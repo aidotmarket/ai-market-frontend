@@ -1,7 +1,18 @@
 import type { MetadataRoute } from 'next';
 
 const SITE_URL = process.env.NEXT_PUBLIC_SITE_URL || 'https://ai.market';
-const API_URL = process.env.API_URL || process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000';
+
+function getApiUrl(): string {
+  const url = process.env.API_URL || process.env.NEXT_PUBLIC_API_URL;
+  if (!url) {
+    if (process.env.NODE_ENV === 'production') {
+      console.warn('[sitemap] API_URL not set in production — listing pages will be omitted from sitemap');
+      return '';
+    }
+    return 'http://localhost:8000';
+  }
+  return url;
+}
 
 interface SitemapEntry {
   slug: string;
@@ -24,8 +35,11 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
     },
   ];
 
+  const apiUrl = getApiUrl();
+  if (!apiUrl) return staticPages;
+
   try {
-    const res = await fetch(`${API_URL}/api/v1/public/sitemap-entries`, {
+    const res = await fetch(`${apiUrl}/api/v1/public/sitemap-entries`, {
       next: { revalidate: 3600 },
     });
 
