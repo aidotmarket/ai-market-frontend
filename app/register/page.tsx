@@ -2,13 +2,15 @@
 
 import { useState } from 'react';
 import Link from 'next/link';
-import { useRouter } from 'next/navigation';
+import { useRouter, useSearchParams } from 'next/navigation';
 import { useAuthStore } from '@/store/auth';
 import { useToast } from '@/components/Toast';
+import { validateRedirect } from '@/lib/redirect';
 import { AxiosError } from 'axios';
 
 export default function RegisterPage() {
   const router = useRouter();
+  const searchParams = useSearchParams();
   const register = useAuthStore((s) => s.register);
   const { toast } = useToast();
 
@@ -35,11 +37,9 @@ export default function RegisterPage() {
     try {
       await register(email, password, firstName || undefined, lastName || undefined, role, companyName || undefined);
       toast('Account created successfully', 'success');
-      if (role === 'seller') {
-        router.push('/dashboard');
-      } else {
-        router.push('/listings');
-      }
+      const defaultRedirect = role === 'seller' ? '/dashboard' : '/listings';
+      const redirectTo = validateRedirect(searchParams.get('redirect'), defaultRedirect);
+      router.push(redirectTo);
     } catch (err) {
       if (err instanceof AxiosError) {
         setError(err.response?.data?.detail || 'Registration failed.');
@@ -170,7 +170,7 @@ export default function RegisterPage() {
 
         <p className="mt-6 text-center text-sm text-gray-500">
           Already have an account?{' '}
-          <Link href="/login" className="text-blue-600 hover:underline">
+          <Link href={searchParams.get('redirect') ? `/login?redirect=${encodeURIComponent(searchParams.get('redirect')!)}` : '/login'} className="text-blue-600 hover:underline">
             Log in
           </Link>
         </p>

@@ -219,3 +219,71 @@ export interface UpdateListingRequest {
   schema_info?: Record<string, string>;
   license?: string;
 }
+
+// ============================================================================
+// Checkout types — matches backend app/api/v1/endpoints/checkout.py
+// ============================================================================
+
+export interface CheckoutCreateRequest {
+  listing_id: string;
+  success_url?: string;
+  cancel_url?: string;
+}
+
+export interface CheckoutCreateResponse {
+  checkout_url: string;
+  session_id: string;
+}
+
+export interface CheckoutVerifyResponse {
+  status: 'pending' | 'completed' | 'expired';
+  order_id?: string;
+  listing_title?: string;
+  amount?: number;
+}
+
+// ============================================================================
+// Buyer order types — matches backend app/api/v1/endpoints/orders.py
+// ============================================================================
+
+export type OrderStatus =
+  | 'pending_fulfillment'
+  | 'fulfilled'
+  | 'refunded'
+  | 'disputed'
+  | 'payment_failed';
+
+export interface BuyerOrder {
+  id: string;
+  listing_id: string;
+  listing_title: string;
+  seller_name: string | null;
+  amount: number;
+  status: OrderStatus;
+  created_at: string;
+  updated_at: string | null;
+}
+
+export interface BuyerOrderDetail extends BuyerOrder {
+  access_url?: string | null;
+  access_expires_at?: string | null;
+  download_count?: number;
+}
+
+export interface OrderEvent {
+  id: string;
+  event_type: string;
+  description: string;
+  created_at: string;
+}
+
+export interface OrderDownloadResponse {
+  download_url: string;
+  expires_at?: string;
+}
+
+export interface OrderAccessResponse {
+  has_access: boolean;
+  access_url?: string;
+  expires_at?: string;
+}

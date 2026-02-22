@@ -10,6 +10,7 @@ import {
   trustLevelLabel,
 } from '@/lib/format';
 import type { ListingDetail } from '@/types';
+import BuyButton from '@/components/BuyButton';
 
 export const revalidate = 3600;
 
@@ -189,19 +190,13 @@ export default async function ListingDetailPage({ params }: Props) {
           {/* Price card */}
           <div className="rounded-xl border border-gray-200 p-6">
             <p className="text-3xl font-bold text-gray-900 mb-1">{formatPrice(listing.price)}</p>
-            <p className="text-sm text-gray-500 mb-4">
-              {listing.pricing_type === 'subscription'
-                ? `${formatPrice(listing.subscription_price_monthly ?? 0)}/mo`
-                : 'One-time purchase'}
-            </p>
-            <button
-              disabled
-              className="w-full rounded-lg bg-blue-600 px-4 py-2.5 text-sm font-medium text-white opacity-50 cursor-not-allowed"
-              title="Checkout coming soon"
-            >
-              Purchase
-            </button>
-            <p className="text-xs text-gray-400 mt-2 text-center">Checkout available soon</p>
+            <BuyButton
+              listingId={listing.id}
+              sellerId={listing.seller_id}
+              slug={listing.slug}
+              price={listing.price}
+              pricingType={listing.pricing_type}
+            />
           </div>
 
           {/* Trust metrics */}

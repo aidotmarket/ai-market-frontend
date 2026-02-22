@@ -2,13 +2,15 @@
 
 import { useState } from 'react';
 import Link from 'next/link';
-import { useRouter } from 'next/navigation';
+import { useRouter, useSearchParams } from 'next/navigation';
 import { useAuthStore } from '@/store/auth';
 import { useToast } from '@/components/Toast';
+import { validateRedirect } from '@/lib/redirect';
 import { AxiosError } from 'axios';
 
 export default function LoginPage() {
   const router = useRouter();
+  const searchParams = useSearchParams();
   const login = useAuthStore((s) => s.login);
   const { toast } = useToast();
 
@@ -25,7 +27,8 @@ export default function LoginPage() {
     try {
       await login(email, password);
       toast('Logged in successfully', 'success');
-      router.push('/');
+      const redirectTo = validateRedirect(searchParams.get('redirect'), '/listings');
+      router.push(redirectTo);
     } catch (err) {
       if (err instanceof AxiosError) {
         setError(err.response?.data?.detail || 'Login failed. Please check your credentials.');
@@ -90,7 +93,7 @@ export default function LoginPage() {
 
         <p className="mt-6 text-center text-sm text-gray-500">
           Don&apos;t have an account?{' '}
-          <Link href="/register" className="text-blue-600 hover:underline">
+          <Link href={searchParams.get('redirect') ? `/register?redirect=${encodeURIComponent(searchParams.get('redirect')!)}` : '/register'} className="text-blue-600 hover:underline">
             Sign up
           </Link>
         </p>
