@@ -4,6 +4,7 @@ const SITE_URL = process.env.NEXT_PUBLIC_SITE_URL || 'https://ai.market';
 
 const robotsTxt = `User-agent: *
 Allow: /
+Disallow: /dashboard
 Disallow: /dashboard/
 Disallow: /login
 Disallow: /register
