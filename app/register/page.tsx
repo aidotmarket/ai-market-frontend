@@ -12,10 +12,12 @@ export default function RegisterPage() {
   const register = useAuthStore((s) => s.register);
   const { toast } = useToast();
 
+  const [role, setRole] = useState<'buyer' | 'seller'>('buyer');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [firstName, setFirstName] = useState('');
   const [lastName, setLastName] = useState('');
+  const [companyName, setCompanyName] = useState('');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
 
@@ -24,10 +26,20 @@ export default function RegisterPage() {
     setError('');
     setLoading(true);
 
+    if (role === 'seller' && !companyName.trim()) {
+      setError('Company name is required for sellers.');
+      setLoading(false);
+      return;
+    }
+
     try {
-      await register(email, password, firstName || undefined, lastName || undefined);
+      await register(email, password, firstName || undefined, lastName || undefined, role, companyName || undefined);
       toast('Account created successfully', 'success');
-      router.push('/');
+      if (role === 'seller') {
+        router.push('/dashboard');
+      } else {
+        router.push('/listings');
+      }
     } catch (err) {
       if (err instanceof AxiosError) {
         setError(err.response?.data?.detail || 'Registration failed.');
@@ -40,7 +52,7 @@ export default function RegisterPage() {
   };
 
   return (
-    <div className="flex min-h-[calc(100vh-10rem)] items-center justify-center px-4">
+    <div className="flex min-h-[calc(100vh-10rem)] items-center justify-center px-4 py-12">
       <div className="w-full max-w-md">
         <h1 className="text-2xl font-bold text-center mb-8">Create your account</h1>
 
@@ -50,6 +62,17 @@ export default function RegisterPage() {
               {error}
             </div>
           )}
+
+          <div className="flex gap-4 mb-6">
+            <label className={`flex-1 cursor-pointer rounded-lg border p-4 text-center transition-colors ${role === 'buyer' ? 'border-blue-600 bg-blue-50 text-blue-700' : 'border-gray-200 hover:bg-gray-50'}`}>
+              <input type="radio" name="role" value="buyer" checked={role === 'buyer'} onChange={() => setRole('buyer')} className="sr-only" />
+              <span className="block font-medium">I want to buy data</span>
+            </label>
+            <label className={`flex-1 cursor-pointer rounded-lg border p-4 text-center transition-colors ${role === 'seller' ? 'border-blue-600 bg-blue-50 text-blue-700' : 'border-gray-200 hover:bg-gray-50'}`}>
+              <input type="radio" name="role" value="seller" checked={role === 'seller'} onChange={() => setRole('seller')} className="sr-only" />
+              <span className="block font-medium">I want to sell data</span>
+            </label>
+          </div>
 
           <div className="grid grid-cols-2 gap-3">
             <div>
@@ -77,6 +100,23 @@ export default function RegisterPage() {
               />
             </div>
           </div>
+
+          {role === 'seller' && (
+            <div>
+              <label htmlFor="companyName" className="block text-sm font-medium text-gray-700 mb-1">
+                Company name <span className="text-red-500">*</span>
+              </label>
+              <input
+                id="companyName"
+                type="text"
+                required
+                value={companyName}
+                onChange={(e) => setCompanyName(e.target.value)}
+                className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                placeholder="Your Company Inc."
+              />
+            </div>
+          )}
 
           <div>
             <label htmlFor="email" className="block text-sm font-medium text-gray-700 mb-1">
@@ -112,9 +152,19 @@ export default function RegisterPage() {
           <button
             type="submit"
             disabled={loading}
-            className="w-full rounded-lg bg-blue-600 px-4 py-2.5 text-sm font-medium text-white hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed"
+            className="w-full rounded-lg bg-blue-600 px-4 py-2.5 text-sm font-medium text-white hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center"
           >
-            {loading ? 'Creating account...' : 'Create account'}
+            {loading ? (
+              <>
+                <svg className="animate-spin -ml-1 mr-2 h-4 w-4 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                  <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                  <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                </svg>
+                Creating account...
+              </>
+            ) : (
+              'Create account'
+            )}
           </button>
         </form>
 

@@ -139,3 +139,83 @@ export interface SearchResponse {
   facets: FacetInfo;
   fallback?: boolean;
 }
+
+// ============================================================================
+// Stripe Connect types — matches backend app/api/v1/endpoints/connect.py
+// ============================================================================
+
+export interface StripeOnboardingResponse {
+  url: string;
+}
+
+export interface StripeConnectStatus {
+  payouts_enabled: boolean;
+  details_submitted: boolean;
+  charges_enabled?: boolean;
+}
+
+export interface StripeLoginLinkResponse {
+  url: string;
+}
+
+// ============================================================================
+// Seller dashboard types — matches backend app/api/v1/endpoints/seller.py
+// ============================================================================
+
+export interface SellerStats {
+  total_listings: number;
+  published_listings: number;
+  total_views: number;
+  total_inquiries: number;
+  total_sales: number;
+  total_revenue: number;
+}
+
+export interface SellerFinancials {
+  total_revenue: number;
+  pending_payouts: number;
+  completed_payouts: number;
+}
+
+export interface SellerOrder {
+  id: string;
+  listing_id: string;
+  listing_title: string;
+  buyer_email: string;
+  amount: number;
+  status: string;
+  created_at: string;
+}
+
+// ============================================================================
+// Listing creation types
+// ============================================================================
+
+export interface CreateListingRequest {
+  title: string;
+  description: string;
+  short_description?: string;
+  category: string;
+  tags?: string[];
+  price: number;
+  pricing_type: PricingType;
+  data_format?: string;
+  source_row_count?: number;
+  schema_info?: Record<string, string>;
+  license?: string;
+}
+
+export interface UpdateListingRequest {
+  status?: ListingStatus;
+  title?: string;
+  description?: string;
+  short_description?: string;
+  category?: string;
+  tags?: string[];
+  price?: number;
+  pricing_type?: PricingType;
+  data_format?: string;
+  source_row_count?: number;
+  schema_info?: Record<string, string>;
+  license?: string;
+}

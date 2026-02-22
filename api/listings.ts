@@ -38,3 +38,8 @@ export async function searchListings(
   });
   return res.data;
 }
+
+export const getListings = () => api.get('/listings');
+export const createListing = (data: any) => api.post('/listings', data);
+export const updateListing = (id: string, data: any) => api.patch(`/listings/${id}`, data);
+export const getListingBySlug = (slug: string) => api.get(`/listings/${slug}`);

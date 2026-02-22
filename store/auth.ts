@@ -11,7 +11,7 @@ interface AuthState {
   isAuthenticated: boolean;
   isLoading: boolean;
   login: (email: string, password: string) => Promise<void>;
-  register: (email: string, password: string, firstName?: string, lastName?: string) => Promise<void>;
+  register: (email: string, password: string, firstName?: string, lastName?: string, role?: "buyer" | "seller" | "admin", companyName?: string) => Promise<void>;
   logout: () => void;
   refreshAuth: () => Promise<void>;
   hydrate: () => Promise<void>;
@@ -40,13 +40,13 @@ export const useAuthStore = create<AuthState>((set, get) => ({
     });
   },
 
-  register: async (email, password, firstName, lastName) => {
+  register: async (email, password, firstName, lastName, role = "buyer" as "buyer" | "seller" | "admin", companyName) => {
     await authApi.register({
       email,
       password,
       first_name: firstName,
       last_name: lastName,
-      role: 'buyer',
+      role, company_name: companyName,
     });
 
     // Auto-login after registration
