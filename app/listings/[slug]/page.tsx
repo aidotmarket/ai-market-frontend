@@ -84,7 +84,14 @@ export default async function ListingDetailPage({ params }: Props) {
   const rowCount = (listing.schema_info as { row_count?: number })?.row_count;
 
   return (
-    <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8 py-8">
+    <>
+      {listing.jsonld && (
+        <script
+          type="application/ld+json"
+          dangerouslySetInnerHTML={{ __html: JSON.stringify(listing.jsonld) }}
+        />
+      )}
+      <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8 py-8">
       {/* Breadcrumb */}
       <nav className="text-sm text-gray-500 mb-6">
         <Link href="/listings" className="hover:text-gray-700">
@@ -258,6 +265,7 @@ export default async function ListingDetailPage({ params }: Props) {
         </div>
       </div>
     </div>
+    </>
   );
 }
 

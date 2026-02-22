@@ -5,6 +5,7 @@ export interface PaginatedListings {
   total: number;
   page: number;
   per_page: number;
+  jsonld?: Record<string, unknown>;
 }
 
 export async function fetchPublicListings(params?: {

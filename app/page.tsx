@@ -77,9 +77,37 @@ const stats = [
   { value: '50+', label: 'AI Integrations' },
 ];
 
+const LANDING_JSONLD = [
+  {
+    "@context": "https://schema.org",
+    "@type": "Organization",
+    "name": "ai.market",
+    "url": "https://ai.market",
+    "description": "B2B Data Marketplace — Making enterprise data discoverable by AI systems",
+    "sameAs": ["https://github.com/maxrobbins"]
+  },
+  {
+    "@context": "https://schema.org",
+    "@type": "WebSite",
+    "name": "ai.market",
+    "url": "https://ai.market",
+    "description": "The marketplace where enterprise datasets become findable, queryable, and purchasable by AI systems.",
+    "potentialAction": {
+      "@type": "SearchAction",
+      "target": "https://ai.market/listings?q={search_term_string}",
+      "query-input": "required name=search_term_string"
+    }
+  }
+];
+
 export default function LandingPage() {
   return (
-    <div className="overflow-hidden">
+    <>
+      <script
+        type="application/ld+json"
+        dangerouslySetInnerHTML={{ __html: JSON.stringify(LANDING_JSONLD) }}
+      />
+      <div className="overflow-hidden">
       {/* Hero */}
       <section className="relative isolate">
         {/* Background grid pattern */}
@@ -234,5 +262,6 @@ export default function LandingPage() {
         </div>
       </section>
     </div>
+    </>
   );
 }

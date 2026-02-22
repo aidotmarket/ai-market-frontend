@@ -94,6 +94,7 @@ export interface ListingDetail {
   created_at: string;
   updated_at: string | null;
   published_at: string | null;
+  jsonld?: Record<string, unknown>;
 }
 
 // ============================================================================
