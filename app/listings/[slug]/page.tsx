@@ -1,7 +1,7 @@
 import { notFound, redirect } from 'next/navigation';
 import Link from 'next/link';
 import type { Metadata } from 'next';
-import { fetchPublicListing, fetchPublicListings, resolveListingUUID } from '@/lib/api';
+import { fetchPublicListing, resolveListingUUID } from '@/lib/api';
 import {
   formatPrice,
   formatDate,
@@ -12,19 +12,13 @@ import {
 import type { ListingDetail } from '@/types';
 import BuyButton from '@/components/BuyButton';
 
-export const revalidate = 3600;
+export const dynamic = 'force-dynamic';
 
 // UUID v4 pattern
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
 interface Props {
   params: Promise<{ slug: string }>;
-}
-
-export async function generateStaticParams() {
-  const data = await fetchPublicListings({ per_page: 100 });
-  const listings = Array.isArray(data) ? data : data?.items ?? [];
-  return listings.map((l: { slug: string }) => ({ slug: l.slug }));
 }
 
 export async function generateMetadata({ params }: Props): Promise<Metadata> {
