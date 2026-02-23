@@ -52,10 +52,9 @@ export default async function BrowseListingsPage({ searchParams }: Props) {
   return (
     <>
       {data && !Array.isArray(data) && data.jsonld && (
-        <script
-          type="application/ld+json"
-          dangerouslySetInnerHTML={{ __html: JSON.stringify(data.jsonld) }}
-        />
+        <script type="application/ld+json">
+          {JSON.stringify(data.jsonld)}
+        </script>
       )}
       <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8 py-8">
       <h1 className="text-3xl font-bold mb-6">Browse Datasets</h1>

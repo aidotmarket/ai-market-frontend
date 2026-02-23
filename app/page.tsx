@@ -103,10 +103,9 @@ const LANDING_JSONLD = [
 export default function LandingPage() {
   return (
     <>
-      <script
-        type="application/ld+json"
-        dangerouslySetInnerHTML={{ __html: JSON.stringify(LANDING_JSONLD) }}
-      />
+      <script type="application/ld+json">
+        {JSON.stringify(LANDING_JSONLD)}
+      </script>
       <div className="overflow-hidden">
       {/* Hero */}
       <section className="relative isolate">

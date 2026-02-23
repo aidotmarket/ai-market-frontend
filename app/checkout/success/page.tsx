@@ -10,7 +10,6 @@ import type { CheckoutVerifyResponse } from '@/types';
 type PageState = 'verifying' | 'success' | 'timeout' | 'error';
 
 const POLL_INTERVAL = 2000;
-const POLL_INTERVAL_BACKGROUND = 5000;
 const MAX_POLL_DURATION = 30000;
 
 export default function CheckoutSuccessPage() {
@@ -23,22 +22,23 @@ export default function CheckoutSuccessPage() {
 
   const startTimeRef = useRef(Date.now());
   const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const abortRef = useRef<AbortController | null>(null);
   const mountedRef = useRef(true);
 
   const poll = useCallback(async () => {
     if (!mountedRef.current || !sessionId) return;
 
-    // Stop if tab hidden (MP-G2-M6)
-    if (document.visibilityState === 'hidden') return;
-
-    // Timeout check
+    // Wall-clock timeout
     if (Date.now() - startTimeRef.current > MAX_POLL_DURATION) {
       setState('timeout');
       return;
     }
 
+    abortRef.current?.abort();
+    abortRef.current = new AbortController();
+
     try {
-      const data = await verifyCheckout(sessionId);
+      const data = await verifyCheckout(sessionId, abortRef.current.signal);
 
       if (!mountedRef.current) return;
 
@@ -49,12 +49,13 @@ export default function CheckoutSuccessPage() {
       }
 
       // Still pending — schedule next poll
-      const interval = document.visibilityState === 'visible'
-        ? POLL_INTERVAL
-        : POLL_INTERVAL_BACKGROUND;
-      timerRef.current = setTimeout(poll, interval);
-    } catch {
+      timerRef.current = setTimeout(() => {
+        timerRef.current = null;
+        poll();
+      }, POLL_INTERVAL);
+    } catch (err: unknown) {
       if (!mountedRef.current) return;
+      if (err instanceof DOMException && err.name === 'AbortError') return;
       setErrorMessage("We couldn't verify this payment session.");
       setState('error');
     }
@@ -62,6 +63,7 @@ export default function CheckoutSuccessPage() {
 
   useEffect(() => {
     mountedRef.current = true;
+    startTimeRef.current = Date.now();
 
     if (!sessionId) {
       setErrorMessage('No session ID provided.');
@@ -69,15 +71,19 @@ export default function CheckoutSuccessPage() {
       return;
     }
 
-    // Start polling
     poll();
 
-    // Resume polling when tab becomes visible again
     const handleVisibility = () => {
-      if (document.visibilityState === 'visible' && mountedRef.current) {
-        // Only resume if still in verifying state
-        if (timerRef.current === null) {
+      if (document.visibilityState === 'visible') {
+        // Resume: if still verifying and no timer pending, poll immediately
+        if (mountedRef.current && timerRef.current === null) {
           poll();
+        }
+      } else {
+        // Pause: clear scheduled poll
+        if (timerRef.current !== null) {
+          clearTimeout(timerRef.current);
+          timerRef.current = null;
         }
       }
     };
@@ -85,7 +91,11 @@ export default function CheckoutSuccessPage() {
 
     return () => {
       mountedRef.current = false;
-      if (timerRef.current) clearTimeout(timerRef.current);
+      if (timerRef.current !== null) {
+        clearTimeout(timerRef.current);
+        timerRef.current = null;
+      }
+      abortRef.current?.abort();
       document.removeEventListener('visibilitychange', handleVisibility);
     };
   }, [sessionId, poll]);

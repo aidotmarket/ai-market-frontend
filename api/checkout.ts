@@ -11,7 +11,7 @@ export async function createCheckout(listingId: string): Promise<CheckoutCreateR
   return res.data;
 }
 
-export async function verifyCheckout(sessionId: string): Promise<CheckoutVerifyResponse> {
-  const res = await api.get<CheckoutVerifyResponse>(`/checkout/verify/${encodeURIComponent(sessionId)}`);
+export async function verifyCheckout(sessionId: string, signal?: AbortSignal): Promise<CheckoutVerifyResponse> {
+  const res = await api.get<CheckoutVerifyResponse>(`/checkout/verify/${encodeURIComponent(sessionId)}`, { signal });
   return res.data;
 }

@@ -1,36 +1,36 @@
 const ALLOWED_PREFIXES = ['/listings', '/dashboard', '/checkout'];
+const FALLBACK = '/';
 
 /**
  * Validate a redirect URL to prevent open redirect attacks.
- * Returns the validated path or a safe default.
+ * Decodes repeatedly to catch double/triple encoding, blocks protocol-relative
+ * and absolute URLs, and enforces an allowlist of path prefixes.
  */
 export function validateRedirect(
   redirect: string | null | undefined,
-  fallback: string = '/listings'
+  fallback: string = FALLBACK
 ): string {
   if (!redirect || typeof redirect !== 'string') return fallback;
 
-  const decoded = redirect;
+  // Decode repeatedly (max 3 iterations) to catch double/triple encoding
+  let decoded = redirect;
+  for (let i = 0; i < 3; i++) {
+    const next = decodeURIComponent(decoded);
+    if (next === decoded) break;
+    decoded = next;
+  }
+
+  // Block protocol-relative, absolute URLs, backslashes
+  if (decoded.includes('://') || decoded.startsWith('//') || decoded.includes('\\')) {
+    return fallback;
+  }
 
   // Must start with /
   if (!decoded.startsWith('/')) return fallback;
 
-  // Block protocol-relative and backslash tricks
-  if (decoded.includes('://')) return fallback;
-  if (decoded.includes('//')) return fallback;
-  if (decoded.includes('\\')) return fallback;
-
-  // Block encoded variants: %2F%2F (//) %5C (\) %3A (:)
-  const upper = decoded.toUpperCase();
-  if (upper.includes('%2F%2F')) return fallback;
-  if (upper.includes('%5C')) return fallback;
-  if (upper.includes('%3A%2F%2F')) return fallback;
-
   // Must match an allowed prefix
-  const matchesPrefix = ALLOWED_PREFIXES.some(
-    (prefix) => decoded === prefix || decoded.startsWith(prefix + '/')|| decoded.startsWith(prefix + '?')
-  );
-  if (!matchesPrefix) return fallback;
+  if (!ALLOWED_PREFIXES.some((p) => decoded.startsWith(p))) return fallback;
 
-  return decoded;
+  // Return the ORIGINAL (not decoded) if safe
+  return redirect;
 }
