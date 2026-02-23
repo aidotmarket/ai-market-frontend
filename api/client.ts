@@ -13,7 +13,9 @@ export const api = axios.create({
 let refreshPromise: Promise<string> | null = null;
 
 async function refreshAuth(): Promise<string> {
-  const refreshToken = localStorage.getItem('refresh_token');
+  const { useAuthStore } = await import('@/store/auth');
+  const store = useAuthStore.getState();
+  const refreshToken = store.refreshToken;
   if (!refreshToken) {
     throw new Error('No refresh token');
   }
@@ -24,18 +26,19 @@ async function refreshAuth(): Promise<string> {
 
   const { access_token, refresh_token: newRefreshToken } = response.data;
 
-  // M2: Persist rotated refresh token
-  localStorage.setItem('token', access_token);
-  if (newRefreshToken) {
-    localStorage.setItem('refresh_token', newRefreshToken);
-  }
+  // Update in-memory store — never localStorage
+  useAuthStore.setState({
+    token: access_token,
+    refreshToken: newRefreshToken || refreshToken,
+  });
 
   return access_token;
 }
 
-// Request interceptor: attach token
-api.interceptors.request.use((config: InternalAxiosRequestConfig) => {
-  const token = localStorage.getItem('token');
+// Request interceptor: attach token from Zustand store
+api.interceptors.request.use(async (config: InternalAxiosRequestConfig) => {
+  const { useAuthStore } = await import('@/store/auth');
+  const token = useAuthStore.getState().token;
   if (token && config.headers) {
     config.headers.Authorization = `Bearer ${token}`;
   }
@@ -73,10 +76,9 @@ api.interceptors.response.use(
         }
         return api(originalRequest);
       } catch {
-        // Refresh failed — clear auth and redirect
-        localStorage.removeItem('token');
-        localStorage.removeItem('refresh_token');
-        localStorage.removeItem('user');
+        // Refresh failed — clear auth state and redirect
+        const { useAuthStore } = await import('@/store/auth');
+        useAuthStore.getState().logout();
         window.location.href = '/login';
         return Promise.reject(error);
       }

@@ -1,22 +1,59 @@
 'use client';
 
-import { useEffect } from 'react';
+import { useEffect, useState } from 'react';
 import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
 import { useAuthStore } from '@/store/auth';
+import { getConnectStatus } from '@/api/connect';
 
 export default function DashboardLayout({ children }: { children: React.ReactNode }) {
   const { user, isAuthenticated, isLoading } = useAuthStore();
   const router = useRouter();
   const pathname = usePathname();
+  const [stripeConnected, setStripeConnected] = useState<boolean | null>(null);
 
   useEffect(() => {
-    if (!isLoading && !isAuthenticated) {
-      router.push('/login');
+    if (isLoading) return;
+
+    if (!isAuthenticated) {
+      router.push(`/login?redirect=${encodeURIComponent(pathname)}`);
+      return;
     }
-  }, [isAuthenticated, isLoading, router]);
+
+    if (user && user.role !== 'seller' && user.role !== 'admin') {
+      router.push('/listings');
+      return;
+    }
+
+    // Check Stripe connected status for /dashboard/listings/new
+    if (pathname === '/dashboard/listings/new') {
+      getConnectStatus()
+        .then((res) => {
+          const connected = !!res.data?.details_submitted;
+          setStripeConnected(connected);
+          if (!connected) {
+            router.push('/dashboard');
+          }
+        })
+        .catch(() => {
+          setStripeConnected(false);
+          router.push('/dashboard');
+        });
+    } else {
+      setStripeConnected(true); // not needed for other routes
+    }
+  }, [isAuthenticated, isLoading, user, router, pathname]);
 
   if (isLoading || !isAuthenticated) {
+    return (
+      <div className="flex min-h-screen items-center justify-center">
+        <div className="h-8 w-8 animate-spin rounded-full border-4 border-blue-600 border-t-transparent"></div>
+      </div>
+    );
+  }
+
+  // Still checking role or stripe status
+  if ((user && user.role !== 'seller' && user.role !== 'admin') || stripeConnected === null) {
     return (
       <div className="flex min-h-screen items-center justify-center">
         <div className="h-8 w-8 animate-spin rounded-full border-4 border-blue-600 border-t-transparent"></div>

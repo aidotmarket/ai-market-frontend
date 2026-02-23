@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useCallback } from 'react';
 import Link from 'next/link';
 import { useAuthStore } from '@/store/auth';
 import { getConnectStatus, getConnectOnboarding } from '@/api/connect';
@@ -8,48 +8,55 @@ import { getSellerStats } from '@/api/seller';
 import { getListings } from '@/api/listings';
 import { useToast } from '@/components/Toast';
 
+const STRIPE_CONNECT_URL_PREFIX = 'https://connect.stripe.com/';
+
 export default function DashboardOverview() {
   const { user } = useAuthStore();
   const { toast } = useToast();
 
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState(false);
   const [connecting, setConnecting] = useState(false);
-  const [stripeStatus, setStripeStatus] = useState<any>(null);
+  const [stripeStatus, setStripeStatus] = useState<{ details_submitted?: boolean; payouts_enabled?: boolean } | null>(null);
   const [stats, setStats] = useState<any>(null);
   const [listingsCount, setListingsCount] = useState(0);
 
-  useEffect(() => {
-    const fetchData = async () => {
-      try {
-        const [statusRes, statsRes, listingsRes] = await Promise.all([
-          getConnectStatus().catch(() => ({ data: { is_connected: false } })),
-          getSellerStats().catch(() => ({ data: { views: 0, sales: 0, revenue: 0 } })),
-          getListings().catch(() => ({ data: [] })),
-        ]);
+  const fetchData = useCallback(async () => {
+    setLoading(true);
+    setError(false);
+    try {
+      const [statusRes, statsRes, listingsRes] = await Promise.all([
+        getConnectStatus(),
+        getSellerStats(),
+        getListings(),
+      ]);
 
-        setStripeStatus(statusRes.data);
-        setStats(statsRes.data);
-        setListingsCount(listingsRes.data.length || 0);
-      } catch (error) {
-        console.error('Failed to fetch dashboard data', error);
-      } finally {
-        setLoading(false);
-      }
-    };
-
-    fetchData();
+      setStripeStatus(statusRes.data);
+      setStats(statsRes.data);
+      setListingsCount(Array.isArray(listingsRes.data) ? listingsRes.data.length : 0);
+    } catch (err) {
+      console.error('Failed to fetch dashboard data', err);
+      setError(true);
+    } finally {
+      setLoading(false);
+    }
   }, []);
+
+  useEffect(() => {
+    fetchData();
+  }, [fetchData]);
 
   const handleConnectStripe = async () => {
     setConnecting(true);
     try {
       const res = await getConnectOnboarding();
-      if (res.data?.url) {
-        window.location.href = res.data.url;
+      const url = res.data?.url;
+      if (url && typeof url === 'string' && url.startsWith(STRIPE_CONNECT_URL_PREFIX)) {
+        window.location.href = url;
       } else {
-        throw new Error('No URL returned');
+        throw new Error('Invalid Stripe onboarding URL');
       }
-    } catch (error) {
+    } catch (err) {
       toast('Failed to start Stripe connection', 'error');
       setConnecting(false);
     }
@@ -63,7 +70,21 @@ export default function DashboardOverview() {
     );
   }
 
-  const isStripeConnected = stripeStatus?.is_connected;
+  if (error) {
+    return (
+      <div className="rounded-lg bg-red-50 border border-red-200 p-6 text-center">
+        <p className="text-sm text-red-700 mb-4">Failed to load dashboard data.</p>
+        <button
+          onClick={fetchData}
+          className="inline-flex items-center rounded-lg bg-red-600 px-4 py-2 text-sm font-medium text-white hover:bg-red-700"
+        >
+          Retry
+        </button>
+      </div>
+    );
+  }
+
+  const isStripeConnected = !!stripeStatus?.details_submitted;
   const hasListings = listingsCount > 0;
 
   return (

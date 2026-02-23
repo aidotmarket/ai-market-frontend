@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useCallback } from 'react';
 import Link from 'next/link';
 import { getListings } from '@/api/listings';
 
@@ -10,20 +10,22 @@ export default function ListingsPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
 
-  useEffect(() => {
-    const fetchListings = async () => {
-      try {
-        const res = await getListings();
-        setListings(res.data || []);
-      } catch (err) {
-        setError('Failed to load listings.');
-      } finally {
-        setLoading(false);
-      }
-    };
-
-    fetchListings();
+  const fetchListings = useCallback(async () => {
+    setLoading(true);
+    setError('');
+    try {
+      const res = await getListings();
+      setListings(res.data || []);
+    } catch (err) {
+      setError('Failed to load listings.');
+    } finally {
+      setLoading(false);
+    }
   }, []);
+
+  useEffect(() => {
+    fetchListings();
+  }, [fetchListings]);
 
   if (loading) {
     return (
@@ -35,8 +37,14 @@ export default function ListingsPage() {
 
   if (error) {
     return (
-      <div className="rounded-lg bg-red-50 p-4 text-sm text-red-700">
-        {error}
+      <div className="rounded-lg bg-red-50 border border-red-200 p-6 text-center">
+        <p className="text-sm text-red-700 mb-4">{error}</p>
+        <button
+          onClick={fetchListings}
+          className="inline-flex items-center rounded-lg bg-red-600 px-4 py-2 text-sm font-medium text-white hover:bg-red-700"
+        >
+          Retry
+        </button>
       </div>
     );
   }

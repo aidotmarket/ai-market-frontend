@@ -19,25 +19,23 @@ interface AuthState {
 
 export const useAuthStore = create<AuthState>((set, get) => ({
   user: null,
-  token: typeof window !== 'undefined' ? localStorage.getItem('token') : null,
-  refreshToken: typeof window !== 'undefined' ? localStorage.getItem('refresh_token') : null,
-  isAuthenticated: typeof window !== 'undefined' ? !!localStorage.getItem('token') : false,
+  token: null,
+  refreshToken: null,
+  isAuthenticated: false,
   isLoading: false,
 
   login: async (email, password) => {
     const tokenRes = await authApi.login({ email, password });
-    localStorage.setItem('token', tokenRes.access_token);
-    localStorage.setItem('refresh_token', tokenRes.refresh_token);
 
-    const user = await authApi.getMe();
-    localStorage.setItem('user', JSON.stringify(user));
-
+    // Store tokens in-memory only — never localStorage
     set({
-      user,
       token: tokenRes.access_token,
       refreshToken: tokenRes.refresh_token,
       isAuthenticated: true,
     });
+
+    const user = await authApi.getMe();
+    set({ user });
   },
 
   register: async (email, password, firstName, lastName, role = "buyer" as "buyer" | "seller" | "admin", companyName) => {
@@ -54,9 +52,6 @@ export const useAuthStore = create<AuthState>((set, get) => ({
   },
 
   logout: () => {
-    localStorage.removeItem('token');
-    localStorage.removeItem('refresh_token');
-    localStorage.removeItem('user');
     set({
       user: null,
       token: null,
@@ -73,11 +68,6 @@ export const useAuthStore = create<AuthState>((set, get) => ({
     const res = await api.post('/auth/refresh', { refresh_token: refreshToken });
     const { access_token, refresh_token: newRefreshToken } = res.data;
 
-    localStorage.setItem('token', access_token);
-    if (newRefreshToken) {
-      localStorage.setItem('refresh_token', newRefreshToken);
-    }
-
     set({
       token: access_token,
       refreshToken: newRefreshToken || refreshToken,
@@ -85,28 +75,16 @@ export const useAuthStore = create<AuthState>((set, get) => ({
   },
 
   hydrate: async () => {
-    const token = localStorage.getItem('token');
+    const token = get().token;
     if (!token) return;
 
     set({ isLoading: true });
     try {
       const user = await authApi.getMe();
-      localStorage.setItem('user', JSON.stringify(user));
       set({ user, isAuthenticated: true, isLoading: false });
     } catch {
-      // Token invalid — try cached user
-      const cached = localStorage.getItem('user');
-      if (cached) {
-        try {
-          set({ user: JSON.parse(cached), isAuthenticated: true, isLoading: false });
-        } catch {
-          get().logout();
-          set({ isLoading: false });
-        }
-      } else {
-        get().logout();
-        set({ isLoading: false });
-      }
+      get().logout();
+      set({ isLoading: false });
     }
   },
 }));
