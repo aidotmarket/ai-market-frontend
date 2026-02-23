@@ -86,12 +86,6 @@ export default async function ListingDetailPage({ params }: Props) {
 
   return (
     <>
-      {listing.jsonld && (
-        <script
-          type="application/ld+json"
-          dangerouslySetInnerHTML={{ __html: JSON.stringify(listing.jsonld) }}
-        />
-      )}
       <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8 py-8">
       {/* Breadcrumb */}
       <nav className="text-sm text-gray-500 mb-6">

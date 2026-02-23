@@ -6,6 +6,7 @@ import { useParams } from 'next/navigation';
 import { getOrder, getOrderEvents, requestDownload, refreshOrderAccess } from '@/api/orders';
 import { formatPrice, formatDate } from '@/lib/format';
 import { useToast } from '@/components/Toast';
+import { useAuthStore } from '@/store/auth';
 import type { BuyerOrderDetail, OrderEvent, OrderStatus } from '@/types';
 import { AxiosError } from 'axios';
 
@@ -29,6 +30,7 @@ export default function OrderDetailPage() {
   const params = useParams<{ id: string }>();
   const orderId = params.id;
   const { toast } = useToast();
+  const token = useAuthStore((s) => s.token);
 
   const [order, setOrder] = useState<BuyerOrderDetail | null>(null);
   const [events, setEvents] = useState<OrderEvent[]>([]);
@@ -73,7 +75,6 @@ export default function OrderDetailPage() {
       const { download_url } = await requestDownload(orderId);
 
       // Fetch with auth header, set referrer policy
-      const token = localStorage.getItem('token');
       const res = await fetch(download_url, {
         headers: token ? { Authorization: `Bearer ${token}` } : {},
         referrerPolicy: 'no-referrer',
@@ -112,7 +113,7 @@ export default function OrderDetailPage() {
     } finally {
       setDownloading(false);
     }
-  }, [orderId, downloading, toast]);
+  }, [orderId, downloading, token, toast]);
 
   const handleRefresh = async () => {
     if (refreshing) return;
