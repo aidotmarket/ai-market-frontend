@@ -20,8 +20,11 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
       return;
     }
 
-    if (user && user.role !== 'seller' && user.role !== 'admin') {
-      router.push('/listings');
+    // Buyers can access inquiry and order routes only
+    const buyerAllowedPrefixes = ['/dashboard/inquiries', '/dashboard/orders'];
+    const isBuyer = user && user.role !== 'seller' && user.role !== 'admin';
+    if (isBuyer && !buyerAllowedPrefixes.some((p) => pathname.startsWith(p))) {
+      router.push('/dashboard/inquiries');
       return;
     }
 
@@ -52,8 +55,8 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
     );
   }
 
-  // Still checking role or stripe status
-  if ((user && user.role !== 'seller' && user.role !== 'admin') || stripeConnected === null) {
+  // Still checking stripe status (buyers are now allowed for some routes)
+  if (stripeConnected === null) {
     return (
       <div className="flex min-h-screen items-center justify-center">
         <div className="h-8 w-8 animate-spin rounded-full border-4 border-blue-600 border-t-transparent"></div>
@@ -61,12 +64,20 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
     );
   }
 
-  const navLinks = [
-    { name: 'Overview', href: '/dashboard' },
-    { name: 'Listings', href: '/dashboard/listings' },
-    { name: 'Orders', href: '/dashboard/orders' },
-    { name: 'Settings', href: '/dashboard/settings' },
-  ];
+  const isSeller = user?.role === 'seller' || user?.role === 'admin';
+
+  const navLinks = isSeller
+    ? [
+        { name: 'Overview', href: '/dashboard' },
+        { name: 'Listings', href: '/dashboard/listings' },
+        { name: 'Orders', href: '/dashboard/orders' },
+        { name: 'Inquiries', href: '/dashboard/seller/inquiries' },
+        { name: 'Settings', href: '/dashboard/settings' },
+      ]
+    : [
+        { name: 'My Inquiries', href: '/dashboard/inquiries' },
+        { name: 'My Orders', href: '/dashboard/orders' },
+      ];
 
   return (
     <div className="flex min-h-screen bg-gray-50">
@@ -74,7 +85,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
       <aside className="w-64 bg-white border-r border-gray-200 flex flex-col">
         <div className="h-16 flex items-center px-6 border-b border-gray-200">
           <span className="text-lg font-semibold text-gray-900 truncate">
-            {user?.company_name || user?.first_name || 'Seller Dashboard'}
+            {user?.company_name || user?.first_name || (isSeller ? 'Seller Dashboard' : 'Dashboard')}
           </span>
         </div>
         <nav className="flex-1 px-4 py-6 space-y-1">

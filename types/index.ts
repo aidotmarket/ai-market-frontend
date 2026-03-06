@@ -287,3 +287,50 @@ export interface OrderAccessResponse {
   access_url?: string;
   expires_at?: string;
 }
+
+// ============================================================================
+// Conversation / Inquiry types — matches backend InquiryService
+// ============================================================================
+
+export type MessageRole = 'buyer' | 'seller' | 'allai' | 'system';
+
+export type ConversationStatus =
+  | 'auto_answered'
+  | 'escalated'
+  | 'awaiting_seller'
+  | 'seller_replied'
+  | 'resolved';
+
+export interface ConversationMessage {
+  id: string;
+  conversation_id: string;
+  role: MessageRole;
+  content: string;
+  created_at: string;
+}
+
+export interface ConversationListItem {
+  id: string;
+  listing_id: string;
+  listing_title: string;
+  status: ConversationStatus;
+  last_message_at: string;
+  last_message_preview: string | null;
+  unread_by_buyer: number;
+  unread_by_seller: number;
+  created_at: string;
+}
+
+export interface ConversationDetail {
+  id: string;
+  listing_id: string;
+  listing_title: string;
+  buyer_id: string;
+  seller_id: string;
+  status: ConversationStatus;
+  last_message_at: string;
+  unread_by_buyer: number;
+  unread_by_seller: number;
+  messages: ConversationMessage[];
+  created_at: string;
+}
