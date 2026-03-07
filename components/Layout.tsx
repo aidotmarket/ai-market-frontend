@@ -34,6 +34,9 @@ export function Layout({ children }: { children: React.ReactNode }) {
               <Link href="/requests" className="text-sm text-gray-600 hover:text-gray-900">
                 Request Data
               </Link>
+              <Link href="/partner" className="text-sm text-gray-600 hover:text-gray-900">
+                Become a Partner
+              </Link>
               {isAuthenticated && (
                 <Link href="/dashboard" className="text-sm text-gray-600 hover:text-gray-900">
                   Dashboard
@@ -105,6 +108,13 @@ export function Layout({ children }: { children: React.ReactNode }) {
                 onClick={() => setMobileMenuOpen(false)}
               >
                 Request Data
+              </Link>
+              <Link
+                href="/partner"
+                className="block px-2 py-2 text-sm text-gray-600 hover:text-gray-900"
+                onClick={() => setMobileMenuOpen(false)}
+              >
+                Become a Partner
               </Link>
               {isAuthenticated ? (
                 <>

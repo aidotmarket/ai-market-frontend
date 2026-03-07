@@ -2,7 +2,7 @@ import Link from 'next/link';
 import type { Metadata } from 'next';
 
 export const metadata: Metadata = {
-  title: 'ai.market — B2B Data Marketplace',
+  title: 'ai.market — B2B Data Marketplace (Private Beta)',
   description:
     'The marketplace where enterprise datasets become findable, queryable, and purchasable by AI systems. Think SEO — but for your data.',
 };
@@ -71,12 +71,6 @@ const valueProps = [
   },
 ];
 
-const stats = [
-  { value: '2,400+', label: 'Datasets Listed' },
-  { value: '180', label: 'Categories' },
-  { value: '50+', label: 'AI Integrations' },
-];
-
 const LANDING_JSONLD = [
   {
     "@context": "https://schema.org",
@@ -132,7 +126,7 @@ export default function LandingPage() {
         <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8 pt-20 pb-24 sm:pt-32 sm:pb-32">
           <div className="max-w-3xl">
             <p className="text-sm font-semibold tracking-wide text-blue-600 uppercase">
-              The B2B Data Marketplace
+              Private Beta
             </p>
             <h1 className="mt-3 text-4xl font-bold tracking-tight text-gray-900 sm:text-6xl">
               Make Your Data{' '}
@@ -141,24 +135,24 @@ export default function LandingPage() {
               </span>
             </h1>
             <p className="mt-6 text-lg leading-8 text-gray-600 max-w-2xl">
-              The marketplace where enterprise datasets become findable, queryable, and purchasable
-              by AI systems. Think SEO — but for your data.
+              The marketplace where enterprise data becomes discoverable by AI. We&apos;re in private
+              beta — join as a data partner or tell us what data you need.
             </p>
             <div className="mt-10 flex flex-col sm:flex-row gap-4">
               <Link
                 href="/listings"
                 className="inline-flex items-center justify-center rounded-lg bg-blue-600 px-6 py-3 text-sm font-medium text-white hover:bg-blue-700 transition-colors"
               >
-                Browse Marketplace
+                Explore Marketplace
                 <svg className="ml-2 h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
                   <path strokeLinecap="round" strokeLinejoin="round" d="M13.5 4.5 21 12m0 0-7.5 7.5M21 12H3" />
                 </svg>
               </Link>
               <Link
-                href="/register"
+                href="/partner"
                 className="inline-flex items-center justify-center rounded-lg border border-gray-300 bg-white px-6 py-3 text-sm font-medium text-gray-700 hover:bg-gray-50 transition-colors"
               >
-                Start Selling
+                Become a Data Partner
               </Link>
               <Link
                 href="/requests"
@@ -229,16 +223,16 @@ export default function LandingPage() {
         </div>
       </section>
 
-      {/* Stats / Social Proof */}
-      <section className="border-t border-gray-100 bg-gray-50 py-16 sm:py-20">
-        <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
-          <div className="grid grid-cols-1 gap-8 sm:grid-cols-3">
-            {stats.map((stat) => (
-              <div key={stat.label} className="text-center">
-                <p className="text-4xl font-bold tracking-tight text-gray-900">{stat.value}</p>
-                <p className="mt-1 text-sm text-gray-600">{stat.label}</p>
-              </div>
-            ))}
+      {/* Early Access Banner */}
+      <section className="border-y border-gray-200 bg-gray-50">
+        <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8 py-8 text-center">
+          <p className="text-sm font-semibold tracking-wide text-blue-600 uppercase">Private Beta</p>
+          <p className="mt-2 text-lg text-gray-600">
+            We&apos;re onboarding our first data partners. Apply to list your datasets or tell us what data you need.
+          </p>
+          <div className="mt-4 flex justify-center gap-4">
+            <a href="/requests/new" className="text-sm font-medium text-blue-600 hover:text-blue-800">I Need Data &rarr;</a>
+            <a href="/register" className="text-sm font-medium text-blue-600 hover:text-blue-800">Become a Data Partner &rarr;</a>
           </div>
         </div>
       </section>
