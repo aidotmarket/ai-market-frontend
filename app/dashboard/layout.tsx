@@ -20,8 +20,8 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
       return;
     }
 
-    // Buyers can access inquiry and order routes only
-    const buyerAllowedPrefixes = ['/dashboard/inquiries', '/dashboard/orders'];
+    // Buyers can access inquiry, order, and request routes only
+    const buyerAllowedPrefixes = ['/dashboard/inquiries', '/dashboard/orders', '/dashboard/requests'];
     const isBuyer = user && user.role !== 'seller' && user.role !== 'admin';
     if (isBuyer && !buyerAllowedPrefixes.some((p) => pathname.startsWith(p))) {
       router.push('/dashboard/inquiries');
@@ -77,6 +77,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
     : [
         { name: 'My Inquiries', href: '/dashboard/inquiries' },
         { name: 'My Orders', href: '/dashboard/orders' },
+        { name: 'My Requests', href: '/dashboard/requests' },
       ];
 
   return (

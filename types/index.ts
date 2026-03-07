@@ -334,3 +334,58 @@ export interface ConversationDetail {
   messages: ConversationMessage[];
   created_at: string;
 }
+
+// ============================================================================
+// Data Request types — matches backend app/schemas/data_request.py
+// ============================================================================
+
+export type DataRequestStatus = 'draft' | 'open' | 'responses_received' | 'fulfilled' | 'closed' | 'expired';
+export type DataRequestUrgency = 'low' | 'medium' | 'high' | 'urgent';
+
+export interface DataRequestListItem {
+  id: string;
+  slug: string;
+  title: string;
+  description: string;
+  categories: string[];
+  urgency: DataRequestUrgency;
+  price_range_min: number | null;
+  price_range_max: number | null;
+  currency: string;
+  status: DataRequestStatus;
+  response_count: number;
+  buyer_display_name: string | null;
+  created_at: string;
+  updated_at: string | null;
+}
+
+export interface DataRequestDetail extends DataRequestListItem {
+  format_preferences: string | null;
+  provenance_requirements: string | null;
+  published_at: string | null;
+  owner_id: string;
+}
+
+export interface CreateDataRequestPayload {
+  title: string;
+  description: string;
+  categories?: string[];
+  format_preferences?: string;
+  price_range_min?: number;
+  price_range_max?: number;
+  currency?: string;
+  urgency?: DataRequestUrgency;
+  provenance_requirements?: string;
+}
+
+export interface DataRequestResponse {
+  id: string;
+  request_id: string;
+  responder_id: string;
+  proposal: string;
+  proposed_price: number | null;
+  timeline: string | null;
+  status: string;
+  created_at: string;
+  updated_at: string | null;
+}

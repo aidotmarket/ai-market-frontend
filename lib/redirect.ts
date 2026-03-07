@@ -1,4 +1,4 @@
-const ALLOWED_PREFIXES = ['/listings', '/dashboard', '/checkout'];
+const ALLOWED_PREFIXES = ['/listings', '/dashboard', '/checkout', '/requests'];
 
 /**
  * Validate a redirect URL to prevent open redirect attacks.
