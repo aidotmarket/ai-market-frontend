@@ -162,17 +162,24 @@ export function AllAIProvider({ children }: { children: ReactNode }) {
 
             try {
               const evt = JSON.parse(raw);
-              if (evt.type === 'delta' && evt.chunk) {
+
+              // Delta content: support both {"text":"..."} and {"type":"delta","chunk":"..."}
+              const delta = evt.text ?? (evt.type === 'delta' ? evt.chunk : undefined);
+              if (delta) {
                 setMessages((prev) =>
                   prev.map((m) =>
-                    m.id === assistantId ? { ...m, content: m.content + evt.chunk } : m
+                    m.id === assistantId ? { ...m, content: m.content + delta } : m
                   )
                 );
-              } else if (evt.type === 'error') {
+              }
+
+              // Error: support both {"error":"..."} and {"type":"error","message":"..."}
+              const error = evt.error ?? (evt.type === 'error' ? evt.message : undefined);
+              if (error) {
                 setMessages((prev) =>
                   prev.map((m) =>
                     m.id === assistantId
-                      ? { ...m, content: evt.message || 'Something went wrong.' }
+                      ? { ...m, content: error || 'Something went wrong.' }
                       : m
                   )
                 );
