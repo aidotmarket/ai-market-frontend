@@ -7,12 +7,19 @@ export const metadata: Metadata = {
     'The marketplace where enterprise datasets become findable, queryable, and purchasable by AI systems. Think SEO — but for your data.',
 };
 
-const steps = [
+const steps: { number: string; title: string; description: React.ReactNode; iconPath: string }[] = [
   {
     number: '01',
     title: 'Process & Enrich',
-    description:
-      'Upload data to vectorAIz. AI automatically profiles, tags, and generates rich metadata for discoverability.',
+    description: (
+      <>
+        Upload data to{' '}
+        <a href="https://vectoraiz.com" className="text-blue-600 hover:underline" target="_blank" rel="noopener noreferrer">
+          vectorAIz
+        </a>
+        . AI automatically profiles, tags, and generates rich metadata for discoverability.
+      </>
+    ),
     iconPath:
       'M9.75 3.104v5.714a2.25 2.25 0 0 1-.659 1.591L5 14.5M9.75 3.104c-.251.023-.501.05-.75.082m.75-.082a24.301 24.301 0 0 1 4.5 0m0 0v5.714a2.25 2.25 0 0 0 .659 1.591L19 14.5M14.25 3.104c.251.023.501.05.75.082M19 14.5l-2.47 2.47a2.25 2.25 0 0 1-1.59.659H9.06a2.25 2.25 0 0 1-1.591-.659L5 14.5m14 0-1.543-4.117A2.25 2.25 0 0 0 15.349 8.75H8.651a2.25 2.25 0 0 0-2.108 1.633L5 14.5',
   },

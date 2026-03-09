@@ -10,6 +10,10 @@ export const metadata: Metadata = {
   },
   description: 'The marketplace where enterprise datasets become findable, queryable, and purchasable by AI systems.',
   metadataBase: new URL('https://ai.market'),
+  icons: {
+    icon: '/favicon.svg',
+    apple: '/apple-touch-icon.png',
+  },
   openGraph: {
     siteName: 'ai.market',
     type: 'website',
