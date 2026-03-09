@@ -1,1 +1,27 @@
 @import "tailwindcss";
+
+/* allAI chat animations */
+@keyframes allai-blink {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0; }
+}
+
+@keyframes allai-bounce {
+  0%, 80%, 100% { transform: scale(0); }
+  40% { transform: scale(1); }
+}
+
+@keyframes allai-pulse-ring {
+  0% { box-shadow: 0 0 0 0 rgba(34, 211, 238, 0.3); }
+  70% { box-shadow: 0 0 0 10px rgba(34, 211, 238, 0); }
+  100% { box-shadow: 0 0 0 0 rgba(34, 211, 238, 0); }
+}
+
+.allai-fab-pulse {
+  animation: allai-pulse-ring 2s ease-out 1;
+}
+
+@keyframes allai-dot {
+  0%, 80%, 100% { opacity: 0.3; }
+  40% { opacity: 1; }
+}
