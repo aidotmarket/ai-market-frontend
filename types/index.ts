@@ -68,29 +68,36 @@ export interface ListingListItem {
 
 export interface ListingDetail {
   id: string;
-  seller_id: string;
   slug: string;
-  status: ListingStatus;
   title: string;
   description: string;
   short_description: string | null;
-  price: number;
-  pricing_type: PricingType;
-  subscription_price_monthly: number | null;
-  model_provider: ModelProvider;
+  publisher: { name: string; id: string } | null;
+  pricing: {
+    price: number;
+    pricing_type: PricingType;
+    subscription_price_monthly: number | null;
+  } | null;
+  license: string | null;
   category: string;
   secondary_categories: string[] | null;
   tags: string[];
-  schema_info: Record<string, unknown>;
+  schema_summary: string | null;
+  row_count: number | null;
+  data_format: string | null;
+  update_frequency: string | null;
+  coverage: Record<string, unknown> | null;
   privacy_score: number;
-  compliance_status: ComplianceStatus;
-  compliance_details: Record<string, unknown> | null;
-  trust_level: TrustLevel;
   quality_score: number;
+  searchability_score: number | null;
+  compliance_status: ComplianceStatus;
+  compliance_frameworks: string[] | null;
+  trust_level: TrustLevel;
   verification_status: VerificationStatus;
+  is_accessible_for_free: boolean;
   view_count: number;
   inquiry_count: number;
-  purchase_count: number;
+  noindex: boolean;
   created_at: string;
   updated_at: string | null;
   published_at: string | null;

@@ -53,7 +53,7 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
       description,
     },
     robots:
-      listing.status !== 'published'
+      listing.noindex
         ? { index: false, follow: false }
         : undefined,
   };
@@ -76,8 +76,8 @@ export default async function ListingDetailPage({ params }: Props) {
     notFound();
   }
 
-  const columns = (listing.schema_info as { columns?: { name: string; type: string }[] })?.columns;
-  const rowCount = (listing.schema_info as { row_count?: number })?.row_count;
+  const schemaSummary = listing.schema_summary;
+  const rowCount = listing.row_count;
 
   return (
     <>
@@ -101,7 +101,7 @@ export default async function ListingDetailPage({ params }: Props) {
               <span>&middot;</span>
               <span>{listing.view_count} views</span>
               <span>&middot;</span>
-              <span>{listing.purchase_count} purchases</span>
+              <span>{listing.inquiry_count ?? 0} inquiries</span>
             </div>
           </div>
 
@@ -134,30 +134,15 @@ export default async function ListingDetailPage({ params }: Props) {
           </div>
 
           {/* Schema Info */}
-          {columns && columns.length > 0 && (
+          {(schemaSummary || rowCount != null) && (
             <div>
               <h2 className="text-lg font-semibold mb-3">Schema Information</h2>
               {rowCount != null && (
                 <p className="text-sm text-gray-500 mb-3">{rowCount.toLocaleString()} rows</p>
               )}
-              <div className="overflow-x-auto rounded-lg border border-gray-200">
-                <table className="min-w-full text-sm">
-                  <thead className="bg-gray-50">
-                    <tr>
-                      <th className="px-4 py-2 text-left font-medium text-gray-700">Column</th>
-                      <th className="px-4 py-2 text-left font-medium text-gray-700">Type</th>
-                    </tr>
-                  </thead>
-                  <tbody className="divide-y divide-gray-100">
-                    {columns.map((col) => (
-                      <tr key={col.name}>
-                        <td className="px-4 py-2 font-mono text-gray-900">{col.name}</td>
-                        <td className="px-4 py-2 text-gray-500">{col.type}</td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
+              {schemaSummary && (
+                <p className="text-sm text-gray-700 whitespace-pre-wrap">{schemaSummary}</p>
+              )}
             </div>
           )}
 
@@ -166,10 +151,9 @@ export default async function ListingDetailPage({ params }: Props) {
             <h2 className="text-lg font-semibold mb-3">Compliance</h2>
             <div className="flex flex-wrap gap-2">
               <ComplianceBadge label="Status" value={listing.compliance_status} />
-              {listing.compliance_details &&
-                Object.entries(listing.compliance_details).map(([key, val]) => (
-                  <ComplianceBadge key={key} label={key.toUpperCase()} value={String(val)} />
-                ))}
+              {listing.compliance_frameworks?.map((framework) => (
+                <ComplianceBadge key={framework} label={framework} value="compliant" />
+              ))}
             </div>
           </div>
         </div>
@@ -178,13 +162,13 @@ export default async function ListingDetailPage({ params }: Props) {
         <div className="space-y-6">
           {/* Price card */}
           <div className="rounded-xl border border-gray-200 p-6">
-            <p className="text-3xl font-bold text-gray-900 mb-1">{formatPrice(listing.price)}</p>
+            <p className="text-3xl font-bold text-gray-900 mb-1">{formatPrice(listing.pricing?.price ?? 0)}</p>
             <BuyButton
               listingId={listing.id}
-              sellerId={listing.seller_id}
+              sellerId={listing.publisher?.id ?? ''}
               slug={listing.slug}
-              price={listing.price}
-              pricingType={listing.pricing_type}
+              price={listing.pricing?.price ?? 0}
+              pricingType={listing.pricing?.pricing_type ?? 'one_time'}
             />
           </div>
 
@@ -219,11 +203,13 @@ export default async function ListingDetailPage({ params }: Props) {
             </div>
           </div>
 
-          {/* Seller card */}
-          <div className="rounded-xl border border-gray-200 p-6">
-            <h3 className="font-semibold text-gray-900 mb-3">Seller</h3>
-            <p className="text-sm text-gray-600">Seller ID: {listing.seller_id.slice(0, 8)}...</p>
-          </div>
+          {/* Publisher card */}
+          {listing.publisher && (
+            <div className="rounded-xl border border-gray-200 p-6">
+              <h3 className="font-semibold text-gray-900 mb-3">Publisher</h3>
+              <p className="text-sm text-gray-600">{listing.publisher.name}</p>
+            </div>
+          )}
 
           {/* Inquiry Widget */}
           <InquiryWidget listingId={listing.id} listingSlug={listing.slug} />
