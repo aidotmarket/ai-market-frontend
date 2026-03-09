@@ -21,8 +21,8 @@ export default function PartnerPage() {
             <p className="text-gray-900 font-medium">You&apos;re signed in.</p>
             <p className="mt-2 text-gray-600">
               Contact us at{' '}
-              <a href="mailto:max@ai.market" className="text-blue-600 hover:text-blue-800 font-medium">
-                max@ai.market
+              <a href="mailto:support@ai.market" className="text-blue-600 hover:text-blue-800 font-medium">
+                support@ai.market
               </a>{' '}
               to start listing your data.
             </p>
@@ -40,8 +40,8 @@ export default function PartnerPage() {
             </div>
             <p className="mt-4 text-sm text-gray-500">
               Already have questions? Email{' '}
-              <a href="mailto:max@ai.market" className="text-blue-600 hover:text-blue-800">
-                max@ai.market
+              <a href="mailto:support@ai.market" className="text-blue-600 hover:text-blue-800">
+                support@ai.market
               </a>
             </p>
           </div>

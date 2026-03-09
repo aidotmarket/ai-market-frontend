@@ -45,6 +45,12 @@ export default function LoginForm() {
       <div className="w-full max-w-md">
         <h1 className="text-2xl font-bold text-center mb-8">Log in to ai.market</h1>
 
+        {searchParams.get('redirect')?.includes('/requests/new') && (
+          <div className="rounded-lg bg-blue-50 border border-blue-200 px-4 py-3 text-sm text-blue-700 mb-4">
+            We need an account so we can reach out to you with offers that match your requirements. After sign-up, allAI will walk you through submitting a data request to the marketplace.
+          </div>
+        )}
+
         <form onSubmit={handleSubmit} className="space-y-4">
           {error && (
             <div className="rounded-lg bg-red-50 border border-red-200 px-4 py-3 text-sm text-red-700">
@@ -80,6 +86,15 @@ export default function LoginForm() {
               className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
               placeholder="••••••••"
             />
+          </div>
+
+          <div className="text-right">
+            <a
+              href="mailto:support@ai.market?subject=Password%20Reset%20Request"
+              className="text-sm text-blue-600 hover:underline"
+            >
+              Forgot your password?
+            </a>
           </div>
 
           <button
