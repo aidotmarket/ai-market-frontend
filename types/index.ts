@@ -82,7 +82,7 @@ export interface ListingDetail {
   category: string;
   secondary_categories: string[] | null;
   tags: string[];
-  schema_summary: string | null;
+  schema_summary: string | { columns: string[]; column_count: number; sample_types: Record<string, string> } | null;
   row_count: number | null;
   data_format: string | null;
   update_frequency: string | null;

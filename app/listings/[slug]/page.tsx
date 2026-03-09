@@ -140,8 +140,28 @@ export default async function ListingDetailPage({ params }: Props) {
               {rowCount != null && (
                 <p className="text-sm text-gray-500 mb-3">{rowCount.toLocaleString()} rows</p>
               )}
-              {schemaSummary && (
+              {schemaSummary && typeof schemaSummary === 'string' && (
                 <p className="text-sm text-gray-700 whitespace-pre-wrap">{schemaSummary}</p>
+              )}
+              {schemaSummary && typeof schemaSummary === 'object' && 'columns' in schemaSummary && (
+                <div className="overflow-x-auto">
+                  <table className="min-w-full text-sm border border-gray-200 rounded-lg">
+                    <thead>
+                      <tr className="bg-gray-50">
+                        <th className="px-3 py-2 text-left font-medium text-gray-700 border-b">Column</th>
+                        <th className="px-3 py-2 text-left font-medium text-gray-700 border-b">Type</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {schemaSummary.columns.map((col) => (
+                        <tr key={col} className="border-b border-gray-100 last:border-0">
+                          <td className="px-3 py-1.5 text-gray-900 font-mono">{col}</td>
+                          <td className="px-3 py-1.5 text-gray-600">{schemaSummary.sample_types?.[col] ?? '—'}</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
               )}
             </div>
           )}
