@@ -23,7 +23,7 @@ export function Layout({ children }: { children: React.ReactNode }) {
           <div className="flex h-16 items-center justify-between">
             {/* Logo */}
             <Link href="/" className="flex items-center gap-2 font-bold text-xl text-gray-900">
-              <span className="text-blue-600">ai</span>.market
+              <span className="text-blue-600">ai</span>{'.market'}
             </Link>
 
             {/* Desktop Nav */}
