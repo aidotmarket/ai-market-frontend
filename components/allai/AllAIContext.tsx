@@ -79,6 +79,7 @@ export function AllAIProvider({ children }: { children: ReactNode }) {
     const res = await fetch(`${API_URL}/api/allai/support/anonymous/session`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({}),
     });
     if (!res.ok) throw new Error('Failed to create session');
     const data = await res.json();
