@@ -9,7 +9,9 @@ import { formatPrice, formatDate } from '@/lib/format';
 
 const STATUS_STYLES: Record<string, string> = {
   draft: 'bg-gray-100 text-gray-800',
+  enhanced: 'bg-purple-100 text-purple-800',
   published: 'bg-green-100 text-green-800',
+  unlisted: 'bg-orange-100 text-orange-800',
   pending_review: 'bg-yellow-100 text-yellow-800',
   suspended: 'bg-red-100 text-red-800',
   archived: 'bg-gray-100 text-gray-600',
@@ -17,7 +19,9 @@ const STATUS_STYLES: Record<string, string> = {
 
 const STATUS_LABELS: Record<string, string> = {
   draft: 'Draft',
+  enhanced: 'Enhanced',
   published: 'Published',
+  unlisted: 'Unlisted',
   pending_review: 'Pending Review',
   suspended: 'Suspended',
   archived: 'Archived',
@@ -186,7 +190,13 @@ export default function ListingsPage() {
                   </td>
                   <td className="whitespace-nowrap px-6 py-4 text-right">
                     <div className="flex items-center justify-end gap-2">
-                      {listing.status === 'draft' && (
+                      <button
+                        onClick={() => router.push(`/dashboard/listings/${listing.id}/edit`)}
+                        className="text-xs font-medium text-gray-600 hover:text-gray-800"
+                      >
+                        Edit
+                      </button>
+                      {(listing.status === 'draft' || listing.status === 'enhanced') && (
                         <button
                           onClick={() => handlePublish(listing.id)}
                           disabled={actionLoading === listing.id}
@@ -195,7 +205,7 @@ export default function ListingsPage() {
                           Publish
                         </button>
                       )}
-                      {listing.status === 'published' && (
+                      {(listing.status === 'published' || listing.status === 'unlisted') && (
                         <button
                           onClick={() => handleUnpublish(listing.id)}
                           disabled={actionLoading === listing.id}

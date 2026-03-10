@@ -41,7 +41,7 @@ export interface RegisterRequest {
 // Listing types — matches backend app/schemas/listing.py
 // ============================================================================
 
-export type ListingStatus = 'draft' | 'pending_review' | 'published' | 'suspended' | 'archived';
+export type ListingStatus = 'draft' | 'enhanced' | 'pending_review' | 'published' | 'unlisted' | 'suspended' | 'archived';
 export type PricingType = 'one_time' | 'subscription' | 'both';
 export type ComplianceStatus = 'not_checked' | 'low_risk' | 'medium_risk' | 'high_risk';
 export type ModelProvider = 'openai' | 'anthropic' | 'google' | 'mistral' | 'local';
