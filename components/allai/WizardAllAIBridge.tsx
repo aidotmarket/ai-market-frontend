@@ -154,7 +154,7 @@ export function WizardAllAIBridgeProvider({ children }: { children: ReactNode })
     (field: string, editedValue: string) => {
       setPendingProposals((prev) => {
         const proposal = prev.get(field);
-        if (!proposal) return prev;
+        if (!proposal || proposal.status !== 'pending') return prev;
 
         // Save pre-AI value before overwriting
         const currentValue = formGetterRef.current?.()?.[field];

@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import { useRouter } from 'next/navigation';
 import { createDraft, enhanceListing, updateListing, getListingPreview, publishListing } from '@/api/listings';
 import { getConnectStatus } from '@/api/connect';
@@ -98,7 +98,7 @@ function NewListingWizardInner() {
   const { setOnFieldProposal, setOnBatchProposal, setFormSnapshotGetter } = useAllAI();
 
   // Register form state with the bridge
-  const dataRef = { current: data }; // always fresh
+  const dataRef = useRef(data);
   dataRef.current = data;
 
   const formGetter = useCallback(() => ({ ...dataRef.current }), []);
