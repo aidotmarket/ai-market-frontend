@@ -4,6 +4,8 @@ import { useRef, useEffect, useState, useCallback } from 'react';
 import { useAllAI } from './AllAIContext';
 import AllAIMessage from './AllAIMessage';
 import AllAIChatInput from './AllAIChatInput';
+import FieldProposalCard from './FieldProposalCard';
+import { useWizardBridge } from './WizardAllAIBridge';
 
 const MOBILE_BREAKPOINT = 640;
 
@@ -16,6 +18,7 @@ const MAX_HEIGHT = 600;
 
 export default function AllAIPanel() {
   const { isOpen, close, messages, isStreaming, sendMessage } = useAllAI();
+  const bridge = useWizardBridge();
   const scrollRef = useRef<HTMLDivElement>(null);
   const [visible, setVisible] = useState(false);
   const [isMobile, setIsMobile] = useState(false);
@@ -238,6 +241,17 @@ export default function AllAIPanel() {
             isStreaming={isStreaming && msg === messages[messages.length - 1]}
           />
         ))}
+        {bridge && Array.from(bridge.pendingProposals.values())
+          .filter((p) => p.status === 'pending')
+          .map((p) => (
+            <FieldProposalCard
+              key={`proposal-${p.field}-${p.timestamp}`}
+              proposal={p}
+              onAccept={() => bridge.acceptProposal(p.field)}
+              onEdit={(v) => bridge.editProposal(p.field, v)}
+              onReject={() => bridge.rejectProposal(p.field)}
+            />
+          ))}
       </div>
 
       {/* Input */}

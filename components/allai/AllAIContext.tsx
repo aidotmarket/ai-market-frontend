@@ -21,6 +21,12 @@ export interface Message {
   timestamp: number;
 }
 
+export interface FieldProposalEvent {
+  field: string;
+  value: string;
+  reasoning: string;
+}
+
 interface AllAIContextValue {
   isOpen: boolean;
   open: () => void;
@@ -30,6 +36,14 @@ interface AllAIContextValue {
   isStreaming: boolean;
   sendMessage: (text: string) => Promise<void>;
   page: string;
+  // Wizard bridge callbacks
+  onFieldProposal: ((proposal: FieldProposalEvent) => void) | null;
+  setOnFieldProposal: (cb: ((proposal: FieldProposalEvent) => void) | null) => void;
+  onBatchProposal: ((proposals: FieldProposalEvent[]) => void) | null;
+  setOnBatchProposal: (cb: ((proposals: FieldProposalEvent[]) => void) | null) => void;
+  // Form snapshot getter for G1-M1
+  formSnapshotGetter: (() => Record<string, any>) | null;
+  setFormSnapshotGetter: (getter: (() => Record<string, any>) | null) => void;
 }
 
 const AllAIContext = createContext<AllAIContextValue | null>(null);
@@ -47,6 +61,30 @@ export function AllAIProvider({ children }: { children: ReactNode }) {
   const [isStreaming, setIsStreaming] = useState(false);
   const sessionIdRef = useRef<string | null>(null);
   const abortRef = useRef<AbortController | null>(null);
+
+  // Wizard bridge callbacks
+  const onFieldProposalRef = useRef<((proposal: FieldProposalEvent) => void) | null>(null);
+  const onBatchProposalRef = useRef<((proposals: FieldProposalEvent[]) => void) | null>(null);
+  const formSnapshotGetterRef = useRef<(() => Record<string, any>) | null>(null);
+
+  const [onFieldProposalState, setOnFieldProposalState] = useState<((proposal: FieldProposalEvent) => void) | null>(null);
+  const [onBatchProposalState, setOnBatchProposalState] = useState<((proposals: FieldProposalEvent[]) => void) | null>(null);
+  const [formSnapshotGetterState, setFormSnapshotGetterState] = useState<(() => Record<string, any>) | null>(null);
+
+  const setOnFieldProposal = useCallback((cb: ((proposal: FieldProposalEvent) => void) | null) => {
+    onFieldProposalRef.current = cb;
+    setOnFieldProposalState(() => cb);
+  }, []);
+
+  const setOnBatchProposal = useCallback((cb: ((proposals: FieldProposalEvent[]) => void) | null) => {
+    onBatchProposalRef.current = cb;
+    setOnBatchProposalState(() => cb);
+  }, []);
+
+  const setFormSnapshotGetter = useCallback((getter: (() => Record<string, any>) | null) => {
+    formSnapshotGetterRef.current = getter;
+    setFormSnapshotGetterState(() => getter);
+  }, []);
 
   // Restore session on mount
   useEffect(() => {
@@ -118,15 +156,21 @@ export function AllAIProvider({ children }: { children: ReactNode }) {
         const context: Record<string, string> = { page: pathname };
         if (listingMatch) context.listing_id = listingMatch[1];
 
-        const res = await fetch(`${API_URL}/api/allai/support/anonymous/message`, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
+        const bodyPayload: Record<string, any> = {
             session_id: sessionId,
             message: trimmed,
             context,
             stream: true,
-          }),
+        };
+        const snapshot = formSnapshotGetterRef.current?.();
+        if (snapshot && Object.keys(snapshot).length > 0) {
+          bodyPayload.form_snapshot = snapshot;
+        }
+
+        const res = await fetch(`${API_URL}/api/allai/support/anonymous/message`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(bodyPayload),
           signal: controller.signal,
           cache: 'no-store',
         });
@@ -193,6 +237,26 @@ export function AllAIProvider({ children }: { children: ReactNode }) {
                     )
                   );
                 }
+
+                // Field proposal from wizard tools
+                if (evt.type === 'field_proposal' && evt.field) {
+                  onFieldProposalRef.current?.({
+                    field: evt.field,
+                    value: evt.value ?? '',
+                    reasoning: evt.reasoning ?? '',
+                  });
+                }
+
+                // Batch proposal from wizard tools
+                if (evt.type === 'batch_proposal' && Array.isArray(evt.proposals)) {
+                  onBatchProposalRef.current?.(
+                    evt.proposals.map((p: any) => ({
+                      field: p.field,
+                      value: p.value ?? '',
+                      reasoning: p.reasoning ?? '',
+                    }))
+                  );
+                }
               } catch {
                 // skip malformed JSON
               }
@@ -236,7 +300,12 @@ export function AllAIProvider({ children }: { children: ReactNode }) {
 
   return (
     <AllAIContext.Provider
-      value={{ isOpen, open, close, toggle, messages, isStreaming, sendMessage, page: pathname }}
+      value={{
+        isOpen, open, close, toggle, messages, isStreaming, sendMessage, page: pathname,
+        onFieldProposal: onFieldProposalState, setOnFieldProposal,
+        onBatchProposal: onBatchProposalState, setOnBatchProposal,
+        formSnapshotGetter: formSnapshotGetterState, setFormSnapshotGetter,
+      }}
     >
       {children}
     </AllAIContext.Provider>

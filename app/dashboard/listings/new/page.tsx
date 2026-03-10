@@ -1,12 +1,14 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { useRouter } from 'next/navigation';
 import { createDraft, enhanceListing, updateListing, getListingPreview, publishListing } from '@/api/listings';
 import { getConnectStatus } from '@/api/connect';
 import { useToast } from '@/components/Toast';
 import { formatPrice } from '@/lib/format';
 import type { SchemaColumn } from '@/types';
+import { WizardAllAIBridgeProvider, useWizardBridge } from '@/components/allai/WizardAllAIBridge';
+import { useAllAI } from '@/components/allai/AllAIContext';
 
 const STEPS = [
   'Basic Info',
@@ -72,6 +74,14 @@ const initialData: WizardData = {
 };
 
 export default function NewListingWizardPage() {
+  return (
+    <WizardAllAIBridgeProvider>
+      <NewListingWizardInner />
+    </WizardAllAIBridgeProvider>
+  );
+}
+
+function NewListingWizardInner() {
   const router = useRouter();
   const { toast } = useToast();
 
@@ -83,6 +93,35 @@ export default function NewListingWizardPage() {
   const [showConfirmModal, setShowConfirmModal] = useState(false);
   const [stripeChecked, setStripeChecked] = useState(false);
   const [stripeConnected, setStripeConnected] = useState(false);
+
+  const bridge = useWizardBridge();
+  const { setOnFieldProposal, setOnBatchProposal, setFormSnapshotGetter } = useAllAI();
+
+  // Register form state with the bridge
+  const dataRef = { current: data }; // always fresh
+  dataRef.current = data;
+
+  const formGetter = useCallback(() => ({ ...dataRef.current }), []);
+  const formSetter = useCallback((field: string, value: any) => {
+    setData((prev) => ({ ...prev, [field]: value }));
+  }, []);
+
+  useEffect(() => {
+    bridge?.registerFormState(formGetter, formSetter);
+  }, [bridge, formGetter, formSetter]);
+
+  // Wire SSE proposal callbacks to bridge
+  useEffect(() => {
+    if (!bridge) return;
+    setOnFieldProposal((p) => bridge.proposeFieldChange(p.field, p.value, p.reasoning));
+    setOnBatchProposal((proposals) => bridge.proposeBatchChanges(proposals));
+    setFormSnapshotGetter(() => formGetter());
+    return () => {
+      setOnFieldProposal(null);
+      setOnBatchProposal(null);
+      setFormSnapshotGetter(null);
+    };
+  }, [bridge, setOnFieldProposal, setOnBatchProposal, setFormSnapshotGetter, formGetter]);
 
   useEffect(() => {
     getConnectStatus()
@@ -265,6 +304,21 @@ export default function NewListingWizardPage() {
         <p className="mt-1 text-sm text-gray-500">Follow the steps to list your data for sale.</p>
       </div>
 
+      {/* Revert all AI changes */}
+      {bridge && bridge.aiPopulatedFields.size > 0 && (
+        <div className="flex items-center justify-between rounded-lg border border-purple-200 bg-purple-50 px-4 py-2">
+          <span className="text-xs text-purple-700">
+            &#10024; allAI has populated {bridge.aiPopulatedFields.size} field{bridge.aiPopulatedFields.size > 1 ? 's' : ''}
+          </span>
+          <button
+            onClick={() => bridge.revertAllAIChanges()}
+            className="text-xs font-medium text-purple-600 hover:text-purple-800 underline"
+          >
+            Revert all AI changes
+          </button>
+        </div>
+      )}
+
       {/* Progress indicator */}
       <div className="bg-white rounded-xl border border-gray-200 p-4 shadow-sm">
         <div className="flex items-center justify-between">
@@ -303,10 +357,10 @@ export default function NewListingWizardPage() {
       {/* Step content */}
       <div className="bg-white rounded-xl border border-gray-200 shadow-sm overflow-hidden">
         <div className="p-6">
-          {step === 0 && <Step1BasicInfo data={data} update={update} onEnhance={handleEnhance} onSkip={handleSkipAI} enhancing={enhancing} />}
-          {step === 1 && <Step2AIEnhancement data={data} update={update} />}
+          {step === 0 && <Step1BasicInfo data={data} update={update} onEnhance={handleEnhance} onSkip={handleSkipAI} enhancing={enhancing} aiFields={bridge?.aiPopulatedFields} />}
+          {step === 1 && <Step2AIEnhancement data={data} update={update} aiFields={bridge?.aiPopulatedFields} />}
           {step === 2 && <Step3Schema data={data} update={update} />}
-          {step === 3 && <Step4Pricing data={data} update={update} />}
+          {step === 3 && <Step4Pricing data={data} update={update} aiFields={bridge?.aiPopulatedFields} />}
           {step === 4 && <Step5Compliance data={data} update={update} />}
           {step === 5 && <Step6Review data={data} onPublish={() => setShowConfirmModal(true)} publishing={publishing} />}
         </div>
@@ -377,6 +431,14 @@ export default function NewListingWizardPage() {
   );
 }
 
+function AllAIFieldBadge() {
+  return (
+    <span className="ml-1 inline-flex items-center text-[10px] font-medium text-purple-600 bg-purple-50 rounded px-1.5 py-0.5">
+      &#10024; allAI
+    </span>
+  );
+}
+
 /* ========================================================================
    Step 1: Basic Info
    ======================================================================== */
@@ -387,12 +449,14 @@ function Step1BasicInfo({
   onEnhance,
   onSkip,
   enhancing,
+  aiFields,
 }: {
   data: WizardData;
   update: (f: Partial<WizardData>) => void;
   onEnhance: () => void;
   onSkip: () => void;
   enhancing: boolean;
+  aiFields?: Set<string>;
 }) {
   if (enhancing) {
     return (
@@ -413,7 +477,7 @@ function Step1BasicInfo({
 
       <div className="space-y-4">
         <div>
-          <label className="block text-sm font-medium text-gray-700 mb-1">Title (optional)</label>
+          <label className="block text-sm font-medium text-gray-700 mb-1">Title (optional){aiFields?.has('title') && <AllAIFieldBadge />}</label>
           <input
             type="text"
             value={data.title}
@@ -424,7 +488,7 @@ function Step1BasicInfo({
         </div>
 
         <div>
-          <label className="block text-sm font-medium text-gray-700 mb-1">Description (optional)</label>
+          <label className="block text-sm font-medium text-gray-700 mb-1">Description (optional){aiFields?.has('description') && <AllAIFieldBadge />}</label>
           <textarea
             rows={3}
             value={data.description}
@@ -508,9 +572,11 @@ function Step1BasicInfo({
 function Step2AIEnhancement({
   data,
   update,
+  aiFields,
 }: {
   data: WizardData;
   update: (f: Partial<WizardData>) => void;
+  aiFields?: Set<string>;
 }) {
   const [tagInput, setTagInput] = useState('');
   const isAI = (field: string) => data.ai_generated_fields.includes(field);
@@ -543,7 +609,7 @@ function Step2AIEnhancement({
       <div className="space-y-4">
         <div>
           <label className="block text-sm font-medium text-gray-700 mb-1">
-            Title {isAI('title') && <AIBadge />}
+            Title {isAI('title') && <AIBadge />}{aiFields?.has('ai_title') && <AllAIFieldBadge />}
           </label>
           <input
             type="text"
@@ -555,7 +621,7 @@ function Step2AIEnhancement({
 
         <div>
           <label className="block text-sm font-medium text-gray-700 mb-1">
-            Description {isAI('description') && <AIBadge />}
+            Description {isAI('description') && <AIBadge />}{aiFields?.has('ai_description') && <AllAIFieldBadge />}
           </label>
           <textarea
             rows={4}
@@ -722,9 +788,11 @@ function Step3Schema({
 function Step4Pricing({
   data,
   update,
+  aiFields,
 }: {
   data: WizardData;
   update: (f: Partial<WizardData>) => void;
+  aiFields?: Set<string>;
 }) {
   return (
     <div className="space-y-6">
@@ -764,7 +832,7 @@ function Step4Pricing({
         <div className="grid grid-cols-2 gap-4">
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-1">
-              Price ({data.currency})
+              Price ({data.currency}){aiFields?.has('price') && <AllAIFieldBadge />}
             </label>
             <div className="relative">
               <div className="pointer-events-none absolute inset-y-0 left-0 flex items-center pl-3">
