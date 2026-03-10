@@ -108,6 +108,7 @@ export function AllAIProvider({ children }: { children: ReactNode }) {
       ]);
       setIsStreaming(true);
 
+      let readerRef: ReadableStreamDefaultReader<Uint8Array> | null = null;
       try {
         const sessionId = await ensureSession();
         const controller = new AbortController();
@@ -127,6 +128,7 @@ export function AllAIProvider({ children }: { children: ReactNode }) {
             stream: true,
           }),
           signal: controller.signal,
+          cache: 'no-store',
         });
 
         if (res.status === 429) {
@@ -144,50 +146,66 @@ export function AllAIProvider({ children }: { children: ReactNode }) {
         if (!res.ok || !res.body) throw new Error('Stream request failed');
 
         const reader = res.body.getReader();
+        readerRef = reader;
         const decoder = new TextDecoder();
         let buffer = '';
+        const READ_TIMEOUT_MS = 30_000;
 
-        while (true) {
-          const { done, value } = await reader.read();
-          if (done) break;
+        try {
+          while (true) {
+            const readPromise = reader.read();
+            const timeoutPromise = new Promise<never>((_, reject) =>
+              setTimeout(() => reject(new Error('Stream read timeout')), READ_TIMEOUT_MS)
+            );
+            const { done, value } = await Promise.race([readPromise, timeoutPromise]);
+            if (done) break;
 
-          buffer += decoder.decode(value, { stream: true });
-          const lines = buffer.split('\n');
-          buffer = lines.pop() || '';
+            buffer += decoder.decode(value, { stream: true });
+            const lines = buffer.split('\n');
+            buffer = lines.pop() || '';
 
-          for (const line of lines) {
-            if (!line.startsWith('data: ')) continue;
-            const raw = line.slice(6).trim();
-            if (!raw) continue;
+            for (const line of lines) {
+              if (!line.startsWith('data: ')) continue;
+              const raw = line.slice(6).trim();
+              if (!raw) continue;
 
-            try {
-              const evt = JSON.parse(raw);
+              try {
+                const evt = JSON.parse(raw);
 
-              // Delta content: support both {"text":"..."} and {"type":"delta","chunk":"..."}
-              const delta = evt.text ?? (evt.type === 'delta' ? evt.chunk : undefined);
-              if (delta) {
-                setMessages((prev) =>
-                  prev.map((m) =>
-                    m.id === assistantId ? { ...m, content: m.content + delta } : m
-                  )
-                );
+                // Delta content: support both {"text":"..."} and {"type":"delta","chunk":"..."}
+                const delta = evt.text ?? (evt.type === 'delta' ? evt.chunk : undefined);
+                if (delta) {
+                  setMessages((prev) =>
+                    prev.map((m) =>
+                      m.id === assistantId ? { ...m, content: m.content + delta } : m
+                    )
+                  );
+                }
+
+                // Error: support both {"error":"..."} and {"type":"error","message":"..."}
+                const error = evt.error ?? (evt.type === 'error' ? evt.message : undefined);
+                if (error) {
+                  setMessages((prev) =>
+                    prev.map((m) =>
+                      m.id === assistantId
+                        ? { ...m, content: error || 'Something went wrong.' }
+                        : m
+                    )
+                  );
+                }
+              } catch {
+                // skip malformed JSON
               }
-
-              // Error: support both {"error":"..."} and {"type":"error","message":"..."}
-              const error = evt.error ?? (evt.type === 'error' ? evt.message : undefined);
-              if (error) {
-                setMessages((prev) =>
-                  prev.map((m) =>
-                    m.id === assistantId
-                      ? { ...m, content: error || 'Something went wrong.' }
-                      : m
-                  )
-                );
-              }
-            } catch {
-              // skip malformed JSON
             }
           }
+        } catch (readErr) {
+          // On timeout, abort the request so the connection is torn down
+          if (readErr instanceof Error && readErr.message === 'Stream read timeout') {
+            controller.abort();
+          }
+          throw readErr;
+        } finally {
+          reader.releaseLock();
         }
       } catch (err: any) {
         if (err?.name !== 'AbortError') {
@@ -200,6 +218,8 @@ export function AllAIProvider({ children }: { children: ReactNode }) {
           );
         }
       } finally {
+        // Safety net: cancel the reader if it's still locked
+        try { readerRef?.cancel(); } catch { /* already released */ }
         setIsStreaming(false);
         abortRef.current = null;
       }
