@@ -228,6 +228,56 @@ export interface UpdateListingRequest {
 }
 
 // ============================================================================
+// Seller Wizard types — AI enhancement & preview
+// ============================================================================
+
+export interface EnhanceResponse {
+  title?: string;
+  description?: string;
+  short_description?: string;
+  tags?: string[];
+  category?: string;
+  suggested_price?: number;
+  pricing_type?: PricingType;
+}
+
+export interface SchemaColumn {
+  name: string;
+  type: string;
+  pii_flag: boolean;
+  description: string;
+}
+
+export interface ListingPreview {
+  id: string;
+  title: string;
+  description: string;
+  short_description: string | null;
+  category: string;
+  tags: string[];
+  price: number;
+  pricing_type: PricingType;
+  data_format: string | null;
+  row_count: number | null;
+  schema: SchemaColumn[];
+  pii_score: number;
+  compliance_frameworks: string[];
+  compliance_status: ComplianceStatus;
+  ai_generated_fields: string[];
+}
+
+export interface SellerListingItem {
+  id: string;
+  title: string;
+  status: ListingStatus;
+  category: string;
+  price: number;
+  pricing_type: PricingType;
+  view_count: number;
+  created_at: string;
+}
+
+// ============================================================================
 // Checkout types — matches backend app/api/v1/endpoints/checkout.py
 // ============================================================================
 

@@ -43,3 +43,11 @@ export const getListings = () => api.get('/listings');
 export const createListing = (data: any) => api.post('/listings', data);
 export const updateListing = (id: string, data: any) => api.patch(`/listings/${id}`, data);
 export const getListingBySlug = (slug: string) => api.get(`/listings/${slug}`);
+
+// Seller wizard endpoints
+export const createDraft = (data: any) => api.post('/listings/draft', data);
+export const enhanceListing = (id: string) => api.post(`/listings/${id}/enhance`);
+export const getListingPreview = (id: string) => api.get(`/listings/${id}/preview`);
+export const publishListing = (id: string) => api.post(`/listings/${id}/publish`, { confirmation: true });
+export const unpublishListing = (id: string) => api.post(`/listings/${id}/unpublish`);
+export const deleteListing = (id: string) => api.delete(`/listings/${id}`);
