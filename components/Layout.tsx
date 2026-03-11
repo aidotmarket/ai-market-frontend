@@ -37,6 +37,9 @@ export function Layout({ children }: { children: React.ReactNode }) {
               <Link href="/partner" className="text-sm text-gray-600 hover:text-gray-900">
                 Become a Partner
               </Link>
+              <Link href="/download" className="text-sm text-gray-600 hover:text-gray-900">
+                Get vectorAIz
+              </Link>
               {isAuthenticated && (
                 <Link href="/dashboard" className="text-sm text-gray-600 hover:text-gray-900">
                   Dashboard
@@ -116,6 +119,13 @@ export function Layout({ children }: { children: React.ReactNode }) {
               >
                 Become a Partner
               </Link>
+              <Link
+                href="/download"
+                className="block px-2 py-2 text-sm text-gray-600 hover:text-gray-900"
+                onClick={() => setMobileMenuOpen(false)}
+              >
+                Get vectorAIz
+              </Link>
               {isAuthenticated ? (
                 <>
                   <Link
@@ -173,6 +183,9 @@ export function Layout({ children }: { children: React.ReactNode }) {
               </Link>
               <Link href="/requests" className="text-sm text-gray-500 hover:text-gray-700">
                 Request Data
+              </Link>
+              <Link href="/download" className="text-sm text-gray-500 hover:text-gray-700">
+                Get vectorAIz
               </Link>
             </div>
           </div>
