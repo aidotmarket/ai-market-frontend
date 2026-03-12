@@ -94,7 +94,13 @@ export function AllAIProvider({ children }: { children: ReactNode }) {
       fetch(`${API_URL}/api/allai/support/anonymous/session/${stored}`)
         .then((r) => (r.ok ? r.json() : null))
         .then((data) => {
-          if (data?.messages?.length) {
+          if (!data) {
+            // Session expired or not found — clear stale reference
+            sessionStorage.removeItem(SESSION_KEY);
+            sessionIdRef.current = null;
+            return;
+          }
+          if (data.messages?.length) {
             setMessages(
               data.messages.map((m: any, i: number) => ({
                 id: `restored-${i}`,
