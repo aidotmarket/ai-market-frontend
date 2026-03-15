@@ -128,13 +128,16 @@ export default function CheckoutSuccessContent() {
           {result.amount != null && (
             <p className="text-lg font-semibold text-gray-900 mb-1">{formatPrice(result.amount)}</p>
           )}
+          {result.tx_number && (
+            <p className="text-sm font-mono text-gray-600 mb-1">{result.tx_number}</p>
+          )}
           {result.order_id && (
             <p className="text-sm text-gray-500 mb-6">Order #{result.order_id.slice(0, 8)}</p>
           )}
           <div className="flex flex-col sm:flex-row gap-3 justify-center">
             {result.order_id && (
               <Link
-                href={`/dashboard/orders/${result.order_id}`}
+                href={`/dashboard/orders/${result.order_id}${result.transaction_id ? `?tx=${result.transaction_id}` : ''}`}
                 className="rounded-lg bg-blue-600 px-6 py-2.5 text-sm font-medium text-white hover:bg-blue-700"
               >
                 View Order

@@ -2,12 +2,13 @@
 
 import { useEffect, useState, useCallback } from 'react';
 import Link from 'next/link';
-import { useParams } from 'next/navigation';
+import { useParams, useSearchParams } from 'next/navigation';
 import { getOrder, getOrderEvents, requestDownload, refreshOrderAccess } from '@/api/orders';
+import { getTransaction, confirmTransaction, deliverTransaction } from '@/api/transactions';
 import { formatPrice, formatDate } from '@/lib/format';
 import { useToast } from '@/components/Toast';
 import { useAuthStore } from '@/store/auth';
-import type { BuyerOrderDetail, OrderEvent, OrderStatus } from '@/types';
+import type { BuyerOrderDetail, OrderEvent, OrderStatus, Transaction, TransactionStatus, TransactionEvent } from '@/types';
 import { AxiosError } from 'axios';
 
 const STATUS_BADGE: Record<OrderStatus, string> = {
@@ -26,30 +27,64 @@ const STATUS_LABEL: Record<OrderStatus, string> = {
   payment_failed: 'Payment Failed',
 };
 
+const TX_STATUS_BADGE: Record<TransactionStatus, string> = {
+  initiated: 'bg-gray-100 text-gray-600',
+  quoted: 'bg-gray-100 text-gray-600',
+  accepted: 'bg-blue-100 text-blue-800',
+  checkout_pending: 'bg-yellow-100 text-yellow-800',
+  paid: 'bg-blue-100 text-blue-800',
+  fulfilling: 'bg-yellow-100 text-yellow-800',
+  delivered: 'bg-indigo-100 text-indigo-800',
+  confirmed: 'bg-green-100 text-green-800',
+  settled: 'bg-green-100 text-green-800',
+};
+
+const TX_STATUS_LABEL: Record<TransactionStatus, string> = {
+  initiated: 'Initiated',
+  quoted: 'Quoted',
+  accepted: 'Accepted',
+  checkout_pending: 'Checkout Pending',
+  paid: 'Paid',
+  fulfilling: 'Fulfilling',
+  delivered: 'Delivered',
+  confirmed: 'Confirmed',
+  settled: 'Settled',
+};
+
 export default function OrderDetailPage() {
   const params = useParams<{ id: string }>();
+  const searchParams = useSearchParams();
   const orderId = params.id;
+  const txIdParam = searchParams.get('tx');
   const { toast } = useToast();
   const token = useAuthStore((s) => s.token);
+  const userRole = useAuthStore((s) => s.user?.role);
 
   const [order, setOrder] = useState<BuyerOrderDetail | null>(null);
   const [events, setEvents] = useState<OrderEvent[]>([]);
+  const [tx, setTx] = useState<Transaction | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [downloading, setDownloading] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
+  const [confirming, setConfirming] = useState(false);
+  const [delivering, setDelivering] = useState(false);
 
   useEffect(() => {
     let cancelled = false;
 
-    Promise.all([
+    const fetches: [Promise<BuyerOrderDetail>, Promise<OrderEvent[]>, Promise<Transaction | null>] = [
       getOrder(orderId),
       getOrderEvents(orderId).catch(() => [] as OrderEvent[]),
-    ])
-      .then(([orderData, eventsData]) => {
+      txIdParam ? getTransaction(txIdParam).catch(() => null) : Promise.resolve(null),
+    ];
+
+    Promise.all(fetches)
+      .then(([orderData, eventsData, txData]) => {
         if (cancelled) return;
         setOrder(orderData);
         setEvents(eventsData);
+        setTx(txData);
       })
       .catch((err) => {
         if (cancelled) return;
@@ -64,7 +99,35 @@ export default function OrderDetailPage() {
       });
 
     return () => { cancelled = true; };
-  }, [orderId]);
+  }, [orderId, txIdParam]);
+
+  const handleConfirm = async () => {
+    if (!tx || confirming) return;
+    setConfirming(true);
+    try {
+      const updated = await confirmTransaction(tx.id);
+      setTx(updated);
+      toast('Receipt confirmed!', 'success');
+    } catch {
+      toast('Failed to confirm receipt.', 'error');
+    } finally {
+      setConfirming(false);
+    }
+  };
+
+  const handleDeliver = async () => {
+    if (!tx || delivering) return;
+    setDelivering(true);
+    try {
+      const updated = await deliverTransaction(tx.id, { proof_type: 'manual', notes: 'Marked delivered by seller' });
+      setTx(updated);
+      toast('Marked as delivered!', 'success');
+    } catch {
+      toast('Failed to mark as delivered.', 'error');
+    } finally {
+      setDelivering(false);
+    }
+  };
 
   // Download via fetch+blob (MP-G2-M4: no tokens in URLs)
   const handleDownload = useCallback(async () => {
@@ -186,6 +249,99 @@ export default function OrderDetailPage() {
               </div>
             </dl>
           </div>
+
+          {/* Transaction detail */}
+          {tx && (
+            <div className="rounded-lg border border-gray-200 p-6">
+              <div className="flex items-center justify-between mb-4">
+                <h2 className="text-lg font-semibold text-gray-900">Transaction</h2>
+                <span className={`inline-flex items-center rounded-full px-3 py-1 text-sm font-medium ${TX_STATUS_BADGE[tx.status as TransactionStatus] || 'bg-gray-100 text-gray-600'}`}>
+                  {TX_STATUS_LABEL[tx.status as TransactionStatus] || tx.status}
+                </span>
+              </div>
+
+              <dl className="grid grid-cols-1 sm:grid-cols-2 gap-4 text-sm">
+                <div>
+                  <dt className="text-gray-500">Transaction #</dt>
+                  <dd className="font-mono font-medium text-gray-900">{tx.tx_number}</dd>
+                </div>
+                <div>
+                  <dt className="text-gray-500">Amount</dt>
+                  <dd className="font-medium text-gray-900">{formatPrice(tx.amount_cents / 100)}</dd>
+                </div>
+                <div>
+                  <dt className="text-gray-500">Platform Fee</dt>
+                  <dd className="font-medium text-gray-900">{formatPrice(tx.platform_fee_cents / 100)}</dd>
+                </div>
+                <div>
+                  <dt className="text-gray-500">Seller Receives</dt>
+                  <dd className="font-medium text-gray-900">{formatPrice(tx.seller_amount_cents / 100)}</dd>
+                </div>
+                {tx.paid_at && (
+                  <div>
+                    <dt className="text-gray-500">Paid At</dt>
+                    <dd className="font-medium text-gray-900">{formatDate(tx.paid_at)}</dd>
+                  </div>
+                )}
+                {tx.delivered_at && (
+                  <div>
+                    <dt className="text-gray-500">Delivered At</dt>
+                    <dd className="font-medium text-gray-900">{formatDate(tx.delivered_at)}</dd>
+                  </div>
+                )}
+              </dl>
+
+              {/* Action buttons based on TX status */}
+              <div className="mt-4 flex flex-col sm:flex-row gap-3">
+                {tx.status === 'delivered' && (
+                  <button
+                    onClick={handleConfirm}
+                    disabled={confirming}
+                    className="rounded-lg bg-green-600 px-6 py-2.5 text-sm font-medium text-white hover:bg-green-700 disabled:opacity-50 disabled:cursor-not-allowed"
+                  >
+                    {confirming ? 'Confirming…' : 'Confirm Receipt'}
+                  </button>
+                )}
+                {tx.status === 'fulfilling' && userRole === 'seller' && (
+                  <button
+                    onClick={handleDeliver}
+                    disabled={delivering}
+                    className="rounded-lg bg-blue-600 px-6 py-2.5 text-sm font-medium text-white hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed"
+                  >
+                    {delivering ? 'Marking…' : 'Mark Delivered'}
+                  </button>
+                )}
+              </div>
+
+              {/* Transaction events timeline */}
+              {tx.events && tx.events.length > 0 && (
+                <div className="mt-6 border-t border-gray-100 pt-4">
+                  <h3 className="text-sm font-semibold text-gray-900 mb-3">Transaction Timeline</h3>
+                  <div className="space-y-3">
+                    {tx.events.map((evt: TransactionEvent) => (
+                      <div key={evt.id} className="flex gap-3">
+                        <div className="flex flex-col items-center">
+                          <div className="h-2 w-2 rounded-full bg-blue-400 mt-2"></div>
+                          <div className="w-px flex-1 bg-gray-200"></div>
+                        </div>
+                        <div className="pb-2">
+                          <p className="text-sm text-gray-900">
+                            {evt.event_type.replace(/_/g, ' ')}
+                            {evt.from_status && evt.to_status && (
+                              <span className="text-gray-500"> — {evt.from_status} → {evt.to_status}</span>
+                            )}
+                          </p>
+                          <p className="text-xs text-gray-500 mt-0.5">
+                            {evt.actor_type} · {formatDate(evt.created_at)}
+                          </p>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+            </div>
+          )}
 
           {/* Access / Download section */}
           {order.status === 'fulfilled' && (

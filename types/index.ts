@@ -297,6 +297,8 @@ export interface CheckoutVerifyResponse {
   order_id?: string;
   listing_title?: string;
   amount?: number;
+  transaction_id?: string;
+  tx_number?: string;
 }
 
 // ============================================================================
@@ -343,6 +345,54 @@ export interface OrderAccessResponse {
   has_access: boolean;
   access_url?: string;
   expires_at?: string;
+}
+
+// ============================================================================
+// Transaction types — matches backend app/api/v1/endpoints/transactions.py
+// ============================================================================
+
+export type TransactionStatus =
+  | 'initiated'
+  | 'quoted'
+  | 'accepted'
+  | 'checkout_pending'
+  | 'paid'
+  | 'fulfilling'
+  | 'delivered'
+  | 'confirmed'
+  | 'settled';
+
+export interface Transaction {
+  id: string;
+  tx_number: string;
+  status: TransactionStatus;
+  buyer_type: string;
+  amount_cents: number;
+  currency: string;
+  platform_fee_cents: number;
+  seller_amount_cents: number;
+  listing_title?: string;
+  seller_name?: string;
+  created_at: string;
+  updated_at: string;
+  paid_at: string | null;
+  delivered_at: string | null;
+  settled_at: string | null;
+  events?: TransactionEvent[];
+}
+
+export interface TransactionEvent {
+  id: string;
+  event_type: string;
+  actor_type: string;
+  from_status: string | null;
+  to_status: string | null;
+  created_at: string;
+}
+
+export interface DeliverRequest {
+  proof_type: string;
+  notes?: string;
 }
 
 // ============================================================================
