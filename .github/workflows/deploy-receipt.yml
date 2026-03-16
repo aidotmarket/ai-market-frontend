@@ -1,0 +1,87 @@
+name: Deploy Receipt
+
+on:
+  push:
+    branches: [main]
+
+env:
+  APP_URL: https://ai-market-frontend-production.up.railway.app
+  EVENTS_URL: https://ai-market-backend-production.up.railway.app/api/v1/allai/events/
+  SERVICE_KEY: svc:ai-market-frontend
+
+jobs:
+  verify-deploy:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Wait for Railway build + deploy
+        run: |
+          echo "Commit: ${{ github.sha }}"
+          echo "Waiting 120s for Railway to build and deploy..."
+          sleep 120
+
+      - name: Verify app is healthy
+        id: health
+        run: |
+          MAX_RETRIES=12
+          RETRY_INTERVAL=15
+          for i in $(seq 1 $MAX_RETRIES); do
+            STATUS=$(curl -s -o /dev/null -w "%{http_code}" "$APP_URL/" 2>/dev/null || echo "000")
+            if [ "$STATUS" = "200" ]; then
+              echo "App healthy (attempt $i)"
+              echo "healthy=true" >> $GITHUB_OUTPUT
+              exit 0
+            fi
+            echo "Attempt $i/$MAX_RETRIES: status=$STATUS, retrying in ${RETRY_INTERVAL}s..."
+            sleep $RETRY_INTERVAL
+          done
+          echo "App did not become healthy after $MAX_RETRIES attempts"
+          echo "healthy=false" >> $GITHUB_OUTPUT
+          exit 1
+
+      - name: Post deploy receipt to event ledger
+        if: steps.health.outputs.healthy == 'true'
+        run: |
+          curl -s -X POST "$EVENTS_URL" \
+            -H "Content-Type: application/json" \
+            -H "X-Internal-API-Key: ${{ secrets.DEPLOY_RECEIPT_KEY }}" \
+            -d '{
+              "actor": "system",
+              "event_type": "deploy",
+              "title": "Deploy receipt: ${{ github.repository }} @ ${{ github.sha }}",
+              "entity_key": "'"$SERVICE_KEY"'",
+              "source_ref": "${{ github.sha }}",
+              "dedupe_key": "deploy-receipt-${{ github.sha }}",
+              "payload": {
+                "commit_sha": "${{ github.sha }}",
+                "commit_message": ${{ toJSON(github.event.head_commit.message) }},
+                "pushed_by": "${{ github.actor }}",
+                "repository": "${{ github.repository }}",
+                "branch": "${{ github.ref_name }}",
+                "run_id": "${{ github.run_id }}",
+                "run_url": "https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }}",
+                "health_verified": true
+              }
+            }'
+
+      - name: Post failure receipt
+        if: failure()
+        run: |
+          curl -s -X POST "$EVENTS_URL" \
+            -H "Content-Type: application/json" \
+            -H "X-Internal-API-Key: ${{ secrets.DEPLOY_RECEIPT_KEY }}" \
+            -d '{
+              "actor": "system",
+              "event_type": "alert",
+              "title": "DEPLOY FAILED: ${{ github.repository }} @ ${{ github.sha }}",
+              "entity_key": "'"$SERVICE_KEY"'",
+              "source_ref": "${{ github.sha }}",
+              "dedupe_key": "deploy-fail-${{ github.sha }}",
+              "payload": {
+                "commit_sha": "${{ github.sha }}",
+                "pushed_by": "${{ github.actor }}",
+                "repository": "${{ github.repository }}",
+                "run_url": "https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }}",
+                "health_verified": false
+              }
+            }' || true
