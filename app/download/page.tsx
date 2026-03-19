@@ -97,6 +97,29 @@ export default function DownloadPage() {
               </div>
             </div>
           </div>
+
+          {/* Windows Note */}
+          <div className="mt-6 rounded-lg border border-amber-200 bg-amber-50 px-5 py-4">
+            <div className="flex items-start gap-3">
+              <svg className="mt-0.5 h-5 w-5 shrink-0 text-amber-600" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                <path strokeLinecap="round" strokeLinejoin="round" d="M12 9v3.75m-9.303 3.376c-.866 1.5.217 3.374 1.948 3.374h14.71c1.73 0 2.813-1.874 1.948-3.374L13.949 3.378c-.866-1.5-3.032-1.5-3.898 0L2.697 16.126ZM12 15.75h.007v.008H12v-.008Z" />
+              </svg>
+              <div>
+                <p className="text-sm font-medium text-amber-800">Windows users</p>
+                <p className="mt-1 text-sm text-amber-700">
+                  Install{' '}
+                  <a href="https://learn.microsoft.com/en-us/windows/wsl/install" target="_blank" rel="noopener noreferrer" className="underline hover:text-amber-900">
+                    WSL2
+                  </a>
+                  {' '}and{' '}
+                  <a href="https://docs.docker.com/desktop/install/windows-install/" target="_blank" rel="noopener noreferrer" className="underline hover:text-amber-900">
+                    Docker Desktop for Windows
+                  </a>
+                  {' '}first, then run the install commands above inside your WSL terminal.
+                </p>
+              </div>
+            </div>
+          </div>
         </div>
       </section>
 
@@ -119,8 +142,8 @@ export default function DownloadPage() {
                 <path strokeLinecap="round" strokeLinejoin="round" d="m4.5 12.75 6 6 9-13.5" />
               </svg>
               <div>
-                <p className="text-sm font-medium text-gray-900">Mac or Linux</p>
-                <p className="text-sm text-gray-500">macOS 12+ or any modern Linux distribution</p>
+                <p className="text-sm font-medium text-gray-900">Mac, Linux, or Windows</p>
+                <p className="text-sm text-gray-500">macOS 12+, any modern Linux, or Windows 10/11 with WSL2</p>
               </div>
             </div>
           </div>

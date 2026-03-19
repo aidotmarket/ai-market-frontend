@@ -10,6 +10,7 @@ import {
   type ReactNode,
 } from 'react';
 import { usePathname } from 'next/navigation';
+import { useAuthStore } from '@/store/auth';
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000';
 const SESSION_KEY = 'allai-session-id';
@@ -56,8 +57,10 @@ export function useAllAI() {
 
 export function AllAIProvider({ children }: { children: ReactNode }) {
   const pathname = usePathname();
+  const { user, token } = useAuthStore();
   const [isOpen, setIsOpen] = useState(false);
   const [messages, setMessages] = useState<Message[]>([]);
+  const greetingSentRef = useRef(false);
   const [isStreaming, setIsStreaming] = useState(false);
   const sessionIdRef = useRef<string | null>(null);
   const abortRef = useRef<AbortController | null>(null);
@@ -118,6 +121,31 @@ export function AllAIProvider({ children }: { children: ReactNode }) {
     }
   }, []);
 
+  // Greeting for logged-in users (QA-5)
+  useEffect(() => {
+    if (isOpen && !greetingSentRef.current && messages.length === 0 && user) {
+      greetingSentRef.current = true;
+      const name = user.first_name || user.email?.split('@')[0] || '';
+      const roleGreeting = user.role === 'seller'
+        ? "I can help you manage your listings, understand marketplace trends, or answer questions about ai.market."
+        : "I can help you find data, submit requests, or answer questions about ai.market.";
+      setMessages([{
+        id: 'greeting-0',
+        role: 'assistant',
+        content: `Hey${name ? ' ' + name : ''}! ${roleGreeting} What can I help with?`,
+        timestamp: Date.now(),
+      }]);
+    } else if (isOpen && !greetingSentRef.current && messages.length === 0 && !user) {
+      greetingSentRef.current = true;
+      setMessages([{
+        id: 'greeting-0',
+        role: 'assistant',
+        content: "Hey! I'm allAI — your guide to ai.market. I can help you find data, learn about vectorAIz, or answer any questions. What are you looking for?",
+        timestamp: Date.now(),
+      }]);
+    }
+  }, [isOpen, messages.length, user]);
+
   const ensureSession = useCallback(async (): Promise<string> => {
     if (sessionIdRef.current) return sessionIdRef.current;
     const res = await fetch(`${API_URL}/api/allai/support/anonymous/session`, {
@@ -161,6 +189,9 @@ export function AllAIProvider({ children }: { children: ReactNode }) {
         const listingMatch = pathname.match(/^\/listings\/([^/]+)/);
         const context: Record<string, string> = { page: pathname };
         if (listingMatch) context.listing_id = listingMatch[1];
+        if (user?.role) context.user_role = user.role;
+        if (user?.first_name) context.user_name = user.first_name;
+        if (user?.company_name) context.company_name = user.company_name;
 
         const bodyPayload: Record<string, any> = {
             session_id: sessionId,
@@ -173,9 +204,12 @@ export function AllAIProvider({ children }: { children: ReactNode }) {
           bodyPayload.form_snapshot = snapshot;
         }
 
+        const headers: Record<string, string> = { 'Content-Type': 'application/json' };
+        if (token) headers['Authorization'] = `Bearer ${token}`;
+
         const res = await fetch(`${API_URL}/api/allai/support/anonymous/message`, {
           method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
+          headers,
           body: JSON.stringify(bodyPayload),
           signal: controller.signal,
           cache: 'no-store',
