@@ -7,8 +7,8 @@ import type {
 } from '@/types';
 
 export async function getDataRequests(): Promise<DataRequestListItem[]> {
-  const res = await api.get<DataRequestListItem[]>('/data-requests');
-  return res.data;
+  const res = await api.get<{ items: DataRequestListItem[] } | DataRequestListItem[]>('/data-requests');
+  return Array.isArray(res.data) ? res.data : res.data.items;
 }
 
 export async function getDataRequest(slugOrId: string): Promise<DataRequestDetail> {
@@ -57,8 +57,8 @@ export async function getDataRequestResponses(requestId: string): Promise<DataRe
 }
 
 export async function getMyDataRequests(): Promise<DataRequestListItem[]> {
-  const res = await api.get<DataRequestListItem[]>('/data-requests', {
+  const res = await api.get<{ items: DataRequestListItem[] } | DataRequestListItem[]>('/data-requests', {
     params: { mine: true },
   });
-  return res.data;
+  return Array.isArray(res.data) ? res.data : res.data.items;
 }

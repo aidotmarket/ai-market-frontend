@@ -3,7 +3,7 @@
 import { useEffect, useState, useCallback } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
-import { getListings, publishListing, unpublishListing, deleteListing } from '@/api/listings';
+import { getMyListings, publishListing, unpublishListing, deleteListing } from '@/api/listings';
 import { useToast } from '@/components/Toast';
 import { formatPrice, formatDate } from '@/lib/format';
 
@@ -40,7 +40,7 @@ export default function ListingsPage() {
     setLoading(true);
     setError('');
     try {
-      const res = await getListings();
+      const res = await getMyListings();
       setListings(res.data || []);
     } catch {
       setError('Failed to load listings.');

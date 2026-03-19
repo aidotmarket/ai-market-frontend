@@ -5,7 +5,7 @@ import Link from 'next/link';
 import { useAuthStore } from '@/store/auth';
 import { getConnectStatus, getConnectOnboarding } from '@/api/connect';
 import { getSellerStats } from '@/api/seller';
-import { getListings } from '@/api/listings';
+import { getMyListings } from '@/api/listings';
 import { useToast } from '@/components/Toast';
 
 const STRIPE_CONNECT_URL_PREFIX = 'https://connect.stripe.com/';
@@ -28,7 +28,7 @@ export default function DashboardOverview() {
       const [statusRes, statsRes, listingsRes] = await Promise.all([
         getConnectStatus(),
         getSellerStats(),
-        getListings(),
+        getMyListings(),
       ]);
 
       setStripeStatus(statusRes.data);
