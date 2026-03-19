@@ -51,7 +51,7 @@ export type VerificationStatus = 'unverified' | 'verified' | 'premium';
 export interface ListingListItem {
   id: string;
   slug: string;
-  title: string;
+  title?: string;
   short_description: string | null;
   price: number;
   pricing_type: PricingType;
@@ -69,7 +69,7 @@ export interface ListingListItem {
 export interface ListingDetail {
   id: string;
   slug: string;
-  title: string;
+  title?: string;
   description: string;
   short_description: string | null;
   publisher: { name: string; id: string } | null;
@@ -121,7 +121,7 @@ export interface SearchRequest {
 
 export interface SearchResultItem {
   id: string;
-  title: string;
+  title?: string;
   slug: string;
   description: string | null;
   short_description: string | null;
@@ -199,7 +199,7 @@ export interface SellerOrder {
 // ============================================================================
 
 export interface CreateListingRequest {
-  title: string;
+  title?: string;
   description: string;
   short_description?: string;
   category: string;
@@ -250,7 +250,7 @@ export interface SchemaColumn {
 
 export interface ListingPreview {
   id: string;
-  title: string;
+  title?: string;
   description: string;
   short_description: string | null;
   category: string;
@@ -268,7 +268,7 @@ export interface ListingPreview {
 
 export interface SellerListingItem {
   id: string;
-  title: string;
+  title?: string;
   status: ListingStatus;
   category: string;
   price: number;
@@ -452,7 +452,7 @@ export type DataRequestUrgency = 'low' | 'medium' | 'high' | 'urgent';
 export interface DataRequestListItem {
   id: string;
   slug: string;
-  title: string;
+  title?: string;
   description: string;
   categories: string[];
   urgency: DataRequestUrgency;
@@ -474,7 +474,7 @@ export interface DataRequestDetail extends DataRequestListItem {
 }
 
 export interface CreateDataRequestPayload {
-  title: string;
+  title?: string;
   description: string;
   categories?: string[];
   format_preferences?: string;

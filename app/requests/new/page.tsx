@@ -18,7 +18,7 @@ export default function NewDataRequestPage() {
   const router = useRouter();
   const { toast } = useToast();
 
-  const [title, setTitle] = useState('');
+
   const [description, setDescription] = useState('');
   const [categories, setCategories] = useState('');
   const [formatPreferences, setFormatPreferences] = useState('');
@@ -43,7 +43,7 @@ export default function NewDataRequestPage() {
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
-    if (!title.trim() || !description.trim()) return;
+    if (!description.trim()) return;
 
     setSubmitting(true);
     try {
@@ -53,7 +53,6 @@ export default function NewDataRequestPage() {
         .filter(Boolean);
 
       const result = await createDataRequest({
-        title: title.trim(),
         description: description.trim(),
         categories: parsedCategories.length > 0 ? parsedCategories : undefined,
         format_preferences: formatPreferences.trim() || undefined,
@@ -85,22 +84,6 @@ export default function NewDataRequestPage() {
       </p>
 
       <form onSubmit={handleSubmit} className="space-y-6">
-        {/* Title */}
-        <div>
-          <label htmlFor="title" className="block text-sm font-medium text-gray-700 mb-1">
-            Title
-          </label>
-          <input
-            id="title"
-            type="text"
-            required
-            value={title}
-            onChange={(e) => setTitle(e.target.value)}
-            placeholder="e.g., US retail foot traffic data for 2024"
-            className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
-          />
-        </div>
-
         {/* Description */}
         <div>
           <label htmlFor="description" className="block text-sm font-medium text-gray-700 mb-1">
@@ -219,7 +202,7 @@ export default function NewDataRequestPage() {
 
         <button
           type="submit"
-          disabled={submitting || !title.trim() || !description.trim()}
+          disabled={submitting || !description.trim()}
           className="w-full rounded-lg bg-blue-600 px-4 py-2.5 text-sm font-medium text-white hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
         >
           {submitting ? 'Creating...' : 'Create Data Request'}
