@@ -89,12 +89,9 @@ export default function LoginForm() {
           </div>
 
           <div className="text-right">
-            <a
-              href="mailto:support@ai.market?subject=Password%20Reset%20Request"
-              className="text-sm text-blue-600 hover:underline"
-            >
+            <Link href="/forgot-password" className="text-sm text-blue-600 hover:underline">
               Forgot your password?
-            </a>
+            </Link>
           </div>
 
           <button
