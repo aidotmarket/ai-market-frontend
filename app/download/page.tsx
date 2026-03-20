@@ -72,9 +72,9 @@ export default function DownloadPage() {
               </p>
               <div className="mt-6 flex items-center gap-3 rounded-lg bg-gray-900 px-4 py-3">
                 <code className="flex-1 text-sm text-gray-100 overflow-x-auto whitespace-nowrap">
-                  curl -fsSL https://get.vectoraiz.com/market | bash
+                  curl -fsSL https://get.vectoraiz.com | bash
                 </code>
-                <CopyButton text="curl -fsSL https://get.vectoraiz.com/market | bash" />
+                <CopyButton text="curl -fsSL https://get.vectoraiz.com | bash" />
               </div>
             </div>
 
