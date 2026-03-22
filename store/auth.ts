@@ -12,7 +12,7 @@ interface AuthState {
   isLoading: boolean;
   login: (email: string, password: string) => Promise<void>;
   register: (email: string, password: string, firstName?: string, lastName?: string, role?: "buyer" | "seller" | "admin", companyName?: string) => Promise<void>;
-  oauthLogin: (provider: string, code: string, state: string) => Promise<void>;
+  oauthLogin: (provider: string, code: string, state: string, nonce: string) => Promise<void>;
   logout: () => void;
   refreshAuth: () => Promise<void>;
   hydrate: () => Promise<void>;
@@ -52,8 +52,8 @@ export const useAuthStore = create<AuthState>((set, get) => ({
     await get().login(email, password);
   },
 
-  oauthLogin: async (provider, code, state) => {
-    const tokenRes = await authApi.oauthCallback(provider, code, state);
+  oauthLogin: async (provider, code, state, nonce) => {
+    const tokenRes = await authApi.oauthCallback(provider, code, state, nonce);
 
     set({
       token: tokenRes.access_token,

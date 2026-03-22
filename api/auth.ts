@@ -33,12 +33,12 @@ export async function resetPassword(token: string, new_password: string): Promis
   return res.data;
 }
 
-export async function oauthAuthorize(provider: string): Promise<{ authorization_url: string }> {
-  const res = await api.get<{ authorization_url: string }>(`/auth/oauth/${provider}/authorize`);
+export async function oauthAuthorize(provider: string): Promise<{ authorization_url: string; nonce: string }> {
+  const res = await api.get<{ authorization_url: string; nonce: string }>(`/auth/oauth/${provider}/authorize`);
   return res.data;
 }
 
-export async function oauthCallback(provider: string, code: string, state: string): Promise<TokenResponse> {
-  const res = await api.post<TokenResponse>(`/auth/oauth/${provider}/callback`, { code, state });
+export async function oauthCallback(provider: string, code: string, state: string, nonce: string): Promise<TokenResponse> {
+  const res = await api.post<TokenResponse>(`/auth/oauth/${provider}/callback`, { code, state, nonce });
   return res.data;
 }

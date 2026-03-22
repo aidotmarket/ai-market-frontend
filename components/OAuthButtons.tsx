@@ -15,8 +15,9 @@ export default function OAuthButtons({ mode }: OAuthButtonsProps) {
     setError('');
     setLoadingProvider(provider);
     try {
-      const { authorization_url } = await authApi.oauthAuthorize(provider);
-      window.location.href = authorization_url;
+      const data = await authApi.oauthAuthorize(provider);
+      sessionStorage.setItem('oauth_nonce', data.nonce);
+      window.location.href = data.authorization_url;
     } catch {
       setError(`Failed to connect to ${provider === 'google' ? 'Google' : 'GitHub'}. Please try again.`);
       setLoadingProvider(null);

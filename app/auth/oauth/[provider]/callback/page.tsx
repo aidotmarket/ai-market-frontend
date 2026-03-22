@@ -19,13 +19,15 @@ export default function OAuthCallbackPage() {
     const provider = params.provider as string;
     const code = searchParams.get('code');
     const state = searchParams.get('state');
+    const nonce = sessionStorage.getItem('oauth_nonce');
+    sessionStorage.removeItem('oauth_nonce');
 
-    if (!code || !state) {
+    if (!code || !state || !nonce) {
       router.replace('/login?error=oauth_failed');
       return;
     }
 
-    oauthLogin(provider, code, state)
+    oauthLogin(provider, code, state, nonce)
       .then(() => {
         router.replace('/listings');
       })
