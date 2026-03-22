@@ -1,6 +1,5 @@
 'use client';
 
-import type { Metadata } from 'next';
 import { useState } from 'react';
 
 function CopyButton({ text }: { text: string }) {
@@ -22,6 +21,76 @@ function CopyButton({ text }: { text: string }) {
   );
 }
 
+const steps = [
+  {
+    num: '1',
+    title: 'Install vectorAIz',
+    desc: 'Download and run the installer. vectorAIz runs as a Docker container on your machine — nothing is sent anywhere.',
+    icon: (
+      <svg className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
+        <path strokeLinecap="round" strokeLinejoin="round" d="M3 16.5v2.25A2.25 2.25 0 0 0 5.25 21h13.5A2.25 2.25 0 0 0 21 18.75V16.5M16.5 12 12 16.5m0 0L7.5 12m4.5 4.5V3" />
+      </svg>
+    ),
+  },
+  {
+    num: '2',
+    title: 'Prepare with allAI',
+    desc: 'allAI, your local AI assistant, profiles your data, detects PII, scores quality, and generates listing metadata — all on your machine.',
+    icon: (
+      <svg className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
+        <path strokeLinecap="round" strokeLinejoin="round" d="M9.813 15.904 9 18.75l-.813-2.846a4.5 4.5 0 0 0-3.09-3.09L2.25 12l2.846-.813a4.5 4.5 0 0 0 3.09-3.09L9 5.25l.813 2.846a4.5 4.5 0 0 0 3.09 3.09L15.75 12l-2.846.813a4.5 4.5 0 0 0-3.09 3.09ZM18.259 8.715 18 9.75l-.259-1.035a3.375 3.375 0 0 0-2.455-2.456L14.25 6l1.036-.259a3.375 3.375 0 0 0 2.455-2.456L18 2.25l.259 1.035a3.375 3.375 0 0 0 2.455 2.456L21.75 6l-1.036.259a3.375 3.375 0 0 0-2.455 2.456Z" />
+      </svg>
+    ),
+  },
+  {
+    num: '3',
+    title: 'Publish Your Listing',
+    desc: 'Review what allAI prepared and publish to ai.market with one click. Only metadata and descriptions are shared — raw data stays with you.',
+    icon: (
+      <svg className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
+        <path strokeLinecap="round" strokeLinejoin="round" d="M12 16.5V9.75m0 0 3 3m-3-3-3 3M6.75 19.5a4.5 4.5 0 0 1-1.41-8.775 5.25 5.25 0 0 1 10.233-2.33 3 3 0 0 1 3.758 3.848A3.752 3.752 0 0 1 18 19.5H6.75Z" />
+      </svg>
+    ),
+  },
+  {
+    num: '4',
+    title: 'Deliver Securely',
+    desc: 'When a buyer purchases, ai.market generates a secure, time-limited token. Data flows peer-to-peer from your vectorAIz instance — no middleman.',
+    icon: (
+      <svg className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
+        <path strokeLinecap="round" strokeLinejoin="round" d="M16.5 10.5V6.75a4.5 4.5 0 1 0-9 0v3.75m-.75 11.25h10.5a2.25 2.25 0 0 0 2.25-2.25v-6.75a2.25 2.25 0 0 0-2.25-2.25H6.75a2.25 2.25 0 0 0-2.25 2.25v6.75a2.25 2.25 0 0 0 2.25 2.25Z" />
+      </svg>
+    ),
+  },
+];
+
+const features = [
+  {
+    title: 'Local-First Processing',
+    desc: 'Your data never leaves your infrastructure. All profiling, PII detection, and quality scoring happens on your machine.',
+  },
+  {
+    title: 'AI-Assisted Listings',
+    desc: 'allAI helps describe your data, generate metadata, and optimize your listing for discovery by buyers and AI agents.',
+  },
+  {
+    title: 'Automated PII Detection',
+    desc: 'Sensitive data is flagged before publishing. Protect your customers and stay compliant automatically.',
+  },
+  {
+    title: 'Quality Scoring',
+    desc: 'Every dataset is scored for completeness, consistency, and freshness so buyers know what they are getting.',
+  },
+  {
+    title: 'Peer-to-Peer Delivery',
+    desc: 'No middleman. Buyers connect directly to your instance through secure, time-limited access tokens.',
+  },
+  {
+    title: '5% Marketplace Fee',
+    desc: 'Utility pricing. We make money when you make money. No listing fees, no hidden charges.',
+  },
+];
+
 export default function DownloadPage() {
   return (
     <div className="overflow-hidden">
@@ -32,109 +101,145 @@ export default function DownloadPage() {
           <div className="absolute top-20 -left-20 h-[20rem] w-[20rem] rounded-full bg-indigo-100 opacity-30 blur-3xl" />
         </div>
 
-        <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8 pt-20 pb-16 sm:pt-32 sm:pb-24">
-          <div className="max-w-3xl">
-            <p className="text-sm font-semibold tracking-wide text-blue-600 uppercase">
-              Local-First Data Processing
-            </p>
-            <h1 className="mt-3 text-4xl font-bold tracking-tight text-gray-900 sm:text-6xl">
-              Get{' '}
+        <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8 pt-20 pb-12 sm:pt-32 sm:pb-16">
+          <div className="max-w-3xl mx-auto text-center">
+            <h1 className="text-4xl font-bold tracking-tight text-gray-900 sm:text-6xl">
+              List Your Data on{' '}
               <span className="bg-gradient-to-r from-blue-600 to-indigo-600 bg-clip-text text-transparent">
-                vectorAIz
+                ai.market
               </span>
             </h1>
-            <p className="mt-6 text-lg leading-8 text-gray-600 max-w-2xl">
-              Process, enrich, and profile your data locally with AI. Your data never leaves your
-              infrastructure — only metadata is shared when you choose to publish.
+            <p className="mt-6 text-lg leading-8 text-gray-600 max-w-2xl mx-auto">
+              vectorAIz runs on your infrastructure, processes your data locally with AI, and
+              publishes listings to the marketplace. Your raw data never leaves your servers —
+              only metadata is shared. Delivery happens peer-to-peer through secure tokens.
             </p>
           </div>
         </div>
       </section>
 
-      {/* Install Cards */}
-      <section className="pb-20 sm:pb-28">
+      {/* How It Works */}
+      <section className="pb-16 sm:pb-24">
         <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
-          <div className="grid grid-cols-1 gap-6 md:grid-cols-2">
-            {/* Marketplace — Primary */}
-            <div className="relative rounded-xl border-2 border-blue-600 p-8">
-              <span className="absolute -top-3 left-6 bg-blue-600 px-3 py-0.5 text-xs font-semibold text-white rounded-full">
-                Recommended
-              </span>
-              <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-blue-50 text-blue-600">
-                <svg className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
-                  <path strokeLinecap="round" strokeLinejoin="round" d="M13.5 21v-7.5a.75.75 0 0 1 .75-.75h3a.75.75 0 0 1 .75.75V21m-4.5 0H2.36m11.14 0H18m0 0h3.64m-1.39 0V9.349M3.75 21V9.349m0 0a3.001 3.001 0 0 0 3.75-.615A2.993 2.993 0 0 0 9.75 9.75c.896 0 1.7-.393 2.25-1.016a2.993 2.993 0 0 0 2.25 1.016c.896 0 1.7-.393 2.25-1.016A3.001 3.001 0 0 0 20.25 9.35m-16.5 0a3.004 3.004 0 0 1-.621-4.72l1.189-1.19A1.5 1.5 0 0 1 5.378 3h13.243a1.5 1.5 0 0 1 1.06.44l1.19 1.189a3 3 0 0 1-.621 4.72" />
-                </svg>
+          <h2 className="text-center text-sm font-semibold tracking-wide text-blue-600 uppercase mb-10">
+            How it works
+          </h2>
+          <div className="grid grid-cols-1 gap-8 sm:grid-cols-2 lg:grid-cols-4 max-w-5xl mx-auto">
+            {steps.map((step) => (
+              <div key={step.num} className="text-center">
+                <div className="mx-auto flex h-12 w-12 items-center justify-center rounded-full bg-blue-50 text-blue-600 mb-4">
+                  {step.icon}
+                </div>
+                <div className="text-xs font-semibold text-blue-600 uppercase tracking-wide mb-1">
+                  Step {step.num}
+                </div>
+                <h3 className="text-base font-semibold text-gray-900 mb-2">{step.title}</h3>
+                <p className="text-sm leading-6 text-gray-600">{step.desc}</p>
               </div>
-              <h3 className="mt-4 text-lg font-semibold text-gray-900">For Data Sellers</h3>
-              <p className="mt-2 text-sm leading-6 text-gray-600">
-                Pre-configured for ai.market. Process your data and publish listings directly to the
-                marketplace.
-              </p>
-              <div className="mt-6 flex items-center gap-3 rounded-lg bg-gray-900 px-4 py-3">
-                <code className="flex-1 text-sm text-gray-100 overflow-x-auto whitespace-nowrap">
-                  curl -fsSL https://get.vectoraiz.com | bash
-                </code>
-                <CopyButton text="curl -fsSL https://get.vectoraiz.com | bash" />
-              </div>
-            </div>
+            ))}
+          </div>
+        </div>
+      </section>
 
-            {/* Standard — Secondary */}
-            <div className="rounded-xl border border-gray-200 p-8">
-              <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-blue-50 text-blue-600">
-                <svg className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
-                  <path strokeLinecap="round" strokeLinejoin="round" d="M9.75 3.104v5.714a2.25 2.25 0 0 1-.659 1.591L5 14.5M9.75 3.104c-.251.023-.501.05-.75.082m.75-.082a24.301 24.301 0 0 1 4.5 0m0 0v5.714a2.25 2.25 0 0 0 .659 1.591L19 14.5M14.25 3.104c.251.023.501.05.75.082M19 14.5l-2.47 2.47a2.25 2.25 0 0 1-1.59.659H9.06a2.25 2.25 0 0 1-1.591-.659L5 14.5m14 0-1.543-4.117A2.25 2.25 0 0 0 15.349 8.75H8.651a2.25 2.25 0 0 0-2.108 1.633L5 14.5" />
-                </svg>
-              </div>
-              <h3 className="mt-4 text-lg font-semibold text-gray-900">For Data Processing</h3>
-              <p className="mt-2 text-sm leading-6 text-gray-600">
-                Process and enrich data locally. Connect to a marketplace later, or use standalone.
-              </p>
-              <div className="mt-6 flex items-center gap-3 rounded-lg bg-gray-900 px-4 py-3">
-                <code className="flex-1 text-sm text-gray-100 overflow-x-auto whitespace-nowrap">
-                  curl -fsSL https://get.vectoraiz.com | bash
-                </code>
-                <CopyButton text="curl -fsSL https://get.vectoraiz.com | bash" />
-              </div>
-            </div>
+      {/* Download Section */}
+      <section className="py-16 sm:py-24 bg-gray-50 border-t border-gray-100">
+        <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
+          <div className="text-center mb-10">
+            <h2 className="text-3xl font-bold tracking-tight text-gray-900">
+              Install vectorAIz
+            </h2>
+            <p className="mt-3 text-base text-gray-600">
+              One command. Runs locally in Docker. Free to use.
+            </p>
           </div>
 
-          {/* Windows Note */}
-          <div className="mt-6 rounded-lg border border-amber-200 bg-amber-50 px-5 py-4">
-            <div className="flex items-start gap-3">
-              <svg className="mt-0.5 h-5 w-5 shrink-0 text-amber-600" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                <path strokeLinecap="round" strokeLinejoin="round" d="M12 9v3.75m-9.303 3.376c-.866 1.5.217 3.374 1.948 3.374h14.71c1.73 0 2.813-1.874 1.948-3.374L13.949 3.378c-.866-1.5-3.032-1.5-3.898 0L2.697 16.126ZM12 15.75h.007v.008H12v-.008Z" />
-              </svg>
-              <div>
-                <p className="text-sm font-medium text-amber-800">Windows users</p>
-                <p className="mt-1 text-sm text-amber-700">
-                  Install{' '}
-                  <a href="https://learn.microsoft.com/en-us/windows/wsl/install" target="_blank" rel="noopener noreferrer" className="underline hover:text-amber-900">
-                    WSL2
-                  </a>
-                  {' '}and{' '}
-                  <a href="https://docs.docker.com/desktop/install/windows-install/" target="_blank" rel="noopener noreferrer" className="underline hover:text-amber-900">
-                    Docker Desktop for Windows
-                  </a>
-                  {' '}first, then run the install commands above inside your WSL terminal.
-                </p>
+          <div className="grid grid-cols-1 gap-6 md:grid-cols-2 max-w-4xl mx-auto">
+            {/* Mac & Linux */}
+            <div className="rounded-xl border border-gray-200 bg-white p-8">
+              <div className="flex items-center gap-3 mb-1">
+                <svg className="h-6 w-6 text-gray-700" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M6.75 7.5l3 2.25-3 2.25m4.5 0h3m-9 8.25h13.5A2.25 2.25 0 0021 18V6a2.25 2.25 0 00-2.25-2.25H5.25A2.25 2.25 0 003 6v12a2.25 2.25 0 002.25 2.25z" />
+                </svg>
+                <h3 className="text-lg font-semibold text-gray-900">Mac &amp; Linux</h3>
               </div>
+              <p className="text-sm text-gray-500 mb-5">macOS (Apple Silicon &amp; Intel) and any modern Linux distribution</p>
+              <div className="flex items-center gap-3 rounded-lg bg-gray-900 px-4 py-3 mb-4">
+                <code className="flex-1 text-sm text-gray-100 overflow-x-auto whitespace-nowrap">
+                  curl -fsSL https://get.vectoraiz.com | bash
+                </code>
+                <CopyButton text="curl -fsSL https://get.vectoraiz.com | bash" />
+              </div>
+              <p className="text-xs text-gray-500">
+                Requires{' '}
+                <a href="https://docs.docker.com/desktop/" target="_blank" rel="noopener noreferrer" className="text-blue-600 hover:text-blue-800 underline">
+                  Docker Desktop
+                </a>
+                {' '}or{' '}
+                <a href="https://orbstack.dev/" target="_blank" rel="noopener noreferrer" className="text-blue-600 hover:text-blue-800 underline">
+                  OrbStack
+                </a>
+              </p>
             </div>
+
+            {/* Windows */}
+            <div className="rounded-xl border border-gray-200 bg-white p-8">
+              <div className="flex items-center gap-3 mb-1">
+                <svg className="h-6 w-6 text-gray-700" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M9 17.25v1.007a3 3 0 01-.879 2.122L7.5 21h9l-.621-.621A3 3 0 0115 18.257V17.25m6-12V15a2.25 2.25 0 01-2.25 2.25H5.25A2.25 2.25 0 013 15V5.25m18 0A2.25 2.25 0 0018.75 3H5.25A2.25 2.25 0 003 5.25m18 0V12a2.25 2.25 0 01-2.25 2.25H5.25A2.25 2.25 0 013 12V5.25" />
+                </svg>
+                <h3 className="text-lg font-semibold text-gray-900">Windows</h3>
+              </div>
+              <p className="text-sm text-gray-500 mb-5">Windows 10 and 11 with PowerShell</p>
+              <div className="flex items-center gap-3 rounded-lg bg-gray-900 px-4 py-3 mb-4">
+                <code className="flex-1 text-sm text-gray-100 overflow-x-auto whitespace-nowrap">
+                  irm https://get.vectoraiz.com/windows | iex
+                </code>
+                <CopyButton text="irm https://get.vectoraiz.com/windows | iex" />
+              </div>
+              <p className="text-xs text-gray-500">
+                Requires{' '}
+                <a href="https://docs.docker.com/desktop/install/windows-install/" target="_blank" rel="noopener noreferrer" className="text-blue-600 hover:text-blue-800 underline">
+                  Docker Desktop for Windows
+                </a>
+                {' '}and{' '}
+                <a href="https://learn.microsoft.com/en-us/powershell/scripting/install/installing-powershell-on-windows" target="_blank" rel="noopener noreferrer" className="text-blue-600 hover:text-blue-800 underline">
+                  PowerShell 5.1+
+                </a>
+              </p>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      {/* Features */}
+      <section className="py-16 sm:py-24">
+        <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
+          <h2 className="text-center text-sm font-semibold tracking-wide text-blue-600 uppercase mb-10">
+            What you get
+          </h2>
+          <div className="grid grid-cols-1 gap-8 sm:grid-cols-2 lg:grid-cols-3 max-w-5xl mx-auto">
+            {features.map((feature) => (
+              <div key={feature.title}>
+                <h3 className="text-base font-semibold text-gray-900 mb-2">{feature.title}</h3>
+                <p className="text-sm leading-6 text-gray-600">{feature.desc}</p>
+              </div>
+            ))}
           </div>
         </div>
       </section>
 
       {/* Requirements */}
-      <section className="border-t border-gray-100 bg-gray-50 py-16 sm:py-20">
+      <section className="border-t border-gray-100 bg-gray-50 py-12 sm:py-16">
         <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
-          <h2 className="text-sm font-semibold tracking-wide text-blue-600 uppercase">Requirements</h2>
-          <div className="mt-6 grid grid-cols-1 gap-4 sm:grid-cols-2 max-w-2xl">
+          <h2 className="text-sm font-semibold tracking-wide text-blue-600 uppercase">System requirements</h2>
+          <div className="mt-6 grid grid-cols-1 gap-4 sm:grid-cols-3 max-w-3xl">
             <div className="flex items-start gap-3">
               <svg className="mt-0.5 h-5 w-5 shrink-0 text-blue-600" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
                 <path strokeLinecap="round" strokeLinejoin="round" d="m4.5 12.75 6 6 9-13.5" />
               </svg>
               <div>
-                <p className="text-sm font-medium text-gray-900">Docker Desktop</p>
-                <p className="text-sm text-gray-500">Required for running vectorAIz containers</p>
+                <p className="text-sm font-medium text-gray-900">Docker</p>
+                <p className="text-sm text-gray-500">Docker Desktop, OrbStack, or Docker Engine</p>
               </div>
             </div>
             <div className="flex items-start gap-3">
@@ -142,8 +247,17 @@ export default function DownloadPage() {
                 <path strokeLinecap="round" strokeLinejoin="round" d="m4.5 12.75 6 6 9-13.5" />
               </svg>
               <div>
-                <p className="text-sm font-medium text-gray-900">Mac, Linux, or Windows</p>
-                <p className="text-sm text-gray-500">macOS 12+, any modern Linux, or Windows 10/11 with WSL2</p>
+                <p className="text-sm font-medium text-gray-900">8 GB RAM</p>
+                <p className="text-sm text-gray-500">16 GB recommended</p>
+              </div>
+            </div>
+            <div className="flex items-start gap-3">
+              <svg className="mt-0.5 h-5 w-5 shrink-0 text-blue-600" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                <path strokeLinecap="round" strokeLinejoin="round" d="m4.5 12.75 6 6 9-13.5" />
+              </svg>
+              <div>
+                <p className="text-sm font-medium text-gray-900">10 GB Disk</p>
+                <p className="text-sm text-gray-500">For Docker images and data</p>
               </div>
             </div>
           </div>
