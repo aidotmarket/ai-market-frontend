@@ -1,7 +1,14 @@
 'use client';
 
 import { api } from './client';
-import type { TokenResponse, User, LoginRequest, RegisterRequest } from '@/types';
+import type {
+  TokenResponse,
+  User,
+  LoginRequest,
+  RegisterRequest,
+  TOTPSetupResponse,
+  TOTPVerifySetupResponse,
+} from '@/types';
 
 export async function login(data: LoginRequest): Promise<TokenResponse> {
   const res = await api.post<TokenResponse>('/auth/login', data);
@@ -28,6 +35,11 @@ export async function forgotPassword(email: string): Promise<{ message: string }
   return res.data;
 }
 
+export async function requestMagicLink(email: string): Promise<{ message: string }> {
+  const res = await api.post<{ message: string }>('/auth/magic-link/request', { email });
+  return res.data;
+}
+
 export async function resetPassword(token: string, new_password: string): Promise<{ message: string }> {
   const res = await api.post<{ message: string }>('/auth/reset-password', { token, new_password });
   return res.data;
@@ -45,5 +57,25 @@ export async function oauthCallback(provider: string, code: string, state: strin
 
 export async function magicLinkVerify(token: string): Promise<TokenResponse> {
   const res = await api.post<TokenResponse>('/auth/magic-link/verify', { token });
+  return res.data;
+}
+
+export async function setup2FA(): Promise<TOTPSetupResponse> {
+  const res = await api.post<TOTPSetupResponse>('/auth/2fa/setup');
+  return res.data;
+}
+
+export async function verify2FASetup(code: string): Promise<TOTPVerifySetupResponse> {
+  const res = await api.post<TOTPVerifySetupResponse>('/auth/2fa/verify-setup', { code });
+  return res.data;
+}
+
+export async function disable2FA(reauth_token: string, code: string): Promise<{ message: string }> {
+  const res = await api.post<{ message: string }>('/auth/2fa/disable', { reauth_token, code });
+  return res.data;
+}
+
+export async function regenerateBackupCodes(reauth_token: string, code: string): Promise<{ backup_codes: string[] }> {
+  const res = await api.post<{ backup_codes: string[] }>('/auth/2fa/regenerate-backup-codes', { reauth_token, code });
   return res.data;
 }

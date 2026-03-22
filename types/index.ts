@@ -15,6 +15,9 @@ export interface User {
   status: UserStatus;
   created_at: string;
   email_verified_at: string | null;
+  totp_enabled: boolean;
+  auth_methods: string[];
+  primary_auth: string;
 }
 
 export interface TokenResponse {
@@ -35,6 +38,17 @@ export interface RegisterRequest {
   last_name?: string;
   company_name?: string;
   role: UserRole;
+}
+
+export interface TOTPSetupResponse {
+  secret: string;
+  qr_uri: string;
+  setup_session_id: string;
+  expires_in: number;
+}
+
+export interface TOTPVerifySetupResponse {
+  backup_codes: string[];
 }
 
 // ============================================================================

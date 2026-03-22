@@ -100,6 +100,13 @@ export const useAuthStore = create<AuthState>((set, get) => ({
       token: access_token,
       refreshToken: newRefreshToken || refreshToken,
     });
+
+    try {
+      const user = await authApi.getMe();
+      set({ user, isAuthenticated: true });
+    } catch {
+      // Keep refreshed tokens even if reloading the user fails transiently.
+    }
   },
 
   hydrate: async () => {

@@ -8,6 +8,7 @@ import { useToast } from '@/components/Toast';
 import { validateRedirect } from '@/lib/redirect';
 import { AxiosError } from 'axios';
 import OAuthButtons from '@/components/OAuthButtons';
+import { requestMagicLink } from '@/api/auth';
 
 export default function LoginForm() {
   const router = useRouter();
@@ -19,6 +20,8 @@ export default function LoginForm() {
   const [password, setPassword] = useState('');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
+  const [loginMode, setLoginMode] = useState<'password' | 'magic-link'>('password');
+  const [magicLinkSentTo, setMagicLinkSentTo] = useState('');
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -26,19 +29,42 @@ export default function LoginForm() {
     setLoading(true);
 
     try {
-      await login(email, password);
-      toast('Logged in successfully', 'success');
-      const redirectTo = validateRedirect(searchParams.get('redirect'), '/listings');
-      router.push(redirectTo);
+      if (loginMode === 'magic-link') {
+        await requestMagicLink(email);
+        setMagicLinkSentTo(email);
+        toast('Magic link sent', 'success');
+      } else {
+        await login(email, password);
+        toast('Logged in successfully', 'success');
+        const redirectTo = validateRedirect(searchParams.get('redirect'), '/listings');
+        router.push(redirectTo);
+      }
     } catch (err) {
       if (err instanceof AxiosError) {
-        setError(err.response?.data?.detail || 'Login failed. Please check your credentials.');
+        if (loginMode === 'magic-link') {
+          setError(err.response?.status === 429 ? 'Too many requests. Try again in a minute.' : 'Failed to send magic link. Please try again.');
+        } else {
+          setError(err.response?.data?.detail || 'Login failed. Please check your credentials.');
+        }
       } else {
-        setError('An unexpected error occurred.');
+        setError(loginMode === 'magic-link' ? 'Failed to send magic link. Please try again.' : 'An unexpected error occurred.');
       }
     } finally {
       setLoading(false);
     }
+  };
+
+  const switchToMagicLink = () => {
+    setLoginMode('magic-link');
+    setPassword('');
+    setError('');
+    setMagicLinkSentTo('');
+  };
+
+  const switchToPassword = () => {
+    setLoginMode('password');
+    setError('');
+    setMagicLinkSentTo('');
   };
 
   return (
@@ -67,6 +93,12 @@ export default function LoginForm() {
             </div>
           )}
 
+          {magicLinkSentTo && loginMode === 'magic-link' && (
+            <div className="rounded-lg bg-green-50 border border-green-200 px-4 py-3 text-sm text-green-700">
+              Check your email — we sent a sign-in link to {magicLinkSentTo}
+            </div>
+          )}
+
           <div>
             <label htmlFor="email" className="block text-sm font-medium text-gray-700 mb-1">
               Email
@@ -82,33 +114,54 @@ export default function LoginForm() {
             />
           </div>
 
-          <div>
-            <label htmlFor="password" className="block text-sm font-medium text-gray-700 mb-1">
-              Password
-            </label>
-            <input
-              id="password"
-              type="password"
-              required
-              value={password}
-              onChange={(e) => setPassword(e.target.value)}
-              className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-              placeholder="••••••••"
-            />
-          </div>
+          {loginMode === 'password' ? (
+            <>
+              <div>
+                <label htmlFor="password" className="block text-sm font-medium text-gray-700 mb-1">
+                  Password
+                </label>
+                <input
+                  id="password"
+                  type="password"
+                  required
+                  value={password}
+                  onChange={(e) => setPassword(e.target.value)}
+                  className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                  placeholder="••••••••"
+                />
+              </div>
 
-          <div className="text-right">
-            <Link href="/forgot-password" className="text-sm text-blue-600 hover:underline">
-              Forgot your password?
-            </Link>
-          </div>
+              <div className="flex items-center justify-between">
+                <button
+                  type="button"
+                  onClick={switchToMagicLink}
+                  className="text-sm text-blue-600 hover:underline"
+                >
+                  Sign in with a magic link instead
+                </button>
+                <Link href="/forgot-password" className="text-sm text-blue-600 hover:underline">
+                  Forgot your password?
+                </Link>
+              </div>
+            </>
+          ) : (
+            <div className="text-right">
+              <button
+                type="button"
+                onClick={switchToPassword}
+                className="text-sm text-blue-600 hover:underline"
+              >
+                Use password instead
+              </button>
+            </div>
+          )}
 
           <button
             type="submit"
             disabled={loading}
             className="w-full rounded-lg bg-blue-600 px-4 py-2.5 text-sm font-medium text-white hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed"
           >
-            {loading ? 'Logging in...' : 'Log in'}
+            {loading ? (loginMode === 'magic-link' ? 'Sending magic link...' : 'Logging in...') : (loginMode === 'magic-link' ? 'Send magic link' : 'Log in')}
           </button>
         </form>
 
