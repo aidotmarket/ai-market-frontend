@@ -51,6 +51,14 @@ export interface TOTPVerifySetupResponse {
   backup_codes: string[];
 }
 
+export interface GenerateReauthTokenResponse {
+  message: string;
+}
+
+export interface ReauthResponse {
+  reauth_token: string;
+}
+
 // ============================================================================
 // Listing types — matches backend app/schemas/listing.py
 // ============================================================================

@@ -1,14 +1,5 @@
-Task: Frontend Auth UI - Magic Link Login + 2FA Settings
-
-Status: completed
-
-Progress:
-- Created scratchpad file.
-- Inspecting existing auth API, login form, settings page, and shared types.
-- Identified that `refreshAuth()` refreshes tokens only, which would leave settings UI stale after profile and 2FA changes.
-- Patching auth types/API/store, then implementing magic link login and dashboard 2FA UI.
-- Main feature code is in place.
-- Running a review pass for JSX/TypeScript issues before build verification.
-- Build caught a type narrowing issue in the 2FA verification button state; patched and re-running verification.
-- Verified with `npm run build`.
-- Remaining caveat: disable/regenerate 2FA flows still need a real frontend re-auth token source; placeholder TODOs are in place.
+# Task State
+- Added `generateReauthToken()` and `submitReauth()` to the auth API helper and added matching response types.
+- Created `app/dashboard/settings/ReauthModal.tsx` to initiate the backend reauth challenge, collect the verification code, and return the resulting `reauth_token`.
+- Updated settings 2FA disable/regenerate flows to open the modal first, then retry the sensitive action with the returned token.
+- Verified with `npx tsc --noEmit 2>&1 | head -30` (no TypeScript errors reported).

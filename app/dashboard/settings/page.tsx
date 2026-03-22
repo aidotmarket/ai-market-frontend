@@ -5,6 +5,7 @@ import { useAuthStore } from '@/store/auth';
 import { disable2FA, regenerateBackupCodes, setup2FA, updateProfile, verify2FASetup } from '@/api/auth';
 import { useToast } from '@/components/Toast';
 import { AxiosError } from 'axios';
+import ReauthModal from './ReauthModal';
 
 type TwoFactorFlow = 'idle' | 'showing_qr' | 'verifying' | 'showing_backup_codes';
 type SecurityAction = 'disable' | 'regenerate' | null;
@@ -30,6 +31,8 @@ export default function SettingsPage() {
   const [backupCodes, setBackupCodes] = useState<string[]>([]);
   const [backupCodesLabel, setBackupCodesLabel] = useState('Save these backup codes before you continue.');
   const [copiedBackupCodes, setCopiedBackupCodes] = useState(false);
+  const [isReauthOpen, setIsReauthOpen] = useState(false);
+  const [pendingReauthAction, setPendingReauthAction] = useState<Exclude<SecurityAction, null> | null>(null);
 
   useEffect(() => {
     if (user) {
@@ -88,6 +91,13 @@ export default function SettingsPage() {
     setBackupCodes([]);
     setBackupCodesLabel('Save these backup codes before you continue.');
     setCopiedBackupCodes(false);
+    setIsReauthOpen(false);
+    setPendingReauthAction(null);
+  };
+
+  const closeReauthModal = () => {
+    setIsReauthOpen(false);
+    setPendingReauthAction(null);
   };
 
   const handleSetup2FA = async () => {
@@ -162,34 +172,20 @@ export default function SettingsPage() {
     }
   };
 
-  const handleDisable2FA = async () => {
+  const handleSecurityActionWithReauth = async (action: Exclude<SecurityAction, null>, reauthToken: string) => {
     setSecurityLoading(true);
     setSecurityError('');
 
     try {
-      // TODO: Replace the placeholder reauth token once a dedicated frontend re-auth flow exists.
-      const res = await disable2FA('', totpCode.trim());
-      await refreshAuth();
-      resetTwoFactorState();
-      toast(res.message || 'Two-factor authentication disabled', 'success');
-    } catch (err) {
-      if (err instanceof AxiosError) {
-        setSecurityError(err.response?.data?.detail || 'Failed to disable 2FA.');
-      } else {
-        setSecurityError('Failed to disable 2FA.');
+      if (action === 'disable') {
+        const res = await disable2FA(reauthToken, totpCode.trim());
+        await refreshAuth();
+        resetTwoFactorState();
+        toast(res.message || 'Two-factor authentication disabled', 'success');
+        return;
       }
-    } finally {
-      setSecurityLoading(false);
-    }
-  };
 
-  const handleRegenerateBackupCodes = async () => {
-    setSecurityLoading(true);
-    setSecurityError('');
-
-    try {
-      // TODO: Replace the placeholder reauth token once a dedicated frontend re-auth flow exists.
-      const res = await regenerateBackupCodes('', totpCode.trim());
+      const res = await regenerateBackupCodes(reauthToken, totpCode.trim());
       setBackupCodes(res.backup_codes);
       setBackupCodesLabel('Your backup codes were regenerated. Store this new set securely; older codes are no longer valid.');
       setTwoFactorFlow('showing_backup_codes');
@@ -198,12 +194,30 @@ export default function SettingsPage() {
       toast('Backup codes regenerated', 'success');
     } catch (err) {
       if (err instanceof AxiosError) {
-        setSecurityError(err.response?.data?.detail || 'Failed to regenerate backup codes.');
+        setSecurityError(
+          err.response?.data?.detail ||
+            (action === 'disable' ? 'Failed to disable 2FA.' : 'Failed to regenerate backup codes.')
+        );
       } else {
-        setSecurityError('Failed to regenerate backup codes.');
+        setSecurityError(action === 'disable' ? 'Failed to disable 2FA.' : 'Failed to regenerate backup codes.');
       }
     } finally {
       setSecurityLoading(false);
+    }
+  };
+
+  const openReauthForAction = (action: Exclude<SecurityAction, null>) => {
+    setPendingReauthAction(action);
+    setIsReauthOpen(true);
+  };
+
+  const handleReauthSuccess = async (reauthToken: string) => {
+    if (!pendingReauthAction) return;
+
+    try {
+      await handleSecurityActionWithReauth(pendingReauthAction, reauthToken);
+    } finally {
+      closeReauthModal();
     }
   };
 
@@ -213,6 +227,12 @@ export default function SettingsPage() {
 
   return (
     <div className="max-w-2xl">
+      <ReauthModal
+        isOpen={isReauthOpen}
+        onClose={closeReauthModal}
+        onSuccess={handleReauthSuccess}
+      />
+
       <h1 className="text-2xl font-bold text-gray-900 mb-8">Settings</h1>
 
       {/* Profile Section */}
@@ -489,7 +509,7 @@ export default function SettingsPage() {
                 </div>
                 <div className="flex gap-3">
                   <button
-                    onClick={securityAction === 'disable' ? handleDisable2FA : handleRegenerateBackupCodes}
+                    onClick={() => openReauthForAction(securityAction)}
                     disabled={securityLoading || totpCode.trim().length !== 6}
                     className={`rounded-lg px-4 py-2 text-sm font-medium text-white disabled:opacity-50 disabled:cursor-not-allowed transition-colors ${securityAction === 'disable' ? 'bg-red-600 hover:bg-red-700' : 'bg-blue-600 hover:bg-blue-700'}`}
                   >
