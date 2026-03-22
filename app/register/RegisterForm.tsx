@@ -7,6 +7,7 @@ import { useAuthStore } from '@/store/auth';
 import { useToast } from '@/components/Toast';
 import { validateRedirect } from '@/lib/redirect';
 import { AxiosError } from 'axios';
+import OAuthButtons from '@/components/OAuthButtons';
 
 export default function RegisterForm() {
   const router = useRouter();
@@ -68,6 +69,8 @@ export default function RegisterForm() {
             We need an account so we can reach out to you with offers that match your requirements. After sign-up, allAI will walk you through submitting a data request to the marketplace.
           </div>
         )}
+
+        <OAuthButtons mode="register" />
 
         <form onSubmit={handleSubmit} className="space-y-4">
           {error && (

@@ -32,3 +32,13 @@ export async function resetPassword(token: string, new_password: string): Promis
   const res = await api.post<{ message: string }>('/auth/reset-password', { token, new_password });
   return res.data;
 }
+
+export async function oauthAuthorize(provider: string): Promise<{ authorization_url: string }> {
+  const res = await api.get<{ authorization_url: string }>(`/auth/oauth/${provider}/authorize`);
+  return res.data;
+}
+
+export async function oauthCallback(provider: string, code: string, state: string): Promise<TokenResponse> {
+  const res = await api.post<TokenResponse>(`/auth/oauth/${provider}/callback`, { code, state });
+  return res.data;
+}

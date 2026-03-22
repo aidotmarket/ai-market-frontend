@@ -7,6 +7,7 @@ import { useAuthStore } from '@/store/auth';
 import { useToast } from '@/components/Toast';
 import { validateRedirect } from '@/lib/redirect';
 import { AxiosError } from 'axios';
+import OAuthButtons from '@/components/OAuthButtons';
 
 export default function LoginForm() {
   const router = useRouter();
@@ -45,11 +46,19 @@ export default function LoginForm() {
       <div className="w-full max-w-md">
         <h1 className="text-2xl font-bold text-center mb-8">Log in to ai.market</h1>
 
+        {searchParams.get('error') === 'oauth_failed' && (
+          <div className="rounded-lg bg-red-50 border border-red-200 px-4 py-3 text-sm text-red-700 mb-4">
+            OAuth sign-in failed. Please try again or use email and password.
+          </div>
+        )}
+
         {searchParams.get('redirect')?.includes('/requests/new') && (
           <div className="rounded-lg bg-blue-50 border border-blue-200 px-4 py-3 text-sm text-blue-700 mb-4">
             We need an account so we can reach out to you with offers that match your requirements. After sign-up, allAI will walk you through submitting a data request to the marketplace.
           </div>
         )}
+
+        <OAuthButtons mode="login" />
 
         <form onSubmit={handleSubmit} className="space-y-4">
           {error && (
