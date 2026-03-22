@@ -22,8 +22,8 @@ export function Layout({ children }: { children: React.ReactNode }) {
         <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
           <div className="flex h-16 items-center justify-between">
             {/* Logo */}
-            <Link href="/" className="font-bold text-xl text-gray-900">
-              <span className="text-blue-600">ai</span>{'.market'}
+            <Link href="/">
+              <img src="/logo.svg" alt="ai.market" className="h-8" />
             </Link>
 
             {/* Desktop Nav */}

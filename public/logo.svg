@@ -1,0 +1,83 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 2048 512" width="2048" height="512">
+  <defs>
+    <filter id="textShadow" x="-5%" y="-5%" width="115%" height="120%">
+      <feOffset dx="3" dy="4" in="SourceAlpha" result="off"/>
+      <feGaussianBlur in="off" stdDeviation="2" result="blur"/>
+      <feFlood flood-color="#1e40af" flood-opacity="0.35" result="color"/>
+      <feComposite in="color" in2="blur" operator="in" result="shadow"/>
+      <feMerge>
+        <feMergeNode in="shadow"/>
+        <feMergeNode in="SourceGraphic"/>
+      </feMerge>
+    </filter>
+    <filter id="robotShadow" x="-5%" y="-5%" width="115%" height="120%">
+      <feOffset dx="2" dy="3" in="SourceAlpha" result="off"/>
+      <feGaussianBlur in="off" stdDeviation="1.5" result="blur"/>
+      <feFlood flood-color="#1e3a8a" flood-opacity="0.3" result="color"/>
+      <feComposite in="color" in2="blur" operator="in" result="shadow"/>
+      <feMerge>
+        <feMergeNode in="shadow"/>
+        <feMergeNode in="SourceGraphic"/>
+      </feMerge>
+    </filter>
+    <linearGradient id="marketGrad" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0%" stop-color="#3B82F6"/>
+      <stop offset="55%" stop-color="#2563EB"/>
+      <stop offset="100%" stop-color="#1D4ED8"/>
+    </linearGradient>
+    <linearGradient id="aGrad" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0%" stop-color="#3B82F6"/>
+      <stop offset="50%" stop-color="#2563EB"/>
+      <stop offset="100%" stop-color="#1D4ED8"/>
+    </linearGradient>
+  </defs>
+
+  <text x="180" y="340" font-family="Arial, Helvetica, sans-serif" font-weight="800" font-size="280" fill="url(#aGrad)" filter="url(#textShadow)">a</text>
+  
+  <g transform="translate(345, 80)" filter="url(#robotShadow)">
+    <line x1="55" y1="0" x2="55" y2="30" stroke="#2563EB" stroke-width="6" stroke-linecap="round"/>
+    <circle cx="55" cy="0" r="8" fill="#3B82F6"/>
+    <rect x="15" y="30" width="80" height="65" rx="16" ry="16" fill="#2563EB"/>
+    <rect x="15" y="30" width="80" height="32" rx="16" ry="16" fill="#3B82F6" opacity="0.4"/>
+    <rect x="28" y="48" width="22" height="18" rx="6" fill="white"/>
+    <rect x="60" y="48" width="22" height="18" rx="6" fill="white"/>
+    <circle cx="39" cy="57" r="5" fill="#0F172A"/>
+    <circle cx="71" cy="57" r="5" fill="#0F172A"/>
+    <circle cx="37" cy="55" r="1.5" fill="white" opacity="0.7"/>
+    <circle cx="69" cy="55" r="1.5" fill="white" opacity="0.7"/>
+    <rect x="25" y="100" width="60" height="160" rx="8" fill="#2563EB"/>
+    <rect x="25" y="100" width="30" height="160" rx="8" fill="#3B82F6" opacity="0.25"/>
+  </g>
+  
+  <circle cx="480" cy="335" r="16" fill="#2563EB" filter="url(#robotShadow)"/>
+  <circle cx="478" cy="333" r="6" fill="#3B82F6" opacity="0.4"/>
+
+  <clipPath id="marketClip">
+    <text x="530" y="340" font-family="Arial, Helvetica, sans-serif" font-weight="500" font-size="280" letter-spacing="-2">market</text>
+  </clipPath>
+
+  <g clip-path="url(#marketClip)">
+    <rect x="520" y="50" width="1080" height="310" fill="#0F0F0F"/>
+    <line x1="520" y1="82" x2="1600" y2="82" stroke="white" stroke-width="5"/>
+    <line x1="520" y1="95" x2="1600" y2="95" stroke="white" stroke-width="5"/>
+    <line x1="520" y1="108" x2="1600" y2="108" stroke="white" stroke-width="5"/>
+    <line x1="520" y1="121" x2="1600" y2="121" stroke="white" stroke-width="5"/>
+    <line x1="520" y1="134" x2="1600" y2="134" stroke="white" stroke-width="5"/>
+    <line x1="520" y1="147" x2="1600" y2="147" stroke="white" stroke-width="5"/>
+    <line x1="520" y1="160" x2="1600" y2="160" stroke="white" stroke-width="5"/>
+    <line x1="520" y1="173" x2="1600" y2="173" stroke="white" stroke-width="5"/>
+    <line x1="520" y1="186" x2="1600" y2="186" stroke="white" stroke-width="5"/>
+    <line x1="520" y1="199" x2="1600" y2="199" stroke="white" stroke-width="5"/>
+    <line x1="520" y1="212" x2="1600" y2="212" stroke="white" stroke-width="5"/>
+    <line x1="520" y1="225" x2="1600" y2="225" stroke="white" stroke-width="5"/>
+    <line x1="520" y1="238" x2="1600" y2="238" stroke="white" stroke-width="5"/>
+    <line x1="520" y1="251" x2="1600" y2="251" stroke="white" stroke-width="5"/>
+    <line x1="520" y1="264" x2="1600" y2="264" stroke="white" stroke-width="5"/>
+    <line x1="520" y1="277" x2="1600" y2="277" stroke="white" stroke-width="5"/>
+    <line x1="520" y1="290" x2="1600" y2="290" stroke="white" stroke-width="5"/>
+    <line x1="520" y1="303" x2="1600" y2="303" stroke="white" stroke-width="5"/>
+    <line x1="520" y1="316" x2="1600" y2="316" stroke="white" stroke-width="5"/>
+    <line x1="520" y1="329" x2="1600" y2="329" stroke="white" stroke-width="5"/>
+    <line x1="520" y1="342" x2="1600" y2="342" stroke="white" stroke-width="5"/>
+  </g>
+</svg>
