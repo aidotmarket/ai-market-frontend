@@ -42,3 +42,8 @@ export async function oauthCallback(provider: string, code: string, state: strin
   const res = await api.post<TokenResponse>(`/auth/oauth/${provider}/callback`, { code, state, nonce });
   return res.data;
 }
+
+export async function magicLinkVerify(token: string): Promise<TokenResponse> {
+  const res = await api.post<TokenResponse>('/auth/magic-link/verify', { token });
+  return res.data;
+}

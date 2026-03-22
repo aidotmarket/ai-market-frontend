@@ -13,6 +13,7 @@ interface AuthState {
   login: (email: string, password: string) => Promise<void>;
   register: (email: string, password: string, firstName?: string, lastName?: string, role?: "buyer" | "seller" | "admin", companyName?: string) => Promise<void>;
   oauthLogin: (provider: string, code: string, state: string, nonce: string) => Promise<void>;
+  magicLinkVerify: (token: string) => Promise<void>;
   logout: () => void;
   refreshAuth: () => Promise<void>;
   hydrate: () => Promise<void>;
@@ -54,6 +55,19 @@ export const useAuthStore = create<AuthState>((set, get) => ({
 
   oauthLogin: async (provider, code, state, nonce) => {
     const tokenRes = await authApi.oauthCallback(provider, code, state, nonce);
+
+    set({
+      token: tokenRes.access_token,
+      refreshToken: tokenRes.refresh_token,
+      isAuthenticated: true,
+    });
+
+    const user = await authApi.getMe();
+    set({ user });
+  },
+
+  magicLinkVerify: async (token) => {
+    const tokenRes = await authApi.magicLinkVerify(token);
 
     set({
       token: tokenRes.access_token,
