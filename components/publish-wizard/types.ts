@@ -38,6 +38,7 @@ export interface TermsData {
 }
 
 export interface PrivacyData {
+  scanCompleted: boolean;
   findings: PIIFinding[];
   notes: string;
   proposals: ProposalCardData[];
@@ -78,6 +79,8 @@ export interface MetadataData {
 
 export interface PricePublishData {
   price: string;
+  allStepsComplete: boolean;
+  confirmationChecked: boolean;
   checklist: {
     oneTimeOnly: boolean;
     reviewedPrivacy: boolean;

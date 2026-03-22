@@ -5,12 +5,14 @@ import type { PricePublishData, PublishWizardContextSnapshot } from '../types';
 export function PricePublishStep({
   data,
   context,
+  allPriorStepsComplete,
   onChange,
   onPublish,
   publishing,
 }: {
   data: PricePublishData;
   context: PublishWizardContextSnapshot;
+  allPriorStepsComplete: boolean;
   onChange: (patch: Partial<PricePublishData>) => void;
   onPublish: () => void;
   publishing: boolean;
@@ -18,6 +20,7 @@ export function PricePublishStep({
   const priceNumber = Number(data.price || '0');
   const sellerShare = Number.isFinite(priceNumber) ? priceNumber * 0.95 : 0;
   const marketplaceShare = Number.isFinite(priceNumber) ? priceNumber * 0.05 : 0;
+  const canPublish = priceNumber >= 1 && allPriorStepsComplete && data.confirmationChecked;
 
   const checklist = data.checklist;
 
@@ -35,7 +38,7 @@ export function PricePublishStep({
             <input
               type="number"
               min="1"
-              step="1"
+              step="0.01"
               value={data.price}
               onChange={(event) => onChange({ price: event.target.value })}
               className="w-full rounded-2xl border border-stone-200 bg-white px-4 py-3"
@@ -80,6 +83,16 @@ export function PricePublishStep({
               </label>
             ))}
           </div>
+
+          <label className="mt-6 flex items-start gap-3 rounded-2xl border border-stone-200 bg-stone-50 px-4 py-3">
+            <input
+              type="checkbox"
+              checked={data.confirmationChecked}
+              onChange={(event) => onChange({ confirmationChecked: event.target.checked })}
+              className="mt-1 h-5 w-5"
+            />
+            <span className="text-sm text-stone-700">I confirm this listing is ready to publish.</span>
+          </label>
         </div>
 
         <div className="rounded-[2rem] bg-stone-950 p-6 text-stone-50">
@@ -93,11 +106,20 @@ export function PricePublishStep({
           <button
             type="button"
             onClick={onPublish}
-            disabled={publishing}
+            disabled={publishing || !canPublish}
             className="mt-8 w-full rounded-full bg-amber-300 px-5 py-3 text-sm font-semibold text-stone-950 disabled:opacity-60"
           >
             {publishing ? 'Publishing...' : 'Publish Listing'}
           </button>
+          {!allPriorStepsComplete && (
+            <p className="mt-3 text-xs text-stone-400">Complete the first seven steps before publishing.</p>
+          )}
+          {allPriorStepsComplete && priceNumber < 1 && (
+            <p className="mt-3 text-xs text-stone-400">Set a price of at least $1.00 to publish.</p>
+          )}
+          {allPriorStepsComplete && priceNumber >= 1 && !data.confirmationChecked && (
+            <p className="mt-3 text-xs text-stone-400">Check the publish confirmation box to continue.</p>
+          )}
         </div>
       </div>
     </div>

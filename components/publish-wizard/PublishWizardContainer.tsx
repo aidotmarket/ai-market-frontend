@@ -38,7 +38,7 @@ import { PricePublishStep } from './steps/PricePublishStep';
 const DEFAULT_DRAFT: PublishWizardDraft = {
   account: { linked: false, email: '', deviceLabel: '' },
   terms: { accepted: false },
-  privacy: { findings: [], notes: '', proposals: [], decisions: {} },
+  privacy: { scanCompleted: false, findings: [], notes: '', proposals: [], decisions: {} },
   compliance: { frameworks: [], handlingPII: '', crossBorderTransfers: '', regulatedData: '' },
   provenance: { source: '', collectionMethod: '', collectionDates: '', geoCoverage: '', processingSummary: '', license: '' },
   quality: {
@@ -65,9 +65,17 @@ const DEFAULT_DRAFT: PublishWizardDraft = {
   },
   price_publish: {
     price: '49',
+    allStepsComplete: false,
+    confirmationChecked: false,
     checklist: { oneTimeOnly: true, reviewedPrivacy: false, reviewedMetadata: false },
   },
 };
+
+const MAX_WIZARD_STEP_INDEX = WIZARD_STEPS.length - 1;
+
+function clampWizardStep(step: number | null | undefined) {
+  return Math.max(0, Math.min(MAX_WIZARD_STEP_INDEX, step ?? 0));
+}
 
 function toProposalMap(proposals: ProposalCardData[]) {
   return proposals.reduce<Record<string, ProposalCardData>>((acc, proposal) => {
@@ -98,6 +106,7 @@ function fromDecisionMap(value: unknown): Record<string, ProposalDecisionState> 
 }
 
 function buildSavePayload(currentStep: number, draft: PublishWizardDraft): WizardStateUpdate {
+  const allPriorStepsComplete = areAllPriorStepsComplete(draft);
   return {
     current_step: currentStep,
     steps: {
@@ -117,7 +126,11 @@ function buildSavePayload(currentStep: number, draft: PublishWizardDraft): Wizar
         step_index: 2,
         step_key: 'privacy',
         completed: validateStep('privacy', draft),
-        form_data: { findings: draft.privacy.findings, notes: draft.privacy.notes },
+        form_data: {
+          scanCompleted: draft.privacy.scanCompleted,
+          findings: draft.privacy.findings,
+          notes: draft.privacy.notes,
+        },
         allai_proposals: toProposalMap(draft.privacy.proposals),
         allai_proposal_decisions: draft.privacy.decisions,
       },
@@ -158,7 +171,10 @@ function buildSavePayload(currentStep: number, draft: PublishWizardDraft): Wizar
         step_index: 7,
         step_key: 'price_publish',
         completed: validateStep('price_publish', draft),
-        form_data: draft.price_publish as unknown as Record<string, unknown>,
+        form_data: {
+          ...draft.price_publish,
+          allStepsComplete: allPriorStepsComplete,
+        } as unknown as Record<string, unknown>,
       },
     },
   };
@@ -170,6 +186,7 @@ function hydrateDraft(base: PublishWizardDraft, steps: WizardStateUpdate['steps'
   const privacy = steps.privacy;
   if (privacy?.form_data) {
     next.privacy = {
+      scanCompleted: Boolean(privacy.form_data.scanCompleted),
       findings: Array.isArray(privacy.form_data.findings) ? (privacy.form_data.findings as PublishWizardDraft['privacy']['findings']) : [],
       notes: String(privacy.form_data.notes ?? ''),
       proposals: fromProposalMap(privacy.allai_proposals),
@@ -209,14 +226,23 @@ function hydrateDraft(base: PublishWizardDraft, steps: WizardStateUpdate['steps'
   return next;
 }
 
-function validateStep(stepKey: WizardStepKey, draft: PublishWizardDraft) {
+function areAllPriorStepsComplete(draft: PublishWizardDraft): boolean {
+  return WIZARD_STEPS.slice(0, MAX_WIZARD_STEP_INDEX).every((step) => validateStep(step.key, draft));
+}
+
+function validateStep(stepKey: WizardStepKey, draft: PublishWizardDraft): boolean {
   switch (stepKey) {
     case 'account':
       return draft.account.linked && draft.account.email.trim().length > 0 && draft.account.deviceLabel.trim().length > 0;
     case 'terms':
       return draft.terms.accepted;
-    case 'privacy':
-      return draft.privacy.proposals.every((proposal) => (draft.privacy.decisions[proposal.id]?.status ?? 'pending') !== 'pending');
+    case 'privacy': {
+      const scanCompleted = draft.privacy.scanCompleted;
+      const hasFindings = draft.privacy.proposals.length > 0;
+      const allDecisionsRecorded = hasFindings && draft.privacy.proposals.every((proposal) => (draft.privacy.decisions[proposal.id]?.status ?? 'pending') !== 'pending');
+      const cleanScan = scanCompleted && draft.privacy.findings.length === 0 && draft.privacy.proposals.length === 0;
+      return scanCompleted && (allDecisionsRecorded || cleanScan);
+    }
     case 'compliance':
       return draft.compliance.frameworks.length > 0 && !!draft.compliance.handlingPII && !!draft.compliance.crossBorderTransfers && !!draft.compliance.regulatedData;
     case 'provenance':
@@ -226,7 +252,7 @@ function validateStep(stepKey: WizardStepKey, draft: PublishWizardDraft) {
     case 'metadata':
       return !!draft.metadata.title.trim() && !!draft.metadata.description.trim() && !!draft.metadata.category.trim() && draft.metadata.proposals.every((proposal) => (draft.metadata.decisions[proposal.id]?.status ?? 'pending') !== 'pending');
     case 'price_publish':
-      return Number(draft.price_publish.price) > 0 && Object.values(draft.price_publish.checklist).every(Boolean);
+      return Number(draft.price_publish.price) >= 1 && areAllPriorStepsComplete(draft) && draft.price_publish.confirmationChecked;
     default:
       return false;
   }
@@ -269,7 +295,7 @@ function PublishWizardProtected({ operationId }: { operationId: string }) {
         if (!active) return;
 
         setOperation(operationResponse);
-        setCurrentStep(wizardStateResponse.current_step ?? 0);
+        setCurrentStep(clampWizardStep(wizardStateResponse.current_step));
         setLastSavedAt(wizardStateResponse.updated_at);
         setDraft((prev) => hydrateDraft(prev, wizardStateResponse.steps));
         hydratedRef.current = true;
@@ -390,6 +416,7 @@ function PublishWizardProtected({ operationId }: { operationId: string }) {
         ...prev,
         privacy: {
           ...prev.privacy,
+          scanCompleted: true,
           findings: scan.findings,
           proposals,
           decisions: {},
@@ -409,6 +436,11 @@ function PublishWizardProtected({ operationId }: { operationId: string }) {
     try {
       if (!operation) {
         throw new Error('Operation missing');
+      }
+
+      if (!validateStep('price_publish', draft)) {
+        toast('Finish the price and publish requirements before publishing.', 'info');
+        return;
       }
 
       if (operation.status === 'published') {
@@ -505,6 +537,7 @@ function PublishWizardProtected({ operationId }: { operationId: string }) {
           <PricePublishStep
             data={draft.price_publish}
             context={context}
+            allPriorStepsComplete={areAllPriorStepsComplete(draft)}
             onChange={(patch) => setDraft((prev) => ({ ...prev, price_publish: { ...prev.price_publish, ...patch } }))}
             onPublish={handlePublish}
             publishing={publishing}
