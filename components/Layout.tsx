@@ -2,13 +2,16 @@
 
 import { useState } from 'react';
 import Link from 'next/link';
-import { useRouter } from 'next/navigation';
+import { useRouter, usePathname } from 'next/navigation';
 import { useAuthStore } from '@/store/auth';
+import { SearchForm } from '@/components/search/SearchForm';
 
 export function Layout({ children }: { children: React.ReactNode }) {
   const { user, isAuthenticated, logout } = useAuthStore();
   const router = useRouter();
+  const pathname = usePathname();
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
+  const showNavSearch = pathname !== '/' && pathname !== '/search' && pathname !== '/listings';
 
   const handleLogout = () => {
     logout();
@@ -46,6 +49,13 @@ export function Layout({ children }: { children: React.ReactNode }) {
                 </Link>
               )}
             </nav>
+
+            {/* Desktop Nav Search */}
+            {showNavSearch && (
+              <div className="hidden md:block w-full max-w-xs lg:max-w-sm">
+                <SearchForm size="compact" placeholder="Search datasets..." />
+              </div>
+            )}
 
             {/* Desktop Auth */}
             <div className="hidden md:flex items-center gap-3">

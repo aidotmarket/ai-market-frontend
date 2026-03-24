@@ -1,5 +1,6 @@
 import Link from 'next/link';
 import type { Metadata } from 'next';
+import { HeroSearch } from '@/components/search/HeroSearch';
 
 export const metadata: Metadata = {
   title: 'ai.market — B2B Data Marketplace (Private Beta)',
@@ -167,6 +168,9 @@ export default function LandingPage() {
               >
                 I Need Data
               </Link>
+            </div>
+            <div className="mt-8 max-w-xl">
+              <HeroSearch />
             </div>
           </div>
         </div>

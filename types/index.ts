@@ -80,6 +80,7 @@ export interface ListingListItem {
   category: string;
   tags: string[];
   privacy_score: number;
+  data_format?: string | null;
   model_provider: ModelProvider;
   trust_level: TrustLevel;
   quality_score: number;
@@ -154,11 +155,20 @@ export interface SearchResultItem {
   data_format: string | null;
   source_row_count: number | null;
   tags: string[] | null;
+  created_at?: string | null;
+  verification_status?: VerificationStatus;
+  view_count?: number;
+}
+
+export interface PriceFacet {
+  min: number;
+  max: number;
+  avg?: number;
 }
 
 export interface FacetInfo {
   categories: Record<string, number>;
-  price: Record<string, number>;
+  price: PriceFacet;
 }
 
 export interface SearchResponse {

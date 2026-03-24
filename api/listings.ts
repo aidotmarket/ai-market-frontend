@@ -8,6 +8,7 @@ export interface ListListingsParams {
   limit?: number;
   category?: string;
   search?: string;
+  listing_type?: string;
   min_price?: number;
   max_price?: number;
   min_privacy_score?: number;
@@ -29,6 +30,8 @@ export async function searchListings(
     category?: string;
     min_price?: number;
     max_price?: number;
+    min_privacy_score?: number;
+    compliance_status?: string;
     limit?: number;
     offset?: number;
   } = {}
