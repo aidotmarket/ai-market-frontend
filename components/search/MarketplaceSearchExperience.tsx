@@ -1,5 +1,6 @@
 'use client';
 
+import { useState, useEffect, useRef, useCallback } from 'react';
 import { usePathname, useRouter, useSearchParams } from 'next/navigation';
 import { useSearchListings, type ResultItem } from '@/hooks/useSearchListings';
 import { MarketplaceListingCard } from '@/components/search/MarketplaceListingCard';
@@ -35,6 +36,12 @@ function sortItems(items: ResultItem[], sort: string, semanticMode: boolean) {
   return next;
 }
 
+/*
+ * Known limitation: data_type / data_format counts are computed client-side
+ * from loaded items only. The backend does not currently return format facets.
+ * Counts reflect only the items fetched so far, not the full result set.
+ * If the backend adds format facets in the future, wire them in here.
+ */
 function buildDataTypeCounts(items: ResultItem[]) {
   const counts = new Map<string, number>();
 
@@ -53,6 +60,8 @@ function parseNumber(value: string | null) {
   return Number.isFinite(parsed) ? parsed : undefined;
 }
 
+const PRICE_DEBOUNCE_MS = 500;
+
 export function MarketplaceSearchExperience({
   mode,
 }: MarketplaceSearchExperienceProps) {
@@ -66,15 +75,30 @@ export function MarketplaceSearchExperience({
   const minPrice = parseNumber(searchParams.get('min_price'));
   const maxPrice = parseNumber(searchParams.get('max_price'));
 
+  // Local state for debounced price inputs
+  const [localMinPrice, setLocalMinPrice] = useState(searchParams.get('min_price') ?? '');
+  const [localMaxPrice, setLocalMaxPrice] = useState(searchParams.get('max_price') ?? '');
+  const priceTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  // Sync local price state when URL params change externally (e.g. "Clear all")
+  useEffect(() => {
+    setLocalMinPrice(searchParams.get('min_price') ?? '');
+    setLocalMaxPrice(searchParams.get('max_price') ?? '');
+  }, [searchParams]);
+
   const {
     items: rawItems,
     facets,
+    browseCategoryCounts,
     total,
     semanticMode,
     isLoading,
+    isError,
+    error,
     hasNextPage,
     isFetchingNextPage,
     fetchNextPage,
+    refetch,
   } = useSearchListings({ q, category, minPrice, maxPrice });
 
   const sort = searchParams.get('sort') || (semanticMode ? 'relevance' : 'newest');
@@ -85,12 +109,21 @@ export function MarketplaceSearchExperience({
   });
 
   const items = sortItems(filteredItems, sort, semanticMode);
-  const categoryCounts = facets ? Object.entries(facets.categories) : [];
+
+  // FIX 1: Use facet categories when available, otherwise derive from loaded items
+  const categoryCounts: [string, number][] = facets
+    ? Object.entries(facets.categories)
+    : browseCategoryCounts
+      ? Object.entries(browseCategoryCounts)
+      : [];
+
+  // FIX 4: Client-side only — counts reflect loaded items, not full dataset
   const dataTypeCounts = buildDataTypeCounts(rawItems);
   const priceStats = facets?.price || null;
   const resultCount = semanticMode ? total : items.length;
 
-  function updateParams(updates: Record<string, string | number | undefined>) {
+  // FIX 3: Use router.replace for filter changes to avoid history spam
+  const updateParams = useCallback((updates: Record<string, string | number | undefined>) => {
     const next = new URLSearchParams(searchParams.toString());
 
     for (const [key, value] of Object.entries(updates)) {
@@ -105,8 +138,23 @@ export function MarketplaceSearchExperience({
     next.delete('per_page');
     next.delete('offset');
 
-    router.push(`${pathname}?${next.toString()}`);
-  }
+    router.replace(`${pathname}?${next.toString()}`);
+  }, [pathname, router, searchParams]);
+
+  // FIX 3: Debounced price update
+  const debouncePriceUpdate = useCallback((key: string, value: string) => {
+    if (priceTimerRef.current) clearTimeout(priceTimerRef.current);
+    priceTimerRef.current = setTimeout(() => {
+      updateParams({ [key]: value });
+    }, PRICE_DEBOUNCE_MS);
+  }, [updateParams]);
+
+  // Cleanup timer on unmount
+  useEffect(() => {
+    return () => {
+      if (priceTimerRef.current) clearTimeout(priceTimerRef.current);
+    };
+  }, []);
 
   const sortOptions = semanticMode
     ? [
@@ -162,11 +210,13 @@ export function MarketplaceSearchExperience({
               </div>
             </div>
 
+            {/* FIX 6: htmlFor/id association for Category */}
             <div className="space-y-2">
-              <label className="text-xs font-semibold uppercase tracking-wide text-slate-500">
+              <label htmlFor="filter-category" className="text-xs font-semibold uppercase tracking-wide text-slate-500">
                 Category
               </label>
               <select
+                id="filter-category"
                 value={category}
                 onChange={(event) => updateParams({ category: event.target.value })}
                 className="w-full rounded-2xl border border-slate-200 px-3 py-2.5 text-sm text-slate-900 focus:border-blue-500 focus:outline-none"
@@ -180,11 +230,13 @@ export function MarketplaceSearchExperience({
               </select>
             </div>
 
+            {/* FIX 6: htmlFor/id association for Data type */}
             <div className="space-y-2">
-              <label className="text-xs font-semibold uppercase tracking-wide text-slate-500">
+              <label htmlFor="filter-data-type" className="text-xs font-semibold uppercase tracking-wide text-slate-500">
                 Data type
               </label>
               <select
+                id="filter-data-type"
                 value={dataType}
                 onChange={(event) => updateParams({ data_type: event.target.value })}
                 className="w-full rounded-2xl border border-slate-200 px-3 py-2.5 text-sm text-slate-900 focus:border-blue-500 focus:outline-none"
@@ -196,31 +248,49 @@ export function MarketplaceSearchExperience({
                   </option>
                 ))}
               </select>
+              {dataTypeCounts.length > 0 && (
+                <p className="text-xs text-slate-400">Counts reflect loaded results only</p>
+              )}
             </div>
 
+            {/* FIX 6: htmlFor/id associations for Price range inputs */}
             <div className="space-y-3">
-              <label className="text-xs font-semibold uppercase tracking-wide text-slate-500">
+              <span className="text-xs font-semibold uppercase tracking-wide text-slate-500" id="price-range-label">
                 Price range
-              </label>
-              <div className="grid grid-cols-2 gap-3">
-                <input
-                  type="number"
-                  min={0}
-                  inputMode="numeric"
-                  value={minPrice ?? ''}
-                  onChange={(event) => updateParams({ min_price: event.target.value })}
-                  placeholder="Min"
-                  className="w-full rounded-2xl border border-slate-200 px-3 py-2.5 text-sm text-slate-900 focus:border-blue-500 focus:outline-none"
-                />
-                <input
-                  type="number"
-                  min={0}
-                  inputMode="numeric"
-                  value={maxPrice ?? ''}
-                  onChange={(event) => updateParams({ max_price: event.target.value })}
-                  placeholder="Max"
-                  className="w-full rounded-2xl border border-slate-200 px-3 py-2.5 text-sm text-slate-900 focus:border-blue-500 focus:outline-none"
-                />
+              </span>
+              <div className="grid grid-cols-2 gap-3" role="group" aria-labelledby="price-range-label">
+                <div>
+                  <label htmlFor="filter-min-price" className="sr-only">Minimum price</label>
+                  <input
+                    id="filter-min-price"
+                    type="number"
+                    min={0}
+                    inputMode="numeric"
+                    value={localMinPrice}
+                    onChange={(event) => {
+                      setLocalMinPrice(event.target.value);
+                      debouncePriceUpdate('min_price', event.target.value);
+                    }}
+                    placeholder="Min"
+                    className="w-full rounded-2xl border border-slate-200 px-3 py-2.5 text-sm text-slate-900 focus:border-blue-500 focus:outline-none"
+                  />
+                </div>
+                <div>
+                  <label htmlFor="filter-max-price" className="sr-only">Maximum price</label>
+                  <input
+                    id="filter-max-price"
+                    type="number"
+                    min={0}
+                    inputMode="numeric"
+                    value={localMaxPrice}
+                    onChange={(event) => {
+                      setLocalMaxPrice(event.target.value);
+                      debouncePriceUpdate('max_price', event.target.value);
+                    }}
+                    placeholder="Max"
+                    className="w-full rounded-2xl border border-slate-200 px-3 py-2.5 text-sm text-slate-900 focus:border-blue-500 focus:outline-none"
+                  />
+                </div>
               </div>
               {priceStats && (
                 <p className="text-xs text-slate-500">
@@ -242,9 +312,11 @@ export function MarketplaceSearchExperience({
                 </p>
               </div>
 
-              <label className="flex items-center gap-3 text-sm text-slate-500">
+              {/* FIX 6: htmlFor/id association for Sort */}
+              <label htmlFor="filter-sort" className="flex items-center gap-3 text-sm text-slate-500">
                 <span>Sort</span>
                 <select
+                  id="filter-sort"
                   value={sort}
                   onChange={(event) => updateParams({ sort: event.target.value })}
                   className="rounded-2xl border border-slate-200 px-3 py-2 text-sm text-slate-900 focus:border-blue-500 focus:outline-none"
@@ -269,7 +341,24 @@ export function MarketplaceSearchExperience({
               </div>
             )}
 
-            {!isLoading && items.length === 0 && (
+            {/* FIX 2: Distinct error state — never collapse into "No datasets found" */}
+            {!isLoading && isError && (
+              <div className="mt-6 rounded-3xl border border-red-200 bg-red-50 px-6 py-16 text-center shadow-sm">
+                <p className="text-lg font-semibold text-red-900">Something went wrong</p>
+                <p className="mt-2 text-sm text-red-600">
+                  {error instanceof Error ? error.message : 'Failed to load results. Please try again.'}
+                </p>
+                <button
+                  type="button"
+                  onClick={() => refetch()}
+                  className="mt-4 rounded-full border border-red-300 bg-white px-5 py-2.5 text-sm font-medium text-red-700 transition-colors hover:bg-red-50"
+                >
+                  Retry
+                </button>
+              </div>
+            )}
+
+            {!isLoading && !isError && items.length === 0 && (
               <div className="mt-6 rounded-3xl border border-dashed border-slate-300 bg-white px-6 py-16 text-center shadow-sm">
                 <p className="text-lg font-semibold text-slate-900">No datasets found</p>
                 <p className="mt-2 text-sm text-slate-500">

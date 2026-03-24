@@ -94,6 +94,8 @@ export function Layout({ children }: { children: React.ReactNode }) {
               className="md:hidden p-2 text-gray-600"
               onClick={() => setMobileMenuOpen(!mobileMenuOpen)}
               aria-label="Toggle menu"
+              aria-expanded={mobileMenuOpen}
+              aria-controls="mobile-nav-menu"
             >
               <svg className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                 {mobileMenuOpen ? (
@@ -107,7 +109,7 @@ export function Layout({ children }: { children: React.ReactNode }) {
 
           {/* Mobile menu */}
           {mobileMenuOpen && (
-            <div className="md:hidden border-t border-gray-200 py-3 space-y-2">
+            <div id="mobile-nav-menu" className="md:hidden border-t border-gray-200 py-3 space-y-2">
               <Link
                 href="/listings"
                 className="block px-2 py-2 text-sm text-gray-600 hover:text-gray-900"

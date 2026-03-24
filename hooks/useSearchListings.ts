@@ -51,12 +51,19 @@ export function useSearchListings({
       });
     },
     getNextPageParam: (lastPage, allPages) => {
-      const pageSize = Array.isArray(lastPage) ? lastPage.length : lastPage.results.length;
-      if (pageSize < PAGE_SIZE) return undefined;
+      const pageItems = Array.isArray(lastPage) ? lastPage : lastPage.results;
+      if (pageItems.length < PAGE_SIZE) return undefined;
 
-      return allPages.reduce((total, page) => {
-        return total + (Array.isArray(page) ? page.length : page.results.length);
+      const loadedCount = allPages.reduce((sum, page) => {
+        return sum + (Array.isArray(page) ? page.length : page.results.length);
       }, 0);
+
+      // Use backend total when available to avoid fetching an empty final page
+      if (!Array.isArray(lastPage) && lastPage.total > 0 && loadedCount >= lastPage.total) {
+        return undefined;
+      }
+
+      return loadedCount;
     },
   });
 
@@ -70,10 +77,21 @@ export function useSearchListings({
     ? (Array.isArray(firstPage) ? rawItems.length : (firstPage as SearchResponse | undefined)?.total || rawItems.length)
     : rawItems.length;
 
+  // In browse mode (no facets), derive category counts from loaded items
+  const browseCategoryCounts: Record<string, number> | null = facets ? null : (() => {
+    const counts: Record<string, number> = {};
+    for (const item of rawItems) {
+      const cat = 'category' in item && item.category ? item.category : null;
+      if (cat) counts[cat] = (counts[cat] || 0) + 1;
+    }
+    return Object.keys(counts).length > 0 ? counts : null;
+  })();
+
   return {
     ...query,
     items: rawItems,
     facets,
+    browseCategoryCounts,
     total,
     semanticMode,
     pageSize: PAGE_SIZE,
