@@ -1,5 +1,6 @@
 # Task State
-- Added `generateReauthToken()` and `submitReauth()` to the auth API helper and added matching response types.
-- Created `app/dashboard/settings/ReauthModal.tsx` to initiate the backend reauth challenge, collect the verification code, and return the resulting `reauth_token`.
-- Updated settings 2FA disable/regenerate flows to open the modal first, then retry the sensitive action with the returned token.
-- Verified with `npx tsc --noEmit 2>&1 | head -30` (no TypeScript errors reported).
+
+- 2026-03-24 12:19 CET: Ran `git pull --ff-only`; repository already up to date.
+- 2026-03-24 12:20 CET: Searched the requested file types for the removed term; source hits were in homepage/meta copy, plus a non-tracked `dist` bundle.
+- 2026-03-24 12:22 CET: Preserved existing dirty copy edits that already removed the term from metadata, hero, and SEO text.
+- 2026-03-24 12:23 CET: Patched the remaining homepage value prop title to `Compliance Built-In`.

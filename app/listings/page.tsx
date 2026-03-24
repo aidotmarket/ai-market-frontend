@@ -6,7 +6,7 @@ import type { ListingListItem } from '@/types';
 
 export const metadata: Metadata = {
   title: 'Browse Datasets',
-  description: 'Discover enterprise datasets on ai.market — findable, queryable, and purchasable by AI systems.',
+  description: 'Discover datasets on ai.market — findable, queryable, and purchasable by AI systems.',
 };
 
 export const dynamic = 'force-dynamic';

@@ -11,7 +11,7 @@ export const metadata: Metadata = {
     default: 'ai.market — B2B Data Marketplace',
     template: '%s | ai.market',
   },
-  description: 'The marketplace where enterprise datasets become findable, queryable, and purchasable by AI systems.',
+  description: 'The marketplace where datasets become findable, queryable, and purchasable by AI systems.',
   metadataBase: new URL('https://ai.market'),
   icons: {
     icon: '/favicon.svg',
