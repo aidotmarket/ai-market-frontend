@@ -17,42 +17,23 @@ const footerSections = [
     ],
   },
   {
-    title: 'Solutions',
-    links: [
-      { label: 'Financial Services', href: '/solutions/financial-services' },
-      { label: 'Healthcare & Life Sciences', href: '/solutions/healthcare' },
-      { label: 'Retail & E-Commerce', href: '/solutions/retail' },
-      { label: 'Marketing & Advertising', href: '/solutions/marketing' },
-      { label: 'AI & Machine Learning', href: '/solutions/ai-ml' },
-    ],
-  },
-  {
-    title: 'Resources',
-    links: [
-      { label: 'Documentation', href: '/docs' },
-      { label: 'API Reference', href: '/docs/api' },
-      { label: 'Blog', href: '/blog' },
-      { label: 'Community', href: '/community' },
-      { label: 'Support', href: '/support' },
-    ],
-  },
-  {
     title: 'Developers',
     links: [
-      { label: 'MCP Integration', href: '/docs/mcp' },
-      { label: 'Agent SDK', href: '/docs/sdk' },
-      { label: 'Webhooks', href: '/docs/webhooks' },
       { label: 'vectorAIz', href: 'https://vectoraiz.com' },
       { label: 'GitHub', href: 'https://github.com/aidotmarket' },
     ],
   },
   {
-    title: 'Company',
+    title: 'Support',
     links: [
-      { label: 'About', href: '/about' },
-      { label: 'Careers', href: '/careers' },
-      { label: 'Contact', href: '/contact' },
-      { label: 'Legal', href: '/legal/site-terms' },
+      { label: 'Contact & Support', href: '/support' },
+    ],
+  },
+  {
+    title: 'Legal',
+    links: [
+      { label: 'Site Terms', href: '/legal/site-terms' },
+      { label: 'Privacy Notice', href: '/legal/privacy' },
     ],
   },
 ];
@@ -246,8 +227,8 @@ export function Layout({ children }: { children: React.ReactNode }) {
             <p className="text-sm text-[#96a0af] flex-1 sm:mx-8">
               Be the first to know about new data products and providers added to ai.market.
             </p>
-            <Link
-              href="/newsletter"
+            <a
+              href="mailto:support@ai.market?subject=Newsletter%20Subscription"
               className="inline-flex items-center gap-2.5 px-5 py-2.5 border border-[#3d4a5c] rounded-md text-sm font-medium text-[#e2e8f0] hover:border-[#6b7a8d] hover:bg-white/[0.04] transition-colors whitespace-nowrap"
             >
               <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
@@ -255,7 +236,7 @@ export function Layout({ children }: { children: React.ReactNode }) {
                 <path d="M22 7l-10 6L2 7" />
               </svg>
               Subscribe to Newsletter
-            </Link>
+            </a>
           </div>
         </div>
 
@@ -266,7 +247,7 @@ export function Layout({ children }: { children: React.ReactNode }) {
 
         {/* Footer Links Grid */}
         <div className="mx-auto max-w-7xl px-6 lg:px-8 py-10">
-          <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-8 gap-y-10">
+          <div className="grid grid-cols-2 sm:grid-cols-4 gap-8 gap-y-10">
             {footerSections.map((section) => (
               <div key={section.title}>
                 <h4 className="text-[11px] font-bold tracking-[0.1em] uppercase text-[#e2e8f0] mb-4">
@@ -298,10 +279,6 @@ export function Layout({ children }: { children: React.ReactNode }) {
             <span className="mx-1.5">|</span>
             <Link href="/legal/privacy" className="hover:text-[#96a0af] transition-colors">
               Privacy Notice
-            </Link>
-            <span className="mx-1.5">|</span>
-            <Link href="/legal/cookies" className="hover:text-[#96a0af] transition-colors">
-              Cookie Settings
             </Link>
             <span className="flex-1" />
             <span>&copy; {new Date().getFullYear()} ai.market. All rights reserved.</span>
