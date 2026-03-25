@@ -6,7 +6,7 @@ import { useRouter, usePathname } from 'next/navigation';
 import { useAuthStore } from '@/store/auth';
 import { SearchForm } from '@/components/search/SearchForm';
 
-const footerSections = [
+const footerLinkSections = [
   {
     title: 'Marketplace',
     links: [
@@ -36,6 +36,14 @@ const footerSections = [
       { label: 'Privacy Notice', href: '/legal/privacy' },
     ],
   },
+];
+
+const solutionsItems = [
+  'Financial Services',
+  'Healthcare & Life Sciences',
+  'Retail & E-Commerce',
+  'Marketing & Advertising',
+  'AI & Machine Learning',
 ];
 
 export function Layout({ children }: { children: React.ReactNode }) {
@@ -247,8 +255,9 @@ export function Layout({ children }: { children: React.ReactNode }) {
 
         {/* Footer Links Grid */}
         <div className="mx-auto max-w-7xl px-6 lg:px-8 py-10">
-          <div className="grid grid-cols-2 sm:grid-cols-4 gap-8 gap-y-10">
-            {footerSections.map((section) => (
+          <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-8 gap-y-10">
+            {/* Marketplace — with links */}
+            {footerLinkSections.map((section) => (
               <div key={section.title}>
                 <h4 className="text-[11px] font-bold tracking-[0.1em] uppercase text-[#e2e8f0] mb-4">
                   {section.title}
@@ -267,6 +276,20 @@ export function Layout({ children }: { children: React.ReactNode }) {
                 </ul>
               </div>
             ))}
+
+            {/* Solutions — plain text, no links */}
+            <div>
+              <h4 className="text-[11px] font-bold tracking-[0.1em] uppercase text-[#e2e8f0] mb-4">
+                Solutions
+              </h4>
+              <ul className="space-y-2.5">
+                {solutionsItems.map((item) => (
+                  <li key={item} className="text-sm text-[#96a0af]">
+                    {item}
+                  </li>
+                ))}
+              </ul>
+            </div>
           </div>
         </div>
 
