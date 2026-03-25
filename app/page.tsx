@@ -3,7 +3,7 @@ import type { Metadata } from 'next';
 import { HeroSearch } from '@/components/search/HeroSearch';
 
 export const metadata: Metadata = {
-  title: 'ai.market — B2B Data Marketplace (Private Beta)',
+  title: 'ai.market — B2B Data Marketplace',
   description:
     'The marketplace where datasets become findable, queryable, and purchasable by AI systems. Think SEO — but for your data.',
 };
@@ -133,18 +133,15 @@ export default function LandingPage() {
 
         <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8 pt-20 pb-24 sm:pt-32 sm:pb-32">
           <div className="max-w-3xl">
-            <p className="text-sm font-semibold tracking-wide text-blue-600 uppercase">
-              Private Beta
-            </p>
-            <h1 className="mt-3 text-4xl font-bold tracking-tight text-gray-900 sm:text-6xl">
+            <h1 className="text-4xl font-bold tracking-tight text-gray-900 sm:text-6xl">
               Make Your Data{' '}
               <span className="bg-gradient-to-r from-blue-600 to-indigo-600 bg-clip-text text-transparent">
                 Discoverable by AI
               </span>
             </h1>
             <p className="mt-6 text-lg leading-8 text-gray-600 max-w-2xl">
-              The marketplace where data becomes discoverable by AI. We&apos;re in private
-              beta — join as a data partner or tell us what data you need.
+              The marketplace where datasets become findable, queryable, and purchasable by AI systems.
+              List your data and let AI agents discover it.
             </p>
             <div className="mt-10 flex flex-col sm:flex-row gap-4">
               <Link
@@ -230,20 +227,6 @@ export default function LandingPage() {
                 <p className="mt-2 text-sm leading-6 text-gray-600">{prop.description}</p>
               </div>
             ))}
-          </div>
-        </div>
-      </section>
-
-      {/* Early Access Banner */}
-      <section className="border-y border-gray-200 bg-gray-50">
-        <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8 py-8 text-center">
-          <p className="text-sm font-semibold tracking-wide text-blue-600 uppercase">Private Beta</p>
-          <p className="mt-2 text-lg text-gray-600">
-            We&apos;re onboarding our first data partners. Apply to list your datasets or tell us what data you need.
-          </p>
-          <div className="mt-4 flex justify-center gap-4">
-            <a href="/requests/new" className="text-sm font-medium text-blue-600 hover:text-blue-800">I Need Data &rarr;</a>
-            <a href="/register" className="text-sm font-medium text-blue-600 hover:text-blue-800">Become a Data Partner &rarr;</a>
           </div>
         </div>
       </section>
