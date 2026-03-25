@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { Suspense, useState } from 'react';
 import Link from 'next/link';
 import { useRouter, usePathname } from 'next/navigation';
 import { useAuthStore } from '@/store/auth';
@@ -53,7 +53,9 @@ export function Layout({ children }: { children: React.ReactNode }) {
             {/* Desktop Nav Search */}
             {showNavSearch && (
               <div className="hidden md:block w-full max-w-xs lg:max-w-sm">
-                <SearchForm size="compact" placeholder="Search datasets..." />
+                <Suspense fallback={null}>
+                  <SearchForm size="compact" placeholder="Search datasets..." />
+                </Suspense>
               </div>
             )}
 
