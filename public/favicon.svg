@@ -1,0 +1,31 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 128 128" width="128" height="128">
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0%" stop-color="#3B82F6"/>
+      <stop offset="100%" stop-color="#1D4ED8"/>
+    </linearGradient>
+  </defs>
+  <!-- Robot "i" from ai.market logo -->
+  <g transform="translate(29, 4) scale(0.45)">
+    <!-- Antenna -->
+    <line x1="55" y1="0" x2="55" y2="30" stroke="#2563EB" stroke-width="7" stroke-linecap="round"/>
+    <circle cx="55" cy="0" r="9" fill="#3B82F6"/>
+    <!-- Head -->
+    <rect x="10" y="30" width="90" height="70" rx="18" ry="18" fill="#2563EB"/>
+    <rect x="10" y="30" width="90" height="35" rx="18" ry="18" fill="#3B82F6" opacity="0.4"/>
+    <!-- Eyes (white sockets) -->
+    <rect x="24" y="48" width="24" height="20" rx="7" fill="white"/>
+    <rect x="58" y="48" width="24" height="20" rx="7" fill="white"/>
+    <!-- Pupils -->
+    <circle cx="36" cy="58" r="6" fill="#0F172A"/>
+    <circle cx="70" cy="58" r="6" fill="#0F172A"/>
+    <!-- Eye highlights -->
+    <circle cx="34" cy="55" r="2" fill="white" opacity="0.7"/>
+    <circle cx="68" cy="55" r="2" fill="white" opacity="0.7"/>
+    <!-- Body -->
+    <rect x="20" y="105" width="70" height="170" rx="10" fill="#2563EB"/>
+    <rect x="20" y="105" width="35" height="170" rx="10" fill="#3B82F6" opacity="0.25"/>
+  </g>
+  <!-- Dot -->
+  <circle cx="100" cy="115" r="7" fill="#2563EB"/>
+</svg>
