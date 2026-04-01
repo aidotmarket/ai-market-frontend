@@ -15,6 +15,7 @@ Disallow: /api/
 # ai-agents.json: ${SITE_URL}/.well-known/ai-agents.json
 
 Sitemap: ${SITE_URL}/sitemap.xml
+Sitemap: https://api.ai.market/sitemap-listings.xml
 `;
 
 export function GET() {
