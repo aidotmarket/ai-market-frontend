@@ -2,6 +2,16 @@ import type { NextConfig } from 'next';
 
 const nextConfig: NextConfig = {
   reactStrictMode: true,
+  async redirects() {
+    return [
+      {
+        source: '/:path*',
+        has: [{ type: 'host', value: 'www.ai.market' }],
+        destination: 'https://ai.market/:path*',
+        permanent: true,
+      },
+    ];
+  },
   async rewrites() {
     const apiUrl = process.env.NEXT_PUBLIC_API_URL || process.env.API_URL;
     if (!apiUrl) {
