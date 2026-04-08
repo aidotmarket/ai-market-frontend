@@ -161,22 +161,17 @@ const howItWorks = [
   {
     title: 'Install',
     description:
-      'Download AIM-Node or AIM-Data and connect to your private infrastructure.',
-  },
-  {
-    title: 'Enrich & Index',
-    description:
-      'AI auto-generates metadata, tags, compliance reports, and Schema.org markup.',
+      'Download AIM, installed on your secure network infrastructure.',
   },
   {
     title: 'Publish',
     description:
-      'One-click publish. Your listing becomes discoverable by AI agents and search.',
+      'One-click publish. AI auto-generates metadata, cleans PII, and automates compliance.',
   },
   {
     title: 'Earn',
     description:
-      'AI agents discover and transact with your assets. Stripe-powered instant payouts.',
+      'Users and agents discover and transact with your assets. Stripe-powered instant payouts.',
   },
 ];
 
@@ -370,11 +365,11 @@ export default function LandingPage() {
                 How it works
               </p>
               <h2 className="mt-2 text-3xl font-extrabold tracking-tight text-[#1A1A1A] sm:text-4xl">
-                Four steps from install to earn
+                Three steps to get discovered
               </h2>
             </div>
 
-            <div className="mt-14 grid grid-cols-1 gap-8 sm:grid-cols-2 lg:grid-cols-4">
+            <div className="mt-14 grid grid-cols-1 gap-8 sm:grid-cols-3 lg:grid-cols-3">
               {howItWorks.map((step, idx) => (
                 <div key={step.title}>
                   <div className="flex h-10 w-10 items-center justify-center rounded-full bg-[#3F51B5] text-white text-sm font-bold">
