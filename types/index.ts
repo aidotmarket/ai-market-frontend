@@ -2,7 +2,7 @@
 // Auth types — matches backend app/schemas/user.py
 // ============================================================================
 
-export type UserRole = 'buyer' | 'seller' | 'admin';
+export type UserRole = 'buyer' | 'seller' | 'model_provider' | 'admin';
 export type UserStatus = 'pending' | 'active' | 'suspended' | 'deleted';
 
 export interface User {

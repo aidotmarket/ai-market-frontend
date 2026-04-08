@@ -15,7 +15,7 @@ export default function RegisterForm() {
   const register = useAuthStore((s) => s.register);
   const { toast } = useToast();
 
-  const [role, setRole] = useState<'buyer' | 'seller'>('buyer');
+  const [role, setRole] = useState<'buyer' | 'seller' | 'model_provider'>('buyer');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
@@ -79,14 +79,18 @@ export default function RegisterForm() {
             </div>
           )}
 
-          <div className="flex gap-4 mb-6">
-            <label className={`flex-1 cursor-pointer rounded-lg border p-4 text-center transition-colors ${role === 'buyer' ? 'border-[#3F51B5] bg-[#E8EAF6] text-[#3F51B5]' : 'border-gray-200 hover:bg-gray-50'}`}>
+          <div className="mb-6 flex flex-wrap gap-3 sm:flex-nowrap sm:gap-4">
+            <label className={`min-w-0 flex-1 cursor-pointer rounded-lg border p-4 text-center transition-colors ${role === 'buyer' ? 'border-[#3F51B5] bg-[#E8EAF6] text-[#3F51B5]' : 'border-gray-200 hover:bg-gray-50'}`}>
               <input type="radio" name="role" value="buyer" checked={role === 'buyer'} onChange={() => setRole('buyer')} className="sr-only" />
               <span className="block font-medium">I want to buy data</span>
             </label>
-            <label className={`flex-1 cursor-pointer rounded-lg border p-4 text-center transition-colors ${role === 'seller' ? 'border-[#3F51B5] bg-[#E8EAF6] text-[#3F51B5]' : 'border-gray-200 hover:bg-gray-50'}`}>
+            <label className={`min-w-0 flex-1 cursor-pointer rounded-lg border p-4 text-center transition-colors ${role === 'seller' ? 'border-[#3F51B5] bg-[#E8EAF6] text-[#3F51B5]' : 'border-gray-200 hover:bg-gray-50'}`}>
               <input type="radio" name="role" value="seller" checked={role === 'seller'} onChange={() => setRole('seller')} className="sr-only" />
               <span className="block font-medium">I want to sell data</span>
+            </label>
+            <label className={`min-w-0 flex-1 cursor-pointer rounded-lg border p-4 text-center transition-colors ${role === 'model_provider' ? 'border-[#3F51B5] bg-[#E8EAF6] text-[#3F51B5]' : 'border-gray-200 hover:bg-gray-50'}`}>
+              <input type="radio" name="role" value="model_provider" checked={role === 'model_provider'} onChange={() => setRole('model_provider')} className="sr-only" />
+              <span className="block font-medium">I am a model provider</span>
             </label>
           </div>
 

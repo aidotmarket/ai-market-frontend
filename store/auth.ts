@@ -11,7 +11,7 @@ interface AuthState {
   isAuthenticated: boolean;
   isLoading: boolean;
   login: (email: string, password: string) => Promise<void>;
-  register: (email: string, password: string, firstName?: string, lastName?: string, role?: "buyer" | "seller" | "admin", companyName?: string) => Promise<void>;
+  register: (email: string, password: string, firstName?: string, lastName?: string, role?: "buyer" | "seller" | "model_provider" | "admin", companyName?: string) => Promise<void>;
   oauthLogin: (provider: string, code: string, state: string, nonce: string) => Promise<void>;
   magicLinkVerify: (token: string) => Promise<void>;
   logout: () => void;
@@ -40,7 +40,7 @@ export const useAuthStore = create<AuthState>((set, get) => ({
     set({ user });
   },
 
-  register: async (email, password, firstName, lastName, role = "buyer" as "buyer" | "seller" | "admin", companyName) => {
+  register: async (email, password, firstName, lastName, role = "buyer" as "buyer" | "seller" | "model_provider" | "admin", companyName) => {
     await authApi.register({
       email,
       password,
