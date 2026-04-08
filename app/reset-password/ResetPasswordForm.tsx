@@ -63,7 +63,7 @@ export default function ResetPasswordForm() {
         {successMessage ? (
           <div className="space-y-4 rounded-lg border border-green-200 bg-green-50 px-4 py-5 text-sm text-green-800">
             <p>{successMessage}</p>
-            <Link href="/login" className="inline-block text-blue-600 hover:underline">
+            <Link href="/login" className="inline-block text-[#3F51B5] hover:underline">
               Continue to login
             </Link>
           </div>
@@ -72,7 +72,7 @@ export default function ResetPasswordForm() {
             {error && (
               <div className="rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
                 {error}{' '}
-                <Link href="/forgot-password" className="text-blue-600 hover:underline">
+                <Link href="/forgot-password" className="text-[#3F51B5] hover:underline">
                   Request a new reset link
                 </Link>
               </div>
@@ -89,7 +89,7 @@ export default function ResetPasswordForm() {
                 minLength={8}
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
-                className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:border-transparent focus:outline-none focus:ring-2 focus:ring-blue-500"
+                className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:border-transparent focus:outline-none focus:ring-2 focus:ring-[#3F51B5]"
                 placeholder="At least 8 characters"
               />
             </div>
@@ -105,7 +105,7 @@ export default function ResetPasswordForm() {
                 minLength={8}
                 value={confirmPassword}
                 onChange={(e) => setConfirmPassword(e.target.value)}
-                className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:border-transparent focus:outline-none focus:ring-2 focus:ring-blue-500"
+                className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:border-transparent focus:outline-none focus:ring-2 focus:ring-[#3F51B5]"
                 placeholder="Repeat your new password"
               />
             </div>
@@ -113,14 +113,14 @@ export default function ResetPasswordForm() {
             <button
               type="submit"
               disabled={loading}
-              className="w-full rounded-lg bg-blue-600 px-4 py-2.5 text-sm font-medium text-white hover:bg-blue-700 disabled:cursor-not-allowed disabled:opacity-50"
+              className="w-full rounded-lg bg-[#3F51B5] px-4 py-2.5 text-sm font-medium text-white hover:bg-[#3545a0] disabled:cursor-not-allowed disabled:opacity-50"
             >
               {loading ? 'Resetting password...' : 'Reset password'}
             </button>
 
             <p className="text-center text-sm text-gray-500">
               Need a different link?{' '}
-              <Link href="/forgot-password" className="text-blue-600 hover:underline">
+              <Link href="/forgot-password" className="text-[#3F51B5] hover:underline">
                 Request another reset email
               </Link>
             </p>

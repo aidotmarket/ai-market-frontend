@@ -18,7 +18,7 @@ export function MarketplaceListingCard({ listing }: { listing: CardListing }) {
   return (
     <Link
       href={`/listings/${listing.slug}`}
-      className="flex h-full flex-col rounded-2xl border border-gray-200 bg-white p-6 transition-all hover:-translate-y-0.5 hover:border-blue-300 hover:shadow-md"
+      className="flex h-full flex-col rounded-2xl border border-gray-200 bg-white p-6 transition-all hover:-translate-y-0.5 hover:border-[#C5CAE9] hover:shadow-md"
     >
       <div className="flex items-start justify-between gap-3">
         <h3 className="line-clamp-2 flex-1 text-base font-semibold text-gray-900">
@@ -47,7 +47,7 @@ export function MarketplaceListingCard({ listing }: { listing: CardListing }) {
         {tags.map((tag) => (
           <span
             key={tag}
-            className="inline-flex items-center rounded-full bg-blue-50 px-2.5 py-1 text-xs text-blue-700"
+            className="inline-flex items-center rounded-full bg-[#E8EAF6] px-2.5 py-1 text-xs text-[#3F51B5]"
           >
             {tag}
           </span>

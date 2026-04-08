@@ -126,7 +126,7 @@ export default function ReauthModal({ isOpen, onClose, onSuccess }: ReauthModalP
             maxLength={8}
             value={code}
             onChange={(event) => setCode(event.target.value.replace(/\s/g, ''))}
-            className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:border-transparent focus:outline-none focus:ring-2 focus:ring-blue-500"
+            className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:border-transparent focus:outline-none focus:ring-2 focus:ring-[#3F51B5]"
             placeholder="Enter code"
           />
         </div>
@@ -153,7 +153,7 @@ export default function ReauthModal({ isOpen, onClose, onSuccess }: ReauthModalP
               type="button"
               onClick={handleSubmit}
               disabled={loadingChallenge || submitting || code.trim().length === 0}
-              className="rounded-lg bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-700 disabled:cursor-not-allowed disabled:opacity-50"
+              className="rounded-lg bg-[#3F51B5] px-4 py-2 text-sm font-medium text-white hover:bg-[#3545a0] disabled:cursor-not-allowed disabled:opacity-50"
             >
               {submitting ? 'Verifying...' : 'Continue'}
             </button>

@@ -18,8 +18,8 @@ export default function SupportPage() {
         {/* Email */}
         <div className="rounded-xl border border-gray-200 p-6 sm:p-8">
           <div className="flex items-start gap-4">
-            <div className="rounded-lg bg-blue-50 p-3 shrink-0">
-              <svg className="h-6 w-6 text-blue-600" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="1.8">
+            <div className="rounded-lg bg-[#E8EAF6] p-3 shrink-0">
+              <svg className="h-6 w-6 text-[#3F51B5]" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="1.8">
                 <rect x="2" y="4" width="20" height="16" rx="2" />
                 <path d="M22 7l-10 6L2 7" />
               </svg>
@@ -31,7 +31,7 @@ export default function SupportPage() {
               </p>
               <a
                 href="mailto:support@ai.market"
-                className="inline-flex items-center gap-2 text-blue-600 font-medium hover:text-blue-700 transition-colors"
+                className="inline-flex items-center gap-2 text-[#3F51B5] font-medium hover:text-[#3F51B5] transition-colors"
               >
                 support@ai.market
                 <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2">

@@ -50,7 +50,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
   if (isLoading || !isAuthenticated) {
     return (
       <div className="flex min-h-screen items-center justify-center">
-        <div className="h-8 w-8 animate-spin rounded-full border-4 border-blue-600 border-t-transparent"></div>
+        <div className="h-8 w-8 animate-spin rounded-full border-4 border-[#3F51B5] border-t-transparent"></div>
       </div>
     );
   }
@@ -59,7 +59,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
   if (stripeConnected === null) {
     return (
       <div className="flex min-h-screen items-center justify-center">
-        <div className="h-8 w-8 animate-spin rounded-full border-4 border-blue-600 border-t-transparent"></div>
+        <div className="h-8 w-8 animate-spin rounded-full border-4 border-[#3F51B5] border-t-transparent"></div>
       </div>
     );
   }
@@ -98,7 +98,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
                 href={link.href}
                 className={`flex items-center px-3 py-2 text-sm font-medium rounded-md transition-colors ${
                   isActive
-                    ? 'bg-blue-50 text-blue-700'
+                    ? 'bg-[#E8EAF6] text-[#3F51B5]'
                     : 'text-gray-700 hover:bg-gray-100 hover:text-gray-900'
                 }`}
               >

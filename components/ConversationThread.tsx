@@ -4,7 +4,7 @@ import { useRef, useEffect } from 'react';
 import type { ConversationMessage, MessageRole } from '@/types';
 
 const ROLE_STYLES: Record<MessageRole, { bg: string; label: string; align: string }> = {
-  buyer: { bg: 'bg-blue-50 border-blue-200', label: 'You', align: 'ml-8' },
+  buyer: { bg: 'bg-[#E8EAF6] border-[#C5CAE9]', label: 'You', align: 'ml-8' },
   seller: { bg: 'bg-gray-50 border-gray-200', label: 'Seller', align: 'mr-8' },
   allai: { bg: 'bg-purple-50 border-purple-200', label: 'allAI', align: 'mr-8' },
   system: { bg: 'bg-yellow-50 border-yellow-200', label: 'System', align: 'mx-8' },
@@ -28,7 +28,7 @@ export default function ConversationThread({ messages, viewerRole, showTypingInd
       {messages.map((msg) => {
         const isOwn = msg.role === viewerRole;
         const style = isOwn
-          ? { bg: 'bg-blue-50 border-blue-200', label: 'You', align: 'ml-8' }
+          ? { bg: 'bg-[#E8EAF6] border-[#C5CAE9]', label: 'You', align: 'ml-8' }
           : ROLE_STYLES[msg.role] || ROLE_STYLES.system;
 
         return (

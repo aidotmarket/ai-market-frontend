@@ -105,7 +105,7 @@ export function SearchForm({
         <button
           type="submit"
           className={cn(
-            'shrink-0 rounded-full bg-blue-600 font-medium text-white transition-colors hover:bg-blue-700',
+            'shrink-0 rounded-full bg-[#3F51B5] font-medium text-white transition-colors hover:bg-[#3545a0]',
             isHero ? 'px-5 py-3 text-sm sm:px-6' : 'px-3 py-2 text-xs sm:px-4 sm:text-sm'
           )}
         >

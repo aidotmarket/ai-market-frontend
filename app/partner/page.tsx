@@ -21,7 +21,7 @@ export default function PartnerPage() {
             <p className="text-gray-900 font-medium">You&apos;re signed in.</p>
             <p className="mt-2 text-gray-600">
               Contact us at{' '}
-              <a href="mailto:support@ai.market" className="text-blue-600 hover:text-blue-800 font-medium">
+              <a href="mailto:support@ai.market" className="text-[#3F51B5] hover:text-[#303F9F] font-medium">
                 support@ai.market
               </a>{' '}
               to start listing your data.
@@ -33,14 +33,14 @@ export default function PartnerPage() {
             <div className="mt-4 flex flex-col sm:flex-row gap-4">
               <Link
                 href="/register"
-                className="inline-flex items-center justify-center rounded-lg bg-blue-600 px-6 py-3 text-sm font-medium text-white hover:bg-blue-700 transition-colors"
+                className="inline-flex items-center justify-center rounded-lg bg-[#3F51B5] px-6 py-3 text-sm font-medium text-white hover:bg-[#3545a0] transition-colors"
               >
                 Sign Up
               </Link>
             </div>
             <p className="mt-4 text-sm text-gray-500">
               Already have questions? Email{' '}
-              <a href="mailto:support@ai.market" className="text-blue-600 hover:text-blue-800">
+              <a href="mailto:support@ai.market" className="text-[#3F51B5] hover:text-[#303F9F]">
                 support@ai.market
               </a>
             </p>

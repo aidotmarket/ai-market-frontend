@@ -162,7 +162,7 @@ export default function EditListingPage() {
   if (loading) {
     return (
       <div className="flex justify-center py-12">
-        <div className="h-8 w-8 animate-spin rounded-full border-4 border-blue-600 border-t-transparent"></div>
+        <div className="h-8 w-8 animate-spin rounded-full border-4 border-[#3F51B5] border-t-transparent"></div>
       </div>
     );
   }
@@ -191,7 +191,7 @@ export default function EditListingPage() {
               type="text"
               value={data.title}
               onChange={(e) => update({ title: e.target.value })}
-              className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+              className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-[#3F51B5]"
             />
           </div>
 
@@ -201,7 +201,7 @@ export default function EditListingPage() {
               rows={4}
               value={data.description}
               onChange={(e) => update({ description: e.target.value })}
-              className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+              className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-[#3F51B5]"
             />
           </div>
 
@@ -210,7 +210,7 @@ export default function EditListingPage() {
             <select
               value={data.category}
               onChange={(e) => update({ category: e.target.value })}
-              className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white"
+              className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-[#3F51B5] bg-white"
             >
               {CATEGORIES.map((cat) => (
                 <option key={cat} value={cat}>{cat}</option>
@@ -227,7 +227,7 @@ export default function EditListingPage() {
                 value={tagInput}
                 onChange={(e) => setTagInput(e.target.value)}
                 onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); addTag(); } }}
-                className="flex-1 rounded-lg border border-gray-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                className="flex-1 rounded-lg border border-gray-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-[#3F51B5]"
                 placeholder="Add a tag"
               />
               <button onClick={addTag} className="rounded-lg border border-gray-300 px-3 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50">
@@ -237,9 +237,9 @@ export default function EditListingPage() {
             {data.tags.length > 0 && (
               <div className="flex flex-wrap gap-2">
                 {data.tags.map((tag, idx) => (
-                  <span key={idx} className="inline-flex items-center gap-1 rounded-full bg-blue-50 px-3 py-1 text-xs font-medium text-blue-700">
+                  <span key={idx} className="inline-flex items-center gap-1 rounded-full bg-[#E8EAF6] px-3 py-1 text-xs font-medium text-[#3F51B5]">
                     {tag}
-                    <button type="button" onClick={() => removeTag(idx)} className="text-blue-500 hover:text-blue-700">&times;</button>
+                    <button type="button" onClick={() => removeTag(idx)} className="text-blue-500 hover:text-[#3F51B5]">&times;</button>
                   </span>
                 ))}
               </div>
@@ -254,7 +254,7 @@ export default function EditListingPage() {
             <select
               value={data.data_format}
               onChange={(e) => update({ data_format: e.target.value })}
-              className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white"
+              className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-[#3F51B5] bg-white"
             >
               {FORMATS.map((fmt) => (
                 <option key={fmt} value={fmt}>{fmt.toUpperCase()}</option>
@@ -268,7 +268,7 @@ export default function EditListingPage() {
               min={0}
               value={data.source_row_count || ''}
               onChange={(e) => update({ source_row_count: Number(e.target.value) })}
-              className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+              className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-[#3F51B5]"
             />
           </div>
         </div>
@@ -285,7 +285,7 @@ export default function EditListingPage() {
                   value={type}
                   checked={data.pricing_type === type}
                   onChange={() => update({ pricing_type: type })}
-                  className="h-4 w-4 text-blue-600 border-gray-300 focus:ring-blue-500"
+                  className="h-4 w-4 text-[#3F51B5] border-gray-300 focus:ring-[#3F51B5]"
                 />
                 <span className="text-sm text-gray-700">
                   {type === 'one_time' ? 'One-time purchase' : 'Subscription'}
@@ -306,7 +306,7 @@ export default function EditListingPage() {
                   step="0.01"
                   value={data.price}
                   onChange={(e) => update({ price: Number(e.target.value) })}
-                  className="w-full rounded-lg border border-gray-300 pl-7 pr-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  className="w-full rounded-lg border border-gray-300 pl-7 pr-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-[#3F51B5]"
                 />
               </div>
             </div>
@@ -315,7 +315,7 @@ export default function EditListingPage() {
               <select
                 value={data.currency}
                 onChange={(e) => update({ currency: e.target.value })}
-                className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white"
+                className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-[#3F51B5] bg-white"
               >
                 {CURRENCIES.map((c) => (
                   <option key={c} value={c}>{c}</option>
@@ -334,7 +334,7 @@ export default function EditListingPage() {
               <label
                 key={fw}
                 className={`flex items-center justify-between p-3 rounded-lg border cursor-pointer transition-colors ${
-                  active ? 'border-blue-300 bg-blue-50' : 'border-gray-200 bg-white hover:bg-gray-50'
+                  active ? 'border-[#C5CAE9] bg-[#E8EAF6]' : 'border-gray-200 bg-white hover:bg-gray-50'
                 }`}
               >
                 <div className="flex items-center gap-3">
@@ -342,7 +342,7 @@ export default function EditListingPage() {
                     type="checkbox"
                     checked={active}
                     onChange={() => toggleFramework(fw)}
-                    className="h-4 w-4 rounded border-gray-300 text-blue-600 focus:ring-blue-500"
+                    className="h-4 w-4 rounded border-gray-300 text-[#3F51B5] focus:ring-[#3F51B5]"
                   />
                   <span className="text-sm font-medium text-gray-900">{fw}</span>
                 </div>
@@ -360,7 +360,7 @@ export default function EditListingPage() {
               rows={2}
               value={data.compliance_notes}
               onChange={(e) => update({ compliance_notes: e.target.value })}
-              className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+              className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-[#3F51B5]"
               placeholder="Any additional compliance information..."
             />
           </div>
@@ -393,7 +393,7 @@ export default function EditListingPage() {
             <button
               onClick={handlePublish}
               disabled={saving}
-              className="rounded-lg bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-700 disabled:opacity-50"
+              className="rounded-lg bg-[#3F51B5] px-4 py-2 text-sm font-medium text-white hover:bg-[#3545a0] disabled:opacity-50"
             >
               {saving ? 'Publishing...' : 'Save & Publish'}
             </button>

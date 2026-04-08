@@ -51,7 +51,7 @@ export function Layout({ children }: { children: React.ReactNode }) {
   const router = useRouter();
   const pathname = usePathname();
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
-  const showNavSearch = pathname !== '/' && pathname !== '/search' && pathname !== '/listings';
+  const showNavSearch = pathname !== '/search' && pathname !== '/listings';
 
   const handleLogout = () => {
     logout();
@@ -71,20 +71,20 @@ export function Layout({ children }: { children: React.ReactNode }) {
 
             {/* Desktop Nav */}
             <nav className="hidden md:flex items-center gap-6">
-              <Link href="/listings" className="text-sm text-gray-600 hover:text-gray-900">
+              <Link href="/listings" className="text-sm text-[#666666] hover:text-[#1A1A1A]">
                 Browse
               </Link>
-              <Link href="/requests" className="text-sm text-gray-600 hover:text-gray-900">
+              <Link href="/requests" className="text-sm text-[#666666] hover:text-[#1A1A1A]">
                 Request Data
               </Link>
-              <Link href="/partner" className="text-sm text-gray-600 hover:text-gray-900">
+              <Link href="/partner" className="text-sm text-[#666666] hover:text-[#1A1A1A]">
                 Become a Partner
               </Link>
-              <Link href="/download" className="text-sm text-gray-600 hover:text-gray-900">
+              <Link href="/download" className="text-sm text-[#666666] hover:text-[#1A1A1A]">
                 List Data
               </Link>
               {isAuthenticated && (
-                <Link href="/dashboard" className="text-sm text-gray-600 hover:text-gray-900">
+                <Link href="/dashboard" className="text-sm text-[#666666] hover:text-[#1A1A1A]">
                   Dashboard
                 </Link>
               )}
@@ -123,7 +123,7 @@ export function Layout({ children }: { children: React.ReactNode }) {
                   </Link>
                   <Link
                     href="/register"
-                    className="rounded-lg bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-700"
+                    className="rounded-lg bg-[#3F51B5] px-4 py-2 text-sm font-medium text-white hover:bg-[#3545a0]"
                   >
                     Sign up
                   </Link>
@@ -207,7 +207,7 @@ export function Layout({ children }: { children: React.ReactNode }) {
                   </Link>
                   <Link
                     href="/register"
-                    className="block px-2 py-2 text-sm text-blue-600 font-medium"
+                    className="block px-2 py-2 text-sm text-[#3F51B5] font-medium"
                     onClick={() => setMobileMenuOpen(false)}
                   >
                     Sign up

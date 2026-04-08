@@ -79,7 +79,7 @@ export default function LoginForm() {
         )}
 
         {searchParams.get('redirect')?.includes('/requests/new') && (
-          <div className="rounded-lg bg-blue-50 border border-blue-200 px-4 py-3 text-sm text-blue-700 mb-4">
+          <div className="rounded-lg bg-[#E8EAF6] border border-[#C5CAE9] px-4 py-3 text-sm text-[#3F51B5] mb-4">
             We need an account so we can reach out to you with offers that match your requirements. After sign-up, allAI will walk you through submitting a data request to the marketplace.
           </div>
         )}
@@ -109,7 +109,7 @@ export default function LoginForm() {
               required
               value={email}
               onChange={(e) => setEmail(e.target.value)}
-              className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+              className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-[#3F51B5] focus:border-transparent"
               placeholder="you@company.com"
             />
           </div>
@@ -126,7 +126,7 @@ export default function LoginForm() {
                   required
                   value={password}
                   onChange={(e) => setPassword(e.target.value)}
-                  className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                  className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-[#3F51B5] focus:border-transparent"
                   placeholder="••••••••"
                 />
               </div>
@@ -135,11 +135,11 @@ export default function LoginForm() {
                 <button
                   type="button"
                   onClick={switchToMagicLink}
-                  className="text-sm text-blue-600 hover:underline"
+                  className="text-sm text-[#3F51B5] hover:underline"
                 >
                   Sign in with a magic link instead
                 </button>
-                <Link href="/forgot-password" className="text-sm text-blue-600 hover:underline">
+                <Link href="/forgot-password" className="text-sm text-[#3F51B5] hover:underline">
                   Forgot your password?
                 </Link>
               </div>
@@ -149,7 +149,7 @@ export default function LoginForm() {
               <button
                 type="button"
                 onClick={switchToPassword}
-                className="text-sm text-blue-600 hover:underline"
+                className="text-sm text-[#3F51B5] hover:underline"
               >
                 Use password instead
               </button>
@@ -159,7 +159,7 @@ export default function LoginForm() {
           <button
             type="submit"
             disabled={loading}
-            className="w-full rounded-lg bg-blue-600 px-4 py-2.5 text-sm font-medium text-white hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed"
+            className="w-full rounded-lg bg-[#3F51B5] px-4 py-2.5 text-sm font-medium text-white hover:bg-[#3545a0] disabled:opacity-50 disabled:cursor-not-allowed"
           >
             {loading ? (loginMode === 'magic-link' ? 'Sending magic link...' : 'Logging in...') : (loginMode === 'magic-link' ? 'Send magic link' : 'Log in')}
           </button>
@@ -167,7 +167,7 @@ export default function LoginForm() {
 
         <p className="mt-6 text-center text-sm text-gray-500">
           Don&apos;t have an account?{' '}
-          <Link href={searchParams.get('redirect') ? `/register?redirect=${encodeURIComponent(searchParams.get('redirect')!)}` : '/register'} className="text-blue-600 hover:underline">
+          <Link href={searchParams.get('redirect') ? `/register?redirect=${encodeURIComponent(searchParams.get('redirect')!)}` : '/register'} className="text-[#3F51B5] hover:underline">
             Sign up
           </Link>
         </p>

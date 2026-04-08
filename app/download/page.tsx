@@ -97,7 +97,7 @@ export default function DownloadPage() {
       {/* Hero */}
       <section className="relative isolate">
         <div className="absolute inset-0 -z-10 overflow-hidden">
-          <div className="absolute -top-40 right-0 h-[28rem] w-[28rem] rounded-full bg-blue-100 opacity-40 blur-3xl" />
+          <div className="absolute -top-40 right-0 h-[28rem] w-[28rem] rounded-full bg-[#E8EAF6] opacity-40 blur-3xl" />
           <div className="absolute top-20 -left-20 h-[20rem] w-[20rem] rounded-full bg-indigo-100 opacity-30 blur-3xl" />
         </div>
 
@@ -105,7 +105,7 @@ export default function DownloadPage() {
           <div className="max-w-3xl mx-auto text-center">
             <h1 className="text-4xl font-bold tracking-tight text-gray-900 sm:text-6xl">
               List Your Data on{' '}
-              <span className="bg-gradient-to-r from-blue-600 to-indigo-600 bg-clip-text text-transparent">
+              <span className="bg-gradient-to-r from-[#3F51B5] to-[#303F9F] bg-clip-text text-transparent">
                 ai.market
               </span>
             </h1>
@@ -121,16 +121,16 @@ export default function DownloadPage() {
       {/* How It Works */}
       <section className="pb-16 sm:pb-24">
         <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
-          <h2 className="text-center text-sm font-semibold tracking-wide text-blue-600 uppercase mb-10">
+          <h2 className="text-center text-sm font-semibold tracking-wide text-[#3F51B5] uppercase mb-10">
             How it works
           </h2>
           <div className="grid grid-cols-1 gap-8 sm:grid-cols-2 lg:grid-cols-4 max-w-5xl mx-auto">
             {steps.map((step) => (
               <div key={step.num} className="text-center">
-                <div className="mx-auto flex h-12 w-12 items-center justify-center rounded-full bg-blue-50 text-blue-600 mb-4">
+                <div className="mx-auto flex h-12 w-12 items-center justify-center rounded-full bg-[#E8EAF6] text-[#3F51B5] mb-4">
                   {step.icon}
                 </div>
-                <div className="text-xs font-semibold text-blue-600 uppercase tracking-wide mb-1">
+                <div className="text-xs font-semibold text-[#3F51B5] uppercase tracking-wide mb-1">
                   Step {step.num}
                 </div>
                 <h3 className="text-base font-semibold text-gray-900 mb-2">{step.title}</h3>
@@ -171,11 +171,11 @@ export default function DownloadPage() {
               </div>
               <p className="text-xs text-gray-500">
                 Requires{' '}
-                <a href="https://docs.docker.com/desktop/" target="_blank" rel="noopener noreferrer" className="text-blue-600 hover:text-blue-800 underline">
+                <a href="https://docs.docker.com/desktop/" target="_blank" rel="noopener noreferrer" className="text-[#3F51B5] hover:text-[#303F9F] underline">
                   Docker Desktop
                 </a>
                 {' '}or{' '}
-                <a href="https://orbstack.dev/" target="_blank" rel="noopener noreferrer" className="text-blue-600 hover:text-blue-800 underline">
+                <a href="https://orbstack.dev/" target="_blank" rel="noopener noreferrer" className="text-[#3F51B5] hover:text-[#303F9F] underline">
                   OrbStack
                 </a>
               </p>
@@ -198,11 +198,11 @@ export default function DownloadPage() {
               </div>
               <p className="text-xs text-gray-500">
                 Requires{' '}
-                <a href="https://docs.docker.com/desktop/install/windows-install/" target="_blank" rel="noopener noreferrer" className="text-blue-600 hover:text-blue-800 underline">
+                <a href="https://docs.docker.com/desktop/install/windows-install/" target="_blank" rel="noopener noreferrer" className="text-[#3F51B5] hover:text-[#303F9F] underline">
                   Docker Desktop for Windows
                 </a>
                 {' '}and{' '}
-                <a href="https://learn.microsoft.com/en-us/powershell/scripting/install/installing-powershell-on-windows" target="_blank" rel="noopener noreferrer" className="text-blue-600 hover:text-blue-800 underline">
+                <a href="https://learn.microsoft.com/en-us/powershell/scripting/install/installing-powershell-on-windows" target="_blank" rel="noopener noreferrer" className="text-[#3F51B5] hover:text-[#303F9F] underline">
                   PowerShell 5.1+
                 </a>
               </p>
@@ -214,7 +214,7 @@ export default function DownloadPage() {
       {/* Features */}
       <section className="py-16 sm:py-24">
         <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
-          <h2 className="text-center text-sm font-semibold tracking-wide text-blue-600 uppercase mb-10">
+          <h2 className="text-center text-sm font-semibold tracking-wide text-[#3F51B5] uppercase mb-10">
             What you get
           </h2>
           <div className="grid grid-cols-1 gap-8 sm:grid-cols-2 lg:grid-cols-3 max-w-5xl mx-auto">
@@ -231,10 +231,10 @@ export default function DownloadPage() {
       {/* Requirements */}
       <section className="border-t border-gray-100 bg-gray-50 py-12 sm:py-16">
         <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
-          <h2 className="text-sm font-semibold tracking-wide text-blue-600 uppercase">System requirements</h2>
+          <h2 className="text-sm font-semibold tracking-wide text-[#3F51B5] uppercase">System requirements</h2>
           <div className="mt-6 grid grid-cols-1 gap-4 sm:grid-cols-3 max-w-3xl">
             <div className="flex items-start gap-3">
-              <svg className="mt-0.5 h-5 w-5 shrink-0 text-blue-600" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+              <svg className="mt-0.5 h-5 w-5 shrink-0 text-[#3F51B5]" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
                 <path strokeLinecap="round" strokeLinejoin="round" d="m4.5 12.75 6 6 9-13.5" />
               </svg>
               <div>
@@ -243,7 +243,7 @@ export default function DownloadPage() {
               </div>
             </div>
             <div className="flex items-start gap-3">
-              <svg className="mt-0.5 h-5 w-5 shrink-0 text-blue-600" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+              <svg className="mt-0.5 h-5 w-5 shrink-0 text-[#3F51B5]" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
                 <path strokeLinecap="round" strokeLinejoin="round" d="m4.5 12.75 6 6 9-13.5" />
               </svg>
               <div>
@@ -252,7 +252,7 @@ export default function DownloadPage() {
               </div>
             </div>
             <div className="flex items-start gap-3">
-              <svg className="mt-0.5 h-5 w-5 shrink-0 text-blue-600" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+              <svg className="mt-0.5 h-5 w-5 shrink-0 text-[#3F51B5]" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
                 <path strokeLinecap="round" strokeLinejoin="round" d="m4.5 12.75 6 6 9-13.5" />
               </svg>
               <div>

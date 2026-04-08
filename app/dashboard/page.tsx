@@ -65,7 +65,7 @@ export default function DashboardOverview() {
   if (loading) {
     return (
       <div className="flex justify-center py-12">
-        <div className="h-8 w-8 animate-spin rounded-full border-4 border-blue-600 border-t-transparent"></div>
+        <div className="h-8 w-8 animate-spin rounded-full border-4 border-[#3F51B5] border-t-transparent"></div>
       </div>
     );
   }
@@ -112,7 +112,7 @@ export default function DashboardOverview() {
           <div className="w-16 h-px bg-gray-200 mx-4"></div>
 
           <div className="flex-1 flex items-center">
-            <div className={`flex items-center justify-center w-8 h-8 rounded-full ${isStripeConnected ? 'bg-green-100 text-green-600' : 'bg-blue-100 text-blue-600'}`}>
+            <div className={`flex items-center justify-center w-8 h-8 rounded-full ${isStripeConnected ? 'bg-green-100 text-green-600' : 'bg-[#E8EAF6] text-[#3F51B5]'}`}>
               {isStripeConnected ? (
                 <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
@@ -127,7 +127,7 @@ export default function DashboardOverview() {
                 <button
                   onClick={handleConnectStripe}
                   disabled={connecting}
-                  className="mt-1 text-sm text-blue-600 hover:text-blue-700 font-medium disabled:opacity-50"
+                  className="mt-1 text-sm text-[#3F51B5] hover:text-[#3F51B5] font-medium disabled:opacity-50"
                 >
                   {connecting ? 'Connecting...' : 'Connect now →'}
                 </button>
@@ -138,7 +138,7 @@ export default function DashboardOverview() {
           <div className="w-16 h-px bg-gray-200 mx-4"></div>
 
           <div className="flex-1 flex items-center">
-            <div className={`flex items-center justify-center w-8 h-8 rounded-full ${hasListings ? 'bg-green-100 text-green-600' : (isStripeConnected ? 'bg-blue-100 text-blue-600' : 'bg-gray-100 text-gray-500')}`}>
+            <div className={`flex items-center justify-center w-8 h-8 rounded-full ${hasListings ? 'bg-green-100 text-green-600' : (isStripeConnected ? 'bg-[#E8EAF6] text-[#3F51B5]' : 'bg-gray-100 text-gray-500')}`}>
               {hasListings ? (
                 <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
@@ -150,7 +150,7 @@ export default function DashboardOverview() {
             <div className="ml-4">
               <p className="text-sm font-medium text-gray-900">Create First Listing</p>
               {!hasListings && isStripeConnected && (
-                <Link href="/dashboard/listings/new" className="mt-1 text-sm text-blue-600 hover:text-blue-700 font-medium block">
+                <Link href="/dashboard/listings/new" className="mt-1 text-sm text-[#3F51B5] hover:text-[#3F51B5] font-medium block">
                   Create listing →
                 </Link>
               )}

@@ -30,9 +30,9 @@ const STATUS_LABEL: Record<OrderStatus, string> = {
 const TX_STATUS_BADGE: Record<TransactionStatus, string> = {
   initiated: 'bg-gray-100 text-gray-600',
   quoted: 'bg-gray-100 text-gray-600',
-  accepted: 'bg-blue-100 text-blue-800',
+  accepted: 'bg-[#E8EAF6] text-[#303F9F]',
   checkout_pending: 'bg-yellow-100 text-yellow-800',
-  paid: 'bg-blue-100 text-blue-800',
+  paid: 'bg-[#E8EAF6] text-[#303F9F]',
   fulfilling: 'bg-yellow-100 text-yellow-800',
   delivered: 'bg-indigo-100 text-indigo-800',
   confirmed: 'bg-green-100 text-green-800',
@@ -197,7 +197,7 @@ export default function OrderDetailPage() {
   if (loading) {
     return (
       <div className="flex min-h-[40vh] items-center justify-center">
-        <div className="h-8 w-8 animate-spin rounded-full border-4 border-blue-600 border-t-transparent"></div>
+        <div className="h-8 w-8 animate-spin rounded-full border-4 border-[#3F51B5] border-t-transparent"></div>
       </div>
     );
   }
@@ -215,7 +215,7 @@ export default function OrderDetailPage() {
 
   return (
     <div>
-      <Link href="/dashboard/orders" className="text-sm text-blue-600 hover:underline mb-4 inline-block">
+      <Link href="/dashboard/orders" className="text-sm text-[#3F51B5] hover:underline mb-4 inline-block">
         &larr; Back to Orders
       </Link>
 
@@ -306,7 +306,7 @@ export default function OrderDetailPage() {
                   <button
                     onClick={handleDeliver}
                     disabled={delivering}
-                    className="rounded-lg bg-blue-600 px-6 py-2.5 text-sm font-medium text-white hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed"
+                    className="rounded-lg bg-[#3F51B5] px-6 py-2.5 text-sm font-medium text-white hover:bg-[#3545a0] disabled:opacity-50 disabled:cursor-not-allowed"
                   >
                     {delivering ? 'Marking…' : 'Mark Delivered'}
                   </button>

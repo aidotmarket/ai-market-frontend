@@ -104,7 +104,7 @@ export default function StripeReturnPage() {
       <div className="max-w-md w-full bg-white rounded-xl shadow-sm border border-gray-200 p-8 text-center">
         {status === 'loading' && (
           <>
-            <div className="mx-auto h-12 w-12 animate-spin rounded-full border-4 border-blue-600 border-t-transparent mb-4"></div>
+            <div className="mx-auto h-12 w-12 animate-spin rounded-full border-4 border-[#3F51B5] border-t-transparent mb-4"></div>
             <h2 className="text-xl font-semibold text-gray-900 mb-2">Verifying Connection</h2>
             <p className="text-gray-500">Please wait while we confirm your Stripe account setup...</p>
           </>
@@ -187,7 +187,7 @@ export default function StripeReturnPage() {
               <button
                 onClick={handleResume}
                 disabled={connecting}
-                className="w-full rounded-lg bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-700 disabled:opacity-50"
+                className="w-full rounded-lg bg-[#3F51B5] px-4 py-2 text-sm font-medium text-white hover:bg-[#3545a0] disabled:opacity-50"
               >
                 {connecting ? 'Loading...' : 'Resume Onboarding'}
               </button>

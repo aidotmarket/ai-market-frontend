@@ -249,7 +249,7 @@ export default function SettingsPage() {
                 type="text"
                 value={firstName}
                 onChange={(e) => setFirstName(e.target.value)}
-                className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-[#3F51B5] focus:border-transparent"
               />
             </div>
             <div>
@@ -261,7 +261,7 @@ export default function SettingsPage() {
                 type="text"
                 value={lastName}
                 onChange={(e) => setLastName(e.target.value)}
-                className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-[#3F51B5] focus:border-transparent"
               />
             </div>
           </div>
@@ -276,7 +276,7 @@ export default function SettingsPage() {
                 type="text"
                 value={companyName}
                 onChange={(e) => setCompanyName(e.target.value)}
-                className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-[#3F51B5] focus:border-transparent"
               />
             </div>
           )}
@@ -285,7 +285,7 @@ export default function SettingsPage() {
             <button
               onClick={handleSave}
               disabled={!dirty || saving}
-              className="rounded-lg bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+              className="rounded-lg bg-[#3F51B5] px-4 py-2 text-sm font-medium text-white hover:bg-[#3545a0] disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
             >
               {saving ? 'Saving...' : 'Save changes'}
             </button>
@@ -347,7 +347,7 @@ export default function SettingsPage() {
               <button
                 onClick={handleSetup2FA}
                 disabled={securityLoading}
-                className="rounded-lg bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                className="rounded-lg bg-[#3F51B5] px-4 py-2 text-sm font-medium text-white hover:bg-[#3545a0] disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
               >
                 {securityLoading && twoFactorFlow === 'idle' ? 'Starting...' : 'Enable two-factor authentication'}
               </button>
@@ -396,7 +396,7 @@ export default function SettingsPage() {
                     maxLength={6}
                     value={totpCode}
                     onChange={(e) => setTotpCode(e.target.value.replace(/\D/g, '').slice(0, 6))}
-                    className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                    className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-[#3F51B5] focus:border-transparent"
                     placeholder="123456"
                   />
                 </div>
@@ -404,7 +404,7 @@ export default function SettingsPage() {
                   <button
                     onClick={handleVerify2FASetup}
                     disabled={securityLoading || totpCode.trim().length !== 6}
-                    className="rounded-lg bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                    className="rounded-lg bg-[#3F51B5] px-4 py-2 text-sm font-medium text-white hover:bg-[#3545a0] disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
                   >
                     {securityLoading && verifyingSetup ? 'Verifying...' : 'Verify and enable'}
                   </button>
@@ -447,7 +447,7 @@ export default function SettingsPage() {
                 <button
                   onClick={handleTwoFactorDone}
                   disabled={securityLoading}
-                  className="rounded-lg bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                  className="rounded-lg bg-[#3F51B5] px-4 py-2 text-sm font-medium text-white hover:bg-[#3545a0] disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
                 >
                   {securityLoading ? 'Refreshing...' : 'Done'}
                 </button>
@@ -503,7 +503,7 @@ export default function SettingsPage() {
                     maxLength={6}
                     value={totpCode}
                     onChange={(e) => setTotpCode(e.target.value.replace(/\D/g, '').slice(0, 6))}
-                    className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                    className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-[#3F51B5] focus:border-transparent"
                     placeholder="123456"
                   />
                 </div>
@@ -511,7 +511,7 @@ export default function SettingsPage() {
                   <button
                     onClick={() => openReauthForAction(securityAction)}
                     disabled={securityLoading || totpCode.trim().length !== 6}
-                    className={`rounded-lg px-4 py-2 text-sm font-medium text-white disabled:opacity-50 disabled:cursor-not-allowed transition-colors ${securityAction === 'disable' ? 'bg-red-600 hover:bg-red-700' : 'bg-blue-600 hover:bg-blue-700'}`}
+                    className={`rounded-lg px-4 py-2 text-sm font-medium text-white disabled:opacity-50 disabled:cursor-not-allowed transition-colors ${securityAction === 'disable' ? 'bg-red-600 hover:bg-red-700' : 'bg-[#3F51B5] hover:bg-[#3545a0]'}`}
                   >
                     {securityLoading ? 'Working...' : securityAction === 'disable' ? 'Confirm disable' : 'Generate new codes'}
                   </button>

@@ -15,7 +15,7 @@ const PAGE_SIZE = 20;
 
 const URGENCY_BADGE: Record<DataRequestUrgency, string> = {
   low: 'bg-gray-100 text-gray-700',
-  medium: 'bg-blue-100 text-blue-700',
+  medium: 'bg-[#E8EAF6] text-[#3F51B5]',
   high: 'bg-amber-100 text-amber-800',
   urgent: 'bg-red-100 text-red-800',
 };
@@ -61,7 +61,7 @@ export default async function BrowseRequestsPage({ searchParams }: Props) {
         </div>
         <Link
           href="/requests/new"
-          className="inline-flex items-center justify-center rounded-lg bg-blue-600 px-5 py-2.5 text-sm font-medium text-white hover:bg-blue-700 transition-colors"
+          className="inline-flex items-center justify-center rounded-lg bg-[#3F51B5] px-5 py-2.5 text-sm font-medium text-white hover:bg-[#3545a0] transition-colors"
         >
           Post a Data Request
         </Link>
@@ -73,7 +73,7 @@ export default async function BrowseRequestsPage({ searchParams }: Props) {
           <select
             name="category"
             defaultValue={category}
-            className="rounded-lg border border-gray-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+            className="rounded-lg border border-gray-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-[#3F51B5]"
           >
             <option value="">All Categories</option>
             <option value="healthcare">Healthcare</option>
@@ -97,7 +97,7 @@ export default async function BrowseRequestsPage({ searchParams }: Props) {
           </p>
           <Link
             href="/requests/new"
-            className="rounded-lg bg-blue-600 px-6 py-2.5 text-sm font-medium text-white hover:bg-blue-700"
+            className="rounded-lg bg-[#3F51B5] px-6 py-2.5 text-sm font-medium text-white hover:bg-[#3545a0]"
           >
             Post a Data Request
           </Link>
@@ -149,7 +149,7 @@ function RequestCard({ request }: { request: DataRequestListItem }) {
   return (
     <Link
       href={`/requests/${request.slug}`}
-      className="block rounded-xl border border-gray-200 p-6 hover:border-blue-300 hover:shadow-md transition-all"
+      className="block rounded-xl border border-gray-200 p-6 hover:border-[#C5CAE9] hover:shadow-md transition-all"
     >
       <div className="flex items-start justify-between mb-3">
         <h3 className="font-semibold text-gray-900 line-clamp-2 flex-1 mr-2">{request.title}</h3>

@@ -174,7 +174,7 @@ export function MarketplaceSearchExperience({
         <div className="rounded-3xl border border-slate-200 bg-white p-5 shadow-sm sm:p-6">
           <div className="flex flex-col gap-6 lg:flex-row lg:items-end lg:justify-between">
             <div className="max-w-2xl">
-              <p className="text-sm font-semibold uppercase tracking-[0.18em] text-blue-600">
+              <p className="text-sm font-semibold uppercase tracking-[0.18em] text-[#3F51B5]">
                 {mode === 'search' ? 'Search' : 'Browse'}
               </p>
               <h1 className="mt-2 text-3xl font-bold tracking-tight text-slate-900 sm:text-4xl">
@@ -203,7 +203,7 @@ export function MarketplaceSearchExperience({
                 <button
                   type="button"
                   onClick={() => router.push(pathname + (q ? `?q=${encodeURIComponent(q)}` : ''))}
-                  className="text-xs font-medium text-blue-600 hover:text-blue-700"
+                  className="text-xs font-medium text-[#3F51B5] hover:text-[#3F51B5]"
                 >
                   Clear all
                 </button>
@@ -219,7 +219,7 @@ export function MarketplaceSearchExperience({
                 id="filter-category"
                 value={category}
                 onChange={(event) => updateParams({ category: event.target.value })}
-                className="w-full rounded-2xl border border-slate-200 px-3 py-2.5 text-sm text-slate-900 focus:border-blue-500 focus:outline-none"
+                className="w-full rounded-2xl border border-slate-200 px-3 py-2.5 text-sm text-slate-900 focus:border-[#3F51B5] focus:outline-none"
               >
                 <option value="">All categories</option>
                 {categoryCounts.map(([value, count]) => (
@@ -239,7 +239,7 @@ export function MarketplaceSearchExperience({
                 id="filter-data-type"
                 value={dataType}
                 onChange={(event) => updateParams({ data_type: event.target.value })}
-                className="w-full rounded-2xl border border-slate-200 px-3 py-2.5 text-sm text-slate-900 focus:border-blue-500 focus:outline-none"
+                className="w-full rounded-2xl border border-slate-200 px-3 py-2.5 text-sm text-slate-900 focus:border-[#3F51B5] focus:outline-none"
               >
                 <option value="">All formats</option>
                 {dataTypeCounts.map(([value, count]) => (
@@ -272,7 +272,7 @@ export function MarketplaceSearchExperience({
                       debouncePriceUpdate('min_price', event.target.value);
                     }}
                     placeholder="Min"
-                    className="w-full rounded-2xl border border-slate-200 px-3 py-2.5 text-sm text-slate-900 focus:border-blue-500 focus:outline-none"
+                    className="w-full rounded-2xl border border-slate-200 px-3 py-2.5 text-sm text-slate-900 focus:border-[#3F51B5] focus:outline-none"
                   />
                 </div>
                 <div>
@@ -288,7 +288,7 @@ export function MarketplaceSearchExperience({
                       debouncePriceUpdate('max_price', event.target.value);
                     }}
                     placeholder="Max"
-                    className="w-full rounded-2xl border border-slate-200 px-3 py-2.5 text-sm text-slate-900 focus:border-blue-500 focus:outline-none"
+                    className="w-full rounded-2xl border border-slate-200 px-3 py-2.5 text-sm text-slate-900 focus:border-[#3F51B5] focus:outline-none"
                   />
                 </div>
               </div>
@@ -319,7 +319,7 @@ export function MarketplaceSearchExperience({
                   id="filter-sort"
                   value={sort}
                   onChange={(event) => updateParams({ sort: event.target.value })}
-                  className="rounded-2xl border border-slate-200 px-3 py-2 text-sm text-slate-900 focus:border-blue-500 focus:outline-none"
+                  className="rounded-2xl border border-slate-200 px-3 py-2 text-sm text-slate-900 focus:border-[#3F51B5] focus:outline-none"
                 >
                   {sortOptions.map((option) => (
                     <option key={option.value} value={option.value}>

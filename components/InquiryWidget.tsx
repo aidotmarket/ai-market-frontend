@@ -135,12 +135,12 @@ export default function InquiryWidget({ listingId, listingSlug }: Props) {
             onChange={(e) => setReplyText(e.target.value)}
             onKeyDown={(e) => e.key === 'Enter' && !e.shiftKey && handleReply()}
             placeholder="Follow up..."
-            className="flex-1 rounded-lg border border-gray-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+            className="flex-1 rounded-lg border border-gray-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-[#3F51B5] focus:border-transparent"
           />
           <button
             onClick={handleReply}
             disabled={replying || !replyText.trim()}
-            className="rounded-lg bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed"
+            className="rounded-lg bg-[#3F51B5] px-4 py-2 text-sm font-medium text-white hover:bg-[#3545a0] disabled:opacity-50 disabled:cursor-not-allowed"
           >
             {replying ? 'Sending...' : 'Reply'}
           </button>
@@ -149,7 +149,7 @@ export default function InquiryWidget({ listingId, listingSlug }: Props) {
         <div className="mt-3">
           <Link
             href={`/dashboard/inquiries/${conversation.id}`}
-            className="text-sm text-blue-600 hover:underline"
+            className="text-sm text-[#3F51B5] hover:underline"
           >
             View full conversation
           </Link>
@@ -170,12 +170,12 @@ export default function InquiryWidget({ listingId, listingSlug }: Props) {
         onChange={(e) => setQuestion(e.target.value)}
         placeholder="What would you like to know about this dataset?"
         rows={3}
-        className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent resize-none"
+        className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-[#3F51B5] focus:border-transparent resize-none"
       />
       <button
         onClick={handleSubmit}
         disabled={submitting || !question.trim()}
-        className="mt-3 w-full rounded-lg bg-blue-600 px-4 py-2.5 text-sm font-medium text-white hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center"
+        className="mt-3 w-full rounded-lg bg-[#3F51B5] px-4 py-2.5 text-sm font-medium text-white hover:bg-[#3545a0] disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center"
       >
         {submitting ? (
           <>

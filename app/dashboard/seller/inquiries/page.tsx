@@ -15,7 +15,7 @@ const STATUS_BADGE: Record<ConversationStatus, { css: string; label: string }> =
   auto_answered: { css: 'bg-green-100 text-green-800', label: 'Auto-answered' },
   escalated: { css: 'bg-red-100 text-red-800', label: 'Needs reply' },
   awaiting_seller: { css: 'bg-red-100 text-red-800', label: 'Awaiting your reply' },
-  seller_replied: { css: 'bg-blue-100 text-blue-800', label: 'Replied' },
+  seller_replied: { css: 'bg-[#E8EAF6] text-[#303F9F]', label: 'Replied' },
   resolved: { css: 'bg-gray-100 text-gray-600', label: 'Resolved' },
 };
 
@@ -45,7 +45,7 @@ export default function SellerInquiriesPage() {
   if (loading) {
     return (
       <div className="flex min-h-[40vh] items-center justify-center">
-        <div className="h-8 w-8 animate-spin rounded-full border-4 border-blue-600 border-t-transparent" />
+        <div className="h-8 w-8 animate-spin rounded-full border-4 border-[#3F51B5] border-t-transparent" />
       </div>
     );
   }
@@ -187,7 +187,7 @@ function SellerInquiryCard({
         <div className="border-t border-gray-200 p-4">
           {loadingDetail ? (
             <div className="flex justify-center py-4">
-              <div className="h-6 w-6 animate-spin rounded-full border-4 border-blue-600 border-t-transparent" />
+              <div className="h-6 w-6 animate-spin rounded-full border-4 border-[#3F51B5] border-t-transparent" />
             </div>
           ) : (
             <>
@@ -201,12 +201,12 @@ function SellerInquiryCard({
                   onChange={(e) => setReplyText(e.target.value)}
                   onKeyDown={(e) => e.key === 'Enter' && !e.shiftKey && handleReply()}
                   placeholder="Reply to buyer..."
-                  className="flex-1 rounded-lg border border-gray-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                  className="flex-1 rounded-lg border border-gray-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-[#3F51B5] focus:border-transparent"
                 />
                 <button
                   onClick={handleReply}
                   disabled={replying || !replyText.trim()}
-                  className="rounded-lg bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed"
+                  className="rounded-lg bg-[#3F51B5] px-4 py-2 text-sm font-medium text-white hover:bg-[#3545a0] disabled:opacity-50 disabled:cursor-not-allowed"
                 >
                   {replying ? 'Sending...' : 'Reply'}
                 </button>
@@ -214,7 +214,7 @@ function SellerInquiryCard({
               <div className="mt-2">
                 <Link
                   href={`/dashboard/inquiries/${inquiry.id}`}
-                  className="text-xs text-blue-600 hover:underline"
+                  className="text-xs text-[#3F51B5] hover:underline"
                 >
                   Open full thread
                 </Link>

@@ -104,7 +104,7 @@ export default function CheckoutSuccessContent() {
     return (
       <div className="flex min-h-[60vh] items-center justify-center px-4">
         <div className="text-center max-w-md">
-          <div className="mx-auto h-12 w-12 animate-spin rounded-full border-4 border-blue-600 border-t-transparent mb-6"></div>
+          <div className="mx-auto h-12 w-12 animate-spin rounded-full border-4 border-[#3F51B5] border-t-transparent mb-6"></div>
           <h1 className="text-2xl font-bold text-gray-900 mb-2">Verifying your payment…</h1>
           <p className="text-gray-500">This usually takes just a few seconds.</p>
         </div>
@@ -138,7 +138,7 @@ export default function CheckoutSuccessContent() {
             {result.order_id && (
               <Link
                 href={`/dashboard/orders/${result.order_id}${result.transaction_id ? `?tx=${result.transaction_id}` : ''}`}
-                className="rounded-lg bg-blue-600 px-6 py-2.5 text-sm font-medium text-white hover:bg-blue-700"
+                className="rounded-lg bg-[#3F51B5] px-6 py-2.5 text-sm font-medium text-white hover:bg-[#3545a0]"
               >
                 View Order
               </Link>
@@ -159,8 +159,8 @@ export default function CheckoutSuccessContent() {
     return (
       <div className="flex min-h-[60vh] items-center justify-center px-4">
         <div className="text-center max-w-md">
-          <div className="mx-auto flex h-16 w-16 items-center justify-center rounded-full bg-blue-100 mb-6">
-            <svg className="h-8 w-8 text-blue-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+          <div className="mx-auto flex h-16 w-16 items-center justify-center rounded-full bg-[#E8EAF6] mb-6">
+            <svg className="h-8 w-8 text-[#3F51B5]" fill="none" viewBox="0 0 24 24" stroke="currentColor">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
             </svg>
           </div>
@@ -173,7 +173,7 @@ export default function CheckoutSuccessContent() {
           </p>
           <Link
             href="/dashboard/orders"
-            className="rounded-lg bg-blue-600 px-6 py-2.5 text-sm font-medium text-white hover:bg-blue-700"
+            className="rounded-lg bg-[#3F51B5] px-6 py-2.5 text-sm font-medium text-white hover:bg-[#3545a0]"
           >
             Check My Orders
           </Link>
@@ -196,7 +196,7 @@ export default function CheckoutSuccessContent() {
         <div className="flex flex-col sm:flex-row gap-3 justify-center">
           <Link
             href="/dashboard/orders"
-            className="rounded-lg bg-blue-600 px-6 py-2.5 text-sm font-medium text-white hover:bg-blue-700"
+            className="rounded-lg bg-[#3F51B5] px-6 py-2.5 text-sm font-medium text-white hover:bg-[#3545a0]"
           >
             Check My Orders
           </Link>

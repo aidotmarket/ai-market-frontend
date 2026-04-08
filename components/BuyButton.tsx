@@ -60,7 +60,7 @@ export default function BuyButton({ listingId, sellerId, slug, price, pricingTyp
       <div>
         <Link
           href={`/login?redirect=/listings/${encodeURIComponent(slug)}`}
-          className="block w-full rounded-lg bg-blue-600 px-4 py-2.5 text-sm font-medium text-white text-center hover:bg-blue-700"
+          className="block w-full rounded-lg bg-[#3F51B5] px-4 py-2.5 text-sm font-medium text-white text-center hover:bg-[#3545a0]"
         >
           Buy Now — {formatPrice(price)}
         </Link>
@@ -72,12 +72,12 @@ export default function BuyButton({ listingId, sellerId, slug, price, pricingTyp
   // Seller viewing own listing
   if (user?.id === sellerId) {
     return (
-      <div className="rounded-lg bg-blue-50 border border-blue-200 px-4 py-3">
+      <div className="rounded-lg bg-[#E8EAF6] border border-[#C5CAE9] px-4 py-3">
         <div className="flex items-center gap-2">
-          <svg className="h-5 w-5 text-blue-600 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+          <svg className="h-5 w-5 text-[#3F51B5] shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
           </svg>
-          <p className="text-sm font-medium text-blue-800">This is your listing</p>
+          <p className="text-sm font-medium text-[#303F9F]">This is your listing</p>
         </div>
       </div>
     );
@@ -129,7 +129,7 @@ export default function BuyButton({ listingId, sellerId, slug, price, pricingTyp
       <button
         onClick={handleBuy}
         disabled={loading || checkingPurchase}
-        className="w-full rounded-lg bg-blue-600 px-4 py-2.5 text-sm font-medium text-white hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center"
+        className="w-full rounded-lg bg-[#3F51B5] px-4 py-2.5 text-sm font-medium text-white hover:bg-[#3545a0] disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center"
       >
         {loading ? (
           <>

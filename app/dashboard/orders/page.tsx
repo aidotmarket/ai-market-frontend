@@ -26,9 +26,9 @@ const STATUS_LABEL: Record<OrderStatus, string> = {
 const TX_STATUS_BADGE: Record<TransactionStatus, string> = {
   initiated: 'bg-gray-100 text-gray-600',
   quoted: 'bg-gray-100 text-gray-600',
-  accepted: 'bg-blue-100 text-blue-800',
+  accepted: 'bg-[#E8EAF6] text-[#303F9F]',
   checkout_pending: 'bg-yellow-100 text-yellow-800',
-  paid: 'bg-blue-100 text-blue-800',
+  paid: 'bg-[#E8EAF6] text-[#303F9F]',
   fulfilling: 'bg-yellow-100 text-yellow-800',
   delivered: 'bg-indigo-100 text-indigo-800',
   confirmed: 'bg-green-100 text-green-800',
@@ -102,7 +102,7 @@ export default function OrdersListPage() {
   if (loading) {
     return (
       <div className="flex min-h-[40vh] items-center justify-center">
-        <div className="h-8 w-8 animate-spin rounded-full border-4 border-blue-600 border-t-transparent"></div>
+        <div className="h-8 w-8 animate-spin rounded-full border-4 border-[#3F51B5] border-t-transparent"></div>
       </div>
     );
   }
@@ -123,7 +123,7 @@ export default function OrdersListPage() {
           <p className="text-gray-500 mb-6">You haven&apos;t purchased any datasets yet.</p>
           <Link
             href="/listings"
-            className="rounded-lg bg-blue-600 px-6 py-2.5 text-sm font-medium text-white hover:bg-blue-700"
+            className="rounded-lg bg-[#3F51B5] px-6 py-2.5 text-sm font-medium text-white hover:bg-[#3545a0]"
           >
             Browse the Marketplace
           </Link>
@@ -155,7 +155,7 @@ export default function OrdersListPage() {
               return (
                 <tr key={order.id} className="hover:bg-gray-50">
                   <td className="px-4 py-3">
-                    <Link href={`/dashboard/orders/${order.id}`} className="text-blue-600 hover:underline font-mono text-xs">
+                    <Link href={`/dashboard/orders/${order.id}`} className="text-[#3F51B5] hover:underline font-mono text-xs">
                       #{order.id.slice(0, 8)}
                     </Link>
                   </td>

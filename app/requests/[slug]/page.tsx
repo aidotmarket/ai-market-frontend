@@ -18,7 +18,7 @@ import type { DataRequestDetail, DataRequestResponse, DataRequestUrgency } from 
 
 const URGENCY_BADGE: Record<DataRequestUrgency, string> = {
   low: 'bg-gray-100 text-gray-700',
-  medium: 'bg-blue-100 text-blue-700',
+  medium: 'bg-[#E8EAF6] text-[#3F51B5]',
   high: 'bg-amber-100 text-amber-800',
   urgent: 'bg-red-100 text-red-800',
 };
@@ -26,7 +26,7 @@ const URGENCY_BADGE: Record<DataRequestUrgency, string> = {
 const STATUS_BADGE: Record<string, string> = {
   draft: 'bg-gray-100 text-gray-600',
   open: 'bg-green-100 text-green-800',
-  responses_received: 'bg-blue-100 text-blue-800',
+  responses_received: 'bg-[#E8EAF6] text-[#303F9F]',
   fulfilled: 'bg-purple-100 text-purple-800',
   closed: 'bg-gray-100 text-gray-600',
   expired: 'bg-red-100 text-red-700',
@@ -144,7 +144,7 @@ export default function DataRequestDetailPage() {
   if (loading) {
     return (
       <div className="flex min-h-[60vh] items-center justify-center">
-        <div className="h-8 w-8 animate-spin rounded-full border-4 border-blue-600 border-t-transparent" />
+        <div className="h-8 w-8 animate-spin rounded-full border-4 border-[#3F51B5] border-t-transparent" />
       </div>
     );
   }
@@ -156,7 +156,7 @@ export default function DataRequestDetailPage() {
         <p className="text-gray-500 mb-6">This data request may have been removed or doesn&apos;t exist.</p>
         <Link
           href="/requests"
-          className="rounded-lg bg-blue-600 px-6 py-2.5 text-sm font-medium text-white hover:bg-blue-700"
+          className="rounded-lg bg-[#3F51B5] px-6 py-2.5 text-sm font-medium text-white hover:bg-[#3545a0]"
         >
           Browse Requests
         </Link>
@@ -175,7 +175,7 @@ export default function DataRequestDetailPage() {
   return (
     <div className="mx-auto max-w-3xl px-4 sm:px-6 lg:px-8 py-8">
       {/* Back link */}
-      <Link href="/requests" className="text-sm text-blue-600 hover:underline mb-6 inline-block">
+      <Link href="/requests" className="text-sm text-[#3F51B5] hover:underline mb-6 inline-block">
         &larr; Back to requests
       </Link>
 
@@ -302,7 +302,7 @@ export default function DataRequestDetailPage() {
                 value={proposal}
                 onChange={(e) => setProposal(e.target.value)}
                 placeholder="Describe the data you can provide and how it meets the requirements..."
-                className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-[#3F51B5]"
               />
             </div>
             <div className="grid grid-cols-2 gap-4">
@@ -317,7 +317,7 @@ export default function DataRequestDetailPage() {
                   step="0.01"
                   value={proposedPrice}
                   onChange={(e) => setProposedPrice(e.target.value)}
-                  className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-[#3F51B5]"
                 />
               </div>
               <div>
@@ -330,14 +330,14 @@ export default function DataRequestDetailPage() {
                   value={timeline}
                   onChange={(e) => setTimeline(e.target.value)}
                   placeholder="e.g., 2 weeks"
-                  className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-[#3F51B5]"
                 />
               </div>
             </div>
             <button
               type="submit"
               disabled={submittingResponse || !proposal.trim()}
-              className="rounded-lg bg-blue-600 px-4 py-2.5 text-sm font-medium text-white hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed"
+              className="rounded-lg bg-[#3F51B5] px-4 py-2.5 text-sm font-medium text-white hover:bg-[#3545a0] disabled:opacity-50 disabled:cursor-not-allowed"
             >
               {submittingResponse ? 'Submitting...' : 'Submit Response'}
             </button>
@@ -351,7 +351,7 @@ export default function DataRequestDetailPage() {
           <p className="text-gray-600 mb-4">Have the data this buyer needs?</p>
           <Link
             href={`/login?redirect=${encodeURIComponent(`/requests/${request.slug}`)}`}
-            className="rounded-lg bg-blue-600 px-6 py-2.5 text-sm font-medium text-white hover:bg-blue-700"
+            className="rounded-lg bg-[#3F51B5] px-6 py-2.5 text-sm font-medium text-white hover:bg-[#3545a0]"
           >
             Log in to Respond
           </Link>

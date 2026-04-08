@@ -82,7 +82,7 @@ export default function ConversationDetailPage({ params }: Props) {
   if (loading) {
     return (
       <div className="flex min-h-[40vh] items-center justify-center">
-        <div className="h-8 w-8 animate-spin rounded-full border-4 border-blue-600 border-t-transparent" />
+        <div className="h-8 w-8 animate-spin rounded-full border-4 border-[#3F51B5] border-t-transparent" />
       </div>
     );
   }
@@ -100,7 +100,7 @@ export default function ConversationDetailPage({ params }: Props) {
       <div className="mb-6">
         <Link
           href={viewerRole === 'seller' ? '/dashboard/seller/inquiries' : '/dashboard/inquiries'}
-          className="text-sm text-blue-600 hover:underline"
+          className="text-sm text-[#3F51B5] hover:underline"
         >
           &larr; Back to inquiries
         </Link>
@@ -133,12 +133,12 @@ export default function ConversationDetailPage({ params }: Props) {
             onChange={(e) => setReplyText(e.target.value)}
             onKeyDown={(e) => e.key === 'Enter' && !e.shiftKey && handleReply()}
             placeholder={`Reply as ${viewerRole}...`}
-            className="flex-1 rounded-lg border border-gray-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+            className="flex-1 rounded-lg border border-gray-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-[#3F51B5] focus:border-transparent"
           />
           <button
             onClick={handleReply}
             disabled={replying || !replyText.trim()}
-            className="rounded-lg bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed"
+            className="rounded-lg bg-[#3F51B5] px-4 py-2 text-sm font-medium text-white hover:bg-[#3545a0] disabled:opacity-50 disabled:cursor-not-allowed"
           >
             {replying ? 'Sending...' : 'Reply'}
           </button>

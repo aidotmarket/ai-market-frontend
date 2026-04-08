@@ -1,5 +1,26 @@
 @import "tailwindcss";
 
+/* Card geometric texture overlay */
+.card-texture {
+  position: relative;
+  overflow: hidden;
+}
+.card-texture::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  background-image: radial-gradient(#0F6E56 0.5px, transparent 0.5px),
+    linear-gradient(to right, #0F6E56 0.5px, transparent 0.5px),
+    linear-gradient(to bottom, #0F6E56 0.5px, transparent 0.5px);
+  background-size: 20px 20px, 40px 40px, 40px 40px;
+  opacity: 0.025;
+}
+.card-texture > * {
+  position: relative;
+  z-index: 1;
+}
+
 /* allAI chat animations */
 @keyframes allai-blink {
   0%, 100% { opacity: 1; }

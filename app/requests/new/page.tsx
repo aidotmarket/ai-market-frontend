@@ -31,7 +31,7 @@ export default function NewDataRequestPage() {
   if (isLoading) {
     return (
       <div className="flex min-h-[60vh] items-center justify-center">
-        <div className="h-8 w-8 animate-spin rounded-full border-4 border-blue-600 border-t-transparent" />
+        <div className="h-8 w-8 animate-spin rounded-full border-4 border-[#3F51B5] border-t-transparent" />
       </div>
     );
   }
@@ -96,7 +96,7 @@ export default function NewDataRequestPage() {
             value={description}
             onChange={(e) => setDescription(e.target.value)}
             placeholder="Describe exactly what data you're looking for, how you'll use it, and any requirements..."
-            className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+            className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-[#3F51B5]"
           />
         </div>
 
@@ -111,7 +111,7 @@ export default function NewDataRequestPage() {
             value={categories}
             onChange={(e) => setCategories(e.target.value)}
             placeholder="e.g., retail, marketing (comma-separated)"
-            className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+            className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-[#3F51B5]"
           />
           <p className="mt-1 text-xs text-gray-400">
             Suggested: {CATEGORIES.join(', ')}
@@ -129,7 +129,7 @@ export default function NewDataRequestPage() {
             value={formatPreferences}
             onChange={(e) => setFormatPreferences(e.target.value)}
             placeholder="e.g., CSV, JSON, Parquet"
-            className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+            className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-[#3F51B5]"
           />
         </div>
 
@@ -147,7 +147,7 @@ export default function NewDataRequestPage() {
               value={priceMin}
               onChange={(e) => setPriceMin(e.target.value)}
               placeholder="0"
-              className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+              className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-[#3F51B5]"
             />
           </div>
           <div>
@@ -162,7 +162,7 @@ export default function NewDataRequestPage() {
               value={priceMax}
               onChange={(e) => setPriceMax(e.target.value)}
               placeholder="10000"
-              className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+              className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-[#3F51B5]"
             />
           </div>
         </div>
@@ -176,7 +176,7 @@ export default function NewDataRequestPage() {
             id="urgency"
             value={urgency}
             onChange={(e) => setUrgency(e.target.value as DataRequestUrgency)}
-            className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+            className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-[#3F51B5]"
           >
             <option value="low">Low</option>
             <option value="medium">Medium</option>
@@ -196,14 +196,14 @@ export default function NewDataRequestPage() {
             value={provenanceRequirements}
             onChange={(e) => setProvenanceRequirements(e.target.value)}
             placeholder="Any requirements on data origin, licensing, compliance..."
-            className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+            className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-[#3F51B5]"
           />
         </div>
 
         <button
           type="submit"
           disabled={submitting || !description.trim()}
-          className="w-full rounded-lg bg-blue-600 px-4 py-2.5 text-sm font-medium text-white hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+          className="w-full rounded-lg bg-[#3F51B5] px-4 py-2.5 text-sm font-medium text-white hover:bg-[#3545a0] disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
         >
           {submitting ? 'Creating...' : 'Create Data Request'}
         </button>

@@ -14,7 +14,7 @@ export default function CheckoutCancelPage() {
         <div className="flex flex-col sm:flex-row gap-3 justify-center">
           <Link
             href="/listings"
-            className="rounded-lg bg-blue-600 px-6 py-2.5 text-sm font-medium text-white hover:bg-blue-700"
+            className="rounded-lg bg-[#3F51B5] px-6 py-2.5 text-sm font-medium text-white hover:bg-[#3545a0]"
           >
             Browse Datasets
           </Link>

@@ -31,7 +31,7 @@ export function trustLevelLabel(level: string): string {
 export function verificationBadgeColor(status: string): string {
   switch (status) {
     case 'premium': return 'bg-purple-100 text-purple-800';
-    case 'verified': return 'bg-blue-100 text-blue-800';
+    case 'verified': return 'bg-[#E8EAF6] text-[#303F9F]';
     default: return 'bg-gray-100 text-gray-600';
   }
 }

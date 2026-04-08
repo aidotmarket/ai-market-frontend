@@ -65,7 +65,7 @@ export default function RegisterForm() {
         <h1 className="text-2xl font-bold text-center mb-8">Create your account</h1>
 
         {searchParams.get('redirect')?.includes('/requests/new') && (
-          <div className="rounded-lg bg-blue-50 border border-blue-200 px-4 py-3 text-sm text-blue-700 mb-4">
+          <div className="rounded-lg bg-[#E8EAF6] border border-[#C5CAE9] px-4 py-3 text-sm text-[#3F51B5] mb-4">
             We need an account so we can reach out to you with offers that match your requirements. After sign-up, allAI will walk you through submitting a data request to the marketplace.
           </div>
         )}
@@ -80,11 +80,11 @@ export default function RegisterForm() {
           )}
 
           <div className="flex gap-4 mb-6">
-            <label className={`flex-1 cursor-pointer rounded-lg border p-4 text-center transition-colors ${role === 'buyer' ? 'border-blue-600 bg-blue-50 text-blue-700' : 'border-gray-200 hover:bg-gray-50'}`}>
+            <label className={`flex-1 cursor-pointer rounded-lg border p-4 text-center transition-colors ${role === 'buyer' ? 'border-[#3F51B5] bg-[#E8EAF6] text-[#3F51B5]' : 'border-gray-200 hover:bg-gray-50'}`}>
               <input type="radio" name="role" value="buyer" checked={role === 'buyer'} onChange={() => setRole('buyer')} className="sr-only" />
               <span className="block font-medium">I want to buy data</span>
             </label>
-            <label className={`flex-1 cursor-pointer rounded-lg border p-4 text-center transition-colors ${role === 'seller' ? 'border-blue-600 bg-blue-50 text-blue-700' : 'border-gray-200 hover:bg-gray-50'}`}>
+            <label className={`flex-1 cursor-pointer rounded-lg border p-4 text-center transition-colors ${role === 'seller' ? 'border-[#3F51B5] bg-[#E8EAF6] text-[#3F51B5]' : 'border-gray-200 hover:bg-gray-50'}`}>
               <input type="radio" name="role" value="seller" checked={role === 'seller'} onChange={() => setRole('seller')} className="sr-only" />
               <span className="block font-medium">I want to sell data</span>
             </label>
@@ -100,7 +100,7 @@ export default function RegisterForm() {
                 type="text"
                 value={firstName}
                 onChange={(e) => setFirstName(e.target.value)}
-                className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-[#3F51B5] focus:border-transparent"
               />
             </div>
             <div>
@@ -112,7 +112,7 @@ export default function RegisterForm() {
                 type="text"
                 value={lastName}
                 onChange={(e) => setLastName(e.target.value)}
-                className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-[#3F51B5] focus:border-transparent"
               />
             </div>
           </div>
@@ -128,7 +128,7 @@ export default function RegisterForm() {
                 required
                 value={companyName}
                 onChange={(e) => setCompanyName(e.target.value)}
-                className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-[#3F51B5] focus:border-transparent"
                 placeholder="Your Company Inc."
               />
             </div>
@@ -144,7 +144,7 @@ export default function RegisterForm() {
               required
               value={email}
               onChange={(e) => setEmail(e.target.value)}
-              className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+              className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-[#3F51B5] focus:border-transparent"
               placeholder="you@company.com"
             />
           </div>
@@ -160,7 +160,7 @@ export default function RegisterForm() {
               minLength={8}
               value={password}
               onChange={(e) => setPassword(e.target.value)}
-              className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+              className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-[#3F51B5] focus:border-transparent"
               placeholder="Minimum 8 characters"
             />
           </div>
@@ -176,7 +176,7 @@ export default function RegisterForm() {
               minLength={8}
               value={confirmPassword}
               onChange={(e) => setConfirmPassword(e.target.value)}
-              className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+              className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-[#3F51B5] focus:border-transparent"
               placeholder="Re-enter your password"
             />
           </div>
@@ -184,7 +184,7 @@ export default function RegisterForm() {
           <button
             type="submit"
             disabled={loading}
-            className="w-full rounded-lg bg-blue-600 px-4 py-2.5 text-sm font-medium text-white hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center"
+            className="w-full rounded-lg bg-[#3F51B5] px-4 py-2.5 text-sm font-medium text-white hover:bg-[#3545a0] disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center"
           >
             {loading ? (
               <>
@@ -202,7 +202,7 @@ export default function RegisterForm() {
 
         <p className="mt-6 text-center text-sm text-gray-500">
           Already have an account?{' '}
-          <Link href={searchParams.get('redirect') ? `/login?redirect=${encodeURIComponent(searchParams.get('redirect')!)}` : '/login'} className="text-blue-600 hover:underline">
+          <Link href={searchParams.get('redirect') ? `/login?redirect=${encodeURIComponent(searchParams.get('redirect')!)}` : '/login'} className="text-[#3F51B5] hover:underline">
             Log in
           </Link>
         </p>

@@ -275,7 +275,7 @@ function NewListingWizardInner() {
   if (!stripeChecked) {
     return (
       <div className="flex justify-center py-12">
-        <div className="h-8 w-8 animate-spin rounded-full border-4 border-blue-600 border-t-transparent"></div>
+        <div className="h-8 w-8 animate-spin rounded-full border-4 border-[#3F51B5] border-t-transparent"></div>
       </div>
     );
   }
@@ -288,7 +288,7 @@ function NewListingWizardInner() {
           <p className="text-sm text-gray-600 mb-4">You need to connect your Stripe account before creating listings.</p>
           <button
             onClick={() => router.push('/dashboard')}
-            className="inline-flex items-center rounded-lg bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-700"
+            className="inline-flex items-center rounded-lg bg-[#3F51B5] px-4 py-2 text-sm font-medium text-white hover:bg-[#3545a0]"
           >
             Go to Dashboard
           </button>
@@ -328,9 +328,9 @@ function NewListingWizardInner() {
                 <div
                   className={`flex h-8 w-8 items-center justify-center rounded-full text-xs font-medium ${
                     i < step
-                      ? 'bg-blue-600 text-white'
+                      ? 'bg-[#3F51B5] text-white'
                       : i === step
-                        ? 'bg-blue-600 text-white ring-2 ring-blue-300'
+                        ? 'bg-[#3F51B5] text-white ring-2 ring-[#C5CAE9]'
                         : 'bg-gray-200 text-gray-500'
                   }`}
                 >
@@ -342,12 +342,12 @@ function NewListingWizardInner() {
                     i + 1
                   )}
                 </div>
-                <span className={`mt-1 text-[10px] leading-tight text-center max-w-[60px] ${i <= step ? 'text-blue-600 font-medium' : 'text-gray-400'}`}>
+                <span className={`mt-1 text-[10px] leading-tight text-center max-w-[60px] ${i <= step ? 'text-[#3F51B5] font-medium' : 'text-gray-400'}`}>
                   {label}
                 </span>
               </div>
               {i < STEPS.length - 1 && (
-                <div className={`h-0.5 w-6 mx-1 mt-[-12px] ${i < step ? 'bg-blue-600' : 'bg-gray-200'}`} />
+                <div className={`h-0.5 w-6 mx-1 mt-[-12px] ${i < step ? 'bg-[#3F51B5]' : 'bg-gray-200'}`} />
               )}
             </div>
           ))}
@@ -377,7 +377,7 @@ function NewListingWizardInner() {
             {step < STEPS.length - 1 ? (
               <button
                 onClick={nextStep}
-                className="rounded-lg bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-700"
+                className="rounded-lg bg-[#3F51B5] px-4 py-2 text-sm font-medium text-white hover:bg-[#3545a0]"
               >
                 Continue
               </button>
@@ -385,7 +385,7 @@ function NewListingWizardInner() {
               <button
                 onClick={() => setShowConfirmModal(true)}
                 disabled={publishing}
-                className="rounded-lg bg-blue-600 px-6 py-2 text-sm font-medium text-white hover:bg-blue-700 disabled:opacity-50"
+                className="rounded-lg bg-[#3F51B5] px-6 py-2 text-sm font-medium text-white hover:bg-[#3545a0] disabled:opacity-50"
               >
                 Confirm & Publish
               </button>
@@ -413,7 +413,7 @@ function NewListingWizardInner() {
               <button
                 onClick={handlePublish}
                 disabled={publishing}
-                className="rounded-lg bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-700 disabled:opacity-50 flex items-center"
+                className="rounded-lg bg-[#3F51B5] px-4 py-2 text-sm font-medium text-white hover:bg-[#3545a0] disabled:opacity-50 flex items-center"
               >
                 {publishing && (
                   <svg className="animate-spin -ml-1 mr-2 h-4 w-4 text-white" fill="none" viewBox="0 0 24 24">
@@ -461,7 +461,7 @@ function Step1BasicInfo({
   if (enhancing) {
     return (
       <div className="py-16 text-center">
-        <div className="mx-auto h-12 w-12 animate-spin rounded-full border-4 border-blue-600 border-t-transparent mb-4"></div>
+        <div className="mx-auto h-12 w-12 animate-spin rounded-full border-4 border-[#3F51B5] border-t-transparent mb-4"></div>
         <h3 className="text-lg font-medium text-gray-900">AI is analyzing your data...</h3>
         <p className="mt-2 text-sm text-gray-500">Generating title, description, tags, pricing suggestions, and scanning for PII.</p>
       </div>
@@ -482,7 +482,7 @@ function Step1BasicInfo({
             type="text"
             value={data.title}
             onChange={(e) => update({ title: e.target.value })}
-            className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+            className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-[#3F51B5]"
             placeholder="e.g., Global E-commerce Sales Data 2023"
           />
         </div>
@@ -493,7 +493,7 @@ function Step1BasicInfo({
             rows={3}
             value={data.description}
             onChange={(e) => update({ description: e.target.value })}
-            className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+            className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-[#3F51B5]"
             placeholder="Describe what's included in this dataset..."
           />
         </div>
@@ -504,7 +504,7 @@ function Step1BasicInfo({
             <select
               value={data.data_format}
               onChange={(e) => update({ data_format: e.target.value })}
-              className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white"
+              className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-[#3F51B5] bg-white"
             >
               {FORMATS.map((fmt) => (
                 <option key={fmt} value={fmt}>{fmt.toUpperCase()}</option>
@@ -518,7 +518,7 @@ function Step1BasicInfo({
               min={0}
               value={data.row_count || ''}
               onChange={(e) => update({ row_count: Number(e.target.value) })}
-              className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+              className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-[#3F51B5]"
               placeholder="e.g., 50000"
             />
           </div>
@@ -530,7 +530,7 @@ function Step1BasicInfo({
             type="text"
             value={data.column_names}
             onChange={(e) => update({ column_names: e.target.value })}
-            className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+            className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-[#3F51B5]"
             placeholder="e.g., id, name, email, purchase_amount, date"
           />
         </div>
@@ -541,7 +541,7 @@ function Step1BasicInfo({
             type="text"
             value={data.column_types}
             onChange={(e) => update({ column_types: e.target.value })}
-            className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+            className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-[#3F51B5]"
             placeholder="e.g., integer, string, string, float, date"
           />
         </div>
@@ -550,7 +550,7 @@ function Step1BasicInfo({
       <div className="flex items-center gap-3 pt-2">
         <button
           onClick={onEnhance}
-          className="rounded-lg bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-700 flex items-center gap-2"
+          className="rounded-lg bg-[#3F51B5] px-4 py-2 text-sm font-medium text-white hover:bg-[#3545a0] flex items-center gap-2"
         >
           <span>&#10024;</span> Let AI Fill This In
         </button>
@@ -615,7 +615,7 @@ function Step2AIEnhancement({
             type="text"
             value={data.ai_title}
             onChange={(e) => update({ ai_title: e.target.value })}
-            className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+            className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-[#3F51B5]"
           />
         </div>
 
@@ -627,7 +627,7 @@ function Step2AIEnhancement({
             rows={4}
             value={data.ai_description}
             onChange={(e) => update({ ai_description: e.target.value })}
-            className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+            className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-[#3F51B5]"
           />
         </div>
 
@@ -641,7 +641,7 @@ function Step2AIEnhancement({
               value={tagInput}
               onChange={(e) => setTagInput(e.target.value)}
               onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); addTag(); } }}
-              className="flex-1 rounded-lg border border-gray-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+              className="flex-1 rounded-lg border border-gray-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-[#3F51B5]"
               placeholder="Add a tag"
             />
             <button onClick={addTag} className="rounded-lg border border-gray-300 px-3 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50">
@@ -651,9 +651,9 @@ function Step2AIEnhancement({
           {data.ai_tags.length > 0 && (
             <div className="flex flex-wrap gap-2">
               {data.ai_tags.map((tag, idx) => (
-                <span key={idx} className="inline-flex items-center gap-1 rounded-full bg-blue-50 px-3 py-1 text-xs font-medium text-blue-700">
+                <span key={idx} className="inline-flex items-center gap-1 rounded-full bg-[#E8EAF6] px-3 py-1 text-xs font-medium text-[#3F51B5]">
                   {tag}
-                  <button type="button" onClick={() => removeTag(idx)} className="text-blue-500 hover:text-blue-700">&times;</button>
+                  <button type="button" onClick={() => removeTag(idx)} className="text-blue-500 hover:text-[#3F51B5]">&times;</button>
                 </span>
               ))}
             </div>
@@ -668,7 +668,7 @@ function Step2AIEnhancement({
             <select
               value={data.ai_category}
               onChange={(e) => update({ ai_category: e.target.value })}
-              className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white"
+              className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-[#3F51B5] bg-white"
             >
               {CATEGORIES.map((cat) => (
                 <option key={cat} value={cat}>{cat}</option>
@@ -690,7 +690,7 @@ function Step2AIEnhancement({
                 step="0.01"
                 value={data.ai_suggested_price}
                 onChange={(e) => update({ ai_suggested_price: Number(e.target.value) })}
-                className="w-full rounded-lg border border-gray-300 pl-7 pr-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                className="w-full rounded-lg border border-gray-300 pl-7 pr-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-[#3F51B5]"
               />
             </div>
           </div>
@@ -763,7 +763,7 @@ function Step3Schema({
                       type="text"
                       value={col.description}
                       onChange={(e) => updateColumnDesc(idx, e.target.value)}
-                      className="w-full rounded border border-gray-200 px-2 py-1 text-sm focus:outline-none focus:ring-1 focus:ring-blue-500"
+                      className="w-full rounded border border-gray-200 px-2 py-1 text-sm focus:outline-none focus:ring-1 focus:ring-[#3F51B5]"
                       placeholder="Describe this column..."
                     />
                   </td>
@@ -819,7 +819,7 @@ function Step4Pricing({
                   value={type}
                   checked={data.pricing_type === type}
                   onChange={() => update({ pricing_type: type })}
-                  className="h-4 w-4 text-blue-600 border-gray-300 focus:ring-blue-500"
+                  className="h-4 w-4 text-[#3F51B5] border-gray-300 focus:ring-[#3F51B5]"
                 />
                 <span className="text-sm text-gray-700">
                   {type === 'one_time' ? 'One-time purchase' : 'Subscription'}
@@ -844,7 +844,7 @@ function Step4Pricing({
                 step="0.01"
                 value={data.price}
                 onChange={(e) => update({ price: Number(e.target.value) })}
-                className="w-full rounded-lg border border-gray-300 pl-7 pr-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                className="w-full rounded-lg border border-gray-300 pl-7 pr-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-[#3F51B5]"
               />
             </div>
           </div>
@@ -854,7 +854,7 @@ function Step4Pricing({
             <select
               value={data.currency}
               onChange={(e) => update({ currency: e.target.value })}
-              className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white"
+              className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-[#3F51B5] bg-white"
             >
               {CURRENCIES.map((c) => (
                 <option key={c} value={c}>{c}</option>
@@ -901,7 +901,7 @@ function Step5Compliance({
             <label
               key={fw}
               className={`flex items-center justify-between p-3 rounded-lg border cursor-pointer transition-colors ${
-                active ? 'border-blue-300 bg-blue-50' : 'border-gray-200 bg-white hover:bg-gray-50'
+                active ? 'border-[#C5CAE9] bg-[#E8EAF6]' : 'border-gray-200 bg-white hover:bg-gray-50'
               }`}
             >
               <div className="flex items-center gap-3">
@@ -909,7 +909,7 @@ function Step5Compliance({
                   type="checkbox"
                   checked={active}
                   onChange={() => toggleFramework(fw)}
-                  className="h-4 w-4 rounded border-gray-300 text-blue-600 focus:ring-blue-500"
+                  className="h-4 w-4 rounded border-gray-300 text-[#3F51B5] focus:ring-[#3F51B5]"
                 />
                 <span className="text-sm font-medium text-gray-900">{fw}</span>
               </div>
@@ -929,7 +929,7 @@ function Step5Compliance({
           rows={3}
           value={data.compliance_notes}
           onChange={(e) => update({ compliance_notes: e.target.value })}
-          className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+          className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-[#3F51B5]"
           placeholder="Any additional compliance information..."
         />
       </div>
@@ -969,7 +969,7 @@ function Step6Review({
             {data.ai_title || data.title || 'Untitled Listing'}
             {isAI('title') && <AIBadge />}
           </h3>
-          <span className="inline-flex rounded-full bg-blue-100 px-2.5 py-0.5 text-xs font-medium text-blue-800 mt-2">
+          <span className="inline-flex rounded-full bg-[#E8EAF6] px-2.5 py-0.5 text-xs font-medium text-[#303F9F] mt-2">
             {data.ai_category}
           </span>
         </div>

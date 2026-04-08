@@ -3,7 +3,7 @@
     <filter id="textShadow" x="-5%" y="-5%" width="115%" height="120%">
       <feOffset dx="3" dy="4" in="SourceAlpha" result="off"/>
       <feGaussianBlur in="off" stdDeviation="2" result="blur"/>
-      <feFlood flood-color="#1e40af" flood-opacity="0.35" result="color"/>
+      <feFlood flood-color="#283593" flood-opacity="0.35" result="color"/>
       <feComposite in="color" in2="blur" operator="in" result="shadow"/>
       <feMerge>
         <feMergeNode in="shadow"/>
@@ -13,7 +13,7 @@
     <filter id="robotShadow" x="-5%" y="-5%" width="115%" height="120%">
       <feOffset dx="2" dy="3" in="SourceAlpha" result="off"/>
       <feGaussianBlur in="off" stdDeviation="1.5" result="blur"/>
-      <feFlood flood-color="#1e3a8a" flood-opacity="0.3" result="color"/>
+      <feFlood flood-color="#283593" flood-opacity="0.3" result="color"/>
       <feComposite in="color" in2="blur" operator="in" result="shadow"/>
       <feMerge>
         <feMergeNode in="shadow"/>
@@ -21,36 +21,36 @@
       </feMerge>
     </filter>
     <linearGradient id="marketGrad" x1="0" y1="0" x2="0" y2="1">
-      <stop offset="0%" stop-color="#3B82F6"/>
-      <stop offset="55%" stop-color="#2563EB"/>
-      <stop offset="100%" stop-color="#1D4ED8"/>
+      <stop offset="0%" stop-color="#5C6BC0"/>
+      <stop offset="55%" stop-color="#3F51B5"/>
+      <stop offset="100%" stop-color="#303F9F"/>
     </linearGradient>
     <linearGradient id="aGrad" x1="0" y1="0" x2="0" y2="1">
-      <stop offset="0%" stop-color="#3B82F6"/>
-      <stop offset="50%" stop-color="#2563EB"/>
-      <stop offset="100%" stop-color="#1D4ED8"/>
+      <stop offset="0%" stop-color="#5C6BC0"/>
+      <stop offset="50%" stop-color="#3F51B5"/>
+      <stop offset="100%" stop-color="#303F9F"/>
     </linearGradient>
   </defs>
 
   <text x="180" y="340" font-family="Arial, Helvetica, sans-serif" font-weight="800" font-size="280" fill="url(#aGrad)" filter="url(#textShadow)">a</text>
-  
+
   <g transform="translate(345, 80)" filter="url(#robotShadow)">
-    <line x1="55" y1="0" x2="55" y2="30" stroke="#2563EB" stroke-width="6" stroke-linecap="round"/>
-    <circle cx="55" cy="0" r="8" fill="#3B82F6"/>
-    <rect x="15" y="30" width="80" height="65" rx="16" ry="16" fill="#2563EB"/>
-    <rect x="15" y="30" width="80" height="32" rx="16" ry="16" fill="#3B82F6" opacity="0.4"/>
+    <line x1="55" y1="0" x2="55" y2="30" stroke="#3F51B5" stroke-width="6" stroke-linecap="round"/>
+    <circle cx="55" cy="0" r="8" fill="#5C6BC0"/>
+    <rect x="15" y="30" width="80" height="65" rx="16" ry="16" fill="#3F51B5"/>
+    <rect x="15" y="30" width="80" height="32" rx="16" ry="16" fill="#5C6BC0" opacity="0.4"/>
     <rect x="28" y="48" width="22" height="18" rx="6" fill="white"/>
     <rect x="60" y="48" width="22" height="18" rx="6" fill="white"/>
     <circle cx="39" cy="57" r="5" fill="#0F172A"/>
     <circle cx="71" cy="57" r="5" fill="#0F172A"/>
     <circle cx="37" cy="55" r="1.5" fill="white" opacity="0.7"/>
     <circle cx="69" cy="55" r="1.5" fill="white" opacity="0.7"/>
-    <rect x="25" y="100" width="60" height="160" rx="8" fill="#2563EB"/>
-    <rect x="25" y="100" width="30" height="160" rx="8" fill="#3B82F6" opacity="0.25"/>
+    <rect x="25" y="100" width="60" height="160" rx="8" fill="#3F51B5"/>
+    <rect x="25" y="100" width="30" height="160" rx="8" fill="#5C6BC0" opacity="0.25"/>
   </g>
-  
-  <circle cx="480" cy="335" r="16" fill="#2563EB" filter="url(#robotShadow)"/>
-  <circle cx="478" cy="333" r="6" fill="#3B82F6" opacity="0.4"/>
+
+  <circle cx="480" cy="335" r="16" fill="#3F51B5" filter="url(#robotShadow)"/>
+  <circle cx="478" cy="333" r="6" fill="#5C6BC0" opacity="0.4"/>
 
   <clipPath id="marketClip">
     <text x="530" y="340" font-family="Arial, Helvetica, sans-serif" font-weight="500" font-size="280" letter-spacing="-2">market</text>

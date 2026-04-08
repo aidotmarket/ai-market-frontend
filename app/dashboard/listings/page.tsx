@@ -96,7 +96,7 @@ export default function ListingsPage() {
   if (loading) {
     return (
       <div className="flex justify-center py-12">
-        <div className="h-8 w-8 animate-spin rounded-full border-4 border-blue-600 border-t-transparent"></div>
+        <div className="h-8 w-8 animate-spin rounded-full border-4 border-[#3F51B5] border-t-transparent"></div>
       </div>
     );
   }
@@ -121,7 +121,7 @@ export default function ListingsPage() {
         <h1 className="text-2xl font-bold text-gray-900">Your Listings</h1>
         <Link
           href="/dashboard/listings/new"
-          className="inline-flex items-center justify-center rounded-lg bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-700"
+          className="inline-flex items-center justify-center rounded-lg bg-[#3F51B5] px-4 py-2 text-sm font-medium text-white hover:bg-[#3545a0]"
         >
           Create New Listing
         </Link>
@@ -137,7 +137,7 @@ export default function ListingsPage() {
           <div className="mt-6">
             <Link
               href="/dashboard/listings/new"
-              className="inline-flex items-center justify-center rounded-lg bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-700"
+              className="inline-flex items-center justify-center rounded-lg bg-[#3F51B5] px-4 py-2 text-sm font-medium text-white hover:bg-[#3545a0]"
             >
               Create your first listing
             </Link>
@@ -200,7 +200,7 @@ export default function ListingsPage() {
                         <button
                           onClick={() => handlePublish(listing.id)}
                           disabled={actionLoading === listing.id}
-                          className="text-xs font-medium text-blue-600 hover:text-blue-800 disabled:opacity-50"
+                          className="text-xs font-medium text-[#3F51B5] hover:text-[#303F9F] disabled:opacity-50"
                         >
                           Publish
                         </button>

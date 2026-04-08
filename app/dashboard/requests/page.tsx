@@ -12,7 +12,7 @@ import type { DataRequestListItem, DataRequestStatus, DataRequestUrgency } from 
 const STATUS_BADGE: Record<DataRequestStatus, { css: string; label: string }> = {
   draft: { css: 'bg-gray-100 text-gray-600', label: 'Draft' },
   open: { css: 'bg-green-100 text-green-800', label: 'Open' },
-  responses_received: { css: 'bg-blue-100 text-blue-800', label: 'Responses received' },
+  responses_received: { css: 'bg-[#E8EAF6] text-[#303F9F]', label: 'Responses received' },
   fulfilled: { css: 'bg-purple-100 text-purple-800', label: 'Fulfilled' },
   closed: { css: 'bg-gray-100 text-gray-600', label: 'Closed' },
   expired: { css: 'bg-red-100 text-red-700', label: 'Expired' },
@@ -20,7 +20,7 @@ const STATUS_BADGE: Record<DataRequestStatus, { css: string; label: string }> = 
 
 const URGENCY_BADGE: Record<DataRequestUrgency, string> = {
   low: 'bg-gray-100 text-gray-700',
-  medium: 'bg-blue-100 text-blue-700',
+  medium: 'bg-[#E8EAF6] text-[#3F51B5]',
   high: 'bg-amber-100 text-amber-800',
   urgent: 'bg-red-100 text-red-800',
 };
@@ -60,7 +60,7 @@ export default function MyDataRequestsPage() {
   if (loading) {
     return (
       <div className="flex min-h-[40vh] items-center justify-center">
-        <div className="h-8 w-8 animate-spin rounded-full border-4 border-blue-600 border-t-transparent" />
+        <div className="h-8 w-8 animate-spin rounded-full border-4 border-[#3F51B5] border-t-transparent" />
       </div>
     );
   }
@@ -81,7 +81,7 @@ export default function MyDataRequestsPage() {
           <p className="text-gray-500 mb-6">Tell the market what data you need.</p>
           <Link
             href="/requests/new"
-            className="rounded-lg bg-blue-600 px-6 py-2.5 text-sm font-medium text-white hover:bg-blue-700"
+            className="rounded-lg bg-[#3F51B5] px-6 py-2.5 text-sm font-medium text-white hover:bg-[#3545a0]"
           >
             Post a Data Request
           </Link>
@@ -96,7 +96,7 @@ export default function MyDataRequestsPage() {
         <h1 className="text-2xl font-bold text-gray-900">My Data Requests</h1>
         <Link
           href="/requests/new"
-          className="rounded-lg bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-700"
+          className="rounded-lg bg-[#3F51B5] px-4 py-2 text-sm font-medium text-white hover:bg-[#3545a0]"
         >
           New Request
         </Link>
@@ -118,7 +118,7 @@ export default function MyDataRequestsPage() {
             {requests.map((req) => (
               <tr key={req.id} className="hover:bg-gray-50">
                 <td className="px-4 py-3">
-                  <Link href={`/requests/${req.slug}`} className="text-blue-600 hover:underline font-medium">
+                  <Link href={`/requests/${req.slug}`} className="text-[#3F51B5] hover:underline font-medium">
                     {req.title}
                   </Link>
                 </td>
