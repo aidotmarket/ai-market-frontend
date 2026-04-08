@@ -110,8 +110,8 @@ export default function AimDataDownloadPage() {
               </span>
             </h1>
             <p className="mt-6 text-lg leading-8 text-gray-600 max-w-2xl mx-auto">
-              AIM-Data (powered by vectorAIz) processes your data locally, generates AI-enriched
-              metadata, and publishes listings to ai.market. Your raw data never leaves your servers.
+              AIM-Data processes your data locally, generates AI-enriched metadata, and publishes
+              listings to ai.market. Your raw data never leaves your servers.
             </p>
           </div>
         </div>
@@ -164,9 +164,9 @@ export default function AimDataDownloadPage() {
               <p className="text-sm text-gray-500 mb-5">macOS (Apple Silicon &amp; Intel) and any modern Linux distribution</p>
               <div className="flex items-center gap-3 rounded-lg bg-gray-900 px-4 py-3 mb-4">
                 <code className="flex-1 text-sm text-gray-100 overflow-x-auto whitespace-nowrap">
-                  curl -fsSL https://get.vectoraiz.com | bash
+                  curl -fsSL https://get.ai.market/aim-data | bash
                 </code>
-                <CopyButton text="curl -fsSL https://get.vectoraiz.com | bash" />
+                <CopyButton text="curl -fsSL https://get.ai.market/aim-data | bash" />
               </div>
               <p className="text-xs text-gray-500">
                 Requires{' '}
@@ -191,9 +191,9 @@ export default function AimDataDownloadPage() {
               <p className="text-sm text-gray-500 mb-5">Windows 10 and 11 with PowerShell</p>
               <div className="flex items-center gap-3 rounded-lg bg-gray-900 px-4 py-3 mb-4">
                 <code className="flex-1 text-sm text-gray-100 overflow-x-auto whitespace-nowrap">
-                  irm https://get.vectoraiz.com/windows | iex
+                  irm https://get.ai.market/aim-data/windows | iex
                 </code>
-                <CopyButton text="irm https://get.vectoraiz.com/windows | iex" />
+                <CopyButton text="irm https://get.ai.market/aim-data/windows | iex" />
               </div>
               <p className="text-xs text-gray-500">
                 Requires{' '}
