@@ -84,7 +84,7 @@ const offerings: Offering[] = [
     name: 'AIM-Node',
     subtitle: 'Models & Pipelines',
     description:
-      'Serve models and pipelines from your own infrastructure. Buyers call them peer-to-peer — payloads never touch ai.market.',
+      'Serve models and pipelines from your own infrastructure. Buyers call them peer-to-peer. Payloads never touch ai.market.',
     tags: ['Models', 'Pipelines', 'P2P Compute'],
     cta: 'Download AIM-Node',
     href: '/download/aim-node',
