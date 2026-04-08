@@ -57,18 +57,6 @@ type Offering = {
 
 const offerings: Offering[] = [
   {
-    name: 'AIM-Node',
-    subtitle: 'Models & Pipelines',
-    description:
-      'Serve models and pipelines from your own infrastructure. Buyers call them peer-to-peer — payloads never touch ai.market.',
-    tags: ['Models', 'Pipelines', 'P2P Compute'],
-    cta: 'Download AIM-Node',
-    href: '/download/aim-node',
-    ctaIcon: 'download',
-    accent: 'indigo',
-    iconPath: 'M9.75 17L9 20l-1 1h8l-1-1-.75-3M3 13h18M5 17h14a2 2 0 0 0 2-2V5a2 2 0 0 0-2-2H5a2 2 0 0 0-2 2v10a2 2 0 0 0 2 2z',
-  },
-  {
     name: 'AIM-Data',
     subtitle: 'Data Management',
     description:
@@ -91,6 +79,18 @@ const offerings: Offering[] = [
     ctaIcon: 'arrow',
     accent: 'orange',
     iconPath: 'M12 4.5v15m7.5-7.5h-15',
+  },
+  {
+    name: 'AIM-Node',
+    subtitle: 'Models & Pipelines',
+    description:
+      'Serve models and pipelines from your own infrastructure. Buyers call them peer-to-peer — payloads never touch ai.market.',
+    tags: ['Models', 'Pipelines', 'P2P Compute'],
+    cta: 'Download AIM-Node',
+    href: '/download/aim-node',
+    ctaIcon: 'download',
+    accent: 'indigo',
+    iconPath: 'M9.75 17L9 20l-1 1h8l-1-1-.75-3M3 13h18M5 17h14a2 2 0 0 0 2-2V5a2 2 0 0 0-2-2H5a2 2 0 0 0-2 2v10a2 2 0 0 0 2 2z',
   },
 ];
 
@@ -263,7 +263,7 @@ export default function LandingPage() {
                 Three ways to participate
               </h2>
               <p className="mt-3 text-lg text-[#666666]">
-                List assets, find data, or run compute — all non-custodial, all AI-discoverable.
+                Provide Data, Request Data/Models, or Provide a Model
               </p>
             </div>
 
