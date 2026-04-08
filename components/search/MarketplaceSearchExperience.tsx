@@ -8,7 +8,6 @@ import { SearchForm } from '@/components/search/SearchForm';
 
 type SearchMode = 'browse' | 'search';
 type ListingTypeFilter = 'all' | 'data' | 'models';
-type FulfillmentType = 'ai_queryable' | 'file_download' | 'model_access';
 
 interface MarketplaceSearchExperienceProps {
   mode: SearchMode;
@@ -67,12 +66,6 @@ function parseListingType(value: string | null): ListingTypeFilter {
   return 'all';
 }
 
-function getFulfillmentTypes(type: ListingTypeFilter): FulfillmentType[] | undefined {
-  if (type === 'data') return ['ai_queryable', 'file_download'];
-  if (type === 'models') return ['model_access'];
-  return undefined;
-}
-
 const PRICE_DEBOUNCE_MS = 500;
 
 export function MarketplaceSearchExperience({
@@ -85,16 +78,16 @@ export function MarketplaceSearchExperience({
   const q = (searchParams.get('q') || '').trim();
   const category = searchParams.get('category') || '';
   const dataType = searchParams.get('data_type') || '';
-  const listingType = parseListingType(searchParams.get('type'));
   const minPrice = parseNumber(searchParams.get('min_price'));
   const maxPrice = parseNumber(searchParams.get('max_price'));
-  const fulfillmentType = getFulfillmentTypes(listingType);
+  const [listingCategory, setListingCategory] = useState<ListingTypeFilter>(() => parseListingType(searchParams.get('type')));
 
   const [localMinPrice, setLocalMinPrice] = useState(searchParams.get('min_price') ?? '');
   const [localMaxPrice, setLocalMaxPrice] = useState(searchParams.get('max_price') ?? '');
   const priceTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   useEffect(() => {
+    setListingCategory(parseListingType(searchParams.get('type')));
     setLocalMinPrice(searchParams.get('min_price') ?? '');
     setLocalMaxPrice(searchParams.get('max_price') ?? '');
   }, [searchParams]);
@@ -112,12 +105,12 @@ export function MarketplaceSearchExperience({
     isFetchingNextPage,
     fetchNextPage,
     refetch,
-  } = useSearchListings({ q, category, minPrice, maxPrice, fulfillmentType });
+  } = useSearchListings({ q, category, listingCategory, minPrice, maxPrice });
 
   const sort = searchParams.get('sort') || (semanticMode ? 'relevance' : 'newest');
 
   const filteredItems = rawItems.filter((item) => {
-    if (!dataType || listingType !== 'data') return true;
+    if (!dataType || listingCategory !== 'data') return true;
     return 'data_format' in item && item.data_format === dataType;
   });
 
@@ -132,18 +125,18 @@ export function MarketplaceSearchExperience({
   const dataTypeCounts = buildDataTypeCounts(rawItems);
   const priceStats = facets?.price || null;
   const resultCount = semanticMode ? total : items.length;
-  const typeLabel = listingType === 'data' ? 'Data' : listingType === 'models' ? 'Models' : 'Marketplace';
-  const searchPlaceholder = listingType === 'models'
+  const typeLabel = listingCategory === 'data' ? 'Data' : listingCategory === 'models' ? 'Models' : 'Marketplace';
+  const searchPlaceholder = listingCategory === 'models'
     ? 'Search models by provider, task, capability, or category'
-    : listingType === 'data'
+    : listingCategory === 'data'
       ? 'Search data by topic, company, geography, or format'
       : 'Search data and models by topic, provider, geography, or capability';
-  const browseDescription = listingType === 'models'
+  const browseDescription = listingCategory === 'models'
     ? 'Explore model listings with URL-driven filters, sorting, and incremental loading.'
-    : listingType === 'data'
+    : listingCategory === 'data'
       ? 'Explore data listings with URL-driven filters, sorting, and incremental loading.'
       : 'Explore marketplace listings with URL-driven filters, sorting, and incremental loading.';
-  const emptyLabel = listingType === 'data' ? 'data' : listingType === 'models' ? 'models' : 'listings';
+  const emptyLabel = listingCategory === 'data' ? 'data' : listingCategory === 'models' ? 'models' : 'listings';
 
   const updateParams = useCallback((updates: Record<string, string | number | undefined>) => {
     const next = new URLSearchParams(searchParams.toString());
@@ -209,40 +202,42 @@ export function MarketplaceSearchExperience({
                 </p>
               </div>
               <div className="w-full max-w-3xl">
+                <div className="mb-4 inline-flex rounded-full bg-white p-1">
+                  {[
+                    { label: 'Data', value: 'data' as const },
+                    { label: 'Models', value: 'models' as const },
+                  ].map((option) => {
+                    const isActive = listingCategory === option.value;
+
+                    return (
+                      <button
+                        key={option.value}
+                        type="button"
+                        aria-pressed={isActive}
+                        onClick={() => {
+                          const nextCategory = isActive ? 'all' : option.value;
+                          setListingCategory(nextCategory);
+                          updateParams({
+                            type: nextCategory === 'all' ? undefined : nextCategory,
+                            data_type: nextCategory === 'data' ? dataType : undefined,
+                          });
+                        }}
+                        className={`rounded-full px-4 py-2 text-sm font-semibold transition-colors ${
+                          isActive
+                            ? 'bg-[#0F6E56] text-white'
+                            : 'bg-gray-100 text-gray-600'
+                        }`}
+                      >
+                        {option.label}
+                      </button>
+                    );
+                  })}
+                </div>
                 <SearchForm
                   targetPath={mode === 'search' ? '/search' : '/listings'}
                   placeholder={searchPlaceholder}
                 />
               </div>
-            </div>
-
-            <div className="inline-flex w-full rounded-full bg-slate-100 p-1 sm:w-auto">
-              {[
-                { label: 'All', value: 'all' as const },
-                { label: 'Data', value: 'data' as const },
-                { label: 'Models', value: 'models' as const },
-              ].map((option) => {
-                const isActive = listingType === option.value;
-
-                return (
-                  <button
-                    key={option.value}
-                    type="button"
-                    aria-pressed={isActive}
-                    onClick={() => updateParams({
-                      type: option.value === 'all' ? undefined : option.value,
-                      data_type: option.value === 'data' ? dataType : undefined,
-                    })}
-                    className={`flex-1 rounded-full px-4 py-2 text-sm font-semibold transition-colors sm:flex-none ${
-                      isActive
-                        ? 'bg-[#0F6E56] text-white shadow-sm'
-                        : 'bg-slate-100 text-slate-600 hover:text-slate-900'
-                    }`}
-                  >
-                    {option.label}
-                  </button>
-                );
-              })}
             </div>
           </div>
         </div>
@@ -257,7 +252,7 @@ export function MarketplaceSearchExperience({
                   onClick={() => {
                     const next = new URLSearchParams();
                     if (q) next.set('q', q);
-                    if (listingType !== 'all') next.set('type', listingType);
+                    if (listingCategory !== 'all') next.set('type', listingCategory);
                     router.push(pathname + (next.toString() ? `?${next.toString()}` : ''));
                   }}
                   className="text-xs font-medium text-[#3F51B5] hover:text-[#3F51B5]"
@@ -286,7 +281,7 @@ export function MarketplaceSearchExperience({
               </select>
             </div>
 
-            {listingType === 'data' && (
+            {listingCategory === 'data' && (
               <div className="space-y-2">
                 <label htmlFor="filter-data-type" className="text-xs font-semibold uppercase tracking-wide text-slate-500">
                   Data type
@@ -364,7 +359,7 @@ export function MarketplaceSearchExperience({
                 </p>
                 <p className="mt-1 text-sm text-slate-500">
                   {resultCount} result{resultCount === 1 ? '' : 's'}
-                  {listingType === 'data' && dataType ? ` filtered to ${dataType.toUpperCase()}` : ''}
+                  {listingCategory === 'data' && dataType ? ` filtered to ${dataType.toUpperCase()}` : ''}
                 </p>
               </div>
 

@@ -1,9 +1,8 @@
 'use client';
 
 import { api } from './client';
-import type { ListingListItem, ListingDetail, SearchResponse } from '@/types';
+import type { FulfillmentType, ListingListItem, ListingDetail, SearchResponse } from '@/types';
 
-type FulfillmentType = 'ai_queryable' | 'file_download' | 'model_access';
 type FulfillmentTypeParam = FulfillmentType | FulfillmentType[];
 
 export interface ListListingsParams {
@@ -19,8 +18,11 @@ export interface ListListingsParams {
 }
 
 export async function listListings(params: ListListingsParams = {}): Promise<ListingListItem[]> {
+  const requestParams = params.fulfillment_type?.length === 0
+    ? { ...params, fulfillment_type: undefined }
+    : params;
   const res = await api.get<ListingListItem[]>('/listings/', {
-    params,
+    params: requestParams,
     paramsSerializer: { indexes: null },
   });
   return res.data;
@@ -44,8 +46,11 @@ export async function searchListings(
     offset?: number;
   } = {}
 ): Promise<SearchResponse> {
+  const requestParams = params.fulfillment_type?.length === 0
+    ? { ...params, fulfillment_type: undefined }
+    : params;
   const res = await api.get<SearchResponse>('/search/listings', {
-    params: { q, ...params },
+    params: { q, ...requestParams },
     paramsSerializer: { indexes: null },
   });
   return res.data;

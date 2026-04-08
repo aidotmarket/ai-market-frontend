@@ -69,6 +69,7 @@ export type ComplianceStatus = 'not_checked' | 'low_risk' | 'medium_risk' | 'hig
 export type ModelProvider = 'openai' | 'anthropic' | 'google' | 'mistral' | 'local';
 export type TrustLevel = 'L0' | 'L1' | 'L2' | 'L3';
 export type VerificationStatus = 'unverified' | 'verified' | 'premium';
+export type FulfillmentType = 'ai_queryable' | 'file_download' | 'pipeline_invocation' | 'model_access';
 
 export interface ListingListItem {
   id: string;
@@ -81,6 +82,7 @@ export interface ListingListItem {
   tags: string[];
   privacy_score: number;
   data_format?: string | null;
+  fulfillment_type?: FulfillmentType | null;
   model_provider: ModelProvider;
   trust_level: TrustLevel;
   quality_score: number;
@@ -124,6 +126,7 @@ export interface ListingDetail {
   created_at: string;
   updated_at: string | null;
   published_at: string | null;
+  fulfillment_type?: FulfillmentType | null;
   jsonld?: Record<string, unknown>;
 }
 
@@ -138,6 +141,7 @@ export interface SearchRequest {
   max_price?: number;
   min_privacy_score?: number;
   compliance_status?: string;
+  fulfillment_type?: FulfillmentType | FulfillmentType[];
   limit?: number;
   offset?: number;
 }
@@ -153,6 +157,7 @@ export interface SearchResultItem {
   privacy_score: number | null;
   compliance_status: string | null;
   data_format: string | null;
+  fulfillment_type?: FulfillmentType | null;
   source_row_count: number | null;
   tags: string[] | null;
   created_at?: string | null;

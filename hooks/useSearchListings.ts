@@ -2,10 +2,10 @@
 
 import { useInfiniteQuery } from '@tanstack/react-query';
 import { listListings, searchListings } from '@/api/listings';
-import type { ListingListItem, SearchResultItem, SearchResponse } from '@/types';
+import type { FulfillmentType, ListingListItem, SearchResultItem, SearchResponse } from '@/types';
 
 const PAGE_SIZE = 12;
-type FulfillmentType = 'ai_queryable' | 'file_download' | 'model_access';
+type ListingCategory = 'data' | 'models' | 'all';
 type FulfillmentTypeParam = FulfillmentType | FulfillmentType[];
 
 export type ResultItem = ListingListItem | SearchResultItem;
@@ -13,24 +13,37 @@ export type ResultItem = ListingListItem | SearchResultItem;
 export interface UseSearchListingsParams {
   q?: string;
   category?: string;
+  listingCategory?: ListingCategory;
   minPrice?: number;
   maxPrice?: number;
-  fulfillmentType?: FulfillmentTypeParam;
   enabled?: boolean;
+}
+
+function getFulfillmentTypesForCategory(listingCategory: ListingCategory): FulfillmentTypeParam | undefined {
+  if (listingCategory === 'data') {
+    return ['ai_queryable', 'file_download'];
+  }
+
+  if (listingCategory === 'models') {
+    return ['model_access', 'pipeline_invocation'];
+  }
+
+  return undefined;
 }
 
 export function useSearchListings({
   q = '',
   category,
+  listingCategory = 'all',
   minPrice,
   maxPrice,
-  fulfillmentType,
   enabled = true,
 }: UseSearchListingsParams) {
   const semanticMode = q.length > 0;
+  const fulfillmentType = getFulfillmentTypesForCategory(listingCategory);
 
   const query = useInfiniteQuery({
-    queryKey: ['marketplace-results', semanticMode ? 'semantic' : 'browse', q, category, minPrice, maxPrice, fulfillmentType],
+    queryKey: ['marketplace-results', semanticMode ? 'semantic' : 'browse', q, category, listingCategory, minPrice, maxPrice],
     enabled: semanticMode ? q.length > 0 && enabled : enabled,
     initialPageParam: 0,
     queryFn: async ({ pageParam }) => {

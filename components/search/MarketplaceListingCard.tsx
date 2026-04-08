@@ -14,6 +14,11 @@ export function MarketplaceListingCard({ listing }: { listing: CardListing }) {
   const tags = Array.isArray(listing.tags) ? listing.tags.slice(0, 3) : [];
   const views = 'view_count' in listing ? listing.view_count : undefined;
   const description = listing.short_description || ('description' in listing ? listing.description : null);
+  const fulfillmentBadge = listing.fulfillment_type === 'model_access'
+    ? 'Model'
+    : listing.fulfillment_type === 'pipeline_invocation'
+      ? 'Pipeline'
+      : null;
 
   return (
     <Link
@@ -42,6 +47,11 @@ export function MarketplaceListingCard({ listing }: { listing: CardListing }) {
         {'data_format' in listing && listing.data_format && (
           <span className="inline-flex items-center rounded-full bg-emerald-50 px-2.5 py-1 text-xs font-medium uppercase tracking-wide text-emerald-700">
             {listing.data_format}
+          </span>
+        )}
+        {fulfillmentBadge && (
+          <span className="inline-flex items-center rounded-full bg-purple-100 px-2.5 py-1 text-xs font-medium text-purple-700">
+            {fulfillmentBadge}
           </span>
         )}
         {tags.map((tag) => (
