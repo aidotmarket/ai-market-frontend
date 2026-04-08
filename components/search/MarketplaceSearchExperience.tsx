@@ -5,10 +5,8 @@ import { usePathname, useRouter, useSearchParams } from 'next/navigation';
 import { useSearchListings, type ResultItem } from '@/hooks/useSearchListings';
 import { MarketplaceListingCard } from '@/components/search/MarketplaceListingCard';
 import { SearchForm } from '@/components/search/SearchForm';
-import type { FulfillmentType } from '@/types';
 
 type SearchMode = 'browse' | 'search';
-type AssetType = 'data' | 'model';
 
 interface MarketplaceSearchExperienceProps {
   mode: SearchMode;
@@ -64,14 +62,6 @@ function parseNumber(value: string | null) {
 
 const PRICE_DEBOUNCE_MS = 500;
 
-function parseAssetType(value: string | null): AssetType {
-  return value === 'model' ? 'model' : 'data';
-}
-
-function getFulfillmentType(assetType: AssetType): FulfillmentType | undefined {
-  return assetType === 'model' ? 'model_access' : undefined;
-}
-
 export function MarketplaceSearchExperience({
   mode,
 }: MarketplaceSearchExperienceProps) {
@@ -82,11 +72,8 @@ export function MarketplaceSearchExperience({
   const q = (searchParams.get('q') || '').trim();
   const category = searchParams.get('category') || '';
   const dataType = searchParams.get('data_type') || '';
-  const assetTypeFromParams = parseAssetType(searchParams.get('asset_type'));
   const minPrice = parseNumber(searchParams.get('min_price'));
   const maxPrice = parseNumber(searchParams.get('max_price'));
-  const [assetType, setAssetType] = useState<AssetType>(assetTypeFromParams);
-  const fulfillmentType = getFulfillmentType(assetType);
 
   // Local state for debounced price inputs
   const [localMinPrice, setLocalMinPrice] = useState(searchParams.get('min_price') ?? '');
@@ -98,10 +85,6 @@ export function MarketplaceSearchExperience({
     setLocalMinPrice(searchParams.get('min_price') ?? '');
     setLocalMaxPrice(searchParams.get('max_price') ?? '');
   }, [searchParams]);
-
-  useEffect(() => {
-    setAssetType(assetTypeFromParams);
-  }, [assetTypeFromParams]);
 
   const {
     items: rawItems,
@@ -116,12 +99,12 @@ export function MarketplaceSearchExperience({
     isFetchingNextPage,
     fetchNextPage,
     refetch,
-  } = useSearchListings({ q, category, minPrice, maxPrice, fulfillmentType });
+  } = useSearchListings({ q, category, minPrice, maxPrice });
 
   const sort = searchParams.get('sort') || (semanticMode ? 'relevance' : 'newest');
 
   const filteredItems = rawItems.filter((item) => {
-    if (assetType === 'model' || !dataType) return true;
+    if (!dataType) return true;
     return 'data_format' in item && item.data_format === dataType;
   });
 
@@ -158,13 +141,6 @@ export function MarketplaceSearchExperience({
     router.replace(`${pathname}?${next.toString()}`);
   }, [pathname, router, searchParams]);
 
-  useEffect(() => {
-    const rawAssetType = searchParams.get('asset_type');
-    if (rawAssetType === assetTypeFromParams) return;
-
-    updateParams({ asset_type: assetTypeFromParams });
-  }, [assetTypeFromParams, searchParams, updateParams]);
-
   // FIX 3: Debounced price update
   const debouncePriceUpdate = useCallback((key: string, value: string) => {
     if (priceTimerRef.current) clearTimeout(priceTimerRef.current);
@@ -192,72 +168,29 @@ export function MarketplaceSearchExperience({
         { label: 'Price: High to Low', value: 'price-desc' },
       ];
 
-  const assetLabel = assetType === 'model' ? 'Models' : 'Data';
-  const placeholder = assetType === 'model'
-    ? 'Search models by provider, task, capability, or category'
-    : 'Search data by topic, company, geography, or format';
-  const emptyLabel = assetType === 'model' ? 'models' : 'data';
-  const browseTitle = assetType === 'model' ? 'Browse Marketplace Models' : 'Browse Marketplace Data';
-  const browseDescription = assetType === 'model'
-    ? 'Explore model listings with URL-driven filters, sorting, and incremental loading.'
-    : 'Explore data listings with URL-driven filters, sorting, and incremental loading.';
-
   return (
     <div className="bg-gradient-to-b from-slate-50 to-white">
       <div className="mx-auto max-w-7xl px-4 py-8 sm:px-6 lg:px-8 lg:py-10">
         <div className="rounded-3xl border border-slate-200 bg-white p-5 shadow-sm sm:p-6">
-          <div className="flex flex-col gap-6">
-            <div className="inline-flex w-full rounded-full bg-slate-100 p-1 sm:w-auto">
-              {([
-                { label: 'Data', value: 'data' as const },
-                { label: 'Models', value: 'model' as const },
-              ]).map((option) => {
-                const isActive = assetType === option.value;
-
-                return (
-                  <button
-                    key={option.value}
-                    type="button"
-                    aria-pressed={isActive}
-                    onClick={() => {
-                      setAssetType(option.value);
-                      updateParams({
-                        asset_type: option.value,
-                        data_type: option.value === 'model' ? undefined : dataType,
-                      });
-                    }}
-                    className={`flex-1 rounded-full px-4 py-2 text-sm font-semibold transition-colors sm:flex-none ${
-                      isActive
-                        ? 'bg-[#3F51B5] text-white shadow-sm'
-                        : 'text-slate-600 hover:text-slate-900'
-                    }`}
-                  >
-                    {option.label}
-                  </button>
-                );
-              })}
+          <div className="flex flex-col gap-6 lg:flex-row lg:items-end lg:justify-between">
+            <div className="max-w-2xl">
+              <p className="text-sm font-semibold uppercase tracking-[0.18em] text-[#3F51B5]">
+                {mode === 'search' ? 'Search' : 'Browse'}
+              </p>
+              <h1 className="mt-2 text-3xl font-bold tracking-tight text-slate-900 sm:text-4xl">
+                {mode === 'search' ? 'Search Marketplace' : 'Browse Datasets'}
+              </h1>
+              <p className="mt-3 text-sm leading-6 text-slate-600 sm:text-base">
+                {mode === 'search'
+                  ? 'Search across marketplace listings with semantic ranking and refine the result set with filters.'
+                  : 'Explore the marketplace with a URL-driven search state, filters, and incremental loading.'}
+              </p>
             </div>
-
-            <div className="flex flex-col gap-6 lg:flex-row lg:items-end lg:justify-between">
-              <div className="max-w-2xl">
-                <p className="text-sm font-semibold uppercase tracking-[0.18em] text-[#3F51B5]">
-                  {mode === 'search' ? `Search ${assetLabel}` : `Browse ${assetLabel}`}
-                </p>
-                <h1 className="mt-2 text-3xl font-bold tracking-tight text-slate-900 sm:text-4xl">
-                  {mode === 'search' ? `Search Marketplace ${assetLabel}` : browseTitle}
-                </h1>
-                <p className="mt-3 text-sm leading-6 text-slate-600 sm:text-base">
-                  {mode === 'search'
-                    ? `Search across marketplace ${assetType === 'model' ? 'models' : 'data listings'} with semantic ranking and refine the result set with filters.`
-                    : browseDescription}
-                </p>
-              </div>
-              <div className="w-full max-w-3xl">
-                <SearchForm
-                  targetPath={mode === 'search' ? '/search' : '/listings'}
-                  placeholder={placeholder}
-                />
-              </div>
+            <div className="w-full max-w-3xl">
+              <SearchForm
+                targetPath={mode === 'search' ? '/search' : '/listings'}
+                placeholder="Search datasets by topic, company, geography, or format"
+              />
             </div>
           </div>
         </div>
@@ -269,12 +202,7 @@ export function MarketplaceSearchExperience({
                 <h2 className="text-sm font-semibold text-slate-900">Filters</h2>
                 <button
                   type="button"
-                  onClick={() => {
-                    const next = new URLSearchParams();
-                    if (q) next.set('q', q);
-                    if (assetType !== 'data') next.set('asset_type', assetType);
-                    router.push(pathname + (next.toString() ? `?${next.toString()}` : ''));
-                  }}
+                  onClick={() => router.push(pathname + (q ? `?q=${encodeURIComponent(q)}` : ''))}
                   className="text-xs font-medium text-[#3F51B5] hover:text-[#3F51B5]"
                 >
                   Clear all
@@ -302,29 +230,28 @@ export function MarketplaceSearchExperience({
               </select>
             </div>
 
-            {assetType === 'data' && (
-              <div className="space-y-2">
-                <label htmlFor="filter-data-type" className="text-xs font-semibold uppercase tracking-wide text-slate-500">
-                  Data type
-                </label>
-                <select
-                  id="filter-data-type"
-                  value={dataType}
-                  onChange={(event) => updateParams({ data_type: event.target.value })}
-                  className="w-full rounded-2xl border border-slate-200 px-3 py-2.5 text-sm text-slate-900 focus:border-[#3F51B5] focus:outline-none"
-                >
-                  <option value="">All formats</option>
-                  {dataTypeCounts.map(([value, count]) => (
-                    <option key={value} value={value}>
-                      {value.toUpperCase()} ({count})
-                    </option>
-                  ))}
-                </select>
-                {dataTypeCounts.length > 0 && (
-                  <p className="text-xs text-slate-400">Counts reflect loaded results only</p>
-                )}
-              </div>
-            )}
+            {/* FIX 6: htmlFor/id association for Data type */}
+            <div className="space-y-2">
+              <label htmlFor="filter-data-type" className="text-xs font-semibold uppercase tracking-wide text-slate-500">
+                Data type
+              </label>
+              <select
+                id="filter-data-type"
+                value={dataType}
+                onChange={(event) => updateParams({ data_type: event.target.value })}
+                className="w-full rounded-2xl border border-slate-200 px-3 py-2.5 text-sm text-slate-900 focus:border-[#3F51B5] focus:outline-none"
+              >
+                <option value="">All formats</option>
+                {dataTypeCounts.map(([value, count]) => (
+                  <option key={value} value={value}>
+                    {value.toUpperCase()} ({count})
+                  </option>
+                ))}
+              </select>
+              {dataTypeCounts.length > 0 && (
+                <p className="text-xs text-slate-400">Counts reflect loaded results only</p>
+              )}
+            </div>
 
             {/* FIX 6: htmlFor/id associations for Price range inputs */}
             <div className="space-y-3">
@@ -377,11 +304,11 @@ export function MarketplaceSearchExperience({
             <div className="flex flex-col gap-4 rounded-3xl border border-slate-200 bg-white p-5 shadow-sm sm:flex-row sm:items-center sm:justify-between">
               <div>
                 <p className="text-sm font-semibold text-slate-900">
-                  {semanticMode && q ? `${assetLabel} results for \u201c${q}\u201d` : `${assetLabel} results`}
+                  {semanticMode && q ? `Results for \u201c${q}\u201d` : 'Marketplace results'}
                 </p>
                 <p className="mt-1 text-sm text-slate-500">
                   {resultCount} result{resultCount === 1 ? '' : 's'}
-                  {assetType === 'data' && dataType ? ` filtered to ${dataType.toUpperCase()}` : ''}
+                  {dataType ? ` filtered to ${dataType.toUpperCase()}` : ''}
                 </p>
               </div>
 
@@ -433,7 +360,7 @@ export function MarketplaceSearchExperience({
 
             {!isLoading && !isError && items.length === 0 && (
               <div className="mt-6 rounded-3xl border border-dashed border-slate-300 bg-white px-6 py-16 text-center shadow-sm">
-                <p className="text-lg font-semibold text-slate-900">No {emptyLabel} found</p>
+                <p className="text-lg font-semibold text-slate-900">No datasets found</p>
                 <p className="mt-2 text-sm text-slate-500">
                   Try adjusting the search text or filters to widen the result set.
                 </p>

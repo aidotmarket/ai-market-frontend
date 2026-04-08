@@ -39,11 +39,6 @@ export function MarketplaceListingCard({ listing }: { listing: CardListing }) {
         <span className="inline-flex items-center rounded-full bg-gray-100 px-2.5 py-1 text-xs font-medium text-gray-700">
           {listing.category}
         </span>
-        {listing.fulfillment_type === 'model_access' && (
-          <span className="inline-flex items-center rounded-full bg-violet-100 px-2.5 py-1 text-xs font-medium text-violet-700">
-            Model
-          </span>
-        )}
         {'data_format' in listing && listing.data_format && (
           <span className="inline-flex items-center rounded-full bg-emerald-50 px-2.5 py-1 text-xs font-medium uppercase tracking-wide text-emerald-700">
             {listing.data_format}

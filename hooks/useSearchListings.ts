@@ -2,7 +2,7 @@
 
 import { useInfiniteQuery } from '@tanstack/react-query';
 import { listListings, searchListings } from '@/api/listings';
-import type { FulfillmentType, ListingListItem, SearchResultItem, SearchResponse } from '@/types';
+import type { ListingListItem, SearchResultItem, SearchResponse } from '@/types';
 
 const PAGE_SIZE = 12;
 
@@ -13,7 +13,6 @@ export interface UseSearchListingsParams {
   category?: string;
   minPrice?: number;
   maxPrice?: number;
-  fulfillmentType?: FulfillmentType;
   enabled?: boolean;
 }
 
@@ -22,13 +21,12 @@ export function useSearchListings({
   category,
   minPrice,
   maxPrice,
-  fulfillmentType,
   enabled = true,
 }: UseSearchListingsParams) {
   const semanticMode = q.length > 0;
 
   const query = useInfiniteQuery({
-    queryKey: ['marketplace-results', semanticMode ? 'semantic' : 'browse', q, category, minPrice, maxPrice, fulfillmentType],
+    queryKey: ['marketplace-results', semanticMode ? 'semantic' : 'browse', q, category, minPrice, maxPrice],
     enabled: semanticMode ? q.length > 0 && enabled : enabled,
     initialPageParam: 0,
     queryFn: async ({ pageParam }) => {
@@ -39,7 +37,6 @@ export function useSearchListings({
           category: category || undefined,
           min_price: minPrice,
           max_price: maxPrice,
-          fulfillment_type: fulfillmentType,
           limit: PAGE_SIZE,
           offset,
         });
@@ -51,7 +48,6 @@ export function useSearchListings({
         category: category || undefined,
         min_price: minPrice,
         max_price: maxPrice,
-        fulfillment_type: fulfillmentType,
       });
     },
     getNextPageParam: (lastPage, allPages) => {

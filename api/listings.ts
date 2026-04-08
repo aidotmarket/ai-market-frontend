@@ -1,7 +1,7 @@
 'use client';
 
 import { api } from './client';
-import type { FulfillmentType, ListingListItem, ListingDetail, SearchResponse } from '@/types';
+import type { ListingListItem, ListingDetail, SearchResponse } from '@/types';
 
 export interface ListListingsParams {
   skip?: number;
@@ -9,7 +9,6 @@ export interface ListListingsParams {
   category?: string;
   search?: string;
   listing_type?: string;
-  fulfillment_type?: FulfillmentType;
   min_price?: number;
   max_price?: number;
   min_privacy_score?: number;
@@ -33,7 +32,6 @@ export async function searchListings(
     max_price?: number;
     min_privacy_score?: number;
     compliance_status?: string;
-    fulfillment_type?: FulfillmentType;
     limit?: number;
     offset?: number;
   } = {}
