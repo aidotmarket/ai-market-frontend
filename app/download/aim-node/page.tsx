@@ -148,7 +148,7 @@ export default function AimNodeDownloadPage() {
               Install AIM-Node
             </h2>
             <p className="mt-3 text-base text-gray-600">
-              One command. Runs locally in Docker. Free to use.
+              One command. Runs locally in Docker. Serve models and pipelines peer-to-peer.
             </p>
           </div>
 
@@ -164,19 +164,16 @@ export default function AimNodeDownloadPage() {
               <p className="text-sm text-gray-500 mb-5">macOS (Apple Silicon &amp; Intel) and any modern Linux distribution</p>
               <div className="flex items-center gap-3 rounded-lg bg-gray-900 px-4 py-3 mb-4">
                 <code className="flex-1 text-sm text-gray-100 overflow-x-auto whitespace-nowrap">
-                  curl -fsSL https://get.vectoraiz.com | bash
+                  curl -fsSL https://get.ai.market/aim-node | bash
                 </code>
-                <CopyButton text="curl -fsSL https://get.vectoraiz.com | bash" />
+                <CopyButton text="curl -fsSL https://get.ai.market/aim-node | bash" />
               </div>
               <p className="text-xs text-gray-500">
                 Requires{' '}
                 <a href="https://docs.docker.com/desktop/" target="_blank" rel="noopener noreferrer" className="text-[#3F51B5] hover:text-[#303F9F] underline">
                   Docker Desktop
                 </a>
-                {' '}or{' '}
-                <a href="https://orbstack.dev/" target="_blank" rel="noopener noreferrer" className="text-[#3F51B5] hover:text-[#303F9F] underline">
-                  OrbStack
-                </a>
+                {' '}or OrbStack
               </p>
             </div>
 
@@ -191,9 +188,9 @@ export default function AimNodeDownloadPage() {
               <p className="text-sm text-gray-500 mb-5">Windows 10 and 11 with PowerShell</p>
               <div className="flex items-center gap-3 rounded-lg bg-gray-900 px-4 py-3 mb-4">
                 <code className="flex-1 text-sm text-gray-100 overflow-x-auto whitespace-nowrap">
-                  irm https://get.vectoraiz.com/windows | iex
+                  irm https://get.ai.market/aim-node/windows | iex
                 </code>
-                <CopyButton text="irm https://get.vectoraiz.com/windows | iex" />
+                <CopyButton text="irm https://get.ai.market/aim-node/windows | iex" />
               </div>
               <p className="text-xs text-gray-500">
                 Requires{' '}
