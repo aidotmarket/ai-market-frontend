@@ -48,7 +48,7 @@ export default function CheckoutSuccessContent() {
         return;
       }
 
-      // Still pending — schedule next poll
+      // Still pending - schedule next poll
       timerRef.current = setTimeout(() => {
         timerRef.current = null;
         poll();
@@ -169,7 +169,7 @@ export default function CheckoutSuccessContent() {
             Your payment was received and is being processed. This may take a minute.
           </p>
           <p className="text-sm text-gray-500 mb-6">
-            This page is safe to close — we&apos;ll email you when your order is ready.
+            This page is safe to close - we&apos;ll email you when your order is ready.
           </p>
           <Link
             href="/dashboard/orders"

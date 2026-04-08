@@ -328,7 +328,7 @@ export default function OrderDetailPage() {
                           <p className="text-sm text-gray-900">
                             {evt.event_type.replace(/_/g, ' ')}
                             {evt.from_status && evt.to_status && (
-                              <span className="text-gray-500"> — {evt.from_status} → {evt.to_status}</span>
+                              <span className="text-gray-500"> - {evt.from_status} → {evt.to_status}</span>
                             )}
                           </p>
                           <p className="text-xs text-gray-500 mt-0.5">

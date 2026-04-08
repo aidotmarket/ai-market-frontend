@@ -267,7 +267,7 @@ export function Layout({ children }: { children: React.ReactNode }) {
         {/* Footer Links Grid */}
         <div className="mx-auto max-w-7xl px-6 lg:px-8 py-10">
           <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-8 gap-y-10">
-            {/* Marketplace — with links */}
+            {/* Marketplace - with links */}
             {footerLinkSections.map((section) => (
               <div key={section.title}>
                 <h4 className="text-[11px] font-bold tracking-[0.1em] uppercase text-[#e2e8f0] mb-4">
@@ -288,7 +288,7 @@ export function Layout({ children }: { children: React.ReactNode }) {
               </div>
             ))}
 
-            {/* Solutions — plain text, no links */}
+            {/* Solutions - plain text, no links */}
             <div>
               <h4 className="text-[11px] font-bold tracking-[0.1em] uppercase text-[#e2e8f0] mb-4">
                 Solutions

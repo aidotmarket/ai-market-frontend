@@ -7,6 +7,8 @@ import { MarketplaceListingCard } from '@/components/search/MarketplaceListingCa
 import { SearchForm } from '@/components/search/SearchForm';
 
 type SearchMode = 'browse' | 'search';
+type ListingTypeFilter = 'all' | 'data' | 'models';
+type FulfillmentType = 'ai_queryable' | 'file_download' | 'model_access';
 
 interface MarketplaceSearchExperienceProps {
   mode: SearchMode;
@@ -60,6 +62,17 @@ function parseNumber(value: string | null) {
   return Number.isFinite(parsed) ? parsed : undefined;
 }
 
+function parseListingType(value: string | null): ListingTypeFilter {
+  if (value === 'data' || value === 'models') return value;
+  return 'all';
+}
+
+function getFulfillmentTypes(type: ListingTypeFilter): FulfillmentType[] | undefined {
+  if (type === 'data') return ['ai_queryable', 'file_download'];
+  if (type === 'models') return ['model_access'];
+  return undefined;
+}
+
 const PRICE_DEBOUNCE_MS = 500;
 
 export function MarketplaceSearchExperience({
@@ -72,15 +85,15 @@ export function MarketplaceSearchExperience({
   const q = (searchParams.get('q') || '').trim();
   const category = searchParams.get('category') || '';
   const dataType = searchParams.get('data_type') || '';
+  const listingType = parseListingType(searchParams.get('type'));
   const minPrice = parseNumber(searchParams.get('min_price'));
   const maxPrice = parseNumber(searchParams.get('max_price'));
+  const fulfillmentType = getFulfillmentTypes(listingType);
 
-  // Local state for debounced price inputs
   const [localMinPrice, setLocalMinPrice] = useState(searchParams.get('min_price') ?? '');
   const [localMaxPrice, setLocalMaxPrice] = useState(searchParams.get('max_price') ?? '');
   const priceTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
-  // Sync local price state when URL params change externally (e.g. "Clear all")
   useEffect(() => {
     setLocalMinPrice(searchParams.get('min_price') ?? '');
     setLocalMaxPrice(searchParams.get('max_price') ?? '');
@@ -99,30 +112,39 @@ export function MarketplaceSearchExperience({
     isFetchingNextPage,
     fetchNextPage,
     refetch,
-  } = useSearchListings({ q, category, minPrice, maxPrice });
+  } = useSearchListings({ q, category, minPrice, maxPrice, fulfillmentType });
 
   const sort = searchParams.get('sort') || (semanticMode ? 'relevance' : 'newest');
 
   const filteredItems = rawItems.filter((item) => {
-    if (!dataType) return true;
+    if (!dataType || listingType !== 'data') return true;
     return 'data_format' in item && item.data_format === dataType;
   });
 
   const items = sortItems(filteredItems, sort, semanticMode);
 
-  // FIX 1: Use facet categories when available, otherwise derive from loaded items
   const categoryCounts: [string, number][] = facets
     ? Object.entries(facets.categories)
     : browseCategoryCounts
       ? Object.entries(browseCategoryCounts)
       : [];
 
-  // FIX 4: Client-side only — counts reflect loaded items, not full dataset
   const dataTypeCounts = buildDataTypeCounts(rawItems);
   const priceStats = facets?.price || null;
   const resultCount = semanticMode ? total : items.length;
+  const typeLabel = listingType === 'data' ? 'Data' : listingType === 'models' ? 'Models' : 'Marketplace';
+  const searchPlaceholder = listingType === 'models'
+    ? 'Search models by provider, task, capability, or category'
+    : listingType === 'data'
+      ? 'Search data by topic, company, geography, or format'
+      : 'Search data and models by topic, provider, geography, or capability';
+  const browseDescription = listingType === 'models'
+    ? 'Explore model listings with URL-driven filters, sorting, and incremental loading.'
+    : listingType === 'data'
+      ? 'Explore data listings with URL-driven filters, sorting, and incremental loading.'
+      : 'Explore marketplace listings with URL-driven filters, sorting, and incremental loading.';
+  const emptyLabel = listingType === 'data' ? 'data' : listingType === 'models' ? 'models' : 'listings';
 
-  // FIX 3: Use router.replace for filter changes to avoid history spam
   const updateParams = useCallback((updates: Record<string, string | number | undefined>) => {
     const next = new URLSearchParams(searchParams.toString());
 
@@ -138,10 +160,10 @@ export function MarketplaceSearchExperience({
     next.delete('per_page');
     next.delete('offset');
 
-    router.replace(`${pathname}?${next.toString()}`);
+    const nextQuery = next.toString();
+    router.replace(nextQuery ? `${pathname}?${nextQuery}` : pathname);
   }, [pathname, router, searchParams]);
 
-  // FIX 3: Debounced price update
   const debouncePriceUpdate = useCallback((key: string, value: string) => {
     if (priceTimerRef.current) clearTimeout(priceTimerRef.current);
     priceTimerRef.current = setTimeout(() => {
@@ -149,7 +171,6 @@ export function MarketplaceSearchExperience({
     }, PRICE_DEBOUNCE_MS);
   }, [updateParams]);
 
-  // Cleanup timer on unmount
   useEffect(() => {
     return () => {
       if (priceTimerRef.current) clearTimeout(priceTimerRef.current);
@@ -172,25 +193,56 @@ export function MarketplaceSearchExperience({
     <div className="bg-gradient-to-b from-slate-50 to-white">
       <div className="mx-auto max-w-7xl px-4 py-8 sm:px-6 lg:px-8 lg:py-10">
         <div className="rounded-3xl border border-slate-200 bg-white p-5 shadow-sm sm:p-6">
-          <div className="flex flex-col gap-6 lg:flex-row lg:items-end lg:justify-between">
-            <div className="max-w-2xl">
-              <p className="text-sm font-semibold uppercase tracking-[0.18em] text-[#3F51B5]">
-                {mode === 'search' ? 'Search' : 'Browse'}
-              </p>
-              <h1 className="mt-2 text-3xl font-bold tracking-tight text-slate-900 sm:text-4xl">
-                {mode === 'search' ? 'Search Marketplace' : 'Browse Datasets'}
-              </h1>
-              <p className="mt-3 text-sm leading-6 text-slate-600 sm:text-base">
-                {mode === 'search'
-                  ? 'Search across marketplace listings with semantic ranking and refine the result set with filters.'
-                  : 'Explore the marketplace with a URL-driven search state, filters, and incremental loading.'}
-              </p>
+          <div className="flex flex-col gap-6">
+            <div className="flex flex-col gap-6 lg:flex-row lg:items-end lg:justify-between">
+              <div className="max-w-2xl">
+                <p className="text-sm font-semibold uppercase tracking-[0.18em] text-[#0F6E56]">
+                  {mode === 'search' ? `Search ${typeLabel}` : `Browse ${typeLabel}`}
+                </p>
+                <h1 className="mt-2 text-3xl font-bold tracking-tight text-slate-900 sm:text-4xl">
+                  {mode === 'search' ? `Search ${typeLabel}` : 'Browse Marketplace'}
+                </h1>
+                <p className="mt-3 text-sm leading-6 text-slate-600 sm:text-base">
+                  {mode === 'search'
+                    ? 'Search across marketplace listings with semantic ranking and refine the result set with filters.'
+                    : browseDescription}
+                </p>
+              </div>
+              <div className="w-full max-w-3xl">
+                <SearchForm
+                  targetPath={mode === 'search' ? '/search' : '/listings'}
+                  placeholder={searchPlaceholder}
+                />
+              </div>
             </div>
-            <div className="w-full max-w-3xl">
-              <SearchForm
-                targetPath={mode === 'search' ? '/search' : '/listings'}
-                placeholder="Search datasets by topic, company, geography, or format"
-              />
+
+            <div className="inline-flex w-full rounded-full bg-slate-100 p-1 sm:w-auto">
+              {[
+                { label: 'All', value: 'all' as const },
+                { label: 'Data', value: 'data' as const },
+                { label: 'Models', value: 'models' as const },
+              ].map((option) => {
+                const isActive = listingType === option.value;
+
+                return (
+                  <button
+                    key={option.value}
+                    type="button"
+                    aria-pressed={isActive}
+                    onClick={() => updateParams({
+                      type: option.value === 'all' ? undefined : option.value,
+                      data_type: option.value === 'data' ? dataType : undefined,
+                    })}
+                    className={`flex-1 rounded-full px-4 py-2 text-sm font-semibold transition-colors sm:flex-none ${
+                      isActive
+                        ? 'bg-[#0F6E56] text-white shadow-sm'
+                        : 'bg-slate-100 text-slate-600 hover:text-slate-900'
+                    }`}
+                  >
+                    {option.label}
+                  </button>
+                );
+              })}
             </div>
           </div>
         </div>
@@ -202,7 +254,12 @@ export function MarketplaceSearchExperience({
                 <h2 className="text-sm font-semibold text-slate-900">Filters</h2>
                 <button
                   type="button"
-                  onClick={() => router.push(pathname + (q ? `?q=${encodeURIComponent(q)}` : ''))}
+                  onClick={() => {
+                    const next = new URLSearchParams();
+                    if (q) next.set('q', q);
+                    if (listingType !== 'all') next.set('type', listingType);
+                    router.push(pathname + (next.toString() ? `?${next.toString()}` : ''));
+                  }}
                   className="text-xs font-medium text-[#3F51B5] hover:text-[#3F51B5]"
                 >
                   Clear all
@@ -210,7 +267,6 @@ export function MarketplaceSearchExperience({
               </div>
             </div>
 
-            {/* FIX 6: htmlFor/id association for Category */}
             <div className="space-y-2">
               <label htmlFor="filter-category" className="text-xs font-semibold uppercase tracking-wide text-slate-500">
                 Category
@@ -230,30 +286,30 @@ export function MarketplaceSearchExperience({
               </select>
             </div>
 
-            {/* FIX 6: htmlFor/id association for Data type */}
-            <div className="space-y-2">
-              <label htmlFor="filter-data-type" className="text-xs font-semibold uppercase tracking-wide text-slate-500">
-                Data type
-              </label>
-              <select
-                id="filter-data-type"
-                value={dataType}
-                onChange={(event) => updateParams({ data_type: event.target.value })}
-                className="w-full rounded-2xl border border-slate-200 px-3 py-2.5 text-sm text-slate-900 focus:border-[#3F51B5] focus:outline-none"
-              >
-                <option value="">All formats</option>
-                {dataTypeCounts.map(([value, count]) => (
-                  <option key={value} value={value}>
-                    {value.toUpperCase()} ({count})
-                  </option>
-                ))}
-              </select>
-              {dataTypeCounts.length > 0 && (
-                <p className="text-xs text-slate-400">Counts reflect loaded results only</p>
-              )}
-            </div>
+            {listingType === 'data' && (
+              <div className="space-y-2">
+                <label htmlFor="filter-data-type" className="text-xs font-semibold uppercase tracking-wide text-slate-500">
+                  Data type
+                </label>
+                <select
+                  id="filter-data-type"
+                  value={dataType}
+                  onChange={(event) => updateParams({ data_type: event.target.value })}
+                  className="w-full rounded-2xl border border-slate-200 px-3 py-2.5 text-sm text-slate-900 focus:border-[#3F51B5] focus:outline-none"
+                >
+                  <option value="">All formats</option>
+                  {dataTypeCounts.map(([value, count]) => (
+                    <option key={value} value={value}>
+                      {value.toUpperCase()} ({count})
+                    </option>
+                  ))}
+                </select>
+                {dataTypeCounts.length > 0 && (
+                  <p className="text-xs text-slate-400">Counts reflect loaded results only</p>
+                )}
+              </div>
+            )}
 
-            {/* FIX 6: htmlFor/id associations for Price range inputs */}
             <div className="space-y-3">
               <span className="text-xs font-semibold uppercase tracking-wide text-slate-500" id="price-range-label">
                 Price range
@@ -304,15 +360,14 @@ export function MarketplaceSearchExperience({
             <div className="flex flex-col gap-4 rounded-3xl border border-slate-200 bg-white p-5 shadow-sm sm:flex-row sm:items-center sm:justify-between">
               <div>
                 <p className="text-sm font-semibold text-slate-900">
-                  {semanticMode && q ? `Results for \u201c${q}\u201d` : 'Marketplace results'}
+                  {semanticMode && q ? `${typeLabel} results for "${q}"` : `${typeLabel} results`}
                 </p>
                 <p className="mt-1 text-sm text-slate-500">
                   {resultCount} result{resultCount === 1 ? '' : 's'}
-                  {dataType ? ` filtered to ${dataType.toUpperCase()}` : ''}
+                  {listingType === 'data' && dataType ? ` filtered to ${dataType.toUpperCase()}` : ''}
                 </p>
               </div>
 
-              {/* FIX 6: htmlFor/id association for Sort */}
               <label htmlFor="filter-sort" className="flex items-center gap-3 text-sm text-slate-500">
                 <span>Sort</span>
                 <select
@@ -341,7 +396,6 @@ export function MarketplaceSearchExperience({
               </div>
             )}
 
-            {/* FIX 2: Distinct error state — never collapse into "No datasets found" */}
             {!isLoading && isError && (
               <div className="mt-6 rounded-3xl border border-red-200 bg-red-50 px-6 py-16 text-center shadow-sm">
                 <p className="text-lg font-semibold text-red-900">Something went wrong</p>
@@ -360,7 +414,7 @@ export function MarketplaceSearchExperience({
 
             {!isLoading && !isError && items.length === 0 && (
               <div className="mt-6 rounded-3xl border border-dashed border-slate-300 bg-white px-6 py-16 text-center shadow-sm">
-                <p className="text-lg font-semibold text-slate-900">No datasets found</p>
+                <p className="text-lg font-semibold text-slate-900">No {emptyLabel} found</p>
                 <p className="mt-2 text-sm text-slate-500">
                   Try adjusting the search text or filters to widen the result set.
                 </p>

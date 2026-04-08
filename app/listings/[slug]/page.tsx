@@ -105,7 +105,7 @@ export default async function ListingDetailPage({ params }: Props) {
             </div>
           </div>
 
-          {/* Description — rendered as text (no dangerouslySetInnerHTML) */}
+          {/* Description - rendered as text (no dangerouslySetInnerHTML) */}
           <div className="prose prose-sm max-w-none">
             <p className="whitespace-pre-wrap">{listing.description}</p>
           </div>
@@ -156,7 +156,7 @@ export default async function ListingDetailPage({ params }: Props) {
                       {schemaSummary.columns.map((col) => (
                         <tr key={col} className="border-b border-gray-100 last:border-0">
                           <td className="px-3 py-1.5 text-gray-900 font-mono">{col}</td>
-                          <td className="px-3 py-1.5 text-gray-600">{schemaSummary.sample_types?.[col] ?? '—'}</td>
+                          <td className="px-3 py-1.5 text-gray-600">{schemaSummary.sample_types?.[col] ?? ' - '}</td>
                         </tr>
                       ))}
                     </tbody>

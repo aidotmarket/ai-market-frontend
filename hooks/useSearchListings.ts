@@ -5,6 +5,8 @@ import { listListings, searchListings } from '@/api/listings';
 import type { ListingListItem, SearchResultItem, SearchResponse } from '@/types';
 
 const PAGE_SIZE = 12;
+type FulfillmentType = 'ai_queryable' | 'file_download' | 'model_access';
+type FulfillmentTypeParam = FulfillmentType | FulfillmentType[];
 
 export type ResultItem = ListingListItem | SearchResultItem;
 
@@ -13,6 +15,7 @@ export interface UseSearchListingsParams {
   category?: string;
   minPrice?: number;
   maxPrice?: number;
+  fulfillmentType?: FulfillmentTypeParam;
   enabled?: boolean;
 }
 
@@ -21,12 +24,13 @@ export function useSearchListings({
   category,
   minPrice,
   maxPrice,
+  fulfillmentType,
   enabled = true,
 }: UseSearchListingsParams) {
   const semanticMode = q.length > 0;
 
   const query = useInfiniteQuery({
-    queryKey: ['marketplace-results', semanticMode ? 'semantic' : 'browse', q, category, minPrice, maxPrice],
+    queryKey: ['marketplace-results', semanticMode ? 'semantic' : 'browse', q, category, minPrice, maxPrice, fulfillmentType],
     enabled: semanticMode ? q.length > 0 && enabled : enabled,
     initialPageParam: 0,
     queryFn: async ({ pageParam }) => {
@@ -37,6 +41,7 @@ export function useSearchListings({
           category: category || undefined,
           min_price: minPrice,
           max_price: maxPrice,
+          fulfillment_type: fulfillmentType,
           limit: PAGE_SIZE,
           offset,
         });
@@ -48,6 +53,7 @@ export function useSearchListings({
         category: category || undefined,
         min_price: minPrice,
         max_price: maxPrice,
+        fulfillment_type: fulfillmentType,
       });
     },
     getNextPageParam: (lastPage, allPages) => {

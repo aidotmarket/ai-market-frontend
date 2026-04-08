@@ -6,7 +6,7 @@ import type { DataRequestListItem, DataRequestUrgency } from '@/types';
 
 export const metadata: Metadata = {
   title: 'Data Requests',
-  description: 'Browse open data requests on ai.market — tell the market what data you need.',
+  description: 'Browse open data requests on ai.market - tell the market what data you need.',
 };
 
 export const dynamic = 'force-dynamic';

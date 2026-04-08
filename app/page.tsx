@@ -2,9 +2,9 @@ import Link from 'next/link';
 import type { Metadata } from 'next';
 
 export const metadata: Metadata = {
-  title: 'ai.market — B2B Data Marketplace',
+  title: 'ai.market - B2B Data Marketplace',
   description:
-    'The non-custodial B2B marketplace for AI data, models, and pipelines. We make your assets discoverable by AI — think SEO, but for AI systems.',
+    'The non-custodial B2B marketplace for AI data, models, and pipelines. We make your assets discoverable by AI - think SEO, but for AI systems.',
 };
 
 const LANDING_JSONLD = [
@@ -137,7 +137,7 @@ const listings: Listing[] = [
   },
   {
     type: 'Model',
-    title: 'Medical NER v3 — Clinical Entity Extraction',
+    title: 'Medical NER v3 - Clinical Entity Extraction',
     description: 'Fine-tuned biomedical NER. HIPAA-compliant, runs on your infra via AIM-Node.',
     meta: 'AIM-Node',
     price: '$0.002/call',
@@ -195,7 +195,7 @@ export default function LandingPage() {
                 </h1>
                 <p className="mt-6 text-lg leading-8 text-[#4A4A4A] max-w-xl">
                   The non-custodial B2B marketplace for AI data, models, and pipelines. We make
-                  your assets discoverable by AI — think SEO, but for AI systems.
+                  your assets discoverable by AI - think SEO, but for AI systems.
                 </p>
                 <div className="mt-8">
                   <Link
@@ -208,11 +208,11 @@ export default function LandingPage() {
                 </div>
               </div>
 
-              {/* Right — trust visual card */}
+              {/* Right - trust visual card */}
               <div className="card-texture rounded-2xl border border-[#E8E8E8] bg-[#FAFAFA] p-8">
                 <p className="text-base leading-7 text-[#1A1A1A]">
                   Your data, models & pipelines become discoverable by AI agents and visible in
-                  AI-powered search — so buyers find you, not the other way around.
+                  AI-powered search - so buyers find you, not the other way around.
                 </p>
                 <div className="my-6 h-px bg-[#E8E8E8]" />
                 <ul className="space-y-5">

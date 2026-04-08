@@ -245,7 +245,7 @@ function NewListingWizardInner() {
         source_row_count: data.row_count || undefined,
       });
     } catch {
-      // Silent save — user can still proceed
+      // Silent save - user can still proceed
     }
   };
 
@@ -472,7 +472,7 @@ function Step1BasicInfo({
     <div className="space-y-6">
       <div>
         <h2 className="text-lg font-medium text-gray-900 mb-1">Basic Information</h2>
-        <p className="text-sm text-gray-500">Provide what you know — AI can fill in the rest.</p>
+        <p className="text-sm text-gray-500">Provide what you know - AI can fill in the rest.</p>
       </div>
 
       <div className="space-y-4">
@@ -734,7 +734,7 @@ function Step3Schema({
         <div>
           <p className="text-sm font-medium text-gray-900">PII Scan Score</p>
           <p className="text-xs text-gray-500">
-            {data.pii_score <= 2 ? 'Low risk — minimal PII detected' : data.pii_score <= 5 ? 'Medium risk — some PII fields detected' : 'High risk — significant PII detected'}
+            {data.pii_score <= 2 ? 'Low risk - minimal PII detected' : data.pii_score <= 5 ? 'Medium risk - some PII fields detected' : 'High risk - significant PII detected'}
           </p>
         </div>
       </div>

@@ -95,7 +95,7 @@ export default function LoginForm() {
 
           {magicLinkSentTo && loginMode === 'magic-link' && (
             <div className="rounded-lg bg-green-50 border border-green-200 px-4 py-3 text-sm text-green-700">
-              Check your email — we sent a sign-in link to {magicLinkSentTo}
+              Check your email - we sent a sign-in link to {magicLinkSentTo}
             </div>
           )}
 

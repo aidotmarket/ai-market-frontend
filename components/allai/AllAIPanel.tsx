@@ -208,7 +208,7 @@ export default function AllAIPanel() {
         </svg>
       </button>
 
-      {/* Header — drag handle (desktop only) */}
+      {/* Header - drag handle (desktop only) */}
       <div
         className={`px-5 pt-4 pb-2 select-none ${!isMobile ? 'cursor-grab active:cursor-grabbing' : ''}`}
         onMouseDown={!isMobile ? onDragStart : undefined}

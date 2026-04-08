@@ -169,7 +169,7 @@ export default function OrdersListPage() {
                         <span className="text-xs text-gray-500 font-mono">{tx.tx_number}</span>
                       </Link>
                     ) : (
-                      <span className="text-xs text-gray-400">—</span>
+                      <span className="text-xs text-gray-400"> - </span>
                     )}
                   </td>
                   <td className="px-4 py-3 text-gray-500">{formatDate(order.created_at)}</td>

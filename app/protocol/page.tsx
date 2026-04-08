@@ -7,19 +7,19 @@ const howItWorks = [
     eyebrow: 'List',
     title: 'Local Processing',
     description:
-      "Sellers install AIM-Data (for datasets) or AIM-Node (for models and pipelines) on their own infrastructure. An embedded AI assistant profiles the asset locally — detecting PII, scoring quality, generating descriptions and metadata. Only the metadata is published to ai.market. Raw data and model weights never leave the seller's servers.",
+      "Sellers install AIM-Data (for datasets) or AIM-Node (for models and pipelines) on their own infrastructure. An embedded AI assistant profiles the asset locally - detecting PII, scoring quality, generating descriptions and metadata. Only the metadata is published to ai.market. Raw data and model weights never leave the seller's servers. Both AIM-Data and AIM-Node are open source.",
   },
   {
     eyebrow: 'Discover',
     title: 'Marketplace Matching',
     description:
-      "Buyers and AI agents search ai.market's catalog using semantic search, filters, and structured queries. Every listing includes AI-generated quality scores, schema previews, and sample metadata — enough to evaluate fit without exposing the underlying asset.",
+      "Buyers and AI agents search ai.market's catalog using semantic search, filters, and structured queries. Every listing includes AI-generated quality scores, schema previews, and sample metadata - enough to evaluate fit without exposing the underlying asset.",
   },
   {
     eyebrow: 'Transact',
     title: 'Platform Billing',
     description:
-      'When a buyer commits, ai.market handles authentication, payment processing, and billing. The seller receives a cryptographically signed delivery token scoped to the specific transaction — time-limited, single-use, and auditable.',
+      'When a buyer commits, ai.market handles authentication, payment processing, and billing. The seller receives a cryptographically signed delivery token scoped to the specific transaction - time-limited, single-use, and auditable.',
   },
   {
     eyebrow: 'Deliver',
@@ -67,12 +67,12 @@ const platformDoesNot = [
   {
     label: 'Access payloads',
     description:
-      'Delivery tokens are opaque to the platform — only the endpoints can decrypt them',
+      'Delivery tokens are opaque to the platform - only the endpoints can decrypt them',
   },
   {
     label: 'Lock in sellers',
     description:
-      'AIM-Data and AIM-Node are open, self-hosted tools — sellers own their infrastructure',
+      'AIM-Data and AIM-Node are open, self-hosted tools - sellers own their infrastructure',
   },
 ];
 
@@ -80,7 +80,7 @@ const securitySections = [
   {
     label: 'DEVICE IDENTITY',
     description:
-      "Every AIM-Data and AIM-Node instance generates an Ed25519 keypair locally during first setup. The private key is stored in a passphrase-protected keystore on the device — it never leaves the seller's infrastructure. The corresponding public key is registered with ai.market during device enrollment. All subsequent operations — publishing listings, signing delivery receipts, reporting traces — are authenticated by Ed25519 signatures verified against the registered public key.",
+      "Every AIM-Data and AIM-Node instance generates an Ed25519 keypair locally during first setup. The private key is stored in a passphrase-protected keystore on the device - it never leaves the seller's infrastructure. The corresponding public key is registered with ai.market during device enrollment. All subsequent operations - publishing listings, signing delivery receipts, reporting traces - are authenticated by Ed25519 signatures verified against the registered public key.",
   },
   {
     label: 'TRUST CHANNEL',
@@ -95,7 +95,7 @@ const securitySections = [
   {
     label: 'TRANSPORT SECURITY',
     description:
-      'All API traffic is served over HTTPS with TLS. Platform JWTs use HMAC-SHA256 signing for session tokens. Device-to-platform authentication uses Ed25519-signed JWTs — a separate, stronger signing mechanism than the platform session tokens. Key rotation is supported with a 24-hour grace period to prevent service interruption during rollover.',
+      'All API traffic is served over HTTPS with TLS. Platform JWTs use HMAC-SHA256 signing for session tokens. Device-to-platform authentication uses Ed25519-signed JWTs - a separate, stronger signing mechanism than the platform session tokens. Key rotation is supported with a 24-hour grace period to prevent service interruption during rollover.',
   },
   {
     label: 'TRUST SCORING',
@@ -322,8 +322,8 @@ export default function ProtocolPage() {
             API-first by design
           </h2>
           <p className="mt-6 text-lg leading-8 text-gray-600">
-            The protocol is API-first. Every interaction — listing, searching, purchasing,
-            delivering — is available as a REST endpoint. AI agents can discover and transact
+            The protocol is API-first. Every interaction - listing, searching, purchasing,
+            delivering - is available as a REST endpoint. AI agents can discover and transact
             with data and compute assets programmatically without human intervention.
           </p>
           <div className="mt-10 flex flex-col items-center justify-center gap-4 sm:flex-row">

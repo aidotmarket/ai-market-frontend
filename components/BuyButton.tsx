@@ -45,7 +45,7 @@ export default function BuyButton({ listingId, sellerId, slug, price, pricingTyp
         if (match) setPurchasedOrder(match);
       })
       .catch(() => {
-        // Silently fail — not critical
+        // Silently fail - not critical
       })
       .finally(() => {
         if (!cancelled) setCheckingPurchase(false);
@@ -62,7 +62,7 @@ export default function BuyButton({ listingId, sellerId, slug, price, pricingTyp
           href={`/login?redirect=/listings/${encodeURIComponent(slug)}`}
           className="block w-full rounded-lg bg-[#3F51B5] px-4 py-2.5 text-sm font-medium text-white text-center hover:bg-[#3545a0]"
         >
-          Buy Now — {formatPrice(price)}
+          Buy Now - {formatPrice(price)}
         </Link>
         <p className="text-xs text-gray-500 mt-2 text-center">Sign up to purchase this dataset</p>
       </div>
@@ -140,7 +140,7 @@ export default function BuyButton({ listingId, sellerId, slug, price, pricingTyp
             Opening Stripe…
           </>
         ) : (
-          `Buy Now — ${formatPrice(price)}`
+          `Buy Now - ${formatPrice(price)}`
         )}
       </button>
       <p className="text-xs text-gray-500 mt-2 text-center">

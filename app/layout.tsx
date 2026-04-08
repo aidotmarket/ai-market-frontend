@@ -15,7 +15,7 @@ import './globals.css';
 
 export const metadata: Metadata = {
   title: {
-    default: 'ai.market — B2B Data Marketplace',
+    default: 'ai.market - B2B Data Marketplace',
     template: '%s | ai.market',
   },
   description: 'The marketplace where datasets become findable, queryable, and purchasable by AI systems.',

@@ -88,7 +88,7 @@ export default function BuyerInquiriesPage() {
                 </td>
                 <td className="px-4 py-3">{statusBadge(inq.status)}</td>
                 <td className="px-4 py-3 text-gray-500 max-w-xs truncate">
-                  {inq.last_message_preview || '—'}
+                  {inq.last_message_preview || ' - '}
                 </td>
                 <td className="px-4 py-3 text-gray-500">{formatDate(inq.last_message_at)}</td>
               </tr>

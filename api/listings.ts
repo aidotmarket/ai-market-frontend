@@ -3,19 +3,26 @@
 import { api } from './client';
 import type { ListingListItem, ListingDetail, SearchResponse } from '@/types';
 
+type FulfillmentType = 'ai_queryable' | 'file_download' | 'model_access';
+type FulfillmentTypeParam = FulfillmentType | FulfillmentType[];
+
 export interface ListListingsParams {
   skip?: number;
   limit?: number;
   category?: string;
   search?: string;
   listing_type?: string;
+  fulfillment_type?: FulfillmentTypeParam;
   min_price?: number;
   max_price?: number;
   min_privacy_score?: number;
 }
 
 export async function listListings(params: ListListingsParams = {}): Promise<ListingListItem[]> {
-  const res = await api.get<ListingListItem[]>('/listings/', { params });
+  const res = await api.get<ListingListItem[]>('/listings/', {
+    params,
+    paramsSerializer: { indexes: null },
+  });
   return res.data;
 }
 
@@ -32,12 +39,14 @@ export async function searchListings(
     max_price?: number;
     min_privacy_score?: number;
     compliance_status?: string;
+    fulfillment_type?: FulfillmentTypeParam;
     limit?: number;
     offset?: number;
   } = {}
 ): Promise<SearchResponse> {
   const res = await api.get<SearchResponse>('/search/listings', {
     params: { q, ...params },
+    paramsSerializer: { indexes: null },
   });
   return res.data;
 }

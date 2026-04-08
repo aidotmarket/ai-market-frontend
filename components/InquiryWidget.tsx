@@ -123,7 +123,7 @@ export default function InquiryWidget({ listingId, listingSlug }: Props) {
         {escalatedStatus && (
           <div className="rounded-lg bg-yellow-50 border border-yellow-200 px-3 py-2 mb-3">
             <p className="text-sm text-yellow-800">
-              Escalated to seller — you&apos;ll be notified when they respond.
+              Escalated to seller - you&apos;ll be notified when they respond.
             </p>
           </div>
         )}

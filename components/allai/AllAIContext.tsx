@@ -98,7 +98,7 @@ export function AllAIProvider({ children }: { children: ReactNode }) {
         .then((r) => (r.ok ? r.json() : null))
         .then((data) => {
           if (!data) {
-            // Session expired or not found — clear stale reference
+            // Session expired or not found - clear stale reference
             sessionStorage.removeItem(SESSION_KEY);
             sessionIdRef.current = null;
             return;
@@ -140,7 +140,7 @@ export function AllAIProvider({ children }: { children: ReactNode }) {
       setMessages([{
         id: 'greeting-0',
         role: 'assistant',
-        content: "Hey! I'm allAI — your guide to ai.market. I can help you find data, learn about vectorAIz, or answer any questions. What are you looking for?",
+        content: "Hey! I'm allAI - your guide to ai.market. I can help you find data, learn about vectorAIz, or answer any questions. What are you looking for?",
         timestamp: Date.now(),
       }]);
     }

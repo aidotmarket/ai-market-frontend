@@ -67,7 +67,7 @@ const steps = [
 const features = [
   {
     title: 'P2P Compute',
-    desc: 'Models and pipelines run on your infrastructure. Buyers connect directly — no middleman.',
+    desc: 'Models and pipelines run on your infrastructure. Buyers connect directly - no middleman.',
   },
   {
     title: 'Built-in Billing',
