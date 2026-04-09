@@ -123,7 +123,7 @@ export default async function ListingDetailPage({ params }: Props) {
                 {cat}
               </span>
             ))}
-            {listing.tags.map((tag) => (
+            {listing.tags?.map((tag) => (
               <span
                 key={tag}
                 className="inline-flex items-center rounded-full bg-[#E8EAF6] px-3 py-1 text-sm text-[#3F51B5]"
