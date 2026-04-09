@@ -28,6 +28,7 @@ const footerLinkSections = [
     title: 'Support',
     links: [
       { label: 'Contact & Support', href: '/support' },
+      { label: 'Become a Partner', href: '/partner' },
     ],
   },
   {
@@ -77,9 +78,6 @@ export function Layout({ children }: { children: React.ReactNode }) {
               </Link>
               <Link href="/requests" className="text-sm text-[#666666] hover:text-[#1A1A1A]">
                 Request Data
-              </Link>
-              <Link href="/partner" className="text-sm text-[#666666] hover:text-[#1A1A1A]">
-                Become a Partner
               </Link>
               <Link href="/download" className="text-sm text-[#666666] hover:text-[#1A1A1A]">
                 List Data
@@ -169,13 +167,6 @@ export function Layout({ children }: { children: React.ReactNode }) {
                 onClick={() => setMobileMenuOpen(false)}
               >
                 Request Data
-              </Link>
-              <Link
-                href="/partner"
-                className="block px-2 py-2 text-sm text-gray-600 hover:text-gray-900"
-                onClick={() => setMobileMenuOpen(false)}
-              >
-                Become a Partner
               </Link>
               <Link
                 href="/download"
