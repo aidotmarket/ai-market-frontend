@@ -12,7 +12,6 @@ import {
   saveWizardState,
   transitionPublishOperation,
   type PublishOperationResponse,
-  type PublishStatus,
   type WizardStateUpdate,
 } from '@/lib/api/publish-wizard';
 import { OperationStatusBadge } from './OperationStatusBadge';

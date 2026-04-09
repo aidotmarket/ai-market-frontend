@@ -2,7 +2,6 @@
 
 import { useState, useEffect, useRef } from 'react';
 import Link from 'next/link';
-import { useRouter } from 'next/navigation';
 import { useAuthStore } from '@/store/auth';
 import { useToast } from '@/components/Toast';
 import { createCheckout } from '@/api/checkout';
@@ -22,8 +21,6 @@ interface BuyButtonProps {
 export default function BuyButton({ listingId, sellerId, slug, price, pricingType }: BuyButtonProps) {
   const { user, isAuthenticated } = useAuthStore();
   const { toast } = useToast();
-  const router = useRouter();
-
   const [loading, setLoading] = useState(false);
   const [purchasedOrder, setPurchasedOrder] = useState<BuyerOrder | null>(null);
   const [checkingPurchase, setCheckingPurchase] = useState(false);

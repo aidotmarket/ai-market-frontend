@@ -4,7 +4,6 @@ import { useState, useEffect, useCallback } from 'react';
 import { useRouter, useParams } from 'next/navigation';
 import { getListing, updateListing, publishListing, unpublishListing } from '@/api/listings';
 import { useToast } from '@/components/Toast';
-import { formatPrice } from '@/lib/format';
 
 const CATEGORIES = ['Finance', 'Healthcare', 'Technology', 'Real Estate', 'Government', 'Marketing'];
 const FORMATS = ['csv', 'parquet', 'json', 'xlsx', 'other'];

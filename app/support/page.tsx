@@ -1,6 +1,4 @@
 import type { Metadata } from 'next';
-import Link from 'next/link';
-
 export const metadata: Metadata = {
   title: 'Contact & Support | ai.market',
   description: 'Get help with ai.market. Reach us by email or through allAI on the site.',

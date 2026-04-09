@@ -9,7 +9,7 @@ export default function OAuthCallbackPage() {
   const searchParams = useSearchParams();
   const router = useRouter();
   const oauthLogin = useAuthStore((s) => s.oauthLogin);
-  const [error, setError] = useState('');
+  const [error] = useState('');
   const calledRef = useRef(false);
 
   useEffect(() => {
