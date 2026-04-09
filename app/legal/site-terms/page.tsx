@@ -11,7 +11,7 @@ export default function SiteTermsPage() {
       <h1 className="text-3xl font-bold text-gray-900 mb-2">ai.market Site Terms</h1>
       <p className="text-sm text-gray-500 mb-10">Last Updated: March 25, 2026</p>
 
-      <div className="prose prose-gray max-w-none prose-headings:text-gray-900 prose-p:text-gray-700 prose-a:text-[#3F51B5]">
+      <div className="prose prose-gray max-w-none prose-headings:text-gray-900 prose-p:text-gray-700 prose-a:text-[#3F51B5] [&>h2]:mb-4 [&>h2]:mt-10 [&>p]:mb-6">
         <p>
           Welcome to ai.market. These Site Terms (&ldquo;Terms&rdquo;) govern your access to and use of the ai.market website located at https://ai.market and any related subdomains, pages, content, and services made available through the site (collectively, the &ldquo;Site&rdquo;). By accessing or using the Site, you agree to be bound by these Terms. If you do not agree to these Terms, you must discontinue use of the Site immediately.
         </p>
