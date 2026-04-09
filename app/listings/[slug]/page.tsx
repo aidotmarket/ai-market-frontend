@@ -153,7 +153,7 @@ export default async function ListingDetailPage({ params }: Props) {
                       </tr>
                     </thead>
                     <tbody>
-                      {schemaSummary.columns.map((col) => (
+                      {schemaSummary.columns?.map((col) => (
                         <tr key={col} className="border-b border-gray-100 last:border-0">
                           <td className="px-3 py-1.5 text-gray-900 font-mono">{col}</td>
                           <td className="px-3 py-1.5 text-gray-600">{schemaSummary.sample_types?.[col] ?? ' - '}</td>
