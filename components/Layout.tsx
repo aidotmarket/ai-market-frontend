@@ -21,7 +21,6 @@ const footerLinkSections = [
     links: [
       { label: 'The Protocol', href: '/protocol' },
       { label: 'vectorAIz', href: 'https://vectoraiz.com' },
-      { label: 'GitHub', href: 'https://github.com/aidotmarket' },
     ],
   },
   {
