@@ -57,13 +57,13 @@ type Offering = {
 
 const offerings: Offering[] = [
   {
-    name: 'AIM-Data',
-    subtitle: 'Data Management',
+    name: 'AIM Channel',
+    subtitle: 'Data Channel',
     description:
       'List datasets with AI-generated metadata, compliance reports, and Schema.org markup. Data stays on your infra.',
     tags: ['Datasets', 'Auto-Enrichment', 'Schema.org'],
-    cta: 'Download AIM-Data',
-    href: '/download/aim-data',
+    cta: 'Download AIM Channel',
+    href: '/download/aim-channel',
     ctaIcon: 'download',
     accent: 'teal',
     iconPath: 'M4 7v10c0 2 3.5 3 8 3s8-1 8-3V7M4 7c0-2 3.5-3 8-3s8 1 8 3M4 7c0 2 3.5 3 8 3s8-1 8-3m0 5c0 2-3.5 3-8 3s-8-1-8-3',

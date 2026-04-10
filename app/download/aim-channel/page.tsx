@@ -24,8 +24,8 @@ function CopyButton({ text }: { text: string }) {
 const steps = [
   {
     num: '1',
-    title: 'Install AIM-Data',
-    desc: 'Download and run the installer. AIM-Data runs locally via Docker - nothing is sent anywhere.',
+    title: 'Install AIM Channel',
+    desc: 'Download and run the installer. AIM Channel runs locally via Docker - nothing is sent anywhere.',
     icon: (
       <svg className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
         <path strokeLinecap="round" strokeLinejoin="round" d="M3 16.5v2.25A2.25 2.25 0 0 0 5.25 21h13.5A2.25 2.25 0 0 0 21 18.75V16.5M16.5 12 12 16.5m0 0L7.5 12m4.5 4.5V3" />
@@ -55,7 +55,7 @@ const steps = [
   {
     num: '4',
     title: 'Deliver Securely',
-    desc: 'When a buyer purchases, ai.market generates a secure, time-limited token. Data flows peer-to-peer from your AIM-Data instance - no middleman.',
+    desc: 'When a buyer purchases, ai.market generates a secure, time-limited token. Data flows peer-to-peer from your AIM Channel instance - no middleman.',
     icon: (
       <svg className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
         <path strokeLinecap="round" strokeLinejoin="round" d="M16.5 10.5V6.75a4.5 4.5 0 1 0-9 0v3.75m-.75 11.25h10.5a2.25 2.25 0 0 0 2.25-2.25v-6.75a2.25 2.25 0 0 0-2.25-2.25H6.75a2.25 2.25 0 0 0-2.25 2.25v6.75a2.25 2.25 0 0 0 2.25 2.25Z" />
@@ -83,7 +83,7 @@ const features = [
   },
   {
     title: 'Peer-to-Peer Delivery',
-    desc: 'No middleman. Buyers connect directly to your AIM-Data instance through secure, time-limited access tokens.',
+    desc: 'No middleman. Buyers connect directly to your AIM Channel instance through secure, time-limited access tokens.',
   },
   {
     title: '5% Marketplace Fee',
@@ -91,7 +91,7 @@ const features = [
   },
 ];
 
-export default function AimDataDownloadPage() {
+export default function AimChannelDownloadPage() {
   return (
     <div className="overflow-hidden">
       {/* Hero */}
@@ -106,11 +106,11 @@ export default function AimDataDownloadPage() {
             <h1 className="text-4xl font-bold tracking-tight text-gray-900 sm:text-6xl">
               Manage &amp; List Data with{' '}
               <span className="bg-gradient-to-r from-[#0F6E56] to-[#0c5a47] bg-clip-text text-transparent">
-                AIM-Data
+                AIM Channel
               </span>
             </h1>
             <p className="mt-6 text-lg leading-8 text-gray-600 max-w-2xl mx-auto">
-              AIM-Data processes your data locally, generates AI-enriched metadata, and publishes
+              AIM Channel processes your data locally, generates AI-enriched metadata, and publishes
               listings to ai.market. Your raw data never leaves your servers.
             </p>
           </div>
@@ -145,7 +145,7 @@ export default function AimDataDownloadPage() {
         <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
           <div className="text-center mb-10">
             <h2 className="text-3xl font-bold tracking-tight text-gray-900">
-              Install AIM-Data
+              Install AIM Channel
             </h2>
             <p className="mt-3 text-base text-gray-600">
               One command. Runs locally in Docker. Free to use.
@@ -164,9 +164,9 @@ export default function AimDataDownloadPage() {
               <p className="flex-1 text-sm text-gray-500 mb-5">macOS (Apple Silicon &amp; Intel) and any modern Linux distribution</p>
               <div className="flex items-center gap-3 rounded-lg bg-gray-900 px-4 py-3 mb-4">
                 <code className="flex-1 text-sm text-gray-100 overflow-x-auto whitespace-nowrap">
-                  curl -fsSL https://get.ai.market/aim-data | bash
+                  curl -fsSL https://get.ai.market/aim-channel | bash
                 </code>
-                <CopyButton text="curl -fsSL https://get.ai.market/aim-data | bash" />
+                <CopyButton text="curl -fsSL https://get.ai.market/aim-channel | bash" />
               </div>
               <p className="text-xs text-gray-500">
                 Requires{' '}
@@ -191,9 +191,9 @@ export default function AimDataDownloadPage() {
               <p className="flex-1 text-sm text-gray-500 mb-5">Windows 10 and 11 with PowerShell</p>
               <div className="flex items-center gap-3 rounded-lg bg-gray-900 px-4 py-3 mb-4">
                 <code className="flex-1 text-sm text-gray-100 overflow-x-auto whitespace-nowrap">
-                  irm https://get.ai.market/aim-data/windows | iex
+                  irm https://get.ai.market/aim-channel/windows | iex
                 </code>
-                <CopyButton text="irm https://get.ai.market/aim-data/windows | iex" />
+                <CopyButton text="irm https://get.ai.market/aim-channel/windows | iex" />
               </div>
               <p className="text-xs text-gray-500">
                 Requires{' '}

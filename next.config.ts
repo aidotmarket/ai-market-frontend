@@ -5,6 +5,11 @@ const nextConfig: NextConfig = {
   async redirects() {
     return [
       {
+        source: '/download/aim-data',
+        destination: '/download/aim-channel',
+        permanent: true,
+      },
+      {
         source: '/:path*',
         has: [{ type: 'host', value: 'www.ai.market' }],
         destination: 'https://ai.market/:path*',
