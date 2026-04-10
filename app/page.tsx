@@ -1,5 +1,6 @@
 import Link from 'next/link';
 import type { Metadata } from 'next';
+import { fetchPublicListings, type PaginatedListings } from '@/lib/api';
 
 export const metadata: Metadata = {
   title: 'ai.market - B2B Data Marketplace',
@@ -112,50 +113,12 @@ const accentStyles = {
   },
 } as const;
 
-type Listing = {
-  type: 'Dataset' | 'Model' | 'Request';
-  title: string;
-  description: string;
-  meta: string;
-  price: string;
+const categoryBadge: Record<string, string> = {
+  dataset: 'bg-[#E1F5EE] text-[#0F6E56]',
+  model: 'bg-[#E8EAF6] text-[#3F51B5]',
 };
 
-const listings: Listing[] = [
-  {
-    type: 'Dataset',
-    title: 'US Real Estate Transactions 2020–2025',
-    description: '42M property transactions with sale prices, geo-coordinates, and attributes.',
-    meta: 'Updated 2d ago',
-    price: '$0.08/record',
-  },
-  {
-    type: 'Dataset',
-    title: 'Global Supply Chain Disruption Signals',
-    description: 'Real-time shipping delays, port congestion, and commodity price feeds.',
-    meta: 'Updated 6h ago',
-    price: '$2,400/mo',
-  },
-  {
-    type: 'Model',
-    title: 'Medical NER v3 - Clinical Entity Extraction',
-    description: 'Fine-tuned biomedical NER. HIPAA-compliant, runs on your infra via AIM-Node.',
-    meta: 'AIM-Node',
-    price: '$0.002/call',
-  },
-  {
-    type: 'Request',
-    title: 'European SME Financial Benchmarks',
-    description: 'Looking for revenue, headcount & growth metrics for EU SMEs by sector.',
-    meta: '3 offers',
-    price: 'Budget: $5k',
-  },
-];
-
-const typeBadge = {
-  Dataset: 'bg-[#E1F5EE] text-[#0F6E56]',
-  Model: 'bg-[#E8EAF6] text-[#3F51B5]',
-  Request: 'bg-[#FFF0E0] text-[#BF5C00]',
-} as const;
+const defaultBadge = 'bg-[#F0F0F0] text-[#666666]';
 
 const howItWorks = [
   {
@@ -175,7 +138,13 @@ const howItWorks = [
   },
 ];
 
-export default function LandingPage() {
+export default async function LandingPage() {
+  const listingsData: PaginatedListings | null = await fetchPublicListings({
+    per_page: 4,
+    sort: 'newest',
+  });
+  const featuredListings = listingsData?.items ?? [];
+
   return (
     <>
       <script type="application/ld+json">{JSON.stringify(LANDING_JSONLD)}</script>
@@ -332,27 +301,38 @@ export default function LandingPage() {
             </div>
 
             <div className="mt-10 grid grid-cols-1 gap-6 sm:grid-cols-2 lg:grid-cols-4">
-              {listings.map((l) => (
-                <div
-                  key={l.title}
-                  className="card-texture rounded-2xl border border-[#E8E8E8] bg-white p-5 flex flex-col"
-                >
-                  <span
-                    className={`inline-flex w-fit rounded-md px-2 py-0.5 text-[11px] font-bold uppercase tracking-wide ${typeBadge[l.type]}`}
+              {featuredListings.length > 0 ? (
+                featuredListings.map((l) => (
+                  <Link
+                    key={l.id}
+                    href={`/listings/${l.slug}`}
+                    className="card-texture rounded-2xl border border-[#E8E8E8] bg-white p-5 flex flex-col hover:border-[#3F51B5] hover:shadow-sm transition-all"
                   >
-                    {l.type}
-                  </span>
-                  <h3 className="mt-4 text-base font-bold leading-snug text-[#1A1A1A]">
-                    {l.title}
-                  </h3>
-                  <p className="mt-2 text-sm leading-6 text-[#666666]">{l.description}</p>
-                  <div className="flex-1" />
-                  <div className="mt-5 pt-4 border-t border-[#F0F0F0] flex items-center justify-between text-xs">
-                    <span className="text-[#888888]">{l.meta}</span>
-                    <span className="font-semibold text-[#1A1A1A]">{l.price}</span>
-                  </div>
-                </div>
-              ))}
+                    <span
+                      className={`inline-flex w-fit rounded-md px-2 py-0.5 text-[11px] font-bold uppercase tracking-wide ${categoryBadge[l.category] ?? defaultBadge}`}
+                    >
+                      {l.category}
+                    </span>
+                    <h3 className="mt-4 text-base font-bold leading-snug text-[#1A1A1A]">
+                      {l.title ?? 'Untitled'}
+                    </h3>
+                    <p className="mt-2 text-sm leading-6 text-[#666666] line-clamp-2">
+                      {l.short_description ?? ''}
+                    </p>
+                    <div className="flex-1" />
+                    <div className="mt-5 pt-4 border-t border-[#F0F0F0] flex items-center justify-between text-xs">
+                      <span className="text-[#888888]">{l.category}</span>
+                      <span className="font-semibold text-[#1A1A1A]">
+                        {l.price === 0 ? 'Free' : `$${l.price}`}
+                      </span>
+                    </div>
+                  </Link>
+                ))
+              ) : (
+                <p className="col-span-full text-center text-sm text-[#888888]">
+                  No listings yet — be the first to publish.
+                </p>
+              )}
             </div>
           </div>
         </section>
