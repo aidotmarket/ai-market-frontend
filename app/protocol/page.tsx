@@ -250,37 +250,6 @@ export default function ProtocolPage() {
         <div className="mx-auto max-w-6xl px-4 sm:px-6 lg:px-8">
           <div className="mx-auto max-w-3xl">
             <p className="text-xs font-bold uppercase tracking-[0.18em] text-[#0F6E56]">
-              Encryption &amp; Security
-            </p>
-            <h2 className="mt-3 text-3xl font-extrabold tracking-tight text-gray-900 sm:text-4xl">
-              Security primitives designed for non-custodial delivery
-            </h2>
-            <p className="mt-4 text-base leading-7 text-gray-600">
-              The platform coordinates trust, authentication, and billing without taking custody
-              of datasets, weights, or pipeline outputs.
-            </p>
-          </div>
-
-          <div className="mt-12 grid grid-cols-1 gap-6 lg:grid-cols-2">
-            {securitySections.map((section) => (
-              <div
-                key={section.label}
-                className="rounded-2xl border border-gray-200 bg-white p-6 sm:p-7"
-              >
-                <p className="text-xs font-bold uppercase tracking-[0.18em] text-[#0F6E56]">
-                  {section.label}
-                </p>
-                <p className="mt-4 text-sm leading-7 text-gray-600">{section.description}</p>
-              </div>
-            ))}
-          </div>
-        </div>
-      </section>
-
-      <section className="bg-white py-16 sm:py-24">
-        <div className="mx-auto max-w-6xl px-4 sm:px-6 lg:px-8">
-          <div className="mx-auto max-w-3xl">
-            <p className="text-xs font-bold uppercase tracking-[0.18em] text-[#0F6E56]">
               The Stack
             </p>
             <h2 className="mt-3 text-3xl font-extrabold tracking-tight text-gray-900 sm:text-4xl">
@@ -309,6 +278,37 @@ export default function ProtocolPage() {
                 ))}
               </tbody>
             </table>
+          </div>
+        </div>
+      </section>
+
+      <section className="bg-white py-16 sm:py-24">
+        <div className="mx-auto max-w-6xl px-4 sm:px-6 lg:px-8">
+          <div className="mx-auto max-w-3xl">
+            <p className="text-xs font-bold uppercase tracking-[0.18em] text-[#0F6E56]">
+              Encryption &amp; Security
+            </p>
+            <h2 className="mt-3 text-3xl font-extrabold tracking-tight text-gray-900 sm:text-4xl">
+              Security primitives designed for non-custodial delivery
+            </h2>
+            <p className="mt-4 text-base leading-7 text-gray-600">
+              The platform coordinates trust, authentication, and billing without taking custody
+              of datasets, weights, or pipeline outputs.
+            </p>
+          </div>
+
+          <div className="mt-12 grid grid-cols-1 gap-6 lg:grid-cols-2">
+            {securitySections.map((section) => (
+              <div
+                key={section.label}
+                className="rounded-2xl border border-gray-200 bg-white p-6 sm:p-7"
+              >
+                <p className="text-xs font-bold uppercase tracking-[0.18em] text-[#0F6E56]">
+                  {section.label}
+                </p>
+                <p className="mt-4 text-sm leading-7 text-gray-600">{section.description}</p>
+              </div>
+            ))}
           </div>
         </div>
       </section>
