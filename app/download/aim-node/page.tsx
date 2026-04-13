@@ -185,7 +185,7 @@ export default function AimNodeDownloadPage() {
                 </svg>
                 <h3 className="text-lg font-semibold text-gray-900">Windows</h3>
               </div>
-              <p className="text-sm text-gray-500 mb-5">Windows 10 and 11 with PowerShell</p>
+              <p className="text-sm text-gray-500 mb-5">Windows 10 and 11<br />with PowerShell</p>
               <div className="flex items-center gap-3 rounded-lg bg-gray-900 px-4 py-3 mb-4">
                 <code className="flex-1 text-sm text-gray-100 overflow-x-auto whitespace-nowrap">
                   irm https://get.ai.market/aim-node/windows | iex
