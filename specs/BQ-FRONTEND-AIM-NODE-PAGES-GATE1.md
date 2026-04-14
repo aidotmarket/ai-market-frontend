@@ -210,3 +210,33 @@ Note: Install URLs (`get.vectoraiz.com`) remain unchanged — those are the actu
 3. Download commands are copy-pasteable and link to `get.ai.market` for full docs
 4. All "vectorAIz" references on the download page are updated to "AIM Channel"
 5. No broken links, consistent design language with existing pages
+
+---
+
+## R1 Mandate Resolutions (APPROVE_WITH_MANDATES — MP)
+
+### Mandate 1: Existing `/download/aim-node` page duplication
+The existing `app/download/aim-node/page.tsx` is replaced by the new `/aim-node` page. Changes:
+- `app/download/aim-node/page.tsx` → deleted, replaced by redirect: `redirect('/aim-node')` (Next.js server redirect)
+- Homepage CTA (`app/page.tsx` line ~91): `href: '/download/aim-node'` → `href: '/aim-node'`
+- `/aim-node` is the single canonical AIM-Node product page going forward
+
+### Mandate 2: Browse Models CTA URL
+Fixed: `/listings?category=models` → `/listings?type=models` (matches `MarketplaceSearchExperience.tsx` type switcher)
+
+### Mandate 3: Product naming standardization
+Canonical brand form: **AIM-Node** (hyphenated, capital N). All references in the new page and across modified files use `AIM-Node`. This matches existing site copy on the homepage, protocol page, and former download page. The spec body above should be read with `AIM Node` → `AIM-Node` throughout.
+
+### Mandate 4: Install messaging — pip-first replaces Docker-first
+This is an intentional product update. AIM-Node is now pip-installable (`pip install aim-node`) as the primary install method. Docker (`ghcr.io/aidotmarket/aim-node`) is the secondary method for containerized deployments. The old `/download/aim-node` page's Docker-first messaging is outdated and replaced by the new page's pip-first flow. The spec explicitly supersedes the old install narrative.
+
+### Updated File Inventory (additions from mandates)
+
+**Deleted files:**
+- `app/download/aim-node/page.tsx` — replaced by redirect
+
+**Additional modified files:**
+- `app/page.tsx` — update AIM-Node CTA href from `/download/aim-node` to `/aim-node`
+
+**New files:**
+- `app/download/aim-node/page.tsx` — server redirect to `/aim-node` (or use Next.js `redirect()` in a route handler)
