@@ -5,6 +5,11 @@ const nextConfig: NextConfig = {
   async redirects() {
     return [
       {
+        source: '/aim-node',
+        destination: '/download/aim-node',
+        permanent: true,
+      },
+      {
         source: '/download/aim-data',
         destination: '/download/aim-channel',
         permanent: true,
