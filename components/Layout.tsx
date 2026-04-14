@@ -20,7 +20,8 @@ const footerLinkSections = [
     title: 'Developers',
     links: [
       { label: 'The Protocol', href: '/protocol' },
-      { label: 'vectorAIz', href: 'https://vectoraiz.com' },
+      { label: 'AIM-Node', href: '/aim-node' },
+      { label: 'AIM Channel', href: '/download' },
     ],
   },
   {
@@ -80,6 +81,9 @@ export function Layout({ children }: { children: React.ReactNode }) {
               </Link>
               <Link href="/download" className="text-sm text-[#666666] hover:text-[#1A1A1A]">
                 List Data
+              </Link>
+              <Link href="/aim-node" className="text-sm text-[#666666] hover:text-[#1A1A1A]">
+                AIM-Node
               </Link>
               <Link href="/protocol" className="text-sm text-[#666666] hover:text-[#1A1A1A]">
                 The Protocol
@@ -173,6 +177,13 @@ export function Layout({ children }: { children: React.ReactNode }) {
                 onClick={() => setMobileMenuOpen(false)}
               >
                 List Data
+              </Link>
+              <Link
+                href="/aim-node"
+                className="block px-2 py-2 text-sm text-gray-600 hover:text-gray-900"
+                onClick={() => setMobileMenuOpen(false)}
+              >
+                AIM-Node
               </Link>
               <Link
                 href="/protocol"
