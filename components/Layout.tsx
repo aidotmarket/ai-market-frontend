@@ -4,7 +4,6 @@ import { Suspense, useState } from 'react';
 import Link from 'next/link';
 import { useRouter, usePathname } from 'next/navigation';
 import { useAuthStore } from '@/store/auth';
-import { SearchForm } from '@/components/search/SearchForm';
 
 const footerLinkSections = [
   {
@@ -55,7 +54,6 @@ export function Layout({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const isKeystatic = pathname?.startsWith("/keystatic");
-  const showNavSearch = pathname !== "/search" && pathname !== "/listings";
   const isAdminEmail = user?.email === 'max@ai.market';
 
   const handleLogout = () => {
@@ -162,15 +160,6 @@ export function Layout({ children }: { children: React.ReactNode }) {
               </svg>
             </button>
           </div>
-
-          {/* Search bar row */}
-          {showNavSearch && (
-            <div className="hidden md:block border-t border-gray-100 py-2">
-              <Suspense fallback={null}>
-                <SearchForm size="compact" placeholder="Search datasets, models, and pipelines..." className="max-w-xl" />
-              </Suspense>
-            </div>
-          )}
 
           {/* Mobile menu */}
           {mobileMenuOpen && (
@@ -302,7 +291,6 @@ export function Layout({ children }: { children: React.ReactNode }) {
         {/* Footer Links Grid */}
         <div className="mx-auto max-w-7xl px-6 lg:px-8 py-10">
           <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-8 gap-y-10">
-            {/* Marketplace - with links */}
             {footerLinkSections.map((section) => (
               <div key={section.title}>
                 <h4 className="text-[11px] font-bold tracking-[0.1em] uppercase text-[#e2e8f0] mb-4">

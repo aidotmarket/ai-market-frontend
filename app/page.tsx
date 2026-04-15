@@ -44,6 +44,12 @@ const DownloadIcon = ({ className = 'ml-2 h-4 w-4' }: { className?: string }) =>
   </svg>
 );
 
+const SearchIcon = ({ className = 'ml-2 h-4 w-4' }: { className?: string }) => (
+  <svg className={className} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+    <path strokeLinecap="round" strokeLinejoin="round" d="m21 21-4.35-4.35m1.85-5.15a7 7 0 1 1-14 0 7 7 0 0 1 14 0Z" />
+  </svg>
+);
+
 type Offering = {
   name: string;
   subtitle: string;
@@ -168,11 +174,11 @@ export default async function LandingPage() {
                 </p>
                 <div className="mt-8">
                   <Link
-                    href="/listings"
+                    href="/search"
                     className="inline-flex items-center justify-center rounded-lg bg-[#3F51B5] px-6 py-3 text-sm font-semibold text-white hover:bg-[#3545a0] transition-colors"
                   >
-                    Explore Marketplace
-                    <ArrowIcon />
+                    Search Marketplace
+                    <SearchIcon />
                   </Link>
                 </div>
               </div>
