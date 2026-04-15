@@ -1,6 +1,6 @@
 'use client';
 
-import { Suspense, useState } from 'react';
+import { useState } from 'react';
 import Link from 'next/link';
 import { useRouter, usePathname } from 'next/navigation';
 import { useAuthStore } from '@/store/auth';
@@ -61,81 +61,46 @@ export function Layout({ children }: { children: React.ReactNode }) {
     router.push('/');
   };
 
-  // Skip site chrome for Keystatic CMS
   if (isKeystatic) {
     return <>{children}</>;
   }
 
   return (
     <div className="min-h-screen flex flex-col">
-      {/* Header */}
       <header className="border-b border-gray-200 bg-white sticky top-0 z-40">
         <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
           <div className="flex h-16 items-center justify-between">
-            {/* Logo */}
             <Link href="/">
               <img src="/logo.svg" alt="ai.market" className="h-8" />
             </Link>
 
-            {/* Desktop Nav */}
             <nav className="hidden md:flex items-center gap-6">
-              <Link href="/listings" className="text-sm text-[#666666] hover:text-[#1A1A1A]">
-                Browse
-              </Link>
-              <Link href="/requests" className="text-sm text-[#666666] hover:text-[#1A1A1A]">
-                Request Data
-              </Link>
-              <Link href="/download" className="text-sm text-[#666666] hover:text-[#1A1A1A]">
-                List Data
-              </Link>
-              <Link href="/download/aim-node" className="text-sm text-[#666666] hover:text-[#1A1A1A]">
-                AIM-Node
-              </Link>
-              <Link href="/protocol" className="text-sm text-[#666666] hover:text-[#1A1A1A]">
-                The Protocol
-              </Link>
-              <Link href="/blog" className="text-sm text-[#666666] hover:text-[#1A1A1A]">
-                Blog
-              </Link>
+              <Link href="/listings" className="text-sm text-[#666666] hover:text-[#1A1A1A]">Browse</Link>
+              <Link href="/requests" className="text-sm text-[#666666] hover:text-[#1A1A1A]">Request Data</Link>
+              <Link href="/download" className="text-sm text-[#666666] hover:text-[#1A1A1A]">List Data</Link>
+              <Link href="/download/aim-node" className="text-sm text-[#666666] hover:text-[#1A1A1A]">AIM-Node</Link>
+              <Link href="/protocol" className="text-sm text-[#666666] hover:text-[#1A1A1A]">The Protocol</Link>
+              <Link href="/blog" className="text-sm text-[#666666] hover:text-[#1A1A1A]">Blog</Link>
               {isAdminEmail && (
-                <Link href="/keystatic" className="text-sm text-[#666666] hover:text-[#1A1A1A]">
-                  Admin
-                </Link>
+                <Link href="/keystatic" className="text-sm text-[#666666] hover:text-[#1A1A1A]">Admin</Link>
               )}
               {isAuthenticated && (
-                <Link href="/dashboard" className="text-sm text-[#666666] hover:text-[#1A1A1A]">
-                  Dashboard
-                </Link>
+                <Link href="/dashboard" className="text-sm text-[#666666] hover:text-[#1A1A1A]">Dashboard</Link>
               )}
             </nav>
 
-
-
-            {/* Desktop Auth */}
             <div className="hidden md:flex items-center gap-3">
               {isAuthenticated ? (
                 <div className="flex items-center gap-3">
-                  <span className="text-sm text-gray-600">
-                    {user?.first_name || user?.email}
-                  </span>
-                  <button
-                    onClick={handleLogout}
-                    className="text-sm text-gray-500 hover:text-gray-700"
-                  >
-                    Log out
-                  </button>
+                  <span className="text-sm text-gray-600">{user?.first_name || user?.email}</span>
+                  <button onClick={handleLogout} className="text-sm text-gray-500 hover:text-gray-700">Log out</button>
                 </div>
               ) : (
                 <>
-                  <Link
-                    href="/login"
-                    className="text-sm text-gray-600 hover:text-gray-900"
-                  >
-                    Log in
-                  </Link>
+                  <Link href="/login" className="text-sm text-gray-600 hover:text-gray-900">Log in</Link>
                   <Link
                     href="/register"
-                    className="rounded-lg border border-gray-300 px-4 py-2 text-sm font-medium text-gray-700 hover:border-gray-400 hover:text-gray-900 transition-colors"
+                    className="rounded-lg bg-[#3F51B5] px-4 py-2 text-sm font-medium text-white hover:bg-[#3545a0] transition-colors"
                   >
                     Sign up
                   </Link>
@@ -143,7 +108,6 @@ export function Layout({ children }: { children: React.ReactNode }) {
               )}
             </div>
 
-            {/* Mobile hamburger */}
             <button
               className="md:hidden p-2 text-gray-600"
               onClick={() => setMobileMenuOpen(!mobileMenuOpen)}
@@ -161,92 +125,26 @@ export function Layout({ children }: { children: React.ReactNode }) {
             </button>
           </div>
 
-          {/* Mobile menu */}
           {mobileMenuOpen && (
             <div id="mobile-nav-menu" className="md:hidden border-t border-gray-200 py-3 space-y-2">
-              <Link
-                href="/listings"
-                className="block px-2 py-2 text-sm text-gray-600 hover:text-gray-900"
-                onClick={() => setMobileMenuOpen(false)}
-              >
-                Browse
-              </Link>
-              <Link
-                href="/requests"
-                className="block px-2 py-2 text-sm text-gray-600 hover:text-gray-900"
-                onClick={() => setMobileMenuOpen(false)}
-              >
-                Request Data
-              </Link>
-              <Link
-                href="/download"
-                className="block px-2 py-2 text-sm text-gray-600 hover:text-gray-900"
-                onClick={() => setMobileMenuOpen(false)}
-              >
-                List Data
-              </Link>
-              <Link
-                href="/download/aim-node"
-                className="block px-2 py-2 text-sm text-gray-600 hover:text-gray-900"
-                onClick={() => setMobileMenuOpen(false)}
-              >
-                AIM-Node
-              </Link>
-              <Link
-                href="/protocol"
-                className="block px-2 py-2 text-sm text-gray-600 hover:text-gray-900"
-                onClick={() => setMobileMenuOpen(false)}
-              >
-                The Protocol
-              </Link>
-              <Link
-                href="/blog"
-                className="block px-2 py-2 text-sm text-gray-600 hover:text-gray-900"
-                onClick={() => setMobileMenuOpen(false)}
-              >
-                Blog
-              </Link>
+              <Link href="/listings" className="block px-2 py-2 text-sm text-gray-600 hover:text-gray-900" onClick={() => setMobileMenuOpen(false)}>Browse</Link>
+              <Link href="/requests" className="block px-2 py-2 text-sm text-gray-600 hover:text-gray-900" onClick={() => setMobileMenuOpen(false)}>Request Data</Link>
+              <Link href="/download" className="block px-2 py-2 text-sm text-gray-600 hover:text-gray-900" onClick={() => setMobileMenuOpen(false)}>List Data</Link>
+              <Link href="/download/aim-node" className="block px-2 py-2 text-sm text-gray-600 hover:text-gray-900" onClick={() => setMobileMenuOpen(false)}>AIM-Node</Link>
+              <Link href="/protocol" className="block px-2 py-2 text-sm text-gray-600 hover:text-gray-900" onClick={() => setMobileMenuOpen(false)}>The Protocol</Link>
+              <Link href="/blog" className="block px-2 py-2 text-sm text-gray-600 hover:text-gray-900" onClick={() => setMobileMenuOpen(false)}>Blog</Link>
               {isAdminEmail && (
-                <Link
-                  href="/keystatic"
-                  className="block px-2 py-2 text-sm text-gray-600 hover:text-gray-900"
-                  onClick={() => setMobileMenuOpen(false)}
-                >
-                  Admin
-                </Link>
+                <Link href="/keystatic" className="block px-2 py-2 text-sm text-gray-600 hover:text-gray-900" onClick={() => setMobileMenuOpen(false)}>Admin</Link>
               )}
               {isAuthenticated ? (
                 <>
-                  <Link
-                    href="/dashboard"
-                    className="block px-2 py-2 text-sm text-gray-600 hover:text-gray-900"
-                    onClick={() => setMobileMenuOpen(false)}
-                  >
-                    Dashboard
-                  </Link>
-                  <button
-                    onClick={() => { handleLogout(); setMobileMenuOpen(false); }}
-                    className="block w-full text-left px-2 py-2 text-sm text-gray-500 hover:text-gray-700"
-                  >
-                    Log out
-                  </button>
+                  <Link href="/dashboard" className="block px-2 py-2 text-sm text-gray-600 hover:text-gray-900" onClick={() => setMobileMenuOpen(false)}>Dashboard</Link>
+                  <button onClick={() => { handleLogout(); setMobileMenuOpen(false); }} className="block w-full text-left px-2 py-2 text-sm text-gray-500 hover:text-gray-700">Log out</button>
                 </>
               ) : (
                 <>
-                  <Link
-                    href="/login"
-                    className="block px-2 py-2 text-sm text-gray-600 hover:text-gray-900"
-                    onClick={() => setMobileMenuOpen(false)}
-                  >
-                    Log in
-                  </Link>
-                  <Link
-                    href="/register"
-                    className="block px-2 py-2 text-sm text-[#3F51B5] font-medium"
-                    onClick={() => setMobileMenuOpen(false)}
-                  >
-                    Sign up
-                  </Link>
+                  <Link href="/login" className="block px-2 py-2 text-sm text-gray-600 hover:text-gray-900" onClick={() => setMobileMenuOpen(false)}>Log in</Link>
+                  <Link href="/register" className="block px-2 py-2 text-sm text-[#3F51B5] font-medium" onClick={() => setMobileMenuOpen(false)}>Sign up</Link>
                 </>
               )}
             </div>
@@ -254,14 +152,9 @@ export function Layout({ children }: { children: React.ReactNode }) {
         </div>
       </header>
 
-      {/* Main content */}
-      <main className="flex-1">
-        {children}
-      </main>
+      <main className="flex-1">{children}</main>
 
-      {/* Footer */}
       <footer className="bg-[#1b2332] text-[#c1c9d4]">
-        {/* Newsletter CTA */}
         <div className="mx-auto max-w-7xl px-6 lg:px-8 pt-12 pb-10">
           <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-6">
             <Link href="/" className="shrink-0">
@@ -282,61 +175,36 @@ export function Layout({ children }: { children: React.ReactNode }) {
             </a>
           </div>
         </div>
-
-        {/* Divider */}
-        <div className="mx-auto max-w-7xl px-6 lg:px-8">
-          <div className="border-t border-[#2a3545]" />
-        </div>
-
-        {/* Footer Links Grid */}
+        <div className="mx-auto max-w-7xl px-6 lg:px-8"><div className="border-t border-[#2a3545]" /></div>
         <div className="mx-auto max-w-7xl px-6 lg:px-8 py-10">
           <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-8 gap-y-10">
             {footerLinkSections.map((section) => (
               <div key={section.title}>
-                <h4 className="text-[11px] font-bold tracking-[0.1em] uppercase text-[#e2e8f0] mb-4">
-                  {section.title}
-                </h4>
+                <h4 className="text-[11px] font-bold tracking-[0.1em] uppercase text-[#e2e8f0] mb-4">{section.title}</h4>
                 <ul className="space-y-2.5">
                   {section.links.map((link) => (
                     <li key={link.label}>
-                      <Link
-                        href={link.href}
-                        className="text-sm text-[#96a0af] hover:text-white transition-colors"
-                      >
-                        {link.label}
-                      </Link>
+                      <Link href={link.href} className="text-sm text-[#96a0af] hover:text-white transition-colors">{link.label}</Link>
                     </li>
                   ))}
                 </ul>
               </div>
             ))}
-
-            {/* Solutions - plain text, no links */}
             <div>
-              <h4 className="text-[11px] font-bold tracking-[0.1em] uppercase text-[#e2e8f0] mb-4">
-                Solutions
-              </h4>
+              <h4 className="text-[11px] font-bold tracking-[0.1em] uppercase text-[#e2e8f0] mb-4">Solutions</h4>
               <ul className="space-y-2.5">
                 {solutionsItems.map((item) => (
-                  <li key={item} className="text-sm text-[#96a0af]">
-                    {item}
-                  </li>
+                  <li key={item} className="text-sm text-[#96a0af]">{item}</li>
                 ))}
               </ul>
             </div>
           </div>
         </div>
-
-        {/* Bottom Bar */}
         <div className="mx-auto max-w-7xl px-6 lg:px-8 pb-8">
           <div className="border-t border-[#2a3545] pt-6 flex flex-wrap items-center gap-x-1.5 gap-y-2 text-[13px] text-[#6b7a8d]">
-            <Link href="/legal/site-terms" className="hover:text-[#96a0af] transition-colors">
-              Site Terms
-            </Link>
+            <Link href="/legal/site-terms" className="hover:text-[#96a0af] transition-colors">Site Terms</Link>
             <span className="mx-1.5">|</span>
-            <Link href="/legal/privacy" className="hover:text-[#96a0af] transition-colors">
-              Privacy Notice
-            </Link>
+            <Link href="/legal/privacy" className="hover:text-[#96a0af] transition-colors">Privacy Notice</Link>
             <span className="flex-1" />
             <span>&copy; {new Date().getFullYear()} ai.market. All rights reserved.</span>
           </div>

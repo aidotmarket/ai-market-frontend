@@ -1,6 +1,7 @@
 import Link from 'next/link';
 import type { Metadata } from 'next';
 import { fetchPublicListings, type PaginatedListings } from '@/lib/api';
+import { HeroSearch } from '@/components/HeroSearch';
 
 export const metadata: Metadata = {
   title: 'ai.market - B2B Data Marketplace',
@@ -41,12 +42,6 @@ const ArrowIcon = ({ className = 'ml-2 h-4 w-4' }: { className?: string }) => (
 const DownloadIcon = ({ className = 'ml-2 h-4 w-4' }: { className?: string }) => (
   <svg className={className} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
     <path strokeLinecap="round" strokeLinejoin="round" d="M3 16.5v2.25A2.25 2.25 0 0 0 5.25 21h13.5A2.25 2.25 0 0 0 21 18.75V16.5M16.5 12 12 16.5m0 0L7.5 12m4.5 4.5V3" />
-  </svg>
-);
-
-const SearchIcon = ({ className = 'ml-2 h-4 w-4' }: { className?: string }) => (
-  <svg className={className} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-    <path strokeLinecap="round" strokeLinejoin="round" d="m21 21-4.35-4.35m1.85-5.15a7 7 0 1 1-14 0 7 7 0 0 1 14 0Z" />
   </svg>
 );
 
@@ -172,15 +167,7 @@ export default async function LandingPage() {
                   The non-custodial B2B marketplace for AI data, models, and pipelines. We make
                   your assets discoverable by AI - think SEO, but for AI systems.
                 </p>
-                <div className="mt-8">
-                  <Link
-                    href="/search"
-                    className="inline-flex items-center justify-center rounded-lg bg-[#3F51B5] px-6 py-3 text-sm font-semibold text-white hover:bg-[#3545a0] transition-colors"
-                  >
-                    Search Marketplace
-                    <SearchIcon />
-                  </Link>
-                </div>
+                <HeroSearch />
               </div>
 
               {/* Right - trust visual card */}
@@ -194,18 +181,14 @@ export default async function LandingPage() {
                   <li className="flex items-start gap-3">
                     <span className="mt-1.5 h-2.5 w-2.5 shrink-0 rounded-full bg-[#0F6E56]" />
                     <div>
-                      <p className="text-sm font-semibold text-[#1A1A1A]">
-                        Data stays on your infra
-                      </p>
+                      <p className="text-sm font-semibold text-[#1A1A1A]">Data stays on your infra</p>
                       <p className="text-sm text-[#666666]">Only metadata is published</p>
                     </div>
                   </li>
                   <li className="flex items-start gap-3">
                     <span className="mt-1.5 h-2.5 w-2.5 shrink-0 rounded-full bg-[#3F51B5]" />
                     <div>
-                      <p className="text-sm font-semibold text-[#1A1A1A]">
-                        Peer-to-peer transactions
-                      </p>
+                      <p className="text-sm font-semibold text-[#1A1A1A]">Peer-to-peer transactions</p>
                       <p className="text-sm text-[#666666]">ai.market never touches payloads</p>
                     </div>
                   </li>
@@ -213,9 +196,7 @@ export default async function LandingPage() {
                     <span className="mt-1.5 h-2.5 w-2.5 shrink-0 rounded-full bg-[#14B8A6]" />
                     <div>
                       <p className="text-sm font-semibold text-[#1A1A1A]">Agentic First</p>
-                      <p className="text-sm text-[#666666]">
-                        AI Agents can process transactions directly
-                      </p>
+                      <p className="text-sm text-[#666666]">AI Agents can process transactions directly</p>
                     </div>
                   </li>
                 </ul>
@@ -245,16 +226,8 @@ export default async function LandingPage() {
                     key={o.name}
                     className="card-texture rounded-2xl border border-[#E8E8E8] bg-white p-7 flex flex-col"
                   >
-                    <div
-                      className={`flex h-12 w-12 items-center justify-center rounded-xl ${styles.icon}`}
-                    >
-                      <svg
-                        className="h-6 w-6"
-                        fill="none"
-                        viewBox="0 0 24 24"
-                        stroke="currentColor"
-                        strokeWidth={1.75}
-                      >
+                    <div className={`flex h-12 w-12 items-center justify-center rounded-xl ${styles.icon}`}>
+                      <svg className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.75}>
                         <path strokeLinecap="round" strokeLinejoin="round" d={o.iconPath} />
                       </svg>
                     </div>
@@ -263,12 +236,7 @@ export default async function LandingPage() {
                     <p className="mt-3 text-sm leading-6 text-[#4A4A4A]">{o.description}</p>
                     <div className="mt-5 flex flex-wrap gap-2">
                       {o.tags.map((t) => (
-                        <span
-                          key={t}
-                          className={`rounded-md px-2.5 py-1 text-xs font-medium ${styles.tag}`}
-                        >
-                          {t}
-                        </span>
+                        <span key={t} className={`rounded-md px-2.5 py-1 text-xs font-medium ${styles.tag}`}>{t}</span>
                       ))}
                     </div>
                     <div className="flex-1" />
@@ -291,19 +259,12 @@ export default async function LandingPage() {
           <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
             <div className="flex items-end justify-between flex-wrap gap-4">
               <div>
-                <p className="text-xs font-bold uppercase tracking-wider text-[#3F51B5]">
-                  Featured
-                </p>
+                <p className="text-xs font-bold uppercase tracking-wider text-[#3F51B5]">Featured</p>
                 <h2 className="mt-2 text-3xl font-extrabold tracking-tight text-[#1A1A1A] sm:text-4xl">
                   Live on the marketplace
                 </h2>
               </div>
-              <Link
-                href="/listings"
-                className="text-sm font-semibold text-[#3F51B5] hover:text-[#3545a0]"
-              >
-                View All →
-              </Link>
+              <Link href="/listings" className="text-sm font-semibold text-[#3F51B5] hover:text-[#3545a0]">View All →</Link>
             </div>
 
             <div className="mt-10 grid grid-cols-1 gap-6 sm:grid-cols-2 lg:grid-cols-4">
@@ -314,30 +275,20 @@ export default async function LandingPage() {
                     href={`/listings/${l.slug}`}
                     className="card-texture rounded-2xl border border-[#E8E8E8] bg-white p-5 flex flex-col hover:border-[#3F51B5] hover:shadow-sm transition-all"
                   >
-                    <span
-                      className={`inline-flex w-fit rounded-md px-2 py-0.5 text-[11px] font-bold uppercase tracking-wide ${categoryBadge[l.category] ?? defaultBadge}`}
-                    >
+                    <span className={`inline-flex w-fit rounded-md px-2 py-0.5 text-[11px] font-bold uppercase tracking-wide ${categoryBadge[l.category] ?? defaultBadge}`}>
                       {l.category}
                     </span>
-                    <h3 className="mt-4 text-base font-bold leading-snug text-[#1A1A1A]">
-                      {l.title ?? 'Untitled'}
-                    </h3>
-                    <p className="mt-2 text-sm leading-6 text-[#666666] line-clamp-2">
-                      {l.short_description ?? ''}
-                    </p>
+                    <h3 className="mt-4 text-base font-bold leading-snug text-[#1A1A1A]">{l.title ?? 'Untitled'}</h3>
+                    <p className="mt-2 text-sm leading-6 text-[#666666] line-clamp-2">{l.short_description ?? ''}</p>
                     <div className="flex-1" />
                     <div className="mt-5 pt-4 border-t border-[#F0F0F0] flex items-center justify-between text-xs">
                       <span className="text-[#888888]">{l.category}</span>
-                      <span className="font-semibold text-[#1A1A1A]">
-                        {l.price === 0 ? 'Free' : `$${l.price}`}
-                      </span>
+                      <span className="font-semibold text-[#1A1A1A]">{l.price === 0 ? 'Free' : `$${l.price}`}</span>
                     </div>
                   </Link>
                 ))
               ) : (
-                <p className="col-span-full text-center text-sm text-[#888888]">
-                  No listings yet — be the first to publish.
-                </p>
+                <p className="col-span-full text-center text-sm text-[#888888]">No listings yet — be the first to publish.</p>
               )}
             </div>
           </div>
@@ -347,9 +298,7 @@ export default async function LandingPage() {
         <section className="border-t border-[#E8E8E8] bg-[#FAFAFA] py-20 sm:py-24">
           <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
             <div className="max-w-2xl">
-              <p className="text-xs font-bold uppercase tracking-wider text-[#3F51B5]">
-                How it works
-              </p>
+              <p className="text-xs font-bold uppercase tracking-wider text-[#3F51B5]">How it works</p>
               <h2 className="mt-2 text-3xl font-extrabold tracking-tight text-[#1A1A1A] sm:text-4xl">
                 Three steps to get discovered
               </h2>
@@ -358,9 +307,7 @@ export default async function LandingPage() {
             <div className="mt-14 grid grid-cols-1 gap-8 sm:grid-cols-3 lg:grid-cols-3">
               {howItWorks.map((step, idx) => (
                 <div key={step.title}>
-                  <div className="flex h-10 w-10 items-center justify-center rounded-full bg-[#3F51B5] text-white text-sm font-bold">
-                    {idx + 1}
-                  </div>
+                  <div className="flex h-10 w-10 items-center justify-center rounded-full bg-[#3F51B5] text-white text-sm font-bold">{idx + 1}</div>
                   <h3 className="mt-4 text-lg font-bold text-[#1A1A1A]">{step.title}</h3>
                   <p className="mt-2 text-sm leading-6 text-[#666666]">{step.description}</p>
                 </div>
