@@ -54,13 +54,19 @@ export function Layout({ children }: { children: React.ReactNode }) {
   const router = useRouter();
   const pathname = usePathname();
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
-  const showNavSearch = pathname !== '/search' && pathname !== '/listings';
+  const isKeystatic = pathname?.startsWith("/keystatic");
+  const showNavSearch = pathname !== "/search" && pathname !== "/listings";
   const isAdminEmail = user?.email === 'max@ai.market';
 
   const handleLogout = () => {
     logout();
     router.push('/');
   };
+
+  // Skip site chrome for Keystatic CMS
+  if (isKeystatic) {
+    return <>{children}</>;
+  }
 
   return (
     <div className="min-h-screen flex flex-col">
