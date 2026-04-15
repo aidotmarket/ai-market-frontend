@@ -111,14 +111,7 @@ export function Layout({ children }: { children: React.ReactNode }) {
               )}
             </nav>
 
-            {/* Desktop Nav Search */}
-            {showNavSearch && (
-              <div className="hidden md:block w-full max-w-xs lg:max-w-sm">
-                <Suspense fallback={null}>
-                  <SearchForm size="compact" placeholder="Search datasets..." />
-                </Suspense>
-              </div>
-            )}
+
 
             {/* Desktop Auth */}
             <div className="hidden md:flex items-center gap-3">
@@ -169,6 +162,15 @@ export function Layout({ children }: { children: React.ReactNode }) {
               </svg>
             </button>
           </div>
+
+          {/* Search bar row */}
+          {showNavSearch && (
+            <div className="hidden md:block border-t border-gray-100 py-2">
+              <Suspense fallback={null}>
+                <SearchForm size="compact" placeholder="Search datasets, models, and pipelines..." />
+              </Suspense>
+            </div>
+          )}
 
           {/* Mobile menu */}
           {mobileMenuOpen && (
