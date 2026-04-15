@@ -1,17 +1,10 @@
 import { collection, config, fields } from '@keystatic/core';
 
-const isDevelopment = process.env.NODE_ENV === 'development';
-const hasGitHubStorageEnv = Boolean(
-  process.env.KEYSTATIC_GITHUB_CLIENT_ID &&
-  process.env.KEYSTATIC_GITHUB_CLIENT_SECRET &&
-  process.env.KEYSTATIC_SECRET
-);
-
 export default config({
-  storage: isDevelopment || !hasGitHubStorageEnv
-    ? { kind: 'local' }
+  storage: process.env.NODE_ENV === 'development'
+    ? { kind: 'local' as const }
     : {
-        kind: 'github',
+        kind: 'github' as const,
         repo: {
           owner: 'aidotmarket',
           name: 'ai-market-frontend',
