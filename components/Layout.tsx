@@ -13,6 +13,7 @@ const footerLinkSections = [
       { label: 'Browse Data', href: '/listings' },
       { label: 'Request Data', href: '/requests' },
       { label: 'List Your Data', href: '/download' },
+      { label: 'Blog', href: '/blog' },
       { label: 'Partner Program', href: '/partner' },
     ],
   },
@@ -87,6 +88,9 @@ export function Layout({ children }: { children: React.ReactNode }) {
               </Link>
               <Link href="/protocol" className="text-sm text-[#666666] hover:text-[#1A1A1A]">
                 The Protocol
+              </Link>
+              <Link href="/blog" className="text-sm text-[#666666] hover:text-[#1A1A1A]">
+                Blog
               </Link>
               {isAuthenticated && (
                 <Link href="/dashboard" className="text-sm text-[#666666] hover:text-[#1A1A1A]">
@@ -191,6 +195,13 @@ export function Layout({ children }: { children: React.ReactNode }) {
                 onClick={() => setMobileMenuOpen(false)}
               >
                 The Protocol
+              </Link>
+              <Link
+                href="/blog"
+                className="block px-2 py-2 text-sm text-gray-600 hover:text-gray-900"
+                onClick={() => setMobileMenuOpen(false)}
+              >
+                Blog
               </Link>
               {isAuthenticated ? (
                 <>
