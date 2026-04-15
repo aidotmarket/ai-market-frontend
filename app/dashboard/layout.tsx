@@ -65,20 +65,24 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
   }
 
   const isSeller = user?.role === 'seller' || user?.role === 'admin';
+  const isAdminEmail = user?.email === 'max@ai.market';
 
-  const navLinks = isSeller
-    ? [
+  const navLinks = [
+    ...(isSeller
+      ? [
         { name: 'Overview', href: '/dashboard' },
         { name: 'Listings', href: '/dashboard/listings' },
         { name: 'Orders', href: '/dashboard/orders' },
         { name: 'Inquiries', href: '/dashboard/seller/inquiries' },
         { name: 'Settings', href: '/dashboard/settings' },
       ]
-    : [
+      : [
         { name: 'My Inquiries', href: '/dashboard/inquiries' },
         { name: 'My Orders', href: '/dashboard/orders' },
         { name: 'My Requests', href: '/dashboard/requests' },
-      ];
+      ]),
+    ...(isAdminEmail ? [{ name: 'Blog Admin', href: '/keystatic' }] : []),
+  ];
 
   return (
     <div className="flex min-h-screen bg-gray-50">

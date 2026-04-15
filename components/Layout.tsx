@@ -55,6 +55,7 @@ export function Layout({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const showNavSearch = pathname !== '/search' && pathname !== '/listings';
+  const isAdminEmail = user?.email === 'max@ai.market';
 
   const handleLogout = () => {
     logout();
@@ -92,6 +93,11 @@ export function Layout({ children }: { children: React.ReactNode }) {
               <Link href="/blog" className="text-sm text-[#666666] hover:text-[#1A1A1A]">
                 Blog
               </Link>
+              {isAdminEmail && (
+                <Link href="/keystatic" className="text-sm text-[#666666] hover:text-[#1A1A1A]">
+                  Admin
+                </Link>
+              )}
               {isAuthenticated && (
                 <Link href="/dashboard" className="text-sm text-[#666666] hover:text-[#1A1A1A]">
                   Dashboard
@@ -203,6 +209,15 @@ export function Layout({ children }: { children: React.ReactNode }) {
               >
                 Blog
               </Link>
+              {isAdminEmail && (
+                <Link
+                  href="/keystatic"
+                  className="block px-2 py-2 text-sm text-gray-600 hover:text-gray-900"
+                  onClick={() => setMobileMenuOpen(false)}
+                >
+                  Admin
+                </Link>
+              )}
               {isAuthenticated ? (
                 <>
                   <Link
