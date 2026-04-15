@@ -137,7 +137,7 @@ export function Layout({ children }: { children: React.ReactNode }) {
                   </Link>
                   <Link
                     href="/register"
-                    className="rounded-lg bg-[#3F51B5] px-4 py-2 text-sm font-medium text-white hover:bg-[#3545a0]"
+                    className="rounded-lg border border-gray-300 px-4 py-2 text-sm font-medium text-gray-700 hover:border-gray-400 hover:text-gray-900 transition-colors"
                   >
                     Sign up
                   </Link>
@@ -167,7 +167,7 @@ export function Layout({ children }: { children: React.ReactNode }) {
           {showNavSearch && (
             <div className="hidden md:block border-t border-gray-100 py-2">
               <Suspense fallback={null}>
-                <SearchForm size="compact" placeholder="Search datasets, models, and pipelines..." />
+                <SearchForm size="compact" placeholder="Search datasets, models, and pipelines..." className="max-w-xl" />
               </Suspense>
             </div>
           )}
