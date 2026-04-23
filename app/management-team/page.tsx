@@ -16,6 +16,7 @@ type Leader = {
   title: string;
   tagline: string;
   bio: string;
+  imageSrc: string;
   experience: string[];
   education: string[];
   expertise: string[];
@@ -25,19 +26,19 @@ const team: Leader[] = [
   {
     name: 'Max Robbins',
     title: 'CHIEF EXECUTIVE OFFICER',
+    imageSrc: '/team/max-robbins.png',
     tagline:
       'Founder and entrepreneur building the infrastructure for AI-native commerce.',
     bio:
-      'Max Robbins founded ai.market to create the first non-custodial B2B marketplace purpose-built for AI data, models, and pipelines. He is focused on designing a market operated primarily by AI agents, with humans providing strategic oversight and direction.',
+      'Max Robbins is a three-time exited founder in cutting-edge technology companies. He founded ai.market to create the first non-custodial B2B marketplace purpose-built for AI data, models, and pipelines. He is focused on designing a market operated primarily by AI agents, with humans providing strategic oversight and direction.',
     experience: [
       'Founder of ai.market, the non-custodial B2B marketplace for AI data, models, and pipelines.',
-      'Founder of vectorAIz, the customer-hosted local data processing platform that pairs with ai.market listings.',
-      'Career spanning founder-scale product development, marketplace architecture, and agent-orchestrated systems design.',
+      'Founder of AICACHE LTD, sold to NBC Universal.',
+      'CTO of IDT Corp (NYSE).',
     ],
     education: [
-      // TODO(max): replace the two lines below with your real credentials
-      '[Degree and institution — to be filled in]',
-      '[Secondary degree or certification — optional]',
+      'B.S., Georgetown University',
+      'Telecommunications Studies, Columbia University',
     ],
     expertise: [
       'Marketplace Strategy',
@@ -49,12 +50,13 @@ const team: Leader[] = [
   {
     name: 'Dr. Sarah Lin',
     title: 'EXECUTIVE VICE PRESIDENT',
+    imageSrc: '/team/sarah-lin.png',
     tagline:
       'STEM innovator and strategic leader with 20+ years building and scaling technology ventures.',
     bio:
       'Dr. Sarah Lin is a proven technology executive with deep expertise in engineering, product innovation, and organizational growth. She has a track record of turning complex scientific advances into market-leading solutions.',
     experience: [
-      'Former VP of Engineering at IonQ, where she led the development of quantum computing systems from lab to commercialization.',
+      'Former VP of Engineering at PeopleSoft, where she led the development of customer support systems from lab to commercialization.',
       'Held senior engineering leadership roles at Boeing and Raytheon Technologies.',
       'Published researcher in nanotechnology and materials science with 30+ peer-reviewed papers.',
     ],
@@ -73,12 +75,13 @@ const team: Leader[] = [
   {
     name: 'Michelle Carter, CFA',
     title: 'CHIEF FINANCIAL OFFICER',
+    imageSrc: '/team/michelle-carter.png',
     tagline:
       'Finance leader with 15+ years driving financial strategy, capital markets, and value creation.',
     bio:
       'Michelle Carter is a seasoned finance executive with extensive experience in corporate finance, fundraising, investor relations, and operational excellence across high-growth technology companies.',
     experience: [
-      'Former VP of Finance at Snowflake, where she led FP&A, Treasury, and Investor Relations through a successful IPO and scale-up.',
+      'Former VP of Finance at EDS, where she led FP&A, Treasury, and Investor Relations prior to acquisition.',
       'Prior experience in investment banking at Goldman Sachs in the Technology, Media & Telecommunications group.',
       'Expertise in financial modeling, capital raising, M&A, and building high-performance finance teams.',
     ],
@@ -97,13 +100,14 @@ const team: Leader[] = [
   {
     name: 'Dr. James Anderson',
     title: 'CHIEF TECHNOLOGY OFFICER',
+    imageSrc: '/team/james-anderson.png',
     tagline:
       'Deep technical leader with expertise in AI, cloud architecture, and advanced engineering systems.',
     bio:
       'Dr. James Anderson brings over 18 years of experience architecting and scaling complex technology platforms. He is passionate about solving hard problems at the intersection of AI, data, and cloud computing.',
     experience: [
-      'Former Head of Engineering at NVIDIA, leading teams building AI infrastructure and accelerated computing platforms.',
-      'Previously led infrastructure engineering at Amazon Web Services (AWS).',
+      'Former Head of Engineering at BEA Systems, leading teams building infrastructure and accelerated computing platforms.',
+      'Previously led infrastructure engineering at Sun Microsystems.',
       'Holds multiple patents in distributed systems and machine learning optimization.',
     ],
     education: [
@@ -119,16 +123,6 @@ const team: Leader[] = [
     ],
   },
 ];
-
-function initials(name: string): string {
-  return name
-    .replace(/,.*/, '')
-    .split(' ')
-    .filter((w) => /^[A-Za-z]/.test(w) && w !== 'Dr.')
-    .slice(0, 2)
-    .map((w) => w[0]?.toUpperCase() ?? '')
-    .join('');
-}
 
 function Section({ label, items }: LeaderSection) {
   return (
@@ -178,9 +172,15 @@ export default function ManagementTeamPage() {
               key={person.name}
               className="flex flex-col rounded-xl border border-gray-200 bg-white p-6 lg:p-7 hover:border-[#3F51B5]/40 hover:shadow-[0_4px_24px_rgba(63,81,181,0.08)] transition-all"
             >
-              {/* Avatar */}
-              <div className="h-20 w-20 rounded-full bg-gradient-to-br from-[#3F51B5] to-[#5969c7] flex items-center justify-center text-white text-xl font-semibold mb-5">
-                {initials(person.name)}
+              {/* Portrait */}
+              <div className="w-full aspect-[3/4] rounded-xl overflow-hidden bg-gray-100 mb-5 ring-1 ring-gray-200">
+                {/* eslint-disable-next-line @next/next/no-img-element */}
+                <img
+                  src={person.imageSrc}
+                  alt={`Portrait of ${person.name}`}
+                  className="w-full h-full object-cover object-top"
+                  loading="lazy"
+                />
               </div>
 
               {/* Name + title */}
