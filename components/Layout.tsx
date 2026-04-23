@@ -32,6 +32,12 @@ const footerLinkSections = [
     ],
   },
   {
+    title: 'Company',
+    links: [
+      { label: 'Management Team', href: '/management-team' },
+    ],
+  },
+  {
     title: 'Legal',
     links: [
       { label: 'Site Terms', href: '/legal/site-terms' },
@@ -177,7 +183,7 @@ export function Layout({ children }: { children: React.ReactNode }) {
         </div>
         <div className="mx-auto max-w-7xl px-6 lg:px-8"><div className="border-t border-[#2a3545]" /></div>
         <div className="mx-auto max-w-7xl px-6 lg:px-8 py-10">
-          <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-8 gap-y-10">
+          <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-8 gap-y-10">
             {footerLinkSections.map((section) => (
               <div key={section.title}>
                 <h4 className="text-[11px] font-bold tracking-[0.1em] uppercase text-[#e2e8f0] mb-4">{section.title}</h4>
