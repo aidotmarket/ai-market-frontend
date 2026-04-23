@@ -41,47 +41,64 @@ jobs:
 
       - name: Post deploy receipt to event ledger
         if: steps.health.outputs.healthy == 'true'
+        env:
+          EVENTS_URL: ${{ env.EVENTS_URL }}
+          SERVICE_KEY: ${{ env.SERVICE_KEY }}
+          RECEIPT_KEY: ${{ secrets.DEPLOY_RECEIPT_KEY }}
         run: |
+          # Build payload in a quoted heredoc so bash does NOT parse the JSON
+          # content (avoids shell-syntax errors when commit messages contain
+          # apostrophes, parentheses, backticks, or other metacharacters).
+          cat > /tmp/deploy-payload.json <<'JSON_EOF'
+          {
+            "actor": "system",
+            "event_type": "deploy",
+            "title": "Deploy receipt: ${{ github.repository }} @ ${{ github.sha }}",
+            "entity_key": "${{ env.SERVICE_KEY }}",
+            "source_ref": "${{ github.sha }}",
+            "dedupe_key": "deploy-receipt-${{ github.sha }}",
+            "payload": {
+              "commit_sha": "${{ github.sha }}",
+              "commit_message": ${{ toJSON(github.event.head_commit.message) }},
+              "pushed_by": "${{ github.actor }}",
+              "repository": "${{ github.repository }}",
+              "branch": "${{ github.ref_name }}",
+              "run_id": "${{ github.run_id }}",
+              "run_url": "https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }}",
+              "health_verified": true
+            }
+          }
+          JSON_EOF
           curl -s -X POST "$EVENTS_URL" \
             -H "Content-Type: application/json" \
-            -H "X-Internal-API-Key: ${{ secrets.DEPLOY_RECEIPT_KEY }}" \
-            -d '{
-              "actor": "system",
-              "event_type": "deploy",
-              "title": "Deploy receipt: ${{ github.repository }} @ ${{ github.sha }}",
-              "entity_key": "'"$SERVICE_KEY"'",
-              "source_ref": "${{ github.sha }}",
-              "dedupe_key": "deploy-receipt-${{ github.sha }}",
-              "payload": {
-                "commit_sha": "${{ github.sha }}",
-                "commit_message": ${{ toJSON(github.event.head_commit.message) }},
-                "pushed_by": "${{ github.actor }}",
-                "repository": "${{ github.repository }}",
-                "branch": "${{ github.ref_name }}",
-                "run_id": "${{ github.run_id }}",
-                "run_url": "https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }}",
-                "health_verified": true
-              }
-            }'
+            -H "X-Internal-API-Key: $RECEIPT_KEY" \
+            -d @/tmp/deploy-payload.json
 
       - name: Post failure receipt
         if: failure()
+        env:
+          EVENTS_URL: ${{ env.EVENTS_URL }}
+          SERVICE_KEY: ${{ env.SERVICE_KEY }}
+          RECEIPT_KEY: ${{ secrets.DEPLOY_RECEIPT_KEY }}
         run: |
+          cat > /tmp/fail-payload.json <<'JSON_EOF'
+          {
+            "actor": "system",
+            "event_type": "alert",
+            "title": "DEPLOY FAILED: ${{ github.repository }} @ ${{ github.sha }}",
+            "entity_key": "${{ env.SERVICE_KEY }}",
+            "source_ref": "${{ github.sha }}",
+            "dedupe_key": "deploy-fail-${{ github.sha }}",
+            "payload": {
+              "commit_sha": "${{ github.sha }}",
+              "pushed_by": "${{ github.actor }}",
+              "repository": "${{ github.repository }}",
+              "run_url": "https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }}",
+              "health_verified": false
+            }
+          }
+          JSON_EOF
           curl -s -X POST "$EVENTS_URL" \
             -H "Content-Type: application/json" \
-            -H "X-Internal-API-Key: ${{ secrets.DEPLOY_RECEIPT_KEY }}" \
-            -d '{
-              "actor": "system",
-              "event_type": "alert",
-              "title": "DEPLOY FAILED: ${{ github.repository }} @ ${{ github.sha }}",
-              "entity_key": "'"$SERVICE_KEY"'",
-              "source_ref": "${{ github.sha }}",
-              "dedupe_key": "deploy-fail-${{ github.sha }}",
-              "payload": {
-                "commit_sha": "${{ github.sha }}",
-                "pushed_by": "${{ github.actor }}",
-                "repository": "${{ github.repository }}",
-                "run_url": "https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }}",
-                "health_verified": false
-              }
-            }' || true
+            -H "X-Internal-API-Key: $RECEIPT_KEY" \
+            -d @/tmp/fail-payload.json || true
