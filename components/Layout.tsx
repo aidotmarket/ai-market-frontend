@@ -35,6 +35,7 @@ const footerLinkSections = [
     title: 'Company',
     links: [
       { label: 'Management Team', href: '/management-team' },
+      { label: 'Investors', href: '/investors' },
     ],
   },
   {
