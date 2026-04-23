@@ -3,7 +3,7 @@ import type { Metadata } from 'next';
 export const metadata: Metadata = {
   title: 'Management Team | ai.market',
   description:
-    'Meet the leadership team behind ai.market — the non-custodial B2B marketplace for AI data, models, and pipelines.',
+    'Meet the leadership team behind ai.market, the non-custodial B2B marketplace for AI data, models, and pipelines.',
 };
 
 type LeaderSection = {
@@ -86,7 +86,7 @@ const team: Leader[] = [
       'Expertise in financial modeling, capital raising, M&A, and building high-performance finance teams.',
     ],
     education: [
-      'M.B.A., Northwestern University — Kellogg School of Management',
+      'M.B.A., Kellogg School of Management, Northwestern University',
       'B.S. in Finance, University of Illinois at Urbana-Champaign',
       'Chartered Financial Analyst (CFA)',
     ],
@@ -157,7 +157,7 @@ export default function ManagementTeamPage() {
             Management Team
           </h1>
           <p className="text-lg text-[#666666] max-w-2xl mx-auto leading-relaxed">
-            The people building ai.market — the non-custodial B2B marketplace for AI
+            The people building ai.market, a non-custodial B2B marketplace for AI
             data, models, and pipelines, designed to be run primarily by AI agents with
             humans as strategic oversight.
           </p>

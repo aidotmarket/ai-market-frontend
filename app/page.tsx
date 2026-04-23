@@ -288,7 +288,7 @@ export default async function LandingPage() {
                   </Link>
                 ))
               ) : (
-                <p className="col-span-full text-center text-sm text-[#888888]">No listings yet — be the first to publish.</p>
+                <p className="col-span-full text-center text-sm text-[#888888]">No listings yet. Be the first to publish.</p>
               )}
             </div>
           </div>
