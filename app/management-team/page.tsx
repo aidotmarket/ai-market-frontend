@@ -173,7 +173,7 @@ export default function ManagementTeamPage() {
               className="flex flex-col rounded-xl border border-gray-200 bg-white p-6 lg:p-7 hover:border-[#3F51B5]/40 hover:shadow-[0_4px_24px_rgba(63,81,181,0.08)] transition-all"
             >
               {/* Portrait */}
-              <div className="w-full aspect-[3/4] rounded-xl overflow-hidden bg-gray-100 mb-5 ring-1 ring-gray-200">
+              <div className="w-[35%] aspect-[3/4] rounded-xl overflow-hidden bg-gray-100 mb-5 ring-1 ring-gray-200 mx-auto">
                 {/* eslint-disable-next-line @next/next/no-img-element */}
                 <img
                   src={person.imageSrc}
@@ -229,24 +229,6 @@ export default function ManagementTeamPage() {
               </div>
             </article>
           ))}
-        </div>
-      </section>
-
-      {/* Footer CTA */}
-      <section className="border-t border-gray-200 bg-[#f8f9fb]">
-        <div className="mx-auto max-w-7xl px-6 lg:px-8 py-12 text-center">
-          <h2 className="text-2xl font-bold text-[#1A1A1A] mb-3">
-            Partnering with ai.market
-          </h2>
-          <p className="text-[#666666] mb-6 max-w-xl mx-auto">
-            For investor, partnership, or press inquiries, reach out to the team directly.
-          </p>
-          <a
-            href="mailto:support@ai.market"
-            className="inline-flex items-center gap-2 rounded-lg bg-[#3F51B5] px-6 py-3 text-sm font-medium text-white hover:bg-[#3545a0] transition-colors"
-          >
-            Contact the team
-          </a>
         </div>
       </section>
     </div>
