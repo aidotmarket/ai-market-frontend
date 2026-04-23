@@ -242,7 +242,7 @@ export default function ManagementTeamPage() {
             For investor, partnership, or press inquiries, reach out to the team directly.
           </p>
           <a
-            href="mailto:contact@ai.market"
+            href="mailto:support@ai.market"
             className="inline-flex items-center gap-2 rounded-lg bg-[#3F51B5] px-6 py-3 text-sm font-medium text-white hover:bg-[#3545a0] transition-colors"
           >
             Contact the team
