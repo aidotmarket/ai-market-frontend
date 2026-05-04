@@ -22,26 +22,26 @@ function CopyButton({ text }: { text: string }) {
   );
 }
 
-const sellerSteps = [
+const builderSteps = [
   {
     num: '1',
     title: 'Install via pip',
-    desc: 'Install AIM-Node on your server with Python. It runs alongside your model or pipeline, with no uploads and no proxy layer.',
+    desc: 'Install AIM-Node on your infrastructure with Python or Docker. It runs as a local control point for connecting to ai.market.',
   },
   {
     num: '2',
-    title: 'Wrap Model as MCP Tool',
-    desc: "Expose your model or pipeline through AIM-Node's MCP interface. Define schemas, pricing, and clear descriptions for buyers and agents.",
+    title: 'Authenticate',
+    desc: 'AIM-Node enrolls a per-instance Ed25519 keypair with ai.market. The private key never leaves your infrastructure.',
   },
   {
     num: '3',
-    title: 'Publish Metadata',
-    desc: 'Register with ai.market so discovery metadata, schemas, and descriptions are searchable while your weights and code stay private.',
+    title: 'Find data',
+    desc: 'Search ai.market for datasets that match your application — by capability, schema, license, price, or quality score. AI agents can do the same programmatically.',
   },
   {
     num: '4',
-    title: 'Earn per-call',
-    desc: 'Buyers connect peer-to-peer to your AIM-Node. Usage is metered and settled through ai.market while you control pricing.',
+    title: 'Connect peer-to-peer',
+    desc: 'Purchase access on ai.market and connect directly to the seller over an encrypted P2P channel. Payloads never touch ai.market.',
   },
 ];
 
@@ -49,7 +49,7 @@ const buyerSteps = [
   {
     num: '1',
     title: 'Browse',
-    desc: 'Find models and pipelines on ai.market by capability, schema, price, or quality score. AI agents can discover the same tools programmatically.',
+    desc: 'Find datasets on ai.market by capability, schema, license, price, or quality score. AI agents can discover the same data programmatically.',
   },
   {
     num: '2',
@@ -64,7 +64,7 @@ const buyerSteps = [
   {
     num: '4',
     title: 'Connect P2P',
-    desc: "Present the token and connect directly to the seller's AIM-Node over an encrypted peer-to-peer channel for live inference or pipeline execution.",
+    desc: "Present the token and connect directly to the seller's AIM Channel or seller-edge over an encrypted peer-to-peer channel for live data delivery.",
   },
 ];
 
@@ -75,7 +75,7 @@ const responsibilities = [
   },
   {
     title: 'What ai.market never touches',
-    desc: 'Model weights, training data, inference inputs, inference outputs, and raw payloads. Those stay on the endpoints and move only between nodes.',
+    desc: 'Datasets, queries, results, and raw payloads. Those stay on the endpoints and move only between nodes.',
   },
   {
     title: 'How delivery works',
@@ -94,7 +94,7 @@ const requirements = [
   },
   {
     title: '4 GB RAM minimum',
-    desc: 'Enough for lightweight serving and local consumer-mode connectivity.',
+    desc: 'Enough for local control-plane operation and peer-to-peer connectivity.',
   },
   {
     title: 'Network access',
@@ -126,13 +126,13 @@ export default function AimNodePage() {
               AIM-Node
             </span>
             <h1 className="mt-6 text-4xl font-extrabold tracking-tight text-gray-900 sm:text-5xl lg:text-6xl">
-              Sell or Buy AI Models &amp; Pipelines on ai.market
+              Build against ai.market
             </h1>
             <p className="mx-auto mt-6 max-w-3xl text-lg leading-8 text-gray-600 sm:text-xl">
-              AIM-Node runs on your infrastructure and connects to ai.market&apos;s
-              distributed peer-to-peer network. Sellers wrap models as MCP tools and publish.
-              Buyers discover, purchase, and connect directly with no centralized proxy, no
-              model uploads, and no middleman in the payload path.
+              AIM-Node is the gateway client for building against ai.market — the
+              buyer-side companion to AIM Channel. Run it on your own infrastructure to
+              find data, authenticate, purchase access, and connect peer-to-peer to
+              sellers. No centralized proxy, no payloads through ai.market, no middleman.
             </p>
             <div className="mt-10 flex flex-col items-center justify-center gap-4 sm:flex-row">
               <a
@@ -142,10 +142,10 @@ export default function AimNodePage() {
                 Install AIM-Node
               </a>
               <Link
-                href="/listings?type=models"
+                href="/listings"
                 className="inline-flex items-center justify-center rounded-lg border border-[#C5CAE9] bg-white px-6 py-3 text-sm font-semibold text-[#3F51B5] transition-colors hover:border-[#3F51B5] hover:bg-[#F5F6FF]"
               >
-                Browse Models
+                Browse the Marketplace
               </Link>
             </div>
           </div>
@@ -156,15 +156,15 @@ export default function AimNodePage() {
         <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
           <div className="mx-auto max-w-3xl text-center">
             <p className="text-xs font-bold uppercase tracking-[0.18em] text-[#3F51B5]">
-              For Sellers
+              For Builders
             </p>
             <h2 className="mt-3 text-3xl font-extrabold tracking-tight text-gray-900 sm:text-4xl">
-              Publish models without giving up control
+              Connect to ai.market data from your own infrastructure
             </h2>
           </div>
 
           <div className="mx-auto mt-12 grid max-w-6xl grid-cols-1 gap-6 sm:grid-cols-2 lg:grid-cols-4">
-            {sellerSteps.map((step) => (
+            {builderSteps.map((step) => (
               <div
                 key={step.num}
                 className="rounded-2xl border border-gray-200 bg-white p-6 shadow-[0_12px_32px_rgba(63,81,181,0.08)]"
@@ -237,8 +237,8 @@ export default function AimNodePage() {
                     Seller Node
                   </p>
                   <p className="mt-3 font-semibold text-gray-900">Seller&apos;s Infrastructure</p>
-                  <p className="mt-2 leading-6">AIM-Node provider</p>
-                  <p className="leading-6">Your model or pipeline</p>
+                  <p className="mt-2 leading-6">AIM Channel or seller-edge</p>
+                  <p className="leading-6">Your dataset</p>
                 </div>
                 <div className="rounded-2xl border border-[#D6DBF5] bg-white p-4">
                   <p className="text-xs font-bold uppercase tracking-[0.18em] text-[#3F51B5]">
@@ -306,7 +306,7 @@ export default function AimNodePage() {
                   <span className="text-sm font-semibold">Buyer Node</span>
                 </div>
                 <p className="mt-3 text-sm text-indigo-100">
-                  Encrypted P2P channel for inference data and results
+                  Encrypted P2P channel for data delivery and results
                 </p>
               </div>
             </div>

@@ -6,7 +6,7 @@ import { HeroSearch } from '@/components/HeroSearch';
 export const metadata: Metadata = {
   title: 'ai.market - B2B Data Marketplace',
   description:
-    'The non-custodial B2B marketplace for AI data, models, and pipelines. We make your assets discoverable by AI - think SEO, but for AI systems.',
+    'The non-custodial B2B data marketplace. We make your datasets discoverable by AI — think SEO, but for AI systems.',
 };
 
 const LANDING_JSONLD = [
@@ -15,7 +15,7 @@ const LANDING_JSONLD = [
     '@type': 'Organization',
     name: 'ai.market',
     url: 'https://ai.market',
-    description: 'Non-custodial B2B marketplace for AI data, models, and pipelines',
+    description: 'Non-custodial B2B data marketplace.',
     sameAs: ['https://github.com/maxrobbins'],
   },
   {
@@ -24,7 +24,7 @@ const LANDING_JSONLD = [
     name: 'ai.market',
     url: 'https://ai.market',
     description:
-      'The non-custodial B2B marketplace for AI data, models, and pipelines.',
+      'The non-custodial B2B data marketplace.',
     potentialAction: {
       '@type': 'SearchAction',
       target: 'https://ai.market/listings?q={search_term_string}',
@@ -71,10 +71,10 @@ const offerings: Offering[] = [
     iconPath: 'M4 7v10c0 2 3.5 3 8 3s8-1 8-3V7M4 7c0-2 3.5-3 8-3s8 1 8 3M4 7c0 2 3.5 3 8 3s8-1 8-3m0 5c0 2-3.5 3-8 3s-8-1-8-3',
   },
   {
-    name: 'I Need Data / Models',
+    name: 'I Need Data',
     subtitle: 'Post Requirements',
     description:
-      'Describe what you need. Providers bid with matching datasets, models, and pipelines. Budget-controlled, outcome-driven.',
+      'Describe what you need. Providers bid with matching datasets. Budget-controlled, outcome-driven.',
     tags: ['Requests', 'Matching', 'Budget Control'],
     cta: 'Post a Request',
     href: '/requests',
@@ -84,10 +84,10 @@ const offerings: Offering[] = [
   },
   {
     name: 'AIM-Node',
-    subtitle: 'Models & Pipelines',
+    subtitle: 'Gateway Client',
     description:
-      'Serve models and pipelines from your own infrastructure. Buyers call them peer-to-peer. Payloads never touch ai.market.',
-    tags: ['Models', 'Pipelines', 'P2P Compute'],
+      'Build against ai.market from your own infrastructure — the buyer-side companion to AIM Channel. Connect to data peer-to-peer; payloads never touch ai.market.',
+    tags: ['Gateway', 'MCP', 'P2P Compute'],
     cta: 'Download AIM-Node',
     href: '/aim-node',
     ctaIcon: 'download',
@@ -164,8 +164,8 @@ export default async function LandingPage() {
                   <span className="text-[#3F51B5]">the market.</span>
                 </h1>
                 <p className="mt-6 text-lg leading-8 text-[#4A4A4A] max-w-xl">
-                  The non-custodial B2B marketplace for AI data, models, and pipelines. We make
-                  your assets discoverable by AI - think SEO, but for AI systems.
+                  The non-custodial B2B data marketplace. We make your datasets discoverable
+                  by AI — think SEO, but for AI systems.
                 </p>
                 <HeroSearch />
               </div>
@@ -173,8 +173,8 @@ export default async function LandingPage() {
               {/* Right - trust visual card */}
               <div className="card-texture rounded-2xl border border-[#E8E8E8] bg-[#FAFAFA] p-8">
                 <p className="text-base leading-7 text-[#1A1A1A]">
-                  Your data, models & pipelines become discoverable by AI agents and visible in
-                  AI-powered search - so buyers find you, not the other way around.
+                  Your datasets become discoverable by AI agents and visible in AI-powered
+                  search — so buyers find you, not the other way around.
                 </p>
                 <div className="my-6 h-px bg-[#E8E8E8]" />
                 <ul className="space-y-5">
@@ -214,7 +214,7 @@ export default async function LandingPage() {
                 Three ways to participate
               </h2>
               <p className="mt-3 text-lg text-[#666666]">
-                Provide Data, Request Data/Models, or Provide a Model
+                Provide data, request data, or build against the marketplace gateway
               </p>
             </div>
 
@@ -323,8 +323,8 @@ export default async function LandingPage() {
               Ready to get discovered?
             </h2>
             <p className="mx-auto mt-4 max-w-xl text-lg text-[#666666]">
-              Join the non-custodial marketplace where AI agents discover and transact with your
-              data, models, and pipelines.
+              Join the non-custodial data marketplace where AI agents discover and transact
+              with your datasets.
             </p>
             <div className="mt-10">
               <Link

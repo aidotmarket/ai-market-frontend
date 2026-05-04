@@ -30,6 +30,7 @@ export const metadata: Metadata = {
   openGraph: {
     siteName: 'ai.market',
     type: 'website',
+    description: 'The non-custodial data marketplace where datasets become findable, queryable, and purchasable by AI systems.',
   },
 };
 

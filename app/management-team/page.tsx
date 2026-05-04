@@ -3,7 +3,7 @@ import type { Metadata } from 'next';
 export const metadata: Metadata = {
   title: 'Management Team | ai.market',
   description:
-    'Meet the leadership team behind ai.market, the non-custodial B2B marketplace for AI data, models, and pipelines.',
+    'Meet the leadership team behind ai.market, the non-custodial B2B data marketplace.',
 };
 
 type LeaderSection = {
@@ -30,9 +30,9 @@ const team: Leader[] = [
     tagline:
       'Founder and entrepreneur building the infrastructure for AI-native commerce.',
     bio:
-      'Max Robbins is a three-time exited founder in cutting-edge technology companies. He founded ai.market to create the first non-custodial B2B marketplace purpose-built for AI data, models, and pipelines. He is focused on designing a market operated primarily by AI agents, with humans providing strategic oversight and direction.',
+      'Max Robbins is a three-time exited founder in cutting-edge technology companies. He founded ai.market to create the first non-custodial B2B data marketplace purpose-built for AI systems. He is focused on designing a market operated primarily by AI agents, with humans providing strategic oversight and direction.',
     experience: [
-      'Founder of ai.market, the non-custodial B2B marketplace for AI data, models, and pipelines.',
+      'Founder of ai.market, the non-custodial B2B data marketplace.',
       'Founder of AICACHE LTD, sold to NBC Universal.',
       'CTO of IDT Corp (NYSE).',
     ],
@@ -157,9 +157,9 @@ export default function ManagementTeamPage() {
             Management Team
           </h1>
           <p className="text-lg text-[#666666] max-w-2xl mx-auto leading-relaxed">
-            The people building ai.market, a non-custodial B2B marketplace for AI
-            data, models, and pipelines, designed to be run primarily by AI agents with
-            humans as strategic oversight.
+            The people building ai.market, a non-custodial B2B data marketplace,
+            designed to be run primarily by AI agents with humans as strategic
+            oversight.
           </p>
         </div>
       </section>

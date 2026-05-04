@@ -7,7 +7,7 @@ const howItWorks = [
     eyebrow: 'List',
     title: 'Local Processing',
     description:
-      "Sellers install AIM Channel (for datasets) or AIM-Node (for models and pipelines) on their own infrastructure. An embedded AI assistant profiles the asset locally - detecting PII, scoring quality, generating descriptions and metadata. Only the metadata is published to ai.market. Raw data and model weights never leave the seller's servers. Both AIM Channel and AIM-Node are open source.",
+      "Sellers install AIM Channel on their own infrastructure to manage and publish data; buyers and builders install AIM-Node as their gateway client. An embedded AI assistant profiles each dataset locally - detecting PII, scoring quality, generating descriptions and metadata. Only the metadata is published to ai.market. Raw data never leaves the seller's servers. Both AIM Channel and AIM-Node are open source.",
   },
   {
     eyebrow: 'Discover',
@@ -58,7 +58,7 @@ const platformDoesNot = [
   {
     label: 'Store data',
     description:
-      'No raw datasets, model weights, or pipeline outputs ever transit ai.market servers',
+      'No raw datasets ever transit ai.market servers — payloads flow only between buyer and seller endpoints',
   },
   {
     label: 'Proxy requests',
@@ -80,7 +80,7 @@ const securitySections = [
   {
     label: 'DEVICE IDENTITY',
     description:
-      "Every AIM Channel and AIM-Node instance generates an Ed25519 keypair locally during first setup. The private key is stored in a passphrase-protected keystore on the device - it never leaves the seller's infrastructure. The corresponding public key is registered with ai.market during device enrollment. All subsequent operations - publishing listings, signing delivery receipts, reporting traces - are authenticated by Ed25519 signatures verified against the registered public key.",
+      "Every AIM Channel or AIM-Node node instance generates an Ed25519 keypair locally during first setup. The private key is stored in a passphrase-protected keystore on the node instance - it never leaves the operator's infrastructure. The corresponding public key is registered with ai.market during node-instance enrollment. All subsequent operations - publishing listings, signing delivery receipts, reporting traces - are authenticated by Ed25519 signatures verified against the registered public key.",
   },
   {
     label: 'TRUST CHANNEL',
@@ -117,8 +117,8 @@ const stackRows = [
   },
   {
     component: 'AIM-Node',
-    role: 'Model/pipeline serving, compute metering, P2P execution',
-    operator: 'Providers (self-hosted)',
+    role: 'Gateway client — discovery, authentication, P2P delivery, local metering',
+    operator: 'Buyers and builders (self-hosted)',
   },
   {
     component: 'allAI',
@@ -293,7 +293,7 @@ export default function ProtocolPage() {
             </h2>
             <p className="mt-4 text-base leading-7 text-gray-600">
               The platform coordinates trust, authentication, and billing without taking custody
-              of datasets, weights, or pipeline outputs.
+              of datasets or any payload bytes.
             </p>
           </div>
 
@@ -324,7 +324,7 @@ export default function ProtocolPage() {
           <p className="mt-6 text-lg leading-8 text-gray-600">
             The protocol is API-first. Every interaction - listing, searching, purchasing,
             delivering - is available as a REST endpoint. AI agents can discover and transact
-            with data and compute assets programmatically without human intervention.
+            with data programmatically without human intervention.
           </p>
           <div className="mt-10 flex flex-col items-center justify-center gap-4 sm:flex-row">
             <Link
