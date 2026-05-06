@@ -18,7 +18,7 @@ import type { DataRequestDetail, DataRequestResponse, DataRequestUrgency } from 
 
 const URGENCY_BADGE: Record<DataRequestUrgency, string> = {
   low: 'bg-gray-100 text-gray-700',
-  medium: 'bg-[#E8EAF6] text-[#3F51B5]',
+  normal: 'bg-[#E8EAF6] text-[#3F51B5]',
   high: 'bg-amber-100 text-amber-800',
   urgent: 'bg-red-100 text-red-800',
 };
