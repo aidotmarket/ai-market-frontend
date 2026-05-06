@@ -196,7 +196,7 @@ export default function NewDataRequestPage() {
             className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-[#3F51B5]"
           >
             <option value="low">Low</option>
-            <option value="medium">Medium</option>
+            <option value="normal">Normal</option>
             <option value="high">High</option>
             <option value="urgent">Urgent</option>
           </select>
