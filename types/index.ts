@@ -484,7 +484,7 @@ export interface ConversationDetail {
 // ============================================================================
 
 export type DataRequestStatus = 'draft' | 'open' | 'responses_received' | 'fulfilled' | 'closed' | 'expired';
-export type DataRequestUrgency = 'low' | 'medium' | 'high' | 'urgent';
+export type DataRequestUrgency = 'low' | 'normal' | 'high' | 'urgent';
 
 export interface DataRequestListItem {
   id: string;
@@ -514,7 +514,7 @@ export interface CreateDataRequestPayload {
   title?: string;
   description: string;
   categories?: string[];
-  format_preferences?: string;
+  format_preferences?: string[];
   price_range_min?: number;
   price_range_max?: number;
   currency?: string;

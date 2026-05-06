@@ -24,7 +24,7 @@ export default function NewDataRequestPage() {
   const [formatPreferences, setFormatPreferences] = useState('');
   const [priceMin, setPriceMin] = useState('');
   const [priceMax, setPriceMax] = useState('');
-  const [urgency, setUrgency] = useState<DataRequestUrgency>('medium');
+  const [urgency, setUrgency] = useState<DataRequestUrgency>('normal');
   const [provenanceRequirements, setProvenanceRequirements] = useState('');
   const [submitting, setSubmitting] = useState(false);
 
@@ -55,7 +55,9 @@ export default function NewDataRequestPage() {
       const result = await createDataRequest({
         description: description.trim(),
         categories: parsedCategories.length > 0 ? parsedCategories : undefined,
-        format_preferences: formatPreferences.trim() || undefined,
+        format_preferences: formatPreferences.trim()
+          ? formatPreferences.split(',').map((s) => s.trim()).filter(Boolean)
+          : undefined,
         price_range_min: priceMin ? parseFloat(priceMin) : undefined,
         price_range_max: priceMax ? parseFloat(priceMax) : undefined,
         currency: 'USD',
@@ -67,7 +69,22 @@ export default function NewDataRequestPage() {
       router.push(`/requests/${result.slug}`);
     } catch (err) {
       if (err instanceof AxiosError) {
-        toast(err.response?.data?.detail || 'Failed to create data request.', 'error');
+        const detail = err.response?.data?.detail;
+        let message = 'Failed to create data request.';
+        if (typeof detail === 'string') {
+          message = detail;
+        } else if (Array.isArray(detail) && detail.length > 0) {
+          // FastAPI validation 422 shape: [{type, loc, msg}, ...]
+          message = detail
+            .map((d: { msg?: string; loc?: (string | number)[] }) => {
+              const field = Array.isArray(d?.loc) ? d.loc.filter((x) => x !== 'body').join('.') : '';
+              return field ? `${field}: ${d?.msg ?? 'invalid'}` : (d?.msg ?? 'invalid');
+            })
+            .join('; ');
+        } else if (detail && typeof detail === 'object') {
+          message = JSON.stringify(detail);
+        }
+        toast(message, 'error');
       } else {
         toast('An unexpected error occurred.', 'error');
       }
