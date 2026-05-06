@@ -483,7 +483,7 @@ export interface ConversationDetail {
 // Data Request types — matches backend app/schemas/data_request.py
 // ============================================================================
 
-export type DataRequestStatus = 'draft' | 'open' | 'responses_received' | 'fulfilled' | 'closed' | 'expired';
+export type DataRequestStatus = 'draft' | 'open' | 'matched' | 'responses_received' | 'fulfilled' | 'closed' | 'expired';
 export type DataRequestUrgency = 'low' | 'normal' | 'high' | 'urgent';
 
 export interface DataRequestListItem {
@@ -515,6 +515,7 @@ export interface CreateDataRequestPayload {
   description: string;
   categories?: string[];
   format_preferences?: string[];
+  regulatory_requirements?: string[];
   price_range_min?: number;
   price_range_max?: number;
   currency?: string;
