@@ -12,6 +12,7 @@ import type { DataRequestListItem, DataRequestStatus, DataRequestUrgency } from 
 const STATUS_BADGE: Record<DataRequestStatus, { css: string; label: string }> = {
   draft: { css: 'bg-gray-100 text-gray-600', label: 'Draft' },
   open: { css: 'bg-green-100 text-green-800', label: 'Open' },
+  matched: { css: 'bg-emerald-100 text-emerald-700', label: 'Matched' },
   responses_received: { css: 'bg-[#E8EAF6] text-[#303F9F]', label: 'Responses received' },
   fulfilled: { css: 'bg-purple-100 text-purple-800', label: 'Fulfilled' },
   closed: { css: 'bg-gray-100 text-gray-600', label: 'Closed' },
