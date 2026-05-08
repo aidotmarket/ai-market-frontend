@@ -1,4 +1,4 @@
-# BQ-FRONTEND-TYPES-FROM-BACKEND-OPENAPI-S574 — Gate 1 Spec (v2)
+# BQ-FRONTEND-TYPES-FROM-BACKEND-OPENAPI-S574 — Gate 1 Spec (v3)
 
 **Status:** Gate 1 author / R2 fold applied
 **Pillars:** ai.market product surface; Council/Koskadeux orchestration (clean contracts)
@@ -8,6 +8,15 @@
 **Priority:** P2
 
 ## Changelog
+
+### v3 (S586.W — NIT fold)
+
+R2 verdicts: MP=APPROVE_WITH_NITS (task `80865dd2`), AG=APPROVE clean (task `42e7a045`). All three R1 folds landed; AG independently verified citation accuracy, MED-2 grep premise, MED-3 backend ref, and AC7/AC8 preservation. v3 folds MP's two NIT findings:
+
+- **AC1 NIT** — v2 named both `openapi-typescript` and `orval` even though the same sentence locked tooling to `openapi-typescript` per MP R1 disposition Q1. v3 names only `openapi-typescript`.
+- **AC5 heading NIT** — v2 said "At least three known-drift cases" but AC5d makes the fourth explicit. v3 says "At least four known-drift cases".
+
+No structural changes; pure wording cleanup. Branch HEAD prior to v3: 299378a.
 
 ### v2 (S585.W drafted, S586.W shipped)
 
@@ -50,7 +59,7 @@ When a staging environment is added, AC7 will be re-fold to switch CI to staging
 
 ## Acceptance Criteria
 
-**AC1.** Frontend has a generated types module (e.g. `types/api-generated.ts`) produced by `openapi-typescript` or `orval` from the backend's OpenAPI spec at `/openapi.json`. Tooling choice locked to `openapi-typescript` per MP R1 disposition Q1 (no existing codegen tooling in repo; types-only output is the right scope).
+**AC1.** Frontend has a generated types module (e.g. `types/api-generated.ts`) produced by `openapi-typescript` from the backend's OpenAPI spec at `/openapi.json`. Tooling choice locked to `openapi-typescript` per MP R1 disposition Q1 (no existing codegen tooling in repo; types-only output is the right scope).
 
 **AC2.** A make-target / npm script regenerates the types on demand and is documented in the frontend README. The generated file IS committed (per MP F-Q5: do NOT regenerate inside every Railway build; keep cold builds deterministic and cheap).
 
@@ -60,7 +69,7 @@ When a staging environment is added, AC7 will be re-fold to switch CI to staging
 
 > **Scoping note (R2 MED-2 fold).** AC4 covers all hand-maintained backend-mirror types currently in `types/index.ts`. `BuildQueueDetail` does not appear there (verified via S585.W AG dispatch `1cf3fcf0`: `grep BuildQueueDetail types/index.ts` returned no match) and its drift is covered by AC5d.
 
-**AC5.** At least three known-drift cases are validated against the regenerated types and any divergence resolved:
+**AC5.** At least four known-drift cases are validated against the regenerated types and any divergence resolved:
 
 - **AC5a.** `DataRequestUrgency` — frontend value space matches backend pattern `low|normal|high|urgent` (no `'medium'`).
 - **AC5b.** `CreateDataRequestPayload.format_preferences` — typed as `list[str]` matching backend.
