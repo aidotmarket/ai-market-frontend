@@ -92,13 +92,25 @@ assigned to Max or Primary if the Worker token cannot perform it.
 - Do not rely on voluntary merge discipline where GitHub can enforce the invariant.
 - Do not require non-admin review approval until the solo-operator review model changes.
 
+**Reserved future required checks.**
+Two known S574 sibling BQs will add required CI contexts after this Gate ships. This Gate reserves
+their names and requires a branch-protection update at the moment each sibling lands:
+- `types-stale-check` — added by `BQ-FRONTEND-TYPES-FROM-BACKEND-OPENAPI-S574` when generated
+  OpenAPI-derived types become enforceable. That BQ must update `required_status_checks.contexts`
+  from `["typecheck", "lint", "build"]` to `["typecheck", "lint", "build",
+  "types-stale-check"]` in the same merge/apply sequence that introduces the stale-types job.
+- `e2e` — added by `BQ-FRONTEND-E2E-CUSTOMER-JOURNEY-TESTS-S574` when customer-journey E2E tests
+  exist. That BQ must update `required_status_checks.contexts` to include `e2e` before the E2E
+  workflow is treated as complete. Until then, no placeholder `e2e` job is added because a required
+  context that never reports would block all merges.
+
 ## 3. Acceptance Criteria
 
 **AC0a (precondition).** `package.json` gains a `typecheck` script: `"typecheck": "tsc --noEmit"`. No other script changes. Verified by `npm run typecheck` exiting 0 against current `main` HEAD.
 
 **AC1.** A new file `.github/workflows/ci.yml` exists with these properties:
-- Trigger: `on: pull_request: branches: [main]` and `on: push: branches: [main]` (push trigger keeps required checks current on `main` itself).
-- Three jobs, each on `ubuntu-latest`, each using `actions/checkout@v4` and `actions/setup-node@v4` with Node version pinned (proposed: `20`, matched to Railway's nixpacks.toml; verify at build time and adjust):
+- Trigger: `on: pull_request: branches: [main]`, `on: push: branches: [main]`, and `on: workflow_dispatch` (push trigger keeps required checks current on `main`; manual dispatch supports admin re-runs without editing YAML).
+- Three jobs, each on `ubuntu-latest`, each using `actions/checkout@v4` and `actions/setup-node@v4` with Node version pinned to `20`, verified against `nixpacks.toml` (`nixPkgs = ["nodejs_20"]`):
   - `typecheck`: `npm ci` then `npm run typecheck`.
   - `lint`: `npm ci` then `npm run lint`.
   - `build`: `npm ci` then `npm run build`.
@@ -112,7 +124,11 @@ context names stable and easy to bind in branch protection. The jobs may duplica
 accepted for clarity and because GitHub job isolation means sharing `node_modules` would add more
 complexity than it removes.
 
-**AC2.** The workflow runs successfully on a no-op PR opened against `main` (smoke test). Verified by opening a draft PR with a whitespace-only change to a markdown file post-merge and observing all three checks pass.
+The context is intentionally named `typecheck`, not `type-check`, because it matches the existing
+script name and avoids a future mismatch between `package.json`, workflow job ID, and branch
+protection context.
+
+**AC2.** The workflow runs successfully on a no-op PR opened against `main` (smoke test). Verified by opening a draft PR with a whitespace-only change to a markdown file post-merge and recording `gh pr checks <PR_NUMBER> --repo aidotmarket/ai-market-frontend --watch` output showing `typecheck`, `lint`, and `build` pass.
 
 **AC3.** Branch protection on `aidotmarket/ai-market-frontend` `main` is configured via `PUT /repos/aidotmarket/ai-market-frontend/branches/main/protection` with this JSON shape (recorded in runbook AC8 for reproducibility):
 ```json
@@ -131,6 +147,11 @@ complexity than it removes.
 }
 ```
 The `strict: true` flag means status checks must be up-to-date with `main` (no stale passes). The `enforce_admins: false` is the deliberate admin emergency-bypass channel (AC6).
+The `required_pull_request_reviews: null` decision is deliberate: S574's accepted solo-operator
+policy uses required CI plus a soft self-review checklist instead of blocking on formal approval.
+The branch-protection rule must not require signed commits in this Gate. Signed commits are deferred
+because this BQ addresses CI completion before merge, while signed commits are a separate
+supply-chain/authorship policy that needs its own repository-wide decision.
 
 **AC3 expected post-apply shape.**
 After the protection rule is applied, `gh api repos/aidotmarket/ai-market-frontend/branches/main/protection`
@@ -138,15 +159,23 @@ must return `required_status_checks.strict == true`, `required_status_checks.con
 exactly `typecheck`, `lint`, and `build`, `allow_force_pushes.enabled == false`, and
 `allow_deletions.enabled == false`.
 
-**AC4.** Required-status-check completion is enforced before merge — neither pending nor failing checks allow the green merge button. Verified by opening a synthetic test PR that introduces a deliberate `tsc --noEmit` failure and confirming the merge button is disabled in the GitHub UI; capture screenshot or `gh pr view --json mergeable,mergeStateStatus` output showing `mergeStateStatus: BLOCKED`.
+**Future protection expansion protocol.**
+When `BQ-FRONTEND-TYPES-FROM-BACKEND-OPENAPI-S574` lands, the same PR or immediate post-merge apply
+step must add the `types-stale-check` context and prove it with:
+`gh api repos/aidotmarket/ai-market-frontend/branches/main/protection --jq '.required_status_checks.contexts'`.
+When `BQ-FRONTEND-E2E-CUSTOMER-JOURNEY-TESTS-S574` lands, the same protocol must add `e2e`. A
+sibling is not complete until its new check is both emitted by Actions and present in branch
+protection readback.
 
-**AC5.** Merge methods on the repo settings: squash and merge commit are both allowed; rebase merge is left at current setting (no change required). No bypass for non-admins.
+**AC4.** Required-status-check completion is enforced before merge — neither pending nor failing checks allow the green merge button. Verified by opening a synthetic test PR that introduces a deliberate `tsc --noEmit` failure and committing either (a) `gh pr view <PR_NUMBER> --repo aidotmarket/ai-market-frontend --json mergeable,mergeStateStatus,statusCheckRollup` output showing `mergeStateStatus: BLOCKED`, or (b) a screenshot artifact path plus the failing check URL in the Gate 2 verification log.
+
+**AC5.** Merge methods on the repo settings: squash and merge commit are both allowed; rebase merge is left at current setting (no change required). No bypass for non-admins. Verified with `gh api repos/aidotmarket/ai-market-frontend --jq '{allow_squash_merge, allow_merge_commit, allow_rebase_merge}'`; PASS requires `allow_squash_merge == true`, `allow_merge_commit == true`, and no intentional change to the observed `allow_rebase_merge` value.
 
 **AC6.** Emergency bypass procedure: admin (`max`) can force-merge via `gh pr merge --admin` per GitHub's documented admin override. Every admin override is recorded as an audit event in the allAI Event Ledger via a `ci_protection_override` event posted manually as part of the bypass procedure (runbook AC8 documents the exact `curl` and event payload).
 
 **AC7.** Self-review checklist replaces approving-review requirement (per S574 MP solo-operator finding F-Q6 — `required_pull_request_reviews: null` in AC3 JSON honors this). Runbook documents the soft self-review checklist: (a) `gh pr diff` reviewed for unintended changes; (b) PR description references BQ ref; (c) all required checks green or admin-bypass justification captured.
 
-**AC8.** A new runbook section is added (proposed location: `aidotmarket/runbooks` repo) documenting:
+**AC8.** Because `aidotmarket/runbooks` is out of scope for this Worker, this Gate commits the exact runbook section content into the Gate 2 verification log and files `BQ-RUNBOOK-CI-MERGE-GATE-BRANCH-PROTECTION-S574-FOLLOWUP` for materialization in the runbooks repo. The verification log section documents:
 - The exact protection-rule JSON applied (AC3 verbatim).
 - The `gh api PUT` invocation used to apply it (with `--input -` from a file for reproducibility).
 - The emergency bypass procedure (`gh pr merge --admin` + manual audit-event POST).
@@ -171,6 +200,20 @@ The verification artifact must include these headings:
 Each heading must include either a command transcript, a PR URL, or an explicit `not run because`
 statement with owner and follow-up.
 
+**Acceptance verification matrix.**
+| AC | PASS/FAIL evidence |
+| --- | --- |
+| AC0a | `npm run typecheck` exits 0 on the implementation PR. |
+| AC1 | `test -f .github/workflows/ci.yml` plus YAML inspection showing `pull_request`, `push`, `workflow_dispatch`, Node `20`, and jobs `typecheck`, `lint`, `build`. |
+| AC2 | `gh pr checks <NOOP_PR> --repo aidotmarket/ai-market-frontend --watch` shows all three required checks passing. |
+| AC3 | `gh api repos/aidotmarket/ai-market-frontend/branches/main/protection --jq '{strict: .required_status_checks.strict, contexts: .required_status_checks.contexts, reviews: .required_pull_request_reviews, force: .allow_force_pushes.enabled, deletions: .allow_deletions.enabled}'` matches the spec. |
+| AC4 | Synthetic failing PR evidence from `gh pr view <FAIL_PR> --repo aidotmarket/ai-market-frontend --json mergeable,mergeStateStatus,statusCheckRollup` or committed screenshot artifact shows merge blocked. |
+| AC5 | `gh api repos/aidotmarket/ai-market-frontend --jq '{allow_squash_merge, allow_merge_commit, allow_rebase_merge}'` shows squash and merge commit allowed. |
+| AC6 | Verification log includes the exact `gh pr merge --admin` bypass command and allAI `ci_protection_override` event payload; no real override is required for PASS. |
+| AC7 | Verification log includes completed self-review checklist items and PR description contains the BQ ref. |
+| AC8 | Verification log includes the deferred runbook section content and sibling BQ filing evidence or explicit owner/date if filing is blocked. |
+| AC9 | `test -f specs/BQ-CI-MERGE-GATE-BRANCH-PROTECTION-S574-VERIFICATION.md` and the artifact contains the required headings listed above. |
+
 ## 4. Implementation Plan (Gate 2 preview)
 
 Single PR with:
@@ -192,6 +235,8 @@ Single PR with:
 8. Open a synthetic failing PR to prove merge is blocked while `typecheck` fails.
 9. Close the synthetic PR without merge and commit the verification log.
 10. File sibling BQs for backend, ops, runbooks, and runbook materialization.
+11. When the type-generation sibling lands, update branch protection to add `types-stale-check`.
+12. When the E2E sibling lands, update branch protection to add `e2e`.
 
 **File touch list (Gate 2):**
 - `package.json` (1 line)
@@ -240,7 +285,7 @@ head to be up to date with `main`; this is the specific protection against stale
 
 **Q2.** Should `push: branches: [main]` trigger be included or only `pull_request`? Including push keeps `main`-itself check status fresh which `strict: true` requires. **Recommendation:** include both (AC1 reflects this).
 
-**Q3.** Should the workflow also run on `workflow_dispatch` for manual re-runs? **Recommendation:** yes, low-cost; AC1 should be amended to add `workflow_dispatch` if Council concurs. Marked as a NIT-class question for R1.
+**Q3.** Should the workflow also run on `workflow_dispatch` for manual re-runs? **Resolved:** yes. AC1 now requires `workflow_dispatch`.
 
 **Q4.** Required-status-check name binding: GitHub matches by job name string. If the workflow file uses `name: typecheck` at the workflow level vs at the job level, the displayed check name differs. **Resolution in spec:** AC1 fixes job names exactly as `typecheck`, `lint`, `build`. AC3 contexts list matches. Confirmed against GitHub Actions docs at spec authoring.
 
@@ -250,9 +295,10 @@ head to be up to date with `main`; this is the specific protection against stale
 Gate. The accepted policy is admin-only emergency override with audit event. This keeps production
 incident response possible while removing bypass for non-admin merges.
 
-**Q7.** Should branch protection require signed commits? **Deferred in v3 baseline.** The original
-Gate scope is CI completion before merge. Signed-commit policy is a separate supply-chain control
-and should be decided explicitly by Council before binding repository settings.
+**Q7.** Should branch protection require signed commits? **Resolved for this Gate:** not required.
+The original Gate scope is CI completion before merge. Signed commits are a separate
+supply-chain/authorship policy and are deferred to a future repository-wide decision instead of
+being silently added here.
 
 ## 7. Sequence & Dependencies
 
