@@ -85,6 +85,15 @@ Add exactly one entry to `package.json` `scripts` block: `"typecheck": "tsc --no
 
 ### AC-B3 — Workflow file `.github/workflows/ci.yml`
 
+**Baseline workflow inventory:** At Gate 2 entry, only one workflow file exists on `origin/main`:
+
+```bash
+ls .github/workflows/
+# Expected: deploy-receipt.yml (only)
+```
+
+`deploy-receipt.yml` — workflow name `Deploy Receipt`, triggers on `push` to `main`, job ID `verify-deploy`. It records deployment receipts and is orthogonal to PR-time CI gating. `ci.yml` coexists alongside `deploy-receipt.yml` — no deletion, merging, or modification of `deploy-receipt.yml` is required or in scope.
+
 Author a new workflow with this exact shape (no drift — required-check binding is by job-name string identity):
 
 ```yaml
@@ -195,7 +204,11 @@ cat > /tmp/protection.json <<'EOF'
     "contexts": ["typecheck", "lint", "build"]
   },
   "enforce_admins": false,
-  "required_pull_request_reviews": null,
+  "required_pull_request_reviews": {
+    "required_approving_review_count": 0,
+    "dismiss_stale_reviews": false,
+    "require_code_owner_reviews": false
+  },
   "restrictions": null,
   "required_linear_history": false,
   "allow_force_pushes": false,
@@ -211,18 +224,18 @@ gh api -X PUT repos/aidotmarket/ai-market-frontend/branches/main/protection \
 
 ```bash
 gh api repos/aidotmarket/ai-market-frontend/branches/main/protection \
-  --jq '{strict: .required_status_checks.strict, contexts: .required_status_checks.contexts, force: .allow_force_pushes.enabled, deletions: .allow_deletions.enabled, reviews: .required_pull_request_reviews}'
+  --jq '{strict: .required_status_checks.strict, contexts: .required_status_checks.contexts, force: .allow_force_pushes.enabled, deletions: .allow_deletions.enabled, reviews_required: (.required_pull_request_reviews != null), reviews_approvals: .required_pull_request_reviews.required_approving_review_count}'
 ```
 
-Output must show: `strict: true`; `contexts` containing exactly the set `{"typecheck","lint","build"}` (order-insensitive); `force: false`; `deletions: false`; `reviews: null`.
+Output must show: `strict: true`; `contexts` containing exactly the set `{"typecheck","lint","build"}` (order-insensitive); `force: false`; `deletions: false`; `reviews_required: true`; `reviews_approvals: 0` (PRs are required; zero approvals preserves the solo-operator policy — changes must arrive via PR but no peer sign-off is mandated).
 
 **Worker-without-admin path:** if Worker token returns 403, Worker commits `protection.json` artifact + the `gh api` command into the verification log and assigns Max as the follow-up actor. AC-B7 PASS-pending until Max executes.
 
-### AC-B8 — Synthetic failing PR
+### AC-B8 — Three-scenario test matrix
 
-After AC-B7 PASS, open a synthetic failing PR proving merge is blocked when CI fails (Gate 1 AC4).
+After AC-B7 PASS, exercise all three required test scenarios to prove enforcement is complete.
 
-Procedure:
+#### Scenario A — Failing check blocks merge (Gate 1 AC4)
 
 1. From `main`, create branch `synthetic/ci-merge-gate-block-test`.
 2. Add one line to a temp `*.ts` or `*.tsx` file that breaks `tsc --noEmit` — e.g., `export const __syn: number = "broken";`.
@@ -233,6 +246,30 @@ Procedure:
 **PASS condition:** `mergeStateStatus == "BLOCKED"` AND `statusCheckRollup` shows `typecheck` with conclusion `FAILURE`.
 
 **Cleanup:** close PR without merge; delete branch.
+
+#### Scenario B — Required contexts absent blocks merge
+
+Immediately after pushing the Scenario A branch and opening the PR (before any CI run completes), capture mergeability while the required check contexts are in `EXPECTED` or `PENDING` state:
+
+```bash
+# Run within ~10s of PR open, before CI reports:
+gh pr view <PR-S-FAIL> --json mergeable,mergeStateStatus,statusCheckRollup
+# Expected: mergeStateStatus == "BLOCKED"; required contexts appear as PENDING or EXPECTED
+```
+
+**PASS condition:** `mergeStateStatus == "BLOCKED"` at a point when no required context has yet reported. This proves the gate fires when checks are absent, not only when they fail.
+
+**Note:** Scenario A and Scenario B share the same synthetic PR. Capture Scenario B output first (immediately after PR open), then wait for CI to complete and capture Scenario A output.
+
+#### Scenario C — All checks passing allows merge
+
+The verification PR (PR-V, AC-B9) opened on a clean branch serves as the all-passing scenario. After branch protection is active (AC-B7 PASS) and PR-V's CI completes green, capture:
+
+```bash
+gh pr view <PR-V> --json mergeable,mergeStateStatus,statusCheckRollup
+```
+
+**PASS condition:** `mergeStateStatus == "CLEAN"` AND all three required contexts (`typecheck`, `lint`, `build`) show conclusion `SUCCESS`. This proves that protection does not permanently block valid PRs.
 
 ### AC-B9 — Verification log
 
@@ -268,6 +305,45 @@ Each filed as `kind=build` Living State entity with: `summary`, `body.summary`, 
 **PASS condition:** `state_request action=get` on each of the four entity keys returns `version >= 1`.
 
 **Caveat (Gate 1 R6 + bq_entity_hook phantom):** when filing, watch for phantom suffix-truncated siblings per `BQ-BQ-ENTITY-HOOK-PHANTOM-SUFFIX-TRUNCATED-SIBLINGS-S587`. If phantoms appear, document them in verification log §Deferred sibling BQs as cleanup deltas (do not delete in this BQ).
+
+### AC-B11 — Rollback procedure
+
+**Purpose:** Restore `main` to its pre-Gate-2 state (no branch protection) if the applied rule is incorrect, causes an incident, or must be temporarily relaxed. This is distinct from the emergency bypass (`gh pr merge --admin`) — use bypass when the rule is correct but CI is broken; use this rollback when the rule itself is wrong.
+
+**Authorization:** Same as AC-B7 — only Max or a repo admin may execute. Log the rollback event in the verification log with timestamp and reason.
+
+**Step 1 — Save current rule before touching anything:**
+
+```bash
+gh api repos/aidotmarket/ai-market-frontend/branches/main/protection \
+  > /tmp/protection-backup-$(date +%Y%m%d-%H%M%S).json
+cat /tmp/protection-backup-*.json   # confirm non-empty before proceeding
+```
+
+**Step 2 — Remove protection (restore pre-Gate-2 state):**
+
+```bash
+gh api -X DELETE repos/aidotmarket/ai-market-frontend/branches/main/protection
+# Returns HTTP 204 on success (no body)
+```
+
+**Step 3 — Verify rollback:**
+
+```bash
+gh api repos/aidotmarket/ai-market-frontend/branches/main/protection 2>&1 \
+  | grep -q "Branch not protected" && echo "ROLLBACK OK"
+```
+
+**Step 4 — Re-apply corrected rule (if editing rather than removing):**
+
+```bash
+# Edit /tmp/protection-backup-<timestamp>.json to correct the rule, then:
+gh api -X PUT repos/aidotmarket/ai-market-frontend/branches/main/protection \
+  --input /tmp/protection-corrected.json
+# Readback with the same jq from AC-B7 PASS condition.
+```
+
+**PASS condition:** Step 3 prints `ROLLBACK OK`, or Step 4 readback shows the corrected rule.
 
 ---
 
