@@ -4,9 +4,25 @@ import { fetchPublicListings, type PaginatedListings } from '@/lib/api';
 import { HeroSearch } from '@/components/HeroSearch';
 
 export const metadata: Metadata = {
-  title: 'ai.market - B2B Data Marketplace',
+  title: 'ai.market — Sell data without giving it away',
   description:
-    'Sell data without giving it away. A non-custodial B2B marketplace where data stays on your infrastructure.',
+    'Non-custodial B2B data marketplace. List with AIM Data, find with semantic search and data requests, train across orgs with AIM Federate.',
+  openGraph: {
+    title: 'ai.market — Sell data without giving it away',
+    description:
+      'Non-custodial B2B data marketplace. List with AIM Data, find with semantic search and data requests, train across orgs with AIM Federate.',
+    url: 'https://ai.market',
+    siteName: 'ai.market',
+    images: ['/og/ai-market.png'],
+    type: 'website',
+  },
+  twitter: {
+    card: 'summary_large_image',
+    title: 'ai.market — Sell data without giving it away',
+    description:
+      'Non-custodial B2B data marketplace. List with AIM Data, find with semantic search and data requests, train across orgs with AIM Federate.',
+    images: ['/og/ai-market.png'],
+  },
 };
 
 const LANDING_JSONLD = [

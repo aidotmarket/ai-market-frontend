@@ -2,10 +2,62 @@ import Link from 'next/link';
 import type { Metadata } from 'next';
 
 export const metadata: Metadata = {
-  title: 'Sell Data',
+  title: 'Sell data on ai.market with AIM Data',
   description:
-    'Install AIM Data on your own infrastructure and sell data through ai.market without giving it away.',
+    'Install AIM Data on your infrastructure. List your datasets without giving up custody. Stripe payouts on every transaction.',
+  openGraph: {
+    title: 'Sell data on ai.market with AIM Data',
+    description:
+      'Install AIM Data on your infrastructure. List your datasets without giving up custody. Stripe payouts on every transaction.',
+    url: 'https://ai.market/sell-data',
+    siteName: 'ai.market',
+    images: ['/og/sell-data.png'],
+    type: 'website',
+  },
+  twitter: {
+    card: 'summary_large_image',
+    title: 'Sell data on ai.market with AIM Data',
+    description:
+      'Install AIM Data on your infrastructure. List your datasets without giving up custody. Stripe payouts on every transaction.',
+    images: ['/og/sell-data.png'],
+  },
 };
+
+const SELL_DATA_JSONLD = [
+  {
+    '@context': 'https://schema.org',
+    '@type': 'SoftwareApplication',
+    name: 'AIM Data',
+    applicationCategory: 'BusinessApplication',
+    operatingSystem: 'Linux, macOS',
+    url: 'https://ai.market/sell-data',
+    description:
+      'Install AIM Data on your infrastructure. List your datasets without giving up custody. Stripe payouts on every transaction.',
+    provider: {
+      '@type': 'Organization',
+      name: 'ai.market',
+      url: 'https://ai.market',
+    },
+  },
+  {
+    '@context': 'https://schema.org',
+    '@type': 'BreadcrumbList',
+    itemListElement: [
+      {
+        '@type': 'ListItem',
+        position: 1,
+        name: 'ai.market',
+        item: 'https://ai.market',
+      },
+      {
+        '@type': 'ListItem',
+        position: 2,
+        name: 'Sell data',
+        item: 'https://ai.market/sell-data',
+      },
+    ],
+  },
+];
 
 const steps = [
   {
@@ -148,7 +200,9 @@ function FeatureCard({
 
 export default function SellDataPage() {
   return (
-    <div className="bg-white">
+    <>
+      <script type="application/ld+json">{JSON.stringify(SELL_DATA_JSONLD)}</script>
+      <div className="bg-white">
       <section className="bg-gradient-to-b from-[#F7FCFA] to-white">
         <div className="mx-auto max-w-7xl px-4 py-12 sm:px-6 sm:py-16 lg:px-8">
           <div className="max-w-4xl">
@@ -310,6 +364,7 @@ export default function SellDataPage() {
           </p>
         </div>
       </section>
-    </div>
+      </div>
+    </>
   );
 }

@@ -3,11 +3,62 @@ import type { Metadata } from 'next';
 import { MarketplaceSearchExperience } from '@/components/search/MarketplaceSearchExperience';
 
 export const metadata: Metadata = {
-  title: 'Find Data',
-  description: 'Search the ai.market catalog or post a Data Request for providers to answer.',
+  title: 'Find data on ai.market',
+  description:
+    'Semantic search across the marketplace data catalog, or post a data request and let providers respond.',
+  openGraph: {
+    title: 'Find data on ai.market',
+    description:
+      'Semantic search across the marketplace data catalog, or post a data request and let providers respond.',
+    url: 'https://ai.market/find-data',
+    siteName: 'ai.market',
+    images: ['/og/find-data.png'],
+    type: 'website',
+  },
+  twitter: {
+    card: 'summary_large_image',
+    title: 'Find data on ai.market',
+    description:
+      'Semantic search across the marketplace data catalog, or post a data request and let providers respond.',
+    images: ['/og/find-data.png'],
+  },
 };
 
 export const dynamic = 'force-dynamic';
+
+const FIND_DATA_JSONLD = [
+  {
+    '@context': 'https://schema.org',
+    '@type': 'WebPage',
+    name: 'Find data on ai.market',
+    url: 'https://ai.market/find-data',
+    description:
+      'Semantic search across the marketplace data catalog, or post a data request and let providers respond.',
+    isPartOf: {
+      '@type': 'WebSite',
+      name: 'ai.market',
+      url: 'https://ai.market',
+    },
+  },
+  {
+    '@context': 'https://schema.org',
+    '@type': 'BreadcrumbList',
+    itemListElement: [
+      {
+        '@type': 'ListItem',
+        position: 1,
+        name: 'ai.market',
+        item: 'https://ai.market',
+      },
+      {
+        '@type': 'ListItem',
+        position: 2,
+        name: 'Find data',
+        item: 'https://ai.market/find-data',
+      },
+    ],
+  },
+];
 
 const categories = [
   {
@@ -54,7 +105,9 @@ const categories = [
 
 export default function FindDataPage() {
   return (
-    <div className="bg-white">
+    <>
+      <script type="application/ld+json">{JSON.stringify(FIND_DATA_JSONLD)}</script>
+      <div className="bg-white">
       <section className="bg-gradient-to-b from-[#F7FCFA] to-white">
         <div className="mx-auto max-w-7xl px-4 py-12 sm:px-6 sm:py-16 lg:px-8">
           <div className="max-w-3xl">
@@ -169,6 +222,7 @@ export default function FindDataPage() {
           </p>
         </div>
       </section>
-    </div>
+      </div>
+    </>
   );
 }
