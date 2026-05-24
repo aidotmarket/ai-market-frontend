@@ -4,22 +4,10 @@ const nextConfig: NextConfig = {
   reactStrictMode: true,
   async redirects() {
     return [
-      {
-        source: '/aim-node',
-        destination: '/download/aim-node',
-        permanent: true,
-      },
-      {
-        source: '/download/aim-data',
-        destination: '/download/aim-channel',
-        permanent: true,
-      },
-      {
-        source: '/:path*',
-        has: [{ type: 'host', value: 'www.ai.market' }],
-        destination: 'https://ai.market/:path*',
-        permanent: true,
-      },
+      { source: '/download/aim-channel', destination: '/sell-data', permanent: true },
+      { source: '/download', destination: '/sell-data', permanent: true },
+      { source: '/download/aim-node', destination: '/partner#technology-partner', permanent: true },
+      { source: '/run-federated-learning', destination: '/aim-federate', permanent: true },
     ];
   },
   async rewrites() {

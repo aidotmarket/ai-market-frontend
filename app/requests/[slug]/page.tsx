@@ -153,7 +153,7 @@ export default function DataRequestDetailPage() {
     return (
       <div className="mx-auto max-w-3xl px-4 sm:px-6 lg:px-8 py-16 text-center">
         <h1 className="text-2xl font-bold text-gray-900 mb-2">Request not found</h1>
-        <p className="text-gray-500 mb-6">This data request may have been removed or doesn&apos;t exist.</p>
+        <p className="text-gray-500 mb-6">This data request was removed or does not exist.</p>
         <Link
           href="/requests"
           className="rounded-lg bg-[#3F51B5] px-6 py-2.5 text-sm font-medium text-white hover:bg-[#3545a0]"
@@ -228,7 +228,7 @@ export default function DataRequestDetailPage() {
 
       {/* Description */}
       <div className="rounded-xl border border-gray-200 p-6 mb-6">
-        <h2 className="text-sm font-semibold text-gray-700 uppercase tracking-wide mb-3">Description</h2>
+        <h2 className="text-sm font-semibold text-gray-700 uppercase tracking-wide mb-3">Request</h2>
         <p className="text-gray-800 whitespace-pre-wrap">{request.description}</p>
       </div>
 
@@ -248,7 +248,7 @@ export default function DataRequestDetailPage() {
         )}
         {request.format_preferences && (
           <div className="rounded-xl border border-gray-200 p-4">
-            <h3 className="text-xs font-semibold text-gray-500 uppercase mb-2">Format Preferences</h3>
+            <h3 className="text-xs font-semibold text-gray-500 uppercase mb-2">Preferred Formats</h3>
             <p className="text-sm text-gray-800">{request.format_preferences}</p>
           </div>
         )}
@@ -289,7 +289,7 @@ export default function DataRequestDetailPage() {
       {/* Seller: Submit Response form */}
       {isAuthenticated && !isOwner && (request.status === 'open' || request.status === 'responses_received') && (
         <div className="rounded-xl border border-gray-200 p-6">
-          <h2 className="text-lg font-semibold text-gray-900 mb-4">Submit a Response</h2>
+          <h2 className="text-lg font-semibold text-gray-900 mb-4">Respond to Request</h2>
           <form onSubmit={handleSubmitResponse} className="space-y-4">
             <div>
               <label htmlFor="proposal" className="block text-sm font-medium text-gray-700 mb-1">
@@ -301,7 +301,7 @@ export default function DataRequestDetailPage() {
                 rows={4}
                 value={proposal}
                 onChange={(e) => setProposal(e.target.value)}
-                placeholder="Describe the data you can provide and how it meets the requirements..."
+                placeholder="Describe the data you can provide and how it meets the request."
                 className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-[#3F51B5]"
               />
             </div>
