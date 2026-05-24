@@ -43,7 +43,7 @@ const technologyPartnerSteps = [
   {
     title: 'Search the catalog',
     description:
-      'Use the MCP API to search marketplace listings, inspect matching data products, and connect catalog access to your user workflows.',
+      'Query the MCP API by capability, schema, license, price, and quality score. Inspect matching data products and connect catalog access to your user workflows.',
   },
   {
     title: 'Connect peer-to-peer',
@@ -285,7 +285,8 @@ export default function PartnerPage() {
               Some partners do both.
             </h2>
             <p className="mt-4 max-w-4xl text-base leading-7 text-gray-600">
-              A partner can list with AIM Data and integrate AIM Node at the same time. That path works well for platforms that want to sell their own datasets while also giving their customers programmatic access to the broader ai.market catalog.
+              A partner can list with <Link href="#data-partner" className="font-semibold text-[#3F51B5] hover:text-[#303F9F]">AIM Data</Link> and integrate <Link href="#technology-partner" className="font-semibold text-[#3F51B5] hover:text-[#303F9F]">AIM Node</Link>{' '}
+              at the same time. That path works well for platforms that want to sell their own datasets while also giving their customers programmatic access to the broader ai.market catalog.
             </p>
           </div>
         </div>
