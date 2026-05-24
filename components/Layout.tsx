@@ -9,25 +9,27 @@ const footerLinkSections = [
   {
     title: 'Marketplace',
     links: [
+      { label: 'Find Data', href: '/find-data' },
+      { label: 'Sell Data', href: '/sell-data' },
+      { label: 'Run Federated Learning', href: '/run-federated-learning' },
       { label: 'Browse Data', href: '/listings' },
       { label: 'Request Data', href: '/requests' },
-      { label: 'List Your Data', href: '/download' },
-      { label: 'Blog', href: '/blog' },
       { label: 'Partner Program', href: '/partner' },
+      { label: 'Blog', href: '/blog' },
     ],
   },
   {
     title: 'Developers',
     links: [
       { label: 'The Protocol', href: '/protocol' },
-      { label: 'AIM-Node', href: '/download/aim-node' },
-      { label: 'AIM Channel', href: '/download' },
+      { label: 'AIM Data', href: '/aim-data' },
+      { label: 'AIM Node', href: '/aim-node' },
     ],
   },
   {
     title: 'Support',
     links: [
-      { label: 'Contact & Support', href: '/support' },
+      { label: 'Contact and Support', href: '/support' },
       { label: 'Become a Partner', href: '/partner' },
     ],
   },
@@ -82,10 +84,9 @@ export function Layout({ children }: { children: React.ReactNode }) {
             </Link>
 
             <nav className="hidden md:flex items-center gap-6">
-              <Link href="/listings" className="text-sm text-[#666666] hover:text-[#1A1A1A]">Browse</Link>
-              <Link href="/requests" className="text-sm text-[#666666] hover:text-[#1A1A1A]">Request Data</Link>
-              <Link href="/download" className="text-sm text-[#666666] hover:text-[#1A1A1A]">List Data</Link>
-              <Link href="/download/aim-node" className="text-sm text-[#666666] hover:text-[#1A1A1A]">AIM-Node</Link>
+              <Link href="/find-data" className="text-sm text-[#666666] hover:text-[#1A1A1A]">Find Data</Link>
+              <Link href="/sell-data" className="text-sm text-[#666666] hover:text-[#1A1A1A]">Sell Data</Link>
+              <Link href="/run-federated-learning" className="text-sm text-[#666666] hover:text-[#1A1A1A]">Run Federated Learning</Link>
               <Link href="/protocol" className="text-sm text-[#666666] hover:text-[#1A1A1A]">The Protocol</Link>
               <Link href="/blog" className="text-sm text-[#666666] hover:text-[#1A1A1A]">Blog</Link>
               {isAdminEmail && (
@@ -104,7 +105,7 @@ export function Layout({ children }: { children: React.ReactNode }) {
                 </div>
               ) : (
                 <>
-                  <Link href="/login" className="text-sm text-gray-600 hover:text-gray-900">Log in</Link>
+                  <Link href="/login" className="text-sm text-gray-600 hover:text-gray-900">Sign in</Link>
                   <Link
                     href="/register"
                     className="rounded-lg bg-[#3F51B5] px-4 py-2 text-sm font-medium text-white hover:bg-[#3545a0] transition-colors"
@@ -134,10 +135,9 @@ export function Layout({ children }: { children: React.ReactNode }) {
 
           {mobileMenuOpen && (
             <div id="mobile-nav-menu" className="md:hidden border-t border-gray-200 py-3 space-y-2">
-              <Link href="/listings" className="block px-2 py-2 text-sm text-gray-600 hover:text-gray-900" onClick={() => setMobileMenuOpen(false)}>Browse</Link>
-              <Link href="/requests" className="block px-2 py-2 text-sm text-gray-600 hover:text-gray-900" onClick={() => setMobileMenuOpen(false)}>Request Data</Link>
-              <Link href="/download" className="block px-2 py-2 text-sm text-gray-600 hover:text-gray-900" onClick={() => setMobileMenuOpen(false)}>List Data</Link>
-              <Link href="/download/aim-node" className="block px-2 py-2 text-sm text-gray-600 hover:text-gray-900" onClick={() => setMobileMenuOpen(false)}>AIM-Node</Link>
+              <Link href="/find-data" className="block px-2 py-2 text-sm text-gray-600 hover:text-gray-900" onClick={() => setMobileMenuOpen(false)}>Find Data</Link>
+              <Link href="/sell-data" className="block px-2 py-2 text-sm text-gray-600 hover:text-gray-900" onClick={() => setMobileMenuOpen(false)}>Sell Data</Link>
+              <Link href="/run-federated-learning" className="block px-2 py-2 text-sm text-gray-600 hover:text-gray-900" onClick={() => setMobileMenuOpen(false)}>Run Federated Learning</Link>
               <Link href="/protocol" className="block px-2 py-2 text-sm text-gray-600 hover:text-gray-900" onClick={() => setMobileMenuOpen(false)}>The Protocol</Link>
               <Link href="/blog" className="block px-2 py-2 text-sm text-gray-600 hover:text-gray-900" onClick={() => setMobileMenuOpen(false)}>Blog</Link>
               {isAdminEmail && (
@@ -150,7 +150,7 @@ export function Layout({ children }: { children: React.ReactNode }) {
                 </>
               ) : (
                 <>
-                  <Link href="/login" className="block px-2 py-2 text-sm text-gray-600 hover:text-gray-900" onClick={() => setMobileMenuOpen(false)}>Log in</Link>
+                  <Link href="/login" className="block px-2 py-2 text-sm text-gray-600 hover:text-gray-900" onClick={() => setMobileMenuOpen(false)}>Sign in</Link>
                   <Link href="/register" className="block px-2 py-2 text-sm text-[#3F51B5] font-medium" onClick={() => setMobileMenuOpen(false)}>Sign up</Link>
                 </>
               )}
