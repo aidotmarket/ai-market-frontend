@@ -54,9 +54,9 @@ export default async function BrowseRequestsPage({ searchParams }: Props) {
     <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8 py-8">
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between mb-6 gap-4">
         <div>
-          <h1 className="text-3xl font-bold text-gray-900">Data Requests</h1>
+          <h1 className="text-3xl font-bold text-gray-900">Data Requests.</h1>
           <p className="mt-1 text-sm text-gray-500">
-            Browse what buyers are looking for, or post your own request.
+            Browse open data requests, or post your own. Sellers respond with matching datasets. The whole conversation happens here.
           </p>
         </div>
         <Link

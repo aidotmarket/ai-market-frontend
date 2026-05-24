@@ -97,7 +97,7 @@ export default function NewDataRequestPage() {
     <div className="mx-auto max-w-2xl px-4 sm:px-6 lg:px-8 py-8">
       <h1 className="text-2xl font-bold text-gray-900 mb-6">Post a Data Request</h1>
       <p className="text-sm text-gray-500 mb-8">
-        Describe the data you need. Your request will be created as a draft - you can publish it from the detail page.
+        Describe the data you need. We create it as a draft. Publish it from the detail page.
       </p>
 
       <form onSubmit={handleSubmit} className="space-y-6">
@@ -112,7 +112,7 @@ export default function NewDataRequestPage() {
             rows={5}
             value={description}
             onChange={(e) => setDescription(e.target.value)}
-            placeholder="Describe exactly what data you're looking for, how you'll use it, and any requirements..."
+            placeholder="Describe the data you need, how you will use it, and any requirements."
             className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-[#3F51B5]"
           />
         </div>
@@ -138,7 +138,7 @@ export default function NewDataRequestPage() {
         {/* Format Preferences */}
         <div>
           <label htmlFor="format" className="block text-sm font-medium text-gray-700 mb-1">
-            Format Preferences
+            Preferred Formats
           </label>
           <input
             id="format"
@@ -212,7 +212,7 @@ export default function NewDataRequestPage() {
             rows={3}
             value={provenanceRequirements}
             onChange={(e) => setProvenanceRequirements(e.target.value)}
-            placeholder="Any requirements on data origin, licensing, compliance..."
+            placeholder="Requirements for data origin, licensing, or compliance."
             className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-[#3F51B5]"
           />
         </div>
