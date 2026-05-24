@@ -166,7 +166,7 @@ export default function SellDataPage() {
                 href="/aim-data#install"
                 className="inline-flex items-center justify-center rounded-lg bg-[#0F6E56] px-5 py-3 text-sm font-semibold text-white transition-colors hover:bg-[#0c5a47] focus:outline-none focus:ring-2 focus:ring-[#0F6E56] focus:ring-offset-2"
               >
-                Install AIM Data →
+                Install AIM Data
               </Link>
               <Link
                 href="#how-it-works"
@@ -285,7 +285,7 @@ export default function SellDataPage() {
               href="/aim-data#install"
               className="mt-6 inline-flex items-center justify-center rounded-lg bg-[#0F6E56] px-5 py-3 text-sm font-semibold text-white transition-colors hover:bg-[#0c5a47] focus:outline-none focus:ring-2 focus:ring-[#0F6E56] focus:ring-offset-2"
             >
-              Install AIM Data →
+              Install AIM Data
             </Link>
           </div>
         </div>
