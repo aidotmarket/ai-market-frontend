@@ -3,7 +3,38 @@ import type { Metadata } from 'next';
 
 export const metadata: Metadata = {
   title: 'Partner with ai.market',
-  description: 'Partner with ai.market as a data partner listing datasets or as a technology partner integrating AIM Node.',
+  description:
+    'Data partners and Technology partners. Integrate AIM Node, list datasets, co-sell.',
+  openGraph: {
+    title: 'Partner with ai.market',
+    description:
+      'Data partners and Technology partners. Integrate AIM Node, list datasets, co-sell.',
+    url: 'https://ai.market/partner',
+    siteName: 'ai.market',
+    images: ['/og/partner.png'],
+    type: 'website',
+  },
+  twitter: {
+    card: 'summary_large_image',
+    title: 'Partner with ai.market',
+    description:
+      'Data partners and Technology partners. Integrate AIM Node, list datasets, co-sell.',
+    images: ['/og/partner.png'],
+  },
+};
+
+const PARTNER_JSONLD = {
+  '@context': 'https://schema.org',
+  '@type': 'Organization',
+  name: 'ai.market Partner Program',
+  url: 'https://ai.market/partner',
+  description:
+    'Data partners and Technology partners. Integrate AIM Node, list datasets, co-sell.',
+  parentOrganization: {
+    '@type': 'Organization',
+    name: 'ai.market',
+    url: 'https://ai.market',
+  },
 };
 
 const dataPartnerSteps = [
@@ -109,7 +140,9 @@ function StepCard({
 
 export default function PartnerPage() {
   return (
-    <div className="bg-white">
+    <>
+      <script type="application/ld+json">{JSON.stringify(PARTNER_JSONLD)}</script>
+      <div className="bg-white">
       <section className="bg-gradient-to-b from-[#F7FCFA] to-white">
         <div className="mx-auto max-w-7xl px-4 py-12 sm:px-6 sm:py-16 lg:px-8">
           <div className="max-w-4xl">
@@ -311,6 +344,7 @@ export default function PartnerPage() {
           </p>
         </div>
       </section>
-    </div>
+      </div>
+    </>
   );
 }

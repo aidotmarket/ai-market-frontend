@@ -3,8 +3,25 @@ import type { Metadata } from 'next';
 import { MarketplaceSearchExperience } from '@/components/search/MarketplaceSearchExperience';
 
 export const metadata: Metadata = {
-  title: 'Find Data',
-  description: 'Search the ai.market catalog or post a Data Request for providers to answer.',
+  title: 'Find data on ai.market',
+  description:
+    'Semantic search across the marketplace data catalog, or post a data request and let providers respond.',
+  openGraph: {
+    title: 'Find data on ai.market',
+    description:
+      'Semantic search across the marketplace data catalog, or post a data request and let providers respond.',
+    url: 'https://ai.market/find-data',
+    siteName: 'ai.market',
+    images: ['/og/find-data.png'],
+    type: 'website',
+  },
+  twitter: {
+    card: 'summary_large_image',
+    title: 'Find data on ai.market',
+    description:
+      'Semantic search across the marketplace data catalog, or post a data request and let providers respond.',
+    images: ['/og/find-data.png'],
+  },
 };
 
 export const dynamic = 'force-dynamic';
