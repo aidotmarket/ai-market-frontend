@@ -6,7 +6,7 @@ import { HeroSearch } from '@/components/HeroSearch';
 export const metadata: Metadata = {
   title: 'ai.market - B2B Data Marketplace',
   description:
-    'The non-custodial B2B data marketplace. We make your datasets discoverable by AI — think SEO, but for AI systems.',
+    'Sell data without giving it away. A non-custodial B2B marketplace where data stays on your infrastructure.',
 };
 
 const LANDING_JSONLD = [
@@ -27,7 +27,7 @@ const LANDING_JSONLD = [
       'The non-custodial B2B data marketplace.',
     potentialAction: {
       '@type': 'SearchAction',
-      target: 'https://ai.market/listings?q={search_term_string}',
+      target: 'https://ai.market/find-data?q={search_term_string}',
       'query-input': 'required name=search_term_string',
     },
   },
@@ -39,58 +39,54 @@ const ArrowIcon = ({ className = 'ml-2 h-4 w-4' }: { className?: string }) => (
   </svg>
 );
 
-const DownloadIcon = ({ className = 'ml-2 h-4 w-4' }: { className?: string }) => (
-  <svg className={className} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-    <path strokeLinecap="round" strokeLinejoin="round" d="M3 16.5v2.25A2.25 2.25 0 0 0 5.25 21h13.5A2.25 2.25 0 0 0 21 18.75V16.5M16.5 12 12 16.5m0 0L7.5 12m4.5 4.5V3" />
-  </svg>
-);
-
 type Offering = {
   name: string;
   subtitle: string;
-  description: string;
+  description: string[];
   tags: string[];
   cta: string;
   href: string;
-  ctaIcon: 'arrow' | 'download';
   accent: 'indigo' | 'teal' | 'orange';
   iconPath: string;
 };
 
 const offerings: Offering[] = [
   {
-    name: 'AIM Channel',
-    subtitle: 'Data Channel',
-    description:
-      'List datasets with AI-generated metadata, compliance reports, and Schema.org markup. Data stays on your infra.',
-    tags: ['Datasets', 'Auto-Enrichment', 'Schema.org'],
-    cta: 'Download AIM Channel',
-    href: '/download/aim-channel',
-    ctaIcon: 'download',
-    accent: 'teal',
-    iconPath: 'M4 7v10c0 2 3.5 3 8 3s8-1 8-3V7M4 7c0-2 3.5-3 8-3s8 1 8 3M4 7c0 2 3.5 3 8 3s8-1 8-3m0 5c0 2-3.5 3-8 3s-8-1-8-3',
-  },
-  {
-    name: 'I Need Data',
-    subtitle: 'Post Requirements',
-    description:
-      'Describe what you need. Providers bid with matching datasets. Budget-controlled, outcome-driven.',
-    tags: ['Requests', 'Matching', 'Budget Control'],
-    cta: 'Post a Request',
-    href: '/requests',
-    ctaIcon: 'arrow',
+    name: 'Find Data',
+    subtitle: 'Search the catalog or post a request',
+    description: [
+      'Run a semantic search across the catalog. Or describe what you need and let providers respond. Both paths are live today.',
+    ],
+    tags: ['Semantic search', 'Data Requests', 'Live'],
+    cta: 'Find Data',
+    href: '/find-data',
     accent: 'orange',
     iconPath: 'M12 4.5v15m7.5-7.5h-15',
   },
   {
-    name: 'AIM-Node',
-    subtitle: 'Gateway Client',
+    name: 'Sell Data',
+    subtitle: 'List with AIM Data',
+    description: [
+      'Install AIM Data on your own infrastructure. We help you describe what you have, scan it for PII, and publish a listing buyers can find. Your raw data stays put.',
+    ],
+    tags: ['AIM Data', 'Stays on your infra', 'Auto-metadata'],
+    cta: 'Sell Data',
+    href: '/sell-data',
+    accent: 'teal',
+    iconPath: 'M4 7v10c0 2 3.5 3 8 3s8-1 8-3V7M4 7c0-2 3.5-3 8-3s8 1 8 3M4 7c0 2 3.5 3 8 3s8-1 8-3m0 5c0 2-3.5 3-8 3s-8-1-8-3',
+  },
+  {
+    name: 'Run Federated Learning',
+    subtitle: 'AIM Federate, private beta',
     description:
-      'Build against ai.market from your own infrastructure — the buyer-side companion to AIM Channel. Connect to data peer-to-peer; payloads never touch ai.market.',
-    tags: ['Gateway', 'MCP', 'P2P Compute'],
-    cta: 'Download AIM-Node',
-    href: '/aim-node',
-    ctaIcon: 'download',
+      [
+        'Train models across organizations without moving the data.',
+        'Five organizations, one model, raw data never leaves the perimeter. The aggregator runs in a sealed enclave; we provide the orchestration, the cohort owns the math.',
+        'Private beta — request access.',
+      ],
+    tags: ['Private beta', 'Nitro enclave', 'Request access'],
+    cta: 'Run Federated Learning',
+    href: '/run-federated-learning',
     accent: 'indigo',
     iconPath: 'M9.75 17L9 20l-1 1h8l-1-1-.75-3M3 13h18M5 17h14a2 2 0 0 0 2-2V5a2 2 0 0 0-2-2H5a2 2 0 0 0-2 2v10a2 2 0 0 0 2 2z',
   },
@@ -123,19 +119,19 @@ const defaultBadge = 'bg-[#F0F0F0] text-[#666666]';
 
 const howItWorks = [
   {
-    title: 'Install',
+    title: 'Install AIM Data.',
     description:
-      'Download AIM, installed on your secure network infrastructure.',
+      'Python or Docker. Runs locally on your infrastructure.',
   },
   {
-    title: 'Publish',
+    title: 'Publish your listing.',
     description:
-      'One-click publish. AI auto-generates metadata, cleans PII, and automates compliance.',
+      'AIM Data scans for PII, scores quality, and writes the metadata. You review and click publish.',
   },
   {
-    title: 'Earn',
+    title: 'Get paid.',
     description:
-      'Users and agents discover and transact with your assets. Stripe-powered instant payouts.',
+      'Buyers find your listing through search or AI agents. Stripe handles the payout when they purchase.',
   },
 ];
 
@@ -160,12 +156,13 @@ export default async function LandingPage() {
                   Non-Custodial Protocol
                 </span>
                 <h1 className="mt-5 text-4xl font-extrabold tracking-tight text-[#1A1A1A] sm:text-5xl lg:text-6xl">
-                  Your data never touches{' '}
-                  <span className="text-[#3F51B5]">the market.</span>
+                  Sell data without{' '}
+                  <span className="text-[#3F51B5]">giving it away.</span>
                 </h1>
                 <p className="mt-6 text-lg leading-8 text-[#4A4A4A] max-w-xl">
-                  The non-custodial B2B data marketplace. We make your datasets discoverable
-                  by AI — think SEO, but for AI systems.
+                  ai.market is a non-custodial B2B marketplace. Your data stays on your
+                  infrastructure. Buyers and AI agents find it through search or post a request,
+                  and the bytes move peer-to-peer the moment a deal closes.
                 </p>
                 <HeroSearch />
               </div>
@@ -181,22 +178,22 @@ export default async function LandingPage() {
                   <li className="flex items-start gap-3">
                     <span className="mt-1.5 h-2.5 w-2.5 shrink-0 rounded-full bg-[#0F6E56]" />
                     <div>
-                      <p className="text-sm font-semibold text-[#1A1A1A]">Data stays on your infra</p>
-                      <p className="text-sm text-[#666666]">Only metadata is published</p>
+                      <p className="text-sm font-semibold text-[#1A1A1A]">Data stays on your infrastructure.</p>
+                      <p className="text-sm text-[#666666]">Only metadata is published.</p>
                     </div>
                   </li>
                   <li className="flex items-start gap-3">
                     <span className="mt-1.5 h-2.5 w-2.5 shrink-0 rounded-full bg-[#3F51B5]" />
                     <div>
-                      <p className="text-sm font-semibold text-[#1A1A1A]">Peer-to-peer transactions</p>
-                      <p className="text-sm text-[#666666]">ai.market never touches payloads</p>
+                      <p className="text-sm font-semibold text-[#1A1A1A]">Peer-to-peer transactions.</p>
+                      <p className="text-sm text-[#666666]">ai.market never touches payloads.</p>
                     </div>
                   </li>
                   <li className="flex items-start gap-3">
                     <span className="mt-1.5 h-2.5 w-2.5 shrink-0 rounded-full bg-[#14B8A6]" />
                     <div>
-                      <p className="text-sm font-semibold text-[#1A1A1A]">Agentic First</p>
-                      <p className="text-sm text-[#666666]">AI Agents can process transactions directly</p>
+                      <p className="text-sm font-semibold text-[#1A1A1A]">Agentic-first.</p>
+                      <p className="text-sm text-[#666666]">AI agents can discover and transact directly.</p>
                     </div>
                   </li>
                 </ul>
@@ -214,7 +211,7 @@ export default async function LandingPage() {
                 Three ways to participate
               </h2>
               <p className="mt-3 text-lg text-[#666666]">
-                Provide data, request data, or build against the marketplace gateway
+                Find data, sell data, or run federated learning without moving raw datasets.
               </p>
             </div>
 
@@ -233,7 +230,13 @@ export default async function LandingPage() {
                     </div>
                     <h3 className="mt-5 text-xl font-bold text-[#1A1A1A]">{o.name}</h3>
                     <p className="text-sm font-semibold text-[#666666]">{o.subtitle}</p>
-                    <p className="mt-3 text-sm leading-6 text-[#4A4A4A]">{o.description}</p>
+                    <div className="mt-3 space-y-3 text-sm leading-6 text-[#4A4A4A]">
+                      {o.description.map((paragraph) => (
+                        <p key={paragraph} className={paragraph === 'Private beta — request access.' ? 'italic' : undefined}>
+                          {paragraph}
+                        </p>
+                      ))}
+                    </div>
                     <div className="mt-5 flex flex-wrap gap-2">
                       {o.tags.map((t) => (
                         <span key={t} className={`rounded-md px-2.5 py-1 text-xs font-medium ${styles.tag}`}>{t}</span>
@@ -245,7 +248,7 @@ export default async function LandingPage() {
                       className={`mt-7 inline-flex items-center justify-center rounded-lg px-5 py-2.5 text-sm font-semibold transition-colors ${styles.btn}`}
                     >
                       {o.cta}
-                      {o.ctaIcon === 'arrow' ? <ArrowIcon /> : <DownloadIcon />}
+                      <ArrowIcon />
                     </Link>
                   </div>
                 );
@@ -288,7 +291,12 @@ export default async function LandingPage() {
                   </Link>
                 ))
               ) : (
-                <p className="col-span-full text-center text-sm text-[#888888]">No listings yet. Be the first to publish.</p>
+                <p className="col-span-full text-center text-sm text-[#888888]">
+                  No listings yet.{' '}
+                  <Link href="/sell-data" className="font-semibold text-[#3F51B5] hover:text-[#3545a0]">
+                    Be the first to publish.
+                  </Link>
+                </p>
               )}
             </div>
           </div>
@@ -323,8 +331,8 @@ export default async function LandingPage() {
               Ready to get discovered?
             </h2>
             <p className="mx-auto mt-4 max-w-xl text-lg text-[#666666]">
-              Join the non-custodial data marketplace where AI agents discover and transact
-              with your datasets.
+              Join the non-custodial data marketplace. Your data stays where it is. We help
+              buyers and AI agents find it, and Stripe handles the money.
             </p>
             <div className="mt-10">
               <Link
@@ -335,6 +343,27 @@ export default async function LandingPage() {
                 <ArrowIcon />
               </Link>
             </div>
+          </div>
+        </section>
+
+        {/* CROSS-LINKS */}
+        <section className="border-t border-[#E8E8E8] bg-[#FAFAFA] py-10">
+          <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
+            <p className="text-center text-sm leading-6 text-[#666666]">
+              Looking for something else? Check our{' '}
+              <Link href="/partner" className="font-semibold text-[#3F51B5] hover:text-[#3545a0]">
+                Partner Program
+              </Link>
+              , read{' '}
+              <Link href="/protocol" className="font-semibold text-[#3F51B5] hover:text-[#3545a0]">
+                The Protocol
+              </Link>
+              , or browse the{' '}
+              <Link href="/blog" className="font-semibold text-[#3F51B5] hover:text-[#3545a0]">
+                Blog
+              </Link>
+              .
+            </p>
           </div>
         </section>
       </div>

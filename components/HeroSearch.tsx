@@ -11,9 +11,9 @@ export function HeroSearch() {
     e.preventDefault();
     const trimmed = value.trim();
     if (trimmed) {
-      router.push(`/search?q=${encodeURIComponent(trimmed)}`);
+      router.push(`/find-data?q=${encodeURIComponent(trimmed)}`);
     } else {
-      router.push('/search');
+      router.push('/find-data');
     }
   }
 
