@@ -98,7 +98,7 @@ const offerings: Offering[] = [
       [
         'Train models across organizations without moving the data.',
         'Five organizations, one model, raw data never leaves the perimeter. The aggregator runs in a sealed enclave; we provide the orchestration, the cohort owns the math.',
-        'Private beta — request access.',
+        'Private beta. Request access.',
       ],
     tags: ['Private beta', 'Nitro enclave', 'Request access'],
     cta: 'Run Federated Learning',
@@ -187,7 +187,7 @@ export default async function LandingPage() {
               <div className="card-texture rounded-2xl border border-[#E8E8E8] bg-[#FAFAFA] p-8">
                 <p className="text-base leading-7 text-[#1A1A1A]">
                   Your datasets become discoverable by AI agents and visible in AI-powered
-                  search — so buyers find you, not the other way around.
+                  search, so buyers find you, not the other way around.
                 </p>
                 <div className="my-6 h-px bg-[#E8E8E8]" />
                 <ul className="space-y-5">
@@ -248,7 +248,7 @@ export default async function LandingPage() {
                     <p className="text-sm font-semibold text-[#666666]">{o.subtitle}</p>
                     <div className="mt-3 space-y-3 text-sm leading-6 text-[#4A4A4A]">
                       {o.description.map((paragraph) => (
-                        <p key={paragraph} className={paragraph === 'Private beta — request access.' ? 'italic' : undefined}>
+                        <p key={paragraph} className={paragraph === 'Private beta. Request access.' ? 'italic' : undefined}>
                           {paragraph}
                         </p>
                       ))}

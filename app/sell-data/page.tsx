@@ -44,14 +44,11 @@ const steps = [
     title: 'Install AIM Data.',
     description:
       'Python or Docker. Local-first. Nothing leaves your machine during install.',
-    reference: 'release cadence + Cloudflare Worker installer at get.ai.market/aim-data.',
-    href: 'https://github.com/aidotmarket/runbooks/blob/main/aim-data-release-process.md',
-    linkLabel: 'aim-data-release-process.md',
   },
   {
     title: 'Prepare with allAI.',
     description:
-      'allAI scans your data, profiles structure, detects PII, scores quality, and writes the listing metadata. All on your infrastructure.',
+      'allAI scans your data, profiles structure, detects PII, scores quality, and writes the listing metadata.',
   },
   {
     title: 'Publish.',
@@ -61,10 +58,7 @@ const steps = [
   {
     title: 'Deliver securely.',
     description:
-      'When a buyer purchases, ai.market issues a signed delivery token. Your AIM Data instance honors it and opens the encrypted peer-to-peer channel. Direct, end-to-end.',
-    reference: 'AIM/1.0 frame types and delivery handshake.',
-    href: 'https://github.com/aidotmarket/runbooks/blob/main/aim-node.md',
-    linkLabel: 'aim-node.md §Wire protocol + §Session lifecycle',
+      'When someone buys your data, ai.market sends them a signed delivery token. Your AIM Data instance reads the token and opens a direct peer-to-peer channel to the buyer. The bytes never touch our servers.',
   },
 ];
 
@@ -73,10 +67,6 @@ const features = [
     title: 'Local-first processing.',
     description:
       'Your data never leaves your infrastructure. Profiling, PII scanning, and quality scoring all run on your own machine.',
-    reference:
-      'release path demonstrates local-first install ethos via Docker multi-arch image + Cloudflare Worker installer + local container execution.',
-    href: 'https://github.com/aidotmarket/runbooks/blob/main/aim-data-release-process.md',
-    linkLabel: 'aim-data-release-process.md',
   },
   {
     title: 'AI-assisted listings.',
@@ -87,7 +77,6 @@ const features = [
     title: 'Honest PII signals.',
     description:
       'PII scans surface to buyers as one of three states: passed, flagged, or not run. We do not fake clean scans for unscanned data.',
-    note: 'See §4.5 AIM Data trust signals.',
   },
   {
     title: 'Stripe payouts.',
@@ -100,16 +89,10 @@ function StepCard({
   step,
   title,
   description,
-  reference,
-  href,
-  linkLabel,
 }: {
   step: number;
   title: string;
   description: string;
-  reference?: string;
-  href?: string;
-  linkLabel?: string;
 }) {
   return (
     <li className="rounded-2xl border border-gray-200 bg-white p-5 shadow-sm">
@@ -120,20 +103,6 @@ function StepCard({
         <div>
           <h3 className="text-base font-semibold text-gray-900">{title}</h3>
           <p className="mt-2 text-sm leading-6 text-gray-600">{description}</p>
-          {href && reference && linkLabel ? (
-            <p className="mt-3 text-xs leading-5 text-gray-500">
-              Operational reference:{' '}
-              <a
-                href={href}
-                className="font-semibold text-[#3F51B5] hover:text-[#303F9F]"
-                rel="noreferrer"
-                target="_blank"
-              >
-                {linkLabel}
-              </a>{' '}
-              — {reference}
-            </p>
-          ) : null}
         </div>
       </div>
     </li>
@@ -143,37 +112,14 @@ function StepCard({
 function FeatureCard({
   title,
   description,
-  reference,
-  href,
-  linkLabel,
-  note,
 }: {
   title: string;
   description: string;
-  reference?: string;
-  href?: string;
-  linkLabel?: string;
-  note?: string;
 }) {
   return (
     <div className="rounded-2xl border border-gray-200 bg-white p-6 shadow-sm">
       <h3 className="text-lg font-bold tracking-tight text-gray-900">{title}</h3>
       <p className="mt-3 text-sm leading-6 text-gray-600">{description}</p>
-      {href && reference && linkLabel ? (
-        <p className="mt-4 text-xs leading-5 text-gray-500">
-          Operational reference:{' '}
-          <a
-            href={href}
-            className="font-semibold text-[#3F51B5] hover:text-[#303F9F]"
-            rel="noreferrer"
-            target="_blank"
-          >
-            {linkLabel}
-          </a>{' '}
-          — {reference}
-        </p>
-      ) : null}
-      {note ? <p className="mt-4 text-xs leading-5 text-gray-500">{note}</p> : null}
     </div>
   );
 }
@@ -231,9 +177,6 @@ export default function SellDataPage() {
                 step={index + 1}
                 title={step.title}
                 description={step.description}
-                reference={step.reference}
-                href={step.href}
-                linkLabel={step.linkLabel}
               />
             ))}
           </ol>
@@ -257,10 +200,6 @@ export default function SellDataPage() {
                 key={feature.title}
                 title={feature.title}
                 description={feature.description}
-                reference={feature.reference}
-                href={feature.href}
-                linkLabel={feature.linkLabel}
-                note={feature.note}
               />
             ))}
           </div>
@@ -275,10 +214,10 @@ export default function SellDataPage() {
                 Pricing
               </p>
               <h2 id="pricing-heading" className="mt-3 text-2xl font-bold tracking-tight text-gray-900">
-                Platform fee details are moving to the pricing page.
+                Pricing is simple. We take 5%. You keep the rest.
               </h2>
               <p className="mt-4 max-w-3xl text-base leading-7 text-gray-600">
-                For the v1 launch, use support for pricing questions while the dedicated pricing page ships.
+                The pricing page ships soon. Until then, talk to us if you need numbers.
               </p>
               <Link
                 href="/support"
