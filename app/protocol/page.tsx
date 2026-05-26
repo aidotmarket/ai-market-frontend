@@ -58,7 +58,7 @@ const platformDoesNot = [
   {
     label: 'Store data',
     description:
-      'No raw datasets ever transit ai.market servers — payloads flow only between buyer and seller endpoints',
+      'No raw datasets ever transit ai.market servers. Payloads flow only between buyer and seller endpoints.',
   },
   {
     label: 'Proxy requests',
@@ -117,7 +117,7 @@ const stackRows = [
   },
   {
     component: 'AIM-Node',
-    role: 'Gateway client — discovery, authentication, P2P delivery, local metering',
+    role: 'Gateway client for discovery, authentication, P2P delivery, and local metering.',
     operator: 'Buyers and builders (self-hosted)',
   },
   {
