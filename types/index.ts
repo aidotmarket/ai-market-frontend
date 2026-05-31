@@ -376,12 +376,29 @@ export interface OrderEvent {
 export interface OrderDownloadResponse {
   download_url: string;
   expires_at?: string;
+  download_number?: number;
+  downloads_remaining?: number;
+  s3_download_urls?: S3DownloadFile[];
 }
 
 export interface OrderAccessResponse {
   has_access: boolean;
   access_url?: string;
   expires_at?: string;
+}
+
+export interface S3DownloadFile {
+  path: string;
+  presigned_url: string;
+  expires_at: string;
+}
+
+export interface OrderRefreshResponse {
+  status: 'current_valid' | 'refresh_requested' | string;
+  message?: string;
+  expires_at?: string;
+  access_url?: string;
+  request_id?: string;
 }
 
 // ============================================================================

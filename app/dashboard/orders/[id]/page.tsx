@@ -8,7 +8,7 @@ import { getTransaction, confirmTransaction, deliverTransaction } from '@/api/tr
 import { formatPrice, formatDate } from '@/lib/format';
 import { useToast } from '@/components/Toast';
 import { useAuthStore } from '@/store/auth';
-import type { BuyerOrderDetail, OrderEvent, OrderStatus, Transaction, TransactionStatus, TransactionEvent } from '@/types';
+import type { BuyerOrderDetail, OrderDownloadResponse, OrderEvent, OrderStatus, S3DownloadFile, Transaction, TransactionStatus, TransactionEvent } from '@/types';
 import { AxiosError } from 'axios';
 
 const STATUS_BADGE: Record<OrderStatus, string> = {
@@ -57,16 +57,20 @@ export default function OrderDetailPage() {
   const orderId = params.id;
   const txIdParam = searchParams.get('tx');
   const { toast } = useToast();
-  const token = useAuthStore((s) => s.token);
   const userRole = useAuthStore((s) => s.user?.role);
 
   const [order, setOrder] = useState<BuyerOrderDetail | null>(null);
   const [events, setEvents] = useState<OrderEvent[]>([]);
   const [tx, setTx] = useState<Transaction | null>(null);
+  const [downloadPackage, setDownloadPackage] = useState<OrderDownloadResponse | null>(null);
+  const [downloadLoading, setDownloadLoading] = useState(false);
+  const [downloadError, setDownloadError] = useState('');
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
-  const [downloading, setDownloading] = useState(false);
-  const [refreshing, setRefreshing] = useState(false);
+  const [activeFilePath, setActiveFilePath] = useState<string | null>(null);
+  const [refreshingFilePath, setRefreshingFilePath] = useState<string | null>(null);
+  const [refreshingAccess, setRefreshingAccess] = useState(false);
+  const [now, setNow] = useState(() => Date.now());
   const [confirming, setConfirming] = useState(false);
   const [delivering, setDelivering] = useState(false);
 
@@ -101,6 +105,32 @@ export default function OrderDetailPage() {
     return () => { cancelled = true; };
   }, [orderId, txIdParam]);
 
+  useEffect(() => {
+    if (order?.status !== 'fulfilled') return;
+
+    let cancelled = false;
+    setDownloadLoading(true);
+    setDownloadError('');
+
+    requestDownload(orderId)
+      .then((data) => {
+        if (!cancelled) setDownloadPackage(data);
+      })
+      .catch(() => {
+        if (!cancelled) setDownloadError('Failed to load download links.');
+      })
+      .finally(() => {
+        if (!cancelled) setDownloadLoading(false);
+      });
+
+    return () => { cancelled = true; };
+  }, [order?.status, orderId]);
+
+  useEffect(() => {
+    const interval = window.setInterval(() => setNow(Date.now()), 1000);
+    return () => window.clearInterval(interval);
+  }, []);
+
   const handleConfirm = async () => {
     if (!tx || confirming) return;
     setConfirming(true);
@@ -129,68 +159,54 @@ export default function OrderDetailPage() {
     }
   };
 
-  // Download via fetch+blob (MP-G2-M4: no tokens in URLs)
-  const handleDownload = useCallback(async () => {
-    if (downloading) return;
-    setDownloading(true);
-
-    try {
-      const { download_url } = await requestDownload(orderId);
-
-      // Fetch with auth header, set referrer policy
-      const res = await fetch(download_url, {
-        headers: token ? { Authorization: `Bearer ${token}` } : {},
-        referrerPolicy: 'no-referrer',
-      });
-
-      if (!res.ok) {
-        // Auto-refresh on 403/410 (AG-G2-M6)
-        if (res.status === 403 || res.status === 410) {
-          setRefreshing(true);
-          try {
-            await refreshOrderAccess(orderId);
-            // Retry download after refresh
-            const retryData = await requestDownload(orderId);
-            const retryRes = await fetch(retryData.download_url, {
-              headers: token ? { Authorization: `Bearer ${token}` } : {},
-              referrerPolicy: 'no-referrer',
-            });
-            if (!retryRes.ok) throw new Error('Download failed after refresh');
-            const blob = await retryRes.blob();
-            triggerBlobDownload(blob, 'data');
-            return;
-          } catch {
-            toast('Access expired. Please try refreshing manually.', 'error');
-            return;
-          } finally {
-            setRefreshing(false);
-          }
-        }
-        throw new Error('Download failed');
-      }
-
-      const blob = await res.blob();
-      triggerBlobDownload(blob, 'data');
-    } catch {
-      toast('Failed to download. Please try again.', 'error');
-    } finally {
-      setDownloading(false);
-    }
-  }, [orderId, downloading, token, toast]);
-
-  const handleRefresh = async () => {
-    if (refreshing) return;
-    setRefreshing(true);
+  const getFreshDownloadPackage = useCallback(async (filePath?: string) => {
+    if (filePath) setRefreshingFilePath(filePath);
+    setDownloadError(filePath ? 'Link expired - refreshing.' : '');
     try {
       await refreshOrderAccess(orderId);
-      toast('Access refreshed successfully.', 'success');
-      // Reload order data
-      const updated = await getOrder(orderId);
-      setOrder(updated);
+      const updatedPackage = await requestDownload(orderId);
+      setDownloadPackage(updatedPackage);
+      setDownloadError('');
+      return updatedPackage;
+    } catch {
+      setDownloadError('Failed to refresh download links.');
+      throw new Error('refresh_failed');
+    } finally {
+      if (filePath) setRefreshingFilePath(null);
+    }
+  }, [orderId]);
+
+  const handleDownloadFile = useCallback(async (file: S3DownloadFile) => {
+    if (activeFilePath || refreshingFilePath) return;
+    setActiveFilePath(file.path);
+
+    try {
+      let fileToOpen = file;
+      if (isNearExpiry(file.expires_at, now)) {
+        const refreshedPackage = await getFreshDownloadPackage(file.path);
+        const refreshedFile = refreshedPackage.s3_download_urls?.find((candidate) => candidate.path === file.path);
+        if (!refreshedFile) throw new Error('file_missing_after_refresh');
+        fileToOpen = refreshedFile;
+      }
+
+      openPresignedUrl(fileToOpen);
+    } catch {
+      toast('Failed to prepare this download. Please try again.', 'error');
+    } finally {
+      setActiveFilePath(null);
+    }
+  }, [activeFilePath, refreshingFilePath, now, getFreshDownloadPackage, toast]);
+
+  const handleRefresh = async () => {
+    if (refreshingAccess) return;
+    setRefreshingAccess(true);
+    try {
+      await getFreshDownloadPackage();
+      toast('Download links refreshed.', 'success');
     } catch {
       toast('Failed to refresh access.', 'error');
     } finally {
-      setRefreshing(false);
+      setRefreshingAccess(false);
     }
   };
 
@@ -346,37 +362,73 @@ export default function OrderDetailPage() {
           {/* Access / Download section */}
           {order.status === 'fulfilled' && (
             <div className="rounded-lg border border-gray-200 p-6">
-              <h2 className="text-lg font-semibold text-gray-900 mb-4">Download</h2>
-              <div className="flex flex-col sm:flex-row gap-3">
-                <button
-                  onClick={handleDownload}
-                  disabled={downloading || refreshing}
-                  className="rounded-lg bg-green-600 px-6 py-2.5 text-sm font-medium text-white hover:bg-green-700 disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center"
-                >
-                  {downloading ? (
-                    <>
-                      <svg className="animate-spin -ml-1 mr-2 h-4 w-4 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
-                        <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
-                        <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
-                      </svg>
-                      {refreshing ? 'Refreshing access…' : 'Downloading…'}
-                    </>
-                  ) : (
-                    'Download Data'
+              <div className="mb-4 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                <div>
+                  <h2 className="text-lg font-semibold text-gray-900">Downloads</h2>
+                  {downloadPackage?.downloads_remaining !== undefined && (
+                    <p className="mt-1 text-xs text-gray-500">
+                      {downloadPackage.downloads_remaining} downloads remaining after this link issue.
+                    </p>
                   )}
-                </button>
+                </div>
                 <button
                   onClick={handleRefresh}
-                  disabled={refreshing || downloading}
-                  className="rounded-lg border border-gray-300 px-6 py-2.5 text-sm font-medium text-gray-700 hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed"
+                  disabled={refreshingAccess || downloadLoading || !!activeFilePath}
+                  className="rounded-lg border border-gray-300 px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50 disabled:cursor-not-allowed disabled:opacity-50"
                 >
-                  {refreshing ? 'Refreshing…' : 'Refresh Access'}
+                  {refreshingAccess ? 'Refreshing...' : 'Refresh Links'}
                 </button>
               </div>
-              {order.access_expires_at && (
-                <p className="text-xs text-gray-500 mt-3">
-                  Access expires: {formatDate(order.access_expires_at)}
-                </p>
+
+              {downloadLoading && (
+                <div className="rounded-lg bg-gray-50 px-4 py-3 text-sm text-gray-600">
+                  Loading download links...
+                </div>
+              )}
+
+              {downloadError && (
+                <div className="mb-3 rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
+                  {downloadError}
+                </div>
+              )}
+
+              {!downloadLoading && !downloadError && (!downloadPackage?.s3_download_urls || downloadPackage.s3_download_urls.length === 0) && (
+                <div className="rounded-lg bg-gray-50 px-4 py-3 text-sm text-gray-600">
+                  No S3 files are available yet. The seller may still be completing fulfillment.
+                </div>
+              )}
+
+              {downloadPackage?.s3_download_urls && downloadPackage.s3_download_urls.length > 0 && (
+                <div className="divide-y divide-gray-100 rounded-lg border border-gray-200">
+                  {downloadPackage.s3_download_urls.map((file) => {
+                    const secondsLeft = secondsUntil(file.expires_at, now);
+                    const expired = secondsLeft <= 0;
+                    const refreshing = refreshingFilePath === file.path;
+                    const active = activeFilePath === file.path;
+                    return (
+                      <div key={file.path} className="flex flex-col gap-3 px-4 py-3 sm:flex-row sm:items-center sm:justify-between">
+                        <div className="min-w-0">
+                          <p className="truncate text-sm font-medium text-gray-900" title={file.path}>
+                            {fileNameFromPath(file.path)}
+                          </p>
+                          <p className="mt-1 truncate text-xs text-gray-500" title={file.path}>
+                            {file.path}
+                          </p>
+                          <p className={`mt-1 text-xs ${expired ? 'text-red-700' : 'text-gray-500'}`}>
+                            {refreshing ? 'Link expired - refreshing.' : formatValidity(secondsLeft)}
+                          </p>
+                        </div>
+                        <button
+                          onClick={() => handleDownloadFile(file)}
+                          disabled={!!activeFilePath || !!refreshingFilePath}
+                          className="rounded-lg bg-green-600 px-4 py-2 text-sm font-medium text-white hover:bg-green-700 disabled:cursor-not-allowed disabled:opacity-50"
+                        >
+                          {active || refreshing ? 'Preparing...' : 'Download'}
+                        </button>
+                      </div>
+                    );
+                  })}
+                </div>
               )}
             </div>
           )}
@@ -420,17 +472,37 @@ export default function OrderDetailPage() {
   );
 }
 
-function triggerBlobDownload(blob: Blob, fallbackName: string) {
-  const url = URL.createObjectURL(blob);
+function openPresignedUrl(file: S3DownloadFile) {
   const a = document.createElement('a');
-  a.href = url;
-  a.download = fallbackName;
+  a.href = file.presigned_url;
+  a.download = fileNameFromPath(file.path);
+  a.rel = 'noopener noreferrer';
+  a.referrerPolicy = 'no-referrer';
   a.style.display = 'none';
   document.body.appendChild(a);
   a.click();
-  // Clean up
-  setTimeout(() => {
-    URL.revokeObjectURL(url);
-    a.remove();
-  }, 100);
+  a.remove();
+}
+
+function fileNameFromPath(path: string) {
+  const cleanPath = path.split('?')[0] || path;
+  return cleanPath.split('/').filter(Boolean).pop() || 'data';
+}
+
+function secondsUntil(expiresAt: string, now: number) {
+  const expiry = new Date(expiresAt).getTime();
+  if (Number.isNaN(expiry)) return 0;
+  return Math.max(0, Math.floor((expiry - now) / 1000));
+}
+
+function isNearExpiry(expiresAt: string, now: number) {
+  return secondsUntil(expiresAt, now) <= 60;
+}
+
+function formatValidity(secondsLeft: number) {
+  if (secondsLeft <= 0) return 'Link expired.';
+  const minutes = Math.floor(secondsLeft / 60);
+  const seconds = secondsLeft % 60;
+  if (minutes === 0) return `Valid for ${seconds}s.`;
+  return `Valid for ${minutes}m ${seconds.toString().padStart(2, '0')}s.`;
 }
