@@ -147,6 +147,7 @@ export default function OrdersListPage() {
               <th className="px-4 py-3 text-left font-medium text-gray-700">Status</th>
               <th className="px-4 py-3 text-left font-medium text-gray-700">Transaction</th>
               <th className="px-4 py-3 text-left font-medium text-gray-700">Date</th>
+              <th className="px-4 py-3 text-left font-medium text-gray-700">Files</th>
             </tr>
           </thead>
           <tbody className="divide-y divide-gray-100">
@@ -173,6 +174,18 @@ export default function OrdersListPage() {
                     )}
                   </td>
                   <td className="px-4 py-3 text-gray-500">{formatDate(order.created_at)}</td>
+                  <td className="px-4 py-3">
+                    {order.status === 'fulfilled' ? (
+                      <Link
+                        href={`/dashboard/orders/${order.id}`}
+                        className="text-sm font-medium text-[#3F51B5] hover:underline"
+                      >
+                        View downloads
+                      </Link>
+                    ) : (
+                      <span className="text-xs text-gray-400"> - </span>
+                    )}
+                  </td>
                 </tr>
               );
             })}
@@ -205,6 +218,9 @@ export default function OrdersListPage() {
                   <span className="text-gray-500">{formatDate(order.created_at)}</span>
                 </div>
               </div>
+              {order.status === 'fulfilled' && (
+                <p className="mt-3 text-sm font-medium text-[#3F51B5]">View downloads</p>
+              )}
             </Link>
           );
         })}
