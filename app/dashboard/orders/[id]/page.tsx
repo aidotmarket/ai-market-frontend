@@ -3,12 +3,12 @@
 import { useEffect, useState, useCallback } from 'react';
 import Link from 'next/link';
 import { useParams, useSearchParams } from 'next/navigation';
-import { getOrder, getOrderEvents, requestDownload, refreshOrderAccess } from '@/api/orders';
+import { getOrder, getOrderAccess, getOrderEvents, refreshOrderAccess } from '@/api/orders';
 import { getTransaction, confirmTransaction, deliverTransaction } from '@/api/transactions';
 import { formatPrice, formatDate } from '@/lib/format';
 import { useToast } from '@/components/Toast';
 import { useAuthStore } from '@/store/auth';
-import type { BuyerOrderDetail, OrderDownloadResponse, OrderEvent, OrderStatus, S3DownloadFile, Transaction, TransactionStatus, TransactionEvent } from '@/types';
+import type { BuyerOrderDetail, OrderAccessResponse, OrderEvent, OrderStatus, S3DownloadFile, Transaction, TransactionStatus, TransactionEvent } from '@/types';
 import { AxiosError } from 'axios';
 
 const STATUS_BADGE: Record<OrderStatus, string> = {
@@ -62,7 +62,7 @@ export default function OrderDetailPage() {
   const [order, setOrder] = useState<BuyerOrderDetail | null>(null);
   const [events, setEvents] = useState<OrderEvent[]>([]);
   const [tx, setTx] = useState<Transaction | null>(null);
-  const [downloadPackage, setDownloadPackage] = useState<OrderDownloadResponse | null>(null);
+  const [downloadPackage, setDownloadPackage] = useState<OrderAccessResponse | null>(null);
   const [downloadLoading, setDownloadLoading] = useState(false);
   const [downloadError, setDownloadError] = useState('');
   const [loading, setLoading] = useState(true);
@@ -112,7 +112,7 @@ export default function OrderDetailPage() {
     setDownloadLoading(true);
     setDownloadError('');
 
-    requestDownload(orderId)
+    getOrderAccess(orderId)
       .then((data) => {
         if (!cancelled) setDownloadPackage(data);
       })
@@ -164,7 +164,7 @@ export default function OrderDetailPage() {
     setDownloadError(filePath ? 'Link expired - refreshing.' : '');
     try {
       await refreshOrderAccess(orderId);
-      const updatedPackage = await requestDownload(orderId);
+      const updatedPackage = await getOrderAccess(orderId);
       setDownloadPackage(updatedPackage);
       setDownloadError('');
       return updatedPackage;
@@ -367,7 +367,7 @@ export default function OrderDetailPage() {
                   <h2 className="text-lg font-semibold text-gray-900">Downloads</h2>
                   {downloadPackage?.downloads_remaining !== undefined && (
                     <p className="mt-1 text-xs text-gray-500">
-                      {downloadPackage.downloads_remaining} downloads remaining after this link issue.
+                      {downloadPackage.downloads_remaining} downloads remaining.
                     </p>
                   )}
                 </div>

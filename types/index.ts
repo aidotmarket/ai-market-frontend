@@ -382,9 +382,11 @@ export interface OrderDownloadResponse {
 }
 
 export interface OrderAccessResponse {
-  has_access: boolean;
-  access_url?: string;
+  has_access?: boolean;
+  access_url?: string | null;
   expires_at?: string;
+  downloads_remaining?: number;
+  s3_download_urls?: S3DownloadFile[];
 }
 
 export interface S3DownloadFile {
