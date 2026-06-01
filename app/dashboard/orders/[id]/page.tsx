@@ -365,11 +365,6 @@ export default function OrderDetailPage() {
               <div className="mb-4 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
                 <div>
                   <h2 className="text-lg font-semibold text-gray-900">Downloads</h2>
-                  {downloadPackage?.downloads_remaining !== undefined && (
-                    <p className="mt-1 text-xs text-gray-500">
-                      {downloadPackage.downloads_remaining} downloads remaining.
-                    </p>
-                  )}
                 </div>
                 <button
                   onClick={handleRefresh}
