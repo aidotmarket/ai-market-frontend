@@ -198,14 +198,14 @@ export default async function ListingDetailPage({ params }: Props) {
             <div className="space-y-3">
               <div className="flex justify-between items-center">
                 <span className="text-sm text-gray-600">Privacy Score</span>
-                <span className={`inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-medium ${privacyScoreColor(listing.privacy_score)}`}>
-                  {listing.privacy_score.toFixed(1)}/10
+                <span className={`inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-medium ${listing.privacy_score != null ? privacyScoreColor(listing.privacy_score) : 'bg-gray-100 text-gray-500'}`}>
+                  {listing.privacy_score != null ? `${listing.privacy_score.toFixed(1)}/10` : 'Not scored'}
                 </span>
               </div>
               <div className="flex justify-between items-center">
                 <span className="text-sm text-gray-600">Quality Score</span>
                 <span className="text-sm font-medium text-gray-900">
-                  {listing.quality_score.toFixed(0)}/100
+                  {listing.quality_score != null ? `${listing.quality_score.toFixed(0)}/100` : 'Not scored'}
                 </span>
               </div>
               <div className="flex justify-between items-center">

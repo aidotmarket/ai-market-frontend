@@ -80,12 +80,12 @@ export interface ListingListItem {
   pricing_type: PricingType;
   category: string;
   tags: string[];
-  privacy_score: number;
+  privacy_score: number | null;
   data_format?: string | null;
   fulfillment_type?: FulfillmentType | null;
   model_provider: ModelProvider;
   trust_level: TrustLevel;
-  quality_score: number;
+  quality_score: number | null;
   verification_status: VerificationStatus;
   view_count: number;
   created_at: string;
@@ -112,8 +112,8 @@ export interface ListingDetail {
   data_format: string | null;
   update_frequency: string | null;
   coverage: Record<string, unknown> | null;
-  privacy_score: number;
-  quality_score: number;
+  privacy_score: number | null;
+  quality_score: number | null;
   searchability_score: number | null;
   compliance_status: ComplianceStatus;
   compliance_frameworks: string[] | null;
