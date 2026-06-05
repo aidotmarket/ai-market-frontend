@@ -3,7 +3,6 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { useRouter } from 'next/navigation';
 import { createDraft, enhanceListing, updateListing, getListingPreview, publishListing } from '@/api/listings';
-import { getConnectStatus } from '@/api/connect';
 import { useToast } from '@/components/Toast';
 import { formatPrice } from '@/lib/format';
 import type { SchemaColumn } from '@/types';
@@ -91,8 +90,6 @@ function NewListingWizardInner() {
   const [enhancing, setEnhancing] = useState(false);
   const [publishing, setPublishing] = useState(false);
   const [showConfirmModal, setShowConfirmModal] = useState(false);
-  const [stripeChecked, setStripeChecked] = useState(false);
-  const [stripeConnected, setStripeConnected] = useState(false);
 
   const bridge = useWizardBridge();
   const { setOnFieldProposal, setOnBatchProposal, setFormSnapshotGetter } = useAllAI();
@@ -122,18 +119,6 @@ function NewListingWizardInner() {
       setFormSnapshotGetter(null);
     };
   }, [bridge, setOnFieldProposal, setOnBatchProposal, setFormSnapshotGetter, formGetter]);
-
-  useEffect(() => {
-    getConnectStatus()
-      .then((res) => {
-        setStripeConnected(!!res.data?.details_submitted);
-        setStripeChecked(true);
-      })
-      .catch(() => {
-        setStripeConnected(false);
-        setStripeChecked(true);
-      });
-  }, []);
 
   const update = (fields: Partial<WizardData>) => setData((prev) => ({ ...prev, ...fields }));
 
@@ -272,36 +257,15 @@ function NewListingWizardInner() {
     }
   };
 
-  if (!stripeChecked) {
-    return (
-      <div className="flex justify-center py-12">
-        <div className="h-8 w-8 animate-spin rounded-full border-4 border-[#3F51B5] border-t-transparent"></div>
-      </div>
-    );
-  }
-
-  if (!stripeConnected) {
-    return (
-      <div className="max-w-3xl mx-auto">
-        <div className="rounded-xl border border-yellow-200 bg-yellow-50 p-8 text-center">
-          <h2 className="text-lg font-semibold text-gray-900 mb-2">Stripe Connection Required</h2>
-          <p className="text-sm text-gray-600 mb-4">You need to connect your Stripe account before creating listings.</p>
-          <button
-            onClick={() => router.push('/dashboard')}
-            className="inline-flex items-center rounded-lg bg-[#3F51B5] px-4 py-2 text-sm font-medium text-white hover:bg-[#3545a0]"
-          >
-            Go to Dashboard
-          </button>
-        </div>
-      </div>
-    );
-  }
-
   return (
     <div className="max-w-3xl mx-auto space-y-6">
       <div>
         <h1 className="text-2xl font-bold text-gray-900">Create New Listing</h1>
         <p className="mt-1 text-sm text-gray-500">Follow the steps to list your data for sale.</p>
+      </div>
+
+      <div className="rounded-lg border border-blue-200 bg-blue-50 px-4 py-3 text-sm text-blue-800">
+        You can publish now. Finish payout setup from the dashboard to enable sales.
       </div>
 
       {/* Revert all AI changes */}

@@ -12,6 +12,20 @@ import type {
   TOTPVerifySetupResponse,
 } from '@/types';
 
+export type OnboardingStepId = 'profile' | 'role_selection' | 'company_info' | 'enable_2fa' | 'connect_stripe';
+export type OnboardingCurrentStep = OnboardingStepId | 'complete' | null;
+
+export interface OnboardingStatusResponse {
+  completed: boolean;
+  current_step: OnboardingCurrentStep;
+  steps: Array<{
+    id: OnboardingStepId;
+    label: string;
+    completed: boolean;
+    required_for?: Array<'buyer' | 'seller' | 'model_provider'> | null;
+  }>;
+}
+
 export async function login(data: LoginRequest): Promise<TokenResponse> {
   const res = await api.post<TokenResponse>('/auth/login', data);
   return res.data;
@@ -24,6 +38,11 @@ export async function register(data: RegisterRequest): Promise<User> {
 
 export async function getMe(): Promise<User> {
   const res = await api.get<User>('/auth/me');
+  return res.data;
+}
+
+export async function getOnboardingStatus(): Promise<OnboardingStatusResponse> {
+  const res = await api.get<OnboardingStatusResponse>('/auth/onboarding/status');
   return res.data;
 }
 
