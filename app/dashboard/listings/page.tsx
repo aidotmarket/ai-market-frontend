@@ -4,6 +4,7 @@ import { useEffect, useState, useCallback } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { getMyListings, publishListing, unpublishListing, deleteListing } from '@/api/listings';
+import { getConnectStatus } from '@/api/connect';
 import { useToast } from '@/components/Toast';
 import { formatPrice, formatDate } from '@/lib/format';
 
@@ -33,6 +34,7 @@ export default function ListingsPage() {
   const [error, setError] = useState('');
   const [actionLoading, setActionLoading] = useState<string | null>(null);
   const [deleteConfirm, setDeleteConfirm] = useState<string | null>(null);
+  const [payoutsEnabled, setPayoutsEnabled] = useState(false);
   const router = useRouter();
   const { toast } = useToast();
 
@@ -40,8 +42,12 @@ export default function ListingsPage() {
     setLoading(true);
     setError('');
     try {
-      const res = await getMyListings();
-      setListings(res.data || []);
+      const [listingsRes, connectRes] = await Promise.all([
+        getMyListings(),
+        getConnectStatus(),
+      ]);
+      setListings(listingsRes.data || []);
+      setPayoutsEnabled(!!connectRes.data?.payouts_enabled);
     } catch {
       setError('Failed to load listings.');
     } finally {
@@ -178,6 +184,11 @@ export default function ListingsPage() {
                     <span className={`inline-flex rounded-full px-2.5 py-0.5 text-xs font-medium ${STATUS_STYLES[listing.status] || 'bg-gray-100 text-gray-800'}`}>
                       {STATUS_LABELS[listing.status] || listing.status}
                     </span>
+                    {listing.status === 'published' && !payoutsEnabled && (
+                      <p className="mt-2 max-w-xs whitespace-normal text-xs leading-5 text-amber-700">
+                        Published &mdash; not yet purchasable. Finish payout setup to enable sales.
+                      </p>
+                    )}
                   </td>
                   <td className="whitespace-nowrap px-6 py-4 text-sm text-gray-500">
                     {listing.category}

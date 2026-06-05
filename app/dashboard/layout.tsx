@@ -4,15 +4,15 @@ import { useEffect, useState } from 'react';
 import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
 import { useAuthStore } from '@/store/auth';
-import { getConnectStatus } from '@/api/connect';
 
 export default function DashboardLayout({ children }: { children: React.ReactNode }) {
   const { user, isAuthenticated, isLoading } = useAuthStore();
   const router = useRouter();
   const pathname = usePathname();
-  const [stripeConnected, setStripeConnected] = useState<boolean | null>(null);
+  const [routeReady, setRouteReady] = useState(false);
 
   useEffect(() => {
+    setRouteReady(false);
     if (isLoading) return;
 
     if (!isAuthenticated) {
@@ -28,23 +28,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
       return;
     }
 
-    // Check Stripe connected status for /dashboard/listings/new
-    if (pathname === '/dashboard/listings/new') {
-      getConnectStatus()
-        .then((res) => {
-          const connected = !!res.data?.details_submitted;
-          setStripeConnected(connected);
-          if (!connected) {
-            router.push('/dashboard');
-          }
-        })
-        .catch(() => {
-          setStripeConnected(false);
-          router.push('/dashboard');
-        });
-    } else {
-      setStripeConnected(true); // not needed for other routes
-    }
+    setRouteReady(true);
   }, [isAuthenticated, isLoading, user, router, pathname]);
 
   if (isLoading || !isAuthenticated) {
@@ -55,8 +39,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
     );
   }
 
-  // Still checking stripe status (buyers are now allowed for some routes)
-  if (stripeConnected === null) {
+  if (!routeReady) {
     return (
       <div className="flex min-h-screen items-center justify-center">
         <div className="h-8 w-8 animate-spin rounded-full border-4 border-[#3F51B5] border-t-transparent"></div>
