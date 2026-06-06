@@ -136,7 +136,7 @@ export default async function ListingDetailPage({ params }: Props) {
           </div>
 
           {/* Schema Info */}
-          {(schemaSummary || rowCount != null) && (
+          {(rowCount != null || (typeof schemaSummary === 'string' ? schemaSummary.trim().length > 0 : (schemaSummary?.columns?.length ?? 0) > 0)) && (
             <div>
               <h2 className="text-lg font-semibold mb-3">Schema Information</h2>
               {rowCount != null && (
@@ -145,7 +145,7 @@ export default async function ListingDetailPage({ params }: Props) {
               {schemaSummary && typeof schemaSummary === 'string' && (
                 <p className="text-sm text-gray-700 whitespace-pre-wrap">{schemaSummary}</p>
               )}
-              {schemaSummary && typeof schemaSummary === 'object' && 'columns' in schemaSummary && (
+              {schemaSummary && typeof schemaSummary === 'object' && 'columns' in schemaSummary && (schemaSummary.columns?.length ?? 0) > 0 && (
                 <div className="overflow-x-auto">
                   <table className="min-w-full text-sm border border-gray-200 rounded-lg">
                     <thead>
