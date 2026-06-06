@@ -12,6 +12,8 @@ import {
 import type { ListingDetail } from '@/types';
 import BuyButton from '@/components/BuyButton';
 import InquiryWidget from '@/components/InquiryWidget';
+import ReactMarkdown from 'react-markdown';
+import rehypeSanitize from 'rehype-sanitize';
 
 export const dynamic = 'force-dynamic';
 
@@ -105,9 +107,9 @@ export default async function ListingDetailPage({ params }: Props) {
             </div>
           </div>
 
-          {/* Description - rendered as text (no dangerouslySetInnerHTML) */}
+          {/* Description - rendered as sanitized markdown */}
           <div className="prose prose-sm max-w-none">
-            <p className="whitespace-pre-wrap">{listing.description}</p>
+            <ReactMarkdown rehypePlugins={[rehypeSanitize]}>{listing.description ?? ''}</ReactMarkdown>
           </div>
 
           {/* Tags */}
