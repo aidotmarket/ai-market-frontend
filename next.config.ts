@@ -21,12 +21,16 @@ const nextConfig: NextConfig = {
       const devUrl = 'http://localhost:8000';
       return [
         { source: '/llms.txt', destination: `${devUrl}/llms.txt` },
+        { source: '/requests.txt', destination: `${devUrl}/requests.txt` },
+        { source: '/.well-known/requests.txt', destination: `${devUrl}/.well-known/requests.txt` },
         { source: '/.well-known/ai-agents.json', destination: `${devUrl}/.well-known/ai-agents.json` },
         { source: '/.well-known/ai-plugin.json', destination: `${devUrl}/.well-known/ai-plugin.json` },
       ];
     }
     return [
       { source: '/llms.txt', destination: `${apiUrl}/llms.txt` },
+      { source: '/requests.txt', destination: `${apiUrl}/requests.txt` },
+      { source: '/.well-known/requests.txt', destination: `${apiUrl}/.well-known/requests.txt` },
       { source: '/.well-known/ai-agents.json', destination: `${apiUrl}/.well-known/ai-agents.json` },
       { source: '/.well-known/ai-plugin.json', destination: `${apiUrl}/.well-known/ai-plugin.json` },
     ];
