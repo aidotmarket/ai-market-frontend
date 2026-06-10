@@ -14,6 +14,7 @@ function getApiUrl(): string {
 interface SitemapEntry {
   slug: string;
   published_at: string;
+  updated_at?: string;
 }
 
 export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
@@ -97,7 +98,24 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
       priority: 0.8,
     }));
 
-    return [...staticPages, ...listingPages];
+    let requestPages: MetadataRoute.Sitemap = [];
+    const requestRes = await fetch(`${apiUrl}/api/v1/public/request-sitemap-entries`, {
+      next: { revalidate: 3600 },
+    });
+    if (requestRes.ok) {
+      const requestData = await requestRes.json();
+      const requestEntries: SitemapEntry[] = requestData.entries || [];
+      requestPages = requestEntries.map((entry) => ({
+        url: `${SITE_URL}/requests/${entry.slug}`,
+        lastModified: new Date(entry.updated_at || entry.published_at),
+        changeFrequency: 'weekly' as const,
+        priority: 0.7,
+      }));
+    } else {
+      console.warn(`[sitemap] API responded with status ${requestRes.status} — request pages will be omitted`);
+    }
+
+    return [...staticPages, ...listingPages, ...requestPages];
   } catch (error) {
     console.error('Failed to fetch listings for sitemap:', error);
     return staticPages;

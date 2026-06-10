@@ -523,9 +523,13 @@ export interface DataRequestListItem {
 }
 
 export interface DataRequestDetail extends DataRequestListItem {
-  format_preferences: string | null;
+  format_preferences: string[];
+  regulatory_requirements?: string[];
   provenance_requirements: string | null;
   published_at: string | null;
+  expires_at?: string | null;
+  jsonld?: Record<string, unknown>;
+  indexing?: { index: boolean; robots: string };
   owner_id: string;
 }
 
