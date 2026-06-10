@@ -97,7 +97,7 @@ export interface ListingDetail {
   title?: string;
   description: string;
   short_description: string | null;
-  publisher: { name: string; id: string } | null;
+  publisher: { name?: string; display_name?: string; id?: string } | null;
   pricing: {
     price: number;
     pricing_type: PricingType;
