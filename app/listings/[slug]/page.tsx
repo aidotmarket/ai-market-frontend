@@ -19,6 +19,7 @@ export const dynamic = 'force-dynamic';
 
 // UUID v4 pattern
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+const DATASET_JSONLD_ENABLED = process.env.NEXT_PUBLIC_ENABLE_DATASET_JSONLD !== 'false';
 
 interface Props {
   params: Promise<{ slug: string }>;
@@ -80,9 +81,17 @@ export default async function ListingDetailPage({ params }: Props) {
 
   const schemaSummary = listing.schema_summary;
   const rowCount = listing.row_count;
+  const shouldEmitJsonLd = shouldEmitDatasetJsonLd(listing);
+  const publisherName = listing.publisher?.display_name ?? listing.publisher?.name;
 
   return (
     <>
+      {shouldEmitJsonLd && (
+        <script
+          type="application/ld+json"
+          dangerouslySetInnerHTML={{ __html: safeJsonLdStringify(listing.jsonld) }}
+        />
+      )}
       <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8 py-8">
       {/* Breadcrumb */}
       <nav className="text-sm text-gray-500 mb-6">
@@ -222,14 +231,20 @@ export default async function ListingDetailPage({ params }: Props) {
                   {listing.verification_status}
                 </span>
               </div>
+              {listing.license && (
+                <div className="flex justify-between items-center gap-4">
+                  <span className="text-sm text-gray-600">License</span>
+                  <span className="text-sm font-medium text-gray-900 text-right">{listing.license}</span>
+                </div>
+              )}
             </div>
           </div>
 
           {/* Publisher card */}
-          {listing.publisher && (
+          {publisherName && (
             <div className="rounded-xl border border-gray-200 p-6">
               <h3 className="font-semibold text-gray-900 mb-3">Publisher</h3>
-              <p className="text-sm text-gray-600">{listing.publisher.name}</p>
+              <p className="text-sm text-gray-600">{publisherName}</p>
             </div>
           )}
 
@@ -254,6 +269,20 @@ export default async function ListingDetailPage({ params }: Props) {
       </div>
     </div>
     </>
+  );
+}
+
+function safeJsonLdStringify(value: unknown): string {
+  return JSON.stringify(value).replace(/</g, '\\u003c');
+}
+
+function shouldEmitDatasetJsonLd(listing: ListingDetail): listing is ListingDetail & {
+  jsonld: Record<string, unknown>;
+} {
+  return (
+    DATASET_JSONLD_ENABLED &&
+    !listing.noindex &&
+    listing.jsonld?.['@type'] === 'Dataset'
   );
 }
 
