@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { useAuthStore } from '@/store/auth';
 import { useToast } from '@/components/Toast';
@@ -28,6 +28,12 @@ export default function NewDataRequestPage() {
   const [provenanceRequirements, setProvenanceRequirements] = useState('');
   const [submitting, setSubmitting] = useState(false);
 
+  useEffect(() => {
+    if (!isLoading && !isAuthenticated) {
+      router.push(`/login?redirect=${encodeURIComponent('/requests/new')}`);
+    }
+  }, [isAuthenticated, isLoading, router]);
+
   if (isLoading) {
     return (
       <div className="flex min-h-[60vh] items-center justify-center">
@@ -37,7 +43,6 @@ export default function NewDataRequestPage() {
   }
 
   if (!isAuthenticated) {
-    router.push(`/login?redirect=${encodeURIComponent('/requests/new')}`);
     return null;
   }
 
