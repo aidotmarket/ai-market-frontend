@@ -149,7 +149,7 @@ export default function PartnerPage() {
             <p className="text-sm font-semibold uppercase tracking-[0.18em] text-[#0F6E56]">Partners</p>
             <h1 className="mt-3 text-4xl font-extrabold tracking-tight text-gray-900 sm:text-5xl">Partner with ai.market.</h1>
             <p className="mt-5 text-lg leading-8 text-gray-600">
-              ai.market works with two kinds of partners. Data partners list datasets on the marketplace. Technology partners build integrations that connect their platform to ai.market&apos;s catalog, requests, and federated training.
+              ai.market works with two kinds of partners. Data partners list datasets on the marketplace. Technology partners build integrations that connect their platform to ai.market&apos;s catalog, requests, and delivery flows.
             </p>
           </div>
 
@@ -332,13 +332,9 @@ export default function PartnerPage() {
             <Link href="/find-data" className="font-semibold text-[#3F51B5] hover:text-[#303F9F]">
               Find Data
             </Link>
-            ,{' '}
+            , or{' '}
             <Link href="/sell-data" className="font-semibold text-[#3F51B5] hover:text-[#303F9F]">
               Sell Data
-            </Link>
-            , or{' '}
-            <Link href="/run-federated-learning" className="font-semibold text-[#3F51B5] hover:text-[#303F9F]">
-              Run Federated Learning
             </Link>
             .
           </p>

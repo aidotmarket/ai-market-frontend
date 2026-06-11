@@ -15,10 +15,10 @@ import './globals.css';
 
 export const metadata: Metadata = {
   title: {
-    default: 'ai.market - B2B Data Marketplace',
+    default: 'ai.market - Sell data without giving it away',
     template: '%s | ai.market',
   },
-  description: 'The marketplace where datasets become findable, queryable, and purchasable by AI systems.',
+  description: "Non-custodial B2B data marketplace. Data stays on the seller's infrastructure, only metadata is published. Search, post requests, and buy with peer-to-peer delivery. 5% commission, no listing fees.",
   metadataBase: new URL('https://ai.market'),
   icons: {
     icon: '/favicon.svg',
@@ -30,7 +30,10 @@ export const metadata: Metadata = {
   openGraph: {
     siteName: 'ai.market',
     type: 'website',
-    description: 'The non-custodial data marketplace where datasets become findable, queryable, and purchasable by AI systems.',
+    description: "Non-custodial B2B data marketplace. Data stays on the seller's infrastructure, only metadata is published. Search, post requests, and buy with peer-to-peer delivery. 5% commission, no listing fees.",
+  },
+  twitter: {
+    description: "Non-custodial B2B data marketplace. Data stays on the seller's infrastructure, only metadata is published. Search, post requests, and buy with peer-to-peer delivery. 5% commission, no listing fees.",
   },
 };
 

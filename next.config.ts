@@ -7,7 +7,8 @@ const nextConfig: NextConfig = {
       { source: '/download/aim-channel', destination: '/sell-data', permanent: true },
       { source: '/download', destination: '/sell-data', permanent: true },
       { source: '/download/aim-node', destination: '/partner#technology-partner', permanent: true },
-      { source: '/run-federated-learning', destination: '/aim-federate', permanent: true },
+      { source: '/aim-federate', destination: '/', permanent: true },
+      { source: '/run-federated-learning', destination: '/', permanent: true },
     ];
   },
   async rewrites() {
