@@ -230,28 +230,6 @@ export default function AimDataPage() {
           </div>
         </section>
 
-        <section className="bg-white py-16 sm:py-20" aria-labelledby="federate-bridge-heading">
-          <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
-            <div className="rounded-2xl border border-[#D8EEE6] bg-[#F7FCFA] p-6 shadow-sm sm:p-8">
-              <h2 id="federate-bridge-heading" className="text-2xl font-bold tracking-tight text-gray-900">
-                You can also sell access to your data without selling the data.
-              </h2>
-              <p className="mt-4 max-w-3xl text-base leading-7 text-gray-600">
-                If you operate data that other organizations want to train on but cannot have a copy
-                of, AIM Federate is the path. You keep the data on your infrastructure. Models get
-                trained on it inside a sealed enclave. Only aggregated updates leave the enclave; raw
-                data never moves.
-              </p>
-              <Link
-                href="/aim-federate"
-                className="mt-6 inline-flex items-center justify-center rounded-lg border border-[#0F6E56] px-5 py-3 text-sm font-semibold text-[#0F6E56] transition-colors hover:bg-[#E1F5EE] focus:outline-none focus:ring-2 focus:ring-[#0F6E56] focus:ring-offset-2"
-              >
-                Learn about AIM Federate →
-              </Link>
-            </div>
-          </div>
-        </section>
-
         <section className="bg-gray-50 py-16 sm:py-20" aria-labelledby="install">
           <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
             <div className="max-w-3xl">
@@ -304,10 +282,6 @@ export default function AimDataPage() {
               Not a seller? You might want{' '}
               <Link href="/find-data" className="font-semibold text-[#3F51B5] hover:text-[#303F9F]">
                 Find Data
-              </Link>
-              ,{' '}
-              <Link href="/run-federated-learning" className="font-semibold text-[#3F51B5] hover:text-[#303F9F]">
-                Run Federated Learning
               </Link>
               , or our{' '}
               <Link href="/partner" className="font-semibold text-[#3F51B5] hover:text-[#303F9F]">

@@ -41,24 +41,19 @@ const SELL_DATA_JSONLD = {
 
 const steps = [
   {
-    title: 'Install AIM Data.',
+    title: 'THE MARKETING IS INCLUDED',
     description:
-      'Python or Docker. Local-first. Nothing leaves your machine during install.',
+      'Getting a data product in front of buyers normally costs a marketing budget. Here it is part of the listing. allAI writes your metadata in the formats AI search reads, publishes it everywhere agents look, and answers buyer questions for you around the clock. You pay nothing until a sale clears, and then it is 5%.',
   },
   {
-    title: 'Prepare with allAI.',
+    title: 'YOUR DATA NEVER LEAVES',
     description:
-      'allAI scans your data, profiles structure, detects PII, scores quality, and writes the listing metadata.',
+      'Install AIM Data on your own infrastructure. It profiles what you have, scans it for PII, scores the quality and writes the listing. You review and click publish. The data itself stays exactly where it is, and when a sale closes it moves peer-to-peer, encrypted, straight to the buyer.',
   },
   {
-    title: 'Publish.',
+    title: "YOU DON'T CHASE LEADS",
     description:
-      'Review what allAI prepared. Click publish. Only metadata and the listing description go live. The raw data stays with you.',
-  },
-  {
-    title: 'Deliver securely.',
-    description:
-      'When someone buys your data, ai.market sends them a signed delivery token. Your AIM Data instance reads the token and opens a direct peer-to-peer channel to the buyer. The bytes never touch our servers.',
+      "allAI sits between you and every buyer. It answers questions about your data, handles the negotiation and runs checkout. You see the sale, not the busywork.",
   },
 ];
 
@@ -136,17 +131,17 @@ export default function SellDataPage() {
               Sell Data
             </p>
             <h1 className="mt-3 text-4xl font-extrabold tracking-tight text-gray-900 sm:text-5xl">
-              Sell your data without giving it away.
+              List once. Get found everywhere.
             </h1>
             <p className="mt-5 max-w-3xl text-lg leading-8 text-gray-600">
-              Install AIM Data on your own infrastructure. Your raw data stays put. We handle discovery, payments, and delivery tokens. Bytes move peer-to-peer the moment a buyer purchases.
+              Your data stays on your infrastructure. Your listing travels the world. Every listing is built to be found by AI assistants and search engines globally, so buyers discover your data without ever visiting ai.market.
             </p>
             <div className="mt-8 flex flex-col gap-4 sm:flex-row sm:items-center">
               <Link
-                href="/aim-data#install"
+                href="/register"
                 className="inline-flex items-center justify-center rounded-lg bg-[#0F6E56] px-5 py-3 text-sm font-semibold text-white transition-colors hover:bg-[#0c5a47] focus:outline-none focus:ring-2 focus:ring-[#0F6E56] focus:ring-offset-2"
               >
-                Install AIM Data
+                Create Your Account
               </Link>
               <Link
                 href="#how-it-works"
@@ -166,7 +161,7 @@ export default function SellDataPage() {
               How it works
             </p>
             <h2 id="how-it-works-heading" className="mt-3 text-3xl font-extrabold tracking-tight text-gray-900">
-              Four steps from install to delivery.
+              Three reasons to list.
             </h2>
           </div>
 
@@ -190,7 +185,7 @@ export default function SellDataPage() {
               What you get
             </p>
             <h2 id="features-heading" className="mt-3 text-3xl font-extrabold tracking-tight text-gray-900">
-              The listing workflow stays local-first.
+              The listing workflow stays local.
             </h2>
           </div>
 
@@ -214,25 +209,25 @@ export default function SellDataPage() {
                 Pricing
               </p>
               <h2 id="pricing-heading" className="mt-3 text-2xl font-bold tracking-tight text-gray-900">
-                Pricing is simple. We take 5%. You keep the rest.
+                List free. Pay 5% when a sale clears.
               </h2>
               <p className="mt-4 max-w-3xl text-base leading-7 text-gray-600">
-                The pricing page ships soon. Until then, talk to us if you need numbers.
+                Sellers list free and pay nothing until a buyer pays. Stripe handles the payout.
               </p>
               <Link
-                href="/support"
+                href="/register"
                 className="mt-6 inline-flex items-center justify-center rounded-lg border border-[#3F51B5] px-5 py-3 text-sm font-semibold text-[#3F51B5] transition-colors hover:bg-[#E8EAF6] focus:outline-none focus:ring-2 focus:ring-[#3F51B5] focus:ring-offset-2"
               >
-                Contact Support →
+                Create Your Account
               </Link>
             </div>
 
             <aside className="rounded-2xl border border-[#D8EEE6] bg-[#F7FCFA] p-6 shadow-sm" aria-labelledby="agents-heading">
               <h2 id="agents-heading" className="text-xl font-bold tracking-tight text-gray-900">
-                Selling to AI agents?
+                Built for AI search
               </h2>
               <p className="mt-4 text-sm leading-7 text-gray-600">
-                AI agents discover and purchase data through ai.market&apos;s MCP API. Your AIM Data listing is automatically agent-discoverable. No extra integration work needed on your side.
+                Every listing is built to be found by AI assistants and search engines. Buyers can discover your data where they already ask.
               </p>
               <Link
                 href="/protocol"
@@ -249,16 +244,16 @@ export default function SellDataPage() {
         <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
           <div className="rounded-2xl border border-[#D8EEE6] bg-white p-6 shadow-sm sm:p-8">
             <h2 id="final-cta-heading" className="text-2xl font-bold tracking-tight text-gray-900">
-              Start with AIM Data.
+              Create Your Account
             </h2>
             <p className="mt-4 max-w-3xl text-base leading-7 text-gray-600">
-              Install AIM Data on your own infrastructure, prepare the listing locally, and publish when you are ready.
+              Start as a seller. List free and pay nothing until a sale clears.
             </p>
             <Link
-              href="/aim-data#install"
+              href="/register"
               className="mt-6 inline-flex items-center justify-center rounded-lg bg-[#0F6E56] px-5 py-3 text-sm font-semibold text-white transition-colors hover:bg-[#0c5a47] focus:outline-none focus:ring-2 focus:ring-[#0F6E56] focus:ring-offset-2"
             >
-              Install AIM Data
+              Create Your Account
             </Link>
           </div>
         </div>
@@ -270,10 +265,6 @@ export default function SellDataPage() {
             Not selling data? You might be looking for{' '}
             <Link href="/find-data" className="font-semibold text-[#3F51B5] hover:text-[#303F9F]">
               Find Data
-            </Link>
-            ,{' '}
-            <Link href="/run-federated-learning" className="font-semibold text-[#3F51B5] hover:text-[#303F9F]">
-              Run Federated Learning
             </Link>
             , or our{' '}
             <Link href="/partner" className="font-semibold text-[#3F51B5] hover:text-[#303F9F]">

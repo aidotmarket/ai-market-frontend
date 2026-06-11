@@ -11,7 +11,6 @@ const footerLinkSections = [
     links: [
       { label: 'Find Data', href: '/find-data' },
       { label: 'Sell Data', href: '/sell-data' },
-      { label: 'Run Federated Learning', href: '/run-federated-learning' },
       { label: 'Browse Data', href: '/listings' },
       { label: 'Request Data', href: '/requests' },
       { label: 'Partner Program', href: '/partner' },
@@ -49,14 +48,6 @@ const footerLinkSections = [
   },
 ];
 
-const solutionsItems = [
-  'Financial Services',
-  'Healthcare & Life Sciences',
-  'Retail & E-Commerce',
-  'Marketing & Advertising',
-  'AI & Machine Learning',
-];
-
 export function Layout({ children }: { children: React.ReactNode }) {
   const { user, isAuthenticated, logout } = useAuthStore();
   const router = useRouter();
@@ -86,7 +77,6 @@ export function Layout({ children }: { children: React.ReactNode }) {
             <nav className="hidden md:flex items-center gap-6">
               <Link href="/find-data" className="text-sm text-[#666666] hover:text-[#1A1A1A]">Find Data</Link>
               <Link href="/sell-data" className="text-sm text-[#666666] hover:text-[#1A1A1A]">Sell Data</Link>
-              <Link href="/run-federated-learning" className="text-sm text-[#666666] hover:text-[#1A1A1A]">Run Federated Learning</Link>
               <Link href="/protocol" className="text-sm text-[#666666] hover:text-[#1A1A1A]">The Protocol</Link>
               <Link href="/blog" className="text-sm text-[#666666] hover:text-[#1A1A1A]">Blog</Link>
               {isAdminEmail && (
@@ -137,7 +127,6 @@ export function Layout({ children }: { children: React.ReactNode }) {
             <div id="mobile-nav-menu" className="md:hidden border-t border-gray-200 py-3 space-y-2">
               <Link href="/find-data" className="block px-2 py-2 text-sm text-gray-600 hover:text-gray-900" onClick={() => setMobileMenuOpen(false)}>Find Data</Link>
               <Link href="/sell-data" className="block px-2 py-2 text-sm text-gray-600 hover:text-gray-900" onClick={() => setMobileMenuOpen(false)}>Sell Data</Link>
-              <Link href="/run-federated-learning" className="block px-2 py-2 text-sm text-gray-600 hover:text-gray-900" onClick={() => setMobileMenuOpen(false)}>Run Federated Learning</Link>
               <Link href="/protocol" className="block px-2 py-2 text-sm text-gray-600 hover:text-gray-900" onClick={() => setMobileMenuOpen(false)}>The Protocol</Link>
               <Link href="/blog" className="block px-2 py-2 text-sm text-gray-600 hover:text-gray-900" onClick={() => setMobileMenuOpen(false)}>Blog</Link>
               {isAdminEmail && (
@@ -184,7 +173,7 @@ export function Layout({ children }: { children: React.ReactNode }) {
         </div>
         <div className="mx-auto max-w-7xl px-6 lg:px-8"><div className="border-t border-[#2a3545]" /></div>
         <div className="mx-auto max-w-7xl px-6 lg:px-8 py-10">
-          <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-8 gap-y-10">
+          <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-8 gap-y-10">
             {footerLinkSections.map((section) => (
               <div key={section.title}>
                 <h4 className="text-[11px] font-bold tracking-[0.1em] uppercase text-[#e2e8f0] mb-4">{section.title}</h4>
@@ -197,14 +186,6 @@ export function Layout({ children }: { children: React.ReactNode }) {
                 </ul>
               </div>
             ))}
-            <div>
-              <h4 className="text-[11px] font-bold tracking-[0.1em] uppercase text-[#e2e8f0] mb-4">Solutions</h4>
-              <ul className="space-y-2.5">
-                {solutionsItems.map((item) => (
-                  <li key={item} className="text-sm text-[#96a0af]">{item}</li>
-                ))}
-              </ul>
-            </div>
           </div>
         </div>
         <div className="mx-auto max-w-7xl px-6 lg:px-8 pb-8">

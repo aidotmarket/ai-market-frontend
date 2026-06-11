@@ -79,10 +79,10 @@ export default function FindDataPage() {
               Find Data
             </p>
             <h1 className="mt-3 text-4xl font-extrabold tracking-tight text-gray-900 sm:text-5xl">
-              Find data, or post what you need.
+              Find data you can&apos;t get anywhere else.
             </h1>
             <p className="mt-5 text-lg leading-8 text-gray-600">
-              Run a semantic search across the marketplace data catalog. Or describe what you are looking for and let providers come to you. Both paths are live.
+              Companies list data here that never reaches the aggregators, because listing with us does not mean handing it over. Search it. Buy it. It arrives straight from the source.
             </p>
           </div>
         </div>
@@ -97,10 +97,10 @@ export default function FindDataPage() {
           <div className="grid gap-8 lg:grid-cols-[minmax(0,1fr)_360px] lg:items-start">
             <div className="rounded-2xl border border-gray-200 bg-white p-6 shadow-sm sm:p-8">
               <h2 className="text-2xl font-bold tracking-tight text-gray-900">
-                Cannot find what you need?
+                CAN&apos;T FIND IT? POST A REQUEST.
               </h2>
               <p className="mt-4 max-w-3xl text-base leading-7 text-gray-600">
-                Post a Data Request. Describe what you are looking for, set a budget range, and providers respond with matching datasets. The whole conversation happens on ai.market.
+                Describe the dataset you wish existed. Providers with matching data respond through allAI and you pick. You stay anonymous until you choose to engage.
               </p>
               <div className="mt-6 flex flex-col gap-4 sm:flex-row sm:items-center">
                 <Link
@@ -121,10 +121,10 @@ export default function FindDataPage() {
 
             <aside className="rounded-2xl border border-[#D8EEE6] bg-[#F7FCFA] p-6 shadow-sm" aria-labelledby="agents-heading">
               <h2 id="agents-heading" className="text-xl font-bold tracking-tight text-gray-900">
-                Building an AI agent?
+                FOR YOUR AGENTS
               </h2>
               <p className="mt-4 text-sm leading-7 text-gray-600">
-                ai.market exposes the marketplace via a standard MCP API. Your agent can search the catalog, purchase datasets, and stream data peer-to-peer.
+                Your AI agents can search and transact here directly through our MCP server and API. Point them at the catalog and let them do the looking.
               </p>
               <Link
                 href="/protocol"
@@ -141,11 +141,14 @@ export default function FindDataPage() {
         <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
           <div className="max-w-3xl">
             <p className="text-sm font-semibold uppercase tracking-[0.18em] text-[#0F6E56]">
-              Browse by Category
+              SEARCH BY MEANING
             </p>
             <h2 id="category-browse-heading" className="mt-3 text-3xl font-extrabold tracking-tight text-gray-900">
-              Start with the market you know.
+              Describe what you need in plain language.
             </h2>
+            <p className="mt-4 text-base leading-7 text-gray-600">
+              Search matches meaning, not just keywords, so &apos;urban traffic incidents with coordinates&apos; finds collision data even when no listing uses those words.
+            </p>
           </div>
 
           <div className="mt-10 grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
@@ -170,13 +173,9 @@ export default function FindDataPage() {
       <section className="bg-white py-12 sm:py-16" aria-label="Related marketplace paths">
         <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
           <p className="rounded-2xl border border-gray-200 bg-white p-6 text-sm leading-7 text-gray-600 shadow-sm">
-            Not the right fit? You might want to{' '}
+            WHAT EVERY LISTING GIVES YOU - Scanned for PII before it ever goes live. Scored for quality. Described in structured metadata your tools and your agents can read. And when you buy, delivery is peer-to-peer from the seller&apos;s infrastructure, encrypted end to end. You might also want to{' '}
             <Link href="/sell-data" className="font-semibold text-[#3F51B5] hover:text-[#303F9F]">
               Sell Data
-            </Link>
-            ,{' '}
-            <Link href="/run-federated-learning" className="font-semibold text-[#3F51B5] hover:text-[#303F9F]">
-              Run Federated Learning
             </Link>
             , or check our{' '}
             <Link href="/partner" className="font-semibold text-[#3F51B5] hover:text-[#303F9F]">

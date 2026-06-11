@@ -6,11 +6,11 @@ import { HeroSearch } from '@/components/HeroSearch';
 export const metadata: Metadata = {
   title: 'ai.market — Sell data without giving it away',
   description:
-    'Non-custodial B2B data marketplace. List with AIM Data, find with semantic search and data requests, train across orgs with AIM Federate.',
+    "Non-custodial B2B data marketplace. Data stays on the seller's infrastructure, only metadata is published. Search, post requests, and buy with peer-to-peer delivery. 5% commission, no listing fees.",
   openGraph: {
     title: 'ai.market — Sell data without giving it away',
     description:
-      'Non-custodial B2B data marketplace. List with AIM Data, find with semantic search and data requests, train across orgs with AIM Federate.',
+      "Non-custodial B2B data marketplace. Data stays on the seller's infrastructure, only metadata is published. Search, post requests, and buy with peer-to-peer delivery. 5% commission, no listing fees.",
     url: 'https://ai.market',
     siteName: 'ai.market',
     images: ['/og/ai-market.png'],
@@ -20,7 +20,7 @@ export const metadata: Metadata = {
     card: 'summary_large_image',
     title: 'ai.market — Sell data without giving it away',
     description:
-      'Non-custodial B2B data marketplace. List with AIM Data, find with semantic search and data requests, train across orgs with AIM Federate.',
+      "Non-custodial B2B data marketplace. Data stays on the seller's infrastructure, only metadata is published. Search, post requests, and buy with peer-to-peer delivery. 5% commission, no listing fees.",
     images: ['/og/ai-market.png'],
   },
 };
@@ -71,7 +71,7 @@ const offerings: Offering[] = [
     name: 'Find Data',
     subtitle: 'Search the catalog or post a request',
     description: [
-      'Run a semantic search across the catalog. Or describe what you need and let providers respond. Both paths are live today.',
+      'Every listing is scanned for PII, scored for quality and described in a structure your tools can read. Run a semantic search, or describe what you need and let providers respond.',
     ],
     tags: ['Semantic search', 'Data Requests', 'Live'],
     cta: 'Find Data',
@@ -83,28 +83,13 @@ const offerings: Offering[] = [
     name: 'Sell Data',
     subtitle: 'List with AIM Data',
     description: [
-      'Install AIM Data on your own infrastructure. We help you describe what you have, scan it for PII, and publish a listing buyers can find. Your raw data stays put.',
+      'Install AIM Data on your own infrastructure. It helps you describe what you have, scans for PII and publishes a listing buyers can find. Your raw data stays put.',
     ],
     tags: ['AIM Data', 'Stays on your infra', 'Auto-metadata'],
     cta: 'Sell Data',
     href: '/sell-data',
     accent: 'teal',
     iconPath: 'M4 7v10c0 2 3.5 3 8 3s8-1 8-3V7M4 7c0-2 3.5-3 8-3s8 1 8 3M4 7c0 2 3.5 3 8 3s8-1 8-3m0 5c0 2-3.5 3-8 3s-8-1-8-3',
-  },
-  {
-    name: 'Run Federated Learning',
-    subtitle: 'AIM Federate, private beta',
-    description:
-      [
-        'Train models across organizations without moving the data.',
-        'Five organizations, one model, raw data never leaves the perimeter. The aggregator runs in a sealed enclave; we provide the orchestration, the cohort owns the math.',
-        'Private beta. Request access.',
-      ],
-    tags: ['Private beta', 'Nitro enclave', 'Request access'],
-    cta: 'Run Federated Learning',
-    href: '/run-federated-learning',
-    accent: 'indigo',
-    iconPath: 'M9.75 17L9 20l-1 1h8l-1-1-.75-3M3 13h18M5 17h14a2 2 0 0 0 2-2V5a2 2 0 0 0-2-2H5a2 2 0 0 0-2 2v10a2 2 0 0 0 2 2z',
   },
 ];
 
@@ -147,7 +132,7 @@ const howItWorks = [
   {
     title: 'Get paid.',
     description:
-      'Buyers find your listing through search or AI agents. Stripe handles the payout when they purchase.',
+      'Buyers find your listing wherever they search, on ai.market or through their AI assistant. Stripe handles the payout.',
   },
 ];
 
@@ -181,6 +166,25 @@ export default async function LandingPage() {
                   and the bytes move peer-to-peer the moment a deal closes.
                 </p>
                 <HeroSearch />
+                <div className="mt-5 rounded-xl border border-[#E8E8E8] bg-[#FAFAFA] p-4">
+                  <p className="text-sm leading-6 text-[#4A4A4A]">
+                    Buying? Search the catalog or tell us what you need and let providers come to you.
+                  </p>
+                  <div className="mt-4 flex flex-col gap-3 sm:flex-row">
+                    <Link
+                      href="/listings"
+                      className="inline-flex items-center justify-center rounded-lg bg-[#3F51B5] px-4 py-2.5 text-sm font-semibold text-white transition-colors hover:bg-[#3545a0]"
+                    >
+                      Browse Data
+                    </Link>
+                    <Link
+                      href="/requests"
+                      className="inline-flex items-center justify-center rounded-lg border border-[#3F51B5] px-4 py-2.5 text-sm font-semibold text-[#3F51B5] transition-colors hover:bg-[#E8EAF6]"
+                    >
+                      Post a Request
+                    </Link>
+                  </div>
+                </div>
               </div>
 
               {/* Right - trust visual card */}
@@ -208,8 +212,8 @@ export default async function LandingPage() {
                   <li className="flex items-start gap-3">
                     <span className="mt-1.5 h-2.5 w-2.5 shrink-0 rounded-full bg-[#14B8A6]" />
                     <div>
-                      <p className="text-sm font-semibold text-[#1A1A1A]">Agentic-first.</p>
-                      <p className="text-sm text-[#666666]">AI agents can discover and transact directly.</p>
+                      <p className="text-sm font-semibold text-[#1A1A1A]">Found everywhere.</p>
+                      <p className="text-sm text-[#666666]">Listings surface in AI search worldwide, and buyers&apos; agents can transact directly.</p>
                     </div>
                   </li>
                 </ul>
@@ -218,20 +222,73 @@ export default async function LandingPage() {
           </div>
         </section>
 
-        {/* THREE OFFERINGS */}
+        {/* HOW NON-CUSTODIAL WORKS */}
+        <section className="border-t border-[#E8E8E8] bg-[#FAFAFA] py-20 sm:py-24">
+          <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
+            <div className="max-w-3xl">
+              <p className="text-xs font-bold uppercase tracking-wider text-[#3F51B5]">How it works</p>
+              <h2 className="mt-2 text-3xl font-extrabold tracking-tight text-[#1A1A1A] sm:text-4xl">
+                How non-custodial actually works
+              </h2>
+            </div>
+
+            <div className="mt-14 grid grid-cols-1 gap-8 sm:grid-cols-3">
+              <div>
+                <div className="flex h-10 w-10 items-center justify-center rounded-full bg-[#3F51B5] text-sm font-bold text-white">1</div>
+                <p className="mt-4 text-sm leading-6 text-[#666666]">
+                  You list. The data stays put. AIM Data runs on your servers and publishes a description of what you have. We see the description, never the data.
+                </p>
+              </div>
+              <div>
+                <div className="flex h-10 w-10 items-center justify-center rounded-full bg-[#3F51B5] text-sm font-bold text-white">2</div>
+                <p className="mt-4 text-sm leading-6 text-[#666666]">
+                  allAI handles the middle. Questions, negotiation and checkout run through our AI. Buyers get answers fast. You never chase a lead or hand out your contact details.
+                </p>
+              </div>
+              <div>
+                <div className="flex h-10 w-10 items-center justify-center rounded-full bg-[#3F51B5] text-sm font-bold text-white">3</div>
+                <p className="mt-4 text-sm leading-6 text-[#666666]">
+                  Delivery is peer-to-peer. When a deal closes, the bytes move encrypted from your infrastructure straight to the buyer. Stripe moves the money. We take 5% and that is it.
+                </p>
+              </div>
+            </div>
+          </div>
+        </section>
+
+        {/* LISTING MARKETING */}
+        <section className="bg-white py-20 sm:py-24">
+          <div className="mx-auto max-w-4xl px-4 sm:px-6 lg:px-8">
+            <h2 className="text-3xl font-extrabold tracking-tight text-[#1A1A1A] sm:text-4xl">
+              Your listing is marketing you don&apos;t pay for.
+            </h2>
+            <div className="mt-6 space-y-5 text-lg leading-8 text-[#4A4A4A]">
+              <p>
+                Every listing is published in the formats AI assistants and search engines read. Structured metadata, machine-readable manifests, all of it, on every listing, automatically.
+              </p>
+              <p>
+                So when a buyer anywhere in the world asks their AI for data like yours, your listing is built to be the answer. They don&apos;t need to know ai.market exists. They don&apos;t need to visit us. Your data shows up where buyers already ask.
+              </p>
+              <p>
+                Companies pay real money for that kind of reach. Here it comes with the listing. Free.
+              </p>
+            </div>
+          </div>
+        </section>
+
+        {/* OFFERINGS */}
         <section className="border-t border-[#E8E8E8] bg-[#FAFAFA] py-20 sm:py-24">
           <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
             <div className="max-w-2xl">
               <p className="text-xs font-bold uppercase tracking-wider text-[#3F51B5]">Products</p>
               <h2 className="mt-2 text-3xl font-extrabold tracking-tight text-[#1A1A1A] sm:text-4xl">
-                Three ways to participate
+                Two ways to participate
               </h2>
               <p className="mt-3 text-lg text-[#666666]">
-                Find data, sell data, or run federated learning without moving raw datasets.
+                Find data or sell data without moving raw datasets.
               </p>
             </div>
 
-            <div className="mt-14 grid grid-cols-1 gap-6 md:grid-cols-3">
+            <div className="mt-14 grid grid-cols-1 gap-6 md:grid-cols-2">
               {offerings.map((o) => {
                 const styles = accentStyles[o.accent];
                 return (
@@ -344,19 +401,23 @@ export default async function LandingPage() {
         <section className="bg-white py-20 sm:py-24">
           <div className="mx-auto max-w-3xl px-4 sm:px-6 lg:px-8 text-center">
             <h2 className="text-3xl font-extrabold tracking-tight text-[#1A1A1A] sm:text-4xl">
-              Ready to get discovered?
+              Ready to get started?
             </h2>
             <p className="mx-auto mt-4 max-w-xl text-lg text-[#666666]">
-              Join the non-custodial data marketplace. Your data stays where it is. We help
-              buyers and AI agents find it, and Stripe handles the money.
+              Buyers search free. No account needed to look. Sellers list free and pay nothing until a sale clears.
             </p>
-            <div className="mt-10">
+            <div className="mt-10 grid gap-4 sm:grid-cols-2">
+              <Link
+                href="/find-data"
+                className="inline-flex items-center justify-center rounded-lg border border-[#3F51B5] px-8 py-3.5 text-sm font-semibold text-[#3F51B5] transition-colors hover:bg-[#E8EAF6]"
+              >
+                Find Data
+              </Link>
               <Link
                 href="/register"
-                className="inline-flex items-center justify-center rounded-lg bg-[#3F51B5] px-8 py-3.5 text-sm font-semibold text-white hover:bg-[#3545a0] transition-colors"
+                className="inline-flex items-center justify-center rounded-lg bg-[#3F51B5] px-8 py-3.5 text-sm font-semibold text-white transition-colors hover:bg-[#3545a0]"
               >
                 Create Your Account
-                <ArrowIcon />
               </Link>
             </div>
           </div>

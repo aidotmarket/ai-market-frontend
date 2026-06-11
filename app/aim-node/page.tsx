@@ -64,7 +64,7 @@ const buyerSteps = [
   {
     num: '4',
     title: 'Connect P2P',
-    desc: "Present the token and connect directly to the seller's AIM Channel or seller-edge over an encrypted peer-to-peer channel for live data delivery.",
+    desc: "Present the token and connect directly to the seller's AIM Data or seller-edge over an encrypted peer-to-peer channel for live data delivery.",
   },
 ];
 
@@ -130,7 +130,7 @@ export default function AimNodePage() {
             </h1>
             <p className="mx-auto mt-6 max-w-3xl text-lg leading-8 text-gray-600 sm:text-xl">
               AIM-Node is the gateway client for building against ai.market — the
-              buyer-side companion to AIM Channel. Run it on your own infrastructure to
+              buyer-side companion to AIM Data. Run it on your own infrastructure to
               find data, authenticate, purchase access, and connect peer-to-peer to
               sellers. No centralized proxy, no payloads through ai.market, no middleman.
             </p>
@@ -237,7 +237,7 @@ export default function AimNodePage() {
                     Seller Node
                   </p>
                   <p className="mt-3 font-semibold text-gray-900">Seller&apos;s Infrastructure</p>
-                  <p className="mt-2 leading-6">AIM Channel or seller-edge</p>
+                  <p className="mt-2 leading-6">AIM Data or seller-edge</p>
                   <p className="leading-6">Your dataset</p>
                 </div>
                 <div className="rounded-2xl border border-[#D6DBF5] bg-white p-4">
