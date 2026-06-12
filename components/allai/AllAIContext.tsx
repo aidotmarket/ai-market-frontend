@@ -11,6 +11,7 @@ import {
 } from 'react';
 import { usePathname } from 'next/navigation';
 import { useAuthStore } from '@/store/auth';
+import type { TicketStatusCardData } from './TicketStatusCard';
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000';
 const SESSION_KEY = 'allai-session-id';
@@ -20,6 +21,7 @@ export interface Message {
   role: 'user' | 'assistant' | 'system';
   content: string;
   timestamp: number;
+  ticketStatusCards?: TicketStatusCardData[];
 }
 
 export interface FieldProposalEvent {
@@ -48,6 +50,38 @@ interface AllAIContextValue {
 }
 
 const AllAIContext = createContext<AllAIContextValue | null>(null);
+
+function isTicketStatusCard(value: unknown): value is TicketStatusCardData {
+  if (!value || typeof value !== 'object') return false;
+  const candidate = value as Record<string, unknown>;
+  return (
+    typeof candidate.public_ref === 'string' &&
+    typeof candidate.status === 'string' &&
+    typeof candidate.priority === 'string' &&
+    typeof candidate.issue_class === 'string' &&
+    typeof candidate.collapsed === 'boolean' &&
+    typeof candidate.updated_at === 'string' &&
+    (typeof candidate.last_ticket_message_at === 'string' || candidate.last_ticket_message_at === null)
+  );
+}
+
+function coerceTicketStatusCards(value: unknown): TicketStatusCardData[] | null {
+  if (!Array.isArray(value)) return null;
+  const cards = value.filter(isTicketStatusCard);
+  return cards.length > 0 ? cards : null;
+}
+
+function extractTicketStatusCards(evt: Record<string, any>): TicketStatusCardData[] | null {
+  return (
+    coerceTicketStatusCards(evt.ticket_status_cards) ??
+    coerceTicketStatusCards(evt.cards) ??
+    coerceTicketStatusCards(evt.data?.ticket_status_cards) ??
+    coerceTicketStatusCards(evt.payload?.ticket_status_cards) ??
+    coerceTicketStatusCards(evt.result?.ticket_status_cards) ??
+    coerceTicketStatusCards(evt.result?.cards) ??
+    null
+  );
+}
 
 export function useAllAI() {
   const ctx = useContext(AllAIContext);
@@ -110,6 +144,7 @@ export function AllAIProvider({ children }: { children: ReactNode }) {
                 role: m.role,
                 content: m.content,
                 timestamp: Date.now(),
+                ticketStatusCards: coerceTicketStatusCards(m.ticket_status_cards ?? m.ticketStatusCards) ?? undefined,
               }))
             );
           }
@@ -297,6 +332,23 @@ export function AllAIProvider({ children }: { children: ReactNode }) {
                     }))
                   );
                 }
+
+                const ticketStatusCards = extractTicketStatusCards(evt);
+                if (ticketStatusCards) {
+                  setMessages((prev) =>
+                    prev.map((m) =>
+                      m.id === assistantId
+                        ? {
+                            ...m,
+                            ticketStatusCards: [
+                              ...(m.ticketStatusCards ?? []),
+                              ...ticketStatusCards,
+                            ],
+                          }
+                        : m
+                    )
+                  );
+                }
               } catch {
                 // skip malformed JSON
               }
@@ -328,7 +380,7 @@ export function AllAIProvider({ children }: { children: ReactNode }) {
         abortRef.current = null;
       }
     },
-    [isStreaming, ensureSession, pathname]
+    [isStreaming, ensureSession, pathname, token, user]
   );
 
   const open = useCallback(() => setIsOpen(true), []);
