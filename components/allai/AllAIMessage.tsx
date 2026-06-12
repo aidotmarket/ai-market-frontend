@@ -2,6 +2,7 @@
 
 import type { Message } from './AllAIContext';
 import Markdown from 'react-markdown';
+import TicketStatusCard from './TicketStatusCard';
 
 function StreamingDots() {
   return (
@@ -40,6 +41,7 @@ export default function AllAIMessage({
 
   // assistant
   const showDots = isStreaming && !message.content;
+  const ticketStatusCards = message.ticketStatusCards ?? [];
   return (
     <div className="flex justify-start">
       <div className="max-w-[80%] rounded-2xl rounded-bl-md px-4 py-2.5 bg-transparent border border-white/[0.08] text-white/90 text-sm leading-relaxed break-words allai-markdown">
@@ -67,6 +69,9 @@ export default function AllAIMessage({
             {message.content}
           </Markdown>
         )}
+        {ticketStatusCards.map((card) => (
+          <TicketStatusCard key={`${message.id}-${card.public_ref}-${card.updated_at}`} card={card} />
+        ))}
       </div>
     </div>
   );

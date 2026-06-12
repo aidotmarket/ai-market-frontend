@@ -4,6 +4,7 @@ import { useState } from 'react';
 import Link from 'next/link';
 import { useRouter, usePathname } from 'next/navigation';
 import { useAuthStore } from '@/store/auth';
+import NotificationCenter from '@/components/NotificationCenter';
 
 const footerLinkSections = [
   {
@@ -90,6 +91,7 @@ export function Layout({ children }: { children: React.ReactNode }) {
             <div className="hidden md:flex items-center gap-3">
               {isAuthenticated ? (
                 <div className="flex items-center gap-3">
+                  <NotificationCenter enabled={isAuthenticated} />
                   <span className="text-sm text-gray-600">{user?.first_name || user?.email}</span>
                   <button onClick={handleLogout} className="text-sm text-gray-500 hover:text-gray-700">Log out</button>
                 </div>
@@ -134,6 +136,9 @@ export function Layout({ children }: { children: React.ReactNode }) {
               )}
               {isAuthenticated ? (
                 <>
+                  <div className="px-2 py-2">
+                    <NotificationCenter enabled={isAuthenticated} />
+                  </div>
                   <Link href="/dashboard" className="block px-2 py-2 text-sm text-gray-600 hover:text-gray-900" onClick={() => setMobileMenuOpen(false)}>Dashboard</Link>
                   <button onClick={() => { handleLogout(); setMobileMenuOpen(false); }} className="block w-full text-left px-2 py-2 text-sm text-gray-500 hover:text-gray-700">Log out</button>
                 </>
