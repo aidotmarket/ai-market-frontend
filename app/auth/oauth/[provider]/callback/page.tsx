@@ -2,6 +2,7 @@
 
 import { useEffect, useRef, useState } from 'react';
 import { useParams, useSearchParams, useRouter } from 'next/navigation';
+import TwoFactorChallenge from '@/components/TwoFactorChallenge';
 import { useAuthStore } from '@/store/auth';
 
 export default function OAuthCallbackPage() {
@@ -9,6 +10,7 @@ export default function OAuthCallbackPage() {
   const searchParams = useSearchParams();
   const router = useRouter();
   const oauthLogin = useAuthStore((s) => s.oauthLogin);
+  const pendingTwoFactor = useAuthStore((s) => s.pendingTwoFactor);
   const [error] = useState('');
   const calledRef = useRef(false);
 
@@ -28,8 +30,10 @@ export default function OAuthCallbackPage() {
     }
 
     oauthLogin(provider, code, state, nonce)
-      .then(() => {
-        router.replace('/listings');
+      .then((result) => {
+        if (!result.requiresTwoFactor) {
+          router.replace('/listings');
+        }
       })
       .catch(() => {
         router.replace('/login?error=oauth_failed');
@@ -43,6 +47,14 @@ export default function OAuthCallbackPage() {
           <p className="text-red-600 mb-4">{error}</p>
           <a href="/login" className="text-[#3F51B5] hover:underline">Back to login</a>
         </div>
+      </div>
+    );
+  }
+
+  if (pendingTwoFactor) {
+    return (
+      <div className="flex min-h-[calc(100vh-10rem)] items-center justify-center px-4">
+        <TwoFactorChallenge onVerified={() => router.replace('/listings')} />
       </div>
     );
   }

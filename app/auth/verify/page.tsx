@@ -2,12 +2,14 @@
 
 import { Suspense, useEffect, useRef } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
+import TwoFactorChallenge from '@/components/TwoFactorChallenge';
 import { useAuthStore } from '@/store/auth';
 
 function MagicLinkVerifyContent() {
   const searchParams = useSearchParams();
   const router = useRouter();
   const magicLinkVerify = useAuthStore((s) => s.magicLinkVerify);
+  const pendingTwoFactor = useAuthStore((s) => s.pendingTwoFactor);
   const calledRef = useRef(false);
 
   useEffect(() => {
@@ -25,13 +27,23 @@ function MagicLinkVerifyContent() {
     }
 
     magicLinkVerify(token)
-      .then(() => {
-        router.replace('/listings');
+      .then((result) => {
+        if (!result.requiresTwoFactor) {
+          router.replace('/listings');
+        }
       })
       .catch(() => {
         router.replace('/login?error=magic_link_failed');
       });
   }, [searchParams, router, magicLinkVerify]);
+
+  if (pendingTwoFactor) {
+    return (
+      <div className="flex min-h-[calc(100vh-10rem)] items-center justify-center px-4">
+        <TwoFactorChallenge onVerified={() => router.replace('/listings')} />
+      </div>
+    );
+  }
 
   return (
     <div className="flex min-h-[calc(100vh-10rem)] items-center justify-center px-4">

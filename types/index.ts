@@ -25,6 +25,14 @@ export interface TokenResponse {
   token_type: string;
 }
 
+export interface PreAuthRequiredResponse {
+  pre_auth_token: string;
+  requires_2fa: true;
+  expires_in: number;
+}
+
+export type LoginResult = TokenResponse | PreAuthRequiredResponse;
+
 export interface LoginRequest {
   email: string;
   password: string;

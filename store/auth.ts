@@ -1,18 +1,30 @@
 'use client';
 
 import { create } from 'zustand';
-import type { User } from '@/types';
+import type { TokenResponse, User } from '@/types';
 import * as authApi from '@/api/auth';
+
+export interface PendingTwoFactor {
+  preAuthToken: string;
+  expiresAt: number;
+}
+
+export type AuthFlowResult = { requiresTwoFactor: boolean };
+export type TwoFactorVerifyResult = { ok: true } | { ok: false; reason: 'invalid_code' | 'expired' | 'missing_challenge' };
 
 interface AuthState {
   user: User | null;
   token: string | null;
   isAuthenticated: boolean;
   isLoading: boolean;
-  login: (email: string, password: string) => Promise<void>;
+  pendingTwoFactor: PendingTwoFactor | null;
+  completeSession: (tokenRes: TokenResponse) => Promise<void>;
+  login: (email: string, password: string) => Promise<AuthFlowResult>;
   register: (email: string, password: string, firstName?: string, lastName?: string, role?: "buyer" | "seller" | "model_provider" | "admin", companyName?: string) => Promise<void>;
-  oauthLogin: (provider: string, code: string, state: string, nonce: string) => Promise<void>;
-  magicLinkVerify: (token: string) => Promise<void>;
+  oauthLogin: (provider: string, code: string, state: string, nonce: string) => Promise<AuthFlowResult>;
+  magicLinkVerify: (token: string) => Promise<AuthFlowResult>;
+  verifyTwoFactor: (code: string) => Promise<TwoFactorVerifyResult>;
+  clearPendingTwoFactor: () => void;
   logout: () => Promise<void>;
   refreshAuth: () => Promise<void>;
   hydrate: () => Promise<void>;
@@ -23,17 +35,37 @@ export const useAuthStore = create<AuthState>((set, get) => ({
   token: null,
   isAuthenticated: false,
   isLoading: false,
+  pendingTwoFactor: null,
 
-  login: async (email, password) => {
-    const tokenRes = await authApi.login({ email, password });
-
+  completeSession: async (tokenRes) => {
     set({
       token: tokenRes.access_token,
       isAuthenticated: true,
+      pendingTwoFactor: null,
     });
 
     const user = await authApi.getMe();
     set({ user });
+  },
+
+  login: async (email, password) => {
+    const res = await authApi.login({ email, password });
+
+    if (authApi.isTwoFactorChallenge(res)) {
+      set({
+        pendingTwoFactor: {
+          preAuthToken: res.pre_auth_token,
+          expiresAt: Date.now() + res.expires_in * 1000,
+        },
+        token: null,
+        user: null,
+        isAuthenticated: false,
+      });
+      return { requiresTwoFactor: true };
+    }
+
+    await get().completeSession(res);
+    return { requiresTwoFactor: false };
   },
 
   register: async (email, password, firstName, lastName, role = "buyer" as "buyer" | "seller" | "model_provider" | "admin", companyName) => {
@@ -50,27 +82,75 @@ export const useAuthStore = create<AuthState>((set, get) => ({
   },
 
   oauthLogin: async (provider, code, state, nonce) => {
-    const tokenRes = await authApi.oauthCallback(provider, code, state, nonce);
+    const res = await authApi.oauthCallback(provider, code, state, nonce);
 
-    set({
-      token: tokenRes.access_token,
-      isAuthenticated: true,
-    });
+    if (authApi.isTwoFactorChallenge(res)) {
+      set({
+        pendingTwoFactor: {
+          preAuthToken: res.pre_auth_token,
+          expiresAt: Date.now() + res.expires_in * 1000,
+        },
+        token: null,
+        user: null,
+        isAuthenticated: false,
+      });
+      return { requiresTwoFactor: true };
+    }
 
-    const user = await authApi.getMe();
-    set({ user });
+    await get().completeSession(res);
+    return { requiresTwoFactor: false };
   },
 
   magicLinkVerify: async (token) => {
-    const tokenRes = await authApi.magicLinkVerify(token);
+    const res = await authApi.magicLinkVerify(token);
 
-    set({
-      token: tokenRes.access_token,
-      isAuthenticated: true,
-    });
+    if (authApi.isTwoFactorChallenge(res)) {
+      set({
+        pendingTwoFactor: {
+          preAuthToken: res.pre_auth_token,
+          expiresAt: Date.now() + res.expires_in * 1000,
+        },
+        token: null,
+        user: null,
+        isAuthenticated: false,
+      });
+      return { requiresTwoFactor: true };
+    }
 
-    const user = await authApi.getMe();
-    set({ user });
+    await get().completeSession(res);
+    return { requiresTwoFactor: false };
+  },
+
+  verifyTwoFactor: async (code) => {
+    const pending = get().pendingTwoFactor;
+    if (!pending) {
+      return { ok: false, reason: 'missing_challenge' };
+    }
+
+    try {
+      const tokenRes = await authApi.verify2FALogin(pending.preAuthToken, code);
+      await get().completeSession(tokenRes);
+      return { ok: true };
+    } catch (error) {
+      const status = typeof error === 'object' && error !== null && 'response' in error
+        ? (error as { response?: { status?: number } }).response?.status
+        : undefined;
+
+      if (status === 400) {
+        return { ok: false, reason: 'invalid_code' };
+      }
+
+      if (status === 401) {
+        get().clearPendingTwoFactor();
+        return { ok: false, reason: 'expired' };
+      }
+
+      throw error;
+    }
+  },
+
+  clearPendingTwoFactor: () => {
+    set({ pendingTwoFactor: null });
   },
 
   logout: async () => {
@@ -81,6 +161,7 @@ export const useAuthStore = create<AuthState>((set, get) => ({
         user: null,
         token: null,
         isAuthenticated: false,
+        pendingTwoFactor: null,
       });
     }
   },
@@ -91,22 +172,22 @@ export const useAuthStore = create<AuthState>((set, get) => ({
 
     try {
       const user = await authApi.getMe();
-      set({ user, isAuthenticated: true });
+      set({ user, isAuthenticated: true, pendingTwoFactor: null });
     } catch {
       // Keep refreshed access token even if reloading the user fails transiently.
     }
   },
 
   hydrate: async () => {
-    set({ isLoading: true });
+    set({ isLoading: true, pendingTwoFactor: null });
 
     try {
       const { refreshAccessToken } = await import('@/api/client');
       await refreshAccessToken();
       const user = await authApi.getMe();
-      set({ user, isAuthenticated: true, isLoading: false });
+      set({ user, isAuthenticated: true, isLoading: false, pendingTwoFactor: null });
     } catch {
-      set({ isLoading: false });
+      set({ isLoading: false, pendingTwoFactor: null });
     }
   },
 }));
