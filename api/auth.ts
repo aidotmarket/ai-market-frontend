@@ -3,6 +3,8 @@
 import { api } from './client';
 import type {
   GenerateReauthTokenResponse,
+  LoginResult,
+  PreAuthRequiredResponse,
   ReauthResponse,
   TokenResponse,
   User,
@@ -26,8 +28,12 @@ export interface OnboardingStatusResponse {
   }>;
 }
 
-export async function login(data: LoginRequest): Promise<TokenResponse> {
-  const res = await api.post<TokenResponse>('/auth/login', data);
+export function isTwoFactorChallenge(r: LoginResult): r is PreAuthRequiredResponse {
+  return (r as PreAuthRequiredResponse).requires_2fa === true;
+}
+
+export async function login(data: LoginRequest): Promise<LoginResult> {
+  const res = await api.post<LoginResult>('/auth/login', data);
   return res.data;
 }
 
@@ -75,13 +81,18 @@ export async function oauthAuthorize(provider: string): Promise<{ authorization_
   return res.data;
 }
 
-export async function oauthCallback(provider: string, code: string, state: string, nonce: string): Promise<TokenResponse> {
-  const res = await api.post<TokenResponse>(`/auth/oauth/${provider}/callback`, { code, state, nonce });
+export async function oauthCallback(provider: string, code: string, state: string, nonce: string): Promise<LoginResult> {
+  const res = await api.post<LoginResult>(`/auth/oauth/${provider}/callback`, { code, state, nonce });
   return res.data;
 }
 
-export async function magicLinkVerify(token: string): Promise<TokenResponse> {
-  const res = await api.post<TokenResponse>('/auth/magic-link/verify', { token });
+export async function magicLinkVerify(token: string): Promise<LoginResult> {
+  const res = await api.post<LoginResult>('/auth/magic-link/verify', { token });
+  return res.data;
+}
+
+export async function verify2FALogin(pre_auth_token: string, code: string): Promise<TokenResponse> {
+  const res = await api.post<TokenResponse>('/auth/2fa/verify', { pre_auth_token, code });
   return res.data;
 }
 

@@ -18,6 +18,7 @@ async function clearAuthState(): Promise<void> {
     user: null,
     token: null,
     isAuthenticated: false,
+    pendingTwoFactor: null,
   });
 }
 
@@ -77,7 +78,8 @@ api.interceptors.response.use(
     if (
       error.response.status === 401 &&
       !(originalRequest as { _retry?: boolean })._retry &&
-      !originalRequest.url?.includes('/auth/refresh')
+      !originalRequest.url?.includes('/auth/refresh') &&
+      !originalRequest.url?.includes('/auth/2fa/verify')
     ) {
       (originalRequest as { _retry?: boolean })._retry = true;
 

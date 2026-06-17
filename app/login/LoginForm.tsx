@@ -8,12 +8,14 @@ import { useToast } from '@/components/Toast';
 import { validateRedirect } from '@/lib/redirect';
 import { AxiosError } from 'axios';
 import OAuthButtons from '@/components/OAuthButtons';
+import TwoFactorChallenge from '@/components/TwoFactorChallenge';
 import { requestMagicLink } from '@/api/auth';
 
 export default function LoginForm() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const login = useAuthStore((s) => s.login);
+  const pendingTwoFactor = useAuthStore((s) => s.pendingTwoFactor);
   const { toast } = useToast();
 
   const [email, setEmail] = useState('');
@@ -34,7 +36,10 @@ export default function LoginForm() {
         setMagicLinkSentTo(email);
         toast('Magic link sent', 'success');
       } else {
-        await login(email, password);
+        const result = await login(email, password);
+        if (result.requiresTwoFactor) {
+          return;
+        }
         toast('Logged in successfully', 'success');
         const redirectTo = validateRedirect(searchParams.get('redirect'), '/listings');
         router.push(redirectTo);
@@ -54,6 +59,12 @@ export default function LoginForm() {
     }
   };
 
+  const handleTwoFactorVerified = () => {
+    toast('Logged in successfully', 'success');
+    const redirectTo = validateRedirect(searchParams.get('redirect'), '/listings');
+    router.push(redirectTo);
+  };
+
   const switchToMagicLink = () => {
     setLoginMode('magic-link');
     setPassword('');
@@ -70,11 +81,21 @@ export default function LoginForm() {
   return (
     <div className="flex min-h-[calc(100vh-10rem)] items-center justify-center px-4">
       <div className="w-full max-w-md">
+        {pendingTwoFactor ? (
+          <TwoFactorChallenge onVerified={handleTwoFactorVerified} />
+        ) : (
+          <>
         <h1 className="text-2xl font-bold text-center mb-8">Log in to ai.market</h1>
 
         {searchParams.get('error') === 'oauth_failed' && (
           <div className="rounded-lg bg-red-50 border border-red-200 px-4 py-3 text-sm text-red-700 mb-4">
             OAuth sign-in failed. Please try again or use email and password.
+          </div>
+        )}
+
+        {searchParams.get('error') === 'two_factor_expired' && (
+          <div className="rounded-lg bg-red-50 border border-red-200 px-4 py-3 text-sm text-red-700 mb-4">
+            Your two-factor session expired. Please sign in again.
           </div>
         )}
 
@@ -171,6 +192,8 @@ export default function LoginForm() {
             Sign up
           </Link>
         </p>
+          </>
+        )}
       </div>
     </div>
   );
