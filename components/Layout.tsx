@@ -57,8 +57,8 @@ export function Layout({ children }: { children: React.ReactNode }) {
   const isKeystatic = pathname?.startsWith("/keystatic");
   const isAdminEmail = user?.email === 'max@ai.market';
 
-  const handleLogout = () => {
-    logout();
+  const handleLogout = async () => {
+    await logout();
     router.push('/');
   };
 

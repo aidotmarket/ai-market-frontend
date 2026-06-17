@@ -7,14 +7,13 @@ import * as authApi from '@/api/auth';
 interface AuthState {
   user: User | null;
   token: string | null;
-  refreshToken: string | null;
   isAuthenticated: boolean;
   isLoading: boolean;
   login: (email: string, password: string) => Promise<void>;
   register: (email: string, password: string, firstName?: string, lastName?: string, role?: "buyer" | "seller" | "model_provider" | "admin", companyName?: string) => Promise<void>;
   oauthLogin: (provider: string, code: string, state: string, nonce: string) => Promise<void>;
   magicLinkVerify: (token: string) => Promise<void>;
-  logout: () => void;
+  logout: () => Promise<void>;
   refreshAuth: () => Promise<void>;
   hydrate: () => Promise<void>;
 }
@@ -22,17 +21,14 @@ interface AuthState {
 export const useAuthStore = create<AuthState>((set, get) => ({
   user: null,
   token: null,
-  refreshToken: null,
   isAuthenticated: false,
   isLoading: false,
 
   login: async (email, password) => {
     const tokenRes = await authApi.login({ email, password });
 
-    // Store tokens in-memory only — never localStorage
     set({
       token: tokenRes.access_token,
-      refreshToken: tokenRes.refresh_token,
       isAuthenticated: true,
     });
 
@@ -58,7 +54,6 @@ export const useAuthStore = create<AuthState>((set, get) => ({
 
     set({
       token: tokenRes.access_token,
-      refreshToken: tokenRes.refresh_token,
       isAuthenticated: true,
     });
 
@@ -71,7 +66,6 @@ export const useAuthStore = create<AuthState>((set, get) => ({
 
     set({
       token: tokenRes.access_token,
-      refreshToken: tokenRes.refresh_token,
       isAuthenticated: true,
     });
 
@@ -79,46 +73,39 @@ export const useAuthStore = create<AuthState>((set, get) => ({
     set({ user });
   },
 
-  logout: () => {
-    set({
-      user: null,
-      token: null,
-      refreshToken: null,
-      isAuthenticated: false,
-    });
+  logout: async () => {
+    try {
+      await authApi.logout();
+    } finally {
+      set({
+        user: null,
+        token: null,
+        isAuthenticated: false,
+      });
+    }
   },
 
   refreshAuth: async () => {
-    const refreshToken = get().refreshToken;
-    if (!refreshToken) throw new Error('No refresh token');
-
-    const { api } = await import('@/api/client');
-    const res = await api.post('/auth/refresh', { refresh_token: refreshToken });
-    const { access_token, refresh_token: newRefreshToken } = res.data;
-
-    set({
-      token: access_token,
-      refreshToken: newRefreshToken || refreshToken,
-    });
+    const { refreshAccessToken } = await import('@/api/client');
+    await refreshAccessToken();
 
     try {
       const user = await authApi.getMe();
       set({ user, isAuthenticated: true });
     } catch {
-      // Keep refreshed tokens even if reloading the user fails transiently.
+      // Keep refreshed access token even if reloading the user fails transiently.
     }
   },
 
   hydrate: async () => {
-    const token = get().token;
-    if (!token) return;
-
     set({ isLoading: true });
+
     try {
+      const { refreshAccessToken } = await import('@/api/client');
+      await refreshAccessToken();
       const user = await authApi.getMe();
       set({ user, isAuthenticated: true, isLoading: false });
     } catch {
-      get().logout();
       set({ isLoading: false });
     }
   },

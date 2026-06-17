@@ -41,6 +41,10 @@ export async function getMe(): Promise<User> {
   return res.data;
 }
 
+export async function logout(): Promise<void> {
+  await api.post('/auth/logout');
+}
+
 export async function getOnboardingStatus(): Promise<OnboardingStatusResponse> {
   const res = await api.get<OnboardingStatusResponse>('/auth/onboarding/status');
   return res.data;

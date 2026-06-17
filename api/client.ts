@@ -7,32 +7,51 @@ const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000';
 export const api = axios.create({
   baseURL: `${API_URL}/api/v1`,
   headers: { 'Content-Type': 'application/json' },
+  withCredentials: true,
 });
 
-// M1: Single-flight refresh pattern
 let refreshPromise: Promise<string> | null = null;
 
-async function refreshAuth(): Promise<string> {
+async function clearAuthState(): Promise<void> {
   const { useAuthStore } = await import('@/store/auth');
-  const store = useAuthStore.getState();
-  const refreshToken = store.refreshToken;
-  if (!refreshToken) {
-    throw new Error('No refresh token');
-  }
-
-  const response = await axios.post(`${API_URL}/api/v1/auth/refresh`, {
-    refresh_token: refreshToken,
+  useAuthStore.setState({
+    user: null,
+    token: null,
+    isAuthenticated: false,
   });
+}
 
-  const { access_token, refresh_token: newRefreshToken } = response.data;
+async function refreshAccessTokenRequest(): Promise<string> {
+  const response = await axios.post<{ access_token: string }>(
+    `${API_URL}/api/v1/auth/refresh`,
+    {},
+    {
+      headers: { 'Content-Type': 'application/json' },
+      withCredentials: true,
+    }
+  );
 
-  // Update in-memory store — never localStorage
+  const { access_token } = response.data;
+
+  const { useAuthStore } = await import('@/store/auth');
   useAuthStore.setState({
     token: access_token,
-    refreshToken: newRefreshToken || refreshToken,
   });
 
   return access_token;
+}
+
+export function refreshAccessToken(): Promise<string> {
+  if (!refreshPromise) {
+    refreshPromise = refreshAccessTokenRequest().catch(async (error) => {
+      await clearAuthState();
+      throw error;
+    }).finally(() => {
+      refreshPromise = null;
+    });
+  }
+
+  return refreshPromise;
 }
 
 // Request interceptor: attach token from Zustand store
@@ -63,22 +82,13 @@ api.interceptors.response.use(
       (originalRequest as { _retry?: boolean })._retry = true;
 
       try {
-        // M1: Single-flight — only one refresh at a time
-        if (!refreshPromise) {
-          refreshPromise = refreshAuth().finally(() => {
-            refreshPromise = null;
-          });
-        }
-        const newToken = await refreshPromise;
+        const newToken = await refreshAccessToken();
 
         if (originalRequest.headers) {
           originalRequest.headers.Authorization = `Bearer ${newToken}`;
         }
         return api(originalRequest);
       } catch {
-        // Refresh failed — clear auth state and redirect
-        const { useAuthStore } = await import('@/store/auth');
-        useAuthStore.getState().logout();
         window.location.href = '/login';
         return Promise.reject(error);
       }
