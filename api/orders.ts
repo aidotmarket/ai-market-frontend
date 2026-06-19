@@ -1,5 +1,5 @@
 import { api } from './client';
-import type { BuyerOrder, BuyerOrderDetail, OrderEvent, OrderAccessResponse, OrderDownloadResponse, OrderRefreshResponse } from '@/types';
+import type { BuyerOrder, BuyerOrderDetail, OrderEvent, OrderAccessResponse, OrderDownloadResponse, OrderRefreshResponse, S3ScopedDeliveryResponse } from '@/types';
 
 export async function getMyOrders(): Promise<BuyerOrder[]> {
   const res = await api.get<BuyerOrder[]>('/orders/mine');
@@ -28,5 +28,10 @@ export async function getOrderAccess(orderId: string): Promise<OrderAccessRespon
 
 export async function refreshOrderAccess(orderId: string): Promise<OrderRefreshResponse> {
   const res = await api.post<OrderRefreshResponse>(`/orders/${encodeURIComponent(orderId)}/refresh`);
+  return res.data;
+}
+
+export async function refreshScopedDelivery(orderId: string): Promise<S3ScopedDeliveryResponse> {
+  const res = await api.post<S3ScopedDeliveryResponse>(`/orders/${encodeURIComponent(orderId)}/delivery/refresh`);
   return res.data;
 }

@@ -3,12 +3,13 @@
 import { useEffect, useState, useCallback } from 'react';
 import Link from 'next/link';
 import { useParams, useSearchParams } from 'next/navigation';
-import { getOrder, getOrderAccess, getOrderEvents, refreshOrderAccess } from '@/api/orders';
+import { getOrder, getOrderAccess, getOrderEvents, refreshOrderAccess, refreshScopedDelivery, requestDownload } from '@/api/orders';
 import { getTransaction, confirmTransaction, deliverTransaction } from '@/api/transactions';
 import { formatPrice, formatDate } from '@/lib/format';
 import { useToast } from '@/components/Toast';
 import { useAuthStore } from '@/store/auth';
-import type { BuyerOrderDetail, OrderAccessResponse, OrderEvent, OrderStatus, S3DownloadFile, Transaction, TransactionStatus, TransactionEvent } from '@/types';
+import ScopedCredentialDownload, { isS3ScopedDeliveryResponse } from '@/components/orders/ScopedCredentialDownload';
+import type { BuyerOrderDetail, OrderAccessResponse, OrderEvent, OrderStatus, S3DownloadFile, S3ScopedDeliveryResponse, Transaction, TransactionStatus, TransactionEvent } from '@/types';
 import { AxiosError } from 'axios';
 
 const STATUS_BADGE: Record<OrderStatus, string> = {
@@ -63,8 +64,10 @@ export default function OrderDetailPage() {
   const [events, setEvents] = useState<OrderEvent[]>([]);
   const [tx, setTx] = useState<Transaction | null>(null);
   const [downloadPackage, setDownloadPackage] = useState<OrderAccessResponse | null>(null);
+  const [scopedDelivery, setScopedDelivery] = useState<S3ScopedDeliveryResponse | null>(null);
   const [downloadLoading, setDownloadLoading] = useState(false);
   const [downloadError, setDownloadError] = useState('');
+  const [scopedRefreshError, setScopedRefreshError] = useState('');
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [activeFilePath, setActiveFilePath] = useState<string | null>(null);
@@ -112,12 +115,19 @@ export default function OrderDetailPage() {
     setDownloadLoading(true);
     setDownloadError('');
 
-    getOrderAccess(orderId)
+    requestDownload(orderId)
       .then((data) => {
-        if (!cancelled) setDownloadPackage(data);
+        if (cancelled) return;
+        if (isS3ScopedDeliveryResponse(data)) {
+          setScopedDelivery(data);
+          setDownloadPackage(null);
+        } else {
+          setDownloadPackage(data);
+          setScopedDelivery(null);
+        }
       })
       .catch(() => {
-        if (!cancelled) setDownloadError('Failed to load download links.');
+        if (!cancelled) setDownloadError('Could not prepare download access.');
       })
       .finally(() => {
         if (!cancelled) setDownloadLoading(false);
@@ -207,6 +217,19 @@ export default function OrderDetailPage() {
       toast('Failed to refresh access.', 'error');
     } finally {
       setRefreshingAccess(false);
+    }
+  };
+
+  const handleScopedRefresh = async () => {
+    setScopedRefreshError('');
+    try {
+      const refreshed = await refreshScopedDelivery(orderId);
+      setScopedDelivery(refreshed);
+      return refreshed;
+    } catch (err) {
+      const message = scopedRefreshFailureMessage(err);
+      setScopedRefreshError(message);
+      throw err;
     }
   };
 
@@ -361,6 +384,14 @@ export default function OrderDetailPage() {
 
           {/* Access / Download section */}
           {order.status === 'fulfilled' && (
+            scopedDelivery ? (
+              <ScopedCredentialDownload
+                orderId={order.id}
+                delivery={scopedDelivery}
+                onRefresh={handleScopedRefresh}
+                refreshError={scopedRefreshError}
+              />
+            ) : (
             <div className="rounded-lg border border-gray-200 p-6">
               <div className="mb-4 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
                 <div>
@@ -377,7 +408,7 @@ export default function OrderDetailPage() {
 
               {downloadLoading && (
                 <div className="rounded-lg bg-gray-50 px-4 py-3 text-sm text-gray-600">
-                  Loading download links...
+                  Preparing download access...
                 </div>
               )}
 
@@ -426,6 +457,7 @@ export default function OrderDetailPage() {
                 </div>
               )}
             </div>
+            )
           )}
 
           {/* Event Timeline */}
@@ -500,4 +532,12 @@ function formatValidity(secondsLeft: number) {
   const seconds = secondsLeft % 60;
   if (minutes === 0) return `Valid for ${seconds}s.`;
   return `Valid for ${minutes}m ${seconds.toString().padStart(2, '0')}s.`;
+}
+
+function scopedRefreshFailureMessage(err: unknown) {
+  if (err instanceof AxiosError && err.response?.status === 429) {
+    const detail = (err.response.data as { detail?: unknown } | undefined)?.detail;
+    if (typeof detail === 'string' && detail.trim()) return detail;
+  }
+  return 'Could not refresh credentials. Try again in a moment.';
 }

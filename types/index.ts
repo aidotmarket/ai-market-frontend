@@ -380,13 +380,33 @@ export interface OrderEvent {
   created_at: string;
 }
 
-export interface OrderDownloadResponse {
+export interface LegacyOrderDownloadResponse {
   download_url: string;
   expires_at?: string;
   download_number?: number;
   downloads_remaining?: number;
   s3_download_urls?: S3DownloadFile[];
 }
+
+export interface S3ScopedDeliveryCredentials {
+  access_key_id: string;
+  secret_access_key: string;
+  session_token: string;
+  expiration: string;
+  bucket: string;
+  prefix: string | null;
+  region?: string | null;
+  sync_command_hint: string;
+}
+
+export interface S3ScopedDeliveryResponse {
+  delivery_type: 's3_scoped_credential';
+  s3_scoped_delivery: S3ScopedDeliveryCredentials;
+  download_number: number;
+  downloads_remaining: number;
+}
+
+export type OrderDownloadResponse = LegacyOrderDownloadResponse | S3ScopedDeliveryResponse;
 
 export interface OrderAccessResponse {
   has_access?: boolean;
