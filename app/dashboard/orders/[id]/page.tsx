@@ -536,8 +536,7 @@ function formatValidity(secondsLeft: number) {
 
 function scopedRefreshFailureMessage(err: unknown) {
   if (err instanceof AxiosError && err.response?.status === 429) {
-    const detail = (err.response.data as { detail?: unknown } | undefined)?.detail;
-    if (typeof detail === 'string' && detail.trim()) return detail;
+    return 'Credential refresh is temporarily rate limited. Please wait before trying again.';
   }
   return 'Could not refresh credentials. Try again in a moment.';
 }
