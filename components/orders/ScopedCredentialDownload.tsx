@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import type { S3ScopedDeliveryCredentials, S3ScopedDeliveryResponse } from '@/types';
 
 interface ScopedCredentialDownloadProps {
@@ -19,14 +19,13 @@ export function isS3ScopedDeliveryResponse(value: unknown): value is S3ScopedDel
 }
 
 export function buildSyncCommand(orderId: string, credentials: S3ScopedDeliveryCredentials) {
-  if (credentials.sync_command_hint) return credentials.sync_command_hint;
-
+  const bucket = validateS3BucketName(credentials.bucket);
   const prefix = normalizePrefix(credentials.prefix);
   const source = prefix
-    ? `s3://${credentials.bucket}/${prefix}`
-    : `s3://${credentials.bucket}`;
+    ? `s3://${bucket}/${prefix}`
+    : `s3://${bucket}`;
 
-  return `aws s3 sync ${source} ./ai-market-order-${shortOrderId(orderId)}`;
+  return `aws s3 sync ${shellQuote(source)} ${shellQuote(`./ai-market-order-${shortOrderId(orderId)}`)}`;
 }
 
 export function buildEnvBlock(credentials: S3ScopedDeliveryCredentials) {
@@ -72,6 +71,7 @@ export default function ScopedCredentialDownload({
   const [now, setNow] = useState(() => Date.now());
   const [refreshing, setRefreshing] = useState(false);
   const [localError, setLocalError] = useState('');
+  const refreshPromiseRef = useRef<Promise<S3ScopedDeliveryResponse> | null>(null);
 
   useEffect(() => {
     const interval = window.setInterval(() => setNow(Date.now()), 1000);
@@ -81,20 +81,31 @@ export default function ScopedCredentialDownload({
   const credentials = delivery.s3_scoped_delivery;
   const secondsLeft = getCredentialSecondsLeft(credentials.expiration, now);
   const expired = secondsLeft <= 0;
-  const syncCommand = useMemo(() => buildSyncCommand(orderId, credentials), [orderId, credentials]);
-  const envBlock = useMemo(() => buildEnvBlock(credentials), [credentials]);
-  const profileSnippet = useMemo(() => buildProfileSnippet(orderId, credentials), [orderId, credentials]);
+  const syncCommand = useMemo(() => (
+    expired ? '' : buildSyncCommand(orderId, credentials)
+  ), [expired, orderId, credentials]);
+  const envBlock = useMemo(() => (
+    expired ? '' : buildEnvBlock(credentials)
+  ), [expired, credentials]);
+  const profileSnippet = useMemo(() => (
+    expired ? '' : buildProfileSnippet(orderId, credentials)
+  ), [expired, orderId, credentials]);
 
   const handleRefresh = async () => {
-    if (refreshing) return;
+    if (refreshPromiseRef.current) return refreshPromiseRef.current;
     setRefreshing(true);
     setLocalError('');
+    const refreshPromise = onRefresh();
+    refreshPromiseRef.current = refreshPromise;
     try {
-      await onRefresh();
+      await refreshPromise;
     } catch {
       setLocalError('Could not refresh credentials. Try again in a moment.');
     } finally {
-      setRefreshing(false);
+      if (refreshPromiseRef.current === refreshPromise) {
+        refreshPromiseRef.current = null;
+        setRefreshing(false);
+      }
     }
   };
 
@@ -129,18 +140,26 @@ export default function ScopedCredentialDownload({
         </div>
       )}
 
-      <div className="space-y-4">
-        <CopyBlock title="Sync command" value={syncCommand} />
-        <CopyBlock title="Environment variables" value={envBlock} />
-        <CopyBlock title="AWS profile" value={profileSnippet} />
-      </div>
+      {expired ? (
+        <div className="rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800">
+          Refresh credentials to show download commands and temporary AWS credentials.
+        </div>
+      ) : (
+        <>
+          <div className="space-y-4">
+            <CopyBlock title="Sync command" value={syncCommand} />
+            <CopyBlock title="Environment variables" value={envBlock} />
+            <CopyBlock title="AWS profile" value={profileSnippet} />
+          </div>
 
-      <ol className="mt-5 list-decimal space-y-2 pl-5 text-sm text-gray-700">
-        <li>Install the AWS CLI.</li>
-        <li>Paste the credentials into your terminal or AWS config.</li>
-        <li>Run the sync command.</li>
-        <li>Refresh credentials if they expire before the download finishes.</li>
-      </ol>
+          <ol className="mt-5 list-decimal space-y-2 pl-5 text-sm text-gray-700">
+            <li>Install the AWS CLI.</li>
+            <li>Paste the credentials into your terminal or AWS config.</li>
+            <li>Run the sync command.</li>
+            <li>Refresh credentials if they expire before the download finishes.</li>
+          </ol>
+        </>
+      )}
     </div>
   );
 }
@@ -179,4 +198,32 @@ function normalizePrefix(prefix: string | null) {
 
 function shortOrderId(orderId: string) {
   return orderId.slice(0, 8);
+}
+
+function validateS3BucketName(bucket: string) {
+  if (
+    bucket.length < 3 ||
+    bucket.length > 63 ||
+    !/^[a-z0-9][a-z0-9.-]*[a-z0-9]$/.test(bucket) ||
+    bucket.includes('..') ||
+    bucket.includes('.-') ||
+    bucket.includes('-.') ||
+    /^\d{1,3}(?:\.\d{1,3}){3}$/.test(bucket) ||
+    bucket.startsWith('xn--') ||
+    bucket.startsWith('sthree-') ||
+    bucket.startsWith('amzn-s3-demo-') ||
+    bucket.endsWith('-s3alias') ||
+    bucket.endsWith('--ol-s3') ||
+    bucket.endsWith('.mrap') ||
+    bucket.endsWith('--x-s3') ||
+    bucket.endsWith('--table-s3')
+  ) {
+    throw new Error('Invalid S3 bucket name.');
+  }
+
+  return bucket;
+}
+
+function shellQuote(value: string) {
+  return `'${value.replace(/'/g, `'\\''`)}'`;
 }

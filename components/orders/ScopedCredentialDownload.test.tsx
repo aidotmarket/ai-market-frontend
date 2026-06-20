@@ -31,13 +31,77 @@ describe('ScopedCredentialDownload helpers', () => {
 
   it('builds sync commands with prefixes with or without trailing slash', () => {
     expect(buildSyncCommand('order-123456789', delivery.s3_scoped_delivery)).toBe(
-      'aws s3 sync s3://buyer-bucket/orders/order-123 ./ai-market-order-order-12'
+      "aws s3 sync 's3://buyer-bucket/orders/order-123' './ai-market-order-order-12'"
     );
 
     expect(buildSyncCommand('order-123456789', {
       ...delivery.s3_scoped_delivery,
       prefix: 'orders/order-123',
-    })).toBe('aws s3 sync s3://buyer-bucket/orders/order-123 ./ai-market-order-order-12');
+    })).toBe("aws s3 sync 's3://buyer-bucket/orders/order-123' './ai-market-order-order-12'");
+  });
+
+  it('shell-quotes awkward and malicious-looking prefixes', () => {
+    expect(buildSyncCommand('order-123456789', {
+      ...delivery.s3_scoped_delivery,
+      prefix: 'orders/order 123',
+    })).toBe("aws s3 sync 's3://buyer-bucket/orders/order 123' './ai-market-order-order-12'");
+
+    expect(buildSyncCommand('order-123456789', {
+      ...delivery.s3_scoped_delivery,
+      prefix: 'orders/order-123; rm -rf ~',
+    })).toBe("aws s3 sync 's3://buyer-bucket/orders/order-123; rm -rf ~' './ai-market-order-order-12'");
+
+    expect(buildSyncCommand('order-123456789', {
+      ...delivery.s3_scoped_delivery,
+      prefix: 'orders/$(touch pwned)',
+    })).toBe("aws s3 sync 's3://buyer-bucket/orders/$(touch pwned)' './ai-market-order-order-12'");
+
+    expect(buildSyncCommand('order-123456789', {
+      ...delivery.s3_scoped_delivery,
+      prefix: 'orders/`touch pwned`',
+    })).toBe("aws s3 sync 's3://buyer-bucket/orders/`touch pwned`' './ai-market-order-order-12'");
+
+    expect(buildSyncCommand('order-123456789', {
+      ...delivery.s3_scoped_delivery,
+      prefix: 'orders/order-\"quoted\"',
+    })).toBe("aws s3 sync 's3://buyer-bucket/orders/order-\"quoted\"' './ai-market-order-order-12'");
+
+    expect(buildSyncCommand('order-123456789', {
+      ...delivery.s3_scoped_delivery,
+      prefix: "orders/order-'quoted'",
+    })).toBe("aws s3 sync 's3://buyer-bucket/orders/order-'\\''quoted'\\''' './ai-market-order-order-12'");
+  });
+
+  it('ignores unsafe sync command hints and validates bucket names', () => {
+    expect(buildSyncCommand('order-123456789', {
+      ...delivery.s3_scoped_delivery,
+      sync_command_hint: 'aws s3 sync s3://buyer-bucket/orders/order-123 .; cat ~/.aws/credentials',
+    })).toBe("aws s3 sync 's3://buyer-bucket/orders/order-123' './ai-market-order-order-12'");
+
+    expect(() => buildSyncCommand('order-123456789', {
+      ...delivery.s3_scoped_delivery,
+      bucket: 'buyer-bucket; cat ~/.aws/credentials',
+    })).toThrow('Invalid S3 bucket name.');
+  });
+
+  it('rejects reserved S3 bucket namespace names', () => {
+    const invalidBuckets = [
+      'xn--buyer-bucket',
+      'sthree-buyer-bucket',
+      'amzn-s3-demo-bucket',
+      'buyer-bucket-s3alias',
+      'buyer-bucket--ol-s3',
+      'buyer-bucket.mrap',
+      'buyer-bucket--x-s3',
+      'buyer-bucket--table-s3',
+    ];
+
+    invalidBuckets.forEach((bucket) => {
+      expect(() => buildSyncCommand('order-123456789', {
+        ...delivery.s3_scoped_delivery,
+        bucket,
+      })).toThrow('Invalid S3 bucket name.');
+    });
   });
 });
 
@@ -48,7 +112,7 @@ describe('ScopedCredentialDownload component', () => {
     );
 
     expect(html).toContain('Sync command');
-    expect(html).toContain('aws s3 sync s3://buyer-bucket/orders/order-123 ./ai-market-order-order-12');
+    expect(html).toContain("aws s3 sync &#x27;s3://buyer-bucket/orders/order-123&#x27; &#x27;./ai-market-order-order-12&#x27;");
     expect(html).toContain('Environment variables');
     expect(html).toContain('AWS_ACCESS_KEY_ID=AKIA_TEST');
     expect(html).toContain('AWS_SECRET_ACCESS_KEY=SECRET_TEST');
@@ -75,5 +139,11 @@ describe('ScopedCredentialDownload component', () => {
 
     expect(html).toContain('These credentials have expired. Refresh credentials to continue.');
     expect(html).toContain('Refresh credentials');
+    expect(html).toContain('Refresh credentials to show download commands and temporary AWS credentials.');
+    expect(html).not.toContain('AWS_ACCESS_KEY_ID=AKIA_TEST');
+    expect(html).not.toContain('AWS_SECRET_ACCESS_KEY=SECRET_TEST');
+    expect(html).not.toContain('AWS_SESSION_TOKEN=TOKEN_TEST');
+    expect(html).not.toContain('AWS profile');
+    expect(html).not.toContain('Copy');
   });
 });

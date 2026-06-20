@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState, useCallback } from 'react';
+import { useEffect, useRef, useState, useCallback } from 'react';
 import Link from 'next/link';
 import { useParams, useSearchParams } from 'next/navigation';
 import { getOrder, getOrderAccess, getOrderEvents, refreshOrderAccess, refreshScopedDelivery, requestDownload } from '@/api/orders';
@@ -76,6 +76,7 @@ export default function OrderDetailPage() {
   const [now, setNow] = useState(() => Date.now());
   const [confirming, setConfirming] = useState(false);
   const [delivering, setDelivering] = useState(false);
+  const scopedRefreshPromiseRef = useRef<Promise<S3ScopedDeliveryResponse> | null>(null);
 
   useEffect(() => {
     let cancelled = false;
@@ -221,15 +222,24 @@ export default function OrderDetailPage() {
   };
 
   const handleScopedRefresh = async () => {
+    if (scopedRefreshPromiseRef.current) return scopedRefreshPromiseRef.current;
+
     setScopedRefreshError('');
+    const refreshPromise = refreshScopedDelivery(orderId);
+    scopedRefreshPromiseRef.current = refreshPromise;
+
     try {
-      const refreshed = await refreshScopedDelivery(orderId);
+      const refreshed = await refreshPromise;
       setScopedDelivery(refreshed);
       return refreshed;
     } catch (err) {
       const message = scopedRefreshFailureMessage(err);
       setScopedRefreshError(message);
       throw err;
+    } finally {
+      if (scopedRefreshPromiseRef.current === refreshPromise) {
+        scopedRefreshPromiseRef.current = null;
+      }
     }
   };
 
@@ -536,8 +546,7 @@ function formatValidity(secondsLeft: number) {
 
 function scopedRefreshFailureMessage(err: unknown) {
   if (err instanceof AxiosError && err.response?.status === 429) {
-    const detail = (err.response.data as { detail?: unknown } | undefined)?.detail;
-    if (typeof detail === 'string' && detail.trim()) return detail;
+    return 'Credential refresh is temporarily rate limited. Please wait before trying again.';
   }
   return 'Could not refresh credentials. Try again in a moment.';
 }
