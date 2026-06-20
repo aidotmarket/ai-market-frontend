@@ -83,6 +83,26 @@ describe('ScopedCredentialDownload helpers', () => {
       bucket: 'buyer-bucket; cat ~/.aws/credentials',
     })).toThrow('Invalid S3 bucket name.');
   });
+
+  it('rejects reserved S3 bucket namespace names', () => {
+    const invalidBuckets = [
+      'xn--buyer-bucket',
+      'sthree-buyer-bucket',
+      'amzn-s3-demo-bucket',
+      'buyer-bucket-s3alias',
+      'buyer-bucket--ol-s3',
+      'buyer-bucket.mrap',
+      'buyer-bucket--x-s3',
+      'buyer-bucket--table-s3',
+    ];
+
+    invalidBuckets.forEach((bucket) => {
+      expect(() => buildSyncCommand('order-123456789', {
+        ...delivery.s3_scoped_delivery,
+        bucket,
+      })).toThrow('Invalid S3 bucket name.');
+    });
+  });
 });
 
 describe('ScopedCredentialDownload component', () => {

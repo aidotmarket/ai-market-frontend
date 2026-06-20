@@ -208,7 +208,15 @@ function validateS3BucketName(bucket: string) {
     bucket.includes('..') ||
     bucket.includes('.-') ||
     bucket.includes('-.') ||
-    /^\d{1,3}(?:\.\d{1,3}){3}$/.test(bucket)
+    /^\d{1,3}(?:\.\d{1,3}){3}$/.test(bucket) ||
+    bucket.startsWith('xn--') ||
+    bucket.startsWith('sthree-') ||
+    bucket.startsWith('amzn-s3-demo-') ||
+    bucket.endsWith('-s3alias') ||
+    bucket.endsWith('--ol-s3') ||
+    bucket.endsWith('.mrap') ||
+    bucket.endsWith('--x-s3') ||
+    bucket.endsWith('--table-s3')
   ) {
     throw new Error('Invalid S3 bucket name.');
   }
