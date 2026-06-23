@@ -3,7 +3,7 @@ import type { Metadata } from 'next';
 
 const title = 'AIM Data — local-first publishing for the data marketplace';
 const description =
-  'AIM Data scans your data for PII, scores quality, and writes the listing. Runs on your own infrastructure.';
+  'AIM Data scans your data for PII, scores quality, writes the listing, and connects sellers, buyers, and builders through one local-first conduit.';
 
 export const metadata: Metadata = {
   title,
@@ -120,6 +120,67 @@ const steps = [
   },
 ];
 
+const developerSteps = [
+  {
+    title: 'Install for your surface.',
+    description:
+      'Use the non-dev GUI for seller workflows, or run AIM Data through the CLI, SDK, MCP server, or Docker for application integrations.',
+  },
+  {
+    title: 'Enroll local identity.',
+    description:
+      'Each AIM Data instance generates an Ed25519 keypair locally. The private key stays on your infrastructure.',
+  },
+  {
+    title: 'Search and transact.',
+    description:
+      'Query ai.market by capability, schema, license, price, and quality score, then connect catalog access to your user workflows.',
+  },
+  {
+    title: 'Open the P2P channel.',
+    description:
+      'Present the signed delivery token and connect directly over an encrypted peer-to-peer channel. Payloads never touch ai.market.',
+  },
+];
+
+const developerSurfaces = [
+  {
+    title: 'CLI',
+    description:
+      'Script installs, local enrollment, listing preparation, catalog queries, and delivery checks from terminal workflows.',
+  },
+  {
+    title: 'SDK',
+    description:
+      'Embed AIM Data workflows inside your own product for search, authorization, listing, and transaction handoff.',
+  },
+  {
+    title: 'MCP server',
+    description:
+      'Expose catalog search and marketplace workflows to AI agents through a local server controlled by your infrastructure.',
+  },
+  {
+    title: 'P2P delivery',
+    description:
+      'Keep raw payload movement between buyer and seller endpoints with signed tokens and encrypted peer-to-peer transfer.',
+  },
+];
+
+const developerRequirements = [
+  {
+    title: 'Python 3.11+ or Docker',
+    description: 'Use a Python-native install path or containerized deployment for local control-plane operation.',
+  },
+  {
+    title: '4 GB RAM minimum',
+    description: 'Enough for local scans, integration workflows, and peer-to-peer connectivity.',
+  },
+  {
+    title: 'Network access',
+    description: 'Outbound access to the ai.market API plus peer-to-peer connectivity for delivery sessions.',
+  },
+];
+
 function CodeBlock({ children }: { children: string }) {
   return (
     <div className="rounded-lg bg-gray-950 px-4 py-3">
@@ -144,8 +205,9 @@ export default function AimDataPage() {
               </h1>
               <p className="mt-5 max-w-3xl text-lg leading-8 text-gray-600">
                 AIM Data runs on your own infrastructure. It profiles your data, scans for PII,
-                scores quality, and writes the listing for you. You review, you publish, and your
-                raw data stays where it is.
+                scores quality, writes the listing for you, and gives builders a local developer
+                surface for catalog search, transaction handoff, and peer-to-peer delivery. You
+                review, you publish, and your raw data stays where it is.
               </p>
               <div className="mt-8 flex flex-col gap-4 sm:flex-row sm:items-center">
                 <Link
@@ -155,10 +217,10 @@ export default function AimDataPage() {
                   Install AIM Data
                 </Link>
                 <Link
-                  href="#trust-signals"
+                  href="#developer-surface"
                   className="inline-flex items-center justify-center rounded-lg border border-[#0F6E56] px-5 py-3 text-sm font-semibold text-[#0F6E56] transition-colors hover:bg-[#E1F5EE] focus:outline-none focus:ring-2 focus:ring-[#0F6E56] focus:ring-offset-2"
                 >
-                  View trust signals
+                  Developer surface
                 </Link>
               </div>
             </div>
@@ -230,6 +292,54 @@ export default function AimDataPage() {
           </div>
         </section>
 
+        <section id="developer-surface" className="bg-white py-16 sm:py-20" aria-labelledby="developer-surface-heading">
+          <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
+            <div className="grid gap-10 lg:grid-cols-[minmax(0,420px)_1fr] lg:items-start">
+              <div>
+                <p className="text-sm font-semibold uppercase tracking-[0.18em] text-[#0F6E56]">
+                  Developer surface
+                </p>
+                <h2 id="developer-surface-heading" className="mt-3 text-3xl font-extrabold tracking-tight text-gray-900">
+                  One conduit for GUI users and builders.
+                </h2>
+                <p className="mt-5 text-base leading-7 text-gray-600">
+                  AIM Data is the local control point for sellers, buyers, and partner platforms. The same local-first conduit supports the non-dev GUI and the developer surface: CLI, SDK, MCP server, and encrypted peer-to-peer delivery.
+                </p>
+                <blockquote className="mt-8 rounded-2xl border border-[#D8EEE6] bg-[#F7FCFA] p-6 text-base font-semibold leading-7 text-gray-900 shadow-sm">
+                  ai.market coordinates discovery, billing, delivery tokens, and transaction records. AIM Data keeps private keys, raw data, queries, results, and payload movement under endpoint control.
+                </blockquote>
+              </div>
+
+              <div>
+                <ol className="grid gap-4 sm:grid-cols-2">
+                  {developerSteps.map((step, index) => (
+                    <li key={step.title} className="rounded-2xl border border-gray-200 bg-white p-5 shadow-sm">
+                      <div className="flex items-start gap-4">
+                        <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-[#E1F5EE] text-sm font-bold text-[#0F6E56]">
+                          {index + 1}
+                        </span>
+                        <div>
+                          <h3 className="text-base font-semibold text-gray-900">{step.title}</h3>
+                          <p className="mt-2 text-sm leading-6 text-gray-600">{step.description}</p>
+                        </div>
+                      </div>
+                    </li>
+                  ))}
+                </ol>
+
+                <div className="mt-8 grid gap-4 sm:grid-cols-2">
+                  {developerSurfaces.map((surface) => (
+                    <article key={surface.title} className="rounded-2xl border border-gray-200 bg-white p-5 shadow-sm">
+                      <h3 className="text-base font-semibold text-gray-900">{surface.title}</h3>
+                      <p className="mt-2 text-sm leading-6 text-gray-600">{surface.description}</p>
+                    </article>
+                  ))}
+                </div>
+              </div>
+            </div>
+          </div>
+        </section>
+
         <section className="bg-gray-50 py-16 sm:py-20" aria-labelledby="install">
           <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
             <div className="max-w-3xl">
@@ -268,10 +378,20 @@ export default function AimDataPage() {
               </div>
             </div>
 
+            <div className="mt-8 grid gap-4 sm:grid-cols-3">
+              {developerRequirements.map((item) => (
+                <article key={item.title} className="rounded-2xl border border-gray-200 bg-white p-5 shadow-sm">
+                  <h3 className="text-base font-semibold text-gray-900">{item.title}</h3>
+                  <p className="mt-2 text-sm leading-6 text-gray-600">{item.description}</p>
+                </article>
+              ))}
+            </div>
+
             <p className="mt-6 text-sm leading-6 text-gray-600">
               Full documentation is being consolidated with the AIM Data release process. Until then,
-              keep the setup local: install the app, connect the data source, run scans, review the
-              generated listing, then publish.
+              keep the setup local: install the app or developer surface, connect the data source,
+              enroll the local Ed25519 identity, run scans, review the generated listing, then
+              publish or connect peer-to-peer.
             </p>
           </div>
         </section>

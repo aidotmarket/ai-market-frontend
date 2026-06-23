@@ -4,11 +4,11 @@ import type { Metadata } from 'next';
 export const metadata: Metadata = {
   title: 'Partner with ai.market',
   description:
-    'Data partners and Technology partners. Integrate AIM Node, list datasets, co-sell.',
+    'Data partners, Technology partners, and Specialists. Use AIM Data, list datasets, build integrations, or build a business inside the market.',
   openGraph: {
     title: 'Partner with ai.market',
     description:
-      'Data partners and Technology partners. Integrate AIM Node, list datasets, co-sell.',
+      'Data partners, Technology partners, and Specialists. Use AIM Data, list datasets, build integrations, or build a business inside the market.',
     url: 'https://ai.market/partner',
     siteName: 'ai.market',
     images: ['/og/partner.png'],
@@ -18,7 +18,7 @@ export const metadata: Metadata = {
     card: 'summary_large_image',
     title: 'Partner with ai.market',
     description:
-      'Data partners and Technology partners. Integrate AIM Node, list datasets, co-sell.',
+      'Data partners, Technology partners, and Specialists. Use AIM Data, list datasets, build integrations, or build a business inside the market.',
     images: ['/og/partner.png'],
   },
 };
@@ -29,7 +29,7 @@ const PARTNER_JSONLD = {
   name: 'ai.market Partner Program',
   url: 'https://ai.market/partner',
   description:
-    'Data partners and Technology partners. Integrate AIM Node, list datasets, co-sell.',
+    'Data partners, Technology partners, and Specialists. Use AIM Data, list datasets, build integrations, or build a business inside the market.',
   parentOrganization: {
     '@type': 'Organization',
     name: 'ai.market',
@@ -62,9 +62,9 @@ const dataPartnerSteps = [
 
 const technologyPartnerSteps = [
   {
-    title: 'Install AIM Node',
+    title: 'Install AIM Data',
     description:
-      'Run AIM Node with pip or Docker inside the environment that will connect your platform to ai.market.',
+      'Run AIM Data with the CLI, SDK, MCP server, or Docker inside the environment that will connect your platform to ai.market.',
   },
   {
     title: 'Authenticate',
@@ -74,7 +74,7 @@ const technologyPartnerSteps = [
   {
     title: 'Search the catalog',
     description:
-      'Query the MCP API by capability, schema, license, price, and quality score. Inspect matching data products and connect catalog access to your user workflows.',
+      'Query ai.market by capability, schema, license, price, and quality score through AIM Data’s developer surface.',
   },
   {
     title: 'Connect peer-to-peer',
@@ -87,7 +87,7 @@ const comparisonRows = [
   {
     area: 'Discovery and search',
     market: 'Catalog indexing, marketplace search, listing pages, and request matching.',
-    node: 'Programmatic catalog access from your platform through AIM Node and the MCP API.',
+    node: 'Programmatic catalog access from your platform through AIM Data and the MCP API.',
   },
   {
     area: 'Authentication',
@@ -111,12 +111,35 @@ const comparisonRows = [
   },
   {
     area: 'Raw data and payloads',
-    market: 'Does not receive raw payloads during AIM Node peer-to-peer delivery.',
+    market: 'Does not receive raw payloads during AIM Data peer-to-peer delivery.',
     node: 'Keeps raw data movement inside the encrypted P2P channel between peers.',
   },
 ];
 
 const requirements = ['Python 3.11+ or Docker', '4 GB RAM minimum', 'Outbound network access to ai.market API + P2P connectivity'];
+
+const specialistTypes = [
+  {
+    title: 'Listing specialists.',
+    description:
+      "You take a company's data and get it ready to sell. Profiling, cleanup, the right metadata, sensible pricing and licensing. You make data that buyers and AI agents can actually find and trust.",
+  },
+  {
+    title: 'Vertical specialists.',
+    description:
+      'You own a niche. Energy, health, finance, geospatial, whatever you know cold. You understand what buyers in that space need and which sellers have it. You become the trusted name for data in your category, and for sensitive data you are the one who can vouch for it.',
+  },
+  {
+    title: 'Deployment specialists.',
+    description:
+      'You install and run AIM Data and vectorAIz for clients. You wire up their data sources, get them listed, and keep it running. Setup plus managed service, billed your way.',
+  },
+  {
+    title: 'Sourcing specialists.',
+    description:
+      'You work for the buyers. AI teams and funds need the right data and do not have time to hunt for it. You find it, you vet it, you handle the buying.',
+  },
+];
 
 function StepCard({
   step,
@@ -149,11 +172,11 @@ export default function PartnerPage() {
             <p className="text-sm font-semibold uppercase tracking-[0.18em] text-[#0F6E56]">Partners</p>
             <h1 className="mt-3 text-4xl font-extrabold tracking-tight text-gray-900 sm:text-5xl">Partner with ai.market.</h1>
             <p className="mt-5 text-lg leading-8 text-gray-600">
-              ai.market works with two kinds of partners. Data partners list datasets on the marketplace. Technology partners build integrations that connect their platform to ai.market&apos;s catalog, requests, and delivery flows.
+              ai.market works with three kinds of partners. Data partners list datasets on the marketplace. Technology partners build integrations that connect their platform to ai.market&apos;s catalog, requests, and delivery flows. Specialists build a business inside the market itself.
             </p>
           </div>
 
-          <div className="mt-10 grid gap-4 sm:grid-cols-2 lg:max-w-4xl">
+          <div className="mt-10 grid gap-4 sm:grid-cols-2 lg:max-w-6xl lg:grid-cols-3">
             <Link
               href="#data-partner"
               className="group rounded-2xl border border-gray-200 bg-white p-6 shadow-sm transition-all hover:border-[#C5CAE9] hover:shadow-md focus:outline-none focus:ring-2 focus:ring-[#3F51B5] focus:ring-offset-2"
@@ -172,7 +195,18 @@ export default function PartnerPage() {
               <p className="text-sm font-semibold uppercase tracking-[0.16em] text-[#0F6E56]">Technology Partners</p>
               <h2 className="mt-3 text-xl font-bold tracking-tight text-gray-900 group-hover:text-[#3F51B5]">I want to integrate</h2>
               <p className="mt-3 text-sm leading-6 text-gray-600">
-                Connect your platform to ai.market through AIM Node and marketplace APIs.
+                Connect your platform to ai.market through AIM Data and marketplace APIs.
+              </p>
+            </Link>
+
+            <Link
+              href="#specialists"
+              className="group rounded-2xl border border-gray-200 bg-white p-6 shadow-sm transition-all hover:border-[#C5CAE9] hover:shadow-md focus:outline-none focus:ring-2 focus:ring-[#3F51B5] focus:ring-offset-2"
+            >
+              <p className="text-sm font-semibold uppercase tracking-[0.16em] text-[#0F6E56]">Specialists</p>
+              <h2 className="mt-3 text-xl font-bold tracking-tight text-gray-900 group-hover:text-[#3F51B5]">I want to build a business</h2>
+              <p className="mt-3 text-sm leading-6 text-gray-600">
+                Help people transact on ai.market, or build and list data products of your own.
               </p>
             </Link>
           </div>
@@ -215,30 +249,30 @@ export default function PartnerPage() {
           <div className="max-w-4xl">
             <p className="text-sm font-semibold uppercase tracking-[0.18em] text-[#0F6E56]">Technology Partners</p>
             <h2 id="technology-partner-heading" className="mt-3 text-3xl font-extrabold tracking-tight text-gray-900">
-              AIM Node connects your platform to ai.market.
+              AIM Data connects your platform to ai.market.
             </h2>
             <p className="mt-5 text-lg leading-8 text-gray-600">
-              You operate a platform that needs ai.market access. AIM Node is the integration.
+              You operate a platform that needs ai.market access. AIM Data is the single conduit.
             </p>
             <blockquote className="mt-8 rounded-2xl border border-[#D8EEE6] bg-white p-6 text-base font-semibold leading-7 text-gray-900 shadow-sm">
-              AIM Node is the local integration layer for partner platforms. It authenticates an instance, searches ai.market through the MCP API, and coordinates encrypted peer-to-peer delivery so raw payloads move directly between peers.
+              AIM Data is the local integration layer for partner platforms. It authenticates an instance, exposes a developer surface with CLI, SDK, MCP server, and P2P flows, searches ai.market, and coordinates encrypted peer-to-peer delivery so raw payloads move directly between peers.
             </blockquote>
             <p className="mt-5 text-sm leading-6 text-gray-600">
               Technical runbook:{' '}
               <a
-                href="https://github.com/aidotmarket/runbooks/blob/main/aim-node.md"
+                href="https://github.com/aidotmarket/runbooks/blob/main/aim-data.md"
                 className="font-semibold text-[#3F51B5] hover:text-[#303F9F]"
                 rel="noreferrer"
                 target="_blank"
               >
-                AIM Node runbook
+                AIM Data runbook
               </a>
             </p>
           </div>
 
           <div className="mt-12 grid gap-8 lg:grid-cols-[minmax(0,1fr)_360px] lg:items-start">
             <div>
-              <h3 className="text-2xl font-bold tracking-tight text-gray-900">AIM Node integration</h3>
+              <h3 className="text-2xl font-bold tracking-tight text-gray-900">AIM Data integration</h3>
               <ol className="mt-6 grid gap-4 sm:grid-cols-2">
                 {technologyPartnerSteps.map((item, index) => (
                   <StepCard key={item.title} step={index + 1} title={item.title} description={item.description} />
@@ -266,10 +300,10 @@ export default function PartnerPage() {
                   Talk to a Technology Partner manager →
                 </a>
                 <Link
-                  href="/aim-node"
+                  href="/aim-data"
                   className="inline-flex items-center justify-center rounded-lg border border-[#3F51B5] px-5 py-3 text-sm font-semibold text-[#3F51B5] transition-colors hover:bg-[#E8EAF6] focus:outline-none focus:ring-2 focus:ring-[#3F51B5] focus:ring-offset-2"
                 >
-                  Install AIM Node →
+                  Install AIM Data →
                 </Link>
               </div>
             </aside>
@@ -277,7 +311,7 @@ export default function PartnerPage() {
 
           <div className="mt-12 overflow-hidden rounded-2xl border border-gray-200 bg-white shadow-sm">
             <div className="px-6 py-5 sm:px-8">
-              <h3 className="text-2xl font-bold tracking-tight text-gray-900">What ai.market handles vs. AIM Node handles</h3>
+              <h3 className="text-2xl font-bold tracking-tight text-gray-900">What ai.market handles vs. AIM Data handles</h3>
             </div>
             <div className="overflow-x-auto">
               <table className="min-w-full divide-y divide-gray-200 text-left">
@@ -290,7 +324,7 @@ export default function PartnerPage() {
                       ai.market handles
                     </th>
                     <th scope="col" className="px-6 py-4 text-sm font-semibold text-gray-900">
-                      AIM Node handles
+                      AIM Data handles
                     </th>
                   </tr>
                 </thead>
@@ -311,6 +345,60 @@ export default function PartnerPage() {
         </div>
       </section>
 
+      <section id="specialists" className="bg-white py-16 sm:py-20" aria-labelledby="specialists-heading">
+        <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
+          <div className="grid gap-10 lg:grid-cols-[minmax(0,420px)_1fr] lg:items-start">
+            <div>
+              <p className="text-sm font-semibold uppercase tracking-[0.18em] text-[#0F6E56]">Specialists</p>
+              <h2 id="specialists-heading" className="mt-3 text-3xl font-extrabold tracking-tight text-gray-900">
+                Build a business on ai.market.
+              </h2>
+              <p className="mt-6 text-base leading-7 text-gray-600">
+                Some of the best partners are not bringing their own data and are not plugging in their own product. They want to make a living working inside the market itself. They know data, they know buyers, and they are good at getting deals done. We want more of them.
+              </p>
+              <p className="mt-5 text-base leading-7 text-gray-600">
+                A specialist earns by helping other people transact on ai.market, or by building and listing data products of their own. allAI does the heavy lifting on metadata, classification and listing quality, so a specialist spends their time where it counts, on the relationships and the judgment that turn raw data into something that sells. You set your own prices. We take 5% when something sells and nothing else.
+              </p>
+              <a
+                href="mailto:support@ai.market?subject=Specialist%20Inquiry"
+                className="mt-8 inline-flex items-center justify-center rounded-lg bg-[#3F51B5] px-5 py-3 text-sm font-semibold text-white transition-colors hover:bg-[#3545a0] focus:outline-none focus:ring-2 focus:ring-[#3F51B5] focus:ring-offset-2"
+              >
+                Talk to us
+              </a>
+            </div>
+
+            <div>
+              <div className="rounded-2xl border border-[#D8EEE6] bg-[#F7FCFA] p-6 shadow-sm sm:p-8">
+                <h3 className="text-2xl font-bold tracking-tight text-gray-900">Start with public data.</h3>
+                <p className="mt-4 text-base leading-7 text-gray-600">
+                  Here is one of the best ways in, and it does not need a single client. A huge amount of valuable data is technically public and a real pain to actually use. It is scattered, badly formatted, out of date, and there is nobody to call when it breaks. If you can find it, clean it up, package it so a buyer or an AI agent can actually use it, and keep it current, that is a product. You list it and you charge a fair convenience fee for the work you saved everyone. We have talked to people in bioscience who tell us getting public data is a nightmare and they would gladly pay a fair rate if someone just made it easy. That gap is the opportunity.
+                </p>
+              </div>
+
+              <div className="mt-8">
+                <h3 className="text-2xl font-bold tracking-tight text-gray-900">Here is the kind of specialist we are looking for:</h3>
+                <div className="mt-6 grid gap-4 sm:grid-cols-2">
+                  {specialistTypes.map((item) => (
+                    <article key={item.title} className="rounded-2xl border border-gray-200 bg-white p-5 shadow-sm">
+                      <h4 className="text-base font-semibold text-gray-900">{item.title}</h4>
+                      <p className="mt-2 text-sm leading-6 text-gray-600">{item.description}</p>
+                    </article>
+                  ))}
+                </div>
+              </div>
+
+              <div className="mt-8 rounded-2xl border border-gray-200 bg-white p-6 shadow-sm">
+                <h3 className="text-2xl font-bold tracking-tight text-gray-900">Why do this on ai.market?</h3>
+                <p className="mt-4 text-base leading-7 text-gray-600">
+                  The model is simple. You set your own pricing and keep what you earn, and we take 5% only when a deal closes. No listing fees. So your incentive and ours are the same, more good data changing hands. The rails are non-custodial, so raw data never touches us, and it never touches you unless your client wants it to. allAI does the grunt work so you can focus on the part only a person can do.
+                </p>
+                <p className="mt-5 text-base font-semibold leading-7 text-gray-900">Want in? Talk to us.</p>
+              </div>
+            </div>
+          </div>
+        </div>
+      </section>
+
       <section className="bg-white py-16 sm:py-20" aria-labelledby="co-sell-heading">
         <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
           <div className="rounded-2xl border border-[#D8EEE6] bg-[#F7FCFA] p-6 shadow-sm sm:p-8">
@@ -318,7 +406,7 @@ export default function PartnerPage() {
               Some partners do both.
             </h2>
             <p className="mt-4 max-w-4xl text-base leading-7 text-gray-600">
-              A partner can list with <Link href="#data-partner" className="font-semibold text-[#3F51B5] hover:text-[#303F9F]">AIM Data</Link> and integrate <Link href="#technology-partner" className="font-semibold text-[#3F51B5] hover:text-[#303F9F]">AIM Node</Link>{' '}
+              A partner can list with <Link href="#data-partner" className="font-semibold text-[#3F51B5] hover:text-[#303F9F]">AIM Data</Link>, integrate <Link href="#technology-partner" className="font-semibold text-[#3F51B5] hover:text-[#303F9F]">AIM Data</Link>, or work as a <Link href="#specialists" className="font-semibold text-[#3F51B5] hover:text-[#303F9F]">Specialist</Link>{' '}
               at the same time. That path works well for platforms that want to sell their own datasets while also giving their customers programmatic access to the broader ai.market catalog.
             </p>
           </div>

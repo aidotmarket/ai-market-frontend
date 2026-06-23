@@ -23,7 +23,6 @@ const footerLinkSections = [
     links: [
       { label: 'The Protocol', href: '/protocol' },
       { label: 'AIM Data', href: '/aim-data' },
-      { label: 'AIM Node', href: '/aim-node' },
     ],
   },
   {
