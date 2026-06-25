@@ -8,6 +8,38 @@ export interface PaginatedListings {
   jsonld?: Record<string, unknown>;
 }
 
+export type FeaturedItemSource = 'just_listed' | 'recently_sold' | 'trending' | 'cold_start' | 'curated';
+
+export interface FeaturedPriceDisplay {
+  currency?: string | null;
+  amount?: number | null;
+  label: string;
+  on_request?: boolean;
+}
+
+export interface FeaturedItem {
+  listing_id: string;
+  seller_id?: string;
+  slug: string;
+  title: string;
+  summary?: string | null;
+  canonical_url: string;
+  locale?: string;
+  source: FeaturedItemSource;
+  slot: number;
+  price: FeaturedPriceDisplay;
+  quality_score?: number | null;
+  placement_id?: string | null;
+}
+
+export interface FeaturedFeedResponse {
+  generated_at?: string;
+  locale?: string;
+  currency?: string;
+  items: FeaturedItem[];
+  item_list: Record<string, unknown>;
+}
+
 export async function fetchPublicListings(params?: {
   page?: number;
   per_page?: number;
@@ -22,6 +54,24 @@ export async function fetchPublicListings(params?: {
 
   const qs = searchParams.toString();
   const res = await fetch(`${API_URL}/api/v1/public/listings${qs ? `?${qs}` : ''}`, {
+    next: { revalidate: 60 },
+  });
+  if (!res.ok) return null;
+  return res.json();
+}
+
+export async function fetchFeaturedFeed(params?: {
+  locale?: string;
+  currency?: string;
+  limit?: number;
+}): Promise<FeaturedFeedResponse | null> {
+  const searchParams = new URLSearchParams();
+  if (params?.locale) searchParams.set('locale', params.locale);
+  if (params?.currency) searchParams.set('currency', params.currency);
+  if (params?.limit) searchParams.set('limit', String(params.limit));
+
+  const qs = searchParams.toString();
+  const res = await fetch(`${API_URL}/api/v1/public/featured-listings${qs ? `?${qs}` : ''}`, {
     next: { revalidate: 60 },
   });
   if (!res.ok) return null;
