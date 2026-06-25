@@ -1,6 +1,7 @@
 import Link from 'next/link';
 import type { Metadata } from 'next';
-import { fetchPublicListings, type PaginatedListings } from '@/lib/api';
+import { fetchFeaturedFeed, fetchPublicListings, type FeaturedItem, type PaginatedListings } from '@/lib/api';
+import { HomepageActivityTickerBeacons } from '@/components/HomepageActivityTickerBeacons';
 import { HeroSearch } from '@/components/HeroSearch';
 
 export const metadata: Metadata = {
@@ -118,6 +119,122 @@ const categoryBadge: Record<string, string> = {
 
 const defaultBadge = 'bg-[#F0F0F0] text-[#666666]';
 
+const activitySourceLabel: Record<FeaturedItem['source'], string> = {
+  curated: 'Featured',
+  just_listed: 'Just listed',
+  recently_sold: 'Recently sold',
+  trending: 'Trending',
+  cold_start: 'Featured',
+};
+
+function interleaveFeaturedItems(items: FeaturedItem[]) {
+  const justListed = items.filter((item) => item.source === 'just_listed');
+  const recentlySold = items.filter((item) => item.source === 'recently_sold');
+  const rest = items.filter((item) => item.source !== 'just_listed' && item.source !== 'recently_sold');
+  const ordered: FeaturedItem[] = [];
+  const maxLength = Math.max(justListed.length, recentlySold.length, rest.length);
+
+  for (let index = 0; index < maxLength; index += 1) {
+    if (justListed[index]) ordered.push(justListed[index]);
+    if (recentlySold[index]) ordered.push(recentlySold[index]);
+    if (rest[index]) ordered.push(rest[index]);
+  }
+
+  return ordered;
+}
+
+function formatFeaturedPrice(item: FeaturedItem) {
+  const label = item.price.label;
+  const semanticLabel = label.toLowerCase();
+  const amount = item.price.amount;
+  const currency = item.price.currency ?? 'USD';
+  const amountLabel = amount == null
+    ? null
+    : new Intl.NumberFormat('en-US', { style: 'currency', currency }).format(amount);
+
+  if (item.price.on_request || semanticLabel === 'on_request') return 'On request';
+  if (semanticLabel === 'from') return amountLabel ? `from ${amountLabel}` : 'from price';
+  if (semanticLabel === 'firm') return amountLabel ?? 'Price listed';
+
+  return label;
+}
+
+function metricEndpoint(path: string) {
+  const apiBaseUrl = process.env.NEXT_PUBLIC_API_URL || process.env.API_URL || '';
+  return apiBaseUrl ? `${apiBaseUrl}${path}` : path;
+}
+
+function ActivityTicker({ items, locale }: { items: FeaturedItem[]; locale: string }) {
+  if (items.length === 0) return null;
+
+  const tickerItems = interleaveFeaturedItems(items);
+  const repeatedItems = tickerItems.length > 1 ? [...tickerItems, ...tickerItems] : tickerItems;
+
+  return (
+    <section
+      className="homepage-activity-strip min-h-[92px] border-b border-[#E8E8E8] bg-[#FAFAFA]"
+      aria-labelledby="homepage-activity-heading"
+    >
+      <h2 id="homepage-activity-heading" className="sr-only">
+        Marketplace activity
+      </h2>
+      <div className="mx-auto flex min-h-[92px] max-w-7xl items-center gap-4 px-4 sm:px-6 lg:px-8">
+        <p className="hidden shrink-0 text-xs font-bold uppercase tracking-wider text-[#3F51B5] sm:block">
+          Marketplace activity
+        </p>
+        <div className="min-w-0 flex-1 overflow-x-auto overflow-y-hidden">
+          <ul className={`${tickerItems.length > 1 ? 'homepage-activity-marquee' : ''} flex w-max items-center gap-3 py-3 ${tickerItems.length > 1 ? '' : 'md:w-full'}`}>
+            {repeatedItems.map((item, index) => {
+              const isDuplicate = index >= tickerItems.length;
+              const isSold = item.source === 'recently_sold';
+
+              return (
+                <li
+                  key={`${item.listing_id}-${index}`}
+                  className={isDuplicate ? 'homepage-activity-duplicate' : undefined}
+                  aria-hidden={isDuplicate}
+                >
+                  <a
+                    href={item.canonical_url}
+                    data-featured-listing-id={item.listing_id}
+                    data-featured-slot={item.slot}
+                    data-featured-placement-id={item.placement_id ?? undefined}
+                    className="group flex h-14 min-w-[280px] max-w-[360px] items-center gap-3 rounded-lg border border-[#E8E8E8] bg-white px-4 text-left shadow-sm transition-colors hover:border-[#3F51B5] focus:outline-none focus:ring-2 focus:ring-[#3F51B5] focus:ring-offset-2 sm:min-w-[340px]"
+                  >
+                    <span
+                      className={`shrink-0 rounded-md px-2 py-1 text-[11px] font-bold uppercase tracking-wide ${
+                        isSold ? 'bg-[#E1F5EE] text-[#0F6E56]' : 'bg-[#E8EAF6] text-[#3F51B5]'
+                      }`}
+                    >
+                      {activitySourceLabel[item.source]}
+                    </span>
+                    <span className="min-w-0 flex-1">
+                      <span className="block truncate text-sm font-semibold text-[#1A1A1A] group-hover:text-[#303F9F]">
+                        {item.title}
+                      </span>
+                      <span className="block truncate text-xs text-[#666666]">{formatFeaturedPrice(item)}</span>
+                    </span>
+                  </a>
+                </li>
+              );
+            })}
+          </ul>
+        </div>
+      </div>
+      <HomepageActivityTickerBeacons
+        items={tickerItems.map((item) => ({
+          listingId: item.listing_id,
+          slot: item.slot,
+          placementId: item.placement_id,
+        }))}
+        locale={locale}
+        impressionEndpoint={metricEndpoint('/featured-listings/impressions')}
+        clickEndpointBase={metricEndpoint('/featured-listings')}
+      />
+    </section>
+  );
+}
+
 const howItWorks = [
   {
     title: 'Install AIM Data.',
@@ -137,16 +254,27 @@ const howItWorks = [
 ];
 
 export default async function LandingPage() {
-  const listingsData: PaginatedListings | null = await fetchPublicListings({
-    per_page: 4,
-    sort: 'newest',
-  });
+  const [listingsData, featuredFeed]: [PaginatedListings | null, Awaited<ReturnType<typeof fetchFeaturedFeed>>] =
+    await Promise.all([
+      fetchPublicListings({
+        per_page: 4,
+        sort: 'newest',
+      }),
+      fetchFeaturedFeed(),
+    ]);
   const featuredListings = listingsData?.items ?? [];
+  const activityItems = featuredFeed?.items ?? [];
+  const activityItemList = featuredFeed?.item_list ?? null;
 
   return (
     <>
       <script type="application/ld+json">{JSON.stringify(LANDING_JSONLD)}</script>
+      {activityItemList ? (
+        <script type="application/ld+json">{JSON.stringify(activityItemList)}</script>
+      ) : null}
       <div className="overflow-hidden">
+        <ActivityTicker items={activityItems} locale={featuredFeed?.locale ?? 'en'} />
+
         {/* HERO */}
         <section className="relative isolate bg-white">
           <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8 pt-16 pb-20 sm:pt-24 sm:pb-28">

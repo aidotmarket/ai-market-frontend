@@ -21,6 +21,33 @@
   z-index: 1;
 }
 
+@keyframes homepage-activity-marquee {
+  from { transform: translateX(0); }
+  to { transform: translateX(-50%); }
+}
+
+.homepage-activity-marquee {
+  animation: homepage-activity-marquee 34s linear infinite;
+  will-change: transform;
+}
+
+.homepage-activity-strip:hover .homepage-activity-marquee,
+.homepage-activity-strip:focus-within .homepage-activity-marquee {
+  animation-play-state: paused;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .homepage-activity-duplicate {
+    display: none;
+  }
+
+  .homepage-activity-marquee {
+    animation: none;
+    transform: none;
+    will-change: auto;
+  }
+}
+
 /* allAI chat animations */
 @keyframes allai-blink {
   0%, 100% { opacity: 1; }
