@@ -4,12 +4,43 @@ import { useEffect, useState } from 'react';
 import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
 import { useAuthStore } from '@/store/auth';
+import { getCapabilities, type CapabilityStatus } from '@/api/capabilities';
+import SellerSetupProgressBar from '@/components/onboarding/SellerSetupProgressBar';
 
 export default function DashboardLayout({ children }: { children: React.ReactNode }) {
   const { user, isAuthenticated, isLoading } = useAuthStore();
   const router = useRouter();
   const pathname = usePathname();
   const [routeReady, setRouteReady] = useState(false);
+  const [sellerStatus, setSellerStatus] = useState<CapabilityStatus | null>(null);
+  const [capabilitiesResolved, setCapabilitiesResolved] = useState(false);
+
+  useEffect(() => {
+    let cancelled = false;
+    setSellerStatus(null);
+    setCapabilitiesResolved(false);
+
+    if (isLoading || !isAuthenticated) return;
+
+    getCapabilities()
+      .then((capabilities) => {
+        if (!cancelled) {
+          setSellerStatus(capabilities.seller.effective_status);
+        }
+      })
+      .catch((err) => {
+        console.error('Failed to fetch dashboard capabilities', err);
+      })
+      .finally(() => {
+        if (!cancelled) {
+          setCapabilitiesResolved(true);
+        }
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [isAuthenticated, isLoading]);
 
   useEffect(() => {
     setRouteReady(false);
@@ -20,16 +51,19 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
       return;
     }
 
-    // Buyers can access inquiry, order, and request routes only
-    const buyerAllowedPrefixes = ['/dashboard/inquiries', '/dashboard/orders', '/dashboard/requests'];
-    const isBuyer = user && user.role !== 'seller' && user.role !== 'admin';
-    if (isBuyer && !buyerAllowedPrefixes.some((p) => pathname.startsWith(p))) {
+    const roleSellerFallback = user?.role === 'seller' || user?.role === 'admin';
+    const isSeller = capabilitiesResolved
+      ? sellerStatus === 'active' || sellerStatus === 'provisioning'
+      : roleSellerFallback;
+    const buyerAllowedRoutes = ['/dashboard', '/dashboard/inquiries', '/dashboard/orders', '/dashboard/requests', '/dashboard/settings'];
+    const isBuyer = user && !isSeller;
+    if (isBuyer && !buyerAllowedRoutes.some((p) => pathname === p || pathname.startsWith(`${p}/`))) {
       router.push('/dashboard/inquiries');
       return;
     }
 
     setRouteReady(true);
-  }, [isAuthenticated, isLoading, user, router, pathname]);
+  }, [capabilitiesResolved, isAuthenticated, isLoading, pathname, router, sellerStatus, user]);
 
   if (isLoading || !isAuthenticated) {
     return (
@@ -47,7 +81,9 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
     );
   }
 
-  const isSeller = user?.role === 'seller' || user?.role === 'admin';
+  const isSeller = capabilitiesResolved
+    ? sellerStatus === 'active' || sellerStatus === 'provisioning'
+    : user?.role === 'seller' || user?.role === 'admin';
   const isAdminEmail = user?.email === 'max@ai.market';
 
   const navLinks = [
@@ -104,6 +140,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
           </div>
         </div>
       </main>
+      <SellerSetupProgressBar />
     </div>
   );
 }

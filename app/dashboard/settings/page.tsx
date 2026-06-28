@@ -3,6 +3,7 @@
 import { useState, useEffect } from 'react';
 import { useAuthStore } from '@/store/auth';
 import { disable2FA, regenerateBackupCodes, setup2FA, updateProfile, verify2FASetup } from '@/api/auth';
+import { getCapabilities, type CapabilityStatus } from '@/api/capabilities';
 import { useToast } from '@/components/Toast';
 import { AxiosError } from 'axios';
 import ReauthModal from './ReauthModal';
@@ -33,6 +34,7 @@ export default function SettingsPage() {
   const [copiedBackupCodes, setCopiedBackupCodes] = useState(false);
   const [isReauthOpen, setIsReauthOpen] = useState(false);
   const [pendingReauthAction, setPendingReauthAction] = useState<Exclude<SecurityAction, null> | null>(null);
+  const [sellerStatus, setSellerStatus] = useState<CapabilityStatus | null>(null);
 
   useEffect(() => {
     if (user) {
@@ -56,6 +58,25 @@ export default function SettingsPage() {
     const timer = window.setTimeout(() => setCopiedBackupCodes(false), 2000);
     return () => window.clearTimeout(timer);
   }, [copiedBackupCodes]);
+
+  useEffect(() => {
+    let cancelled = false;
+    if (!user) return;
+
+    getCapabilities()
+      .then((capabilities) => {
+        if (!cancelled) {
+          setSellerStatus(capabilities.seller.effective_status);
+        }
+      })
+      .catch((err) => {
+        console.error('Failed to fetch settings capabilities', err);
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [user]);
 
   const handleSave = async () => {
     setSaving(true);
@@ -223,7 +244,11 @@ export default function SettingsPage() {
 
   if (!user) return null;
 
-  const isSeller = user.role === 'seller' || user.role === 'admin';
+  const isSeller =
+    sellerStatus === 'active' ||
+    sellerStatus === 'provisioning' ||
+    user.role === 'seller' ||
+    user.role === 'admin';
 
   return (
     <div className="max-w-2xl">
@@ -236,7 +261,7 @@ export default function SettingsPage() {
       <h1 className="text-2xl font-bold text-gray-900 mb-8">Settings</h1>
 
       {/* Profile Section */}
-      <section className="bg-white rounded-xl border border-gray-200 shadow-sm p-6 mb-6">
+      <section id="profile" className="scroll-mt-6 bg-white rounded-xl border border-gray-200 shadow-sm p-6 mb-6">
         <h2 className="text-lg font-semibold text-gray-900 mb-4">Profile</h2>
         <div className="space-y-4">
           <div className="grid grid-cols-2 gap-4">
@@ -267,7 +292,7 @@ export default function SettingsPage() {
           </div>
 
           {isSeller && (
-            <div>
+            <div id="company" className="scroll-mt-6">
               <label htmlFor="companyName" className="block text-sm font-medium text-gray-700 mb-1">
                 Company name
               </label>
@@ -316,7 +341,7 @@ export default function SettingsPage() {
         </dl>
       </section>
 
-      <section className="bg-white rounded-xl border border-gray-200 shadow-sm p-6 mt-6">
+      <section id="security" className="scroll-mt-6 bg-white rounded-xl border border-gray-200 shadow-sm p-6 mt-6">
         <div className="flex items-start justify-between gap-4 mb-4">
           <div>
             <h2 className="text-lg font-semibold text-gray-900">Security</h2>

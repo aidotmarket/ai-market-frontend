@@ -6,6 +6,12 @@ import { getConnectStatus, getConnectOnboarding } from '@/api/connect';
 import { getOnboardingStatus, setup2FA, verify2FASetup, type OnboardingStatusResponse } from '@/api/auth';
 import { getSellerStats } from '@/api/seller';
 import { getMyListings } from '@/api/listings';
+import {
+  getCapabilities,
+  requestSellerCapability,
+  type CapabilitySetResponse,
+} from '@/api/capabilities';
+import { notifyCapabilitiesChanged } from '@/components/onboarding/SellerSetupProgressBar';
 import { useToast } from '@/components/Toast';
 import { AxiosError } from 'axios';
 
@@ -21,8 +27,10 @@ export default function DashboardOverview() {
   const [connecting, setConnecting] = useState(false);
   const [stripeStatus, setStripeStatus] = useState<{ details_submitted?: boolean; payouts_enabled?: boolean } | null>(null);
   const [onboardingStatus, setOnboardingStatus] = useState<OnboardingStatusResponse | null>(null);
+  const [capabilities, setCapabilities] = useState<CapabilitySetResponse | null>(null);
   const [stats, setStats] = useState<any>(null);
   const [heldPublishedCount, setHeldPublishedCount] = useState(0);
+  const [requestingSeller, setRequestingSeller] = useState(false);
   const [twoFactorFlow, setTwoFactorFlow] = useState<TwoFactorFlow>('idle');
   const [securityLoading, setSecurityLoading] = useState(false);
   const [securityError, setSecurityError] = useState('');
@@ -36,18 +44,34 @@ export default function DashboardOverview() {
     setLoading(true);
     setError(false);
     try {
-      const [statusRes, onboardingRes, statsRes, listingsRes] = await Promise.all([
-        getConnectStatus(),
-        getOnboardingStatus(),
-        getSellerStats(),
-        getMyListings(),
-      ]);
-      const listings = Array.isArray(listingsRes.data) ? listingsRes.data : [];
+      const capabilityRes = await getCapabilities();
+      setCapabilities(capabilityRes);
 
-      setStripeStatus(statusRes.data);
-      setOnboardingStatus(onboardingRes);
-      setStats(statsRes.data);
-      setHeldPublishedCount(listings.filter((listing: any) => listing.status === 'published').length);
+      const sellerIsActive = capabilityRes.seller.effective_status === 'active';
+      const sellerIsProvisioning = capabilityRes.seller.effective_status === 'provisioning';
+
+      setStripeStatus(null);
+      setStats(null);
+      setHeldPublishedCount(0);
+
+      if (sellerIsActive) {
+        const [statusRes, onboardingRes, statsRes, listingsRes] = await Promise.all([
+          getConnectStatus(),
+          getOnboardingStatus(),
+          getSellerStats(),
+          getMyListings(),
+        ]);
+        const listings = Array.isArray(listingsRes.data) ? listingsRes.data : [];
+
+        setStripeStatus(statusRes.data);
+        setOnboardingStatus(onboardingRes);
+        setStats(statsRes.data);
+        setHeldPublishedCount(listings.filter((listing: any) => listing.status === 'published').length);
+      } else if (sellerIsProvisioning) {
+        setOnboardingStatus(await getOnboardingStatus());
+      } else {
+        setOnboardingStatus(null);
+      }
     } catch (err) {
       console.error('Failed to fetch dashboard data', err);
       setError(true);
@@ -81,6 +105,21 @@ export default function DashboardOverview() {
         toast('Failed to start Stripe connection', 'error');
       }
       setConnecting(false);
+    }
+  };
+
+  const handleStartSelling = async () => {
+    setRequestingSeller(true);
+    try {
+      const capabilityRes = await requestSellerCapability();
+      setCapabilities(capabilityRes);
+      notifyCapabilitiesChanged();
+      toast('Seller setup started', 'success');
+      await fetchData();
+    } catch (err) {
+      toast('Failed to start seller setup', 'error');
+    } finally {
+      setRequestingSeller(false);
     }
   };
 
@@ -162,24 +201,50 @@ export default function DashboardOverview() {
     );
   }
 
+  const sellerStatus = capabilities?.seller.effective_status;
+  const sellerMissingSteps = capabilities?.seller.missing_steps ?? [];
   const isStripeConnected = !!stripeStatus?.details_submitted;
-  const payoutsEnabled = !!stripeStatus?.payouts_enabled;
-  const isSeller = user?.role === 'seller' || user?.role === 'admin';
+  const payoutsEnabled = sellerStatus === 'active'
+    ? !!stripeStatus?.payouts_enabled
+    : !!capabilities && !sellerMissingSteps.includes('stripe_payouts_live');
+  const isSellerActive = sellerStatus === 'active';
+  const isSellerProvisioning = sellerStatus === 'provisioning';
+  const canStartSelling = sellerStatus === 'not_requested';
   const twoFactorEnabled = !!user?.totp_enabled || !!onboardingStatus?.steps.find((step) => step.id === 'enable_2fa')?.completed;
   const showSetupFlow =
-    isSeller &&
-    !!onboardingStatus &&
-    !onboardingStatus.completed &&
-    ['enable_2fa', 'connect_stripe', 'complete'].includes(onboardingStatus.current_step || '') &&
+    isSellerProvisioning &&
     !(twoFactorEnabled && payoutsEnabled);
-  const showHeldPublishedNotice = heldPublishedCount > 0 && !payoutsEnabled;
+  const showHeldPublishedNotice = isSellerActive && heldPublishedCount > 0 && !payoutsEnabled;
 
   return (
     <div className="space-y-8">
       <div>
-        <h1 className="text-2xl font-bold text-gray-900">Welcome back, {user?.first_name || 'Seller'}</h1>
-        <p className="mt-1 text-sm text-gray-500">Here's what's happening with your store today.</p>
+        <h1 className="text-2xl font-bold text-gray-900">Welcome back, {user?.first_name || 'there'}</h1>
+        <p className="mt-1 text-sm text-gray-500">
+          {isSellerActive ? "Here's what's happening with your store today." : 'Manage your marketplace account.'}
+        </p>
       </div>
+
+      {canStartSelling && (
+        <div className="rounded-xl border border-[#C5CAE9] bg-white p-6 shadow-sm">
+          <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+            <div>
+              <h2 className="text-lg font-semibold text-gray-900">Start selling on AI Market</h2>
+              <p className="mt-1 text-sm text-gray-600">
+                Set up your seller profile, security, and Stripe payouts before publishing paid listings.
+              </p>
+            </div>
+            <button
+              type="button"
+              onClick={handleStartSelling}
+              disabled={requestingSeller}
+              className="rounded-lg bg-[#3F51B5] px-4 py-2 text-sm font-semibold text-white transition-colors hover:bg-[#3545a0] disabled:cursor-not-allowed disabled:opacity-60"
+            >
+              {requestingSeller ? 'Starting...' : 'Start selling'}
+            </button>
+          </div>
+        </div>
+      )}
 
       {showSetupFlow && (
         <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
@@ -351,69 +416,70 @@ export default function DashboardOverview() {
         </div>
       )}
 
-      {/* Stats Cards */}
-      <div className="grid grid-cols-1 gap-5 sm:grid-cols-3">
-        <div className="bg-white overflow-hidden shadow-sm rounded-xl border border-gray-200">
-          <div className="p-5">
-            <div className="flex items-center">
-              <div className="flex-shrink-0">
-                <svg className="h-6 w-6 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" />
-                </svg>
-              </div>
-              <div className="ml-5 w-0 flex-1">
-                <dl>
-                  <dt className="text-sm font-medium text-gray-500 truncate">Total Views</dt>
-                  <dd className="flex items-baseline">
-                    <div className="text-2xl font-semibold text-gray-900">{stats?.views || 0}</div>
-                  </dd>
-                </dl>
+      {isSellerActive && (
+        <div className="grid grid-cols-1 gap-5 sm:grid-cols-3">
+          <div className="bg-white overflow-hidden shadow-sm rounded-xl border border-gray-200">
+            <div className="p-5">
+              <div className="flex items-center">
+                <div className="flex-shrink-0">
+                  <svg className="h-6 w-6 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" />
+                  </svg>
+                </div>
+                <div className="ml-5 w-0 flex-1">
+                  <dl>
+                    <dt className="text-sm font-medium text-gray-500 truncate">Total Views</dt>
+                    <dd className="flex items-baseline">
+                      <div className="text-2xl font-semibold text-gray-900">{stats?.views || 0}</div>
+                    </dd>
+                  </dl>
+                </div>
               </div>
             </div>
           </div>
-        </div>
 
-        <div className="bg-white overflow-hidden shadow-sm rounded-xl border border-gray-200">
-          <div className="p-5">
-            <div className="flex items-center">
-              <div className="flex-shrink-0">
-                <svg className="h-6 w-6 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M16 11V7a4 4 0 00-8 0v4M5 9h14l1 12H4L5 9z" />
-                </svg>
-              </div>
-              <div className="ml-5 w-0 flex-1">
-                <dl>
-                  <dt className="text-sm font-medium text-gray-500 truncate">Total Sales</dt>
-                  <dd className="flex items-baseline">
-                    <div className="text-2xl font-semibold text-gray-900">{stats?.sales || 0}</div>
-                  </dd>
-                </dl>
+          <div className="bg-white overflow-hidden shadow-sm rounded-xl border border-gray-200">
+            <div className="p-5">
+              <div className="flex items-center">
+                <div className="flex-shrink-0">
+                  <svg className="h-6 w-6 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M16 11V7a4 4 0 00-8 0v4M5 9h14l1 12H4L5 9z" />
+                  </svg>
+                </div>
+                <div className="ml-5 w-0 flex-1">
+                  <dl>
+                    <dt className="text-sm font-medium text-gray-500 truncate">Total Sales</dt>
+                    <dd className="flex items-baseline">
+                      <div className="text-2xl font-semibold text-gray-900">{stats?.sales || 0}</div>
+                    </dd>
+                  </dl>
+                </div>
               </div>
             </div>
           </div>
-        </div>
 
-        <div className="bg-white overflow-hidden shadow-sm rounded-xl border border-gray-200">
-          <div className="p-5">
-            <div className="flex items-center">
-              <div className="flex-shrink-0">
-                <svg className="h-6 w-6 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
-                </svg>
-              </div>
-              <div className="ml-5 w-0 flex-1">
-                <dl>
-                  <dt className="text-sm font-medium text-gray-500 truncate">Total Revenue</dt>
-                  <dd className="flex items-baseline">
-                    <div className="text-2xl font-semibold text-gray-900">${(stats?.revenue || 0).toFixed(2)}</div>
-                  </dd>
-                </dl>
+          <div className="bg-white overflow-hidden shadow-sm rounded-xl border border-gray-200">
+            <div className="p-5">
+              <div className="flex items-center">
+                <div className="flex-shrink-0">
+                  <svg className="h-6 w-6 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                  </svg>
+                </div>
+                <div className="ml-5 w-0 flex-1">
+                  <dl>
+                    <dt className="text-sm font-medium text-gray-500 truncate">Total Revenue</dt>
+                    <dd className="flex items-baseline">
+                      <div className="text-2xl font-semibold text-gray-900">${(stats?.revenue || 0).toFixed(2)}</div>
+                    </dd>
+                  </dl>
+                </div>
               </div>
             </div>
           </div>
         </div>
-      </div>
+      )}
     </div>
   );
 }
