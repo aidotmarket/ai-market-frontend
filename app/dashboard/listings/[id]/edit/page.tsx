@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useCallback } from 'react';
 import { useRouter, useParams } from 'next/navigation';
-import { getListing, updateListing, publishListing, unpublishListing } from '@/api/listings';
+import { getListing, updateListing, unpublishListing } from '@/api/listings';
 import { useToast } from '@/components/Toast';
 
 const CATEGORIES = ['Finance', 'Healthcare', 'Technology', 'Real Estate', 'Government', 'Marketing'];
@@ -117,29 +117,6 @@ export default function EditListingPage() {
       toast('Listing saved', 'success');
     } catch (err: any) {
       toast(err.response?.data?.detail || 'Failed to save', 'error');
-    } finally {
-      setSaving(false);
-    }
-  };
-
-  const handlePublish = async () => {
-    setSaving(true);
-    try {
-      await updateListing(id, {
-        title: data.title,
-        description: data.description,
-        category: data.category,
-        tags: data.tags,
-        price: data.price,
-        pricing_type: data.pricing_type,
-        data_format: data.data_format,
-        source_row_count: data.source_row_count || undefined,
-      });
-      await publishListing(id);
-      toast('Listing published!', 'success');
-      router.push('/dashboard/listings');
-    } catch (err: any) {
-      toast(err.response?.data?.detail || 'Failed to publish', 'error');
     } finally {
       setSaving(false);
     }
@@ -388,15 +365,6 @@ export default function EditListingPage() {
           >
             {saving ? 'Saving...' : 'Save Draft'}
           </button>
-          {data.status !== 'published' && (
-            <button
-              onClick={handlePublish}
-              disabled={saving}
-              className="rounded-lg bg-[#3F51B5] px-4 py-2 text-sm font-medium text-white hover:bg-[#3545a0] disabled:opacity-50"
-            >
-              {saving ? 'Publishing...' : 'Save & Publish'}
-            </button>
-          )}
         </div>
       </div>
     </div>

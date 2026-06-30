@@ -1,9 +1,8 @@
 'use client';
 
 import { useEffect, useState, useCallback } from 'react';
-import Link from 'next/link';
 import { useRouter } from 'next/navigation';
-import { getMyListings, publishListing, unpublishListing, deleteListing } from '@/api/listings';
+import { getMyListings, unpublishListing, deleteListing } from '@/api/listings';
 import { getConnectStatus } from '@/api/connect';
 import { useToast } from '@/components/Toast';
 import { formatPrice, formatDate } from '@/lib/format';
@@ -59,19 +58,6 @@ export default function ListingsPage() {
     fetchListings();
   }, [fetchListings]);
 
-  const handlePublish = async (id: string) => {
-    setActionLoading(id);
-    try {
-      await publishListing(id);
-      toast('Listing published', 'success');
-      fetchListings();
-    } catch (err: any) {
-      toast(err.response?.data?.detail || 'Failed to publish', 'error');
-    } finally {
-      setActionLoading(null);
-    }
-  };
-
   const handleUnpublish = async (id: string) => {
     setActionLoading(id);
     try {
@@ -125,12 +111,6 @@ export default function ListingsPage() {
     <div className="space-y-6">
       <div className="flex items-center justify-between">
         <h1 className="text-2xl font-bold text-gray-900">Your Listings</h1>
-        <Link
-          href="/dashboard/listings/new"
-          className="inline-flex items-center justify-center rounded-lg bg-[#3F51B5] px-4 py-2 text-sm font-medium text-white hover:bg-[#3545a0]"
-        >
-          Create New Listing
-        </Link>
       </div>
 
       {listings.length === 0 ? (
@@ -139,15 +119,7 @@ export default function ListingsPage() {
             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1} d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 012-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10" />
           </svg>
           <h3 className="mt-4 text-lg font-medium text-gray-900">No listings yet</h3>
-          <p className="mt-2 text-sm text-gray-500">Get started by creating your first data listing.</p>
-          <div className="mt-6">
-            <Link
-              href="/dashboard/listings/new"
-              className="inline-flex items-center justify-center rounded-lg bg-[#3F51B5] px-4 py-2 text-sm font-medium text-white hover:bg-[#3545a0]"
-            >
-              Create your first listing
-            </Link>
-          </div>
+          <p className="mt-2 text-sm text-gray-500">Listings published through AIM Data and vectorAIz will appear here.</p>
         </div>
       ) : (
         <div className="overflow-hidden rounded-xl border border-gray-200 bg-white shadow-sm">
@@ -207,15 +179,6 @@ export default function ListingsPage() {
                       >
                         Edit
                       </button>
-                      {(listing.status === 'draft' || listing.status === 'enhanced') && (
-                        <button
-                          onClick={() => handlePublish(listing.id)}
-                          disabled={actionLoading === listing.id}
-                          className="text-xs font-medium text-[#3F51B5] hover:text-[#303F9F] disabled:opacity-50"
-                        >
-                          Publish
-                        </button>
-                      )}
                       {(listing.status === 'published' || listing.status === 'unlisted') && (
                         <button
                           onClick={() => handleUnpublish(listing.id)}
