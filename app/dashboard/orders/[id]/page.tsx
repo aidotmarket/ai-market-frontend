@@ -9,6 +9,7 @@ import { formatPrice, formatDate } from '@/lib/format';
 import { useToast } from '@/components/Toast';
 import { useAuthStore } from '@/store/auth';
 import ScopedCredentialDownload, { isS3ScopedDeliveryResponse } from '@/components/orders/ScopedCredentialDownload';
+import OrderVersionAccessSummary from '@/components/orders/OrderVersionAccessSummary';
 import type { BuyerOrderDetail, OrderAccessResponse, OrderEvent, OrderStatus, S3DownloadFile, S3ScopedDeliveryResponse, Transaction, TransactionStatus, TransactionEvent } from '@/types';
 import { AxiosError } from 'axios';
 
@@ -110,7 +111,7 @@ export default function OrderDetailPage() {
   }, [orderId, txIdParam]);
 
   useEffect(() => {
-    if (order?.status !== 'fulfilled') return;
+    if (order?.status !== 'fulfilled' || order.access_expired) return;
 
     let cancelled = false;
     setDownloadLoading(true);
@@ -135,7 +136,7 @@ export default function OrderDetailPage() {
       });
 
     return () => { cancelled = true; };
-  }, [order?.status, orderId]);
+  }, [order?.access_expired, order?.status, orderId]);
 
   useEffect(() => {
     const interval = window.setInterval(() => setNow(Date.now()), 1000);
@@ -297,6 +298,9 @@ export default function OrderDetailPage() {
                 <dd className="font-medium text-gray-900">{formatDate(order.created_at)}</dd>
               </div>
             </dl>
+            <div className="mt-4">
+              <OrderVersionAccessSummary order={order} />
+            </div>
           </div>
 
           {/* Transaction detail */}
@@ -393,7 +397,16 @@ export default function OrderDetailPage() {
           )}
 
           {/* Access / Download section */}
-          {order.status === 'fulfilled' && (
+          {order.status === 'fulfilled' && order.access_expired && (
+            <div className="rounded-lg border border-red-200 bg-red-50 p-6">
+              <h2 className="text-lg font-semibold text-red-900">Download window expired</h2>
+              <p className="mt-2 text-sm text-red-700">
+                This order&apos;s download window has ended. No download access is available for this purchase.
+              </p>
+            </div>
+          )}
+
+          {order.status === 'fulfilled' && !order.access_expired && (
             scopedDelivery ? (
               <ScopedCredentialDownload
                 orderId={order.id}

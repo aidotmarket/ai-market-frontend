@@ -86,9 +86,9 @@ export function useSearchListings({
     },
   });
 
-  const rawItems: ResultItem[] = query.data?.pages.flatMap((page): ResultItem[] =>
+  const rawItems: ResultItem[] = filterDiscoverableItems(query.data?.pages.flatMap((page): ResultItem[] =>
     Array.isArray(page) ? page : page.results
-  ) || [];
+  ) || []);
 
   const firstPage = query.data?.pages[0];
   const facets = Array.isArray(firstPage) ? null : (firstPage as SearchResponse | undefined)?.facets;
@@ -115,4 +115,8 @@ export function useSearchListings({
     semanticMode,
     pageSize: PAGE_SIZE,
   };
+}
+
+export function filterDiscoverableItems(items: ResultItem[]) {
+  return items.filter((item) => item.status !== 'unlisted');
 }

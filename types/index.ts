@@ -96,6 +96,19 @@ export interface ListingListItem {
   verification_status: VerificationStatus;
   view_count: number;
   created_at: string;
+  status?: ListingStatus;
+  access_window_days?: number;
+}
+
+export type ListingVersionStatus = 'active' | 'superseded' | 'quarantined';
+
+export interface ListingVersion {
+  version_id: string;
+  version_label: string;
+  published_at: string;
+  object_count: number;
+  total_size_bytes: number;
+  status: ListingVersionStatus;
 }
 
 export interface ListingDetail {
@@ -133,6 +146,7 @@ export interface ListingDetail {
   created_at: string;
   updated_at: string | null;
   published_at: string | null;
+  access_window_days?: number;
   fulfillment_type?: FulfillmentType | null;
   jsonld?: Record<string, unknown>;
 }
@@ -170,6 +184,8 @@ export interface SearchResultItem {
   created_at?: string | null;
   verification_status?: VerificationStatus;
   view_count?: number;
+  status?: ListingStatus;
+  access_window_days?: number;
 }
 
 export interface PriceFacet {
@@ -327,6 +343,7 @@ export interface SellerListingItem {
 
 export interface CheckoutCreateRequest {
   listing_id: string;
+  version_id?: string;
   success_url?: string;
   cancel_url?: string;
 }
@@ -365,12 +382,26 @@ export interface BuyerOrder {
   status: OrderStatus;
   created_at: string;
   updated_at: string | null;
+  access_expires_at?: string | null;
+  access_expired?: boolean;
+  purchased_version?: PurchasedVersion | null;
+  newer_version_available?: boolean;
 }
 
 export interface BuyerOrderDetail extends BuyerOrder {
   access_url?: string | null;
-  access_expires_at?: string | null;
   download_count?: number;
+}
+
+export interface PurchasedVersion {
+  version_id?: string;
+  id?: string;
+  version_label?: string;
+  label?: string;
+  published_at?: string;
+  object_count?: number;
+  total_size_bytes?: number;
+  status?: ListingVersionStatus | string;
 }
 
 export interface OrderEvent {

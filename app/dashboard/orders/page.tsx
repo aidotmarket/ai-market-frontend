@@ -5,6 +5,7 @@ import Link from 'next/link';
 import { getMyOrders } from '@/api/orders';
 import { getMyTransactions } from '@/api/transactions';
 import { formatPrice, formatDate } from '@/lib/format';
+import OrderVersionAccessSummary from '@/components/orders/OrderVersionAccessSummary';
 import type { BuyerOrder, OrderStatus, Transaction, TransactionStatus } from '@/types';
 
 const STATUS_BADGE: Record<OrderStatus, string> = {
@@ -160,7 +161,10 @@ export default function OrdersListPage() {
                       #{order.id.slice(0, 8)}
                     </Link>
                   </td>
-                  <td className="px-4 py-3 text-gray-900">{order.listing_title}</td>
+                  <td className="px-4 py-3 text-gray-900">
+                    <div>{order.listing_title}</div>
+                    <OrderVersionAccessSummary order={order} compact />
+                  </td>
                   <td className="px-4 py-3 font-medium text-gray-900">{formatPrice(order.amount)}</td>
                   <td className="px-4 py-3">{statusBadge(order.status)}</td>
                   <td className="px-4 py-3">
@@ -175,13 +179,15 @@ export default function OrdersListPage() {
                   </td>
                   <td className="px-4 py-3 text-gray-500">{formatDate(order.created_at)}</td>
                   <td className="px-4 py-3">
-                    {order.status === 'fulfilled' ? (
+                    {order.status === 'fulfilled' && !order.access_expired ? (
                       <Link
                         href={`/dashboard/orders/${order.id}`}
                         className="text-sm font-medium text-[#3F51B5] hover:underline"
                       >
                         View downloads
                       </Link>
+                    ) : order.access_expired ? (
+                      <span className="text-xs font-medium text-red-700">Expired</span>
                     ) : (
                       <span className="text-xs text-gray-400"> - </span>
                     )}
@@ -211,6 +217,7 @@ export default function OrdersListPage() {
                 </div>
               </div>
               <p className="font-medium text-gray-900 mb-1">{order.listing_title}</p>
+              <OrderVersionAccessSummary order={order} compact />
               <div className="flex items-center justify-between text-sm">
                 <span className="font-medium text-gray-900">{formatPrice(order.amount)}</span>
                 <div className="flex items-center gap-2">
@@ -218,8 +225,11 @@ export default function OrdersListPage() {
                   <span className="text-gray-500">{formatDate(order.created_at)}</span>
                 </div>
               </div>
-              {order.status === 'fulfilled' && (
+              {order.status === 'fulfilled' && !order.access_expired && (
                 <p className="mt-3 text-sm font-medium text-[#3F51B5]">View downloads</p>
+              )}
+              {order.access_expired && (
+                <p className="mt-3 text-sm font-medium text-red-700">Download window expired</p>
               )}
             </Link>
           );

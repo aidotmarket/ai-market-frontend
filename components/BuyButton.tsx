@@ -16,9 +16,11 @@ interface BuyButtonProps {
   slug: string;
   price: number;
   pricingType: string;
+  versionId?: string;
+  disabledReason?: string;
 }
 
-export default function BuyButton({ listingId, sellerId, slug, price, pricingType }: BuyButtonProps) {
+export default function BuyButton({ listingId, sellerId, slug, price, pricingType, versionId, disabledReason }: BuyButtonProps) {
   const { user, isAuthenticated } = useAuthStore();
   const { toast } = useToast();
   const [loading, setLoading] = useState(false);
@@ -53,6 +55,10 @@ export default function BuyButton({ listingId, sellerId, slug, price, pricingTyp
 
   // Unauthenticated: redirect to login
   if (!isAuthenticated) {
+    if (disabledReason) {
+      return <DisabledBuyButton price={price} reason={disabledReason} />;
+    }
+
     return (
       <div>
         <Link
@@ -93,14 +99,16 @@ export default function BuyButton({ listingId, sellerId, slug, price, pricingTyp
   }
 
   const handleBuy = async () => {
+    if (disabledReason) return;
     // Dedupe guard: ignore if same listing checkout is in-flight
-    if (inflightRef.current === listingId) return;
+    const inflightKey = `${listingId}:${versionId ?? 'latest'}`;
+    if (inflightRef.current === inflightKey) return;
 
     setLoading(true);
-    inflightRef.current = listingId;
+    inflightRef.current = inflightKey;
 
     try {
-      const { checkout_url } = await createCheckout(listingId);
+      const { checkout_url } = await createCheckout(listingId, versionId);
 
       // Validate Stripe URL before redirect (AG-G2-M4)
       if (!checkout_url.startsWith('https://checkout.stripe.com/')) {
@@ -125,7 +133,7 @@ export default function BuyButton({ listingId, sellerId, slug, price, pricingTyp
     <div>
       <button
         onClick={handleBuy}
-        disabled={loading || checkingPurchase}
+        disabled={loading || checkingPurchase || !!disabledReason}
         className="w-full rounded-lg bg-[#3F51B5] px-4 py-2.5 text-sm font-medium text-white hover:bg-[#3545a0] disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center"
       >
         {loading ? (
@@ -140,9 +148,27 @@ export default function BuyButton({ listingId, sellerId, slug, price, pricingTyp
           `Buy Now - ${formatPrice(price)}`
         )}
       </button>
+      {disabledReason && (
+        <p className="text-xs text-gray-500 mt-2 text-center">{disabledReason}</p>
+      )}
       <p className="text-xs text-gray-500 mt-2 text-center">
         {pricingType === 'subscription' ? 'Subscription' : 'One-time purchase'}
       </p>
+    </div>
+  );
+}
+
+function DisabledBuyButton({ price, reason }: { price: number; reason: string }) {
+  return (
+    <div>
+      <button
+        type="button"
+        disabled
+        className="w-full rounded-lg bg-[#3F51B5] px-4 py-2.5 text-sm font-medium text-white opacity-50"
+      >
+        Buy Now - {formatPrice(price)}
+      </button>
+      <p className="text-xs text-gray-500 mt-2 text-center">{reason}</p>
     </div>
   );
 }

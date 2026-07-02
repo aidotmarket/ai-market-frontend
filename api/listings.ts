@@ -1,7 +1,7 @@
 'use client';
 
 import { api } from './client';
-import type { FulfillmentType, ListingListItem, ListingDetail, SearchResponse } from '@/types';
+import type { FulfillmentType, ListingListItem, ListingDetail, ListingVersion, SearchResponse } from '@/types';
 
 type FulfillmentTypeParam = FulfillmentType | FulfillmentType[];
 
@@ -30,6 +30,11 @@ export async function listListings(params: ListListingsParams = {}): Promise<Lis
 
 export async function getListing(id: string): Promise<ListingDetail> {
   const res = await api.get<ListingDetail>(`/listings/${id}`);
+  return res.data;
+}
+
+export async function getListingVersions(id: string): Promise<ListingVersion[]> {
+  const res = await api.get<ListingVersion[]>(`/listings/${id}/versions`);
   return res.data;
 }
 

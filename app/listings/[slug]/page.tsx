@@ -1,7 +1,7 @@
 import { notFound, redirect } from 'next/navigation';
 import Link from 'next/link';
 import type { Metadata } from 'next';
-import { fetchPublicListing, resolveListingUUID } from '@/lib/api';
+import { fetchListingAccessWindowDays, fetchListingVersions, fetchPublicListing, resolveListingUUID } from '@/lib/api';
 import {
   formatPrice,
   formatDate,
@@ -11,6 +11,7 @@ import {
 } from '@/lib/format';
 import type { ListingDetail } from '@/types';
 import BuyButton from '@/components/BuyButton';
+import ListingPurchasePanel from '@/components/ListingPurchasePanel';
 import InquiryWidget from '@/components/InquiryWidget';
 import ReactMarkdown from 'react-markdown';
 import rehypeSanitize from 'rehype-sanitize';
@@ -23,6 +24,7 @@ const DATASET_JSONLD_ENABLED = process.env.NEXT_PUBLIC_ENABLE_DATASET_JSONLD !==
 
 interface Props {
   params: Promise<{ slug: string }>;
+  searchParams?: Promise<{ version?: string }>;
 }
 
 export async function generateMetadata({ params }: Props): Promise<Metadata> {
@@ -62,8 +64,9 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
   };
 }
 
-export default async function ListingDetailPage({ params }: Props) {
+export default async function ListingDetailPage({ params, searchParams }: Props) {
   const { slug } = await params;
+  const requestedVersionId = (await searchParams)?.version ?? null;
 
   // UUID redirect: resolve UUID → slug, 301 redirect
   if (UUID_RE.test(slug)) {
@@ -83,6 +86,11 @@ export default async function ListingDetailPage({ params }: Props) {
   const rowCount = listing.row_count;
   const shouldEmitJsonLd = shouldEmitDatasetJsonLd(listing);
   const publisherName = listing.publisher?.display_name ?? listing.publisher?.name;
+  const versions = await fetchListingVersions(listing.id);
+  const hasVersionRows = versions.length > 0;
+  const accessWindowDays = hasVersionRows
+    ? listing.access_window_days ?? await fetchListingAccessWindowDays(listing.id)
+    : null;
 
   return (
     <>
@@ -194,13 +202,26 @@ export default async function ListingDetailPage({ params }: Props) {
           {/* Price card */}
           <div className="rounded-xl border border-gray-200 p-6">
             <p className="text-3xl font-bold text-gray-900 mb-1">{formatPrice(listing.pricing?.price ?? 0)}</p>
-            <BuyButton
-              listingId={listing.id}
-              sellerId={listing.publisher?.id ?? ''}
-              slug={listing.slug}
-              price={listing.pricing?.price ?? 0}
-              pricingType={listing.pricing?.pricing_type ?? 'one_time'}
-            />
+            {hasVersionRows ? (
+              <ListingPurchasePanel
+                listingId={listing.id}
+                sellerId={listing.publisher?.id ?? ''}
+                slug={listing.slug}
+                price={listing.pricing?.price ?? 0}
+                pricingType={listing.pricing?.pricing_type ?? 'one_time'}
+                versions={versions}
+                accessWindowDays={accessWindowDays}
+                initialVersionId={requestedVersionId}
+              />
+            ) : (
+              <BuyButton
+                listingId={listing.id}
+                sellerId={listing.publisher?.id ?? ''}
+                slug={listing.slug}
+                price={listing.pricing?.price ?? 0}
+                pricingType={listing.pricing?.pricing_type ?? 'one_time'}
+              />
+            )}
           </div>
 
           {/* Trust metrics */}

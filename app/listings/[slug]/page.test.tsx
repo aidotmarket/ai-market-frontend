@@ -1,6 +1,6 @@
 import React from 'react';
 import { renderToStaticMarkup } from 'react-dom/server';
-import { describe, expect, it, vi } from 'vitest';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import type { ListingDetail } from '@/types';
 
@@ -9,6 +9,8 @@ const notFound = vi.fn(() => {
 });
 
 const fetchPublicListing = vi.fn();
+const fetchListingVersions = vi.fn();
+const fetchListingAccessWindowDays = vi.fn();
 const resolveListingUUID = vi.fn();
 
 vi.mock('next/navigation', () => ({
@@ -18,6 +20,8 @@ vi.mock('next/navigation', () => ({
 
 vi.mock('@/lib/api', () => ({
   fetchPublicListing,
+  fetchListingVersions,
+  fetchListingAccessWindowDays,
   resolveListingUUID,
 }));
 
@@ -92,8 +96,10 @@ function makeListing(overrides: Partial<ListingDetail> = {}): ListingDetail {
 
 async function renderPage(listing: ListingDetail | null): Promise<string> {
   fetchPublicListing.mockResolvedValueOnce(listing);
+  fetchListingVersions.mockResolvedValueOnce([]);
   const element = await ListingDetailPage({
     params: Promise.resolve({ slug: 'test-dataset' }),
+    searchParams: Promise.resolve({}),
   });
   return renderToStaticMarkup(element);
 }
@@ -106,6 +112,13 @@ function extractJsonLdScripts(html: string): string[] {
 }
 
 describe('ListingDetailPage Dataset JSON-LD', () => {
+  beforeEach(() => {
+    fetchPublicListing.mockReset();
+    fetchListingVersions.mockReset();
+    fetchListingAccessWindowDays.mockReset();
+    notFound.mockClear();
+  });
+
   it('server-renders exactly one Dataset JSON-LD script from the backend payload', async () => {
     const listing = makeListing();
 
@@ -137,5 +150,13 @@ describe('ListingDetailPage Dataset JSON-LD', () => {
     expect(html).toContain('Test Dataset');
     expect(payload.name).toBe(listing.title);
     expect(payload.url).toBe(`https://ai.market/listings/${listing.slug}`);
+  });
+
+  it('keeps legacy no-version listing markup pinned without a version selector', async () => {
+    const html = await renderPage(makeListing());
+
+    expect(html).not.toContain('Version');
+    expect(html).not.toContain('Download window');
+    expect(html).toMatchSnapshot();
   });
 });

@@ -86,6 +86,23 @@ export async function fetchPublicListing(slug: string) {
   return res.json();
 }
 
+export async function fetchListingVersions(listingId: string) {
+  const res = await fetch(`${API_URL}/api/v1/listings/${encodeURIComponent(listingId)}/versions`, {
+    next: { revalidate: 60 },
+  });
+  if (!res.ok) return [];
+  return res.json();
+}
+
+export async function fetchListingAccessWindowDays(listingId: string): Promise<number | null> {
+  const res = await fetch(`${API_URL}/api/v1/listings/${encodeURIComponent(listingId)}`, {
+    next: { revalidate: 60 },
+  });
+  if (!res.ok) return null;
+  const listing = await res.json();
+  return typeof listing.access_window_days === 'number' ? listing.access_window_days : null;
+}
+
 export async function resolveListingUUID(uuid: string) {
   const res = await fetch(`${API_URL}/api/v1/public/listings/resolve/${encodeURIComponent(uuid)}`);
   if (!res.ok) return null;
