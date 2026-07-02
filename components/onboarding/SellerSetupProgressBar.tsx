@@ -2,8 +2,11 @@
 
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useRouter } from 'next/navigation';
-import { AxiosError } from 'axios';
-import { getConnectOnboarding } from '@/api/connect';
+import {
+  getConnectOnboarding,
+  isConnectOnboardingTwoFactorRequired,
+  redirectToConnectOnboarding,
+} from '@/api/connect';
 import {
   getCapabilities,
   type CapabilitySetResponse,
@@ -12,7 +15,6 @@ import {
 import { useAuthStore } from '@/store/auth';
 import { useToast } from '@/components/Toast';
 
-const STRIPE_CONNECT_URL_PREFIX = 'https://connect.stripe.com/';
 const CAPABILITIES_CHANGED_EVENT = 'capabilities:changed';
 
 const STEPS: Array<{ id: CapabilityStep; label: string; href?: string }> = [
@@ -84,18 +86,9 @@ export default function SellerSetupProgressBar() {
       setStripeLoading(true);
       try {
         const res = await getConnectOnboarding();
-        const url = res.data?.url;
-        if (url && typeof url === 'string' && url.startsWith(STRIPE_CONNECT_URL_PREFIX)) {
-          window.location.href = url;
-        } else {
-          throw new Error('Invalid Stripe onboarding URL');
-        }
+        redirectToConnectOnboarding(res.data);
       } catch (err) {
-        if (
-          err instanceof AxiosError &&
-          err.response?.status === 403 &&
-          err.response?.data?.detail === 'Complete 2FA setup before connecting Stripe'
-        ) {
+        if (isConnectOnboardingTwoFactorRequired(err)) {
           toast('Complete 2FA setup before connecting payouts.', 'info');
         } else {
           toast('Failed to start Stripe connection', 'error');

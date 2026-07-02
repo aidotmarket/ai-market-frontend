@@ -2,10 +2,12 @@
 
 import { useEffect, useState, useRef } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
-import { getConnectStatus, getConnectOnboarding } from '@/api/connect';
+import {
+  getConnectStatus,
+  getConnectOnboarding,
+  redirectToConnectOnboarding,
+} from '@/api/connect';
 import { useToast } from '@/components/Toast';
-
-const STRIPE_CONNECT_URL_PREFIX = 'https://connect.stripe.com/';
 
 export default function StripeReturnPage() {
   const router = useRouter();
@@ -87,12 +89,7 @@ export default function StripeReturnPage() {
     setConnecting(true);
     try {
       const res = await getConnectOnboarding();
-      const url = res.data?.url;
-      if (url && typeof url === 'string' && url.startsWith(STRIPE_CONNECT_URL_PREFIX)) {
-        window.location.href = url;
-      } else {
-        throw new Error('Invalid Stripe onboarding URL');
-      }
+      redirectToConnectOnboarding(res.data);
     } catch (err) {
       toast('Failed to resume Stripe connection', 'error');
       setConnecting(false);

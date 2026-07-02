@@ -2,7 +2,12 @@
 
 import { useEffect, useState, useCallback } from 'react';
 import { useAuthStore } from '@/store/auth';
-import { getConnectStatus, getConnectOnboarding } from '@/api/connect';
+import {
+  getConnectStatus,
+  getConnectOnboarding,
+  isConnectOnboardingTwoFactorRequired,
+  redirectToConnectOnboarding,
+} from '@/api/connect';
 import { getOnboardingStatus, setup2FA, verify2FASetup, type OnboardingStatusResponse } from '@/api/auth';
 import { getSellerStats } from '@/api/seller';
 import { getMyListings } from '@/api/listings';
@@ -15,7 +20,6 @@ import { notifyCapabilitiesChanged } from '@/components/onboarding/SellerSetupPr
 import { useToast } from '@/components/Toast';
 import { AxiosError } from 'axios';
 
-const STRIPE_CONNECT_URL_PREFIX = 'https://connect.stripe.com/';
 type TwoFactorFlow = 'idle' | 'showing_qr' | 'verifying' | 'showing_backup_codes';
 
 export default function DashboardOverview() {
@@ -88,18 +92,9 @@ export default function DashboardOverview() {
     setConnecting(true);
     try {
       const res = await getConnectOnboarding();
-      const url = res.data?.url;
-      if (url && typeof url === 'string' && url.startsWith(STRIPE_CONNECT_URL_PREFIX)) {
-        window.location.href = url;
-      } else {
-        throw new Error('Invalid Stripe onboarding URL');
-      }
+      redirectToConnectOnboarding(res.data);
     } catch (err) {
-      if (
-        err instanceof AxiosError &&
-        err.response?.status === 403 &&
-        err.response?.data?.detail === 'Complete 2FA setup before connecting Stripe'
-      ) {
+      if (isConnectOnboardingTwoFactorRequired(err)) {
         toast('Complete 2FA setup before connecting payouts.', 'info');
       } else {
         toast('Failed to start Stripe connection', 'error');
