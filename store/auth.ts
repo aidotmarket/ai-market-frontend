@@ -17,6 +17,7 @@ interface AuthState {
   token: string | null;
   isAuthenticated: boolean;
   isLoading: boolean;
+  hydrated: boolean;
   pendingTwoFactor: PendingTwoFactor | null;
   completeSession: (tokenRes: TokenResponse) => Promise<void>;
   login: (email: string, password: string) => Promise<AuthFlowResult>;
@@ -35,6 +36,7 @@ export const useAuthStore = create<AuthState>((set, get) => ({
   token: null,
   isAuthenticated: false,
   isLoading: false,
+  hydrated: false,
   pendingTwoFactor: null,
 
   completeSession: async (tokenRes) => {
@@ -185,9 +187,9 @@ export const useAuthStore = create<AuthState>((set, get) => ({
       const { refreshAccessToken } = await import('@/api/client');
       await refreshAccessToken();
       const user = await authApi.getMe();
-      set({ user, isAuthenticated: true, isLoading: false, pendingTwoFactor: null });
+      set({ user, isAuthenticated: true, isLoading: false, hydrated: true, pendingTwoFactor: null });
     } catch {
-      set({ isLoading: false, pendingTwoFactor: null });
+      set({ isLoading: false, hydrated: true, pendingTwoFactor: null });
     }
   },
 }));

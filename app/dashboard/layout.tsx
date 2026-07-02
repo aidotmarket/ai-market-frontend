@@ -8,7 +8,7 @@ import { getCapabilities, type CapabilityStatus } from '@/api/capabilities';
 import SellerSetupProgressBar from '@/components/onboarding/SellerSetupProgressBar';
 
 export default function DashboardLayout({ children }: { children: React.ReactNode }) {
-  const { user, isAuthenticated, isLoading } = useAuthStore();
+  const { user, isAuthenticated, isLoading, hydrated } = useAuthStore();
   const router = useRouter();
   const pathname = usePathname();
   const [routeReady, setRouteReady] = useState(false);
@@ -20,7 +20,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
     setSellerStatus(null);
     setCapabilitiesResolved(false);
 
-    if (isLoading || !isAuthenticated) return;
+    if (isLoading || !hydrated || !isAuthenticated) return;
 
     getCapabilities()
       .then((capabilities) => {
@@ -40,11 +40,11 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
     return () => {
       cancelled = true;
     };
-  }, [isAuthenticated, isLoading]);
+  }, [hydrated, isAuthenticated, isLoading]);
 
   useEffect(() => {
     setRouteReady(false);
-    if (isLoading) return;
+    if (isLoading || !hydrated) return;
 
     if (!isAuthenticated) {
       router.push(`/login?redirect=${encodeURIComponent(pathname)}`);
@@ -63,9 +63,9 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
     }
 
     setRouteReady(true);
-  }, [capabilitiesResolved, isAuthenticated, isLoading, pathname, router, sellerStatus, user]);
+  }, [capabilitiesResolved, hydrated, isAuthenticated, isLoading, pathname, router, sellerStatus, user]);
 
-  if (isLoading || !isAuthenticated) {
+  if (isLoading || !hydrated || !isAuthenticated) {
     return (
       <div className="flex min-h-screen items-center justify-center">
         <div className="h-8 w-8 animate-spin rounded-full border-4 border-[#3F51B5] border-t-transparent"></div>

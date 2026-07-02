@@ -6,15 +6,19 @@ import { useAuthStore } from '@/store/auth';
 
 export function ProtectedRoute({ children }: { children: React.ReactNode }) {
   const isAuthenticated = useAuthStore((s) => s.isAuthenticated);
+  const isLoading = useAuthStore((s) => s.isLoading);
+  const hydrated = useAuthStore((s) => s.hydrated);
   const router = useRouter();
 
   useEffect(() => {
+    if (isLoading || !hydrated) return;
+
     if (!isAuthenticated) {
       router.replace('/login');
     }
-  }, [isAuthenticated, router]);
+  }, [hydrated, isAuthenticated, isLoading, router]);
 
-  if (!isAuthenticated) {
+  if (isLoading || !hydrated || !isAuthenticated) {
     return null;
   }
 

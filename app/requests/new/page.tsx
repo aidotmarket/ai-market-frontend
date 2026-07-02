@@ -14,7 +14,7 @@ const CATEGORIES = [
 ];
 
 export default function NewDataRequestPage() {
-  const { isAuthenticated, isLoading } = useAuthStore();
+  const { isAuthenticated, isLoading, hydrated } = useAuthStore();
   const router = useRouter();
   const { toast } = useToast();
 
@@ -28,7 +28,7 @@ export default function NewDataRequestPage() {
   const [provenanceRequirements, setProvenanceRequirements] = useState('');
   const [submitting, setSubmitting] = useState(false);
 
-  if (isLoading) {
+  if (isLoading || !hydrated) {
     return (
       <div className="flex min-h-[60vh] items-center justify-center">
         <div className="h-8 w-8 animate-spin rounded-full border-4 border-[#3F51B5] border-t-transparent" />

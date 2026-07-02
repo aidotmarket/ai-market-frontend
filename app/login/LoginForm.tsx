@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import Link from 'next/link';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { useAuthStore } from '@/store/auth';
@@ -16,6 +16,8 @@ export default function LoginForm() {
   const searchParams = useSearchParams();
   const login = useAuthStore((s) => s.login);
   const pendingTwoFactor = useAuthStore((s) => s.pendingTwoFactor);
+  const isAuthenticated = useAuthStore((s) => s.isAuthenticated);
+  const hydrated = useAuthStore((s) => s.hydrated);
   const { toast } = useToast();
 
   const [email, setEmail] = useState('');
@@ -24,6 +26,13 @@ export default function LoginForm() {
   const [error, setError] = useState('');
   const [loginMode, setLoginMode] = useState<'password' | 'magic-link'>('password');
   const [magicLinkSentTo, setMagicLinkSentTo] = useState('');
+
+  useEffect(() => {
+    if (!hydrated || !isAuthenticated) return;
+
+    const redirectTo = validateRedirect(searchParams.get('redirect'), '/dashboard');
+    router.replace(redirectTo);
+  }, [hydrated, isAuthenticated, router, searchParams]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();

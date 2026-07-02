@@ -12,7 +12,12 @@ const authApi = vi.hoisted(() => ({
   isTwoFactorChallenge: vi.fn((res: { requires_2fa?: boolean }) => res.requires_2fa === true),
 }));
 
+const clientApi = vi.hoisted(() => ({
+  refreshAccessToken: vi.fn(),
+}));
+
 vi.mock('@/api/auth', () => authApi);
+vi.mock('@/api/client', () => clientApi);
 
 const { useAuthStore } = await import('./auth');
 
@@ -37,14 +42,17 @@ describe('auth store login-time 2FA', () => {
     vi.restoreAllMocks();
     vi.unstubAllGlobals();
     Object.values(authApi).forEach((mock: ReturnType<typeof vi.fn>) => mock.mockClear());
+    Object.values(clientApi).forEach((mock: ReturnType<typeof vi.fn>) => mock.mockClear());
     useAuthStore.setState({
       user: null,
       token: null,
       isAuthenticated: false,
       isLoading: false,
+      hydrated: false,
       pendingTwoFactor: null,
     });
     authApi.getMe.mockResolvedValue(user);
+    clientApi.refreshAccessToken.mockResolvedValue('access-token');
   });
 
   it('detects a challenge, stores only pending 2FA state, and withholds auth', async () => {
@@ -125,6 +133,29 @@ describe('auth store login-time 2FA', () => {
     await useAuthStore.getState().oauthLogin('github', 'code', 'state', 'nonce');
     expect(useAuthStore.getState().token).toBe('oauth-token');
     expect(useAuthStore.getState().isAuthenticated).toBe(true);
+  });
+
+  it('marks hydrate complete after successful refresh and user load', async () => {
+    await useAuthStore.getState().hydrate();
+
+    expect(clientApi.refreshAccessToken).toHaveBeenCalledOnce();
+    expect(authApi.getMe).toHaveBeenCalledOnce();
+    expect(useAuthStore.getState().hydrated).toBe(true);
+    expect(useAuthStore.getState().isLoading).toBe(false);
+    expect(useAuthStore.getState().isAuthenticated).toBe(true);
+    expect(useAuthStore.getState().user).toEqual(user);
+  });
+
+  it('marks hydrate complete after failed refresh', async () => {
+    clientApi.refreshAccessToken.mockRejectedValue(new Error('no session'));
+
+    await useAuthStore.getState().hydrate();
+
+    expect(clientApi.refreshAccessToken).toHaveBeenCalledOnce();
+    expect(authApi.getMe).not.toHaveBeenCalled();
+    expect(useAuthStore.getState().hydrated).toBe(true);
+    expect(useAuthStore.getState().isLoading).toBe(false);
+    expect(useAuthStore.getState().isAuthenticated).toBe(false);
   });
 
   it('does not persist or log the pre-auth token or submitted code', async () => {
