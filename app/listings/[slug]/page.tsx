@@ -88,6 +88,8 @@ export default async function ListingDetailPage({ params, searchParams }: Props)
   const publisherName = listing.publisher?.display_name ?? listing.publisher?.name;
   const versions = await fetchListingVersions(listing.id);
   const hasVersionRows = versions.length > 0;
+  // S1097: legacy listings intentionally keep byte-identical rendering and omit
+  // the pre-purchase download-window line pending Max's R5.1h-vs-parity adjudication.
   const accessWindowDays = hasVersionRows
     ? listing.access_window_days ?? await fetchListingAccessWindowDays(listing.id)
     : null;

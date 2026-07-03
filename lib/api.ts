@@ -88,7 +88,7 @@ export async function fetchPublicListing(slug: string) {
 
 export async function fetchListingVersions(listingId: string) {
   const res = await fetch(`${API_URL}/api/v1/listings/${encodeURIComponent(listingId)}/versions`, {
-    next: { revalidate: 60 },
+    next: { revalidate: 10 },
   });
   if (!res.ok) return [];
   return res.json();
@@ -96,7 +96,7 @@ export async function fetchListingVersions(listingId: string) {
 
 export async function fetchListingAccessWindowDays(listingId: string): Promise<number | null> {
   const res = await fetch(`${API_URL}/api/v1/listings/${encodeURIComponent(listingId)}`, {
-    next: { revalidate: 60 },
+    next: { revalidate: 10 },
   });
   if (!res.ok) return null;
   const listing = await res.json();

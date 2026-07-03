@@ -11,8 +11,8 @@ export default function OrderVersionAccessSummary({ order, compact = false }: Or
   const version = order.purchased_version ?? null;
   const versionLabel = version?.version_label ?? version?.label ?? null;
   const versionStatus = version?.status ?? null;
-  const isSuperseded = versionStatus === 'superseded' || order.newer_version_available;
-  const listingHref = `/listings/${order.listing_id}?version=latest`;
+  const isSuperseded = versionStatus === 'superseded';
+  const listingHref = `/listings/${order.listing_id}`;
 
   if (!version && !order.access_expires_at && !order.newer_version_available) return null;
 

@@ -16,7 +16,7 @@ const baseOrder: BuyerOrder = {
 };
 
 describe('OrderVersionAccessSummary', () => {
-  it('shows purchased version and newer-version affordance', () => {
+  it('shows active purchased version and newer-version affordance without superseded label', () => {
     const html = renderToStaticMarkup(
       <OrderVersionAccessSummary
         order={{
@@ -29,8 +29,10 @@ describe('OrderVersionAccessSummary', () => {
 
     expect(html).toContain('Purchased version:');
     expect(html).toContain('v1');
+    expect(html).not.toContain('(superseded)');
     expect(html).toContain('Newer version available');
-    expect(html).toContain('/listings/listing-1?version=latest');
+    expect(html).toContain('/listings/listing-1');
+    expect(html).not.toContain('?version=');
   });
 
   it('surfaces an already-superseded purchased version honestly', () => {
@@ -46,7 +48,7 @@ describe('OrderVersionAccessSummary', () => {
 
     expect(html).toContain('v1');
     expect(html).toContain('(superseded)');
-    expect(html).not.toContain('latest');
+    expect(html).not.toContain('Newer version available');
   });
 
   it('shows time remaining before expiry', () => {
