@@ -63,7 +63,22 @@ describe('SharePage', () => {
   });
 
   it('generates published listing metadata with OG, Twitter, canonical, and card image fields', async () => {
-    const share = makeShareMetadata();
+    const share = makeShareMetadata({
+      og: {
+        'og:title': 'Shared Dataset',
+        'og:description': 'A marketplace-ready dataset for testing share previews.',
+        'og:url': 'https://ai.market/listings/shared-dataset',
+        'og:type': 'article',
+        'og:site_name': 'ai.market',
+        'og:image': 'https://ai.market/l/AbC123xYz987/card.png?v=hash-og',
+        'og:locale': 'en_US',
+        'twitter:card': 'summary_large_image',
+        'twitter:title': 'Shared Dataset',
+        'twitter:description': 'A marketplace-ready dataset for testing share previews.',
+        'twitter:image': 'https://ai.market/l/AbC123xYz987/card.png?v=hash-twitter',
+      },
+      card_url: 'https://ai.market/l/AbC123xYz987/card.png?v=hash-card',
+    });
     fetchShareMetadata.mockResolvedValueOnce({ status: 'published', data: share });
 
     const metadata = await generateMetadata({
@@ -78,23 +93,26 @@ describe('SharePage', () => {
         title: 'Shared Dataset',
         description: 'A marketplace-ready dataset for testing share previews.',
         url: 'https://ai.market/listings/shared-dataset',
-        type: 'website',
+        type: 'article',
         siteName: 'ai.market',
-        images: ['https://ai.market/l/AbC123xYz987/card.png?v=hash-1'],
+        images: ['https://ai.market/l/AbC123xYz987/card.png?v=hash-card'],
         locale: 'en_US',
       },
       twitter: {
         card: 'summary_large_image',
         title: 'Shared Dataset',
         description: 'A marketplace-ready dataset for testing share previews.',
-        images: ['https://ai.market/l/AbC123xYz987/card.png?v=hash-1'],
+        images: ['https://ai.market/l/AbC123xYz987/card.png?v=hash-twitter'],
       },
     });
     expect(metadata).toMatchSnapshot();
   });
 
   it('renders the JSON-LD script, card preview, and View listing CTA for published shares', async () => {
-    const share = makeShareMetadata();
+    const share = makeShareMetadata({
+      canonical: 'https://example.com/listings/shared-dataset',
+      card_url: 'https://ai.market/l/AbC123xYz987/card.png?v=fresh-card',
+    });
 
     const html = await renderSharePage({ status: 'published', data: share });
     const scripts = extractJsonLdScripts(html);
@@ -104,9 +122,10 @@ describe('SharePage', () => {
     expect(scripts[0]).not.toContain('</script>');
     expect(html).toContain('Shared Dataset');
     expect(html).toContain('A marketplace-ready dataset for testing share previews.');
-    expect(html).toContain('href="/listings/shared-dataset"');
+    expect(html).toContain('href="/listings"');
+    expect(html).not.toContain('href="https://example.com/listings/shared-dataset"');
     expect(html).toContain('View listing');
-    expect(html).toContain('src="/l/AbC123xYz987/card.png"');
+    expect(html).toContain('src="https://ai.market/l/AbC123xYz987/card.png?v=fresh-card"');
     expect(html).toMatchSnapshot();
   });
 
@@ -122,8 +141,10 @@ describe('SharePage', () => {
       title: 'Listing unavailable | ai.market',
       robots: { index: false, follow: false },
     });
-    expect(JSON.stringify(metadata)).not.toContain('Shared Dataset');
-    expect(JSON.stringify(metadata)).not.toContain('marketplace-ready dataset');
+    const serializedMetadata = JSON.stringify(metadata);
+    expect(serializedMetadata).not.toContain('Shared Dataset');
+    expect(serializedMetadata).not.toContain('marketplace-ready dataset');
+    expect(serializedMetadata).not.toContain('/listings/shared-dataset');
     expect(html).toContain('This share link is no longer available');
     expect(html).toContain('href="/find-data"');
     expect(html).not.toContain('Shared Dataset');
@@ -139,11 +160,16 @@ describe('SharePage', () => {
 
     expect(metadata).toEqual({
       title: 'ai.market listing',
+      robots: { index: false, follow: false },
       openGraph: {
         title: 'ai.market listing',
         type: 'website',
         siteName: 'ai.market',
       },
     });
+    const serializedMetadata = JSON.stringify(metadata);
+    expect(serializedMetadata).not.toContain('Shared Dataset');
+    expect(serializedMetadata).not.toContain('marketplace-ready dataset');
+    expect(serializedMetadata).not.toContain('/listings/shared-dataset');
   });
 });

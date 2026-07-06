@@ -21,25 +21,27 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
     const title = share.og['og:title'] ?? FALLBACK_TITLE;
     const description = share.og['og:description'] ?? '';
     const cardUrl = share.card_url || share.og['og:image'];
+    const twitterImage = share.og['twitter:image'] ?? cardUrl;
+    const openGraph = {
+      title,
+      description,
+      url: share.canonical,
+      type: share.og['og:type'] ?? 'website',
+      siteName: SITE_NAME,
+      images: cardUrl ? [cardUrl] : undefined,
+      locale: share.og['og:locale'] ?? share.locale,
+    } as Metadata['openGraph'];
 
     return {
       title,
       description,
       alternates: { canonical: share.canonical },
-      openGraph: {
-        title,
-        description,
-        url: share.canonical,
-        type: 'website',
-        siteName: SITE_NAME,
-        images: cardUrl ? [cardUrl] : undefined,
-        locale: share.og['og:locale'] ?? share.locale,
-      },
+      openGraph,
       twitter: {
         card: 'summary_large_image',
         title: share.og['twitter:title'] ?? title,
         description: share.og['twitter:description'] ?? description,
-        images: cardUrl ? [cardUrl] : undefined,
+        images: twitterImage ? [twitterImage] : undefined,
       },
     };
   }
@@ -47,6 +49,7 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
   if (result.status === 'error') {
     return {
       title: FALLBACK_TITLE,
+      robots: { index: false, follow: false },
       openGraph: {
         title: FALLBACK_TITLE,
         type: 'website',
@@ -73,6 +76,7 @@ export default async function SharePage({ params }: Props) {
   const title = share.og['og:title'] ?? FALLBACK_TITLE;
   const description = share.og['og:description'] ?? '';
   const listingHref = listingPathFromCanonical(share.canonical);
+  const cardPreviewUrl = share.card_url || `/l/${encodeURIComponent(code)}/card.png`;
 
   return (
     <>
@@ -101,7 +105,7 @@ export default async function SharePage({ params }: Props) {
           </section>
 
           <img
-            src={`/l/${encodeURIComponent(code)}/card.png`}
+            src={cardPreviewUrl}
             alt=""
             className="aspect-[1.91/1] w-full rounded-lg border border-gray-200 bg-gray-50 object-cover"
           />
@@ -137,9 +141,9 @@ function listingPathFromCanonical(canonical: ShareMetadataResponse['canonical'])
       return url.pathname;
     }
   } catch {
-    // Fall through to the provided value for relative canonicals.
+    return '/listings';
   }
-  return canonical;
+  return '/listings';
 }
 
 function safeJsonLdStringify(value: unknown): string {
