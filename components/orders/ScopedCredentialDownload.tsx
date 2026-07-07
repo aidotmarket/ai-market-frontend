@@ -6,7 +6,7 @@ import type { S3ScopedDeliveryCredentials, S3ScopedDeliveryResponse } from '@/ty
 interface ScopedCredentialDownloadProps {
   orderId: string;
   delivery: S3ScopedDeliveryResponse;
-  onRefresh: () => Promise<S3ScopedDeliveryResponse>;
+  onRefresh: () => Promise<S3ScopedDeliveryResponse | undefined>;
   refreshError?: string;
 }
 
@@ -71,7 +71,7 @@ export default function ScopedCredentialDownload({
   const [now, setNow] = useState(() => Date.now());
   const [refreshing, setRefreshing] = useState(false);
   const [localError, setLocalError] = useState('');
-  const refreshPromiseRef = useRef<Promise<S3ScopedDeliveryResponse> | null>(null);
+  const refreshPromiseRef = useRef<Promise<S3ScopedDeliveryResponse | undefined> | null>(null);
 
   useEffect(() => {
     const interval = window.setInterval(() => setNow(Date.now()), 1000);

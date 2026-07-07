@@ -7,6 +7,7 @@ import { useToast } from '@/components/Toast';
 import { createCheckout } from '@/api/checkout';
 import { getMyOrders } from '@/api/orders';
 import { formatPrice } from '@/lib/format';
+import { useTermsGate } from '@/components/legal/TermsGate';
 import type { BuyerOrder } from '@/types';
 import { AxiosError } from 'axios';
 
@@ -27,6 +28,7 @@ export default function BuyButton({ listingId, sellerId, slug, price, pricingTyp
   const [purchasedOrder, setPurchasedOrder] = useState<BuyerOrder | null>(null);
   const [checkingPurchase, setCheckingPurchase] = useState(false);
   const inflightRef = useRef<string | null>(null);
+  const { ensureTermsAccepted, TermsGatePrompt, checkingTerms } = useTermsGate();
 
   // Check if user already purchased this listing
   useEffect(() => {
@@ -98,7 +100,7 @@ export default function BuyButton({ listingId, sellerId, slug, price, pricingTyp
     );
   }
 
-  const handleBuy = async () => {
+  const startCheckout = async () => {
     if (disabledReason) return;
     // Dedupe guard: ignore if same listing checkout is in-flight
     const inflightKey = `${listingId}:${versionId ?? 'latest'}`;
@@ -129,20 +131,25 @@ export default function BuyButton({ listingId, sellerId, slug, price, pricingTyp
     }
   };
 
+  const handleBuy = async () => {
+    await ensureTermsAccepted(startCheckout);
+  };
+
   return (
     <div>
+      <TermsGatePrompt />
       <button
         onClick={handleBuy}
-        disabled={loading || checkingPurchase || !!disabledReason}
+        disabled={loading || checkingPurchase || checkingTerms || !!disabledReason}
         className="w-full rounded-lg bg-[#3F51B5] px-4 py-2.5 text-sm font-medium text-white hover:bg-[#3545a0] disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center"
       >
-        {loading ? (
+        {loading || checkingTerms ? (
           <>
             <svg className="animate-spin -ml-1 mr-2 h-4 w-4 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
               <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
               <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
             </svg>
-            Opening Stripe…
+            {checkingTerms ? 'Checking terms...' : 'Opening Stripe…'}
           </>
         ) : (
           `Buy Now - ${formatPrice(price)}`

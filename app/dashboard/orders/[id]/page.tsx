@@ -10,6 +10,7 @@ import { useToast } from '@/components/Toast';
 import { useAuthStore } from '@/store/auth';
 import ScopedCredentialDownload, { isS3ScopedDeliveryResponse } from '@/components/orders/ScopedCredentialDownload';
 import OrderVersionAccessSummary from '@/components/orders/OrderVersionAccessSummary';
+import { useTermsGate } from '@/components/legal/TermsGate';
 import type { BuyerOrderDetail, OrderAccessResponse, OrderEvent, OrderStatus, S3DownloadFile, S3ScopedDeliveryResponse, Transaction, TransactionStatus, TransactionEvent } from '@/types';
 import { AxiosError } from 'axios';
 
@@ -60,6 +61,7 @@ export default function OrderDetailPage() {
   const txIdParam = searchParams.get('tx');
   const { toast } = useToast();
   const userRole = useAuthStore((s) => s.user?.role);
+  const { ensureTermsAccepted, TermsGatePrompt, checkingTerms } = useTermsGate();
 
   const [order, setOrder] = useState<BuyerOrderDetail | null>(null);
   const [events, setEvents] = useState<OrderEvent[]>([]);
@@ -144,6 +146,10 @@ export default function OrderDetailPage() {
   }, []);
 
   const handleConfirm = async () => {
+    await ensureTermsAccepted(confirmReceipt);
+  };
+
+  const confirmReceipt = async () => {
     if (!tx || confirming) return;
     setConfirming(true);
     try {
@@ -158,6 +164,10 @@ export default function OrderDetailPage() {
   };
 
   const handleDeliver = async () => {
+    await ensureTermsAccepted(markDelivered);
+  };
+
+  const markDelivered = async () => {
     if (!tx || delivering) return;
     setDelivering(true);
     try {
@@ -188,7 +198,7 @@ export default function OrderDetailPage() {
     }
   }, [orderId]);
 
-  const handleDownloadFile = useCallback(async (file: S3DownloadFile) => {
+  const downloadFile = useCallback(async (file: S3DownloadFile) => {
     if (activeFilePath || refreshingFilePath) return;
     setActiveFilePath(file.path);
 
@@ -209,7 +219,15 @@ export default function OrderDetailPage() {
     }
   }, [activeFilePath, refreshingFilePath, now, getFreshDownloadPackage, toast]);
 
+  const handleDownloadFile = useCallback(async (file: S3DownloadFile) => {
+    await ensureTermsAccepted(() => downloadFile(file));
+  }, [downloadFile, ensureTermsAccepted]);
+
   const handleRefresh = async () => {
+    await ensureTermsAccepted(refreshDownloads);
+  };
+
+  const refreshDownloads = async () => {
     if (refreshingAccess) return;
     setRefreshingAccess(true);
     try {
@@ -223,6 +241,10 @@ export default function OrderDetailPage() {
   };
 
   const handleScopedRefresh = async () => {
+    return ensureTermsAccepted(refreshScopedCredentials);
+  };
+
+  const refreshScopedCredentials = async () => {
     if (scopedRefreshPromiseRef.current) return scopedRefreshPromiseRef.current;
 
     setScopedRefreshError('');
@@ -265,6 +287,7 @@ export default function OrderDetailPage() {
 
   return (
     <div>
+      <TermsGatePrompt />
       <Link href="/dashboard/orders" className="text-sm text-[#3F51B5] hover:underline mb-4 inline-block">
         &larr; Back to Orders
       </Link>
@@ -349,19 +372,19 @@ export default function OrderDetailPage() {
                 {tx.status === 'delivered' && (
                   <button
                     onClick={handleConfirm}
-                    disabled={confirming}
+                    disabled={confirming || checkingTerms}
                     className="rounded-lg bg-green-600 px-6 py-2.5 text-sm font-medium text-white hover:bg-green-700 disabled:opacity-50 disabled:cursor-not-allowed"
                   >
-                    {confirming ? 'Confirming…' : 'Confirm Receipt'}
+                    {confirming || checkingTerms ? 'Confirming…' : 'Confirm Receipt'}
                   </button>
                 )}
                 {tx.status === 'fulfilling' && userRole === 'seller' && (
                   <button
                     onClick={handleDeliver}
-                    disabled={delivering}
+                    disabled={delivering || checkingTerms}
                     className="rounded-lg bg-[#3F51B5] px-6 py-2.5 text-sm font-medium text-white hover:bg-[#3545a0] disabled:opacity-50 disabled:cursor-not-allowed"
                   >
-                    {delivering ? 'Marking…' : 'Mark Delivered'}
+                    {delivering || checkingTerms ? 'Marking…' : 'Mark Delivered'}
                   </button>
                 )}
               </div>
@@ -422,7 +445,7 @@ export default function OrderDetailPage() {
                 </div>
                 <button
                   onClick={handleRefresh}
-                  disabled={refreshingAccess || downloadLoading || !!activeFilePath}
+                  disabled={refreshingAccess || downloadLoading || !!activeFilePath || checkingTerms}
                   className="rounded-lg border border-gray-300 px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50 disabled:cursor-not-allowed disabled:opacity-50"
                 >
                   {refreshingAccess ? 'Refreshing...' : 'Refresh Links'}

@@ -47,7 +47,7 @@ export default function RegisterForm() {
       toast('Account created successfully', 'success');
       const defaultRedirect = role === 'seller' ? '/dashboard' : '/listings';
       const redirectTo = validateRedirect(searchParams.get('redirect'), defaultRedirect);
-      router.push(redirectTo);
+      router.push(`/legal/terms/accept?redirect=${encodeURIComponent(redirectTo)}`);
     } catch (err) {
       if (err instanceof AxiosError) {
         setError(err.response?.data?.detail || 'Registration failed.');

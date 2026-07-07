@@ -6,6 +6,7 @@ import { getMyListings, unpublishListing, deleteListing } from '@/api/listings';
 import { getConnectStatus } from '@/api/connect';
 import { useToast } from '@/components/Toast';
 import SellerShareControls from '@/components/listings/SellerShareControls';
+import { useTermsGate } from '@/components/legal/TermsGate';
 import { formatPrice, formatDate } from '@/lib/format';
 
 const STATUS_STYLES: Record<string, string> = {
@@ -37,6 +38,7 @@ export default function ListingsPage() {
   const [payoutsEnabled, setPayoutsEnabled] = useState(false);
   const router = useRouter();
   const { toast } = useToast();
+  const { ensureTermsAccepted, TermsGatePrompt, checkingTerms } = useTermsGate();
 
   const fetchListings = useCallback(async () => {
     setLoading(true);
@@ -110,6 +112,7 @@ export default function ListingsPage() {
 
   return (
     <div className="space-y-6">
+      <TermsGatePrompt />
       <div className="flex items-center justify-between">
         <h1 className="text-2xl font-bold text-gray-900">Your Listings</h1>
       </div>
@@ -175,8 +178,9 @@ export default function ListingsPage() {
                   <td className="whitespace-nowrap px-6 py-4 text-right">
                     <div className="flex items-center justify-end gap-2">
                       <button
-                        onClick={() => router.push(`/dashboard/listings/${listing.id}/edit`)}
-                        className="text-xs font-medium text-gray-600 hover:text-gray-800"
+                        onClick={() => ensureTermsAccepted(() => router.push(`/dashboard/listings/${listing.id}/edit`))}
+                        disabled={checkingTerms}
+                        className="text-xs font-medium text-gray-600 hover:text-gray-800 disabled:opacity-50"
                       >
                         Edit
                       </button>
