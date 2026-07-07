@@ -88,6 +88,7 @@ describe('RegisterForm', () => {
     expect(
       await screen.findByText(/Account created\. We sent a verification link to ada@example\.com\./i)
     ).not.toBeNull();
+    expect(screen.queryByText('Registration failed.')).toBeNull();
     expect(screen.getByRole('link', { name: 'sign in' }).getAttribute('href')).toBe('/login');
   });
 });

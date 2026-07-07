@@ -135,6 +135,43 @@ describe('auth store login-time 2FA', () => {
     expect(useAuthStore.getState().isAuthenticated).toBe(true);
   });
 
+  it('resolves registration after the backend creates the account without auto-login', async () => {
+    authApi.register.mockResolvedValue({ ...user, email_verified_at: null });
+
+    await expect(
+      useAuthStore.getState().register('new@example.com', 'password123', 'New', 'Buyer')
+    ).resolves.toBeUndefined();
+
+    expect(authApi.register).toHaveBeenCalledWith({
+      email: 'new@example.com',
+      password: 'password123',
+      first_name: 'New',
+      last_name: 'Buyer',
+      role: 'buyer',
+      company_name: undefined,
+    });
+    expect(authApi.login).not.toHaveBeenCalled();
+    expect(authApi.getMe).not.toHaveBeenCalled();
+    expect(useAuthStore.getState().isAuthenticated).toBe(false);
+  });
+
+  it('treats email-verification-required from a leftover registration login path as pending verification', async () => {
+    authApi.register.mockRejectedValue({
+      response: {
+        status: 403,
+        data: {
+          detail: { email_verification_required: true },
+        },
+      },
+    });
+
+    await expect(
+      useAuthStore.getState().register('new@example.com', 'password123')
+    ).resolves.toBeUndefined();
+
+    expect(useAuthStore.getState().isAuthenticated).toBe(false);
+  });
+
   it('marks hydrate complete after successful refresh and user load', async () => {
     await useAuthStore.getState().hydrate();
 
