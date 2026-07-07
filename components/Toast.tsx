@@ -16,12 +16,29 @@ const ToastContext = createContext<ToastContextValue>({ toast: () => {} });
 
 let nextId = 0;
 
+function toMessageString(message: unknown): string {
+  if (typeof message === 'string') return message;
+  if (message == null) return '';
+  if (typeof message === 'object') {
+    const obj = message as Record<string, unknown>;
+    const d = obj.detail;
+    if (typeof d === 'string') return d;
+    if (d && typeof d === 'object') {
+      const inner = (d as Record<string, unknown>).detail;
+      if (typeof inner === 'string') return inner;
+    }
+    if (typeof obj.message === 'string') return obj.message;
+    try { return JSON.stringify(message); } catch { return 'Something went wrong'; }
+  }
+  return String(message);
+}
+
 export function ToastProvider({ children }: { children: React.ReactNode }) {
   const [toasts, setToasts] = useState<Toast[]>([]);
 
-  const addToast = useCallback((message: string, type: Toast['type'] = 'info') => {
+  const addToast = useCallback((message: unknown, type: Toast['type'] = 'info') => {
     const id = nextId++;
-    setToasts((prev) => [...prev, { id, message, type }]);
+    setToasts((prev) => [...prev, { id, message: toMessageString(message), type }]);
   }, []);
 
   const removeToast = useCallback((id: number) => {

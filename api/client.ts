@@ -11,6 +11,7 @@ export const api = axios.create({
 });
 
 let refreshPromise: Promise<string> | null = null;
+let onboardingRedirected = false;
 
 async function clearAuthState(): Promise<void> {
   const { useAuthStore } = await import('@/store/auth');
@@ -94,6 +95,23 @@ api.interceptors.response.use(
         window.location.href = '/login';
         return Promise.reject(error);
       }
+    }
+
+    // Onboarding not finished: the API gate returns 403 with an onboarding_url.
+    // Guide the user to complete setup (surfaced on the dashboard) instead of
+    // surfacing the raw error object (which crashed the app as React #31).
+    const onboardingData = error.response.data as
+      | { detail?: { onboarding_url?: string } }
+      | undefined;
+    if (
+      error.response.status === 403 &&
+      onboardingData?.detail?.onboarding_url &&
+      typeof window !== 'undefined' &&
+      !onboardingRedirected &&
+      window.location.pathname !== '/dashboard'
+    ) {
+      onboardingRedirected = true;
+      window.location.href = '/dashboard';
     }
 
     return Promise.reject(error);
