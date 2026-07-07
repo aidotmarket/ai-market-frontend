@@ -125,3 +125,13 @@ export async function regenerateBackupCodes(reauth_token: string, code: string):
   const res = await api.post<{ backup_codes: string[] }>('/auth/2fa/regenerate-backup-codes', { reauth_token, code });
   return res.data;
 }
+
+export async function verifyEmail(token: string): Promise<{ message: string }> {
+  const res = await api.post<{ message: string }>(`/auth/verify-email?token=${encodeURIComponent(token)}`);
+  return res.data;
+}
+
+export async function resendVerification(email: string): Promise<{ message: string }> {
+  const res = await api.post<{ message: string }>('/auth/resend-verification', { email, purpose: 'login' });
+  return res.data;
+}

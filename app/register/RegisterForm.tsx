@@ -24,6 +24,7 @@ export default function RegisterForm() {
   const [companyName, setCompanyName] = useState('');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
+  const [verifySentTo, setVerifySentTo] = useState('');
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -44,13 +45,11 @@ export default function RegisterForm() {
 
     try {
       await register(email, password, firstName || undefined, lastName || undefined, role, companyName || undefined);
-      toast('Account created successfully', 'success');
-      const defaultRedirect = role === 'seller' ? '/dashboard' : '/listings';
-      const redirectTo = validateRedirect(searchParams.get('redirect'), defaultRedirect);
-      router.push(`/legal/terms/accept?redirect=${encodeURIComponent(redirectTo)}`);
+      toast('Account created. Check your email to verify your account.', 'success');
+      setVerifySentTo(email);
     } catch (err) {
       if (err instanceof AxiosError) {
-        setError(err.response?.data?.detail || 'Registration failed.');
+        setError(typeof err.response?.data?.detail === 'string' ? err.response?.data?.detail : 'Registration failed.');
       } else {
         setError('An unexpected error occurred.');
       }
@@ -76,6 +75,13 @@ export default function RegisterForm() {
           {error && (
             <div className="rounded-lg bg-red-50 border border-red-200 px-4 py-3 text-sm text-red-700">
               {error}
+            </div>
+          )}
+
+          {verifySentTo && (
+            <div className="rounded-lg bg-green-50 border border-green-200 px-4 py-3 text-sm text-green-700">
+              Account created. We sent a verification link to {verifySentTo}. Please verify, then{' '}
+              <Link href="/login" className="underline font-medium">sign in</Link>.
             </div>
           )}
 

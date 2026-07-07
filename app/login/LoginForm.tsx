@@ -9,7 +9,7 @@ import { validateRedirect } from '@/lib/redirect';
 import { AxiosError } from 'axios';
 import OAuthButtons from '@/components/OAuthButtons';
 import TwoFactorChallenge from '@/components/TwoFactorChallenge';
-import { requestMagicLink } from '@/api/auth';
+import { requestMagicLink, resendVerification } from '@/api/auth';
 
 export default function LoginForm() {
   const router = useRouter();
@@ -26,6 +26,8 @@ export default function LoginForm() {
   const [error, setError] = useState('');
   const [loginMode, setLoginMode] = useState<'password' | 'magic-link'>('password');
   const [magicLinkSentTo, setMagicLinkSentTo] = useState('');
+  const [needsVerification, setNeedsVerification] = useState(false);
+  const [resendNote, setResendNote] = useState('');
 
   useEffect(() => {
     if (!hydrated || !isAuthenticated) return;
@@ -33,6 +35,16 @@ export default function LoginForm() {
     const redirectTo = validateRedirect(searchParams.get('redirect'), '/dashboard');
     router.replace(redirectTo);
   }, [hydrated, isAuthenticated, router, searchParams]);
+
+  const handleResendVerification = async () => {
+    setResendNote('');
+    try {
+      await resendVerification(email);
+      setResendNote(`We sent a new verification link to ${email}.`);
+    } catch {
+      setResendNote('Could not resend right now. Please try again shortly.');
+    }
+  };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -58,7 +70,12 @@ export default function LoginForm() {
         if (loginMode === 'magic-link') {
           setError(err.response?.status === 429 ? 'Too many requests. Try again in a minute.' : 'Failed to send magic link. Please try again.');
         } else {
-          setError(err.response?.data?.detail || 'Login failed. Please check your credentials.');
+          const detail = err.response?.data?.detail as unknown;
+          if (detail && typeof detail === 'object' && (detail as { email_verification_required?: boolean }).email_verification_required) {
+            setNeedsVerification(true);
+          } else {
+            setError(typeof detail === 'string' ? detail : 'Login failed. Please check your credentials.');
+          }
         }
       } else {
         setError(loginMode === 'magic-link' ? 'Failed to send magic link. Please try again.' : 'An unexpected error occurred.');
@@ -120,6 +137,16 @@ export default function LoginForm() {
           {error && (
             <div className="rounded-lg bg-red-50 border border-red-200 px-4 py-3 text-sm text-red-700">
               {error}
+            </div>
+          )}
+
+          {needsVerification && (
+            <div className="rounded-lg bg-[#E8EAF6] border border-[#C5CAE9] px-4 py-3 text-sm text-[#3F51B5]">
+              <p>Please verify your email before signing in. We sent a link to {email}.</p>
+              <button type="button" onClick={handleResendVerification} className="mt-2 font-medium underline">
+                Resend verification email
+              </button>
+              {resendNote && <p className="mt-2 text-green-700">{resendNote}</p>}
             </div>
           )}
 
