@@ -76,7 +76,8 @@ export const useAuthStore = create<AuthState>((set, get) => ({
       password,
       first_name: firstName,
       last_name: lastName,
-      role, company_name: companyName,
+      role,
+      company_name: companyName,
     });
 
     // Auto-login after registration

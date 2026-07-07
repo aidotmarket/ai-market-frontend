@@ -44,7 +44,7 @@ export interface RegisterRequest {
   first_name?: string;
   last_name?: string;
   company_name?: string;
-  role: UserRole;
+  role?: UserRole;
 }
 
 export interface TOTPSetupResponse {
