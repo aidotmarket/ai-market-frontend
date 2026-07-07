@@ -8,8 +8,8 @@ interface Props {
   params: Promise<{ code: string }>;
 }
 
-const UNAVAILABLE_TITLE = 'Listing unavailable | ai.market';
-const FALLBACK_TITLE = 'ai.market listing';
+const UNAVAILABLE_TITLE = 'Listing unavailable';
+const FALLBACK_TITLE = 'Listing';
 const SITE_NAME = 'ai.market';
 
 export async function generateMetadata({ params }: Props): Promise<Metadata> {

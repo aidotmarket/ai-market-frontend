@@ -138,7 +138,7 @@ describe('SharePage', () => {
     const html = await renderSharePage({ status: 'gone' });
 
     expect(metadata).toEqual({
-      title: 'Listing unavailable | ai.market',
+      title: 'Listing unavailable',
       robots: { index: false, follow: false },
     });
     const serializedMetadata = JSON.stringify(metadata);
@@ -159,10 +159,10 @@ describe('SharePage', () => {
     });
 
     expect(metadata).toEqual({
-      title: 'ai.market listing',
+      title: 'Listing',
       robots: { index: false, follow: false },
       openGraph: {
-        title: 'ai.market listing',
+        title: 'Listing',
         type: 'website',
         siteName: 'ai.market',
       },
