@@ -5,6 +5,7 @@ import { useRouter } from 'next/navigation';
 import { getMyListings, unpublishListing, deleteListing } from '@/api/listings';
 import { getConnectStatus } from '@/api/connect';
 import { useToast } from '@/components/Toast';
+import SellerShareControls from '@/components/listings/SellerShareControls';
 import { formatPrice, formatDate } from '@/lib/format';
 
 const STATUS_STYLES: Record<string, string> = {
@@ -187,6 +188,9 @@ export default function ListingsPage() {
                         >
                           Unpublish
                         </button>
+                      )}
+                      {listing.status === 'published' && (
+                        <SellerShareControls listingId={listing.id} compact />
                       )}
                       {deleteConfirm === listing.id ? (
                         <span className="flex items-center gap-1">

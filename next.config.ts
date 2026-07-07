@@ -27,6 +27,7 @@ const nextConfig: NextConfig = {
         { source: '/.well-known/requests.txt', destination: `${devUrl}/.well-known/requests.txt` },
         { source: '/.well-known/ai-agents.json', destination: `${devUrl}/.well-known/ai-agents.json` },
         { source: '/.well-known/ai-plugin.json', destination: `${devUrl}/.well-known/ai-plugin.json` },
+        { source: '/l/:code/card.png', destination: `${devUrl}/api/v1/public/share/:code/card.png` },
       ];
     }
     return [
@@ -35,6 +36,7 @@ const nextConfig: NextConfig = {
       { source: '/.well-known/requests.txt', destination: `${apiUrl}/.well-known/requests.txt` },
       { source: '/.well-known/ai-agents.json', destination: `${apiUrl}/.well-known/ai-agents.json` },
       { source: '/.well-known/ai-plugin.json', destination: `${apiUrl}/.well-known/ai-plugin.json` },
+      { source: '/l/:code/card.png', destination: `${apiUrl}/api/v1/public/share/:code/card.png` },
     ];
   },
 };

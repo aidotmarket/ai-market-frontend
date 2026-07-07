@@ -1,0 +1,32 @@
+// Vitest Snapshot v1, https://vitest.dev/guide/snapshot.html
+
+exports[`SharePage > generates published listing metadata with OG, Twitter, canonical, and card image fields 1`] = `
+{
+  "alternates": {
+    "canonical": "https://ai.market/listings/shared-dataset",
+  },
+  "description": "A marketplace-ready dataset for testing share previews.",
+  "openGraph": {
+    "description": "A marketplace-ready dataset for testing share previews.",
+    "images": [
+      "https://ai.market/l/AbC123xYz987/card.png?v=hash-card",
+    ],
+    "locale": "en_US",
+    "siteName": "ai.market",
+    "title": "Shared Dataset",
+    "type": "article",
+    "url": "https://ai.market/listings/shared-dataset",
+  },
+  "title": "Shared Dataset",
+  "twitter": {
+    "card": "summary_large_image",
+    "description": "A marketplace-ready dataset for testing share previews.",
+    "images": [
+      "https://ai.market/l/AbC123xYz987/card.png?v=hash-twitter",
+    ],
+    "title": "Shared Dataset",
+  },
+}
+`;
+
+exports[`SharePage > renders the JSON-LD script, card preview, and View listing CTA for published shares 1`] = `"<link rel="preload" as="image" href="https://ai.market/l/AbC123xYz987/card.png?v=fresh-card"/><script type="application/ld+json">{"@context":"https://schema.org","@type":"Dataset","name":"Shared Dataset","description":"A marketplace-ready dataset for testing share previews.","url":"https://ai.market/listings/shared-dataset"}</script><main class="mx-auto max-w-5xl px-4 py-10 sm:px-6 lg:px-8"><div class="grid gap-8 lg:grid-cols-[minmax(0,1fr)_360px] lg:items-start"><section class="space-y-5"><a class="text-sm font-medium text-[#3F51B5] hover:text-[#303F9F]" href="/listings">Listings</a><div class="space-y-3"><h1 class="text-3xl font-bold text-gray-900">Shared Dataset</h1><p class="max-w-3xl text-base leading-7 text-gray-700">A marketplace-ready dataset for testing share previews.</p></div><a class="inline-flex items-center rounded-md bg-[#3F51B5] px-4 py-2 text-sm font-semibold text-white hover:bg-[#303F9F]" href="/listings">View listing</a></section><img src="https://ai.market/l/AbC123xYz987/card.png?v=fresh-card" alt="" class="aspect-[1.91/1] w-full rounded-lg border border-gray-200 bg-gray-50 object-cover"/></div></main>"`;

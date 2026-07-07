@@ -1,5 +1,31 @@
 const API_URL = process.env.API_URL || process.env.NEXT_PUBLIC_API_URL;
 
+export interface ShareMetadataResponse {
+  og: {
+    'og:title'?: string;
+    'og:description'?: string;
+    'og:url'?: string;
+    'og:type'?: 'website' | string;
+    'og:site_name'?: string;
+    'og:image'?: string;
+    'og:locale'?: string;
+    'twitter:card'?: 'summary_large_image' | string;
+    'twitter:title'?: string;
+    'twitter:description'?: string;
+    'twitter:image'?: string;
+  };
+  jsonld: Record<string, unknown>;
+  card_url: string;
+  canonical: string;
+  locale?: string;
+  alternates?: unknown[];
+}
+
+export type ShareMetadataFetchResult =
+  | { status: 'published'; data: ShareMetadataResponse }
+  | { status: 'gone' }
+  | { status: 'error' };
+
 export interface PaginatedListings {
   items: import('@/types').ListingListItem[];
   total: number;
@@ -84,6 +110,23 @@ export async function fetchPublicListing(slug: string) {
   });
   if (!res.ok) return null;
   return res.json();
+}
+
+export async function fetchShareMetadata(code: string): Promise<ShareMetadataFetchResult> {
+  try {
+    const res = await fetch(`${API_URL}/api/v1/public/share/${encodeURIComponent(code)}`, {
+      next: { revalidate: 60 },
+    });
+    if (res.ok) {
+      return { status: 'published', data: await res.json() };
+    }
+    if (res.status === 410 || res.status === 404) {
+      return { status: 'gone' };
+    }
+    return { status: 'error' };
+  } catch {
+    return { status: 'error' };
+  }
 }
 
 export async function fetchListingVersions(listingId: string) {

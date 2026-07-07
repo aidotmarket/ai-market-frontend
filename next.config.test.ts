@@ -39,4 +39,28 @@ describe('next.config request discovery rewrites', () => {
       destination: 'http://localhost:8000/.well-known/requests.txt',
     });
   });
+
+  it('proxies the share card image to the backend when API URL is configured', async () => {
+    process.env.NEXT_PUBLIC_API_URL = 'https://api.example.test';
+    const { default: config } = await import('./next.config');
+
+    const rewrites = await config.rewrites!();
+
+    expect(rewrites).toContainEqual({
+      source: '/l/:code/card.png',
+      destination: 'https://api.example.test/api/v1/public/share/:code/card.png',
+    });
+  });
+
+  it('uses localhost fallback for the share card image outside production', async () => {
+    vi.stubEnv('NODE_ENV', 'development');
+    const { default: config } = await import('./next.config');
+
+    const rewrites = await config.rewrites!();
+
+    expect(rewrites).toContainEqual({
+      source: '/l/:code/card.png',
+      destination: 'http://localhost:8000/api/v1/public/share/:code/card.png',
+    });
+  });
 });

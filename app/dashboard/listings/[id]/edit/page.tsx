@@ -4,6 +4,7 @@ import { useState, useEffect, useCallback } from 'react';
 import { useRouter, useParams } from 'next/navigation';
 import { getListing, updateListing, unpublishListing } from '@/api/listings';
 import { useToast } from '@/components/Toast';
+import SellerShareControls from '@/components/listings/SellerShareControls';
 
 const CATEGORIES = ['Finance', 'Healthcare', 'Technology', 'Real Estate', 'Government', 'Marketing'];
 const FORMATS = ['csv', 'parquet', 'json', 'xlsx', 'other'];
@@ -157,6 +158,10 @@ export default function EditListingPage() {
           Back to Listings
         </button>
       </div>
+
+      {data.status === 'published' && (
+        <SellerShareControls listingId={id} />
+      )}
 
       <div className="bg-white rounded-xl border border-gray-200 shadow-sm p-6 space-y-6">
         {/* Title & Description */}
