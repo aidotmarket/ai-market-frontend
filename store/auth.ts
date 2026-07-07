@@ -31,6 +31,29 @@ interface AuthState {
   hydrate: () => Promise<void>;
 }
 
+function isEmailVerificationRequiredError(error: unknown): boolean {
+  const response = typeof error === 'object' && error !== null && 'response' in error
+    ? (error as { response?: { status?: number; data?: unknown } }).response
+    : undefined;
+
+  if (response?.status !== 403) {
+    return false;
+  }
+
+  const data = response.data;
+  if (data && typeof data === 'object') {
+    const detail = (data as { detail?: unknown; email_verification_required?: unknown }).detail;
+
+    return (data as { email_verification_required?: unknown }).email_verification_required === true
+      || detail === 'email_verification_required'
+      || (detail !== null
+        && typeof detail === 'object'
+        && (detail as { email_verification_required?: unknown }).email_verification_required === true);
+  }
+
+  return false;
+}
+
 export const useAuthStore = create<AuthState>((set, get) => ({
   user: null,
   token: null,
@@ -71,17 +94,22 @@ export const useAuthStore = create<AuthState>((set, get) => ({
   },
 
   register: async (email, password, firstName, lastName, role = "buyer" as "buyer" | "seller" | "model_provider" | "admin", companyName) => {
-    await authApi.register({
-      email,
-      password,
-      first_name: firstName,
-      last_name: lastName,
-      role,
-      company_name: companyName,
-    });
+    try {
+      await authApi.register({
+        email,
+        password,
+        first_name: firstName,
+        last_name: lastName,
+        role,
+        company_name: companyName,
+      });
+    } catch (error) {
+      if (isEmailVerificationRequiredError(error)) {
+        return;
+      }
 
-    // Auto-login after registration
-    await get().login(email, password);
+      throw error;
+    }
   },
 
   oauthLogin: async (provider, code, state, nonce) => {
