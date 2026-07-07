@@ -42,6 +42,7 @@ const footerLinkSections = [
   {
     title: 'Legal',
     links: [
+      { label: 'Terms', href: '/legal/terms' },
       { label: 'Site Terms', href: '/legal/site-terms' },
       { label: 'Privacy Notice', href: '/legal/privacy' },
     ],
@@ -194,6 +195,8 @@ export function Layout({ children }: { children: React.ReactNode }) {
         </div>
         <div className="mx-auto max-w-7xl px-6 lg:px-8 pb-8">
           <div className="border-t border-[#2a3545] pt-6 flex flex-wrap items-center gap-x-1.5 gap-y-2 text-[13px] text-[#6b7a8d]">
+            <Link href="/legal/terms" className="hover:text-[#96a0af] transition-colors">Terms</Link>
+            <span className="mx-1.5">|</span>
             <Link href="/legal/site-terms" className="hover:text-[#96a0af] transition-colors">Site Terms</Link>
             <span className="mx-1.5">|</span>
             <Link href="/legal/privacy" className="hover:text-[#96a0af] transition-colors">Privacy Notice</Link>
