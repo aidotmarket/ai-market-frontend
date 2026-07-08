@@ -205,7 +205,7 @@ export default function DashboardOverview() {
   const isSellerActive = sellerStatus === 'active';
   const isSellerProvisioning = sellerStatus === 'provisioning';
   const canStartSelling = sellerStatus === 'not_requested';
-  const twoFactorEnabled = !!user?.totp_enabled || !!onboardingStatus?.steps.find((step) => step.id === 'enable_2fa')?.completed;
+  const twoFactorEnabled = !!user?.totp_enabled;
   const showSetupFlow =
     isSellerProvisioning &&
     !(twoFactorEnabled && payoutsEnabled);

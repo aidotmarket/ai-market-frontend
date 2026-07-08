@@ -2,6 +2,12 @@
 
 import axios, { type AxiosError, type InternalAxiosRequestConfig } from 'axios';
 
+declare module 'axios' {
+  interface AxiosRequestConfig {
+    skipOnboardingRedirect?: boolean;
+  }
+}
+
 const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000';
 
 export const api = axios.create({
@@ -107,6 +113,7 @@ api.interceptors.response.use(
       error.response.status === 403 &&
       onboardingData?.detail?.onboarding_url &&
       typeof window !== 'undefined' &&
+      !originalRequest.skipOnboardingRedirect &&
       !onboardingRedirected &&
       window.location.pathname !== '/dashboard'
     ) {
