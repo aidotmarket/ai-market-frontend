@@ -63,7 +63,7 @@ export default function EditListingPage() {
         pricing_type: l.pricing?.pricing_type ?? l.pricing_type ?? 'one_time',
         currency: 'USD',
         data_format: l.data_format || 'csv',
-        source_row_count: l.row_count || 0,
+        source_row_count: l.source_row_count || 0,
         compliance_frameworks: l.compliance_frameworks || [],
         compliance_notes: l.compliance_notes || '',
         status: l.status || 'draft',
