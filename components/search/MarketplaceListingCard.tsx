@@ -65,7 +65,7 @@ export function MarketplaceListingCard({ listing }: { listing: CardListing }) {
       </div>
 
       <div className="mt-auto flex flex-wrap items-center gap-2 pt-5 text-xs">
-        {typeof listing.privacy_score === 'number' && (
+        {listing.privacy_score != null && (
           <span
             className={`inline-flex items-center rounded-full px-2 py-1 font-medium ${privacyScoreColor(
               listing.privacy_score
