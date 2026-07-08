@@ -67,5 +67,6 @@ export const updateListing = (id: string, data: any) => api.patch(`/listings/${i
 export const getListingBySlug = (slug: string) => api.get(`/listings/${slug}`);
 
 export const getListingPreview = (id: string) => api.get(`/listings/${id}/preview`);
+export const publishListing = (id: string) => api.post(`/listings/${id}/publish`);
 export const unpublishListing = (id: string) => api.post(`/listings/${id}/unpublish`);
 export const deleteListing = (id: string) => api.delete(`/listings/${id}`);

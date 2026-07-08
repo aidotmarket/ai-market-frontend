@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useCallback } from 'react';
 import { useRouter, useParams } from 'next/navigation';
-import { getListing, updateListing, unpublishListing } from '@/api/listings';
+import { getListing, updateListing, unpublishListing, publishListing } from '@/api/listings';
 import { useToast } from '@/components/Toast';
 import SellerShareControls from '@/components/listings/SellerShareControls';
 
@@ -65,7 +65,7 @@ export default function EditListingPage() {
         data_format: l.data_format || 'csv',
         source_row_count: l.row_count || 0,
         compliance_frameworks: l.compliance_frameworks || [],
-        compliance_notes: '',
+        compliance_notes: l.compliance_notes || '',
         status: l.status || 'draft',
       });
     } catch {
@@ -114,6 +114,8 @@ export default function EditListingPage() {
         pricing_type: data.pricing_type,
         data_format: data.data_format,
         source_row_count: data.source_row_count || undefined,
+        compliance_frameworks: data.compliance_frameworks,
+        compliance_notes: data.compliance_notes,
       });
       toast('Listing saved', 'success');
     } catch (err: any) {
@@ -128,9 +130,22 @@ export default function EditListingPage() {
     try {
       await unpublishListing(id);
       toast('Listing unpublished', 'success');
-      setData((prev) => ({ ...prev, status: 'draft' }));
+      setData((prev) => ({ ...prev, status: 'unlisted' }));
     } catch (err: any) {
       toast(err.response?.data?.detail || 'Failed to unpublish', 'error');
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const handlePublish = async () => {
+    setSaving(true);
+    try {
+      await publishListing(id);
+      toast('Listing published', 'success');
+      setData((prev) => ({ ...prev, status: 'published' }));
+    } catch (err: any) {
+      toast(err.response?.data?.detail || 'Failed to publish', 'error');
     } finally {
       setSaving(false);
     }
@@ -361,6 +376,15 @@ export default function EditListingPage() {
               className="rounded-lg border border-yellow-300 px-4 py-2 text-sm font-medium text-yellow-700 hover:bg-yellow-50 disabled:opacity-50"
             >
               Unpublish
+            </button>
+          )}
+          {data.status === 'unlisted' && (
+            <button
+              onClick={handlePublish}
+              disabled={saving}
+              className="rounded-lg border border-yellow-300 px-4 py-2 text-sm font-medium text-yellow-700 hover:bg-yellow-50 disabled:opacity-50"
+            >
+              Publish
             </button>
           )}
           <button
