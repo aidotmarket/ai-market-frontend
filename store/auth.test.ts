@@ -195,6 +195,38 @@ describe('auth store login-time 2FA', () => {
     expect(useAuthStore.getState().isAuthenticated).toBe(false);
   });
 
+  it.each([
+    ['429', { response: { status: 429 } }],
+    ['network failure', new Error('offline')],
+    ['5xx', { response: { status: 503 } }],
+  ])('preserves an authenticated store during transient %s refresh failure', async (_label, error) => {
+    clientApi.refreshAccessToken.mockRejectedValue(error);
+    useAuthStore.setState({
+      user,
+      token: 'existing-token',
+      isAuthenticated: true,
+      hydrated: true,
+    });
+
+    await useAuthStore.getState().hydrate();
+
+    expect(useAuthStore.getState()).toMatchObject({
+      user,
+      token: 'existing-token',
+      isAuthenticated: true,
+      isLoading: false,
+      hydrated: true,
+    });
+
+    await expect(useAuthStore.getState().refreshAuth()).rejects.toBe(error);
+    expect(useAuthStore.getState()).toMatchObject({
+      user,
+      token: 'existing-token',
+      isAuthenticated: true,
+    });
+    expect(authApi.getMe).not.toHaveBeenCalled();
+  });
+
   it('does not persist or log the pre-auth token or submitted code', async () => {
     const setItem = vi.fn();
     const consoleLog = vi.spyOn(console, 'log').mockImplementation(() => undefined);

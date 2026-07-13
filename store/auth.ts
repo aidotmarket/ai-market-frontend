@@ -205,7 +205,7 @@ export const useAuthStore = create<AuthState>((set, get) => ({
       const user = await authApi.getMe();
       set({ user, isAuthenticated: true, pendingTwoFactor: null });
     } catch {
-      // Keep refreshed access token even if reloading the user fails transiently.
+      // Keep the current authenticated state if reloading the user fails transiently.
     }
   },
 
@@ -218,6 +218,8 @@ export const useAuthStore = create<AuthState>((set, get) => ({
       const user = await authApi.getMe();
       set({ user, isAuthenticated: true, isLoading: false, hydrated: true, pendingTwoFactor: null });
     } catch {
+      // refreshAccessToken owns terminal 401/403 clearing. Hydration must not
+      // erase an existing session for a transient 429, network error, or 5xx.
       set({ isLoading: false, hydrated: true, pendingTwoFactor: null });
     }
   },

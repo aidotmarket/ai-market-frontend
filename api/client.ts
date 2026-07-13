@@ -19,6 +19,53 @@ export const api = axios.create({
 let refreshPromise: Promise<string> | null = null;
 let onboardingRedirected = false;
 
+const DEFAULT_REFRESH_RETRY_SECONDS = 60;
+const MAX_REFRESH_RETRY_SECONDS = 60;
+
+function getRefreshRetryDelayMs(error: AxiosError): number {
+  const headers = error.response?.headers as
+    | { get?: (name: string) => unknown; [name: string]: unknown }
+    | undefined;
+  const rawRetryAfter = headers?.get?.('retry-after') ?? headers?.['retry-after'];
+
+  if (typeof rawRetryAfter !== 'string' && typeof rawRetryAfter !== 'number') {
+    return DEFAULT_REFRESH_RETRY_SECONDS * 1000;
+  }
+
+  const retryAfter = String(rawRetryAfter).trim();
+  let delaySeconds: number;
+
+  if (/^\d+$/.test(retryAfter)) {
+    delaySeconds = Number(retryAfter);
+  } else {
+    const retryAt = Date.parse(retryAfter);
+    if (!Number.isFinite(retryAt)) {
+      return DEFAULT_REFRESH_RETRY_SECONDS * 1000;
+    }
+    delaySeconds = Math.ceil((retryAt - Date.now()) / 1000);
+  }
+
+  if (!Number.isFinite(delaySeconds)) {
+    return DEFAULT_REFRESH_RETRY_SECONDS * 1000;
+  }
+
+  return Math.min(MAX_REFRESH_RETRY_SECONDS, Math.max(1, delaySeconds)) * 1000;
+}
+
+function wait(ms: number): Promise<void> {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+function isRefreshErrorStatus(error: unknown, statuses: readonly number[]): boolean {
+  return axios.isAxiosError(error) && statuses.includes(error.response?.status ?? 0);
+}
+
+function redirectToLogin(): void {
+  if (typeof window !== 'undefined' && window.location.pathname !== '/login') {
+    window.location.href = '/login';
+  }
+}
+
 async function clearAuthState(): Promise<void> {
   const { useAuthStore } = await import('@/store/auth');
   useAuthStore.setState({
@@ -49,14 +96,32 @@ async function refreshAccessTokenRequest(): Promise<string> {
   return access_token;
 }
 
+async function refreshAccessTokenWithRetry(): Promise<string> {
+  try {
+    return await refreshAccessTokenRequest();
+  } catch (error) {
+    if (!isRefreshErrorStatus(error, [429])) {
+      throw error;
+    }
+
+    await wait(getRefreshRetryDelayMs(error as AxiosError));
+    return refreshAccessTokenRequest();
+  }
+}
+
 export function refreshAccessToken(): Promise<string> {
   if (!refreshPromise) {
-    refreshPromise = refreshAccessTokenRequest().catch(async (error) => {
-      await clearAuthState();
-      throw error;
-    }).finally(() => {
-      refreshPromise = null;
-    });
+    refreshPromise = refreshAccessTokenWithRetry()
+      .catch(async (error) => {
+        if (isRefreshErrorStatus(error, [401, 403])) {
+          await clearAuthState();
+          redirectToLogin();
+        }
+        throw error;
+      })
+      .finally(() => {
+        refreshPromise = null;
+      });
   }
 
   return refreshPromise;
@@ -97,9 +162,8 @@ api.interceptors.response.use(
           originalRequest.headers.Authorization = `Bearer ${newToken}`;
         }
         return api(originalRequest);
-      } catch {
-        window.location.href = '/login';
-        return Promise.reject(error);
+      } catch (refreshError) {
+        return Promise.reject(refreshError);
       }
     }
 
