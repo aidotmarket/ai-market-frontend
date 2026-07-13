@@ -21,6 +21,20 @@ let onboardingRedirected = false;
 
 const DEFAULT_REFRESH_RETRY_SECONDS = 60;
 const MAX_REFRESH_RETRY_SECONDS = 60;
+const IMF_FIXDATE_PATTERN =
+  /^(?:Mon|Tue|Wed|Thu|Fri|Sat|Sun), \d{2} (?:Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec) \d{4} \d{2}:\d{2}:\d{2} GMT$/i;
+const RFC850_DATE_PATTERN =
+  /^(?:Monday|Tuesday|Wednesday|Thursday|Friday|Saturday|Sunday), \d{2}-(?:Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)-\d{2} \d{2}:\d{2}:\d{2} GMT$/i;
+const ASCTIME_DATE_PATTERN =
+  /^(?:Mon|Tue|Wed|Thu|Fri|Sat|Sun) (?:Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec) (?: \d|\d{2}) \d{2}:\d{2}:\d{2} \d{4}$/i;
+
+function isHttpDate(value: string): boolean {
+  return (
+    IMF_FIXDATE_PATTERN.test(value) ||
+    RFC850_DATE_PATTERN.test(value) ||
+    ASCTIME_DATE_PATTERN.test(value)
+  );
+}
 
 function getRefreshRetryDelayMs(error: AxiosError): number {
   const headers = error.response?.headers as
@@ -38,6 +52,10 @@ function getRefreshRetryDelayMs(error: AxiosError): number {
   if (/^\d+$/.test(retryAfter)) {
     delaySeconds = Number(retryAfter);
   } else {
+    if (!isHttpDate(retryAfter)) {
+      return DEFAULT_REFRESH_RETRY_SECONDS * 1000;
+    }
+
     const retryAt = Date.parse(retryAfter);
     if (!Number.isFinite(retryAt)) {
       return DEFAULT_REFRESH_RETRY_SECONDS * 1000;

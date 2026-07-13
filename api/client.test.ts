@@ -88,6 +88,7 @@ describe('refreshAccessToken', () => {
       .mockRejectedValueOnce(makeResponseError(429, retryAt))
       .mockResolvedValueOnce({ data: { access_token: 'new-token' } });
     const { refreshAccessToken } = await import('./client');
+    const parseDate = vi.spyOn(Date, 'parse');
 
     const refresh = refreshAccessToken();
     await vi.advanceTimersByTimeAsync(4_999);
@@ -96,10 +97,14 @@ describe('refreshAccessToken', () => {
     await vi.advanceTimersByTimeAsync(1);
     await expect(refresh).resolves.toBe('new-token');
     expect(post).toHaveBeenCalledTimes(2);
+    expect(parseDate).toHaveBeenCalledWith(retryAt);
   });
 
   it.each([
     ['invalid', 'not-a-retry-date'],
+    ['fractional numeric', '1.5'],
+    ['negative numeric', '-1'],
+    ['explicitly positive numeric', '+1'],
     ['missing', undefined],
   ])('falls back to 60 seconds for %s Retry-After', async (_label, retryAfter) => {
     vi.useFakeTimers();
@@ -107,6 +112,7 @@ describe('refreshAccessToken', () => {
       .mockRejectedValueOnce(makeResponseError(429, retryAfter))
       .mockResolvedValueOnce({ data: { access_token: 'new-token' } });
     const { refreshAccessToken } = await import('./client');
+    const parseDate = vi.spyOn(Date, 'parse');
 
     const refresh = refreshAccessToken();
     await vi.advanceTimersByTimeAsync(59_999);
@@ -115,6 +121,7 @@ describe('refreshAccessToken', () => {
     await vi.advanceTimersByTimeAsync(1);
     await expect(refresh).resolves.toBe('new-token');
     expect(post).toHaveBeenCalledTimes(2);
+    expect(parseDate).not.toHaveBeenCalled();
   });
 
   it.each([
