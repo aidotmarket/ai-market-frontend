@@ -143,7 +143,8 @@ export function AllAIProvider({ children }: { children: ReactNode }) {
           }
           if (
             sessionIdRef.current !== stored ||
-            sessionStorage.getItem(SESSION_KEY) !== stored
+            sessionStorage.getItem(SESSION_KEY) !== stored ||
+            abortRef.current
           ) {
             return;
           }

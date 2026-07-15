@@ -318,6 +318,61 @@ describe('anonymous initial-message stale-session recovery', () => {
 });
 
 describe('mount validation ownership', () => {
+  it('does not replace an in-flight same-session send with delayed restored messages', async () => {
+    const validation = deferred<Response>();
+    const streamEnd = deferred<ReadableStreamReadResult<Uint8Array>>();
+    const reader = {
+      read: vi.fn()
+        .mockResolvedValueOnce({
+          done: false,
+          value: new TextEncoder().encode(`data: ${JSON.stringify({ text: 'streaming answer' })}\n\n`),
+        })
+        .mockImplementationOnce(() => streamEnd.promise),
+      releaseLock: vi.fn(),
+      cancel: vi.fn(),
+    };
+    fetchMock.mockImplementation(async (input) => {
+      const url = String(input);
+      if (url === `${SESSION_URL}/stale-session`) return validation.promise;
+      if (url === MESSAGE_URL) {
+        return {
+          status: 200,
+          ok: true,
+          body: { getReader: () => reader },
+          json: vi.fn(),
+        } as unknown as Response;
+      }
+      throw new Error(`Unexpected request: ${url}`);
+    });
+
+    renderProvider();
+    let pendingSend!: Promise<void>;
+    act(() => {
+      pendingSend = context().sendMessage('hello');
+    });
+    await waitFor(() => expectSinglePair('streaming answer'));
+    expect(context().isStreaming).toBe(true);
+
+    await act(async () => {
+      validation.resolve(
+        response(200, {
+          messages: [{ role: 'assistant', content: 'restored historical message' }],
+        })
+      );
+      await Promise.resolve();
+    });
+
+    expectSinglePair('streaming answer');
+    expect(context().isStreaming).toBe(true);
+
+    await act(async () => {
+      streamEnd.resolve({ done: true, value: undefined });
+      await pendingSend;
+    });
+
+    expectSinglePair('streaming answer');
+  });
+
   it.each(['success', 'not-found', 'rejection'] as const)(
     'ignores a delayed stale-session validation %s after recovery establishes a newer id',
     async (validationOutcome) => {
