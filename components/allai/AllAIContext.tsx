@@ -133,8 +133,18 @@ export function AllAIProvider({ children }: { children: ReactNode }) {
         .then((data) => {
           if (!data) {
             // Session expired or not found - clear stale reference
-            sessionStorage.removeItem(SESSION_KEY);
-            sessionIdRef.current = null;
+            if (sessionIdRef.current === stored) {
+              sessionIdRef.current = null;
+            }
+            if (sessionStorage.getItem(SESSION_KEY) === stored) {
+              sessionStorage.removeItem(SESSION_KEY);
+            }
+            return;
+          }
+          if (
+            sessionIdRef.current !== stored ||
+            sessionStorage.getItem(SESSION_KEY) !== stored
+          ) {
             return;
           }
           if (data.messages?.length) {
@@ -150,8 +160,12 @@ export function AllAIProvider({ children }: { children: ReactNode }) {
           }
         })
         .catch(() => {
-          sessionStorage.removeItem(SESSION_KEY);
-          sessionIdRef.current = null;
+          if (sessionIdRef.current === stored) {
+            sessionIdRef.current = null;
+          }
+          if (sessionStorage.getItem(SESSION_KEY) === stored) {
+            sessionStorage.removeItem(SESSION_KEY);
+          }
         });
     }
   }, []);
@@ -242,13 +256,34 @@ export function AllAIProvider({ children }: { children: ReactNode }) {
         const headers: Record<string, string> = { 'Content-Type': 'application/json' };
         if (token) headers['Authorization'] = `Bearer ${token}`;
 
-        const res = await fetch(`${API_URL}/api/allai/support/anonymous/message`, {
+        let res = await fetch(`${API_URL}/api/allai/support/anonymous/message`, {
           method: 'POST',
           headers,
           body: JSON.stringify(bodyPayload),
           signal: controller.signal,
           cache: 'no-store',
         });
+
+        if (res.status === 404) {
+          if (sessionIdRef.current === sessionId) {
+            sessionIdRef.current = null;
+          }
+          if (sessionStorage.getItem(SESSION_KEY) === sessionId) {
+            sessionStorage.removeItem(SESSION_KEY);
+          }
+
+          const replacementSessionId = await ensureSession();
+          res = await fetch(`${API_URL}/api/allai/support/anonymous/message`, {
+            method: 'POST',
+            headers,
+            body: JSON.stringify({
+              ...bodyPayload,
+              session_id: replacementSessionId,
+            }),
+            signal: controller.signal,
+            cache: 'no-store',
+          });
+        }
 
         if (res.status === 429) {
           setMessages((prev) =>
