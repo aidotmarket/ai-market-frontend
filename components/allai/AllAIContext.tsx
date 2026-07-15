@@ -98,6 +98,7 @@ export function AllAIProvider({ children }: { children: ReactNode }) {
   const [isStreaming, setIsStreaming] = useState(false);
   const sessionIdRef = useRef<string | null>(null);
   const abortRef = useRef<AbortController | null>(null);
+  const localConversationStartedRef = useRef(false);
 
   // Wizard bridge callbacks
   const onFieldProposalRef = useRef<((proposal: FieldProposalEvent) => void) | null>(null);
@@ -144,7 +145,7 @@ export function AllAIProvider({ children }: { children: ReactNode }) {
           if (
             sessionIdRef.current !== stored ||
             sessionStorage.getItem(SESSION_KEY) !== stored ||
-            abortRef.current
+            localConversationStartedRef.current
           ) {
             return;
           }
@@ -214,6 +215,7 @@ export function AllAIProvider({ children }: { children: ReactNode }) {
     async (text: string) => {
       const trimmed = text.trim();
       if (!trimmed || isStreaming) return;
+      localConversationStartedRef.current = true;
 
       const userMsg: Message = {
         id: `user-${Date.now()}`,

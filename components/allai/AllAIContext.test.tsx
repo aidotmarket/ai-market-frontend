@@ -318,6 +318,81 @@ describe('anonymous initial-message stale-session recovery', () => {
 });
 
 describe('mount validation ownership', () => {
+  it('does not replace a completed same-session send with delayed restored messages', async () => {
+    const validation = deferred<Response>();
+    fetchMock.mockImplementation(async (input) => {
+      const url = String(input);
+      if (url === `${SESSION_URL}/stale-session`) return validation.promise;
+      if (url === MESSAGE_URL) return sseResponse('completed answer');
+      throw new Error(`Unexpected request: ${url}`);
+    });
+
+    renderProvider();
+    await send();
+    expect(context().isStreaming).toBe(false);
+    expectSinglePair('completed answer');
+
+    await act(async () => {
+      validation.resolve(
+        response(200, {
+          messages: [{ role: 'assistant', content: 'restored historical message' }],
+        })
+      );
+      await Promise.resolve();
+    });
+
+    expectSinglePair('completed answer');
+  });
+
+  it('does not replace an appended pair when validation resolves while ensureSession is pending', async () => {
+    const validation = deferred<Response>();
+    const sendStarted = deferred<void>();
+    const realSessionStorage = sessionStorage;
+    let startSendOnIdentityCheck = false;
+    let pendingSend: Promise<void> | undefined;
+    let messageCallsAtInterleave = -1;
+
+    vi.stubGlobal('sessionStorage', {
+      getItem: (key: string) => {
+        if (key === SESSION_KEY && startSendOnIdentityCheck) {
+          startSendOnIdentityCheck = false;
+          pendingSend = context().sendMessage('hello');
+          messageCallsAtInterleave = messageCalls().length;
+          sendStarted.resolve();
+        }
+        return realSessionStorage.getItem(key);
+      },
+      setItem: (key: string, value: string) => realSessionStorage.setItem(key, value),
+      removeItem: (key: string) => realSessionStorage.removeItem(key),
+      clear: () => realSessionStorage.clear(),
+      key: (index: number) => realSessionStorage.key(index),
+      get length() { return realSessionStorage.length; },
+    } satisfies Storage);
+    fetchMock.mockImplementation(async (input) => {
+      const url = String(input);
+      if (url === `${SESSION_URL}/stale-session`) return validation.promise;
+      if (url === MESSAGE_URL) return sseResponse('answer after pending session');
+      throw new Error(`Unexpected request: ${url}`);
+    });
+
+    renderProvider();
+    await waitFor(() => expect(fetchMock).toHaveBeenCalledWith(`${SESSION_URL}/stale-session`));
+
+    await act(async () => {
+      startSendOnIdentityCheck = true;
+      validation.resolve(
+        response(200, {
+          messages: [{ role: 'assistant', content: 'restored historical message' }],
+        })
+      );
+      await sendStarted.promise;
+      await pendingSend;
+    });
+
+    expect(messageCallsAtInterleave).toBe(0);
+    expectSinglePair('answer after pending session');
+  });
+
   it('does not replace an in-flight same-session send with delayed restored messages', async () => {
     const validation = deferred<Response>();
     const streamEnd = deferred<ReadableStreamReadResult<Uint8Array>>();
