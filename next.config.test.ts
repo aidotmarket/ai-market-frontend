@@ -1,4 +1,30 @@
+import { existsSync } from 'node:fs';
+import { resolve } from 'node:path';
 import { afterEach, describe, expect, it, vi } from 'vitest';
+
+describe('retired AIM Federate surface', () => {
+  it('preserves unrelated redirects without publishing retired redirect sources', async () => {
+    const { default: config } = await import('./next.config');
+
+    const redirects = await config.redirects!();
+
+    expect(redirects).toEqual([
+      { source: '/download/aim-channel', destination: '/sell-data', permanent: true },
+      { source: '/download', destination: '/sell-data', permanent: true },
+      {
+        source: '/download/aim-node',
+        destination: '/partner#technology-partner',
+        permanent: true,
+      },
+      { source: '/aim-node', destination: '/aim-data', permanent: true },
+    ]);
+  });
+
+  it('does not restore the retired route or public asset', () => {
+    expect(existsSync(resolve('app/aim-federate/page.tsx'))).toBe(false);
+    expect(existsSync(resolve('public/og/aim-federate.png'))).toBe(false);
+  });
+});
 
 describe('next.config request discovery rewrites', () => {
   afterEach(() => {
