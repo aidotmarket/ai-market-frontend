@@ -6,6 +6,7 @@ import axios, {
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 let setAuthState: ReturnType<typeof vi.fn>;
+let isAuthenticated: boolean;
 
 function makeResponseError(status: number, retryAfter?: string): AxiosError {
   const config = { headers: {} } as InternalAxiosRequestConfig;
@@ -50,9 +51,10 @@ beforeEach(() => {
   vi.resetModules();
   vi.unstubAllGlobals();
   setAuthState = vi.fn();
+  isAuthenticated = true;
   vi.doMock('@/store/auth', () => ({
     useAuthStore: {
-      getState: () => ({ token: 'existing-token' }),
+      getState: () => ({ token: 'existing-token', isAuthenticated }),
       setState: setAuthState,
     },
   }));
@@ -207,6 +209,25 @@ describe('refreshAccessToken', () => {
       pendingTwoFactor: null,
     });
     expect(window.location.href).toBe('/login');
+  });
+
+  it('clears auth without redirecting an anonymous visitor after a terminal 401', async () => {
+    isAuthenticated = false;
+    const terminalError = makeResponseError(401);
+    vi.spyOn(axios, 'post').mockRejectedValueOnce(terminalError);
+    vi.stubGlobal('window', { location: { pathname: '/listings', href: '/listings' } });
+    const { refreshAccessToken } = await import('./client');
+
+    await expect(refreshAccessToken()).rejects.toBe(terminalError);
+
+    expect(setAuthState).toHaveBeenCalledOnce();
+    expect(setAuthState).toHaveBeenCalledWith({
+      user: null,
+      token: null,
+      isAuthenticated: false,
+      pendingTwoFactor: null,
+    });
+    expect(window.location.href).toBe('/listings');
   });
 
   it.each([

@@ -183,10 +183,10 @@ describe('auth store login-time 2FA', () => {
     expect(useAuthStore.getState().user).toEqual(user);
   });
 
-  it('marks hydrate complete after failed refresh', async () => {
-    clientApi.refreshAccessToken.mockRejectedValue(new Error('no session'));
+  it('marks anonymous hydrate complete without throwing after a 401 refresh failure', async () => {
+    clientApi.refreshAccessToken.mockRejectedValue({ response: { status: 401 } });
 
-    await useAuthStore.getState().hydrate();
+    await expect(useAuthStore.getState().hydrate()).resolves.toBeUndefined();
 
     expect(clientApi.refreshAccessToken).toHaveBeenCalledOnce();
     expect(authApi.getMe).not.toHaveBeenCalled();

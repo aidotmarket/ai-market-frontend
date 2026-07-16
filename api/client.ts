@@ -132,8 +132,11 @@ export function refreshAccessToken(): Promise<string> {
     refreshPromise = refreshAccessTokenWithRetry()
       .catch(async (error) => {
         if (isRefreshErrorStatus(error, [401, 403])) {
+          const hadSession = (await import('@/store/auth')).useAuthStore.getState().isAuthenticated;
           await clearAuthState();
-          redirectToLogin();
+          if (hadSession) {
+            redirectToLogin();
+          }
         }
         throw error;
       })
