@@ -3,7 +3,7 @@ import type { Metadata } from 'next';
 import { MarketplaceSearchExperience } from '@/components/search/MarketplaceSearchExperience';
 
 export const metadata: Metadata = {
-  title: 'Find data on ai.market',
+  title: { absolute: 'Find data on ai.market' },
   description:
     'Semantic search across the marketplace data catalog, or post a data request and let providers respond.',
   openGraph: {

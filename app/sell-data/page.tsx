@@ -2,7 +2,7 @@ import Link from 'next/link';
 import type { Metadata } from 'next';
 
 export const metadata: Metadata = {
-  title: 'Sell data on ai.market with AIM Data',
+  title: { absolute: 'Sell data on ai.market with AIM Data' },
   description:
     'Install AIM Data on your infrastructure. List your datasets without giving up custody. Stripe payouts on every transaction.',
   openGraph: {

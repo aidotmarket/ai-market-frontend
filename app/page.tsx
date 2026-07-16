@@ -5,24 +5,24 @@ import { HomepageActivityTickerBeacons } from '@/components/HomepageActivityTick
 import { HeroSearch } from '@/components/HeroSearch';
 
 export const metadata: Metadata = {
-  title: 'ai.market — Sell data without giving it away',
+  title: { absolute: 'ai.market — Sell data without giving it away' },
   description:
-    "Non-custodial B2B data marketplace. Data stays on the seller's infrastructure, only metadata is published. Search, post requests, and buy with peer-to-peer delivery. 5% commission, no listing fees.",
+    'Non-custodial B2B data marketplace. List with AIM Data, find with semantic search and data requests, train across orgs with AIM Federate.',
   openGraph: {
     title: 'ai.market — Sell data without giving it away',
     description:
-      "Non-custodial B2B data marketplace. Data stays on the seller's infrastructure, only metadata is published. Search, post requests, and buy with peer-to-peer delivery. 5% commission, no listing fees.",
+      'Non-custodial B2B data marketplace. List with AIM Data, find with semantic search and data requests, train across orgs with AIM Federate.',
     url: 'https://ai.market',
     siteName: 'ai.market',
-    images: ['/og/ai-market.png'],
+    images: ['/og/home.png'],
     type: 'website',
   },
   twitter: {
     card: 'summary_large_image',
     title: 'ai.market — Sell data without giving it away',
     description:
-      "Non-custodial B2B data marketplace. Data stays on the seller's infrastructure, only metadata is published. Search, post requests, and buy with peer-to-peer delivery. 5% commission, no listing fees.",
-    images: ['/og/ai-market.png'],
+      'Non-custodial B2B data marketplace. List with AIM Data, find with semantic search and data requests, train across orgs with AIM Federate.',
+    images: ['/og/home.png'],
   },
 };
 
