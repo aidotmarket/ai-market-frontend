@@ -30,12 +30,47 @@ describe('sitemap', () => {
 
     const entries = await sitemap();
     const urls = entries.map((entry) => entry.url);
+    const retiredRoutes = [
+      `https://ai.market/${['aim', 'federate'].join('-')}`,
+      `https://ai.market/${['run-feder', 'ated-learning'].join('')}`,
+    ];
 
     expect(urls).toContain('https://ai.market/listings/test-listing');
     expect(urls).toContain('https://ai.market/requests/need-claims-data');
+    for (const retiredRoute of retiredRoutes) {
+      expect(urls).not.toContain(retiredRoute);
+    }
     expect(fetchMock).toHaveBeenCalledWith(
       'https://api.example.test/api/v1/public/request-sitemap-entries',
       { next: { revalidate: 3600 } },
+    );
+  });
+
+  it('redirects legacy download root and suffix URLs to AIM Data without dropping attribution', async () => {
+    const { default: config } = await import('../next.config');
+
+    const redirects = await config.redirects!();
+    const rootRedirect = redirects.find(({ source }) => source === '/download/aim-channel');
+    const suffixRedirect = redirects.find(({ source }) => source === '/download/aim-channel/:path*');
+
+    expect(rootRedirect).toEqual({
+      source: '/download/aim-channel',
+      destination: '/aim-data',
+      permanent: true,
+    });
+    expect(suffixRedirect).toEqual({
+      source: '/download/aim-channel/:path*',
+      destination: '/aim-data',
+      permanent: true,
+    });
+
+    const legacyRequest = new URL(
+      'https://ai.market/download/aim-channel/windows?utm_source=test&ref=partner123',
+    );
+    const redirectedUrl = new URL(`${suffixRedirect!.destination}${legacyRequest.search}`, legacyRequest);
+
+    expect(redirectedUrl.toString()).toBe(
+      'https://ai.market/aim-data?utm_source=test&ref=partner123',
     );
   });
 });

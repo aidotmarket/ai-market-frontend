@@ -7,11 +7,11 @@ import { HeroSearch } from '@/components/HeroSearch';
 export const metadata: Metadata = {
   title: { absolute: 'ai.market — Sell data without giving it away' },
   description:
-    'Non-custodial B2B data marketplace. List with AIM Data, find with semantic search and data requests, train across orgs with AIM Federate.',
+    'Non-custodial B2B data marketplace. List with AIM Data, find with semantic search and data requests.',
   openGraph: {
     title: 'ai.market — Sell data without giving it away',
     description:
-      'Non-custodial B2B data marketplace. List with AIM Data, find with semantic search and data requests, train across orgs with AIM Federate.',
+      'Non-custodial B2B data marketplace. List with AIM Data, find with semantic search and data requests.',
     url: 'https://ai.market',
     siteName: 'ai.market',
     images: ['/og/home.png'],
@@ -21,7 +21,7 @@ export const metadata: Metadata = {
     card: 'summary_large_image',
     title: 'ai.market — Sell data without giving it away',
     description:
-      'Non-custodial B2B data marketplace. List with AIM Data, find with semantic search and data requests, train across orgs with AIM Federate.',
+      'Non-custodial B2B data marketplace. List with AIM Data, find with semantic search and data requests.',
     images: ['/og/home.png'],
   },
 };

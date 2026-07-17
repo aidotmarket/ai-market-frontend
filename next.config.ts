@@ -4,12 +4,11 @@ const nextConfig: NextConfig = {
   reactStrictMode: true,
   async redirects() {
     return [
-      { source: '/download/aim-channel', destination: '/sell-data', permanent: true },
+      { source: '/download/aim-channel', destination: '/aim-data', permanent: true },
+      { source: '/download/aim-channel/:path*', destination: '/aim-data', permanent: true },
       { source: '/download', destination: '/sell-data', permanent: true },
       { source: '/download/aim-node', destination: '/partner#technology-partner', permanent: true },
       { source: '/aim-node', destination: '/aim-data', permanent: true },
-      { source: '/aim-federate', destination: '/', permanent: true },
-      { source: '/run-federated-learning', destination: '/', permanent: true },
     ];
   },
   async rewrites() {
