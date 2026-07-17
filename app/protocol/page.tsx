@@ -7,7 +7,7 @@ const howItWorks = [
     eyebrow: 'List',
     title: 'Local Processing',
     description:
-      "Sellers install AIM Data on their own infrastructure to manage and publish data; buyers and builders install AIM-Node as their gateway client. An embedded AI assistant profiles each dataset locally - detecting PII, scoring quality, generating descriptions and metadata. Only the metadata is published to ai.market. Raw data never leaves the seller's servers. Both AIM Data and AIM-Node are open source.",
+      "Everyone installs the same tool: AIM Data. Sellers use it to manage and publish data. Buyers and builders switch on its gateway features for discovery and programmatic access. An embedded AI assistant profiles each dataset locally - detecting PII, scoring quality, generating descriptions and metadata. Only the metadata is published to ai.market. Raw data never leaves the seller's servers. AIM Data is open source.",
   },
   {
     eyebrow: 'Discover',
@@ -25,7 +25,7 @@ const howItWorks = [
     eyebrow: 'Deliver',
     title: 'Peer-to-Peer',
     description:
-      "The buyer's system connects directly to the seller's AIM Data or AIM-Node instance using the delivery token. Data flows point-to-point over an encrypted channel. ai.market never proxies, caches, or stores the payload.",
+      "The buyer's system connects directly to the seller's AIM Data instance using the delivery token. Data flows point-to-point over an encrypted channel. ai.market never proxies, caches, or stores the payload.",
   },
 ];
 
@@ -72,7 +72,7 @@ const platformDoesNot = [
   {
     label: 'Lock in sellers',
     description:
-      'AIM Data and AIM-Node are open, self-hosted tools - sellers own their infrastructure',
+      'AIM Data is an open, self-hosted tool - sellers own their infrastructure',
   },
 ];
 
@@ -80,7 +80,7 @@ const securitySections = [
   {
     label: 'DEVICE IDENTITY',
     description:
-      "Every AIM Data or AIM-Node node instance generates an Ed25519 keypair locally during first setup. The private key is stored in a passphrase-protected keystore on the node instance - it never leaves the operator's infrastructure. The corresponding public key is registered with ai.market during node-instance enrollment. All subsequent operations - publishing listings, signing delivery receipts, reporting traces - are authenticated by Ed25519 signatures verified against the registered public key.",
+      "Every AIM Data install generates an Ed25519 keypair locally during first setup. The private key is stored in a passphrase-protected keystore on the install - it never leaves the operator's infrastructure. The corresponding public key is registered with ai.market during enrollment. All subsequent operations - publishing listings, signing delivery receipts, reporting traces - are authenticated by Ed25519 signatures verified against the registered public key.",
   },
   {
     label: 'TRUST CHANNEL',
@@ -112,18 +112,13 @@ const stackRows = [
   },
   {
     component: 'AIM Data',
-    role: 'Dataset management, local AI profiling, P2P delivery',
-    operator: 'Sellers (self-hosted)',
-  },
-  {
-    component: 'AIM-Node',
-    role: 'Gateway client for discovery, authentication, P2P delivery, and local metering.',
-    operator: 'Buyers and builders (self-hosted)',
+    role: 'Dataset management, local AI profiling, P2P delivery. Gateway features for buyers and builders - discovery, authentication, and local metering - unlock in the same install.',
+    operator: 'Sellers, buyers, and builders (self-hosted)',
   },
   {
     component: 'allAI',
     role: 'Embedded AI for metadata generation and quality scoring',
-    operator: 'Runs inside AIM Data/AIM-Node',
+    operator: 'Runs inside AIM Data',
   },
 ];
 

@@ -4,11 +4,11 @@ import type { Metadata } from 'next';
 export const metadata: Metadata = {
   title: { absolute: 'Partner with ai.market' },
   description:
-    'Data partners and Technology partners. Integrate AIM Node, list datasets, co-sell.',
+    'Data partners and Technology partners. Integrate AIM Data, list datasets, co-sell.',
   openGraph: {
     title: 'Partner with ai.market',
     description:
-      'Data partners and Technology partners. Integrate AIM Node, list datasets, co-sell.',
+      'Data partners and Technology partners. Integrate AIM Data, list datasets, co-sell.',
     url: 'https://ai.market/partner',
     siteName: 'ai.market',
     images: ['/og/partner.png'],
@@ -18,7 +18,7 @@ export const metadata: Metadata = {
     card: 'summary_large_image',
     title: 'Partner with ai.market',
     description:
-      'Data partners and Technology partners. Integrate AIM Node, list datasets, co-sell.',
+      'Data partners and Technology partners. Integrate AIM Data, list datasets, co-sell.',
     images: ['/og/partner.png'],
   },
 };
@@ -29,7 +29,7 @@ const PARTNER_JSONLD = {
   name: 'ai.market Partner Program',
   url: 'https://ai.market/partner',
   description:
-    'Data partners and Technology partners. Integrate AIM Node, list datasets, co-sell.',
+    'Data partners and Technology partners. Integrate AIM Data, list datasets, co-sell.',
   parentOrganization: {
     '@type': 'Organization',
     name: 'ai.market',

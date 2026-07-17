@@ -50,12 +50,6 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
       priority: 0.8,
     },
     {
-      url: `${SITE_URL}/aim-node`,
-      lastModified: new Date(),
-      changeFrequency: 'weekly',
-      priority: 0.8,
-    },
-    {
       url: `${SITE_URL}/partner`,
       lastModified: new Date(),
       changeFrequency: 'weekly',
