@@ -376,7 +376,7 @@ export default async function LandingPage() {
               <div>
                 <div className="flex h-10 w-10 items-center justify-center rounded-full bg-[#3F51B5] text-sm font-bold text-white">3</div>
                 <p className="mt-4 text-sm leading-6 text-[#666666]">
-                  Delivery is peer-to-peer. When a deal closes, the bytes move encrypted from your infrastructure straight to the buyer. Stripe moves the money. We take 5% and that is it.
+                  Delivery is peer-to-peer. When a deal closes, the bytes move encrypted from your infrastructure straight to the buyer. Stripe moves the money. We deduct 5% from the seller; the buyer pays any payment-provider costs and applicable tax shown at checkout.
                 </p>
               </div>
             </div>

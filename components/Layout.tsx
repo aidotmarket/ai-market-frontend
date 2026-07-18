@@ -12,6 +12,7 @@ const footerLinkSections = [
     links: [
       { label: 'Find Data', href: '/find-data' },
       { label: 'Sell Data', href: '/sell-data' },
+      { label: 'Pricing', href: '/pricing' },
       { label: 'Browse Data', href: '/listings' },
       { label: 'Request Data', href: '/requests' },
       { label: 'Partner Program', href: '/partner' },
@@ -78,6 +79,7 @@ export function Layout({ children }: { children: React.ReactNode }) {
             <nav className="hidden md:flex items-center gap-6">
               <Link href="/find-data" className="text-sm text-[#666666] hover:text-[#1A1A1A]">Find Data</Link>
               <Link href="/sell-data" className="text-sm text-[#666666] hover:text-[#1A1A1A]">Sell Data</Link>
+              <Link href="/pricing" className="text-sm text-[#666666] hover:text-[#1A1A1A]">Pricing</Link>
               <Link href="/protocol" className="text-sm text-[#666666] hover:text-[#1A1A1A]">The Protocol</Link>
               <Link href="/blog" className="text-sm text-[#666666] hover:text-[#1A1A1A]">Blog</Link>
               {isAdminEmail && (
@@ -129,6 +131,7 @@ export function Layout({ children }: { children: React.ReactNode }) {
             <div id="mobile-nav-menu" className="md:hidden border-t border-gray-200 py-3 space-y-2">
               <Link href="/find-data" className="block px-2 py-2 text-sm text-gray-600 hover:text-gray-900" onClick={() => setMobileMenuOpen(false)}>Find Data</Link>
               <Link href="/sell-data" className="block px-2 py-2 text-sm text-gray-600 hover:text-gray-900" onClick={() => setMobileMenuOpen(false)}>Sell Data</Link>
+              <Link href="/pricing" className="block px-2 py-2 text-sm text-gray-600 hover:text-gray-900" onClick={() => setMobileMenuOpen(false)}>Pricing</Link>
               <Link href="/protocol" className="block px-2 py-2 text-sm text-gray-600 hover:text-gray-900" onClick={() => setMobileMenuOpen(false)}>The Protocol</Link>
               <Link href="/blog" className="block px-2 py-2 text-sm text-gray-600 hover:text-gray-900" onClick={() => setMobileMenuOpen(false)}>Blog</Link>
               {isAdminEmail && (

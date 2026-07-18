@@ -92,7 +92,7 @@ export default function TermsAndConditionsPage() {
         <p className={paragraphClass}>4.5 Communication runs through allAI. Buyer-seller discovery, search, and deal communication on the Platform are carried by allAI, and Buyers and Sellers agree not to arrange an on-platform transaction through direct off-platform contact. This is how the marketplace works and how translation between languages happens. This is separate from disputes: once a transaction has gone wrong, resolving the dispute is the parties&apos; own responsibility (Section 12), and ai.market does not mediate it.</p>
       </section>
 
-      <section className={sectionClass}>
+      <section id="fees" className={`${sectionClass} scroll-mt-24`}>
         <h2 className={headingClass}>5. Commission, transaction costs, payment, and tax</h2>
         <p className={paragraphClass}>5.1 Commission. We charge a 5% Commission on the value of a successful transaction. We charge no listing fees.</p>
         <p className={paragraphClass}>5.2 Buyer pays transaction costs. The Buyer pays all transaction and processing costs on top of the price, including Stripe fees, stablecoin fees, and escrow fees. These costs are the Buyer&apos;s, not the Seller&apos;s and not ours.</p>
