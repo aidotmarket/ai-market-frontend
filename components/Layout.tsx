@@ -197,13 +197,7 @@ export function Layout({ children }: { children: React.ReactNode }) {
           </div>
         </div>
         <div className="mx-auto max-w-7xl px-6 lg:px-8 pb-8">
-          <div className="border-t border-[#2a3545] pt-6 flex flex-wrap items-center gap-x-1.5 gap-y-2 text-[13px] text-[#6b7a8d]">
-            <Link href="/legal/terms" className="hover:text-[#96a0af] transition-colors">Terms</Link>
-            <span className="mx-1.5">|</span>
-            <Link href="/legal/site-terms" className="hover:text-[#96a0af] transition-colors">Site Terms</Link>
-            <span className="mx-1.5">|</span>
-            <Link href="/legal/privacy" className="hover:text-[#96a0af] transition-colors">Privacy Notice</Link>
-            <span className="flex-1" />
+          <div className="border-t border-[#2a3545] pt-6 flex flex-wrap items-center gap-y-2 text-[13px] text-[#6b7a8d]">
             <span>&copy; {new Date().getFullYear()} ai.market. All rights reserved.</span>
           </div>
         </div>
