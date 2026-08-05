@@ -272,7 +272,11 @@ export default async function ListingDetailPage({ params, searchParams }: Props)
           )}
 
           {/* Inquiry Widget */}
-          <InquiryWidget listingId={listing.id} listingSlug={listing.slug} />
+          <InquiryWidget
+            listingId={listing.id}
+            listingSlug={listing.slug}
+            listingTitle={listing.title ?? listing.slug}
+          />
 
           {/* Non-custodial trust strip */}
           <div className="rounded-xl bg-green-50 border border-green-200 p-4">
