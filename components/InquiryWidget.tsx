@@ -1,10 +1,15 @@
 'use client';
 
-import { useState, useCallback, useEffect } from 'react';
+import { useState, useCallback, useEffect, useRef } from 'react';
 import Link from 'next/link';
 import { useAuthStore } from '@/store/auth';
 import { useToast } from '@/components/Toast';
 import { createInquiry, replyToConversation } from '@/api/conversations';
+import {
+  createAnonymousSession,
+  readAnonymousMessageStream,
+  sendAnonymousMessage,
+} from '@/api/anonymousChat';
 import { useConversationPoll } from '@/hooks/useConversationPoll';
 import ConversationThread from '@/components/ConversationThread';
 import type { ConversationDetail, ConversationMessage } from '@/types';
@@ -13,11 +18,12 @@ import { AxiosError } from 'axios';
 interface Props {
   listingId: string;
   listingSlug: string;
+  listingTitle: string;
 }
 
 const DRAFT_KEY_PREFIX = 'inquiry_draft_';
 
-export default function InquiryWidget({ listingId, listingSlug }: Props) {
+export default function InquiryWidget({ listingId, listingSlug, listingTitle }: Props) {
   const { isAuthenticated } = useAuthStore();
   const { toast } = useToast();
 
@@ -28,6 +34,12 @@ export default function InquiryWidget({ listingId, listingSlug }: Props) {
   const [showTyping, setShowTyping] = useState(false);
   const [replyText, setReplyText] = useState('');
   const [replying, setReplying] = useState(false);
+  const [anonymousMessages, setAnonymousMessages] = useState<ConversationMessage[]>([]);
+  const [anonymousError, setAnonymousError] = useState<string | null>(null);
+  const [anonymousAnswerReturned, setAnonymousAnswerReturned] = useState(false);
+  const [anonymousAnswerStarted, setAnonymousAnswerStarted] = useState(false);
+  const anonymousSessionRef = useRef<string | null>(null);
+  const anonymousAbortRef = useRef<AbortController | null>(null);
 
   // Restore draft from sessionStorage
   useEffect(() => {
@@ -37,6 +49,8 @@ export default function InquiryWidget({ listingId, listingSlug }: Props) {
       sessionStorage.removeItem(DRAFT_KEY_PREFIX + listingId);
     }
   }, [listingId]);
+
+  useEffect(() => () => anonymousAbortRef.current?.abort(), []);
 
   // Poll for new messages after submission
   const handleNewMessages = useCallback((newMsgs: ConversationMessage[]) => {
@@ -54,9 +68,98 @@ export default function InquiryWidget({ listingId, listingSlug }: Props) {
     if (!question.trim()) return;
 
     if (!isAuthenticated) {
-      // Save draft and redirect to login
-      sessionStorage.setItem(DRAFT_KEY_PREFIX + listingId, question);
-      window.location.href = `/login?redirect=/listings/${encodeURIComponent(listingSlug)}`;
+      const trimmedQuestion = question.trim();
+      const attemptId = Date.now();
+      const questionMessageId = `anonymous-question-${attemptId}`;
+      const answerMessageId = `anonymous-answer-${attemptId}`;
+      const controller = new AbortController();
+      let receivedAnswer = '';
+
+      anonymousAbortRef.current = controller;
+      setSubmitting(true);
+      setAnonymousError(null);
+      setAnonymousAnswerStarted(false);
+      setAnonymousMessages((prev) => [
+        ...prev,
+        {
+          id: questionMessageId,
+          conversation_id: '',
+          role: 'buyer',
+          content: trimmedQuestion,
+          created_at: new Date().toISOString(),
+        },
+      ]);
+
+      try {
+        if (!anonymousSessionRef.current) {
+          anonymousSessionRef.current = await createAnonymousSession();
+        }
+
+        const response = await sendAnonymousMessage({
+          session_id: anonymousSessionRef.current,
+          message: `Question about the listing "${listingTitle}" (slug: ${listingSlug}):\n\n${trimmedQuestion}`,
+          context: {
+            page: `/listings/${listingSlug}`,
+            listing_id: listingId,
+          },
+          stream: true,
+        }, { signal: controller.signal });
+
+        if (!response.ok || !response.body) {
+          throw new Error('Anonymous message request failed');
+        }
+
+        await readAnonymousMessageStream(response.body, (event) => {
+          const streamError = event.error ?? (event.type === 'error' ? event.message : undefined);
+          if (typeof streamError === 'string' && streamError) {
+            throw new Error(streamError);
+          }
+
+          const delta = event.text ?? (event.type === 'delta' ? event.chunk : undefined);
+          if (typeof delta !== 'string' || !delta) return;
+
+          receivedAnswer += delta;
+          setAnonymousAnswerStarted(true);
+          setAnonymousMessages((prev) => {
+            const answer = prev.find((message) => message.id === answerMessageId);
+            if (!answer) {
+              return [
+                ...prev,
+                {
+                  id: answerMessageId,
+                  conversation_id: '',
+                  role: 'allai',
+                  content: delta,
+                  created_at: new Date().toISOString(),
+                },
+              ];
+            }
+
+            return prev.map((message) => (
+              message.id === answerMessageId
+                ? { ...message, content: message.content + delta }
+                : message
+            ));
+          });
+        });
+
+        if (!receivedAnswer.trim()) {
+          throw new Error('Anonymous message stream returned no answer');
+        }
+
+        setQuestion('');
+        setAnonymousAnswerReturned(true);
+      } catch (error) {
+        if (!(error instanceof Error && error.name === 'AbortError')) {
+          setAnonymousError("We couldn't get an answer. Please try again.");
+          setAnonymousMessages((prev) => prev.filter(
+            (message) => message.id !== questionMessageId && message.id !== answerMessageId
+          ));
+        }
+      } finally {
+        setSubmitting(false);
+        anonymousAbortRef.current = null;
+      }
       return;
     }
 
@@ -165,6 +268,15 @@ export default function InquiryWidget({ listingId, listingSlug }: Props) {
       <p className="text-sm text-gray-500 mb-4">
         Get an instant AI-powered answer, or your question will be forwarded to the seller.
       </p>
+      {!isAuthenticated && anonymousMessages.length > 0 && (
+        <div className="max-h-80 overflow-y-auto mb-4" aria-live="polite">
+          <ConversationThread
+            messages={anonymousMessages}
+            viewerRole="buyer"
+            showTypingIndicator={submitting && !anonymousAnswerStarted}
+          />
+        </div>
+      )}
       <textarea
         value={question}
         onChange={(e) => setQuestion(e.target.value)}
@@ -189,9 +301,20 @@ export default function InquiryWidget({ listingId, listingSlug }: Props) {
           'Submit Question'
         )}
       </button>
-      {!isAuthenticated && (
+      {!isAuthenticated && anonymousError && (
+        <p className="text-xs text-red-600 mt-2" role="alert">
+          {anonymousError}
+        </p>
+      )}
+      {!isAuthenticated && anonymousAnswerReturned && (
         <p className="text-xs text-gray-500 mt-2 text-center">
-          You&apos;ll need to sign in to submit your question.
+          Want the seller to answer personally?{' '}
+          <Link
+            href={`/login?redirect=/listings/${encodeURIComponent(listingSlug)}`}
+            className="text-[#3F51B5] hover:underline"
+          >
+            Sign in to forward this question.
+          </Link>
         </p>
       )}
     </div>

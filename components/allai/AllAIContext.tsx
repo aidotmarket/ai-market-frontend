@@ -11,6 +11,12 @@ import {
 } from 'react';
 import { usePathname } from 'next/navigation';
 import { useAuthStore } from '@/store/auth';
+import {
+  createAnonymousSession,
+  readAnonymousMessageStream,
+  sendAnonymousMessage,
+  type AnonymousMessagePayload,
+} from '@/api/anonymousChat';
 import type { TicketStatusCardData } from './TicketStatusCard';
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000';
@@ -199,16 +205,10 @@ export function AllAIProvider({ children }: { children: ReactNode }) {
 
   const ensureSession = useCallback(async (): Promise<string> => {
     if (sessionIdRef.current) return sessionIdRef.current;
-    const res = await fetch(`${API_URL}/api/allai/support/anonymous/session`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({}),
-    });
-    if (!res.ok) throw new Error('Failed to create session');
-    const data = await res.json();
-    sessionIdRef.current = data.session_id;
-    sessionStorage.setItem(SESSION_KEY, data.session_id);
-    return data.session_id;
+    const sessionId = await createAnonymousSession();
+    sessionIdRef.current = sessionId;
+    sessionStorage.setItem(SESSION_KEY, sessionId);
+    return sessionId;
   }, []);
 
   const sendMessage = useCallback(
@@ -232,7 +232,6 @@ export function AllAIProvider({ children }: { children: ReactNode }) {
       ]);
       setIsStreaming(true);
 
-      let readerRef: ReadableStreamDefaultReader<Uint8Array> | null = null;
       try {
         const sessionId = await ensureSession();
         const controller = new AbortController();
@@ -259,12 +258,9 @@ export function AllAIProvider({ children }: { children: ReactNode }) {
         const headers: Record<string, string> = { 'Content-Type': 'application/json' };
         if (token) headers['Authorization'] = `Bearer ${token}`;
 
-        let res = await fetch(`${API_URL}/api/allai/support/anonymous/message`, {
-          method: 'POST',
+        let res = await sendAnonymousMessage(bodyPayload as unknown as AnonymousMessagePayload, {
           headers,
-          body: JSON.stringify(bodyPayload),
           signal: controller.signal,
-          cache: 'no-store',
         });
 
         if (res.status === 404) {
@@ -276,15 +272,12 @@ export function AllAIProvider({ children }: { children: ReactNode }) {
           }
 
           const replacementSessionId = await ensureSession();
-          res = await fetch(`${API_URL}/api/allai/support/anonymous/message`, {
-            method: 'POST',
+          res = await sendAnonymousMessage({
+            ...(bodyPayload as unknown as AnonymousMessagePayload),
+            session_id: replacementSessionId,
+          }, {
             headers,
-            body: JSON.stringify({
-              ...bodyPayload,
-              session_id: replacementSessionId,
-            }),
             signal: controller.signal,
-            cache: 'no-store',
           });
         }
 
@@ -302,104 +295,77 @@ export function AllAIProvider({ children }: { children: ReactNode }) {
 
         if (!res.ok || !res.body) throw new Error('Stream request failed');
 
-        const reader = res.body.getReader();
-        readerRef = reader;
-        const decoder = new TextDecoder();
-        let buffer = '';
-        const READ_TIMEOUT_MS = 30_000;
-
         try {
-          while (true) {
-            const readPromise = reader.read();
-            const timeoutPromise = new Promise<never>((_, reject) =>
-              setTimeout(() => reject(new Error('Stream read timeout')), READ_TIMEOUT_MS)
-            );
-            const { done, value } = await Promise.race([readPromise, timeoutPromise]);
-            if (done) break;
-
-            buffer += decoder.decode(value, { stream: true });
-            const lines = buffer.split('\n');
-            buffer = lines.pop() || '';
-
-            for (const line of lines) {
-              if (!line.startsWith('data: ')) continue;
-              const raw = line.slice(6).trim();
-              if (!raw) continue;
-
-              try {
-                const evt = JSON.parse(raw);
-
-                // Delta content: support both {"text":"..."} and {"type":"delta","chunk":"..."}
-                const delta = evt.text ?? (evt.type === 'delta' ? evt.chunk : undefined);
-                if (delta) {
-                  setMessages((prev) =>
-                    prev.map((m) =>
-                      m.id === assistantId ? { ...m, content: m.content + delta } : m
-                    )
-                  );
-                }
-
-                // Error: support both {"error":"..."} and {"type":"error","message":"..."}
-                const error = evt.error ?? (evt.type === 'error' ? evt.message : undefined);
-                if (error) {
-                  setMessages((prev) =>
-                    prev.map((m) =>
-                      m.id === assistantId
-                        ? { ...m, content: error || 'Something went wrong.' }
-                        : m
-                    )
-                  );
-                }
-
-                // Field proposal from wizard tools
-                if (evt.type === 'field_proposal' && evt.field) {
-                  onFieldProposalRef.current?.({
-                    field: evt.field,
-                    value: evt.value ?? '',
-                    reasoning: evt.reasoning ?? '',
-                  });
-                }
-
-                // Batch proposal from wizard tools
-                if (evt.type === 'batch_proposal' && Array.isArray(evt.proposals)) {
-                  onBatchProposalRef.current?.(
-                    evt.proposals.map((p: any) => ({
-                      field: p.field,
-                      value: p.value ?? '',
-                      reasoning: p.reasoning ?? '',
-                    }))
-                  );
-                }
-
-                const ticketStatusCards = extractTicketStatusCards(evt);
-                if (ticketStatusCards) {
-                  setMessages((prev) =>
-                    prev.map((m) =>
-                      m.id === assistantId
-                        ? {
-                            ...m,
-                            ticketStatusCards: [
-                              ...(m.ticketStatusCards ?? []),
-                              ...ticketStatusCards,
-                            ],
-                          }
-                        : m
-                    )
-                  );
-                }
-              } catch {
-                // skip malformed JSON
-              }
+          await readAnonymousMessageStream(res.body, (evt) => {
+            // Delta content: support both {"text":"..."} and {"type":"delta","chunk":"..."}
+            const delta = evt.text ?? (evt.type === 'delta' ? evt.chunk : undefined);
+            if (typeof delta === 'string' && delta) {
+              setMessages((prev) =>
+                prev.map((m) =>
+                  m.id === assistantId ? { ...m, content: m.content + delta } : m
+                )
+              );
             }
-          }
+
+            // Error: support both {"error":"..."} and {"type":"error","message":"..."}
+            const error = evt.error ?? (evt.type === 'error' ? evt.message : undefined);
+            if (typeof error === 'string' && error) {
+              setMessages((prev) =>
+                prev.map((m) =>
+                  m.id === assistantId
+                    ? { ...m, content: error || 'Something went wrong.' }
+                    : m
+                )
+              );
+            }
+
+            // Field proposal from wizard tools
+            if (evt.type === 'field_proposal' && typeof evt.field === 'string') {
+              onFieldProposalRef.current?.({
+                field: evt.field,
+                value: typeof evt.value === 'string' ? evt.value : '',
+                reasoning: typeof evt.reasoning === 'string' ? evt.reasoning : '',
+              });
+            }
+
+            // Batch proposal from wizard tools
+            if (evt.type === 'batch_proposal' && Array.isArray(evt.proposals)) {
+              onBatchProposalRef.current?.(
+                evt.proposals
+                  .filter((proposal): proposal is Record<string, unknown> => (
+                    typeof proposal === 'object' && proposal !== null
+                  ))
+                  .map((proposal) => ({
+                    field: typeof proposal.field === 'string' ? proposal.field : '',
+                    value: typeof proposal.value === 'string' ? proposal.value : '',
+                    reasoning: typeof proposal.reasoning === 'string' ? proposal.reasoning : '',
+                  }))
+              );
+            }
+
+            const ticketStatusCards = extractTicketStatusCards(evt as Record<string, any>);
+            if (ticketStatusCards) {
+              setMessages((prev) =>
+                prev.map((m) =>
+                  m.id === assistantId
+                    ? {
+                        ...m,
+                        ticketStatusCards: [
+                          ...(m.ticketStatusCards ?? []),
+                          ...ticketStatusCards,
+                        ],
+                      }
+                    : m
+                )
+              );
+            }
+          });
         } catch (readErr) {
           // On timeout, abort the request so the connection is torn down
           if (readErr instanceof Error && readErr.message === 'Stream read timeout') {
             controller.abort();
           }
           throw readErr;
-        } finally {
-          reader.releaseLock();
         }
       } catch (err: any) {
         if (err?.name !== 'AbortError') {
@@ -412,8 +378,6 @@ export function AllAIProvider({ children }: { children: ReactNode }) {
           );
         }
       } finally {
-        // Safety net: cancel the reader if it's still locked
-        try { readerRef?.cancel(); } catch { /* already released */ }
         setIsStreaming(false);
         abortRef.current = null;
       }
