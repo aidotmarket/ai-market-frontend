@@ -61,6 +61,19 @@ export async function searchListings(
   return res.data;
 }
 
+export async function getMarketplaceCategoryFacets(): Promise<Record<string, number>> {
+  // The search endpoint requires a non-empty query. Its category facets describe
+  // the full publicly visible inventory, independent of the result matches.
+  const response = await searchListings('*', { limit: 1, offset: 0 });
+  const categories = response.facets?.categories;
+
+  if (!categories || typeof categories !== 'object') {
+    throw new Error('Category facets are unavailable');
+  }
+
+  return categories;
+}
+
 export const getListings = () => api.get('/listings/');
 export const getMyListings = () => api.get('/listings/mine');
 export const updateListing = (id: string, data: any) => api.patch(`/listings/${id}`, data);

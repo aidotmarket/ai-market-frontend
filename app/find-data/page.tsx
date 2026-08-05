@@ -1,6 +1,7 @@
 import Link from 'next/link';
 import type { Metadata } from 'next';
 import { MarketplaceSearchExperience } from '@/components/search/MarketplaceSearchExperience';
+import { MarketplaceCategoryCards } from '@/components/categories/MarketplaceCategoryCards';
 
 export const metadata: Metadata = {
   title: { absolute: 'Find data on ai.market' },
@@ -25,49 +26,6 @@ export const metadata: Metadata = {
 };
 
 export const dynamic = 'force-dynamic';
-
-const categories = [
-  {
-    name: 'Healthcare',
-    slug: 'healthcare',
-    description: 'Clinical, life sciences, population health, and care operations data.',
-  },
-  {
-    name: 'Finance',
-    slug: 'finance',
-    description: 'Markets, risk, payments, insurance, and business intelligence datasets.',
-  },
-  {
-    name: 'Technology',
-    slug: 'technology',
-    description: 'Software, infrastructure, AI systems, and digital product signals.',
-  },
-  {
-    name: 'Retail',
-    slug: 'retail',
-    description: 'Commerce, merchandising, pricing, inventory, and consumer behavior data.',
-  },
-  {
-    name: 'Real Estate',
-    slug: 'real-estate',
-    description: 'Property, location, mobility, construction, and market intelligence.',
-  },
-  {
-    name: 'Marketing',
-    slug: 'marketing',
-    description: 'Audience, advertising, brand, demand generation, and campaign signals.',
-  },
-  {
-    name: 'Government',
-    slug: 'government',
-    description: 'Public sector, civic, regulatory, procurement, and open-data assets.',
-  },
-  {
-    name: 'Other',
-    slug: 'other',
-    description: 'Specialized datasets that do not fit a single marketplace category.',
-  },
-];
 
 export default function FindDataPage() {
   return (
@@ -151,22 +109,7 @@ export default function FindDataPage() {
             </p>
           </div>
 
-          <div className="mt-10 grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
-            {categories.map((category) => (
-              <Link
-                key={category.slug}
-                href={`/listings?category=${category.slug}`}
-                className="group rounded-2xl border border-gray-200 bg-white p-5 shadow-sm transition-all hover:border-[#C5CAE9] hover:shadow-md focus:outline-none focus:ring-2 focus:ring-[#3F51B5] focus:ring-offset-2"
-              >
-                <h3 className="text-base font-semibold text-gray-900 group-hover:text-[#3F51B5]">
-                  {category.name}
-                </h3>
-                <p className="mt-3 text-sm leading-6 text-gray-600">
-                  {category.description}
-                </p>
-              </Link>
-            ))}
-          </div>
+          <MarketplaceCategoryCards />
         </div>
       </section>
 

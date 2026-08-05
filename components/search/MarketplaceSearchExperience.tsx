@@ -3,6 +3,11 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
 import { usePathname, useRouter, useSearchParams } from 'next/navigation';
 import { useSearchListings, type ResultItem } from '@/hooks/useSearchListings';
+import { useMarketplaceCategoryFacets } from '@/hooks/useMarketplaceCategoryFacets';
+import {
+  formatMarketplaceCategoryName,
+  getMarketplaceCategories,
+} from '@/lib/marketplaceCategories';
 import { MarketplaceListingCard } from '@/components/search/MarketplaceListingCard';
 import { SearchForm } from '@/components/search/SearchForm';
 
@@ -95,7 +100,6 @@ export function MarketplaceSearchExperience({
   const {
     items: rawItems,
     facets,
-    browseCategoryCounts,
     total,
     semanticMode,
     isLoading,
@@ -106,6 +110,10 @@ export function MarketplaceSearchExperience({
     fetchNextPage,
     refetch,
   } = useSearchListings({ q, category, listingCategory, minPrice, maxPrice });
+  const {
+    data: inventoryCategoryFacets,
+    isError: areInventoryCategoryFacetsUnavailable,
+  } = useMarketplaceCategoryFacets();
 
   const sort = searchParams.get('sort') || (semanticMode ? 'relevance' : 'newest');
 
@@ -116,11 +124,15 @@ export function MarketplaceSearchExperience({
 
   const items = sortItems(filteredItems, sort, semanticMode);
 
-  const categoryCounts: [string, number][] = facets
-    ? Object.entries(facets.categories)
-    : browseCategoryCounts
-      ? Object.entries(browseCategoryCounts)
+  const availableCategoryFacets = inventoryCategoryFacets ?? facets?.categories;
+  const categoryOptions = availableCategoryFacets
+    ? getMarketplaceCategories(availableCategoryFacets)
+    : areInventoryCategoryFacetsUnavailable
+      ? getMarketplaceCategories(null)
       : [];
+  const selectedCategoryIsHidden = Boolean(
+    category && !categoryOptions.some((option) => option.value === category),
+  );
 
   const dataTypeCounts = buildDataTypeCounts(rawItems);
   const priceStats = facets?.price || null;
@@ -273,9 +285,14 @@ export function MarketplaceSearchExperience({
                 className="w-full rounded-2xl border border-slate-200 px-3 py-2.5 text-sm text-slate-900 focus:border-[#3F51B5] focus:outline-none"
               >
                 <option value="">All categories</option>
-                {categoryCounts.map(([value, count]) => (
-                  <option key={value} value={value}>
-                    {value} ({count})
+                {selectedCategoryIsHidden && (
+                  <option value={category} disabled>
+                    {formatMarketplaceCategoryName(category)} (0)
+                  </option>
+                )}
+                {categoryOptions.map((option) => (
+                  <option key={option.value} value={option.value}>
+                    {option.name}{option.count !== null ? ` (${option.count})` : ''}
                   </option>
                 ))}
               </select>

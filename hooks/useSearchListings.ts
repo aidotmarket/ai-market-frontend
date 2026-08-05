@@ -96,21 +96,10 @@ export function useSearchListings({
     ? (Array.isArray(firstPage) ? rawItems.length : (firstPage as SearchResponse | undefined)?.total || rawItems.length)
     : rawItems.length;
 
-  // In browse mode (no facets), derive category counts from loaded items
-  const browseCategoryCounts: Record<string, number> | null = facets ? null : (() => {
-    const counts: Record<string, number> = {};
-    for (const item of rawItems) {
-      const cat = 'category' in item && item.category ? item.category : null;
-      if (cat) counts[cat] = (counts[cat] || 0) + 1;
-    }
-    return Object.keys(counts).length > 0 ? counts : null;
-  })();
-
   return {
     ...query,
     items: rawItems,
     facets,
-    browseCategoryCounts,
     total,
     semanticMode,
     pageSize: PAGE_SIZE,
