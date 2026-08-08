@@ -2,12 +2,6 @@
 
 import axios, { type AxiosError, type InternalAxiosRequestConfig } from 'axios';
 
-declare module 'axios' {
-  interface AxiosRequestConfig {
-    skipOnboardingRedirect?: boolean;
-  }
-}
-
 const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000';
 
 export const api = axios.create({
@@ -17,7 +11,6 @@ export const api = axios.create({
 });
 
 let refreshPromise: Promise<string> | null = null;
-let onboardingRedirected = false;
 
 const DEFAULT_REFRESH_RETRY_SECONDS = 60;
 const MAX_REFRESH_RETRY_SECONDS = 60;
@@ -186,24 +179,6 @@ api.interceptors.response.use(
       } catch (refreshError) {
         return Promise.reject(refreshError);
       }
-    }
-
-    // Onboarding not finished: the API gate returns 403 with an onboarding_url.
-    // Guide the user to complete setup (surfaced on the dashboard) instead of
-    // surfacing the raw error object (which crashed the app as React #31).
-    const onboardingData = error.response.data as
-      | { detail?: { onboarding_url?: string } }
-      | undefined;
-    if (
-      error.response.status === 403 &&
-      onboardingData?.detail?.onboarding_url &&
-      typeof window !== 'undefined' &&
-      !originalRequest.skipOnboardingRedirect &&
-      !onboardingRedirected &&
-      window.location.pathname !== '/dashboard'
-    ) {
-      onboardingRedirected = true;
-      window.location.href = '/dashboard';
     }
 
     return Promise.reject(error);

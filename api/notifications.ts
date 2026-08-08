@@ -27,14 +27,12 @@ export interface NotificationUnreadCountResponse {
 }
 
 export async function getNotifications(params?: { limit?: number; offset?: number; unread_only?: boolean }) {
-  const res = await api.get<NotificationListResponse>('/notifications', { params, skipOnboardingRedirect: true });
+  const res = await api.get<NotificationListResponse>('/notifications', { params });
   return res.data;
 }
 
 export async function getUnreadNotificationCount() {
-  const res = await api.get<NotificationUnreadCountResponse>('/notifications/unread-count', {
-    skipOnboardingRedirect: true,
-  });
+  const res = await api.get<NotificationUnreadCountResponse>('/notifications/unread-count');
   return res.data;
 }
 
