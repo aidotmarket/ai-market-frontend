@@ -14,7 +14,6 @@ const connectApi = vi.hoisted(() => ({
 }));
 
 const authApi = vi.hoisted(() => ({
-  getOnboardingStatus: vi.fn(),
   setup2FA: vi.fn(),
   verify2FASetup: vi.fn(),
 }));
@@ -71,15 +70,6 @@ describe('DashboardOverview seller setup 2FA state', () => {
       },
       next_action: { capability: 'seller', step: 'totp_enabled' },
     });
-    authApi.getOnboardingStatus.mockResolvedValue({
-      completed: false,
-      current_step: 'connect_stripe',
-      steps: [
-        { id: 'profile', label: 'Profile', completed: true },
-        { id: 'enable_2fa', label: 'Enable 2FA', completed: true },
-        { id: 'connect_stripe', label: 'Connect Stripe', completed: false },
-      ],
-    });
     useAuthStore.setState({
       user: baseUser,
       token: 'access-token',
@@ -95,7 +85,7 @@ describe('DashboardOverview seller setup 2FA state', () => {
     vi.clearAllMocks();
   });
 
-  it('shows 2FA as not enabled when totp_enabled is false even if onboarding step data is complete', async () => {
+  it('renders provisioning seller setup from capability state alone', async () => {
     render(<DashboardOverview />);
 
     await waitFor(() => {
@@ -105,5 +95,44 @@ describe('DashboardOverview seller setup 2FA state', () => {
     expect(screen.queryByText('Two-factor authentication is enabled.')).toBeNull();
     expect(screen.getByRole('button', { name: 'Enable 2FA' })).not.toBeNull();
     expect(screen.getByRole('button', { name: 'Connect Stripe' }).hasAttribute('disabled')).toBe(true);
+    expect(capabilitiesApi.getCapabilities).toHaveBeenCalledOnce();
+    expect(connectApi.getConnectStatus).not.toHaveBeenCalled();
+    expect(sellerApi.getSellerStats).not.toHaveBeenCalled();
+    expect(listingsApi.getMyListings).not.toHaveBeenCalled();
+  });
+
+  it('renders active seller stats from capability state alone', async () => {
+    capabilitiesApi.getCapabilities.mockResolvedValue({
+      buyer: { persisted_status: 'active', effective_status: 'active', missing_steps: [], reason: null },
+      seller: {
+        persisted_status: 'active',
+        effective_status: 'active',
+        missing_steps: [],
+        reason: null,
+      },
+      next_action: null,
+    });
+    connectApi.getConnectStatus.mockResolvedValue({
+      data: { details_submitted: true, payouts_enabled: true },
+    });
+    sellerApi.getSellerStats.mockResolvedValue({
+      data: { views: 12, sales: 3, revenue: 45.5 },
+    });
+    listingsApi.getMyListings.mockResolvedValue({ data: [] });
+
+    render(<DashboardOverview />);
+
+    await waitFor(() => {
+      expect(screen.getByText("Here's what's happening with your store today.")).not.toBeNull();
+    });
+
+    expect(screen.getByText('12')).not.toBeNull();
+    expect(screen.getByText('3')).not.toBeNull();
+    expect(screen.getByText('$45.50')).not.toBeNull();
+    expect(screen.queryByText('Finish seller setup')).toBeNull();
+    expect(capabilitiesApi.getCapabilities).toHaveBeenCalledOnce();
+    expect(connectApi.getConnectStatus).toHaveBeenCalledOnce();
+    expect(sellerApi.getSellerStats).toHaveBeenCalledOnce();
+    expect(listingsApi.getMyListings).toHaveBeenCalledOnce();
   });
 });

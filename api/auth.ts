@@ -14,20 +14,6 @@ import type {
   TOTPVerifySetupResponse,
 } from '@/types';
 
-export type OnboardingStepId = 'profile' | 'role_selection' | 'company_info' | 'enable_2fa' | 'connect_stripe';
-export type OnboardingCurrentStep = OnboardingStepId | 'complete' | null;
-
-export interface OnboardingStatusResponse {
-  completed: boolean;
-  current_step: OnboardingCurrentStep;
-  steps: Array<{
-    id: OnboardingStepId;
-    label: string;
-    completed: boolean;
-    required_for?: Array<'buyer' | 'seller' | 'model_provider'> | null;
-  }>;
-}
-
 export function isTwoFactorChallenge(r: LoginResult): r is PreAuthRequiredResponse {
   return (r as PreAuthRequiredResponse).requires_2fa === true;
 }
@@ -49,11 +35,6 @@ export async function getMe(): Promise<User> {
 
 export async function logout(): Promise<void> {
   await api.post('/auth/logout');
-}
-
-export async function getOnboardingStatus(): Promise<OnboardingStatusResponse> {
-  const res = await api.get<OnboardingStatusResponse>('/auth/onboarding/status');
-  return res.data;
 }
 
 export async function updateProfile(data: { first_name?: string; last_name?: string; company_name?: string }): Promise<User> {

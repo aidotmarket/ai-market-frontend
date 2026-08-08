@@ -21,18 +21,6 @@ function makeResponseError(status: number, retryAfter?: string): AxiosError {
   });
 }
 
-function makeOnboardingForbiddenAdapter(): AxiosAdapter {
-  return async (config: InternalAxiosRequestConfig) => {
-    throw new AxiosError('Forbidden', 'ERR_BAD_REQUEST', config, undefined, {
-      config,
-      data: { detail: { onboarding_url: '/dashboard' } },
-      headers: {},
-      status: 403,
-      statusText: 'Forbidden',
-    });
-  };
-}
-
 function makeUnauthorizedAdapter(): AxiosAdapter {
   return async (config: InternalAxiosRequestConfig) => {
     throw new AxiosError('Unauthorized', 'ERR_BAD_REQUEST', config, undefined, {
@@ -257,33 +245,6 @@ describe('api client response handling', () => {
     ).rejects.toBe(refreshError);
 
     expect(setAuthState).not.toHaveBeenCalled();
-    expect(window.location.href).toBe('/dashboard');
-  });
-
-  it('does not redirect 403 onboarding responses when the request opts out', async () => {
-    vi.stubGlobal('window', { location: { pathname: '/find-data', href: '/find-data' } });
-    const { api } = await import('./client');
-
-    await expect(
-      api.get('/restricted', {
-        adapter: makeOnboardingForbiddenAdapter(),
-        skipOnboardingRedirect: true,
-      })
-    ).rejects.toMatchObject({ response: { status: 403 } });
-
-    expect(window.location.href).toBe('/find-data');
-  });
-
-  it('still redirects 403 onboarding responses when the request does not opt out', async () => {
-    vi.stubGlobal('window', { location: { pathname: '/find-data', href: '/find-data' } });
-    const { api } = await import('./client');
-
-    await expect(
-      api.get('/restricted', {
-        adapter: makeOnboardingForbiddenAdapter(),
-      })
-    ).rejects.toMatchObject({ response: { status: 403 } });
-
     expect(window.location.href).toBe('/dashboard');
   });
 });

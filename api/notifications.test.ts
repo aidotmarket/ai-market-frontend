@@ -13,7 +13,7 @@ describe('notifications API', () => {
     apiGet.mockReset();
   });
 
-  it('opts notification list polling out of onboarding redirects', async () => {
+  it('requests the notification list with its filters', async () => {
     apiGet.mockResolvedValue({
       data: { items: [], total: 0, limit: 20, offset: 0, unread_only: false },
     });
@@ -22,17 +22,14 @@ describe('notifications API', () => {
 
     expect(apiGet).toHaveBeenCalledWith('/notifications', {
       params: { limit: 20, unread_only: true },
-      skipOnboardingRedirect: true,
     });
   });
 
-  it('opts unread count polling out of onboarding redirects', async () => {
+  it('requests the unread notification count', async () => {
     apiGet.mockResolvedValue({ data: { unread_count: 0 } });
 
     await getUnreadNotificationCount();
 
-    expect(apiGet).toHaveBeenCalledWith('/notifications/unread-count', {
-      skipOnboardingRedirect: true,
-    });
+    expect(apiGet).toHaveBeenCalledWith('/notifications/unread-count');
   });
 });

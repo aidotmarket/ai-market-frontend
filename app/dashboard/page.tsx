@@ -8,7 +8,7 @@ import {
   isConnectOnboardingTwoFactorRequired,
   redirectToConnectOnboarding,
 } from '@/api/connect';
-import { getOnboardingStatus, setup2FA, verify2FASetup, type OnboardingStatusResponse } from '@/api/auth';
+import { setup2FA, verify2FASetup } from '@/api/auth';
 import { getSellerStats } from '@/api/seller';
 import { getMyListings } from '@/api/listings';
 import {
@@ -30,7 +30,6 @@ export default function DashboardOverview() {
   const [error, setError] = useState(false);
   const [connecting, setConnecting] = useState(false);
   const [stripeStatus, setStripeStatus] = useState<{ details_submitted?: boolean; payouts_enabled?: boolean } | null>(null);
-  const [onboardingStatus, setOnboardingStatus] = useState<OnboardingStatusResponse | null>(null);
   const [capabilities, setCapabilities] = useState<CapabilitySetResponse | null>(null);
   const [stats, setStats] = useState<any>(null);
   const [heldPublishedCount, setHeldPublishedCount] = useState(0);
@@ -52,29 +51,22 @@ export default function DashboardOverview() {
       setCapabilities(capabilityRes);
 
       const sellerIsActive = capabilityRes.seller.effective_status === 'active';
-      const sellerIsProvisioning = capabilityRes.seller.effective_status === 'provisioning';
 
       setStripeStatus(null);
       setStats(null);
       setHeldPublishedCount(0);
 
       if (sellerIsActive) {
-        const [statusRes, onboardingRes, statsRes, listingsRes] = await Promise.all([
+        const [statusRes, statsRes, listingsRes] = await Promise.all([
           getConnectStatus(),
-          getOnboardingStatus(),
           getSellerStats(),
           getMyListings(),
         ]);
         const listings = Array.isArray(listingsRes.data) ? listingsRes.data : [];
 
         setStripeStatus(statusRes.data);
-        setOnboardingStatus(onboardingRes);
         setStats(statsRes.data);
         setHeldPublishedCount(listings.filter((listing: any) => listing.status === 'published').length);
-      } else if (sellerIsProvisioning) {
-        setOnboardingStatus(await getOnboardingStatus());
-      } else {
-        setOnboardingStatus(null);
       }
     } catch (err) {
       console.error('Failed to fetch dashboard data', err);
