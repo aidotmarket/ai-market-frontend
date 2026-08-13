@@ -1,5 +1,6 @@
 import Link from 'next/link';
 import type { Metadata } from 'next';
+import SellDataCta from '@/components/SellDataCta';
 
 export const metadata: Metadata = {
   title: { absolute: 'Sell data on ai.market with AIM Data' },
@@ -136,20 +137,7 @@ export default function SellDataPage() {
             <p className="mt-5 max-w-3xl text-lg leading-8 text-gray-600">
               Your data stays on your infrastructure. Your listing travels the world. Every listing is built to be found by AI assistants and search engines globally, so buyers discover your data without ever visiting ai.market.
             </p>
-            <div className="mt-8 flex flex-col gap-4 sm:flex-row sm:items-center">
-              <Link
-                href="/register"
-                className="inline-flex items-center justify-center rounded-lg bg-[#0F6E56] px-5 py-3 text-sm font-semibold text-white transition-colors hover:bg-[#0c5a47] focus:outline-none focus:ring-2 focus:ring-[#0F6E56] focus:ring-offset-2"
-              >
-                Create Your Account
-              </Link>
-              <Link
-                href="#how-it-works"
-                className="inline-flex items-center justify-center rounded-lg border border-[#0F6E56] px-5 py-3 text-sm font-semibold text-[#0F6E56] transition-colors hover:bg-[#E1F5EE] focus:outline-none focus:ring-2 focus:ring-[#0F6E56] focus:ring-offset-2"
-              >
-                How it works
-              </Link>
-            </div>
+            <SellDataCta variant="hero" />
           </div>
         </div>
       </section>
@@ -214,12 +202,7 @@ export default function SellDataPage() {
               <p className="mt-4 max-w-3xl text-base leading-7 text-gray-600">
                 Sellers list free and pay nothing until a buyer pays. Stripe handles the payout.
               </p>
-              <Link
-                href="/register"
-                className="mt-6 inline-flex items-center justify-center rounded-lg border border-[#3F51B5] px-5 py-3 text-sm font-semibold text-[#3F51B5] transition-colors hover:bg-[#E8EAF6] focus:outline-none focus:ring-2 focus:ring-[#3F51B5] focus:ring-offset-2"
-              >
-                Create Your Account
-              </Link>
+              <SellDataCta variant="inline" />
             </div>
 
             <aside className="rounded-2xl border border-[#D8EEE6] bg-[#F7FCFA] p-6 shadow-sm" aria-labelledby="agents-heading">
@@ -242,20 +225,7 @@ export default function SellDataPage() {
 
       <section className="bg-gray-50 py-16 sm:py-20" aria-labelledby="final-cta-heading">
         <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
-          <div className="rounded-2xl border border-[#D8EEE6] bg-white p-6 shadow-sm sm:p-8">
-            <h2 id="final-cta-heading" className="text-2xl font-bold tracking-tight text-gray-900">
-              Create Your Account
-            </h2>
-            <p className="mt-4 max-w-3xl text-base leading-7 text-gray-600">
-              Start as a seller. List free and pay nothing until a sale clears.
-            </p>
-            <Link
-              href="/register"
-              className="mt-6 inline-flex items-center justify-center rounded-lg bg-[#0F6E56] px-5 py-3 text-sm font-semibold text-white transition-colors hover:bg-[#0c5a47] focus:outline-none focus:ring-2 focus:ring-[#0F6E56] focus:ring-offset-2"
-            >
-              Create Your Account
-            </Link>
-          </div>
+          <SellDataCta variant="final" />
         </div>
       </section>
 
