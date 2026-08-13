@@ -44,7 +44,6 @@ const footerLinkSections = [
     title: 'Legal',
     links: [
       { label: 'Terms', href: '/legal/terms' },
-      { label: 'Site Terms', href: '/legal/site-terms' },
       { label: 'Privacy Notice', href: '/legal/privacy' },
     ],
   },

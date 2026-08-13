@@ -13,6 +13,9 @@ export default function PrivacyNoticePage() {
 
       <div className="prose prose-gray max-w-none prose-headings:text-gray-900 prose-p:text-gray-700 prose-a:text-[#3F51B5] [&>h2]:mb-4 [&>h2]:mt-10 [&>p]:mb-6">
         <p>
+          This Privacy Notice is provided by AIMARKET LLC, a Wyoming limited liability company, located at 30 N Gould St Ste R, Sheridan, WY 82801, which operates ai.market.
+        </p>
+        <p>
           ai.market and its affiliates (&ldquo;ai.market,&rdquo; &ldquo;we,&rdquo; &ldquo;us,&rdquo; or &ldquo;our&rdquo;) are committed to protecting your privacy. This Privacy Notice describes how we collect, use, disclose, and otherwise process personal information in connection with our websites, applications, and other online services that link to this Privacy Notice (collectively, the &ldquo;Services&rdquo;), as well as offline activities such as events and sales interactions.
         </p>
 
