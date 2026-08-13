@@ -45,6 +45,7 @@ const footerLinkSections = [
     links: [
       { label: 'Terms', href: '/legal/terms' },
       { label: 'Privacy Notice', href: '/legal/privacy' },
+      { label: 'Cookie Policy', href: '/legal/cookies' },
     ],
   },
 ];

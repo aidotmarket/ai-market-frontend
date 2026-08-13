@@ -65,7 +65,7 @@ export default function PrivacyNoticePage() {
 
         <h2>Cookies and Tracking Technologies</h2>
         <p>
-          We use cookies and similar tracking technologies to collect and use personal information about you, including to serve interest-based advertising. You can control cookies through your browser settings and other tools. For more information about the cookies we use, please see our Cookie Policy.
+          We use cookies and similar technologies solely to provide, secure, and improve the Services. You can control cookies through your browser settings and other tools. For more information about the cookies we use, please see our <a href="/legal/cookies">Cookie Policy</a>.
         </p>
 
         <h2>Changes to This Privacy Notice</h2>
