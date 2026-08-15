@@ -1,6 +1,7 @@
 'use client';
 
 import { useEffect, useState, useCallback } from 'react';
+import Link from 'next/link';
 import { useAuthStore } from '@/store/auth';
 import {
   getConnectStatus,
@@ -11,6 +12,7 @@ import {
 import { setup2FA, verify2FASetup } from '@/api/auth';
 import { getSellerStats } from '@/api/seller';
 import { getMyListings } from '@/api/listings';
+import { getMyOrders } from '@/api/orders';
 import {
   getCapabilities,
   requestSellerCapability,
@@ -18,9 +20,19 @@ import {
 } from '@/api/capabilities';
 import { notifyCapabilitiesChanged } from '@/components/onboarding/SellerSetupProgressBar';
 import { useToast } from '@/components/Toast';
+import { formatDate, formatPrice } from '@/lib/format';
+import type { BuyerOrder, OrderStatus } from '@/types';
 import { AxiosError } from 'axios';
 
 type TwoFactorFlow = 'idle' | 'showing_qr' | 'verifying' | 'showing_backup_codes';
+
+const ORDER_STATUS_LABEL: Record<OrderStatus, string> = {
+  pending_fulfillment: 'Pending',
+  fulfilled: 'Fulfilled',
+  refunded: 'Refunded',
+  disputed: 'Disputed',
+  payment_failed: 'Failed',
+};
 
 export default function DashboardOverview() {
   const { user, refreshAuth } = useAuthStore();
@@ -33,6 +45,7 @@ export default function DashboardOverview() {
   const [capabilities, setCapabilities] = useState<CapabilitySetResponse | null>(null);
   const [stats, setStats] = useState<any>(null);
   const [heldPublishedCount, setHeldPublishedCount] = useState(0);
+  const [buyerOrders, setBuyerOrders] = useState<BuyerOrder[]>([]);
   const [requestingSeller, setRequestingSeller] = useState(false);
   const [twoFactorFlow, setTwoFactorFlow] = useState<TwoFactorFlow>('idle');
   const [securityLoading, setSecurityLoading] = useState(false);
@@ -51,10 +64,12 @@ export default function DashboardOverview() {
       setCapabilities(capabilityRes);
 
       const sellerIsActive = capabilityRes.seller.effective_status === 'active';
+      const sellerIsProvisioning = capabilityRes.seller.effective_status === 'provisioning';
 
       setStripeStatus(null);
       setStats(null);
       setHeldPublishedCount(0);
+      setBuyerOrders([]);
 
       if (sellerIsActive) {
         const [statusRes, statsRes, listingsRes] = await Promise.all([
@@ -67,6 +82,8 @@ export default function DashboardOverview() {
         setStripeStatus(statusRes.data);
         setStats(statsRes.data);
         setHeldPublishedCount(listings.filter((listing: any) => listing.status === 'published').length);
+      } else if (!sellerIsProvisioning) {
+        setBuyerOrders(await getMyOrders());
       }
     } catch (err) {
       console.error('Failed to fetch dashboard data', err);
@@ -196,6 +213,7 @@ export default function DashboardOverview() {
     : !!capabilities && !sellerMissingSteps.includes('stripe_payouts_live');
   const isSellerActive = sellerStatus === 'active';
   const isSellerProvisioning = sellerStatus === 'provisioning';
+  const isBuyerView = !isSellerActive && !isSellerProvisioning;
   const canStartSelling = sellerStatus === 'not_requested';
   const twoFactorEnabled = !!user?.totp_enabled;
   const showSetupFlow =
@@ -208,15 +226,67 @@ export default function DashboardOverview() {
       <div>
         <h1 className="text-2xl font-bold text-gray-900">Welcome back, {user?.first_name || 'there'}</h1>
         <p className="mt-1 text-sm text-gray-500">
-          {isSellerActive ? "Here's what's happening with your store today." : 'Manage your marketplace account.'}
+          {isSellerActive
+            ? "Here's what's happening with your store today."
+            : isBuyerView
+              ? 'View your purchases and manage your marketplace account.'
+              : 'Manage your marketplace account.'}
         </p>
       </div>
 
+      {isBuyerView && (
+        <section className="rounded-xl border border-gray-200 bg-white p-6 shadow-sm" aria-labelledby="purchases-heading">
+          <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+            <div>
+              <h2 id="purchases-heading" className="text-lg font-semibold text-gray-900">Your purchases</h2>
+              <p className="mt-1 text-sm text-gray-600">Track orders and access delivered datasets.</p>
+            </div>
+            {buyerOrders.length > 0 && (
+              <Link href="/dashboard/orders" className="text-sm font-semibold text-[#3F51B5] hover:underline">
+                View all orders
+              </Link>
+            )}
+          </div>
+
+          {buyerOrders.length === 0 ? (
+            <div className="mt-6 rounded-lg border border-dashed border-gray-300 bg-gray-50 px-6 py-8 text-center">
+              <h3 className="text-base font-semibold text-gray-900">You haven&apos;t bought anything yet</h3>
+              <p className="mt-1 text-sm text-gray-600">Browse available datasets to make your first purchase.</p>
+              <Link
+                href="/find-data"
+                className="mt-4 inline-flex rounded-lg bg-[#3F51B5] px-4 py-2 text-sm font-semibold text-white hover:bg-[#3545a0]"
+              >
+                Browse data
+              </Link>
+            </div>
+          ) : (
+            <div className="mt-6 space-y-3">
+              {buyerOrders.slice(0, 3).map((order) => (
+                <Link
+                  key={order.id}
+                  href={`/dashboard/orders/${order.id}`}
+                  className="flex flex-col gap-2 rounded-lg border border-gray-200 p-4 transition-colors hover:bg-gray-50 sm:flex-row sm:items-center sm:justify-between"
+                >
+                  <div>
+                    <p className="font-medium text-gray-900">{order.listing_title}</p>
+                    <p className="mt-1 text-xs text-gray-500">Ordered {formatDate(order.created_at)}</p>
+                  </div>
+                  <div className="flex items-center gap-3 text-sm">
+                    <span className="text-gray-600">{ORDER_STATUS_LABEL[order.status] ?? order.status}</span>
+                    <span className="font-semibold text-gray-900">{formatPrice(order.amount)}</span>
+                  </div>
+                </Link>
+              ))}
+            </div>
+          )}
+        </section>
+      )}
+
       {canStartSelling && (
-        <div className="rounded-xl border border-[#C5CAE9] bg-white p-6 shadow-sm">
+        <div className="rounded-xl border border-gray-200 bg-gray-50 p-5">
           <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
             <div>
-              <h2 className="text-lg font-semibold text-gray-900">Start selling on AI Market</h2>
+              <h2 className="text-base font-semibold text-gray-900">Interested in selling on AI Market?</h2>
               <p className="mt-1 text-sm text-gray-600">
                 Set up your seller profile, security, and Stripe payouts before publishing paid listings.
               </p>
@@ -225,7 +295,7 @@ export default function DashboardOverview() {
               type="button"
               onClick={handleStartSelling}
               disabled={requestingSeller}
-              className="rounded-lg bg-[#3F51B5] px-4 py-2 text-sm font-semibold text-white transition-colors hover:bg-[#3545a0] disabled:cursor-not-allowed disabled:opacity-60"
+              className="rounded-lg border border-[#3F51B5] bg-white px-4 py-2 text-sm font-semibold text-[#3F51B5] transition-colors hover:bg-[#F8F9FF] disabled:cursor-not-allowed disabled:opacity-60"
             >
               {requestingSeller ? 'Starting...' : 'Start selling'}
             </button>

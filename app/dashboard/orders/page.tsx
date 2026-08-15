@@ -123,10 +123,10 @@ export default function OrdersListPage() {
           <h1 className="text-2xl font-bold text-gray-900 mb-2">No orders yet</h1>
           <p className="text-gray-500 mb-6">You haven&apos;t purchased any datasets yet.</p>
           <Link
-            href="/listings"
+            href="/find-data"
             className="rounded-lg bg-[#3F51B5] px-6 py-2.5 text-sm font-medium text-white hover:bg-[#3545a0]"
           >
-            Browse the Marketplace
+            Browse data
           </Link>
         </div>
       </div>

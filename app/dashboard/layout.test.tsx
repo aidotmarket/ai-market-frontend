@@ -56,6 +56,7 @@ const user: User = {
 
 describe('DashboardLayout hydration guard', () => {
   beforeEach(() => {
+    navigation.pathname = '/dashboard/stripe-return';
     navigation.push.mockClear();
     navigation.replace.mockClear();
     capabilitiesApi.getCapabilities.mockResolvedValue({
@@ -125,5 +126,30 @@ describe('DashboardLayout hydration guard', () => {
     expect(navigation.push).not.toHaveBeenCalledWith(
       `/login?redirect=${encodeURIComponent('/dashboard/stripe-return')}`
     );
+  });
+
+  it('uses a neutral title and overview navigation for a buyer without a display name', async () => {
+    navigation.pathname = '/dashboard';
+    useAuthStore.setState({
+      user: { ...user, first_name: null, company_name: null, role: 'seller' },
+      token: 'access-token',
+      isAuthenticated: true,
+      isLoading: false,
+      hydrated: true,
+    });
+
+    render(
+      <DashboardLayout>
+        <div>buyer dashboard child</div>
+      </DashboardLayout>
+    );
+
+    await waitFor(() => {
+      expect(screen.getByText('buyer dashboard child')).not.toBeNull();
+    });
+
+    expect(screen.getByText('Dashboard')).not.toBeNull();
+    expect(screen.queryByText('Seller Dashboard')).toBeNull();
+    expect(screen.getByRole('link', { name: 'Overview' }).getAttribute('href')).toBe('/dashboard');
   });
 });
