@@ -18,9 +18,15 @@ vi.mock('@/lib/api', () => ({
 }));
 
 vi.mock('./DataRequestDetailClient', () => ({
-  default: ({ initialRequest }: { initialRequest: DataRequestDetail }) => (
-    <main>
-      <h1>{initialRequest.title}</h1>
+  default: ({
+    slug,
+    initialRequest,
+  }: {
+    slug: string;
+    initialRequest: DataRequestDetail | null;
+  }) => (
+    <main data-slug={slug} data-has-initial-request={initialRequest !== null}>
+      {initialRequest && <h1>{initialRequest.title}</h1>}
     </main>
   ),
 }));
@@ -115,13 +121,17 @@ describe('DataRequestDetailPage Demand JSON-LD', () => {
     expect(extractJsonLdScripts(renderToStaticMarkup(element))).toHaveLength(0);
   });
 
-  it('calls notFound when the request is missing', async () => {
+  it('renders the client loader instead of calling notFound when the anonymous fetch misses', async () => {
     fetchDataRequest.mockResolvedValueOnce(null);
     const { default: DataRequestDetailPage } = await importPage();
 
-    await expect(
-      DataRequestDetailPage({ params: Promise.resolve({ slug: 'missing' }) }),
-    ).rejects.toThrow('NEXT_NOT_FOUND');
-    expect(notFound).toHaveBeenCalled();
+    const element = await DataRequestDetailPage({
+      params: Promise.resolve({ slug: 'draft-request' }),
+    });
+    const html = renderToStaticMarkup(element);
+
+    expect(notFound).not.toHaveBeenCalled();
+    expect(html).toContain('data-slug="draft-request"');
+    expect(html).toContain('data-has-initial-request="false"');
   });
 });

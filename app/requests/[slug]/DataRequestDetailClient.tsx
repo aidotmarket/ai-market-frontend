@@ -34,7 +34,7 @@ const STATUS_BADGE: Record<string, string> = {
 
 interface DataRequestDetailClientProps {
   slug: string;
-  initialRequest: DataRequestDetail;
+  initialRequest: DataRequestDetail | null;
 }
 
 export default function DataRequestDetailClient({
@@ -47,7 +47,7 @@ export default function DataRequestDetailClient({
 
   const [request, setRequest] = useState<DataRequestDetail | null>(initialRequest);
   const [responses, setResponses] = useState<DataRequestResponse[]>([]);
-  const [loading, setLoading] = useState(false);
+  const [loading, setLoading] = useState(initialRequest === null);
   const [publishing, setPublishing] = useState(false);
   const [deleting, setDeleting] = useState(false);
 

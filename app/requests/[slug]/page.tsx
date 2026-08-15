@@ -1,4 +1,3 @@
-import { notFound } from 'next/navigation';
 import type { Metadata } from 'next';
 import { fetchDataRequest } from '@/lib/api';
 import type { DataRequestDetail } from '@/types';
@@ -51,7 +50,7 @@ export default async function DataRequestDetailPage({ params }: Props) {
   const { slug } = await params;
   const request: DataRequestDetail | null = await fetchDataRequest(slug);
   if (!request) {
-    notFound();
+    return <DataRequestDetailClient slug={slug} initialRequest={null} />;
   }
 
   const shouldEmitJsonLd = shouldEmitDemandJsonLd(request);
