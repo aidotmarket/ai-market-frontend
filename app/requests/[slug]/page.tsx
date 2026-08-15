@@ -17,7 +17,7 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
   const request: DataRequestDetail | null = await fetchDataRequest(slug);
   if (!request) {
     return {
-      title: 'Request Not Found',
+      title: 'Data Request',
       robots: { index: false, follow: false },
     };
   }

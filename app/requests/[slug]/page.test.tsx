@@ -134,4 +134,18 @@ describe('DataRequestDetailPage Demand JSON-LD', () => {
     expect(html).toContain('data-slug="draft-request"');
     expect(html).toContain('data-has-initial-request="false"');
   });
+
+  it('returns neutral noindex metadata when the anonymous fetch misses', async () => {
+    fetchDataRequest.mockResolvedValueOnce(null);
+    const { generateMetadata } = await importPage();
+
+    const metadata = await generateMetadata({
+      params: Promise.resolve({ slug: 'draft-request' }),
+    });
+
+    expect(metadata).toEqual({
+      title: 'Data Request',
+      robots: { index: false, follow: false },
+    });
+  });
 });
