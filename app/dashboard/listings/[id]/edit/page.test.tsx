@@ -92,12 +92,13 @@ describe('EditListingPage', () => {
     expect(screen.getByText('unlisted')).toBeTruthy();
   });
 
-  it('loads compliance notes and saves compliance fields in the listing update payload', async () => {
+  it('falls back to row_count and saves it with the compliance fields', async () => {
     listingsApi.getListing.mockResolvedValue(baseListing);
 
     render(<EditListingPage />);
 
     expect(await screen.findByDisplayValue('Reviewed by legal.')).toBeTruthy();
+    expect(screen.getByDisplayValue('100')).toBeTruthy();
 
     fireEvent.click(screen.getByRole('button', { name: 'Save Draft' }));
 
@@ -114,6 +115,64 @@ describe('EditListingPage', () => {
         compliance_frameworks: ['GDPR'],
         compliance_notes: 'Reviewed by legal.',
       });
+    });
+  });
+
+  it('prefers source_row_count when both row count fields are present', async () => {
+    listingsApi.getListing.mockResolvedValue({
+      ...baseListing,
+      source_row_count: 75,
+    });
+
+    render(<EditListingPage />);
+
+    expect(await screen.findByDisplayValue('75')).toBeTruthy();
+
+    fireEvent.click(screen.getByRole('button', { name: 'Save Draft' }));
+
+    await waitFor(() => {
+      expect(listingsApi.updateListing).toHaveBeenCalledWith(
+        'listing-1',
+        expect.objectContaining({ source_row_count: 75 }),
+      );
+    });
+  });
+
+  it('preserves an explicit zero source_row_count over row_count', async () => {
+    listingsApi.getListing.mockResolvedValue({
+      ...baseListing,
+      source_row_count: 0,
+    });
+
+    render(<EditListingPage />);
+
+    expect(await screen.findByDisplayValue('0')).toBeTruthy();
+
+    fireEvent.click(screen.getByRole('button', { name: 'Save Draft' }));
+
+    await waitFor(() => {
+      expect(listingsApi.updateListing).toHaveBeenCalledWith(
+        'listing-1',
+        expect.objectContaining({ source_row_count: 0 }),
+      );
+    });
+  });
+
+  it('defaults an absent row count to zero and keeps it in the update payload', async () => {
+    const { row_count: _rowCount, ...listingWithoutRowCount } = baseListing;
+    listingsApi.getListing.mockResolvedValue(listingWithoutRowCount);
+
+    render(<EditListingPage />);
+
+    expect(await screen.findByDisplayValue('0')).toBeTruthy();
+
+    fireEvent.click(screen.getByRole('button', { name: 'Save Draft' }));
+
+    await waitFor(() => {
+      expect(listingsApi.updateListing).toHaveBeenCalledWith(
+        'listing-1',
+        expect.objectContaining({ source_row_count: 0 }),
+      );
     });
   });
 });
