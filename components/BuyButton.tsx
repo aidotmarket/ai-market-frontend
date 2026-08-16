@@ -20,6 +20,9 @@ interface BuyButtonProps {
   versionId?: string;
   versionLabel?: string;
   accessWindowDays?: number | null;
+  license?: string | null;
+  dataFormat?: string | null;
+  fulfillmentType?: string | null;
   disabledReason?: string;
 }
 
@@ -32,6 +35,9 @@ export default function BuyButton({
   versionId,
   versionLabel,
   accessWindowDays,
+  license,
+  dataFormat,
+  fulfillmentType,
   disabledReason,
 }: BuyButtonProps) {
   const { user, isAuthenticated } = useAuthStore();
@@ -80,6 +86,9 @@ export default function BuyButton({
         pricingType={pricingType}
         versionLabel={versionLabel}
         accessWindowDays={accessWindowDays}
+        license={license}
+        dataFormat={dataFormat}
+        fulfillmentType={fulfillmentType}
       />
     );
   }
@@ -181,7 +190,20 @@ export function SignedOutPurchase({
   pricingType,
   versionLabel,
   accessWindowDays,
-}: Pick<BuyButtonProps, 'slug' | 'price' | 'pricingType' | 'versionLabel' | 'accessWindowDays'>) {
+  license,
+  dataFormat,
+  fulfillmentType,
+}: Pick<
+  BuyButtonProps,
+  | 'slug'
+  | 'price'
+  | 'pricingType'
+  | 'versionLabel'
+  | 'accessWindowDays'
+  | 'license'
+  | 'dataFormat'
+  | 'fulfillmentType'
+>) {
   const returnPath = `/listings/${encodeURIComponent(slug)}`;
   const encodedReturnPath = encodeURIComponent(returnPath);
   const purchaseType = pricingType === 'subscription'
@@ -189,6 +211,9 @@ export function SignedOutPurchase({
     : pricingType === 'both'
       ? 'One-time or subscription'
       : 'One-time purchase';
+  const licenseLabel = license?.trim() || null;
+  const dataFormatLabel = formatPurchaseFact(dataFormat);
+  const fulfillmentTypeLabel = formatPurchaseFact(fulfillmentType);
 
   return (
     <div>
@@ -235,10 +260,34 @@ export function SignedOutPurchase({
               </dd>
             </div>
           )}
+          {licenseLabel && (
+            <div className="flex justify-between gap-3">
+              <dt>License</dt>
+              <dd className="font-medium text-gray-900">{licenseLabel}</dd>
+            </div>
+          )}
+          {dataFormatLabel && (
+            <div className="flex justify-between gap-3">
+              <dt>Data format</dt>
+              <dd className="font-medium text-gray-900">{dataFormatLabel}</dd>
+            </div>
+          )}
+          {fulfillmentTypeLabel && (
+            <div className="flex justify-between gap-3">
+              <dt>Fulfillment type</dt>
+              <dd className="font-medium text-gray-900">{fulfillmentTypeLabel}</dd>
+            </div>
+          )}
         </dl>
       </div>
     </div>
   );
+}
+
+function formatPurchaseFact(value?: string | null): string | null {
+  const normalized = value?.trim().replace(/_/g, ' ').replace(/\s+/g, ' ');
+  if (!normalized) return null;
+  return normalized.charAt(0).toUpperCase() + normalized.slice(1).toLowerCase();
 }
 
 function DisabledBuyButton({ price, reason }: { price: number; reason: string }) {

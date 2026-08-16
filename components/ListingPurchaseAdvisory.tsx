@@ -69,7 +69,7 @@ export function getWeakSignalIndicators({
   }
 
   if (verificationStatus === 'unverified') {
-    indicators.push('Seller unverified');
+    indicators.push('Verification status: Unverified');
   }
 
   if (trustLevel === 'L0') {

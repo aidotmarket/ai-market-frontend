@@ -32,4 +32,19 @@ describe('ListingPurchaseAdvisory', () => {
     expect(html).toContain('Quality not scored');
     expect(html).not.toContain('Quality score: 0/100');
   });
+
+  it('describes the listing verification metric without claiming seller identity status', () => {
+    const html = renderToStaticMarkup(
+      <ListingPurchaseAdvisory
+        price={10}
+        complianceStatus="low_risk"
+        qualityScore={90}
+        verificationStatus="unverified"
+        trustLevel="L1"
+      />,
+    );
+
+    expect(html).toContain('Verification status: Unverified');
+    expect(html).not.toContain('Seller unverified');
+  });
 });

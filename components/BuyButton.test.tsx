@@ -1,6 +1,7 @@
 import React from 'react';
 import { renderToStaticMarkup } from 'react-dom/server';
 import { describe, expect, it } from 'vitest';
+import { validateRedirect } from '@/lib/redirect';
 import { SignedOutPurchase } from './BuyButton';
 
 describe('SignedOutPurchase', () => {
@@ -16,12 +17,18 @@ describe('SignedOutPurchase', () => {
     );
 
     expect(html).toContain('href="/login?redirect=/listings/signed-out-dataset"');
+    expect(html).toContain('href="/register?redirect=%2Flistings%2Fsigned-out-dataset"');
+    expect(validateRedirect('/listings/signed-out-dataset')).toBe('/listings/signed-out-dataset');
+    expect(validateRedirect('%2Flistings%2Fsigned-out-dataset')).toBe('/listings/signed-out-dataset');
     expect(html).toContain('Buy Now - $49.00');
     expect(html).not.toContain('disabled');
     expect(html).toContain('Sign in or');
     expect(html).toContain('create an account');
     expect(html).toContain('Following the sign-in link does not charge you.');
     expect(html).toContain('review the checkout details and choose whether to confirm');
+    expect(html).not.toContain('License');
+    expect(html).not.toContain('Data format');
+    expect(html).not.toContain('Fulfillment type');
   });
 
   it('previews known purchase facts and omits unavailable version facts', () => {
@@ -32,6 +39,9 @@ describe('SignedOutPurchase', () => {
         pricingType="subscription"
         versionLabel="2026-Q3"
         accessWindowDays={14}
+        license="CC-BY-4.0"
+        dataFormat="json_lines"
+        fulfillmentType="file_download"
       />,
     );
     const legacyFacts = renderToStaticMarkup(
@@ -39,6 +49,9 @@ describe('SignedOutPurchase', () => {
         slug="legacy-dataset"
         price={10}
         pricingType="one_time"
+        license={null}
+        dataFormat={null}
+        fulfillmentType={null}
       />,
     );
 
@@ -46,7 +59,13 @@ describe('SignedOutPurchase', () => {
     expect(knownFacts).toContain('Purchase type</dt><dd class="font-medium text-gray-900">Subscription');
     expect(knownFacts).toContain('Selected version</dt><dd class="font-medium text-gray-900">2026-Q3');
     expect(knownFacts).toContain('Download window</dt><dd class="font-medium text-gray-900">14 days after purchase');
+    expect(knownFacts).toContain('License</dt><dd class="font-medium text-gray-900">CC-BY-4.0');
+    expect(knownFacts).toContain('Data format</dt><dd class="font-medium text-gray-900">Json lines');
+    expect(knownFacts).toContain('Fulfillment type</dt><dd class="font-medium text-gray-900">File download');
     expect(legacyFacts).not.toContain('Selected version');
     expect(legacyFacts).not.toContain('Download window');
+    expect(legacyFacts).not.toContain('License');
+    expect(legacyFacts).not.toContain('Data format');
+    expect(legacyFacts).not.toContain('Fulfillment type');
   });
 });

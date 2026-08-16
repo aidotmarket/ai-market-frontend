@@ -221,6 +221,9 @@ export default async function ListingDetailPage({ params, searchParams }: Props)
                 pricingType={listing.pricing?.pricing_type ?? 'one_time'}
                 versions={versions}
                 accessWindowDays={accessWindowDays}
+                license={listing.license}
+                dataFormat={listing.data_format}
+                fulfillmentType={listing.fulfillment_type}
                 initialVersionId={requestedVersionId}
               />
             ) : (
@@ -230,6 +233,9 @@ export default async function ListingDetailPage({ params, searchParams }: Props)
                 slug={listing.slug}
                 price={listing.pricing?.price ?? 0}
                 pricingType={listing.pricing?.pricing_type ?? 'one_time'}
+                license={listing.license}
+                dataFormat={listing.data_format}
+                fulfillmentType={listing.fulfillment_type}
               />
             )}
           </div>

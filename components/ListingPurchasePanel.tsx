@@ -13,6 +13,9 @@ interface ListingPurchasePanelProps {
   pricingType: string;
   versions: ListingVersion[];
   accessWindowDays: number | null;
+  license?: string | null;
+  dataFormat?: string | null;
+  fulfillmentType?: string | null;
   initialVersionId?: string | null;
 }
 
@@ -24,6 +27,9 @@ export default function ListingPurchasePanel({
   pricingType,
   versions,
   accessWindowDays,
+  license,
+  dataFormat,
+  fulfillmentType,
   initialVersionId,
 }: ListingPurchasePanelProps) {
   const visibleVersions = useMemo(() => sortVersions(versions), [versions]);
@@ -61,6 +67,9 @@ export default function ListingPurchasePanel({
           versionId={selectedVersion?.status === 'active' ? selectedVersion.version_id : undefined}
           versionLabel={selectedVersion?.status === 'active' ? selectedVersion.version_label : undefined}
           accessWindowDays={accessWindowDays}
+          license={license}
+          dataFormat={dataFormat}
+          fulfillmentType={fulfillmentType}
           disabledReason={disabledReason}
         />
       </div>
