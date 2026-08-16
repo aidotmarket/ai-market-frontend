@@ -159,4 +159,41 @@ describe('ListingDetailPage Dataset JSON-LD', () => {
     expect(html).not.toContain('Download window');
     expect(html).toMatchSnapshot();
   });
+
+  it('shows each detected advisory signal on a paid weak-signal listing without disabling purchase', async () => {
+    const html = await renderPage(makeListing({
+      pricing: {
+        price: 25,
+        pricing_type: 'one_time',
+        subscription_price_monthly: null,
+      },
+      compliance_status: 'not_checked',
+      quality_score: 0,
+      verification_status: 'unverified',
+      trust_level: 'L0',
+    }));
+
+    expect(html).toContain('Review before buying');
+    expect(html).toContain('Compliance not checked');
+    expect(html).toContain('Quality score: 0/100');
+    expect(html).toContain('Seller unverified');
+    expect(html).toContain('Trust level: New');
+    expect(html).toContain('ask the seller questions before you buy');
+    expect(html).toContain('<button type="button">Buy</button>');
+    expect(html).not.toContain('<button type="button" disabled="">Buy</button>');
+  });
+
+  it('does not show a purchase advisory on a healthy verified paid listing', async () => {
+    const html = await renderPage(makeListing({
+      pricing: {
+        price: 25,
+        pricing_type: 'one_time',
+        subscription_price_monthly: null,
+      },
+    }));
+
+    expect(html).not.toContain('Review before buying');
+    expect(html).not.toContain('advisory, not a purchase block');
+    expect(html).toContain('<button type="button">Buy</button>');
+  });
 });

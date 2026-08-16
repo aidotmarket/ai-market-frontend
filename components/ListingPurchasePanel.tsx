@@ -59,6 +59,8 @@ export default function ListingPurchasePanel({
           price={price}
           pricingType={pricingType}
           versionId={selectedVersion?.status === 'active' ? selectedVersion.version_id : undefined}
+          versionLabel={selectedVersion?.status === 'active' ? selectedVersion.version_label : undefined}
+          accessWindowDays={accessWindowDays}
           disabledReason={disabledReason}
         />
       </div>

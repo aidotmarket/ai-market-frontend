@@ -18,10 +18,22 @@ interface BuyButtonProps {
   price: number;
   pricingType: string;
   versionId?: string;
+  versionLabel?: string;
+  accessWindowDays?: number | null;
   disabledReason?: string;
 }
 
-export default function BuyButton({ listingId, sellerId, slug, price, pricingType, versionId, disabledReason }: BuyButtonProps) {
+export default function BuyButton({
+  listingId,
+  sellerId,
+  slug,
+  price,
+  pricingType,
+  versionId,
+  versionLabel,
+  accessWindowDays,
+  disabledReason,
+}: BuyButtonProps) {
   const { user, isAuthenticated } = useAuthStore();
   const { toast } = useToast();
   const [loading, setLoading] = useState(false);
@@ -62,15 +74,13 @@ export default function BuyButton({ listingId, sellerId, slug, price, pricingTyp
     }
 
     return (
-      <div>
-        <Link
-          href={`/login?redirect=/listings/${encodeURIComponent(slug)}`}
-          className="block w-full rounded-lg bg-[#3F51B5] px-4 py-2.5 text-sm font-medium text-white text-center hover:bg-[#3545a0]"
-        >
-          Buy Now - {formatPrice(price)}
-        </Link>
-        <p className="text-xs text-gray-500 mt-2 text-center">Sign up to purchase this dataset</p>
-      </div>
+      <SignedOutPurchase
+        slug={slug}
+        price={price}
+        pricingType={pricingType}
+        versionLabel={versionLabel}
+        accessWindowDays={accessWindowDays}
+      />
     );
   }
 
@@ -161,6 +171,72 @@ export default function BuyButton({ listingId, sellerId, slug, price, pricingTyp
       <p className="text-xs text-gray-500 mt-2 text-center">
         {pricingType === 'subscription' ? 'Subscription' : 'One-time purchase'}
       </p>
+    </div>
+  );
+}
+
+export function SignedOutPurchase({
+  slug,
+  price,
+  pricingType,
+  versionLabel,
+  accessWindowDays,
+}: Pick<BuyButtonProps, 'slug' | 'price' | 'pricingType' | 'versionLabel' | 'accessWindowDays'>) {
+  const returnPath = `/listings/${encodeURIComponent(slug)}`;
+  const encodedReturnPath = encodeURIComponent(returnPath);
+  const purchaseType = pricingType === 'subscription'
+    ? 'Subscription'
+    : pricingType === 'both'
+      ? 'One-time or subscription'
+      : 'One-time purchase';
+
+  return (
+    <div>
+      <Link
+        href={`/login?redirect=${returnPath}`}
+        className="block w-full rounded-lg bg-[#3F51B5] px-4 py-2.5 text-sm font-medium text-white text-center hover:bg-[#3545a0]"
+      >
+        Buy Now - {formatPrice(price)}
+      </Link>
+      <div className="mt-3 rounded-lg bg-gray-50 px-3 py-3 text-xs text-gray-600">
+        <p>
+          Sign in or{' '}
+          <Link
+            href={`/register?redirect=${encodedReturnPath}`}
+            className="font-medium text-[#3F51B5] underline underline-offset-2"
+          >
+            create an account
+          </Link>{' '}
+          to continue.
+        </p>
+        <p className="mt-2">
+          After signing in, you will return here to review the checkout details and choose whether to confirm. Following the sign-in link does not charge you.
+        </p>
+        <dl className="mt-3 space-y-1 border-t border-gray-200 pt-3" aria-label="Purchase preview">
+          <div className="flex justify-between gap-3">
+            <dt>Listing price</dt>
+            <dd className="font-medium text-gray-900">{formatPrice(price)}</dd>
+          </div>
+          <div className="flex justify-between gap-3">
+            <dt>Purchase type</dt>
+            <dd className="font-medium text-gray-900">{purchaseType}</dd>
+          </div>
+          {versionLabel && (
+            <div className="flex justify-between gap-3">
+              <dt>Selected version</dt>
+              <dd className="font-medium text-gray-900">{versionLabel}</dd>
+            </div>
+          )}
+          {accessWindowDays != null && (
+            <div className="flex justify-between gap-3">
+              <dt>Download window</dt>
+              <dd className="font-medium text-gray-900">
+                {accessWindowDays} day{accessWindowDays === 1 ? '' : 's'} after purchase
+              </dd>
+            </div>
+          )}
+        </dl>
+      </div>
     </div>
   );
 }

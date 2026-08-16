@@ -11,6 +11,7 @@ import {
 } from '@/lib/format';
 import type { ListingDetail } from '@/types';
 import BuyButton from '@/components/BuyButton';
+import ListingPurchaseAdvisory from '@/components/ListingPurchaseAdvisory';
 import ListingPurchasePanel from '@/components/ListingPurchasePanel';
 import InquiryWidget from '@/components/InquiryWidget';
 import ReactMarkdown from 'react-markdown';
@@ -204,6 +205,13 @@ export default async function ListingDetailPage({ params, searchParams }: Props)
           {/* Price card */}
           <div className="rounded-xl border border-gray-200 p-6">
             <p className="text-3xl font-bold text-gray-900 mb-1">{formatPrice(listing.pricing?.price ?? 0)}</p>
+            <ListingPurchaseAdvisory
+              price={listing.pricing?.price ?? 0}
+              complianceStatus={listing.compliance_status}
+              qualityScore={listing.quality_score}
+              verificationStatus={listing.verification_status}
+              trustLevel={listing.trust_level}
+            />
             {hasVersionRows ? (
               <ListingPurchasePanel
                 listingId={listing.id}
