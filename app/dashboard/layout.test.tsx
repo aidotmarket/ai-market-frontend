@@ -36,7 +36,7 @@ vi.mock('@/api/capabilities', () => ({
 }));
 
 vi.mock('@/components/onboarding/SellerSetupProgressBar', () => ({
-  default: () => null,
+  default: () => <div>seller setup progress</div>,
 }));
 
 const user: User = {
@@ -151,5 +151,60 @@ describe('DashboardLayout hydration guard', () => {
     expect(screen.getByText('Dashboard')).not.toBeNull();
     expect(screen.queryByText('Seller Dashboard')).toBeNull();
     expect(screen.getByRole('link', { name: 'Overview' }).getAttribute('href')).toBe('/dashboard');
+  });
+
+  it('uses buyer purchase context for a provisioning seller-capable user without a display name', async () => {
+    navigation.pathname = '/dashboard/orders';
+    capabilitiesApi.getCapabilities.mockResolvedValue({
+      seller: { effective_status: 'provisioning' },
+    });
+    useAuthStore.setState({
+      user: { ...user, first_name: null, company_name: null, role: 'seller' },
+      token: 'access-token',
+      isAuthenticated: true,
+      isLoading: false,
+      hydrated: true,
+    });
+
+    render(
+      <DashboardLayout>
+        <div>buyer orders child</div>
+      </DashboardLayout>
+    );
+
+    await waitFor(() => {
+      expect(screen.getByText('buyer orders child')).not.toBeNull();
+    });
+
+    expect(screen.getByText('Dashboard')).not.toBeNull();
+    expect(screen.queryByText('Seller Dashboard')).toBeNull();
+    expect(screen.queryByText('seller setup progress')).toBeNull();
+  });
+
+  it('keeps seller context on a seller route for a provisioning seller-capable user', async () => {
+    navigation.pathname = '/dashboard/listings';
+    capabilitiesApi.getCapabilities.mockResolvedValue({
+      seller: { effective_status: 'provisioning' },
+    });
+    useAuthStore.setState({
+      user: { ...user, first_name: null, company_name: null, role: 'seller' },
+      token: 'access-token',
+      isAuthenticated: true,
+      isLoading: false,
+      hydrated: true,
+    });
+
+    render(
+      <DashboardLayout>
+        <div>seller listings child</div>
+      </DashboardLayout>
+    );
+
+    await waitFor(() => {
+      expect(screen.getByText('seller listings child')).not.toBeNull();
+    });
+
+    expect(screen.getByText('Seller Dashboard')).not.toBeNull();
+    expect(screen.getByText('seller setup progress')).not.toBeNull();
   });
 });

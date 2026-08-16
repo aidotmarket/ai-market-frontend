@@ -7,6 +7,9 @@ import { useAuthStore } from '@/store/auth';
 import { getCapabilities, type CapabilityStatus } from '@/api/capabilities';
 import SellerSetupProgressBar from '@/components/onboarding/SellerSetupProgressBar';
 
+const isBuyerPurchaseRoute = (pathname: string) =>
+  pathname === '/dashboard/orders' || pathname.startsWith('/dashboard/orders/');
+
 export default function DashboardLayout({ children }: { children: React.ReactNode }) {
   const { user, isAuthenticated, isLoading, hydrated } = useAuthStore();
   const router = useRouter();
@@ -85,6 +88,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
     ? sellerStatus === 'active' || sellerStatus === 'provisioning'
     : user?.role === 'seller' || user?.role === 'admin';
   const isAdminEmail = user?.email === 'max@ai.market';
+  const usesBuyerPurchaseContext = isBuyerPurchaseRoute(pathname);
 
   const navLinks = [
     ...(isSeller
@@ -110,7 +114,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
       <aside className="w-64 bg-white border-r border-gray-200 flex flex-col">
         <div className="h-16 flex items-center px-6 border-b border-gray-200">
           <span className="text-lg font-semibold text-gray-900 truncate">
-            {user?.company_name || user?.first_name || (capabilitiesResolved && isSeller ? 'Seller Dashboard' : 'Dashboard')}
+            {user?.company_name || user?.first_name || (capabilitiesResolved && isSeller && !usesBuyerPurchaseContext ? 'Seller Dashboard' : 'Dashboard')}
           </span>
         </div>
         <nav className="flex-1 px-4 py-6 space-y-1">
@@ -141,7 +145,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
           </div>
         </div>
       </main>
-      <SellerSetupProgressBar />
+      {!usesBuyerPurchaseContext && <SellerSetupProgressBar />}
     </div>
   );
 }
