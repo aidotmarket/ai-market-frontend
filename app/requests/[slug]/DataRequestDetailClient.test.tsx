@@ -90,7 +90,7 @@ function makeDraft(): DataRequestDetail {
     format_preferences: ['csv'],
     provenance_requirements: null,
     published_at: null,
-    owner_id: owner.id,
+    buyer_id: owner.id,
   };
 }
 

@@ -588,7 +588,7 @@ export interface DataRequestDetail extends DataRequestListItem {
   expires_at?: string | null;
   jsonld?: Record<string, unknown>;
   indexing?: { index: boolean; robots: string };
-  owner_id: string;
+  buyer_id: string;
 }
 
 export interface CreateDataRequestPayload {

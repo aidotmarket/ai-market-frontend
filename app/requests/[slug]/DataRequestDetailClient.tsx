@@ -57,7 +57,7 @@ export default function DataRequestDetailClient({
   const [timeline, setTimeline] = useState('');
   const [submittingResponse, setSubmittingResponse] = useState(false);
 
-  const isOwner = user && request && user.id === request.owner_id;
+  const isOwner = user && request && user.id === request.buyer_id;
 
   const loadData = useCallback(async () => {
     try {
@@ -65,7 +65,7 @@ export default function DataRequestDetailClient({
       setRequest(data);
 
       // Load responses if owner
-      if (data && user && user.id === data.owner_id) {
+      if (data && user && user.id === data.buyer_id) {
         try {
           const resps = await getDataRequestResponses(data.id);
           setResponses(resps);

@@ -50,7 +50,7 @@ function makeRequest(overrides: Partial<DataRequestDetail> = {}): DataRequestDet
     format_preferences: ['csv'],
     provenance_requirements: null,
     published_at: '2026-06-01T00:00:00Z',
-    owner_id: 'buyer-1',
+    buyer_id: 'buyer-1',
     indexing: { index: true, robots: 'index, follow' },
     jsonld: {
       '@context': 'https://schema.org',
