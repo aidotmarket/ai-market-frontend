@@ -4,7 +4,14 @@ import { act, cleanup, render, waitFor } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 const mocks = vi.hoisted(() => ({
-  auth: { user: null, token: null },
+  auth: {
+    user: null as null | {
+      role?: string;
+      first_name?: string;
+      company_name?: string;
+    },
+    token: null as string | null,
+  },
 }));
 
 vi.mock('next/navigation', () => ({
@@ -142,10 +149,45 @@ function expectSinglePair(assistantContent: string) {
 beforeEach(() => {
   let now = 1_700_000_000_000;
   vi.spyOn(Date, 'now').mockImplementation(() => ++now);
+  mocks.auth.user = null;
+  mocks.auth.token = null;
   currentContext = null;
   sessionStorage.clear();
   fetchMock = vi.fn<typeof fetch>();
   vi.stubGlobal('fetch', fetchMock);
+});
+
+describe('signed-in message contract', () => {
+  it('keeps identity in authorization and sends only backend-supported page context', async () => {
+    mocks.auth.user = {
+      role: 'buyer',
+      first_name: 'Synthetic',
+      company_name: 'Synthetic Buyer',
+    };
+    mocks.auth.token = 'signed-in-token';
+    fetchMock.mockImplementation(async (input) => {
+      const url = String(input);
+      if (url === `${SESSION_URL}/stale-session`) return response(200, { messages: [] });
+      if (url === MESSAGE_URL) return sseResponse();
+      throw new Error(`Unexpected request: ${url}`);
+    });
+
+    renderProvider();
+    await send();
+
+    expect(messageCalls()).toHaveLength(1);
+    expect(messagePayload(messageCalls()[0])).toEqual({
+      session_id: 'stale-session',
+      message: 'hello',
+      context: { page: '/listings/example-listing', listing_id: 'example-listing' },
+      stream: true,
+    });
+    expect(requestInit(messageCalls()[0]).headers).toEqual({
+      'Content-Type': 'application/json',
+      Authorization: 'Bearer signed-in-token',
+    });
+    expectSinglePair('answer');
+  });
 });
 
 afterEach(() => {

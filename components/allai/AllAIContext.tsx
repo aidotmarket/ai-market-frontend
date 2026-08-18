@@ -238,27 +238,20 @@ export function AllAIProvider({ children }: { children: ReactNode }) {
         abortRef.current = controller;
 
         const listingMatch = pathname.match(/^\/listings\/([^/]+)/);
-        const context: Record<string, string> = { page: pathname };
+        const context: AnonymousMessagePayload['context'] = { page: pathname };
         if (listingMatch) context.listing_id = listingMatch[1];
-        if (user?.role) context.user_role = user.role;
-        if (user?.first_name) context.user_name = user.first_name;
-        if (user?.company_name) context.company_name = user.company_name;
 
-        const bodyPayload: Record<string, any> = {
+        const bodyPayload: AnonymousMessagePayload = {
             session_id: sessionId,
             message: trimmed,
             context,
             stream: true,
         };
-        const snapshot = formSnapshotGetterRef.current?.();
-        if (snapshot && Object.keys(snapshot).length > 0) {
-          bodyPayload.form_snapshot = snapshot;
-        }
 
         const headers: Record<string, string> = { 'Content-Type': 'application/json' };
         if (token) headers['Authorization'] = `Bearer ${token}`;
 
-        let res = await sendAnonymousMessage(bodyPayload as unknown as AnonymousMessagePayload, {
+        let res = await sendAnonymousMessage(bodyPayload, {
           headers,
           signal: controller.signal,
         });
@@ -273,7 +266,7 @@ export function AllAIProvider({ children }: { children: ReactNode }) {
 
           const replacementSessionId = await ensureSession();
           res = await sendAnonymousMessage({
-            ...(bodyPayload as unknown as AnonymousMessagePayload),
+            ...bodyPayload,
             session_id: replacementSessionId,
           }, {
             headers,
@@ -382,7 +375,7 @@ export function AllAIProvider({ children }: { children: ReactNode }) {
         abortRef.current = null;
       }
     },
-    [isStreaming, ensureSession, pathname, token, user]
+    [isStreaming, ensureSession, pathname, token]
   );
 
   const open = useCallback(() => setIsOpen(true), []);
