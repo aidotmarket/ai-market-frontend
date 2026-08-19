@@ -60,11 +60,14 @@ export default function DashboardOverview() {
     setLoading(true);
     setError(false);
     try {
+      const ordersPromise = getMyOrders().catch((err) => {
+        console.error('Failed to fetch dashboard purchase data', err);
+        return [];
+      });
       const capabilityRes = await getCapabilities();
       setCapabilities(capabilityRes);
 
       const sellerIsActive = capabilityRes.seller.effective_status === 'active';
-      const sellerIsProvisioning = capabilityRes.seller.effective_status === 'provisioning';
 
       setStripeStatus(null);
       setStats(null);
@@ -72,18 +75,20 @@ export default function DashboardOverview() {
       setBuyerOrders([]);
 
       if (sellerIsActive) {
-        const [statusRes, statsRes, listingsRes] = await Promise.all([
+        const [statusRes, statsRes, listingsRes, orders] = await Promise.all([
           getConnectStatus(),
           getSellerStats(),
           getMyListings(),
+          ordersPromise,
         ]);
         const listings = Array.isArray(listingsRes.data) ? listingsRes.data : [];
 
         setStripeStatus(statusRes.data);
         setStats(statsRes.data);
         setHeldPublishedCount(listings.filter((listing: any) => listing.status === 'published').length);
-      } else if (!sellerIsProvisioning) {
-        setBuyerOrders(await getMyOrders());
+        setBuyerOrders(orders);
+      } else {
+        setBuyerOrders(await ordersPromise);
       }
     } catch (err) {
       console.error('Failed to fetch dashboard data', err);
@@ -234,7 +239,7 @@ export default function DashboardOverview() {
         </p>
       </div>
 
-      {isBuyerView && (
+      {(isBuyerView || buyerOrders.length > 0) && (
         <section className="rounded-xl border border-gray-200 bg-white p-6 shadow-sm" aria-labelledby="purchases-heading">
           <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
             <div>

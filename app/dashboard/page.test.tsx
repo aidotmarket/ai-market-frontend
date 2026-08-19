@@ -63,6 +63,17 @@ const baseUser: User = {
   primary_auth: 'password',
 };
 
+const buyerOrder = {
+  id: 'order-12345678',
+  listing_id: 'listing-1',
+  listing_title: 'Climate Dataset',
+  seller_name: 'Data Seller',
+  amount: 25,
+  status: 'fulfilled' as const,
+  created_at: '2026-08-14T00:00:00Z',
+  updated_at: null,
+};
+
 describe('DashboardOverview seller setup 2FA state', () => {
   beforeEach(() => {
     capabilitiesApi.getCapabilities.mockResolvedValue({
@@ -75,6 +86,7 @@ describe('DashboardOverview seller setup 2FA state', () => {
       },
       next_action: { capability: 'seller', step: 'totp_enabled' },
     });
+    ordersApi.getMyOrders.mockResolvedValue([]);
     useAuthStore.setState({
       user: baseUser,
       token: 'access-token',
@@ -104,7 +116,7 @@ describe('DashboardOverview seller setup 2FA state', () => {
     expect(connectApi.getConnectStatus).not.toHaveBeenCalled();
     expect(sellerApi.getSellerStats).not.toHaveBeenCalled();
     expect(listingsApi.getMyListings).not.toHaveBeenCalled();
-    expect(ordersApi.getMyOrders).not.toHaveBeenCalled();
+    expect(ordersApi.getMyOrders).toHaveBeenCalledOnce();
   });
 
   it('renders active seller stats from capability state alone', async () => {
@@ -140,7 +152,56 @@ describe('DashboardOverview seller setup 2FA state', () => {
     expect(connectApi.getConnectStatus).toHaveBeenCalledOnce();
     expect(sellerApi.getSellerStats).toHaveBeenCalledOnce();
     expect(listingsApi.getMyListings).toHaveBeenCalledOnce();
-    expect(ordersApi.getMyOrders).not.toHaveBeenCalled();
+    expect(ordersApi.getMyOrders).toHaveBeenCalledOnce();
+    expect(screen.queryByRole('heading', { name: 'Your purchases' })).toBeNull();
+    expect(screen.queryByText("You haven't bought anything yet")).toBeNull();
+  });
+
+  it('renders purchases and order rows for an active seller', async () => {
+    capabilitiesApi.getCapabilities.mockResolvedValue({
+      buyer: { persisted_status: 'active', effective_status: 'active', missing_steps: [], reason: null },
+      seller: {
+        persisted_status: 'active',
+        effective_status: 'active',
+        missing_steps: [],
+        reason: null,
+      },
+      next_action: null,
+    });
+    connectApi.getConnectStatus.mockResolvedValue({
+      data: { details_submitted: true, payouts_enabled: true },
+    });
+    sellerApi.getSellerStats.mockResolvedValue({
+      data: { views: 12, sales: 3, revenue: 45.5 },
+    });
+    listingsApi.getMyListings.mockResolvedValue({ data: [] });
+    ordersApi.getMyOrders.mockResolvedValue([buyerOrder]);
+
+    render(<DashboardOverview />);
+
+    await waitFor(() => {
+      expect(screen.getByRole('heading', { name: 'Your purchases' })).not.toBeNull();
+    });
+
+    expect(screen.getByText('Climate Dataset')).not.toBeNull();
+    expect(screen.getByText('Fulfilled')).not.toBeNull();
+    expect(screen.getByText('$25.00')).not.toBeNull();
+    expect(screen.getByRole('link', { name: 'View all orders' }).getAttribute('href')).toBe('/dashboard/orders');
+    expect(screen.queryByText("You haven't bought anything yet")).toBeNull();
+  });
+
+  it('renders purchases for a provisioning seller', async () => {
+    ordersApi.getMyOrders.mockResolvedValue([buyerOrder]);
+
+    render(<DashboardOverview />);
+
+    await waitFor(() => {
+      expect(screen.getByRole('heading', { name: 'Your purchases' })).not.toBeNull();
+    });
+
+    expect(screen.getByText('Climate Dataset')).not.toBeNull();
+    expect(screen.getByText('Finish seller setup')).not.toBeNull();
+    expect(ordersApi.getMyOrders).toHaveBeenCalledOnce();
   });
 
   it('renders purchases first and an explicit empty state for a buyer', async () => {
@@ -181,18 +242,7 @@ describe('DashboardOverview seller setup 2FA state', () => {
       },
       next_action: null,
     });
-    ordersApi.getMyOrders.mockResolvedValue([
-      {
-        id: 'order-12345678',
-        listing_id: 'listing-1',
-        listing_title: 'Climate Dataset',
-        seller_name: 'Data Seller',
-        amount: 25,
-        status: 'fulfilled',
-        created_at: '2026-08-14T00:00:00Z',
-        updated_at: null,
-      },
-    ]);
+    ordersApi.getMyOrders.mockResolvedValue([buyerOrder]);
 
     render(<DashboardOverview />);
 
@@ -204,5 +254,40 @@ describe('DashboardOverview seller setup 2FA state', () => {
     expect(screen.getByText('$25.00')).not.toBeNull();
     expect(screen.getByRole('link', { name: 'View all orders' }).getAttribute('href')).toBe('/dashboard/orders');
     expect(screen.queryByText("You haven't bought anything yet")).toBeNull();
+  });
+
+  it('keeps active seller dashboard content when purchases fail to load', async () => {
+    const purchaseError = new Error('orders unavailable');
+    const consoleError = vi.spyOn(console, 'error').mockImplementation(() => undefined);
+    capabilitiesApi.getCapabilities.mockResolvedValue({
+      buyer: { persisted_status: 'active', effective_status: 'active', missing_steps: [], reason: null },
+      seller: {
+        persisted_status: 'active',
+        effective_status: 'active',
+        missing_steps: [],
+        reason: null,
+      },
+      next_action: null,
+    });
+    connectApi.getConnectStatus.mockResolvedValue({
+      data: { details_submitted: true, payouts_enabled: true },
+    });
+    sellerApi.getSellerStats.mockResolvedValue({
+      data: { views: 12, sales: 3, revenue: 45.5 },
+    });
+    listingsApi.getMyListings.mockResolvedValue({ data: [] });
+    ordersApi.getMyOrders.mockRejectedValue(purchaseError);
+
+    render(<DashboardOverview />);
+
+    await waitFor(() => {
+      expect(screen.getByText("Here's what's happening with your store today.")).not.toBeNull();
+    });
+
+    expect(screen.queryByText('Failed to load dashboard data.')).toBeNull();
+    expect(screen.getByText('Total Views')).not.toBeNull();
+    expect(screen.getByText('12')).not.toBeNull();
+    expect(screen.queryByRole('heading', { name: 'Your purchases' })).toBeNull();
+    expect(consoleError).toHaveBeenCalledWith('Failed to fetch dashboard purchase data', purchaseError);
   });
 });
