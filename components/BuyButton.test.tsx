@@ -23,7 +23,8 @@ describe('SignedOutPurchase', () => {
     expect(html).toContain('Buy Now - $49.00');
     expect(html).not.toContain('disabled');
     expect(html).toContain('Following the sign-in link does not charge you.');
-    expect(html).toContain('review the checkout details and choose whether to confirm');
+    expect(html).toContain('continue from the listing to review the checkout details and choose whether to confirm');
+    expect(html).not.toContain('you will return here');
   });
 
   it('previews known purchase facts and omits unavailable facts', () => {

@@ -235,7 +235,7 @@ export function SignedOutPurchase({
           to continue.
         </p>
         <p className="mt-2">
-          After signing in, you will return here to review the checkout details and choose whether to confirm. Following the sign-in link does not charge you.
+          After signing in, continue from the listing to review the checkout details and choose whether to confirm. Following the sign-in link does not charge you.
         </p>
         <dl className="mt-3 space-y-1 border-t border-gray-200 pt-3" aria-label="Purchase preview">
           <div className="flex justify-between gap-3">
