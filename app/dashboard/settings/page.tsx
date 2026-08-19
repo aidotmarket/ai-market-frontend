@@ -4,6 +4,7 @@ import { useState, useEffect } from 'react';
 import { useAuthStore } from '@/store/auth';
 import { disable2FA, regenerateBackupCodes, setup2FA, updateProfile, verify2FASetup } from '@/api/auth';
 import { getCapabilities, type CapabilityStatus } from '@/api/capabilities';
+import { notifyCapabilitiesChanged } from '@/components/onboarding/SellerSetupProgressBar';
 import { useToast } from '@/components/Toast';
 import { AxiosError } from 'axios';
 import ReauthModal from './ReauthModal';
@@ -87,6 +88,7 @@ export default function SettingsPage() {
         company_name: companyName.trim() || undefined,
       });
       await refreshAuth();
+      notifyCapabilitiesChanged();
       toast('Profile updated', 'success');
       setDirty(false);
     } catch (err) {
@@ -157,6 +159,7 @@ export default function SettingsPage() {
       setBackupCodes(res.backup_codes);
       setBackupCodesLabel('Save these backup codes now. You will need them if you lose access to your authenticator app.');
       setTwoFactorFlow('showing_backup_codes');
+      notifyCapabilitiesChanged();
       toast('Two-factor authentication enabled', 'success');
     } catch (err) {
       setTwoFactorFlow('showing_qr');
@@ -201,6 +204,7 @@ export default function SettingsPage() {
       if (action === 'disable') {
         const res = await disable2FA(reauthToken, totpCode.trim());
         await refreshAuth();
+        notifyCapabilitiesChanged();
         resetTwoFactorState();
         toast(res.message || 'Two-factor authentication disabled', 'success');
         return;
