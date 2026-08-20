@@ -4,37 +4,29 @@ import { cleanup, render, screen } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 const mocks = vi.hoisted(() => ({
-  pathname: '/',
-  user: null as object | null,
   context: {
     toggle: vi.fn(),
     isOpen: false,
     locale: 'en' as const,
+    anonymousSurfaceActive: true,
     anonymousAvailable: true,
   },
 }));
 
-vi.mock('next/navigation', () => ({ usePathname: () => mocks.pathname }));
-vi.mock('@/store/auth', () => ({
-  useAuthStore: (selector: (state: { user: object | null }) => unknown) =>
-    selector({ user: mocks.user }),
-}));
 vi.mock('./AllAIContext', () => ({ useAllAI: () => mocks.context }));
 
 import AllAIFab from './AllAIFab';
 
 describe('AllAIFab anonymous visitor entry point', () => {
   beforeEach(() => {
-    mocks.pathname = '/';
-    mocks.user = null;
     mocks.context.isOpen = false;
+    mocks.context.anonymousSurfaceActive = true;
     mocks.context.anonymousAvailable = true;
   });
 
   afterEach(cleanup);
 
-  it.each(['/', '/find-data', '/search'])('shows a visible AI label on %s', (pathname) => {
-    mocks.pathname = pathname;
+  it('shows a visible AI label when the approved anonymous mode is active', () => {
     render(<AllAIFab />);
 
     const launcher = screen.getByRole('button', { name: 'Open allAI · AI assistant' });
@@ -44,7 +36,7 @@ describe('AllAIFab anonymous visitor entry point', () => {
   });
 
   it('preserves the icon-only signed-in presentation', () => {
-    mocks.user = { id: 'buyer' };
+    mocks.context.anonymousSurfaceActive = false;
     render(<AllAIFab />);
 
     const launcher = screen.getByRole('button', { name: 'Open allAI assistant' });
@@ -53,7 +45,7 @@ describe('AllAIFab anonymous visitor entry point', () => {
   });
 
   it('keeps the existing icon-only control outside the approved routes', () => {
-    mocks.pathname = '/pricing';
+    mocks.context.anonymousSurfaceActive = false;
     render(<AllAIFab />);
 
     expect(screen.getByRole('button', { name: 'Open allAI assistant' }).textContent).not.toContain(

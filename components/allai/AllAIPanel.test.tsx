@@ -4,7 +4,6 @@ import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/re
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 const mocks = vi.hoisted(() => ({
-  user: null as object | null,
   context: {
     isOpen: true,
     close: vi.fn(),
@@ -13,15 +12,12 @@ const mocks = vi.hoisted(() => ({
     sendMessage: vi.fn(),
     locale: 'en' as 'en' | 'es' | 'zh-Hans',
     setLocale: vi.fn(),
+    anonymousSurfaceActive: true,
     anonymousAvailable: true,
     page: '/',
   },
 }));
 
-vi.mock('@/store/auth', () => ({
-  useAuthStore: (selector: (state: { user: object | null }) => unknown) =>
-    selector({ user: mocks.user }),
-}));
 vi.mock('./AllAIContext', () => ({ useAllAI: () => mocks.context }));
 vi.mock('./WizardAllAIBridge', () => ({ useWizardBridge: () => null }));
 
@@ -29,10 +25,11 @@ import AllAIPanel from './AllAIPanel';
 
 describe('AllAIPanel accessibility and locale boundary', () => {
   beforeEach(() => {
-    mocks.user = null;
     mocks.context.close.mockReset();
     mocks.context.setLocale.mockReset();
     mocks.context.locale = 'en';
+    mocks.context.anonymousSurfaceActive = true;
+    mocks.context.messages = [];
     Object.defineProperty(window, 'innerWidth', { configurable: true, value: 1024 });
   });
 
@@ -55,10 +52,26 @@ describe('AllAIPanel accessibility and locale boundary', () => {
     expect(mocks.context.close).toHaveBeenCalledOnce();
   });
 
-  it('preserves the signed-in header and hides anonymous locale controls', () => {
-    mocks.user = { id: 'buyer' };
+  it('preserves the legacy panel outside the active anonymous mode', () => {
+    mocks.context.anonymousSurfaceActive = false;
     render(<AllAIPanel />);
     expect(screen.getByRole('dialog', { name: 'allAI' })).not.toBeNull();
     expect(screen.queryByRole('combobox')).toBeNull();
+    expect(screen.getByPlaceholderText('Ask allAI anything...')).not.toBeNull();
+  });
+
+  it('exposes validated revision provenance in the rendered answer', () => {
+    mocks.context.messages = [{
+      id: 'answer-1',
+      role: 'assistant',
+      content: 'Validated answer',
+      timestamp: 1,
+      factRevisionSet: 'a'.repeat(64),
+    }] as never[];
+    render(<AllAIPanel />);
+
+    expect(screen.getByText('Validated answer').closest('[data-fact-revision-set]')?.getAttribute(
+      'data-fact-revision-set'
+    )).toBe('a'.repeat(64));
   });
 });

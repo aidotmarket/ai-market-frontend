@@ -66,6 +66,7 @@ interface AllAIContextValue {
   page: string;
   locale: AnonymousAllAILocale;
   setLocale: (locale: AnonymousAllAILocale) => void;
+  anonymousSurfaceActive: boolean;
   anonymousAvailable: boolean;
   // Wizard bridge callbacks
   onFieldProposal: ((proposal: FieldProposalEvent) => void) | null;
@@ -78,6 +79,12 @@ interface AllAIContextValue {
 }
 
 const AllAIContext = createContext<AllAIContextValue | null>(null);
+
+const ANONYMOUS_SURFACE_ROUTES = new Set(['/', '/find-data', '/search']);
+
+function isAnonymousSurfaceActive(pathname: string, user: unknown) {
+  return !user && ANONYMOUS_SURFACE_ROUTES.has(pathname);
+}
 
 function isTicketStatusCard(value: unknown): value is TicketStatusCardData {
   if (!value || typeof value !== 'object') return false;
@@ -174,7 +181,11 @@ export function AllAIProvider({ children }: { children: ReactNode }) {
   const greetingSentRef = useRef(false);
   const [isStreaming, setIsStreaming] = useState(false);
   const [locale, setLocale] = useState<AnonymousAllAILocale>('en');
-  const [anonymousAvailable, setAnonymousAvailable] = useState(true);
+  const anonymousSurfaceActive = isAnonymousSurfaceActive(pathname, user);
+  const [anonymousStatus, setAnonymousStatus] = useState({ pathname: '', available: false });
+  const anonymousAvailable =
+    !anonymousSurfaceActive ||
+    (anonymousStatus.pathname === pathname && anonymousStatus.available);
   const sessionIdRef = useRef<string | null>(null);
   const abortRef = useRef<AbortController | null>(null);
   const localConversationStartedRef = useRef(false);
@@ -190,16 +201,13 @@ export function AllAIProvider({ children }: { children: ReactNode }) {
   const [formSnapshotGetterState, setFormSnapshotGetterState] = useState<(() => Record<string, any>) | null>(null);
 
   useEffect(() => {
-    setLocale(user ? 'en' : preferredAnonymousAllAILocale(navigator.language));
-  }, [user]);
+    setLocale(
+      anonymousSurfaceActive ? preferredAnonymousAllAILocale(navigator.language) : 'en'
+    );
+  }, [anonymousSurfaceActive]);
 
   useEffect(() => {
-    const isApprovedAnonymousRoute =
-      !user && (pathname === '/' || pathname === '/find-data' || pathname === '/search');
-    if (!isApprovedAnonymousRoute) {
-      setAnonymousAvailable(true);
-      return;
-    }
+    if (!anonymousSurfaceActive) return;
 
     let active = true;
     let timer: ReturnType<typeof setTimeout> | undefined;
@@ -208,13 +216,15 @@ export function AllAIProvider({ children }: { children: ReactNode }) {
       try {
         const status = await getAnonymousChatStatus();
         if (!active) return;
+        const supportedLocales = new Set(status.supported_locales);
         const localesMatch =
-          ANONYMOUS_ALLAI_LOCALES.every((item) => status.supported_locales.includes(item)) &&
-          status.supported_locales.every((item) => ANONYMOUS_ALLAI_LOCALES.includes(item));
-        setAnonymousAvailable(status.available && localesMatch);
+          supportedLocales.size === ANONYMOUS_ALLAI_LOCALES.length &&
+          status.supported_locales.length === ANONYMOUS_ALLAI_LOCALES.length &&
+          ANONYMOUS_ALLAI_LOCALES.every((item) => supportedLocales.has(item));
+        setAnonymousStatus({ pathname, available: status.available && localesMatch });
         refreshSeconds = Math.max(1, status.cache_seconds || 5);
       } catch {
-        if (active) setAnonymousAvailable(false);
+        if (active) setAnonymousStatus({ pathname, available: false });
       }
       if (active) timer = setTimeout(refresh, refreshSeconds * 1000);
     };
@@ -223,7 +233,7 @@ export function AllAIProvider({ children }: { children: ReactNode }) {
       active = false;
       if (timer) clearTimeout(timer);
     };
-  }, [pathname, user]);
+  }, [anonymousSurfaceActive, pathname]);
 
   const setOnFieldProposal = useCallback((cb: ((proposal: FieldProposalEvent) => void) | null) => {
     onFieldProposalRef.current = cb;
@@ -309,11 +319,13 @@ export function AllAIProvider({ children }: { children: ReactNode }) {
       setMessages([{
         id: 'greeting-0',
         role: 'assistant',
-        content: anonymousAllAIResources(locale).greeting,
+        content: anonymousSurfaceActive
+          ? anonymousAllAIResources(locale).greeting
+          : "Hey! I'm allAI - your guide to ai.market. I can help you find data, learn about vectorAIz, or answer any questions. What are you looking for?",
         timestamp: Date.now(),
       }]);
     }
-  }, [isOpen, locale, messages.length, user]);
+  }, [anonymousSurfaceActive, isOpen, locale, messages.length, user]);
 
   const ensureSession = useCallback(async (): Promise<string> => {
     if (sessionIdRef.current) return sessionIdRef.current;
@@ -328,7 +340,7 @@ export function AllAIProvider({ children }: { children: ReactNode }) {
       const trimmed = text.trim();
       if (!trimmed || isStreaming) return;
       const resources = anonymousAllAIResources(locale);
-      if (!user && !anonymousAvailable) {
+      if (anonymousSurfaceActive && !anonymousAvailable) {
         setMessages((prev) => [
           ...prev,
           {
@@ -371,7 +383,7 @@ export function AllAIProvider({ children }: { children: ReactNode }) {
           session_id: sessionId,
           message: trimmed,
           context,
-          ...(!user ? { locale } : {}),
+          ...(anonymousSurfaceActive ? { locale } : {}),
           stream: true,
         };
 
@@ -402,16 +414,16 @@ export function AllAIProvider({ children }: { children: ReactNode }) {
         }
 
         if (res.status === 429) {
-          const limitContent = user
-            ? "You've reached the message limit for this session. Please try again later."
-            : resources.safeOutcomes.rate_limited;
+          const limitContent = anonymousSurfaceActive
+            ? resources.safeOutcomes.rate_limited
+            : "You've reached the message limit for this session. Please try again later.";
           setMessages((prev) =>
             prev.map((m) =>
               m.id === assistantId
                 ? {
                     ...m,
                     content: limitContent,
-                    safeOutcome: user ? undefined : 'rate_limited',
+                    safeOutcome: anonymousSurfaceActive ? 'rate_limited' : undefined,
                   }
                 : m
             )
@@ -420,7 +432,7 @@ export function AllAIProvider({ children }: { children: ReactNode }) {
           return;
         }
 
-        if (res.status === 503 && !user) {
+        if (res.status === 503 && anonymousSurfaceActive) {
           setMessages((prev) =>
             prev.map((m) =>
               m.id === assistantId
@@ -428,7 +440,7 @@ export function AllAIProvider({ children }: { children: ReactNode }) {
                 : m
             )
           );
-          setAnonymousAvailable(false);
+          setAnonymousStatus({ pathname, available: false });
           return;
         }
 
@@ -436,8 +448,8 @@ export function AllAIProvider({ children }: { children: ReactNode }) {
 
         try {
           await readAnonymousMessageStream(res.body, (evt) => {
-            if (evt.type === 'answer' && typeof evt.text === 'string') {
-              const nextStep = !user && isAnonymousNextStep(evt.next_step) ? evt.next_step : undefined;
+            if (anonymousSurfaceActive && evt.type === 'answer' && typeof evt.text === 'string') {
+              const nextStep = isAnonymousNextStep(evt.next_step) ? evt.next_step : undefined;
               setMessages((prev) =>
                 prev.map((m) =>
                   m.id === assistantId
@@ -456,7 +468,7 @@ export function AllAIProvider({ children }: { children: ReactNode }) {
               return;
             }
 
-            if (evt.type === 'safe_failure' && isAnonymousSafeOutcome(evt.outcome)) {
+            if (anonymousSurfaceActive && evt.type === 'safe_failure' && isAnonymousSafeOutcome(evt.outcome)) {
               const outcome = evt.outcome;
               const fallback = resources.safeOutcomes[outcome];
               setMessages((prev) =>
@@ -558,7 +570,7 @@ export function AllAIProvider({ children }: { children: ReactNode }) {
         abortRef.current = null;
       }
     },
-    [anonymousAvailable, ensureSession, isStreaming, locale, pathname, token, user]
+    [anonymousAvailable, anonymousSurfaceActive, ensureSession, isStreaming, locale, pathname, token]
   );
 
   const open = useCallback(() => {
@@ -570,26 +582,22 @@ export function AllAIProvider({ children }: { children: ReactNode }) {
   const close = useCallback(() => {
     setIsOpen(false);
     abortRef.current?.abort();
-    requestAnimationFrame(() => returnFocusRef.current?.focus());
-  }, []);
-  const toggle = useCallback(() => {
-    setIsOpen((current) => {
-      if (!current) {
-        returnFocusRef.current = document.activeElement instanceof HTMLElement
-          ? document.activeElement
-          : null;
-      } else {
-        requestAnimationFrame(() => returnFocusRef.current?.focus());
-      }
-      return !current;
+    requestAnimationFrame(() => {
+      const target = returnFocusRef.current;
+      if (target?.isConnected) target.focus();
+      else if (target?.id) document.getElementById(target.id)?.focus();
     });
   }, []);
+  const toggle = useCallback(() => {
+    if (isOpen) close();
+    else open();
+  }, [close, isOpen, open]);
 
   return (
     <AllAIContext.Provider
       value={{
         isOpen, open, close, toggle, messages, isStreaming, sendMessage, page: pathname,
-        locale, setLocale, anonymousAvailable,
+        locale, setLocale, anonymousSurfaceActive, anonymousAvailable,
         onFieldProposal: onFieldProposalState, setOnFieldProposal,
         onBatchProposal: onBatchProposalState, setOnBatchProposal,
         formSnapshotGetter: formSnapshotGetterState, setFormSnapshotGetter,

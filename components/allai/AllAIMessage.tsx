@@ -6,7 +6,6 @@ import TicketStatusCard from './TicketStatusCard';
 import AllAINextStep from './AllAINextStep';
 import { useAllAI } from './AllAIContext';
 import { anonymousAllAIResources } from '@/lib/i18n/anonymous-allai';
-import { useAuthStore } from '@/store/auth';
 
 function StreamingDots() {
   return (
@@ -25,8 +24,7 @@ export default function AllAIMessage({
   message: Message;
   isStreaming: boolean;
 }) {
-  const { locale } = useAllAI();
-  const user = useAuthStore((state) => state.user);
+  const { locale, anonymousSurfaceActive } = useAllAI();
   const resources = anonymousAllAIResources(locale);
   if (message.role === 'system') {
     return (
@@ -54,8 +52,9 @@ export default function AllAIMessage({
       <div
         className="max-w-[80%] rounded-2xl rounded-bl-md px-4 py-2.5 bg-transparent border border-white/[0.08] text-white/90 text-sm leading-relaxed break-words allai-markdown"
         data-safe-outcome={message.safeOutcome}
+        data-fact-revision-set={message.factRevisionSet}
       >
-        {message.historical && !user && (
+        {message.historical && anonymousSurfaceActive && (
           <p className="mb-2 text-xs text-amber-200/70">{resources.historicalAnswer}</p>
         )}
         {showDots ? (

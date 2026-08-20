@@ -6,7 +6,6 @@ import AllAIMessage from './AllAIMessage';
 import AllAIChatInput from './AllAIChatInput';
 import FieldProposalCard from './FieldProposalCard';
 import { useWizardBridge } from './WizardAllAIBridge';
-import { useAuthStore } from '@/store/auth';
 import {
   ANONYMOUS_ALLAI_LOCALES,
   anonymousAllAIResources,
@@ -22,7 +21,6 @@ const MAX_WIDTH = 700;
 const MAX_HEIGHT = 600;
 
 export default function AllAIPanel() {
-  const user = useAuthStore((state) => state.user);
   const {
     isOpen,
     close,
@@ -31,6 +29,7 @@ export default function AllAIPanel() {
     sendMessage,
     locale,
     setLocale,
+    anonymousSurfaceActive,
     anonymousAvailable,
   } = useAllAI();
   const resources = anonymousAllAIResources(locale);
@@ -250,7 +249,7 @@ export default function AllAIPanel() {
         type="button"
         onClick={close}
         className="absolute top-3 right-3 z-10 p-1.5 rounded-full text-white/40 hover:text-white/80 hover:bg-white/10 transition-all"
-        aria-label={user ? 'Close allAI assistant' : resources.closeAssistant}
+        aria-label={anonymousSurfaceActive ? resources.closeAssistant : 'Close allAI assistant'}
       >
         <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
           <path d="M18 6L6 18" />
@@ -270,9 +269,9 @@ export default function AllAIPanel() {
             <span className="text-white/20 text-[10px] leading-none tracking-[2px]" aria-hidden>⠿</span>
           )}
           <h2 id="allai-assistant-title" className="text-sm font-semibold text-white/80">
-            {user ? 'allAI' : resources.assistantLabel}
+            {anonymousSurfaceActive ? resources.assistantLabel : 'allAI'}
           </h2>
-          {!user && (
+          {anonymousSurfaceActive && (
             <label className="ml-auto mr-8 flex items-center gap-2 text-xs text-white/50">
               <span className="sr-only">{resources.languageLabel}</span>
               <select
@@ -301,7 +300,7 @@ export default function AllAIPanel() {
         {messages.length === 0 && (
           <div className="flex items-center justify-center h-full">
             <p className="text-sm text-white/30 italic">
-              {user ? 'How can I help you today?' : resources.emptyPrompt}
+              {anonymousSurfaceActive ? resources.emptyPrompt : 'How can I help you today?'}
             </p>
           </div>
         )}
@@ -326,7 +325,10 @@ export default function AllAIPanel() {
       </div>
 
       {/* Input */}
-      <AllAIChatInput onSend={sendMessage} disabled={isStreaming || (!user && !anonymousAvailable)} />
+      <AllAIChatInput
+        onSend={sendMessage}
+        disabled={isStreaming || (anonymousSurfaceActive && !anonymousAvailable)}
+      />
 
       {/* Resize handle (desktop only) */}
       {!isMobile && (

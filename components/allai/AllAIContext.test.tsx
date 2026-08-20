@@ -30,7 +30,7 @@ const SESSION_URL = 'http://localhost:8000/api/allai/support/anonymous/session';
 const MESSAGE_URL = 'http://localhost:8000/api/allai/support/anonymous/message';
 const STATUS_URL = 'http://localhost:8000/api/allai/support/anonymous/status';
 const GENERIC_ERROR = 'Sorry, something went wrong. Please try again.';
-const LIMIT_ERROR = 'The anonymous usage limit has been reached. Please try again later.';
+const LIMIT_ERROR = "You've reached the message limit for this session. Please try again later.";
 
 type ContextValue = ReturnType<typeof useAllAI>;
 type FetchMock = ReturnType<typeof vi.fn<typeof fetch>>;
@@ -215,6 +215,45 @@ describe('signed-in message contract', () => {
 });
 
 describe('anonymous visitor surface contract', () => {
+  it.each(['/', '/find-data', '/search'])(
+    'activates the anonymous mode only on the approved route %s',
+    async (pathname) => {
+      mocks.pathname = pathname;
+      fetchMock.mockImplementation(async (input) => {
+        const url = String(input);
+        if (url === STATUS_URL) {
+          return response(200, {
+            available: true,
+            reason: 'available',
+            supported_locales: ['en', 'es', 'zh-Hans'],
+            cache_seconds: 5,
+          });
+        }
+        if (url === `${SESSION_URL}/stale-session`) return response(200, { messages: [] });
+        throw new Error(`Unexpected request: ${url}`);
+      });
+
+      renderProvider();
+      expect(context().anonymousSurfaceActive).toBe(true);
+      await waitFor(() => expect(context().anonymousAvailable).toBe(true));
+    }
+  );
+
+  it('keeps the anonymous mode and status poll off outside the approved routes', async () => {
+    mocks.pathname = '/pricing';
+    fetchMock.mockImplementation(async (input) => {
+      const url = String(input);
+      if (url === `${SESSION_URL}/stale-session`) return response(200, { messages: [] });
+      throw new Error(`Unexpected request: ${url}`);
+    });
+
+    renderProvider();
+    expect(context().anonymousSurfaceActive).toBe(false);
+    expect(context().anonymousAvailable).toBe(true);
+    await waitFor(() => expect(fetchMock).toHaveBeenCalledWith(`${SESSION_URL}/stale-session`));
+    expect(fetchMock.mock.calls.some((call) => requestUrl(call) === STATUS_URL)).toBe(false);
+  });
+
   it('checks readiness without creating a session and sends the selected locale', async () => {
     mocks.pathname = '/';
     fetchMock.mockImplementation(async (input) => {
@@ -265,6 +304,71 @@ describe('anonymous visitor surface contract', () => {
     expect(creationCalls()).toHaveLength(0);
     expect(messageCalls()).toHaveLength(0);
     expect(context().messages.at(-1)?.safeOutcome).toBe('surface_disabled');
+  });
+
+  it('fails closed while readiness is still pending', async () => {
+    mocks.pathname = '/';
+    const status = deferred<Response>();
+    fetchMock.mockImplementation(async (input, init) => {
+      const url = String(input);
+      if (url === STATUS_URL) return status.promise;
+      if (url === SESSION_URL && init?.method === 'POST') return response(200, { session_id: 'new' });
+      if (url === MESSAGE_URL) return sseResponse();
+      throw new Error(`Unexpected request: ${url}`);
+    });
+
+    renderProvider('');
+    await waitFor(() => expect(fetchMock).toHaveBeenCalledWith(STATUS_URL, { cache: 'no-store' }));
+    expect(context().anonymousAvailable).toBe(false);
+    await send();
+
+    expect(creationCalls()).toHaveLength(0);
+    expect(messageCalls()).toHaveLength(0);
+  });
+
+  it('rejects a duplicated locale registry instead of treating it as exact', async () => {
+    mocks.pathname = '/';
+    fetchMock.mockImplementation(async (input) => {
+      const url = String(input);
+      if (url === STATUS_URL) {
+        return response(200, {
+          available: true,
+          reason: 'available',
+          supported_locales: ['en', 'en', 'es', 'zh-Hans'],
+          cache_seconds: 5,
+        });
+      }
+      if (url === `${SESSION_URL}/stale-session`) return response(200, { messages: [] });
+      throw new Error(`Unexpected request: ${url}`);
+    });
+
+    renderProvider();
+    await waitFor(() => expect(fetchMock).toHaveBeenCalledWith(STATUS_URL, { cache: 'no-store' }));
+    expect(context().anonymousAvailable).toBe(false);
+  });
+
+  it('restores focus to the remounted launcher after close', async () => {
+    fetchMock.mockImplementation(async (input) => {
+      const url = String(input);
+      if (url === `${SESSION_URL}/stale-session`) return response(200, { messages: [] });
+      throw new Error(`Unexpected request: ${url}`);
+    });
+    renderProvider();
+
+    const original = document.createElement('button');
+    original.id = 'allai-launcher';
+    document.body.append(original);
+    original.focus();
+    act(() => context().open());
+    original.remove();
+
+    const replacement = document.createElement('button');
+    replacement.id = 'allai-launcher';
+    document.body.append(replacement);
+    act(() => context().close());
+
+    await waitFor(() => expect(document.activeElement).toBe(replacement));
+    replacement.remove();
   });
 
   it('accepts only a route-bound account next step from a validated answer', async () => {
@@ -341,6 +445,7 @@ describe('anonymous visitor surface contract', () => {
     });
 
     renderProvider();
+    await waitFor(() => expect(context().anonymousAvailable).toBe(true));
     await send();
 
     expect(context().messages.at(-1)?.nextStep).toBeUndefined();
@@ -370,6 +475,7 @@ describe('anonymous visitor surface contract', () => {
     });
 
     renderProvider();
+    await waitFor(() => expect(context().anonymousAvailable).toBe(true));
     await send();
 
     expect(context().messages.at(-1)).toMatchObject({
@@ -415,7 +521,6 @@ describe('anonymous initial-message stale-session recovery', () => {
       session_id: 'stale-session',
       message: 'hello',
       context: { page: '/listings/example-listing', listing_id: 'example-listing' },
-      locale: 'en',
       stream: true,
     });
     expect(retryPayload).toEqual({ ...initialPayload, session_id: 'fresh-session' });

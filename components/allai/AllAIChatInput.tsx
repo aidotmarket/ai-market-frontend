@@ -3,7 +3,6 @@
 import { useState, useRef, useCallback, useEffect, type KeyboardEvent } from 'react';
 import { useAllAI } from './AllAIContext';
 import { anonymousAllAIResources } from '@/lib/i18n/anonymous-allai';
-import { useAuthStore } from '@/store/auth';
 
 const SUGGESTED_PROMPTS: Record<string, string[]> = {
   '/': [
@@ -39,8 +38,7 @@ export default function AllAIChatInput({
   onSend: (text: string) => void;
   disabled?: boolean;
 }) {
-  const { page, messages, locale } = useAllAI();
-  const user = useAuthStore((state) => state.user);
+  const { page, messages, locale, anonymousSurfaceActive } = useAllAI();
   const resources = anonymousAllAIResources(locale);
   const [value, setValue] = useState('');
   const textareaRef = useRef<HTMLTextAreaElement>(null);
@@ -97,15 +95,15 @@ export default function AllAIChatInput({
           value={value}
           onChange={(e) => setValue(e.target.value)}
           onKeyDown={handleKeyDown}
-          placeholder={user ? 'Ask allAI anything...' : resources.inputPlaceholder}
+          placeholder={anonymousSurfaceActive ? resources.inputPlaceholder : 'Ask allAI anything...'}
           disabled={disabled}
           rows={1}
-          className="flex-1 resize-none bg-transparent text-sm text-white/90 placeholder:text-white/30 outline-none leading-snug"
+          className="flex-1 resize-none rounded-sm bg-transparent text-sm text-white/90 placeholder:text-white/30 outline-none leading-snug focus-visible:ring-2 focus-visible:ring-blue-300"
         />
         <button
           onClick={handleSend}
           disabled={disabled || !value.trim()}
-          aria-label={resources.sendMessage}
+          aria-label={anonymousSurfaceActive ? resources.sendMessage : 'Send message'}
           className="flex-shrink-0 p-1.5 rounded-lg text-white/40 hover:text-white/80 disabled:opacity-30 transition-colors"
         >
           <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
