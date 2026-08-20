@@ -120,7 +120,8 @@ export default function OrdersListPage() {
     return (
       <div className="flex min-h-[40vh] items-center justify-center">
         <div className="text-center">
-          <h1 className="text-2xl font-bold text-gray-900 mb-2">No orders yet</h1>
+          <h1 className="text-2xl font-bold text-gray-900 mb-2">Purchases</h1>
+          <h2 className="text-lg font-medium text-gray-900 mb-2">No orders yet</h2>
           <p className="text-gray-500 mb-6">You haven&apos;t purchased any datasets yet.</p>
           <Link
             href="/find-data"
@@ -135,7 +136,7 @@ export default function OrdersListPage() {
 
   return (
     <div>
-      <h1 className="text-2xl font-bold text-gray-900 mb-6">My Orders</h1>
+      <h1 className="text-2xl font-bold text-gray-900 mb-6">Purchases</h1>
 
       {/* Desktop table */}
       <div className="hidden md:block overflow-x-auto rounded-lg border border-gray-200">

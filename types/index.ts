@@ -229,13 +229,30 @@ export interface StripeLoginLinkResponse {
 // Seller dashboard types — matches backend app/api/v1/endpoints/seller.py
 // ============================================================================
 
+export type SellerOrderStatus =
+  | 'created'
+  | 'paid'
+  | 'in_escrow'
+  | 'pending_delivery'
+  | 'delivered'
+  | 'completed'
+  | 'disputed'
+  | 'resolved'
+  | 'delivery_failed'
+  | 'refunded'
+  | 'cancelled';
+
 export interface SellerStats {
+  period: string;
   total_listings: number;
-  published_listings: number;
   total_views: number;
   total_inquiries: number;
   total_sales: number;
-  total_revenue: number;
+  period_sales: number;
+  period_revenue_cents: number;
+  period_revenue_display: string;
+  pending_fulfillments: number;
+  conversion_rate: number;
 }
 
 export interface SellerFinancials {
@@ -246,12 +263,18 @@ export interface SellerFinancials {
 
 export interface SellerOrder {
   id: string;
+  order_number: string;
   listing_id: string;
   listing_title: string;
   buyer_email: string;
-  amount: number;
-  status: string;
-  created_at: string;
+  amount_cents: number;
+  seller_amount_cents: number;
+  status: SellerOrderStatus;
+  needs_action: boolean;
+  created_at: string | null;
+  paid_at: string | null;
+  delivered_at: string | null;
+  completed_at: string | null;
 }
 
 // ============================================================================

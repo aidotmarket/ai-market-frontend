@@ -60,7 +60,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
       : roleSellerFallback;
     const buyerAllowedRoutes = ['/dashboard', '/dashboard/inquiries', '/dashboard/orders', '/dashboard/requests', '/dashboard/settings'];
     const isBuyer = user && !isSeller;
-    if (isBuyer && !buyerAllowedRoutes.some((p) => pathname === p || pathname.startsWith(`${p}/`))) {
+    if (isBuyer && !buyerAllowedRoutes.some((p) => pathname === p || (p !== '/dashboard' && pathname.startsWith(`${p}/`)))) {
       router.push('/dashboard/inquiries');
       return;
     }
@@ -87,6 +87,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
   const isSeller = capabilitiesResolved
     ? sellerStatus === 'active' || sellerStatus === 'provisioning'
     : user?.role === 'seller' || user?.role === 'admin';
+  const isSellerActive = capabilitiesResolved && sellerStatus === 'active';
   const isAdminEmail = user?.email === 'max@ai.market';
   const usesBuyerPurchaseContext = isBuyerPurchaseRoute(pathname);
 
@@ -95,14 +96,15 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
       ? [
         { name: 'Overview', href: '/dashboard' },
         { name: 'Listings', href: '/dashboard/listings' },
-        { name: 'Orders', href: '/dashboard/orders' },
+        ...(isSellerActive ? [{ name: 'Sales', href: '/dashboard/sales' }] : []),
+        { name: 'Purchases', href: '/dashboard/orders' },
         { name: 'Inquiries', href: '/dashboard/seller/inquiries' },
         { name: 'Settings', href: '/dashboard/settings' },
       ]
       : [
         { name: 'Overview', href: '/dashboard' },
         { name: 'My Inquiries', href: '/dashboard/inquiries' },
-        { name: 'My Orders', href: '/dashboard/orders' },
+        { name: 'Purchases', href: '/dashboard/orders' },
         { name: 'My Requests', href: '/dashboard/requests' },
       ]),
     ...(isAdminEmail ? [{ name: 'Blog Admin', href: '/keystatic' }] : []),
