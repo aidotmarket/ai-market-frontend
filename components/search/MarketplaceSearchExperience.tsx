@@ -1,5 +1,6 @@
 'use client';
 
+import Link from 'next/link';
 import { useState, useEffect, useRef, useCallback } from 'react';
 import { usePathname, useRouter, useSearchParams } from 'next/navigation';
 import { useSearchListings, type ResultItem } from '@/hooks/useSearchListings';
@@ -430,6 +431,14 @@ export function MarketplaceSearchExperience({
                 <p className="mt-2 text-sm text-slate-500">
                   Try adjusting the search text or filters to widen the result set.
                 </p>
+                {semanticMode && q && (
+                  <Link
+                    href="/listings"
+                    className="mt-5 inline-flex rounded-full bg-[#3F51B5] px-5 py-2.5 text-sm font-medium text-white transition-colors hover:bg-[#3545a0]"
+                  >
+                    Browse all marketplace listings
+                  </Link>
+                )}
               </div>
             )}
 

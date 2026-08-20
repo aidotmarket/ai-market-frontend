@@ -6,6 +6,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 const mocks = vi.hoisted(() => ({
   replace: vi.fn(),
   push: vi.fn(),
+  pathname: '/listings',
   useSearchListings: vi.fn(),
   searchParams: new URLSearchParams('category=finance'),
   facetQuery: {
@@ -15,7 +16,7 @@ const mocks = vi.hoisted(() => ({
 }));
 
 vi.mock('next/navigation', () => ({
-  usePathname: () => '/listings',
+  usePathname: () => mocks.pathname,
   useRouter: () => ({ replace: mocks.replace, push: mocks.push }),
   useSearchParams: () => mocks.searchParams,
 }));
@@ -39,6 +40,7 @@ vi.mock('@/components/search/MarketplaceListingCard', () => ({
 import { MarketplaceSearchExperience } from './MarketplaceSearchExperience';
 
 beforeEach(() => {
+  mocks.pathname = '/listings';
   mocks.searchParams = new URLSearchParams('category=finance');
   mocks.facetQuery.data = { healthcare: 2 };
   mocks.facetQuery.isError = false;
@@ -101,5 +103,30 @@ describe('MarketplaceSearchExperience', () => {
 
     expect(screen.getByRole('option', { name: 'Finance' })).toBeTruthy();
     expect(screen.getByRole('option', { name: 'Government' })).toBeTruthy();
+  });
+
+  it('offers the full catalog when a search has no results', () => {
+    mocks.pathname = '/search';
+    mocks.searchParams = new URLSearchParams('q=traffic');
+    mocks.useSearchListings.mockReturnValue({
+      items: [],
+      facets: null,
+      total: 0,
+      semanticMode: true,
+      isLoading: false,
+      isError: false,
+      error: null,
+      hasNextPage: false,
+      isFetchingNextPage: false,
+      fetchNextPage: vi.fn(),
+      refetch: vi.fn(),
+    });
+
+    render(<MarketplaceSearchExperience mode="search" />);
+
+    const recoveryLink = screen.getByRole('link', {
+      name: 'Browse all marketplace listings',
+    });
+    expect(recoveryLink.getAttribute('href')).toBe('/listings');
   });
 });
