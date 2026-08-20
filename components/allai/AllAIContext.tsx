@@ -221,7 +221,10 @@ export function AllAIProvider({ children }: { children: ReactNode }) {
           supportedLocales.size === ANONYMOUS_ALLAI_LOCALES.length &&
           status.supported_locales.length === ANONYMOUS_ALLAI_LOCALES.length &&
           ANONYMOUS_ALLAI_LOCALES.every((item) => supportedLocales.has(item));
-        setAnonymousStatus({ pathname, available: status.available && localesMatch });
+        setAnonymousStatus({
+          pathname,
+          available: status.available === true && localesMatch,
+        });
         refreshSeconds = Math.max(1, status.cache_seconds || 5);
       } catch {
         if (active) setAnonymousStatus({ pathname, available: false });

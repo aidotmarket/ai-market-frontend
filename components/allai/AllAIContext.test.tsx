@@ -347,6 +347,30 @@ describe('anonymous visitor surface contract', () => {
     expect(context().anonymousAvailable).toBe(false);
   });
 
+  it('rejects a truthy non-boolean availability value', async () => {
+    mocks.pathname = '/';
+    fetchMock.mockImplementation(async (input) => {
+      const url = String(input);
+      if (url === STATUS_URL) {
+        return response(200, {
+          available: 'yes',
+          reason: 'available',
+          supported_locales: ['en', 'es', 'zh-Hans'],
+          cache_seconds: 5,
+        });
+      }
+      if (url === `${SESSION_URL}/stale-session`) return response(200, { messages: [] });
+      throw new Error(`Unexpected request: ${url}`);
+    });
+
+    renderProvider();
+    await waitFor(() => expect(fetchMock).toHaveBeenCalledWith(STATUS_URL, { cache: 'no-store' }));
+    expect(context().anonymousAvailable).toBe(false);
+    await send();
+    expect(creationCalls()).toHaveLength(0);
+    expect(messageCalls()).toHaveLength(0);
+  });
+
   it('restores focus to the remounted launcher after close', async () => {
     fetchMock.mockImplementation(async (input) => {
       const url = String(input);
