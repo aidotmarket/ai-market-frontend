@@ -142,6 +142,7 @@ describe('InquiryWidget', () => {
         page: '/listings/weather-observations',
         listing_id: 'listing-123',
       },
+      locale: 'en',
       stream: true,
     });
     expect(screen.getByText('Want the seller to answer personally?')).toBeTruthy();

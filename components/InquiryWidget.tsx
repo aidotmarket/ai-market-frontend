@@ -102,6 +102,7 @@ export default function InquiryWidget({ listingId, listingSlug, listingTitle }: 
             page: `/listings/${listingSlug}`,
             listing_id: listingId,
           },
+          locale: 'en',
           stream: true,
         }, { signal: controller.signal });
 

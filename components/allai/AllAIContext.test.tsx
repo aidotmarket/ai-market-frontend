@@ -4,6 +4,7 @@ import { act, cleanup, render, waitFor } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 const mocks = vi.hoisted(() => ({
+  pathname: '/listings/example-listing',
   auth: {
     user: null as null | {
       role?: string;
@@ -15,7 +16,7 @@ const mocks = vi.hoisted(() => ({
 }));
 
 vi.mock('next/navigation', () => ({
-  usePathname: () => '/listings/example-listing',
+  usePathname: () => mocks.pathname,
 }));
 
 vi.mock('@/store/auth', () => ({
@@ -27,6 +28,7 @@ import { AllAIProvider, useAllAI } from './AllAIContext';
 const SESSION_KEY = 'allai-session-id';
 const SESSION_URL = 'http://localhost:8000/api/allai/support/anonymous/session';
 const MESSAGE_URL = 'http://localhost:8000/api/allai/support/anonymous/message';
+const STATUS_URL = 'http://localhost:8000/api/allai/support/anonymous/status';
 const GENERIC_ERROR = 'Sorry, something went wrong. Please try again.';
 const LIMIT_ERROR = "You've reached the message limit for this session. Please try again later.";
 
@@ -66,6 +68,27 @@ function response(status: number, data: unknown = {}) {
 
 function sseResponse(text = 'answer') {
   const chunks = [new TextEncoder().encode(`data: ${JSON.stringify({ text })}\n\n`)];
+  const reader = {
+    read: vi.fn(async () =>
+      chunks.length > 0
+        ? { done: false, value: chunks.shift() }
+        : { done: true, value: undefined }
+    ),
+    releaseLock: vi.fn(),
+    cancel: vi.fn(),
+  };
+  return {
+    status: 200,
+    ok: true,
+    body: { getReader: () => reader },
+    json: vi.fn(),
+  } as unknown as Response;
+}
+
+function sseEvents(...events: Record<string, unknown>[]) {
+  const chunks = events.map((event) =>
+    new TextEncoder().encode(`data: ${JSON.stringify(event)}\n\n`)
+  );
   const reader = {
     read: vi.fn(async () =>
       chunks.length > 0
@@ -151,6 +174,7 @@ beforeEach(() => {
   vi.spyOn(Date, 'now').mockImplementation(() => ++now);
   mocks.auth.user = null;
   mocks.auth.token = null;
+  mocks.pathname = '/listings/example-listing';
   currentContext = null;
   sessionStorage.clear();
   fetchMock = vi.fn<typeof fetch>();
@@ -187,6 +211,302 @@ describe('signed-in message contract', () => {
       Authorization: 'Bearer signed-in-token',
     });
     expectSinglePair('answer');
+  });
+});
+
+describe('anonymous visitor surface contract', () => {
+  it.each(['/', '/find-data', '/search'])(
+    'activates the anonymous mode only on the approved route %s',
+    async (pathname) => {
+      mocks.pathname = pathname;
+      fetchMock.mockImplementation(async (input) => {
+        const url = String(input);
+        if (url === STATUS_URL) {
+          return response(200, {
+            available: true,
+            reason: 'available',
+            supported_locales: ['en', 'es', 'zh-Hans'],
+            cache_seconds: 5,
+          });
+        }
+        if (url === `${SESSION_URL}/stale-session`) return response(200, { messages: [] });
+        throw new Error(`Unexpected request: ${url}`);
+      });
+
+      renderProvider();
+      expect(context().anonymousSurfaceActive).toBe(true);
+      await waitFor(() => expect(context().anonymousAvailable).toBe(true));
+    }
+  );
+
+  it('keeps the anonymous mode and status poll off outside the approved routes', async () => {
+    mocks.pathname = '/pricing';
+    fetchMock.mockImplementation(async (input) => {
+      const url = String(input);
+      if (url === `${SESSION_URL}/stale-session`) return response(200, { messages: [] });
+      throw new Error(`Unexpected request: ${url}`);
+    });
+
+    renderProvider();
+    expect(context().anonymousSurfaceActive).toBe(false);
+    expect(context().anonymousAvailable).toBe(true);
+    await waitFor(() => expect(fetchMock).toHaveBeenCalledWith(`${SESSION_URL}/stale-session`));
+    expect(fetchMock.mock.calls.some((call) => requestUrl(call) === STATUS_URL)).toBe(false);
+  });
+
+  it('checks readiness without creating a session and sends the selected locale', async () => {
+    mocks.pathname = '/';
+    fetchMock.mockImplementation(async (input) => {
+      const url = String(input);
+      if (url === STATUS_URL) {
+        return response(200, {
+          available: true,
+          reason: 'available',
+          supported_locales: ['en', 'es', 'zh-Hans'],
+          cache_seconds: 5,
+        });
+      }
+      if (url === `${SESSION_URL}/stale-session`) return response(200, { messages: [] });
+      if (url === MESSAGE_URL) return sseResponse('respuesta');
+      throw new Error(`Unexpected request: ${url}`);
+    });
+
+    renderProvider();
+    await waitFor(() => expect(fetchMock).toHaveBeenCalledWith(STATUS_URL, { cache: 'no-store' }));
+    await act(async () => context().open());
+    expect(creationCalls()).toHaveLength(0);
+
+    act(() => context().setLocale('es'));
+    await send();
+    expect(messagePayload(messageCalls()[0]).locale).toBe('es');
+  });
+
+  it('prevents sending when the anonymous backend is unavailable', async () => {
+    mocks.pathname = '/search';
+    fetchMock.mockImplementation(async (input) => {
+      const url = String(input);
+      if (url === STATUS_URL) {
+        return response(200, {
+          available: false,
+          reason: 'surface_disabled',
+          supported_locales: ['en', 'es', 'zh-Hans'],
+          cache_seconds: 5,
+        });
+      }
+      if (url === `${SESSION_URL}/stale-session`) return response(200, { messages: [] });
+      throw new Error(`Unexpected request: ${url}`);
+    });
+
+    renderProvider();
+    await waitFor(() => expect(context().anonymousAvailable).toBe(false));
+    await send();
+
+    expect(creationCalls()).toHaveLength(0);
+    expect(messageCalls()).toHaveLength(0);
+    expect(context().messages.at(-1)?.safeOutcome).toBe('surface_disabled');
+  });
+
+  it('fails closed while readiness is still pending', async () => {
+    mocks.pathname = '/';
+    const status = deferred<Response>();
+    fetchMock.mockImplementation(async (input, init) => {
+      const url = String(input);
+      if (url === STATUS_URL) return status.promise;
+      if (url === SESSION_URL && init?.method === 'POST') return response(200, { session_id: 'new' });
+      if (url === MESSAGE_URL) return sseResponse();
+      throw new Error(`Unexpected request: ${url}`);
+    });
+
+    renderProvider('');
+    await waitFor(() => expect(fetchMock).toHaveBeenCalledWith(STATUS_URL, { cache: 'no-store' }));
+    expect(context().anonymousAvailable).toBe(false);
+    await send();
+
+    expect(creationCalls()).toHaveLength(0);
+    expect(messageCalls()).toHaveLength(0);
+  });
+
+  it('rejects a duplicated locale registry instead of treating it as exact', async () => {
+    mocks.pathname = '/';
+    fetchMock.mockImplementation(async (input) => {
+      const url = String(input);
+      if (url === STATUS_URL) {
+        return response(200, {
+          available: true,
+          reason: 'available',
+          supported_locales: ['en', 'en', 'es', 'zh-Hans'],
+          cache_seconds: 5,
+        });
+      }
+      if (url === `${SESSION_URL}/stale-session`) return response(200, { messages: [] });
+      throw new Error(`Unexpected request: ${url}`);
+    });
+
+    renderProvider();
+    await waitFor(() => expect(fetchMock).toHaveBeenCalledWith(STATUS_URL, { cache: 'no-store' }));
+    expect(context().anonymousAvailable).toBe(false);
+  });
+
+  it('rejects a truthy non-boolean availability value', async () => {
+    mocks.pathname = '/';
+    fetchMock.mockImplementation(async (input) => {
+      const url = String(input);
+      if (url === STATUS_URL) {
+        return response(200, {
+          available: 'yes',
+          reason: 'available',
+          supported_locales: ['en', 'es', 'zh-Hans'],
+          cache_seconds: 5,
+        });
+      }
+      if (url === `${SESSION_URL}/stale-session`) return response(200, { messages: [] });
+      throw new Error(`Unexpected request: ${url}`);
+    });
+
+    renderProvider();
+    await waitFor(() => expect(fetchMock).toHaveBeenCalledWith(STATUS_URL, { cache: 'no-store' }));
+    expect(context().anonymousAvailable).toBe(false);
+    await send();
+    expect(creationCalls()).toHaveLength(0);
+    expect(messageCalls()).toHaveLength(0);
+  });
+
+  it('restores focus to the remounted launcher after close', async () => {
+    fetchMock.mockImplementation(async (input) => {
+      const url = String(input);
+      if (url === `${SESSION_URL}/stale-session`) return response(200, { messages: [] });
+      throw new Error(`Unexpected request: ${url}`);
+    });
+    renderProvider();
+
+    const original = document.createElement('button');
+    original.id = 'allai-launcher';
+    document.body.append(original);
+    original.focus();
+    act(() => context().open());
+    original.remove();
+
+    const replacement = document.createElement('button');
+    replacement.id = 'allai-launcher';
+    document.body.append(replacement);
+    act(() => context().close());
+
+    await waitFor(() => expect(document.activeElement).toBe(replacement));
+    replacement.remove();
+  });
+
+  it('accepts only a route-bound account next step from a validated answer', async () => {
+    mocks.pathname = '/';
+    fetchMock.mockImplementation(async (input) => {
+      const url = String(input);
+      if (url === STATUS_URL) {
+        return response(200, {
+          available: true,
+          reason: 'available',
+          supported_locales: ['en', 'es', 'zh-Hans'],
+          cache_seconds: 5,
+        });
+      }
+      if (url === `${SESSION_URL}/stale-session`) return response(200, { messages: [] });
+      if (url === MESSAGE_URL) {
+        return sseEvents({
+          type: 'answer',
+          text: 'You can buy this listing after creating an account.',
+          source_revision_set: 'a'.repeat(64),
+          next_step: {
+            action: 'buy_listing',
+            label: 'Buy listing',
+            url: '/listings/example-listing',
+            requires_account: true,
+          },
+        });
+      }
+      throw new Error(`Unexpected request: ${url}`);
+    });
+
+    renderProvider();
+    await waitFor(() => expect(context().anonymousAvailable).toBe(true));
+    await send();
+
+    expect(context().messages.at(-1)).toMatchObject({
+      content: 'You can buy this listing after creating an account.',
+      factRevisionSet: 'a'.repeat(64),
+      nextStep: {
+        action: 'buy_listing',
+        url: '/listings/example-listing',
+        requires_account: true,
+      },
+    });
+  });
+
+  it('drops a next step whose account flag conflicts with its public action', async () => {
+    mocks.pathname = '/';
+    fetchMock.mockImplementation(async (input) => {
+      const url = String(input);
+      if (url === STATUS_URL) {
+        return response(200, {
+          available: true,
+          reason: 'available',
+          supported_locales: ['en', 'es', 'zh-Hans'],
+          cache_seconds: 5,
+        });
+      }
+      if (url === `${SESSION_URL}/stale-session`) return response(200, { messages: [] });
+      if (url === MESSAGE_URL) {
+        return sseEvents({
+          type: 'answer',
+          text: 'Browse public listings.',
+          source_revision_set: 'b'.repeat(64),
+          next_step: {
+            action: 'browse_listings',
+            label: 'Browse listings',
+            url: '/listings',
+            requires_account: true,
+          },
+        });
+      }
+      throw new Error(`Unexpected request: ${url}`);
+    });
+
+    renderProvider();
+    await waitFor(() => expect(context().anonymousAvailable).toBe(true));
+    await send();
+
+    expect(context().messages.at(-1)?.nextStep).toBeUndefined();
+  });
+
+  it('renders a safe failure without an account next step', async () => {
+    mocks.pathname = '/';
+    fetchMock.mockImplementation(async (input) => {
+      const url = String(input);
+      if (url === STATUS_URL) {
+        return response(200, {
+          available: true,
+          reason: 'available',
+          supported_locales: ['en', 'es', 'zh-Hans'],
+          cache_seconds: 5,
+        });
+      }
+      if (url === `${SESSION_URL}/stale-session`) return response(200, { messages: [] });
+      if (url === MESSAGE_URL) {
+        return sseEvents({
+          type: 'safe_failure',
+          outcome: 'no_matches',
+          text: 'No matches were found for this query at this time.',
+        });
+      }
+      throw new Error(`Unexpected request: ${url}`);
+    });
+
+    renderProvider();
+    await waitFor(() => expect(context().anonymousAvailable).toBe(true));
+    await send();
+
+    expect(context().messages.at(-1)).toMatchObject({
+      content: 'No matches were found for this query at this time.',
+      safeOutcome: 'no_matches',
+    });
+    expect(context().messages.at(-1)?.nextStep).toBeUndefined();
   });
 });
 

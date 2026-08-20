@@ -2,6 +2,7 @@
 
 import { useState, useRef, useCallback, useEffect, type KeyboardEvent } from 'react';
 import { useAllAI } from './AllAIContext';
+import { anonymousAllAIResources } from '@/lib/i18n/anonymous-allai';
 
 const SUGGESTED_PROMPTS: Record<string, string[]> = {
   '/': [
@@ -37,7 +38,8 @@ export default function AllAIChatInput({
   onSend: (text: string) => void;
   disabled?: boolean;
 }) {
-  const { page, messages } = useAllAI();
+  const { page, messages, locale, anonymousSurfaceActive } = useAllAI();
+  const resources = anonymousAllAIResources(locale);
   const [value, setValue] = useState('');
   const textareaRef = useRef<HTMLTextAreaElement>(null);
 
@@ -67,7 +69,7 @@ export default function AllAIChatInput({
     [handleSend]
   );
 
-  const showSuggestions = messages.length === 0 && !value;
+  const showSuggestions = locale === 'en' && messages.length === 0 && !value;
   const suggestions = getSuggestions(page);
 
   return (
@@ -78,6 +80,7 @@ export default function AllAIChatInput({
             <button
               key={s}
               onClick={() => onSend(s)}
+              disabled={disabled}
               className="text-xs px-3 py-1.5 rounded-full border border-white/[0.1] text-white/50 hover:text-white/80 hover:border-white/20 transition-colors"
             >
               {s}
@@ -88,18 +91,19 @@ export default function AllAIChatInput({
       <div className="flex items-end gap-2 rounded-xl border border-white/[0.1] bg-white/[0.04] px-3 py-2">
         <textarea
           ref={textareaRef}
+          data-allai-autofocus="true"
           value={value}
           onChange={(e) => setValue(e.target.value)}
           onKeyDown={handleKeyDown}
-          placeholder="Ask allAI anything..."
+          placeholder={anonymousSurfaceActive ? resources.inputPlaceholder : 'Ask allAI anything...'}
           disabled={disabled}
           rows={1}
-          className="flex-1 resize-none bg-transparent text-sm text-white/90 placeholder:text-white/30 outline-none leading-snug"
+          className="flex-1 resize-none rounded-sm bg-transparent text-sm text-white/90 placeholder:text-white/30 outline-none leading-snug focus-visible:ring-2 focus-visible:ring-blue-300"
         />
         <button
           onClick={handleSend}
           disabled={disabled || !value.trim()}
-          aria-label="Send message"
+          aria-label={anonymousSurfaceActive ? resources.sendMessage : 'Send message'}
           className="flex-shrink-0 p-1.5 rounded-lg text-white/40 hover:text-white/80 disabled:opacity-30 transition-colors"
         >
           <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">

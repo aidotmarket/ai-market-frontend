@@ -1,7 +1,10 @@
+import type { AnonymousAllAILocale } from '@/lib/i18n/anonymous-allai';
+
 const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000';
 
 export const ANONYMOUS_SESSION_URL = `${API_URL}/api/allai/support/anonymous/session`;
 export const ANONYMOUS_MESSAGE_URL = `${API_URL}/api/allai/support/anonymous/message`;
+export const ANONYMOUS_STATUS_URL = `${API_URL}/api/allai/support/anonymous/status`;
 
 export interface AnonymousPageContext {
   page: string;
@@ -13,10 +16,24 @@ export interface AnonymousMessagePayload {
   session_id: string;
   message: string;
   context: AnonymousPageContext;
+  locale?: AnonymousAllAILocale;
   stream: true;
 }
 
 export type AnonymousChatEvent = Record<string, unknown>;
+
+export interface AnonymousChatStatus {
+  available: boolean;
+  reason: string;
+  supported_locales: AnonymousAllAILocale[];
+  cache_seconds: number;
+}
+
+export async function getAnonymousChatStatus(): Promise<AnonymousChatStatus> {
+  const response = await fetch(ANONYMOUS_STATUS_URL, { cache: 'no-store' });
+  if (!response.ok) throw new Error('Anonymous allAI status is unavailable');
+  return response.json() as Promise<AnonymousChatStatus>;
+}
 
 export async function createAnonymousSession(): Promise<string> {
   const response = await fetch(ANONYMOUS_SESSION_URL, {
