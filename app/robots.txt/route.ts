@@ -12,6 +12,7 @@ Disallow: /api/
 
 # AI Agent Discovery
 # llms.txt: ${SITE_URL}/llms.txt
+# anonymous allAI: https://api.ai.market/api/v1/public/allai/anonymous/manifest.json
 # requests.txt: ${SITE_URL}/requests.txt
 # requests.txt well-known: ${SITE_URL}/.well-known/requests.txt
 # ai-agents.json: ${SITE_URL}/.well-known/ai-agents.json
