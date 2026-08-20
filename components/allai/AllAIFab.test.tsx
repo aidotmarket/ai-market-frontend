@@ -1,6 +1,7 @@
 // @vitest-environment jsdom
 
 import { cleanup, render, screen } from '@testing-library/react';
+import { readFileSync } from 'node:fs';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 const mocks = vi.hoisted(() => ({
@@ -57,5 +58,11 @@ describe('AllAIFab anonymous visitor entry point', () => {
     mocks.context.anonymousAvailable = false;
     render(<AllAIFab />);
     expect(screen.queryByTestId('allai-launcher')).toBeNull();
+  });
+
+  it('uses an unlayered reduced-motion override for the global pulse animation', () => {
+    const css = readFileSync('app/globals.css', 'utf8');
+    expect(css).toContain('@media (prefers-reduced-motion: reduce)');
+    expect(css).toMatch(/\.allai-fab-pulse\s*{\s*animation:\s*none;/);
   });
 });
