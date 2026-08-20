@@ -6,6 +6,11 @@ import AllAIMessage from './AllAIMessage';
 import AllAIChatInput from './AllAIChatInput';
 import FieldProposalCard from './FieldProposalCard';
 import { useWizardBridge } from './WizardAllAIBridge';
+import { useAuthStore } from '@/store/auth';
+import {
+  ANONYMOUS_ALLAI_LOCALES,
+  anonymousAllAIResources,
+} from '@/lib/i18n/anonymous-allai';
 
 const MOBILE_BREAKPOINT = 640;
 
@@ -17,7 +22,18 @@ const MAX_WIDTH = 700;
 const MAX_HEIGHT = 600;
 
 export default function AllAIPanel() {
-  const { isOpen, close, messages, isStreaming, sendMessage } = useAllAI();
+  const user = useAuthStore((state) => state.user);
+  const {
+    isOpen,
+    close,
+    messages,
+    isStreaming,
+    sendMessage,
+    locale,
+    setLocale,
+    anonymousAvailable,
+  } = useAllAI();
+  const resources = anonymousAllAIResources(locale);
   const bridge = useWizardBridge();
   const scrollRef = useRef<HTMLDivElement>(null);
   const [visible, setVisible] = useState(false);
@@ -37,6 +53,34 @@ export default function AllAIPanel() {
 
   const panelRef = useRef<HTMLDivElement>(null);
 
+  const onDialogKeyDown = useCallback(
+    (event: React.KeyboardEvent<HTMLDivElement>) => {
+      if (event.key === 'Escape') {
+        event.preventDefault();
+        close();
+        return;
+      }
+      if (event.key !== 'Tab' || !panelRef.current) return;
+
+      const focusable = Array.from(
+        panelRef.current.querySelectorAll<HTMLElement>(
+          'button:not([disabled]), a[href], textarea:not([disabled]), select:not([disabled]), [tabindex]:not([tabindex="-1"])'
+        )
+      );
+      if (focusable.length === 0) return;
+      const first = focusable[0];
+      const last = focusable[focusable.length - 1];
+      if (event.shiftKey && document.activeElement === first) {
+        event.preventDefault();
+        last.focus();
+      } else if (!event.shiftKey && document.activeElement === last) {
+        event.preventDefault();
+        first.focus();
+      }
+    },
+    [close]
+  );
+
   useEffect(() => {
     const check = () => setIsMobile(window.innerWidth < MOBILE_BREAKPOINT);
     check();
@@ -46,7 +90,12 @@ export default function AllAIPanel() {
 
   useEffect(() => {
     if (isOpen) {
-      requestAnimationFrame(() => setVisible(true));
+      requestAnimationFrame(() => {
+        setVisible(true);
+        panelRef.current
+          ?.querySelector<HTMLElement>('[data-allai-autofocus="true"]')
+          ?.focus();
+      });
     } else {
       setVisible(false);
     }
@@ -74,8 +123,8 @@ export default function AllAIPanel() {
   // --- Drag handlers ---
   const onDragStart = useCallback(
     (e: React.MouseEvent | React.TouchEvent) => {
-      // Don't drag if clicking close button
-      if ((e.target as HTMLElement).closest('button')) return;
+      // Keep interactive header controls usable instead of starting a drag.
+      if ((e.target as HTMLElement).closest('button, select, input, textarea, a')) return;
       e.preventDefault();
       dragRef.current = true;
 
@@ -198,9 +247,10 @@ export default function AllAIPanel() {
     <>
       {/* Close button */}
       <button
+        type="button"
         onClick={close}
         className="absolute top-3 right-3 z-10 p-1.5 rounded-full text-white/40 hover:text-white/80 hover:bg-white/10 transition-all"
-        aria-label="Close allAI assistant"
+        aria-label={user ? 'Close allAI assistant' : resources.closeAssistant}
       >
         <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
           <path d="M18 6L6 18" />
@@ -219,7 +269,26 @@ export default function AllAIPanel() {
           {!isMobile && (
             <span className="text-white/20 text-[10px] leading-none tracking-[2px]" aria-hidden>⠿</span>
           )}
-          <h2 className="text-sm font-semibold text-white/80">allAI</h2>
+          <h2 id="allai-assistant-title" className="text-sm font-semibold text-white/80">
+            {user ? 'allAI' : resources.assistantLabel}
+          </h2>
+          {!user && (
+            <label className="ml-auto mr-8 flex items-center gap-2 text-xs text-white/50">
+              <span className="sr-only">{resources.languageLabel}</span>
+              <select
+                aria-label={resources.languageLabel}
+                value={locale}
+                onChange={(event) => setLocale(event.target.value as typeof locale)}
+                className="rounded-md border border-white/10 bg-slate-950/70 px-2 py-1 text-xs text-white/80 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-300"
+              >
+                {ANONYMOUS_ALLAI_LOCALES.map((item) => (
+                  <option key={item} value={item}>
+                    {item === 'en' ? 'English' : item === 'es' ? 'Español' : '简体中文'}
+                  </option>
+                ))}
+              </select>
+            </label>
+          )}
         </div>
       </div>
 
@@ -231,7 +300,9 @@ export default function AllAIPanel() {
       >
         {messages.length === 0 && (
           <div className="flex items-center justify-center h-full">
-            <p className="text-sm text-white/30 italic">How can I help you today?</p>
+            <p className="text-sm text-white/30 italic">
+              {user ? 'How can I help you today?' : resources.emptyPrompt}
+            </p>
           </div>
         )}
         {messages.map((msg) => (
@@ -255,7 +326,7 @@ export default function AllAIPanel() {
       </div>
 
       {/* Input */}
-      <AllAIChatInput onSend={sendMessage} disabled={isStreaming} />
+      <AllAIChatInput onSend={sendMessage} disabled={isStreaming || (!user && !anonymousAvailable)} />
 
       {/* Resize handle (desktop only) */}
       {!isMobile && (
@@ -277,13 +348,21 @@ export default function AllAIPanel() {
   if (isMobile) {
     return (
       <div
+        ref={panelRef}
+        id="allai-assistant-dialog"
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="allai-assistant-title"
+        data-testid="allai-dialog"
+        onKeyDown={onDialogKeyDown}
         className={`fixed inset-0 z-50 flex flex-col transition-opacity duration-200 ${
           visible ? 'opacity-100' : 'opacity-0'
-        }`}
+        } motion-reduce:transition-none`}
         style={{
           background: 'rgba(12, 17, 30, 0.92)',
           backdropFilter: 'blur(24px)',
           WebkitBackdropFilter: 'blur(24px)',
+          paddingBottom: 'env(safe-area-inset-bottom)',
         }}
       >
         {panelContent}
@@ -300,7 +379,13 @@ export default function AllAIPanel() {
   return (
     <div
       ref={panelRef}
-      className="fixed z-50 flex flex-col rounded-2xl overflow-hidden shadow-[0_8px_40px_rgba(0,0,0,0.5)]"
+      id="allai-assistant-dialog"
+      role="dialog"
+      aria-modal="false"
+      aria-labelledby="allai-assistant-title"
+      data-testid="allai-dialog"
+      onKeyDown={onDialogKeyDown}
+      className="fixed z-50 flex flex-col rounded-2xl overflow-hidden shadow-[0_8px_40px_rgba(0,0,0,0.5)] motion-reduce:transition-none"
       style={{
         width: size.w,
         height: size.h,

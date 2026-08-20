@@ -3,6 +3,10 @@
 import type { Message } from './AllAIContext';
 import Markdown from 'react-markdown';
 import TicketStatusCard from './TicketStatusCard';
+import AllAINextStep from './AllAINextStep';
+import { useAllAI } from './AllAIContext';
+import { anonymousAllAIResources } from '@/lib/i18n/anonymous-allai';
+import { useAuthStore } from '@/store/auth';
 
 function StreamingDots() {
   return (
@@ -21,6 +25,9 @@ export default function AllAIMessage({
   message: Message;
   isStreaming: boolean;
 }) {
+  const { locale } = useAllAI();
+  const user = useAuthStore((state) => state.user);
+  const resources = anonymousAllAIResources(locale);
   if (message.role === 'system') {
     return (
       <div className="text-center">
@@ -44,7 +51,13 @@ export default function AllAIMessage({
   const ticketStatusCards = message.ticketStatusCards ?? [];
   return (
     <div className="flex justify-start">
-      <div className="max-w-[80%] rounded-2xl rounded-bl-md px-4 py-2.5 bg-transparent border border-white/[0.08] text-white/90 text-sm leading-relaxed break-words allai-markdown">
+      <div
+        className="max-w-[80%] rounded-2xl rounded-bl-md px-4 py-2.5 bg-transparent border border-white/[0.08] text-white/90 text-sm leading-relaxed break-words allai-markdown"
+        data-safe-outcome={message.safeOutcome}
+      >
+        {message.historical && !user && (
+          <p className="mb-2 text-xs text-amber-200/70">{resources.historicalAnswer}</p>
+        )}
         {showDots ? (
           <StreamingDots />
         ) : (
@@ -72,6 +85,9 @@ export default function AllAIMessage({
         {ticketStatusCards.map((card) => (
           <TicketStatusCard key={`${message.id}-${card.public_ref}-${card.updated_at}`} card={card} />
         ))}
+        {message.nextStep && !message.safeOutcome && (
+          <AllAINextStep nextStep={message.nextStep} />
+        )}
       </div>
     </div>
   );

@@ -13,11 +13,19 @@ import { usePathname } from 'next/navigation';
 import { useAuthStore } from '@/store/auth';
 import {
   createAnonymousSession,
+  getAnonymousChatStatus,
   readAnonymousMessageStream,
   sendAnonymousMessage,
   type AnonymousMessagePayload,
 } from '@/api/anonymousChat';
 import type { TicketStatusCardData } from './TicketStatusCard';
+import {
+  ANONYMOUS_ALLAI_LOCALES,
+  anonymousAllAIResources,
+  preferredAnonymousAllAILocale,
+  type AnonymousAllAILocale,
+  type AnonymousSafeOutcome,
+} from '@/lib/i18n/anonymous-allai';
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000';
 const SESSION_KEY = 'allai-session-id';
@@ -28,6 +36,17 @@ export interface Message {
   content: string;
   timestamp: number;
   ticketStatusCards?: TicketStatusCardData[];
+  historical?: boolean;
+  factRevisionSet?: string;
+  safeOutcome?: AnonymousSafeOutcome;
+  nextStep?: AnonymousNextStep;
+}
+
+export interface AnonymousNextStep {
+  action: string;
+  label: string;
+  url: string;
+  requires_account: boolean;
 }
 
 export interface FieldProposalEvent {
@@ -45,6 +64,9 @@ interface AllAIContextValue {
   isStreaming: boolean;
   sendMessage: (text: string) => Promise<void>;
   page: string;
+  locale: AnonymousAllAILocale;
+  setLocale: (locale: AnonymousAllAILocale) => void;
+  anonymousAvailable: boolean;
   // Wizard bridge callbacks
   onFieldProposal: ((proposal: FieldProposalEvent) => void) | null;
   setOnFieldProposal: (cb: ((proposal: FieldProposalEvent) => void) | null) => void;
@@ -89,6 +111,55 @@ function extractTicketStatusCards(evt: Record<string, any>): TicketStatusCardDat
   );
 }
 
+function isAnonymousSafeOutcome(value: unknown): value is AnonymousSafeOutcome {
+  return (
+    value === 'no_matches' ||
+    value === 'retrieval_unavailable' ||
+    value === 'answer_unverified' ||
+    value === 'surface_disabled' ||
+    value === 'rate_limited' ||
+    value === 'unsupported_language'
+  );
+}
+
+function isAnonymousNextStep(value: unknown): value is AnonymousNextStep {
+  if (!value || typeof value !== 'object') return false;
+  const candidate = value as Record<string, unknown>;
+  if (
+    typeof candidate.action !== 'string' ||
+    typeof candidate.label !== 'string' ||
+    candidate.label.length === 0 ||
+    typeof candidate.url !== 'string' ||
+    !candidate.url.startsWith('/') ||
+    candidate.url.startsWith('//') ||
+    typeof candidate.requires_account !== 'boolean'
+  ) return false;
+
+  const path = candidate.url.split('?', 1)[0].split('#', 1)[0].replace(/\/$/, '') || '/';
+  const publicRoutes: Record<string, string> = {
+    browse_listings: '/listings',
+    refine_search: '/find-data',
+    view_terms: '/legal/terms',
+    view_pricing: '/pricing',
+  };
+  const accountRoutes: Record<string, string> = {
+    post_request: '/requests/new',
+    publish_listing: '/partner',
+    buy_listing: '/listings',
+    save_listing: '/listings',
+    view_account: '/dashboard',
+  };
+  const accountRoute = accountRoutes[candidate.action];
+  if (accountRoute) {
+    const allowsDescendants = candidate.action === 'buy_listing' || candidate.action === 'save_listing';
+    return candidate.requires_account &&
+      (path === accountRoute || (allowsDescendants && path.startsWith(`${accountRoute}/`)));
+  }
+  const publicRoute = publicRoutes[candidate.action];
+  return Boolean(publicRoute) && !candidate.requires_account &&
+    (path === publicRoute || (candidate.action === 'browse_listings' && path.startsWith(`${publicRoute}/`)));
+}
+
 export function useAllAI() {
   const ctx = useContext(AllAIContext);
   if (!ctx) throw new Error('useAllAI must be used within AllAIProvider');
@@ -102,9 +173,12 @@ export function AllAIProvider({ children }: { children: ReactNode }) {
   const [messages, setMessages] = useState<Message[]>([]);
   const greetingSentRef = useRef(false);
   const [isStreaming, setIsStreaming] = useState(false);
+  const [locale, setLocale] = useState<AnonymousAllAILocale>('en');
+  const [anonymousAvailable, setAnonymousAvailable] = useState(true);
   const sessionIdRef = useRef<string | null>(null);
   const abortRef = useRef<AbortController | null>(null);
   const localConversationStartedRef = useRef(false);
+  const returnFocusRef = useRef<HTMLElement | null>(null);
 
   // Wizard bridge callbacks
   const onFieldProposalRef = useRef<((proposal: FieldProposalEvent) => void) | null>(null);
@@ -114,6 +188,42 @@ export function AllAIProvider({ children }: { children: ReactNode }) {
   const [onFieldProposalState, setOnFieldProposalState] = useState<((proposal: FieldProposalEvent) => void) | null>(null);
   const [onBatchProposalState, setOnBatchProposalState] = useState<((proposals: FieldProposalEvent[]) => void) | null>(null);
   const [formSnapshotGetterState, setFormSnapshotGetterState] = useState<(() => Record<string, any>) | null>(null);
+
+  useEffect(() => {
+    setLocale(user ? 'en' : preferredAnonymousAllAILocale(navigator.language));
+  }, [user]);
+
+  useEffect(() => {
+    const isApprovedAnonymousRoute =
+      !user && (pathname === '/' || pathname === '/find-data' || pathname === '/search');
+    if (!isApprovedAnonymousRoute) {
+      setAnonymousAvailable(true);
+      return;
+    }
+
+    let active = true;
+    let timer: ReturnType<typeof setTimeout> | undefined;
+    const refresh = async () => {
+      let refreshSeconds = 5;
+      try {
+        const status = await getAnonymousChatStatus();
+        if (!active) return;
+        const localesMatch =
+          ANONYMOUS_ALLAI_LOCALES.every((item) => status.supported_locales.includes(item)) &&
+          status.supported_locales.every((item) => ANONYMOUS_ALLAI_LOCALES.includes(item));
+        setAnonymousAvailable(status.available && localesMatch);
+        refreshSeconds = Math.max(1, status.cache_seconds || 5);
+      } catch {
+        if (active) setAnonymousAvailable(false);
+      }
+      if (active) timer = setTimeout(refresh, refreshSeconds * 1000);
+    };
+    void refresh();
+    return () => {
+      active = false;
+      if (timer) clearTimeout(timer);
+    };
+  }, [pathname, user]);
 
   const setOnFieldProposal = useCallback((cb: ((proposal: FieldProposalEvent) => void) | null) => {
     onFieldProposalRef.current = cb;
@@ -162,6 +272,8 @@ export function AllAIProvider({ children }: { children: ReactNode }) {
                 role: m.role,
                 content: m.content,
                 timestamp: Date.now(),
+                historical: true,
+                factRevisionSet: typeof m.fact_revision_set === 'string' ? m.fact_revision_set : undefined,
                 ticketStatusCards: coerceTicketStatusCards(m.ticket_status_cards ?? m.ticketStatusCards) ?? undefined,
               }))
             );
@@ -197,11 +309,11 @@ export function AllAIProvider({ children }: { children: ReactNode }) {
       setMessages([{
         id: 'greeting-0',
         role: 'assistant',
-        content: "Hey! I'm allAI - your guide to ai.market. I can help you find data, learn about vectorAIz, or answer any questions. What are you looking for?",
+        content: anonymousAllAIResources(locale).greeting,
         timestamp: Date.now(),
       }]);
     }
-  }, [isOpen, messages.length, user]);
+  }, [isOpen, locale, messages.length, user]);
 
   const ensureSession = useCallback(async (): Promise<string> => {
     if (sessionIdRef.current) return sessionIdRef.current;
@@ -215,6 +327,20 @@ export function AllAIProvider({ children }: { children: ReactNode }) {
     async (text: string) => {
       const trimmed = text.trim();
       if (!trimmed || isStreaming) return;
+      const resources = anonymousAllAIResources(locale);
+      if (!user && !anonymousAvailable) {
+        setMessages((prev) => [
+          ...prev,
+          {
+            id: `assistant-${Date.now()}`,
+            role: 'assistant',
+            content: resources.safeOutcomes.surface_disabled,
+            safeOutcome: 'surface_disabled',
+            timestamp: Date.now(),
+          },
+        ]);
+        return;
+      }
       localConversationStartedRef.current = true;
 
       const userMsg: Message = {
@@ -242,10 +368,11 @@ export function AllAIProvider({ children }: { children: ReactNode }) {
         if (listingMatch) context.listing_id = listingMatch[1];
 
         const bodyPayload: AnonymousMessagePayload = {
-            session_id: sessionId,
-            message: trimmed,
-            context,
-            stream: true,
+          session_id: sessionId,
+          message: trimmed,
+          context,
+          ...(!user ? { locale } : {}),
+          stream: true,
         };
 
         const headers: Record<string, string> = { 'Content-Type': 'application/json' };
@@ -275,10 +402,17 @@ export function AllAIProvider({ children }: { children: ReactNode }) {
         }
 
         if (res.status === 429) {
+          const limitContent = user
+            ? "You've reached the message limit for this session. Please try again later."
+            : resources.safeOutcomes.rate_limited;
           setMessages((prev) =>
             prev.map((m) =>
               m.id === assistantId
-                ? { ...m, content: "You've reached the message limit for this session. Please try again later." }
+                ? {
+                    ...m,
+                    content: limitContent,
+                    safeOutcome: user ? undefined : 'rate_limited',
+                  }
                 : m
             )
           );
@@ -286,10 +420,59 @@ export function AllAIProvider({ children }: { children: ReactNode }) {
           return;
         }
 
+        if (res.status === 503 && !user) {
+          setMessages((prev) =>
+            prev.map((m) =>
+              m.id === assistantId
+                ? { ...m, content: resources.safeOutcomes.surface_disabled, safeOutcome: 'surface_disabled' }
+                : m
+            )
+          );
+          setAnonymousAvailable(false);
+          return;
+        }
+
         if (!res.ok || !res.body) throw new Error('Stream request failed');
 
         try {
           await readAnonymousMessageStream(res.body, (evt) => {
+            if (evt.type === 'answer' && typeof evt.text === 'string') {
+              const nextStep = !user && isAnonymousNextStep(evt.next_step) ? evt.next_step : undefined;
+              setMessages((prev) =>
+                prev.map((m) =>
+                  m.id === assistantId
+                    ? {
+                        ...m,
+                        content: evt.text as string,
+                        nextStep,
+                        factRevisionSet:
+                          typeof evt.source_revision_set === 'string'
+                            ? evt.source_revision_set
+                            : undefined,
+                      }
+                    : m
+                )
+              );
+              return;
+            }
+
+            if (evt.type === 'safe_failure' && isAnonymousSafeOutcome(evt.outcome)) {
+              const outcome = evt.outcome;
+              const fallback = resources.safeOutcomes[outcome];
+              setMessages((prev) =>
+                prev.map((m) =>
+                  m.id === assistantId
+                    ? {
+                        ...m,
+                        content: typeof evt.text === 'string' && evt.text ? evt.text : fallback,
+                        safeOutcome: outcome,
+                      }
+                    : m
+                )
+              );
+              return;
+            }
+
             // Delta content: support both {"text":"..."} and {"type":"delta","chunk":"..."}
             const delta = evt.text ?? (evt.type === 'delta' ? evt.chunk : undefined);
             if (typeof delta === 'string' && delta) {
@@ -365,7 +548,7 @@ export function AllAIProvider({ children }: { children: ReactNode }) {
           setMessages((prev) =>
             prev.map((m) =>
               m.id === assistantId && !m.content
-                ? { ...m, content: 'Sorry, something went wrong. Please try again.' }
+                ? { ...m, content: resources.genericError }
                 : m
             )
           );
@@ -375,20 +558,38 @@ export function AllAIProvider({ children }: { children: ReactNode }) {
         abortRef.current = null;
       }
     },
-    [isStreaming, ensureSession, pathname, token]
+    [anonymousAvailable, ensureSession, isStreaming, locale, pathname, token, user]
   );
 
-  const open = useCallback(() => setIsOpen(true), []);
+  const open = useCallback(() => {
+    returnFocusRef.current = document.activeElement instanceof HTMLElement
+      ? document.activeElement
+      : null;
+    setIsOpen(true);
+  }, []);
   const close = useCallback(() => {
     setIsOpen(false);
     abortRef.current?.abort();
+    requestAnimationFrame(() => returnFocusRef.current?.focus());
   }, []);
-  const toggle = useCallback(() => setIsOpen((v) => !v), []);
+  const toggle = useCallback(() => {
+    setIsOpen((current) => {
+      if (!current) {
+        returnFocusRef.current = document.activeElement instanceof HTMLElement
+          ? document.activeElement
+          : null;
+      } else {
+        requestAnimationFrame(() => returnFocusRef.current?.focus());
+      }
+      return !current;
+    });
+  }, []);
 
   return (
     <AllAIContext.Provider
       value={{
         isOpen, open, close, toggle, messages, isStreaming, sendMessage, page: pathname,
+        locale, setLocale, anonymousAvailable,
         onFieldProposal: onFieldProposalState, setOnFieldProposal,
         onBatchProposal: onBatchProposalState, setOnBatchProposal,
         formSnapshotGetter: formSnapshotGetterState, setFormSnapshotGetter,
