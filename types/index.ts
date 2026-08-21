@@ -503,6 +503,7 @@ export type TransactionStatus =
 
 export interface Transaction {
   id: string;
+  order_id: string | null;
   tx_number: string;
   status: TransactionStatus;
   buyer_type: string;

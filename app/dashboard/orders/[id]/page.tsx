@@ -97,7 +97,7 @@ export default function OrderDetailPage() {
         if (cancelled) return;
         setOrder(orderData);
         setEvents(eventsData);
-        setTx(txData);
+        setTx(txData?.order_id === orderId ? txData : null);
       })
       .catch((err) => {
         if (cancelled) return;
@@ -422,7 +422,7 @@ export default function OrderDetailPage() {
           )}
 
           {/* Access / Download section */}
-          {order.status === 'fulfilled' && isSellerOfRecord && (
+          {order.status === 'fulfilled' && isSellerOfRecord && !isBuyerOfRecord && (
             <p>Downloads are available to the buyer of this order.</p>
           )}
 

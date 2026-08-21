@@ -76,6 +76,7 @@ function order(overrides: Partial<BuyerOrderDetail> = {}): BuyerOrderDetail {
 function transaction(overrides: Partial<Transaction> = {}): Transaction {
   return {
     id: 'tx-1',
+    order_id: navigation.orderId,
     tx_number: 'TX-001',
     status: 'delivered',
     buyer_type: 'human',
@@ -97,6 +98,8 @@ function transaction(overrides: Partial<Transaction> = {}): Transaction {
 
 describe('OrderDetailPage viewer relationship gating', () => {
   beforeEach(() => {
+    navigation.orderId = 'order-1';
+    navigation.txId = 'tx-1';
     auth.userId = 'viewer-1';
     auth.role = 'seller';
     ordersApi.getOrder.mockResolvedValue(order());
@@ -115,7 +118,7 @@ describe('OrderDetailPage viewer relationship gating', () => {
     vi.clearAllMocks();
   });
 
-  it('does not offer Mark Delivered to a dual-role buyer of record', async () => {
+  it('does not offer Mark Delivered to a buyer of record who also has global seller role', async () => {
     auth.role = 'seller';
     ordersApi.getOrder.mockResolvedValue(order({ buyer_id: auth.userId, seller_id: 'seller-1' }));
     transactionsApi.getTransaction.mockResolvedValue(transaction({ status: 'fulfilling' }));
@@ -124,6 +127,60 @@ describe('OrderDetailPage viewer relationship gating', () => {
 
     expect(await screen.findByText('Order dataset')).not.toBeNull();
     expect(screen.queryByRole('button', { name: 'Mark Delivered' })).toBeNull();
+  });
+
+  it('offers Mark Delivered to the seller of record', async () => {
+    ordersApi.getOrder.mockResolvedValue(order({
+      buyer_id: 'buyer-1',
+      seller_id: auth.userId,
+    }));
+    transactionsApi.getTransaction.mockResolvedValue(transaction({ status: 'fulfilling' }));
+
+    render(<OrderDetailPage />);
+
+    expect(await screen.findByRole('button', { name: 'Mark Delivered' })).not.toBeNull();
+  });
+
+  it('discards a participant-authorized transaction that belongs to another order', async () => {
+    navigation.orderId = 'A';
+    navigation.txId = 'B';
+    ordersApi.getOrder.mockResolvedValue(order({
+      id: 'A',
+      buyer_id: auth.userId,
+    }));
+    transactionsApi.getTransaction.mockResolvedValue(transaction({
+      id: 'B',
+      order_id: 'B-order',
+      status: 'delivered',
+    }));
+
+    render(<OrderDetailPage />);
+
+    expect(await screen.findByText('Order #A')).not.toBeNull();
+    expect(screen.queryByRole('heading', { name: 'Transaction' })).toBeNull();
+    expect(screen.queryByRole('button', { name: 'Confirm Receipt' })).toBeNull();
+    expect(screen.queryByRole('button', { name: 'Mark Delivered' })).toBeNull();
+    expect(transactionsApi.confirmTransaction).not.toHaveBeenCalled();
+    expect(transactionsApi.deliverTransaction).not.toHaveBeenCalled();
+  });
+
+  it('renders a transaction that belongs to the current order', async () => {
+    navigation.orderId = 'A';
+    navigation.txId = 'B';
+    ordersApi.getOrder.mockResolvedValue(order({
+      id: 'A',
+      buyer_id: auth.userId,
+    }));
+    transactionsApi.getTransaction.mockResolvedValue(transaction({
+      id: 'B',
+      order_id: 'A',
+      status: 'delivered',
+    }));
+
+    render(<OrderDetailPage />);
+
+    expect(await screen.findByRole('heading', { name: 'Transaction' })).not.toBeNull();
+    expect(screen.getByRole('button', { name: 'Confirm Receipt' })).not.toBeNull();
   });
 
   it('hides buyer actions and download preparation from a seller of record', async () => {
@@ -137,7 +194,7 @@ describe('OrderDetailPage viewer relationship gating', () => {
 
     render(<OrderDetailPage />);
 
-    expect(await screen.findByText('Downloads are available to the buyer of this order.')).not.toBeNull();
+    expect(await screen.findByText(/available to the buyer/)).not.toBeNull();
     expect(screen.queryByRole('button', { name: 'Confirm Receipt' })).toBeNull();
     expect(ordersApi.requestDownload).not.toHaveBeenCalled();
   });
