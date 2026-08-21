@@ -412,6 +412,8 @@ export interface BuyerOrder {
 }
 
 export interface BuyerOrderDetail extends BuyerOrder {
+  buyer_id: string;
+  seller_id: string;
   access_url?: string | null;
   download_count?: number;
 }

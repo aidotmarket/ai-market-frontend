@@ -60,10 +60,12 @@ export default function OrderDetailPage() {
   const orderId = params.id;
   const txIdParam = searchParams.get('tx');
   const { toast } = useToast();
-  const userRole = useAuthStore((s) => s.user?.role);
+  const userId = useAuthStore((s) => s.user?.id);
   const { ensureTermsAccepted, TermsGatePrompt, checkingTerms } = useTermsGate();
 
   const [order, setOrder] = useState<BuyerOrderDetail | null>(null);
+  const isBuyerOfRecord = order !== null && userId === order.buyer_id;
+  const isSellerOfRecord = order !== null && userId === order.seller_id;
   const [events, setEvents] = useState<OrderEvent[]>([]);
   const [tx, setTx] = useState<Transaction | null>(null);
   const [downloadPackage, setDownloadPackage] = useState<OrderAccessResponse | null>(null);
@@ -113,7 +115,7 @@ export default function OrderDetailPage() {
   }, [orderId, txIdParam]);
 
   useEffect(() => {
-    if (order?.status !== 'fulfilled' || order.access_expired) return;
+    if (!isBuyerOfRecord || order?.status !== 'fulfilled' || order.access_expired) return;
 
     let cancelled = false;
     setDownloadLoading(true);
@@ -138,7 +140,7 @@ export default function OrderDetailPage() {
       });
 
     return () => { cancelled = true; };
-  }, [order?.access_expired, order?.status, orderId]);
+  }, [isBuyerOfRecord, order?.access_expired, order?.status, orderId]);
 
   useEffect(() => {
     const interval = window.setInterval(() => setNow(Date.now()), 1000);
@@ -150,7 +152,7 @@ export default function OrderDetailPage() {
   };
 
   const confirmReceipt = async () => {
-    if (!tx || confirming) return;
+    if (!isBuyerOfRecord || !tx || confirming) return;
     setConfirming(true);
     try {
       const updated = await confirmTransaction(tx.id);
@@ -168,7 +170,7 @@ export default function OrderDetailPage() {
   };
 
   const markDelivered = async () => {
-    if (!tx || delivering) return;
+    if (!isSellerOfRecord || !tx || delivering) return;
     setDelivering(true);
     try {
       const updated = await deliverTransaction(tx.id, { proof_type: 'manual', notes: 'Marked delivered by seller' });
@@ -369,7 +371,7 @@ export default function OrderDetailPage() {
 
               {/* Action buttons based on TX status */}
               <div className="mt-4 flex flex-col sm:flex-row gap-3">
-                {tx.status === 'delivered' && (
+                {tx.status === 'delivered' && isBuyerOfRecord && (
                   <button
                     onClick={handleConfirm}
                     disabled={confirming || checkingTerms}
@@ -378,7 +380,7 @@ export default function OrderDetailPage() {
                     {confirming || checkingTerms ? 'Confirming…' : 'Confirm Receipt'}
                   </button>
                 )}
-                {tx.status === 'fulfilling' && userRole === 'seller' && (
+                {tx.status === 'fulfilling' && isSellerOfRecord && (
                   <button
                     onClick={handleDeliver}
                     disabled={delivering || checkingTerms}
@@ -420,7 +422,11 @@ export default function OrderDetailPage() {
           )}
 
           {/* Access / Download section */}
-          {order.status === 'fulfilled' && order.access_expired && (
+          {order.status === 'fulfilled' && isSellerOfRecord && (
+            <p>Downloads are available to the buyer of this order.</p>
+          )}
+
+          {order.status === 'fulfilled' && isBuyerOfRecord && order.access_expired && (
             <div className="rounded-lg border border-red-200 bg-red-50 p-6">
               <h2 className="text-lg font-semibold text-red-900">Download window expired</h2>
               <p className="mt-2 text-sm text-red-700">
@@ -429,7 +435,7 @@ export default function OrderDetailPage() {
             </div>
           )}
 
-          {order.status === 'fulfilled' && !order.access_expired && (
+          {order.status === 'fulfilled' && isBuyerOfRecord && !order.access_expired && (
             scopedDelivery ? (
               <ScopedCredentialDownload
                 orderId={order.id}
