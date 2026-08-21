@@ -289,7 +289,7 @@ export default function OrderDetailPage() {
     <div>
       <TermsGatePrompt />
       <Link href="/dashboard/orders" className="text-sm text-[#3F51B5] hover:underline mb-4 inline-block">
-        &larr; Back to Orders
+        &larr; Back to Purchases
       </Link>
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">

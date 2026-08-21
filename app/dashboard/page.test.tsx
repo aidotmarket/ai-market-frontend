@@ -74,6 +74,19 @@ const buyerOrder = {
   updated_at: null,
 };
 
+const sellerStats = {
+  period: '30d',
+  total_listings: 2,
+  total_views: 12,
+  total_inquiries: 4,
+  total_sales: 3,
+  period_sales: 2,
+  period_revenue_cents: 4550,
+  period_revenue_display: '$45.50',
+  pending_fulfillments: 2,
+  conversion_rate: 75,
+};
+
 describe('DashboardOverview seller setup 2FA state', () => {
   beforeEach(() => {
     capabilitiesApi.getCapabilities.mockResolvedValue({
@@ -119,7 +132,7 @@ describe('DashboardOverview seller setup 2FA state', () => {
     expect(ordersApi.getMyOrders).toHaveBeenCalledOnce();
   });
 
-  it('renders active seller stats from capability state alone', async () => {
+  it('renders active seller stats from the real contract shape', async () => {
     capabilitiesApi.getCapabilities.mockResolvedValue({
       buyer: { persisted_status: 'active', effective_status: 'active', missing_steps: [], reason: null },
       seller: {
@@ -134,7 +147,7 @@ describe('DashboardOverview seller setup 2FA state', () => {
       data: { details_submitted: true, payouts_enabled: true },
     });
     sellerApi.getSellerStats.mockResolvedValue({
-      data: { views: 12, sales: 3, revenue: 45.5 },
+      data: sellerStats,
     });
     listingsApi.getMyListings.mockResolvedValue({ data: [] });
 
@@ -147,6 +160,11 @@ describe('DashboardOverview seller setup 2FA state', () => {
     expect(screen.getByText('12')).not.toBeNull();
     expect(screen.getByText('3')).not.toBeNull();
     expect(screen.getByText('$45.50')).not.toBeNull();
+    expect(screen.getByText('Revenue (30 days)')).not.toBeNull();
+    expect(screen.queryByText('Total Revenue')).toBeNull();
+    const salesPointer = screen.getByRole('link', { name: 'Sales awaiting delivery' });
+    expect(salesPointer.getAttribute('href')).toBe('/dashboard/sales?status=pending_delivery');
+    expect(salesPointer.textContent).toContain('2');
     expect(screen.queryByText('Finish seller setup')).toBeNull();
     expect(capabilitiesApi.getCapabilities).toHaveBeenCalledOnce();
     expect(connectApi.getConnectStatus).toHaveBeenCalledOnce();
@@ -172,7 +190,7 @@ describe('DashboardOverview seller setup 2FA state', () => {
       data: { details_submitted: true, payouts_enabled: true },
     });
     sellerApi.getSellerStats.mockResolvedValue({
-      data: { views: 12, sales: 3, revenue: 45.5 },
+      data: sellerStats,
     });
     listingsApi.getMyListings.mockResolvedValue({ data: [] });
     ordersApi.getMyOrders.mockResolvedValue([buyerOrder]);
@@ -187,6 +205,7 @@ describe('DashboardOverview seller setup 2FA state', () => {
     expect(screen.getByText('Fulfilled')).not.toBeNull();
     expect(screen.getByText('$25.00')).not.toBeNull();
     expect(screen.getByRole('link', { name: 'View all orders' }).getAttribute('href')).toBe('/dashboard/orders');
+    expect(screen.getByRole('link', { name: 'Sales awaiting delivery' }).getAttribute('href')).toBe('/dashboard/sales?status=pending_delivery');
     expect(screen.queryByText("You haven't bought anything yet")).toBeNull();
   });
 
@@ -273,7 +292,7 @@ describe('DashboardOverview seller setup 2FA state', () => {
       data: { details_submitted: true, payouts_enabled: true },
     });
     sellerApi.getSellerStats.mockResolvedValue({
-      data: { views: 12, sales: 3, revenue: 45.5 },
+      data: sellerStats,
     });
     listingsApi.getMyListings.mockResolvedValue({ data: [] });
     ordersApi.getMyOrders.mockRejectedValue(purchaseError);
@@ -287,7 +306,34 @@ describe('DashboardOverview seller setup 2FA state', () => {
     expect(screen.queryByText('Failed to load dashboard data.')).toBeNull();
     expect(screen.getByText('Total Views')).not.toBeNull();
     expect(screen.getByText('12')).not.toBeNull();
+    expect(screen.getByRole('link', { name: 'Sales awaiting delivery' }).textContent).toContain('2');
     expect(screen.queryByRole('heading', { name: 'Your purchases' })).toBeNull();
     expect(consoleError).toHaveBeenCalledWith('Failed to fetch dashboard purchase data', purchaseError);
+  });
+
+  it('renders zero Sales awaiting delivery from the real contract shape', async () => {
+    capabilitiesApi.getCapabilities.mockResolvedValue({
+      buyer: { persisted_status: 'active', effective_status: 'active', missing_steps: [], reason: null },
+      seller: {
+        persisted_status: 'active',
+        effective_status: 'active',
+        missing_steps: [],
+        reason: null,
+      },
+      next_action: null,
+    });
+    connectApi.getConnectStatus.mockResolvedValue({
+      data: { details_submitted: true, payouts_enabled: true },
+    });
+    sellerApi.getSellerStats.mockResolvedValue({
+      data: { ...sellerStats, pending_fulfillments: 0 },
+    });
+    listingsApi.getMyListings.mockResolvedValue({ data: [] });
+
+    render(<DashboardOverview />);
+
+    const salesPointer = await screen.findByRole('link', { name: 'Sales awaiting delivery' });
+    expect(salesPointer.getAttribute('href')).toBe('/dashboard/sales?status=pending_delivery');
+    expect(salesPointer.textContent).toContain('0');
   });
 });

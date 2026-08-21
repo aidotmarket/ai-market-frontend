@@ -106,6 +106,7 @@ describe('DashboardLayout hydration guard', () => {
   });
 
   it('renders children after hydrate resolves authenticated', async () => {
+    navigation.pathname = '/dashboard';
     useAuthStore.setState({
       user,
       token: 'access-token',
@@ -124,7 +125,7 @@ describe('DashboardLayout hydration guard', () => {
       expect(screen.getByText('dashboard child')).not.toBeNull();
     });
     expect(navigation.push).not.toHaveBeenCalledWith(
-      `/login?redirect=${encodeURIComponent('/dashboard/stripe-return')}`
+      `/login?redirect=${encodeURIComponent('/dashboard')}`
     );
   });
 
@@ -206,5 +207,111 @@ describe('DashboardLayout hydration guard', () => {
 
     expect(screen.getByText('Seller Dashboard')).not.toBeNull();
     expect(screen.getByText('seller setup progress')).not.toBeNull();
+  });
+
+  it('renders exact active seller navigation', async () => {
+    navigation.pathname = '/dashboard';
+    capabilitiesApi.getCapabilities.mockResolvedValue({
+      seller: { effective_status: 'active' },
+    });
+    useAuthStore.setState({
+      user,
+      token: 'access-token',
+      isAuthenticated: true,
+      isLoading: false,
+      hydrated: true,
+    });
+
+    render(<DashboardLayout><div>active seller child</div></DashboardLayout>);
+
+    await screen.findByText('active seller child');
+    await waitFor(() => {
+      expect(screen.getAllByRole('link').map((link) => [link.textContent, link.getAttribute('href')])).toEqual([
+        ['Overview', '/dashboard'],
+        ['Listings', '/dashboard/listings'],
+        ['Sales', '/dashboard/sales'],
+        ['Purchases', '/dashboard/orders'],
+        ['Inquiries', '/dashboard/seller/inquiries'],
+        ['Settings', '/dashboard/settings'],
+      ]);
+    });
+  });
+
+  it('omits Sales for provisioning sellers but keeps Purchases', async () => {
+    navigation.pathname = '/dashboard/listings';
+    capabilitiesApi.getCapabilities.mockResolvedValue({
+      seller: { effective_status: 'provisioning' },
+    });
+    useAuthStore.setState({
+      user,
+      token: 'access-token',
+      isAuthenticated: true,
+      isLoading: false,
+      hydrated: true,
+    });
+
+    render(<DashboardLayout><div>provisioning seller child</div></DashboardLayout>);
+
+    await screen.findByText('provisioning seller child');
+    await waitFor(() => {
+      expect(screen.getAllByRole('link').map((link) => [link.textContent, link.getAttribute('href')])).toEqual([
+        ['Overview', '/dashboard'],
+        ['Listings', '/dashboard/listings'],
+        ['Purchases', '/dashboard/orders'],
+        ['Inquiries', '/dashboard/seller/inquiries'],
+        ['Settings', '/dashboard/settings'],
+      ]);
+    });
+    expect(screen.queryByRole('link', { name: 'Sales' })).toBeNull();
+  });
+
+  it('renders exact buyer navigation', async () => {
+    navigation.pathname = '/dashboard';
+    capabilitiesApi.getCapabilities.mockResolvedValue({
+      seller: { effective_status: 'not_requested' },
+    });
+    useAuthStore.setState({
+      user,
+      token: 'access-token',
+      isAuthenticated: true,
+      isLoading: false,
+      hydrated: true,
+    });
+
+    render(<DashboardLayout><div>buyer child</div></DashboardLayout>);
+
+    await screen.findByText('buyer child');
+    await waitFor(() => {
+      expect(screen.getAllByRole('link').map((link) => [link.textContent, link.getAttribute('href')])).toEqual([
+        ['Overview', '/dashboard'],
+        ['My Inquiries', '/dashboard/inquiries'],
+        ['Purchases', '/dashboard/orders'],
+        ['My Requests', '/dashboard/requests'],
+      ]);
+    });
+  });
+
+  it.each([
+    ['/dashboard/sales', 'Sales'],
+    ['/dashboard/listings', 'Listings'],
+  ])('redirects a buyer direct visit to %s', async (pathname, childLabel) => {
+    navigation.pathname = pathname;
+    capabilitiesApi.getCapabilities.mockResolvedValue({
+      seller: { effective_status: 'not_requested' },
+    });
+    useAuthStore.setState({
+      user,
+      token: 'access-token',
+      isAuthenticated: true,
+      isLoading: false,
+      hydrated: true,
+    });
+
+    render(<DashboardLayout><div>{childLabel} child must not render</div></DashboardLayout>);
+
+    await waitFor(() => {
+      expect(navigation.push).toHaveBeenCalledWith('/dashboard/inquiries');
+    });
+    expect(screen.queryByText(`${childLabel} child must not render`)).toBeNull();
   });
 });

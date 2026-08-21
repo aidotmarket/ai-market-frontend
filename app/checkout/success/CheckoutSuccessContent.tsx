@@ -175,7 +175,7 @@ export default function CheckoutSuccessContent() {
             href="/dashboard/orders"
             className="rounded-lg bg-[#3F51B5] px-6 py-2.5 text-sm font-medium text-white hover:bg-[#3545a0]"
           >
-            Check My Orders
+            Check My Purchases
           </Link>
         </div>
       </div>
@@ -198,7 +198,7 @@ export default function CheckoutSuccessContent() {
             href="/dashboard/orders"
             className="rounded-lg bg-[#3F51B5] px-6 py-2.5 text-sm font-medium text-white hover:bg-[#3545a0]"
           >
-            Check My Orders
+            Check My Purchases
           </Link>
           <a
             href="mailto:support@ai.market"

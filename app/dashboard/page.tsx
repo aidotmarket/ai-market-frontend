@@ -21,7 +21,7 @@ import {
 import { notifyCapabilitiesChanged } from '@/components/onboarding/SellerSetupProgressBar';
 import { useToast } from '@/components/Toast';
 import { formatDate, formatPrice } from '@/lib/format';
-import type { BuyerOrder, OrderStatus } from '@/types';
+import type { BuyerOrder, OrderStatus, SellerStats } from '@/types';
 import { AxiosError } from 'axios';
 
 type TwoFactorFlow = 'idle' | 'showing_qr' | 'verifying' | 'showing_backup_codes';
@@ -43,7 +43,7 @@ export default function DashboardOverview() {
   const [connecting, setConnecting] = useState(false);
   const [stripeStatus, setStripeStatus] = useState<{ details_submitted?: boolean; payouts_enabled?: boolean } | null>(null);
   const [capabilities, setCapabilities] = useState<CapabilitySetResponse | null>(null);
-  const [stats, setStats] = useState<any>(null);
+  const [stats, setStats] = useState<SellerStats | null>(null);
   const [heldPublishedCount, setHeldPublishedCount] = useState(0);
   const [buyerOrders, setBuyerOrders] = useState<BuyerOrder[]>([]);
   const [requestingSeller, setRequestingSeller] = useState(false);
@@ -479,7 +479,7 @@ export default function DashboardOverview() {
       )}
 
       {isSellerActive && (
-        <div className="grid grid-cols-1 gap-5 sm:grid-cols-3">
+        <div className="grid grid-cols-1 gap-5 sm:grid-cols-2 lg:grid-cols-4">
           <div className="bg-white overflow-hidden shadow-sm rounded-xl border border-gray-200">
             <div className="p-5">
               <div className="flex items-center">
@@ -493,7 +493,7 @@ export default function DashboardOverview() {
                   <dl>
                     <dt className="text-sm font-medium text-gray-500 truncate">Total Views</dt>
                     <dd className="flex items-baseline">
-                      <div className="text-2xl font-semibold text-gray-900">{stats?.views || 0}</div>
+                      <div className="text-2xl font-semibold text-gray-900">{stats?.total_views ?? 0}</div>
                     </dd>
                   </dl>
                 </div>
@@ -513,7 +513,7 @@ export default function DashboardOverview() {
                   <dl>
                     <dt className="text-sm font-medium text-gray-500 truncate">Total Sales</dt>
                     <dd className="flex items-baseline">
-                      <div className="text-2xl font-semibold text-gray-900">{stats?.sales || 0}</div>
+                      <div className="text-2xl font-semibold text-gray-900">{stats?.total_sales ?? 0}</div>
                     </dd>
                   </dl>
                 </div>
@@ -531,15 +531,39 @@ export default function DashboardOverview() {
                 </div>
                 <div className="ml-5 w-0 flex-1">
                   <dl>
-                    <dt className="text-sm font-medium text-gray-500 truncate">Total Revenue</dt>
+                    <dt className="text-sm font-medium text-gray-500 truncate">Revenue (30 days)</dt>
                     <dd className="flex items-baseline">
-                      <div className="text-2xl font-semibold text-gray-900">${(stats?.revenue || 0).toFixed(2)}</div>
+                      <div className="text-2xl font-semibold text-gray-900">{stats?.period_revenue_display ?? '$0.00'}</div>
                     </dd>
                   </dl>
                 </div>
               </div>
             </div>
           </div>
+
+          <Link
+            href="/dashboard/sales?status=pending_delivery"
+            aria-label="Sales awaiting delivery"
+            className="bg-white overflow-hidden shadow-sm rounded-xl border border-gray-200"
+          >
+            <div className="p-5">
+              <div className="flex items-center">
+                <div className="flex-shrink-0">
+                  <svg className="h-6 w-6 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5l5 5v11a2 2 0 01-2 2z" />
+                  </svg>
+                </div>
+                <div className="ml-5 w-0 flex-1">
+                  <dl>
+                    <dt className="text-sm font-medium text-gray-500 truncate">Sales awaiting delivery</dt>
+                    <dd className="flex items-baseline">
+                      <div className="text-2xl font-semibold text-gray-900">{stats?.pending_fulfillments ?? 0}</div>
+                    </dd>
+                  </dl>
+                </div>
+              </div>
+            </div>
+          </Link>
         </div>
       )}
     </div>
