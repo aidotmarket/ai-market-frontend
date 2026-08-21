@@ -412,6 +412,8 @@ export interface BuyerOrder {
 }
 
 export interface BuyerOrderDetail extends BuyerOrder {
+  buyer_id: string;
+  seller_id: string;
   access_url?: string | null;
   download_count?: number;
 }
@@ -501,6 +503,7 @@ export type TransactionStatus =
 
 export interface Transaction {
   id: string;
+  order_id: string | null;
   tx_number: string;
   status: TransactionStatus;
   buyer_type: string;
