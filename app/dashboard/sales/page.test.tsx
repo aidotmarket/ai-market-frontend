@@ -201,14 +201,53 @@ describe('SalesPage', () => {
         sellerOrder({ id: 'sale-c', order_number: 'SALE-C', paid_at: '2026-08-20T12:00:00Z', created_at: '2026-08-20T10:00:00Z' }),
         sellerOrder({ id: 'sale-old', order_number: 'SALE-OLD', paid_at: '2026-08-19T12:00:00Z', created_at: '2026-08-19T10:00:00Z' }),
         sellerOrder({ id: 'sale-b', order_number: 'SALE-B', paid_at: '2026-08-20T12:00:00Z', created_at: '2026-08-20T10:00:00Z' }),
+        sellerOrder({ id: 'sale-created-late', order_number: 'SALE-A', paid_at: '2026-08-20T12:00:00Z', created_at: '2026-08-20T11:00:00Z' }),
+        sellerOrder({ id: 'sale-created-early', order_number: 'SALE-Z', paid_at: '2026-08-20T12:00:00Z', created_at: '2026-08-20T09:00:00Z' }),
       ],
     });
 
     const { container } = render(<SalesPage />);
 
     await waitFor(() => {
-      expect(tableSaleNumbers(container)).toEqual(['SALE-OLD', 'SALE-B', 'SALE-C']);
+      expect(tableSaleNumbers(container)).toEqual(['SALE-OLD', 'SALE-Z', 'SALE-B', 'SALE-C', 'SALE-A']);
     });
+  });
+
+  it('renders null-paid fallback and delivered and completed dates', async () => {
+    sellerApi.getSellerOrders.mockResolvedValue({
+      data: [
+        sellerOrder({
+          id: 'sale-not-paid',
+          order_number: 'SALE-NOT-PAID',
+          paid_at: null,
+          created_at: '2026-08-17T12:00:00Z',
+        }),
+        sellerOrder({
+          id: 'sale-delivered',
+          order_number: 'SALE-DELIVERED',
+          status: 'delivered',
+          delivered_at: '2026-08-19T12:00:00Z',
+        }),
+        sellerOrder({
+          id: 'sale-completed',
+          order_number: 'SALE-COMPLETED',
+          status: 'completed',
+          completed_at: '2026-08-18T12:00:00Z',
+        }),
+      ],
+    });
+
+    render(<SalesPage />);
+
+    for (const notPaid of await screen.findAllByText('Not paid')) {
+      expect(within(notPaid.parentElement as HTMLElement).getByText('Created Aug 17, 2026')).not.toBeNull();
+    }
+    for (const deliveredBadge of screen.getAllByText('Delivered', { selector: 'span' })) {
+      expect(within(deliveredBadge.parentElement as HTMLElement).getByText('Aug 19, 2026')).not.toBeNull();
+    }
+    for (const completedBadge of screen.getAllByText('Completed', { selector: 'span' })) {
+      expect(within(completedBadge.parentElement as HTMLElement).getByText('Aug 18, 2026')).not.toBeNull();
+    }
   });
 
   it('sorts all non-default filters newest paid first with nulls and deterministic ties', async () => {
@@ -334,7 +373,11 @@ describe('SalesPage', () => {
     expect(await screen.findAllByText('Buyer-only purchase')).toHaveLength(2);
     expect(screen.queryByText('Seller-only sale')).toBeNull();
     expect(sellerApi.getSellerOrders).toHaveBeenCalledOnce();
-    expect(sellerApi.getSellerOrders.mock.calls.flat()).not.toContain('Buyer-only purchase');
+    expect(sellerApi.getSellerOrders).toHaveBeenCalledWith({
+      status_filter: 'pending_delivery',
+      limit: 100,
+      offset: 0,
+    });
     expect(ordersApi.getMyOrders).toHaveBeenCalledOnce();
   });
 });

@@ -291,8 +291,11 @@ describe('DashboardLayout hydration guard', () => {
     });
   });
 
-  it('redirects a buyer direct Sales visit', async () => {
-    navigation.pathname = '/dashboard/sales';
+  it.each([
+    ['/dashboard/sales', 'Sales'],
+    ['/dashboard/listings', 'Listings'],
+  ])('redirects a buyer direct visit to %s', async (pathname, childLabel) => {
+    navigation.pathname = pathname;
     capabilitiesApi.getCapabilities.mockResolvedValue({
       seller: { effective_status: 'not_requested' },
     });
@@ -304,11 +307,11 @@ describe('DashboardLayout hydration guard', () => {
       hydrated: true,
     });
 
-    render(<DashboardLayout><div>Sales child must not render</div></DashboardLayout>);
+    render(<DashboardLayout><div>{childLabel} child must not render</div></DashboardLayout>);
 
     await waitFor(() => {
       expect(navigation.push).toHaveBeenCalledWith('/dashboard/inquiries');
     });
-    expect(screen.queryByText('Sales child must not render')).toBeNull();
+    expect(screen.queryByText(`${childLabel} child must not render`)).toBeNull();
   });
 });
