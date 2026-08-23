@@ -6,14 +6,13 @@ import {
   formatPrice,
   formatDate,
   privacyScoreColor,
-  verificationBadgeColor,
-  trustLevelLabel,
 } from '@/lib/format';
 import type { ListingDetail } from '@/types';
 import BuyButton from '@/components/BuyButton';
 import ListingPurchaseAdvisory from '@/components/ListingPurchaseAdvisory';
 import ListingPurchasePanel from '@/components/ListingPurchasePanel';
 import InquiryWidget from '@/components/InquiryWidget';
+import ScanFindingsBadge from '@/components/listings/ScanFindingsBadge';
 import ReactMarkdown from 'react-markdown';
 import rehypeSanitize from 'rehype-sanitize';
 
@@ -132,6 +131,8 @@ export default async function ListingDetailPage({ params, searchParams }: Props)
             <ReactMarkdown rehypePlugins={[rehypeSanitize]}>{listing.description ?? ''}</ReactMarkdown>
           </div>
 
+          <ScanFindingsBadge scanFindings={listing.scan_findings ?? null} />
+
           {/* Tags */}
           <div className="flex flex-wrap gap-2">
             <span className="inline-flex items-center rounded-full bg-gray-100 px-3 py-1 text-sm font-medium text-gray-700">
@@ -188,16 +189,6 @@ export default async function ListingDetailPage({ params, searchParams }: Props)
             </div>
           )}
 
-          {/* Compliance Badges */}
-          <div>
-            <h2 className="text-lg font-semibold mb-3">Compliance</h2>
-            <div className="flex flex-wrap gap-2">
-              <ComplianceBadge label="Status" value={listing.compliance_status} />
-              {listing.compliance_frameworks?.map((framework) => (
-                <ComplianceBadge key={framework} label={framework} value="compliant" />
-              ))}
-            </div>
-          </div>
         </div>
 
         {/* Sidebar */}
@@ -207,10 +198,7 @@ export default async function ListingDetailPage({ params, searchParams }: Props)
             <p className="text-3xl font-bold text-gray-900 mb-1">{formatPrice(listing.pricing?.price ?? 0)}</p>
             <ListingPurchaseAdvisory
               price={listing.pricing?.price ?? 0}
-              complianceStatus={listing.compliance_status}
-              qualityScore={listing.quality_score}
-              verificationStatus={listing.verification_status}
-              trustLevel={listing.trust_level}
+              scanFindings={listing.scan_findings ?? null}
             />
             {hasVersionRows ? (
               <ListingPurchasePanel
@@ -251,21 +239,9 @@ export default async function ListingDetailPage({ params, searchParams }: Props)
                 </span>
               </div>
               <div className="flex justify-between items-center">
-                <span className="text-sm text-gray-600">Quality Score</span>
-                <span className="text-sm font-medium text-gray-900">
-                  {listing.quality_score != null ? `${listing.quality_score.toFixed(0)}/100` : 'Not scored'}
-                </span>
-              </div>
-              <div className="flex justify-between items-center">
                 <span className="text-sm text-gray-600">Trust Level</span>
                 <span className="text-sm font-medium text-gray-900">
-                  {trustLevelLabel(listing.trust_level)}
-                </span>
-              </div>
-              <div className="flex justify-between items-center">
-                <span className="text-sm text-gray-600">Verification</span>
-                <span className={`inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-medium ${verificationBadgeColor(listing.verification_status)}`}>
-                  {listing.verification_status}
+                  {listing.trust_level}
                 </span>
               </div>
               {listing.license && (
@@ -324,22 +300,5 @@ function shouldEmitDatasetJsonLd(listing: ListingDetail): listing is ListingDeta
     DATASET_JSONLD_ENABLED &&
     !listing.noindex &&
     listing.jsonld?.['@type'] === 'Dataset'
-  );
-}
-
-function ComplianceBadge({ label, value }: { label: string; value: string }) {
-  const colorMap: Record<string, string> = {
-    low_risk: 'bg-green-100 text-green-800',
-    medium_risk: 'bg-yellow-100 text-yellow-800',
-    high_risk: 'bg-red-100 text-red-800',
-    true: 'bg-green-100 text-green-800',
-    false: 'bg-gray-100 text-gray-600',
-  };
-  const color = colorMap[value] || 'bg-gray-100 text-gray-600';
-
-  return (
-    <span className={`inline-flex items-center rounded-full px-3 py-1 text-xs font-medium ${color}`}>
-      {label}: {value.replace('_', ' ')}
-    </span>
   );
 }

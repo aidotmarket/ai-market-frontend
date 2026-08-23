@@ -78,6 +78,114 @@ export type TrustLevel = 'L0' | 'L1' | 'L2' | 'L3';
 export type VerificationStatus = 'unverified' | 'verified' | 'premium';
 export type FulfillmentType = 'ai_queryable' | 'file_download' | 'pipeline_invocation' | 'model_access';
 
+export type VerificationSkippedReason = 'permission_denied' | 'unsupported_type' | 'timeout';
+export type VerificationSchemaColumnType =
+  | 'string'
+  | 'integer'
+  | 'float'
+  | 'decimal'
+  | 'boolean'
+  | 'date'
+  | 'datetime'
+  | 'binary'
+  | 'unknown';
+
+export interface VerificationSchemaColumn {
+  name: string;
+  type: VerificationSchemaColumnType;
+}
+
+export interface VerificationSchemaObject {
+  object_id: string;
+  columns: VerificationSchemaColumn[];
+}
+
+export interface VerificationRowCount {
+  object_id: string;
+  count: number;
+  method: 'exact' | 'catalog_estimate' | `deterministic_sample_estimate(${number})`;
+}
+
+export interface VerificationCoverage {
+  objects_discovered: number;
+  objects_scanned: number;
+  objects_skipped_by_reason: Partial<Record<VerificationSkippedReason, number>>;
+  skipped: Array<{
+    object_id: string;
+    reason: VerificationSkippedReason;
+  }>;
+}
+
+export interface VerificationApproxDistinct {
+  algorithm: 'hll-sha256-v1';
+  estimate: number;
+  relative_error_ppm: number;
+}
+
+export interface VerificationFactColumn {
+  position: number;
+  null_rate: string;
+  approx_distinct_count: VerificationApproxDistinct | 'suppressed_low_occupancy';
+  length_histogram?: number[] | 'suppressed_low_occupancy' | null;
+  numeric_range_buckets?: number[] | 'suppressed_low_occupancy' | null;
+}
+
+export interface VerificationFactObject {
+  object_id: string;
+  columns: VerificationFactColumn[];
+}
+
+export interface PublishedScanFindings {
+  publication_state: 'PUBLISHED';
+  artifact_version: 'data-verification-public-artifact-v1';
+  verification_series_id: string;
+  epoch_id: string;
+  listing_id: string;
+  title: string;
+  scan_date_utc: string;
+  published_at_utc: string;
+  spec: {
+    id: string;
+    version: '1';
+    hash: string;
+    depth_class: 'complete_standard_v1';
+    canonicalization_version: 'python-json-sort-compact-v1';
+  };
+  execution: {
+    agent_version: string;
+    connector_type: 'eolymp';
+    connector_version: 'eolymp-v1';
+    content_sha256_reference: string;
+  };
+  methods: {
+    row_count_algorithm_version: 'exact-v1';
+    distinct_algorithm_version: 'hll-sha256-v1';
+    histogram_version: 'fixed-buckets-v1';
+    numeric_bucket_version: 'fixed-buckets-v1';
+  };
+  coverage: VerificationCoverage;
+  deterministic_facts: VerificationFactObject[];
+  fingerprint_hash: string;
+  narrative_state: 'grounded' | 'withheld_grounding_failed';
+  narrative: string | null;
+  listing_claim_comparison: string | null;
+  narrative_notice: string | null;
+  seller_context_provided: boolean;
+  preview_requested: boolean;
+  schema_preview?: VerificationSchemaObject[];
+  row_counts?: VerificationRowCount[];
+  attestation: string;
+  disclaimer: string;
+}
+
+export interface WithdrawnScanFindings {
+  publication_state: 'WITHDRAWN';
+  withdrawn_at_utc: string;
+  marker: string;
+}
+
+export type ScanFindings = PublishedScanFindings | WithdrawnScanFindings;
+
 export interface ListingListItem {
   id: string;
   slug: string;
@@ -92,7 +200,7 @@ export interface ListingListItem {
   fulfillment_type?: FulfillmentType | null;
   model_provider: ModelProvider;
   trust_level: TrustLevel;
-  quality_score: number | null;
+  quality_score?: number | null;
   verification_status: VerificationStatus;
   view_count: number;
   created_at: string;
@@ -133,7 +241,6 @@ export interface ListingDetail {
   update_frequency: string | null;
   coverage: Record<string, unknown> | null;
   privacy_score: number | null;
-  quality_score: number | null;
   searchability_score: number | null;
   compliance_status: ComplianceStatus;
   compliance_frameworks: string[] | null;
@@ -148,6 +255,7 @@ export interface ListingDetail {
   published_at: string | null;
   access_window_days?: number;
   fulfillment_type?: FulfillmentType | null;
+  scan_findings: ScanFindings | null;
   jsonld?: Record<string, unknown>;
 }
 
