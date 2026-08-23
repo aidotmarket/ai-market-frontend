@@ -106,7 +106,7 @@ export async function fetchFeaturedFeed(params?: {
 
 export async function fetchPublicListing(slug: string) {
   const res = await fetch(`${API_URL}/api/v1/public/listings/${encodeURIComponent(slug)}`, {
-    next: { revalidate: 3600 },
+    cache: 'no-store',
   });
   if (!res.ok) return null;
   return res.json();

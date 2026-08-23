@@ -1,14 +1,8 @@
 import Link from 'next/link';
-import { formatPrice, privacyScoreColor, verificationBadgeColor } from '@/lib/format';
+import { formatPrice, privacyScoreColor } from '@/lib/format';
 import type { ListingListItem, SearchResultItem } from '@/types';
 
 type CardListing = ListingListItem | SearchResultItem;
-
-function hasVerification(
-  listing: CardListing
-): listing is CardListing & { verification_status: NonNullable<ListingListItem['verification_status']> } {
-  return 'verification_status' in listing && typeof listing.verification_status === 'string';
-}
 
 export function MarketplaceListingCard({ listing }: { listing: CardListing }) {
   const tags = Array.isArray(listing.tags) ? listing.tags.slice(0, 3) : [];
@@ -72,15 +66,6 @@ export function MarketplaceListingCard({ listing }: { listing: CardListing }) {
             )}`}
           >
             Privacy: {listing.privacy_score.toFixed(1)}
-          </span>
-        )}
-        {hasVerification(listing) && (
-          <span
-            className={`inline-flex items-center rounded-full px-2 py-1 font-medium ${verificationBadgeColor(
-              listing.verification_status
-            )}`}
-          >
-            {listing.verification_status}
           </span>
         )}
         {typeof views === 'number' && (
