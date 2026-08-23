@@ -167,8 +167,8 @@ function Interpretation({ artifact }: { artifact: PublishedScanFindings }) {
       <h3 id="scan-interpretation-heading" className="font-semibold text-gray-900">allAI interpretation</h3>
       <dl className="mt-2 space-y-3">
         <ReportField label="Narrative state">{artifact.narrative_state}</ReportField>
-        <ReportField label="Narrative">{displayNullable(artifact.narrative)}</ReportField>
-        <ReportField label="Listing claim comparison">{displayNullable(artifact.listing_claim_comparison)}</ReportField>
+        <ReportField label="Narrative">{displaySafeNullable(artifact.narrative)}</ReportField>
+        <ReportField label="Listing claim comparison">{displaySafeNullable(artifact.listing_claim_comparison)}</ReportField>
         <ReportField label="Narrative notice">{displayNullable(artifact.narrative_notice)}</ReportField>
       </dl>
     </section>
@@ -191,7 +191,7 @@ function D8Preview({ artifact }: { artifact: PublishedScanFindings }) {
               <p>Object <span className="font-mono break-all">{object.object_id}</span></p>
               <ul className="mt-2 list-disc space-y-1 pl-5">
                 {object.columns.map((column, index) => (
-                  <li key={`${column.name}:${index}`}><span className="font-mono">{column.name}</span>: {column.type}</li>
+                  <li key={`${column.name}:${index}`}><span className="font-mono">{decodeHtmlEscapeEntities(column.name)}</span>: {column.type}</li>
                 ))}
               </ul>
             </article>
@@ -233,4 +233,23 @@ function displayAggregate(value: number[] | 'suppressed_low_occupancy' | null | 
 
 function displayNullable(value: string | null): string {
   return value === null ? 'null' : value;
+}
+
+function displaySafeNullable(value: string | null): string {
+  return value === null ? 'null' : decodeHtmlEscapeEntities(value);
+}
+
+const HTML_ESCAPE_ENTITIES: Record<string, string> = {
+  '&amp;': '&',
+  '&lt;': '<',
+  '&gt;': '>',
+  '&#x27;': "'",
+  '&quot;': '"',
+};
+
+export function decodeHtmlEscapeEntities(value: string): string {
+  return value.replace(
+    /&(amp|lt|gt|#x27|quot);/g,
+    (entity) => HTML_ESCAPE_ENTITIES[entity],
+  );
 }

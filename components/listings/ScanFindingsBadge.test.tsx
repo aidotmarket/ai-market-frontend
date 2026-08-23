@@ -1,8 +1,10 @@
+// @vitest-environment jsdom
+
 import React from 'react';
 import { renderToStaticMarkup } from 'react-dom/server';
 import { describe, expect, it } from 'vitest';
 import type { PublishedScanFindings, ScanFindings, VerificationObjectId } from '@/types';
-import ScanFindingsBadge from './ScanFindingsBadge';
+import ScanFindingsBadge, { decodeHtmlEscapeEntities } from './ScanFindingsBadge';
 
 const ATTESTATION = "On 2026-08-23 12:00:00 UTC, at the data owner's authorization and expense, ai.market directed AIM Data to scan the seller-designated source for this listing inside the owner's environment; the structural facts below were computed by ai.market-authored conduit code executed by the owner's AIM Data installation, and the findings are published unedited.";
 const DISCLAIMER = 'This is a seller-published, point-in-time scan of what the seller-designated source exposed through AIM Data on 2026-08-23; the source may change at any time, and this is not a continuing audit, warranty, compliance certification, or guarantee that data delivered later will match or remain available, accurate, complete, or unchanged. Verification does not assess data accuracy, legality, or fitness for any purpose.';
@@ -66,8 +68,8 @@ function makePublishedFindings(overrides: Partial<PublishedScanFindings> = {}): 
     }],
     fingerprint_hash: 'e'.repeat(64),
     narrative_state: 'grounded',
-    narrative: 'The scan found one readable object.',
-    listing_claim_comparison: 'The listing says two objects; one object was scanned and one was skipped.',
+    narrative: 'The dataset&#x27;s A &amp; B source contains one readable object.',
+    listing_claim_comparison: 'The listing says &quot;A &amp; B&quot;; one object was scanned and one was skipped.',
     narrative_notice: null,
     seller_context_provided: true,
     preview_requested: true,
@@ -84,6 +86,11 @@ function makePublishedFindings(overrides: Partial<PublishedScanFindings> = {}): 
 
 function render(scanFindings: ScanFindings | null): string {
   return renderToStaticMarkup(<ScanFindingsBadge scanFindings={scanFindings} />);
+}
+
+function renderText(scanFindings: ScanFindings | null): string {
+  document.body.innerHTML = render(scanFindings);
+  return document.body.textContent ?? '';
 }
 
 describe('ScanFindingsBadge', () => {
@@ -115,8 +122,6 @@ describe('ScanFindingsBadge', () => {
       findings.methods.distinct_algorithm_version,
       findings.methods.histogram_version,
       findings.methods.numeric_bucket_version,
-      findings.narrative!,
-      findings.listing_claim_comparison!,
       DISCLAIMER,
       'Objects discovered',
       'Objects scanned',
@@ -130,8 +135,19 @@ describe('ScanFindingsBadge', () => {
     }
     expect(html).toContain(ATTESTATION.replaceAll("'", '&#x27;'));
     expect(html).toContain('View full report');
-    expect(html).toContain('&amp;lt;script&amp;gt;alert(1)&amp;lt;/script&amp;gt;');
+    expect(html).toContain('&lt;script&gt;alert(1)&lt;/script&gt;');
     expect(html).not.toContain('<script>');
+
+    const text = renderText(findings);
+    expect(text).toContain("The dataset's A & B source contains one readable object.");
+    expect(text).toContain('The listing says "A & B"; one object was scanned and one was skipped.');
+    expect(text).toContain('<script>alert(1)</script>');
+    expect(document.body.querySelector('script')).toBeNull();
+  });
+
+  it('decodes only the five entities emitted by Python html.escape', () => {
+    expect(decodeHtmlEscapeEntities('&amp; &lt; &gt; &#x27; &quot; &nbsp; &#39;'))
+      .toBe('& < > \' " &nbsp; &#39;');
   });
 
   it('renders only the exact withdrawal marker inside the backend window', () => {
