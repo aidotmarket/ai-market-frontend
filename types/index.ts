@@ -343,14 +343,8 @@ export interface SearchResultItem {
   privacy_score: number | null;
   compliance_status: string | null;
   data_format: string | null;
-  fulfillment_type?: FulfillmentType | null;
-  source_row_count: number | null;
-  tags: string[] | null;
-  created_at?: string | null;
-  verification_status?: VerificationStatus;
-  view_count?: number;
-  status?: ListingStatus;
-  access_window_days?: number;
+  source_row_count?: number | null;
+  tags?: string[] | null;
 }
 
 export interface PriceFacet {

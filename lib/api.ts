@@ -41,7 +41,7 @@ export interface FeaturedPriceDisplay {
 
 export interface FeaturedItem {
   listing_id: string;
-  seller_id?: string;
+  seller_id: string;
   slug: string;
   title: string;
   summary?: string | null;
@@ -50,7 +50,6 @@ export interface FeaturedItem {
   source: FeaturedItemSource;
   slot: number;
   price: FeaturedPriceDisplay;
-  quality_score?: number | null;
   placement_id?: string | null;
 }
 

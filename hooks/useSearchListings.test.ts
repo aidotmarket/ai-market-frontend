@@ -3,7 +3,7 @@ import { filterDiscoverableItems, type ResultItem } from './useSearchListings';
 
 describe('filterDiscoverableItems', () => {
   it('pins unlisted listings as hidden from browse/search surfaces', () => {
-    const items: ResultItem[] = [
+    const items: Array<ResultItem & { status: 'published' | 'unlisted' }> = [
       {
         id: 'published-1',
         slug: 'published-dataset',
@@ -17,7 +17,6 @@ describe('filterDiscoverableItems', () => {
         compliance_status: null,
         data_format: null,
         source_row_count: null,
-        verification_status: 'verified',
         view_count: 0,
         created_at: '2026-07-01T00:00:00Z',
         status: 'published',
@@ -35,7 +34,6 @@ describe('filterDiscoverableItems', () => {
         compliance_status: null,
         data_format: null,
         source_row_count: null,
-        verification_status: 'verified',
         view_count: 0,
         created_at: '2026-07-01T00:00:00Z',
         status: 'unlisted',

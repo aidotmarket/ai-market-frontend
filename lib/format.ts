@@ -18,20 +18,3 @@ export function privacyScoreColor(score: number): string {
   if (score >= 5) return 'bg-yellow-100 text-yellow-800';
   return 'bg-red-100 text-red-800';
 }
-
-export function trustLevelLabel(level: string): string {
-  switch (level) {
-    case 'L3': return 'Certified';
-    case 'L2': return 'Reputable';
-    case 'L1': return 'Verified';
-    default: return 'New';
-  }
-}
-
-export function verificationBadgeColor(status: string): string {
-  switch (status) {
-    case 'premium': return 'bg-purple-100 text-purple-800';
-    case 'verified': return 'bg-[#E8EAF6] text-[#303F9F]';
-    default: return 'bg-gray-100 text-gray-600';
-  }
-}

@@ -5,7 +5,7 @@ import type { SearchResultItem } from '@/types';
 import { MarketplaceListingCard } from './MarketplaceListingCard';
 
 describe('MarketplaceListingCard', () => {
-  it('does not render a truth-status badge from a legacy verification_status field', () => {
+  it('does not render a truth-status badge', () => {
     const listing: SearchResultItem = {
       id: 'listing-1',
       slug: 'legacy-dataset',
@@ -19,7 +19,6 @@ describe('MarketplaceListingCard', () => {
       data_format: 'csv',
       source_row_count: 10,
       tags: [],
-      verification_status: 'verified',
     };
 
     const html = renderToStaticMarkup(<MarketplaceListingCard listing={listing} />);

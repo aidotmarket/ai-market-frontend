@@ -122,13 +122,13 @@ export default async function ListingDetailPage({ params, searchParams }: Props)
               <span>&middot;</span>
               <span>{listing.view_count} views</span>
               <span>&middot;</span>
-              <span>{listing.inquiry_count ?? 0} inquiries</span>
+              <span>{listing.inquiry_count} inquiries</span>
             </div>
           </div>
 
           {/* Description - rendered as sanitized markdown */}
           <div className="prose prose-sm max-w-none">
-            <ReactMarkdown rehypePlugins={[rehypeSanitize]}>{listing.description ?? ''}</ReactMarkdown>
+            <ReactMarkdown rehypePlugins={[rehypeSanitize]}>{listing.description}</ReactMarkdown>
           </div>
 
           <ScanFindingsBadge scanFindings={listing.scan_findings ?? null} />
@@ -146,7 +146,7 @@ export default async function ListingDetailPage({ params, searchParams }: Props)
                 {cat}
               </span>
             ))}
-            {listing.tags?.map((tag) => (
+            {listing.tags.map((tag) => (
               <span
                 key={tag}
                 className="inline-flex items-center rounded-full bg-[#E8EAF6] px-3 py-1 text-sm text-[#3F51B5]"
