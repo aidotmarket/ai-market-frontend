@@ -13,7 +13,7 @@ import { AxiosError } from 'axios';
 
 interface BuyButtonProps {
   listingId: string;
-  sellerId: string;
+  sellerId?: string;
   slug: string;
   price: number;
   pricingType: string;
@@ -50,7 +50,7 @@ export default function BuyButton({
 
   // Check if user already purchased this listing
   useEffect(() => {
-    if (!isAuthenticated || !user || user.id === sellerId) return;
+    if (!isAuthenticated || !user || (sellerId && user.id === sellerId)) return;
 
     let cancelled = false;
     setCheckingPurchase(true);
@@ -93,8 +93,9 @@ export default function BuyButton({
     );
   }
 
-  // Seller viewing own listing
-  if (user?.id === sellerId) {
+  // Authenticated/private callers may provide seller identity. Public listing
+  // responses intentionally do not expose it.
+  if (sellerId && user?.id === sellerId) {
     return (
       <div className="rounded-lg bg-[#E8EAF6] border border-[#C5CAE9] px-4 py-3">
         <div className="flex items-center gap-2">

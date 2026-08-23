@@ -1,3 +1,5 @@
+import type { ListingPublicListResponse } from '@/types';
+
 const API_URL = process.env.API_URL || process.env.NEXT_PUBLIC_API_URL;
 
 export interface ShareMetadataResponse {
@@ -26,13 +28,7 @@ export type ShareMetadataFetchResult =
   | { status: 'gone' }
   | { status: 'error' };
 
-export interface PaginatedListings {
-  items: import('@/types').ListingListItem[];
-  total: number;
-  page: number;
-  per_page: number;
-  jsonld?: Record<string, unknown>;
-}
+export type PaginatedListings = ListingPublicListResponse;
 
 export type FeaturedItemSource = 'just_listed' | 'recently_sold' | 'trending' | 'cold_start' | 'curated';
 

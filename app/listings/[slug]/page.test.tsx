@@ -54,7 +54,7 @@ function makeListing(overrides: Partial<ListingDetail> = {}): ListingDetail {
     title: 'Test Dataset',
     description: 'Visible dataset description.',
     short_description: 'Visible dataset description.',
-    publisher: { name: 'Seller Co', id: 'seller-1' },
+    publisher: { display_name: 'Seller Co', trust_level: 'L1' },
     pricing: {
       price: 0,
       pricing_type: 'one_time',
@@ -64,6 +64,8 @@ function makeListing(overrides: Partial<ListingDetail> = {}): ListingDetail {
     category: 'Business',
     secondary_categories: null,
     tags: ['test'],
+    task_category: null,
+    domain_tags: null,
     schema_summary: {
       columns: ['region'],
       column_count: 1,
@@ -74,18 +76,19 @@ function makeListing(overrides: Partial<ListingDetail> = {}): ListingDetail {
     update_frequency: null,
     coverage: null,
     privacy_score: 9,
+    privacy_scan_status: 'scanned',
     searchability_score: 80,
-    compliance_status: 'low_risk',
-    compliance_frameworks: [],
     trust_level: 'L1',
-    verification_status: 'verified',
     is_accessible_for_free: true,
     view_count: 1,
     inquiry_count: 0,
     noindex: false,
+    purchasable: true,
+    purchase_hold_reason: null,
     created_at: '2026-06-01T00:00:00Z',
     updated_at: '2026-06-01T00:00:00Z',
     published_at: '2026-06-01T00:00:00Z',
+    fulfillment_type: 'ai_queryable',
     scan_findings: null,
     jsonld: {
       '@context': 'https://schema.org',
@@ -170,7 +173,6 @@ describe('ListingDetailPage Dataset JSON-LD', () => {
       license: 'ODC-BY-1.0',
       data_format: 'json_lines',
       fulfillment_type: 'file_download',
-      access_window_days: 30,
     });
 
     await renderPage(listing);
@@ -181,6 +183,7 @@ describe('ListingDetailPage Dataset JSON-LD', () => {
     }));
 
     buyButtonProps.mockClear();
+    fetchListingAccessWindowDays.mockResolvedValueOnce(30);
     await renderPage(listing, [{
       version_id: 'version-1',
       version_label: '2026-Q3',

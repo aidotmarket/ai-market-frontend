@@ -60,7 +60,10 @@ function ArtifactProvenance({ artifact }: { artifact: PublishedScanFindings }) {
       <h3 id="scan-provenance-heading" className="font-semibold text-gray-900">Report provenance</h3>
       <dl className="mt-2 grid gap-x-6 gap-y-2 sm:grid-cols-2">
         <ReportField label="Publication state">{artifact.publication_state}</ReportField>
-        <ReportField label="Scan timestamp (UTC)"><time dateTime={artifact.scan_date_utc}>{artifact.scan_date_utc}</time></ReportField>
+        <ReportField label="Scan date (UTC)"><time dateTime={artifact.scan_date_utc}>{artifact.scan_date_utc}</time></ReportField>
+        <ReportField label="Scan started (UTC)"><time dateTime={artifact.scanned_at_utc}>{artifact.scanned_at_utc}</time></ReportField>
+        <ReportField label="Scan completed (UTC)"><time dateTime={artifact.completed_at_utc}>{artifact.completed_at_utc}</time></ReportField>
+        <ReportField label="Scan duration (ms)">{artifact.duration_ms}</ReportField>
         <ReportField label="Published timestamp (UTC)"><time dateTime={artifact.published_at_utc}>{artifact.published_at_utc}</time></ReportField>
         <ReportField label="Artifact version">{artifact.artifact_version}</ReportField>
         <ReportField label="Verification series ID">{artifact.verification_series_id}</ReportField>

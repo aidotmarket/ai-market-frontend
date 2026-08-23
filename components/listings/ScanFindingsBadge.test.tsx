@@ -1,12 +1,12 @@
 import React from 'react';
 import { renderToStaticMarkup } from 'react-dom/server';
 import { describe, expect, it } from 'vitest';
-import type { PublishedScanFindings, ScanFindings } from '@/types';
+import type { PublishedScanFindings, ScanFindings, VerificationObjectId } from '@/types';
 import ScanFindingsBadge from './ScanFindingsBadge';
 
 const ATTESTATION = "On 2026-08-23 12:00:00 UTC, at the data owner's authorization and expense, ai.market directed AIM Data to scan the seller-designated source for this listing inside the owner's environment; the structural facts below were computed by ai.market-authored conduit code executed by the owner's AIM Data installation, and the findings are published unedited.";
 const DISCLAIMER = 'This is a seller-published, point-in-time scan of what the seller-designated source exposed through AIM Data on 2026-08-23; the source may change at any time, and this is not a continuing audit, warranty, compliance certification, or guarantee that data delivered later will match or remain available, accurate, complete, or unchanged. Verification does not assess data accuracy, legality, or fitness for any purpose.';
-const OBJECT_ID = 'a'.repeat(64);
+const OBJECT_ID = 'a'.repeat(64) as VerificationObjectId;
 
 function makePublishedFindings(overrides: Partial<PublishedScanFindings> = {}): PublishedScanFindings {
   return {
@@ -17,6 +17,9 @@ function makePublishedFindings(overrides: Partial<PublishedScanFindings> = {}): 
     listing_id: '33333333-3333-4333-8333-333333333333',
     title: 'Scan findings — 2026-08-23',
     scan_date_utc: '2026-08-23T12:00:00Z',
+    scanned_at_utc: '2026-08-23T11:59:58Z',
+    completed_at_utc: '2026-08-23T12:00:00Z',
+    duration_ms: 2000,
     published_at_utc: '2026-08-23T12:01:00Z',
     spec: {
       id: 'scan-spec-v1',
@@ -45,7 +48,7 @@ function makePublishedFindings(overrides: Partial<PublishedScanFindings> = {}): 
         unsupported_type: 0,
         timeout: 0,
       },
-      skipped: [{ object_id: 'd'.repeat(64), reason: 'permission_denied' }],
+      skipped: [{ object_id: 'd'.repeat(64) as VerificationObjectId, reason: 'permission_denied' }],
     },
     deterministic_facts: [{
       object_id: OBJECT_ID,
@@ -91,6 +94,9 @@ describe('ScanFindingsBadge', () => {
     for (const expected of [
       findings.title,
       findings.scan_date_utc,
+      findings.scanned_at_utc,
+      findings.completed_at_utc,
+      String(findings.duration_ms),
       findings.published_at_utc,
       findings.artifact_version,
       findings.verification_series_id,

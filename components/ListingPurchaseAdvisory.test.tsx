@@ -12,6 +12,9 @@ const publishedFindings: PublishedScanFindings = {
   listing_id: 'listing-1',
   title: 'Scan findings — 2026-08-23',
   scan_date_utc: '2026-08-23T12:00:00Z',
+  scanned_at_utc: '2026-08-23T11:59:58Z',
+  completed_at_utc: '2026-08-23T12:00:00Z',
+  duration_ms: 2000,
   published_at_utc: '2026-08-23T12:01:00Z',
   spec: {
     id: 'scan-spec-v1',
