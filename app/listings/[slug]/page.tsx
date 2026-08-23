@@ -6,14 +6,13 @@ import {
   formatPrice,
   formatDate,
   privacyScoreColor,
-  verificationBadgeColor,
-  trustLevelLabel,
 } from '@/lib/format';
 import type { ListingDetail } from '@/types';
 import BuyButton from '@/components/BuyButton';
 import ListingPurchaseAdvisory from '@/components/ListingPurchaseAdvisory';
 import ListingPurchasePanel from '@/components/ListingPurchasePanel';
 import InquiryWidget from '@/components/InquiryWidget';
+import ScanFindingsBadge from '@/components/listings/ScanFindingsBadge';
 import ReactMarkdown from 'react-markdown';
 import rehypeSanitize from 'rehype-sanitize';
 
@@ -86,13 +85,13 @@ export default async function ListingDetailPage({ params, searchParams }: Props)
   const schemaSummary = listing.schema_summary;
   const rowCount = listing.row_count;
   const shouldEmitJsonLd = shouldEmitDatasetJsonLd(listing);
-  const publisherName = listing.publisher?.display_name ?? listing.publisher?.name;
+  const publisherName = listing.publisher.display_name;
   const versions = await fetchListingVersions(listing.id);
   const hasVersionRows = versions.length > 0;
   // S1097: legacy listings intentionally keep byte-identical rendering and omit
   // the pre-purchase download-window line pending Max's R5.1h-vs-parity adjudication.
   const accessWindowDays = hasVersionRows
-    ? listing.access_window_days ?? await fetchListingAccessWindowDays(listing.id)
+    ? await fetchListingAccessWindowDays(listing.id)
     : null;
 
   return (
@@ -123,14 +122,16 @@ export default async function ListingDetailPage({ params, searchParams }: Props)
               <span>&middot;</span>
               <span>{listing.view_count} views</span>
               <span>&middot;</span>
-              <span>{listing.inquiry_count ?? 0} inquiries</span>
+              <span>{listing.inquiry_count} inquiries</span>
             </div>
           </div>
 
           {/* Description - rendered as sanitized markdown */}
           <div className="prose prose-sm max-w-none">
-            <ReactMarkdown rehypePlugins={[rehypeSanitize]}>{listing.description ?? ''}</ReactMarkdown>
+            <ReactMarkdown rehypePlugins={[rehypeSanitize]}>{listing.description}</ReactMarkdown>
           </div>
+
+          <ScanFindingsBadge scanFindings={listing.scan_findings ?? null} />
 
           {/* Tags */}
           <div className="flex flex-wrap gap-2">
@@ -145,7 +146,7 @@ export default async function ListingDetailPage({ params, searchParams }: Props)
                 {cat}
               </span>
             ))}
-            {listing.tags?.map((tag) => (
+            {listing.tags.map((tag) => (
               <span
                 key={tag}
                 className="inline-flex items-center rounded-full bg-[#E8EAF6] px-3 py-1 text-sm text-[#3F51B5]"
@@ -156,16 +157,13 @@ export default async function ListingDetailPage({ params, searchParams }: Props)
           </div>
 
           {/* Schema Info */}
-          {(rowCount != null || (typeof schemaSummary === 'string' ? schemaSummary.trim().length > 0 : (schemaSummary?.columns?.length ?? 0) > 0)) && (
+          {(rowCount != null || (schemaSummary?.columns?.length ?? 0) > 0) && (
             <div>
               <h2 className="text-lg font-semibold mb-3">Schema Information</h2>
               {rowCount != null && (
                 <p className="text-sm text-gray-500 mb-3">{rowCount.toLocaleString()} rows</p>
               )}
-              {schemaSummary && typeof schemaSummary === 'string' && (
-                <p className="text-sm text-gray-700 whitespace-pre-wrap">{schemaSummary}</p>
-              )}
-              {schemaSummary && typeof schemaSummary === 'object' && 'columns' in schemaSummary && (schemaSummary.columns?.length ?? 0) > 0 && (
+              {schemaSummary && (schemaSummary.columns?.length ?? 0) > 0 && (
                 <div className="overflow-x-auto">
                   <table className="min-w-full text-sm border border-gray-200 rounded-lg">
                     <thead>
@@ -188,37 +186,23 @@ export default async function ListingDetailPage({ params, searchParams }: Props)
             </div>
           )}
 
-          {/* Compliance Badges */}
-          <div>
-            <h2 className="text-lg font-semibold mb-3">Compliance</h2>
-            <div className="flex flex-wrap gap-2">
-              <ComplianceBadge label="Status" value={listing.compliance_status} />
-              {listing.compliance_frameworks?.map((framework) => (
-                <ComplianceBadge key={framework} label={framework} value="compliant" />
-              ))}
-            </div>
-          </div>
         </div>
 
         {/* Sidebar */}
         <div className="space-y-6">
           {/* Price card */}
           <div className="rounded-xl border border-gray-200 p-6">
-            <p className="text-3xl font-bold text-gray-900 mb-1">{formatPrice(listing.pricing?.price ?? 0)}</p>
+            <p className="text-3xl font-bold text-gray-900 mb-1">{formatPrice(listing.pricing.price)}</p>
             <ListingPurchaseAdvisory
-              price={listing.pricing?.price ?? 0}
-              complianceStatus={listing.compliance_status}
-              qualityScore={listing.quality_score}
-              verificationStatus={listing.verification_status}
-              trustLevel={listing.trust_level}
+              price={listing.pricing.price}
+              scanFindings={listing.scan_findings ?? null}
             />
             {hasVersionRows ? (
               <ListingPurchasePanel
                 listingId={listing.id}
-                sellerId={listing.publisher?.id ?? ''}
                 slug={listing.slug}
-                price={listing.pricing?.price ?? 0}
-                pricingType={listing.pricing?.pricing_type ?? 'one_time'}
+                price={listing.pricing.price}
+                pricingType={listing.pricing.pricing_type}
                 versions={versions}
                 accessWindowDays={accessWindowDays}
                 license={listing.license}
@@ -229,10 +213,9 @@ export default async function ListingDetailPage({ params, searchParams }: Props)
             ) : (
               <BuyButton
                 listingId={listing.id}
-                sellerId={listing.publisher?.id ?? ''}
                 slug={listing.slug}
-                price={listing.pricing?.price ?? 0}
-                pricingType={listing.pricing?.pricing_type ?? 'one_time'}
+                price={listing.pricing.price}
+                pricingType={listing.pricing.pricing_type}
                 license={listing.license}
                 dataFormat={listing.data_format}
                 fulfillmentType={listing.fulfillment_type}
@@ -251,21 +234,9 @@ export default async function ListingDetailPage({ params, searchParams }: Props)
                 </span>
               </div>
               <div className="flex justify-between items-center">
-                <span className="text-sm text-gray-600">Quality Score</span>
-                <span className="text-sm font-medium text-gray-900">
-                  {listing.quality_score != null ? `${listing.quality_score.toFixed(0)}/100` : 'Not scored'}
-                </span>
-              </div>
-              <div className="flex justify-between items-center">
                 <span className="text-sm text-gray-600">Trust Level</span>
                 <span className="text-sm font-medium text-gray-900">
-                  {trustLevelLabel(listing.trust_level)}
-                </span>
-              </div>
-              <div className="flex justify-between items-center">
-                <span className="text-sm text-gray-600">Verification</span>
-                <span className={`inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-medium ${verificationBadgeColor(listing.verification_status)}`}>
-                  {listing.verification_status}
+                  {listing.trust_level}
                 </span>
               </div>
               {listing.license && (
@@ -289,7 +260,7 @@ export default async function ListingDetailPage({ params, searchParams }: Props)
           <InquiryWidget
             listingId={listing.id}
             listingSlug={listing.slug}
-            listingTitle={listing.title ?? listing.slug}
+            listingTitle={listing.title}
           />
 
           {/* Non-custodial trust strip */}
@@ -324,22 +295,5 @@ function shouldEmitDatasetJsonLd(listing: ListingDetail): listing is ListingDeta
     DATASET_JSONLD_ENABLED &&
     !listing.noindex &&
     listing.jsonld?.['@type'] === 'Dataset'
-  );
-}
-
-function ComplianceBadge({ label, value }: { label: string; value: string }) {
-  const colorMap: Record<string, string> = {
-    low_risk: 'bg-green-100 text-green-800',
-    medium_risk: 'bg-yellow-100 text-yellow-800',
-    high_risk: 'bg-red-100 text-red-800',
-    true: 'bg-green-100 text-green-800',
-    false: 'bg-gray-100 text-gray-600',
-  };
-  const color = colorMap[value] || 'bg-gray-100 text-gray-600';
-
-  return (
-    <span className={`inline-flex items-center rounded-full px-3 py-1 text-xs font-medium ${color}`}>
-      {label}: {value.replace('_', ' ')}
-    </span>
   );
 }

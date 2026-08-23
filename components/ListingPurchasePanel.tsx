@@ -7,7 +7,7 @@ import type { ListingVersion } from '@/types';
 
 interface ListingPurchasePanelProps {
   listingId: string;
-  sellerId: string;
+  sellerId?: string;
   slug: string;
   price: number;
   pricingType: string;

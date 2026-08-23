@@ -3,21 +3,20 @@ import { filterDiscoverableItems, type ResultItem } from './useSearchListings';
 
 describe('filterDiscoverableItems', () => {
   it('pins unlisted listings as hidden from browse/search surfaces', () => {
-    const items: ResultItem[] = [
+    const items: Array<ResultItem & { status: 'published' | 'unlisted' }> = [
       {
         id: 'published-1',
         slug: 'published-dataset',
         title: 'Published Dataset',
+        description: null,
         short_description: null,
         price: 1,
-        pricing_type: 'one_time',
         category: 'Business',
         tags: [],
         privacy_score: null,
-        model_provider: 'openai',
-        trust_level: 'L1',
-        quality_score: null,
-        verification_status: 'verified',
+        compliance_status: null,
+        data_format: null,
+        source_row_count: null,
         view_count: 0,
         created_at: '2026-07-01T00:00:00Z',
         status: 'published',
@@ -26,16 +25,15 @@ describe('filterDiscoverableItems', () => {
         id: 'unlisted-1',
         slug: 'unlisted-dataset',
         title: 'Unlisted Dataset',
+        description: null,
         short_description: null,
         price: 1,
-        pricing_type: 'one_time',
         category: 'Business',
         tags: [],
         privacy_score: null,
-        model_provider: 'openai',
-        trust_level: 'L1',
-        quality_score: null,
-        verification_status: 'verified',
+        compliance_status: null,
+        data_format: null,
+        source_row_count: null,
         view_count: 0,
         created_at: '2026-07-01T00:00:00Z',
         status: 'unlisted',
@@ -44,7 +42,7 @@ describe('filterDiscoverableItems', () => {
 
     expect(filterDiscoverableItems(items).map((item) => ({
       slug: item.slug,
-      status: item.status,
+      status: 'status' in item ? item.status : undefined,
     }))).toMatchSnapshot();
   });
 });

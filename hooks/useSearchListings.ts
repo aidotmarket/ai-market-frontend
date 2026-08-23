@@ -107,5 +107,5 @@ export function useSearchListings({
 }
 
 export function filterDiscoverableItems(items: ResultItem[]) {
-  return items.filter((item) => item.status !== 'unlisted');
+  return items.filter((item) => !('status' in item) || item.status !== 'unlisted');
 }

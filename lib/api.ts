@@ -1,3 +1,5 @@
+import type { ListingPublicListResponse } from '@/types';
+
 const API_URL = process.env.API_URL || process.env.NEXT_PUBLIC_API_URL;
 
 export interface ShareMetadataResponse {
@@ -26,36 +28,29 @@ export type ShareMetadataFetchResult =
   | { status: 'gone' }
   | { status: 'error' };
 
-export interface PaginatedListings {
-  items: import('@/types').ListingListItem[];
-  total: number;
-  page: number;
-  per_page: number;
-  jsonld?: Record<string, unknown>;
-}
+export type PaginatedListings = ListingPublicListResponse;
 
 export type FeaturedItemSource = 'just_listed' | 'recently_sold' | 'trending' | 'cold_start' | 'curated';
 
 export interface FeaturedPriceDisplay {
-  currency?: string | null;
-  amount?: number | null;
+  currency: string | null;
+  amount: number | null;
   label: string;
-  on_request?: boolean;
+  on_request: boolean;
 }
 
 export interface FeaturedItem {
   listing_id: string;
-  seller_id?: string;
+  seller_id: string;
   slug: string;
   title: string;
-  summary?: string | null;
+  summary: string | null;
   canonical_url: string;
-  locale?: string;
+  locale: string;
   source: FeaturedItemSource;
   slot: number;
   price: FeaturedPriceDisplay;
-  quality_score?: number | null;
-  placement_id?: string | null;
+  placement_id: string | null;
 }
 
 export interface FeaturedFeedResponse {
@@ -106,7 +101,7 @@ export async function fetchFeaturedFeed(params?: {
 
 export async function fetchPublicListing(slug: string) {
   const res = await fetch(`${API_URL}/api/v1/public/listings/${encodeURIComponent(slug)}`, {
-    next: { revalidate: 3600 },
+    cache: 'no-store',
   });
   if (!res.ok) return null;
   return res.json();

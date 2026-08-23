@@ -76,28 +76,182 @@ export type ComplianceStatus = 'not_checked' | 'low_risk' | 'medium_risk' | 'hig
 export type ModelProvider = 'openai' | 'anthropic' | 'google' | 'mistral' | 'local';
 export type TrustLevel = 'L0' | 'L1' | 'L2' | 'L3';
 export type VerificationStatus = 'unverified' | 'verified' | 'premium';
-export type FulfillmentType = 'ai_queryable' | 'file_download' | 'pipeline_invocation' | 'model_access';
+export type ListingType = 'queryable' | 'raw';
+export type FulfillmentType = 'ai_queryable' | 'file_download' | 'pipeline_invocation' | 'model_access' | 'reference';
+
+export type VerificationSkippedReason = 'permission_denied' | 'unsupported_type' | 'timeout';
+type DecimalLeadingDigit = '1' | '2' | '3' | '4' | '5' | '6' | '7' | '8' | '9';
+type LowercaseHexDigit = '0' | DecimalLeadingDigit | 'a' | 'b' | 'c' | 'd' | 'e' | 'f';
+export type VerificationObjectId = `${LowercaseHexDigit}${Lowercase<string>}`;
+export type VerificationNullRate = `${0 | 1}.${number}` | 'suppressed_low_occupancy';
+type PositiveIntegerString = DecimalLeadingDigit | `${DecimalLeadingDigit}${bigint}`;
+export type VerificationSchemaColumnType =
+  | 'string'
+  | 'integer'
+  | 'float'
+  | 'decimal'
+  | 'boolean'
+  | 'date'
+  | 'datetime'
+  | 'binary'
+  | 'unknown';
+
+export interface VerificationSchemaColumn {
+  name: string;
+  type: VerificationSchemaColumnType;
+}
+
+export interface VerificationSchemaObject {
+  object_id: VerificationObjectId;
+  columns: VerificationSchemaColumn[];
+}
+
+export interface VerificationRowCount {
+  object_id: VerificationObjectId;
+  count: number;
+  method: 'exact' | 'catalog_estimate' | `deterministic_sample_estimate(${PositiveIntegerString})`;
+}
+
+export interface VerificationCoverage {
+  objects_discovered: number;
+  objects_scanned: number;
+  objects_skipped_by_reason: Record<VerificationSkippedReason, number>;
+  skipped: Array<{
+    object_id: VerificationObjectId;
+    reason: VerificationSkippedReason;
+  }>;
+}
+
+export interface VerificationApproxDistinct {
+  algorithm: 'hll-sha256-v1';
+  estimate: number;
+  relative_error_ppm: number;
+}
+
+export interface VerificationFactColumn {
+  position: number;
+  null_rate: VerificationNullRate;
+  approx_distinct_count: VerificationApproxDistinct | 'suppressed_low_occupancy';
+  length_histogram: number[] | 'suppressed_low_occupancy' | null;
+  numeric_range_buckets: number[] | 'suppressed_low_occupancy' | null;
+}
+
+export interface VerificationFactObject {
+  object_id: VerificationObjectId;
+  columns: VerificationFactColumn[];
+}
+
+export interface PublishedScanFindings {
+  publication_state: 'PUBLISHED';
+  artifact_version: 'data-verification-public-artifact-v1';
+  verification_series_id: string;
+  epoch_id: string;
+  listing_id: string;
+  title: string;
+  scan_date_utc: string;
+  scanned_at_utc: string;
+  completed_at_utc: string;
+  duration_ms: number;
+  published_at_utc: string;
+  spec: {
+    id: string;
+    version: '1';
+    hash: string;
+    depth_class: 'complete_standard_v1';
+    canonicalization_version: 'python-json-sort-compact-v1';
+  };
+  execution: {
+    agent_version: string;
+    connector_type: 'eolymp';
+    connector_version: 'eolymp-v1';
+    content_sha256_reference: string;
+  };
+  methods: {
+    row_count_algorithm_version: 'exact-v1';
+    distinct_algorithm_version: 'hll-sha256-v1';
+    histogram_version: 'fixed-buckets-v1';
+    numeric_bucket_version: 'fixed-buckets-v1';
+  };
+  coverage: VerificationCoverage;
+  deterministic_facts: VerificationFactObject[];
+  fingerprint_hash: string;
+  narrative_state: 'grounded' | 'withheld_grounding_failed';
+  narrative: string | null;
+  listing_claim_comparison: string | null;
+  narrative_notice: string | null;
+  seller_context_provided: boolean;
+  preview_requested: boolean;
+  schema_preview?: VerificationSchemaObject[];
+  row_counts?: VerificationRowCount[];
+  attestation: string;
+  disclaimer: string;
+}
+
+export interface WithdrawnScanFindings {
+  publication_state: 'WITHDRAWN';
+  withdrawn_at_utc: string;
+  marker: string;
+}
+
+export type ScanFindings = PublishedScanFindings | WithdrawnScanFindings;
 
 export interface ListingListItem {
   id: string;
   slug: string;
-  title?: string;
+  title: string;
   short_description: string | null;
   price: number;
   pricing_type: PricingType;
+  access_window_days: number;
   category: string;
   tags: string[];
   privacy_score: number | null;
-  data_format?: string | null;
-  fulfillment_type?: FulfillmentType | null;
-  model_provider: ModelProvider;
+  listing_type: ListingType;
+  fulfillment_type: FulfillmentType;
+  task_category: string | null;
+  domain_tags: string[] | null;
+  model_provider: ModelProvider | null;
   trust_level: TrustLevel;
-  quality_score: number | null;
-  verification_status: VerificationStatus;
   view_count: number;
   created_at: string;
-  status?: ListingStatus;
-  access_window_days?: number;
+}
+
+export interface ListingPublicListItem {
+  id: string;
+  slug: string;
+  title: string;
+  short_description: string | null;
+  category: string;
+  tags: string[];
+  fulfillment_type: string;
+  task_category: string | null;
+  domain_tags: string[] | null;
+  pricing: {
+    price: number;
+    pricing_type: string;
+    subscription_price_monthly: number | null;
+  };
+  price: number | null;
+  privacy_score: number | null;
+  privacy_scan_status: 'scanned' | 'not_scanned';
+  trust_level: string;
+  view_count: number;
+  published_at: string | null;
+  purchasable: boolean;
+  purchase_hold_reason: string | null;
+}
+
+export interface ListingPublicListResponse {
+  items: ListingPublicListItem[];
+  pagination: {
+    page: number;
+    per_page: number;
+    total: number;
+    total_pages: number;
+    has_next: boolean;
+    has_prev: boolean;
+  };
+  jsonld: Record<string, unknown> | null;
 }
 
 export type ListingVersionStatus = 'active' | 'superseded' | 'quarantined';
@@ -114,41 +268,52 @@ export interface ListingVersion {
 export interface ListingDetail {
   id: string;
   slug: string;
-  title?: string;
+  title: string;
   description: string;
   short_description: string | null;
-  publisher: { name?: string; display_name?: string; id?: string } | null;
+  publisher: {
+    display_name: string;
+    trust_level: string;
+  };
   pricing: {
     price: number;
     pricing_type: PricingType;
     subscription_price_monthly: number | null;
-  } | null;
+  };
   license: string | null;
   category: string;
   secondary_categories: string[] | null;
   tags: string[];
-  schema_summary: string | { columns: string[]; column_count: number; sample_types: Record<string, string> } | null;
+  task_category: string | null;
+  domain_tags: string[] | null;
+  schema_summary: {
+    columns: string[] | null;
+    column_count: number | null;
+    sample_types: Record<string, string> | null;
+  } | null;
   row_count: number | null;
   data_format: string | null;
   update_frequency: string | null;
-  coverage: Record<string, unknown> | null;
+  coverage: {
+    temporal: string | null;
+    spatial: string | null;
+  } | null;
   privacy_score: number | null;
-  quality_score: number | null;
-  searchability_score: number | null;
-  compliance_status: ComplianceStatus;
-  compliance_frameworks: string[] | null;
+  privacy_scan_status: 'scanned' | 'not_scanned';
+  searchability_score: number;
   trust_level: TrustLevel;
-  verification_status: VerificationStatus;
   is_accessible_for_free: boolean;
   view_count: number;
   inquiry_count: number;
   noindex: boolean;
+  purchasable: boolean;
+  purchase_hold_reason: string | null;
   created_at: string;
   updated_at: string | null;
   published_at: string | null;
-  access_window_days?: number;
-  fulfillment_type?: FulfillmentType | null;
-  jsonld?: Record<string, unknown>;
+  fulfillment_type: FulfillmentType;
+  scan_findings: ScanFindings | null;
+  jsonld: Record<string, unknown> | null;
 }
 
 // ============================================================================
@@ -169,7 +334,7 @@ export interface SearchRequest {
 
 export interface SearchResultItem {
   id: string;
-  title?: string;
+  title: string | null;
   slug: string;
   description: string | null;
   short_description: string | null;
@@ -178,14 +343,8 @@ export interface SearchResultItem {
   privacy_score: number | null;
   compliance_status: string | null;
   data_format: string | null;
-  fulfillment_type?: FulfillmentType | null;
   source_row_count: number | null;
   tags: string[] | null;
-  created_at?: string | null;
-  verification_status?: VerificationStatus;
-  view_count?: number;
-  status?: ListingStatus;
-  access_window_days?: number;
 }
 
 export interface PriceFacet {
