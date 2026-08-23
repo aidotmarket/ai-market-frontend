@@ -334,7 +334,7 @@ export interface SearchRequest {
 
 export interface SearchResultItem {
   id: string;
-  title?: string;
+  title: string | null;
   slug: string;
   description: string | null;
   short_description: string | null;
@@ -343,8 +343,8 @@ export interface SearchResultItem {
   privacy_score: number | null;
   compliance_status: string | null;
   data_format: string | null;
-  source_row_count?: number | null;
-  tags?: string[] | null;
+  source_row_count: number | null;
+  tags: string[] | null;
 }
 
 export interface PriceFacet {

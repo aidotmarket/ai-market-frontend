@@ -45,12 +45,12 @@ type FeaturedItemFields = Expect<Equal<
 
 type SearchResultItemOptionalFields = Expect<Equal<
   OptionalKeys<SearchResultItem>,
-  'title' | 'source_row_count' | 'tags'
+  never
 >>;
 
 type FeaturedItemOptionalFields = Expect<Equal<
   OptionalKeys<FeaturedItem>,
-  'summary' | 'locale' | 'placement_id'
+  never
 >>;
 
 const searchResultItemFixture = {

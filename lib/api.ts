@@ -33,10 +33,10 @@ export type PaginatedListings = ListingPublicListResponse;
 export type FeaturedItemSource = 'just_listed' | 'recently_sold' | 'trending' | 'cold_start' | 'curated';
 
 export interface FeaturedPriceDisplay {
-  currency?: string | null;
-  amount?: number | null;
+  currency: string | null;
+  amount: number | null;
   label: string;
-  on_request?: boolean;
+  on_request: boolean;
 }
 
 export interface FeaturedItem {
@@ -44,13 +44,13 @@ export interface FeaturedItem {
   seller_id: string;
   slug: string;
   title: string;
-  summary?: string | null;
+  summary: string | null;
   canonical_url: string;
-  locale?: string;
+  locale: string;
   source: FeaturedItemSource;
   slot: number;
   price: FeaturedPriceDisplay;
-  placement_id?: string | null;
+  placement_id: string | null;
 }
 
 export interface FeaturedFeedResponse {
