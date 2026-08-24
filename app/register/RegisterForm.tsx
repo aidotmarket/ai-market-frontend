@@ -14,6 +14,18 @@ export default function RegisterForm() {
   const register = useAuthStore((s) => s.register);
   const { toast } = useToast();
 
+  const rawRedirect = searchParams.get('redirect');
+  let validatedRedirect = '';
+  try {
+    validatedRedirect = validateRedirect(rawRedirect, '');
+  } catch {
+    // Treat malformed encoded redirects like any other unsafe redirect.
+  }
+  const isListingRedirect = /^\/listings\/[^/?#]+/.test(validatedRedirect);
+  const loginHref = validatedRedirect
+    ? `/login?redirect=${encodeURIComponent(validatedRedirect)}`
+    : '/login';
+
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
@@ -60,6 +72,19 @@ export default function RegisterForm() {
           </div>
         )}
 
+        {isListingRedirect && (
+          <div className="rounded-lg bg-[#E8EAF6] border border-[#C5CAE9] px-4 py-3 text-sm text-[#3F51B5] mb-4">
+            <p>
+              Creating an account or signing in does not charge you. After you sign in, you will return to this listing. Checkout shows the final total, including payment-provider costs and applicable tax, before you choose whether to confirm.
+            </p>
+            <p className="mt-2 flex flex-wrap gap-x-3 gap-y-1">
+              <Link href={validatedRedirect} className="underline font-medium">Back to listing</Link>
+              <Link href="/pricing" className="underline font-medium">Pricing</Link>
+              <Link href="/legal/terms#fees" className="underline font-medium">Fees and terms</Link>
+            </p>
+          </div>
+        )}
+
         <OAuthButtons mode="register" />
 
         <form onSubmit={handleSubmit} className="space-y-4">
@@ -72,7 +97,7 @@ export default function RegisterForm() {
           {verifySentTo && (
             <div className="rounded-lg bg-green-50 border border-green-200 px-4 py-3 text-sm text-green-700">
               Account created. We sent a verification link to {verifySentTo}. Please verify, then{' '}
-              <Link href="/login" className="underline font-medium">sign in</Link>.
+              <Link href={isListingRedirect ? loginHref : '/login'} className="underline font-medium">sign in</Link>.
             </div>
           )}
 
@@ -179,7 +204,7 @@ export default function RegisterForm() {
 
         <p className="mt-6 text-center text-sm text-gray-500">
           Already have an account?{' '}
-          <Link href={searchParams.get('redirect') ? `/login?redirect=${encodeURIComponent(searchParams.get('redirect')!)}` : '/login'} className="text-[#3F51B5] hover:underline">
+          <Link href={loginHref} className="text-[#3F51B5] hover:underline">
             Log in
           </Link>
         </p>
