@@ -16,6 +16,7 @@ const footerLinkSections = [
       { label: 'Browse Data', href: '/listings' },
       { label: 'Request Data', href: '/requests' },
       { label: 'Partner Program', href: '/partner' },
+      { label: 'Verified data', href: '/verified' },
       { label: 'Blog', href: '/blog' },
     ],
   },

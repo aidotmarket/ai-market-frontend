@@ -107,6 +107,13 @@ export default function FindDataPage() {
             <p className="mt-4 text-base leading-7 text-gray-600">
               Search matches meaning, not just keywords, so &apos;urban traffic incidents with coordinates&apos; finds collision data even when no listing uses those words.
             </p>
+            <p className="mt-4 text-base leading-7 text-gray-600">
+              Look for the{' '}
+              <Link href="/verified" className="font-semibold text-[#0F6E56] hover:text-[#0c5a47]">
+                verified label
+              </Link>
+              .
+            </p>
           </div>
 
           <MarketplaceCategoryCards />

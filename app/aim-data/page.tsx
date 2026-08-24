@@ -240,6 +240,12 @@ export default function AimDataPage() {
                 AIM Data listings use nullable privacy and quality scores. A missing score means the
                 scan did not run, and the marketplace says that plainly.
               </p>
+              <Link
+                href="/verified"
+                className="mt-5 inline-flex text-sm font-semibold text-[#0F6E56] hover:text-[#0c5a47]"
+              >
+                How the verified label works →
+              </Link>
             </div>
 
             <div className="mt-10 grid gap-4 md:grid-cols-2">
