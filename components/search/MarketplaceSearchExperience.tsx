@@ -150,6 +150,7 @@ export function MarketplaceSearchExperience({
       ? 'Explore data listings with URL-driven filters, sorting, and incremental loading.'
       : 'Explore marketplace listings with URL-driven filters, sorting, and incremental loading.';
   const emptyLabel = listingCategory === 'data' ? 'data' : listingCategory === 'models' ? 'models' : 'listings';
+  const hasSemanticSuggestions = semanticMode && Boolean(q) && !isLoading && !isError && items.length > 0;
 
   const updateParams = useCallback((updates: Record<string, string | number | undefined>) => {
     const next = new URLSearchParams(searchParams.toString());
@@ -373,12 +374,21 @@ export function MarketplaceSearchExperience({
             <div className="flex flex-col gap-4 rounded-3xl border border-slate-200 bg-white p-5 shadow-sm sm:flex-row sm:items-center sm:justify-between">
               <div>
                 <p className="text-sm font-semibold text-slate-900">
-                  {semanticMode && q ? `${typeLabel} results for "${q}"` : `${typeLabel} results`}
+                  {hasSemanticSuggestions
+                    ? `Marketplace suggestions for "${q}"`
+                    : semanticMode && q
+                      ? `${typeLabel} results for "${q}"`
+                      : `${typeLabel} results`}
                 </p>
                 <p className="mt-1 text-sm text-slate-500">
-                  {resultCount} result{resultCount === 1 ? '' : 's'}
+                  {resultCount} {hasSemanticSuggestions ? 'suggestion' : 'result'}{resultCount === 1 ? '' : 's'}
                   {listingCategory === 'data' && dataType ? ` filtered to ${dataType.toUpperCase()}` : ''}
                 </p>
+                {hasSemanticSuggestions && (
+                  <p className="mt-2 max-w-2xl text-sm leading-6 text-slate-600">
+                    Suggestions are ranked by meaning and may be related rather than exact. Refine your search text or filters if they do not fit.
+                  </p>
+                )}
               </div>
 
               <label htmlFor="filter-sort" className="flex items-center gap-3 text-sm text-slate-500">

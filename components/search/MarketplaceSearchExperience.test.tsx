@@ -124,9 +124,66 @@ describe('MarketplaceSearchExperience', () => {
 
     render(<MarketplaceSearchExperience mode="search" />);
 
+    expect(screen.getByText('No listings found')).toBeTruthy();
     const recoveryLink = screen.getByRole('link', {
       name: 'Browse all marketplace listings',
     });
     expect(recoveryLink.getAttribute('href')).toBe('/listings');
+  });
+
+  it('labels nonempty semantic results as related suggestions', () => {
+    const query = 'real-time telepathy recordings from wild unicorns on Mars';
+    mocks.pathname = '/search';
+    mocks.searchParams = new URLSearchParams({ q: query });
+    mocks.useSearchListings.mockReturnValue({
+      items: [
+        {
+          id: 'listing-1',
+          slug: 'related-listing-1',
+          title: 'Related listing one',
+          description: 'A semantically related listing.',
+          short_description: 'A semantically related listing.',
+          category: 'Research',
+          price: 10,
+          privacy_score: null,
+          compliance_status: null,
+          data_format: 'json',
+          source_row_count: 100,
+          tags: [],
+        },
+        {
+          id: 'listing-2',
+          slug: 'related-listing-2',
+          title: 'Related listing two',
+          description: 'Another semantically related listing.',
+          short_description: 'Another semantically related listing.',
+          category: 'Research',
+          price: 20,
+          privacy_score: null,
+          compliance_status: null,
+          data_format: 'csv',
+          source_row_count: 200,
+          tags: [],
+        },
+      ],
+      facets: null,
+      total: 2,
+      semanticMode: true,
+      isLoading: false,
+      isError: false,
+      error: null,
+      hasNextPage: false,
+      isFetchingNextPage: false,
+      fetchNextPage: vi.fn(),
+      refetch: vi.fn(),
+    });
+
+    render(<MarketplaceSearchExperience mode="search" />);
+
+    expect(screen.getByText(`Marketplace suggestions for "${query}"`)).toBeTruthy();
+    expect(screen.getByText('2 suggestions')).toBeTruthy();
+    expect(screen.getByText(/ranked by meaning and may be related rather than exact/i)).toBeTruthy();
+    expect(screen.getByText(/refine your search text or filters if they do not fit/i)).toBeTruthy();
+    expect(screen.getAllByTestId('listing-card')).toHaveLength(2);
   });
 });
