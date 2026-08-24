@@ -29,6 +29,7 @@ export default function InquiryWidget({ listingId, listingSlug, listingTitle }: 
 
   const [question, setQuestion] = useState('');
   const [submitting, setSubmitting] = useState(false);
+  const [submissionError, setSubmissionError] = useState<string | null>(null);
   const [conversation, setConversation] = useState<ConversationDetail | null>(null);
   const [messages, setMessages] = useState<ConversationMessage[]>([]);
   const [showTyping, setShowTyping] = useState(false);
@@ -66,6 +67,8 @@ export default function InquiryWidget({ listingId, listingSlug, listingTitle }: 
 
   const handleSubmit = async () => {
     if (!question.trim()) return;
+
+    setSubmissionError(null);
 
     if (!isAuthenticated) {
       const trimmedQuestion = question.trim();
@@ -178,12 +181,18 @@ export default function InquiryWidget({ listingId, listingSlug, listingTitle }: 
       if (err instanceof AxiosError) {
         const detail = err.response?.data?.detail;
         if (err.response?.status === 409) {
-          toast('You already have an inquiry for this listing. Check your dashboard.', 'info');
+          const message = 'You already have an inquiry for this listing. Check your dashboard.';
+          setSubmissionError(message);
+          toast(message, 'info');
         } else {
-          toast(detail || 'Failed to submit question.', 'error');
+          const message = typeof detail === 'string' ? detail : 'Failed to submit question.';
+          setSubmissionError(message);
+          toast(message, 'error');
         }
       } else {
-        toast('An unexpected error occurred.', 'error');
+        const message = 'An unexpected error occurred.';
+        setSubmissionError(message);
+        toast(message, 'error');
       }
     } finally {
       setSubmitting(false);
@@ -302,6 +311,11 @@ export default function InquiryWidget({ listingId, listingSlug, listingTitle }: 
           'Submit Question'
         )}
       </button>
+      {isAuthenticated && submissionError && (
+        <p className="text-xs text-red-600 mt-2" role="alert">
+          {submissionError}
+        </p>
+      )}
       {!isAuthenticated && anonymousError && (
         <p className="text-xs text-red-600 mt-2" role="alert">
           {anonymousError}

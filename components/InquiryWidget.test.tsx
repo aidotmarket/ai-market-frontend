@@ -3,6 +3,7 @@
 import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { ConversationDetail } from '@/types';
+import { AxiosError } from 'axios';
 
 const mocks = vi.hoisted(() => ({
   auth: { isAuthenticated: false },
@@ -183,6 +184,51 @@ describe('InquiryWidget', () => {
     });
     expect(fetchMock).not.toHaveBeenCalled();
     expect(await screen.findByText('Your Inquiry')).toBeTruthy();
+  });
+
+  it('keeps an authenticated mediation rejection visible after submission ends', async () => {
+    mocks.auth.isAuthenticated = true;
+    const error = new AxiosError('Message rejected');
+    error.response = {
+      status: 422,
+      data: { detail: 'Message held for review. Please revise.' },
+    } as typeof error.response;
+    mocks.createInquiry.mockRejectedValue(error);
+
+    renderWidget();
+    typeQuestion('Please contact me at 555-0100.');
+
+    expect((await screen.findByRole('alert')).textContent).toContain(
+      'Message held for review. Please revise.'
+    );
+    expect(screen.getByRole('button', { name: 'Submit Question' })).toBeTruthy();
+    expect((screen.getByRole('textbox') as HTMLTextAreaElement).value).toBe(
+      'Please contact me at 555-0100.'
+    );
+  });
+
+  it('uses a safe fallback for structured validation details', async () => {
+    mocks.auth.isAuthenticated = true;
+    const error = new AxiosError('Validation failed');
+    error.response = {
+      status: 422,
+      data: {
+        detail: [{
+          loc: ['body', 'question'],
+          msg: 'String should have at least 10 characters',
+          type: 'string_too_short',
+        }],
+      },
+    } as typeof error.response;
+    mocks.createInquiry.mockRejectedValue(error);
+
+    renderWidget();
+    typeQuestion('short');
+
+    expect((await screen.findByRole('alert')).textContent).toContain(
+      'Failed to submit question.'
+    );
+    expect(screen.getByRole('button', { name: 'Submit Question' })).toBeTruthy();
   });
 
   it('surfaces an anonymous failure and preserves the typed question', async () => {
