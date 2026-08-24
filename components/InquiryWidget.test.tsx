@@ -207,6 +207,30 @@ describe('InquiryWidget', () => {
     );
   });
 
+  it('uses a safe fallback for structured validation details', async () => {
+    mocks.auth.isAuthenticated = true;
+    const error = new AxiosError('Validation failed');
+    error.response = {
+      status: 422,
+      data: {
+        detail: [{
+          loc: ['body', 'question'],
+          msg: 'String should have at least 10 characters',
+          type: 'string_too_short',
+        }],
+      },
+    } as typeof error.response;
+    mocks.createInquiry.mockRejectedValue(error);
+
+    renderWidget();
+    typeQuestion('short');
+
+    expect((await screen.findByRole('alert')).textContent).toContain(
+      'Failed to submit question.'
+    );
+    expect(screen.getByRole('button', { name: 'Submit Question' })).toBeTruthy();
+  });
+
   it('surfaces an anonymous failure and preserves the typed question', async () => {
     fetchMock.mockResolvedValue(response(500));
 

@@ -185,7 +185,7 @@ export default function InquiryWidget({ listingId, listingSlug, listingTitle }: 
           setSubmissionError(message);
           toast(message, 'info');
         } else {
-          const message = detail || 'Failed to submit question.';
+          const message = typeof detail === 'string' ? detail : 'Failed to submit question.';
           setSubmissionError(message);
           toast(message, 'error');
         }
