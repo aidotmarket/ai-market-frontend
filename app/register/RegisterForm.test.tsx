@@ -13,6 +13,10 @@ const toastApi = vi.hoisted(() => ({
   toast: vi.fn(),
 }));
 
+const navigation = vi.hoisted(() => ({
+  search: '',
+}));
+
 vi.mock('@/store/auth', () => ({
   useAuthStore: <T,>(selector: (state: typeof authStore) => T) => selector(authStore),
 }));
@@ -26,7 +30,7 @@ vi.mock('@/components/OAuthButtons', () => ({
 }));
 
 vi.mock('next/navigation', () => ({
-  useSearchParams: () => new URLSearchParams(),
+  useSearchParams: () => new URLSearchParams(navigation.search),
 }));
 
 vi.mock('next/link', () => ({
@@ -39,6 +43,7 @@ vi.mock('next/link', () => ({
 
 describe('RegisterForm', () => {
   beforeEach(() => {
+    navigation.search = '';
     authStore.register.mockResolvedValue(undefined);
     toastApi.toast.mockClear();
   });
@@ -90,5 +95,58 @@ describe('RegisterForm', () => {
     ).not.toBeNull();
     expect(screen.queryByText('Registration failed.')).toBeNull();
     expect(screen.getByRole('link', { name: 'sign in' }).getAttribute('href')).toBe('/login');
+  });
+
+  it('shows listing purchase context and preserves the validated redirect in both login links', async () => {
+    const listingRedirect = '/listings/signed-out-dataset?offer=annual';
+    navigation.search = new URLSearchParams({ redirect: listingRedirect }).toString();
+
+    render(<RegisterForm />);
+
+    expect(screen.getByText(/account or signing in does not charge you/i)).not.toBeNull();
+    expect(screen.getByText(/after you sign in, you will return to this listing/i)).not.toBeNull();
+    expect(screen.getByText(/final total, including payment-provider costs and applicable tax/i)).not.toBeNull();
+    expect(screen.getByRole('link', { name: 'Back to listing' }).getAttribute('href')).toBe(listingRedirect);
+    expect(screen.getByRole('link', { name: 'Pricing' }).getAttribute('href')).toBe('/pricing');
+    expect(screen.getByRole('link', { name: 'Fees and terms' }).getAttribute('href')).toBe('/legal/terms#fees');
+
+    const loginHref = `/login?redirect=${encodeURIComponent(listingRedirect)}`;
+    expect(screen.getByRole('link', { name: 'Log in' }).getAttribute('href')).toBe(loginHref);
+
+    fireEvent.change(screen.getByLabelText(/^email$/i), { target: { value: 'buyer@example.com' } });
+    fireEvent.change(screen.getByLabelText(/^password$/i), { target: { value: 'password123' } });
+    fireEvent.change(screen.getByLabelText(/confirm password/i), { target: { value: 'password123' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Create account' }));
+
+    expect(await screen.findByRole('link', { name: 'sign in' })).not.toBeNull();
+    expect(screen.getByRole('link', { name: 'sign in' }).getAttribute('href')).toBe(loginHref);
+  });
+
+  it.each([
+    ['/dashboard?tab=orders'],
+    ['/listings'],
+  ])('keeps valid non-detail registration behavior without purchase context for %s', (redirect) => {
+    navigation.search = new URLSearchParams({ redirect }).toString();
+
+    render(<RegisterForm />);
+
+    expect(screen.queryByText(/account or signing in does not charge you/i)).toBeNull();
+    expect(screen.queryByRole('link', { name: 'Back to listing' })).toBeNull();
+    expect(screen.getByRole('link', { name: 'Log in' }).getAttribute('href')).toBe(
+      `/login?redirect=${encodeURIComponent(redirect)}`
+    );
+  });
+
+  it.each([
+    ['an external redirect', new URLSearchParams({ redirect: 'https://evil.example/listings/stolen' }).toString()],
+    ['a malformed encoded redirect', 'redirect=%E0%A4%A'],
+  ])('does not expose purchase context or unsafe hrefs for %s', (_label, search) => {
+    navigation.search = search;
+
+    render(<RegisterForm />);
+
+    expect(screen.queryByText(/account or signing in does not charge you/i)).toBeNull();
+    expect(screen.queryByRole('link', { name: 'Back to listing' })).toBeNull();
+    expect(screen.getByRole('link', { name: 'Log in' }).getAttribute('href')).toBe('/login');
   });
 });
