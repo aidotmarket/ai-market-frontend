@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 
-import { cleanup, render, screen } from '@testing-library/react';
+import { cleanup, fireEvent, render, screen } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 const mocks = vi.hoisted(() => ({
@@ -52,6 +52,30 @@ afterEach(() => {
 });
 
 describe('MarketplaceSearchExperience', () => {
+  it('clears the search query and filters from the marketplace URL', () => {
+    mocks.searchParams = new URLSearchParams(
+      'q=financial+markets&type=data&category=finance&sort=price-asc',
+    );
+    mocks.useSearchListings.mockReturnValue({
+      items: [],
+      facets: null,
+      total: 0,
+      semanticMode: true,
+      isLoading: false,
+      isError: false,
+      error: null,
+      hasNextPage: false,
+      isFetchingNextPage: false,
+      fetchNextPage: vi.fn(),
+      refetch: vi.fn(),
+    });
+
+    render(<MarketplaceSearchExperience mode="browse" />);
+    fireEvent.click(screen.getByRole('button', { name: 'Clear all' }));
+
+    expect(mocks.push).toHaveBeenCalledWith('/listings');
+  });
+
   it('keeps a direct link to an empty category active and shows the empty state', () => {
     mocks.useSearchListings.mockReturnValue({
       items: [],

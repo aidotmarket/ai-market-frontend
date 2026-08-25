@@ -263,12 +263,7 @@ export function MarketplaceSearchExperience({
                 <h2 className="text-sm font-semibold text-slate-900">Filters</h2>
                 <button
                   type="button"
-                  onClick={() => {
-                    const next = new URLSearchParams();
-                    if (q) next.set('q', q);
-                    if (listingCategory !== 'all') next.set('type', listingCategory);
-                    router.push(pathname + (next.toString() ? `?${next.toString()}` : ''));
-                  }}
+                  onClick={() => router.push(pathname)}
                   className="text-xs font-medium text-[#3F51B5] hover:text-[#3F51B5]"
                 >
                   Clear all
