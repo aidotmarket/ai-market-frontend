@@ -41,9 +41,12 @@ export default function InquiryWidget({ listingId, listingSlug, listingTitle }: 
   const [anonymousAnswerReturned, setAnonymousAnswerReturned] = useState(false);
   const [anonymousAnswerStarted, setAnonymousAnswerStarted] = useState(false);
   const [anonymousWaitElapsed, setAnonymousWaitElapsed] = useState(false);
+  const [anonymousSubmissionInProgress, setAnonymousSubmissionInProgress] = useState(false);
   const anonymousSessionRef = useRef<string | null>(null);
   const anonymousAbortRef = useRef<AbortController | null>(null);
   const anonymousWaitTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const anonymousSubmittedQuestionRef = useRef('');
+  const mountedRef = useRef(true);
 
   const clearAnonymousWaitTimer = useCallback(() => {
     if (anonymousWaitTimerRef.current !== null) {
@@ -61,10 +64,23 @@ export default function InquiryWidget({ listingId, listingSlug, listingTitle }: 
     }
   }, [listingId]);
 
-  useEffect(() => () => {
-    clearAnonymousWaitTimer();
-    anonymousAbortRef.current?.abort();
+  useEffect(() => {
+    mountedRef.current = true;
+    return () => {
+      mountedRef.current = false;
+      clearAnonymousWaitTimer();
+      anonymousAbortRef.current?.abort();
+    };
   }, [clearAnonymousWaitTimer]);
+
+  const preserveAnonymousDraft = useCallback(() => {
+    if (anonymousSubmittedQuestionRef.current) {
+      sessionStorage.setItem(
+        DRAFT_KEY_PREFIX + listingId,
+        anonymousSubmittedQuestionRef.current
+      );
+    }
+  }, [listingId]);
 
   // Poll for new messages after submission
   const handleNewMessages = useCallback((newMsgs: ConversationMessage[]) => {
@@ -92,14 +108,18 @@ export default function InquiryWidget({ listingId, listingSlug, listingTitle }: 
       let receivedAnswer = '';
 
       anonymousAbortRef.current = controller;
+      anonymousSubmittedQuestionRef.current = trimmedQuestion;
       setSubmitting(true);
+      setAnonymousSubmissionInProgress(true);
       setAnonymousError(null);
       setAnonymousAnswerStarted(false);
       setAnonymousWaitElapsed(false);
       clearAnonymousWaitTimer();
       anonymousWaitTimerRef.current = setTimeout(() => {
         anonymousWaitTimerRef.current = null;
-        setAnonymousWaitElapsed(true);
+        if (mountedRef.current) {
+          setAnonymousWaitElapsed(true);
+        }
       }, ANONYMOUS_WAIT_NOTICE_DELAY_MS);
       setAnonymousMessages((prev) => [
         ...prev,
@@ -116,6 +136,7 @@ export default function InquiryWidget({ listingId, listingSlug, listingTitle }: 
         if (!anonymousSessionRef.current) {
           anonymousSessionRef.current = await createAnonymousSession();
         }
+        if (!mountedRef.current) return;
 
         const response = await sendAnonymousMessage({
           session_id: anonymousSessionRef.current,
@@ -133,6 +154,8 @@ export default function InquiryWidget({ listingId, listingSlug, listingTitle }: 
         }
 
         await readAnonymousMessageStream(response.body, (event) => {
+          if (!mountedRef.current) return;
+
           const streamError = event.error ?? (event.type === 'error' ? event.message : undefined);
           if (typeof streamError === 'string' && streamError) {
             throw new Error(streamError);
@@ -170,10 +193,12 @@ export default function InquiryWidget({ listingId, listingSlug, listingTitle }: 
           throw new Error('Anonymous message stream returned no answer');
         }
 
-        setQuestion('');
-        setAnonymousAnswerReturned(true);
+        if (mountedRef.current) {
+          setQuestion('');
+          setAnonymousAnswerReturned(true);
+        }
       } catch (error) {
-        if (!(error instanceof Error && error.name === 'AbortError')) {
+        if (mountedRef.current && !(error instanceof Error && error.name === 'AbortError')) {
           setAnonymousError("We couldn't get an answer. Please try again.");
           setAnonymousMessages((prev) => prev.filter(
             (message) => message.id !== questionMessageId && message.id !== answerMessageId
@@ -181,8 +206,11 @@ export default function InquiryWidget({ listingId, listingSlug, listingTitle }: 
         }
       } finally {
         clearAnonymousWaitTimer();
-        setAnonymousWaitElapsed(false);
-        setSubmitting(false);
+        if (mountedRef.current) {
+          setAnonymousWaitElapsed(false);
+          setAnonymousSubmissionInProgress(false);
+          setSubmitting(false);
+        }
         anonymousAbortRef.current = null;
       }
       return;
@@ -240,6 +268,7 @@ export default function InquiryWidget({ listingId, listingSlug, listingTitle }: 
   };
 
   const escalatedStatus = conversation?.status === 'escalated' || conversation?.status === 'awaiting_seller';
+  const showAnonymousWaitNotice = anonymousSubmissionInProgress && anonymousWaitElapsed;
 
   // Show conversation thread if already submitted
   if (conversation) {
@@ -328,21 +357,31 @@ export default function InquiryWidget({ listingId, listingSlug, listingTitle }: 
               <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
               <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" />
             </svg>
-            {anonymousWaitElapsed ? 'Still working...' : 'Submitting...'}
+            {showAnonymousWaitNotice ? 'Still working...' : 'Submitting...'}
           </>
         ) : (
           'Submit Question'
         )}
       </button>
-      {!isAuthenticated && submitting && anonymousWaitElapsed && (
-        <p className="text-xs text-gray-600 mt-2 text-center" role="status">
-          allAI is checking current public information. You may keep waiting, or{' '}
-          <Link
-            href={`/login?redirect=/listings/${encodeURIComponent(listingSlug)}`}
-            className="text-[#3F51B5] hover:underline"
-          >
-            sign in to forward this question to the seller.
-          </Link>
+      {(!isAuthenticated || anonymousSubmissionInProgress) && (
+        <p
+          className={showAnonymousWaitNotice
+            ? 'text-xs text-gray-600 mt-2 text-center'
+            : 'sr-only'}
+          role="status"
+        >
+          {showAnonymousWaitNotice && (
+            <>
+              allAI is checking current public information. You may keep waiting, or{' '}
+              <Link
+                href={`/login?redirect=/listings/${encodeURIComponent(listingSlug)}`}
+                onClick={preserveAnonymousDraft}
+                className="text-[#3F51B5] hover:underline"
+              >
+                sign in to ask the seller.
+              </Link>
+            </>
+          )}
         </p>
       )}
       {isAuthenticated && submissionError && (
@@ -357,12 +396,13 @@ export default function InquiryWidget({ listingId, listingSlug, listingTitle }: 
       )}
       {!isAuthenticated && anonymousAnswerReturned && (
         <p className="text-xs text-gray-500 mt-2 text-center">
-          Want the seller to answer personally?{' '}
+          Want to contact the seller?{' '}
           <Link
             href={`/login?redirect=/listings/${encodeURIComponent(listingSlug)}`}
+            onClick={preserveAnonymousDraft}
             className="text-[#3F51B5] hover:underline"
           >
-            Sign in to forward this question.
+            Sign in to ask the seller.
           </Link>
         </p>
       )}
