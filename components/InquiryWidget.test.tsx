@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 
-import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { act, cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { ConversationDetail } from '@/types';
 import { AxiosError } from 'axios';
@@ -151,6 +151,54 @@ describe('InquiryWidget', () => {
       screen.getByRole('link', { name: 'Sign in to forward this question.' }).getAttribute('href')
     ).toBe('/login?redirect=/listings/weather-observations');
     expect((screen.getByRole('textbox') as HTMLTextAreaElement).value).toBe('');
+  });
+
+  it('shows an actionable still-working state after eight seconds and resets on completion', async () => {
+    vi.useFakeTimers();
+    const stream = progressiveSseResponse('It contains ', 'daily readings.');
+    fetchMock.mockImplementation(async (input) => {
+      const url = String(input);
+      if (url === SESSION_URL) return response(200, { session_id: 'anon-session' });
+      if (url === MESSAGE_URL) return stream.response;
+      throw new Error(`Unexpected request: ${url}`);
+    });
+
+    try {
+      renderWidget();
+      expect(screen.getByText(
+        'allAI checks current public information to answer questions about this listing.'
+      )).toBeTruthy();
+      expect(screen.queryByText(/your question will be forwarded to the seller/i)).toBeNull();
+
+      typeQuestion('How often is it updated?');
+      await act(async () => {
+        await vi.advanceTimersByTimeAsync(7_999);
+      });
+      expect(screen.getByRole('button', { name: 'Submitting...' })).toBeTruthy();
+      expect(screen.queryByRole('status')).toBeNull();
+
+      await act(async () => {
+        await vi.advanceTimersByTimeAsync(1);
+      });
+      expect(screen.getByRole('button', { name: 'Still working...' })).toBeTruthy();
+      expect(screen.getByRole('status').textContent).toContain(
+        'allAI is checking current public information. You may keep waiting'
+      );
+      expect(
+        screen.getByRole('link', { name: 'sign in to forward this question to the seller.' })
+          .getAttribute('href')
+      ).toBe('/login?redirect=/listings/weather-observations');
+
+      await act(async () => {
+        stream.continue();
+        await vi.advanceTimersByTimeAsync(0);
+      });
+      expect(screen.getByText('It contains daily readings.')).toBeTruthy();
+      expect(screen.getByRole('button', { name: 'Submit Question' })).toBeTruthy();
+      expect(screen.queryByRole('status')).toBeNull();
+    } finally {
+      vi.useRealTimers();
+    }
   });
 
   it('keeps authenticated submission on the existing inquiry path', async () => {

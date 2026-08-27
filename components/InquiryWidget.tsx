@@ -22,6 +22,7 @@ interface Props {
 }
 
 const DRAFT_KEY_PREFIX = 'inquiry_draft_';
+const ANONYMOUS_WAIT_NOTICE_DELAY_MS = 8_000;
 
 export default function InquiryWidget({ listingId, listingSlug, listingTitle }: Props) {
   const { isAuthenticated } = useAuthStore();
@@ -39,8 +40,17 @@ export default function InquiryWidget({ listingId, listingSlug, listingTitle }: 
   const [anonymousError, setAnonymousError] = useState<string | null>(null);
   const [anonymousAnswerReturned, setAnonymousAnswerReturned] = useState(false);
   const [anonymousAnswerStarted, setAnonymousAnswerStarted] = useState(false);
+  const [anonymousWaitElapsed, setAnonymousWaitElapsed] = useState(false);
   const anonymousSessionRef = useRef<string | null>(null);
   const anonymousAbortRef = useRef<AbortController | null>(null);
+  const anonymousWaitTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  const clearAnonymousWaitTimer = useCallback(() => {
+    if (anonymousWaitTimerRef.current !== null) {
+      clearTimeout(anonymousWaitTimerRef.current);
+      anonymousWaitTimerRef.current = null;
+    }
+  }, []);
 
   // Restore draft from sessionStorage
   useEffect(() => {
@@ -51,7 +61,10 @@ export default function InquiryWidget({ listingId, listingSlug, listingTitle }: 
     }
   }, [listingId]);
 
-  useEffect(() => () => anonymousAbortRef.current?.abort(), []);
+  useEffect(() => () => {
+    clearAnonymousWaitTimer();
+    anonymousAbortRef.current?.abort();
+  }, [clearAnonymousWaitTimer]);
 
   // Poll for new messages after submission
   const handleNewMessages = useCallback((newMsgs: ConversationMessage[]) => {
@@ -82,6 +95,12 @@ export default function InquiryWidget({ listingId, listingSlug, listingTitle }: 
       setSubmitting(true);
       setAnonymousError(null);
       setAnonymousAnswerStarted(false);
+      setAnonymousWaitElapsed(false);
+      clearAnonymousWaitTimer();
+      anonymousWaitTimerRef.current = setTimeout(() => {
+        anonymousWaitTimerRef.current = null;
+        setAnonymousWaitElapsed(true);
+      }, ANONYMOUS_WAIT_NOTICE_DELAY_MS);
       setAnonymousMessages((prev) => [
         ...prev,
         {
@@ -161,6 +180,8 @@ export default function InquiryWidget({ listingId, listingSlug, listingTitle }: 
           ));
         }
       } finally {
+        clearAnonymousWaitTimer();
+        setAnonymousWaitElapsed(false);
         setSubmitting(false);
         anonymousAbortRef.current = null;
       }
@@ -276,7 +297,9 @@ export default function InquiryWidget({ listingId, listingSlug, listingTitle }: 
     <div className="rounded-xl border border-gray-200 p-6">
       <h3 className="font-semibold text-gray-900 mb-3">Ask a Question</h3>
       <p className="text-sm text-gray-500 mb-4">
-        Get an instant AI-powered answer, or your question will be forwarded to the seller.
+        {isAuthenticated
+          ? 'Get an instant AI-powered answer, or your question will be forwarded to the seller.'
+          : 'allAI checks current public information to answer questions about this listing.'}
       </p>
       {!isAuthenticated && anonymousMessages.length > 0 && (
         <div className="max-h-80 overflow-y-auto mb-4" aria-live="polite">
@@ -305,12 +328,23 @@ export default function InquiryWidget({ listingId, listingSlug, listingTitle }: 
               <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
               <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" />
             </svg>
-            Submitting...
+            {anonymousWaitElapsed ? 'Still working...' : 'Submitting...'}
           </>
         ) : (
           'Submit Question'
         )}
       </button>
+      {!isAuthenticated && submitting && anonymousWaitElapsed && (
+        <p className="text-xs text-gray-600 mt-2 text-center" role="status">
+          allAI is checking current public information. You may keep waiting, or{' '}
+          <Link
+            href={`/login?redirect=/listings/${encodeURIComponent(listingSlug)}`}
+            className="text-[#3F51B5] hover:underline"
+          >
+            sign in to forward this question to the seller.
+          </Link>
+        </p>
+      )}
       {isAuthenticated && submissionError && (
         <p className="text-xs text-red-600 mt-2" role="alert">
           {submissionError}
