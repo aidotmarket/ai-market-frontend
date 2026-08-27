@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 
-import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { act, cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { ConversationDetail } from '@/types';
 import { AxiosError } from 'axios';
@@ -97,6 +97,11 @@ function typeQuestion(question: string) {
   fireEvent.click(screen.getByRole('button', { name: 'Submit Question' }));
 }
 
+function clickWithoutNavigation(link: HTMLElement) {
+  link.addEventListener('click', (event) => event.preventDefault(), { once: true });
+  fireEvent.click(link);
+}
+
 beforeEach(() => {
   mocks.auth.isAuthenticated = false;
   mocks.createInquiry.mockReset();
@@ -146,11 +151,177 @@ describe('InquiryWidget', () => {
       locale: 'en',
       stream: true,
     });
-    expect(screen.getByText('Want the seller to answer personally?')).toBeTruthy();
-    expect(
-      screen.getByRole('link', { name: 'Sign in to forward this question.' }).getAttribute('href')
-    ).toBe('/login?redirect=/listings/weather-observations');
+    expect(screen.getByText('Want to contact the seller?')).toBeTruthy();
+    const sellerLink = screen.getByRole('link', { name: 'Sign in to ask the seller.' });
+    expect(sellerLink.getAttribute('href')).toBe('/login?redirect=/listings/weather-observations');
+    clickWithoutNavigation(sellerLink);
+    expect(sessionStorage.getItem('inquiry_draft_listing-123')).toBe(
+      'How often is it updated?'
+    );
     expect((screen.getByRole('textbox') as HTMLTextAreaElement).value).toBe('');
+  });
+
+  it('shows an actionable still-working state after eight seconds and resets on completion', async () => {
+    vi.useFakeTimers();
+    const stream = progressiveSseResponse('It contains ', 'daily readings.');
+    fetchMock.mockImplementation(async (input) => {
+      const url = String(input);
+      if (url === SESSION_URL) return response(200, { session_id: 'anon-session' });
+      if (url === MESSAGE_URL) return stream.response;
+      throw new Error(`Unexpected request: ${url}`);
+    });
+
+    try {
+      renderWidget();
+      expect(screen.getByText(
+        'allAI checks current public information to answer questions about this listing.'
+      )).toBeTruthy();
+      expect(screen.queryByText(/your question will be forwarded to the seller/i)).toBeNull();
+      const status = screen.getByRole('status');
+      expect(status.textContent).toBe('');
+      expect(status.className).toBe('sr-only');
+
+      typeQuestion('  How often is it updated?  ');
+      await act(async () => {
+        await vi.advanceTimersByTimeAsync(7_999);
+      });
+      expect(screen.getByRole('button', { name: 'Submitting...' })).toBeTruthy();
+      expect(status.textContent).toBe('');
+      expect(status.className).toBe('sr-only');
+
+      await act(async () => {
+        await vi.advanceTimersByTimeAsync(1);
+      });
+      expect(screen.getByRole('button', { name: 'Still working...' })).toBeTruthy();
+      expect(screen.getByRole('status')).toBe(status);
+      expect(status.textContent).toContain(
+        'allAI is checking current public information. You may keep waiting'
+      );
+      expect(status.className).not.toContain('sr-only');
+      const sellerLink = screen.getByRole('link', { name: 'sign in to ask the seller.' });
+      expect(sellerLink.getAttribute('href')).toBe(
+        '/login?redirect=/listings/weather-observations'
+      );
+      expect(sellerLink.getAttribute('href')).not.toContain('How');
+      clickWithoutNavigation(sellerLink);
+      expect(sessionStorage.getItem('inquiry_draft_listing-123')).toBe(
+        'How often is it updated?'
+      );
+
+      await act(async () => {
+        stream.continue();
+        await vi.advanceTimersByTimeAsync(0);
+      });
+      expect(screen.getByText('It contains daily readings.')).toBeTruthy();
+      expect(screen.getByRole('button', { name: 'Submit Question' })).toBeTruthy();
+      expect(status.textContent).toBe('');
+      expect(status.className).toBe('sr-only');
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it('keeps the anonymous wait label and notice coherent through an auth hydration flip', async () => {
+    vi.useFakeTimers();
+    const pendingSession = deferred<Response>();
+    fetchMock.mockReturnValue(pendingSession.promise);
+
+    try {
+      const view = renderWidget();
+      typeQuestion('Can the seller clarify this?');
+
+      mocks.auth.isAuthenticated = true;
+      view.rerender(
+        <InquiryWidget
+          listingId="listing-123"
+          listingSlug="weather-observations"
+          listingTitle="Weather Observations"
+        />
+      );
+
+      await act(async () => {
+        await vi.advanceTimersByTimeAsync(8_000);
+      });
+
+      expect(screen.getByRole('button', { name: 'Still working...' })).toBeTruthy();
+      expect(screen.getByRole('status').textContent).toContain(
+        'sign in to ask the seller.'
+      );
+
+      pendingSession.resolve(response(500));
+      await act(async () => {
+        await vi.advanceTimersByTimeAsync(0);
+      });
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it('resets the anonymous wait state when a terminal error arrives after eight seconds', async () => {
+    vi.useFakeTimers();
+    const pendingSession = deferred<Response>();
+    fetchMock.mockReturnValue(pendingSession.promise);
+
+    try {
+      renderWidget();
+      typeQuestion('Is this still available?');
+
+      await act(async () => {
+        await vi.advanceTimersByTimeAsync(8_000);
+      });
+      expect(screen.getByRole('button', { name: 'Still working...' })).toBeTruthy();
+      expect(screen.getByRole('status').textContent).not.toBe('');
+
+      pendingSession.resolve(response(500));
+      await act(async () => {
+        await vi.advanceTimersByTimeAsync(0);
+      });
+
+      expect(screen.getByRole('alert').textContent).toContain(
+        "We couldn't get an answer. Please try again."
+      );
+      expect(screen.getByRole('button', { name: 'Submit Question' })).toBeTruthy();
+      expect(screen.getByRole('status').textContent).toBe('');
+      expect(screen.getByRole('status').className).toBe('sr-only');
+      expect(vi.getTimerCount()).toBe(0);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it.each([
+    ['before', 7_999],
+    ['after', 8_000],
+  ])('cleans up without stale timers or state warnings when unmounted %s the wait fires', async (
+    _timing,
+    elapsed
+  ) => {
+    vi.useFakeTimers();
+    const pendingSession = deferred<Response>();
+    fetchMock.mockReturnValue(pendingSession.promise);
+    const consoleError = vi.spyOn(console, 'error').mockImplementation(() => undefined);
+
+    try {
+      const view = renderWidget();
+      typeQuestion('Will this request outlive the widget?');
+
+      await act(async () => {
+        await vi.advanceTimersByTimeAsync(elapsed);
+      });
+      view.unmount();
+      expect(vi.getTimerCount()).toBe(0);
+
+      pendingSession.resolve(response(500));
+      await act(async () => {
+        await vi.advanceTimersByTimeAsync(1);
+      });
+
+      expect(vi.getTimerCount()).toBe(0);
+      expect(consoleError).not.toHaveBeenCalled();
+    } finally {
+      consoleError.mockRestore();
+      vi.useRealTimers();
+    }
   });
 
   it('keeps authenticated submission on the existing inquiry path', async () => {
@@ -243,7 +414,7 @@ describe('InquiryWidget', () => {
     expect((screen.getByRole('textbox') as HTMLTextAreaElement).value).toBe(
       'Please do not lose this question'
     );
-    expect(screen.queryByText('Want the seller to answer personally?')).toBeNull();
+    expect(screen.queryByText('Want to contact the seller?')).toBeNull();
     expect(mocks.createInquiry).not.toHaveBeenCalled();
   });
 });
