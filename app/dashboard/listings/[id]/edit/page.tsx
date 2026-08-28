@@ -63,7 +63,7 @@ export default function EditListingPage() {
         pricing_type: l.pricing?.pricing_type ?? l.pricing_type ?? 'one_time',
         currency: 'USD',
         data_format: l.data_format || 'csv',
-        source_row_count: l.source_row_count || 0,
+        source_row_count: l.source_row_count ?? l.row_count ?? 0,
         compliance_frameworks: l.compliance_frameworks || [],
         compliance_notes: l.compliance_notes || '',
         status: l.status || 'draft',
@@ -113,7 +113,7 @@ export default function EditListingPage() {
         price: data.price,
         pricing_type: data.pricing_type,
         data_format: data.data_format,
-        source_row_count: data.source_row_count || undefined,
+        source_row_count: data.source_row_count,
         compliance_frameworks: data.compliance_frameworks,
         compliance_notes: data.compliance_notes,
       });
@@ -262,7 +262,7 @@ export default function EditListingPage() {
             <input
               type="number"
               min={0}
-              value={data.source_row_count || ''}
+              value={data.source_row_count}
               onChange={(e) => update({ source_row_count: Number(e.target.value) })}
               className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-[#3F51B5]"
             />
