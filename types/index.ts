@@ -747,6 +747,20 @@ export interface ConversationDetail {
 
 export type DataRequestStatus = 'draft' | 'open' | 'matched' | 'responses_received' | 'fulfilled' | 'closed' | 'expired';
 export type DataRequestUrgency = 'low' | 'normal' | 'high' | 'urgent';
+export type RequestPublicationDecision = 'eligible' | 'action_required' | 'needs_review' | 'ineligible';
+export type RequestPublicationReason =
+  | 'eligible'
+  | 'email_verification_required'
+  | 'public_consent_required'
+  | 'public_content_changed'
+  | 'contact_or_personal_data_detected'
+  | 'automated_check_unavailable'
+  | 'safety_uncertain'
+  | 'synthetic_identity'
+  | 'moderation_rejected'
+  | 'consent_withdrawn'
+  | 'request_not_open'
+  | 'request_expired';
 
 export interface DataRequestListItem {
   id: string;
@@ -774,6 +788,15 @@ export interface DataRequestDetail extends DataRequestListItem {
   jsonld?: Record<string, unknown>;
   indexing?: { index: boolean; robots: string };
   buyer_id: string;
+  public_consent_status?: 'required' | 'consented' | 'withdrawn';
+  public_consent_at?: string | null;
+  public_consent_policy_version?: string | null;
+  required_public_consent_policy_version?: string;
+  public_content_hash?: string | null;
+  publication_decision?: RequestPublicationDecision;
+  publication_reason?: RequestPublicationReason;
+  publication_decision_version?: number;
+  publication_next_action?: string;
 }
 
 export interface CreateDataRequestPayload {
