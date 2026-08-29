@@ -34,6 +34,25 @@ export async function publishDataRequest(requestId: string): Promise<DataRequest
   return res.data;
 }
 
+export async function confirmDataRequestPublication(
+  requestId: string,
+  publicContentHash: string,
+  policyVersion: string
+): Promise<DataRequestDetail> {
+  const res = await api.put<DataRequestDetail>(
+    `/data-requests/${encodeURIComponent(requestId)}/publication-consent`,
+    { public_content_hash: publicContentHash, policy_version: policyVersion }
+  );
+  return res.data;
+}
+
+export async function withdrawDataRequestPublication(requestId: string): Promise<DataRequestDetail> {
+  const res = await api.delete<DataRequestDetail>(
+    `/data-requests/${encodeURIComponent(requestId)}/publication-consent`
+  );
+  return res.data;
+}
+
 export async function deleteDataRequest(requestId: string): Promise<void> {
   await api.delete(`/data-requests/${encodeURIComponent(requestId)}`);
 }

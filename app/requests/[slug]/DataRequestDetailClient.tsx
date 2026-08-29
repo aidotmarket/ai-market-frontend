@@ -11,6 +11,8 @@ import {
   deleteDataRequest,
   submitDataRequestResponse,
   getDataRequestResponses,
+  confirmDataRequestPublication,
+  withdrawDataRequestPublication,
 } from '@/api/data-requests';
 import { formatDate } from '@/lib/format';
 import { AxiosError } from 'axios';
@@ -50,6 +52,7 @@ export default function DataRequestDetailClient({
   const [loading, setLoading] = useState(initialRequest === null);
   const [publishing, setPublishing] = useState(false);
   const [deleting, setDeleting] = useState(false);
+  const [updatingPublication, setUpdatingPublication] = useState(false);
 
   // Response form
   const [proposal, setProposal] = useState('');
@@ -90,7 +93,12 @@ export default function DataRequestDetailClient({
     try {
       const updated = await publishDataRequest(request.id);
       setRequest(updated);
-      toast('Data request published successfully.', 'success');
+      toast(
+        updated.publication_decision === 'eligible'
+          ? 'Your request is open and available to the market.'
+          : 'Your request is open. Review the public visibility step below.',
+        'success'
+      );
     } catch (err) {
       if (err instanceof AxiosError) {
         toast(err.response?.data?.detail || 'Failed to publish.', 'error');
@@ -117,6 +125,51 @@ export default function DataRequestDetailClient({
       }
     } finally {
       setDeleting(false);
+    }
+  }
+
+  async function handleConfirmPublication() {
+    if (!request?.public_content_hash || !request.required_public_consent_policy_version) return;
+    setUpdatingPublication(true);
+    try {
+      const updated = await confirmDataRequestPublication(
+        request.id,
+        request.public_content_hash,
+        request.required_public_consent_policy_version
+      );
+      setRequest(updated);
+      toast(
+        updated.publication_decision === 'eligible'
+          ? 'Your request is now available to the market.'
+          : 'Your publication choice was saved. The status below explains what happens next.',
+        'success'
+      );
+    } catch (err) {
+      if (err instanceof AxiosError) {
+        toast(err.response?.data?.detail || 'Failed to update public visibility.', 'error');
+      } else {
+        toast('An unexpected error occurred.', 'error');
+      }
+    } finally {
+      setUpdatingPublication(false);
+    }
+  }
+
+  async function handleWithdrawPublication() {
+    if (!request) return;
+    setUpdatingPublication(true);
+    try {
+      const updated = await withdrawDataRequestPublication(request.id);
+      setRequest(updated);
+      toast('Your request is now private.', 'success');
+    } catch (err) {
+      if (err instanceof AxiosError) {
+        toast(err.response?.data?.detail || 'Failed to update public visibility.', 'error');
+      } else {
+        toast('An unexpected error occurred.', 'error');
+      }
+    } finally {
+      setUpdatingPublication(false);
     }
   }
 
@@ -173,6 +226,13 @@ export default function DataRequestDetailClient({
 
   const urgencyCss = URGENCY_BADGE[request.urgency] || URGENCY_BADGE.low;
   const statusCss = STATUS_BADGE[request.status] || STATUS_BADGE.draft;
+  const canConfirmPublication =
+    Boolean(request.public_content_hash) &&
+    Boolean(request.required_public_consent_policy_version) &&
+    ['public_consent_required', 'public_content_changed', 'consent_withdrawn'].includes(
+      request.publication_reason || ''
+    );
+  const canWithdrawPublication = request.public_consent_status === 'consented';
 
   const priceRange =
     request.price_range_min != null || request.price_range_max != null
@@ -199,6 +259,7 @@ export default function DataRequestDetailClient({
             {request.urgency} urgency
           </span>
           {priceRange && <span className="font-medium text-gray-700">{priceRange}</span>}
+          {!priceRange && <span>Currency: {request.currency || 'USD'}</span>}
           <span>Posted {formatDate(request.created_at)}</span>
           {request.buyer_display_name && <span>by {request.buyer_display_name}</span>}
           <span>{request.response_count} response{request.response_count !== 1 ? 's' : ''}</span>
@@ -214,7 +275,7 @@ export default function DataRequestDetailClient({
               disabled={publishing}
               className="rounded-lg bg-green-600 px-4 py-2 text-sm font-medium text-white hover:bg-green-700 disabled:opacity-50"
             >
-              {publishing ? 'Publishing...' : 'Publish'}
+              {publishing ? 'Opening...' : 'Open request'}
             </button>
           )}
           <Link
@@ -231,6 +292,63 @@ export default function DataRequestDetailClient({
             {deleting ? 'Deleting...' : 'Delete'}
           </button>
         </div>
+      )}
+
+      {isOwner && request.publication_decision && (
+        <section className="rounded-xl border border-[#D8DDF4] bg-[#F7F8FE] p-5 mb-6" aria-labelledby="publication-status-heading">
+          <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+            <div>
+              <h2 id="publication-status-heading" className="font-semibold text-gray-900">
+                Public visibility: {request.publication_decision === 'eligible' ? 'Public' : 'Private'}
+              </h2>
+              <p className="mt-1 text-sm text-gray-700">
+                {request.publication_next_action || 'No public action is available.'}
+              </p>
+              {request.publication_reason && request.publication_reason !== 'eligible' && (
+                <p className="mt-1 text-xs text-gray-500">
+                  Reason: {request.publication_reason.replaceAll('_', ' ')}
+                </p>
+              )}
+            </div>
+            {request.publication_reason === 'automated_check_unavailable' && (
+              <span className="inline-flex w-fit rounded-full bg-amber-100 px-2.5 py-1 text-xs font-medium text-amber-800">
+                Automatic check pending
+              </span>
+            )}
+          </div>
+
+          {canConfirmPublication && (
+            <div className="mt-4 border-t border-[#D8DDF4] pt-4">
+              <p className="mb-3 text-sm text-gray-700">
+                By making this request public, you agree that the request details shown on this page may appear on ai.market, in search engines, to AI agents, and in relevant seller alerts. Your full account profile is not included; your existing public buyer name may appear. Do not put contact details in the request text.
+              </p>
+              <button
+                type="button"
+                onClick={handleConfirmPublication}
+                disabled={updatingPublication}
+                className="rounded-lg bg-[#3F51B5] px-4 py-2 text-sm font-medium text-white hover:bg-[#3545a0] disabled:opacity-50"
+              >
+                {updatingPublication ? 'Updating...' : 'Make this request public'}
+              </button>
+            </div>
+          )}
+
+          {canWithdrawPublication && (
+            <div className="mt-4 border-t border-[#D8DDF4] pt-4">
+              <p className="mb-3 text-sm text-gray-700">
+                You can remove this request from public discovery without deleting your work.
+              </p>
+              <button
+                type="button"
+                onClick={handleWithdrawPublication}
+                disabled={updatingPublication}
+                className="rounded-lg border border-gray-300 bg-white px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50 disabled:opacity-50"
+              >
+                {updatingPublication ? 'Updating...' : 'Make this request private'}
+              </button>
+            </div>
+          )}
+        </section>
       )}
 
       {/* Description */}
@@ -257,6 +375,12 @@ export default function DataRequestDetailClient({
           <div className="rounded-xl border border-gray-200 p-4">
             <h3 className="text-xs font-semibold text-gray-500 uppercase mb-2">Preferred Formats</h3>
             <p className="text-sm text-gray-800">{request.format_preferences.join(', ')}</p>
+          </div>
+        )}
+        {request.regulatory_requirements && request.regulatory_requirements.length > 0 && (
+          <div className="rounded-xl border border-gray-200 p-4 sm:col-span-2">
+            <h3 className="text-xs font-semibold text-gray-500 uppercase mb-2">Regulatory Requirements</h3>
+            <p className="text-sm text-gray-800">{request.regulatory_requirements.join(', ')}</p>
           </div>
         )}
         {request.provenance_requirements && (

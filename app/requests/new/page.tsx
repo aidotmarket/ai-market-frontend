@@ -65,7 +65,7 @@ export default function NewDataRequestPage() {
         provenance_requirements: provenanceRequirements.trim() || undefined,
       });
 
-      toast('Data request created as draft. Publish it from the detail page.', 'success');
+      toast('Data request created as a draft. Open it from the detail page.', 'success');
       router.push(`/requests/${result.slug}`);
     } catch (err) {
       if (err instanceof AxiosError) {
@@ -97,7 +97,7 @@ export default function NewDataRequestPage() {
     <div className="mx-auto max-w-2xl px-4 sm:px-6 lg:px-8 py-8">
       <h1 className="text-2xl font-bold text-gray-900 mb-6">Post a Data Request</h1>
       <p className="text-sm text-gray-500 mb-8">
-        Describe the data you need. We create it as a draft. Publish it from the detail page.
+          Describe the data you need. We create it as a draft. Open it from the detail page.
       </p>
 
       <form onSubmit={handleSubmit} className="space-y-6">
