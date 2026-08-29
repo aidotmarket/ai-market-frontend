@@ -1,8 +1,15 @@
 import Link from 'next/link';
 import type { Metadata } from 'next';
-import { fetchFeaturedFeed, fetchPublicListings, type FeaturedItem, type PaginatedListings } from '@/lib/api';
+import {
+  fetchDataRequests,
+  fetchFeaturedFeed,
+  fetchPublicListings,
+  type FeaturedItem,
+  type PaginatedListings,
+} from '@/lib/api';
 import { HomepageActivityTickerBeacons } from '@/components/HomepageActivityTickerBeacons';
 import { HeroSearch } from '@/components/HeroSearch';
+import type { DataRequestListItem } from '@/types';
 
 export const metadata: Metadata = {
   title: { absolute: 'ai.market — Sell data without giving it away' },
@@ -254,17 +261,26 @@ const howItWorks = [
 ];
 
 export default async function LandingPage() {
-  const [listingsData, featuredFeed]: [PaginatedListings | null, Awaited<ReturnType<typeof fetchFeaturedFeed>>] =
+  const [listingsData, featuredFeed, requestData]: [
+    PaginatedListings | null,
+    Awaited<ReturnType<typeof fetchFeaturedFeed>>,
+    Awaited<ReturnType<typeof fetchDataRequests>>,
+  ] =
     await Promise.all([
       fetchPublicListings({
         per_page: 4,
         sort: 'newest',
       }),
       fetchFeaturedFeed(),
+      fetchDataRequests({ per_page: 3 }).catch(() => null),
     ]);
   const featuredListings = listingsData?.items ?? [];
   const activityItems = featuredFeed?.items ?? [];
   const activityItemList = featuredFeed?.item_list ?? null;
+  const buyerRequests: DataRequestListItem[] = Array.isArray(requestData)
+    ? requestData
+    : requestData?.items ?? [];
+  const showLiveDemand = buyerRequests.length >= 3;
 
   return (
     <>
@@ -455,6 +471,78 @@ export default async function LandingPage() {
                 );
               })}
             </div>
+          </div>
+        </section>
+
+        {/* BUYER REQUESTS */}
+        <section className="border-t border-[#E8E8E8] bg-white py-20 sm:py-24">
+          <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
+            {showLiveDemand ? (
+              <>
+                <div className="flex items-end justify-between flex-wrap gap-4">
+                  <div>
+                    <p className="text-xs font-bold uppercase tracking-wider text-[#0F6E56]">Buyer Requests</p>
+                    <h2 className="mt-2 text-3xl font-extrabold tracking-tight text-[#1A1A1A] sm:text-4xl">
+                      Buyer demand, live now
+                    </h2>
+                    <p className="mt-3 text-lg text-[#666666]">
+                      See what verified buyers need and respond with a relevant listing.
+                    </p>
+                  </div>
+                  <Link href="/requests" className="text-sm font-semibold text-[#3F51B5] hover:text-[#3545a0]">
+                    View All Buyer Requests →
+                  </Link>
+                </div>
+                <div className="mt-10 grid grid-cols-1 gap-6 md:grid-cols-3">
+                  {buyerRequests.slice(0, 3).map((request) => (
+                    <Link
+                      key={request.id}
+                      href={`/requests/${request.slug}`}
+                      className="rounded-2xl border border-[#E8E8E8] bg-white p-6 transition-all hover:border-[#3F51B5] hover:shadow-sm"
+                    >
+                      <div className="flex flex-wrap gap-2">
+                        {request.categories.slice(0, 3).map((category) => (
+                          <span key={category} className="rounded-md bg-[#E1F5EE] px-2 py-1 text-xs font-medium text-[#0F6E56]">
+                            {category}
+                          </span>
+                        ))}
+                      </div>
+                      <h3 className="mt-4 text-lg font-bold leading-snug text-[#1A1A1A]">
+                        {request.title || 'Buyer data request'}
+                      </h3>
+                      <p className="mt-2 line-clamp-3 text-sm leading-6 text-[#666666]">
+                        {request.description}
+                      </p>
+                      <p className="mt-5 text-sm font-semibold text-[#3F51B5]">Review request →</p>
+                    </Link>
+                  ))}
+                </div>
+              </>
+            ) : (
+              <div className="mx-auto max-w-3xl text-center">
+                <p className="text-xs font-bold uppercase tracking-wider text-[#0F6E56]">Buyer Requests</p>
+                <h2 className="mt-2 text-3xl font-extrabold tracking-tight text-[#1A1A1A] sm:text-4xl">
+                  Tell the market what data you need
+                </h2>
+                <p className="mx-auto mt-4 max-w-2xl text-lg leading-8 text-[#666666]">
+                  Publish a requirement once. Relevant sellers can find it and respond with matching data.
+                </p>
+                <div className="mt-8 flex flex-col justify-center gap-3 sm:flex-row">
+                  <Link
+                    href="/requests/new"
+                    className="inline-flex items-center justify-center rounded-lg bg-[#3F51B5] px-6 py-3 text-sm font-semibold text-white hover:bg-[#3545a0]"
+                  >
+                    Post a Buyer Request
+                  </Link>
+                  <Link
+                    href="/requests"
+                    className="inline-flex items-center justify-center rounded-lg border border-[#3F51B5] px-6 py-3 text-sm font-semibold text-[#3F51B5] hover:bg-[#E8EAF6]"
+                  >
+                    Browse Buyer Requests
+                  </Link>
+                </div>
+              </div>
+            )}
           </div>
         </section>
 

@@ -36,6 +36,7 @@ describe('sitemap', () => {
     ];
 
     expect(urls).toContain('https://ai.market/listings/test-listing');
+    expect(urls).toContain('https://ai.market/requests');
     expect(urls).toContain('https://ai.market/requests/need-claims-data');
     for (const retiredRoute of retiredRoutes) {
       expect(urls).not.toContain(retiredRoute);
