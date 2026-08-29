@@ -272,7 +272,7 @@ export default async function LandingPage() {
         sort: 'newest',
       }),
       fetchFeaturedFeed(),
-      fetchDataRequests({ per_page: 3 }),
+      fetchDataRequests({ per_page: 3 }).catch(() => null),
     ]);
   const featuredListings = listingsData?.items ?? [];
   const activityItems = featuredFeed?.items ?? [];

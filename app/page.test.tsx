@@ -68,4 +68,14 @@ describe('homepage buyer requests', () => {
     expect(html).not.toContain('Buyer demand, live now');
     expect(html).not.toContain('Request 1');
   });
+
+  it('keeps the homepage available when the request feed is unavailable', async () => {
+    fetchDataRequests.mockRejectedValue(new Error('request feed unavailable'));
+    const { default: LandingPage } = await import('./page');
+
+    const html = renderToStaticMarkup(await LandingPage());
+
+    expect(html).toContain('Tell the market what data you need');
+    expect(html).not.toContain('Buyer demand, live now');
+  });
 });
