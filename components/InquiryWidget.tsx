@@ -23,6 +23,12 @@ interface Props {
 
 const DRAFT_KEY_PREFIX = 'inquiry_draft_';
 const ANONYMOUS_WAIT_NOTICE_DELAY_MS = 8_000;
+const ANONYMOUS_ATTEMPT_DEADLINE_MS = 45_000;
+
+interface AnonymousAttemptResource<T> {
+  attemptId: number;
+  value: T;
+}
 
 export default function InquiryWidget({ listingId, listingSlug, listingTitle }: Props) {
   const { isAuthenticated } = useAuthStore();
@@ -38,20 +44,34 @@ export default function InquiryWidget({ listingId, listingSlug, listingTitle }: 
   const [replying, setReplying] = useState(false);
   const [anonymousMessages, setAnonymousMessages] = useState<ConversationMessage[]>([]);
   const [anonymousError, setAnonymousError] = useState<string | null>(null);
+  const [anonymousTimedOut, setAnonymousTimedOut] = useState(false);
   const [anonymousAnswerReturned, setAnonymousAnswerReturned] = useState(false);
   const [anonymousAnswerStarted, setAnonymousAnswerStarted] = useState(false);
   const [anonymousWaitElapsed, setAnonymousWaitElapsed] = useState(false);
   const [anonymousSubmissionInProgress, setAnonymousSubmissionInProgress] = useState(false);
   const anonymousSessionRef = useRef<string | null>(null);
-  const anonymousAbortRef = useRef<AbortController | null>(null);
-  const anonymousWaitTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const anonymousAbortRef = useRef<AnonymousAttemptResource<AbortController> | null>(null);
+  const anonymousWaitTimerRef = useRef<AnonymousAttemptResource<ReturnType<typeof setTimeout>> | null>(null);
+  const anonymousDeadlineTimerRef = useRef<AnonymousAttemptResource<ReturnType<typeof setTimeout>> | null>(null);
+  const anonymousAttemptRef = useRef(0);
   const anonymousSubmittedQuestionRef = useRef('');
   const mountedRef = useRef(true);
 
-  const clearAnonymousWaitTimer = useCallback(() => {
-    if (anonymousWaitTimerRef.current !== null) {
-      clearTimeout(anonymousWaitTimerRef.current);
+  const clearAnonymousAttemptTimers = useCallback((attemptId?: number) => {
+    if (
+      anonymousWaitTimerRef.current !== null
+      && (attemptId === undefined || anonymousWaitTimerRef.current.attemptId === attemptId)
+    ) {
+      clearTimeout(anonymousWaitTimerRef.current.value);
       anonymousWaitTimerRef.current = null;
+    }
+
+    if (
+      anonymousDeadlineTimerRef.current !== null
+      && (attemptId === undefined || anonymousDeadlineTimerRef.current.attemptId === attemptId)
+    ) {
+      clearTimeout(anonymousDeadlineTimerRef.current.value);
+      anonymousDeadlineTimerRef.current = null;
     }
   }, []);
 
@@ -68,10 +88,12 @@ export default function InquiryWidget({ listingId, listingSlug, listingTitle }: 
     mountedRef.current = true;
     return () => {
       mountedRef.current = false;
-      clearAnonymousWaitTimer();
-      anonymousAbortRef.current?.abort();
+      anonymousAttemptRef.current += 1;
+      clearAnonymousAttemptTimers();
+      anonymousAbortRef.current?.value.abort();
+      anonymousAbortRef.current = null;
     };
-  }, [clearAnonymousWaitTimer]);
+  }, [clearAnonymousAttemptTimers]);
 
   const preserveAnonymousDraft = useCallback(() => {
     if (anonymousSubmittedQuestionRef.current) {
@@ -98,29 +120,60 @@ export default function InquiryWidget({ listingId, listingSlug, listingTitle }: 
     if (!question.trim()) return;
 
     setSubmissionError(null);
+    setAnonymousError(null);
+    setAnonymousTimedOut(false);
 
     if (!isAuthenticated) {
       const trimmedQuestion = question.trim();
-      const attemptId = Date.now();
+      const attemptId = anonymousAttemptRef.current + 1;
       const questionMessageId = `anonymous-question-${attemptId}`;
       const answerMessageId = `anonymous-answer-${attemptId}`;
       const controller = new AbortController();
       let receivedAnswer = '';
 
-      anonymousAbortRef.current = controller;
+      anonymousAttemptRef.current = attemptId;
+      clearAnonymousAttemptTimers();
+      anonymousAbortRef.current?.value.abort();
+      anonymousAbortRef.current = { attemptId, value: controller };
       anonymousSubmittedQuestionRef.current = trimmedQuestion;
       setSubmitting(true);
       setAnonymousSubmissionInProgress(true);
-      setAnonymousError(null);
       setAnonymousAnswerStarted(false);
       setAnonymousWaitElapsed(false);
-      clearAnonymousWaitTimer();
-      anonymousWaitTimerRef.current = setTimeout(() => {
-        anonymousWaitTimerRef.current = null;
-        if (mountedRef.current) {
+      const waitTimer = setTimeout(() => {
+        if (anonymousWaitTimerRef.current?.attemptId === attemptId) {
+          anonymousWaitTimerRef.current = null;
+        }
+        if (mountedRef.current && anonymousAttemptRef.current === attemptId) {
           setAnonymousWaitElapsed(true);
         }
       }, ANONYMOUS_WAIT_NOTICE_DELAY_MS);
+      anonymousWaitTimerRef.current = { attemptId, value: waitTimer };
+
+      const deadlineTimer = setTimeout(() => {
+        if (!mountedRef.current || anonymousAttemptRef.current !== attemptId) return;
+
+        anonymousAttemptRef.current += 1;
+        if (anonymousDeadlineTimerRef.current?.attemptId === attemptId) {
+          anonymousDeadlineTimerRef.current = null;
+        }
+        clearAnonymousAttemptTimers(attemptId);
+        if (anonymousAbortRef.current?.attemptId === attemptId) {
+          anonymousAbortRef.current.value.abort();
+          anonymousAbortRef.current = null;
+        }
+        setAnonymousMessages((prev) => prev.filter(
+          (message) => message.id !== questionMessageId && message.id !== answerMessageId
+        ));
+        setAnonymousError('This is taking longer than expected. Please try again, or');
+        setAnonymousTimedOut(true);
+        setAnonymousWaitElapsed(false);
+        setAnonymousAnswerStarted(false);
+        setAnonymousSubmissionInProgress(false);
+        setSubmitting(false);
+      }, ANONYMOUS_ATTEMPT_DEADLINE_MS);
+      anonymousDeadlineTimerRef.current = { attemptId, value: deadlineTimer };
+
       setAnonymousMessages((prev) => [
         ...prev,
         {
@@ -133,13 +186,17 @@ export default function InquiryWidget({ listingId, listingSlug, listingTitle }: 
       ]);
 
       try {
-        if (!anonymousSessionRef.current) {
-          anonymousSessionRef.current = await createAnonymousSession();
+        let sessionId = anonymousSessionRef.current;
+        if (!sessionId) {
+          const createdSessionId = await createAnonymousSession({ signal: controller.signal });
+          if (!mountedRef.current || anonymousAttemptRef.current !== attemptId) return;
+          anonymousSessionRef.current = createdSessionId;
+          sessionId = createdSessionId;
         }
-        if (!mountedRef.current) return;
+        if (!mountedRef.current || anonymousAttemptRef.current !== attemptId) return;
 
         const response = await sendAnonymousMessage({
-          session_id: anonymousSessionRef.current,
+          session_id: sessionId,
           message: `Question about the listing "${listingTitle}" (slug: ${listingSlug}):\n\n${trimmedQuestion}`,
           context: {
             page: `/listings/${listingSlug}`,
@@ -149,12 +206,13 @@ export default function InquiryWidget({ listingId, listingSlug, listingTitle }: 
           stream: true,
         }, { signal: controller.signal });
 
+        if (!mountedRef.current || anonymousAttemptRef.current !== attemptId) return;
         if (!response.ok || !response.body) {
           throw new Error('Anonymous message request failed');
         }
 
         await readAnonymousMessageStream(response.body, (event) => {
-          if (!mountedRef.current) return;
+          if (!mountedRef.current || anonymousAttemptRef.current !== attemptId) return;
 
           const streamError = event.error ?? (event.type === 'error' ? event.message : undefined);
           if (typeof streamError === 'string' && streamError) {
@@ -187,8 +245,9 @@ export default function InquiryWidget({ listingId, listingSlug, listingTitle }: 
                 : message
             ));
           });
-        });
+        }, ANONYMOUS_ATTEMPT_DEADLINE_MS + 1, controller.signal);
 
+        if (!mountedRef.current || anonymousAttemptRef.current !== attemptId) return;
         if (!receivedAnswer.trim()) {
           throw new Error('Anonymous message stream returned no answer');
         }
@@ -198,20 +257,27 @@ export default function InquiryWidget({ listingId, listingSlug, listingTitle }: 
           setAnonymousAnswerReturned(true);
         }
       } catch (error) {
-        if (mountedRef.current && !(error instanceof Error && error.name === 'AbortError')) {
+        if (
+          mountedRef.current
+          && anonymousAttemptRef.current === attemptId
+          && !(error instanceof Error && error.name === 'AbortError')
+        ) {
           setAnonymousError("We couldn't get an answer. Please try again.");
+          setAnonymousTimedOut(false);
           setAnonymousMessages((prev) => prev.filter(
             (message) => message.id !== questionMessageId && message.id !== answerMessageId
           ));
         }
       } finally {
-        clearAnonymousWaitTimer();
-        if (mountedRef.current) {
+        clearAnonymousAttemptTimers(attemptId);
+        if (mountedRef.current && anonymousAttemptRef.current === attemptId) {
           setAnonymousWaitElapsed(false);
           setAnonymousSubmissionInProgress(false);
           setSubmitting(false);
         }
-        anonymousAbortRef.current = null;
+        if (anonymousAbortRef.current?.attemptId === attemptId) {
+          anonymousAbortRef.current = null;
+        }
       }
       return;
     }
@@ -357,7 +423,9 @@ export default function InquiryWidget({ listingId, listingSlug, listingTitle }: 
               <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
               <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" />
             </svg>
-            {showAnonymousWaitNotice ? 'Still working...' : 'Submitting...'}
+            {anonymousSubmissionInProgress
+              ? (showAnonymousWaitNotice ? 'Still working...' : 'Checking public information...')
+              : 'Submitting...'}
           </>
         ) : (
           'Submit Question'
@@ -389,7 +457,19 @@ export default function InquiryWidget({ listingId, listingSlug, listingTitle }: 
           {submissionError}
         </p>
       )}
-      {!isAuthenticated && anonymousError && (
+      {anonymousTimedOut && anonymousError && (
+        <p className="text-xs text-red-600 mt-2" role="alert">
+          {anonymousError}{' '}
+          <Link
+            href={`/login?redirect=/listings/${encodeURIComponent(listingSlug)}`}
+            onClick={preserveAnonymousDraft}
+            className="text-[#3F51B5] hover:underline"
+          >
+            sign in to ask the seller.
+          </Link>
+        </p>
+      )}
+      {!isAuthenticated && anonymousError && !anonymousTimedOut && (
         <p className="text-xs text-red-600 mt-2" role="alert">
           {anonymousError}
         </p>

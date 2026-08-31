@@ -35,11 +35,14 @@ export async function getAnonymousChatStatus(): Promise<AnonymousChatStatus> {
   return response.json() as Promise<AnonymousChatStatus>;
 }
 
-export async function createAnonymousSession(): Promise<string> {
+export async function createAnonymousSession(
+  options: { signal?: AbortSignal } = {}
+): Promise<string> {
   const response = await fetch(ANONYMOUS_SESSION_URL, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({}),
+    signal: options.signal,
   });
 
   if (!response.ok) throw new Error('Failed to create session');
@@ -68,7 +71,8 @@ export function sendAnonymousMessage(
 export async function readAnonymousMessageStream(
   body: ReadableStream<Uint8Array>,
   onEvent: (event: AnonymousChatEvent) => void,
-  readTimeoutMs = 30_000
+  readTimeoutMs = 30_000,
+  signal?: AbortSignal
 ): Promise<void> {
   const reader = body.getReader();
   const decoder = new TextDecoder();
@@ -77,15 +81,37 @@ export async function readAnonymousMessageStream(
   try {
     while (true) {
       let timeoutId: ReturnType<typeof setTimeout> | undefined;
+      let handleAbort: (() => void) | undefined;
       const timeoutPromise = new Promise<never>((_, reject) => {
         timeoutId = setTimeout(() => reject(new Error('Stream read timeout')), readTimeoutMs);
       });
+      const readPromises: Promise<ReadableStreamReadResult<Uint8Array>>[] = [
+        reader.read(),
+        timeoutPromise,
+      ];
+      if (signal) {
+        const abortPromise = new Promise<never>((_, reject) => {
+          handleAbort = () => reject(
+            signal.reason instanceof Error
+              ? signal.reason
+              : new DOMException('The operation was aborted.', 'AbortError')
+          );
+
+          if (signal.aborted) {
+            handleAbort();
+          } else {
+            signal.addEventListener('abort', handleAbort, { once: true });
+          }
+        });
+        readPromises.push(abortPromise);
+      }
 
       let result: ReadableStreamReadResult<Uint8Array>;
       try {
-        result = await Promise.race([reader.read(), timeoutPromise]);
+        result = await Promise.race(readPromises);
       } finally {
         if (timeoutId) clearTimeout(timeoutId);
+        if (handleAbort) signal?.removeEventListener('abort', handleAbort);
       }
 
       if (result.done) break;
