@@ -5,7 +5,7 @@ import Link from 'next/link';
 import { useSearchParams } from 'next/navigation';
 import { useAuthStore } from '@/store/auth';
 import { useToast } from '@/components/Toast';
-import { validateRedirect } from '@/lib/redirect';
+import { validateListingRedirect, validateRedirect } from '@/lib/redirect';
 import { AxiosError } from 'axios';
 import OAuthButtons from '@/components/OAuthButtons';
 
@@ -21,7 +21,8 @@ export default function RegisterForm() {
   } catch {
     // Treat malformed encoded redirects like any other unsafe redirect.
   }
-  const isListingRedirect = /^\/listings\/[^/?#]+/.test(validatedRedirect);
+  const listingRedirect = validateListingRedirect(validatedRedirect);
+  const isListingRedirect = Boolean(listingRedirect);
   const loginHref = validatedRedirect
     ? `/login?redirect=${encodeURIComponent(validatedRedirect)}`
     : '/login';
@@ -78,9 +79,9 @@ export default function RegisterForm() {
               Creating an account or signing in does not charge you. After you sign in, you will return to this listing. Checkout shows the final total, including payment-provider costs and applicable tax, before you choose whether to confirm.
             </p>
             <p className="mt-2 flex flex-wrap gap-x-3 gap-y-1">
-              <Link href={validatedRedirect} className="underline font-medium">Back to listing</Link>
+              <Link href={listingRedirect} className="underline font-medium">Back to listing</Link>
               <Link href="/pricing" className="underline font-medium">Pricing</Link>
-              <Link href="/legal/terms#fees" className="underline font-medium">Fees and terms</Link>
+              <Link href={`/legal/terms?redirect=${encodeURIComponent(listingRedirect)}#fees`} className="underline font-medium">Fees and terms</Link>
             </p>
           </div>
         )}
@@ -97,7 +98,7 @@ export default function RegisterForm() {
           {verifySentTo && (
             <div className="rounded-lg bg-green-50 border border-green-200 px-4 py-3 text-sm text-green-700">
               Account created. We sent a verification link to {verifySentTo}. Please verify, then{' '}
-              <Link href={isListingRedirect ? loginHref : '/login'} className="underline font-medium">sign in</Link>.
+              <Link href={loginHref} className="underline font-medium">sign in</Link>.
             </div>
           )}
 
