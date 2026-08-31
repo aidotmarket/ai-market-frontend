@@ -215,6 +215,41 @@ describe('SellerWorkspacePage safety boundaries', () => {
     expect(screen.queryByText('server-external-id')).toBeNull();
   });
 
+  it('replaces the active deadline timer without clearing a later ceremony early', async () => {
+    sellerWorkspaceApi.createSellerWorkspaceConnection
+      .mockResolvedValueOnce({ connection: pendingConnection, authorization })
+      .mockResolvedValueOnce({
+        connection: { ...pendingConnection, id: 'connection-2' },
+        authorization: {
+          ...authorization,
+          external_id: 'replacement-external-id',
+          expires_in_seconds: 120,
+        },
+      });
+
+    render(<SellerWorkspacePage />);
+    const createButton = await screen.findByRole('button', { name: 'Add AWS connection' });
+    vi.useFakeTimers();
+    await act(async () => {
+      fireEvent.click(createButton);
+    });
+    expect(screen.getByText('server-external-id')).not.toBeNull();
+
+    act(() => vi.advanceTimersByTime(10_000));
+    act(() => window.dispatchEvent(new Event('focus')));
+    await act(async () => {
+      fireEvent.click(screen.getByRole('button', { name: 'Add AWS connection' }));
+    });
+    expect(screen.getByText('replacement-external-id')).not.toBeNull();
+
+    act(() => vi.advanceTimersByTime(50_000));
+    expect(screen.getByText('replacement-external-id')).not.toBeNull();
+    act(() => vi.advanceTimersByTime(69_999));
+    expect(screen.getByText('replacement-external-id')).not.toBeNull();
+    act(() => vi.advanceTimersByTime(1));
+    expect(screen.queryByText('replacement-external-id')).toBeNull();
+  });
+
   it('enables no action when the server capability is unavailable', async () => {
     sellerWorkspaceApi.getSellerWorkspaceCapabilities.mockResolvedValue({
       ...enabledCapabilities,
@@ -284,7 +319,14 @@ describe('SellerWorkspacePage safety boundaries', () => {
     );
   });
 
-  it.each(['foo*', 'foo?bar', '${aws:username}/data', 'bad\u0001prefix'])(
+  it.each([
+    'foo*',
+    'foo?bar',
+    '${aws:username}/data',
+    'bad\u0001prefix',
+    'bad\u007fprefix',
+    'bad\u0085prefix',
+  ])(
     'rejects unsafe prefix %s before any provider request',
     async (prefix) => {
       sellerWorkspaceApi.listSellerWorkspaceConnections.mockResolvedValue([pendingConnection]);

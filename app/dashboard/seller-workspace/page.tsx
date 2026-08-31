@@ -174,6 +174,10 @@ export default function SellerWorkspacePage() {
     const expiresAt = authorizationSession.expiresAtMonotonic;
 
     const clearAtDeadline = () => {
+      if (deadlineTimer !== undefined) {
+        clearTimeout(deadlineTimer);
+        deadlineTimer = undefined;
+      }
       const remaining = expiresAt - monotonicNow();
       if (!Number.isFinite(remaining) || remaining <= 0) {
         clearSensitive();
@@ -337,7 +341,7 @@ export default function SellerWorkspacePage() {
     if (
       !normalizedPrefix
       || normalizedPrefix.split('/').includes('..')
-      || /[\u0000-\u001F]/.test(normalizedPrefix)
+      || /[\u0000-\u001F\u007F-\u009F]/.test(normalizedPrefix)
       || /[*?]/.test(normalizedPrefix)
       || normalizedPrefix.includes('${')
     ) {
