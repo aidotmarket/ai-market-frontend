@@ -69,6 +69,7 @@ export interface AWSAuthorization {
   external_id: string;
   trust_policy: Record<string, unknown>;
   expires_at: string;
+  expires_in_seconds: number;
   purpose: 'aws_external_id' | 'aws_external_id_rotation';
 }
 

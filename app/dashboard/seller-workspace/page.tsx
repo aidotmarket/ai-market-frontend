@@ -22,9 +22,30 @@ type PageState = 'loading' | 'ready' | 'unavailable' | 'gated' | 'error';
 type AuthorizationSession = {
   connectionId: string;
   authorization: AWSAuthorization;
+  expiresAtMonotonic: number;
 };
 
 const MAX_DEADLINE_TIMEOUT_MS = 2_147_483_647;
+
+const monotonicNow = () => globalThis.performance?.now?.() ?? 0;
+
+const sessionFromResponse = (
+  connectionId: string,
+  authorization: AWSAuthorization,
+  requestStartedAt: number
+): AuthorizationSession => {
+  const ttlSeconds = Number.isFinite(authorization.expires_in_seconds)
+    ? Math.max(0, authorization.expires_in_seconds)
+    : 0;
+  return {
+    connectionId,
+    authorization,
+    // The server computes the remaining lifetime after this request started.
+    // Starting its monotonic countdown at request start is conservative by the
+    // full request duration and does not trust the browser wall clock.
+    expiresAtMonotonic: requestStartedAt + ttlSeconds * 1000,
+  };
+};
 
 const EMPTY_SCOPE: ConnectionVerifyRequest = {
   role_arn: '',
@@ -148,10 +169,10 @@ export default function SellerWorkspacePage() {
     if (!authorizationSession) return;
 
     let deadlineTimer: ReturnType<typeof setTimeout> | undefined;
-    const expiresAt = Date.parse(authorizationSession.authorization.expires_at);
+    const expiresAt = authorizationSession.expiresAtMonotonic;
 
     const clearAtDeadline = () => {
-      const remaining = expiresAt - Date.now();
+      const remaining = expiresAt - monotonicNow();
       if (!Number.isFinite(remaining) || remaining <= 0) {
         clearSensitive();
         return;
@@ -160,8 +181,12 @@ export default function SellerWorkspacePage() {
     };
 
     clearAtDeadline();
+    document.addEventListener('visibilitychange', clearAtDeadline);
+    window.addEventListener('focus', clearAtDeadline);
     return () => {
       if (deadlineTimer !== undefined) clearTimeout(deadlineTimer);
+      document.removeEventListener('visibilitychange', clearAtDeadline);
+      window.removeEventListener('focus', clearAtDeadline);
     };
   }, [authorizationSession, clearSensitive]);
 
@@ -264,12 +289,15 @@ export default function SellerWorkspacePage() {
     setBusyAction(operation);
     setActionError(null);
     clearSensitive();
+    const requestStartedAt = monotonicNow();
     try {
       const result = await createSellerWorkspaceConnection(keyFor(operation));
       clearKey(operation);
       updateConnection(result.connection);
       if (result.authorization) {
-        showAuthorization({ connectionId: result.connection.id, authorization: result.authorization });
+        showAuthorization(
+          sessionFromResponse(result.connection.id, result.authorization, requestStartedAt)
+        );
       } else {
         setActionError('Setup values are unavailable. Open the connection to try again.');
       }
@@ -285,9 +313,10 @@ export default function SellerWorkspacePage() {
     setBusyAction(operation);
     setActionError(null);
     clearSensitive();
+    const requestStartedAt = monotonicNow();
     try {
       const authorization = await getSellerWorkspaceAuthorization(connection.id);
-      showAuthorization({ connectionId: connection.id, authorization });
+      showAuthorization(sessionFromResponse(connection.id, authorization, requestStartedAt));
     } catch (error) {
       if (errorCode(error) === 'authorization_expired') {
         markExpired(connection.id);
@@ -303,7 +332,12 @@ export default function SellerWorkspacePage() {
     event.preventDefault();
     if (!authorizationSession) return;
     const normalizedPrefix = scope.prefix.trim().replace(/^\/+|\/+$/g, '');
-    if (!normalizedPrefix || normalizedPrefix.split('/').includes('..')) {
+    if (
+      !normalizedPrefix
+      || normalizedPrefix.split('/').includes('..')
+      || /[*?]/.test(normalizedPrefix)
+      || normalizedPrefix.includes('${')
+    ) {
       setActionError('Prefix must identify a bounded, non-root S3 location.');
       return;
     }
@@ -327,10 +361,12 @@ export default function SellerWorkspacePage() {
       clearKey(operation);
       updateConnection(result.connection);
     } catch (error) {
-      if (errorCode(error) === 'authorization_expired') {
+      const code = errorCode(error);
+      if (code === 'authorization_expired') {
         markExpired(connectionId);
         clearSensitive();
       }
+      if (code === 'verification_failed') clearKey(operation);
       if (!closeForCapabilityError(error)) setActionError(safeActionMessage(error));
     } finally {
       setBusyAction(null);
@@ -342,6 +378,7 @@ export default function SellerWorkspacePage() {
     setBusyAction(operation);
     setActionError(null);
     clearSensitive();
+    const requestStartedAt = monotonicNow();
     try {
       const result = await rotateSellerWorkspaceConnection(
         connection.id,
@@ -351,7 +388,9 @@ export default function SellerWorkspacePage() {
       clearKey(operation);
       updateConnection(result.connection);
       if (result.authorization) {
-        showAuthorization({ connectionId: connection.id, authorization: result.authorization });
+        showAuthorization(
+          sessionFromResponse(connection.id, result.authorization, requestStartedAt)
+        );
       } else {
         setActionError('Rotation setup values are unavailable. Open the rotation to try again.');
       }
@@ -378,7 +417,9 @@ export default function SellerWorkspacePage() {
       clearKey(operation);
       updateConnection(result.connection);
     } catch (error) {
-      if (errorCode(error) === 'authorization_expired') clearSensitive();
+      const code = errorCode(error);
+      if (code === 'authorization_expired') clearSensitive();
+      if (code === 'verification_failed') clearKey(operation);
       if (!closeForCapabilityError(error)) setActionError(safeActionMessage(error));
     } finally {
       setBusyAction(null);
