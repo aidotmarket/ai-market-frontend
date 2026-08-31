@@ -98,7 +98,7 @@ export default function RegisterForm() {
           {verifySentTo && (
             <div className="rounded-lg bg-green-50 border border-green-200 px-4 py-3 text-sm text-green-700">
               Account created. We sent a verification link to {verifySentTo}. Please verify, then{' '}
-              <Link href={isListingRedirect ? loginHref : '/login'} className="underline font-medium">sign in</Link>.
+              <Link href={loginHref} className="underline font-medium">sign in</Link>.
             </div>
           )}
 

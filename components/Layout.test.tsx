@@ -85,8 +85,12 @@ describe('Layout registration links', () => {
     }
   });
 
-  it('keeps global Sign up actions generic away from the terms page', () => {
-    navigation.pathname = '/pricing';
+  it.each([
+    '/pricing',
+    '/legal/terms/accept',
+    '/legal/terms/',
+  ])('keeps global Sign up actions generic on the exact path %s', (pathname) => {
+    navigation.pathname = pathname;
     navigation.search = new URLSearchParams({ redirect: '/listings/ignored' }).toString();
 
     const signUpLinks = renderSignedOutLayout();
