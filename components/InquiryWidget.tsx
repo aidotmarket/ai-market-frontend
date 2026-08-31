@@ -96,13 +96,14 @@ export default function InquiryWidget({ listingId, listingSlug, listingTitle }: 
   }, [clearAnonymousAttemptTimers]);
 
   const preserveAnonymousDraft = useCallback(() => {
-    if (anonymousSubmittedQuestionRef.current) {
+    const draft = question.trim() ? question : anonymousSubmittedQuestionRef.current;
+    if (draft) {
       sessionStorage.setItem(
         DRAFT_KEY_PREFIX + listingId,
-        anonymousSubmittedQuestionRef.current
+        draft
       );
     }
-  }, [listingId]);
+  }, [listingId, question]);
 
   // Poll for new messages after submission
   const handleNewMessages = useCallback((newMsgs: ConversationMessage[]) => {
@@ -138,6 +139,7 @@ export default function InquiryWidget({ listingId, listingSlug, listingTitle }: 
       anonymousSubmittedQuestionRef.current = trimmedQuestion;
       setSubmitting(true);
       setAnonymousSubmissionInProgress(true);
+      setAnonymousAnswerReturned(false);
       setAnonymousAnswerStarted(false);
       setAnonymousWaitElapsed(false);
       const waitTimer = setTimeout(() => {
@@ -206,6 +208,9 @@ export default function InquiryWidget({ listingId, listingSlug, listingTitle }: 
           stream: true,
         }, { signal: controller.signal });
 
+        if (response.status === 404 && anonymousSessionRef.current === sessionId) {
+          anonymousSessionRef.current = null;
+        }
         if (!mountedRef.current || anonymousAttemptRef.current !== attemptId) return;
         if (!response.ok || !response.body) {
           throw new Error('Anonymous message request failed');
@@ -396,7 +401,7 @@ export default function InquiryWidget({ listingId, listingSlug, listingTitle }: 
           ? 'Get an instant AI-powered answer, or your question will be forwarded to the seller.'
           : 'allAI checks current public information to answer questions about this listing.'}
       </p>
-      {!isAuthenticated && anonymousMessages.length > 0 && (
+      {anonymousMessages.length > 0 && (
         <div className="max-h-80 overflow-y-auto mb-4" aria-live="polite">
           <ConversationThread
             messages={anonymousMessages}
@@ -469,12 +474,12 @@ export default function InquiryWidget({ listingId, listingSlug, listingTitle }: 
           </Link>
         </p>
       )}
-      {!isAuthenticated && anonymousError && !anonymousTimedOut && (
+      {anonymousError && !anonymousTimedOut && (
         <p className="text-xs text-red-600 mt-2" role="alert">
           {anonymousError}
         </p>
       )}
-      {!isAuthenticated && anonymousAnswerReturned && (
+      {anonymousAnswerReturned && (
         <p className="text-xs text-gray-500 mt-2 text-center">
           Want to contact the seller?{' '}
           <Link
