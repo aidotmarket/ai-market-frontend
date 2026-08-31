@@ -122,7 +122,7 @@ export default function SellerWorkspacePage() {
     useState<AuthorizationSession | null>(null);
   const authorizationRef = useRef<AuthorizationSession | null>(null);
   const mountedRef = useRef(true);
-  const mutationKeysRef = useRef(new Map<string, string>());
+  const mutationKeysRef = useRef(new Map<string, { fingerprint: string; key: string }>());
   const [scope, setScope] = useState<ConnectionVerifyRequest>(EMPTY_SCOPE);
   const [busyAction, setBusyAction] = useState<string | null>(null);
   const [actionError, setActionError] = useState<string | null>(null);
@@ -213,11 +213,11 @@ export default function SellerWorkspacePage() {
     [authorizationSession]
   );
 
-  const keyFor = (operation: string) => {
+  const keyFor = (operation: string, fingerprint = operation) => {
     const existing = mutationKeysRef.current.get(operation);
-    if (existing) return existing;
+    if (existing?.fingerprint === fingerprint) return existing.key;
     const created = createIdempotencyKey(operation);
-    mutationKeysRef.current.set(operation, created);
+    mutationKeysRef.current.set(operation, { fingerprint, key: created });
     return created;
   };
 
@@ -322,7 +322,7 @@ export default function SellerWorkspacePage() {
       const result = await verifySellerWorkspaceConnection(
         connectionId,
         submittedScope,
-        keyFor(operation)
+        keyFor(operation, JSON.stringify(submittedScope))
       );
       clearKey(operation);
       updateConnection(result.connection);

@@ -214,6 +214,53 @@ describe('SellerWorkspacePage safety boundaries', () => {
     );
   });
 
+  it('uses a new idempotency key when the seller corrects a failed verification scope', async () => {
+    let keyNumber = 0;
+    sellerWorkspaceApi.createIdempotencyKey.mockImplementation(
+      (operation: string) => `sw.${operation}.00000000-0000-4000-8000-${String(++keyNumber).padStart(12, '0')}`
+    );
+    sellerWorkspaceApi.listSellerWorkspaceConnections.mockResolvedValue([pendingConnection]);
+    sellerWorkspaceApi.getSellerWorkspaceAuthorization.mockResolvedValue(authorization);
+    sellerWorkspaceApi.verifySellerWorkspaceConnection
+      .mockRejectedValueOnce(new Error('safe failure'))
+      .mockResolvedValueOnce({
+        connection: { ...pendingConnection, status: 'verified' },
+        replayed: false,
+      });
+
+    render(<SellerWorkspacePage />);
+    fireEvent.click(await screen.findByRole('button', { name: 'Open setup values' }));
+    await screen.findByText('server-external-id');
+
+    fireEvent.change(screen.getByLabelText('Role ARN'), {
+      target: { value: 'arn:aws:iam::123456789012:role/seller-data' },
+    });
+    fireEvent.change(screen.getByLabelText('Bucket'), { target: { value: 'first-bucket' } });
+    fireEvent.change(screen.getByLabelText('Non-root prefix'), {
+      target: { value: 'bounded/data' },
+    });
+    fireEvent.change(screen.getByLabelText('AWS region'), { target: { value: 'eu-west-1' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Verify AWS connection' }));
+    await screen.findByText('The action could not be completed. Try again.');
+
+    fireEvent.click(screen.getByRole('button', { name: 'Open setup values' }));
+    await screen.findByText('server-external-id');
+    fireEvent.change(screen.getByLabelText('Role ARN'), {
+      target: { value: 'arn:aws:iam::123456789012:role/seller-data' },
+    });
+    fireEvent.change(screen.getByLabelText('Bucket'), { target: { value: 'corrected-bucket' } });
+    fireEvent.change(screen.getByLabelText('Non-root prefix'), {
+      target: { value: 'bounded/data' },
+    });
+    fireEvent.change(screen.getByLabelText('AWS region'), { target: { value: 'eu-west-1' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Verify AWS connection' }));
+
+    await waitFor(() => expect(sellerWorkspaceApi.verifySellerWorkspaceConnection).toHaveBeenCalledTimes(2));
+    expect(sellerWorkspaceApi.verifySellerWorkspaceConnection.mock.calls[0][2]).not.toBe(
+      sellerWorkspaceApi.verifySellerWorkspaceConnection.mock.calls[1][2]
+    );
+  });
+
   it('clears server authorization on rotation completion even when completion fails', async () => {
     sellerWorkspaceApi.listSellerWorkspaceConnections.mockResolvedValue([
       {
