@@ -27,7 +27,7 @@ type AuthorizationSession = {
 
 const MAX_DEADLINE_TIMEOUT_MS = 2_147_483_647;
 
-const monotonicNow = () => globalThis.performance?.now?.() ?? 0;
+const monotonicNow = () => globalThis.performance?.now?.() ?? Number.POSITIVE_INFINITY;
 
 const sessionFromResponse = (
   connectionId: string,
@@ -78,6 +78,8 @@ function safeActionMessage(error: unknown): string {
       return 'Enter a valid role ARN, bucket, bounded non-root prefix, and AWS region.';
     case 'verification_failed':
       return 'AWS could not verify this connection. Check the trust policy and scope, then try again.';
+    case 'verification_outcome_unknown':
+      return 'AWS did not return a definitive result. Try the same action again.';
     case 'rate_limited':
       return 'Too many requests. Wait a moment, then try again.';
     case 'conflict':
@@ -335,6 +337,7 @@ export default function SellerWorkspacePage() {
     if (
       !normalizedPrefix
       || normalizedPrefix.split('/').includes('..')
+      || /[\u0000-\u001F]/.test(normalizedPrefix)
       || /[*?]/.test(normalizedPrefix)
       || normalizedPrefix.includes('${')
     ) {

@@ -97,6 +97,7 @@ export type SellerWorkspaceErrorCode =
   | 'authorization_expired'
   | 'invalid_scope'
   | 'verification_failed'
+  | 'verification_outcome_unknown'
   | 'rate_limited'
   | 'conflict'
   | 'not_found'
@@ -119,6 +120,9 @@ function safeError(error: unknown): SellerWorkspaceApiError {
   if (status === 403) return new SellerWorkspaceApiError('active_seller_required');
   if (status === 404) return new SellerWorkspaceApiError('not_found');
   if (status === 429) return new SellerWorkspaceApiError('rate_limited');
+  if (status === 503 && detail === 'Connection verification outcome is unknown') {
+    return new SellerWorkspaceApiError('verification_outcome_unknown');
+  }
   if (status === 503) return new SellerWorkspaceApiError('unavailable');
   if (status === 409 && detail === 'Connection authorization is unavailable') {
     return new SellerWorkspaceApiError('authorization_expired');

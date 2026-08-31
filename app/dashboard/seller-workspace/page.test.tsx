@@ -284,8 +284,8 @@ describe('SellerWorkspacePage safety boundaries', () => {
     );
   });
 
-  it.each(['foo*', 'foo?bar', '${aws:username}/data'])(
-    'rejects IAM wildcard or variable prefix %s before any provider request',
+  it.each(['foo*', 'foo?bar', '${aws:username}/data', 'bad\u0001prefix'])(
+    'rejects unsafe prefix %s before any provider request',
     async (prefix) => {
       sellerWorkspaceApi.listSellerWorkspaceConnections.mockResolvedValue([pendingConnection]);
       sellerWorkspaceApi.getSellerWorkspaceAuthorization.mockResolvedValue(authorization);
@@ -308,7 +308,7 @@ describe('SellerWorkspacePage safety boundaries', () => {
 
   it.each([
     ['definitive failure', new SellerWorkspaceApiError('verification_failed'), false],
-    ['unknown outcome', new Error('transport outcome unknown'), true],
+    ['unknown outcome', new SellerWorkspaceApiError('verification_outcome_unknown'), true],
   ])('uses the correct verification key after a %s', async (_description, failure, reuseKey) => {
     let keyNumber = 0;
     sellerWorkspaceApi.createIdempotencyKey.mockImplementation(
@@ -339,7 +339,9 @@ describe('SellerWorkspacePage safety boundaries', () => {
       await waitFor(() =>
         expect(sellerWorkspaceApi.verifySellerWorkspaceConnection).toHaveBeenCalledTimes(attempt + 1)
       );
-      if (attempt === 0) await screen.findByText(/could not be completed|could not verify/);
+      if (attempt === 0) {
+        await screen.findByText(/could not be completed|could not verify|did not return a definitive result/);
+      }
     }
 
     const firstKey = sellerWorkspaceApi.verifySellerWorkspaceConnection.mock.calls[0][2];
@@ -428,7 +430,7 @@ describe('SellerWorkspacePage safety boundaries', () => {
 
   it.each([
     ['definitive failure', new SellerWorkspaceApiError('verification_failed'), false],
-    ['unknown outcome', new Error('transport outcome unknown'), true],
+    ['unknown outcome', new SellerWorkspaceApiError('verification_outcome_unknown'), true],
   ])('uses the correct rotation completion key after a %s', async (_description, failure, reuseKey) => {
     let keyNumber = 0;
     sellerWorkspaceApi.createIdempotencyKey.mockImplementation(
@@ -460,7 +462,9 @@ describe('SellerWorkspacePage safety boundaries', () => {
       await waitFor(() =>
         expect(sellerWorkspaceApi.rotateSellerWorkspaceConnection).toHaveBeenCalledTimes(attempt + 1)
       );
-      if (attempt === 0) await screen.findByText(/could not be completed|could not verify/);
+      if (attempt === 0) {
+        await screen.findByText(/could not be completed|could not verify|did not return a definitive result/);
+      }
     }
 
     const firstKey = sellerWorkspaceApi.rotateSellerWorkspaceConnection.mock.calls[0][2];
