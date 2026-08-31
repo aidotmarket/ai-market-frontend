@@ -130,6 +130,17 @@ describe('Seller Workspace frozen routes', () => {
     const key = createIdempotencyKey('Rotate Start');
     expect(key).toMatch(/^sw\.rotate-start\.[a-z0-9-]+$/);
     expect(key.length).toBeLessThanOrEqual(128);
+
+    const boundedKey = createIdempotencyKey(`Verify ${'LONG '.repeat(40)}`);
+    expect(boundedKey).toMatch(/^[a-z0-9][a-z0-9_.:-]+$/);
+    expect(boundedKey.length).toBeLessThanOrEqual(128);
+  });
+
+  it('rejects unsafe caller-provided idempotency keys before any mutation', () => {
+    expect(() => createSellerWorkspaceConnection('Unsafe Key')).toThrow(
+      new SellerWorkspaceApiError('unavailable')
+    );
+    expect(client.post).not.toHaveBeenCalled();
   });
 });
 

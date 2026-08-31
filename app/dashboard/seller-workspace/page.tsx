@@ -119,6 +119,7 @@ export default function SellerWorkspacePage() {
   const [authorizationSession, setAuthorizationSession] =
     useState<AuthorizationSession | null>(null);
   const authorizationRef = useRef<AuthorizationSession | null>(null);
+  const mountedRef = useRef(true);
   const mutationKeysRef = useRef(new Map<string, string>());
   const [scope, setScope] = useState<ConnectionVerifyRequest>(EMPTY_SCOPE);
   const [busyAction, setBusyAction] = useState<string | null>(null);
@@ -135,6 +136,7 @@ export default function SellerWorkspacePage() {
   }, []);
 
   const showAuthorization = useCallback((session: AuthorizationSession | null) => {
+    if (!mountedRef.current) return;
     authorizationRef.current = session;
     setAuthorizationSession(session);
     setCopiedField(null);
@@ -142,6 +144,7 @@ export default function SellerWorkspacePage() {
 
   useEffect(() => {
     let cancelled = false;
+    mountedRef.current = true;
     clearSensitive();
     setConnections([]);
     setActionError(null);
@@ -173,6 +176,7 @@ export default function SellerWorkspacePage() {
     load();
     return () => {
       cancelled = true;
+      mountedRef.current = false;
       authorizationRef.current = null;
       mutationKeysRef.current.clear();
     };
@@ -282,21 +286,22 @@ export default function SellerWorkspacePage() {
     }
     const connectionId = authorizationSession.connectionId;
     const operation = `verify-${connectionId}`;
+    const submittedScope = {
+      role_arn: scope.role_arn.trim(),
+      bucket: scope.bucket.trim(),
+      prefix: normalizedPrefix,
+      region: scope.region.trim(),
+    };
     setBusyAction(operation);
     setActionError(null);
+    clearSensitive();
     try {
       const result = await verifySellerWorkspaceConnection(
         connectionId,
-        {
-          role_arn: scope.role_arn.trim(),
-          bucket: scope.bucket.trim(),
-          prefix: normalizedPrefix,
-          region: scope.region.trim(),
-        },
+        submittedScope,
         keyFor(operation)
       );
       clearKey(operation);
-      clearSensitive();
       updateConnection(result.connection);
     } catch (error) {
       if (errorCode(error) === 'authorization_expired') {
@@ -340,6 +345,7 @@ export default function SellerWorkspacePage() {
     const operation = `rotate-complete-${connectionId}`;
     setBusyAction(operation);
     setActionError(null);
+    clearSensitive();
     try {
       const result = await rotateSellerWorkspaceConnection(
         connectionId,
@@ -347,7 +353,6 @@ export default function SellerWorkspacePage() {
         keyFor(operation)
       );
       clearKey(operation);
-      clearSensitive();
       updateConnection(result.connection);
     } catch (error) {
       if (errorCode(error) === 'authorization_expired') clearSensitive();

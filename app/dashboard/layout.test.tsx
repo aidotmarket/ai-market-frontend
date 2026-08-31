@@ -229,6 +229,7 @@ describe('DashboardLayout hydration guard', () => {
       expect(screen.getAllByRole('link').map((link) => [link.textContent, link.getAttribute('href')])).toEqual([
         ['Overview', '/dashboard'],
         ['Listings', '/dashboard/listings'],
+        ['Seller Workspace', '/dashboard/seller-workspace'],
         ['Sales', '/dashboard/sales'],
         ['Purchases', '/dashboard/orders'],
         ['Inquiries', '/dashboard/seller/inquiries'],
@@ -257,6 +258,7 @@ describe('DashboardLayout hydration guard', () => {
       expect(screen.getAllByRole('link').map((link) => [link.textContent, link.getAttribute('href')])).toEqual([
         ['Overview', '/dashboard'],
         ['Listings', '/dashboard/listings'],
+        ['Seller Workspace', '/dashboard/seller-workspace'],
         ['Purchases', '/dashboard/orders'],
         ['Inquiries', '/dashboard/seller/inquiries'],
         ['Settings', '/dashboard/settings'],
@@ -294,6 +296,7 @@ describe('DashboardLayout hydration guard', () => {
   it.each([
     ['/dashboard/sales', 'Sales'],
     ['/dashboard/listings', 'Listings'],
+    ['/dashboard/seller-workspace', 'Seller Workspace'],
   ])('redirects a buyer direct visit to %s', async (pathname, childLabel) => {
     navigation.pathname = pathname;
     capabilitiesApi.getCapabilities.mockResolvedValue({

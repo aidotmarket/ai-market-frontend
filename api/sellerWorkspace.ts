@@ -2,6 +2,7 @@ import axios from 'axios';
 import { api } from './client';
 
 const BASE_PATH = '/seller-workspace';
+const SAFE_IDEMPOTENCY_KEY = /^[a-z0-9][a-z0-9_.:-]{0,127}$/;
 
 export type CapabilityStatus = 'available' | 'disabled' | 'unavailable';
 
@@ -138,15 +139,28 @@ async function safely<T>(request: Promise<{ data: T }>): Promise<T> {
 }
 
 function mutationHeaders(idempotencyKey: string) {
+  if (!SAFE_IDEMPOTENCY_KEY.test(idempotencyKey)) {
+    throw new SellerWorkspaceApiError('unavailable');
+  }
   return { 'Idempotency-Key': idempotencyKey };
 }
 
 export function createIdempotencyKey(operation: string): string {
-  const safeOperation = operation.toLowerCase().replace(/[^a-z0-9_.:-]/g, '-');
-  if (!safeOperation || !globalThis.crypto?.randomUUID) {
+  const randomUUID = globalThis.crypto?.randomUUID;
+  if (!randomUUID) {
     throw new SellerWorkspaceApiError('unavailable');
   }
-  return `sw.${safeOperation}.${globalThis.crypto.randomUUID().toLowerCase()}`;
+  const uuid = randomUUID.call(globalThis.crypto).toLowerCase();
+  const maxOperationLength = 128 - 'sw..'.length - uuid.length;
+  const safeOperation = operation
+    .toLowerCase()
+    .replace(/[^a-z0-9_.:-]/g, '-')
+    .slice(0, maxOperationLength);
+  const key = `sw.${safeOperation}.${uuid}`;
+  if (!safeOperation || !SAFE_IDEMPOTENCY_KEY.test(key)) {
+    throw new SellerWorkspaceApiError('unavailable');
+  }
+  return key;
 }
 
 export function isAWSConnectionAvailable(capabilities: SellerWorkspaceCapabilities): boolean {
