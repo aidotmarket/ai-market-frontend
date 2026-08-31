@@ -24,6 +24,8 @@ type AuthorizationSession = {
   authorization: AWSAuthorization;
 };
 
+const MAX_DEADLINE_TIMEOUT_MS = 2_147_483_647;
+
 const EMPTY_SCOPE: ConnectionVerifyRequest = {
   role_arn: '',
   bucket: '',
@@ -141,6 +143,27 @@ export default function SellerWorkspacePage() {
     setAuthorizationSession(session);
     setCopiedField(null);
   }, []);
+
+  useEffect(() => {
+    if (!authorizationSession) return;
+
+    let deadlineTimer: ReturnType<typeof setTimeout> | undefined;
+    const expiresAt = Date.parse(authorizationSession.authorization.expires_at);
+
+    const clearAtDeadline = () => {
+      const remaining = expiresAt - Date.now();
+      if (!Number.isFinite(remaining) || remaining <= 0) {
+        clearSensitive();
+        return;
+      }
+      deadlineTimer = setTimeout(clearAtDeadline, Math.min(remaining, MAX_DEADLINE_TIMEOUT_MS));
+    };
+
+    clearAtDeadline();
+    return () => {
+      if (deadlineTimer !== undefined) clearTimeout(deadlineTimer);
+    };
+  }, [authorizationSession, clearSensitive]);
 
   useEffect(() => {
     let cancelled = false;

@@ -5,6 +5,10 @@ import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
 import { useAuthStore } from '@/store/auth';
 import { getCapabilities, type CapabilityStatus } from '@/api/capabilities';
+import {
+  getSellerWorkspaceCapabilities,
+  isAWSConnectionAvailable,
+} from '@/api/sellerWorkspace';
 import SellerSetupProgressBar from '@/components/onboarding/SellerSetupProgressBar';
 
 const isBuyerPurchaseRoute = (pathname: string) =>
@@ -16,19 +20,31 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
   const pathname = usePathname();
   const [routeReady, setRouteReady] = useState(false);
   const [sellerStatus, setSellerStatus] = useState<CapabilityStatus | null>(null);
+  const [sellerWorkspaceAvailable, setSellerWorkspaceAvailable] = useState(false);
   const [capabilitiesResolved, setCapabilitiesResolved] = useState(false);
 
   useEffect(() => {
     let cancelled = false;
     setSellerStatus(null);
+    setSellerWorkspaceAvailable(false);
     setCapabilitiesResolved(false);
 
     if (isLoading || !hydrated || !isAuthenticated) return;
 
     getCapabilities()
-      .then((capabilities) => {
-        if (!cancelled) {
-          setSellerStatus(capabilities.seller.effective_status);
+      .then(async (capabilities) => {
+        if (cancelled) return;
+        const status = capabilities.seller.effective_status;
+        setSellerStatus(status);
+        if (status !== 'active') return;
+
+        try {
+          const workspaceCapabilities = await getSellerWorkspaceCapabilities();
+          if (!cancelled) {
+            setSellerWorkspaceAvailable(isAWSConnectionAvailable(workspaceCapabilities));
+          }
+        } catch {
+          if (!cancelled) setSellerWorkspaceAvailable(false);
         }
       })
       .catch((err) => {
@@ -43,7 +59,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
     return () => {
       cancelled = true;
     };
-  }, [hydrated, isAuthenticated, isLoading]);
+  }, [hydrated, isAuthenticated, isLoading, user?.id]);
 
   useEffect(() => {
     setRouteReady(false);
@@ -96,7 +112,9 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
       ? [
         { name: 'Overview', href: '/dashboard' },
         { name: 'Listings', href: '/dashboard/listings' },
-        { name: 'Seller Workspace', href: '/dashboard/seller-workspace' },
+        ...(isSellerActive && sellerWorkspaceAvailable
+          ? [{ name: 'Seller Workspace', href: '/dashboard/seller-workspace' }]
+          : []),
         ...(isSellerActive ? [{ name: 'Sales', href: '/dashboard/sales' }] : []),
         { name: 'Purchases', href: '/dashboard/orders' },
         { name: 'Inquiries', href: '/dashboard/seller/inquiries' },

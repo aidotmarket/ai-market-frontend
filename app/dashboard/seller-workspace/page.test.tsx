@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 
-import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { act, cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import SellerWorkspacePage from './page';
 
@@ -78,7 +78,72 @@ describe('SellerWorkspacePage safety boundaries', () => {
     sellerWorkspaceApi.listSellerWorkspaceConnections.mockResolvedValue([]);
   });
 
-  afterEach(() => cleanup());
+  afterEach(() => {
+    cleanup();
+    vi.useRealTimers();
+  });
+
+  it('clears initial authorization material when its server deadline passes', async () => {
+    const now = new Date('2026-08-31T23:00:00Z');
+    sellerWorkspaceApi.createSellerWorkspaceConnection.mockResolvedValue({
+      connection: pendingConnection,
+      authorization: { ...authorization, expires_at: '2026-08-31T23:01:00Z' },
+    });
+
+    render(<SellerWorkspacePage />);
+    const createButton = await screen.findByRole('button', { name: 'Add AWS connection' });
+    vi.useFakeTimers();
+    vi.setSystemTime(now);
+
+    await act(async () => {
+      fireEvent.click(createButton);
+    });
+    expect(screen.getByText('server-external-id')).not.toBeNull();
+    expect(screen.getByText(/trust-policy-secret/)).not.toBeNull();
+
+    act(() => vi.advanceTimersByTime(59_999));
+    expect(screen.getByText('server-external-id')).not.toBeNull();
+
+    act(() => vi.advanceTimersByTime(1));
+    expect(screen.queryByText('server-external-id')).toBeNull();
+    expect(screen.queryByText(/trust-policy-secret/)).toBeNull();
+  });
+
+  it('clears rotation authorization material when its server deadline passes', async () => {
+    const now = new Date('2026-08-31T23:00:00Z');
+    const verifiedConnection = {
+      ...pendingConnection,
+      status: 'verified' as const,
+      role_arn: 'arn:aws:iam::123456789012:role/seller-data',
+      bucket: 'seller-bucket',
+      prefix: 'bounded/data',
+      region: 'eu-west-1',
+    };
+    sellerWorkspaceApi.listSellerWorkspaceConnections.mockResolvedValue([verifiedConnection]);
+    sellerWorkspaceApi.rotateSellerWorkspaceConnection.mockResolvedValue({
+      connection: { ...verifiedConnection, rotation_substate: 'pending_verification' },
+      authorization: {
+        ...authorization,
+        expires_at: '2026-08-31T23:01:00Z',
+        purpose: 'aws_external_id_rotation',
+      },
+    });
+
+    render(<SellerWorkspacePage />);
+    const rotateButton = await screen.findByRole('button', { name: 'Start reconnect / rotation' });
+    vi.useFakeTimers();
+    vi.setSystemTime(now);
+
+    await act(async () => {
+      fireEvent.click(rotateButton);
+    });
+    expect(screen.getByText('server-external-id')).not.toBeNull();
+    expect(screen.getByText(/trust-policy-secret/)).not.toBeNull();
+
+    act(() => vi.advanceTimersByTime(60_000));
+    expect(screen.queryByText('server-external-id')).toBeNull();
+    expect(screen.queryByText(/trust-policy-secret/)).toBeNull();
+  });
 
   it('enables no action when the server capability is unavailable', async () => {
     sellerWorkspaceApi.getSellerWorkspaceCapabilities.mockResolvedValue({
