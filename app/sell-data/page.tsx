@@ -163,6 +163,12 @@ export default function SellDataPage() {
               />
             ))}
           </ol>
+          <p className="mt-8 text-base leading-7 text-gray-600">
+            The local scan earns the buyer-facing verified shape label.{' '}
+            <Link href="/verified" className="font-semibold text-[#0F6E56] hover:text-[#0c5a47]">
+              How the verified label works →
+            </Link>
+          </p>
         </div>
       </section>
 
