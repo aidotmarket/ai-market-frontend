@@ -108,7 +108,9 @@ describe('RegisterForm', () => {
     expect(screen.getByText(/final total, including payment-provider costs and applicable tax/i)).not.toBeNull();
     expect(screen.getByRole('link', { name: 'Back to listing' }).getAttribute('href')).toBe(listingRedirect);
     expect(screen.getByRole('link', { name: 'Pricing' }).getAttribute('href')).toBe('/pricing');
-    expect(screen.getByRole('link', { name: 'Fees and terms' }).getAttribute('href')).toBe('/legal/terms#fees');
+    expect(screen.getByRole('link', { name: 'Fees and terms' }).getAttribute('href')).toBe(
+      `/legal/terms?redirect=${encodeURIComponent(listingRedirect)}#fees`
+    );
 
     const loginHref = `/login?redirect=${encodeURIComponent(listingRedirect)}`;
     expect(screen.getByRole('link', { name: 'Log in' }).getAttribute('href')).toBe(loginHref);

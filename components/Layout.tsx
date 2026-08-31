@@ -1,10 +1,12 @@
 'use client';
 
-import { useState } from 'react';
+import { Suspense, useState } from 'react';
+import type { MouseEventHandler } from 'react';
 import Link from 'next/link';
 import { useRouter, usePathname } from 'next/navigation';
 import { useAuthStore } from '@/store/auth';
 import NotificationCenter from '@/components/NotificationCenter';
+import { TermsSignUpLink } from '@/components/TermsSignUpLink';
 
 const footerLinkSections = [
   {
@@ -50,12 +52,37 @@ const footerLinkSections = [
   },
 ];
 
+function SignUpAction({
+  preserveTermsRedirect,
+  className,
+  onClick,
+}: {
+  preserveTermsRedirect: boolean;
+  className: string;
+  onClick?: MouseEventHandler<HTMLAnchorElement>;
+}) {
+  const fallback = (
+    <Link href="/register" className={className} onClick={onClick}>
+      Sign up
+    </Link>
+  );
+
+  if (!preserveTermsRedirect) return fallback;
+
+  return (
+    <Suspense fallback={fallback}>
+      <TermsSignUpLink className={className} onClick={onClick} />
+    </Suspense>
+  );
+}
+
 export function Layout({ children }: { children: React.ReactNode }) {
   const { user, isAuthenticated, logout } = useAuthStore();
   const router = useRouter();
   const pathname = usePathname();
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const isKeystatic = pathname?.startsWith("/keystatic");
+  const preserveTermsRedirect = pathname === '/legal/terms';
   const isAdminEmail = user?.email === 'max@ai.market';
 
   const handleLogout = async () => {
@@ -101,12 +128,10 @@ export function Layout({ children }: { children: React.ReactNode }) {
               ) : (
                 <>
                   <Link href="/login" className="text-sm text-gray-600 hover:text-gray-900">Sign in</Link>
-                  <Link
-                    href="/register"
+                  <SignUpAction
+                    preserveTermsRedirect={preserveTermsRedirect}
                     className="rounded-lg bg-[#3F51B5] px-4 py-2 text-sm font-medium text-white hover:bg-[#3545a0] transition-colors"
-                  >
-                    Sign up
-                  </Link>
+                  />
                 </>
               )}
             </div>
@@ -150,7 +175,11 @@ export function Layout({ children }: { children: React.ReactNode }) {
               ) : (
                 <>
                   <Link href="/login" className="block px-2 py-2 text-sm text-gray-600 hover:text-gray-900" onClick={() => setMobileMenuOpen(false)}>Sign in</Link>
-                  <Link href="/register" className="block px-2 py-2 text-sm text-[#3F51B5] font-medium" onClick={() => setMobileMenuOpen(false)}>Sign up</Link>
+                  <SignUpAction
+                    preserveTermsRedirect={preserveTermsRedirect}
+                    className="block px-2 py-2 text-sm text-[#3F51B5] font-medium"
+                    onClick={() => setMobileMenuOpen(false)}
+                  />
                 </>
               )}
             </div>

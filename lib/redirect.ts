@@ -1,4 +1,5 @@
 const ALLOWED_PREFIXES = ['/listings', '/dashboard', '/checkout', '/requests'];
+const LISTING_DETAIL_REDIRECT = /^\/listings\/[a-z0-9](?:[a-z0-9._~-]*[a-z0-9])?(?:[?#][^\r\n]*)?$/i;
 
 /**
  * Validate a redirect URL to prevent open redirect attacks.
@@ -33,4 +34,16 @@ export function validateRedirect(
 
   // Return the DECODED safe path, not the original
   return decoded;
+}
+
+/** Return only a validated, single-listing detail redirect. */
+export function validateListingRedirect(
+  redirect: string | null | undefined
+): string {
+  try {
+    const validated = validateRedirect(redirect, '');
+    return LISTING_DETAIL_REDIRECT.test(validated) ? validated : '';
+  } catch {
+    return '';
+  }
 }
