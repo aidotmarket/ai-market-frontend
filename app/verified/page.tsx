@@ -115,10 +115,10 @@ export default function VerifiedPage() {
               this, missing-value rates, distinct-value estimates, and distribution buckets, have a
               floor. If one would reflect fewer underlying values than the floor allows, it is
               withheld and the report shows a privacy label in its place. Structural facts like row
-              counts and column names are not statistics about individuals and are always shown. The
-              floor is enforced twice, once by the scanner before anything is sent and once by our
-              servers, using the same arithmetic. A report that tries to carry a number the floor
-              forbids does not get verified.
+              counts and column names are not statistics about individuals, so when a report includes
+              them, this privacy floor does not hide them. The floor is enforced twice, once by the
+              scanner before anything is sent and once by our servers, using the same arithmetic. A
+              report that tries to carry a number the floor forbids does not get verified.
             </p>
           </div>
         </div>
@@ -139,11 +139,11 @@ export default function VerifiedPage() {
             </h2>
             <div className="mt-6 space-y-6 text-base leading-8 text-gray-600 sm:text-lg">
               <p>
+                It is a snapshot, not a promise about the future. The data can change after the
+                timestamp, and the label always shows you when the measurement was taken.{' '}
                 <Link href="/legal/terms" className={linkClassName}>
-                  It is a snapshot, not a promise about the future.
-                </Link>{' '}
-                The data can change after the timestamp, and the label always shows you when the
-                measurement was taken.
+                  Read the Terms.
+                </Link>
               </p>
               <p>
                 It is not an opinion on whether the data is good, accurate, or right for your use. It
