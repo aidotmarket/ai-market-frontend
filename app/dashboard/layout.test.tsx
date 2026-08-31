@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 
-import { cleanup, render, screen, waitFor } from '@testing-library/react';
+import { act, cleanup, render, screen, waitFor } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type React from 'react';
 import type { User } from '@/types';
@@ -15,6 +15,10 @@ const navigation = vi.hoisted(() => ({
 
 const capabilitiesApi = vi.hoisted(() => ({
   getCapabilities: vi.fn(),
+}));
+
+const sellerWorkspaceApi = vi.hoisted(() => ({
+  getSellerWorkspaceCapabilities: vi.fn(),
 }));
 
 vi.mock('next/navigation', () => ({
@@ -33,6 +37,11 @@ vi.mock('next/link', () => ({
 
 vi.mock('@/api/capabilities', () => ({
   getCapabilities: capabilitiesApi.getCapabilities,
+}));
+
+vi.mock('@/api/sellerWorkspace', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('@/api/sellerWorkspace')>()),
+  getSellerWorkspaceCapabilities: sellerWorkspaceApi.getSellerWorkspaceCapabilities,
 }));
 
 vi.mock('@/components/onboarding/SellerSetupProgressBar', () => ({
@@ -54,14 +63,34 @@ const user: User = {
   primary_auth: 'password',
 };
 
+const enabledWorkspaceCapabilities = {
+  master: { enabled: true, status: 'available' as const, reason: 'enabled' },
+  providers: {
+    aws: {
+      connect: { enabled: true, status: 'available' as const, reason: 'enabled' },
+      profile: { enabled: false, status: 'unavailable' as const, reason: 'not_implemented' },
+      publish: { enabled: false, status: 'unavailable' as const, reason: 'not_implemented' },
+      delivery: { enabled: false, status: 'unavailable' as const, reason: 'not_implemented' },
+    },
+    r2: {
+      connect: { enabled: false, status: 'unavailable' as const, reason: 'not_implemented' },
+      profile: { enabled: false, status: 'unavailable' as const, reason: 'not_implemented' },
+      publish: { enabled: false, status: 'unavailable' as const, reason: 'not_implemented' },
+      delivery: { enabled: false, status: 'unavailable' as const, reason: 'not_implemented' },
+    },
+  },
+};
+
 describe('DashboardLayout hydration guard', () => {
   beforeEach(() => {
+    vi.clearAllMocks();
     navigation.pathname = '/dashboard/stripe-return';
-    navigation.push.mockClear();
-    navigation.replace.mockClear();
     capabilitiesApi.getCapabilities.mockResolvedValue({
       seller: { effective_status: 'inactive' },
     });
+    sellerWorkspaceApi.getSellerWorkspaceCapabilities.mockResolvedValue(
+      enabledWorkspaceCapabilities
+    );
     useAuthStore.setState({
       user: null,
       token: null,
@@ -229,6 +258,7 @@ describe('DashboardLayout hydration guard', () => {
       expect(screen.getAllByRole('link').map((link) => [link.textContent, link.getAttribute('href')])).toEqual([
         ['Overview', '/dashboard'],
         ['Listings', '/dashboard/listings'],
+        ['Seller Workspace', '/dashboard/seller-workspace'],
         ['Sales', '/dashboard/sales'],
         ['Purchases', '/dashboard/orders'],
         ['Inquiries', '/dashboard/seller/inquiries'],
@@ -263,6 +293,80 @@ describe('DashboardLayout hydration guard', () => {
       ]);
     });
     expect(screen.queryByRole('link', { name: 'Sales' })).toBeNull();
+    expect(sellerWorkspaceApi.getSellerWorkspaceCapabilities).not.toHaveBeenCalled();
+  });
+
+  it.each([
+    [
+      'the master is default-off',
+      {
+        ...enabledWorkspaceCapabilities,
+        master: { enabled: false, status: 'disabled' as const, reason: 'disabled_by_default' },
+      },
+    ],
+    [
+      'AWS connect is unavailable',
+      {
+        ...enabledWorkspaceCapabilities,
+        providers: {
+          ...enabledWorkspaceCapabilities.providers,
+          aws: {
+            ...enabledWorkspaceCapabilities.providers.aws,
+            connect: { enabled: true, status: 'unavailable' as const, reason: 'not_configured' },
+          },
+        },
+      },
+    ],
+  ])('omits Seller Workspace when %s', async (_scenario, workspaceCapabilities) => {
+    navigation.pathname = '/dashboard';
+    capabilitiesApi.getCapabilities.mockResolvedValue({
+      seller: { effective_status: 'active' },
+    });
+    sellerWorkspaceApi.getSellerWorkspaceCapabilities.mockResolvedValue(workspaceCapabilities);
+    useAuthStore.setState({
+      user,
+      token: 'access-token',
+      isAuthenticated: true,
+      isLoading: false,
+      hydrated: true,
+    });
+
+    render(<DashboardLayout><div>default-off seller child</div></DashboardLayout>);
+
+    await screen.findByText('default-off seller child');
+    await waitFor(() => {
+      expect(sellerWorkspaceApi.getSellerWorkspaceCapabilities).toHaveBeenCalledTimes(1);
+    });
+    expect(screen.queryByRole('link', { name: 'Seller Workspace' })).toBeNull();
+  });
+
+  it('removes a stale Seller Workspace link when the capability request fails', async () => {
+    navigation.pathname = '/dashboard';
+    capabilitiesApi.getCapabilities.mockResolvedValue({
+      seller: { effective_status: 'active' },
+    });
+    sellerWorkspaceApi.getSellerWorkspaceCapabilities
+      .mockResolvedValueOnce(enabledWorkspaceCapabilities)
+      .mockRejectedValueOnce(new Error('capability unavailable'));
+    useAuthStore.setState({
+      user,
+      token: 'access-token',
+      isAuthenticated: true,
+      isLoading: false,
+      hydrated: true,
+    });
+
+    render(<DashboardLayout><div>active seller child</div></DashboardLayout>);
+    await screen.findByRole('link', { name: 'Seller Workspace' });
+
+    await act(async () => {
+      useAuthStore.setState({ user: { ...user, id: 'user-2' } });
+    });
+
+    await waitFor(() => {
+      expect(sellerWorkspaceApi.getSellerWorkspaceCapabilities).toHaveBeenCalledTimes(2);
+      expect(screen.queryByRole('link', { name: 'Seller Workspace' })).toBeNull();
+    });
   });
 
   it('renders exact buyer navigation', async () => {
@@ -289,11 +393,13 @@ describe('DashboardLayout hydration guard', () => {
         ['My Requests', '/dashboard/requests'],
       ]);
     });
+    expect(sellerWorkspaceApi.getSellerWorkspaceCapabilities).not.toHaveBeenCalled();
   });
 
   it.each([
     ['/dashboard/sales', 'Sales'],
     ['/dashboard/listings', 'Listings'],
+    ['/dashboard/seller-workspace', 'Seller Workspace'],
   ])('redirects a buyer direct visit to %s', async (pathname, childLabel) => {
     navigation.pathname = pathname;
     capabilitiesApi.getCapabilities.mockResolvedValue({
