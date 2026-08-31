@@ -96,6 +96,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
       ? [
         { name: 'Overview', href: '/dashboard' },
         { name: 'Listings', href: '/dashboard/listings' },
+        { name: 'Seller Workspace', href: '/dashboard/seller-workspace' },
         ...(isSellerActive ? [{ name: 'Sales', href: '/dashboard/sales' }] : []),
         { name: 'Purchases', href: '/dashboard/orders' },
         { name: 'Inquiries', href: '/dashboard/seller/inquiries' },
