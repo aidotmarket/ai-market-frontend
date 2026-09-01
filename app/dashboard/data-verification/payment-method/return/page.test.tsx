@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 
-import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { act, cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import DataVerificationPaymentMethodReturnPage from './page';
 
@@ -47,7 +47,9 @@ async function completeReturnReauth(code = '123456') {
       false
     );
   });
-  fireEvent.click(screen.getByRole('button', { name: 'Continue' }));
+  await act(async () => {
+    fireEvent.click(screen.getByRole('button', { name: 'Continue' }));
+  });
 }
 
 describe('data-verification payment-method return page', () => {
