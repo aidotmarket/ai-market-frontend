@@ -185,7 +185,7 @@ describe('data-verification payment-method return page', () => {
     expect(document.body.textContent).not.toContain(checkoutSessionId);
   });
 
-  it('advances to return reauthentication under React StrictMode after synchronous query scrubbing', async () => {
+  it('reschedules the scrub under React StrictMode and removes a query restored by Next', async () => {
     payinApi.getDataVerificationPayInReadiness.mockImplementationOnce(async () => {
       expect(window.location.search).toBe('');
       return {
@@ -197,19 +197,23 @@ describe('data-verification payment-method return page', () => {
       };
     });
 
+    navigation.replace
+      .mockImplementationOnce(() => setReturnUrl())
+      .mockImplementationOnce(() => setReturnUrl());
+
     render(
       <StrictMode>
         <DataVerificationPaymentMethodReturnPage />
       </StrictMode>
     );
 
-    expect(window.location.search).toBe('');
+    await waitFor(() => expect(window.location.search).toBe(''));
     expect(
       await screen.findByText('Confirm it is you again to finish adding your payment method.')
     ).toBeTruthy();
     expect(payinApi.getDataVerificationPayInReadiness).toHaveBeenCalledTimes(1);
-    expect(navigation.replace).toHaveBeenCalledTimes(1);
-    expect(navigation.replace).toHaveBeenCalledWith(
+    expect(navigation.replace).toHaveBeenCalledTimes(2);
+    expect(navigation.replace).toHaveBeenLastCalledWith(
       '/dashboard/data-verification/payment-method/return',
       { scroll: false }
     );
