@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 
-import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { act, cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import SettingsPage from './page';
 import { useAuthStore } from '@/store/auth';
@@ -8,8 +8,10 @@ import type { User } from '@/types';
 
 const authApi = vi.hoisted(() => ({
   disable2FA: vi.fn(),
+  generateReauthToken: vi.fn(),
   regenerateBackupCodes: vi.fn(),
   setup2FA: vi.fn(),
+  submitReauth: vi.fn(),
   updateProfile: vi.fn(),
   verify2FASetup: vi.fn(),
 }));
@@ -28,10 +30,6 @@ vi.mock('@/api/dataVerificationPayin', () => payinApi);
 vi.mock('@/components/Toast', () => ({
   useToast: () => ({ toast: vi.fn() }),
 }));
-vi.mock('./ReauthModal', () => ({
-  default: () => null,
-}));
-
 const user: User = {
   id: 'user-1',
   email: 'seller@example.com',
@@ -53,6 +51,8 @@ describe('SettingsPage capability refresh', () => {
   beforeEach(() => {
     refreshAuth.mockResolvedValue(undefined);
     authApi.updateProfile.mockResolvedValue(undefined);
+    authApi.generateReauthToken.mockResolvedValue({});
+    authApi.submitReauth.mockResolvedValue({ reauth_token: 'fresh-settings-token' });
     capabilitiesApi.getCapabilities.mockResolvedValue({
       seller: { effective_status: 'provisioning' },
     });
@@ -176,4 +176,52 @@ describe('SettingsPage capability refresh', () => {
       screen.queryByRole('heading', { name: 'Payment method for verification charges' })
     ).toBeNull();
   });
+
+  it.each([
+    ['disable', 'Disable 2FA', 'Confirm disable'],
+    ['regenerate', 'Regenerate backup codes', 'Generate new codes'],
+  ] as const)(
+    'focuses the stable Settings heading after successful %s removes the modal opener',
+    async (action, actionLabel, confirmLabel) => {
+      useAuthStore.setState({ user: { ...user, totp_enabled: true } });
+      authApi.disable2FA.mockResolvedValue({ message: '2FA disabled' });
+      authApi.regenerateBackupCodes.mockResolvedValue({
+        backup_codes: ['backup-one', 'backup-two'],
+      });
+      render(<SettingsPage />);
+
+      fireEvent.click(screen.getByRole('button', { name: actionLabel }));
+      fireEvent.change(screen.getByRole('textbox', { name: 'Current TOTP code' }), {
+        target: { value: '123456' },
+      });
+      const opener = screen.getByRole('button', { name: confirmLabel });
+      opener.focus();
+      fireEvent.click(opener);
+      const dialog = await screen.findByRole('dialog', { name: 'Re-authenticate' });
+      const reauthCode = screen.getByRole('textbox', { name: 'Verification code' });
+      fireEvent.change(reauthCode, { target: { value: '654321' } });
+      const continueButton = screen.getByRole('button', { name: 'Continue' });
+      await waitFor(() =>
+        expect((continueButton as HTMLButtonElement).disabled).toBe(false)
+      );
+
+      await act(async () => {
+        fireEvent.click(continueButton);
+      });
+
+      await waitFor(() => expect(screen.queryByRole('dialog')).toBeNull());
+      const fallback = screen.getByRole('heading', { name: 'Settings', level: 1 });
+      await waitFor(() => expect(document.activeElement).toBe(fallback));
+      expect(dialog.isConnected).toBe(false);
+      expect(opener.isConnected).toBe(false);
+      expect(fallback.isConnected).toBe(true);
+      expect(fallback).not.toBe(document.body);
+      expect(fallback.closest('[role="dialog"]')).toBeNull();
+      expect(fallback.hidden).toBe(false);
+      expect(fallback.closest('[hidden], [inert], [aria-hidden="true"]')).toBeNull();
+      expect(fallback.getAttribute('tabindex')).toBe('-1');
+      expect(authApi[action === 'disable' ? 'disable2FA' : 'regenerateBackupCodes'])
+        .toHaveBeenCalledWith('fresh-settings-token', '123456');
+    }
+  );
 });

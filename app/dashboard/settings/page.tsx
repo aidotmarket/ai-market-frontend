@@ -1,7 +1,7 @@
 'use client';
 
 import Link from 'next/link';
-import { useState, useEffect } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { useAuthStore } from '@/store/auth';
 import { disable2FA, regenerateBackupCodes, setup2FA, updateProfile, verify2FASetup } from '@/api/auth';
 import { getCapabilities, type CapabilityStatus } from '@/api/capabilities';
@@ -39,6 +39,7 @@ export default function SettingsPage() {
   const [pendingReauthAction, setPendingReauthAction] = useState<Exclude<SecurityAction, null> | null>(null);
   const [sellerStatus, setSellerStatus] = useState<CapabilityStatus | null>(null);
   const [showPayInOnboarding, setShowPayInOnboarding] = useState(false);
+  const settingsHeadingRef = useRef<HTMLHeadingElement>(null);
 
   useEffect(() => {
     if (user) {
@@ -281,9 +282,16 @@ export default function SettingsPage() {
         isOpen={isReauthOpen}
         onClose={closeReauthModal}
         onSuccess={handleReauthSuccess}
+        fallbackFocusRef={settingsHeadingRef}
       />
 
-      <h1 className="text-2xl font-bold text-gray-900 mb-8">Settings</h1>
+      <h1
+        ref={settingsHeadingRef}
+        tabIndex={-1}
+        className="text-2xl font-bold text-gray-900 mb-8"
+      >
+        Settings
+      </h1>
 
       {/* Profile Section */}
       <section id="profile" className="scroll-mt-6 bg-white rounded-xl border border-gray-200 shadow-sm p-6 mb-6">

@@ -56,9 +56,23 @@ async function expectFocusOnSettingsFallback(dialog: HTMLElement) {
   expect(dialog.isConnected).toBe(false);
   expect(fallback.isConnected).toBe(true);
   expect(fallback).not.toBe(document.body);
+  expect(fallback.closest('[role="dialog"]')).toBeNull();
   expect(fallback.matches(':disabled')).toBe(false);
   expect(fallback.hidden).toBe(false);
   expect(fallback.closest('[hidden], [inert], [aria-hidden="true"]')).toBeNull();
+}
+
+function expectOnlyGenericSettingsNavigation() {
+  const fallback = screen.getByRole('link', { name: 'Back to settings' });
+  expect(fallback.getAttribute('href')).toBe('/dashboard/settings');
+  expect(fallback.isConnected).toBe(true);
+  expect(fallback.hidden).toBe(false);
+  expect(fallback.matches(':disabled')).toBe(false);
+  expect(screen.queryByRole('heading')).toBeNull();
+  expect(screen.queryByRole('status')).toBeNull();
+  expect(screen.queryByRole('alert')).toBeNull();
+  expect(screen.queryByRole('button')).toBeNull();
+  expect(document.body.textContent?.trim()).toBe('Back to settings');
 }
 
 const readiness = (state: 'setup_required' | 'setup_pending' | 'ready' | 'blocked') => ({
@@ -158,6 +172,23 @@ describe('data-verification payment-method page', () => {
     expect(document.body.textContent).not.toContain('private provider setup detail');
   });
 
+  it('hides all pay-in content and focuses only generic settings navigation after setup creation 404', async () => {
+    payinApi.createDataVerificationPayInSetupSession.mockRejectedValueOnce({
+      response: { status: 404 },
+      message: 'private provider setup 404 detail',
+    });
+    render(<DataVerificationPaymentMethodPage />);
+    fireEvent.click(await screen.findByRole('button', { name: 'Add payment method' }));
+    const dialog = await screen.findByRole('dialog', { name: 'Re-authenticate' });
+
+    await completeSetupReauth();
+
+    await waitFor(() => expect(screen.queryByRole('dialog')).toBeNull());
+    expectOnlyGenericSettingsNavigation();
+    await expectFocusOnSettingsFallback(dialog);
+    expect(document.body.textContent).not.toContain('private provider setup 404 detail');
+  });
+
   it('renders the route inside exactly one outer dashboard main landmark', async () => {
     render(
       <main>
@@ -185,6 +216,11 @@ describe('data-verification payment-method page', () => {
   });
 
   it.each([
+    [
+      'setup_required',
+      'status',
+      'Choose Add payment method to continue.',
+    ],
     [
       'ready',
       'status',
@@ -227,6 +263,7 @@ describe('data-verification payment-method page', () => {
       expect((expectedRegion === 'status' ? status : alert).textContent).toBe(expectedCopy);
       expect((expectedRegion === 'status' ? alert : status).textContent).toBe('');
       expect(document.body.textContent).not.toContain('private provider readiness detail');
+      expect(document.body.textContent).not.toContain('server text is intentionally ignored');
     }
   );
 
@@ -287,6 +324,7 @@ describe('data-verification payment-method page', () => {
         screen.queryByRole('heading', { name: 'Payment method for verification charges' })
       ).toBeNull();
     });
+    expectOnlyGenericSettingsNavigation();
   });
 
   it('does not render identifiers, card metadata, or Connect status from server text', async () => {

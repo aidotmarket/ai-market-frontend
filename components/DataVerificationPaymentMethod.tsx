@@ -25,6 +25,7 @@ const HOSTED_HANDOFF =
 const SETUP_REAUTH =
   'Confirm it is you to continue. This confirmation is valid for 60 seconds.';
 const RETURN_REAUTH = 'Confirm it is you again to finish adding your payment method.';
+const SETUP_REQUIRED = 'Choose Add payment method to continue.';
 const READY =
   'A payment method is ready for verification charges. Your Stripe payouts are separate and were not changed.';
 const CANCELLED =
@@ -64,6 +65,7 @@ interface DataVerificationPaymentMethodProps {
 
 function fixedCopy(state: DisplayState, mode: 'setup' | 'return'): string | null {
   if (state === 'cancelled') return CANCELLED;
+  if (state === 'setup_required') return SETUP_REQUIRED;
   if (state === 'setup_pending') return SETUP_PENDING;
   if (state === 'pending') return RETURN_PENDING;
   if (state === 'ready') return mode === 'return' ? SUCCESS : READY;
@@ -81,6 +83,9 @@ export default function DataVerificationPaymentMethod({
   const [isReauthOpen, setIsReauthOpen] = useState(false);
   const [isWorking, setIsWorking] = useState(false);
   const returnValues = useRef<ReturnValues | null>(null);
+  const returnPreflightRequest = useRef<
+    ReturnType<typeof getDataVerificationPayInReadiness> | null
+  >(null);
   const initialized = useRef(false);
   const backToSettingsRef = useRef<HTMLAnchorElement>(null);
 
@@ -122,8 +127,14 @@ export default function DataVerificationPaymentMethod({
     }
 
     setDisplayState('checking');
+    let readinessRequest = returnPreflightRequest.current;
+    if (!readinessRequest) {
+      readinessRequest = getDataVerificationPayInReadiness();
+      returnPreflightRequest.current = readinessRequest;
+    }
+
     try {
-      await getDataVerificationPayInReadiness();
+      await readinessRequest;
       if (!isCancelled() && returnValues.current) setIsReauthOpen(true);
     } catch (error: unknown) {
       if (isCancelled()) return;
@@ -132,6 +143,10 @@ export default function DataVerificationPaymentMethod({
         setDisplayState('hidden');
       } else {
         setDisplayState('network_error');
+      }
+    } finally {
+      if (returnPreflightRequest.current === readinessRequest) {
+        returnPreflightRequest.current = null;
       }
     }
   }, []);
@@ -236,7 +251,17 @@ export default function DataVerificationPaymentMethod({
     returnValues.current !== null &&
     (displayState === 'pending' || displayState === 'network_error');
 
-  if (displayState === 'hidden') return null;
+  const backToSettings = (
+    <Link
+      ref={backToSettingsRef}
+      href="/dashboard/settings"
+      className="mt-6 inline-flex text-sm font-medium text-[#3F51B5] hover:underline"
+    >
+      Back to settings
+    </Link>
+  );
+
+  if (displayState === 'hidden') return backToSettings;
 
   return (
     <section className="max-w-2xl" aria-labelledby={HEADING_ID}>
@@ -313,13 +338,7 @@ export default function DataVerificationPaymentMethod({
         )}
       </section>
 
-      <Link
-        ref={backToSettingsRef}
-        href="/dashboard/settings"
-        className="mt-6 inline-flex text-sm font-medium text-[#3F51B5] hover:underline"
-      >
-        Back to settings
-      </Link>
+      {backToSettings}
     </section>
   );
 }

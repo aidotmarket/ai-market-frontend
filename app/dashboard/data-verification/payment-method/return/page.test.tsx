@@ -68,9 +68,23 @@ async function expectFocusOnSettingsFallback(dialog: HTMLElement) {
   expect(dialog.isConnected).toBe(false);
   expect(fallback.isConnected).toBe(true);
   expect(fallback).not.toBe(document.body);
+  expect(fallback.closest('[role="dialog"]')).toBeNull();
   expect(fallback.matches(':disabled')).toBe(false);
   expect(fallback.hidden).toBe(false);
   expect(fallback.closest('[hidden], [inert], [aria-hidden="true"]')).toBeNull();
+}
+
+function expectOnlyGenericSettingsNavigation() {
+  const fallback = screen.getByRole('link', { name: 'Back to settings' });
+  expect(fallback.getAttribute('href')).toBe('/dashboard/settings');
+  expect(fallback.isConnected).toBe(true);
+  expect(fallback.hidden).toBe(false);
+  expect(fallback.matches(':disabled')).toBe(false);
+  expect(screen.queryByRole('heading')).toBeNull();
+  expect(screen.queryByRole('status')).toBeNull();
+  expect(screen.queryByRole('alert')).toBeNull();
+  expect(screen.queryByRole('button')).toBeNull();
+  expect(document.body.textContent?.trim()).toBe('Back to settings');
 }
 
 describe('data-verification payment-method return page', () => {
@@ -357,6 +371,25 @@ describe('data-verification payment-method return page', () => {
     expect(document.body.textContent).not.toContain('private terminal provider detail');
   });
 
+  it('hides all pay-in content and focuses only generic settings navigation after reconciliation 404', async () => {
+    payinApi.isDataVerificationPayInNotFound.mockReturnValueOnce(true);
+    payinApi.reconcileDataVerificationPayInSetupSession.mockRejectedValueOnce({
+      response: { status: 404 },
+      message: 'private provider reconciliation 404 detail',
+    });
+    render(<DataVerificationPaymentMethodReturnPage />);
+    const dialog = await screen.findByRole('dialog', { name: 'Re-authenticate' });
+
+    await completeReturnReauth();
+
+    await waitFor(() => expect(screen.queryByRole('dialog')).toBeNull());
+    expectOnlyGenericSettingsNavigation();
+    await expectFocusOnSettingsFallback(dialog);
+    expect(document.body.textContent).not.toContain(
+      'private provider reconciliation 404 detail'
+    );
+  });
+
   it('focuses Back to settings after cancelling a retry opened by a deferred preflight', async () => {
     const retryPreflight = deferred<{
       version: string;
@@ -405,6 +438,41 @@ describe('data-verification payment-method return page', () => {
     expect(document.body.textContent).not.toContain('private retry preflight detail');
   });
 
+  it('issues only one readiness request for two rapid retry clicks', async () => {
+    const retryPreflight = deferred<{
+      version: string;
+      state: 'setup_pending';
+      can_start_setup: false;
+      can_replace_payment_method: false;
+      message: string;
+    }>();
+    payinApi.reconcileDataVerificationPayInSetupSession.mockResolvedValueOnce({
+      version: 'data_verification_payin_reconcile_result_v1',
+      state: 'pending',
+      message: 'ignored pending detail',
+    });
+    render(<DataVerificationPaymentMethodReturnPage />);
+    await completeReturnReauth();
+    payinApi.getDataVerificationPayInReadiness.mockReturnValueOnce(retryPreflight.promise);
+
+    const retry = await screen.findByRole('button', { name: 'Check again' });
+    fireEvent.click(retry);
+    fireEvent.click(retry);
+
+    expect(payinApi.getDataVerificationPayInReadiness).toHaveBeenCalledTimes(2);
+    await act(async () =>
+      retryPreflight.resolve({
+        version: 'data_verification_payin_readiness_v1',
+        state: 'setup_pending',
+        can_start_setup: false,
+        can_replace_payment_method: false,
+        message: 'private duplicate-guard detail',
+      })
+    );
+    expect(await screen.findByRole('dialog', { name: 'Re-authenticate' })).toBeTruthy();
+    expect(document.body.textContent).not.toContain('private duplicate-guard detail');
+  });
+
   it('hides the return surface if the endpoint becomes unavailable', async () => {
     payinApi.isDataVerificationPayInNotFound.mockReturnValueOnce(true);
     payinApi.getDataVerificationPayInReadiness.mockRejectedValueOnce({
@@ -419,6 +487,7 @@ describe('data-verification payment-method return page', () => {
     });
     expect(auth.generateReauthToken).not.toHaveBeenCalled();
     expect(payinApi.reconcileDataVerificationPayInSetupSession).not.toHaveBeenCalled();
+    expectOnlyGenericSettingsNavigation();
   });
 
   it('renders fixed cancellation copy when the return rechallenge is closed', async () => {

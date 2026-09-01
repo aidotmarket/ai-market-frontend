@@ -17,8 +17,8 @@ interface ReauthModalProps {
 
 type ChallengeState = 'requesting' | 'sent' | 'failed';
 
-function isMeaningfullyFocusable(element: HTMLElement | null): element is HTMLElement {
-  if (!element?.isConnected || element === document.body || element.tabIndex < 0) return false;
+function isAvailableFocusTarget(element: HTMLElement | null): element is HTMLElement {
+  if (!element?.isConnected || element === document.body) return false;
   if (element.matches(':disabled') || element.getAttribute('aria-disabled') === 'true') {
     return false;
   }
@@ -43,6 +43,17 @@ function isMeaningfullyFocusable(element: HTMLElement | null): element is HTMLEl
   }
 
   return true;
+}
+
+function isAutomaticFocusTarget(element: HTMLElement | null): element is HTMLElement {
+  return isAvailableFocusTarget(element) && element.tabIndex >= 0;
+}
+
+function isExplicitFallbackFocusTarget(element: HTMLElement | null): element is HTMLElement {
+  return (
+    isAvailableFocusTarget(element) &&
+    (element.tabIndex >= 0 || element.hasAttribute('tabindex'))
+  );
 }
 
 function getReauthErrorMessage(error: unknown): string {
@@ -98,11 +109,15 @@ export default function ReauthModal({
 
     return () => {
       queueMicrotask(() => {
-        const focusTarget = isMeaningfullyFocusable(previouslyFocused)
-          ? previouslyFocused
-          : fallbackFocusRef?.current;
-        const validFocusTarget = focusTarget ?? null;
-        if (isMeaningfullyFocusable(validFocusTarget)) validFocusTarget.focus();
+        if (isAutomaticFocusTarget(previouslyFocused)) {
+          previouslyFocused.focus();
+          return;
+        }
+
+        const fallbackFocusTarget = fallbackFocusRef?.current ?? null;
+        if (isExplicitFallbackFocusTarget(fallbackFocusTarget)) {
+          fallbackFocusTarget.focus();
+        }
       });
     };
   }, [fallbackFocusRef, isOpen]);
