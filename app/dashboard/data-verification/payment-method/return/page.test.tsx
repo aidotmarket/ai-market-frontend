@@ -145,10 +145,13 @@ describe('data-verification payment-method return page', () => {
   });
 
   it.each([
-    ['pending', 'Stripe is still confirming your payment method. Check again in a moment.'],
+    [
+      'pending',
+      'Stripe is still confirming your payment method. Select Check again in a moment.',
+    ],
     [
       'failed',
-      'We could not confirm your payment method. No verification charge was made. Try again.',
+      'We could not confirm your payment method. No verification charge was made. Select Back to settings to start again.',
     ],
   ] as const)('renders fixed %s reconcile copy', async (state, copy) => {
     payinApi.reconcileDataVerificationPayInSetupSession.mockResolvedValueOnce({
@@ -172,7 +175,7 @@ describe('data-verification payment-method return page', () => {
 
     expect(
       await screen.findByText(
-        'We could not confirm your payment method. No verification charge was made. Try again.'
+        'We could not confirm your payment method. No verification charge was made. Select Check again to retry.'
       )
     ).toBeTruthy();
     expect(screen.queryByText('provider network detail')).toBeNull();
@@ -202,6 +205,11 @@ describe('data-verification payment-method return page', () => {
     await completeReturnReauth('111111');
     fireEvent.click(await screen.findByRole('button', { name: 'Check again' }));
     await completeReturnReauth('222222');
+    expect(
+      await screen.findByText(
+        'We could not confirm your payment method. No verification charge was made. Select Check again to retry.'
+      )
+    ).toBeTruthy();
     fireEvent.click(await screen.findByRole('button', { name: 'Check again' }));
     await completeReturnReauth('333333');
 
@@ -246,7 +254,7 @@ describe('data-verification payment-method return page', () => {
 
     expect(
       screen.getByText(
-        'No payment method was changed and no verification charge was made. You can try again.'
+        'No payment method was changed and no verification charge was made. Select Back to settings to start again.'
       )
     ).toBeTruthy();
     expect(payinApi.reconcileDataVerificationPayInSetupSession).not.toHaveBeenCalled();
@@ -259,7 +267,7 @@ describe('data-verification payment-method return page', () => {
     expect(window.location.search).toBe('');
     expect(
       await screen.findByText(
-        'We could not confirm your payment method. No verification charge was made. Try again.'
+        'We could not confirm your payment method. No verification charge was made. Select Back to settings to start again.'
       )
     ).toBeTruthy();
     expect(screen.queryByRole('dialog')).toBeNull();

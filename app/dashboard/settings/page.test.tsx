@@ -115,7 +115,7 @@ describe('SettingsPage capability refresh', () => {
     window.removeEventListener('capabilities:changed', onCapabilitiesChanged);
   });
 
-  it('shows pay-in onboarding only after successful eligible readiness', async () => {
+  it('shows pay-in onboarding when the readiness endpoint is available', async () => {
     let resolveReadiness: ((value: unknown) => void) | undefined;
     payinApi.getDataVerificationPayInReadiness.mockReturnValueOnce(
       new Promise((resolve) => {

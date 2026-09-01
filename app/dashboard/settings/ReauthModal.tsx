@@ -4,6 +4,10 @@ import { useEffect, useRef, useState } from 'react';
 import { AxiosError } from 'axios';
 import { generateReauthToken, submitReauth } from '@/api/auth';
 
+const DIALOG_DESCRIPTION_ID = 'reauth-dialog-description';
+const CHALLENGE_STATUS_ID = 'reauth-challenge-status';
+const ERROR_ID = 'reauth-error';
+
 interface ReauthModalProps {
   isOpen: boolean;
   onClose: () => void;
@@ -37,6 +41,7 @@ export default function ReauthModal({ isOpen, onClose, onSuccess }: ReauthModalP
   const initialFocusRef = useRef<HTMLInputElement>(null);
 
   const requestChallenge = async () => {
+    initialFocusRef.current?.focus();
     setLoadingChallenge(true);
     setError('');
 
@@ -52,6 +57,18 @@ export default function ReauthModal({ isOpen, onClose, onSuccess }: ReauthModalP
   };
 
   useEffect(() => {
+    if (!isOpen) return;
+
+    const previouslyFocused =
+      document.activeElement instanceof HTMLElement ? document.activeElement : null;
+    initialFocusRef.current?.focus();
+
+    return () => {
+      if (previouslyFocused?.isConnected) previouslyFocused.focus();
+    };
+  }, [isOpen]);
+
+  useEffect(() => {
     if (!isOpen) {
       setCode('');
       setError('');
@@ -64,21 +81,10 @@ export default function ReauthModal({ isOpen, onClose, onSuccess }: ReauthModalP
     void requestChallenge();
   }, [isOpen]);
 
-  useEffect(() => {
-    if (!isOpen) return;
-
-    const previouslyFocused =
-      document.activeElement instanceof HTMLElement ? document.activeElement : null;
-    initialFocusRef.current?.focus();
-
-    return () => {
-      if (previouslyFocused?.isConnected) previouslyFocused.focus();
-    };
-  }, [isOpen]);
-
   if (!isOpen) return null;
 
   const handleSubmit = async () => {
+    initialFocusRef.current?.focus();
     setSubmitting(true);
     setError('');
 
@@ -128,6 +134,7 @@ export default function ReauthModal({ isOpen, onClose, onSuccess }: ReauthModalP
         role="dialog"
         aria-modal="true"
         aria-labelledby="reauth-dialog-title"
+        aria-describedby={`${DIALOG_DESCRIPTION_ID} ${CHALLENGE_STATUS_ID}${error ? ` ${ERROR_ID}` : ''}`}
         onKeyDown={handleDialogKeyDown}
         className="w-full max-w-md rounded-2xl bg-white p-6 shadow-xl"
       >
@@ -136,7 +143,7 @@ export default function ReauthModal({ isOpen, onClose, onSuccess }: ReauthModalP
             <h2 id="reauth-dialog-title" className="text-lg font-semibold text-gray-900">
               Re-authenticate
             </h2>
-            <p className="mt-1 text-sm text-gray-500">
+            <p id={DIALOG_DESCRIPTION_ID} className="mt-1 text-sm text-gray-500">
               Enter the verification code from your email or authenticator app to continue.
             </p>
           </div>
@@ -151,7 +158,13 @@ export default function ReauthModal({ isOpen, onClose, onSuccess }: ReauthModalP
           </button>
         </div>
 
-        <div className="mt-4 rounded-lg border border-gray-200 bg-gray-50 px-4 py-3 text-sm text-gray-600">
+        <div
+          id={CHALLENGE_STATUS_ID}
+          role="status"
+          aria-live="polite"
+          aria-atomic="true"
+          className="mt-4 rounded-lg border border-gray-200 bg-gray-50 px-4 py-3 text-sm text-gray-600"
+        >
           {loadingChallenge
             ? 'Sending verification challenge...'
             : challengeSent
@@ -160,7 +173,12 @@ export default function ReauthModal({ isOpen, onClose, onSuccess }: ReauthModalP
         </div>
 
         {error && (
-          <div className="mt-4 rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
+          <div
+            id={ERROR_ID}
+            role="alert"
+            aria-atomic="true"
+            className="mt-4 rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700"
+          >
             {error}
           </div>
         )}
@@ -177,6 +195,7 @@ export default function ReauthModal({ isOpen, onClose, onSuccess }: ReauthModalP
             autoComplete="one-time-code"
             maxLength={8}
             value={code}
+            aria-describedby={`${CHALLENGE_STATUS_ID}${error ? ` ${ERROR_ID}` : ''}`}
             onChange={(event) => setCode(event.target.value.replace(/\s/g, ''))}
             className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:border-transparent focus:outline-none focus:ring-2 focus:ring-[#3F51B5]"
             placeholder="Enter code"

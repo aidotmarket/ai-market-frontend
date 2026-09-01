@@ -135,7 +135,7 @@ describe('data-verification payment-method page', () => {
   it.each([
     [
       'setup_pending',
-      'Stripe is still confirming your payment method. Check again in a moment.',
+      'Stripe is still confirming your payment method. Return to this page later to check its status.',
     ],
     [
       'blocked',
@@ -164,7 +164,7 @@ describe('data-verification payment-method page', () => {
 
     expect(
       await screen.findByText(
-        'No payment method was changed and no verification charge was made. You can try again.'
+        'No payment method was changed and no verification charge was made. Select Back to settings to start again.'
       )
     ).toBeTruthy();
     expect(window.location.search).toBe('');
@@ -176,7 +176,7 @@ describe('data-verification payment-method page', () => {
     const { unmount } = render(<DataVerificationPaymentMethodPage />);
     expect(
       await screen.findByText(
-        'We could not confirm your payment method. No verification charge was made. Try again.'
+        'We could not confirm your payment method. No verification charge was made. Select Back to settings to start again.'
       )
     ).toBeTruthy();
     expect(screen.queryByText('raw network detail')).toBeNull();
