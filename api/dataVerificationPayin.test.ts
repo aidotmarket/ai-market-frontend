@@ -14,6 +14,9 @@ import {
   createDataVerificationPayInSetupSession,
   getDataVerificationPayInReadiness,
   isDataVerificationPayInNotFound,
+  isOpaqueCheckoutSessionId,
+  isOpaqueSetupAttemptId,
+  navigateToDataVerificationPayInSetup,
   reconcileDataVerificationPayInSetupSession,
 } from './dataVerificationPayin';
 
@@ -134,6 +137,57 @@ describe('dataVerificationPayin API', () => {
     await expect(
       reconcileDataVerificationPayInSetupSession(attemptId, 'cs_test_value', 'token')
     ).rejects.toThrow('Invalid data-verification payment-method response.');
+  });
+
+  it('rejects prototype-chain readiness state names', async () => {
+    client.api.get.mockResolvedValueOnce({
+      data: {
+        version: 'data_verification_payin_readiness_v1',
+        state: 'constructor',
+        can_start_setup: false,
+        can_replace_payment_method: false,
+        message: 'fixed',
+      },
+    });
+
+    await expect(getDataVerificationPayInReadiness()).rejects.toThrow(
+      'Invalid data-verification payment-method response.'
+    );
+  });
+
+  it('accepts only opaque setup-attempt and Checkout-session identifiers', () => {
+    expect(isOpaqueSetupAttemptId(attemptId)).toBe(true);
+    for (const invalid of [
+      null,
+      'not-a-uuid',
+      'cs_123e4567-e89b-12d3-a456-426614174000',
+      '123e4567-e89b-12d3-a456-42661417400g',
+      `${attemptId}0`,
+    ]) {
+      expect(isOpaqueSetupAttemptId(invalid)).toBe(false);
+    }
+
+    expect(isOpaqueCheckoutSessionId('cs_test_value_123')).toBe(true);
+    for (const invalid of [
+      null,
+      'cs_',
+      'pi_test_value_123',
+      'cs_test-value',
+      `cs_${'a'.repeat(253)}`,
+    ]) {
+      expect(isOpaqueCheckoutSessionId(invalid)).toBe(false);
+    }
+  });
+
+  it('navigates exactly once through the top-level location boundary', () => {
+    const assign = vi.fn();
+    const hostedCheckoutUrl =
+      'https://checkout.stripe.com/c/pay/cs_test_exact_navigation_sentinel';
+
+    navigateToDataVerificationPayInSetup(hostedCheckoutUrl, { assign });
+
+    expect(assign).toHaveBeenCalledTimes(1);
+    expect(assign).toHaveBeenCalledWith(hostedCheckoutUrl);
   });
 
   it('classifies readiness 404 without exposing response details', () => {

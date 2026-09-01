@@ -59,7 +59,7 @@ function parseReadiness(value: unknown): DataVerificationPayInReadinessV1 {
     ready: [false, true],
     blocked: [false, false],
   };
-  if (!(value.state in expectedBooleans)) return invalidResponse();
+  if (!Object.hasOwn(expectedBooleans, value.state)) return invalidResponse();
 
   const state = value.state as DataVerificationPayInReadinessState;
   const expected = expectedBooleans[state];
@@ -121,6 +121,13 @@ export function isOpaqueCheckoutSessionId(value: string | null): value is string
     value.length <= 255 &&
     CHECKOUT_SESSION_PATTERN.test(value)
   );
+}
+
+export function navigateToDataVerificationPayInSetup(
+  checkoutUrl: string,
+  topLevelLocation: Pick<Location, 'assign'> = window.location
+): void {
+  topLevelLocation.assign(checkoutUrl);
 }
 
 export function isDataVerificationPayInNotFound(error: unknown): boolean {

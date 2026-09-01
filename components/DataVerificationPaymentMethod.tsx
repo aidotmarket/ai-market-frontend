@@ -8,6 +8,7 @@ import {
   isDataVerificationPayInNotFound,
   isOpaqueCheckoutSessionId,
   isOpaqueSetupAttemptId,
+  navigateToDataVerificationPayInSetup,
   reconcileDataVerificationPayInSetupSession,
 } from '@/api/dataVerificationPayin';
 import ReauthModal from '@/app/dashboard/settings/ReauthModal';
@@ -35,6 +36,7 @@ const SUCCESS =
   'Your payment method is ready for verification charges. Your Stripe payouts were not changed.';
 const BLOCKED =
   'Payment-method setup is unavailable for this seller account. Contact support without sending payment details.';
+const HEADING_ID = 'data-verification-payment-method-heading';
 
 type DisplayState =
   | 'checking'
@@ -144,7 +146,7 @@ export default function DataVerificationPaymentMethod({
     setIsWorking(true);
     try {
       const setupSession = await createDataVerificationPayInSetupSession(reauthToken);
-      window.location.assign(setupSession.checkout_url);
+      navigateToDataVerificationPayInSetup(setupSession.checkout_url);
     } catch (error: unknown) {
       setIsReauthOpen(false);
       setDisplayState(isDataVerificationPayInNotFound(error) ? 'hidden' : 'failed');
@@ -189,14 +191,16 @@ export default function DataVerificationPaymentMethod({
   if (displayState === 'hidden') return null;
 
   return (
-    <main className="max-w-2xl">
+    <section className="max-w-2xl" aria-labelledby={HEADING_ID}>
       <ReauthModal
         isOpen={isReauthOpen}
         onClose={closeReauth}
         onSuccess={mode === 'return' ? handleReturnReauth : handleSetupReauth}
       />
 
-      <h1 className="text-2xl font-bold text-gray-900">{HEADING}</h1>
+      <h1 id={HEADING_ID} className="text-2xl font-bold text-gray-900">
+        {HEADING}
+      </h1>
       <p className="mt-3 text-sm text-gray-600">{EXPLANATION}</p>
 
       {mode === 'setup' && (canStart || canReplace) && (
@@ -240,6 +244,6 @@ export default function DataVerificationPaymentMethod({
       >
         Back to settings
       </Link>
-    </main>
+    </section>
   );
 }

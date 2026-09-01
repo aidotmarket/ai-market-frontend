@@ -18,6 +18,7 @@ const payinApi = vi.hoisted(() => ({
         value ?? ''
       )
   ),
+  navigateToDataVerificationPayInSetup: vi.fn(),
   reconcileDataVerificationPayInSetupSession: vi.fn(),
 }));
 
@@ -65,6 +66,20 @@ describe('data-verification payment-method return page', () => {
   afterEach(() => {
     cleanup();
     vi.clearAllMocks();
+  });
+
+  it('renders the return route inside exactly one outer dashboard main landmark', async () => {
+    render(
+      <main>
+        <DataVerificationPaymentMethodReturnPage />
+      </main>
+    );
+
+    expect(
+      await screen.findByRole('region', { name: 'Payment method for verification charges' })
+    ).toBeTruthy();
+    expect(document.querySelectorAll('main')).toHaveLength(1);
+    expect(document.querySelector('main main')).toBeNull();
   });
 
   it('removes query values before network work and reconciles only with a fresh token', async () => {

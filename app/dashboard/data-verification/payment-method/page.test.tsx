@@ -18,6 +18,7 @@ const payinApi = vi.hoisted(() => ({
   ),
   isOpaqueCheckoutSessionId: vi.fn(),
   isOpaqueSetupAttemptId: vi.fn(),
+  navigateToDataVerificationPayInSetup: vi.fn(),
   reconcileDataVerificationPayInSetupSession: vi.fn(),
 }));
 
@@ -64,7 +65,14 @@ describe('data-verification payment-method page', () => {
   });
 
   it('renders fixed setup copy, reauthenticates, and uses direct top-level navigation', async () => {
-    payinApi.createDataVerificationPayInSetupSession.mockReturnValueOnce(new Promise(() => {}));
+    const hostedCheckoutUrl =
+      'https://checkout.stripe.com/c/pay/cs_test_exact_navigation_sentinel';
+    payinApi.createDataVerificationPayInSetupSession.mockResolvedValueOnce({
+      version: 'data_verification_payin_setup_session_v1',
+      setup_attempt_id: '123e4567-e89b-12d3-a456-426614174000',
+      checkout_url: hostedCheckoutUrl,
+      expires_at: '2026-09-01T12:00:00Z',
+    });
     render(<DataVerificationPaymentMethodPage />);
 
     expect(
@@ -91,13 +99,25 @@ describe('data-verification payment-method page', () => {
       expect(payinApi.createDataVerificationPayInSetupSession).toHaveBeenCalledWith(
         'fresh-setup-token'
       );
+      expect(payinApi.navigateToDataVerificationPayInSetup).toHaveBeenCalledTimes(1);
     });
-
-    const source = readFileSync(
-      resolve(process.cwd(), 'components/DataVerificationPaymentMethod.tsx'),
-      'utf8'
+    expect(payinApi.navigateToDataVerificationPayInSetup).toHaveBeenCalledWith(
+      hostedCheckoutUrl
     );
-    expect(source).toContain('window.location.assign(setupSession.checkout_url);');
+  });
+
+  it('renders the route inside exactly one outer dashboard main landmark', async () => {
+    render(
+      <main>
+        <DataVerificationPaymentMethodPage />
+      </main>
+    );
+
+    expect(
+      await screen.findByRole('region', { name: 'Payment method for verification charges' })
+    ).toBeTruthy();
+    expect(document.querySelectorAll('main')).toHaveLength(1);
+    expect(document.querySelector('main main')).toBeNull();
   });
 
   it('uses the replacement label and fixed ready copy', async () => {
