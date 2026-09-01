@@ -1,5 +1,6 @@
 // @vitest-environment jsdom
 
+import { StrictMode } from 'react';
 import { act, cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import DataVerificationPaymentMethodReturnPage from './page';
@@ -184,25 +185,7 @@ describe('data-verification payment-method return page', () => {
     expect(document.body.textContent).not.toContain(checkoutSessionId);
   });
 
-  it('re-scrubs query values restored by a finishing login redirect before network work', async () => {
-    const nativeReplaceState = window.history.replaceState.bind(window.history);
-    let restoreOnce = true;
-    const replaceStateSpy = vi
-      .spyOn(window.history, 'replaceState')
-      .mockImplementation((state, unused, url) => {
-        nativeReplaceState(state, unused, url);
-        if (restoreOnce && url === window.location.pathname) {
-          restoreOnce = false;
-          window.requestAnimationFrame(() => {
-            nativeReplaceState(
-              {},
-              '',
-              `/dashboard/data-verification/payment-method/return?attempt=${attemptId}&session_id=${checkoutSessionId}`
-            );
-          });
-        }
-      });
-
+  it('advances to return reauthentication under React StrictMode after synchronous query scrubbing', async () => {
     payinApi.getDataVerificationPayInReadiness.mockImplementationOnce(async () => {
       expect(window.location.search).toBe('');
       return {
@@ -214,18 +197,22 @@ describe('data-verification payment-method return page', () => {
       };
     });
 
-    render(<DataVerificationPaymentMethodReturnPage />);
+    render(
+      <StrictMode>
+        <DataVerificationPaymentMethodReturnPage />
+      </StrictMode>
+    );
 
+    expect(window.location.search).toBe('');
     expect(
       await screen.findByText('Confirm it is you again to finish adding your payment method.')
     ).toBeTruthy();
-    expect(window.location.search).toBe('');
-    expect(replaceStateSpy.mock.calls.length).toBeGreaterThanOrEqual(2);
+    expect(payinApi.getDataVerificationPayInReadiness).toHaveBeenCalledTimes(1);
+    expect(navigation.replace).toHaveBeenCalledTimes(1);
     expect(navigation.replace).toHaveBeenCalledWith(
       '/dashboard/data-verification/payment-method/return',
       { scroll: false }
     );
-    expect(payinApi.getDataVerificationPayInReadiness).toHaveBeenCalledTimes(1);
   });
 
   it.each([

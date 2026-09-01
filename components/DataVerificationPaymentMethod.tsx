@@ -88,18 +88,15 @@ export default function DataVerificationPaymentMethod({
   const returnPreflightRequest = useRef<
     ReturnType<typeof getDataVerificationPayInReadiness> | null
   >(null);
-  const initialized = useRef(false);
   const backToSettingsRef = useRef<HTMLAnchorElement>(null);
 
   useLayoutEffect(() => {
-    if (initialized.current) return;
-    initialized.current = true;
-
     const query = new URLSearchParams(window.location.search);
     if (mode === 'return') {
       const setupAttemptId = query.get('attempt');
       const checkoutSessionId = query.get('session_id');
       if (
+        returnValues.current === null &&
         isOpaqueSetupAttemptId(setupAttemptId) &&
         isOpaqueCheckoutSessionId(checkoutSessionId)
       ) {
@@ -108,47 +105,20 @@ export default function DataVerificationPaymentMethod({
     }
 
     const cancelled = mode === 'setup' && query.get('result') === 'cancelled';
-    if (mode !== 'return') {
-      if (window.location.search) {
-        window.history.replaceState(window.history.state, '', window.location.pathname);
-      }
-      setQueryRemoved(true);
-      if (cancelled) setDisplayState('cancelled');
-      return;
-    }
-
-    let frameId: number | null = null;
-    let consecutiveCleanFrames = 0;
-
-    // Next's login redirect may finish its own history update after this layout
-    // effect. Scrub immediately, then keep the return flow gated until the
-    // clean URL survives two browser frames.
-    const scrubAndVerify = () => {
-      if (window.location.search) {
-        window.history.replaceState(window.history.state, '', window.location.pathname);
-        consecutiveCleanFrames = 0;
-      } else {
-        consecutiveCleanFrames += 1;
-      }
-
-      if (consecutiveCleanFrames >= 2) {
-        setQueryRemoved(true);
-        return;
-      }
-      frameId = window.requestAnimationFrame(scrubAndVerify);
-    };
-
-    if (window.location.search) {
+    const hadQuery = window.location.search.length > 0;
+    if (hadQuery) {
       window.history.replaceState(window.history.state, '', window.location.pathname);
     }
-    // Keep Next's internal router state clean too. Otherwise the finishing
-    // login navigation can restore its original query after native scrubbing.
-    router.replace(window.location.pathname, { scroll: false });
-    frameId = window.requestAnimationFrame(scrubAndVerify);
 
-    return () => {
-      if (frameId !== null) window.cancelAnimationFrame(frameId);
-    };
+    if (mode === 'return' && hadQuery) {
+      // Native history removes the values before any network work. Updating
+      // Next's router state prevents the finishing login navigation from
+      // restoring its original query.
+      router.replace(window.location.pathname, { scroll: false });
+    }
+
+    setQueryRemoved(true);
+    if (cancelled) setDisplayState('cancelled');
   }, [mode, router]);
 
   const runReturnPreflight = useCallback(async (isCancelled: () => boolean = () => false) => {
