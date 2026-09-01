@@ -1,6 +1,7 @@
 'use client';
 
 import Link from 'next/link';
+import { useRouter } from 'next/navigation';
 import { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react';
 import {
   createDataVerificationPayInSetupSession,
@@ -78,6 +79,7 @@ function fixedCopy(state: DisplayState, mode: 'setup' | 'return'): string | null
 export default function DataVerificationPaymentMethod({
   mode = 'setup',
 }: DataVerificationPaymentMethodProps) {
+  const router = useRouter();
   const [displayState, setDisplayState] = useState<DisplayState>('checking');
   const [queryRemoved, setQueryRemoved] = useState(false);
   const [isReauthOpen, setIsReauthOpen] = useState(false);
@@ -139,12 +141,15 @@ export default function DataVerificationPaymentMethod({
     if (window.location.search) {
       window.history.replaceState(window.history.state, '', window.location.pathname);
     }
+    // Keep Next's internal router state clean too. Otherwise the finishing
+    // login navigation can restore its original query after native scrubbing.
+    router.replace(window.location.pathname, { scroll: false });
     frameId = window.requestAnimationFrame(scrubAndVerify);
 
     return () => {
       if (frameId !== null) window.cancelAnimationFrame(frameId);
     };
-  }, [mode]);
+  }, [mode, router]);
 
   const runReturnPreflight = useCallback(async (isCancelled: () => boolean = () => false) => {
     setDisplayState('checking');

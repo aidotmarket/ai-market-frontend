@@ -28,6 +28,13 @@ const auth = vi.hoisted(() => ({
   submitReauth: vi.fn(),
 }));
 
+const navigation = vi.hoisted(() => ({
+  replace: vi.fn(),
+}));
+
+vi.mock('next/navigation', () => ({
+  useRouter: () => navigation,
+}));
 vi.mock('@/api/dataVerificationPayin', () => payinApi);
 vi.mock('@/api/auth', () => auth);
 

@@ -26,6 +26,13 @@ const auth = vi.hoisted(() => ({
   submitReauth: vi.fn(),
 }));
 
+const navigation = vi.hoisted(() => ({
+  replace: vi.fn(),
+}));
+
+vi.mock('next/navigation', () => ({
+  useRouter: () => navigation,
+}));
 vi.mock('@/api/dataVerificationPayin', () => payinApi);
 vi.mock('@/api/auth', () => auth);
 
@@ -214,6 +221,10 @@ describe('data-verification payment-method return page', () => {
     ).toBeTruthy();
     expect(window.location.search).toBe('');
     expect(replaceStateSpy.mock.calls.length).toBeGreaterThanOrEqual(2);
+    expect(navigation.replace).toHaveBeenCalledWith(
+      '/dashboard/data-verification/payment-method/return',
+      { scroll: false }
+    );
     expect(payinApi.getDataVerificationPayInReadiness).toHaveBeenCalledTimes(1);
   });
 
