@@ -42,6 +42,8 @@ const SUCCESS =
 const BLOCKED =
   'Payment-method setup is unavailable for this seller account. Contact support without sending payment details.';
 const HEADING_ID = 'data-verification-payment-method-heading';
+const STATUS_REGION_LABEL = 'Payment-method status';
+const ALERT_REGION_LABEL = 'Payment-method error';
 
 type DisplayState =
   | 'checking'
@@ -80,6 +82,7 @@ export default function DataVerificationPaymentMethod({
   const [isWorking, setIsWorking] = useState(false);
   const returnValues = useRef<ReturnValues | null>(null);
   const initialized = useRef(false);
+  const backToSettingsRef = useRef<HTMLAnchorElement>(null);
 
   useLayoutEffect(() => {
     if (initialized.current) return;
@@ -241,6 +244,7 @@ export default function DataVerificationPaymentMethod({
         isOpen={isReauthOpen}
         onClose={closeReauth}
         onSuccess={mode === 'return' ? handleReturnReauth : handleSetupReauth}
+        fallbackFocusRef={backToSettingsRef}
       />
 
       <h1 id={HEADING_ID} className="text-2xl font-bold text-gray-900">
@@ -259,13 +263,28 @@ export default function DataVerificationPaymentMethod({
       )}
 
       <section className="mt-6 rounded-xl border border-gray-200 bg-white p-6 shadow-sm">
-        {displayState === 'checking' ? (
-          <p className="text-sm text-gray-600" role="status">
-            Checking payment-method setup…
-          </p>
-        ) : (
-          copy && <p className="text-sm text-gray-700">{copy}</p>
-        )}
+        <div
+          role="status"
+          aria-label={STATUS_REGION_LABEL}
+          aria-live="polite"
+          aria-atomic="true"
+          className="text-sm text-gray-700"
+        >
+          {displayState === 'checking'
+            ? 'Checking payment-method setup…'
+            : displayState !== 'failed' && displayState !== 'network_error'
+              ? copy
+              : null}
+        </div>
+        <div
+          role="alert"
+          aria-label={ALERT_REGION_LABEL}
+          aria-live="assertive"
+          aria-atomic="true"
+          className="text-sm text-gray-700"
+        >
+          {displayState === 'failed' || displayState === 'network_error' ? copy : null}
+        </div>
 
         {(canStart || canReplace) && (
           <button
@@ -295,6 +314,7 @@ export default function DataVerificationPaymentMethod({
       </section>
 
       <Link
+        ref={backToSettingsRef}
         href="/dashboard/settings"
         className="mt-6 inline-flex text-sm font-medium text-[#3F51B5] hover:underline"
       >

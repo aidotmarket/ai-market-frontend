@@ -2,7 +2,7 @@
 
 import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
-import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { act, cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import DataVerificationPaymentMethodPage from './page';
 
@@ -22,28 +22,40 @@ const payinApi = vi.hoisted(() => ({
   reconcileDataVerificationPayInSetupSession: vi.fn(),
 }));
 
-vi.mock('@/api/dataVerificationPayin', () => payinApi);
-vi.mock('@/app/dashboard/settings/ReauthModal', () => ({
-  default: ({
-    isOpen,
-    onClose,
-    onSuccess,
-  }: {
-    isOpen: boolean;
-    onClose: () => void;
-    onSuccess: (token: string) => void | Promise<void>;
-  }) =>
-    isOpen ? (
-      <div role="dialog" aria-label="Re-authenticate">
-        <button type="button" onClick={() => void onSuccess('fresh-setup-token')}>
-          Complete setup reauth
-        </button>
-        <button type="button" onClick={onClose}>
-          Close reauth
-        </button>
-      </div>
-    ) : null,
+const auth = vi.hoisted(() => ({
+  generateReauthToken: vi.fn(),
+  submitReauth: vi.fn(),
 }));
+
+vi.mock('@/api/dataVerificationPayin', () => payinApi);
+vi.mock('@/api/auth', () => auth);
+
+function deferred<T>() {
+  let resolve!: (value: T | PromiseLike<T>) => void;
+  let reject!: (reason?: unknown) => void;
+  const promise = new Promise<T>((resolvePromise, rejectPromise) => {
+    resolve = resolvePromise;
+    reject = rejectPromise;
+  });
+  return { promise, resolve, reject };
+}
+
+async function completeSetupReauth() {
+  const input = await screen.findByRole('textbox', { name: 'Verification code' });
+  fireEvent.change(input, { target: { value: '123456' } });
+  fireEvent.click(screen.getByRole('button', { name: 'Continue' }));
+}
+
+async function expectFocusOnSettingsFallback(dialog: HTMLElement) {
+  const fallback = screen.getByRole('link', { name: 'Back to settings' });
+  await waitFor(() => expect(document.activeElement).toBe(fallback));
+  expect(dialog.isConnected).toBe(false);
+  expect(fallback.isConnected).toBe(true);
+  expect(fallback).not.toBe(document.body);
+  expect(fallback.matches(':disabled')).toBe(false);
+  expect(fallback.hidden).toBe(false);
+  expect(fallback.closest('[hidden], [inert], [aria-hidden="true"]')).toBeNull();
+}
 
 const readiness = (state: 'setup_required' | 'setup_pending' | 'ready' | 'blocked') => ({
   version: 'data_verification_payin_readiness_v1',
@@ -57,6 +69,8 @@ describe('data-verification payment-method page', () => {
   beforeEach(() => {
     window.history.replaceState({}, '', '/dashboard/data-verification/payment-method');
     payinApi.getDataVerificationPayInReadiness.mockResolvedValue(readiness('setup_required'));
+    auth.generateReauthToken.mockResolvedValue({});
+    auth.submitReauth.mockResolvedValue({ reauth_token: 'fresh-setup-token' });
   });
 
   afterEach(() => {
@@ -93,7 +107,7 @@ describe('data-verification payment-method page', () => {
     expect(
       screen.getByText('Confirm it is you to continue. This confirmation is valid for 60 seconds.')
     ).toBeTruthy();
-    fireEvent.click(screen.getByRole('button', { name: 'Complete setup reauth' }));
+    await completeSetupReauth();
 
     await waitFor(() => {
       expect(payinApi.createDataVerificationPayInSetupSession).toHaveBeenCalledWith(
@@ -104,6 +118,37 @@ describe('data-verification payment-method page', () => {
     expect(payinApi.navigateToDataVerificationPayInSetup).toHaveBeenCalledWith(
       hostedCheckoutUrl
     );
+  });
+
+  it('restores normal cancel focus to the connected setup opener', async () => {
+    render(<DataVerificationPaymentMethodPage />);
+    const opener = await screen.findByRole('button', { name: 'Add payment method' });
+    opener.focus();
+    fireEvent.click(opener);
+
+    const cancel = await screen.findByRole('button', { name: 'Cancel' });
+    await waitFor(() => expect((cancel as HTMLButtonElement).disabled).toBe(false));
+    fireEvent.click(cancel);
+
+    await waitFor(() => expect(screen.queryByRole('dialog')).toBeNull());
+    expect(document.activeElement).toBe(opener);
+  });
+
+  it('focuses Back to settings after a deferred setup creation failure removes the opener', async () => {
+    const setup = deferred<never>();
+    payinApi.createDataVerificationPayInSetupSession.mockReturnValueOnce(setup.promise);
+    render(<DataVerificationPaymentMethodPage />);
+    fireEvent.click(await screen.findByRole('button', { name: 'Add payment method' }));
+    const dialog = await screen.findByRole('dialog', { name: 'Re-authenticate' });
+    await completeSetupReauth();
+
+    await act(async () => setup.reject(new Error('private provider setup detail')));
+
+    await screen.findByText(
+      'We could not confirm your payment method. No verification charge was made. Select Back to settings to start again.'
+    );
+    await expectFocusOnSettingsFallback(dialog);
+    expect(document.body.textContent).not.toContain('private provider setup detail');
   });
 
   it('renders the route inside exactly one outer dashboard main landmark', async () => {
@@ -131,6 +176,52 @@ describe('data-verification payment-method page', () => {
     ).toBeTruthy();
     expect(screen.getByRole('button', { name: 'Replace payment method' })).toBeTruthy();
   });
+
+  it.each([
+    [
+      'ready',
+      'status',
+      'A payment method is ready for verification charges. Your Stripe payouts are separate and were not changed.',
+    ],
+    [
+      'setup_pending',
+      'status',
+      'Stripe is still confirming your payment method. Return to this page later to check its status.',
+    ],
+    [
+      'network_error',
+      'alert',
+      'We could not confirm your payment method. No verification charge was made. Select Back to settings to start again.',
+    ],
+  ] as const)(
+    'uses stable page live regions for a deferred %s setup-readiness outcome',
+    async (outcome, expectedRegion, expectedCopy) => {
+      const request = deferred<ReturnType<typeof readiness>>();
+      payinApi.getDataVerificationPayInReadiness.mockReturnValueOnce(request.promise);
+      render(<DataVerificationPaymentMethodPage />);
+
+      const status = screen.getByRole('status', { name: 'Payment-method status' });
+      const alert = screen.getByRole('alert', { name: 'Payment-method error' });
+      expect(status.textContent).toBe('Checking payment-method setup…');
+      expect(status.getAttribute('aria-live')).toBe('polite');
+      expect(status.getAttribute('aria-atomic')).toBe('true');
+      expect(alert.textContent).toBe('');
+      expect(alert.getAttribute('aria-live')).toBe('assertive');
+      expect(alert.getAttribute('aria-atomic')).toBe('true');
+
+      if (outcome === 'network_error') {
+        await act(async () => request.reject(new Error('private provider readiness detail')));
+      } else {
+        await act(async () => request.resolve(readiness(outcome)));
+      }
+
+      expect(screen.getByRole('status', { name: 'Payment-method status' })).toBe(status);
+      expect(screen.getByRole('alert', { name: 'Payment-method error' })).toBe(alert);
+      expect((expectedRegion === 'status' ? status : alert).textContent).toBe(expectedCopy);
+      expect((expectedRegion === 'status' ? alert : status).textContent).toBe('');
+      expect(document.body.textContent).not.toContain('private provider readiness detail');
+    }
+  );
 
   it.each([
     [

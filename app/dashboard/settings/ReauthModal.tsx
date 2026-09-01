@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useRef, useState, type RefObject } from 'react';
 import { AxiosError } from 'axios';
 import { generateReauthToken, submitReauth } from '@/api/auth';
 
@@ -12,6 +12,37 @@ interface ReauthModalProps {
   isOpen: boolean;
   onClose: () => void;
   onSuccess: (reauthToken: string) => void | Promise<void>;
+  fallbackFocusRef?: RefObject<HTMLElement | null>;
+}
+
+type ChallengeState = 'requesting' | 'sent' | 'failed';
+
+function isMeaningfullyFocusable(element: HTMLElement | null): element is HTMLElement {
+  if (!element?.isConnected || element === document.body || element.tabIndex < 0) return false;
+  if (element.matches(':disabled') || element.getAttribute('aria-disabled') === 'true') {
+    return false;
+  }
+
+  for (let current: HTMLElement | null = element; current; current = current.parentElement) {
+    if (
+      current.hidden ||
+      current.hasAttribute('inert') ||
+      current.getAttribute('aria-hidden') === 'true' ||
+      current.matches('fieldset[disabled]')
+    ) {
+      return false;
+    }
+    const style = window.getComputedStyle(current);
+    if (
+      style.display === 'none' ||
+      style.visibility === 'hidden' ||
+      style.visibility === 'collapse'
+    ) {
+      return false;
+    }
+  }
+
+  return true;
 }
 
 function getReauthErrorMessage(error: unknown): string {
@@ -31,28 +62,30 @@ function getReauthErrorMessage(error: unknown): string {
   return 'Failed to verify the re-authentication code.';
 }
 
-export default function ReauthModal({ isOpen, onClose, onSuccess }: ReauthModalProps) {
+export default function ReauthModal({
+  isOpen,
+  onClose,
+  onSuccess,
+  fallbackFocusRef,
+}: ReauthModalProps) {
   const [code, setCode] = useState('');
-  const [loadingChallenge, setLoadingChallenge] = useState(false);
   const [submitting, setSubmitting] = useState(false);
-  const [challengeSent, setChallengeSent] = useState(false);
+  const [challengeState, setChallengeState] = useState<ChallengeState>('requesting');
   const [error, setError] = useState('');
   const dialogRef = useRef<HTMLDivElement>(null);
   const initialFocusRef = useRef<HTMLInputElement>(null);
 
   const requestChallenge = async () => {
     initialFocusRef.current?.focus();
-    setLoadingChallenge(true);
+    setChallengeState('requesting');
     setError('');
 
     try {
       await generateReauthToken();
-      setChallengeSent(true);
+      setChallengeState('sent');
     } catch (error) {
-      setChallengeSent(false);
+      setChallengeState('failed');
       setError(getReauthErrorMessage(error));
-    } finally {
-      setLoadingChallenge(false);
     }
   };
 
@@ -64,16 +97,21 @@ export default function ReauthModal({ isOpen, onClose, onSuccess }: ReauthModalP
     initialFocusRef.current?.focus();
 
     return () => {
-      if (previouslyFocused?.isConnected) previouslyFocused.focus();
+      queueMicrotask(() => {
+        const focusTarget = isMeaningfullyFocusable(previouslyFocused)
+          ? previouslyFocused
+          : fallbackFocusRef?.current;
+        const validFocusTarget = focusTarget ?? null;
+        if (isMeaningfullyFocusable(validFocusTarget)) validFocusTarget.focus();
+      });
     };
-  }, [isOpen]);
+  }, [fallbackFocusRef, isOpen]);
 
   useEffect(() => {
     if (!isOpen) {
       setCode('');
       setError('');
-      setChallengeSent(false);
-      setLoadingChallenge(false);
+      setChallengeState('requesting');
       setSubmitting(false);
       return;
     }
@@ -99,6 +137,8 @@ export default function ReauthModal({ isOpen, onClose, onSuccess }: ReauthModalP
     }
   };
 
+  const loadingChallenge = challengeState === 'requesting';
+  const challengeSent = challengeState === 'sent';
   const isWorking = loadingChallenge || submitting;
 
   const handleDialogKeyDown = (event: React.KeyboardEvent<HTMLDivElement>) => {

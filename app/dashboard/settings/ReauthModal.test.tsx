@@ -159,6 +159,25 @@ describe('ReauthModal accessibility and working guard', () => {
     await act(async () => success.resolve());
   });
 
+  it('renders requesting on the initial open and shows Unable to start only after rejection', async () => {
+    const challenge = deferred<void>();
+    auth.generateReauthToken.mockReturnValueOnce(challenge.promise);
+    render(<ReauthModal isOpen onClose={vi.fn()} onSuccess={vi.fn()} />);
+
+    const status = screen.getByRole('status');
+    expect(status.textContent).toBe('Sending verification challenge...');
+    expect(screen.queryByText('Unable to start the verification challenge.')).toBeNull();
+    expect(screen.queryByRole('alert')).toBeNull();
+
+    await act(async () => challenge.reject(new Error('private challenge detail')));
+
+    expect(status.textContent).toBe('Unable to start the verification challenge.');
+    expect(screen.getByRole('alert').textContent).toBe(
+      'Failed to verify the re-authentication code.'
+    );
+    expect(document.body.textContent).not.toContain('private challenge detail');
+  });
+
   it.each([
     ['success', null],
     ['failure', 'Failed to verify the re-authentication code.'],
