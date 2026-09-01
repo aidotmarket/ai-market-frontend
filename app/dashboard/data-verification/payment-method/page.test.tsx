@@ -43,7 +43,11 @@ function deferred<T>() {
 async function completeSetupReauth() {
   const input = await screen.findByRole('textbox', { name: 'Verification code' });
   fireEvent.change(input, { target: { value: '123456' } });
-  fireEvent.click(screen.getByRole('button', { name: 'Continue' }));
+  const continueButton = screen.getByRole('button', { name: 'Continue' });
+  await waitFor(() => expect((continueButton as HTMLButtonElement).disabled).toBe(false));
+  await act(async () => {
+    fireEvent.click(continueButton);
+  });
 }
 
 async function expectFocusOnSettingsFallback(dialog: HTMLElement) {
@@ -142,7 +146,10 @@ describe('data-verification payment-method page', () => {
     const dialog = await screen.findByRole('dialog', { name: 'Re-authenticate' });
     await completeSetupReauth();
 
-    await act(async () => setup.reject(new Error('private provider setup detail')));
+    await act(async () => {
+      setup.reject(new Error('private provider setup detail'));
+      await setup.promise.catch(() => undefined);
+    });
 
     await screen.findByText(
       'We could not confirm your payment method. No verification charge was made. Select Back to settings to start again.'
