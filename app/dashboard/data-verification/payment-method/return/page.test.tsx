@@ -177,6 +177,46 @@ describe('data-verification payment-method return page', () => {
     expect(document.body.textContent).not.toContain(checkoutSessionId);
   });
 
+  it('re-scrubs query values restored by a finishing login redirect before network work', async () => {
+    const nativeReplaceState = window.history.replaceState.bind(window.history);
+    let restoreOnce = true;
+    const replaceStateSpy = vi
+      .spyOn(window.history, 'replaceState')
+      .mockImplementation((state, unused, url) => {
+        nativeReplaceState(state, unused, url);
+        if (restoreOnce && url === window.location.pathname) {
+          restoreOnce = false;
+          window.requestAnimationFrame(() => {
+            nativeReplaceState(
+              {},
+              '',
+              `/dashboard/data-verification/payment-method/return?attempt=${attemptId}&session_id=${checkoutSessionId}`
+            );
+          });
+        }
+      });
+
+    payinApi.getDataVerificationPayInReadiness.mockImplementationOnce(async () => {
+      expect(window.location.search).toBe('');
+      return {
+        version: 'data_verification_payin_readiness_v1',
+        state: 'setup_pending',
+        can_start_setup: false,
+        can_replace_payment_method: false,
+        message: 'ignored',
+      };
+    });
+
+    render(<DataVerificationPaymentMethodReturnPage />);
+
+    expect(
+      await screen.findByText('Confirm it is you again to finish adding your payment method.')
+    ).toBeTruthy();
+    expect(window.location.search).toBe('');
+    expect(replaceStateSpy.mock.calls.length).toBeGreaterThanOrEqual(2);
+    expect(payinApi.getDataVerificationPayInReadiness).toHaveBeenCalledTimes(1);
+  });
+
   it.each([
     [
       'ready',

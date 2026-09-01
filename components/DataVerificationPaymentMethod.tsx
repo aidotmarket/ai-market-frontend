@@ -106,14 +106,44 @@ export default function DataVerificationPaymentMethod({
     }
 
     const cancelled = mode === 'setup' && query.get('result') === 'cancelled';
+    if (mode !== 'return') {
+      if (window.location.search) {
+        window.history.replaceState(window.history.state, '', window.location.pathname);
+      }
+      setQueryRemoved(true);
+      if (cancelled) setDisplayState('cancelled');
+      return;
+    }
+
+    let frameId: number | null = null;
+    let consecutiveCleanFrames = 0;
+
+    // Next's login redirect may finish its own history update after this layout
+    // effect. Scrub immediately, then keep the return flow gated until the
+    // clean URL survives two browser frames.
+    const scrubAndVerify = () => {
+      if (window.location.search) {
+        window.history.replaceState(window.history.state, '', window.location.pathname);
+        consecutiveCleanFrames = 0;
+      } else {
+        consecutiveCleanFrames += 1;
+      }
+
+      if (consecutiveCleanFrames >= 2) {
+        setQueryRemoved(true);
+        return;
+      }
+      frameId = window.requestAnimationFrame(scrubAndVerify);
+    };
+
     if (window.location.search) {
       window.history.replaceState(window.history.state, '', window.location.pathname);
     }
-    setQueryRemoved(true);
+    frameId = window.requestAnimationFrame(scrubAndVerify);
 
-    if (mode !== 'return' && cancelled) {
-      setDisplayState('cancelled');
-    }
+    return () => {
+      if (frameId !== null) window.cancelAnimationFrame(frameId);
+    };
   }, [mode]);
 
   const runReturnPreflight = useCallback(async (isCancelled: () => boolean = () => false) => {
