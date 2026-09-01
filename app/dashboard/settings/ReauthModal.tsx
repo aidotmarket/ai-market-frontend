@@ -1,13 +1,59 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState, type RefObject } from 'react';
 import { AxiosError } from 'axios';
 import { generateReauthToken, submitReauth } from '@/api/auth';
+
+const DIALOG_DESCRIPTION_ID = 'reauth-dialog-description';
+const CHALLENGE_STATUS_ID = 'reauth-challenge-status';
+const ERROR_ID = 'reauth-error';
 
 interface ReauthModalProps {
   isOpen: boolean;
   onClose: () => void;
   onSuccess: (reauthToken: string) => void | Promise<void>;
+  fallbackFocusRef?: RefObject<HTMLElement | null>;
+}
+
+type ChallengeState = 'requesting' | 'sent' | 'failed';
+
+function isAvailableFocusTarget(element: HTMLElement | null): element is HTMLElement {
+  if (!element?.isConnected || element === document.body) return false;
+  if (element.matches(':disabled') || element.getAttribute('aria-disabled') === 'true') {
+    return false;
+  }
+
+  for (let current: HTMLElement | null = element; current; current = current.parentElement) {
+    if (
+      current.hidden ||
+      current.hasAttribute('inert') ||
+      current.getAttribute('aria-hidden') === 'true' ||
+      current.matches('fieldset[disabled]')
+    ) {
+      return false;
+    }
+    const style = window.getComputedStyle(current);
+    if (
+      style.display === 'none' ||
+      style.visibility === 'hidden' ||
+      style.visibility === 'collapse'
+    ) {
+      return false;
+    }
+  }
+
+  return true;
+}
+
+function isAutomaticFocusTarget(element: HTMLElement | null): element is HTMLElement {
+  return isAvailableFocusTarget(element) && element.tabIndex >= 0;
+}
+
+function isExplicitFallbackFocusTarget(element: HTMLElement | null): element is HTMLElement {
+  return (
+    isAvailableFocusTarget(element) &&
+    (element.tabIndex >= 0 || element.hasAttribute('tabindex'))
+  );
 }
 
 function getReauthErrorMessage(error: unknown): string {
@@ -27,34 +73,60 @@ function getReauthErrorMessage(error: unknown): string {
   return 'Failed to verify the re-authentication code.';
 }
 
-export default function ReauthModal({ isOpen, onClose, onSuccess }: ReauthModalProps) {
+export default function ReauthModal({
+  isOpen,
+  onClose,
+  onSuccess,
+  fallbackFocusRef,
+}: ReauthModalProps) {
   const [code, setCode] = useState('');
-  const [loadingChallenge, setLoadingChallenge] = useState(false);
   const [submitting, setSubmitting] = useState(false);
-  const [challengeSent, setChallengeSent] = useState(false);
+  const [challengeState, setChallengeState] = useState<ChallengeState>('requesting');
   const [error, setError] = useState('');
+  const dialogRef = useRef<HTMLDivElement>(null);
+  const initialFocusRef = useRef<HTMLInputElement>(null);
 
   const requestChallenge = async () => {
-    setLoadingChallenge(true);
+    initialFocusRef.current?.focus();
+    setChallengeState('requesting');
     setError('');
 
     try {
       await generateReauthToken();
-      setChallengeSent(true);
+      setChallengeState('sent');
     } catch (error) {
-      setChallengeSent(false);
+      setChallengeState('failed');
       setError(getReauthErrorMessage(error));
-    } finally {
-      setLoadingChallenge(false);
     }
   };
+
+  useEffect(() => {
+    if (!isOpen) return;
+
+    const previouslyFocused =
+      document.activeElement instanceof HTMLElement ? document.activeElement : null;
+    initialFocusRef.current?.focus();
+
+    return () => {
+      queueMicrotask(() => {
+        if (isAutomaticFocusTarget(previouslyFocused)) {
+          previouslyFocused.focus();
+          return;
+        }
+
+        const fallbackFocusTarget = fallbackFocusRef?.current ?? null;
+        if (isExplicitFallbackFocusTarget(fallbackFocusTarget)) {
+          fallbackFocusTarget.focus();
+        }
+      });
+    };
+  }, [fallbackFocusRef, isOpen]);
 
   useEffect(() => {
     if (!isOpen) {
       setCode('');
       setError('');
-      setChallengeSent(false);
-      setLoadingChallenge(false);
+      setChallengeState('requesting');
       setSubmitting(false);
       return;
     }
@@ -65,6 +137,7 @@ export default function ReauthModal({ isOpen, onClose, onSuccess }: ReauthModalP
   if (!isOpen) return null;
 
   const handleSubmit = async () => {
+    initialFocusRef.current?.focus();
     setSubmitting(true);
     setError('');
 
@@ -79,13 +152,53 @@ export default function ReauthModal({ isOpen, onClose, onSuccess }: ReauthModalP
     }
   };
 
+  const loadingChallenge = challengeState === 'requesting';
+  const challengeSent = challengeState === 'sent';
+  const isWorking = loadingChallenge || submitting;
+
+  const handleDialogKeyDown = (event: React.KeyboardEvent<HTMLDivElement>) => {
+    if (event.key === 'Escape') {
+      event.preventDefault();
+      if (!isWorking) onClose();
+      return;
+    }
+    if (event.key !== 'Tab' || !dialogRef.current) return;
+
+    const focusable = Array.from(
+      dialogRef.current.querySelectorAll<HTMLElement>(
+        'button:not([disabled]), input:not([disabled]), select:not([disabled]), textarea:not([disabled]), a[href], [tabindex]:not([tabindex="-1"])'
+      )
+    );
+    if (focusable.length === 0) return;
+
+    const first = focusable[0];
+    const last = focusable[focusable.length - 1];
+    if (event.shiftKey && document.activeElement === first) {
+      event.preventDefault();
+      last.focus();
+    } else if (!event.shiftKey && document.activeElement === last) {
+      event.preventDefault();
+      first.focus();
+    }
+  };
+
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-gray-900/60 px-4">
-      <div className="w-full max-w-md rounded-2xl bg-white p-6 shadow-xl">
+      <div
+        ref={dialogRef}
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="reauth-dialog-title"
+        aria-describedby={`${DIALOG_DESCRIPTION_ID} ${CHALLENGE_STATUS_ID}${error ? ` ${ERROR_ID}` : ''}`}
+        onKeyDown={handleDialogKeyDown}
+        className="w-full max-w-md rounded-2xl bg-white p-6 shadow-xl"
+      >
         <div className="flex items-start justify-between gap-4">
           <div>
-            <h2 className="text-lg font-semibold text-gray-900">Re-authenticate</h2>
-            <p className="mt-1 text-sm text-gray-500">
+            <h2 id="reauth-dialog-title" className="text-lg font-semibold text-gray-900">
+              Re-authenticate
+            </h2>
+            <p id={DIALOG_DESCRIPTION_ID} className="mt-1 text-sm text-gray-500">
               Enter the verification code from your email or authenticator app to continue.
             </p>
           </div>
@@ -100,7 +213,13 @@ export default function ReauthModal({ isOpen, onClose, onSuccess }: ReauthModalP
           </button>
         </div>
 
-        <div className="mt-4 rounded-lg border border-gray-200 bg-gray-50 px-4 py-3 text-sm text-gray-600">
+        <div
+          id={CHALLENGE_STATUS_ID}
+          role="status"
+          aria-live="polite"
+          aria-atomic="true"
+          className="mt-4 rounded-lg border border-gray-200 bg-gray-50 px-4 py-3 text-sm text-gray-600"
+        >
           {loadingChallenge
             ? 'Sending verification challenge...'
             : challengeSent
@@ -109,7 +228,12 @@ export default function ReauthModal({ isOpen, onClose, onSuccess }: ReauthModalP
         </div>
 
         {error && (
-          <div className="mt-4 rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
+          <div
+            id={ERROR_ID}
+            role="alert"
+            aria-atomic="true"
+            className="mt-4 rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700"
+          >
             {error}
           </div>
         )}
@@ -119,12 +243,14 @@ export default function ReauthModal({ isOpen, onClose, onSuccess }: ReauthModalP
             Verification code
           </label>
           <input
+            ref={initialFocusRef}
             id="reauthCode"
             type="text"
             inputMode="numeric"
             autoComplete="one-time-code"
             maxLength={8}
             value={code}
+            aria-describedby={`${CHALLENGE_STATUS_ID}${error ? ` ${ERROR_ID}` : ''}`}
             onChange={(event) => setCode(event.target.value.replace(/\s/g, ''))}
             className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:border-transparent focus:outline-none focus:ring-2 focus:ring-[#3F51B5]"
             placeholder="Enter code"

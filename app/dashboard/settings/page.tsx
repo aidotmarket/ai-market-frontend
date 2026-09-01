@@ -1,9 +1,11 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import Link from 'next/link';
+import { useEffect, useRef, useState } from 'react';
 import { useAuthStore } from '@/store/auth';
 import { disable2FA, regenerateBackupCodes, setup2FA, updateProfile, verify2FASetup } from '@/api/auth';
 import { getCapabilities, type CapabilityStatus } from '@/api/capabilities';
+import { getDataVerificationPayInReadiness } from '@/api/dataVerificationPayin';
 import { notifyCapabilitiesChanged } from '@/components/onboarding/SellerSetupProgressBar';
 import { useToast } from '@/components/Toast';
 import { AxiosError } from 'axios';
@@ -36,6 +38,8 @@ export default function SettingsPage() {
   const [isReauthOpen, setIsReauthOpen] = useState(false);
   const [pendingReauthAction, setPendingReauthAction] = useState<Exclude<SecurityAction, null> | null>(null);
   const [sellerStatus, setSellerStatus] = useState<CapabilityStatus | null>(null);
+  const [showPayInOnboarding, setShowPayInOnboarding] = useState(false);
+  const settingsHeadingRef = useRef<HTMLHeadingElement>(null);
 
   useEffect(() => {
     if (user) {
@@ -72,6 +76,24 @@ export default function SettingsPage() {
       })
       .catch((err) => {
         console.error('Failed to fetch settings capabilities', err);
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [user]);
+
+  useEffect(() => {
+    let cancelled = false;
+    setShowPayInOnboarding(false);
+    if (!user) return;
+
+    getDataVerificationPayInReadiness()
+      .then(() => {
+        if (!cancelled) setShowPayInOnboarding(true);
+      })
+      .catch(() => {
+        if (!cancelled) setShowPayInOnboarding(false);
       });
 
     return () => {
@@ -260,9 +282,16 @@ export default function SettingsPage() {
         isOpen={isReauthOpen}
         onClose={closeReauthModal}
         onSuccess={handleReauthSuccess}
+        fallbackFocusRef={settingsHeadingRef}
       />
 
-      <h1 className="text-2xl font-bold text-gray-900 mb-8">Settings</h1>
+      <h1
+        ref={settingsHeadingRef}
+        tabIndex={-1}
+        className="text-2xl font-bold text-gray-900 mb-8"
+      >
+        Settings
+      </h1>
 
       {/* Profile Section */}
       <section id="profile" className="scroll-mt-6 bg-white rounded-xl border border-gray-200 shadow-sm p-6 mb-6">
@@ -344,6 +373,24 @@ export default function SettingsPage() {
           </div>
         </dl>
       </section>
+
+      {showPayInOnboarding && (
+        <section className="mt-6 rounded-xl border border-gray-200 bg-white p-6 shadow-sm">
+          <h2 className="text-lg font-semibold text-gray-900">
+            Payment method for verification charges
+          </h2>
+          <p className="mt-2 text-sm text-gray-500">
+            Add a payment method that ai.market can use for data-verification charges. This is
+            separate from Stripe payouts.
+          </p>
+          <Link
+            href="/dashboard/data-verification/payment-method"
+            className="mt-4 inline-flex rounded-lg bg-[#3F51B5] px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-[#3545a0]"
+          >
+            Manage payment method
+          </Link>
+        </section>
+      )}
 
       <section id="security" className="scroll-mt-6 bg-white rounded-xl border border-gray-200 shadow-sm p-6 mt-6">
         <div className="flex items-start justify-between gap-4 mb-4">

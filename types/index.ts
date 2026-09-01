@@ -67,6 +67,49 @@ export interface ReauthResponse {
 }
 
 // ============================================================================
+// Data-verification pay-in onboarding types — exact S1646 v1 server contracts
+// ============================================================================
+
+export type DataVerificationPayInReadinessState =
+  | 'setup_required'
+  | 'setup_pending'
+  | 'ready'
+  | 'blocked';
+
+export interface DataVerificationPayInReadinessV1 {
+  version: 'data_verification_payin_readiness_v1';
+  state: DataVerificationPayInReadinessState;
+  can_start_setup: boolean;
+  can_replace_payment_method: boolean;
+  message: string;
+}
+
+export interface DataVerificationPayInSetupCreateV1 {
+  version: 'data_verification_payin_setup_v1';
+}
+
+export interface DataVerificationPayInSetupSessionV1 {
+  version: 'data_verification_payin_setup_session_v1';
+  setup_attempt_id: string;
+  checkout_url: string;
+  expires_at: string;
+}
+
+export interface DataVerificationPayInSetupReconcileV1 {
+  version: 'data_verification_payin_reconcile_v1';
+  setup_attempt_id: string;
+  checkout_session_id: string;
+}
+
+export type DataVerificationPayInReconcileState = 'ready' | 'pending' | 'failed';
+
+export interface DataVerificationPayInReconcileResultV1 {
+  version: 'data_verification_payin_reconcile_result_v1';
+  state: DataVerificationPayInReconcileState;
+  message: string;
+}
+
+// ============================================================================
 // Listing types — matches backend app/schemas/listing.py
 // ============================================================================
 
