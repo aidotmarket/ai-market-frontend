@@ -9,12 +9,14 @@ import DataVerificationPaymentMethodPage from './page';
 const payinApi = vi.hoisted(() => ({
   createDataVerificationPayInSetupSession: vi.fn(),
   getDataVerificationPayInReadiness: vi.fn(),
-  isDataVerificationPayInNotFound: vi.fn(
+  isDataVerificationPayInUnavailable: vi.fn(
     (error: unknown) =>
       typeof error === 'object' &&
       error !== null &&
       'response' in error &&
-      (error as { response?: { status?: number } }).response?.status === 404
+      [403, 404].includes(
+        (error as { response?: { status?: number } }).response?.status ?? 0
+      )
   ),
   isOpaqueCheckoutSessionId: vi.fn(),
   isOpaqueSetupAttemptId: vi.fn(),
@@ -172,10 +174,10 @@ describe('data-verification payment-method page', () => {
     expect(document.body.textContent).not.toContain('private provider setup detail');
   });
 
-  it('hides all pay-in content and focuses only generic settings navigation after setup creation 404', async () => {
+  it('hides all pay-in content and focuses only generic settings navigation after setup creation 403', async () => {
     payinApi.createDataVerificationPayInSetupSession.mockRejectedValueOnce({
-      response: { status: 404 },
-      message: 'private provider setup 404 detail',
+      response: { status: 403 },
+      message: 'private provider setup 403 detail',
     });
     render(<DataVerificationPaymentMethodPage />);
     fireEvent.click(await screen.findByRole('button', { name: 'Add payment method' }));
@@ -186,7 +188,7 @@ describe('data-verification payment-method page', () => {
     await waitFor(() => expect(screen.queryByRole('dialog')).toBeNull());
     expectOnlyGenericSettingsNavigation();
     await expectFocusOnSettingsFallback(dialog);
-    expect(document.body.textContent).not.toContain('private provider setup 404 detail');
+    expect(document.body.textContent).not.toContain('private provider setup 403 detail');
   });
 
   it('renders the route inside exactly one outer dashboard main landmark', async () => {
@@ -325,6 +327,22 @@ describe('data-verification payment-method page', () => {
       ).toBeNull();
     });
     expectOnlyGenericSettingsNavigation();
+  });
+
+  it('hides the dedicated surface for an authenticated but ineligible seller', async () => {
+    payinApi.getDataVerificationPayInReadiness.mockRejectedValueOnce({
+      response: { status: 403 },
+      message: 'private eligibility detail',
+    });
+    render(<DataVerificationPaymentMethodPage />);
+
+    await waitFor(() => {
+      expect(
+        screen.queryByRole('heading', { name: 'Payment method for verification charges' })
+      ).toBeNull();
+    });
+    expectOnlyGenericSettingsNavigation();
+    expect(document.body.textContent).not.toContain('private eligibility detail');
   });
 
   it('does not render identifiers, card metadata, or Connect status from server text', async () => {
