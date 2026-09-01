@@ -1,7 +1,7 @@
 'use client';
 
 import Link from 'next/link';
-import { useEffect, useLayoutEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react';
 import {
   createDataVerificationPayInSetupSession,
   getDataVerificationPayInReadiness,
@@ -97,9 +97,7 @@ export default function DataVerificationPaymentMethod({
     setQueryRemoved(true);
 
     if (mode === 'return') {
-      if (returnValues.current) {
-        setIsReauthOpen(true);
-      } else {
+      if (!returnValues.current) {
         setDisplayState('failed');
       }
     } else if (cancelled) {
@@ -107,9 +105,39 @@ export default function DataVerificationPaymentMethod({
     }
   }, [mode]);
 
+  const runReturnPreflight = useCallback(async (isCancelled: () => boolean = () => false) => {
+    if (!returnValues.current) {
+      if (!isCancelled()) setDisplayState('failed');
+      return;
+    }
+
+    setDisplayState('checking');
+    try {
+      await getDataVerificationPayInReadiness();
+      if (!isCancelled() && returnValues.current) setIsReauthOpen(true);
+    } catch (error: unknown) {
+      if (isCancelled()) return;
+      if (isDataVerificationPayInNotFound(error)) {
+        returnValues.current = null;
+        setDisplayState('hidden');
+      } else {
+        setDisplayState('network_error');
+      }
+    }
+  }, []);
+
   useEffect(() => {
-    if (mode !== 'setup' || !queryRemoved) return;
+    if (!queryRemoved) return;
     let cancelled = false;
+
+    if (mode === 'return') {
+      if (returnValues.current) {
+        void runReturnPreflight(() => cancelled);
+      }
+      return () => {
+        cancelled = true;
+      };
+    }
 
     getDataVerificationPayInReadiness()
       .then((readiness) => {
@@ -130,7 +158,7 @@ export default function DataVerificationPaymentMethod({
     return () => {
       cancelled = true;
     };
-  }, [mode, queryRemoved]);
+  }, [mode, queryRemoved, runReturnPreflight]);
 
   const openSetupReauth = () => {
     setIsReauthOpen(true);
@@ -139,7 +167,10 @@ export default function DataVerificationPaymentMethod({
   const closeReauth = () => {
     if (isWorking) return;
     setIsReauthOpen(false);
-    if (mode === 'return') setDisplayState('cancelled');
+    if (mode === 'return') {
+      returnValues.current = null;
+      setDisplayState('cancelled');
+    }
   };
 
   const handleSetupReauth = async (reauthToken: string) => {
@@ -170,14 +201,16 @@ export default function DataVerificationPaymentMethod({
         values.checkoutSessionId,
         reauthToken
       );
-      returnValues.current = null;
+      if (result.state !== 'pending') returnValues.current = null;
       setDisplayState(result.state);
       setIsReauthOpen(false);
     } catch (error: unknown) {
-      returnValues.current = null;
-      setDisplayState(
-        isDataVerificationPayInNotFound(error) ? 'hidden' : 'network_error'
-      );
+      if (isDataVerificationPayInNotFound(error)) {
+        returnValues.current = null;
+        setDisplayState('hidden');
+      } else {
+        setDisplayState('network_error');
+      }
       setIsReauthOpen(false);
     } finally {
       setIsWorking(false);
@@ -187,6 +220,11 @@ export default function DataVerificationPaymentMethod({
   const copy = fixedCopy(displayState, mode);
   const canStart = mode === 'setup' && displayState === 'setup_required';
   const canReplace = mode === 'setup' && displayState === 'ready';
+  const canRecheck =
+    mode === 'return' &&
+    !isReauthOpen &&
+    returnValues.current !== null &&
+    (displayState === 'pending' || displayState === 'network_error');
 
   if (displayState === 'hidden') return null;
 
@@ -234,6 +272,17 @@ export default function DataVerificationPaymentMethod({
               : canReplace
                 ? 'Replace payment method'
                 : 'Add payment method'}
+          </button>
+        )}
+
+        {canRecheck && (
+          <button
+            type="button"
+            onClick={() => void runReturnPreflight()}
+            disabled={isWorking}
+            className="mt-5 rounded-lg bg-[#3F51B5] px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-[#3545a0] disabled:cursor-not-allowed disabled:opacity-50"
+          >
+            Check again
           </button>
         )}
       </section>

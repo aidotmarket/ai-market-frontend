@@ -19,7 +19,7 @@ const UUID_PATTERN =
   /^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$/;
 const CHECKOUT_SESSION_PATTERN = /^cs_[A-Za-z0-9_]+$/;
 const RFC3339_UTC_PATTERN =
-  /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d+)?(?:Z|\+00:00)$/;
+  /^(\d{4})-(\d{2})-(\d{2})T(\d{2}):(\d{2}):(\d{2})(?:\.\d+)?(?:Z|\+00:00)$/;
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null && !Array.isArray(value);
@@ -32,6 +32,32 @@ function hasExactKeys(value: Record<string, unknown>, expected: readonly string[
 
 function invalidResponse(): never {
   throw new Error('Invalid data-verification payment-method response.');
+}
+
+function isRfc3339UtcTimestamp(value: string): boolean {
+  const match = RFC3339_UTC_PATTERN.exec(value);
+  if (!match) return false;
+
+  const [, yearText, monthText, dayText, hourText, minuteText, secondText] = match;
+  const year = Number(yearText);
+  const month = Number(monthText);
+  const day = Number(dayText);
+  const hour = Number(hourText);
+  const minute = Number(minuteText);
+  const second = Number(secondText);
+  const leapYear = year % 4 === 0 && (year % 100 !== 0 || year % 400 === 0);
+  const daysInMonth = [31, leapYear ? 29 : 28, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31];
+
+  return (
+    month >= 1 &&
+    month <= 12 &&
+    day >= 1 &&
+    day <= daysInMonth[month - 1] &&
+    hour <= 23 &&
+    minute <= 59 &&
+    second <= 59 &&
+    Number.isFinite(Date.parse(value))
+  );
 }
 
 function parseReadiness(value: unknown): DataVerificationPayInReadinessV1 {
@@ -88,8 +114,7 @@ function parseSetupSession(value: unknown): DataVerificationPayInSetupSessionV1 
     typeof value.checkout_url !== 'string' ||
     value.checkout_url.length === 0 ||
     typeof value.expires_at !== 'string' ||
-    !RFC3339_UTC_PATTERN.test(value.expires_at) ||
-    !Number.isFinite(Date.parse(value.expires_at))
+    !isRfc3339UtcTimestamp(value.expires_at)
   ) {
     return invalidResponse();
   }

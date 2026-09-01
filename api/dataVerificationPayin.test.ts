@@ -62,6 +62,35 @@ describe('dataVerificationPayin API', () => {
     );
   });
 
+  it('accepts real RFC3339 UTC instants and rejects normalized impossible dates', async () => {
+    for (const expiresAt of [
+      '2026-09-01T12:00:00Z',
+      '2026-09-01T12:00:00.123Z',
+      '2024-02-29T23:59:59+00:00',
+      '2024-02-29T23:59:59.123456+00:00',
+    ]) {
+      const response = { ...setupResponse, expires_at: expiresAt };
+      client.api.post.mockResolvedValueOnce({ data: response });
+      await expect(createDataVerificationPayInSetupSession('token')).resolves.toEqual(response);
+    }
+
+    for (const expiresAt of [
+      '2026-02-29T12:00:00Z',
+      '2026-02-30T12:00:00Z',
+      '2026-02-31T12:00:00+00:00',
+      '2026-04-31T12:00:00Z',
+      '2026-13-01T12:00:00Z',
+      '2026-01-01T24:00:00Z',
+    ]) {
+      client.api.post.mockResolvedValueOnce({
+        data: { ...setupResponse, expires_at: expiresAt },
+      });
+      await expect(createDataVerificationPayInSetupSession('token')).rejects.toThrow(
+        'Invalid data-verification payment-method response.'
+      );
+    }
+  });
+
   it('sends the exact versioned reconcile body and fresh reauth header', async () => {
     const result = {
       version: 'data_verification_payin_reconcile_result_v1',

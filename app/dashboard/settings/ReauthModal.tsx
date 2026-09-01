@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { AxiosError } from 'axios';
 import { generateReauthToken, submitReauth } from '@/api/auth';
 
@@ -33,6 +33,8 @@ export default function ReauthModal({ isOpen, onClose, onSuccess }: ReauthModalP
   const [submitting, setSubmitting] = useState(false);
   const [challengeSent, setChallengeSent] = useState(false);
   const [error, setError] = useState('');
+  const dialogRef = useRef<HTMLDivElement>(null);
+  const initialFocusRef = useRef<HTMLInputElement>(null);
 
   const requestChallenge = async () => {
     setLoadingChallenge(true);
@@ -62,6 +64,18 @@ export default function ReauthModal({ isOpen, onClose, onSuccess }: ReauthModalP
     void requestChallenge();
   }, [isOpen]);
 
+  useEffect(() => {
+    if (!isOpen) return;
+
+    const previouslyFocused =
+      document.activeElement instanceof HTMLElement ? document.activeElement : null;
+    initialFocusRef.current?.focus();
+
+    return () => {
+      if (previouslyFocused?.isConnected) previouslyFocused.focus();
+    };
+  }, [isOpen]);
+
   if (!isOpen) return null;
 
   const handleSubmit = async () => {
@@ -79,12 +93,49 @@ export default function ReauthModal({ isOpen, onClose, onSuccess }: ReauthModalP
     }
   };
 
+  const isWorking = loadingChallenge || submitting;
+
+  const handleDialogKeyDown = (event: React.KeyboardEvent<HTMLDivElement>) => {
+    if (event.key === 'Escape') {
+      event.preventDefault();
+      if (!isWorking) onClose();
+      return;
+    }
+    if (event.key !== 'Tab' || !dialogRef.current) return;
+
+    const focusable = Array.from(
+      dialogRef.current.querySelectorAll<HTMLElement>(
+        'button:not([disabled]), input:not([disabled]), select:not([disabled]), textarea:not([disabled]), a[href], [tabindex]:not([tabindex="-1"])'
+      )
+    );
+    if (focusable.length === 0) return;
+
+    const first = focusable[0];
+    const last = focusable[focusable.length - 1];
+    if (event.shiftKey && document.activeElement === first) {
+      event.preventDefault();
+      last.focus();
+    } else if (!event.shiftKey && document.activeElement === last) {
+      event.preventDefault();
+      first.focus();
+    }
+  };
+
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-gray-900/60 px-4">
-      <div className="w-full max-w-md rounded-2xl bg-white p-6 shadow-xl">
+      <div
+        ref={dialogRef}
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="reauth-dialog-title"
+        onKeyDown={handleDialogKeyDown}
+        className="w-full max-w-md rounded-2xl bg-white p-6 shadow-xl"
+      >
         <div className="flex items-start justify-between gap-4">
           <div>
-            <h2 className="text-lg font-semibold text-gray-900">Re-authenticate</h2>
+            <h2 id="reauth-dialog-title" className="text-lg font-semibold text-gray-900">
+              Re-authenticate
+            </h2>
             <p className="mt-1 text-sm text-gray-500">
               Enter the verification code from your email or authenticator app to continue.
             </p>
@@ -119,6 +170,7 @@ export default function ReauthModal({ isOpen, onClose, onSuccess }: ReauthModalP
             Verification code
           </label>
           <input
+            ref={initialFocusRef}
             id="reauthCode"
             type="text"
             inputMode="numeric"

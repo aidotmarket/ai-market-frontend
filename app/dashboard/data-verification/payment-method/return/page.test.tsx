@@ -22,28 +22,13 @@ const payinApi = vi.hoisted(() => ({
   reconcileDataVerificationPayInSetupSession: vi.fn(),
 }));
 
-vi.mock('@/api/dataVerificationPayin', () => payinApi);
-vi.mock('@/app/dashboard/settings/ReauthModal', () => ({
-  default: ({
-    isOpen,
-    onClose,
-    onSuccess,
-  }: {
-    isOpen: boolean;
-    onClose: () => void;
-    onSuccess: (token: string) => void | Promise<void>;
-  }) =>
-    isOpen ? (
-      <div role="dialog" aria-label="Re-authenticate after return">
-        <button type="button" onClick={() => void onSuccess('fresh-return-token')}>
-          Complete return reauth
-        </button>
-        <button type="button" onClick={onClose}>
-          Cancel return reauth
-        </button>
-      </div>
-    ) : null,
+const auth = vi.hoisted(() => ({
+  generateReauthToken: vi.fn(),
+  submitReauth: vi.fn(),
 }));
+
+vi.mock('@/api/dataVerificationPayin', () => payinApi);
+vi.mock('@/api/auth', () => auth);
 
 function setReturnUrl(attempt = attemptId, sessionId = checkoutSessionId) {
   window.history.replaceState(
@@ -53,14 +38,35 @@ function setReturnUrl(attempt = attemptId, sessionId = checkoutSessionId) {
   );
 }
 
+async function completeReturnReauth(code = '123456') {
+  const input = await screen.findByRole('textbox', { name: 'Verification code' });
+  expect(screen.getByRole('dialog', { name: 'Re-authenticate' })).toBeTruthy();
+  fireEvent.change(input, { target: { value: code } });
+  await waitFor(() => {
+    expect((screen.getByRole('button', { name: 'Continue' }) as HTMLButtonElement).disabled).toBe(
+      false
+    );
+  });
+  fireEvent.click(screen.getByRole('button', { name: 'Continue' }));
+}
+
 describe('data-verification payment-method return page', () => {
   beforeEach(() => {
     setReturnUrl();
+    payinApi.getDataVerificationPayInReadiness.mockResolvedValue({
+      version: 'data_verification_payin_readiness_v1',
+      state: 'setup_pending',
+      can_start_setup: false,
+      can_replace_payment_method: false,
+      message: 'ignored',
+    });
     payinApi.reconcileDataVerificationPayInSetupSession.mockResolvedValue({
       version: 'data_verification_payin_reconcile_result_v1',
       state: 'ready',
       message: 'server text is intentionally ignored',
     });
+    auth.generateReauthToken.mockResolvedValue({});
+    auth.submitReauth.mockResolvedValue({ reauth_token: 'fresh-return-token' });
   });
 
   afterEach(() => {
@@ -83,6 +89,16 @@ describe('data-verification payment-method return page', () => {
   });
 
   it('removes query values before network work and reconciles only with a fresh token', async () => {
+    payinApi.getDataVerificationPayInReadiness.mockImplementationOnce(async () => {
+      expect(window.location.search).toBe('');
+      return {
+        version: 'data_verification_payin_readiness_v1',
+        state: 'setup_pending',
+        can_start_setup: false,
+        can_replace_payment_method: false,
+        message: 'ignored',
+      };
+    });
     payinApi.reconcileDataVerificationPayInSetupSession.mockImplementationOnce(async () => {
       expect(window.location.search).toBe('');
       return {
@@ -100,7 +116,15 @@ describe('data-verification payment-method return page', () => {
     ).toBeTruthy();
     expect(payinApi.reconcileDataVerificationPayInSetupSession).not.toHaveBeenCalled();
 
-    fireEvent.click(screen.getByRole('button', { name: 'Complete return reauth' }));
+    expect(screen.getByRole('dialog', { name: 'Re-authenticate' }).getAttribute('aria-modal')).toBe(
+      'true'
+    );
+    await waitFor(() =>
+      expect(document.activeElement).toBe(
+        screen.getByRole('textbox', { name: 'Verification code' })
+      )
+    );
+    await completeReturnReauth();
 
     await waitFor(() => {
       expect(payinApi.reconcileDataVerificationPayInSetupSession).toHaveBeenCalledWith(
@@ -131,7 +155,7 @@ describe('data-verification payment-method return page', () => {
       message: 'raw backend/provider detail is ignored',
     });
     render(<DataVerificationPaymentMethodReturnPage />);
-    fireEvent.click(await screen.findByRole('button', { name: 'Complete return reauth' }));
+    await completeReturnReauth();
 
     expect(await screen.findByText(copy)).toBeTruthy();
     expect(screen.queryByText('raw backend/provider detail is ignored')).toBeNull();
@@ -142,7 +166,7 @@ describe('data-verification payment-method return page', () => {
       new Error('provider network detail')
     );
     render(<DataVerificationPaymentMethodReturnPage />);
-    fireEvent.click(await screen.findByRole('button', { name: 'Complete return reauth' }));
+    await completeReturnReauth();
 
     expect(
       await screen.findByText(
@@ -152,24 +176,71 @@ describe('data-verification payment-method return page', () => {
     expect(screen.queryByText('provider network detail')).toBeNull();
   });
 
+  it('keeps opaque values only in memory and requires fresh reauth on two retries', async () => {
+    payinApi.reconcileDataVerificationPayInSetupSession
+      .mockResolvedValueOnce({
+        version: 'data_verification_payin_reconcile_result_v1',
+        state: 'pending',
+        message: 'ignored pending detail',
+      })
+      .mockRejectedValueOnce(new Error('transient provider detail'))
+      .mockResolvedValueOnce({
+        version: 'data_verification_payin_reconcile_result_v1',
+        state: 'ready',
+        message: 'ignored ready detail',
+      });
+    auth.submitReauth
+      .mockResolvedValueOnce({ reauth_token: 'fresh-token-1' })
+      .mockResolvedValueOnce({ reauth_token: 'fresh-token-2' })
+      .mockResolvedValueOnce({ reauth_token: 'fresh-token-3' });
+
+    render(<DataVerificationPaymentMethodReturnPage />);
+    expect(window.location.search).toBe('');
+
+    await completeReturnReauth('111111');
+    fireEvent.click(await screen.findByRole('button', { name: 'Check again' }));
+    await completeReturnReauth('222222');
+    fireEvent.click(await screen.findByRole('button', { name: 'Check again' }));
+    await completeReturnReauth('333333');
+
+    expect(
+      await screen.findByText(
+        'Your payment method is ready for verification charges. Your Stripe payouts were not changed.'
+      )
+    ).toBeTruthy();
+    expect(payinApi.getDataVerificationPayInReadiness).toHaveBeenCalledTimes(3);
+    expect(auth.generateReauthToken).toHaveBeenCalledTimes(3);
+    expect(payinApi.reconcileDataVerificationPayInSetupSession.mock.calls).toEqual([
+      [attemptId, checkoutSessionId, 'fresh-token-1'],
+      [attemptId, checkoutSessionId, 'fresh-token-2'],
+      [attemptId, checkoutSessionId, 'fresh-token-3'],
+    ]);
+    expect(window.location.search).toBe('');
+    expect(document.body.textContent).not.toContain(attemptId);
+    expect(document.body.textContent).not.toContain(checkoutSessionId);
+  });
+
   it('hides the return surface if the endpoint becomes unavailable', async () => {
     payinApi.isDataVerificationPayInNotFound.mockReturnValueOnce(true);
-    payinApi.reconcileDataVerificationPayInSetupSession.mockRejectedValueOnce({
+    payinApi.getDataVerificationPayInReadiness.mockRejectedValueOnce({
       response: { status: 404 },
     });
     render(<DataVerificationPaymentMethodReturnPage />);
-    fireEvent.click(await screen.findByRole('button', { name: 'Complete return reauth' }));
 
     await waitFor(() => {
       expect(
         screen.queryByRole('heading', { name: 'Payment method for verification charges' })
       ).toBeNull();
     });
+    expect(auth.generateReauthToken).not.toHaveBeenCalled();
+    expect(payinApi.reconcileDataVerificationPayInSetupSession).not.toHaveBeenCalled();
   });
 
   it('renders fixed cancellation copy when the return rechallenge is closed', async () => {
     render(<DataVerificationPaymentMethodReturnPage />);
-    fireEvent.click(await screen.findByRole('button', { name: 'Cancel return reauth' }));
+    const cancel = await screen.findByRole('button', { name: 'Cancel' });
+    await waitFor(() => expect((cancel as HTMLButtonElement).disabled).toBe(false));
+    fireEvent.click(cancel);
 
     expect(
       screen.getByText(
@@ -190,6 +261,7 @@ describe('data-verification payment-method return page', () => {
       )
     ).toBeTruthy();
     expect(screen.queryByRole('dialog')).toBeNull();
+    expect(payinApi.getDataVerificationPayInReadiness).not.toHaveBeenCalled();
     expect(payinApi.reconcileDataVerificationPayInSetupSession).not.toHaveBeenCalled();
     expect(document.body.textContent).not.toContain('not-a-uuid');
     expect(document.body.textContent).not.toContain('not-a-session');
