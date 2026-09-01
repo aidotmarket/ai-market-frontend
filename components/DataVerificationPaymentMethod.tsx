@@ -111,21 +111,12 @@ export default function DataVerificationPaymentMethod({
     }
     setQueryRemoved(true);
 
-    if (mode === 'return') {
-      if (!returnValues.current) {
-        setDisplayState('failed');
-      }
-    } else if (cancelled) {
+    if (mode !== 'return' && cancelled) {
       setDisplayState('cancelled');
     }
   }, [mode]);
 
   const runReturnPreflight = useCallback(async (isCancelled: () => boolean = () => false) => {
-    if (!returnValues.current) {
-      if (!isCancelled()) setDisplayState('failed');
-      return;
-    }
-
     setDisplayState('checking');
     let readinessRequest = returnPreflightRequest.current;
     if (!readinessRequest) {
@@ -135,7 +126,13 @@ export default function DataVerificationPaymentMethod({
 
     try {
       await readinessRequest;
-      if (!isCancelled() && returnValues.current) setIsReauthOpen(true);
+      if (!isCancelled()) {
+        if (returnValues.current) {
+          setIsReauthOpen(true);
+        } else {
+          setDisplayState('failed');
+        }
+      }
     } catch (error: unknown) {
       if (isCancelled()) return;
       if (isDataVerificationPayInUnavailable(error)) {
@@ -156,9 +153,7 @@ export default function DataVerificationPaymentMethod({
     let cancelled = false;
 
     if (mode === 'return') {
-      if (returnValues.current) {
-        void runReturnPreflight(() => cancelled);
-      }
+      void runReturnPreflight(() => cancelled);
       return () => {
         cancelled = true;
       };

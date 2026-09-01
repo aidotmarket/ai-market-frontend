@@ -371,11 +371,11 @@ describe('data-verification payment-method return page', () => {
     expect(document.body.textContent).not.toContain('private terminal provider detail');
   });
 
-  it('hides all pay-in content and focuses only generic settings navigation after reconciliation 404', async () => {
+  it('hides all pay-in content and focuses only generic settings navigation after reconciliation 403', async () => {
     payinApi.isDataVerificationPayInUnavailable.mockReturnValueOnce(true);
     payinApi.reconcileDataVerificationPayInSetupSession.mockRejectedValueOnce({
-      response: { status: 404 },
-      message: 'private provider reconciliation 404 detail',
+      response: { status: 403 },
+      message: 'private provider reconciliation 403 detail',
     });
     render(<DataVerificationPaymentMethodReturnPage />);
     const dialog = await screen.findByRole('dialog', { name: 'Re-authenticate' });
@@ -386,7 +386,7 @@ describe('data-verification payment-method return page', () => {
     expectOnlyGenericSettingsNavigation();
     await expectFocusOnSettingsFallback(dialog);
     expect(document.body.textContent).not.toContain(
-      'private provider reconciliation 404 detail'
+      'private provider reconciliation 403 detail'
     );
   });
 
@@ -506,7 +506,7 @@ describe('data-verification payment-method return page', () => {
     await expectFocusOnSettingsFallback(dialog);
   });
 
-  it('fails closed and scrubs invalid opaque return values without network work', async () => {
+  it('checks availability before showing fixed failure copy for invalid return values', async () => {
     setReturnUrl('not-a-uuid', 'not-a-session');
     render(<DataVerificationPaymentMethodReturnPage />);
 
@@ -517,9 +517,28 @@ describe('data-verification payment-method return page', () => {
       )
     ).toBeTruthy();
     expect(screen.queryByRole('dialog')).toBeNull();
-    expect(payinApi.getDataVerificationPayInReadiness).not.toHaveBeenCalled();
+    expect(payinApi.getDataVerificationPayInReadiness).toHaveBeenCalledTimes(1);
     expect(payinApi.reconcileDataVerificationPayInSetupSession).not.toHaveBeenCalled();
     expect(document.body.textContent).not.toContain('not-a-uuid');
     expect(document.body.textContent).not.toContain('not-a-session');
+  });
+
+  it('hides an unavailable return surface even when callback values are invalid', async () => {
+    setReturnUrl('not-a-uuid', 'not-a-session');
+    payinApi.isDataVerificationPayInUnavailable.mockReturnValueOnce(true);
+    payinApi.getDataVerificationPayInReadiness.mockRejectedValueOnce({
+      response: { status: 403 },
+      message: 'private eligibility detail',
+    });
+    render(<DataVerificationPaymentMethodReturnPage />);
+
+    await waitFor(() => {
+      expect(
+        screen.queryByRole('heading', { name: 'Payment method for verification charges' })
+      ).toBeNull();
+    });
+    expect(payinApi.reconcileDataVerificationPayInSetupSession).not.toHaveBeenCalled();
+    expect(document.body.textContent).not.toContain('private eligibility detail');
+    expectOnlyGenericSettingsNavigation();
   });
 });

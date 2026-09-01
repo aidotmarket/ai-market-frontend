@@ -174,10 +174,10 @@ describe('data-verification payment-method page', () => {
     expect(document.body.textContent).not.toContain('private provider setup detail');
   });
 
-  it('hides all pay-in content and focuses only generic settings navigation after setup creation 404', async () => {
+  it('hides all pay-in content and focuses only generic settings navigation after setup creation 403', async () => {
     payinApi.createDataVerificationPayInSetupSession.mockRejectedValueOnce({
-      response: { status: 404 },
-      message: 'private provider setup 404 detail',
+      response: { status: 403 },
+      message: 'private provider setup 403 detail',
     });
     render(<DataVerificationPaymentMethodPage />);
     fireEvent.click(await screen.findByRole('button', { name: 'Add payment method' }));
@@ -188,7 +188,7 @@ describe('data-verification payment-method page', () => {
     await waitFor(() => expect(screen.queryByRole('dialog')).toBeNull());
     expectOnlyGenericSettingsNavigation();
     await expectFocusOnSettingsFallback(dialog);
-    expect(document.body.textContent).not.toContain('private provider setup 404 detail');
+    expect(document.body.textContent).not.toContain('private provider setup 403 detail');
   });
 
   it('renders the route inside exactly one outer dashboard main landmark', async () => {
