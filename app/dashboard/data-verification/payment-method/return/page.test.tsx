@@ -10,7 +10,7 @@ const checkoutSessionId = 'cs_test_return_value';
 const payinApi = vi.hoisted(() => ({
   createDataVerificationPayInSetupSession: vi.fn(),
   getDataVerificationPayInReadiness: vi.fn(),
-  isDataVerificationPayInNotFound: vi.fn(),
+  isDataVerificationPayInUnavailable: vi.fn(),
   isOpaqueCheckoutSessionId: vi.fn((value: string | null) => /^cs_[A-Za-z0-9_]+$/.test(value ?? '')),
   isOpaqueSetupAttemptId: vi.fn(
     (value: string | null) =>
@@ -372,7 +372,7 @@ describe('data-verification payment-method return page', () => {
   });
 
   it('hides all pay-in content and focuses only generic settings navigation after reconciliation 404', async () => {
-    payinApi.isDataVerificationPayInNotFound.mockReturnValueOnce(true);
+    payinApi.isDataVerificationPayInUnavailable.mockReturnValueOnce(true);
     payinApi.reconcileDataVerificationPayInSetupSession.mockRejectedValueOnce({
       response: { status: 404 },
       message: 'private provider reconciliation 404 detail',
@@ -474,7 +474,7 @@ describe('data-verification payment-method return page', () => {
   });
 
   it('hides the return surface if the endpoint becomes unavailable', async () => {
-    payinApi.isDataVerificationPayInNotFound.mockReturnValueOnce(true);
+    payinApi.isDataVerificationPayInUnavailable.mockReturnValueOnce(true);
     payinApi.getDataVerificationPayInReadiness.mockRejectedValueOnce({
       response: { status: 404 },
     });

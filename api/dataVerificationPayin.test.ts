@@ -13,7 +13,7 @@ vi.mock('@/api/client', () => client);
 import {
   createDataVerificationPayInSetupSession,
   getDataVerificationPayInReadiness,
-  isDataVerificationPayInNotFound,
+  isDataVerificationPayInUnavailable,
   isOpaqueCheckoutSessionId,
   isOpaqueSetupAttemptId,
   navigateToDataVerificationPayInSetup,
@@ -219,10 +219,12 @@ describe('dataVerificationPayin API', () => {
     expect(assign).toHaveBeenCalledWith(hostedCheckoutUrl);
   });
 
-  it('classifies readiness 404 without exposing response details', () => {
-    expect(isDataVerificationPayInNotFound({ response: { status: 404 } })).toBe(true);
-    expect(isDataVerificationPayInNotFound({ response: { status: 503 } })).toBe(false);
-    expect(isDataVerificationPayInNotFound(new Error('network'))).toBe(false);
+  it('classifies disabled and ineligible surfaces without exposing response details', () => {
+    expect(isDataVerificationPayInUnavailable({ response: { status: 404 } })).toBe(true);
+    expect(isDataVerificationPayInUnavailable({ response: { status: 403 } })).toBe(true);
+    expect(isDataVerificationPayInUnavailable({ response: { status: 401 } })).toBe(false);
+    expect(isDataVerificationPayInUnavailable({ response: { status: 503 } })).toBe(false);
+    expect(isDataVerificationPayInUnavailable(new Error('network'))).toBe(false);
   });
 
   it('never imports the public lib/api transport', () => {

@@ -5,7 +5,7 @@ import { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react
 import {
   createDataVerificationPayInSetupSession,
   getDataVerificationPayInReadiness,
-  isDataVerificationPayInNotFound,
+  isDataVerificationPayInUnavailable,
   isOpaqueCheckoutSessionId,
   isOpaqueSetupAttemptId,
   navigateToDataVerificationPayInSetup,
@@ -138,7 +138,7 @@ export default function DataVerificationPaymentMethod({
       if (!isCancelled() && returnValues.current) setIsReauthOpen(true);
     } catch (error: unknown) {
       if (isCancelled()) return;
-      if (isDataVerificationPayInNotFound(error)) {
+      if (isDataVerificationPayInUnavailable(error)) {
         returnValues.current = null;
         setDisplayState('hidden');
       } else {
@@ -175,7 +175,7 @@ export default function DataVerificationPaymentMethod({
       .catch((error: unknown) => {
         if (!cancelled) {
           setDisplayState(
-            isDataVerificationPayInNotFound(error) ? 'hidden' : 'network_error'
+            isDataVerificationPayInUnavailable(error) ? 'hidden' : 'network_error'
           );
         }
       });
@@ -205,7 +205,7 @@ export default function DataVerificationPaymentMethod({
       navigateToDataVerificationPayInSetup(setupSession.checkout_url);
     } catch (error: unknown) {
       setIsReauthOpen(false);
-      setDisplayState(isDataVerificationPayInNotFound(error) ? 'hidden' : 'failed');
+      setDisplayState(isDataVerificationPayInUnavailable(error) ? 'hidden' : 'failed');
     } finally {
       setIsWorking(false);
     }
@@ -230,7 +230,7 @@ export default function DataVerificationPaymentMethod({
       setDisplayState(result.state);
       setIsReauthOpen(false);
     } catch (error: unknown) {
-      if (isDataVerificationPayInNotFound(error)) {
+      if (isDataVerificationPayInUnavailable(error)) {
         returnValues.current = null;
         setDisplayState('hidden');
       } else {

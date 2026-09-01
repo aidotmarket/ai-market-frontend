@@ -155,10 +155,15 @@ export function navigateToDataVerificationPayInSetup(
   topLevelLocation.assign(checkoutUrl);
 }
 
-export function isDataVerificationPayInNotFound(error: unknown): boolean {
+export function isDataVerificationPayInUnavailable(error: unknown): boolean {
   if (!isRecord(error)) return false;
   const response = error.response;
-  return isRecord(response) && response.status === 404;
+  if (!isRecord(response)) return false;
+
+  // A disabled/non-pilot surface is a 404. Other authenticated eligibility
+  // failures (for example missing TOTP) are 403s. Both mean the dedicated
+  // payment-method UI must stay undiscoverable; neither is a network failure.
+  return response.status === 404 || response.status === 403;
 }
 
 export async function getDataVerificationPayInReadiness(): Promise<DataVerificationPayInReadinessV1> {
