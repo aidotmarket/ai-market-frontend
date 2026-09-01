@@ -2,7 +2,6 @@
 
 import { api } from './client';
 import type {
-  GenerateReauthTokenResponse,
   LoginResult,
   PreAuthRequiredResponse,
   ReauthResponse,
@@ -84,11 +83,6 @@ export async function setup2FA(): Promise<TOTPSetupResponse> {
 
 export async function verify2FASetup(code: string): Promise<TOTPVerifySetupResponse> {
   const res = await api.post<TOTPVerifySetupResponse>('/auth/2fa/verify-setup', { code });
-  return res.data;
-}
-
-export async function generateReauthToken(): Promise<GenerateReauthTokenResponse> {
-  const res = await api.post<GenerateReauthTokenResponse>('/auth/generate-reauth-token');
   return res.data;
 }
 

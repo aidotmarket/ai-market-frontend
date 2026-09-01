@@ -58,12 +58,12 @@ export interface TOTPVerifySetupResponse {
   backup_codes: string[];
 }
 
-export interface GenerateReauthTokenResponse {
-  message: string;
-}
-
 export interface ReauthResponse {
-  reauth_token: string;
+  token: string | null;
+  expires_in: number | null;
+  token_type: 'reauth' | null;
+  message: string | null;
+  method: 'password' | 'totp' | 'magic_link' | null;
 }
 
 // ============================================================================

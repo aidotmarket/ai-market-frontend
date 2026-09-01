@@ -8,7 +8,6 @@ import type { User } from '@/types';
 
 const authApi = vi.hoisted(() => ({
   disable2FA: vi.fn(),
-  generateReauthToken: vi.fn(),
   regenerateBackupCodes: vi.fn(),
   setup2FA: vi.fn(),
   submitReauth: vi.fn(),
@@ -51,8 +50,7 @@ describe('SettingsPage capability refresh', () => {
   beforeEach(() => {
     refreshAuth.mockResolvedValue(undefined);
     authApi.updateProfile.mockResolvedValue(undefined);
-    authApi.generateReauthToken.mockResolvedValue({});
-    authApi.submitReauth.mockResolvedValue({ reauth_token: 'fresh-settings-token' });
+    authApi.submitReauth.mockResolvedValue({ token: 'fresh-settings-token' });
     capabilitiesApi.getCapabilities.mockResolvedValue({
       seller: { effective_status: 'provisioning' },
     });

@@ -23,7 +23,6 @@ const payinApi = vi.hoisted(() => ({
 }));
 
 const auth = vi.hoisted(() => ({
-  generateReauthToken: vi.fn(),
   submitReauth: vi.fn(),
 }));
 
@@ -102,8 +101,7 @@ describe('data-verification payment-method return page', () => {
       state: 'ready',
       message: 'server text is intentionally ignored',
     });
-    auth.generateReauthToken.mockResolvedValue({});
-    auth.submitReauth.mockResolvedValue({ reauth_token: 'fresh-return-token' });
+    auth.submitReauth.mockResolvedValue({ token: 'fresh-return-token' });
   });
 
   afterEach(() => {
@@ -302,9 +300,9 @@ describe('data-verification payment-method return page', () => {
         message: 'ignored ready detail',
       });
     auth.submitReauth
-      .mockResolvedValueOnce({ reauth_token: 'fresh-token-1' })
-      .mockResolvedValueOnce({ reauth_token: 'fresh-token-2' })
-      .mockResolvedValueOnce({ reauth_token: 'fresh-token-3' });
+      .mockResolvedValueOnce({ token: 'fresh-token-1' })
+      .mockResolvedValueOnce({ token: 'fresh-token-2' })
+      .mockResolvedValueOnce({ token: 'fresh-token-3' });
 
     render(<DataVerificationPaymentMethodReturnPage />);
     expect(window.location.search).toBe('');
@@ -326,7 +324,6 @@ describe('data-verification payment-method return page', () => {
       )
     ).toBeTruthy();
     expect(payinApi.getDataVerificationPayInReadiness).toHaveBeenCalledTimes(3);
-    expect(auth.generateReauthToken).toHaveBeenCalledTimes(3);
     expect(payinApi.reconcileDataVerificationPayInSetupSession.mock.calls).toEqual([
       [attemptId, checkoutSessionId, 'fresh-token-1'],
       [attemptId, checkoutSessionId, 'fresh-token-2'],
@@ -485,7 +482,6 @@ describe('data-verification payment-method return page', () => {
         screen.queryByRole('heading', { name: 'Payment method for verification charges' })
       ).toBeNull();
     });
-    expect(auth.generateReauthToken).not.toHaveBeenCalled();
     expect(payinApi.reconcileDataVerificationPayInSetupSession).not.toHaveBeenCalled();
     expectOnlyGenericSettingsNavigation();
   });
