@@ -2,10 +2,9 @@
 
 import { useEffect, useRef, useState, type RefObject } from 'react';
 import { AxiosError } from 'axios';
-import { generateReauthToken, submitReauth } from '@/api/auth';
+import { submitReauth } from '@/api/auth';
 
 const DIALOG_DESCRIPTION_ID = 'reauth-dialog-description';
-const CHALLENGE_STATUS_ID = 'reauth-challenge-status';
 const ERROR_ID = 'reauth-error';
 
 interface ReauthModalProps {
@@ -14,8 +13,6 @@ interface ReauthModalProps {
   onSuccess: (reauthToken: string) => void | Promise<void>;
   fallbackFocusRef?: RefObject<HTMLElement | null>;
 }
-
-type ChallengeState = 'requesting' | 'sent' | 'failed';
 
 function isAvailableFocusTarget(element: HTMLElement | null): element is HTMLElement {
   if (!element?.isConnected || element === document.body) return false;
@@ -81,24 +78,9 @@ export default function ReauthModal({
 }: ReauthModalProps) {
   const [code, setCode] = useState('');
   const [submitting, setSubmitting] = useState(false);
-  const [challengeState, setChallengeState] = useState<ChallengeState>('requesting');
   const [error, setError] = useState('');
   const dialogRef = useRef<HTMLDivElement>(null);
   const initialFocusRef = useRef<HTMLInputElement>(null);
-
-  const requestChallenge = async () => {
-    initialFocusRef.current?.focus();
-    setChallengeState('requesting');
-    setError('');
-
-    try {
-      await generateReauthToken();
-      setChallengeState('sent');
-    } catch (error) {
-      setChallengeState('failed');
-      setError(getReauthErrorMessage(error));
-    }
-  };
 
   useEffect(() => {
     if (!isOpen) return;
@@ -126,12 +108,8 @@ export default function ReauthModal({
     if (!isOpen) {
       setCode('');
       setError('');
-      setChallengeState('requesting');
       setSubmitting(false);
-      return;
     }
-
-    void requestChallenge();
   }, [isOpen]);
 
   if (!isOpen) return null;
@@ -143,7 +121,10 @@ export default function ReauthModal({
 
     try {
       const result = await submitReauth(code.trim());
-      await onSuccess(result.reauth_token);
+      if (typeof result.token !== 'string' || result.token.length === 0) {
+        throw new Error('Missing re-authentication token');
+      }
+      await onSuccess(result.token);
       setCode('');
     } catch (error) {
       setError(getReauthErrorMessage(error));
@@ -152,9 +133,7 @@ export default function ReauthModal({
     }
   };
 
-  const loadingChallenge = challengeState === 'requesting';
-  const challengeSent = challengeState === 'sent';
-  const isWorking = loadingChallenge || submitting;
+  const isWorking = submitting;
 
   const handleDialogKeyDown = (event: React.KeyboardEvent<HTMLDivElement>) => {
     if (event.key === 'Escape') {
@@ -189,7 +168,7 @@ export default function ReauthModal({
         role="dialog"
         aria-modal="true"
         aria-labelledby="reauth-dialog-title"
-        aria-describedby={`${DIALOG_DESCRIPTION_ID} ${CHALLENGE_STATUS_ID}${error ? ` ${ERROR_ID}` : ''}`}
+        aria-describedby={`${DIALOG_DESCRIPTION_ID}${error ? ` ${ERROR_ID}` : ''}`}
         onKeyDown={handleDialogKeyDown}
         className="w-full max-w-md rounded-2xl bg-white p-6 shadow-xl"
       >
@@ -199,32 +178,18 @@ export default function ReauthModal({
               Re-authenticate
             </h2>
             <p id={DIALOG_DESCRIPTION_ID} className="mt-1 text-sm text-gray-500">
-              Enter the verification code from your email or authenticator app to continue.
+              Enter the current code from your authenticator app to continue.
             </p>
           </div>
           <button
             type="button"
             onClick={onClose}
-            disabled={loadingChallenge || submitting}
+            disabled={submitting}
             className="rounded-lg px-2 py-1 text-sm text-gray-500 hover:bg-gray-100 disabled:opacity-50"
             aria-label="Close re-authentication dialog"
           >
             Close
           </button>
-        </div>
-
-        <div
-          id={CHALLENGE_STATUS_ID}
-          role="status"
-          aria-live="polite"
-          aria-atomic="true"
-          className="mt-4 rounded-lg border border-gray-200 bg-gray-50 px-4 py-3 text-sm text-gray-600"
-        >
-          {loadingChallenge
-            ? 'Sending verification challenge...'
-            : challengeSent
-              ? 'Verification challenge sent. Use the latest code to continue.'
-              : 'Unable to start the verification challenge.'}
         </div>
 
         {error && (
@@ -250,27 +215,19 @@ export default function ReauthModal({
             autoComplete="one-time-code"
             maxLength={8}
             value={code}
-            aria-describedby={`${CHALLENGE_STATUS_ID}${error ? ` ${ERROR_ID}` : ''}`}
+            aria-describedby={error ? ERROR_ID : undefined}
             onChange={(event) => setCode(event.target.value.replace(/\s/g, ''))}
             className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:border-transparent focus:outline-none focus:ring-2 focus:ring-[#3F51B5]"
             placeholder="Enter code"
           />
         </div>
 
-        <div className="mt-6 flex flex-col-reverse gap-3 sm:flex-row sm:justify-between">
-          <button
-            type="button"
-            onClick={requestChallenge}
-            disabled={loadingChallenge || submitting}
-            className="rounded-lg border border-gray-300 px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50 disabled:opacity-50"
-          >
-            {loadingChallenge ? 'Sending...' : challengeSent ? 'Resend code' : 'Try again'}
-          </button>
+        <div className="mt-6 flex justify-end gap-3">
           <div className="flex gap-3">
             <button
               type="button"
               onClick={onClose}
-              disabled={loadingChallenge || submitting}
+              disabled={submitting}
               className="rounded-lg border border-gray-300 px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50 disabled:opacity-50"
             >
               Cancel
@@ -278,7 +235,7 @@ export default function ReauthModal({
             <button
               type="button"
               onClick={handleSubmit}
-              disabled={loadingChallenge || submitting || code.trim().length === 0}
+              disabled={submitting || code.trim().length === 0}
               className="rounded-lg bg-[#3F51B5] px-4 py-2 text-sm font-medium text-white hover:bg-[#3545a0] disabled:cursor-not-allowed disabled:opacity-50"
             >
               {submitting ? 'Verifying...' : 'Continue'}

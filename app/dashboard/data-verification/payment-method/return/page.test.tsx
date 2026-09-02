@@ -1,5 +1,6 @@
 // @vitest-environment jsdom
 
+import { StrictMode } from 'react';
 import { act, cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import DataVerificationPaymentMethodReturnPage from './page';
@@ -23,10 +24,16 @@ const payinApi = vi.hoisted(() => ({
 }));
 
 const auth = vi.hoisted(() => ({
-  generateReauthToken: vi.fn(),
   submitReauth: vi.fn(),
 }));
 
+const navigation = vi.hoisted(() => ({
+  replace: vi.fn(),
+}));
+
+vi.mock('next/navigation', () => ({
+  useRouter: () => navigation,
+}));
 vi.mock('@/api/dataVerificationPayin', () => payinApi);
 vi.mock('@/api/auth', () => auth);
 
@@ -102,8 +109,7 @@ describe('data-verification payment-method return page', () => {
       state: 'ready',
       message: 'server text is intentionally ignored',
     });
-    auth.generateReauthToken.mockResolvedValue({});
-    auth.submitReauth.mockResolvedValue({ reauth_token: 'fresh-return-token' });
+    auth.submitReauth.mockResolvedValue({ token: 'fresh-return-token' });
   });
 
   afterEach(() => {
@@ -177,6 +183,40 @@ describe('data-verification payment-method return page', () => {
     ).toBeTruthy();
     expect(document.body.textContent).not.toContain(attemptId);
     expect(document.body.textContent).not.toContain(checkoutSessionId);
+  });
+
+  it('reschedules the scrub under React StrictMode and removes a query restored by Next', async () => {
+    payinApi.getDataVerificationPayInReadiness.mockImplementationOnce(async () => {
+      expect(window.location.search).toBe('');
+      return {
+        version: 'data_verification_payin_readiness_v1',
+        state: 'setup_pending',
+        can_start_setup: false,
+        can_replace_payment_method: false,
+        message: 'ignored',
+      };
+    });
+
+    navigation.replace
+      .mockImplementationOnce(() => setReturnUrl())
+      .mockImplementationOnce(() => setReturnUrl());
+
+    render(
+      <StrictMode>
+        <DataVerificationPaymentMethodReturnPage />
+      </StrictMode>
+    );
+
+    await waitFor(() => expect(window.location.search).toBe(''));
+    expect(
+      await screen.findByText('Confirm it is you again to finish adding your payment method.')
+    ).toBeTruthy();
+    expect(payinApi.getDataVerificationPayInReadiness).toHaveBeenCalledTimes(1);
+    expect(navigation.replace).toHaveBeenCalledTimes(2);
+    expect(navigation.replace).toHaveBeenLastCalledWith(
+      '/dashboard/data-verification/payment-method/return',
+      { scroll: false }
+    );
   });
 
   it.each([
@@ -302,9 +342,9 @@ describe('data-verification payment-method return page', () => {
         message: 'ignored ready detail',
       });
     auth.submitReauth
-      .mockResolvedValueOnce({ reauth_token: 'fresh-token-1' })
-      .mockResolvedValueOnce({ reauth_token: 'fresh-token-2' })
-      .mockResolvedValueOnce({ reauth_token: 'fresh-token-3' });
+      .mockResolvedValueOnce({ token: 'fresh-token-1' })
+      .mockResolvedValueOnce({ token: 'fresh-token-2' })
+      .mockResolvedValueOnce({ token: 'fresh-token-3' });
 
     render(<DataVerificationPaymentMethodReturnPage />);
     expect(window.location.search).toBe('');
@@ -326,7 +366,6 @@ describe('data-verification payment-method return page', () => {
       )
     ).toBeTruthy();
     expect(payinApi.getDataVerificationPayInReadiness).toHaveBeenCalledTimes(3);
-    expect(auth.generateReauthToken).toHaveBeenCalledTimes(3);
     expect(payinApi.reconcileDataVerificationPayInSetupSession.mock.calls).toEqual([
       [attemptId, checkoutSessionId, 'fresh-token-1'],
       [attemptId, checkoutSessionId, 'fresh-token-2'],
@@ -485,7 +524,6 @@ describe('data-verification payment-method return page', () => {
         screen.queryByRole('heading', { name: 'Payment method for verification charges' })
       ).toBeNull();
     });
-    expect(auth.generateReauthToken).not.toHaveBeenCalled();
     expect(payinApi.reconcileDataVerificationPayInSetupSession).not.toHaveBeenCalled();
     expectOnlyGenericSettingsNavigation();
   });

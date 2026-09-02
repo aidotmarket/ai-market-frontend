@@ -25,10 +25,16 @@ const payinApi = vi.hoisted(() => ({
 }));
 
 const auth = vi.hoisted(() => ({
-  generateReauthToken: vi.fn(),
   submitReauth: vi.fn(),
 }));
 
+const navigation = vi.hoisted(() => ({
+  replace: vi.fn(),
+}));
+
+vi.mock('next/navigation', () => ({
+  useRouter: () => navigation,
+}));
 vi.mock('@/api/dataVerificationPayin', () => payinApi);
 vi.mock('@/api/auth', () => auth);
 
@@ -89,8 +95,7 @@ describe('data-verification payment-method page', () => {
   beforeEach(() => {
     window.history.replaceState({}, '', '/dashboard/data-verification/payment-method');
     payinApi.getDataVerificationPayInReadiness.mockResolvedValue(readiness('setup_required'));
-    auth.generateReauthToken.mockResolvedValue({});
-    auth.submitReauth.mockResolvedValue({ reauth_token: 'fresh-setup-token' });
+    auth.submitReauth.mockResolvedValue({ token: 'fresh-setup-token' });
   });
 
   afterEach(() => {

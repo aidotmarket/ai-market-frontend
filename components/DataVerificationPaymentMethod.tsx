@@ -1,6 +1,7 @@
 'use client';
 
 import Link from 'next/link';
+import { useRouter } from 'next/navigation';
 import { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react';
 import {
   createDataVerificationPayInSetupSession,
@@ -78,6 +79,7 @@ function fixedCopy(state: DisplayState, mode: 'setup' | 'return'): string | null
 export default function DataVerificationPaymentMethod({
   mode = 'setup',
 }: DataVerificationPaymentMethodProps) {
+  const router = useRouter();
   const [displayState, setDisplayState] = useState<DisplayState>('checking');
   const [queryRemoved, setQueryRemoved] = useState(false);
   const [isReauthOpen, setIsReauthOpen] = useState(false);
@@ -86,13 +88,9 @@ export default function DataVerificationPaymentMethod({
   const returnPreflightRequest = useRef<
     ReturnType<typeof getDataVerificationPayInReadiness> | null
   >(null);
-  const initialized = useRef(false);
   const backToSettingsRef = useRef<HTMLAnchorElement>(null);
 
   useLayoutEffect(() => {
-    if (initialized.current) return;
-    initialized.current = true;
-
     const query = new URLSearchParams(window.location.search);
     if (mode === 'return') {
       const setupAttemptId = query.get('attempt');
@@ -106,15 +104,48 @@ export default function DataVerificationPaymentMethod({
     }
 
     const cancelled = mode === 'setup' && query.get('result') === 'cancelled';
+    if (mode !== 'return') {
+      if (window.location.search) {
+        window.history.replaceState(window.history.state, '', window.location.pathname);
+      }
+      setQueryRemoved(true);
+      if (cancelled) setDisplayState('cancelled');
+      return;
+    }
+
+    let frameId: number | null = null;
+    let consecutiveCleanFrames = 0;
+
+    // Next's login redirect may finish its own history update after this layout
+    // effect. Scrub immediately, then keep the return flow gated until the
+    // clean URL survives two browser frames.
+    const scrubAndVerify = () => {
+      if (window.location.search) {
+        window.history.replaceState(window.history.state, '', window.location.pathname);
+        consecutiveCleanFrames = 0;
+      } else {
+        consecutiveCleanFrames += 1;
+      }
+
+      if (consecutiveCleanFrames >= 2) {
+        setQueryRemoved(true);
+        return;
+      }
+      frameId = window.requestAnimationFrame(scrubAndVerify);
+    };
+
     if (window.location.search) {
       window.history.replaceState(window.history.state, '', window.location.pathname);
     }
-    setQueryRemoved(true);
+    // Keep Next's internal router state clean too. Otherwise the finishing
+    // login navigation can restore its original query after native scrubbing.
+    router.replace(window.location.pathname, { scroll: false });
+    frameId = window.requestAnimationFrame(scrubAndVerify);
 
-    if (mode !== 'return' && cancelled) {
-      setDisplayState('cancelled');
-    }
-  }, [mode]);
+    return () => {
+      if (frameId !== null) window.cancelAnimationFrame(frameId);
+    };
+  }, [mode, router]);
 
   const runReturnPreflight = useCallback(async (isCancelled: () => boolean = () => false) => {
     setDisplayState('checking');
