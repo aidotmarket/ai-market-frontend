@@ -160,8 +160,9 @@ export function isDataVerificationPayInUnavailable(error: unknown): boolean {
   const response = error.response;
   if (!isRecord(response)) return false;
 
-  // A disabled/non-pilot surface is a 404. Other authenticated eligibility
-  // failures (for example missing TOTP) are 403s. Both mean the dedicated
+  // Every authenticated-but-ineligible case (surface disabled, not a seller,
+  // missing TOTP, party unavailable) is an identical 404 from the backend.
+  // A 403 is still treated the same defensively. Both mean the dedicated
   // payment-method UI must stay undiscoverable; neither is a network failure.
   return response.status === 404 || response.status === 403;
 }
