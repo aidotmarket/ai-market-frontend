@@ -18,6 +18,7 @@ const footerLinkSections = [
       { label: 'Browse Data', href: '/listings' },
       { label: 'Buyer Requests', href: '/requests' },
       { label: 'Partner Program', href: '/partner' },
+      { label: 'Verified shape', href: '/verified' },
       { label: 'Blog', href: '/blog' },
     ],
   },
