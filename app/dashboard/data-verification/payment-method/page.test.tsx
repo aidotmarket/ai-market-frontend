@@ -119,7 +119,7 @@ describe('data-verification payment-method page', () => {
     ).toBeTruthy();
     expect(
       screen.getByText(
-        'Add a payment method that ai.market can use for data-verification charges. This is separate from Stripe payouts.'
+        'Add a debit or credit card only when you choose paid data verification. No card is required for unpaid ai.market use. This is separate from Stripe payouts.'
       )
     ).toBeTruthy();
     expect(

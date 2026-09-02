@@ -20,7 +20,7 @@ import type {
 
 const HEADING = 'Payment method for verification charges';
 const EXPLANATION =
-  'Add a payment method that ai.market can use for data-verification charges. This is separate from Stripe payouts.';
+  'Add a debit or credit card only when you choose paid data verification. No card is required for unpaid ai.market use. This is separate from Stripe payouts.';
 const HOSTED_HANDOFF =
   'You will continue securely on Stripe. ai.market does not collect or store your card details, and no verification charge is made during setup.';
 const SETUP_REAUTH =
