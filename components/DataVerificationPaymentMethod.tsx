@@ -62,6 +62,8 @@ interface ReturnValues {
 
 interface DataVerificationPaymentMethodProps {
   mode?: 'setup' | 'return';
+  initialSetupAttemptId?: string | null;
+  initialCheckoutSessionId?: string | null;
 }
 
 function fixedCopy(state: DisplayState, mode: 'setup' | 'return'): string | null {
@@ -78,13 +80,23 @@ function fixedCopy(state: DisplayState, mode: 'setup' | 'return'): string | null
 
 export default function DataVerificationPaymentMethod({
   mode = 'setup',
+  initialSetupAttemptId = null,
+  initialCheckoutSessionId = null,
 }: DataVerificationPaymentMethodProps) {
   const router = useRouter();
   const [displayState, setDisplayState] = useState<DisplayState>('checking');
   const [queryRemoved, setQueryRemoved] = useState(false);
   const [isReauthOpen, setIsReauthOpen] = useState(false);
   const [isWorking, setIsWorking] = useState(false);
-  const returnValues = useRef<ReturnValues | null>(null);
+  // Capture the server's query snapshot once, before client history updates.
+  // Later clean-URL props must not restore values cleared by a terminal result.
+  const returnValues = useRef<ReturnValues | null>(
+    mode === 'return' &&
+    isOpaqueSetupAttemptId(initialSetupAttemptId) &&
+    isOpaqueCheckoutSessionId(initialCheckoutSessionId)
+      ? { setupAttemptId: initialSetupAttemptId, checkoutSessionId: initialCheckoutSessionId }
+      : null
+  );
   const returnPreflightRequest = useRef<
     ReturnType<typeof getDataVerificationPayInReadiness> | null
   >(null);
@@ -92,17 +104,6 @@ export default function DataVerificationPaymentMethod({
 
   useLayoutEffect(() => {
     const query = new URLSearchParams(window.location.search);
-    if (mode === 'return') {
-      const setupAttemptId = query.get('attempt');
-      const checkoutSessionId = query.get('session_id');
-      if (
-        isOpaqueSetupAttemptId(setupAttemptId) &&
-        isOpaqueCheckoutSessionId(checkoutSessionId)
-      ) {
-        returnValues.current = { setupAttemptId, checkoutSessionId };
-      }
-    }
-
     const cancelled = mode === 'setup' && query.get('result') === 'cancelled';
     if (mode !== 'return') {
       if (window.location.search) {

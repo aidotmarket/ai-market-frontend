@@ -55,6 +55,12 @@ function setReturnUrl(attempt = attemptId, sessionId = checkoutSessionId) {
   );
 }
 
+async function returnPage() {
+  return DataVerificationPaymentMethodReturnPage({
+    searchParams: Promise.resolve(Object.fromEntries(new URLSearchParams(window.location.search))),
+  });
+}
+
 async function completeReturnReauth(code = '123456') {
   const input = await screen.findByRole('textbox', { name: 'Verification code' });
   expect(screen.getByRole('dialog', { name: 'Re-authenticate' })).toBeTruthy();
@@ -120,7 +126,7 @@ describe('data-verification payment-method return page', () => {
   it('renders the return route inside exactly one outer dashboard main landmark', async () => {
     render(
       <main>
-        <DataVerificationPaymentMethodReturnPage />
+        {await returnPage()}
       </main>
     );
 
@@ -129,6 +135,23 @@ describe('data-verification payment-method return page', () => {
     ).toBeTruthy();
     expect(document.querySelectorAll('main')).toHaveLength(1);
     expect(document.querySelector('main main')).toBeNull();
+  });
+
+  it('uses server-captured values when hydration has already removed the query', async () => {
+    const page = await returnPage();
+    window.history.replaceState({}, '', window.location.pathname);
+    render(<StrictMode>{page}</StrictMode>);
+
+    expect(await screen.findByRole('dialog', { name: 'Re-authenticate' })).toBeTruthy();
+    expect(window.location.search).toBe('');
+    expect(payinApi.getDataVerificationPayInReadiness).toHaveBeenCalledTimes(1);
+    expect(payinApi.reconcileDataVerificationPayInSetupSession).not.toHaveBeenCalled();
+    expect(document.body.innerHTML).not.toContain(attemptId);
+    expect(document.body.innerHTML).not.toContain(checkoutSessionId);
+    await completeReturnReauth();
+    expect(payinApi.reconcileDataVerificationPayInSetupSession).toHaveBeenCalledExactlyOnceWith(
+      attemptId, checkoutSessionId, 'fresh-return-token'
+    );
   });
 
   it('removes query values before network work and reconciles only with a fresh token', async () => {
@@ -151,7 +174,7 @@ describe('data-verification payment-method return page', () => {
       };
     });
 
-    render(<DataVerificationPaymentMethodReturnPage />);
+    render(await returnPage());
 
     expect(window.location.search).toBe('');
     expect(
@@ -203,7 +226,7 @@ describe('data-verification payment-method return page', () => {
 
     render(
       <StrictMode>
-        <DataVerificationPaymentMethodReturnPage />
+        {await returnPage()}
       </StrictMode>
     );
 
@@ -251,7 +274,7 @@ describe('data-verification payment-method return page', () => {
       payinApi.reconcileDataVerificationPayInSetupSession.mockReturnValueOnce(
         reconcile.promise
       );
-      render(<DataVerificationPaymentMethodReturnPage />);
+      render(await returnPage());
 
       const status = screen.getByRole('status', { name: 'Payment-method status' });
       const alert = screen.getByRole('alert', { name: 'Payment-method error' });
@@ -306,7 +329,7 @@ describe('data-verification payment-method return page', () => {
       state,
       message: 'raw backend/provider detail is ignored',
     });
-    render(<DataVerificationPaymentMethodReturnPage />);
+    render(await returnPage());
     await completeReturnReauth();
 
     expect(await screen.findByText(copy)).toBeTruthy();
@@ -317,7 +340,7 @@ describe('data-verification payment-method return page', () => {
     payinApi.reconcileDataVerificationPayInSetupSession.mockRejectedValueOnce(
       new Error('provider network detail')
     );
-    render(<DataVerificationPaymentMethodReturnPage />);
+    render(await returnPage());
     await completeReturnReauth();
 
     expect(
@@ -346,7 +369,7 @@ describe('data-verification payment-method return page', () => {
       .mockResolvedValueOnce({ token: 'fresh-token-2' })
       .mockResolvedValueOnce({ token: 'fresh-token-3' });
 
-    render(<DataVerificationPaymentMethodReturnPage />);
+    render(await returnPage());
     expect(window.location.search).toBe('');
 
     await completeReturnReauth('111111');
@@ -389,7 +412,7 @@ describe('data-verification payment-method return page', () => {
         message: 'ignored pending detail',
       })
       .mockReturnValueOnce(terminal.promise);
-    render(<DataVerificationPaymentMethodReturnPage />);
+    render(await returnPage());
 
     await completeReturnReauth('111111');
     fireEvent.click(await screen.findByRole('button', { name: 'Check again' }));
@@ -416,7 +439,7 @@ describe('data-verification payment-method return page', () => {
       response: { status: 403 },
       message: 'private provider reconciliation 403 detail',
     });
-    render(<DataVerificationPaymentMethodReturnPage />);
+    render(await returnPage());
     const dialog = await screen.findByRole('dialog', { name: 'Re-authenticate' });
 
     await completeReturnReauth();
@@ -451,7 +474,7 @@ describe('data-verification payment-method return page', () => {
       state: 'pending',
       message: 'ignored pending detail',
     });
-    render(<DataVerificationPaymentMethodReturnPage />);
+    render(await returnPage());
 
     await completeReturnReauth('111111');
     fireEvent.click(await screen.findByRole('button', { name: 'Check again' }));
@@ -490,7 +513,7 @@ describe('data-verification payment-method return page', () => {
       state: 'pending',
       message: 'ignored pending detail',
     });
-    render(<DataVerificationPaymentMethodReturnPage />);
+    render(await returnPage());
     await completeReturnReauth();
     payinApi.getDataVerificationPayInReadiness.mockReturnValueOnce(retryPreflight.promise);
 
@@ -517,7 +540,7 @@ describe('data-verification payment-method return page', () => {
     payinApi.getDataVerificationPayInReadiness.mockRejectedValueOnce({
       response: { status: 404 },
     });
-    render(<DataVerificationPaymentMethodReturnPage />);
+    render(await returnPage());
 
     await waitFor(() => {
       expect(
@@ -529,7 +552,7 @@ describe('data-verification payment-method return page', () => {
   });
 
   it('renders fixed cancellation copy when the return rechallenge is closed', async () => {
-    render(<DataVerificationPaymentMethodReturnPage />);
+    render(await returnPage());
     const dialog = await screen.findByRole('dialog', { name: 'Re-authenticate' });
     const cancel = await screen.findByRole('button', { name: 'Cancel' });
     await waitFor(() => expect((cancel as HTMLButtonElement).disabled).toBe(false));
@@ -546,7 +569,7 @@ describe('data-verification payment-method return page', () => {
 
   it('checks availability before showing fixed failure copy for invalid return values', async () => {
     setReturnUrl('not-a-uuid', 'not-a-session');
-    render(<DataVerificationPaymentMethodReturnPage />);
+    render(await returnPage());
 
     expect(window.location.search).toBe('');
     expect(
@@ -568,7 +591,7 @@ describe('data-verification payment-method return page', () => {
       response: { status: 403 },
       message: 'private eligibility detail',
     });
-    render(<DataVerificationPaymentMethodReturnPage />);
+    render(await returnPage());
 
     await waitFor(() => {
       expect(
