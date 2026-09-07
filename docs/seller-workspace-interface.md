@@ -96,3 +96,11 @@ Saved review now returns one deterministic HTML document and its SHA-256 digest 
 Thirteen backend render/review tests pass, including active-HTML/resource injection, price changes, invalid prices and private-field exclusion. Eight frontend transport/render tests pass, including changed bytes, unsupported presentation versions, oversized content, cancellation and sandbox attributes. TypeScript and focused ESLint pass. Normal Chrome showed the actual sandboxed saved title, description, tags, $25 price and license from the shared synthetic backend. No approval/publication action has been enabled.
 
 The existing marketplace disclosure schema and service explicitly support `sample_decision=none` as well as approved rows. Preserve this product capability in the new contract, but never infer a seller's choice or a product-policy answer from silence. No sample decision is selected automatically.
+
+## Explicit approval screen
+
+SellerReview now displays server-provided confirmation statements when the approval stage is available. The seller explicitly chooses no public sample and confirms ownership, privacy, price/license and public discovery; all boxes start unchecked. Approval waits for the verified presentation frame to load. A saved receipt restores on refresh; any changed saved review resets the controls. Unknown responses retain the request identity, stale conflicts require refresh, and navigation ignores late results. This step saves approval only; publication and public sample preparation remain unfinished.
+
+Normal Chrome verified the real local approval endpoint/service/migration against synthetic data: $25 approval saved and survived refresh, while a saved $30 price required fresh unchecked confirmation. Focused tests, TypeScript and ESLint pass. No production action occurred.
+
+Approval review additionally displays the saved source filenames and sizes in a separate private section. They are never inserted into the public HTML presentation. The source summary is owner-only, decrypted under the saved review's locks and checked against its source version. A PostgreSQL-backed HTTP test verifies the source summary, matching receipt and foreign-owner denial; a frontend test checks that filenames remain outside the public iframe. The final frontend approval/render/transport run passed 13 tests.

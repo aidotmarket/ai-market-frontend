@@ -1,7 +1,7 @@
 import { createHash, webcrypto } from 'node:crypto';
 import { afterEach, beforeEach, expect, it, vi } from 'vitest';
-import { readListingReview } from './sellerListingReview';
-const client = vi.hoisted(() => ({get:vi.fn()}));
+import { readListingReview, approveListingReview, type ListingReview } from './sellerListingReview';
+const client = vi.hoisted(() => ({get:vi.fn(),post:vi.fn()}));
 vi.mock('./client', () => ({api:client}));
 const html = '<!doctype html><html><body>Regional retail — $25.00</body></html>';
 const review = {presentation_version:'seller-listing-review-v2', rendered_html:html, render_hash:createHash('sha256').update(html).digest('hex')};
@@ -26,4 +26,16 @@ it('does not return a render after navigation cancels the request', async () => 
   client.get.mockResolvedValue({data:review});
   const controller = new AbortController();controller.abort();
   await expect(readListingReview(controller.signal)).rejects.toThrow('Saved review could not be verified');
+});
+
+it('sends only exact review identities and explicit confirmations, never source or HTML payloads', async () => {
+  const prepared = {...review,review_hash:'c'.repeat(64),draft_version:1,source_version:2,confirmation_version:'seller-listing-confirmation-v1'} as ListingReview;
+  const receipt = {id:'approval',review_hash:prepared.review_hash,render_hash:prepared.render_hash,draft_version:1,source_version:2,sample_decision:'none'};
+  client.post.mockResolvedValue({data:receipt});
+  const signal = new AbortController().signal;
+  expect(await approveListingReview(prepared,'request-id',signal)).toEqual(receipt);
+  const body = client.post.mock.calls[0][1];
+  expect(body).toEqual({request_id:'request-id',review_hash:prepared.review_hash,render_hash:prepared.render_hash,confirmation_version:prepared.confirmation_version,sample_decision:'none',ownership_confirmed:true,privacy_confirmed:true,price_license_confirmed:true,public_disclosure_confirmed:true});
+  client.post.mockResolvedValue({data:{...receipt,source_version:3}});
+  await expect(approveListingReview(prepared,'request-id',signal)).rejects.toThrow('Approval could not be verified');
 });
