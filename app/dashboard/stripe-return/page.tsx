@@ -5,6 +5,7 @@ import { useRouter, useSearchParams } from 'next/navigation';
 import {
   getConnectStatus,
   getConnectOnboarding,
+  isConnectOnboardingTwoFactorRequired,
   redirectToConnectOnboarding,
 } from '@/api/connect';
 import { useToast } from '@/components/Toast';
@@ -14,9 +15,10 @@ export default function StripeReturnPage() {
   const searchParams = useSearchParams();
   const { toast } = useToast();
 
-  const [status, setStatus] = useState<'loading' | 'success' | 'timeout' | 'abandoned' | 'error'>('loading');
+  const [status, setStatus] = useState<'loading' | 'resuming' | 'success' | 'timeout' | 'abandoned' | 'error'>('loading');
   const [connecting, setConnecting] = useState(false);
   const cancelledRef = useRef(false);
+  const refreshRequestRef = useRef<ReturnType<typeof getConnectOnboarding> | null>(null);
   const redirectTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const pollTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
@@ -24,9 +26,21 @@ export default function StripeReturnPage() {
     cancelledRef.current = false;
 
     const abandoned = searchParams.get('abandoned');
-    if (abandoned === 'true') {
-      setStatus('abandoned');
-      return;
+    if (abandoned === '1' || abandoned === 'true') {
+      setStatus('resuming');
+      let cancelled = false;
+      // Reuse the mint request when Strict Mode replays this effect.
+      refreshRequestRef.current ??= getConnectOnboarding();
+      refreshRequestRef.current.then((res) => {
+        if (!cancelled) redirectToConnectOnboarding(res.data);
+      }).catch((err) => {
+        if (cancelled) return;
+        if (isConnectOnboardingTwoFactorRequired(err)) {
+          toast('Complete 2FA setup before connecting payouts.', 'info');
+        }
+        setStatus('abandoned');
+      });
+      return () => { cancelled = true; };
     }
 
     let attempts = 0;
@@ -83,7 +97,7 @@ export default function StripeReturnPage() {
         pollTimerRef.current = null;
       }
     };
-  }, [router, searchParams]);
+  }, [router, searchParams, toast]);
 
   const handleResume = async () => {
     setConnecting(true);
@@ -91,7 +105,11 @@ export default function StripeReturnPage() {
       const res = await getConnectOnboarding();
       redirectToConnectOnboarding(res.data);
     } catch (err) {
-      toast('Failed to resume Stripe connection', 'error');
+      if (isConnectOnboardingTwoFactorRequired(err)) {
+        toast('Complete 2FA setup before connecting payouts.', 'info');
+      } else {
+        toast('Failed to resume Stripe connection', 'error');
+      }
       setConnecting(false);
     }
   };
@@ -105,6 +123,10 @@ export default function StripeReturnPage() {
             <h2 className="text-xl font-semibold text-gray-900 mb-2">Verifying Connection</h2>
             <p className="text-gray-500">Please wait while we confirm your Stripe account setup...</p>
           </>
+        )}
+
+        {status === 'resuming' && (
+          <h2 className="text-xl font-semibold text-gray-900 mb-2">Returning you to Stripe...</h2>
         )}
 
         {status === 'success' && (
@@ -126,14 +148,15 @@ export default function StripeReturnPage() {
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
               </svg>
             </div>
-            <h2 className="text-xl font-semibold text-gray-900 mb-2">Verification Pending</h2>
-            <p className="text-gray-500 mb-6">Your account is being reviewed by Stripe. This can take a few minutes.</p>
+            <h2 className="text-xl font-semibold text-gray-900 mb-2">Stripe setup not finished</h2>
+            <p className="text-gray-500 mb-6">It looks like the Stripe form wasn't completed. You can pick up where you left off.</p>
             <div className="space-y-3">
               <button
-                onClick={() => window.location.reload()}
-                className="w-full rounded-lg bg-gray-100 px-4 py-2 text-sm font-medium text-gray-900 hover:bg-gray-200"
+                onClick={handleResume}
+                disabled={connecting}
+                className="w-full rounded-lg bg-[#3F51B5] px-4 py-2 text-sm font-medium text-white hover:bg-[#3545a0] disabled:opacity-50"
               >
-                Refresh Status
+                {connecting ? 'Loading...' : 'Continue Stripe setup'}
               </button>
               <button
                 onClick={() => router.push('/dashboard')}
