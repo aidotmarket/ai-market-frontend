@@ -1,7 +1,7 @@
 import Link from 'next/link';
 import type { SellerWorkspaceCapabilities, SellerWorkspaceConnection } from '@/api/sellerWorkspace';
 
-export type WorkspaceView = 'storage' | 'data' | 'listing';
+export type WorkspaceView = 'storage' | 'data' | 'listing' | 'review';
 
 export function WorkspaceOverview({ connections, view, onViewChange }: {
   connections: SellerWorkspaceConnection[];
@@ -33,7 +33,7 @@ export function WorkspaceOverview({ connections, view, onViewChange }: {
         </dl>
       </header>
       <nav aria-label="Workspace sections" className="flex gap-1 overflow-x-auto border-b border-gray-200">
-        {([['storage', 'Storage connections'], ['data', 'Choose what to sell'], ['listing', 'Prepare with Allai']] as const).map(([key, label]) => (
+        {([['storage', 'Storage connections'], ['data', 'Choose what to sell'], ['listing', 'Prepare with Allai'], ['review', 'Review listing']] as const).map(([key, label]) => (
           <button key={key} type="button" aria-current={view === key ? 'page' : undefined} onClick={() => onViewChange(key)} className={`shrink-0 border-b-2 px-4 py-3 text-sm font-medium focus-visible:outline-2 focus-visible:outline-[#3F51B5] ${view === key ? 'border-[#3F51B5] text-[#3F51B5]' : 'border-transparent text-gray-600 hover:border-gray-300 hover:text-gray-900'}`}>{label}</button>
         ))}
       </nav>

@@ -25,6 +25,7 @@ export interface SellerWorkspaceCapabilities {
   drafts?: CapabilityStage | null;
   listing_assistant?: CapabilityStage | null;
   sources?: CapabilityStage | null;
+  review?: CapabilityStage | null;
   providers: {
     aws: ProviderCapabilities;
     r2: ProviderCapabilities;
