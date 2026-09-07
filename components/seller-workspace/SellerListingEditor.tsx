@@ -12,6 +12,7 @@ type Draft = Record<DraftField, string>;
 interface FieldProposalEvent { field: string; value: string; reasoning: string }
 export type ListingAssistant = (request: {
   brief: string; draft: Draft; reviewing: DraftField; instruction: string;
+  history: Array<{ role: 'user' | 'assistant'; content: string }>;
 }, signal: AbortSignal) => Promise<{ message: string; proposals: FieldProposalEvent[] }>;
 const emptyDraft: Draft = { title: '', description: '', category: '', tags: '' };
 const limits: Record<DraftField, number> = { title: 255, description: 10000, category: 200, tags: 1000 };
@@ -76,7 +77,9 @@ export default function SellerListingEditor({ assistant, active = true, initialC
     const requestController = new AbortController();
     controller.current = requestController;
     try {
-      const result = await assistant({ brief, draft: { ...draft }, reviewing: activeField, instruction }, requestController.signal);
+      const result = await assistant({ brief, draft: { ...draft }, reviewing: activeField, instruction,
+        history: messages.slice(-6).map((item) => ({ role: item.role, content: item.content.slice(0, 4000) })),
+      }, requestController.signal);
       if (!mounted.current || requestController.signal.aborted) return;
       if (typeof result.message !== 'string' || result.message.length > 12000 || !Array.isArray(result.proposals)) throw new Error('Invalid assistant response');
       setMessages((current) => [...current, { role: 'assistant', content: result.message }]);
