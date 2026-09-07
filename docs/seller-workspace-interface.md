@@ -4,6 +4,8 @@ The seller dashboard now includes a journey overview, storage management, a scop
 
 ## Behavior
 
+- AWS S3 and Cloudflare R2 both have visible provider cards, including when storage is unavailable. The AWS action follows the server capability gate. R2 is represented explicitly with its unfinished setup status and no enabled connection action; showing the provider does not claim its integration is complete.
+
 - Storage connections retain the existing create, trust setup, verify, rotate, and disconnect contracts. Setup values remain in memory only and are cleared when changing workspace sections. Setup and result headings receive keyboard focus when opened.
 - Connection cards foreground the bucket, folder, region, and verification time. Technical identifiers are under Connection details.
 - Your data lists current objects from a verified connection using its exact pinned prefix. It displays file names as text, supports opaque-cursor pagination, and searches only loaded files. Switching connections discards old responses and data. Browsing does not create selectors or start jobs.

@@ -4,6 +4,7 @@ import { type FormEvent, useCallback, useEffect, useMemo, useRef, useState } fro
 import Link from 'next/link';
 import { SellerJourney, WorkspaceOverview, type WorkspaceView } from '@/components/seller-workspace/WorkspaceOverview';
 import { WorkspaceActivity, WorkspaceData } from '@/components/seller-workspace/WorkspaceData';
+import { StorageProviders } from '@/components/seller-workspace/StorageProviders';
 import {
   type AWSAuthorization,
   type ConnectionVerifyRequest,
@@ -492,6 +493,7 @@ export default function SellerWorkspacePage() {
     return (
       <div className="space-y-6">
         <h1 className="text-2xl font-bold text-gray-900">Seller Workspace</h1>
+        <StorageProviders capabilities={null} busy={null} onConnectAWS={handleCreate} />
         <div className="rounded-xl border border-gray-200 bg-white p-8 shadow-sm">
           <h2 className="text-lg font-semibold text-gray-900">AWS connections are unavailable</h2>
           <p className="mt-2 text-sm text-gray-600">
@@ -542,22 +544,7 @@ export default function SellerWorkspacePage() {
       <WorkspaceOverview connections={connections} view={view} onViewChange={(nextView) => { clearSensitive(); setActionError(null); setDisconnectConfirmation(null); setView(nextView); }} />
       {view === 'data' ? <WorkspaceData connections={connections} enabled={capabilities !== null && isAWSProfilingAvailable(capabilities)} /> : view === 'activity' ? <WorkspaceActivity connections={connections} enabled={capabilities !== null && isAWSProfilingAvailable(capabilities)} /> : <>
       {capabilities && <SellerJourney capabilities={capabilities} connected={connections.some((connection) => connection.status === 'verified')} />}
-      <div className="flex flex-wrap items-start justify-between gap-4">
-        <div>
-          <h2 className="text-xl font-semibold text-gray-900">Storage connections</h2>
-          <p className="mt-2 text-sm text-gray-600">
-            Connect a specific AWS S3 folder. You control which data ai.market can access.
-          </p>
-        </div>
-        <button
-          type="button"
-          onClick={handleCreate}
-          disabled={busyAction !== null}
-          className="rounded-lg bg-[#3F51B5] px-4 py-2 text-sm font-medium text-white hover:bg-[#303F9F] disabled:cursor-not-allowed disabled:opacity-50"
-        >
-          {busyAction === 'create-connection' ? 'Creating...' : 'Add AWS connection'}
-        </button>
-      </div>
+      <StorageProviders capabilities={capabilities} busy={busyAction} onConnectAWS={handleCreate} />
 
       {actionError && (
         <div className="rounded-lg border border-red-200 bg-red-50 p-4 text-sm text-red-800" role="alert">
@@ -819,7 +806,6 @@ export default function SellerWorkspacePage() {
           })}
         </section>
       )}
-      <p className="text-xs text-gray-500">Cloudflare R2 connection setup is not available in this interface yet.</p>
       </>}
     </div>
   );
