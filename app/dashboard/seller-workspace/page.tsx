@@ -1,10 +1,14 @@
 'use client';
 
 import { type FormEvent, useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import Link from 'next/link';
+import { SellerJourney, WorkspaceOverview, type WorkspaceView } from '@/components/seller-workspace/WorkspaceOverview';
+import { WorkspaceActivity, WorkspaceData } from '@/components/seller-workspace/WorkspaceData';
 import {
   type AWSAuthorization,
   type ConnectionVerifyRequest,
   type SellerWorkspaceConnection,
+  type SellerWorkspaceCapabilities,
   SellerWorkspaceApiError,
   createIdempotencyKey,
   createSellerWorkspaceConnection,
@@ -12,6 +16,7 @@ import {
   getSellerWorkspaceAuthorization,
   getSellerWorkspaceCapabilities,
   isAWSConnectionAvailable,
+  isAWSProfilingAvailable,
   listSellerWorkspaceConnections,
   rotateSellerWorkspaceConnection,
   verifySellerWorkspaceConnection,
@@ -140,10 +145,13 @@ function CopyValue({
 
 export default function SellerWorkspacePage() {
   const [pageState, setPageState] = useState<PageState>('loading');
+  const [capabilities, setCapabilities] = useState<SellerWorkspaceCapabilities | null>(null);
+  const [view, setView] = useState<WorkspaceView>('storage');
   const [connections, setConnections] = useState<SellerWorkspaceConnection[]>([]);
   const [authorizationSession, setAuthorizationSession] =
     useState<AuthorizationSession | null>(null);
   const authorizationRef = useRef<AuthorizationSession | null>(null);
+  const setupHeadingRef = useRef<HTMLHeadingElement>(null);
   const mountedRef = useRef(true);
   const mutationKeysRef = useRef(new Map<string, { fingerprint: string; key: string }>());
   const [scope, setScope] = useState<ConnectionVerifyRequest>(EMPTY_SCOPE);
@@ -166,6 +174,10 @@ export default function SellerWorkspacePage() {
     setAuthorizationSession(session);
     setCopiedField(null);
   }, []);
+
+  useEffect(() => {
+    if (authorizationSession) setupHeadingRef.current?.focus();
+  }, [authorizationSession]);
 
   useEffect(() => {
     if (!authorizationSession) return;
@@ -201,6 +213,7 @@ export default function SellerWorkspacePage() {
     mountedRef.current = true;
     clearSensitive();
     setConnections([]);
+    setCapabilities(null);
     setActionError(null);
     setPageState('loading');
 
@@ -208,6 +221,7 @@ export default function SellerWorkspacePage() {
       try {
         const capabilities = await getSellerWorkspaceCapabilities();
         if (cancelled) return;
+        setCapabilities(capabilities);
         if (!isAWSConnectionAvailable(capabilities)) {
           setPageState('unavailable');
           return;
@@ -481,8 +495,9 @@ export default function SellerWorkspacePage() {
         <div className="rounded-xl border border-gray-200 bg-white p-8 shadow-sm">
           <h2 className="text-lg font-semibold text-gray-900">AWS connections are unavailable</h2>
           <p className="mt-2 text-sm text-gray-600">
-            This capability is disabled or unavailable. No AWS connection actions are enabled.
+            Cloud storage setup is not currently available. You can still manage your existing listings.
           </p>
+          <Link href="/dashboard/listings" className="mt-5 inline-flex rounded-lg bg-[#3F51B5] px-4 py-2 text-sm font-medium text-white">Manage listings</Link>
         </div>
       </div>
     );
@@ -495,8 +510,9 @@ export default function SellerWorkspacePage() {
         <div className="rounded-xl border border-gray-200 bg-white p-8 shadow-sm">
           <h2 className="text-lg font-semibold text-gray-900">Active seller access required</h2>
           <p className="mt-2 text-sm text-gray-600">
-            AWS connections are available only after the server confirms an active seller capability.
+            Complete your seller setup to connect storage and prepare your data for buyers.
           </p>
+          <Link href="/dashboard/settings" className="mt-5 inline-flex rounded-lg bg-[#3F51B5] px-4 py-2 text-sm font-medium text-white">Go to seller settings</Link>
         </div>
       </div>
     );
@@ -523,11 +539,14 @@ export default function SellerWorkspacePage() {
 
   return (
     <div className="space-y-6">
+      <WorkspaceOverview connections={connections} view={view} onViewChange={(nextView) => { clearSensitive(); setActionError(null); setDisconnectConfirmation(null); setView(nextView); }} />
+      {view === 'data' ? <WorkspaceData connections={connections} enabled={capabilities !== null && isAWSProfilingAvailable(capabilities)} /> : view === 'activity' ? <WorkspaceActivity connections={connections} enabled={capabilities !== null && isAWSProfilingAvailable(capabilities)} /> : <>
+      {capabilities && <SellerJourney capabilities={capabilities} connected={connections.some((connection) => connection.status === 'verified')} />}
       <div className="flex flex-wrap items-start justify-between gap-4">
         <div>
-          <h1 className="text-2xl font-bold text-gray-900">Seller Workspace</h1>
+          <h2 className="text-xl font-semibold text-gray-900">Storage connections</h2>
           <p className="mt-2 text-sm text-gray-600">
-            Connect an AWS S3 prefix for seller data workflows. No AWS credentials are stored here.
+            Connect a specific AWS S3 folder. You control which data ai.market can access.
           </p>
         </div>
         <button
@@ -550,13 +569,13 @@ export default function SellerWorkspacePage() {
         <section className="rounded-xl border border-indigo-200 bg-white p-6 shadow-sm" aria-labelledby="aws-setup-title">
           <div className="flex items-start justify-between gap-4">
             <div>
-              <h2 id="aws-setup-title" className="text-lg font-semibold text-gray-900">
+              <h2 ref={setupHeadingRef} tabIndex={-1} id="aws-setup-title" className="text-lg font-semibold text-gray-900">
                 {authorizationSession.authorization.purpose === 'aws_external_id_rotation'
                   ? 'Reconnect / rotate AWS trust'
                   : 'Configure AWS trust'}
               </h2>
               <p className="mt-1 text-sm text-gray-600">
-                These server-generated values stay in this page only. Copy them into the AWS role trust policy.
+                In your AWS account, add this trust policy to the role for your data. Then return here to verify the connection.
               </p>
               <p className="mt-1 text-xs text-gray-500">
                 Available until {formatDate(authorizationSession.authorization.expires_at)}.
@@ -596,9 +615,9 @@ export default function SellerWorkspacePage() {
           {authorizationSession.authorization.purpose === 'aws_external_id' ? (
             <form className="mt-6 space-y-4 border-t border-gray-200 pt-6" onSubmit={handleVerify} autoComplete="off">
               <div>
-                <h3 className="font-medium text-gray-900">Verify the bounded S3 scope</h3>
+                <h3 className="font-medium text-gray-900">Choose the folder to connect</h3>
                 <p className="mt-1 text-sm text-gray-600">
-                  Enter the role and exact non-root prefix that ai.market should verify.
+                  Enter the role you configured and the S3 folder containing your data. Access is limited to this folder.
                 </p>
               </div>
               <div className="grid gap-4 md:grid-cols-2">
@@ -677,7 +696,8 @@ export default function SellerWorkspacePage() {
       {connections.length === 0 ? (
         <div className="rounded-xl border border-gray-200 bg-white p-12 text-center shadow-sm">
           <h2 className="text-lg font-medium text-gray-900">No AWS connections</h2>
-          <p className="mt-2 text-sm text-gray-500">Create a pending connection to receive server-generated trust values.</p>
+          <p className="mx-auto mt-2 max-w-lg text-sm leading-6 text-gray-500">Start with Add AWS connection. You will need access to your AWS account, the bucket containing your data, and the folder you want to connect.</p>
+          <p className="mt-4 text-xs text-gray-500">Connecting storage does not publish your data.</p>
         </div>
       ) : (
         <section className="space-y-4" aria-label="AWS connections">
@@ -691,12 +711,12 @@ export default function SellerWorkspacePage() {
                 <div className="flex flex-wrap items-start justify-between gap-4">
                   <div>
                     <div className="flex flex-wrap items-center gap-3">
-                      <h2 className="text-lg font-semibold text-gray-900">AWS S3 connection</h2>
+                      <h2 className="break-all text-lg font-semibold text-gray-900">{connection.bucket || 'AWS S3 connection'}</h2>
                       <span className={`rounded-full px-2.5 py-0.5 text-xs font-medium ${status.classes}`}>
                         {status.label}
                       </span>
                     </div>
-                    <p className="mt-1 font-mono text-xs text-gray-500">{connection.id}</p>
+                    <p className="mt-1 break-all text-xs text-gray-500">{connection.prefix ? `AWS S3 · ${connection.prefix}` : connection.status === 'pending_authorization' ? 'AWS S3 · Setup in progress' : 'AWS S3'}</p>
                   </div>
                   <div className="flex flex-wrap gap-2">
                     {awaitingSetup && (
@@ -749,13 +769,19 @@ export default function SellerWorkspacePage() {
                 )}
 
                 {connection.status === 'verified' && (
-                  <dl className="mt-5 grid gap-4 text-sm sm:grid-cols-2 lg:grid-cols-4">
-                    <div><dt className="text-gray-500">Role ARN</dt><dd className="mt-1 break-all font-mono text-gray-900">{connection.role_arn}</dd></div>
-                    <div><dt className="text-gray-500">Bucket</dt><dd className="mt-1 font-mono text-gray-900">{connection.bucket}</dd></div>
-                    <div><dt className="text-gray-500">Prefix</dt><dd className="mt-1 break-all font-mono text-gray-900">{connection.prefix}</dd></div>
+                  <dl className="mt-5 grid gap-4 text-sm sm:grid-cols-3">
+                    <div><dt className="text-gray-500">Connected folder</dt><dd className="mt-1 break-all text-gray-900">{connection.prefix}</dd></div>
                     <div><dt className="text-gray-500">Region</dt><dd className="mt-1 font-mono text-gray-900">{connection.region}</dd></div>
+                    <div><dt className="text-gray-500">Verified</dt><dd className="mt-1 text-gray-900">{formatDate(connection.verified_at)}</dd></div>
                   </dl>
                 )}
+                <details className="mt-5 border-t border-gray-100 pt-4 text-xs text-gray-500">
+                  <summary className="cursor-pointer font-medium text-gray-600">Connection details</summary>
+                  <dl className="mt-3 space-y-3">
+                    <div><dt>Connection ID</dt><dd className="mt-1 break-all font-mono">{connection.id}</dd></div>
+                    {connection.role_arn && <div><dt>Role ARN</dt><dd className="mt-1 break-all font-mono">{connection.role_arn}</dd></div>}
+                  </dl>
+                </details>
 
                 {rotationPending && (
                   <p className="mt-4 text-sm text-amber-800">
@@ -793,6 +819,8 @@ export default function SellerWorkspacePage() {
           })}
         </section>
       )}
+      <p className="text-xs text-gray-500">Cloudflare R2 connection setup is not available in this interface yet.</p>
+      </>}
     </div>
   );
 }

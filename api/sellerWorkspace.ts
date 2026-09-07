@@ -237,3 +237,78 @@ export function disconnectSellerWorkspaceConnection(
     })
   );
 }
+
+export function isAWSProfilingAvailable(capabilities: SellerWorkspaceCapabilities): boolean {
+  const profile = capabilities?.providers?.aws?.profile;
+  return capabilities?.master?.enabled === true && capabilities.master.status === 'available'
+    && profile?.enabled === true && profile.status === 'available';
+}
+
+export interface WorkspaceObject {
+  key: string;
+  version_id: string | null;
+  etag: string;
+  size: number;
+  last_modified: string;
+  format_candidate: 'csv' | 'tsv' | 'json' | 'jsonl' | 'parquet' | 'unknown';
+}
+
+export interface WorkspaceProfileJob {
+  id: string;
+  connection_id: string;
+  runtime_id: string;
+  state: 'queued' | 'starting' | 'running' | 'validating_result' | 'cancel_requested' | 'succeeded' | 'failed' | 'cancelled' | 'expired';
+  version: number;
+  attempt: number;
+  objects_completed: number;
+  source_bytes_read: number;
+  rows_examined: number;
+  field_records_emitted: number;
+  safe_failure_code: string | null;
+  evidence_ref: string | null;
+}
+
+export interface WorkspaceProfileEvidence {
+  id: string;
+  result: {
+    semantic_evidence: {
+      observed: { objects_completed: number; rows_examined: number; source_bytes_read: number; truncated: boolean; truncation_reasons: string[] };
+      objects: Array<{
+        object_ref: string;
+        format: string;
+        size: number;
+        warning_codes: string[];
+        fields: Array<{
+          position: string;
+          physical_type: string;
+          non_null_count: number;
+          null_count: number;
+          pii_classes: string[];
+          quality_flags: string[];
+        }>;
+      }>;
+    };
+  };
+}
+
+export function listWorkspaceObjects(connectionId: string, prefix: string, cursor?: string) {
+  return safely<{ objects: WorkspaceObject[]; next_cursor: string | null }>(api.get(
+    `${BASE_PATH}/connections/${encodeURIComponent(connectionId)}/objects`,
+    { params: { prefix, version_mode: 'current', limit: 100, ...(cursor ? { cursor } : {}) } }
+  ));
+}
+
+export function listWorkspaceProfileJobs(cursor?: string) {
+  return safely<{ jobs: WorkspaceProfileJob[]; next_cursor: string | null }>(api.get(
+    `${BASE_PATH}/profile-jobs`, { params: { limit: 50, ...(cursor ? { cursor } : {}) } }
+  ));
+}
+
+export function cancelWorkspaceProfileJob(job: WorkspaceProfileJob, idempotencyKey: string) {
+  return safely<WorkspaceProfileJob>(api.post(`${BASE_PATH}/profile-jobs/${encodeURIComponent(job.id)}/cancel`,
+    { expected_version: job.version }, { headers: mutationHeaders(idempotencyKey) }));
+}
+
+export function getWorkspaceProfileEvidence(evidenceId: string) {
+  return safely<WorkspaceProfileEvidence>(api.get(`${BASE_PATH}/profile-evidence/${encodeURIComponent(evidenceId)}`));
+}
