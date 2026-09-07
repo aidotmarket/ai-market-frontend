@@ -11,6 +11,7 @@ const mocks = vi.hoisted(() => ({
     locale: 'en' as const,
     anonymousSurfaceActive: true,
     anonymousAvailable: true,
+    page: '/',
   },
 }));
 
@@ -23,9 +24,17 @@ describe('AllAIFab anonymous visitor entry point', () => {
     mocks.context.isOpen = false;
     mocks.context.anonymousSurfaceActive = true;
     mocks.context.anonymousAvailable = true;
+    mocks.context.page = '/';
   });
 
   afterEach(cleanup);
+
+  it('keeps Allai visibly named throughout the seller workspace', () => {
+    mocks.context.anonymousSurfaceActive = false;
+    mocks.context.page = '/dashboard/seller-workspace';
+    render(<AllAIFab />);
+    expect(screen.getByRole('button', { name: 'Open Allai — here to help' }).textContent).toContain('Allai · Here to help');
+  });
 
   it('shows a visible AI label when the approved anonymous mode is active', () => {
     render(<AllAIFab />);
