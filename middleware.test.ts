@@ -24,7 +24,7 @@ describe('AI crawler middleware', () => {
     vi.stubGlobal('fetch', fetchMock);
     vi.stubEnv('API_URL', 'https://backend.example');
     vi.stubEnv('NEXT_PUBLIC_API_URL', 'https://public-backend.example');
-    vi.stubEnv('INTERNAL_API_KEY', 'test-internal-key');
+    vi.stubEnv('AI_CRAWL_BEACON_KEY', 'test-beacon-key');
   });
 
   afterEach(() => {
@@ -39,7 +39,7 @@ describe('AI crawler middleware', () => {
       'https://backend.example/api/v1/internal/ai-crawl-event',
       {
         method: 'POST',
-        headers: { 'content-type': 'application/json', 'x-internal-api-key': 'test-internal-key' },
+        headers: { 'content-type': 'application/json', 'x-ai-crawl-beacon-key': 'test-beacon-key' },
         body: JSON.stringify({ user_agent: 'GPTBot/1.0', path: '/listings/some-slug', ip: '203.0.113.7', status_code: 200 }),
         keepalive: true,
       },
@@ -78,12 +78,20 @@ describe('AI crawler middleware', () => {
   });
 
   it.each(['key', 'base'])('skips the beacon when the %s is missing', (missing) => {
-    if (missing === 'key') vi.stubEnv('INTERNAL_API_KEY', undefined);
+    if (missing === 'key') vi.stubEnv('AI_CRAWL_BEACON_KEY', undefined);
     else {
       vi.stubEnv('API_URL', undefined);
       vi.stubEnv('NEXT_PUBLIC_API_URL', undefined);
     }
     expectNext(middleware(request(), event));
+    expect(fetchMock).not.toHaveBeenCalled();
+    expect(waitUntil).not.toHaveBeenCalled();
+  });
+
+  it('does not use the internal API key when the beacon key is unset', () => {
+    vi.stubEnv('AI_CRAWL_BEACON_KEY', undefined);
+    vi.stubEnv('INTERNAL_API_KEY', 'test-internal-key');
+    expectNext(middleware(request('/listings/some-slug', 'GPTBot/1.0'), event));
     expect(fetchMock).not.toHaveBeenCalled();
     expect(waitUntil).not.toHaveBeenCalled();
   });

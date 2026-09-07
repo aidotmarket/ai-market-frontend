@@ -22,15 +22,15 @@ export function middleware(request: NextRequest, event: NextFetchEvent) {
     path.startsWith('/sitemap-');
   const userAgent = request.headers.get('user-agent');
   const apiBase = process.env.API_URL || process.env.NEXT_PUBLIC_API_URL;
-  const internalApiKey = process.env.INTERNAL_API_KEY;
+  const aiCrawlBeaconKey = process.env.AI_CRAWL_BEACON_KEY;
 
-  if (isPublicRoute && detectAiBot(userAgent) && apiBase && internalApiKey) {
+  if (isPublicRoute && detectAiBot(userAgent) && apiBase && aiCrawlBeaconKey) {
     try {
       event.waitUntil(fetch(`${apiBase}/api/v1/internal/ai-crawl-event`, {
         method: 'POST',
         headers: {
           'content-type': 'application/json',
-          'x-internal-api-key': internalApiKey,
+          'x-ai-crawl-beacon-key': aiCrawlBeaconKey,
         },
         body: JSON.stringify({
           user_agent: userAgent,
