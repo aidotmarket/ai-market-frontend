@@ -8,6 +8,7 @@ import { StorageProviders } from '@/components/seller-workspace/StorageProviders
 import SellerListingEditor from '@/components/seller-workspace/SellerListingEditor';
 import SavedListingEditor from '@/components/seller-workspace/SavedListingEditor';
 import { WorkspacePanel } from '@/components/seller-workspace/WorkspacePanel';
+import { createListingAssistant } from '@/api/sellerListingAssistant';
 import {
   type AWSAuthorization,
   type ConnectionVerifyRequest,
@@ -148,6 +149,7 @@ function CopyValue({
 }
 
 export default function SellerWorkspacePage() {
+  const listingAssistant = useMemo(() => createListingAssistant(), []);
   const [pageState, setPageState] = useState<PageState>('loading');
   const [capabilities, setCapabilities] = useState<SellerWorkspaceCapabilities | null>(null);
   const [view, setView] = useState<WorkspaceView>('storage');
@@ -228,7 +230,8 @@ export default function SellerWorkspacePage() {
         setCapabilities(capabilities);
         const canConnect = isAWSConnectionAvailable(capabilities);
         const canSaveDraft = capabilities.master.enabled && capabilities.drafts?.enabled && capabilities.drafts.status === 'available';
-        if (!canConnect && !canSaveDraft) {
+        const canUseAllai = capabilities.master.enabled && capabilities.listing_assistant?.enabled && capabilities.listing_assistant.status === 'available';
+        if (!canConnect && !canSaveDraft && !canUseAllai) {
           setPageState('unavailable');
           return;
         }
@@ -548,7 +551,7 @@ export default function SellerWorkspacePage() {
     <div className="space-y-6">
       <WorkspaceOverview connections={connections} view={view} onViewChange={(nextView) => { clearSensitive(); setActionError(null); setDisconnectConfirmation(null); setView(nextView); }} />
       <WorkspacePanel active={view === 'data'}><WorkspaceData connections={connections} enabled={capabilities !== null && isAWSProfilingAvailable(capabilities)} /></WorkspacePanel>
-      <WorkspacePanel active={view === 'listing'}>{capabilities?.master.enabled && capabilities?.drafts?.enabled && capabilities.drafts.status === 'available' ? <SavedListingEditor active={view === 'listing'} /> : <SellerListingEditor active={view === 'listing'} />}</WorkspacePanel>
+      <WorkspacePanel active={view === 'listing'}>{capabilities?.master.enabled && capabilities?.drafts?.enabled && capabilities.drafts.status === 'available' ? <SavedListingEditor active={view === 'listing'} assistant={capabilities.listing_assistant?.enabled && capabilities.listing_assistant.status === 'available' ? listingAssistant : undefined} /> : <SellerListingEditor active={view === 'listing'} assistant={capabilities?.master.enabled && capabilities.listing_assistant?.enabled && capabilities.listing_assistant.status === 'available' ? listingAssistant : undefined} />}</WorkspacePanel>
       <WorkspacePanel active={view === 'storage'}>
       {capabilities && <SellerJourney capabilities={capabilities} connected={connections.some((connection) => connection.status === 'verified')} />}
       <StorageProviders capabilities={capabilities} busy={busyAction} onConnectAWS={handleCreate} />

@@ -21,6 +21,7 @@ const buttonClass = 'rounded-lg border border-gray-300 bg-white px-3 py-2 text-s
 
 export default function SellerListingEditor({ assistant, active = true, initialContent, onSave }: { assistant?: ListingAssistant; active?: boolean; initialContent?: ListingDraftContent; onSave?: (content: ListingDraftContent) => Promise<void> }) {
   const [messages, setMessages] = useState<Array<{ role: 'user' | 'assistant'; content: string }>>([]);
+  const completedHistory = useRef<Array<{ role: 'user' | 'assistant'; content: string }>>([]);
   const [isStreaming, setIsStreaming] = useState(false);
   const [draft, setDraft] = useState<Draft>(initialContent ? { title: initialContent.title, description: initialContent.description, category: initialContent.category, tags: initialContent.tags } : emptyDraft);
   const [activeField, setActiveField] = useState<DraftField>('title');
@@ -78,10 +79,11 @@ export default function SellerListingEditor({ assistant, active = true, initialC
     controller.current = requestController;
     try {
       const result = await assistant({ brief, draft: { ...draft }, reviewing: activeField, instruction,
-        history: messages.slice(-6).map((item) => ({ role: item.role, content: item.content.slice(0, 4000) })),
+        history: completedHistory.current.slice(-6).map((item) => ({ role: item.role, content: item.content.slice(0, 4000) })),
       }, requestController.signal);
       if (!mounted.current || requestController.signal.aborted) return;
       if (typeof result.message !== 'string' || result.message.length > 12000 || !Array.isArray(result.proposals)) throw new Error('Invalid assistant response');
+      completedHistory.current = [...completedHistory.current.slice(-4), { role: 'user', content: instruction }, { role: 'assistant', content: result.message }];
       setMessages((current) => [...current, { role: 'assistant', content: result.message }]);
       for (const proposal of result.proposals.slice(0, 4)) {
         if (!proposal || !fields.some(([field]) => field === proposal.field)) continue;
@@ -89,7 +91,10 @@ export default function SellerListingEditor({ assistant, active = true, initialC
         if (typeof proposal.value !== 'string' || !proposal.value.trim() || proposal.value.length > limits[field]) continue;
         setProposals((current) => ({ ...current, [field]: { ...proposal, reasoning: typeof proposal.reasoning === 'string' ? proposal.reasoning.slice(0, 2000) : '' } }));
       }
-    } catch { if (mounted.current && !requestController.signal.aborted) setError('Allai could not respond. Your draft is still here; try again.'); }
+    } catch (error) { if (mounted.current && !requestController.signal.aborted) {
+      const status = axios.isAxiosError(error) ? error.response?.status : undefined;
+      setError(status === 402 ? 'There are not enough starter credits for this request. Your draft is still here and you can continue editing.' : status === 409 || status === 429 ? 'Allai is already working or receiving too many requests. Your draft is still here; try again shortly.' : 'Allai could not respond. Your draft is still here; try again.');
+    } }
     finally { if (controller.current === requestController) { requesting.current = false; if (mounted.current) setIsStreaming(false); } }
   };
   const accept = (field: DraftField) => {
@@ -103,6 +108,7 @@ export default function SellerListingEditor({ assistant, active = true, initialC
   return (
     <section className="space-y-5" aria-labelledby="listing-editor-title">
       <div><h2 id="listing-editor-title" className="text-xl font-semibold text-gray-900">Prepare your listing with Allai</h2><p className="mt-2 max-w-3xl text-sm leading-6 text-gray-600">Let Allai do the writing and suggest metadata tags. Review her suggestions, ask for changes, and decide what buyers will see.</p></div>
+      {assistant && <p className="text-sm text-gray-600">Allai requests use your existing starter credits. Editing and saving your draft do not use credits.</p>}
       <div className="grid items-start gap-5 lg:grid-cols-[minmax(0,1fr)_320px] xl:grid-cols-[minmax(0,1fr)_360px]">
         <div className="space-y-5 rounded-xl border border-gray-200 bg-white p-5 sm:p-6">
           <div className="rounded-lg bg-indigo-50 p-4"><label htmlFor="seller-listing-brief" className="text-sm font-semibold text-indigo-950">Give Allai a starting point</label><p className="mt-1 text-xs leading-5 text-indigo-900">Tell her what the data covers and who it helps. Share information you want her to use for the listing.</p><textarea id="seller-listing-brief" rows={3} maxLength={4000} value={brief} onChange={(event) => setBrief(event.target.value)} className={fieldClass} placeholder="For example: weekly retail sales by region, covering 2024–2026…" /><button type="button" disabled={!assistant || isStreaming || !brief.trim()} onClick={() => ask('Draft my listing title, description, category and tags.')} className="mt-3 rounded-lg bg-[#3F51B5] px-4 py-2 text-sm font-semibold text-white disabled:opacity-50">{isStreaming ? 'Allai is working…' : 'Ask Allai to draft my listing'}</button></div>

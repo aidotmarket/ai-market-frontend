@@ -2,9 +2,19 @@
 import { act, cleanup, fireEvent, render, screen } from '@testing-library/react';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import SellerListingEditor from './SellerListingEditor';
+import { AxiosError } from 'axios';
 afterEach(cleanup);
 
 describe('Allai seller listing review', () => {
+  it('explains exhausted starter credits while keeping manual editing available', async () => {
+    const assistant = vi.fn().mockRejectedValue(new AxiosError('credits', undefined, undefined, undefined, { status: 402 } as never));
+    render(<SellerListingEditor assistant={assistant} />);
+    fireEvent.change(screen.getByLabelText('Give Allai a starting point'), { target: { value: 'Retail sales' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Ask Allai to draft my listing' }));
+    await screen.findByText(/not enough starter credits/);
+    fireEvent.change(screen.getByLabelText('Title'), { target: { value: 'My own title' } });
+    expect((screen.getByLabelText('Title') as HTMLInputElement).value).toBe('My own title');
+  });
   it('preserves edits across sections and ignores a cancelled response after returning', async () => {
     let finish!: (value: { message: string; proposals: never[] }) => void;
     let signal!: AbortSignal;
@@ -61,6 +71,7 @@ describe('Allai seller listing review', () => {
     await screen.findByRole('alert');
     expect((screen.getByLabelText('Title') as HTMLInputElement).value).toBe('My title');
     await act(async () => fireEvent.click(screen.getByRole('button', { name: 'Ask Allai to draft my listing' })));
+    expect(assistant.mock.calls[1][0]).toEqual(assistant.mock.calls[0][0]);
     unmount();
     expect(signal.aborted).toBe(true);
   });

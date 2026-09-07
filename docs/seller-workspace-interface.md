@@ -12,7 +12,9 @@ The reference is AIM-DATA's `frontend/src/pages/DatasetDetail.tsx`: generated ti
 
 The listing assistant has a separate typed request/response boundary. It accepts the seller's brief, draft metadata, active field and instruction; it returns a message and bounded proposed changes to the four allowed metadata fields. Proposals do not overwrite fields until accepted. Price, license, ownership and publication are not allowed proposal fields. Leaving the editor aborts a pending request. Explicit private draft saving is available only when the backend capability enables it; saving never publishes.
 
-Live assistant connection remains unfinished. The existing website Allai chat sends to `/api/allai/support/anonymous/message`, a public-support/retrieval surface; the editor does not send seller drafting context there. Without a listing assistant adapter, generation and chat submission are disabled with an explicit unavailable state. The local preview injects synthetic responses from outside the application repository. Permitted source metadata and live assistant generation remain to be connected. Private draft persistence is implemented in companion backend PR 342 and tested locally; production deployment remains outstanding.
+The authenticated adapter now uses `/seller-workspace/listing-assistant` when the master and `listing_assistant` capability permit it. Listing context never goes to the public support endpoint. Max selected existing starter credits for this flow: the backend reserves and settles that allowance without paid fallback or a new grant. Insufficient credit leaves the draft editable. Unknown responses retry with the same request identity; stale responses cannot clear a newer retry identity. Without the capability, assistant submission stays disabled.
+
+Normal Chrome exercised the actual HTTP adapter and credit ledger with an isolated synthetic seller and model. Suggestions required acceptance and saved through the private draft endpoint. Live provider behavior and production deployment remain unverified. Companion backend PR 342 contains both the draft and assistant migrations, all default off.
 
 ## Behavior
 
@@ -31,7 +33,7 @@ Live assistant connection remains unfinished. The existing website Allai chat se
 
 ## Remaining journey
 
-Next: seller-owned listing assistant backend and permitted metadata context, persistent source selection, exact seller review, then workspace publication/delivery. Cloudflare R2 connection remains unfinished. Allai should do most drafting/tagging work; manual editing remains available and separate marketplace verification is not a listing prerequisite. Existing manual listings remain at `/dashboard/listings`; this interface never sends a workspace draft through the legacy publication path.
+Next: permitted metadata context, persistent source selection, exact seller review, then workspace publication/delivery. Cloudflare R2 connection remains unfinished. Allai should do most drafting/tagging work; manual editing remains available and separate marketplace verification is not a listing prerequisite. Existing manual listings remain at `/dashboard/listings`; this interface never sends a workspace draft through the legacy publication path.
 
 Backend contract gap: the inspected object-list endpoint currently shares the W3 profile capability gate. The frontend respects that availability gate without asking the seller to run a profile. Independent source-discovery availability must be established server-side before this flow can work when profiling is disabled. No feature flags or provider resources are changed here.
 
