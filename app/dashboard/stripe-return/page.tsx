@@ -19,6 +19,7 @@ export default function StripeReturnPage() {
   const [connecting, setConnecting] = useState(false);
   const cancelledRef = useRef(false);
   const refreshRequestRef = useRef<ReturnType<typeof getConnectOnboarding> | null>(null);
+  const refreshTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const redirectTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const pollTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
@@ -29,8 +30,21 @@ export default function StripeReturnPage() {
     if (abandoned === '1' || abandoned === 'true') {
       setStatus('resuming');
       let cancelled = false;
-      // Reuse the mint request when Strict Mode replays this effect.
-      refreshRequestRef.current ??= getConnectOnboarding();
+      const clearRefreshTimer = () => {
+        if (refreshTimerRef.current !== null) {
+          clearTimeout(refreshTimerRef.current);
+          refreshTimerRef.current = null;
+        }
+      };
+      refreshTimerRef.current = setTimeout(() => {
+        cancelled = true;
+        refreshTimerRef.current = null;
+        setStatus('abandoned');
+      }, 15000);
+      // Reuse only the in-flight mint when Strict Mode replays this effect.
+      refreshRequestRef.current ??= getConnectOnboarding().finally(() => {
+        refreshRequestRef.current = null;
+      });
       refreshRequestRef.current.then((res) => {
         if (!cancelled) redirectToConnectOnboarding(res.data);
       }).catch((err) => {
@@ -39,8 +53,13 @@ export default function StripeReturnPage() {
           toast('Complete 2FA setup before connecting payouts.', 'info');
         }
         setStatus('abandoned');
+      }).finally(() => {
+        if (!cancelled) clearRefreshTimer();
       });
-      return () => { cancelled = true; };
+      return () => {
+        cancelled = true;
+        clearRefreshTimer();
+      };
     }
 
     let attempts = 0;
@@ -126,7 +145,10 @@ export default function StripeReturnPage() {
         )}
 
         {status === 'resuming' && (
-          <h2 className="text-xl font-semibold text-gray-900 mb-2">Returning you to Stripe...</h2>
+          <>
+            <div className="mx-auto h-12 w-12 animate-spin rounded-full border-4 border-[#3F51B5] border-t-transparent mb-4"></div>
+            <h2 className="text-xl font-semibold text-gray-900 mb-2">Returning you to Stripe...</h2>
+          </>
         )}
 
         {status === 'success' && (

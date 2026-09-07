@@ -59,6 +59,47 @@ describe('Stripe return', () => {
     },
   );
 
+  it('mints a fresh link on re-entry after a settled Strict Mode refresh', async () => {
+    navigation.searchParams = new URLSearchParams('abandoned=1');
+    const firstData = { onboarding_url: 'https://connect.stripe.com/setup/first' };
+    const secondData = { onboarding_url: 'https://connect.stripe.com/setup/second' };
+    connectApi.getConnectOnboarding
+      .mockResolvedValueOnce({ data: firstData })
+      .mockResolvedValueOnce({ data: secondData });
+    const view = render(<StrictMode><StripeReturnPage /></StrictMode>);
+    await waitFor(() => expect(connectApi.redirectToConnectOnboarding).toHaveBeenCalledExactlyOnceWith(firstData));
+    expect(connectApi.getConnectOnboarding).toHaveBeenCalledOnce();
+
+    navigation.searchParams = new URLSearchParams();
+    await act(async () => { view.rerender(<StrictMode><StripeReturnPage /></StrictMode>); });
+    navigation.searchParams = new URLSearchParams('abandoned=1');
+    await act(async () => { view.rerender(<StrictMode><StripeReturnPage /></StrictMode>); });
+
+    expect(connectApi.getConnectOnboarding).toHaveBeenCalledTimes(2);
+    expect(connectApi.redirectToConnectOnboarding.mock.calls).toEqual([[firstData], [secondData]]);
+  });
+
+  it('offers resume after 15 seconds and ignores a late refresh resolution', async () => {
+    vi.useFakeTimers();
+    navigation.searchParams = new URLSearchParams('abandoned=1');
+    let resolveOnboarding!: (value: { data: typeof onboardingData }) => void;
+    connectApi.getConnectOnboarding.mockReturnValue(new Promise((resolve) => {
+      resolveOnboarding = resolve;
+    }));
+    render(<StrictMode><StripeReturnPage /></StrictMode>);
+    expect(connectApi.getConnectOnboarding).toHaveBeenCalledOnce();
+    await act(async () => { await vi.advanceTimersByTimeAsync(14999); });
+    expect(screen.getByText('Returning you to Stripe...')).not.toBeNull();
+    await act(async () => { await vi.advanceTimersByTimeAsync(1); });
+    expect(screen.getByText('Setup Incomplete')).not.toBeNull();
+    expect(screen.getByRole('button', { name: 'Resume Onboarding' }).hasAttribute('disabled')).toBe(false);
+
+    await act(async () => { resolveOnboarding({ data: onboardingData }); });
+    expect(connectApi.redirectToConnectOnboarding).not.toHaveBeenCalled();
+    expect(screen.getByText('Setup Incomplete')).not.toBeNull();
+    expect(screen.getByRole('button', { name: 'Resume Onboarding' })).not.toBeNull();
+  });
+
   it('falls back to Setup Incomplete after a failed refresh and lets the seller retry', async () => {
     navigation.searchParams = new URLSearchParams('abandoned=1');
     connectApi.getConnectOnboarding.mockRejectedValueOnce(new Error('unavailable'));
