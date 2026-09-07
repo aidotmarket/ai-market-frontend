@@ -1,3 +1,5 @@
+export const AIM_DATA_CONTINUATION = /^\/oauth\/authorize\?request=([A-Za-z0-9_-]{43})(?![\s\S])/;
+
 const ALLOWED_PREFIXES = ['/listings', '/dashboard', '/checkout', '/requests'];
 const LISTING_DETAIL_REDIRECT = /^\/listings\/[a-z0-9](?:[a-z0-9._~-]*[a-z0-9])?(?:[?#][^\r\n]*)?$/i;
 const REDIRECT_CONTROL_CHARACTERS = /[\u0000-\u001F\u007F-\u009F\u2028\u2029]/u;
@@ -14,12 +16,13 @@ export function validateRedirect(
 ): string {
   if (!redirect || typeof redirect !== 'string') return fallback;
 
+  if (AIM_DATA_CONTINUATION.test(redirect)) return redirect;
   // Decode iteratively to handle double-encoding
   let decoded = redirect;
   let prev = '';
   for (let i = 0; i < 5 && decoded !== prev; i++) {
     prev = decoded;
-    decoded = decodeURIComponent(decoded);
+    try { decoded = decodeURIComponent(decoded); } catch { return fallback; }
   }
 
   // Block protocol-relative URLs, backslashes, and protocol schemes
