@@ -3,6 +3,7 @@
 import { useEffect, useRef, useState } from 'react';
 import axios from 'axios';
 import type { ListingDraftContent } from '@/api/sellerListingDraft';
+import ListingPreview from './ListingPreview';
 
 const fields = [
   ['title', 'Title'], ['description', 'Description'], ['category', 'Category'], ['tags', 'Tags'],
@@ -32,6 +33,7 @@ export default function SellerListingEditor({ assistant, active = true, initialC
   const [reviewed, setReviewed] = useState<DraftField[]>([]);
   const [price, setPrice] = useState(initialContent?.price ?? '');
   const [license, setLicense] = useState(initialContent?.license ?? '');
+  const [previewOpen, setPreviewOpen] = useState(false);
   const snapshot = JSON.stringify({ brief, ...draft, price, license });
   const [savedSnapshot, setSavedSnapshot] = useState(initialContent ? JSON.stringify({ brief: initialContent.brief, title: initialContent.title, description: initialContent.description, category: initialContent.category, tags: initialContent.tags, price: initialContent.price, license: initialContent.license }) : '');
   const [saving, setSaving] = useState(false);
@@ -129,6 +131,8 @@ export default function SellerListingEditor({ assistant, active = true, initialC
           {error && <p role="alert" className="rounded-lg bg-red-50 p-3 text-sm text-red-800">{error}</p>}
         </aside>
       </div>
+      <button type="button" aria-expanded={previewOpen} aria-controls="seller-listing-preview" onClick={() => setPreviewOpen(current => !current)} className={buttonClass}>{previewOpen ? 'Hide listing preview' : 'Preview my listing'}</button>
+      {previewOpen && <div id="seller-listing-preview"><ListingPreview draft={{ ...draft, price, license }} /></div>}
     </section>
   );
 }

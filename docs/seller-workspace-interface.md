@@ -68,3 +68,7 @@ Instructions checked against official documentation on 2026-09-07:
 - https://docs.aws.amazon.com/AmazonS3/latest/userguide/GetStartedWithS3.html
 
 Guide state is temporary and resets when closed or unmounted. Three focused interaction tests cover existing-storage handoff, capability enforcement, and R2's unavailable boundary. Normal Chrome verified both guides in the synthetic preview.
+
+## Private listing preview
+
+Preview my listing brings current title, description, category, deduplicated tags, USD price and license together. It includes unsaved edits and explicitly remains private. Brief/chat/unaccepted proposals are excluded. Missing fields and invalid prices show placeholders; there is no publish button or recorded approval. Two focused tests and normal Chrome verified this view. Source binding and final versioned approval remain outstanding.
