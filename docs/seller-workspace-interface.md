@@ -29,13 +29,13 @@ Normal Chrome exercised the actual HTTP adapter and credit ledger with an isolat
 
 ## Existing backend contracts used
 
-`GET /seller-workspace/connections/{id}/objects`, `GET /seller-workspace/profile-jobs`, `POST /seller-workspace/profile-jobs/{id}/cancel`, and `GET /seller-workspace/profile-evidence/{id}`. The common client adds `/api/v1`. Object discovery uses `version_mode=current`, limit 100, the connection's pinned prefix, and the returned opaque cursor. Activity pages use limit 50.
+`GET /seller-workspace/connections/{id}/source-objects`, `GET /seller-workspace/profile-jobs`, `POST /seller-workspace/profile-jobs/{id}/cancel`, and `GET /seller-workspace/profile-evidence/{id}`. The common client adds `/api/v1`. Object discovery uses `version_mode=current`, limit 100, the connection's pinned prefix, and the returned opaque cursor. Activity pages use limit 50.
 
 ## Remaining journey
 
 Next: permitted metadata context, persistent source selection, exact seller review, then workspace publication/delivery. Cloudflare R2 connection remains unfinished. Allai should do most drafting/tagging work; manual editing remains available and separate marketplace verification is not a listing prerequisite. Existing manual listings remain at `/dashboard/listings`; this interface never sends a workspace draft through the legacy publication path.
 
-Backend contract gap: the inspected object-list endpoint currently shares the W3 profile capability gate. The frontend respects that availability gate without asking the seller to run a profile. Independent source-discovery availability must be established server-side before this flow can work when profiling is disabled. No feature flags or provider resources are changed here.
+Independent AWS file discovery is implemented in the companion backend, default off behind `SELLER_WORKSPACE_AWS_DISCOVERY_ENABLED`. The frontend now requires `providers.aws.discovery`, calls `/connections/{id}/source-objects`, and does not infer availability from the profiling stage. The old profiling objects route remains separately gated. Normal Chrome showed file selection with synthetic profiling explicitly disabled. Real AWS proof and production enablement remain outstanding.
 
 ## Verification
 

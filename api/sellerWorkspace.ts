@@ -15,6 +15,7 @@ export interface CapabilityStage {
 export interface ProviderCapabilities {
   connect: CapabilityStage;
   profile: CapabilityStage;
+  discovery?: CapabilityStage | null;
   publish: CapabilityStage;
   delivery: CapabilityStage;
 }
@@ -240,6 +241,11 @@ export function disconnectSellerWorkspaceConnection(
   );
 }
 
+export function isAWSDiscoveryAvailable(capabilities: SellerWorkspaceCapabilities): boolean {
+  const stage = capabilities?.providers?.aws?.discovery;
+  return isAWSConnectionAvailable(capabilities) && stage?.enabled === true && stage.status === 'available';
+}
+
 export function isAWSProfilingAvailable(capabilities: SellerWorkspaceCapabilities): boolean {
   const profile = capabilities?.providers?.aws?.profile;
   return capabilities?.master?.enabled === true && capabilities.master.status === 'available'
@@ -295,7 +301,7 @@ export interface WorkspaceProfileEvidence {
 
 export function listWorkspaceObjects(connectionId: string, prefix: string, cursor?: string) {
   return safely<{ objects: WorkspaceObject[]; next_cursor: string | null }>(api.get(
-    `${BASE_PATH}/connections/${encodeURIComponent(connectionId)}/objects`,
+    `${BASE_PATH}/connections/${encodeURIComponent(connectionId)}/source-objects`,
     { params: { prefix, version_mode: 'current', limit: 100, ...(cursor ? { cursor } : {}) } }
   ));
 }

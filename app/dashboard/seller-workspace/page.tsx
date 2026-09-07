@@ -21,7 +21,7 @@ import {
   getSellerWorkspaceAuthorization,
   getSellerWorkspaceCapabilities,
   isAWSConnectionAvailable,
-  isAWSProfilingAvailable,
+  isAWSDiscoveryAvailable,
   listSellerWorkspaceConnections,
   rotateSellerWorkspaceConnection,
   verifySellerWorkspaceConnection,
@@ -550,7 +550,7 @@ export default function SellerWorkspacePage() {
   return (
     <div className="space-y-6">
       <WorkspaceOverview connections={connections} view={view} onViewChange={(nextView) => { clearSensitive(); setActionError(null); setDisconnectConfirmation(null); setView(nextView); }} />
-      <WorkspacePanel active={view === 'data'}><WorkspaceData connections={connections} enabled={capabilities !== null && isAWSProfilingAvailable(capabilities)} /></WorkspacePanel>
+      <WorkspacePanel active={view === 'data'}><WorkspaceData connections={connections} enabled={capabilities !== null && isAWSDiscoveryAvailable(capabilities)} /></WorkspacePanel>
       <WorkspacePanel active={view === 'listing'}>{capabilities?.master.enabled && capabilities?.drafts?.enabled && capabilities.drafts.status === 'available' ? <SavedListingEditor active={view === 'listing'} assistant={capabilities.listing_assistant?.enabled && capabilities.listing_assistant.status === 'available' ? listingAssistant : undefined} /> : <SellerListingEditor active={view === 'listing'} assistant={capabilities?.master.enabled && capabilities.listing_assistant?.enabled && capabilities.listing_assistant.status === 'available' ? listingAssistant : undefined} />}</WorkspacePanel>
       <WorkspacePanel active={view === 'storage'}>
       {capabilities && <SellerJourney capabilities={capabilities} connected={connections.some((connection) => connection.status === 'verified')} />}
