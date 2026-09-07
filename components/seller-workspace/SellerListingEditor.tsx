@@ -16,7 +16,7 @@ const limits: Record<DraftField, number> = { title: 255, description: 10000, cat
 const fieldClass = 'mt-2 block w-full rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm text-gray-900 focus:border-[#3F51B5] focus:outline-none focus:ring-1 focus:ring-[#3F51B5]';
 const buttonClass = 'rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50 disabled:opacity-50';
 
-export default function SellerListingEditor({ assistant }: { assistant?: ListingAssistant }) {
+export default function SellerListingEditor({ assistant, active = true }: { assistant?: ListingAssistant; active?: boolean }) {
   const [messages, setMessages] = useState<Array<{ role: 'user' | 'assistant'; content: string }>>([]);
   const [isStreaming, setIsStreaming] = useState(false);
   const [draft, setDraft] = useState<Draft>(emptyDraft);
@@ -33,6 +33,13 @@ export default function SellerListingEditor({ assistant }: { assistant?: Listing
   const mounted = useRef(true);
   const controller = useRef<AbortController | null>(null);
   useEffect(() => {
+    if (!active) {
+      controller.current?.abort();
+      requesting.current = false;
+      setIsStreaming(false);
+    }
+  }, [active]);
+  useEffect(() => {
     mounted.current = true;
     return () => { mounted.current = false; controller.current?.abort(); };
   }, []);
@@ -42,14 +49,15 @@ export default function SellerListingEditor({ assistant }: { assistant?: Listing
     setReviewed((current) => current.filter((item) => item !== field));
   };
   const ask = async (instruction: string) => {
-    if (!assistant || isStreaming || requesting.current) return;
+    if (!active || !assistant || isStreaming || requesting.current) return;
     requesting.current = true;
     setRequested(true); setError(null); setIsStreaming(true);
     setMessages((current) => [...current, { role: 'user', content: instruction }]);
-    controller.current = new AbortController();
+    const requestController = new AbortController();
+    controller.current = requestController;
     try {
-      const result = await assistant({ brief, draft: { ...draft }, reviewing: activeField, instruction }, controller.current.signal);
-      if (!mounted.current || controller.current.signal.aborted) return;
+      const result = await assistant({ brief, draft: { ...draft }, reviewing: activeField, instruction }, requestController.signal);
+      if (!mounted.current || requestController.signal.aborted) return;
       if (typeof result.message !== 'string' || result.message.length > 12000 || !Array.isArray(result.proposals)) throw new Error('Invalid assistant response');
       setMessages((current) => [...current, { role: 'assistant', content: result.message }]);
       for (const proposal of result.proposals.slice(0, 4)) {
@@ -58,8 +66,8 @@ export default function SellerListingEditor({ assistant }: { assistant?: Listing
         if (typeof proposal.value !== 'string' || !proposal.value.trim() || proposal.value.length > limits[field]) continue;
         setProposals((current) => ({ ...current, [field]: { ...proposal, reasoning: typeof proposal.reasoning === 'string' ? proposal.reasoning.slice(0, 2000) : '' } }));
       }
-    } catch { if (mounted.current) setError('Allai could not respond. Your draft is still here; try again.'); }
-    finally { requesting.current = false; if (mounted.current) setIsStreaming(false); }
+    } catch { if (mounted.current && !requestController.signal.aborted) setError('Allai could not respond. Your draft is still here; try again.'); }
+    finally { if (controller.current === requestController) { requesting.current = false; if (mounted.current) setIsStreaming(false); } }
   };
   const accept = (field: DraftField) => {
     const proposal = proposals[field];
@@ -84,7 +92,7 @@ export default function SellerListingEditor({ assistant }: { assistant?: Listing
             {proposals[field] && <div className="mt-3 rounded-lg border border-indigo-200 bg-white p-3"><p className="text-xs font-semibold text-indigo-800">Allai suggests</p><p className="mt-2 whitespace-pre-wrap break-words text-sm text-gray-800">{proposals[field]!.value}</p>{proposals[field]!.reasoning && <p className="mt-2 text-xs text-gray-500">{proposals[field]!.reasoning}</p>}<div className="mt-3 flex gap-2"><button type="button" onClick={() => accept(field)} className={buttonClass}>Use suggestion</button><button type="button" onClick={() => setProposals((current) => { const next = { ...current }; delete next[field]; return next; })} className={buttonClass}>Keep mine</button></div></div>}
           </div>)}
           <div className="grid gap-4 sm:grid-cols-2"><label className="text-sm font-semibold text-gray-900">Your price (USD)<input type="number" min="0" step="0.01" value={price} onChange={(event) => setPrice(event.target.value)} className={fieldClass} /></label><label className="text-sm font-semibold text-gray-900">Your license<input value={license} onChange={(event) => setLicense(event.target.value)} maxLength={500} className={fieldClass} /></label></div>
-          <p className="text-xs leading-5 text-gray-500">This draft stays on this page only. Saving, public-sample approval, and publishing are not connected yet.</p>
+          <p className="text-xs leading-5 text-gray-500">Your edits stay here when you switch Workspace sections. They are not saved to your account yet and will be lost if you reload or leave the Workspace. Public-sample approval and publishing are not connected yet.</p>
         </div>
         <aside className="space-y-4 lg:sticky lg:top-5" aria-label="Allai listing assistant">
           <div className="rounded-xl border border-indigo-200 bg-indigo-50 p-4"><p className="font-semibold text-indigo-950">Review {label.toLowerCase()} with Allai</p><p className="mt-2 text-sm text-indigo-900">Ask her to change the wording, refine the tags, or explain a suggestion.</p><div className="mt-3 flex flex-wrap gap-2"><button type="button" disabled={!draft[activeField].trim()} onClick={() => { setReviewed((current) => [...new Set([...current, activeField])]); const index = fields.findIndex(([field]) => field === activeField); setActiveField(fields[Math.min(index + 1, fields.length - 1)][0]); }} className={buttonClass}>Looks good</button><button type="button" disabled={!assistant || isStreaming || !brief.trim()} onClick={() => ask(`Help me improve the ${label.toLowerCase()}. Ask what I would like changed if needed.`)} className={buttonClass}>Change it with Allai</button></div></div>

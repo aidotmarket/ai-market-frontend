@@ -45,6 +45,12 @@ Backend contract gap: the inspected object-list endpoint currently shares the W3
 Preview fixtures and the local preview server live outside this repository. They are not included in the production application.
 # Guided cloud storage setup
 
+## Temporary workspace progress
+
+Visited workspace sections now remain mounted while hidden. Listing edits, accepted and pending Allai proposals, chat and file selection survive switching sections. Hidden sections are excluded from the accessible page; data browsing only mounts on first visit. Connection identity/version changes still reset file selection, and authorization material still clears on section changes. Leaving the editor aborts its pending assistant request; a late response cannot replace newer work after returning.
+
+This is in-memory progress only. Reloading or leaving the Workspace discards it. There is no server draft-save endpoint in the inspected workspace backend, and no claim of account-level saving. Browser proof uses synthetic files and a synthetic listing title.
+
 Both provider cards offer a browser-based guide for customers starting without storage: account, private bucket, upload files, return to connection. Existing customers can skip to the connection step. Provider links open in another tab; navigation does not verify an account, create resources, upload files, or enable a connection. AWS handoff preserves the existing capability gate. R2 ends with the actual unavailable connection status. No passwords, keys or billing details are collected by the guide.
 
 Instructions checked against official documentation on 2026-09-07:

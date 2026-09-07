@@ -5,6 +5,26 @@ import SellerListingEditor from './SellerListingEditor';
 afterEach(cleanup);
 
 describe('Allai seller listing review', () => {
+  it('preserves edits across sections and ignores a cancelled response after returning', async () => {
+    let finish!: (value: { message: string; proposals: never[] }) => void;
+    let signal!: AbortSignal;
+    const assistant = vi.fn().mockImplementationOnce((_request, requestSignal) => {
+      signal = requestSignal;
+      return new Promise((resolve) => { finish = resolve; });
+    }).mockResolvedValue({ message: 'Fresh response', proposals: [] });
+    const { rerender } = render(<SellerListingEditor assistant={assistant} active />);
+    fireEvent.change(screen.getByLabelText('Title'), { target: { value: 'Keep my title' } });
+    fireEvent.change(screen.getByLabelText('Give Allai a starting point'), { target: { value: 'Retail sales' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Ask Allai to draft my listing' }));
+    rerender(<SellerListingEditor assistant={assistant} active={false} />);
+    expect(signal.aborted).toBe(true);
+    rerender(<SellerListingEditor assistant={assistant} active />);
+    expect((screen.getByLabelText('Title') as HTMLInputElement).value).toBe('Keep my title');
+    fireEvent.click(screen.getByRole('button', { name: 'Ask Allai to draft my listing' }));
+    await screen.findByText('Fresh response');
+    await act(async () => finish({ message: 'Old response', proposals: [] }));
+    expect(screen.queryByText('Old response')).toBeNull();
+  });
   it('does not send seller content when the listing assistant is unavailable', () => {
     render(<SellerListingEditor />);
     fireEvent.change(screen.getByLabelText('Give Allai a starting point'), { target: { value: 'Retail sales by region' } });

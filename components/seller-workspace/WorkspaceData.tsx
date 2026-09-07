@@ -106,7 +106,7 @@ function ObjectBrowser({ connection }: { connection: SellerWorkspaceConnection }
       {cursor && !error && <div className="border-t border-gray-200 p-4 text-center"><button type="button" disabled={loading} onClick={loadMore} className={buttonClass}>Load more files</button></div>}
       <div className="border-t border-gray-200 bg-gray-50 px-5 py-4">
         <div className="flex flex-wrap items-center justify-between gap-3"><p role="status" className="text-sm font-medium text-gray-900">{selected.length} {selected.length === 1 ? 'file' : 'files'} selected · {formatBytes(selected.reduce((total, object) => total + object.size, 0))}</p>{selected.length > 0 && <button type="button" onClick={() => setSelected([])} className={buttonClass}>Clear selection</button>}</div>
-        <p className="mt-2 text-xs leading-5 text-gray-600">Choosing files does not read or analyze their contents. This selection stays on this screen only; saving it to a listing is not available yet.</p>
+        <p className="mt-2 text-xs leading-5 text-gray-600">Choosing files does not read or analyze their contents. Your selection stays when you switch Workspace sections. Changing the storage connection, reloading, or leaving the Workspace clears it. Saving it to a listing is not available yet.</p>
       </div>
     </div>
   );
