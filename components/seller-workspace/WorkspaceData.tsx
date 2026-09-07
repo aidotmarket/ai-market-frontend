@@ -25,7 +25,7 @@ export function WorkspaceNotice({ title, children }: { title: string; children: 
 }
 
 type SaveSelection = (connection: SellerWorkspaceConnection, objects: WorkspaceObject[]) => Promise<void>;
-export function WorkspaceData({ connections, enabled, savedSource, onSaveSelection }: { connections: SellerWorkspaceConnection[]; enabled: boolean; savedSource?: SourceRead | null; onSaveSelection?: SaveSelection }) {
+export function WorkspaceData({ connections, enabled, savedSource, onSaveSelection, saving = false }: { connections: SellerWorkspaceConnection[]; enabled: boolean; savedSource?: SourceRead | null; onSaveSelection?: SaveSelection; saving?: boolean }) {
   const verified = connections.filter((connection) => connection.status === 'verified');
   const [selectedId, setSelectedId] = useState(savedSource?.content.connection_id ?? '');
   const selected = verified.find((connection) => connection.id === selectedId) ?? verified[0];
@@ -36,7 +36,7 @@ export function WorkspaceData({ connections, enabled, savedSource, onSaveSelecti
       <div className="flex flex-wrap items-end justify-between gap-4">
         <div><h2 className="text-xl font-semibold text-gray-900">Choose what to sell</h2><p className="mt-1 text-sm text-gray-600">Browse file names, formats, and sizes in your connected folder. File contents stay in your cloud account.</p></div>
         <label className="text-sm font-medium text-gray-700">Storage connection
-          <select value={selected.id} onChange={(event) => setSelectedId(event.target.value)} className="mt-1 block w-full max-w-sm rounded-lg border border-gray-300 bg-white px-3 py-2">
+          <select disabled={saving} value={selected.id} onChange={(event) => setSelectedId(event.target.value)} className="mt-1 block w-full max-w-sm rounded-lg border border-gray-300 bg-white px-3 py-2 disabled:opacity-50">
             {verified.map((connection) => <option key={connection.id} value={connection.id}>{connection.bucket} / {connection.prefix}</option>)}
           </select>
         </label>
@@ -69,7 +69,6 @@ function ObjectBrowser({ connection, initialSelection, onSaveSelection }: { conn
     setLoading(true);
     setError(false);
     setObjects([]);
-    setSelected(initial.current);
     setCursor(null);
     listWorkspaceObjects(connection.id, connection.prefix ?? '')
       .then((result) => { if (!cancelled) { setObjects(result.objects); setCursor(result.next_cursor); } })

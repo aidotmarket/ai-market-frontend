@@ -82,3 +82,9 @@ Normal Chrome saved a synthetic file through the actual local source HTTP servic
 ## Review saved listing
 
 The new Review listing section loads the backend's coherent saved draft/source view when the review capability is enabled. It refreshes when re-entered and can be refreshed explicitly, distinguishes saved fields from the editable preview, reports missing fields and uses safe recovery messages. It has no approval or publish action yet. The public-sample requirement is pending a product answer; browser integration for this new saved-review route remains to be exercised in a unified local backend fixture. TypeScript, ESLint and focused frontend tests pass.
+
+## Shared saved-state verification
+
+The local preview now uses the actual draft, source, assistant accounting and saved-review routes against one isolated PostgreSQL database. Normal Chrome verified that saving a $25 price updates the review, an unsaved $99 edit does not change it, and synthetic Allai proposals leave price/license and saved fields unchanged until accepted and saved. External metadata/model calls and KMS are synthetic; this is not live provider or production proof.
+
+Connection selection is disabled while a source save is pending, with a shared request guard across picker instances. Newer checkbox edits survive the earlier save response. Retrying a failed file read no longer resets local choices to the original saved selection. The focused picker/review suite passes 15 tests; TypeScript and focused ESLint pass. Final sample approval, publication/delivery and the actual R2 connection remain incomplete.

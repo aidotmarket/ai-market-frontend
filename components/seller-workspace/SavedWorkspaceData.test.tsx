@@ -1,5 +1,5 @@
 // @vitest-environment jsdom
-import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { act, cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { afterEach, beforeEach, expect, it, vi } from 'vitest';
 import type { SellerWorkspaceConnection } from '@/api/sellerWorkspace';
 import SavedWorkspaceData from './SavedWorkspaceData';
@@ -40,4 +40,30 @@ it('does not open an empty file picker when the saved selection cannot be loaded
   api.readListingSource.mockResolvedValue(null);
   fireEvent.click(screen.getByRole('button', {name:'Try loading again'}));
   await waitFor(() => expect(api.listWorkspaceObjects).toHaveBeenCalledTimes(1));
+});
+it('keeps the connection fixed during a save and preserves newer checkbox edits', async () => {
+  api.readListingSource.mockResolvedValue(null);
+  let finish!: (value: unknown) => void;
+  api.saveListingSource.mockReturnValue(new Promise(resolve => { finish = resolve; }));
+  render(<SavedWorkspaceData enabled connections={[connection, {...connection,id:'connection-2'}]} />);
+  const checkbox = await screen.findByRole('checkbox', {name:`Select ${object.key}`});
+  fireEvent.click(checkbox);
+  fireEvent.click(screen.getByRole('button', {name:'Save selected files'}));
+  expect((screen.getByRole('combobox', {name:'Storage connection'}) as HTMLSelectElement).disabled).toBe(true);
+  fireEvent.click(checkbox);
+  await act(async () => finish({version:1,content,connection_current:true}));
+  expect((checkbox as HTMLInputElement).checked).toBe(false);
+  expect(screen.getByText(/Your file choices have not been saved/)).toBeTruthy();
+  expect((screen.getByRole('combobox', {name:'Storage connection'}) as HTMLSelectElement).disabled).toBe(false);
+});
+it('keeps a local selection change when retrying a failed file read', async () => {
+  api.readListingSource.mockResolvedValue({version:1,content,connection_current:true});
+  api.listWorkspaceObjects.mockRejectedValueOnce(new Error('network')).mockResolvedValue({objects:[object],next_cursor:null});
+  render(<SavedWorkspaceData enabled connections={[connection]} />);
+  await screen.findByRole('alert');
+  fireEvent.click(screen.getByRole('button', {name:'Clear selection'}));
+  fireEvent.click(screen.getByRole('button', {name:'Try again'}));
+  const checkbox = await screen.findByRole('checkbox', {name:`Select ${object.key}`});
+  expect((checkbox as HTMLInputElement).checked).toBe(false);
+  expect(screen.getByText(/Your file choices have not been saved/)).toBeTruthy();
 });
