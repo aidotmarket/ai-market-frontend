@@ -1,6 +1,10 @@
 # Seller Workspace interface
 
-The seller dashboard now includes a journey overview, storage management, a scoped file browser, and profiling activity with result inspection. This is a frontend increment toward the browser seller journey in `seller-workspace-cloud-listing-delivery.md`; it does not complete W3, W4, or W5.
+The seller dashboard now includes a journey overview, storage management, and a scoped file browser with temporary file selection. This is an incomplete frontend increment toward the browser seller journey.
+
+## Agreed seller journey, September 7
+
+Max approved: **Connect storage → Choose what to sell → Describe and price it → Review and publish.** Profiling is not a mandatory step or primary navigation item. Optional listing assistance belongs inside listing preparation; marketplace data verification remains a separate offering. This product decision supersedes the earlier UI projection of W3 profiling as a required selling step.
 
 ## Behavior
 
@@ -8,9 +12,8 @@ The seller dashboard now includes a journey overview, storage management, a scop
 
 - Storage connections retain the existing create, trust setup, verify, rotate, and disconnect contracts. Setup values remain in memory only and are cleared when changing workspace sections. Setup and result headings receive keyboard focus when opened.
 - Connection cards foreground the bucket, folder, region, and verification time. Technical identifiers are under Connection details.
-- Your data lists current objects from a verified connection using its exact pinned prefix. It displays file names as text, supports opaque-cursor pagination, and searches only loaded files. Switching connections discards old responses and data. Browsing does not create selectors or start jobs.
-- Profiling activity lists jobs, supports explicit refresh and pagination, displays observed counts, and requests cancellation only after a seller confirmation. Cancellation sends the observed version and a stable idempotency key; `cancel_requested` is never represented as cancelled.
-- Completed evidence shows field positions, observed types, missing values, and sensitivity/quality findings. It discloses partial results and distinguishes observed rows from total source rows. No raw field names or cells are required.
+- Choose what to sell lists current objects from a verified connection using its exact pinned prefix. It displays file names as text, supports opaque-cursor pagination, and searches only loaded files. Checkboxes select object bindings in page memory and display count and size. Switching connections or leaving the screen discards selection. Saving to a listing is explicitly unavailable. Browsing and selection never create selectors, start jobs, retrieve evidence, or analyze file contents.
+- Profiling activity and evidence components are not mounted or linked in the seller flow. Their preparatory code does not add a verification requirement or integrate with the separate marketplace verification offering.
 - The existing server-owned master/connect gate remains in place. Profile reads are additionally gated on an explicitly enabled, available profile stage. Unknown capability states do not enable actions. API failures use fixed seller-facing errors, never raw provider responses.
 - Dashboard navigation stacks above the content on small screens, with horizontal scrolling confined to navigation and wide tables.
 
@@ -20,11 +23,13 @@ The seller dashboard now includes a journey overview, storage management, a scop
 
 ## Remaining journey
 
-Starting a new profile still needs the seller runtime setup/recovery, immutable object selection, estimate receipt, and explicit cost acknowledgement interface. W4 listing preparation and public-sample approval, and W5 workspace publication/delivery are not implemented here. Existing manual listings remain at `/dashboard/listings`; this interface never sends a workspace draft through the legacy publication path. R2 remains unavailable. No feature flags or provider resources are changed.
+Next: persistent source selection, seller-authored listing description, price and license, exact seller review, then workspace publication/delivery. Cloudflare R2 setup remains unfinished. Optional listing assistance can be added within the editor; it must not become a prerequisite for listing. Existing manual listings remain at `/dashboard/listings`; this interface never sends a workspace draft through the legacy publication path.
+
+Backend contract gap: the inspected object-list endpoint currently shares the W3 profile capability gate. The frontend respects that availability gate without asking the seller to run a profile. Independent source-discovery availability must be established server-side before this flow can work when profiling is disabled. No feature flags or provider resources are changed here.
 
 ## Verification
 
-- 61 focused tests across the API, Workspace page, dashboard layout, and data/activity components, including existing connection lifetime/rotation tests.
+- 62 focused tests across the API, Workspace page, dashboard layout, and preparatory data/activity components, including existing connection lifetime/rotation tests and source selection without analysis.
 - TypeScript and focused ESLint pass; whitespace validation is clean.
 - Next production compilation and type validation succeed. Final page collection cannot finish in the isolated checkout because the existing Keystatic GitHub credentials are absent. This is not a successful full production build.
 - Normal Chrome local preview with synthetic fixtures exercises desktop storage, file search, result inspection, empty and disabled states, and mobile setup. At a phone viewport the document has no horizontal overflow. These are UI checks, not production/AWS integration evidence.

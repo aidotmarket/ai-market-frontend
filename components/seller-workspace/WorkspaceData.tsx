@@ -9,6 +9,7 @@ import {
 } from '@/api/sellerWorkspace';
 
 const buttonClass = 'rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#3F51B5] disabled:cursor-not-allowed disabled:opacity-50';
+const objectIdentity = (object: WorkspaceObject) => JSON.stringify([object.key, object.version_id, object.etag, object.size]);
 
 export function formatBytes(bytes: number) {
   if (!Number.isFinite(bytes) || bytes < 0) return 'Unknown';
@@ -25,12 +26,12 @@ export function WorkspaceData({ connections, enabled }: { connections: SellerWor
   const verified = connections.filter((connection) => connection.status === 'verified');
   const [selectedId, setSelectedId] = useState('');
   const selected = verified.find((connection) => connection.id === selectedId) ?? verified[0];
-  if (!enabled) return <WorkspaceNotice title="Data profiling is not available yet">Your storage connections are saved. When profiling becomes available, you can browse the files in your connected folder and review their structure and quality here.</WorkspaceNotice>;
+  if (!enabled) return <WorkspaceNotice title="File browsing is not available yet">Your storage connections are saved. File browsing still needs to be connected in this Workspace. You do not need to run a data analysis or request marketplace verification to prepare a listing.</WorkspaceNotice>;
   if (!selected) return <WorkspaceNotice title="Connect storage to see your data">Add and verify an AWS connection in Storage connections. Only files inside the folder you authorize will be available here.</WorkspaceNotice>;
   return (
-    <section className="space-y-5" aria-label="Your data">
+    <section className="space-y-5" aria-label="Choose what to sell">
       <div className="flex flex-wrap items-end justify-between gap-4">
-        <div><h2 className="text-xl font-semibold text-gray-900">Your data</h2><p className="mt-1 text-sm text-gray-600">Browse the current files in your connected storage.</p></div>
+        <div><h2 className="text-xl font-semibold text-gray-900">Choose what to sell</h2><p className="mt-1 text-sm text-gray-600">Browse file names, formats, and sizes in your connected folder. File contents stay in your cloud account.</p></div>
         <label className="text-sm font-medium text-gray-700">Storage connection
           <select value={selected.id} onChange={(event) => setSelectedId(event.target.value)} className="mt-1 block w-full max-w-sm rounded-lg border border-gray-300 bg-white px-3 py-2">
             {verified.map((connection) => <option key={connection.id} value={connection.id}>{connection.bucket} / {connection.prefix}</option>)}
@@ -48,6 +49,7 @@ function ObjectBrowser({ connection }: { connection: SellerWorkspaceConnection }
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(false);
   const [query, setQuery] = useState('');
+  const [selected, setSelected] = useState<WorkspaceObject[]>([]);
   const [retry, setRetry] = useState(0);
   const mounted = useRef(true);
   const pending = useRef(false);
@@ -58,6 +60,7 @@ function ObjectBrowser({ connection }: { connection: SellerWorkspaceConnection }
     setLoading(true);
     setError(false);
     setObjects([]);
+    setSelected([]);
     setCursor(null);
     listWorkspaceObjects(connection.id, connection.prefix ?? '')
       .then((result) => { if (!cancelled) { setObjects(result.objects); setCursor(result.next_cursor); } })
@@ -85,6 +88,11 @@ function ObjectBrowser({ connection }: { connection: SellerWorkspaceConnection }
     finally { pending.current = false; if (mounted.current) setLoading(false); }
   };
   const filtered = objects.filter((object) => object.key.toLowerCase().includes(query.toLowerCase()));
+  const toggleSelection = (object: WorkspaceObject) => {
+    setSelected((current) => current.some((item) => objectIdentity(item) === objectIdentity(object))
+      ? current.filter((item) => objectIdentity(item) !== objectIdentity(object))
+      : [...current, object]);
+  };
   return (
     <div className="overflow-hidden rounded-xl border border-gray-200 bg-white">
       <div className="flex flex-wrap items-center justify-between gap-4 border-b border-gray-200 p-5">
@@ -92,11 +100,14 @@ function ObjectBrowser({ connection }: { connection: SellerWorkspaceConnection }
         <label className="text-sm text-gray-600"><span className="sr-only">Search loaded files</span><input type="search" value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Search loaded files" className="w-full rounded-lg border border-gray-300 px-3 py-2 sm:w-60" /></label>
       </div>
       {error && <div role="alert" className="m-5 rounded-lg bg-red-50 p-4 text-sm text-red-800">Files could not be loaded. Check that the connection is still available.<button type="button" disabled={loading} onClick={() => cursor ? void loadMore() : setRetry((value) => value + 1)} className={`${buttonClass} ml-3`}>Try again</button></div>}
-      {objects.length > 0 && <div className="overflow-x-auto"><table className="w-full text-left text-sm"><caption className="sr-only">Files in the selected storage connection</caption><thead className="bg-gray-50 text-xs text-gray-500"><tr><th scope="col" className="px-5 py-3">File</th><th scope="col" className="px-5 py-3">Format</th><th scope="col" className="px-5 py-3 text-right">Size</th></tr></thead><tbody className="divide-y divide-gray-100">{filtered.map((object) => <tr key={JSON.stringify([object.key, object.version_id])}><th scope="row" className="max-w-md break-all px-5 py-4 font-medium text-gray-900">{object.key}</th><td className="px-5 py-4 text-xs uppercase text-gray-600">{object.format_candidate === 'unknown' ? 'Unrecognized' : object.format_candidate}</td><td className="whitespace-nowrap px-5 py-4 text-right text-gray-600">{formatBytes(object.size)}</td></tr>)}</tbody></table></div>}
+      {objects.length > 0 && <div className="overflow-x-auto"><table className="w-full text-left text-sm"><caption className="sr-only">Files in the selected storage connection</caption><thead className="bg-gray-50 text-xs text-gray-500"><tr><th scope="col" className="px-5 py-3">File</th><th scope="col" className="px-5 py-3">Format</th><th scope="col" className="px-5 py-3 text-right">Size</th></tr></thead><tbody className="divide-y divide-gray-100">{filtered.map((object) => <tr key={objectIdentity(object)}><th scope="row" className="max-w-md break-all px-5 py-4 font-medium text-gray-900"><label className="flex items-start gap-3"><input type="checkbox" aria-label={`Select ${object.key}`} checked={selected.some((item) => objectIdentity(item) === objectIdentity(object))} onChange={() => toggleSelection(object)} className="mt-0.5 h-4 w-4 shrink-0 accent-[#3F51B5]" /><span>{object.key}</span></label></th><td className="px-5 py-4 text-xs uppercase text-gray-600">{object.format_candidate === 'unknown' ? 'Unrecognized' : object.format_candidate}</td><td className="whitespace-nowrap px-5 py-4 text-right text-gray-600">{formatBytes(object.size)}</td></tr>)}</tbody></table></div>}
       {!loading && !error && filtered.length === 0 && <p className="p-8 text-center text-sm text-gray-500">{query ? 'No loaded files match your search.' : 'No files found in this connected folder.'}</p>}
       {loading && <p role="status" className="p-5 text-sm text-gray-600">Loading files…</p>}
       {cursor && !error && <div className="border-t border-gray-200 p-4 text-center"><button type="button" disabled={loading} onClick={loadMore} className={buttonClass}>Load more files</button></div>}
-      <p className="border-t border-gray-200 bg-gray-50 px-5 py-4 text-xs leading-5 text-gray-600">Browsing does not start a profile or publish a listing. Starting a new profile from this interface is not available yet.</p>
+      <div className="border-t border-gray-200 bg-gray-50 px-5 py-4">
+        <div className="flex flex-wrap items-center justify-between gap-3"><p role="status" className="text-sm font-medium text-gray-900">{selected.length} {selected.length === 1 ? 'file' : 'files'} selected · {formatBytes(selected.reduce((total, object) => total + object.size, 0))}</p>{selected.length > 0 && <button type="button" onClick={() => setSelected([])} className={buttonClass}>Clear selection</button>}</div>
+        <p className="mt-2 text-xs leading-5 text-gray-600">Choosing files does not read or analyze their contents. This selection stays on this screen only; saving it to a listing is not available yet.</p>
+      </div>
     </div>
   );
 }

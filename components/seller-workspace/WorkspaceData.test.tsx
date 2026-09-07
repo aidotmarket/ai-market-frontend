@@ -28,13 +28,25 @@ describe('Seller data browser', () => {
     render(<><WorkspaceData enabled={false} connections={[connection]} /><WorkspaceActivity enabled={false} connections={[connection]} /></>);
     expect(api.listWorkspaceObjects).not.toHaveBeenCalled();
     expect(api.listWorkspaceProfileJobs).not.toHaveBeenCalled();
-    expect(screen.getByText('Data profiling is not available yet')).toBeTruthy();
+    expect(screen.getByText('File browsing is not available yet')).toBeTruthy();
   });
 
   it('requires a verified connection before browsing', () => {
     render(<WorkspaceData enabled connections={[{ ...connection, status: 'revoked' }]} />);
     expect(screen.getByText('Connect storage to see your data')).toBeTruthy();
     expect(api.listWorkspaceObjects).not.toHaveBeenCalled();
+  });
+
+  it('selects source files without starting analysis and clears selection on connection change', async () => {
+    api.listWorkspaceObjects.mockResolvedValue({ objects: [object], next_cursor: null });
+    render(<WorkspaceData enabled connections={[connection, { ...connection, id: 'connection-2' }]} />);
+    fireEvent.click(await screen.findByRole('checkbox', { name: `Select ${object.key}` }));
+    expect(screen.getByText('1 file selected · 1 KB')).toBeTruthy();
+    expect(api.listWorkspaceProfileJobs).not.toHaveBeenCalled();
+    expect(api.getWorkspaceProfileEvidence).not.toHaveBeenCalled();
+    fireEvent.change(screen.getByRole('combobox'), { target: { value: 'connection-2' } });
+    await screen.findByRole('checkbox', { name: `Select ${object.key}` });
+    expect(screen.getByText('0 files selected · 0 B')).toBeTruthy();
   });
 
   it('uses the pinned prefix, renders source names as text, and preserves pagination during search', async () => {

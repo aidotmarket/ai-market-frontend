@@ -3,7 +3,7 @@
 import { type FormEvent, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import Link from 'next/link';
 import { SellerJourney, WorkspaceOverview, type WorkspaceView } from '@/components/seller-workspace/WorkspaceOverview';
-import { WorkspaceActivity, WorkspaceData } from '@/components/seller-workspace/WorkspaceData';
+import { WorkspaceData } from '@/components/seller-workspace/WorkspaceData';
 import { StorageProviders } from '@/components/seller-workspace/StorageProviders';
 import {
   type AWSAuthorization,
@@ -542,7 +542,7 @@ export default function SellerWorkspacePage() {
   return (
     <div className="space-y-6">
       <WorkspaceOverview connections={connections} view={view} onViewChange={(nextView) => { clearSensitive(); setActionError(null); setDisconnectConfirmation(null); setView(nextView); }} />
-      {view === 'data' ? <WorkspaceData connections={connections} enabled={capabilities !== null && isAWSProfilingAvailable(capabilities)} /> : view === 'activity' ? <WorkspaceActivity connections={connections} enabled={capabilities !== null && isAWSProfilingAvailable(capabilities)} /> : <>
+      {view === 'data' ? <WorkspaceData connections={connections} enabled={capabilities !== null && isAWSProfilingAvailable(capabilities)} /> : <>
       {capabilities && <SellerJourney capabilities={capabilities} connected={connections.some((connection) => connection.status === 'verified')} />}
       <StorageProviders capabilities={capabilities} busy={busyAction} onConnectAWS={handleCreate} />
 

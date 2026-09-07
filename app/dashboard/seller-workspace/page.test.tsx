@@ -86,14 +86,17 @@ describe('SellerWorkspacePage safety boundaries', () => {
     vi.restoreAllMocks();
   });
 
-  it('clears setup material when switching workspace sections and keeps profiling gated', async () => {
+  it('clears setup material when choosing a source and excludes profiling from the selling flow', async () => {
     sellerWorkspaceApi.createSellerWorkspaceConnection.mockResolvedValue({ connection: pendingConnection, authorization });
     render(<SellerWorkspacePage />);
     fireEvent.click(await screen.findByRole('button', { name: 'Add AWS connection' }));
     await screen.findByText('server-external-id');
-    fireEvent.click(screen.getByRole('button', { name: 'Your data' }));
+    expect(screen.queryByRole('button', { name: 'Profiling activity' })).toBeNull();
+    expect(screen.queryByRole('heading', { name: 'Understand your data' })).toBeNull();
+    expect(screen.getByRole('heading', { name: 'Describe and price it' })).toBeTruthy();
+    fireEvent.click(screen.getByRole('button', { name: 'Choose what to sell' }));
     expect(screen.queryByText('server-external-id')).toBeNull();
-    expect(screen.getByText('Data profiling is not available yet')).toBeTruthy();
+    expect(screen.getByText('File browsing is not available yet')).toBeTruthy();
     fireEvent.click(screen.getByRole('button', { name: 'Storage connections' }));
     expect(screen.queryByText('server-external-id')).toBeNull();
   });
