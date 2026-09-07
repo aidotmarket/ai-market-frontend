@@ -5,7 +5,7 @@ import Link from 'next/link';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { useAuthStore } from '@/store/auth';
 import { useToast } from '@/components/Toast';
-import { validateRedirect } from '@/lib/redirect';
+import { aimDataEnabled, resumeContinuation, readContinuation, requestPath } from '@/lib/aim-data-continuation';
 import { AxiosError } from 'axios';
 import OAuthButtons from '@/components/OAuthButtons';
 import TwoFactorChallenge from '@/components/TwoFactorChallenge';
@@ -31,10 +31,23 @@ export default function LoginForm() {
 
   useEffect(() => {
     if (!hydrated || !isAuthenticated) return;
+    if (searchParams.get('reauth') === 'aim-data' && readContinuation()) return;
 
-    const redirectTo = validateRedirect(searchParams.get('redirect'), '/dashboard');
+    const redirectTo = resumeContinuation(searchParams.get('redirect'), '/dashboard');
     router.replace(redirectTo);
   }, [hydrated, isAuthenticated, router, searchParams]);
+
+  useEffect(() => {
+    const visible = async () => {
+      if (!aimDataEnabled() || document.visibilityState !== 'visible' || !readContinuation()
+        || useAuthStore.getState().pendingTwoFactor) return;
+      await useAuthStore.getState().hydrate();
+      const saved = readContinuation();
+      if (saved && useAuthStore.getState().isAuthenticated) router.replace(requestPath(saved.request));
+    };
+    document.addEventListener('visibilitychange', visible);
+    return () => document.removeEventListener('visibilitychange', visible);
+  }, [router]);
 
   const handleResendVerification = async () => {
     setResendNote('');
@@ -62,7 +75,7 @@ export default function LoginForm() {
           return;
         }
         toast('Logged in successfully', 'success');
-        const redirectTo = validateRedirect(searchParams.get('redirect'), '/listings');
+        const redirectTo = resumeContinuation(searchParams.get('redirect'), '/listings');
         router.push(redirectTo);
       }
     } catch (err) {
@@ -87,7 +100,7 @@ export default function LoginForm() {
 
   const handleTwoFactorVerified = () => {
     toast('Logged in successfully', 'success');
-    const redirectTo = validateRedirect(searchParams.get('redirect'), '/listings');
+    const redirectTo = resumeContinuation(searchParams.get('redirect'), '/listings');
     router.push(redirectTo);
   };
 
