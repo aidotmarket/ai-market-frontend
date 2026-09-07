@@ -45,6 +45,12 @@ Backend contract gap: the inspected object-list endpoint currently shares the W3
 Preview fixtures and the local preview server live outside this repository. They are not included in the production application.
 # Guided cloud storage setup
 
+## Private account draft saving
+
+When backend `master.enabled` and `drafts.enabled/status=available` permit it, Prepare with Allai loads the seller's private working draft before editing. The seller explicitly saves brief/title/description/category/tags/price/license with Save private draft. The backend version and request identity protect competing tabs and retries. Save responses never overwrite newer local edits; unknown outcomes and conflicts keep the local draft. A read failure blocks opening a misleading empty draft. AWS connection availability does not gate draft preparation.
+
+Contract: GET/PUT `/seller-workspace/listing-draft`; PUT contains `content`, `expected_version`, `request_id`. Backend companion branch `codex/seller-listing-drafts` adds a default-off capability and database migration. This is one working draft per seller; source selection, unaccepted proposals and chat are not saved. It is not publication or full W4 completion. Preview uses the actual endpoint/service through an isolated local synthetic account. Browser save/reload restored the title, description and license. Production not deployed or enabled.
+
 ## Temporary workspace progress
 
 Visited workspace sections now remain mounted while hidden. Listing edits, accepted and pending Allai proposals, chat and file selection survive switching sections. Hidden sections are excluded from the accessible page; data browsing only mounts on first visit. Connection identity/version changes still reset file selection, and authorization material still clears on section changes. Leaving the editor aborts its pending assistant request; a late response cannot replace newer work after returning.

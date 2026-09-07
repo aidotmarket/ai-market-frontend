@@ -1,6 +1,8 @@
 'use client';
 
 import { useEffect, useRef, useState } from 'react';
+import axios from 'axios';
+import type { ListingDraftContent } from '@/api/sellerListingDraft';
 
 const fields = [
   ['title', 'Title'], ['description', 'Description'], ['category', 'Category'], ['tags', 'Tags'],
@@ -16,18 +18,36 @@ const limits: Record<DraftField, number> = { title: 255, description: 10000, cat
 const fieldClass = 'mt-2 block w-full rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm text-gray-900 focus:border-[#3F51B5] focus:outline-none focus:ring-1 focus:ring-[#3F51B5]';
 const buttonClass = 'rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50 disabled:opacity-50';
 
-export default function SellerListingEditor({ assistant, active = true }: { assistant?: ListingAssistant; active?: boolean }) {
+export default function SellerListingEditor({ assistant, active = true, initialContent, onSave }: { assistant?: ListingAssistant; active?: boolean; initialContent?: ListingDraftContent; onSave?: (content: ListingDraftContent) => Promise<void> }) {
   const [messages, setMessages] = useState<Array<{ role: 'user' | 'assistant'; content: string }>>([]);
   const [isStreaming, setIsStreaming] = useState(false);
-  const [draft, setDraft] = useState<Draft>(emptyDraft);
+  const [draft, setDraft] = useState<Draft>(initialContent ? { title: initialContent.title, description: initialContent.description, category: initialContent.category, tags: initialContent.tags } : emptyDraft);
   const [activeField, setActiveField] = useState<DraftField>('title');
-  const [brief, setBrief] = useState('');
+  const [brief, setBrief] = useState(initialContent?.brief ?? '');
   const [message, setMessage] = useState('');
   const [error, setError] = useState<string | null>(null);
   const [proposals, setProposals] = useState<Partial<Record<DraftField, FieldProposalEvent>>>({});
   const [reviewed, setReviewed] = useState<DraftField[]>([]);
-  const [price, setPrice] = useState('');
-  const [license, setLicense] = useState('');
+  const [price, setPrice] = useState(initialContent?.price ?? '');
+  const [license, setLicense] = useState(initialContent?.license ?? '');
+  const snapshot = JSON.stringify({ brief, ...draft, price, license });
+  const [savedSnapshot, setSavedSnapshot] = useState(initialContent ? JSON.stringify({ brief: initialContent.brief, title: initialContent.title, description: initialContent.description, category: initialContent.category, tags: initialContent.tags, price: initialContent.price, license: initialContent.license }) : '');
+  const [saving, setSaving] = useState(false);
+  const savingRef = useRef(false);
+  const [saveError, setSaveError] = useState<string | null>(null);
+  const save = async () => {
+    if (!onSave || savingRef.current) return;
+    savingRef.current = true; setSaving(true); setSaveError(null);
+    const submitted = snapshot;
+    try {
+      await onSave(JSON.parse(submitted));
+      if (mounted.current) setSavedSnapshot(submitted);
+    } catch (error) {
+      if (mounted.current) setSaveError(axios.isAxiosError(error) && error.response?.status === 409
+        ? 'This draft was saved elsewhere. Your edits are still here. Copy any changes you want to keep, then reload the Workspace to open the saved version.'
+        : 'Saving could not be confirmed. Your edits are still here. Try saving again.');
+    } finally { savingRef.current = false; if (mounted.current) setSaving(false); }
+  };
   const requesting = useRef(false);
   const [requested, setRequested] = useState(false);
   const mounted = useRef(true);
@@ -92,7 +112,7 @@ export default function SellerListingEditor({ assistant, active = true }: { assi
             {proposals[field] && <div className="mt-3 rounded-lg border border-indigo-200 bg-white p-3"><p className="text-xs font-semibold text-indigo-800">Allai suggests</p><p className="mt-2 whitespace-pre-wrap break-words text-sm text-gray-800">{proposals[field]!.value}</p>{proposals[field]!.reasoning && <p className="mt-2 text-xs text-gray-500">{proposals[field]!.reasoning}</p>}<div className="mt-3 flex gap-2"><button type="button" onClick={() => accept(field)} className={buttonClass}>Use suggestion</button><button type="button" onClick={() => setProposals((current) => { const next = { ...current }; delete next[field]; return next; })} className={buttonClass}>Keep mine</button></div></div>}
           </div>)}
           <div className="grid gap-4 sm:grid-cols-2"><label className="text-sm font-semibold text-gray-900">Your price (USD)<input type="number" min="0" step="0.01" value={price} onChange={(event) => setPrice(event.target.value)} className={fieldClass} /></label><label className="text-sm font-semibold text-gray-900">Your license<input value={license} onChange={(event) => setLicense(event.target.value)} maxLength={500} className={fieldClass} /></label></div>
-          <p className="text-xs leading-5 text-gray-500">Your edits stay here when you switch Workspace sections. They are not saved to your account yet and will be lost if you reload or leave the Workspace. Public-sample approval and publishing are not connected yet.</p>
+          {onSave ? <div className="space-y-3"><button type="button" disabled={saving || snapshot === savedSnapshot} onClick={save} className={buttonClass}>{saving ? 'Saving draft…' : 'Save private draft'}</button><p role="status" className="text-sm text-gray-600">{snapshot === savedSnapshot ? 'Draft saved to your account.' : 'You have unsaved changes.'} Saving does not publish your listing.</p>{saveError && <p role="alert" className="text-sm text-red-800">{saveError}</p>}<p className="text-xs text-gray-500">Saves your listing fields, brief, price and license. File selection, chat and unaccepted suggestions stay in this Workspace only.</p></div> : <p className="text-xs leading-5 text-gray-500">Your edits stay here when you switch Workspace sections. They are not saved to your account yet and will be lost if you reload or leave the Workspace. Public-sample approval and publishing are not connected yet.</p>}
         </div>
         <aside className="space-y-4 lg:sticky lg:top-5" aria-label="Allai listing assistant">
           <div className="rounded-xl border border-indigo-200 bg-indigo-50 p-4"><p className="font-semibold text-indigo-950">Review {label.toLowerCase()} with Allai</p><p className="mt-2 text-sm text-indigo-900">Ask her to change the wording, refine the tags, or explain a suggestion.</p><div className="mt-3 flex flex-wrap gap-2"><button type="button" disabled={!draft[activeField].trim()} onClick={() => { setReviewed((current) => [...new Set([...current, activeField])]); const index = fields.findIndex(([field]) => field === activeField); setActiveField(fields[Math.min(index + 1, fields.length - 1)][0]); }} className={buttonClass}>Looks good</button><button type="button" disabled={!assistant || isStreaming || !brief.trim()} onClick={() => ask(`Help me improve the ${label.toLowerCase()}. Ask what I would like changed if needed.`)} className={buttonClass}>Change it with Allai</button></div></div>

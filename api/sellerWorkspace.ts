@@ -21,6 +21,7 @@ export interface ProviderCapabilities {
 
 export interface SellerWorkspaceCapabilities {
   master: CapabilityStage;
+  drafts?: CapabilityStage | null;
   providers: {
     aws: ProviderCapabilities;
     r2: ProviderCapabilities;

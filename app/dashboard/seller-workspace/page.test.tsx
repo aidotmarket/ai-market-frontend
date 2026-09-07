@@ -15,6 +15,8 @@ const sellerWorkspaceApi = vi.hoisted(() => ({
   rotateSellerWorkspaceConnection: vi.fn(),
   verifySellerWorkspaceConnection: vi.fn(),
 }));
+const draftsApi = vi.hoisted(() => ({ readListingDraft: vi.fn(), saveListingDraft: vi.fn() }));
+vi.mock('@/api/sellerListingDraft', () => draftsApi);
 
 vi.mock('@/api/sellerWorkspace', async (importOriginal) => ({
   ...(await importOriginal<typeof import('@/api/sellerWorkspace')>()),
@@ -78,12 +80,33 @@ describe('SellerWorkspacePage safety boundaries', () => {
     );
     sellerWorkspaceApi.getSellerWorkspaceCapabilities.mockResolvedValue(enabledCapabilities);
     sellerWorkspaceApi.listSellerWorkspaceConnections.mockResolvedValue([]);
+    draftsApi.readListingDraft.mockResolvedValue(null);
   });
 
   afterEach(() => {
     cleanup();
     vi.useRealTimers();
     vi.restoreAllMocks();
+  });
+
+  it('can prepare a private draft before connecting AWS when the backend enables drafts', async () => {
+    sellerWorkspaceApi.getSellerWorkspaceCapabilities.mockResolvedValue({
+      ...enabledCapabilities,
+      drafts: { enabled: true, status: 'available', reason: 'enabled' },
+      providers: { ...enabledCapabilities.providers, aws: { ...enabledCapabilities.providers.aws, connect: { enabled: false, status: 'disabled', reason: 'stage_disabled' } } },
+    });
+    render(<SellerWorkspacePage />);
+    fireEvent.click(await screen.findByRole('button', { name: 'Prepare with Allai' }));
+    await screen.findByRole('button', { name: 'Save private draft' });
+    expect(draftsApi.readListingDraft).toHaveBeenCalledTimes(1);
+    expect(sellerWorkspaceApi.listSellerWorkspaceConnections).not.toHaveBeenCalled();
+  });
+
+  it('does not request saved drafts unless backend capability enables them', async () => {
+    render(<SellerWorkspacePage />);
+    fireEvent.click(await screen.findByRole('button', { name: 'Prepare with Allai' }));
+    expect(screen.queryByRole('button', { name: 'Save private draft' })).toBeNull();
+    expect(draftsApi.readListingDraft).not.toHaveBeenCalled();
   });
 
   it('clears setup material when choosing a source and excludes profiling from the selling flow', async () => {

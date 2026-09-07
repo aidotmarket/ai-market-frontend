@@ -6,6 +6,7 @@ import { SellerJourney, WorkspaceOverview, type WorkspaceView } from '@/componen
 import { WorkspaceData } from '@/components/seller-workspace/WorkspaceData';
 import { StorageProviders } from '@/components/seller-workspace/StorageProviders';
 import SellerListingEditor from '@/components/seller-workspace/SellerListingEditor';
+import SavedListingEditor from '@/components/seller-workspace/SavedListingEditor';
 import { WorkspacePanel } from '@/components/seller-workspace/WorkspacePanel';
 import {
   type AWSAuthorization,
@@ -225,12 +226,14 @@ export default function SellerWorkspacePage() {
         const capabilities = await getSellerWorkspaceCapabilities();
         if (cancelled) return;
         setCapabilities(capabilities);
-        if (!isAWSConnectionAvailable(capabilities)) {
+        const canConnect = isAWSConnectionAvailable(capabilities);
+        const canSaveDraft = capabilities.master.enabled && capabilities.drafts?.enabled && capabilities.drafts.status === 'available';
+        if (!canConnect && !canSaveDraft) {
           setPageState('unavailable');
           return;
         }
 
-        const listed = await listSellerWorkspaceConnections();
+        const listed = canConnect ? await listSellerWorkspaceConnections() : [];
         if (!cancelled) {
           setConnections(listed);
           setPageState('ready');
@@ -545,7 +548,7 @@ export default function SellerWorkspacePage() {
     <div className="space-y-6">
       <WorkspaceOverview connections={connections} view={view} onViewChange={(nextView) => { clearSensitive(); setActionError(null); setDisconnectConfirmation(null); setView(nextView); }} />
       <WorkspacePanel active={view === 'data'}><WorkspaceData connections={connections} enabled={capabilities !== null && isAWSProfilingAvailable(capabilities)} /></WorkspacePanel>
-      <WorkspacePanel active={view === 'listing'}><SellerListingEditor active={view === 'listing'} /></WorkspacePanel>
+      <WorkspacePanel active={view === 'listing'}>{capabilities?.master.enabled && capabilities?.drafts?.enabled && capabilities.drafts.status === 'available' ? <SavedListingEditor active={view === 'listing'} /> : <SellerListingEditor active={view === 'listing'} />}</WorkspacePanel>
       <WorkspacePanel active={view === 'storage'}>
       {capabilities && <SellerJourney capabilities={capabilities} connected={connections.some((connection) => connection.status === 'verified')} />}
       <StorageProviders capabilities={capabilities} busy={busyAction} onConnectAWS={handleCreate} />
