@@ -10,9 +10,9 @@ Max approved: **Connect storage → Choose what to sell → Describe and price i
 
 The reference is AIM-DATA's `frontend/src/pages/DatasetDetail.tsx`: generated title/description/category/tags, field navigation, embedded chat, Looks good / Change it, and seller acceptance. The web editor follows that interaction model in a Prepare with Allai section, with manual edits and seller-controlled price/license.
 
-The listing assistant has a separate typed request/response boundary. It accepts the seller's brief, draft metadata, active field and instruction; it returns a message and bounded proposed changes to the four allowed metadata fields. Proposals do not overwrite fields until accepted. Price, license, ownership and publication are not allowed proposal fields. Leaving the editor aborts a pending request. Drafts are volatile and are not saved or published.
+The listing assistant has a separate typed request/response boundary. It accepts the seller's brief, draft metadata, active field and instruction; it returns a message and bounded proposed changes to the four allowed metadata fields. Proposals do not overwrite fields until accepted. Price, license, ownership and publication are not allowed proposal fields. Leaving the editor aborts a pending request. Explicit private draft saving is available only when the backend capability enables it; saving never publishes.
 
-Live connection remains unfinished. The existing website Allai chat sends to `/api/allai/support/anonymous/message`, a public-support/retrieval surface; the editor does not send seller drafting context there. Without a listing assistant adapter, generation and chat submission are disabled with an explicit unavailable state. The local preview injects synthetic responses from outside the application repository. Real seller-owned context, permitted source metadata, assistant generation, persistence and end-to-end proof remain to be connected.
+Live assistant connection remains unfinished. The existing website Allai chat sends to `/api/allai/support/anonymous/message`, a public-support/retrieval surface; the editor does not send seller drafting context there. Without a listing assistant adapter, generation and chat submission are disabled with an explicit unavailable state. The local preview injects synthetic responses from outside the application repository. Permitted source metadata and live assistant generation remain to be connected. Private draft persistence is implemented in companion backend PR 342 and tested locally; production deployment remains outstanding.
 
 ## Behavior
 
@@ -31,7 +31,7 @@ Live connection remains unfinished. The existing website Allai chat sends to `/a
 
 ## Remaining journey
 
-Next: seller-owned listing assistant backend and permitted metadata context, persistent source selection and draft, exact seller review, then workspace publication/delivery. Cloudflare R2 setup remains unfinished. Allai should do most drafting/tagging work; manual editing remains available and separate marketplace verification is not a listing prerequisite. Existing manual listings remain at `/dashboard/listings`; this interface never sends a workspace draft through the legacy publication path.
+Next: seller-owned listing assistant backend and permitted metadata context, persistent source selection, exact seller review, then workspace publication/delivery. Cloudflare R2 connection remains unfinished. Allai should do most drafting/tagging work; manual editing remains available and separate marketplace verification is not a listing prerequisite. Existing manual listings remain at `/dashboard/listings`; this interface never sends a workspace draft through the legacy publication path.
 
 Backend contract gap: the inspected object-list endpoint currently shares the W3 profile capability gate. The frontend respects that availability gate without asking the seller to run a profile. Independent source-discovery availability must be established server-side before this flow can work when profiling is disabled. No feature flags or provider resources are changed here.
 
@@ -55,7 +55,7 @@ Contract: GET/PUT `/seller-workspace/listing-draft`; PUT contains `content`, `ex
 
 Visited workspace sections now remain mounted while hidden. Listing edits, accepted and pending Allai proposals, chat and file selection survive switching sections. Hidden sections are excluded from the accessible page; data browsing only mounts on first visit. Connection identity/version changes still reset file selection, and authorization material still clears on section changes. Leaving the editor aborts its pending assistant request; a late response cannot replace newer work after returning.
 
-This is in-memory progress only. Reloading or leaving the Workspace discards it. There is no server draft-save endpoint in the inspected workspace backend, and no claim of account-level saving. Browser proof uses synthetic files and a synthetic listing title.
+Unsubmitted changes, chat and file selections remain in memory and are lost when leaving or reloading. Explicitly saved listing fields restore from the account draft endpoint when enabled. Browser proof uses synthetic files and a synthetic listing title.
 
 Both provider cards offer a browser-based guide for customers starting without storage: account, private bucket, upload files, return to connection. Existing customers can skip to the connection step. Provider links open in another tab; navigation does not verify an account, create resources, upload files, or enable a connection. AWS handoff preserves the existing capability gate. R2 ends with the actual unavailable connection status. No passwords, keys or billing details are collected by the guide.
 
