@@ -58,3 +58,19 @@ it('does not open a blank editor when the saved draft cannot be read', async () 
   expect(screen.queryByLabelText('Title')).toBeNull();
   expect(api.saveListingDraft).not.toHaveBeenCalled();
 });
+
+it('explains an unsupported price before saving and allows correction', async () => {
+  api.saveListingDraft.mockResolvedValue({version:4});
+  render(<SavedListingEditor active />);
+  const price = await screen.findByLabelText('Your price (USD)');
+  fireEvent.change(price, {target:{value:'1000000'}});
+  expect(screen.getByRole('alert').textContent).toContain('$999,999.99');
+  expect((screen.getByText('Save private draft') as HTMLButtonElement).disabled).toBe(true);
+  fireEvent.click(screen.getByText('Save private draft'));
+  expect(api.saveListingDraft).not.toHaveBeenCalled();
+  fireEvent.change(price, {target:{value:'999999.99'}});
+  expect(screen.queryByRole('alert')).toBeNull();
+  fireEvent.click(screen.getByText('Save private draft'));
+  await screen.findByText(/Draft saved to your account/);
+  expect(api.saveListingDraft.mock.calls[0][0].price).toBe('999999.99');
+});
