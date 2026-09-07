@@ -5,6 +5,7 @@ import Link from 'next/link';
 import { SellerJourney, WorkspaceOverview, type WorkspaceView } from '@/components/seller-workspace/WorkspaceOverview';
 import { WorkspaceData } from '@/components/seller-workspace/WorkspaceData';
 import { StorageProviders } from '@/components/seller-workspace/StorageProviders';
+import SellerListingEditor from '@/components/seller-workspace/SellerListingEditor';
 import {
   type AWSAuthorization,
   type ConnectionVerifyRequest,
@@ -542,7 +543,7 @@ export default function SellerWorkspacePage() {
   return (
     <div className="space-y-6">
       <WorkspaceOverview connections={connections} view={view} onViewChange={(nextView) => { clearSensitive(); setActionError(null); setDisconnectConfirmation(null); setView(nextView); }} />
-      {view === 'data' ? <WorkspaceData connections={connections} enabled={capabilities !== null && isAWSProfilingAvailable(capabilities)} /> : <>
+      {view === 'data' ? <WorkspaceData connections={connections} enabled={capabilities !== null && isAWSProfilingAvailable(capabilities)} /> : view === 'listing' ? <SellerListingEditor /> : <>
       {capabilities && <SellerJourney capabilities={capabilities} connected={connections.some((connection) => connection.status === 'verified')} />}
       <StorageProviders capabilities={capabilities} busy={busyAction} onConnectAWS={handleCreate} />
 

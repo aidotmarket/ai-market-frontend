@@ -4,7 +4,15 @@ The seller dashboard now includes a journey overview, storage management, and a 
 
 ## Agreed seller journey, September 7
 
-Max approved: **Connect storage → Choose what to sell → Describe and price it → Review and publish.** Profiling is not a mandatory step or primary navigation item. Optional listing assistance belongs inside listing preparation; marketplace data verification remains a separate offering. This product decision supersedes the earlier UI projection of W3 profiling as a required selling step.
+Max approved: **Connect storage → Choose what to sell → Describe and price it → Review and publish.** Profiling is not a mandatory step or primary navigation item. Allai is central to listing preparation: she drafts the description and metadata tags, then the seller reviews and approves. Marketplace data verification remains a separate offering.
+
+## Allai editor
+
+The reference is AIM-DATA's `frontend/src/pages/DatasetDetail.tsx`: generated title/description/category/tags, field navigation, embedded chat, Looks good / Change it, and seller acceptance. The web editor follows that interaction model in a Prepare with Allai section, with manual edits and seller-controlled price/license.
+
+The listing assistant has a separate typed request/response boundary. It accepts the seller's brief, draft metadata, active field and instruction; it returns a message and bounded proposed changes to the four allowed metadata fields. Proposals do not overwrite fields until accepted. Price, license, ownership and publication are not allowed proposal fields. Leaving the editor aborts a pending request. Drafts are volatile and are not saved or published.
+
+Live connection remains unfinished. The existing website Allai chat sends to `/api/allai/support/anonymous/message`, a public-support/retrieval surface; the editor does not send seller drafting context there. Without a listing assistant adapter, generation and chat submission are disabled with an explicit unavailable state. The local preview injects synthetic responses from outside the application repository. Real seller-owned context, permitted source metadata, assistant generation, persistence and end-to-end proof remain to be connected.
 
 ## Behavior
 
@@ -23,13 +31,13 @@ Max approved: **Connect storage → Choose what to sell → Describe and price i
 
 ## Remaining journey
 
-Next: persistent source selection, seller-authored listing description, price and license, exact seller review, then workspace publication/delivery. Cloudflare R2 setup remains unfinished. Optional listing assistance can be added within the editor; it must not become a prerequisite for listing. Existing manual listings remain at `/dashboard/listings`; this interface never sends a workspace draft through the legacy publication path.
+Next: seller-owned listing assistant backend and permitted metadata context, persistent source selection and draft, exact seller review, then workspace publication/delivery. Cloudflare R2 setup remains unfinished. Allai should do most drafting/tagging work; manual editing remains available and separate marketplace verification is not a listing prerequisite. Existing manual listings remain at `/dashboard/listings`; this interface never sends a workspace draft through the legacy publication path.
 
 Backend contract gap: the inspected object-list endpoint currently shares the W3 profile capability gate. The frontend respects that availability gate without asking the seller to run a profile. Independent source-discovery availability must be established server-side before this flow can work when profiling is disabled. No feature flags or provider resources are changed here.
 
 ## Verification
 
-- 62 focused tests across the API, Workspace page, dashboard layout, and preparatory data/activity components, including existing connection lifetime/rotation tests and source selection without analysis.
+- 65 focused tests across the API, Workspace page, dashboard layout, source selection, and Allai editor, including no-send without an adapter, explicit proposal acceptance, protected price/ownership fields, failure recovery and request cancellation on exit.
 - TypeScript and focused ESLint pass; whitespace validation is clean.
 - Next production compilation and type validation succeed. Final page collection cannot finish in the isolated checkout because the existing Keystatic GitHub credentials are absent. This is not a successful full production build.
 - Normal Chrome local preview with synthetic fixtures exercises desktop storage, file search, result inspection, empty and disabled states, and mobile setup. At a phone viewport the document has no horizontal overflow. These are UI checks, not production/AWS integration evidence.
