@@ -33,7 +33,7 @@ Normal Chrome exercised the actual HTTP adapter and credit ledger with an isolat
 
 ## Remaining journey
 
-Next: permitted metadata context, persistent source selection, exact seller review, then workspace publication/delivery. Cloudflare R2 connection remains unfinished. Allai should do most drafting/tagging work; manual editing remains available and separate marketplace verification is not a listing prerequisite. Existing manual listings remain at `/dashboard/listings`; this interface never sends a workspace draft through the legacy publication path.
+Next: permitted metadata context, exact seller review, then workspace publication/delivery. Cloudflare R2 connection remains unfinished. Allai should do most drafting/tagging work; manual editing remains available and separate marketplace verification is not a listing prerequisite. Existing manual listings remain at `/dashboard/listings`; this interface never sends a workspace draft through the legacy publication path.
 
 Independent AWS file discovery is implemented in the companion backend, default off behind `SELLER_WORKSPACE_AWS_DISCOVERY_ENABLED`. The frontend now requires `providers.aws.discovery`, calls `/connections/{id}/source-objects`, and does not infer availability from the profiling stage. The old profiling objects route remains separately gated. Normal Chrome showed file selection with synthetic profiling explicitly disabled. Real AWS proof and production enablement remain outstanding.
 
@@ -72,3 +72,9 @@ Guide state is temporary and resets when closed or unmounted. Three focused inte
 ## Private listing preview
 
 Preview my listing brings current title, description, category, deduplicated tags, USD price and license together. It includes unsaved edits and explicitly remains private. Brief/chat/unaccepted proposals are excluded. Missing fields and invalid prices show placeholders; there is no publish button or recorded approval. Two focused tests and normal Chrome verified this view. Source binding and final versioned approval remain outstanding.
+
+## Saved file selection
+
+When `sources` and independent discovery are available, Choose what to sell loads the account's working selection before mounting the picker. Explicit Save selected files sends at most ten file identities to the owner-scoped backend; file contents never pass through the frontend or Allai. Unknown save outcomes retry the same request identity/version. A stale save preserves local choices and asks for a refresh; failed initial reads block a misleading empty picker. The restored selected-file list remains visible even when a file is outside the currently loaded page. Connection version changes require choosing and saving again. Clearing checkboxes is a local edit; this increment does not delete a saved source record.
+
+Normal Chrome saved a synthetic file through the actual local source HTTP service and restored it after reload, with profiling disabled. Backend preview used real PostgreSQL and envelope encryption with a test-only KMS implementation and synthetic metadata, not live AWS. Three focused frontend tests cover restoration, exact retry and failed-read recovery. Source selection is not publication, and final approval/source-version binding remains outstanding.

@@ -1,6 +1,8 @@
 'use client';
 
 import { useEffect, useRef, useState } from 'react';
+import axios from 'axios';
+import type { SourceRead } from '@/api/sellerListingSource';
 import {
   cancelWorkspaceProfileJob, createIdempotencyKey, getWorkspaceProfileEvidence,
   listWorkspaceObjects, listWorkspaceProfileJobs,
@@ -22,9 +24,10 @@ export function WorkspaceNotice({ title, children }: { title: string; children: 
   return <div className="rounded-xl border border-gray-200 bg-white p-6 sm:p-8"><h2 className="text-lg font-semibold text-gray-900">{title}</h2><div className="mt-2 max-w-2xl text-sm leading-6 text-gray-600">{children}</div></div>;
 }
 
-export function WorkspaceData({ connections, enabled }: { connections: SellerWorkspaceConnection[]; enabled: boolean }) {
+type SaveSelection = (connection: SellerWorkspaceConnection, objects: WorkspaceObject[]) => Promise<void>;
+export function WorkspaceData({ connections, enabled, savedSource, onSaveSelection }: { connections: SellerWorkspaceConnection[]; enabled: boolean; savedSource?: SourceRead | null; onSaveSelection?: SaveSelection }) {
   const verified = connections.filter((connection) => connection.status === 'verified');
-  const [selectedId, setSelectedId] = useState('');
+  const [selectedId, setSelectedId] = useState(savedSource?.content.connection_id ?? '');
   const selected = verified.find((connection) => connection.id === selectedId) ?? verified[0];
   if (!enabled) return <WorkspaceNotice title="File browsing is not available yet">Your storage connections are saved. File browsing still needs to be connected in this Workspace. You do not need to run a data analysis or request marketplace verification to prepare a listing.</WorkspaceNotice>;
   if (!selected) return <WorkspaceNotice title="Connect storage to see your data">Add and verify an AWS connection in Storage connections. Only files inside the folder you authorize will be available here.</WorkspaceNotice>;
@@ -38,18 +41,24 @@ export function WorkspaceData({ connections, enabled }: { connections: SellerWor
           </select>
         </label>
       </div>
-      <ObjectBrowser key={`${selected.id}:${selected.version}`} connection={selected} />
+      {savedSource && (!savedSource.connection_current || !verified.some(item => item.id === savedSource.content.connection_id && item.version === savedSource.content.connection_version)) && <p role="alert" className="rounded-lg bg-amber-50 p-4 text-sm text-amber-900">The connection for your saved selection has changed. Choose files from a current connection and save them again.</p>}
+      <ObjectBrowser key={`${selected.id}:${selected.version}`} connection={selected} onSaveSelection={onSaveSelection} initialSelection={savedSource?.connection_current && savedSource.content.connection_id === selected.id && savedSource.content.connection_version === selected.version ? savedSource.content.objects.map(item => ({...item, last_modified: '', format_candidate: 'unknown'})) : undefined} />
     </section>
   );
 }
 
-function ObjectBrowser({ connection }: { connection: SellerWorkspaceConnection }) {
+function ObjectBrowser({ connection, initialSelection, onSaveSelection }: { connection: SellerWorkspaceConnection; initialSelection?: WorkspaceObject[]; onSaveSelection?: SaveSelection }) {
+  const initial = useRef(initialSelection ?? []);
+  const [savedSelection, setSavedSelection] = useState(JSON.stringify((initialSelection ?? []).map(objectIdentity)));
+  const [savingSelection, setSavingSelection] = useState(false);
+  const saving = useRef(false);
+  const [selectionError, setSelectionError] = useState<string | null>(null);
   const [objects, setObjects] = useState<WorkspaceObject[]>([]);
   const [cursor, setCursor] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(false);
   const [query, setQuery] = useState('');
-  const [selected, setSelected] = useState<WorkspaceObject[]>([]);
+  const [selected, setSelected] = useState<WorkspaceObject[]>(initial.current);
   const [retry, setRetry] = useState(0);
   const mounted = useRef(true);
   const pending = useRef(false);
@@ -60,7 +69,7 @@ function ObjectBrowser({ connection }: { connection: SellerWorkspaceConnection }
     setLoading(true);
     setError(false);
     setObjects([]);
-    setSelected([]);
+    setSelected(initial.current);
     setCursor(null);
     listWorkspaceObjects(connection.id, connection.prefix ?? '')
       .then((result) => { if (!cancelled) { setObjects(result.objects); setCursor(result.next_cursor); } })
@@ -87,11 +96,25 @@ function ObjectBrowser({ connection }: { connection: SellerWorkspaceConnection }
     } catch { if (mounted.current) setError(true); }
     finally { pending.current = false; if (mounted.current) setLoading(false); }
   };
+  const selectionSnapshot = JSON.stringify(selected.map(objectIdentity));
+  const saveSelection = async () => {
+    if (!onSaveSelection || saving.current || selected.length === 0) return;
+    saving.current = true; setSavingSelection(true); setSelectionError(null);
+    const submitted = selectionSnapshot;
+    try {
+      await onSaveSelection(connection, [...selected]);
+      if (mounted.current) setSavedSelection(submitted);
+    } catch (error) {
+      if (mounted.current) setSelectionError(axios.isAxiosError(error) && error.response?.status === 409
+        ? 'The files, connection or saved selection changed. Your choices are still here. Reload the Workspace and choose the current files before saving again.'
+        : 'Saving could not be confirmed. Your choices are still here. Try saving again.');
+    } finally { saving.current = false; if (mounted.current) setSavingSelection(false); }
+  };
   const filtered = objects.filter((object) => object.key.toLowerCase().includes(query.toLowerCase()));
   const toggleSelection = (object: WorkspaceObject) => {
     setSelected((current) => current.some((item) => objectIdentity(item) === objectIdentity(object))
       ? current.filter((item) => objectIdentity(item) !== objectIdentity(object))
-      : [...current, object]);
+      : current.length < 10 ? [...current, object] : current);
   };
   return (
     <div className="overflow-hidden rounded-xl border border-gray-200 bg-white">
@@ -100,13 +123,13 @@ function ObjectBrowser({ connection }: { connection: SellerWorkspaceConnection }
         <label className="text-sm text-gray-600"><span className="sr-only">Search loaded files</span><input type="search" value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Search loaded files" className="w-full rounded-lg border border-gray-300 px-3 py-2 sm:w-60" /></label>
       </div>
       {error && <div role="alert" className="m-5 rounded-lg bg-red-50 p-4 text-sm text-red-800">Files could not be loaded. Check that the connection is still available.<button type="button" disabled={loading} onClick={() => cursor ? void loadMore() : setRetry((value) => value + 1)} className={`${buttonClass} ml-3`}>Try again</button></div>}
-      {objects.length > 0 && <div className="overflow-x-auto"><table className="w-full text-left text-sm"><caption className="sr-only">Files in the selected storage connection</caption><thead className="bg-gray-50 text-xs text-gray-500"><tr><th scope="col" className="px-5 py-3">File</th><th scope="col" className="px-5 py-3">Format</th><th scope="col" className="px-5 py-3 text-right">Size</th></tr></thead><tbody className="divide-y divide-gray-100">{filtered.map((object) => <tr key={objectIdentity(object)}><th scope="row" className="max-w-md break-all px-5 py-4 font-medium text-gray-900"><label className="flex items-start gap-3"><input type="checkbox" aria-label={`Select ${object.key}`} checked={selected.some((item) => objectIdentity(item) === objectIdentity(object))} onChange={() => toggleSelection(object)} className="mt-0.5 h-4 w-4 shrink-0 accent-[#3F51B5]" /><span>{object.key}</span></label></th><td className="px-5 py-4 text-xs uppercase text-gray-600">{object.format_candidate === 'unknown' ? 'Unrecognized' : object.format_candidate}</td><td className="whitespace-nowrap px-5 py-4 text-right text-gray-600">{formatBytes(object.size)}</td></tr>)}</tbody></table></div>}
+      {objects.length > 0 && <div className="overflow-x-auto"><table className="w-full text-left text-sm"><caption className="sr-only">Files in the selected storage connection</caption><thead className="bg-gray-50 text-xs text-gray-500"><tr><th scope="col" className="px-5 py-3">File</th><th scope="col" className="px-5 py-3">Format</th><th scope="col" className="px-5 py-3 text-right">Size</th></tr></thead><tbody className="divide-y divide-gray-100">{filtered.map((object) => <tr key={objectIdentity(object)}><th scope="row" className="max-w-md break-all px-5 py-4 font-medium text-gray-900"><label className="flex items-start gap-3"><input type="checkbox" aria-label={`Select ${object.key}`} disabled={selected.length >= 10 && !selected.some(item => objectIdentity(item) === objectIdentity(object))} checked={selected.some((item) => objectIdentity(item) === objectIdentity(object))} onChange={() => toggleSelection(object)} className="mt-0.5 h-4 w-4 shrink-0 accent-[#3F51B5]" /><span>{object.key}</span></label></th><td className="px-5 py-4 text-xs uppercase text-gray-600">{object.format_candidate === 'unknown' ? 'Unrecognized' : object.format_candidate}</td><td className="whitespace-nowrap px-5 py-4 text-right text-gray-600">{formatBytes(object.size)}</td></tr>)}</tbody></table></div>}
       {!loading && !error && filtered.length === 0 && <p className="p-8 text-center text-sm text-gray-500">{query ? 'No loaded files match your search.' : 'No files found in this connected folder.'}</p>}
       {loading && <p role="status" className="p-5 text-sm text-gray-600">Loading files…</p>}
       {cursor && !error && <div className="border-t border-gray-200 p-4 text-center"><button type="button" disabled={loading} onClick={loadMore} className={buttonClass}>Load more files</button></div>}
       <div className="border-t border-gray-200 bg-gray-50 px-5 py-4">
         <div className="flex flex-wrap items-center justify-between gap-3"><p role="status" className="text-sm font-medium text-gray-900">{selected.length} {selected.length === 1 ? 'file' : 'files'} selected · {formatBytes(selected.reduce((total, object) => total + object.size, 0))}</p>{selected.length > 0 && <button type="button" onClick={() => setSelected([])} className={buttonClass}>Clear selection</button>}</div>
-        <p className="mt-2 text-xs leading-5 text-gray-600">Choosing files does not read or analyze their contents. Your selection stays when you switch Workspace sections. Changing the storage connection, reloading, or leaving the Workspace clears it. Saving it to a listing is not available yet.</p>
+        {onSaveSelection ? <div className="mt-3 space-y-3"><button type="button" disabled={savingSelection || selected.length === 0 || selectionSnapshot === savedSelection} onClick={saveSelection} className={buttonClass}>{savingSelection ? 'Saving selection…' : 'Save selected files'}</button><p role="status" className="text-sm text-gray-600">{selectionSnapshot === savedSelection && selected.length > 0 ? 'File selection saved to your account.' : 'Your file choices have not been saved.'} Saving does not publish or analyze your data.</p>{selected.length > 0 && <ul aria-label="Selected files" className="space-y-1 text-xs text-gray-600">{selected.map(item => <li key={objectIdentity(item)} className="break-all">{item.key}</li>)}</ul>}{selectionError && <p role="alert" className="text-sm text-red-800">{selectionError}</p>}<p className="text-xs text-gray-600">Choose up to 10 files. Your file choices are saved privately; the files stay in your cloud account.</p></div> : <p className="mt-2 text-xs leading-5 text-gray-600">Choosing files does not read or analyze their contents. Your selection stays when you switch Workspace sections. Changing the storage connection, reloading, or leaving the Workspace clears it. Saving it to a listing is not available yet.</p>}
       </div>
     </div>
   );
