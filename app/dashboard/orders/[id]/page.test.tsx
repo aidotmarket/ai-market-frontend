@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 
-import { cleanup, render, screen, waitFor } from '@testing-library/react';
+import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { BuyerOrderDetail, Transaction } from '@/types';
 
@@ -222,4 +222,12 @@ describe('OrderDetailPage viewer relationship gating', () => {
       expect(ordersApi.requestDownload).toHaveBeenCalledWith('order-1');
     });
   });
+  it('shows Workspace downloads without automatically consuming an allowance', async () => {
+    ordersApi.getOrder.mockResolvedValue({...order(),workspace_delivery:true,status:'delivered'});
+    render(<OrderDetailPage />);
+    fireEvent.click(await screen.findByRole('button',{name:'Continue to download'}));
+    expect(await screen.findByRole('button',{name:'Choose folder and download'})).not.toBeNull();
+    expect(ordersApi.requestDownload).not.toHaveBeenCalled();
+  });
+
 });

@@ -8,6 +8,7 @@ import { getTransaction, confirmTransaction, deliverTransaction } from '@/api/tr
 import { formatPrice, formatDate } from '@/lib/format';
 import { useToast } from '@/components/Toast';
 import { useAuthStore } from '@/store/auth';
+import WorkspaceDownload from '@/components/orders/WorkspaceDownload';
 import ScopedCredentialDownload, { isS3ScopedDeliveryResponse } from '@/components/orders/ScopedCredentialDownload';
 import OrderVersionAccessSummary from '@/components/orders/OrderVersionAccessSummary';
 import { useTermsGate } from '@/components/legal/TermsGate';
@@ -71,6 +72,8 @@ export default function OrderDetailPage() {
   const [downloadPackage, setDownloadPackage] = useState<OrderAccessResponse | null>(null);
   const [scopedDelivery, setScopedDelivery] = useState<S3ScopedDeliveryResponse | null>(null);
   const [downloadLoading, setDownloadLoading] = useState(false);
+  const [workspaceDownloadReady, setWorkspaceDownloadReady] = useState(false);
+  useEffect(() => {setWorkspaceDownloadReady(false);}, [orderId]);
   const [downloadError, setDownloadError] = useState('');
   const [scopedRefreshError, setScopedRefreshError] = useState('');
   const [loading, setLoading] = useState(true);
@@ -115,7 +118,7 @@ export default function OrderDetailPage() {
   }, [orderId, txIdParam]);
 
   useEffect(() => {
-    if (!isBuyerOfRecord || order?.status !== 'fulfilled' || order.access_expired) return;
+    if (!isBuyerOfRecord || order?.workspace_delivery || order?.status !== 'fulfilled' || order.access_expired) return;
 
     let cancelled = false;
     setDownloadLoading(true);
@@ -140,7 +143,7 @@ export default function OrderDetailPage() {
       });
 
     return () => { cancelled = true; };
-  }, [isBuyerOfRecord, order?.access_expired, order?.status, orderId]);
+  }, [isBuyerOfRecord, order?.workspace_delivery, order?.access_expired, order?.status, orderId]);
 
   useEffect(() => {
     const interval = window.setInterval(() => setNow(Date.now()), 1000);
@@ -426,7 +429,7 @@ export default function OrderDetailPage() {
             <p>Downloads are available to the buyer of this order.</p>
           )}
 
-          {order.status === 'fulfilled' && isBuyerOfRecord && order.access_expired && (
+          {(order.status === 'fulfilled' || order.workspace_delivery) && isBuyerOfRecord && order.access_expired && (
             <div className="rounded-lg border border-red-200 bg-red-50 p-6">
               <h2 className="text-lg font-semibold text-red-900">Download window expired</h2>
               <p className="mt-2 text-sm text-red-700">
@@ -435,7 +438,9 @@ export default function OrderDetailPage() {
             </div>
           )}
 
-          {order.status === 'fulfilled' && isBuyerOfRecord && !order.access_expired && (
+          {order.workspace_delivery && isBuyerOfRecord && !order.access_expired && ['delivered','completed','fulfilled'].includes(String(order.status)) && (workspaceDownloadReady ? <WorkspaceDownload key={order.id} orderId={order.id} /> : <button type="button" disabled={checkingTerms} onClick={() => ensureTermsAccepted(() => setWorkspaceDownloadReady(true))} className="rounded-lg bg-indigo-700 px-4 py-2 text-sm font-semibold text-white disabled:opacity-50">Continue to download</button>)}
+
+          {order.status === 'fulfilled' && !order.workspace_delivery && isBuyerOfRecord && !order.access_expired && (
             scopedDelivery ? (
               <ScopedCredentialDownload
                 orderId={order.id}

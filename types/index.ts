@@ -614,6 +614,7 @@ export interface BuyerOrder {
 }
 
 export interface BuyerOrderDetail extends BuyerOrder {
+  workspace_delivery?: boolean;
   buyer_id: string;
   seller_id: string;
   access_url?: string | null;

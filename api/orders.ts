@@ -7,8 +7,13 @@ export async function getMyOrders(): Promise<BuyerOrder[]> {
 }
 
 export async function getOrder(orderId: string): Promise<BuyerOrderDetail> {
-  const res = await api.get<BuyerOrderDetail>(`/orders/${encodeURIComponent(orderId)}`);
-  return res.data;
+  const res = await api.get<BuyerOrderDetail & {amount_cents?: number; listing_snapshot?: {title?: string}}>(`/orders/${encodeURIComponent(orderId)}`);
+  const data = res.data;
+  if (!data.workspace_delivery) return data;
+  return {...data,
+    amount: typeof data.amount_cents === 'number' ? data.amount_cents / 100 : data.amount,
+    listing_title: data.listing_snapshot?.title ?? data.listing_title ?? 'Purchased data',
+  };
 }
 
 export async function getOrderEvents(orderId: string): Promise<OrderEvent[]> {
