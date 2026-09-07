@@ -43,3 +43,14 @@ Backend contract gap: the inspected object-list endpoint currently shares the W3
 - Normal Chrome local preview with synthetic fixtures exercises desktop storage, file search, result inspection, empty and disabled states, and mobile setup. At a phone viewport the document has no horizontal overflow. These are UI checks, not production/AWS integration evidence.
 
 Preview fixtures and the local preview server live outside this repository. They are not included in the production application.
+# Guided cloud storage setup
+
+Both provider cards offer a browser-based guide for customers starting without storage: account, private bucket, upload files, return to connection. Existing customers can skip to the connection step. Provider links open in another tab; navigation does not verify an account, create resources, upload files, or enable a connection. AWS handoff preserves the existing capability gate. R2 ends with the actual unavailable connection status. No passwords, keys or billing details are collected by the guide.
+
+Instructions checked against official documentation on 2026-09-07:
+- https://developers.cloudflare.com/r2/get-started/
+- https://developers.cloudflare.com/r2/buckets/create-buckets/
+- https://developers.cloudflare.com/r2/objects/upload-objects/
+- https://docs.aws.amazon.com/AmazonS3/latest/userguide/GetStartedWithS3.html
+
+Guide state is temporary and resets when closed or unmounted. Three focused interaction tests cover existing-storage handoff, capability enforcement, and R2's unavailable boundary. Normal Chrome verified both guides in the synthetic preview.

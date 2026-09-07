@@ -1,3 +1,7 @@
+'use client';
+
+import { useRef, useState } from 'react';
+import { StorageSetupGuide, type StorageProvider } from './StorageSetupGuide';
 import type { SellerWorkspaceCapabilities } from '@/api/sellerWorkspace';
 import { isAWSConnectionAvailable } from '@/api/sellerWorkspace';
 
@@ -6,6 +10,8 @@ export function StorageProviders({ capabilities, busy, onConnectAWS }: {
   busy: string | null;
   onConnectAWS: () => void;
 }) {
+  const [guide, setGuide] = useState<StorageProvider | null>(null);
+  const guideButtons = useRef<Partial<Record<StorageProvider, HTMLButtonElement | null>>>({});
   const awsAvailable = capabilities !== null && isAWSConnectionAvailable(capabilities);
   const r2Disabled = capabilities?.master?.enabled === false
     || capabilities?.providers?.r2?.connect?.status === 'disabled';
@@ -25,6 +31,7 @@ export function StorageProviders({ capabilities, busy, onConnectAWS }: {
             className="mt-5 self-start rounded-lg bg-[#3F51B5] px-4 py-2 text-sm font-medium text-white hover:bg-[#303F9F] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#3F51B5] disabled:cursor-not-allowed disabled:opacity-50">
             {!awsAvailable ? 'AWS setup unavailable' : busy === 'create-connection' ? 'Creating...' : 'Add AWS connection'}
           </button>
+          <button ref={(node) => { guideButtons.current.aws = node; }} type="button" onClick={() => setGuide('aws')} aria-expanded={guide === 'aws'} className="mt-3 self-start text-sm font-medium text-indigo-700 underline">Help me set up AWS storage</button>
         </article>
         <article className="flex flex-col rounded-xl border border-gray-200 bg-white p-6">
           <div className="flex items-center gap-3">
@@ -39,8 +46,10 @@ export function StorageProviders({ capabilities, busy, onConnectAWS }: {
             className="mt-5 self-start cursor-not-allowed rounded-lg border border-gray-200 bg-gray-50 px-4 py-2 text-sm font-medium text-gray-500">
             Cloudflare setup unavailable
           </button>
+          <button ref={(node) => { guideButtons.current.r2 = node; }} type="button" onClick={() => setGuide('r2')} aria-expanded={guide === 'r2'} className="mt-3 self-start text-sm font-medium text-indigo-700 underline">Help me set up Cloudflare storage</button>
         </article>
       </div>
+      {guide && <StorageSetupGuide key={guide} provider={guide} canConnectAWS={awsAvailable && busy === null} onConnectAWS={onConnectAWS} onClose={() => { setGuide(null); guideButtons.current[guide]?.focus(); }} />}
     </section>
   );
 }
