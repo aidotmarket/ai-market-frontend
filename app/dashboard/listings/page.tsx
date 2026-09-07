@@ -35,7 +35,7 @@ export default function ListingsPage() {
   const [error, setError] = useState('');
   const [actionLoading, setActionLoading] = useState<string | null>(null);
   const [deleteConfirm, setDeleteConfirm] = useState<string | null>(null);
-  const [payoutsEnabled, setPayoutsEnabled] = useState(false);
+  const [payoutsStatus, setPayoutsStatus] = useState<'unknown' | 'enabled' | 'disabled'>('unknown');
   const router = useRouter();
   const { toast } = useToast();
   const { ensureTermsAccepted, TermsGatePrompt, checkingTerms } = useTermsGate();
@@ -43,18 +43,21 @@ export default function ListingsPage() {
   const fetchListings = useCallback(async () => {
     setLoading(true);
     setError('');
-    try {
-      const [listingsRes, connectRes] = await Promise.all([
-        getMyListings(),
-        getConnectStatus(),
-      ]);
-      setListings(listingsRes.data || []);
-      setPayoutsEnabled(!!connectRes.data?.payouts_enabled);
-    } catch {
+    const [listingsRes, connectRes] = await Promise.allSettled([
+      getMyListings(),
+      getConnectStatus(),
+    ]);
+    if (listingsRes.status === 'fulfilled') {
+      setListings(listingsRes.value.data || []);
+    } else {
       setError('Failed to load listings.');
-    } finally {
-      setLoading(false);
     }
+    setPayoutsStatus(
+      connectRes.status === 'fulfilled'
+        ? connectRes.value.data?.payouts_enabled ? 'enabled' : 'disabled'
+        : 'unknown'
+    );
+    setLoading(false);
   }, []);
 
   useEffect(() => {
@@ -160,7 +163,7 @@ export default function ListingsPage() {
                     <span className={`inline-flex rounded-full px-2.5 py-0.5 text-xs font-medium ${STATUS_STYLES[listing.status] || 'bg-gray-100 text-gray-800'}`}>
                       {STATUS_LABELS[listing.status] || listing.status}
                     </span>
-                    {listing.status === 'published' && !payoutsEnabled && (
+                    {listing.status === 'published' && payoutsStatus === 'disabled' && (
                       <p className="mt-2 max-w-xs whitespace-normal text-xs leading-5 text-amber-700">
                         Published &mdash; not yet purchasable. Finish payout setup to enable sales.
                       </p>
