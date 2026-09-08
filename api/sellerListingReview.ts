@@ -14,7 +14,41 @@ export interface ListingReview {
   confirmation_version: 'seller-listing-confirmation-v1';
   confirmation_statements: Record<ConfirmationKey, string>;
   approval?: ApprovalReceipt | null;
-  source_files?: Array<{key: string; size: number; etag: string; version_id: string | null}>;
+  source_hash: string;
+  source_page?: ReviewSourcePage | null;
+}
+export interface ReviewSourcePage {
+  review_hash: string; source_version: number; source_hash: string;
+  offset: number; page_size: number; total_count: number; total_size_bytes: number;
+  files: Array<{key: string; size: number; etag: string; version_id: string | null}>;
+  next_cursor: string | null;
+}
+function verifySourcePage(page: ReviewSourcePage, review: ListingReview, offset: number) {
+  if (!page || page.review_hash !== review.review_hash || page.source_version !== review.source_version ||
+      page.source_hash !== review.source_hash || !/^[a-f0-9]{64}$/.test(page.source_hash) ||
+      page.offset !== offset || !Number.isSafeInteger(offset) || offset < 0 ||
+      !Number.isSafeInteger(page.page_size) || page.page_size < 1 || page.page_size > 1000 ||
+      !Number.isSafeInteger(page.total_count) || page.total_count < 1 || page.total_count > 50000 ||
+      !Number.isSafeInteger(page.total_size_bytes) || page.total_size_bytes < 0 ||
+      !Array.isArray(page.files) || page.files.length < 1 || page.files.length > page.page_size ||
+      offset + page.files.length > page.total_count ||
+      page.files.some(file => typeof file.key !== 'string' || !file.key || file.key.length > 1024 ||
+        !Number.isSafeInteger(file.size) || file.size < 0 || typeof file.etag !== 'string' || !file.etag || file.etag.length > 256 ||
+        (file.version_id !== null && (typeof file.version_id !== 'string' || file.version_id.length > 1024))) ||
+      new Set(page.files.map(file => JSON.stringify([file.key, file.version_id]))).size !== page.files.length ||
+      page.files.reduce((sum, file) => sum + file.size, 0) > page.total_size_bytes ||
+      (offset + page.files.length < page.total_count ?
+        typeof page.next_cursor !== 'string' || !page.next_cursor || page.next_cursor.length > 512 : page.next_cursor !== null) ||
+      new TextEncoder().encode(JSON.stringify(page.files)).length > 256000 ||
+      (review.source_page && (page.total_count !== review.source_page.total_count ||
+        page.total_size_bytes !== review.source_page.total_size_bytes || page.page_size !== review.source_page.page_size)))
+    throw new Error('Saved review files could not be verified');
+}
+export async function readReviewSourcePage(review: ListingReview, cursor: string, offset: number, signal: AbortSignal): Promise<ReviewSourcePage> {
+  const page: ReviewSourcePage = (await api.get('/seller-workspace/listing-review/files', {params:{cursor}, signal})).data;
+  verifySourcePage(page, review, offset);
+  if (signal.aborted) throw new Error('Saved review files could not be verified');
+  return page;
 }
 export async function readListingReview(signal: AbortSignal): Promise<ListingReview> {
   const review: ListingReview = (await api.get('/seller-workspace/listing-review', {signal})).data;
@@ -28,9 +62,10 @@ export async function readListingReview(signal: AbortSignal): Promise<ListingRev
   if (review.approval_available && (review.confirmation_version !== 'seller-listing-confirmation-v1' ||
       CONFIRMATION_KEYS.some(key => typeof review.confirmation_statements?.[key] !== 'string' || !review.confirmation_statements[key].trim())))
     throw new Error('Saved review could not be verified');
-  if (review.approval_available && (!Array.isArray(review.source_files) || review.source_files.length < 1 || review.source_files.length > 50000 ||
-      review.source_files.some(file => typeof file.key !== 'string' || !file.key || file.key.length > 1024 || !Number.isSafeInteger(file.size) || file.size < 0)))
-    throw new Error('Saved review could not be verified');
+  if (review.approval_available) {
+    try { verifySourcePage(review.source_page as ReviewSourcePage, review, 0); }
+    catch { throw new Error('Saved review could not be verified'); }
+  }
   if (review.approval && (review.approval.review_hash !== review.review_hash || review.approval.render_hash !== review.render_hash ||
       review.approval.draft_version !== review.draft_version || review.approval.source_version !== review.source_version || review.approval.sample_decision !== 'none'))
     throw new Error('Saved review could not be verified');
