@@ -17,7 +17,7 @@ export interface WorkspaceDownload {
 export function validateWorkspaceDownload(value:unknown):WorkspaceDownload {
   const data=value as WorkspaceDownload;
   if (!data || data.delivery_type!=='workspace_direct' || !/^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/.test(data.session_id) ||
-      !Array.isArray(data.files) || !data.files.length || data.files.length>10 ||
+      !Array.isArray(data.files) || !data.files.length || data.files.length>50000 ||
       !Number.isSafeInteger(data.download_number) || data.download_number<1 ||
       !Number.isSafeInteger(data.downloads_remaining) || data.downloads_remaining<0) throw new Error('Invalid download response');
   data.files.forEach((file,index) => {

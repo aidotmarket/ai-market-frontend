@@ -28,7 +28,7 @@ export async function readListingReview(signal: AbortSignal): Promise<ListingRev
   if (review.approval_available && (review.confirmation_version !== 'seller-listing-confirmation-v1' ||
       CONFIRMATION_KEYS.some(key => typeof review.confirmation_statements?.[key] !== 'string' || !review.confirmation_statements[key].trim())))
     throw new Error('Saved review could not be verified');
-  if (review.approval_available && (!Array.isArray(review.source_files) || review.source_files.length < 1 || review.source_files.length > 10 ||
+  if (review.approval_available && (!Array.isArray(review.source_files) || review.source_files.length < 1 || review.source_files.length > 50000 ||
       review.source_files.some(file => typeof file.key !== 'string' || !file.key || file.key.length > 1024 || !Number.isSafeInteger(file.size) || file.size < 0)))
     throw new Error('Saved review could not be verified');
   if (review.approval && (review.approval.review_hash !== review.review_hash || review.approval.render_hash !== review.render_hash ||

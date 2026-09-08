@@ -302,10 +302,10 @@ export interface WorkspaceProfileEvidence {
   };
 }
 
-export function listWorkspaceObjects(connectionId: string, prefix: string, cursor?: string) {
+export function listWorkspaceObjects(connectionId: string, prefix: string, cursor?: string, limit = 100) {
   return safely<{ objects: WorkspaceObject[]; next_cursor: string | null }>(api.get(
     `${BASE_PATH}/connections/${encodeURIComponent(connectionId)}/source-objects`,
-    { params: { prefix, version_mode: 'current', limit: 100, ...(cursor ? { cursor } : {}) } }
+    { params: { prefix, version_mode: 'current', limit, ...(cursor ? { cursor } : {}) } }
   ));
 }
 

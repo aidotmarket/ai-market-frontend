@@ -39,3 +39,9 @@ it('sends only exact review identities and explicit confirmations, never source 
   client.post.mockResolvedValue({data:{...receipt,source_version:3}});
   await expect(approveListingReview(prepared,'request-id',signal)).rejects.toThrow('Approval could not be verified');
 });
+
+it('accepts an exact review with 22,000 private source identities',async()=>{
+ const value={...review,approval_available:true,confirmation_version:'seller-listing-confirmation-v1',confirmation_statements:{ownership_confirmed:'Ownership',privacy_confirmed:'Privacy',price_license_confirmed:'Price/license',public_disclosure_confirmed:'Disclosure'},source_files:Array.from({length:22000},(_,i)=>({key:`private/${i}.csv`,size:1,etag:'e',version_id:null}))};
+ client.get.mockResolvedValue({data:value});
+ expect(await readListingReview(new AbortController().signal)).toBe(value);
+});

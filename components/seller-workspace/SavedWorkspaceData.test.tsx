@@ -24,8 +24,10 @@ it('retries an unknown save with the same version and identity', async () => {
   render(<SavedWorkspaceData enabled connections={[connection]} />);
   fireEvent.click(await screen.findByRole('checkbox', {name:`Select ${object.key}`}));
   fireEvent.click(screen.getByRole('button', {name:'Save selected files'}));
+  fireEvent.click(screen.getByRole('button', {name:'Confirm selection'}));
   await screen.findByText(/Saving could not be confirmed/);
   fireEvent.click(screen.getByRole('button', {name:'Save selected files'}));
+  fireEvent.click(screen.getByRole('button', {name:'Confirm selection'}));
   await screen.findByText(/File selection saved to your account/);
   expect(api.saveListingSource.mock.calls[0]).toEqual(api.saveListingSource.mock.calls[1]);
   expect(api.saveListingSource.mock.calls[0][0]).toEqual(content);
@@ -49,6 +51,7 @@ it('keeps the connection fixed during a save and preserves newer checkbox edits'
   const checkbox = await screen.findByRole('checkbox', {name:`Select ${object.key}`});
   fireEvent.click(checkbox);
   fireEvent.click(screen.getByRole('button', {name:'Save selected files'}));
+  fireEvent.click(screen.getByRole('button', {name:'Confirm selection'}));
   expect((screen.getByRole('combobox', {name:'Storage connection'}) as HTMLSelectElement).disabled).toBe(true);
   fireEvent.click(checkbox);
   await act(async () => finish({version:1,content,connection_current:true}));
@@ -66,4 +69,49 @@ it('keeps a local selection change when retrying a failed file read', async () =
   const checkbox = await screen.findByRole('checkbox', {name:`Select ${object.key}`});
   expect((checkbox as HTMLInputElement).checked).toBe(false);
   expect(screen.getByText(/Your file choices have not been saved/)).toBeTruthy();
+});
+
+it('checks a complete folder and requires count-and-size confirmation before saving',async()=>{
+ api.readListingSource.mockResolvedValue(null);
+ api.listWorkspaceObjects.mockResolvedValueOnce({objects:[object],next_cursor:'browse-next'})
+  .mockResolvedValueOnce({objects:[object],next_cursor:'folder-next'})
+  .mockResolvedValueOnce({objects:[{...object,key:'data/sub/second.csv',size:1048576}],next_cursor:null});
+ api.saveListingSource.mockResolvedValue({version:1,content,connection_current:true});
+ render(<SavedWorkspaceData enabled connections={[connection]}/>);
+ await screen.findByRole('checkbox',{name:`Select ${object.key}`});
+ fireEvent.click(screen.getByRole('button',{name:'Select entire connected folder'}));
+ await screen.findByText(/2 files selected/);
+ fireEvent.click(screen.getByRole('button',{name:'Save selected files'}));
+ expect(screen.getByText(/You have chosen 2 files totaling 1 MB/)).toBeTruthy();
+ expect(api.saveListingSource).not.toHaveBeenCalled();
+ fireEvent.click(screen.getByRole('button',{name:'Change selection'}));
+ expect(screen.queryByRole('region',{name:'Confirm file selection'})).toBeNull();
+ fireEvent.click(screen.getByRole('button',{name:'Save selected files'}));
+ fireEvent.click(screen.getByRole('button',{name:'Confirm selection'}));
+ await waitFor(()=>expect(api.saveListingSource).toHaveBeenCalledOnce());
+ expect(api.saveListingSource.mock.calls[0][0].objects).toHaveLength(2);
+});
+
+it('confirms 22,000 files while rendering only one selected-file preview page',async()=>{
+ const files=Array.from({length:22000},(_,i)=>({...object,key:`data/sub/file-${i}.csv`,size:1024}));
+ api.readListingSource.mockResolvedValue(null);
+ api.listWorkspaceObjects.mockImplementation(async(_id:string,_prefix:string,cursor?:string,limit?:number)=>{
+  if(!limit)return {objects:files.slice(0,100),next_cursor:'browse'};
+  const offset=Number(cursor??0);
+  return {objects:files.slice(offset,offset+1000),next_cursor:offset+1000<files.length?String(offset+1000):null};
+ });
+ api.saveListingSource.mockImplementation(async(content)=>({version:1,content,connection_current:true}));
+ render(<SavedWorkspaceData enabled connections={[connection]}/>);
+ await screen.findByRole('checkbox',{name:`Select ${files[0].key}`});
+ fireEvent.click(screen.getByRole('button',{name:'Select entire connected folder'}));
+ await screen.findByText(/22000 files selected/);
+ expect(screen.getByRole('list',{name:'Selected files'}).children).toHaveLength(50);
+ fireEvent.click(screen.getByRole('button',{name:'Next selected files'}));
+ expect(screen.getByText('Showing 51–100 of 22,000')).toBeTruthy();
+ fireEvent.click(screen.getByRole('button',{name:'Save selected files'}));
+ expect(screen.getByText(/You have chosen 22,000 files totaling 21.5 MB/)).toBeTruthy();
+ expect(api.saveListingSource).not.toHaveBeenCalled();
+ fireEvent.click(screen.getByRole('button',{name:'Confirm selection'}));
+ await waitFor(()=>expect(api.saveListingSource).toHaveBeenCalledOnce());
+ expect(api.saveListingSource.mock.calls[0][0].objects).toHaveLength(22000);
 });

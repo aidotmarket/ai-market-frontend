@@ -1,7 +1,8 @@
 'use client';
 
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import axios from 'axios';
+import {MAX_SELECTION_FILES,FolderSelectionError,mergeSelection,resolveFolder} from './folderSelection';
 import type { SourceRead } from '@/api/sellerListingSource';
 import {
   cancelWorkspaceProfileJob, createIdempotencyKey, getWorkspaceProfileEvidence,
@@ -52,6 +53,13 @@ function ObjectBrowser({ connection, initialSelection, onSaveSelection }: { conn
   const [savedSelection, setSavedSelection] = useState(JSON.stringify((initialSelection ?? []).map(objectIdentity)));
   const [savingSelection, setSavingSelection] = useState(false);
   const saving = useRef(false);
+  const [confirmation,setConfirmation]=useState<string|null>(null);
+  const [selectedFolders,setSelectedFolders]=useState<string[]>([]);
+  const [resolving,setResolving]=useState(false);
+  const resolvingRef=useRef(false);
+  const [scanWaiting,setScanWaiting]=useState(false);
+  const [scanProgress,setScanProgress]=useState({files:0,bytes:0});
+  const [selectionPage,setSelectionPage]=useState(0);
   const [selectionError, setSelectionError] = useState<string | null>(null);
   const [objects, setObjects] = useState<WorkspaceObject[]>([]);
   const [cursor, setCursor] = useState<string | null>(null);
@@ -95,25 +103,46 @@ function ObjectBrowser({ connection, initialSelection, onSaveSelection }: { conn
     } catch { if (mounted.current) setError(true); }
     finally { pending.current = false; if (mounted.current) setLoading(false); }
   };
-  const selectionSnapshot = JSON.stringify(selected.map(objectIdentity));
+  const selectionSnapshot = useMemo(()=>JSON.stringify(selected.map(objectIdentity)),[selected]);
+  const selectedIdentities=useMemo(()=>new Set(selected.map(objectIdentity)),[selected]);
+  const selectionBytes=useMemo(()=>selected.reduce((sum,item)=>sum+item.size,0),[selected]);
+  useEffect(()=>setSelectionPage(0),[selected]);
   const saveSelection = async () => {
-    if (!onSaveSelection || saving.current || selected.length === 0) return;
+    if (!onSaveSelection || saving.current || resolvingRef.current || selected.length === 0 || confirmation !== selectionSnapshot) return;
     saving.current = true; setSavingSelection(true); setSelectionError(null);
     const submitted = selectionSnapshot;
     try {
       await onSaveSelection(connection, [...selected]);
-      if (mounted.current) setSavedSelection(submitted);
+      if (mounted.current) {setSavedSelection(submitted);setConfirmation(null);}
     } catch (error) {
       if (mounted.current) setSelectionError(axios.isAxiosError(error) && error.response?.status === 409
         ? 'The files, connection or saved selection changed. Your choices are still here. Reload the Workspace and choose the current files before saving again.'
         : 'Saving could not be confirmed. Your choices are still here. Try saving again.');
     } finally { saving.current = false; if (mounted.current) setSavingSelection(false); }
   };
+  const folderChoices=[...new Set(objects.flatMap(object=>{
+    const root=(connection.prefix??'').replace(/\/+$/,'')+'/';
+    const relative=object.key.slice(root.length).split('/');
+    return relative.slice(0,-1).map((_,index)=>root+relative.slice(0,index+1).join('/')+'/');
+  }))].sort();
+  const selectFolder=async (prefix:string)=>{
+    if(resolvingRef.current || saving.current)return;
+    resolvingRef.current=true;setResolving(true);setScanProgress({files:0,bytes:0});setSelectionError(null);setConfirmation(null);
+    try{
+      const contents=await resolveFolder(connection.id,prefix,(id,folder,cursor)=>listWorkspaceObjects(id,folder,cursor,1000),{onRateLimit:waiting=>{if(mounted.current)setScanWaiting(waiting);},onProgress:progress=>{if(mounted.current)setScanProgress(progress);},cancelled:()=>!mounted.current});
+      if(!mounted.current)return;
+      if(!contents.length)throw new FolderSelectionError('No files were found in this folder.');
+      const combined=mergeSelection(selected,contents);
+      setSelected(combined);setSelectedFolders(current=>[...new Set([...current,prefix])]);
+    }catch(failure){if(mounted.current)setSelectionError(failure instanceof FolderSelectionError?failure.message:'The entire folder could not be checked. No partial folder has been added. Try again.');}
+    finally{resolvingRef.current=false;if(mounted.current)setResolving(false);}
+  };
   const filtered = objects.filter((object) => object.key.toLowerCase().includes(query.toLowerCase()));
   const toggleSelection = (object: WorkspaceObject) => {
+    setConfirmation(null);setSelectedFolders([]);
     setSelected((current) => current.some((item) => objectIdentity(item) === objectIdentity(object))
       ? current.filter((item) => objectIdentity(item) !== objectIdentity(object))
-      : current.length < 10 ? [...current, object] : current);
+      : current.length < MAX_SELECTION_FILES ? [...current, object] : current);
   };
   return (
     <div className="overflow-hidden rounded-xl border border-gray-200 bg-white">
@@ -121,14 +150,27 @@ function ObjectBrowser({ connection, initialSelection, onSaveSelection }: { conn
         <div className="min-w-0"><p className="break-all text-sm font-semibold text-gray-900">{connection.bucket} / {connection.prefix}</p><p className="mt-1 text-xs text-gray-500">{objects.length} files loaded · Files stay in your cloud account</p></div>
         <label className="text-sm text-gray-600"><span className="sr-only">Search loaded files</span><input type="search" value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Search loaded files" className="w-full rounded-lg border border-gray-300 px-3 py-2 sm:w-60" /></label>
       </div>
+      <div className="border-b border-gray-200 p-5 space-y-3">
+        <p className="text-sm text-gray-600">Choose individual files below, or include a whole folder and its subfolders.</p>
+        <button type="button" disabled={resolving || savingSelection} onClick={()=>void selectFolder(connection.prefix??'')} className={buttonClass}>Select entire connected folder</button>
+        {folderChoices.length>0 && <details><summary className="cursor-pointer text-sm font-medium text-indigo-700">Choose a subfolder</summary><ul className="mt-3 space-y-2">{folderChoices.map(prefix=><li key={prefix}><button type="button" disabled={resolving || savingSelection} onClick={()=>void selectFolder(prefix)} className={buttonClass}>Select folder {prefix}</button></li>)}</ul></details>}
+        {resolving && <p role="status" className="text-sm text-gray-600">Checking the entire folder… {scanProgress.files.toLocaleString('en')} files found · {formatBytes(scanProgress.bytes)} so far. {scanWaiting?'Pausing briefly for the storage request limit; counting will continue automatically.':'Please wait for the complete count.'}</p>}
+      </div>
       {error && <div role="alert" className="m-5 rounded-lg bg-red-50 p-4 text-sm text-red-800">Files could not be loaded. Check that the connection is still available.<button type="button" disabled={loading} onClick={() => cursor ? void loadMore() : setRetry((value) => value + 1)} className={`${buttonClass} ml-3`}>Try again</button></div>}
-      {objects.length > 0 && <div className="overflow-x-auto"><table className="w-full text-left text-sm"><caption className="sr-only">Files in the selected storage connection</caption><thead className="bg-gray-50 text-xs text-gray-500"><tr><th scope="col" className="px-5 py-3">File</th><th scope="col" className="px-5 py-3">Format</th><th scope="col" className="px-5 py-3 text-right">Size</th></tr></thead><tbody className="divide-y divide-gray-100">{filtered.map((object) => <tr key={objectIdentity(object)}><th scope="row" className="max-w-md break-all px-5 py-4 font-medium text-gray-900"><label className="flex items-start gap-3"><input type="checkbox" aria-label={`Select ${object.key}`} disabled={selected.length >= 10 && !selected.some(item => objectIdentity(item) === objectIdentity(object))} checked={selected.some((item) => objectIdentity(item) === objectIdentity(object))} onChange={() => toggleSelection(object)} className="mt-0.5 h-4 w-4 shrink-0 accent-[#3F51B5]" /><span>{object.key}</span></label></th><td className="px-5 py-4 text-xs uppercase text-gray-600">{object.format_candidate === 'unknown' ? 'Unrecognized' : object.format_candidate}</td><td className="whitespace-nowrap px-5 py-4 text-right text-gray-600">{formatBytes(object.size)}</td></tr>)}</tbody></table></div>}
+      {objects.length > 0 && <div className="overflow-x-auto"><table className="w-full text-left text-sm"><caption className="sr-only">Files in the selected storage connection</caption><thead className="bg-gray-50 text-xs text-gray-500"><tr><th scope="col" className="px-5 py-3">File</th><th scope="col" className="px-5 py-3">Format</th><th scope="col" className="px-5 py-3 text-right">Size</th></tr></thead><tbody className="divide-y divide-gray-100">{filtered.map((object) => <tr key={objectIdentity(object)}><th scope="row" className="max-w-md break-all px-5 py-4 font-medium text-gray-900"><label className="flex items-start gap-3"><input type="checkbox" aria-label={`Select ${object.key}`} disabled={resolving || (selected.length >= MAX_SELECTION_FILES && !selectedIdentities.has(objectIdentity(object)))} checked={selectedIdentities.has(objectIdentity(object))} onChange={() => toggleSelection(object)} className="mt-0.5 h-4 w-4 shrink-0 accent-[#3F51B5]" /><span>{object.key}</span></label></th><td className="px-5 py-4 text-xs uppercase text-gray-600">{object.format_candidate === 'unknown' ? 'Unrecognized' : object.format_candidate}</td><td className="whitespace-nowrap px-5 py-4 text-right text-gray-600">{formatBytes(object.size)}</td></tr>)}</tbody></table></div>}
       {!loading && !error && filtered.length === 0 && <p className="p-8 text-center text-sm text-gray-500">{query ? 'No loaded files match your search.' : 'No files found in this connected folder.'}</p>}
       {loading && <p role="status" className="p-5 text-sm text-gray-600">Loading files…</p>}
       {cursor && !error && <div className="border-t border-gray-200 p-4 text-center"><button type="button" disabled={loading} onClick={loadMore} className={buttonClass}>Load more files</button></div>}
+      {confirmation===selectionSnapshot && selected.length>0 && <section aria-label="Confirm file selection" className="m-5 rounded-xl border border-indigo-200 bg-indigo-50 p-5 space-y-3">
+        <h3 className="font-semibold text-gray-900">Is this the data you want to sell?</h3>
+        {selectedFolders.length>0 && <p className="break-all text-sm text-gray-700">Folders: {selectedFolders.join(', ')} (including subfolders)</p>}
+        <p className="text-sm text-gray-900">You have chosen {selected.length.toLocaleString('en')} {selected.length===1?'file':'files'} totaling {formatBytes(selectionBytes)} from {connection.bucket}. Is this correct?</p>
+        <p className="text-sm text-gray-600">This confirms all selected files, including those on other preview pages. We checked file names and sizes; we did not read or analyze their contents.</p>
+        <div className="flex gap-3"><button type="button" disabled={savingSelection} onClick={saveSelection} className={buttonClass}>{savingSelection?'Saving selection…':'Confirm selection'}</button><button type="button" disabled={savingSelection} onClick={()=>setConfirmation(null)} className={buttonClass}>Change selection</button></div>
+      </section>}
       <div className="border-t border-gray-200 bg-gray-50 px-5 py-4">
-        <div className="flex flex-wrap items-center justify-between gap-3"><p role="status" className="text-sm font-medium text-gray-900">{selected.length} {selected.length === 1 ? 'file' : 'files'} selected · {formatBytes(selected.reduce((total, object) => total + object.size, 0))}</p>{selected.length > 0 && <button type="button" onClick={() => setSelected([])} className={buttonClass}>Clear selection</button>}</div>
-        {onSaveSelection ? <div className="mt-3 space-y-3"><button type="button" disabled={savingSelection || selected.length === 0 || selectionSnapshot === savedSelection} onClick={saveSelection} className={buttonClass}>{savingSelection ? 'Saving selection…' : 'Save selected files'}</button><p role="status" className="text-sm text-gray-600">{selectionSnapshot === savedSelection && selected.length > 0 ? 'File selection saved to your account.' : 'Your file choices have not been saved.'} Saving does not publish or analyze your data.</p>{selected.length > 0 && <ul aria-label="Selected files" className="space-y-1 text-xs text-gray-600">{selected.map(item => <li key={objectIdentity(item)} className="break-all">{item.key}</li>)}</ul>}{selectionError && <p role="alert" className="text-sm text-red-800">{selectionError}</p>}<p className="text-xs text-gray-600">Choose up to 10 files. Your file choices are saved privately; the files stay in your cloud account.</p></div> : <p className="mt-2 text-xs leading-5 text-gray-600">Choosing files does not read or analyze their contents. Your selection stays when you switch Workspace sections. Changing the storage connection, reloading, or leaving the Workspace clears it. Saving it to a listing is not available yet.</p>}
+        <div className="flex flex-wrap items-center justify-between gap-3"><p role="status" className="text-sm font-medium text-gray-900">{selected.length} {selected.length === 1 ? 'file' : 'files'} selected · {formatBytes(selectionBytes)}</p>{selected.length > 0 && <button type="button" disabled={resolving} onClick={() => {setSelected([]);setSelectedFolders([]);setConfirmation(null);}} className={buttonClass}>Clear selection</button>}</div>
+        {onSaveSelection ? <div className="mt-3 space-y-3"><button type="button" disabled={resolving || savingSelection || selected.length === 0 || selectionSnapshot === savedSelection} onClick={() => setConfirmation(selectionSnapshot)} className={buttonClass}>{savingSelection ? 'Saving selection…' : 'Save selected files'}</button><p role="status" className="text-sm text-gray-600">{selectionSnapshot === savedSelection && selected.length > 0 ? 'File selection saved to your account.' : 'Your file choices have not been saved.'} Saving does not publish or analyze your data.</p>{selected.length > 0 && <ul aria-label="Selected files" className="space-y-1 text-xs text-gray-600">{selected.slice(selectionPage*50,(selectionPage+1)*50).map(item => <li key={objectIdentity(item)} className="break-all">{item.key}</li>)}</ul>}{selected.length>50 && <div className="flex items-center gap-3 text-xs text-gray-600" aria-label="Selected file preview pages"><button type="button" className={buttonClass} disabled={selectionPage===0} onClick={()=>setSelectionPage(page=>page-1)}>Previous selected files</button><span>Showing {selectionPage*50+1}–{Math.min((selectionPage+1)*50,selected.length)} of {selected.length.toLocaleString('en')}</span><button type="button" className={buttonClass} disabled={(selectionPage+1)*50>=selected.length} onClick={()=>setSelectionPage(page=>page+1)}>Next selected files</button></div>}{selectionError && <p role="alert" className="text-sm text-red-800">{selectionError}</p>}<p className="text-xs text-gray-600">Choose files, folders, or both, up to 50,000 files per selection. Folder choices include subfolders. Files added later require a new selection and confirmation. Your file choices are saved privately; the files stay in your cloud account.</p></div> : <p className="mt-2 text-xs leading-5 text-gray-600">Choosing files does not read or analyze their contents. Your selection stays when you switch Workspace sections. Changing the storage connection, reloading, or leaving the Workspace clears it. Saving it to a listing is not available yet.</p>}
       </div>
     </div>
   );
