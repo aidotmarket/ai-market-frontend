@@ -2,6 +2,8 @@
 import {act,cleanup,fireEvent,render,screen} from '@testing-library/react';
 import {afterEach,expect,it,vi} from 'vitest';
 const stream=vi.hoisted(() => vi.fn());
+const fileGrant=vi.hoisted(() => vi.fn());
+vi.mock('@/api/sellerWorkspaceDownload',async importOriginal => ({...await importOriginal<object>(),requestWorkspaceFile:fileGrant}));
 vi.mock('./workspaceDownloadStream',async importOriginal => ({...await importOriginal<object>(),streamWorkspaceDownload:stream}));
 import WorkspaceDownload from './WorkspaceDownload';
 const bundle=()=>({delivery_type:'workspace_direct' as const,session_id:'00000000-0000-4000-8000-000000000001',download_number:1,downloads_remaining:2,files:[{index:0,filename:'retail.csv',size:3,
@@ -54,4 +56,21 @@ it('reports a browser save failure as an incomplete download, not user cancellat
   fireEvent.click(screen.getByRole('button',{name:'Choose folder and download'}));
   expect((await screen.findByRole('alert')).textContent).toContain('The download could not be completed');
   expect(screen.queryByText(/Download cancelled/)).toBeNull();
+});
+
+it('shows the rate wait and leaves cancellation available without allocating again',async () => {
+  Object.defineProperty(window,'showDirectoryPicker',{value:vi.fn(async () => ({})),configurable:true});
+  const grant=vi.fn(async () => bundle());
+  fileGrant.mockImplementation((_order,_session,_index,signal,waiting) => {
+    waiting(60);
+    return new Promise((_resolve,reject) => signal.addEventListener('abort',() => reject(signal.reason),{once:true}));
+  });
+  stream.mockImplementation(async (value,_directory,_signal,_progress,loadGrant) => {await loadGrant(value.files[0]);});
+  render(<WorkspaceDownload orderId="order-1" requestGrant={grant}/>);
+  fireEvent.click(screen.getByRole('button',{name:'Choose folder and download'}));
+  await screen.findByText(/File 1 of 1: delivery is busy. Retrying in 60 seconds/);
+  expect(grant).toHaveBeenCalledOnce();
+  fireEvent.click(screen.getByRole('button',{name:'Cancel download'}));
+  await screen.findByText(/Download cancelled/);
+  expect(fileGrant).toHaveBeenCalledOnce();expect(grant).toHaveBeenCalledOnce();
 });
