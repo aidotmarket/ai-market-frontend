@@ -1,4 +1,5 @@
 import { api } from './client';
+import axios from 'axios';
 
 export async function prepareWorkspacePurchase(orderId:string, signal:AbortSignal):Promise<void> {
   const response=await api.post(`/seller-workspace/orders/${encodeURIComponent(orderId)}/prepare`,undefined,{signal});
@@ -43,7 +44,37 @@ export async function requestWorkspaceDownload(orderId:string,signal:AbortSignal
   const response=await api.post(`/seller-workspace/orders/${encodeURIComponent(orderId)}/download`,{request_id:requestId},{signal});
   signal.throwIfAborted();return validateWorkspaceDownload(response.data);
 }
-export async function requestWorkspaceFile(orderId:string,sessionId:string,index:number,signal:AbortSignal):Promise<WorkspaceFileGrant> {
-  const response=await api.post(`/seller-workspace/orders/${encodeURIComponent(orderId)}/download/${encodeURIComponent(sessionId)}/files/${index}`,undefined,{signal});
-  signal.throwIfAborted();return validateWorkspaceFileGrant(response.data);
+function waitForDelivery(milliseconds:number, signal:AbortSignal):Promise<void> {
+  signal.throwIfAborted();
+  return new Promise((resolve,reject) => {
+    const cancel=() => {clearTimeout(timer);reject(signal.reason);};
+    const timer=setTimeout(() => {signal.removeEventListener('abort',cancel);resolve();},milliseconds);
+    signal.addEventListener('abort',cancel,{once:true});
+  });
+}
+function deliveryRetryDelay(value:unknown):number | null {
+  if (value === undefined || value === null) return 60000;
+  const text=String(value).trim();
+  const seconds=/^\d+$/.test(text) ? Number(text) : (Date.parse(text)-Date.now())/1000;
+  // Never retry earlier than a valid server delay. Long or malformed delays
+  // require manual recovery instead of an unbounded background wait.
+  return Number.isFinite(seconds) && seconds>=0 && seconds<=60 ? Math.max(1000,Math.ceil(seconds*1000)) : null;
+}
+export async function requestWorkspaceFile(orderId:string,sessionId:string,index:number,signal:AbortSignal,
+  waiting:(seconds:number | null) => void=() => undefined):Promise<WorkspaceFileGrant> {
+  for (let attempt=0;;attempt++) {
+    signal.throwIfAborted();
+    try {
+      const response=await api.post(`/seller-workspace/orders/${encodeURIComponent(orderId)}/download/${encodeURIComponent(sessionId)}/files/${index}`,undefined,{signal});
+      signal.throwIfAborted();return validateWorkspaceFileGrant(response.data);
+    } catch (failure) {
+      signal.throwIfAborted();
+      if (!axios.isAxiosError(failure) || failure.response?.status!==429 || attempt>=3) throw failure;
+      const delay=deliveryRetryDelay(failure.response.headers?.['retry-after']);
+      if (delay===null) throw failure;
+      waiting(Math.ceil(delay/1000));
+      await waitForDelivery(delay,signal);
+      signal.throwIfAborted();waiting(null);
+    }
+  }
 }

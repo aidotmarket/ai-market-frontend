@@ -38,9 +38,13 @@ export default function WorkspaceDownload({orderId,requestGrant=requestWorkspace
       const bundle=validateWorkspaceDownload(await requestGrant(orderId,operation.signal,pendingStart.current));
       pendingStart.current=null;
       operation.signal.throwIfAborted();
-      const folder=await streamWorkspaceDownload(bundle,directory,operation.signal,(file,bytes,size) => {
-        if (mounted.current) setMessage(`Downloading ${file}: ${bytes.toLocaleString()} of ${size.toLocaleString()} bytes`);
-      },entry => requestWorkspaceFile(orderId,bundle.session_id,entry.index,operation.signal));
+      const folder=await streamWorkspaceDownload(bundle,directory,operation.signal,(file,bytes,size,fileNumber) => {
+        if (mounted.current) setMessage(`File ${fileNumber.toLocaleString()} of ${bundle.files.length.toLocaleString()} — downloading ${file}: ${bytes.toLocaleString()} of ${size.toLocaleString()} bytes`);
+      },entry => requestWorkspaceFile(orderId,bundle.session_id,entry.index,operation.signal,seconds => {
+        if (mounted.current) setMessage(seconds === null
+          ? `Resuming file ${(entry.index+1).toLocaleString()} of ${bundle.files.length.toLocaleString()}…`
+          : `File ${(entry.index+1).toLocaleString()} of ${bundle.files.length.toLocaleString()}: delivery is busy. Retrying in ${seconds} seconds. Your completed files are saved.`);
+      }));
       if (mounted.current) setMessage(`Saved ${bundle.files.length} file${bundle.files.length === 1 ? '' : 's'} in ${folder}. ${bundle.downloads_remaining} download${bundle.downloads_remaining === 1 ? '' : 's'} remaining.`);
     } catch (failure) {
       if (mounted.current) {

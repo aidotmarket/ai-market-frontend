@@ -11,7 +11,7 @@ export class WorkspaceDownloadError extends Error {
   constructor(public readonly code: 'file_changed' | 'unavailable' | 'size_changed') { super(code); }
 }
 export async function streamWorkspaceDownload(bundle: WorkspaceDownload, directory: DownloadDirectory,
-  signal: AbortSignal, progress: (file: string, bytes: number, size: number) => void,
+  signal: AbortSignal, progress: (file: string, bytes: number, size: number, fileNumber: number) => void,
   loadGrant: (entry: WorkspaceFileEntry) => Promise<WorkspaceFileGrant>, fetchFile: typeof fetch = fetch): Promise<string> {
   signal.throwIfAborted();
   const folderName = `ai-market-${crypto.randomUUID()}`;
@@ -44,7 +44,7 @@ export async function streamWorkspaceDownload(bundle: WorkspaceDownload, directo
         received += value.byteLength;
         if (received > file.size) throw new WorkspaceDownloadError('size_changed');
         await writer.write(value);
-        progress(file.filename, received, file.size);
+        progress(file.filename, received, file.size, index+1);
       }
       signal.throwIfAborted();
       if (received !== file.size) throw new WorkspaceDownloadError('size_changed');
