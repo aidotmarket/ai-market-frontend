@@ -71,3 +71,33 @@ it('requests the next file only after the previous long transfer has finished',a
     expect(grants).toHaveBeenCalledTimes(2);expect(writer.close).toHaveBeenCalledTimes(2);
   } finally {vi.useRealTimers();}
 });
+
+it('streams all 22,000 files in one bundle without overlapping open writers',async()=>{
+  const data=bundle();
+  data.files=Array.from({length:22000},(_,index)=>({index,filename:`file-${String(index).padStart(5,'0')}.csv`,size:42}));
+  validateWorkspaceDownload(data);
+  const names=new Set<string>();
+  let open=0,closed=0,bytes=0,requests=0,folders=0,grants=0;
+  const directory:DownloadDirectory={
+    async getDirectoryHandle(){folders++;return directory;},
+    async getFileHandle(name){
+      expect(open).toBe(0);
+      expect(names.has(name)).toBe(false);names.add(name);
+      return {async createWritable(){
+        open++;
+        return {
+          async write(value){expect(value.byteLength).toBeLessThanOrEqual(42);bytes+=value.byteLength;},
+          async close(){open--;closed++;},
+          async abort(){throw new Error('unexpected aborted file');},
+        };
+      }};
+    },
+  };
+  const fetcher=async()=>{requests++;return new Response(new Uint8Array(42),{status:200});};
+  await streamWorkspaceDownload(data,directory,new AbortController().signal,()=>{},async entry=>{
+    expect(closed).toBe(entry.index);grants++;return validateWorkspaceFileGrant(await load(entry));
+  },fetcher as typeof fetch);
+  expect({open,closed,bytes,requests,folders,grants}).toEqual({open:0,closed:22000,bytes:924000,requests:22000,folders:1,grants:22000});
+  expect(names.has('001-file-00000.csv')).toBe(true);
+  expect(names.has('22000-file-21999.csv')).toBe(true);
+},20000);
