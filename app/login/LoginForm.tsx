@@ -1,13 +1,13 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import Link from 'next/link';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { useAuthStore } from '@/store/auth';
 import { useToast } from '@/components/Toast';
 import { aimDataEnabled, resumeContinuation, readContinuation, requestPath } from '@/lib/aim-data-continuation';
 import { AxiosError } from 'axios';
-import OAuthButtons from '@/components/OAuthButtons';
+import OAuthButtons, { startProviderOAuth } from '@/components/OAuthButtons';
 import TwoFactorChallenge from '@/components/TwoFactorChallenge';
 import { requestMagicLink, resendVerification } from '@/api/auth';
 
@@ -28,6 +28,22 @@ export default function LoginForm() {
   const [magicLinkSentTo, setMagicLinkSentTo] = useState('');
   const [needsVerification, setNeedsVerification] = useState(false);
   const [resendNote, setResendNote] = useState('');
+
+  const autoStarted = useRef(false);
+  const [openingProvider, setOpeningProvider] = useState<string | null>(null);
+
+  useEffect(() => {
+    const provider = searchParams.get('provider');
+    if (!hydrated || isAuthenticated || autoStarted.current
+      || (provider !== 'google' && provider !== 'github')
+      || (searchParams.get('reauth') !== 'aim-data' && !readContinuation())) return;
+    autoStarted.current = true;
+    setOpeningProvider(provider);
+    startProviderOAuth(provider).catch(() => {
+      setError(`Failed to connect to ${provider === 'google' ? 'Google' : 'GitHub'}. Please try again.`);
+      setOpeningProvider(null);
+    });
+  }, [hydrated, isAuthenticated, searchParams]);
 
   useEffect(() => {
     if (!hydrated || !isAuthenticated) return;
@@ -120,7 +136,9 @@ export default function LoginForm() {
   return (
     <div className="flex min-h-[calc(100vh-10rem)] items-center justify-center px-4">
       <div className="w-full max-w-md">
-        {pendingTwoFactor ? (
+        {openingProvider ? (
+          <p role="status">Opening {openingProvider === 'google' ? 'Google' : 'GitHub'}…</p>
+        ) : pendingTwoFactor ? (
           <TwoFactorChallenge onVerified={handleTwoFactorVerified} />
         ) : (
           <>

@@ -7,17 +7,21 @@ interface OAuthButtonsProps {
   mode: 'login' | 'register';
 }
 
+export async function startProviderOAuth(provider: 'google' | 'github') {
+  const data = await authApi.oauthAuthorize(provider);
+  sessionStorage.setItem('oauth_nonce', data.nonce);
+  window.location.href = data.authorization_url;
+}
+
 export default function OAuthButtons({ mode }: OAuthButtonsProps) {
   const [loadingProvider, setLoadingProvider] = useState<string | null>(null);
   const [error, setError] = useState('');
 
-  const handleOAuth = async (provider: string) => {
+  const handleOAuth = async (provider: 'google' | 'github') => {
     setError('');
     setLoadingProvider(provider);
     try {
-      const data = await authApi.oauthAuthorize(provider);
-      sessionStorage.setItem('oauth_nonce', data.nonce);
-      window.location.href = data.authorization_url;
+      await startProviderOAuth(provider);
     } catch {
       setError(`Failed to connect to ${provider === 'google' ? 'Google' : 'GitHub'}. Please try again.`);
       setLoadingProvider(null);

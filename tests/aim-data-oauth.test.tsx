@@ -174,3 +174,20 @@ it('expires visible confirmation before a late click', async () => {
     expect(decideAuthorization).not.toHaveBeenCalled();
   } finally { Date.now = realNow; }
 });
+
+
+it.each(['google', 'github', 'invalid'])('passes only a valid %s provider hint to login without saving it', (provider) => {
+  window.history.replaceState({}, '', `${path}&provider=${provider}`);
+  useAuthStore.setState({ isAuthenticated: false, user: null });
+  render(<AuthorizationPage />);
+  expect(navigation.replace).toHaveBeenCalledWith(`/login?redirect=${encodeURIComponent(path)}${provider === 'invalid' ? '' : `&provider=${provider}`}`);
+  expect(JSON.parse(sessionStorage.getItem(CONTINUATION_KEY)!)).toEqual({ request: id, deadline: expect.any(Number) });
+});
+
+it.each(['google', 'github', 'invalid'])('passes only a valid %s provider hint to reauthentication', async (provider) => {
+  window.history.replaceState({}, '', `${path}&provider=${provider}`);
+  vi.mocked(getAuthorization).mockRejectedValue(failure('login_required'));
+  render(<AuthorizationPage />);
+  fireEvent.click(await screen.findByRole('button', { name: 'Sign in again' }));
+  expect(navigation.push).toHaveBeenCalledWith(`/login?reauth=aim-data&redirect=${encodeURIComponent(path)}${provider === 'invalid' ? '' : `&provider=${provider}`}`);
+});
