@@ -35,6 +35,15 @@ beforeEach(() => {
 });
 afterEach(() => { cleanup(); vi.useRealTimers(); });
 
+it('enables confirmation when the environment variable is unset', async () => {
+  vi.stubEnv('NEXT_PUBLIC_AIM_DATA_OAUTH_ENABLED', undefined);
+  render(<AuthorizationPage />);
+  expect(await screen.findByText(`Continue to AIM Data as ${user.email}`)).toBeTruthy();
+  expect(screen.getByRole('button', { name: 'Continue' })).toBeTruthy();
+  expect(getAuthorization).toHaveBeenCalledExactlyOnceWith(id);
+  expect(decideAuthorization).not.toHaveBeenCalled();
+});
+
 it('no_code_before_continue', async () => {
   useAuthStore.setState({ hydrated: false, isAuthenticated: false, user: null });
   render(<AuthorizationPage />);

@@ -22,6 +22,11 @@ beforeEach(() => {
 });
 
 describe('exact_continuation_matrix', () => {
+  it.each(['true', undefined])('enables continuation when the environment variable is %s', (value) => {
+    vi.stubEnv('NEXT_PUBLIC_AIM_DATA_OAUTH_ENABLED', value);
+    expect(saveContinuation(path)).toBe(true);
+    expect(resumeContinuation()).toBe(path);
+  });
   it.each([path, requestPath('_'.repeat(43)), requestPath('-'.repeat(43))])('accepts exact %s', (value) => {
     expect(validateRedirect(value)).toBe(value);
     expect(saveContinuation(value)).toBe(true);
@@ -52,8 +57,9 @@ describe('exact_continuation_matrix', () => {
     sessionStorage.setItem(CONTINUATION_KEY, value);
     expect(readContinuation()).toBeNull();
   });
-  it('disables stored and direct OAuth continuation while preserving normal navigation', () => {
-    saveContinuation(path); vi.stubEnv('NEXT_PUBLIC_AIM_DATA_OAUTH_ENABLED', 'false');
+  it.each(['false', 'FALSE', ' false ', '0', 'off'])('disables stored and direct OAuth continuation for %s while preserving normal navigation', (value) => {
+    saveContinuation(path); vi.stubEnv('NEXT_PUBLIC_AIM_DATA_OAUTH_ENABLED', value);
+    expect(saveContinuation(path)).toBe(false);
     expect(resumeContinuation(path)).toBe('/listings');
     expect(resumeContinuation('/dashboard')).toBe('/dashboard');
     expect(readContinuation()).toBeNull();
