@@ -1,7 +1,6 @@
-import Link from 'next/link';
 import type { SellerWorkspaceCapabilities, SellerWorkspaceConnection } from '@/api/sellerWorkspace';
 
-export type WorkspaceView = 'storage' | 'data' | 'listing' | 'review';
+export type WorkspaceView = 'storage' | 'data' | 'listing' | 'review' | 'manage';
 
 export function WorkspaceOverview({ connections, view, onViewChange }: {
   connections: SellerWorkspaceConnection[];
@@ -24,7 +23,7 @@ export function WorkspaceOverview({ connections, view, onViewChange }: {
             <h1 className="text-3xl font-semibold tracking-tight sm:text-4xl">Seller Workspace</h1>
             <p className="mt-3 text-sm leading-6 text-indigo-100">Choose what to sell. Allai helps describe it and add the right tags. Your data stays in your cloud account; you approve what becomes public.</p>
           </div>
-          <Link href="/dashboard/listings" className="rounded-lg border border-white/30 px-4 py-2.5 text-sm font-medium hover:bg-white/10 focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-white">Manage listings <span aria-hidden="true">↗</span></Link>
+          <button type="button" onClick={() => onViewChange('manage')} className="rounded-lg border border-white/30 px-4 py-2.5 text-sm font-medium hover:bg-white/10 focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-white">Manage listings</button>
         </div>
         <dl className="relative mt-6 grid grid-cols-3 gap-3 border-t border-white/15 pt-4 sm:mt-8 sm:flex sm:flex-wrap sm:gap-x-10 sm:gap-y-4 sm:pt-5">
           <div><dt className="text-xs text-indigo-200">Connected storage</dt><dd className="mt-1 text-2xl font-semibold">{verified}</dd></div>
@@ -33,7 +32,7 @@ export function WorkspaceOverview({ connections, view, onViewChange }: {
         </dl>
       </header>
       <nav aria-label="Workspace sections" className="flex gap-1 overflow-x-auto border-b border-gray-200">
-        {([['storage', 'Storage connections'], ['data', 'Choose what to sell'], ['listing', 'Prepare with Allai'], ['review', 'Review listing']] as const).map(([key, label]) => (
+        {([['storage', 'Storage connections'], ['data', 'Choose what to sell'], ['listing', 'Prepare with Allai'], ['review', 'Review listing'], ['manage', 'Your listings']] as const).map(([key, label]) => (
           <button key={key} type="button" aria-current={view === key ? 'page' : undefined} onClick={() => onViewChange(key)} className={`shrink-0 border-b-2 px-4 py-3 text-sm font-medium focus-visible:outline-2 focus-visible:outline-[#3F51B5] ${view === key ? 'border-[#3F51B5] text-[#3F51B5]' : 'border-transparent text-gray-600 hover:border-gray-300 hover:text-gray-900'}`}>{label}</button>
         ))}
       </nav>
@@ -47,7 +46,7 @@ export function SellerJourney({ capabilities, connected }: { capabilities: Selle
     { title: 'Connect storage', description: 'Give access to a specific folder in your cloud storage.', state: connected ? 'Connected' : 'Start here' },
     { title: 'Choose what to sell', description: 'Choose the files or folder you want to offer to buyers.', state: connected ? 'Choose your source' : 'Connect storage first' },
     { title: 'Describe and price it', description: 'Allai drafts the description and tags. You review, set the price, and choose the license.', state: 'Prepare with Allai' },
-    { title: 'Review and publish', description: 'Approve exactly what buyers will see before publishing.', state: publish.enabled && publish.status === 'available' ? 'Interface not available yet' : 'Not available yet' },
+    { title: 'Review and publish', description: 'Approve exactly what buyers will see before publishing.', state: publish.enabled && publish.status === 'available' ? 'Review and publish' : 'Prepare your review' },
   ];
   return (
     <section aria-labelledby="seller-journey-title" className="rounded-xl border border-gray-200 bg-white p-5 sm:p-6">

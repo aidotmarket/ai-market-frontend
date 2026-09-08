@@ -6,6 +6,7 @@ import { SellerJourney, WorkspaceOverview, type WorkspaceView } from '@/componen
 import { WorkspaceData } from '@/components/seller-workspace/WorkspaceData';
 import SavedWorkspaceData from '@/components/seller-workspace/SavedWorkspaceData';
 import SellerReview from '@/components/seller-workspace/SellerReview';
+import SellerPublications from '@/components/seller-workspace/SellerPublications';
 import { StorageProviders } from '@/components/seller-workspace/StorageProviders';
 import SellerListingEditor from '@/components/seller-workspace/SellerListingEditor';
 import SavedListingEditor from '@/components/seller-workspace/SavedListingEditor';
@@ -554,6 +555,7 @@ export default function SellerWorkspacePage() {
       <WorkspaceOverview connections={connections} view={view} onViewChange={(nextView) => { clearSensitive(); setActionError(null); setDisconnectConfirmation(null); setView(nextView); }} />
       <WorkspacePanel active={view === 'data'}>{capabilities?.master.enabled && capabilities.sources?.enabled && capabilities.sources.status === 'available' ? <SavedWorkspaceData connections={connections} enabled={isAWSDiscoveryAvailable(capabilities)} /> : <WorkspaceData connections={connections} enabled={capabilities !== null && isAWSDiscoveryAvailable(capabilities)} />}</WorkspacePanel>
       <WorkspacePanel active={view === 'listing'}>{capabilities?.master.enabled && capabilities?.drafts?.enabled && capabilities.drafts.status === 'available' ? <SavedListingEditor active={view === 'listing'} assistant={capabilities.listing_assistant?.enabled && capabilities.listing_assistant.status === 'available' ? listingAssistant : undefined} /> : <SellerListingEditor active={view === 'listing'} assistant={capabilities?.master.enabled && capabilities.listing_assistant?.enabled && capabilities.listing_assistant.status === 'available' ? listingAssistant : undefined} />}</WorkspacePanel>
+      <WorkspacePanel active={view === 'manage'}><SellerPublications active={view === 'manage'} enabled={capabilities?.master.enabled === true && capabilities.review?.enabled === true && capabilities.review.status === 'available'} /></WorkspacePanel>
       <WorkspacePanel active={view === 'review'}><SellerReview active={view === 'review'} enabled={capabilities?.master.enabled === true && capabilities.review?.enabled === true && capabilities.review.status === 'available'} /></WorkspacePanel>
       <WorkspacePanel active={view === 'storage'}>
       {capabilities && <SellerJourney capabilities={capabilities} connected={connections.some((connection) => connection.status === 'verified')} />}

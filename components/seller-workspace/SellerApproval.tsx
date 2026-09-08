@@ -1,6 +1,7 @@
 'use client';
 import { useEffect, useRef, useState } from 'react';
 import axios from 'axios';
+import SellerPublication from './SellerPublication';
 import { approveListingReview, CONFIRMATION_KEYS, type ConfirmationKey, type ListingReview } from '@/api/sellerListingReview';
 
 export default function SellerApproval({review, active, rendered}: {review: ListingReview; active: boolean; rendered: boolean}) {
@@ -37,7 +38,7 @@ export default function SellerApproval({review, active, rendered}: {review: List
       if (controller.current === request) {controller.current = null;setBusy(false);}
     }
   }
-  if (receipt) return <p role="status" className="rounded-xl border border-green-200 bg-green-50 p-5 text-sm text-green-900">Review approved and saved. Your listing is still private. Publishing will check that your listing and files still match this approval.</p>;
+  if (receipt) return <><p role="status" className="rounded-xl border border-green-200 bg-green-50 p-5 text-sm text-green-900">Review approved and saved.</p><SellerPublication key={receipt.id} approval={receipt} active={active} rendered={rendered} /></>;
   return <form onSubmit={approve} className="space-y-5 rounded-xl border border-gray-200 bg-white p-5 sm:p-6">
     <fieldset disabled={busy || !active || stale} className="space-y-4"><legend className="text-lg font-semibold text-gray-900">Confirm this review</legend>
       <p className="text-sm leading-6 text-gray-600">Read the saved listing above and confirm each statement. Allai cannot approve these choices for you.</p>

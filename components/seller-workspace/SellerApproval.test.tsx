@@ -3,6 +3,7 @@ import { act, cleanup, fireEvent, render, screen } from '@testing-library/react'
 import { afterEach, beforeEach, expect, it, vi } from 'vitest';
 import SellerApproval from './SellerApproval';
 import type { ListingReview } from '@/api/sellerListingReview';
+vi.mock('./SellerPublication', () => ({default:()=>null}));
 const api = vi.hoisted(() => ({approveListingReview:vi.fn()}));
 vi.mock('@/api/sellerListingReview', async original => ({...await original<typeof import('@/api/sellerListingReview')>(),...api}));
 const review = {approval_available:true,review_hash:'a'.repeat(64),render_hash:'b'.repeat(64),confirmation_version:'seller-listing-confirmation-v1',confirmation_statements:{ownership_confirmed:'I have rights.',privacy_confirmed:'I reviewed privacy.',price_license_confirmed:'I confirm price and license.',public_disclosure_confirmed:'I understand public discovery.'}} as ListingReview;
