@@ -8,6 +8,11 @@ import { AIM_DATA_CONTINUATION } from '@/lib/redirect';
 import { aimDataEnabled, clearContinuation, readContinuation, saveContinuation } from '@/lib/aim-data-continuation';
 import { decideAuthorization, getAuthorization, type AuthorizationRequest } from '@/api/aim-data-oauth';
 
+function providerSuffix(): string {
+  const provider = new URLSearchParams(window.location.search).get('provider');
+  return provider === 'google' || provider === 'github' ? `&provider=${provider}` : '';
+}
+
 function errorKind(error: unknown): string {
   const response = (error as { response?: { status?: number; data?: { error?: string } } })?.response;
   return response?.data?.error || (response?.status === 401 ? 'login_required'
@@ -44,12 +49,29 @@ export default function AuthorizationPage() {
     if (!hydrated || isLoading) return;
     let active = true;
     setMetadata(null);
-    const path = window.location.pathname + window.location.search + window.location.hash;
+    // Keep the provider hint out of the strictly validated continuation.
+    const query = window.location.search.slice(1).split('&')
+      .filter((param) => !param.startsWith('provider=') && param !== 'provider').join('&');
+    const path = window.location.pathname + (query ? `?${query}` : '') + window.location.hash;
     const request = AIM_DATA_CONTINUATION.exec(path)?.[1];
-    if (!request || !saveContinuation(path)) { setError('invalid_request'); return; }
+    if (!request) { setError('invalid_request'); return; }
     if (!isAuthenticated) {
-      router.replace(`/login?redirect=${encodeURIComponent(path)}`);
-      return;
+      // Metadata validates the server transaction and this browser's binding cookie.
+      // Never seed an auto-start continuation from request-ID syntax alone.
+      getAuthorization(request).then((data) => {
+        if (!active) return;
+        if (Date.parse(data.expires_at) <= Date.now() || !saveContinuation(path)) {
+          clearContinuation();
+          router.replace(`/login?redirect=${encodeURIComponent(path)}`);
+          return;
+        }
+        router.replace(`/login?redirect=${encodeURIComponent(path)}${providerSuffix()}`);
+      }).catch(() => {
+        if (!active) return;
+        clearContinuation();
+        router.replace(`/login?redirect=${encodeURIComponent(path)}`);
+      });
+      return () => { active = false; };
     }
     setError('');
     getAuthorization(request).then((data) => {
@@ -57,7 +79,8 @@ export default function AuthorizationPage() {
       if (Date.parse(data.expires_at) <= Date.now()) {
         clearContinuation();
         setError('transaction_expired');
-      } else setMetadata(data);
+      } else if (saveContinuation(path)) setMetadata(data);
+      else setError('invalid_request');
     }).catch((cause) => {
       if (!active) return;
       const kind = errorKind(cause);
@@ -116,7 +139,7 @@ export default function AuthorizationPage() {
   const signIn = () => {
     const saved = readContinuation();
     if (!saved) { setError('transaction_expired'); return; }
-    router.push(`/login?reauth=aim-data&redirect=${encodeURIComponent(`/oauth/authorize?request=${saved.request}`)}`);
+    router.push(`/login?reauth=aim-data&redirect=${encodeURIComponent(`/oauth/authorize?request=${saved.request}`)}${providerSuffix()}`);
   };
 
   return (

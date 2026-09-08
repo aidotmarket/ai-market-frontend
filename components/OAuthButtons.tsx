@@ -1,26 +1,52 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useSyncExternalStore } from 'react';
 import * as authApi from '@/api/auth';
 
 interface OAuthButtonsProps {
   mode: 'login' | 'register';
 }
 
+type Provider = 'google' | 'github';
+let loadingProvider: Provider | null = null;
+let providerStart: Promise<void> | null = null;
+const listeners = new Set<() => void>();
+const subscribe = (listener: () => void) => {
+  listeners.add(listener);
+  return () => { listeners.delete(listener); };
+};
+const getSnapshot = () => loadingProvider;
+const getServerSnapshot = () => null;
+
+export function startProviderOAuth(provider: Provider): Promise<void> {
+  if (providerStart) return providerStart;
+  loadingProvider = provider;
+  // Install the shared flight before invoking the API or notifying subscribers.
+  providerStart = Promise.resolve().then(async () => {
+    const data = await authApi.oauthAuthorize(provider);
+    sessionStorage.setItem('oauth_nonce', data.nonce);
+    window.location.href = data.authorization_url;
+  }).catch((error) => {
+    providerStart = null;
+    loadingProvider = null;
+    listeners.forEach((listener) => listener());
+    throw error;
+  });
+  listeners.forEach((listener) => listener());
+  // Successful starts stay locked until the browser leaves this document.
+  return providerStart;
+}
+
 export default function OAuthButtons({ mode }: OAuthButtonsProps) {
-  const [loadingProvider, setLoadingProvider] = useState<string | null>(null);
+  const loadingProvider = useSyncExternalStore(subscribe, getSnapshot, getServerSnapshot);
   const [error, setError] = useState('');
 
-  const handleOAuth = async (provider: string) => {
+  const handleOAuth = async (provider: 'google' | 'github') => {
     setError('');
-    setLoadingProvider(provider);
     try {
-      const data = await authApi.oauthAuthorize(provider);
-      sessionStorage.setItem('oauth_nonce', data.nonce);
-      window.location.href = data.authorization_url;
+      await startProviderOAuth(provider);
     } catch {
       setError(`Failed to connect to ${provider === 'google' ? 'Google' : 'GitHub'}. Please try again.`);
-      setLoadingProvider(null);
     }
   };
 

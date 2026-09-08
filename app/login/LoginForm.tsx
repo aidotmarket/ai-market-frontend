@@ -1,13 +1,13 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import Link from 'next/link';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { useAuthStore } from '@/store/auth';
 import { useToast } from '@/components/Toast';
 import { aimDataEnabled, resumeContinuation, readContinuation, requestPath } from '@/lib/aim-data-continuation';
 import { AxiosError } from 'axios';
-import OAuthButtons from '@/components/OAuthButtons';
+import OAuthButtons, { startProviderOAuth } from '@/components/OAuthButtons';
 import TwoFactorChallenge from '@/components/TwoFactorChallenge';
 import { requestMagicLink, resendVerification } from '@/api/auth';
 
@@ -28,6 +28,21 @@ export default function LoginForm() {
   const [magicLinkSentTo, setMagicLinkSentTo] = useState('');
   const [needsVerification, setNeedsVerification] = useState(false);
   const [resendNote, setResendNote] = useState('');
+
+  const autoStarted = useRef(false);
+  const providerHint = searchParams.get('provider');
+  const awaitingProviderHydration = !hydrated && (providerHint === 'google' || providerHint === 'github');
+
+  useEffect(() => {
+    const provider = searchParams.get('provider');
+    if (!aimDataEnabled() || !hydrated || isAuthenticated || autoStarted.current
+      || (provider !== 'google' && provider !== 'github')
+      || !readContinuation()) return;
+    autoStarted.current = true;
+    startProviderOAuth(provider).catch(() => {
+      setError(`Failed to connect to ${provider === 'google' ? 'Google' : 'GitHub'}. Please try again.`);
+    });
+  }, [hydrated, isAuthenticated, searchParams]);
 
   useEffect(() => {
     if (!hydrated || !isAuthenticated) return;
@@ -144,7 +159,7 @@ export default function LoginForm() {
           </div>
         )}
 
-        <OAuthButtons mode="login" />
+        {awaitingProviderHydration ? <p role="status">Preparing sign-in…</p> : <OAuthButtons mode="login" />}
 
         <form onSubmit={handleSubmit} className="space-y-4">
           {error && (
