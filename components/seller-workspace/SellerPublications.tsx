@@ -1,6 +1,7 @@
 'use client';
 import {useEffect,useState} from 'react';
 import {readPublicationPage,type PublicationPage} from '@/api/sellerListingPublication';
+import SellerListingVisibility from './SellerListingVisibility';
 export default function SellerPublications({active,enabled}:{active:boolean;enabled:boolean}) {
   const [page,setPage]=useState(0);
   const [result,setResult]=useState<PublicationPage|null>(null);
@@ -23,6 +24,7 @@ export default function SellerPublications({active,enabled}:{active:boolean;enab
         <div className="flex flex-wrap items-center justify-between gap-3"><h3 className="font-semibold text-gray-900">{item.title}</h3><span className="rounded-full bg-gray-100 px-3 py-1 text-xs text-gray-700">{item.status==='published' && item.is_listed?'Published':'Not listed'}</span></div>
         <p className="mt-2 text-xs text-gray-500">Published {new Date(item.published_at).toLocaleDateString('en',{year:'numeric',month:'short',day:'numeric'})}</p>
         <a href={`/listings/${encodeURIComponent(item.slug)}`} className="mt-4 inline-block text-sm font-medium text-indigo-700 underline">View listing</a>
+        <SellerListingVisibility publication={item} active={active} onChange={updated=>setResult(current=>current?{...current,items:current.items.map(value=>value.id===updated.id?updated:value)}:current)} />
       </li>)}</ul>
       <div className="flex gap-4"><button type="button" disabled={page===0} onClick={()=>setPage(value=>value-1)} className="text-sm text-indigo-700 disabled:opacity-50">Previous page</button><button type="button" disabled={!result.has_more || page>=500} onClick={()=>setPage(value=>value+1)} className="text-sm text-indigo-700 disabled:opacity-50">Next page</button></div>
     </>}

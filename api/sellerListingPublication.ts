@@ -37,3 +37,13 @@ export async function readPublicationPage(page:number,signal:AbortSignal):Promis
   for (const item of value.items) validateReceipt(item,{id:item.approval_id,review_hash:item.review_hash,render_hash:item.render_hash} as ApprovalReceipt);
   return value;
 }
+
+export async function setPublicationVisibility(publication:PublicationReceipt,listed:boolean,request_id:string,signal:AbortSignal):Promise<PublicationReceipt> {
+  const result=(await api.post(`/seller-workspace/listing-publications/${encodeURIComponent(publication.listing_id)}/visibility`,{
+    request_id,expected_status:publication.status,listed,
+  },{signal})).data;
+  signal.throwIfAborted();
+  if (result?.id!==publication.id || result?.listing_id!==publication.listing_id || result?.listing_version_id!==publication.listing_version_id)
+    throw new Error('Listing status could not be verified');
+  return validateReceipt(result,{id:publication.approval_id,review_hash:publication.review_hash,render_hash:publication.render_hash} as ApprovalReceipt);
+}

@@ -1,5 +1,5 @@
 import {beforeEach,expect,it,vi} from 'vitest';
-import {readPublication,publishListing,readPublicationPage} from './sellerListingPublication';
+import {readPublication,publishListing,readPublicationPage,setPublicationVisibility} from './sellerListingPublication';
 import type {ApprovalReceipt} from './sellerListingReview';
 const api=vi.hoisted(()=>({get:vi.fn(),post:vi.fn()}));vi.mock('./client',()=>({api}));
 const id='00000000-0000-4000-8000-000000000001';
@@ -21,4 +21,11 @@ it('rejects a page for a different request and ignores cancelled responses',asyn
   await expect(readPublicationPage(0,new AbortController().signal)).rejects.toThrow(/verified/);
   api.get.mockResolvedValue({data:{publication_available:true,publication:receipt}});
   const request=new AbortController();request.abort();await expect(readPublication(approval,request.signal)).rejects.toThrow();
+});
+
+it('checks that visibility changes return the same immutable listing',async()=>{
+  api.post.mockResolvedValue({data:{...receipt,listing_id:'00000000-0000-4000-8000-000000000002'}});
+  await expect(setPublicationVisibility(receipt,false,id,new AbortController().signal)).rejects.toThrow(/verified/);
+  api.post.mockResolvedValue({data:{...receipt,status:'unlisted',is_listed:false}});
+  expect((await setPublicationVisibility(receipt,false,id,new AbortController().signal)).status).toBe('unlisted');
 });
