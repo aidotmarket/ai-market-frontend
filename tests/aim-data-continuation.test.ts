@@ -22,6 +22,11 @@ beforeEach(() => {
 });
 
 describe('exact_continuation_matrix', () => {
+  it('enables continuation when the environment variable is unset', () => {
+    vi.stubEnv('NEXT_PUBLIC_AIM_DATA_OAUTH_ENABLED', undefined);
+    expect(saveContinuation(path)).toBe(true);
+    expect(resumeContinuation()).toBe(path);
+  });
   it.each([path, requestPath('_'.repeat(43)), requestPath('-'.repeat(43))])('accepts exact %s', (value) => {
     expect(validateRedirect(value)).toBe(value);
     expect(saveContinuation(value)).toBe(true);
