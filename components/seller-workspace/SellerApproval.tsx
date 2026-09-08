@@ -43,7 +43,7 @@ export default function SellerApproval({review, active, rendered}: {review: List
     <fieldset disabled={busy || !active || stale} className="space-y-4"><legend className="text-lg font-semibold text-gray-900">Confirm this review</legend>
       <p className="text-sm leading-6 text-gray-600">Read the saved listing above and confirm each statement. Allai cannot approve these choices for you.</p>
       <label className="flex items-start gap-3 text-sm leading-6 text-gray-700"><input type="checkbox" checked={noSample} onChange={event => setNoSample(event.target.checked)} className="mt-1 h-4 w-4 shrink-0 accent-indigo-700" /><span>Do not include a public sample in this listing.</span></label>
-      <p className="text-xs leading-5 text-gray-500">To include a sample, leave this unchecked. Public sample preparation is still being connected.</p>
+      <p className="text-xs leading-5 text-gray-500">This listing flow supports publication without a public sample. Confirm this choice to continue.</p>
       {CONFIRMATION_KEYS.map(key => <label key={key} className="flex items-start gap-3 text-sm leading-6 text-gray-700"><input type="checkbox" checked={Boolean(confirmed[key])} onChange={event => setConfirmed(value => ({...value,[key]:event.target.checked}))} className="mt-1 h-4 w-4 shrink-0 accent-indigo-700" /><span>{review.confirmation_statements[key]}</span></label>)}
     </fieldset>
     <button type="submit" disabled={!ready || busy} className="rounded-lg bg-indigo-700 px-4 py-2.5 text-sm font-semibold text-white hover:bg-indigo-800 disabled:cursor-not-allowed disabled:opacity-50">{busy ? 'Saving approval…' : 'Approve this review'}</button>
