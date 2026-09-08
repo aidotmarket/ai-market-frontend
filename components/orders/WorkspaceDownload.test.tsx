@@ -46,3 +46,12 @@ it('reuses the allocation request after an unknown response',async () => {
   await screen.findByText(/Saved 1 file/);
   expect(grant.mock.calls[0][2]).toBe(grant.mock.calls[1][2]);
 });
+
+it('reports a browser save failure as an incomplete download, not user cancellation',async () => {
+  Object.defineProperty(window,'showDirectoryPicker',{value:vi.fn(async () => ({})),configurable:true});
+  stream.mockRejectedValue(new DOMException('write failed','AbortError'));
+  render(<WorkspaceDownload orderId="order-1" requestGrant={vi.fn(async () => bundle())} />);
+  fireEvent.click(screen.getByRole('button',{name:'Choose folder and download'}));
+  expect((await screen.findByRole('alert')).textContent).toContain('The download could not be completed');
+  expect(screen.queryByText(/Download cancelled/)).toBeNull();
+});

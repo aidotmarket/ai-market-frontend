@@ -27,9 +27,11 @@ export default function WorkspaceDownload({orderId,requestGrant=requestWorkspace
     if (!picker) return;
     working.current=true;setBusy(true);setError('');setMessage('Choose where to save your files.');
     const operation=new AbortController();controller.current=operation;
+    let choosingFolder=true;
     try {
       // The picker runs directly in the click gesture, before any network await.
       const directory=await picker.call(window,{mode:'readwrite'});
+      choosingFolder=false;
       operation.signal.throwIfAborted();
       setMessage('Checking access to your purchase…');
       pendingStart.current ??= crypto.randomUUID();
@@ -43,7 +45,7 @@ export default function WorkspaceDownload({orderId,requestGrant=requestWorkspace
     } catch (failure) {
       if (mounted.current) {
         setMessage('');
-        if (operation.signal.aborted || (failure instanceof DOMException && failure.name === 'AbortError')) setMessage('Download cancelled. Any completed files remain in your selected folder.');
+        if (operation.signal.aborted || (choosingFolder && failure instanceof DOMException && failure.name === 'AbortError')) setMessage('Download cancelled. Any completed files remain in your selected folder.');
         else if (failure instanceof WorkspaceDownloadError && failure.code === 'file_changed') setError('The seller’s file has changed since approval. Contact the seller before downloading it again.');
         else if (axios.isAxiosError(failure) && [403,404].includes(failure.response?.status ?? 0)) setError('Download access is not available for this purchase. Check the order or contact support.');
         else setError('The download could not be completed. Any completed files remain in your selected folder. Check your purchase before trying again.');
