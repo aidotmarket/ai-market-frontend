@@ -2,7 +2,8 @@ import { AIM_DATA_CONTINUATION, validateRedirect } from '@/lib/redirect';
 
 export const CONTINUATION_KEY = 'aim_data_authorization_request';
 const TTL = 600_000;
-export const aimDataEnabled = () => process.env.NEXT_PUBLIC_AIM_DATA_OAUTH_ENABLED !== 'false';
+const OFF = new Set(['false', '0', 'off']);
+export const aimDataEnabled = () => !OFF.has((process.env.NEXT_PUBLIC_AIM_DATA_OAUTH_ENABLED ?? '').trim().toLowerCase());
 export const requestPath = (request: string) => `/oauth/authorize?request=${request}`;
 
 export function clearContinuation() {
