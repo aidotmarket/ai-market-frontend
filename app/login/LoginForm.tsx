@@ -30,18 +30,17 @@ export default function LoginForm() {
   const [resendNote, setResendNote] = useState('');
 
   const autoStarted = useRef(false);
-  const [openingProvider, setOpeningProvider] = useState<string | null>(null);
+  const providerHint = searchParams.get('provider');
+  const awaitingProviderHydration = !hydrated && (providerHint === 'google' || providerHint === 'github');
 
   useEffect(() => {
     const provider = searchParams.get('provider');
-    if (!hydrated || isAuthenticated || autoStarted.current
+    if (!aimDataEnabled() || !hydrated || isAuthenticated || autoStarted.current
       || (provider !== 'google' && provider !== 'github')
-      || (searchParams.get('reauth') !== 'aim-data' && !readContinuation())) return;
+      || !readContinuation()) return;
     autoStarted.current = true;
-    setOpeningProvider(provider);
     startProviderOAuth(provider).catch(() => {
       setError(`Failed to connect to ${provider === 'google' ? 'Google' : 'GitHub'}. Please try again.`);
-      setOpeningProvider(null);
     });
   }, [hydrated, isAuthenticated, searchParams]);
 
@@ -136,9 +135,7 @@ export default function LoginForm() {
   return (
     <div className="flex min-h-[calc(100vh-10rem)] items-center justify-center px-4">
       <div className="w-full max-w-md">
-        {openingProvider ? (
-          <p role="status">Opening {openingProvider === 'google' ? 'Google' : 'GitHub'}…</p>
-        ) : pendingTwoFactor ? (
+        {pendingTwoFactor ? (
           <TwoFactorChallenge onVerified={handleTwoFactorVerified} />
         ) : (
           <>
@@ -162,7 +159,7 @@ export default function LoginForm() {
           </div>
         )}
 
-        <OAuthButtons mode="login" />
+        {awaitingProviderHydration ? <p role="status">Preparing sign-in…</p> : <OAuthButtons mode="login" />}
 
         <form onSubmit={handleSubmit} className="space-y-4">
           {error && (

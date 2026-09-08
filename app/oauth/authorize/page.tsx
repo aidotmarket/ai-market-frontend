@@ -54,10 +54,24 @@ export default function AuthorizationPage() {
       .filter((param) => !param.startsWith('provider=') && param !== 'provider').join('&');
     const path = window.location.pathname + (query ? `?${query}` : '') + window.location.hash;
     const request = AIM_DATA_CONTINUATION.exec(path)?.[1];
-    if (!request || !saveContinuation(path)) { setError('invalid_request'); return; }
+    if (!request) { setError('invalid_request'); return; }
     if (!isAuthenticated) {
-      router.replace(`/login?redirect=${encodeURIComponent(path)}${providerSuffix()}`);
-      return;
+      // Metadata validates the server transaction and this browser's binding cookie.
+      // Never seed an auto-start continuation from request-ID syntax alone.
+      getAuthorization(request).then((data) => {
+        if (!active) return;
+        if (Date.parse(data.expires_at) <= Date.now() || !saveContinuation(path)) {
+          clearContinuation();
+          router.replace(`/login?redirect=${encodeURIComponent(path)}`);
+          return;
+        }
+        router.replace(`/login?redirect=${encodeURIComponent(path)}${providerSuffix()}`);
+      }).catch(() => {
+        if (!active) return;
+        clearContinuation();
+        router.replace(`/login?redirect=${encodeURIComponent(path)}`);
+      });
+      return () => { active = false; };
     }
     setError('');
     getAuthorization(request).then((data) => {
@@ -65,7 +79,8 @@ export default function AuthorizationPage() {
       if (Date.parse(data.expires_at) <= Date.now()) {
         clearContinuation();
         setError('transaction_expired');
-      } else setMetadata(data);
+      } else if (saveContinuation(path)) setMetadata(data);
+      else setError('invalid_request');
     }).catch((cause) => {
       if (!active) return;
       const kind = errorKind(cause);
