@@ -242,3 +242,31 @@ describe('ListingDetailPage Dataset JSON-LD', () => {
     expect(html).not.toMatch(/\bverified\b/);
   });
 });
+
+describe('approved Workspace presentation',()=>{
+  beforeEach(()=>{fetchPublicListing.mockReset();fetchListingVersions.mockReset();buyButtonProps.mockClear();});
+  it('uses the exact approved document in an inert frame',async()=>{
+    const {createHash}=await import('node:crypto');
+    const rendered_html='<!doctype html><html><body><h1>Approved title</h1><p>**literal text**</p></body></html>';
+    const listing=makeListing({approved_presentation:{presentation_version:'seller-listing-review-v2',rendered_html,
+      render_hash:createHash('sha256').update(rendered_html).digest('hex')}});
+    const html=await renderPage(listing);
+    expect(html).toContain('title="Seller-approved listing"');
+    expect(html).toContain('sandbox=""');expect(html).toContain('referrerPolicy="no-referrer"');
+    expect(html).toContain('**literal text**');expect(html).not.toContain('class="prose prose-sm');
+  });
+  it('does not render a purchasable page from a mismatched approved document',async()=>{
+    await expect(renderPage(makeListing({approved_presentation:{presentation_version:'seller-listing-review-v2',
+      rendered_html:'changed document',render_hash:'0'.repeat(64)}}))).rejects.toThrow(/could not be verified/);
+    expect(buyButtonProps).not.toHaveBeenCalled();
+  });
+});
+
+it('shows a paused Workspace offer without a purchase control',async()=>{
+  const {createHash}=await import('node:crypto');buyButtonProps.mockClear();
+  fetchPublicListing.mockReset();fetchListingVersions.mockReset();
+  const rendered_html='<html><body>Approved listing</body></html>';
+  const html=await renderPage(makeListing({purchasable:false,purchase_hold_reason:'workspace_sales_paused',approved_presentation:{
+    presentation_version:'seller-listing-review-v2',rendered_html,render_hash:createHash('sha256').update(rendered_html).digest('hex')}}));
+  expect(html).toContain('seller has paused new sales');expect(buyButtonProps).not.toHaveBeenCalled();
+});

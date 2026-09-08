@@ -9,6 +9,7 @@ import { formatPrice, formatDate } from '@/lib/format';
 import { useToast } from '@/components/Toast';
 import { useAuthStore } from '@/store/auth';
 import WorkspaceDownload from '@/components/orders/WorkspaceDownload';
+import WorkspacePurchaseRecovery from '@/components/orders/WorkspacePurchaseRecovery';
 import ScopedCredentialDownload, { isS3ScopedDeliveryResponse } from '@/components/orders/ScopedCredentialDownload';
 import OrderVersionAccessSummary from '@/components/orders/OrderVersionAccessSummary';
 import { useTermsGate } from '@/components/legal/TermsGate';
@@ -438,6 +439,7 @@ export default function OrderDetailPage() {
             </div>
           )}
 
+          {order.workspace_delivery && isBuyerOfRecord && !order.access_expired && String(order.status)==='pending_delivery' && <WorkspacePurchaseRecovery key={order.id} orderId={order.id} onReady={setOrder} />}
           {order.workspace_delivery && isBuyerOfRecord && !order.access_expired && ['delivered','completed','fulfilled'].includes(String(order.status)) && (workspaceDownloadReady ? <WorkspaceDownload key={order.id} orderId={order.id} /> : <button type="button" disabled={checkingTerms} onClick={() => ensureTermsAccepted(() => setWorkspaceDownloadReady(true))} className="rounded-lg bg-indigo-700 px-4 py-2 text-sm font-semibold text-white disabled:opacity-50">Continue to download</button>)}
 
           {order.status === 'fulfilled' && !order.workspace_delivery && isBuyerOfRecord && !order.access_expired && (

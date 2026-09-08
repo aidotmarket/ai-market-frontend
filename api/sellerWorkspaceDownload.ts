@@ -1,5 +1,11 @@
 import { api } from './client';
 
+export async function prepareWorkspacePurchase(orderId:string, signal:AbortSignal):Promise<void> {
+  const response=await api.post(`/seller-workspace/orders/${encodeURIComponent(orderId)}/prepare`,undefined,{signal});
+  signal.throwIfAborted();
+  if (response.data?.delivery_type!=='workspace_direct' || response.data?.ready!==true) throw new Error('Invalid readiness response');
+}
+
 export interface WorkspaceFileGrant {
   filename: string; size: number; url: string; headers: { 'If-Match': string }; expires_at: string;
 }
