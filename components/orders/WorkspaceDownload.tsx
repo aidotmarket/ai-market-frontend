@@ -2,12 +2,12 @@
 
 import {useEffect,useRef,useState} from 'react';
 import axios from 'axios';
-import {requestWorkspaceDownload,validateWorkspaceDownload, type WorkspaceDownload as DownloadBundle} from '@/api/sellerWorkspaceDownload';
+import {requestWorkspaceDownload,requestWorkspaceFile,validateWorkspaceDownload, type WorkspaceDownload as DownloadBundle} from '@/api/sellerWorkspaceDownload';
 import {streamWorkspaceDownload,WorkspaceDownloadError,type DownloadDirectory} from './workspaceDownloadStream';
 
 type PickerWindow = Window & {showDirectoryPicker?: (options:{mode:'readwrite'}) => Promise<DownloadDirectory>};
 export default function WorkspaceDownload({orderId,requestGrant=requestWorkspaceDownload}: {
-  orderId:string;requestGrant?: (orderId:string,signal:AbortSignal) => Promise<DownloadBundle>;
+  orderId:string;requestGrant?: (orderId:string,signal:AbortSignal,requestId?:string) => Promise<DownloadBundle>;
 }) {
   const [supported,setSupported]=useState<boolean|null>(null);
   const [busy,setBusy]=useState(false);
@@ -16,6 +16,7 @@ export default function WorkspaceDownload({orderId,requestGrant=requestWorkspace
   const mounted=useRef(true);
   const controller=useRef<AbortController|null>(null);
   const working=useRef(false);
+  const pendingStart=useRef<string|null>(null);
   useEffect(() => {
     mounted.current=true;setSupported(typeof (window as PickerWindow).showDirectoryPicker === 'function');
     return () => {mounted.current=false;controller.current?.abort();};
@@ -31,11 +32,13 @@ export default function WorkspaceDownload({orderId,requestGrant=requestWorkspace
       const directory=await picker.call(window,{mode:'readwrite'});
       operation.signal.throwIfAborted();
       setMessage('Checking access to your purchase…');
-      const bundle=validateWorkspaceDownload(await requestGrant(orderId,operation.signal));
+      pendingStart.current ??= crypto.randomUUID();
+      const bundle=validateWorkspaceDownload(await requestGrant(orderId,operation.signal,pendingStart.current));
+      pendingStart.current=null;
       operation.signal.throwIfAborted();
       const folder=await streamWorkspaceDownload(bundle,directory,operation.signal,(file,bytes,size) => {
         if (mounted.current) setMessage(`Downloading ${file}: ${bytes.toLocaleString()} of ${size.toLocaleString()} bytes`);
-      });
+      },entry => requestWorkspaceFile(orderId,bundle.session_id,entry.index,operation.signal));
       if (mounted.current) setMessage(`Saved ${bundle.files.length} file${bundle.files.length === 1 ? '' : 's'} in ${folder}. ${bundle.downloads_remaining} download${bundle.downloads_remaining === 1 ? '' : 's'} remaining.`);
     } catch (failure) {
       if (mounted.current) {

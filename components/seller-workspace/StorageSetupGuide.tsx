@@ -4,6 +4,12 @@ import { useEffect, useRef, useState } from 'react';
 
 export type StorageProvider = 'aws' | 'r2';
 const steps = ['Your account', 'Create storage', 'Add your files', 'Connect to ai.market'];
+const awsBrowserDownloads = JSON.stringify([{
+  AllowedOrigins: ['https://ai.market'],
+  AllowedMethods: ['GET'],
+  AllowedHeaders: ['If-Match'],
+  MaxAgeSeconds: 300,
+}], null, 2);
 const guides = {
   aws: {
     name: 'AWS S3', console: 'https://console.aws.amazon.com/s3/',
@@ -46,6 +52,13 @@ export function StorageSetupGuide({ provider, canConnectAWS, onConnectAWS, onClo
       <ol className="my-5 grid gap-2 sm:grid-cols-4" aria-label="Storage setup steps">{steps.map((label, index) => <li key={label}><button type="button" onClick={() => setStep(index)} aria-current={step === index ? 'step' : undefined} className={`w-full rounded-lg p-3 text-left text-sm ${step === index ? 'bg-indigo-50 font-semibold text-indigo-900' : 'bg-gray-50 text-gray-600'}`}>{index + 1}. {label}</button></li>)}</ol>
       <h4 ref={heading} tabIndex={-1} className="text-lg font-semibold text-gray-900">{steps[step]}</h4>
       <p className="mt-3 max-w-3xl text-sm leading-6 text-gray-700">{[guide.account, guide.bucket, guide.upload, guide.ready][step]}</p>
+      {step === 3 && provider === 'aws' && <details className="mt-4 rounded-lg border border-gray-200 p-4">
+        <summary className="cursor-pointer text-sm font-medium text-gray-900">Allow buyers to download from your private storage</summary>
+        <p className="mt-3 text-sm leading-6 text-gray-700">In your S3 bucket, open Permissions, then Cross-origin resource sharing (CORS). For a bucket without existing CORS rules, paste the settings below and save. If you already have rules, add this rule to the existing list so your other applications keep working.</p>
+        <pre className="mt-3 overflow-x-auto rounded-lg bg-gray-50 p-3 text-xs" aria-label="AWS browser download settings">{awsBrowserDownloads}</pre>
+        <p className="mt-3 text-sm leading-6 text-gray-700">These settings allow the ai.market website to make a download request. Keep Block Public Access enabled; buyers still need authorized, temporary access to the files they purchased. Saving these settings does not verify your connection.</p>
+        <a href="https://docs.aws.amazon.com/AmazonS3/latest/userguide/ManageCorsUsing.html" target="_blank" rel="noopener noreferrer" className="mt-2 inline-block text-sm text-indigo-700 underline">AWS instructions for browser access (new tab)</a>
+      </details>}
       {step === 0 && <button type="button" onClick={() => setStep(3)} className="mt-3 text-sm font-medium text-indigo-700 underline">I already have storage and files</button>}
       {step < 3 && <div className="mt-4 flex flex-wrap gap-4">
         <a href={step === 0 ? guide.start : guide.console} target="_blank" rel="noopener noreferrer" className="text-sm font-medium text-indigo-700 underline">Open {guide.name === 'AWS S3' ? 'AWS' : 'Cloudflare'} (new tab)</a>

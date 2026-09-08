@@ -1,4 +1,4 @@
-import type { WorkspaceDownload } from '@/api/sellerWorkspaceDownload';
+import type { WorkspaceDownload, WorkspaceFileGrant, WorkspaceFileEntry } from '@/api/sellerWorkspaceDownload';
 
 export interface DownloadWriter {
   write(data: Uint8Array): Promise<void>; close(): Promise<void>; abort(): Promise<void>;
@@ -12,12 +12,15 @@ export class WorkspaceDownloadError extends Error {
 }
 export async function streamWorkspaceDownload(bundle: WorkspaceDownload, directory: DownloadDirectory,
   signal: AbortSignal, progress: (file: string, bytes: number, size: number) => void,
-  fetchFile: typeof fetch = fetch): Promise<string> {
+  loadGrant: (entry: WorkspaceFileEntry) => Promise<WorkspaceFileGrant>, fetchFile: typeof fetch = fetch): Promise<string> {
   signal.throwIfAborted();
   const folderName = `ai-market-${crypto.randomUUID()}`;
   const folder = await directory.getDirectoryHandle(folderName, {create:true});
-  for (const [index,file] of bundle.files.entries()) {
+  for (const [index,entry] of bundle.files.entries()) {
     signal.throwIfAborted();
+    const file=await loadGrant(entry);
+    signal.throwIfAborted();
+    if (file.size!==entry.size || file.filename!==entry.filename) throw new WorkspaceDownloadError('size_changed');
     if (Date.parse(file.expires_at) <= Date.now()) throw new WorkspaceDownloadError('unavailable');
     const response = await fetchFile(file.url, {method:'GET',headers:{'If-Match':file.headers['If-Match']},
       signal,mode:'cors',credentials:'omit',redirect:'error',referrerPolicy:'no-referrer',cache:'no-store'});
