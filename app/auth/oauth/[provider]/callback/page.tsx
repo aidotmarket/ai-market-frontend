@@ -2,6 +2,7 @@
 
 import { useEffect, useRef, useState } from 'react';
 import { useParams, useSearchParams, useRouter } from 'next/navigation';
+import { resumeContinuation } from '@/lib/aim-data-continuation';
 import TwoFactorChallenge from '@/components/TwoFactorChallenge';
 import { useAuthStore } from '@/store/auth';
 
@@ -32,7 +33,7 @@ export default function OAuthCallbackPage() {
     oauthLogin(provider, code, state, nonce)
       .then((result) => {
         if (!result.requiresTwoFactor) {
-          router.replace('/listings');
+          router.replace(resumeContinuation());
         }
       })
       .catch(() => {
@@ -54,7 +55,7 @@ export default function OAuthCallbackPage() {
   if (pendingTwoFactor) {
     return (
       <div className="flex min-h-[calc(100vh-10rem)] items-center justify-center px-4">
-        <TwoFactorChallenge onVerified={() => router.replace('/listings')} />
+        <TwoFactorChallenge onVerified={() => router.replace(resumeContinuation())} />
       </div>
     );
   }
