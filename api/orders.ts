@@ -2,8 +2,10 @@ import { api } from './client';
 import type { BuyerOrder, BuyerOrderDetail, OrderEvent, OrderAccessResponse, OrderDownloadResponse, OrderRefreshResponse, S3ScopedDeliveryResponse } from '@/types';
 
 export async function getMyOrders(): Promise<BuyerOrder[]> {
-  const res = await api.get<BuyerOrder[]>('/orders/mine');
-  return res.data;
+  const res = await api.get<(BuyerOrder & {amount_cents?: number})[]>('/orders/mine');
+  return res.data.map(order => ({...order,
+    amount: typeof order.amount_cents === 'number' ? order.amount_cents / 100 : order.amount,
+  }));
 }
 
 export async function getOrder(orderId: string): Promise<BuyerOrderDetail> {
