@@ -1,9 +1,16 @@
 import {afterEach,expect,it,vi} from 'vitest';
 const client=vi.hoisted(() => ({post:vi.fn()}));
 vi.mock('./client',() => ({api:client}));
-import {requestWorkspaceFile} from './sellerWorkspaceDownload';
+import {requestWorkspaceFile,validateWorkspaceFileGrant} from './sellerWorkspaceDownload';
 const grant=() => ({filename:'file.csv',size:42,url:'https://synthetic.s3.eu-west-1.amazonaws.com/file?X-Amz-SignedHeaders=host%3Bif-match',headers:{'If-Match':'"e"'},expires_at:new Date(Date.now()+300000).toISOString()});
 const rejected=(status=429,retry:unknown='60') => ({isAxiosError:true,response:{status,headers:{'retry-after':retry}}});
+it.each(['','eu.','us.','fedramp.'])('accepts the fixed R2 %s endpoint', jurisdiction => {
+  const file={...grant(),url:`https://${'d'.repeat(32)}.${jurisdiction}r2.cloudflarestorage.com/bucket/file?X-Amz-SignedHeaders=host%3Bif-match`};
+  expect(validateWorkspaceFileGrant(file)).toBe(file);
+});
+it.each(['evil.r2.cloudflarestorage.com',`${'d'.repeat(32)}.r2.cloudflarestorage.com.evil.example`,`${'d'.repeat(32)}.evil.r2.cloudflarestorage.com`])('rejects unapproved R2 host %s',host => {
+  expect(() => validateWorkspaceFileGrant({...grant(),url:`https://${host}/bucket/file?X-Amz-SignedHeaders=host%3Bif-match`})).toThrow();
+});
 afterEach(() => {vi.useRealTimers();vi.resetAllMocks();});
 it('waits for 429 then retries the same file in the same session without allocating another download',async () => {
   vi.useFakeTimers();client.post.mockRejectedValueOnce(rejected()).mockResolvedValue({data:grant()});

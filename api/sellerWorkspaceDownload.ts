@@ -35,8 +35,10 @@ export function validateWorkspaceFileGrant(value:unknown):WorkspaceFileGrant {
         !/^"[\x21\x23-\x7e]+"$/.test(file.headers['If-Match']) || Object.keys(file.headers).length !== 1 ||
         !Number.isFinite(Date.parse(file.expires_at)) || Date.parse(file.expires_at) <= Date.now()) throw new Error('Invalid download response');
     const url = new URL(file.url);
+    const supportedHost = /^(?:[a-z0-9.-]+\.)?s3\.[a-z]{2}-[a-z]+-[0-9]\.amazonaws\.com$/.test(url.hostname)
+      || /^[0-9a-f]{32}\.(?:(?:eu|us|fedramp)\.)?r2\.cloudflarestorage\.com$/.test(url.hostname);
     if (url.protocol !== 'https:' || url.username || url.password || url.port || url.hash ||
-        !/^(?:[a-z0-9.-]+\.)?s3\.[a-z]{2}-[a-z]+-[0-9]\.amazonaws\.com$/.test(url.hostname) ||
+        !supportedHost ||
         url.searchParams.get('X-Amz-SignedHeaders') !== 'host;if-match') throw new Error('Invalid download response');
   return file;
 }
