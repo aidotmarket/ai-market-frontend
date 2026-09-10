@@ -2,13 +2,20 @@ import { api } from './client';
 import type { BuyerOrder, BuyerOrderDetail, OrderEvent, OrderAccessResponse, OrderDownloadResponse, OrderRefreshResponse, S3ScopedDeliveryResponse } from '@/types';
 
 export async function getMyOrders(): Promise<BuyerOrder[]> {
-  const res = await api.get<BuyerOrder[]>('/orders/mine');
-  return res.data;
+  const res = await api.get<(BuyerOrder & {amount_cents?: number})[]>('/orders/mine');
+  return res.data.map(order => ({...order,
+    amount: typeof order.amount_cents === 'number' ? order.amount_cents / 100 : order.amount,
+  }));
 }
 
 export async function getOrder(orderId: string): Promise<BuyerOrderDetail> {
-  const res = await api.get<BuyerOrderDetail>(`/orders/${encodeURIComponent(orderId)}`);
-  return res.data;
+  const res = await api.get<BuyerOrderDetail & {amount_cents?: number; listing_snapshot?: {title?: string}}>(`/orders/${encodeURIComponent(orderId)}`);
+  const data = res.data;
+  if (!data.workspace_delivery) return data;
+  return {...data,
+    amount: typeof data.amount_cents === 'number' ? data.amount_cents / 100 : data.amount,
+    listing_title: data.listing_snapshot?.title ?? data.listing_title ?? 'Purchased data',
+  };
 }
 
 export async function getOrderEvents(orderId: string): Promise<OrderEvent[]> {

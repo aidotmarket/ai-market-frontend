@@ -31,6 +31,7 @@ export default function AllAIPanel() {
     setLocale,
     anonymousSurfaceActive,
     anonymousAvailable,
+    page,
   } = useAllAI();
   const resources = anonymousAllAIResources(locale);
   const bridge = useWizardBridge();
@@ -300,7 +301,7 @@ export default function AllAIPanel() {
         {messages.length === 0 && (
           <div className="flex items-center justify-center h-full">
             <p className="text-sm text-white/30 italic">
-              {anonymousSurfaceActive ? resources.emptyPrompt : 'How can I help you today?'}
+              {anonymousSurfaceActive ? resources.emptyPrompt : page?.startsWith('/dashboard/seller-workspace') ? 'I’m Allai, here to help throughout your seller journey. Ask me about setting up storage, choosing what to sell, or preparing your listing.' : 'How can I help you today?'}
             </p>
           </div>
         )}

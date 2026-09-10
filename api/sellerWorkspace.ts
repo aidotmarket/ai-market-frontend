@@ -15,12 +15,18 @@ export interface CapabilityStage {
 export interface ProviderCapabilities {
   connect: CapabilityStage;
   profile: CapabilityStage;
+  discovery?: CapabilityStage | null;
   publish: CapabilityStage;
   delivery: CapabilityStage;
 }
 
 export interface SellerWorkspaceCapabilities {
   master: CapabilityStage;
+  drafts?: CapabilityStage | null;
+  listing_assistant?: CapabilityStage | null;
+  sources?: CapabilityStage | null;
+  review?: CapabilityStage | null;
+  approval?: CapabilityStage | null;
   providers: {
     aws: ProviderCapabilities;
     r2: ProviderCapabilities;
@@ -44,7 +50,7 @@ export type RotationSubstate =
 
 export interface SellerWorkspaceConnection {
   id: string;
-  provider: 'aws';
+  provider: 'aws' | 'r2';
   status: ConnectionStatus;
   rotation_substate: RotationSubstate;
   version: number;
@@ -178,6 +184,30 @@ export function isAWSConnectionAvailable(capabilities: SellerWorkspaceCapabiliti
   );
 }
 
+export function isR2ConnectionAvailable(capabilities: SellerWorkspaceCapabilities): boolean {
+  const connect=capabilities?.providers?.r2?.connect;
+  return capabilities?.master?.enabled === true && capabilities.master.status === 'available'
+    && connect?.enabled === true && connect.status === 'available';
+}
+
+export function isStorageDiscoveryAvailable(capabilities: SellerWorkspaceCapabilities): boolean {
+  const discovery=capabilities?.providers?.r2?.discovery;
+  return isAWSDiscoveryAvailable(capabilities) || (isR2ConnectionAvailable(capabilities)
+    && discovery?.enabled === true && discovery.status === 'available');
+}
+
+export interface R2ConnectionInput {
+  account_id:string; jurisdiction:'default'|'eu'|'us'|'fedramp'; bucket:string; prefix:string;
+  access_key_id:string; secret_access_key:string; dedicated_bucket_readonly:true; expected_version:number;
+}
+
+export function saveR2Connection(input:R2ConnectionInput,idempotencyKey:string,connectionId?:string):Promise<ConnectionMutationResponse> {
+  const options={headers:mutationHeaders(idempotencyKey)};
+  return safely(connectionId
+    ? api.put(`${BASE_PATH}/connections/${encodeURIComponent(connectionId)}/r2-credentials`,input,options)
+    : api.post(`${BASE_PATH}/connections/r2`,input,options));
+}
+
 export function getSellerWorkspaceCapabilities(): Promise<SellerWorkspaceCapabilities> {
   return safely(api.get(`${BASE_PATH}/capabilities`));
 }
@@ -236,4 +266,84 @@ export function disconnectSellerWorkspaceConnection(
       headers: mutationHeaders(idempotencyKey),
     })
   );
+}
+
+export function isAWSDiscoveryAvailable(capabilities: SellerWorkspaceCapabilities): boolean {
+  const stage = capabilities?.providers?.aws?.discovery;
+  return isAWSConnectionAvailable(capabilities) && stage?.enabled === true && stage.status === 'available';
+}
+
+export function isAWSProfilingAvailable(capabilities: SellerWorkspaceCapabilities): boolean {
+  const profile = capabilities?.providers?.aws?.profile;
+  return capabilities?.master?.enabled === true && capabilities.master.status === 'available'
+    && profile?.enabled === true && profile.status === 'available';
+}
+
+export interface WorkspaceObject {
+  key: string;
+  version_id: string | null;
+  etag: string;
+  size: number;
+  last_modified: string;
+  format_candidate: 'csv' | 'tsv' | 'json' | 'jsonl' | 'parquet' | 'unknown';
+}
+
+export interface WorkspaceProfileJob {
+  id: string;
+  connection_id: string;
+  runtime_id: string;
+  state: 'queued' | 'starting' | 'running' | 'validating_result' | 'cancel_requested' | 'succeeded' | 'failed' | 'cancelled' | 'expired';
+  version: number;
+  attempt: number;
+  objects_completed: number;
+  source_bytes_read: number;
+  rows_examined: number;
+  field_records_emitted: number;
+  safe_failure_code: string | null;
+  evidence_ref: string | null;
+}
+
+export interface WorkspaceProfileEvidence {
+  id: string;
+  result: {
+    semantic_evidence: {
+      observed: { objects_completed: number; rows_examined: number; source_bytes_read: number; truncated: boolean; truncation_reasons: string[] };
+      objects: Array<{
+        object_ref: string;
+        format: string;
+        size: number;
+        warning_codes: string[];
+        fields: Array<{
+          position: string;
+          physical_type: string;
+          non_null_count: number;
+          null_count: number;
+          pii_classes: string[];
+          quality_flags: string[];
+        }>;
+      }>;
+    };
+  };
+}
+
+export function listWorkspaceObjects(connectionId: string, prefix: string, cursor?: string, limit = 100) {
+  return safely<{ objects: WorkspaceObject[]; next_cursor: string | null }>(api.get(
+    `${BASE_PATH}/connections/${encodeURIComponent(connectionId)}/source-objects`,
+    { params: { prefix, version_mode: 'current', limit, ...(cursor ? { cursor } : {}) } }
+  ));
+}
+
+export function listWorkspaceProfileJobs(cursor?: string) {
+  return safely<{ jobs: WorkspaceProfileJob[]; next_cursor: string | null }>(api.get(
+    `${BASE_PATH}/profile-jobs`, { params: { limit: 50, ...(cursor ? { cursor } : {}) } }
+  ));
+}
+
+export function cancelWorkspaceProfileJob(job: WorkspaceProfileJob, idempotencyKey: string) {
+  return safely<WorkspaceProfileJob>(api.post(`${BASE_PATH}/profile-jobs/${encodeURIComponent(job.id)}/cancel`,
+    { expected_version: job.version }, { headers: mutationHeaders(idempotencyKey) }));
+}
+
+export function getWorkspaceProfileEvidence(evidenceId: string) {
+  return safely<WorkspaceProfileEvidence>(api.get(`${BASE_PATH}/profile-evidence/${encodeURIComponent(evidenceId)}`));
 }

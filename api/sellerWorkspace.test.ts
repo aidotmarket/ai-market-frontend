@@ -19,6 +19,11 @@ import {
   listSellerWorkspaceConnections,
   rotateSellerWorkspaceConnection,
   verifySellerWorkspaceConnection,
+  isAWSProfilingAvailable,
+  isAWSDiscoveryAvailable,
+  listWorkspaceObjects,
+  cancelWorkspaceProfileJob,
+  type WorkspaceProfileJob,
 } from './sellerWorkspace';
 
 const enabledCapabilities = {
@@ -55,6 +60,21 @@ beforeEach(() => {
 });
 
 describe('Seller Workspace capability truth', () => {
+  it('does not enable profiling from connect availability or contradictory flags', () => {
+    expect(isAWSProfilingAvailable(enabledCapabilities)).toBe(false);
+    const enabled = { ...enabledCapabilities, providers: { ...enabledCapabilities.providers, aws: { ...enabledCapabilities.providers.aws, profile: { enabled: true, status: 'available' as const, reason: 'enabled' } } } };
+    expect(isAWSProfilingAvailable(enabled)).toBe(true);
+    expect(isAWSProfilingAvailable({ ...enabled, master: { enabled: true, status: 'disabled', reason: 'disabled' } })).toBe(false);
+    expect(isAWSProfilingAvailable({} as never)).toBe(false);
+  });
+  it('does not require profiling for source discovery or infer discovery from profiling', () => {
+    expect(isAWSDiscoveryAvailable(enabledCapabilities)).toBe(false);
+    const available = { enabled: true, status: 'available' as const, reason: 'enabled' };
+    const capabilities = { ...enabledCapabilities, providers: { ...enabledCapabilities.providers, aws: { ...enabledCapabilities.providers.aws, discovery: available } } };
+    expect(isAWSDiscoveryAvailable(capabilities)).toBe(true);
+    expect(isAWSProfilingAvailable(capabilities)).toBe(false);
+    expect(isAWSDiscoveryAvailable({ ...capabilities, master: { enabled: false, status: 'disabled', reason: 'disabled' } })).toBe(false);
+  });
   it('uses only the frozen capability endpoint', async () => {
     client.get.mockResolvedValueOnce({ data: enabledCapabilities });
     await expect(getSellerWorkspaceCapabilities()).resolves.toEqual(enabledCapabilities);
@@ -86,6 +106,17 @@ describe('Seller Workspace capability truth', () => {
 });
 
 describe('Seller Workspace frozen routes', () => {
+  it('passes object scope and opaque cursor as query parameters', async () => {
+    client.get.mockResolvedValue({ data: { objects: [], next_cursor: null } });
+    await listWorkspaceObjects('connection-1', 'datasets/a&b/', 'opaque+/=');
+    expect(client.get).toHaveBeenCalledWith('/seller-workspace/connections/connection-1/source-objects', { params: { prefix: 'datasets/a&b/', version_mode: 'current', limit: 100, cursor: 'opaque+/=' } });
+  });
+
+  it('binds cancellation to the observed job version and idempotency key', async () => {
+    client.post.mockResolvedValue({ data: {} });
+    await cancelWorkspaceProfileJob({ id: 'job-1', version: 4 } as WorkspaceProfileJob, 'sw.cancel-job.123');
+    expect(client.post).toHaveBeenCalledWith('/seller-workspace/profile-jobs/job-1/cancel', { expected_version: 4 }, { headers: { 'Idempotency-Key': 'sw.cancel-job.123' } });
+  });
   it('lists connections and retrieves open authorization without mutation headers', async () => {
     client.get
       .mockResolvedValueOnce({ data: { connections: [] } })

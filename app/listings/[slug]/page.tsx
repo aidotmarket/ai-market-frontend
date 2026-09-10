@@ -1,3 +1,4 @@
+import { createHash } from 'node:crypto';
 import { notFound, redirect } from 'next/navigation';
 import Link from 'next/link';
 import type { Metadata } from 'next';
@@ -82,6 +83,12 @@ export default async function ListingDetailPage({ params, searchParams }: Props)
     notFound();
   }
 
+  const approved = listing.approved_presentation;
+  if (approved && (approved.presentation_version !== 'seller-listing-review-v2' ||
+      typeof approved.rendered_html !== 'string' || Buffer.byteLength(approved.rendered_html, 'utf8') > 100000 ||
+      createHash('sha256').update(approved.rendered_html, 'utf8').digest('hex') !== approved.render_hash)) {
+    throw new Error('The approved listing presentation could not be verified');
+  }
   const schemaSummary = listing.schema_summary;
   const rowCount = listing.row_count;
   const shouldEmitJsonLd = shouldEmitDatasetJsonLd(listing);
@@ -116,7 +123,7 @@ export default async function ListingDetailPage({ params, searchParams }: Props)
         {/* Main Content */}
         <div className="lg:col-span-2 space-y-8">
           <div>
-            <h1 className="text-3xl font-bold text-gray-900 mb-2">{listing.title}</h1>
+            {!approved && <h1 className="text-3xl font-bold text-gray-900 mb-2">{listing.title}</h1>}
             <div className="flex flex-wrap items-center gap-3 text-sm text-gray-500">
               <span>Published {listing.published_at ? formatDate(listing.published_at) : 'N/A'}</span>
               <span>&middot;</span>
@@ -126,10 +133,13 @@ export default async function ListingDetailPage({ params, searchParams }: Props)
             </div>
           </div>
 
+          {approved ? <iframe title="Seller-approved listing" sandbox="" referrerPolicy="no-referrer"
+            srcDoc={approved.rendered_html} className="h-[min(720px,80vh)] min-h-96 w-full rounded-xl border border-gray-200 bg-white" /> : <>
           {/* Description - rendered as sanitized markdown */}
           <div className="prose prose-sm max-w-none">
             <ReactMarkdown rehypePlugins={[rehypeSanitize]}>{listing.description}</ReactMarkdown>
           </div>
+
 
           <ScanFindingsBadge scanFindings={listing.scan_findings ?? null} />
 
@@ -155,6 +165,9 @@ export default async function ListingDetailPage({ params, searchParams }: Props)
               </span>
             ))}
           </div>
+
+          </>}
+          {approved && <ScanFindingsBadge scanFindings={listing.scan_findings ?? null} />}
 
           {/* Schema Info */}
           {(rowCount != null || (schemaSummary?.columns?.length ?? 0) > 0) && (
@@ -197,7 +210,9 @@ export default async function ListingDetailPage({ params, searchParams }: Props)
               price={listing.pricing.price}
               scanFindings={listing.scan_findings ?? null}
             />
-            {hasVersionRows ? (
+            {approved && !listing.purchasable ? <p role="status" className="rounded-lg bg-gray-50 p-4 text-sm text-gray-700">
+              {listing.purchase_hold_reason === 'workspace_sales_paused' ? 'The seller has paused new sales. Existing buyers can access their purchase from their orders.' : 'This listing is temporarily unavailable for new purchases. Please try again later.'}
+            </p> : hasVersionRows ? (
               <ListingPurchasePanel
                 listingId={listing.id}
                 slug={listing.slug}
