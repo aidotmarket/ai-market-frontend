@@ -76,3 +76,27 @@ describe('Allai seller listing review', () => {
     expect(signal.aborted).toBe(true);
   });
 });
+
+  it.each(['0.01', '1.00', '24.99'])('rejects a paid price below the marketplace minimum: %s', async (price) => {
+    const save = vi.fn().mockResolvedValue(undefined);
+    render(<SellerListingEditor onSave={save} />);
+    fireEvent.change(screen.getByLabelText('Your price (USD)'), { target: { value: price } });
+    expect(screen.getByRole('alert').textContent).toContain('$25');
+    expect((screen.getByRole('button', { name: 'Save private draft' }) as HTMLButtonElement).disabled).toBe(true);
+    expect(save).not.toHaveBeenCalled();
+    fireEvent.change(screen.getByLabelText('Your price (USD)'), { target: { value: '25.00' } });
+    expect(screen.queryByRole('alert')).toBeNull();
+    fireEvent.click(screen.getByRole('button', { name: 'Save private draft' }));
+    await act(async () => {});
+    expect(save.mock.calls[0][0].price).toBe('25.00');
+  });
+
+  it('keeps free listings available', async () => {
+    const save = vi.fn().mockResolvedValue(undefined);
+    render(<SellerListingEditor onSave={save} />);
+    fireEvent.change(screen.getByLabelText('Your price (USD)'), { target: { value: '0' } });
+    expect(screen.queryByRole('alert')).toBeNull();
+    fireEvent.click(screen.getByRole('button', { name: 'Save private draft' }));
+    await act(async () => {});
+    expect(save.mock.calls[0][0].price).toBe('0');
+  });
