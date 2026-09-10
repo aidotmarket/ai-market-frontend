@@ -50,7 +50,7 @@ export type RotationSubstate =
 
 export interface SellerWorkspaceConnection {
   id: string;
-  provider: 'aws';
+  provider: 'aws' | 'r2';
   status: ConnectionStatus;
   rotation_substate: RotationSubstate;
   version: number;
@@ -182,6 +182,30 @@ export function isAWSConnectionAvailable(capabilities: SellerWorkspaceCapabiliti
     connect?.enabled === true &&
     connect.status === 'available'
   );
+}
+
+export function isR2ConnectionAvailable(capabilities: SellerWorkspaceCapabilities): boolean {
+  const connect=capabilities?.providers?.r2?.connect;
+  return capabilities?.master?.enabled === true && capabilities.master.status === 'available'
+    && connect?.enabled === true && connect.status === 'available';
+}
+
+export function isStorageDiscoveryAvailable(capabilities: SellerWorkspaceCapabilities): boolean {
+  const discovery=capabilities?.providers?.r2?.discovery;
+  return isAWSDiscoveryAvailable(capabilities) || (isR2ConnectionAvailable(capabilities)
+    && discovery?.enabled === true && discovery.status === 'available');
+}
+
+export interface R2ConnectionInput {
+  account_id:string; jurisdiction:'default'|'eu'|'us'|'fedramp'; bucket:string; prefix:string;
+  access_key_id:string; secret_access_key:string; dedicated_bucket_readonly:true; expected_version:number;
+}
+
+export function saveR2Connection(input:R2ConnectionInput,idempotencyKey:string,connectionId?:string):Promise<ConnectionMutationResponse> {
+  const options={headers:mutationHeaders(idempotencyKey)};
+  return safely(connectionId
+    ? api.put(`${BASE_PATH}/connections/${encodeURIComponent(connectionId)}/r2-credentials`,input,options)
+    : api.post(`${BASE_PATH}/connections/r2`,input,options));
 }
 
 export function getSellerWorkspaceCapabilities(): Promise<SellerWorkspaceCapabilities> {

@@ -3,18 +3,18 @@
 import { useRef, useState } from 'react';
 import { StorageSetupGuide, type StorageProvider } from './StorageSetupGuide';
 import type { SellerWorkspaceCapabilities } from '@/api/sellerWorkspace';
-import { isAWSConnectionAvailable } from '@/api/sellerWorkspace';
+import { isAWSConnectionAvailable, isR2ConnectionAvailable } from '@/api/sellerWorkspace';
 
-export function StorageProviders({ capabilities, busy, onConnectAWS }: {
+export function StorageProviders({ capabilities, busy, onConnectAWS, onConnectR2 }: {
   capabilities: SellerWorkspaceCapabilities | null;
   busy: string | null;
   onConnectAWS: () => void;
+  onConnectR2?: () => void;
 }) {
   const [guide, setGuide] = useState<StorageProvider | null>(null);
   const guideButtons = useRef<Partial<Record<StorageProvider, HTMLButtonElement | null>>>({});
   const awsAvailable = capabilities !== null && isAWSConnectionAvailable(capabilities);
-  const r2Disabled = capabilities?.master?.enabled === false
-    || capabilities?.providers?.r2?.connect?.status === 'disabled';
+  const r2Available = capabilities !== null && isR2ConnectionAvailable(capabilities);
 
   return (
     <section aria-labelledby="storage-providers-title">
@@ -40,11 +40,11 @@ export function StorageProviders({ capabilities, busy, onConnectAWS }: {
           </div>
           <p className="mt-4 flex-1 text-sm leading-6 text-gray-600">Connect data stored in your Cloudflare R2 account.</p>
           <p id="r2-setup-status" className="mt-3 text-xs leading-5 text-gray-500">
-            {r2Disabled ? 'Cloudflare connection setup is currently unavailable in this Workspace.' : 'Cloudflare is part of Seller Workspace. Its connection setup is still being built.'}
+            {r2Available ? 'Use read-only keys restricted to a dedicated bucket.' : 'Cloudflare connection setup is currently unavailable in this Workspace.'}
           </p>
-          <button type="button" disabled aria-describedby="r2-setup-status"
-            className="mt-5 self-start cursor-not-allowed rounded-lg border border-gray-200 bg-gray-50 px-4 py-2 text-sm font-medium text-gray-500">
-            Cloudflare setup unavailable
+          <button type="button" onClick={onConnectR2} disabled={!r2Available || busy !== null || !onConnectR2} aria-describedby="r2-setup-status"
+            className="mt-5 self-start rounded-lg bg-indigo-700 px-4 py-2 text-sm font-medium text-white disabled:cursor-not-allowed disabled:opacity-50">
+            {r2Available ? 'Add Cloudflare R2 connection' : 'Cloudflare setup unavailable'}
           </button>
           <button ref={(node) => { guideButtons.current.r2 = node; }} type="button" onClick={() => setGuide('r2')} aria-expanded={guide === 'r2'} className="mt-3 self-start text-sm font-medium text-indigo-700 underline">Help me set up Cloudflare storage</button>
         </article>

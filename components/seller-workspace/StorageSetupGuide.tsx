@@ -28,8 +28,8 @@ const guides = {
     pricing: 'https://developers.cloudflare.com/r2/pricing/',
     account: 'Create a Cloudflare account, or sign in to your business account. Open Storage & databases, then R2 and Overview. Complete the R2 subscription checkout in Cloudflare.',
     bucket: 'In R2, create a bucket: a named place to keep your files. Choose a name using lowercase letters, numbers and hyphens. Keep the bucket private; you do not need a public website address for your data.',
-    upload: 'Open your bucket and upload the files you want to sell. Wait for the upload to finish and check that the files appear. Keep the bucket name handy. For large uploads, use the options in Cloudflare’s upload guide.',
-    ready: 'Your files can stay in your Cloudflare account. The R2 connection to ai.market is still being completed. Preparing storage here does not connect it or publish any data.',
+    upload: 'Open your bucket, create a folder for the files you want to sell, and upload them into that folder. Wait for the upload to finish and check that the files appear. Keep the bucket and folder names handy. For large uploads, use the options in Cloudflare’s upload guide.',
+    ready: 'In Cloudflare R2, use Manage API Tokens to create Object Read only keys restricted to this dedicated bucket. Return to Add Cloudflare R2 connection and enter your account ID, bucket, folder and keys. Connection setup does not publish your files.',
   },
 };
 const button = 'rounded-lg border border-gray-300 px-4 py-2 text-sm font-medium text-gray-800 hover:bg-gray-50 disabled:opacity-50';
@@ -59,6 +59,12 @@ export function StorageSetupGuide({ provider, canConnectAWS, onConnectAWS, onClo
         <p className="mt-3 text-sm leading-6 text-gray-700">These settings allow the ai.market website to make a download request. Keep Block Public Access enabled; buyers still need authorized, temporary access to the files they purchased. Saving these settings does not verify your connection.</p>
         <a href="https://docs.aws.amazon.com/AmazonS3/latest/userguide/ManageCorsUsing.html" target="_blank" rel="noopener noreferrer" className="mt-2 inline-block text-sm text-indigo-700 underline">AWS instructions for browser access (new tab)</a>
       </details>}
+      {step === 3 && provider === 'r2' && <details className="mt-4 rounded-lg border border-gray-200 p-4">
+        <summary className="cursor-pointer text-sm font-medium text-gray-900">Allow buyers to download from your private R2 bucket</summary>
+        <p className="mt-3 text-sm text-gray-700">In your R2 bucket settings, open CORS policy. Add this rule, preserving any existing rules. Keep public access disabled.</p>
+        <pre className="mt-3 overflow-x-auto rounded-lg bg-gray-50 p-3 text-xs" aria-label="R2 browser download settings">{awsBrowserDownloads}</pre>
+        <a href="https://developers.cloudflare.com/r2/buckets/cors/" target="_blank" rel="noopener noreferrer" className="mt-2 inline-block text-sm text-indigo-700 underline">Cloudflare instructions for browser access (new tab)</a>
+      </details>}
       {step === 0 && <button type="button" onClick={() => setStep(3)} className="mt-3 text-sm font-medium text-indigo-700 underline">I already have storage and files</button>}
       {step < 3 && <div className="mt-4 flex flex-wrap gap-4">
         <a href={step === 0 ? guide.start : guide.console} target="_blank" rel="noopener noreferrer" className="text-sm font-medium text-indigo-700 underline">Open {guide.name === 'AWS S3' ? 'AWS' : 'Cloudflare'} (new tab)</a>
@@ -66,7 +72,7 @@ export function StorageSetupGuide({ provider, canConnectAWS, onConnectAWS, onClo
       </div>}
       {step === 3 && provider === 'aws' && <><button type="button" disabled={!canConnectAWS} onClick={onConnectAWS} className={`mt-4 ${button}`}>Continue to AWS connection</button>{!canConnectAWS && <p className="mt-2 text-sm text-gray-600">AWS connection setup is currently unavailable in this Workspace. Your storage remains in your AWS account.</p>}</>}
       <div className="mt-6 flex flex-wrap gap-3"><button type="button" disabled={step === 0} onClick={() => setStep(step - 1)} className={button}>Back</button>{step < 3 && <button type="button" onClick={() => setStep(step + 1)} className={button}>Continue guide</button>}</div>
-      <p className="mt-4 text-xs text-gray-500">These steps are guidance, not a check of your cloud account. Keep passwords and secret keys in your provider account. Guide progress lasts while this page is open.</p>
+      <p className="mt-4 text-xs text-gray-500">These steps are guidance, not a check of your cloud account. Enter access keys only in the connection form, never in this guide or a message. Guide progress lasts while this page is open.</p>
     </section>
   );
 }

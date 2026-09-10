@@ -25,7 +25,7 @@ describe('storage setup guidance', () => {
     render(<StorageSetupGuide provider="r2" canConnectAWS onConnectAWS={vi.fn()} onClose={() => {}} />);
     expect(screen.getByText('Open Cloudflare (new tab)').getAttribute('target')).toBe('_blank');
     fireEvent.click(screen.getByText('I already have storage and files'));
-    expect(screen.getByText(/R2 connection to ai.market is still being completed/)).toBeTruthy();
+    expect(screen.getByText(/Object Read only keys restricted to this dedicated bucket/)).toBeTruthy();
     expect(screen.queryByText('Continue to AWS connection')).toBeNull();
   });
 });

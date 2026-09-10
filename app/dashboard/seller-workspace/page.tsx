@@ -7,6 +7,7 @@ import { WorkspaceData } from '@/components/seller-workspace/WorkspaceData';
 import SavedWorkspaceData from '@/components/seller-workspace/SavedWorkspaceData';
 import SellerReview from '@/components/seller-workspace/SellerReview';
 import SellerPublications from '@/components/seller-workspace/SellerPublications';
+import R2ConnectionForm from '@/components/seller-workspace/R2ConnectionForm';
 import { StorageProviders } from '@/components/seller-workspace/StorageProviders';
 import SellerListingEditor from '@/components/seller-workspace/SellerListingEditor';
 import SavedListingEditor from '@/components/seller-workspace/SavedListingEditor';
@@ -24,7 +25,8 @@ import {
   getSellerWorkspaceAuthorization,
   getSellerWorkspaceCapabilities,
   isAWSConnectionAvailable,
-  isAWSDiscoveryAvailable,
+  isStorageDiscoveryAvailable,
+  isR2ConnectionAvailable,
   listSellerWorkspaceConnections,
   rotateSellerWorkspaceConnection,
   verifySellerWorkspaceConnection,
@@ -156,6 +158,7 @@ export default function SellerWorkspacePage() {
   const [pageState, setPageState] = useState<PageState>('loading');
   const [capabilities, setCapabilities] = useState<SellerWorkspaceCapabilities | null>(null);
   const [view, setView] = useState<WorkspaceView>('storage');
+  const [r2Target,setR2Target]=useState<SellerWorkspaceConnection|null|undefined>(undefined);
   const [connections, setConnections] = useState<SellerWorkspaceConnection[]>([]);
   const [authorizationSession, setAuthorizationSession] =
     useState<AuthorizationSession | null>(null);
@@ -231,7 +234,7 @@ export default function SellerWorkspacePage() {
         const capabilities = await getSellerWorkspaceCapabilities();
         if (cancelled) return;
         setCapabilities(capabilities);
-        const canConnect = isAWSConnectionAvailable(capabilities);
+        const canConnect = isAWSConnectionAvailable(capabilities) || isR2ConnectionAvailable(capabilities);
         const canSaveDraft = capabilities.master.enabled && capabilities.drafts?.enabled && capabilities.drafts.status === 'available';
         const canUseAllai = capabilities.master.enabled && capabilities.listing_assistant?.enabled && capabilities.listing_assistant.status === 'available';
         if (!canConnect && !canSaveDraft && !canUseAllai) {
@@ -552,14 +555,15 @@ export default function SellerWorkspacePage() {
 
   return (
     <div className="space-y-6">
-      <WorkspaceOverview connections={connections} view={view} onViewChange={(nextView) => { clearSensitive(); setActionError(null); setDisconnectConfirmation(null); setView(nextView); }} />
-      <WorkspacePanel active={view === 'data'}>{capabilities?.master.enabled && capabilities.sources?.enabled && capabilities.sources.status === 'available' ? <SavedWorkspaceData connections={connections} enabled={isAWSDiscoveryAvailable(capabilities)} /> : <WorkspaceData connections={connections} enabled={capabilities !== null && isAWSDiscoveryAvailable(capabilities)} />}</WorkspacePanel>
+      <WorkspaceOverview connections={connections} view={view} onViewChange={(nextView) => { setR2Target(undefined); clearSensitive(); setActionError(null); setDisconnectConfirmation(null); setView(nextView); }} />
+      <WorkspacePanel active={view === 'data'}>{capabilities?.master.enabled && capabilities.sources?.enabled && capabilities.sources.status === 'available' ? <SavedWorkspaceData connections={connections} enabled={isStorageDiscoveryAvailable(capabilities)} /> : <WorkspaceData connections={connections} enabled={capabilities !== null && isStorageDiscoveryAvailable(capabilities)} />}</WorkspacePanel>
       <WorkspacePanel active={view === 'listing'}>{capabilities?.master.enabled && capabilities?.drafts?.enabled && capabilities.drafts.status === 'available' ? <SavedListingEditor active={view === 'listing'} assistant={capabilities.listing_assistant?.enabled && capabilities.listing_assistant.status === 'available' ? listingAssistant : undefined} /> : <SellerListingEditor active={view === 'listing'} assistant={capabilities?.master.enabled && capabilities.listing_assistant?.enabled && capabilities.listing_assistant.status === 'available' ? listingAssistant : undefined} />}</WorkspacePanel>
       <WorkspacePanel active={view === 'manage'}><SellerPublications active={view === 'manage'} enabled={capabilities?.master.enabled === true && capabilities.review?.enabled === true && capabilities.review.status === 'available'} /></WorkspacePanel>
       <WorkspacePanel active={view === 'review'}><SellerReview active={view === 'review'} enabled={capabilities?.master.enabled === true && capabilities.review?.enabled === true && capabilities.review.status === 'available'} /></WorkspacePanel>
       <WorkspacePanel active={view === 'storage'}>
       {capabilities && <SellerJourney capabilities={capabilities} connected={connections.some((connection) => connection.status === 'verified')} />}
-      <StorageProviders capabilities={capabilities} busy={busyAction} onConnectAWS={handleCreate} />
+      <StorageProviders capabilities={capabilities} busy={busyAction} onConnectAWS={handleCreate} onConnectR2={() => {clearSensitive();setR2Target(null);}} />
+      {view === 'storage' && r2Target !== undefined && <R2ConnectionForm key={r2Target?.id ?? 'new-r2'} connection={r2Target} onClose={() => setR2Target(undefined)} onSaved={saved => {setConnections(current => [...current.filter(item => item.id !== saved.id),saved]);setR2Target(undefined);}} />}
 
       {actionError && (
         <div className="rounded-lg border border-red-200 bg-red-50 p-4 text-sm text-red-800" role="alert">
@@ -702,23 +706,24 @@ export default function SellerWorkspacePage() {
           <p className="mt-4 text-xs text-gray-500">Connecting storage does not publish your data.</p>
         </div>
       ) : (
-        <section className="space-y-4" aria-label="AWS connections">
+        <section className="space-y-4" aria-label="Storage connections">
           {connections.map((connection) => {
             const status = STATUS_PRESENTATION[connection.status];
             const terminal = ['expired', 'revoked', 'disabled'].includes(connection.status);
             const rotationPending = connection.rotation_substate === 'pending_verification';
-            const awaitingSetup = connection.status === 'pending_authorization';
+            const awaitingSetup = connection.provider === 'aws' && connection.status === 'pending_authorization';
+            const providerLabel=connection.provider === 'r2' ? 'Cloudflare R2' : 'AWS S3';
             return (
               <article key={connection.id} className="rounded-xl border border-gray-200 bg-white p-6 shadow-sm">
                 <div className="flex flex-wrap items-start justify-between gap-4">
                   <div>
                     <div className="flex flex-wrap items-center gap-3">
-                      <h2 className="break-all text-lg font-semibold text-gray-900">{connection.bucket || 'AWS S3 connection'}</h2>
+                      <h2 className="break-all text-lg font-semibold text-gray-900">{connection.bucket || `${providerLabel} connection`}</h2>
                       <span className={`rounded-full px-2.5 py-0.5 text-xs font-medium ${status.classes}`}>
                         {status.label}
                       </span>
                     </div>
-                    <p className="mt-1 break-all text-xs text-gray-500">{connection.prefix ? `AWS S3 · ${connection.prefix}` : connection.status === 'pending_authorization' ? 'AWS S3 · Setup in progress' : 'AWS S3'}</p>
+                    <p className="mt-1 break-all text-xs text-gray-500">{connection.prefix ? `${providerLabel} · ${connection.prefix}` : `${providerLabel} · Setup in progress`}</p>
                   </div>
                   <div className="flex flex-wrap gap-2">
                     {awaitingSetup && (
@@ -744,11 +749,11 @@ export default function SellerWorkspacePage() {
                     {connection.status === 'verified' && !rotationPending && (
                       <button
                         type="button"
-                        onClick={() => handleStartRotation(connection)}
+                        onClick={() => connection.provider === 'r2' ? setR2Target(connection) : handleStartRotation(connection)}
                         disabled={busyAction !== null}
                         className="rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50 disabled:opacity-50"
                       >
-                        Start reconnect / rotation
+                        {connection.provider === 'r2' ? 'Replace access keys' : 'Start reconnect / rotation'}
                       </button>
                     )}
                     {!terminal && (
