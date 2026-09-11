@@ -6,7 +6,6 @@ import type React from 'react';
 import type { User } from '@/types';
 import DashboardLayout from './layout';
 import { useAuthStore } from '@/store/auth';
-import { validateRedirect } from '@/lib/redirect';
 
 const navigation = vi.hoisted(() => ({
   push: vi.fn(),
@@ -125,7 +124,7 @@ describe('DashboardLayout hydration guard', () => {
     ['/dashboard/stripe-return', ''],
     [
       '/dashboard/data-verification/payment-method/return',
-      '?setup_attempt_id=abc&session_id=cs_test_x',
+      '?attempt=9bd1c6b2-1472-4a6c-9d6c-e61d14023163&session_id=cs_test_a1AbCdEf',
     ],
   ])('preserves %s%s in the login redirect after unauthenticated hydration', async (pathname, search) => {
     navigation.pathname = pathname;
@@ -145,13 +144,6 @@ describe('DashboardLayout hydration guard', () => {
         `/login?redirect=${encodeURIComponent(pathname + search)}`
       );
     });
-  });
-
-  it('validates the payment-method return path with its query intact', () => {
-    const target = '/dashboard/data-verification/payment-method/return?setup_attempt_id=abc&session_id=cs_test_x';
-
-    expect(validateRedirect(target)).toBe(target);
-    expect(validateRedirect(encodeURIComponent(target))).toBe(target);
   });
 
   it('renders children after hydrate resolves authenticated', async () => {

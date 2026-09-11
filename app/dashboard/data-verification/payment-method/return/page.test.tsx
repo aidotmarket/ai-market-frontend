@@ -123,6 +123,17 @@ describe('data-verification payment-method return page', () => {
     vi.clearAllMocks();
   });
 
+  it('maps the return URL query to the initial payment-method props intact', async () => {
+    const attempt = '9bd1c6b2-1472-4a6c-9d6c-e61d14023163';
+    const sessionId = 'cs_test_a1AbCdEf';
+    setReturnUrl(attempt, sessionId);
+
+    const page = await returnPage();
+
+    expect(page.props.initialSetupAttemptId).toBe(attempt);
+    expect(page.props.initialCheckoutSessionId).toBe(sessionId);
+  });
+
   it('renders the return route inside exactly one outer dashboard main landmark', async () => {
     render(
       <main>
