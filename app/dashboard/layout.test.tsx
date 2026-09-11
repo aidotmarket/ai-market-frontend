@@ -84,6 +84,7 @@ const enabledWorkspaceCapabilities = {
 describe('DashboardLayout hydration guard', () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    window.history.replaceState(null, '', '/');
     navigation.pathname = '/dashboard/stripe-return';
     capabilitiesApi.getCapabilities.mockResolvedValue({
       seller: { effective_status: 'inactive' },
@@ -103,6 +104,7 @@ describe('DashboardLayout hydration guard', () => {
 
   afterEach(() => {
     cleanup();
+    window.history.replaceState(null, '', '/');
   });
 
   it('shows the spinner and does not push login from a pristine store', async () => {
@@ -118,18 +120,28 @@ describe('DashboardLayout hydration guard', () => {
     expect(navigation.push).not.toHaveBeenCalled();
   });
 
-  it('pushes login with redirect after hydrate resolves unauthenticated', async () => {
+  it.each([
+    ['/dashboard/stripe-return', ''],
+    [
+      '/dashboard/data-verification/payment-method/return',
+      '?attempt=9bd1c6b2-1472-4a6c-9d6c-e61d14023163&session_id=cs_test_a1AbCdEf',
+    ],
+  ])('preserves %s%s in the login redirect after unauthenticated hydration', async (pathname, search) => {
+    navigation.pathname = pathname;
+    window.history.replaceState(null, '', pathname + search);
     render(
       <DashboardLayout>
         <div>dashboard child</div>
       </DashboardLayout>
     );
 
-    useAuthStore.setState({ hydrated: true, isLoading: false, isAuthenticated: false });
+    act(() => {
+      useAuthStore.setState({ hydrated: true, isLoading: false, isAuthenticated: false });
+    });
 
     await waitFor(() => {
       expect(navigation.push).toHaveBeenCalledWith(
-        `/login?redirect=${encodeURIComponent('/dashboard/stripe-return')}`
+        `/login?redirect=${encodeURIComponent(pathname + search)}`
       );
     });
   });

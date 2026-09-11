@@ -66,7 +66,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
     if (isLoading || !hydrated) return;
 
     if (!isAuthenticated) {
-      router.push(`/login?redirect=${encodeURIComponent(pathname)}`);
+      router.push(`/login?redirect=${encodeURIComponent(pathname + (typeof window !== 'undefined' ? window.location.search : ''))}`);
       return;
     }
 

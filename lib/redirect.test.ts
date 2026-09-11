@@ -1,5 +1,15 @@
 import { describe, expect, it } from 'vitest';
-import { validateListingRedirect } from './redirect';
+import { validateListingRedirect, validateRedirect } from './redirect';
+
+describe('validateRedirect', () => {
+  it('validates the payment-method return path with its query intact', () => {
+    const target = '/dashboard/data-verification/payment-method/return?attempt=9bd1c6b2-1472-4a6c-9d6c-e61d14023163&session_id=cs_test_a1AbCdEf';
+
+    expect(validateRedirect(target)).toBe(target);
+    expect(validateRedirect(encodeURIComponent(target))).toBe(target);
+  });
+
+});
 
 describe('validateListingRedirect', () => {
   it('accepts a single listing detail with a query and fragment', () => {
