@@ -1,3 +1,4 @@
+import { partitionConnections } from './connectionList';
 import type { SellerWorkspaceCapabilities, SellerWorkspaceConnection } from '@/api/sellerWorkspace';
 
 export type WorkspaceView = 'storage' | 'data' | 'listing' | 'review' | 'manage';
@@ -7,9 +8,10 @@ export function WorkspaceOverview({ connections, view, onViewChange }: {
   view: WorkspaceView;
   onViewChange: (view: WorkspaceView) => void;
 }) {
-  const verified = connections.filter((connection) => connection.status === 'verified').length;
-  const attention = connections.filter((connection) =>
-    ['pending_authorization', 'error', 'expired'].includes(connection.status)
+  const { current } = partitionConnections(connections);
+  const verified = current.filter((connection) => connection.status === 'verified').length;
+  const attention = current.filter((connection) =>
+    ['pending_authorization', 'error'].includes(connection.status)
     || connection.rotation_substate === 'pending_verification'
   ).length;
 

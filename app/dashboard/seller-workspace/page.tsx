@@ -2,6 +2,7 @@
 
 import { type FormEvent, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import Link from 'next/link';
+import { connectionName, partitionConnections } from '@/components/seller-workspace/connectionList';
 import { SellerJourney, WorkspaceOverview, type WorkspaceView } from '@/components/seller-workspace/WorkspaceOverview';
 import { WorkspaceData } from '@/components/seller-workspace/WorkspaceData';
 import SavedWorkspaceData from '@/components/seller-workspace/SavedWorkspaceData';
@@ -160,6 +161,8 @@ export default function SellerWorkspacePage() {
   const [view, setView] = useState<WorkspaceView>('storage');
   const [r2Target,setR2Target]=useState<SellerWorkspaceConnection|null|undefined>(undefined);
   const [connections, setConnections] = useState<SellerWorkspaceConnection[]>([]);
+  const [previousExpanded, setPreviousExpanded] = useState(false);
+  const { current: currentConnections, previous: previousConnections, groups: previousGroups } = partitionConnections(connections);
   const [authorizationSession, setAuthorizationSession] =
     useState<AuthorizationSession | null>(null);
   const authorizationRef = useRef<AuthorizationSession | null>(null);
@@ -320,6 +323,8 @@ export default function SellerWorkspacePage() {
   };
 
   const handleCreate = async () => {
+    const pending = partitionConnections(connections).current.find(connection => connection.provider === 'aws' && connection.status === 'pending_authorization');
+    if (pending) return handleOpenAuthorization(pending);
     const operation = 'create-connection';
     setBusyAction(operation);
     setActionError(null);
@@ -474,7 +479,9 @@ export default function SellerWorkspacePage() {
       );
       clearKey(operation);
       setDisconnectConfirmation(null);
-      updateConnection(result.connection);
+      // A successful disconnect is terminal even if its response retains a stale status.
+      updateConnection({ ...result.connection, status: 'revoked', revoked_at: result.connection.revoked_at ?? new Date().toISOString() });
+      setR2Target(undefined);
     } catch (error) {
       if (!closeForCapabilityError(error)) setActionError(safeActionMessage(error));
     } finally {
@@ -555,14 +562,14 @@ export default function SellerWorkspacePage() {
 
   return (
     <div className="space-y-6">
-      <WorkspaceOverview connections={connections} view={view} onViewChange={(nextView) => { setR2Target(undefined); clearSensitive(); setActionError(null); setDisconnectConfirmation(null); setView(nextView); }} />
+      <WorkspaceOverview connections={currentConnections} view={view} onViewChange={(nextView) => { setR2Target(undefined); clearSensitive(); setActionError(null); setDisconnectConfirmation(null); setView(nextView); }} />
       <WorkspacePanel active={view === 'data'}>{capabilities?.master.enabled && capabilities.sources?.enabled && capabilities.sources.status === 'available' ? <SavedWorkspaceData connections={connections} enabled={isStorageDiscoveryAvailable(capabilities)} /> : <WorkspaceData connections={connections} enabled={capabilities !== null && isStorageDiscoveryAvailable(capabilities)} />}</WorkspacePanel>
       <WorkspacePanel active={view === 'listing'}>{capabilities?.master.enabled && capabilities?.drafts?.enabled && capabilities.drafts.status === 'available' ? <SavedListingEditor active={view === 'listing'} assistant={capabilities.listing_assistant?.enabled && capabilities.listing_assistant.status === 'available' ? listingAssistant : undefined} /> : <SellerListingEditor active={view === 'listing'} assistant={capabilities?.master.enabled && capabilities.listing_assistant?.enabled && capabilities.listing_assistant.status === 'available' ? listingAssistant : undefined} />}</WorkspacePanel>
       <WorkspacePanel active={view === 'manage'}><SellerPublications active={view === 'manage'} enabled={capabilities?.master.enabled === true && capabilities.review?.enabled === true && capabilities.review.status === 'available'} /></WorkspacePanel>
       <WorkspacePanel active={view === 'review'}><SellerReview active={view === 'review'} enabled={capabilities?.master.enabled === true && capabilities.review?.enabled === true && capabilities.review.status === 'available'} /></WorkspacePanel>
       <WorkspacePanel active={view === 'storage'}>
-      {capabilities && <SellerJourney capabilities={capabilities} connected={connections.some((connection) => connection.status === 'verified')} />}
-      <StorageProviders capabilities={capabilities} busy={busyAction} onConnectAWS={handleCreate} onConnectR2={() => {clearSensitive();setR2Target(null);}} />
+      {capabilities && <SellerJourney capabilities={capabilities} connected={currentConnections.some((connection) => connection.status === 'verified')} />}
+      <StorageProviders capabilities={capabilities} busy={busyAction} onConnectAWS={handleCreate} onConnectR2={() => {clearSensitive();setR2Target(partitionConnections(connections).current.find(connection => connection.provider === 'r2' && connection.status === 'pending_authorization') ?? null);}} />
       {view === 'storage' && r2Target !== undefined && <R2ConnectionForm key={r2Target?.id ?? 'new-r2'} connection={r2Target} onClose={() => setR2Target(undefined)} onSaved={saved => {setConnections(current => [...current.filter(item => item.id !== saved.id),saved]);setR2Target(undefined);}} />}
 
       {actionError && (
@@ -699,19 +706,19 @@ export default function SellerWorkspacePage() {
         </section>
       )}
 
-      {connections.length === 0 ? (
+      {currentConnections.length === 0 ? (
         <div className="rounded-xl border border-gray-200 bg-white p-12 text-center shadow-sm">
-          <h2 className="text-lg font-medium text-gray-900">No AWS connections</h2>
+          <h2 className="text-lg font-medium text-gray-900">No active storage connections</h2>
           <p className="mx-auto mt-2 max-w-lg text-sm leading-6 text-gray-500">Start with Add AWS connection. You will need access to your AWS account, the bucket containing your data, and the folder you want to connect.</p>
           <p className="mt-4 text-xs text-gray-500">Connecting storage does not publish your data.</p>
         </div>
       ) : (
         <section className="space-y-4" aria-label="Storage connections">
-          {connections.map((connection) => {
+          {currentConnections.map((connection) => {
             const status = STATUS_PRESENTATION[connection.status];
             const terminal = ['expired', 'revoked', 'disabled'].includes(connection.status);
             const rotationPending = connection.rotation_substate === 'pending_verification';
-            const awaitingSetup = connection.provider === 'aws' && connection.status === 'pending_authorization';
+            const awaitingSetup = connection.status === 'pending_authorization';
             const providerLabel=connection.provider === 'r2' ? 'Cloudflare R2' : 'AWS S3';
             return (
               <article key={connection.id} className="rounded-xl border border-gray-200 bg-white p-6 shadow-sm">
@@ -729,7 +736,7 @@ export default function SellerWorkspacePage() {
                     {awaitingSetup && (
                       <button
                         type="button"
-                        onClick={() => handleOpenAuthorization(connection)}
+                        onClick={() => connection.provider === 'r2' ? setR2Target(connection) : handleOpenAuthorization(connection)}
                         disabled={busyAction !== null}
                         className="rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50 disabled:opacity-50"
                       >
@@ -739,7 +746,7 @@ export default function SellerWorkspacePage() {
                     {connection.status === 'verified' && rotationPending && (
                       <button
                         type="button"
-                        onClick={() => handleOpenAuthorization(connection)}
+                        onClick={() => connection.provider === 'r2' ? setR2Target(connection) : handleOpenAuthorization(connection)}
                         disabled={busyAction !== null}
                         className="rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50 disabled:opacity-50"
                       >
@@ -799,7 +806,7 @@ export default function SellerWorkspacePage() {
                 {disconnectConfirmation === connection.id && (
                   <div className="mt-5 rounded-lg border border-red-200 bg-red-50 p-4" role="alertdialog" aria-label="Confirm disconnect">
                     <p className="text-sm font-medium text-red-900">
-                      Disconnect this AWS connection? ai.market will no longer use this connection.
+                      Disconnect this storage connection? ai.market will no longer use this connection.
                     </p>
                     <div className="mt-3 flex gap-2">
                       <button
@@ -825,6 +832,38 @@ export default function SellerWorkspacePage() {
             );
           })}
         </section>
+      )}
+      {previousConnections.length > 0 && (
+        <div className="border-t border-gray-200 pt-4">
+          <button type="button" aria-expanded={previousExpanded} aria-controls="previous-connections" onClick={() => setPreviousExpanded(value => !value)} className="rounded px-2 py-2 text-sm font-medium text-gray-600 hover:bg-gray-50 focus-visible:outline-2 focus-visible:outline-indigo-600">
+            Previous connections ({previousConnections.length})
+          </button>
+          {previousExpanded && (
+            <ul id="previous-connections" aria-label="Previous connections" className="mt-2 divide-y divide-gray-100">
+              {previousGroups.map(group => {
+                const newest = group[0];
+                return <li key={newest.id} className="px-2 py-3 text-sm text-gray-600">
+                  <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
+                    <span className="break-all font-medium">{connectionName(newest)}</span>
+                    {group.length > 1 && <span>x{group.length}</span>}
+                    <span>{newest.provider === 'aws' ? 'AWS S3' : 'Cloudflare R2'}{newest.prefix ? ` · ${newest.prefix}` : ''}</span>
+                    <span>{STATUS_PRESENTATION[newest.status].label}</span>
+                  </div>
+                  <details className="mt-2 text-xs">
+                    <summary className="cursor-pointer">Connection details</summary>
+                    <ul className="mt-2 space-y-2">
+                      {group.map(connection => <li key={connection.id} className="break-all">
+                        <span>{STATUS_PRESENTATION[connection.status].label} · </span>
+                        <span className="font-mono">{connection.id}</span>
+                        {connection.role_arn && <span> · {connection.role_arn}</span>}
+                      </li>)}
+                    </ul>
+                  </details>
+                </li>;
+              })}
+            </ul>
+          )}
+        </div>
       )}
       </WorkspacePanel>
     </div>

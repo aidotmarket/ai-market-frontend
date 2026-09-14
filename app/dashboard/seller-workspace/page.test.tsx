@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 
-import { act, cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { act, cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { SellerWorkspaceApiError } from '@/api/sellerWorkspace';
 import SellerWorkspacePage from './page';
@@ -52,7 +52,7 @@ const pendingConnection = {
   bucket: null,
   prefix: null,
   region: null,
-  authorization_expires_at: '2026-09-01T00:00:00Z',
+  authorization_expires_at: '2099-09-01T00:00:00Z',
   rotation_deadline: null,
   verified_at: null,
   rotated_at: null,
@@ -87,6 +87,86 @@ describe('SellerWorkspacePage safety boundaries', () => {
     cleanup();
     vi.useRealTimers();
     vi.restoreAllMocks();
+  });
+
+  it('shows usable storage and one pending setup, with duplicate history in compact rows', async () => {
+    const duplicates = ['seller-a', 'seller-b'].flatMap(name => Array.from({ length: 10 }, (_, index) => ({
+      ...pendingConnection, id: `${name}-${index}`, status: 'revoked' as const,
+      bucket: 'synthetic', prefix: name, revoked_at: `2026-09-${String(index + 1).padStart(2, '0')}T00:00:00Z`,
+    })));
+    sellerWorkspaceApi.listSellerWorkspaceConnections.mockResolvedValue([
+      { ...pendingConnection, id: 'verified', status: 'verified', bucket: 'usable' },
+      ...duplicates,
+      { ...pendingConnection, id: 'expired', status: 'expired', bucket: 'expired-setup', expired_at: '2026-09-11T00:00:00Z' },
+      pendingConnection,
+    ]);
+    sellerWorkspaceApi.getSellerWorkspaceAuthorization.mockResolvedValue(authorization);
+    render(<SellerWorkspacePage />);
+    const history = await screen.findByRole('button', { name: 'Previous connections (21)' });
+    expect(history.getAttribute('aria-expanded')).toBe('false');
+    expect(within(screen.getByRole('region', { name: 'Storage connections' })).getAllByRole('article')).toHaveLength(2);
+    expect(screen.getByText('Pending setup')).toBeTruthy();
+    expect(screen.queryByText('synthetic')).toBeNull();
+    expect(screen.getByText('Connected storage').nextElementSibling?.textContent).toBe('1');
+    expect(screen.getByText('Needs attention').nextElementSibling?.textContent).toBe('1');
+    fireEvent.click(history);
+    const rows = within(screen.getByRole('list', { name: 'Previous connections' })).getAllByRole('listitem').filter(item => item.parentElement?.id === 'previous-connections');
+    expect(rows).toHaveLength(3);
+    expect(rows[0].textContent).toContain('expired-setup');
+    expect(screen.getAllByText('x10')).toHaveLength(2);
+    for (const row of rows) expect(within(row).getByText('Connection details')).toBeTruthy();
+    expect(within(screen.getByRole('region', { name: 'Storage connections' })).getAllByRole('article')).toHaveLength(2);
+    fireEvent.click(screen.getByRole('button', { name: 'Add AWS connection' }));
+    await screen.findByText('server-external-id');
+    expect(sellerWorkspaceApi.getSellerWorkspaceAuthorization).toHaveBeenCalledWith('connection-1');
+    expect(sellerWorkspaceApi.createSellerWorkspaceConnection).not.toHaveBeenCalled();
+  });
+
+  it('chooses only the newest unexpired pending setup per provider', async () => {
+    sellerWorkspaceApi.listSellerWorkspaceConnections.mockResolvedValue([
+      { ...pendingConnection, id: 'older', authorization_expires_at: '2098-01-01T00:00:00Z' },
+      { ...pendingConnection, id: 'expired-by-deadline', authorization_expires_at: '2000-01-01T00:00:00Z' },
+      pendingConnection,
+    ]);
+    sellerWorkspaceApi.getSellerWorkspaceAuthorization.mockResolvedValue(authorization);
+    render(<SellerWorkspacePage />);
+    fireEvent.click(await screen.findByRole('button', { name: 'Add AWS connection' }));
+    await screen.findByText('server-external-id');
+    expect(within(screen.getByRole('region', { name: 'Storage connections' })).getAllByRole('article')).toHaveLength(1);
+    expect(screen.getByRole('button', { name: 'Previous connections (2)' })).toBeTruthy();
+    expect(sellerWorkspaceApi.getSellerWorkspaceAuthorization).toHaveBeenCalledWith('connection-1');
+    expect(sellerWorkspaceApi.createSellerWorkspaceConnection).not.toHaveBeenCalled();
+  });
+
+  it.each(['revoked', 'pending_authorization'])('removes disconnected pending setup immediately when the response status is %s', async status => {
+    sellerWorkspaceApi.listSellerWorkspaceConnections.mockResolvedValue([pendingConnection]);
+    sellerWorkspaceApi.disconnectSellerWorkspaceConnection.mockResolvedValue({ connection: { ...pendingConnection, status }, replayed: false });
+    render(<SellerWorkspacePage />);
+    fireEvent.click(await screen.findByRole('button', { name: 'Disconnect' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Confirm disconnect' }));
+    await screen.findByRole('button', { name: 'Previous connections (1)' });
+    expect(screen.queryByText('Pending setup')).toBeNull();
+    expect(screen.queryByRole('region', { name: 'Storage connections' })).toBeNull();
+    expect(screen.getByText('Needs attention').nextElementSibling?.textContent).toBe('0');
+  });
+
+  it('uses terminal timestamps ahead of a stale pending label on reload', async () => {
+    sellerWorkspaceApi.listSellerWorkspaceConnections.mockResolvedValue([{ ...pendingConnection, revoked_at: '2026-09-14T00:00:00Z' }]);
+    render(<SellerWorkspacePage />);
+    await screen.findByRole('button', { name: 'Previous connections (1)' });
+    expect(screen.queryByText('Pending setup')).toBeNull();
+  });
+
+  it('reuses pending R2 setup without creating a new connection', async () => {
+    sellerWorkspaceApi.getSellerWorkspaceCapabilities.mockResolvedValue({
+      ...enabledCapabilities, providers: { ...enabledCapabilities.providers, r2: { ...enabledCapabilities.providers.r2, connect: { enabled: true, status: 'available', reason: 'enabled' } } },
+    });
+    sellerWorkspaceApi.listSellerWorkspaceConnections.mockResolvedValue([{ ...pendingConnection, provider: 'r2', bucket: 'existing-r2', region: 'default' }]);
+    render(<SellerWorkspacePage />);
+    fireEvent.click(await screen.findByRole('button', { name: 'Add Cloudflare R2 connection' }));
+    expect((screen.getByLabelText('Bucket name') as HTMLInputElement).value).toBe('existing-r2');
+    expect(screen.getByRole('button', { name: 'Verify and replace keys' })).toBeTruthy();
+    expect(sellerWorkspaceApi.createSellerWorkspaceConnection).not.toHaveBeenCalled();
   });
 
   it('can prepare a private draft before connecting AWS when the backend enables drafts', async () => {
@@ -254,16 +334,10 @@ describe('SellerWorkspacePage safety boundaries', () => {
   });
 
   it('replaces the active deadline timer without clearing a later ceremony early', async () => {
-    sellerWorkspaceApi.createSellerWorkspaceConnection
-      .mockResolvedValueOnce({ connection: pendingConnection, authorization })
-      .mockResolvedValueOnce({
-        connection: { ...pendingConnection, id: 'connection-2' },
-        authorization: {
-          ...authorization,
-          external_id: 'replacement-external-id',
-          expires_in_seconds: 120,
-        },
-      });
+    sellerWorkspaceApi.createSellerWorkspaceConnection.mockResolvedValue({ connection: pendingConnection, authorization });
+    sellerWorkspaceApi.getSellerWorkspaceAuthorization.mockResolvedValue({
+      ...authorization, external_id: 'replacement-external-id', expires_in_seconds: 120,
+    });
 
     render(<SellerWorkspacePage />);
     const createButton = await screen.findByRole('button', { name: 'Add AWS connection' });
@@ -312,8 +386,8 @@ describe('SellerWorkspacePage safety boundaries', () => {
 
     render(<SellerWorkspacePage />);
 
-    await screen.findByText('Expired');
-    expect(screen.getByText(/expired and cannot be verified/i)).not.toBeNull();
+    fireEvent.click(await screen.findByRole('button', { name: 'Previous connections (1)' }));
+    expect(screen.getAllByText('Expired').length).toBeGreaterThan(0);
     expect(screen.queryByRole('button', { name: 'Open setup values' })).toBeNull();
     expect(screen.queryByRole('button', { name: 'Verify AWS connection' })).toBeNull();
     expect(screen.queryByRole('button', { name: 'Disconnect' })).toBeNull();
