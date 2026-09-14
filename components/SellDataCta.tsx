@@ -4,7 +4,7 @@ import Link from 'next/link';
 import { useAuthStore } from '@/store/auth';
 
 type SellDataCtaProps = {
-  variant: 'hero' | 'inline' | 'final';
+  variant: 'hero' | 'inline' | 'final' | 'cloud' | 'self-hosted';
   className?: string;
 };
 
@@ -29,7 +29,10 @@ function AuthenticatedCtas({
 }) {
   return (
     <>
-      <Link href="/aim-data" className={primaryClassName}>
+      <Link href="/dashboard/seller-workspace" className={primaryClassName}>
+        Open Seller Workspace
+      </Link>
+      <Link href="/aim-data" className={secondaryClassName}>
         Set up AIM Data
       </Link>
       <Link href="/dashboard/listings" className={secondaryClassName}>
@@ -42,9 +45,23 @@ function AuthenticatedCtas({
 export default function SellDataCta({ variant, className }: SellDataCtaProps) {
   const { isAuthenticated } = useAuthStore();
 
+  if (variant === 'cloud' || variant === 'self-hosted') {
+    const href = variant === 'self-hosted'
+      ? '/aim-data'
+      : isAuthenticated
+        ? '/dashboard/seller-workspace'
+        : `/register?redirect=${encodeURIComponent('/dashboard/seller-workspace')}`;
+
+    return (
+      <Link href={href} className={withClassName(greenPrimaryClassName, className)}>
+        {variant === 'self-hosted' ? 'Set up AIM Data' : isAuthenticated ? 'Open Seller Workspace' : 'Create Your Account'}
+      </Link>
+    );
+  }
+
   if (variant === 'hero') {
     return (
-      <div className={withClassName('mt-8 flex flex-col gap-4 sm:flex-row sm:items-center', className)}>
+      <div className={withClassName('mt-8 flex flex-col gap-4 sm:flex-row sm:flex-wrap sm:items-center', className)}>
         {isAuthenticated ? (
           <AuthenticatedCtas primaryClassName={greenPrimaryClassName} />
         ) : (
@@ -67,7 +84,7 @@ export default function SellDataCta({ variant, className }: SellDataCtaProps) {
         </h2>
         <p className="mt-4 max-w-3xl text-base leading-7 text-gray-600">
           {isAuthenticated
-            ? 'Install AIM Data on your infrastructure, review what it writes, and publish.'
+            ? 'Connect your cloud bucket or set up AIM Data on your own infrastructure. Review your listing, approve it, and publish.'
             : 'Start as a seller. List free and pay nothing until a sale clears.'}
         </p>
         {isAuthenticated ? (

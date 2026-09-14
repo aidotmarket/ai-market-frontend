@@ -3,13 +3,13 @@ import type { Metadata } from 'next';
 import SellDataCta from '@/components/SellDataCta';
 
 export const metadata: Metadata = {
-  title: { absolute: 'Sell data on ai.market with AIM Data' },
+  title: { absolute: 'Sell data on ai.market' },
   description:
-    'Install AIM Data on your infrastructure. List your datasets without giving up custody. Stripe payouts on every transaction.',
+    'Sell data from your own AWS S3 or Cloudflare R2 bucket, or from your own machine with AIM Data. Review and publish your listing on ai.market.',
   openGraph: {
-    title: 'Sell data on ai.market with AIM Data',
+    title: 'Sell data on ai.market',
     description:
-      'Install AIM Data on your infrastructure. List your datasets without giving up custody. Stripe payouts on every transaction.',
+      'Sell data from your own AWS S3 or Cloudflare R2 bucket, or from your own machine with AIM Data. Review and publish your listing on ai.market.',
     url: 'https://ai.market/sell-data',
     siteName: 'ai.market',
     images: ['/og/sell-data.png'],
@@ -17,22 +17,20 @@ export const metadata: Metadata = {
   },
   twitter: {
     card: 'summary_large_image',
-    title: 'Sell data on ai.market with AIM Data',
+    title: 'Sell data on ai.market',
     description:
-      'Install AIM Data on your infrastructure. List your datasets without giving up custody. Stripe payouts on every transaction.',
+      'Sell data from your own AWS S3 or Cloudflare R2 bucket, or from your own machine with AIM Data. Review and publish your listing on ai.market.',
     images: ['/og/sell-data.png'],
   },
 };
 
 const SELL_DATA_JSONLD = {
   '@context': 'https://schema.org',
-  '@type': 'SoftwareApplication',
-  name: 'AIM Data',
-  applicationCategory: 'BusinessApplication',
-  operatingSystem: 'Linux, macOS',
+  '@type': 'Service',
+  name: 'Sell data on ai.market',
   url: 'https://ai.market/sell-data',
   description:
-    'Install AIM Data on your infrastructure. List your datasets without giving up custody. Stripe payouts on every transaction.',
+    'Sell data from your own AWS S3 or Cloudflare R2 bucket, or from your own machine with AIM Data. Review and publish your listing on ai.market.',
   provider: {
     '@type': 'Organization',
     name: 'ai.market',
@@ -47,9 +45,9 @@ const steps = [
       'Getting a data product in front of buyers normally costs a marketing budget. Here it is part of the listing. allAI writes your metadata in the formats AI search reads, publishes it everywhere agents look, and answers buyer questions for you around the clock. You pay nothing until a sale clears, and then it is 5%.',
   },
   {
-    title: 'YOUR DATA NEVER LEAVES',
+    title: 'YOUR DATA STAYS UNDER YOUR CONTROL',
     description:
-      'Install AIM Data on your own infrastructure. It profiles what you have, scans it for PII, scores the quality and writes the listing. You review and click publish. The data itself stays exactly where it is, and when a sale closes it moves peer-to-peer, encrypted, straight to the buyer.',
+      'Keep your data in your own cloud bucket or on your own machine. Review and approve the prepared listing before you publish. When a sale closes, buyers download directly from your bucket through time-limited links, or AIM Data delivers it peer-to-peer over an encrypted connection. ai.market never stores your data.',
   },
   {
     title: "YOU DON'T CHASE LEADS",
@@ -60,9 +58,9 @@ const steps = [
 
 const features = [
   {
-    title: 'Local-first processing.',
+    title: 'Your choice of hosting.',
     description:
-      'Your data never leaves your infrastructure. Profiling, PII scanning, and quality scoring all run on your own machine.',
+      'Connect your AWS S3 or Cloudflare R2 bucket read-only in the Seller Workspace, with nothing to install. Or run AIM Data on your own machine, where profiling, PII scanning, and quality scoring happen locally.',
   },
   {
     title: 'AI-assisted listings.',
@@ -135,9 +133,53 @@ export default function SellDataPage() {
               List once. Get found everywhere.
             </h1>
             <p className="mt-5 max-w-3xl text-lg leading-8 text-gray-600">
-              Your data stays on your infrastructure. Your listing travels the world. Every listing is built to be found by AI assistants and search engines globally, so buyers discover your data without ever visiting ai.market.
+              Your data stays in your own cloud bucket or on your own machine. Your listing travels the world. Every listing is built to be found by AI assistants and search engines globally, so buyers discover your data without ever visiting ai.market.
             </p>
             <SellDataCta variant="hero" />
+          </div>
+        </div>
+      </section>
+
+      <section className="bg-gray-50 py-16 sm:py-20" aria-labelledby="hosting-heading">
+        <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
+          <h2 id="hosting-heading" className="text-3xl font-extrabold tracking-tight text-gray-900">
+            Where is your data?
+          </h2>
+          <p className="mt-4 max-w-3xl text-lg leading-8 text-gray-600">
+            Is your data hosted in the cloud on AWS or Cloudflare, or will you host it on your own servers?
+          </p>
+          <div className="mt-10 grid gap-6 md:grid-cols-2">
+            <article className="flex flex-col rounded-2xl border border-gray-200 bg-white p-6 shadow-sm sm:p-8" aria-labelledby="cloud-heading">
+              <h3 id="cloud-heading" className="text-xl font-bold tracking-tight text-gray-900">
+                My data is in the cloud, or I want to put it in the cloud.
+              </h3>
+              <p className="mt-4 text-base leading-7 text-gray-600">
+                Your data stays in your own AWS S3 or Cloudflare R2 bucket. There is nothing to install.
+                Connect the bucket read-only in the Seller Workspace. allAI reads the structure and
+                prepares the listing. You review, approve and publish.
+              </p>
+              <p className="mt-4 mb-6 text-base leading-7 text-gray-600">
+                Buyers purchase on ai.market and download directly from your bucket through
+                time-limited links. ai.market never stores your data.
+              </p>
+              <SellDataCta variant="cloud" className="mt-auto self-start" />
+            </article>
+            <article className="flex flex-col rounded-2xl border border-gray-200 bg-white p-6 shadow-sm sm:p-8" aria-labelledby="self-hosted-heading">
+              <h3 id="self-hosted-heading" className="text-xl font-bold tracking-tight text-gray-900">
+                I will host it on my own infrastructure.
+              </h3>
+              <p className="mt-4 text-base leading-7 text-gray-600">
+                Install AIM Data on your own machine or server. It runs sandboxed, profiles your
+                data, scans for PII, scores quality locally and writes the listing. You review,
+                approve and publish.
+              </p>
+              <p className="mt-4 mb-6 text-base leading-7 text-gray-600">
+                AIM Data must run all the time. It is the gateway that delivers your data
+                peer-to-peer, encrypted, to the buyer when a sale closes. Your data stays on
+                your machine until delivery. ai.market never stores your data.
+              </p>
+              <SellDataCta variant="self-hosted" className="mt-auto self-start" />
+            </article>
           </div>
         </div>
       </section>
@@ -164,7 +206,7 @@ export default function SellDataPage() {
             ))}
           </ol>
           <p className="mt-8 text-base leading-7 text-gray-600">
-            The local scan earns the buyer-facing verified shape label.{' '}
+            For AIM Data listings, the local scan earns the buyer-facing verified shape label.{' '}
             <Link href="/verified" className="font-semibold text-[#0F6E56] hover:text-[#0c5a47]">
               How the verified label works →
             </Link>
@@ -179,7 +221,7 @@ export default function SellDataPage() {
               What you get
             </p>
             <h2 id="features-heading" className="mt-3 text-3xl font-extrabold tracking-tight text-gray-900">
-              The listing workflow stays local.
+              Your data, your hosting.
             </h2>
           </div>
 
