@@ -1,0 +1,15 @@
+{
+  "baseline": "b008558162cee004b08df0578eca2615837950f0",
+  "snapshots": {
+    "app/listings/[slug]/__snapshots__/page.test.tsx.snap": {
+      "baseline_sha256": "31fbba638014615d7060d732b3bff587ca5dae6b6be83ae7ac40cf4fb932e5f7",
+      "current_sha256": "31fbba638014615d7060d732b3bff587ca5dae6b6be83ae7ac40cf4fb932e5f7",
+      "byte_identical": true
+    },
+    "components/listings/__snapshots__/AtAGlance.test.tsx.snap": {
+      "baseline_sha256": "3e3f3908a0821a2e3853599d82a92c225e9ae9d8684b5e40fd60731fd2010cc2",
+      "current_sha256": "3e3f3908a0821a2e3853599d82a92c225e9ae9d8684b5e40fd60731fd2010cc2",
+      "byte_identical": true
+    }
+  }
+}

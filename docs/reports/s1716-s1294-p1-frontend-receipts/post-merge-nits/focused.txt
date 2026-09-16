@@ -1,0 +1,12 @@
+$ rtk proxy npx vitest run components/listings 'app/listings/[slug]/page.test.tsx'
+
+ RUN  v4.1.8 /private/var/tmp/koskadeux/minimal-bridge-worktrees/db44a3ded8bd-c63993
+
+
+ Test Files  6 passed (6)
+      Tests  66 passed (66)
+   Start at  18:09:46
+   Duration  786ms (transform 204ms, setup 0ms, import 476ms, tests 647ms, environment 1.46s)
+
+
+Exit code: 0

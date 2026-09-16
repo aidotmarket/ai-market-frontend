@@ -3,7 +3,7 @@
 import {useEffect, useRef, useState} from 'react';
 import axios from 'axios';
 import {approveSummary, fetchSummaryPreview, regenerateSummary, withdrawSummary, type SummaryPreview} from '@/lib/api';
-import AtAGlance from './AtAGlance';
+import AtAGlance, {hasSupportedSummaryFields} from './AtAGlance';
 
 function requestId(): string {
   if (typeof crypto.randomUUID === 'function') return crypto.randomUUID();
@@ -76,6 +76,8 @@ export default function SellerAtAGlance({listingId, active = true, revision = 0}
     }
   }
 
+  const hasBuyerFields = hasSupportedSummaryFields(preview?.at_a_glance);
+
   return <section aria-label="Review At a glance" aria-busy={busy} className="min-w-0 space-y-4 rounded-xl border border-gray-200 bg-white p-5">
     <h2 className="text-lg font-semibold text-gray-900">Review At a glance</h2>
     {busy && <p role="status">Loading summary…</p>}
@@ -83,13 +85,14 @@ export default function SellerAtAGlance({listingId, active = true, revision = 0}
     {error && <p role="alert" className="text-sm text-red-800">{error}</p>}
     {preview && <>
       <p role="status" className="text-sm text-gray-700">{preview.state === 'approved' ? 'Approved. This summary is shown to buyers.' : 'Review the summary and approve it to show it to buyers'}</p>
+      {preview.state !== 'approved' && !hasBuyerFields && <p className="text-sm text-gray-700">Nothing to show buyers yet. Add more listing details or regenerate.</p>}
       <AtAGlance audience="seller" summary={preview.at_a_glance} />
       <p className="text-sm text-gray-700">{preview.approval_text}</p>
       <div className="flex flex-wrap gap-3">
         <button type="button" disabled={busy || !active} onClick={() => act('regenerate')} className="rounded-lg border border-gray-300 px-4 py-2.5 text-sm disabled:opacity-50">Regenerate</button>
         {preview.state === 'approved' ?
           <button type="button" disabled={busy || !active} onClick={() => act('withdraw')} className="rounded-lg border border-gray-300 px-4 py-2.5 text-sm disabled:opacity-50">Withdraw</button> :
-          <button type="button" disabled={busy || !active} onClick={() => act('approve')} className="rounded-lg bg-indigo-700 px-4 py-2.5 text-sm font-semibold text-white disabled:opacity-50">Approve At a glance</button>}
+          <button type="button" disabled={busy || !active || !hasBuyerFields} onClick={() => act('approve')} className="rounded-lg bg-indigo-700 px-4 py-2.5 text-sm font-semibold text-white disabled:opacity-50">Approve At a glance</button>}
       </div>
     </>}
     {!preview && !busy && active && <button type="button" onClick={() => setRetry(value => value + 1)} className="text-sm text-indigo-700 underline">Reload summary</button>}

@@ -1,0 +1,40 @@
+$ rtk proxy npx vitest run components/listings/SellerAtAGlance.test.tsx -t 'disables approval for field-empty pending'
+
+ RUN  v4.1.8 /private/var/tmp/koskadeux/minimal-bridge-worktrees/db44a3ded8bd-c63993
+
+ ❯ components/listings/SellerAtAGlance.test.tsx (19 tests | 3 failed | 16 skipped) 70ms
+   × disables approval for field-empty pending summary 0 while allowing regeneration 58ms
+   × disables approval for field-empty pending summary 1 while allowing regeneration 6ms
+   × disables approval for field-empty pending summary 2 while allowing regeneration 5ms
+
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 3 ⎯⎯⎯⎯⎯⎯⎯
+
+ FAIL  components/listings/SellerAtAGlance.test.tsx > disables approval for field-empty pending summary 0 while allowing regeneration
+ FAIL  components/listings/SellerAtAGlance.test.tsx > disables approval for field-empty pending summary 1 while allowing regeneration
+ FAIL  components/listings/SellerAtAGlance.test.tsx > disables approval for field-empty pending summary 2 while allowing regeneration
+AssertionError: expected false to be true // Object.is equality
+
+- Expected
++ Received
+
+- true
++ false
+
+ ❯ components/listings/SellerAtAGlance.test.tsx:145:44
+    143|   render(<SellerAtAGlance listingId="listing" />);
+    144|   const approve = await screen.findByRole('button', {name: 'Approve At…
+    145|   expect(approve.hasAttribute('disabled')).toBe(true);
+       |                                            ^
+    146|   expect(screen.getByText('Nothing to show buyers yet. Add more listin…
+    147|   fireEvent.click(approve);
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/3]⎯
+
+
+ Test Files  1 failed (1)
+      Tests  3 failed | 16 skipped (19)
+   Start at  18:09:45
+   Duration  521ms (transform 41ms, setup 0ms, import 117ms, tests 70ms, environment 261ms)
+
+
+Exit code: 1

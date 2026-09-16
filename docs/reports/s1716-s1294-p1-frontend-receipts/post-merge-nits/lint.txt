@@ -1,0 +1,29 @@
+$ rtk proxy npm run lint
+
+> ai-market-frontend@0.0.0 lint
+> eslint .
+
+
+/private/var/tmp/koskadeux/minimal-bridge-worktrees/db44a3ded8bd-c63993/app/blog/[slug]/page.tsx
+  57:5  warning  Using `<img>` could result in slower LCP and higher bandwidth. Consider using `<Image />` from `next/image` or a custom image loader to automatically optimize images. This may incur additional usage or cost from your provider. See: https://nextjs.org/docs/messages/no-img-element  @next/next/no-img-element
+
+/private/var/tmp/koskadeux/minimal-bridge-worktrees/db44a3ded8bd-c63993/app/dashboard/settings/page.tsx
+  404:17  warning  Using `<img>` could result in slower LCP and higher bandwidth. Consider using `<Image />` from `next/image` or a custom image loader to automatically optimize images. This may incur additional usage or cost from your provider. See: https://nextjs.org/docs/messages/no-img-element  @next/next/no-img-element
+
+/private/var/tmp/koskadeux/minimal-bridge-worktrees/db44a3ded8bd-c63993/app/l/[code]/page.tsx
+  107:11  warning  Using `<img>` could result in slower LCP and higher bandwidth. Consider using `<Image />` from `next/image` or a custom image loader to automatically optimize images. This may incur additional usage or cost from your provider. See: https://nextjs.org/docs/messages/no-img-element  @next/next/no-img-element
+
+/private/var/tmp/koskadeux/minimal-bridge-worktrees/db44a3ded8bd-c63993/components/Layout.tsx
+  104:15  warning  Using `<img>` could result in slower LCP and higher bandwidth. Consider using `<Image />` from `next/image` or a custom image loader to automatically optimize images. This may incur additional usage or cost from your provider. See: https://nextjs.org/docs/messages/no-img-element  @next/next/no-img-element
+  197:15  warning  Using `<img>` could result in slower LCP and higher bandwidth. Consider using `<Image />` from `next/image` or a custom image loader to automatically optimize images. This may incur additional usage or cost from your provider. See: https://nextjs.org/docs/messages/no-img-element  @next/next/no-img-element
+
+/private/var/tmp/koskadeux/minimal-bridge-worktrees/db44a3ded8bd-c63993/components/listings/SellerShareControls.tsx
+  192:19  warning  Using `<img>` could result in slower LCP and higher bandwidth. Consider using `<Image />` from `next/image` or a custom image loader to automatically optimize images. This may incur additional usage or cost from your provider. See: https://nextjs.org/docs/messages/no-img-element  @next/next/no-img-element
+
+/private/var/tmp/koskadeux/minimal-bridge-worktrees/db44a3ded8bd-c63993/components/listings/ShareKitModal.tsx
+  65:13  warning  Using `<img>` could result in slower LCP and higher bandwidth. Consider using `<Image />` from `next/image` or a custom image loader to automatically optimize images. This may incur additional usage or cost from your provider. See: https://nextjs.org/docs/messages/no-img-element  @next/next/no-img-element
+
+✖ 7 problems (0 errors, 7 warnings)
+
+
+Exit code: 0
