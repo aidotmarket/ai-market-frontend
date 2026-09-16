@@ -1,0 +1,643 @@
+COMMAND: ['rtk', 'proxy', 'npx', 'vitest', 'run', 'components/listings/SellerAtAGlance.test.tsx', '--maxWorkers=2']
+EXIT: 1
+
+ RUN  v4.1.8 /private/var/tmp/koskadeux/minimal-bridge-worktrees/7d470a7af0c4-b6ad78
+
+ ❯ components/listings/SellerAtAGlance.test.tsx (13 tests | 5 failed) 2274ms
+   × approves the exact preview identifiers with a new UUID and no sample permission 77ms
+   × shows approved state and withdraws using the same exact identifiers 70ms
+   × regenerates in the preview locale and uses the returned generation for approval 1079ms
+   × reloads on 409 and requires a fresh explicit approval of the new identifiers 77ms
+   × mints a fresh retry ID when the preview hash changed after a network failure 167ms
+
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 5 ⎯⎯⎯⎯⎯⎯⎯
+
+ FAIL  components/listings/SellerAtAGlance.test.tsx > approves the exact preview identifiers with a new UUID and no sample permission
+AssertionError: expected { …(6) } to deeply equal { …(6) }
+
+- Expected
++ Received
+
+@@ -1,7 +1,7 @@
+  {
+-   "render_hash": "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
++   "render_hash": "wrong-render-hash",
+    "request_id": "e7cf4de8-4db2-472e-a3df-dec93ec76c45",
+    "sample_decision": "none",
+    "source_revision": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+    "summary_hash": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+    "summary_id": "11111111-1111-4111-8111-111111111111",
+
+ ❯ components/listings/SellerAtAGlance.test.tsx:30:19
+
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/5]⎯
+
+ FAIL  components/listings/SellerAtAGlance.test.tsx > shows approved state and withdraws using the same exact identifiers
+AssertionError: expected "vi.fn()" to be called with arguments: [ Array(3) ]
+
+Received:
+
+  1st vi.fn() call:
+
+  [
+    "listing",
+-   ObjectContaining {
+-     "render_hash": "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
++   {
++     "render_hash": "wrong-render-hash",
++     "request_id": "f4c1fdba-e86a-45b2-97ac-28322c87c0f4",
+      "sample_decision": "none",
+      "source_revision": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+      "summary_hash": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+      "summary_id": "11111111-1111-4111-8111-111111111111",
+    },
+-   Any<AbortSignal>,
++   AbortSignal {
++     Symbol(kEvents): Map {},
++     Symbol(events.maxEventTargetListeners): 0,
++     Symbol(events.maxEventTargetListenersWarned): false,
++     Symbol(kHandlers): Map {},
++     Symbol(kAborted): false,
++     Symbol(kReason): undefined,
++     Symbol(kComposite): false,
++   },
+  ]
+
+
+Number of calls: 1
+
+ ❯ components/listings/SellerAtAGlance.test.tsx:38:31
+
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[2/5]⎯
+
+ FAIL  components/listings/SellerAtAGlance.test.tsx > regenerates in the preview locale and uses the returned generation for approval
+AssertionError: expected "vi.fn()" to be called with arguments: [ Array(3) ]
+
+Received:
+
+  1st vi.fn() call:
+
+  [
+    "listing",
+-   ObjectContaining {
+-     "render_hash": "dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd",
++   {
++     "render_hash": "wrong-render-hash",
++     "request_id": "8356da76-2bef-45bf-b849-dff8b3fe4668",
++     "sample_decision": "none",
++     "source_revision": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
++     "summary_hash": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
++     "summary_id": "11111111-1111-4111-8111-111111111111",
++   },
++   AbortSignal {
++     Symbol(kEvents): Map {},
++     Symbol(events.maxEventTargetListeners): 0,
++     Symbol(events.maxEventTargetListenersWarned): false,
++     Symbol(kHandlers): Map {},
++     Symbol(kAborted): false,
++     Symbol(kReason): undefined,
++     Symbol(kComposite): false,
+    },
+-   Any<AbortSignal>,
+  ]
+
+
+Number of calls: 1
+
+
+Ignored nodes: comments, script, style
+[36m<html>[39m
+  [36m<head />[39m
+  [36m<body>[39m
+    [36m<div>[39m
+      [36m<section[39m
+        [33maria-busy[39m=[32m"false"[39m
+        [33maria-label[39m=[32m"Review At a glance"[39m
+        [33mclass[39m=[32m"min-w-0 space-y-4 rounded-xl border border-gray-200 bg-white p-5"[39m
+      [36m>[39m
+        [36m<h2[39m
+          [33mclass[39m=[32m"text-lg font-semibold text-gray-900"[39m
+        [36m>[39m
+          [0mReview At a glance[0m
+        [36m</h2>[39m
+        [36m<p[39m
+          [33mclass[39m=[32m"text-sm text-gray-700"[39m
+          [33mrole[39m=[32m"status"[39m
+        [36m>[39m
+          [0mReview the summary and approve it to show it to buyers[0m
+        [36m</p>[39m
+        [36m<section[39m
+          [33maria-label[39m=[32m"At a glance"[39m
+          [33mclass[39m=[32m"min-w-0 space-y-4 rounded-xl border border-gray-200 bg-white p-5 break-words"[39m
+        [36m>[39m
+          [36m<h2[39m
+            [33mclass[39m=[32m"text-lg font-semibold text-gray-900"[39m
+          [36m>[39m
+            [0mAt a glance[0m
+          [36m</h2>[39m
+          [36m<div[39m
+            [33mclass[39m=[32m"min-w-0"[39m
+          [36m>[39m
+            [36m<h3[39m
+              [33mclass[39m=[32m"text-sm font-medium text-gray-900"[39m
+            [36m>[39m
+              [0mWhat one row represents[0m
+            [36m</h3>[39m
+            [36m<p[39m
+              [33mclass[39m=[32m"text-sm text-gray-700"[39m
+            [36m>[39m
+              [0mOne recorded sale[0m
+            [36m</p>[39m
+            [36m<p[39m
+              [33mclass[39m=[32m"mt-1 text-xs text-gray-600"[39m
+            [36m>[39m
+              [0mSource: [0m
+              [0mgenerated and checked[0m
+            [36m</p>[39m
+          [36m</div>[39m
+          [36m<div[39m
+            [33mclass[39m=[32m"min-w-0"[39m
+          [36m>[39m
+            [36m<h3[39m
+              [33mclass[39m=[32m"text-sm font-medium text-gray-900"[39m
+            [36m>[39m
+              [0mIntended uses[0m
+            [36m</h3>[39m
+            [36m<ul[39m
+              [33mclass[39m=[32m"list-inside list-disc text-sm text-gray-700"[39m
+            [36m>[39m
+              [36m<li>[39m
+                [0mSales analysis[0m
+              [36m</li>[39m
+            [36m</ul>[39m
+            [36m<p[39m
+              [33mclass[39m=[32m"mt-1 text-xs text-gray-600"[39m
+            [36m>[39m
+              [0mSource: [0m
+              [0mentered by you[0m
+            [36m</p>[39m
+          [36m</div>[39m
+          [36m<div[39m
+            [33mclass[39m=[32m"min-w-0"[39m
+          [36m>[39m
+            [36m<h3[39m
+              [33mclass[39m=[32m"text-sm font-medium text-gray-900"[39m
+            [36m>[39m
+              [0mKey fields[0m
+            [36m</h3>[39m
+            [36m<div[39m
+              [33maria-label[39m=[32m"Key fields schema"[39m
+              [33mclass[39m=[32m"max-w-full overflow-x-auto"[39m
+              [33mrole[39m=[32m"region"[39m
+              [33mtabindex[39m=[32m"0"[39m
+            [36m>[39m
+              [36m<table[39m
+                [33mclass[39m=[32m"min-w-full text-sm border border-gray-200 rounded-lg"[39m
+              [36m>[39m
+                [36m<thead>[39m
+                  [36m<tr[39m
+                    [33mclass[39m=[32m"bg-gray-50"[39m
+                  [36m>[39m
+                    [36m<th[39m
+                      [33mclass[39m=[32m"px-3 py-2 text-left font-medium text-gray-700 border-b"[39m
+                      [33mscope[39m=[32m"col"[39m
+                    [36m>[39m
+                      [0mName[0m
+                    [36m</th>[39m
+                    [36m<th[39m
+                      [33mclass[39m=[32m"px-3 py-2 text-left font-medium text-gray-700 border-b"[39m
+                      [33mscope[39m=[32m"col"[39m
+                    [36m>[39m
+                      [0mType[0m
+                    [36m</th>[39m
+                    [36m<th[39m
+                      [33mclass[39m=[32m"px-3 py-2 text-left font-medium text-gray-700 border-b"[39m
+                      [33mscope[39m=[32m"col"[39m
+                    [36m>[39m
+                      [0mDescription[0m
+                    [36m</th>[39m
+                    [36m<th[39m
+                      [33mclass[39m=[32m"px-3 py-2 text-left font-medium text-gray-700 border-b"[39m
+                      [33mscope[39m=[32m"col"[39m
+                    [36m>[39m
+                      [0mUnit[0m
+                    [36m</th>[39m
+                  [36m</tr>[39m
+                [36m</thead>[39m
+                [36m<tbody>[39m
+                  [36m<tr[39m
+                    [33mclass[39m=[32m"border-b border-gray-100 last:border-0"[39m
+                  [36m>[39m
+                    [36m<th[39m
+                      [33mclass[39m=[32m"px-3 py-1.5 text-left font-mono font-normal text-gray-900"[39m
+                      [33mscope[39m=[32m"row"[39m
+                    [36m>[39m
+                      [0mamount[0m
+                    [36m</th>[39m
+                    [36m<td[39m
+                      [33mclass[39m=[32m"px-3 py-1.5 text-gray-600"[39m
+                    [36m>[39m
+                      [0mdecimal[0m
+                    [36m</td>[39m
+                    [36m<td[39m
+                      [33mclass[39m=[32m"px-3 py-1.5"[39m
+                    [36m>[39m
+                      [0mSale amount[0m
+                    [36m</td>[39m
+                    [36m<td[39m
+                      [33mclass[39m=[32m"px-3 py-1.5"[39m
+                    [36m>[39m
+                      [0mEUR[0m
+                    [36m</td>[39m
+                  [36m</tr>[39m
+                  [36m<tr[39m
+                    [33mclass[39m=[32m"border-b border-gray-100 last:border-0"[39m
+                  [36m>[39m
+                    [36m<th[39m
+                      [33mclass[39m=[32m"px-3 py-1.5 text-left font-mono font-normal text-gray-900"[39m
+                      [33mscope[39m=[32m"row"[39m
+                    [36m>[39m
+                      [0mregion[0m
+                    [36m</th>[39m
+                    [36m<td[39m
+                      [33mclass[39m=[32m"px-3 py-1.5 text-gray-600"[39m
+                    [36m>[39m
+                      [0mstring[0m
+                    [36m</td>[39m
+                    [36m<td[39m
+                      [33maria-label[39m=[32m"no description"[39m
+                      [33mclass[39m=[32m"px-3 py-1.5"[39m
+                    [36m/>[39m
+                    [36m<td[39m
+                      [33maria-label[39m=[32m"no unit"[39m
+                      [33mclass[39m=[32m"px-3 py-1.5"[39m
+                    [36m/>[39m
+                  [36m</tr>[39m
+                [36m</tbody>[39m
+              [36m</table>[39m
+            [36m</div>[39m
+            [36m<p[39m
+              [33mclass[39m=[32m"mt-1 text-xs text-gray-600"[39m
+            [36m>[39m
+              [0mSource: [0m
+              [0mfrom AIM Data[0m
+            [36m</p>[39m
+          [36m</div>[39m
+          [36m<div[39m
+            [33mclass[39m=[32m"min-w-0"[39m
+          [36m>[39m
+            [36m<h3[39m
+              [33mclass[39m=[32m"text-sm font-medium text-gray-900"[39m
+            [36m>[39m
+              [0mField descriptions and units[0m
+            [36m</h3>[39m
+            [36m<ul[39m
+              [33mclass[39m=[32m"space-y-1 text-sm text-gray-700"[39m
+            [36m>[39m
+              [36m<li>[39m
+                [36m<span[39m
+                  [33mclass[39m=[32m"font-mono"[39m
+                [36m>[39m
+                  [0mamount[0m
+                [36m</span>[39m
+                [0m: [0m
+                [0mSale amount[0m
+                [0m — [0m
+                [0mEUR[0m
+              [36m</li>[39m
+            [36m</ul>[39m
+            [36m<p[39m
+              [33mclass[39m=[32m"mt-1 text-xs text-gray-600"[39m
+            [36m>[39m
+              [0mSource: [0m
+              [0mgenerated and checked[0m
+            [36m</p>[39m
+          [36m</div>[39m
+          [36m<div[39m
+            [33mclass[39m=[32m"min-w-0"[39m
+          [36m>[39m
+            [36m<h3[39m
+              [33mclass[39m=[32m"text-sm font-medium text-gray-900"[39m
+            [36m>[39m
+              [0mRow count[0m
+            [36m</h3>[39m
+            [36m<p[39m
+              [33mclass[39m=[32m"text-sm text-gray-700"[39m
+            [36m>[39m
+              [0m0[0m
+            [36m</p>[39m
+            [36m<p[39m
+              [33mclass[39m=[32m"mt-1 text-xs text-gray-600"[39m
+            [36m>[39m
+              [0mSource: [0m
+              [0mfrom AIM Data[0m
+            [36m</p>[39m
+          [36m</div>[39m
+          [36m<div[39m
+            [33mclass[39m=[32m"min-w-0"[39m
+          [36m>[39m
+            [36m<h3[39m
+              [33mclass[39m=[32m"text-sm font-medium text-gray-900"[39m
+            [36m>[39m
+              [0mColumn count[0m
+            [36m</h3>[39m
+            [36m<p[39m
+              [33mclass[39m=[32m"text-sm text-gray-700"[39m
+            [36m>[39m
+              [0m2[0m
+            [36m</p>[39m
+            [36m<p[39m
+              [33mclass[39m=[32m"mt-1 text-xs text-gray-600"[39m
+            [36m>[39m
+              [0mSource: [0m
+              [0mentered by you[0m
+            [36m</p>[39m
+          [36m</div>[39m
+          [36m<div[39m
+            [33mclass[39m=[32m"min-w-0"[39m
+          [36m>[39m
+            [36m<h3[39m
+              [33mclass[39m=[32m"text-sm font-medium text-gray-900"[39m
+            [36m>[39m
+              [0mSize[0m
+            [36m</h3>[39m
+            [36m<p[39m
+              [33mclass[39m=[32m"text-sm text-gray-700"[39m
+              [33mtitle[39m=[32m"12,345 bytes"[39m
+            [36m>[39m
+              [0m12.35 KB[0m
+            [36m</p>[39m
+            [36m<p[39m
+              [33mclass[39m=[32m"mt-1 text-xs text-gray-600"[39m
+            [36m>[39m
+              [0mSource: [0m
+              [0mentered by you[0m
+            [36m</p>[39m
+          [36m</div>[39m
+          [36m<div[39m
+            [33mclass[39m=[32m"min-w-0"[39m
+          [36m>[39m
+            [36m<h3[39m
+              [33mclass[39m=[32m"text-sm font-medium text-gray-900"[39m
+            [36m>[39m
+              [0mFormat[0m
+            [36m</h3>[39m
+            [36m<p[39m
+              [33mclass[39m=[32m"text-sm text-gray-700"[39m
+            [36m>[39m
+              [0mcsv[0m
+            [36m</p>[39m
+            [36m<p[39m
+              [33mclass[39m=[32m"mt-1 text-xs text-gray-600"[39m
+            [36m>[39m
+              [0mSource: [0m
+              [0mentered by you[0m
+            [36m</p>[39m
+          [36m</div>[39m
+          [36m<div[39m
+            [33mclass[39m=[32m"min-w-0"[39m
+          [36m>[39m
+            [36m<h3[39m
+              [33mclass[39m=[32m"text-sm font-medium text-gray-900"[39m
+            [36m>[39m
+              [0mGeographic coverage[0m
+            [36m</h3>[39m
+            [36m<p[39m
+              [33mclass[39m=[32m"text-sm text-gray-700"[39m
+            [36m>[39m
+              [0mSpain[0m
+            [36m</p>[39m
+            [36m<p[39m
+              [33mclass[39m=[32m"mt-1 text-xs text-gray-600"[39m
+            [36m>[39m
+              [0mSource: [0m
+              [0mentered by you[0m
+            [36m</p>[39m
+          [36m</div>[39m
+          [36m<div[39m
+            [33mclass[39m=[32m"min-w-0"[39m
+          [36m>[39m
+            [36m<h3[39m
+              [33mclass[39m=[32m"text-sm font-medium text-gray-900"[39m
+            [36m>[39m
+              [0mTime coverage[0m
+            [36m</h3>[39m
+            [36m<p[39m
+              [33mclass[39m=[32m"text-sm text-gray-700"[39m
+            [36m>[39m
+              [0m2025[0m
+            [36m</p>[39m
+            [36m<p[39m
+              [33mclass[39m=[32m"mt-1 text-xs text-gray-600"[39m
+            [36m>[39m
+              [0mSource: [0m
+              [0mentered by you[0m
+            [36m</p>[39m
+          [36m</div>[39m
+          [36m<div[39m
+            [33mclass[39m=[32m"min-w-0"[39m
+          [36m>[39m
+            [36m<h3[39m
+              [33mclass[39m=[32m"text-sm font-medium text-gray-900"[39m
+            [36m>[39m
+              [0mData language coverage[0m
+            [36m</h3>[39m
+            [36m<ul[39m
+              [33mclass[39m=[32m"list-inside list-disc text-sm text-gray-700"[39m
+            [36m>[39m
+              [36m<li>[39m
+                [0mes[0m
+              [36m</li>[39m
+            [36m</ul>[39m
+            [36m<p[39m
+              [33mclass[39m=[32m"mt-1 text-xs text-gray-600"[39m
+            [36m>[39m
+              [0mSource: [0m
+              [0mentered by you[0m
+            [36m</p>[39m
+          [36m</div>[39m
+          [36m<div[39m
+            [33mclass[39m=[32m"min-w-0"[39m
+          [36m>[39m
+            [36m<h3[39m
+              [33mclass[39m=[32m"text-sm font-medium text-gray-900"[39m
+            [36m>[39m
+              [0mFreshness[0m
+            [36m</h3>[39m
+            [36m<p[39m
+              [33mclass[39m=[32m"text-sm text-gray-700"[39m
+            [36m>[39m
+              [0mMonthly[0m
+              [0m (declared cadence)[0m
+            [36m</p>[39m
+            [36m<p[39m
+              [33mclass[39m=[32m"mt-1 text-xs text-gray-600"[39m
+            [36m>[39m
+              [0mSource: [0m
+              [0mentered by you[0m
+            [36m</p>[39m
+          [36m</div>[39m
+          [36m<div[39m
+            [33mclass[39m=[32m"min-w-0"[39m
+          [36m>[39m
+            [36m<h3[39m
+              [33mclass[39m=[32m"text-sm font-medium text-gray-900"[39m
+            [36m>[39m
+              [0mLicence[0m
+            [36m</h3>[39m
+            [36m<p[39m
+              [33mclass[39m=[32m"text-sm text-gray-700"[39m
+            [36m>[39m
+              [0mCC-BY-4.0[0m
+            [36m</p>[39m
+            [36m<p[39m
+              [33mclass[39m=[32m"mt-1 text-xs text-gray-600"[39m
+            [36m>[39m
+              [0mSource: [0m
+              [0mentered by you[0m
+            [36m</p>[39m
+          [36m</div>[39m
+          [36m<div[39m
+            [33mclass[39m=[32m"min-w-0"[39m
+          [36m>[39m
+            [36m<h3[39m
+              [33mclass[39m=[32m"text-sm font-medium text-gray-900"[39m
+            [36m>[39m
+              [0mDelivery[0m
+            [36m</h3>[39m
+            [36m<p[39m
+              [33mclass[39m=[32m"text-sm text-gray-700"[39m
+            [36m>[39m
+              [0mFile download[0m
+            [36m</p>[39m
+            [36m<p[39m
+              [33mclass[39m=[32m"mt-1 text-xs text-gray-600"[39m
+            [36m>[39m
+              [0mSource: [0m
+              [0mentered by you[0m
+            [36m</p>[39m
+          [36m</div>[39m
+          [36m<div[39m
+            [33mclass[39m=[32m"min-w-0"[39m
+          [36m>[39m
+            [36m<h3[39m
+              [33mclass[39m=[32m"text-sm font-medium text-gray-900"[39m
+            [36m>[39m
+              [0mTrust/privacy status[0m
+            [36m</h3>[39m
+            [36m<p[39m
+              [33mclass[39m=[32m"text-sm text-gray-700"[39m
+            [36m>[39m
+              [0mSeller/local report; no independent scan implied[0m
+            [36m</p>[39m
+            [36m<p[39m
+              [33mclass[39m=[32m"mt-1 text-xs text-gray-600"[39m
+            [36m>[39m
+              [0mSource: [0m
+              [0mentered by you[0m
+            [36m</p>[39m
+          [36m</div>[39m
+          [36m<div[39m
+            [33mclass[39m=[32m"min-w-0"[39m
+          [36m>[39m
+            [36m<h3[39m
+              [33mclass[39m=[32m"text-sm font-medium text-gray-900"[39m
+            [36m>[39m
+              [0mSample availability[0m
+            [36m</h3>[39m
+            [36m<p[39m
+              [33mclass[39m=[32m"text-sm text-gray-700"[39m
+            [36m>[39m
+              [0mNo sample offered[0m
+            [36m</p>[39m
+            [36m<p[39m
+              [33mclass[39m=[32m"mt-1 text-xs text-gray-600"[39m
+            [36m>[39m
+              [0mSource: [0m
+              [0mentered by you[0m
+            [36m</p>[39m
+          [36m</div>[39m
+        [36m</section>[39m
+        [36m<p[39m
+          [33mclass[39m=[32m"text-sm text-gray-700"[39m
+        [36m>[39m
+          [0mApprove the displayed metadata, including counts and coverage. No sample permission is granted. This does not attest data freshness or publish the listing.[0m
+        [36m</p>[39m
+        [36m<div[39m
+          [33mclass[39m=[32m"flex flex-wrap gap-3"[39m
+        [36m>[39m
+          [36m<button[39m
+            [33mclass[39m=[32m"rounded-lg border border-gray-300 px-4 py-2.5 text-sm disabled:opacity-50"[39m
+            [33mtype[39m=[32m"button"[39m
+          [36m>[39m
+            [0mRegenerate[0m
+          [36m</button>[39m
+          [36m<button[39m
+            [33mclass[39m=[32m"rounded-lg bg-indigo-700 px-4 py-2.5 text-sm font-semibold text-white disabled:opacity-50"[39m
+            [33mtype[39m=[32m"button"[39m
+          [36m>[39m
+            [0mApprove At a glance[0m
+          [36m</button>[39m
+        [36m</div>[39m
+      [36m</section>[39m
+    [36m</div>[39m
+  [36m</body>[39m
+[36m</html>[39m
+ ❯ components/listings/SellerAtAGlance.test.tsx:49:50
+     47|   await waitFor(() => expect(screen.getByRole('button', {name: 'Approv…
+     48|   fireEvent.click(screen.getByRole('button', {name: 'Approve At a glan…
+     49|   await waitFor(() => expect(api.approveSummary).toHaveBeenCalledWith(…
+       |                                                  ^
+     50| });
+     51| it('reloads on 409 and requires a fresh explicit approval of the new i…
+ ❯ runWithExpensiveErrorDiagnosticsDisabled node_modules/@testing-library/dom/dist/config.js:47:12
+ ❯ checkCallback node_modules/@testing-library/dom/dist/wait-for.js:124:77
+ ❯ Timeout.checkRealTimersCallback node_modules/@testing-library/dom/dist/wait-for.js:118:16
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[3/5]⎯
+
+ FAIL  components/listings/SellerAtAGlance.test.tsx > reloads on 409 and requires a fresh explicit approval of the new identifiers
+AssertionError: expected { …(6) } to deeply equal { …(6) }
+
+- Expected
++ Received
+
+@@ -1,7 +1,7 @@
+  {
+-   "render_hash": "ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff",
++   "render_hash": "wrong-render-hash",
+    "request_id": "04d70f3e-6622-4b11-a935-0ab0b0ce54fc",
+    "sample_decision": "none",
+    "source_revision": "dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd",
+    "summary_hash": "eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee",
+    "summary_id": "22222222-2222-4222-8222-222222222222",
+
+ ❯ components/listings/SellerAtAGlance.test.tsx:63:18
+
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[4/5]⎯
+
+ FAIL  components/listings/SellerAtAGlance.test.tsx > mints a fresh retry ID when the preview hash changed after a network failure
+AssertionError: expected 'wrong-render-hash' to be 'ddddddddddddddddddddddddddddddddddddd…' // Object.is equality
+
+Expected: "dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd"
+Received: "wrong-render-hash"
+
+ ❯ components/listings/SellerAtAGlance.test.tsx:126:30
+    124|   const [first, second] = vi.mocked(api.approveSummary).mock.calls.map…
+    125|   expect(first.request_id).not.toBe(second.request_id);
+    126|   expect(second.render_hash).toBe('d'.repeat(64));
+       |                              ^
+    127| });
+    128|
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[5/5]⎯
+
+
+ Test Files  1 failed (1)
+      Tests  5 failed | 8 passed (13)
+   Start at  15:12:12
+   Duration  4.75s (transform 169ms, setup 0ms, import 554ms, tests 2.27s, environment 1.27s)
+

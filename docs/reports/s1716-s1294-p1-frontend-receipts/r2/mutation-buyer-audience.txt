@@ -1,0 +1,32 @@
+COMMAND: ['rtk', 'proxy', 'npx', 'vitest', 'run', 'components/listings/AtAGlance.test.tsx', '-t', 'never addresses the buyer as you', '--maxWorkers=2']
+EXIT: 1
+
+ RUN  v4.1.8 /private/var/tmp/koskadeux/minimal-bridge-worktrees/7d470a7af0c4-b6ad78
+
+ ❯ components/listings/AtAGlance.test.tsx (10 tests | 1 failed | 9 skipped) 64ms
+   × never addresses the buyer as you 62ms
+
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 1 ⎯⎯⎯⎯⎯⎯⎯
+
+ FAIL  components/listings/AtAGlance.test.tsx > never addresses the buyer as you
+AssertionError: expected '<section aria-label="At a glance" cla…' not to contain 'you'
+
+Expected: "you"
+Received: "<section aria-label="At a glance" class="min-w-0 space-y-4 rounded-xl border border-gray-200 bg-white p-5 break-words"><h2 class="text-lg font-semibold text-gray-900">At a glance</h2><div class="min-w-0"><h3 class="text-sm font-medium text-gray-900">What one row represents</h3><p class="text-sm text-gray-700">One recorded sale</p><p class="mt-1 text-xs text-gray-600">Source: generated and checked</p></div><div class="min-w-0"><h3 class="text-sm font-medium text-gray-900">Intended uses</h3><ul class="list-inside list-disc text-sm text-gray-700"><li>Sales analysis</li></ul><p class="mt-1 text-xs text-gray-600">Source: entered by you</p></div><div class="min-w-0"><h3 class="text-sm font-medium text-gray-900">Key fields</h3><div class="max-w-full overflow-x-auto" tabindex="0" role="region" aria-label="Key fields schema"><table class="min-w-full text-sm border border-gray-200 rounded-lg"><thead><tr class="bg-gray-50"><th scope="col" class="px-3 py-2 text-left font-medium text-gray-700 border-b">Name</th><th scope="col" class="px-3 py-2 text-left font-medium text-gray-700 border-b">Type</th><th scope="col" class="px-3 py-2 text-left font-medium text-gray-700 border-b">Description</th><th scope="col" class="px-3 py-2 text-left font-medium text-gray-700 border-b">Unit</th></tr></thead><tbody><tr class="border-b border-gray-100 last:border-0"><th scope="row" class="px-3 py-1.5 text-left font-mono font-normal text-gray-900">amount</th><td class="px-3 py-1.5 text-gray-600">decimal</td><td class="px-3 py-1.5">Sale amount</td><td class="px-3 py-1.5">EUR</td></tr><tr class="border-b border-gray-100 last:border-0"><th scope="row" class="px-3 py-1.5 text-left font-mono font-normal text-gray-900">region</th><td class="px-3 py-1.5 text-gray-600">string</td><td class="px-3 py-1.5" aria-label="no description"></td><td class="px-3 py-1.5" aria-label="no unit"></td></tr></tbody></table></div><p class="mt-1 text-xs text-gray-600">Source: from AIM Data</p></div><div class="min-w-0"><h3 class="text-sm font-medium text-gray-900">Field descriptions and units</h3><ul class="space-y-1 text-sm text-gray-700"><li><span class="font-mono">amount</span>: Sale amount — EUR</li></ul><p class="mt-1 text-xs text-gray-600">Source: generated and checked</p></div><div class="min-w-0"><h3 class="text-sm font-medium text-gray-900">Row count</h3><p class="text-sm text-gray-700">0</p><p class="mt-1 text-xs text-gray-600">Source: from AIM Data</p></div><div class="min-w-0"><h3 class="text-sm font-medium text-gray-900">Column count</h3><p class="text-sm text-gray-700">2</p><p class="mt-1 text-xs text-gray-600">Source: entered by you</p></div><div class="min-w-0"><h3 class="text-sm font-medium text-gray-900">Size</h3><p class="text-sm text-gray-700" title="12,345 bytes">12.35 KB</p><p class="mt-1 text-xs text-gray-600">Source: entered by you</p></div><div class="min-w-0"><h3 class="text-sm font-medium text-gray-900">Format</h3><p class="text-sm text-gray-700">csv</p><p class="mt-1 text-xs text-gray-600">Source: entered by you</p></div><div class="min-w-0"><h3 class="text-sm font-medium text-gray-900">Geographic coverage</h3><p class="text-sm text-gray-700">Spain</p><p class="mt-1 text-xs text-gray-600">Source: entered by you</p></div><div class="min-w-0"><h3 class="text-sm font-medium text-gray-900">Time coverage</h3><p class="text-sm text-gray-700">2025</p><p class="mt-1 text-xs text-gray-600">Source: entered by you</p></div><div class="min-w-0"><h3 class="text-sm font-medium text-gray-900">Data language coverage</h3><ul class="list-inside list-disc text-sm text-gray-700"><li>es</li></ul><p class="mt-1 text-xs text-gray-600">Source: entered by you</p></div><div class="min-w-0"><h3 class="text-sm font-medium text-gray-900">Freshness</h3><p class="text-sm text-gray-700">Monthly (declared cadence)</p><p class="mt-1 text-xs text-gray-600">Source: entered by you</p></div><div class="min-w-0"><h3 class="text-sm font-medium text-gray-900">Licence</h3><p class="text-sm text-gray-700">CC-BY-4.0</p><p class="mt-1 text-xs text-gray-600">Source: entered by you</p></div><div class="min-w-0"><h3 class="text-sm font-medium text-gray-900">Delivery</h3><p class="text-sm text-gray-700">File download</p><p class="mt-1 text-xs text-gray-600">Source: entered by you</p></div><div class="min-w-0"><h3 class="text-sm font-medium text-gray-900">Trust/privacy status</h3><p class="text-sm text-gray-700">Seller/local report; no independent scan implied</p><p class="mt-1 text-xs text-gray-600">Source: entered by you</p></div><div class="min-w-0"><h3 class="text-sm font-medium text-gray-900">Sample availability</h3><p class="text-sm text-gray-700">No sample offered</p><p class="mt-1 text-xs text-gray-600">Source: entered by you</p></div></section>"
+
+ ❯ components/listings/AtAGlance.test.tsx:31:20
+     29| it('never addresses the buyer as you', () => {
+     30|   const html = renderToStaticMarkup(<AtAGlance audience="buyer" summar…
+     31|   expect(html).not.toContain('you');
+       |                    ^
+     32|   expect(html).toContain('provided by the seller');
+     33| });
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/1]⎯
+
+
+ Test Files  1 failed (1)
+      Tests  1 failed | 9 skipped (10)
+   Start at  15:12:19
+   Duration  838ms (transform 133ms, setup 0ms, import 239ms, tests 64ms, environment 0ms)
+

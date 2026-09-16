@@ -1,0 +1,115 @@
+COMMAND: ['rtk', 'proxy', 'npm', 'run', 'build']
+ENV: same nonfunctional compile-only fixtures and API URL documented in R1 report
+EXIT: 0
+
+> ai-market-frontend@0.0.0 build
+> next build
+
+   ▲ Next.js 15.5.12
+
+   Creating an optimized production build ...
+ ✓ Compiled successfully in 12.5s
+   Linting and checking validity of types ...
+
+./app/blog/[slug]/page.tsx
+57:5  Warning: Using `<img>` could result in slower LCP and higher bandwidth. Consider using `<Image />` from `next/image` or a custom image loader to automatically optimize images. This may incur additional usage or cost from your provider. See: https://nextjs.org/docs/messages/no-img-element  @next/next/no-img-element
+
+./app/dashboard/settings/page.tsx
+404:17  Warning: Using `<img>` could result in slower LCP and higher bandwidth. Consider using `<Image />` from `next/image` or a custom image loader to automatically optimize images. This may incur additional usage or cost from your provider. See: https://nextjs.org/docs/messages/no-img-element  @next/next/no-img-element
+
+./app/l/[code]/page.tsx
+107:11  Warning: Using `<img>` could result in slower LCP and higher bandwidth. Consider using `<Image />` from `next/image` or a custom image loader to automatically optimize images. This may incur additional usage or cost from your provider. See: https://nextjs.org/docs/messages/no-img-element  @next/next/no-img-element
+
+./components/Layout.tsx
+104:15  Warning: Using `<img>` could result in slower LCP and higher bandwidth. Consider using `<Image />` from `next/image` or a custom image loader to automatically optimize images. This may incur additional usage or cost from your provider. See: https://nextjs.org/docs/messages/no-img-element  @next/next/no-img-element
+197:15  Warning: Using `<img>` could result in slower LCP and higher bandwidth. Consider using `<Image />` from `next/image` or a custom image loader to automatically optimize images. This may incur additional usage or cost from your provider. See: https://nextjs.org/docs/messages/no-img-element  @next/next/no-img-element
+
+./components/listings/SellerShareControls.tsx
+192:19  Warning: Using `<img>` could result in slower LCP and higher bandwidth. Consider using `<Image />` from `next/image` or a custom image loader to automatically optimize images. This may incur additional usage or cost from your provider. See: https://nextjs.org/docs/messages/no-img-element  @next/next/no-img-element
+
+./components/listings/ShareKitModal.tsx
+65:13  Warning: Using `<img>` could result in slower LCP and higher bandwidth. Consider using `<Image />` from `next/image` or a custom image loader to automatically optimize images. This may incur additional usage or cost from your provider. See: https://nextjs.org/docs/messages/no-img-element  @next/next/no-img-element
+
+info  - Need to disable some ESLint rules? Learn more here: https://nextjs.org/docs/app/api-reference/config/eslint#disabling-rules
+   Collecting page data ...
+   Generating static pages (0/47) ...
+   Generating static pages (11/47) 
+   Generating static pages (23/47) 
+   Generating static pages (35/47) 
+ ✓ Generating static pages (47/47)
+   Finalizing page optimization ...
+   Collecting build traces ...
+
+Route (app)                                                                  Size  First Load JS  Revalidate  Expire
+┌ ○ /                                                                      2.6 kB         129 kB          1m      1y
+├ ○ /_not-found                                                             166 B         102 kB
+├ ○ /aim-data                                                               183 B         106 kB
+├ ƒ /api/keystatic/[...params]                                              166 B         102 kB
+├ ƒ /auth/oauth/[provider]/callback                                       2.09 kB         129 kB
+├ ○ /auth/verify                                                          2.04 kB         129 kB
+├ ○ /auth/verify-email                                                    2.53 kB         129 kB
+├ ○ /blog                                                                   178 B         111 kB
+├ ● /blog/[slug]                                                            178 B         111 kB
+├   ├ /blog/AWS
+├   ├ /blog/CROs
+├   └ /blog/the-next-evolution-of-the-ai-marketplace-beyond-data-gravity
+├ ○ /checkout/cancel                                                        183 B         106 kB
+├ ○ /checkout/success                                                     3.36 kB         130 kB
+├ ○ /dashboard                                                            5.44 kB         137 kB
+├ ƒ /dashboard/[...slug]                                                    166 B         102 kB
+├ ○ /dashboard/data-verification/payment-method                             137 B         133 kB
+├ ƒ /dashboard/data-verification/payment-method/return                      137 B         133 kB
+├ ○ /dashboard/inquiries                                                  3.07 kB         129 kB
+├ ƒ /dashboard/inquiries/[id]                                             5.72 kB         132 kB
+├ ○ /dashboard/listings                                                   3.41 kB         138 kB
+├ ƒ /dashboard/listings/[id]/edit                                         2.79 kB         134 kB
+├ ○ /dashboard/orders                                                     3.87 kB         130 kB
+├ ƒ /dashboard/orders/[id]                                                10.9 kB         142 kB
+├ ○ /dashboard/requests                                                   1.75 kB         132 kB
+├ ○ /dashboard/sales                                                       4.1 kB         127 kB
+├ ○ /dashboard/seller-workspace                                           26.3 kB         157 kB
+├ ○ /dashboard/seller/inquiries                                           5.07 kB         131 kB
+├ ○ /dashboard/settings                                                   4.81 kB         133 kB
+├ ○ /dashboard/stripe-return                                              3.97 kB         127 kB
+├ ○ /download                                                              3.3 kB         105 kB
+├ ƒ /find-data                                                              770 B         144 kB
+├ ○ /forgot-password                                                      3.44 kB         130 kB
+├ ○ /investors                                                              166 B         102 kB
+├ ƒ /keystatic/[[...params]]                                                166 B         102 kB
+├ ƒ /l/[code]                                                             1.33 kB         128 kB
+├ ○ /legal/cookies                                                          166 B         102 kB
+├ ○ /legal/privacy                                                          166 B         102 kB
+├ ○ /legal/site-terms                                                       166 B         102 kB
+├ ○ /legal/terms                                                            166 B         102 kB
+├ ○ /legal/terms/accept                                                   1.38 kB         133 kB
+├ ƒ /listings                                                               183 B         143 kB
+├ ƒ /listings/[slug]                                                      10.9 kB         142 kB
+├ ○ /login                                                                5.36 kB         135 kB
+├ ○ /management-team                                                        166 B         102 kB
+├ ○ /oauth/authorize                                                      2.54 kB         133 kB
+├ ○ /partner                                                                183 B         106 kB
+├ ○ /pricing                                                                183 B         106 kB
+├ ○ /protocol                                                             4.03 kB         109 kB
+├ ○ /register                                                             7.15 kB         133 kB
+├ ƒ /requests                                                             1.33 kB         128 kB
+├ ƒ /requests/[slug]                                                      4.09 kB         134 kB
+├ ○ /requests/new                                                         2.13 kB         129 kB
+├ ○ /reset-password                                                       3.72 kB         130 kB
+├ ○ /robots.txt                                                             166 B         102 kB
+├ ƒ /search                                                                 183 B         143 kB
+├ ○ /sell-data                                                            3.79 kB         130 kB
+├ ○ /sitemap.xml                                                            166 B         102 kB          1h      1y
+├ ○ /support                                                                166 B         102 kB
+└ ○ /verified                                                               183 B         106 kB
++ First Load JS shared by all                                              102 kB
+  ├ chunks/1255-ad409e5887c155b0.js                                       45.8 kB
+  ├ chunks/4bd1b696-100b9d70ed4e49c1.js                                   54.2 kB
+  └ other shared chunks (total)                                           1.97 kB
+
+
+ƒ Middleware                                                              34.4 kB
+
+○  (Static)   prerendered as static content
+●  (SSG)      prerendered as static HTML (uses generateStaticParams)
+ƒ  (Dynamic)  server-rendered on demand
+

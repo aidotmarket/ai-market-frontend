@@ -1,0 +1,22 @@
+{
+  "baseline": {
+    "total": 694,
+    "passed": 690,
+    "failed": 4,
+    "failures": [
+      "dashboard/seller-workspace/page.test.tsx :: SellerWorkspacePage safety boundaries uses a new idempotency key when the seller corrects a failed verification scope",
+      "dashboard/seller-workspace/page.test.tsx :: SellerWorkspacePage safety boundaries uses the correct verification key after a definitive failure",
+      "dashboard/seller-workspace/page.test.tsx :: SellerWorkspacePage safety boundaries uses the correct verification key after a unknown outcome",
+      "login/LoginForm.test.tsx :: shares one flight between a manual click and subsequent hinted hydration"
+    ]
+  },
+  "branch": {
+    "total": 726,
+    "passed": 725,
+    "failed": 1,
+    "failures": [
+      "login/LoginForm.test.tsx :: shares one flight between a manual click and subsequent hinted hydration"
+    ]
+  },
+  "branch_only_failures": []
+}
