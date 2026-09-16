@@ -116,9 +116,9 @@ The build fetched only existing public metadata using the documented API URL; it
 Final validation: 30/30 focused tests after restoring both mutations; full branch suite 711/712 vs baseline 693/694 with the same single existing login failure; 0 branch-only failures; typecheck exit 0; lint exit 0 (7 existing warnings); build exit 0. No full-suite-green claim.
 
 
-## R2 fold — DeepSeek Gate-3 R1 (2026-09-16)
+## R2 fold — DeepSeek, GLM and CC Gate-3 R1 (2026-09-16)
 
-Folded all controller rulings from `response-20260916-145250-042275` (`APPROVE_WITH_MANDATES`). GLM/CC findings remain pending and are outside this fold. Continued the preserved branch from `8341c389b6ba3c189dd3b40493a6ff0da286fb6b`; each finding has its own commit and was pushed normally, with no force-push, merge or deployment. Re-read the frontend runbook and the backend addendum §C. This section supersedes the earlier polling, buyer-provenance and byte-display descriptions above.
+Folded all controller rulings from `response-20260916-145250-042275` (`APPROVE_WITH_MANDATES`). Part A folded the DeepSeek findings; Part B below records the additional GLM finding and CC concurrence. Continued the preserved branch from `8341c389b6ba3c189dd3b40493a6ff0da286fb6b`; each finding has its own commit and was pushed normally, with no force-push, merge or deployment. Re-read the frontend runbook and the backend addendum §C. This section supersedes the earlier polling, buyer-provenance and byte-display descriptions above.
 
 ### Per-finding commits
 
@@ -156,4 +156,21 @@ Receipts are under [`s1716-s1294-p1-frontend-receipts/r2/`](s1716-s1294-p1-front
 - Build: exit 0, all 47 static pages generated and listing detail remains dynamic. Used the exact R1 documented nonfunctional Keystatic compile fixtures and API URLs; `build.txt` contains the captured output. No deployment performed.
 - Source identity and ten pushed finding commits: `source-identity.json`. Receipt integrity: `sha256.json`.
 
-R2 fold is complete for M1, M2 and L1–L8. GLM/CC review is still pending; no Gate-3 quorum, Gate-4 pilot, production withdrawal measurement or deployment is claimed. The prior real-listing/pilot acceptance boundaries remain open.
+Part A completed M1, M2 and L1–L8. GLM/CC R1 subsequently returned REQUEST_CHANGES; Part B below folds the additional G3 ruling; no Gate-3 quorum, Gate-4 pilot, production withdrawal measurement or deployment is claimed. The prior real-listing/pilot acceptance boundaries remain open.
+
+
+### Part B — GLM G3: approved field-empty summaries
+
+Continued after Part A task `81fd2c802527`, from freshly fetched remote tip `e898679fbbbf51ff4069917dd4282781b2f3dc13` on `build/bq-listing-enrichment-seller-tools-s1294-p1-frontend-s1716`. GLM R1 `response-20260916-145305-185956` and CC R1 `response-20260916-145317-989394` both returned REQUEST_CHANGES and concurred with the already-folded polling, audience wording and collapsed-fetch findings. The additional controller ruling is G3 (GLM MEDIUM).
+
+**G3 commit: `a17abec04f4c296224a82aa82715fb758489fc85`.** The shared renderer now requires at least one supported field whose provenance is not `absent` before emitting any section markup. Profile-only, all-absent and unsupported-only summaries emit no heading, wrapper or field list for either audience. Seller review controls remain available. Measured zero remains renderable. No backend, polling or approval behavior changed.
+
+Validation receipts: [`s1716-s1294-p1-frontend-receipts/r2-g3/`](s1716-s1294-p1-frontend-receipts/r2-g3/).
+
+- Focused tests: **51/51 passed**, six files (`focused.txt`). Added buyer/seller renderer cases, approved seller-panel cases, and byte-for-byte route comparison of profile-only, all-absent and null summaries against missing-summary legacy output.
+- Mutation: removing the new guard restores the empty heading and produces **five failures** across renderer, seller panel and buyer route, exit 1 (`mutation-empty.txt`). Guard restored before final focused validation; no snapshots updated.
+- Existing renderer and route snapshot files are byte-identical to the fetched tip; hashes recorded in `snapshots.json`. Existing null/missing and full legacy absent-route checks pass unchanged.
+- Typecheck: exit 0 (`typecheck.txt`). Lint: exit 0, zero errors and seven existing image warnings (`lint.txt`).
+- Build: exit 0, 47/47 static pages generated; listing detail remains dynamic (`build.txt`). Used the previously documented nonfunctional compile-only Keystatic fixtures and API URLs.
+
+G3 is folded. This is a frontend correction and validation receipt, not fresh Gate-3 approval or Gate-4 acceptance. No merge or deployment performed; the earlier pilot and production acceptance boundaries remain open. The full-suite baseline comparison above belongs to Part A and was not rerun for this bounded Part B.
