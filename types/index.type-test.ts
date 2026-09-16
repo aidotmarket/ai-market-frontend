@@ -8,7 +8,6 @@ type Equal<Left, Right> =
     : false;
 type Expect<Value extends true> = Value;
 type OptionalKeys<Value> = {
-  // eslint-disable-next-line @typescript-eslint/no-empty-object-type
   [Key in keyof Value]-?: {} extends Pick<Value, Key> ? Key : never;
 }[keyof Value];
 

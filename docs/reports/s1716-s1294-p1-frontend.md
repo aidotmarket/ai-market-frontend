@@ -62,3 +62,16 @@ Buyer detail uses the same `AtAGlance` renderer via `BuyerAtAGlance`; no markup 
 Detail remains force-dynamic/no-store. The client fetches public listing metadata with `cache: no-store`, immediately and every 10 seconds; requests abort after 5 seconds and visible metadata expires 20 seconds after request START, independent of network completion. Failure clears the block; hidden/page-restored tabs clear before refetch. Expected successful withdrawal latency is <=10 seconds plus response time (5-second request limit); worst-case retained metadata expires at 20 seconds on an active browser event loop, below the 30-second requirement. Background/suspended pages clear on visibility/page restore. This is implementation + fake-clock proof, not production measurement. Existing public list fetching is unchanged: this chunk renders summaries only on the detail page.
 
 `rtk proxy npx vitest run components/listings/AtAGlance.test.tsx components/listings/BuyerAtAGlance.test.tsx 'app/listings/[slug]/page.test.tsx'`: 20/20 passed, 2 new present snapshots; existing absent full-page snapshot unchanged. Tests include withdrawal, offline/hung requests, ignored late responses, suspension/resume, newly approved metadata, labels/order, no placeholders, measured zero, plain-text escaping and native table semantics.
+
+
+### Test milestone
+
+- Seller milestone pushed: `ffc3580`; buyer milestone pushed: `dc9632a`.
+- Full suites, identical `npm test -- --maxWorkers=2 --reporter=json` settings and installed dependencies: origin/main `2fa04d4`: **693 passed / 1 failed / 694 total**; branch: **711 passed / 1 failed / 712 total**. **Zero branch-only failures**, 18 added tests. The shared existing failure is `app/login/LoginForm.test.tsx` → “shares one flight between a manual click and subsequent hinted hydration” (`oauth_nonce` expected, empty captured cookie writes received). No unrelated login fix was made. Initial unbounded baseline run had four additional timing failures under concurrent machine load; reducing workers resolved those without code/test changes.
+- Post-mutation focused run: **30/30 passed**, 5 files, 4.43s. `lib/api.summary.test.ts` checks all four typed routes, exact bodies/encoding/signals and public no-store/credential omission.
+- Mutation 1: replaced absent-summary return with an empty visible section. **2 failures**, including the original absent full-page snapshot; exit 1.
+- Mutation 2: replaced preview `render_hash` with `wrong-render-hash`. **4 failures** (approval payload, withdrawal payload, regeneration and 409 replacement); exit 1.
+- Both mutations restored before the passing run; no snapshots updated to accept either mutation.
+- `npm run typecheck`: exit 0. Fixed TS's stale narrowing across an async visibility check through a small visibility function.
+- `npm run lint`: exit 0, 0 errors, 7 existing image warnings. Repaired the stale npm script to invoke the existing ESLint flat config and removed one suppression naming an unregistered rule from `types/index.type-test.ts`. No new lint dependency/rule suppression.
+- Machine-readable comparison and captured test/mutation/typecheck/lint logs are in `docs/reports/s1716-s1294-p1-frontend-receipts/`.

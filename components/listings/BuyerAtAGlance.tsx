@@ -19,14 +19,15 @@ export default function BuyerAtAGlance({slug, initialSummary, checkedAt}: {
     };
     setSummary(Date.now() - checkedAt < 20_000 ? initialSummary ?? null : null);
     expireAt(checkedAt);
+    const isVisible = () => document.visibilityState !== 'hidden';
     async function refresh() {
-      if (document.visibilityState === 'hidden' || current) return;
+      if (!isVisible() || current) return;
       const controller = new AbortController(); current = controller;
       const started = Date.now();
       const timeout = setTimeout(() => controller.abort(), 5_000);
       try {
         const value = await fetchBuyerSummary(slug, controller.signal);
-        if (!disposed && !controller.signal.aborted && document.visibilityState !== 'hidden') {
+        if (!disposed && !controller.signal.aborted && isVisible()) {
           setSummary(Date.now() - started < 20_000 ? value : null);
           expireAt(started);
         }

@@ -1,0 +1,35 @@
+{
+  "baseline-controlled": {
+    "numTotalTests": 694,
+    "numPassedTests": 693,
+    "numFailedTests": 1,
+    "numPendingTests": 0,
+    "failed_tests": [
+      {
+        "file": "app/login/LoginForm.test.tsx",
+        "test": "shares one flight between a manual click and subsequent hinted hydration",
+        "message": [
+          "AssertionError: expected [] to deeply equal [ [ 'oauth_nonce', 'only-nonce' ] ]\n    at /private/var/tmp/s1716-frontend-baseline-20260916/app/login/LoginForm.test.tsx:146:71\n    at file:///private/var/tmp/koskadeux/minimal-bridge-worktrees/7d470a7af0c4-b6ad78/node_modules/@vitest/runner/dist/chunk-artifact.js:1903:20"
+        ]
+      }
+    ]
+  },
+  "branch-controlled": {
+    "numTotalTests": 712,
+    "numPassedTests": 711,
+    "numFailedTests": 1,
+    "numPendingTests": 0,
+    "failed_tests": [
+      {
+        "file": "app/login/LoginForm.test.tsx",
+        "test": "shares one flight between a manual click and subsequent hinted hydration",
+        "message": [
+          "AssertionError: expected [] to deeply equal [ [ 'oauth_nonce', 'only-nonce' ] ]\n    at /private/var/tmp/koskadeux/minimal-bridge-worktrees/7d470a7af0c4-b6ad78/app/login/LoginForm.test.tsx:146:71\n    at file:///private/var/tmp/koskadeux/minimal-bridge-worktrees/7d470a7af0c4-b6ad78/node_modules/@vitest/runner/dist/chunk-artifact.js:1903:20"
+        ]
+      }
+    ]
+  },
+  "branch_only_failures": [],
+  "command": "rtk proxy npm test -- --maxWorkers=2 --reporter=json --outputFile=<receipt.json>",
+  "baseline_sha": "2fa04d4388dec80521bf48745d6edbfabc113361"
+}
