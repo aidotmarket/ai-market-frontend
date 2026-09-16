@@ -1,0 +1,23 @@
+{
+  "source": "BQ-LISTING-ENRICHMENT-SELLER-TOOLS-S1294-GATE2-ADDENDUM-S1716.md \u00a7C field inventory",
+  "source_sha256": "e95dbee687edaaea2380c2f50509e2512cba962eb6833802d0e41bcc2ad65872",
+  "fields": [
+    "What one row represents",
+    "Intended uses",
+    "Key fields",
+    "Field descriptions and units",
+    "Row count",
+    "Column count",
+    "Size",
+    "Format",
+    "Geographic coverage",
+    "Time coverage",
+    "Data language coverage",
+    "Freshness",
+    "Licence",
+    "Price",
+    "Delivery",
+    "Trust/privacy status",
+    "Sample availability"
+  ]
+}

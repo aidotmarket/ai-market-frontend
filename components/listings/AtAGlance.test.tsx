@@ -1,6 +1,7 @@
 import {expect, it} from 'vitest';
 import {renderToStaticMarkup} from 'react-dom/server';
 import AtAGlance, {provenanceLabels} from './AtAGlance';
+import sectionC from '@/tests/summarySectionC.json';
 import {summary, field} from '@/tests/summaryFixture';
 it('renders nothing when absent, without even a wrapper', () => {
   expect(renderToStaticMarkup(<AtAGlance audience="seller" />)).toBe('');
@@ -9,8 +10,8 @@ it('renders nothing when absent, without even a wrapper', () => {
 it('renders the complete ordered metadata with inert schema cells', () => {
   const html = renderToStaticMarkup(<AtAGlance audience="seller" summary={summary} />);
   expect(html).toMatchSnapshot();
-  const labels = ['What one row represents', 'Intended uses', 'Key fields', 'Field descriptions and units', 'Row count', 'Column count', 'Size', 'Format', 'Geographic coverage', 'Time coverage', 'Data language coverage', 'Freshness', 'Licence', 'Delivery', 'Trust/privacy status', 'Sample availability'];
-  for (let i = 1; i < labels.length; i++) expect(html.indexOf(labels[i])).toBeGreaterThan(html.indexOf(labels[i - 1]));
+  const headings = [...html.matchAll(/<h3[^>]*>(.*?)<\/h3>/g)].map(match => match[1]);
+  expect(headings).toEqual(sectionC.fields.filter(label => label !== 'Price'));
   expect(html).toContain('12,345 bytes');
   expect(html).toContain('>0</p>');
   expect(html).toContain('scope="col"');
@@ -29,4 +30,9 @@ it('never addresses the buyer as you', () => {
   const html = renderToStaticMarkup(<AtAGlance audience="buyer" summary={summary} />);
   expect(html).not.toContain('you');
   expect(html).toContain('provided by the seller');
+});
+
+it('does not render unreviewed unknown fields', () => {
+  const unreviewed = {...summary, unexpected: field('UNREVIEWED VALUE')};
+  expect(renderToStaticMarkup(<AtAGlance audience="seller" summary={unreviewed} />)).not.toContain('UNREVIEWED VALUE');
 });

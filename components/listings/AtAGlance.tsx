@@ -4,6 +4,8 @@ export const provenanceLabels = {
   aim_metadata: 'from AIM Data', seller_entered: 'entered by you',
   allai_generated: 'generated and checked', absent: 'not available',
 } as const;
+// §C includes Price between Licence and Delivery. The summary contract has no
+// price field; the existing canonical price card supplies it. Keep this allowlist closed.
 const fields = [
   ['row_meaning', 'What one row represents'], ['intended_uses', 'Intended uses'],
   ['key_fields', 'Key fields'], ['field_descriptions', 'Field descriptions and units'],
