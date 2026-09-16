@@ -9,7 +9,7 @@ it('uses all four owner routes, encodes IDs and sends exact bodies and abort sig
   vi.mocked(api.get).mockResolvedValue({data: preview});
   vi.mocked(api.post).mockResolvedValue({data: preview});
   expect(await fetchSummaryPreview('a/b', signal)).toBe(preview);
-  expect(api.get).toHaveBeenCalledWith('/listings/a%2Fb/at-a-glance/preview', {signal, headers: {'Cache-Control': 'no-cache'}});
+  expect(api.get).toHaveBeenCalledWith('/listings/a%2Fb/at-a-glance/preview', {signal});
   await regenerateSummary('a/b', 'es', signal);
   expect(api.post).toHaveBeenLastCalledWith('/listings/a%2Fb/at-a-glance/regenerate', {locale: 'es'}, {signal});
   const request = {summary_id: preview.summary_id, source_revision: preview.source_revision, summary_hash: preview.summary_hash, render_hash: preview.render_hash, request_id: crypto.randomUUID(), sample_decision: 'none' as const};

@@ -228,7 +228,7 @@ export interface SummaryDecision { decision_id: string; decision: 'approved' | '
 const summaryPath = (id: string) => `/listings/${encodeURIComponent(id)}/at-a-glance`;
 export async function fetchSummaryPreview(id: string, signal?: AbortSignal): Promise<SummaryPreview> {
   const {api} = await import('@/api/client');
-  return (await api.get<SummaryPreview>(`${summaryPath(id)}/preview`, {signal, headers: {'Cache-Control': 'no-cache'}})).data;
+  return (await api.get<SummaryPreview>(`${summaryPath(id)}/preview`, {signal})).data;
 }
 export async function regenerateSummary(id: string, locale: SummaryPreview['locale'], signal?: AbortSignal): Promise<SummaryPreview> {
   const {api} = await import('@/api/client');
