@@ -1,3 +1,4 @@
+// @vitest-environment jsdom
 import {expect, it} from 'vitest';
 import {renderToStaticMarkup} from 'react-dom/server';
 import AtAGlance, {provenanceLabels} from './AtAGlance';
@@ -26,10 +27,22 @@ it('omits missing and absent fields without defaults, and keeps text inert', () 
   expect(provenanceLabels).toEqual({aim_metadata: 'from AIM Data', seller_entered: 'entered by you', allai_generated: 'generated and checked', absent: 'not available'});
 });
 
-it('never addresses the buyer as you', () => {
-  const html = renderToStaticMarkup(<AtAGlance audience="buyer" summary={summary} />);
-  expect(html).not.toContain('you');
-  expect(html).toContain('provided by the seller');
+it.each(['buyer', 'seller'] as const)('uses audience-specific provenance labels for %s', audience => {
+  const html = renderToStaticMarkup(<AtAGlance audience={audience} summary={{...summary, intended_uses: field(['Explore your sales where you work'])}} />);
+  const document = new DOMParser().parseFromString(html, 'text/html');
+  // These paragraphs render provenance, independently of the listing's own text.
+  const nodes = document.querySelectorAll('p.mt-1.text-xs');
+  const allowed = audience === 'buyer'
+    ? ['provided by the seller', 'from AIM Data', 'generated and checked', 'not available']
+    : ['entered by you', 'from AIM Data', 'generated and checked', 'not available'];
+  expect(nodes.length).toBe(sectionC.fields.length - 1);
+  for (const node of nodes) {
+    const text = node.textContent ?? '';
+    const label = text.replace(/^Source: /, '').replace(/ \((seller\/local report|approved publication)\)$/, '').trim();
+    expect(allowed).toContain(label);
+    if (audience === 'buyer') expect(text).not.toMatch(/you|your/i);
+  }
+  if (audience === 'buyer') expect(html).toContain('provided by the seller');
 });
 
 it('does not render unreviewed unknown fields', () => {
