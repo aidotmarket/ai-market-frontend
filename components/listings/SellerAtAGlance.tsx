@@ -22,6 +22,9 @@ export default function SellerAtAGlance({listingId, active = true, revision = 0}
   const [error, setError] = useState('');
   const [retry, setRetry] = useState(0);
   const request = useRef<AbortController | null>(null);
+  // Keep decision IDs across an uncertain outcome and preview reload. Approve
+  // and withdraw are separate operations, each bound to the exact identifiers.
+  const decisions = useRef<{key: string; approve?: string; withdraw?: string}>({key: ''});
   useEffect(() => {
     setPreview(null); setError(''); setMessage('');
     if (!active) return;
@@ -42,10 +45,14 @@ export default function SellerAtAGlance({listingId, active = true, revision = 0}
       let next: SummaryPreview;
       if (action === 'regenerate') next = await regenerateSummary(listingId, preview.locale, controller.signal);
       else {
+        const key = JSON.stringify([listingId, preview.summary_id, preview.source_revision, preview.summary_hash, preview.render_hash]);
+        if (decisions.current.key !== key) decisions.current = {key};
+        const decisionId = decisions.current[action] ?? requestId();
+        decisions.current[action] = decisionId;
         const payload = {
           summary_id: preview.summary_id, source_revision: preview.source_revision,
           summary_hash: preview.summary_hash, render_hash: preview.render_hash,
-          request_id: requestId(), sample_decision: 'none' as const,
+          request_id: decisionId, sample_decision: 'none' as const,
         };
         await (action === 'approve' ? approveSummary : withdrawSummary)(listingId, payload, controller.signal);
         next = await fetchSummaryPreview(listingId, controller.signal);

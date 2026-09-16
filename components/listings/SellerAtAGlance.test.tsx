@@ -98,3 +98,30 @@ it('surfaces the caught action error for diagnosis', async () => {
   expect((await screen.findByRole('alert')).textContent).toContain('Random source unavailable');
   expect(api.approveSummary).not.toHaveBeenCalled();
 });
+
+it.each(['approve', 'withdraw'] as const)('reuses the %s request ID after an unconfirmed outcome and identical reload', async action => {
+  const call = action === 'approve' ? api.approveSummary : api.withdrawSummary;
+  const label = action === 'approve' ? 'Approve At a glance' : 'Withdraw';
+  vi.mocked(api.fetchSummaryPreview).mockResolvedValue({...preview, state: action === 'approve' ? 'pending' : 'approved'});
+  vi.mocked(call).mockRejectedValueOnce(new Error('Network timeout'));
+  render(<SellerAtAGlance listingId="listing" />);
+  fireEvent.click(await screen.findByRole('button', {name: label}));
+  expect((await screen.findByRole('alert')).textContent).toContain('Network timeout');
+  fireEvent.click(screen.getByRole('button', {name: 'Reload summary'}));
+  fireEvent.click(await screen.findByRole('button', {name: label}));
+  await waitFor(() => expect(call).toHaveBeenCalledTimes(2));
+  expect(vi.mocked(call).mock.calls[1][1]).toEqual(vi.mocked(call).mock.calls[0][1]);
+});
+it('mints a fresh retry ID when the preview hash changed after a network failure', async () => {
+  vi.mocked(api.approveSummary).mockRejectedValueOnce(new Error('Network timeout'));
+  vi.mocked(api.fetchSummaryPreview).mockResolvedValueOnce(preview).mockResolvedValue({...preview, render_hash: 'd'.repeat(64)});
+  render(<SellerAtAGlance listingId="listing" />);
+  fireEvent.click(await screen.findByRole('button', {name: 'Approve At a glance'}));
+  await screen.findByRole('alert');
+  fireEvent.click(screen.getByRole('button', {name: 'Reload summary'}));
+  fireEvent.click(await screen.findByRole('button', {name: 'Approve At a glance'}));
+  await waitFor(() => expect(api.approveSummary).toHaveBeenCalledTimes(2));
+  const [first, second] = vi.mocked(api.approveSummary).mock.calls.map(call => call[1]);
+  expect(first.request_id).not.toBe(second.request_id);
+  expect(second.render_hash).toBe('d'.repeat(64));
+});
