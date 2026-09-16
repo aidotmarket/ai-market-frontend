@@ -1,0 +1,7 @@
+$ rtk proxy npm run typecheck
+
+> ai-market-frontend@0.0.0 typecheck
+> tsc --noEmit
+
+
+Exit code: 0

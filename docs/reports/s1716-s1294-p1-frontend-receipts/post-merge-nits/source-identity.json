@@ -1,0 +1,12 @@
+{
+  "base": "b008558162cee004b08df0578eca2615837950f0",
+  "branch": "build/bq-listing-enrichment-seller-tools-s1294-p1-frontend-nits-s1716",
+  "N1_commit": "347a8d61dc9fe0ee0aef60d2f6a1b52843fc2bee",
+  "N2_commit": "The commit containing this receipt",
+  "source_sha256": {
+    "components/listings/AtAGlance.test.tsx": "427c8080965b38cf1644dd17d93e0819040e2707285a6555a60ad08783aa5684",
+    "components/listings/AtAGlance.tsx": "bcd365e8f08f41a0ea1e347645cf25a34e8f2caf606026de3d8fbbc6096308e8",
+    "components/listings/SellerAtAGlance.tsx": "8840c51d1800d037513ad405eb8aaf4804b82069c7e4fb119205b8cab1568811",
+    "components/listings/SellerAtAGlance.test.tsx": "09444dc0c1b9d14e32ccae09fdc7bfb59898b3cb336e13c96e2a65ac5a48c819"
+  }
+}

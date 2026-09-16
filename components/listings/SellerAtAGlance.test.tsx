@@ -4,7 +4,7 @@ import {afterEach, beforeEach, expect, it, vi} from 'vitest';
 import {renderToStaticMarkup} from 'react-dom/server';
 import {AxiosError} from 'axios';
 import * as api from '@/lib/api';
-import {preview, emptySummaries} from '@/tests/summaryFixture';
+import {preview, emptySummaries, field} from '@/tests/summaryFixture';
 import AtAGlance from './AtAGlance';
 import SellerAtAGlance from './SellerAtAGlance';
 vi.mock('@/lib/api', () => ({fetchSummaryPreview: vi.fn(), regenerateSummary: vi.fn(), approveSummary: vi.fn(), withdrawSummary: vi.fn()}));
@@ -129,8 +129,33 @@ it('mints a fresh retry ID when the preview hash changed after a network failure
 it.each(emptySummaries)('omits the field list for an approved empty summary %#', async at_a_glance => {
   vi.mocked(api.fetchSummaryPreview).mockResolvedValue({...preview, state: 'approved', at_a_glance});
   const {container} = render(<SellerAtAGlance listingId="listing" />);
-  await screen.findByRole('button', {name: 'Withdraw'});
+  expect((await screen.findByRole('button', {name: 'Withdraw'})).hasAttribute('disabled')).toBe(false);
+  expect(screen.queryByText('Nothing to show buyers yet. Add more listing details or regenerate.')).toBeNull();
   expect(screen.queryByRole('region', {name: 'At a glance'})).toBeNull();
   expect(container.querySelector('h3, ul, table')).toBeNull();
   expect(screen.getByRole('button', {name: 'Regenerate'})).toBeTruthy();
+});
+
+const emptyPendingSummaries = [...emptySummaries, {profile: preview.at_a_glance.profile, unexpected: field('unsupported')}];
+it.each(emptyPendingSummaries)('disables approval for field-empty pending summary %# while allowing regeneration', async at_a_glance => {
+  vi.mocked(api.fetchSummaryPreview).mockResolvedValue({...preview, at_a_glance});
+  vi.mocked(api.regenerateSummary).mockResolvedValue(preview);
+  render(<SellerAtAGlance listingId="listing" />);
+  const approve = await screen.findByRole('button', {name: 'Approve At a glance'});
+  expect(approve.hasAttribute('disabled')).toBe(true);
+  expect(screen.getByText('Nothing to show buyers yet. Add more listing details or regenerate.')).toBeTruthy();
+  fireEvent.click(approve);
+  expect(api.approveSummary).not.toHaveBeenCalled();
+  const regenerate = screen.getByRole('button', {name: 'Regenerate'});
+  expect(regenerate.hasAttribute('disabled')).toBe(false);
+  fireEvent.click(regenerate);
+  await waitFor(() => expect(api.regenerateSummary).toHaveBeenCalledTimes(1));
+  await waitFor(() => expect(screen.getByRole('button', {name: 'Approve At a glance'}).hasAttribute('disabled')).toBe(false));
+  expect(screen.queryByText('Nothing to show buyers yet. Add more listing details or regenerate.')).toBeNull();
+});
+it('enables approval for a supported measured-zero field', async () => {
+  vi.mocked(api.fetchSummaryPreview).mockResolvedValue({...preview, at_a_glance: {profile: preview.at_a_glance.profile, row_count: field(0)}});
+  render(<SellerAtAGlance listingId="listing" />);
+  expect((await screen.findByRole('button', {name: 'Approve At a glance'})).hasAttribute('disabled')).toBe(false);
+  expect(screen.queryByText('Nothing to show buyers yet. Add more listing details or regenerate.')).toBeNull();
 });

@@ -174,3 +174,24 @@ Validation receipts: [`s1716-s1294-p1-frontend-receipts/r2-g3/`](s1716-s1294-p1-
 - Build: exit 0, 47/47 static pages generated; listing detail remains dynamic (`build.txt`). Used the previously documented nonfunctional compile-only Keystatic fixtures and API URLs.
 
 G3 is folded. This is a frontend correction and validation receipt, not fresh Gate-3 approval or Gate-4 acceptance. No merge or deployment performed; the earlier pilot and production acceptance boundaries remain open. The full-suite baseline comparison above belongs to Part A and was not rerun for this bounded Part B.
+
+
+## Post-merge nits
+
+Folded only N1 and N2 from Gate-3 R2 DeepSeek `response-20260916-152435-095820` and CC `response-20260916-152447-722575`. Branch `build/bq-listing-enrichment-seller-tools-s1294-p1-frontend-nits-s1716` starts at freshly fetched `origin/main` `b008558162cee004b08df0578eca2615837950f0`. Consulted `/Users/max/Projects/ai-market/runbooks/ai-market-frontend.md`; no runbook procedure changed. No merge or deployment is part of this fold.
+
+- **N1**, commit `347a8d61dc9fe0ee0aef60d2f6a1b52843fc2bee`: replaced whole-document buyer rejection with assertions on the provenance paragraph elements for both audiences. Each rendered label must belong to the specified audience allowlist; buyer provenance cannot contain “you”/“your”. Kept the positive buyer assertion. The listing fixture deliberately includes “your” and “you” outside provenance. Isolated renderer check: 13/13 passed.
+- **N2**, this report's commit (`fix(summary): disable approval for field-empty previews (N2)`): extracted the existing G3 closed-field guard into a shared predicate and used it to disable Approve for field-empty pending previews. Shows exactly “Nothing to show buyers yet. Add more listing details or regenerate.” Regenerate remains enabled when idle; approved-state Withdraw is unchanged. Tests cover profile-only, all-absent and unsupported-only pending summaries, successful regeneration enabling approval, measured-zero approval, and approved empty-summary withdrawal availability.
+
+Diff and captured receipts: [`post-merge-nits/`](s1716-s1294-p1-frontend-receipts/post-merge-nits/).
+
+| Check | Result | Receipt |
+|---|---|---|
+| Complete code/test diff against base | Four files; only N1/N2 | [changes.diff](s1716-s1294-p1-frontend-receipts/post-merge-nits/changes.diff) |
+| `rtk proxy npx vitest run components/listings 'app/listings/[slug]/page.test.tsx'` | **66/66 passed**, six files; exit 0 | [focused.txt](s1716-s1294-p1-frontend-receipts/post-merge-nits/focused.txt) |
+| Mutation: remove `!hasBuyerFields` from Approve's disabled condition | **3/3 targeted cases failed**, exit 1, on disabled-state assertion; restored before final checks | [mutation-empty-approve.txt](s1716-s1294-p1-frontend-receipts/post-merge-nits/mutation-empty-approve.txt) |
+| Route and renderer snapshot bytes vs base | Both files byte-identical; no snapshot updates | [snapshots.json](s1716-s1294-p1-frontend-receipts/post-merge-nits/snapshots.json) |
+| `rtk proxy npm run typecheck` | Exit 0 | [typecheck.txt](s1716-s1294-p1-frontend-receipts/post-merge-nits/typecheck.txt) |
+| `rtk proxy npm run lint` | Exit 0; zero errors, seven existing image warnings | [lint.txt](s1716-s1294-p1-frontend-receipts/post-merge-nits/lint.txt) |
+
+The initial renderer invocation could not load Vitest because this new worktree had no dependencies. Installed the locked dependencies with `rtk proxy npm ci --ignore-scripts`, then all checks above passed. No lockfile changes. Source hashes and N1 identity are recorded in [source-identity.json](s1716-s1294-p1-frontend-receipts/post-merge-nits/source-identity.json). The broader full-suite, build and production acceptance claims above remain historical; they were not rerun for these two nits.
