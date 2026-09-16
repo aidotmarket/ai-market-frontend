@@ -42,3 +42,10 @@ it.each([[0, '0 bytes'], [1000, '1 KB'], [2500000, '2.5 MB'], [3000000000, '3 GB
   expect(html).toContain(`title="${Number(bytes).toLocaleString('en-US')} bytes">${display}</p>`);
   expect(html).not.toContain('dataset/file total');
 });
+
+it('labels omitted description and unit cells without placeholder glyphs', () => {
+  const html = renderToStaticMarkup(<AtAGlance audience="buyer" summary={summary} />);
+  expect(html).toContain('aria-label="no description"></td>');
+  expect(html).toContain('aria-label="no unit"></td>');
+  expect(html).not.toMatch(/<td[^>]*>[—-]<\/td>/);
+});

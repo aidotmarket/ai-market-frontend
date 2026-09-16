@@ -19,8 +19,8 @@ export default function SchemaTable({columns, descriptions = [], variant = 'lega
           {summary ? <th scope="row" className="px-3 py-1.5 text-left font-mono font-normal text-gray-900">{column.name}</th>
             : <td className="px-3 py-1.5 text-gray-900 font-mono">{column.name}</td>}
           <td className="px-3 py-1.5 text-gray-600">{column.type}</td>
-          {showDescription && <td className="px-3 py-1.5">{detail?.description}</td>}
-          {showUnit && <td className="px-3 py-1.5">{detail?.unit}</td>}
+          {showDescription && <td className="px-3 py-1.5" aria-label={detail?.description ? undefined : 'no description'}>{detail?.description || undefined}</td>}
+          {showUnit && <td className="px-3 py-1.5" aria-label={detail?.unit ? undefined : 'no unit'}>{detail?.unit || undefined}</td>}
         </tr>;
       })}</tbody>
     </table>
