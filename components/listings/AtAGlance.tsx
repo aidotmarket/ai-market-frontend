@@ -1,3 +1,4 @@
+import SchemaTable from './SchemaTable';
 import type {ListingSummary, SummaryField} from '@/lib/api';
 
 export const provenanceLabels = {
@@ -36,21 +37,7 @@ export default function AtAGlance({summary, audience}: {summary?: ListingSummary
       const value = field.value;
       return <div key={key} className="min-w-0">
         <h3 className="text-sm font-medium text-gray-900">{label}</h3>
-        {key === 'key_fields' ? <div className="max-w-full overflow-x-auto" tabIndex={0} role="region" aria-label="Key fields schema">
-          <table className="min-w-full text-sm border border-gray-200 rounded-lg">
-            <thead><tr className="bg-gray-50">{['Name', 'Type', ...(descriptions.some(d => d.description) ? ['Description'] : []), ...(descriptions.some(d => d.unit) ? ['Unit'] : [])].map(title =>
-              <th key={title} scope="col" className="px-3 py-2 text-left font-medium text-gray-700 border-b">{title}</th>)}</tr></thead>
-            <tbody>{summary.key_fields?.value.map(column => {
-              const detail = descriptions.find(d => d.name === column.name);
-              return <tr key={column.name} className="border-b border-gray-100 last:border-0">
-                <th scope="row" className="px-3 py-1.5 text-left font-mono font-normal text-gray-900">{column.name}</th>
-                <td className="px-3 py-1.5 text-gray-600">{column.type}</td>
-                {descriptions.some(d => d.description) && <td className="px-3 py-1.5">{detail?.description}</td>}
-                {descriptions.some(d => d.unit) && <td className="px-3 py-1.5">{detail?.unit}</td>}
-              </tr>;
-            })}</tbody>
-          </table>
-        </div> : key === 'field_descriptions' ? <ul className="space-y-1 text-sm text-gray-700">{descriptions.map(d =>
+        {key === 'key_fields' ? <SchemaTable variant="summary" columns={summary.key_fields?.value ?? []} descriptions={descriptions} /> : key === 'field_descriptions' ? <ul className="space-y-1 text-sm text-gray-700">{descriptions.map(d =>
           <li key={d.name}><span className="font-mono">{d.name}</span>{d.description && <>: {d.description}</>}{d.unit && <> — {d.unit}</>}</li>)}</ul>
           : Array.isArray(value) ? <ul className="list-inside list-disc text-sm text-gray-700">{(value as string[]).map((item, i) => <li key={i}>{item}</li>)}</ul>
           : <p className="text-sm text-gray-700">{typeof value === 'number' ? value.toLocaleString('en-US') : value}{key === 'size_bytes' && ' bytes (dataset/file total)'}{key === 'freshness' && ' (declared cadence)'}</p>}
