@@ -9,6 +9,7 @@ import {
   privacyScoreColor,
 } from '@/lib/format';
 import type { ListingDetail } from '@/types';
+import BuyerAtAGlance from '@/components/listings/BuyerAtAGlance';
 import BuyButton from '@/components/BuyButton';
 import ListingPurchaseAdvisory from '@/components/ListingPurchaseAdvisory';
 import ListingPurchasePanel from '@/components/ListingPurchasePanel';
@@ -34,6 +35,7 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
   if (UUID_RE.test(slug)) {
     return { title: 'Redirecting...' };
   }
+
 
   const listing: ListingDetail | null = await fetchPublicListing(slug);
   if (!listing) {
@@ -78,6 +80,7 @@ export default async function ListingDetailPage({ params, searchParams }: Props)
     notFound();
   }
 
+  const summaryCheckedAt = Date.now();
   const listing: ListingDetail | null = await fetchPublicListing(slug);
   if (!listing) {
     notFound();
@@ -132,6 +135,8 @@ export default async function ListingDetailPage({ params, searchParams }: Props)
               <span>{listing.inquiry_count} inquiries</span>
             </div>
           </div>
+
+          <BuyerAtAGlance slug={slug} initialSummary={listing.at_a_glance} checkedAt={summaryCheckedAt} />
 
           {approved ? <iframe title="Seller-approved listing" sandbox="" referrerPolicy="no-referrer"
             srcDoc={approved.rendered_html} className="h-[min(720px,80vh)] min-h-96 w-full rounded-xl border border-gray-200 bg-white" /> : <>

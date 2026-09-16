@@ -270,3 +270,13 @@ it('shows a paused Workspace offer without a purchase control',async()=>{
     presentation_version:'seller-listing-review-v2',rendered_html,render_hash:createHash('sha256').update(rendered_html).digest('hex')}}));
   expect(html).toContain('seller has paused new sales');expect(buyButtonProps).not.toHaveBeenCalled();
 });
+
+
+it('renders approved At a glance on the buyer route with a pinned present snapshot', async () => {
+  const {summary} = await import('@/tests/summaryFixture');
+  fetchPublicListing.mockReset(); fetchListingVersions.mockReset();
+  const html = await renderPage(makeListing({at_a_glance: summary}));
+  expect(html).toContain('At a glance');
+  expect(html).toContain('One recorded sale');
+  expect(html).toMatchSnapshot();
+});
