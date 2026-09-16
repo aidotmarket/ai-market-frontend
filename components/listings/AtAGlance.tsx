@@ -32,7 +32,7 @@ function humanSize(bytes: number): string {
 
 // One inert renderer for the seller preview and the public approved projection.
 export default function AtAGlance({summary, audience}: {summary?: ListingSummary | null; audience: Audience}) {
-  if (!summary) return null;
+  if (!summary || !fields.some(([key]) => summary[key] && summary[key]?.provenance !== 'absent')) return null;
   const descriptions = summary.field_descriptions?.provenance === 'absent' ? [] : summary.field_descriptions?.value ?? [];
   return <section aria-label="At a glance" className="min-w-0 space-y-4 rounded-xl border border-gray-200 bg-white p-5 break-words">
     <h2 className="text-lg font-semibold text-gray-900">At a glance</h2>

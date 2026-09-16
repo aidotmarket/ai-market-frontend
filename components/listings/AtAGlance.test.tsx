@@ -2,7 +2,7 @@ import {expect, it} from 'vitest';
 import {renderToStaticMarkup} from 'react-dom/server';
 import AtAGlance, {provenanceLabels} from './AtAGlance';
 import sectionC from '@/tests/summarySectionC.json';
-import {summary, field} from '@/tests/summaryFixture';
+import {summary, field, emptySummaries} from '@/tests/summaryFixture';
 it('renders nothing when absent, without even a wrapper', () => {
   expect(renderToStaticMarkup(<AtAGlance audience="seller" />)).toBe('');
   expect(renderToStaticMarkup(<AtAGlance audience="seller" summary={null} />)).toMatchInlineSnapshot('""');
@@ -48,4 +48,10 @@ it('labels omitted description and unit cells without placeholder glyphs', () =>
   expect(html).toContain('aria-label="no description"></td>');
   expect(html).toContain('aria-label="no unit"></td>');
   expect(html).not.toMatch(/<td[^>]*>[—-]<\/td>/);
+});
+
+it.each(['buyer', 'seller'] as const)('renders no markup for empty %s summaries', audience => {
+  for (const empty of [...emptySummaries, {profile: summary.profile, unexpected: field('unsupported')}]) {
+    expect(renderToStaticMarkup(<AtAGlance audience={audience} summary={empty} />)).toBe('');
+  }
 });

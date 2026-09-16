@@ -4,7 +4,7 @@ import {afterEach, beforeEach, expect, it, vi} from 'vitest';
 import {renderToStaticMarkup} from 'react-dom/server';
 import {AxiosError} from 'axios';
 import * as api from '@/lib/api';
-import {preview} from '@/tests/summaryFixture';
+import {preview, emptySummaries} from '@/tests/summaryFixture';
 import AtAGlance from './AtAGlance';
 import SellerAtAGlance from './SellerAtAGlance';
 vi.mock('@/lib/api', () => ({fetchSummaryPreview: vi.fn(), regenerateSummary: vi.fn(), approveSummary: vi.fn(), withdrawSummary: vi.fn()}));
@@ -124,4 +124,13 @@ it('mints a fresh retry ID when the preview hash changed after a network failure
   const [first, second] = vi.mocked(api.approveSummary).mock.calls.map(call => call[1]);
   expect(first.request_id).not.toBe(second.request_id);
   expect(second.render_hash).toBe('d'.repeat(64));
+});
+
+it.each(emptySummaries)('omits the field list for an approved empty summary %#', async at_a_glance => {
+  vi.mocked(api.fetchSummaryPreview).mockResolvedValue({...preview, state: 'approved', at_a_glance});
+  const {container} = render(<SellerAtAGlance listingId="listing" />);
+  await screen.findByRole('button', {name: 'Withdraw'});
+  expect(screen.queryByRole('region', {name: 'At a glance'})).toBeNull();
+  expect(container.querySelector('h3, ul, table')).toBeNull();
+  expect(screen.getByRole('button', {name: 'Regenerate'})).toBeTruthy();
 });

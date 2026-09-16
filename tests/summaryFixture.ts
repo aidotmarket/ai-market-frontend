@@ -18,3 +18,9 @@ export const preview: SummaryPreview = {
   approval_version: 'v1', generator_version: 's1294-p1-v2',
   approval_text: 'Approve the displayed metadata, including counts and coverage. No sample permission is granted. This does not attest data freshness or publish the listing.',
 };
+
+export const emptySummaries: ListingSummary[] = [
+  {profile: summary.profile},
+  Object.fromEntries(Object.entries(summary).map(([key, value]) =>
+    [key, key === 'profile' ? value : {...value, provenance: 'absent'}])) as ListingSummary,
+];

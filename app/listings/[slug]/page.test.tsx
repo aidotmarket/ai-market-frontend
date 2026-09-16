@@ -280,3 +280,14 @@ it('renders approved At a glance on the buyer route with a pinned present snapsh
   expect(html).toContain('One recorded sale');
   expect(html).toMatchSnapshot();
 });
+
+it('keeps empty and null summaries byte-identical to the legacy absent buyer route', async () => {
+  const {emptySummaries} = await import('@/tests/summaryFixture');
+  fetchPublicListing.mockReset(); fetchListingVersions.mockReset();
+  const legacy = await renderPage(makeListing());
+  for (const at_a_glance of [null, ...emptySummaries]) {
+    const html = await renderPage(makeListing({at_a_glance}));
+    expect(html).not.toContain('At a glance');
+    expect(html).toBe(legacy);
+  }
+});
