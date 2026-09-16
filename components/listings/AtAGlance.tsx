@@ -25,6 +25,11 @@ function Provenance({field, audience}: {field: SummaryField; audience: Audience}
   </p>;
 }
 
+function humanSize(bytes: number): string {
+  const [scale, unit] = bytes >= 1e9 ? [1e9, 'GB'] : bytes >= 1e6 ? [1e6, 'MB'] : bytes >= 1e3 ? [1e3, 'KB'] : [1, 'bytes'];
+  return `${(bytes / Number(scale)).toLocaleString('en-US', {maximumFractionDigits: 2})} ${unit}`;
+}
+
 // One inert renderer for the seller preview and the public approved projection.
 export default function AtAGlance({summary, audience}: {summary?: ListingSummary | null; audience: Audience}) {
   if (!summary) return null;
@@ -40,7 +45,8 @@ export default function AtAGlance({summary, audience}: {summary?: ListingSummary
         {key === 'key_fields' ? <SchemaTable variant="summary" columns={summary.key_fields?.value ?? []} descriptions={descriptions} /> : key === 'field_descriptions' ? <ul className="space-y-1 text-sm text-gray-700">{descriptions.map(d =>
           <li key={d.name}><span className="font-mono">{d.name}</span>{d.description && <>: {d.description}</>}{d.unit && <> — {d.unit}</>}</li>)}</ul>
           : Array.isArray(value) ? <ul className="list-inside list-disc text-sm text-gray-700">{(value as string[]).map((item, i) => <li key={i}>{item}</li>)}</ul>
-          : <p className="text-sm text-gray-700">{typeof value === 'number' ? value.toLocaleString('en-US') : value}{key === 'size_bytes' && ' bytes (dataset/file total)'}{key === 'freshness' && ' (declared cadence)'}</p>}
+          : key === 'size_bytes' && typeof value === 'number' ? <p className="text-sm text-gray-700" title={`${value.toLocaleString('en-US')} bytes`}>{humanSize(value)}</p>
+          : <p className="text-sm text-gray-700">{typeof value === 'number' ? value.toLocaleString('en-US') : value}{key === 'freshness' && ' (declared cadence)'}</p>}
         <Provenance field={field} audience={audience} />
       </div>;
     })}

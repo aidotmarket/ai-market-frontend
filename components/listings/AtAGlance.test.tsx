@@ -12,7 +12,7 @@ it('renders the complete ordered metadata with inert schema cells', () => {
   expect(html).toMatchSnapshot();
   const headings = [...html.matchAll(/<h3[^>]*>(.*?)<\/h3>/g)].map(match => match[1]);
   expect(headings).toEqual(sectionC.fields.filter(label => label !== 'Price'));
-  expect(html).toContain('12,345 bytes');
+  expect(html).toContain('title="12,345 bytes">12.35 KB</p>');
   expect(html).toContain('>0</p>');
   expect(html).toContain('scope="col"');
   expect(html).toContain('Sale amount'); expect(html).toContain('EUR');
@@ -35,4 +35,10 @@ it('never addresses the buyer as you', () => {
 it('does not render unreviewed unknown fields', () => {
   const unreviewed = {...summary, unexpected: field('UNREVIEWED VALUE')};
   expect(renderToStaticMarkup(<AtAGlance audience="seller" summary={unreviewed} />)).not.toContain('UNREVIEWED VALUE');
+});
+
+it.each([[0, '0 bytes'], [1000, '1 KB'], [2500000, '2.5 MB'], [3000000000, '3 GB']])('formats %s bytes without inventing dataset scope', (bytes, display) => {
+  const html = renderToStaticMarkup(<AtAGlance audience="buyer" summary={{profile: summary.profile, size_bytes: field(bytes)}} />);
+  expect(html).toContain(`title="${Number(bytes).toLocaleString('en-US')} bytes">${display}</p>`);
+  expect(html).not.toContain('dataset/file total');
 });
