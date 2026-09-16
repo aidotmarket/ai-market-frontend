@@ -5,6 +5,16 @@ import axios from 'axios';
 import {approveSummary, fetchSummaryPreview, regenerateSummary, withdrawSummary, type SummaryPreview} from '@/lib/api';
 import AtAGlance from './AtAGlance';
 
+function requestId(): string {
+  if (typeof crypto.randomUUID === 'function') return crypto.randomUUID();
+  // getRandomValues is also available on non-HTTPS staging hosts.
+  const bytes = crypto.getRandomValues(new Uint8Array(16));
+  bytes[6] = (bytes[6] & 0x0f) | 0x40;
+  bytes[8] = (bytes[8] & 0x3f) | 0x80;
+  const hex = Array.from(bytes, byte => byte.toString(16).padStart(2, '0')).join('');
+  return `${hex.slice(0, 8)}-${hex.slice(8, 12)}-${hex.slice(12, 16)}-${hex.slice(16, 20)}-${hex.slice(20)}`;
+}
+
 export default function SellerAtAGlance({listingId, active = true, revision = 0}: {listingId: string; active?: boolean; revision?: number}) {
   const [preview, setPreview] = useState<SummaryPreview | null>(null);
   const [busy, setBusy] = useState(false);
@@ -35,7 +45,7 @@ export default function SellerAtAGlance({listingId, active = true, revision = 0}
         const payload = {
           summary_id: preview.summary_id, source_revision: preview.source_revision,
           summary_hash: preview.summary_hash, render_hash: preview.render_hash,
-          request_id: crypto.randomUUID(), sample_decision: 'none' as const,
+          request_id: requestId(), sample_decision: 'none' as const,
         };
         await (action === 'approve' ? approveSummary : withdrawSummary)(listingId, payload, controller.signal);
         next = await fetchSummaryPreview(listingId, controller.signal);
@@ -53,7 +63,7 @@ export default function SellerAtAGlance({listingId, active = true, revision = 0}
           const next = await fetchSummaryPreview(listingId, controller.signal);
           if (!controller.signal.aborted) {setPreview(next); setMessage('Summary changed, reloaded. Review it before approving.');}
         } catch {if (!controller.signal.aborted) setError('The changed summary could not be reloaded. Try again.');}
-      } else setError('The summary action could not be confirmed. Reload the summary before trying again.');
+      } else setError(`The summary action could not be confirmed. ${failure instanceof Error ? failure.message : 'Unknown error.'} Reload the summary before trying again.`);
     } finally {
       if (!controller.signal.aborted) {setBusy(false); request.current = null;}
     }

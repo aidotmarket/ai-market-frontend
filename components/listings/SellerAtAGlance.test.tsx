@@ -9,7 +9,7 @@ import AtAGlance from './AtAGlance';
 import SellerAtAGlance from './SellerAtAGlance';
 vi.mock('@/lib/api', () => ({fetchSummaryPreview: vi.fn(), regenerateSummary: vi.fn(), approveSummary: vi.fn(), withdrawSummary: vi.fn()}));
 beforeEach(() => {vi.resetAllMocks(); vi.mocked(api.fetchSummaryPreview).mockResolvedValue(preview);});
-afterEach(cleanup);
+afterEach(() => {cleanup(); vi.unstubAllGlobals();});
 it.each(['pending', 'invalidated'] as const)('treats %s as neutral pending and renders the exact buyer component', async state => {
   vi.mocked(api.fetchSummaryPreview).mockResolvedValue({...preview, state});
   render(<SellerAtAGlance listingId="listing" />);
@@ -81,4 +81,20 @@ it('disables actions during a request and discards a late response after a listi
   rerender(<SellerAtAGlance listingId="two" />);
   await act(async () => {finish({...preview, state: 'approved'});});
   expect(screen.queryByRole('button', {name: 'Withdraw'})).toBeNull();
+});
+
+it('uses a v4 UUID fallback on staging without randomUUID', async () => {
+  const getRandomValues = crypto.getRandomValues.bind(crypto);
+  vi.stubGlobal('crypto', {getRandomValues});
+  render(<SellerAtAGlance listingId="listing" />);
+  fireEvent.click(await screen.findByRole('button', {name: 'Approve At a glance'}));
+  await waitFor(() => expect(api.approveSummary).toHaveBeenCalledTimes(1));
+  expect(vi.mocked(api.approveSummary).mock.calls[0][1].request_id).toMatch(/^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/);
+});
+it('surfaces the caught action error for diagnosis', async () => {
+  vi.stubGlobal('crypto', {getRandomValues: () => {throw new Error('Random source unavailable');}});
+  render(<SellerAtAGlance listingId="listing" />);
+  fireEvent.click(await screen.findByRole('button', {name: 'Approve At a glance'}));
+  expect((await screen.findByRole('alert')).textContent).toContain('Random source unavailable');
+  expect(api.approveSummary).not.toHaveBeenCalled();
 });
