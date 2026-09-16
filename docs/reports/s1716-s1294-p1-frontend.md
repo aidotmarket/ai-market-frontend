@@ -40,3 +40,16 @@ No backend edits were made, per scope.
 - Screenshots/mobile/accessibility: not performed; no 375px or keyboard/screen-reader verification claimed.
 - Section H's real-listing/five-buyer pilot: not performed.
 - Seller UI, buyer render, and tests milestones remain uncompleted. Only the blocker report milestone is committed and pushed.
+
+
+## Resume: controller ruling (2026-09-16)
+
+The controller explicitly resolved the contract gap: do not change the backend; treat every non-approved preview as pending with “Review the summary and approve it to show it to buyers”. The prior-approval/listing-change distinction is deferred to the BQ backend nit for `last_decision` / `previous_state`. The historical stop above remains evidence, not current implementation status.
+
+### Seller milestone
+
+Implemented the shared `components/listings/AtAGlance.tsx` renderer and `SellerAtAGlance.tsx` panel. Wired into listing edit, Workspace publication result, and Workspace listings. Typed summary and four seller endpoint functions live in `lib/api.ts`, reusing authenticated Axios through dynamic import. Approval/withdrawal use the exact four preview identifiers, a browser UUID and `sample_decision: "none"`. Every decision reloads preview; 409 reloads with neutral changed-summary feedback. No backend edits.
+
+`rtk proxy npx vitest run components/listings/SellerAtAGlance.test.tsx`: 8/8 passed. Covers pending and invalidated neutral wording, byte-identical shared renderer, provenance, exact approval payload, withdrawal, regeneration, 409 reload/new identifiers, failed reload, and late-response cancellation. Initial implementation typecheck passed before these tests were added; final typecheck pending.
+
+Fresh fetch of frontend origin on resume resolved `origin/main` to `2fa04d4388dec80521bf48745d6edbfabc113361`; preserved branch includes prior fetched `078d919`. Baseline comparison will use the actual resume-time origin/main in a separate detached worktree.

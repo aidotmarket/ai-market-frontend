@@ -177,3 +177,77 @@ export async function fetchDataRequest(slugOrId: string) {
   if (!res.ok) return null;
   return res.json();
 }
+
+// Phase 1 metadata-only summary. Seller calls reuse the authenticated client.
+export interface SummaryField<T = string | number | string[] | Record<string, string>[]> {
+  value: T;
+  provenance: 'aim_metadata' | 'seller_entered' | 'allai_generated' | 'absent';
+  authority: 'seller_entered' | 'seller_local_report' | 'publication_bound';
+  source_reference: string;
+  source_revision: string;
+  guard_result_reference?: string | null;
+  artifact_id?: string | null;
+}
+export interface ListingSummary {
+  profile: 'aim-listing-enrichment-profile-v2';
+  row_meaning?: SummaryField<string> | null;
+  intended_uses?: SummaryField<string[]> | null;
+  key_fields?: SummaryField<{name: string; type: string}[]> | null;
+  field_descriptions?: SummaryField<{name: string; description?: string; unit?: string}[]> | null;
+  row_count?: SummaryField<number> | null;
+  column_count?: SummaryField<number> | null;
+  size_bytes?: SummaryField<number> | null;
+  format?: SummaryField<string> | null;
+  spatial_coverage?: SummaryField<string> | null;
+  temporal_coverage?: SummaryField<string> | null;
+  data_languages?: SummaryField<string[]> | null;
+  freshness?: SummaryField<string> | null;
+  license?: SummaryField<string> | null;
+  delivery?: SummaryField<string> | null;
+  privacy_status?: SummaryField<string> | null;
+  sample_availability?: SummaryField<string> | null;
+}
+export interface SummaryApprovalRequest {
+  summary_id: string;
+  source_revision: string;
+  summary_hash: string;
+  render_hash: string;
+  request_id: string;
+  sample_decision: 'none';
+}
+export interface SummaryPreview extends Omit<SummaryApprovalRequest, 'request_id'> {
+  state: 'pending' | 'approved' | 'invalidated';
+  status: 'pending' | 'approved' | 'invalidated';
+  locale: 'en' | 'es' | 'zh-Hans';
+  at_a_glance: ListingSummary;
+  approval_text: string;
+  approval_version: string;
+  generator_version: string;
+}
+export interface SummaryDecision { decision_id: string; decision: 'approved' | 'withdrawn' }
+const summaryPath = (id: string) => `/listings/${encodeURIComponent(id)}/at-a-glance`;
+export async function fetchSummaryPreview(id: string, signal?: AbortSignal): Promise<SummaryPreview> {
+  const {api} = await import('@/api/client');
+  return (await api.get<SummaryPreview>(`${summaryPath(id)}/preview`, {signal, headers: {'Cache-Control': 'no-cache'}})).data;
+}
+export async function regenerateSummary(id: string, locale: SummaryPreview['locale'], signal?: AbortSignal): Promise<SummaryPreview> {
+  const {api} = await import('@/api/client');
+  return (await api.post<SummaryPreview>(`${summaryPath(id)}/regenerate`, {locale}, {signal})).data;
+}
+export async function approveSummary(id: string, request: SummaryApprovalRequest, signal?: AbortSignal): Promise<SummaryDecision> {
+  const {api} = await import('@/api/client');
+  return (await api.post<SummaryDecision>(`${summaryPath(id)}/approve`, request, {signal})).data;
+}
+export async function withdrawSummary(id: string, request: SummaryApprovalRequest, signal?: AbortSignal): Promise<SummaryDecision> {
+  const {api} = await import('@/api/client');
+  return (await api.post<SummaryDecision>(`${summaryPath(id)}/withdraw`, request, {signal})).data;
+}
+
+export async function fetchBuyerSummary(slug: string, signal: AbortSignal): Promise<ListingSummary | null> {
+  const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000'}/api/v1/public/listings/${encodeURIComponent(slug)}`, {
+    cache: 'no-store', credentials: 'omit', signal,
+  });
+  if (!response.ok) throw new Error('Summary could not be refreshed');
+  const listing: {at_a_glance?: ListingSummary} = await response.json();
+  return listing.at_a_glance ?? null;
+}
