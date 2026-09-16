@@ -1,6 +1,8 @@
-# S1716 / S1294 P1 frontend — contract blocker
+# S1716 / S1294 P1 frontend — implementation and validation
 
-Status: stopped at backend contract verification, as explicitly required by the task. No seller UI, buyer rendering, or backend behavior changed. No merge or deployment performed.
+Current status: seller and buyer frontend implemented; controller ruling applied. All milestones are committed and pushed without merge or deployment. See the resume and validation receipts below.
+
+Historical initial stop: stopped at backend contract verification as required by the original task; at that point no seller UI, buyer rendering, or backend behavior had changed.
 
 ## Verified source identities
 
@@ -75,3 +77,40 @@ Detail remains force-dynamic/no-store. The client fetches public listing metadat
 - `npm run typecheck`: exit 0. Fixed TS's stale narrowing across an async visibility check through a small visibility function.
 - `npm run lint`: exit 0, 0 errors, 7 existing image warnings. Repaired the stale npm script to invoke the existing ESLint flat config and removed one suppression naming an unregistered rule from `types/index.type-test.ts`. No new lint dependency/rule suppression.
 - Machine-readable comparison and captured test/mutation/typecheck/lint logs are in `docs/reports/s1716-s1294-p1-frontend-receipts/`.
+
+
+### Mobile and accessibility receipt
+
+Real Chrome, local Vite harness at `http://localhost:3176`, using the actual three production components and application Tailwind CSS with an in-memory, metadata-only fixture API. This harness lives outside the repository under `/tmp/s1716-mobile`; no fixture route or sample data ships in the application.
+
+- Viewport **375 × 812**. DOM width receipt: `innerWidth=375`, `documentElement.scrollWidth=360` (browser scrollbar); no page-wide overflow. Schema scroller width 244px, content width 302px: overflow stays inside the labelled, keyboard-focusable table region.
+- Screenshot inspected: seller pending panel has readable wrapping; the table scrolls horizontally; rows/counts/source labels stay inside the card. Lower screenshot shows the complete approval scope text, Regenerate and Approve as separate reachable buttons, and no buyer block after withdrawal.
+- Keyboard: Tab reaches “Key fields schema”, then Regenerate, then the single “Approve At a glance” button; Enter approves and announces the approved status. Buyer block appears after polling. Enter on Withdraw returns the panel to neutral pending; buyer region count falls from 2 (seller preview + buyer) to 1 (seller preview only).
+- Accessibility tree exposes labelled regions, headings, table cells, plain-word provenance, approval scope and status updates. No pointer was needed for approval/withdrawal. No VoiceOver/screen-reader spoken-session or full real-listing pilot is claimed.
+- Browser viewport reset and task tab closed after verification. This checks component mobile behavior, not a deployed seller account or production withdrawal latency.
+
+### Files and scope
+
+- New shared renderer, seller controller and buyer freshness controller: `components/listings/{AtAGlance,SellerAtAGlance,BuyerAtAGlance}.tsx`.
+- Integration: seller edit route and the two existing Workspace publication components; buyer detail route only; optional `ListingDetail.at_a_glance` type; `lib/api.ts` typed clients.
+- Tests: three component files, typed-client test, route present snapshot, preserved absent snapshot, common metadata fixture. Two minimal existing lint-tooling repairs as recorded above.
+- Price is deliberately absent from the typed summary because the verified backend contract has no price summary field; the existing canonical price card is unchanged. No pricing/checkout component changes, backend edits, flags, sample permission, row transport or table library.
+
+### Remaining acceptance boundaries
+
+The backend prior-decision/history nit stays deferred under the controller ruling. The real three-listing/five-buyer pilot, deployed frontend/backend identity, production withdrawal timing and screen-reader/performance measurements in addendum H remain Gate-4 work; this branch does not claim them. No merge or deployment was performed.
+
+
+### Final build and revision receipt
+
+Tests milestone pushed at `e050304fc208392650ab227ab5e6cdde0a0f3d96`. Source/tool versions: Node **v25.3.0**, Next **15.5.12**, React **19.2.4**, Vitest **4.1.8**. `npm run build` **exit 0**, all 47 static pages generated, detail route shown as dynamic. The seven pre-existing image warnings remain non-blocking.
+
+Reproduction command (all Keystatic values below are deliberately nonfunctional compile-only fixtures, not credentials):
+
+```sh
+rtk proxy env API_URL=https://api.ai.market NEXT_PUBLIC_API_URL=https://api.ai.market KEYSTATIC_GITHUB_CLIENT_ID=local-build-fixture KEYSTATIC_GITHUB_CLIENT_SECRET=local-build-fixture KEYSTATIC_SECRET=local-build-fixture-only-not-a-live-secret NEXT_PUBLIC_KEYSTATIC_GITHUB_APP_SLUG=local-build-fixture npm run build
+```
+
+The build fetched only existing public metadata using the documented API URL; it did not exercise Keystatic authentication or deploy. The initial unconfigured build failed on required Keystatic settings; a subsequent attempt with only those settings failed because API_URL was unset. The fully configured command above passed without application changes. Full captured build receipt: `s1716-s1294-p1-frontend-receipts/build.txt`.
+
+Final validation: 30/30 focused tests after restoring both mutations; full branch suite 711/712 vs baseline 693/694 with the same single existing login failure; 0 branch-only failures; typecheck exit 0; lint exit 0 (7 existing warnings); build exit 0. No full-suite-green claim.
