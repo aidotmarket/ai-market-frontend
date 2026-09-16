@@ -1,0 +1,18 @@
+{
+  "source_head": "c3de646c283028d98bad2a23b8f16657eb5349cc",
+  "remote_head": "c3de646c283028d98bad2a23b8f16657eb5349cc",
+  "starting_head": "8341c389b6ba3c189dd3b40493a6ff0da286fb6b",
+  "commits": [
+    "3aa913a6639e0304a059222893998e6cc6e721f0 fix(summary): distinguish buyer and seller provenance (M1)",
+    "63fc394182cae0f6ebe3d749b330902a1eb304af fix(summary): refresh buyers only on return and restore (M2)",
+    "1804e2d108bb1f26b1c6ea23058ff83b946dd171 fix(summary): mount publication previews only when opened (L1)",
+    "88bc75ed1feca8af6f9e69141025cb85eb86e5b4 test(summary): derive field order fixture from section C (L2)",
+    "2fd7975be6fb4a095ce36c70880640398d545f30 fix(summary): support staging UUIDs and expose action errors (L3)",
+    "ea0b4412b2399d1bcdb47acf0851232fdfa87c5f refactor(summary): share schema table without changing legacy markup (L4)",
+    "74174207d2c10c04189327730b9d42e3a5d7713c fix(summary): display human size with exact byte title (L5)",
+    "5b3b3fdda4c0a91b4a6976387d89420d67958b4f fix(summary): omit preview cache request header (L6)",
+    "cb6acbdae1eeba03f3374aea482a9695dc367d0b fix(summary): retain decision IDs across uncertain retries (L7)",
+    "c3de646c283028d98bad2a23b8f16657eb5349cc fix(summary): name omitted schema cells accessibly (L8)"
+  ],
+  "node": "v25.3.0"
+}

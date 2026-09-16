@@ -1,0 +1,6 @@
+COMMAND: ['rtk', 'proxy', 'npm', 'run', 'typecheck']
+EXIT: 0
+
+> ai-market-frontend@0.0.0 typecheck
+> tsc --noEmit
+

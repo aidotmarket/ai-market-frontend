@@ -1,0 +1,11 @@
+COMMAND: ['rtk', 'proxy', 'npx', 'vitest', 'run', 'components/listings/AtAGlance.test.tsx', 'components/listings/BuyerAtAGlance.test.tsx', 'components/listings/SellerAtAGlance.test.tsx', 'app/listings/[slug]/page.test.tsx', 'lib/api.summary.test.ts', 'components/seller-workspace/SellerPublications.test.tsx', '--maxWorkers=2']
+EXIT: 0
+
+ RUN  v4.1.8 /private/var/tmp/koskadeux/minimal-bridge-worktrees/7d470a7af0c4-b6ad78
+
+
+ Test Files  6 passed (6)
+      Tests  46 passed (46)
+   Start at  15:12:40
+   Duration  8.32s (transform 523ms, setup 0ms, import 2.01s, tests 2.98s, environment 6.00s)
+

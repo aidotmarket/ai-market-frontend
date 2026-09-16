@@ -1,3 +1,4 @@
+import SchemaTable from '@/components/listings/SchemaTable';
 import { createHash } from 'node:crypto';
 import { notFound, redirect } from 'next/navigation';
 import Link from 'next/link';
@@ -9,6 +10,7 @@ import {
   privacyScoreColor,
 } from '@/lib/format';
 import type { ListingDetail } from '@/types';
+import BuyerAtAGlance from '@/components/listings/BuyerAtAGlance';
 import BuyButton from '@/components/BuyButton';
 import ListingPurchaseAdvisory from '@/components/ListingPurchaseAdvisory';
 import ListingPurchasePanel from '@/components/ListingPurchasePanel';
@@ -34,6 +36,7 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
   if (UUID_RE.test(slug)) {
     return { title: 'Redirecting...' };
   }
+
 
   const listing: ListingDetail | null = await fetchPublicListing(slug);
   if (!listing) {
@@ -133,6 +136,8 @@ export default async function ListingDetailPage({ params, searchParams }: Props)
             </div>
           </div>
 
+          <BuyerAtAGlance slug={slug} initialSummary={listing.at_a_glance} />
+
           {approved ? <iframe title="Seller-approved listing" sandbox="" referrerPolicy="no-referrer"
             srcDoc={approved.rendered_html} className="h-[min(720px,80vh)] min-h-96 w-full rounded-xl border border-gray-200 bg-white" /> : <>
           {/* Description - rendered as sanitized markdown */}
@@ -177,24 +182,7 @@ export default async function ListingDetailPage({ params, searchParams }: Props)
                 <p className="text-sm text-gray-500 mb-3">{rowCount.toLocaleString()} rows</p>
               )}
               {schemaSummary && (schemaSummary.columns?.length ?? 0) > 0 && (
-                <div className="overflow-x-auto">
-                  <table className="min-w-full text-sm border border-gray-200 rounded-lg">
-                    <thead>
-                      <tr className="bg-gray-50">
-                        <th className="px-3 py-2 text-left font-medium text-gray-700 border-b">Column</th>
-                        <th className="px-3 py-2 text-left font-medium text-gray-700 border-b">Type</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {schemaSummary.columns?.map((col) => (
-                        <tr key={col} className="border-b border-gray-100 last:border-0">
-                          <td className="px-3 py-1.5 text-gray-900 font-mono">{col}</td>
-                          <td className="px-3 py-1.5 text-gray-600">{schemaSummary.sample_types?.[col] ?? ' - '}</td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                </div>
+                <SchemaTable columns={(schemaSummary.columns ?? []).map(name => ({name, type: schemaSummary.sample_types?.[name] ?? ' - '}))} />
               )}
             </div>
           )}

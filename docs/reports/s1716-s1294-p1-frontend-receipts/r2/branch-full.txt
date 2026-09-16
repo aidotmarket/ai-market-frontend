@@ -1,0 +1,8 @@
+CWD: /private/var/tmp/koskadeux/minimal-bridge-worktrees/7d470a7af0c4-b6ad78
+COMMAND: ['rtk', 'proxy', 'npm', 'test', '--', '--maxWorkers=2', '--reporter=json', '--outputFile=/private/var/tmp/koskadeux/minimal-bridge-worktrees/7d470a7af0c4-b6ad78/docs/reports/s1716-s1294-p1-frontend-receipts/r2/branch.json']
+EXIT: 1
+
+> ai-market-frontend@0.0.0 test
+> vitest run --maxWorkers=2 --reporter=json --outputFile=/private/var/tmp/koskadeux/minimal-bridge-worktrees/7d470a7af0c4-b6ad78/docs/reports/s1716-s1294-p1-frontend-receipts/r2/branch.json
+
+JSON report written to /private/var/tmp/koskadeux/minimal-bridge-worktrees/7d470a7af0c4-b6ad78/docs/reports/s1716-s1294-p1-frontend-receipts/r2/branch.json

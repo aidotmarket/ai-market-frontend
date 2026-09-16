@@ -2,6 +2,9 @@
 import {cleanup,fireEvent,render,screen} from '@testing-library/react';
 import {afterEach,beforeEach,expect,it,vi} from 'vitest';
 import SellerPublications from './SellerPublications';
+import {fetchSummaryPreview} from '@/lib/api';
+import {preview} from '@/tests/summaryFixture';
+vi.mock('@/lib/api',()=>({fetchSummaryPreview:vi.fn()}));
 const api=vi.hoisted(()=>({readPublicationPage:vi.fn()}));vi.mock('@/api/sellerListingPublication',()=>api);
 afterEach(cleanup);beforeEach(()=>vi.resetAllMocks());
 it('loads only when opened and pages through saved publications',async()=>{
@@ -17,4 +20,18 @@ it('loads only when opened and pages through saved publications',async()=>{
 it('does not claim an empty list when the server cannot be reached',async()=>{
   api.readPublicationPage.mockRejectedValue(new Error('network'));render(<SellerPublications active enabled/>);
   await screen.findByRole('alert');expect(screen.queryByText(/No Workspace listings/)).toBeNull();
+});
+
+it('fetches a summary only after its details opens',async()=>{
+  api.readPublicationPage.mockResolvedValue({page:0,has_more:false,items:[{id:'one',listing_id:'listing',title:'Retail',slug:'retail',status:'published',is_listed:true,published_at:'2026-09-08T00:00:00Z'}]});
+  vi.mocked(fetchSummaryPreview).mockResolvedValue(preview);
+  render(<SellerPublications active enabled/>);
+  const label=await screen.findByText('Review At a glance');
+  expect(fetchSummaryPreview).not.toHaveBeenCalled();
+  const details=label.closest('details')!;
+  details.open=true; fireEvent(details,new Event('toggle'));
+  await screen.findByRole('button',{name:'Approve At a glance'});
+  expect(fetchSummaryPreview).toHaveBeenCalledTimes(1);
+  details.open=false; fireEvent(details,new Event('toggle'));
+  expect(screen.queryByRole('region',{name:'Review At a glance'})).toBeNull();
 });

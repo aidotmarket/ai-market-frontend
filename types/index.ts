@@ -309,6 +309,7 @@ export interface ListingVersion {
 }
 
 export interface ListingDetail {
+  at_a_glance?: import('@/lib/api').ListingSummary | null;
   approved_presentation?: {presentation_version: 'seller-listing-review-v2'; rendered_html: string; render_hash: string};
   id: string;
   slug: string;

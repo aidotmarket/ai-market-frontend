@@ -1,0 +1,9 @@
+{
+  "legacy_snapshot_byte_identical": [
+    "ListingDetailPage Dataset JSON-LD > keeps legacy no-version listing markup pinned without a version selector 1"
+  ],
+  "schema_information_tables_byte_identical": 2,
+  "section_c_fixture_matches_source": true,
+  "head": "c3de646c283028d98bad2a23b8f16657eb5349cc",
+  "origin_main": "2fa04d4388dec80521bf48745d6edbfabc113361"
+}

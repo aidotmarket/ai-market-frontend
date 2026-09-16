@@ -4,6 +4,7 @@ import { useState, useEffect, useCallback } from 'react';
 import { useRouter, useParams } from 'next/navigation';
 import { getListing, updateListing, unpublishListing, publishListing } from '@/api/listings';
 import { useToast } from '@/components/Toast';
+import SellerAtAGlance from '@/components/listings/SellerAtAGlance';
 import SellerShareControls from '@/components/listings/SellerShareControls';
 
 const CATEGORIES = ['Finance', 'Healthcare', 'Technology', 'Real Estate', 'Government', 'Marketing'];
@@ -34,6 +35,7 @@ export default function EditListingPage() {
 
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
+  const [summaryRevision, setSummaryRevision] = useState(0);
   const [data, setData] = useState<EditData>({
     title: '',
     description: '',
@@ -117,6 +119,7 @@ export default function EditListingPage() {
         compliance_frameworks: data.compliance_frameworks,
         compliance_notes: data.compliance_notes,
       });
+      setSummaryRevision(value => value + 1);
       toast('Listing saved', 'success');
     } catch (err: any) {
       toast(err.response?.data?.detail || 'Failed to save', 'error');
@@ -362,6 +365,8 @@ export default function EditListingPage() {
           </div>
         </div>
       </div>
+
+      <SellerAtAGlance listingId={id} active={!saving} revision={summaryRevision} />
 
       {/* Actions */}
       <div className="flex items-center justify-between bg-white rounded-xl border border-gray-200 shadow-sm px-6 py-4">

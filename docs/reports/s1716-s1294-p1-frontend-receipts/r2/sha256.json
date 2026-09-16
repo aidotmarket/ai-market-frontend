@@ -1,0 +1,16 @@
+{
+  "baseline-full.txt": "2048a00f545fcd598b6042d4e93d3e427e16049b701fdc9f1c2b14e73a7fb187",
+  "baseline.json": "d470b5925d890b9ee704191df75495bf8236b062fa0002df5b18b696b0ebb9a8",
+  "branch-full.txt": "e31fecca3d12703fdd5cc528eba7eab942f25b79166770fa4a6cd4e4bb4dedb8",
+  "branch.json": "02ea16f34b3773827f65c0f83a0bb0fca547e286cf3730f3738bc2659da69ce4",
+  "build.txt": "64113155360dbd721d7a3ac443b81bb0ad3a03ca4f2fbef579036a3eff8c87f7",
+  "comparison.json": "5837d128aec54dbfa3593009f979e02eee12ac73310ef7efbcd4e6dd2547c9a3",
+  "focused.txt": "e47afb800406a08e968236c03329181c34f540e8fddc736ece26075be8397098",
+  "invariants.json": "64fca2364bdf47c161c32bc0d45647159813120e336a280087aa7b23153c4f18",
+  "lint.txt": "dfff9e6cd0e9c51a926daada49b40b5af4441b70f1015816d3e15dcbea24fd3a",
+  "mutation-absent.txt": "5b0f01125815543de0dcb98d695e5b41910305dd358b09fd65057fc4ea3ed634",
+  "mutation-approval.txt": "e7bf3ea03d0e25ced0851f05fee9e8d0fa8f0c6e4e5ab0290416859f819933b9",
+  "mutation-buyer-audience.txt": "ad35a70455e6d3a53e1ce940870155da67ccd9c2376154f9baa2d45356e36028",
+  "source-identity.json": "3b959ec9262dfe63d00eb117822fd9461208cd6066d89e20aed1355b85ac63c2",
+  "typecheck.txt": "1a620a960eb3d1718d6cd430b3591f8d45f0c04c661945ad03bf056de95bf822"
+}
