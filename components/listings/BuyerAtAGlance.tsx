@@ -3,55 +3,50 @@ import {useEffect, useState} from 'react';
 import {fetchBuyerSummary, type ListingSummary} from '@/lib/api';
 import AtAGlance from './AtAGlance';
 
-// Refresh every 10s. Expire 20s after REQUEST START, not response arrival:
-// a slow or failed request must never extend the life of withdrawn metadata.
-export default function BuyerAtAGlance({slug, initialSummary, checkedAt}: {
-  slug: string; initialSummary?: ListingSummary | null; checkedAt: number;
+// Fresh loads use force-dynamic/no-store. An untouched tab retains its summary
+// until visibility resumes or bfcache restores it; there is no polling.
+export default function BuyerAtAGlance({slug, initialSummary}: {
+  slug: string; initialSummary?: ListingSummary | null;
 }) {
   const [summary, setSummary] = useState(initialSummary ?? null);
   useEffect(() => {
     let disposed = false;
     let current: AbortController | null = null;
-    let expiry: ReturnType<typeof setTimeout>;
-    const expireAt = (start: number) => {
-      clearTimeout(expiry);
-      expiry = setTimeout(() => setSummary(null), Math.max(0, start + 20_000 - Date.now()));
-    };
-    setSummary(Date.now() - checkedAt < 20_000 ? initialSummary ?? null : null);
-    expireAt(checkedAt);
-    const isVisible = () => document.visibilityState !== 'hidden';
+    let timeout: ReturnType<typeof setTimeout> | undefined;
+    setSummary(initialSummary ?? null);
     async function refresh() {
-      if (!isVisible() || current) return;
+      if (document.visibilityState === 'hidden' || current) return;
       const controller = new AbortController(); current = controller;
-      const started = Date.now();
-      const timeout = setTimeout(() => controller.abort(), 5_000);
+      // Clear even if the transport fails to settle when aborted.
+      const requestTimeout = setTimeout(() => {
+        controller.abort();
+        if (!disposed) setSummary(null);
+        if (current === controller) current = null;
+      }, 5_000);
+      timeout = requestTimeout;
       try {
         const value = await fetchBuyerSummary(slug, controller.signal);
-        if (!disposed && !controller.signal.aborted && isVisible()) {
-          setSummary(Date.now() - started < 20_000 ? value : null);
-          expireAt(started);
-        }
+        if (!disposed && !controller.signal.aborted) setSummary(value);
       } catch {
-        if (!disposed) setSummary(null);
+        if (!disposed && !controller.signal.aborted) setSummary(null);
       } finally {
-        clearTimeout(timeout);
+        clearTimeout(requestTimeout);
         if (current === controller) current = null;
       }
     }
     function visibility() {
-      setSummary(null);
-      current?.abort(); current = null;
-      if (document.visibilityState !== 'hidden') void refresh();
+      if (document.visibilityState === 'visible') void refresh();
     }
-    const interval = setInterval(refresh, 10_000);
+    function restore(event: PageTransitionEvent) {
+      if (event.persisted) void refresh();
+    }
     document.addEventListener('visibilitychange', visibility);
-    window.addEventListener('pageshow', visibility);
-    void refresh();
+    window.addEventListener('pageshow', restore);
     return () => {
-      disposed = true; current?.abort(); clearInterval(interval); clearTimeout(expiry);
+      disposed = true; current?.abort(); clearTimeout(timeout);
       document.removeEventListener('visibilitychange', visibility);
-      window.removeEventListener('pageshow', visibility);
+      window.removeEventListener('pageshow', restore);
     };
-  }, [slug, initialSummary, checkedAt]);
+  }, [slug, initialSummary]);
   return <AtAGlance audience="buyer" summary={summary} />;
 }

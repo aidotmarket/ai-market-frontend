@@ -80,7 +80,6 @@ export default async function ListingDetailPage({ params, searchParams }: Props)
     notFound();
   }
 
-  const summaryCheckedAt = Date.now();
   const listing: ListingDetail | null = await fetchPublicListing(slug);
   if (!listing) {
     notFound();
@@ -136,7 +135,7 @@ export default async function ListingDetailPage({ params, searchParams }: Props)
             </div>
           </div>
 
-          <BuyerAtAGlance slug={slug} initialSummary={listing.at_a_glance} checkedAt={summaryCheckedAt} />
+          <BuyerAtAGlance slug={slug} initialSummary={listing.at_a_glance} />
 
           {approved ? <iframe title="Seller-approved listing" sandbox="" referrerPolicy="no-referrer"
             srcDoc={approved.rendered_html} className="h-[min(720px,80vh)] min-h-96 w-full rounded-xl border border-gray-200 bg-white" /> : <>

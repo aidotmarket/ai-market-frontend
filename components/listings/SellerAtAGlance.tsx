@@ -42,7 +42,7 @@ export default function SellerAtAGlance({listingId, active = true, revision = 0}
       }
       if (!controller.signal.aborted) {
         setPreview(next);
-        setMessage(action === 'withdraw' ? 'Summary withdrawn. Buyers will see this change within 30 seconds.' : '');
+        setMessage(action === 'withdraw' ? 'Summary withdrawn. Fresh page loads will reflect this change. Open tabs refresh when buyers return to them.' : '');
       }
     } catch (failure) {
       if (controller.signal.aborted) return;
