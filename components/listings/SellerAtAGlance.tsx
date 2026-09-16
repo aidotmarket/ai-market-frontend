@@ -66,7 +66,7 @@ export default function SellerAtAGlance({listingId, active = true, revision = 0}
     {error && <p role="alert" className="text-sm text-red-800">{error}</p>}
     {preview && <>
       <p role="status" className="text-sm text-gray-700">{preview.state === 'approved' ? 'Approved. This summary is shown to buyers.' : 'Review the summary and approve it to show it to buyers'}</p>
-      <AtAGlance summary={preview.at_a_glance} />
+      <AtAGlance audience="seller" summary={preview.at_a_glance} />
       <p className="text-sm text-gray-700">{preview.approval_text}</p>
       <div className="flex flex-wrap gap-3">
         <button type="button" disabled={busy || !active} onClick={() => act('regenerate')} className="rounded-lg border border-gray-300 px-4 py-2.5 text-sm disabled:opacity-50">Regenerate</button>

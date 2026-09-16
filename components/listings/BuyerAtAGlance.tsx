@@ -53,5 +53,5 @@ export default function BuyerAtAGlance({slug, initialSummary, checkedAt}: {
       window.removeEventListener('pageshow', visibility);
     };
   }, [slug, initialSummary, checkedAt]);
-  return <AtAGlance summary={summary} />;
+  return <AtAGlance audience="buyer" summary={summary} />;
 }

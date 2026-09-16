@@ -14,15 +14,16 @@ const fields = [
   ['privacy_status', 'Trust/privacy status'], ['sample_availability', 'Sample availability'],
 ] as const;
 
-function Provenance({field}: {field: SummaryField}) {
-  return <p className="mt-1 text-xs text-gray-600">Source: {provenanceLabels[field.provenance]}
+type Audience = 'seller' | 'buyer';
+function Provenance({field, audience}: {field: SummaryField; audience: Audience}) {
+  return <p className="mt-1 text-xs text-gray-600">Source: {field.provenance === 'seller_entered' && audience === 'buyer' ? 'provided by the seller' : provenanceLabels[field.provenance]}
     {field.authority === 'seller_local_report' && ' (seller/local report)'}
     {field.authority === 'publication_bound' && ' (approved publication)'}
   </p>;
 }
 
 // One inert renderer for the seller preview and the public approved projection.
-export default function AtAGlance({summary}: {summary?: ListingSummary | null}) {
+export default function AtAGlance({summary, audience}: {summary?: ListingSummary | null; audience: Audience}) {
   if (!summary) return null;
   const descriptions = summary.field_descriptions?.provenance === 'absent' ? [] : summary.field_descriptions?.value ?? [];
   return <section aria-label="At a glance" className="min-w-0 space-y-4 rounded-xl border border-gray-200 bg-white p-5 break-words">
@@ -51,7 +52,7 @@ export default function AtAGlance({summary}: {summary?: ListingSummary | null}) 
           <li key={d.name}><span className="font-mono">{d.name}</span>{d.description && <>: {d.description}</>}{d.unit && <> — {d.unit}</>}</li>)}</ul>
           : Array.isArray(value) ? <ul className="list-inside list-disc text-sm text-gray-700">{(value as string[]).map((item, i) => <li key={i}>{item}</li>)}</ul>
           : <p className="text-sm text-gray-700">{typeof value === 'number' ? value.toLocaleString('en-US') : value}{key === 'size_bytes' && ' bytes (dataset/file total)'}{key === 'freshness' && ' (declared cadence)'}</p>}
-        <Provenance field={field} />
+        <Provenance field={field} audience={audience} />
       </div>;
     })}
   </section>;

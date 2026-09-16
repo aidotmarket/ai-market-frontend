@@ -16,7 +16,7 @@ it.each(['pending', 'invalidated'] as const)('treats %s as neutral pending and r
   await screen.findByText('Review the summary and approve it to show it to buyers');
   expect(screen.queryByText(/changed since you approved/)).toBeNull();
   const buyer = screen.getByRole('region', {name: 'At a glance'});
-  expect(buyer.outerHTML).toBe(renderToStaticMarkup(<AtAGlance summary={preview.at_a_glance} />));
+  expect(buyer.outerHTML).toBe(renderToStaticMarkup(<AtAGlance audience="seller" summary={preview.at_a_glance} />));
   for (const label of ['from AIM Data', 'entered by you', 'generated and checked']) expect(within(buyer).getAllByText(new RegExp(label)).length).toBeGreaterThan(0);
   expect(screen.getByRole('button', {name: 'Approve At a glance'})).toBeTruthy();
   expect(screen.queryByRole('button', {name: 'Withdraw'})).toBeNull();
