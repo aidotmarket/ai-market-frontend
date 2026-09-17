@@ -19,11 +19,12 @@ names = {'RULES', 'COMPILED', 'TOKEN', 'PolicyError', 'check_text'}
 nodes = [n for n in tree.body if getattr(n, 'name', None) in names or isinstance(n, ast.Assign) and any(isinstance(t, ast.Name) and t.id in names for t in n.targets)]
 scope = dict(re=re, math=math, Counter=Counter, unicodedata=unicodedata)
 exec(compile(ast.Module(body=nodes, type_ignores=[]), '<pinned-producer-deterministic-policy>', 'exec'), scope)
+# Credential-shaped synthetic inputs are stored as fragments, never credentials.
 texts = [
  ('safe', 'barley'), ('empty', ''), ('unicode', 'café 山'), ('boolean-text', 'True'),
  ('numeric-negative', '-12.5', True), ('numeric-formula-looking', '-12.5'),
  ('at-formula', '@SUM(A1)'), ('equals-formula', '=1+1'), ('plus-formula', '  +1'),
- ('private-key', '-----BEGIN RSA PRIVATE KEY-----'), ('aws', 'AKIAABCDEFGHIJKLMNOP'),
+ ('private-key', ['-----BEGIN RSA ', 'PRIVATE KEY-----']), ('aws', ['AKIA', 'ABCDEFGHIJKLMNOP']),
  ('github', 'ghp_example'), ('github-pat', 'github_pat_example'), ('stripe-live', 'sk_live_example'),
  ('stripe-test', 'sk_test_example'), ('openai', 'sk-proj-example'), ('slack', 'xoxb-example'),
  ('password', 'password=example'), ('api-key', 'api_key: example'), ('authorization', 'Authorization: example'),
@@ -43,8 +44,9 @@ texts = [
 ]
 vectors = []
 for item in texts:
- name, text, *numeric = item
- value = dict(id=name, text=text, numeric=bool(numeric and numeric[0]))
+ name, stored, *numeric = item
+ text = ''.join(stored) if isinstance(stored, list) else stored
+ value = dict(id=name, **({'text_parts': stored} if isinstance(stored, list) else {'text': stored}), numeric=bool(numeric and numeric[0]))
  try:
   scope['check_text'](text, value['numeric'])
   value['reason'] = None

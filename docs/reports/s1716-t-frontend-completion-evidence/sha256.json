@@ -22,8 +22,11 @@
   "candidate-vitest.txt": "1a134cd937dd75d52115466030624f8e7bc8279e86e2f279beb9d5799247ec14",
   "drop-package-sample-hash.txt": "9a1737be84d2a24cff95dbeb5317565034c6d575ce54ee53ba9eb909c6ce6449",
   "environment.json": "89cbe1eaae25723109659f32891a78bfa04ae1075f1b6e8c4b3469d972d0fe83",
+  "fixture-representation-checks.json": "409e69e723d1b606326864366613c3ad7f7923bea6d9e72bfdbfb6c120a8e8ce",
+  "fixture-representation.json": "d3c54487c676439db36646ed03183a8d2b63253711c4d7c7a84c0ea9ce849b03",
   "mutations.json": "6beee3997cd7fc7b473ad36747686bac57197f00a06588d6ae9780b4ee0da6cd",
   "parity-runs.json": "f165a934ed35dbe95d4c7ee35876daf9e0848e82902512fdf6b2c67dad2ca85e",
+  "preview-vitest-fragment-fixture.json": "aa0771165d029a3a2f417f27f0e890c99e6c2ffb7b78ad1f60e0b158301ee17a",
   "preview-vitest.json": "bc9df1607975b93f58374971edf83c0b095f83055cdef39e102638d2319696e0",
   "production-keys.json": "c410efbe9aea676365ec023168b037b7e370450332dd5738811fee15770c7495",
   "render-before-policy-completes.txt": "5aec8fb40277e34d74609dcaea4aadd6da48445dd77c12bb9d7aabf39f22bcdc",
@@ -31,5 +34,5 @@
   "skip-attestation-check.txt": "961c29a66b246a3d92d25b04718c11b739f4481737dcfe9517d52b10d0d17134",
   "skip-deterministic-scan.txt": "aafe7ae9b973a97b59c16b567ead4abe745b3ff8f0c8a4d3e479873468e59308",
   "skip-platform-envelope.txt": "feaad0cbc04e0b5e304fb927db4a14c6c87e95aaf2e6c18300f5050325165ede",
-  "summary.json": "a584240ba14071c3d6981ad3a44adfbfdde64d7cfab203ccb58b8faec187a04e"
+  "summary.json": "e551c6eb0f643f2249de32347d5735222242843ac6eb295cee6e4b746169c3ed"
 }

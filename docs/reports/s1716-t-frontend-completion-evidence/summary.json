@@ -273,7 +273,8 @@
   },
   "producer_vectors": {
     "passed": 59,
-    "sha256": "6a74bcf56b7a0645a67b2a8aceda0e108b2e0b7a3c1be947edacd39d6e297f9e",
-    "revision": "119f643b5fd25dc8fd61557649371c9832ca33c5"
+    "sha256": "7216bd5f719f4ff576c4c40fef142be6f0121663cc82ab5e059d1881a8f238b1",
+    "revision": "119f643b5fd25dc8fd61557649371c9832ca33c5",
+    "representation_receipt": "fixture-representation.json"
   }
 }

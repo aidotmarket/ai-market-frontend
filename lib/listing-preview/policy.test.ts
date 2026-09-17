@@ -8,14 +8,15 @@ import type {Descriptor, Json} from './types';
 
 const path = 'tests/fixtures/preview/aim-preview-policy-v1-deterministic-vectors';
 const bytes = readFileSync(path + '.json');
-const corpus = JSON.parse(bytes.toString()) as {vectors: {id: string; text: string; numeric: boolean; reason: string | null}[]};
+const corpus = JSON.parse(bytes.toString()) as {vectors: {id: string; text?: string; text_parts?: string[]; numeric: boolean; reason: string | null}[]};
 it('pins the cross-repo deterministic fixture SHA', () => {
   expect(createHash('sha256').update(bytes).digest('hex')).toBe(readFileSync(path + '.sha256', 'utf8').split(' ')[0]);
 });
 for (const v of corpus.vectors) it(`deterministic producer vector ${v.id}`, async () => {
-  if (v.reason) expect(() => checkPolicyText(v.text, v.numeric)).toThrow(new Error(v.reason));
-  else expect(() => checkPolicyText(v.text, v.numeric)).not.toThrow();
-  const scanned = scanLocalPreview([{proofId: v.id, row: {value: v.text}, cells: {}}], new AbortController().signal,
+  const text = v.text ?? v.text_parts!.join('');
+  if (v.reason) expect(() => checkPolicyText(text, v.numeric)).toThrow(new Error(v.reason));
+  else expect(() => checkPolicyText(text, v.numeric)).not.toThrow();
+  const scanned = scanLocalPreview([{proofId: v.id, row: {value: text}, cells: {}}], new AbortController().signal,
     [['value', v.numeric ? 'decimal' : 'string', false, v.numeric ? {precision: 5, scale: 2} : {}]]);
   if (v.reason) await expect(scanned).rejects.toThrow(new Error(v.reason));
   else await expect(scanned).resolves.toBeUndefined();

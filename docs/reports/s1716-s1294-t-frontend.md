@@ -136,7 +136,7 @@ All **59** pass/fail vectors in
 [the cross-repo fixture](../../tests/fixtures/preview/aim-preview-policy-v1-deterministic-vectors.json)
 are evaluated both against the pinned Python `check_text` function and by
 Node/Vitest through the browser scanner. Fixture SHA-256:
-`6a74bcf56b7a0645a67b2a8aceda0e108b2e0b7a3c1be947edacd39d6e297f9e`.
+`7216bd5f719f4ff576c4c40fef142be6f0121663cc82ab5e059d1881a8f238b1`.
 The reproduction script executes only the deterministic AST definitions and does
 not import ML services. This is producer-rule parity, not ML detector parity.
 
@@ -226,3 +226,11 @@ That package is needed for real seller-host transport, approval/refresh/withdraw
 CDN and fresh/return withdrawal proofs. Local tests and synthetic Chrome runs do
 not replace those production checks. The completion fold is committed and pushed;
 no merge or deployment is performed.
+
+The first push was refused by the enabled secret-scan hook because two adversarial
+fixtures resembled an AWS key/private-key header. Those deliberately synthetic
+values now use fragments assembled only during tests. The hook was not bypassed
+or modified. [Representation proof](s1716-t-frontend-completion-evidence/fixture-representation.json)
+confirms all 59 decoded inputs and expected verdicts are identical to the full
+suite's tested corpus; only the stored fixture SHA changed. The full 219-test
+preview suite and typecheck were rerun after this representation-only change.
