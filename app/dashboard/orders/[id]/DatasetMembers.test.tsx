@@ -8,8 +8,8 @@ const api = vi.hoisted(() => ({ get: vi.fn(), post: vi.fn() }));
 vi.mock('@/api/client', () => ({ api }));
 vi.mock('@/store/auth', () => ({ useAuthStore: (select: (s: { token: string }) => unknown) => select({ token: 'buyer-access-secret' }) }));
 const members = [
-  { index: 0, basename: 'first.csv', size_bytes: 2048, sha256: 'private-hash-0', state: 'delivered' as const, address: '/api/v1/orders/order-1/members/0' },
-  { index: 1, basename: 'second.csv', size_bytes: 1048576, sha256: 'private-hash-1', state: 'delivered' as const, address: '/api/v1/orders/order-1/members/1' },
+  { index: 0, basename: 'first.csv', size_bytes: 2048, sha256: 'private-hash-0', state: 'delivered' as const },
+  { index: 1, basename: 'second.csv', size_bytes: 1048576, sha256: 'private-hash-1', state: 'delivered' as const },
   { index: 2, basename: 'missing.csv', size_bytes: 0, sha256: 'private-hash-2', state: 'unavailable' as const },
 ];
 const grant = { token_id: 'token-id', download_token: 'order-grant-secret', expires_at: '2099-09-17T22:00:00Z', downloads_remaining: 2 };
@@ -24,6 +24,7 @@ async function getAccess() {
 }
 
 beforeEach(() => {
+  vi.stubEnv('API_URL', 'https://api.example.test');
   api.get.mockResolvedValue({ data: { members } });
   api.post.mockResolvedValue({ data: grant });
   vi.stubGlobal('fetch', fetchMock);
@@ -31,7 +32,7 @@ beforeEach(() => {
   openUrls.length = 0;
   vi.spyOn(HTMLAnchorElement.prototype, 'click').mockImplementation(function (this: HTMLAnchorElement) { openUrls.push(this.href); });
 });
-afterEach(() => { cleanup(); vi.restoreAllMocks(); vi.resetAllMocks(); vi.unstubAllGlobals(); });
+afterEach(() => { cleanup(); vi.restoreAllMocks(); vi.resetAllMocks(); vi.unstubAllGlobals(); vi.unstubAllEnvs(); });
 
 describe('dataset member access', () => {
   it('lists three members, issues one set grant, and opens each delivered member via a header-authenticated redirect', async () => {
@@ -63,6 +64,8 @@ describe('dataset member access', () => {
     ['grant_rate_limit', 'Too many access requests.'],
     ['download_limit_reached', 'no download allowances remaining'],
     ['delivery_not_complete', 'still being delivered'],
+    ['delivery_busy', 'Delivery is busy. Please try again shortly.'],
+    ['delivery_retention_expired', 'This dataset is no longer available for download.'],
   ])('shows grant refusal %s', async (reason, copy) => {
     api.post.mockRejectedValue({ response: { data: { detail: reason } } });
     setup();
@@ -91,6 +94,14 @@ describe('dataset member access', () => {
     expect((await screen.findByRole('alert')).textContent).toContain('member_unavailable');
     expect(screen.queryByRole('button', { name: 'Download first.csv' })).toBeNull();
     expect(api.post).toHaveBeenCalledTimes(1);
+  });
+
+  it('renders a generic named refusal for a closed-access 403', async () => {
+    setup(); await getAccess();
+    fetchMock.mockResolvedValue(new Response(JSON.stringify({ detail: 'Download access has been closed' }), { status: 403 }));
+    fireEvent.click(screen.getByRole('button', { name: 'Download first.csv' }));
+    expect((await screen.findByRole('alert')).textContent).toBe('Could not prepare this download. Please try again. (download_request_failed)');
+    expect(openUrls).toHaveLength(0);
   });
 
   it('renders the named meter refusal', async () => {
@@ -147,6 +158,13 @@ describe('dataset member access', () => {
 });
 
 describe('redirect resolver safety', () => {
+  it('throws a named configuration error without contacting localhost when API_URL is unset', async () => {
+    vi.stubEnv('API_URL', undefined);
+    vi.stubEnv('NEXT_PUBLIC_API_URL', 'http://localhost:8000');
+    await expect(resolveMemberDownload('order-1', 0, grant.download_token, 'buyer-access-secret'))
+      .rejects.toMatchObject({ name: 'MemberDownloadApiUrlMissingError' });
+    expect(fetchMock).not.toHaveBeenCalled();
+  });
   it.each(['javascript:alert(1)', 'http://storage.example.test/file', 'https://user:pass@storage.example.test/file', 'https://storage.example.test/?token=order-grant-secret'])('refuses unsafe redirect %s', async (location) => {
     fetchMock.mockResolvedValue(new Response(null, { status: 302, headers: { Location: location } }));
     expect(await resolveMemberDownload('order-1', 0, grant.download_token, 'buyer-access-secret')).toEqual({ reason: 'download_request_failed' });

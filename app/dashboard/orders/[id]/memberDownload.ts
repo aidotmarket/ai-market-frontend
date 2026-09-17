@@ -6,7 +6,14 @@ export async function resolveMemberDownload(orderId: string, index: number, down
   if (!/^[a-zA-Z0-9-]+$/.test(orderId) || !Number.isSafeInteger(index) || index < 0 || !downloadToken || !accessToken) {
     return { reason: 'download_request_failed' };
   }
-  const origin = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000';
+  // The refresh cookie is API-host-only and scoped to /api/v1/auth; it
+  // cannot authenticate this Next action. Keep the in-memory buyer bearer.
+  const origin = process.env.API_URL;
+  if (!origin) {
+    const error = new Error('API_URL must be configured for member downloads.');
+    error.name = 'MemberDownloadApiUrlMissingError';
+    throw error;
+  }
   try {
     const response = await fetch(`${origin}/api/v1/orders/${encodeURIComponent(orderId)}/members/${index}`, {
       method: 'GET',
