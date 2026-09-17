@@ -14,17 +14,17 @@ fetches the seller package only after manifest verification. Every display needs
 full package, signature, schema, proof, local policy and final current-head checks.
 Platform-key HTTP 503 produces no preview and no error page.
 
-Successful production display is **blocked** pending an approved browser-local
-implementation of the pinned producer policy's complete detector. The production
-`scanLocalPreview` function currently refuses with `detector_unavailable`.
-Provisioning platform keys alone therefore does not enable sample display.
-The browser test harness substitutes a synthetic-only policy adapter; it is
-outside Next routes and never part of a production activation path.
+Event Ledger `b8ddbd10` (2026-09-18) replaces the browser ML boundary with
+F2-authenticated producer scan evidence (`aim-preview-policy-v1`, `1.0.0`,
+`passed`, exact sampled-leaf and scan-attestation digests) plus a browser-only
+`aim-preview-policy-v1-deterministic` scan. The latter scans every complete raw
+row, key, nested value and array element before any display handle. Either
+failure hides all rows; diagnostics contain fixed reason codes only.
 
-No browser detector artifact is supplied by the contract/producer inspected here:
-producer `e574e1df` requires Presidio 2.2.362, spaCy 3.7.2 and en-core-web-sm 3.7.1.
-Do not replace that independent check with the signed producer scan, call an API
-with row bytes, or relax the policy without a decision on the browser contract.
+The shared deterministic vector fixture and SHA live under `tests/fixtures/preview`.
+`rtk proxy python3 scripts/preview-policy-vectors.py` compares every expectation
+to pinned producer source; Node/Vitest runs the same vectors through the browser
+policy. There is no browser ML model and no server scan or row ingress.
 
 ## Diagnostic sequence
 
@@ -77,8 +77,7 @@ the corpus to make failing tests pass.
 
 ## Remaining release obligations
 
-Retain the report's explicit open items: complete local detector, approved
-summary-label binding, signed seller decision integration where available, real
-production keys/sample, approved Chunk 5 retirement, independent review and I.b
+Retain the report's explicit open items: approved summary-label binding and a real
+production sample, approved Chunk 5 retirement, independent review and I.b
 live approval/direct-origin/withdrawal/CDN checks. No merge or deployment is
 authorized by this implementation task.

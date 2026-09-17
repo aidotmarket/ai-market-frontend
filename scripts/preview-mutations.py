@@ -7,7 +7,7 @@ import subprocess
 import tempfile
 
 root = Path(__file__).resolve().parents[1]
-out = Path('/var/tmp/s1716-t-frontend-evidence')
+out = Path('/var/tmp/s1716-t-frontend-completion-evidence')
 out.mkdir(exist_ok=True)
 mutations = [
     ('skip-platform-envelope',
@@ -15,13 +15,21 @@ mutations = [
      '  // MUTATION: trust seller keys before authenticating platform envelope.',
      'lib/listing-preview/verifier.test.ts', 'verifies platform before resolving seller keys'),
     ('render-before-policy-completes',
-     '  await options.scan(entries, options.signal);',
-     '  void options.scan(entries, options.signal); // MUTATION: early display.',
+     '  await options.scan(entries, options.signal, m.schema_descriptors);',
+     '  void options.scan(entries, options.signal, m.schema_descriptors); // MUTATION: early display.',
      'components/listings/ListingSamplePreview.test.tsx', 'waits for verification and the final manifest before rendering any row'),
     ('drop-package-sample-hash',
      "  check(await sampleHash(p.entries) === p.sample_hash, 'sample_hash_mismatch');",
      '  // MUTATION: omitted ordered package sample hash.',
      'lib/listing-preview/verifier.test.ts', 'checks package content and sample hash without issuing a display handle'),
+    ('skip-deterministic-scan',
+     '  await options.scan(entries, options.signal, m.schema_descriptors);',
+     '  // MUTATION: omit deterministic scan.',
+     'lib/listing-preview/policy.test.ts', 'deterministic scan refuses any unsafe complete row before issuing a handle'),
+    ('skip-attestation-check',
+     '  await verifyScanAttestation(m, leaves);',
+     '  // MUTATION: omit attestation check.',
+     'lib/listing-preview/policy.test.ts', 'attestation check refuses a signed but incorrectly bound scan digest'),
 ]
 results = []
 original = (root / 'lib/listing-preview/verifier.ts').read_text()

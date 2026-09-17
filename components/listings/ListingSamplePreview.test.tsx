@@ -10,7 +10,7 @@ import ListingSamplePreview from './ListingSamplePreview';
 
 vi.mock('@/lib/api', () => ({fetchPreviewManifest: vi.fn(), fetchPreviewKeys: vi.fn()}));
 vi.mock('@/lib/listing-preview/transport', () => ({fetchPackage: vi.fn()}));
-vi.mock('@/lib/listing-preview/policy', () => ({scanLocalPreview: vi.fn()}));
+vi.mock('@/lib/listing-preview/policy', async importOriginal => ({...await importOriginal<typeof import('@/lib/listing-preview/policy')>(), scanLocalPreview: vi.fn()}));
 let f: Awaited<ReturnType<typeof makePreview>>;
 beforeEach(async () => {
   vi.stubGlobal('crypto', webcrypto); vi.resetAllMocks(); f = await makePreview();
@@ -76,4 +76,13 @@ it('never contacts the seller after a platform-signature failure', async () => {
   f.manifest.approval.platform_envelope.signature = 'A'.repeat(86);
   await mount(); fireEvent.click(screen.getByRole('button', {name: 'View sample'})); await screen.findByText('Sample unavailable');
   expect(fetchPackage).not.toHaveBeenCalled(); expect(screen.queryByRole('table')).toBeNull();
+});
+
+it('hides every row on a real deterministic policy failure with neutral text only', async () => {
+  f = await makePreview([{name: 'safe marker'}, {name: 'password=unsafe marker'}], [['name', 'string', false, {}]]);
+  vi.mocked(fetchPreviewManifest).mockResolvedValue(f.manifest); vi.mocked(fetchPackage).mockResolvedValue(f.raw);
+  const actual = await vi.importActual<typeof import('@/lib/listing-preview/policy')>('@/lib/listing-preview/policy');
+  vi.mocked(scanLocalPreview).mockImplementation(actual.scanLocalPreview);
+  await mount(); fireEvent.click(screen.getByRole('button', {name: 'View sample'})); await screen.findByText('Sample unavailable');
+  expect(screen.queryByRole('table')).toBeNull(); expect(screen.queryByText(/marker/)).toBeNull();
 });

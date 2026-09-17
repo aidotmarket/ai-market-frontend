@@ -71,7 +71,7 @@ export interface PreviewPackage {
   disclosure_version: string; sample_hash: string; entries: PackageEntry[];
 }
 export type Cell = {kind: 'missing' | 'null' | LogicalType; value: Json};
-export interface VerifiedEntry {readonly proofId: string; readonly cells: Readonly<Record<string, Cell>>}
+export interface VerifiedEntry {readonly proofId: string; readonly row: Readonly<Record<string, Json>>; readonly cells: Readonly<Record<string, Cell>>}
 // Private brand prevents accidental API JSON -> table assignment. The verifier also
 // checks a WeakSet at runtime; type assertions cannot manufacture a valid handle.
 declare const verified: unique symbol;

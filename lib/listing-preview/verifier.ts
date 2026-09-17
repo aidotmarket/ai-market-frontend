@@ -1,5 +1,6 @@
 /** Browser/Node crypto only. No API, logging, storage, or seller transport here. */
 import type {Binding, Checkpoint, Commitment, LogEvidence, Manifest, PlatformEnvelope, PreviewPackage, Proof, TrustedCheckpoint, TrustedKeys, VerifiedEntry, VerifiedSample} from './types';
+import {PRODUCER_POLICY, POLICY_VERSION} from './policy';
 import {LIMITS} from './types';
 import {b64, canonical, closed, concat, consistency, hex, inclusion, jcs, leaf, parseJson, requirePreview as check, sha, timestamp, unb64, utf8, verifyEd25519} from './primitives';
 import {canonicalRow, schemaDescriptors} from './canonical-row';
@@ -98,14 +99,21 @@ export async function verifyManifest(raw: unknown, keys: TrustedKeys, listingId:
     const hash = await leaf(p.base_row_digest, p.duplicate_ordinal); leaves.push(b64(hash));
     check(await inclusion(hash, p.leaf_index, p.tree_size, p.siblings, c.dataset_merkle_root), 'proof_invalid');
   }
-  const sampled = b64(await sha(domain('aim-preview-sampled-leaves-v1', leaves)));
-  check(sampled === b.sampled_leaf_list_digest && m.proofs.every(p => p.sampled_leaf_list_digest === sampled), 'sampled_list_mismatch');
-  check(hex(await sha(domain('aim-preview-scan-attestation-v1', m.proofs))) === b.scan_attestation_digest, 'scan_mismatch');
+  await verifyScanAttestation(m, leaves);
   check(await sampleHash(m.proofs) === b.sample_hash, 'sample_hash_mismatch');
   const attestation = {listing_id: c.listing_id, seller_dataset_version: c.seller_dataset_version, schema_digest: c.schema_digest, dataset_merkle_root: c.dataset_merkle_root, leaf_count: c.leaf_count, sample_hash: b.sample_hash, rights_basis_digest: b.rights_basis_digest, public_preview_permission: true, metadata_accuracy_confirmed: true, signed_at: c.signed_at};
   check(b64(await sha(domain('aim-dataset-seller-attestation-v1', attestation))) === c.seller_attestation_digest, 'seller_attestation_mismatch');
   await verifyLog(m.log_evidence, m.checkpoint, c, keys, previous);
   return m;
+}
+
+/** Called only after platform and every F2 seller signature authenticate. */
+export async function verifyScanAttestation(m: Manifest, leaves: string[]): Promise<void> {
+  const b = m.approval.platform_envelope.binding;
+  check(m.proofs.every(p => p.scan_policy === PRODUCER_POLICY && p.scan_policy_version === POLICY_VERSION && p.scan_verdict === 'passed'), 'scan_policy_mismatch');
+  const sampled = b64(await sha(domain('aim-preview-sampled-leaves-v1', leaves)));
+  check(sampled === b.sampled_leaf_list_digest && m.proofs.every(p => p.sampled_leaf_list_digest === sampled), 'sampled_list_mismatch');
+  check(hex(await sha(domain('aim-preview-scan-attestation-v1', m.proofs))) === b.scan_attestation_digest, 'scan_mismatch');
 }
 
 const handles = new WeakSet<object>();
@@ -135,7 +143,7 @@ export async function verifyPackage(raw: Uint8Array, m: Pick<Manifest, 'commitme
     const row = canonicalRow(e.row, schema, budget); bytes += utf8(row.text).length; check(bytes <= 250000, 'canonical_byte_limit');
     check(b64(await sha(utf8('aim-row-v1\0'), unb64(p.schema_digest, 32), utf8('\0'), utf8(row.text))) === e.base_row_digest, 'row_digest_mismatch');
     check(await inclusion(await leaf(e.base_row_digest, e.duplicate_ordinal), e.leaf_index, e.tree_size, e.siblings, m.commitment.dataset_merkle_root), 'proof_invalid');
-    entries.push({proofId: e.proof_id, cells: row.cells});
+    entries.push({proofId: e.proof_id, row: e.row, cells: row.cells});
   }
   // Independently recompute from the actual ordered package entries, not metadata.
   check(await sampleHash(p.entries) === p.sample_hash, 'sample_hash_mismatch');
@@ -157,13 +165,13 @@ export function envelopeBudget(value: unknown): number {
 export interface VerificationOptions {
   listingId: string; keys: TrustedKeys; now: () => number; previous?: TrustedCheckpoint;
   /** Must run entirely locally and reject incomplete/uncertain policy coverage. */
-  scan: (entries: readonly VerifiedEntry[], signal: AbortSignal) => Promise<void>;
+  scan: (entries: readonly VerifiedEntry[], signal: AbortSignal, schema: readonly import('./types').Descriptor[]) => Promise<void>;
   readCurrent: () => Promise<unknown>; signal: AbortSignal;
 }
 export async function verifySample(manifest: unknown, raw: Uint8Array, options: VerificationOptions): Promise<VerifiedSample> {
   const m = await verifyManifest(manifest, options.keys, options.listingId, options.now(), options.previous);
   const entries = await verifyPackage(raw, m);
-  await options.scan(entries, options.signal);
+  await options.scan(entries, options.signal, m.schema_descriptors);
   check(!options.signal.aborted, 'cancelled');
   const current = await verifyManifest(await options.readCurrent(), options.keys, options.listingId, options.now(), options.previous);
   // Only eligibility timestamps may advance. Every signed identity/evidence byte
