@@ -103,3 +103,12 @@ it('silently uses identity-only columns when the signed payload is absent or has
   vi.mocked(fetchSignedSummaryPayload).mockResolvedValue(JSON.parse(readFileSync('tests/fixtures/preview/signed-summary-payload.json', 'utf8')));
   await view(); expect(screen.queryByText('Synthetic crop label')).toBeNull(); expect(screen.queryByText('Sample unavailable')).toBeNull();
 });
+
+it('hides all rows before seller contact for an F2-signed attestation digest mismatch', async () => {
+  const e = f.manifest.approval.platform_envelope;
+  e.binding.scan_attestation_digest = '0'.repeat(64);
+  e.seller_signature = testSign(disclosureBytes(e.binding)); e.signature = testSign(platformBytes(e));
+  await mount(); fireEvent.click(screen.getByRole('button', {name: 'View sample'})); await screen.findByText('Sample unavailable');
+  expect(fetchPackage).not.toHaveBeenCalled(); expect(screen.queryByRole('table')).toBeNull();
+  expect(screen.queryByText('scan_mismatch')).toBeNull();
+});

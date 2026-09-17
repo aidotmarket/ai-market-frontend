@@ -92,7 +92,7 @@ F2 producer attestation plus deterministic browser policy replaces the browser M
 requirement; the dedicated signed-payload read supplies approved labels; sellers
 sign sample decisions in AIM Data. The seller sample mount displays state and the
 identical buyer preview. Existing metadata-only summary controls grant no sample
-permission. There is no signed seller decision-control TODO in this frontend.
+permission. Sample signing remains in AIM Data.
 
 Production dependencies are the signed-payload read deployment and a real approved
 v2 package from Sergey. Max reports keys HTTP 200 with

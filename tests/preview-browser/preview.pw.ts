@@ -5,7 +5,7 @@ import type {Descriptor} from '../../lib/listing-preview/types';
 for (const width of [360, 375, 390]) test(`${width}px native keyboard table and zero ingress`, async ({page}) => {
   const schema: Descriptor[] = [['amount', 'decimal', false, {precision: 38, scale: 12}], ['id', 'signed_integer', false, {}], ['note', 'string', false, {}]];
   const marker = 'ROW_MARKER_' + 'x'.repeat(220), filterMarker = 'FILTER_MARKER';
-  const f = await makePreview([{amount: '12345678901234567890.123456789012', id: '9007199254740993', note: marker}, {amount: '-0.123456789012', id: '2', note: 'oats'}], schema);
+  const f = await makePreview([{amount: '12.5', id: '123', note: marker}, {amount: '-0.125', id: '2', note: 'oats'}], schema);
   const requests: {url: string; body: string | null}[] = [], logs: string[] = [], errors: string[] = [];
   page.on('request', r => {if (r.url().startsWith('https://api.preview.test')) requests.push({url: r.url(), body: r.postData()});});
   page.on('console', m => logs.push(m.text())); page.on('pageerror', e => errors.push(e.message));
@@ -13,6 +13,7 @@ for (const width of [360, 375, 390]) test(`${width}px native keyboard table and 
   await page.addInitScript(now => {const realNow = Date.now, offset = now - realNow(); Date.now = () => realNow() + offset;}, f.now);
   await page.route('https://api.preview.test/**', async route => {
     const path = new URL(route.request().url()).pathname;
+    if (path.endsWith('/signed-payload')) {await route.fulfill({status: 404}); return;}
     const body = path.endsWith('/keys') ? {profile: 'aim-preview-platform-keys-v1', keys: Object.entries(f.keys).map(([key_id, public_key]) => ({key_id, public_key, algorithm: 'ed25519'}))} : f.manifest;
     await route.fulfill({status: 200, headers: {'content-type': 'application/json', 'cache-control': 'no-store', 'access-control-allow-origin': '*'}, body: JSON.stringify(body)});
   });

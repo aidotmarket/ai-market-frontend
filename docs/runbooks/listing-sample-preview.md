@@ -76,7 +76,8 @@ rtk proxy npx playwright test -c playwright.preview.config.ts
 rtk proxy python3 scripts/preview-mutations.py
 ```
 
-The Chrome harness uses synthetic keys, fixtures and route interception only.
+The Chrome harness uses synthetic keys/rows and route interception with the real
+deterministic browser scanner.
 Its assertions cover keyboard behavior, 360/375/390px page overflow, deferred
 table loading and marker absence from platform requests/logs/browser storage.
 It is not a real seller-origin, detector, CDN, production approval or withdrawal

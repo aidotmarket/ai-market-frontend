@@ -3,7 +3,6 @@ import {fileURLToPath} from 'node:url';
 const root = fileURLToPath(new URL('../../', import.meta.url));
 const server = await createServer({root, configFile: false,
   resolve: {alias: [
-    {find: '@/lib/listing-preview/policy', replacement: root + 'tests/preview-browser/synthetic-policy.ts'},
     {find: '@', replacement: root},
   ]},
   define: {'process.env.NEXT_PUBLIC_API_URL': JSON.stringify('https://api.preview.test'), 'process.env.API_URL': 'undefined'},
