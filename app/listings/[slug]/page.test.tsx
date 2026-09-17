@@ -1,8 +1,11 @@
+// @vitest-environment jsdom
 import React from 'react';
 import { renderToStaticMarkup } from 'react-dom/server';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { within } from '@testing-library/react';
 
 import type { ListingDetail, ListingVersion } from '@/types';
+import type { ListingWithSamples } from './SampleFiles';
 
 const notFound = vi.fn(() => {
   throw new Error('NEXT_NOT_FOUND');
@@ -47,7 +50,7 @@ vi.mock('rehype-sanitize', () => ({
 
 const { default: ListingDetailPage } = await import('./page');
 
-function makeListing(overrides: Partial<ListingDetail> = {}): ListingDetail {
+function makeListing(overrides: Partial<ListingWithSamples> = {}): ListingWithSamples {
   return {
     id: 'listing-1',
     slug: 'test-dataset',
@@ -290,4 +293,118 @@ it('keeps empty and null summaries byte-identical to the legacy absent buyer rou
     expect(html).not.toContain('At a glance');
     expect(html).toBe(legacy);
   }
+});
+
+
+describe('S1717 member_files and verification scope', () => {
+  const scope = '7 data files scanned; 3 documentation files are not part of the data set';
+  const sampleUrl = (index: number) => `/api/v1/public/listings/12345678-1234-4234-8234-123456789abc/sample/${index}`;
+
+  async function memberFilesListing(route: 'local' | 'workspace'): Promise<ListingWithSamples> {
+    const files = [
+      { index: 0, key_basename: 'sales.csv', size: 1536, state: 'available' as const, url: sampleUrl(0) },
+      { index: 1, key_basename: 'regions.json', size: 1048576, state: 'available' as const, url: sampleUrl(1) },
+      { index: 2, key_basename: 'archive.csv', size: 0, state: 'unavailable' as const, url: sampleUrl(2) },
+    ];
+    if (route === 'local') {
+      return makeListing({ sample_files: files.map(file => ({ ...file, binding: 'manifest' as const })) });
+    }
+    const { createHash } = await import('node:crypto');
+    const rendered_html = '<html><body><h1>Approved member files</h1></body></html>';
+    return makeListing({
+      sample_files: null,
+      approved_presentation: {
+        presentation_version: 'seller-listing-review-v2', rendered_html,
+        render_hash: createHash('sha256').update(rendered_html).digest('hex'),
+        sample_files: files.map((file, index) => ({ ...file, binding: index === 0 ? 'etag_md5' : 'size_only' })),
+      },
+    });
+  }
+
+  beforeEach(() => {
+    fetchPublicListing.mockReset();
+    fetchListingVersions.mockReset();
+    fetchListingAccessWindowDays.mockReset();
+    buyButtonProps.mockClear();
+  });
+
+  for (const route of ['local', 'workspace'] as const) {
+    it(`renders the three-file ${route} member_files fixture with named download links`, async () => {
+      const html = await renderPage(await memberFilesListing(route));
+      document.body.innerHTML = html;
+      const block = within(document.body).getByRole('region', { name: 'Free sample: 3 files' });
+      const sample = within(block);
+      expect(sample.getAllByRole('listitem')).toHaveLength(3);
+      expect(sample.getByText('Sample files are part of the purchased set and free to download.')).toBeTruthy();
+      expect(sample.getByText('1.5 KiB')).toBeTruthy();
+      expect(sample.getByText('1 MiB')).toBeTruthy();
+      expect(sample.getByText('0 B')).toBeTruthy();
+      // The visible filename is also the accessible link name, not a generic Download label.
+      for (const [index, name] of ['sales.csv', 'regions.json'].entries()) {
+        const link = sample.getByRole('link', { name });
+        expect(link.textContent).toBe(name);
+        expect(link.getAttribute('href')).toBe(sampleUrl(index));
+        expect(link.hasAttribute('download')).toBe(true);
+      }
+      expect(sample.getAllByRole('link')).toHaveLength(2);
+      expect(sample.getByText('archive.csv')).toBeTruthy();
+      expect(sample.getByText('(sample unavailable)')).toBeTruthy();
+      expect(sample.queryByRole('link', { name: 'archive.csv' })).toBeNull();
+      expect(html).not.toContain(sampleUrl(2));
+      if (route === 'local') {
+        expect(sample.getAllByText('verified: part of the published dataset')).toHaveLength(3);
+      } else {
+        expect(sample.getByText('checksum-matched copy')).toBeTruthy();
+        expect(sample.getAllByText('copy provided by the seller')).toHaveLength(2);
+      }
+    });
+
+    it(`keeps ${route} null carriers byte-identical to absent carriers`, async () => {
+      const listing = await memberFilesListing(route);
+      delete listing.sample_files;
+      delete listing.approved_presentation?.sample_files;
+      const absent = await renderPage(listing);
+      listing.sample_files = null;
+      listing.verification_scope = null;
+      if (listing.approved_presentation) listing.approved_presentation.sample_files = null;
+      const html = await renderPage(listing);
+      expect(html).toBe(absent);
+      expect(html).not.toContain('free-sample-heading');
+      expect(html).not.toContain('free to download');
+      expect(html).not.toContain('documentation files are not part of the data set');
+    });
+
+    it(`renders the exact scope sentence beside ${route} scan findings`, async () => {
+      const listing = await memberFilesListing(route);
+      listing.verification_scope = scope;
+      listing.scan_findings = {
+        publication_state: 'WITHDRAWN', withdrawn_at_utc: '2026-09-17T00:00:00Z',
+        marker: 'Scan findings withdrawn by seller on 2026-09-17',
+      };
+      document.body.innerHTML = await renderPage(listing);
+      const sentence = within(document.body).getByText(scope, { exact: true });
+      expect(sentence.previousElementSibling?.tagName).toBe('ASIDE');
+      expect(sentence.previousElementSibling?.textContent).toBe(listing.scan_findings.marker);
+    });
+
+    it(`ignores extra private sample metadata on the ${route} carrier`, async () => {
+      const listing = await memberFilesListing(route);
+      const files = listing.sample_files ?? listing.approved_presentation?.sample_files;
+      const clean = await renderPage(listing);
+      for (const file of files!) {
+        Object.assign(file, {
+          storage_key: 'PRIVATE_STORAGE_KEY', asset_id: 'PRIVATE_ASSET_ID',
+          connection_id: 'PRIVATE_CONNECTION_ID', source_version: 'PRIVATE_SOURCE_VERSION',
+          source_file_path: '/private/source.csv', credential: 'PRIVATE_CREDENTIAL',
+        });
+      }
+      expect(await renderPage(listing)).toBe(clean);
+    });
+  }
+
+  it('renders scope without sample files or scan findings', async () => {
+    const html = await renderPage(makeListing({ sample_files: null, scan_findings: null, verification_scope: scope }));
+    expect(html).toContain(scope);
+    expect(html).not.toContain('free-sample-heading');
+  });
 });

@@ -18,6 +18,7 @@ import InquiryWidget from '@/components/InquiryWidget';
 import ScanFindingsBadge from '@/components/listings/ScanFindingsBadge';
 import ReactMarkdown from 'react-markdown';
 import rehypeSanitize from 'rehype-sanitize';
+import SampleFiles, { type ListingWithSamples } from './SampleFiles';
 
 export const dynamic = 'force-dynamic';
 
@@ -81,7 +82,7 @@ export default async function ListingDetailPage({ params, searchParams }: Props)
     notFound();
   }
 
-  const listing: ListingDetail | null = await fetchPublicListing(slug);
+  const listing: ListingWithSamples | null = await fetchPublicListing(slug);
   if (!listing) {
     notFound();
   }
@@ -147,6 +148,7 @@ export default async function ListingDetailPage({ params, searchParams }: Props)
 
 
           <ScanFindingsBadge scanFindings={listing.scan_findings ?? null} />
+          {listing.verification_scope != null && <p className="text-sm text-gray-600">{listing.verification_scope}</p>}
 
           {/* Tags */}
           <div className="flex flex-wrap gap-2">
@@ -172,7 +174,12 @@ export default async function ListingDetailPage({ params, searchParams }: Props)
           </div>
 
           </>}
-          {approved && <ScanFindingsBadge scanFindings={listing.scan_findings ?? null} />}
+          {approved && <>
+            <ScanFindingsBadge scanFindings={listing.scan_findings ?? null} />
+            {listing.verification_scope != null && <p className="text-sm text-gray-600">{listing.verification_scope}</p>}
+          </>}
+
+          <SampleFiles files={listing.sample_files ?? approved?.sample_files} />
 
           {/* Schema Info */}
           {(rowCount != null || (schemaSummary?.columns?.length ?? 0) > 0) && (
