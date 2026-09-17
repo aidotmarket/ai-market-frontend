@@ -1,5 +1,5 @@
 import {afterEach, expect, it, vi} from 'vitest';
-import {fetchPreviewConsistency, fetchPreviewKeys, fetchPreviewManifest} from '@/lib/api';
+import {fetchPreviewConsistency, fetchPreviewKeys, fetchPreviewManifest, fetchSignedSummaryPayload} from '@/lib/api';
 import {makePreview} from '@/tests/previewFixture';
 import {renderToString} from 'react-dom/server';
 import {createElement} from 'react';
@@ -42,4 +42,21 @@ it('checks independently requested consistency sizes and rejects SSR package ret
   expect(await fetchPreviewConsistency(1, 2, new AbortController().signal)).toEqual([]);
   expect(await fetchPreviewConsistency(2, 3, new AbortController().signal)).toBeNull();
   await expect(fetchPackage('https://seller.example/p', 1048576, new AbortController().signal)).rejects.toThrow('browser_only');
+});
+
+it('reads signed summary metadata with no-store and no credentials or row ingress', async () => {
+  const raw = {payload: {profile: 'aim-listing-enrichment-profile-v2'}};
+  const fetch = vi.fn(async () => response(raw)); vi.stubGlobal('fetch', fetch);
+  const signal = new AbortController().signal;
+  expect(await fetchSignedSummaryPayload('space / slug', signal)).toEqual(raw);
+  expect(fetch).toHaveBeenCalledWith(expect.stringContaining('/space%20%2F%20slug/at-a-glance/signed-payload'), {
+    cache: 'no-store', credentials: 'omit', redirect: 'error', referrerPolicy: 'no-referrer', signal,
+  });
+});
+it('treats an undeployed, absent, cached or malformed signed payload as optional', async () => {
+  const signal = new AbortController().signal;
+  for (const value of [response({}, 404), response({}, 503), new Response('{}', {headers: {'content-type': 'application/json'}}),
+    new Response('{bad', {headers: {'content-type': 'application/json', 'cache-control': 'no-store'}})]) {
+    vi.stubGlobal('fetch', vi.fn(async () => value)); expect(await fetchSignedSummaryPayload('slug', signal)).toBeNull();
+  }
 });

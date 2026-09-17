@@ -1,19 +1,22 @@
 // @vitest-environment jsdom
+import {readFileSync} from 'node:fs';
+import {disclosureBytes, platformBytes} from '@/lib/listing-preview/verifier';
+import {testSign} from '@/tests/previewFixture';
 import {webcrypto} from 'node:crypto';
 import {act, cleanup, fireEvent, render, screen, waitFor} from '@testing-library/react';
 import {afterEach, beforeEach, expect, it, vi} from 'vitest';
 import {makePreview} from '@/tests/previewFixture';
-import {fetchPreviewKeys, fetchPreviewManifest} from '@/lib/api';
+import {fetchPreviewKeys, fetchPreviewManifest, fetchSignedSummaryPayload} from '@/lib/api';
 import {fetchPackage} from '@/lib/listing-preview/transport';
 import {scanLocalPreview} from '@/lib/listing-preview/policy';
 import ListingSamplePreview from './ListingSamplePreview';
 
-vi.mock('@/lib/api', () => ({fetchPreviewManifest: vi.fn(), fetchPreviewKeys: vi.fn()}));
+vi.mock('@/lib/api', () => ({fetchPreviewManifest: vi.fn(), fetchPreviewKeys: vi.fn(), fetchSignedSummaryPayload: vi.fn()}));
 vi.mock('@/lib/listing-preview/transport', () => ({fetchPackage: vi.fn()}));
 vi.mock('@/lib/listing-preview/policy', async importOriginal => ({...await importOriginal<typeof import('@/lib/listing-preview/policy')>(), scanLocalPreview: vi.fn()}));
 let f: Awaited<ReturnType<typeof makePreview>>;
 beforeEach(async () => {
-  vi.stubGlobal('crypto', webcrypto); vi.resetAllMocks(); f = await makePreview();
+  vi.stubGlobal('crypto', webcrypto); vi.resetAllMocks(); vi.mocked(fetchSignedSummaryPayload).mockResolvedValue(null); f = await makePreview();
   vi.spyOn(Date, 'now').mockReturnValue(f.now);
   Object.defineProperty(document, 'visibilityState', {configurable: true, value: 'visible'});
   vi.mocked(fetchPreviewManifest).mockResolvedValue(f.manifest); vi.mocked(fetchPreviewKeys).mockResolvedValue(f.keys);
@@ -85,4 +88,18 @@ it('hides every row on a real deterministic policy failure with neutral text onl
   vi.mocked(scanLocalPreview).mockImplementation(actual.scanLocalPreview);
   await mount(); fireEvent.click(screen.getByRole('button', {name: 'View sample'})); await screen.findByText('Sample unavailable');
   expect(screen.queryByRole('table')).toBeNull(); expect(screen.queryByText(/marker/)).toBeNull();
+});
+
+it('binds descriptions and units from the current signed payload before insertion', async () => {
+  const signed = JSON.parse(readFileSync('tests/fixtures/preview/signed-summary-payload.json', 'utf8'));
+  const e = f.manifest.approval.platform_envelope;
+  f.manifest.summary_hash = signed.summary_hash; e.binding.summary_hash = signed.summary_hash;
+  e.seller_signature = testSign(disclosureBytes(e.binding)); e.signature = testSign(platformBytes(e));
+  vi.mocked(fetchSignedSummaryPayload).mockResolvedValue(signed);
+  await view(); expect(screen.getByText('Synthetic crop label')).toBeTruthy();
+  expect(fetchSignedSummaryPayload).toHaveBeenCalledWith('current-canonical', expect.any(AbortSignal));
+});
+it('silently uses identity-only columns when the signed payload is absent or has another hash', async () => {
+  vi.mocked(fetchSignedSummaryPayload).mockResolvedValue(JSON.parse(readFileSync('tests/fixtures/preview/signed-summary-payload.json', 'utf8')));
+  await view(); expect(screen.queryByText('Synthetic crop label')).toBeNull(); expect(screen.queryByText('Sample unavailable')).toBeNull();
 });

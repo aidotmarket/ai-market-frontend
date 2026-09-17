@@ -26,6 +26,17 @@ The shared deterministic vector fixture and SHA live under `tests/fixtures/previ
 to pinned producer source; Node/Vitest runs the same vectors through the browser
 policy. There is no browser ML model and no server scan or row ingress.
 
+## Approved column labels
+
+The buyer and seller sample mount read the optional no-store
+`GET /api/v1/public/listings/{slug}/at-a-glance/signed-payload` response. The
+adapter expects `{payload, summary_hash, render_hash, source_revision,
+approval_version}`. It recomputes SHA-256 of the original payload's RFC8785 bytes
+and requires exact F2-bound summary/render/source identity before joining exact
+column names. Missing rollout, stale identity, malformed payload or hash mismatch
+silently retain identity-only columns. Confirm this response shape against the
+backend amendment when available; fixtures are synthetic contract examples.
+
 ## Diagnostic sequence
 
 1. Confirm the canonical current slug and listing UUID. Do not select a historical
@@ -77,7 +88,7 @@ the corpus to make failing tests pass.
 
 ## Remaining release obligations
 
-Retain the report's explicit open items: approved summary-label binding and a real
+Retain the report's explicit open items: signed-payload production availability and a real
 production sample, approved Chunk 5 retirement, independent review and I.b
 live approval/direct-origin/withdrawal/CDN checks. No merge or deployment is
 authorized by this implementation task.

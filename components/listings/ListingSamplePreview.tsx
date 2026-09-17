@@ -1,7 +1,7 @@
 "use client";
 
 import {useEffect, useRef, useState, type ComponentType} from 'react';
-import {fetchPreviewConsistency, fetchPreviewKeys, fetchPreviewManifest, type ListingSummary} from '@/lib/api';
+import {fetchPreviewConsistency, fetchPreviewKeys, fetchPreviewManifest, fetchSignedSummaryPayload} from '@/lib/api';
 import type {ApprovedColumn} from '@/lib/listing-preview/columns';
 import type {Manifest, TrustedCheckpoint, TrustedKeys, VerifiedSample} from '@/lib/listing-preview/types';
 
@@ -10,8 +10,8 @@ type Ready = {manifest: Manifest; keys: TrustedKeys};
 type State = {kind: 'absent'} | {kind: 'ready'; value: Ready} | {kind: 'loading'} | {kind: 'unavailable'} |
   {kind: 'verified'; sample: VerifiedSample; columns: ApprovedColumn[]; Table: ComponentType<TableProps>};
 
-export default function ListingSamplePreview({slug, listingId, approvedSummary, approvedSummaryHash}: {
-  slug?: string; listingId: string; approvedSummary?: ListingSummary | null; approvedSummaryHash?: string;
+export default function ListingSamplePreview({slug, listingId}: {
+  slug?: string; listingId: string;
 }) {
   const [state, setState] = useState<State>({kind: 'absent'});
   const generation = useRef(0), request = useRef<AbortController | null>(null), requested = useRef(false);
@@ -41,13 +41,13 @@ export default function ListingSamplePreview({slug, listingId, approvedSummary, 
         if (!manifest || manifest.listing_id !== listingId) {setState(requested.current ? {kind: 'unavailable'} : {kind: 'absent'}); return;}
         const keys = await fetchPreviewKeys(controller.signal);
         if (!valid()) return;
-        // Missing trust distribution (including the current production 503) is
+        // Missing trust distribution is
         // no preview, with no error page and no seller-origin request.
         if (!keys) {setState({kind: 'absent'}); return;}
         if (!view) {setState({kind: 'ready', value: {manifest, keys}}); return;}
-        const [{verifyManifest, verifySample}, {fetchPackage}, {scanLocalPreview}, {tableRenderer}, {default: Table}, {joinApprovedColumns}, primitives] = await Promise.all([
+        const [{verifyManifest, verifySample}, {fetchPackage}, {scanLocalPreview}, {tableRenderer}, {default: Table}, {joinApprovedColumns, signedSummaryDescriptions}] = await Promise.all([
           import('@/lib/listing-preview/verifier'), import('@/lib/listing-preview/transport'), import('@/lib/listing-preview/policy'),
-          import('@/lib/listing-preview/registry'), import('./SampleTable'), import('@/lib/listing-preview/columns'), import('@/lib/listing-preview/primitives'),
+          import('@/lib/listing-preview/registry'), import('./SampleTable'), import('@/lib/listing-preview/columns'),
         ]);
         if (!valid()) return;
         async function withPrevious(value: Manifest | null): Promise<Manifest | null> {
@@ -62,18 +62,13 @@ export default function ListingSamplePreview({slug, listingId, approvedSummary, 
         }
         const checked = await verifyManifest(await withPrevious(manifest), keys, listingId, clock(), previous.current);
         if (!valid()) return;
+        const signedSummary = await fetchSignedSummaryPayload(slug, controller.signal);
+        if (!valid()) return;
         const raw = await fetchPackage(checked.package.url, checked.package.byte_ceiling, controller.signal);
         const sample = await verifySample(checked, raw, {listingId, keys, now: clock, previous: previous.current, scan: scanLocalPreview,
           readCurrent: async () => withPrevious(await fetchPreviewManifest(slug, controller.signal)), signal: controller.signal});
         if (!valid()) return;
-        // Optional labels require an exact approved payload hash. A transformed
-        // public summary is not silently treated as the original signed payload.
-        let descriptions: NonNullable<ListingSummary['field_descriptions']>['value'] = [];
-        if (approvedSummary && approvedSummaryHash === sample.manifest.summary_hash && primitives.hex(await primitives.sha(primitives.jcs(approvedSummary))) === sample.manifest.summary_hash) {
-          descriptions = approvedSummary.field_descriptions?.value ?? [];
-          const names = approvedSummary.key_fields?.value.map(c => c.name) ?? [];
-          if (!sample.manifest.selected_fields.every(n => names.includes(n))) throw new Error('approved_column_mismatch');
-        }
+        const descriptions = await signedSummaryDescriptions(signedSummary, sample.manifest);
         const columns = joinApprovedColumns(sample.manifest.columns, descriptions);
         if (!valid()) return;
         previous.current = sample.manifest.checkpoint;
@@ -94,7 +89,7 @@ export default function ListingSamplePreview({slug, listingId, approvedSummary, 
     return () => {disposed = true; clear(); startRef.current = () => undefined;
       document.removeEventListener('visibilitychange', visibility); window.removeEventListener('pageshow', restore);
       window.removeEventListener('pagehide', hide); window.removeEventListener('focus', focus);};
-  }, [slug, listingId, approvedSummary, approvedSummaryHash]);
+  }, [slug, listingId]);
   if (state.kind === 'absent') return null;
   return <section data-listing-sample="" aria-label="Seller-selected sample" className="min-w-0 max-w-full space-y-3 rounded-xl border border-gray-200 bg-white p-4">
     {state.kind === 'ready' && <button type="button" onClick={() => startRef.current(true)} className="rounded border border-indigo-700 px-3 py-2 text-indigo-700 focus-visible:outline-2 focus-visible:outline-indigo-700">View sample</button>}

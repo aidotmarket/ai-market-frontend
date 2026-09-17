@@ -88,7 +88,7 @@ export default function SellerAtAGlance({listingId, slug, active = true, revisio
       <p role="status" className="text-sm text-gray-700">{preview.state === 'approved' ? 'Approved. This summary is shown to buyers.' : 'Review the summary and approve it to show it to buyers'}</p>
       {preview.state !== 'approved' && !hasBuyerFields && <p className="text-sm text-gray-700">Nothing to show buyers yet. Add more listing details or regenerate.</p>}
       <AtAGlance audience="seller" summary={preview.at_a_glance} />
-      {active && preview.state === 'approved' && <ListingSamplePreview slug={slug} listingId={listingId} approvedSummary={preview.at_a_glance} approvedSummaryHash={preview.summary_hash} />}
+      {active && preview.state === 'approved' && <ListingSamplePreview slug={slug} listingId={listingId} />}
       <p className="text-sm text-gray-700">{preview.approval_text}</p>
       <div className="flex flex-wrap gap-3">
         <button type="button" disabled={busy || !active} onClick={() => act('regenerate')} className="rounded-lg border border-gray-300 px-4 py-2.5 text-sm disabled:opacity-50">Regenerate</button>

@@ -265,6 +265,17 @@ export async function fetchPreviewManifest(slug: string, signal: AbortSignal): P
     return value?.profile === 'aim-listing-preview-v1' && value.package_profile === 'aim-preview-package-v2' && value.preview_type === 'table' && value.content_type === 'tabular' ? value : null;
   } catch {return null;}
 }
+/** Optional current-head metadata. Missing rollout or invalid data is identity-only. */
+export async function fetchSignedSummaryPayload(slug: string, signal: AbortSignal): Promise<unknown | null> {
+  try {
+    const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000'}/api/v1/public/listings/${encodeURIComponent(slug)}/at-a-glance/signed-payload`, {
+      cache: 'no-store', credentials: 'omit', redirect: 'error', referrerPolicy: 'no-referrer', signal,
+    });
+    if (response.status !== 200 || signal.aborted) return null;
+    const {metadataResponse} = await import('./listing-preview/transport');
+    return await metadataResponse(response, signal);
+  } catch {return null;}
+}
 // Non-content trust only, in memory. This never supplies a missing key response.
 const observedPreviewKeys = new Map<string, string>();
 export async function fetchPreviewKeys(signal: AbortSignal): Promise<import('./listing-preview/types').TrustedKeys | null> {

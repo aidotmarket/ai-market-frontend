@@ -1,0 +1,42 @@
+{
+  "payload": {
+    "profile": "aim-listing-enrichment-profile-v2",
+    "key_fields": {
+      "value": [
+        {
+          "name": "id",
+          "type": "signed_integer"
+        },
+        {
+          "name": "name",
+          "type": "string"
+        }
+      ],
+      "provenance": "seller_entered",
+      "authority": "seller_entered",
+      "source_reference": "synthetic-fixture",
+      "source_revision": "eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee"
+    },
+    "field_descriptions": {
+      "value": [
+        {
+          "name": "id",
+          "description": "Synthetic identifier"
+        },
+        {
+          "name": "name",
+          "description": "Synthetic crop label",
+          "unit": "crop"
+        }
+      ],
+      "provenance": "seller_entered",
+      "authority": "seller_entered",
+      "source_reference": "synthetic-fixture",
+      "source_revision": "eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee"
+    }
+  },
+  "summary_hash": "aa400a10458871b777ab25c18816d8c04fac3f35899675996b13d9dd9b7cded1",
+  "render_hash": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+  "source_revision": "eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee",
+  "approval_version": "00000000-0000-4000-8000-000000000099"
+}
