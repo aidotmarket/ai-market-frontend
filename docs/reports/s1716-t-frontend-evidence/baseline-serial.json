@@ -1,0 +1,4494 @@
+{
+  "numTotalTests": 745,
+  "numPassedTests": 744,
+  "numFailedTests": 1,
+  "numPendingTests": 0,
+  "numTotalTestSuites": 172,
+  "startTime": 1789686501390,
+  "success": false,
+  "raw_sha256": "0642d7c7e25e8c587299399116f3dbe5c22464e083aac8f0bb1ad373fd781abf",
+  "failures": [
+    {
+      "file": "app/login/LoginForm.test.tsx",
+      "name": "shares one flight between a manual click and subsequent hinted hydration",
+      "status": "failed",
+      "duration_ms": 119.57358299999987,
+      "failure_first_line": "AssertionError: expected [] to deeply equal [ [ 'oauth_nonce', 'only-nonce' ] ]",
+      "failure_sha256": "fe6df1e100f4f4c21de5744553c237862a81aabf966d4febcc771ea64dc7778e"
+    }
+  ],
+  "assertions": [
+    {
+      "file": "middleware.test.ts",
+      "name": "AI crawler middleware sends exactly one POST for GPTBot and returns next before the beacon settles",
+      "status": "passed",
+      "duration_ms": 16.894917000000078
+    },
+    {
+      "file": "middleware.test.ts",
+      "name": "AI crawler middleware does not send a beacon for Chrome",
+      "status": "passed",
+      "duration_ms": 2.8735830000000533
+    },
+    {
+      "file": "middleware.test.ts",
+      "name": "AI crawler middleware excludes /dashboard even for GPTBot",
+      "status": "passed",
+      "duration_ms": 9.25991600000009
+    },
+    {
+      "file": "middleware.test.ts",
+      "name": "AI crawler middleware excludes /listings-private even for GPTBot",
+      "status": "passed",
+      "duration_ms": 2.8628330000000233
+    },
+    {
+      "file": "middleware.test.ts",
+      "name": "AI crawler middleware excludes /requests-private even for GPTBot",
+      "status": "passed",
+      "duration_ms": 11.641166999999996
+    },
+    {
+      "file": "middleware.test.ts",
+      "name": "AI crawler middleware matches and reports public route /",
+      "status": "passed",
+      "duration_ms": 6.392458000000033
+    },
+    {
+      "file": "middleware.test.ts",
+      "name": "AI crawler middleware matches and reports public route /listings",
+      "status": "passed",
+      "duration_ms": 4.54200000000003
+    },
+    {
+      "file": "middleware.test.ts",
+      "name": "AI crawler middleware matches and reports public route /listings/some-slug",
+      "status": "passed",
+      "duration_ms": 5.402417000000014
+    },
+    {
+      "file": "middleware.test.ts",
+      "name": "AI crawler middleware matches and reports public route /requests",
+      "status": "passed",
+      "duration_ms": 4.345042000000035
+    },
+    {
+      "file": "middleware.test.ts",
+      "name": "AI crawler middleware matches and reports public route /requests/some-slug",
+      "status": "passed",
+      "duration_ms": 4.621916999999939
+    },
+    {
+      "file": "middleware.test.ts",
+      "name": "AI crawler middleware matches and reports public route /llms.txt",
+      "status": "passed",
+      "duration_ms": 2.111917000000062
+    },
+    {
+      "file": "middleware.test.ts",
+      "name": "AI crawler middleware matches and reports public route /llms-full.txt",
+      "status": "passed",
+      "duration_ms": 1.1549170000000686
+    },
+    {
+      "file": "middleware.test.ts",
+      "name": "AI crawler middleware matches and reports public route /sitemap.xml",
+      "status": "passed",
+      "duration_ms": 1.314834000000019
+    },
+    {
+      "file": "middleware.test.ts",
+      "name": "AI crawler middleware matches and reports public route /sitemap-listings.xml",
+      "status": "passed",
+      "duration_ms": 4.004750000000058
+    },
+    {
+      "file": "middleware.test.ts",
+      "name": "AI crawler middleware uses the server-side API URL fallback",
+      "status": "passed",
+      "duration_ms": 2.9922920000000204
+    },
+    {
+      "file": "middleware.test.ts",
+      "name": "AI crawler middleware skips the beacon when the key is missing",
+      "status": "passed",
+      "duration_ms": 2.2571669999999813
+    },
+    {
+      "file": "middleware.test.ts",
+      "name": "AI crawler middleware skips the beacon when the base is missing",
+      "status": "passed",
+      "duration_ms": 1.1052079999999478
+    },
+    {
+      "file": "middleware.test.ts",
+      "name": "AI crawler middleware does not use the internal API key when the beacon key is unset",
+      "status": "passed",
+      "duration_ms": 1.8000419999999622
+    },
+    {
+      "file": "middleware.test.ts",
+      "name": "AI crawler middleware swallows a rejected beacon",
+      "status": "passed",
+      "duration_ms": 3.3502920000000813
+    },
+    {
+      "file": "middleware.test.ts",
+      "name": "AI crawler middleware swallows a synchronous fetch failure",
+      "status": "passed",
+      "duration_ms": 0.9418329999999742
+    },
+    {
+      "file": "middleware.test.ts",
+      "name": "AI crawler middleware preserves Keystatic header rewriting without a beacon",
+      "status": "passed",
+      "duration_ms": 2.3358749999999873
+    },
+    {
+      "file": "next.config.test.ts",
+      "name": "next.config request discovery rewrites proxies root and well-known requests.txt when API URL is configured",
+      "status": "passed",
+      "duration_ms": 3.2187090000000182
+    },
+    {
+      "file": "next.config.test.ts",
+      "name": "next.config request discovery rewrites uses localhost fallback for requests.txt outside production",
+      "status": "passed",
+      "duration_ms": 0.6656669999999849
+    },
+    {
+      "file": "next.config.test.ts",
+      "name": "next.config request discovery rewrites proxies the share card image to the backend when API URL is configured",
+      "status": "passed",
+      "duration_ms": 0.33250000000001023
+    },
+    {
+      "file": "next.config.test.ts",
+      "name": "next.config request discovery rewrites uses localhost fallback for the share card image outside production",
+      "status": "passed",
+      "duration_ms": 0.4252920000000131
+    },
+    {
+      "file": "api/anonymousChat.test.ts",
+      "name": "anonymous chat API lifecycle keeps createAnonymousSession backwards compatible when no options are supplied",
+      "status": "passed",
+      "duration_ms": 5.037750000000017
+    },
+    {
+      "file": "api/anonymousChat.test.ts",
+      "name": "anonymous chat API lifecycle cancels the reader, releases its lock, and removes the abort listener",
+      "status": "passed",
+      "duration_ms": 3.103082999999998
+    },
+    {
+      "file": "api/auth.test.ts",
+      "name": "auth register API defaults registrations to buyer while preserving the backend payload shape",
+      "status": "passed",
+      "duration_ms": 3.226832999999999
+    },
+    {
+      "file": "api/auth.test.ts",
+      "name": "auth reauthentication API uses the deployed /auth/reauth contract and preserves its token field",
+      "status": "passed",
+      "duration_ms": 1.3675000000000068
+    },
+    {
+      "file": "api/checkout.test.ts",
+      "name": "createCheckout includes version_id when a version is selected",
+      "status": "passed",
+      "duration_ms": 6.446167000000003
+    },
+    {
+      "file": "api/checkout.test.ts",
+      "name": "createCheckout omits version_id for legacy/latest checkout",
+      "status": "passed",
+      "duration_ms": 1.5823749999999563
+    },
+    {
+      "file": "api/client.test.ts",
+      "name": "refreshAccessToken waits for Retry-After delta-seconds without retrying early",
+      "status": "passed",
+      "duration_ms": 23.200125000000014
+    },
+    {
+      "file": "api/client.test.ts",
+      "name": "refreshAccessToken parses Retry-After HTTP-date",
+      "status": "passed",
+      "duration_ms": 10.336749999999995
+    },
+    {
+      "file": "api/client.test.ts",
+      "name": "refreshAccessToken falls back to 60 seconds for invalid Retry-After",
+      "status": "passed",
+      "duration_ms": 5.1117080000000215
+    },
+    {
+      "file": "api/client.test.ts",
+      "name": "refreshAccessToken falls back to 60 seconds for fractional numeric Retry-After",
+      "status": "passed",
+      "duration_ms": 4.294083999999998
+    },
+    {
+      "file": "api/client.test.ts",
+      "name": "refreshAccessToken falls back to 60 seconds for negative numeric Retry-After",
+      "status": "passed",
+      "duration_ms": 3.1432080000000155
+    },
+    {
+      "file": "api/client.test.ts",
+      "name": "refreshAccessToken falls back to 60 seconds for explicitly positive numeric Retry-After",
+      "status": "passed",
+      "duration_ms": 3.82974999999999
+    },
+    {
+      "file": "api/client.test.ts",
+      "name": "refreshAccessToken falls back to 60 seconds for missing Retry-After",
+      "status": "passed",
+      "duration_ms": 3.3675839999999653
+    },
+    {
+      "file": "api/client.test.ts",
+      "name": "refreshAccessToken clamps zero Retry-After to the supported bound",
+      "status": "passed",
+      "duration_ms": 2.6935829999999896
+    },
+    {
+      "file": "api/client.test.ts",
+      "name": "refreshAccessToken clamps above maximum Retry-After to the supported bound",
+      "status": "passed",
+      "duration_ms": 2.634457999999995
+    },
+    {
+      "file": "api/client.test.ts",
+      "name": "refreshAccessToken keeps concurrent callers on one single-flight through the wait and retry",
+      "status": "passed",
+      "duration_ms": 5.0230829999999855
+    },
+    {
+      "file": "api/client.test.ts",
+      "name": "refreshAccessToken retries exactly once and treats a second 429 as transient",
+      "status": "passed",
+      "duration_ms": 3.4928330000000187
+    },
+    {
+      "file": "api/client.test.ts",
+      "name": "refreshAccessToken clears auth and redirects for terminal refresh 401",
+      "status": "passed",
+      "duration_ms": 3.4354169999999726
+    },
+    {
+      "file": "api/client.test.ts",
+      "name": "refreshAccessToken clears auth and redirects for terminal refresh 403",
+      "status": "passed",
+      "duration_ms": 3.4202079999999455
+    },
+    {
+      "file": "api/client.test.ts",
+      "name": "refreshAccessToken clears auth without redirecting an anonymous visitor after a terminal 401",
+      "status": "passed",
+      "duration_ms": 3.0207079999999564
+    },
+    {
+      "file": "api/client.test.ts",
+      "name": "refreshAccessToken preserves auth for transient network failure",
+      "status": "passed",
+      "duration_ms": 2.6337919999999713
+    },
+    {
+      "file": "api/client.test.ts",
+      "name": "refreshAccessToken preserves auth for transient server failure",
+      "status": "passed",
+      "duration_ms": 2.162375000000054
+    },
+    {
+      "file": "api/client.test.ts",
+      "name": "api client response handling rejects the transient refresh error without redirecting",
+      "status": "passed",
+      "duration_ms": 8.430499999999995
+    },
+    {
+      "file": "api/connect.test.ts",
+      "name": "Stripe Connect onboarding redirect redirects to hosted onboarding_url responses",
+      "status": "passed",
+      "duration_ms": 3.7670420000000604
+    },
+    {
+      "file": "api/connect.test.ts",
+      "name": "Stripe Connect onboarding redirect redirects to legacy url responses",
+      "status": "passed",
+      "duration_ms": 0.70474999999999
+    },
+    {
+      "file": "api/connect.test.ts",
+      "name": "Stripe Connect onboarding redirect rejects missing and invalid onboarding URLs",
+      "status": "passed",
+      "duration_ms": 2.325625000000059
+    },
+    {
+      "file": "api/connect.test.ts",
+      "name": "Stripe Connect onboarding redirect identifies the 403 2FA detail used for the info toast branch",
+      "status": "passed",
+      "duration_ms": 1.1580000000000155
+    },
+    {
+      "file": "api/connect.test.ts",
+      "name": "Stripe Connect onboarding redirect does not classify other 403 responses as 2FA-required",
+      "status": "passed",
+      "duration_ms": 0.6818329999999833
+    },
+    {
+      "file": "api/dataVerificationPayin.test.ts",
+      "name": "dataVerificationPayin API uses authenticated api/client for the exact readiness URL",
+      "status": "passed",
+      "duration_ms": 6.426666999999981
+    },
+    {
+      "file": "api/dataVerificationPayin.test.ts",
+      "name": "dataVerificationPayin API sends the exact versioned setup body and reauth header",
+      "status": "passed",
+      "duration_ms": 1.6842919999999992
+    },
+    {
+      "file": "api/dataVerificationPayin.test.ts",
+      "name": "dataVerificationPayin API accepts real RFC3339 UTC instants and rejects normalized impossible dates",
+      "status": "passed",
+      "duration_ms": 3.8638329999999996
+    },
+    {
+      "file": "api/dataVerificationPayin.test.ts",
+      "name": "dataVerificationPayin API sends the exact versioned reconcile body and fresh reauth header",
+      "status": "passed",
+      "duration_ms": 1.0536670000000186
+    },
+    {
+      "file": "api/dataVerificationPayin.test.ts",
+      "name": "dataVerificationPayin API rejects wrong versions, unknown keys, invalid states, and inconsistent readiness booleans",
+      "status": "passed",
+      "duration_ms": 1.1648750000000234
+    },
+    {
+      "file": "api/dataVerificationPayin.test.ts",
+      "name": "dataVerificationPayin API rejects prototype-chain readiness state names",
+      "status": "passed",
+      "duration_ms": 0.31595799999996643
+    },
+    {
+      "file": "api/dataVerificationPayin.test.ts",
+      "name": "dataVerificationPayin API accepts only opaque setup-attempt and Checkout-session identifiers",
+      "status": "passed",
+      "duration_ms": 0.6715829999999983
+    },
+    {
+      "file": "api/dataVerificationPayin.test.ts",
+      "name": "dataVerificationPayin API navigates exactly once through the top-level location boundary",
+      "status": "passed",
+      "duration_ms": 0.3575000000000159
+    },
+    {
+      "file": "api/dataVerificationPayin.test.ts",
+      "name": "dataVerificationPayin API classifies disabled and ineligible surfaces without exposing response details",
+      "status": "passed",
+      "duration_ms": 0.3463329999999587
+    },
+    {
+      "file": "api/dataVerificationPayin.test.ts",
+      "name": "dataVerificationPayin API never imports the public lib/api transport",
+      "status": "passed",
+      "duration_ms": 0.7404590000000439
+    },
+    {
+      "file": "api/listings.test.ts",
+      "name": "getMarketplaceCategoryFacets returns facets.categories from the public search payload",
+      "status": "passed",
+      "duration_ms": 7.295749999999998
+    },
+    {
+      "file": "api/listings.test.ts",
+      "name": "getMarketplaceCategoryFacets fails when the search payload has no category facet data",
+      "status": "passed",
+      "duration_ms": 2.2381659999999783
+    },
+    {
+      "file": "api/notifications.test.ts",
+      "name": "notifications API requests the notification list with its filters",
+      "status": "passed",
+      "duration_ms": 6.978541000000007
+    },
+    {
+      "file": "api/notifications.test.ts",
+      "name": "notifications API requests the unread notification count",
+      "status": "passed",
+      "duration_ms": 0.637958000000026
+    },
+    {
+      "file": "api/orders.workspace.test.ts",
+      "name": "displays list amounts from backend cents while preserving legacy amounts and purchase access",
+      "status": "passed",
+      "duration_ms": 5.444083000000035
+    },
+    {
+      "file": "api/orders.workspace.test.ts",
+      "name": "uses the stored purchase title and cents for Workspace order display",
+      "status": "passed",
+      "duration_ms": 1.9424999999999955
+    },
+    {
+      "file": "api/seller.test.ts",
+      "name": "seller API passes the Awaiting delivery query to seller orders",
+      "status": "passed",
+      "duration_ms": 15.134000000000015
+    },
+    {
+      "file": "api/seller.test.ts",
+      "name": "seller API omits status_filter for All",
+      "status": "passed",
+      "duration_ms": 1.3705420000000004
+    },
+    {
+      "file": "api/seller.test.ts",
+      "name": "seller API requests typed seller stats",
+      "status": "passed",
+      "duration_ms": 2.0142079999999964
+    },
+    {
+      "file": "api/sellerListingAssistant.test.ts",
+      "name": "reuses the request identity after an unknown response and uses a new identity after success",
+      "status": "passed",
+      "duration_ms": 8.733624999999961
+    },
+    {
+      "file": "api/sellerListingAssistant.test.ts",
+      "name": "does not discard a newer retry identity when an older response arrives",
+      "status": "passed",
+      "duration_ms": 1.2355830000000196
+    },
+    {
+      "file": "api/sellerListingPublication.test.ts",
+      "name": "publishes only the approval binding and stable request identity",
+      "status": "passed",
+      "duration_ms": 6.7201670000000036
+    },
+    {
+      "file": "api/sellerListingPublication.test.ts",
+      "name": "refuses a receipt from a different approved render",
+      "status": "passed",
+      "duration_ms": 2.818833999999981
+    },
+    {
+      "file": "api/sellerListingPublication.test.ts",
+      "name": "rejects a page for a different request and ignores cancelled responses",
+      "status": "passed",
+      "duration_ms": 1.6532909999999674
+    },
+    {
+      "file": "api/sellerListingPublication.test.ts",
+      "name": "checks that visibility changes return the same immutable listing",
+      "status": "passed",
+      "duration_ms": 1.2106670000000008
+    },
+    {
+      "file": "api/sellerListingReview.test.ts",
+      "name": "returns only the exact render whose digest was prepared by the backend",
+      "status": "passed",
+      "duration_ms": 6.259500000000003
+    },
+    {
+      "file": "api/sellerListingReview.test.ts",
+      "name": "rejects changed, unsupported or unbounded rendered reviews",
+      "status": "passed",
+      "duration_ms": 2.1401249999999834
+    },
+    {
+      "file": "api/sellerListingReview.test.ts",
+      "name": "rejects changed, unsupported or unbounded rendered reviews",
+      "status": "passed",
+      "duration_ms": 0.6347080000000176
+    },
+    {
+      "file": "api/sellerListingReview.test.ts",
+      "name": "rejects changed, unsupported or unbounded rendered reviews",
+      "status": "passed",
+      "duration_ms": 0.48004099999999994
+    },
+    {
+      "file": "api/sellerListingReview.test.ts",
+      "name": "rejects changed, unsupported or unbounded rendered reviews",
+      "status": "passed",
+      "duration_ms": 0.6039159999999981
+    },
+    {
+      "file": "api/sellerListingReview.test.ts",
+      "name": "does not return a render after navigation cancels the request",
+      "status": "passed",
+      "duration_ms": 0.9407920000000161
+    },
+    {
+      "file": "api/sellerListingReview.test.ts",
+      "name": "sends only exact review identities and explicit confirmations, never source or HTML payloads",
+      "status": "passed",
+      "duration_ms": 0.783332999999999
+    },
+    {
+      "file": "api/sellerListingReview.test.ts",
+      "name": "accepts a bounded first page for the full 22,000-file review",
+      "status": "passed",
+      "duration_ms": 1.0444579999999917
+    },
+    {
+      "file": "api/sellerListingReview.test.ts",
+      "name": "refuses a mismatched or incomplete subsequent page: {\"source_hash\":\"cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc\"}",
+      "status": "passed",
+      "duration_ms": 0.6291249999999877
+    },
+    {
+      "file": "api/sellerListingReview.test.ts",
+      "name": "refuses a mismatched or incomplete subsequent page: {\"source_version\":2}",
+      "status": "passed",
+      "duration_ms": 0.9960839999999962
+    },
+    {
+      "file": "api/sellerListingReview.test.ts",
+      "name": "refuses a mismatched or incomplete subsequent page: {\"review_hash\":\"cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc\"}",
+      "status": "passed",
+      "duration_ms": 0.6817920000000015
+    },
+    {
+      "file": "api/sellerListingReview.test.ts",
+      "name": "refuses a mismatched or incomplete subsequent page: {\"total_count\":21999}",
+      "status": "passed",
+      "duration_ms": 0.6315840000000037
+    },
+    {
+      "file": "api/sellerListingReview.test.ts",
+      "name": "refuses a mismatched or incomplete subsequent page: {\"total_size_bytes\":21999}",
+      "status": "passed",
+      "duration_ms": 0.6518750000000182
+    },
+    {
+      "file": "api/sellerListingReview.test.ts",
+      "name": "refuses a mismatched or incomplete subsequent page: {\"offset\":51}",
+      "status": "passed",
+      "duration_ms": 0.31825000000000614
+    },
+    {
+      "file": "api/sellerListingReview.test.ts",
+      "name": "refuses a mismatched or incomplete subsequent page: {\"files\":[]}",
+      "status": "passed",
+      "duration_ms": 0.22499999999999432
+    },
+    {
+      "file": "api/sellerListingReview.test.ts",
+      "name": "refuses a mismatched or incomplete subsequent page: {\"next_cursor\":null}",
+      "status": "passed",
+      "duration_ms": 0.25345799999999485
+    },
+    {
+      "file": "api/sellerListingReview.test.ts",
+      "name": "refuses a mismatched or incomplete subsequent page: {\"files\":[{\"key\":\"private/0.csv\",\"size\":1,\"etag\":\"e\",\"version_id\":null},{\"key\":\"private/0.csv\",\"size\":1,\"etag\":\"e\",\"version_id\":null}]}",
+      "status": "passed",
+      "duration_ms": 0.20858299999997598
+    },
+    {
+      "file": "api/sellerListingReview.test.ts",
+      "name": "refuses a mismatched or incomplete subsequent page: {\"page_size\":50001}",
+      "status": "passed",
+      "duration_ms": 0.19012499999999477
+    },
+    {
+      "file": "api/sellerListingReview.test.ts",
+      "name": "requests one cursor-bound page and refuses a cancelled response",
+      "status": "passed",
+      "duration_ms": 1.1688330000000065
+    },
+    {
+      "file": "api/sellerWorkspace.test.ts",
+      "name": "Seller Workspace capability truth does not enable profiling from connect availability or contradictory flags",
+      "status": "passed",
+      "duration_ms": 3.292208999999957
+    },
+    {
+      "file": "api/sellerWorkspace.test.ts",
+      "name": "Seller Workspace capability truth does not require profiling for source discovery or infer discovery from profiling",
+      "status": "passed",
+      "duration_ms": 0.5213749999999777
+    },
+    {
+      "file": "api/sellerWorkspace.test.ts",
+      "name": "Seller Workspace capability truth uses only the frozen capability endpoint",
+      "status": "passed",
+      "duration_ms": 2.9611249999999814
+    },
+    {
+      "file": "api/sellerWorkspace.test.ts",
+      "name": "Seller Workspace capability truth defaults off unless both master and AWS connect are explicitly available",
+      "status": "passed",
+      "duration_ms": 0.379333000000031
+    },
+    {
+      "file": "api/sellerWorkspace.test.ts",
+      "name": "Seller Workspace frozen routes passes object scope and opaque cursor as query parameters",
+      "status": "passed",
+      "duration_ms": 1.7028329999999983
+    },
+    {
+      "file": "api/sellerWorkspace.test.ts",
+      "name": "Seller Workspace frozen routes binds cancellation to the observed job version and idempotency key",
+      "status": "passed",
+      "duration_ms": 0.7520830000000274
+    },
+    {
+      "file": "api/sellerWorkspace.test.ts",
+      "name": "Seller Workspace frozen routes lists connections and retrieves open authorization without mutation headers",
+      "status": "passed",
+      "duration_ms": 0.7574999999999932
+    },
+    {
+      "file": "api/sellerWorkspace.test.ts",
+      "name": "Seller Workspace frozen routes sends a safe Idempotency-Key on every mutation and never sends principal or ExternalId",
+      "status": "passed",
+      "duration_ms": 1.1274999999999977
+    },
+    {
+      "file": "api/sellerWorkspace.test.ts",
+      "name": "Seller Workspace frozen routes generates a backend-safe collision-resistant idempotency key",
+      "status": "passed",
+      "duration_ms": 1.1186250000000086
+    },
+    {
+      "file": "api/sellerWorkspace.test.ts",
+      "name": "Seller Workspace frozen routes rejects unsafe caller-provided idempotency keys before any mutation",
+      "status": "passed",
+      "duration_ms": 0.8602500000000077
+    },
+    {
+      "file": "api/sellerWorkspace.test.ts",
+      "name": "Seller Workspace safe errors reduces status 403 to a safe code",
+      "status": "passed",
+      "duration_ms": 1.5732920000000377
+    },
+    {
+      "file": "api/sellerWorkspace.test.ts",
+      "name": "Seller Workspace safe errors reduces status 409 to a safe code",
+      "status": "passed",
+      "duration_ms": 0.5195420000000013
+    },
+    {
+      "file": "api/sellerWorkspace.test.ts",
+      "name": "Seller Workspace safe errors reduces status 422 to a safe code",
+      "status": "passed",
+      "duration_ms": 0.356666999999959
+    },
+    {
+      "file": "api/sellerWorkspace.test.ts",
+      "name": "Seller Workspace safe errors reduces status 422 to a safe code",
+      "status": "passed",
+      "duration_ms": 0.4072500000000332
+    },
+    {
+      "file": "api/sellerWorkspace.test.ts",
+      "name": "Seller Workspace safe errors reduces status 503 to a safe code",
+      "status": "passed",
+      "duration_ms": 0.7224999999999682
+    },
+    {
+      "file": "api/sellerWorkspace.test.ts",
+      "name": "Seller Workspace safe errors reduces status 503 to a safe code",
+      "status": "passed",
+      "duration_ms": 0.6537920000000099
+    },
+    {
+      "file": "api/sellerWorkspaceDownload.test.ts",
+      "name": "accepts the fixed R2  endpoint",
+      "status": "passed",
+      "duration_ms": 5.574000000000012
+    },
+    {
+      "file": "api/sellerWorkspaceDownload.test.ts",
+      "name": "accepts the fixed R2 eu. endpoint",
+      "status": "passed",
+      "duration_ms": 0.6244590000000017
+    },
+    {
+      "file": "api/sellerWorkspaceDownload.test.ts",
+      "name": "accepts the fixed R2 us. endpoint",
+      "status": "passed",
+      "duration_ms": 0.30458300000003646
+    },
+    {
+      "file": "api/sellerWorkspaceDownload.test.ts",
+      "name": "accepts the fixed R2 fedramp. endpoint",
+      "status": "passed",
+      "duration_ms": 0.26074999999997317
+    },
+    {
+      "file": "api/sellerWorkspaceDownload.test.ts",
+      "name": "rejects unapproved R2 host evil.r2.cloudflarestorage.com",
+      "status": "passed",
+      "duration_ms": 1.1662079999999833
+    },
+    {
+      "file": "api/sellerWorkspaceDownload.test.ts",
+      "name": "rejects unapproved R2 host dddddddddddddddddddddddddddddddd.r2.cloudflarestorage.com.evil.example",
+      "status": "passed",
+      "duration_ms": 0.23275000000001
+    },
+    {
+      "file": "api/sellerWorkspaceDownload.test.ts",
+      "name": "rejects unapproved R2 host dddddddddddddddddddddddddddddddd.evil.r2.cloudflarestorage.com",
+      "status": "passed",
+      "duration_ms": 0.5669170000000463
+    },
+    {
+      "file": "api/sellerWorkspaceDownload.test.ts",
+      "name": "waits for 429 then retries the same file in the same session without allocating another download",
+      "status": "passed",
+      "duration_ms": 9.05537499999997
+    },
+    {
+      "file": "api/sellerWorkspaceDownload.test.ts",
+      "name": "cancels a pending wait without another request",
+      "status": "passed",
+      "duration_ms": 5.087208000000032
+    },
+    {
+      "file": "api/sellerWorkspaceDownload.test.ts",
+      "name": "stops after three rate retries",
+      "status": "passed",
+      "duration_ms": 0.8969999999999914
+    },
+    {
+      "file": "api/sellerWorkspaceDownload.test.ts",
+      "name": "does not replay a 403 response",
+      "status": "passed",
+      "duration_ms": 0.4847090000000094
+    },
+    {
+      "file": "api/sellerWorkspaceDownload.test.ts",
+      "name": "does not replay a 404 response",
+      "status": "passed",
+      "duration_ms": 0.1592080000000351
+    },
+    {
+      "file": "api/sellerWorkspaceDownload.test.ts",
+      "name": "does not replay a 409 response",
+      "status": "passed",
+      "duration_ms": 0.1555829999999787
+    },
+    {
+      "file": "api/sellerWorkspaceDownload.test.ts",
+      "name": "does not replay a 503 response",
+      "status": "passed",
+      "duration_ms": 0.21283299999998917
+    },
+    {
+      "file": "api/sellerWorkspaceDownload.test.ts",
+      "name": "does not shorten or guess unsupported Retry-After 120",
+      "status": "passed",
+      "duration_ms": 0.3802909999999997
+    },
+    {
+      "file": "api/sellerWorkspaceDownload.test.ts",
+      "name": "does not shorten or guess unsupported Retry-After nonsense",
+      "status": "passed",
+      "duration_ms": 0.3084999999999809
+    },
+    {
+      "file": "api/sellerWorkspaceDownload.test.ts",
+      "name": "does not shorten or guess unsupported Retry-After -1",
+      "status": "passed",
+      "duration_ms": 0.3215420000000222
+    },
+    {
+      "file": "api/sellerWorkspaceDownload.test.ts",
+      "name": "honors an HTTP-date Retry-After",
+      "status": "passed",
+      "duration_ms": 1.6497910000000502
+    },
+    {
+      "file": "app/page.test.tsx",
+      "name": "homepage buyer requests server-renders three genuine requests as live buyer demand",
+      "status": "passed",
+      "duration_ms": 85.75737500000002
+    },
+    {
+      "file": "app/page.test.tsx",
+      "name": "homepage buyer requests shows an invitation without claiming live demand below three requests",
+      "status": "passed",
+      "duration_ms": 6.474916000000007
+    },
+    {
+      "file": "app/page.test.tsx",
+      "name": "homepage buyer requests keeps the homepage available when the request feed is unavailable",
+      "status": "passed",
+      "duration_ms": 6.567583000000013
+    },
+    {
+      "file": "app/sitemap.test.ts",
+      "name": "sitemap appends request pages without removing listing pages",
+      "status": "passed",
+      "duration_ms": 22.449250000000006
+    },
+    {
+      "file": "app/sitemap.test.ts",
+      "name": "sitemap redirects legacy download root and suffix URLs to AIM Data without dropping attribution",
+      "status": "passed",
+      "duration_ms": 8.426541999999984
+    },
+    {
+      "file": "components/BuyButton.test.tsx",
+      "name": "SignedOutPurchase keeps Buy Now available and explains that sign-in does not charge the buyer",
+      "status": "passed",
+      "duration_ms": 46.575582999999995
+    },
+    {
+      "file": "components/BuyButton.test.tsx",
+      "name": "SignedOutPurchase previews known purchase facts and omits unavailable facts",
+      "status": "passed",
+      "duration_ms": 4.768208999999956
+    },
+    {
+      "file": "components/InquiryWidget.test.tsx",
+      "name": "InquiryWidget creates an anonymous session, sends listing context, and renders streamed deltas",
+      "status": "passed",
+      "duration_ms": 294.0185839999999
+    },
+    {
+      "file": "components/InquiryWidget.test.tsx",
+      "name": "InquiryWidget drops a cached session after a message 404 and creates a fresh session on retry",
+      "status": "passed",
+      "duration_ms": 47.64016700000002
+    },
+    {
+      "file": "components/InquiryWidget.test.tsx",
+      "name": "InquiryWidget shows an actionable still-working state after eight seconds and resets on completion",
+      "status": "passed",
+      "duration_ms": 52.933958000000075
+    },
+    {
+      "file": "components/InquiryWidget.test.tsx",
+      "name": "InquiryWidget keeps the anonymous wait label and notice coherent through an auth hydration flip",
+      "status": "passed",
+      "duration_ms": 33.87083399999983
+    },
+    {
+      "file": "components/InquiryWidget.test.tsx",
+      "name": "InquiryWidget keeps a completed anonymous thread visible when auth hydrates mid-attempt",
+      "status": "passed",
+      "duration_ms": 27.16041599999994
+    },
+    {
+      "file": "components/InquiryWidget.test.tsx",
+      "name": "InquiryWidget ends an anonymous attempt at exactly 45 seconds with retry and sign-in recovery",
+      "status": "passed",
+      "duration_ms": 44.29216599999995
+    },
+    {
+      "file": "components/InquiryWidget.test.tsx",
+      "name": "InquiryWidget preserves a nonempty textarea edit rather than the submitted snapshot on timeout sign-in",
+      "status": "passed",
+      "duration_ms": 26.799582999999984
+    },
+    {
+      "file": "components/InquiryWidget.test.tsx",
+      "name": "InquiryWidget retries with a new session after session creation itself reaches the deadline",
+      "status": "passed",
+      "duration_ms": 31.347666999999774
+    },
+    {
+      "file": "components/InquiryWidget.test.tsx",
+      "name": "InquiryWidget accepts a successful anonymous response immediately before the overall deadline",
+      "status": "passed",
+      "duration_ms": 26.888124999999945
+    },
+    {
+      "file": "components/InquiryWidget.test.tsx",
+      "name": "InquiryWidget does not let a cleared deadline from an ordinary error abort a retry",
+      "status": "passed",
+      "duration_ms": 41.47404199999983
+    },
+    {
+      "file": "components/InquiryWidget.test.tsx",
+      "name": "InquiryWidget shows only the timeout recovery CTA after a successful attempt then a timed-out attempt",
+      "status": "passed",
+      "duration_ms": 37.91791699999976
+    },
+    {
+      "file": "components/InquiryWidget.test.tsx",
+      "name": "InquiryWidget resets the anonymous wait state when a terminal error arrives after eight seconds",
+      "status": "passed",
+      "duration_ms": 25.618458000000373
+    },
+    {
+      "file": "components/InquiryWidget.test.tsx",
+      "name": "InquiryWidget cleans up without stale timers or state warnings when unmounted before the wait fires",
+      "status": "passed",
+      "duration_ms": 13.976333000000068
+    },
+    {
+      "file": "components/InquiryWidget.test.tsx",
+      "name": "InquiryWidget cleans up without stale timers or state warnings when unmounted after the wait fires",
+      "status": "passed",
+      "duration_ms": 14.349290999999994
+    },
+    {
+      "file": "components/InquiryWidget.test.tsx",
+      "name": "InquiryWidget cancels and releases a pending SSE reader without stale updates on unmount",
+      "status": "passed",
+      "duration_ms": 117.01675000000023
+    },
+    {
+      "file": "components/InquiryWidget.test.tsx",
+      "name": "InquiryWidget keeps authenticated submission on the existing inquiry path",
+      "status": "passed",
+      "duration_ms": 18.756167000000005
+    },
+    {
+      "file": "components/InquiryWidget.test.tsx",
+      "name": "InquiryWidget keeps an authenticated mediation rejection visible after submission ends",
+      "status": "passed",
+      "duration_ms": 21.618582999999944
+    },
+    {
+      "file": "components/InquiryWidget.test.tsx",
+      "name": "InquiryWidget uses a safe fallback for structured validation details",
+      "status": "passed",
+      "duration_ms": 17.81295799999998
+    },
+    {
+      "file": "components/InquiryWidget.test.tsx",
+      "name": "InquiryWidget surfaces an anonymous failure and preserves the typed question",
+      "status": "passed",
+      "duration_ms": 23.258749999999964
+    },
+    {
+      "file": "components/Layout.test.tsx",
+      "name": "Layout registration links restores a validated listing redirect from both desktop and mobile terms Sign up actions",
+      "status": "passed",
+      "duration_ms": 378.2137500000001
+    },
+    {
+      "file": "components/Layout.test.tsx",
+      "name": "Layout registration links keeps both terms Sign up actions generic for an ordinary terms visit",
+      "status": "passed",
+      "duration_ms": 103.05875000000015
+    },
+    {
+      "file": "components/Layout.test.tsx",
+      "name": "Layout registration links keeps both terms Sign up actions generic for an external redirect",
+      "status": "passed",
+      "duration_ms": 100.2655420000001
+    },
+    {
+      "file": "components/Layout.test.tsx",
+      "name": "Layout registration links keeps both terms Sign up actions generic for a protocol-relative redirect",
+      "status": "passed",
+      "duration_ms": 76.55204100000014
+    },
+    {
+      "file": "components/Layout.test.tsx",
+      "name": "Layout registration links keeps both terms Sign up actions generic for a malformed redirect",
+      "status": "passed",
+      "duration_ms": 89.97658299999966
+    },
+    {
+      "file": "components/Layout.test.tsx",
+      "name": "Layout registration links keeps both terms Sign up actions generic for a valid non-listing redirect",
+      "status": "passed",
+      "duration_ms": 81.60670900000014
+    },
+    {
+      "file": "components/Layout.test.tsx",
+      "name": "Layout registration links keeps both terms Sign up actions generic for a non-detail listing redirect",
+      "status": "passed",
+      "duration_ms": 185.82383299999992
+    },
+    {
+      "file": "components/Layout.test.tsx",
+      "name": "Layout registration links keeps both terms Sign up actions generic for a nested listing path",
+      "status": "passed",
+      "duration_ms": 68.01437499999975
+    },
+    {
+      "file": "components/Layout.test.tsx",
+      "name": "Layout registration links keeps global Sign up actions generic on the exact path /pricing",
+      "status": "passed",
+      "duration_ms": 67.46262499999966
+    },
+    {
+      "file": "components/Layout.test.tsx",
+      "name": "Layout registration links keeps global Sign up actions generic on the exact path /legal/terms/accept",
+      "status": "passed",
+      "duration_ms": 62.996042000000216
+    },
+    {
+      "file": "components/Layout.test.tsx",
+      "name": "Layout registration links keeps global Sign up actions generic on the exact path /legal/terms/",
+      "status": "passed",
+      "duration_ms": 61.35220799999979
+    },
+    {
+      "file": "components/ListingPurchaseAdvisory.test.tsx",
+      "name": "ListingPurchaseAdvisory does not render on a free listing",
+      "status": "passed",
+      "duration_ms": 8.397084000000007
+    },
+    {
+      "file": "components/ListingPurchaseAdvisory.test.tsx",
+      "name": "ListingPurchaseAdvisory states honestly when no active findings are published",
+      "status": "passed",
+      "duration_ms": 3.7574579999999855
+    },
+    {
+      "file": "components/ListingPurchaseAdvisory.test.tsx",
+      "name": "ListingPurchaseAdvisory describes published findings as point-in-time and not a guarantee",
+      "status": "passed",
+      "duration_ms": 0.6736669999999663
+    },
+    {
+      "file": "components/ListingPurchaseAdvisory.test.tsx",
+      "name": "ListingPurchaseAdvisory does not treat a withdrawal marker as active findings",
+      "status": "passed",
+      "duration_ms": 0.6095000000000255
+    },
+    {
+      "file": "components/ListingPurchasePanel.test.tsx",
+      "name": "VersionSelector renders a single active version with metadata",
+      "status": "passed",
+      "duration_ms": 55.73345900000004
+    },
+    {
+      "file": "components/ListingPurchasePanel.test.tsx",
+      "name": "VersionSelector defaults to the latest active version and keeps superseded versions visible",
+      "status": "passed",
+      "duration_ms": 2.183167000000026
+    },
+    {
+      "file": "components/ListingPurchasePanel.test.tsx",
+      "name": "VersionSelector hides quarantined versions defensively",
+      "status": "passed",
+      "duration_ms": 1.9634169999999358
+    },
+    {
+      "file": "components/ListingPurchasePanel.test.tsx",
+      "name": "VersionSelector honors an explicit selected superseded version without making it latest",
+      "status": "passed",
+      "duration_ms": 0.30683299999998326
+    },
+    {
+      "file": "components/NotificationCenter.test.tsx",
+      "name": "NotificationList renders support ticket notification types and read/unread states",
+      "status": "passed",
+      "duration_ms": 42.078332999999986
+    },
+    {
+      "file": "components/NotificationCenter.test.tsx",
+      "name": "NotificationList routes support ticket notification clicks to allAI instead of the portal URL",
+      "status": "passed",
+      "duration_ms": 1.0955829999999764
+    },
+    {
+      "file": "components/NotificationCenter.test.tsx",
+      "name": "NotificationList keeps generic notification links routable",
+      "status": "passed",
+      "duration_ms": 0.23237499999999045
+    },
+    {
+      "file": "components/SellDataCta.test.tsx",
+      "name": "SellDataCta keeps registration for signed-out hero CTAs",
+      "status": "passed",
+      "duration_ms": 220.79495900000006
+    },
+    {
+      "file": "components/SellDataCta.test.tsx",
+      "name": "SellDataCta keeps registration for signed-out inline CTAs",
+      "status": "passed",
+      "duration_ms": 9.207499999999982
+    },
+    {
+      "file": "components/SellDataCta.test.tsx",
+      "name": "SellDataCta keeps registration for signed-out final CTAs",
+      "status": "passed",
+      "duration_ms": 14.168083999999908
+    },
+    {
+      "file": "components/SellDataCta.test.tsx",
+      "name": "SellDataCta keeps the existing final-section copy when unauthenticated",
+      "status": "passed",
+      "duration_ms": 16.526791999999887
+    },
+    {
+      "file": "components/SellDataCta.test.tsx",
+      "name": "SellDataCta renders seller paths and authenticated final-section copy without a registration link",
+      "status": "passed",
+      "duration_ms": 26.37179100000003
+    },
+    {
+      "file": "components/SellDataCta.test.tsx",
+      "name": "SellDataCta offers both paths in the authenticated inline variant",
+      "status": "passed",
+      "duration_ms": 16.020958000000064
+    },
+    {
+      "file": "components/SellDataCta.test.tsx",
+      "name": "SellDataCta keeps the how-it-works anchor in the authenticated hero variant",
+      "status": "passed",
+      "duration_ms": 20.699290999999903
+    },
+    {
+      "file": "components/TwoFactorChallenge.test.tsx",
+      "name": "TwoFactorChallenge countdown helpers computes remaining time from an absolute expiry timestamp",
+      "status": "passed",
+      "duration_ms": 3.328125
+    },
+    {
+      "file": "components/TwoFactorChallenge.test.tsx",
+      "name": "TwoFactorChallenge countdown helpers clamps expired sessions to 0 and formats mm:ss",
+      "status": "passed",
+      "duration_ms": 0.9293749999999932
+    },
+    {
+      "file": "lib/aiBot.test.ts",
+      "name": "detectAiBot detects GPTBot case-insensitively within a user agent",
+      "status": "passed",
+      "duration_ms": 3.4958750000000123
+    },
+    {
+      "file": "lib/aiBot.test.ts",
+      "name": "detectAiBot detects OAI-SearchBot case-insensitively within a user agent",
+      "status": "passed",
+      "duration_ms": 0.4318330000000401
+    },
+    {
+      "file": "lib/aiBot.test.ts",
+      "name": "detectAiBot detects ChatGPT-User case-insensitively within a user agent",
+      "status": "passed",
+      "duration_ms": 0.361959000000013
+    },
+    {
+      "file": "lib/aiBot.test.ts",
+      "name": "detectAiBot detects ClaudeBot case-insensitively within a user agent",
+      "status": "passed",
+      "duration_ms": 0.3133330000000001
+    },
+    {
+      "file": "lib/aiBot.test.ts",
+      "name": "detectAiBot detects Claude-Web case-insensitively within a user agent",
+      "status": "passed",
+      "duration_ms": 0.27779099999997925
+    },
+    {
+      "file": "lib/aiBot.test.ts",
+      "name": "detectAiBot detects Anthropic-AI case-insensitively within a user agent",
+      "status": "passed",
+      "duration_ms": 0.42191600000001017
+    },
+    {
+      "file": "lib/aiBot.test.ts",
+      "name": "detectAiBot detects PerplexityBot case-insensitively within a user agent",
+      "status": "passed",
+      "duration_ms": 0.43445800000000645
+    },
+    {
+      "file": "lib/aiBot.test.ts",
+      "name": "detectAiBot detects Perplexity-User case-insensitively within a user agent",
+      "status": "passed",
+      "duration_ms": 0.3781669999999622
+    },
+    {
+      "file": "lib/aiBot.test.ts",
+      "name": "detectAiBot detects Google-Extended case-insensitively within a user agent",
+      "status": "passed",
+      "duration_ms": 0.3680830000000128
+    },
+    {
+      "file": "lib/aiBot.test.ts",
+      "name": "detectAiBot detects Cohere-AI case-insensitively within a user agent",
+      "status": "passed",
+      "duration_ms": 0.4517089999999939
+    },
+    {
+      "file": "lib/aiBot.test.ts",
+      "name": "detectAiBot detects Meta-ExternalAgent case-insensitively within a user agent",
+      "status": "passed",
+      "duration_ms": 0.23533300000002555
+    },
+    {
+      "file": "lib/aiBot.test.ts",
+      "name": "detectAiBot ignores non-AI user agent null",
+      "status": "passed",
+      "duration_ms": 0.22337500000003274
+    },
+    {
+      "file": "lib/aiBot.test.ts",
+      "name": "detectAiBot ignores non-AI user agent ",
+      "status": "passed",
+      "duration_ms": 0.13520799999997735
+    },
+    {
+      "file": "lib/aiBot.test.ts",
+      "name": "detectAiBot ignores non-AI user agent Mozilla/5.0 Chrome/130.0.0.0 Safari/537.36",
+      "status": "passed",
+      "duration_ms": 0.13662500000003774
+    },
+    {
+      "file": "lib/aiBot.test.ts",
+      "name": "detectAiBot ignores non-AI user agent Googlebot",
+      "status": "passed",
+      "duration_ms": 0.1436249999999859
+    },
+    {
+      "file": "lib/aiBot.test.ts",
+      "name": "detectAiBot ignores non-AI user agent bingbot",
+      "status": "passed",
+      "duration_ms": 0.12324999999998454
+    },
+    {
+      "file": "lib/api.summary.test.ts",
+      "name": "uses all four owner routes, encodes IDs and sends exact bodies and abort signals",
+      "status": "passed",
+      "duration_ms": 8.355291000000022
+    },
+    {
+      "file": "lib/api.summary.test.ts",
+      "name": "fetches public summaries without browser caching or credentials and omits absent summaries",
+      "status": "passed",
+      "duration_ms": 5.712291999999991
+    },
+    {
+      "file": "lib/api.test.ts",
+      "name": "fetchPublicListing bypasses the Next data cache for the mutable public scan projection",
+      "status": "passed",
+      "duration_ms": 9.430000000000007
+    },
+    {
+      "file": "lib/marketplaceCategories.test.ts",
+      "name": "getMarketplaceCategories keeps only categories with public inventory and preserves their counts",
+      "status": "passed",
+      "duration_ms": 5.702583000000004
+    },
+    {
+      "file": "lib/marketplaceCategories.test.ts",
+      "name": "getMarketplaceCategories uses the one full static catalog when facet data is unavailable",
+      "status": "passed",
+      "duration_ms": 1.7668330000000196
+    },
+    {
+      "file": "lib/marketplaceCategories.test.ts",
+      "name": "getMarketplaceCategories does not render categories whose available facet count is zero",
+      "status": "passed",
+      "duration_ms": 0.24508400000001984
+    },
+    {
+      "file": "lib/redirect.test.ts",
+      "name": "validateRedirect validates the payment-method return path with its query intact",
+      "status": "passed",
+      "duration_ms": 3.867582999999968
+    },
+    {
+      "file": "lib/redirect.test.ts",
+      "name": "validateListingRedirect accepts a single listing detail with a query and fragment",
+      "status": "passed",
+      "duration_ms": 0.954832999999951
+    },
+    {
+      "file": "lib/redirect.test.ts",
+      "name": "validateListingRedirect rejects a decoded TAB anywhere in the redirect",
+      "status": "passed",
+      "duration_ms": 0.35583400000001575
+    },
+    {
+      "file": "lib/redirect.test.ts",
+      "name": "validateListingRedirect rejects a decoded NUL anywhere in the redirect",
+      "status": "passed",
+      "duration_ms": 0.2745830000000069
+    },
+    {
+      "file": "lib/redirect.test.ts",
+      "name": "validateListingRedirect rejects a decoded C0 control anywhere in the redirect",
+      "status": "passed",
+      "duration_ms": 0.21999999999997044
+    },
+    {
+      "file": "lib/redirect.test.ts",
+      "name": "validateListingRedirect rejects a decoded DEL anywhere in the redirect",
+      "status": "passed",
+      "duration_ms": 0.216041999999959
+    },
+    {
+      "file": "lib/redirect.test.ts",
+      "name": "validateListingRedirect rejects a decoded C1 control anywhere in the redirect",
+      "status": "passed",
+      "duration_ms": 0.2665829999999687
+    },
+    {
+      "file": "lib/redirect.test.ts",
+      "name": "validateListingRedirect rejects a decoded CRLF anywhere in the redirect",
+      "status": "passed",
+      "duration_ms": 0.24812500000001592
+    },
+    {
+      "file": "lib/redirect.test.ts",
+      "name": "validateListingRedirect rejects a decoded Unicode line separator anywhere in the redirect",
+      "status": "passed",
+      "duration_ms": 0.25716699999998127
+    },
+    {
+      "file": "lib/redirect.test.ts",
+      "name": "validateListingRedirect rejects a decoded Unicode paragraph separator anywhere in the redirect",
+      "status": "passed",
+      "duration_ms": 0.28854200000000674
+    },
+    {
+      "file": "lib/redirect.test.ts",
+      "name": "validateListingRedirect rejects malformed encoding",
+      "status": "passed",
+      "duration_ms": 0.395417000000009
+    },
+    {
+      "file": "lib/redirect.test.ts",
+      "name": "validateListingRedirect rejects protocol-relative URL",
+      "status": "passed",
+      "duration_ms": 0.14875000000000682
+    },
+    {
+      "file": "lib/redirect.test.ts",
+      "name": "validateListingRedirect rejects external URL",
+      "status": "passed",
+      "duration_ms": 0.13450000000000273
+    },
+    {
+      "file": "lib/redirect.test.ts",
+      "name": "validateListingRedirect rejects backslash",
+      "status": "passed",
+      "duration_ms": 0.37358299999999645
+    },
+    {
+      "file": "lib/redirect.test.ts",
+      "name": "validateListingRedirect rejects nested listing route",
+      "status": "passed",
+      "duration_ms": 0.19604199999997718
+    },
+    {
+      "file": "hooks/useSearchListings.test.ts",
+      "name": "filterDiscoverableItems pins unlisted listings as hidden from browse/search surfaces",
+      "status": "passed",
+      "duration_ms": 5.496208999999965
+    },
+    {
+      "file": "store/auth.test.ts",
+      "name": "auth store login-time 2FA detects a challenge, stores only pending 2FA state, and withholds auth",
+      "status": "passed",
+      "duration_ms": 10.518207999999959
+    },
+    {
+      "file": "store/auth.test.ts",
+      "name": "auth store login-time 2FA completes the same session path after successful 2FA verification",
+      "status": "passed",
+      "duration_ms": 2.7302909999999656
+    },
+    {
+      "file": "store/auth.test.ts",
+      "name": "auth store login-time 2FA keeps the challenge open and returns an inline-error reason on 400",
+      "status": "passed",
+      "duration_ms": 1.1164580000000228
+    },
+    {
+      "file": "store/auth.test.ts",
+      "name": "auth store login-time 2FA clears the challenge and signals return to login on 401",
+      "status": "passed",
+      "duration_ms": 0.37987500000002683
+    },
+    {
+      "file": "store/auth.test.ts",
+      "name": "auth store login-time 2FA uses completeSession parity for magic link and OAuth token responses",
+      "status": "passed",
+      "duration_ms": 1.2032500000000255
+    },
+    {
+      "file": "store/auth.test.ts",
+      "name": "auth store login-time 2FA resolves registration after the backend creates the account without auto-login",
+      "status": "passed",
+      "duration_ms": 2.3759580000000255
+    },
+    {
+      "file": "store/auth.test.ts",
+      "name": "auth store login-time 2FA treats email-verification-required from a leftover registration login path as pending verification",
+      "status": "passed",
+      "duration_ms": 1.057583999999963
+    },
+    {
+      "file": "store/auth.test.ts",
+      "name": "auth store login-time 2FA marks hydrate complete after successful refresh and user load",
+      "status": "passed",
+      "duration_ms": 0.6020839999999907
+    },
+    {
+      "file": "store/auth.test.ts",
+      "name": "auth store login-time 2FA marks anonymous hydrate complete without throwing after a 401 refresh failure",
+      "status": "passed",
+      "duration_ms": 0.6428750000000036
+    },
+    {
+      "file": "store/auth.test.ts",
+      "name": "auth store login-time 2FA preserves an authenticated store during transient 429 refresh failure",
+      "status": "passed",
+      "duration_ms": 2.616125000000011
+    },
+    {
+      "file": "store/auth.test.ts",
+      "name": "auth store login-time 2FA preserves an authenticated store during transient network failure refresh failure",
+      "status": "passed",
+      "duration_ms": 0.7208329999999705
+    },
+    {
+      "file": "store/auth.test.ts",
+      "name": "auth store login-time 2FA preserves an authenticated store during transient 5xx refresh failure",
+      "status": "passed",
+      "duration_ms": 0.37999999999999545
+    },
+    {
+      "file": "store/auth.test.ts",
+      "name": "auth store login-time 2FA does not persist or log the pre-auth token or submitted code",
+      "status": "passed",
+      "duration_ms": 0.8594160000000102
+    },
+    {
+      "file": "tests/aim-data-continuation.test.ts",
+      "name": "exact_continuation_matrix enables continuation when the environment variable is true",
+      "status": "passed",
+      "duration_ms": 4.579542000000174
+    },
+    {
+      "file": "tests/aim-data-continuation.test.ts",
+      "name": "exact_continuation_matrix enables continuation when the environment variable is undefined",
+      "status": "passed",
+      "duration_ms": 0.43491599999993014
+    },
+    {
+      "file": "tests/aim-data-continuation.test.ts",
+      "name": "exact_continuation_matrix accepts exact /oauth/authorize?request=aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+      "status": "passed",
+      "duration_ms": 0.4395409999999629
+    },
+    {
+      "file": "tests/aim-data-continuation.test.ts",
+      "name": "exact_continuation_matrix accepts exact /oauth/authorize?request=___________________________________________",
+      "status": "passed",
+      "duration_ms": 0.8169169999998758
+    },
+    {
+      "file": "tests/aim-data-continuation.test.ts",
+      "name": "exact_continuation_matrix accepts exact /oauth/authorize?request=-------------------------------------------",
+      "status": "passed",
+      "duration_ms": 0.5509170000000267
+    },
+    {
+      "file": "tests/aim-data-continuation.test.ts",
+      "name": "exact_continuation_matrix rejects /oauth",
+      "status": "passed",
+      "duration_ms": 0.3512080000000424
+    },
+    {
+      "file": "tests/aim-data-continuation.test.ts",
+      "name": "exact_continuation_matrix rejects /oauth/authorize",
+      "status": "passed",
+      "duration_ms": 0.3848329999998441
+    },
+    {
+      "file": "tests/aim-data-continuation.test.ts",
+      "name": "exact_continuation_matrix rejects /oauth/authorize?request=aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa&extra=1",
+      "status": "passed",
+      "duration_ms": 0.2350420000000213
+    },
+    {
+      "file": "tests/aim-data-continuation.test.ts",
+      "name": "exact_continuation_matrix rejects /oauth/authorize?request=aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa&request=aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+      "status": "passed",
+      "duration_ms": 0.27316700000005767
+    },
+    {
+      "file": "tests/aim-data-continuation.test.ts",
+      "name": "exact_continuation_matrix rejects /oauth/authorize?request=aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa#fragment",
+      "status": "passed",
+      "duration_ms": 0.23008299999992232
+    },
+    {
+      "file": "tests/aim-data-continuation.test.ts",
+      "name": "exact_continuation_matrix rejects /oauth/authorize?%72equest=aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+      "status": "passed",
+      "duration_ms": 0.6331669999999576
+    },
+    {
+      "file": "tests/aim-data-continuation.test.ts",
+      "name": "exact_continuation_matrix rejects /oauth/authorize?request=%61aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+      "status": "passed",
+      "duration_ms": 0.4457919999999831
+    },
+    {
+      "file": "tests/aim-data-continuation.test.ts",
+      "name": "exact_continuation_matrix rejects https://ai.market/oauth/authorize?request=aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+      "status": "passed",
+      "duration_ms": 0.3515829999998914
+    },
+    {
+      "file": "tests/aim-data-continuation.test.ts",
+      "name": "exact_continuation_matrix rejects //evil.test/oauth/authorize?request=aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+      "status": "passed",
+      "duration_ms": 0.29587500000002365
+    },
+    {
+      "file": "tests/aim-data-continuation.test.ts",
+      "name": "exact_continuation_matrix rejects %2Foauth%2Fauthorize%3Frequest%3Daaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+      "status": "passed",
+      "duration_ms": 0.3305410000000393
+    },
+    {
+      "file": "tests/aim-data-continuation.test.ts",
+      "name": "exact_continuation_matrix rejects %252Foauth%252Fauthorize%253Frequest%253Daaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+      "status": "passed",
+      "duration_ms": 0.318416999999954
+    },
+    {
+      "file": "tests/aim-data-continuation.test.ts",
+      "name": "exact_continuation_matrix rejects /%6fauth/authorize?request=aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+      "status": "passed",
+      "duration_ms": 0.24020800000016607
+    },
+    {
+      "file": "tests/aim-data-continuation.test.ts",
+      "name": "exact_continuation_matrix rejects /oauth/authorize?request=aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\n",
+      "status": "passed",
+      "duration_ms": 0.23691699999994853
+    },
+    {
+      "file": "tests/aim-data-continuation.test.ts",
+      "name": "exact_continuation_matrix rejects /oauth/authorize?request=aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+      "status": "passed",
+      "duration_ms": 0.22100000000000364
+    },
+    {
+      "file": "tests/aim-data-continuation.test.ts",
+      "name": "exact_continuation_matrix rejects /oauth/authorize?request=aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+      "status": "passed",
+      "duration_ms": 0.23462500000005093
+    },
+    {
+      "file": "tests/aim-data-continuation.test.ts",
+      "name": "exact_continuation_matrix rejects /oauth/other",
+      "status": "passed",
+      "duration_ms": 0.20708399999989524
+    },
+    {
+      "file": "tests/aim-data-continuation.test.ts",
+      "name": "exact_continuation_matrix rejects %",
+      "status": "passed",
+      "duration_ms": 0.27683300000012423
+    },
+    {
+      "file": "tests/aim-data-continuation.test.ts",
+      "name": "exact_continuation_matrix expires without extending on reload and clears consumed state",
+      "status": "passed",
+      "duration_ms": 3.3372499999998126
+    },
+    {
+      "file": "tests/aim-data-continuation.test.ts",
+      "name": "exact_continuation_matrix rejects corrupt storage {\"request\":\"bad\",\"deadline\":9999999999999}",
+      "status": "passed",
+      "duration_ms": 0.21320799999989504
+    },
+    {
+      "file": "tests/aim-data-continuation.test.ts",
+      "name": "exact_continuation_matrix rejects corrupt storage {}",
+      "status": "passed",
+      "duration_ms": 0.17837499999995998
+    },
+    {
+      "file": "tests/aim-data-continuation.test.ts",
+      "name": "exact_continuation_matrix rejects corrupt storage not-json",
+      "status": "passed",
+      "duration_ms": 0.17541699999992488
+    },
+    {
+      "file": "tests/aim-data-continuation.test.ts",
+      "name": "exact_continuation_matrix disables stored and direct OAuth continuation for false while preserving normal navigation",
+      "status": "passed",
+      "duration_ms": 0.5515829999999369
+    },
+    {
+      "file": "tests/aim-data-continuation.test.ts",
+      "name": "exact_continuation_matrix disables stored and direct OAuth continuation for FALSE while preserving normal navigation",
+      "status": "passed",
+      "duration_ms": 0.3558749999999691
+    },
+    {
+      "file": "tests/aim-data-continuation.test.ts",
+      "name": "exact_continuation_matrix disables stored and direct OAuth continuation for  false  while preserving normal navigation",
+      "status": "passed",
+      "duration_ms": 0.4036670000000413
+    },
+    {
+      "file": "tests/aim-data-continuation.test.ts",
+      "name": "exact_continuation_matrix disables stored and direct OAuth continuation for 0 while preserving normal navigation",
+      "status": "passed",
+      "duration_ms": 0.26424999999994725
+    },
+    {
+      "file": "tests/aim-data-continuation.test.ts",
+      "name": "exact_continuation_matrix disables stored and direct OAuth continuation for off while preserving normal navigation",
+      "status": "passed",
+      "duration_ms": 0.27120800000011513
+    },
+    {
+      "file": "tests/aim-data-continuation.test.ts",
+      "name": "website_storage_unchanged",
+      "status": "passed",
+      "duration_ms": 22.698499999999967
+    },
+    {
+      "file": "tests/aim-data-continuation.test.ts",
+      "name": "accepts canonical loopback port 1024",
+      "status": "passed",
+      "duration_ms": 0.9534579999999551
+    },
+    {
+      "file": "tests/aim-data-continuation.test.ts",
+      "name": "accepts canonical loopback port 8080",
+      "status": "passed",
+      "duration_ms": 0.25749999999993634
+    },
+    {
+      "file": "tests/aim-data-continuation.test.ts",
+      "name": "accepts canonical loopback port 8099",
+      "status": "passed",
+      "duration_ms": 0.18933399999991707
+    },
+    {
+      "file": "tests/aim-data-continuation.test.ts",
+      "name": "accepts canonical loopback port 18081",
+      "status": "passed",
+      "duration_ms": 0.21279200000003584
+    },
+    {
+      "file": "tests/aim-data-continuation.test.ts",
+      "name": "accepts canonical loopback port 65535",
+      "status": "passed",
+      "duration_ms": 0.2053329999998823
+    },
+    {
+      "file": "tests/aim-data-continuation.test.ts",
+      "name": "rejects unsafe callback http://127.0.0.1:08099/api/auth/aim-market/callback?code=aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa&state=aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+      "status": "passed",
+      "duration_ms": 0.49500000000011823
+    },
+    {
+      "file": "tests/aim-data-continuation.test.ts",
+      "name": "rejects unsafe callback http://127.0.0.1:1023/api/auth/aim-market/callback?code=aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa&state=aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+      "status": "passed",
+      "duration_ms": 0.4253750000000309
+    },
+    {
+      "file": "tests/aim-data-continuation.test.ts",
+      "name": "rejects unsafe callback http://127.0.0.1:65536/api/auth/aim-market/callback?code=aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa&state=aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+      "status": "passed",
+      "duration_ms": 0.3205830000001697
+    },
+    {
+      "file": "tests/aim-data-continuation.test.ts",
+      "name": "rejects unsafe callback http://localhost:8099/api/auth/aim-market/callback?code=aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa&state=aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+      "status": "passed",
+      "duration_ms": 0.38799999999991996
+    },
+    {
+      "file": "tests/aim-data-continuation.test.ts",
+      "name": "rejects unsafe callback http://[::1]:8099/api/auth/aim-market/callback?code=aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa&state=aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+      "status": "passed",
+      "duration_ms": 0.36912499999994
+    },
+    {
+      "file": "tests/aim-data-continuation.test.ts",
+      "name": "rejects unsafe callback http://127.1:8099/api/auth/aim-market/callback?code=aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa&state=aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+      "status": "passed",
+      "duration_ms": 0.5747499999999945
+    },
+    {
+      "file": "tests/aim-data-continuation.test.ts",
+      "name": "rejects unsafe callback http://evil@127.0.0.1:8099/api/auth/aim-market/callback?code=aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa&state=aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+      "status": "passed",
+      "duration_ms": 0.42695800000001327
+    },
+    {
+      "file": "tests/aim-data-continuation.test.ts",
+      "name": "rejects unsafe callback http://127.0.0.1:8099/%61pi/auth/aim-market/callback?code=aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa&state=aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+      "status": "passed",
+      "duration_ms": 0.38220799999999144
+    },
+    {
+      "file": "tests/aim-data-continuation.test.ts",
+      "name": "rejects unsafe callback https://127.0.0.1:8099/api/auth/aim-market/callback?code=aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa&state=aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+      "status": "passed",
+      "duration_ms": 0.4756250000000364
+    },
+    {
+      "file": "tests/aim-data-continuation.test.ts",
+      "name": "rejects unsafe callback http://127.0.0.1:8099/api/auth/aim-market/callback?code=aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa&state=aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa&token=secret",
+      "status": "passed",
+      "duration_ms": 0.45479199999999764
+    },
+    {
+      "file": "tests/aim-data-continuation.test.ts",
+      "name": "rejects unsafe callback http://127.0.0.1:8099/api/auth/aim-market/callback?code=aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa&state=aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa#fragment",
+      "status": "passed",
+      "duration_ms": 0.45870800000011513
+    },
+    {
+      "file": "tests/aim-data-continuation.test.ts",
+      "name": "rejects unsafe callback http://127.0.0.1:8099/api/auth/aim-market/callback?code=aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa&state=aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa&state=aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+      "status": "passed",
+      "duration_ms": 0.1330840000000535
+    },
+    {
+      "file": "tests/aim-data-continuation.test.ts",
+      "name": "rejects unsafe callback http://127.0.0.1:8099/api/auth/aim-market/callback?code=aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa&state=aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\n",
+      "status": "passed",
+      "duration_ms": 0.10745799999995143
+    },
+    {
+      "file": "tests/aim-data-continuation.test.ts",
+      "name": "accepts cancellation with only an allowed error and state",
+      "status": "passed",
+      "duration_ms": 0.7300419999999122
+    },
+    {
+      "file": "tests/aim-data-oauth.test.tsx",
+      "name": "enables confirmation when the environment variable is unset",
+      "status": "passed",
+      "duration_ms": 246.32954200000017
+    },
+    {
+      "file": "tests/aim-data-oauth.test.tsx",
+      "name": "no_code_before_continue",
+      "status": "passed",
+      "duration_ms": 80.13679200000001
+    },
+    {
+      "file": "tests/aim-data-oauth.test.tsx",
+      "name": "explicit_account_confirm_cancel: Continue",
+      "status": "passed",
+      "duration_ms": 38.48570800000016
+    },
+    {
+      "file": "tests/aim-data-oauth.test.tsx",
+      "name": "explicit_account_confirm_cancel: Cancel",
+      "status": "passed",
+      "duration_ms": 27.29975000000013
+    },
+    {
+      "file": "tests/aim-data-oauth.test.tsx",
+      "name": "original_tab_resumes_other_browser_rejected",
+      "status": "passed",
+      "duration_ms": 32.49795800000038
+    },
+    {
+      "file": "tests/aim-data-oauth.test.tsx",
+      "name": "disabled_expired_error_ui",
+      "status": "passed",
+      "duration_ms": 26.932749999999942
+    },
+    {
+      "file": "tests/aim-data-oauth.test.tsx",
+      "name": "offers explicit reauthentication for login_required",
+      "status": "passed",
+      "duration_ms": 35.263540999999805
+    },
+    {
+      "file": "tests/aim-data-oauth.test.tsx",
+      "name": "offers explicit reauthentication for invalid_session",
+      "status": "passed",
+      "duration_ms": 32.218624999999975
+    },
+    {
+      "file": "tests/aim-data-oauth.test.tsx",
+      "name": "offers explicit reauthentication for insufficient_assurance",
+      "status": "passed",
+      "duration_ms": 31.68100000000004
+    },
+    {
+      "file": "tests/aim-data-oauth.test.tsx",
+      "name": "password_provider_magic_link_2fa_resume resumes password with and without 2FA",
+      "status": "passed",
+      "duration_ms": 48.8911250000001
+    },
+    {
+      "file": "tests/aim-data-oauth.test.tsx",
+      "name": "password_provider_magic_link_2fa_resume resumes provider with and without 2FA",
+      "status": "passed",
+      "duration_ms": 23.008749999999964
+    },
+    {
+      "file": "tests/aim-data-oauth.test.tsx",
+      "name": "password_provider_magic_link_2fa_resume resumes magic-link with and without 2FA",
+      "status": "passed",
+      "duration_ms": 19.851709000000028
+    },
+    {
+      "file": "tests/aim-data-oauth.test.tsx",
+      "name": "password_provider_magic_link_2fa_resume rehydrates the waiting login tab after a magic link",
+      "status": "passed",
+      "duration_ms": 12.349833000000217
+    },
+    {
+      "file": "tests/aim-data-oauth.test.tsx",
+      "name": "consumes continuation and navigates the validated callback after Continue",
+      "status": "passed",
+      "duration_ms": 13.98416700000007
+    },
+    {
+      "file": "tests/aim-data-oauth.test.tsx",
+      "name": "consumes continuation and navigates the validated callback after Cancel",
+      "status": "passed",
+      "duration_ms": 17.204082999999628
+    },
+    {
+      "file": "tests/aim-data-oauth.test.tsx",
+      "name": "rejects raw page URL /oauth/authorize?request=aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa&extra=1",
+      "status": "passed",
+      "duration_ms": 7.666791999999987
+    },
+    {
+      "file": "tests/aim-data-oauth.test.tsx",
+      "name": "rejects raw page URL /oauth/authorize?request=aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa&request=aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+      "status": "passed",
+      "duration_ms": 10.368332999999893
+    },
+    {
+      "file": "tests/aim-data-oauth.test.tsx",
+      "name": "rejects raw page URL /oauth/authorize?%72equest=aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+      "status": "passed",
+      "duration_ms": 8.829416999999921
+    },
+    {
+      "file": "tests/aim-data-oauth.test.tsx",
+      "name": "rejects raw page URL /oauth/authorize?request=aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa#fragment",
+      "status": "passed",
+      "duration_ms": 7.064582999999857
+    },
+    {
+      "file": "tests/aim-data-oauth.test.tsx",
+      "name": "expires visible confirmation before a late click",
+      "status": "passed",
+      "duration_ms": 22.14599999999973
+    },
+    {
+      "file": "tests/aim-data-oauth.test.tsx",
+      "name": "passes only a valid google provider hint to login without saving it",
+      "status": "passed",
+      "duration_ms": 57.289250000000266
+    },
+    {
+      "file": "tests/aim-data-oauth.test.tsx",
+      "name": "passes only a valid github provider hint to login without saving it",
+      "status": "passed",
+      "duration_ms": 55.98675000000003
+    },
+    {
+      "file": "tests/aim-data-oauth.test.tsx",
+      "name": "passes only a valid invalid provider hint to login without saving it",
+      "status": "passed",
+      "duration_ms": 56.88366700000006
+    },
+    {
+      "file": "tests/aim-data-oauth.test.tsx",
+      "name": "passes only a valid google provider hint to reauthentication",
+      "status": "passed",
+      "duration_ms": 26.38799999999992
+    },
+    {
+      "file": "tests/aim-data-oauth.test.tsx",
+      "name": "passes only a valid github provider hint to reauthentication",
+      "status": "passed",
+      "duration_ms": 25.00695799999994
+    },
+    {
+      "file": "tests/aim-data-oauth.test.tsx",
+      "name": "passes only a valid invalid provider hint to reauthentication",
+      "status": "passed",
+      "duration_ms": 25.120832999999948
+    },
+    {
+      "file": "app/dashboard/layout.test.tsx",
+      "name": "DashboardLayout hydration guard shows the spinner and does not push login from a pristine store",
+      "status": "passed",
+      "duration_ms": 55.06941600000005
+    },
+    {
+      "file": "app/dashboard/layout.test.tsx",
+      "name": "DashboardLayout hydration guard preserves /dashboard/stripe-return in the login redirect after unauthenticated hydration",
+      "status": "passed",
+      "duration_ms": 15.188458000000082
+    },
+    {
+      "file": "app/dashboard/layout.test.tsx",
+      "name": "DashboardLayout hydration guard preserves /dashboard/data-verification/payment-method/return?attempt=9bd1c6b2-1472-4a6c-9d6c-e61d14023163&session_id=cs_test_a1AbCdEf in the login redirect after unauthenticated hydration",
+      "status": "passed",
+      "duration_ms": 6.565665999999965
+    },
+    {
+      "file": "app/dashboard/layout.test.tsx",
+      "name": "DashboardLayout hydration guard renders children after hydrate resolves authenticated",
+      "status": "passed",
+      "duration_ms": 19.2757909999998
+    },
+    {
+      "file": "app/dashboard/layout.test.tsx",
+      "name": "DashboardLayout hydration guard uses a neutral title and overview navigation for a buyer without a display name",
+      "status": "passed",
+      "duration_ms": 189.36995899999988
+    },
+    {
+      "file": "app/dashboard/layout.test.tsx",
+      "name": "DashboardLayout hydration guard uses buyer purchase context for a provisioning seller-capable user without a display name",
+      "status": "passed",
+      "duration_ms": 14.193374999999833
+    },
+    {
+      "file": "app/dashboard/layout.test.tsx",
+      "name": "DashboardLayout hydration guard keeps seller context on a seller route for a provisioning seller-capable user",
+      "status": "passed",
+      "duration_ms": 12.685915999999906
+    },
+    {
+      "file": "app/dashboard/layout.test.tsx",
+      "name": "DashboardLayout hydration guard renders exact active seller navigation",
+      "status": "passed",
+      "duration_ms": 41.68554099999983
+    },
+    {
+      "file": "app/dashboard/layout.test.tsx",
+      "name": "DashboardLayout hydration guard omits Sales for provisioning sellers but keeps Purchases",
+      "status": "passed",
+      "duration_ms": 28.170250000000124
+    },
+    {
+      "file": "app/dashboard/layout.test.tsx",
+      "name": "DashboardLayout hydration guard omits Seller Workspace when the master is default-off",
+      "status": "passed",
+      "duration_ms": 21.98591600000009
+    },
+    {
+      "file": "app/dashboard/layout.test.tsx",
+      "name": "DashboardLayout hydration guard omits Seller Workspace when AWS connect is unavailable",
+      "status": "passed",
+      "duration_ms": 23.721917000000303
+    },
+    {
+      "file": "app/dashboard/layout.test.tsx",
+      "name": "DashboardLayout hydration guard removes a stale Seller Workspace link when the capability request fails",
+      "status": "passed",
+      "duration_ms": 60.2869169999999
+    },
+    {
+      "file": "app/dashboard/layout.test.tsx",
+      "name": "DashboardLayout hydration guard renders exact buyer navigation",
+      "status": "passed",
+      "duration_ms": 21.7317079999998
+    },
+    {
+      "file": "app/dashboard/layout.test.tsx",
+      "name": "DashboardLayout hydration guard redirects a buyer direct visit to /dashboard/sales",
+      "status": "passed",
+      "duration_ms": 4.398833000000195
+    },
+    {
+      "file": "app/dashboard/layout.test.tsx",
+      "name": "DashboardLayout hydration guard redirects a buyer direct visit to /dashboard/listings",
+      "status": "passed",
+      "duration_ms": 3.4039590000002136
+    },
+    {
+      "file": "app/dashboard/layout.test.tsx",
+      "name": "DashboardLayout hydration guard redirects a buyer direct visit to /dashboard/seller-workspace",
+      "status": "passed",
+      "duration_ms": 3.7714999999998327
+    },
+    {
+      "file": "app/dashboard/page.test.tsx",
+      "name": "DashboardOverview seller setup 2FA state renders provisioning seller setup from capability state alone",
+      "status": "passed",
+      "duration_ms": 244.35729199999992
+    },
+    {
+      "file": "app/dashboard/page.test.tsx",
+      "name": "DashboardOverview seller setup 2FA state renders active seller stats from the real contract shape",
+      "status": "passed",
+      "duration_ms": 56.89858299999992
+    },
+    {
+      "file": "app/dashboard/page.test.tsx",
+      "name": "DashboardOverview seller setup 2FA state renders purchases and order rows for an active seller",
+      "status": "passed",
+      "duration_ms": 86.06491699999992
+    },
+    {
+      "file": "app/dashboard/page.test.tsx",
+      "name": "DashboardOverview seller setup 2FA state renders purchases for a provisioning seller",
+      "status": "passed",
+      "duration_ms": 28.210207999999966
+    },
+    {
+      "file": "app/dashboard/page.test.tsx",
+      "name": "DashboardOverview seller setup 2FA state renders purchases first and an explicit empty state for a buyer",
+      "status": "passed",
+      "duration_ms": 33.55458399999998
+    },
+    {
+      "file": "app/dashboard/page.test.tsx",
+      "name": "DashboardOverview seller setup 2FA state summarizes recent buyer orders with status and an orders entry point",
+      "status": "passed",
+      "duration_ms": 33.118375000000015
+    },
+    {
+      "file": "app/dashboard/page.test.tsx",
+      "name": "DashboardOverview seller setup 2FA state keeps active seller dashboard content when purchases fail to load",
+      "status": "passed",
+      "duration_ms": 30.400916999999936
+    },
+    {
+      "file": "app/dashboard/page.test.tsx",
+      "name": "DashboardOverview seller setup 2FA state renders zero Sales awaiting delivery from the real contract shape",
+      "status": "passed",
+      "duration_ms": 17.415082999999868
+    },
+    {
+      "file": "app/login/LoginForm.test.tsx",
+      "name": "auto-starts google once under StrictMode and across rerenders",
+      "status": "passed",
+      "duration_ms": 631.6497919999997
+    },
+    {
+      "file": "app/login/LoginForm.test.tsx",
+      "name": "auto-starts github once under StrictMode and across rerenders",
+      "status": "passed",
+      "duration_ms": 104.66641700000037
+    },
+    {
+      "file": "app/login/LoginForm.test.tsx",
+      "name": "auto-starts google from a saved continuation without reauth",
+      "status": "passed",
+      "duration_ms": 88.25841600000012
+    },
+    {
+      "file": "app/login/LoginForm.test.tsx",
+      "name": "auto-starts github from a saved continuation without reauth",
+      "status": "passed",
+      "duration_ms": 66.89329100000032
+    },
+    {
+      "file": "app/login/LoginForm.test.tsx",
+      "name": "ignores invalid provider invalid",
+      "status": "passed",
+      "duration_ms": 12.679625000000215
+    },
+    {
+      "file": "app/login/LoginForm.test.tsx",
+      "name": "ignores invalid provider Google",
+      "status": "passed",
+      "duration_ms": 10.77054199999975
+    },
+    {
+      "file": "app/login/LoginForm.test.tsx",
+      "name": "ignores invalid provider ",
+      "status": "passed",
+      "duration_ms": 11.605000000000018
+    },
+    {
+      "file": "app/login/LoginForm.test.tsx",
+      "name": "ignores invalid provider https://provider.example",
+      "status": "passed",
+      "duration_ms": 200.36233399999992
+    },
+    {
+      "file": "app/login/LoginForm.test.tsx",
+      "name": "does not auto-start google for an authenticated user",
+      "status": "passed",
+      "duration_ms": 40.56029200000012
+    },
+    {
+      "file": "app/login/LoginForm.test.tsx",
+      "name": "does not auto-start github for an authenticated user",
+      "status": "passed",
+      "duration_ms": 13.967083999999886
+    },
+    {
+      "file": "app/login/LoginForm.test.tsx",
+      "name": "does not auto-start outside AIM Data",
+      "status": "passed",
+      "duration_ms": 11.471208000000388
+    },
+    {
+      "file": "app/login/LoginForm.test.tsx",
+      "name": "shows the normal form and existing error after google fails without retrying",
+      "status": "passed",
+      "duration_ms": 149.0388750000002
+    },
+    {
+      "file": "app/login/LoginForm.test.tsx",
+      "name": "shows the normal form and existing error after github fails without retrying",
+      "status": "passed",
+      "duration_ms": 109.24499999999989
+    },
+    {
+      "file": "app/login/LoginForm.test.tsx",
+      "name": "still starts google from its button with the nonce and authorization URL",
+      "status": "passed",
+      "duration_ms": 72.74137500000006
+    },
+    {
+      "file": "app/login/LoginForm.test.tsx",
+      "name": "still starts github from its button with the nonce and authorization URL",
+      "status": "passed",
+      "duration_ms": 67.1115420000001
+    },
+    {
+      "file": "app/login/LoginForm.test.tsx",
+      "name": "does not auto-start google from bare reauth or with the kill switch off",
+      "status": "passed",
+      "duration_ms": 13.31595900000002
+    },
+    {
+      "file": "app/login/LoginForm.test.tsx",
+      "name": "does not auto-start github from bare reauth or with the kill switch off",
+      "status": "passed",
+      "duration_ms": 17.416999999999916
+    },
+    {
+      "file": "app/login/LoginForm.test.tsx",
+      "name": "hides provider buttons until hinted login hydration resolves",
+      "status": "passed",
+      "duration_ms": 19.720542000000023
+    },
+    {
+      "file": "app/login/LoginForm.test.tsx",
+      "name": "shares one flight between a manual click and subsequent hinted hydration",
+      "status": "failed",
+      "duration_ms": 119.57358299999987,
+      "failure_first_line": "AssertionError: expected [] to deeply equal [ [ 'oauth_nonce', 'only-nonce' ] ]",
+      "failure_sha256": "fe6df1e100f4f4c21de5744553c237862a81aabf966d4febcc771ea64dc7778e"
+    },
+    {
+      "file": "app/login/LoginForm.test.tsx",
+      "name": "rejects unverified provider hints when metadata fails with 404",
+      "status": "passed",
+      "duration_ms": 63.145458999999846
+    },
+    {
+      "file": "app/login/LoginForm.test.tsx",
+      "name": "rejects unverified provider hints when metadata fails with 403",
+      "status": "passed",
+      "duration_ms": 63.33137500000021
+    },
+    {
+      "file": "app/login/LoginForm.test.tsx",
+      "name": "rejects unverified provider hints when metadata fails with 400",
+      "status": "passed",
+      "duration_ms": 60.830041999999594
+    },
+    {
+      "file": "app/login/LoginForm.test.tsx",
+      "name": "rejects unverified provider hints when metadata fails with network",
+      "status": "passed",
+      "duration_ms": 65.25545799999963
+    },
+    {
+      "file": "app/login/LoginForm.test.tsx",
+      "name": "auto-starts GitHub exactly once after server verification and continuation save",
+      "status": "passed",
+      "duration_ms": 67.56029200000012
+    },
+    {
+      "file": "app/pricing/page.test.tsx",
+      "name": "PricingPage publishes the complete seller and buyer fee schedule",
+      "status": "passed",
+      "duration_ms": 290.03758400000015
+    },
+    {
+      "file": "app/register/RegisterForm.test.tsx",
+      "name": "RegisterForm does not render role selection or company signup fields",
+      "status": "passed",
+      "duration_ms": 241.85283400000003
+    },
+    {
+      "file": "app/register/RegisterForm.test.tsx",
+      "name": "RegisterForm submits every registration as a buyer without company name and keeps the verify-email success banner",
+      "status": "passed",
+      "duration_ms": 106.77204200000006
+    },
+    {
+      "file": "app/register/RegisterForm.test.tsx",
+      "name": "RegisterForm shows listing purchase context and preserves the validated redirect in both login links",
+      "status": "passed",
+      "duration_ms": 125.29700000000003
+    },
+    {
+      "file": "app/register/RegisterForm.test.tsx",
+      "name": "RegisterForm preserves a valid non-detail redirect in both sign-in links for /dashboard?tab=orders",
+      "status": "passed",
+      "duration_ms": 69.82024999999999
+    },
+    {
+      "file": "app/register/RegisterForm.test.tsx",
+      "name": "RegisterForm preserves a valid non-detail redirect in both sign-in links for /listings",
+      "status": "passed",
+      "duration_ms": 77.20520899999997
+    },
+    {
+      "file": "app/register/RegisterForm.test.tsx",
+      "name": "RegisterForm falls back in both sign-in links and hides purchase context for an external redirect",
+      "status": "passed",
+      "duration_ms": 70.68608399999994
+    },
+    {
+      "file": "app/register/RegisterForm.test.tsx",
+      "name": "RegisterForm falls back in both sign-in links and hides purchase context for a malformed encoded redirect",
+      "status": "passed",
+      "duration_ms": 76.55154200000015
+    },
+    {
+      "file": "app/robots.txt/route.test.ts",
+      "name": "robots.txt anonymous allAI discovery links the canonical public manifest",
+      "status": "passed",
+      "duration_ms": 9.185166999999979
+    },
+    {
+      "file": "app/sell-data/page.test.tsx",
+      "name": "SellDataPage offers both hosting choices when authenticated=false",
+      "status": "passed",
+      "duration_ms": 305.2835
+    },
+    {
+      "file": "app/sell-data/page.test.tsx",
+      "name": "SellDataPage offers both hosting choices when authenticated=true",
+      "status": "passed",
+      "duration_ms": 56.15383400000019
+    },
+    {
+      "file": "components/allai/AllAIContext.test.tsx",
+      "name": "signed-in message contract keeps identity in authorization and sends only backend-supported page context",
+      "status": "passed",
+      "duration_ms": 38.51604199999997
+    },
+    {
+      "file": "components/allai/AllAIContext.test.tsx",
+      "name": "anonymous visitor surface contract activates the anonymous mode only on the approved route /",
+      "status": "passed",
+      "duration_ms": 57.63162500000021
+    },
+    {
+      "file": "components/allai/AllAIContext.test.tsx",
+      "name": "anonymous visitor surface contract activates the anonymous mode only on the approved route /find-data",
+      "status": "passed",
+      "duration_ms": 56.650249999999915
+    },
+    {
+      "file": "components/allai/AllAIContext.test.tsx",
+      "name": "anonymous visitor surface contract activates the anonymous mode only on the approved route /search",
+      "status": "passed",
+      "duration_ms": 58.574540999999954
+    },
+    {
+      "file": "components/allai/AllAIContext.test.tsx",
+      "name": "anonymous visitor surface contract keeps the anonymous mode and status poll off outside the approved routes",
+      "status": "passed",
+      "duration_ms": 6.119916999999987
+    },
+    {
+      "file": "components/allai/AllAIContext.test.tsx",
+      "name": "anonymous visitor surface contract checks readiness without creating a session and sends the selected locale",
+      "status": "passed",
+      "duration_ms": 8.204082999999855
+    },
+    {
+      "file": "components/allai/AllAIContext.test.tsx",
+      "name": "anonymous visitor surface contract prevents sending when the anonymous backend is unavailable",
+      "status": "passed",
+      "duration_ms": 2.909416000000192
+    },
+    {
+      "file": "components/allai/AllAIContext.test.tsx",
+      "name": "anonymous visitor surface contract fails closed while readiness is still pending",
+      "status": "passed",
+      "duration_ms": 5.1437499999999545
+    },
+    {
+      "file": "components/allai/AllAIContext.test.tsx",
+      "name": "anonymous visitor surface contract rejects a duplicated locale registry instead of treating it as exact",
+      "status": "passed",
+      "duration_ms": 2.5734999999999673
+    },
+    {
+      "file": "components/allai/AllAIContext.test.tsx",
+      "name": "anonymous visitor surface contract rejects a truthy non-boolean availability value",
+      "status": "passed",
+      "duration_ms": 4.60287500000004
+    },
+    {
+      "file": "components/allai/AllAIContext.test.tsx",
+      "name": "anonymous visitor surface contract restores focus to the remounted launcher after close",
+      "status": "passed",
+      "duration_ms": 61.44733300000007
+    },
+    {
+      "file": "components/allai/AllAIContext.test.tsx",
+      "name": "anonymous visitor surface contract accepts only a route-bound account next step from a validated answer",
+      "status": "passed",
+      "duration_ms": 58.78616699999998
+    },
+    {
+      "file": "components/allai/AllAIContext.test.tsx",
+      "name": "anonymous visitor surface contract drops a next step whose account flag conflicts with its public action",
+      "status": "passed",
+      "duration_ms": 56.268291999999974
+    },
+    {
+      "file": "components/allai/AllAIContext.test.tsx",
+      "name": "anonymous visitor surface contract renders a safe failure without an account next step",
+      "status": "passed",
+      "duration_ms": 56.593458000000055
+    },
+    {
+      "file": "components/allai/AllAIContext.test.tsx",
+      "name": "anonymous initial-message stale-session recovery recovers 404 -> fresh session -> 200 SSE once with one UI pair and the same AbortSignal",
+      "status": "passed",
+      "duration_ms": 5.620292000000063
+    },
+    {
+      "file": "components/allai/AllAIContext.test.tsx",
+      "name": "anonymous initial-message stale-session recovery bounds a 404 -> 404 sequence to one replacement and two message attempts without body matching",
+      "status": "passed",
+      "duration_ms": 3.9782499999996617
+    },
+    {
+      "file": "components/allai/AllAIContext.test.tsx",
+      "name": "anonymous initial-message stale-session recovery does not retry the message when replacement-session creation fails",
+      "status": "passed",
+      "duration_ms": 4.959124999999858
+    },
+    {
+      "file": "components/allai/AllAIContext.test.tsx",
+      "name": "anonymous initial-message stale-session recovery does not make a third attempt when the retry fails with HTTP 500",
+      "status": "passed",
+      "duration_ms": 4.952374999999847
+    },
+    {
+      "file": "components/allai/AllAIContext.test.tsx",
+      "name": "anonymous initial-message stale-session recovery does not make a third attempt when the retry fails with a network rejection",
+      "status": "passed",
+      "duration_ms": 5.165082999999868
+    },
+    {
+      "file": "components/allai/AllAIContext.test.tsx",
+      "name": "anonymous initial-message stale-session recovery keeps the original controller while aborted during replacement creation and does not add an error",
+      "status": "passed",
+      "duration_ms": 58.58208300000024
+    },
+    {
+      "file": "components/allai/AllAIContext.test.tsx",
+      "name": "anonymous initial-message stale-session recovery does not recover or replay after initial HTTP 500",
+      "status": "passed",
+      "duration_ms": 3.182209000000057
+    },
+    {
+      "file": "components/allai/AllAIContext.test.tsx",
+      "name": "anonymous initial-message stale-session recovery does not recover or replay after initial HTTP 429",
+      "status": "passed",
+      "duration_ms": 1.7816250000000764
+    },
+    {
+      "file": "components/allai/AllAIContext.test.tsx",
+      "name": "anonymous initial-message stale-session recovery does not recover or replay after initial a network rejection",
+      "status": "passed",
+      "duration_ms": 2.2320840000002136
+    },
+    {
+      "file": "components/allai/AllAIContext.test.tsx",
+      "name": "anonymous initial-message stale-session recovery does not recover or replay after initial an abort",
+      "status": "passed",
+      "duration_ms": 2.1359590000001845
+    },
+    {
+      "file": "components/allai/AllAIContext.test.tsx",
+      "name": "anonymous initial-message stale-session recovery does not recover or replay after initial a stream-read failure",
+      "status": "passed",
+      "duration_ms": 1.6305830000001151
+    },
+    {
+      "file": "components/allai/AllAIContext.test.tsx",
+      "name": "mount validation ownership does not replace a completed same-session send with delayed restored messages",
+      "status": "passed",
+      "duration_ms": 2.4409160000000156
+    },
+    {
+      "file": "components/allai/AllAIContext.test.tsx",
+      "name": "mount validation ownership does not replace an appended pair when validation resolves while ensureSession is pending",
+      "status": "passed",
+      "duration_ms": 3.805166999999983
+    },
+    {
+      "file": "components/allai/AllAIContext.test.tsx",
+      "name": "mount validation ownership does not replace an in-flight same-session send with delayed restored messages",
+      "status": "passed",
+      "duration_ms": 54.64133300000003
+    },
+    {
+      "file": "components/allai/AllAIContext.test.tsx",
+      "name": "mount validation ownership ignores a delayed stale-session validation success after recovery establishes a newer id",
+      "status": "passed",
+      "duration_ms": 4.932083000000148
+    },
+    {
+      "file": "components/allai/AllAIContext.test.tsx",
+      "name": "mount validation ownership ignores a delayed stale-session validation not-found after recovery establishes a newer id",
+      "status": "passed",
+      "duration_ms": 3.6488750000003165
+    },
+    {
+      "file": "components/allai/AllAIContext.test.tsx",
+      "name": "mount validation ownership ignores a delayed stale-session validation rejection after recovery establishes a newer id",
+      "status": "passed",
+      "duration_ms": 3.5253749999997126
+    },
+    {
+      "file": "components/allai/AllAIFab.test.tsx",
+      "name": "AllAIFab anonymous visitor entry point keeps Allai visibly named throughout the seller workspace",
+      "status": "passed",
+      "duration_ms": 257.071334
+    },
+    {
+      "file": "components/allai/AllAIFab.test.tsx",
+      "name": "AllAIFab anonymous visitor entry point shows a visible AI label when the approved anonymous mode is active",
+      "status": "passed",
+      "duration_ms": 16.814750000000004
+    },
+    {
+      "file": "components/allai/AllAIFab.test.tsx",
+      "name": "AllAIFab anonymous visitor entry point preserves the icon-only signed-in presentation",
+      "status": "passed",
+      "duration_ms": 13.140208999999913
+    },
+    {
+      "file": "components/allai/AllAIFab.test.tsx",
+      "name": "AllAIFab anonymous visitor entry point keeps the existing icon-only control outside the approved routes",
+      "status": "passed",
+      "duration_ms": 12.819750000000113
+    },
+    {
+      "file": "components/allai/AllAIFab.test.tsx",
+      "name": "AllAIFab anonymous visitor entry point removes the anonymous launcher when backend readiness is unavailable",
+      "status": "passed",
+      "duration_ms": 4.06966599999987
+    },
+    {
+      "file": "components/allai/AllAIFab.test.tsx",
+      "name": "AllAIFab anonymous visitor entry point uses an unlayered reduced-motion override for the global pulse animation",
+      "status": "passed",
+      "duration_ms": 1.8826249999999618
+    },
+    {
+      "file": "components/allai/AllAINextStep.test.tsx",
+      "name": "routes account-required actions through registration",
+      "status": "passed",
+      "duration_ms": 234.56749999999988
+    },
+    {
+      "file": "components/allai/AllAINextStep.test.tsx",
+      "name": "keeps public next steps ungated",
+      "status": "passed",
+      "duration_ms": 16.545916000000034
+    },
+    {
+      "file": "components/allai/AllAIPanel.test.tsx",
+      "name": "AllAIPanel accessibility and locale boundary opens as a labelled dialog and moves focus to the input",
+      "status": "passed",
+      "duration_ms": 341.4217920000001
+    },
+    {
+      "file": "components/allai/AllAIPanel.test.tsx",
+      "name": "AllAIPanel accessibility and locale boundary closes on Escape",
+      "status": "passed",
+      "duration_ms": 37.85454200000004
+    },
+    {
+      "file": "components/allai/AllAIPanel.test.tsx",
+      "name": "AllAIPanel accessibility and locale boundary preserves the legacy panel outside the active anonymous mode",
+      "status": "passed",
+      "duration_ms": 39.57612500000005
+    },
+    {
+      "file": "components/allai/AllAIPanel.test.tsx",
+      "name": "AllAIPanel accessibility and locale boundary exposes validated revision provenance in the rendered answer",
+      "status": "passed",
+      "duration_ms": 36.72162500000013
+    },
+    {
+      "file": "components/allai/TicketStatusCard.test.tsx",
+      "name": "TicketStatusCard renders all seven binding fields and the collapsed badge",
+      "status": "passed",
+      "duration_ms": 39.98762500000004
+    },
+    {
+      "file": "components/categories/MarketplaceCategoryCards.test.tsx",
+      "name": "MarketplaceCategoryCards renders positive inventory categories with counts and hides zero inventory",
+      "status": "passed",
+      "duration_ms": 243.857667
+    },
+    {
+      "file": "components/categories/MarketplaceCategoryCards.test.tsx",
+      "name": "MarketplaceCategoryCards falls back to the full static catalog after a facet request failure",
+      "status": "passed",
+      "duration_ms": 40.18724999999995
+    },
+    {
+      "file": "components/listings/AtAGlance.test.tsx",
+      "name": "renders nothing when absent, without even a wrapper",
+      "status": "passed",
+      "duration_ms": 19.076291999999967
+    },
+    {
+      "file": "components/listings/AtAGlance.test.tsx",
+      "name": "renders the complete ordered metadata with inert schema cells",
+      "status": "passed",
+      "duration_ms": 43.14729200000011
+    },
+    {
+      "file": "components/listings/AtAGlance.test.tsx",
+      "name": "omits missing and absent fields without defaults, and keeps text inert",
+      "status": "passed",
+      "duration_ms": 1.595540999999912
+    },
+    {
+      "file": "components/listings/AtAGlance.test.tsx",
+      "name": "uses audience-specific provenance labels for buyer",
+      "status": "passed",
+      "duration_ms": 51.05549999999994
+    },
+    {
+      "file": "components/listings/AtAGlance.test.tsx",
+      "name": "uses audience-specific provenance labels for seller",
+      "status": "passed",
+      "duration_ms": 16.31829199999993
+    },
+    {
+      "file": "components/listings/AtAGlance.test.tsx",
+      "name": "does not render unreviewed unknown fields",
+      "status": "passed",
+      "duration_ms": 3.6239170000001195
+    },
+    {
+      "file": "components/listings/AtAGlance.test.tsx",
+      "name": "formats 0 bytes without inventing dataset scope",
+      "status": "passed",
+      "duration_ms": 0.7808339999999134
+    },
+    {
+      "file": "components/listings/AtAGlance.test.tsx",
+      "name": "formats 1000 bytes without inventing dataset scope",
+      "status": "passed",
+      "duration_ms": 0.9306669999998576
+    },
+    {
+      "file": "components/listings/AtAGlance.test.tsx",
+      "name": "formats 2500000 bytes without inventing dataset scope",
+      "status": "passed",
+      "duration_ms": 1.532959000000119
+    },
+    {
+      "file": "components/listings/AtAGlance.test.tsx",
+      "name": "formats 3000000000 bytes without inventing dataset scope",
+      "status": "passed",
+      "duration_ms": 0.9351249999999709
+    },
+    {
+      "file": "components/listings/AtAGlance.test.tsx",
+      "name": "labels omitted description and unit cells without placeholder glyphs",
+      "status": "passed",
+      "duration_ms": 6.029416999999967
+    },
+    {
+      "file": "components/listings/AtAGlance.test.tsx",
+      "name": "renders no markup for empty buyer summaries",
+      "status": "passed",
+      "duration_ms": 0.702750000000151
+    },
+    {
+      "file": "components/listings/AtAGlance.test.tsx",
+      "name": "renders no markup for empty seller summaries",
+      "status": "passed",
+      "duration_ms": 0.23316700000009405
+    },
+    {
+      "file": "components/listings/BuyerAtAGlance.test.tsx",
+      "name": "keeps initial metadata without fetching, polling or flashing on initial pageshow",
+      "status": "passed",
+      "duration_ms": 260.94841700000006
+    },
+    {
+      "file": "components/listings/BuyerAtAGlance.test.tsx",
+      "name": "refreshes once on visible and once on persisted pageshow, removing withdrawals",
+      "status": "passed",
+      "duration_ms": 23.50845800000002
+    },
+    {
+      "file": "components/listings/BuyerAtAGlance.test.tsx",
+      "name": "expires a hung refresh after five seconds and ignores late data",
+      "status": "passed",
+      "duration_ms": 34.94483300000002
+    },
+    {
+      "file": "components/listings/BuyerAtAGlance.test.tsx",
+      "name": "fails closed on refresh errors and can recover on the next return",
+      "status": "passed",
+      "duration_ms": 45.40949999999998
+    },
+    {
+      "file": "components/listings/BuyerAtAGlance.test.tsx",
+      "name": "starts with no markup and shows newly approved metadata on return",
+      "status": "passed",
+      "duration_ms": 20.485417000000098
+    },
+    {
+      "file": "components/listings/ScanFindingsBadge.test.tsx",
+      "name": "ScanFindingsBadge renders the complete published artifact, D8 fields, coverage, and exact public wording",
+      "status": "passed",
+      "duration_ms": 89.47779199999991
+    },
+    {
+      "file": "components/listings/ScanFindingsBadge.test.tsx",
+      "name": "ScanFindingsBadge decodes only the five entities emitted by Python html.escape",
+      "status": "passed",
+      "duration_ms": 0.48316700000009405
+    },
+    {
+      "file": "components/listings/ScanFindingsBadge.test.tsx",
+      "name": "ScanFindingsBadge renders only the exact withdrawal marker inside the backend window",
+      "status": "passed",
+      "duration_ms": 0.8795000000000073
+    },
+    {
+      "file": "components/listings/ScanFindingsBadge.test.tsx",
+      "name": "ScanFindingsBadge renders nothing for a withdrawn artifact after the backend window",
+      "status": "passed",
+      "duration_ms": 0.5804169999998976
+    },
+    {
+      "file": "components/listings/ScanFindingsBadge.test.tsx",
+      "name": "ScanFindingsBadge renders only the later active artifact after supersession",
+      "status": "passed",
+      "duration_ms": 10.21374999999989
+    },
+    {
+      "file": "components/listings/ScanFindingsBadge.test.tsx",
+      "name": "ScanFindingsBadge renders nothing when public scan findings are absent",
+      "status": "passed",
+      "duration_ms": 0.3769170000000486
+    },
+    {
+      "file": "components/listings/ScanFindingsBadge.test.tsx",
+      "name": "ScanFindingsBadge does not derive D8 content when the backend omits it",
+      "status": "passed",
+      "duration_ms": 9.657166000000188
+    },
+    {
+      "file": "components/listings/ScanFindingsBadge.test.tsx",
+      "name": "ScanFindingsBadge contains no score or unqualified truth, accuracy, compliance, fitness, monitoring, or delivery claim",
+      "status": "passed",
+      "duration_ms": 7.768958999999995
+    },
+    {
+      "file": "components/listings/SellerAtAGlance.test.tsx",
+      "name": "treats pending as neutral pending and renders the exact buyer component",
+      "status": "passed",
+      "duration_ms": 437.01133300000015
+    },
+    {
+      "file": "components/listings/SellerAtAGlance.test.tsx",
+      "name": "treats invalidated as neutral pending and renders the exact buyer component",
+      "status": "passed",
+      "duration_ms": 85.53970800000002
+    },
+    {
+      "file": "components/listings/SellerAtAGlance.test.tsx",
+      "name": "approves the exact preview identifiers with a new UUID and no sample permission",
+      "status": "passed",
+      "duration_ms": 53.73341700000037
+    },
+    {
+      "file": "components/listings/SellerAtAGlance.test.tsx",
+      "name": "shows approved state and withdraws using the same exact identifiers",
+      "status": "passed",
+      "duration_ms": 58.30387500000006
+    },
+    {
+      "file": "components/listings/SellerAtAGlance.test.tsx",
+      "name": "regenerates in the preview locale and uses the returned generation for approval",
+      "status": "passed",
+      "duration_ms": 59.09199999999964
+    },
+    {
+      "file": "components/listings/SellerAtAGlance.test.tsx",
+      "name": "reloads on 409 and requires a fresh explicit approval of the new identifiers",
+      "status": "passed",
+      "duration_ms": 67.19658299999992
+    },
+    {
+      "file": "components/listings/SellerAtAGlance.test.tsx",
+      "name": "removes stale approval controls if reload fails",
+      "status": "passed",
+      "duration_ms": 47.93120799999997
+    },
+    {
+      "file": "components/listings/SellerAtAGlance.test.tsx",
+      "name": "disables actions during a request and discards a late response after a listing change",
+      "status": "passed",
+      "duration_ms": 63.898749999999836
+    },
+    {
+      "file": "components/listings/SellerAtAGlance.test.tsx",
+      "name": "uses a v4 UUID fallback on staging without randomUUID",
+      "status": "passed",
+      "duration_ms": 36.95849999999973
+    },
+    {
+      "file": "components/listings/SellerAtAGlance.test.tsx",
+      "name": "surfaces the caught action error for diagnosis",
+      "status": "passed",
+      "duration_ms": 33.834499999999935
+    },
+    {
+      "file": "components/listings/SellerAtAGlance.test.tsx",
+      "name": "reuses the approve request ID after an unconfirmed outcome and identical reload",
+      "status": "passed",
+      "duration_ms": 65.6402079999998
+    },
+    {
+      "file": "components/listings/SellerAtAGlance.test.tsx",
+      "name": "reuses the withdraw request ID after an unconfirmed outcome and identical reload",
+      "status": "passed",
+      "duration_ms": 66.11462500000016
+    },
+    {
+      "file": "components/listings/SellerAtAGlance.test.tsx",
+      "name": "mints a fresh retry ID when the preview hash changed after a network failure",
+      "status": "passed",
+      "duration_ms": 70.01183300000002
+    },
+    {
+      "file": "components/listings/SellerAtAGlance.test.tsx",
+      "name": "omits the field list for an approved empty summary 0",
+      "status": "passed",
+      "duration_ms": 15.119500000000244
+    },
+    {
+      "file": "components/listings/SellerAtAGlance.test.tsx",
+      "name": "omits the field list for an approved empty summary 1",
+      "status": "passed",
+      "duration_ms": 12.568917000000056
+    },
+    {
+      "file": "components/listings/SellerAtAGlance.test.tsx",
+      "name": "disables approval for field-empty pending summary 0 while allowing regeneration",
+      "status": "passed",
+      "duration_ms": 36.55445899999995
+    },
+    {
+      "file": "components/listings/SellerAtAGlance.test.tsx",
+      "name": "disables approval for field-empty pending summary 1 while allowing regeneration",
+      "status": "passed",
+      "duration_ms": 34.234375
+    },
+    {
+      "file": "components/listings/SellerAtAGlance.test.tsx",
+      "name": "disables approval for field-empty pending summary 2 while allowing regeneration",
+      "status": "passed",
+      "duration_ms": 37.62808300000006
+    },
+    {
+      "file": "components/listings/SellerAtAGlance.test.tsx",
+      "name": "enables approval for a supported measured-zero field",
+      "status": "passed",
+      "duration_ms": 13.307792000000063
+    },
+    {
+      "file": "components/listings/SellerShareControls.test.tsx",
+      "name": "SellerShareControls loads and renders copy link, card preview, and current caption fields",
+      "status": "passed",
+      "duration_ms": 282.99395900000013
+    },
+    {
+      "file": "components/listings/SellerShareControls.test.tsx",
+      "name": "SellerShareControls renders a freshly minted owner fallback short code from the share fetch",
+      "status": "passed",
+      "duration_ms": 23.071541000000025
+    },
+    {
+      "file": "components/listings/SellerShareControls.test.tsx",
+      "name": "SellerShareControls regenerates and accepts caption edits with the expected request bodies",
+      "status": "passed",
+      "duration_ms": 106.0491669999999
+    },
+    {
+      "file": "components/listings/SellerShareControls.test.tsx",
+      "name": "SellerShareControls copies the share URL when native share is unavailable",
+      "status": "passed",
+      "duration_ms": 35.36841699999991
+    },
+    {
+      "file": "components/listings/SellerShareControls.test.tsx",
+      "name": "SellerShareControls renders an error state without throwing when share fetch fails",
+      "status": "passed",
+      "duration_ms": 18.003957999999784
+    },
+    {
+      "file": "components/listings/SellerShareControls.test.tsx",
+      "name": "ShareKitModal renders platform drafts and encoded intent URLs",
+      "status": "passed",
+      "duration_ms": 52.91875000000027
+    },
+    {
+      "file": "components/listings/SellerShareControls.test.tsx",
+      "name": "ShareKitModal builds three ready-to-post drafts",
+      "status": "passed",
+      "duration_ms": 0.9542089999999916
+    },
+    {
+      "file": "components/search/MarketplaceListingCard.test.tsx",
+      "name": "MarketplaceListingCard does not render a truth-status badge",
+      "status": "passed",
+      "duration_ms": 44.32445799999999
+    },
+    {
+      "file": "components/search/MarketplaceSearchExperience.test.tsx",
+      "name": "MarketplaceSearchExperience clears the search query and filters from the marketplace URL",
+      "status": "passed",
+      "duration_ms": 273.6290829999998
+    },
+    {
+      "file": "components/search/MarketplaceSearchExperience.test.tsx",
+      "name": "MarketplaceSearchExperience keeps a direct link to an empty category active and shows the empty state",
+      "status": "passed",
+      "duration_ms": 55.469041999999945
+    },
+    {
+      "file": "components/search/MarketplaceSearchExperience.test.tsx",
+      "name": "MarketplaceSearchExperience falls back to the full category filter when facet loading fails",
+      "status": "passed",
+      "duration_ms": 46.96187500000019
+    },
+    {
+      "file": "components/search/MarketplaceSearchExperience.test.tsx",
+      "name": "MarketplaceSearchExperience offers the full catalog when a search has no results",
+      "status": "passed",
+      "duration_ms": 28.04454099999998
+    },
+    {
+      "file": "components/search/MarketplaceSearchExperience.test.tsx",
+      "name": "MarketplaceSearchExperience labels nonempty semantic results as related suggestions",
+      "status": "passed",
+      "duration_ms": 20.19329199999993
+    },
+    {
+      "file": "components/seller-workspace/ListingPreview.test.tsx",
+      "name": "renders only public fields as text, with a valid zero price",
+      "status": "passed",
+      "duration_ms": 270.0842089999999
+    },
+    {
+      "file": "components/seller-workspace/ListingPreview.test.tsx",
+      "name": "does not present missing or invalid fields as a complete offer",
+      "status": "passed",
+      "duration_ms": 10.911334000000124
+    },
+    {
+      "file": "components/seller-workspace/R2ConnectionForm.test.tsx",
+      "name": "keeps keys hidden and requires dedicated read-only confirmation before saving",
+      "status": "passed",
+      "duration_ms": 360.1914999999999
+    },
+    {
+      "file": "components/seller-workspace/R2ConnectionForm.test.tsx",
+      "name": "does not echo a failed request or provider secret",
+      "status": "passed",
+      "duration_ms": 69.60725000000002
+    },
+    {
+      "file": "components/seller-workspace/SavedListingEditor.test.tsx",
+      "name": "loads an account draft before editing and preserves newer edits during a save",
+      "status": "passed",
+      "duration_ms": 140.75074999999993
+    },
+    {
+      "file": "components/seller-workspace/SavedListingEditor.test.tsx",
+      "name": "reuses a request identity after an unknown save outcome",
+      "status": "passed",
+      "duration_ms": 64.29399999999987
+    },
+    {
+      "file": "components/seller-workspace/SavedListingEditor.test.tsx",
+      "name": "keeps the local draft on conflict and does not silently fetch over it",
+      "status": "passed",
+      "duration_ms": 49.34512500000005
+    },
+    {
+      "file": "components/seller-workspace/SavedListingEditor.test.tsx",
+      "name": "does not open a blank editor when the saved draft cannot be read",
+      "status": "passed",
+      "duration_ms": 144.03858300000002
+    },
+    {
+      "file": "components/seller-workspace/SavedListingEditor.test.tsx",
+      "name": "explains an unsupported price before saving and allows correction",
+      "status": "passed",
+      "duration_ms": 85.3712079999998
+    },
+    {
+      "file": "components/seller-workspace/SavedWorkspaceData.test.tsx",
+      "name": "restores the selected files from the account",
+      "status": "passed",
+      "duration_ms": 277.07904099999996
+    },
+    {
+      "file": "components/seller-workspace/SavedWorkspaceData.test.tsx",
+      "name": "retries an unknown save with the same version and identity",
+      "status": "passed",
+      "duration_ms": 186.19650000000001
+    },
+    {
+      "file": "components/seller-workspace/SavedWorkspaceData.test.tsx",
+      "name": "does not open an empty file picker when the saved selection cannot be loaded",
+      "status": "passed",
+      "duration_ms": 30.94637499999999
+    },
+    {
+      "file": "components/seller-workspace/SavedWorkspaceData.test.tsx",
+      "name": "keeps the connection fixed during a save and preserves newer checkbox edits",
+      "status": "passed",
+      "duration_ms": 104.67375000000015
+    },
+    {
+      "file": "components/seller-workspace/SavedWorkspaceData.test.tsx",
+      "name": "keeps a local selection change when retrying a failed file read",
+      "status": "passed",
+      "duration_ms": 67.43087500000001
+    },
+    {
+      "file": "components/seller-workspace/SavedWorkspaceData.test.tsx",
+      "name": "checks a complete folder and requires count-and-size confirmation before saving",
+      "status": "passed",
+      "duration_ms": 133.2728750000001
+    },
+    {
+      "file": "components/seller-workspace/SavedWorkspaceData.test.tsx",
+      "name": "confirms 22,000 files while rendering only one selected-file preview page",
+      "status": "passed",
+      "duration_ms": 1231.706667
+    },
+    {
+      "file": "components/seller-workspace/SellerApproval.test.tsx",
+      "name": "requires an explicit sample choice, all confirmations and a loaded render",
+      "status": "passed",
+      "duration_ms": 315.0083340000001
+    },
+    {
+      "file": "components/seller-workspace/SellerApproval.test.tsx",
+      "name": "retries an unknown outcome with the same request identity",
+      "status": "passed",
+      "duration_ms": 93.91366599999992
+    },
+    {
+      "file": "components/seller-workspace/SellerApproval.test.tsx",
+      "name": "requires refreshing a changed review before another approval attempt",
+      "status": "passed",
+      "duration_ms": 64.01041699999996
+    },
+    {
+      "file": "components/seller-workspace/SellerApproval.test.tsx",
+      "name": "does not display a late success after leaving the review",
+      "status": "passed",
+      "duration_ms": 44.71225000000004
+    },
+    {
+      "file": "components/seller-workspace/SellerListingEditor.test.tsx",
+      "name": "Allai seller listing review explains exhausted starter credits while keeping manual editing available",
+      "status": "passed",
+      "duration_ms": 273.473708
+    },
+    {
+      "file": "components/seller-workspace/SellerListingEditor.test.tsx",
+      "name": "Allai seller listing review preserves edits across sections and ignores a cancelled response after returning",
+      "status": "passed",
+      "duration_ms": 97.17116600000008
+    },
+    {
+      "file": "components/seller-workspace/SellerListingEditor.test.tsx",
+      "name": "Allai seller listing review does not send seller content when the listing assistant is unavailable",
+      "status": "passed",
+      "duration_ms": 35.315833999999995
+    },
+    {
+      "file": "components/seller-workspace/SellerListingEditor.test.tsx",
+      "name": "Allai seller listing review requires seller acceptance and ignores proposed price or ownership changes",
+      "status": "passed",
+      "duration_ms": 103.35249999999996
+    },
+    {
+      "file": "components/seller-workspace/SellerListingEditor.test.tsx",
+      "name": "Allai seller listing review keeps edits when a request fails and aborts a pending request on leaving",
+      "status": "passed",
+      "duration_ms": 84.55674999999997
+    },
+    {
+      "file": "components/seller-workspace/SellerListingEditor.test.tsx",
+      "name": "rejects a paid price below the marketplace minimum: 0.01",
+      "status": "passed",
+      "duration_ms": 59.70258300000023
+    },
+    {
+      "file": "components/seller-workspace/SellerListingEditor.test.tsx",
+      "name": "rejects a paid price below the marketplace minimum: 1.00",
+      "status": "passed",
+      "duration_ms": 70.40904099999989
+    },
+    {
+      "file": "components/seller-workspace/SellerListingEditor.test.tsx",
+      "name": "rejects a paid price below the marketplace minimum: 24.99",
+      "status": "passed",
+      "duration_ms": 69.13949999999977
+    },
+    {
+      "file": "components/seller-workspace/SellerListingEditor.test.tsx",
+      "name": "keeps free listings available",
+      "status": "passed",
+      "duration_ms": 44.99941600000011
+    },
+    {
+      "file": "components/seller-workspace/SellerListingVisibility.test.tsx",
+      "name": "only pauses after a click and reuses the same request after an unknown outcome",
+      "status": "passed",
+      "duration_ms": 255.24675000000002
+    },
+    {
+      "file": "components/seller-workspace/SellerListingVisibility.test.tsx",
+      "name": "refuses stale changes and aborts when leaving the listings",
+      "status": "passed",
+      "duration_ms": 33.25504099999989
+    },
+    {
+      "file": "components/seller-workspace/SellerPublication.test.tsx",
+      "name": "requires a click and the approved render before publishing",
+      "status": "passed",
+      "duration_ms": 247.23658299999988
+    },
+    {
+      "file": "components/seller-workspace/SellerPublication.test.tsx",
+      "name": "restores publication status without publishing again",
+      "status": "passed",
+      "duration_ms": 13.235374999999976
+    },
+    {
+      "file": "components/seller-workspace/SellerPublication.test.tsx",
+      "name": "keeps the same identity when publication outcome is unknown",
+      "status": "passed",
+      "duration_ms": 53.646625000000085
+    },
+    {
+      "file": "components/seller-workspace/SellerPublication.test.tsx",
+      "name": "blocks a stale approval and ignores success after leaving the page",
+      "status": "passed",
+      "duration_ms": 43.80837499999984
+    },
+    {
+      "file": "components/seller-workspace/SellerPublications.test.tsx",
+      "name": "loads only when opened and pages through saved publications",
+      "status": "passed",
+      "duration_ms": 324.35066600000005
+    },
+    {
+      "file": "components/seller-workspace/SellerPublications.test.tsx",
+      "name": "does not claim an empty list when the server cannot be reached",
+      "status": "passed",
+      "duration_ms": 28.633957999999893
+    },
+    {
+      "file": "components/seller-workspace/SellerPublications.test.tsx",
+      "name": "fetches a summary only after its details opens",
+      "status": "passed",
+      "duration_ms": 94.58075000000008
+    },
+    {
+      "file": "components/seller-workspace/SellerReview.test.tsx",
+      "name": "displays saved fields without exposing an approval or publication action",
+      "status": "passed",
+      "duration_ms": 302.4101250000001
+    },
+    {
+      "file": "components/seller-workspace/SellerReview.test.tsx",
+      "name": "does not request a review before the capability is available",
+      "status": "passed",
+      "duration_ms": 2.724707999999964
+    },
+    {
+      "file": "components/seller-workspace/SellerReview.test.tsx",
+      "name": "loads bounded server pages while retaining the complete 22,000-file totals",
+      "status": "passed",
+      "duration_ms": 348.35841600000003
+    },
+    {
+      "file": "components/seller-workspace/SellerReview.test.tsx",
+      "name": "hides files and stops paging after a stale or failed page",
+      "status": "passed",
+      "duration_ms": 89.01445899999999
+    },
+    {
+      "file": "components/seller-workspace/SellerReview.test.tsx",
+      "name": "aborts pending file navigation when the review closes",
+      "status": "passed",
+      "duration_ms": 82.73983299999963
+    },
+    {
+      "file": "components/seller-workspace/StorageSetupGuide.test.tsx",
+      "name": "storage setup guidance lets an existing AWS customer proceed only through the enabled connection action",
+      "status": "passed",
+      "duration_ms": 83.62866699999995
+    },
+    {
+      "file": "components/seller-workspace/StorageSetupGuide.test.tsx",
+      "name": "storage setup guidance does not bypass unavailable connections after walking through setup",
+      "status": "passed",
+      "duration_ms": 28.230792000000065
+    },
+    {
+      "file": "components/seller-workspace/StorageSetupGuide.test.tsx",
+      "name": "storage setup guidance keeps R2 setup separate from account verification and opens provider help in another tab",
+      "status": "passed",
+      "duration_ms": 16.267875000000004
+    },
+    {
+      "file": "components/seller-workspace/WorkspaceData.test.tsx",
+      "name": "Seller data browser does not call profile APIs while the profile stage is unavailable",
+      "status": "passed",
+      "duration_ms": 57.912624999999935
+    },
+    {
+      "file": "components/seller-workspace/WorkspaceData.test.tsx",
+      "name": "Seller data browser requires a verified connection before browsing",
+      "status": "passed",
+      "duration_ms": 6.4809999999999945
+    },
+    {
+      "file": "components/seller-workspace/WorkspaceData.test.tsx",
+      "name": "Seller data browser selects source files without starting analysis and clears selection on connection change",
+      "status": "passed",
+      "duration_ms": 335.344333
+    },
+    {
+      "file": "components/seller-workspace/WorkspaceData.test.tsx",
+      "name": "Seller data browser uses the pinned prefix, renders source names as text, and preserves pagination during search",
+      "status": "passed",
+      "duration_ms": 70.87704100000019
+    },
+    {
+      "file": "components/seller-workspace/WorkspaceData.test.tsx",
+      "name": "Seller data browser discards a late response after switching connections",
+      "status": "passed",
+      "duration_ms": 31.574375000000146
+    },
+    {
+      "file": "components/seller-workspace/WorkspaceData.test.tsx",
+      "name": "Seller data browser recovers from a load failure without exposing raw server errors",
+      "status": "passed",
+      "duration_ms": 40.254583999999795
+    },
+    {
+      "file": "components/seller-workspace/WorkspaceData.test.tsx",
+      "name": "Seller profiling activity requires a seller confirmation and keeps cancellation requested distinct from cancelled",
+      "status": "passed",
+      "duration_ms": 55.27166699999998
+    },
+    {
+      "file": "components/seller-workspace/WorkspaceData.test.tsx",
+      "name": "Seller profiling activity shows partial evidence and sensitive-data findings without raw field names or rows",
+      "status": "passed",
+      "duration_ms": 50.09087499999987
+    },
+    {
+      "file": "components/seller-workspace/WorkspacePanel.test.tsx",
+      "name": "mounts on first visit, preserves edits while hidden, and keeps hidden controls out of the accessible page",
+      "status": "passed",
+      "duration_ms": 259.0247089999998
+    },
+    {
+      "file": "components/seller-workspace/folderSelection.test.ts",
+      "name": "includes all pages and nested files, excludes folder markers, and counts overlap once",
+      "status": "passed",
+      "duration_ms": 8.289750000000026
+    },
+    {
+      "file": "components/seller-workspace/folderSelection.test.ts",
+      "name": "never returns a partial folder after a later page fails",
+      "status": "passed",
+      "duration_ms": 3.1138750000000073
+    },
+    {
+      "file": "components/seller-workspace/folderSelection.test.ts",
+      "name": "rejects repeated cursors, out-of-folder files and oversized selections",
+      "status": "passed",
+      "duration_ms": 132.198333
+    },
+    {
+      "file": "components/seller-workspace/folderSelection.test.ts",
+      "name": "counts all 22,000 nested files with progress and deduplicates overlapping choices",
+      "status": "passed",
+      "duration_ms": 172.79049999999995
+    },
+    {
+      "file": "components/seller-workspace/folderSelection.test.ts",
+      "name": "rejects conflicting duplicate observations and stops fetching after leaving",
+      "status": "passed",
+      "duration_ms": 1.8757080000000315
+    },
+    {
+      "file": "components/seller-workspace/folderSelection.test.ts",
+      "name": "waits and retries only a rate rejection with the same cursor",
+      "status": "passed",
+      "duration_ms": 1.895958999999948
+    },
+    {
+      "file": "components/orders/OrderVersionAccessSummary.test.tsx",
+      "name": "OrderVersionAccessSummary shows active purchased version and newer-version affordance without superseded label",
+      "status": "passed",
+      "duration_ms": 13.545334000000025
+    },
+    {
+      "file": "components/orders/OrderVersionAccessSummary.test.tsx",
+      "name": "OrderVersionAccessSummary surfaces an already-superseded purchased version honestly",
+      "status": "passed",
+      "duration_ms": 1.5696669999999813
+    },
+    {
+      "file": "components/orders/OrderVersionAccessSummary.test.tsx",
+      "name": "OrderVersionAccessSummary shows time remaining before expiry",
+      "status": "passed",
+      "duration_ms": 4.025042000000042
+    },
+    {
+      "file": "components/orders/OrderVersionAccessSummary.test.tsx",
+      "name": "OrderVersionAccessSummary shows expired state without a download affordance",
+      "status": "passed",
+      "duration_ms": 33.76550000000003
+    },
+    {
+      "file": "components/orders/ScopedCredentialDownload.test.tsx",
+      "name": "ScopedCredentialDownload helpers detects scoped delivery responses by delivery_type",
+      "status": "passed",
+      "duration_ms": 2.994416000000001
+    },
+    {
+      "file": "components/orders/ScopedCredentialDownload.test.tsx",
+      "name": "ScopedCredentialDownload helpers builds sync commands with prefixes with or without trailing slash",
+      "status": "passed",
+      "duration_ms": 0.5932090000000017
+    },
+    {
+      "file": "components/orders/ScopedCredentialDownload.test.tsx",
+      "name": "ScopedCredentialDownload helpers shell-quotes awkward and malicious-looking prefixes",
+      "status": "passed",
+      "duration_ms": 0.35145900000003394
+    },
+    {
+      "file": "components/orders/ScopedCredentialDownload.test.tsx",
+      "name": "ScopedCredentialDownload helpers ignores unsafe sync command hints and validates bucket names",
+      "status": "passed",
+      "duration_ms": 0.9527499999999804
+    },
+    {
+      "file": "components/orders/ScopedCredentialDownload.test.tsx",
+      "name": "ScopedCredentialDownload helpers rejects reserved S3 bucket namespace names",
+      "status": "passed",
+      "duration_ms": 1.0987499999999955
+    },
+    {
+      "file": "components/orders/ScopedCredentialDownload.test.tsx",
+      "name": "ScopedCredentialDownload component renders command, environment, and profile blocks",
+      "status": "passed",
+      "duration_ms": 13.388374999999996
+    },
+    {
+      "file": "components/orders/ScopedCredentialDownload.test.tsx",
+      "name": "ScopedCredentialDownload component shows the expired state and refresh button",
+      "status": "passed",
+      "duration_ms": 0.7172080000000278
+    },
+    {
+      "file": "components/orders/WorkspaceDownload.test.tsx",
+      "name": "chooses a folder before requesting access and downloads only after an explicit click",
+      "status": "passed",
+      "duration_ms": 252.798
+    },
+    {
+      "file": "components/orders/WorkspaceDownload.test.tsx",
+      "name": "does not consume access when the folder picker is cancelled",
+      "status": "passed",
+      "duration_ms": 25.022040999999945
+    },
+    {
+      "file": "components/orders/WorkspaceDownload.test.tsx",
+      "name": "ignores late grant responses after leaving the page",
+      "status": "passed",
+      "duration_ms": 22.572332999999844
+    },
+    {
+      "file": "components/orders/WorkspaceDownload.test.tsx",
+      "name": "reuses the allocation request after an unknown response",
+      "status": "passed",
+      "duration_ms": 37.94579199999998
+    },
+    {
+      "file": "components/orders/WorkspaceDownload.test.tsx",
+      "name": "reports a browser save failure as an incomplete download, not user cancellation",
+      "status": "passed",
+      "duration_ms": 17.12845900000002
+    },
+    {
+      "file": "components/orders/WorkspaceDownload.test.tsx",
+      "name": "shows the rate wait and leaves cancellation available without allocating again",
+      "status": "passed",
+      "duration_ms": 64.9246250000001
+    },
+    {
+      "file": "components/orders/WorkspacePurchaseRecovery.test.tsx",
+      "name": "checks only on request and refreshes the purchase without requesting a download",
+      "status": "passed",
+      "duration_ms": 212.90045799999984
+    },
+    {
+      "file": "components/orders/WorkspacePurchaseRecovery.test.tsx",
+      "name": "keeps a failed purchase available for an explicit retry",
+      "status": "passed",
+      "duration_ms": 34.554541999999856
+    },
+    {
+      "file": "components/orders/WorkspacePurchaseRecovery.test.tsx",
+      "name": "ignores a late response after leaving the purchase",
+      "status": "passed",
+      "duration_ms": 7.875625000000127
+    },
+    {
+      "file": "components/orders/workspaceDownloadStream.test.ts",
+      "name": "Workspace direct streaming writes bounded chunks with the signed header and no marketplace credentials",
+      "status": "passed",
+      "duration_ms": 20.984874999999988
+    },
+    {
+      "file": "components/orders/workspaceDownloadStream.test.ts",
+      "name": "Workspace direct streaming does not commit truncated or oversized files",
+      "status": "passed",
+      "duration_ms": 3.4378749999999627
+    },
+    {
+      "file": "components/orders/workspaceDownloadStream.test.ts",
+      "name": "Workspace direct streaming refuses changed provider objects before creating a file",
+      "status": "passed",
+      "duration_ms": 0.5489159999999629
+    },
+    {
+      "file": "components/orders/workspaceDownloadStream.test.ts",
+      "name": "Workspace direct streaming aborts the unfinished write when the user cancels",
+      "status": "passed",
+      "duration_ms": 0.8537090000000376
+    },
+    {
+      "file": "components/orders/workspaceDownloadStream.test.ts",
+      "name": "Workspace direct streaming uses separate names for identical basenames",
+      "status": "passed",
+      "duration_ms": 1.1549999999999727
+    },
+    {
+      "file": "components/orders/workspaceDownloadStream.test.ts",
+      "name": "Workspace direct streaming validates expiry, destinations and signed headers before downloading",
+      "status": "passed",
+      "duration_ms": 4.612458000000004
+    },
+    {
+      "file": "components/orders/workspaceDownloadStream.test.ts",
+      "name": "requests the next file only after the previous long transfer has finished",
+      "status": "passed",
+      "duration_ms": 5.121999999999957
+    },
+    {
+      "file": "components/orders/workspaceDownloadStream.test.ts",
+      "name": "streams all 22,000 files in one bundle without overlapping open writers",
+      "status": "passed",
+      "duration_ms": 2783.851042
+    },
+    {
+      "file": "lib/i18n/anonymous-allai.test.ts",
+      "name": "anonymous allAI locale registry contains complete, distinct safe-state copy for every released locale",
+      "status": "passed",
+      "duration_ms": 2.4319579999999803
+    },
+    {
+      "file": "lib/i18n/anonymous-allai.test.ts",
+      "name": "anonymous allAI locale registry maps browser language preferences only to supported locales",
+      "status": "passed",
+      "duration_ms": 0.23837499999999068
+    },
+    {
+      "file": "app/dashboard/[...slug]/page.test.tsx",
+      "name": "DashboardCatchAllPage surfaces unmatched dashboard paths as not found",
+      "status": "passed",
+      "duration_ms": 3.9026250000000005
+    },
+    {
+      "file": "app/dashboard/orders/page.test.tsx",
+      "name": "OrdersListPage Purchases heading renders Purchases heading in the explicit empty state",
+      "status": "passed",
+      "duration_ms": 252.55462500000021
+    },
+    {
+      "file": "app/dashboard/orders/page.test.tsx",
+      "name": "OrdersListPage Purchases heading renders Purchases heading with a buyer order",
+      "status": "passed",
+      "duration_ms": 65.34783300000004
+    },
+    {
+      "file": "app/dashboard/listings/page.test.tsx",
+      "name": "renders listings with enabled payouts on the happy path",
+      "status": "passed",
+      "duration_ms": 117.9704999999999
+    },
+    {
+      "file": "app/dashboard/listings/page.test.tsx",
+      "name": "shows the payout setup warning when Connect confirms disabled payouts",
+      "status": "passed",
+      "duration_ms": 16.492041999999856
+    },
+    {
+      "file": "app/dashboard/listings/page.test.tsx",
+      "name": "renders listings with unknown payouts after Connect returns 403",
+      "status": "passed",
+      "duration_ms": 13.798541999999998
+    },
+    {
+      "file": "app/dashboard/listings/page.test.tsx",
+      "name": "renders listings with unknown payouts after Connect returns 500",
+      "status": "passed",
+      "duration_ms": 13.639417000000094
+    },
+    {
+      "file": "app/dashboard/listings/page.test.tsx",
+      "name": "shows the listings error when listings fail",
+      "status": "passed",
+      "duration_ms": 7.441708000000062
+    },
+    {
+      "file": "app/dashboard/sales/page.test.tsx",
+      "name": "SalesPage guards provisioning sellers before seller orders",
+      "status": "passed",
+      "duration_ms": 202.967042
+    },
+    {
+      "file": "app/dashboard/sales/page.test.tsx",
+      "name": "SalesPage blocks unavailable seller capabilities before seller orders: not_requested",
+      "status": "passed",
+      "duration_ms": 14.265125000000126
+    },
+    {
+      "file": "app/dashboard/sales/page.test.tsx",
+      "name": "SalesPage blocks unavailable seller capabilities before seller orders: suspended",
+      "status": "passed",
+      "duration_ms": 15.237166000000116
+    },
+    {
+      "file": "app/dashboard/sales/page.test.tsx",
+      "name": "SalesPage shows the Sales heading and Loading sales... without stale rows",
+      "status": "passed",
+      "duration_ms": 93.83387499999981
+    },
+    {
+      "file": "app/dashboard/sales/page.test.tsx",
+      "name": "SalesPage requests the selected filters with the bounded query",
+      "status": "passed",
+      "duration_ms": 53.39837499999999
+    },
+    {
+      "file": "app/dashboard/sales/page.test.tsx",
+      "name": "SalesPage renders all seven facts in desktop and mobile presentations without links",
+      "status": "passed",
+      "duration_ms": 33.221624999999904
+    },
+    {
+      "file": "app/dashboard/sales/page.test.tsx",
+      "name": "SalesPage keeps needs_action informational",
+      "status": "passed",
+      "duration_ms": 24.255916999999954
+    },
+    {
+      "file": "app/dashboard/sales/page.test.tsx",
+      "name": "SalesPage sorts pending sales oldest paid first with deterministic ties",
+      "status": "passed",
+      "duration_ms": 28.74712499999987
+    },
+    {
+      "file": "app/dashboard/sales/page.test.tsx",
+      "name": "SalesPage renders null-paid fallback and delivered and completed dates",
+      "status": "passed",
+      "duration_ms": 26.043750000000045
+    },
+    {
+      "file": "app/dashboard/sales/page.test.tsx",
+      "name": "SalesPage sorts all non-default filters newest paid first with nulls and deterministic ties",
+      "status": "passed",
+      "duration_ms": 123.67383300000006
+    },
+    {
+      "file": "app/dashboard/sales/page.test.tsx",
+      "name": "SalesPage maps every seller status independently: created",
+      "status": "passed",
+      "duration_ms": 15.033542000000125
+    },
+    {
+      "file": "app/dashboard/sales/page.test.tsx",
+      "name": "SalesPage maps every seller status independently: paid",
+      "status": "passed",
+      "duration_ms": 16.047083000000157
+    },
+    {
+      "file": "app/dashboard/sales/page.test.tsx",
+      "name": "SalesPage maps every seller status independently: in_escrow",
+      "status": "passed",
+      "duration_ms": 16.01254199999994
+    },
+    {
+      "file": "app/dashboard/sales/page.test.tsx",
+      "name": "SalesPage maps every seller status independently: pending_delivery",
+      "status": "passed",
+      "duration_ms": 12.74304200000006
+    },
+    {
+      "file": "app/dashboard/sales/page.test.tsx",
+      "name": "SalesPage maps every seller status independently: delivered",
+      "status": "passed",
+      "duration_ms": 12.676625000000058
+    },
+    {
+      "file": "app/dashboard/sales/page.test.tsx",
+      "name": "SalesPage maps every seller status independently: completed",
+      "status": "passed",
+      "duration_ms": 13.71225000000004
+    },
+    {
+      "file": "app/dashboard/sales/page.test.tsx",
+      "name": "SalesPage maps every seller status independently: disputed",
+      "status": "passed",
+      "duration_ms": 15.361625000000004
+    },
+    {
+      "file": "app/dashboard/sales/page.test.tsx",
+      "name": "SalesPage maps every seller status independently: resolved",
+      "status": "passed",
+      "duration_ms": 14.080875000000106
+    },
+    {
+      "file": "app/dashboard/sales/page.test.tsx",
+      "name": "SalesPage maps every seller status independently: delivery_failed",
+      "status": "passed",
+      "duration_ms": 12.664208000000144
+    },
+    {
+      "file": "app/dashboard/sales/page.test.tsx",
+      "name": "SalesPage maps every seller status independently: refunded",
+      "status": "passed",
+      "duration_ms": 15.350790999999845
+    },
+    {
+      "file": "app/dashboard/sales/page.test.tsx",
+      "name": "SalesPage maps every seller status independently: cancelled",
+      "status": "passed",
+      "duration_ms": 13.484249999999975
+    },
+    {
+      "file": "app/dashboard/sales/page.test.tsx",
+      "name": "SalesPage reports an unknown status exactly once",
+      "status": "passed",
+      "duration_ms": 13.978708000000097
+    },
+    {
+      "file": "app/dashboard/sales/page.test.tsx",
+      "name": "SalesPage renders each exact empty state",
+      "status": "passed",
+      "duration_ms": 64.05441700000029
+    },
+    {
+      "file": "app/dashboard/sales/page.test.tsx",
+      "name": "SalesPage renders exact error copy and retries the same request",
+      "status": "passed",
+      "duration_ms": 29.649832999999944
+    },
+    {
+      "file": "app/dashboard/sales/page.test.tsx",
+      "name": "SalesPage keeps one sale and one personal purchase on separate surfaces",
+      "status": "passed",
+      "duration_ms": 29.037249999999858
+    },
+    {
+      "file": "app/dashboard/seller-workspace/page.test.tsx",
+      "name": "SellerWorkspacePage safety boundaries shows usable storage and one pending setup, with duplicate history in compact rows",
+      "status": "passed",
+      "duration_ms": 630.6524169999998
+    },
+    {
+      "file": "app/dashboard/seller-workspace/page.test.tsx",
+      "name": "SellerWorkspacePage safety boundaries chooses only the newest unexpired pending setup per provider",
+      "status": "passed",
+      "duration_ms": 187.4078330000002
+    },
+    {
+      "file": "app/dashboard/seller-workspace/page.test.tsx",
+      "name": "SellerWorkspacePage safety boundaries removes disconnected pending setup immediately when the response status is revoked",
+      "status": "passed",
+      "duration_ms": 147.924125
+    },
+    {
+      "file": "app/dashboard/seller-workspace/page.test.tsx",
+      "name": "SellerWorkspacePage safety boundaries removes disconnected pending setup immediately when the response status is pending_authorization",
+      "status": "passed",
+      "duration_ms": 145.33624999999984
+    },
+    {
+      "file": "app/dashboard/seller-workspace/page.test.tsx",
+      "name": "SellerWorkspacePage safety boundaries uses terminal timestamps ahead of a stale pending label on reload",
+      "status": "passed",
+      "duration_ms": 35.660167
+    },
+    {
+      "file": "app/dashboard/seller-workspace/page.test.tsx",
+      "name": "SellerWorkspacePage safety boundaries reuses pending R2 setup without creating a new connection",
+      "status": "passed",
+      "duration_ms": 85.72504100000015
+    },
+    {
+      "file": "app/dashboard/seller-workspace/page.test.tsx",
+      "name": "SellerWorkspacePage safety boundaries can prepare a private draft before connecting AWS when the backend enables drafts",
+      "status": "passed",
+      "duration_ms": 100.22937499999989
+    },
+    {
+      "file": "app/dashboard/seller-workspace/page.test.tsx",
+      "name": "SellerWorkspacePage safety boundaries does not request saved drafts unless backend capability enables them",
+      "status": "passed",
+      "duration_ms": 77.49462500000027
+    },
+    {
+      "file": "app/dashboard/seller-workspace/page.test.tsx",
+      "name": "SellerWorkspacePage safety boundaries clears setup material when choosing a source and excludes profiling from the selling flow",
+      "status": "passed",
+      "duration_ms": 145.22887500000024
+    },
+    {
+      "file": "app/dashboard/seller-workspace/page.test.tsx",
+      "name": "SellerWorkspacePage safety boundaries clears initial authorization material when its server deadline passes",
+      "status": "passed",
+      "duration_ms": 63.990291999999954
+    },
+    {
+      "file": "app/dashboard/seller-workspace/page.test.tsx",
+      "name": "SellerWorkspacePage safety boundaries clears rotation authorization material when its server deadline passes",
+      "status": "passed",
+      "duration_ms": 64.54991700000028
+    },
+    {
+      "file": "app/dashboard/seller-workspace/page.test.tsx",
+      "name": "SellerWorkspacePage safety boundaries ignores a browser wall clock that is far ahead",
+      "status": "passed",
+      "duration_ms": 62.31975000000011
+    },
+    {
+      "file": "app/dashboard/seller-workspace/page.test.tsx",
+      "name": "SellerWorkspacePage safety boundaries ignores a browser wall clock that is far behind",
+      "status": "passed",
+      "duration_ms": 49.151792000000114
+    },
+    {
+      "file": "app/dashboard/seller-workspace/page.test.tsx",
+      "name": "SellerWorkspacePage safety boundaries chains timers beyond the browser maximum timeout without expiring early",
+      "status": "passed",
+      "duration_ms": 50.37679100000014
+    },
+    {
+      "file": "app/dashboard/seller-workspace/page.test.tsx",
+      "name": "SellerWorkspacePage safety boundaries rechecks an elapsed deadline on visibilitychange",
+      "status": "passed",
+      "duration_ms": 65.1525829999996
+    },
+    {
+      "file": "app/dashboard/seller-workspace/page.test.tsx",
+      "name": "SellerWorkspacePage safety boundaries rechecks an elapsed deadline on focus",
+      "status": "passed",
+      "duration_ms": 61.46616600000016
+    },
+    {
+      "file": "app/dashboard/seller-workspace/page.test.tsx",
+      "name": "SellerWorkspacePage safety boundaries replaces the active deadline timer without clearing a later ceremony early",
+      "status": "passed",
+      "duration_ms": 106.71325000000024
+    },
+    {
+      "file": "app/dashboard/seller-workspace/page.test.tsx",
+      "name": "SellerWorkspacePage safety boundaries enables no action when the server capability is unavailable",
+      "status": "passed",
+      "duration_ms": 26.416541999999936
+    },
+    {
+      "file": "app/dashboard/seller-workspace/page.test.tsx",
+      "name": "SellerWorkspacePage safety boundaries keeps an expired pending connection terminal with no verification path",
+      "status": "passed",
+      "duration_ms": 64.14516699999967
+    },
+    {
+      "file": "app/dashboard/seller-workspace/page.test.tsx",
+      "name": "SellerWorkspacePage safety boundaries clears server authorization on every verify attempt and renders only a safe error",
+      "status": "passed",
+      "duration_ms": 179.35770799999955
+    },
+    {
+      "file": "app/dashboard/seller-workspace/page.test.tsx",
+      "name": "SellerWorkspacePage safety boundaries rejects unsafe prefix foo* before any provider request",
+      "status": "passed",
+      "duration_ms": 127.58658299999934
+    },
+    {
+      "file": "app/dashboard/seller-workspace/page.test.tsx",
+      "name": "SellerWorkspacePage safety boundaries rejects unsafe prefix foo?bar before any provider request",
+      "status": "passed",
+      "duration_ms": 126.27020900000025
+    },
+    {
+      "file": "app/dashboard/seller-workspace/page.test.tsx",
+      "name": "SellerWorkspacePage safety boundaries rejects unsafe prefix ${aws:username}/data before any provider request",
+      "status": "passed",
+      "duration_ms": 128.722084
+    },
+    {
+      "file": "app/dashboard/seller-workspace/page.test.tsx",
+      "name": "SellerWorkspacePage safety boundaries rejects unsafe prefix bad\u0001prefix before any provider request",
+      "status": "passed",
+      "duration_ms": 138.6337080000003
+    },
+    {
+      "file": "app/dashboard/seller-workspace/page.test.tsx",
+      "name": "SellerWorkspacePage safety boundaries rejects unsafe prefix bad\u007fprefix before any provider request",
+      "status": "passed",
+      "duration_ms": 150.03462500000023
+    },
+    {
+      "file": "app/dashboard/seller-workspace/page.test.tsx",
+      "name": "SellerWorkspacePage safety boundaries rejects unsafe prefix bad\u0085prefix before any provider request",
+      "status": "passed",
+      "duration_ms": 140.51895800000057
+    },
+    {
+      "file": "app/dashboard/seller-workspace/page.test.tsx",
+      "name": "SellerWorkspacePage safety boundaries uses the correct verification key after a definitive failure",
+      "status": "passed",
+      "duration_ms": 227.61266699999942
+    },
+    {
+      "file": "app/dashboard/seller-workspace/page.test.tsx",
+      "name": "SellerWorkspacePage safety boundaries uses the correct verification key after a unknown outcome",
+      "status": "passed",
+      "duration_ms": 252.483209
+    },
+    {
+      "file": "app/dashboard/seller-workspace/page.test.tsx",
+      "name": "SellerWorkspacePage safety boundaries uses a new idempotency key when the seller corrects a failed verification scope",
+      "status": "passed",
+      "duration_ms": 228.79654100000062
+    },
+    {
+      "file": "app/dashboard/seller-workspace/page.test.tsx",
+      "name": "SellerWorkspacePage safety boundaries clears server authorization on rotation completion even when completion fails",
+      "status": "passed",
+      "duration_ms": 82.7860840000003
+    },
+    {
+      "file": "app/dashboard/seller-workspace/page.test.tsx",
+      "name": "SellerWorkspacePage safety boundaries uses the correct rotation completion key after a definitive failure",
+      "status": "passed",
+      "duration_ms": 158.27154100000007
+    },
+    {
+      "file": "app/dashboard/seller-workspace/page.test.tsx",
+      "name": "SellerWorkspacePage safety boundaries uses the correct rotation completion key after a unknown outcome",
+      "status": "passed",
+      "duration_ms": 169.00950000000012
+    },
+    {
+      "file": "app/dashboard/stripe-return/page.test.tsx",
+      "name": "Stripe return mints once and resumes without polling for abandoned=1, including Strict Mode and re-renders",
+      "status": "passed",
+      "duration_ms": 60.03620799999999
+    },
+    {
+      "file": "app/dashboard/stripe-return/page.test.tsx",
+      "name": "Stripe return mints once and resumes without polling for abandoned=true, including Strict Mode and re-renders",
+      "status": "passed",
+      "duration_ms": 6.477084000000104
+    },
+    {
+      "file": "app/dashboard/stripe-return/page.test.tsx",
+      "name": "Stripe return mints a fresh link on re-entry after a settled Strict Mode refresh",
+      "status": "passed",
+      "duration_ms": 60.447625000000016
+    },
+    {
+      "file": "app/dashboard/stripe-return/page.test.tsx",
+      "name": "Stripe return offers resume after 15 seconds and ignores a late refresh resolution",
+      "status": "passed",
+      "duration_ms": 177.5038750000001
+    },
+    {
+      "file": "app/dashboard/stripe-return/page.test.tsx",
+      "name": "Stripe return falls back to Setup Incomplete after a failed refresh and lets the seller retry",
+      "status": "passed",
+      "duration_ms": 85.08737500000007
+    },
+    {
+      "file": "app/dashboard/stripe-return/page.test.tsx",
+      "name": "Stripe return preserves the dashboard 2FA guidance on automatic and manual resume failures",
+      "status": "passed",
+      "duration_ms": 30.836250000000064
+    },
+    {
+      "file": "app/dashboard/stripe-return/page.test.tsx",
+      "name": "Stripe return falls back if the onboarding redirect rejects its URL",
+      "status": "passed",
+      "duration_ms": 8.531166999999868
+    },
+    {
+      "file": "app/dashboard/stripe-return/page.test.tsx",
+      "name": "Stripe return offers continued setup after all 15 polls report incomplete details",
+      "status": "passed",
+      "duration_ms": 25.439583000000084
+    },
+    {
+      "file": "app/dashboard/stripe-return/page.test.tsx",
+      "name": "Stripe return shows success and redirects when Stripe details have been submitted",
+      "status": "passed",
+      "duration_ms": 5.778999999999996
+    },
+    {
+      "file": "app/l/[code]/page.test.tsx",
+      "name": "SharePage generates published listing metadata with OG, Twitter, canonical, and card image fields",
+      "status": "passed",
+      "duration_ms": 6.529875000000004
+    },
+    {
+      "file": "app/l/[code]/page.test.tsx",
+      "name": "SharePage renders the JSON-LD script, card preview, and View listing CTA for published shares",
+      "status": "passed",
+      "duration_ms": 17.601957999999968
+    },
+    {
+      "file": "app/l/[code]/page.test.tsx",
+      "name": "SharePage returns generic noindex metadata and renders the friendly unavailable page for 410 shares",
+      "status": "passed",
+      "duration_ms": 2.129415999999992
+    },
+    {
+      "file": "app/l/[code]/page.test.tsx",
+      "name": "SharePage returns a minimal OG fallback without throwing when the metadata fetch fails",
+      "status": "passed",
+      "duration_ms": 0.6336659999999483
+    },
+    {
+      "file": "app/dashboard/settings/ReauthModal.test.tsx",
+      "name": "ReauthModal backend contract and accessibility asks for the current authenticator code without starting an obsolete challenge",
+      "status": "passed",
+      "duration_ms": 282.3007090000001
+    },
+    {
+      "file": "app/dashboard/settings/ReauthModal.test.tsx",
+      "name": "ReauthModal backend contract and accessibility cancels on Escape and restores focus to the opening control",
+      "status": "passed",
+      "duration_ms": 43.64558299999999
+    },
+    {
+      "file": "app/dashboard/settings/ReauthModal.test.tsx",
+      "name": "ReauthModal backend contract and accessibility forwards the deployed backend token and guards focus through setup work",
+      "status": "passed",
+      "duration_ms": 53.770917000000054
+    },
+    {
+      "file": "app/dashboard/settings/ReauthModal.test.tsx",
+      "name": "ReauthModal backend contract and accessibility announces submission failure and associates it with the focused code field",
+      "status": "passed",
+      "duration_ms": 34.723792
+    },
+    {
+      "file": "app/dashboard/settings/ReauthModal.test.tsx",
+      "name": "ReauthModal backend contract and accessibility fails closed when a successful response has no reauthentication token",
+      "status": "passed",
+      "duration_ms": 40.755333000000064
+    },
+    {
+      "file": "app/dashboard/settings/page.test.tsx",
+      "name": "SettingsPage capability refresh dispatches capabilities:changed after a successful profile save",
+      "status": "passed",
+      "duration_ms": 328.0944999999999
+    },
+    {
+      "file": "app/dashboard/settings/page.test.tsx",
+      "name": "SettingsPage capability refresh does not dispatch capabilities:changed when the profile save fails",
+      "status": "passed",
+      "duration_ms": 145.42724999999996
+    },
+    {
+      "file": "app/dashboard/settings/page.test.tsx",
+      "name": "SettingsPage capability refresh does not advertise card setup in general Settings",
+      "status": "passed",
+      "duration_ms": 42.46266699999978
+    },
+    {
+      "file": "app/dashboard/settings/page.test.tsx",
+      "name": "SettingsPage capability refresh focuses the stable Settings heading after successful disable removes the modal opener",
+      "status": "passed",
+      "duration_ms": 214.15200000000004
+    },
+    {
+      "file": "app/dashboard/settings/page.test.tsx",
+      "name": "SettingsPage capability refresh focuses the stable Settings heading after successful regenerate removes the modal opener",
+      "status": "passed",
+      "duration_ms": 151.48508399999992
+    },
+    {
+      "file": "app/listings/[slug]/page.test.tsx",
+      "name": "ListingDetailPage Dataset JSON-LD server-renders exactly one Dataset JSON-LD script from the backend payload",
+      "status": "passed",
+      "duration_ms": 60.18399999999997
+    },
+    {
+      "file": "app/listings/[slug]/page.test.tsx",
+      "name": "ListingDetailPage Dataset JSON-LD suppresses Dataset JSON-LD for noindex listings",
+      "status": "passed",
+      "duration_ms": 4.65629100000001
+    },
+    {
+      "file": "app/listings/[slug]/page.test.tsx",
+      "name": "ListingDetailPage Dataset JSON-LD calls notFound and emits no script when the listing is missing",
+      "status": "passed",
+      "duration_ms": 2.3908329999999296
+    },
+    {
+      "file": "app/listings/[slug]/page.test.tsx",
+      "name": "ListingDetailPage Dataset JSON-LD keeps visible title and canonical URL aligned with the JSON-LD payload",
+      "status": "passed",
+      "duration_ms": 3.8978329999999914
+    },
+    {
+      "file": "app/listings/[slug]/page.test.tsx",
+      "name": "ListingDetailPage Dataset JSON-LD keeps legacy no-version listing markup pinned without a version selector",
+      "status": "passed",
+      "duration_ms": 6.832417000000078
+    },
+    {
+      "file": "app/listings/[slug]/page.test.tsx",
+      "name": "ListingDetailPage Dataset JSON-LD threads known purchase facts through legacy and versioned purchase paths",
+      "status": "passed",
+      "duration_ms": 11.697582999999895
+    },
+    {
+      "file": "app/listings/[slug]/page.test.tsx",
+      "name": "ListingDetailPage Dataset JSON-LD shows the absent-findings advisory on a paid listing without disabling purchase",
+      "status": "passed",
+      "duration_ms": 3.794750000000022
+    },
+    {
+      "file": "app/listings/[slug]/page.test.tsx",
+      "name": "ListingDetailPage Dataset JSON-LD renders the backend withdrawal marker verbatim",
+      "status": "passed",
+      "duration_ms": 3.3400420000000395
+    },
+    {
+      "file": "app/listings/[slug]/page.test.tsx",
+      "name": "ListingDetailPage Dataset JSON-LD contains no numeric quality score or unqualified listing claim",
+      "status": "passed",
+      "duration_ms": 3.9661250000001473
+    },
+    {
+      "file": "app/listings/[slug]/page.test.tsx",
+      "name": "approved Workspace presentation uses the exact approved document in an inert frame",
+      "status": "passed",
+      "duration_ms": 5.496666000000005
+    },
+    {
+      "file": "app/listings/[slug]/page.test.tsx",
+      "name": "approved Workspace presentation does not render a purchasable page from a mismatched approved document",
+      "status": "passed",
+      "duration_ms": 1.0009580000000824
+    },
+    {
+      "file": "app/listings/[slug]/page.test.tsx",
+      "name": "shows a paused Workspace offer without a purchase control",
+      "status": "passed",
+      "duration_ms": 4.556167000000187
+    },
+    {
+      "file": "app/listings/[slug]/page.test.tsx",
+      "name": "renders approved At a glance on the buyer route with a pinned present snapshot",
+      "status": "passed",
+      "duration_ms": 18.654457999999977
+    },
+    {
+      "file": "app/listings/[slug]/page.test.tsx",
+      "name": "keeps empty and null summaries byte-identical to the legacy absent buyer route",
+      "status": "passed",
+      "duration_ms": 11.239333999999872
+    },
+    {
+      "file": "app/listings/[slug]/page.test.tsx",
+      "name": "S1717 member_files and verification scope renders the three-file local member_files fixture with named download links",
+      "status": "passed",
+      "duration_ms": 265.1216670000001
+    },
+    {
+      "file": "app/listings/[slug]/page.test.tsx",
+      "name": "S1717 member_files and verification scope keeps local null carriers byte-identical to absent carriers",
+      "status": "passed",
+      "duration_ms": 4.475875000000087
+    },
+    {
+      "file": "app/listings/[slug]/page.test.tsx",
+      "name": "S1717 member_files and verification scope renders the exact scope sentence beside local scan findings",
+      "status": "passed",
+      "duration_ms": 25.219749999999976
+    },
+    {
+      "file": "app/listings/[slug]/page.test.tsx",
+      "name": "S1717 member_files and verification scope ignores extra private sample metadata on the local carrier",
+      "status": "passed",
+      "duration_ms": 9.840083999999933
+    },
+    {
+      "file": "app/listings/[slug]/page.test.tsx",
+      "name": "S1717 member_files and verification scope renders the three-file workspace member_files fixture with named download links",
+      "status": "passed",
+      "duration_ms": 72.67337499999985
+    },
+    {
+      "file": "app/listings/[slug]/page.test.tsx",
+      "name": "S1717 member_files and verification scope keeps workspace null carriers byte-identical to absent carriers",
+      "status": "passed",
+      "duration_ms": 7.128833000000213
+    },
+    {
+      "file": "app/listings/[slug]/page.test.tsx",
+      "name": "S1717 member_files and verification scope renders the exact scope sentence beside workspace scan findings",
+      "status": "passed",
+      "duration_ms": 36.0656670000003
+    },
+    {
+      "file": "app/listings/[slug]/page.test.tsx",
+      "name": "S1717 member_files and verification scope ignores extra private sample metadata on the workspace carrier",
+      "status": "passed",
+      "duration_ms": 5.767582999999831
+    },
+    {
+      "file": "app/listings/[slug]/page.test.tsx",
+      "name": "S1717 member_files and verification scope renders scope without sample files or scan findings",
+      "status": "passed",
+      "duration_ms": 2.858458999999584
+    },
+    {
+      "file": "app/requests/[slug]/DataRequestDetailClient.test.tsx",
+      "name": "DataRequestDetailClient authenticated fallback loading renders an owner draft and its open action after the authenticated fetch succeeds",
+      "status": "passed",
+      "duration_ms": 303.38358300000004
+    },
+    {
+      "file": "app/requests/[slug]/DataRequestDetailClient.test.tsx",
+      "name": "DataRequestDetailClient authenticated fallback loading renders an explicit not-found state with a requests link when the authenticated fetch fails",
+      "status": "passed",
+      "duration_ms": 35.57075000000009
+    },
+    {
+      "file": "app/requests/[slug]/DataRequestDetailClient.test.tsx",
+      "name": "DataRequestDetailClient authenticated fallback loading shows the authoritative reason and confirms the exact current request text",
+      "status": "passed",
+      "duration_ms": 49.51770899999997
+    },
+    {
+      "file": "app/requests/[slug]/DataRequestDetailClient.test.tsx",
+      "name": "DataRequestDetailClient authenticated fallback loading does not claim the request is public when a later automatic check is still pending",
+      "status": "passed",
+      "duration_ms": 30.055208999999877
+    },
+    {
+      "file": "app/requests/[slug]/DataRequestDetailClient.test.tsx",
+      "name": "DataRequestDetailClient authenticated fallback loading withdraws public consent without deleting the request",
+      "status": "passed",
+      "duration_ms": 40.93604200000004
+    },
+    {
+      "file": "app/requests/[slug]/DataRequestDetailClient.test.tsx",
+      "name": "DataRequestDetailClient authenticated fallback loading does not ask the buyer to act while an automatic safety retry is pending",
+      "status": "passed",
+      "duration_ms": 18.74562499999979
+    },
+    {
+      "file": "app/requests/[slug]/DataRequestDetailClient.test.tsx",
+      "name": "DataRequestDetailClient authenticated fallback loading does not describe a genuine safety exception as an automatic retry",
+      "status": "passed",
+      "duration_ms": 10.803333999999722
+    },
+    {
+      "file": "app/requests/[slug]/page.test.tsx",
+      "name": "DataRequestDetailPage Demand JSON-LD server-renders exactly one Demand JSON-LD script from the backend payload",
+      "status": "passed",
+      "duration_ms": 26.800749999999994
+    },
+    {
+      "file": "app/requests/[slug]/page.test.tsx",
+      "name": "DataRequestDetailPage Demand JSON-LD suppresses Demand JSON-LD when the request flag is false",
+      "status": "passed",
+      "duration_ms": 1.9696670000000154
+    },
+    {
+      "file": "app/requests/[slug]/page.test.tsx",
+      "name": "DataRequestDetailPage Demand JSON-LD suppresses Demand JSON-LD for noindex responses",
+      "status": "passed",
+      "duration_ms": 2.0137920000000236
+    },
+    {
+      "file": "app/requests/[slug]/page.test.tsx",
+      "name": "DataRequestDetailPage Demand JSON-LD renders the client loader instead of calling notFound when the anonymous fetch misses",
+      "status": "passed",
+      "duration_ms": 2.143374999999992
+    },
+    {
+      "file": "app/requests/[slug]/page.test.tsx",
+      "name": "DataRequestDetailPage Demand JSON-LD returns neutral noindex metadata when the anonymous fetch misses",
+      "status": "passed",
+      "duration_ms": 1.7489589999999566
+    },
+    {
+      "file": "app/dashboard/orders/[id]/page.test.tsx",
+      "name": "OrderDetailPage viewer relationship gating does not offer Mark Delivered to a buyer of record who also has global seller role",
+      "status": "passed",
+      "duration_ms": 129.46016699999996
+    },
+    {
+      "file": "app/dashboard/orders/[id]/page.test.tsx",
+      "name": "OrderDetailPage viewer relationship gating offers Mark Delivered to the seller of record",
+      "status": "passed",
+      "duration_ms": 246.41245800000002
+    },
+    {
+      "file": "app/dashboard/orders/[id]/page.test.tsx",
+      "name": "OrderDetailPage viewer relationship gating discards a participant-authorized transaction that belongs to another order",
+      "status": "passed",
+      "duration_ms": 47.544583999999986
+    },
+    {
+      "file": "app/dashboard/orders/[id]/page.test.tsx",
+      "name": "OrderDetailPage viewer relationship gating renders a transaction that belongs to the current order",
+      "status": "passed",
+      "duration_ms": 29.96125000000029
+    },
+    {
+      "file": "app/dashboard/orders/[id]/page.test.tsx",
+      "name": "OrderDetailPage viewer relationship gating hides buyer actions and download preparation from a seller of record",
+      "status": "passed",
+      "duration_ms": 20.110208000000057
+    },
+    {
+      "file": "app/dashboard/orders/[id]/page.test.tsx",
+      "name": "OrderDetailPage viewer relationship gating offers Confirm Receipt to the buyer of record",
+      "status": "passed",
+      "duration_ms": 21.481416999999965
+    },
+    {
+      "file": "app/dashboard/orders/[id]/page.test.tsx",
+      "name": "OrderDetailPage viewer relationship gating prepares fulfilled downloads exactly once for the buyer of record",
+      "status": "passed",
+      "duration_ms": 58.09520899999961
+    },
+    {
+      "file": "app/dashboard/orders/[id]/page.test.tsx",
+      "name": "OrderDetailPage viewer relationship gating shows Workspace downloads without automatically consuming an allowance",
+      "status": "passed",
+      "duration_ms": 54.30549999999994
+    },
+    {
+      "file": "app/dashboard/data-verification/payment-method/page.test.tsx",
+      "name": "data-verification payment-method page renders fixed setup copy, reauthenticates, and uses direct top-level navigation",
+      "status": "passed",
+      "duration_ms": 421.46633299999985
+    },
+    {
+      "file": "app/dashboard/data-verification/payment-method/page.test.tsx",
+      "name": "data-verification payment-method page restores normal cancel focus to the connected setup opener",
+      "status": "passed",
+      "duration_ms": 50.534541999999874
+    },
+    {
+      "file": "app/dashboard/data-verification/payment-method/page.test.tsx",
+      "name": "data-verification payment-method page focuses Back to settings after a deferred setup creation failure removes the opener",
+      "status": "passed",
+      "duration_ms": 69.57737499999985
+    },
+    {
+      "file": "app/dashboard/data-verification/payment-method/page.test.tsx",
+      "name": "data-verification payment-method page hides all pay-in content and focuses only generic settings navigation after setup creation 403",
+      "status": "passed",
+      "duration_ms": 58.01091699999961
+    },
+    {
+      "file": "app/dashboard/data-verification/payment-method/page.test.tsx",
+      "name": "data-verification payment-method page renders the route inside exactly one outer dashboard main landmark",
+      "status": "passed",
+      "duration_ms": 16.59999999999991
+    },
+    {
+      "file": "app/dashboard/data-verification/payment-method/page.test.tsx",
+      "name": "data-verification payment-method page uses the replacement label and fixed ready copy",
+      "status": "passed",
+      "duration_ms": 17.773666999999932
+    },
+    {
+      "file": "app/dashboard/data-verification/payment-method/page.test.tsx",
+      "name": "data-verification payment-method page uses stable page live regions for a deferred setup_required setup-readiness outcome",
+      "status": "passed",
+      "duration_ms": 16.18029200000001
+    },
+    {
+      "file": "app/dashboard/data-verification/payment-method/page.test.tsx",
+      "name": "data-verification payment-method page uses stable page live regions for a deferred ready setup-readiness outcome",
+      "status": "passed",
+      "duration_ms": 22.033042000000023
+    },
+    {
+      "file": "app/dashboard/data-verification/payment-method/page.test.tsx",
+      "name": "data-verification payment-method page uses stable page live regions for a deferred setup_pending setup-readiness outcome",
+      "status": "passed",
+      "duration_ms": 13.958082999999988
+    },
+    {
+      "file": "app/dashboard/data-verification/payment-method/page.test.tsx",
+      "name": "data-verification payment-method page uses stable page live regions for a deferred network_error setup-readiness outcome",
+      "status": "passed",
+      "duration_ms": 18.683125000000018
+    },
+    {
+      "file": "app/dashboard/data-verification/payment-method/page.test.tsx",
+      "name": "data-verification payment-method page renders fixed setup_pending copy without an action button",
+      "status": "passed",
+      "duration_ms": 8.450417000000016
+    },
+    {
+      "file": "app/dashboard/data-verification/payment-method/page.test.tsx",
+      "name": "data-verification payment-method page renders fixed blocked copy without an action button",
+      "status": "passed",
+      "duration_ms": 6.921458000000257
+    },
+    {
+      "file": "app/dashboard/data-verification/payment-method/page.test.tsx",
+      "name": "data-verification payment-method page removes cancellation queries before readiness and renders fixed cancel copy",
+      "status": "passed",
+      "duration_ms": 8.995582999999897
+    },
+    {
+      "file": "app/dashboard/data-verification/payment-method/page.test.tsx",
+      "name": "data-verification payment-method page uses fixed failure copy for a network error and hides a not-found surface",
+      "status": "passed",
+      "duration_ms": 27.38716599999998
+    },
+    {
+      "file": "app/dashboard/data-verification/payment-method/page.test.tsx",
+      "name": "data-verification payment-method page hides the dedicated surface for an authenticated but ineligible seller",
+      "status": "passed",
+      "duration_ms": 21.85312500000009
+    },
+    {
+      "file": "app/dashboard/data-verification/payment-method/page.test.tsx",
+      "name": "data-verification payment-method page does not render identifiers, card metadata, or Connect status from server text",
+      "status": "passed",
+      "duration_ms": 20.069500000000062
+    },
+    {
+      "file": "app/dashboard/data-verification/payment-method/page.test.tsx",
+      "name": "data-verification payment-method page has no embedded payment, secret, persistence, analytics, or Stripe dependency surface",
+      "status": "passed",
+      "duration_ms": 3.1262499999998
+    },
+    {
+      "file": "app/dashboard/listings/[id]/edit/page.test.tsx",
+      "name": "EditListingPage shows Publish and not Unpublish for unlisted listings, then marks publish success locally",
+      "status": "passed",
+      "duration_ms": 339.24308399999995
+    },
+    {
+      "file": "app/dashboard/listings/[id]/edit/page.test.tsx",
+      "name": "EditListingPage shows Unpublish and not Publish for published listings, then switches local status to unlisted",
+      "status": "passed",
+      "duration_ms": 152.33458300000007
+    },
+    {
+      "file": "app/dashboard/listings/[id]/edit/page.test.tsx",
+      "name": "EditListingPage falls back to row_count and saves it with the compliance fields",
+      "status": "passed",
+      "duration_ms": 65.858792
+    },
+    {
+      "file": "app/dashboard/listings/[id]/edit/page.test.tsx",
+      "name": "EditListingPage prefers source_row_count when both row count fields are present",
+      "status": "passed",
+      "duration_ms": 62.791999999999916
+    },
+    {
+      "file": "app/dashboard/listings/[id]/edit/page.test.tsx",
+      "name": "EditListingPage preserves an explicit zero source_row_count over row_count",
+      "status": "passed",
+      "duration_ms": 58.93562499999962
+    },
+    {
+      "file": "app/dashboard/listings/[id]/edit/page.test.tsx",
+      "name": "EditListingPage defaults an absent row count to zero and keeps it in the update payload",
+      "status": "passed",
+      "duration_ms": 51.11054100000001
+    },
+    {
+      "file": "app/dashboard/data-verification/payment-method/return/page.test.tsx",
+      "name": "data-verification payment-method return page maps the return URL query to the initial payment-method props intact",
+      "status": "passed",
+      "duration_ms": 15.035875000000033
+    },
+    {
+      "file": "app/dashboard/data-verification/payment-method/return/page.test.tsx",
+      "name": "data-verification payment-method return page renders the return route inside exactly one outer dashboard main landmark",
+      "status": "passed",
+      "duration_ms": 220.619917
+    },
+    {
+      "file": "app/dashboard/data-verification/payment-method/return/page.test.tsx",
+      "name": "data-verification payment-method return page uses server-captured values when hydration has already removed the query",
+      "status": "passed",
+      "duration_ms": 134.3871670000001
+    },
+    {
+      "file": "app/dashboard/data-verification/payment-method/return/page.test.tsx",
+      "name": "data-verification payment-method return page removes query values before network work and reconciles only with a fresh token",
+      "status": "passed",
+      "duration_ms": 86.18970800000034
+    },
+    {
+      "file": "app/dashboard/data-verification/payment-method/return/page.test.tsx",
+      "name": "data-verification payment-method return page reschedules the scrub under React StrictMode and removes a query restored by Next",
+      "status": "passed",
+      "duration_ms": 68.72666600000002
+    },
+    {
+      "file": "app/dashboard/data-verification/payment-method/return/page.test.tsx",
+      "name": "data-verification payment-method return page announces a deferred ready reconcile outcome through stable page live regions",
+      "status": "passed",
+      "duration_ms": 91.15608400000019
+    },
+    {
+      "file": "app/dashboard/data-verification/payment-method/return/page.test.tsx",
+      "name": "data-verification payment-method return page announces a deferred pending reconcile outcome through stable page live regions",
+      "status": "passed",
+      "duration_ms": 87.58500000000004
+    },
+    {
+      "file": "app/dashboard/data-verification/payment-method/return/page.test.tsx",
+      "name": "data-verification payment-method return page announces a deferred failed reconcile outcome through stable page live regions",
+      "status": "passed",
+      "duration_ms": 101.72779200000014
+    },
+    {
+      "file": "app/dashboard/data-verification/payment-method/return/page.test.tsx",
+      "name": "data-verification payment-method return page announces a deferred network_error reconcile outcome through stable page live regions",
+      "status": "passed",
+      "duration_ms": 85.44687499999964
+    },
+    {
+      "file": "app/dashboard/data-verification/payment-method/return/page.test.tsx",
+      "name": "data-verification payment-method return page renders fixed pending reconcile copy",
+      "status": "passed",
+      "duration_ms": 74.4284590000002
+    },
+    {
+      "file": "app/dashboard/data-verification/payment-method/return/page.test.tsx",
+      "name": "data-verification payment-method return page renders fixed failed reconcile copy",
+      "status": "passed",
+      "duration_ms": 76.36462500000016
+    },
+    {
+      "file": "app/dashboard/data-verification/payment-method/return/page.test.tsx",
+      "name": "data-verification payment-method return page uses fixed failure copy after network loss",
+      "status": "passed",
+      "duration_ms": 78.6614169999998
+    },
+    {
+      "file": "app/dashboard/data-verification/payment-method/return/page.test.tsx",
+      "name": "data-verification payment-method return page keeps opaque values only in memory and requires fresh reauth on two retries",
+      "status": "passed",
+      "duration_ms": 167.809667
+    },
+    {
+      "file": "app/dashboard/data-verification/payment-method/return/page.test.tsx",
+      "name": "data-verification payment-method return page focuses Back to settings after a deferred terminal retry removes its opener",
+      "status": "passed",
+      "duration_ms": 144.78287499999988
+    },
+    {
+      "file": "app/dashboard/data-verification/payment-method/return/page.test.tsx",
+      "name": "data-verification payment-method return page hides all pay-in content and focuses only generic settings navigation after reconciliation 403",
+      "status": "passed",
+      "duration_ms": 74.47104099999979
+    },
+    {
+      "file": "app/dashboard/data-verification/payment-method/return/page.test.tsx",
+      "name": "data-verification payment-method return page focuses Back to settings after cancelling a retry opened by a deferred preflight",
+      "status": "passed",
+      "duration_ms": 102.72283299999981
+    },
+    {
+      "file": "app/dashboard/data-verification/payment-method/return/page.test.tsx",
+      "name": "data-verification payment-method return page issues only one readiness request for two rapid retry clicks",
+      "status": "passed",
+      "duration_ms": 86.49241699999993
+    },
+    {
+      "file": "app/dashboard/data-verification/payment-method/return/page.test.tsx",
+      "name": "data-verification payment-method return page hides the return surface if the endpoint becomes unavailable",
+      "status": "passed",
+      "duration_ms": 44.47458299999971
+    },
+    {
+      "file": "app/dashboard/data-verification/payment-method/return/page.test.tsx",
+      "name": "data-verification payment-method return page renders fixed cancellation copy when the return rechallenge is closed",
+      "status": "passed",
+      "duration_ms": 115.71433399999978
+    },
+    {
+      "file": "app/dashboard/data-verification/payment-method/return/page.test.tsx",
+      "name": "data-verification payment-method return page checks availability before showing fixed failure copy for invalid return values",
+      "status": "passed",
+      "duration_ms": 43.02345800000012
+    },
+    {
+      "file": "app/dashboard/data-verification/payment-method/return/page.test.tsx",
+      "name": "data-verification payment-method return page hides an unavailable return surface even when callback values are invalid",
+      "status": "passed",
+      "duration_ms": 46.25316699999985
+    }
+  ]
+}

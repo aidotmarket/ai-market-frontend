@@ -1,0 +1,91 @@
+{
+  "baseline": [
+    {
+      "file": "app/blog/[slug]/page.tsx",
+      "rule": "@next/next/no-img-element",
+      "severity": 1,
+      "message": "Using `<img>` could result in slower LCP and higher bandwidth. Consider using `<Image />` from `next/image` or a custom image loader to automatically optimize images. This may incur additional usage or cost from your provider. See: https://nextjs.org/docs/messages/no-img-element"
+    },
+    {
+      "file": "app/dashboard/settings/page.tsx",
+      "rule": "@next/next/no-img-element",
+      "severity": 1,
+      "message": "Using `<img>` could result in slower LCP and higher bandwidth. Consider using `<Image />` from `next/image` or a custom image loader to automatically optimize images. This may incur additional usage or cost from your provider. See: https://nextjs.org/docs/messages/no-img-element"
+    },
+    {
+      "file": "app/l/[code]/page.tsx",
+      "rule": "@next/next/no-img-element",
+      "severity": 1,
+      "message": "Using `<img>` could result in slower LCP and higher bandwidth. Consider using `<Image />` from `next/image` or a custom image loader to automatically optimize images. This may incur additional usage or cost from your provider. See: https://nextjs.org/docs/messages/no-img-element"
+    },
+    {
+      "file": "components/Layout.tsx",
+      "rule": "@next/next/no-img-element",
+      "severity": 1,
+      "message": "Using `<img>` could result in slower LCP and higher bandwidth. Consider using `<Image />` from `next/image` or a custom image loader to automatically optimize images. This may incur additional usage or cost from your provider. See: https://nextjs.org/docs/messages/no-img-element"
+    },
+    {
+      "file": "components/Layout.tsx",
+      "rule": "@next/next/no-img-element",
+      "severity": 1,
+      "message": "Using `<img>` could result in slower LCP and higher bandwidth. Consider using `<Image />` from `next/image` or a custom image loader to automatically optimize images. This may incur additional usage or cost from your provider. See: https://nextjs.org/docs/messages/no-img-element"
+    },
+    {
+      "file": "components/listings/SellerShareControls.tsx",
+      "rule": "@next/next/no-img-element",
+      "severity": 1,
+      "message": "Using `<img>` could result in slower LCP and higher bandwidth. Consider using `<Image />` from `next/image` or a custom image loader to automatically optimize images. This may incur additional usage or cost from your provider. See: https://nextjs.org/docs/messages/no-img-element"
+    },
+    {
+      "file": "components/listings/ShareKitModal.tsx",
+      "rule": "@next/next/no-img-element",
+      "severity": 1,
+      "message": "Using `<img>` could result in slower LCP and higher bandwidth. Consider using `<Image />` from `next/image` or a custom image loader to automatically optimize images. This may incur additional usage or cost from your provider. See: https://nextjs.org/docs/messages/no-img-element"
+    }
+  ],
+  "candidate": [
+    {
+      "file": "app/blog/[slug]/page.tsx",
+      "rule": "@next/next/no-img-element",
+      "severity": 1,
+      "message": "Using `<img>` could result in slower LCP and higher bandwidth. Consider using `<Image />` from `next/image` or a custom image loader to automatically optimize images. This may incur additional usage or cost from your provider. See: https://nextjs.org/docs/messages/no-img-element"
+    },
+    {
+      "file": "app/dashboard/settings/page.tsx",
+      "rule": "@next/next/no-img-element",
+      "severity": 1,
+      "message": "Using `<img>` could result in slower LCP and higher bandwidth. Consider using `<Image />` from `next/image` or a custom image loader to automatically optimize images. This may incur additional usage or cost from your provider. See: https://nextjs.org/docs/messages/no-img-element"
+    },
+    {
+      "file": "app/l/[code]/page.tsx",
+      "rule": "@next/next/no-img-element",
+      "severity": 1,
+      "message": "Using `<img>` could result in slower LCP and higher bandwidth. Consider using `<Image />` from `next/image` or a custom image loader to automatically optimize images. This may incur additional usage or cost from your provider. See: https://nextjs.org/docs/messages/no-img-element"
+    },
+    {
+      "file": "components/Layout.tsx",
+      "rule": "@next/next/no-img-element",
+      "severity": 1,
+      "message": "Using `<img>` could result in slower LCP and higher bandwidth. Consider using `<Image />` from `next/image` or a custom image loader to automatically optimize images. This may incur additional usage or cost from your provider. See: https://nextjs.org/docs/messages/no-img-element"
+    },
+    {
+      "file": "components/Layout.tsx",
+      "rule": "@next/next/no-img-element",
+      "severity": 1,
+      "message": "Using `<img>` could result in slower LCP and higher bandwidth. Consider using `<Image />` from `next/image` or a custom image loader to automatically optimize images. This may incur additional usage or cost from your provider. See: https://nextjs.org/docs/messages/no-img-element"
+    },
+    {
+      "file": "components/listings/SellerShareControls.tsx",
+      "rule": "@next/next/no-img-element",
+      "severity": 1,
+      "message": "Using `<img>` could result in slower LCP and higher bandwidth. Consider using `<Image />` from `next/image` or a custom image loader to automatically optimize images. This may incur additional usage or cost from your provider. See: https://nextjs.org/docs/messages/no-img-element"
+    },
+    {
+      "file": "components/listings/ShareKitModal.tsx",
+      "rule": "@next/next/no-img-element",
+      "severity": 1,
+      "message": "Using `<img>` could result in slower LCP and higher bandwidth. Consider using `<Image />` from `next/image` or a custom image loader to automatically optimize images. This may incur additional usage or cost from your provider. See: https://nextjs.org/docs/messages/no-img-element"
+    }
+  ],
+  "equal": true
+}

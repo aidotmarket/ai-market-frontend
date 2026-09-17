@@ -1,0 +1,53 @@
+[
+  {
+    "name": "skip-platform-envelope",
+    "command": [
+      "rtk",
+      "proxy",
+      "npm",
+      "test",
+      "--",
+      "lib/listing-preview/verifier.test.ts",
+      "-t",
+      "verifies platform before resolving seller keys",
+      "--maxWorkers=1"
+    ],
+    "exit_code": 1,
+    "observed_assertion_failure": true,
+    "log_sha256": "e9e35a1c04761ca8fa4d0d822707b9eff4e5afc529d35185827e14bd9533f1de"
+  },
+  {
+    "name": "render-before-policy-completes",
+    "command": [
+      "rtk",
+      "proxy",
+      "npm",
+      "test",
+      "--",
+      "components/listings/ListingSamplePreview.test.tsx",
+      "-t",
+      "waits for verification and the final manifest before rendering any row",
+      "--maxWorkers=1"
+    ],
+    "exit_code": 1,
+    "observed_assertion_failure": true,
+    "log_sha256": "804ff14947a924db2ac2a687d66f17d0b1047d8fbdb14810c126d68ed1fd00e5"
+  },
+  {
+    "name": "drop-package-sample-hash",
+    "command": [
+      "rtk",
+      "proxy",
+      "npm",
+      "test",
+      "--",
+      "lib/listing-preview/verifier.test.ts",
+      "-t",
+      "checks package content and sample hash without issuing a display handle",
+      "--maxWorkers=1"
+    ],
+    "exit_code": 1,
+    "observed_assertion_failure": true,
+    "log_sha256": "3f80002fba8b3af68ab4e6fba382a96d00a898aad2caf6636490da9033ba268f"
+  }
+]
