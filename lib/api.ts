@@ -265,6 +265,8 @@ export async function fetchPreviewManifest(slug: string, signal: AbortSignal): P
     return value?.profile === 'aim-listing-preview-v1' && value.package_profile === 'aim-preview-package-v2' && value.preview_type === 'table' && value.content_type === 'tabular' ? value : null;
   } catch {return null;}
 }
+// Non-content trust only, in memory. This never supplies a missing key response.
+const observedPreviewKeys = new Map<string, string>();
 export async function fetchPreviewKeys(signal: AbortSignal): Promise<import('./listing-preview/types').TrustedKeys | null> {
   try {
     const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000'}/api/v1/public/transparency/keys`, {
@@ -283,8 +285,29 @@ export async function fetchPreviewKeys(signal: AbortSignal): Promise<import('./l
       closed(key, 'key_id algorithm public_key');
       requirePreview(typeof key.key_id === 'string' && /^[A-Za-z0-9._:-]{1,255}$/.test(key.key_id) && typeof key.public_key === 'string' && key.algorithm === 'ed25519');
       unb64(key.public_key, 32); requirePreview(!Object.hasOwn(keys, key.key_id) && !material.has(key.public_key));
+      requirePreview(!observedPreviewKeys.has(key.key_id) || observedPreviewKeys.get(key.key_id) === key.public_key);
       keys[key.key_id] = key.public_key; material.add(key.public_key);
     }
+    for (const [id, key] of Object.entries(keys)) observedPreviewKeys.set(id, key);
     return keys;
+  } catch {return null;}
+}
+
+export async function fetchPreviewConsistency(fromSize: number, toSize: number, signal: AbortSignal): Promise<string[] | null> {
+  try {
+    if (!Number.isSafeInteger(fromSize) || !Number.isSafeInteger(toSize) || fromSize < 1 || toSize < fromSize) return null;
+    const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000'}/api/v1/public/transparency/consistency?from_size=${fromSize}&to_size=${toSize}`, {
+      cache: 'no-store', credentials: 'omit', redirect: 'error', referrerPolicy: 'no-referrer', signal,
+    });
+    if (response.status !== 200 || signal.aborted) return null;
+    const {metadataResponse} = await import('./listing-preview/transport');
+    const raw = await metadataResponse(response, signal);
+    const primitives = await import('./listing-preview/primitives');
+    const closed: typeof primitives.closed = primitives.closed;
+    const check: typeof primitives.requirePreview = primitives.requirePreview;
+    closed(raw, 'from_size to_size consistency_path');
+    check(raw.from_size === fromSize && raw.to_size === toSize && Array.isArray(raw.consistency_path) && raw.consistency_path.length <= 63);
+    for (const item of raw.consistency_path) {check(typeof item === 'string'); primitives.unb64(item, 32);}
+    return raw.consistency_path as string[];
   } catch {return null;}
 }

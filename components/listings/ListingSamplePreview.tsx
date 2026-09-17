@@ -1,7 +1,7 @@
 "use client";
 
 import {useEffect, useRef, useState, type ComponentType} from 'react';
-import {fetchPreviewKeys, fetchPreviewManifest, type ListingSummary} from '@/lib/api';
+import {fetchPreviewConsistency, fetchPreviewKeys, fetchPreviewManifest, type ListingSummary} from '@/lib/api';
 import type {ApprovedColumn} from '@/lib/listing-preview/columns';
 import type {Manifest, TrustedCheckpoint, TrustedKeys, VerifiedSample} from '@/lib/listing-preview/types';
 
@@ -19,7 +19,7 @@ export default function ListingSamplePreview({slug, listingId, approvedSummary, 
   const startRef = useRef<(view: boolean) => void>(() => undefined);
   useEffect(() => {
     let disposed = false, timer: ReturnType<typeof setTimeout> | undefined;
-    requested.current = false; previous.current = undefined;
+    requested.current = false;
     function clear() {generation.current++; request.current?.abort(); request.current = null; clearTimeout(timer); setState({kind: 'absent'});}
     async function start(view: boolean) {
       if (disposed || !slug || document.visibilityState === 'hidden') return;
@@ -50,11 +50,21 @@ export default function ListingSamplePreview({slug, listingId, approvedSummary, 
           import('@/lib/listing-preview/registry'), import('./SampleTable'), import('@/lib/listing-preview/columns'), import('@/lib/listing-preview/primitives'),
         ]);
         if (!valid()) return;
-        const checked = await verifyManifest(manifest, keys, listingId, clock(), previous.current);
+        async function withPrevious(value: Manifest | null): Promise<Manifest | null> {
+          const prior = previous.current;
+          if (!value || !prior) return value;
+          if (prior.log_id !== value.checkpoint.log_id || prior.tree_size > value.checkpoint.tree_size) throw new Error('log_rollback');
+          // Equal-size roots need no network evidence. For extension fetch the
+          // immutable metadata proof from our independently retained predecessor.
+          const path = prior.tree_size === value.checkpoint.tree_size ? [] : await fetchPreviewConsistency(prior.tree_size, value.checkpoint.tree_size, controller.signal);
+          if (!path) throw new Error('log_consistency_unavailable');
+          return {...value, log_evidence: {...value.log_evidence, previous_tree_size: prior.tree_size, previous_root: prior.root_hash, consistency_path: path}};
+        }
+        const checked = await verifyManifest(await withPrevious(manifest), keys, listingId, clock(), previous.current);
         if (!valid()) return;
         const raw = await fetchPackage(checked.package.url, checked.package.byte_ceiling, controller.signal);
         const sample = await verifySample(checked, raw, {listingId, keys, now: clock, previous: previous.current, scan: scanLocalPreview,
-          readCurrent: () => fetchPreviewManifest(slug, controller.signal), signal: controller.signal});
+          readCurrent: async () => withPrevious(await fetchPreviewManifest(slug, controller.signal)), signal: controller.signal});
         if (!valid()) return;
         // Optional labels require an exact approved payload hash. A transformed
         // public summary is not silently treated as the original signed payload.

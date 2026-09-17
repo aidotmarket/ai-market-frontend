@@ -117,6 +117,7 @@ function freeze<T>(value: T): T {
  * This function cannot issue a display handle. */
 export async function verifyPackage(raw: Uint8Array, m: Pick<Manifest, 'commitment' | 'disclosure_version' | 'sample_hash' | 'schema_descriptors' | 'proofs' | 'package'>): Promise<VerifiedEntry[]> {
   const parsed = parseJson(raw, Math.min(LIMITS.envelope_bytes, m.package.byte_ceiling));
+  envelopeBudget(parsed);
   closed(parsed, 'package_profile commitment_id schema_digest disclosure_version sample_hash entries');
   const p = parsed as unknown as PreviewPackage;
   check(p.package_profile === 'aim-preview-package-v2' && p.commitment_id === m.commitment.commitment_id && p.schema_digest === m.commitment.schema_digest && p.disclosure_version === m.disclosure_version && p.sample_hash === m.sample_hash, 'package_binding_mismatch');
@@ -139,6 +140,19 @@ export async function verifyPackage(raw: Uint8Array, m: Pick<Manifest, 'commitme
   // Independently recompute from the actual ordered package entries, not metadata.
   check(await sampleHash(p.entries) === p.sample_hash, 'sample_hash_mismatch');
   return entries;
+}
+/** Producer value_budget parity: count every container/scalar/null in the whole
+ * decoded envelope, including proof metadata; object keys are not nodes. */
+export function envelopeBudget(value: unknown): number {
+  let nodes = 0; const stack: [unknown, number][] = [[value, 0]];
+  while (stack.length) {
+    const [current, depth] = stack.pop()!;
+    check(++nodes <= LIMITS.nodes && depth <= LIMITS.depth, 'envelope_bound');
+    if (current && typeof current === 'object') {
+      for (const child of Object.values(current)) stack.push([child, depth + 1]);
+    } else check(current === null || ['string', 'number', 'boolean'].includes(typeof current), 'invalid_value');
+  }
+  return nodes;
 }
 export interface VerificationOptions {
   listingId: string; keys: TrustedKeys; now: () => number; previous?: TrustedCheckpoint;

@@ -2,7 +2,7 @@
 
 import {useId, useMemo, useRef, useState} from 'react';
 import {flexRender, getCoreRowModel, getFilteredRowModel, getSortedRowModel, useReactTable, type ColumnDef, type SortingState} from '@tanstack/react-table';
-import type {Cell, VerifiedEntry, VerifiedSample} from '@/lib/listing-preview/types';
+import type {Cell, Descriptor, VerifiedEntry, VerifiedSample} from '@/lib/listing-preview/types';
 import type {ApprovedColumn} from '@/lib/listing-preview/columns';
 import {isVerifiedSample} from '@/lib/listing-preview/verifier';
 import {canonical} from '@/lib/listing-preview/primitives';
@@ -14,6 +14,12 @@ export function cellText(cell: Cell): string {
 }
 function decimalParts(value: string): [bigint, number] {
   const [whole, fraction = ''] = value.split('.'); return [BigInt(whole + fraction), fraction.length];
+}
+function typeLabel(column: ApprovedColumn, descriptors: readonly Descriptor[]): string {
+  const descriptor = descriptors.find(d => d[0] === column.name);
+  if (column.type === 'decimal') return `decimal (precision ${descriptor?.[3].precision}, scale ${descriptor?.[3].scale})`;
+  if (column.type === 'timestamp') return `timestamp (UTC, precision ${descriptor?.[3].timestamp_precision})`;
+  return column.type;
 }
 export function compareCells(a: Cell, b: Cell): number {
   const rank = (c: Cell) => c.kind === 'missing' ? 0 : c.kind === 'null' ? 1 : 2;
@@ -45,17 +51,18 @@ function SampleCell({cell, name}: {cell: Cell; name: string}) {
 
 function VerifiedTable({sample, columns}: {sample: VerifiedSample; columns: readonly ApprovedColumn[]}) {
   const [sorting, setSorting] = useState<SortingState>([]), [query, setQuery] = useState(''), [field, setField] = useState('');
+  const globalFilter = useMemo(() => ({query, field}), [query, field]);
   const searchId = useId(), columnId = useId();
   const defs = useMemo<ColumnDef<VerifiedEntry>[]>(() => columns.map(column => ({
     id: column.name, accessorFn: row => row.cells[column.name], sortUndefined: false,
     sortingFn: (a, b) => compareCells(a.original.cells[column.name], b.original.cells[column.name]),
-    header: () => <><span className="font-mono">{column.name}</span><span className="block text-xs font-normal">Type: {column.type}</span>
+    header: () => <><span className="font-mono">{column.name}</span><span className="block text-xs font-normal">Type: {typeLabel(column, sample.manifest.schema_descriptors)}</span>
       {column.description && <span className="block text-xs font-normal">{column.description}</span>}
       {column.unit && <span className="block text-xs font-normal">Unit: {column.unit}</span>}</>,
     cell: info => <SampleCell cell={info.row.original.cells[column.name]} name={column.name} />,
-  })), [columns]);
+  })), [columns, sample.manifest.schema_descriptors]);
   const data = useMemo(() => [...sample.entries], [sample]);
-  const table = useReactTable({data, columns: defs, state: {sorting, globalFilter: {query, field}}, onSortingChange: setSorting,
+  const table = useReactTable({data, columns: defs, state: {sorting, globalFilter}, onSortingChange: setSorting, autoResetPageIndex: false,
     getRowId: row => row.proofId, getCoreRowModel: getCoreRowModel(), getSortedRowModel: getSortedRowModel(), getFilteredRowModel: getFilteredRowModel(),
     enableMultiSort: false, sortDescFirst: false, getColumnCanGlobalFilter: () => true,
     globalFilterFn: row => {
