@@ -36,6 +36,7 @@ export default function EditListingPage() {
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [summaryRevision, setSummaryRevision] = useState(0);
+  const [listingSlug, setListingSlug] = useState<string | undefined>();
   const [data, setData] = useState<EditData>({
     title: '',
     description: '',
@@ -56,6 +57,7 @@ export default function EditListingPage() {
     try {
       const res = await getListing(id);
       const l = res as any;
+      setListingSlug(typeof l.slug === 'string' ? l.slug : undefined);
       setData({
         title: l.title || '',
         description: l.description || '',
@@ -366,7 +368,7 @@ export default function EditListingPage() {
         </div>
       </div>
 
-      <SellerAtAGlance listingId={id} active={!saving} revision={summaryRevision} />
+      <SellerAtAGlance listingId={id} slug={listingSlug} active={!saving} revision={summaryRevision} />
 
       {/* Actions */}
       <div className="flex items-center justify-between bg-white rounded-xl border border-gray-200 shadow-sm px-6 py-4">

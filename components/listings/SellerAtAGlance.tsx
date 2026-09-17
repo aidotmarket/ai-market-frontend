@@ -4,6 +4,7 @@ import {useEffect, useRef, useState} from 'react';
 import axios from 'axios';
 import {approveSummary, fetchSummaryPreview, regenerateSummary, withdrawSummary, type SummaryPreview} from '@/lib/api';
 import AtAGlance, {hasSupportedSummaryFields} from './AtAGlance';
+import ListingSamplePreview from './ListingSamplePreview';
 
 function requestId(): string {
   if (typeof crypto.randomUUID === 'function') return crypto.randomUUID();
@@ -15,7 +16,7 @@ function requestId(): string {
   return `${hex.slice(0, 8)}-${hex.slice(8, 12)}-${hex.slice(12, 16)}-${hex.slice(16, 20)}-${hex.slice(20)}`;
 }
 
-export default function SellerAtAGlance({listingId, active = true, revision = 0}: {listingId: string; active?: boolean; revision?: number}) {
+export default function SellerAtAGlance({listingId, slug, active = true, revision = 0}: {listingId: string; slug?: string; active?: boolean; revision?: number}) {
   const [preview, setPreview] = useState<SummaryPreview | null>(null);
   const [busy, setBusy] = useState(false);
   const [message, setMessage] = useState('');
@@ -87,6 +88,7 @@ export default function SellerAtAGlance({listingId, active = true, revision = 0}
       <p role="status" className="text-sm text-gray-700">{preview.state === 'approved' ? 'Approved. This summary is shown to buyers.' : 'Review the summary and approve it to show it to buyers'}</p>
       {preview.state !== 'approved' && !hasBuyerFields && <p className="text-sm text-gray-700">Nothing to show buyers yet. Add more listing details or regenerate.</p>}
       <AtAGlance audience="seller" summary={preview.at_a_glance} />
+      {active && preview.state === 'approved' && <ListingSamplePreview slug={slug} listingId={listingId} approvedSummary={preview.at_a_glance} approvedSummaryHash={preview.summary_hash} />}
       <p className="text-sm text-gray-700">{preview.approval_text}</p>
       <div className="flex flex-wrap gap-3">
         <button type="button" disabled={busy || !active} onClick={() => act('regenerate')} className="rounded-lg border border-gray-300 px-4 py-2.5 text-sm disabled:opacity-50">Regenerate</button>

@@ -251,3 +251,40 @@ export async function fetchBuyerSummary(slug: string, signal: AbortSignal): Prom
   const listing: {at_a_glance?: ListingSummary} = await response.json();
   return listing.at_a_glance ?? null;
 }
+
+// Preview calls use only identifiers. Never route a package body, row, filter,
+// arbitrary exception, or detector output through this API client.
+export async function fetchPreviewManifest(slug: string, signal: AbortSignal): Promise<import('./listing-preview/types').Manifest | null> {
+  try {
+    const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000'}/api/v1/public/listings/${encodeURIComponent(slug)}/preview-manifest`, {
+      cache: 'no-store', credentials: 'omit', redirect: 'error', referrerPolicy: 'no-referrer', signal,
+    });
+    if (response.status !== 200 || signal.aborted) return null;
+    const {metadataResponse} = await import('./listing-preview/transport');
+    const value = await metadataResponse(response, signal) as import('./listing-preview/types').Manifest;
+    return value?.profile === 'aim-listing-preview-v1' && value.package_profile === 'aim-preview-package-v2' && value.preview_type === 'table' && value.content_type === 'tabular' ? value : null;
+  } catch {return null;}
+}
+export async function fetchPreviewKeys(signal: AbortSignal): Promise<import('./listing-preview/types').TrustedKeys | null> {
+  try {
+    const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000'}/api/v1/public/transparency/keys`, {
+      cache: 'no-store', credentials: 'omit', redirect: 'error', referrerPolicy: 'no-referrer', signal,
+    });
+    if (response.status !== 200 || signal.aborted) return null;
+    const {metadataResponse} = await import('./listing-preview/transport');
+    const primitives = await import('./listing-preview/primitives');
+    const closed: typeof primitives.closed = primitives.closed;
+    const requirePreview: typeof primitives.requirePreview = primitives.requirePreview;
+    const unb64 = primitives.unb64;
+    const raw = await metadataResponse(response, signal); closed(raw, 'profile keys');
+    requirePreview(raw.profile === 'aim-preview-platform-keys-v1' && Array.isArray(raw.keys) && raw.keys.length > 0);
+    const keys: Record<string, string> = Object.create(null), material = new Set<string>();
+    for (const key of raw.keys) {
+      closed(key, 'key_id algorithm public_key');
+      requirePreview(typeof key.key_id === 'string' && /^[A-Za-z0-9._:-]{1,255}$/.test(key.key_id) && typeof key.public_key === 'string' && key.algorithm === 'ed25519');
+      unb64(key.public_key, 32); requirePreview(!Object.hasOwn(keys, key.key_id) && !material.has(key.public_key));
+      keys[key.key_id] = key.public_key; material.add(key.public_key);
+    }
+    return keys;
+  } catch {return null;}
+}
