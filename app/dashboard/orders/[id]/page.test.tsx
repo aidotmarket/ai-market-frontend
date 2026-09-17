@@ -6,6 +6,8 @@ import type { BuyerOrderDetail, Transaction } from '@/types';
 
 const navigation = vi.hoisted(() => ({ orderId: 'order-1', txId: 'tx-1' }));
 const auth = vi.hoisted(() => ({ userId: 'viewer-1', role: 'seller' }));
+const membersApi = vi.hoisted(() => ({ get: vi.fn(), post: vi.fn() }));
+vi.mock('@/api/client', () => ({ api: membersApi }));
 const ordersApi = vi.hoisted(() => ({
   getOrder: vi.fn(),
   getOrderAccess: vi.fn(),
@@ -102,6 +104,7 @@ describe('OrderDetailPage viewer relationship gating', () => {
     navigation.txId = 'tx-1';
     auth.userId = 'viewer-1';
     auth.role = 'seller';
+    membersApi.get.mockRejectedValue({ response: { status: 404 } });
     ordersApi.getOrder.mockResolvedValue(order());
     ordersApi.getOrderEvents.mockResolvedValue([]);
     ordersApi.requestDownload.mockResolvedValue({
@@ -228,6 +231,49 @@ describe('OrderDetailPage viewer relationship gating', () => {
     fireEvent.click(await screen.findByRole('button',{name:'Continue to download'}));
     expect(await screen.findByRole('button',{name:'Choose folder and download'})).not.toBeNull();
     expect(ordersApi.requestDownload).not.toHaveBeenCalled();
+  });
+
+  it('keeps the legacy fulfilled order markup byte-identical to the base', async () => {
+    ordersApi.getOrder.mockResolvedValue(order({ status: 'fulfilled' }));
+    const { container } = render(<OrderDetailPage />);
+    await waitFor(() => expect(ordersApi.requestDownload).toHaveBeenCalledTimes(1));
+    await waitFor(() => expect(screen.queryByText('Preparing download access...')).toBeNull());
+    expect(container.innerHTML).toMatchSnapshot();
+    expect(screen.queryByText('Files in this dataset')).toBeNull();
+  });
+
+  it('uses directory grants without triggering the legacy download request', async () => {
+    ordersApi.getOrder.mockResolvedValue({ ...order({ status: 'fulfilled' }), delivery_manifest_hash: 'manifest' });
+    membersApi.get.mockResolvedValue({ data: { members: [] } });
+    render(<OrderDetailPage />);
+    await screen.findByText('Files in this dataset');
+    expect(ordersApi.requestDownload).not.toHaveBeenCalled();
+    expect(membersApi.post).not.toHaveBeenCalled();
+  });
+
+  it('recognizes directory rows when the order serializer omits the hash', async () => {
+    ordersApi.getOrder.mockResolvedValue(order({ status: 'fulfilled' }));
+    membersApi.get.mockResolvedValue({ data: { members: [{ index: 0, basename: 'rows.csv', size_bytes: 10, sha256: 'hash', state: 'delivered' }] } });
+    render(<OrderDetailPage />);
+    await screen.findByText('rows.csv');
+    expect(ordersApi.requestDownload).not.toHaveBeenCalled();
+  });
+
+  it('does not consume legacy access when directory discovery fails transiently', async () => {
+    ordersApi.getOrder.mockResolvedValue(order({ status: 'fulfilled' }));
+    membersApi.get.mockRejectedValue({ response: { status: 503 } });
+    render(<OrderDetailPage />);
+    await screen.findByText('Failed to load order details.');
+    expect(ordersApi.requestDownload).not.toHaveBeenCalled();
+  });
+
+  it('does not show directory access controls to the seller', async () => {
+    ordersApi.getOrder.mockResolvedValue({ ...order({ buyer_id: 'buyer-2', seller_id: auth.userId, status: 'fulfilled' }), delivery_manifest_hash: 'manifest' });
+    render(<OrderDetailPage />);
+    await screen.findByText(/available to the buyer/);
+    expect(screen.queryByText('Files in this dataset')).toBeNull();
+    expect(membersApi.get).not.toHaveBeenCalled();
+    expect(membersApi.post).not.toHaveBeenCalled();
   });
 
 });

@@ -15,6 +15,10 @@ import OrderVersionAccessSummary from '@/components/orders/OrderVersionAccessSum
 import { useTermsGate } from '@/components/legal/TermsGate';
 import type { BuyerOrderDetail, OrderAccessResponse, OrderEvent, OrderStatus, S3DownloadFile, S3ScopedDeliveryResponse, Transaction, TransactionStatus, TransactionEvent } from '@/types';
 import { AxiosError } from 'axios';
+import { api } from '@/api/client';
+import DatasetMembers, { type DatasetMember } from './DatasetMembers';
+
+type DirectoryOrder = BuyerOrderDetail & { delivery_manifest_hash?: string | null; dataset_members?: DatasetMember[] };
 
 const STATUS_BADGE: Record<OrderStatus, string> = {
   pending_fulfillment: 'bg-yellow-100 text-yellow-800',
@@ -65,7 +69,8 @@ export default function OrderDetailPage() {
   const userId = useAuthStore((s) => s.user?.id);
   const { ensureTermsAccepted, TermsGatePrompt, checkingTerms } = useTermsGate();
 
-  const [order, setOrder] = useState<BuyerOrderDetail | null>(null);
+  const [order, setOrder] = useState<DirectoryOrder | null>(null);
+  const isDirectoryOrder = !!order?.delivery_manifest_hash || !!order?.dataset_members?.length;
   const isBuyerOfRecord = order !== null && userId === order.buyer_id;
   const isSellerOfRecord = order !== null && userId === order.seller_id;
   const [events, setEvents] = useState<OrderEvent[]>([]);
@@ -91,7 +96,20 @@ export default function OrderDetailPage() {
     let cancelled = false;
 
     const fetches: [Promise<BuyerOrderDetail>, Promise<OrderEvent[]>, Promise<Transaction | null>] = [
-      getOrder(orderId),
+      getOrder(orderId).then(async (data: DirectoryOrder) => {
+        if (data.buyer_id !== userId || data.workspace_delivery || data.delivery_manifest_hash) return data;
+        // Older order serializers may omit the manifest hash. A read-only probe
+        // must finish before the legacy auto-download can consume an allowance.
+        try {
+          const response = await api.get<{ members: DatasetMember[] }>(`/orders/${encodeURIComponent(orderId)}/members`, { timeout: 10000 });
+          if (response.data.members.length) return { ...data, dataset_members: response.data.members };
+        } catch (err) {
+          // Only a definitive non-directory response may enter the legacy path.
+          // A transient failure must not accidentally consume a set allowance.
+          if ((err as { response?: { status?: number } }).response?.status !== 404) throw err;
+        }
+        return data;
+      }),
       getOrderEvents(orderId).catch(() => [] as OrderEvent[]),
       txIdParam ? getTransaction(txIdParam).catch(() => null) : Promise.resolve(null),
     ];
@@ -116,10 +134,10 @@ export default function OrderDetailPage() {
       });
 
     return () => { cancelled = true; };
-  }, [orderId, txIdParam]);
+  }, [orderId, txIdParam, userId]);
 
   useEffect(() => {
-    if (!isBuyerOfRecord || order?.workspace_delivery || order?.status !== 'fulfilled' || order.access_expired) return;
+    if (isDirectoryOrder || !isBuyerOfRecord || order?.workspace_delivery || order?.status !== 'fulfilled' || order.access_expired) return;
 
     let cancelled = false;
     setDownloadLoading(true);
@@ -144,7 +162,7 @@ export default function OrderDetailPage() {
       });
 
     return () => { cancelled = true; };
-  }, [isBuyerOfRecord, order?.workspace_delivery, order?.access_expired, order?.status, orderId]);
+  }, [isDirectoryOrder, isBuyerOfRecord, order?.workspace_delivery, order?.access_expired, order?.status, orderId]);
 
   useEffect(() => {
     const interval = window.setInterval(() => setNow(Date.now()), 1000);
@@ -426,6 +444,10 @@ export default function OrderDetailPage() {
           )}
 
           {/* Access / Download section */}
+          {isDirectoryOrder && isBuyerOfRecord && (
+            <DatasetMembers key={`${order.id}:${userId}`} orderId={order.id} initialMembers={order.dataset_members}
+              accessExpired={!!order.access_expired} ensureTermsAccepted={ensureTermsAccepted} />
+          )}
           {order.status === 'fulfilled' && isSellerOfRecord && !isBuyerOfRecord && (
             <p>Downloads are available to the buyer of this order.</p>
           )}
@@ -442,7 +464,7 @@ export default function OrderDetailPage() {
           {order.workspace_delivery && isBuyerOfRecord && !order.access_expired && String(order.status)==='pending_delivery' && <WorkspacePurchaseRecovery key={order.id} orderId={order.id} onReady={setOrder} />}
           {order.workspace_delivery && isBuyerOfRecord && !order.access_expired && ['delivered','completed','fulfilled'].includes(String(order.status)) && (workspaceDownloadReady ? <WorkspaceDownload key={order.id} orderId={order.id} /> : <button type="button" disabled={checkingTerms} onClick={() => ensureTermsAccepted(() => setWorkspaceDownloadReady(true))} className="rounded-lg bg-indigo-700 px-4 py-2 text-sm font-semibold text-white disabled:opacity-50">Continue to download</button>)}
 
-          {order.status === 'fulfilled' && !order.workspace_delivery && isBuyerOfRecord && !order.access_expired && (
+          {!isDirectoryOrder && order.status === 'fulfilled' && !order.workspace_delivery && isBuyerOfRecord && !order.access_expired && (
             scopedDelivery ? (
               <ScopedCredentialDownload
                 orderId={order.id}
