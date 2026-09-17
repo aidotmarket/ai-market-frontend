@@ -233,42 +233,69 @@ describe('OrderDetailPage viewer relationship gating', () => {
     expect(ordersApi.requestDownload).not.toHaveBeenCalled();
   });
 
-  it('keeps the legacy fulfilled order markup byte-identical to the base', async () => {
+  it('treats an empty 200 without a hash as a directory without legacy download', async () => {
     ordersApi.getOrder.mockResolvedValue(order({ status: 'fulfilled' }));
-    const { container } = render(<OrderDetailPage />);
-    await waitFor(() => expect(ordersApi.requestDownload).toHaveBeenCalledTimes(1));
-    await waitFor(() => expect(screen.queryByText('Preparing download access...')).toBeNull());
-    expect(container.innerHTML).toMatchSnapshot();
-    expect(screen.queryByText('Files in this dataset')).toBeNull();
-  });
-
-  it('uses directory grants without triggering the legacy download request', async () => {
-    ordersApi.getOrder.mockResolvedValue({ ...order({ status: 'fulfilled' }), delivery_manifest_hash: 'manifest' });
-    membersApi.get.mockResolvedValue({ data: { members: [] } });
+    membersApi.get.mockResolvedValue({ status: 200, data: { members: [] } });
     render(<OrderDetailPage />);
     await screen.findByText('Files in this dataset');
+    expect(await screen.findByText('No files are available yet.')).toBeTruthy();
     expect(ordersApi.requestDownload).not.toHaveBeenCalled();
     expect(membersApi.post).not.toHaveBeenCalled();
   });
 
   it('recognizes directory rows when the order serializer omits the hash', async () => {
     ordersApi.getOrder.mockResolvedValue(order({ status: 'fulfilled' }));
-    membersApi.get.mockResolvedValue({ data: { members: [{ index: 0, basename: 'rows.csv', size_bytes: 10, sha256: 'hash', state: 'delivered' }] } });
+    membersApi.get.mockResolvedValue({ status: 200, data: { members: [{ index: 0, basename: 'rows.csv', size_bytes: 10, sha256: 'hash', state: 'delivered' }] } });
     render(<OrderDetailPage />);
     await screen.findByText('rows.csv');
     expect(ordersApi.requestDownload).not.toHaveBeenCalled();
   });
 
-  it('does not consume legacy access when directory discovery fails transiently', async () => {
+  it.each([403, 410, 503])('keeps order details and offers retry when member discovery returns %s', async (status) => {
     ordersApi.getOrder.mockResolvedValue(order({ status: 'fulfilled' }));
-    membersApi.get.mockRejectedValue({ response: { status: 503 } });
+    membersApi.get.mockRejectedValue({ response: { status } });
     render(<OrderDetailPage />);
-    await screen.findByText('Failed to load order details.');
+    await screen.findByText('Order dataset');
+    expect(screen.queryByText('Failed to load order details.')).toBeNull();
+    expect(screen.getByText('Files unavailable. Please try again.')).toBeTruthy();
+    expect(screen.queryByRole('button', { name: 'Get download access' })).toBeNull();
+    const retry = screen.getByRole('button', { name: 'Retry loading files' });
+    expect(membersApi.get).toHaveBeenCalledTimes(1);
+    expect(ordersApi.requestDownload).not.toHaveBeenCalled();
+    membersApi.get.mockResolvedValue({ status: 200, data: { members: [] } });
+    fireEvent.click(retry);
+    await screen.findByText('No files are available yet.');
+    expect(membersApi.get).toHaveBeenCalledTimes(2);
     expect(ordersApi.requestDownload).not.toHaveBeenCalled();
   });
 
+  it('keeps unexpected successful probe statuses unavailable', async () => {
+    ordersApi.getOrder.mockResolvedValue(order({ status: 'fulfilled' }));
+    membersApi.get.mockResolvedValue({ status: 204 });
+    render(<OrderDetailPage />);
+    await screen.findByText('Order dataset');
+    expect(screen.getByRole('button', { name: 'Retry loading files' })).toBeTruthy();
+    expect(ordersApi.requestDownload).not.toHaveBeenCalled();
+  });
+
+  it('permits legacy access only after a retry returns a definitive 404', async () => {
+    ordersApi.getOrder.mockResolvedValue(order({ status: 'fulfilled' }));
+    membersApi.get.mockRejectedValue({ response: { status: 503 } });
+    render(<OrderDetailPage />);
+    const retry = await screen.findByRole('button', { name: 'Retry loading files' });
+    expect(ordersApi.requestDownload).not.toHaveBeenCalled();
+    fireEvent.click(retry);
+    await waitFor(() => expect(membersApi.get).toHaveBeenCalledTimes(2));
+    await waitFor(() => expect((retry as HTMLButtonElement).disabled).toBe(false));
+    expect(ordersApi.requestDownload).not.toHaveBeenCalled();
+    membersApi.get.mockRejectedValue({ response: { status: 404 } });
+    fireEvent.click(retry);
+    await waitFor(() => expect(ordersApi.requestDownload).toHaveBeenCalledTimes(1));
+    expect(screen.queryByText('Files in this dataset')).toBeNull();
+  });
+
   it('does not show directory access controls to the seller', async () => {
-    ordersApi.getOrder.mockResolvedValue({ ...order({ buyer_id: 'buyer-2', seller_id: auth.userId, status: 'fulfilled' }), delivery_manifest_hash: 'manifest' });
+    ordersApi.getOrder.mockResolvedValue(order({ buyer_id: 'buyer-2', seller_id: auth.userId, status: 'fulfilled' }));
     render(<OrderDetailPage />);
     await screen.findByText(/available to the buyer/);
     expect(screen.queryByText('Files in this dataset')).toBeNull();

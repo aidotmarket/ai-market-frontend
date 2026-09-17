@@ -18,7 +18,19 @@ import { AxiosError } from 'axios';
 import { api } from '@/api/client';
 import DatasetMembers, { type DatasetMember } from './DatasetMembers';
 
-type DirectoryOrder = BuyerOrderDetail & { delivery_manifest_hash?: string | null; dataset_members?: DatasetMember[] };
+type DirectoryOrder = BuyerOrderDetail & { memberMode?: 'legacy' | 'directory' | 'unavailable'; dataset_members?: DatasetMember[] };
+
+async function probeMembers(data: BuyerOrderDetail): Promise<DirectoryOrder> {
+  try {
+    const response = await api.get<{ members: DatasetMember[] }>(`/orders/${encodeURIComponent(data.id)}/members`, { timeout: 10000 });
+    if (response.status === 200) return { ...data, memberMode: 'directory', dataset_members: response.data.members };
+    return { ...data, memberMode: 'unavailable', dataset_members: undefined };
+  } catch (err) {
+    // Only a definitive 404 permits legacy automatic download preparation.
+    const legacy = (err as { response?: { status?: number } }).response?.status === 404;
+    return { ...data, memberMode: legacy ? 'legacy' : 'unavailable', dataset_members: undefined };
+  }
+}
 
 const STATUS_BADGE: Record<OrderStatus, string> = {
   pending_fulfillment: 'bg-yellow-100 text-yellow-800',
@@ -70,7 +82,8 @@ export default function OrderDetailPage() {
   const { ensureTermsAccepted, TermsGatePrompt, checkingTerms } = useTermsGate();
 
   const [order, setOrder] = useState<DirectoryOrder | null>(null);
-  const isDirectoryOrder = !!order?.delivery_manifest_hash || !!order?.dataset_members?.length;
+  const isDirectoryOrder = order?.memberMode === 'directory' || order?.memberMode === 'unavailable';
+  const [retryingMembers, setRetryingMembers] = useState(false);
   const isBuyerOfRecord = order !== null && userId === order.buyer_id;
   const isSellerOfRecord = order !== null && userId === order.seller_id;
   const [events, setEvents] = useState<OrderEvent[]>([]);
@@ -96,19 +109,9 @@ export default function OrderDetailPage() {
     let cancelled = false;
 
     const fetches: [Promise<BuyerOrderDetail>, Promise<OrderEvent[]>, Promise<Transaction | null>] = [
-      getOrder(orderId).then(async (data: DirectoryOrder) => {
-        if (data.buyer_id !== userId || data.workspace_delivery || data.delivery_manifest_hash) return data;
-        // Older order serializers may omit the manifest hash. A read-only probe
-        // must finish before the legacy auto-download can consume an allowance.
-        try {
-          const response = await api.get<{ members: DatasetMember[] }>(`/orders/${encodeURIComponent(orderId)}/members`, { timeout: 10000 });
-          if (response.data.members.length) return { ...data, dataset_members: response.data.members };
-        } catch (err) {
-          // Only a definitive non-directory response may enter the legacy path.
-          // A transient failure must not accidentally consume a set allowance.
-          if ((err as { response?: { status?: number } }).response?.status !== 404) throw err;
-        }
-        return data;
+      getOrder(orderId).then(async (data) => {
+        if (data.buyer_id !== userId || data.workspace_delivery) return data;
+        return probeMembers(data);
       }),
       getOrderEvents(orderId).catch(() => [] as OrderEvent[]),
       txIdParam ? getTransaction(txIdParam).catch(() => null) : Promise.resolve(null),
@@ -446,6 +449,15 @@ export default function OrderDetailPage() {
           {/* Access / Download section */}
           {isDirectoryOrder && isBuyerOfRecord && (
             <DatasetMembers key={`${order.id}:${userId}`} orderId={order.id} initialMembers={order.dataset_members}
+              filesUnavailable={order.memberMode === 'unavailable'} retrying={retryingMembers}
+              onRetry={async () => {
+                setRetryingMembers(true);
+                try {
+                  const updated = await probeMembers(order);
+                  setOrder((current) => current === order ? updated : current);
+                }
+                finally { setRetryingMembers(false); }
+              }}
               accessExpired={!!order.access_expired} ensureTermsAccepted={ensureTermsAccepted} />
           )}
           {order.status === 'fulfilled' && isSellerOfRecord && !isBuyerOfRecord && (
