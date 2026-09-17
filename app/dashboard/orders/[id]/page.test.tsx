@@ -6,6 +6,8 @@ import type { BuyerOrderDetail, Transaction } from '@/types';
 
 const navigation = vi.hoisted(() => ({ orderId: 'order-1', txId: 'tx-1' }));
 const auth = vi.hoisted(() => ({ userId: 'viewer-1', role: 'seller' }));
+const membersApi = vi.hoisted(() => ({ get: vi.fn(), post: vi.fn() }));
+vi.mock('@/api/client', () => ({ api: membersApi }));
 const ordersApi = vi.hoisted(() => ({
   getOrder: vi.fn(),
   getOrderAccess: vi.fn(),
@@ -102,6 +104,7 @@ describe('OrderDetailPage viewer relationship gating', () => {
     navigation.txId = 'tx-1';
     auth.userId = 'viewer-1';
     auth.role = 'seller';
+    membersApi.get.mockRejectedValue({ response: { status: 404 } });
     ordersApi.getOrder.mockResolvedValue(order());
     ordersApi.getOrderEvents.mockResolvedValue([]);
     ordersApi.requestDownload.mockResolvedValue({
@@ -228,6 +231,76 @@ describe('OrderDetailPage viewer relationship gating', () => {
     fireEvent.click(await screen.findByRole('button',{name:'Continue to download'}));
     expect(await screen.findByRole('button',{name:'Choose folder and download'})).not.toBeNull();
     expect(ordersApi.requestDownload).not.toHaveBeenCalled();
+  });
+
+  it('treats an empty 200 without a hash as a directory without legacy download', async () => {
+    ordersApi.getOrder.mockResolvedValue(order({ status: 'fulfilled' }));
+    membersApi.get.mockResolvedValue({ status: 200, data: { members: [] } });
+    render(<OrderDetailPage />);
+    await screen.findByText('Files in this dataset');
+    expect(await screen.findByText('No files are available yet.')).toBeTruthy();
+    expect(ordersApi.requestDownload).not.toHaveBeenCalled();
+    expect(membersApi.post).not.toHaveBeenCalled();
+  });
+
+  it('recognizes directory rows when the order serializer omits the hash', async () => {
+    ordersApi.getOrder.mockResolvedValue(order({ status: 'fulfilled' }));
+    membersApi.get.mockResolvedValue({ status: 200, data: { members: [{ index: 0, basename: 'rows.csv', size_bytes: 10, sha256: 'hash', state: 'delivered' }] } });
+    render(<OrderDetailPage />);
+    await screen.findByText('rows.csv');
+    expect(ordersApi.requestDownload).not.toHaveBeenCalled();
+  });
+
+  it.each([403, 410, 503])('keeps order details and offers retry when member discovery returns %s', async (status) => {
+    ordersApi.getOrder.mockResolvedValue(order({ status: 'fulfilled' }));
+    membersApi.get.mockRejectedValue({ response: { status } });
+    render(<OrderDetailPage />);
+    await screen.findByText('Order dataset');
+    expect(screen.queryByText('Failed to load order details.')).toBeNull();
+    expect(screen.getByText('Files unavailable. Please try again.')).toBeTruthy();
+    expect(screen.queryByRole('button', { name: 'Get download access' })).toBeNull();
+    const retry = screen.getByRole('button', { name: 'Retry loading files' });
+    expect(membersApi.get).toHaveBeenCalledTimes(1);
+    expect(ordersApi.requestDownload).not.toHaveBeenCalled();
+    membersApi.get.mockResolvedValue({ status: 200, data: { members: [] } });
+    fireEvent.click(retry);
+    await screen.findByText('No files are available yet.');
+    expect(membersApi.get).toHaveBeenCalledTimes(2);
+    expect(ordersApi.requestDownload).not.toHaveBeenCalled();
+  });
+
+  it('keeps unexpected successful probe statuses unavailable', async () => {
+    ordersApi.getOrder.mockResolvedValue(order({ status: 'fulfilled' }));
+    membersApi.get.mockResolvedValue({ status: 204 });
+    render(<OrderDetailPage />);
+    await screen.findByText('Order dataset');
+    expect(screen.getByRole('button', { name: 'Retry loading files' })).toBeTruthy();
+    expect(ordersApi.requestDownload).not.toHaveBeenCalled();
+  });
+
+  it('permits legacy access only after a retry returns a definitive 404', async () => {
+    ordersApi.getOrder.mockResolvedValue(order({ status: 'fulfilled' }));
+    membersApi.get.mockRejectedValue({ response: { status: 503 } });
+    render(<OrderDetailPage />);
+    const retry = await screen.findByRole('button', { name: 'Retry loading files' });
+    expect(ordersApi.requestDownload).not.toHaveBeenCalled();
+    fireEvent.click(retry);
+    await waitFor(() => expect(membersApi.get).toHaveBeenCalledTimes(2));
+    await waitFor(() => expect((retry as HTMLButtonElement).disabled).toBe(false));
+    expect(ordersApi.requestDownload).not.toHaveBeenCalled();
+    membersApi.get.mockRejectedValue({ response: { status: 404 } });
+    fireEvent.click(retry);
+    await waitFor(() => expect(ordersApi.requestDownload).toHaveBeenCalledTimes(1));
+    expect(screen.queryByText('Files in this dataset')).toBeNull();
+  });
+
+  it('does not show directory access controls to the seller', async () => {
+    ordersApi.getOrder.mockResolvedValue(order({ buyer_id: 'buyer-2', seller_id: auth.userId, status: 'fulfilled' }));
+    render(<OrderDetailPage />);
+    await screen.findByText(/available to the buyer/);
+    expect(screen.queryByText('Files in this dataset')).toBeNull();
+    expect(membersApi.get).not.toHaveBeenCalled();
+    expect(membersApi.post).not.toHaveBeenCalled();
   });
 
 });
