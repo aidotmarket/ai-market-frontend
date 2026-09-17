@@ -88,6 +88,7 @@ export default function SellerAtAGlance({listingId, slug, active = true, revisio
       <p role="status" className="text-sm text-gray-700">{preview.state === 'approved' ? 'Approved. This summary is shown to buyers.' : 'Review the summary and approve it to show it to buyers'}</p>
       {preview.state !== 'approved' && !hasBuyerFields && <p className="text-sm text-gray-700">Nothing to show buyers yet. Add more listing details or regenerate.</p>}
       <AtAGlance audience="seller" summary={preview.at_a_glance} />
+      <p className="text-sm text-gray-700">Manage signed sample approvals in AIM Data. The sample below is the same preview buyers see.</p>
       {active && preview.state === 'approved' && <ListingSamplePreview slug={slug} listingId={listingId} />}
       <p className="text-sm text-gray-700">{preview.approval_text}</p>
       <div className="flex flex-wrap gap-3">

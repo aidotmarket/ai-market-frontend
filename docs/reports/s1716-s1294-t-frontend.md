@@ -1,12 +1,12 @@
 # S1716 S1294 T frontend
 
-Status: partial implementation, pushed for review; **not ready to merge or enable**. No merge, deployment, production approval, key provisioning or seller-origin mutation was performed. The production browser policy boundary refuses every sample pending an approved local detector. Provisioning platform keys alone will not enable display.
+Status: completion fold authorized by Max, Event Ledger `b8ddbd10` (2026-09-18). The prior implementation receipts below are historical; the Completion fold section records current verification and production dependencies. No merge, deployment, production approval, key provisioning or seller-origin mutation is performed by this frontend task.
 
 ## Authority and recorded preconditions
 
 - Backend `origin/main` verified at `ea7e777c1ee2a9925db1b221430937cd38694ad5`. T-backend merged/deployed and Alembic head `s1716_preview_disclosure` are supplied task preconditions; deployment and database identity were not independently probed here.
 - Approved Chunk 2 producer: `aim-data e574e1df`, stable `aim-data-v1.24.0`, supplied approval authority. Its canonicalization and policy source were inspected.
-- Production platform signing keys are not provisioned; keys route currently returns 503 according to the task. The frontend maps this to no preview, with no error page or seller request.
+- At the original implementation boundary, the keys route returned 503 according to that task. Max now reports HTTP 200 with `aim-preview-platform-2026-09`. The frontend maps this to no preview, with no error page or seller request.
 - Frontend base: fetched `origin/main c23d6798ce5a484e6145a6d14195c328c5e8405c`. Branch: `build/bq-listing-enrichment-seller-tools-s1294-t-frontend-s1716`. Baseline tests use a detached worktree at this exact SHA, not a peer checkout.
 - Read the full Chunk T contract, backend integration handoff, byte references, shared corpus, relevant Gate 2/addendum sections and producer references. Relevant existing runbooks: backend `docs/runbooks/listing-summary.md` and root `runbooks/aim-data-seller-publish-journey.md`. Scoped frontend procedure: [listing-sample-preview.md](../runbooks/listing-sample-preview.md).
 
@@ -31,7 +31,7 @@ Each implementation milestone was committed and pushed separately. The tests mil
 3. Recompute schema digest from canonical recursive descriptors, signed binding equalities, ordered sample hash, sampled-leaf-list digest, scan attestation and seller attestation. Verify dataset membership paths and the platform log checkpoint/inclusion evidence. A retained checkpoint is an independent predecessor; equal-size roots must agree and extensions require a consistency proof. No rows enter that metadata request.
 4. Only after manifest verification, fetch the seller package in the browser: HTTPS, no query/fragment/userinfo, no redirects, omitted credentials, no referrer, CORS, no-store and exact media type. Reject literal/local/private/platform hosts, unexpected encoding, oversized Content-Length and over-limit streamed bodies. There is no server fetch or API proxy.
 5. Admit only v2 complete rows: 100 rows, 25 fields, 250,000 canonical row bytes, 1,048,576 received package bytes, 262,144 manifest bytes, 63 siblings, depth 16 and 10,000 decoded envelope nodes, conjunctively. Recompute every row digest, leaf and inclusion path; check order/unique IDs/ordinals/indices; independently recompute `sample_hash` from actual ordered package entries.
-6. Await an independent local scan, then fetch and verify the current manifest again. Check unchanged signed identities, current eligibility, monotonic/wall-clock agreement, cancellation and generation. Only then issue an immutable in-memory handle registered in a WeakSet. Forged/deserialized handles cannot render. **The production local scan is presently unavailable and always refuses.**
+6. Await an independent local scan, then fetch and verify the current manifest again. Check unchanged signed identities, current eligibility, monotonic/wall-clock agreement, cancellation and generation. Only then issue an immutable in-memory handle registered in a WeakSet. Forged/deserialized handles cannot render. The completion fold replaces the original always-refusing scan with the deterministic browser corpus under Event Ledger `b8ddbd10`.
 
 No row or filter value is sent to ai.market, analytics, logs or storage by these modules. Static URL validation in browser JavaScript cannot inspect DNS answers or connected peer IPs; browser CORS/private-network controls and real seller hosting remain live integration obligations, not proven public-IP admission.
 
@@ -69,7 +69,7 @@ Earlier runs are retained in the summary and per-run receipts: default-worker ba
 
 Commands were `rtk proxy npm test -- --maxWorkers=1 --reporter=json --outputFile=<receipt>`, `rtk proxy npm run typecheck`, `rtk proxy npm run lint -- --format json --output-file <receipt>`, `rtk proxy npm run build`, `rtk proxy npx playwright test -c playwright.preview.config.ts` and `rtk proxy python3 scripts/preview-mutations.py`. Environment: Node v25.6.0, npm 11.8.0, Vitest 4.1.8, Next 15.5.12. Full parity suites ran sequentially. No tests were skipped or expectations changed to suppress failures. Baseline and candidate retain the exact pre-existing listing-page and AtAGlance snapshots; absent preview markup is also asserted empty after discovery.
 
-Chrome 153.0.8010.52 / Playwright 1.56.1 passes the real component harness at **360, 375 and 390px**, including keyboard sequence, live counts, page overflow and zero-ingress synthetic markers in platform requests, console and browser storage. The first browser run caught an infinite TanStack reset from unstable globalFilter identity; memoizing the filter and disabling unused pagination resets fixed it. The final browser run passes 3/3. Tests inject a synthetic-only scan adapter outside Next routes. This does not demonstrate production detector coverage, real seller CORS/CDN behavior or live approvals.
+Chrome 153.0.8010.52 / Playwright 1.56.1 passes the real component harness at **360, 375 and 390px**, including keyboard sequence, live counts, page overflow and zero-ingress synthetic markers in platform requests, console and browser storage. The first browser run caught an infinite TanStack reset from unstable globalFilter identity; memoizing the filter and disabling unused pagination resets fixed it. The final browser run passes 3/3. Tests inject a synthetic-only scan adapter outside Next routes. This historical run does not demonstrate real seller CORS/CDN behavior or live approvals.
 
 The partially completed Next production compilation also places table/verifier markers outside all initial listing-page chunks. This is static compiled-bundle evidence; the build does not complete page collection because required Keystatic environment configuration is absent.
 
@@ -85,12 +85,23 @@ The reproducible [mutation script](../../scripts/preview-mutations.py) uses disp
 
 This is observed execution, not proposed mutation coverage. Raw synthetic-only logs and hashes are included in the receipt directory. Mutation test-name selection intentionally excludes unrelated tests; it is not a full-suite skip.
 
-## Open items and completion boundary
+## Current production dependencies
 
-1. **Required independent browser-local detector is not implemented.** Producer policy pins Presidio 2.2.362, spaCy 3.7.2 and en-core-web-sm 3.7.1. No browser artifact/equivalent is supplied by the inspected authority. `scanLocalPreview` always throws `detector_unavailable`; signed producer scan evidence is not substituted for an independent viewer scan. The policy corpus is preserved, but successful detector/policy conformance is unverified. Approval of a browser-compatible complete detector or a contract amendment is required. No server scan may receive these rows.
-2. **Buyer approved-description/unit binding is incomplete.** The public summary projection changes sample_availability and does not expose the original signed payload needed to recompute summary_hash. The optional join accepts only an original payload with an exact matching hash; buyer mount supplies identity only and omits descriptions/units rather than trusting transformed labels. An authenticated summary projection contract is needed to finish this part of §D.
-3. **Signed seller decision controls are not added.** Existing metadata none-only approval/withdrawal remains; the sample mount reuses display components. No source of exact platform-allocated, producer-signed approve/refresh/withdraw candidates was supplied to this UI. The broader §E/I.b signed candidate lifecycle remains unverified/unimplemented here; do not claim that display reuse completes it.
-4. Production signing-key provisioning and a real approved v2 package are still required. No live production Gate-4, browser detector, seller-host CORS/no-store/media/redirect behavior, CDN removal, signed approval/refresh/withdrawal or 30-second fresh/return withdrawal proof was performed. Browser-local hidden/return tests meet a five-second bound only with synthetic inputs. Chunk 5 retirement, independent review and I.b live evidence are outstanding.
-5. Full build success remains blocked by the same missing Keystatic configuration on baseline and candidate. No credentials were invented or provisioned. Parity is distinct from a green build and from contract completion.
+Max decision Event Ledger `b8ddbd10` resolves the three earlier design boundaries:
+F2 producer attestation plus deterministic browser policy replaces the browser ML
+requirement; the dedicated signed-payload read supplies approved labels; sellers
+sign sample decisions in AIM Data. The seller sample mount displays state and the
+identical buyer preview. Existing metadata-only summary controls grant no sample
+permission. There is no signed seller decision-control TODO in this frontend.
 
-Do not merge this partial implementation as a completed T-frontend release. The requested no-merge boundary is preserved.
+Production dependencies are the signed-payload read deployment and a real approved
+v2 package from Sergey. Max reports keys HTTP 200 with
+`aim-preview-platform-2026-09`. Real seller-origin CORS/no-store/media/redirect
+behavior, approval/refresh/withdrawal, CDN removal, and live fresh/return withdrawal
+proof await that package and the production verification step. Synthetic unit and
+browser evidence does not establish those live results. Chunk 5 retirement and
+independent review remain separate release obligations. No merge is authorized.
+
+The build comparison must distinguish parity from a completed production build:
+missing Keystatic configuration previously blocked page collection on both the
+baseline and candidate after compilation. Current rerun receipts follow below.

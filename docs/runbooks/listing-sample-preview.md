@@ -86,6 +86,14 @@ The immutable producer/backend corpus is in `tests/fixtures/preview`; compare
 each file to `docs/reports/s1716-preview-corpus-shas.json`. Do not regenerate
 the corpus to make failing tests pass.
 
+## Seller sample display
+
+Sellers sign sample approve/refresh/withdraw decisions in AIM Data. This UI
+shows state and reuses the identical buyer `ListingSamplePreview`, with the
+same verification and optional signed-payload join. Existing metadata-only
+At a glance actions carry `sample_decision: none`; they grant no sample permission.
+There is no pending signed sample decision control to implement in this UI.
+
 ## Remaining release obligations
 
 Retain the report's explicit open items: signed-payload production availability and a real
