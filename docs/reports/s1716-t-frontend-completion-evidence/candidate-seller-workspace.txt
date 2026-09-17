@@ -1,0 +1,5 @@
+
+> ai-market-frontend@0.0.0 test
+> vitest run app/dashboard/seller-workspace/page.test.tsx --maxWorkers=1 --reporter=json --outputFile=/var/tmp/s1716-t-frontend-completion-evidence/candidate-seller-workspace.json
+
+JSON report written to /var/tmp/s1716-t-frontend-completion-evidence/candidate-seller-workspace.json

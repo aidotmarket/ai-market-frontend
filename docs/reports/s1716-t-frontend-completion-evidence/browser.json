@@ -1,0 +1,16 @@
+{
+  "command": "rtk proxy npx playwright test -c playwright.preview.config.ts",
+  "exit_code": 0,
+  "passed": 3,
+  "failed": 0,
+  "skipped": 0,
+  "widths": [
+    360,
+    375,
+    390
+  ],
+  "duration_seconds": 7.5,
+  "scan_adapter": "production deterministic policy",
+  "transport": "synthetic keys, rows and route interception",
+  "source": "observed command result in this completion fold"
+}

@@ -105,3 +105,124 @@ independent review remain separate release obligations. No merge is authorized.
 The build comparison must distinguish parity from a completed production build:
 missing Keystatic configuration previously blocked page collection on both the
 baseline and candidate after compilation. Current rerun receipts follow below.
+
+## Completion fold
+
+Authority: Max decision Event Ledger `b8ddbd10`, 2026-09-18. Work continued in the
+preserved clean branch at `5dfece96a`; the supplied working directory belonged to
+a different detached checkout and was left untouched. No merge or deployment.
+
+| Item | Commit | Verified implementation |
+|---|---|---|
+| Producer attestation and browser deterministic policy | `67222e39edf6426158e75079262c0e968f63de7c` | F2-first verification, exact scan identity/digests, complete-row scan, shared vectors and five mutation definitions |
+| Signed summary label join | `079a57c` | No-store optional read, RFC8785 summary hash recomputation, exact summary/render/source binding, identity-only fallback |
+| Seller display scope | `165f878` | AIM Data owns sample signing; seller sample display uses the identical buyer component |
+| Production-scanner browser evidence | `421dd99782acbd1b56a676ce01d0d4a0411d8559` | Removed synthetic scan adapter; Chrome uses real deterministic rules; explicit attestation failure hides all rows |
+
+The policy is `aim-preview-policy-v1-deterministic`, version `1.0.0`. Its producer
+reference is `aim-data origin/main` at
+`119f643b5fd25dc8fd61557649371c9832ca33c5`,
+`app/services/preview_content_policy.py`. The browser scans complete original row
+keys and scalar values recursively, including unselected fields and array
+elements, plus NFC-normalized strings. Descriptor-proven numeric values preserve
+the producer's formula exception. Rules cover secrets, private-key headers,
+connection strings, known token formats, entropy at 24 characters and 4.0 bits per
+character, executable markup/macros, formulas, URLs, personal-data patterns,
+restricted-content notices, control characters, 500-character and 80-word bounds.
+Unicode word boundaries/digits and Python's special case-insensitive I handling
+are carried into the browser rules. No ML model runs in the browser.
+
+All **59** pass/fail vectors in
+[the cross-repo fixture](../../tests/fixtures/preview/aim-preview-policy-v1-deterministic-vectors.json)
+are evaluated both against the pinned Python `check_text` function and by
+Node/Vitest through the browser scanner. Fixture SHA-256:
+`6a74bcf56b7a0645a67b2a8aceda0e108b2e0b7a3c1be947edacd39d6e297f9e`.
+The reproduction script executes only the deterministic AST definitions and does
+not import ML services. This is producer-rule parity, not ML detector parity.
+
+Attestation verification authenticates the platform envelope before seller keys,
+checks every F2 proof signature and requires policy `aim-preview-policy-v1`,
+version `1.0.0`, verdict `passed`, the recomputed `sampled_leaf_list_digest`, and
+`scan_attestation_digest` exactly bound by the signed manifest. Tests reject
+modified policy/version/verdict/signature, signed mismatched leaf-list and scan
+digests, unsafe nested rows, and unsafe hidden columns. No row is inserted until
+the complete scan and final current-manifest verification succeed. Failure
+exposes only neutral UI text and fixed reason enums, never matched content.
+
+The signed-payload adapter expects `{payload, summary_hash, render_hash,
+source_revision, approval_version}`. It hashes the original payload locally,
+checks F2-bound identities, and joins exact column names. Missing deployment,
+malformed response, changed hash, or absent approved head retains identity-only
+columns without an error. A synthetic payload fixture covers valid descriptions
+and units, tampering and fallback. The named backend amendment branch was not
+published when inspected; its actual response shape and production deployment
+remain integration checks. No production signed-payload response is claimed.
+
+### Verification receipts
+
+Full comparison uses freshly fetched `origin/main` at
+`3f15c1566a8f9aee2c96af397ff1eaab30f34fbc` in an isolated detached baseline. Both checkouts used
+`npm ci --ignore-scripts`, Node v25.3.0, npm 11.7.0, Vitest 4.1.8 and Next 15.5.12.
+
+| Check | Baseline | Candidate | Result |
+|---|---|---|---|
+| Full Vitest, one worker | 775 passed / 1 failed / 0 skipped, 776 total | 963 passed / 1 failed / 0 skipped, 964 total | Same login failure; zero branch-only failures in final run |
+| Preview suites | Not present | 219/219 passed | Includes all 59 vectors, attestation, payload join, DOM and lifecycle cases |
+| Typecheck | Exit 0 | Exit 0 | Pass |
+| Full lint | Exit 0, seven warnings | Exit 0, identical seven warnings | Exact file/rule/message/position parity |
+| Production build | Exit 1 after compilation | Exit 1 after compilation | Identical Keystatic configuration error and page-collection failure |
+| Chrome, actual deterministic scanner | Not present | 3/3 passed | 360/375/390px, keyboard, layout and synthetic zero-ingress checks |
+| Observed mutation failures | Not present | 5/5 detected | Three prior mutations plus skip-scan and skip-attestation |
+
+The unchanged login failure is `shares one flight between a manual click and
+subsequent hinted hydration`, expecting the `oauth_nonce` write and receiving an
+empty array. Baseline has 31 newer tests in the unrelated dataset-members/order
+files that are absent from this preserved branch; no test was skipped, deleted,
+or changed to obtain parity. This task did not rebase or merge unrelated work.
+
+The first full candidate run was 962/963 passing (before the last DOM assertion).
+The next run was 962/964: it additionally hit the unchanged Seller Workspace
+idempotency test. Its source/test files match baseline exactly, and the complete
+file then passed 32/32 on each checkout. The final full run above includes the
+last DOM assertion and restores zero branch-only failures. All three candidate
+receipts are retained; no claim is made that the unrelated intermittent test was
+fixed.
+
+Both builds compile and fail during page collection for
+`/api/keystatic/[...params]` with the exact same missing
+`KEYSTATIC_GITHUB_CLIENT_ID`, `KEYSTATIC_GITHUB_CLIENT_SECRET`, and
+`KEYSTATIC_SECRET` configuration. The full logs differ in timing and bundle stack
+locations; the error text, missing fields, affected route and compile outcome are
+identical. Neither build completed. No credentials were read or provisioned.
+
+The five observed assertion failures are: skip platform-envelope authentication;
+stop awaiting the local scan; drop ordered package `sample_hash` recomputation;
+skip deterministic scan; skip attestation check. Mutations run in disposable
+copies. Each exited 1 with an assertion failure, not a collection/config error.
+The last two are caught by signed synthetic packages that would otherwise issue
+a display handle. Production and fixture source files remained intact.
+
+[Machine summary](s1716-t-frontend-completion-evidence/summary.json),
+[all receipt hashes](s1716-t-frontend-completion-evidence/sha256.json),
+[commands and exit codes](s1716-t-frontend-completion-evidence/parity-runs.json),
+[final full-suite command](s1716-t-frontend-completion-evidence/candidate-vitest-final-command.json).
+Raw full test reports, lint diagnostics, build logs and mutation logs are included.
+The browser receipt records the observed command result and synthetic boundary.
+
+Reproduction commands: `rtk proxy python3 scripts/preview-policy-vectors.py`,
+`rtk proxy npm test -- lib/listing-preview components/listings/ListingSamplePreview.test.tsx components/listings/SampleTable.test.tsx --maxWorkers=1`,
+`rtk proxy python3 scripts/preview-mutations.py`,
+`rtk proxy npm test -- --maxWorkers=1 --reporter=json --outputFile=<receipt>`,
+`rtk proxy npm run typecheck`, `rtk proxy npm run lint -- --format json --output-file <receipt>`,
+`rtk proxy npm run build`, and `rtk proxy npx playwright test -c playwright.preview.config.ts`.
+
+### What awaits production
+
+The [live keys receipt](s1716-t-frontend-completion-evidence/production-keys.json)
+confirms HTTP 200, no-store and `aim-preview-platform-2026-09`. The signed-payload
+read awaits backend response-shape confirmation/deployment; until then the UI
+silently shows identity-only columns. A real approved v2 package awaits Sergey.
+That package is needed for real seller-host transport, approval/refresh/withdrawal,
+CDN and fresh/return withdrawal proofs. Local tests and synthetic Chrome runs do
+not replace those production checks. The completion fold is committed and pushed;
+no merge or deployment is performed.

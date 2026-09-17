@@ -1,0 +1,130 @@
+[
+  {
+    "label": "baseline",
+    "kind": "vitest",
+    "command": [
+      "rtk",
+      "proxy",
+      "npm",
+      "test",
+      "--",
+      "--maxWorkers=1",
+      "--reporter=json",
+      "--outputFile=/var/tmp/s1716-t-frontend-completion-evidence/baseline-vitest.json"
+    ],
+    "cwd": "/var/tmp/s1716-t-completion-baseline-3f15c15",
+    "exit_code": 1,
+    "duration_seconds": 41.06
+  },
+  {
+    "label": "baseline",
+    "kind": "typecheck",
+    "command": [
+      "rtk",
+      "proxy",
+      "npm",
+      "run",
+      "typecheck"
+    ],
+    "cwd": "/var/tmp/s1716-t-completion-baseline-3f15c15",
+    "exit_code": 0,
+    "duration_seconds": 3.56
+  },
+  {
+    "label": "baseline",
+    "kind": "lint",
+    "command": [
+      "rtk",
+      "proxy",
+      "npm",
+      "run",
+      "lint",
+      "--",
+      "--format",
+      "json",
+      "--output-file",
+      "/var/tmp/s1716-t-frontend-completion-evidence/baseline-lint.json"
+    ],
+    "cwd": "/var/tmp/s1716-t-completion-baseline-3f15c15",
+    "exit_code": 0,
+    "duration_seconds": 1.43
+  },
+  {
+    "label": "baseline",
+    "kind": "build",
+    "command": [
+      "rtk",
+      "proxy",
+      "npm",
+      "run",
+      "build"
+    ],
+    "cwd": "/var/tmp/s1716-t-completion-baseline-3f15c15",
+    "exit_code": 1,
+    "duration_seconds": 15.44
+  },
+  {
+    "label": "candidate",
+    "kind": "vitest",
+    "command": [
+      "rtk",
+      "proxy",
+      "npm",
+      "test",
+      "--",
+      "--maxWorkers=1",
+      "--reporter=json",
+      "--outputFile=/var/tmp/s1716-t-frontend-completion-evidence/candidate-vitest.json"
+    ],
+    "cwd": "/private/var/tmp/koskadeux/minimal-bridge-worktrees/3cdeae8792ea-853fd0",
+    "exit_code": 1,
+    "duration_seconds": 46.24
+  },
+  {
+    "label": "candidate",
+    "kind": "typecheck",
+    "command": [
+      "rtk",
+      "proxy",
+      "npm",
+      "run",
+      "typecheck"
+    ],
+    "cwd": "/private/var/tmp/koskadeux/minimal-bridge-worktrees/3cdeae8792ea-853fd0",
+    "exit_code": 0,
+    "duration_seconds": 1.44
+  },
+  {
+    "label": "candidate",
+    "kind": "lint",
+    "command": [
+      "rtk",
+      "proxy",
+      "npm",
+      "run",
+      "lint",
+      "--",
+      "--format",
+      "json",
+      "--output-file",
+      "/var/tmp/s1716-t-frontend-completion-evidence/candidate-lint.json"
+    ],
+    "cwd": "/private/var/tmp/koskadeux/minimal-bridge-worktrees/3cdeae8792ea-853fd0",
+    "exit_code": 0,
+    "duration_seconds": 1.69
+  },
+  {
+    "label": "candidate",
+    "kind": "build",
+    "command": [
+      "rtk",
+      "proxy",
+      "npm",
+      "run",
+      "build"
+    ],
+    "cwd": "/private/var/tmp/koskadeux/minimal-bridge-worktrees/3cdeae8792ea-853fd0",
+    "exit_code": 1,
+    "duration_seconds": 12.35
+  }
+]

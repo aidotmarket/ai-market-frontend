@@ -1,0 +1,124 @@
+
+> ai-market-frontend@0.0.0 test
+> vitest run lib/listing-preview/verifier.test.ts -t checks package content and sample hash without issuing a display handle --maxWorkers=1
+
+
+ RUN  v4.1.8 /private/var/folders/hh/hx7rp5196q3d8wppz2kqtbn40000gn/T/s1716-preview-mutation-a2ju_o_5
+
+ ❯ lib/listing-preview/verifier.test.ts (57 tests | 1 failed | 56 skipped) 14ms
+     × checks package content and sample hash without issuing a display handle 14ms
+
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 1 ⎯⎯⎯⎯⎯⎯⎯
+
+ FAIL  lib/listing-preview/verifier.test.ts > canonical parser and row admission > checks package content and sample hash without issuing a display handle
+AssertionError: promise resolved "[ { …(3) }, { …(3) }, { …(3) }, …(2) ]" instead of rejecting
+
+- Expected:
+Error {
+  "message": "rejected promise",
+}
+
++ Received:
+[
+  {
+    "cells": {
+      "id": {
+        "kind": "signed_integer",
+        "value": "3",
+      },
+      "name": {
+        "kind": "missing",
+        "value": null,
+      },
+    },
+    "proofId": "00000000-0000-0000-0000-000000000064",
+    "row": {
+      "id": "3",
+    },
+  },
+  {
+    "cells": {
+      "id": {
+        "kind": "signed_integer",
+        "value": "2",
+      },
+      "name": {
+        "kind": "null",
+        "value": null,
+      },
+    },
+    "proofId": "00000000-0000-0000-0000-000000000065",
+    "row": {
+      "id": "2",
+      "name": null,
+    },
+  },
+  {
+    "cells": {
+      "id": {
+        "kind": "signed_integer",
+        "value": "1",
+      },
+      "name": {
+        "kind": "string",
+        "value": "Café",
+      },
+    },
+    "proofId": "00000000-0000-0000-0000-000000000066",
+    "row": {
+      "id": "1",
+      "name": "Café",
+    },
+  },
+  {
+    "cells": {
+      "id": {
+        "kind": "signed_integer",
+        "value": "1",
+      },
+      "name": {
+        "kind": "string",
+        "value": "Café",
+      },
+    },
+    "proofId": "00000000-0000-0000-0000-000000000067",
+    "row": {
+      "id": "1",
+      "name": "Café",
+    },
+  },
+  {
+    "cells": {
+      "id": {
+        "kind": "signed_integer",
+        "value": "4",
+      },
+      "name": {
+        "kind": "string",
+        "value": "Z",
+      },
+    },
+    "proofId": "00000000-0000-0000-0000-000000000068",
+    "row": {
+      "id": "4",
+      "name": "Z",
+    },
+  },
+]
+
+ ❯ lib/listing-preview/verifier.test.ts:139:81
+    137|     await expect(verifyPackage(jcs(changed), m)).rejects.toThrow('row_…
+    138|     const hash = {...p, sample_hash: '0'.repeat(64)};
+    139|     await expect(verifyPackage(jcs(hash), {...m, sample_hash: hash.sam…
+       |                                                                                 ^
+    140|   });
+    141| });
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/1]⎯
+
+
+ Test Files  1 failed (1)
+      Tests  1 failed | 56 skipped (57)
+   Start at  01:41:08
+   Duration  206ms (transform 48ms, setup 0ms, import 71ms, tests 14ms, environment 0ms)
+

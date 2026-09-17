@@ -1,0 +1,32 @@
+[
+  {
+    "label": "baseline",
+    "command": [
+      "rtk",
+      "proxy",
+      "npm",
+      "test",
+      "--",
+      "app/dashboard/seller-workspace/page.test.tsx",
+      "--maxWorkers=1",
+      "--reporter=json",
+      "--outputFile=/var/tmp/s1716-t-frontend-completion-evidence/baseline-seller-workspace.json"
+    ],
+    "exit_code": 0
+  },
+  {
+    "label": "candidate",
+    "command": [
+      "rtk",
+      "proxy",
+      "npm",
+      "test",
+      "--",
+      "app/dashboard/seller-workspace/page.test.tsx",
+      "--maxWorkers=1",
+      "--reporter=json",
+      "--outputFile=/var/tmp/s1716-t-frontend-completion-evidence/candidate-seller-workspace.json"
+    ],
+    "exit_code": 0
+  }
+]

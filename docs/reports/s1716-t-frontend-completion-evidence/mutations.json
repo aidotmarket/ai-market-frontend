@@ -1,0 +1,87 @@
+[
+  {
+    "name": "skip-platform-envelope",
+    "command": [
+      "rtk",
+      "proxy",
+      "npm",
+      "test",
+      "--",
+      "lib/listing-preview/verifier.test.ts",
+      "-t",
+      "verifies platform before resolving seller keys",
+      "--maxWorkers=1"
+    ],
+    "exit_code": 1,
+    "observed_assertion_failure": true,
+    "log_sha256": "feaad0cbc04e0b5e304fb927db4a14c6c87e95aaf2e6c18300f5050325165ede"
+  },
+  {
+    "name": "render-before-policy-completes",
+    "command": [
+      "rtk",
+      "proxy",
+      "npm",
+      "test",
+      "--",
+      "components/listings/ListingSamplePreview.test.tsx",
+      "-t",
+      "waits for verification and the final manifest before rendering any row",
+      "--maxWorkers=1"
+    ],
+    "exit_code": 1,
+    "observed_assertion_failure": true,
+    "log_sha256": "5aec8fb40277e34d74609dcaea4aadd6da48445dd77c12bb9d7aabf39f22bcdc"
+  },
+  {
+    "name": "drop-package-sample-hash",
+    "command": [
+      "rtk",
+      "proxy",
+      "npm",
+      "test",
+      "--",
+      "lib/listing-preview/verifier.test.ts",
+      "-t",
+      "checks package content and sample hash without issuing a display handle",
+      "--maxWorkers=1"
+    ],
+    "exit_code": 1,
+    "observed_assertion_failure": true,
+    "log_sha256": "9a1737be84d2a24cff95dbeb5317565034c6d575ce54ee53ba9eb909c6ce6449"
+  },
+  {
+    "name": "skip-deterministic-scan",
+    "command": [
+      "rtk",
+      "proxy",
+      "npm",
+      "test",
+      "--",
+      "lib/listing-preview/policy.test.ts",
+      "-t",
+      "deterministic scan refuses any unsafe complete row before issuing a handle",
+      "--maxWorkers=1"
+    ],
+    "exit_code": 1,
+    "observed_assertion_failure": true,
+    "log_sha256": "aafe7ae9b973a97b59c16b567ead4abe745b3ff8f0c8a4d3e479873468e59308"
+  },
+  {
+    "name": "skip-attestation-check",
+    "command": [
+      "rtk",
+      "proxy",
+      "npm",
+      "test",
+      "--",
+      "lib/listing-preview/policy.test.ts",
+      "-t",
+      "attestation check refuses a signed but incorrectly bound scan digest",
+      "--maxWorkers=1"
+    ],
+    "exit_code": 1,
+    "observed_assertion_failure": true,
+    "log_sha256": "961c29a66b246a3d92d25b04718c11b739f4481737dcfe9517d52b10d0d17134"
+  }
+]
