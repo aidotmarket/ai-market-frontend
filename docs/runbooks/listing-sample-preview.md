@@ -1,6 +1,7 @@
 # Browser sample preview
 
-This procedure covers S1294 T frontend. Authority is backend main
+This procedure covers S1294 T frontend. S1719 is binding and overrides the T
+contract's content-rule requirements. The remaining authority is backend main
 `ea7e777c1ee2a9925db1b221430937cd38694ad5`,
 `specs/BQ-LISTING-ENRICHMENT-SELLER-TOOLS-S1294-CHUNK-T-CONTRACT-S1716.md`
 and its T-backend ratifications. It complements backend
@@ -11,20 +12,16 @@ and its T-backend ratifications. It complements backend
 The component has no rollout flag. It discovers metadata in the browser, offers
 View sample only for a supported manifest with available platform keys, and
 fetches the seller package only after manifest verification. Every display needs
-full package, signature, schema, proof, local policy and final current-head checks.
+full package, signature, schema, proof, attestation binding and final current-head checks.
 Platform-key HTTP 503 produces no preview and no error page.
 
-Event Ledger `b8ddbd10` (2026-09-18) replaces the browser ML boundary with
-F2-authenticated producer scan evidence (`aim-preview-policy-v1`, `1.0.0`,
-`passed`, exact sampled-leaf and scan-attestation digests) plus a browser-only
-`aim-preview-policy-v1-deterministic` scan. The latter scans every complete raw
-row, key, nested value and array element before any display handle. Either
-failure hides all rows; diagnostics contain fixed reason codes only.
-
-The shared deterministic vector fixture and SHA live under `tests/fixtures/preview`.
-`rtk proxy python3 scripts/preview-policy-vectors.py` compares every expectation
-to pinned producer source; Node/Vitest runs the same vectors through the browser
-policy. There is no browser ML model and no server scan or row ingress.
+S1719 removes automated content judgement from the preview path. The viewer
+accepts exactly `aim-preview-policy-v2` / `2.0.0` and legacy
+`aim-preview-policy-v1` / `1.0.0`. For both identities it authenticates the
+seller proof signatures, exact scan-attestation digest and recomputed
+`sampled_leaf_list_digest`; it runs no content corpus. Unknown identity/version
+pairs hide all rows. There is no browser detector, server row ingress or content
+refusal.
 
 ## Approved column labels
 
@@ -44,14 +41,17 @@ malformed payload or hash mismatch silently retain identity-only columns.
 1. Confirm the canonical current slug and listing UUID. Do not select a historical
    disclosure or purchase version as preview eligibility.
 2. Inspect metadata-only `GET /api/v1/public/listings/{slug}/preview-manifest` and
-   `GET /api/v1/public/transparency/keys`. Require HTTP 200 and no-store. Any
-   absence, error, timeout or malformed response is ineligible.
+   `GET /api/v1/public/transparency/keys`. Require a successful response with
+   bounded parseable JSON. Any absence, error, timeout or malformed response is
+   ineligible. Requests use cache bypass; response cache/media headers are not
+   trust evidence.
 3. Verify the platform envelope first, then its authenticated signer-key records,
    then seller signatures and all binding/hash/log rules. Ed25519 uses WebCrypto;
    only NotSupportedError invokes pinned `@noble/curves` 2.0.1, strict RFC8032
    verification (`zip215: false`). Missing SHA-256/WebCrypto fails closed.
 4. Seller transport is direct HTTPS, no credentials/query/fragment/redirects,
-   no-referrer and no-store, with exact media type and bounded streaming.
+   no-referrer and request cache bypass, with bounded streaming and parseable
+   JSON. Response media type, cache header and CDN compression are advisory.
    No API proxy or server-side fetch is permitted. Static host admission cannot
    independently observe DNS or the connected peer address in browser JavaScript;
    real origin/CORS/private-network behavior remains a live integration obligation.
@@ -79,15 +79,18 @@ rtk proxy python3 scripts/preview-mutations.py
 ```
 
 The Chrome harness uses synthetic keys/rows and route interception with the real
-deterministic browser scanner.
+cryptographic viewer path.
 Its assertions cover keyboard behavior, 360/375/390px page overflow, deferred
 table loading and marker absence from platform requests/logs/browser storage.
 It is not a real seller-origin, detector, CDN, production approval or withdrawal
 receipt. Do not publish traces or screenshots containing real rows.
 
-The immutable producer/backend corpus is in `tests/fixtures/preview`; compare
-each file to `docs/reports/s1716-preview-corpus-shas.json`. Do not regenerate
-the corpus to make failing tests pass.
+The immutable producer/backend corpus is in `tests/fixtures/preview`. Its
+complete shared pin list is `preview-fixture-manifest.json`, including AIM
+Data's canonical S1719 v2 policy, signing, request, differential and manifest
+budget fixtures. Keep those producer bytes exact; do not add an adjacent
+self-referential checksum for a fixture or regenerate fixtures merely to make
+failing tests pass.
 
 ## Seller sample display
 

@@ -31,12 +31,12 @@ it.each(['image_gallery', 'map', 'timeseries_chart', 'audio', 'nested_json', 'fu
   const f = await makePreview(); vi.stubGlobal('fetch', vi.fn(async () => response({...f.manifest, preview_type: type})));
   expect(await fetchPreviewManifest('slug', new AbortController().signal)).toBeNull();
 });
-it('rejects duplicate keys, rebound aliases and cacheable metadata', async () => {
+it('rejects duplicate keys and rebound aliases but accepts parseable cacheable metadata', async () => {
   const f = await makePreview(); const k = Object.entries(f.keys)[0];
   vi.stubGlobal('fetch', vi.fn(async () => response({profile: 'aim-preview-platform-keys-v1', keys: [{key_id: k[0], public_key: k[1], algorithm: 'ed25519'}, {key_id: 'alias', public_key: k[1], algorithm: 'ed25519'}]})));
   expect(await fetchPreviewKeys(new AbortController().signal)).toBeNull();
   vi.stubGlobal('fetch', vi.fn(async () => new Response(JSON.stringify(f.manifest), {headers: {'content-type': 'application/json', 'cache-control': 'public'}})));
-  expect(await fetchPreviewManifest('slug', new AbortController().signal)).toBeNull();
+  expect(await fetchPreviewManifest('slug', new AbortController().signal)).toEqual(f.manifest);
 });
 it('checks independently requested consistency sizes and rejects SSR package retrieval', async () => {
   vi.stubGlobal('fetch', vi.fn(async () => response({from_size: 1, to_size: 2, consistency_path: []})));
@@ -54,11 +54,17 @@ it('reads signed summary metadata with no-store and no credentials or row ingres
     cache: 'no-store', credentials: 'omit', redirect: 'error', referrerPolicy: 'no-referrer', signal,
   });
 });
-it('treats an undeployed, absent, cached or malformed signed payload as optional', async () => {
+it('treats an undeployed, absent or malformed signed payload as optional', async () => {
   const signal = new AbortController().signal;
-  for (const value of [response({}, 404), response({}, 503), new Response('{}', {headers: {'content-type': 'application/json'}}),
+  for (const value of [response({}, 404), response({}, 503),
     new Response('{bad', {headers: {'content-type': 'application/json', 'cache-control': 'no-store'}})]) {
     vi.stubGlobal('fetch', vi.fn(async () => value)); expect(await fetchSignedSummaryPayload('slug', signal)).toBeNull();
+  }
+});
+it('accepts parseable metadata regardless of response media type or cache header', async () => {
+  for (const contentType of ['application/json', 'text/plain', 'application/octet-stream']) {
+    vi.stubGlobal('fetch', vi.fn(async () => new Response('{"plain":true}', {headers: {'content-type': contentType, 'cache-control': 'public'}})));
+    await expect(fetchSignedSummaryPayload('slug', new AbortController().signal)).resolves.toEqual({plain: true});
   }
 });
 it('turns a signed-payload 404 into identity-only labels without throwing', async () => {

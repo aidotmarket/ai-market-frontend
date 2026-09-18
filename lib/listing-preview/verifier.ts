@@ -1,6 +1,6 @@
 /** Browser/Node crypto only. No API, logging, storage, or seller transport here. */
 import type {Binding, Checkpoint, Commitment, LogEvidence, Manifest, PlatformEnvelope, PreviewPackage, Proof, TrustedCheckpoint, TrustedKeys, VerifiedEntry, VerifiedSample} from './types';
-import {PRODUCER_POLICY, requirePolicyVersion} from './policy';
+import {requirePolicyVersion} from './policy';
 import {LIMITS} from './types';
 import {b64, canonical, closed, concat, consistency, hex, inclusion, jcs, leaf, parseJson, requirePreview as check, sha, timestamp, unb64, utf8, verifyEd25519} from './primitives';
 import {canonicalRow, schemaDescriptors} from './canonical-row';
@@ -110,8 +110,11 @@ export async function verifyManifest(raw: unknown, keys: TrustedKeys, listingId:
 /** Called only after platform and every F2 seller signature authenticate. */
 export async function verifyScanAttestation(m: Manifest): Promise<void> {
   const b = m.approval.platform_envelope.binding;
+  check(m.proofs.length > 0, 'scan_attestation_invalid');
   for (const p of m.proofs) requirePolicyVersion(p.scan_policy, p.scan_policy_version);
-  check(m.proofs.every(p => p.scan_policy === PRODUCER_POLICY && p.scan_verdict === 'passed'), 'scan_attestation_invalid');
+  check(m.proofs.every(p => p.scan_policy === m.proofs[0].scan_policy
+    && p.scan_policy_version === m.proofs[0].scan_policy_version
+    && p.scan_verdict === 'passed'), 'scan_attestation_invalid');
   check(m.proofs.every(p => p.sampled_leaf_list_digest === b.sampled_leaf_list_digest), 'sampled_list_mismatch');
   check(hex(await sha(domain('aim-preview-scan-attestation-v1', m.proofs))) === b.scan_attestation_digest, 'scan_mismatch');
 }
@@ -166,8 +169,6 @@ export function envelopeBudget(value: unknown): number {
 }
 export interface VerificationOptions {
   listingId: string; keys: TrustedKeys; now: () => number; previous?: TrustedCheckpoint;
-  /** Must run entirely locally and reject incomplete/uncertain policy coverage. */
-  scan: (entries: readonly VerifiedEntry[], signal: AbortSignal, schema: readonly import('./types').Descriptor[]) => Promise<void>;
   readCurrent: () => Promise<unknown>; signal: AbortSignal;
 }
 export async function verifySample(manifest: unknown, raw: Uint8Array, options: VerificationOptions): Promise<VerifiedSample> {
@@ -175,7 +176,6 @@ export async function verifySample(manifest: unknown, raw: Uint8Array, options: 
   const entries = await verifyPackage(raw, m);
   const sampled = b64(await sha(domain('aim-preview-sampled-leaves-v1', entries.map(entry => entry.leafHash))));
   check(sampled === m.approval.platform_envelope.binding.sampled_leaf_list_digest, 'sampled_list_mismatch');
-  await options.scan(entries, options.signal, m.schema_descriptors);
   check(!options.signal.aborted, 'cancelled');
   const current = await verifyManifest(await options.readCurrent(), options.keys, options.listingId, options.now(), options.previous);
   // Only eligibility timestamps may advance. Every signed identity/evidence byte

@@ -2,24 +2,33 @@
 
 import {useId, useMemo, useRef, useState} from 'react';
 import {flexRender, getCoreRowModel, getFilteredRowModel, getSortedRowModel, useReactTable, type ColumnDef, type SortingState} from '@tanstack/react-table';
-import type {Cell, Descriptor, VerifiedEntry, VerifiedSample} from '@/lib/listing-preview/types';
+import type {Cell, Descriptor, Json, VerifiedEntry, VerifiedSample} from '@/lib/listing-preview/types';
 import type {ApprovedColumn} from '@/lib/listing-preview/columns';
 import {isVerifiedSample} from '@/lib/listing-preview/verifier';
 import {canonical} from '@/lib/listing-preview/primitives';
 
+export function inertText(value: string): string {
+  return value.replace(/[\p{Cc}\p{Cf}\p{Cs}]/gu, '\uFFFD');
+}
+function neutralizedCanonical(value: Json): string {
+  if (typeof value === 'string') return canonical(inertText(value));
+  if (Array.isArray(value)) return `[${value.map(neutralizedCanonical).join(',')}]`;
+  if (value && typeof value === 'object') return `{${Object.keys(value).sort().map(key => `${canonical(inertText(key))}:${neutralizedCanonical(value[key])}`).join(',')}}`;
+  return canonical(value);
+}
 export function cellText(cell: Cell): string {
   if (cell.kind === 'missing' || cell.kind === 'null') return cell.kind;
   if (cell.kind === 'string' && cell.value === '') return 'empty string';
-  return typeof cell.value === 'string' ? cell.value : canonical(cell.value);
+  return typeof cell.value === 'string' ? inertText(cell.value) : neutralizedCanonical(cell.value);
 }
 function decimalParts(value: string): [bigint, number] {
   const [whole, fraction = ''] = value.split('.'); return [BigInt(whole + fraction), fraction.length];
 }
 function typeLabel(column: ApprovedColumn, descriptors: readonly Descriptor[]): string {
   const descriptor = descriptors.find(d => d[0] === column.name);
-  if (column.type === 'decimal') return `decimal (precision ${descriptor?.[3].precision}, scale ${descriptor?.[3].scale})`;
-  if (column.type === 'timestamp') return `timestamp (UTC, precision ${descriptor?.[3].timestamp_precision})`;
-  return column.type;
+  if (column.type === 'decimal') return inertText(`decimal (precision ${descriptor?.[3].precision}, scale ${descriptor?.[3].scale})`);
+  if (column.type === 'timestamp') return inertText(`timestamp (UTC, precision ${descriptor?.[3].timestamp_precision})`);
+  return inertText(column.type);
 }
 export function compareCells(a: Cell, b: Cell): number {
   const rank = (c: Cell) => c.kind === 'missing' ? 0 : c.kind === 'null' ? 1 : 2;
@@ -36,13 +45,13 @@ export function compareCells(a: Cell, b: Cell): number {
 }
 function SampleCell({cell, name}: {cell: Cell; name: string}) {
   const [expanded, setExpanded] = useState(false), button = useRef<HTMLButtonElement>(null), id = useId();
-  const text = cellText(cell), long = Array.from(text).length > 200, nested = cell.kind === 'array' || cell.kind === 'object';
+  const text = cellText(cell), inertName = inertText(name), long = Array.from(text).length > 200, nested = cell.kind === 'array' || cell.kind === 'object';
   return <div className="min-w-0 whitespace-pre-wrap break-words [overflow-wrap:anywhere]" onKeyDown={event => {
     if (event.key === 'Escape' && expanded) {event.preventDefault(); setExpanded(false); button.current?.focus();}
   }}>
     <span id={id}>{long && !expanded ? Array.from(text).slice(0, 200).join('') + '…' : text}</span>
     {(long || nested) && <button ref={button} type="button" aria-expanded={expanded} aria-controls={id}
-      aria-label={`${expanded ? 'Collapse' : 'Expand'} ${name}`} onClick={() => setExpanded(v => !v)}
+      aria-label={`${expanded ? 'Collapse' : 'Expand'} ${inertName}`} onClick={() => setExpanded(v => !v)}
       className="ml-2 rounded px-1 text-indigo-700 underline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-indigo-700">
       {expanded ? 'Collapse' : 'Expand'}
     </button>}
@@ -56,9 +65,9 @@ function VerifiedTable({sample, columns}: {sample: VerifiedSample; columns: read
   const defs = useMemo<ColumnDef<VerifiedEntry>[]>(() => columns.map(column => ({
     id: column.name, accessorFn: row => row.cells[column.name], sortUndefined: false,
     sortingFn: (a, b) => compareCells(a.original.cells[column.name], b.original.cells[column.name]),
-    header: () => <><span className="font-mono">{column.name}</span><span className="block text-xs font-normal">Type: {typeLabel(column, sample.manifest.schema_descriptors)}</span>
-      {column.description && <span className="block text-xs font-normal">{column.description}</span>}
-      {column.unit && <span className="block text-xs font-normal">Unit: {column.unit}</span>}</>,
+    header: () => <><span className="font-mono">{inertText(column.name)}</span><span className="block text-xs font-normal">Type: {typeLabel(column, sample.manifest.schema_descriptors)}</span>
+      {column.description && <span className="block text-xs font-normal">{inertText(column.description)}</span>}
+      {column.unit && <span className="block text-xs font-normal">Unit: {inertText(column.unit)}</span>}</>,
     cell: info => <SampleCell cell={info.row.original.cells[column.name]} name={column.name} />,
   })), [columns, sample.manifest.schema_descriptors]);
   const data = useMemo(() => [...sample.entries], [sample]);
@@ -67,35 +76,35 @@ function VerifiedTable({sample, columns}: {sample: VerifiedSample; columns: read
     enableMultiSort: false, sortDescFirst: false, getColumnCanGlobalFilter: () => true,
     globalFilterFn: row => {
       const literal = query.toLocaleLowerCase('en-US');
-      return columns.filter(c => !field || c.name === field).some(c => cellText(row.original.cells[c.name]).toLocaleLowerCase('en-US').includes(literal));
+      return columns.filter((_, index) => !field || String(index) === field).some(c => cellText(row.original.cells[c.name]).toLocaleLowerCase('en-US').includes(literal));
     },
   });
   const count = table.getRowModel().rows.length;
   return <div className="min-w-0 max-w-full space-y-3">
     <p className="text-sm">{sample.entries.length} seller-selected sample rows from {sample.manifest.commitment.leaf_count.toLocaleString('en-US')} dataset rows.</p>
-    <p className="text-sm">This sample row matches the dataset commitment recorded by the seller.</p>
+    <p className="text-sm">These rows are verified to belong to the seller&apos;s dataset and are shown as the seller published them.</p>
     <p className="text-sm text-gray-600">Membership does not prove quality, representativeness, legality, compliance, seller identity or completeness against an external source.</p>
-    <p className="text-sm">Last attested by seller: {sample.manifest.last_attested_by_seller_at}{sample.manifest.stale && <strong className="ml-2">Stale</strong>}</p>
+    <p className="text-sm">Last attested by seller: {inertText(sample.manifest.last_attested_by_seller_at)}{sample.manifest.stale && <strong className="ml-2">Stale</strong>}</p>
     <div className="flex min-w-0 flex-wrap items-end gap-3">
       <div className="min-w-0 flex-1"><label htmlFor={searchId} className="block text-sm">Search sample</label>
         <input id={searchId} value={query} onChange={e => setQuery(e.target.value)} type="search" autoComplete="off"
           className="w-full min-w-0 rounded border border-gray-400 px-2 py-1 focus-visible:outline-2 focus-visible:outline-indigo-700" /></div>
       <div className="min-w-0 max-w-full"><label htmlFor={columnId} className="block text-sm">Search column</label>
         <select id={columnId} value={field} onChange={e => setField(e.target.value)} className="max-w-full rounded border border-gray-400 px-2 py-1 focus-visible:outline-2 focus-visible:outline-indigo-700">
-          <option value="">All columns</option>{columns.map(c => <option key={c.name} value={c.name}>{c.name}</option>)}
+          <option value="">All columns</option>{columns.map((c, index) => <option key={c.name} value={String(index)}>{inertText(c.name)}</option>)}
         </select></div>
       <button type="button" onClick={() => {setQuery(''); setField('');}} className="rounded border border-gray-400 px-2 py-1 text-sm focus-visible:outline-2 focus-visible:outline-indigo-700">Clear filter</button>
     </div>
     <p role="status" aria-live="polite" aria-atomic="true" className="text-sm">Showing {count} of {sample.entries.length} seller-selected sample rows.</p>
     <div role="region" aria-label="Seller-selected sample table" tabIndex={0}
       className="min-w-0 max-w-full overflow-auto rounded border border-gray-200 focus-visible:outline-2 focus-visible:outline-indigo-700" style={{maxHeight: '60vh'}}>
-      <table className="w-full border-collapse text-sm">
-        <caption className="p-2 text-left font-semibold">Seller-selected sample</caption>
+      <table aria-label="Seller-selected sample" className="w-full border-collapse text-sm">
+        <caption className="p-2 text-left font-semibold">These rows are verified to belong to the seller&apos;s dataset and are shown as the seller published them.</caption>
         <thead><tr>{table.getHeaderGroups()[0].headers.map(header => <th key={header.id} scope="col"
           aria-sort={header.column.getIsSorted() === 'asc' ? 'ascending' : header.column.getIsSorted() === 'desc' ? 'descending' : 'none'}
           className="border-b bg-gray-50 p-2 text-left align-top">
           <button type="button" onClick={header.column.getToggleSortingHandler()} className="max-w-full rounded text-left break-words [overflow-wrap:anywhere] focus-visible:outline-2 focus-visible:outline-indigo-700"
-            aria-label={`Sort ${header.column.id}: ${header.column.getNextSortingOrder() === 'asc' ? 'ascending' : header.column.getNextSortingOrder() === 'desc' ? 'descending' : 'reset'}`}>
+            aria-label={`Sort ${inertText(header.column.id)}: ${header.column.getNextSortingOrder() === 'asc' ? 'ascending' : header.column.getNextSortingOrder() === 'desc' ? 'descending' : 'reset'}`}>
             {flexRender(header.column.columnDef.header, header.getContext())}
           </button></th>)}</tr></thead>
         <tbody>{table.getRowModel().rows.map(row => <tr key={row.id}>{row.getVisibleCells().map(cell =>

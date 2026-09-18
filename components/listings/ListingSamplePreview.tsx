@@ -45,8 +45,8 @@ export default function ListingSamplePreview({slug, listingId}: {
         // no preview, with no error page and no seller-origin request.
         if (!keys) {setState({kind: 'absent'}); return;}
         if (!view) {setState({kind: 'ready', value: {manifest, keys}}); return;}
-        const [{verifyManifest, verifySample}, {fetchPackage}, {scanLocalPreview}, {tableRenderer}, {default: Table}, {joinApprovedColumns, signedSummaryDescriptions}] = await Promise.all([
-          import('@/lib/listing-preview/verifier'), import('@/lib/listing-preview/transport'), import('@/lib/listing-preview/policy'),
+        const [{verifyManifest, verifySample}, {fetchPackage}, {tableRenderer}, {default: Table}, {joinApprovedColumns, signedSummaryDescriptions}] = await Promise.all([
+          import('@/lib/listing-preview/verifier'), import('@/lib/listing-preview/transport'),
           import('@/lib/listing-preview/registry'), import('./SampleTable'), import('@/lib/listing-preview/columns'),
         ]);
         if (!valid()) return;
@@ -65,7 +65,7 @@ export default function ListingSamplePreview({slug, listingId}: {
         const signedSummary = await fetchSignedSummaryPayload(slug, controller.signal);
         if (!valid()) return;
         const raw = await fetchPackage(checked.package.url, checked.package.byte_ceiling, controller.signal);
-        const sample = await verifySample(checked, raw, {listingId, keys, now: clock, previous: previous.current, scan: scanLocalPreview,
+        const sample = await verifySample(checked, raw, {listingId, keys, now: clock, previous: previous.current,
           readCurrent: async () => withPrevious(await fetchPreviewManifest(slug, controller.signal)), signal: controller.signal});
         if (!valid()) return;
         const descriptions = await signedSummaryDescriptions(signedSummary, sample.manifest);
