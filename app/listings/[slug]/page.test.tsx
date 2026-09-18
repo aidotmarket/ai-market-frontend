@@ -304,6 +304,24 @@ it('renders the public listing page when legacy schema columns contain duplicate
   expect(html.match(/>id<\/td>/g)).toHaveLength(2);
 });
 
+it.each([
+  ['object', {length: 1, 0: 'id'}],
+  ['string', 'id'],
+  ['number', 7],
+  ['null', null],
+])('omits schema information when legacy schema columns are a non-array %s', async (_shape, columns) => {
+  fetchPublicListing.mockReset(); fetchListingVersions.mockReset();
+  const html = await renderPage(makeListing({
+    row_count: null,
+    schema_summary: {
+      columns,
+      column_count: 1,
+      sample_types: {id: 'string'},
+    } as never,
+  }));
+  expect(html).not.toContain('Schema Information');
+});
+
 
 describe('S1717 member_files and verification scope', () => {
   const scope = '7 data files scanned; 3 documentation files are not part of the data set';

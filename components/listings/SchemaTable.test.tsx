@@ -16,8 +16,20 @@ it.each(legacyCases)('renders legacy columns with %s without throwing', (columns
 it('omits labels for ambiguous legacy names while retaining duplicate rows', () => {
   const html = renderToStaticMarkup(<SchemaTable variant="summary"
     columns={[{name: 'id', type: 'string'}, {name: 'id', type: 'integer'}]}
-    descriptions={[{name: 'id', description: 'first'}, {name: 'id', description: 'second'}]} />);
+    descriptions={[{name: 'id', description: 'first', unit: 'kg'}, {name: 'id', description: 'second', unit: 'lb'}]} />);
   expect(html.match(/<tr/g)).toHaveLength(3);
   expect(html).not.toContain('first');
   expect(html).not.toContain('second');
+  expect(html).not.toContain('>Description</th>');
+  expect(html).not.toContain('>Unit</th>');
+});
+
+it.each([
+  ['description', {description: {unsafe: true}}, [{name: 'labelled', description: 'safe'}]],
+  ['unit', {unit: ['unsafe']}, [{name: 'labelled', unit: 'kg'}]],
+  ['type', {type: {unsafe: true}}, []],
+])('renders an object-valued legacy %s field inertly', (_field, unsafe, descriptions) => {
+  expect(() => renderToStaticMarkup(<SchemaTable variant="summary"
+    columns={[{name: 'unsafe', type: 'string', ...unsafe}, {name: 'labelled', type: 'string'}] as never}
+    descriptions={descriptions as never} />)).not.toThrow();
 });
