@@ -130,8 +130,10 @@ describe('Seller data browser', () => {
   it('keeps dark markup byte-identical and shows an explicit alert for a deployed-signal 404',async()=>{
     api.listWorkspaceObjects.mockResolvedValue({objects:[object],next_cursor:null});
     const props={enabled:true,connections:[connection],savedSource,onSaveSampleSelection:vi.fn()};
-    const legacy=render(<WorkspaceData {...props} sampleFilesAvailable={false}/>);
+    const legacy=render(<WorkspaceData {...props}/>);
     await screen.findByText(object.key);const legacyMarkup=legacy.container.innerHTML;legacy.unmount();
+    const explicitDark=render(<WorkspaceData {...props} sampleFilesAvailable={false}/>);
+    await screen.findByText(object.key);expect(explicitDark.container.innerHTML).toBe(legacyMarkup);explicitDark.unmount();
     api.uploadWorkspaceSample.mockRejectedValue({isAxiosError:true,response:{status:404,data:{detail:'Not Found'}}});
     const feature=render(<WorkspaceData {...props} sampleFilesAvailable/>);
     expect(legacyMarkup).not.toContain('Free sample');
