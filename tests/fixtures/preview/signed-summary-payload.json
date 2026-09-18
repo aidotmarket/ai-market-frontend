@@ -1,42 +1,68 @@
 {
+  "approval_version": "91fca535-fba9-405c-8705-dd29ed3b82e3",
   "payload": {
-    "profile": "aim-listing-enrichment-profile-v2",
-    "key_fields": {
-      "value": [
-        {
-          "name": "id",
-          "type": "signed_integer"
-        },
-        {
-          "name": "name",
-          "type": "string"
-        }
-      ],
-      "provenance": "seller_entered",
-      "authority": "seller_entered",
-      "source_reference": "synthetic-fixture",
-      "source_revision": "eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee"
+    "column_count": {
+      "authority": "seller_local_report",
+      "provenance": "aim_metadata",
+      "source_reference": "Listing.schema_info.columns",
+      "source_revision": "3af0b1ab5085f398be9d2b46ee158405b37b9fcf8d91744830e10ae3750680e1",
+      "value": 2
     },
     "field_descriptions": {
-      "value": [
-        {
-          "name": "id",
-          "description": "Synthetic identifier"
-        },
-        {
-          "name": "name",
-          "description": "Synthetic crop label",
-          "unit": "crop"
-        }
-      ],
-      "provenance": "seller_entered",
+      "artifact_id": "602af8b1-b6ff-4405-bc4d-e43fcb8ad3df",
       "authority": "seller_entered",
-      "source_reference": "synthetic-fixture",
-      "source_revision": "eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee"
+      "guard_result_reference": "1d09a5024316c83443dfa4f5843bb1bd196ef88cbe53ecc16d7257bd31ffd876",
+      "provenance": "allai_generated",
+      "source_reference": "Listing.description",
+      "source_revision": "3af0b1ab5085f398be9d2b46ee158405b37b9fcf8d91744830e10ae3750680e1",
+      "value": [
+        {"description": "Café identifier", "name": "id", "unit": "count"},
+        {"description": "Crop label", "name": "name", "unit": "crop"}
+      ]
+    },
+    "format": {
+      "authority": "seller_local_report",
+      "provenance": "aim_metadata",
+      "source_reference": "Listing.data_format",
+      "source_revision": "3af0b1ab5085f398be9d2b46ee158405b37b9fcf8d91744830e10ae3750680e1",
+      "value": "csv"
+    },
+    "key_fields": {
+      "authority": "seller_local_report",
+      "provenance": "aim_metadata",
+      "source_reference": "Listing.schema_info.columns",
+      "source_revision": "3af0b1ab5085f398be9d2b46ee158405b37b9fcf8d91744830e10ae3750680e1",
+      "value": [
+        {"name": "id", "type": "signed_integer"},
+        {"name": "name", "type": "string"}
+      ]
+    },
+    "license": {
+      "authority": "seller_entered",
+      "provenance": "seller_entered",
+      "source_reference": "Listing.license",
+      "source_revision": "3af0b1ab5085f398be9d2b46ee158405b37b9fcf8d91744830e10ae3750680e1",
+      "value": "MIT"
+    },
+    "profile": "aim-listing-enrichment-profile-v2",
+    "row_count": {
+      "authority": "seller_local_report",
+      "provenance": "aim_metadata",
+      "source_reference": "Listing.source_row_count",
+      "source_revision": "3af0b1ab5085f398be9d2b46ee158405b37b9fcf8d91744830e10ae3750680e1",
+      "value": 0
+    },
+    "row_meaning": {
+      "artifact_id": "262748e7-d62a-402b-a0cc-c5a1594e0340",
+      "authority": "seller_entered",
+      "guard_result_reference": "370b56d1b041a49e8cec362db51fc28f5c54a8769aee7186f8b0c012279f1667",
+      "provenance": "allai_generated",
+      "source_reference": "Listing.description",
+      "source_revision": "3af0b1ab5085f398be9d2b46ee158405b37b9fcf8d91744830e10ae3750680e1",
+      "value": "a sale"
     }
   },
-  "summary_hash": "aa400a10458871b777ab25c18816d8c04fac3f35899675996b13d9dd9b7cded1",
-  "render_hash": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
-  "source_revision": "eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee",
-  "approval_version": "00000000-0000-4000-8000-000000000099"
+  "render_hash": "8d8d763dbcfa3607e53d99c8b99803e19820e116a0d7b1629972a9a9c75fe6aa",
+  "source_revision": "3af0b1ab5085f398be9d2b46ee158405b37b9fcf8d91744830e10ae3750680e1",
+  "summary_hash": "b2874adc43bfd320657577d9694a5a1794e2175e9d9f060c418f789d7d4762ef"
 }

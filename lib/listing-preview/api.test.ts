@@ -5,6 +5,7 @@ import {renderToString} from 'react-dom/server';
 import {createElement} from 'react';
 import ListingSamplePreview from '@/components/listings/ListingSamplePreview';
 import {fetchPackage} from './transport';
+import {signedSummaryDescriptions} from './columns';
 
 afterEach(() => vi.unstubAllGlobals());
 const response = (value: unknown, status = 200) => new Response(JSON.stringify(value), {status, headers: {'content-type': 'application/json', 'cache-control': 'no-store'}});
@@ -59,4 +60,12 @@ it('treats an undeployed, absent, cached or malformed signed payload as optional
     new Response('{bad', {headers: {'content-type': 'application/json', 'cache-control': 'no-store'}})]) {
     vi.stubGlobal('fetch', vi.fn(async () => value)); expect(await fetchSignedSummaryPayload('slug', signal)).toBeNull();
   }
+});
+it('turns a signed-payload 404 into identity-only labels without throwing', async () => {
+  vi.stubGlobal('fetch', vi.fn(async () => response({detail: 'Preview unavailable'}, 404)));
+  const raw = await fetchSignedSummaryPayload('slug', new AbortController().signal);
+  expect(raw).toBeNull();
+  await expect(signedSummaryDescriptions(raw, {
+    summary_hash: 'a'.repeat(64), render_hash: 'b'.repeat(64), source_revision: 'c'.repeat(64), selected_fields: ['id'],
+  })).resolves.toEqual([]);
 });

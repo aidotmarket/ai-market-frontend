@@ -31,11 +31,13 @@ policy. There is no browser ML model and no server scan or row ingress.
 The buyer and seller sample mount read the optional no-store
 `GET /api/v1/public/listings/{slug}/at-a-glance/signed-payload` response. The
 adapter expects `{payload, summary_hash, render_hash, source_revision,
-approval_version}`. It recomputes SHA-256 of the original payload's RFC8785 bytes
-and requires exact F2-bound summary/render/source identity before joining exact
-column names. Missing rollout, stale identity, malformed payload or hash mismatch
-silently retain identity-only columns. Confirm this response shape against the
-backend amendment when available; fixtures are synthetic contract examples.
+approval_version}`. This shape is confirmed against backend amendment branch
+`build/bq-listing-enrichment-seller-tools-s1294-t-viewer-scan-amendment-s1716`
+at `5e7d9732fb02c9c97a3c6845236c7ec075f515cb`; the frontend fixture was captured
+from that route's ASGI response. The adapter recomputes SHA-256 of the original
+payload's RFC8785 bytes and requires exact F2-bound summary/render/source identity
+before joining exact column names. HTTP 404, missing deployment, stale identity,
+malformed payload or hash mismatch silently retain identity-only columns.
 
 ## Diagnostic sequence
 

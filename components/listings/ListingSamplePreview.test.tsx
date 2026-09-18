@@ -101,15 +101,17 @@ it('hides every row on a real deterministic policy failure with neutral text onl
 it('binds descriptions and units from the current signed payload before insertion', async () => {
   const signed = JSON.parse(readFileSync('tests/fixtures/preview/signed-summary-payload.json', 'utf8'));
   const e = f.manifest.approval.platform_envelope;
-  f.manifest.summary_hash = signed.summary_hash; e.binding.summary_hash = signed.summary_hash;
+  for (const field of ['summary_hash', 'render_hash', 'source_revision'] as const) {
+    f.manifest[field] = signed[field]; e.binding[field] = signed[field];
+  }
   e.seller_signature = testSign(disclosureBytes(e.binding)); e.signature = testSign(platformBytes(e));
   vi.mocked(fetchSignedSummaryPayload).mockResolvedValue(signed);
-  await view(); expect(screen.getByText('Synthetic crop label')).toBeTruthy();
+  await view(); expect(screen.getByText('Crop label')).toBeTruthy();
   expect(fetchSignedSummaryPayload).toHaveBeenCalledWith('current-canonical', expect.any(AbortSignal));
 });
 it('silently uses identity-only columns when the signed payload is absent or has another hash', async () => {
   vi.mocked(fetchSignedSummaryPayload).mockResolvedValue(JSON.parse(readFileSync('tests/fixtures/preview/signed-summary-payload.json', 'utf8')));
-  await view(); expect(screen.queryByText('Synthetic crop label')).toBeNull(); expect(screen.queryByText('Sample unavailable')).toBeNull();
+  await view(); expect(screen.queryByText('Crop label')).toBeNull(); expect(screen.queryByText('Sample unavailable')).toBeNull();
 });
 
 it('hides all rows before seller contact for an F2-signed attestation digest mismatch', async () => {

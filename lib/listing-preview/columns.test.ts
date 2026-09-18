@@ -4,10 +4,10 @@ import {joinApprovedColumns, signedSummaryDescriptions} from './columns';
 import {hex, jcs, sha} from './primitives';
 const fixture = JSON.parse(readFileSync('tests/fixtures/preview/signed-summary-payload.json', 'utf8'));
 const manifest = {...fixture, selected_fields: ['id', 'name']};
-it('recomputes the fixture RFC8785 summary hash and joins exact descriptions and units', async () => {
+it('recomputes the captured backend response RFC8785 summary hash and joins exact descriptions and units', async () => {
   expect(hex(await sha(jcs(fixture.payload)))).toBe(fixture.summary_hash);
   const labels = await signedSummaryDescriptions(fixture, manifest);
-  expect(joinApprovedColumns([{name: 'name', type: 'string'}], labels)).toEqual([{name: 'name', type: 'string', description: 'Synthetic crop label', unit: 'crop'}]);
+  expect(joinApprovedColumns([{name: 'name', type: 'string'}], labels)).toEqual([{name: 'name', type: 'string', description: 'Crop label', unit: 'crop'}]);
 });
 it.each(['summary_hash', 'render_hash', 'source_revision'])('omits descriptions on mismatched %s', async field => {
   expect(await signedSummaryDescriptions({...fixture, [field]: '0'.repeat(64)}, manifest)).toEqual([]);
