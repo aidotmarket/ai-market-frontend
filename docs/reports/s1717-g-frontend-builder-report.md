@@ -52,3 +52,27 @@ Carried D corrections:
 - Flag-off parity: exact markup equality is asserted after dark 404 in `WorkspaceData.test.tsx`, and between legacy/explicit-none payloads in `SellerReview.test.tsx`, `SellerApproval.test.tsx`, and `SellerPublication.test.tsx`.
 
 Tests use mocked HTTP and browser inputs. This is not deployed-backend, provider, object-store, or live-browser proof, and it is not an enabled-release claim.
+
+## Gate 3 R1 fold
+
+R1 implementation commit: `728a5c208f5cf33ba9ef251a191b5394c8c21683`; dark-parity test follow-up: `4385a76d47b36ecbf3d9dc70182b9e15e2f44617`.
+
+- Draft writes now have one page-level owner and one serialized version queue. Listing-field saves omit both sample keys on the legacy/dark path. When the capability is positively enabled, an existing selection is merged into later listing saves; sample changes, including unticks during an in-flight save, are queued and the final visible indices win. A source commit completes independently, then queues a best-effort sample clear.
+- The frontend now requires a positive `samples` stage in the already-read workspace capabilities payload. The pinned backend has no suitable signal in that payload, while probing review or upload would add a dark-path request. Backend follow-up is therefore required to add this tiny read-only stage and omit/disable it until the chunk-G routes are deployed. Without it, markup remains on the legacy path and no extra request is made. A route 404 after a positive signal produces the explicit `sample_route_unavailable` alert and does not silently collapse the UI.
+- New sample tick, upload and progress attributes use only basename plus saved-object index. Existing non-sample object-key rendering is unchanged.
+- `SAMPLE_REFUSALS` is one exported map pinned by comment and test to `app/services/seller_sample_upload.py` plus the upload endpoint at backend `c9bbe7338fe84d095e2bcc4f370cf2e0c7ebe179`.
+- Publication copy is “N free sample files are part of the purchased set.” The count is derived from the approved review held in the current frontend session because the pinned publication receipt has no sample fields; it is session-only and is not claimed as durable publication-receipt data.
+- `files_unavailable` no longer tells the buyer to retry when no Retry control is available. The D report citation now points to `api/client.ts`.
+
+Recorded W-D1 deviation beyond Gate 2 §4.7: `api/sellerListingDraft.ts`, `api/sellerListingReview.ts`, `api/sellerWorkspace.ts`, `components/seller-workspace/SavedWorkspaceData.tsx`, and `components/seller-workspace/SellerListingEditor.tsx`. These files were required for the draft round-trip. R1 additionally introduced the shared owner in `components/seller-workspace/SellerListingDraftStore.tsx` and wired it at the workspace page.
+
+### R1 validation
+
+- `rtk proxy npm test -- --maxWorkers=1 components/seller-workspace/SavedListingEditor.test.tsx components/seller-workspace/SavedWorkspaceData.test.tsx components/seller-workspace/WorkspaceData.test.tsx components/seller-workspace/SellerPublication.test.tsx api/sellerListingReview.test.ts` — 54 passed, 5 files.
+- `rtk proxy npm test -- --maxWorkers=1 components/seller-workspace api/sellerListingReview.test.ts api/sellerWorkspace.test.ts app/dashboard/seller-workspace/page.test.tsx 'app/dashboard/orders/[id]/page.test.tsx' 'app/dashboard/orders/[id]/DatasetMembers.test.tsx'` — 188 passed, 19 files; includes the carried D suites.
+- `rtk proxy npm run lint` — 0 errors and the same 7 unrelated `no-img-element` warnings.
+- `rtk proxy npx tsc --noEmit` — passed.
+- `rtk git diff --check` — passed before the implementation commit and again before the report commit.
+- `rtk proxy npm test -- --maxWorkers=1` — 1,048 passed and 1 inherited failure across 101 files. The unchanged inherited node is `app/login/LoginForm.test.tsx > shares one flight between a manual click and subsequent hinted hydration`; it still expected the `oauth_nonce` storage call and received none. No login file changed.
+
+An initial local attempt used Vitest's unsupported `--runInBand` option and exited before running tests; it was replaced by the repository-supported `--maxWorkers=1` commands above.
