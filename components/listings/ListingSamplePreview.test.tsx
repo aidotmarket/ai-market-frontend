@@ -60,6 +60,14 @@ it('stays hidden after an offline return and rejects an expired manifest on fres
   await mount(); fireEvent.click(screen.getByRole('button', {name: 'View sample'})); await screen.findByText('Sample unavailable');
   expect(screen.queryByRole('table')).toBeNull(); expect(fetchPackage).toHaveBeenCalledTimes(1);
 });
+it('keeps rows hidden with neutral UI when the device clock is behind the signed generation time', async () => {
+  vi.spyOn(Date, 'now').mockReturnValue(Date.parse(f.manifest.generated_at) - 1_000);
+  await mount(); fireEvent.click(screen.getByRole('button', {name: 'View sample'}));
+  await screen.findByText('Sample unavailable');
+  expect(screen.queryByRole('table')).toBeNull();
+  expect(screen.queryByText('clock_uncertain')).toBeNull();
+  expect(fetchPackage).not.toHaveBeenCalled();
+});
 it('rejects offline and late replies after a return timeout', async () => {
   await view(); await visibility('hidden'); vi.useFakeTimers({toFake: ['setTimeout', 'clearTimeout']});
   let finish!: (v: typeof f.manifest) => void; vi.mocked(fetchPreviewManifest).mockReturnValue(new Promise(r => {finish = r;}));

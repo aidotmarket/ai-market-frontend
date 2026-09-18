@@ -64,7 +64,8 @@ export async function verifyLog(e: LogEvidence, cp: Checkpoint, c: Commitment, k
 }
 export function fresh(m: Manifest, now: number) {
   const b = m.approval.platform_envelope.binding, generated = timestamp(m.generated_at), until = timestamp(m.valid_until);
-  check(Number.isFinite(now) && generated <= now && now < until && until - generated <= 30000 && until > generated, 'manifest_expired');
+  check(Number.isFinite(now) && now >= generated, 'clock_uncertain');
+  check(now < until && until - generated <= 30000 && until > generated, 'manifest_expired');
   const attested = timestamp(b.last_attested_by_seller_at), threshold = attested + Math.min(90, b.update_cadence_days === null ? 90 : Math.max(7, Math.min(90, b.update_cadence_days) * 2)) * 86400000;
   check(timestamp(m.freshness_stale_at) === threshold && m.stale === (generated >= threshold) && attested <= generated, 'freshness_mismatch');
   if (!m.stale) check(until <= threshold, 'freshness_mismatch');

@@ -116,7 +116,7 @@ describe('conjunctive bounds and freshness', () => {
   it('rejects deadline/clock uncertainty and distinguishes stale from expired', () => {
     expect(() => fresh(f.manifest, f.now)).not.toThrow();
     expect(() => fresh(f.manifest, Date.parse(f.manifest.valid_until))).toThrow('manifest_expired');
-    expect(() => fresh(f.manifest, Date.parse(f.manifest.generated_at) - 1)).toThrow('manifest_expired');
+    expect(() => fresh(f.manifest, Date.parse(f.manifest.generated_at) - 1)).toThrow('clock_uncertain');
     const m = structuredClone(f.manifest), threshold = Date.parse(m.freshness_stale_at);
     m.generated_at = m.freshness_stale_at; m.valid_until = new Date(threshold + 30000).toISOString().replace('000Z', '000000Z'); m.stale = true;
     expect(() => fresh(m, threshold + 1)).not.toThrow(); m.stale = false; expect(() => fresh(m, threshold + 1)).toThrow('freshness_mismatch');
