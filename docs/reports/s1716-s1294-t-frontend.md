@@ -258,3 +258,59 @@ points above. Whitespace differences can change only the fixed reason enum,
 because every differing separator is independently rejected as Unicode Cc or
 Cf. The browser is therefore never weaker and never admits a row the producer
 rejects on these seams.
+
+### Finding disposition
+
+This section supersedes the earlier completion-fold statements about the
+signed-payload fixture, mutation count and final suite totals. The fold started
+from `94d1bc74c643a5a93f2f099dcaaa50e2bb826012`. Commit
+`75ad36ace19e3a51234c8c76a51ea526cfb5a851` cleanly merged fetched
+`origin/main` at `3f15c1566a8f9aee2c96af397ff1eaab30f34fbc`; it has exactly those two
+parents. Each row below was committed and pushed separately.
+
+| Finding | Fold | Commit |
+|---|---|---|
+| DeepSeek F1 / GLM 1 | The legacy `SchemaTable` path now performs a tolerant exact-name label join. Null or malformed schemas render without throwing; duplicate names retain the origin/main rows but receive no ambiguous label. The verified sample path retains the strict duplicate refusal and hides every row. Buyer, seller and public-listing tests cover duplicate, empty, non-string and null inputs. | `3b2782b` |
+| Contract amendment B | After every fetched row has passed its row digest and Merkle proof, the verifier hashes its actual ordered leaf hashes with `aim-preview-sampled-leaves-v1\0` and compares the result with the signed attestation before invoking the corpus. A validly re-signed different-leaf-set fixture fails with fixed reason `sampled_list_mismatch` and never invokes the scan. Only `1.0.0` of `aim-preview-policy-v1` and `aim-preview-policy-v1-deterministic` is accepted; other versions fail as `scan_policy_unknown`. | `23a0226` |
+| DeepSeek F2 / GLM 2 | Addendum E.x was checked and grants no negative clock-skew allowance. The fail-closed rule therefore remains. A device time earlier than signed `generated_at` now yields distinct fixed reason `clock_uncertain`; actual expiry remains `manifest_expired`. Neutral UI tests prove no rows or seller fetch escape. | `d7250ce` |
+| DeepSeek F5 / GLM 3 | Vitest now assembles the complete shared signing/request/checkpoint/log fixture and runs it through `verifyManifest` with the fixture's own trusted platform key. A column-order mutation is rejected. The separate budget fixture remains its declared unsigned sizing skeleton and is not misrepresented as a valid signed manifest. | `c471028` |
+| DeepSeek F3/F8 / CC NIT-2 | The shared producer fixture remains byte-identical. The table above records every deliberate case-fold, split-whitespace and lstrip/trimStart seam; boundary vectors live only in frontend tests. Each seam is equivalent or stricter in the browser, never weaker. | `48a2137` |
+| DeepSeek F4 | The label-binding fixture is an ASGI response captured from the real backend branch implementation of `GET /api/v1/public/listings/{slug}/at-a-glance/signed-payload`, including its response envelope and provenance. Hash binding, identity-only fallback and an explicit non-throwing 404 path are tested. | `2934947` |
+
+The clock question remains open at the contract level: should a future signed
+contract grant a bounded negative-skew allowance? This frontend does not invent
+one. Under the current contract, sufficiently slow device clocks can make a
+valid sample unavailable, but support can now distinguish that condition by
+the `clock_uncertain` reason enum.
+
+### S1719 validation
+
+Validation was performed at candidate `2934947` and against the clean detached
+origin/main baseline above:
+
+| Command/check | Result |
+|---|---|
+| `npx tsc --noEmit` | Candidate exit 0. |
+| `npx vitest run --maxWorkers=1` | Final candidate: 1,020 passed, 1 failed, 1,021 total. Origin/main: 775 passed, 1 failed, 776 total. The sole failure on both is `app/login/LoginForm.test.tsx` / `shares one flight between a manual click and subsequent hinted hydration`, expecting an `oauth_nonce` write and receiving `[]`. |
+| First candidate full-suite run | 1,018 passed and 3 failed. Besides the same login failure, two untouched Seller Workspace tests failed intermittently; their isolated rerun passed 39/39 and the second full run left only the baseline login failure. No Seller Workspace file was changed. |
+| `npx eslint components/listings lib/listing-preview 'app/listings/[slug]'` | Exit 0. Two existing `@next/next/no-img-element` warnings remain in `SellerShareControls.tsx:192` and `ShareKitModal.tsx:65`. |
+| `npx next build` | Candidate and origin/main both compiled successfully, then failed while collecting `/api/keystatic/[...params]` for the same missing `KEYSTATIC_GITHUB_CLIENT_ID`, `KEYSTATIC_GITHUB_CLIENT_SECRET` and `KEYSTATIC_SECRET`. No credential was added or read. |
+| `python3 scripts/preview-policy-vectors.py` | All 59 producer vectors passed; shared fixture SHA-256 remained `7216bd5f719f4ff576c4c40fef142be6f0121663cc82ab5e059d1881a8f238b1`. |
+| `python3 scripts/preview-mutations.py` | All seven mutations were killed: skip platform envelope, render before policy completion, drop package sample hash, skip deterministic scan, skip attestation, skip fetched-leaf digest, and accept unknown policy version. |
+| Backend route fixture check | On backend viewer-scan amendment head `5e7d9732`, `pytest -q tests/test_listing_summary_signed_payload.py -x` passed 13/13 before the ASGI response was captured. The backend checkout was not modified. |
+
+Fold-only changed files are
+`app/listings/[slug]/page.test.tsx`, the listing At-a-Glance, schema and preview
+components/tests, `lib/listing-preview/{api,columns,policy,verifier,wire}` and
+their tests, `scripts/preview-mutations.py`,
+`tests/fixtures/preview/signed-summary-payload.json`, this report, and
+`docs/runbooks/listing-sample-preview.md`. The runbook update replaces its
+synthetic signed-payload claim with the verified backend response shape.
+
+Residual risk is limited and explicit: no real production package or live
+seller host was exercised; the current contract can reject valid packages on a
+slow-clocked device; the unrelated LoginForm test remains failing on main; and
+a credential-free production build cannot pass the pre-existing Keystatic
+page-data gate. Scope was strictly followed: no product behavior beyond the six
+findings was changed, the producer fixture bytes were preserved, no backend
+source was edited, and there was no merge to main or deployment.
