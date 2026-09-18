@@ -43,11 +43,11 @@ it('blocks a stale approval and ignores success after leaving the page',async()=
   late.rerender(<SellerPublication approval={approval} active={false} rendered/>);
   await act(async()=>finish(publication));expect(screen.queryByText(/published and available/)).toBeNull();
 });
-it('shows the published free sample count and review sample status',async()=>{
+it('shows seller copy for the session-only approved free sample count',async()=>{
  const sampled={...approval,sample_decision:'member_files' as const};
  api.readPublication.mockResolvedValue({publication_available:false,publication});
  render(<SellerPublication approval={sampled} active rendered sampleCount={2} sampleStatus="selected"/>);
- expect(await screen.findByText('2 sample files published free · Sample status: selected')).toBeTruthy();
+ expect(await screen.findByText('2 free sample files are part of the purchased set.')).toBeTruthy();
 });
 it('keeps none-publication markup unchanged with the widened receipt',async()=>{
  api.readPublication.mockResolvedValue({publication_available:false,publication});

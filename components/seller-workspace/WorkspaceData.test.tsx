@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
 import { act, cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { sampleUploadRefusal, WorkspaceActivity, WorkspaceData } from './WorkspaceData';
+import { SAMPLE_REFUSALS, sampleUploadRefusal, WorkspaceActivity, WorkspaceData } from './WorkspaceData';
 import type { SellerWorkspaceConnection, WorkspaceProfileJob } from '@/api/sellerWorkspace';
 
 const api = vi.hoisted(() => ({
@@ -94,9 +94,9 @@ describe('Seller data browser', () => {
     render(<WorkspaceData enabled connections={[connection]} savedSource={savedSource} sampleFilesAvailable initialSampleIndices={[]} onSaveSampleSelection={saveSamples}/>);
     expect((await screen.findByText(/Tick up to 10 saved objects/)).textContent).toContain('64 MB');
     expect(screen.getByText(/Tick up to 10 saved objects/).textContent).toContain('256 MB');
-    fireEvent.click(screen.getByRole('checkbox',{name:`Offer ${object.key} as free sample`}));
+    fireEvent.click(screen.getByRole('checkbox',{name:/Offer one.csv.*free sample/}));
     const file=new File([new Uint8Array(1024)],'one.csv');
-    fireEvent.change(screen.getByLabelText(`Upload sample for ${object.key}`),{target:{files:[file]}});
+    fireEvent.change(screen.getByLabelText(/Upload sample one.csv/),{target:{files:[file]}});
     expect(await screen.findByText('Uploaded and saved for review.')).toBeTruthy();
     expect(api.uploadWorkspaceSample).toHaveBeenCalledWith(connection.id,3,0,file,'synthetic-cancel-key',expect.any(Function));
     expect(saveSamples).toHaveBeenCalledWith([0]);
@@ -115,28 +115,38 @@ describe('Seller data browser', () => {
       ['sample size mismatch','exactly the saved file size'],
     ];
     for(const [detail,copy] of cases){const result=sampleUploadRefusal(detail);expect(result.copy).toContain(copy);expect(result.code).not.toBe('sample_upload_refused');}
+    expect(Object.keys(SAMPLE_REFUSALS)).toEqual(['Sample source not found','invalid sample basename','out of range','sample size mismatch','SAMPLE_MAX_FILE_BYTES','sample is immutable','upload already in progress','SAMPLE_MAX_FILES','SAMPLE_MAX_TOTAL_BYTES','SAMPLE_SELLER_QUOTA_BYTES','sample upload generation expired','SAMPLE_UPLOAD_TIMEOUT_S','sample_store_unavailable','SAMPLE_UPLOAD_RATE']);
   });
 
   it('shows an over-limit refusal by name',async()=>{
     api.listWorkspaceObjects.mockResolvedValue({objects:[object],next_cursor:null});
     api.uploadWorkspaceSample.mockRejectedValue({isAxiosError:true,response:{status:400,data:{detail:'SAMPLE_MAX_FILE_BYTES: 67108864'}}});
     render(<WorkspaceData enabled connections={[connection]} savedSource={savedSource} sampleFilesAvailable onSaveSampleSelection={vi.fn()}/>);
-    fireEvent.click(await screen.findByRole('checkbox',{name:`Offer ${object.key} as free sample`}));
-    fireEvent.change(screen.getByLabelText(`Upload sample for ${object.key}`),{target:{files:[new File([new Uint8Array(1024)],'one.csv')]}});
+    fireEvent.click(await screen.findByRole('checkbox',{name:/Offer one.csv.*free sample/}));
+    fireEvent.change(screen.getByLabelText(/Upload sample one.csv/),{target:{files:[new File([new Uint8Array(1024)],'one.csv')]}});
     const alert=await screen.findByRole('alert');expect(alert.textContent).toContain('per-file sample limit');expect(alert.textContent).toContain('(SAMPLE_MAX_FILE_BYTES)');
   });
 
-  it('hides the affordance after a dark 404 and restores legacy markup',async()=>{
+  it('keeps dark markup byte-identical and shows an explicit alert for a deployed-signal 404',async()=>{
     api.listWorkspaceObjects.mockResolvedValue({objects:[object],next_cursor:null});
     const props={enabled:true,connections:[connection],savedSource,onSaveSampleSelection:vi.fn()};
     const legacy=render(<WorkspaceData {...props} sampleFilesAvailable={false}/>);
     await screen.findByText(object.key);const legacyMarkup=legacy.container.innerHTML;legacy.unmount();
     api.uploadWorkspaceSample.mockRejectedValue({isAxiosError:true,response:{status:404,data:{detail:'Not Found'}}});
     const feature=render(<WorkspaceData {...props} sampleFilesAvailable/>);
-    fireEvent.click(await screen.findByRole('checkbox',{name:`Offer ${object.key} as free sample`}));
-    fireEvent.change(screen.getByLabelText(`Upload sample for ${object.key}`),{target:{files:[new File([new Uint8Array(1024)],'one.csv')]}});
-    await waitFor(()=>expect(screen.queryByRole('region',{name:'Workspace sample files'})).toBeNull());
-    expect(feature.container.innerHTML).toBe(legacyMarkup);
+    expect(legacyMarkup).not.toContain('Free sample');
+    fireEvent.click(await screen.findByRole('checkbox',{name:/Offer one.csv.*free sample/}));
+    fireEvent.change(screen.getByLabelText(/Upload sample one.csv/),{target:{files:[new File([new Uint8Array(1024)],'one.csv')]}});
+    expect((await screen.findByRole('alert')).textContent).toContain('sample_route_unavailable');
+    expect(feature.container.querySelector('[aria-label="Workspace sample files"]')).toBeTruthy();
+  });
+
+  it('does not place a full object key in new sample attributes',async()=>{
+    api.listWorkspaceObjects.mockResolvedValue({objects:[object],next_cursor:null});
+    const {container}=render(<WorkspaceData enabled connections={[connection]} savedSource={savedSource} sampleFilesAvailable onSaveSampleSelection={vi.fn()}/>);
+    await screen.findByRole('checkbox',{name:/Offer one.csv.*free sample/});
+    const matching=[...container.querySelectorAll('*')].flatMap(node=>[...node.attributes].map(attribute=>attribute.value)).filter(value=>value.includes(object.key));
+    expect(matching).toEqual([`Select ${object.key}`]);
   });
 });
 

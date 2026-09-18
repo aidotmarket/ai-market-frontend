@@ -26,7 +26,7 @@ const reasons: Record<string, string> = {
   delivery_retention_expired: 'This dataset is no longer available for download.',
   download_window_expired: 'This order’s download window has ended.',
   access_closed: 'Download access for this order has been closed.',
-  files_unavailable: 'Files are temporarily unavailable. Please try again.',
+  files_unavailable: 'Files are temporarily unavailable.',
 };
 
 function refusal(detail: unknown): string {

@@ -12,6 +12,7 @@ import R2ConnectionForm from '@/components/seller-workspace/R2ConnectionForm';
 import { StorageProviders } from '@/components/seller-workspace/StorageProviders';
 import SellerListingEditor from '@/components/seller-workspace/SellerListingEditor';
 import SavedListingEditor from '@/components/seller-workspace/SavedListingEditor';
+import {SellerListingDraftProvider} from '@/components/seller-workspace/SellerListingDraftStore';
 import { WorkspacePanel } from '@/components/seller-workspace/WorkspacePanel';
 import { createListingAssistant } from '@/api/sellerListingAssistant';
 import {
@@ -561,6 +562,9 @@ export default function SellerWorkspacePage() {
   }
 
   return (
+    <SellerListingDraftProvider
+      enabled={capabilities?.master.enabled===true&&capabilities?.drafts?.enabled===true&&capabilities.drafts.status==='available'}
+      sampleCapability={capabilities?.master.enabled===true&&capabilities?.drafts?.enabled===true&&capabilities.drafts.status==='available'&&capabilities?.samples?.enabled===true&&capabilities.samples.status==='available'}>
     <div className="space-y-6">
       <WorkspaceOverview connections={currentConnections} view={view} onViewChange={(nextView) => { setR2Target(undefined); clearSensitive(); setActionError(null); setDisconnectConfirmation(null); setView(nextView); }} />
       <WorkspacePanel active={view === 'data'}>{capabilities?.master.enabled && capabilities.sources?.enabled && capabilities.sources.status === 'available' ? <SavedWorkspaceData connections={connections} enabled={isStorageDiscoveryAvailable(capabilities)} /> : <WorkspaceData connections={connections} enabled={capabilities !== null && isStorageDiscoveryAvailable(capabilities)} />}</WorkspacePanel>
@@ -867,5 +871,6 @@ export default function SellerWorkspacePage() {
       )}
       </WorkspacePanel>
     </div>
+    </SellerListingDraftProvider>
   );
 }

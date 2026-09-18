@@ -27,6 +27,8 @@ export interface SellerWorkspaceCapabilities {
   sources?: CapabilityStage | null;
   review?: CapabilityStage | null;
   approval?: CapabilityStage | null;
+  /** Read-only deployment signal; the backend must omit it until sample routes are deployed. */
+  samples?: CapabilityStage | null;
   providers: {
     aws: ProviderCapabilities;
     r2: ProviderCapabilities;

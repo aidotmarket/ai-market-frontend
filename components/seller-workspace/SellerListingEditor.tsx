@@ -34,11 +34,9 @@ export default function SellerListingEditor({ assistant, active = true, initialC
   const [price, setPrice] = useState(initialContent?.price ?? '');
   const priceInvalid = price !== '' && (!/^[0-9]{1,12}(?:\.[0-9]{1,2})?$/.test(price) || Number(price) > 999999.99 || (Number(price) > 0 && Number(price) < 25));
   const [license, setLicense] = useState(initialContent?.license ?? '');
-  const sampleDecision = initialContent?.sample_decision ?? 'none';
-  const sampleObjectIndices = initialContent?.sample_object_indices ?? [];
   const [previewOpen, setPreviewOpen] = useState(false);
-  const snapshot = JSON.stringify({ brief, ...draft, price, license, sample_decision:sampleDecision, sample_object_indices:sampleObjectIndices });
-  const [savedSnapshot, setSavedSnapshot] = useState(initialContent ? JSON.stringify({ brief: initialContent.brief, title: initialContent.title, description: initialContent.description, category: initialContent.category, tags: initialContent.tags, price: initialContent.price, license: initialContent.license, sample_decision:sampleDecision, sample_object_indices:sampleObjectIndices }) : '');
+  const snapshot = JSON.stringify({ brief, ...draft, price, license });
+  const [savedSnapshot, setSavedSnapshot] = useState(initialContent ? JSON.stringify({ brief: initialContent.brief, title: initialContent.title, description: initialContent.description, category: initialContent.category, tags: initialContent.tags, price: initialContent.price, license: initialContent.license }) : '');
   const [saving, setSaving] = useState(false);
   const savingRef = useRef(false);
   const [saveError, setSaveError] = useState<string | null>(null);
