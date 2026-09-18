@@ -33,6 +33,11 @@ does not merge or deploy anything.
      **View sample** activation.
    - Verified rows remain only in React component memory and are cleared on
      visibility/page lifecycle changes.
+3. Rendering derives an inert text representation without changing verified
+   row values. Unicode control, format, and surrogate code points (`Cc`, `Cf`,
+   `Cs`) become the visible replacement character. Scalar and nested values use
+   text nodes only; long text retains the existing truncate/expand affordance.
+   Formula-looking strings remain ordinary text.
 
 No production code change was needed for item 2; this audit is the item artifact.
 

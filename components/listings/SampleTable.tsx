@@ -7,10 +7,19 @@ import type {ApprovedColumn} from '@/lib/listing-preview/columns';
 import {isVerifiedSample} from '@/lib/listing-preview/verifier';
 import {canonical} from '@/lib/listing-preview/primitives';
 
+export function neutralizeCellText(value: string): string {
+  return value.replace(/[\p{Cc}\p{Cf}\p{Cs}]/gu, '\uFFFD');
+}
+function neutralizedCanonical(value: Json): string {
+  if (typeof value === 'string') return canonical(neutralizeCellText(value));
+  if (Array.isArray(value)) return `[${value.map(neutralizedCanonical).join(',')}]`;
+  if (value && typeof value === 'object') return `{${Object.keys(value).sort().map(key => `${canonical(neutralizeCellText(key))}:${neutralizedCanonical(value[key])}`).join(',')}}`;
+  return canonical(value);
+}
 export function cellText(cell: Cell): string {
   if (cell.kind === 'missing' || cell.kind === 'null') return cell.kind;
   if (cell.kind === 'string' && cell.value === '') return 'empty string';
-  return typeof cell.value === 'string' ? cell.value : canonical(cell.value);
+  return typeof cell.value === 'string' ? neutralizeCellText(cell.value) : neutralizedCanonical(cell.value);
 }
 function decimalParts(value: string): [bigint, number] {
   const [whole, fraction = ''] = value.split('.'); return [BigInt(whole + fraction), fraction.length];
