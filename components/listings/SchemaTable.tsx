@@ -31,10 +31,9 @@ export default function SchemaTable({columns, descriptions = [], variant = 'lega
   columns: ApprovedColumn[] | null; descriptions?: ApprovedDescription[] | null; variant?: 'legacy' | 'summary';
 }) {
   const joined = joinLegacyColumns(columns, descriptions);
-  const safeDescriptions = Array.isArray(descriptions) ? descriptions : [];
   const summary = variant === 'summary';
-  const showDescription = safeDescriptions.some(detail => typeof detail?.description === 'string' && detail.description.length > 0);
-  const showUnit = safeDescriptions.some(detail => typeof detail?.unit === 'string' && detail.unit.length > 0);
+  const showDescription = joined.some(column => typeof column.description === 'string' && column.description.length > 0);
+  const showUnit = joined.some(column => typeof column.unit === 'string' && column.unit.length > 0);
   return <div className={summary ? 'max-w-full overflow-x-auto' : 'overflow-x-auto'}
     tabIndex={summary ? 0 : undefined} role={summary ? 'region' : undefined} aria-label={summary ? 'Key fields schema' : undefined}>
     <table className="min-w-full text-sm border border-gray-200 rounded-lg">
