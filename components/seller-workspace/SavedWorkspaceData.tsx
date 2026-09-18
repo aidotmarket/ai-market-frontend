@@ -11,20 +11,33 @@ export default function SavedWorkspaceData({connections, enabled,sampleLimits}: 
   const [failed, setFailed] = useState(false);
   const [retry, setRetry] = useState(0);
   const [saving, setSaving] = useState(false);
-  const {draft,loaded,sampleCapability,sampleIndices,saveSamples,beginSelectionSave,finishSelectionSave}=useSellerListingDraft();
+  const {draft,loaded,sampleCapability,sampleIndices,selectionSavePending,saveSamples,beginSelectionSave,finishSelectionSave,setVisibleSampleIndices}=useSellerListingDraft();
   const inFlight = useRef(false);
   const version = useRef(0);
+  const observedVersion=useRef<number|null>(null);
+  const draftState=useRef({draft,loaded,sampleIndices,selectionSavePending,saveSamples});
   const pending = useRef<{serialized: string; id: string; version: number} | null>(null);
+  useEffect(()=>{draftState.current={draft,loaded,sampleIndices,selectionSavePending,saveSamples};},[draft,loaded,sampleIndices,selectionSavePending,saveSamples]);
   useEffect(() => {
     let current = true;
     setLoading(true); setFailed(false);
     readListingSource()
-      .then(result => { if (current) { setSource(result); version.current = result?.version ?? 0; } })
+      .then(async result => { if (current) {
+        const nextVersion=result?.version??0;const changed=observedVersion.current!==null&&observedVersion.current!==nextVersion;
+        observedVersion.current=nextVersion;setSource(result);version.current=nextVersion;
+        if(changed&&sampleCapability){
+          const state=draftState.current;beginSelectionSave();let cleared=false;
+          try{if(state.loaded&&(state.selectionSavePending||state.sampleIndices.length>0||state.draft?.content.sample_decision==='member_files'))await state.saveSamples([]);cleared=true;}
+          catch{/* The source read is valid; the durable draft owner keeps Review blocked until reconciliation. */}
+          finally{finishSelectionSave(cleared);}
+        }
+      } })
       .catch(() => { if (current) setFailed(true); }).finally(() => { if (current) setLoading(false); });
     return () => { current = false; };
   }, [retry]);
   async function save(connection: SellerWorkspaceConnection, objects: WorkspaceObject[]) {
     if (inFlight.current) throw new Error('A file selection save is already pending');
+    const sampleState=draftState.current;
     inFlight.current = true; setSaving(true);beginSelectionSave();let succeeded=false;
     try {
       const content: SourceContent = {connection_id:connection.id, connection_version:connection.version, version_mode:'current',
@@ -33,15 +46,15 @@ export default function SavedWorkspaceData({connections, enabled,sampleLimits}: 
       if (!pending.current || pending.current.serialized !== serialized || pending.current.version !== version.current)
         pending.current = {serialized, id:crypto.randomUUID(), version:version.current};
       const result = await saveListingSource(content, pending.current.version, pending.current.id);
-      version.current = result.version; pending.current = null; setSource(result);
+      version.current = result.version;observedVersion.current=result.version; pending.current = null; setSource(result);
       succeeded=true;
-      if (loaded&&draft?.content.sample_decision==='member_files'&&sampleIndices.length>0) {
-        try { await saveSamples([]); } catch { succeeded=false; /* Source commit remains successful; retry from the sample selector. */ }
+      if (sampleCapability&&sampleState.loaded&&(sampleState.selectionSavePending||sampleState.sampleIndices.length>0||sampleState.draft?.content.sample_decision==='member_files')) {
+        try { await sampleState.saveSamples([]); } catch { succeeded=false; /* Source commit remains successful; retry from the sample selector. */ }
       }
     } finally { finishSelectionSave(succeeded);inFlight.current = false; setSaving(false); }
   }
   if (loading) return <p role="status" className="p-5 text-sm text-gray-600">Loading your saved file selection…</p>;
   if (failed) return <div role="alert" className="rounded-xl border border-red-200 p-5 text-sm text-red-800">Your saved file selection could not be loaded.<button className="ml-3 underline" onClick={() => setRetry(value => value + 1)}>Try loading again</button></div>;
   return <WorkspaceData connections={connections} enabled={enabled} savedSource={source} onSaveSelection={save} saving={saving}
-    sampleFilesAvailable={sampleCapability&&loaded} initialSampleIndices={sampleIndices} onSaveSampleSelection={saveSamples} sampleLimits={sampleLimits} />;
+    sampleFilesAvailable={sampleCapability&&loaded} initialSampleIndices={sampleIndices} onSaveSampleSelection={saveSamples} onVisibleSampleSelectionChange={setVisibleSampleIndices} sampleLimits={sampleLimits} />;
 }

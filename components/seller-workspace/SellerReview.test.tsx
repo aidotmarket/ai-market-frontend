@@ -1,14 +1,15 @@
 // @vitest-environment jsdom
 import {useState} from 'react';
-import { cleanup, fireEvent, render, screen,waitFor } from '@testing-library/react';
+import { act, cleanup, fireEvent, render, screen,waitFor } from '@testing-library/react';
 import { afterEach, expect, it, vi } from 'vitest';
 import SellerReview from './SellerReview';
-import {SellerListingDraftProvider,useSellerListingDraft} from './SellerListingDraftStore';
+import {resetSellerListingDraftOwnerForTests,SellerListingDraftProvider,useSellerListingDraft,useSellerListingDraftStatus} from './SellerListingDraftStore';
+import type {SavedListingDraft} from '@/api/sellerListingDraft';
 const api = vi.hoisted(() => ({readListingReview:vi.fn(),readReviewSourcePage:vi.fn()}));
 const drafts=vi.hoisted(()=>({readListingDraft:vi.fn(),saveListingDraft:vi.fn()}));
 vi.mock('@/api/sellerListingReview', () => api);
 vi.mock('@/api/sellerListingDraft',()=>drafts);
-afterEach(() => {cleanup();vi.resetAllMocks();});
+afterEach(() => {cleanup();resetSellerListingDraftOwnerForTests();vi.resetAllMocks();});
 it('displays saved fields without exposing an approval or publication action', async () => {
   const html = '<!doctype html><html><body><h1>Saved retail offer</h1><p>$25.00</p></body></html>';
   api.readListingReview.mockResolvedValue({rendered_html:html,fields:{title:'Saved retail offer', description:'Weekly totals', category:'Retail',tags:'retail',price:'25.00',license:'Research'},source_page:{files:[{key:'private/retail.csv',size:42,etag:'synthetic',version_id:null}],total_count:1,total_size_bytes:42,offset:0,next_cursor:null},missing_fields:[],approval_available:false});
@@ -30,6 +31,25 @@ function PendingReviewHarness(){
  const {loaded,saveSamples}=useSellerListingDraft();const [active,setActive]=useState(false);
  return <><button disabled={!loaded} onClick={()=>void saveSamples([0])}>Start sample save</button><button onClick={()=>setActive(true)}>Open review</button><SellerReview active={active} enabled/></>;
 }
+function DraftOwnerProbe(){
+ const {loaded,saveSamples,sampleIndices}=useSellerListingDraft();const status=useSellerListingDraftStatus();
+ return <><button disabled={!loaded} onClick={()=>void saveSamples([0])}>Persist sample</button><span>{sampleIndices.join(',')}</span><span>{status.selectionSavePending?'pending':'settled'}</span></>;
+}
+it('keeps the draft transaction owner across a provider remount',async()=>{
+ let persisted:SavedListingDraft={version:1,content:{brief:'',title:'',description:'',category:'',tags:'',price:'',license:'',sample_decision:'none',sample_object_indices:[]},updated_at:'2026-09-18T12:00:00Z'};
+ let finish!:(value:typeof persisted)=>void;
+ drafts.readListingDraft.mockImplementation(async()=>persisted);
+ drafts.saveListingDraft.mockImplementation(()=>new Promise(resolve=>{finish=value=>{persisted=value;resolve(value);};}));
+ const view=render(<SellerListingDraftProvider enabled sampleCapability><DraftOwnerProbe/></SellerListingDraftProvider>);
+ await waitFor(()=>expect((screen.getByRole('button',{name:'Persist sample'}) as HTMLButtonElement).disabled).toBe(false));
+ fireEvent.click(screen.getByRole('button',{name:'Persist sample'}));await screen.findByText('pending');
+ view.rerender(<SellerListingDraftProvider key="replacement" enabled sampleCapability><DraftOwnerProbe/></SellerListingDraftProvider>);
+ expect(screen.getByText('pending')).toBeTruthy();
+ await act(async()=>finish({...persisted,version:2,content:{...persisted.content,sample_decision:'member_files',sample_object_indices:[0]}}));
+ await waitFor(()=>expect(screen.getByText('settled')).toBeTruthy());
+ expect(screen.getByText('0')).toBeTruthy();
+ expect(drafts.readListingDraft).toHaveBeenCalledTimes(2);
+});
 it('disables review while a sample selection save is pending',async()=>{
  drafts.readListingDraft.mockResolvedValue({version:1,content:{brief:'',title:'',description:'',category:'',tags:'',price:'',license:''}});
  drafts.saveListingDraft.mockReturnValue(new Promise(()=>{}));

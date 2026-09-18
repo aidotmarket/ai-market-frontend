@@ -3,7 +3,7 @@ import { act, cleanup, fireEvent, render, screen, waitFor } from '@testing-libra
 import { afterEach, beforeEach, expect, it, vi } from 'vitest';
 import { AxiosError } from 'axios';
 import SavedListingEditor from './SavedListingEditor';
-import {SellerListingDraftProvider} from './SellerListingDraftStore';
+import {resetSellerListingDraftOwnerForTests,SellerListingDraftProvider} from './SellerListingDraftStore';
 
 const api = vi.hoisted(() => ({ readListingDraft: vi.fn(), saveListingDraft: vi.fn() }));
 vi.mock('@/api/sellerListingDraft', () => api);
@@ -12,7 +12,7 @@ beforeEach(() => {
   vi.clearAllMocks();
   api.readListingDraft.mockResolvedValue({ version: 3, content, updated_at: '2026-09-07T00:00:00Z' });
 });
-afterEach(cleanup);
+afterEach(()=>{cleanup();resetSellerListingDraftOwnerForTests();});
 const renderEditor=(sampleCapability=false)=>render(<SellerListingDraftProvider enabled sampleCapability={sampleCapability}><SavedListingEditor active /></SellerListingDraftProvider>);
 
 it('loads an account draft before editing and preserves newer edits during a save', async () => {
