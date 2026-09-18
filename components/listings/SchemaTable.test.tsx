@@ -21,3 +21,13 @@ it('omits labels for ambiguous legacy names while retaining duplicate rows', () 
   expect(html).not.toContain('first');
   expect(html).not.toContain('second');
 });
+
+it.each([
+  ['description', {description: {unsafe: true}}, [{name: 'labelled', description: 'safe'}]],
+  ['unit', {unit: ['unsafe']}, [{name: 'labelled', unit: 'kg'}]],
+  ['type', {type: {unsafe: true}}, []],
+])('renders an object-valued legacy %s field inertly', (_field, unsafe, descriptions) => {
+  expect(() => renderToStaticMarkup(<SchemaTable variant="summary"
+    columns={[{name: 'unsafe', type: 'string', ...unsafe}, {name: 'labelled', type: 'string'}] as never}
+    descriptions={descriptions as never} />)).not.toThrow();
+});

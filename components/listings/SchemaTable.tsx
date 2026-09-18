@@ -18,7 +18,7 @@ function joinLegacyColumns(columns: unknown, descriptions: unknown): ApprovedCol
       && columnNames.filter(value => value === raw.name).length === 1
       && descriptionNames.filter(value => value === raw.name).length === 1;
     const found = unambiguous ? rawDescriptions.find(detail => detail && typeof detail === 'object' && (detail as {name?: unknown}).name === raw.name) as {description?: unknown; unit?: unknown} | undefined : undefined;
-    return {...raw, name, type,
+    return {name, type,
       ...(found ? {
         description: typeof found.description === 'string' ? found.description : undefined,
         unit: typeof found.unit === 'string' ? found.unit : undefined,
