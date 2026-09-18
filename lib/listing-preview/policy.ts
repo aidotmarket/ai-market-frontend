@@ -4,11 +4,17 @@ import {requirePreview as check} from './primitives';
 /** Event Ledger b8ddbd10: producer ML evidence is authenticated by F2. This
  * independent browser pass implements only the frozen deterministic corpus.
  * No network, logging, matched values or DOM operations are permitted here. */
-export const DETERMINISTIC_POLICY = 'aim-preview-policy-v1-deterministic';
-export const PRODUCER_POLICY = 'aim-preview-policy-v1';
-export const POLICY_VERSION = '1.0.0';
+export const ACCEPTED_POLICY_VERSIONS = {
+  producer: 'aim-preview-policy-v1',
+  deterministic: 'aim-preview-policy-v1-deterministic',
+  version: '1.0.0',
+} as const;
+export const DETERMINISTIC_POLICY = ACCEPTED_POLICY_VERSIONS.deterministic;
+export const PRODUCER_POLICY = ACCEPTED_POLICY_VERSIONS.producer;
+export const POLICY_VERSION = ACCEPTED_POLICY_VERSIONS.version;
 export function requirePolicyVersion(policy: string, version: string): void {
-  check((policy === PRODUCER_POLICY || policy === DETERMINISTIC_POLICY) && version === POLICY_VERSION, 'scan_policy_unknown');
+  check((policy === ACCEPTED_POLICY_VERSIONS.producer || policy === ACCEPTED_POLICY_VERSIONS.deterministic)
+    && version === ACCEPTED_POLICY_VERSIONS.version, 'scan_policy_unknown');
 }
 // Python Unicode word boundaries expanded explicitly (JS \b is ASCII-only).
 const rules: readonly [string, RegExp][] = [
