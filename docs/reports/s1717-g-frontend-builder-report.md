@@ -76,3 +76,22 @@ Recorded W-D1 deviation beyond Gate 2 §4.7: `api/sellerListingDraft.ts`, `api/s
 - `rtk proxy npm test -- --maxWorkers=1` — 1,048 passed and 1 inherited failure across 101 files. The unchanged inherited node is `app/login/LoginForm.test.tsx > shares one flight between a manual click and subsequent hinted hydration`; it still expected the `oauth_nonce` storage call and received none. No login file changed.
 
 An initial local attempt used Vitest's unsupported `--runInBand` option and exited before running tests; it was replaced by the repository-supported `--maxWorkers=1` commands above.
+
+## Gate 3 R2 fold
+
+R2 implementation commit: `af3f2343a6685779f7f859a63b24e750b5c87856`. Backend contract verified at `ba3889064106cd2c4c815a69a25ba7b9bbb3b3d4`: `samples` is omitted flag-off and is exactly `{enabled,status,reason}` flag-on; legacy no-sample reviews omit sample decision/index fields.
+
+- Sample ticks are local until upload succeeds. Draft PUT success establishes the confirmed selection; failure restores the last persisted ticks with `sample_selection_save_failed`. Review and approval stay disabled during a selection write and after an unresolved failure, and approval uses the persisted review selection.
+- Draft reads retain the legacy visit-lazy request path when `samples` is absent and run once eagerly when the sample stage is available. Source saves clear only a loaded persisted `member_files` selection.
+- Persisted sample rows remount with the Replace affordance. Client limits use a server payload when present and otherwise fixed documented defaults; they are no longer frontend-environment tunable. Refusal names and the pin comment match the R2 upload service and endpoint.
+- Publication no longer accepts the unused sample-status prop and renders `No free sample files` for the zero-count member-file branch.
+
+R2 changed files: `api/sellerListingReview.test.ts`, `api/sellerWorkspace.test.ts`, `api/sellerWorkspace.ts`, `app/dashboard/seller-workspace/page.test.tsx`, `app/dashboard/seller-workspace/page.tsx`, `components/seller-workspace/SavedListingEditor.tsx`, `components/seller-workspace/SavedWorkspaceData.test.tsx`, `components/seller-workspace/SavedWorkspaceData.tsx`, `components/seller-workspace/SellerApproval.tsx`, `components/seller-workspace/SellerListingDraftStore.tsx`, `components/seller-workspace/SellerPublication.test.tsx`, `components/seller-workspace/SellerPublication.tsx`, `components/seller-workspace/SellerReview.test.tsx`, `components/seller-workspace/SellerReview.tsx`, `components/seller-workspace/WorkspaceData.test.tsx`, `components/seller-workspace/WorkspaceData.tsx`, and this report.
+
+### R2 validation
+
+- Focused G plus carried D suites: **168 passed**, 11 files.
+- `npm run lint`: 0 errors and the same 7 unrelated `no-img-element` warnings.
+- `npx tsc --noEmit`: passed.
+- `git diff --check`: passed.
+- Full suite with Node `v25.6.0`: **1,056 passed, 1 inherited failure**, 101 files. The unchanged inherited node is `app/login/LoginForm.test.tsx > shares one flight between a manual click and subsequent hinted hydration`; it expected the `oauth_nonce` storage call and received none. No login file changed.
