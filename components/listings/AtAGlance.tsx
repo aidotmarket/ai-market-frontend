@@ -37,7 +37,12 @@ function humanSize(bytes: number): string {
 // One inert renderer for the seller preview and the public approved projection.
 export default function AtAGlance({summary, audience}: {summary?: ListingSummary | null; audience: Audience}) {
   if (!summary || !hasSupportedSummaryFields(summary)) return null;
-  const descriptions = summary.field_descriptions?.provenance === 'absent' ? [] : summary.field_descriptions?.value ?? [];
+  const rawDescriptions = summary.field_descriptions?.provenance === 'absent' ? [] : summary.field_descriptions?.value;
+  const descriptions = (Array.isArray(rawDescriptions) ? rawDescriptions : []).map(detail => ({
+    name: typeof detail?.name === 'string' || typeof detail?.name === 'number' ? String(detail.name) : '',
+    description: typeof detail?.description === 'string' ? detail.description : undefined,
+    unit: typeof detail?.unit === 'string' ? detail.unit : undefined,
+  }));
   return <section aria-label="At a glance" className="min-w-0 space-y-4 rounded-xl border border-gray-200 bg-white p-5 break-words">
     <h2 className="text-lg font-semibold text-gray-900">At a glance</h2>
     {fields.map(([key, label]) => {

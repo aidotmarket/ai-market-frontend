@@ -68,3 +68,11 @@ it.each(['buyer', 'seller'] as const)('renders no markup for empty %s summaries'
     expect(renderToStaticMarkup(<AtAGlance audience={audience} summary={empty} />)).toBe('');
   }
 });
+
+it.each(['buyer', 'seller'] as const)('keeps duplicate and malformed legacy columns non-throwing for %s', audience => {
+  const malformed = {...summary,
+    key_fields: field([{name: 'id', type: 'string'}, {name: 'id', type: 'integer'}, {name: 7, type: 'integer'}, {name: '', type: 'string'}] as never),
+    field_descriptions: field([{name: 'id', description: 'ambiguous'}, {name: 'id', description: 'duplicate'}] as never),
+  };
+  expect(() => renderToStaticMarkup(<AtAGlance audience={audience} summary={malformed} />)).not.toThrow();
+});

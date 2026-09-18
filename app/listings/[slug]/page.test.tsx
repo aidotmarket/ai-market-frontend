@@ -295,6 +295,15 @@ it('keeps empty and null summaries byte-identical to the legacy absent buyer rou
   }
 });
 
+it('renders the public listing page when legacy schema columns contain duplicates', async () => {
+  fetchPublicListing.mockReset(); fetchListingVersions.mockReset();
+  const html = await renderPage(makeListing({schema_summary: {
+    columns: ['id', 'id'], column_count: 2, sample_types: {id: 'string'},
+  }}));
+  expect(html).toContain('Schema Information');
+  expect(html.match(/>id<\/td>/g)).toHaveLength(2);
+});
+
 
 describe('S1717 member_files and verification scope', () => {
   const scope = '7 data files scanned; 3 documentation files are not part of the data set';
