@@ -1,9 +1,13 @@
 // @vitest-environment jsdom
-import { cleanup, fireEvent, render, screen } from '@testing-library/react';
+import {useState} from 'react';
+import { cleanup, fireEvent, render, screen,waitFor } from '@testing-library/react';
 import { afterEach, expect, it, vi } from 'vitest';
 import SellerReview from './SellerReview';
+import {SellerListingDraftProvider,useSellerListingDraft} from './SellerListingDraftStore';
 const api = vi.hoisted(() => ({readListingReview:vi.fn(),readReviewSourcePage:vi.fn()}));
+const drafts=vi.hoisted(()=>({readListingDraft:vi.fn(),saveListingDraft:vi.fn()}));
 vi.mock('@/api/sellerListingReview', () => api);
+vi.mock('@/api/sellerListingDraft',()=>drafts);
 afterEach(() => {cleanup();vi.resetAllMocks();});
 it('displays saved fields without exposing an approval or publication action', async () => {
   const html = '<!doctype html><html><body><h1>Saved retail offer</h1><p>$25.00</p></body></html>';
@@ -21,6 +25,20 @@ it('displays saved fields without exposing an approval or publication action', a
 it('does not request a review before the capability is available', () => {
   render(<SellerReview active enabled={false} />);
   expect(api.readListingReview).not.toHaveBeenCalled();
+});
+function PendingReviewHarness(){
+ const {loaded,saveSamples}=useSellerListingDraft();const [active,setActive]=useState(false);
+ return <><button disabled={!loaded} onClick={()=>void saveSamples([0])}>Start sample save</button><button onClick={()=>setActive(true)}>Open review</button><SellerReview active={active} enabled/></>;
+}
+it('disables review while a sample selection save is pending',async()=>{
+ drafts.readListingDraft.mockResolvedValue({version:1,content:{brief:'',title:'',description:'',category:'',tags:'',price:'',license:''}});
+ drafts.saveListingDraft.mockReturnValue(new Promise(()=>{}));
+ render(<SellerListingDraftProvider enabled sampleCapability><PendingReviewHarness/></SellerListingDraftProvider>);
+ await waitFor(()=>expect((screen.getByRole('button',{name:'Start sample save'}) as HTMLButtonElement).disabled).toBe(false));
+ fireEvent.click(screen.getByRole('button',{name:'Start sample save'}));fireEvent.click(screen.getByRole('button',{name:'Open review'}));
+ expect(await screen.findByText(/Review is disabled while/)).toBeTruthy();
+ expect((screen.getByRole('button',{name:'Refresh saved review'}) as HTMLButtonElement).disabled).toBe(true);
+ expect(api.readListingReview).not.toHaveBeenCalled();
 });
 
 it('shows the v2 sample statement with basename, size and index',async()=>{

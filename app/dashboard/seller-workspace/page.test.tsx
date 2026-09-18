@@ -176,10 +176,19 @@ describe('SellerWorkspacePage safety boundaries', () => {
       providers: { ...enabledCapabilities.providers, aws: { ...enabledCapabilities.providers.aws, connect: { enabled: false, status: 'disabled', reason: 'stage_disabled' } } },
     });
     render(<SellerWorkspacePage />);
-    fireEvent.click(await screen.findByRole('button', { name: 'Prepare with Allai' }));
+    const prepare=await screen.findByRole('button', { name: 'Prepare with Allai' });
+    expect(draftsApi.readListingDraft).not.toHaveBeenCalled();
+    fireEvent.click(prepare);
     await screen.findByRole('button', { name: 'Save private draft' });
     expect(draftsApi.readListingDraft).toHaveBeenCalledTimes(1);
     expect(sellerWorkspaceApi.listSellerWorkspaceConnections).not.toHaveBeenCalled();
+  });
+
+  it('reads one draft eagerly only when the backend enables samples',async()=>{
+    sellerWorkspaceApi.getSellerWorkspaceCapabilities.mockResolvedValue({...enabledCapabilities,
+      drafts:{enabled:true,status:'available',reason:'enabled'},samples:{enabled:true,status:'available',reason:'enabled'}});
+    render(<SellerWorkspacePage/>);
+    await waitFor(()=>expect(draftsApi.readListingDraft).toHaveBeenCalledTimes(1));
   });
 
   it('does not request saved drafts unless backend capability enables them', async () => {

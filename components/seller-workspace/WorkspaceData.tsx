@@ -9,11 +9,12 @@ import {
   listWorkspaceObjects, listWorkspaceProfileJobs,
   SAMPLE_MAX_FILE_BYTES,SAMPLE_MAX_FILES,SAMPLE_MAX_TOTAL_BYTES,uploadWorkspaceSample,
   type SellerWorkspaceConnection, type WorkspaceObject,
-  type WorkspaceProfileEvidence, type WorkspaceProfileJob,
+  type SampleLimits,type WorkspaceProfileEvidence, type WorkspaceProfileJob,
 } from '@/api/sellerWorkspace';
 
 const buttonClass = 'rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#3F51B5] disabled:cursor-not-allowed disabled:opacity-50';
 const objectIdentity = (object: WorkspaceObject) => JSON.stringify([object.key, object.version_id, object.etag, object.size]);
+const DEFAULT_LIMITS:SampleLimits={max_files:SAMPLE_MAX_FILES,max_file_bytes:SAMPLE_MAX_FILE_BYTES,max_total_bytes:SAMPLE_MAX_TOTAL_BYTES};
 
 export function formatBytes(bytes: number) {
   if (!Number.isFinite(bytes) || bytes < 0) return 'Unknown';
@@ -29,8 +30,8 @@ export function WorkspaceNotice({ title, children }: { title: string; children: 
 type SaveSelection = (connection: SellerWorkspaceConnection, objects: WorkspaceObject[]) => Promise<void>;
 type SaveSampleSelection=(indices:number[])=>Promise<void>;
 export function WorkspaceData({ connections, enabled, savedSource, onSaveSelection, saving = false,
-  sampleFilesAvailable=false,initialSampleIndices=[],onSaveSampleSelection }: { connections: SellerWorkspaceConnection[]; enabled: boolean; savedSource?: SourceRead | null; onSaveSelection?: SaveSelection; saving?: boolean;
-  sampleFilesAvailable?:boolean;initialSampleIndices?:number[];onSaveSampleSelection?:SaveSampleSelection }) {
+  sampleFilesAvailable=false,initialSampleIndices=[],onSaveSampleSelection,sampleLimits=DEFAULT_LIMITS }: { connections: SellerWorkspaceConnection[]; enabled: boolean; savedSource?: SourceRead | null; onSaveSelection?: SaveSelection; saving?: boolean;
+  sampleFilesAvailable?:boolean;initialSampleIndices?:number[];onSaveSampleSelection?:SaveSampleSelection;sampleLimits?:SampleLimits }) {
   const verified = connections.filter((connection) => connection.status === 'verified');
   const [selectedId, setSelectedId] = useState(savedSource?.content.connection_id ?? '');
   const selected = verified.find((connection) => connection.id === selectedId) ?? verified[0];
@@ -49,13 +50,13 @@ export function WorkspaceData({ connections, enabled, savedSource, onSaveSelecti
       {savedSource && (!savedSource.connection_current || !verified.some(item => item.id === savedSource.content.connection_id && item.version === savedSource.content.connection_version)) && <p role="alert" className="rounded-lg bg-amber-50 p-4 text-sm text-amber-900">The connection for your saved selection has changed. Choose files from a current connection and save them again.</p>}
       <ObjectBrowser key={`${selected.id}:${selected.version}`} connection={selected} onSaveSelection={onSaveSelection} initialSelection={savedSource?.connection_current && savedSource.content.connection_id === selected.id && savedSource.content.connection_version === selected.version ? savedSource.content.objects.map(item => ({...item, last_modified: '', format_candidate: 'unknown'})) : undefined}
         sourceVersion={savedSource?.version} sampleFilesAvailable={sampleFilesAvailable} initialSampleIndices={initialSampleIndices}
-        onSaveSampleSelection={onSaveSampleSelection} />
+        onSaveSampleSelection={onSaveSampleSelection} sampleLimits={sampleLimits} />
     </section>
   );
 }
 
 type SampleRow={progress:number;uploaded:boolean;error:string|null};
-// Pinned to backend app/services/seller_sample_upload.py and seller_workspace.py at c9bbe7338fe84d095e2bcc4f370cf2e0c7ebe179.
+// Pinned to backend app/services/seller_sample_upload.py and seller_workspace.py at ba3889064106cd2c4c815a69a25ba7b9bbb3b3d4.
 export const SAMPLE_REFUSALS:Record<string,string>={
   'Sample source not found':'The saved file selection could not be found. Save the current selection and try again.',
   'invalid sample basename':'This file name cannot be used for a public sample.',
@@ -64,12 +65,16 @@ export const SAMPLE_REFUSALS:Record<string,string>={
   SAMPLE_MAX_FILE_BYTES:'This file is larger than the per-file sample limit.',
   'sample is immutable':'This sample is already approved or published and cannot be replaced.',
   'upload already in progress':'An upload for this sample is already in progress.',
+  'sample upload already in progress':'An upload with this request identity is already in progress.',
   SAMPLE_MAX_FILES:'The listing already has the maximum number of sample files.',
   SAMPLE_MAX_TOTAL_BYTES:'The selected samples exceed the total sample size limit.',
   SAMPLE_SELLER_QUOTA_BYTES:'Your seller sample-storage quota has been reached.',
   'sample upload generation expired':'This upload was replaced or expired before it completed.',
   SAMPLE_UPLOAD_TIMEOUT_S:'The sample upload took too long.',
   sample_store_unavailable:'Sample storage is temporarily unavailable.',
+  sample_upload_refused:'This repeated upload was previously refused. Start the upload again.',
+  sample_index_out_of_range:'This file is no longer in the saved selection.',
+  sample_size_out_of_range:'This file is larger than the per-file sample limit.',
   SAMPLE_UPLOAD_RATE:'Too many sample uploads were started. Please wait and try again.',
 };
 export function sampleUploadRefusal(detail:unknown) {
@@ -82,8 +87,8 @@ export function sampleUploadRefusal(detail:unknown) {
 }
 
 function ObjectBrowser({ connection, initialSelection, onSaveSelection,sourceVersion,sampleFilesAvailable,initialSampleIndices,
-  onSaveSampleSelection }: { connection: SellerWorkspaceConnection; initialSelection?: WorkspaceObject[]; onSaveSelection?: SaveSelection;
-  sourceVersion?:number;sampleFilesAvailable:boolean;initialSampleIndices:number[];onSaveSampleSelection?:SaveSampleSelection }) {
+  onSaveSampleSelection,sampleLimits }: { connection: SellerWorkspaceConnection; initialSelection?: WorkspaceObject[]; onSaveSelection?: SaveSelection;
+  sourceVersion?:number;sampleFilesAvailable:boolean;initialSampleIndices:number[];onSaveSampleSelection?:SaveSampleSelection;sampleLimits:SampleLimits }) {
   const initial = useRef(initialSelection ?? []);
   const [savedSelection, setSavedSelection] = useState(JSON.stringify((initialSelection ?? []).map(objectIdentity)));
   const [savingSelection, setSavingSelection] = useState(false);
@@ -111,10 +116,14 @@ function ObjectBrowser({ connection, initialSelection, onSaveSelection,sourceVer
   const sampleIndicesRef=useRef(sampleIndices);
   const initialSampleSignature=JSON.stringify(initialSampleIndices);
   const initialSelectionLength=initialSelection?.length??0;
-  const [sampleRows,setSampleRows]=useState<Record<number,SampleRow>>({});
+  const persistedRows=()=>Object.fromEntries(initialSampleIndices.map(index=>[index,{progress:100,uploaded:true,error:null}]));
+  const [sampleRows,setSampleRows]=useState<Record<number,SampleRow>>(persistedRows);
+  const sampleRowsRef=useRef(sampleRows);
+  const confirmedSampleIndices=useRef(initialSampleIndices);
   const [sampleError,setSampleError]=useState<string|null>(null);
   useEffect(()=>{sampleIndicesRef.current=sampleIndices;},[sampleIndices]);
-  useEffect(()=>{const next=(JSON.parse(initialSampleSignature) as number[]).filter(index=>index>=0&&index<initialSelectionLength);sampleIndicesRef.current=next;setSampleIndices(next);},[initialSampleSignature,initialSelectionLength]);
+  useEffect(()=>{sampleRowsRef.current=sampleRows;},[sampleRows]);
+  useEffect(()=>{const next=(JSON.parse(initialSampleSignature) as number[]).filter(index=>index>=0&&index<initialSelectionLength);confirmedSampleIndices.current=next;sampleIndicesRef.current=next;setSampleIndices(next);setSampleRows(rows=>({...rows,...Object.fromEntries(next.map(index=>[index,{progress:100,uploaded:true,error:null}]))}));},[initialSampleSignature,initialSelectionLength]);
 
   useEffect(() => {
     let cancelled = false;
@@ -189,20 +198,21 @@ function ObjectBrowser({ connection, initialSelection, onSaveSelection,sourceVer
       ? current.filter((item) => objectIdentity(item) !== objectIdentity(object))
       : current.length < MAX_SELECTION_FILES ? [...current, object] : current);
   };
+  const rollbackSampleIndices=()=>{const confirmed=[...confirmedSampleIndices.current];sampleIndicesRef.current=confirmed;setSampleIndices(confirmed);setSampleRows(rows=>Object.fromEntries(Object.entries(rows).filter(([index])=>confirmed.includes(Number(index)))));};
   const saveSampleIndices=async(indices:number[])=>{
     if(!onSaveSampleSelection)return;
     setSampleError(null);
     try{await onSaveSampleSelection(indices);}
-    catch{if(mounted.current)setSampleError('Your sample choice could not be saved. The uploaded copy is still private. (sample_selection_save_failed)');}
+    catch{if(mounted.current){rollbackSampleIndices();setSampleError('Your sample choice could not be saved. The tick was restored to the last saved choice and the uploaded copy remains private. (sample_selection_save_failed)');}throw new Error('sample_selection_save_failed');}
   };
   const toggleSample=(index:number)=>{
     const active=sampleIndicesRef.current.includes(index);
-    if(active){const next=sampleIndicesRef.current.filter(value=>value!==index);sampleIndicesRef.current=next;setSampleIndices(next);setSampleRows(rows=>{const copy={...rows};delete copy[index];return copy;});void saveSampleIndices(next);return;}
+    if(active){const next=sampleIndicesRef.current.filter(value=>value!==index);sampleIndicesRef.current=next;setSampleIndices(next);void saveSampleIndices(next.filter(value=>sampleRowsRef.current[value]?.uploaded)).catch(()=>undefined);return;}
     const item=initialSelection![index];
     let refusal:string|null=null;
-    if(sampleIndicesRef.current.length>=SAMPLE_MAX_FILES)refusal='SAMPLE_MAX_FILES';
-    else if(item.size>SAMPLE_MAX_FILE_BYTES)refusal='SAMPLE_MAX_FILE_BYTES';
-    else if(sampleIndicesRef.current.reduce((sum,value)=>sum+initialSelection![value].size,0)+item.size>SAMPLE_MAX_TOTAL_BYTES)refusal='SAMPLE_MAX_TOTAL_BYTES';
+    if(sampleIndicesRef.current.length>=sampleLimits.max_files)refusal='SAMPLE_MAX_FILES';
+    else if(item.size>sampleLimits.max_file_bytes)refusal='SAMPLE_MAX_FILE_BYTES';
+    else if(sampleIndicesRef.current.reduce((sum,value)=>sum+initialSelection![value].size,0)+item.size>sampleLimits.max_total_bytes)refusal='SAMPLE_MAX_TOTAL_BYTES';
     if(refusal){const message=sampleUploadRefusal(refusal);setSampleError(`${message.copy} (${message.code})`);return;}
     const next=[...sampleIndicesRef.current,index].sort((a,b)=>a-b);sampleIndicesRef.current=next;
     setSampleError(null);setSampleIndices(next);setSampleRows(rows=>({...rows,[index]:{progress:0,uploaded:false,error:null}}));
@@ -215,8 +225,9 @@ function ObjectBrowser({ connection, initialSelection, onSaveSelection,sourceVer
         if(mounted.current)setSampleRows(rows=>({...rows,[index]:{...rows[index],progress:total?Math.min(100,Math.round(loaded/total*100)):0}}));
       });
       if(!mounted.current)return;
-      setSampleRows(rows=>({...rows,[index]:{progress:100,uploaded:true,error:null}}));
-      await saveSampleIndices([...sampleIndicesRef.current].sort((a,b)=>a-b));
+      const uploaded={progress:100,uploaded:true,error:null};sampleRowsRef.current={...sampleRowsRef.current,[index]:uploaded};setSampleRows(sampleRowsRef.current);
+      const persisted=sampleIndicesRef.current.filter(value=>sampleRowsRef.current[value]?.uploaded).sort((a,b)=>a-b);
+      await saveSampleIndices(persisted);
     }catch(failure){
       if(!mounted.current)return;
       const detail=axios.isAxiosError(failure)?failure.response?.data?.detail:undefined;
@@ -239,7 +250,7 @@ function ObjectBrowser({ connection, initialSelection, onSaveSelection,sourceVer
         {folderChoices.length>0 && <details><summary className="cursor-pointer text-sm font-medium text-indigo-700">Choose a subfolder</summary><ul className="mt-3 space-y-2">{folderChoices.map(prefix=><li key={prefix}><button type="button" disabled={resolving || savingSelection} onClick={()=>void selectFolder(prefix)} className={buttonClass}>Select folder {prefix}</button></li>)}</ul></details>}
         {resolving && <p role="status" className="text-sm text-gray-600">Checking the entire folder… {scanProgress.files.toLocaleString('en')} files found · {formatBytes(scanProgress.bytes)} so far. {scanWaiting?'Pausing briefly for the storage request limit; counting will continue automatically.':'Please wait for the complete count.'}</p>}
       </div>
-      {sampleEnabled && <section aria-label="Workspace sample files" className="border-b border-gray-200 bg-indigo-50/40 p-5 space-y-2"><h3 className="font-semibold text-gray-900">Workspace sample files</h3><p className="text-sm text-gray-700">Tick up to {SAMPLE_MAX_FILES} saved objects, then upload a local copy of each one. Each file can be up to {formatBytes(SAMPLE_MAX_FILE_BYTES)} and all sample files together can be up to {formatBytes(SAMPLE_MAX_TOTAL_BYTES)}.</p><p className="text-xs text-gray-600">Only the basename, size and sample status become public. Re-tick a removed file or choose another local copy to replace a pending upload.</p>{sampleError&&<p role="alert" className="text-sm text-red-800">{sampleError}</p>}</section>}
+      {sampleEnabled && <section aria-label="Workspace sample files" className="border-b border-gray-200 bg-indigo-50/40 p-5 space-y-2"><h3 className="font-semibold text-gray-900">Workspace sample files</h3><p className="text-sm text-gray-700">Tick up to {sampleLimits.max_files} saved objects, then upload a local copy of each one. Each file can be up to {formatBytes(sampleLimits.max_file_bytes)} and all sample files together can be up to {formatBytes(sampleLimits.max_total_bytes)}.</p><p className="text-xs text-gray-600">Limits come from the server payload when provided; otherwise the documented defaults apply. Only the basename, size and sample status become public.</p>{sampleError&&<p role="alert" className="text-sm text-red-800">{sampleError}</p>}</section>}
       {error && <div role="alert" className="m-5 rounded-lg bg-red-50 p-4 text-sm text-red-800">Files could not be loaded. Check that the connection is still available.<button type="button" disabled={loading} onClick={() => cursor ? void loadMore() : setRetry((value) => value + 1)} className={`${buttonClass} ml-3`}>Try again</button></div>}
       {objects.length > 0 && <div className="overflow-x-auto"><table className="w-full text-left text-sm"><caption className="sr-only">Files in the selected storage connection</caption><thead className="bg-gray-50 text-xs text-gray-500"><tr><th scope="col" className="px-5 py-3">File</th><th scope="col" className="px-5 py-3">Format</th><th scope="col" className="px-5 py-3 text-right">Size</th>{sampleEnabled&&<th scope="col" className="px-5 py-3">Free sample</th>}</tr></thead><tbody className="divide-y divide-gray-100">{filtered.map((object) => {const sampleIndex=sampleIndexByIdentity.get(objectIdentity(object));const row=sampleIndex===undefined?undefined:sampleRows[sampleIndex];const sampleName=object.key.split('/').filter(Boolean).at(-1)??`File ${(sampleIndex??0)+1}`;return <tr key={objectIdentity(object)}><th scope="row" className="max-w-md break-all px-5 py-4 font-medium text-gray-900"><label className="flex items-start gap-3"><input type="checkbox" aria-label={`Select ${object.key}`} disabled={resolving || (selected.length >= MAX_SELECTION_FILES && !selectedIdentities.has(objectIdentity(object)))} checked={selectedIdentities.has(objectIdentity(object))} onChange={() => toggleSelection(object)} className="mt-0.5 h-4 w-4 shrink-0 accent-[#3F51B5]" /><span>{object.key}</span></label></th><td className="px-5 py-4 text-xs uppercase text-gray-600">{object.format_candidate === 'unknown' ? 'Unrecognized' : object.format_candidate}</td><td className="whitespace-nowrap px-5 py-4 text-right text-gray-600">{formatBytes(object.size)}</td>{sampleEnabled&&<td className="px-5 py-4">{sampleIndex===undefined?<span className="text-xs text-gray-500">Save this object first</span>:<div className="space-y-2"><label className="flex gap-2"><input type="checkbox" aria-label={`Offer ${sampleName} (file ${sampleIndex+1}) as free sample`} checked={sampleIndices.includes(sampleIndex)} onChange={()=>toggleSample(sampleIndex)}/><span>Select</span></label>{sampleIndices.includes(sampleIndex)&&<><label className="block text-xs text-indigo-700">{row?.uploaded?'Replace uploaded copy':'Upload local copy'}<input type="file" aria-label={`Upload sample ${sampleName} (file ${sampleIndex+1})`} className="block max-w-56 text-xs" onChange={event=>{const file=event.target.files?.[0];if(file)void uploadSample(sampleIndex,file);}}/></label>{row&&row.progress>0&&<progress aria-label={`Upload progress ${sampleName} (file ${sampleIndex+1})`} value={row.progress} max={100}>{row.progress}%</progress>}{row?.uploaded&&<p role="status" className="text-xs text-green-800">Uploaded and saved for review.</p>}{row?.error&&<p role="alert" className="text-xs text-red-800">{row.error}</p>}</>}</div>}</td>}</tr>;})}</tbody></table></div>}
       {!loading && !error && filtered.length === 0 && <p className="p-8 text-center text-sm text-gray-500">{query ? 'No loaded files match your search.' : 'No files found in this connected folder.'}</p>}

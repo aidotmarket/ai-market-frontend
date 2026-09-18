@@ -33,13 +33,31 @@ it('round-trips the uploaded sample selection inside draft content',async()=>{
   await screen.findByText('Uploaded and saved for review.');
   expect(api.saveListingDraft).toHaveBeenCalledWith({...draft.content,sample_decision:'member_files',sample_object_indices:[0]},4,expect.any(String));
 });
+it('rolls a tick back with the named alert when the draft PUT fails',async()=>{
+  const draft={version:4,content:{brief:'brief',title:'Offer',description:'Description',category:'Retail',tags:'retail',price:'25',license:'Research'},updated_at:'2026-09-18T12:00:00Z'};
+  api.readListingSource.mockResolvedValue({version:2,content,connection_current:true});api.readListingDraft.mockResolvedValue(draft);
+  api.uploadWorkspaceSample.mockResolvedValue({index:0,size:42,sha256:'a'.repeat(64),binding:'size_only'});api.saveListingDraft.mockRejectedValue(new Error('network'));
+  renderData([connection],true);
+  const tick=await screen.findByRole('checkbox',{name:/Offer example.csv.*free sample/});fireEvent.click(tick);
+  fireEvent.change(screen.getByLabelText(/Upload sample example.csv/),{target:{files:[new File([new Uint8Array(42)],'example.csv')]}});
+  expect((await screen.findByRole('alert')).textContent).toContain('sample_selection_save_failed');
+  expect((tick as HTMLInputElement).checked).toBe(false);
+});
+it('does not write the draft after a source save when no persisted sample selection exists',async()=>{
+  api.readListingSource.mockResolvedValue(null);api.saveListingSource.mockResolvedValue({version:1,content,connection_current:true});
+  renderData([connection],true);
+  fireEvent.click(await screen.findByRole('checkbox',{name:`Select ${object.key}`}));fireEvent.click(screen.getByRole('button',{name:'Save selected files'}));fireEvent.click(screen.getByRole('button',{name:'Confirm selection'}));
+  await screen.findByText(/File selection saved to your account/);
+  expect(api.saveListingDraft).not.toHaveBeenCalled();
+});
 it('serializes an in-flight sample save and persists the latest visible ticks',async()=>{
   const draft={version:4,content:{brief:'brief',title:'Offer',description:'Description',category:'Retail',tags:'retail',price:'25',license:'Research'},updated_at:'2026-09-18T12:00:00Z'};
   api.readListingSource.mockResolvedValue({version:2,content,connection_current:true});api.readListingDraft.mockResolvedValue(draft);
   api.uploadWorkspaceSample.mockResolvedValue({index:0,size:42,sha256:'a'.repeat(64),binding:'size_only'});
   let finishFirst!:(value:unknown)=>void;
   api.saveListingDraft.mockImplementationOnce(()=>new Promise(resolve=>{finishFirst=resolve;}))
-    .mockImplementationOnce(async(saved)=>({version:6,content:saved,updated_at:draft.updated_at}));
+    .mockImplementationOnce(async(saved)=>({version:6,content:saved,updated_at:draft.updated_at}))
+    .mockImplementationOnce(async(saved)=>({version:7,content:saved,updated_at:draft.updated_at}));
   renderData([connection],true);
   const tick=await screen.findByRole('checkbox',{name:/Offer example.csv.*free sample/});
   fireEvent.click(tick);
@@ -52,6 +70,11 @@ it('serializes an in-flight sample save and persists the latest visible ticks',a
   await waitFor(()=>expect(api.saveListingDraft).toHaveBeenCalledTimes(2));
   expect(api.saveListingDraft.mock.calls[1][0]).toEqual({...draft.content,sample_decision:'none',sample_object_indices:[]});
   expect(api.saveListingDraft.mock.calls[1][1]).toBe(5);
+  fireEvent.click(tick);
+  fireEvent.change(screen.getByLabelText(/Upload sample example.csv/),{target:{files:[new File([new Uint8Array(42)],'example.csv')]}});
+  await waitFor(()=>expect(api.saveListingDraft).toHaveBeenCalledTimes(3));
+  expect(api.saveListingDraft.mock.calls[2][0]).toEqual({...draft.content,sample_decision:'member_files',sample_object_indices:[0]});
+  expect(api.saveListingDraft.mock.calls[2][1]).toBe(6);
 });
 it('retries an unknown save with the same version and identity', async () => {
   api.readListingSource.mockResolvedValue(null);

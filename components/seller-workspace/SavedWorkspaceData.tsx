@@ -1,17 +1,17 @@
 'use client';
 import { useEffect, useRef, useState } from 'react';
 import { readListingSource, saveListingSource, type SourceRead, type SourceContent } from '@/api/sellerListingSource';
-import type { SellerWorkspaceConnection, WorkspaceObject } from '@/api/sellerWorkspace';
+import type {SampleLimits,SellerWorkspaceConnection,WorkspaceObject} from '@/api/sellerWorkspace';
 import { WorkspaceData } from './WorkspaceData';
 import {useSellerListingDraft} from './SellerListingDraftStore';
 
-export default function SavedWorkspaceData({connections, enabled}: {connections: SellerWorkspaceConnection[]; enabled: boolean}) {
+export default function SavedWorkspaceData({connections, enabled,sampleLimits}: {connections: SellerWorkspaceConnection[]; enabled: boolean;sampleLimits?:SampleLimits}) {
   const [source, setSource] = useState<SourceRead | null>(null);
   const [loading, setLoading] = useState(true);
   const [failed, setFailed] = useState(false);
   const [retry, setRetry] = useState(0);
   const [saving, setSaving] = useState(false);
-  const {sampleCapability,sampleIndices,saveSamples}=useSellerListingDraft();
+  const {draft,loaded,sampleCapability,sampleIndices,saveSamples,beginSelectionSave,finishSelectionSave}=useSellerListingDraft();
   const inFlight = useRef(false);
   const version = useRef(0);
   const pending = useRef<{serialized: string; id: string; version: number} | null>(null);
@@ -25,7 +25,7 @@ export default function SavedWorkspaceData({connections, enabled}: {connections:
   }, [retry]);
   async function save(connection: SellerWorkspaceConnection, objects: WorkspaceObject[]) {
     if (inFlight.current) throw new Error('A file selection save is already pending');
-    inFlight.current = true; setSaving(true);
+    inFlight.current = true; setSaving(true);beginSelectionSave();let succeeded=false;
     try {
       const content: SourceContent = {connection_id:connection.id, connection_version:connection.version, version_mode:'current',
         objects: objects.map(({key, version_id, etag, size}) => ({key, version_id, etag, size}))};
@@ -34,13 +34,14 @@ export default function SavedWorkspaceData({connections, enabled}: {connections:
         pending.current = {serialized, id:crypto.randomUUID(), version:version.current};
       const result = await saveListingSource(content, pending.current.version, pending.current.id);
       version.current = result.version; pending.current = null; setSource(result);
-      if (sampleCapability) {
-        try { await saveSamples([]); } catch { /* Source commit remains successful; retry from the sample selector. */ }
+      succeeded=true;
+      if (loaded&&draft?.content.sample_decision==='member_files'&&sampleIndices.length>0) {
+        try { await saveSamples([]); } catch { succeeded=false; /* Source commit remains successful; retry from the sample selector. */ }
       }
-    } finally { inFlight.current = false; setSaving(false); }
+    } finally { finishSelectionSave(succeeded);inFlight.current = false; setSaving(false); }
   }
   if (loading) return <p role="status" className="p-5 text-sm text-gray-600">Loading your saved file selection…</p>;
   if (failed) return <div role="alert" className="rounded-xl border border-red-200 p-5 text-sm text-red-800">Your saved file selection could not be loaded.<button className="ml-3 underline" onClick={() => setRetry(value => value + 1)}>Try loading again</button></div>;
   return <WorkspaceData connections={connections} enabled={enabled} savedSource={source} onSaveSelection={save} saving={saving}
-    sampleFilesAvailable={sampleCapability} initialSampleIndices={sampleIndices} onSaveSampleSelection={saveSamples} />;
+    sampleFilesAvailable={sampleCapability&&loaded} initialSampleIndices={sampleIndices} onSaveSampleSelection={saveSamples} sampleLimits={sampleLimits} />;
 }

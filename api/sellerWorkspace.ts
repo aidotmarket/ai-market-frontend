@@ -27,7 +27,7 @@ export interface SellerWorkspaceCapabilities {
   sources?: CapabilityStage | null;
   review?: CapabilityStage | null;
   approval?: CapabilityStage | null;
-  /** Read-only deployment signal; the backend must omit it until sample routes are deployed. */
+  /** Backend ba3889064106cd2c4c815a69a25ba7b9bbb3b3d4 omits this flag-off and emits CapabilityStage flag-on. */
   samples?: CapabilityStage | null;
   providers: {
     aws: ProviderCapabilities;
@@ -350,9 +350,21 @@ export function getWorkspaceProfileEvidence(evidenceId: string) {
   return safely<WorkspaceProfileEvidence>(api.get(`${BASE_PATH}/profile-evidence/${encodeURIComponent(evidenceId)}`));
 }
 
-export const SAMPLE_MAX_FILES = Number(process.env.NEXT_PUBLIC_SAMPLE_MAX_FILES ?? 10);
-export const SAMPLE_MAX_TOTAL_BYTES = Number(process.env.NEXT_PUBLIC_SAMPLE_MAX_TOTAL_BYTES ?? 256 * 1024 * 1024);
-export const SAMPLE_MAX_FILE_BYTES = Number(process.env.NEXT_PUBLIC_SAMPLE_MAX_FILE_BYTES ?? 64 * 1024 * 1024);
+export interface SampleLimits { max_files:number; max_file_bytes:number; max_total_bytes:number }
+// Backend-documented defaults. These are not independently environment-tunable in the client.
+export const SAMPLE_MAX_FILES = 10;
+export const SAMPLE_MAX_TOTAL_BYTES = 256 * 1024 * 1024;
+export const SAMPLE_MAX_FILE_BYTES = 64 * 1024 * 1024;
+export const DEFAULT_SAMPLE_LIMITS:SampleLimits={max_files:SAMPLE_MAX_FILES,max_file_bytes:SAMPLE_MAX_FILE_BYTES,max_total_bytes:SAMPLE_MAX_TOTAL_BYTES};
+export function sampleLimitsFromPayload(payload:unknown):SampleLimits {
+  if(!payload || typeof payload!=='object')return DEFAULT_SAMPLE_LIMITS;
+  const record=payload as Record<string,unknown>;
+  const candidate=(record.sample_limits??record.limits) as Partial<SampleLimits>|undefined;
+  if(!candidate || !Number.isSafeInteger(candidate.max_files) || candidate.max_files!<=0 ||
+    !Number.isSafeInteger(candidate.max_file_bytes) || candidate.max_file_bytes!<=0 ||
+    !Number.isSafeInteger(candidate.max_total_bytes) || candidate.max_total_bytes!<=0)return DEFAULT_SAMPLE_LIMITS;
+  return candidate as SampleLimits;
+}
 
 export interface SampleUploadReceipt { index:number; size:number; sha256:string; binding:'etag_md5'|'size_only' }
 

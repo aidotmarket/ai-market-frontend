@@ -48,6 +48,13 @@ it('sends the v2 member-file confirmation and ordered indices',async()=>{
  await approveListingReview(prepared,'request-id',new AbortController().signal);
  expect(client.post.mock.calls[0][1]).toMatchObject({confirmation_version:'seller-listing-confirmation-v2',sample_decision:'member_files',sample_object_indices:[1,4],sample_files_confirmed:true});
 });
+it('uses the last persisted sample selection in the approval payload',async()=>{
+ const prepared={...review,review_hash:'c'.repeat(64),draft_version:1,source_version:2,confirmation_version:'seller-listing-confirmation-v2' as const,
+  sample_decision:'member_files' as const,sample_object_indices:[0]} as ListingReview;
+ client.post.mockResolvedValue({data:{id:'approved',review_hash:prepared.review_hash,render_hash:prepared.render_hash,draft_version:1,source_version:2,sample_decision:'member_files'}});
+ await approveListingReview(prepared,'request-id',new AbortController().signal);
+ expect(client.post.mock.calls[0][1].sample_object_indices).toEqual([0]);
+});
 
 
 const page={review_hash:'a'.repeat(64),source_hash:'b'.repeat(64),source_version:1,offset:0,page_size:50,total_count:22000,total_size_bytes:22000,next_cursor:'next',files:Array.from({length:50},(_,i)=>({key:`private/${i}.csv`,size:1,etag:'e',version_id:null}))};

@@ -111,11 +111,13 @@ describe('Seller data browser', () => {
       ['index 3: upload already in progress','already in progress'],['SAMPLE_MAX_FILES: 10','maximum number'],
       ['SAMPLE_MAX_TOTAL_BYTES: 268435456','total sample size'],['SAMPLE_SELLER_QUOTA_BYTES: 2147483648','storage quota'],
       ['sample upload generation expired','replaced or expired'],['SAMPLE_UPLOAD_TIMEOUT_S: 900','took too long'],
-      ['sample_store_unavailable','temporarily unavailable'],['SAMPLE_UPLOAD_RATE: 30','Too many sample uploads'],
+      ['sample_store_unavailable','temporarily unavailable'],['sample_upload_refused','previously refused'],
+      ['sample upload already in progress','request identity'],['sample_index_out_of_range','no longer in the saved selection'],
+      ['sample_size_out_of_range','per-file sample limit'],['SAMPLE_UPLOAD_RATE: 30','Too many sample uploads'],
       ['sample size mismatch','exactly the saved file size'],
     ];
-    for(const [detail,copy] of cases){const result=sampleUploadRefusal(detail);expect(result.copy).toContain(copy);expect(result.code).not.toBe('sample_upload_refused');}
-    expect(Object.keys(SAMPLE_REFUSALS)).toEqual(['Sample source not found','invalid sample basename','out of range','sample size mismatch','SAMPLE_MAX_FILE_BYTES','sample is immutable','upload already in progress','SAMPLE_MAX_FILES','SAMPLE_MAX_TOTAL_BYTES','SAMPLE_SELLER_QUOTA_BYTES','sample upload generation expired','SAMPLE_UPLOAD_TIMEOUT_S','sample_store_unavailable','SAMPLE_UPLOAD_RATE']);
+    for(const [detail,copy] of cases){const result=sampleUploadRefusal(detail);expect(result.copy).toContain(copy);if(detail!=='sample_upload_refused')expect(result.code).not.toBe('sample_upload_refused');}
+    expect(Object.keys(SAMPLE_REFUSALS)).toEqual(['Sample source not found','invalid sample basename','out of range','sample size mismatch','SAMPLE_MAX_FILE_BYTES','sample is immutable','upload already in progress','sample upload already in progress','SAMPLE_MAX_FILES','SAMPLE_MAX_TOTAL_BYTES','SAMPLE_SELLER_QUOTA_BYTES','sample upload generation expired','SAMPLE_UPLOAD_TIMEOUT_S','sample_store_unavailable','sample_upload_refused','sample_index_out_of_range','sample_size_out_of_range','SAMPLE_UPLOAD_RATE']);
   });
 
   it('shows an over-limit refusal by name',async()=>{
@@ -149,6 +151,18 @@ describe('Seller data browser', () => {
     await screen.findByRole('checkbox',{name:/Offer one.csv.*free sample/});
     const matching=[...container.querySelectorAll('*')].flatMap(node=>[...node.attributes].map(attribute=>attribute.value)).filter(value=>value.includes(object.key));
     expect(matching).toEqual([`Select ${object.key}`]);
+  });
+  it('persists only uploaded ticks and restores the replace affordance from persisted state',async()=>{
+    const second={...object,key:'datasets/two.csv',etag:'etag-2'};
+    api.listWorkspaceObjects.mockResolvedValue({objects:[object,second],next_cursor:null});
+    const source={...savedSource,content:{...savedSource.content,objects:[...savedSource.content.objects,{key:second.key,version_id:null,etag:second.etag,size:second.size}]}};
+    const saveSamples=vi.fn().mockResolvedValue(undefined);
+    render(<WorkspaceData enabled connections={[connection]} savedSource={source} sampleFilesAvailable initialSampleIndices={[0]} onSaveSampleSelection={saveSamples}/>);
+    expect(await screen.findByText('Replace uploaded copy')).toBeTruthy();
+    fireEvent.click(screen.getByRole('checkbox',{name:/Offer two.csv.*free sample/}));
+    fireEvent.click(screen.getByRole('checkbox',{name:/Offer one.csv.*free sample/}));
+    await waitFor(()=>expect(saveSamples).toHaveBeenCalledWith([]));
+    expect(saveSamples).not.toHaveBeenCalledWith([1]);
   });
 });
 

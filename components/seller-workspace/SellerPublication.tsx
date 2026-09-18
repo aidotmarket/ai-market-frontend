@@ -4,7 +4,7 @@ import SellerAtAGlance from '@/components/listings/SellerAtAGlance';
 import axios from 'axios';
 import {readPublication,publishListing,type PublicationState} from '@/api/sellerListingPublication';
 import type {ApprovalReceipt} from '@/api/sellerListingReview';
-export default function SellerPublication({approval,active,rendered,sampleCount=0}:{approval:ApprovalReceipt;active:boolean;rendered:boolean;sampleStatus?:string;sampleCount?:number}) {
+export default function SellerPublication({approval,active,rendered,sampleCount=0}:{approval:ApprovalReceipt;active:boolean;rendered:boolean;sampleCount?:number}) {
   const [state,setState]=useState<PublicationState|null>(null);
   const [busy,setBusy]=useState(false);
   const [error,setError]=useState('');
@@ -41,7 +41,7 @@ export default function SellerPublication({approval,active,rendered,sampleCount=
     <h3 className="text-lg font-semibold text-gray-900">Publish your listing</h3>
     {!state && !error && <p role="status" className="text-sm text-gray-600">Checking publication status…</p>}
     {publication ? <><p role="status" className="text-sm text-green-900">{publication.status==='published' && publication.is_listed?'Your listing is published and available in the marketplace.':'This review has been published. The listing is currently not available in marketplace discovery.'}</p>
-      {approval.sample_decision==='member_files'&&<p className="text-sm text-gray-700">{sampleCount} free sample {sampleCount===1?'file is':'files are'} part of the purchased set.</p>}
+      {approval.sample_decision==='member_files'&&<p className="text-sm text-gray-700">{sampleCount===0?'No free sample files':`${sampleCount} free sample ${sampleCount===1?'file is':'files are'} part of the purchased set.`}</p>}
       <a href={`/listings/${encodeURIComponent(publication.slug)}`} className="inline-block text-sm font-medium text-indigo-700 underline">View {publication.title}</a>
       {publication.listing_id && <SellerAtAGlance listingId={publication.listing_id} slug={publication.slug} active={active} />}</> : state && <>
       <p className="text-sm leading-6 text-gray-700">Your approved listing is private. Publishing makes the approved description, tags, price and license public. The files stay in your storage.</p>
