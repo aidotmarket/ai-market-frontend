@@ -8,19 +8,17 @@ import {afterEach, beforeEach, expect, it, vi} from 'vitest';
 import {makePreview} from '@/tests/previewFixture';
 import {fetchPreviewKeys, fetchPreviewManifest, fetchSignedSummaryPayload} from '@/lib/api';
 import {fetchPackage} from '@/lib/listing-preview/transport';
-import {scanLocalPreview} from '@/lib/listing-preview/policy';
 import ListingSamplePreview from './ListingSamplePreview';
 
 vi.mock('@/lib/api', () => ({fetchPreviewManifest: vi.fn(), fetchPreviewKeys: vi.fn(), fetchSignedSummaryPayload: vi.fn()}));
 vi.mock('@/lib/listing-preview/transport', () => ({fetchPackage: vi.fn()}));
-vi.mock('@/lib/listing-preview/policy', async importOriginal => ({...await importOriginal<typeof import('@/lib/listing-preview/policy')>(), scanLocalPreview: vi.fn()}));
 let f: Awaited<ReturnType<typeof makePreview>>;
 beforeEach(async () => {
   vi.stubGlobal('crypto', webcrypto); vi.resetAllMocks(); vi.mocked(fetchSignedSummaryPayload).mockResolvedValue(null); f = await makePreview();
   vi.spyOn(Date, 'now').mockReturnValue(f.now);
   Object.defineProperty(document, 'visibilityState', {configurable: true, value: 'visible'});
   vi.mocked(fetchPreviewManifest).mockResolvedValue(f.manifest); vi.mocked(fetchPreviewKeys).mockResolvedValue(f.keys);
-  vi.mocked(fetchPackage).mockResolvedValue(f.raw); vi.mocked(scanLocalPreview).mockResolvedValue(undefined);
+  vi.mocked(fetchPackage).mockResolvedValue(f.raw);
 });
 afterEach(() => {cleanup(); vi.restoreAllMocks(); vi.useRealTimers();});
 async function mount() {render(<ListingSamplePreview slug="current-canonical" listingId={f.manifest.listing_id} />); await screen.findByRole('button', {name: 'View sample'});}
@@ -32,16 +30,17 @@ it('has byte-empty markup without a manifest and no seller fetch', async () => {
   await waitFor(() => expect(fetchPreviewManifest).toHaveBeenCalledOnce()); expect(v.container.innerHTML).toBe(''); expect(fetchPackage).not.toHaveBeenCalled();
 });
 it('does not fetch the seller before an explicit request or when keys are 503/absent', async () => {
-  await mount(); expect(fetchPackage).not.toHaveBeenCalled(); expect(scanLocalPreview).not.toHaveBeenCalled();
+  await mount(); expect(fetchPackage).not.toHaveBeenCalled();
   cleanup(); vi.mocked(fetchPreviewKeys).mockResolvedValue(null); const v = render(<ListingSamplePreview slug="no-keys" listingId={f.manifest.listing_id} />);
   await waitFor(() => expect(fetchPreviewKeys).toHaveBeenCalledTimes(2)); expect(v.container.innerHTML).toBe(''); expect(fetchPackage).not.toHaveBeenCalled();
 });
 it('waits for verification and the final manifest before rendering any row', async () => {
-  let finish!: () => void; vi.mocked(scanLocalPreview).mockReturnValue(new Promise(r => {finish = r;}));
+  let finish!: (manifest: typeof f.manifest) => void; let calls = 0;
+  vi.mocked(fetchPreviewManifest).mockImplementation(() => ++calls === 3 ? new Promise(r => {finish = r;}) : Promise.resolve(f.manifest));
   await mount(); fireEvent.click(screen.getByRole('button', {name: 'View sample'}));
-  await waitFor(() => expect(scanLocalPreview).toHaveBeenCalledOnce());
-  expect(screen.queryByRole('table')).toBeNull(); expect(screen.queryByText('barley')).toBeNull(); expect(fetchPreviewManifest).toHaveBeenCalledTimes(2);
-  await act(async () => {finish();}); await screen.findByRole('table'); expect(fetchPreviewManifest).toHaveBeenCalledTimes(3);
+  await waitFor(() => expect(fetchPreviewManifest).toHaveBeenCalledTimes(3));
+  expect(screen.queryByRole('table')).toBeNull(); expect(screen.queryByText('barley')).toBeNull();
+  await act(async () => {finish(f.manifest);}); await screen.findByRole('table');
 });
 it('hides on tab departure and stays hidden after withdrawal on return', async () => {
   await view(); await visibility('hidden'); expect(screen.queryByRole('table')).toBeNull();
@@ -89,13 +88,10 @@ it('never contacts the seller after a platform-signature failure', async () => {
   expect(fetchPackage).not.toHaveBeenCalled(); expect(screen.queryByRole('table')).toBeNull();
 });
 
-it('hides every row on a real deterministic policy failure with neutral text only', async () => {
-  f = await makePreview([{name: 'safe marker'}, {name: 'password=unsafe marker'}], [['name', 'string', false, {}]]);
+it('displays seller-published content without a browser content gate', async () => {
+  f = await makePreview([{name: 'seller@example.test https://example.test =SUM(A1)'}], [['name', 'string', false, {}]]);
   vi.mocked(fetchPreviewManifest).mockResolvedValue(f.manifest); vi.mocked(fetchPackage).mockResolvedValue(f.raw);
-  const actual = await vi.importActual<typeof import('@/lib/listing-preview/policy')>('@/lib/listing-preview/policy');
-  vi.mocked(scanLocalPreview).mockImplementation(actual.scanLocalPreview);
-  await mount(); fireEvent.click(screen.getByRole('button', {name: 'View sample'})); await screen.findByText('Sample unavailable');
-  expect(screen.queryByRole('table')).toBeNull(); expect(screen.queryByText(/marker/)).toBeNull();
+  await view(); expect(screen.getByText('seller@example.test https://example.test =SUM(A1)')).toBeTruthy();
 });
 
 it('binds descriptions and units from the current signed payload before insertion', async () => {

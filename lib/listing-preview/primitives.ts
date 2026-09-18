@@ -24,7 +24,6 @@ export async function sha(...parts: Uint8Array[]): Promise<Uint8Array<ArrayBuffe
   return new Uint8Array(await crypto.subtle.digest('SHA-256', concat(...parts)));
 }
 export function unicode(value: string): string {
-  requirePreview(!/[\uD800-\uDBFF](?![\uDC00-\uDFFF])|(?<![\uD800-\uDBFF])[\uDC00-\uDFFF]/u.test(value), 'invalid_unicode');
   return value;
 }
 export function codepointCompare(a: string, b: string): number {

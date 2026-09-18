@@ -1,0 +1,19 @@
+{
+  "scan_policy": "aim-preview-policy-v2",
+  "scan_policy_version": "2.0.0",
+  "detector_identity": {},
+  "cases": [
+    {"id": "date", "value": "2026-09-18", "blocked": false},
+    {"id": "place", "value": "Madrid, Spain", "blocked": false},
+    {"id": "email", "value": "seller@example.test", "blocked": false},
+    {"id": "url", "value": "https://seller.example/data", "blocked": false},
+    {"id": "uuid", "value": "123e4567-e89b-12d3-a456-426614174000", "blocked": false},
+    {"id": "hash", "value": "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef", "blocked": false},
+    {"id": "phone", "value": "+34 612 345 678", "blocked": false},
+    {"id": "negative-decimal", "value": "-12.5", "blocked": false},
+    {"id": "formula", "value": "=SUM(A1)", "blocked": false},
+    {"id": "control", "value": "left\u0000middle‮right", "blocked": false},
+    {"id": "xss", "value": "<script>alert(1)</script><img src=x onerror=alert(2)><a href=https://example.test>link</a>", "blocked": false}
+  ],
+  "safe_cases": ["oats", "barley", "Café"]
+}

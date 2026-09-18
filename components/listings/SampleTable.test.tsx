@@ -18,6 +18,8 @@ describe('lossless inert table', () => {
     expect(compareCells({kind: 'missing', value: null}, {kind: 'null', value: null})).toBe(-1);
     expect(compareCells({kind: 'boolean', value: false}, {kind: 'boolean', value: true})).toBe(-1);
     expect(compareCells({kind: 'timestamp', value: '2026-01-01T00:00:00.000000001Z'}, {kind: 'timestamp', value: '2026-01-01T00:00:00.000000002Z'})).toBe(-1);
+    expect(cellText({kind: 'string', value: 'a\u0000\u200Eb\ud800'})).toBe('a��b�');
+    expect(cellText({kind: 'object', value: {'a\u0000': ['b\u200E']}})).toBe('{"a�":["b�"]}');
   });
   it('sorts ascending/descending/reset, uses proof identity and filters locally', async () => {
     const {sample} = await verifiedFixture(); const original = JSON.stringify(sample.entries);
@@ -33,18 +35,31 @@ describe('lossless inert table', () => {
     fireEvent.change(screen.getByLabelText('Search sample'), {target: {value: '.*'}}); expect(rows()).toHaveLength(0);
   });
   it('renders expansion as literal text, Escape returns focus, and values cause no network/storage', async () => {
-    const marker = '<script>ROW_MARKER</script> https://example.test =SUM(A1) '; const long = marker + 'x'.repeat(240);
-    // Synthetic table fixture bypasses policy ONLY in the test helper to verify
-    // inert DOM behavior even for content that production policy must refuse.
+    const marker = '<script>ROW_MARKER</script><img src=x onerror=alert(1)><a href="https://example.test">link</a> =SUM(A1) '; const long = marker + 'x'.repeat(240);
     const {sample} = await verifiedFixture([{text: long}], [['text', 'string', false, {}]]);
     const fetch = vi.fn(); vi.stubGlobal('fetch', fetch); const storage = vi.spyOn(Storage.prototype, 'setItem');
     render(<SampleTable sample={sample} columns={sample.manifest.columns} />);
-    expect(document.querySelector('script')).toBeNull(); expect(document.querySelector('a')).toBeNull();
+    expect(document.querySelector('script')).toBeNull(); expect(document.querySelector('img')).toBeNull(); expect(document.querySelector('a')).toBeNull();
     const expand = screen.getByRole('button', {name: 'Expand text'}); expand.focus(); fireEvent.click(expand);
     expect(screen.getByText(long)).toBeTruthy(); expect(expand.getAttribute('aria-expanded')).toBe('true');
     fireEvent.keyDown(expand, {key: 'Escape'}); expect(expand.getAttribute('aria-expanded')).toBe('false'); expect(document.activeElement).toBe(expand);
     fireEvent.change(screen.getByLabelText('Search sample'), {target: {value: 'FILTER_MARKER'}});
     expect(fetch).not.toHaveBeenCalled(); expect(storage).not.toHaveBeenCalled(); storage.mockRestore();
+  });
+  it('renders dates, places, contact data, identifiers, formulas, long prose and neutralized controls', async () => {
+    const prose = Array(2000).fill('word').join(' ');
+    const row: Record<string, Json> = {
+      date: '2026-09-18', place: 'Madrid, Spain', email: 'seller@example.test', url: 'https://seller.example/data',
+      uuid: '123e4567-e89b-12d3-a456-426614174000', hash: 'a'.repeat(64), phone: '+34 612 345 678',
+      decimal: '-12.5', formula: '=SUM(A1)', controls: 'left\u0000middle\u200Eright\ud800', prose,
+    };
+    const schema = Object.keys(row).map(name => [name, 'string', false, {}] as Descriptor);
+    const {sample} = await verifiedFixture([row], schema);
+    render(<SampleTable sample={sample} columns={sample.manifest.columns} />);
+    for (const value of Object.values(row).slice(0, 9)) expect(screen.getByText(String(value))).toBeTruthy();
+    expect(screen.getByText('left�middle�right�')).toBeTruthy();
+    const expand = screen.getByRole('button', {name: 'Expand prose'}); fireEvent.click(expand);
+    expect(screen.getByText(prose)).toBeTruthy();
   });
   it('renders explicit states and names/types/descriptions/units in native semantics', async () => {
     const schema: Descriptor[] = [['empty', 'string', true, {}], ['missing', 'string', true, {}], ['nil', 'string', true, {}]];

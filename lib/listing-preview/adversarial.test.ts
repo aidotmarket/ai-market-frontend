@@ -3,7 +3,7 @@ import {makePreview, testSign, verifiedFixture} from '@/tests/previewFixture';
 import {canonicalRow, schemaDescriptors} from './canonical-row';
 import {b64, canonical, jcs, parseJson, unb64, utf8} from './primitives';
 import {envelopeBudget, fresh, isVerifiedSample, platformBytes, verifyManifest, verifyPackage, verifySample} from './verifier';
-import {admitPackageUrl, boundedBody} from './transport';
+import {admitPackageUrl, boundedBody, fetchPackage} from './transport';
 import {tableRenderer} from './registry';
 import type {Descriptor, Manifest, PlatformEnvelope} from './types';
 
@@ -17,17 +17,17 @@ describe('all verification gates before a handle', () => {
     expect(isVerifiedSample(JSON.parse(JSON.stringify(sample)))).toBe(false);
     expect(Object.isFrozen(sample.entries[0].cells)).toBe(true);
   });
-  it('does not render before policy and the final current read', async () => {
-    let release!: () => void; const gate = new Promise<void>(r => {release = r;});
+  it('does not render before the final current read', async () => {
+    let release!: (value: Manifest) => void; const gate = new Promise<Manifest>(r => {release = r;});
     const publish = vi.fn(), renderer = tableRenderer(publish), readCurrent = vi.fn(async () => f.manifest);
-    const promise = verifySample(f.manifest, f.raw, {listingId: f.manifest.listing_id, keys: f.keys, now: () => f.now, scan: () => gate, readCurrent, signal: new AbortController().signal});
-    await new Promise(r => setTimeout(r, 50)); expect(readCurrent).not.toHaveBeenCalled(); expect(publish).not.toHaveBeenCalled();
-    release(); const sample = await promise; renderer.mount(sample.manifest as Manifest, sample); expect(publish).toHaveBeenCalledWith(sample);
+    readCurrent.mockReturnValue(gate);
+    const promise = verifySample(f.manifest, f.raw, {listingId: f.manifest.listing_id, keys: f.keys, now: () => f.now, readCurrent, signal: new AbortController().signal});
+    await new Promise(r => setTimeout(r, 50)); expect(readCurrent).toHaveBeenCalledOnce(); expect(publish).not.toHaveBeenCalled();
+    release(f.manifest); const sample = await promise; renderer.mount(sample.manifest as Manifest, sample); expect(publish).toHaveBeenCalledWith(sample);
     renderer.clear(); expect(publish).toHaveBeenLastCalledWith(null); renderer.dispose(); renderer.mount(sample.manifest as Manifest, sample); expect(publish).toHaveBeenLastCalledWith(null);
   });
-  it('rejects scan failure, aborts and current-pointer races without a handle', async () => {
-    const opts = {listingId: f.manifest.listing_id, keys: f.keys, now: () => f.now, scan: async () => undefined, readCurrent: async () => f.manifest, signal: new AbortController().signal};
-    await expect(verifySample(f.manifest, f.raw, {...opts, scan: async () => {throw new Error('detector_unavailable');}})).rejects.toThrow('detector_unavailable');
+  it('rejects aborts and current-pointer races without a handle', async () => {
+    const opts = {listingId: f.manifest.listing_id, keys: f.keys, now: () => f.now, readCurrent: async () => f.manifest, signal: new AbortController().signal};
     await expect(verifySample(f.manifest, f.raw, {...opts, readCurrent: async () => null})).rejects.toThrow();
     const controller = new AbortController(); controller.abort(); await expect(verifySample(f.manifest, f.raw, {...opts, signal: controller.signal})).rejects.toThrow('cancelled');
   });
@@ -124,13 +124,20 @@ describe('conjunctive bounds and freshness', () => {
   });
 });
 describe('credential-free origin admission and streaming', () => {
-  it.each(['http://seller.example/a', 'https://u:p@seller.example/a', 'https://seller.example/a?x', 'https://seller.example/a#x', 'https://127.0.0.1/a', 'https://2130706433/a', 'https://[::1]/a', 'https://private.local/a', 'https://localhost/a', 'https://ai.market/a', 'https://sub.ai.market/a', 'https://x.r2.dev/a', 'https://seller.example./a', 'https://seller.example:0/a'])('rejects %s', url => expect(() => admitPackageUrl(url)).toThrow());
-  it('admits seller HTTPS without credentials or URL arguments', () => expect(admitPackageUrl('https://seller.example/previews/sample.json').protocol).toBe('https:'));
-  it('rejects redirects, missing no-store, encoding, and oversized responses', async () => {
+  it.each(['http://seller.example/a', 'https://u:p@seller.example/a', 'https://seller.example/a?x', 'https://seller.example/a#x', 'https://127.0.0.1/a', 'https://2130706433/a', 'https://[::1]/a', 'https://private.local/a', 'https://localhost/a', 'https://ai.market/a', 'https://sub.ai.market/a', 'https://seller.example./a', 'https://seller.example:0/a'])('rejects %s', url => expect(() => admitPackageUrl(url)).toThrow());
+  it.each(['https://seller.example/previews/sample.json', 'https://seller-account.r2.dev/sample.json'])('admits public seller origin %s', url => expect(admitPackageUrl(url).protocol).toBe('https:'));
+  it('ignores advisory response headers and enforces the delivered-byte ceiling', async () => {
     const signal = new AbortController().signal;
-    await expect(boundedBody(new Response('ok', {headers: {'cache-control': 'public'}}), 10, signal)).rejects.toThrow('cache_policy');
-    await expect(boundedBody(new Response('ok', {headers: {'cache-control': 'no-store', 'content-encoding': 'gzip'}}), 10, signal)).rejects.toThrow('unsupported_encoding');
-    await expect(boundedBody(new Response('123456', {headers: {'cache-control': 'no-store'}}), 5, signal)).rejects.toThrow('byte_limit');
-    expect(new TextDecoder().decode(await boundedBody(new Response('12345', {headers: {'cache-control': 'no-store'}}), 5, signal))).toBe('12345');
+    for (const headers of [{'content-type': 'text/plain'}, {'content-type': 'application/octet-stream'}, {'content-encoding': 'gzip'}, {'cache-control': 'public'}, {'content-length': '999'}]) {
+      expect(new TextDecoder().decode(await boundedBody(new Response('ok', {status: 201, headers}), 10, signal))).toBe('ok');
+    }
+    await expect(boundedBody(new Response('123456'), 5, signal)).rejects.toThrow('byte_limit');
+    expect(new TextDecoder().decode(await boundedBody(new Response('12345'), 5, signal))).toBe('12345');
+  });
+  it.each(['application/json', 'text/plain', 'application/octet-stream'])('parses package JSON served as %s', async contentType => {
+    vi.stubGlobal('window', {location: {origin: 'https://ai.market'}});
+    vi.stubGlobal('fetch', vi.fn(async () => new Response(f.raw, {headers: {'content-type': contentType}})));
+    await expect(fetchPackage('https://seller.example/sample.json', 1048576, new AbortController().signal)).resolves.toEqual(f.raw);
+    vi.unstubAllGlobals();
   });
 });

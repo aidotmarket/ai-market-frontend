@@ -1,95 +1,70 @@
-import {readFileSync} from 'node:fs';
 import {createHash} from 'node:crypto';
+import {readFileSync} from 'node:fs';
 import {expect, it, vi} from 'vitest';
-import {checkPolicyText, DETERMINISTIC_POLICY, POLICY_VERSION, PRODUCER_POLICY, requirePolicyVersion, scanLocalPreview} from './policy';
+import {LEGACY_POLICY, requirePolicyVersion, SELLER_ATTESTED_POLICY} from './policy';
 import {makePreview, testSign} from '@/tests/previewFixture';
 import {checkpointBytes, commitmentBytes, disclosureBytes, platformBytes, proofBytes, verifyManifest, verifySample} from './verifier';
 import {b64, hex, jcs, sha, utf8} from './primitives';
 import type {Descriptor, Json} from './types';
 
-const path = 'tests/fixtures/preview/aim-preview-policy-v1-deterministic-vectors';
-const bytes = readFileSync(path + '.json');
-const corpus = JSON.parse(bytes.toString()) as {vectors: {id: string; text?: string; text_parts?: string[]; numeric: boolean; reason: string | null}[]};
-it('pins the cross-repo deterministic fixture SHA', () => {
-  expect(createHash('sha256').update(bytes).digest('hex')).toBe(readFileSync(path + '.sha256', 'utf8').split(' ')[0]);
+const fixturePath = 'tests/fixtures/preview/aim_preview_policy_v2';
+const fixtureBytes = readFileSync(fixturePath + '.json');
+const fixture = JSON.parse(fixtureBytes.toString()) as {
+  scan_policy: string; scan_policy_version: string;
+  cases: {id: string; value?: string; parts?: string[]; blocked: boolean}[];
+  safe_cases: string[];
+};
+
+it('pins the provisional v2 seller-attested fixture SHA', () => {
+  expect(createHash('sha256').update(fixtureBytes).digest('hex')).toBe(readFileSync(fixturePath + '.sha256', 'utf8').split(' ')[0]);
+  expect([fixture.scan_policy, fixture.scan_policy_version]).toEqual([SELLER_ATTESTED_POLICY, '2.0.0']);
+  expect(fixture.cases.every(test => test.blocked === false)).toBe(true);
 });
+
 it.each([
-  [PRODUCER_POLICY, POLICY_VERSION, true],
-  [DETERMINISTIC_POLICY, POLICY_VERSION, true],
-  [PRODUCER_POLICY, '1.0.1', false],
-  [DETERMINISTIC_POLICY, '0.9.0', false],
-  ['aim-preview-policy-v2', POLICY_VERSION, false],
-] as const)('accepts only known policy/version %s %s', (policy, version, accepted) => {
+  [LEGACY_POLICY, '1.0.0', true],
+  [SELLER_ATTESTED_POLICY, '2.0.0', true],
+  [LEGACY_POLICY, '2.0.0', false],
+  [SELLER_ATTESTED_POLICY, '1.0.0', false],
+  ['aim-preview-policy-v3', '3.0.0', false],
+] as const)('accepts only the exact known policy/version pair %s %s', (policy, version, accepted) => {
   const result = () => requirePolicyVersion(policy, version);
   if (accepted) expect(result).not.toThrow(); else expect(result).toThrow('scan_policy_unknown');
 });
-it.each([
-  ['copyrİght example', 'restricted_content'],
-  ['copyrıght example', 'restricted_content'],
-  ['paſſword=example', 'secret'],
-  ['AKIAABCDEFGHIJKLMNOP', 'secret'],
-] as const)('pins special case-fold boundary %s', (value, reason) => {
-  expect(() => checkPolicyText(value)).toThrow(reason);
-});
-const pythonOnlyWhitespace = ['\u001c', '\u001d', '\u001e', '\u001f', '\u0085'];
-it.each(pythonOnlyWhitespace)('pins Python-only split/lstrip whitespace U+%s', separator => {
-  expect(() => checkPolicyText(Array(81).fill('a').join(separator))).toThrow('control_character');
-  expect(() => checkPolicyText(`${separator}=1`)).toThrow('control_character');
-});
-it('pins browser-only FEFF split/lstrip whitespace', () => {
-  expect(() => checkPolicyText(Array(81).fill('a').join('\ufeff'))).toThrow('long_prose');
-  expect(() => checkPolicyText('\ufeff=1')).toThrow('control_character');
-});
-for (const v of corpus.vectors) it(`deterministic producer vector ${v.id}`, async () => {
-  const text = v.text ?? v.text_parts!.join('');
-  if (v.reason) expect(() => checkPolicyText(text, v.numeric)).toThrow(new Error(v.reason));
-  else expect(() => checkPolicyText(text, v.numeric)).not.toThrow();
-  const scanned = scanLocalPreview([{proofId: v.id, row: {value: text}, cells: {}}], new AbortController().signal,
-    [['value', v.numeric ? 'decimal' : 'string', false, v.numeric ? {precision: 5, scale: 2} : {}]]);
-  if (v.reason) await expect(scanned).rejects.toThrow(new Error(v.reason));
-  else await expect(scanned).resolves.toBeUndefined();
-});
+
 const text: Descriptor[] = [['value', 'string', false, {}]];
-const nested: Descriptor[] = [['value', 'object', false, {object_fields: [{name: 'child', type: 'array', nullable: false, type_parameters: {element_type: {type: 'string', type_parameters: {}}}}]}]];
-async function verify(rows: Record<string, Json>[], schema: Descriptor[]) {
-  const f = await makePreview(rows, schema);
+async function verify(rows: Record<string, Json>[], schema: Descriptor[] = text, policy?: Parameters<typeof makePreview>[2]) {
+  const f = await makePreview(rows, schema, policy);
   return verifySample(f.manifest, f.raw, {listingId: f.manifest.listing_id, keys: f.keys, now: () => f.now,
-    scan: scanLocalPreview, readCurrent: async () => f.manifest, signal: new AbortController().signal});
+    readCurrent: async () => f.manifest, signal: new AbortController().signal});
 }
-it('deterministic scan refuses any unsafe complete row before issuing a handle', async () => {
-  await expect(verify([{value: 'barley'}, {value: 'password=synthetic'}], text)).rejects.toThrow('secret');
+
+it('displays ordinary seller content without any content corpus', async () => {
+  const values = fixture.cases.map(test => test.value ?? test.parts!.join(''));
+  values.push(Array(2000).fill('word').join(' '), '\ud800');
+  for (const value of values) await expect(verify([{value}])).resolves.toHaveProperty('entries.0.row.value', value);
 });
-it('scans keys, nested values and every array element', async () => {
-  await expect(verify([{'password=synthetic': 'barley'}], [['password=synthetic', 'string', false, {}]])).rejects.toThrow('secret');
-  await expect(verify([{value: {child: ['barley', 'test@example.com']}}], nested)).rejects.toThrow('personal_data');
-  const schema: Descriptor[] = [['value', 'object', false, {object_fields: [{name: '=bad', type: 'string', nullable: false, type_parameters: {}}]}]];
-  await expect(verify([{value: {'=bad': 'barley'}}], schema)).rejects.toThrow('formula');
+
+it('accepts already-published legacy v1 attestations without scanning their rows', async () => {
+  await expect(verify([{value: 'seller@example.test =SUM(A1)'}], text,
+    {scan_policy: 'aim-preview-policy-v1', scan_policy_version: '1.0.0'})).resolves.toHaveProperty('entries');
 });
-it('scans the original fetched text before normalization', async () => {
-  await expect(verify([{value: 'a'.repeat(499) + 'e\u0301'}], text)).rejects.toThrow('long_prose');
-});
-it('preserves descriptor-proven numeric identity recursively', async () => {
-  const schema: Descriptor[] = [['value', 'array', false, {element_type: {type: 'decimal', type_parameters: {precision: 5, scale: 2}}}]];
-  await expect(verify([{value: ['-12.5', '1.2']}], schema)).resolves.toHaveProperty('entries');
-  await expect(verify([{value: 'barley'}, {value: 'oats'}], text)).resolves.toHaveProperty('entries');
-});
-it('cancellation refuses the deterministic scan', async () => {
-  const controller = new AbortController(); controller.abort();
-  await expect(scanLocalPreview([{proofId: 'synthetic', row: {value: 'barley'}, cells: {}}], controller.signal, text)).rejects.toThrow('cancelled');
-});
-it('attestation check refuses a signed but incorrectly bound scan digest', async () => {
+
+it('refuses a signed but incorrectly bound scan-attestation digest', async () => {
   const f = await makePreview([{value: 'barley'}], text), e = f.manifest.approval.platform_envelope;
   e.binding.scan_attestation_digest = '0'.repeat(64);
   e.seller_signature = testSign(disclosureBytes(e.binding)); e.signature = testSign(platformBytes(e));
   await expect(verifyManifest(f.manifest, f.keys, f.manifest.listing_id, f.now)).rejects.toThrow('scan_mismatch');
 });
+
 it.each(['scan_policy', 'scan_policy_version', 'scan_verdict', 'sampled_leaf_list_digest', 'signature'])('refuses modified producer attestation %s', async field => {
   const f = await makePreview([{value: 'barley'}], text);
   const proof = f.manifest.proofs[0] as unknown as Record<string, unknown>;
   proof[field] = field === 'signature' ? 'A'.repeat(86) : field === 'sampled_leaf_list_digest' ? 'A'.repeat(43) : 'invalid';
   await expect(verifyManifest(f.manifest, f.keys, f.manifest.listing_id, f.now)).rejects.toThrow();
 });
-it('hides all rows when a validly signed attestation digests a different fetched leaf set', async () => {
+
+it('hides all rows when a validly signed attestation names a different fetched leaf set', async () => {
   const f = await makePreview([{value: 'barley'}], text), e = f.manifest.approval.platform_envelope;
   const different = b64(await sha(utf8('aim-preview-sampled-leaves-v1\0'), jcs(['A'.repeat(43)])));
   e.binding.sampled_leaf_list_digest = different;
@@ -101,18 +76,8 @@ it('hides all rows when a validly signed attestation digests a different fetched
   f.manifest.checkpoint.root_hash = b64(await sha(utf8('\0aim-log-leaf-v1\0'), jcs(f.manifest.log_evidence.entry)));
   f.manifest.checkpoint.signature = testSign(checkpointBytes(f.manifest.checkpoint));
   e.seller_signature = testSign(disclosureBytes(e.binding)); e.signature = testSign(platformBytes(e));
-  const scan = vi.fn();
+  const readCurrent = vi.fn(async () => f.manifest);
   await expect(verifySample(f.manifest, f.raw, {listingId: f.manifest.listing_id, keys: f.keys, now: () => f.now,
-    scan, readCurrent: async () => f.manifest, signal: new AbortController().signal})).rejects.toThrow('sampled_list_mismatch');
-  expect(scan).not.toHaveBeenCalled();
-});
-
-it('scans fields outside the displayed column selection', async () => {
-  const f = await makePreview([{hidden: 'password=synthetic', value: 'barley'}], [['hidden', 'string', false, {}], ...text]);
-  const e = f.manifest.approval.platform_envelope;
-  e.binding.selected_fields = ['value']; f.manifest.selected_fields = ['value'];
-  f.manifest.columns = [{name: 'value', type: 'string'}];
-  e.seller_signature = testSign(disclosureBytes(e.binding)); e.signature = testSign(platformBytes(e));
-  await expect(verifySample(f.manifest, f.raw, {listingId: f.manifest.listing_id, keys: f.keys, now: () => f.now,
-    scan: scanLocalPreview, readCurrent: async () => f.manifest, signal: new AbortController().signal})).rejects.toThrow('secret');
+    readCurrent, signal: new AbortController().signal})).rejects.toThrow('sampled_list_mismatch');
+  expect(readCurrent).not.toHaveBeenCalled();
 });

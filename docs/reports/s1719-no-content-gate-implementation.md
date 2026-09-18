@@ -82,6 +82,25 @@ Every condition retained on the display path is technical or cryptographic:
   and signed column identity may mount. Values become neutralized text nodes;
   no cell-derived element, HTML, URL, network request, or persistence exists.
 
+## Item 5 fixture and tests
+
+The named AIM Data branch was present at
+`58bece43e7ef24fd884556ba2130c8675ec84281`, but contained no published v2
+shared fixture. The frontend therefore carries a provisional fixture following
+the existing policy fixture structure at
+`tests/fixtures/preview/aim_preview_policy_v2.json`, pinned locally by
+`aim_preview_policy_v2.sha256`. Its SHA-256 is
+`acd9ff50afd097f93a8bc1aa348a5c5bfaed8477f62d71ee2351086e447702e0`.
+This file and hash must be replaced and re-pinned byte-for-byte when AIM Data
+publishes the canonical shared fixture.
+
+Tests cover exact v1/v2 pair admission, unknown/mismatched pair refusal, the
+attestation and fetched-leaf digest bindings, ordinary display of dates,
+places, email, URLs, 2,000-word prose, UUIDs, hashes, phone numbers, negative
+decimal text, formulas, control/format/surrogate code units, literal XSS text,
+and the existing cryptographic mutation suite. The obsolete browser
+deterministic corpus and its generator were removed.
+
 ## Validation
 
 Pending final validation.

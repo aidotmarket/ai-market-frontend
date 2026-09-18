@@ -16,7 +16,7 @@ const time = '2026-09-17T00:00:00.000000Z';
 const uuid = (n: number) => `00000000-0000-4000-8000-${String(n).padStart(12, '0')}`;
 const hash = async (domain: string, value: unknown) => sha(utf8(domain + '\0'), jcs(value));
 const baseRequest = JSON.parse(readFileSync('tests/fixtures/preview/aim_preview_requests_v1.json', 'utf8')).approve;
-export async function makePreview(rows: Record<string, Json>[] = [{id: '9007199254740993', name: 'barley'}, {id: '2', name: 'oats'}], schema: Descriptor[] = [['id', 'signed_integer', false, {}], ['name', 'string', true, {}]]) {
+export async function makePreview(rows: Record<string, Json>[] = [{id: '9007199254740993', name: 'barley'}, {id: '2', name: 'oats'}], schema: Descriptor[] = [['id', 'signed_integer', false, {}], ['name', 'string', true, {}]], policy: Pick<Proof, 'scan_policy' | 'scan_policy_version'> = {scan_policy: 'aim-preview-policy-v2', scan_policy_version: '2.0.0'}) {
   const descriptors = schemaDescriptors(schema), schemaDigest = b64(await hash('aim-schema-v1', descriptors));
   const prepared = await Promise.all(rows.map(async row => ({row, digest: await sha(utf8('aim-row-v1\0'), new Uint8Array(Buffer.from(schemaDigest, 'base64url')), utf8('\0'), utf8(canonicalRow(row, descriptors).text))})));
   prepared.sort((a, b) => Buffer.compare(a.digest, b.digest));
@@ -37,7 +37,7 @@ export async function makePreview(rows: Record<string, Json>[] = [{id: '90071992
   for (let i = 0; i < entries.length; i++) entries[i].siblings = await path(0, entries.length, i);
   const sample = await sampleHash(entries), sampled = b64(await hash('aim-preview-sampled-leaves-v1', leaves.map(b64)));
   const fingerprint = hex(await sha(new Uint8Array(Buffer.from(testPublicKey, 'base64url')))), reference = uuid(1) + ':' + fingerprint;
-  const proofs: Proof[] = entries.map(e => ({...baseRequest.proofs[0], ...Object.fromEntries(Object.entries(e).filter(([k]) => k !== 'row')), signer_reference: reference, sampled_leaf_list_digest: sampled}));
+  const proofs: Proof[] = entries.map(e => ({...baseRequest.proofs[0], ...Object.fromEntries(Object.entries(e).filter(([k]) => k !== 'row')), ...policy, signer_reference: reference, sampled_leaf_list_digest: sampled}));
   const c: Commitment = {...baseRequest.commitment, schema_digest: schemaDigest, dataset_merkle_root: b64(await root(0, entries.length)), leaf_count: entries.length, aim_data_signer_reference: reference, proofs};
   const b: Binding = {...baseRequest.binding, signer_reference: reference, schema_descriptors: descriptors, selected_fields: descriptors.map(d => d[0]), schema_digest: schemaDigest, sample_hash: sample, proof_ids: proofs.map(p => p.proof_id), sampled_leaf_list_digest: sampled};
   for (const p of proofs) p.signature = testSign(proofBytes(c, p));
@@ -58,6 +58,6 @@ export async function makePreview(rows: Record<string, Json>[] = [{id: '90071992
 }
 export async function verifiedFixture(rows?: Record<string, Json>[], schema?: Descriptor[]) {
   const f = await makePreview(rows, schema);
-  const sample = await verifySample(f.manifest, f.raw, {listingId: f.manifest.listing_id, keys: f.keys, now: () => f.now, scan: async () => undefined, readCurrent: async () => f.manifest, signal: new AbortController().signal});
+  const sample = await verifySample(f.manifest, f.raw, {listingId: f.manifest.listing_id, keys: f.keys, now: () => f.now, readCurrent: async () => f.manifest, signal: new AbortController().signal});
   return {...f, sample};
 }
