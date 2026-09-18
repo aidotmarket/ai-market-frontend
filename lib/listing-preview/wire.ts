@@ -52,7 +52,8 @@ export function validateProof(p: Proof) {
   check(Array.isArray(p.siblings) && p.siblings.length <= 63);
   for (const sibling of p.siblings) {closed(sibling, 'hash direction'); unb64(sibling.hash, 32); check(['left', 'right'].includes(sibling.direction));}
   check(p.package_profile === 'aim-preview-package-v2' && p.package_media_type === 'application/vnd.aim.preview+json' && natural(p.package_byte_ceiling, 1) && p.package_byte_ceiling <= 1048576);
-  check(p.scan_policy === 'aim-preview-policy-v1' && p.scan_policy_version === '1.0.0' && p.scan_verdict === 'passed' && p.signature_algorithm === 'ed25519');
+  check(p.scan_policy === 'aim-preview-policy-v1' && p.scan_policy_version === '1.0.0', 'scan_policy_unknown');
+  check(p.scan_verdict === 'passed' && p.signature_algorithm === 'ed25519', 'scan_attestation_invalid');
   check(typeof p.preview_package_url === 'string' && p.preview_package_url.length <= 2048);
 }
 export function validateCommitment(c: Commitment) {

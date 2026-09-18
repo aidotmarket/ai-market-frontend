@@ -1,9 +1,10 @@
 import {readFileSync} from 'node:fs';
 import {createHash} from 'node:crypto';
-import {expect, it} from 'vitest';
-import {checkPolicyText, scanLocalPreview} from './policy';
+import {expect, it, vi} from 'vitest';
+import {checkPolicyText, DETERMINISTIC_POLICY, POLICY_VERSION, PRODUCER_POLICY, requirePolicyVersion, scanLocalPreview} from './policy';
 import {makePreview, testSign} from '@/tests/previewFixture';
-import {disclosureBytes, platformBytes, verifyManifest, verifySample} from './verifier';
+import {checkpointBytes, commitmentBytes, disclosureBytes, platformBytes, proofBytes, verifyManifest, verifySample} from './verifier';
+import {b64, hex, jcs, sha, utf8} from './primitives';
 import type {Descriptor, Json} from './types';
 
 const path = 'tests/fixtures/preview/aim-preview-policy-v1-deterministic-vectors';
@@ -11,6 +12,16 @@ const bytes = readFileSync(path + '.json');
 const corpus = JSON.parse(bytes.toString()) as {vectors: {id: string; text?: string; text_parts?: string[]; numeric: boolean; reason: string | null}[]};
 it('pins the cross-repo deterministic fixture SHA', () => {
   expect(createHash('sha256').update(bytes).digest('hex')).toBe(readFileSync(path + '.sha256', 'utf8').split(' ')[0]);
+});
+it.each([
+  [PRODUCER_POLICY, POLICY_VERSION, true],
+  [DETERMINISTIC_POLICY, POLICY_VERSION, true],
+  [PRODUCER_POLICY, '1.0.1', false],
+  [DETERMINISTIC_POLICY, '0.9.0', false],
+  ['aim-preview-policy-v2', POLICY_VERSION, false],
+] as const)('accepts only known policy/version %s %s', (policy, version, accepted) => {
+  const result = () => requirePolicyVersion(policy, version);
+  if (accepted) expect(result).not.toThrow(); else expect(result).toThrow('scan_policy_unknown');
 });
 for (const v of corpus.vectors) it(`deterministic producer vector ${v.id}`, async () => {
   const text = v.text ?? v.text_parts!.join('');
@@ -61,11 +72,22 @@ it.each(['scan_policy', 'scan_policy_version', 'scan_verdict', 'sampled_leaf_lis
   proof[field] = field === 'signature' ? 'A'.repeat(86) : field === 'sampled_leaf_list_digest' ? 'A'.repeat(43) : 'invalid';
   await expect(verifyManifest(f.manifest, f.keys, f.manifest.listing_id, f.now)).rejects.toThrow();
 });
-it('refuses a signed binding to a different sampled leaf list', async () => {
+it('hides all rows when a validly signed attestation digests a different fetched leaf set', async () => {
   const f = await makePreview([{value: 'barley'}], text), e = f.manifest.approval.platform_envelope;
-  e.binding.sampled_leaf_list_digest = 'A'.repeat(43);
+  const different = b64(await sha(utf8('aim-preview-sampled-leaves-v1\0'), jcs(['A'.repeat(43)])));
+  e.binding.sampled_leaf_list_digest = different;
+  for (const proof of f.manifest.proofs) proof.sampled_leaf_list_digest = different;
+  for (const proof of f.manifest.proofs) proof.signature = testSign(proofBytes(f.manifest.commitment, proof));
+  e.binding.scan_attestation_digest = hex(await sha(utf8('aim-preview-scan-attestation-v1\0'), jcs(f.manifest.proofs)));
+  f.manifest.commitment.seller_signature = testSign(commitmentBytes(f.manifest.commitment));
+  f.manifest.log_evidence.entry.seller_signature = f.manifest.commitment.seller_signature;
+  f.manifest.checkpoint.root_hash = b64(await sha(utf8('\0aim-log-leaf-v1\0'), jcs(f.manifest.log_evidence.entry)));
+  f.manifest.checkpoint.signature = testSign(checkpointBytes(f.manifest.checkpoint));
   e.seller_signature = testSign(disclosureBytes(e.binding)); e.signature = testSign(platformBytes(e));
-  await expect(verifyManifest(f.manifest, f.keys, f.manifest.listing_id, f.now)).rejects.toThrow('sampled_list_mismatch');
+  const scan = vi.fn();
+  await expect(verifySample(f.manifest, f.raw, {listingId: f.manifest.listing_id, keys: f.keys, now: () => f.now,
+    scan, readCurrent: async () => f.manifest, signal: new AbortController().signal})).rejects.toThrow('sampled_list_mismatch');
+  expect(scan).not.toHaveBeenCalled();
 });
 
 it('scans fields outside the displayed column selection', async () => {

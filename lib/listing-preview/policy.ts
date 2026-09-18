@@ -7,6 +7,9 @@ import {requirePreview as check} from './primitives';
 export const DETERMINISTIC_POLICY = 'aim-preview-policy-v1-deterministic';
 export const PRODUCER_POLICY = 'aim-preview-policy-v1';
 export const POLICY_VERSION = '1.0.0';
+export function requirePolicyVersion(policy: string, version: string): void {
+  check((policy === PRODUCER_POLICY || policy === DETERMINISTIC_POLICY) && version === POLICY_VERSION, 'scan_policy_unknown');
+}
 // Python Unicode word boundaries expanded explicitly (JS \b is ASCII-only).
 const rules: readonly [string, RegExp][] = [
   ["secret", new RegExp("(-----BEGIN [A-Z ]*PRIVATE KEY-----|(?:(?<![\\p{L}\\p{N}_])(?=[\\p{L}\\p{N}_])|(?<=[\\p{L}\\p{N}_])(?![\\p{L}\\p{N}_]))(?:AKIA|ASIA)[A-Z0-9]{16}(?:(?<![\\p{L}\\p{N}_])(?=[\\p{L}\\p{N}_])|(?<=[\\p{L}\\p{N}_])(?![\\p{L}\\p{N}_]))|(?:(?<![\\p{L}\\p{N}_])(?=[\\p{L}\\p{N}_])|(?<=[\\p{L}\\p{N}_])(?![\\p{L}\\p{N}_]))(?:gh[pousr]_|github_pat_|sk_live_|sk_test_|sk-(?:proj-)?|xox[baprs]-)|(?:(?<![\\p{L}\\p{N}_])(?=[\\p{L}\\p{N}_])|(?<=[\\p{L}\\p{N}_])(?![\\p{L}\\p{N}_]))(?:password|passwd|secret|api[_-]?key|access[_-]?token|authorization)\\s*[:=]|(?:(?<![\\p{L}\\p{N}_])(?=[\\p{L}\\p{N}_])|(?<=[\\p{L}\\p{N}_])(?![\\p{L}\\p{N}_]))Bearer\\s+\\S+|(?:(?<![\\p{L}\\p{N}_])(?=[\\p{L}\\p{N}_])|(?<=[\\p{L}\\p{N}_])(?![\\p{L}\\p{N}_]))eyJ[A-Za-z0-9_-]+\\.[A-Za-z0-9_-]+\\.[A-Za-z0-9_-]+)", "iu")],
@@ -32,6 +35,7 @@ export function checkPolicyText(text: string, numeric = false): void {
  * keys and values, including unselected fields, before producing a DOM handle.
  * NumericText parity uses descriptor-proven types, including nested arrays. */
 export async function scanLocalPreview(entries: readonly VerifiedEntry[], signal: AbortSignal, schema: readonly Descriptor[]): Promise<void> {
+  requirePolicyVersion(DETERMINISTIC_POLICY, POLICY_VERSION);
   check(!signal.aborted, 'cancelled');
   check(entries.length >= 1 && entries.length <= 100, 'invalid_selection');
   function walk(value: Json, tag: LogicalType, params: Record<string, Json>, depth: number): void {

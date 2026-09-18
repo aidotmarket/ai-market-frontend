@@ -1,6 +1,6 @@
 /** Browser/Node crypto only. No API, logging, storage, or seller transport here. */
 import type {Binding, Checkpoint, Commitment, LogEvidence, Manifest, PlatformEnvelope, PreviewPackage, Proof, TrustedCheckpoint, TrustedKeys, VerifiedEntry, VerifiedSample} from './types';
-import {PRODUCER_POLICY, POLICY_VERSION} from './policy';
+import {PRODUCER_POLICY, requirePolicyVersion} from './policy';
 import {LIMITS} from './types';
 import {b64, canonical, closed, concat, consistency, hex, inclusion, jcs, leaf, parseJson, requirePreview as check, sha, timestamp, unb64, utf8, verifyEd25519} from './primitives';
 import {canonicalRow, schemaDescriptors} from './canonical-row';
@@ -92,14 +92,13 @@ export async function verifyManifest(raw: unknown, keys: TrustedKeys, listingId:
   const first = m.proofs[0];
   check(canonical(m.package) === canonical({url: first.preview_package_url, media_type: first.package_media_type, byte_ceiling: first.package_byte_ceiling}), 'package_mismatch');
   const shared = ['preview_package_url', 'package_media_type', 'package_profile', 'package_byte_ceiling', 'scan_policy', 'scan_policy_version', 'scan_verdict', 'scanned_at', 'signer_reference'] as const;
-  const leaves: string[] = [];
   for (const p of m.proofs) {
     check(shared.every(k => p[k] === first[k]), 'package_mismatch');
     check(timestamp(p.scanned_at) <= timestamp(c.signed_at) && timestamp(c.signed_at) <= timestamp(b.approved_at) && timestamp(b.approved_at) <= now && timestamp(b.last_attested_by_seller_at) <= timestamp(b.approved_at), 'attestation_time_mismatch');
-    const hash = await leaf(p.base_row_digest, p.duplicate_ordinal); leaves.push(b64(hash));
+    const hash = await leaf(p.base_row_digest, p.duplicate_ordinal);
     check(await inclusion(hash, p.leaf_index, p.tree_size, p.siblings, c.dataset_merkle_root), 'proof_invalid');
   }
-  await verifyScanAttestation(m, leaves);
+  await verifyScanAttestation(m);
   check(await sampleHash(m.proofs) === b.sample_hash, 'sample_hash_mismatch');
   const attestation = {listing_id: c.listing_id, seller_dataset_version: c.seller_dataset_version, schema_digest: c.schema_digest, dataset_merkle_root: c.dataset_merkle_root, leaf_count: c.leaf_count, sample_hash: b.sample_hash, rights_basis_digest: b.rights_basis_digest, public_preview_permission: true, metadata_accuracy_confirmed: true, signed_at: c.signed_at};
   check(b64(await sha(domain('aim-dataset-seller-attestation-v1', attestation))) === c.seller_attestation_digest, 'seller_attestation_mismatch');
@@ -108,11 +107,11 @@ export async function verifyManifest(raw: unknown, keys: TrustedKeys, listingId:
 }
 
 /** Called only after platform and every F2 seller signature authenticate. */
-export async function verifyScanAttestation(m: Manifest, leaves: string[]): Promise<void> {
+export async function verifyScanAttestation(m: Manifest): Promise<void> {
   const b = m.approval.platform_envelope.binding;
-  check(m.proofs.every(p => p.scan_policy === PRODUCER_POLICY && p.scan_policy_version === POLICY_VERSION && p.scan_verdict === 'passed'), 'scan_policy_mismatch');
-  const sampled = b64(await sha(domain('aim-preview-sampled-leaves-v1', leaves)));
-  check(sampled === b.sampled_leaf_list_digest && m.proofs.every(p => p.sampled_leaf_list_digest === sampled), 'sampled_list_mismatch');
+  for (const p of m.proofs) requirePolicyVersion(p.scan_policy, p.scan_policy_version);
+  check(m.proofs.every(p => p.scan_policy === PRODUCER_POLICY && p.scan_verdict === 'passed'), 'scan_attestation_invalid');
+  check(m.proofs.every(p => p.sampled_leaf_list_digest === b.sampled_leaf_list_digest), 'sampled_list_mismatch');
   check(hex(await sha(domain('aim-preview-scan-attestation-v1', m.proofs))) === b.scan_attestation_digest, 'scan_mismatch');
 }
 
@@ -123,7 +122,8 @@ function freeze<T>(value: T): T {
 }
 /** Pure package verification is separately testable against producer fixtures.
  * This function cannot issue a display handle. */
-export async function verifyPackage(raw: Uint8Array, m: Pick<Manifest, 'commitment' | 'disclosure_version' | 'sample_hash' | 'schema_descriptors' | 'proofs' | 'package'>): Promise<VerifiedEntry[]> {
+type VerifiedPackageEntry = VerifiedEntry & {readonly leafHash: string};
+export async function verifyPackage(raw: Uint8Array, m: Pick<Manifest, 'commitment' | 'disclosure_version' | 'sample_hash' | 'schema_descriptors' | 'proofs' | 'package'>): Promise<VerifiedPackageEntry[]> {
   const parsed = parseJson(raw, Math.min(LIMITS.envelope_bytes, m.package.byte_ceiling));
   envelopeBudget(parsed);
   closed(parsed, 'package_profile commitment_id schema_digest disclosure_version sample_hash entries');
@@ -132,7 +132,7 @@ export async function verifyPackage(raw: Uint8Array, m: Pick<Manifest, 'commitme
   check(Array.isArray(p.entries) && p.entries.length >= 1 && p.entries.length <= 100 && p.entries.length === m.proofs.length, 'row_limit');
   const schema = schemaDescriptors(m.schema_descriptors); check(schema.length <= 25, 'field_limit');
   check(b64(await sha(utf8('aim-schema-v1\0'), jcs(schema))) === p.schema_digest, 'schema_digest_mismatch');
-  const entries: VerifiedEntry[] = [], budget = {nodes: 0}; let bytes = 0, lastIndex = -1;
+  const entries: VerifiedPackageEntry[] = [], budget = {nodes: 0}; let bytes = 0, lastIndex = -1;
   const ids = new Set<string>(), ordinals = new Set<string>();
   for (let i = 0; i < p.entries.length; i++) {
     const e = p.entries[i], proof = m.proofs[i];
@@ -142,8 +142,9 @@ export async function verifyPackage(raw: Uint8Array, m: Pick<Manifest, 'commitme
     check(canonical(without(e, 'row')) === canonical({proof_id: proof.proof_id, base_row_digest: proof.base_row_digest, duplicate_ordinal: proof.duplicate_ordinal, leaf_index: proof.leaf_index, tree_size: proof.tree_size, siblings: proof.siblings}), 'entry_mismatch');
     const row = canonicalRow(e.row, schema, budget); bytes += utf8(row.text).length; check(bytes <= 250000, 'canonical_byte_limit');
     check(b64(await sha(utf8('aim-row-v1\0'), unb64(p.schema_digest, 32), utf8('\0'), utf8(row.text))) === e.base_row_digest, 'row_digest_mismatch');
-    check(await inclusion(await leaf(e.base_row_digest, e.duplicate_ordinal), e.leaf_index, e.tree_size, e.siblings, m.commitment.dataset_merkle_root), 'proof_invalid');
-    entries.push({proofId: e.proof_id, row: e.row, cells: row.cells});
+    const leafHash = await leaf(e.base_row_digest, e.duplicate_ordinal);
+    check(await inclusion(leafHash, e.leaf_index, e.tree_size, e.siblings, m.commitment.dataset_merkle_root), 'proof_invalid');
+    entries.push({proofId: e.proof_id, row: e.row, cells: row.cells, leafHash: b64(leafHash)});
   }
   // Independently recompute from the actual ordered package entries, not metadata.
   check(await sampleHash(p.entries) === p.sample_hash, 'sample_hash_mismatch');
@@ -171,6 +172,8 @@ export interface VerificationOptions {
 export async function verifySample(manifest: unknown, raw: Uint8Array, options: VerificationOptions): Promise<VerifiedSample> {
   const m = await verifyManifest(manifest, options.keys, options.listingId, options.now(), options.previous);
   const entries = await verifyPackage(raw, m);
+  const sampled = b64(await sha(domain('aim-preview-sampled-leaves-v1', entries.map(entry => entry.leafHash))));
+  check(sampled === m.approval.platform_envelope.binding.sampled_leaf_list_digest, 'sampled_list_mismatch');
   await options.scan(entries, options.signal, m.schema_descriptors);
   check(!options.signal.aborted, 'cancelled');
   const current = await verifyManifest(await options.readCurrent(), options.keys, options.listingId, options.now(), options.previous);
