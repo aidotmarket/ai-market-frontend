@@ -1,18 +1,21 @@
 import { api } from './client';
 import type { ListingDraftContent } from './sellerListingDraft';
 export const CONFIRMATION_KEYS = ['ownership_confirmed', 'privacy_confirmed', 'price_license_confirmed', 'public_disclosure_confirmed'] as const;
-export type ConfirmationKey = typeof CONFIRMATION_KEYS[number];
+export type ConfirmationKey = typeof CONFIRMATION_KEYS[number] | 'sample_files_confirmed';
+export interface ReviewSampleFile { index: number; sha256: string; key_basename: string; size: number }
+export type SampleStatus = 'not_selected' | {state:'selected';files:ReviewSampleFile[]};
 export interface ApprovalReceipt {
   id: string; review_hash: string; render_hash: string; draft_version: number; source_version: number;
-  approved_at: string; sample_decision: 'none';
+  approved_at: string; sample_decision: 'none' | 'member_files';
 }
 export interface ListingReview {
   fields: Pick<ListingDraftContent, 'title' | 'description' | 'category' | 'tags' | 'price' | 'license'>;
   draft_version: number; source_version: number; presentation_version: string; review_hash: string;
-  missing_fields: string[]; approval_available: boolean; sample_status: string;
+  missing_fields: string[]; approval_available: boolean; sample_status?: SampleStatus;
+  sample_decision?: 'none' | 'member_files'; sample_object_indices?: number[];
   rendered_html: string; render_hash: string;
-  confirmation_version: 'seller-listing-confirmation-v1';
-  confirmation_statements: Record<ConfirmationKey, string>;
+  confirmation_version: 'seller-listing-confirmation-v1' | 'seller-listing-confirmation-v2';
+  confirmation_statements: Record<typeof CONFIRMATION_KEYS[number], string> & Partial<Record<'sample_files_confirmed',string>>;
   approval?: ApprovalReceipt | null;
   source_hash: string;
   source_page?: ReviewSourcePage | null;
@@ -59,26 +62,42 @@ export async function readListingReview(signal: AbortSignal): Promise<ListingRev
   const digest = await crypto.subtle.digest('SHA-256', bytes);
   const hash = Array.from(new Uint8Array(digest), value => value.toString(16).padStart(2, '0')).join('');
   if (hash !== review.render_hash || signal.aborted) throw new Error('Saved review could not be verified');
-  if (review.approval_available && (review.confirmation_version !== 'seller-listing-confirmation-v1' ||
-      CONFIRMATION_KEYS.some(key => typeof review.confirmation_statements?.[key] !== 'string' || !review.confirmation_statements[key].trim())))
+  const sampleDecision=review.sample_decision??'none';
+  const sampleIndices=review.sample_object_indices??[];
+  const sampleFiles = typeof review.sample_status === 'object' && review.sample_status?.state === 'selected'
+    ? review.sample_status.files : [];
+  const sampleShapeValid = sampleDecision === 'member_files'
+    ? review.confirmation_version === 'seller-listing-confirmation-v2' && sampleIndices.length > 0 &&
+      sampleIndices.length <= 10 && sampleFiles.length === sampleIndices.length &&
+      sampleFiles.every((file, position) => file.index === sampleIndices[position] &&
+        Number.isSafeInteger(file.index) && file.index >= 0 && Number.isSafeInteger(file.size) && file.size >= 0 &&
+        typeof file.key_basename === 'string' && !!file.key_basename && /^[a-f0-9]{64}$/.test(file.sha256))
+    : sampleDecision === 'none' && review.confirmation_version === 'seller-listing-confirmation-v1' &&
+      sampleIndices.length === 0 && (review.sample_status===undefined || review.sample_status === 'not_selected');
+  const requiredConfirmations: ConfirmationKey[] = [...CONFIRMATION_KEYS,
+    ...(sampleDecision === 'member_files' ? ['sample_files_confirmed' as const] : [])];
+  if (review.approval_available && (!sampleShapeValid ||
+      requiredConfirmations.some(key => typeof review.confirmation_statements?.[key] !== 'string' || !review.confirmation_statements[key].trim())))
     throw new Error('Saved review could not be verified');
   if (review.approval_available) {
     try { verifySourcePage(review.source_page as ReviewSourcePage, review, 0); }
     catch { throw new Error('Saved review could not be verified'); }
   }
   if (review.approval && (review.approval.review_hash !== review.review_hash || review.approval.render_hash !== review.render_hash ||
-      review.approval.draft_version !== review.draft_version || review.approval.source_version !== review.source_version || review.approval.sample_decision !== 'none'))
+      review.approval.draft_version !== review.draft_version || review.approval.source_version !== review.source_version || review.approval.sample_decision !== sampleDecision))
     throw new Error('Saved review could not be verified');
   return review;
 }
 
 export async function approveListingReview(review: ListingReview, request_id: string, signal: AbortSignal): Promise<ApprovalReceipt> {
+  const sampleDecision=review.sample_decision??'none';
   const body = {request_id,review_hash:review.review_hash,render_hash:review.render_hash,
-    confirmation_version:review.confirmation_version,sample_decision:'none',
-    ownership_confirmed:true,privacy_confirmed:true,price_license_confirmed:true,public_disclosure_confirmed:true};
+    confirmation_version:review.confirmation_version,sample_decision:sampleDecision,
+    ownership_confirmed:true,privacy_confirmed:true,price_license_confirmed:true,public_disclosure_confirmed:true,
+    ...(sampleDecision === 'member_files' ? {sample_object_indices:review.sample_object_indices??[],sample_files_confirmed:true} : {})};
   const receipt: ApprovalReceipt = (await api.post('/seller-workspace/listing-approval',body,{signal})).data;
   if (receipt.review_hash !== review.review_hash || receipt.render_hash !== review.render_hash ||
       receipt.draft_version !== review.draft_version || receipt.source_version !== review.source_version ||
-      receipt.sample_decision !== 'none' || signal.aborted) throw new Error('Approval could not be verified');
+      receipt.sample_decision !== sampleDecision || signal.aborted) throw new Error('Approval could not be verified');
   return receipt;
 }

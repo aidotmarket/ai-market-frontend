@@ -23,6 +23,7 @@ import {
   isAWSDiscoveryAvailable,
   listWorkspaceObjects,
   cancelWorkspaceProfileJob,
+  DEFAULT_SAMPLE_LIMITS,
   type WorkspaceProfileJob,
 } from './sellerWorkspace';
 
@@ -79,6 +80,9 @@ describe('Seller Workspace capability truth', () => {
     client.get.mockResolvedValueOnce({ data: enabledCapabilities });
     await expect(getSellerWorkspaceCapabilities()).resolves.toEqual(enabledCapabilities);
     expect(client.get).toHaveBeenCalledWith('/seller-workspace/capabilities');
+  });
+  it('uses the documented fixed sample limits',()=>{
+    expect(DEFAULT_SAMPLE_LIMITS).toEqual({max_files:10,max_file_bytes:64*1024*1024,max_total_bytes:256*1024*1024});
   });
 
   it('defaults off unless both master and AWS connect are explicitly available', () => {

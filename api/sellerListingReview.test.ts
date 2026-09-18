@@ -40,6 +40,22 @@ it('sends only exact review identities and explicit confirmations, never source 
   await expect(approveListingReview(prepared,'request-id',signal)).rejects.toThrow('Approval could not be verified');
 });
 
+it('sends the v2 member-file confirmation and ordered indices',async()=>{
+ const prepared={...review,review_hash:'c'.repeat(64),draft_version:1,source_version:2,confirmation_version:'seller-listing-confirmation-v2' as const,
+  sample_decision:'member_files' as const,sample_object_indices:[1,4]} as ListingReview;
+ const receipt={id:'approval',review_hash:prepared.review_hash,render_hash:prepared.render_hash,draft_version:1,source_version:2,sample_decision:'member_files'};
+ client.post.mockResolvedValue({data:receipt});
+ await approveListingReview(prepared,'request-id',new AbortController().signal);
+ expect(client.post.mock.calls[0][1]).toMatchObject({confirmation_version:'seller-listing-confirmation-v2',sample_decision:'member_files',sample_object_indices:[1,4],sample_files_confirmed:true});
+});
+it('uses the last persisted sample selection in the approval payload',async()=>{
+ const prepared={...review,review_hash:'c'.repeat(64),draft_version:1,source_version:2,confirmation_version:'seller-listing-confirmation-v2' as const,
+  sample_decision:'member_files' as const,sample_object_indices:[0]} as ListingReview;
+ client.post.mockResolvedValue({data:{id:'approved',review_hash:prepared.review_hash,render_hash:prepared.render_hash,draft_version:1,source_version:2,sample_decision:'member_files'}});
+ await approveListingReview(prepared,'request-id',new AbortController().signal);
+ expect(client.post.mock.calls[0][1].sample_object_indices).toEqual([0]);
+});
+
 
 const page={review_hash:'a'.repeat(64),source_hash:'b'.repeat(64),source_version:1,offset:0,page_size:50,total_count:22000,total_size_bytes:22000,next_cursor:'next',files:Array.from({length:50},(_,i)=>({key:`private/${i}.csv`,size:1,etag:'e',version_id:null}))};
 const complete={...review,review_hash:page.review_hash,source_hash:page.source_hash,source_version:1,approval_available:true,confirmation_version:'seller-listing-confirmation-v1',confirmation_statements:{ownership_confirmed:'Ownership',privacy_confirmed:'Privacy',price_license_confirmed:'Price/license',public_disclosure_confirmed:'Disclosure'},source_page:page} as ListingReview;
