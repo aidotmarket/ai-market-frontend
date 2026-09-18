@@ -110,6 +110,7 @@ export async function verifyManifest(raw: unknown, keys: TrustedKeys, listingId:
 /** Called only after platform and every F2 seller signature authenticate. */
 export async function verifyScanAttestation(m: Manifest): Promise<void> {
   const b = m.approval.platform_envelope.binding;
+  check(m.proofs.length > 0, 'scan_attestation_invalid');
   for (const p of m.proofs) requirePolicyVersion(p.scan_policy, p.scan_policy_version);
   check(m.proofs.every(p => p.scan_policy === m.proofs[0].scan_policy
     && p.scan_policy_version === m.proofs[0].scan_policy_version

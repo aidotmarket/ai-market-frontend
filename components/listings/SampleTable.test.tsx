@@ -38,6 +38,12 @@ describe('lossless inert table', () => {
   it('uses one inert-text mapping for control, format and surrogate code points', () => {
     expect(inertText('left\u0000middle\u202Eright\ud800')).toBe('left�middle�right�');
   });
+  it('accepts a lone surrogate through verification and replaces it only at render', async () => {
+    const {sample} = await verifiedFixture([{value: '\ud800'}], [['value', 'string', false, {}]]);
+    expect(sample.entries[0].row.value).toBe('\ud800');
+    expect(() => render(<SampleTable sample={sample} columns={sample.manifest.columns} />)).not.toThrow();
+    expect(screen.getByText('�')).toBeTruthy();
+  });
   it('sorts ascending/descending/reset, uses proof identity and filters locally', async () => {
     const {sample} = await verifiedFixture(); const original = JSON.stringify(sample.entries);
     render(<SampleTable sample={sample} columns={sample.manifest.columns} />);

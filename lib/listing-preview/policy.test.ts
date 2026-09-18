@@ -3,7 +3,7 @@ import {readFileSync} from 'node:fs';
 import {expect, it, vi} from 'vitest';
 import {LEGACY_POLICY, requirePolicyVersion, SELLER_ATTESTED_POLICY} from './policy';
 import {makePreview, testSign} from '@/tests/previewFixture';
-import {checkpointBytes, commitmentBytes, disclosureBytes, platformBytes, proofBytes, verifyManifest, verifySample} from './verifier';
+import {checkpointBytes, commitmentBytes, disclosureBytes, platformBytes, proofBytes, verifyManifest, verifySample, verifyScanAttestation} from './verifier';
 import {b64, hex, jcs, sha, utf8} from './primitives';
 import type {Descriptor, Json} from './types';
 
@@ -60,6 +60,11 @@ it('refuses a signed but incorrectly bound scan-attestation digest', async () =>
   e.binding.scan_attestation_digest = '0'.repeat(64);
   e.seller_signature = testSign(disclosureBytes(e.binding)); e.signature = testSign(platformBytes(e));
   await expect(verifyManifest(f.manifest, f.keys, f.manifest.listing_id, f.now)).rejects.toThrow('scan_mismatch');
+});
+
+it('returns a fixed reason for an empty proof array', async () => {
+  const f = await makePreview([{value: 'barley'}], text);
+  await expect(verifyScanAttestation({...f.manifest, proofs: []})).rejects.toThrow('scan_attestation_invalid');
 });
 
 it.each(['scan_policy', 'scan_policy_version', 'scan_verdict', 'sampled_leaf_list_digest', 'signature'])('refuses modified producer attestation %s', async field => {
