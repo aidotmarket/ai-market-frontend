@@ -18,17 +18,37 @@ import { AxiosError } from 'axios';
 import { api } from '@/api/client';
 import DatasetMembers, { type DatasetMember } from './DatasetMembers';
 
-type DirectoryOrder = BuyerOrderDetail & { memberMode?: 'legacy' | 'directory' | 'unavailable'; dataset_members?: DatasetMember[] };
+type DirectoryOrder = BuyerOrderDetail & {
+  memberMode?: 'legacy' | 'directory' | 'unavailable';
+  dataset_members?: DatasetMember[];
+  memberUnavailableReason?: 'delivery_retention_expired' | 'download_window_expired' | 'access_closed' | 'files_unavailable';
+  memberRetryable?: boolean;
+};
+
+function memberProbeReason(status: number | undefined, detail: unknown): DirectoryOrder['memberUnavailableReason'] {
+  const code = detail && typeof detail === 'object' && 'code' in detail ? String(detail.code) : undefined;
+  if (status === 410 || detail === 'delivery_retention_expired') return 'delivery_retention_expired';
+  if (status === 403 && code === 'download_window_expired') return 'download_window_expired';
+  if (status === 403 && (code === 'access_closed' || (typeof detail === 'string' && /closed|revoked/i.test(detail)))) return 'access_closed';
+  return 'files_unavailable';
+}
 
 async function probeMembers(data: BuyerOrderDetail): Promise<DirectoryOrder> {
   try {
     const response = await api.get<{ members: DatasetMember[] }>(`/orders/${encodeURIComponent(data.id)}/members`, { timeout: 10000 });
-    if (response.status === 200) return { ...data, memberMode: 'directory', dataset_members: response.data.members };
-    return { ...data, memberMode: 'unavailable', dataset_members: undefined };
+    if (response.status === 200 && Array.isArray(response.data?.members)) {
+      return { ...data, memberMode: 'directory', dataset_members: response.data.members };
+    }
+    return { ...data, memberMode: 'unavailable', dataset_members: undefined,
+      memberUnavailableReason: 'files_unavailable', memberRetryable: false };
   } catch (err) {
     // Only a definitive 404 permits legacy automatic download preparation.
-    const legacy = (err as { response?: { status?: number } }).response?.status === 404;
-    return { ...data, memberMode: legacy ? 'legacy' : 'unavailable', dataset_members: undefined };
+    const response = (err as { response?: { status?: number; data?: { detail?: unknown } } }).response;
+    const status = response?.status;
+    const legacy = status === 404;
+    return { ...data, memberMode: legacy ? 'legacy' : 'unavailable', dataset_members: undefined,
+      memberUnavailableReason: legacy ? undefined : memberProbeReason(status, response?.data?.detail),
+      memberRetryable: !legacy && (status === undefined || status >= 500) };
   }
 }
 
@@ -450,6 +470,7 @@ export default function OrderDetailPage() {
           {isDirectoryOrder && isBuyerOfRecord && (
             <DatasetMembers key={`${order.id}:${userId}`} orderId={order.id} initialMembers={order.dataset_members}
               filesUnavailable={order.memberMode === 'unavailable'} retrying={retryingMembers}
+              unavailableReason={order.memberUnavailableReason} retryable={order.memberRetryable}
               onRetry={async () => {
                 setRetryingMembers(true);
                 try {

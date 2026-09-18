@@ -27,6 +27,8 @@ export interface SellerWorkspaceCapabilities {
   sources?: CapabilityStage | null;
   review?: CapabilityStage | null;
   approval?: CapabilityStage | null;
+  /** Backend ba3889064106cd2c4c815a69a25ba7b9bbb3b3d4 omits this flag-off and emits CapabilityStage flag-on. */
+  samples?: CapabilityStage | null;
   providers: {
     aws: ProviderCapabilities;
     r2: ProviderCapabilities;
@@ -346,4 +348,23 @@ export function cancelWorkspaceProfileJob(job: WorkspaceProfileJob, idempotencyK
 
 export function getWorkspaceProfileEvidence(evidenceId: string) {
   return safely<WorkspaceProfileEvidence>(api.get(`${BASE_PATH}/profile-evidence/${encodeURIComponent(evidenceId)}`));
+}
+
+export interface SampleLimits { max_files:number; max_file_bytes:number; max_total_bytes:number }
+// Backend-documented defaults. These are not independently environment-tunable in the client.
+export const SAMPLE_MAX_FILES = 10;
+export const SAMPLE_MAX_TOTAL_BYTES = 256 * 1024 * 1024;
+export const SAMPLE_MAX_FILE_BYTES = 64 * 1024 * 1024;
+export const DEFAULT_SAMPLE_LIMITS:SampleLimits={max_files:SAMPLE_MAX_FILES,max_file_bytes:SAMPLE_MAX_FILE_BYTES,max_total_bytes:SAMPLE_MAX_TOTAL_BYTES};
+
+export interface SampleUploadReceipt { index:number; size:number; sha256:string; binding:'etag_md5'|'size_only' }
+
+export async function uploadWorkspaceSample(connectionId:string,sourceVersion:number,index:number,file:File,
+  idempotencyKey:string,onProgress:(loaded:number,total:number)=>void):Promise<SampleUploadReceipt> {
+  return (await api.post<SampleUploadReceipt>(
+    `${BASE_PATH}/listing-source/${encodeURIComponent(connectionId)}/${sourceVersion}/samples/${index}`,
+    file,
+    {params:{size:file.size},headers:{...mutationHeaders(idempotencyKey),'Content-Type':'application/octet-stream'},
+      onUploadProgress:event=>onProgress(event.loaded,event.total ?? file.size)},
+  )).data;
 }

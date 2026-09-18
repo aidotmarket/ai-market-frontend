@@ -24,6 +24,9 @@ const reasons: Record<string, string> = {
   byte_budget_exceeded: 'The hourly download byte allowance (DOWNLOAD_GRANT_BYTES_PER_HOUR) has been reached. Try again next hour.',
   delivery_busy: 'Delivery is busy. Please try again shortly.',
   delivery_retention_expired: 'This dataset is no longer available for download.',
+  download_window_expired: 'This order’s download window has ended.',
+  access_closed: 'Download access for this order has been closed.',
+  files_unavailable: 'Files are temporarily unavailable.',
 };
 
 function refusal(detail: unknown): string {
@@ -39,10 +42,12 @@ function sizeLabel(bytes: number) {
   return `${(bytes / 1024 ** unit).toFixed(1)} ${['B', 'KiB', 'MiB', 'GiB', 'TiB'][unit]}`;
 }
 
-export default function DatasetMembers({ orderId, initialMembers, filesUnavailable = false, retrying = false, onRetry, accessExpired, ensureTermsAccepted }: {
+export default function DatasetMembers({ orderId, initialMembers, filesUnavailable = false, unavailableReason = 'files_unavailable', retryable = false, retrying = false, onRetry, accessExpired, ensureTermsAccepted }: {
   orderId: string;
   initialMembers?: DatasetMember[];
   filesUnavailable?: boolean;
+  unavailableReason?: 'delivery_retention_expired' | 'download_window_expired' | 'access_closed' | 'files_unavailable';
+  retryable?: boolean;
   retrying?: boolean;
   onRetry?: () => Promise<void>;
   accessExpired: boolean;
@@ -136,8 +141,8 @@ export default function DatasetMembers({ orderId, initialMembers, filesUnavailab
       <h2 className="text-lg font-semibold text-gray-900">Files in this dataset</h2>
       <p className="mt-2 text-sm text-gray-600">One download allowance gives access to the whole dataset. Renewing access uses another allowance.</p>
       {filesUnavailable && <div role="alert">
-        <p>Files unavailable. Please try again.</p>
-        <button type="button" disabled={retrying} onClick={onRetry}>{retrying ? 'Retrying…' : 'Retry loading files'}</button>
+        <p>{reasons[unavailableReason]} ({unavailableReason})</p>
+        {retryable && <button type="button" disabled={retrying} onClick={onRetry}>{retrying ? 'Retrying…' : 'Retry loading files'}</button>}
       </div>}
       {!filesUnavailable && (accessExpired ? <p>Download window expired.</p> : <>
         {(!grant || needsRenewal) && <button type="button" disabled={busy} onClick={getAccess} className="mt-3 rounded-lg bg-indigo-700 px-4 py-2 text-sm font-semibold text-white disabled:opacity-50">

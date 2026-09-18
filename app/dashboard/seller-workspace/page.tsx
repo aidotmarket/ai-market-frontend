@@ -12,6 +12,7 @@ import R2ConnectionForm from '@/components/seller-workspace/R2ConnectionForm';
 import { StorageProviders } from '@/components/seller-workspace/StorageProviders';
 import SellerListingEditor from '@/components/seller-workspace/SellerListingEditor';
 import SavedListingEditor from '@/components/seller-workspace/SavedListingEditor';
+import {SellerListingDraftProvider} from '@/components/seller-workspace/SellerListingDraftStore';
 import { WorkspacePanel } from '@/components/seller-workspace/WorkspacePanel';
 import { createListingAssistant } from '@/api/sellerListingAssistant';
 import {
@@ -19,6 +20,7 @@ import {
   type ConnectionVerifyRequest,
   type SellerWorkspaceConnection,
   type SellerWorkspaceCapabilities,
+  DEFAULT_SAMPLE_LIMITS,
   SellerWorkspaceApiError,
   createIdempotencyKey,
   createSellerWorkspaceConnection,
@@ -561,9 +563,12 @@ export default function SellerWorkspacePage() {
   }
 
   return (
+    <SellerListingDraftProvider
+      enabled={capabilities?.master.enabled===true&&capabilities?.drafts?.enabled===true&&capabilities.drafts.status==='available'}
+      sampleCapability={capabilities?.master.enabled===true&&capabilities?.drafts?.enabled===true&&capabilities.drafts.status==='available'&&capabilities?.samples?.enabled===true&&capabilities.samples.status==='available'}>
     <div className="space-y-6">
       <WorkspaceOverview connections={currentConnections} view={view} onViewChange={(nextView) => { setR2Target(undefined); clearSensitive(); setActionError(null); setDisconnectConfirmation(null); setView(nextView); }} />
-      <WorkspacePanel active={view === 'data'}>{capabilities?.master.enabled && capabilities.sources?.enabled && capabilities.sources.status === 'available' ? <SavedWorkspaceData connections={connections} enabled={isStorageDiscoveryAvailable(capabilities)} /> : <WorkspaceData connections={connections} enabled={capabilities !== null && isStorageDiscoveryAvailable(capabilities)} />}</WorkspacePanel>
+      <WorkspacePanel active={view === 'data'}>{capabilities?.master.enabled && capabilities.sources?.enabled && capabilities.sources.status === 'available' ? <SavedWorkspaceData connections={connections} enabled={isStorageDiscoveryAvailable(capabilities)} sampleLimits={DEFAULT_SAMPLE_LIMITS} /> : <WorkspaceData connections={connections} enabled={capabilities !== null && isStorageDiscoveryAvailable(capabilities)} />}</WorkspacePanel>
       <WorkspacePanel active={view === 'listing'}>{capabilities?.master.enabled && capabilities?.drafts?.enabled && capabilities.drafts.status === 'available' ? <SavedListingEditor active={view === 'listing'} assistant={capabilities.listing_assistant?.enabled && capabilities.listing_assistant.status === 'available' ? listingAssistant : undefined} /> : <SellerListingEditor active={view === 'listing'} assistant={capabilities?.master.enabled && capabilities.listing_assistant?.enabled && capabilities.listing_assistant.status === 'available' ? listingAssistant : undefined} />}</WorkspacePanel>
       <WorkspacePanel active={view === 'manage'}><SellerPublications active={view === 'manage'} enabled={capabilities?.master.enabled === true && capabilities.review?.enabled === true && capabilities.review.status === 'available'} /></WorkspacePanel>
       <WorkspacePanel active={view === 'review'}><SellerReview active={view === 'review'} enabled={capabilities?.master.enabled === true && capabilities.review?.enabled === true && capabilities.review.status === 'available'} /></WorkspacePanel>
@@ -867,5 +872,6 @@ export default function SellerWorkspacePage() {
       )}
       </WorkspacePanel>
     </div>
+    </SellerListingDraftProvider>
   );
 }

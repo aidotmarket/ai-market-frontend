@@ -1,13 +1,14 @@
 // @vitest-environment jsdom
-import { act, cleanup, fireEvent, render, screen, within } from '@testing-library/react';
+import { act, cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { WorkspaceActivity, WorkspaceData } from './WorkspaceData';
+import { SAMPLE_REFUSALS, sampleUploadRefusal, WorkspaceActivity, WorkspaceData } from './WorkspaceData';
 import type { SellerWorkspaceConnection, WorkspaceProfileJob } from '@/api/sellerWorkspace';
 
 const api = vi.hoisted(() => ({
   listWorkspaceObjects: vi.fn(), listWorkspaceProfileJobs: vi.fn(),
   cancelWorkspaceProfileJob: vi.fn(), getWorkspaceProfileEvidence: vi.fn(),
   createIdempotencyKey: vi.fn(() => 'synthetic-cancel-key'),
+  uploadWorkspaceSample:vi.fn(),SAMPLE_MAX_FILES:10,SAMPLE_MAX_FILE_BYTES:64*1024*1024,SAMPLE_MAX_TOTAL_BYTES:256*1024*1024,
 }));
 vi.mock('@/api/sellerWorkspace', () => api);
 
@@ -24,6 +25,8 @@ beforeEach(() => { vi.resetAllMocks(); api.createIdempotencyKey.mockReturnValue(
 afterEach(cleanup);
 
 describe('Seller data browser', () => {
+  const savedSource={version:3,connection_current:true,content:{connection_id:connection.id,connection_version:connection.version,version_mode:'current' as const,objects:[{key:object.key,version_id:object.version_id,etag:object.etag,size:object.size}]}};
+
   it('does not call profile APIs while the profile stage is unavailable', () => {
     render(<><WorkspaceData enabled={false} connections={[connection]} /><WorkspaceActivity enabled={false} connections={[connection]} /></>);
     expect(api.listWorkspaceObjects).not.toHaveBeenCalled();
@@ -82,6 +85,84 @@ describe('Seller data browser', () => {
     expect(screen.queryByText(/secret-provider-response/)).toBeNull();
     fireEvent.click(screen.getByRole('button', { name: 'Try again' }));
     await screen.findByText(object.key);
+  });
+
+  it('ticks and uploads a saved sample object with the pinned limits and progress',async()=>{
+    api.listWorkspaceObjects.mockResolvedValue({objects:[object],next_cursor:null});
+    api.uploadWorkspaceSample.mockImplementation(async(_connection:string,_version:number,_index:number,_file:File,_key:string,progress:(loaded:number,total:number)=>void)=>{progress(512,1024);progress(1024,1024);return {index:0,size:1024,sha256:'a'.repeat(64),binding:'size_only'};});
+    const saveSamples=vi.fn().mockResolvedValue(undefined);
+    render(<WorkspaceData enabled connections={[connection]} savedSource={savedSource} sampleFilesAvailable initialSampleIndices={[]} onSaveSampleSelection={saveSamples}/>);
+    expect((await screen.findByText(/Tick up to 10 saved objects/)).textContent).toContain('64 MB');
+    expect(screen.getByText(/Tick up to 10 saved objects/).textContent).toContain('256 MB');
+    fireEvent.click(screen.getByRole('checkbox',{name:/Offer one.csv.*free sample/}));
+    const file=new File([new Uint8Array(1024)],'one.csv');
+    fireEvent.change(screen.getByLabelText(/Upload sample one.csv/),{target:{files:[file]}});
+    expect(await screen.findByText('Uploaded and saved for review.')).toBeTruthy();
+    expect(api.uploadWorkspaceSample).toHaveBeenCalledWith(connection.id,3,0,file,'synthetic-cancel-key',expect.any(Function));
+    expect(saveSamples).toHaveBeenCalledWith([0]);
+    expect(screen.getByRole('progressbar').getAttribute('value')).toBe('100');
+  });
+
+  it('renders every backend sample refusal by its safe name',()=>{
+    const cases=[
+      ['Sample source not found','saved file selection'],['index 3: invalid sample basename','file name'],
+      ['index 3: out of range','no longer in the saved selection'],['index 3: sample size mismatch','exactly the saved file size'],
+      ['SAMPLE_MAX_FILE_BYTES: 67108864','per-file sample limit'],['index 3: sample is immutable','already approved or published'],
+      ['index 3: upload already in progress','already in progress'],['SAMPLE_MAX_FILES: 10','maximum number'],
+      ['SAMPLE_MAX_TOTAL_BYTES: 268435456','total sample size'],['SAMPLE_SELLER_QUOTA_BYTES: 2147483648','storage quota'],
+      ['sample upload generation expired','replaced or expired'],['SAMPLE_UPLOAD_TIMEOUT_S: 900','took too long'],
+      ['sample_store_unavailable','temporarily unavailable'],['sample_upload_refused','previously refused'],
+      ['sample upload already in progress','request identity'],['sample_index_out_of_range','no longer in the saved selection'],
+      ['sample_size_out_of_range','per-file sample limit'],['SAMPLE_UPLOAD_RATE: 30','Too many sample uploads'],
+      ['sample size mismatch','exactly the saved file size'],
+    ];
+    for(const [detail,copy] of cases){const result=sampleUploadRefusal(detail);expect(result.copy).toContain(copy);if(detail!=='sample_upload_refused')expect(result.code).not.toBe('sample_upload_refused');}
+    expect(Object.keys(SAMPLE_REFUSALS)).toEqual(['Sample source not found','invalid sample basename','out of range','sample size mismatch','SAMPLE_MAX_FILE_BYTES','sample is immutable','upload already in progress','sample upload already in progress','SAMPLE_MAX_FILES','SAMPLE_MAX_TOTAL_BYTES','SAMPLE_SELLER_QUOTA_BYTES','sample upload generation expired','SAMPLE_UPLOAD_TIMEOUT_S','sample_store_unavailable','sample_upload_refused','sample_index_out_of_range','sample_size_out_of_range','SAMPLE_UPLOAD_RATE']);
+  });
+
+  it('shows an over-limit refusal by name',async()=>{
+    api.listWorkspaceObjects.mockResolvedValue({objects:[object],next_cursor:null});
+    api.uploadWorkspaceSample.mockRejectedValue({isAxiosError:true,response:{status:400,data:{detail:'SAMPLE_MAX_FILE_BYTES: 67108864'}}});
+    render(<WorkspaceData enabled connections={[connection]} savedSource={savedSource} sampleFilesAvailable onSaveSampleSelection={vi.fn()}/>);
+    fireEvent.click(await screen.findByRole('checkbox',{name:/Offer one.csv.*free sample/}));
+    fireEvent.change(screen.getByLabelText(/Upload sample one.csv/),{target:{files:[new File([new Uint8Array(1024)],'one.csv')]}});
+    const alert=await screen.findByRole('alert');expect(alert.textContent).toContain('per-file sample limit');expect(alert.textContent).toContain('(SAMPLE_MAX_FILE_BYTES)');
+  });
+
+  it('keeps dark markup byte-identical and shows an explicit alert for a deployed-signal 404',async()=>{
+    api.listWorkspaceObjects.mockResolvedValue({objects:[object],next_cursor:null});
+    const props={enabled:true,connections:[connection],savedSource,onSaveSampleSelection:vi.fn()};
+    const legacy=render(<WorkspaceData {...props}/>);
+    await screen.findByText(object.key);const legacyMarkup=legacy.container.innerHTML;legacy.unmount();
+    const explicitDark=render(<WorkspaceData {...props} sampleFilesAvailable={false}/>);
+    await screen.findByText(object.key);expect(explicitDark.container.innerHTML).toBe(legacyMarkup);explicitDark.unmount();
+    api.uploadWorkspaceSample.mockRejectedValue({isAxiosError:true,response:{status:404,data:{detail:'Not Found'}}});
+    const feature=render(<WorkspaceData {...props} sampleFilesAvailable/>);
+    expect(legacyMarkup).not.toContain('Free sample');
+    fireEvent.click(await screen.findByRole('checkbox',{name:/Offer one.csv.*free sample/}));
+    fireEvent.change(screen.getByLabelText(/Upload sample one.csv/),{target:{files:[new File([new Uint8Array(1024)],'one.csv')]}});
+    expect((await screen.findByRole('alert')).textContent).toContain('sample_route_unavailable');
+    expect(feature.container.querySelector('[aria-label="Workspace sample files"]')).toBeTruthy();
+  });
+
+  it('does not place a full object key in new sample attributes',async()=>{
+    api.listWorkspaceObjects.mockResolvedValue({objects:[object],next_cursor:null});
+    const {container}=render(<WorkspaceData enabled connections={[connection]} savedSource={savedSource} sampleFilesAvailable onSaveSampleSelection={vi.fn()}/>);
+    await screen.findByRole('checkbox',{name:/Offer one.csv.*free sample/});
+    const matching=[...container.querySelectorAll('*')].flatMap(node=>[...node.attributes].map(attribute=>attribute.value)).filter(value=>value.includes(object.key));
+    expect(matching).toEqual([`Select ${object.key}`]);
+  });
+  it('persists only uploaded ticks and restores the replace affordance from persisted state',async()=>{
+    const second={...object,key:'datasets/two.csv',etag:'etag-2'};
+    api.listWorkspaceObjects.mockResolvedValue({objects:[object,second],next_cursor:null});
+    const source={...savedSource,content:{...savedSource.content,objects:[...savedSource.content.objects,{key:second.key,version_id:null,etag:second.etag,size:second.size}]}};
+    const saveSamples=vi.fn().mockResolvedValue(undefined);
+    render(<WorkspaceData enabled connections={[connection]} savedSource={source} sampleFilesAvailable initialSampleIndices={[0]} onSaveSampleSelection={saveSamples}/>);
+    expect(await screen.findByText('Replace uploaded copy')).toBeTruthy();
+    fireEvent.click(screen.getByRole('checkbox',{name:/Offer two.csv.*free sample/}));
+    fireEvent.click(screen.getByRole('checkbox',{name:/Offer one.csv.*free sample/}));
+    await waitFor(()=>expect(saveSamples).toHaveBeenCalledWith([]));
+    expect(saveSamples).not.toHaveBeenCalledWith([1]);
   });
 });
 

@@ -35,6 +35,19 @@ beforeEach(() => {
 afterEach(() => { cleanup(); vi.restoreAllMocks(); vi.resetAllMocks(); vi.unstubAllGlobals(); vi.unstubAllEnvs(); });
 
 describe('dataset member access', () => {
+  it.each([
+    ['delivery_retention_expired', 'This dataset is no longer available for download.'],
+    ['download_window_expired', 'This order’s download window has ended.'],
+    ['access_closed', 'Download access for this order has been closed.'],
+  ] as const)('renders permanent discovery refusal %s without Retry', (reason, copy) => {
+    render(<DatasetMembers orderId="order-1" filesUnavailable unavailableReason={reason} retryable={false}
+      accessExpired={false} ensureTermsAccepted={async (action) => action()} />);
+    expect(screen.getByRole('alert').textContent).toContain(copy);
+    expect(screen.getByRole('alert').textContent).toContain(reason);
+    expect(screen.queryByRole('button', { name: 'Retry loading files' })).toBeNull();
+    expect(api.post).not.toHaveBeenCalled();
+  });
+
   it('lists three members, issues one set grant, and opens each delivered member via a header-authenticated redirect', async () => {
     const { container } = setup();
     await screen.findByText('missing.csv');
