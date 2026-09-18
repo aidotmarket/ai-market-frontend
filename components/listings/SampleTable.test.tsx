@@ -70,7 +70,7 @@ describe('lossless inert table', () => {
     expect(screen.getByText('empty string')).toBeTruthy(); expect(screen.getByText('null')).toBeTruthy();
     expect(screen.getAllByRole('cell').map(c => c.textContent)).toEqual(['empty string', 'missing', 'null']);
     expect(screen.getAllByRole('columnheader')).toHaveLength(3); expect(screen.getAllByText('Unit: kg')).toHaveLength(3);
-    expect(screen.getByText('This sample row matches the dataset commitment recorded by the seller.')).toBeTruthy();
+    expect(screen.getAllByText("These rows are verified to belong to the seller's dataset and are shown as the seller published them.")).toHaveLength(2);
   });
   it('cannot render a handle deserialized from JSON', async () => {
     const {sample} = await verifiedFixture(); const view = render(<SampleTable sample={JSON.parse(JSON.stringify(sample))} columns={sample.manifest.columns} />);

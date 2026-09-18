@@ -128,7 +128,8 @@ describe('credential-free origin admission and streaming', () => {
   it.each(['https://seller.example/previews/sample.json', 'https://seller-account.r2.dev/sample.json'])('admits public seller origin %s', url => expect(admitPackageUrl(url).protocol).toBe('https:'));
   it('ignores advisory response headers and enforces the delivered-byte ceiling', async () => {
     const signal = new AbortController().signal;
-    for (const headers of [{'content-type': 'text/plain'}, {'content-type': 'application/octet-stream'}, {'content-encoding': 'gzip'}, {'cache-control': 'public'}, {'content-length': '999'}]) {
+    const variants: Record<string, string>[] = [{'content-type': 'text/plain'}, {'content-type': 'application/octet-stream'}, {'content-encoding': 'gzip'}, {'cache-control': 'public'}, {'content-length': '999'}];
+    for (const headers of variants) {
       expect(new TextDecoder().decode(await boundedBody(new Response('ok', {status: 201, headers}), 10, signal))).toBe('ok');
     }
     await expect(boundedBody(new Response('123456'), 5, signal)).rejects.toThrow('byte_limit');

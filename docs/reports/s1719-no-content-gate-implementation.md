@@ -103,8 +103,61 @@ deterministic corpus and its generator were removed.
 
 ## Validation
 
-Pending final validation.
+- `rtk proxy npx tsc --noEmit`: exit 0.
+- `rtk proxy npx vitest run --maxWorkers=1`: 101 files / 960 tests; 100
+  files and 959 tests passed. The sole failure was the known origin/main
+  baseline `app/login/LoginForm.test.tsx` test `shares one flight between a
+  manual click and subsequent hinted hydration`, with the unchanged
+  `oauth_nonce` storage assertion.
+- `rtk proxy npx eslint components/listings lib/listing-preview tests`: exit 0
+  with 0 errors and 2 warnings in unchanged `SellerShareControls.tsx` and
+  `ShareKitModal.tsx` (`@next/next/no-img-element`).
+- `rtk proxy npx vitest run lib/listing-preview components/listings/ListingSamplePreview.test.tsx components/listings/SampleTable.test.tsx --maxWorkers=1`:
+  7 files and 169 tests passed.
+- `rtk proxy python3 scripts/preview-mutations.py`: all 6 cryptographic/current
+  pointer mutations produced observed assertion failures.
 
 ## Risks and scope boundary
 
-Pending final assessment.
+- The v2 fixture is provisional until AIM Data publishes the canonical shared
+  file; its bytes and SHA must then be re-pinned.
+- Browser JavaScript cannot independently verify DNS resolution or the connected
+  peer address. Public-host/CORS/private-network behavior still needs live
+  seller-origin integration evidence.
+- Lone surrogate code units are retained for signed canonical JSON and replaced
+  only in rendered text. Cross-language producers must preserve the same escaped
+  JSON representation for cryptographic parity.
+- Response media/cache/encoding headers are intentionally non-authoritative;
+  protection relies on credential-free CORS Fetch, parseability, request cache
+  bypass, and the actual streamed-byte cap.
+- Scope is the frontend browser viewer, its fixtures/tests, mutation harness,
+  runbook and this report. No backend/AIM Data code, merge, deployment or live
+  provider state was changed.
+
+## Files changed
+
+- `components/listings/ListingSamplePreview.tsx`
+- `components/listings/ListingSamplePreview.test.tsx`
+- `components/listings/SampleTable.tsx`
+- `components/listings/SampleTable.test.tsx`
+- `lib/listing-preview/policy.ts`
+- `lib/listing-preview/policy.test.ts`
+- `lib/listing-preview/verifier.ts`
+- `lib/listing-preview/wire.ts`
+- `lib/listing-preview/transport.ts`
+- `lib/listing-preview/types.ts`
+- `lib/listing-preview/registry.ts`
+- `lib/listing-preview/primitives.ts`
+- `lib/listing-preview/adversarial.test.ts`
+- `lib/listing-preview/api.test.ts`
+- `tests/previewFixture.ts`
+- `tests/fixtures/preview/aim_preview_policy_v2.json`
+- `tests/fixtures/preview/aim_preview_policy_v2.sha256`
+- `tests/fixtures/preview/aim-preview-policy-v1-deterministic-vectors.json`
+  (deleted)
+- `tests/fixtures/preview/aim-preview-policy-v1-deterministic-vectors.sha256`
+  (deleted)
+- `scripts/preview-mutations.py`
+- `scripts/preview-policy-vectors.py` (deleted)
+- `docs/runbooks/listing-sample-preview.md`
+- `docs/reports/s1719-no-content-gate-implementation.md`

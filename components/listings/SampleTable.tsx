@@ -2,7 +2,7 @@
 
 import {useId, useMemo, useRef, useState} from 'react';
 import {flexRender, getCoreRowModel, getFilteredRowModel, getSortedRowModel, useReactTable, type ColumnDef, type SortingState} from '@tanstack/react-table';
-import type {Cell, Descriptor, VerifiedEntry, VerifiedSample} from '@/lib/listing-preview/types';
+import type {Cell, Descriptor, Json, VerifiedEntry, VerifiedSample} from '@/lib/listing-preview/types';
 import type {ApprovedColumn} from '@/lib/listing-preview/columns';
 import {isVerifiedSample} from '@/lib/listing-preview/verifier';
 import {canonical} from '@/lib/listing-preview/primitives';
@@ -82,7 +82,7 @@ function VerifiedTable({sample, columns}: {sample: VerifiedSample; columns: read
   const count = table.getRowModel().rows.length;
   return <div className="min-w-0 max-w-full space-y-3">
     <p className="text-sm">{sample.entries.length} seller-selected sample rows from {sample.manifest.commitment.leaf_count.toLocaleString('en-US')} dataset rows.</p>
-    <p className="text-sm">This sample row matches the dataset commitment recorded by the seller.</p>
+    <p className="text-sm">These rows are verified to belong to the seller&apos;s dataset and are shown as the seller published them.</p>
     <p className="text-sm text-gray-600">Membership does not prove quality, representativeness, legality, compliance, seller identity or completeness against an external source.</p>
     <p className="text-sm">Last attested by seller: {sample.manifest.last_attested_by_seller_at}{sample.manifest.stale && <strong className="ml-2">Stale</strong>}</p>
     <div className="flex min-w-0 flex-wrap items-end gap-3">
@@ -98,8 +98,8 @@ function VerifiedTable({sample, columns}: {sample: VerifiedSample; columns: read
     <p role="status" aria-live="polite" aria-atomic="true" className="text-sm">Showing {count} of {sample.entries.length} seller-selected sample rows.</p>
     <div role="region" aria-label="Seller-selected sample table" tabIndex={0}
       className="min-w-0 max-w-full overflow-auto rounded border border-gray-200 focus-visible:outline-2 focus-visible:outline-indigo-700" style={{maxHeight: '60vh'}}>
-      <table className="w-full border-collapse text-sm">
-        <caption className="p-2 text-left font-semibold">Seller-selected sample</caption>
+      <table aria-label="Seller-selected sample" className="w-full border-collapse text-sm">
+        <caption className="p-2 text-left font-semibold">These rows are verified to belong to the seller&apos;s dataset and are shown as the seller published them.</caption>
         <thead><tr>{table.getHeaderGroups()[0].headers.map(header => <th key={header.id} scope="col"
           aria-sort={header.column.getIsSorted() === 'asc' ? 'ascending' : header.column.getIsSorted() === 'desc' ? 'descending' : 'none'}
           className="border-b bg-gray-50 p-2 text-left align-top">
