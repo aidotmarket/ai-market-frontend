@@ -7,7 +7,7 @@ import {verifiedFixture} from '@/tests/previewFixture';
 import {producerV2ManifestFixture} from '@/tests/producerPreviewFixture';
 import type {Cell, Descriptor, Json} from '@/lib/listing-preview/types';
 import {verifyManifest} from '@/lib/listing-preview/verifier';
-import SampleTable, {cellText, compareCells} from './SampleTable';
+import SampleTable, {cellText, compareCells, inertText} from './SampleTable';
 
 beforeAll(() => {vi.stubGlobal('crypto', webcrypto);});
 afterEach(cleanup);
@@ -35,6 +35,9 @@ describe('lossless inert table', () => {
     expect(cellText({kind: 'string', value: 'a\u0000\u200Eb\ud800'})).toBe('a��b�');
     expect(cellText({kind: 'object', value: {'a\u0000': ['b\u200E']}})).toBe('{"a�":["b�"]}');
   });
+  it('uses one inert-text mapping for control, format and surrogate code points', () => {
+    expect(inertText('left\u0000middle\u202Eright\ud800')).toBe('left�middle�right�');
+  });
   it('sorts ascending/descending/reset, uses proof identity and filters locally', async () => {
     const {sample} = await verifiedFixture(); const original = JSON.stringify(sample.entries);
     render(<SampleTable sample={sample} columns={sample.manifest.columns} />);
@@ -44,7 +47,7 @@ describe('lossless inert table', () => {
     fireEvent.click(screen.getByRole('button', {name: 'Sort id: reset'})); expect(rows()).toEqual(initial);
     fireEvent.change(screen.getByLabelText('Search sample'), {target: {value: 'OATS'}});
     expect(screen.getByRole('status').textContent).toBe('Showing 1 of 2 seller-selected sample rows.');
-    fireEvent.change(screen.getByLabelText('Search column'), {target: {value: 'id'}}); expect(screen.getByRole('status').textContent).toContain('Showing 0');
+    fireEvent.change(screen.getByLabelText('Search column'), {target: {value: '0'}}); expect(screen.getByRole('status').textContent).toContain('Showing 0');
     fireEvent.click(screen.getByText('Clear filter')); expect(rows()).toHaveLength(2); expect(JSON.stringify(sample.entries)).toBe(original);
     fireEvent.change(screen.getByLabelText('Search sample'), {target: {value: '.*'}}); expect(rows()).toHaveLength(0);
   });
@@ -85,6 +88,32 @@ describe('lossless inert table', () => {
     expect(screen.getAllByRole('cell').map(c => c.textContent)).toEqual(['empty string', 'missing', 'null']);
     expect(screen.getAllByRole('columnheader')).toHaveLength(3); expect(screen.getAllByText('Unit: kg')).toHaveLength(3);
     expect(screen.getAllByText("These rows are verified to belong to the seller's dataset and are shown as the seller published them.")).toHaveLength(2);
+  });
+  it('neutralizes seller strings at every label, key and expanded-value render site', async () => {
+    const name = 'na\u202Eme\u0000\ud800';
+    const long = 'start\u0000\u202E\ud800' + 'x'.repeat(220);
+    const nestedKey = 'ke\u0000y\u202E\ud800';
+    const schema: Descriptor[] = [[name, 'string', false, {}], ['nested', 'object', false,
+      {object_fields: [{name: nestedKey, type: 'string', nullable: false, type_parameters: {}}]}]];
+    const {sample} = await verifiedFixture([{[name]: long, nested: {[nestedKey]: 'value'}}], schema);
+    const columns = sample.manifest.columns.map(column => column.name === name
+      ? {...column, description: 'desc\u0000\u202E\ud800', unit: 'u\u0000\u202E\ud800'} : column);
+    render(<SampleTable sample={sample} columns={columns} />);
+
+    const inertName = 'na�me��';
+    expect(screen.getByRole('columnheader', {name: new RegExp(inertName)}).textContent).toContain(inertName);
+    expect(screen.getByRole('option', {name: inertName}).getAttribute('value')).toBe('0');
+    expect(screen.getByText('desc���')).toBeTruthy();
+    expect(screen.getByText('Unit: u���')).toBeTruthy();
+    expect(screen.getByRole('button', {name: `Sort ${inertName}: ascending`})).toBeTruthy();
+    expect(screen.getByText('[["ke�y��","string","value"]]')).toBeTruthy();
+
+    const expand = screen.getByRole('button', {name: `Expand ${inertName}`});
+    fireEvent.click(expand);
+    expect(screen.getByText('start���' + 'x'.repeat(220))).toBeTruthy();
+    expect(screen.getByRole('button', {name: `Collapse ${inertName}`})).toBeTruthy();
+    expect(document.body.textContent).not.toContain('\u0000');
+    expect(document.body.textContent).not.toContain('\u202E');
   });
   it('cannot render a handle deserialized from JSON', async () => {
     const {sample} = await verifiedFixture(); const view = render(<SampleTable sample={JSON.parse(JSON.stringify(sample))} columns={sample.manifest.columns} />);
