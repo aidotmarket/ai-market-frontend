@@ -1,14 +1,28 @@
 // @vitest-environment jsdom
 import {webcrypto} from 'node:crypto';
+import {readFileSync} from 'node:fs';
 import {act, cleanup, fireEvent, render, screen, within} from '@testing-library/react';
 import {afterEach, beforeAll, describe, expect, it, vi} from 'vitest';
 import {verifiedFixture} from '@/tests/previewFixture';
+import {producerV2ManifestFixture} from '@/tests/producerPreviewFixture';
 import type {Cell, Descriptor, Json} from '@/lib/listing-preview/types';
+import {verifyManifest} from '@/lib/listing-preview/verifier';
 import SampleTable, {cellText, compareCells} from './SampleTable';
 
 beforeAll(() => {vi.stubGlobal('crypto', webcrypto);});
 afterEach(cleanup);
 describe('lossless inert table', () => {
+  it('verifies the producer real v2 signed manifest before displaying producer-approved row examples', async () => {
+    const producer = producerV2ManifestFixture();
+    const manifest = await verifyManifest(producer.manifest, producer.keys, producer.manifest.listing_id, producer.now);
+    expect(manifest.proofs.every(proof => proof.scan_policy === 'aim-preview-policy-v2')).toBe(true);
+    const policy = JSON.parse(readFileSync('tests/fixtures/preview/aim_preview_policy_v2.json', 'utf8')) as {content_examples_that_pass: string[]};
+    const rows = policy.content_examples_that_pass.map(value => ({value}));
+    const {sample} = await verifiedFixture(rows, [['value', 'string', false, {}]]);
+    render(<SampleTable sample={sample} columns={sample.manifest.columns} />);
+    for (const {value} of rows) expect(screen.getByText(value)).toBeTruthy();
+    expect(screen.getByRole('status').textContent).toBe(`Showing ${rows.length} of ${rows.length} seller-selected sample rows.`);
+  });
   it.each([
     ['9007199254740993', '9007199254740992', 1], ['-9007199254740993', '-9007199254740992', -1],
     ['0.00000000000000000001', '0.00000000000000000002', -1], ['-0.2', '-0.11', -1], ['12.3', '12.30', 0],

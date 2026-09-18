@@ -85,11 +85,12 @@ table loading and marker absence from platform requests/logs/browser storage.
 It is not a real seller-origin, detector, CDN, production approval or withdrawal
 receipt. Do not publish traces or screenshots containing real rows.
 
-The immutable historical producer/backend corpus is in `tests/fixtures/preview`;
-compare its listed files to `docs/reports/s1716-preview-corpus-shas.json`. The
-provisional S1719 v2 policy fixture has its own adjacent SHA and must be replaced
-and re-pinned when AIM Data publishes the canonical shared fixture. Do not
-regenerate fixtures merely to make failing tests pass.
+The immutable producer/backend corpus is in `tests/fixtures/preview`. Its
+complete shared pin list is `preview-fixture-manifest.json`, including AIM
+Data's canonical S1719 v2 policy, signing, request, differential and manifest
+budget fixtures. Keep those producer bytes exact; do not add an adjacent
+self-referential checksum for a fixture or regenerate fixtures merely to make
+failing tests pass.
 
 ## Seller sample display
 

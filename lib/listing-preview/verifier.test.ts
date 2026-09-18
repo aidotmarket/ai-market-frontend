@@ -1,11 +1,12 @@
 import {readFileSync} from 'node:fs';
 import {createHash} from 'node:crypto';
 import {describe, expect, it, vi} from 'vitest';
-import type {Binding, Checkpoint, Commitment, Descriptor, Manifest, PlatformEnvelope, Proof, TrustedCheckpoint} from './types';
+import type {Binding, Checkpoint, Commitment, Descriptor, PlatformEnvelope, Proof, TrustedCheckpoint} from './types';
 import {LIMITS} from './types';
 import {b64, canonical, hex, inclusion, jcs, leaf, node, parseJson, sha, unb64, utf8, verifyEd25519} from './primitives';
 import {canonicalRow, schemaDescriptors} from './canonical-row';
 import {checkpointBytes, commitmentBytes, disclosureBytes, platformBytes, proofBytes, sampleHash, verifyLog, verifyManifest, verifyPackage, verifySignatures} from './verifier';
+import {producerV2ManifestFixture} from '@/tests/producerPreviewFixture';
 
 // Exact shared files are never rewritten to fit the TypeScript implementation.
 const bytes = (name: string) => readFileSync(`tests/fixtures/preview/${name}`);
@@ -17,37 +18,13 @@ const base = fixture('aim_dataset_merkle_v1.json');
 const keys = {[signing.platform_envelope.key_id]: signing.signatures.find((s: {name: string}) => s.name === 'platform-envelope').public_key};
 const at = Date.parse('2026-09-17T00:00:01Z');
 
-function sharedFullManifest(): Manifest {
-  const envelope = signing.platform_envelope as PlatformEnvelope;
-  const binding = envelope.binding;
-  const commitment = requests.approve.commitment as Commitment;
-  const descriptors = binding.schema_descriptors as Descriptor[];
-  const first = commitment.proofs[0];
-  return {
-    profile: 'aim-listing-preview-v1', package_profile: 'aim-preview-package-v2',
-    listing_id: binding.listing_id, listing_version_id: binding.listing_version_id,
-    content_revision: binding.content_revision, source_revision: binding.source_revision,
-    summary_approval_id: binding.summary_approval_id, summary_hash: binding.summary_hash,
-    render_hash: binding.render_hash, disclosure_version: binding.disclosure_version,
-    approval_status: 'approved', sample_hash: binding.sample_hash!, aggregate_hash: binding.aggregate_hash,
-    preview_type: 'table', content_type: 'tabular', selected_fields: binding.selected_fields,
-    columns: binding.selected_fields.map(name => ({name, type: descriptors.find(d => d[0] === name)![1]})),
-    schema_descriptors: descriptors, commitment, proofs: commitment.proofs,
-    checkpoint: signing.checkpoint, log_evidence: signing.log_evidence,
-    approval: {platform_envelope: envelope},
-    package: {url: first.preview_package_url, media_type: first.package_media_type, byte_ceiling: first.package_byte_ceiling},
-    last_attested_by_seller_at: binding.last_attested_by_seller_at, stale: false,
-    freshness_stale_at: '2026-10-15T00:00:00.000000Z', freshness_expires_at: null,
-    generated_at: '2026-09-17T00:00:01.000000Z', valid_until: '2026-09-17T00:00:30.000000Z', limits: LIMITS,
-  } as Manifest;
-}
-
 describe('byte-identical producer/backend corpus', () => {
   for (const pin of fixture('preview-fixture-manifest.json')) it(pin.path, () => {
     expect(createHash('sha256').update(bytes(pin.path.split('/').pop())).digest('hex')).toBe(pin.sha256);
   });
   it('verifies the shared complete manifest end-to-end with its trusted platform key', async () => {
-    const manifest = sharedFullManifest();
+    const {manifest} = producerV2ManifestFixture();
+    expect(manifest.proofs.every(proof => proof.scan_policy === 'aim-preview-policy-v2' && proof.scan_policy_version === '2.0.0')).toBe(true);
     await expect(verifyManifest(manifest, keys, manifest.listing_id, at)).resolves.toEqual(manifest);
     const changed = structuredClone(manifest); changed.columns.reverse();
     await expect(verifyManifest(changed, keys, changed.listing_id, at)).rejects.toThrow('column_mismatch');

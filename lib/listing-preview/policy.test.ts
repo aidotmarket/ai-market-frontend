@@ -7,18 +7,23 @@ import {checkpointBytes, commitmentBytes, disclosureBytes, platformBytes, proofB
 import {b64, hex, jcs, sha, utf8} from './primitives';
 import type {Descriptor, Json} from './types';
 
-const fixturePath = 'tests/fixtures/preview/aim_preview_policy_v2';
-const fixtureBytes = readFileSync(fixturePath + '.json');
+const fixturePath = 'tests/fixtures/preview/aim_preview_policy_v2.json';
+const fixtureBytes = readFileSync(fixturePath);
 const fixture = JSON.parse(fixtureBytes.toString()) as {
-  scan_policy: string; scan_policy_version: string;
-  cases: {id: string; value?: string; parts?: string[]; blocked: boolean}[];
-  safe_cases: string[];
+  scan_policy: string; scan_policy_version: string; scan_verdict: string;
+  rules: string[]; reason_codes: string[];
+  legacy_accepted: {scan_policy: string; scan_policy_version: string};
+  content_examples_that_pass: string[];
 };
 
-it('pins the provisional v2 seller-attested fixture SHA', () => {
-  expect(createHash('sha256').update(fixtureBytes).digest('hex')).toBe(readFileSync(fixturePath + '.sha256', 'utf8').split(' ')[0]);
+it('pins the canonical producer v2 seller-attested fixture and its real shape', () => {
+  const pins = JSON.parse(readFileSync('tests/fixtures/preview/preview-fixture-manifest.json', 'utf8')) as {path: string; sha256: string}[];
+  const pin = pins.find(candidate => candidate.path.endsWith('/aim_preview_policy_v2.json'));
+  expect(createHash('sha256').update(fixtureBytes).digest('hex')).toBe(pin?.sha256);
+  expect(pin?.sha256).toBe('6efb7dbe71f1c0b05c5fec3eff56646a9eb0143c172b9dc8eb5084024f6423dc');
   expect([fixture.scan_policy, fixture.scan_policy_version]).toEqual([SELLER_ATTESTED_POLICY, '2.0.0']);
-  expect(fixture.cases.every(test => test.blocked === false)).toBe(true);
+  expect(fixture).toMatchObject({scan_verdict: 'passed', rules: [], reason_codes: [],
+    legacy_accepted: {scan_policy: LEGACY_POLICY, scan_policy_version: '1.0.0'}});
 });
 
 it.each([
@@ -40,7 +45,7 @@ async function verify(rows: Record<string, Json>[], schema: Descriptor[] = text,
 }
 
 it('displays ordinary seller content without any content corpus', async () => {
-  const values = fixture.cases.map(test => test.value ?? test.parts!.join(''));
+  const values = [...fixture.content_examples_that_pass];
   values.push(Array(2000).fill('word').join(' '), '\ud800');
   for (const value of values) await expect(verify([{value}])).resolves.toHaveProperty('entries.0.row.value', value);
 });
