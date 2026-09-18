@@ -1,5 +1,5 @@
 import type {Binding, Checkpoint, Commitment, Manifest, PlatformEnvelope, Proof} from './types';
-import {ACCEPTED_POLICY_VERSIONS} from './policy';
+import {requirePolicyVersion} from './policy';
 import {LIMITS} from './types';
 import {canonical, closed, natural, requirePreview as check, timestamp, unb64} from './primitives';
 
@@ -53,8 +53,7 @@ export function validateProof(p: Proof) {
   check(Array.isArray(p.siblings) && p.siblings.length <= 63);
   for (const sibling of p.siblings) {closed(sibling, 'hash direction'); unb64(sibling.hash, 32); check(['left', 'right'].includes(sibling.direction));}
   check(p.package_profile === 'aim-preview-package-v2' && p.package_media_type === 'application/vnd.aim.preview+json' && natural(p.package_byte_ceiling, 1) && p.package_byte_ceiling <= 1048576);
-  check(p.scan_policy === ACCEPTED_POLICY_VERSIONS.producer
-    && p.scan_policy_version === ACCEPTED_POLICY_VERSIONS.version, 'scan_policy_unknown');
+  requirePolicyVersion(p.scan_policy, p.scan_policy_version);
   check(p.scan_verdict === 'passed' && p.signature_algorithm === 'ed25519', 'scan_attestation_invalid');
   check(typeof p.preview_package_url === 'string' && p.preview_package_url.length <= 2048);
 }
