@@ -95,6 +95,7 @@ export default async function ListingDetailPage({ params, searchParams }: Props)
     throw new Error('The approved listing presentation could not be verified');
   }
   const schemaSummary = listing.schema_summary;
+  const schemaColumns = Array.isArray(schemaSummary?.columns) ? schemaSummary.columns : [];
   const rowCount = listing.row_count;
   const shouldEmitJsonLd = shouldEmitDatasetJsonLd(listing);
   const publisherName = listing.publisher.display_name;
@@ -183,14 +184,14 @@ export default async function ListingDetailPage({ params, searchParams }: Props)
           <SampleFiles files={listing.sample_files ?? approved?.sample_files} />
 
           {/* Schema Info */}
-          {(rowCount != null || (schemaSummary?.columns?.length ?? 0) > 0) && (
+          {(rowCount != null || schemaColumns.length > 0) && (
             <div>
               <h2 className="text-lg font-semibold mb-3">Schema Information</h2>
               {rowCount != null && (
                 <p className="text-sm text-gray-500 mb-3">{rowCount.toLocaleString()} rows</p>
               )}
-              {schemaSummary && (schemaSummary.columns?.length ?? 0) > 0 && (
-                <SchemaTable columns={(schemaSummary.columns ?? []).map(name => ({name, type: schemaSummary.sample_types?.[name] ?? ' - '}))} />
+              {schemaSummary && schemaColumns.length > 0 && (
+                <SchemaTable columns={schemaColumns.map(name => ({name, type: schemaSummary.sample_types?.[name] ?? ' - '}))} />
               )}
             </div>
           )}
