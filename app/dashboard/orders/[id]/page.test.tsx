@@ -251,21 +251,40 @@ describe('OrderDetailPage viewer relationship gating', () => {
     expect(ordersApi.requestDownload).not.toHaveBeenCalled();
   });
 
-  it.each([403, 410, 503])('keeps order details and offers retry when member discovery returns %s', async (status) => {
+  it.each([
+    [410, 'delivery_retention_expired', 'This dataset is no longer available for download.'],
+    [403, 'download_window_expired', 'This order’s download window has ended.'],
+    [403, 'Download access has been closed', 'Download access for this order has been closed.'],
+  ])('renders permanent member refusal %s/%s without retry', async (status, detail, copy) => {
     ordersApi.getOrder.mockResolvedValue(order({ status: 'fulfilled' }));
-    membersApi.get.mockRejectedValue({ response: { status } });
+    membersApi.get.mockRejectedValue({ response: { status, data: { detail: detail === 'download_window_expired' ? { code: detail } : detail } } });
     render(<OrderDetailPage />);
     await screen.findByText('Order dataset');
     expect(screen.queryByText('Failed to load order details.')).toBeNull();
-    expect(screen.getByText('Files unavailable. Please try again.')).toBeTruthy();
+    expect(screen.getByRole('alert').textContent).toContain(copy);
     expect(screen.queryByRole('button', { name: 'Get download access' })).toBeNull();
-    const retry = screen.getByRole('button', { name: 'Retry loading files' });
+    expect(screen.queryByRole('button', { name: 'Retry loading files' })).toBeNull();
     expect(membersApi.get).toHaveBeenCalledTimes(1);
     expect(ordersApi.requestDownload).not.toHaveBeenCalled();
+  });
+
+  it.each([
+    ['500', { response: { status: 500 } }],
+    ['transport error', new Error('network')],
+  ])('keeps order details and offers read-only retry for %s', async (_label, failure) => {
+    ordersApi.getOrder.mockResolvedValue(order({ status: 'fulfilled' }));
+    membersApi.get.mockRejectedValue(failure);
+    render(<OrderDetailPage />);
+    await screen.findByText('Order dataset');
+    expect(screen.getByRole('heading', { name: 'Transaction' })).toBeTruthy();
+    expect(screen.getByRole('link', { name: 'Report Issue' })).toBeTruthy();
+    expect(screen.getByRole('alert').textContent).toContain('files_unavailable');
+    const retry = screen.getByRole('button', { name: 'Retry loading files' });
     membersApi.get.mockResolvedValue({ status: 200, data: { members: [] } });
     fireEvent.click(retry);
     await screen.findByText('No files are available yet.');
     expect(membersApi.get).toHaveBeenCalledTimes(2);
+    expect(membersApi.post).not.toHaveBeenCalled();
     expect(ordersApi.requestDownload).not.toHaveBeenCalled();
   });
 
@@ -274,7 +293,18 @@ describe('OrderDetailPage viewer relationship gating', () => {
     membersApi.get.mockResolvedValue({ status: 204 });
     render(<OrderDetailPage />);
     await screen.findByText('Order dataset');
-    expect(screen.getByRole('button', { name: 'Retry loading files' })).toBeTruthy();
+    expect(screen.queryByRole('button', { name: 'Retry loading files' })).toBeNull();
+    expect(ordersApi.requestDownload).not.toHaveBeenCalled();
+  });
+
+  it('treats a 200 without a members array as unavailable rather than a directory', async () => {
+    ordersApi.getOrder.mockResolvedValue(order({ status: 'fulfilled' }));
+    membersApi.get.mockResolvedValue({ status: 200, data: {} });
+    render(<OrderDetailPage />);
+    await screen.findByText('Order dataset');
+    expect(screen.getByRole('alert').textContent).toContain('files_unavailable');
+    expect(screen.queryByText('No files are available yet.')).toBeNull();
+    expect(screen.queryByRole('button', { name: 'Retry loading files' })).toBeNull();
     expect(ordersApi.requestDownload).not.toHaveBeenCalled();
   });
 
