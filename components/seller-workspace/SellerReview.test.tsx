@@ -23,6 +23,25 @@ it('does not request a review before the capability is available', () => {
   expect(api.readListingReview).not.toHaveBeenCalled();
 });
 
+it('shows the v2 sample statement with basename, size and index',async()=>{
+ const html='<p>Sampled offer</p>';
+ api.readListingReview.mockResolvedValue({rendered_html:html,render_hash:'a'.repeat(64),review_hash:'b'.repeat(64),source_hash:'c'.repeat(64),source_version:2,
+  fields:{title:'Sampled',description:'Description',category:'Retail',tags:'retail',price:'25',license:'Research'},draft_version:2,presentation_version:'seller-listing-review-v2',
+  source_page:null,missing_fields:[],approval_available:false,sample_decision:'member_files',sample_object_indices:[4],confirmation_version:'seller-listing-confirmation-v2',
+  confirmation_statements:{sample_files_confirmed:'Uploaded samples are free copies.'},sample_status:{state:'selected',files:[{index:4,key_basename:'sample.csv',size:2048,sha256:'d'.repeat(64)}]}});
+ render(<SellerReview active enabled/>);
+ expect(await screen.findByText('Uploaded samples are free copies.')).toBeTruthy();
+ expect(screen.getByText('sample.csv')).toBeTruthy();expect(screen.getByText('2,048 bytes · index 4')).toBeTruthy();
+});
+it('keeps v1 review markup unchanged when explicit none fields arrive',async()=>{
+ const value={rendered_html:'<p>Legacy</p>',fields:{},source_page:null,missing_fields:[],approval_available:false};
+ api.readListingReview.mockResolvedValue(value);const first=render(<SellerReview active enabled/>);
+ await screen.findByTitle('Saved listing buyers would see');const legacy=first.container.innerHTML;first.unmount();
+ api.readListingReview.mockResolvedValue({...value,sample_decision:'none',sample_object_indices:[],sample_status:'not_selected'});
+ const second=render(<SellerReview active enabled/>);await screen.findByTitle('Saved listing buyers would see');
+ expect(second.container.innerHTML).toBe(legacy);
+});
+
 
 const files=(offset:number)=>Array.from({length:50},(_,i)=>({key:`private/${i+offset}.csv`,size:1024,etag:'e',version_id:null}));
 const first={files:files(0),review_hash:'review',source_hash:'source',source_version:1,offset:0,page_size:50,total_count:22000,total_size_bytes:22528000,next_cursor:'next'};

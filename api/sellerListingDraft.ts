@@ -8,6 +8,8 @@ export interface ListingDraftContent {
   tags: string;
   price: string;
   license: string;
+  sample_decision?: 'none' | 'member_files';
+  sample_object_indices?: number[];
 }
 export interface SavedListingDraft {
   version: number;

@@ -347,3 +347,19 @@ export function cancelWorkspaceProfileJob(job: WorkspaceProfileJob, idempotencyK
 export function getWorkspaceProfileEvidence(evidenceId: string) {
   return safely<WorkspaceProfileEvidence>(api.get(`${BASE_PATH}/profile-evidence/${encodeURIComponent(evidenceId)}`));
 }
+
+export const SAMPLE_MAX_FILES = Number(process.env.NEXT_PUBLIC_SAMPLE_MAX_FILES ?? 10);
+export const SAMPLE_MAX_TOTAL_BYTES = Number(process.env.NEXT_PUBLIC_SAMPLE_MAX_TOTAL_BYTES ?? 256 * 1024 * 1024);
+export const SAMPLE_MAX_FILE_BYTES = Number(process.env.NEXT_PUBLIC_SAMPLE_MAX_FILE_BYTES ?? 64 * 1024 * 1024);
+
+export interface SampleUploadReceipt { index:number; size:number; sha256:string; binding:'etag_md5'|'size_only' }
+
+export async function uploadWorkspaceSample(connectionId:string,sourceVersion:number,index:number,file:File,
+  idempotencyKey:string,onProgress:(loaded:number,total:number)=>void):Promise<SampleUploadReceipt> {
+  return (await api.post<SampleUploadReceipt>(
+    `${BASE_PATH}/listing-source/${encodeURIComponent(connectionId)}/${sourceVersion}/samples/${index}`,
+    file,
+    {params:{size:file.size},headers:{...mutationHeaders(idempotencyKey),'Content-Type':'application/octet-stream'},
+      onUploadProgress:event=>onProgress(event.loaded,event.total ?? file.size)},
+  )).data;
+}

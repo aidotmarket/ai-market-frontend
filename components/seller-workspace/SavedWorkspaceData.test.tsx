@@ -3,20 +3,33 @@ import { act, cleanup, fireEvent, render, screen, waitFor } from '@testing-libra
 import { afterEach, beforeEach, expect, it, vi } from 'vitest';
 import type { SellerWorkspaceConnection } from '@/api/sellerWorkspace';
 import SavedWorkspaceData from './SavedWorkspaceData';
-const api = vi.hoisted(() => ({readListingSource:vi.fn(), saveListingSource:vi.fn(), listWorkspaceObjects:vi.fn()}));
+const api = vi.hoisted(() => ({readListingSource:vi.fn(), saveListingSource:vi.fn(), listWorkspaceObjects:vi.fn(),readListingDraft:vi.fn(),saveListingDraft:vi.fn(),
+  createIdempotencyKey:vi.fn(()=> 'sample-key'),uploadWorkspaceSample:vi.fn(),SAMPLE_MAX_FILES:10,SAMPLE_MAX_FILE_BYTES:64*1024*1024,SAMPLE_MAX_TOTAL_BYTES:256*1024*1024}));
 vi.mock('@/api/sellerListingSource', () => api);
+vi.mock('@/api/sellerListingDraft',()=>api);
 vi.mock('@/api/sellerWorkspace', () => api);
 const connection = {id:'connection-1',version:1,status:'verified',bucket:'synthetic',prefix:'data'} as SellerWorkspaceConnection;
 const object = {key:'data/example.csv',version_id:null,etag:'synthetic',size:42,last_modified:null,format_candidate:'csv'};
 const content = {connection_id:connection.id,connection_version:1,version_mode:'current',objects:[{key:object.key,version_id:null,etag:object.etag,size:42}]};
 afterEach(cleanup);
-beforeEach(() => {vi.resetAllMocks(); api.listWorkspaceObjects.mockResolvedValue({objects:[object],next_cursor:null});});
+beforeEach(() => {vi.resetAllMocks(); api.listWorkspaceObjects.mockResolvedValue({objects:[object],next_cursor:null});api.readListingDraft.mockResolvedValue(null);});
 it('restores the selected files from the account', async () => {
   api.readListingSource.mockResolvedValue({version:2, content, connection_current:true});
   render(<SavedWorkspaceData enabled connections={[connection]} />);
   const checkbox = await screen.findByRole('checkbox', {name:`Select ${object.key}`});
   expect((checkbox as HTMLInputElement).checked).toBe(true);
   expect(screen.getByText(/File selection saved to your account/)).toBeTruthy();
+});
+it('round-trips the uploaded sample selection inside draft content',async()=>{
+  const draft={version:4,content:{brief:'brief',title:'Offer',description:'Description',category:'Retail',tags:'retail',price:'25',license:'Research',sample_decision:'none',sample_object_indices:[]},updated_at:'2026-09-18T12:00:00Z'};
+  api.readListingSource.mockResolvedValue({version:2,content,connection_current:true});api.readListingDraft.mockResolvedValue(draft);
+  api.uploadWorkspaceSample.mockResolvedValue({index:0,size:42,sha256:'a'.repeat(64),binding:'size_only'});
+  api.saveListingDraft.mockImplementation(async(saved)=>({version:5,content:saved,updated_at:draft.updated_at}));
+  render(<SavedWorkspaceData enabled connections={[connection]}/>);
+  fireEvent.click(await screen.findByRole('checkbox',{name:`Offer ${object.key} as free sample`}));
+  fireEvent.change(screen.getByLabelText(`Upload sample for ${object.key}`),{target:{files:[new File([new Uint8Array(42)],'example.csv')]}});
+  await screen.findByText('Uploaded and saved for review.');
+  expect(api.saveListingDraft).toHaveBeenCalledWith({...draft.content,sample_decision:'member_files',sample_object_indices:[0]},4,expect.any(String));
 });
 it('retries an unknown save with the same version and identity', async () => {
   api.readListingSource.mockResolvedValue(null);

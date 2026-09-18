@@ -48,3 +48,24 @@ it('does not display a late success after leaving the review', async () => {
   await act(async () => finish({id:'approved'}));
   expect(screen.queryByText(/Review approved and saved/)).toBeNull();
 });
+
+it('requires the v2 sample statement and shows its exact file list beside it',async()=>{
+ const sampleReview={...review,sample_decision:'member_files' as const,sample_object_indices:[2],confirmation_version:'seller-listing-confirmation-v2' as const,
+  sample_status:{state:'selected' as const,files:[{index:2,key_basename:'free.csv',size:4096,sha256:'c'.repeat(64)}]},
+  confirmation_statements:{...review.confirmation_statements,sample_files_confirmed:'These uploaded sample files are free copies.'}};
+ api.approveListingReview.mockResolvedValue({id:'approved',sample_decision:'member_files'});
+ render(<SellerApproval review={sampleReview} active rendered/>);
+ expect(screen.queryByText('Do not include a public sample in this listing.')).toBeNull();
+ expect(screen.getByText('free.csv · 4,096 bytes · index 2')).toBeTruthy();
+ expect(screen.getAllByRole('checkbox')).toHaveLength(5);confirmAll();
+ fireEvent.click(screen.getByRole('button',{name:'Approve this review'}));
+ await screen.findByText(/Review approved and saved/);
+ expect(api.approveListingReview).toHaveBeenCalledWith(sampleReview,expect.any(String),expect.any(AbortSignal));
+});
+
+it('keeps the v1 markup unchanged when explicit none fields arrive',()=>{
+ const first=render(<SellerApproval review={review} active rendered/>);const legacy=first.container.innerHTML;first.unmount();
+ const explicit={...review,sample_decision:'none' as const,sample_object_indices:[],sample_status:'not_selected' as const};
+ const second=render(<SellerApproval review={explicit} active rendered/>);
+ expect(second.container.innerHTML).toBe(legacy);
+});

@@ -43,3 +43,16 @@ it('blocks a stale approval and ignores success after leaving the page',async()=
   late.rerender(<SellerPublication approval={approval} active={false} rendered/>);
   await act(async()=>finish(publication));expect(screen.queryByText(/published and available/)).toBeNull();
 });
+it('shows the published free sample count and review sample status',async()=>{
+ const sampled={...approval,sample_decision:'member_files' as const};
+ api.readPublication.mockResolvedValue({publication_available:false,publication});
+ render(<SellerPublication approval={sampled} active rendered sampleCount={2} sampleStatus="selected"/>);
+ expect(await screen.findByText('2 sample files published free · Sample status: selected')).toBeTruthy();
+});
+it('keeps none-publication markup unchanged with the widened receipt',async()=>{
+ api.readPublication.mockResolvedValue({publication_available:false,publication});
+ const first=render(<SellerPublication approval={approval} active rendered/>);await screen.findByText(/published and available/);
+ const legacy=first.container.innerHTML;first.unmount();
+ const second=render(<SellerPublication approval={{...approval,sample_decision:'none'}} active rendered/>);await screen.findByText(/published and available/);
+ expect(second.container.innerHTML).toBe(legacy);
+});
