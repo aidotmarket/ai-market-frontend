@@ -356,15 +356,6 @@ export const SAMPLE_MAX_FILES = 10;
 export const SAMPLE_MAX_TOTAL_BYTES = 256 * 1024 * 1024;
 export const SAMPLE_MAX_FILE_BYTES = 64 * 1024 * 1024;
 export const DEFAULT_SAMPLE_LIMITS:SampleLimits={max_files:SAMPLE_MAX_FILES,max_file_bytes:SAMPLE_MAX_FILE_BYTES,max_total_bytes:SAMPLE_MAX_TOTAL_BYTES};
-export function sampleLimitsFromPayload(payload:unknown):SampleLimits {
-  if(!payload || typeof payload!=='object')return DEFAULT_SAMPLE_LIMITS;
-  const record=payload as Record<string,unknown>;
-  const candidate=(record.sample_limits??record.limits) as Partial<SampleLimits>|undefined;
-  if(!candidate || !Number.isSafeInteger(candidate.max_files) || candidate.max_files!<=0 ||
-    !Number.isSafeInteger(candidate.max_file_bytes) || candidate.max_file_bytes!<=0 ||
-    !Number.isSafeInteger(candidate.max_total_bytes) || candidate.max_total_bytes!<=0)return DEFAULT_SAMPLE_LIMITS;
-  return candidate as SampleLimits;
-}
 
 export interface SampleUploadReceipt { index:number; size:number; sha256:string; binding:'etag_md5'|'size_only' }
 

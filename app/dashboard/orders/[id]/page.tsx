@@ -21,7 +21,6 @@ import DatasetMembers, { type DatasetMember } from './DatasetMembers';
 type DirectoryOrder = BuyerOrderDetail & {
   memberMode?: 'legacy' | 'directory' | 'unavailable';
   dataset_members?: DatasetMember[];
-  memberProbeStatus?: number;
   memberUnavailableReason?: 'delivery_retention_expired' | 'download_window_expired' | 'access_closed' | 'files_unavailable';
   memberRetryable?: boolean;
 };
@@ -30,7 +29,7 @@ function memberProbeReason(status: number | undefined, detail: unknown): Directo
   const code = detail && typeof detail === 'object' && 'code' in detail ? String(detail.code) : undefined;
   if (status === 410 || detail === 'delivery_retention_expired') return 'delivery_retention_expired';
   if (status === 403 && code === 'download_window_expired') return 'download_window_expired';
-  if (status === 403 && typeof detail === 'string' && /closed|revoked/i.test(detail)) return 'access_closed';
+  if (status === 403 && (code === 'access_closed' || (typeof detail === 'string' && /closed|revoked/i.test(detail)))) return 'access_closed';
   return 'files_unavailable';
 }
 
@@ -41,14 +40,14 @@ async function probeMembers(data: BuyerOrderDetail): Promise<DirectoryOrder> {
       return { ...data, memberMode: 'directory', dataset_members: response.data.members };
     }
     return { ...data, memberMode: 'unavailable', dataset_members: undefined,
-      memberProbeStatus: response.status, memberUnavailableReason: 'files_unavailable', memberRetryable: false };
+      memberUnavailableReason: 'files_unavailable', memberRetryable: false };
   } catch (err) {
     // Only a definitive 404 permits legacy automatic download preparation.
     const response = (err as { response?: { status?: number; data?: { detail?: unknown } } }).response;
     const status = response?.status;
     const legacy = status === 404;
     return { ...data, memberMode: legacy ? 'legacy' : 'unavailable', dataset_members: undefined,
-      memberProbeStatus: status, memberUnavailableReason: legacy ? undefined : memberProbeReason(status, response?.data?.detail),
+      memberUnavailableReason: legacy ? undefined : memberProbeReason(status, response?.data?.detail),
       memberRetryable: !legacy && (status === undefined || status >= 500) };
   }
 }

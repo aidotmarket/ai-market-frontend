@@ -254,10 +254,11 @@ describe('OrderDetailPage viewer relationship gating', () => {
   it.each([
     [410, 'delivery_retention_expired', 'This dataset is no longer available for download.'],
     [403, 'download_window_expired', 'This order’s download window has ended.'],
+    [403, 'access_closed', 'Download access for this order has been closed.'],
     [403, 'Download access has been closed', 'Download access for this order has been closed.'],
   ])('renders permanent member refusal %s/%s without retry', async (status, detail, copy) => {
     ordersApi.getOrder.mockResolvedValue(order({ status: 'fulfilled' }));
-    membersApi.get.mockRejectedValue({ response: { status, data: { detail: detail === 'download_window_expired' ? { code: detail } : detail } } });
+    membersApi.get.mockRejectedValue({ response: { status, data: { detail: detail === 'download_window_expired' || detail === 'access_closed' ? { code: detail } : detail } } });
     render(<OrderDetailPage />);
     await screen.findByText('Order dataset');
     expect(screen.queryByText('Failed to load order details.')).toBeNull();
