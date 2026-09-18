@@ -11,18 +11,14 @@ export function admitPackageUrl(value: string, platformOrigins: string[] = []): 
   check(url.protocol === 'https:' && !url.username && !url.password && url.port !== '0' && !host.endsWith('.') && host.includes('.'), 'invalid_origin');
   check(!host.includes(':') && !host.includes('[') && !host.includes('%'), 'private_origin');
   check(!['localhost', 'localhost.localdomain'].includes(host) && !/\.(localhost|local|internal|test|invalid)$/.test(host), 'private_origin');
-  for (const h of ['ai.market', 'r2.dev', ...platformOrigins.map(o => new URL(o).hostname)]) check(host !== h && !host.endsWith('.' + h), 'platform_origin');
+  for (const h of ['ai.market', ...platformOrigins.map(o => new URL(o).hostname)]) check(host !== h && !host.endsWith('.' + h), 'platform_origin');
   // Admit DNS names only. Literal addresses include IPv4-mapped IPv6 and unusual
   // IPv4 encodings normalized by URL; all are refused without contacting them.
   check(!/^[\d.]+$/.test(host) && /^[a-z0-9.-]+$/.test(host) && host.split('.').every(p => /^[a-z0-9](?:[a-z0-9-]*[a-z0-9])?$/.test(p)), 'private_origin');
   return url;
 }
 export async function boundedBody(response: Response, ceiling: number, signal: AbortSignal): Promise<Uint8Array<ArrayBuffer>> {
-  check(response.status === 200 && !response.redirected && response.type !== 'opaque', 'origin_unavailable');
-  check(/(?:^|,)\s*no-store\s*(?:,|$)/i.test(response.headers.get('cache-control') ?? ''), 'cache_policy');
-  const encoding = response.headers.get('content-encoding'); check(encoding === null || encoding === 'identity', 'unsupported_encoding');
-  const length = response.headers.get('content-length');
-  check(length === null || (/^\d+$/.test(length) && Number(length) <= ceiling), 'byte_limit');
+  check(response.ok && !response.redirected && response.type !== 'opaque', 'origin_unavailable');
   check(response.body, 'origin_unavailable'); const reader = response.body.getReader(), chunks: Uint8Array[] = []; let total = 0;
   const abort = () => {void reader.cancel().catch(() => undefined);}; signal.addEventListener('abort', abort, {once: true});
   try {
@@ -38,10 +34,8 @@ export async function fetchPackage(url: string, byteCeiling: number, signal: Abo
   check(typeof window !== 'undefined', 'browser_only');
   admitPackageUrl(url, [window.location.origin, ...(process.env.NEXT_PUBLIC_API_URL ? [process.env.NEXT_PUBLIC_API_URL] : [])]);
   const response = await fetch(url, {credentials: 'omit', referrerPolicy: 'no-referrer', redirect: 'error', cache: 'no-store', mode: 'cors', signal});
-  check(response.headers.get('content-type')?.toLowerCase() === 'application/vnd.aim.preview+json', 'media_type');
   return boundedBody(response, Math.min(LIMITS.envelope_bytes, byteCeiling), signal);
 }
 export async function metadataResponse(response: Response, signal: AbortSignal): Promise<unknown> {
-  const media = response.headers.get('content-type')?.split(';')[0].trim(); check(media === 'application/json', 'media_type');
   return parseJson(await boundedBody(response, LIMITS.manifest_bytes, signal), LIMITS.manifest_bytes);
 }

@@ -52,7 +52,8 @@ export function validateProof(p: Proof) {
   check(natural(p.tree_size, 1) && natural(p.leaf_index) && p.leaf_index < p.tree_size && natural(p.duplicate_ordinal) && p.duplicate_ordinal < p.tree_size);
   check(Array.isArray(p.siblings) && p.siblings.length <= 63);
   for (const sibling of p.siblings) {closed(sibling, 'hash direction'); unb64(sibling.hash, 32); check(['left', 'right'].includes(sibling.direction));}
-  check(p.package_profile === 'aim-preview-package-v2' && p.package_media_type === 'application/vnd.aim.preview+json' && natural(p.package_byte_ceiling, 1) && p.package_byte_ceiling <= 1048576);
+  check(p.package_profile === 'aim-preview-package-v2' && typeof p.package_media_type === 'string'
+    && natural(p.package_byte_ceiling, 1) && p.package_byte_ceiling <= 1048576);
   requirePolicyVersion(p.scan_policy, p.scan_policy_version);
   check(p.scan_verdict === 'passed' && p.signature_algorithm === 'ed25519', 'scan_attestation_invalid');
   check(typeof p.preview_package_url === 'string' && p.preview_package_url.length <= 2048);

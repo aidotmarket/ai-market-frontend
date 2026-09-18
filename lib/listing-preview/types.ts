@@ -6,7 +6,7 @@ export type PreviewType = 'table' | 'image_gallery' | 'map' | 'timeseries_chart'
 export interface Sibling {hash: string; direction: 'left' | 'right'}
 export interface Proof {
   proof_id: string; base_row_digest: string; duplicate_ordinal: number; leaf_index: number; tree_size: number;
-  siblings: Sibling[]; preview_package_url: string; package_media_type: 'application/vnd.aim.preview+json';
+  siblings: Sibling[]; preview_package_url: string; package_media_type: string;
   package_profile: 'aim-preview-package-v2'; package_byte_ceiling: number;
   scan_policy: 'aim-preview-policy-v1' | 'aim-preview-policy-v2'; scan_policy_version: '1.0.0' | '2.0.0'; scan_verdict: 'passed'; scanned_at: string;
   sampled_leaf_list_digest: string; signer_reference: string; signature_algorithm: 'ed25519'; signature: string;

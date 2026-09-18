@@ -43,7 +43,44 @@ No production code change was needed for item 2; this audit is the item artifact
 
 ## Item 4 transport inventory
 
-Pending item 4 implementation and audit.
+Response `Content-Type`, response `Cache-Control`, response
+`Content-Encoding`, and declared `Content-Length` are not admission gates. Fetch
+handles CORS and decompression; the viewer parses JSON itself and enforces the
+limit against bytes actually delivered to JavaScript. The signed media-type
+label is retained for wire compatibility but its value is not judged. Seller
+subdomains on the shared public `r2.dev` service are admitted.
+
+Every condition retained on the display path is technical or cryptographic:
+
+- URL: syntactically valid, visible ASCII, at most 2,048 characters, HTTPS,
+  DNS hostname with a public-looking suffix, no credentials, query, fragment,
+  backslash, invalid port, localhost/private-use suffix, IP literal/alias, or
+  platform-owned origin. These prevent credential leakage, ambiguous URL
+  identity, insecure transport, private-network access, and platform row
+  transit. DNS and connected-address enforcement remains the browser/network's
+  responsibility.
+- Fetch: browser-only, credential-free CORS GET, omitted referrer, redirect
+  refusal, request cache bypass, non-opaque successful response, live abort
+  signal, readable body, and five-second component deadline. These are direct
+  transport, privacy, lifecycle, and CORS requirements.
+- Bounds/parser: streamed delivered-body ceiling, JSON parse, 100 rows, 25
+  displayed fields, 250,000 canonical row bytes, 1 MiB envelope, depth 16,
+  10,000 nodes, and bounded manifest/proof/schema structures. These prevent
+  resource exhaustion and ensure the verified wire format can be interpreted.
+- Wire identity: closed supported profiles, exact v1/1.0.0 or v2/2.0.0 policy
+  pair, required seller confirmations, supported table/tabular schema and
+  logical types, canonical values, and valid timestamps/identifiers. These are
+  parser compatibility or signed authorization requirements, not content
+  judgments.
+- Cryptography: platform envelope before seller-key trust; seller disclosure,
+  commitment and proof signatures; schema/row/attestation/fetched-leaf/sample
+  digests; every Merkle inclusion; log checkpoint signature, inclusion and
+  consistency; approval/freshness; exact signed manifest bindings; and final
+  fresh manifest identity. These establish provenance, exact membership,
+  authorization, freshness, and non-equivocation.
+- Rendering: only an in-memory verified handle with the supported table type
+  and signed column identity may mount. Values become neutralized text nodes;
+  no cell-derived element, HTML, URL, network request, or persistence exists.
 
 ## Validation
 
