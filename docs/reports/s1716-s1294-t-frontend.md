@@ -234,3 +234,27 @@ or modified. [Representation proof](s1716-t-frontend-completion-evidence/fixture
 confirms all 59 decoded inputs and expected verdicts are identical to the full
 suite's tested corpus; only the stored fixture SHA changed. The full 219-test
 preview suite and typecheck were rerun after this representation-only change.
+
+## Gate-2 fold (S1719)
+
+### Browser/producer deterministic boundary vectors
+
+The shared 59-vector producer-derived fixture remains byte-identical at SHA-256
+`7216bd5f719f4ff576c4c40fef142be6f0121663cc82ab5e059d1881a8f238b1`.
+The following boundary cases are frontend-only Vitest vectors so this fold does
+not rewrite that pinned producer corpus:
+
+| Boundary | Python producer result | Browser result | Direction |
+|---|---|---|---|
+| `copyrİght`, `copyrıght` | `restricted_content` via Python `re.IGNORECASE` | `restricted_content` after explicit `İ`/`ı` to `i` folding | Same rejection |
+| `paſſword=example`, `AKIA` plus 16 ASCII characters | `secret` via Python special case folding | `secret` via JavaScript Unicode `iu` folding | Same rejection |
+| 81 words separated by U+001C, U+001D, U+001E, U+001F, or U+0085 | `long_prose` because Python `str.split()` treats the separator as whitespace | `control_character` because JavaScript `\s` does not split it | Reason differs; both reject |
+| The same 81 words separated by U+FEFF | `control_character` because Python does not split on U+FEFF | `long_prose` because JavaScript `\s` splits on U+FEFF | Reason differs; both reject |
+| Any differing whitespace point above followed by `=1` | `control_character` before Python reaches `lstrip()` | `control_character` before the browser reaches `trimStart()` | The lstrip/trimStart class differs, but ordering makes the outcome identical |
+
+These are every deliberate case-folding and whitespace-class seam in
+`checkPolicyText`. Case-fold outcomes remain equivalent for the special Unicode
+points above. Whitespace differences can change only the fixed reason enum,
+because every differing separator is independently rejected as Unicode Cc or
+Cf. The browser is therefore never weaker and never admits a row the producer
+rejects on these seams.

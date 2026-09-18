@@ -23,6 +23,23 @@ it.each([
   const result = () => requirePolicyVersion(policy, version);
   if (accepted) expect(result).not.toThrow(); else expect(result).toThrow('scan_policy_unknown');
 });
+it.each([
+  ['copyrİght example', 'restricted_content'],
+  ['copyrıght example', 'restricted_content'],
+  ['paſſword=example', 'secret'],
+  ['AKIAABCDEFGHIJKLMNOP', 'secret'],
+] as const)('pins special case-fold boundary %s', (value, reason) => {
+  expect(() => checkPolicyText(value)).toThrow(reason);
+});
+const pythonOnlyWhitespace = ['\u001c', '\u001d', '\u001e', '\u001f', '\u0085'];
+it.each(pythonOnlyWhitespace)('pins Python-only split/lstrip whitespace U+%s', separator => {
+  expect(() => checkPolicyText(Array(81).fill('a').join(separator))).toThrow('control_character');
+  expect(() => checkPolicyText(`${separator}=1`)).toThrow('control_character');
+});
+it('pins browser-only FEFF split/lstrip whitespace', () => {
+  expect(() => checkPolicyText(Array(81).fill('a').join('\ufeff'))).toThrow('long_prose');
+  expect(() => checkPolicyText('\ufeff=1')).toThrow('control_character');
+});
 for (const v of corpus.vectors) it(`deterministic producer vector ${v.id}`, async () => {
   const text = v.text ?? v.text_parts!.join('');
   if (v.reason) expect(() => checkPolicyText(text, v.numeric)).toThrow(new Error(v.reason));
