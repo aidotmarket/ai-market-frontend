@@ -1,0 +1,52 @@
+{
+  "numTotalTests": 872,
+  "numPassedTests": 867,
+  "numFailedTests": 5,
+  "numPendingTests": 0,
+  "numTotalTestSuites": 183,
+  "startTime": 1789686101087,
+  "success": false,
+  "raw_sha256": "a23c06c02c1201b5305a873d5ebd093ac36f0273f079a9fb0dbaa70d3bca7c0d",
+  "failures": [
+    {
+      "file": "app/login/LoginForm.test.tsx",
+      "name": "shares one flight between a manual click and subsequent hinted hydration",
+      "status": "failed",
+      "duration_ms": 126.76074999999992,
+      "failure_first_line": "AssertionError: expected [] to deeply equal [ [ 'oauth_nonce', 'only-nonce' ] ]",
+      "failure_sha256": "e29789a7f0bd0604f65286603f75a476565499ba276d124f66b8829e0b191206"
+    },
+    {
+      "file": "app/dashboard/seller-workspace/page.test.tsx",
+      "name": "SellerWorkspacePage safety boundaries rejects unsafe prefix bad\u0085prefix before any provider request",
+      "status": "failed",
+      "duration_ms": 1171.3493749999998,
+      "failure_first_line": "Error: Unable to find an element with the text: Prefix must identify a bounded, non-root S3 location.. This could be because the text is broken up by multiple elements. In this case, you can provide a function for your text matcher to make your matcher more flexible.",
+      "failure_sha256": "4763f6fc1d536e4fd44ae00ac1cb698e62111e4d9b645fbd3c10c52ee1d5c0da"
+    },
+    {
+      "file": "app/dashboard/seller-workspace/page.test.tsx",
+      "name": "SellerWorkspacePage safety boundaries uses the correct verification key after a definitive failure",
+      "status": "failed",
+      "duration_ms": 1313.2045830000006,
+      "failure_first_line": "AssertionError: expected \"vi.fn()\" to be called 2 times, but got 1 times",
+      "failure_sha256": "3cfd52da8ad8b36752c4fde030ba1ffe0750f4319d1a3abcba5ecaf32097cebf"
+    },
+    {
+      "file": "app/dashboard/seller-workspace/page.test.tsx",
+      "name": "SellerWorkspacePage safety boundaries uses the correct verification key after a unknown outcome",
+      "status": "failed",
+      "duration_ms": 1130.546624999999,
+      "failure_first_line": "Error: Unable to find an element with the text: /could not be completed|could not verify|did not return a definitive result/. This could be because the text is broken up by multiple elements. In this case, you can provide a function for your text matcher to make your matcher more flexible.",
+      "failure_sha256": "83fa39e6bf4fe85fdbf86f80f946cef15121657fdccc9e4cb1fad6aefb24a3a0"
+    },
+    {
+      "file": "app/dashboard/seller-workspace/page.test.tsx",
+      "name": "SellerWorkspacePage safety boundaries uses a new idempotency key when the seller corrects a failed verification scope",
+      "status": "failed",
+      "duration_ms": 1163.2087080000001,
+      "failure_first_line": "Error: Unable to find an element with the text: The action could not be completed. Try again.. This could be because the text is broken up by multiple elements. In this case, you can provide a function for your text matcher to make your matcher more flexible.",
+      "failure_sha256": "b2354625215aa9f9201d60fe2b586b6d73ee8dbe79f32b5525e5acb00fb74d0a"
+    }
+  ]
+}

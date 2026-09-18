@@ -1,0 +1,60 @@
+{
+  "source": "Partial Next production compilation before Keystatic page collection failure",
+  "markers": [
+    "Seller-selected sample table",
+    "row_digest_mismatch",
+    "getCoreRowModel"
+  ],
+  "chunks": [
+    {
+      "file": "static/chunks/webpack-2fab6defd2ac71f2.js",
+      "sha256": "6fca3937d97146acd2e6af2d1e5e605820bb1af731e02e63478b156108734841",
+      "matches": []
+    },
+    {
+      "file": "static/chunks/4bd1b696-100b9d70ed4e49c1.js",
+      "sha256": "5421e13a91a9389517b66179f3b4b5eaa0d95245438066d4d7b19ac30aeb809b",
+      "matches": []
+    },
+    {
+      "file": "static/chunks/1255-ad409e5887c155b0.js",
+      "sha256": "5bd6a2e828246e8f1659d650bc760289a7734059b7e641f8fac4871c21dab865",
+      "matches": []
+    },
+    {
+      "file": "static/chunks/main-app-8940ecc9d151f5b1.js",
+      "sha256": "99e80700e7b6a8c5296f3a7c7e534461d0b5205593ee83e891b90f99a6f8d855",
+      "matches": []
+    },
+    {
+      "file": "static/chunks/2619-04bc32f026a0d946.js",
+      "sha256": "a9b6c2213ea787a015c0169d198b4a90d7a44a0cc17abb0d132e8362d3016ced",
+      "matches": []
+    },
+    {
+      "file": "static/chunks/5376-04a3d57f5f04927f.js",
+      "sha256": "f9033e064f294b41c5b860b85df3a6b4c4ddbfc53d21078ff29d98a79984e863",
+      "matches": []
+    },
+    {
+      "file": "static/chunks/5125-7097df6069775053.js",
+      "sha256": "24a5615eca08b4b8314aa277ff6e875836d99f9b948c5114455e652423e81a32",
+      "matches": []
+    },
+    {
+      "file": "static/chunks/6523-ed12ab7060e521ce.js",
+      "sha256": "7c1fc5470e2ac2d2762f523159c1ddc40f6aa5ef44684ef7c7dc7deb7eb1876f",
+      "matches": []
+    },
+    {
+      "file": "static/chunks/6559-7416cf28b3a1dd93.js",
+      "sha256": "6f3626e9d500236d764f943c4f31b39e4856daebb8afb2fd553db92befecffa3",
+      "matches": []
+    },
+    {
+      "file": "static/chunks/app/listings/[slug]/page-0d5fa3d1a2c0383b.js",
+      "sha256": "d24764d2f3df410ca744d8fa7b1b9ca034383158a830c2447e21f4f52b7d0656",
+      "matches": []
+    }
+  ]
+}

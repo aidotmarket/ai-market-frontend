@@ -16,6 +16,7 @@ export default function BuyerAtAGlance({slug, initialSummary}: {
     setSummary(initialSummary ?? null);
     async function refresh() {
       if (document.visibilityState === 'hidden' || current) return;
+      setSummary(null);
       const controller = new AbortController(); current = controller;
       // Clear even if the transport fails to settle when aborted.
       const requestTimeout = setTimeout(() => {
@@ -35,6 +36,7 @@ export default function BuyerAtAGlance({slug, initialSummary}: {
       }
     }
     function visibility() {
+      if (document.visibilityState === 'hidden') {current?.abort(); current = null; clearTimeout(timeout); setSummary(null);}
       if (document.visibilityState === 'visible') void refresh();
     }
     function restore(event: PageTransitionEvent) {

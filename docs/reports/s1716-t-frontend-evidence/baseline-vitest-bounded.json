@@ -1,0 +1,20 @@
+{
+  "numTotalTests": 745,
+  "numPassedTests": 744,
+  "numFailedTests": 1,
+  "numPendingTests": 0,
+  "numTotalTestSuites": 172,
+  "startTime": 1789685917285,
+  "success": false,
+  "raw_sha256": "57a41650665a4dfa2063df5e728ba0c6f744aa9f5235a417b1895d7c613cc2a9",
+  "failures": [
+    {
+      "file": "app/login/LoginForm.test.tsx",
+      "name": "shares one flight between a manual click and subsequent hinted hydration",
+      "status": "failed",
+      "duration_ms": 173.0305419999995,
+      "failure_first_line": "AssertionError: expected [] to deeply equal [ [ 'oauth_nonce', 'only-nonce' ] ]",
+      "failure_sha256": "fe6df1e100f4f4c21de5744553c237862a81aabf966d4febcc771ea64dc7778e"
+    }
+  ]
+}

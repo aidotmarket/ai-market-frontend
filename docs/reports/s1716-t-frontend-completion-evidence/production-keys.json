@@ -1,0 +1,10 @@
+{
+  "url": "https://api.ai.market/api/v1/public/transparency/keys",
+  "status": 200,
+  "cache_control": "no-store",
+  "profile": "aim-preview-platform-keys-v1",
+  "key_ids": [
+    "aim-preview-platform-2026-09"
+  ],
+  "checked_at": "2026-09-17T23:41:44.193381+00:00"
+}

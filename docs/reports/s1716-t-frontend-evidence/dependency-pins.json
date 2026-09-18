@@ -1,0 +1,66 @@
+{
+  "@tanstack/react-table": {
+    "version": "8.21.3",
+    "resolved": "https://registry.npmjs.org/@tanstack/react-table/-/react-table-8.21.3.tgz",
+    "integrity": "sha512-5nNMTSETP4ykGegmVkhjcS8tTLW6Vl4axfEGQN3v0zdHYbK4UfoqfPChclTrJ4EoK9QynqAu9oUf8VEmrpZ5Ww==",
+    "license": "MIT",
+    "dependencies": {
+      "@tanstack/table-core": "8.21.3"
+    },
+    "engines": {
+      "node": ">=12"
+    },
+    "funding": {
+      "type": "github",
+      "url": "https://github.com/sponsors/tannerlinsley"
+    },
+    "peerDependencies": {
+      "react": ">=16.8",
+      "react-dom": ">=16.8"
+    }
+  },
+  "@tanstack/table-core": {
+    "version": "8.21.3",
+    "resolved": "https://registry.npmjs.org/@tanstack/table-core/-/table-core-8.21.3.tgz",
+    "integrity": "sha512-ldZXEhOBb8Is7xLs01fR3YEc3DERiz5silj8tnGkFZytt1abEvl/GhUmCE0PMLaMPTa3Jk4HbKmRlHmu+gCftg==",
+    "license": "MIT",
+    "engines": {
+      "node": ">=12"
+    },
+    "funding": {
+      "type": "github",
+      "url": "https://github.com/sponsors/tannerlinsley"
+    }
+  },
+  "@noble/curves": {
+    "version": "2.0.1",
+    "resolved": "https://registry.npmjs.org/@noble/curves/-/curves-2.0.1.tgz",
+    "integrity": "sha512-vs1Az2OOTBiP4q0pwjW5aF0xp9n4MxVrmkFBxc6EKZc6ddYx5gaZiAsZoq0uRRXWbi3AT/sBqn05eRPtn1JCPw==",
+    "license": "MIT",
+    "dependencies": {
+      "@noble/hashes": "2.0.1"
+    },
+    "engines": {
+      "node": ">= 20.19.0"
+    },
+    "funding": {
+      "url": "https://paulmillr.com/funding/"
+    }
+  },
+  "@playwright/test": {
+    "version": "1.56.1",
+    "resolved": "https://registry.npmjs.org/@playwright/test/-/test-1.56.1.tgz",
+    "integrity": "sha512-vSMYtL/zOcFpvJCW71Q/OEGQb7KYBPAdKh35WNSkaZA75JlAO8ED8UN6GUNTm3drWomcbcqRPFqQbLae8yBTdg==",
+    "devOptional": true,
+    "license": "Apache-2.0",
+    "dependencies": {
+      "playwright": "1.56.1"
+    },
+    "bin": {
+      "playwright": "cli.js"
+    },
+    "engines": {
+      "node": ">=18"
+    }
+  }
+}

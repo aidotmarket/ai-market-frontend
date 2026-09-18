@@ -1,0 +1,120 @@
+{
+  "fixture_notice": "Synthetic supplemental subsequent-verification vector",
+  "trusted_previous": {
+    "log_id": "synthetic-log-1",
+    "tree_size": 1,
+    "root_hash": "RUJ0vWxxDZc_EMfw8Qj1d0kWGygMVLPh6YqRjF2tFhA",
+    "checkpoint_at": "2026-09-17T00:00:00.000000Z",
+    "key_id": "synthetic-platform-1",
+    "public_key_algorithm": "ed25519",
+    "signature": "5tS3tsuhznWk838dFr3B-J7hkrnqq4N1u4v-l7Bm0V51o4YznDhgsdoJOSHRjnw9qmd4hC5SAY3XZQiW68PpAQ"
+  },
+  "checkpoint": {
+    "log_id": "synthetic-log-1",
+    "tree_size": 2,
+    "root_hash": "mKS8tq0ZvKS8M2YPpJlRzuUgM-ZADtDOPUoxAVRkGPk",
+    "checkpoint_at": "2026-09-17T00:00:01.000000Z",
+    "key_id": "synthetic-platform-1",
+    "public_key_algorithm": "ed25519",
+    "signature": "kDaHpjZ8dL8iFQwofJ0QbDpmvmUNhQNN_JEna-fBLURwOt4QrlmM0_iB90f7qSIdSUzuPmTaqlTvRtm1AXTUCw"
+  },
+  "commitment": {
+    "commitment_id": "00000000-0000-4000-8000-000000000103",
+    "listing_id": "00000000-0000-4000-8000-000000000004",
+    "seller_dataset_version": "fixture-v2",
+    "previous_commitment_id": "00000000-0000-4000-8000-000000000003",
+    "canonicalization_profile": "aim-dataset-merkle-v1",
+    "hash_algorithm": "sha-256",
+    "schema_digest": "EVqrUw-N9cNckMbu_RmlkFbG1gTL3XwcjVO88oeL7k8",
+    "dataset_merkle_root": "MehZC_kBrOTCv3Xes52Q4e3kJ-Y4fvyM938Hk67Mc-k",
+    "leaf_count": 2,
+    "seller_attestation_digest": "WXK7X-lm7_00utagI_4s3x-7u3gSoy_bEiB9fdFC1VM",
+    "aim_data_signer_reference": "00000000-0000-4000-8000-000000000001:56475aa75463474c0285df5dbf2bcab73da651358839e9b77481b2eab107708c",
+    "signature_algorithm": "ed25519",
+    "seller_signature": "WbnLRijk-mRjGtS-VZVALK-DM33K0tW_FsUX7uosl_6R8MqfbAKGh-7lPps2C9xfSkN7LuZwOH929A5oeZkJBg",
+    "signed_at": "2026-09-17T00:00:00.000000Z",
+    "proofs": [
+      {
+        "proof_id": "00000000-0000-4000-8000-000000000010",
+        "base_row_digest": "BwcHBwcHBwcHBwcHBwcHBwcHBwcHBwcHBwcHBwcHBwc",
+        "duplicate_ordinal": 0,
+        "leaf_index": 0,
+        "tree_size": 2,
+        "siblings": [
+          {
+            "hash": "5NJAylw32XZjbXBytygW8vqLV7O7mZaoZyO5Dj4m338",
+            "direction": "right"
+          }
+        ],
+        "preview_package_url": "https://seller.example/previews/package.json",
+        "package_media_type": "application/vnd.aim.preview+json",
+        "package_profile": "aim-preview-package-v2",
+        "package_byte_ceiling": 1048576,
+        "scan_policy": "aim-preview-policy-v1",
+        "scan_policy_version": "1.0.0",
+        "scan_verdict": "passed",
+        "scanned_at": "2026-09-17T00:00:00.000000Z",
+        "sampled_leaf_list_digest": "80iZxywN5dW80HOnMWmWPx9_0lazLkr1QBE-9eoDqAQ",
+        "signer_reference": "00000000-0000-4000-8000-000000000001:56475aa75463474c0285df5dbf2bcab73da651358839e9b77481b2eab107708c",
+        "signature_algorithm": "ed25519",
+        "signature": "YpGLQNTnksF2l26glO--Ic_VWp8hU82OkrGn-wAbg1_lm1kK039Fx9ZdTXWY6WrMKv0VvgesRFYSe2UHIh0uBg"
+      },
+      {
+        "proof_id": "00000000-0000-4000-8000-000000000011",
+        "base_row_digest": "CAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAg",
+        "duplicate_ordinal": 0,
+        "leaf_index": 1,
+        "tree_size": 2,
+        "siblings": [
+          {
+            "hash": "F0FpcnK4wjY1c7TIR-5amGD-5fhU6L3_EU1_ZeUPK6k",
+            "direction": "left"
+          }
+        ],
+        "preview_package_url": "https://seller.example/previews/package.json",
+        "package_media_type": "application/vnd.aim.preview+json",
+        "package_profile": "aim-preview-package-v2",
+        "package_byte_ceiling": 1048576,
+        "scan_policy": "aim-preview-policy-v1",
+        "scan_policy_version": "1.0.0",
+        "scan_verdict": "passed",
+        "scanned_at": "2026-09-17T00:00:00.000000Z",
+        "sampled_leaf_list_digest": "80iZxywN5dW80HOnMWmWPx9_0lazLkr1QBE-9eoDqAQ",
+        "signer_reference": "00000000-0000-4000-8000-000000000001:56475aa75463474c0285df5dbf2bcab73da651358839e9b77481b2eab107708c",
+        "signature_algorithm": "ed25519",
+        "signature": "ZHbs30HBtqg8pHCSl8vJY0EbsvhkAjL4N6zTDrpBOzMRHxOHcqvkvZfZZCUonomMOqZodagIotPARn7RFnyjDw"
+      }
+    ]
+  },
+  "log_evidence": {
+    "entry": {
+      "commitment_id": "00000000-0000-4000-8000-000000000103",
+      "listing_id": "00000000-0000-4000-8000-000000000004",
+      "seller_dataset_version": "fixture-v2",
+      "previous_commitment_id": "00000000-0000-4000-8000-000000000003",
+      "canonicalization_profile": "aim-dataset-merkle-v1",
+      "hash_algorithm": "sha-256",
+      "schema_digest": "EVqrUw-N9cNckMbu_RmlkFbG1gTL3XwcjVO88oeL7k8",
+      "dataset_merkle_root": "MehZC_kBrOTCv3Xes52Q4e3kJ-Y4fvyM938Hk67Mc-k",
+      "leaf_count": 2,
+      "seller_attestation_digest": "WXK7X-lm7_00utagI_4s3x-7u3gSoy_bEiB9fdFC1VM",
+      "aim_data_signer_reference": "00000000-0000-4000-8000-000000000001:56475aa75463474c0285df5dbf2bcab73da651358839e9b77481b2eab107708c",
+      "signature_algorithm": "ed25519",
+      "seller_signature": "WbnLRijk-mRjGtS-VZVALK-DM33K0tW_FsUX7uosl_6R8MqfbAKGh-7lPps2C9xfSkN7LuZwOH929A5oeZkJBg",
+      "signed_at": "2026-09-17T00:00:00.000000Z",
+      "appended_at": "2026-09-17T00:00:01.000000Z",
+      "transparency_sequence": 2
+    },
+    "inclusion_path": [
+      {
+        "hash": "RUJ0vWxxDZc_EMfw8Qj1d0kWGygMVLPh6YqRjF2tFhA",
+        "direction": "left"
+      }
+    ],
+    "consistency_path": [
+      "ngcxtFLrs-qYEmUPNgaBwHnKDKpVXQ33WkFdl23y6Ig"
+    ],
+    "previous_tree_size": 1,
+    "previous_root": "RUJ0vWxxDZc_EMfw8Qj1d0kWGygMVLPh6YqRjF2tFhA"
+  }
+}

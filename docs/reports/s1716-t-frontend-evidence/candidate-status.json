@@ -1,0 +1,14 @@
+{
+  "test": {
+    "exit_code": 1
+  },
+  "typecheck": {
+    "exit_code": 0
+  },
+  "lint": {
+    "exit_code": 0
+  },
+  "build": {
+    "exit_code": 1
+  }
+}

@@ -1,0 +1,52 @@
+
+> ai-market-frontend@0.0.0 build
+> next build
+
+[next.config] API_URL not set — AI discovery rewrites disabled
+   ▲ Next.js 15.5.12
+
+[next.config] API_URL not set — AI discovery rewrites disabled
+   Creating an optimized production build ...
+ ✓ Compiled successfully in 38.9s
+   Linting and checking validity of types ...
+
+./app/blog/[slug]/page.tsx
+57:5  Warning: Using `<img>` could result in slower LCP and higher bandwidth. Consider using `<Image />` from `next/image` or a custom image loader to automatically optimize images. This may incur additional usage or cost from your provider. See: https://nextjs.org/docs/messages/no-img-element  @next/next/no-img-element
+
+./app/dashboard/settings/page.tsx
+404:17  Warning: Using `<img>` could result in slower LCP and higher bandwidth. Consider using `<Image />` from `next/image` or a custom image loader to automatically optimize images. This may incur additional usage or cost from your provider. See: https://nextjs.org/docs/messages/no-img-element  @next/next/no-img-element
+
+./app/l/[code]/page.tsx
+107:11  Warning: Using `<img>` could result in slower LCP and higher bandwidth. Consider using `<Image />` from `next/image` or a custom image loader to automatically optimize images. This may incur additional usage or cost from your provider. See: https://nextjs.org/docs/messages/no-img-element  @next/next/no-img-element
+
+./components/Layout.tsx
+104:15  Warning: Using `<img>` could result in slower LCP and higher bandwidth. Consider using `<Image />` from `next/image` or a custom image loader to automatically optimize images. This may incur additional usage or cost from your provider. See: https://nextjs.org/docs/messages/no-img-element  @next/next/no-img-element
+197:15  Warning: Using `<img>` could result in slower LCP and higher bandwidth. Consider using `<Image />` from `next/image` or a custom image loader to automatically optimize images. This may incur additional usage or cost from your provider. See: https://nextjs.org/docs/messages/no-img-element  @next/next/no-img-element
+
+./components/listings/SellerShareControls.tsx
+192:19  Warning: Using `<img>` could result in slower LCP and higher bandwidth. Consider using `<Image />` from `next/image` or a custom image loader to automatically optimize images. This may incur additional usage or cost from your provider. See: https://nextjs.org/docs/messages/no-img-element  @next/next/no-img-element
+
+./components/listings/ShareKitModal.tsx
+65:13  Warning: Using `<img>` could result in slower LCP and higher bandwidth. Consider using `<Image />` from `next/image` or a custom image loader to automatically optimize images. This may incur additional usage or cost from your provider. See: https://nextjs.org/docs/messages/no-img-element  @next/next/no-img-element
+
+info  - Need to disable some ESLint rules? Learn more here: https://nextjs.org/docs/app/api-reference/config/eslint#disabling-rules
+   Collecting page data ...
+Error: Missing required config in Keystatic API setup when using the 'github' storage mode:
+- clientId (can be provided via KEYSTATIC_GITHUB_CLIENT_ID env var)
+- clientSecret (can be provided via KEYSTATIC_GITHUB_CLIENT_SECRET env var)
+- secret (can be provided via KEYSTATIC_SECRET env var)
+
+If you've created your GitHub app locally, make sure to copy the environment variables from your local env file to your deployed environment
+    at b.slugEnvName (.next/server/app/api/keystatic/[...params]/route.js:10:21651)
+    at <unknown> (.next/server/app/api/keystatic/[...params]/route.js:13:1298)
+    at 39635 (.next/server/app/api/keystatic/[...params]/route.js:13:1585)
+    at c (.next/server/webpack-runtime.js:1:128)
+    at <unknown> (.next/server/app/api/keystatic/[...params]/route.js:13:14740)
+    at c.X (.next/server/webpack-runtime.js:1:2125)
+    at <unknown> (.next/server/app/api/keystatic/[...params]/route.js:13:14725)
+    at Object.<anonymous> (.next/server/app/api/keystatic/[...params]/route.js:13:14772)
+
+> Build error occurred
+[Error: Failed to collect page data for /api/keystatic/[...params]] {
+  type: 'Error'
+}

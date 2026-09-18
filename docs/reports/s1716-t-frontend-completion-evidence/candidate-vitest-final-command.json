@@ -1,0 +1,13 @@
+{
+  "command": [
+    "rtk",
+    "proxy",
+    "npm",
+    "test",
+    "--",
+    "--maxWorkers=1",
+    "--reporter=json",
+    "--outputFile=/var/tmp/s1716-t-frontend-completion-evidence/candidate-vitest.json"
+  ],
+  "exit_code": 1
+}

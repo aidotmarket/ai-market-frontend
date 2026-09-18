@@ -1,0 +1,30 @@
+
+> ai-market-frontend@0.0.0 test
+> vitest run components/listings/ListingSamplePreview.test.tsx -t waits for verification and the final manifest before rendering any row --maxWorkers=1
+
+
+ RUN  v4.1.8 /private/var/folders/hh/hx7rp5196q3d8wppz2kqtbn40000gn/T/s1716-preview-mutation-ysj4_v6g
+
+ ❯ components/listings/ListingSamplePreview.test.tsx (7 tests | 1 failed | 6 skipped) 635ms
+   × waits for verification and the final manifest before rendering any row 631ms
+
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 1 ⎯⎯⎯⎯⎯⎯⎯
+
+ FAIL  components/listings/ListingSamplePreview.test.tsx > waits for verification and the final manifest before rendering any row
+AssertionError: expected "vi.fn()" to be called 2 times, but got 3 times
+ ❯ components/listings/ListingSamplePreview.test.tsx:40:129
+     38|   await mount(); fireEvent.click(screen.getByRole('button', {name: 'Vi…
+     39|   await waitFor(() => expect(scanLocalPreview).toHaveBeenCalledOnce());
+     40|   expect(screen.queryByRole('table')).toBeNull(); expect(screen.queryB…
+       |                                                                                                                                 ^
+     41|   await act(async () => {finish();}); await screen.findByRole('table')…
+     42| });
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/1]⎯
+
+
+ Test Files  1 failed (1)
+      Tests  1 failed | 6 skipped (7)
+   Start at  01:03:16
+   Duration  2.75s (transform 400ms, setup 0ms, import 559ms, tests 635ms, environment 1.24s)
+

@@ -1,0 +1,105 @@
+
+> ai-market-frontend@0.0.0 test
+> vitest run lib/listing-preview/verifier.test.ts -t checks package content and sample hash without issuing a display handle --maxWorkers=1
+
+
+ RUN  v4.1.8 /private/var/folders/hh/hx7rp5196q3d8wppz2kqtbn40000gn/T/s1716-preview-mutation-vdht_4fc
+
+ ❯ lib/listing-preview/verifier.test.ts (52 tests | 1 failed | 51 skipped) 129ms
+     × checks package content and sample hash without issuing a display handle 116ms
+
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 1 ⎯⎯⎯⎯⎯⎯⎯
+
+ FAIL  lib/listing-preview/verifier.test.ts > canonical parser and row admission > checks package content and sample hash without issuing a display handle
+AssertionError: promise resolved "[ { …(2) }, { …(2) }, { …(2) }, …(2) ]" instead of rejecting
+
+- Expected:
+Error {
+  "message": "rejected promise",
+}
+
++ Received:
+[
+  {
+    "cells": {
+      "id": {
+        "kind": "signed_integer",
+        "value": "3",
+      },
+      "name": {
+        "kind": "missing",
+        "value": null,
+      },
+    },
+    "proofId": "00000000-0000-0000-0000-000000000064",
+  },
+  {
+    "cells": {
+      "id": {
+        "kind": "signed_integer",
+        "value": "2",
+      },
+      "name": {
+        "kind": "null",
+        "value": null,
+      },
+    },
+    "proofId": "00000000-0000-0000-0000-000000000065",
+  },
+  {
+    "cells": {
+      "id": {
+        "kind": "signed_integer",
+        "value": "1",
+      },
+      "name": {
+        "kind": "string",
+        "value": "Café",
+      },
+    },
+    "proofId": "00000000-0000-0000-0000-000000000066",
+  },
+  {
+    "cells": {
+      "id": {
+        "kind": "signed_integer",
+        "value": "1",
+      },
+      "name": {
+        "kind": "string",
+        "value": "Café",
+      },
+    },
+    "proofId": "00000000-0000-0000-0000-000000000067",
+  },
+  {
+    "cells": {
+      "id": {
+        "kind": "signed_integer",
+        "value": "4",
+      },
+      "name": {
+        "kind": "string",
+        "value": "Z",
+      },
+    },
+    "proofId": "00000000-0000-0000-0000-000000000068",
+  },
+]
+
+ ❯ lib/listing-preview/verifier.test.ts:90:81
+     88|     await expect(verifyPackage(jcs(changed), m)).rejects.toThrow('row_…
+     89|     const hash = {...p, sample_hash: '0'.repeat(64)};
+     90|     await expect(verifyPackage(jcs(hash), {...m, sample_hash: hash.sam…
+       |                                                                                 ^
+     91|   });
+     92| });
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/1]⎯
+
+
+ Test Files  1 failed (1)
+      Tests  1 failed | 51 skipped (52)
+   Start at  01:03:20
+   Duration  739ms (transform 209ms, setup 0ms, import 275ms, tests 129ms, environment 0ms)
+

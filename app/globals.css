@@ -1,5 +1,9 @@
 @import "tailwindcss";
 
+/* Constrain only containers with an active sample. Manifest-absent listings
+   retain their existing markup and layout. Table overflow stays in its region. */
+div:has(> [data-listing-sample]) { min-width: 0; max-width: 100%; }
+
 /* Card geometric texture overlay */
 .card-texture {
   position: relative;

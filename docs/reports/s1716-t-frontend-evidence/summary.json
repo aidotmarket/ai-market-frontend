@@ -1,0 +1,221 @@
+{
+  "baseline_sha": "c23d6798ce5a484e6145a6d14195c328c5e8405c",
+  "tested_candidate_sha": "04ca0cd00123c8a3cef6223312f35ad64e11dbbe",
+  "node": "v25.6.0",
+  "npm": "11.8.0",
+  "vitest": "4.1.8",
+  "chrome": "153.0.8010.52",
+  "full_command": "rtk proxy npm test -- --maxWorkers=1 --reporter=json --outputFile=<receipt>",
+  "runs": {
+    "baseline-vitest": {
+      "numTotalTests": 745,
+      "numPassedTests": 741,
+      "numFailedTests": 4,
+      "numPendingTests": 0,
+      "numTotalTestSuites": 172,
+      "startTime": 1789685683511,
+      "success": false,
+      "raw_sha256": "983f27e7d6781b57bb237a427e2cda30abc3702889c5d9e98bf4afcc025959c8",
+      "failures": [
+        {
+          "file": "app/login/LoginForm.test.tsx",
+          "name": "shares one flight between a manual click and subsequent hinted hydration",
+          "status": "failed",
+          "duration_ms": 736.7245000000003,
+          "failure_first_line": "AssertionError: expected [] to deeply equal [ [ 'oauth_nonce', 'only-nonce' ] ]",
+          "failure_sha256": "fe6df1e100f4f4c21de5744553c237862a81aabf966d4febcc771ea64dc7778e"
+        },
+        {
+          "file": "components/orders/workspaceDownloadStream.test.ts",
+          "name": "streams all 22,000 files in one bundle without overlapping open writers",
+          "status": "failed",
+          "duration_ms": 25651.612500000003,
+          "failure_first_line": "Error: STACK_TRACE_ERROR",
+          "failure_sha256": "43e949fb6ed93c245491410f4afc269e85f005e7d74996d1b9e24eb50d39ecc9"
+        },
+        {
+          "file": "components/seller-workspace/SavedWorkspaceData.test.tsx",
+          "name": "confirms 22,000 files while rendering only one selected-file preview page",
+          "status": "failed",
+          "duration_ms": 5232.508249999999,
+          "failure_first_line": "Error: STACK_TRACE_ERROR",
+          "failure_sha256": "099058cad668c86de264edf7ed6145b7eb2bd61df72135821c3479f9ed87697e"
+        },
+        {
+          "file": "app/dashboard/seller-workspace/page.test.tsx",
+          "name": "SellerWorkspacePage safety boundaries shows usable storage and one pending setup, with duplicate history in compact rows",
+          "status": "failed",
+          "duration_ms": 6410.430458999999,
+          "failure_first_line": "Error: STACK_TRACE_ERROR",
+          "failure_sha256": "934669f633dcb102f442080705ac369d79ec58db43212d0da6c2b0483da21817"
+        }
+      ]
+    },
+    "baseline-vitest-bounded": {
+      "numTotalTests": 745,
+      "numPassedTests": 744,
+      "numFailedTests": 1,
+      "numPendingTests": 0,
+      "numTotalTestSuites": 172,
+      "startTime": 1789685917285,
+      "success": false,
+      "raw_sha256": "57a41650665a4dfa2063df5e728ba0c6f744aa9f5235a417b1895d7c613cc2a9",
+      "failures": [
+        {
+          "file": "app/login/LoginForm.test.tsx",
+          "name": "shares one flight between a manual click and subsequent hinted hydration",
+          "status": "failed",
+          "duration_ms": 173.0305419999995,
+          "failure_first_line": "AssertionError: expected [] to deeply equal [ [ 'oauth_nonce', 'only-nonce' ] ]",
+          "failure_sha256": "fe6df1e100f4f4c21de5744553c237862a81aabf966d4febcc771ea64dc7778e"
+        }
+      ]
+    },
+    "candidate-vitest": {
+      "numTotalTests": 872,
+      "numPassedTests": 867,
+      "numFailedTests": 5,
+      "numPendingTests": 0,
+      "numTotalTestSuites": 183,
+      "startTime": 1789686101087,
+      "success": false,
+      "raw_sha256": "a23c06c02c1201b5305a873d5ebd093ac36f0273f079a9fb0dbaa70d3bca7c0d",
+      "failures": [
+        {
+          "file": "app/login/LoginForm.test.tsx",
+          "name": "shares one flight between a manual click and subsequent hinted hydration",
+          "status": "failed",
+          "duration_ms": 126.76074999999992,
+          "failure_first_line": "AssertionError: expected [] to deeply equal [ [ 'oauth_nonce', 'only-nonce' ] ]",
+          "failure_sha256": "e29789a7f0bd0604f65286603f75a476565499ba276d124f66b8829e0b191206"
+        },
+        {
+          "file": "app/dashboard/seller-workspace/page.test.tsx",
+          "name": "SellerWorkspacePage safety boundaries rejects unsafe prefix bad\u0085prefix before any provider request",
+          "status": "failed",
+          "duration_ms": 1171.3493749999998,
+          "failure_first_line": "Error: Unable to find an element with the text: Prefix must identify a bounded, non-root S3 location.. This could be because the text is broken up by multiple elements. In this case, you can provide a function for your text matcher to make your matcher more flexible.",
+          "failure_sha256": "4763f6fc1d536e4fd44ae00ac1cb698e62111e4d9b645fbd3c10c52ee1d5c0da"
+        },
+        {
+          "file": "app/dashboard/seller-workspace/page.test.tsx",
+          "name": "SellerWorkspacePage safety boundaries uses the correct verification key after a definitive failure",
+          "status": "failed",
+          "duration_ms": 1313.2045830000006,
+          "failure_first_line": "AssertionError: expected \"vi.fn()\" to be called 2 times, but got 1 times",
+          "failure_sha256": "3cfd52da8ad8b36752c4fde030ba1ffe0750f4319d1a3abcba5ecaf32097cebf"
+        },
+        {
+          "file": "app/dashboard/seller-workspace/page.test.tsx",
+          "name": "SellerWorkspacePage safety boundaries uses the correct verification key after a unknown outcome",
+          "status": "failed",
+          "duration_ms": 1130.546624999999,
+          "failure_first_line": "Error: Unable to find an element with the text: /could not be completed|could not verify|did not return a definitive result/. This could be because the text is broken up by multiple elements. In this case, you can provide a function for your text matcher to make your matcher more flexible.",
+          "failure_sha256": "83fa39e6bf4fe85fdbf86f80f946cef15121657fdccc9e4cb1fad6aefb24a3a0"
+        },
+        {
+          "file": "app/dashboard/seller-workspace/page.test.tsx",
+          "name": "SellerWorkspacePage safety boundaries uses a new idempotency key when the seller corrects a failed verification scope",
+          "status": "failed",
+          "duration_ms": 1163.2087080000001,
+          "failure_first_line": "Error: Unable to find an element with the text: The action could not be completed. Try again.. This could be because the text is broken up by multiple elements. In this case, you can provide a function for your text matcher to make your matcher more flexible.",
+          "failure_sha256": "b2354625215aa9f9201d60fe2b586b6d73ee8dbe79f32b5525e5acb00fb74d0a"
+        }
+      ]
+    },
+    "baseline-serial": {
+      "numTotalTests": 745,
+      "numPassedTests": 744,
+      "numFailedTests": 1,
+      "numPendingTests": 0,
+      "numTotalTestSuites": 172,
+      "startTime": 1789686501390,
+      "success": false,
+      "raw_sha256": "0642d7c7e25e8c587299399116f3dbe5c22464e083aac8f0bb1ad373fd781abf",
+      "failures": [
+        {
+          "file": "app/login/LoginForm.test.tsx",
+          "name": "shares one flight between a manual click and subsequent hinted hydration",
+          "status": "failed",
+          "duration_ms": 119.57358299999987,
+          "failure_first_line": "AssertionError: expected [] to deeply equal [ [ 'oauth_nonce', 'only-nonce' ] ]",
+          "failure_sha256": "fe6df1e100f4f4c21de5744553c237862a81aabf966d4febcc771ea64dc7778e"
+        }
+      ]
+    },
+    "candidate-serial": {
+      "numTotalTests": 879,
+      "numPassedTests": 877,
+      "numFailedTests": 2,
+      "numPendingTests": 0,
+      "numTotalTestSuites": 183,
+      "startTime": 1789686638405,
+      "success": false,
+      "raw_sha256": "3ede8d6ba697664cb899d9a6728980b85568cccdd2a275e50af1425296b560f5",
+      "failures": [
+        {
+          "file": "app/login/LoginForm.test.tsx",
+          "name": "shares one flight between a manual click and subsequent hinted hydration",
+          "status": "failed",
+          "duration_ms": 121.73999999999978,
+          "failure_first_line": "AssertionError: expected [] to deeply equal [ [ 'oauth_nonce', 'only-nonce' ] ]",
+          "failure_sha256": "e29789a7f0bd0604f65286603f75a476565499ba276d124f66b8829e0b191206"
+        },
+        {
+          "file": "app/dashboard/seller-workspace/page.test.tsx",
+          "name": "SellerWorkspacePage safety boundaries uses a new idempotency key when the seller corrects a failed verification scope",
+          "status": "failed",
+          "duration_ms": 1118.5752090000005,
+          "failure_first_line": "Error: Unable to find an element with the text: The action could not be completed. Try again.. This could be because the text is broken up by multiple elements. In this case, you can provide a function for your text matcher to make your matcher more flexible.",
+          "failure_sha256": "b2354625215aa9f9201d60fe2b586b6d73ee8dbe79f32b5525e5acb00fb74d0a"
+        }
+      ]
+    },
+    "baseline-workspace": {
+      "numTotalTests": 32,
+      "numPassedTests": 32,
+      "numFailedTests": 0,
+      "numPendingTests": 0,
+      "numTotalTestSuites": 2,
+      "startTime": 1789686870870,
+      "success": true,
+      "raw_sha256": "1bb7b1bfca43a30c94a42df8ef63b80826af6fb435038c23d1aa2b2b81e2b335",
+      "failures": []
+    },
+    "candidate-workspace": {
+      "numTotalTests": 32,
+      "numPassedTests": 32,
+      "numFailedTests": 0,
+      "numPendingTests": 0,
+      "numTotalTestSuites": 2,
+      "startTime": 1789686880433,
+      "success": true,
+      "raw_sha256": "111fb83c2aa5f59a73918911bc8b053046f59c6c54385ac759d788d8592ff31d",
+      "failures": []
+    },
+    "candidate-final-vitest": {
+      "numTotalTests": 879,
+      "numPassedTests": 878,
+      "numFailedTests": 1,
+      "numPendingTests": 0,
+      "numTotalTestSuites": 183,
+      "startTime": 1789686951832,
+      "success": false,
+      "raw_sha256": "5223e6e235cf46f1c066c31832dcb4b05a4f11892ddceddf57e55607932ccc78",
+      "failures": [
+        {
+          "file": "app/login/LoginForm.test.tsx",
+          "name": "shares one flight between a manual click and subsequent hinted hydration",
+          "status": "failed",
+          "duration_ms": 117.13820900000019,
+          "failure_first_line": "AssertionError: expected [] to deeply equal [ [ 'oauth_nonce', 'only-nonce' ] ]",
+          "failure_sha256": "e29789a7f0bd0604f65286603f75a476565499ba276d124f66b8829e0b191206"
+        }
+      ]
+    }
+  },
+  "final_branch_only_failures": [],
+  "lint_parity": true,
+  "production_success": false,
+  "policy_detector_implemented": false
+}

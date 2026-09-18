@@ -1,0 +1,345 @@
+
+> ai-market-frontend@0.0.0 test
+> vitest run lib/listing-preview/policy.test.ts -t deterministic scan refuses any unsafe complete row before issuing a handle --maxWorkers=1
+
+
+ RUN  v4.1.8 /private/var/folders/hh/hx7rp5196q3d8wppz2kqtbn40000gn/T/s1716-preview-mutation-pljd6e6g
+
+ ❯ lib/listing-preview/policy.test.ts (73 tests | 1 failed | 72 skipped) 63ms
+   × deterministic scan refuses any unsafe complete row before issuing a handle 62ms
+
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 1 ⎯⎯⎯⎯⎯⎯⎯
+
+ FAIL  lib/listing-preview/policy.test.ts > deterministic scan refuses any unsafe complete row before issuing a handle
+AssertionError: promise resolved "{ manifest: { …(31) }, …(1) }" instead of rejecting
+
+- Expected
++ Received
+
+- Error {
+-   "message": "rejected promise",
++ {
++   "entries": [
++     {
++       "cells": {
++         "value": {
++           "kind": "string",
++           "value": "barley",
++         },
++       },
++       "proofId": "00000000-0000-4000-8000-000000000100",
++       "row": {
++         "value": "barley",
++       },
++     },
++     {
++       "cells": {
++         "value": {
++           "kind": "string",
++           "value": "password=synthetic",
++         },
++       },
++       "proofId": "00000000-0000-4000-8000-000000000101",
++       "row": {
++         "value": "password=synthetic",
++       },
++     },
++   ],
++   "manifest": {
++     "aggregate_hash": "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
++     "approval": {
++       "platform_envelope": {
++         "binding": {
++           "aggregate_hash": "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
++           "approval_expires_at": null,
++           "approved_at": "2026-09-17T00:00:00.000000Z",
++           "approved_by": "00000000-0000-4000-8000-000000000002",
++           "commitment_id": "00000000-0000-4000-8000-000000000003",
++           "content_revision": "00000000-0000-4000-8000-000000000008",
++           "content_type": "tabular",
++           "decision": "approve",
++           "disclosure_version": "00000000-0000-4000-8000-000000000006",
++           "expected_current_disclosure_id": null,
++           "last_attested_by_seller_at": "2026-09-17T00:00:00.000000Z",
++           "listing_id": "00000000-0000-4000-8000-000000000004",
++           "listing_version_id": null,
++           "preview_type": "table",
++           "profile": "aim-preview-disclosure-v1",
++           "proof_ids": [
++             "00000000-0000-4000-8000-000000000100",
++             "00000000-0000-4000-8000-000000000101",
++           ],
++           "public_preview_permission": true,
++           "render_hash": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
++           "request_id": "00000000-0000-4000-8000-000000000007",
++           "rights_basis_code": "owner",
++           "rights_basis_digest": "5172e4f2f69f97a6258586767c9aeb883bdeeb7edc9d8b6a866b1236b9a84997",
++           "sample_decision": "approved",
++           "sample_hash": "b3345fd23d1b2af4dfdb5272269e9a236754bbb8d5ddf40e92eff45e6266b43b",
++           "sampled_leaf_list_digest": "P8S6fRqn0J9UyfTjQL-cgZY1Hd5gCsmTBxbxuwEfVvc",
++           "scan_attestation_digest": "82e55b0133aaea6f51fd36b2a57db6e5badb443f6e8921430d130625813508d2",
++           "schema_descriptors": [
++             [
++               "value",
++               "string",
++               false,
++               {},
++             ],
++           ],
++           "schema_digest": "glOZ02Hjj7Gy0QT4TzIlVCaVOXf1p-IPOlyFlzENDp8",
++           "selected_fields": [
++             "value",
++           ],
++           "seller_dataset_version": "fixture-v1",
++           "seller_id": "00000000-0000-4000-8000-000000000002",
++           "signature_algorithm": "ed25519",
++           "signature_profile": "aim-preview-disclosure-signature-v1",
++           "signer_reference": "00000000-0000-4000-8000-000000000001:b600306cfa76723fdec395e53a9b3d9fdb78b1e2d7a23c32fcbcd2dc6d0c4092",
++           "source_revision": "eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee",
++           "summary_approval_id": "00000000-0000-4000-8000-000000000009",
++           "summary_hash": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
++           "summary_id": "00000000-0000-4000-8000-000000000005",
++           "supersedes": null,
++           "update_cadence_days": 14,
++         },
++         "key_id": "synthetic-platform",
++         "profile": "aim-preview-platform-envelope-v1",
++         "seller_signature": "W6N_TEckpsnDzPr0tTFhrtl4fCSD4NkTn6b0i8o9aZ3Iztiw5PBdd8JwZoUsjIVdxEU9tYlf4CYpMyfZT8FSAA",
++         "signature": "CVEEobq76l2liGP5u8PY96rLNjqIRYLVLhUAtw4O7lT75L8pIk4tL0RdKuV3rrX8LYEYdDmyc5vQBvd7h9bFDg",
++         "signature_algorithm": "ed25519",
++         "signer_keys": [
++           {
++             "algorithm": "ed25519",
++             "fingerprint": "b600306cfa76723fdec395e53a9b3d9fdb78b1e2d7a23c32fcbcd2dc6d0c4092",
++             "key_id": "00000000-0000-4000-8000-000000000001",
++             "public_key": "GX9rI-FshTLGq8g4-s1ep4m-DHaykgM0A5v6iz02jWE",
++             "status": "active",
++             "valid_from": "2026-09-17T00:00:00.000000Z",
++           },
++         ],
++       },
++     },
++     "approval_status": "approved",
++     "checkpoint": {
++       "checkpoint_at": "2026-09-17T00:00:00.000000Z",
++       "key_id": "synthetic-platform",
++       "log_id": "synthetic-log",
++       "public_key_algorithm": "ed25519",
++       "root_hash": "A-SrHyx6lBF2sLZYFaKv1wNgS5SImZbHAmb_fBYVlQk",
++       "signature": "esEvs-sB9KdySpdXw7mO8iOXbhWYn9NT24TEBMC7k01qPtFm4gbisS3l1QZQewohL9oTMuwmKieZ02T1YHPHBg",
++       "tree_size": 1,
++     },
++     "columns": [
++       {
++         "name": "value",
++         "type": "string",
++       },
++     ],
++     "commitment": {
++       "aim_data_signer_reference": "00000000-0000-4000-8000-000000000001:b600306cfa76723fdec395e53a9b3d9fdb78b1e2d7a23c32fcbcd2dc6d0c4092",
++       "canonicalization_profile": "aim-dataset-merkle-v1",
++       "commitment_id": "00000000-0000-4000-8000-000000000003",
++       "dataset_merkle_root": "Izn5GcpdsIamdo856X1hMGFP3uc5SFrxfi9-WbjUsfg",
++       "hash_algorithm": "sha-256",
++       "leaf_count": 2,
++       "listing_id": "00000000-0000-4000-8000-000000000004",
++       "previous_commitment_id": null,
++       "proofs": [
++         {
++           "base_row_digest": "giEwo2zV39rld1sBGYzPJI_xc_5Riueet-eumTSmZ_I",
++           "duplicate_ordinal": 0,
++           "leaf_index": 0,
++           "package_byte_ceiling": 1048576,
++           "package_media_type": "application/vnd.aim.preview+json",
++           "package_profile": "aim-preview-package-v2",
++           "preview_package_url": "https://seller.example/previews/package.json",
++           "proof_id": "00000000-0000-4000-8000-000000000100",
++           "sampled_leaf_list_digest": "P8S6fRqn0J9UyfTjQL-cgZY1Hd5gCsmTBxbxuwEfVvc",
++           "scan_policy": "aim-preview-policy-v1",
++           "scan_policy_version": "1.0.0",
++           "scan_verdict": "passed",
++           "scanned_at": "2026-09-17T00:00:00.000000Z",
++           "siblings": [
++             {
++               "direction": "right",
++               "hash": "C7Lf0atBUsaoCpKhySDrEf3JPe3-wG2kvzNNCdd4Kw0",
++             },
++           ],
++           "signature": "0GE2lqdzJa2PJxYlJcsaonymF9aIhVX7K78TE-1SvQPpC4fsmj5wNCQ3B3uz8pTHtDCjnG2zjGR6bpDfWcAADQ",
++           "signature_algorithm": "ed25519",
++           "signer_reference": "00000000-0000-4000-8000-000000000001:b600306cfa76723fdec395e53a9b3d9fdb78b1e2d7a23c32fcbcd2dc6d0c4092",
++           "tree_size": 2,
++         },
++         {
++           "base_row_digest": "y-fEF7Vb4pTcm_Ci740cmImqpL7DDOe57kCD5zaxzAM",
++           "duplicate_ordinal": 0,
++           "leaf_index": 1,
++           "package_byte_ceiling": 1048576,
++           "package_media_type": "application/vnd.aim.preview+json",
++           "package_profile": "aim-preview-package-v2",
++           "preview_package_url": "https://seller.example/previews/package.json",
++           "proof_id": "00000000-0000-4000-8000-000000000101",
++           "sampled_leaf_list_digest": "P8S6fRqn0J9UyfTjQL-cgZY1Hd5gCsmTBxbxuwEfVvc",
++           "scan_policy": "aim-preview-policy-v1",
++           "scan_policy_version": "1.0.0",
++           "scan_verdict": "passed",
++           "scanned_at": "2026-09-17T00:00:00.000000Z",
++           "siblings": [
++             {
++               "direction": "left",
++               "hash": "dmGbUI_BzyZzH2LOJjEtHB_Xgn5iszHNvaULdcyt4G4",
++             },
++           ],
++           "signature": "a6X6pDO3ZvBz3IkEwSqEwG3FJJkobniOAIIJWdE7rL7X7EsQKlmQD9qy7DsAyTv9-cL4kyB8STfPuGJ1zxHfCA",
++           "signature_algorithm": "ed25519",
++           "signer_reference": "00000000-0000-4000-8000-000000000001:b600306cfa76723fdec395e53a9b3d9fdb78b1e2d7a23c32fcbcd2dc6d0c4092",
++           "tree_size": 2,
++         },
++       ],
++       "schema_digest": "glOZ02Hjj7Gy0QT4TzIlVCaVOXf1p-IPOlyFlzENDp8",
++       "seller_attestation_digest": "ncClBNA9Oy_v7TdFx0wtRmBj6cuNV06BTp2Aaxk3NtE",
++       "seller_dataset_version": "fixture-v1",
++       "seller_signature": "BTUv81yz9hXTZx_gCb_XGonhT5UwysNAM5yVqQjbdKFVi3dnXMPypFkG78bTD1s87kKddyVaf5ic8m-MKFi-CQ",
++       "signature_algorithm": "ed25519",
++       "signed_at": "2026-09-17T00:00:00.000000Z",
++     },
++     "content_revision": "00000000-0000-4000-8000-000000000008",
++     "content_type": "tabular",
++     "disclosure_version": "00000000-0000-4000-8000-000000000006",
++     "freshness_expires_at": null,
++     "freshness_stale_at": "2026-10-15T00:00:00.000000Z",
++     "generated_at": "2026-09-17T00:00:00.000000Z",
++     "last_attested_by_seller_at": "2026-09-17T00:00:00.000000Z",
++     "limits": {
++       "canonical_bytes": 250000,
++       "depth": 16,
++       "envelope_bytes": 1048576,
++       "fields": 25,
++       "manifest_bytes": 262144,
++       "nodes": 10000,
++       "rows": 100,
++       "siblings": 63,
++     },
++     "listing_id": "00000000-0000-4000-8000-000000000004",
++     "listing_version_id": null,
++     "log_evidence": {
++       "consistency_path": [],
++       "entry": {
++         "aim_data_signer_reference": "00000000-0000-4000-8000-000000000001:b600306cfa76723fdec395e53a9b3d9fdb78b1e2d7a23c32fcbcd2dc6d0c4092",
++         "appended_at": "2026-09-17T00:00:00.000000Z",
++         "canonicalization_profile": "aim-dataset-merkle-v1",
++         "commitment_id": "00000000-0000-4000-8000-000000000003",
++         "dataset_merkle_root": "Izn5GcpdsIamdo856X1hMGFP3uc5SFrxfi9-WbjUsfg",
++         "hash_algorithm": "sha-256",
++         "leaf_count": 2,
++         "listing_id": "00000000-0000-4000-8000-000000000004",
++         "previous_commitment_id": null,
++         "schema_digest": "glOZ02Hjj7Gy0QT4TzIlVCaVOXf1p-IPOlyFlzENDp8",
++         "seller_attestation_digest": "ncClBNA9Oy_v7TdFx0wtRmBj6cuNV06BTp2Aaxk3NtE",
++         "seller_dataset_version": "fixture-v1",
++         "seller_signature": "BTUv81yz9hXTZx_gCb_XGonhT5UwysNAM5yVqQjbdKFVi3dnXMPypFkG78bTD1s87kKddyVaf5ic8m-MKFi-CQ",
++         "signature_algorithm": "ed25519",
++         "signed_at": "2026-09-17T00:00:00.000000Z",
++         "transparency_sequence": 1,
++       },
++       "inclusion_path": [],
++       "previous_root": null,
++       "previous_tree_size": null,
++     },
++     "package": {
++       "byte_ceiling": 1048576,
++       "media_type": "application/vnd.aim.preview+json",
++       "url": "https://seller.example/previews/package.json",
++     },
++     "package_profile": "aim-preview-package-v2",
++     "preview_type": "table",
++     "profile": "aim-listing-preview-v1",
++     "proofs": [
++       {
++         "base_row_digest": "giEwo2zV39rld1sBGYzPJI_xc_5Riueet-eumTSmZ_I",
++         "duplicate_ordinal": 0,
++         "leaf_index": 0,
++         "package_byte_ceiling": 1048576,
++         "package_media_type": "application/vnd.aim.preview+json",
++         "package_profile": "aim-preview-package-v2",
++         "preview_package_url": "https://seller.example/previews/package.json",
++         "proof_id": "00000000-0000-4000-8000-000000000100",
++         "sampled_leaf_list_digest": "P8S6fRqn0J9UyfTjQL-cgZY1Hd5gCsmTBxbxuwEfVvc",
++         "scan_policy": "aim-preview-policy-v1",
++         "scan_policy_version": "1.0.0",
++         "scan_verdict": "passed",
++         "scanned_at": "2026-09-17T00:00:00.000000Z",
++         "siblings": [
++           {
++             "direction": "right",
++             "hash": "C7Lf0atBUsaoCpKhySDrEf3JPe3-wG2kvzNNCdd4Kw0",
++           },
++         ],
++         "signature": "0GE2lqdzJa2PJxYlJcsaonymF9aIhVX7K78TE-1SvQPpC4fsmj5wNCQ3B3uz8pTHtDCjnG2zjGR6bpDfWcAADQ",
++         "signature_algorithm": "ed25519",
++         "signer_reference": "00000000-0000-4000-8000-000000000001:b600306cfa76723fdec395e53a9b3d9fdb78b1e2d7a23c32fcbcd2dc6d0c4092",
++         "tree_size": 2,
++       },
++       {
++         "base_row_digest": "y-fEF7Vb4pTcm_Ci740cmImqpL7DDOe57kCD5zaxzAM",
++         "duplicate_ordinal": 0,
++         "leaf_index": 1,
++         "package_byte_ceiling": 1048576,
++         "package_media_type": "application/vnd.aim.preview+json",
++         "package_profile": "aim-preview-package-v2",
++         "preview_package_url": "https://seller.example/previews/package.json",
++         "proof_id": "00000000-0000-4000-8000-000000000101",
++         "sampled_leaf_list_digest": "P8S6fRqn0J9UyfTjQL-cgZY1Hd5gCsmTBxbxuwEfVvc",
++         "scan_policy": "aim-preview-policy-v1",
++         "scan_policy_version": "1.0.0",
++         "scan_verdict": "passed",
++         "scanned_at": "2026-09-17T00:00:00.000000Z",
++         "siblings": [
++           {
++             "direction": "left",
++             "hash": "dmGbUI_BzyZzH2LOJjEtHB_Xgn5iszHNvaULdcyt4G4",
++           },
++         ],
++         "signature": "a6X6pDO3ZvBz3IkEwSqEwG3FJJkobniOAIIJWdE7rL7X7EsQKlmQD9qy7DsAyTv9-cL4kyB8STfPuGJ1zxHfCA",
++         "signature_algorithm": "ed25519",
++         "signer_reference": "00000000-0000-4000-8000-000000000001:b600306cfa76723fdec395e53a9b3d9fdb78b1e2d7a23c32fcbcd2dc6d0c4092",
++         "tree_size": 2,
++       },
++     ],
++     "render_hash": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
++     "sample_hash": "b3345fd23d1b2af4dfdb5272269e9a236754bbb8d5ddf40e92eff45e6266b43b",
++     "schema_descriptors": [
++       [
++         "value",
++         "string",
++         false,
++         {},
++       ],
++     ],
++     "selected_fields": [
++       "value",
++     ],
++     "source_revision": "eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee",
++     "stale": false,
++     "summary_approval_id": "00000000-0000-4000-8000-000000000009",
++     "summary_hash": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
++     "valid_until": "2026-09-17T00:00:30.000000Z",
++   },
+  }
+
+ ❯ lib/listing-preview/policy.test.ts:31:80
+     29| }
+     30| it('deterministic scan refuses any unsafe complete row before issuing …
+     31|   await expect(verify([{value: 'barley'}, {value: 'password=synthetic'…
+       |                                                                                ^
+     32| });
+     33| it('scans keys, nested values and every array element', async () => {
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/1]⎯
+
+
+ Test Files  1 failed (1)
+      Tests  1 failed | 72 skipped (73)
+   Start at  01:41:09
+   Duration  261ms (transform 50ms, setup 0ms, import 74ms, tests 63ms, environment 0ms)
+

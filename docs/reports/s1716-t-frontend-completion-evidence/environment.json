@@ -1,0 +1,12 @@
+{
+  "node": "v25.3.0",
+  "npm": "11.7.0",
+  "chrome": "Google Chrome 153.0.8010.52",
+  "packages": {
+    "vitest": "4.1.8",
+    "next": "15.5.12",
+    "@playwright/test": "1.56.1",
+    "@noble/curves": "2.0.1",
+    "@tanstack/react-table": "8.21.3"
+  }
+}

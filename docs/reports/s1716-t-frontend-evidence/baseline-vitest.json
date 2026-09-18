@@ -1,0 +1,44 @@
+{
+  "numTotalTests": 745,
+  "numPassedTests": 741,
+  "numFailedTests": 4,
+  "numPendingTests": 0,
+  "numTotalTestSuites": 172,
+  "startTime": 1789685683511,
+  "success": false,
+  "raw_sha256": "983f27e7d6781b57bb237a427e2cda30abc3702889c5d9e98bf4afcc025959c8",
+  "failures": [
+    {
+      "file": "app/login/LoginForm.test.tsx",
+      "name": "shares one flight between a manual click and subsequent hinted hydration",
+      "status": "failed",
+      "duration_ms": 736.7245000000003,
+      "failure_first_line": "AssertionError: expected [] to deeply equal [ [ 'oauth_nonce', 'only-nonce' ] ]",
+      "failure_sha256": "fe6df1e100f4f4c21de5744553c237862a81aabf966d4febcc771ea64dc7778e"
+    },
+    {
+      "file": "components/orders/workspaceDownloadStream.test.ts",
+      "name": "streams all 22,000 files in one bundle without overlapping open writers",
+      "status": "failed",
+      "duration_ms": 25651.612500000003,
+      "failure_first_line": "Error: STACK_TRACE_ERROR",
+      "failure_sha256": "43e949fb6ed93c245491410f4afc269e85f005e7d74996d1b9e24eb50d39ecc9"
+    },
+    {
+      "file": "components/seller-workspace/SavedWorkspaceData.test.tsx",
+      "name": "confirms 22,000 files while rendering only one selected-file preview page",
+      "status": "failed",
+      "duration_ms": 5232.508249999999,
+      "failure_first_line": "Error: STACK_TRACE_ERROR",
+      "failure_sha256": "099058cad668c86de264edf7ed6145b7eb2bd61df72135821c3479f9ed87697e"
+    },
+    {
+      "file": "app/dashboard/seller-workspace/page.test.tsx",
+      "name": "SellerWorkspacePage safety boundaries shows usable storage and one pending setup, with duplicate history in compact rows",
+      "status": "failed",
+      "duration_ms": 6410.430458999999,
+      "failure_first_line": "Error: STACK_TRACE_ERROR",
+      "failure_sha256": "934669f633dcb102f442080705ac369d79ec58db43212d0da6c2b0483da21817"
+    }
+  ]
+}

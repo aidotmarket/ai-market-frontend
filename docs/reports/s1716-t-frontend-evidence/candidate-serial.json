@@ -1,0 +1,28 @@
+{
+  "numTotalTests": 879,
+  "numPassedTests": 877,
+  "numFailedTests": 2,
+  "numPendingTests": 0,
+  "numTotalTestSuites": 183,
+  "startTime": 1789686638405,
+  "success": false,
+  "raw_sha256": "3ede8d6ba697664cb899d9a6728980b85568cccdd2a275e50af1425296b560f5",
+  "failures": [
+    {
+      "file": "app/login/LoginForm.test.tsx",
+      "name": "shares one flight between a manual click and subsequent hinted hydration",
+      "status": "failed",
+      "duration_ms": 121.73999999999978,
+      "failure_first_line": "AssertionError: expected [] to deeply equal [ [ 'oauth_nonce', 'only-nonce' ] ]",
+      "failure_sha256": "e29789a7f0bd0604f65286603f75a476565499ba276d124f66b8829e0b191206"
+    },
+    {
+      "file": "app/dashboard/seller-workspace/page.test.tsx",
+      "name": "SellerWorkspacePage safety boundaries uses a new idempotency key when the seller corrects a failed verification scope",
+      "status": "failed",
+      "duration_ms": 1118.5752090000005,
+      "failure_first_line": "Error: Unable to find an element with the text: The action could not be completed. Try again.. This could be because the text is broken up by multiple elements. In this case, you can provide a function for your text matcher to make your matcher more flexible.",
+      "failure_sha256": "b2354625215aa9f9201d60fe2b586b6d73ee8dbe79f32b5525e5acb00fb74d0a"
+    }
+  ]
+}

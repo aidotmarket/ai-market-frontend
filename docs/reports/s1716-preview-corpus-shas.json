@@ -1,0 +1,19 @@
+{
+  "aim_dataset_integral_decimal_v1.json": "5ee3ad8022da09a652f46e72b8ce7ba4f4bc5a53b9a2db32a4220b608da44f63",
+  "aim_dataset_merkle_v1.json": "f3e358d1e7ce7c836ce8604810675e0952201a7799b92d30858cd489906499af",
+  "aim_dataset_merkle_v1_extended.json": "6f33e31252c267ae6b3b4a920fab723a53ccbecae9742043599efd80e3b2a7fd",
+  "aim_dataset_parser_v1.json": "8ee8ac6b6bdaccd943987afb0a17cbb548a88a7dc7598563a143e7d8ab415754",
+  "aim_dataset_serialization_conflict_s1716.json": "ec2397992cbec7a8b2c66190ae9f81c7386df912ccf36285d724d83757f6babf",
+  "aim_preview_differential_v1.json": "a6684a718f57d841af5e591de20b1f58fa6716d0cfbeea2955b477569c729e57",
+  "aim_preview_differential_v1.sha256": "713890b9535a1459ff05e53d787e4b0fc4e173714efd1dfecadec9794534739b",
+  "aim_preview_manifest_budget_v1.json": "fa10ad02a49c5c4d08967d9deb760fbb155676917baab0e08c7ec31a2d89d598",
+  "aim_preview_package_v2.json": "4397a036ccf4326edf686b68b9d0fe4beb83e73d1dbc81ea09afb3bdf95ca37a",
+  "aim_preview_package_vectors_v1.json": "4561ecc2cd9fae5845bcd78b9e5eeae8bb3af8d13f5a9532b99bdf5ffa33787c",
+  "aim_preview_policy_v1.json": "ff8c85862c6aa90da271a1bb6204a229266dec2b5218b7b061d187119c22008b",
+  "aim_preview_requests_v1.json": "164eced90fc11df44466b45df290c5f80e7fefc81044c9dfd45bb8a36e3cbe91",
+  "aim_preview_signing_requests_v1.sha256": "0d00c4180436edc459c41ad7583c572eadd9c5bccc36f2b0450cef19c5411674",
+  "aim_preview_signing_v1.json": "19674653e7fd353d5141189310b7a274be1ff48b4704e3598eef53bf34cf72d2",
+  "platform-valid-until-present.json": "682bf03268ca68592cc9dd80adb1ba91bd4078a628d55c4b3433a018d16745dc",
+  "preview-fixture-manifest.json": "2e4a5ac743930898c1cb5b37a08bba54e7f65f31c81fa11aa525345b6ff0f01c",
+  "subsequent-checkpoints.json": "906d2818e0b70c21f4dfa27c08fa5a171c41c9a3eefab98a8ed2c18e5748c935"
+}

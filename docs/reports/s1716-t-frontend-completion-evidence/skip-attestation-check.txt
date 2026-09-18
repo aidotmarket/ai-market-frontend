@@ -1,0 +1,256 @@
+
+> ai-market-frontend@0.0.0 test
+> vitest run lib/listing-preview/policy.test.ts -t attestation check refuses a signed but incorrectly bound scan digest --maxWorkers=1
+
+
+ RUN  v4.1.8 /private/var/folders/hh/hx7rp5196q3d8wppz2kqtbn40000gn/T/s1716-preview-mutation-5k2s5ced
+
+ ❯ lib/listing-preview/policy.test.ts (73 tests | 1 failed | 72 skipped) 39ms
+   × attestation check refuses a signed but incorrectly bound scan digest 39ms
+
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 1 ⎯⎯⎯⎯⎯⎯⎯
+
+ FAIL  lib/listing-preview/policy.test.ts > attestation check refuses a signed but incorrectly bound scan digest
+AssertionError: promise resolved "{ …(31) }" instead of rejecting
+
+- Expected
++ Received
+
+- Error {
+-   "message": "rejected promise",
++ {
++   "aggregate_hash": "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
++   "approval": {
++     "platform_envelope": {
++       "binding": {
++         "aggregate_hash": "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
++         "approval_expires_at": null,
++         "approved_at": "2026-09-17T00:00:00.000000Z",
++         "approved_by": "00000000-0000-4000-8000-000000000002",
++         "commitment_id": "00000000-0000-4000-8000-000000000003",
++         "content_revision": "00000000-0000-4000-8000-000000000008",
++         "content_type": "tabular",
++         "decision": "approve",
++         "disclosure_version": "00000000-0000-4000-8000-000000000006",
++         "expected_current_disclosure_id": null,
++         "last_attested_by_seller_at": "2026-09-17T00:00:00.000000Z",
++         "listing_id": "00000000-0000-4000-8000-000000000004",
++         "listing_version_id": null,
++         "preview_type": "table",
++         "profile": "aim-preview-disclosure-v1",
++         "proof_ids": [
++           "00000000-0000-4000-8000-000000000100",
++         ],
++         "public_preview_permission": true,
++         "render_hash": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
++         "request_id": "00000000-0000-4000-8000-000000000007",
++         "rights_basis_code": "owner",
++         "rights_basis_digest": "5172e4f2f69f97a6258586767c9aeb883bdeeb7edc9d8b6a866b1236b9a84997",
++         "sample_decision": "approved",
++         "sample_hash": "aeb86c8a094cd6363e81eae4c867f7c7c83c7f4d8b25ff39cdba2eb1723c3261",
++         "sampled_leaf_list_digest": "8vm-E12zQIwp2SLOyfa87QlfXFWyLW2ym2QclQZYjP0",
++         "scan_attestation_digest": "0000000000000000000000000000000000000000000000000000000000000000",
++         "schema_descriptors": [
++           [
++             "value",
++             "string",
++             false,
++             {},
++           ],
++         ],
++         "schema_digest": "glOZ02Hjj7Gy0QT4TzIlVCaVOXf1p-IPOlyFlzENDp8",
++         "selected_fields": [
++           "value",
++         ],
++         "seller_dataset_version": "fixture-v1",
++         "seller_id": "00000000-0000-4000-8000-000000000002",
++         "signature_algorithm": "ed25519",
++         "signature_profile": "aim-preview-disclosure-signature-v1",
++         "signer_reference": "00000000-0000-4000-8000-000000000001:b600306cfa76723fdec395e53a9b3d9fdb78b1e2d7a23c32fcbcd2dc6d0c4092",
++         "source_revision": "eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee",
++         "summary_approval_id": "00000000-0000-4000-8000-000000000009",
++         "summary_hash": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
++         "summary_id": "00000000-0000-4000-8000-000000000005",
++         "supersedes": null,
++         "update_cadence_days": 14,
++       },
++       "key_id": "synthetic-platform",
++       "profile": "aim-preview-platform-envelope-v1",
++       "seller_signature": "3onTLWnutSDkkJ0dJA30pUbJo0z0kd8Ue13K3HK0dP38Zdk-O-dPEXRxSCR2VlAf-TjSnonaOUkWej8LeJJuBA",
++       "signature": "Si-m-MWby61aGd4eVf1h_ulZ4P117gCTgtvjzpgzEFt3ndN0Bqd2r8qjjgIFmpwSVfjdFzip2KYzOAgrT06qAQ",
++       "signature_algorithm": "ed25519",
++       "signer_keys": [
++         {
++           "algorithm": "ed25519",
++           "fingerprint": "b600306cfa76723fdec395e53a9b3d9fdb78b1e2d7a23c32fcbcd2dc6d0c4092",
++           "key_id": "00000000-0000-4000-8000-000000000001",
++           "public_key": "GX9rI-FshTLGq8g4-s1ep4m-DHaykgM0A5v6iz02jWE",
++           "status": "active",
++           "valid_from": "2026-09-17T00:00:00.000000Z",
++         },
++       ],
++     },
++   },
++   "approval_status": "approved",
++   "checkpoint": {
++     "checkpoint_at": "2026-09-17T00:00:00.000000Z",
++     "key_id": "synthetic-platform",
++     "log_id": "synthetic-log",
++     "public_key_algorithm": "ed25519",
++     "root_hash": "Thgah0xgzVMHhaGyThqmKDwKxhbYsfhwhjgEz-aG9CI",
++     "signature": "h38MxD4Nz-kC-HkZD5f_eMlbgP5N-t3LghnI-fs92Micc8ZSKlJA7oAv_v4EZrLWr7wLzbbuYTOZZnbFQXm5Bw",
++     "tree_size": 1,
++   },
++   "columns": [
++     {
++       "name": "value",
++       "type": "string",
++     },
++   ],
++   "commitment": {
++     "aim_data_signer_reference": "00000000-0000-4000-8000-000000000001:b600306cfa76723fdec395e53a9b3d9fdb78b1e2d7a23c32fcbcd2dc6d0c4092",
++     "canonicalization_profile": "aim-dataset-merkle-v1",
++     "commitment_id": "00000000-0000-4000-8000-000000000003",
++     "dataset_merkle_root": "dmGbUI_BzyZzH2LOJjEtHB_Xgn5iszHNvaULdcyt4G4",
++     "hash_algorithm": "sha-256",
++     "leaf_count": 1,
++     "listing_id": "00000000-0000-4000-8000-000000000004",
++     "previous_commitment_id": null,
++     "proofs": [
++       {
++         "base_row_digest": "giEwo2zV39rld1sBGYzPJI_xc_5Riueet-eumTSmZ_I",
++         "duplicate_ordinal": 0,
++         "leaf_index": 0,
++         "package_byte_ceiling": 1048576,
++         "package_media_type": "application/vnd.aim.preview+json",
++         "package_profile": "aim-preview-package-v2",
++         "preview_package_url": "https://seller.example/previews/package.json",
++         "proof_id": "00000000-0000-4000-8000-000000000100",
++         "sampled_leaf_list_digest": "8vm-E12zQIwp2SLOyfa87QlfXFWyLW2ym2QclQZYjP0",
++         "scan_policy": "aim-preview-policy-v1",
++         "scan_policy_version": "1.0.0",
++         "scan_verdict": "passed",
++         "scanned_at": "2026-09-17T00:00:00.000000Z",
++         "siblings": [],
++         "signature": "pEsDdhEGeUiJbZP1o0Zlhp5_KcVqPOjSUeJg2uvpRSd_2HRh2UGQOKDet_aXYzl8jLwSkjlGbI6H5gXqi4kFDw",
++         "signature_algorithm": "ed25519",
++         "signer_reference": "00000000-0000-4000-8000-000000000001:b600306cfa76723fdec395e53a9b3d9fdb78b1e2d7a23c32fcbcd2dc6d0c4092",
++         "tree_size": 1,
++       },
++     ],
++     "schema_digest": "glOZ02Hjj7Gy0QT4TzIlVCaVOXf1p-IPOlyFlzENDp8",
++     "seller_attestation_digest": "J0IrCNu2s9sJs1yGkUsiBxI8UBdGNTQrymHK-ToFW10",
++     "seller_dataset_version": "fixture-v1",
++     "seller_signature": "-Nk0ezd9V9zKoDFlJh42IbhDPBQw7DCeDI2tcmZqsB6dT4uq1g-iUgUV6-ZYmfDWLo9xeLCTXn9Yn7mHXJrdDw",
++     "signature_algorithm": "ed25519",
++     "signed_at": "2026-09-17T00:00:00.000000Z",
++   },
++   "content_revision": "00000000-0000-4000-8000-000000000008",
++   "content_type": "tabular",
++   "disclosure_version": "00000000-0000-4000-8000-000000000006",
++   "freshness_expires_at": null,
++   "freshness_stale_at": "2026-10-15T00:00:00.000000Z",
++   "generated_at": "2026-09-17T00:00:00.000000Z",
++   "last_attested_by_seller_at": "2026-09-17T00:00:00.000000Z",
++   "limits": {
++     "canonical_bytes": 250000,
++     "depth": 16,
++     "envelope_bytes": 1048576,
++     "fields": 25,
++     "manifest_bytes": 262144,
++     "nodes": 10000,
++     "rows": 100,
++     "siblings": 63,
++   },
++   "listing_id": "00000000-0000-4000-8000-000000000004",
++   "listing_version_id": null,
++   "log_evidence": {
++     "consistency_path": [],
++     "entry": {
++       "aim_data_signer_reference": "00000000-0000-4000-8000-000000000001:b600306cfa76723fdec395e53a9b3d9fdb78b1e2d7a23c32fcbcd2dc6d0c4092",
++       "appended_at": "2026-09-17T00:00:00.000000Z",
++       "canonicalization_profile": "aim-dataset-merkle-v1",
++       "commitment_id": "00000000-0000-4000-8000-000000000003",
++       "dataset_merkle_root": "dmGbUI_BzyZzH2LOJjEtHB_Xgn5iszHNvaULdcyt4G4",
++       "hash_algorithm": "sha-256",
++       "leaf_count": 1,
++       "listing_id": "00000000-0000-4000-8000-000000000004",
++       "previous_commitment_id": null,
++       "schema_digest": "glOZ02Hjj7Gy0QT4TzIlVCaVOXf1p-IPOlyFlzENDp8",
++       "seller_attestation_digest": "J0IrCNu2s9sJs1yGkUsiBxI8UBdGNTQrymHK-ToFW10",
++       "seller_dataset_version": "fixture-v1",
++       "seller_signature": "-Nk0ezd9V9zKoDFlJh42IbhDPBQw7DCeDI2tcmZqsB6dT4uq1g-iUgUV6-ZYmfDWLo9xeLCTXn9Yn7mHXJrdDw",
++       "signature_algorithm": "ed25519",
++       "signed_at": "2026-09-17T00:00:00.000000Z",
++       "transparency_sequence": 1,
++     },
++     "inclusion_path": [],
++     "previous_root": null,
++     "previous_tree_size": null,
++   },
++   "package": {
++     "byte_ceiling": 1048576,
++     "media_type": "application/vnd.aim.preview+json",
++     "url": "https://seller.example/previews/package.json",
++   },
++   "package_profile": "aim-preview-package-v2",
++   "preview_type": "table",
++   "profile": "aim-listing-preview-v1",
++   "proofs": [
++     {
++       "base_row_digest": "giEwo2zV39rld1sBGYzPJI_xc_5Riueet-eumTSmZ_I",
++       "duplicate_ordinal": 0,
++       "leaf_index": 0,
++       "package_byte_ceiling": 1048576,
++       "package_media_type": "application/vnd.aim.preview+json",
++       "package_profile": "aim-preview-package-v2",
++       "preview_package_url": "https://seller.example/previews/package.json",
++       "proof_id": "00000000-0000-4000-8000-000000000100",
++       "sampled_leaf_list_digest": "8vm-E12zQIwp2SLOyfa87QlfXFWyLW2ym2QclQZYjP0",
++       "scan_policy": "aim-preview-policy-v1",
++       "scan_policy_version": "1.0.0",
++       "scan_verdict": "passed",
++       "scanned_at": "2026-09-17T00:00:00.000000Z",
++       "siblings": [],
++       "signature": "pEsDdhEGeUiJbZP1o0Zlhp5_KcVqPOjSUeJg2uvpRSd_2HRh2UGQOKDet_aXYzl8jLwSkjlGbI6H5gXqi4kFDw",
++       "signature_algorithm": "ed25519",
++       "signer_reference": "00000000-0000-4000-8000-000000000001:b600306cfa76723fdec395e53a9b3d9fdb78b1e2d7a23c32fcbcd2dc6d0c4092",
++       "tree_size": 1,
++     },
++   ],
++   "render_hash": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
++   "sample_hash": "aeb86c8a094cd6363e81eae4c867f7c7c83c7f4d8b25ff39cdba2eb1723c3261",
++   "schema_descriptors": [
++     [
++       "value",
++       "string",
++       false,
++       {},
++     ],
++   ],
++   "selected_fields": [
++     "value",
++   ],
++   "source_revision": "eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee",
++   "stale": false,
++   "summary_approval_id": "00000000-0000-4000-8000-000000000009",
++   "summary_hash": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
++   "valid_until": "2026-09-17T00:00:30.000000Z",
+  }
+
+ ❯ lib/listing-preview/policy.test.ts:55:80
+     53|   e.binding.scan_attestation_digest = '0'.repeat(64);
+     54|   e.seller_signature = testSign(disclosureBytes(e.binding)); e.signatu…
+     55|   await expect(verifyManifest(f.manifest, f.keys, f.manifest.listing_i…
+       |                                                                                ^
+     56| });
+     57| it.each(['scan_policy', 'scan_policy_version', 'scan_verdict', 'sample…
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/1]⎯
+
+
+ Test Files  1 failed (1)
+      Tests  1 failed | 72 skipped (73)
+   Start at  01:41:09
+   Duration  230ms (transform 49ms, setup 0ms, import 74ms, tests 39ms, environment 0ms)
+
