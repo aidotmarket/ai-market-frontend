@@ -127,7 +127,6 @@ it('shares one flight between a manual click and subsequent hinted hydration', a
   vi.mocked(oauthAuthorize).mockReturnValue(new Promise((done) => { resolve = done; }));
   const assign = vi.fn();
   Object.defineProperty(window.location, 'href', { set: assign, configurable: true });
-  const storage = vi.spyOn(Storage.prototype, 'setItem');
   saveContinuation(requestPath('a'.repeat(43)));
   useAuthStore.setState({ hydrated: false });
   // A manual control already mounted before the hinted login hydrates.
@@ -143,9 +142,8 @@ it('shares one flight between a manual click and subsequent hinted hydration', a
   expect(screen.getByRole('button', { name: 'Continue with GitHub' }).querySelector('.animate-spin')).toBeTruthy();
   await act(async () => resolve({ nonce: 'only-nonce', authorization_url: 'https://provider.example/one' }));
   expect(assign).toHaveBeenCalledExactlyOnceWith('https://provider.example/one');
-  expect(storage.mock.calls.filter(([key]) => key === 'oauth_nonce')).toEqual([['oauth_nonce', 'only-nonce']]);
+  expect(sessionStorage.getItem('oauth_nonce')).toBe('only-nonce');
   expect(oauthAuthorize).toHaveBeenCalledTimes(1);
-  storage.mockRestore();
 });
 
 it.each([404, 403, 400, 'network'])('rejects unverified provider hints when metadata fails with %s', async (status) => {

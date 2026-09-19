@@ -34,6 +34,13 @@ it('does not fetch the seller before an explicit request or when keys are 503/ab
   cleanup(); vi.mocked(fetchPreviewKeys).mockResolvedValue(null); const v = render(<ListingSamplePreview slug="no-keys" listingId={f.manifest.listing_id} />);
   await waitFor(() => expect(fetchPreviewKeys).toHaveBeenCalledTimes(2)); expect(v.container.innerHTML).toBe(''); expect(fetchPackage).not.toHaveBeenCalled();
 });
+it('reports the current read-only selected fields to seller chrome without changing preview markup', async () => {
+  const onManifest = vi.fn();
+  const view = render(<ListingSamplePreview slug="current-canonical" listingId={f.manifest.listing_id} onManifest={onManifest} />);
+  await screen.findByRole('button', {name: 'View sample'});
+  expect(onManifest).toHaveBeenCalledWith(f.manifest);
+  expect(view.container.textContent).not.toContain(f.manifest.selected_fields.join(','));
+});
 it('waits for verification and the final manifest before rendering any row', async () => {
   let finish!: (manifest: typeof f.manifest) => void; let calls = 0;
   vi.mocked(fetchPreviewManifest).mockImplementation(() => ++calls === 3 ? new Promise(r => {finish = r;}) : Promise.resolve(f.manifest));

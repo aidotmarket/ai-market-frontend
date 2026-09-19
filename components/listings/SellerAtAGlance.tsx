@@ -1,10 +1,12 @@
 "use client";
 
-import {useEffect, useRef, useState} from 'react';
+import {useCallback, useEffect, useRef, useState} from 'react';
 import axios from 'axios';
-import {approveSummary, fetchSummaryPreview, regenerateSummary, withdrawSummary, type SummaryPreview} from '@/lib/api';
-import AtAGlance, {hasSupportedSummaryFields} from './AtAGlance';
-import ListingSamplePreview from './ListingSamplePreview';
+import {approveSummary, fetchSummaryPreview, regenerateSummary, withdrawSummary, type ListingSummary, type SummaryPreview} from '@/lib/api';
+import type {Manifest} from '@/lib/listing-preview/types';
+import {hasSupportedSummaryFields, provenanceLabels, summaryFields} from './AtAGlance';
+import {BuyerPreviewContent} from './BuyerAtAGlance';
+import SellerEnrichmentControls from './SellerEnrichmentControls';
 
 function requestId(): string {
   if (typeof crypto.randomUUID === 'function') return crypto.randomUUID();
@@ -16,12 +18,49 @@ function requestId(): string {
   return `${hex.slice(0, 8)}-${hex.slice(8, 12)}-${hex.slice(12, 16)}-${hex.slice(16, 20)}-${hex.slice(20)}`;
 }
 
+function refusal(failure: unknown): string | null {
+  if (!axios.isAxiosError(failure)) return null;
+  const detail = typeof failure.response?.data?.detail === 'string' ? failure.response.data.detail : undefined;
+  if (detail === 'verified_sample_unavailable_above_25_column_cap') return 'A verified sample is not available for a dataset above the approved 25-column cap. This is a product limit, not an error in your dataset.';
+  if (detail === 'dictionary_must_match_committed_dataset_schema_republish_through_aim_data') return 'The dictionary must match the committed dataset schema. Republish through AIM Data to restore agreement.';
+  return null;
+}
+
+function SellerPreviewChrome({summary, selectedFields, manifestReceived}: {
+  summary: ListingSummary; selectedFields: string[]; manifestReceived: boolean;
+}) {
+  const present = summaryFields.filter(([key]) => summary[key] && summary[key]?.provenance !== 'absent');
+  const omitted = summaryFields.filter(([key]) => !summary[key] || summary[key]?.provenance === 'absent');
+  const attribution = (Object.keys(provenanceLabels) as (keyof typeof provenanceLabels)[])
+    .filter(key => key !== 'absent').map(key => ({key, labels: present.filter(([field]) => summary[field]?.provenance === key).map(([, label]) => label)}))
+    .filter(group => group.labels.length > 0);
+  return <aside aria-label="Seller-only preview information" className="space-y-4 rounded-lg border border-indigo-100 bg-indigo-50/40 p-4">
+    <h3 className="text-sm font-semibold text-indigo-950">Seller-only preview information</h3>
+    <div><h4 className="text-sm font-medium text-gray-900">Omitted from the buyer view</h4>
+      <p className="text-xs text-gray-600">An omitted field is simply not stated and is not an assurance about the data.</p>
+      {omitted.length > 0 ? <ul className="mt-1 list-inside list-disc text-sm text-gray-700">{omitted.map(([, label]) => <li key={label}>{label}</li>)}</ul>
+        : <p className="mt-1 text-sm text-gray-700">No At-a-glance fields are omitted.</p>}
+    </div>
+    <div><h4 className="text-sm font-medium text-gray-900">Attribution summary</h4>
+      <ul className="mt-1 space-y-1 text-sm text-gray-700">{attribution.map(group => <li key={group.key}>{provenanceLabels[group.key]}: {group.labels.join(', ')}</li>)}</ul>
+    </div>
+    <div><h4 className="text-sm font-medium text-gray-900">Selected sample fields</h4>
+      <p className="text-xs text-gray-600">Read-only here. Field selection is set and signed in AIM Data.</p>
+      {manifestReceived && selectedFields.length > 0 ? <ul className="mt-1 list-inside list-disc text-sm text-gray-700">{selectedFields.map(field => <li key={field} className="font-mono">{field}</li>)}</ul>
+        : manifestReceived ? <p className="mt-1 text-sm text-gray-700">No fields are selected for a sample.</p>
+          : <p className="mt-1 text-sm text-gray-700">The current selection is not shown here. Field selection is set and signed in AIM Data.</p>}
+    </div>
+  </aside>;
+}
+
 export default function SellerAtAGlance({listingId, slug, active = true, revision = 0}: {listingId: string; slug?: string; active?: boolean; revision?: number}) {
   const [preview, setPreview] = useState<SummaryPreview | null>(null);
   const [busy, setBusy] = useState(false);
   const [message, setMessage] = useState('');
   const [error, setError] = useState('');
   const [retry, setRetry] = useState(0);
+  const [selectedFields, setSelectedFields] = useState<string[]>([]);
+  const [manifestReceived, setManifestReceived] = useState(false);
   const request = useRef<AbortController | null>(null);
   // Keep decision IDs across an uncertain outcome and preview reload. Approve
   // and withdraw are separate operations, each bound to the exact identifiers.
@@ -71,13 +110,17 @@ export default function SellerAtAGlance({listingId, slug, active = true, revisio
           const next = await fetchSummaryPreview(listingId, controller.signal);
           if (!controller.signal.aborted) {setPreview(next); setMessage('Summary changed, reloaded. Review it before approving.');}
         } catch {if (!controller.signal.aborted) setError('The changed summary could not be reloaded. Try again.');}
-      } else setError(`The summary action could not be confirmed. ${failure instanceof Error ? failure.message : 'Unknown error.'} Reload the summary before trying again.`);
+      } else setError(refusal(failure) ?? `The summary action could not be confirmed. ${failure instanceof Error ? failure.message : 'Unknown error.'} Reload the summary before trying again.`);
     } finally {
       if (!controller.signal.aborted) {setBusy(false); request.current = null;}
     }
   }
 
   const hasBuyerFields = hasSupportedSummaryFields(preview?.at_a_glance);
+  const receiveManifest = useCallback((manifest: Manifest | null) => {
+    setManifestReceived(manifest !== null);
+    setSelectedFields(manifest?.selected_fields ?? []);
+  }, []);
 
   return <section aria-label="Review At a glance" aria-busy={busy} className="min-w-0 space-y-4 rounded-xl border border-gray-200 bg-white p-5">
     <h2 className="text-lg font-semibold text-gray-900">Review At a glance</h2>
@@ -87,9 +130,13 @@ export default function SellerAtAGlance({listingId, slug, active = true, revisio
     {preview && <>
       <p role="status" className="text-sm text-gray-700">{preview.state === 'approved' ? 'Approved. This summary is shown to buyers.' : 'Review the summary and approve it to show it to buyers'}</p>
       {preview.state !== 'approved' && !hasBuyerFields && <p className="text-sm text-gray-700">Nothing to show buyers yet. Add more listing details or regenerate.</p>}
-      <AtAGlance audience="seller" summary={preview.at_a_glance} />
-      <p className="text-sm text-gray-700">Manage signed sample approvals in AIM Data. The sample below is the same preview buyers see.</p>
-      {active && preview.state === 'approved' && <ListingSamplePreview slug={slug} listingId={listingId} />}
+      <SellerPreviewChrome summary={preview.at_a_glance} selectedFields={selectedFields} manifestReceived={manifestReceived} />
+      <SellerEnrichmentControls listingId={listingId} active={active} onSaved={() => setRetry(value => value + 1)} />
+      <p className="text-sm text-gray-700">Manage signed sample approvals in AIM Data. The block below shows exactly what buyers see; on the listing page, the sample appears after the schema.</p>
+      <div data-testid="buyer-preview" className="space-y-4">
+        <BuyerPreviewContent summary={preview.at_a_glance} slug={slug}
+          listingId={active && preview.state === 'approved' ? listingId : undefined} onManifest={receiveManifest} />
+      </div>
       <p className="text-sm text-gray-700">{preview.approval_text}</p>
       <div className="flex flex-wrap gap-3">
         <button type="button" disabled={busy || !active} onClick={() => act('regenerate')} className="rounded-lg border border-gray-300 px-4 py-2.5 text-sm disabled:opacity-50">Regenerate</button>

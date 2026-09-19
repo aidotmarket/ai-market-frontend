@@ -10,6 +10,15 @@ export const summary: ListingSummary = {
   format: field('csv'), spatial_coverage: field('Spain'), temporal_coverage: field('2025'),
   data_languages: field(['es']), freshness: field('Monthly'), license: field('CC-BY-4.0'),
   delivery: field('File download'), privacy_status: field('Seller/local report; no independent scan implied'),
+  dataset_origin_statement: field('Collected from seller-operated tills.', 'allai_generated'),
+  dataset_limitations: field(['Coverage varies by month.']),
+  aggregate_statistics: field({
+    profile: 'aim-aggregate-statistics-v1', row_count: 100, row_count_source: 'seller_entered',
+    row_count_derived_at: '2026-09-19T08:00:00Z',
+    temporal_coverage: {start: '2025-01-01T00:00:00Z', end: '2025-12-31T23:59:59Z'},
+    temporal_coverage_source: 'locally_derived', temporal_coverage_derived_at: '2026-09-19T08:00:30Z',
+    columns: [{column: 'region', kind: 'categorical', source: 'locally_derived', derived_at: '2026-09-19T08:01:00Z', buckets: [], groups: [{label: 'other', count: 10}], null_count: 0}],
+  }),
   sample_availability: field('No sample offered'),
 };
 export const preview: SummaryPreview = {

@@ -188,6 +188,28 @@ export interface SummaryField<T = string | number | string[] | Record<string, st
   guard_result_reference?: string | null;
   artifact_id?: string | null;
 }
+export type DerivationSource = 'locally_derived' | 'seller_entered';
+export interface AggregateBucket { lower_bound?: string | null; upper_bound?: string | null; count: number }
+export interface AggregateGroup { label: string; count: number }
+export interface ColumnAggregate {
+  column: string;
+  kind: 'numeric' | 'temporal' | 'categorical';
+  source: DerivationSource;
+  derived_at: string;
+  buckets: AggregateBucket[];
+  groups: AggregateGroup[];
+  null_count?: number | null;
+}
+export interface AggregateStatistics {
+  profile: 'aim-aggregate-statistics-v1';
+  row_count: number;
+  row_count_source: DerivationSource;
+  row_count_derived_at: string;
+  temporal_coverage?: {start?: string | null; end?: string | null} | null;
+  temporal_coverage_source?: DerivationSource | null;
+  temporal_coverage_derived_at?: string | null;
+  columns: ColumnAggregate[];
+}
 export interface ListingSummary {
   profile: 'aim-listing-enrichment-profile-v2';
   row_meaning?: SummaryField<string> | null;
@@ -206,6 +228,9 @@ export interface ListingSummary {
   delivery?: SummaryField<string> | null;
   privacy_status?: SummaryField<string> | null;
   sample_availability?: SummaryField<string> | null;
+  dataset_origin_statement?: SummaryField<string> | null;
+  dataset_limitations?: SummaryField<string[]> | null;
+  aggregate_statistics?: SummaryField<AggregateStatistics> | null;
 }
 export interface SummaryApprovalRequest {
   summary_id: string;
@@ -250,6 +275,68 @@ export async function fetchBuyerSummary(slug: string, signal: AbortSignal): Prom
   if (!response.ok) throw new Error('Summary could not be refreshed');
   const listing: {at_a_glance?: ListingSummary} = await response.json();
   return listing.at_a_glance ?? null;
+}
+
+export interface LogicalTypeParameters {
+  precision?: number | null;
+  scale?: number | null;
+  timestamp_precision?: number | null;
+  element_type?: {type: string; type_parameters: LogicalTypeParameters} | null;
+  object_fields?: {name: string; type: string; type_parameters: LogicalTypeParameters; nullable: boolean}[] | null;
+}
+export interface EnrichmentDictionaryField {
+  name: string;
+  type: string;
+  type_parameters: LogicalTypeParameters;
+  description?: string | null;
+  cardinality?: number | null;
+  nullable?: boolean | null;
+  unit?: string | null;
+}
+export interface EnrichmentDictionaryWriteField extends EnrichmentDictionaryField {
+  description: string;
+  nullable: boolean;
+}
+export interface EnrichmentDictionary {
+  profile?: 'aim-data-dictionary-v1' | 'aim-data-dictionary-v2';
+  fields?: EnrichmentDictionaryField[];
+  columns?: EnrichmentDictionaryField[];
+}
+export interface EnrichmentView {
+  profile: 'aim-listing-enrichment-profile-v2';
+  source_revision: string;
+  source_language?: string | null;
+  summary_id: string;
+  state: 'pending' | 'approved' | 'invalidated';
+  values: {
+    dataset_origin_statement?: SummaryField<string>;
+    dataset_limitations?: SummaryField<string[]>;
+  };
+  schema_info?: EnrichmentDictionary | null;
+  aggregate_statistics?: AggregateStatistics | null;
+  drafts: unknown[];
+}
+export interface EnrichmentWrite {
+  profile: 'aim-listing-enrichment-profile-v2';
+  source_revision: string;
+  request_id: string;
+  dataset_origin_statement?: {text: string; attribution: 'seller_entered'} | null;
+  dataset_limitations?: {statements: string[]; attribution: 'seller_entered'} | null;
+  schema_info?: {profile: 'aim-data-dictionary-v2'; fields: EnrichmentDictionaryWriteField[]} | null;
+  aggregate_statistics?: AggregateStatistics | null;
+}
+export interface EnrichmentWriteResult {
+  profile: 'aim-listing-enrichment-profile-v2'; request_id: string; summary_id: string;
+  source_revision: string; changed: boolean;
+}
+const enrichmentPath = (id: string) => `/listings/${encodeURIComponent(id)}/enrichment`;
+export async function fetchListingEnrichment(id: string, signal?: AbortSignal): Promise<EnrichmentView> {
+  const {api} = await import('@/api/client');
+  return (await api.get<EnrichmentView>(enrichmentPath(id), {signal})).data;
+}
+export async function saveListingEnrichment(id: string, request: EnrichmentWrite, signal?: AbortSignal): Promise<EnrichmentWriteResult> {
+  const {api} = await import('@/api/client');
+  return (await api.put<EnrichmentWriteResult>(enrichmentPath(id), request, {signal})).data;
 }
 
 // Preview calls use only identifiers. Never route a package body, row, filter,
