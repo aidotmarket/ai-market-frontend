@@ -26,7 +26,9 @@ function refusal(failure: unknown): string | null {
   return null;
 }
 
-function SellerPreviewChrome({summary, selectedFields}: {summary: ListingSummary; selectedFields: string[]}) {
+function SellerPreviewChrome({summary, selectedFields, manifestReceived}: {
+  summary: ListingSummary; selectedFields: string[]; manifestReceived: boolean;
+}) {
   const present = summaryFields.filter(([key]) => summary[key] && summary[key]?.provenance !== 'absent');
   const omitted = summaryFields.filter(([key]) => !summary[key] || summary[key]?.provenance === 'absent');
   const attribution = (Object.keys(provenanceLabels) as (keyof typeof provenanceLabels)[])
@@ -44,8 +46,9 @@ function SellerPreviewChrome({summary, selectedFields}: {summary: ListingSummary
     </div>
     <div><h4 className="text-sm font-medium text-gray-900">Selected sample fields</h4>
       <p className="text-xs text-gray-600">Read-only here. Field selection is set and signed in AIM Data.</p>
-      {selectedFields.length > 0 ? <ul className="mt-1 list-inside list-disc text-sm text-gray-700">{selectedFields.map(field => <li key={field} className="font-mono">{field}</li>)}</ul>
-        : <p className="mt-1 text-sm text-gray-700">No fields are selected for a sample.</p>}
+      {manifestReceived && selectedFields.length > 0 ? <ul className="mt-1 list-inside list-disc text-sm text-gray-700">{selectedFields.map(field => <li key={field} className="font-mono">{field}</li>)}</ul>
+        : manifestReceived ? <p className="mt-1 text-sm text-gray-700">No fields are selected for a sample.</p>
+          : <p className="mt-1 text-sm text-gray-700">The current selection is not shown here. Field selection is set and signed in AIM Data.</p>}
     </div>
   </aside>;
 }
@@ -57,6 +60,7 @@ export default function SellerAtAGlance({listingId, slug, active = true, revisio
   const [error, setError] = useState('');
   const [retry, setRetry] = useState(0);
   const [selectedFields, setSelectedFields] = useState<string[]>([]);
+  const [manifestReceived, setManifestReceived] = useState(false);
   const request = useRef<AbortController | null>(null);
   // Keep decision IDs across an uncertain outcome and preview reload. Approve
   // and withdraw are separate operations, each bound to the exact identifiers.
@@ -113,7 +117,10 @@ export default function SellerAtAGlance({listingId, slug, active = true, revisio
   }
 
   const hasBuyerFields = hasSupportedSummaryFields(preview?.at_a_glance);
-  const receiveManifest = useCallback((manifest: Manifest | null) => setSelectedFields(manifest?.selected_fields ?? []), []);
+  const receiveManifest = useCallback((manifest: Manifest | null) => {
+    setManifestReceived(manifest !== null);
+    setSelectedFields(manifest?.selected_fields ?? []);
+  }, []);
 
   return <section aria-label="Review At a glance" aria-busy={busy} className="min-w-0 space-y-4 rounded-xl border border-gray-200 bg-white p-5">
     <h2 className="text-lg font-semibold text-gray-900">Review At a glance</h2>
@@ -123,7 +130,7 @@ export default function SellerAtAGlance({listingId, slug, active = true, revisio
     {preview && <>
       <p role="status" className="text-sm text-gray-700">{preview.state === 'approved' ? 'Approved. This summary is shown to buyers.' : 'Review the summary and approve it to show it to buyers'}</p>
       {preview.state !== 'approved' && !hasBuyerFields && <p className="text-sm text-gray-700">Nothing to show buyers yet. Add more listing details or regenerate.</p>}
-      <SellerPreviewChrome summary={preview.at_a_glance} selectedFields={selectedFields} />
+      <SellerPreviewChrome summary={preview.at_a_glance} selectedFields={selectedFields} manifestReceived={manifestReceived} />
       <SellerEnrichmentControls listingId={listingId} active={active} onSaved={() => setRetry(value => value + 1)} />
       <p className="text-sm text-gray-700">Manage signed sample approvals in AIM Data. The block below is the exact buyer view.</p>
       <div data-testid="buyer-preview" className="space-y-4">

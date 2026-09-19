@@ -93,7 +93,8 @@ describe('lossless inert table', () => {
     expect(screen.getByText('empty string')).toBeTruthy(); expect(screen.getByText('null')).toBeTruthy();
     expect(screen.getAllByRole('cell').map(c => c.textContent)).toEqual(['empty string', 'missing', 'null']);
     expect(screen.getAllByRole('columnheader')).toHaveLength(3); expect(screen.getAllByText('Unit: kg')).toHaveLength(3);
-    expect(screen.getAllByText("These rows are verified to belong to the seller's dataset and are shown as the seller published them.")).toHaveLength(2);
+    expect(screen.getAllByText('This sample row matches the dataset commitment recorded by the seller.')).toHaveLength(2);
+    expect(screen.getByText('This proof does not establish quality, representativeness, legality, compliance, seller identity, or completeness against an external source.')).toBeTruthy();
   });
   it('neutralizes seller strings at every label, key and expanded-value render site', async () => {
     const name = 'na\u202Eme\u0000\ud800';

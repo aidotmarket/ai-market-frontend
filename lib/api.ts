@@ -288,10 +288,14 @@ export interface EnrichmentDictionaryField {
   name: string;
   type: string;
   type_parameters: LogicalTypeParameters;
-  description: string;
+  description?: string | null;
   cardinality?: number | null;
-  nullable: boolean;
+  nullable?: boolean | null;
   unit?: string | null;
+}
+export interface EnrichmentDictionaryWriteField extends EnrichmentDictionaryField {
+  description: string;
+  nullable: boolean;
 }
 export interface EnrichmentDictionary {
   profile?: 'aim-data-dictionary-v1' | 'aim-data-dictionary-v2';
@@ -318,7 +322,7 @@ export interface EnrichmentWrite {
   request_id: string;
   dataset_origin_statement?: {text: string; attribution: 'seller_entered'} | null;
   dataset_limitations?: {statements: string[]; attribution: 'seller_entered'} | null;
-  schema_info?: {profile: 'aim-data-dictionary-v2'; fields: EnrichmentDictionaryField[]} | null;
+  schema_info?: {profile: 'aim-data-dictionary-v2'; fields: EnrichmentDictionaryWriteField[]} | null;
   aggregate_statistics?: AggregateStatistics | null;
 }
 export interface EnrichmentWriteResult {

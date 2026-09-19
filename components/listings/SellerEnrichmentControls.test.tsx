@@ -23,9 +23,10 @@ const view: api.EnrichmentView = {
 
 beforeEach(() => {
   vi.resetAllMocks(); vi.mocked(api.fetchListingEnrichment).mockResolvedValue(view);
+  vi.spyOn(window, 'confirm').mockReturnValue(true);
   vi.mocked(api.saveListingEnrichment).mockResolvedValue({profile: view.profile, request_id: crypto.randomUUID(), summary_id: view.summary_id, source_revision: 'b'.repeat(64), changed: true});
 });
-afterEach(cleanup);
+afterEach(() => {cleanup(); vi.restoreAllMocks();});
 
 it('keeps all controls optional and sends one partial revision-bound update', async () => {
   const saved = vi.fn(); render(<SellerEnrichmentControls listingId="listing" onSaved={saved} />);
@@ -75,8 +76,37 @@ it('reuses the request ID for an identical retry after an uncertain outcome', as
 });
 
 it.each([
+  ['description', {...view.schema_info!.fields![0], description: undefined}],
+  ['nullable', {...view.schema_info!.fields![0], nullable: undefined}],
+])('does not offer a units write when %s is absent from the read projection', async (_missing, field) => {
+  vi.mocked(api.fetchListingEnrichment).mockResolvedValue({...view, schema_info: {...view.schema_info!, fields: [field]}});
+  render(<SellerEnrichmentControls listingId="listing" />);
+  fireEvent.click(await screen.findByText('Optional listing details'));
+  const unit = await screen.findByLabelText('Unit for amount');
+  expect(unit.hasAttribute('disabled')).toBe(true);
+  expect(screen.getByText(/Republish the dictionary through AIM Data/)).toBeTruthy();
+  fireEvent.click(screen.getByRole('button', {name: 'Save optional details'}));
+  expect(api.saveListingEnrichment).not.toHaveBeenCalled();
+});
+
+it('requires confirmation before removing aggregate statistics for every reader', async () => {
+  vi.mocked(window.confirm).mockReturnValue(false);
+  render(<SellerEnrichmentControls listingId="listing" />);
+  fireEvent.click(await screen.findByText('Optional listing details'));
+  expect(screen.getByText(/Unchecking removes them for all readers/)).toBeTruthy();
+  fireEvent.click(screen.getByRole('checkbox'));
+  fireEvent.click(screen.getByRole('button', {name: 'Save optional details'}));
+  expect(window.confirm).toHaveBeenCalledWith(expect.stringContaining('They will disappear for all readers'));
+  expect(api.saveListingEnrichment).not.toHaveBeenCalled();
+});
+
+it.each([
   ['verified_sample_unavailable_above_25_column_cap', 'A verified sample is not available for a dataset above the approved 25-column cap. This is a product limit, not an error in your dataset.'],
   ['dictionary_must_match_committed_dataset_schema_republish_through_aim_data', 'The dictionary must match the committed dataset schema. Republish through AIM Data to restore agreement.'],
+  ['dictionary_field_unknown', 'A dictionary field no longer matches the listing. Reload the optional details; if it still differs, republish the dictionary through AIM Data.'],
+  ['dictionary_removal_forbidden', 'Dictionary fields cannot be removed here. Restore the field, or republish schema changes through AIM Data.'],
+  ['aggregate_column_unknown', 'An aggregate column no longer matches the listing. Republish the aggregate statistics through AIM Data, then reload the optional details.'],
+  ['generated_statement_not_guarded', 'This generated statement cannot be changed from this form. Regenerate or replace it through AIM Data, then reload the optional details.'],
 ])('shows the actionable %s refusal', async (detail, message) => {
   vi.mocked(api.saveListingEnrichment).mockRejectedValueOnce(new AxiosError(detail, '409', undefined, undefined, {status: 409, data: {detail}} as never));
   render(<SellerEnrichmentControls listingId="listing" />);
@@ -84,6 +114,16 @@ it.each([
   fireEvent.change(await screen.findByLabelText(/^Dataset origin statement/), {target: {value: 'Changed.'}});
   fireEvent.click(screen.getByRole('button', {name: 'Save optional details'}));
   expect((await screen.findByRole('alert')).textContent).toBe(message);
+});
+
+it('turns a structured 422 validation refusal into a next action instead of an identical retry', async () => {
+  vi.mocked(api.saveListingEnrichment).mockRejectedValueOnce(new AxiosError('validation', '422', undefined, undefined, {status: 422, data: {detail: [{loc: ['body', 'schema_info'], msg: 'Field required'}]}} as never));
+  render(<SellerEnrichmentControls listingId="listing" />);
+  fireEvent.click(await screen.findByText('Optional listing details'));
+  fireEvent.change(await screen.findByLabelText(/^Dataset origin statement/), {target: {value: 'Changed.'}});
+  fireEvent.click(screen.getByRole('button', {name: 'Save optional details'}));
+  expect((await screen.findByRole('alert')).textContent).toBe('The optional details do not match the current listing contract. Reload them; if the problem remains, republish the affected metadata through AIM Data.');
+  expect(screen.queryByText(/identical save/)).toBeNull();
 });
 
 it('counts Unicode characters like the backend instead of UTF-16 units', async () => {
