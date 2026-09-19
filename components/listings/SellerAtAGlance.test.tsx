@@ -1,14 +1,23 @@
 // @vitest-environment jsdom
 import {act, cleanup, fireEvent, render, screen, waitFor, within} from '@testing-library/react';
 import {afterEach, beforeEach, expect, it, vi} from 'vitest';
-import {renderToStaticMarkup} from 'react-dom/server';
 import {AxiosError} from 'axios';
 import * as api from '@/lib/api';
 import {preview, emptySummaries, field} from '@/tests/summaryFixture';
-import AtAGlance from './AtAGlance';
+import BuyerAtAGlance from './BuyerAtAGlance';
 import SellerAtAGlance from './SellerAtAGlance';
-vi.mock('@/lib/api', () => ({fetchSummaryPreview: vi.fn(), regenerateSummary: vi.fn(), approveSummary: vi.fn(), withdrawSummary: vi.fn()}));
-beforeEach(() => {vi.resetAllMocks(); vi.mocked(api.fetchSummaryPreview).mockResolvedValue(preview);});
+vi.mock('@/lib/api', () => ({
+  fetchSummaryPreview: vi.fn(), regenerateSummary: vi.fn(), approveSummary: vi.fn(), withdrawSummary: vi.fn(),
+  fetchListingEnrichment: vi.fn(), saveListingEnrichment: vi.fn(), fetchBuyerSummary: vi.fn(),
+}));
+vi.mock('./ListingSamplePreview', () => ({default: () => <section aria-label="Seller-selected sample"><p>Selected fields: amount, region</p><p>Membership does not prove quality, representativeness, legality, compliance, seller identity or completeness against an external source.</p></section>}));
+beforeEach(() => {
+  vi.resetAllMocks(); vi.mocked(api.fetchSummaryPreview).mockResolvedValue(preview);
+  vi.mocked(api.fetchListingEnrichment).mockResolvedValue({
+    profile: 'aim-listing-enrichment-profile-v2', source_revision: preview.source_revision, summary_id: preview.summary_id,
+    state: preview.state, values: {}, schema_info: null, aggregate_statistics: null, drafts: [],
+  });
+});
 afterEach(() => {cleanup(); vi.unstubAllGlobals();});
 it.each(['pending', 'invalidated'] as const)('treats %s as neutral pending and renders the exact buyer component', async state => {
   vi.mocked(api.fetchSummaryPreview).mockResolvedValue({...preview, state});
@@ -16,10 +25,24 @@ it.each(['pending', 'invalidated'] as const)('treats %s as neutral pending and r
   await screen.findByText('Review the summary and approve it to show it to buyers');
   expect(screen.queryByText(/changed since you approved/)).toBeNull();
   const buyer = screen.getByRole('region', {name: 'At a glance'});
-  expect(buyer.outerHTML).toBe(renderToStaticMarkup(<AtAGlance audience="seller" summary={preview.at_a_glance} />));
-  for (const label of ['from AIM Data', 'entered by you', 'generated and checked']) expect(within(buyer).getAllByText(new RegExp(label)).length).toBeGreaterThan(0);
+  for (const label of ['from AIM Data', 'provided by the seller', 'generated and checked']) expect(within(buyer).getAllByText(new RegExp(label)).length).toBeGreaterThan(0);
+  expect(within(buyer).queryByText(/entered by you/i)).toBeNull();
   expect(screen.getByRole('button', {name: 'Approve At a glance'})).toBeTruthy();
   expect(screen.queryByRole('button', {name: 'Withdraw'})).toBeNull();
+  const sellerMarkup = buyer.outerHTML;
+  cleanup();
+  render(<BuyerAtAGlance slug="listing" initialSummary={preview.at_a_glance} />);
+  expect(screen.getByRole('region', {name: 'At a glance'}).outerHTML).toBe(sellerMarkup);
+});
+it('keeps the approved seller preview byte-identical to buyer output including selected fields and proof limitations', async () => {
+  vi.mocked(api.fetchSummaryPreview).mockResolvedValue({...preview, state: 'approved'});
+  render(<SellerAtAGlance listingId="listing" slug="sales" />);
+  const sellerMarkup = (await screen.findByTestId('buyer-preview')).innerHTML;
+  expect(sellerMarkup).toContain('Selected fields: amount, region');
+  expect(sellerMarkup).toContain('Membership does not prove quality, representativeness, legality, compliance, seller identity or completeness against an external source.');
+  cleanup();
+  const buyer = render(<BuyerAtAGlance slug="sales" listingId="listing" initialSummary={preview.at_a_glance} />);
+  expect(buyer.container.innerHTML).toBe(sellerMarkup);
 });
 it('approves the exact preview identifiers with a new UUID and no sample permission', async () => {
   render(<SellerAtAGlance listingId="listing" />);
@@ -128,11 +151,11 @@ it('mints a fresh retry ID when the preview hash changed after a network failure
 
 it.each(emptySummaries)('omits the field list for an approved empty summary %#', async at_a_glance => {
   vi.mocked(api.fetchSummaryPreview).mockResolvedValue({...preview, state: 'approved', at_a_glance});
-  const {container} = render(<SellerAtAGlance listingId="listing" />);
+  render(<SellerAtAGlance listingId="listing" />);
   expect((await screen.findByRole('button', {name: 'Withdraw'})).hasAttribute('disabled')).toBe(false);
   expect(screen.queryByText('Nothing to show buyers yet. Add more listing details or regenerate.')).toBeNull();
   expect(screen.queryByRole('region', {name: 'At a glance'})).toBeNull();
-  expect(container.querySelector('h3, ul, table')).toBeNull();
+  expect(screen.getByTestId('buyer-preview').querySelector('h3, ul, table')).toBeNull();
   expect(screen.getByRole('button', {name: 'Regenerate'})).toBeTruthy();
 });
 

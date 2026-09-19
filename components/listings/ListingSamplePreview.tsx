@@ -10,8 +10,8 @@ type Ready = {manifest: Manifest; keys: TrustedKeys};
 type State = {kind: 'absent'} | {kind: 'ready'; value: Ready} | {kind: 'loading'} | {kind: 'unavailable'} |
   {kind: 'verified'; sample: VerifiedSample; columns: ApprovedColumn[]; Table: ComponentType<TableProps>};
 
-export default function ListingSamplePreview({slug, listingId}: {
-  slug?: string; listingId: string;
+export default function ListingSamplePreview({slug, listingId, onManifest}: {
+  slug?: string; listingId: string; onManifest?: (manifest: Manifest | null) => void;
 }) {
   const [state, setState] = useState<State>({kind: 'absent'});
   const generation = useRef(0), request = useRef<AbortController | null>(null), requested = useRef(false);
@@ -20,7 +20,7 @@ export default function ListingSamplePreview({slug, listingId}: {
   useEffect(() => {
     let disposed = false, timer: ReturnType<typeof setTimeout> | undefined;
     requested.current = false;
-    function clear() {generation.current++; request.current?.abort(); request.current = null; clearTimeout(timer); setState({kind: 'absent'});}
+    function clear() {generation.current++; request.current?.abort(); request.current = null; clearTimeout(timer); setState({kind: 'absent'}); onManifest?.(null);}
     async function start(view: boolean) {
       if (disposed || !slug || document.visibilityState === 'hidden') return;
       clear(); const token = generation.current, controller = new AbortController(); request.current = controller;
@@ -38,7 +38,8 @@ export default function ListingSamplePreview({slug, listingId}: {
       try {
         const manifest = await fetchPreviewManifest(slug, controller.signal);
         if (!valid()) return;
-        if (!manifest || manifest.listing_id !== listingId) {setState(requested.current ? {kind: 'unavailable'} : {kind: 'absent'}); return;}
+        if (!manifest || manifest.listing_id !== listingId) {onManifest?.(null); setState(requested.current ? {kind: 'unavailable'} : {kind: 'absent'}); return;}
+        onManifest?.(manifest);
         const keys = await fetchPreviewKeys(controller.signal);
         if (!valid()) return;
         // Missing trust distribution is
@@ -89,7 +90,7 @@ export default function ListingSamplePreview({slug, listingId}: {
     return () => {disposed = true; clear(); startRef.current = () => undefined;
       document.removeEventListener('visibilitychange', visibility); window.removeEventListener('pageshow', restore);
       window.removeEventListener('pagehide', hide); window.removeEventListener('focus', focus);};
-  }, [slug, listingId]);
+  }, [slug, listingId, onManifest]);
   if (state.kind === 'absent') return null;
   return <section data-listing-sample="" aria-label="Seller-selected sample" className="min-w-0 max-w-full space-y-3 rounded-xl border border-gray-200 bg-white p-4">
     {state.kind === 'ready' && <button type="button" onClick={() => startRef.current(true)} className="rounded border border-indigo-700 px-3 py-2 text-indigo-700 focus-visible:outline-2 focus-visible:outline-indigo-700">View sample</button>}
