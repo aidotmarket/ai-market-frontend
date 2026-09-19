@@ -85,19 +85,26 @@ it.each([
   const unit = await screen.findByLabelText('Unit for amount');
   expect(unit.hasAttribute('disabled')).toBe(true);
   expect(screen.getByText(/Republish the dictionary through AIM Data/)).toBeTruthy();
+  unit.removeAttribute('disabled');
+  fireEvent.change(unit, {target: {value: 'cents'}});
   fireEvent.click(screen.getByRole('button', {name: 'Save optional details'}));
+  expect(screen.getByRole('alert').textContent).toBe('Units cannot be changed here because this dictionary is missing required write fields. Republish the dictionary through AIM Data, then reload the optional details.');
   expect(api.saveListingEnrichment).not.toHaveBeenCalled();
 });
 
-it('requires confirmation before removing aggregate statistics for every reader', async () => {
+it('replaces stale save success when aggregate removal is declined', async () => {
   vi.mocked(window.confirm).mockReturnValue(false);
   render(<SellerEnrichmentControls listingId="listing" />);
   fireEvent.click(await screen.findByText('Optional listing details'));
+  fireEvent.change(await screen.findByLabelText(/^Dataset origin statement/), {target: {value: 'Changed.'}});
+  fireEvent.click(screen.getByRole('button', {name: 'Save optional details'}));
+  await screen.findByText('Optional details saved. The buyer bundle now needs a fresh approval.');
   expect(screen.getByText(/Unchecking removes them for all readers/)).toBeTruthy();
   fireEvent.click(screen.getByRole('checkbox'));
   fireEvent.click(screen.getByRole('button', {name: 'Save optional details'}));
   expect(window.confirm).toHaveBeenCalledWith(expect.stringContaining('They will disappear for all readers'));
-  expect(api.saveListingEnrichment).not.toHaveBeenCalled();
+  expect(screen.getByRole('status').textContent).toBe('Aggregate statistics were not removed. Nothing was sent.');
+  expect(api.saveListingEnrichment).toHaveBeenCalledOnce();
 });
 
 it.each([

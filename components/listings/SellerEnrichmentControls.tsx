@@ -114,7 +114,11 @@ export default function SellerEnrichmentControls({listingId, active = true, onSa
       changes.schema_info = {profile: 'aim-data-dictionary-v2', fields};
     }
     if (form.aggregate && form.includeAggregate !== initial.includeAggregate) {
-      if (!form.includeAggregate && !window.confirm('Remove these aggregate statistics from the listing? They will disappear for all readers. To restore them, republish the statistics through AIM Data.')) return;
+      if (!form.includeAggregate && !window.confirm('Remove these aggregate statistics from the listing? They will disappear for all readers. To restore them, republish the statistics through AIM Data.')) {
+        setError('');
+        setMessage('Aggregate statistics were not removed. Nothing was sent.');
+        return;
+      }
       changes.aggregate_statistics = form.includeAggregate ? form.aggregate : null;
     }
     if (Object.keys(changes).length === 0) {setError(''); setMessage('No optional detail changes to save.'); return;}

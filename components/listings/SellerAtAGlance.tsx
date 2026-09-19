@@ -132,7 +132,7 @@ export default function SellerAtAGlance({listingId, slug, active = true, revisio
       {preview.state !== 'approved' && !hasBuyerFields && <p className="text-sm text-gray-700">Nothing to show buyers yet. Add more listing details or regenerate.</p>}
       <SellerPreviewChrome summary={preview.at_a_glance} selectedFields={selectedFields} manifestReceived={manifestReceived} />
       <SellerEnrichmentControls listingId={listingId} active={active} onSaved={() => setRetry(value => value + 1)} />
-      <p className="text-sm text-gray-700">Manage signed sample approvals in AIM Data. The block below is the exact buyer view.</p>
+      <p className="text-sm text-gray-700">Manage signed sample approvals in AIM Data. The block below shows exactly what buyers see; on the listing page, the sample appears after the schema.</p>
       <div data-testid="buyer-preview" className="space-y-4">
         <BuyerPreviewContent summary={preview.at_a_glance} slug={slug}
           listingId={active && preview.state === 'approved' ? listingId : undefined} onManifest={receiveManifest} />

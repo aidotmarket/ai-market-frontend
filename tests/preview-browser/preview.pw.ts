@@ -74,14 +74,24 @@ test('seller preview and buyer output render the same verified sample in Chrome'
   const sellerChrome = seller.getByRole('complementary', {name: 'Seller-only preview information'});
   await expect(sellerChrome.getByText('amount', {exact: true})).toBeVisible();
   await expect(sellerChrome.getByText('id', {exact: true})).toBeVisible();
+  await expect(buyer.getByRole('complementary', {name: 'Seller-only preview information'})).toHaveCount(0);
+  await expect(buyer.getByText(/^Seller only:/)).toHaveCount(0);
+  const sellerSample = seller.locator('[data-listing-sample]');
+  const buyerSample = buyer.locator('[data-listing-sample]');
+  await expect(buyerSample).toHaveCount(1);
+  await expect(buyer.locator(':scope > *')).toHaveCount(3);
 
   await seller.getByRole('button', {name: 'View sample'}).click();
   await buyer.getByRole('button', {name: 'View sample'}).click();
-  const sellerSample = seller.locator('[data-listing-sample]');
-  const buyerSample = buyer.locator('[data-listing-sample]');
+  const sampleFollowsSchema = await buyer.evaluate(region => {
+    const schema = region.querySelector('[aria-label="Schema Information"]');
+    const sample = region.querySelector('[data-listing-sample]');
+    return !!schema && !!sample && !!(schema.compareDocumentPosition(sample) & Node.DOCUMENT_POSITION_FOLLOWING);
+  });
+  expect(sampleFollowsSchema).toBe(true);
   await expect(sellerSample.getByRole('table', {name: 'Seller-selected sample'})).toBeVisible();
   await expect(buyerSample.getByRole('table', {name: 'Seller-selected sample'})).toBeVisible();
-  await expect(sellerSample.getByText('This sample row matches the dataset commitment recorded by the seller.', {exact: true}).first()).toBeVisible();
-  await expect(sellerSample.getByText('This proof does not establish quality, representativeness, legality, compliance, seller identity, or completeness against an external source.', {exact: true})).toBeVisible();
+  await expect(buyerSample.getByText('This sample row matches the dataset commitment recorded by the seller.', {exact: true}).first()).toBeVisible();
+  await expect(buyerSample.getByText('This proof does not establish quality, representativeness, legality, compliance, seller identity, or completeness against an external source.', {exact: true})).toBeVisible();
   expect(await sellerSample.innerText()).toBe(await buyerSample.innerText());
 });
