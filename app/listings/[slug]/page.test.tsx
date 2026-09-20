@@ -295,6 +295,86 @@ it('keeps empty and null summaries byte-identical to the legacy absent buyer rou
   }
 });
 
+describe('fresh public payload transitions', () => {
+  beforeEach(() => {
+    fetchPublicListing.mockReset();
+    fetchListingVersions.mockReset();
+    fetchListingAccessWindowDays.mockReset();
+    buyButtonProps.mockClear();
+  });
+
+  it('renders changed and removed At a glance values without carrying over an earlier render', async () => {
+    const {field, summary} = await import('@/tests/summaryFixture');
+
+    document.body.innerHTML = await renderPage(makeListing({at_a_glance: summary}));
+    let page = within(document.body);
+    expect(page.getByRole('region', {name: 'At a glance'})).toBeTruthy();
+    expect(page.getByText('One recorded sale', {exact: true})).toBeTruthy();
+    expect(page.getByText('Spain', {exact: true})).toBeTruthy();
+
+    const changed = {
+      ...summary,
+      row_meaning: field('One current inventory record', 'allai_generated'),
+      spatial_coverage: field('Portugal'),
+    };
+    document.body.innerHTML = await renderPage(makeListing({at_a_glance: changed}));
+    page = within(document.body);
+    expect(page.getByRole('region', {name: 'At a glance'})).toBeTruthy();
+    expect(page.getByText('One current inventory record', {exact: true})).toBeTruthy();
+    expect(page.getByText('Portugal', {exact: true})).toBeTruthy();
+    expect(page.queryByText('One recorded sale', {exact: true})).toBeNull();
+    expect(page.queryByText('Spain', {exact: true})).toBeNull();
+
+    document.body.innerHTML = await renderPage(makeListing({
+      description: 'Description after source change.',
+      short_description: 'Description after source change.',
+      at_a_glance: null,
+    }));
+    page = within(document.body);
+    expect(page.getByText('Description after source change.', {exact: true})).toBeTruthy();
+    expect(page.queryByRole('region', {name: 'At a glance'})).toBeNull();
+    expect(page.queryByText('One recorded sale', {exact: true})).toBeNull();
+    expect(page.queryByText('One current inventory record', {exact: true})).toBeNull();
+    expect(fetchPublicListing).toHaveBeenCalledTimes(3);
+    expect(fetchPublicListing.mock.calls).toEqual([
+      ['test-dataset'], ['test-dataset'], ['test-dataset'],
+    ]);
+  });
+
+  it('renders At a glance when a later render changes from absent to current', async () => {
+    const {summary} = await import('@/tests/summaryFixture');
+
+    document.body.innerHTML = await renderPage(makeListing({at_a_glance: null}));
+    expect(within(document.body).queryByRole('region', {name: 'At a glance'})).toBeNull();
+
+    document.body.innerHTML = await renderPage(makeListing({at_a_glance: summary}));
+    const page = within(document.body);
+    expect(page.getByRole('region', {name: 'At a glance'})).toBeTruthy();
+    expect(page.getByText('One recorded sale', {exact: true})).toBeTruthy();
+    expect(fetchPublicListing).toHaveBeenCalledTimes(2);
+    expect(fetchPublicListing.mock.calls).toEqual([['test-dataset'], ['test-dataset']]);
+  });
+
+  it('replaces scan findings on a later render of the same slug', async () => {
+    const first = 'Scan findings withdrawn by seller on 2026-09-18';
+    const second = 'Scan findings withdrawn by seller on 2026-09-20';
+
+    document.body.innerHTML = await renderPage(makeListing({scan_findings: {
+      publication_state: 'WITHDRAWN', withdrawn_at_utc: '2026-09-18T00:00:00Z', marker: first,
+    }}));
+    expect(within(document.body).getByText(first, {exact: true})).toBeTruthy();
+
+    document.body.innerHTML = await renderPage(makeListing({scan_findings: {
+      publication_state: 'WITHDRAWN', withdrawn_at_utc: '2026-09-20T00:00:00Z', marker: second,
+    }}));
+    const page = within(document.body);
+    expect(page.getByText(second, {exact: true})).toBeTruthy();
+    expect(page.queryByText(first, {exact: true})).toBeNull();
+    expect(fetchPublicListing).toHaveBeenCalledTimes(2);
+    expect(fetchPublicListing.mock.calls).toEqual([['test-dataset'], ['test-dataset']]);
+  });
+});
+
 it('renders the public listing page when legacy schema columns contain duplicates', async () => {
   fetchPublicListing.mockReset(); fetchListingVersions.mockReset();
   const html = await renderPage(makeListing({schema_summary: {
