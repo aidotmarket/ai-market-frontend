@@ -16,15 +16,16 @@ const time = '2026-09-17T00:00:00.000000Z';
 const uuid = (n: number) => `00000000-0000-4000-8000-${String(n).padStart(12, '0')}`;
 const hash = async (domain: string, value: unknown) => sha(utf8(domain + '\0'), jcs(value));
 const baseRequest = JSON.parse(readFileSync('tests/fixtures/preview/aim_preview_requests_v1.json', 'utf8')).approve;
-export async function makePreview(rows: Record<string, Json>[] = [{id: '9007199254740993', name: 'barley'}, {id: '2', name: 'oats'}], schema: Descriptor[] = [['id', 'signed_integer', false, {}], ['name', 'string', true, {}]], policy: Pick<Proof, 'scan_policy' | 'scan_policy_version'> = {scan_policy: 'aim-preview-policy-v2', scan_policy_version: '2.0.0'}) {
+export async function makePreview(rows: Record<string, Json>[] = [{id: '9007199254740993', name: 'barley'}, {id: '2', name: 'oats'}], schema: Descriptor[] = [['id', 'signed_integer', false, {}], ['name', 'string', true, {}]], policy: Pick<Proof, 'scan_policy' | 'scan_policy_version'> = {scan_policy: 'aim-preview-policy-v2', scan_policy_version: '2.0.0'}, additionalDatasetRows: Record<string, Json>[] = []) {
   const descriptors = schemaDescriptors(schema), schemaDigest = b64(await hash('aim-schema-v1', descriptors));
-  const prepared = await Promise.all(rows.map(async row => ({row, digest: await sha(utf8('aim-row-v1\0'), new Uint8Array(Buffer.from(schemaDigest, 'base64url')), utf8('\0'), utf8(canonicalRow(row, descriptors).text))})));
+  const prepared = await Promise.all([...rows.map(row => ({row, sampled: true})), ...additionalDatasetRows.map(row => ({row, sampled: false}))]
+    .map(async ({row, sampled}) => ({row, sampled, digest: await sha(utf8('aim-row-v1\0'), new Uint8Array(Buffer.from(schemaDigest, 'base64url')), utf8('\0'), utf8(canonicalRow(row, descriptors).text))})));
   prepared.sort((a, b) => Buffer.compare(a.digest, b.digest));
-  const entries: PreviewPackage['entries'] = []; const leaves: Uint8Array[] = []; let ordinal = 0;
+  const allEntries: (PreviewPackage['entries'][number] & {sampled: boolean})[] = []; const leaves: Uint8Array[] = []; let ordinal = 0;
   for (let i = 0; i < prepared.length; i++) {
     ordinal = i && b64(prepared[i].digest) === b64(prepared[i - 1].digest) ? ordinal + 1 : 0;
     const digest = b64(prepared[i].digest); leaves.push(await leaf(digest, ordinal));
-    entries.push({proof_id: uuid(100 + i), row: prepared[i].row, base_row_digest: digest, duplicate_ordinal: ordinal, leaf_index: i, tree_size: prepared.length, siblings: []});
+    allEntries.push({proof_id: uuid(100 + i), row: prepared[i].row, base_row_digest: digest, duplicate_ordinal: ordinal, leaf_index: i, tree_size: prepared.length, siblings: [], sampled: prepared[i].sampled});
   }
   async function root(start: number, size: number): Promise<Uint8Array> {
     if (size === 1) return leaves[start]; let split = 1; while (split * 2 < size) split *= 2;
@@ -34,11 +35,13 @@ export async function makePreview(rows: Record<string, Json>[] = [{id: '90071992
     if (size === 1) return []; let split = 1; while (split * 2 < size) split *= 2;
     return index < split ? [...await path(start, split, index), {hash: b64(await root(start + split, size - split)), direction: 'right'}] : [...await path(start + split, size - split, index - split), {hash: b64(await root(start, split)), direction: 'left'}];
   }
-  for (let i = 0; i < entries.length; i++) entries[i].siblings = await path(0, entries.length, i);
-  const sample = await sampleHash(entries), sampled = b64(await hash('aim-preview-sampled-leaves-v1', leaves.map(b64)));
+  for (let i = 0; i < allEntries.length; i++) allEntries[i].siblings = await path(0, allEntries.length, i);
+  const entries: PreviewPackage['entries'] = allEntries.filter(entry => entry.sampled).map(({sampled: _sampled, ...entry}) => entry);
+  const sampleLeaves = await Promise.all(entries.map(entry => leaf(entry.base_row_digest, entry.duplicate_ordinal)));
+  const sample = await sampleHash(entries), sampled = b64(await hash('aim-preview-sampled-leaves-v1', sampleLeaves.map(b64)));
   const fingerprint = hex(await sha(new Uint8Array(Buffer.from(testPublicKey, 'base64url')))), reference = uuid(1) + ':' + fingerprint;
   const proofs: Proof[] = entries.map(e => ({...baseRequest.proofs[0], ...Object.fromEntries(Object.entries(e).filter(([k]) => k !== 'row')), ...policy, signer_reference: reference, sampled_leaf_list_digest: sampled}));
-  const c: Commitment = {...baseRequest.commitment, schema_digest: schemaDigest, dataset_merkle_root: b64(await root(0, entries.length)), leaf_count: entries.length, aim_data_signer_reference: reference, proofs};
+  const c: Commitment = {...baseRequest.commitment, schema_digest: schemaDigest, dataset_merkle_root: b64(await root(0, allEntries.length)), leaf_count: allEntries.length, aim_data_signer_reference: reference, proofs};
   const b: Binding = {...baseRequest.binding, signer_reference: reference, schema_descriptors: descriptors, selected_fields: descriptors.map(d => d[0]), schema_digest: schemaDigest, sample_hash: sample, proof_ids: proofs.map(p => p.proof_id), sampled_leaf_list_digest: sampled};
   for (const p of proofs) p.signature = testSign(proofBytes(c, p));
   b.scan_attestation_digest = hex(await hash('aim-preview-scan-attestation-v1', proofs));
@@ -62,7 +65,7 @@ const cloneManifest = (manifest: Manifest): Manifest => JSON.parse(JSON.stringif
 
 /** One commitment across stale, unchanged-root re-attested, and contradictory claims. */
 export async function makeFreshnessTransitionPreview() {
-  const base = await makePreview();
+  const base = await makePreview(undefined, undefined, undefined, [{id: '3', name: 'rye'}]);
   const staleManifest = cloneManifest(base.manifest);
   const staleAt = Date.parse(staleManifest.freshness_stale_at);
   staleManifest.generated_at = wireTime(staleAt);
@@ -72,10 +75,12 @@ export async function makeFreshnessTransitionPreview() {
 
   const currentManifest = cloneManifest(staleManifest);
   const envelope = currentManifest.approval.platform_envelope;
-  const reattestedAt = staleAt - 1_000;
+  const reattestedAt = stale.now;
   envelope.binding.last_attested_by_seller_at = wireTime(reattestedAt);
   envelope.binding.approved_at = wireTime(reattestedAt);
   currentManifest.last_attested_by_seller_at = wireTime(reattestedAt);
+  currentManifest.generated_at = wireTime(reattestedAt);
+  currentManifest.valid_until = wireTime(reattestedAt + 30_000);
   const cadence = envelope.binding.update_cadence_days;
   const freshnessDays = Math.min(90, cadence === null ? 90 : Math.max(7, 2 * cadence));
   currentManifest.freshness_stale_at = wireTime(reattestedAt + freshnessDays * 86_400_000);
@@ -84,8 +89,8 @@ export async function makeFreshnessTransitionPreview() {
   envelope.signature = testSign(platformBytes(envelope));
   const reattested = {...base, manifest: currentManifest, now: stale.now};
 
-  const inconsistentManifest = cloneManifest(staleManifest);
-  inconsistentManifest.stale = false;
+  const inconsistentManifest = cloneManifest(currentManifest);
+  inconsistentManifest.valid_until = inconsistentManifest.generated_at;
   const inconsistent = {...base, manifest: inconsistentManifest, now: stale.now};
   return {stale, reattested, inconsistent};
 }
