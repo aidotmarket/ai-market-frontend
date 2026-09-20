@@ -5,7 +5,7 @@ type TransitionFixture = Awaited<ReturnType<typeof makeFreshnessTransitionPrevie
 
 async function openFixture(page: Page, served: TransitionFixture) {
   const cors = {'content-type': 'application/json', 'cache-control': 'no-store', 'access-control-allow-origin': '*'};
-  await page.addInitScript(now => {Date.now = () => now;}, served.now);
+  await page.addInitScript(now => {const realNow = Date.now, offset = now - realNow(); Date.now = () => realNow() + offset;}, served.now);
   await page.route('https://api.preview.test/**', async route => {
     const path = new URL(route.request().url()).pathname;
     if (path.endsWith('/signed-payload')) {
