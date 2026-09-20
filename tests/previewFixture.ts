@@ -56,6 +56,40 @@ export async function makePreview(rows: Record<string, Json>[] = [{id: '90071992
   const keys = {[e.key_id]: testPublicKey};
   return {manifest, pack, raw: jcs(pack), keys, now: testNow};
 }
+
+const wireTime = (value: number) => new Date(value).toISOString().replace('000Z', '000000Z');
+const cloneManifest = (manifest: Manifest): Manifest => JSON.parse(JSON.stringify(manifest)) as Manifest;
+
+/** One commitment across stale, unchanged-root re-attested, and contradictory claims. */
+export async function makeFreshnessTransitionPreview() {
+  const base = await makePreview();
+  const staleManifest = cloneManifest(base.manifest);
+  const staleAt = Date.parse(staleManifest.freshness_stale_at);
+  staleManifest.generated_at = wireTime(staleAt);
+  staleManifest.valid_until = wireTime(staleAt + 30_000);
+  staleManifest.stale = true;
+  const stale = {...base, manifest: staleManifest, now: staleAt + 1_000};
+
+  const currentManifest = cloneManifest(staleManifest);
+  const envelope = currentManifest.approval.platform_envelope;
+  const reattestedAt = staleAt - 1_000;
+  envelope.binding.last_attested_by_seller_at = wireTime(reattestedAt);
+  envelope.binding.approved_at = wireTime(reattestedAt);
+  currentManifest.last_attested_by_seller_at = wireTime(reattestedAt);
+  const cadence = envelope.binding.update_cadence_days;
+  const freshnessDays = Math.min(90, cadence === null ? 90 : Math.max(7, 2 * cadence));
+  currentManifest.freshness_stale_at = wireTime(reattestedAt + freshnessDays * 86_400_000);
+  currentManifest.stale = false;
+  envelope.seller_signature = testSign(disclosureBytes(envelope.binding));
+  envelope.signature = testSign(platformBytes(envelope));
+  const reattested = {...base, manifest: currentManifest, now: stale.now};
+
+  const inconsistentManifest = cloneManifest(staleManifest);
+  inconsistentManifest.stale = false;
+  const inconsistent = {...base, manifest: inconsistentManifest, now: stale.now};
+  return {stale, reattested, inconsistent};
+}
+
 export async function verifiedFixture(rows?: Record<string, Json>[], schema?: Descriptor[]) {
   const f = await makePreview(rows, schema);
   const sample = await verifySample(f.manifest, f.raw, {listingId: f.manifest.listing_id, keys: f.keys, now: () => f.now, readCurrent: async () => f.manifest, signal: new AbortController().signal});
