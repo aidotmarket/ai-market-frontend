@@ -63,7 +63,7 @@ export async function makePreview(rows: Record<string, Json>[] = [{id: '90071992
 const wireTime = (value: number) => new Date(value).toISOString().replace('000Z', '000000Z');
 const cloneManifest = (manifest: Manifest): Manifest => JSON.parse(JSON.stringify(manifest)) as Manifest;
 
-/** One commitment across stale, unchanged-root re-attested, and contradictory claims. */
+/** One commitment across stale, unchanged-root re-attested, and fail-closed claims. */
 export async function makeFreshnessTransitionPreview() {
   const base = await makePreview(undefined, undefined, undefined, [{id: '3', name: 'rye'}]);
   const staleManifest = cloneManifest(base.manifest);
@@ -89,10 +89,14 @@ export async function makeFreshnessTransitionPreview() {
   envelope.signature = testSign(platformBytes(envelope));
   const reattested = {...base, manifest: currentManifest, now: stale.now};
 
-  const inconsistentManifest = cloneManifest(currentManifest);
-  inconsistentManifest.valid_until = inconsistentManifest.generated_at;
-  const inconsistent = {...base, manifest: inconsistentManifest, now: stale.now};
-  return {stale, reattested, inconsistent};
+  const claimsCurrentPastFreshnessDeadlineManifest = cloneManifest(staleManifest);
+  claimsCurrentPastFreshnessDeadlineManifest.stale = false;
+  const claimsCurrentPastFreshnessDeadline = {...base, manifest: claimsCurrentPastFreshnessDeadlineManifest, now: stale.now};
+
+  const regeneratedWithoutValidityWindowManifest = cloneManifest(currentManifest);
+  regeneratedWithoutValidityWindowManifest.valid_until = regeneratedWithoutValidityWindowManifest.generated_at;
+  const regeneratedWithoutValidityWindow = {...base, manifest: regeneratedWithoutValidityWindowManifest, now: stale.now};
+  return {stale, reattested, claimsCurrentPastFreshnessDeadline, regeneratedWithoutValidityWindow};
 }
 
 export async function verifiedFixture(rows?: Record<string, Json>[], schema?: Descriptor[]) {

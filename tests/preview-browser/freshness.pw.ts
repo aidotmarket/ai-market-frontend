@@ -62,11 +62,25 @@ test('renders a current preview after unchanged-root re-attestation', async ({pa
   await expect(page.getByRole('row')).toHaveCount(reattested.manifest.proofs.length + 1);
 });
 
-test('fails closed when regenerated manifest timestamps contradict', async ({page}) => {
-  const {inconsistent} = await makeFreshnessTransitionPreview();
+test('fails closed when the manifest claims to be current past its own freshness deadline', async ({page}) => {
+  const {stale, claimsCurrentPastFreshnessDeadline} = await makeFreshnessTransitionPreview();
 
-  expect(inconsistent.manifest.valid_until).toBe(inconsistent.manifest.generated_at);
-  await openFixture(page, inconsistent);
+  expect(claimsCurrentPastFreshnessDeadline.manifest).toEqual({...stale.manifest, stale: false});
+  expect(claimsCurrentPastFreshnessDeadline.now)
+    .toBeGreaterThan(Date.parse(claimsCurrentPastFreshnessDeadline.manifest.freshness_stale_at));
+  await openFixture(page, claimsCurrentPastFreshnessDeadline);
+  await expect(page.getByRole('status')).toHaveText('Sample unavailable');
+  await expect(page.getByRole('table', {name: 'Seller-selected sample'})).toHaveCount(0);
+  await expect(page.getByRole('row')).toHaveCount(0);
+  await expect(page.getByText('Stale', {exact: true})).toHaveCount(0);
+});
+
+test('fails closed when regenerated timestamps leave no validity window', async ({page}) => {
+  const {regeneratedWithoutValidityWindow} = await makeFreshnessTransitionPreview();
+
+  expect(regeneratedWithoutValidityWindow.manifest.valid_until)
+    .toBe(regeneratedWithoutValidityWindow.manifest.generated_at);
+  await openFixture(page, regeneratedWithoutValidityWindow);
   await expect(page.getByRole('status')).toHaveText('Sample unavailable');
   await expect(page.getByRole('table', {name: 'Seller-selected sample'})).toHaveCount(0);
   await expect(page.getByRole('row')).toHaveCount(0);
