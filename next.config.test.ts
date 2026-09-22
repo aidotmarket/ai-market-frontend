@@ -1,5 +1,19 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
+describe('next.config listing redirects', () => {
+  it('permanently redirects the branded listing slug to the neutral slug', async () => {
+    const { default: config } = await import('./next.config');
+
+    const redirects = await config.redirects!();
+
+    expect(redirects).toContainEqual({
+      source: '/listings/eolymp-problem-dataset-5ab53e16',
+      destination: '/listings/competitive-programming-problems-5ab53e16',
+      permanent: true,
+    });
+  });
+});
+
 describe('next.config request discovery rewrites', () => {
   afterEach(() => {
     vi.resetModules();

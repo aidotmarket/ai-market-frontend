@@ -4,6 +4,11 @@ const nextConfig: NextConfig = {
   reactStrictMode: true,
   async redirects() {
     return [
+      {
+        source: '/listings/eolymp-problem-dataset-5ab53e16',
+        destination: '/listings/competitive-programming-problems-5ab53e16',
+        permanent: true,
+      },
       { source: '/download/aim-channel', destination: '/aim-data', permanent: true },
       { source: '/download/aim-channel/:path*', destination: '/aim-data', permanent: true },
       { source: '/download', destination: '/sell-data', permanent: true },
