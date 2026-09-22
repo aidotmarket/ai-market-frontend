@@ -1,8 +1,9 @@
 // @vitest-environment jsdom
 
 import React from 'react';
+import { webcrypto } from 'node:crypto';
 import { renderToStaticMarkup } from 'react-dom/server';
-import { cleanup, render, screen, waitFor } from '@testing-library/react';
+import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { validateRedirect } from '@/lib/redirect';
 import BuyButton, { parseCheckoutRefusal, SignedOutPurchase } from './BuyButton';
@@ -13,15 +14,6 @@ import { AxiosError } from 'axios';
 const ordersApi = vi.hoisted(() => ({ getMyOrders: vi.fn() }));
 vi.mock('@/api/orders', () => ordersApi);
 vi.mock('@/api/checkout', () => ({ createCheckout: vi.fn() }));
-vi.mock('@/components/ListingLicenseDisclosure', async () => {
-  const ReactModule = await import('react');
-  return {
-    default: ({ onVerificationChange }: { onVerificationChange?: (verified: boolean) => void }) => {
-      ReactModule.useEffect(() => onVerificationChange?.(true), [onVerificationChange]);
-      return <div>Verified licence materials</div>;
-    },
-  };
-});
 
 const structuredLicense = {
   code: 'standard' as const, version: '1.0', params: { ai_training: true },
@@ -31,15 +23,36 @@ const structuredLicense = {
   sha256: 'a'.repeat(64), covenant_sha256: 'b'.repeat(64), rider_sha256: null,
 };
 
+const verifiedLicense = {
+  ...structuredLicense,
+  sha256: 'f91f4e012a318e5e709e8fe0b830b903bf8fbc05f17beab7bba2bb329af104e8',
+  covenant_sha256: '2d900715ffc29f256a556f44b3ecf2e0efa01916e4a467d8add9a3ff124ea17e',
+};
+
+function documentResponse(text: string) {
+  const bytes = new TextEncoder().encode(text);
+  return { ok: true, arrayBuffer: async () => bytes.buffer, headers: new Headers({ 'content-type': 'text/plain' }) };
+}
+
+function completeAcceptanceForm() {
+  fireEvent.change(screen.getByLabelText('Typed full name'), { target: { value: 'Ada Buyer' } });
+  fireEvent.change(screen.getByLabelText('Signer title'), { target: { value: 'Director' } });
+  fireEvent.change(screen.getByLabelText('Business legal name'), { target: { value: 'Buyer Ltd' } });
+  fireEvent.change(screen.getByLabelText('Jurisdiction (2-letter country code)'), { target: { value: 'gb' } });
+  fireEvent.click(screen.getByRole('checkbox', { name: 'Confirm licence authority' }));
+}
+
 describe('BuyButton licence acceptance', () => {
   beforeEach(() => {
     ordersApi.getMyOrders.mockResolvedValue([]);
     useAuthStore.setState({ isAuthenticated: true, user: { id: 'buyer-1' } as never });
+    vi.stubGlobal('crypto', webcrypto);
   });
 
   afterEach(() => {
     cleanup();
     vi.clearAllMocks();
+    vi.unstubAllGlobals();
     useAuthStore.setState({ isAuthenticated: false, user: null });
   });
 
@@ -65,22 +78,56 @@ describe('BuyButton licence acceptance', () => {
     await waitFor(() => expect(ordersApi.getMyOrders).toHaveBeenCalled());
   });
 
+  it('enables acceptance only after the real disclosure matches every fetched document byte hash', async () => {
+    const fetchMock = vi.fn(async (input: RequestInfo | URL) => String(input).includes('marketplace-listing')
+      ? documentResponse('Exact covenant text\n')
+      : documentResponse('Exact licence text\n'));
+    vi.stubGlobal('fetch', fetchMock);
+
+    render(<ToastProvider><BuyButton listingId="listing-1" slug="listing" price={20} pricingType="one_time" licenseDetails={verifiedLicense} /></ToastProvider>);
+    completeAcceptanceForm();
+
+    await waitFor(() => expect(screen.getAllByText('Fetched bytes match the server hash')).toHaveLength(2));
+    expect(fetchMock.mock.calls.map(([url]) => String(url))).toEqual([
+      '/licenses/standard/1.0/ai-training?download=1',
+      '/licenses/marketplace-listing/1.0?download=1',
+    ]);
+    expect((screen.getByRole('button', { name: 'Accept and continue to payment' }) as HTMLButtonElement).disabled).toBe(false);
+  });
+
+  it.each([
+    ['byte mismatch', async () => documentResponse('tampered licence bytes\n'), 'Hash mismatch — do not accept'],
+    ['fetch failure', async () => { throw new Error('network unavailable'); }, 'Could not verify — do not accept'],
+  ])('keeps acceptance disabled on %s', async (_case, licenseFetch, expectedStatus) => {
+    vi.stubGlobal('fetch', vi.fn(async (input: RequestInfo | URL) => String(input).includes('marketplace-listing')
+      ? documentResponse('Exact covenant text\n')
+      : licenseFetch()));
+
+    render(<ToastProvider><BuyButton listingId="listing-1" slug="listing" price={20} pricingType="one_time" licenseDetails={verifiedLicense} /></ToastProvider>);
+    completeAcceptanceForm();
+
+    await waitFor(() => expect(screen.getByText(expectedStatus)).not.toBeNull());
+    expect((screen.getByRole('button', { name: 'Accept and continue to payment' }) as HTMLButtonElement).disabled).toBe(true);
+  });
+
   it('shows both conflicting legal identities and the reconciliation link', () => {
     const error = new AxiosError('conflict');
     error.response = {
       data: { detail: {
         code: 'LEGAL_IDENTITY_CONFLICT',
-        billing: { source: 'stripe', legal_name: 'Buyer Holdings Ltd', jurisdiction: 'GB' },
-        typed: { source: 'platform_terms', legal_name: 'Buyer Data Ltd', jurisdiction: 'IE' },
-        reconciliation_link: '/dashboard/settings/legal-identity',
+        sources: [
+          { source: 'billing_entity', legal_name: 'Buyer Holdings Ltd', jurisdiction: 'GB' },
+          { source: 'typed', legal_name: 'Buyer Data Ltd', jurisdiction: 'IE' },
+        ],
+        reconciliation_url: '/settings/organization/legal-identity',
       } },
       status: 409, statusText: 'Conflict', headers: {}, config: {} as never,
     };
 
     expect(parseCheckoutRefusal(error)).toEqual({
       code: 'LEGAL_IDENTITY_CONFLICT',
-      message: 'Your legal identity records conflict — stripe: Buyer Holdings Ltd (GB) versus platform_terms: Buyer Data Ltd (IE). Reconcile them before purchasing.',
-      reconciliationUrl: '/dashboard/settings/legal-identity',
+      message: 'Your legal identity records conflict — billing_entity: Buyer Holdings Ltd (GB) versus typed: Buyer Data Ltd (IE). Reconcile them before purchasing.',
+      reconciliationUrl: '/settings/organization/legal-identity',
     });
   });
 });

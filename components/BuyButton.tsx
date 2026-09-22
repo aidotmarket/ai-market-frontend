@@ -290,7 +290,8 @@ export function parseCheckoutRefusal(error: AxiosError): CheckoutRefusal {
     SELLER_TERMS_ACCEPTANCE_PENDING: 'This listing cannot be purchased until the seller accepts the current terms.',
   };
   if (code === 'LEGAL_IDENTITY_CONFLICT') {
-    const candidates = [value.billing_identity, value.typed_identity, value.billing, value.typed]
+    const sources = Array.isArray(value.sources) ? value.sources : [];
+    const candidates = sources
       .filter((candidate): candidate is Record<string, unknown> => Boolean(candidate && typeof candidate === 'object'));
     const described = candidates.map((candidate) => {
       const source = typeof candidate.source === 'string' ? candidate.source : 'identity';
@@ -301,9 +302,9 @@ export function parseCheckoutRefusal(error: AxiosError): CheckoutRefusal {
     return {
       code,
       message: `Your legal identity records conflict${described.length ? ` — ${described.join(' versus ')}` : ''}. Reconcile them before purchasing.`,
-      reconciliationUrl: typeof value.reconciliation_link === 'string'
-        ? value.reconciliation_link
-        : typeof value.reconciliation_url === 'string' ? value.reconciliation_url : '/dashboard/settings',
+      reconciliationUrl: typeof value.reconciliation_url === 'string'
+        ? value.reconciliation_url
+        : '/settings/organization/legal-identity',
     };
   }
   return {

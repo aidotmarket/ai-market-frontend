@@ -181,7 +181,7 @@ describe('SalesPage', () => {
 
     const links = await screen.findAllByRole('link', { name: 'Licence record' });
     expect(links).toHaveLength(2);
-    expect(links[0].getAttribute('href')).toBe('/dashboard/orders/sale-1/license-record');
+    expect(links[0].getAttribute('href')).toBe('/dashboard/sales/sale-1/license-record');
   });
 
   it('keeps needs_action informational', async () => {

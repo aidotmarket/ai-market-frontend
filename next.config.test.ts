@@ -38,6 +38,18 @@ describe('next.config request discovery rewrites', () => {
     });
   });
 
+  it('proxies canonical licence URLs to the API licence routes', async () => {
+    process.env.NEXT_PUBLIC_API_URL = 'https://api.example.test';
+    const { default: config } = await import('./next.config');
+
+    const rewrites = await config.rewrites!();
+
+    expect(rewrites).toContainEqual({
+      source: '/licenses/:path*',
+      destination: 'https://api.example.test/api/v1/licenses/:path*',
+    });
+  });
+
   it('uses localhost fallback for requests.txt outside production', async () => {
     vi.stubEnv('NODE_ENV', 'development');
     const { default: config } = await import('./next.config');
@@ -51,6 +63,18 @@ describe('next.config request discovery rewrites', () => {
     expect(rewrites).toContainEqual({
       source: '/.well-known/requests.txt',
       destination: 'http://localhost:8000/.well-known/requests.txt',
+    });
+  });
+
+  it('uses the local API licence routes outside production', async () => {
+    vi.stubEnv('NODE_ENV', 'development');
+    const { default: config } = await import('./next.config');
+
+    const rewrites = await config.rewrites!();
+
+    expect(rewrites).toContainEqual({
+      source: '/licenses/:path*',
+      destination: 'http://localhost:8000/api/v1/licenses/:path*',
     });
   });
 

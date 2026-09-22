@@ -1,0 +1,58 @@
+{
+  "acceptance_id": "00000000-0000-0000-0000-000000000001",
+  "order": { "id": "00000000-0000-0000-0000-000000000002", "number": "ORDER-1" },
+  "listing": { "id": "00000000-0000-0000-0000-000000000003", "title": "Licensed data", "version_id": null },
+  "license": {
+    "code": "standard",
+    "version": "1.0",
+    "params": { "ai_training": true },
+    "text": "Exact licence text\n",
+    "pdf_source_sha256": null,
+    "sha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+  },
+  "rider": null,
+  "covenant": {
+    "code": "marketplace-listing",
+    "version": "1.0",
+    "text": "Exact covenant text\n",
+    "sha256": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"
+  },
+  "buyer": {
+    "user_id": "00000000-0000-0000-0000-000000000004",
+    "organization_id": null,
+    "party_type": "sole_trader",
+    "legal_name": "Buyer Ltd",
+    "jurisdiction": "GB"
+  },
+  "seller": {
+    "user_id": "00000000-0000-0000-0000-000000000005",
+    "organization_id": null,
+    "party_type": "sole_trader",
+    "legal_name": "Seller LLC",
+    "jurisdiction": "US"
+  },
+  "signature": {
+    "channel": "web",
+    "typed_name": "Buyer Signer",
+    "signer_title": "Director",
+    "principal_ref": "user:00000000-0000-0000-0000-000000000004",
+    "credential_id": null,
+    "authority_confirmed": true,
+    "accepted_at": "2026-09-22T00:00:00+00:00"
+  },
+  "status": "terminated",
+  "lifecycle_events": [{
+    "event_type": "terminated",
+    "reason": "full_refund",
+    "actor_type": "refund",
+    "actor_id": null,
+    "occurred_at": "2026-09-22T10:00:00+00:00",
+    "deletion_due_at": "2026-10-22T10:00:00+00:00",
+    "metadata": null
+  }],
+  "fulfilment_history": [{
+    "event_type": "delivery_completed",
+    "created_at": "2026-09-22T01:00:00+00:00",
+    "metadata": { "version_id": "00000000-0000-0000-0000-000000000006", "version_label": "v1" }
+  }]
+}

@@ -98,6 +98,18 @@ async function fetchedBytesMatch(
   return await hashLicenseComponentBytes(canonicalBytes, reference) === reference.sha256;
 }
 
+function documentFetchUrl(url: string): string {
+  try {
+    const parsed = new URL(url, 'https://ai.market');
+    if (parsed.origin === 'https://ai.market' && parsed.pathname.startsWith('/licenses/')) {
+      return `${parsed.pathname}${parsed.search}`;
+    }
+  } catch {
+    // The fetch below owns invalid URL handling and reports a verification error.
+  }
+  return url;
+}
+
 function referencesFor(license: ListingLicenseDetails): DocumentReference[] {
   const aiTraining = license.params.ai_training;
   const references: DocumentReference[] = [{
@@ -155,7 +167,7 @@ export default function ListingLicenseDisclosure({
     onVerificationChange?.(false);
     void Promise.all(references.map(async (reference): Promise<LoadedDocument> => {
       try {
-        const response = await fetch(reference.downloadUrl, { credentials: 'include', cache: 'no-store' });
+        const response = await fetch(documentFetchUrl(reference.downloadUrl), { credentials: 'include', cache: 'no-store' });
         if (!response.ok) throw new Error('document fetch failed');
         const bytes = new Uint8Array(await response.arrayBuffer());
         const contentType = response.headers.get('content-type') ?? 'text/plain';

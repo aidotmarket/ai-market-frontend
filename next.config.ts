@@ -26,6 +26,7 @@ const nextConfig: NextConfig = {
       // Local dev fallback only
       const devUrl = 'http://localhost:8000';
       return [
+        { source: '/licenses/:path*', destination: `${devUrl}/api/v1/licenses/:path*` },
         { source: '/llms.txt', destination: `${devUrl}/llms.txt` },
         { source: '/requests.txt', destination: `${devUrl}/requests.txt` },
         { source: '/.well-known/requests.txt', destination: `${devUrl}/.well-known/requests.txt` },
@@ -35,6 +36,7 @@ const nextConfig: NextConfig = {
       ];
     }
     return [
+      { source: '/licenses/:path*', destination: `${apiUrl}/api/v1/licenses/:path*` },
       { source: '/llms.txt', destination: `${apiUrl}/llms.txt` },
       { source: '/requests.txt', destination: `${apiUrl}/requests.txt` },
       { source: '/.well-known/requests.txt', destination: `${apiUrl}/.well-known/requests.txt` },

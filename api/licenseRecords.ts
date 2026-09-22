@@ -1,5 +1,5 @@
 import { api } from './client';
-import type { LicenseRecord } from '@/types';
+import type { LicenseDeletionConfirmation, LicenseRecord } from '@/types';
 
 export async function getLicenseRecord(orderId: string): Promise<LicenseRecord> {
   const response = await api.get<LicenseRecord>(`/orders/${encodeURIComponent(orderId)}/license-record`);
@@ -14,9 +14,9 @@ export async function downloadLicenseRecordPdf(orderId: string): Promise<Blob> {
   return response.data;
 }
 
-export async function confirmLicenseRecordDeletion(orderId: string): Promise<LicenseRecord> {
-  const response = await api.post<LicenseRecord>(
-    `/orders/${encodeURIComponent(orderId)}/license-record/deletion-confirmed`,
+export async function confirmLicenseRecordDeletion(orderId: string): Promise<LicenseDeletionConfirmation> {
+  const response = await api.post<LicenseDeletionConfirmation>(
+    `/orders/${encodeURIComponent(orderId)}/license-record/deletion-confirmation`,
   );
   return response.data;
 }

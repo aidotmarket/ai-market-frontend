@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from 'react';
 import Link from 'next/link';
+import { buyerLicenseRecordPath } from '@/lib/licenseRecordRoutes';
 import { getMyOrders } from '@/api/orders';
 import { getMyTransactions } from '@/api/transactions';
 import { formatPrice, formatDate } from '@/lib/format';
@@ -178,7 +179,7 @@ export default function OrdersListPage() {
                       <span className="text-xs text-gray-400"> - </span>
                     )}
                     {order.license_record_available && (
-                      <Link href={`/dashboard/orders/${order.id}/license-record`} className="mt-2 block text-sm font-medium text-[#3F51B5] hover:underline">
+                      <Link href={buyerLicenseRecordPath(order.id)} className="mt-2 block text-sm font-medium text-[#3F51B5] hover:underline">
                         Licence record
                       </Link>
                     )}
@@ -239,7 +240,7 @@ export default function OrdersListPage() {
               )}
             </Link>
             {order.license_record_available && (
-              <Link href={`/dashboard/orders/${order.id}/license-record`} className="mt-1 block px-4 py-2 text-sm font-medium text-[#3F51B5] underline">
+              <Link href={buyerLicenseRecordPath(order.id)} className="mt-1 block px-4 py-2 text-sm font-medium text-[#3F51B5] underline">
                 Licence record
               </Link>
             )}

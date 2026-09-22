@@ -652,39 +652,74 @@ export interface BuyerOrder {
 }
 
 export interface LicenseRecordParty {
+  user_id: string;
+  organization_id: string | null;
+  party_type: string;
   legal_name: string;
   jurisdiction: string;
 }
 
-export interface LicenseRecordDocument {
-  title: string;
-  text?: string | null;
-  download_url?: string | null;
+export interface LicenseRecordLicenseDocument {
+  code: string;
+  version: string;
+  params: Record<string, string | boolean>;
+  text: string | null;
+  pdf_source_sha256: string | null;
   sha256: string;
 }
 
+export interface LicenseRecordCovenantDocument {
+  code: string;
+  version: string;
+  text: string;
+  sha256: string;
+}
+
+export interface LicenseRecordRiderDocument {
+  text: string;
+  sha256: string;
+}
+
+export interface LicenseRecordLifecycleEvent {
+  event_type: string;
+  reason: string | null;
+  actor_type: string | null;
+  actor_id: string | null;
+  occurred_at: string;
+  deletion_due_at: string | null;
+  metadata: Record<string, unknown> | null;
+}
+
 export interface LicenseRecord {
-  order_id: string;
-  listing_id: string;
-  listing_version_id?: string | null;
-  listing_title: string;
-  accepted_at: string;
+  acceptance_id: string;
+  order: { id: string; number: string | null };
+  listing: { id: string; title: string | null; version_id: string | null };
+  license: LicenseRecordLicenseDocument;
+  rider: LicenseRecordRiderDocument | null;
+  covenant: LicenseRecordCovenantDocument;
   status: 'active' | 'terminated';
-  channel: string;
-  typed_name?: string | null;
-  signer_title?: string | null;
-  principal_ref?: string | null;
   buyer: LicenseRecordParty;
   seller: LicenseRecordParty;
-  license: LicenseRecordDocument;
-  covenant: LicenseRecordDocument;
-  rider?: LicenseRecordDocument | null;
-  delivered_versions?: Array<{ id: string; label?: string | null; delivered_at?: string | null }>;
-  terminated_at?: string | null;
-  terminated_reason?: string | null;
-  deletion_due_at?: string | null;
-  deletion_confirmed_at?: string | null;
-  deletion_confirmation_available?: boolean;
+  signature: {
+    channel: string;
+    typed_name: string | null;
+    signer_title: string | null;
+    principal_ref: string | null;
+    credential_id: string | null;
+    authority_confirmed: boolean;
+    accepted_at: string;
+  };
+  lifecycle_events: LicenseRecordLifecycleEvent[];
+  fulfilment_history: Array<{
+    event_type: string;
+    created_at: string;
+    metadata: Record<string, unknown> | null;
+  }>;
+}
+
+export interface LicenseDeletionConfirmation {
+  status: 'confirmed';
+  occurred_at: string;
 }
 
 export interface BuyerOrderDetail extends BuyerOrder {

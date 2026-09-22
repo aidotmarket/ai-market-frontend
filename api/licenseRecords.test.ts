@@ -3,7 +3,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 const api = vi.hoisted(() => ({ get: vi.fn(), post: vi.fn() }));
 vi.mock('./client', () => ({ api }));
 
-const { downloadLicenseRecordPdf, getLicenseRecord } = await import('./licenseRecords');
+const { confirmLicenseRecordDeletion, downloadLicenseRecordPdf, getLicenseRecord } = await import('./licenseRecords');
 
 describe('licence record API', () => {
   beforeEach(() => vi.clearAllMocks());
@@ -20,5 +20,11 @@ describe('licence record API', () => {
     expect(api.get).toHaveBeenCalledWith('/orders/order-1/license-record', {
       params: { format: 'pdf' }, responseType: 'blob',
     });
+  });
+
+  it('posts deletion confirmation to the backend contract path', async () => {
+    api.post.mockResolvedValue({ data: { status: 'confirmed', occurred_at: '2026-09-22T11:00:00Z' } });
+    await confirmLicenseRecordDeletion('order-1');
+    expect(api.post).toHaveBeenCalledWith('/orders/order-1/license-record/deletion-confirmation');
   });
 });
