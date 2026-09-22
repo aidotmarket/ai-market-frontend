@@ -1,4 +1,5 @@
 import { api } from './client';
+import type {LicenseSelection} from './listingLicenses';
 
 export interface ListingDraftContent {
   brief: string;
@@ -8,6 +9,7 @@ export interface ListingDraftContent {
   tags: string;
   price: string;
   license: string;
+  license_selection?: LicenseSelection;
   sample_decision?: 'none' | 'member_files';
   sample_object_indices?: number[];
 }

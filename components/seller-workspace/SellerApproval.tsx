@@ -2,7 +2,7 @@
 import { useEffect, useRef, useState } from 'react';
 import axios from 'axios';
 import SellerPublication from './SellerPublication';
-import { approveListingReview, CONFIRMATION_KEYS, type ConfirmationKey, type ListingReview } from '@/api/sellerListingReview';
+import { approveListingReview, CONFIRMATION_KEYS, LICENSE_CONFIRMATION_KEYS, type ConfirmationKey, type ListingReview } from '@/api/sellerListingReview';
 
 export default function SellerApproval({review, active, rendered,disabled=false}: {review: ListingReview; active: boolean; rendered: boolean;disabled?:boolean}) {
   const [confirmed, setConfirmed] = useState<Partial<Record<ConfirmationKey, boolean>>>({});
@@ -20,7 +20,7 @@ export default function SellerApproval({review, active, rendered,disabled=false}
     if (!active) {controller.current?.abort();controller.current = null;setBusy(false);}
   }, [active]);
   const sampleDecision=review.sample_decision??'none';
-  const confirmationKeys:ConfirmationKey[]=[...CONFIRMATION_KEYS,...(sampleDecision==='member_files'?['sample_files_confirmed' as const]:[])];
+  const confirmationKeys:ConfirmationKey[]=[...(review.license_selection?LICENSE_CONFIRMATION_KEYS:CONFIRMATION_KEYS),...(sampleDecision==='member_files'?['sample_files_confirmed' as const]:[])];
   const ready = active && rendered && !disabled && (sampleDecision==='member_files'||noSample) && confirmationKeys.every(key => confirmed[key]) && !stale && !receipt;
   async function approve(event: React.FormEvent) {
     event.preventDefault();

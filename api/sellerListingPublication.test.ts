@@ -1,6 +1,7 @@
 import {beforeEach,expect,it,vi} from 'vitest';
 import {readPublication,publishListing,readPublicationPage,setPublicationVisibility} from './sellerListingPublication';
 import type {ApprovalReceipt} from './sellerListingReview';
+import {createStandardSelection} from './listingLicenses';
 const api=vi.hoisted(()=>({get:vi.fn(),post:vi.fn()}));vi.mock('./client',()=>({api}));
 const id='00000000-0000-4000-8000-000000000001';
 const approval={id,review_hash:'a'.repeat(64),render_hash:'b'.repeat(64)} as ApprovalReceipt;
@@ -11,6 +12,13 @@ it('publishes only the approval binding and stable request identity',async()=>{
   expect(await publishListing(approval,id,signal)).toEqual(receipt);
   expect(api.post).toHaveBeenCalledWith('/seller-workspace/listing-publication',{
     request_id:id,approval_id:id,review_hash:approval.review_hash,render_hash:approval.render_hash},{signal});
+});
+it('includes the exact approved licence selection when the capability is enabled',async()=>{
+  const license_selection={...createStandardSelection(),seller_acceptance:{signer_name:'Sam Seller',signer_title:'Director',authority_confirmed:true}};
+  api.post.mockResolvedValue({data:receipt});const signal=new AbortController().signal;
+  await publishListing({...approval,license_selection},id,signal);
+  expect(api.post).toHaveBeenCalledWith('/seller-workspace/listing-publication',{
+    request_id:id,approval_id:id,review_hash:approval.review_hash,render_hash:approval.render_hash,license_selection},{signal});
 });
 it('refuses a receipt from a different approved render',async()=>{
   api.get.mockResolvedValue({data:{publication_available:true,publication:{...receipt,render_hash:'c'.repeat(64)}}});

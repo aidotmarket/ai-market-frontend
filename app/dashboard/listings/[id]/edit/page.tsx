@@ -6,6 +6,8 @@ import { getListing, updateListing, unpublishListing, publishListing } from '@/a
 import { useToast } from '@/components/Toast';
 import SellerAtAGlance from '@/components/listings/SellerAtAGlance';
 import SellerShareControls from '@/components/listings/SellerShareControls';
+import SellerLicenseSelection from '@/components/seller-workspace/SellerLicenseSelection';
+import {createStandardSelection,isCompleteLicenseSelection,type LicenseSelection} from '@/api/listingLicenses';
 
 const CATEGORIES = ['Finance', 'Healthcare', 'Technology', 'Real Estate', 'Government', 'Marketing'];
 const FORMATS = ['csv', 'parquet', 'json', 'xlsx', 'other'];
@@ -52,11 +54,16 @@ export default function EditListingPage() {
     status: 'draft',
   });
   const [tagInput, setTagInput] = useState('');
+  const [listingLicensesEnabled, setListingLicensesEnabled] = useState(false);
+  const [licenseSelection, setLicenseSelection] = useState<LicenseSelection>(createStandardSelection());
 
   const fetchListing = useCallback(async () => {
     try {
       const res = await getListing(id);
       const l = res as any;
+      const licensesEnabled = l.listing_licenses_enabled === true || l.capabilities?.listing_licenses_enabled === true;
+      setListingLicensesEnabled(licensesEnabled);
+      if (licensesEnabled && l.license_selection) setLicenseSelection(l.license_selection);
       setListingSlug(typeof l.slug === 'string' ? l.slug : undefined);
       setData({
         title: l.title || '',
@@ -120,6 +127,7 @@ export default function EditListingPage() {
         source_row_count: data.source_row_count,
         compliance_frameworks: data.compliance_frameworks,
         compliance_notes: data.compliance_notes,
+        ...(listingLicensesEnabled ? {license_selection: licenseSelection} : {}),
       });
       setSummaryRevision(value => value + 1);
       toast('Listing saved', 'success');
@@ -146,7 +154,8 @@ export default function EditListingPage() {
   const handlePublish = async () => {
     setSaving(true);
     try {
-      await publishListing(id);
+      if (listingLicensesEnabled) await publishListing(id, licenseSelection);
+      else await publishListing(id);
       toast('Listing published', 'success');
       setData((prev) => ({ ...prev, status: 'published' }));
     } catch (err: any) {
@@ -368,6 +377,8 @@ export default function EditListingPage() {
         </div>
       </div>
 
+      {listingLicensesEnabled && <SellerLicenseSelection value={licenseSelection} onChange={setLicenseSelection} disabled={saving} />}
+
       <SellerAtAGlance listingId={id} slug={listingSlug} active={!saving} revision={summaryRevision} />
 
       {/* Actions */}
@@ -388,7 +399,7 @@ export default function EditListingPage() {
           {data.status === 'unlisted' && (
             <button
               onClick={handlePublish}
-              disabled={saving}
+              disabled={saving || (listingLicensesEnabled && !isCompleteLicenseSelection(licenseSelection))}
               className="rounded-lg border border-yellow-300 px-4 py-2 text-sm font-medium text-yellow-700 hover:bg-yellow-50 disabled:opacity-50"
             >
               Publish

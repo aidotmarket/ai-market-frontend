@@ -1,6 +1,7 @@
 import { createHash, webcrypto } from 'node:crypto';
 import { afterEach, beforeEach, expect, it, vi } from 'vitest';
 import { readListingReview, readReviewSourcePage, approveListingReview, type ListingReview } from './sellerListingReview';
+import {createStandardSelection} from './listingLicenses';
 const client = vi.hoisted(() => ({get:vi.fn(),post:vi.fn()}));
 vi.mock('./client', () => ({api:client}));
 const html = '<!doctype html><html><body>Regional retail — $25.00</body></html>';
@@ -47,6 +48,17 @@ it('sends the v2 member-file confirmation and ordered indices',async()=>{
  client.post.mockResolvedValue({data:receipt});
  await approveListingReview(prepared,'request-id',new AbortController().signal);
  expect(client.post.mock.calls[0][1]).toMatchObject({confirmation_version:'seller-listing-confirmation-v2',sample_decision:'member_files',sample_object_indices:[1,4],sample_files_confirmed:true});
+});
+it('replaces the combined price/license checkbox with explicit licence and covenant facts',async()=>{
+ const selection={...createStandardSelection(),seller_acceptance:{signer_name:'Sam Seller',signer_title:'Director',authority_confirmed:true}};
+ const prepared={...review,review_hash:'c'.repeat(64),draft_version:1,source_version:2,confirmation_version:'seller-listing-confirmation-v3' as const,
+  sample_decision:'none' as const,license_selection:selection} as ListingReview;
+ const receipt={id:'approval',review_hash:prepared.review_hash,render_hash:prepared.render_hash,draft_version:1,source_version:2,sample_decision:'none'};
+ client.post.mockResolvedValue({data:receipt});
+ expect((await approveListingReview(prepared,'request-id',new AbortController().signal)).license_selection).toEqual(selection);
+ const body=client.post.mock.calls[0][1];
+ expect(body).toMatchObject({price_confirmed:true,license_confirmed:true,covenant_authority_confirmed:true,license_selection:selection});
+ expect(body).not.toHaveProperty('price_license_confirmed');
 });
 it('uses the last persisted sample selection in the approval payload',async()=>{
  const prepared={...review,review_hash:'c'.repeat(64),draft_version:1,source_version:2,confirmation_version:'seller-listing-confirmation-v2' as const,

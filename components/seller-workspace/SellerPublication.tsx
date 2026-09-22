@@ -4,6 +4,7 @@ import SellerAtAGlance from '@/components/listings/SellerAtAGlance';
 import axios from 'axios';
 import {readPublication,publishListing,type PublicationState} from '@/api/sellerListingPublication';
 import type {ApprovalReceipt} from '@/api/sellerListingReview';
+import {isCompleteLicenseSelection} from '@/api/listingLicenses';
 export default function SellerPublication({approval,active,rendered,sampleCount=0}:{approval:ApprovalReceipt;active:boolean;rendered:boolean;sampleCount?:number}) {
   const [state,setState]=useState<PublicationState|null>(null);
   const [busy,setBusy]=useState(false);
@@ -23,7 +24,8 @@ export default function SellerPublication({approval,active,rendered,sampleCount=
   useEffect(()=>()=>{action.current?.abort();},[]);
   useEffect(()=>{if (!active) {action.current?.abort();action.current=null;setBusy(false);}},[active]);
   async function publish() {
-    if (!active || !rendered || !state?.publication_available || state.publication || stale || action.current) return;
+    if (!active || !rendered || !state?.publication_available || state.publication || stale || action.current ||
+      (approval.license_selection && !isCompleteLicenseSelection(approval.license_selection))) return;
     const request=new AbortController();action.current=request;identity.current ??= crypto.randomUUID();
     setBusy(true);setError('');
     try {
@@ -37,6 +39,7 @@ export default function SellerPublication({approval,active,rendered,sampleCount=
     } finally {if (action.current===request) {action.current=null;setBusy(false);}}
   }
   const publication=state?.publication;
+  const licenseReady=!approval.license_selection||isCompleteLicenseSelection(approval.license_selection);
   return <section aria-label="Publish approved listing" className="space-y-4 rounded-xl border border-indigo-200 bg-white p-5">
     <h3 className="text-lg font-semibold text-gray-900">Publish your listing</h3>
     {!state && !error && <p role="status" className="text-sm text-gray-600">Checking publication status…</p>}
@@ -44,8 +47,9 @@ export default function SellerPublication({approval,active,rendered,sampleCount=
       {approval.sample_decision==='member_files'&&<p className="text-sm text-gray-700">{sampleCount===0?'No free sample files':`${sampleCount} free sample ${sampleCount===1?'file is':'files are'} part of the purchased set.`}</p>}
       <a href={`/listings/${encodeURIComponent(publication.slug)}`} className="inline-block text-sm font-medium text-indigo-700 underline">View {publication.title}</a>
       {publication.listing_id && <SellerAtAGlance listingId={publication.listing_id} slug={publication.slug} active={active} />}</> : state && <>
-      <p className="text-sm leading-6 text-gray-700">Your approved listing is private. Publishing makes the approved description, tags, price and license public. The files stay in your storage.</p>
-      {state.publication_available ? <button type="button" onClick={publish} disabled={busy || !active || !rendered || stale} className="rounded-lg bg-indigo-700 px-4 py-2.5 text-sm font-semibold text-white disabled:opacity-50">{busy?'Publishing…':'Publish this listing'}</button>:
+      <p className="text-sm leading-6 text-gray-700">Your approved listing is private. Publishing makes the approved description, tags, price and licence public. The files stay in your storage.</p>
+      {approval.license_selection&&<p className="text-sm text-gray-700">{approval.license_selection.kind==='standard'?'Standard (recommended)':'My own licence'} · AI/ML training {approval.license_selection.ai_training?'allowed':'not allowed'} · covenant and authority {approval.license_selection.seller_acceptance.authority_confirmed?'confirmed':'not confirmed'}</p>}
+      {state.publication_available ? <button type="button" onClick={publish} disabled={busy || !active || !rendered || stale || !licenseReady} className="rounded-lg bg-indigo-700 px-4 py-2.5 text-sm font-semibold text-white disabled:opacity-50">{busy?'Publishing…':'Publish this listing'}</button>:
         <p className="text-sm text-gray-600">Publication is not available in this Workspace yet. Your approval is saved.</p>}
     </>}
     {error && <p role="alert" className="text-sm text-red-800">{error}</p>}

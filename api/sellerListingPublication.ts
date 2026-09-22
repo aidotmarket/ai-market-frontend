@@ -24,6 +24,7 @@ export async function readPublication(approval:ApprovalReceipt,signal:AbortSigna
 export async function publishListing(approval:ApprovalReceipt,request_id:string,signal:AbortSignal):Promise<PublicationReceipt> {
   const receipt=(await api.post('/seller-workspace/listing-publication',{
     request_id,approval_id:approval.id,review_hash:approval.review_hash,render_hash:approval.render_hash,
+    ...(approval.license_selection ? {license_selection:approval.license_selection} : {}),
   },{signal})).data;
   signal.throwIfAborted();return validateReceipt(receipt,approval);
 }

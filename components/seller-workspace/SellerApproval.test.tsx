@@ -3,6 +3,7 @@ import { act, cleanup, fireEvent, render, screen } from '@testing-library/react'
 import { afterEach, beforeEach, expect, it, vi } from 'vitest';
 import SellerApproval from './SellerApproval';
 import type { ListingReview } from '@/api/sellerListingReview';
+import {createStandardSelection} from '@/api/listingLicenses';
 vi.mock('./SellerPublication', () => ({default:()=>null}));
 const api = vi.hoisted(() => ({approveListingReview:vi.fn()}));
 vi.mock('@/api/sellerListingReview', async original => ({...await original<typeof import('@/api/sellerListingReview')>(),...api}));
@@ -68,4 +69,10 @@ it('keeps the v1 markup unchanged when explicit none fields arrive',()=>{
  const explicit={...review,sample_decision:'none' as const,sample_object_indices:[],sample_status:'not_selected' as const};
  const second=render(<SellerApproval review={explicit} active rendered/>);
  expect(second.container.innerHTML).toBe(legacy);
+});
+it('uses separate price, licence and covenant authority confirmations for a licensed review',()=>{
+ const licensed={...review,confirmation_version:'seller-listing-confirmation-v3' as const,license_selection:createStandardSelection(),confirmation_statements:{ownership_confirmed:'Ownership',privacy_confirmed:'Privacy',price_confirmed:'Price',license_confirmed:'Licence',covenant_authority_confirmed:'Covenant authority',public_disclosure_confirmed:'Disclosure'}};
+ render(<SellerApproval review={licensed} active rendered/>);
+ expect(screen.getByText('Price')).toBeTruthy();expect(screen.getByText('Licence')).toBeTruthy();expect(screen.getByText('Covenant authority')).toBeTruthy();
+ expect(screen.queryByText('I confirm price and license.')).toBeNull();expect(screen.getAllByRole('checkbox')).toHaveLength(7);
 });

@@ -3,6 +3,7 @@ import { act, cleanup, fireEvent, render, screen, waitFor, within } from '@testi
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { SAMPLE_REFUSALS, sampleUploadRefusal, WorkspaceActivity, WorkspaceData } from './WorkspaceData';
 import type { SellerWorkspaceConnection, WorkspaceProfileJob } from '@/api/sellerWorkspace';
+import {createStandardSelection} from '@/api/listingLicenses';
 
 const api = vi.hoisted(() => ({
   listWorkspaceObjects: vi.fn(), listWorkspaceProfileJobs: vi.fn(),
@@ -143,6 +144,16 @@ describe('Seller data browser', () => {
     fireEvent.change(screen.getByLabelText(/Upload sample one.csv/),{target:{files:[new File([new Uint8Array(1024)],'one.csv')]}});
     expect((await screen.findByRole('alert')).textContent).toContain('sample_route_unavailable');
     expect(feature.container.querySelector('[aria-label="Workspace sample files"]')).toBeTruthy();
+  });
+
+  it('keeps licence UI byte-hidden when its capability is absent and shows exactly two cards when enabled',async()=>{
+    api.listWorkspaceObjects.mockResolvedValue({objects:[object],next_cursor:null});
+    const props={enabled:true,connections:[connection]};
+    const dark=render(<WorkspaceData {...props}/>);await screen.findByText(object.key);const darkMarkup=dark.container.innerHTML;dark.unmount();
+    const explicitDark=render(<WorkspaceData {...props} licenseSelection={undefined}/>);await screen.findByText(object.key);
+    expect(explicitDark.container.innerHTML).toBe(darkMarkup);expect(screen.queryByText('How can buyers use this data?')).toBeNull();explicitDark.unmount();
+    render(<WorkspaceData {...props} licenseSelection={createStandardSelection()} onLicenseSelectionChange={vi.fn()}/>);await screen.findByText(object.key);
+    expect(screen.getByText('How can buyers use this data?')).toBeTruthy();expect(screen.getAllByRole('radio')).toHaveLength(2);
   });
 
   it('does not place a full object key in new sample attributes',async()=>{

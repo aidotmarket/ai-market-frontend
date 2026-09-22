@@ -4,6 +4,8 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import axios from 'axios';
 import {MAX_SELECTION_FILES,FolderSelectionError,mergeSelection,resolveFolder} from './folderSelection';
 import type { SourceRead } from '@/api/sellerListingSource';
+import type {LicenseSelection} from '@/api/listingLicenses';
+import SellerLicenseSelection from './SellerLicenseSelection';
 import {
   cancelWorkspaceProfileJob, createIdempotencyKey, getWorkspaceProfileEvidence,
   listWorkspaceObjects, listWorkspaceProfileJobs,
@@ -30,8 +32,10 @@ export function WorkspaceNotice({ title, children }: { title: string; children: 
 type SaveSelection = (connection: SellerWorkspaceConnection, objects: WorkspaceObject[]) => Promise<void>;
 type SaveSampleSelection=(indices:number[])=>Promise<void>;
 export function WorkspaceData({ connections, enabled, savedSource, onSaveSelection, saving = false,
-  sampleFilesAvailable=false,initialSampleIndices=[],onSaveSampleSelection,onVisibleSampleSelectionChange,sampleLimits=DEFAULT_LIMITS }: { connections: SellerWorkspaceConnection[]; enabled: boolean; savedSource?: SourceRead | null; onSaveSelection?: SaveSelection; saving?: boolean;
-  sampleFilesAvailable?:boolean;initialSampleIndices?:number[];onSaveSampleSelection?:SaveSampleSelection;onVisibleSampleSelectionChange?:(indices:number[]|null)=>void;sampleLimits?:SampleLimits }) {
+  sampleFilesAvailable=false,initialSampleIndices=[],onSaveSampleSelection,onVisibleSampleSelectionChange,sampleLimits=DEFAULT_LIMITS,
+  licenseSelection,onLicenseSelectionChange,onSaveLicenseSelection,licenseSaving=false }: { connections: SellerWorkspaceConnection[]; enabled: boolean; savedSource?: SourceRead | null; onSaveSelection?: SaveSelection; saving?: boolean;
+  sampleFilesAvailable?:boolean;initialSampleIndices?:number[];onSaveSampleSelection?:SaveSampleSelection;onVisibleSampleSelectionChange?:(indices:number[]|null)=>void;sampleLimits?:SampleLimits;
+  licenseSelection?:LicenseSelection;onLicenseSelectionChange?:(value:LicenseSelection)=>void;onSaveLicenseSelection?:()=>Promise<void>;licenseSaving?:boolean }) {
   const verified = connections.filter((connection) => connection.status === 'verified');
   const [selectedId, setSelectedId] = useState(savedSource?.content.connection_id ?? '');
   const selected = verified.find((connection) => connection.id === selectedId) ?? verified[0];
@@ -51,6 +55,8 @@ export function WorkspaceData({ connections, enabled, savedSource, onSaveSelecti
       <ObjectBrowser key={`${selected.id}:${selected.version}`} connection={selected} onSaveSelection={onSaveSelection} initialSelection={savedSource?.connection_current && savedSource.content.connection_id === selected.id && savedSource.content.connection_version === selected.version ? savedSource.content.objects.map(item => ({...item, last_modified: '', format_candidate: 'unknown'})) : undefined}
         sourceVersion={savedSource?.version} sampleFilesAvailable={sampleFilesAvailable} initialSampleIndices={initialSampleIndices}
         onSaveSampleSelection={onSaveSampleSelection} onVisibleSampleSelectionChange={onVisibleSampleSelectionChange} sampleLimits={sampleLimits} />
+      {licenseSelection && onLicenseSelectionChange && <div className="space-y-3"><SellerLicenseSelection value={licenseSelection} onChange={onLicenseSelectionChange} disabled={licenseSaving} />
+        {onSaveLicenseSelection && <button type="button" disabled={licenseSaving} onClick={()=>void onSaveLicenseSelection()} className={buttonClass}>{licenseSaving?'Saving licence choice…':'Save licence choice'}</button>}</div>}
     </section>
   );
 }

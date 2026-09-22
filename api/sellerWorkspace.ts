@@ -29,6 +29,8 @@ export interface SellerWorkspaceCapabilities {
   approval?: CapabilityStage | null;
   /** Backend ba3889064106cd2c4c815a69a25ba7b9bbb3b3d4 omits this flag-off and emits CapabilityStage flag-on. */
   samples?: CapabilityStage | null;
+  /** Present only when the backend LISTING_LICENSES_ENABLED capability is on. */
+  listing_licenses?: CapabilityStage | null;
   providers: {
     aws: ProviderCapabilities;
     r2: ProviderCapabilities;

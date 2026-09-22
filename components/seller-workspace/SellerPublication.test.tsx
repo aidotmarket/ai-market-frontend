@@ -3,6 +3,7 @@ import {act,cleanup,fireEvent,render,screen} from '@testing-library/react';
 import {afterEach,beforeEach,expect,it,vi} from 'vitest';
 import SellerPublication from './SellerPublication';
 import type {ApprovalReceipt} from '@/api/sellerListingReview';
+import {createStandardSelection} from '@/api/listingLicenses';
 const api=vi.hoisted(()=>({readPublication:vi.fn(),publishListing:vi.fn()}));
 vi.mock('@/api/sellerListingPublication',()=>api);
 const approval={id:'approval',review_hash:'a',render_hash:'b'} as ApprovalReceipt;
@@ -60,4 +61,11 @@ it('keeps none-publication markup unchanged with the widened receipt',async()=>{
  const legacy=first.container.innerHTML;first.unmount();
  const second=render(<SellerPublication approval={{...approval,sample_decision:'none'}} active rendered/>);await screen.findByText(/published and available/);
  expect(second.container.innerHTML).toBe(legacy);
+});
+it('keeps publish disabled until covenant authority and signer facts are complete',async()=>{
+ const licensed={...approval,license_selection:createStandardSelection()};
+ render(<SellerPublication approval={licensed} active rendered/>);
+ const button=await screen.findByRole('button',{name:'Publish this listing'});
+ expect((button as HTMLButtonElement).disabled).toBe(true);fireEvent.click(button);expect(api.publishListing).not.toHaveBeenCalled();
+ expect(screen.getByText(/covenant and authority not confirmed/)).toBeTruthy();
 });
