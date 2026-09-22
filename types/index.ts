@@ -308,6 +308,21 @@ export interface ListingVersion {
   status: ListingVersionStatus;
 }
 
+export interface ListingLicenseDetails {
+  code: 'standard' | 'custom';
+  version: string;
+  params: {
+    ai_training: boolean;
+    source_sha256?: string;
+  };
+  summary: string[];
+  full_text_url: string;
+  download_url: string;
+  sha256: string;
+  covenant_sha256: string;
+  rider_sha256: string | null;
+}
+
 export interface ListingDetail {
   at_a_glance?: import('@/lib/api').ListingSummary | null;
   approved_presentation?: {presentation_version: 'seller-listing-review-v2'; rendered_html: string; render_hash: string};
@@ -325,7 +340,7 @@ export interface ListingDetail {
     pricing_type: PricingType;
     subscription_price_monthly: number | null;
   };
-  license: string | null;
+  license: string | ListingLicenseDetails | null;
   category: string;
   secondary_categories: string[] | null;
   tags: string[];
@@ -479,6 +494,7 @@ export interface SellerOrder {
   paid_at: string | null;
   delivered_at: string | null;
   completed_at: string | null;
+  license_record_available?: boolean;
 }
 
 // ============================================================================
@@ -573,6 +589,25 @@ export interface CheckoutCreateRequest {
   version_id?: string;
   success_url?: string;
   cancel_url?: string;
+  accept_license_sha256?: string;
+  accept_covenant_sha256?: string;
+  accept_rider_sha256?: string | null;
+  authority_confirmed?: boolean;
+  typed_name?: string;
+  signer_title?: string;
+  business_legal_name?: string;
+  jurisdiction?: string;
+}
+
+export interface LicenseAcceptanceFields {
+  accept_license_sha256: string;
+  accept_covenant_sha256: string;
+  accept_rider_sha256: string | null;
+  authority_confirmed: true;
+  typed_name: string;
+  signer_title: string;
+  business_legal_name: string;
+  jurisdiction: string;
 }
 
 export interface CheckoutCreateResponse {
@@ -613,6 +648,43 @@ export interface BuyerOrder {
   access_expired?: boolean;
   purchased_version?: PurchasedVersion | null;
   newer_version_available?: boolean;
+  license_record_available?: boolean;
+}
+
+export interface LicenseRecordParty {
+  legal_name: string;
+  jurisdiction: string;
+}
+
+export interface LicenseRecordDocument {
+  title: string;
+  text?: string | null;
+  download_url?: string | null;
+  sha256: string;
+}
+
+export interface LicenseRecord {
+  order_id: string;
+  listing_id: string;
+  listing_version_id?: string | null;
+  listing_title: string;
+  accepted_at: string;
+  status: 'active' | 'terminated';
+  channel: string;
+  typed_name?: string | null;
+  signer_title?: string | null;
+  principal_ref?: string | null;
+  buyer: LicenseRecordParty;
+  seller: LicenseRecordParty;
+  license: LicenseRecordDocument;
+  covenant: LicenseRecordDocument;
+  rider?: LicenseRecordDocument | null;
+  delivered_versions?: Array<{ id: string; label?: string | null; delivered_at?: string | null }>;
+  terminated_at?: string | null;
+  terminated_reason?: string | null;
+  deletion_due_at?: string | null;
+  deletion_confirmed_at?: string | null;
+  deletion_confirmation_available?: boolean;
 }
 
 export interface BuyerOrderDetail extends BuyerOrder {

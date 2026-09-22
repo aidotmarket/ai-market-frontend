@@ -6,6 +6,7 @@ import { getCapabilities } from '@/api/capabilities';
 import { getSellerOrders, type SellerOrderListParams } from '@/api/seller';
 import { formatDate, formatPrice } from '@/lib/format';
 import type { SellerOrder, SellerOrderStatus } from '@/types';
+import Link from 'next/link';
 
 type SalesFilter = 'pending_delivery' | 'all' | 'delivered' | 'completed';
 
@@ -281,7 +282,10 @@ function SalesPageContent() {
               <tbody className="divide-y divide-gray-100">
                 {rows.map((order) => (
                   <tr key={order.id} className="hover:bg-gray-50">
-                    <td className="px-4 py-3 font-mono text-xs text-gray-700">{order.order_number}</td>
+                    <td className="px-4 py-3 font-mono text-xs text-gray-700">
+                      {order.order_number}
+                      {order.license_record_available && <Link href={`/dashboard/orders/${order.id}/license-record`} className="mt-2 block font-sans text-sm font-medium text-[#3F51B5] underline">Licence record</Link>}
+                    </td>
                     <td className="px-4 py-3 text-gray-900">{order.listing_title}</td>
                     <td className="px-4 py-3 font-medium text-gray-900">{formatPrice(order.amount_cents / 100)}</td>
                     <td className="px-4 py-3 font-medium text-gray-900">{formatPrice(order.seller_amount_cents / 100)}</td>
@@ -304,6 +308,7 @@ function SalesPageContent() {
                   <div><dt className="font-medium text-gray-500">Status</dt><dd>{renderStatus(order)}</dd></div>
                   <div><dt className="font-medium text-gray-500">Paid</dt><dd className="text-gray-900">{renderPaid(order)}</dd></div>
                 </dl>
+                {order.license_record_available && <Link href={`/dashboard/orders/${order.id}/license-record`} className="mt-4 inline-block text-sm font-medium text-[#3F51B5] underline">Licence record</Link>}
               </article>
             ))}
           </div>

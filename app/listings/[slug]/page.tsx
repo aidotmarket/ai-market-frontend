@@ -19,6 +19,7 @@ import ScanFindingsBadge from '@/components/listings/ScanFindingsBadge';
 import ReactMarkdown from 'react-markdown';
 import rehypeSanitize from 'rehype-sanitize';
 import SampleFiles, { type ListingWithSamples } from './SampleFiles';
+import ListingLicenseDisclosure, { isListingLicenseDetails } from '@/components/ListingLicenseDisclosure';
 
 export const dynamic = 'force-dynamic';
 
@@ -98,6 +99,8 @@ export default async function ListingDetailPage({ params, searchParams }: Props)
   const rowCount = listing.row_count;
   const shouldEmitJsonLd = shouldEmitDatasetJsonLd(listing);
   const publisherName = listing.publisher.display_name;
+  const licenseDetails = isListingLicenseDetails(listing.license) ? listing.license : undefined;
+  const legacyLicense = typeof listing.license === 'string' ? listing.license : null;
   const versions = await fetchListingVersions(listing.id);
   const hasVersionRows = versions.length > 0;
   // S1097: legacy listings intentionally keep byte-identical rendering and omit
@@ -180,6 +183,8 @@ export default async function ListingDetailPage({ params, searchParams }: Props)
             {listing.verification_scope != null && <p className="text-sm text-gray-600">{listing.verification_scope}</p>}
           </>}
 
+          {licenseDetails && <ListingLicenseDisclosure license={licenseDetails} />}
+
           <SampleFiles files={listing.sample_files ?? approved?.sample_files} />
 
           {/* Schema Info */}
@@ -217,7 +222,8 @@ export default async function ListingDetailPage({ params, searchParams }: Props)
                 pricingType={listing.pricing.pricing_type}
                 versions={versions}
                 accessWindowDays={accessWindowDays}
-                license={listing.license}
+                license={legacyLicense}
+                licenseDetails={licenseDetails}
                 dataFormat={listing.data_format}
                 fulfillmentType={listing.fulfillment_type}
                 initialVersionId={requestedVersionId}
@@ -228,7 +234,8 @@ export default async function ListingDetailPage({ params, searchParams }: Props)
                 slug={listing.slug}
                 price={listing.pricing.price}
                 pricingType={listing.pricing.pricing_type}
-                license={listing.license}
+                license={legacyLicense}
+                licenseDetails={licenseDetails}
                 dataFormat={listing.data_format}
                 fulfillmentType={listing.fulfillment_type}
               />
@@ -251,10 +258,10 @@ export default async function ListingDetailPage({ params, searchParams }: Props)
                   {listing.trust_level}
                 </span>
               </div>
-              {listing.license && (
+              {legacyLicense && (
                 <div className="flex justify-between items-center gap-4">
                   <span className="text-sm text-gray-600">License</span>
-                  <span className="text-sm font-medium text-gray-900 text-right">{listing.license}</span>
+                  <span className="text-sm font-medium text-gray-900 text-right">{legacyLicense}</span>
                 </div>
               )}
             </div>

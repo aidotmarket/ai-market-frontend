@@ -62,5 +62,20 @@ describe('OrdersListPage Purchases heading', () => {
     expect(screen.getAllByText('Buyer purchase fixture')).toHaveLength(2);
     expect(screen.queryByText('Seller sale fixture')).toBeNull();
     expect(ordersApi.getMyOrders).toHaveBeenCalledOnce();
+    expect(screen.queryByRole('link', { name: 'Licence record' })).toBeNull();
+  });
+
+  it('links the buyer licence record only when the backend exposes it', async () => {
+    ordersApi.getMyOrders.mockResolvedValue([{
+      id: 'purchase-license', listing_id: 'listing-1', listing_title: 'Licensed data', seller_name: 'Seller',
+      amount: 12, status: 'fulfilled', created_at: '2026-09-22T00:00:00Z', updated_at: null,
+      license_record_available: true,
+    }]);
+
+    render(<OrdersListPage />);
+
+    const links = await screen.findAllByRole('link', { name: 'Licence record' });
+    expect(links).toHaveLength(2);
+    expect(links[0].getAttribute('href')).toBe('/dashboard/orders/purchase-license/license-record');
   });
 });

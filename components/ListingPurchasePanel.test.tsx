@@ -2,6 +2,7 @@ import React from 'react';
 import { renderToStaticMarkup } from 'react-dom/server';
 import { describe, expect, it } from 'vitest';
 import { VersionSelector, selectDefaultVersion, sortVersions } from './ListingPurchasePanel';
+import { hashLicenseComponentBytes } from './ListingLicenseDisclosure';
 import type { ListingVersion } from '@/types';
 
 const versions: ListingVersion[] = [
@@ -73,5 +74,15 @@ describe('VersionSelector', () => {
 
     expect(selected?.version_label).toBe('v1');
     expect(selected?.status).toBe('superseded');
+  });
+});
+
+describe('licence byte hashing', () => {
+  it('hashes the fetched bytes inside the domain-separated licence construction', async () => {
+    const digest = await hashLicenseComponentBytes(new TextEncoder().encode('exact fetched bytes\n'), {
+      kind: 'license', code: 'standard', version: '1.0', params: { ai_training: true },
+    });
+
+    expect(digest).toBe('29d65b88da1372f457795712848a16374c3f308147ac93cecae2f16b17fc35e3');
   });
 });

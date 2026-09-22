@@ -1,11 +1,16 @@
 import { api } from './client';
-import type { CheckoutCreateResponse, CheckoutVerifyResponse } from '@/types';
+import type { CheckoutCreateResponse, CheckoutVerifyResponse, LicenseAcceptanceFields } from '@/types';
 
-export async function createCheckout(listingId: string, versionId?: string): Promise<CheckoutCreateResponse> {
+export async function createCheckout(
+  listingId: string,
+  versionId?: string,
+  acceptance?: LicenseAcceptanceFields,
+): Promise<CheckoutCreateResponse> {
   const frontendUrl = typeof window !== 'undefined' ? window.location.origin : '';
   const res = await api.post<CheckoutCreateResponse>('/checkout/create', {
     listing_id: listingId,
     ...(versionId ? { version_id: versionId } : {}),
+    ...(acceptance ?? {}),
     success_url: `${frontendUrl}/checkout/success?session_id={CHECKOUT_SESSION_ID}`,
     cancel_url: `${frontendUrl}/checkout/cancel`,
   });

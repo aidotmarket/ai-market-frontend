@@ -3,7 +3,7 @@
 import { useMemo, useState } from 'react';
 import BuyButton from '@/components/BuyButton';
 import { formatDate } from '@/lib/format';
-import type { ListingVersion } from '@/types';
+import type { ListingLicenseDetails, ListingVersion } from '@/types';
 
 interface ListingPurchasePanelProps {
   listingId: string;
@@ -14,6 +14,7 @@ interface ListingPurchasePanelProps {
   versions: ListingVersion[];
   accessWindowDays: number | null;
   license?: string | null;
+  licenseDetails?: ListingLicenseDetails;
   dataFormat?: string | null;
   fulfillmentType?: string | null;
   initialVersionId?: string | null;
@@ -28,6 +29,7 @@ export default function ListingPurchasePanel({
   versions,
   accessWindowDays,
   license,
+  licenseDetails,
   dataFormat,
   fulfillmentType,
   initialVersionId,
@@ -68,6 +70,7 @@ export default function ListingPurchasePanel({
           versionLabel={selectedVersion?.status === 'active' ? selectedVersion.version_label : undefined}
           accessWindowDays={accessWindowDays}
           license={license}
+          licenseDetails={licenseDetails}
           dataFormat={dataFormat}
           fulfillmentType={fulfillmentType}
           disabledReason={disabledReason}

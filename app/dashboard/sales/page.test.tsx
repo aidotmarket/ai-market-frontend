@@ -174,6 +174,16 @@ describe('SalesPage', () => {
     expect(screen.queryByText(/Mark Delivered|Deliver now|Upload/)).toBeNull();
   });
 
+  it('links the seller licence record only when exposed by the backend', async () => {
+    sellerApi.getSellerOrders.mockResolvedValue({ data: [sellerOrder({ license_record_available: true })] });
+
+    render(<SalesPage />);
+
+    const links = await screen.findAllByRole('link', { name: 'Licence record' });
+    expect(links).toHaveLength(2);
+    expect(links[0].getAttribute('href')).toBe('/dashboard/orders/sale-1/license-record');
+  });
+
   it('keeps needs_action informational', async () => {
     vi.useFakeTimers({ toFake: ['Date'] });
     vi.setSystemTime(new Date('2026-08-20T15:00:00Z'));

@@ -177,6 +177,11 @@ export default function OrdersListPage() {
                     ) : (
                       <span className="text-xs text-gray-400"> - </span>
                     )}
+                    {order.license_record_available && (
+                      <Link href={`/dashboard/orders/${order.id}/license-record`} className="mt-2 block text-sm font-medium text-[#3F51B5] hover:underline">
+                        Licence record
+                      </Link>
+                    )}
                   </td>
                   <td className="px-4 py-3 text-gray-500">{formatDate(order.created_at)}</td>
                   <td className="px-4 py-3">
@@ -205,8 +210,8 @@ export default function OrdersListPage() {
         {orders.map((order) => {
           const tx = Object.values(txMap).find((t) => t.listing_title === order.listing_title);
           return (
+            <div key={order.id}>
             <Link
-              key={order.id}
               href={`/dashboard/orders/${order.id}`}
               className="block rounded-lg border border-gray-200 p-4 hover:bg-gray-50"
             >
@@ -233,6 +238,12 @@ export default function OrdersListPage() {
                 <p className="mt-3 text-sm font-medium text-red-700">Download window expired</p>
               )}
             </Link>
+            {order.license_record_available && (
+              <Link href={`/dashboard/orders/${order.id}/license-record`} className="mt-1 block px-4 py-2 text-sm font-medium text-[#3F51B5] underline">
+                Licence record
+              </Link>
+            )}
+            </div>
           );
         })}
       </div>

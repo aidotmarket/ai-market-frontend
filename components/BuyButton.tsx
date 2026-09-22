@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useRef, useCallback } from 'react';
 import Link from 'next/link';
 import { useAuthStore } from '@/store/auth';
 import { useToast } from '@/components/Toast';
@@ -8,8 +8,9 @@ import { createCheckout } from '@/api/checkout';
 import { getMyOrders } from '@/api/orders';
 import { formatPrice } from '@/lib/format';
 import { useTermsGate } from '@/components/legal/TermsGate';
-import type { BuyerOrder } from '@/types';
+import type { BuyerOrder, LicenseAcceptanceFields, ListingLicenseDetails } from '@/types';
 import { AxiosError } from 'axios';
+import ListingLicenseDisclosure from '@/components/ListingLicenseDisclosure';
 
 interface BuyButtonProps {
   listingId: string;
@@ -21,6 +22,7 @@ interface BuyButtonProps {
   versionLabel?: string;
   accessWindowDays?: number | null;
   license?: string | null;
+  licenseDetails?: ListingLicenseDetails;
   dataFormat?: string | null;
   fulfillmentType?: string | null;
   disabledReason?: string;
@@ -36,6 +38,7 @@ export default function BuyButton({
   versionLabel,
   accessWindowDays,
   license,
+  licenseDetails,
   dataFormat,
   fulfillmentType,
   disabledReason,
@@ -45,8 +48,22 @@ export default function BuyButton({
   const [loading, setLoading] = useState(false);
   const [purchasedOrder, setPurchasedOrder] = useState<BuyerOrder | null>(null);
   const [checkingPurchase, setCheckingPurchase] = useState(false);
+  const [typedName, setTypedName] = useState('');
+  const [signerTitle, setSignerTitle] = useState('');
+  const [businessLegalName, setBusinessLegalName] = useState('');
+  const [jurisdiction, setJurisdiction] = useState('');
+  const [authorityConfirmed, setAuthorityConfirmed] = useState(false);
+  const [licenseVerified, setLicenseVerified] = useState(false);
+  const [checkoutRefusal, setCheckoutRefusal] = useState<CheckoutRefusal | null>(null);
   const inflightRef = useRef<string | null>(null);
   const { ensureTermsAccepted, TermsGatePrompt, checkingTerms } = useTermsGate();
+  const handleVerificationChange = useCallback((verified: boolean) => setLicenseVerified(verified), []);
+
+  useEffect(() => {
+    setAuthorityConfirmed(false);
+    setLicenseVerified(false);
+    setCheckoutRefusal(null);
+  }, [licenseDetails?.sha256, licenseDetails?.covenant_sha256, licenseDetails?.rider_sha256]);
 
   // Check if user already purchased this listing
   useEffect(() => {
@@ -130,7 +147,17 @@ export default function BuyButton({
     inflightRef.current = inflightKey;
 
     try {
-      const { checkout_url } = await createCheckout(listingId, versionId);
+      const acceptance: LicenseAcceptanceFields | undefined = licenseDetails ? {
+        accept_license_sha256: licenseDetails.sha256,
+        accept_covenant_sha256: licenseDetails.covenant_sha256,
+        accept_rider_sha256: licenseDetails.rider_sha256,
+        authority_confirmed: true,
+        typed_name: typedName.trim(),
+        signer_title: signerTitle.trim(),
+        business_legal_name: businessLegalName.trim(),
+        jurisdiction: jurisdiction.trim().toUpperCase(),
+      } : undefined;
+      const { checkout_url } = await createCheckout(listingId, versionId, acceptance);
 
       // Validate Stripe URL before redirect (AG-G2-M4)
       if (!checkout_url.startsWith('https://checkout.stripe.com/')) {
@@ -141,7 +168,9 @@ export default function BuyButton({
       window.location.href = checkout_url;
     } catch (err) {
       if (err instanceof AxiosError) {
-        toast(err.response?.data?.detail || 'Failed to start checkout. Please try again.', 'error');
+        const refusal = parseCheckoutRefusal(err);
+        setCheckoutRefusal(refusal);
+        toast(refusal.message, 'error');
       } else {
         toast('An unexpected error occurred.', 'error');
       }
@@ -152,8 +181,62 @@ export default function BuyButton({
   };
 
   const handleBuy = async () => {
+    setCheckoutRefusal(null);
     await ensureTermsAccepted(startCheckout);
   };
+
+  const acceptanceComplete = !licenseDetails || (
+    licenseVerified && typedName.trim() && signerTitle.trim() && businessLegalName.trim() &&
+    /^[A-Za-z]{2}$/.test(jurisdiction.trim()) && authorityConfirmed
+  );
+
+  if (licenseDetails) {
+    return (
+      <div className="space-y-5">
+        <TermsGatePrompt />
+        <ListingLicenseDisclosure license={licenseDetails} compact onVerificationChange={handleVerificationChange} />
+        <div className="grid gap-4 sm:grid-cols-2">
+          <label className="text-sm font-medium text-gray-900">Typed full name
+            <input value={typedName} onChange={(event) => { setTypedName(event.target.value); setAuthorityConfirmed(false); }} maxLength={255} autoComplete="name" className="mt-2 block w-full rounded-lg border border-gray-300 px-3 py-2" />
+          </label>
+          <label className="text-sm font-medium text-gray-900">Signer title
+            <input value={signerTitle} onChange={(event) => { setSignerTitle(event.target.value); setAuthorityConfirmed(false); }} maxLength={255} autoComplete="organization-title" className="mt-2 block w-full rounded-lg border border-gray-300 px-3 py-2" />
+          </label>
+          <label className="text-sm font-medium text-gray-900">Business legal name
+            <input value={businessLegalName} onChange={(event) => { setBusinessLegalName(event.target.value); setAuthorityConfirmed(false); }} maxLength={255} autoComplete="organization" className="mt-2 block w-full rounded-lg border border-gray-300 px-3 py-2" />
+          </label>
+          <label className="text-sm font-medium text-gray-900">Jurisdiction (2-letter country code)
+            <input value={jurisdiction} onChange={(event) => { setJurisdiction(event.target.value.toUpperCase().slice(0, 2)); setAuthorityConfirmed(false); }} minLength={2} maxLength={2} autoComplete="country" className="mt-2 block w-full rounded-lg border border-gray-300 px-3 py-2 uppercase" />
+          </label>
+        </div>
+        <label className="flex items-start gap-3 text-sm leading-6 text-gray-700">
+          <input
+            aria-label="Confirm licence authority"
+            type="checkbox"
+            checked={authorityConfirmed}
+            onChange={(event) => setAuthorityConfirmed(event.target.checked)}
+            className="mt-1 h-4 w-4 accent-indigo-700"
+          />
+          <span>I am authorised to accept for {businessLegalName.trim() || 'the named legal business'}.</span>
+        </label>
+        {!licenseVerified && <p className="text-xs text-gray-600">Acceptance unlocks after every displayed licence component is fetched and its bytes match the server hash.</p>}
+        {checkoutRefusal && (
+          <div role="alert" className="rounded-lg border border-red-200 bg-red-50 p-4 text-sm text-red-800">
+            <p>{checkoutRefusal.message}</p>
+            {checkoutRefusal.reconciliationUrl && <Link href={checkoutRefusal.reconciliationUrl} className="mt-2 inline-block font-medium underline">Reconcile legal identity</Link>}
+          </div>
+        )}
+        <button
+          onClick={handleBuy}
+          disabled={loading || checkingPurchase || checkingTerms || !!disabledReason || !acceptanceComplete}
+          className="w-full rounded-lg bg-[#3F51B5] px-4 py-2.5 text-sm font-medium text-white hover:bg-[#3545a0] disabled:cursor-not-allowed disabled:opacity-50"
+        >
+          {loading || checkingTerms ? (checkingTerms ? 'Checking terms...' : 'Opening Stripe…') : 'Accept and continue to payment'}
+        </button>
+        {disabledReason && <p className="text-xs text-gray-500 text-center">{disabledReason}</p>}
+      </div>
+    );
+  }
 
   return (
     <div>
@@ -183,6 +266,50 @@ export default function BuyButton({
       </p>
     </div>
   );
+}
+
+export interface CheckoutRefusal {
+  code: string;
+  message: string;
+  reconciliationUrl?: string;
+}
+
+export function parseCheckoutRefusal(error: AxiosError): CheckoutRefusal {
+  const data = error.response?.data as { detail?: unknown } | undefined;
+  const detail = data?.detail;
+  if (typeof detail === 'string') return { code: 'CHECKOUT_FAILED', message: detail };
+  const value = detail && typeof detail === 'object' ? detail as Record<string, unknown> : {};
+  const code = typeof value.code === 'string' ? value.code : 'CHECKOUT_FAILED';
+  const messages: Record<string, string> = {
+    TERMS_ACCEPTANCE_REQUIRED: 'Accept the current ai.market platform terms before purchasing.',
+    LICENSE_ACCEPTANCE_STALE: 'The licence or covenant changed. Review the current documents and accept again.',
+    LICENSE_RIDER_ACCEPTANCE_STALE: 'The AI-Training Rider changed. Review the current rider and accept again.',
+    LICENSE_ACCEPTANCE_INVALID: 'The licence acceptance details are invalid. Review every field and try again.',
+    LICENSE_AUTHORITY_REQUIRED: 'Confirm that you are authorised to accept for the named legal business.',
+    BUYER_LEGAL_IDENTITY_REQUIRED: 'A verified business legal name and jurisdiction are required before purchase.',
+    SELLER_TERMS_ACCEPTANCE_PENDING: 'This listing cannot be purchased until the seller accepts the current terms.',
+  };
+  if (code === 'LEGAL_IDENTITY_CONFLICT') {
+    const candidates = [value.billing_identity, value.typed_identity, value.billing, value.typed]
+      .filter((candidate): candidate is Record<string, unknown> => Boolean(candidate && typeof candidate === 'object'));
+    const described = candidates.map((candidate) => {
+      const source = typeof candidate.source === 'string' ? candidate.source : 'identity';
+      const name = typeof candidate.legal_name === 'string' ? candidate.legal_name : 'missing name';
+      const country = typeof candidate.jurisdiction === 'string' ? candidate.jurisdiction : 'missing jurisdiction';
+      return `${source}: ${name} (${country})`;
+    });
+    return {
+      code,
+      message: `Your legal identity records conflict${described.length ? ` — ${described.join(' versus ')}` : ''}. Reconcile them before purchasing.`,
+      reconciliationUrl: typeof value.reconciliation_link === 'string'
+        ? value.reconciliation_link
+        : typeof value.reconciliation_url === 'string' ? value.reconciliation_url : '/dashboard/settings',
+    };
+  }
+  return {
+    code,
+    message: messages[code] ?? (typeof value.message === 'string' ? value.message : 'Failed to start checkout. Please try again.'),
+  };
 }
 
 export function SignedOutPurchase({
