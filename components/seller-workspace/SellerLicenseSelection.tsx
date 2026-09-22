@@ -2,7 +2,7 @@
 
 import {useState} from 'react';
 import {
-  LICENSE_HASHES, createStandardSelection, uploadCustomLicense,
+  LICENSE_HASHES, createStandardSelection, uploadCustomLicense, licenseDocumentPath,
   type LicenseSelection,
 } from '@/api/listingLicenses';
 
@@ -15,9 +15,6 @@ A material mismatch reported within seven days is remedied by fix or refund; lia
 ai.market is not a party and gives no legal advice; New York law governs.`;
 
 export const CUSTOM_NOTICE = "The seller's own terms. ai.market did not write these; review them before you accept. The separate ai.market AI-Training Rider and Marketplace Listing Covenant also form part of your record. ai.market is not a party and gives no legal advice.";
-
-const STANDARD_FULL_TEXT_URL = (aiTraining: boolean) => `/licenses/standard/1.0/${aiTraining ? 'ai-training' : 'no-ai-training'}?download=1`;
-const COVENANT_FULL_TEXT_URL = '/licenses/marketplace-listing/1.0?download=1';
 
 export default function SellerLicenseSelection({value, onChange, disabled = false}: {
   value: LicenseSelection; onChange: (value: LicenseSelection) => void; disabled?: boolean;
@@ -47,9 +44,9 @@ export default function SellerLicenseSelection({value, onChange, disabled = fals
     setUploading(true); setUploadError(''); setTermsOpened(false);
     try {
       const result = await uploadCustomLicense(file, value.ai_training);
-      onChange({...value, kind: 'custom', version: '1.0', license_document_id: result.license_document_id,
-        license_sha256: result.license_sha256, rider_sha256: result.rider_sha256,
-        covenant_sha256: result.covenant_sha256, seller_acceptance: {...identity, authority_confirmed: false}});
+      onChange({...value, kind: 'custom', version: '1.0', license_document_id: result.id,
+        license_sha256: result.license_sha256, rider_sha256: LICENSE_HASHES.rider[String(value.ai_training) as 'true' | 'false'],
+        covenant_sha256: LICENSE_HASHES.covenant, seller_acceptance: {...identity, authority_confirmed: false}});
     } catch { setUploadError('The custom licence could not be uploaded. Check that it is a clean English PDF or text file no larger than 1 MiB.'); }
     finally { setUploading(false); }
   }
@@ -80,7 +77,7 @@ export default function SellerLicenseSelection({value, onChange, disabled = fals
     <details onToggle={event => {if (event.currentTarget.open) setTermsOpened(true);}} className="rounded-lg border border-gray-200 p-4">
       <summary className="cursor-pointer font-medium text-indigo-700">Read the summary and full terms</summary>
       <p className="mt-3 whitespace-pre-line text-sm leading-6 text-gray-700">{value.kind === 'standard' ? STANDARD_SELLER_SUMMARY : CUSTOM_NOTICE}</p>
-      <div className="mt-3 flex flex-wrap gap-4 text-sm">{value.kind === 'standard' || value.license_document_id ? <a className="text-indigo-700 underline" href={value.kind === 'standard' ? STANDARD_FULL_TEXT_URL(value.ai_training) : `/licenses/custom/${encodeURIComponent(value.license_document_id!)}`} target="_blank" rel="noreferrer">Open full licence</a> : <span className="text-gray-500">Upload your licence to open the full document.</span>}<a className="text-indigo-700 underline" href={COVENANT_FULL_TEXT_URL} target="_blank" rel="noreferrer">Open Marketplace Listing Covenant</a></div>
+      <div className="mt-3 flex flex-wrap gap-4 text-sm">{value.kind === 'standard' || value.license_document_id ? <a className="text-indigo-700 underline" href={`${value.kind === 'standard' ? licenseDocumentPath('standard', value.ai_training) : licenseDocumentPath('custom', value.license_document_id!)}?download=1`} target="_blank" rel="noreferrer">Open full licence</a> : <span className="text-gray-500">Upload your licence to open the full document.</span>}{value.kind === 'custom' && <a className="text-indigo-700 underline" href={`${licenseDocumentPath('rider', value.ai_training)}?download=1`} target="_blank" rel="noreferrer">Open AI-Training Rider</a>}<a className="text-indigo-700 underline" href={`${licenseDocumentPath('covenant')}?download=1`} target="_blank" rel="noreferrer">Open Marketplace Listing Covenant</a></div>
     </details>
     <div className="grid gap-4 sm:grid-cols-2">
       <label className="text-sm font-medium text-gray-900">Signer full name<input aria-label="Signer full name" value={identity.signer_name} onChange={event => updateIdentity('signer_name', event.target.value)} className="mt-2 block w-full rounded-lg border border-gray-300 px-3 py-2" /></label>

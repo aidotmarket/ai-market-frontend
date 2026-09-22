@@ -20,10 +20,20 @@ export interface LicenseSelection {
 }
 
 export interface CustomLicenseUpload {
-  license_document_id: string;
+  id: string;
+  title: string;
+  content_type: 'text/plain' | 'application/pdf';
+  size_bytes: number;
+  source_sha256: string;
   license_sha256: string;
-  rider_sha256: string;
-  covenant_sha256: string;
+  status: 'active';
+}
+
+export function licenseDocumentPath(kind: 'standard' | 'covenant' | 'rider' | 'custom', value?: boolean | string): string {
+  if (kind === 'standard') return `/licenses/standard/1.0/${value === false ? 'no-ai-training' : 'ai-training'}`;
+  if (kind === 'covenant') return '/licenses/marketplace-listing/1.0';
+  if (kind === 'rider') return `/licenses/ai-training-rider/1.0/${value === false ? 'not-permitted' : 'permitted'}`;
+  return `/licenses/custom/${encodeURIComponent(String(value))}`;
 }
 
 export const LICENSE_HASHES = {
@@ -49,11 +59,16 @@ export function createStandardSelection(aiTraining = true): LicenseSelection {
 
 export async function uploadCustomLicense(file: File, aiTraining: boolean): Promise<CustomLicenseUpload> {
   const body = new FormData();
-  body.append('file', file);
+  body.append('upload', file);
+  body.append('title', file.name);
   body.append('ai_training', String(aiTraining));
   const result = (await api.post<CustomLicenseUpload>('/licenses/custom', body)).data;
-  if (!result || !/^[0-9a-f-]{36}$/.test(result.license_document_id) ||
-      ![result.license_sha256, result.rider_sha256, result.covenant_sha256].every(hash => /^[a-f0-9]{64}$/.test(hash))) {
+  if (!result || Object.keys(result).sort().join(',') !== 'content_type,id,license_sha256,size_bytes,source_sha256,status,title' ||
+      !/^[0-9a-f-]{36}$/.test(result.id) || result.title !== file.name ||
+      !['text/plain', 'application/pdf'].includes(result.content_type) ||
+      !Number.isSafeInteger(result.size_bytes) || result.size_bytes !== file.size ||
+      result.status !== 'active' ||
+      ![result.source_sha256, result.license_sha256].every(hash => /^[a-f0-9]{64}$/.test(hash))) {
     throw new Error('Custom licence upload could not be verified');
   }
   return result;

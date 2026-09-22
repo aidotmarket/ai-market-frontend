@@ -30,6 +30,17 @@ export interface ReviewSourcePage {
   files: Array<{key: string; size: number; etag: string; version_id: string | null}>;
   next_cursor: string | null;
 }
+function sameLicenseSelection(left?: LicenseSelection, right?: LicenseSelection): boolean {
+  if (!left || !right) return left === right;
+  return left.kind === right.kind && left.version === right.version &&
+    left.ai_training === right.ai_training && left.license_document_id === right.license_document_id &&
+    left.license_sha256 === right.license_sha256 && left.rider_sha256 === right.rider_sha256 &&
+    left.covenant_code === right.covenant_code && left.covenant_version === right.covenant_version &&
+    left.covenant_sha256 === right.covenant_sha256 &&
+    left.seller_acceptance.signer_name === right.seller_acceptance.signer_name &&
+    left.seller_acceptance.signer_title === right.seller_acceptance.signer_title &&
+    left.seller_acceptance.authority_confirmed === right.seller_acceptance.authority_confirmed;
+}
 function verifySourcePage(page: ReviewSourcePage, review: ListingReview, offset: number) {
   if (!page || page.review_hash !== review.review_hash || page.source_version !== review.source_version ||
       page.source_hash !== review.source_hash || !/^[a-f0-9]{64}$/.test(page.source_hash) ||
@@ -92,7 +103,8 @@ export async function readListingReview(signal: AbortSignal): Promise<ListingRev
     catch { throw new Error('Saved review could not be verified'); }
   }
   if (review.approval && (review.approval.review_hash !== review.review_hash || review.approval.render_hash !== review.render_hash ||
-      review.approval.draft_version !== review.draft_version || review.approval.source_version !== review.source_version || review.approval.sample_decision !== sampleDecision))
+      review.approval.draft_version !== review.draft_version || review.approval.source_version !== review.source_version || review.approval.sample_decision !== sampleDecision ||
+      (review.license_selection && !sameLicenseSelection(review.approval.license_selection, review.license_selection))))
     throw new Error('Saved review could not be verified');
   return review;
 }
@@ -107,6 +119,8 @@ export async function approveListingReview(review: ListingReview, request_id: st
   const receipt: ApprovalReceipt = (await api.post('/seller-workspace/listing-approval',body,{signal})).data;
   if (receipt.review_hash !== review.review_hash || receipt.render_hash !== review.render_hash ||
       receipt.draft_version !== review.draft_version || receipt.source_version !== review.source_version ||
-      receipt.sample_decision !== sampleDecision || signal.aborted) throw new Error('Approval could not be verified');
-  return review.license_selection ? {...receipt,license_selection:review.license_selection} : receipt;
+      receipt.sample_decision !== sampleDecision || signal.aborted ||
+      (review.license_selection && !sameLicenseSelection(receipt.license_selection, review.license_selection)))
+    throw new Error('Approval could not be verified');
+  return receipt;
 }

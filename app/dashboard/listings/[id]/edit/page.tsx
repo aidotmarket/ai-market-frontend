@@ -8,6 +8,7 @@ import SellerAtAGlance from '@/components/listings/SellerAtAGlance';
 import SellerShareControls from '@/components/listings/SellerShareControls';
 import SellerLicenseSelection from '@/components/seller-workspace/SellerLicenseSelection';
 import {createStandardSelection,isCompleteLicenseSelection,type LicenseSelection} from '@/api/listingLicenses';
+import {getSellerWorkspaceCapabilities} from '@/api/sellerWorkspace';
 
 const CATEGORIES = ['Finance', 'Healthcare', 'Technology', 'Real Estate', 'Government', 'Marketing'];
 const FORMATS = ['csv', 'parquet', 'json', 'xlsx', 'other'];
@@ -59,9 +60,9 @@ export default function EditListingPage() {
 
   const fetchListing = useCallback(async () => {
     try {
-      const res = await getListing(id);
+      const [res, capabilities] = await Promise.all([getListing(id), getSellerWorkspaceCapabilities().catch(() => null)]);
       const l = res as any;
-      const licensesEnabled = l.listing_licenses_enabled === true || l.capabilities?.listing_licenses_enabled === true;
+      const licensesEnabled = capabilities?.listing_licenses === true;
       setListingLicensesEnabled(licensesEnabled);
       if (licensesEnabled && l.license_selection) setLicenseSelection(l.license_selection);
       setListingSlug(typeof l.slug === 'string' ? l.slug : undefined);

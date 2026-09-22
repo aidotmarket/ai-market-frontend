@@ -53,12 +53,14 @@ it('replaces the combined price/license checkbox with explicit licence and coven
  const selection={...createStandardSelection(),seller_acceptance:{signer_name:'Sam Seller',signer_title:'Director',authority_confirmed:true}};
  const prepared={...review,review_hash:'c'.repeat(64),draft_version:1,source_version:2,confirmation_version:'seller-listing-confirmation-v3' as const,
   sample_decision:'none' as const,license_selection:selection} as ListingReview;
- const receipt={id:'approval',review_hash:prepared.review_hash,render_hash:prepared.render_hash,draft_version:1,source_version:2,sample_decision:'none'};
+ const receipt={id:'approval',review_hash:prepared.review_hash,render_hash:prepared.render_hash,draft_version:1,source_version:2,sample_decision:'none',license_selection:selection};
  client.post.mockResolvedValue({data:receipt});
  expect((await approveListingReview(prepared,'request-id',new AbortController().signal)).license_selection).toEqual(selection);
  const body=client.post.mock.calls[0][1];
  expect(body).toMatchObject({price_confirmed:true,license_confirmed:true,covenant_authority_confirmed:true,license_selection:selection});
  expect(body).not.toHaveProperty('price_license_confirmed');
+ client.post.mockResolvedValue({data:{...receipt,license_selection:{...selection,ai_training:false}}});
+ await expect(approveListingReview(prepared,'request-id',new AbortController().signal)).rejects.toThrow('Approval could not be verified');
 });
 it('uses the last persisted sample selection in the approval payload',async()=>{
  const prepared={...review,review_hash:'c'.repeat(64),draft_version:1,source_version:2,confirmation_version:'seller-listing-confirmation-v2' as const,

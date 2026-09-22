@@ -13,6 +13,8 @@ const listingsApi = vi.hoisted(() => ({
   unpublishListing: vi.fn(),
   publishListing: vi.fn(),
 }));
+const capabilitiesApi = vi.hoisted(() => ({getSellerWorkspaceCapabilities:vi.fn()}));
+vi.mock('@/api/sellerWorkspace',()=>capabilitiesApi);
 
 const toast = vi.hoisted(() => vi.fn());
 
@@ -44,6 +46,7 @@ const baseListing = {
 
 describe('EditListingPage', () => {
   beforeEach(() => {
+    capabilitiesApi.getSellerWorkspaceCapabilities.mockResolvedValue({});
     listingsApi.updateListing.mockResolvedValue({});
     listingsApi.unpublishListing.mockResolvedValue({});
     listingsApi.publishListing.mockResolvedValue({});
@@ -76,7 +79,8 @@ describe('EditListingPage', () => {
   });
 
   it('keeps publish disabled until licence covenant authority is confirmed and posts the exact selection',async()=>{
-    listingsApi.getListing.mockResolvedValue({...baseListing,status:'unlisted',listing_licenses_enabled:true});
+    listingsApi.getListing.mockResolvedValue({...baseListing,status:'unlisted'});
+    capabilitiesApi.getSellerWorkspaceCapabilities.mockResolvedValue({listing_licenses:true});
     render(<EditListingPage/>);
     const publish=await screen.findByRole('button',{name:'Publish'}) as HTMLButtonElement;
     expect(within(screen.getByText('How can buyers use this data?').closest('fieldset')!).getAllByRole('radio')).toHaveLength(2);expect((screen.getByLabelText('Allow AI/ML training') as HTMLInputElement).checked).toBe(true);
