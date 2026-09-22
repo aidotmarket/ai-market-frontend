@@ -23,6 +23,7 @@ interface DocumentReference {
 interface LoadedDocument extends DocumentReference {
   state: 'loading' | 'matched' | 'mismatch' | 'error';
   text: string | null;
+  objectUrl?: string;
 }
 
 export function isListingLicenseDetails(value: unknown): value is ListingLicenseDetails {
@@ -170,6 +171,7 @@ export default function ListingLicenseDisclosure({
 
   useEffect(() => {
     let cancelled = false;
+    const objectUrls: string[] = [];
     setDocuments(references.map((reference) => ({ ...reference, state: 'loading', text: null })));
     onVerificationChange?.(false);
     void Promise.all(references.map(async (reference): Promise<LoadedDocument> => {
@@ -188,10 +190,15 @@ export default function ListingLicenseDisclosure({
           contentType = response.headers.get('content-type') ?? 'text/plain';
         }
         const matched = await fetchedBytesMatch(bytes, contentType, reference);
+        const objectUrl = matched && !cancelled && reference.kind === 'license' && reference.code === 'custom'
+          ? URL.createObjectURL(new Blob([bytes.slice().buffer as ArrayBuffer], { type: contentType }))
+          : undefined;
+        if (objectUrl) objectUrls.push(objectUrl);
         return {
           ...reference,
           state: matched ? 'matched' : 'mismatch',
           text: contentType.toLowerCase().includes('application/pdf') ? null : new TextDecoder().decode(bytes),
+          objectUrl,
         };
       } catch {
         return { ...reference, state: 'error', text: null };
@@ -201,7 +208,10 @@ export default function ListingLicenseDisclosure({
       setDocuments(loaded);
       onVerificationChange?.(loaded.every((document) => document.state === 'matched'));
     });
-    return () => { cancelled = true; };
+    return () => {
+      cancelled = true;
+      objectUrls.forEach((url) => URL.revokeObjectURL(url));
+    };
   }, [onVerificationChange, references]);
 
   const standard = license.code === 'standard';
@@ -220,14 +230,18 @@ export default function ListingLicenseDisclosure({
         AI/ML training is {license.params.ai_training ? 'permitted' : 'not permitted'} for this listing.
       </p>
       <div className="space-y-3">
-        {documents.map((document) => (
+        {documents.map((document) => {
+          const customDocument = document.kind === 'license' && document.code === 'custom';
+          const canonicalHref = customDocument ? document.objectUrl : documentLocation(document.canonicalUrl).href;
+          const downloadHref = customDocument ? document.objectUrl : documentLocation(document.downloadUrl).href;
+          return (
           <div key={document.kind} className="rounded-lg border border-gray-200 p-4">
             <div className="flex flex-wrap items-start justify-between gap-3">
               <div className="min-w-0">
                 <h3 className="text-sm font-semibold text-gray-900">{document.label}</h3>
-                <a href={documentLocation(document.canonicalUrl).href} target="_blank" rel="noreferrer" className="break-all text-xs text-indigo-700 underline">
-                  {document.canonicalUrl}
-                </a>
+                {canonicalHref
+                  ? <a href={canonicalHref} target="_blank" rel="noreferrer" className="break-all text-xs text-indigo-700 underline">{document.canonicalUrl}</a>
+                  : <span className="break-all text-xs text-gray-600">{document.canonicalUrl}</span>}
               </div>
               <span role="status" className={`text-xs font-medium ${document.state === 'matched' ? 'text-green-800' : document.state === 'loading' ? 'text-gray-500' : 'text-red-800'}`}>
                 {document.state === 'matched' ? 'Fetched bytes match the server hash' : document.state === 'loading' ? 'Verifying fetched bytes…' : document.state === 'mismatch' ? 'Hash mismatch — do not accept' : 'Could not verify — do not accept'}
@@ -236,10 +250,13 @@ export default function ListingLicenseDisclosure({
             <p className="mt-2 break-all font-mono text-[11px] text-gray-600">SHA-256: {document.sha256}</p>
             <div className="mt-3 flex flex-wrap gap-4 text-sm">
               {document.text && <details className="w-full rounded border border-gray-100 p-3"><summary className="cursor-pointer font-medium text-indigo-700">Read full text</summary><pre className="mt-3 max-h-96 overflow-auto whitespace-pre-wrap text-xs leading-5 text-gray-800">{document.text}</pre></details>}
-              <a href={documentLocation(document.downloadUrl).href} download className="font-medium text-indigo-700 underline">Download exact document</a>
+              {downloadHref
+                ? <a href={downloadHref} download className="font-medium text-indigo-700 underline">Download exact document</a>
+                : <span className="font-medium text-gray-500">Download exact document</span>}
             </div>
           </div>
-        ))}
+          );
+        })}
       </div>
     </section>
   );

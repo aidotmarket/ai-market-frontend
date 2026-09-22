@@ -160,6 +160,17 @@ describe('BuyButton licence acceptance', () => {
     process.env.NEXT_PUBLIC_API_URL = 'https://api.ai.market';
     api.defaults.baseURL = 'https://api.ai.market/api/v1';
     const calls: string[] = [];
+    const createdBlobs = new Map<string, Blob>();
+    const createObjectURL = vi.fn((blob: Blob) => {
+      const url = `blob:https://ai.market/verified-${createdBlobs.size + 1}`;
+      createdBlobs.set(url, blob);
+      return url;
+    });
+    const revokeObjectURL = vi.fn();
+    vi.stubGlobal('URL', class extends URL {
+      static createObjectURL = createObjectURL;
+      static revokeObjectURL = revokeObjectURL;
+    });
     api.defaults.adapter = async (config) => {
       calls.push(config.url ?? '');
       expect(config.baseURL).toBe('https://api.ai.market/api/v1');
@@ -177,9 +188,9 @@ describe('BuyButton licence acceptance', () => {
     vi.stubGlobal('fetch', fetchMock);
     useAuthStore.setState({ token: 'buyer-token' });
     const license = await customLicense();
-    render(<ToastProvider><BuyButton listingId="listing-1" slug="listing" price={20} pricingType="one_time" licenseDetails={license} /></ToastProvider>);
+    const view = render(<ToastProvider><BuyButton listingId="listing-1" slug="listing" price={20} pricingType="one_time" licenseDetails={license} /></ToastProvider>);
     completeAcceptanceForm();
-    return { calls, fetchMock, restore: () => {
+    return { calls, fetchMock, createdBlobs, createObjectURL, revokeObjectURL, unmount: view.unmount, restore: () => {
       api.defaults.adapter = priorAdapter;
       api.defaults.baseURL = priorBaseUrl;
       if (priorApiUrl === undefined) delete process.env.NEXT_PUBLIC_API_URL;
@@ -187,14 +198,39 @@ describe('BuyButton licence acceptance', () => {
     } };
   }
 
-  it('verifies custom text with the authenticated API client and all three component hashes', async () => {
-    const { calls, fetchMock, restore } = await renderCustom();
+  it('activates both custom document links using the exact authenticated, verified bytes', async () => {
+    const { calls, fetchMock, createdBlobs, createObjectURL, revokeObjectURL, unmount, restore } = await renderCustom();
     try {
       await waitFor(() => expect(screen.getAllByText('Fetched bytes match the server hash')).toHaveLength(3));
       expect(calls).toEqual(['/listings/listing-1/license-document?download=1']);
       expect(fetchMock).toHaveBeenCalledTimes(2);
-      expect(screen.getAllByRole('link', { name: 'Download exact document' })[0].getAttribute('href')).toBe('https://api.ai.market/api/v1/listings/listing-1/license-document?download=1');
+      const canonical = screen.getByRole('link', { name: '/api/v1/listings/listing-1/license-document' }) as HTMLAnchorElement;
+      const download = screen.getAllByRole('link', { name: 'Download exact document' })[0] as HTMLAnchorElement;
+      const activated: string[] = [];
+      for (const link of [canonical, download]) {
+        link.addEventListener('click', (event) => {
+          activated.push((event.currentTarget as HTMLAnchorElement).href);
+          event.preventDefault();
+        });
+        fireEvent.click(link);
+      }
+      expect(createObjectURL).toHaveBeenCalledTimes(1);
+      expect(activated).toEqual([createObjectURL.mock.results[0].value, createObjectURL.mock.results[0].value]);
+      expect(canonical.textContent).toBe('/api/v1/listings/listing-1/license-document');
+      expect(download.hasAttribute('download')).toBe(true);
+      expect(document.querySelector('a[href*="/api/v1/"]')).toBeNull();
+      const blob = createdBlobs.get(activated[0]);
+      expect(blob?.type).toBe('text/plain');
+      const bytes = await new Promise<ArrayBuffer>((resolve, reject) => {
+        const reader = new FileReader();
+        reader.onload = () => resolve(reader.result as ArrayBuffer);
+        reader.onerror = () => reject(reader.error);
+        reader.readAsArrayBuffer(blob!);
+      });
+      expect(Array.from(new Uint8Array(bytes))).toEqual(Array.from(new TextEncoder().encode(customText)));
       expect((screen.getByRole('button', { name: 'Accept and continue to payment' }) as HTMLButtonElement).disabled).toBe(false);
+      unmount();
+      expect(revokeObjectURL).toHaveBeenCalledWith(activated[0]);
     } finally { restore(); }
   });
 
