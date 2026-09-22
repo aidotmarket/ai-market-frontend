@@ -153,7 +153,7 @@ describe('SalesPage', () => {
     });
   });
 
-  it('renders all seven facts in desktop and mobile presentations without links', async () => {
+  it('renders all six facts in desktop and mobile presentations without links', async () => {
     vi.useFakeTimers({ toFake: ['Date'] });
     vi.setSystemTime(new Date('2026-08-20T15:00:00Z'));
     sellerApi.getSellerOrders.mockResolvedValue({ data: [sellerOrder()] });
@@ -161,11 +161,12 @@ describe('SalesPage', () => {
     const { container } = render(<SalesPage />);
 
     expect(await screen.findAllByText('SALE-001')).toHaveLength(2);
-    for (const label of ['Sale', 'Listing', 'Buyer', 'Gross (USD)', 'You receive (USD)', 'Status', 'Paid']) {
+    for (const label of ['Sale', 'Listing', 'Gross (USD)', 'You receive (USD)', 'Status', 'Paid']) {
       expect(screen.getAllByText(label)).toHaveLength(2);
     }
     expect(screen.getAllByText('Seller dataset')).toHaveLength(2);
-    expect(screen.getAllByText('buyer@example.com')).toHaveLength(2);
+    expect(screen.queryByText('buyer@example.com')).toBeNull();
+    expect(screen.queryByRole('columnheader', { name: 'Buyer' })).toBeNull();
     expect(screen.getAllByText('$12.34')).toHaveLength(2);
     expect(screen.getAllByText('$10.00')).toHaveLength(2);
     expect(container.querySelector('a')).toBeNull();

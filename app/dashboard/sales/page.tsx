@@ -273,7 +273,7 @@ function SalesPageContent() {
             <table className="min-w-full text-sm">
               <thead className="bg-gray-50">
                 <tr>
-                  {['Sale', 'Listing', 'Buyer', 'Gross (USD)', 'You receive (USD)', 'Status', 'Paid'].map((label) => (
+                  {['Sale', 'Listing', 'Gross (USD)', 'You receive (USD)', 'Status', 'Paid'].map((label) => (
                     <th key={label} className="px-4 py-3 text-left font-medium text-gray-700">{label}</th>
                   ))}
                 </tr>
@@ -283,7 +283,6 @@ function SalesPageContent() {
                   <tr key={order.id} className="hover:bg-gray-50">
                     <td className="px-4 py-3 font-mono text-xs text-gray-700">{order.order_number}</td>
                     <td className="px-4 py-3 text-gray-900">{order.listing_title}</td>
-                    <td className="px-4 py-3 text-gray-700">{order.buyer_email}</td>
                     <td className="px-4 py-3 font-medium text-gray-900">{formatPrice(order.amount_cents / 100)}</td>
                     <td className="px-4 py-3 font-medium text-gray-900">{formatPrice(order.seller_amount_cents / 100)}</td>
                     <td className="px-4 py-3">{renderStatus(order)}</td>
@@ -300,7 +299,6 @@ function SalesPageContent() {
                 <dl className="space-y-3 text-sm">
                   <div><dt className="font-medium text-gray-500">Sale</dt><dd className="font-mono text-xs text-gray-900">{order.order_number}</dd></div>
                   <div><dt className="font-medium text-gray-500">Listing</dt><dd className="text-gray-900">{order.listing_title}</dd></div>
-                  <div><dt className="font-medium text-gray-500">Buyer</dt><dd className="text-gray-900">{order.buyer_email}</dd></div>
                   <div><dt className="font-medium text-gray-500">Gross (USD)</dt><dd className="text-gray-900">{formatPrice(order.amount_cents / 100)}</dd></div>
                   <div><dt className="font-medium text-gray-500">You receive (USD)</dt><dd className="text-gray-900">{formatPrice(order.seller_amount_cents / 100)}</dd></div>
                   <div><dt className="font-medium text-gray-500">Status</dt><dd>{renderStatus(order)}</dd></div>
