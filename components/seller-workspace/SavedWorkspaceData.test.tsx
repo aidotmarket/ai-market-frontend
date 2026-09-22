@@ -15,6 +15,7 @@ const content = {connection_id:connection.id,connection_version:1,version_mode:'
 afterEach(()=>{cleanup();resetSellerListingDraftOwnerForTests();});
 beforeEach(() => {vi.resetAllMocks(); api.listWorkspaceObjects.mockResolvedValue({objects:[object],next_cursor:null});api.readListingDraft.mockResolvedValue(null);});
 const renderData=(connections=[connection],sampleCapability=false)=>render(<SellerListingDraftProvider enabled sampleCapability={sampleCapability}><SavedWorkspaceData enabled connections={connections} /></SellerListingDraftProvider>);
+const renderLicensedData=()=>render(<SellerListingDraftProvider enabled sampleCapability={false}><SavedWorkspaceData enabled connections={[connection]} listingLicensesEnabled /></SellerListingDraftProvider>);
 const DraftStatus=()=>{const status=useSellerListingDraftStatus();return <p data-testid="draft-status">{status.selectionSavePending?`pending:${status.sampleIndices.join(',')}`:status.selectionSaveFailed?'failed':'ready'}</p>;};
 it('restores the selected files from the account', async () => {
   api.readListingSource.mockResolvedValue({version:2, content, connection_current:true});
@@ -22,6 +23,34 @@ it('restores the selected files from the account', async () => {
   const checkbox = await screen.findByRole('checkbox', {name:`Select ${object.key}`});
   expect((checkbox as HTMLInputElement).checked).toBe(true);
   expect(screen.getByText(/File selection saved to your account/)).toBeTruthy();
+});
+it('omits an incomplete licence choice from a draft save and explains what remains',async()=>{
+ const draft={version:4,content:{brief:'brief',title:'Offer',description:'Description',category:'Retail',tags:'retail',price:'25',license:'Research'},updated_at:'2026-09-18T12:00:00Z'};
+ api.readListingSource.mockResolvedValue({version:2,content,connection_current:true});
+ api.readListingDraft.mockResolvedValue(draft);
+ api.saveListingDraft.mockImplementation(async saved=>({version:5,content:saved,updated_at:draft.updated_at}));
+ renderLicensedData();
+ fireEvent.click(await screen.findByRole('button',{name:'Save licence choice'}));
+ await waitFor(()=>expect(api.saveListingDraft).toHaveBeenCalledOnce());
+ expect(api.saveListingDraft.mock.calls[0][0]).not.toHaveProperty('license_selection');
+ expect(screen.getByText(/Draft saved without a licence choice/)).toBeTruthy();
+});
+it('saves only a complete licence selection',async()=>{
+ const draft={version:4,content:{brief:'brief',title:'Offer',description:'Description',category:'Retail',tags:'retail',price:'25',license:'Research'},updated_at:'2026-09-18T12:00:00Z'};
+ api.readListingSource.mockResolvedValue({version:2,content,connection_current:true});
+ api.readListingDraft.mockResolvedValue(draft);
+ api.saveListingDraft.mockImplementation(async saved=>({version:5,content:saved,updated_at:draft.updated_at}));
+ renderLicensedData();
+ await screen.findByRole('button',{name:'Save licence choice'});
+ fireEvent.change(screen.getByLabelText('Signer full name'),{target:{value:'Sam Seller'}});
+ fireEvent.change(screen.getByLabelText('Signer title'),{target:{value:'Director'}});
+ const details=screen.getByText('Read the summary and full terms').closest('details')!;
+ Object.defineProperty(details,'open',{value:true,configurable:true});
+ fireEvent(details,new Event('toggle'));
+ fireEvent.click(screen.getByLabelText('Confirm covenant and authority'));
+ fireEvent.click(screen.getByRole('button',{name:'Save licence choice'}));
+ await waitFor(()=>expect(api.saveListingDraft).toHaveBeenCalledOnce());
+ expect(api.saveListingDraft.mock.calls[0][0].license_selection.seller_acceptance).toEqual({signer_name:'Sam Seller',signer_title:'Director',authority_confirmed:true});
 });
 it('round-trips the uploaded sample selection inside draft content',async()=>{
   const draft={version:4,content:{brief:'brief',title:'Offer',description:'Description',category:'Retail',tags:'retail',price:'25',license:'Research',sample_decision:'none',sample_object_indices:[]},updated_at:'2026-09-18T12:00:00Z'};

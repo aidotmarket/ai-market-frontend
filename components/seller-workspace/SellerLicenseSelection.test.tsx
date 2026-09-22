@@ -8,7 +8,7 @@ import uploadResponse from '@/api/fixtures/s1735-custom-upload.json';
 
 const transport = vi.hoisted(()=>({post:vi.fn()}));
 vi.mock('@/api/client',()=>({api:transport}));
-afterEach(()=>{cleanup();vi.clearAllMocks();});
+afterEach(()=>{cleanup();vi.unstubAllGlobals();vi.clearAllMocks();});
 
 function Harness({initial=createStandardSelection()}:{initial?:LicenseSelection}) {
   const [value,setValue]=useState(initial);
@@ -49,6 +49,7 @@ describe('Seller licence selection',()=>{
   });
 
   it('uploads a custom document, shows the exact amber notice, and sends explicit training choice',async()=>{
+    vi.stubGlobal('URL',{...URL,createObjectURL:vi.fn(()=> 'blob:uploaded-licence'),revokeObjectURL:vi.fn()});
     transport.post.mockResolvedValue({data:uploadResponse});
     render(<Harness/>);
     fireEvent.click(screen.getByRole('radio',{name:/My own licence/}));
@@ -61,5 +62,7 @@ describe('Seller licence selection',()=>{
     expect(body.get('upload')).toBe(file);expect(body.get('title')).toBe('terms.txt');expect(body.get('ai_training')).toBe('true');
     await waitFor(()=>expect(JSON.parse(screen.getByTestId('wire').textContent!)).toEqual(expect.objectContaining({kind:'custom',version:'1.0',ai_training:true,license_document_id:'11111111-1111-4111-8111-111111111111',license_sha256:'1'.repeat(64),rider_sha256:'f9785144dc4d48af6446512cbabd03431a35015d71b92260f4dcfab164084140',covenant_sha256:'a91234b67bf7467a0c80f6e1caa47b563032e94751146901b796eaaf220431af'})));
     expect(screen.getByRole('link',{name:'Open AI-Training Rider'}).getAttribute('href')).toBe('/licenses/ai-training-rider/1.0/permitted?download=1');
+    expect(screen.getByRole('link',{name:'Open full licence'}).getAttribute('href')).toBe('blob:uploaded-licence');
+    expect(screen.queryByRole('link',{name:/custom\/11111111/})).toBeNull();
   });
 });

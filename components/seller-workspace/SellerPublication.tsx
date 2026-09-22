@@ -4,13 +4,14 @@ import SellerAtAGlance from '@/components/listings/SellerAtAGlance';
 import axios from 'axios';
 import {readPublication,publishListing,type PublicationState} from '@/api/sellerListingPublication';
 import type {ApprovalReceipt} from '@/api/sellerListingReview';
-import {isCompleteLicenseSelection} from '@/api/listingLicenses';
+import {isCompleteLicenseSelection,publishedCustomLicense} from '@/api/listingLicenses';
 export default function SellerPublication({approval,active,rendered,sampleCount=0}:{approval:ApprovalReceipt;active:boolean;rendered:boolean;sampleCount?:number}) {
   const [state,setState]=useState<PublicationState|null>(null);
   const [busy,setBusy]=useState(false);
   const [error,setError]=useState('');
   const [stale,setStale]=useState(false);
   const [retry,setRetry]=useState(0);
+  const [customDocumentUrl,setCustomDocumentUrl]=useState<string|null>(null);
   const identity=useRef<string|null>(null);
   const action=useRef<AbortController|null>(null);
   useEffect(()=>{
@@ -22,6 +23,7 @@ export default function SellerPublication({approval,active,rendered,sampleCount=
     return ()=>request.abort();
   },[active,approval,retry]);
   useEffect(()=>()=>{action.current?.abort();},[]);
+  useEffect(()=>()=>{if(customDocumentUrl) URL.revokeObjectURL(customDocumentUrl);},[customDocumentUrl]);
   useEffect(()=>{if (!active) {action.current?.abort();action.current=null;setBusy(false);}},[active]);
   async function publish() {
     if (!active || !rendered || !state?.publication_available || state.publication || stale || action.current ||
@@ -39,6 +41,13 @@ export default function SellerPublication({approval,active,rendered,sampleCount=
     } finally {if (action.current===request) {action.current=null;setBusy(false);}}
   }
   const publication=state?.publication;
+  async function viewCustomDocument() {
+    if (!publication?.listing_id) return;
+    try {
+      const document=await publishedCustomLicense(publication.listing_id);
+      setCustomDocumentUrl(URL.createObjectURL(document));
+    } catch {setError('The published custom licence could not be opened. Refresh the listing and try again.');}
+  }
   const licenseReady=!approval.license_selection||isCompleteLicenseSelection(approval.license_selection);
   return <section aria-label="Publish approved listing" className="space-y-4 rounded-xl border border-indigo-200 bg-white p-5">
     <h3 className="text-lg font-semibold text-gray-900">Publish your listing</h3>
@@ -46,6 +55,9 @@ export default function SellerPublication({approval,active,rendered,sampleCount=
     {publication ? <><p role="status" className="text-sm text-green-900">{publication.status==='published' && publication.is_listed?'Your listing is published and available in the marketplace.':'This review has been published. The listing is currently not available in marketplace discovery.'}</p>
       {approval.sample_decision==='member_files'&&<p className="text-sm text-gray-700">{sampleCount===0?'No free sample files':`${sampleCount} free sample ${sampleCount===1?'file is':'files are'} part of the purchased set.`}</p>}
       <a href={`/listings/${encodeURIComponent(publication.slug)}`} className="inline-block text-sm font-medium text-indigo-700 underline">View {publication.title}</a>
+      {approval.license_selection?.kind==='custom'&&<div>{customDocumentUrl
+        ? <a href={customDocumentUrl} target="_blank" rel="noreferrer" className="text-sm text-indigo-700 underline">Open published custom licence</a>
+        : <button type="button" onClick={()=>void viewCustomDocument()} className="text-sm text-indigo-700 underline">Open published custom licence</button>}</div>}
       {publication.listing_id && <SellerAtAGlance listingId={publication.listing_id} slug={publication.slug} active={active} />}</> : state && <>
       <p className="text-sm leading-6 text-gray-700">Your approved listing is private. Publishing makes the approved description, tags, price and licence public. The files stay in your storage.</p>
       {approval.license_selection&&<p className="text-sm text-gray-700">{approval.license_selection.kind==='standard'?'Standard (recommended)':'My own licence'} · AI/ML training {approval.license_selection.ai_training?'allowed':'not allowed'} · covenant and authority {approval.license_selection.seller_acceptance.authority_confirmed?'confirmed':'not confirmed'}</p>}

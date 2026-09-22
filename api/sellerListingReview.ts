@@ -115,7 +115,7 @@ export async function approveListingReview(review: ListingReview, request_id: st
   const body = {request_id,review_hash:review.review_hash,render_hash:review.render_hash,
     confirmation_version:review.confirmation_version,sample_decision:sampleDecision,
     ownership_confirmed:true,privacy_confirmed:true,...licenseConfirmations,public_disclosure_confirmed:true,
-    ...(sampleDecision === 'member_files' ? {sample_object_indices:review.sample_object_indices??[],sample_files_confirmed:true} : {})};
+    ...(sampleDecision === 'member_files' ? {sample_files_confirmed:true} : {})};
   const receipt: ApprovalReceipt = (await api.post('/seller-workspace/listing-approval',body,{signal})).data;
   if (receipt.review_hash !== review.review_hash || receipt.render_hash !== review.render_hash ||
       receipt.draft_version !== review.draft_version || receipt.source_version !== review.source_version ||

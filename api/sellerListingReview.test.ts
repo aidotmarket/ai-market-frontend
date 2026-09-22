@@ -41,13 +41,14 @@ it('sends only exact review identities and explicit confirmations, never source 
   await expect(approveListingReview(prepared,'request-id',signal)).rejects.toThrow('Approval could not be verified');
 });
 
-it('sends the v2 member-file confirmation and ordered indices',async()=>{
+it('sends the v2 member-file confirmation without client-authored indices',async()=>{
  const prepared={...review,review_hash:'c'.repeat(64),draft_version:1,source_version:2,confirmation_version:'seller-listing-confirmation-v2' as const,
   sample_decision:'member_files' as const,sample_object_indices:[1,4]} as ListingReview;
  const receipt={id:'approval',review_hash:prepared.review_hash,render_hash:prepared.render_hash,draft_version:1,source_version:2,sample_decision:'member_files'};
  client.post.mockResolvedValue({data:receipt});
  await approveListingReview(prepared,'request-id',new AbortController().signal);
- expect(client.post.mock.calls[0][1]).toMatchObject({confirmation_version:'seller-listing-confirmation-v2',sample_decision:'member_files',sample_object_indices:[1,4],sample_files_confirmed:true});
+ expect(client.post.mock.calls[0][1]).toMatchObject({confirmation_version:'seller-listing-confirmation-v2',sample_decision:'member_files',sample_files_confirmed:true});
+ expect(client.post.mock.calls[0][1]).not.toHaveProperty('sample_object_indices');
 });
 it('replaces the combined price/license checkbox with explicit licence and covenant facts',async()=>{
  const selection={...createStandardSelection(),seller_acceptance:{signer_name:'Sam Seller',signer_title:'Director',authority_confirmed:true}};
@@ -62,12 +63,21 @@ it('replaces the combined price/license checkbox with explicit licence and coven
  client.post.mockResolvedValue({data:{...receipt,license_selection:{...selection,ai_training:false}}});
  await expect(approveListingReview(prepared,'request-id',new AbortController().signal)).rejects.toThrow('Approval could not be verified');
 });
-it('uses the last persisted sample selection in the approval payload',async()=>{
- const prepared={...review,review_hash:'c'.repeat(64),draft_version:1,source_version:2,confirmation_version:'seller-listing-confirmation-v2' as const,
-  sample_decision:'member_files' as const,sample_object_indices:[0]} as ListingReview;
- client.post.mockResolvedValue({data:{id:'approved',review_hash:prepared.review_hash,render_hash:prepared.render_hash,draft_version:1,source_version:2,sample_decision:'member_files'}});
+it('matches the exact backend flag-on ListingApprovalRequest fields for member files',async()=>{
+ // Copied from ListingApprovalRequest at backend 7a222a13 (LISTING_LICENSES_ENABLED=true; extra=forbid).
+ const allowed=['request_id','review_hash','render_hash','confirmation_version','sample_decision',
+  'sample_files_confirmed','ownership_confirmed','privacy_confirmed','public_disclosure_confirmed',
+  'license_selection','price_confirmed','license_confirmed','covenant_authority_confirmed'];
+ const selection={...createStandardSelection(),seller_acceptance:{signer_name:'Sam Seller',signer_title:'Director',authority_confirmed:true}};
+ const prepared={...review,review_hash:'c'.repeat(64),draft_version:1,source_version:2,confirmation_version:'seller-listing-confirmation-v3' as const,
+  sample_decision:'member_files' as const,sample_object_indices:[0],license_selection:selection} as ListingReview;
+ client.post.mockResolvedValue({data:{id:'approved',review_hash:prepared.review_hash,render_hash:prepared.render_hash,draft_version:1,source_version:2,sample_decision:'member_files',license_selection:selection}});
  await approveListingReview(prepared,'request-id',new AbortController().signal);
- expect(client.post.mock.calls[0][1].sample_object_indices).toEqual([0]);
+ const body=client.post.mock.calls[0][1];
+ expect(Object.keys(body).sort()).toEqual(allowed.sort());
+ const matchesBackendSchema=(value:Record<string,unknown>)=>Object.keys(value).every(key=>allowed.includes(key));
+ expect(matchesBackendSchema(body)).toBe(true);
+ expect(matchesBackendSchema({...body,sample_object_indices:[0]})).toBe(false);
 });
 
 

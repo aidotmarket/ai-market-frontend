@@ -29,11 +29,16 @@ export interface CustomLicenseUpload {
   status: 'active';
 }
 
-export function licenseDocumentPath(kind: 'standard' | 'covenant' | 'rider' | 'custom', value?: boolean | string): string {
+export function licenseDocumentPath(kind: 'standard' | 'covenant' | 'rider', value?: boolean): string {
   if (kind === 'standard') return `/licenses/standard/1.0/${value === false ? 'no-ai-training' : 'ai-training'}`;
   if (kind === 'covenant') return '/licenses/marketplace-listing/1.0';
   if (kind === 'rider') return `/licenses/ai-training-rider/1.0/${value === false ? 'not-permitted' : 'permitted'}`;
-  return `/licenses/custom/${encodeURIComponent(String(value))}`;
+  throw new Error('Unknown licence document');
+}
+
+export async function publishedCustomLicense(listingId: string): Promise<Blob> {
+  const response = await api.get<Blob>(`/listings/${encodeURIComponent(listingId)}/license-document`, {responseType:'blob'});
+  return response.data;
 }
 
 export const LICENSE_HASHES = {

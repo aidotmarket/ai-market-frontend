@@ -1,17 +1,17 @@
 // @vitest-environment jsdom
 import {beforeEach,expect,it,vi} from 'vitest';
-import {createStandardSelection,LICENSE_HASHES,licenseDocumentPath,uploadCustomLicense} from './listingLicenses';
+import {createStandardSelection,LICENSE_HASHES,licenseDocumentPath,publishedCustomLicense,uploadCustomLicense} from './listingLicenses';
 import vectors from './fixtures/s1735-backend-hash-vectors.json';
-const client=vi.hoisted(()=>({post:vi.fn()}));
+const client=vi.hoisted(()=>({post:vi.fn(),get:vi.fn()}));
 vi.mock('./client',()=>({api:client}));
 beforeEach(()=>vi.resetAllMocks());
 
 it('pins the reviewed standard, rider and covenant vectors',()=>{
-  expect(createStandardSelection(true).license_sha256).toBe(vectors.standard_true);
-  expect(createStandardSelection(false).license_sha256).toBe(vectors.standard_false);
-  expect(LICENSE_HASHES.rider).toEqual({true:vectors.rider_true,false:vectors.rider_false});
-  expect(LICENSE_HASHES.covenant).toBe(vectors.covenant);
-  expect(vectors.custom_pdf_true).toBe('80a42b3f3b022e19ce60ad7b2cf59b524877b92320ec49f8af859833764a55f4');
+  expect(Object.keys(vectors).sort()).toEqual(['covenant_marketplace_listing','rider_not_permitted','rider_permitted','standard_ai_training','standard_no_ai_training']);
+  expect(createStandardSelection(true).license_sha256).toBe(vectors.standard_ai_training);
+  expect(createStandardSelection(false).license_sha256).toBe(vectors.standard_no_ai_training);
+  expect(LICENSE_HASHES.rider).toEqual({true:vectors.rider_permitted,false:vectors.rider_not_permitted});
+  expect(LICENSE_HASHES.covenant).toBe(vectors.covenant_marketplace_listing);
 });
 
 it('constructs the immutable public document paths',()=>{
@@ -31,4 +31,10 @@ it('posts the custom document with an explicit training boolean and verifies eve
   expect(client.post.mock.calls[0][0]).toBe('/licenses/custom');expect(body.get('upload')).toBe(file);expect(body.get('title')).toBe('terms.txt');expect(body.get('ai_training')).toBe('false');
   client.post.mockResolvedValue({data:{...response,license_sha256:'not-a-hash'}});
   await expect(uploadCustomLicense(file,true)).rejects.toThrow('could not be verified');
+});
+it('reads a published custom document from the authenticated listing-scoped route',async()=>{
+ const document=new Blob(['seller terms'],{type:'text/plain'});
+ client.get.mockResolvedValue({data:document});
+ expect(await publishedCustomLicense('11111111-1111-4111-8111-111111111111')).toBe(document);
+ expect(client.get).toHaveBeenCalledWith('/listings/11111111-1111-4111-8111-111111111111/license-document',{responseType:'blob'});
 });

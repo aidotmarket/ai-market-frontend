@@ -1,6 +1,6 @@
 'use client';
 
-import {useState} from 'react';
+import {useEffect,useState} from 'react';
 import {
   LICENSE_HASHES, createStandardSelection, uploadCustomLicense, licenseDocumentPath,
   type LicenseSelection,
@@ -22,11 +22,14 @@ export default function SellerLicenseSelection({value, onChange, disabled = fals
   const [uploading, setUploading] = useState(false);
   const [uploadError, setUploadError] = useState('');
   const [termsOpened, setTermsOpened] = useState(false);
+  const [customPreview,setCustomPreview]=useState<{id:string;url:string}|null>(null);
+  useEffect(()=>()=>{if(customPreview) URL.revokeObjectURL(customPreview.url);},[customPreview]);
   const identity = value.seller_acceptance;
   const updateIdentity = (field: 'signer_name' | 'signer_title' | 'authority_confirmed', next: string | boolean) =>
     onChange({...value, seller_acceptance: {...identity, [field]: next}});
   const chooseKind = (kind: LicenseSelection['kind']) => {
     setTermsOpened(false);
+    setCustomPreview(null);
     const invalidatedIdentity={...identity,authority_confirmed:false};
     if (kind === 'standard') onChange({...createStandardSelection(value.ai_training), seller_acceptance: invalidatedIdentity});
     else onChange({...value, kind: 'custom', version: '1.0', license_document_id: null, license_sha256: '',
@@ -34,6 +37,7 @@ export default function SellerLicenseSelection({value, onChange, disabled = fals
   };
   const setAiTraining = (aiTraining: boolean) => {
     setTermsOpened(false);
+    setCustomPreview(null);
     if (value.kind === 'standard') onChange({...value, ai_training: aiTraining,
       license_sha256: LICENSE_HASHES.standard[String(aiTraining) as 'true' | 'false'],seller_acceptance:{...identity,authority_confirmed:false}});
     else onChange({...value, ai_training: aiTraining, license_document_id: null, license_sha256: '',
@@ -42,8 +46,10 @@ export default function SellerLicenseSelection({value, onChange, disabled = fals
   };
   async function upload(file: File) {
     setUploading(true); setUploadError(''); setTermsOpened(false);
+    setCustomPreview(null);
     try {
       const result = await uploadCustomLicense(file, value.ai_training);
+      setCustomPreview({id:result.id,url:URL.createObjectURL(file)});
       onChange({...value, kind: 'custom', version: '1.0', license_document_id: result.id,
         license_sha256: result.license_sha256, rider_sha256: LICENSE_HASHES.rider[String(value.ai_training) as 'true' | 'false'],
         covenant_sha256: LICENSE_HASHES.covenant, seller_acceptance: {...identity, authority_confirmed: false}});
@@ -77,7 +83,7 @@ export default function SellerLicenseSelection({value, onChange, disabled = fals
     <details onToggle={event => {if (event.currentTarget.open) setTermsOpened(true);}} className="rounded-lg border border-gray-200 p-4">
       <summary className="cursor-pointer font-medium text-indigo-700">Read the summary and full terms</summary>
       <p className="mt-3 whitespace-pre-line text-sm leading-6 text-gray-700">{value.kind === 'standard' ? STANDARD_SELLER_SUMMARY : CUSTOM_NOTICE}</p>
-      <div className="mt-3 flex flex-wrap gap-4 text-sm">{value.kind === 'standard' || value.license_document_id ? <a className="text-indigo-700 underline" href={`${value.kind === 'standard' ? licenseDocumentPath('standard', value.ai_training) : licenseDocumentPath('custom', value.license_document_id!)}?download=1`} target="_blank" rel="noreferrer">Open full licence</a> : <span className="text-gray-500">Upload your licence to open the full document.</span>}{value.kind === 'custom' && <a className="text-indigo-700 underline" href={`${licenseDocumentPath('rider', value.ai_training)}?download=1`} target="_blank" rel="noreferrer">Open AI-Training Rider</a>}<a className="text-indigo-700 underline" href={`${licenseDocumentPath('covenant')}?download=1`} target="_blank" rel="noreferrer">Open Marketplace Listing Covenant</a></div>
+      <div className="mt-3 flex flex-wrap gap-4 text-sm">{value.kind === 'standard' ? <a className="text-indigo-700 underline" href={`${licenseDocumentPath('standard', value.ai_training)}?download=1`} target="_blank" rel="noreferrer">Open full licence</a> : customPreview?.id===value.license_document_id ? <a className="text-indigo-700 underline" href={customPreview.url} target="_blank" rel="noreferrer">Open full licence</a> : <span className="text-gray-500">Upload your licence here to open the full document before publication.</span>}{value.kind === 'custom' && <a className="text-indigo-700 underline" href={`${licenseDocumentPath('rider', value.ai_training)}?download=1`} target="_blank" rel="noreferrer">Open AI-Training Rider</a>}<a className="text-indigo-700 underline" href={`${licenseDocumentPath('covenant')}?download=1`} target="_blank" rel="noreferrer">Open Marketplace Listing Covenant</a></div>
     </details>
     <div className="grid gap-4 sm:grid-cols-2">
       <label className="text-sm font-medium text-gray-900">Signer full name<input aria-label="Signer full name" value={identity.signer_name} onChange={event => updateIdentity('signer_name', event.target.value)} className="mt-2 block w-full rounded-lg border border-gray-300 px-3 py-2" /></label>
