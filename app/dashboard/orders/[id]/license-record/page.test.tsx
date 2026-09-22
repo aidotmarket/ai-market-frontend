@@ -2,7 +2,7 @@
 
 import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import backendRecord from '@/tests/fixtures/s1735_license_record.json';
+import backendRecord from '@/tests/fixtures/s1735_license_record_terminated.json';
 import type { LicenseRecord } from '@/types';
 
 const records = vi.hoisted(() => ({

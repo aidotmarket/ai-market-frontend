@@ -10,6 +10,9 @@ import BuyButton, { parseCheckoutRefusal, SignedOutPurchase } from './BuyButton'
 import { useAuthStore } from '@/store/auth';
 import { ToastProvider } from './Toast';
 import { AxiosError } from 'axios';
+import { api } from '@/api/client';
+import { hashLicenseComponentBytes } from './ListingLicenseDisclosure';
+import { readFileSync } from 'node:fs';
 
 const ordersApi = vi.hoisted(() => ({ getMyOrders: vi.fn() }));
 vi.mock('@/api/orders', () => ordersApi);
@@ -119,7 +122,7 @@ describe('BuyButton licence acceptance', () => {
           { source: 'billing_entity', legal_name: 'Buyer Holdings Ltd', jurisdiction: 'GB' },
           { source: 'typed', legal_name: 'Buyer Data Ltd', jurisdiction: 'IE' },
         ],
-        reconciliation_url: '/settings/organization/legal-identity',
+        reconciliation_url: '/settings/organization/legal-identity?org=org-1',
       } },
       status: 409, statusText: 'Conflict', headers: {}, config: {} as never,
     };
@@ -127,8 +130,84 @@ describe('BuyButton licence acceptance', () => {
     expect(parseCheckoutRefusal(error)).toEqual({
       code: 'LEGAL_IDENTITY_CONFLICT',
       message: 'Your legal identity records conflict — billing_entity: Buyer Holdings Ltd (GB) versus typed: Buyer Data Ltd (IE). Reconcile them before purchasing.',
-      reconciliationUrl: '/settings/organization/legal-identity',
+      reconciliationUrl: '/settings/organization/legal-identity?org=org-1',
     });
+  });
+
+  const customText = 'Seller custom licence text\n';
+  const covenantText = 'Exact covenant text\n';
+  const riderText = readFileSync('tests/fixtures/s1735_rider_true.txt', 'utf8');
+  const componentTexts = { license: customText, covenant: covenantText, rider: riderText };
+
+  async function customLicense() {
+    const bytes = (text: string) => new TextEncoder().encode(text);
+    return {
+      code: 'custom' as const, version: '1',
+      params: { ai_training: true, source_sha256: 'c'.repeat(64) },
+      summary: ['Seller terms — read the full licence.'],
+      full_text_url: '/api/v1/listings/listing-1/license-document',
+      download_url: '/api/v1/listings/listing-1/license-document?download=1',
+      sha256: await hashLicenseComponentBytes(bytes(customText), { kind: 'license', code: 'custom', version: '1', params: { ai_training: true, source_sha256: 'c'.repeat(64) } }),
+      covenant_sha256: await hashLicenseComponentBytes(bytes(covenantText), { kind: 'covenant', code: 'marketplace-listing', version: '1.0', params: {} }),
+      rider_sha256: await hashLicenseComponentBytes(bytes(riderText), { kind: 'rider', code: 'ai-training', version: '1.0', params: { ai_training: true } }),
+    };
+  }
+
+  async function renderCustom(failing?: keyof typeof componentTexts, failure?: 'mismatch' | 'error') {
+    const priorAdapter = api.defaults.adapter;
+    const priorBaseUrl = api.defaults.baseURL;
+    const priorApiUrl = process.env.NEXT_PUBLIC_API_URL;
+    process.env.NEXT_PUBLIC_API_URL = 'https://api.ai.market';
+    api.defaults.baseURL = 'https://api.ai.market/api/v1';
+    const calls: string[] = [];
+    api.defaults.adapter = async (config) => {
+      calls.push(config.url ?? '');
+      expect(config.baseURL).toBe('https://api.ai.market/api/v1');
+      expect(config.headers.Authorization).toBe('Bearer buyer-token');
+      if (failing === 'license' && failure === 'error') throw new Error('document unavailable');
+      const text = failing === 'license' && failure === 'mismatch' ? 'tampered custom text\n' : customText;
+      return { data: new TextEncoder().encode(text).buffer, status: 200, statusText: 'OK', headers: { 'content-type': 'text/plain' }, config };
+    };
+    const fetchMock = vi.fn(async (input: RequestInfo | URL) => {
+      const url = String(input);
+      const kind = url.includes('marketplace-listing') ? 'covenant' : 'rider';
+      if (failing === kind && failure === 'error') throw new Error('document unavailable');
+      return documentResponse(failing === kind && failure === 'mismatch' ? 'tampered document\n' : componentTexts[kind]);
+    });
+    vi.stubGlobal('fetch', fetchMock);
+    useAuthStore.setState({ token: 'buyer-token' });
+    const license = await customLicense();
+    render(<ToastProvider><BuyButton listingId="listing-1" slug="listing" price={20} pricingType="one_time" licenseDetails={license} /></ToastProvider>);
+    completeAcceptanceForm();
+    return { calls, fetchMock, restore: () => {
+      api.defaults.adapter = priorAdapter;
+      api.defaults.baseURL = priorBaseUrl;
+      if (priorApiUrl === undefined) delete process.env.NEXT_PUBLIC_API_URL;
+      else process.env.NEXT_PUBLIC_API_URL = priorApiUrl;
+    } };
+  }
+
+  it('verifies custom text with the authenticated API client and all three component hashes', async () => {
+    const { calls, fetchMock, restore } = await renderCustom();
+    try {
+      await waitFor(() => expect(screen.getAllByText('Fetched bytes match the server hash')).toHaveLength(3));
+      expect(calls).toEqual(['/listings/listing-1/license-document?download=1']);
+      expect(fetchMock).toHaveBeenCalledTimes(2);
+      expect(screen.getAllByRole('link', { name: 'Download exact document' })[0].getAttribute('href')).toBe('https://api.ai.market/api/v1/listings/listing-1/license-document?download=1');
+      expect((screen.getByRole('button', { name: 'Accept and continue to payment' }) as HTMLButtonElement).disabled).toBe(false);
+    } finally { restore(); }
+  });
+
+  it.each([
+    ['license', 'mismatch'], ['license', 'error'],
+    ['covenant', 'mismatch'], ['covenant', 'error'],
+    ['rider', 'mismatch'], ['rider', 'error'],
+  ] as const)('keeps acceptance disabled when %s has %s', async (kind, failure) => {
+    const { restore } = await renderCustom(kind, failure);
+    try {
+      await waitFor(() => expect(screen.getByText(failure === 'mismatch' ? 'Hash mismatch — do not accept' : 'Could not verify — do not accept')).not.toBeNull());
+      expect((screen.getByRole('button', { name: 'Accept and continue to payment' }) as HTMLButtonElement).disabled).toBe(true);
+    } finally { restore(); }
   });
 });
 

@@ -1,0 +1,2 @@
+ai.market AI-Training Rider v1.0 — Not permitted
+The Licensee must not use the licensed dataset to train, fine-tune, test or evaluate artificial-intelligence or machine-learning systems. This restriction supplements the seller's own licence; if that licence is more restrictive, the more restrictive term controls.

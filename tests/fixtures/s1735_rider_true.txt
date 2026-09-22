@@ -1,0 +1,2 @@
+ai.market AI-Training Rider v1.0 — Permitted
+The Licensor permits the Licensee to use the licensed dataset to train, fine-tune, test and evaluate artificial-intelligence and machine-learning systems, subject to the seller's own licence and the ai.market Marketplace Listing Covenant. If the seller's own licence expressly prohibits that use, the prohibition controls and the listing must not be published until the conflict is removed.

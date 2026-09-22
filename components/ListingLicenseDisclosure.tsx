@@ -2,6 +2,7 @@
 
 import { useEffect, useMemo, useState } from 'react';
 import type { ListingLicenseDetails } from '@/types';
+import { api } from '@/api/client';
 
 const STANDARD_NOTICE = 'ai.market standard terms — the same balanced terms every seller on ai.market uses. ai.market is not a party and gives no legal advice.';
 const CUSTOM_NOTICE = "The seller's own terms. ai.market did not write these; review them before you accept. The separate ai.market AI-Training Rider and Marketplace Listing Covenant also form part of your record. ai.market is not a party and gives no legal advice.";
@@ -98,16 +99,22 @@ async function fetchedBytesMatch(
   return await hashLicenseComponentBytes(canonicalBytes, reference) === reference.sha256;
 }
 
-function documentFetchUrl(url: string): string {
+function documentLocation(url: string): { href: string; apiPath?: string } {
   try {
     const parsed = new URL(url, 'https://ai.market');
+    if (parsed.pathname.startsWith('/api/v1/') && (url.startsWith('/api/v1/') || parsed.origin === 'https://ai.market')) {
+      return {
+        href: `${process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000'}${parsed.pathname}${parsed.search}`,
+        apiPath: `${parsed.pathname.slice('/api/v1'.length)}${parsed.search}`,
+      };
+    }
     if (parsed.origin === 'https://ai.market' && parsed.pathname.startsWith('/licenses/')) {
-      return `${parsed.pathname}${parsed.search}`;
+      return { href: `${parsed.pathname}${parsed.search}` };
     }
   } catch {
     // The fetch below owns invalid URL handling and reports a verification error.
   }
-  return url;
+  return { href: url };
 }
 
 function referencesFor(license: ListingLicenseDetails): DocumentReference[] {
@@ -167,10 +174,19 @@ export default function ListingLicenseDisclosure({
     onVerificationChange?.(false);
     void Promise.all(references.map(async (reference): Promise<LoadedDocument> => {
       try {
-        const response = await fetch(documentFetchUrl(reference.downloadUrl), { credentials: 'include', cache: 'no-store' });
-        if (!response.ok) throw new Error('document fetch failed');
-        const bytes = new Uint8Array(await response.arrayBuffer());
-        const contentType = response.headers.get('content-type') ?? 'text/plain';
+        const location = documentLocation(reference.downloadUrl);
+        let bytes: Uint8Array;
+        let contentType: string;
+        if (location.apiPath) {
+          const response = await api.get<ArrayBuffer>(location.apiPath, { responseType: 'arraybuffer', headers: { 'Cache-Control': 'no-store' } });
+          bytes = new Uint8Array(response.data);
+          contentType = response.headers['content-type'] ?? 'text/plain';
+        } else {
+          const response = await fetch(location.href, { credentials: 'include', cache: 'no-store' });
+          if (!response.ok) throw new Error('document fetch failed');
+          bytes = new Uint8Array(await response.arrayBuffer());
+          contentType = response.headers.get('content-type') ?? 'text/plain';
+        }
         const matched = await fetchedBytesMatch(bytes, contentType, reference);
         return {
           ...reference,
@@ -209,7 +225,7 @@ export default function ListingLicenseDisclosure({
             <div className="flex flex-wrap items-start justify-between gap-3">
               <div className="min-w-0">
                 <h3 className="text-sm font-semibold text-gray-900">{document.label}</h3>
-                <a href={document.canonicalUrl} target="_blank" rel="noreferrer" className="break-all text-xs text-indigo-700 underline">
+                <a href={documentLocation(document.canonicalUrl).href} target="_blank" rel="noreferrer" className="break-all text-xs text-indigo-700 underline">
                   {document.canonicalUrl}
                 </a>
               </div>
@@ -220,7 +236,7 @@ export default function ListingLicenseDisclosure({
             <p className="mt-2 break-all font-mono text-[11px] text-gray-600">SHA-256: {document.sha256}</p>
             <div className="mt-3 flex flex-wrap gap-4 text-sm">
               {document.text && <details className="w-full rounded border border-gray-100 p-3"><summary className="cursor-pointer font-medium text-indigo-700">Read full text</summary><pre className="mt-3 max-h-96 overflow-auto whitespace-pre-wrap text-xs leading-5 text-gray-800">{document.text}</pre></details>}
-              <a href={document.downloadUrl} download className="font-medium text-indigo-700 underline">Download exact document</a>
+              <a href={documentLocation(document.downloadUrl).href} download className="font-medium text-indigo-700 underline">Download exact document</a>
             </div>
           </div>
         ))}

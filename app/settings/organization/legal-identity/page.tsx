@@ -1,17 +1,13 @@
 'use client';
 
-import { FormEvent, useEffect, useState } from 'react';
+import { FormEvent, Suspense, useEffect, useState } from 'react';
 import Link from 'next/link';
+import { useSearchParams } from 'next/navigation';
 import { AxiosError } from 'axios';
 import { getOrganization, reconcileOrganizationLegalIdentity, type OrganizationLegalIdentity } from '@/api/organizations';
-import { useAuthStore } from '@/store/auth';
 
-type UserWithOrganization = { org_id?: string | null; organization_id?: string | null };
-
-export default function OrganizationLegalIdentityPage() {
-  const user = useAuthStore((state) => state.user);
-  const organizationId = (user as (typeof user & UserWithOrganization))?.org_id
-    ?? (user as (typeof user & UserWithOrganization))?.organization_id;
+function OrganizationLegalIdentityContent() {
+  const organizationId = useSearchParams().get('org');
   const [organization, setOrganization] = useState<OrganizationLegalIdentity | null>(null);
   const [state, setState] = useState<'loading' | 'ready' | 'forbidden' | 'error'>('loading');
   const [legalName, setLegalName] = useState('');
@@ -30,7 +26,7 @@ export default function OrganizationLegalIdentityPage() {
       setLegalName(value.legal_name ?? '');
       setJurisdiction(value.jurisdiction ?? '');
       setState('ready');
-    }).catch(() => { if (!cancelled) setState('error'); });
+    }).catch((error: unknown) => { if (!cancelled) setState(error instanceof AxiosError && error.response?.status === 403 ? 'forbidden' : 'error'); });
     return () => { cancelled = true; };
   }, [organizationId]);
 
@@ -71,4 +67,8 @@ export default function OrganizationLegalIdentityPage() {
       {message && <p role="status" className="mt-4 rounded-lg bg-gray-100 p-4 text-sm text-gray-800">{message}</p>}
     </main>
   );
+}
+
+export default function OrganizationLegalIdentityPage() {
+  return <Suspense fallback={<main className="mx-auto max-w-2xl p-8">Loading organisation legal identity…</main>}><OrganizationLegalIdentityContent /></Suspense>;
 }
