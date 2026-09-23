@@ -125,16 +125,29 @@ it('marks inherited listings unavailable and preserves seller licence provenance
   const html = await renderPage(makeListing({
     license_status: 'pending_seller_terms',
     license_provenance: 'CC-BY-4.0',
+    sample_files: [{ index: 0, key_basename: 'sample.csv', size: 12, binding: 'manifest', state: 'available', url: 'https://sample.example/sample.csv' }],
+    at_a_glance: { profile: 'aim-listing-enrichment-profile-v2', sample_availability: {
+      value: 'View sample', provenance: 'seller_entered', authority: 'seller_entered', source_reference: 'test', source_revision: '1',
+    } },
   }));
   expect(html).toContain('Not yet available to buy');
   expect(html).toContain('seller previously indicated: CC-BY-4.0');
   expect(html).not.toContain('>Buy</button>');
+  expect(html).not.toContain('sample.csv');
+  expect(html).not.toContain('https://sample.example/');
+  expect(html).not.toContain('View sample');
+  expect(html).not.toContain('Sample availability');
+  expect(html).not.toContain('Free sample:');
 });
 
 it('keeps inherited seller provenance visible after terms acceptance', async () => {
-  const html = await renderPage(makeListing({ license_status: 'bound', license_provenance: 'CC-BY-4.0' }));
+  const html = await renderPage(makeListing({
+    license_status: 'bound', license_provenance: 'CC-BY-4.0',
+    sample_files: [{ index: 0, key_basename: 'sample.csv', size: 12, binding: 'manifest', state: 'available', url: 'https://sample.example/sample.csv' }],
+  }));
   expect(html).toContain('seller previously indicated: CC-BY-4.0');
   expect(html).not.toContain('Not yet available to buy');
+  expect(html).toContain('https://sample.example/sample.csv');
 });
 
 describe('ListingDetailPage Dataset JSON-LD', () => {

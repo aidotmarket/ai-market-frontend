@@ -10,6 +10,20 @@ const originalFetch = globalThis.fetch;
 afterEach(() => {
   globalThis.fetch = originalFetch;
   delete process.env.API_URL;
+  delete process.env.NEXT_PUBLIC_API_URL;
+});
+
+it.each([
+  ['API_URL only', 'https://api.ai.market', undefined],
+  ['trailing slash', undefined, 'https://api.ai.market/'],
+])('uses the normalized API base for the download link with %s', async (_label, apiUrl, publicApiUrl) => {
+  if (apiUrl) process.env.API_URL = apiUrl;
+  if (publicApiUrl) process.env.NEXT_PUBLIC_API_URL = publicApiUrl;
+  globalThis.fetch = vi.fn().mockResolvedValue({ ok: true, json: async () => ({
+    code: 'standard', version: '1.0', variant: 'ai-training', summary: [], full_text: 'Full text', sha256: 'a'.repeat(64),
+  }) });
+  const html = renderToStaticMarkup(await LicencePage({ params: Promise.resolve({ parts: ['standard', '1.0', 'ai-training'] }) }));
+  expect(html).toContain('href="https://api.ai.market/api/v1/licenses/standard/1.0/ai-training?download=1"');
 });
 
 it('renders the backend Standard summary before the full text at its canonical URL', async () => {

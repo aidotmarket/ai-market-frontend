@@ -17,8 +17,8 @@ export function BuyerSamplePreview({slug, listingId}: {slug: string; listingId: 
 
 // Fresh loads use force-dynamic/no-store. An untouched tab retains its summary
 // until visibility resumes or bfcache restores it; there is no polling.
-export default function BuyerAtAGlance({slug, listingId, initialSummary, includeSample = true}: {
-  slug: string; listingId?: string; initialSummary?: ListingSummary | null; includeSample?: boolean;
+export default function BuyerAtAGlance({slug, listingId, initialSummary, includeSample = true, hideSampleAvailability = false}: {
+  slug: string; listingId?: string; initialSummary?: ListingSummary | null; includeSample?: boolean; hideSampleAvailability?: boolean;
 }) {
   const [summary, setSummary] = useState(initialSummary ?? null);
   useEffect(() => {
@@ -62,5 +62,8 @@ export default function BuyerAtAGlance({slug, listingId, initialSummary, include
       window.removeEventListener('pageshow', restore);
     };
   }, [slug, initialSummary]);
-  return <BuyerPreviewContent summary={summary} slug={slug} listingId={includeSample ? listingId : undefined} />;
+  const visibleSummary = summary && hideSampleAvailability
+    ? {...summary, sample_availability: undefined}
+    : summary;
+  return <BuyerPreviewContent summary={visibleSummary} slug={slug} listingId={includeSample ? listingId : undefined} />;
 }

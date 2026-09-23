@@ -21,14 +21,19 @@ const stockPaths = new Set([
   'ai-training-rider/1.0/not-permitted',
 ]);
 
+function getApiBase(): string {
+  const apiUrl = process.env.API_URL || process.env.NEXT_PUBLIC_API_URL;
+  if (!apiUrl) throw new Error('API_URL is required for public licence pages');
+  return apiUrl.replace(/\/$/, '');
+}
+
 async function getDocument(parts: string[]): Promise<StockDocument | CustomNotice> {
   const path = parts.join('/');
   const custom = parts.length === 2 && parts[0] === 'custom' && hashPattern.test(parts[1]);
   if (!custom && !stockPaths.has(path)) notFound();
-  const apiUrl = process.env.API_URL || process.env.NEXT_PUBLIC_API_URL;
-  if (!apiUrl) throw new Error('API_URL is required for public licence pages');
+  const apiBase = getApiBase();
   const suffix = custom ? '' : '?format=json';
-  const response = await fetch(`${apiUrl}/api/v1/licenses/${path}${suffix}`, { next: { revalidate: 3600 } });
+  const response = await fetch(`${apiBase}/api/v1/licenses/${path}${suffix}`, { next: { revalidate: 3600 } });
   if (response.status === 404) notFound();
   if (!response.ok) throw new Error('The licence document is unavailable');
   const data: unknown = await response.json();
@@ -70,6 +75,7 @@ export default async function LicencePage({ params }: Props) {
     </main>;
   }
   const title = document.code === 'standard' ? 'ai.market Standard Data Licence' : document.code === 'marketplace-listing' ? 'ai.market Marketplace Listing Covenant' : 'ai.market AI-Training Rider';
+  const apiBase = getApiBase();
   return <main className="mx-auto max-w-3xl px-6 py-16">
     <h1 className="text-3xl font-bold text-gray-900">{title}</h1>
     <p className="mt-2 text-sm text-gray-600">Version {document.version}{document.variant ? ` · ${document.variant.replaceAll('-', ' ')}` : ''}</p>
@@ -82,6 +88,6 @@ export default async function LicencePage({ params }: Props) {
       <pre className="mt-4 whitespace-pre-wrap break-words font-sans leading-7 text-gray-700">{document.full_text}</pre>
     </section>
     <p className="mt-8 break-all text-sm text-gray-600">SHA-256: <code>{document.sha256}</code></p>
-    <a className="mt-4 inline-block text-indigo-700 underline" href={`${process.env.NEXT_PUBLIC_API_URL || process.env.API_URL}/api/v1/licenses/${parts.join('/')}?download=1`}>Download exact document</a>
+    <a className="mt-4 inline-block text-indigo-700 underline" href={`${apiBase}/api/v1/licenses/${parts.join('/')}?download=1`}>Download exact document</a>
   </main>;
 }

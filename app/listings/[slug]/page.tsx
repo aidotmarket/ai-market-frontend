@@ -105,6 +105,9 @@ export default async function ListingDetailPage({ params, searchParams }: Props)
     ? listing.jsonld.license : null;
   const legacyLicense = typeof listing.license === 'string' ? listing.license : null;
   const pendingSellerTerms = listing.license_status === 'pending_seller_terms';
+  const atAGlanceSummary = pendingSellerTerms && listing.at_a_glance
+    ? {...listing.at_a_glance, sample_availability: undefined}
+    : listing.at_a_glance;
   const versions = await fetchListingVersions(listing.id);
   const hasVersionRows = versions.length > 0;
   // S1097: legacy listings intentionally keep byte-identical rendering and omit
@@ -145,7 +148,7 @@ export default async function ListingDetailPage({ params, searchParams }: Props)
             </div>
           </div>
 
-          <BuyerAtAGlance slug={listing.slug} listingId={listing.id} initialSummary={listing.at_a_glance} includeSample={false} />
+          <BuyerAtAGlance slug={listing.slug} listingId={listing.id} initialSummary={atAGlanceSummary} includeSample={false} hideSampleAvailability={pendingSellerTerms} />
 
           {approved ? <iframe title="Seller-approved listing" sandbox="" referrerPolicy="no-referrer"
             srcDoc={approved.rendered_html} className="h-[min(720px,80vh)] min-h-96 w-full rounded-xl border border-gray-200 bg-white" /> : <>
@@ -196,7 +199,7 @@ export default async function ListingDetailPage({ params, searchParams }: Props)
           </div>}
           {listing.license_provenance && <p className="text-sm text-gray-600">seller previously indicated: {listing.license_provenance}</p>}
 
-          <SampleFiles files={listing.sample_files ?? approved?.sample_files} />
+          {!pendingSellerTerms && <SampleFiles files={listing.sample_files ?? approved?.sample_files} />}
 
           {/* Schema Info */}
           {(rowCount != null || schemaColumns.length > 0) && (
@@ -211,7 +214,7 @@ export default async function ListingDetailPage({ params, searchParams }: Props)
             </div>
           )}
 
-          <BuyerSamplePreview slug={listing.slug} listingId={listing.id} />
+          {!pendingSellerTerms && <BuyerSamplePreview slug={listing.slug} listingId={listing.id} />}
         </div>
 
         {/* Sidebar */}
