@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 import {beforeEach,expect,it,vi} from 'vitest';
-import {createStandardSelection,LICENSE_HASHES,licenseDocumentPath,publishedCustomLicense,uploadCustomLicense} from './listingLicenses';
+import {createStandardSelection,LICENSE_HASHES,licenseDocumentPath,uploadCustomLicense} from './listingLicenses';
 import vectors from './fixtures/s1735-backend-hash-vectors.json';
 const client=vi.hoisted(()=>({post:vi.fn(),get:vi.fn()}));
 vi.mock('./client',()=>({api:client}));
@@ -31,10 +31,4 @@ it('posts the custom document with an explicit training boolean and verifies eve
   expect(client.post.mock.calls[0][0]).toBe('/licenses/custom');expect(body.get('upload')).toBe(file);expect(body.get('title')).toBe('terms.txt');expect(body.get('ai_training')).toBe('false');
   client.post.mockResolvedValue({data:{...response,license_sha256:'not-a-hash'}});
   await expect(uploadCustomLicense(file,true)).rejects.toThrow('could not be verified');
-});
-it('reads a published custom document from the authenticated listing-scoped route',async()=>{
- const document=new Blob(['seller terms'],{type:'text/plain'});
- client.get.mockResolvedValue({data:document});
- expect(await publishedCustomLicense('11111111-1111-4111-8111-111111111111')).toBe(document);
- expect(client.get).toHaveBeenCalledWith('/listings/11111111-1111-4111-8111-111111111111/license-document',{responseType:'blob'});
 });

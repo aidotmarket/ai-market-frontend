@@ -36,11 +36,6 @@ export function licenseDocumentPath(kind: 'standard' | 'covenant' | 'rider', val
   throw new Error('Unknown licence document');
 }
 
-export async function publishedCustomLicense(listingId: string): Promise<Blob> {
-  const response = await api.get<Blob>(`/listings/${encodeURIComponent(listingId)}/license-document`, {responseType:'blob'});
-  return response.data;
-}
-
 export const LICENSE_HASHES = {
   standard: {
     true: '4b05dbcd0c186746d3deab6c68beaebba88610de8e85122efb4d527edb1263c6',

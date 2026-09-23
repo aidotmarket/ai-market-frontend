@@ -2,7 +2,7 @@ import { webcrypto } from 'node:crypto';
 import { readFileSync } from 'node:fs';
 import { describe, expect, it, vi } from 'vitest';
 import record from '@/tests/fixtures/s1735_license_record.json';
-import { hashLicenseComponentBytes } from './ListingLicenseDisclosure';
+import { fetchedBytesMatch, hashLicenseComponentBytes } from './ListingLicenseDisclosure';
 
 const trueClause = 'The Licensee may use the Data to train, fine-tune, test and evaluate artificial-intelligence and machine-learning systems, subject to every other restriction in this licence.';
 const falseClause = 'The Licensee must not use the Data to train, fine-tune, test or evaluate artificial-intelligence or machine-learning systems. This does not prohibit ordinary analysis that does not train, fine-tune, test or evaluate such a system.';
@@ -23,6 +23,25 @@ describe('Gate 2 §3.2 frontend hash vectors', () => {
         expect(bytes.length).toBe(length);
         expect(await hashLicenseComponentBytes(bytes, { kind, code, version, params })).toBe(digest);
       }
+    } finally { vi.unstubAllGlobals(); }
+  });
+});
+
+describe('custom PDF source verification', () => {
+  it('requires PDF media type and the exact pinned source bytes', async () => {
+    vi.stubGlobal('crypto', webcrypto);
+    try {
+      const bytes = new TextEncoder().encode('%PDF-1.4 test');
+      const sourceSha256 = 'd663640088750cf16276d623c2588d7233f2b84b45f4b2e20832f47b16aa5618';
+      const reference = {
+        kind: 'license' as const, label: "Seller's own licence", canonicalUrl: '/api/v1/listings/id/license-document',
+        downloadUrl: '/api/v1/listings/id/license-document?download=1',
+        sha256: '80a42b3f3b022e19ce60ad7b2cf59b524877b92320ec49f8af859833764a55f4',
+        code: 'custom', version: '1', params: {ai_training: true, source_sha256: sourceSha256},
+      };
+      expect(await fetchedBytesMatch(bytes, 'application/pdf', reference)).toBe(true);
+      expect(await fetchedBytesMatch(bytes, 'text/plain', reference)).toBe(false);
+      expect(await fetchedBytesMatch(new TextEncoder().encode('%PDF-1.4 evil'), 'application/pdf', reference)).toBe(false);
     } finally { vi.unstubAllGlobals(); }
   });
 });

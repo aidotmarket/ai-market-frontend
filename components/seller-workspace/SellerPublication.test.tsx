@@ -6,8 +6,6 @@ import type {ApprovalReceipt} from '@/api/sellerListingReview';
 import {createStandardSelection} from '@/api/listingLicenses';
 const api=vi.hoisted(()=>({readPublication:vi.fn(),publishListing:vi.fn()}));
 vi.mock('@/api/sellerListingPublication',()=>api);
-const licenseApi=vi.hoisted(()=>({publishedCustomLicense:vi.fn()}));
-vi.mock('@/api/listingLicenses',async importOriginal=>({...await importOriginal<typeof import('@/api/listingLicenses')>(),...licenseApi}));
 const approval={id:'approval',review_hash:'a',render_hash:'b'} as ApprovalReceipt;
 const publication={title:'Retail',slug:'retail',status:'published',is_listed:true};
 afterEach(cleanup);
@@ -71,18 +69,10 @@ it('keeps publish disabled until covenant authority and signer facts are complet
  expect((button as HTMLButtonElement).disabled).toBe(true);fireEvent.click(button);expect(api.publishListing).not.toHaveBeenCalled();
  expect(screen.getByText(/covenant and authority not confirmed/)).toBeTruthy();
 });
-it('opens a published custom document through the authenticated listing route',async()=>{
+it('opens the verified custom document through the listing disclosure',async()=>{
  const licensed={...approval,license_selection:{...createStandardSelection(),kind:'custom' as const}};
  const listed={...publication,listing_id:'11111111-1111-4111-8111-111111111111'};
  api.readPublication.mockResolvedValue({publication_available:false,publication:listed});
- licenseApi.publishedCustomLicense.mockResolvedValue(new Blob(['seller terms'],{type:'text/plain'}));
- const createObjectURL=vi.fn(()=> 'blob:published-licence');
- const revokeObjectURL=vi.fn();
- vi.stubGlobal('URL',{...URL,createObjectURL,revokeObjectURL});
- const view=render(<SellerPublication approval={licensed} active rendered/>);
- fireEvent.click(await screen.findByRole('button',{name:'Open published custom licence'}));
- expect((await screen.findByRole('link',{name:'Open published custom licence'})).getAttribute('href')).toBe('blob:published-licence');
- expect(licenseApi.publishedCustomLicense).toHaveBeenCalledWith(listed.listing_id);
- view.unmount();expect(revokeObjectURL).toHaveBeenCalledWith('blob:published-licence');
- vi.unstubAllGlobals();
+ render(<SellerPublication approval={licensed} active rendered/>);
+ expect((await screen.findByRole('link',{name:'Open verified custom licence on listing'})).getAttribute('href')).toBe('/listings/retail');
 });

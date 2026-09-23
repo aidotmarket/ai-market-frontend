@@ -83,19 +83,25 @@ export async function hashLicenseComponentBytes(
   ]));
 }
 
-async function fetchedBytesMatch(
+export async function fetchedBytesMatch(
   bytes: Uint8Array,
   contentType: string,
   reference: DocumentReference,
 ): Promise<boolean> {
   let canonicalBytes = bytes;
-  if (reference.kind === 'license' && contentType.toLowerCase().includes('application/pdf')) {
-    const sourceSha256 = reference.params.source_sha256;
-    if (typeof sourceSha256 !== 'string' || await sha256(bytes) !== sourceSha256) return false;
-    canonicalBytes = new TextEncoder().encode(`${canonicalJson({
-      content_type: 'application/pdf',
-      source_sha256: sourceSha256,
-    })}\n`);
+  const mediaType = contentType.split(';')[0].trim().toLowerCase();
+  const sourceSha256 = reference.params.source_sha256;
+  const pdfCanonicalBytes = typeof sourceSha256 === 'string' && /^[a-f0-9]{64}$/.test(sourceSha256)
+    ? new TextEncoder().encode(`${canonicalJson({content_type: 'application/pdf', source_sha256: sourceSha256})}\n`)
+    : null;
+  const expectsPdf = reference.kind === 'license' && reference.code === 'custom' && pdfCanonicalBytes !== null &&
+    await hashLicenseComponentBytes(pdfCanonicalBytes, reference) === reference.sha256;
+  if (expectsPdf && mediaType === 'application/pdf') {
+    if (typeof sourceSha256 !== 'string' ||
+      await sha256(bytes) !== sourceSha256) return false;
+    canonicalBytes = pdfCanonicalBytes!;
+  } else if (expectsPdf || mediaType === 'application/pdf') {
+    return false;
   }
   return await hashLicenseComponentBytes(canonicalBytes, reference) === reference.sha256;
 }
@@ -197,7 +203,7 @@ export default function ListingLicenseDisclosure({
         return {
           ...reference,
           state: matched ? 'matched' : 'mismatch',
-          text: contentType.toLowerCase().includes('application/pdf') ? null : new TextDecoder().decode(bytes),
+          text: matched && !contentType.toLowerCase().includes('application/pdf') ? new TextDecoder().decode(bytes) : null,
           objectUrl,
         };
       } catch {
