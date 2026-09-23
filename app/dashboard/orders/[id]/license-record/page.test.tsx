@@ -13,7 +13,7 @@ vi.mock('next/navigation', () => ({ useParams: () => ({ id: 'order-1' }) }));
 
 const { default: LicenseRecordPage } = await import('./page');
 
-const record = backendRecord as LicenseRecord;
+const record: LicenseRecord = backendRecord as LicenseRecord;
 
 describe('LicenseRecordPage', () => {
   beforeEach(() => {
@@ -31,7 +31,9 @@ describe('LicenseRecordPage', () => {
 
     expect(await screen.findByRole('heading', { name: 'Licence record' })).not.toBeNull();
     expect(screen.getByText('Buyer Ltd (GB)')).not.toBeNull();
-    expect(screen.getByText('Seller LLC (US)')).not.toBeNull();
+    expect(screen.getByText('identified to ai.market under order ORDER-1')).not.toBeNull();
+    expect(screen.getByText(record.identity_notice)).not.toBeNull();
+    expect(screen.queryByText(/Seller LLC/)).toBeNull();
     expect(screen.getByText('Terminated')).not.toBeNull();
     expect(screen.getByText(/Delete the dataset and all copies/)).not.toBeNull();
 

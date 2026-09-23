@@ -129,6 +129,8 @@ describe('OrderDetailPage viewer relationship gating', () => {
     render(<OrderDetailPage />);
 
     expect(await screen.findByText('Order dataset')).not.toBeNull();
+    expect(screen.getByText('Identified to ai.market for this order')).not.toBeNull();
+    expect(screen.queryByText('Example Seller')).toBeNull();
     expect(screen.queryByRole('button', { name: 'Mark Delivered' })).toBeNull();
   });
 

@@ -357,7 +357,7 @@ export default function OrderDetailPage() {
               </div>
               <div>
                 <dt className="text-gray-500">Seller</dt>
-                <dd className="font-medium text-gray-900">{order.seller_name || 'N/A'}</dd>
+                <dd className="font-medium text-gray-900">Identified to ai.market for this order</dd>
               </div>
               <div>
                 <dt className="text-gray-500">Amount Paid</dt>

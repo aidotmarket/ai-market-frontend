@@ -5,9 +5,16 @@ import Link from 'next/link';
 import { useParams } from 'next/navigation';
 import { confirmLicenseRecordDeletion, downloadLicenseRecordPdf, getLicenseRecord } from '@/api/licenseRecords';
 import { formatDate } from '@/lib/format';
-import type { LicenseRecord, LicenseRecordCovenantDocument, LicenseRecordLicenseDocument, LicenseRecordRiderDocument } from '@/types';
+import type { LicenseRecord, LicenseRecordCovenantDocument, LicenseRecordIdentifiedParty, LicenseRecordLicenseDocument, LicenseRecordReferencedParty, LicenseRecordRiderDocument } from '@/types';
 
 type RecordDocument = LicenseRecordLicenseDocument | LicenseRecordCovenantDocument | LicenseRecordRiderDocument;
+type RecordParty = LicenseRecordIdentifiedParty | LicenseRecordReferencedParty;
+
+function partyLabel(value: RecordParty, isViewer: boolean): string {
+  if (isViewer && 'legal_name' in value) return `${value.legal_name} (${value.jurisdiction})`;
+  if ('reference' in value) return value.reference;
+  return 'Identified to ai.market for this order';
+}
 
 function DocumentSection({ document, title }: { document: RecordDocument; title: string }) {
   return (
@@ -56,7 +63,7 @@ export default function LicenseRecordView({ party }: { party: 'buyer' | 'seller'
         ...current,
         lifecycle_events: [...current.lifecycle_events, {
           event_type: 'deletion_confirmed', reason: null, actor_type: 'buyer',
-          actor_id: current.buyer.user_id, occurred_at: confirmation.occurred_at,
+          occurred_at: confirmation.occurred_at,
           deletion_due_at: null, metadata: null,
         }],
       } : current);
@@ -86,11 +93,12 @@ export default function LicenseRecordView({ party }: { party: 'buyer' | 'seller'
       <dl className="grid gap-4 rounded-lg border border-gray-200 p-5 text-sm sm:grid-cols-2">
         <div><dt className="text-gray-500">Order</dt><dd className="mt-1 break-all font-mono text-gray-900">{record.order.number ?? record.order.id}</dd></div>
         <div><dt className="text-gray-500">Accepted</dt><dd className="mt-1 text-gray-900">{formatDate(record.signature.accepted_at)}</dd></div>
-        <div><dt className="text-gray-500">Buyer</dt><dd className="mt-1 text-gray-900">{record.buyer.legal_name} ({record.buyer.jurisdiction})</dd></div>
-        <div><dt className="text-gray-500">Seller</dt><dd className="mt-1 text-gray-900">{record.seller.legal_name} ({record.seller.jurisdiction})</dd></div>
-        <div><dt className="text-gray-500">Signature</dt><dd className="mt-1 text-gray-900">{record.signature.typed_name ?? record.signature.principal_ref ?? record.signature.channel}{record.signature.signer_title ? `, ${record.signature.signer_title}` : ''}</dd></div>
+        <div><dt className="text-gray-500">Buyer</dt><dd className="mt-1 text-gray-900">{partyLabel(record.buyer, party === 'buyer')}</dd></div>
+        <div><dt className="text-gray-500">Seller</dt><dd className="mt-1 text-gray-900">{partyLabel(record.seller, party === 'seller')}</dd></div>
+        <div><dt className="text-gray-500">Signature</dt><dd className="mt-1 text-gray-900">{party === 'buyer' && 'typed_name' in record.signature ? (record.signature.typed_name ?? record.signature.principal_ref ?? record.signature.channel) : record.signature.channel}{party === 'buyer' && 'signer_title' in record.signature && record.signature.signer_title ? `, ${record.signature.signer_title}` : ''}</dd></div>
         <div><dt className="text-gray-500">Status</dt><dd className={`mt-1 font-semibold ${record.status === 'active' ? 'text-green-800' : 'text-red-800'}`}>{record.status === 'active' ? 'Active' : 'Terminated'}</dd></div>
       </dl>
+      <p className="text-sm text-gray-700">{record.identity_notice}</p>
       {record.status === 'terminated' && (
         <section className="rounded-lg border border-amber-300 bg-amber-50 p-5 text-sm text-amber-950">
           <h2 className="font-semibold">Deletion duty</h2>

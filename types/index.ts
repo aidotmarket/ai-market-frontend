@@ -651,12 +651,17 @@ export interface BuyerOrder {
   license_record_available?: boolean;
 }
 
-export interface LicenseRecordParty {
+export interface LicenseRecordIdentifiedParty {
   user_id: string;
   organization_id: string | null;
   party_type: string;
   legal_name: string;
   jurisdiction: string;
+}
+
+export interface LicenseRecordReferencedParty {
+  role: 'buyer' | 'seller';
+  reference: string;
 }
 
 export interface LicenseRecordLicenseDocument {
@@ -684,13 +689,12 @@ export interface LicenseRecordLifecycleEvent {
   event_type: string;
   reason: string | null;
   actor_type: string | null;
-  actor_id: string | null;
   occurred_at: string;
   deletion_due_at: string | null;
   metadata: Record<string, unknown> | null;
 }
 
-export interface LicenseRecord {
+interface LicenseRecordBase {
   acceptance_id: string;
   order: { id: string; number: string | null };
   listing: { id: string; title: string | null; version_id: string | null };
@@ -698,17 +702,7 @@ export interface LicenseRecord {
   rider: LicenseRecordRiderDocument | null;
   covenant: LicenseRecordCovenantDocument;
   status: 'active' | 'terminated';
-  buyer: LicenseRecordParty;
-  seller: LicenseRecordParty;
-  signature: {
-    channel: string;
-    typed_name: string | null;
-    signer_title: string | null;
-    principal_ref: string | null;
-    credential_id: string | null;
-    authority_confirmed: boolean;
-    accepted_at: string;
-  };
+  identity_notice: string;
   lifecycle_events: LicenseRecordLifecycleEvent[];
   fulfilment_history: Array<{
     event_type: string;
@@ -716,6 +710,30 @@ export interface LicenseRecord {
     metadata: Record<string, unknown> | null;
   }>;
 }
+
+interface LicenseRecordSignatureBase {
+  channel: string;
+  authority_confirmed: boolean;
+  accepted_at: string;
+}
+
+export type LicenseRecord = LicenseRecordBase & (
+  | {
+      buyer: LicenseRecordIdentifiedParty;
+      seller: LicenseRecordReferencedParty & { role: 'seller' };
+      signature: LicenseRecordSignatureBase & {
+        typed_name: string | null;
+        signer_title: string | null;
+        principal_ref: string | null;
+        credential_id: string | null;
+      };
+    }
+  | {
+      buyer: LicenseRecordReferencedParty & { role: 'buyer' };
+      seller: LicenseRecordIdentifiedParty;
+      signature: LicenseRecordSignatureBase;
+    }
+);
 
 export interface LicenseDeletionConfirmation {
   status: 'confirmed';
