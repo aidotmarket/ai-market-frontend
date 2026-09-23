@@ -18,10 +18,24 @@ export interface TermsAcceptRequest extends TermsPartyContext {
   signer_full_name: string;
   signer_title: string;
   business_legal_name: string;
+  jurisdiction?: string;
   authority_ack: boolean;
   ack_box1: boolean;
   ack_box2: boolean;
   ack_box3: boolean;
+}
+
+export interface CurrentTerms {
+  terms_version: string;
+  terms_hash_sha256: string;
+  effective_at: string | null;
+  markdown?: string;
+  text_url?: string;
+}
+
+export async function getCurrentTerms(): Promise<CurrentTerms> {
+  const res = await api.get<CurrentTerms>('/legal/terms/current');
+  return res.data;
 }
 
 export interface TermsAcceptResponse extends TermsAcceptanceStatus {

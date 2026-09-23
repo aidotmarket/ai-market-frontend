@@ -77,6 +77,19 @@ export async function getMarketplaceCategoryFacets(): Promise<Record<string, num
 
 export const getListings = () => api.get('/listings/');
 export const getMyListings = () => api.get('/listings/mine');
+
+export interface PendingSellerTermsListing {
+  id: string;
+  slug: string;
+  title: string;
+  status: string;
+  license_status: 'pending_seller_terms';
+}
+
+export const getPendingSellerTermsListings = () =>
+  api.get<{ count: number; listings: PendingSellerTermsListing[] }>('/sellers/me/listings', {
+    params: { license_status: 'pending_seller_terms' },
+  });
 export const updateListing = (id: string, data: any) => api.patch(`/listings/${id}`, data);
 export const getListingBySlug = (slug: string) => api.get(`/listings/${slug}`);
 

@@ -282,6 +282,8 @@ export interface ListingPublicListItem {
   published_at: string | null;
   purchasable: boolean;
   purchase_hold_reason: string | null;
+  license_status?: 'bound' | 'pending_seller_terms';
+  license_provenance?: string | null;
 }
 
 export interface ListingPublicListResponse {
@@ -341,6 +343,8 @@ export interface ListingDetail {
     subscription_price_monthly: number | null;
   };
   license: string | ListingLicenseDetails | null;
+  license_status?: 'bound' | 'pending_seller_terms';
+  license_provenance?: string | null;
   category: string;
   secondary_categories: string[] | null;
   tags: string[];

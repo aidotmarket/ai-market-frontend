@@ -1,9 +1,9 @@
 'use client';
 
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import Link from 'next/link';
 import { AxiosError } from 'axios';
-import { acceptTerms, type TermsPartyContext } from '@/api/legal';
+import { acceptTerms, getCurrentTerms, type TermsPartyContext } from '@/api/legal';
 import { useAuthStore } from '@/store/auth';
 
 const ACK_BOX_1 = 'I understand ai.market is non-custodial. It never touches, stores, or moves the data. It is not a party to any transaction, it does not mediate deals, and it does not guarantee that any dataset is accurate, lawful, or fit for purpose. The deal and its risks are between the buyer and the seller.';
@@ -21,6 +21,9 @@ export default function TermsAcceptanceForm({ context, compact = false, onAccept
   const [signerFullName, setSignerFullName] = useState(fullName(user?.first_name, user?.last_name));
   const [signerTitle, setSignerTitle] = useState('');
   const [businessLegalName, setBusinessLegalName] = useState(user?.company_name || '');
+  const [jurisdiction, setJurisdiction] = useState('');
+  const [requiresJurisdiction, setRequiresJurisdiction] = useState(false);
+  const [termsReady, setTermsReady] = useState(false);
   const [authorityAck, setAuthorityAck] = useState(false);
   const [ackBox1, setAckBox1] = useState(false);
   const [ackBox2, setAckBox2] = useState(false);
@@ -29,15 +32,30 @@ export default function TermsAcceptanceForm({ context, compact = false, onAccept
   const [submitted, setSubmitted] = useState(false);
   const [error, setError] = useState('');
 
+  useEffect(() => {
+    let cancelled = false;
+    getCurrentTerms().then((terms) => {
+      if (!cancelled) {
+        setRequiresJurisdiction(terms.terms_version === '1.1');
+        setTermsReady(true);
+      }
+    }).catch(() => {
+      if (!cancelled) setError('Could not load the current terms. Please try again.');
+    });
+    return () => { cancelled = true; };
+  }, []);
+
   const canSubmit = useMemo(() => (
+    termsReady &&
+    (!requiresJurisdiction || /^[A-Za-z]{2}$/.test(jurisdiction.trim())) &&
     ackBox1 &&
     ackBox2 &&
     ackBox3 &&
     signerFullName.trim().length > 0 &&
     signerTitle.trim().length > 0 &&
     businessLegalName.trim().length > 0 &&
-    (context.scope !== 'organization' || authorityAck)
-  ), [ackBox1, ackBox2, ackBox3, authorityAck, businessLegalName, context.scope, signerFullName, signerTitle]);
+    (context.scope === 'organization' || requiresJurisdiction ? authorityAck : true)
+  ), [termsReady, requiresJurisdiction, jurisdiction, ackBox1, ackBox2, ackBox3, authorityAck, businessLegalName, context.scope, signerFullName, signerTitle]);
 
   const handleSubmit = async (event: React.FormEvent) => {
     event.preventDefault();
@@ -51,7 +69,8 @@ export default function TermsAcceptanceForm({ context, compact = false, onAccept
         signer_full_name: signerFullName.trim(),
         signer_title: signerTitle.trim(),
         business_legal_name: businessLegalName.trim(),
-        authority_ack: context.scope === 'organization' ? authorityAck : false,
+        ...(requiresJurisdiction ? { jurisdiction: jurisdiction.trim().toUpperCase() } : {}),
+        authority_ack: context.scope === 'organization' || requiresJurisdiction ? authorityAck : false,
         ack_box1: ackBox1,
         ack_box2: ackBox2,
         ack_box3: ackBox3,
@@ -104,9 +123,13 @@ export default function TermsAcceptanceForm({ context, compact = false, onAccept
         <TextField id="signer-full-name" label="Full legal name" value={signerFullName} onChange={setSignerFullName} />
         <TextField id="signer-title" label="Title" value={signerTitle} onChange={setSignerTitle} />
         <TextField id="business-legal-name" label="Business legal name" value={businessLegalName} onChange={setBusinessLegalName} />
+        {requiresJurisdiction && <div>
+          <label htmlFor="terms-jurisdiction" className="mb-1 block text-sm font-medium text-gray-700">Jurisdiction (2-letter country code) <span className="text-red-500">*</span></label>
+          <input id="terms-jurisdiction" required minLength={2} maxLength={2} value={jurisdiction} onChange={(event) => setJurisdiction(event.target.value.toUpperCase().slice(0, 2))} className="w-full rounded-lg border border-gray-300 px-3 py-2 uppercase" />
+        </div>}
       </div>
 
-      {context.scope === 'organization' && (
+      {(context.scope === 'organization' || requiresJurisdiction) && (
         <RequiredCheckbox
           id="authority-ack"
           checked={authorityAck}

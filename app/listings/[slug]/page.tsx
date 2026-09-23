@@ -104,6 +104,7 @@ export default async function ListingDetailPage({ params, searchParams }: Props)
     listing.jsonld.license.startsWith('https://ai.market/licenses/')
     ? listing.jsonld.license : null;
   const legacyLicense = typeof listing.license === 'string' ? listing.license : null;
+  const pendingSellerTerms = listing.license_status === 'pending_seller_terms';
   const versions = await fetchListingVersions(listing.id);
   const hasVersionRows = versions.length > 0;
   // S1097: legacy listings intentionally keep byte-identical rendering and omit
@@ -190,6 +191,10 @@ export default async function ListingDetailPage({ params, searchParams }: Props)
             {licenseDetails?.code === 'standard' ? 'ai.market standard terms' : "Seller's own licence"}
           </Link>}
           {licenseDetails && <ListingLicenseDisclosure license={licenseDetails} />}
+          {pendingSellerTerms && <div role="status" className="rounded-lg border border-amber-200 bg-amber-50 p-4 text-sm text-amber-950">
+            <p className="font-medium">Not yet available to buy. The seller needs to accept the current terms.</p>
+          </div>}
+          {listing.license_provenance && <p className="text-sm text-gray-600">seller previously indicated: {listing.license_provenance}</p>}
 
           <SampleFiles files={listing.sample_files ?? approved?.sample_files} />
 
@@ -218,7 +223,7 @@ export default async function ListingDetailPage({ params, searchParams }: Props)
               price={listing.pricing.price}
               scanFindings={listing.scan_findings ?? null}
             />
-            {approved && !listing.purchasable ? <p role="status" className="rounded-lg bg-gray-50 p-4 text-sm text-gray-700">
+            {pendingSellerTerms ? null : approved && !listing.purchasable ? <p role="status" className="rounded-lg bg-gray-50 p-4 text-sm text-gray-700">
               {listing.purchase_hold_reason === 'workspace_sales_paused' ? 'The seller has paused new sales. Existing buyers can access their purchase from their orders.' : 'This listing is temporarily unavailable for new purchases. Please try again later.'}
             </p> : hasVersionRows ? (
               <ListingPurchasePanel

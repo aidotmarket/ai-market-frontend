@@ -134,6 +134,15 @@ describe('BuyButton licence acceptance', () => {
     });
   });
 
+  it('explains the inherited listing terms refusal in plain words', () => {
+    const error = new AxiosError('conflict');
+    error.response = {
+      data: { detail: { code: 'SELLER_TERMS_ACCEPTANCE_PENDING' } },
+      status: 409, statusText: 'Conflict', headers: {}, config: {} as never,
+    };
+    expect(parseCheckoutRefusal(error).message).toBe('This listing cannot be purchased until the seller accepts the current terms.');
+  });
+
   const customText = 'Seller custom licence text\n';
   const covenantText = 'Exact covenant text\n';
   const riderText = readFileSync('tests/fixtures/s1735_rider_true.txt', 'utf8');

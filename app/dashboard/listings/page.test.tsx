@@ -6,6 +6,7 @@ import ListingsPage from './page';
 
 const api = vi.hoisted(() => ({
   getMyListings: vi.fn(),
+  getPendingSellerTermsListings: vi.fn(),
   getConnectStatus: vi.fn(),
   unpublishListing: vi.fn(),
   deleteListing: vi.fn(),
@@ -25,6 +26,7 @@ beforeEach(() => {
     category: 'Research', price: 100, created_at: '2026-09-01T12:00:00Z',
   }] });
   api.getConnectStatus.mockResolvedValue({ data: { payouts_enabled: true } });
+  api.getPendingSellerTermsListings.mockResolvedValue({ data: { count: 0, listings: [] } });
 });
 afterEach(() => { cleanup(); vi.resetAllMocks(); });
 
@@ -54,4 +56,12 @@ it('shows the listings error when listings fail', async () => {
   render(<ListingsPage />);
   expect(await screen.findByText('Failed to load listings.')).toBeTruthy();
   expect(screen.queryByText('Seller dataset')).toBeNull();
+});
+
+it('prompts sellers with inherited listings to accept Terms 1.1', async () => {
+  api.getPendingSellerTermsListings.mockResolvedValue({ data: { count: 1, listings: [{ id: 'listing-1', slug: 'seller-dataset', title: 'Seller dataset', status: 'published', license_status: 'pending_seller_terms' }] } });
+  render(<ListingsPage />);
+  const link = await screen.findByRole('link', { name: 'Review and accept Terms 1.1' });
+  expect(link.getAttribute('href')).toBe('/legal/terms/accept?redirect=%2Fdashboard%2Flistings');
+  expect(screen.getByText(/not yet available to buy/)).toBeTruthy();
 });

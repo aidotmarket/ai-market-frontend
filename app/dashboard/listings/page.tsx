@@ -2,7 +2,8 @@
 
 import { useEffect, useState, useCallback } from 'react';
 import { useRouter } from 'next/navigation';
-import { getMyListings, unpublishListing, deleteListing } from '@/api/listings';
+import Link from 'next/link';
+import { getMyListings, getPendingSellerTermsListings, unpublishListing, deleteListing } from '@/api/listings';
 import { getConnectStatus } from '@/api/connect';
 import { useToast } from '@/components/Toast';
 import SellerShareControls from '@/components/listings/SellerShareControls';
@@ -31,6 +32,7 @@ const STATUS_LABELS: Record<string, string> = {
 
 export default function ListingsPage() {
   const [listings, setListings] = useState<any[]>([]);
+  const [pendingTermsCount, setPendingTermsCount] = useState(0);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [actionLoading, setActionLoading] = useState<string | null>(null);
@@ -43,9 +45,10 @@ export default function ListingsPage() {
   const fetchListings = useCallback(async () => {
     setLoading(true);
     setError('');
-    const [listingsRes, connectRes] = await Promise.allSettled([
+    const [listingsRes, connectRes, pendingRes] = await Promise.allSettled([
       getMyListings(),
       getConnectStatus(),
+      getPendingSellerTermsListings(),
     ]);
     if (listingsRes.status === 'fulfilled') {
       setListings(listingsRes.value.data || []);
@@ -57,6 +60,7 @@ export default function ListingsPage() {
         ? connectRes.value.data?.payouts_enabled ? 'enabled' : 'disabled'
         : 'unknown'
     );
+    setPendingTermsCount(pendingRes.status === 'fulfilled' ? pendingRes.value.data.count : 0);
     setLoading(false);
   }, []);
 
@@ -116,6 +120,11 @@ export default function ListingsPage() {
   return (
     <div className="space-y-6">
       <TermsGatePrompt />
+      {pendingTermsCount > 0 && <div role="status" className="rounded-lg border border-amber-300 bg-amber-50 p-4 text-sm text-amber-950">
+        <p className="font-semibold">{pendingTermsCount} inherited {pendingTermsCount === 1 ? 'listing is' : 'listings are'} not yet available to buy.</p>
+        <p className="mt-1">Review and accept Terms 1.1 to make eligible listings available for purchase.</p>
+        <Link href="/legal/terms/accept?redirect=%2Fdashboard%2Flistings" className="mt-2 inline-block font-semibold underline">Review and accept Terms 1.1</Link>
+      </div>}
       <div className="flex items-center justify-between">
         <h1 className="text-2xl font-bold text-gray-900">Your Listings</h1>
       </div>

@@ -121,6 +121,22 @@ function extractJsonLdScripts(html: string): string[] {
   );
 }
 
+it('marks inherited listings unavailable and preserves seller licence provenance', async () => {
+  const html = await renderPage(makeListing({
+    license_status: 'pending_seller_terms',
+    license_provenance: 'CC-BY-4.0',
+  }));
+  expect(html).toContain('Not yet available to buy');
+  expect(html).toContain('seller previously indicated: CC-BY-4.0');
+  expect(html).not.toContain('>Buy</button>');
+});
+
+it('keeps inherited seller provenance visible after terms acceptance', async () => {
+  const html = await renderPage(makeListing({ license_status: 'bound', license_provenance: 'CC-BY-4.0' }));
+  expect(html).toContain('seller previously indicated: CC-BY-4.0');
+  expect(html).not.toContain('Not yet available to buy');
+});
+
 describe('ListingDetailPage Dataset JSON-LD', () => {
   beforeEach(() => {
     fetchPublicListing.mockReset();
