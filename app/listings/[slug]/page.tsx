@@ -100,6 +100,9 @@ export default async function ListingDetailPage({ params, searchParams }: Props)
   const shouldEmitJsonLd = shouldEmitDatasetJsonLd(listing);
   const publisherName = listing.publisher.display_name;
   const licenseDetails = isListingLicenseDetails(listing.license) ? listing.license : undefined;
+  const publicLicenseUrl = licenseDetails && typeof listing.jsonld?.license === 'string' &&
+    listing.jsonld.license.startsWith('https://ai.market/licenses/')
+    ? listing.jsonld.license : null;
   const legacyLicense = typeof listing.license === 'string' ? listing.license : null;
   const versions = await fetchListingVersions(listing.id);
   const hasVersionRows = versions.length > 0;
@@ -183,6 +186,9 @@ export default async function ListingDetailPage({ params, searchParams }: Props)
             {listing.verification_scope != null && <p className="text-sm text-gray-600">{listing.verification_scope}</p>}
           </>}
 
+          {publicLicenseUrl && <Link href={publicLicenseUrl} className={`inline-flex rounded-full px-3 py-1 text-sm font-medium ${licenseDetails?.code === 'standard' ? 'bg-green-50 text-green-900' : 'bg-amber-50 text-amber-950'}`}>
+            {licenseDetails?.code === 'standard' ? 'ai.market standard terms' : "Seller's own licence"}
+          </Link>}
           {licenseDetails && <ListingLicenseDisclosure license={licenseDetails} />}
 
           <SampleFiles files={listing.sample_files ?? approved?.sample_files} />
