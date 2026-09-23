@@ -5,7 +5,7 @@ import EditListingPage from './page';
 import enabled from '@/api/fixtures/s1735-capability-on.json';
 import disabled from '@/api/fixtures/s1735-capability-off.json';
 
-const transport=vi.hoisted(()=>({get:vi.fn(),post:vi.fn()}));
+const transport=vi.hoisted(()=>({get:vi.fn(),post:vi.fn(),patch:vi.fn()}));
 vi.mock('@/api/client',()=>({api:transport}));
 vi.mock('next/navigation',()=>({useParams:()=>({id:'listing-1'}),useRouter:()=>({push:vi.fn()})}));
 vi.mock('@/components/Toast',()=>({useToast:()=>({toast:vi.fn()})}));
@@ -15,6 +15,17 @@ vi.mock('@/components/listings/SellerShareControls',()=>({default:()=>null}));
 const listing={title:'Example listing',description:'Useful data',category:'Technology',tags:[],price:25,
   pricing_type:'one_time',status:'unlisted',listing_licenses_enabled:true};
 afterEach(()=>{cleanup();vi.resetAllMocks();});
+
+it('omits the unpublished licence choice from the edit-page draft PATCH',async()=>{
+  transport.get.mockImplementation(async(path:string)=>({data:path==='/seller-workspace/capabilities'?enabled:listing}));
+  transport.patch.mockResolvedValue({data:{}});
+  render(<EditListingPage/>);
+  const save=await screen.findByRole('button',{name:'Save Draft'});
+  fireEvent.click(save);
+  await waitFor(()=>expect(transport.patch).toHaveBeenCalledOnce());
+  expect(transport.patch.mock.calls[0][0]).toBe('/listings/listing-1');
+  expect(transport.patch.mock.calls[0][1]).not.toHaveProperty('license_selection');
+});
 
 it.each([[enabled,true],[disabled,false]])('uses only the capability response for licence UI and publish payload',async(capability,shown)=>{
   transport.get.mockImplementation(async(path:string)=>({data:path==='/seller-workspace/capabilities'?capability:listing}));

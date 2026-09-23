@@ -128,7 +128,6 @@ export default function EditListingPage() {
         source_row_count: data.source_row_count,
         compliance_frameworks: data.compliance_frameworks,
         compliance_notes: data.compliance_notes,
-        ...(listingLicensesEnabled ? {license_selection: licenseSelection} : {}),
       });
       setSummaryRevision(value => value + 1);
       toast('Listing saved', 'success');
