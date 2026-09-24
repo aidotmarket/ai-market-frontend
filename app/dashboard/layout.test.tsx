@@ -20,6 +20,7 @@ const capabilitiesApi = vi.hoisted(() => ({
 const sellerWorkspaceApi = vi.hoisted(() => ({
   getSellerWorkspaceCapabilities: vi.fn(),
 }));
+const gatewaysApi = vi.hoisted(() => ({ listSellerGateways: vi.fn() }));
 
 vi.mock('next/navigation', () => ({
   useRouter: () => ({
@@ -43,6 +44,7 @@ vi.mock('@/api/sellerWorkspace', async (importOriginal) => ({
   ...(await importOriginal<typeof import('@/api/sellerWorkspace')>()),
   getSellerWorkspaceCapabilities: sellerWorkspaceApi.getSellerWorkspaceCapabilities,
 }));
+vi.mock('@/api/sellerGateways', () => ({ listSellerGateways: gatewaysApi.listSellerGateways }));
 
 vi.mock('@/components/onboarding/SellerSetupProgressBar', () => ({
   default: () => <div>seller setup progress</div>,
@@ -92,6 +94,7 @@ describe('DashboardLayout hydration guard', () => {
     sellerWorkspaceApi.getSellerWorkspaceCapabilities.mockResolvedValue(
       enabledWorkspaceCapabilities
     );
+    gatewaysApi.listSellerGateways.mockResolvedValue([]);
     useAuthStore.setState({
       user: null,
       token: null,
@@ -271,6 +274,7 @@ describe('DashboardLayout hydration guard', () => {
         ['Overview', '/dashboard'],
         ['Listings', '/dashboard/listings'],
         ['Seller Workspace', '/dashboard/seller-workspace'],
+        ['Gateways', '/dashboard/gateways'],
         ['Sales', '/dashboard/sales'],
         ['Purchases', '/dashboard/orders'],
         ['Inquiries', '/dashboard/seller/inquiries'],
@@ -406,6 +410,17 @@ describe('DashboardLayout hydration guard', () => {
       ]);
     });
     expect(sellerWorkspaceApi.getSellerWorkspaceCapabilities).not.toHaveBeenCalled();
+  });
+
+  it.each(['gateway_disabled', 'other_error'])('hides Gateways after %s', async (code) => {
+    navigation.pathname = '/dashboard';
+    capabilitiesApi.getCapabilities.mockResolvedValue({ seller: { effective_status: 'active' } });
+    gatewaysApi.listSellerGateways.mockRejectedValue({ response: { data: { error: { code } } } });
+    useAuthStore.setState({ user: { ...user, role: 'seller' }, token: 'token', isAuthenticated: true, isLoading: false, hydrated: true });
+    render(<DashboardLayout>Seller dashboard</DashboardLayout>);
+    await screen.findByText('Seller dashboard');
+    await waitFor(() => expect(gatewaysApi.listSellerGateways).toHaveBeenCalled());
+    expect(screen.queryByRole('link', { name: 'Gateways' })).toBeNull();
   });
 
   it.each([
