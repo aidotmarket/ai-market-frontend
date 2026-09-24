@@ -33,7 +33,7 @@ function formatBytes(bytes: number) {
 }
 
 function shellQuote(value: string) {
-  return `'${value.replace(/[\x00-\x1f]/g, '').replaceAll("'", "'\\''")}'`;
+  return `'${value.replace(/[\x00-\x1f\x7f]/g, '').replaceAll("'", "'\\''")}'`;
 }
 
 function FileRow({ file, orderId, reload, report, disputable }: { file: GatewayDeliveryFile; orderId: string; reload: () => void; report: (fileId: string) => void; disputable: boolean }) {
@@ -45,6 +45,7 @@ function FileRow({ file, orderId, reload, report, disputable }: { file: GatewayD
   const worker = useRef<Worker | null>(null);
 
   useEffect(() => { setPermission(file.permission); }, [file.permission]);
+  useEffect(() => { if (file.reissue.blocked_code || !file.reissue.allowed) setResumeAvailable(false); }, [file.reissue.allowed, file.reissue.blocked_code]);
   useEffect(() => () => worker.current?.terminate(), []);
 
   async function reissue(mode: 'restart' | 'resume') {
@@ -94,7 +95,7 @@ function FileRow({ file, orderId, reload, report, disputable }: { file: GatewayD
     </div>}
     {file.reissue.blocked_code && <p className="mt-2 text-sm">{BLOCKED_MESSAGES[file.reissue.blocked_code]}</p>}
     {file.reissue.allowed && !permission && !resumeAvailable && file.reissue.blocked_code !== 'coverage_exhausted' && <button type="button" disabled={busy} className="mt-2 rounded border px-3 py-2 text-sm disabled:opacity-50" onClick={() => reissue('restart')}>Restart download</button>}
-    {resumeAvailable && <button type="button" disabled={busy} className="ml-2 rounded border px-3 py-2 text-sm disabled:opacity-50" onClick={() => reissue('resume')}>Resume download</button>}
+    {resumeAvailable && file.reissue.allowed && !file.reissue.blocked_code && <button type="button" disabled={busy} className="ml-2 rounded border px-3 py-2 text-sm disabled:opacity-50" onClick={() => reissue('resume')}>Resume download</button>}
     {disputable && (file.reissue.blocked_code === 'coverage_exhausted' || resumeAvailable || file.reissue.blocked_code === 'gateway_revoked') && <button type="button" className="ml-2 text-sm text-indigo-700 underline" onClick={() => report(file.file_id)}>Report a problem</button>}
     <label className="mt-3 block text-sm">Verify file <input type="file" className="mt-1 block text-sm" onChange={(event) => { const picked = event.currentTarget.files?.[0]; event.currentTarget.value = ''; verify(picked); }} /></label>
     {verification && <p role="status" className="mt-1 text-sm">{verification}</p>}
@@ -114,18 +115,19 @@ export default function GatewayDeliverySection({ orderId }: { orderId: string })
 
   useEffect(() => {
     let active = true;
+    let generation = 0;
     let timer: ReturnType<typeof setTimeout> | undefined;
     let lastDelivery: GatewayDelivery | null = null;
-    async function load() {
+    async function load(current: number) {
       try {
         const { delivery: next, retryAfter } = await getGatewayDelivery(orderId);
-        if (!active) return;
+        if (!active || current !== generation) return;
         lastDelivery = next;
         setDelivery(next);
         const seconds = retryAfter ?? (next.files.some((file) => file.state === 'in_progress') ? 5 : 60);
-        timer = setTimeout(load, seconds * 1000);
+        timer = setTimeout(() => { timer = undefined; void load(current); }, seconds * 1000);
       } catch (error) {
-        if (!active) return;
+        if (!active || current !== generation) return;
         const response = (error as { response?: { status?: number; headers?: { get?: (name: string) => unknown; [name: string]: unknown } } })?.response;
         const code = gatewayErrorCode(error);
         if (response?.status === 401 || response?.status === 403 || (response?.status === 404 && ['gateway_disabled', 'not_a_gateway_order', 'order_not_found'].includes(code ?? ''))) {
@@ -136,12 +138,12 @@ export default function GatewayDeliverySection({ orderId }: { orderId: string })
         const headers = response?.headers;
         const retry = Number(headers?.get?.('retry-after') ?? headers?.['retry-after']);
         const seconds = Number.isFinite(retry) && retry > 0 ? retry : lastDelivery?.files.some((file) => file.state === 'in_progress') ? 5 : 60;
-        timer = setTimeout(load, seconds * 1000);
+        timer = setTimeout(() => { timer = undefined; void load(current); }, seconds * 1000);
       }
     }
-    refresh.current = () => { if (timer) clearTimeout(timer); void load(); };
-    void load();
-    return () => { active = false; if (timer) clearTimeout(timer); refresh.current = () => {}; };
+    refresh.current = () => { generation++; if (timer) clearTimeout(timer); timer = undefined; void load(generation); };
+    refresh.current();
+    return () => { active = false; generation++; if (timer) clearTimeout(timer); timer = undefined; refresh.current = () => {}; };
   }, [orderId]);
 
   if (!delivery) return null;

@@ -92,14 +92,25 @@ test('real Restart control requests restart, renders the new URL, and completes 
 });
 
 test('Verify file in the real component reports both a match and a mismatch', async ({ page }) => {
+  test.setTimeout(90_000);
+  let navigations = 0;
+  page.on('framenavigated', frame => { if (frame === page.mainFrame()) navigations++; });
   await page.route('https://api.preview.test/**', route => route.fulfill({
     status: 200, contentType: 'application/json', headers: { 'access-control-allow-origin': 'http://127.0.0.1:4178', 'access-control-allow-credentials': 'true' },
     body: JSON.stringify(delivery(null)),
   }));
   await page.goto('/tests/preview-browser/index.html?gateway=1');
   const picker = page.getByLabel('Verify file');
+  const beforeWorkerLoad = navigations;
   await picker.setInputFiles({ name: 'file-ab12.bin', mimeType: 'application/octet-stream', buffer: body });
-  await expect(page.getByRole('status')).toHaveText('File matches the committed SHA-256.');
+  try {
+    await expect(page.getByRole('status')).toHaveText('File matches the committed SHA-256.', { timeout: 30_000 });
+  } catch (error) {
+    if (navigations === beforeWorkerLoad) throw error;
+    // Vite can reload the preview page while transforming a cold worker; select again on the new page.
+    await picker.setInputFiles({ name: 'file-ab12.bin', mimeType: 'application/octet-stream', buffer: body });
+    await expect(page.getByRole('status')).toHaveText('File matches the committed SHA-256.', { timeout: 30_000 });
+  }
   await picker.setInputFiles({ name: 'file-ab12.bin', mimeType: 'application/octet-stream', buffer: Buffer.from('different') });
-  await expect(page.getByRole('status')).toHaveText('File does not match. Report a problem.');
+  await expect(page.getByRole('status')).toHaveText('File does not match. Report a problem.', { timeout: 30_000 });
 });

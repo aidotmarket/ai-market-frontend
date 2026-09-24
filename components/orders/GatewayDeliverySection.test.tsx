@@ -97,10 +97,59 @@ describe('buyer gateway delivery', () => {
     expect(screen.getByText('Copy resume command')).toBeTruthy();
   });
 
-  it('removes C0 characters before quoting the copied command', async () => {
+  it('hides Resume when a later GET blocks re-issue', async () => {
+    let resolveBlocked!: (value: ReturnType<typeof success>) => void;
+    api.get.mockResolvedValueOnce(success()).mockImplementationOnce(() => new Promise(resolve => { resolveBlocked = resolve; }));
+    api.post.mockRejectedValueOnce(failure('restart_unavailable', 409));
+    render(<Section orderId="order-1" />);
+    fireEvent.click(await screen.findByText('Restart download'));
+    expect(await screen.findByText('Resume download')).toBeTruthy();
+    await act(async () => resolveBlocked(success({ ...delivery, files: [{ ...file, reissue: { allowed: false, remaining_24h: 0, blocked_code: 'rate_limited' } }] })));
+    expect(screen.getByText(BLOCKED_MESSAGES.rate_limited)).toBeTruthy();
+    expect(screen.queryByText('Resume download')).toBeNull();
+  });
+
+  it.each(['newer first', 'older first'] as const)('keeps one polling chain when refresh overlaps a pending GET: %s', async (order) => {
+    vi.useFakeTimers();
+    const pending = () => {
+      let resolve!: (value: ReturnType<typeof success>) => void;
+      const promise = new Promise<ReturnType<typeof success>>(done => { resolve = done; });
+      return { promise, resolve };
+    };
+    const older = pending();
+    const newer = pending();
+    const permission = (token: string) => ({ token, browser_url: `https://door.example/?t=${token}`, download_url: 'https://door.example/file', jti: token, start_deadline: '', transfer_deadline: '', resume_offset: 0 });
+    const snapshot = (token: string) => success({ ...delivery, files: [{ ...file, state: 'in_progress', permission: permission(token) }] }, '7');
+    api.get.mockResolvedValueOnce(success({ ...delivery, files: [{ ...file, state: 'in_progress' }] }, '5'))
+      .mockImplementationOnce(() => older.promise).mockImplementationOnce(() => newer.promise)
+      .mockResolvedValue(snapshot('new'));
+    api.post.mockResolvedValue({ data: permission('new') });
+    const view = render(<Section orderId="order-1" />);
+    await act(async () => { await Promise.resolve(); });
+    await act(async () => { await vi.advanceTimersByTimeAsync(5000); });
+    expect(api.get).toHaveBeenCalledTimes(2);
+    await act(async () => { fireEvent.click(screen.getByText('Restart download')); await Promise.resolve(); });
+    expect(api.get).toHaveBeenCalledTimes(3);
+    const settle = async (request: typeof older, token: string) => { await act(async () => request.resolve(snapshot(token))); };
+    if (order === 'newer first') {
+      await settle(newer, 'new');
+      await settle(older, 'old');
+    } else {
+      await settle(older, 'old');
+      await settle(newer, 'new');
+    }
+    expect(screen.getByRole('link', { name: 'Download file' }).getAttribute('href')).toBe(permission('new').browser_url);
+    await act(async () => { await vi.advanceTimersByTimeAsync(7000); });
+    expect(api.get).toHaveBeenCalledTimes(4);
+    view.unmount();
+    await act(async () => { await vi.advanceTimersByTimeAsync(7000); });
+    expect(api.get).toHaveBeenCalledTimes(4);
+  });
+
+  it('removes C0 and DEL characters before quoting the copied command', async () => {
     const writeText = vi.fn().mockResolvedValue(undefined);
     Object.defineProperty(navigator, 'clipboard', { configurable: true, value: { writeText } });
-    api.get.mockResolvedValue(success({ ...delivery, files: [{ ...file, display_name: "bad\r\n\x00'name.csv", permission: { token: 'safe', browser_url: 'https://door.example/?t=safe', download_url: 'https://door.example/\nfile', jti: 'j', start_deadline: '', transfer_deadline: '', resume_offset: 0 } }] }));
+    api.get.mockResolvedValue(success({ ...delivery, files: [{ ...file, display_name: "bad\r\n\x00\x7f'name.csv", permission: { token: 'safe', browser_url: 'https://door.example/?t=safe', download_url: 'https://door.example/\n\x7ffile', jti: 'j', start_deadline: '', transfer_deadline: '', resume_offset: 0 } }] }));
     render(<Section orderId="order-1" />);
     fireEvent.click(await screen.findByText('Copy resume command'));
     await waitFor(() => expect(writeText).toHaveBeenCalled());
