@@ -63,4 +63,28 @@ describe('NotificationList', () => {
 
     expect(action).toEqual({ kind: 'route', href: '/dashboard/orders/o-1' });
   });
+
+  it('labels a terminated licence and keeps its record link routable', () => {
+    const notification: NotificationItem = {
+      ...baseNotification,
+      type: 'license_terminated',
+      title: 'Licence ended',
+      body: 'Access has ended for this order',
+      metadata: { order_id: 'o-1' },
+      link_url: '/dashboard/sales/o-1/license-record',
+    };
+
+    const html = renderToStaticMarkup(
+      <NotificationList notifications={[notification]} onNotificationClick={vi.fn()} />
+    );
+
+    expect(html).toContain('Licence terminated');
+    expect(html).not.toContain('license_terminated');
+    expect(html).toContain('Licence ended');
+    expect(html).toContain('Access has ended for this order');
+    expect(getNotificationClickAction(notification)).toEqual({
+      kind: 'route',
+      href: '/dashboard/sales/o-1/license-record',
+    });
+  });
 });
