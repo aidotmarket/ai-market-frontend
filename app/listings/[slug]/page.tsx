@@ -19,7 +19,8 @@ import ScanFindingsBadge from '@/components/listings/ScanFindingsBadge';
 import ReactMarkdown from 'react-markdown';
 import rehypeSanitize from 'rehype-sanitize';
 import SampleFiles, { type ListingWithSamples } from './SampleFiles';
-import ListingLicenseDisclosure, { isListingLicenseDetails } from '@/components/ListingLicenseDisclosure';
+import ListingLicenseDisclosure from '@/components/ListingLicenseDisclosure';
+import { isListingLicenseDetails } from '@/lib/listingLicense';
 
 export const dynamic = 'force-dynamic';
 
