@@ -8,6 +8,8 @@ const navigation = vi.hoisted(() => ({ orderId: 'order-1', txId: 'tx-1' }));
 const auth = vi.hoisted(() => ({ userId: 'viewer-1', role: 'seller' }));
 const membersApi = vi.hoisted(() => ({ get: vi.fn(), post: vi.fn() }));
 vi.mock('@/api/client', () => ({ api: membersApi }));
+const gatewayApi = vi.hoisted(() => ({ getGatewayDelivery: vi.fn(), reissueGatewayPermission: vi.fn(), reportGatewayProblem: vi.fn() }));
+vi.mock('@/api/gatewayDelivery', () => ({ ...gatewayApi, gatewayErrorCode: () => null }));
 const ordersApi = vi.hoisted(() => ({
   getOrder: vi.fn(),
   getOrderAccess: vi.fn(),
@@ -105,6 +107,7 @@ describe('OrderDetailPage viewer relationship gating', () => {
     auth.userId = 'viewer-1';
     auth.role = 'seller';
     membersApi.get.mockRejectedValue({ response: { status: 404 } });
+    gatewayApi.getGatewayDelivery.mockRejectedValue({ response: { status: 404, data: { error: { code: 'not_a_gateway_order' } } } });
     ordersApi.getOrder.mockResolvedValue(order());
     ordersApi.getOrderEvents.mockResolvedValue([]);
     ordersApi.requestDownload.mockResolvedValue({
@@ -144,6 +147,8 @@ describe('OrderDetailPage viewer relationship gating', () => {
     render(<OrderDetailPage />);
 
     expect(await screen.findByRole('button', { name: 'Mark Delivered' })).not.toBeNull();
+    expect(screen.queryByRole('region', { name: 'Gateway delivery' })).toBeNull();
+    expect(gatewayApi.getGatewayDelivery).not.toHaveBeenCalled();
   });
 
   it('discards a participant-authorized transaction that belongs to another order', async () => {

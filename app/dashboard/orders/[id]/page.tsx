@@ -17,6 +17,7 @@ import type { BuyerOrderDetail, OrderAccessResponse, OrderEvent, OrderStatus, S3
 import { AxiosError } from 'axios';
 import { api } from '@/api/client';
 import DatasetMembers, { type DatasetMember } from './DatasetMembers';
+import GatewayDeliverySection from '@/components/orders/GatewayDeliverySection';
 
 type DirectoryOrder = BuyerOrderDetail & {
   memberMode?: 'legacy' | 'directory' | 'unavailable';
@@ -342,6 +343,7 @@ export default function OrderDetailPage() {
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
         {/* Main info */}
         <div className="lg:col-span-2 space-y-6">
+          {isBuyerOfRecord && <GatewayDeliverySection key={order.id} orderId={order.id} />}
           <div className="rounded-lg border border-gray-200 p-6">
             <div className="flex items-center justify-between mb-4">
               <h1 className="text-xl font-bold text-gray-900">Order #{order.id.slice(0, 8)}</h1>
