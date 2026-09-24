@@ -6,7 +6,7 @@ import type { GatewayBlockedCode, GatewayDelivery, GatewayDeliveryFile, GatewayP
 
 export const BLOCKED_MESSAGES: Record<GatewayBlockedCode, string> = {
   complete: 'Delivery is complete.',
-  rate_limited: 'You have used all five re-issues for this file today. Try again later.',
+  rate_limited: 'You have used all five re-issues for this file in the last 24 hours. Try again later.',
   gateway_unavailable: 'The gateway is unavailable. Try again later.',
   gateway_revoked: 'The gateway is no longer available. Report a problem.',
   coverage_exhausted: 'This file cannot be downloaded again. Report a problem.',
@@ -15,7 +15,7 @@ export const BLOCKED_MESSAGES: Record<GatewayBlockedCode, string> = {
 
 function errorMessage(code: string | null): string {
   switch (code) {
-    case 'restart_unavailable': return 'Restart is unavailable. Try Resume or report a problem.';
+    case 'restart_unavailable': return 'Restart is unavailable. Choose Resume download for a new download link and copyable resume command, or report a problem.';
     case 'delivery_complete': return 'Delivery is complete.';
     case 'reissue_rate_limited': return BLOCKED_MESSAGES.rate_limited;
     case 'gateway_unavailable': return BLOCKED_MESSAGES.gateway_unavailable;
@@ -33,10 +33,10 @@ function formatBytes(bytes: number) {
 }
 
 function shellQuote(value: string) {
-  return `'${value.replaceAll("'", "'\\''")}'`;
+  return `'${value.replace(/[\x00-\x1f]/g, '').replaceAll("'", "'\\''")}'`;
 }
 
-function FileRow({ file, orderId, reload, report }: { file: GatewayDeliveryFile; orderId: string; reload: () => void; report: (fileId: string) => void }) {
+function FileRow({ file, orderId, reload, report, disputable }: { file: GatewayDeliveryFile; orderId: string; reload: () => void; report: (fileId: string) => void; disputable: boolean }) {
   const [permission, setPermission] = useState<GatewayPermission | null>(file.permission);
   const [busy, setBusy] = useState(false);
   const [message, setMessage] = useState('');
@@ -67,7 +67,9 @@ function FileRow({ file, orderId, reload, report }: { file: GatewayDeliveryFile;
     if (!picked) return;
     worker.current?.terminate();
     setVerification('Checking 0%');
-    const next = new Worker(new URL('./verifyGatewayFile.worker.ts', import.meta.url));
+    let next: Worker;
+    try { next = new Worker(new URL('./verifyGatewayFile.worker.ts', import.meta.url), { type: 'module' }); }
+    catch { setVerification('Could not check this file.'); return; }
     worker.current = next;
     next.onmessage = (event: MessageEvent<{ progress?: number; result?: string }>) => {
       if (event.data.progress !== undefined) setVerification(`Checking ${event.data.progress}%`);
@@ -88,13 +90,13 @@ function FileRow({ file, orderId, reload, report }: { file: GatewayDeliveryFile;
     <p className="break-all text-xs text-gray-600">SHA-256: {file.sha256}</p>
     {permission && file.state !== 'delivered' && <div className="mt-2 flex flex-wrap gap-2">
       <a href={permission.browser_url} referrerPolicy="no-referrer" className="rounded bg-indigo-700 px-3 py-2 text-sm text-white">Download file</a>
-      {command && <button type="button" className="rounded border px-3 py-2 text-sm" onClick={() => navigator.clipboard.writeText(command).then(() => setMessage('Command copied.')).catch(() => setMessage('Could not copy command.'))}>Copy resume command</button>}
+      {command && <button type="button" className="rounded border px-3 py-2 text-sm" onClick={() => { if (!navigator.clipboard) { setMessage('Could not copy command.'); return; } void navigator.clipboard.writeText(command).then(() => setMessage('Command copied.')).catch(() => setMessage('Could not copy command.')); }}>Copy resume command</button>}
     </div>}
     {file.reissue.blocked_code && <p className="mt-2 text-sm">{BLOCKED_MESSAGES[file.reissue.blocked_code]}</p>}
-    {file.reissue.allowed && !permission && file.reissue.blocked_code !== 'coverage_exhausted' && <button type="button" disabled={busy} className="mt-2 rounded border px-3 py-2 text-sm disabled:opacity-50" onClick={() => reissue('restart')}>Restart download</button>}
+    {file.reissue.allowed && !permission && !resumeAvailable && file.reissue.blocked_code !== 'coverage_exhausted' && <button type="button" disabled={busy} className="mt-2 rounded border px-3 py-2 text-sm disabled:opacity-50" onClick={() => reissue('restart')}>Restart download</button>}
     {resumeAvailable && <button type="button" disabled={busy} className="ml-2 rounded border px-3 py-2 text-sm disabled:opacity-50" onClick={() => reissue('resume')}>Resume download</button>}
-    {(file.reissue.blocked_code === 'coverage_exhausted' || resumeAvailable || file.reissue.blocked_code === 'gateway_revoked') && <button type="button" className="ml-2 text-sm text-indigo-700 underline" onClick={() => report(file.file_id)}>Report a problem</button>}
-    <label className="mt-3 block text-sm">Verify file <input type="file" className="mt-1 block text-sm" onChange={(event) => verify(event.currentTarget.files?.[0])} /></label>
+    {disputable && (file.reissue.blocked_code === 'coverage_exhausted' || resumeAvailable || file.reissue.blocked_code === 'gateway_revoked') && <button type="button" className="ml-2 text-sm text-indigo-700 underline" onClick={() => report(file.file_id)}>Report a problem</button>}
+    <label className="mt-3 block text-sm">Verify file <input type="file" className="mt-1 block text-sm" onChange={(event) => { const picked = event.currentTarget.files?.[0]; event.currentTarget.value = ''; verify(picked); }} /></label>
     {verification && <p role="status" className="mt-1 text-sm">{verification}</p>}
     {message && <p role="alert" className="mt-1 text-sm text-red-700">{message}</p>}
   </li>;
@@ -113,15 +115,28 @@ export default function GatewayDeliverySection({ orderId }: { orderId: string })
   useEffect(() => {
     let active = true;
     let timer: ReturnType<typeof setTimeout> | undefined;
+    let lastDelivery: GatewayDelivery | null = null;
     async function load() {
       try {
         const { delivery: next, retryAfter } = await getGatewayDelivery(orderId);
         if (!active) return;
+        lastDelivery = next;
         setDelivery(next);
         const seconds = retryAfter ?? (next.files.some((file) => file.state === 'in_progress') ? 5 : 60);
         timer = setTimeout(load, seconds * 1000);
-      } catch {
-        if (active) setDelivery(null);
+      } catch (error) {
+        if (!active) return;
+        const response = (error as { response?: { status?: number; headers?: { get?: (name: string) => unknown; [name: string]: unknown } } })?.response;
+        const code = gatewayErrorCode(error);
+        if (response?.status === 401 || response?.status === 403 || (response?.status === 404 && ['gateway_disabled', 'not_a_gateway_order', 'order_not_found'].includes(code ?? ''))) {
+          lastDelivery = null;
+          setDelivery(null);
+          return;
+        }
+        const headers = response?.headers;
+        const retry = Number(headers?.get?.('retry-after') ?? headers?.['retry-after']);
+        const seconds = Number.isFinite(retry) && retry > 0 ? retry : lastDelivery?.files.some((file) => file.state === 'in_progress') ? 5 : 60;
+        timer = setTimeout(load, seconds * 1000);
       }
     }
     refresh.current = () => { if (timer) clearTimeout(timer); void load(); };
@@ -150,7 +165,7 @@ export default function GatewayDeliverySection({ orderId }: { orderId: string })
   return <section className="rounded-lg border border-gray-200 p-6" aria-label="Gateway delivery">
     <h2 className="text-lg font-semibold">Gateway delivery</h2>
     <p className="mt-1 text-sm text-gray-600">{allDelivered ? 'All files delivered.' : 'Download each file below.'}</p>
-    <ul>{delivery.files.map((file) => <FileRow key={file.file_id} file={file} orderId={orderId} reload={() => refresh.current()} report={(fileId) => { setSelected([fileId]); setFormOpen(true); }} />)}</ul>
+    <ul>{delivery.files.map((file) => <FileRow key={file.file_id} file={file} orderId={orderId} reload={() => refresh.current()} report={(fileId) => { setSelected([fileId]); setFormOpen(true); }} disputable={delivery.hold.disputable} />)}</ul>
     {delivery.problem && <p className="mt-3 text-sm" role="status">Problem {delivery.problem.state.replace('_', ' ')}. {delivery.problem.file_ids.length} file(s) reported.</p>}
     {delivery.hold.state === 'held_until' && delivery.hold.until && <p className="mt-2 text-sm">Problem window ends {new Date(delivery.hold.until).toLocaleString()}.</p>}
     {delivery.hold.disputable && <button type="button" className="mt-3 text-sm text-indigo-700 underline" onClick={() => setFormOpen(!formOpen)}>Report a problem</button>}
