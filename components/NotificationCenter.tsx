@@ -83,7 +83,7 @@ export function NotificationList({
                   {notification.body && (
                     <span className="mt-1 block text-sm leading-snug text-gray-600">{notification.body}</span>
                   )}
-                  <span className="mt-1 block text-xs text-gray-400">{notification.type}</span>
+                  <span className="mt-1 block text-xs text-gray-400">{notification.type === 'license_terminated' ? 'Licence terminated' : notification.type}</span>
                 </span>
               </div>
             </button>
