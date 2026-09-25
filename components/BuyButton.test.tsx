@@ -145,26 +145,30 @@ describe('BuyButton licence acceptance', () => {
   });
 
   const customText = '<script>alert(1)</script> **bold**\n\tCafé\n';
+  const legacyPdfBytes = new TextEncoder().encode('%PDF-1.4 test');
   const covenantText = 'Exact covenant text\n';
   const riderText = readFileSync('tests/fixtures/s1735_rider_true.txt', 'utf8');
   const componentTexts = { license: customText, covenant: covenantText, rider: riderText };
 
-  async function customLicense() {
+  async function customLicense(legacyPdf = false) {
     const bytes = (text: string) => new TextEncoder().encode(text);
-    const source_sha256 = await sha256(bytes(customText));
+    const source_sha256 = await sha256(legacyPdf ? legacyPdfBytes : bytes(customText));
+    const licenseBytes = legacyPdf
+      ? bytes(`${JSON.stringify({content_type: 'application/pdf', source_sha256})}\n`)
+      : bytes(customText);
     return {
       code: 'custom' as const, version: '1',
       params: { ai_training: true, source_sha256 },
       summary: ['Seller terms — read the full licence.'],
       full_text_url: '/api/v1/listings/listing-1/license-document',
       download_url: '/api/v1/listings/listing-1/license-document?download=1',
-      sha256: await hashLicenseComponentBytes(bytes(customText), { kind: 'license', code: 'custom', version: '1', params: { ai_training: true, source_sha256 } }),
+      sha256: await hashLicenseComponentBytes(licenseBytes, { kind: 'license', code: 'custom', version: '1', params: { ai_training: true, source_sha256 } }),
       covenant_sha256: await hashLicenseComponentBytes(bytes(covenantText), { kind: 'covenant', code: 'marketplace-listing', version: '1.0', params: {} }),
       rider_sha256: await hashLicenseComponentBytes(bytes(riderText), { kind: 'rider', code: 'ai-training', version: '1.0', params: { ai_training: true } }),
     };
   }
 
-  async function renderCustom(failing?: keyof typeof componentTexts, failure?: 'mismatch' | 'error', headerChanges: Record<string, string | undefined> = {}) {
+  async function renderCustom(failing?: keyof typeof componentTexts, failure?: 'mismatch' | 'error', headerChanges: Record<string, string | undefined> = {}, legacyPdf = false) {
     const priorAdapter = api.defaults.adapter;
     const priorBaseUrl = api.defaults.baseURL;
     const priorApiUrl = process.env.NEXT_PUBLIC_API_URL;
@@ -182,7 +186,7 @@ describe('BuyButton licence acceptance', () => {
       static createObjectURL = createObjectURL;
       static revokeObjectURL = revokeObjectURL;
     });
-    const license = await customLicense();
+    const license = await customLicense(legacyPdf);
     api.defaults.adapter = async (config) => {
       calls.push(config.url ?? '');
       expect(config.baseURL).toBe('https://api.ai.market/api/v1');
@@ -190,7 +194,7 @@ describe('BuyButton licence acceptance', () => {
       if (failing === 'license' && failure === 'error') throw new Error('document unavailable');
       const text = failing === 'license' && failure === 'mismatch' ? 'tampered custom text\n' : customText;
       const headers: Record<string, string> = {
-        'content-type': 'text/plain; charset=utf-8',
+        'content-type': legacyPdf ? 'application/pdf' : 'text/plain; charset=utf-8',
         'x-content-type-options': 'nosniff',
         'cache-control': 'private, no-store',
         'content-disposition': 'attachment; filename="listing-listing-1-licence.txt"',
@@ -200,7 +204,7 @@ describe('BuyButton licence acceptance', () => {
       for (const [key, value] of Object.entries(headerChanges)) {
         if (value === undefined) delete headers[key]; else headers[key] = value;
       }
-      return { data: new TextEncoder().encode(text).buffer, status: 200, statusText: 'OK', headers, config };
+      return { data: legacyPdf ? legacyPdfBytes.slice().buffer : new TextEncoder().encode(text).buffer, status: 200, statusText: 'OK', headers, config };
     };
     const fetchMock = vi.fn(async (input: RequestInfo | URL) => {
       const url = String(input);
@@ -257,6 +261,41 @@ describe('BuyButton licence acceptance', () => {
       expect((screen.getByRole('button', { name: 'Accept and continue to payment' }) as HTMLButtonElement).disabled).toBe(false);
       unmount();
       expect(revokeObjectURL).toHaveBeenCalledWith(activated[0]);
+    } finally { restore(); }
+  });
+
+  it('downloads verified legacy PDF bytes with a .pdf filename', async () => {
+    const {restore, createdBlobs, license} = await renderCustom(undefined, undefined, {}, true);
+    try {
+      await waitFor(() => expect(screen.getAllByText('Fetched bytes match the server hash')).toHaveLength(3));
+      const download = screen.getAllByRole('link', {name: 'Download exact document'})[0] as HTMLAnchorElement;
+      expect(download.getAttribute('download')).toBe('custom-licence.pdf');
+      const blob = createdBlobs.get(download.href);
+      expect(blob?.type).toBe('application/pdf');
+      const pdfBytes = new Uint8Array(await new Promise<ArrayBuffer>((resolve, reject) => {
+        const reader = new FileReader();
+        reader.onload = () => resolve(reader.result as ArrayBuffer);
+        reader.onerror = () => reject(reader.error);
+        reader.readAsArrayBuffer(blob!);
+      }));
+      expect(Array.from(pdfBytes)).toEqual(Array.from(legacyPdfBytes));
+      expect(await sha256(pdfBytes)).toBe(license.params.source_sha256);
+      expect((screen.getByRole('button', {name: 'Accept and continue to payment'}) as HTMLButtonElement).disabled).toBe(false);
+    } finally { restore(); }
+  });
+
+  it('refuses render and acceptance when CORS hides all three non-safelisted metadata headers', async () => {
+    const {restore, createObjectURL} = await renderCustom(undefined, undefined, {
+      'content-disposition': undefined,
+      'x-license-source-sha256': undefined,
+      'x-license-sha256': undefined,
+    });
+    try {
+      await waitFor(() => expect(screen.getByText('Hash mismatch — do not accept')).not.toBeNull());
+      expect(screen.queryByText(/<script>alert\(1\)<\/script>/)).toBeNull();
+      expect(screen.queryByRole('link', {name: '/api/v1/listings/listing-1/license-document'})).toBeNull();
+      expect((screen.getByRole('button', {name: 'Accept and continue to payment'}) as HTMLButtonElement).disabled).toBe(true);
+      expect(createObjectURL).not.toHaveBeenCalled();
     } finally { restore(); }
   });
 

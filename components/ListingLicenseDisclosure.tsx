@@ -26,11 +26,15 @@ interface LoadedDocument extends DocumentReference {
   state: 'loading' | 'matched' | 'mismatch' | 'error';
   text: string | null;
   objectUrl?: string;
+  verifiedMediaType?: 'text/plain' | 'application/pdf';
 }
 
 const CUSTOM_TEXT_CONTENT_TYPE = 'text/plain; charset=utf-8';
 
 export function customTextMetadataMatches(headers: Record<string, unknown>, reference: DocumentReference): boolean {
+  // Cross-origin reads depend on the backend exposing Content-Disposition,
+  // X-License-Sha256 and X-License-Source-Sha256 through CORS expose_headers.
+  // Missing browser-visible headers must fail closed, even when bytes match.
   const listingId = reference.downloadUrl.match(/\/listings\/([^/?#]+)\/license-document\?download=1$/)?.[1];
   return headers['content-type'] === CUSTOM_TEXT_CONTENT_TYPE &&
     headers['x-content-type-options'] === 'nosniff' &&
@@ -169,6 +173,9 @@ export default function ListingLicenseDisclosure({
         const customText = reference.kind === 'license' && reference.code === 'custom' && contentType !== 'application/pdf';
         const matched = (!customText || customTextMetadataMatches(responseHeaders, reference)) &&
           await fetchedBytesMatch(bytes, contentType, reference);
+        const verifiedMediaType = matched && reference.kind === 'license' && reference.code === 'custom'
+          ? contentType.split(';')[0].trim().toLowerCase() as 'text/plain' | 'application/pdf'
+          : undefined;
         const objectUrl = matched && !cancelled && reference.kind === 'license' && reference.code === 'custom'
           ? URL.createObjectURL(new Blob([bytes.slice().buffer as ArrayBuffer], { type: contentType }))
           : undefined;
@@ -178,6 +185,7 @@ export default function ListingLicenseDisclosure({
           state: matched ? 'matched' : 'mismatch',
           text: matched && !contentType.toLowerCase().includes('application/pdf') ? new TextDecoder('utf-8', {fatal: true}).decode(bytes) : null,
           objectUrl,
+          verifiedMediaType,
         };
       } catch {
         return { ...reference, state: 'error', text: null };
@@ -230,7 +238,7 @@ export default function ListingLicenseDisclosure({
             <div className="mt-3 flex flex-wrap gap-4 text-sm">
               {document.text && <details className="w-full rounded border border-gray-100 p-3"><summary className="cursor-pointer font-medium text-indigo-700">Read full text</summary><pre dir="auto" className="mt-3 max-h-96 overflow-auto whitespace-pre-wrap break-words [tab-size:4] text-xs leading-5 text-gray-800">{document.text}</pre></details>}
               {downloadHref
-                ? <a href={downloadHref} download={customDocument ? 'custom-licence.txt' : true} className="font-medium text-indigo-700 underline">Download exact document</a>
+                ? <a href={downloadHref} download={customDocument ? `custom-licence.${document.verifiedMediaType === 'application/pdf' ? 'pdf' : 'txt'}` : true} className="font-medium text-indigo-700 underline">Download exact document</a>
                 : <span className="font-medium text-gray-500">Download exact document</span>}
             </div>
           </div>
