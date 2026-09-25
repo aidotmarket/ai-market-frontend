@@ -6,7 +6,7 @@ import { useParams } from 'next/navigation';
 import { useAuthStore } from '@/store/auth';
 import { getCapabilities } from '@/api/capabilities';
 import { gatewayErrorCode } from '@/api/gatewayDelivery';
-import { acknowledgeGatewayIdentity, describeGatewayFile, gatewayErrorDetails, getGatewayFile, getSellerGateway, listGatewayFiles, listReceivedMessages, patchSellerGateway, revokeSellerGateway, startDoorCheck } from '@/api/sellerGateways';
+import { acknowledgeGatewayIdentity, describeGatewayFile, gatewayErrorDetails, getGatewayFile, getSellerGateway, listGatewayFiles, listReceivedMessages, listSellerGateways, patchSellerGateway, revokeSellerGateway, startDoorCheck } from '@/api/sellerGateways';
 import { blockerMessage, dateLabel, DESCRIPTION_CONFIRMATION, descriptionFailure, doorFailure, gatewaySummary } from '@/components/gateways/presentation';
 import type { GatewayFile, GatewayMessageType, ReceivedMessage, SellerGateway } from '@/types/sellerGateway';
 
@@ -34,6 +34,8 @@ export default function GatewayPage() {
   const [doorError, setDoorError] = useState<string | null>(null);
   const [fileError, setFileError] = useState<string | null>(null);
   const alive = useRef(true);
+  const currentId = useRef(id);
+  currentId.current = id;
   const doorRun = useRef(0);
   const fileRuns = useRef(new Map<string, number>());
   const fileRetryDelay = useRef(new Map<string, number>());
@@ -44,32 +46,60 @@ export default function GatewayPage() {
 
   const loadMessages = useCallback(async (cursor?: string, type: GatewayMessageType | '' = '') => {
     const page = await listReceivedMessages(id, cursor, 100, type || undefined);
-    if (alive.current) {
+    if (alive.current && currentId.current === id) {
       setMessages(current => cursor ? [...current, ...page.messages] : page.messages);
       setMessageCursor(page.next_cursor);
     }
   }, [id]);
 
+  const pollDoor = useCallback((delay = 2) => {
+    if (!alive.current || currentId.current !== id) return;
+    const run = ++doorRun.current;
+    const deadline = Date.now() + 30_000;
+    async function poll() {
+      try {
+        while (alive.current && currentId.current === id && doorRun.current === run && Date.now() + delay * 1000 <= deadline) {
+          await wait(delay * 1000);
+          if (!alive.current || currentId.current !== id || doorRun.current !== run) return;
+          const result = await getSellerGateway(id);
+          if (!alive.current || currentId.current !== id || doorRun.current !== run) return;
+          setGateway(result);
+          if (result.door_check.state !== 'pending') return;
+          delay = 2;
+        }
+        if (alive.current && currentId.current === id && doorRun.current === run) setDoorError('The check is still pending. Refresh to see its result.');
+      } catch {
+        if (alive.current && currentId.current === id && doorRun.current === run) setDoorError('The door check could not be refreshed. Try again.');
+      }
+    }
+    void poll();
+  }, [id]);
+
   useEffect(() => {
     alive.current = true;
+    let cancelled = false;
+    setState('loading'); setGateway(null); setFiles([]); setFileCursor(null); setMessages([]); setMessageCursor(null);
+    setName(''); setDoorUrl(''); setMessageType(''); setError(null); setDoorError(null); setFileError(null);
+    setConfirmRevoke(false); setOpenOrders(null); setConfirmFile(null);
+    fileRetryDelay.current.clear();
     if (!hydrated || !isAuthenticated) return;
     async function load() {
       try {
         const capabilities = await getCapabilities();
         if (capabilities.seller.effective_status !== 'active') throw new Error('seller inactive');
         // A list failure, including gateway_disabled, hides this page's gateway content.
-        const { listSellerGateways } = await import('@/api/sellerGateways');
         await listSellerGateways();
         const [item, filePage] = await Promise.all([getSellerGateway(id), listGatewayFiles(id)]);
-        if (!alive.current) return;
+        if (cancelled || !alive.current) return;
         setGateway(item); setName(item.name); setDoorUrl(item.door_url ?? '');
         setFiles(filePage.files); setFileCursor(filePage.next_cursor); setState('ready');
+        if (item.door_check.state === 'pending') pollDoor();
         await loadMessages();
-      } catch { if (alive.current) setState('unavailable'); }
+      } catch { if (!cancelled && alive.current) setState('unavailable'); }
     }
     void load();
-    return () => { alive.current = false; doorRun.current++; fileRuns.current.clear(); };
-  }, [hydrated, isAuthenticated, id, loadMessages]);
+    return () => { cancelled = true; alive.current = false; doorRun.current++; fileRuns.current.clear(); };
+  }, [hydrated, isAuthenticated, id, loadMessages, pollDoor]);
 
   useEffect(() => {
     if (state !== 'ready') return;
@@ -84,7 +114,7 @@ export default function GatewayPage() {
           if (!alive.current || fileRuns.current.get(file.file_id) !== run) break;
           try {
             const response = await getGatewayFile(id, file.file_id);
-            if (!alive.current) break;
+            if (!alive.current || currentId.current !== id || fileRuns.current.get(file.file_id) !== run) break;
             updateFile(response.data);
             if (response.data.description.state !== 'requested') break;
             delay = response.retryAfter ?? 10;
@@ -108,6 +138,8 @@ export default function GatewayPage() {
     try {
       const result = await patchSellerGateway(id, { door_url: doorUrl || null });
       setGateway(result); setDoorUrl(result.door_url ?? '');
+      if (result.door_check.state === 'pending') pollDoor();
+      else doorRun.current++;
     } catch (cause) {
       setDoorError(({
         door_url_not_https: 'Use an https URL.',
@@ -117,21 +149,11 @@ export default function GatewayPage() {
   }
   async function checkDoor() {
     setDoorError(null);
-    const run = ++doorRun.current;
+    doorRun.current++;
     try {
       const started = await startDoorCheck(id);
       setGateway(current => current ? { ...current, door_check: started.data.door_check } : current);
-      const deadline = Date.now() + 30_000;
-      let delay = started.retryAfter ?? 2;
-      while (alive.current && doorRun.current === run && Date.now() + delay * 1000 <= deadline) {
-        await wait(delay * 1000);
-        if (!alive.current || doorRun.current !== run) return;
-        const result = await getSellerGateway(id);
-        setGateway(result);
-        if (result.door_check.state !== 'pending') return;
-        delay = 2;
-      }
-      if (alive.current && doorRun.current === run) setDoorError('The check is still pending. Refresh to see its result.');
+      if (started.data.door_check.state === 'pending') pollDoor(started.retryAfter ?? 2);
     } catch (cause) {
       setDoorError(({
         door_check_rate_limited: 'A door check was run recently. Wait a minute and try again.',
@@ -149,7 +171,9 @@ export default function GatewayPage() {
     setError(null);
     try {
       await revokeSellerGateway(id, confirmed);
-      setGateway(current => current ? { ...current, status: 'revoked', can_publish: false } : current);
+      doorRun.current++;
+      try { setGateway(await getSellerGateway(id)); }
+      catch { setGateway(current => current ? { ...current, status: 'revoked', status_reason: null, blockers: [{ code: 'gateway_revoked' }], can_publish: false } : current); }
       setConfirmRevoke(false); setOpenOrders(null);
     } catch (cause) {
       if (gatewayErrorCode(cause) === 'gateway_has_open_orders') {
@@ -220,7 +244,7 @@ export default function GatewayPage() {
     </section>
     <section className="space-y-3"><h2 className="text-xl font-semibold">What we receive</h2>
       <label>Message type <select value={messageType} onChange={event => { const type = event.target.value as GatewayMessageType | ''; setMessageType(type); setMessages([]); setMessageCursor(null); void loadMessages(undefined, type).catch(() => setError('We could not load messages. Try again.')); }} className="ml-2 rounded border p-2"><option value="">All types</option>{MESSAGE_TYPES.map(type => <option key={type} value={type}>{type}</option>)}</select></label>
-      <ol className="space-y-3">{sortedMessages.map((message, index) => <li key={message.seq}>{index > 0 && message.seq > sortedMessages[index - 1].seq + 1 && <p className="rounded bg-amber-50 p-2">{messageType ? 'Messages' : 'Messages'} {sortedMessages[index - 1].seq + 1} to {message.seq - 1} {messageType ? 'not shown by this filter or missing' : 'missing'}</p>}<article className="rounded border bg-white p-3"><p>Seq {message.seq} · {message.message_type} · {dateLabel(message.received_at)}</p><pre className="overflow-auto whitespace-pre-wrap text-xs">{JSON.stringify(message.body, null, 2)}</pre></article></li>)}</ol>
+      <ol className="space-y-3">{sortedMessages.map((message, index) => <li key={message.seq}>{index > 0 && message.seq > sortedMessages[index - 1].seq + 1 && <p className="rounded bg-amber-50 p-2">Messages {sortedMessages[index - 1].seq + 1} to {message.seq - 1} {messageType ? 'not shown by this filter or missing' : 'missing'}</p>}<article className="rounded border bg-white p-3"><p>Seq {message.seq} · {message.message_type} · {dateLabel(message.received_at)}</p><pre className="overflow-auto whitespace-pre-wrap text-xs">{JSON.stringify(message.body, null, 2)}</pre></article></li>)}</ol>
       {messageCursor && <button type="button" className="rounded border px-3 py-2" onClick={() => void loadMessages(messageCursor, messageType).catch(() => setError('We could not load more messages. Try again.'))}>Load more messages</button>}
     </section>
   </div>;

@@ -59,7 +59,7 @@ export default function GatewaysPage() {
       <p>Image digest: <code className="break-all">{pairing.image}</code></p>
       <p>Version: {pairing.version} · Minimum version: {pairing.minimum_version}</p>
       <pre className="overflow-auto rounded bg-gray-100 p-3 text-sm">{pairing.compose_snippet}</pre>
-      <button type="button" onClick={async () => { await navigator.clipboard.writeText(pairing.compose_snippet); setCopied(true); }} className="rounded border px-3 py-2">{copied ? 'Copied' : 'Copy compose snippet'}</button>
+      <button type="button" onClick={async () => { if (!navigator.clipboard?.writeText) return; try { await navigator.clipboard.writeText(pairing.compose_snippet); setCopied(true); } catch { setCopied(false); } }} className="rounded border px-3 py-2">{copied ? 'Copied' : 'Copy compose snippet'}</button>
       <p><a className="text-indigo-700 underline" href={pairing.install_guide_url}>Read the install guide</a></p>
     </section>}
     {gateways.length === 0 ? <p>No gateways yet.</p> : <ul className="space-y-3">

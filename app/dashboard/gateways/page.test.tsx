@@ -35,6 +35,23 @@ it('shows the pairing response and handles the rate limit', async () => {
   fireEvent.click(screen.getByRole('button', { name: 'Add a gateway' }));
   expect(await screen.findByText(/Too many pairing codes/)).toBeTruthy();
 });
+it('handles unavailable and rejected clipboard writes', async () => {
+  mocks.pair.mockResolvedValue({ code: 'ABCD-EFGH-JKLM', expires_at: '2026-01-01T00:15:00Z', image: 'image', version: '1.0.0', minimum_version: '1.0.0', compose_snippet: 'services:', install_guide_url: 'https://example.test/install' });
+  const original = Object.getOwnPropertyDescriptor(navigator, 'clipboard');
+  try {
+    Object.defineProperty(navigator, 'clipboard', { configurable: true, value: undefined });
+    render(<GatewaysPage />);
+    fireEvent.click(await screen.findByRole('button', { name: 'Add a gateway' }));
+    fireEvent.click(await screen.findByRole('button', { name: 'Copy compose snippet' }));
+    expect(screen.getByRole('button', { name: 'Copy compose snippet' })).toBeTruthy();
+    Object.defineProperty(navigator, 'clipboard', { configurable: true, value: { writeText: vi.fn().mockRejectedValue(new Error('denied')) } });
+    fireEvent.click(screen.getByRole('button', { name: 'Copy compose snippet' }));
+    await waitFor(() => expect(screen.getByRole('button', { name: 'Copy compose snippet' })).toBeTruthy());
+  } finally {
+    if (original) Object.defineProperty(navigator, 'clipboard', original);
+    else Reflect.deleteProperty(navigator, 'clipboard');
+  }
+});
 it('hides gateway content on flag and other errors', async () => {
   mocks.list.mockRejectedValue({ response: { data: { error: { code: 'gateway_disabled' } } } });
   const view = render(<GatewaysPage />);

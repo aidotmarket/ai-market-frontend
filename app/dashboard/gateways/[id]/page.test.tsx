@@ -11,7 +11,8 @@ const api = vi.hoisted(() => ({
   capabilities: vi.fn(), list: vi.fn(), get: vi.fn(), files: vi.fn(), file: vi.fn(), received: vi.fn(),
   patch: vi.fn(), door: vi.fn(), ack: vi.fn(), revoke: vi.fn(), describe: vi.fn(),
 }));
-vi.mock('next/navigation', () => ({ useParams: () => ({ id: 'gateway-1' }) }));
+const route = vi.hoisted(() => ({ id: 'gateway-1' }));
+vi.mock('next/navigation', () => ({ useParams: () => ({ id: route.id }) }));
 vi.mock('next/link', () => ({ default: ({ children, href }: { children: React.ReactNode; href: string }) => <a href={href}>{children}</a> }));
 vi.mock('@/api/capabilities', () => ({ getCapabilities: api.capabilities }));
 vi.mock('@/api/sellerGateways', () => ({
@@ -23,6 +24,7 @@ vi.mock('@/api/sellerGateways', () => ({
 
 beforeEach(() => {
   vi.clearAllMocks();
+  route.id = 'gateway-1';
   api.capabilities.mockResolvedValue({ seller: { effective_status: 'active' } });
   api.list.mockResolvedValue([gateway]); api.get.mockResolvedValue(gateway);
   api.files.mockResolvedValue({ files: [file], next_cursor: null });
@@ -88,6 +90,7 @@ it('shows the D-A notice, certificate warnings, and saves acknowledgement', asyn
 
 it('revokes directly and retries with confirmed open orders', async () => {
   await ready();
+  api.get.mockResolvedValueOnce({ ...gateway, status: 'revoked', status_reason: null, blockers: [{ code: 'gateway_revoked' }], can_publish: false });
   fireEvent.click(screen.getByRole('button', { name: 'Revoke gateway' }));
   expect(screen.getByText(/Orders with undelivered files become blocked/)).toBeTruthy();
   api.revoke.mockRejectedValueOnce({ response: { data: { error: { code: 'gateway_has_open_orders', details: { open_order_count: 3 } } } } });
@@ -100,10 +103,40 @@ it('revokes directly and retries with confirmed open orders', async () => {
 
 it('revokes without open orders after one confirmation', async () => {
   await ready();
+  api.get.mockResolvedValueOnce({ ...gateway, status: 'revoked', status_reason: null, blockers: [{ code: 'gateway_revoked' }], can_publish: false });
   fireEvent.click(screen.getByRole('button', { name: 'Revoke gateway' }));
   fireEvent.click(screen.getByRole('button', { name: 'Confirm revoke' }));
   await waitFor(() => expect(api.revoke).toHaveBeenCalledWith('gateway-1', false));
   expect(await screen.findByText(/Status: revoked/)).toBeTruthy();
+});
+
+it('renders authoritative status, reason, blockers and controls after revoke', async () => {
+  api.get.mockResolvedValueOnce({ ...gateway, status: 'unsupported', status_reason: 'egress_open', blockers: [], can_publish: true })
+    .mockResolvedValueOnce({ ...gateway, status: 'revoked', status_reason: null, blockers: [{ code: 'gateway_revoked' }], can_publish: false });
+  await ready();
+  fireEvent.click(screen.getByRole('button', { name: 'Revoke gateway' }));
+  fireEvent.click(screen.getByRole('button', { name: 'Confirm revoke' }));
+  expect(await screen.findByText('Status: revoked')).toBeTruthy();
+  expect(screen.getByText('This gateway has been revoked.')).toBeTruthy();
+  expect(screen.getByText(/Can publish: No/)).toBeTruthy();
+  expect(screen.queryByText(/network can reach more/)).toBeNull();
+  expect(screen.queryByText('No blockers.')).toBeNull();
+  expect(screen.queryByRole('button', { name: 'Save name' })).toBeNull();
+  expect(screen.queryByRole('button', { name: 'Run door check' })).toBeNull();
+  expect(api.get).toHaveBeenCalledTimes(2);
+});
+
+it('shows safe revoked state when the post-revoke refresh fails', async () => {
+  api.get.mockResolvedValueOnce({ ...gateway, status: 'unsupported', status_reason: 'egress_open', blockers: [], can_publish: true })
+    .mockRejectedValueOnce(new Error('network'));
+  await ready();
+  fireEvent.click(screen.getByRole('button', { name: 'Revoke gateway' }));
+  fireEvent.click(screen.getByRole('button', { name: 'Confirm revoke' }));
+  expect(await screen.findByText('Status: revoked')).toBeTruthy();
+  expect(screen.getByText('This gateway has been revoked.')).toBeTruthy();
+  expect(screen.getByText(/Can publish: No/)).toBeTruthy();
+  expect(screen.queryByText(/network can reach more/)).toBeNull();
+  expect(screen.queryByRole('button', { name: 'Save name' })).toBeNull();
 });
 
 it('confirms exact description text, polls to described, and renders columns', async () => {
@@ -149,6 +182,25 @@ it('loads the next file page without showing a path', async () => {
   expect(await screen.findByText('second.csv')).toBeTruthy();
   expect(api.files).toHaveBeenCalledWith('gateway-1', file.file_id);
   expect(document.body.textContent).not.toContain('/private/source/data.csv');
+});
+
+it('clears files, cursors and messages while loading a different route id', async () => {
+  api.files.mockResolvedValueOnce({ files: [file], next_cursor: file.file_id })
+    .mockResolvedValueOnce({ files: [], next_cursor: null });
+  api.received.mockResolvedValueOnce({ messages: [{ seq: 1, received_at: '2026-01-01T00:00:00Z', message_type: 'hello', body: bodies.hello }], next_cursor: '1' })
+    .mockResolvedValueOnce({ messages: [], next_cursor: null });
+  const view = render(<GatewayPage />);
+  await screen.findByText('file-01234567.csv');
+  await screen.findByText(/test-only-nonce/);
+  route.id = 'gateway-2';
+  api.get.mockResolvedValueOnce({ ...gateway, name: 'Second gateway' });
+  view.rerender(<GatewayPage />);
+  expect(screen.getByText('Loading…')).toBeTruthy();
+  expect(await screen.findByText('Second gateway')).toBeTruthy();
+  expect(screen.queryByText('file-01234567.csv')).toBeNull();
+  expect(screen.queryByText(/test-only-nonce/)).toBeNull();
+  expect(screen.queryByRole('button', { name: 'Load more files' })).toBeNull();
+  expect(screen.queryByRole('button', { name: 'Load more messages' })).toBeNull();
 });
 
 it('paginates received messages, filters, shows gaps, and formats vector bodies', async () => {
@@ -199,4 +251,67 @@ it.each(['passed', 'failed'])('polls door check to %s', async (state) => {
   await act(async () => { await Promise.resolve(); });
   await act(async () => { await vi.advanceTimersByTimeAsync(2_000); });
   expect(screen.getByText(new RegExp(`State: ${state}`))).toBeTruthy();
+});
+
+const pendingGateway = { ...gateway, door_check: { ...gateway.door_check, state: 'pending' as const } };
+async function readyWithFakeTimers() {
+  vi.useFakeTimers();
+  await act(async () => { render(<GatewayPage />); });
+  expect(screen.getByText('Test gateway', { selector: 'h1' })).toBeTruthy();
+}
+
+it('polls an initially pending door check once after two seconds and renders passed', async () => {
+  api.get.mockResolvedValueOnce(pendingGateway).mockResolvedValueOnce({ ...gateway, door_check: { ...gateway.door_check, state: 'passed' } });
+  await readyWithFakeTimers();
+  expect(api.get).toHaveBeenCalledTimes(1);
+  await act(async () => { await vi.advanceTimersByTimeAsync(1_999); });
+  expect(api.get).toHaveBeenCalledTimes(1);
+  await act(async () => { await vi.advanceTimersByTimeAsync(1); });
+  expect(api.get).toHaveBeenCalledTimes(2);
+  expect(screen.getByText(/State: passed/)).toBeTruthy();
+});
+
+it('polls a pending door URL PATCH and renders the failure code message', async () => {
+  api.patch.mockResolvedValueOnce(pendingGateway);
+  api.get.mockResolvedValueOnce(gateway).mockResolvedValueOnce({ ...gateway, door_check: { ...gateway.door_check, state: 'failed', failure_code: 'dns_failed' } });
+  await readyWithFakeTimers();
+  fireEvent.click(screen.getByRole('button', { name: 'Save door URL' }));
+  await act(async () => { await Promise.resolve(); });
+  await act(async () => { await vi.advanceTimersByTimeAsync(2_000); });
+  expect(api.get).toHaveBeenCalledTimes(2);
+  expect(screen.getByText(/State: failed/)).toBeTruthy();
+  expect(screen.getByText(/could not be found in DNS/)).toBeTruthy();
+});
+
+it('stops a pending door check at thirty seconds', async () => {
+  api.get.mockResolvedValue(pendingGateway);
+  await readyWithFakeTimers();
+  await act(async () => { await vi.advanceTimersByTimeAsync(30_000); });
+  expect(api.get).toHaveBeenCalledTimes(16);
+  expect(screen.getByText(/still pending/)).toBeTruthy();
+  await act(async () => { await vi.advanceTimersByTimeAsync(10_000); });
+  expect(api.get).toHaveBeenCalledTimes(16);
+});
+
+it('cancels the existing door loop when Run door check starts a new one', async () => {
+  api.get.mockResolvedValue(pendingGateway);
+  await readyWithFakeTimers();
+  await act(async () => { await vi.advanceTimersByTimeAsync(1_000); });
+  fireEvent.click(screen.getByRole('button', { name: 'Run door check' }));
+  await act(async () => { await Promise.resolve(); });
+  await act(async () => { await vi.advanceTimersByTimeAsync(1_000); });
+  expect(api.get).toHaveBeenCalledTimes(1);
+  await act(async () => { await vi.advanceTimersByTimeAsync(1_000); });
+  expect(api.get).toHaveBeenCalledTimes(2);
+});
+
+it('makes no more door requests after unmount', async () => {
+  api.get.mockResolvedValue(pendingGateway);
+  vi.useFakeTimers();
+  let view!: ReturnType<typeof render>;
+  await act(async () => { view = render(<GatewayPage />); });
+  expect(api.get).toHaveBeenCalledTimes(1);
+  view.unmount();
+  await act(async () => { await vi.advanceTimersByTimeAsync(30_000); });
+  expect(api.get).toHaveBeenCalledTimes(1);
 });
