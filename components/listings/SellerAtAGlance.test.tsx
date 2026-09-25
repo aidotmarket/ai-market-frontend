@@ -40,7 +40,7 @@ it('does not claim there are no selected fields when an approved manifest is una
   render(<SellerAtAGlance listingId="listing" slug="sales" />);
   await screen.findByRole('button', {name: 'Withdraw'});
   expect(screen.queryByText('No fields are selected for a sample.')).toBeNull();
-  expect(screen.getByText('The current selection is not shown here. Field selection is set and signed in AIM Data.')).toBeTruthy();
+  expect(screen.getByText("The current selection is not shown here. Field selection belongs to this listing's signed sample.")).toBeTruthy();
 });
 it('keeps the approved seller preview byte-identical to buyer output including selected fields and proof limitations', async () => {
   vi.mocked(api.fetchSummaryPreview).mockResolvedValue({...preview, state: 'approved'});

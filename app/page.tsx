@@ -79,7 +79,7 @@ const offerings: Offering[] = [
     name: 'Find Data',
     subtitle: 'Search the catalog or post a request',
     description: [
-      'Every listing is scanned for PII, scored for quality and described in a structure your tools can read. Run a semantic search, or describe what you need and let providers respond.',
+      'Search listings or describe what you need and let providers respond.',
     ],
     tags: ['Semantic search', 'Data Requests', 'Live'],
     cta: 'Find Data',
@@ -89,11 +89,11 @@ const offerings: Offering[] = [
   },
   {
     name: 'Sell Data',
-    subtitle: 'List with AIM Data',
+    subtitle: 'List from your own infrastructure',
     description: [
-      'Install AIM Data on your own infrastructure. It helps you describe what you have, scans for PII and publishes a listing buyers can find. Your raw data stays put.',
+      'Run the open-source AIM Data gateway with Docker. Confirm each file before sharing its structural description. Buyers download purchases directly from your gateway.',
     ],
-    tags: ['AIM Data', 'Stays on your infra', 'Auto-metadata'],
+    tags: ['AIM Data gateway', 'Your infrastructure', 'You confirm each file'],
     cta: 'Sell Data',
     href: '/sell-data',
     accent: 'teal',
@@ -244,14 +244,14 @@ function ActivityTicker({ items, locale }: { items: FeaturedItem[]; locale: stri
 
 const howItWorks = [
   {
-    title: 'Install AIM Data.',
+    title: 'Add a gateway.',
     description:
-      'Python or Docker. Runs locally on your infrastructure.',
+      'In Sell Data, open Gateways for a one-time pairing code and Docker Compose file.',
   },
   {
     title: 'Publish your listing.',
     description:
-      'AIM Data scans for PII, scores quality, and writes the metadata. You review and click publish.',
+      'Confirm each file before sharing its structure. Manage the listing, price, and licence on ai.market.',
   },
   {
     title: 'Get paid.',
@@ -380,7 +380,7 @@ export default async function LandingPage() {
               <div>
                 <div className="flex h-10 w-10 items-center justify-center rounded-full bg-[#3F51B5] text-sm font-bold text-white">1</div>
                 <p className="mt-4 text-sm leading-6 text-[#666666]">
-                  You list. The data stays put. AIM Data runs on your servers and publishes a description of what you have. We see the description, never the data.
+                  You list. Your files stay put. AIM Data lists them on your infrastructure and sends structural descriptions only after you confirm each file.
                 </p>
               </div>
               <div>

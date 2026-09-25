@@ -84,11 +84,11 @@ it.each([
   fireEvent.click(await screen.findByText('Optional listing details'));
   const unit = await screen.findByLabelText('Unit for amount');
   expect(unit.hasAttribute('disabled')).toBe(true);
-  expect(screen.getByText(/Republish the dictionary through AIM Data/)).toBeTruthy();
+  expect(screen.getByText(/Publish a new listing version with an updated dictionary/)).toBeTruthy();
   unit.removeAttribute('disabled');
   fireEvent.change(unit, {target: {value: 'cents'}});
   fireEvent.click(screen.getByRole('button', {name: 'Save optional details'}));
-  expect(screen.getByRole('alert').textContent).toBe('Units cannot be changed here because this dictionary is missing required write fields. Republish the dictionary through AIM Data, then reload the optional details.');
+  expect(screen.getByRole('alert').textContent).toBe('Units cannot be changed here because this dictionary is missing required write fields. Publish a new listing version with an updated dictionary, then reload the optional details.');
   expect(api.saveListingEnrichment).not.toHaveBeenCalled();
 });
 
@@ -109,11 +109,11 @@ it('replaces stale save success when aggregate removal is declined', async () =>
 
 it.each([
   ['verified_sample_unavailable_above_25_column_cap', 'A verified sample is not available for a dataset above the approved 25-column cap. This is a product limit, not an error in your dataset.'],
-  ['dictionary_must_match_committed_dataset_schema_republish_through_aim_data', 'The dictionary must match the committed dataset schema. Republish through AIM Data to restore agreement.'],
-  ['dictionary_field_unknown', 'A dictionary field no longer matches the listing. Reload the optional details; if it still differs, republish the dictionary through AIM Data.'],
-  ['dictionary_removal_forbidden', 'Dictionary fields cannot be removed here. Restore the field, or republish schema changes through AIM Data.'],
-  ['aggregate_column_unknown', 'An aggregate column no longer matches the listing. Republish the aggregate statistics through AIM Data, then reload the optional details.'],
-  ['generated_statement_not_guarded', 'This generated statement cannot be changed from this form. Regenerate or replace it through AIM Data, then reload the optional details.'],
+  ['dictionary_must_match_committed_dataset_schema_republish_through_aim_data', 'The dictionary must match the committed dataset schema. Update the source file and publish a new listing version to restore agreement.'],
+  ['dictionary_field_unknown', 'A dictionary field no longer matches the listing. Reload the optional details; if it still differs, publish a new listing version from the source file.'],
+  ['dictionary_removal_forbidden', 'Dictionary fields cannot be removed here. Restore the field, or publish a new listing version with the changed schema.'],
+  ['aggregate_column_unknown', 'An aggregate column no longer matches the listing. Publish a new listing version with updated statistics, then reload the optional details.'],
+  ['generated_statement_not_guarded', 'This generated statement cannot be changed from this form. Update the source listing, then reload the optional details.'],
 ])('shows the actionable %s refusal', async (detail, message) => {
   vi.mocked(api.saveListingEnrichment).mockRejectedValueOnce(new AxiosError(detail, '409', undefined, undefined, {status: 409, data: {detail}} as never));
   render(<SellerEnrichmentControls listingId="listing" />);
@@ -129,7 +129,7 @@ it('turns a structured 422 validation refusal into a next action instead of an i
   fireEvent.click(await screen.findByText('Optional listing details'));
   fireEvent.change(await screen.findByLabelText(/^Dataset origin statement/), {target: {value: 'Changed.'}});
   fireEvent.click(screen.getByRole('button', {name: 'Save optional details'}));
-  expect((await screen.findByRole('alert')).textContent).toBe('The optional details do not match the current listing contract. Reload them; if the problem remains, republish the affected metadata through AIM Data.');
+  expect((await screen.findByRole('alert')).textContent).toBe('The optional details do not match the current listing. Reload them; if the problem remains, publish a new listing version with updated source metadata.');
   expect(screen.queryByText(/identical save/)).toBeNull();
 });
 

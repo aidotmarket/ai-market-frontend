@@ -22,28 +22,28 @@ function refusal(error: unknown): string | null {
     return 'A verified sample is not available for a dataset above the approved 25-column cap. This is a product limit, not an error in your dataset.';
   }
   if (detail === 'dictionary_must_match_committed_dataset_schema_republish_through_aim_data') {
-    return 'The dictionary must match the committed dataset schema. Republish through AIM Data to restore agreement.';
+    return 'The dictionary must match the committed dataset schema. Update the source file and publish a new listing version to restore agreement.';
   }
   if (detail === 'new_commitment_required') {
-    return 'This would change the committed schema. Republish through AIM Data before changing these units.';
+    return 'This would change the committed schema. Publish a new listing version before changing these units.';
   }
   if (detail === 'idempotency_conflict') {
     return 'This save identifier was already used for different content. Review the current values and save again.';
   }
   if (detail === 'dictionary_field_unknown') {
-    return 'A dictionary field no longer matches the listing. Reload the optional details; if it still differs, republish the dictionary through AIM Data.';
+    return 'A dictionary field no longer matches the listing. Reload the optional details; if it still differs, publish a new listing version from the source file.';
   }
   if (detail === 'dictionary_removal_forbidden') {
-    return 'Dictionary fields cannot be removed here. Restore the field, or republish schema changes through AIM Data.';
+    return 'Dictionary fields cannot be removed here. Restore the field, or publish a new listing version with the changed schema.';
   }
   if (detail === 'aggregate_column_unknown') {
-    return 'An aggregate column no longer matches the listing. Republish the aggregate statistics through AIM Data, then reload the optional details.';
+    return 'An aggregate column no longer matches the listing. Publish a new listing version with updated statistics, then reload the optional details.';
   }
   if (detail === 'generated_statement_not_guarded') {
-    return 'This generated statement cannot be changed from this form. Regenerate or replace it through AIM Data, then reload the optional details.';
+    return 'This generated statement cannot be changed from this form. Update the source listing, then reload the optional details.';
   }
   if (error.response?.status === 422) {
-    return 'The optional details do not match the current listing contract. Reload them; if the problem remains, republish the affected metadata through AIM Data.';
+    return 'The optional details do not match the current listing. Reload them; if the problem remains, publish a new listing version with updated source metadata.';
   }
   return detail ? `The optional details were not saved: ${detail}. Review the values and try again.` : null;
 }
@@ -106,7 +106,7 @@ export default function SellerEnrichmentControls({listingId, active = true, onSa
     }
     if (form.dictionary.length && form.dictionary.some(field => (form.units[field.name] ?? '') !== (initial.units[field.name] ?? ''))) {
       if (!writableDictionary(form.dictionary)) {
-        setError('Units cannot be changed here because this dictionary is missing required write fields. Republish the dictionary through AIM Data, then reload the optional details.');
+        setError('Units cannot be changed here because this dictionary is missing required write fields. Publish a new listing version with an updated dictionary, then reload the optional details.');
         return;
       }
       const fields = form.dictionary.map(field => ({...field, unit: form.units[field.name] || null}));
@@ -114,7 +114,7 @@ export default function SellerEnrichmentControls({listingId, active = true, onSa
       changes.schema_info = {profile: 'aim-data-dictionary-v2', fields};
     }
     if (form.aggregate && form.includeAggregate !== initial.includeAggregate) {
-      if (!form.includeAggregate && !window.confirm('Remove these aggregate statistics from the listing? They will disappear for all readers. To restore them, republish the statistics through AIM Data.')) {
+      if (!form.includeAggregate && !window.confirm('Remove these aggregate statistics from the listing? They will disappear for all readers. Restoring them requires a new listing version.')) {
         setError('');
         setMessage('Aggregate statistics were not removed. Nothing was sent.');
         return;
@@ -162,8 +162,8 @@ export default function SellerEnrichmentControls({listingId, active = true, onSa
       {busy && !form && <p role="status" className="text-sm text-gray-600">Loading optional details…</p>}
       {form && <>
         {form.dictionary.length > 0 && <fieldset className="space-y-3"><legend className="text-sm font-semibold text-gray-900">Dictionary units</legend>
-          <p className="text-xs text-gray-600">Units attach to the existing field names. Schema fields are set by AIM Data.</p>
-          {!writableDictionary(form.dictionary) && <p className="text-xs text-amber-800">Units cannot be changed here because this dictionary is missing required write fields. Republish the dictionary through AIM Data, then reload the optional details.</p>}
+          <p className="text-xs text-gray-600">Units attach to the existing field names. Schema fields come from the listing source.</p>
+          {!writableDictionary(form.dictionary) && <p className="text-xs text-amber-800">Units cannot be changed here because this dictionary is missing required write fields. Publish a new listing version with an updated dictionary, then reload the optional details.</p>}
           {form.dictionary.map(field => <label key={field.name} className="block text-sm text-gray-700"><span className="font-mono">{field.name}</span>
             <input value={form.units[field.name] ?? ''} onChange={event => setForm(current => current ? {...current, units: {...current.units, [field.name]: event.target.value}} : current)}
               aria-label={`Unit for ${field.name}`} disabled={busy || !active || !writableDictionary(form.dictionary)} className="mt-1 block w-full rounded border border-gray-300 bg-white px-3 py-2" />
@@ -184,7 +184,7 @@ export default function SellerEnrichmentControls({listingId, active = true, onSa
         </fieldset>
         {form.aggregate && <label className="flex items-start gap-2 text-sm text-gray-700">
           <input type="checkbox" checked={form.includeAggregate} disabled={busy || !active} onChange={event => setForm(current => current ? {...current, includeAggregate: event.target.checked} : current)} className="mt-1" />
-          <span>Keep the exact AIM Data aggregate statistics on this listing. Unchecking removes them for all readers; restoring them requires republishing through AIM Data. Buckets and groups are read-only here.</span>
+          <span>Keep the current aggregate statistics on this listing. Unchecking removes them for all readers; restoring them requires a new listing version. Buckets and groups are read-only here.</span>
         </label>}
         <button type="button" onClick={save} disabled={busy || !active} className="rounded-lg border border-indigo-700 bg-white px-4 py-2 text-sm font-medium text-indigo-700 disabled:opacity-50">{busy ? 'Saving…' : 'Save optional details'}</button>
       </>}

@@ -5,27 +5,27 @@ import Link from 'next/link';
 const howItWorks = [
   {
     eyebrow: 'List',
-    title: 'Local Processing',
+    title: 'Files stay on your infrastructure',
     description:
-      "Everyone installs the same tool: AIM Data. Sellers use it to manage and publish data. Buyers and builders switch on its gateway features for discovery and programmatic access. An embedded AI assistant profiles each dataset locally - detecting PII, scoring quality, generating descriptions and metadata. Only the metadata is published to ai.market. Raw data never leaves the seller's servers. AIM Data is open source.",
+      'Sellers run the open-source AIM Data gateway with Docker. It lists files in place and sends structural descriptions only after the seller confirms each file. It never sends data values.',
   },
   {
     eyebrow: 'Discover',
     title: 'Marketplace Matching',
     description:
-      "Buyers and AI agents search ai.market's catalog using semantic search, filters, and structured queries. Every listing includes AI-generated quality scores, schema previews, and sample metadata - enough to evaluate fit without exposing the underlying asset.",
+      "Buyers and AI agents search ai.market's catalog using semantic search, filters, and structured queries.",
   },
   {
     eyebrow: 'Transact',
     title: 'Platform Billing',
     description:
-      'When a buyer commits, ai.market handles authentication, payment processing, and billing. The seller receives a cryptographically signed delivery token scoped to the specific transaction - time-limited, single-use, and auditable.',
+      'When a buyer purchases, ai.market handles checkout and issues a file-specific delivery permission.',
   },
   {
     eyebrow: 'Deliver',
-    title: 'Peer-to-Peer',
+    title: 'Direct delivery',
     description:
-      "The buyer's system connects directly to the seller's AIM Data instance using the delivery token. Data flows point-to-point over an encrypted channel. ai.market never proxies, caches, or stores the payload.",
+      "The buyer downloads purchased files directly from the seller's AIM Data gateway. ai.market does not store the files.",
   },
 ];
 
@@ -72,7 +72,7 @@ const platformDoesNot = [
   {
     label: 'Lock in sellers',
     description:
-      'AIM Data is an open, self-hosted tool - sellers own their infrastructure',
+      'AIM Data is an open-source Docker gateway that sellers run on their own infrastructure',
   },
 ];
 
@@ -80,7 +80,7 @@ const securitySections = [
   {
     label: 'DEVICE IDENTITY',
     description:
-      "Every AIM Data install generates an Ed25519 keypair locally during first setup. The private key is stored in a passphrase-protected keystore on the install - it never leaves the operator's infrastructure. The corresponding public key is registered with ai.market during enrollment. All subsequent operations - publishing listings, signing delivery receipts, reporting traces - are authenticated by Ed25519 signatures verified against the registered public key.",
+      'Sellers get a one-time pairing code and Docker Compose file in Sell Data > Gateways. The gateway runs without admin rights and with read-only file access.',
   },
   {
     label: 'TRUST CHANNEL',
@@ -112,13 +112,13 @@ const stackRows = [
   },
   {
     component: 'AIM Data',
-    role: 'Dataset management, local AI profiling, P2P delivery. Gateway features for buyers and builders - discovery, authentication, and local metering - unlock in the same install.',
-    operator: 'Sellers, buyers, and builders (self-hosted)',
+    role: 'Lists seller files in place, describes confirmed files, and serves purchased files directly to buyers.',
+    operator: 'Sellers (self-hosted)',
   },
   {
     component: 'allAI',
-    role: 'Embedded AI for metadata generation and quality scoring',
-    operator: 'Runs inside AIM Data',
+    role: 'Website listing assistance',
+    operator: 'ai.market',
   },
 ];
 
@@ -329,7 +329,7 @@ export default function ProtocolPage() {
               Browse the Marketplace
             </Link>
             <Link
-              href="/download"
+              href="/sell-data"
               className="inline-flex items-center justify-center rounded-lg border border-[#0F6E56] bg-white px-6 py-3 text-sm font-semibold text-[#0F6E56] transition-colors hover:bg-[#E1F5EE]"
             >
               Start Selling

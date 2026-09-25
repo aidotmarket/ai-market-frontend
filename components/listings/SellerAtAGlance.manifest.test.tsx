@@ -29,7 +29,7 @@ it('does not claim no fields are selected when the approved manifest request rej
   await screen.findByRole('button', {name: 'Withdraw'});
   expect(api.fetchPreviewManifest).toHaveBeenCalled();
   expect(screen.queryByText('No fields are selected for a sample.')).toBeNull();
-  expect(screen.getByText('The current selection is not shown here. Field selection is set and signed in AIM Data.')).toBeTruthy();
+  expect(screen.getByText("The current selection is not shown here. Field selection belongs to this listing's signed sample.")).toBeTruthy();
 });
 
 it('shows the definitive empty-selection copy only after a manifest is received', async () => {
@@ -37,5 +37,5 @@ it('shows the definitive empty-selection copy only after a manifest is received'
   vi.mocked(api.fetchPreviewKeys).mockResolvedValue(null);
   render(<SellerAtAGlance listingId="listing" slug="sales" />);
   expect(await screen.findByText('No fields are selected for a sample.')).toBeTruthy();
-  expect(screen.queryByText('The current selection is not shown here. Field selection is set and signed in AIM Data.')).toBeNull();
+  expect(screen.queryByText("The current selection is not shown here. Field selection belongs to this listing's signed sample.")).toBeNull();
 });

@@ -28,9 +28,11 @@ describe('SellDataPage', () => {
     expect(within(cards[0]).getByText(/Connect the bucket read-only/)).toBeTruthy();
     expect(within(cards[0]).getByText(/time-limited links/)).toBeTruthy();
     expect(within(cards[1]).getByRole('heading', { name: 'I will host it on my own infrastructure.' })).toBeTruthy();
-    expect(within(cards[1]).getByRole('link', { name: 'Set up AIM Data' }).getAttribute('href')).toBe('/aim-data');
-    expect(within(cards[1]).getByText(/runs sandboxed/)).toBeTruthy();
-    expect(within(cards[1]).getByText(/AIM Data must run all the time/)).toBeTruthy();
+    expect(within(cards[1]).getByRole('link', { name: 'Set up a gateway' }).getAttribute('href')).toBe(
+      isAuthenticated ? '/dashboard/gateways' : '/register?redirect=%2Fdashboard%2Fgateways'
+    );
+    expect(within(cards[1]).getByText(/Confirm each file/)).toBeTruthy();
+    expect(within(cards[1]).getByText(/read-only file access/)).toBeTruthy();
 
     const structuredData = JSON.parse(container.querySelector('script[type="application/ld+json"]')!.textContent!);
     expect(structuredData['@type']).toBe('Service');
@@ -38,6 +40,6 @@ describe('SellDataPage', () => {
     expect(structuredData.description).toBe(metadata.description);
     expect(metadata.title).toEqual({ absolute: 'Sell data on ai.market' });
     expect(metadata.description).toContain('AWS S3 or Cloudflare R2');
-    expect(metadata.description).toContain('your own machine with AIM Data');
+    expect(metadata.description).toContain('AIM Data gateway');
   });
 });
