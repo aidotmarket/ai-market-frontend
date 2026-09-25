@@ -341,6 +341,14 @@ it('continues after one failed refresh and clears the error when the check resol
   expect(screen.queryByText(/could not be refreshed/)).toBeNull();
 });
 
+it('shows still pending after a failed refresh followed by successful pending refreshes', async () => {
+  api.get.mockResolvedValueOnce(pendingGateway).mockRejectedValueOnce(new Error('network')).mockResolvedValue(pendingGateway);
+  await readyWithFakeTimers();
+  await act(async () => { await vi.advanceTimersByTimeAsync(30_000); });
+  expect(screen.getByText(/still pending/)).toBeTruthy();
+  expect(screen.queryByText(/could not be refreshed/)).toBeNull();
+});
+
 it('shows a refresh error only after the deadline if refreshes keep failing', async () => {
   api.get.mockResolvedValueOnce(pendingGateway).mockRejectedValue(new Error('network'));
   await readyWithFakeTimers();

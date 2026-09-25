@@ -73,6 +73,7 @@ export default function GatewayPage() {
           if (!alive.current || currentId.current !== id || doorRun.current !== run) return;
           setGateway(result);
           if (result.door_check.state !== 'pending') { setDoorError(null); return; }
+          refreshFailed = false;
         } catch {
           refreshFailed = true;
         }

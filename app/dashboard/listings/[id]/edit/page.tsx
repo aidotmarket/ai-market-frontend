@@ -63,14 +63,14 @@ export default function EditListingPage() {
   const [listingLicensesEnabled, setListingLicensesEnabled] = useState(false);
   const [licenseSelection, setLicenseSelection] = useState<LicenseSelection>(createStandardSelection());
   const [savedGatewaySourceListingId, setSavedGatewaySourceListingId] = useState<string | null>(null);
-  const [chosenGateway, setChosenGateway] = useState<SellerGateway | null>(null);
+  const [savedGateway, setSavedGateway] = useState<SellerGateway | null>(null);
   const [sourceFiles, setSourceFiles] = useState<GatewayFile[]>([]);
   const [publishError, setPublishError] = useState<string | null>(null);
   const [publishBlockers, setPublishBlockers] = useState<GatewayBlocker[]>([]);
-  const onGatewayChosen = useCallback((gateway: SellerGateway | null) => setChosenGateway(gateway), []);
+  const onSourceDirty = useCallback(() => setSavedGatewaySourceListingId(null), []);
   const onSourceSaved = useCallback((gateway: SellerGateway, files: GatewayFile[]) => {
     setSavedGatewaySourceListingId(id);
-    setChosenGateway(gateway); setSourceFiles(files); setPublishError(null); setPublishBlockers([]);
+    setSavedGateway(gateway); setSourceFiles(files); setPublishError(null); setPublishBlockers([]);
   }, [id]);
   const canPublish = data.status === 'unlisted' || (data.status === 'draft' && savedGatewaySourceListingId === id);
 
@@ -403,13 +403,13 @@ export default function EditListingPage() {
 
       {listingLicensesEnabled && <SellerLicenseSelection value={licenseSelection} onChange={setLicenseSelection} disabled={saving} />}
 
-      {data.status === 'draft' && <ListingGatewaySource listingId={id} onGatewayChosen={onGatewayChosen} onSourceSaved={onSourceSaved} />}
+      {data.status === 'draft' && <ListingGatewaySource listingId={id} onSourceDirty={onSourceDirty} onSourceSaved={onSourceSaved} />}
 
       <SellerAtAGlance listingId={id} slug={listingSlug} active={!saving} revision={summaryRevision} />
 
       {/* Actions */}
       {publishError && <div role="alert" className="rounded border border-red-300 p-3 text-red-700"><p>{publishError}</p>{publishBlockers.length > 0 && <ul className="list-disc pl-6">{publishBlockers.map((blocker, index) => <li key={`${blocker.code}-${blocker.file_id ?? index}`}>{blockerMessage(blocker, sourceFiles)}</li>)}</ul>}</div>}
-      {canPublish && chosenGateway && !chosenGateway.identity_ack_at && <p className="rounded border border-amber-300 p-3 text-sm">Before this listing goes live: after purchase, buyers learn your door hostname and certificate. Use a neutral hostname. <Link href={`/dashboard/gateways/${encodeURIComponent(chosenGateway.gateway_id)}`} className="text-indigo-700 underline">Review and acknowledge the gateway identity notice</Link>.</p>}
+      {canPublish && savedGateway && !savedGateway.identity_ack_at && <p className="rounded border border-amber-300 p-3 text-sm">Before this listing goes live: after purchase, buyers learn your door hostname and certificate. Use a neutral hostname. <Link href={`/dashboard/gateways/${encodeURIComponent(savedGateway.gateway_id)}`} className="text-indigo-700 underline">Review and acknowledge the gateway identity notice</Link>.</p>}
       <div className="flex items-center justify-between bg-white rounded-xl border border-gray-200 shadow-sm px-6 py-4">
         <div className="text-sm text-gray-500">
           Status: <span className="font-medium text-gray-900 capitalize">{data.status.replace('_', ' ')}</span>

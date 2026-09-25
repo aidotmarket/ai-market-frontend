@@ -21,10 +21,10 @@ function fileBlocker(file: GatewayFile) {
   return { code: 'file_not_described', file_id: file.file_id };
 }
 
-export default function ListingGatewaySource({ listingId, onSourceSaved, onGatewayChosen }: {
+export default function ListingGatewaySource({ listingId, onSourceSaved, onSourceDirty }: {
   listingId: string;
   onSourceSaved: (gateway: SellerGateway, files: GatewayFile[]) => void;
-  onGatewayChosen: (gateway: SellerGateway | null) => void;
+  onSourceDirty: () => void;
 }) {
   const [gateways, setGateways] = useState<SellerGateway[] | null>(null);
   const [gatewayId, setGatewayId] = useState('');
@@ -44,10 +44,6 @@ export default function ListingGatewaySource({ listingId, onSourceSaved, onGatew
   }, []);
 
   useEffect(() => {
-    onGatewayChosen(gateway ?? null);
-  }, [gateway, onGatewayChosen]);
-
-  useEffect(() => {
     if (!gatewayId || !gateway) return;
     let active = true;
     setFiles([]); setCursor(null); setLoadingFiles(true); setError(null);
@@ -62,6 +58,10 @@ export default function ListingGatewaySource({ listingId, onSourceSaved, onGatew
   if (!gateways) return null;
   const selectedFiles = files.filter(file => selected.includes(file.file_id));
   const gatewayLink = `/dashboard/gateways/${encodeURIComponent(gatewayId)}`;
+  function markDirty() {
+    if (saved) onSourceDirty();
+    setSaved(false);
+  }
 
   async function loadMore() {
     if (!cursor) return;
@@ -89,9 +89,11 @@ export default function ListingGatewaySource({ listingId, onSourceSaved, onGatew
 
   return <section className="space-y-3 rounded-xl border border-gray-200 bg-white p-6">
     <h2 className="text-lg font-semibold">Deliver from a gateway</h2>
+    {gateways.length === 0 && <p>You have no gateways yet. <Link className="text-indigo-700 underline" href="/dashboard/gateways">View gateways</Link></p>}
+    {gateways.length > 0 && <>
     <label className="block">Gateway
       <select aria-label="Gateway" className="mt-1 block w-full rounded border p-2" value={gatewayId} disabled={saving || loadingFiles} onChange={event => {
-        setGatewayId(event.target.value); setSelected([]); setSaved(false); setFiles([]); setCursor(null); setError(null);
+        setGatewayId(event.target.value); setSelected([]); markDirty(); setFiles([]); setCursor(null); setError(null);
       }}>
         <option value="">Choose a gateway</option>
         {gateways.map(item => <option key={item.gateway_id} value={item.gateway_id}>{item.name}</option>)}
@@ -104,7 +106,7 @@ export default function ListingGatewaySource({ listingId, onSourceSaved, onGatew
         <h3 className="font-medium">Files</h3>
         {files.map(file => <label key={file.file_id} className="flex gap-2 rounded border p-2">
           <input type="checkbox" checked={selected.includes(file.file_id)} disabled={saving} onChange={() => {
-            setSelected(current => current.includes(file.file_id) ? current.filter(id => id !== file.file_id) : [...current, file.file_id]); setSaved(false);
+            setSelected(current => current.includes(file.file_id) ? current.filter(id => id !== file.file_id) : [...current, file.file_id]); markDirty();
           }} />
           <span><strong>{file.display_name}</strong> · {file.size_bytes.toLocaleString()} bytes · {file.media_type} · Description: {file.description.state} · Offerable: {file.offerable ? 'Yes' : 'No'}
             {selected.includes(file.file_id) && !file.offerable && <span className="block text-amber-800">{blockerMessage(fileBlocker(file), files)} <Link className="underline" href={gatewayLink}>Review gateway file</Link></span>}
@@ -115,6 +117,7 @@ export default function ListingGatewaySource({ listingId, onSourceSaved, onGatew
       </div>
       <button type="button" className="rounded border px-3 py-2" disabled={saving || selected.length === 0 || selected.length > 200} onClick={save}>Save gateway source</button>
       {saved && <p role="status">Gateway source saved. This selection is shown only during this session because listing details do not return the saved gateway source.</p>}
+    </>}
     </>}
     {error && <p role="alert" className="text-red-700">{error}</p>}
   </section>;
