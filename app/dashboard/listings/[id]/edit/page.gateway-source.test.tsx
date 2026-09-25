@@ -39,9 +39,31 @@ async function chooseGateway() {
 it.each(['gateway_disabled', 'network_error'])('hides the section when gateway list fails with %s', async code => {
   gatewayApi.listSellerGateways.mockRejectedValue(error(code));
   render(<EditListingPage />);
-  await screen.findByRole('button', { name: 'Publish' });
+  await screen.findByRole('button', { name: 'Save Draft' });
   await waitFor(() => expect(gatewayApi.listSellerGateways).toHaveBeenCalled());
   expect(screen.queryByText('Deliver from a gateway')).toBeNull();
+  expect(screen.queryByRole('button', { name: 'Publish' })).toBeNull();
+});
+
+it('keeps Publish and the identity reminder hidden for a draft without a saved gateway source', async () => {
+  render(<EditListingPage />);
+  await screen.findByRole('combobox', { name: 'Gateway' });
+  expect(screen.queryByRole('button', { name: 'Publish' })).toBeNull();
+  expect(screen.queryByText(/Before this listing goes live/)).toBeNull();
+  fireEvent.change(screen.getByRole('combobox', { name: 'Gateway' }), { target: { value: gateway.gateway_id } });
+  await screen.findByText(file.display_name);
+  expect(screen.queryByRole('button', { name: 'Publish' })).toBeNull();
+  expect(screen.queryByText(/Before this listing goes live/)).toBeNull();
+});
+
+it('keeps the existing Publish action for an unlisted listing', async () => {
+  listingApi.getListing.mockResolvedValue({ ...draft, status: 'unlisted' });
+  render(<EditListingPage />);
+  const publish = await screen.findByRole('button', { name: 'Publish' });
+  expect(screen.queryByText('Deliver from a gateway')).toBeNull();
+  expect(screen.queryByText(/Before this listing goes live/)).toBeNull();
+  fireEvent.click(publish);
+  await waitFor(() => expect(listingApi.publishListing).toHaveBeenCalledWith('listing-1'));
 });
 
 it('does not offer source editing for a published listing', async () => {
@@ -66,9 +88,8 @@ it('paginates, shows only safe file fields, explains non-offerable selections, a
   const stale = { ...file, file_id: 'second', display_name: 'second.csv', description: { ...file.description, state: 'stale' }, offerable: false, path: '/private/source/data.csv' };
   gatewayApi.listGatewayFiles.mockResolvedValueOnce({ files: [file], next_cursor: 'next' }).mockResolvedValueOnce({ files: [stale], next_cursor: null });
   await chooseGateway();
-  expect(screen.getByText(/Review and acknowledge the gateway identity notice/)).toBeTruthy();
-  expect(screen.getByText(/after purchase, buyers learn your door hostname/)).toBeTruthy();
-  expect(screen.getByText(/Review and acknowledge the gateway identity notice/).closest('a')?.getAttribute('href')).toBe(`/dashboard/gateways/${gateway.gateway_id}`);
+  expect(screen.queryByRole('button', { name: 'Publish' })).toBeNull();
+  expect(screen.queryByText(/after purchase, buyers learn your door hostname/)).toBeNull();
   fireEvent.click(screen.getByRole('button', { name: 'Load more files' }));
   await screen.findByText('second.csv');
   fireEvent.click(screen.getByText('second.csv').closest('label')!.querySelector('input')!);
@@ -77,6 +98,9 @@ it('paginates, shows only safe file fields, explains non-offerable selections, a
   fireEvent.click(screen.getByRole('button', { name: 'Save gateway source' }));
   await waitFor(() => expect(gatewayApi.saveGatewayListingSource).toHaveBeenCalledWith('listing-1', { type: 'gateway', gateway_id: gateway.gateway_id, file_ids: ['second'] }));
   expect(screen.getByText(/selection is shown only during this session/)).toBeTruthy();
+  expect(screen.getByRole('button', { name: 'Publish' })).toBeTruthy();
+  expect(screen.getByText(/after purchase, buyers learn your door hostname/)).toBeTruthy();
+  expect(screen.getByText(/Review and acknowledge the gateway identity notice/).closest('a')?.getAttribute('href')).toBe(`/dashboard/gateways/${gateway.gateway_id}`);
 });
 
 it.each([
@@ -89,6 +113,8 @@ it.each([
   fireEvent.click(screen.getByText(file.display_name).closest('label')!.querySelector('input')!);
   fireEvent.click(screen.getByRole('button', { name: 'Save gateway source' }));
   expect(await screen.findByText(new RegExp(text))).toBeTruthy();
+  expect(screen.queryByRole('button', { name: 'Publish' })).toBeNull();
+  expect(screen.queryByText(/Before this listing goes live/)).toBeNull();
 });
 
 it('renders publish blockers with known file names and handles other gateway publish codes', async () => {

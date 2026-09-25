@@ -3,7 +3,7 @@
 import { useEffect, useState } from 'react';
 import Link from 'next/link';
 import { gatewayErrorCode } from '@/api/gatewayDelivery';
-import { listGatewayFiles, listSellerGateways, saveGatewayListingSource, type GatewayListingSource } from '@/api/sellerGateways';
+import { listGatewayFiles, listSellerGateways, saveGatewayListingSource } from '@/api/sellerGateways';
 import { blockerMessage } from './presentation';
 import type { GatewayFile, SellerGateway } from '@/types/sellerGateway';
 
@@ -21,17 +21,16 @@ function fileBlocker(file: GatewayFile) {
   return { code: 'file_not_described', file_id: file.file_id };
 }
 
-export default function ListingGatewaySource({ listingId, initialSource, onSourceSaved, onGatewayChosen }: {
+export default function ListingGatewaySource({ listingId, onSourceSaved, onGatewayChosen }: {
   listingId: string;
-  initialSource?: GatewayListingSource | null;
   onSourceSaved: (gateway: SellerGateway, files: GatewayFile[]) => void;
   onGatewayChosen: (gateway: SellerGateway | null) => void;
 }) {
   const [gateways, setGateways] = useState<SellerGateway[] | null>(null);
-  const [gatewayId, setGatewayId] = useState(initialSource?.gateway_id ?? '');
+  const [gatewayId, setGatewayId] = useState('');
   const [files, setFiles] = useState<GatewayFile[]>([]);
   const [cursor, setCursor] = useState<string | null>(null);
-  const [selected, setSelected] = useState<string[]>([...new Set(initialSource?.file_ids ?? [])]);
+  const [selected, setSelected] = useState<string[]>([]);
   const [saved, setSaved] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [loadingFiles, setLoadingFiles] = useState(false);
