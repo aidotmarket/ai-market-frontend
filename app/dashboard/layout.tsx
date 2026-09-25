@@ -10,6 +10,7 @@ import {
   isAWSConnectionAvailable,
 } from '@/api/sellerWorkspace';
 import SellerSetupProgressBar from '@/components/onboarding/SellerSetupProgressBar';
+import { listSellerGateways } from '@/api/sellerGateways';
 
 const isBuyerPurchaseRoute = (pathname: string) =>
   pathname === '/dashboard/orders' || pathname.startsWith('/dashboard/orders/');
@@ -21,12 +22,14 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
   const [routeReady, setRouteReady] = useState(false);
   const [sellerStatus, setSellerStatus] = useState<CapabilityStatus | null>(null);
   const [sellerWorkspaceAvailable, setSellerWorkspaceAvailable] = useState(false);
+  const [gatewaysAvailable, setGatewaysAvailable] = useState(false);
   const [capabilitiesResolved, setCapabilitiesResolved] = useState(false);
 
   useEffect(() => {
     let cancelled = false;
     setSellerStatus(null);
     setSellerWorkspaceAvailable(false);
+    setGatewaysAvailable(false);
     setCapabilitiesResolved(false);
 
     if (isLoading || !hydrated || !isAuthenticated) return;
@@ -38,13 +41,12 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
         setSellerStatus(status);
         if (status !== 'active') return;
 
-        try {
-          const workspaceCapabilities = await getSellerWorkspaceCapabilities();
-          if (!cancelled) {
-            setSellerWorkspaceAvailable(isAWSConnectionAvailable(workspaceCapabilities));
-          }
-        } catch {
-          if (!cancelled) setSellerWorkspaceAvailable(false);
+        const [workspace, gateways] = await Promise.allSettled([
+          getSellerWorkspaceCapabilities(), listSellerGateways(),
+        ]);
+        if (!cancelled) {
+          setSellerWorkspaceAvailable(workspace.status === 'fulfilled' && isAWSConnectionAvailable(workspace.value));
+          setGatewaysAvailable(gateways.status === 'fulfilled');
         }
       })
       .catch((err) => {
@@ -114,6 +116,9 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
         { name: 'Listings', href: '/dashboard/listings' },
         ...(isSellerActive && sellerWorkspaceAvailable
           ? [{ name: 'Seller Workspace', href: '/dashboard/seller-workspace' }]
+          : []),
+        ...(isSellerActive && gatewaysAvailable
+          ? [{ name: 'Gateways', href: '/dashboard/gateways' }]
           : []),
         ...(isSellerActive ? [{ name: 'Sales', href: '/dashboard/sales' }] : []),
         { name: 'Purchases', href: '/dashboard/orders' },
