@@ -87,7 +87,7 @@ const comparisonRows = [
   {
     area: 'Discovery and search',
     market: 'Catalog indexing, marketplace search, listing pages, and request matching.',
-    node: 'Lists files in place and sends structural descriptions only after you confirm each file.',
+    node: 'Sends opaque inventory automatically and file structure after your confirmation.',
   },
   {
     area: 'Authentication',
@@ -116,7 +116,11 @@ const comparisonRows = [
   },
 ];
 
-const requirements = ['Python 3.11+ or Docker', '4 GB RAM minimum', 'Outbound network access to ai.market API + P2P connectivity'];
+const requirements = [
+  'Docker and Docker Compose on Linux',
+  'Deny-all egress except api.ai.market:443, using a restricted proxy or firewall and DNS',
+  'A seller reverse proxy serving the gateway door over HTTPS',
+];
 
 const specialistTypes = [
   {
@@ -252,10 +256,10 @@ export default function PartnerPage() {
               Run an AIM Data gateway on your infrastructure.
             </h2>
             <p className="mt-5 text-lg leading-8 text-gray-600">
-              The open-source gateway lists files in place. You confirm each file before it shares column names, types, and row counts with ai.market.
+              The open-source gateway sends opaque file IDs and keyed commitments automatically, with your alias if set. After you confirm a file, it sends column names, types, row count, bucketed null rates and distinct counts, and raw SHA-256. No data values go to ai.market in these messages. You can separately publish a public sample on your listing.
             </p>
             <blockquote className="mt-8 rounded-2xl border border-[#D8EEE6] bg-white p-6 text-base font-semibold leading-7 text-gray-900 shadow-sm">
-              The gateway runs with Docker, without admin rights, with read-only file access and outbound access only to ai.market. Buyers download purchases directly from it.
+              The gateway refuses to start as root or the wrong user, with a writable root filesystem, any capability, no-new-privileges off, or a mounted socket. You must restrict outbound access to api.ai.market:443 with a restricted proxy or firewall and DNS. Its egress canary reports open access, which blocks publishing and new permissions. Buyers download purchases directly through your HTTPS door.
             </blockquote>
             <p className="mt-5 text-sm leading-6 text-gray-600">
               Open-source project:{' '}

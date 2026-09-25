@@ -32,7 +32,11 @@ describe('SellDataPage', () => {
       isAuthenticated ? '/dashboard/gateways' : '/register?redirect=%2Fdashboard%2Fgateways'
     );
     expect(within(cards[1]).getByText(/Confirm each file/)).toBeTruthy();
-    expect(within(cards[1]).getByText(/read-only file access/)).toBeTruthy();
+    expect(within(cards[1]).getByText(/keyed commitments automatically/)).toBeTruthy();
+    expect(within(cards[1]).getByText(/raw SHA-256/)).toBeTruthy();
+    expect(within(cards[1]).getByText(/public sample/)).toBeTruthy();
+    expect(within(cards[1]).getByText(/refuses to start as root/)).toBeTruthy();
+    expect(within(cards[1]).getByText(/canary reports open access/)).toBeTruthy();
 
     const structuredData = JSON.parse(container.querySelector('script[type="application/ld+json"]')!.textContent!);
     expect(structuredData['@type']).toBe('Service');

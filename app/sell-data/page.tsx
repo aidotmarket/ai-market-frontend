@@ -47,7 +47,7 @@ const steps = [
   {
     title: 'YOUR DATA STAYS UNDER YOUR CONTROL',
     description:
-      'Keep your files in your own cloud bucket or on your own infrastructure. For gateway files, you confirm each one before ai.market receives its structural description. When a buyer purchases, they download directly from your bucket or gateway. ai.market never stores your files.',
+      'Keep your files in your own cloud bucket or on your own infrastructure. The gateway sends opaque inventory automatically; you confirm each file before it sends structure. Buyers download purchases directly from your bucket or gateway.',
   },
   {
     title: "YOU DON'T CHASE LEADS",
@@ -70,7 +70,7 @@ const features = [
   {
     title: 'Control what you share.',
     description:
-      'The gateway lists files in place. After you confirm a file, ai.market receives column names, types, and row counts, never data values.',
+      'The gateway sends opaque inventory automatically. After you confirm a file, it sends structure and SHA-256, with no data values. You can separately publish a public sample.',
   },
   {
     title: 'Stripe payouts.',
@@ -170,13 +170,18 @@ export default function SellDataPage() {
               </h3>
               <p className="mt-4 text-base leading-7 text-gray-600">
                 Run the small open-source AIM Data gateway with Docker on your own infrastructure.
-                It lists files in place. Confirm each file before it sends column names, types,
-                and row counts to ai.market. It never sends data values.
+                It sends opaque file IDs and keyed commitments automatically, with your alias if set.
+                Confirm each file before it sends column names, types, row count, bucketed null rates
+                and distinct counts, and raw SHA-256. No data values go to ai.market in these
+                messages. You can separately publish a public sample on your listing. The gateway
+                sends delivery receipts and signed audit entries for every outbound message.
               </p>
               <p className="mt-4 mb-6 text-base leading-7 text-gray-600">
-                The gateway runs without admin rights, with read-only file access and outbound
-                access only to ai.market. It refuses to start if those limits are loosened.
-                When a buyer purchases, they download directly from your gateway.
+                The gateway refuses to start as root or the wrong user, with a writable root filesystem,
+                any capability, no-new-privileges off, or a mounted socket. You must restrict outbound
+                access to api.ai.market:443 with a restricted proxy or firewall and DNS. Its egress
+                canary reports open access, which blocks publishing and new permissions. Buyers
+                download purchases directly from your gateway.
               </p>
               <SellDataCta variant="self-hosted" className="mt-auto self-start" />
             </article>
