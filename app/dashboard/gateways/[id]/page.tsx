@@ -36,6 +36,7 @@ export default function GatewayPage() {
   const alive = useRef(true);
   const currentId = useRef(id);
   const doorRun = useRef(0);
+  const doorWaitTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const fileRuns = useRef(new Map<string, number>());
   const fileRetryDelay = useRef(new Map<string, number>());
   const isCurrent = useCallback((requestId: string) => alive.current && currentId.current === requestId, []);
@@ -54,23 +55,30 @@ export default function GatewayPage() {
 
   const pollDoor = useCallback((delay = 2) => {
     if (!alive.current || currentId.current !== id) return;
+    if (doorWaitTimer.current) clearTimeout(doorWaitTimer.current);
     const run = ++doorRun.current;
     const deadline = Date.now() + 30_000;
     async function poll() {
-      try {
-        while (alive.current && currentId.current === id && doorRun.current === run && Date.now() + delay * 1000 <= deadline) {
-          await wait(delay * 1000);
-          if (!alive.current || currentId.current !== id || doorRun.current !== run) return;
+      let refreshFailed = false;
+      while (alive.current && currentId.current === id && doorRun.current === run) {
+        const remaining = deadline - Date.now();
+        if (remaining <= 0) break;
+        const refreshDue = delay * 1000 <= remaining;
+        await new Promise<void>(resolve => { doorWaitTimer.current = setTimeout(resolve, Math.min(delay * 1000, remaining)); });
+        doorWaitTimer.current = null;
+        if (!alive.current || currentId.current !== id || doorRun.current !== run) return;
+        if (!refreshDue) break;
+        try {
           const result = await getSellerGateway(id);
           if (!alive.current || currentId.current !== id || doorRun.current !== run) return;
           setGateway(result);
-          if (result.door_check.state !== 'pending') return;
-          delay = 2;
+          if (result.door_check.state !== 'pending') { setDoorError(null); return; }
+        } catch {
+          refreshFailed = true;
         }
-        if (alive.current && currentId.current === id && doorRun.current === run) setDoorError('The check is still pending. Refresh to see its result.');
-      } catch {
-        if (alive.current && currentId.current === id && doorRun.current === run) setDoorError('The door check could not be refreshed. Try again.');
+        delay = 2;
       }
+      if (alive.current && currentId.current === id && doorRun.current === run) setDoorError(refreshFailed ? 'The door check could not be refreshed. Try again.' : 'The check is still pending. Refresh to see its result.');
     }
     void poll();
   }, [id]);
@@ -99,7 +107,7 @@ export default function GatewayPage() {
       } catch { if (!cancelled && isCurrent(id)) setState('unavailable'); }
     }
     void load();
-    return () => { cancelled = true; alive.current = false; doorRun.current++; fileRuns.current.clear(); };
+    return () => { cancelled = true; alive.current = false; doorRun.current++; if (doorWaitTimer.current) clearTimeout(doorWaitTimer.current); doorWaitTimer.current = null; fileRuns.current.clear(); };
   }, [hydrated, isAuthenticated, id, isCurrent, loadMessages, pollDoor]);
 
   useEffect(() => {
@@ -143,7 +151,7 @@ export default function GatewayPage() {
       if (!isCurrent(requestId)) return;
       setGateway(result); setDoorUrl(result.door_url ?? '');
       if (result.door_check.state === 'pending') pollDoor();
-      else doorRun.current++;
+      else { doorRun.current++; if (doorWaitTimer.current) clearTimeout(doorWaitTimer.current); doorWaitTimer.current = null; }
     } catch (cause) {
       if (!isCurrent(requestId)) return;
       setDoorError(({
@@ -160,7 +168,7 @@ export default function GatewayPage() {
       if (!isCurrent(requestId)) return;
       setGateway(current => current ? { ...current, door_check: started.data.door_check } : current);
       if (started.data.door_check.state === 'pending') pollDoor(started.retryAfter ?? 2);
-      else doorRun.current++;
+      else { doorRun.current++; if (doorWaitTimer.current) clearTimeout(doorWaitTimer.current); doorWaitTimer.current = null; }
     } catch (cause) {
       if (!isCurrent(requestId)) return;
       setDoorError(({
@@ -183,6 +191,8 @@ export default function GatewayPage() {
       await revokeSellerGateway(requestId, confirmed);
       if (!isCurrent(requestId)) return;
       doorRun.current++;
+      if (doorWaitTimer.current) clearTimeout(doorWaitTimer.current);
+      doorWaitTimer.current = null;
       try { const result = await getSellerGateway(requestId); if (!isCurrent(requestId)) return; setGateway(result); }
       catch { if (!isCurrent(requestId)) return; setGateway(current => current ? { ...current, status: 'revoked', status_reason: null, blockers: [{ code: 'gateway_revoked' }], can_publish: false } : current); }
       setConfirmRevoke(false); setOpenOrders(null);

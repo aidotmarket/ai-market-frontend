@@ -35,6 +35,10 @@ export async function acknowledgeGatewayIdentity(id: string): Promise<SellerGate
 export async function listGatewayFiles(id: string, cursor?: string, limit = 100): Promise<FilesPage> {
   return (await api.get<FilesPage>(`${gatewayPath(id)}/files`, { params: { cursor, limit } })).data;
 }
+export interface GatewayListingSource { type: 'gateway'; gateway_id: string; file_ids: string[] }
+export async function saveGatewayListingSource(listingId: string, source: GatewayListingSource): Promise<GatewayListingSource> {
+  return (await api.put<{ source: GatewayListingSource }>(`/listings/${encodeURIComponent(listingId)}/gateway-source`, { source })).data.source;
+}
 export async function getGatewayFile(id: string, fileId: string): Promise<WithRetry<GatewayFile>> {
   return withRetry(await api.get<GatewayFile>(filePath(id, fileId)));
 }
