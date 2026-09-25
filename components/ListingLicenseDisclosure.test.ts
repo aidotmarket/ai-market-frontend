@@ -3,6 +3,7 @@ import { readFileSync } from 'node:fs';
 import { describe, expect, it, vi } from 'vitest';
 import record from '@/tests/fixtures/s1735_license_record.json';
 import { fetchedBytesMatch, hashLicenseComponentBytes } from './ListingLicenseDisclosure';
+import {sha256} from '@/lib/customLicenseVerification';
 
 const trueClause = 'The Licensee may use the Data to train, fine-tune, test and evaluate artificial-intelligence and machine-learning systems, subject to every other restriction in this licence.';
 const falseClause = 'The Licensee must not use the Data to train, fine-tune, test or evaluate artificial-intelligence or machine-learning systems. This does not prohibit ordinary analysis that does not train, fine-tune, test or evaluate such a system.';
@@ -43,5 +44,24 @@ describe('custom PDF source verification', () => {
       expect(await fetchedBytesMatch(bytes, 'text/plain', reference)).toBe(false);
       expect(await fetchedBytesMatch(new TextEncoder().encode('%PDF-1.4 evil'), 'application/pdf', reference)).toBe(false);
     } finally { vi.unstubAllGlobals(); }
+  });
+});
+
+describe('custom plain text byte verification', () => {
+  it('checks both hashes before literal rendering for NFC, LF and trailing whitespace', async () => {
+    vi.stubGlobal('crypto', webcrypto);
+    try {
+      const canonical = 'Café\nC\n';
+      const bytes = new TextEncoder().encode(canonical);
+      const source_sha256 = await sha256(bytes);
+      const reference = {kind:'license' as const,label:'Custom',canonicalUrl:'/api/v1/listings/id/license-document',downloadUrl:'/api/v1/listings/id/license-document?download=1',
+        sha256:await hashLicenseComponentBytes(bytes,{kind:'license',code:'custom',version:'1',params:{ai_training:true,source_sha256}}),
+        code:'custom',version:'1',params:{ai_training:true,source_sha256}};
+      expect(await fetchedBytesMatch(bytes,'text/plain; charset=utf-8',reference)).toBe(true);
+      expect(await fetchedBytesMatch(new TextEncoder().encode('Cafe\u0301\rC\t\n\n'),'text/plain',reference)).toBe(false);
+      expect(await fetchedBytesMatch(bytes,'application/pdf',reference)).toBe(false);
+      expect(await fetchedBytesMatch(bytes,'text/plain',{...reference,sha256:'0'.repeat(64)})).toBe(false);
+      expect(await fetchedBytesMatch(bytes,'text/plain',{...reference,params:{...reference.params,source_sha256:'0'.repeat(64)}})).toBe(false);
+    } finally {vi.unstubAllGlobals();}
   });
 });

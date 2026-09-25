@@ -3,6 +3,8 @@
 import { useEffect, useMemo, useState } from 'react';
 import type { ListingLicenseDetails } from '@/types';
 import { api } from '@/api/client';
+import {hashLicenseComponentBytes, sha256, verifyCustomText} from '@/lib/customLicenseVerification';
+export {hashLicenseComponentBytes} from '@/lib/customLicenseVerification';
 
 const STANDARD_NOTICE = 'ai.market standard terms — the same balanced terms every seller on ai.market uses. ai.market is not a party and gives no legal advice.';
 const CUSTOM_NOTICE = "The seller's own terms. ai.market did not write these; review them before you accept. The separate ai.market AI-Training Rider and Marketplace Listing Covenant also form part of your record. ai.market is not a party and gives no legal advice.";
@@ -24,53 +26,29 @@ interface LoadedDocument extends DocumentReference {
   state: 'loading' | 'matched' | 'mismatch' | 'error';
   text: string | null;
   objectUrl?: string;
+  verifiedMediaType?: 'text/plain' | 'application/pdf';
 }
 
-function lengthPrefixed(bytes: Uint8Array): Uint8Array {
-  const result = new Uint8Array(8 + bytes.length);
-  new DataView(result.buffer).setBigUint64(0, BigInt(bytes.length));
-  result.set(bytes, 8);
-  return result;
-}
+const CUSTOM_TEXT_CONTENT_TYPE = 'text/plain; charset=utf-8';
 
-function join(parts: Uint8Array[]): Uint8Array {
-  const result = new Uint8Array(parts.reduce((size, part) => size + part.length, 0));
-  let offset = 0;
-  for (const part of parts) {
-    result.set(part, offset);
-    offset += part.length;
-  }
-  return result;
+export function customTextMetadataMatches(headers: Record<string, unknown>, reference: DocumentReference): boolean {
+  // Cross-origin reads depend on the backend exposing Content-Disposition,
+  // X-License-Sha256 and X-License-Source-Sha256 through CORS expose_headers.
+  // Missing browser-visible headers must fail closed, even when bytes match.
+  const listingId = reference.downloadUrl.match(/\/listings\/([^/?#]+)\/license-document\?download=1$/)?.[1];
+  return headers['content-type'] === CUSTOM_TEXT_CONTENT_TYPE &&
+    headers['x-content-type-options'] === 'nosniff' &&
+    headers['cache-control'] === 'private, no-store' &&
+    Boolean(listingId) &&
+    headers['content-disposition'] === `attachment; filename="listing-${listingId}-licence.txt"` &&
+    headers['x-license-source-sha256'] === reference.params.source_sha256 &&
+    headers['x-license-sha256'] === reference.sha256;
 }
 
 function canonicalJson(value: Record<string, string | boolean>): string {
   return `{${Object.keys(value).sort().map((key) => `${JSON.stringify(key.normalize('NFC'))}:${JSON.stringify(
     typeof value[key] === 'string' ? value[key].normalize('NFC') : value[key],
   )}`).join(',')}}`;
-}
-
-async function sha256(bytes: Uint8Array): Promise<string> {
-  const digest = await globalThis.crypto.subtle.digest('SHA-256', bytes as BufferSource);
-  return Array.from(new Uint8Array(digest), (byte) => byte.toString(16).padStart(2, '0')).join('');
-}
-
-export async function hashLicenseComponentBytes(
-  bytes: Uint8Array,
-  reference: Pick<DocumentReference, 'kind' | 'code' | 'version' | 'params'>,
-): Promise<string> {
-  const encoder = new TextEncoder();
-  const domain = reference.kind === 'license'
-    ? 'ai.market/license/v1'
-    : reference.kind === 'rider'
-      ? 'ai.market/rider/v1'
-      : 'ai.market/covenant/v1';
-  return sha256(join([
-    lengthPrefixed(encoder.encode(domain)),
-    lengthPrefixed(encoder.encode(reference.code.normalize('NFC'))),
-    lengthPrefixed(encoder.encode(reference.version.normalize('NFC'))),
-    lengthPrefixed(bytes),
-    lengthPrefixed(encoder.encode(canonicalJson(reference.params))),
-  ]));
 }
 
 export async function fetchedBytesMatch(
@@ -81,6 +59,10 @@ export async function fetchedBytesMatch(
   let canonicalBytes = bytes;
   const mediaType = contentType.split(';')[0].trim().toLowerCase();
   const sourceSha256 = reference.params.source_sha256;
+  if (reference.kind === 'license' && reference.code === 'custom' && mediaType === 'text/plain') {
+    return typeof sourceSha256 === 'string' && typeof reference.params.ai_training === 'boolean' &&
+      await verifyCustomText(bytes, sourceSha256, reference.sha256, reference.params.ai_training) !== null;
+  }
   const pdfCanonicalBytes = typeof sourceSha256 === 'string' && /^[a-f0-9]{64}$/.test(sourceSha256)
     ? new TextEncoder().encode(`${canonicalJson({content_type: 'application/pdf', source_sha256: sourceSha256})}\n`)
     : null;
@@ -175,17 +157,25 @@ export default function ListingLicenseDisclosure({
         const location = documentLocation(reference.downloadUrl);
         let bytes: Uint8Array;
         let contentType: string;
+        let responseHeaders: Record<string, unknown>;
         if (location.apiPath) {
           const response = await api.get<ArrayBuffer>(location.apiPath, { responseType: 'arraybuffer', headers: { 'Cache-Control': 'no-store' } });
           bytes = new Uint8Array(response.data);
-          contentType = response.headers['content-type'] ?? 'text/plain';
+          responseHeaders = response.headers as Record<string, unknown>;
+          contentType = String(responseHeaders['content-type'] ?? '');
         } else {
           const response = await fetch(location.href, { credentials: 'include', cache: 'no-store' });
           if (!response.ok) throw new Error('document fetch failed');
           bytes = new Uint8Array(await response.arrayBuffer());
-          contentType = response.headers.get('content-type') ?? 'text/plain';
+          responseHeaders = Object.fromEntries(response.headers.entries());
+          contentType = String(responseHeaders['content-type'] ?? '');
         }
-        const matched = await fetchedBytesMatch(bytes, contentType, reference);
+        const customText = reference.kind === 'license' && reference.code === 'custom' && contentType !== 'application/pdf';
+        const matched = (!customText || customTextMetadataMatches(responseHeaders, reference)) &&
+          await fetchedBytesMatch(bytes, contentType, reference);
+        const verifiedMediaType = matched && reference.kind === 'license' && reference.code === 'custom'
+          ? contentType.split(';')[0].trim().toLowerCase() as 'text/plain' | 'application/pdf'
+          : undefined;
         const objectUrl = matched && !cancelled && reference.kind === 'license' && reference.code === 'custom'
           ? URL.createObjectURL(new Blob([bytes.slice().buffer as ArrayBuffer], { type: contentType }))
           : undefined;
@@ -193,8 +183,9 @@ export default function ListingLicenseDisclosure({
         return {
           ...reference,
           state: matched ? 'matched' : 'mismatch',
-          text: matched && !contentType.toLowerCase().includes('application/pdf') ? new TextDecoder().decode(bytes) : null,
+          text: matched && !contentType.toLowerCase().includes('application/pdf') ? new TextDecoder('utf-8', {fatal: true}).decode(bytes) : null,
           objectUrl,
+          verifiedMediaType,
         };
       } catch {
         return { ...reference, state: 'error', text: null };
@@ -245,9 +236,9 @@ export default function ListingLicenseDisclosure({
             </div>
             <p className="mt-2 break-all font-mono text-[11px] text-gray-600">SHA-256: {document.sha256}</p>
             <div className="mt-3 flex flex-wrap gap-4 text-sm">
-              {document.text && <details className="w-full rounded border border-gray-100 p-3"><summary className="cursor-pointer font-medium text-indigo-700">Read full text</summary><pre className="mt-3 max-h-96 overflow-auto whitespace-pre-wrap text-xs leading-5 text-gray-800">{document.text}</pre></details>}
+              {document.text && <details className="w-full rounded border border-gray-100 p-3"><summary className="cursor-pointer font-medium text-indigo-700">Read full text</summary><pre dir="auto" className="mt-3 max-h-96 overflow-auto whitespace-pre-wrap break-words [tab-size:4] text-xs leading-5 text-gray-800">{document.text}</pre></details>}
               {downloadHref
-                ? <a href={downloadHref} download className="font-medium text-indigo-700 underline">Download exact document</a>
+                ? <a href={downloadHref} download={customDocument ? `custom-licence.${document.verifiedMediaType === 'application/pdf' ? 'pdf' : 'txt'}` : true} className="font-medium text-indigo-700 underline">Download exact document</a>
                 : <span className="font-medium text-gray-500">Download exact document</span>}
             </div>
           </div>

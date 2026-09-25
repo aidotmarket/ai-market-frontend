@@ -51,3 +51,13 @@ it('shows only the backend custom notice and hash', async () => {
   expect(html).toContain(hash);
   expect(html).not.toContain('Full text');
 });
+
+it('escapes markup in the public amber notice and never exposes custom text',async()=>{
+  process.env.API_URL='https://api.ai.market';
+  const hash='c'.repeat(64);
+  globalThis.fetch=vi.fn().mockResolvedValue({ok:true,json:async()=>({code:'custom',sha256:hash,notice:'<script>alert(1)</script> **review**'})});
+  const html=renderToStaticMarkup(await LicencePage({params:Promise.resolve({parts:['custom',hash]})}));
+  expect(html).toContain('&lt;script&gt;alert(1)&lt;/script&gt; **review**');
+  expect(html).not.toContain('<script>');
+  expect(html).not.toContain('Read exact recorded text');
+});
