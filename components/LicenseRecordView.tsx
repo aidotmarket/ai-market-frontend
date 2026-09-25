@@ -21,7 +21,7 @@ function DocumentSection({ document, title }: { document: RecordDocument; title:
     <section className="rounded-lg border border-gray-200 p-4">
       <h2 className="font-semibold text-gray-900">{title}</h2>
       <p className="mt-2 break-all font-mono text-xs text-gray-600">SHA-256: {document.sha256}</p>
-      {document.text && <details className="mt-3"><summary className="cursor-pointer text-sm font-medium text-indigo-700">Read exact recorded text</summary><pre className="mt-3 max-h-96 overflow-auto whitespace-pre-wrap text-xs leading-5 text-gray-800">{document.text}</pre></details>}
+      {document.text && <details className="mt-3"><summary className="cursor-pointer text-sm font-medium text-indigo-700">Read exact recorded text</summary><pre dir="auto" className="mt-3 max-h-96 overflow-auto whitespace-pre-wrap break-words [tab-size:4] text-xs leading-5 text-gray-800">{document.text}</pre></details>}
     </section>
   );
 }

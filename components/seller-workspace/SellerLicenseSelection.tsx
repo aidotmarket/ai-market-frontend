@@ -1,10 +1,11 @@
 'use client';
 
-import {useEffect,useState} from 'react';
+import {useRef,useState} from 'react';
 import {
-  LICENSE_HASHES, createStandardSelection, uploadCustomLicense, licenseDocumentPath,
+  LICENSE_HASHES, createStandardSelection, submitCustomLicenseText, licenseDocumentPath,
   type LicenseSelection,
 } from '@/api/listingLicenses';
+import {MAX_CUSTOM_LICENSE_CODEPOINTS,canonicalizeCustomText} from '@/lib/customLicenseVerification';
 
 export const STANDARD_SELLER_SUMMARY = `Not the contract — read the full licence before choosing it.
 You remain the owner and licensor of the delivered dataset version.
@@ -19,44 +20,70 @@ export const CUSTOM_NOTICE = "The seller's own terms. ai.market did not write th
 export default function SellerLicenseSelection({value, onChange, disabled = false}: {
   value: LicenseSelection; onChange: (value: LicenseSelection) => void; disabled?: boolean;
 }) {
-  const [uploading, setUploading] = useState(false);
-  const [uploadError, setUploadError] = useState('');
+  const [submitting, setSubmitting] = useState(false);
+  const [submitError, setSubmitError] = useState('');
+  const [title, setTitle] = useState('');
+  const [text, setText] = useState('');
   const [termsOpened, setTermsOpened] = useState(false);
-  const [customPreview,setCustomPreview]=useState<{id:string;url:string}|null>(null);
-  useEffect(()=>()=>{if(customPreview) URL.revokeObjectURL(customPreview.url);},[customPreview]);
+  const [customPreview,setCustomPreview]=useState<{id:string;title:string;text:string}|null>(null);
+  const [lastStored, setLastStored] = useState<{title:string;text:string;aiTraining:boolean}|null>(null);
+  const submissionVersion = useRef(0);
   const identity = value.seller_acceptance;
   const updateIdentity = (field: 'signer_name' | 'signer_title' | 'authority_confirmed', next: string | boolean) =>
     onChange({...value, seller_acceptance: {...identity, [field]: next}});
-  const chooseKind = (kind: LicenseSelection['kind']) => {
+  const invalidateCustom = (changes: Partial<LicenseSelection> = {}) => {
+    submissionVersion.current += 1;
     setTermsOpened(false);
     setCustomPreview(null);
+    setSubmitError('');
+    onChange({...value, ...changes, license_document_id: null, license_sha256: '',
+      seller_acceptance: {...identity, authority_confirmed: false}});
+  };
+  const chooseKind = (kind: LicenseSelection['kind']) => {
+    submissionVersion.current += 1;
+    setTermsOpened(false);
+    setCustomPreview(null);
+    setSubmitError('');
     const invalidatedIdentity={...identity,authority_confirmed:false};
     if (kind === 'standard') onChange({...createStandardSelection(value.ai_training), seller_acceptance: invalidatedIdentity});
     else onChange({...value, kind: 'custom', version: '1.0', license_document_id: null, license_sha256: '',
       rider_sha256: LICENSE_HASHES.rider[String(value.ai_training) as 'true' | 'false'],seller_acceptance:invalidatedIdentity});
   };
   const setAiTraining = (aiTraining: boolean) => {
-    setTermsOpened(false);
-    setCustomPreview(null);
     if (value.kind === 'standard') onChange({...value, ai_training: aiTraining,
       license_sha256: LICENSE_HASHES.standard[String(aiTraining) as 'true' | 'false'],seller_acceptance:{...identity,authority_confirmed:false}});
-    else onChange({...value, ai_training: aiTraining, license_document_id: null, license_sha256: '',
-      rider_sha256: LICENSE_HASHES.rider[String(aiTraining) as 'true' | 'false'],
-      seller_acceptance: {...identity, authority_confirmed: false}});
+    else invalidateCustom({ai_training: aiTraining, rider_sha256: LICENSE_HASHES.rider[String(aiTraining) as 'true' | 'false']});
+    setTermsOpened(false);
   };
-  async function upload(file: File) {
-    setUploading(true); setUploadError(''); setTermsOpened(false);
-    setCustomPreview(null);
+  async function submit() {
+    const version = ++submissionVersion.current;
+    setSubmitting(true); setSubmitError(''); setTermsOpened(false); setCustomPreview(null);
+    const submittedTitle = title;
+    const submittedText = text;
+    const submittedTraining = value.ai_training;
     try {
-      const result = await uploadCustomLicense(file, value.ai_training);
-      setCustomPreview({id:result.id,url:URL.createObjectURL(file)});
+      const result = await submitCustomLicenseText(submittedTitle, submittedText, submittedTraining);
+      if (version !== submissionVersion.current) return;
+      setCustomPreview({id:result.id,title:result.title,text:result.text});
+      setLastStored({title:result.title,text:result.text,aiTraining:submittedTraining});
       onChange({...value, kind: 'custom', version: '1.0', license_document_id: result.id,
         license_sha256: result.license_sha256, rider_sha256: LICENSE_HASHES.rider[String(value.ai_training) as 'true' | 'false'],
         covenant_sha256: LICENSE_HASHES.covenant, seller_acceptance: {...identity, authority_confirmed: false}});
-    } catch { setUploadError('The custom licence could not be uploaded. Check that it is a clean English PDF or text file no larger than 1 MiB.'); }
-    finally { setUploading(false); }
+    } catch (error) {
+      if (version !== submissionVersion.current) return;
+      const code = (error as {response?: {data?: {detail?: {code?: string}}}})?.response?.data?.detail?.code;
+      const messages: Record<string,string> = {
+        LICENSE_SIZE_INVALID: 'Enter nonempty terms of at most 65,536 Unicode characters.',
+        LICENSE_DOCUMENT_INVALID: `The licence was refused. Check the title and characters.${lastStored && lastStored.text === canonicalizeCustomText(submittedText) && lastStored.aiTraining === submittedTraining && lastStored.title !== submittedTitle.trim() ? ` The stored title is “${lastStored.title}”; revert to it for the same terms and training choice.` : ''}`,
+        LICENSE_LANGUAGE_NOT_ENGLISH: 'Use English terms with at least 200 letters.',
+        LICENSE_SECRET_DETECTED: 'Remove secrets or credentials from the terms.',
+        LICENSE_PROHIBITED_TERMS: 'Remove terms that conflict with marketplace rules.',
+        LICENSE_TEXT_INVALID_UTF8: 'The licence text is not valid UTF-8.',
+      };
+      setSubmitError(messages[code ?? ''] ?? 'The custom licence could not be submitted or verified. Please try again.');
+    } finally { if (version === submissionVersion.current) setSubmitting(false); }
   }
-  return <fieldset disabled={disabled || uploading} className="space-y-5 rounded-xl border border-gray-200 bg-white p-5">
+  return <fieldset disabled={disabled || submitting} className="space-y-5 rounded-xl border border-gray-200 bg-white p-5">
     <legend className="px-1 text-lg font-semibold text-gray-900">How can buyers use this data?</legend>
     <div className="grid gap-4 sm:grid-cols-2">
       <label className={`rounded-xl border p-4 ${value.kind === 'standard' ? 'border-indigo-500 bg-indigo-50' : 'border-gray-200'}`}>
@@ -65,7 +92,7 @@ export default function SellerLicenseSelection({value, onChange, disabled = fals
       </label>
       <label className={`rounded-xl border p-4 ${value.kind === 'custom' ? 'border-indigo-500 bg-indigo-50' : 'border-gray-200'}`}>
         <span className="flex items-center gap-2 font-semibold"><input type="radio" name="listing-license-kind" checked={value.kind === 'custom'} onChange={() => chooseKind('custom')} />My own licence</span>
-        <span className="mt-2 block text-sm text-gray-600">Upload your own English PDF or text terms.</span>
+        <span className="mt-2 block text-sm text-gray-600">Type or paste your own English licence terms.</span>
       </label>
     </div>
     <label className="flex items-center justify-between gap-4 rounded-lg border border-gray-200 p-4 text-sm font-medium text-gray-900">
@@ -74,16 +101,22 @@ export default function SellerLicenseSelection({value, onChange, disabled = fals
     </label>
     {value.kind === 'custom' && <div className="space-y-3">
       <p className="rounded-lg bg-amber-50 p-4 text-sm text-amber-900">{CUSTOM_NOTICE}</p>
-      <label className="block text-sm font-medium text-gray-900">Upload your licence
-        <input aria-label="Upload your licence" type="file" accept=".txt,text/plain,.pdf,application/pdf" className="mt-2 block w-full text-sm" onChange={event => {const file = event.target.files?.[0]; if (file) void upload(file);}} />
+      <label className="block text-sm font-medium text-gray-900">Licence title
+        <input aria-label="Licence title" value={title} onChange={event => {setTitle(event.target.value); invalidateCustom();}} className="mt-2 block w-full rounded-lg border border-gray-300 px-3 py-2" />
       </label>
-      {value.license_document_id && <p role="status" className="text-sm text-green-800">Custom licence uploaded and verified.</p>}
-      {uploadError && <p role="alert" className="text-sm text-red-800">{uploadError}</p>}
+      <label className="block text-sm font-medium text-gray-900">Your licence text
+        <textarea aria-label="Your licence text" value={text} onChange={event => {setText(event.target.value); invalidateCustom();}} rows={12} className="mt-2 block w-full rounded-lg border border-gray-300 px-3 py-2 font-mono text-sm" />
+      </label>
+      <p role="status" className="text-xs text-gray-600">{Array.from(text).length.toLocaleString()} / {MAX_CUSTOM_LICENSE_CODEPOINTS.toLocaleString()} Unicode characters</p>
+      <p className="text-xs text-gray-600">Use English terms with at least 200 letters. Do not include passwords, private keys or terms that conflict with marketplace rules. Your text is stored as plain text.</p>
+      <button type="button" disabled={!title.trim() || !text.trim() || Array.from(canonicalizeCustomText(text)).length > MAX_CUSTOM_LICENSE_CODEPOINTS} onClick={() => void submit()} className="rounded-lg bg-indigo-700 px-4 py-2 text-sm font-medium text-white disabled:opacity-50">Save custom licence text</button>
+      {customPreview?.id === value.license_document_id && <section aria-label="Verified custom licence preview" className="rounded-lg border border-green-300 p-4"><h3 className="font-medium">{customPreview.title}</h3><p role="status" className="text-sm text-green-800">Custom licence text saved and verified.</p><pre dir="auto" className="mt-3 max-h-96 overflow-auto whitespace-pre-wrap break-words [tab-size:4] text-sm">{customPreview.text}</pre></section>}
+      {submitError && <p role="alert" className="text-sm text-red-800">{submitError}</p>}
     </div>}
     <details onToggle={event => {if (event.currentTarget.open) setTermsOpened(true);}} className="rounded-lg border border-gray-200 p-4">
       <summary className="cursor-pointer font-medium text-indigo-700">Read the summary and full terms</summary>
       <p className="mt-3 whitespace-pre-line text-sm leading-6 text-gray-700">{value.kind === 'standard' ? STANDARD_SELLER_SUMMARY : CUSTOM_NOTICE}</p>
-      <div className="mt-3 flex flex-wrap gap-4 text-sm">{value.kind === 'standard' ? <a className="text-indigo-700 underline" href={`${licenseDocumentPath('standard', value.ai_training)}?download=1`} target="_blank" rel="noreferrer">Open full licence</a> : customPreview?.id===value.license_document_id ? <a className="text-indigo-700 underline" href={customPreview.url} target="_blank" rel="noreferrer">Open full licence</a> : <span className="text-gray-500">Upload your licence here to open the full document before publication.</span>}{value.kind === 'custom' && <a className="text-indigo-700 underline" href={`${licenseDocumentPath('rider', value.ai_training)}?download=1`} target="_blank" rel="noreferrer">Open AI-Training Rider</a>}<a className="text-indigo-700 underline" href={`${licenseDocumentPath('covenant')}?download=1`} target="_blank" rel="noreferrer">Open Marketplace Listing Covenant</a></div>
+      <div className="mt-3 flex flex-wrap gap-4 text-sm">{value.kind === 'standard' ? <a className="text-indigo-700 underline" href={`${licenseDocumentPath('standard', value.ai_training)}?download=1`} target="_blank" rel="noreferrer">Open full licence</a> : <span className="text-gray-500">Save the text to review the verified full licence above.</span>}{value.kind === 'custom' && <a className="text-indigo-700 underline" href={`${licenseDocumentPath('rider', value.ai_training)}?download=1`} target="_blank" rel="noreferrer">Open AI-Training Rider</a>}<a className="text-indigo-700 underline" href={`${licenseDocumentPath('covenant')}?download=1`} target="_blank" rel="noreferrer">Open Marketplace Listing Covenant</a></div>
     </details>
     <div className="grid gap-4 sm:grid-cols-2">
       <label className="text-sm font-medium text-gray-900">Signer full name<input aria-label="Signer full name" value={identity.signer_name} onChange={event => updateIdentity('signer_name', event.target.value)} className="mt-2 block w-full rounded-lg border border-gray-300 px-3 py-2" /></label>

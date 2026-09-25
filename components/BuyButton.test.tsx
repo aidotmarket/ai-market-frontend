@@ -12,6 +12,7 @@ import { ToastProvider } from './Toast';
 import { AxiosError } from 'axios';
 import { api } from '@/api/client';
 import { hashLicenseComponentBytes } from './ListingLicenseDisclosure';
+import {sha256} from '@/lib/customLicenseVerification';
 import { readFileSync } from 'node:fs';
 
 const ordersApi = vi.hoisted(() => ({ getMyOrders: vi.fn() }));
@@ -143,20 +144,21 @@ describe('BuyButton licence acceptance', () => {
     expect(parseCheckoutRefusal(error).message).toBe('This listing cannot be purchased until the seller accepts the current terms.');
   });
 
-  const customText = 'Seller custom licence text\n';
+  const customText = '<script>alert(1)</script> **bold**\n\tCafé\n';
   const covenantText = 'Exact covenant text\n';
   const riderText = readFileSync('tests/fixtures/s1735_rider_true.txt', 'utf8');
   const componentTexts = { license: customText, covenant: covenantText, rider: riderText };
 
   async function customLicense() {
     const bytes = (text: string) => new TextEncoder().encode(text);
+    const source_sha256 = await sha256(bytes(customText));
     return {
       code: 'custom' as const, version: '1',
-      params: { ai_training: true, source_sha256: 'c'.repeat(64) },
+      params: { ai_training: true, source_sha256 },
       summary: ['Seller terms — read the full licence.'],
       full_text_url: '/api/v1/listings/listing-1/license-document',
       download_url: '/api/v1/listings/listing-1/license-document?download=1',
-      sha256: await hashLicenseComponentBytes(bytes(customText), { kind: 'license', code: 'custom', version: '1', params: { ai_training: true, source_sha256: 'c'.repeat(64) } }),
+      sha256: await hashLicenseComponentBytes(bytes(customText), { kind: 'license', code: 'custom', version: '1', params: { ai_training: true, source_sha256 } }),
       covenant_sha256: await hashLicenseComponentBytes(bytes(covenantText), { kind: 'covenant', code: 'marketplace-listing', version: '1.0', params: {} }),
       rider_sha256: await hashLicenseComponentBytes(bytes(riderText), { kind: 'rider', code: 'ai-training', version: '1.0', params: { ai_training: true } }),
     };
@@ -199,7 +201,7 @@ describe('BuyButton licence acceptance', () => {
     const license = await customLicense();
     const view = render(<ToastProvider><BuyButton listingId="listing-1" slug="listing" price={20} pricingType="one_time" licenseDetails={license} /></ToastProvider>);
     completeAcceptanceForm();
-    return { calls, fetchMock, createdBlobs, createObjectURL, revokeObjectURL, unmount: view.unmount, restore: () => {
+    return { calls, fetchMock, createdBlobs, createObjectURL, revokeObjectURL, license, unmount: view.unmount, restore: () => {
       api.defaults.adapter = priorAdapter;
       api.defaults.baseURL = priorBaseUrl;
       if (priorApiUrl === undefined) delete process.env.NEXT_PUBLIC_API_URL;
@@ -208,7 +210,7 @@ describe('BuyButton licence acceptance', () => {
   }
 
   it('activates both custom document links using the exact authenticated, verified bytes', async () => {
-    const { calls, fetchMock, createdBlobs, createObjectURL, revokeObjectURL, unmount, restore } = await renderCustom();
+    const { calls, fetchMock, createdBlobs, createObjectURL, revokeObjectURL, license, unmount, restore } = await renderCustom();
     try {
       await waitFor(() => expect(screen.getAllByText('Fetched bytes match the server hash')).toHaveLength(3));
       expect(calls).toEqual(['/listings/listing-1/license-document?download=1']);
@@ -237,6 +239,10 @@ describe('BuyButton licence acceptance', () => {
         reader.readAsArrayBuffer(blob!);
       });
       expect(Array.from(new Uint8Array(bytes))).toEqual(Array.from(new TextEncoder().encode(customText)));
+      expect(await sha256(new Uint8Array(bytes))).toBe(license.params.source_sha256);
+      expect(await hashLicenseComponentBytes(new Uint8Array(bytes),{kind:'license',code:'custom',version:'1',params:license.params})).toBe(license.sha256);
+      expect(document.querySelector('script')).toBeNull();
+      expect(screen.getByText(/<script>alert\(1\)<\/script>/).textContent).toContain('**bold**');
       expect((screen.getByRole('button', { name: 'Accept and continue to payment' }) as HTMLButtonElement).disabled).toBe(false);
       unmount();
       expect(revokeObjectURL).toHaveBeenCalledWith(activated[0]);

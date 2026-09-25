@@ -1,4 +1,5 @@
 import {api} from './client';
+import {MAX_CUSTOM_LICENSE_CODEPOINTS, canonicalizeCustomText, verifyCustomText} from '@/lib/customLicenseVerification';
 
 export interface SellerAcceptance {
   signer_name: string;
@@ -19,10 +20,11 @@ export interface LicenseSelection {
   seller_acceptance: SellerAcceptance;
 }
 
-export interface CustomLicenseUpload {
+export interface CustomLicenseSubmission {
   id: string;
   title: string;
-  content_type: 'text/plain' | 'application/pdf';
+  text: string;
+  content_type: 'text/plain';
   size_bytes: number;
   source_sha256: string;
   license_sha256: string;
@@ -57,21 +59,24 @@ export function createStandardSelection(aiTraining = true): LicenseSelection {
   };
 }
 
-export async function uploadCustomLicense(file: File, aiTraining: boolean): Promise<CustomLicenseUpload> {
-  const body = new FormData();
-  body.append('upload', file);
-  body.append('title', file.name);
-  body.append('ai_training', String(aiTraining));
-  const result = (await api.post<CustomLicenseUpload>('/licenses/custom', body)).data;
-  if (!result || Object.keys(result).sort().join(',') !== 'content_type,id,license_sha256,size_bytes,source_sha256,status,title' ||
-      !/^[0-9a-f-]{36}$/.test(result.id) || result.title !== file.name ||
-      !['text/plain', 'application/pdf'].includes(result.content_type) ||
-      !Number.isSafeInteger(result.size_bytes) || result.size_bytes !== file.size ||
+export async function submitCustomLicenseText(title: string, text: string, aiTraining: boolean): Promise<CustomLicenseSubmission> {
+  if (Array.from(canonicalizeCustomText(text)).length > MAX_CUSTOM_LICENSE_CODEPOINTS || !text.trim()) throw new Error('LICENSE_SIZE_INVALID');
+  const raw: unknown = (await api.post('/licenses/custom', {title, ai_training: aiTraining, text}, {headers: {'Content-Type': 'application/json'}})).data;
+  if (!raw || typeof raw !== 'object' || Array.isArray(raw)) throw new Error('Custom licence response could not be verified');
+  const result = raw as Record<string, unknown>;
+  const keys = 'content_type,id,license_sha256,size_bytes,source_sha256,status,text,title';
+  if (Object.keys(result).sort().join(',') !== keys ||
+      typeof result.id !== 'string' || !/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(result.id) ||
+      typeof result.title !== 'string' || result.title !== title.trim() ||
+      typeof result.text !== 'string' || result.text !== canonicalizeCustomText(text) || result.content_type !== 'text/plain' ||
+      !Number.isSafeInteger(result.size_bytes) || (result.size_bytes as number) < 1 ||
+      result.size_bytes !== new TextEncoder().encode(result.text).length ||
       result.status !== 'active' ||
-      ![result.source_sha256, result.license_sha256].every(hash => /^[a-f0-9]{64}$/.test(hash))) {
-    throw new Error('Custom licence upload could not be verified');
+      typeof result.source_sha256 !== 'string' || typeof result.license_sha256 !== 'string' ||
+      await verifyCustomText(new TextEncoder().encode(result.text), result.source_sha256, result.license_sha256, aiTraining) === null) {
+    throw new Error('Custom licence response could not be verified');
   }
-  return result;
+  return result as unknown as CustomLicenseSubmission;
 }
 
 export function isCompleteLicenseSelection(value: LicenseSelection): boolean {

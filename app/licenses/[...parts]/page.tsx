@@ -85,7 +85,7 @@ export default async function LicencePage({ params }: Props) {
     </section>
     <section className="mt-10" aria-label="Full licence text">
       <h2 className="text-xl font-semibold text-gray-900">Full text</h2>
-      <pre className="mt-4 whitespace-pre-wrap break-words font-sans leading-7 text-gray-700">{document.full_text}</pre>
+      <pre dir="auto" className="mt-4 whitespace-pre-wrap break-words [tab-size:4] font-sans leading-7 text-gray-700">{document.full_text}</pre>
     </section>
     <p className="mt-8 break-all text-sm text-gray-600">SHA-256: <code>{document.sha256}</code></p>
     <a className="mt-4 inline-block text-indigo-700 underline" href={`${apiBase}/api/v1/licenses/${parts.join('/')}?download=1`}>Download exact document</a>
