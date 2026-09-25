@@ -192,15 +192,35 @@ it('clears files, cursors and messages while loading a different route id', asyn
   const view = render(<GatewayPage />);
   await screen.findByText('file-01234567.csv');
   await screen.findByText(/test-only-nonce/);
+  fireEvent.click(screen.getByRole('checkbox'));
+  expect((screen.getByRole('checkbox') as HTMLInputElement).checked).toBe(true);
   route.id = 'gateway-2';
   api.get.mockResolvedValueOnce({ ...gateway, name: 'Second gateway' });
   view.rerender(<GatewayPage />);
   expect(screen.getByText('Loading…')).toBeTruthy();
   expect(await screen.findByText('Second gateway')).toBeTruthy();
+  expect((screen.getByRole('checkbox') as HTMLInputElement).checked).toBe(false);
   expect(screen.queryByText('file-01234567.csv')).toBeNull();
   expect(screen.queryByText(/test-only-nonce/)).toBeNull();
   expect(screen.queryByRole('button', { name: 'Load more files' })).toBeNull();
   expect(screen.queryByRole('button', { name: 'Load more messages' })).toBeNull();
+});
+
+it('ignores a revoke refresh for the previous route id', async () => {
+  let resolveRefresh!: (value: SellerGateway) => void;
+  const view = render(<GatewayPage />);
+  await screen.findByText('Test gateway', { selector: 'h1' });
+  api.get.mockImplementationOnce(() => new Promise<SellerGateway>(resolve => { resolveRefresh = resolve; }));
+  fireEvent.click(screen.getByRole('button', { name: 'Revoke gateway' }));
+  fireEvent.click(screen.getByRole('button', { name: 'Confirm revoke' }));
+  await waitFor(() => expect(api.get).toHaveBeenCalledTimes(2));
+  route.id = 'gateway-2';
+  api.get.mockResolvedValueOnce({ ...gateway, name: 'Second gateway' });
+  view.rerender(<GatewayPage />);
+  expect(await screen.findByText('Second gateway')).toBeTruthy();
+  await act(async () => { resolveRefresh({ ...gateway, name: 'First gateway revoked', status: 'revoked' }); });
+  expect(screen.getByText('Second gateway', { selector: 'h1' })).toBeTruthy();
+  expect(screen.queryByText('First gateway revoked')).toBeNull();
 });
 
 it('paginates received messages, filters, shows gaps, and formats vector bodies', async () => {
@@ -269,6 +289,21 @@ it('polls an initially pending door check once after two seconds and renders pas
   await act(async () => { await vi.advanceTimersByTimeAsync(1); });
   expect(api.get).toHaveBeenCalledTimes(2);
   expect(screen.getByText(/State: passed/)).toBeTruthy();
+});
+
+it('keeps polling a pending check after Run door check is rate limited', async () => {
+  api.get.mockResolvedValueOnce(pendingGateway).mockResolvedValueOnce({ ...gateway, door_check: { ...gateway.door_check, state: 'passed' } });
+  api.door.mockRejectedValueOnce({ response: { data: { error: { code: 'door_check_rate_limited' } } } });
+  await readyWithFakeTimers();
+  fireEvent.click(screen.getByRole('button', { name: 'Run door check' }));
+  await act(async () => { await Promise.resolve(); });
+  expect(screen.getByText(/Wait a minute/)).toBeTruthy();
+  await act(async () => { await vi.advanceTimersByTimeAsync(2_000); });
+  expect(api.get).toHaveBeenCalledTimes(2);
+  expect(screen.getByText(/State: passed/)).toBeTruthy();
+  expect(screen.getByText(/Wait a minute/)).toBeTruthy();
+  await act(async () => { await vi.advanceTimersByTimeAsync(30_000); });
+  expect(api.get).toHaveBeenCalledTimes(2);
 });
 
 it('polls a pending door URL PATCH and renders the failure code message', async () => {

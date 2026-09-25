@@ -35,10 +35,10 @@ export default function GatewayPage() {
   const [fileError, setFileError] = useState<string | null>(null);
   const alive = useRef(true);
   const currentId = useRef(id);
-  currentId.current = id;
   const doorRun = useRef(0);
   const fileRuns = useRef(new Map<string, number>());
   const fileRetryDelay = useRef(new Map<string, number>());
+  const isCurrent = useCallback((requestId: string) => alive.current && currentId.current === requestId, []);
 
   const updateFile = useCallback((file: GatewayFile) => {
     setFiles(current => current.map(item => item.file_id === file.file_id ? file : item));
@@ -46,11 +46,11 @@ export default function GatewayPage() {
 
   const loadMessages = useCallback(async (cursor?: string, type: GatewayMessageType | '' = '') => {
     const page = await listReceivedMessages(id, cursor, 100, type || undefined);
-    if (alive.current && currentId.current === id) {
+    if (isCurrent(id)) {
       setMessages(current => cursor ? [...current, ...page.messages] : page.messages);
       setMessageCursor(page.next_cursor);
     }
-  }, [id]);
+  }, [id, isCurrent]);
 
   const pollDoor = useCallback((delay = 2) => {
     if (!alive.current || currentId.current !== id) return;
@@ -76,11 +76,12 @@ export default function GatewayPage() {
   }, [id]);
 
   useEffect(() => {
+    currentId.current = id;
     alive.current = true;
     let cancelled = false;
     setState('loading'); setGateway(null); setFiles([]); setFileCursor(null); setMessages([]); setMessageCursor(null);
     setName(''); setDoorUrl(''); setMessageType(''); setError(null); setDoorError(null); setFileError(null);
-    setConfirmRevoke(false); setOpenOrders(null); setConfirmFile(null);
+    setAckChecked(false); setConfirmRevoke(false); setOpenOrders(null); setConfirmFile(null);
     fileRetryDelay.current.clear();
     if (!hydrated || !isAuthenticated) return;
     async function load() {
@@ -90,16 +91,16 @@ export default function GatewayPage() {
         // A list failure, including gateway_disabled, hides this page's gateway content.
         await listSellerGateways();
         const [item, filePage] = await Promise.all([getSellerGateway(id), listGatewayFiles(id)]);
-        if (cancelled || !alive.current) return;
+        if (cancelled || !isCurrent(id)) return;
         setGateway(item); setName(item.name); setDoorUrl(item.door_url ?? '');
         setFiles(filePage.files); setFileCursor(filePage.next_cursor); setState('ready');
         if (item.door_check.state === 'pending') pollDoor();
         await loadMessages();
-      } catch { if (!cancelled && alive.current) setState('unavailable'); }
+      } catch { if (!cancelled && isCurrent(id)) setState('unavailable'); }
     }
     void load();
     return () => { cancelled = true; alive.current = false; doorRun.current++; fileRuns.current.clear(); };
-  }, [hydrated, isAuthenticated, id, loadMessages, pollDoor]);
+  }, [hydrated, isAuthenticated, id, isCurrent, loadMessages, pollDoor]);
 
   useEffect(() => {
     if (state !== 'ready') return;
@@ -118,29 +119,33 @@ export default function GatewayPage() {
             updateFile(response.data);
             if (response.data.description.state !== 'requested') break;
             delay = response.retryAfter ?? 10;
-          } catch { setFileError('We could not refresh the file. Try again.'); break; }
+          } catch { if (isCurrent(id) && fileRuns.current.get(file.file_id) === run) setFileError('We could not refresh the file. Try again.'); break; }
         }
         if (fileRuns.current.get(file.file_id) === run) fileRuns.current.delete(file.file_id);
       }
       void poll();
     }
-  }, [files, id, state, updateFile]);
+  }, [files, id, isCurrent, state, updateFile]);
 
   async function saveName() {
+    const requestId = id;
     setError(null);
     if (!name.trim() || name.length > 80) { setError('Enter a name of 1 to 80 characters.'); return; }
-    try { setGateway(await patchSellerGateway(id, { name: name.trim() })); }
-    catch { setError('We could not save the name. Try again.'); }
+    try { const result = await patchSellerGateway(requestId, { name: name.trim() }); if (isCurrent(requestId)) setGateway(result); }
+    catch { if (isCurrent(requestId)) setError('We could not save the name. Try again.'); }
   }
   async function saveDoor() {
+    const requestId = id;
     setDoorError(null);
     if (doorUrl && !doorUrl.startsWith('https://')) { setDoorError('Use an https URL.'); return; }
     try {
-      const result = await patchSellerGateway(id, { door_url: doorUrl || null });
+      const result = await patchSellerGateway(requestId, { door_url: doorUrl || null });
+      if (!isCurrent(requestId)) return;
       setGateway(result); setDoorUrl(result.door_url ?? '');
       if (result.door_check.state === 'pending') pollDoor();
       else doorRun.current++;
     } catch (cause) {
+      if (!isCurrent(requestId)) return;
       setDoorError(({
         door_url_not_https: 'Use an https URL.',
         door_url_invalid: 'Enter a valid public door URL.',
@@ -148,13 +153,16 @@ export default function GatewayPage() {
     }
   }
   async function checkDoor() {
+    const requestId = id;
     setDoorError(null);
-    doorRun.current++;
     try {
-      const started = await startDoorCheck(id);
+      const started = await startDoorCheck(requestId);
+      if (!isCurrent(requestId)) return;
       setGateway(current => current ? { ...current, door_check: started.data.door_check } : current);
       if (started.data.door_check.state === 'pending') pollDoor(started.retryAfter ?? 2);
+      else doorRun.current++;
     } catch (cause) {
+      if (!isCurrent(requestId)) return;
       setDoorError(({
         door_check_rate_limited: 'A door check was run recently. Wait a minute and try again.',
         door_url_missing: 'Add a door URL before running a check.',
@@ -163,19 +171,23 @@ export default function GatewayPage() {
   }
   async function acknowledge() {
     if (!ackChecked) return;
+    const requestId = id;
     setError(null);
-    try { setGateway(await acknowledgeGatewayIdentity(id)); }
-    catch { setError('We could not save your acknowledgement. Try again.'); }
+    try { const result = await acknowledgeGatewayIdentity(requestId); if (isCurrent(requestId)) setGateway(result); }
+    catch { if (isCurrent(requestId)) setError('We could not save your acknowledgement. Try again.'); }
   }
   async function revoke(confirmed = false) {
+    const requestId = id;
     setError(null);
     try {
-      await revokeSellerGateway(id, confirmed);
+      await revokeSellerGateway(requestId, confirmed);
+      if (!isCurrent(requestId)) return;
       doorRun.current++;
-      try { setGateway(await getSellerGateway(id)); }
-      catch { setGateway(current => current ? { ...current, status: 'revoked', status_reason: null, blockers: [{ code: 'gateway_revoked' }], can_publish: false } : current); }
+      try { const result = await getSellerGateway(requestId); if (!isCurrent(requestId)) return; setGateway(result); }
+      catch { if (!isCurrent(requestId)) return; setGateway(current => current ? { ...current, status: 'revoked', status_reason: null, blockers: [{ code: 'gateway_revoked' }], can_publish: false } : current); }
       setConfirmRevoke(false); setOpenOrders(null);
     } catch (cause) {
+      if (!isCurrent(requestId)) return;
       if (gatewayErrorCode(cause) === 'gateway_has_open_orders') {
         setOpenOrders(gatewayErrorDetails(cause)?.open_order_count ?? gateway?.open_order_count ?? 0);
       } else setError('We could not revoke this gateway. Try again.');
@@ -183,14 +195,17 @@ export default function GatewayPage() {
   }
   async function describe() {
     if (!confirmFile) return;
+    const requestId = id;
     setFileError(null);
     try {
-      const response = await describeGatewayFile(id, confirmFile.file_id);
+      const response = await describeGatewayFile(requestId, confirmFile.file_id);
+      if (!isCurrent(requestId)) return;
       fileRetryDelay.current.set(confirmFile.file_id, response.retryAfter ?? 10);
       updateFile(response.data);
       setConfirmFile(null);
     }
     catch (cause) {
+      if (!isCurrent(requestId)) return;
       setFileError(({
         gateway_offline: 'The gateway is offline. Reconnect it and try again.',
         already_described: 'This file is already described. Refresh to see it.',
@@ -239,13 +254,13 @@ export default function GatewayPage() {
         <td className="p-2">{file.display_name}</td><td className="p-2">{file.size_bytes.toLocaleString()} bytes</td><td className="p-2">{file.media_type}</td><td className="p-2">{file.present ? 'Yes' : 'No'}</td><td className="p-2">{dateLabel(file.changed_at)}</td><td className="p-2">{file.description.state}{file.description.state === 'stale' && '. Describe again.'}{file.description.state === 'failed' && `: ${descriptionFailure(file.description.failure_code)}`}</td><td className="p-2">{file.offerable ? 'Yes' : 'No'}</td><td className="p-2">{file.description.state !== 'described' && file.description.state !== 'requested' && gateway.status !== 'revoked' && <button type="button" onClick={() => setConfirmFile(file)} className="text-indigo-700 underline">{file.description.state === 'stale' ? 'Describe again' : 'Describe'}</button>}</td>
       </tr>)}</tbody></table></div>
       {files.map(file => file.description.state === 'described' && <div key={`${file.file_id}-description`} className="rounded border p-3"><h3 className="font-semibold">{file.display_name} description</h3><p>Rows: {file.description.row_count} · SHA-256: <code>{file.description.sha256}</code></p><table className="text-left text-sm"><thead><tr><th className="p-2">Column</th><th className="p-2">Type</th><th className="p-2">Null rate</th><th className="p-2">Distinct count</th></tr></thead><tbody>{file.description.columns.map((column, index) => <tr key={`${column.name}-${index}`}><td className="p-2">{column.name}</td><td className="p-2">{column.type}</td><td className="p-2">{column.null_rate_pct === null ? 'Unknown' : `${column.null_rate_pct}%`}</td><td className="p-2">{column.distinct_bucket}</td></tr>)}</tbody></table></div>)}
-      {fileCursor && <button type="button" className="rounded border px-3 py-2" onClick={async () => { try { const page = await listGatewayFiles(id, fileCursor); setFiles(current => [...current, ...page.files]); setFileCursor(page.next_cursor); } catch { setFileError('We could not load more files. Try again.'); } }}>Load more files</button>}
+      {fileCursor && <button type="button" className="rounded border px-3 py-2" onClick={async () => { const requestId = id; try { const page = await listGatewayFiles(requestId, fileCursor); if (!isCurrent(requestId)) return; setFiles(current => [...current, ...page.files]); setFileCursor(page.next_cursor); } catch { if (isCurrent(requestId)) setFileError('We could not load more files. Try again.'); } }}>Load more files</button>}
       {confirmFile && <div role="dialog" aria-label="Confirm description" className="space-y-3 rounded border p-4"><p>{DESCRIPTION_CONFIRMATION}</p><p>Preview locally: <code>aim-gateway preview {confirmFile.file_id}</code></p><button type="button" className="rounded bg-indigo-700 px-3 py-2 text-white" onClick={describe}>Confirm describe</button><button type="button" className="ml-2 rounded border px-3 py-2" onClick={() => setConfirmFile(null)}>Cancel</button></div>}
     </section>
     <section className="space-y-3"><h2 className="text-xl font-semibold">What we receive</h2>
-      <label>Message type <select value={messageType} onChange={event => { const type = event.target.value as GatewayMessageType | ''; setMessageType(type); setMessages([]); setMessageCursor(null); void loadMessages(undefined, type).catch(() => setError('We could not load messages. Try again.')); }} className="ml-2 rounded border p-2"><option value="">All types</option>{MESSAGE_TYPES.map(type => <option key={type} value={type}>{type}</option>)}</select></label>
+      <label>Message type <select value={messageType} onChange={event => { const type = event.target.value as GatewayMessageType | ''; setMessageType(type); setMessages([]); setMessageCursor(null); void loadMessages(undefined, type).catch(() => { if (isCurrent(id)) setError('We could not load messages. Try again.'); }); }} className="ml-2 rounded border p-2"><option value="">All types</option>{MESSAGE_TYPES.map(type => <option key={type} value={type}>{type}</option>)}</select></label>
       <ol className="space-y-3">{sortedMessages.map((message, index) => <li key={message.seq}>{index > 0 && message.seq > sortedMessages[index - 1].seq + 1 && <p className="rounded bg-amber-50 p-2">Messages {sortedMessages[index - 1].seq + 1} to {message.seq - 1} {messageType ? 'not shown by this filter or missing' : 'missing'}</p>}<article className="rounded border bg-white p-3"><p>Seq {message.seq} · {message.message_type} · {dateLabel(message.received_at)}</p><pre className="overflow-auto whitespace-pre-wrap text-xs">{JSON.stringify(message.body, null, 2)}</pre></article></li>)}</ol>
-      {messageCursor && <button type="button" className="rounded border px-3 py-2" onClick={() => void loadMessages(messageCursor, messageType).catch(() => setError('We could not load more messages. Try again.'))}>Load more messages</button>}
+      {messageCursor && <button type="button" className="rounded border px-3 py-2" onClick={() => void loadMessages(messageCursor, messageType).catch(() => { if (isCurrent(id)) setError('We could not load more messages. Try again.'); })}>Load more messages</button>}
     </section>
   </div>;
 }
