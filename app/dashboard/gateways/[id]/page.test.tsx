@@ -301,7 +301,7 @@ it('keeps polling a pending check after Run door check is rate limited', async (
   await act(async () => { await vi.advanceTimersByTimeAsync(2_000); });
   expect(api.get).toHaveBeenCalledTimes(2);
   expect(screen.getByText(/State: passed/)).toBeTruthy();
-  expect(screen.getByText(/Wait a minute/)).toBeTruthy();
+  expect(screen.queryByText(/Wait a minute/)).toBeNull();
   await act(async () => { await vi.advanceTimersByTimeAsync(30_000); });
   expect(api.get).toHaveBeenCalledTimes(2);
 });
@@ -328,6 +328,36 @@ it('stops a pending door check at thirty seconds', async () => {
   expect(api.get).toHaveBeenCalledTimes(16);
 });
 
+it('continues after one failed refresh and clears the error when the check resolves', async () => {
+  api.get.mockResolvedValueOnce(pendingGateway).mockRejectedValueOnce(new Error('network'))
+    .mockResolvedValueOnce({ ...gateway, door_check: { ...gateway.door_check, state: 'failed', failure_code: 'dns_failed' } });
+  await readyWithFakeTimers();
+  await act(async () => { await vi.advanceTimersByTimeAsync(2_000); });
+  expect(api.get).toHaveBeenCalledTimes(2);
+  expect(screen.queryByText(/could not be refreshed/)).toBeNull();
+  await act(async () => { await vi.advanceTimersByTimeAsync(2_000); });
+  expect(api.get).toHaveBeenCalledTimes(3);
+  expect(screen.getByText(/State: failed/)).toBeTruthy();
+  expect(screen.queryByText(/could not be refreshed/)).toBeNull();
+});
+
+it('shows still pending after a failed refresh followed by successful pending refreshes', async () => {
+  api.get.mockResolvedValueOnce(pendingGateway).mockRejectedValueOnce(new Error('network')).mockResolvedValue(pendingGateway);
+  await readyWithFakeTimers();
+  await act(async () => { await vi.advanceTimersByTimeAsync(30_000); });
+  expect(screen.getByText(/still pending/)).toBeTruthy();
+  expect(screen.queryByText(/could not be refreshed/)).toBeNull();
+});
+
+it('shows a refresh error only after the deadline if refreshes keep failing', async () => {
+  api.get.mockResolvedValueOnce(pendingGateway).mockRejectedValue(new Error('network'));
+  await readyWithFakeTimers();
+  await act(async () => { await vi.advanceTimersByTimeAsync(28_000); });
+  expect(screen.queryByText(/could not be refreshed/)).toBeNull();
+  await act(async () => { await vi.advanceTimersByTimeAsync(2_000); });
+  expect(screen.getByText(/could not be refreshed/)).toBeTruthy();
+});
+
 it('cancels the existing door loop when Run door check starts a new one', async () => {
   api.get.mockResolvedValue(pendingGateway);
   await readyWithFakeTimers();
@@ -347,6 +377,7 @@ it('makes no more door requests after unmount', async () => {
   await act(async () => { view = render(<GatewayPage />); });
   expect(api.get).toHaveBeenCalledTimes(1);
   view.unmount();
+  expect(vi.getTimerCount()).toBe(0);
   await act(async () => { await vi.advanceTimersByTimeAsync(30_000); });
   expect(api.get).toHaveBeenCalledTimes(1);
 });
