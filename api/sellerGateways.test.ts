@@ -1,6 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { api } from './client';
-import { acknowledgeGatewayIdentity, createPairingCode, describeGatewayFile, getGatewayFile, getSellerGateway, listGatewayFiles, listReceivedMessages, listSellerGateways, patchSellerGateway, revokeSellerGateway, saveGatewayListingSource, startDoorCheck } from './sellerGateways';
+import { acknowledgeGatewayIdentity, createPairingCode, describeGatewayFile, getGatewayFile, getGatewayListingSource, getSellerGateway, listGatewayFiles, listReceivedMessages, listSellerGateways, patchSellerGateway, revokeSellerGateway, saveGatewayListingSource, startDoorCheck } from './sellerGateways';
 
 vi.mock('./client', () => ({ api: { get: vi.fn(), post: vi.fn(), patch: vi.fn(), delete: vi.fn(), put: vi.fn() } }));
 const response = { data: {}, headers: {} };
@@ -48,5 +48,12 @@ describe('seller gateway API', () => {
     vi.mocked(api.put).mockResolvedValueOnce({ data: { source } });
     expect(await saveGatewayListingSource('listing/1', source)).toEqual(source);
     expect(api.put).toHaveBeenCalledWith('/listings/listing%2F1/gateway-source', { source });
+  });
+  it('reads a saved gateway source or null', async () => {
+    const source = { type: 'gateway' as const, gateway_id: 'gateway-1', file_ids: ['a'] };
+    vi.mocked(api.get).mockResolvedValueOnce({ data: { source } }).mockResolvedValueOnce({ data: { source: null } });
+    expect(await getGatewayListingSource('listing/1')).toEqual(source);
+    expect(await getGatewayListingSource('listing/1')).toBeNull();
+    expect(api.get).toHaveBeenCalledWith('/listings/listing%2F1/gateway-source');
   });
 });

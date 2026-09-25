@@ -36,6 +36,9 @@ export async function listGatewayFiles(id: string, cursor?: string, limit = 100)
   return (await api.get<FilesPage>(`${gatewayPath(id)}/files`, { params: { cursor, limit } })).data;
 }
 export interface GatewayListingSource { type: 'gateway'; gateway_id: string; file_ids: string[] }
+export async function getGatewayListingSource(listingId: string): Promise<GatewayListingSource | null> {
+  return (await api.get<{ source: GatewayListingSource | null }>(`/listings/${encodeURIComponent(listingId)}/gateway-source`)).data.source;
+}
 export async function saveGatewayListingSource(listingId: string, source: GatewayListingSource): Promise<GatewayListingSource> {
   return (await api.put<{ source: GatewayListingSource }>(`/listings/${encodeURIComponent(listingId)}/gateway-source`, { source })).data.source;
 }

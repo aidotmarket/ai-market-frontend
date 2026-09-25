@@ -3,7 +3,7 @@
 import { useEffect, useState } from 'react';
 import Link from 'next/link';
 import { gatewayErrorCode } from '@/api/gatewayDelivery';
-import { listGatewayFiles, listSellerGateways, saveGatewayListingSource } from '@/api/sellerGateways';
+import { getGatewayListingSource, listGatewayFiles, listSellerGateways, saveGatewayListingSource } from '@/api/sellerGateways';
 import { blockerMessage } from './presentation';
 import type { GatewayFile, SellerGateway } from '@/types/sellerGateway';
 
@@ -39,9 +39,23 @@ export default function ListingGatewaySource({ listingId, onSourceSaved, onSourc
 
   useEffect(() => {
     let active = true;
-    listSellerGateways().then(items => { if (active) setGateways(items); }).catch(() => { if (active) setGateways(null); });
+    listSellerGateways().then(async items => {
+      let source = null;
+      try { source = await getGatewayListingSource(listingId); } catch { /* Keep the empty draft state. */ }
+      if (!active) return;
+      if (source) {
+        const restoredGateway = items.find(item => item.gateway_id === source.gateway_id);
+        if (restoredGateway) {
+          setGatewayId(source.gateway_id);
+          setSelected(source.file_ids);
+          setSaved(true);
+          onSourceSaved(restoredGateway, []);
+        }
+      }
+      setGateways(items);
+    }).catch(() => { if (active) setGateways(null); });
     return () => { active = false; };
-  }, []);
+  }, [listingId, onSourceSaved]);
 
   useEffect(() => {
     if (!gatewayId || !gateway) return;
@@ -55,8 +69,13 @@ export default function ListingGatewaySource({ listingId, onSourceSaved, onSourc
     return () => { active = false; };
   }, [gatewayId, gateway]);
 
+  useEffect(() => {
+    if (saved && gateway) onSourceSaved(gateway, files.filter(file => selected.includes(file.file_id)));
+  }, [saved, gateway, files, selected, onSourceSaved]);
+
   if (!gateways) return null;
   const selectedFiles = files.filter(file => selected.includes(file.file_id));
+  const unlistedCount = selected.length - selectedFiles.length;
   const gatewayLink = `/dashboard/gateways/${encodeURIComponent(gatewayId)}`;
   function markDirty() {
     if (saved) onSourceDirty();
@@ -112,11 +131,12 @@ export default function ListingGatewaySource({ listingId, onSourceSaved, onSourc
             {selected.includes(file.file_id) && !file.offerable && <span className="block text-amber-800">{blockerMessage(fileBlocker(file), files)} <Link className="underline" href={gatewayLink}>Review gateway file</Link></span>}
           </span>
         </label>)}
+        {unlistedCount > 0 && <p>{unlistedCount} selected {unlistedCount === 1 ? 'file is' : 'files are'} not in the current file list.</p>}
         {cursor && <button type="button" className="rounded border px-3 py-2" disabled={loadingFiles || saving} onClick={loadMore}>Load more files</button>}
         {loadingFiles && <p>Loading files…</p>}
       </div>
       <button type="button" className="rounded border px-3 py-2" disabled={saving || selected.length === 0 || selected.length > 200} onClick={save}>Save gateway source</button>
-      {saved && <p role="status">Gateway source saved. This selection is shown only during this session because listing details do not return the saved gateway source.</p>}
+      {saved && <p role="status">Gateway source saved.</p>}
     </>}
     </>}
     {error && <p role="alert" className="text-red-700">{error}</p>}
