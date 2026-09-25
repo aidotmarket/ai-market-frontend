@@ -26,7 +26,7 @@ export default function SellerLicenseSelection({value, onChange, disabled = fals
   const [text, setText] = useState('');
   const [termsOpened, setTermsOpened] = useState(false);
   const [customPreview,setCustomPreview]=useState<{id:string;title:string;text:string}|null>(null);
-  const [lastStored, setLastStored] = useState<{title:string;text:string;aiTraining:boolean}|null>(null);
+  const verifiedTitles = useRef(new Map<string, string>());
   const submissionVersion = useRef(0);
   const identity = value.seller_acceptance;
   const updateIdentity = (field: 'signer_name' | 'signer_title' | 'authority_confirmed', next: string | boolean) =>
@@ -65,16 +65,18 @@ export default function SellerLicenseSelection({value, onChange, disabled = fals
       const result = await submitCustomLicenseText(submittedTitle, submittedText, submittedTraining);
       if (version !== submissionVersion.current) return;
       setCustomPreview({id:result.id,title:result.title,text:result.text});
-      setLastStored({title:result.title,text:result.text,aiTraining:submittedTraining});
+      verifiedTitles.current.set(JSON.stringify([result.text, submittedTraining]), result.title);
       onChange({...value, kind: 'custom', version: '1.0', license_document_id: result.id,
         license_sha256: result.license_sha256, rider_sha256: LICENSE_HASHES.rider[String(value.ai_training) as 'true' | 'false'],
         covenant_sha256: LICENSE_HASHES.covenant, seller_acceptance: {...identity, authority_confirmed: false}});
     } catch (error) {
       if (version !== submissionVersion.current) return;
-      const code = (error as {response?: {data?: {detail?: {code?: string}}}})?.response?.data?.detail?.code;
+      const code = (error as {response?: {data?: {detail?: {code?: string}}}})?.response?.data?.detail?.code ??
+        (error instanceof Error ? error.message : undefined);
+      const storedTitle = verifiedTitles.current.get(JSON.stringify([canonicalizeCustomText(submittedText), submittedTraining]));
       const messages: Record<string,string> = {
         LICENSE_SIZE_INVALID: 'Enter nonempty terms of at most 65,536 Unicode characters.',
-        LICENSE_DOCUMENT_INVALID: `The licence was refused. Check the title and characters.${lastStored && lastStored.text === canonicalizeCustomText(submittedText) && lastStored.aiTraining === submittedTraining && lastStored.title !== submittedTitle.trim() ? ` The stored title is “${lastStored.title}”; revert to it for the same terms and training choice.` : ''}`,
+        LICENSE_DOCUMENT_INVALID: `The licence was refused. Check the title and characters.${storedTitle && storedTitle !== submittedTitle.trim() ? ` A previously verified submission used title “${storedTitle}” for the same terms and training choice.` : ''}`,
         LICENSE_LANGUAGE_NOT_ENGLISH: 'Use English terms with at least 200 letters.',
         LICENSE_SECRET_DETECTED: 'Remove secrets or credentials from the terms.',
         LICENSE_PROHIBITED_TERMS: 'Remove terms that conflict with marketplace rules.',
@@ -107,7 +109,7 @@ export default function SellerLicenseSelection({value, onChange, disabled = fals
       <label className="block text-sm font-medium text-gray-900">Your licence text
         <textarea aria-label="Your licence text" value={text} onChange={event => {setText(event.target.value); invalidateCustom();}} rows={12} className="mt-2 block w-full rounded-lg border border-gray-300 px-3 py-2 font-mono text-sm" />
       </label>
-      <p role="status" className="text-xs text-gray-600">{Array.from(text).length.toLocaleString()} / {MAX_CUSTOM_LICENSE_CODEPOINTS.toLocaleString()} Unicode characters</p>
+      <p role="status" className="text-xs text-gray-600">{(text ? Array.from(canonicalizeCustomText(text)).length : 0).toLocaleString()} / {MAX_CUSTOM_LICENSE_CODEPOINTS.toLocaleString()} Unicode characters after normalization</p>
       <p className="text-xs text-gray-600">Use English terms with at least 200 letters. Do not include passwords, private keys or terms that conflict with marketplace rules. Your text is stored as plain text.</p>
       <button type="button" disabled={!title.trim() || !text.trim() || Array.from(canonicalizeCustomText(text)).length > MAX_CUSTOM_LICENSE_CODEPOINTS} onClick={() => void submit()} className="rounded-lg bg-indigo-700 px-4 py-2 text-sm font-medium text-white disabled:opacity-50">Save custom licence text</button>
       {customPreview?.id === value.license_document_id && <section aria-label="Verified custom licence preview" className="rounded-lg border border-green-300 p-4"><h3 className="font-medium">{customPreview.title}</h3><p role="status" className="text-sm text-green-800">Custom licence text saved and verified.</p><pre dir="auto" className="mt-3 max-h-96 overflow-auto whitespace-pre-wrap break-words [tab-size:4] text-sm">{customPreview.text}</pre></section>}

@@ -164,7 +164,7 @@ describe('BuyButton licence acceptance', () => {
     };
   }
 
-  async function renderCustom(failing?: keyof typeof componentTexts, failure?: 'mismatch' | 'error') {
+  async function renderCustom(failing?: keyof typeof componentTexts, failure?: 'mismatch' | 'error', headerChanges: Record<string, string | undefined> = {}) {
     const priorAdapter = api.defaults.adapter;
     const priorBaseUrl = api.defaults.baseURL;
     const priorApiUrl = process.env.NEXT_PUBLIC_API_URL;
@@ -182,13 +182,25 @@ describe('BuyButton licence acceptance', () => {
       static createObjectURL = createObjectURL;
       static revokeObjectURL = revokeObjectURL;
     });
+    const license = await customLicense();
     api.defaults.adapter = async (config) => {
       calls.push(config.url ?? '');
       expect(config.baseURL).toBe('https://api.ai.market/api/v1');
       expect(config.headers.Authorization).toBe('Bearer buyer-token');
       if (failing === 'license' && failure === 'error') throw new Error('document unavailable');
       const text = failing === 'license' && failure === 'mismatch' ? 'tampered custom text\n' : customText;
-      return { data: new TextEncoder().encode(text).buffer, status: 200, statusText: 'OK', headers: { 'content-type': 'text/plain' }, config };
+      const headers: Record<string, string> = {
+        'content-type': 'text/plain; charset=utf-8',
+        'x-content-type-options': 'nosniff',
+        'cache-control': 'private, no-store',
+        'content-disposition': 'attachment; filename="listing-listing-1-licence.txt"',
+        'x-license-source-sha256': license.params.source_sha256,
+        'x-license-sha256': license.sha256,
+      };
+      for (const [key, value] of Object.entries(headerChanges)) {
+        if (value === undefined) delete headers[key]; else headers[key] = value;
+      }
+      return { data: new TextEncoder().encode(text).buffer, status: 200, statusText: 'OK', headers, config };
     };
     const fetchMock = vi.fn(async (input: RequestInfo | URL) => {
       const url = String(input);
@@ -198,7 +210,6 @@ describe('BuyButton licence acceptance', () => {
     });
     vi.stubGlobal('fetch', fetchMock);
     useAuthStore.setState({ token: 'buyer-token' });
-    const license = await customLicense();
     const view = render(<ToastProvider><BuyButton listingId="listing-1" slug="listing" price={20} pricingType="one_time" licenseDetails={license} /></ToastProvider>);
     completeAcceptanceForm();
     return { calls, fetchMock, createdBlobs, createObjectURL, revokeObjectURL, license, unmount: view.unmount, restore: () => {
@@ -228,10 +239,10 @@ describe('BuyButton licence acceptance', () => {
       expect(createObjectURL).toHaveBeenCalledTimes(1);
       expect(activated).toEqual([createObjectURL.mock.results[0].value, createObjectURL.mock.results[0].value]);
       expect(canonical.textContent).toBe('/api/v1/listings/listing-1/license-document');
-      expect(download.hasAttribute('download')).toBe(true);
+      expect(download.getAttribute('download')).toBe('custom-licence.txt');
       expect(document.querySelector('a[href*="/api/v1/"]')).toBeNull();
       const blob = createdBlobs.get(activated[0]);
-      expect(blob?.type).toBe('text/plain');
+      expect(blob?.type).toBe('text/plain; charset=utf-8');
       const bytes = await new Promise<ArrayBuffer>((resolve, reject) => {
         const reader = new FileReader();
         reader.onload = () => resolve(reader.result as ArrayBuffer);
@@ -246,6 +257,30 @@ describe('BuyButton licence acceptance', () => {
       expect((screen.getByRole('button', { name: 'Accept and continue to payment' }) as HTMLButtonElement).disabled).toBe(false);
       unmount();
       expect(revokeObjectURL).toHaveBeenCalledWith(activated[0]);
+    } finally { restore(); }
+  });
+
+  it.each([
+    ['missing content type', {'content-type': undefined}],
+    ['wrong content type', {'content-type': 'text/plain'}],
+    ['wrong charset', {'content-type': 'text/plain; charset=iso-8859-1'}],
+    ['missing nosniff', {'x-content-type-options': undefined}],
+    ['wrong nosniff', {'x-content-type-options': 'sniff'}],
+    ['missing private cache', {'cache-control': undefined}],
+    ['wrong private cache', {'cache-control': 'public'}],
+    ['missing attachment', {'content-disposition': undefined}],
+    ['wrong attachment filename', {'content-disposition': 'attachment; filename="wrong.txt"'}],
+    ['missing source hash', {'x-license-source-sha256': undefined}],
+    ['wrong source hash', {'x-license-source-sha256': '0'.repeat(64)}],
+    ['missing licence hash', {'x-license-sha256': undefined}],
+    ['wrong licence hash', {'x-license-sha256': '0'.repeat(64)}],
+  ] as const)('refuses to render or accept custom text with %s', async (_label, headers) => {
+    const {restore, createObjectURL} = await renderCustom(undefined, undefined, headers);
+    try {
+      await waitFor(() => expect(screen.getByText('Hash mismatch — do not accept')).not.toBeNull());
+      expect(screen.queryByText(/<script>alert\(1\)<\/script>/)).toBeNull();
+      expect((screen.getByRole('button', {name: 'Accept and continue to payment'}) as HTMLButtonElement).disabled).toBe(true);
+      expect(createObjectURL).not.toHaveBeenCalled();
     } finally { restore(); }
   });
 

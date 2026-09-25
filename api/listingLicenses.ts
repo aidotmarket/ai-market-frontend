@@ -61,7 +61,9 @@ export function createStandardSelection(aiTraining = true): LicenseSelection {
 
 export async function submitCustomLicenseText(title: string, text: string, aiTraining: boolean): Promise<CustomLicenseSubmission> {
   if (Array.from(canonicalizeCustomText(text)).length > MAX_CUSTOM_LICENSE_CODEPOINTS || !text.trim()) throw new Error('LICENSE_SIZE_INVALID');
-  const raw: unknown = (await api.post('/licenses/custom', {title, ai_training: aiTraining, text}, {headers: {'Content-Type': 'application/json'}})).data;
+  const response = await api.post('/licenses/custom', {title, ai_training: aiTraining, text}, {headers: {'Content-Type': 'application/json'}});
+  if (response.status !== 201) throw new Error('Custom licence response could not be verified');
+  const raw: unknown = response.data;
   if (!raw || typeof raw !== 'object' || Array.isArray(raw)) throw new Error('Custom licence response could not be verified');
   const result = raw as Record<string, unknown>;
   const keys = 'content_type,id,license_sha256,size_bytes,source_sha256,status,text,title';

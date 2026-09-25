@@ -33,11 +33,17 @@ async function responseFor(text:string,aiTraining:boolean) {
 
 it('posts JSON text with a boolean and verifies canonical UTF-8 source and component hashes',async()=>{
   const response=await responseFor('A\nB\n',false);
-  client.post.mockResolvedValue({data:response});
+  client.post.mockResolvedValue({status:201,data:response});
   expect(await submitCustomLicenseText(' Terms ','A  \r\nB',false)).toEqual(response);
   expect(client.post).toHaveBeenCalledWith('/licenses/custom',{title:' Terms ',ai_training:false,text:'A  \r\nB'},{headers:{'Content-Type':'application/json'}});
   for(const damaged of [{...response,text:'A  \nB\n'},{...response,size_bytes:3},{...response,source_sha256:'0'.repeat(64)},{...response,license_sha256:'0'.repeat(64)},{...response,content_type:'application/pdf'},{...response,extra:1}]) {
-    client.post.mockResolvedValue({data:damaged});
+    client.post.mockResolvedValue({status:201,data:damaged});
+    await expect(submitCustomLicenseText('Terms','A\nB\n',false)).rejects.toThrow('could not be verified');
+  }
+  client.post.mockResolvedValue({status:200,data:response});
+  await expect(submitCustomLicenseText('Terms','A\nB\n',false)).rejects.toThrow('could not be verified');
+  for (const damaged of [{...response,status:undefined},{...response,title:undefined},{...response,size_bytes:'4'},{...response,source_sha256:undefined}]) {
+    client.post.mockResolvedValue({status:201,data:damaged});
     await expect(submitCustomLicenseText('Terms','A\nB\n',false)).rejects.toThrow('could not be verified');
   }
 });
@@ -48,13 +54,13 @@ it.each([
 ])('checks the published LF, TAB, NFC and trailing-space vector',async(input,canonical,source,trueHash,falseHash)=>{
   for(const [training,hash] of [[true,trueHash],[false,falseHash]] as const){
     const response={...await responseFor(canonical,training),source_sha256:source,license_sha256:hash};
-    client.post.mockResolvedValue({data:response});
+    client.post.mockResolvedValue({status:201,data:response});
     expect((await submitCustomLicenseText('Terms',input,training)).text).toBe(canonical);
   }
 });
 
 it('enforces the code-point counter boundary before sending',async()=>{
-  client.post.mockResolvedValue({data:await responseFor('😀'.repeat(65_535)+'\n',true)});
+  client.post.mockResolvedValue({status:201,data:await responseFor('😀'.repeat(65_535)+'\n',true)});
   await submitCustomLicenseText('Terms','😀'.repeat(65_535),true);
   expect(client.post).toHaveBeenCalledTimes(1);
   await expect(submitCustomLicenseText('Terms','😀'.repeat(65_536),true)).rejects.toThrow('LICENSE_SIZE_INVALID');

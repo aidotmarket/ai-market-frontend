@@ -28,6 +28,19 @@ interface LoadedDocument extends DocumentReference {
   objectUrl?: string;
 }
 
+const CUSTOM_TEXT_CONTENT_TYPE = 'text/plain; charset=utf-8';
+
+export function customTextMetadataMatches(headers: Record<string, unknown>, reference: DocumentReference): boolean {
+  const listingId = reference.downloadUrl.match(/\/listings\/([^/?#]+)\/license-document\?download=1$/)?.[1];
+  return headers['content-type'] === CUSTOM_TEXT_CONTENT_TYPE &&
+    headers['x-content-type-options'] === 'nosniff' &&
+    headers['cache-control'] === 'private, no-store' &&
+    Boolean(listingId) &&
+    headers['content-disposition'] === `attachment; filename="listing-${listingId}-licence.txt"` &&
+    headers['x-license-source-sha256'] === reference.params.source_sha256 &&
+    headers['x-license-sha256'] === reference.sha256;
+}
+
 function canonicalJson(value: Record<string, string | boolean>): string {
   return `{${Object.keys(value).sort().map((key) => `${JSON.stringify(key.normalize('NFC'))}:${JSON.stringify(
     typeof value[key] === 'string' ? value[key].normalize('NFC') : value[key],
@@ -140,17 +153,22 @@ export default function ListingLicenseDisclosure({
         const location = documentLocation(reference.downloadUrl);
         let bytes: Uint8Array;
         let contentType: string;
+        let responseHeaders: Record<string, unknown>;
         if (location.apiPath) {
           const response = await api.get<ArrayBuffer>(location.apiPath, { responseType: 'arraybuffer', headers: { 'Cache-Control': 'no-store' } });
           bytes = new Uint8Array(response.data);
-          contentType = response.headers['content-type'] ?? 'text/plain';
+          responseHeaders = response.headers as Record<string, unknown>;
+          contentType = String(responseHeaders['content-type'] ?? '');
         } else {
           const response = await fetch(location.href, { credentials: 'include', cache: 'no-store' });
           if (!response.ok) throw new Error('document fetch failed');
           bytes = new Uint8Array(await response.arrayBuffer());
-          contentType = response.headers.get('content-type') ?? 'text/plain';
+          responseHeaders = Object.fromEntries(response.headers.entries());
+          contentType = String(responseHeaders['content-type'] ?? '');
         }
-        const matched = await fetchedBytesMatch(bytes, contentType, reference);
+        const customText = reference.kind === 'license' && reference.code === 'custom' && contentType !== 'application/pdf';
+        const matched = (!customText || customTextMetadataMatches(responseHeaders, reference)) &&
+          await fetchedBytesMatch(bytes, contentType, reference);
         const objectUrl = matched && !cancelled && reference.kind === 'license' && reference.code === 'custom'
           ? URL.createObjectURL(new Blob([bytes.slice().buffer as ArrayBuffer], { type: contentType }))
           : undefined;
@@ -212,7 +230,7 @@ export default function ListingLicenseDisclosure({
             <div className="mt-3 flex flex-wrap gap-4 text-sm">
               {document.text && <details className="w-full rounded border border-gray-100 p-3"><summary className="cursor-pointer font-medium text-indigo-700">Read full text</summary><pre dir="auto" className="mt-3 max-h-96 overflow-auto whitespace-pre-wrap break-words [tab-size:4] text-xs leading-5 text-gray-800">{document.text}</pre></details>}
               {downloadHref
-                ? <a href={downloadHref} download className="font-medium text-indigo-700 underline">Download exact document</a>
+                ? <a href={downloadHref} download={customDocument ? 'custom-licence.txt' : true} className="font-medium text-indigo-700 underline">Download exact document</a>
                 : <span className="font-medium text-gray-500">Download exact document</span>}
             </div>
           </div>

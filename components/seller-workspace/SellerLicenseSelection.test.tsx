@@ -61,7 +61,7 @@ describe('Seller licence selection',()=>{
     const submitted='A  \nB';
     const canonical='A\nB\n';
     const response=await responseFor(canonical);
-    transport.post.mockResolvedValue({data:response});
+    transport.post.mockResolvedValue({status:201,data:response});
     render(<Harness/>);
     fireEvent.click(screen.getByRole('radio',{name:/My own licence/}));
     expect(screen.getAllByText(CUSTOM_NOTICE)).toHaveLength(2);
@@ -69,7 +69,7 @@ describe('Seller licence selection',()=>{
     expect(document.querySelector('input[type=file]')).toBeNull();
     fireEvent.change(screen.getByLabelText('Licence title'),{target:{value:'Terms'}});
     fireEvent.change(screen.getByLabelText('Your licence text'),{target:{value:submitted}});
-    expect(screen.getByText(/5 \/ 65,536 Unicode characters/)).toBeTruthy();
+    expect(screen.getByText(/4 \/ 65,536 Unicode characters after normalization/)).toBeTruthy();
     fireEvent.click(screen.getByRole('button',{name:'Save custom licence text'}));
     await screen.findByText('Custom licence text saved and verified.');
     expect(transport.post).toHaveBeenCalledWith('/licenses/custom',{title:'Terms',ai_training:true,text:submitted},expect.anything());
@@ -92,7 +92,7 @@ describe('Seller licence selection',()=>{
   it('shows the verified title after a same-session title-only 422 refusal',async()=>{
     vi.stubGlobal('crypto',webcrypto);
     const text='The same licence terms.\n';
-    transport.post.mockResolvedValueOnce({data:await responseFor(text,'Original Terms')});
+    transport.post.mockResolvedValueOnce({status:201,data:await responseFor(text,'Original Terms')});
     render(<Harness/>);
     fireEvent.click(screen.getByRole('radio',{name:/My own licence/}));
     fireEvent.change(screen.getByLabelText('Licence title'),{target:{value:'Original Terms'}});
@@ -103,7 +103,7 @@ describe('Seller licence selection',()=>{
     fireEvent.change(screen.getByLabelText('Licence title'),{target:{value:'Renamed Terms'}});
     transport.post.mockRejectedValueOnce({response:{status:422,data:{detail:{code:'LICENSE_DOCUMENT_INVALID'}}}});
     fireEvent.click(screen.getByRole('button',{name:'Save custom licence text'}));
-    expect((await screen.findByRole('alert')).textContent).toContain('The stored title is “Original Terms”');
+    expect((await screen.findByRole('alert')).textContent).toContain('A previously verified submission used title “Original Terms”');
     expect(transport.post).toHaveBeenLastCalledWith('/licenses/custom',{title:'Renamed Terms',ai_training:true,text},expect.anything());
   });
 
@@ -119,10 +119,31 @@ describe('Seller licence selection',()=>{
     expect(refusal).not.toContain('stored title');
   });
 
+  it('remembers titles from earlier verified submissions in the same form session',async()=>{
+    vi.stubGlobal('crypto',webcrypto);
+    transport.post.mockResolvedValueOnce({status:201,data:await responseFor('First terms.\n','First Title')});
+    transport.post.mockResolvedValueOnce({status:201,data:await responseFor('Second terms.\n','Second Title')});
+    render(<Harness/>);
+    fireEvent.click(screen.getByRole('radio',{name:/My own licence/}));
+    fireEvent.change(screen.getByLabelText('Licence title'),{target:{value:'First Title'}});
+    fireEvent.change(screen.getByLabelText('Your licence text'),{target:{value:'First terms.\n'}});
+    fireEvent.click(screen.getByRole('button',{name:'Save custom licence text'}));
+    await screen.findByText('Custom licence text saved and verified.');
+    fireEvent.change(screen.getByLabelText('Licence title'),{target:{value:'Second Title'}});
+    fireEvent.change(screen.getByLabelText('Your licence text'),{target:{value:'Second terms.\n'}});
+    fireEvent.click(screen.getByRole('button',{name:'Save custom licence text'}));
+    await screen.findByText('Custom licence text saved and verified.');
+    fireEvent.change(screen.getByLabelText('Licence title'),{target:{value:'Renamed First'}});
+    fireEvent.change(screen.getByLabelText('Your licence text'),{target:{value:'First terms.\n'}});
+    transport.post.mockRejectedValueOnce({response:{status:422,data:{detail:{code:'LICENSE_DOCUMENT_INVALID'}}}});
+    fireEvent.click(screen.getByRole('button',{name:'Save custom licence text'}));
+    expect((await screen.findByRole('alert')).textContent).toContain('A previously verified submission used title “First Title”');
+  });
+
   it('keeps literal markup out of the DOM and resets after text or training changes',async()=>{
     vi.stubGlobal('crypto',webcrypto);
     const text='<script>alert(1)</script> **bold**\n\tCafé\n';
-    transport.post.mockResolvedValue({data:await responseFor(text)});
+    transport.post.mockResolvedValue({status:201,data:await responseFor(text)});
     render(<Harness/>);
     fireEvent.click(screen.getByRole('radio',{name:/My own licence/}));
     fireEvent.change(screen.getByLabelText('Licence title'),{target:{value:'Terms'}});
