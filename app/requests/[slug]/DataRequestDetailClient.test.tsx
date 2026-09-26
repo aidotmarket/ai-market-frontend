@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 
-import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { act, cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type React from 'react';
 import type { DataRequestDetail, User } from '@/types';
@@ -14,6 +14,7 @@ const mocks = vi.hoisted(() => ({
   routerPush: vi.fn(),
   toast: vi.fn(),
   getDataRequest: vi.fn(),
+  updateDataRequest: vi.fn(),
   publishDataRequest: vi.fn(),
   deleteDataRequest: vi.fn(),
   submitDataRequestResponse: vi.fn(),
@@ -52,6 +53,7 @@ vi.mock('@/components/Toast', () => ({
 
 vi.mock('@/api/data-requests', () => ({
   getDataRequest: mocks.getDataRequest,
+  updateDataRequest: mocks.updateDataRequest,
   publishDataRequest: mocks.publishDataRequest,
   deleteDataRequest: mocks.deleteDataRequest,
   submitDataRequestResponse: mocks.submitDataRequestResponse,
@@ -113,6 +115,13 @@ function makeOwnerRequest(overrides: Partial<DataRequestDetail> = {}): DataReque
     publication_next_action: 'Confirm the current public text for publication.',
     ...overrides,
   };
+}
+
+function deferred<T>() {
+  let resolve!: (value: T) => void;
+  let reject!: (error: Error) => void;
+  const promise = new Promise<T>((res, rej) => { resolve = res; reject = rej; });
+  return { promise, resolve, reject };
 }
 
 describe('DataRequestDetailClient authenticated fallback loading', () => {
@@ -191,6 +200,300 @@ describe('DataRequestDetailClient authenticated fallback loading', () => {
       );
     });
     expect(await screen.findByText('Public visibility: Public')).not.toBeNull();
+  });
+
+  it('lets a contact-blocked owner correct every public text field, then explicitly confirms the returned hash', async () => {
+    const request = makeOwnerRequest({
+      title: 'Email buyer@example.com',
+      description: 'Please email buyer@example.com for the dataset.',
+      categories: ['buyer@example.com'],
+      format_preferences: ['buyer@example.com'],
+      regulatory_requirements: ['buyer@example.com'],
+      provenance_requirements: 'Contact buyer@example.com',
+      publication_reason: 'contact_or_personal_data_detected',
+      publication_next_action: 'Remove contact details and confirm the public text.',
+    });
+    const corrected = makeOwnerRequest({
+      title: 'Healthcare dataset request',
+      description: 'Seeking an anonymized healthcare dataset for research.',
+      categories: ['healthcare'],
+      format_preferences: ['csv'],
+      regulatory_requirements: ['GDPR'],
+      provenance_requirements: 'Documented sources',
+      public_content_hash: 'b'.repeat(64),
+      publication_reason: 'public_content_changed',
+      publication_next_action: 'Confirm the newly saved public text.',
+    });
+    mocks.getDataRequest.mockResolvedValue(request);
+    mocks.updateDataRequest.mockResolvedValue(corrected);
+    mocks.confirmDataRequestPublication.mockResolvedValue({
+      ...corrected,
+      public_consent_status: 'consented',
+      publication_decision: 'eligible',
+      publication_reason: 'eligible',
+    });
+
+    render(<DataRequestDetailClient slug={request.slug} initialRequest={request} />);
+    fireEvent.click(await screen.findByRole('button', { name: 'Edit request' }));
+    expect(screen.queryByRole('button', { name: 'Make this request public' })).toBeNull();
+    fireEvent.change(screen.getByRole('textbox', { name: 'Title' }), { target: { value: corrected.title } });
+    fireEvent.change(screen.getByRole('textbox', { name: 'Description' }), { target: { value: corrected.description } });
+    fireEvent.change(screen.getByRole('textbox', { name: 'Categories' }), { target: { value: 'healthcare' } });
+    fireEvent.change(screen.getByRole('textbox', { name: 'Preferred Formats' }), { target: { value: 'csv' } });
+    fireEvent.change(screen.getByRole('textbox', { name: 'Regulatory Requirements' }), { target: { value: 'GDPR' } });
+    fireEvent.change(screen.getByRole('textbox', { name: 'Provenance Requirements' }), { target: { value: 'Documented sources' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Save changes' }));
+
+    await waitFor(() => {
+      expect(mocks.updateDataRequest).toHaveBeenCalledWith(request.id, {
+        title: 'Healthcare dataset request',
+        description: 'Seeking an anonymized healthcare dataset for research.',
+        categories: ['healthcare'],
+        format_preferences: ['csv'],
+        regulatory_requirements: ['GDPR'],
+        provenance_requirements: 'Documented sources',
+      });
+    });
+    expect(await screen.findByRole('heading', { name: corrected.title })).not.toBeNull();
+    expect(screen.getByText('Confirm the newly saved public text.')).not.toBeNull();
+    expect(screen.getByText('Reason: public content changed')).not.toBeNull();
+    expect(mocks.confirmDataRequestPublication).not.toHaveBeenCalled();
+    expect(mocks.publishDataRequest).not.toHaveBeenCalled();
+    fireEvent.click(screen.getByRole('button', { name: 'Make this request public' }));
+    await waitFor(() => {
+      expect(mocks.confirmDataRequestPublication).toHaveBeenCalledWith(
+        request.id, 'b'.repeat(64), 'request-publication-v1'
+      );
+    });
+  });
+
+  it('keeps the saved text and fresh consent hash when a pre-edit GET finishes after PATCH', async () => {
+    const old = makeOwnerRequest({
+      title: 'Old public request',
+      public_consent_status: 'consented',
+      publication_decision: 'eligible',
+      publication_reason: 'eligible',
+    });
+    const saved = makeOwnerRequest({
+      title: 'Corrected request',
+      description: 'Corrected public description for this request.',
+      public_content_hash: 'b'.repeat(64),
+      publication_reason: 'public_content_changed',
+      publication_next_action: 'Confirm the newly saved public text.',
+    });
+    let finishGet!: (value: DataRequestDetail) => void;
+    let finishPatch!: (value: DataRequestDetail) => void;
+    mocks.getDataRequest.mockReturnValue(new Promise<DataRequestDetail>((resolve) => { finishGet = resolve; }));
+    mocks.updateDataRequest.mockReturnValue(new Promise<DataRequestDetail>((resolve) => { finishPatch = resolve; }));
+    mocks.confirmDataRequestPublication.mockResolvedValue(saved);
+
+    render(<DataRequestDetailClient slug={old.slug} initialRequest={old} />);
+    await waitFor(() => expect(mocks.getDataRequest).toHaveBeenCalledTimes(1));
+    fireEvent.click(screen.getByRole('button', { name: 'Edit request' }));
+    expect(screen.queryByRole('button', { name: 'Delete' })).toBeNull();
+    expect(screen.queryByRole('button', { name: 'Make this request private' })).toBeNull();
+    fireEvent.change(screen.getByRole('textbox', { name: 'Title' }), { target: { value: saved.title } });
+    fireEvent.change(screen.getByRole('textbox', { name: 'Description' }), { target: { value: saved.description } });
+    fireEvent.click(screen.getByRole('button', { name: 'Save changes' }));
+    expect(screen.getByRole('button', { name: 'Saving...' })).toHaveProperty('disabled', true);
+    expect(screen.queryByRole('button', { name: 'Delete' })).toBeNull();
+    expect(screen.queryByRole('button', { name: 'Make this request private' })).toBeNull();
+    await act(async () => { finishPatch(saved); });
+    expect(await screen.findByRole('heading', { name: saved.title })).not.toBeNull();
+    await act(async () => { finishGet(old); });
+
+    expect(screen.getByRole('heading', { name: saved.title })).not.toBeNull();
+    expect(screen.getByText(saved.description)).not.toBeNull();
+    expect(screen.getByText('Public visibility: Private')).not.toBeNull();
+    expect(screen.getByText('Reason: public content changed')).not.toBeNull();
+    expect(screen.queryByText('Public visibility: Public')).toBeNull();
+    fireEvent.click(screen.getByRole('button', { name: 'Make this request public' }));
+    await waitFor(() => {
+      expect(mocks.confirmDataRequestPublication).toHaveBeenCalledWith(
+        old.id, 'b'.repeat(64), 'request-publication-v1'
+      );
+    });
+  });
+
+  for (const change of ['slug', 'auth'] as const) {
+    for (const order of ['load first', 'mutation first'] as const) {
+      it(`keeps the new ${change} context when an old Save finishes ${order}`, async () => {
+        const old = makeOwnerRequest({ title: 'Old request', public_content_hash: 'a'.repeat(64) });
+        const next = makeOwnerRequest({
+          id: 'request-2',
+          slug: change === 'slug' ? 'other-request' : old.slug,
+          buyer_id: change === 'auth' ? 'buyer-2' : owner.id,
+          title: 'New request',
+          public_content_hash: 'c'.repeat(64),
+        });
+        const savedOld = { ...old, title: 'Stale saved request', public_content_hash: 'b'.repeat(64) };
+        const patch = deferred<DataRequestDetail>();
+        const nextGet = deferred<DataRequestDetail>();
+        mocks.getDataRequest.mockResolvedValueOnce(old).mockReturnValueOnce(nextGet.promise);
+        mocks.updateDataRequest.mockReturnValue(patch.promise);
+        mocks.confirmDataRequestPublication.mockResolvedValue(next);
+        const view = render(<DataRequestDetailClient slug={old.slug} initialRequest={old} />);
+        await screen.findByRole('button', { name: 'Edit request' });
+        fireEvent.click(screen.getByRole('button', { name: 'Edit request' }));
+        fireEvent.change(screen.getByRole('textbox', { name: 'Title' }), { target: { value: savedOld.title } });
+        fireEvent.click(screen.getByRole('button', { name: 'Save changes' }));
+        expect(mocks.updateDataRequest).toHaveBeenCalledWith(old.id, expect.anything());
+
+        if (change === 'auth') mocks.auth.user = { ...owner, id: 'buyer-2' };
+        view.rerender(<DataRequestDetailClient slug={next.slug} initialRequest={next} />);
+        expect(screen.queryByRole('heading', { name: old.title })).toBeNull();
+        expect(screen.queryByRole('textbox', { name: 'Title' })).toBeNull();
+        await waitFor(() => expect(mocks.getDataRequest).toHaveBeenCalledTimes(2));
+        if (order === 'load first') {
+          await act(async () => { nextGet.resolve(next); });
+          await act(async () => { patch.resolve(savedOld); });
+        } else {
+          await act(async () => { patch.resolve(savedOld); });
+          await act(async () => { nextGet.resolve(next); });
+        }
+        expect(screen.getByRole('heading', { name: next.title })).not.toBeNull();
+        expect(screen.queryByRole('heading', { name: savedOld.title })).toBeNull();
+        expect(mocks.toast).not.toHaveBeenCalled();
+        fireEvent.click(screen.getByRole('button', { name: 'Make this request public' }));
+        await waitFor(() => expect(mocks.confirmDataRequestPublication).toHaveBeenCalledWith(
+          next.id, 'c'.repeat(64), 'request-publication-v1'
+        ));
+      });
+    }
+  }
+
+  for (const action of ['Open request', 'Make this request public', 'Make this request private', 'Delete'] as const) {
+    it(`ignores an old ${action} completion after navigating to another request`, async () => {
+      const old = makeOwnerRequest({
+        status: action === 'Open request' ? 'draft' : 'open',
+        public_consent_status: action === 'Make this request private' ? 'consented' : 'required',
+        publication_decision: action === 'Make this request private' ? 'eligible' : 'action_required',
+      });
+      const next = makeOwnerRequest({ id: 'request-2', slug: 'next-request', title: 'Next request', public_content_hash: 'c'.repeat(64) });
+      const mutation = deferred<DataRequestDetail>();
+      const nextGet = deferred<DataRequestDetail>();
+      mocks.getDataRequest.mockResolvedValueOnce(old).mockReturnValueOnce(nextGet.promise);
+      if (action === 'Open request') mocks.publishDataRequest.mockReturnValue(mutation.promise);
+      if (action === 'Make this request public') mocks.confirmDataRequestPublication.mockReturnValue(mutation.promise);
+      if (action === 'Make this request private') mocks.withdrawDataRequestPublication.mockReturnValue(mutation.promise);
+      if (action === 'Delete') mocks.deleteDataRequest.mockReturnValue(mutation.promise);
+      const view = render(<DataRequestDetailClient slug={old.slug} initialRequest={old} />);
+      fireEvent.click(screen.getByRole('button', { name: action }));
+      view.rerender(<DataRequestDetailClient slug={next.slug} initialRequest={next} />);
+      await waitFor(() => expect(mocks.getDataRequest).toHaveBeenCalledTimes(2));
+      await act(async () => { nextGet.resolve(next); });
+      await act(async () => { mutation.resolve(old); });
+      expect(screen.getByRole('heading', { name: next.title })).not.toBeNull();
+      expect(mocks.toast).not.toHaveBeenCalled();
+      expect(mocks.routerPush).not.toHaveBeenCalled();
+    });
+  }
+
+  it('does not show an old Save error after an auth change', async () => {
+    const old = makeOwnerRequest();
+    const next = makeOwnerRequest({ id: 'request-2', buyer_id: 'buyer-2', title: 'New owner request' });
+    const patch = deferred<DataRequestDetail>();
+    mocks.getDataRequest.mockResolvedValueOnce(old).mockResolvedValueOnce(next);
+    mocks.updateDataRequest.mockReturnValue(patch.promise);
+    const view = render(<DataRequestDetailClient slug={old.slug} initialRequest={old} />);
+    fireEvent.click(screen.getByRole('button', { name: 'Edit request' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Save changes' }));
+    mocks.auth.user = { ...owner, id: 'buyer-2' };
+    view.rerender(<DataRequestDetailClient slug={old.slug} initialRequest={next} />);
+    await screen.findByRole('heading', { name: next.title });
+    await act(async () => { patch.reject(new Error('old failure')); });
+    expect(screen.queryByRole('alert')).toBeNull();
+    expect(mocks.toast).not.toHaveBeenCalled();
+  });
+
+  it('keeps a successful Save when a same-context reload starts during PATCH and finishes later', async () => {
+    const old = makeOwnerRequest({ title: 'Before save' });
+    const saved = makeOwnerRequest({
+      title: 'After save',
+      public_content_hash: 'b'.repeat(64),
+      publication_reason: 'public_content_changed',
+    });
+    const patch = deferred<DataRequestDetail>();
+    const reload = deferred<DataRequestDetail>();
+    mocks.getDataRequest.mockResolvedValueOnce(old).mockReturnValueOnce(reload.promise);
+    mocks.updateDataRequest.mockReturnValue(patch.promise);
+    const view = render(<DataRequestDetailClient slug={old.slug} initialRequest={old} />);
+    await screen.findByRole('button', { name: 'Edit request' });
+    fireEvent.click(screen.getByRole('button', { name: 'Edit request' }));
+    fireEvent.change(screen.getByRole('textbox', { name: 'Title' }), { target: { value: saved.title } });
+    fireEvent.click(screen.getByRole('button', { name: 'Save changes' }));
+    mocks.auth.user = { ...owner };
+    view.rerender(<DataRequestDetailClient slug={old.slug} initialRequest={old} />);
+    await waitFor(() => expect(mocks.getDataRequest).toHaveBeenCalledTimes(2));
+    await act(async () => { patch.resolve(saved); });
+    await act(async () => { reload.resolve(old); });
+    expect(screen.getByRole('heading', { name: saved.title })).not.toBeNull();
+    expect(screen.getByText('Reason: public content changed')).not.toBeNull();
+    expect(mocks.toast).toHaveBeenCalledWith(
+      'Request changes saved. Review the public visibility status before confirming.', 'success'
+    );
+  });
+
+
+  it('hides Open and Delete while a draft edit is open', async () => {
+    const draft = makeDraft();
+    mocks.getDataRequest.mockResolvedValue(draft);
+    render(<DataRequestDetailClient slug={draft.slug} initialRequest={draft} />);
+    fireEvent.click(screen.getByRole('button', { name: 'Edit request' }));
+    expect(screen.queryByRole('button', { name: 'Open request' })).toBeNull();
+    expect(screen.queryByRole('button', { name: 'Delete' })).toBeNull();
+    await waitFor(() => expect(mocks.getDataRequestResponses).toHaveBeenCalledWith(draft.id));
+  });
+
+  it('cancels an owner edit without sending a mutation', async () => {
+    const request = makeDraft();
+    mocks.getDataRequest.mockResolvedValue(request);
+    render(<DataRequestDetailClient slug={request.slug} initialRequest={request} />);
+    fireEvent.click(await screen.findByRole('button', { name: 'Edit request' }));
+    fireEvent.change(screen.getByRole('textbox', { name: 'Description' }), {
+      target: { value: 'A changed description that has not been saved.' },
+    });
+    fireEvent.click(screen.getByRole('button', { name: 'Cancel' }));
+    expect(mocks.updateDataRequest).not.toHaveBeenCalled();
+    expect(screen.getByText(request.description)).not.toBeNull();
+  });
+
+  it('keeps edited inputs and private status when save fails', async () => {
+    const request = makeOwnerRequest({ publication_reason: 'contact_or_personal_data_detected' });
+    mocks.getDataRequest.mockResolvedValue(request);
+    mocks.updateDataRequest.mockRejectedValue(new Error('network unavailable'));
+    render(<DataRequestDetailClient slug={request.slug} initialRequest={request} />);
+    fireEvent.click(await screen.findByRole('button', { name: 'Edit request' }));
+    fireEvent.change(screen.getByRole('textbox', { name: 'Description' }), {
+      target: { value: 'A corrected description with no contact details.' },
+    });
+    fireEvent.click(screen.getByRole('button', { name: 'Save changes' }));
+    expect(await screen.findByRole('alert')).toHaveProperty('textContent', 'Could not save request. Please try again.');
+    expect(screen.getByRole('textbox', { name: 'Description' })).toHaveProperty('value', 'A corrected description with no contact details.');
+    expect(screen.getByText('Public visibility: Private')).not.toBeNull();
+    expect(screen.queryByRole('button', { name: 'Make this request public' })).toBeNull();
+    expect(mocks.confirmDataRequestPublication).not.toHaveBeenCalled();
+  });
+
+  it('does not offer edit controls to a nonowner or for a noneditable status', async () => {
+    const request = makeOwnerRequest();
+    mocks.auth.user = { ...owner, id: 'other-buyer' };
+    mocks.getDataRequest.mockResolvedValue(request);
+    const view = render(<DataRequestDetailClient slug={request.slug} initialRequest={request} />);
+    expect(screen.queryByRole('button', { name: 'Edit request' })).toBeNull();
+    await act(async () => { await mocks.getDataRequest.mock.results[0].value; });
+    expect(mocks.getDataRequestResponses).not.toHaveBeenCalled();
+    view.unmount();
+
+    mocks.auth.user = owner;
+    const closed = makeOwnerRequest({ status: 'responses_received' });
+    mocks.getDataRequest.mockResolvedValue(closed);
+    render(<DataRequestDetailClient slug={closed.slug} initialRequest={closed} />);
+    expect(screen.queryByRole('button', { name: 'Edit request' })).toBeNull();
+    await act(async () => { await mocks.getDataRequest.mock.results[1].value; });
+    await act(async () => { await mocks.getDataRequestResponses.mock.results[0].value; });
+    expect(mocks.getDataRequestResponses).toHaveBeenCalledWith(closed.id);
+    expect(mocks.updateDataRequest).not.toHaveBeenCalled();
   });
 
   it('does not claim the request is public when a later automatic check is still pending', async () => {

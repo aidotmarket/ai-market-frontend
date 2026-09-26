@@ -1,12 +1,13 @@
 'use client';
 
-import { useEffect, useState, useCallback } from 'react';
+import { useEffect, useLayoutEffect, useState, useCallback, useRef } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { useAuthStore } from '@/store/auth';
 import { useToast } from '@/components/Toast';
 import {
   getDataRequest,
+  updateDataRequest,
   publishDataRequest,
   deleteDataRequest,
   submitDataRequestResponse,
@@ -47,12 +48,66 @@ export default function DataRequestDetailClient({
   const router = useRouter();
   const { toast } = useToast();
 
-  const [request, setRequest] = useState<DataRequestDetail | null>(initialRequest);
+  const userId = user?.id;
+  const context = `${slug}\0${isAuthenticated}\0${userId ?? ''}`;
+  const [requestRecord, setRequestRecord] = useState({ context, value: initialRequest });
+  const request = requestRecord.context === context ? requestRecord.value : null;
+  const setRequest = (value: DataRequestDetail | null) => setRequestRecord({ context, value });
   const [responses, setResponses] = useState<DataRequestResponse[]>([]);
   const [loading, setLoading] = useState(initialRequest === null);
   const [publishing, setPublishing] = useState(false);
   const [deleting, setDeleting] = useState(false);
   const [updatingPublication, setUpdatingPublication] = useState(false);
+  const [editing, setEditing] = useState(false);
+  const [savingEdit, setSavingEdit] = useState(false);
+  const [editError, setEditError] = useState('');
+  const [editTitle, setEditTitle] = useState('');
+  const [editDescription, setEditDescription] = useState('');
+  const [editCategories, setEditCategories] = useState('');
+  const [editFormats, setEditFormats] = useState('');
+  const [editRegulatory, setEditRegulatory] = useState('');
+  const [editProvenance, setEditProvenance] = useState('');
+  const loadGeneration = useRef(0);
+  const contextEpoch = useRef(0);
+  const currentContext = useRef(context);
+  const mutationPending = useRef(false);
+
+  useLayoutEffect(() => {
+    if (currentContext.current === context) return;
+    currentContext.current = context;
+    contextEpoch.current++;
+    loadGeneration.current++;
+    mutationPending.current = false;
+    setRequest(null);
+    setResponses([]);
+    setLoading(true);
+    setPublishing(false);
+    setDeleting(false);
+    setUpdatingPublication(false);
+    setEditing(false);
+    setSavingEdit(false);
+    setEditError('');
+    setEditTitle('');
+    setEditDescription('');
+    setEditCategories('');
+    setEditFormats('');
+    setEditRegulatory('');
+    setEditProvenance('');
+    setProposal('');
+    setProposedPrice('');
+    setTimeline('');
+    setSubmittingResponse(false);
+  }, [context]);
+
+  function beginMutation() {
+    loadGeneration.current++;
+    mutationPending.current = true;
+    return contextEpoch.current;
+  }
+
+  function isCurrentMutation(epoch: number) {
+    return epoch === contextEpoch.current && currentContext.current === context;
+  }
 
   // Response form
   const [proposal, setProposal] = useState('');
@@ -60,38 +115,98 @@ export default function DataRequestDetailClient({
   const [timeline, setTimeline] = useState('');
   const [submittingResponse, setSubmittingResponse] = useState(false);
 
-  const isOwner = user && request && user.id === request.buyer_id;
+  const isOwner = isAuthenticated && user && request && user.id === request.buyer_id;
+
+  function startEditing() {
+    if (!isOwner || !request || !['draft', 'open'].includes(request.status) || publishing || deleting || updatingPublication) return;
+    setEditTitle(request.title || '');
+    setEditDescription(request.description);
+    setEditCategories(request.categories.join(', '));
+    setEditFormats(request.format_preferences.join(', '));
+    setEditRegulatory(request.regulatory_requirements?.join(', ') || '');
+    setEditProvenance(request.provenance_requirements || '');
+    setEditError('');
+    setEditing(true);
+  }
+
+  async function handleSaveEdit(e: React.FormEvent) {
+    e.preventDefault();
+    if (!isOwner || !request || !['draft', 'open'].includes(request.status) || !editing || savingEdit || publishing || deleting || updatingPublication) return;
+    const splitList = (value: string) => value.split(',').map((item) => item.trim()).filter(Boolean);
+    setSavingEdit(true);
+    setEditError('');
+    const epoch = beginMutation();
+    try {
+      const updated = await updateDataRequest(request.id, {
+        title: editTitle.trim(),
+        description: editDescription.trim(),
+        categories: splitList(editCategories),
+        format_preferences: splitList(editFormats),
+        regulatory_requirements: splitList(editRegulatory),
+        provenance_requirements: editProvenance.trim(),
+      });
+      if (!isCurrentMutation(epoch)) return;
+      setRequest(updated);
+      setEditing(false);
+      toast('Request changes saved. Review the public visibility status before confirming.', 'success');
+    } catch (err) {
+      if (!isCurrentMutation(epoch)) return;
+      const detail = err instanceof AxiosError ? err.response?.data?.detail : null;
+      const message = typeof detail === 'string'
+        ? detail
+        : Array.isArray(detail)
+          ? detail.map((item: { loc?: (string | number)[]; msg?: string }) => {
+              const field = item.loc?.filter((part) => part !== 'body').join('.') || 'Field';
+              return `${field}: ${item.msg || 'invalid value'}`;
+            }).join('; ')
+          : 'Please try again.';
+      setEditError(`Could not save request. ${message}`);
+    } finally {
+      if (isCurrentMutation(epoch)) {
+        mutationPending.current = false;
+        setSavingEdit(false);
+      }
+    }
+  }
 
   const loadData = useCallback(async () => {
+    const generation = ++loadGeneration.current;
+    const epoch = contextEpoch.current;
+    const startedDuringMutation = mutationPending.current;
+    const isCurrent = () => !startedDuringMutation && epoch === contextEpoch.current && generation === loadGeneration.current;
     try {
       const data = await getDataRequest(slug);
+      if (!isCurrent()) return;
       setRequest(data);
 
       // Load responses if owner
-      if (data && user && user.id === data.buyer_id) {
+      if (data && userId === data.buyer_id) {
         try {
           const resps = await getDataRequestResponses(data.id);
-          setResponses(resps);
+          if (isCurrent()) setResponses(resps);
         } catch {
           // May not have permission
         }
       }
     } catch {
-      setRequest(null);
+      if (isCurrent()) setRequest(null);
     } finally {
-      setLoading(false);
+      if (isCurrent()) setLoading(false);
     }
-  }, [slug, user]);
+  }, [slug, context, user, userId]);
 
   useEffect(() => {
     loadData();
+    return () => { loadGeneration.current++; };
   }, [loadData]);
 
   async function handlePublish() {
-    if (!request) return;
+    if (!request || editing || savingEdit || publishing || deleting || updatingPublication) return;
+    const epoch = beginMutation();
     setPublishing(true);
     try {
       const updated = await publishDataRequest(request.id);
+      if (!isCurrentMutation(epoch)) return;
       setRequest(updated);
       toast(
         updated.publication_decision === 'eligible'
@@ -100,36 +215,47 @@ export default function DataRequestDetailClient({
         'success'
       );
     } catch (err) {
+      if (!isCurrentMutation(epoch)) return;
       if (err instanceof AxiosError) {
         toast(err.response?.data?.detail || 'Failed to publish.', 'error');
       } else {
         toast('An unexpected error occurred.', 'error');
       }
     } finally {
-      setPublishing(false);
+      if (isCurrentMutation(epoch)) {
+        mutationPending.current = false;
+        setPublishing(false);
+      }
     }
   }
 
   async function handleDelete() {
-    if (!request) return;
+    if (!request || editing || savingEdit || publishing || deleting || updatingPublication) return;
+    const epoch = beginMutation();
     setDeleting(true);
     try {
       await deleteDataRequest(request.id);
+      if (!isCurrentMutation(epoch)) return;
       toast('Data request deleted.', 'success');
       router.push('/dashboard/requests');
     } catch (err) {
+      if (!isCurrentMutation(epoch)) return;
       if (err instanceof AxiosError) {
         toast(err.response?.data?.detail || 'Failed to delete.', 'error');
       } else {
         toast('An unexpected error occurred.', 'error');
       }
     } finally {
-      setDeleting(false);
+      if (isCurrentMutation(epoch)) {
+        mutationPending.current = false;
+        setDeleting(false);
+      }
     }
   }
 
   async function handleConfirmPublication() {
-    if (!request?.public_content_hash || !request.required_public_consent_policy_version) return;
+    if (!request?.public_content_hash || !request.required_public_consent_policy_version || editing || savingEdit || publishing || deleting || updatingPublication) return;
+    const epoch = beginMutation();
     setUpdatingPublication(true);
     try {
       const updated = await confirmDataRequestPublication(
@@ -137,6 +263,7 @@ export default function DataRequestDetailClient({
         request.public_content_hash,
         request.required_public_consent_policy_version
       );
+      if (!isCurrentMutation(epoch)) return;
       setRequest(updated);
       toast(
         updated.publication_decision === 'eligible'
@@ -145,31 +272,41 @@ export default function DataRequestDetailClient({
         'success'
       );
     } catch (err) {
+      if (!isCurrentMutation(epoch)) return;
       if (err instanceof AxiosError) {
         toast(err.response?.data?.detail || 'Failed to update public visibility.', 'error');
       } else {
         toast('An unexpected error occurred.', 'error');
       }
     } finally {
-      setUpdatingPublication(false);
+      if (isCurrentMutation(epoch)) {
+        mutationPending.current = false;
+        setUpdatingPublication(false);
+      }
     }
   }
 
   async function handleWithdrawPublication() {
-    if (!request) return;
+    if (!request || editing || savingEdit || publishing || deleting || updatingPublication) return;
+    const epoch = beginMutation();
     setUpdatingPublication(true);
     try {
       const updated = await withdrawDataRequestPublication(request.id);
+      if (!isCurrentMutation(epoch)) return;
       setRequest(updated);
       toast('Your request is now private.', 'success');
     } catch (err) {
+      if (!isCurrentMutation(epoch)) return;
       if (err instanceof AxiosError) {
         toast(err.response?.data?.detail || 'Failed to update public visibility.', 'error');
       } else {
         toast('An unexpected error occurred.', 'error');
       }
     } finally {
-      setUpdatingPublication(false);
+      if (isCurrentMutation(epoch)) {
+        mutationPending.current = false;
+        setUpdatingPublication(false);
+      }
     }
   }
 
@@ -177,6 +314,7 @@ export default function DataRequestDetailClient({
     e.preventDefault();
     if (!request || !proposal.trim()) return;
 
+    const epoch = beginMutation();
     setSubmittingResponse(true);
     try {
       await submitDataRequestResponse(request.id, {
@@ -184,6 +322,8 @@ export default function DataRequestDetailClient({
         proposed_price: proposedPrice ? parseFloat(proposedPrice) : undefined,
         timeline: timeline.trim() || undefined,
       });
+      if (!isCurrentMutation(epoch)) return;
+      mutationPending.current = false;
       toast('Response submitted successfully.', 'success');
       setProposal('');
       setProposedPrice('');
@@ -191,17 +331,21 @@ export default function DataRequestDetailClient({
       // Reload to update response count
       loadData();
     } catch (err) {
+      if (!isCurrentMutation(epoch)) return;
       if (err instanceof AxiosError) {
         toast(err.response?.data?.detail || 'Failed to submit response.', 'error');
       } else {
         toast('An unexpected error occurred.', 'error');
       }
     } finally {
-      setSubmittingResponse(false);
+      if (isCurrentMutation(epoch)) {
+        mutationPending.current = false;
+        setSubmittingResponse(false);
+      }
     }
   }
 
-  if (loading) {
+  if (loading || requestRecord.context !== context) {
     return (
       <div className="flex min-h-[60vh] items-center justify-center">
         <div className="h-8 w-8 animate-spin rounded-full border-4 border-[#3F51B5] border-t-transparent" />
@@ -269,7 +413,16 @@ export default function DataRequestDetailClient({
       {/* Owner actions */}
       {isOwner && (
         <div className="flex gap-3 mb-6">
-          {request.status === 'draft' && (
+          {(request.status === 'draft' || request.status === 'open') && !editing && !publishing && !deleting && !updatingPublication && (
+            <button
+              type="button"
+              onClick={startEditing}
+              className="rounded-lg border border-gray-300 px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50"
+            >
+              Edit request
+            </button>
+          )}
+          {request.status === 'draft' && !editing && (
             <button
               onClick={handlePublish}
               disabled={publishing}
@@ -284,14 +437,51 @@ export default function DataRequestDetailClient({
           >
             Refresh
           </Link>
-          <button
-            onClick={handleDelete}
-            disabled={deleting}
-            className="rounded-lg border border-red-300 px-4 py-2 text-sm font-medium text-red-700 hover:bg-red-50 disabled:opacity-50"
-          >
-            {deleting ? 'Deleting...' : 'Delete'}
-          </button>
+          {!editing && (
+            <button
+              onClick={handleDelete}
+              disabled={deleting || publishing || updatingPublication}
+              className="rounded-lg border border-red-300 px-4 py-2 text-sm font-medium text-red-700 hover:bg-red-50 disabled:opacity-50"
+            >
+              {deleting ? 'Deleting...' : 'Delete'}
+            </button>
+          )}
         </div>
+      )}
+
+      {isOwner && editing && (request.status === 'draft' || request.status === 'open') && (
+        <form onSubmit={handleSaveEdit} className="rounded-xl border border-gray-200 p-6 mb-6 space-y-4" aria-label="Edit request">
+          <p className="text-sm text-gray-600">Remove contact details from every public text field before saving.</p>
+          <div>
+            <label htmlFor="edit-request-title" className="block text-sm font-medium text-gray-700 mb-1">Title</label>
+            <input id="edit-request-title" type="text" required minLength={5} maxLength={255} value={editTitle} onChange={(e) => setEditTitle(e.target.value)} className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-[#3F51B5]" />
+          </div>
+          <div>
+            <label htmlFor="edit-request-description" className="block text-sm font-medium text-gray-700 mb-1">Description</label>
+            <textarea id="edit-request-description" required minLength={20} maxLength={10000} rows={5} value={editDescription} onChange={(e) => setEditDescription(e.target.value)} className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-[#3F51B5]" />
+          </div>
+          <div>
+            <label htmlFor="edit-request-categories" className="block text-sm font-medium text-gray-700 mb-1">Categories</label>
+            <input id="edit-request-categories" type="text" value={editCategories} onChange={(e) => setEditCategories(e.target.value)} placeholder="e.g., retail, marketing (comma-separated)" className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-[#3F51B5]" />
+          </div>
+          <div>
+            <label htmlFor="edit-request-formats" className="block text-sm font-medium text-gray-700 mb-1">Preferred Formats</label>
+            <input id="edit-request-formats" type="text" value={editFormats} onChange={(e) => setEditFormats(e.target.value)} placeholder="e.g., CSV, JSON, Parquet" className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-[#3F51B5]" />
+          </div>
+          <div>
+            <label htmlFor="edit-request-regulatory" className="block text-sm font-medium text-gray-700 mb-1">Regulatory Requirements</label>
+            <input id="edit-request-regulatory" type="text" value={editRegulatory} onChange={(e) => setEditRegulatory(e.target.value)} placeholder="e.g., GDPR (comma-separated)" className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-[#3F51B5]" />
+          </div>
+          <div>
+            <label htmlFor="edit-request-provenance" className="block text-sm font-medium text-gray-700 mb-1">Provenance Requirements</label>
+            <textarea id="edit-request-provenance" rows={3} value={editProvenance} onChange={(e) => setEditProvenance(e.target.value)} placeholder="Requirements for data origin, licensing, or compliance." className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-[#3F51B5]" />
+          </div>
+          {editError && <p role="alert" className="text-sm text-red-700">{editError}</p>}
+          <div className="flex gap-3">
+            <button type="submit" disabled={savingEdit} className="rounded-lg bg-[#3F51B5] px-4 py-2 text-sm font-medium text-white hover:bg-[#3545a0] disabled:opacity-50">{savingEdit ? 'Saving...' : 'Save changes'}</button>
+            <button type="button" disabled={savingEdit} onClick={() => { setEditing(false); setEditError(''); }} className="rounded-lg border border-gray-300 px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50 disabled:opacity-50">Cancel</button>
+          </div>
+        </form>
       )}
 
       {isOwner && request.publication_decision && (
@@ -317,7 +507,7 @@ export default function DataRequestDetailClient({
             )}
           </div>
 
-          {canConfirmPublication && (
+          {canConfirmPublication && !editing && (
             <div className="mt-4 border-t border-[#D8DDF4] pt-4">
               <p className="mb-3 text-sm text-gray-700">
                 By making this request public, you agree that the request details shown on this page may appear on ai.market, in search engines, to AI agents, and in relevant seller alerts. Your full account profile is not included; your existing public buyer name may appear. Do not put contact details in the request text.
@@ -333,7 +523,7 @@ export default function DataRequestDetailClient({
             </div>
           )}
 
-          {canWithdrawPublication && (
+          {canWithdrawPublication && !editing && (
             <div className="mt-4 border-t border-[#D8DDF4] pt-4">
               <p className="mb-3 text-sm text-gray-700">
                 You can remove this request from public discovery without deleting your work.
