@@ -40,7 +40,7 @@ export interface CreateDraftListingInput {
   price: number;
   model_provider: 'anthropic';
   listing_type: 'raw';
-  data_format?: 'csv';
+  data_format?: 'csv' | 'json' | 'parquet';
   schema_info: { row_count: number; columns: Array<{ name: string; type: string }> };
 }
 

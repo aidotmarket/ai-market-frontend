@@ -62,11 +62,15 @@ it('creates a raw draft from selected offerable files, saves its source, then op
   expect(api.saveSource.mock.invocationCallOrder[0]).toBeLessThan(api.push.mock.invocationCallOrder[0]);
 });
 
-it('omits data_format when the first selected file is not CSV', async () => {
-  const jsonFile = { ...describedFile, file_id: 'json-file', display_name: 'data.json', media_type: 'application/json' };
-  api.files.mockResolvedValue({ files: [describedFile, jsonFile], next_cursor: null });
+it.each([
+  ['application/json', 'json'],
+  ['application/x-parquet', 'parquet'],
+  ['application/vnd.apache.parquet', 'parquet'],
+])('sends %s as %s when the first selected file uses that media type', async (mediaType, dataFormat) => {
+  const otherFile = { ...describedFile, file_id: 'other-file', display_name: 'other-file', media_type: mediaType };
+  api.files.mockResolvedValue({ files: [describedFile, otherFile], next_cursor: null });
   await ready();
-  fireEvent.click(screen.getByLabelText('Select data.json'));
+  fireEvent.click(screen.getByLabelText('Select other-file'));
   fireEvent.click(screen.getByLabelText(`Select ${describedFile.display_name}`));
   fireEvent.click(screen.getByRole('button', { name: 'Create listing' }));
   fireEvent.change(screen.getByLabelText('Title'), { target: { value: 'Safe data' } });
@@ -74,8 +78,23 @@ it('omits data_format when the first selected file is not CSV', async () => {
   fireEvent.change(screen.getByLabelText('Price'), { target: { value: '0' } });
   fireEvent.click(screen.getByRole('button', { name: 'Create draft' }));
   await waitFor(() => expect(api.createDraft).toHaveBeenCalled());
-  expect(api.createDraft.mock.calls[0][0]).not.toHaveProperty('data_format');
-  expect(api.saveSource).toHaveBeenCalledWith('listing-1', { type: 'gateway', gateway_id: 'gateway-1', file_ids: ['json-file', describedFile.file_id] });
+  expect(api.createDraft.mock.calls[0][0]).toHaveProperty('data_format', dataFormat);
+  expect(api.saveSource).toHaveBeenCalledWith('listing-1', { type: 'gateway', gateway_id: 'gateway-1', file_ids: ['other-file', describedFile.file_id] });
+});
+
+it('blocks files whose column names or types differ', async () => {
+  const different = { ...describedFile, file_id: 'different', display_name: 'different.csv', description: { ...describedFile.description, columns: [{ ...describedFile.description.columns[0], type: 'string' }] } };
+  api.files.mockResolvedValue({ files: [describedFile, different], next_cursor: null });
+  await ready();
+  fireEvent.click(screen.getByLabelText(`Select ${describedFile.display_name}`));
+  fireEvent.click(screen.getByLabelText('Select different.csv'));
+  fireEvent.click(screen.getByRole('button', { name: 'Create listing' }));
+  fireEvent.change(screen.getByLabelText('Title'), { target: { value: 'Safe data' } });
+  fireEvent.change(screen.getByLabelText('Description'), { target: { value: 'A useful data set' } });
+  fireEvent.change(screen.getByLabelText('Price'), { target: { value: '0' } });
+  fireEvent.click(screen.getByRole('button', { name: 'Create draft' }));
+  expect((await screen.findByRole('alert')).textContent).toContain('Pick files with the same columns and types.');
+  expect(api.createDraft).not.toHaveBeenCalled();
 });
 
 it('does not select a non-offerable file or show creation on a revoked gateway', async () => {
@@ -93,7 +112,7 @@ it('does not select a non-offerable file or show creation on a revoked gateway',
 
 it('shows backend errors and stays on the gateway page', async () => {
   api.files.mockResolvedValue({ files: [describedFile], next_cursor: null });
-  api.createDraft.mockRejectedValueOnce({ response: { data: { error: { code: 'capability_required', details: { missing_steps: ['totp_enabled'] } } } } });
+  api.createDraft.mockRejectedValueOnce({ response: { data: { detail: { error: 'capability_required', missing_steps: ['totp_enabled'] } } } });
   await ready();
   fireEvent.click(screen.getByLabelText(`Select ${describedFile.display_name}`));
   fireEvent.click(screen.getByRole('button', { name: 'Create listing' }));
@@ -104,10 +123,24 @@ it('shows backend errors and stays on the gateway page', async () => {
   expect((await screen.findByRole('alert')).textContent).toContain('capability_required: missing_steps: totp_enabled');
   expect(api.saveSource).not.toHaveBeenCalled();
   expect(api.push).not.toHaveBeenCalled();
-  api.createDraft.mockRejectedValueOnce({ response: { data: { error: { code: 'TERMS_ACCEPTANCE_REQUIRED' } } } });
+  api.createDraft.mockRejectedValueOnce({ response: { data: { detail: { code: 'TERMS_ACCEPTANCE_REQUIRED', terms_url: '/legal/terms', acceptance_url: '/legal/terms' } } } });
   fireEvent.click(screen.getByRole('button', { name: 'Create draft' }));
   expect((await screen.findByRole('link', { name: 'Review terms' })).getAttribute('href')).toBe('/legal/terms');
   expect(api.push).not.toHaveBeenCalled();
+});
+
+it('shows a plain-string detail without crashing', async () => {
+  api.files.mockResolvedValue({ files: [describedFile], next_cursor: null });
+  api.createDraft.mockRejectedValueOnce({ response: { data: { detail: 'Invalid listing details' } } });
+  await ready();
+  fireEvent.click(screen.getByLabelText(`Select ${describedFile.display_name}`));
+  fireEvent.click(screen.getByRole('button', { name: 'Create listing' }));
+  fireEvent.change(screen.getByLabelText('Title'), { target: { value: 'Safe data' } });
+  fireEvent.change(screen.getByLabelText('Description'), { target: { value: 'A useful data set' } });
+  fireEvent.change(screen.getByLabelText('Price'), { target: { value: '0' } });
+  fireEvent.click(screen.getByRole('button', { name: 'Create draft' }));
+  expect((await screen.findByRole('alert')).textContent).toContain('Invalid listing details');
+  expect(screen.queryByRole('link', { name: 'Review terms' })).toBeNull();
 });
 
 it('keeps the created draft for a retry when saving the source fails', async () => {

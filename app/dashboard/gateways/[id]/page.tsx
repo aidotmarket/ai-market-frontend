@@ -14,6 +14,31 @@ import type { GatewayFile, GatewayMessageType, ReceivedMessage, SellerGateway } 
 const MESSAGE_TYPES: GatewayMessageType[] = ['hello', 'inventory', 'description', 'receipt', 'canary_result', 'offer_ack', 'prepare_ack', 'revocation_ack', 'error'];
 const revokeEffect = 'Revoking stops new permissions and offers and unlists this gateway’s listings. Orders with undelivered files become blocked and a delivery problem freezes payout until support resolves or refunds them. Already bound permissions may finish before their deadline.';
 const wait = (ms: number) => new Promise(resolve => setTimeout(resolve, ms));
+const dataFormats: Record<string, 'csv' | 'json' | 'parquet'> = {
+  'text/csv': 'csv',
+  'application/json': 'json',
+  'application/x-parquet': 'parquet',
+  'application/vnd.apache.parquet': 'parquet',
+};
+
+function listingFailure(cause: unknown): { message: string; terms: boolean } {
+  const record = (value: unknown): Record<string, unknown> | null =>
+    value !== null && typeof value === 'object' && !Array.isArray(value) ? value as Record<string, unknown> : null;
+  const response = record(record(cause)?.response);
+  const data = record(response?.data);
+  const detail = data?.detail;
+  const detailObject = record(detail);
+  const error = record(data?.error);
+  const errorDetails = record(error?.details);
+  const rawCode = detailObject?.code ?? detailObject?.error ?? error?.code;
+  const code = typeof rawCode === 'string' ? rawCode : null;
+  const rawSteps = detailObject?.missing_steps ?? errorDetails?.missing_steps;
+  const missingSteps = Array.isArray(rawSteps) ? rawSteps.filter((step): step is string => typeof step === 'string') : [];
+  const message = code
+    ? `${code}${missingSteps.length ? `: missing_steps: ${missingSteps.join(', ')}` : ''}`
+    : typeof detail === 'string' ? detail : 'We could not create the listing. Try again.';
+  return { message, terms: code === 'TERMS_ACCEPTANCE_REQUIRED' };
+}
 
 export default function GatewayPage() {
   const { id } = useParams<{ id: string }>();
@@ -247,15 +272,20 @@ export default function GatewayPage() {
       setListingError({ message: 'Select 1 to 200 offerable files. Enter a title of 3–255 characters, a description of at least 10 characters, and a price of 0 or at least 25.', terms: false });
       return;
     }
+    const columns = selectedFiles[0].description.columns;
+    if (selectedFiles.some(file => file.description.columns.length !== columns.length || file.description.columns.some((column, index) => column.name !== columns[index].name || column.type !== columns[index].type))) {
+      setListingError({ message: 'Pick files with the same columns and types.', terms: false });
+      return;
+    }
     const requestId = id;
     setCreatingListing(true); setListingError(null);
     try {
       const listingId = draftListingId ?? (await createDraftListing({
         title, description, price, model_provider: 'anthropic', listing_type: 'raw',
-        ...(selectedFiles[0].media_type === 'text/csv' ? { data_format: 'csv' as const } : {}),
+        ...(dataFormats[selectedFiles[0].media_type] ? { data_format: dataFormats[selectedFiles[0].media_type] } : {}),
         schema_info: {
           row_count: selectedFiles.reduce((sum, file) => sum + file.description.row_count, 0),
-          columns: selectedFiles[0].description.columns.map(column => ({ name: column.name, type: column.type })),
+          columns: columns.map(column => ({ name: column.name, type: column.type })),
         },
       })).id;
       if (!isCurrent(requestId)) return;
@@ -264,13 +294,7 @@ export default function GatewayPage() {
       if (isCurrent(requestId)) router.push(`/dashboard/listings/${encodeURIComponent(listingId)}/edit`);
     } catch (cause) {
       if (!isCurrent(requestId)) return;
-      const response = (cause as { response?: { data?: { error?: { code?: string; details?: { missing_steps?: string[] } }; detail?: string; missing_steps?: string[] } } })?.response?.data;
-      const code = gatewayErrorCode(cause);
-      const missingSteps = response?.error?.details?.missing_steps ?? response?.missing_steps;
-      setListingError({
-        message: code ? `${code}${missingSteps?.length ? `: missing_steps: ${missingSteps.join(', ')}` : ''}` : response?.detail || 'We could not create the listing. Try again.',
-        terms: code === 'TERMS_ACCEPTANCE_REQUIRED',
-      });
+      setListingError(listingFailure(cause));
     } finally { if (isCurrent(requestId)) setCreatingListing(false); }
   }
 
