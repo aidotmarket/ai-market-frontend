@@ -5,27 +5,27 @@ import Link from 'next/link';
 const howItWorks = [
   {
     eyebrow: 'List',
-    title: 'Local Processing',
+    title: 'Files stay on your infrastructure',
     description:
-      "Everyone installs the same tool: AIM Data. Sellers use it to manage and publish data. Buyers and builders switch on its gateway features for discovery and programmatic access. An embedded AI assistant profiles each dataset locally - detecting PII, scoring quality, generating descriptions and metadata. Only the metadata is published to ai.market. Raw data never leaves the seller's servers. AIM Data is open source.",
+      'Sellers run the open-source AIM Data gateway with Docker. It sends opaque inventory automatically and file structure after confirmation, with no data values. A seller can separately publish a public sample on the listing.',
   },
   {
     eyebrow: 'Discover',
     title: 'Marketplace Matching',
     description:
-      "Buyers and AI agents search ai.market's catalog using semantic search, filters, and structured queries. Every listing includes AI-generated quality scores, schema previews, and sample metadata - enough to evaluate fit without exposing the underlying asset.",
+      "Buyers and AI agents search ai.market's catalog using semantic search, filters, and structured queries.",
   },
   {
     eyebrow: 'Transact',
     title: 'Platform Billing',
     description:
-      'When a buyer commits, ai.market handles authentication, payment processing, and billing. The seller receives a cryptographically signed delivery token scoped to the specific transaction - time-limited, single-use, and auditable.',
+      'When a buyer purchases, ai.market handles checkout and signs a file-specific delivery permission.',
   },
   {
     eyebrow: 'Deliver',
-    title: 'Peer-to-Peer',
+    title: 'Direct delivery',
     description:
-      "The buyer's system connects directly to the seller's AIM Data instance using the delivery token. Data flows point-to-point over an encrypted channel. ai.market never proxies, caches, or stores the payload.",
+      "The buyer downloads purchased files directly from the seller's AIM Data gateway. ai.market does not store the files.",
   },
 ];
 
@@ -42,7 +42,7 @@ const platformDoes = [
   {
     label: 'Trust',
     description:
-      'Cryptographic delivery tokens, mutual verification between nodes, session-scoped access',
+      'Signed delivery permissions that the seller gateway verifies before serving a file',
   },
   {
     label: 'Billing',
@@ -50,7 +50,7 @@ const platformDoes = [
   },
   {
     label: 'Observability',
-    description: 'Transaction traces, delivery confirmations, and audit logs',
+    description: 'Delivery receipts and signed audit entries for every outbound gateway message',
   },
 ];
 
@@ -58,21 +58,16 @@ const platformDoesNot = [
   {
     label: 'Store data',
     description:
-      'No raw datasets ever transit ai.market servers. Payloads flow only between buyer and seller endpoints.',
+      'Purchased file bytes go from the seller gateway directly to the buyer, without passing through ai.market.',
   },
   {
-    label: 'Proxy requests',
-    description: 'Compute and data requests flow directly between buyer and seller nodes',
-  },
-  {
-    label: 'Access payloads',
-    description:
-      'Delivery tokens are opaque to the platform - only the endpoints can decrypt them',
+    label: 'Serve files',
+    description: 'The seller gateway serves purchased files through the seller’s HTTPS door',
   },
   {
     label: 'Lock in sellers',
     description:
-      'AIM Data is an open, self-hosted tool - sellers own their infrastructure',
+      'AIM Data is an open-source Docker gateway that sellers run on their own infrastructure',
   },
 ];
 
@@ -80,27 +75,22 @@ const securitySections = [
   {
     label: 'DEVICE IDENTITY',
     description:
-      "Every AIM Data install generates an Ed25519 keypair locally during first setup. The private key is stored in a passphrase-protected keystore on the install - it never leaves the operator's infrastructure. The corresponding public key is registered with ai.market during enrollment. All subsequent operations - publishing listings, signing delivery receipts, reporting traces - are authenticated by Ed25519 signatures verified against the registered public key.",
+      'Sellers get a one-time pairing code and Docker Compose file in Sell Data > Gateways. The gateway runs without admin rights and with read-only file access.',
   },
   {
-    label: 'TRUST CHANNEL',
+    label: 'SIGNED PERMISSIONS',
     description:
-      'Communication between nodes and the platform uses W3C Verifiable Credentials with Ed25519Signature2020 proofs. Every message in the trust channel is wrapped in a signed credential envelope containing the event payload, a cryptographic signature, a timestamp, and a replay-prevention nonce. The platform maintains an Ed25519 signing key and an X25519 key exchange key for secure bidirectional communication.',
+      'ai.market signs file-specific download permissions. The seller gateway checks each signature, file version, expiry, and local offer rules before serving bytes.',
   },
   {
-    label: 'DATA AT REST',
+    label: 'WHAT LEAVES THE GATEWAY',
     description:
-      'API keys are encrypted using Fernet symmetric encryption (AES-128-CBC with HMAC-SHA256 authentication), with keys derived via HKDF from the platform secret. TOTP secrets for two-factor authentication use AES-256-GCM authenticated encryption. Passwords are hashed with bcrypt. No raw data payloads are ever stored on the platform.',
+      'Opaque file IDs and keyed commitments leave automatically, with an alias only if the seller sets one. After confirmation, structure and raw SHA-256 leave. No data values go to ai.market in these messages. The gateway sends delivery receipts and signed audit entries for every outbound message. The seller may separately publish a public sample.',
   },
   {
-    label: 'TRANSPORT SECURITY',
+    label: 'NETWORK BOUNDARY',
     description:
-      'All API traffic is served over HTTPS with TLS. Platform JWTs use HMAC-SHA256 signing for session tokens. Device-to-platform authentication uses Ed25519-signed JWTs - a separate, stronger signing mechanism than the platform session tokens. Key rotation is supported with a 24-hour grace period to prevent service interruption during rollover.',
-  },
-  {
-    label: 'TRUST SCORING',
-    description:
-      'Each node maintains a dynamic trust score computed from uptime history, key rotation compliance, successful delivery confirmations, and behavioral signals over a rolling 30-day window. Trust scores are visible to buyers and influence search ranking.',
+      'The seller restricts gateway egress to api.ai.market:443 with a restricted proxy or firewall and DNS. The gateway reports open egress through its canary; ai.market blocks publishing and new permissions until the check passes.',
   },
 ];
 
@@ -112,13 +102,13 @@ const stackRows = [
   },
   {
     component: 'AIM Data',
-    role: 'Dataset management, local AI profiling, P2P delivery. Gateway features for buyers and builders - discovery, authentication, and local metering - unlock in the same install.',
-    operator: 'Sellers, buyers, and builders (self-hosted)',
+    role: 'Lists seller files in place, describes confirmed files, and serves purchased files directly to buyers.',
+    operator: 'Sellers (self-hosted)',
   },
   {
     component: 'allAI',
-    role: 'Embedded AI for metadata generation and quality scoring',
-    operator: 'Runs inside AIM Data',
+    role: 'Website listing assistance',
+    operator: 'ai.market',
   },
 ];
 
@@ -161,8 +151,8 @@ export default function ProtocolPage() {
               The ai.market Protocol
             </h1>
             <p className="mx-auto mt-6 max-w-3xl text-lg leading-8 text-gray-600 sm:text-xl">
-              A non-custodial marketplace protocol where data and compute assets are discovered
-              centrally but delivered peer-to-peer. The platform never touches your payloads.
+              Buyers find and purchase data on ai.market, then download purchased files directly
+              from the seller&apos;s HTTPS door. ai.market does not relay the file bytes.
             </p>
           </div>
         </div>
@@ -329,7 +319,7 @@ export default function ProtocolPage() {
               Browse the Marketplace
             </Link>
             <Link
-              href="/download"
+              href="/sell-data"
               className="inline-flex items-center justify-center rounded-lg border border-[#0F6E56] bg-white px-6 py-3 text-sm font-semibold text-[#0F6E56] transition-colors hover:bg-[#E1F5EE]"
             >
               Start Selling

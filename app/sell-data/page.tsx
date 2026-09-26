@@ -5,11 +5,11 @@ import SellDataCta from '@/components/SellDataCta';
 export const metadata: Metadata = {
   title: { absolute: 'Sell data on ai.market' },
   description:
-    'Sell data from your own AWS S3 or Cloudflare R2 bucket, or from your own machine with AIM Data. Review and publish your listing on ai.market.',
+    'Sell data from your own AWS S3 or Cloudflare R2 bucket, or through the AIM Data gateway on your infrastructure. Manage your listing on ai.market.',
   openGraph: {
     title: 'Sell data on ai.market',
     description:
-      'Sell data from your own AWS S3 or Cloudflare R2 bucket, or from your own machine with AIM Data. Review and publish your listing on ai.market.',
+      'Sell data from your own AWS S3 or Cloudflare R2 bucket, or through the AIM Data gateway on your infrastructure. Manage your listing on ai.market.',
     url: 'https://ai.market/sell-data',
     siteName: 'ai.market',
     images: ['/og/sell-data.png'],
@@ -19,7 +19,7 @@ export const metadata: Metadata = {
     card: 'summary_large_image',
     title: 'Sell data on ai.market',
     description:
-      'Sell data from your own AWS S3 or Cloudflare R2 bucket, or from your own machine with AIM Data. Review and publish your listing on ai.market.',
+      'Sell data from your own AWS S3 or Cloudflare R2 bucket, or through the AIM Data gateway on your infrastructure. Manage your listing on ai.market.',
     images: ['/og/sell-data.png'],
   },
 };
@@ -30,7 +30,7 @@ const SELL_DATA_JSONLD = {
   name: 'Sell data on ai.market',
   url: 'https://ai.market/sell-data',
   description:
-    'Sell data from your own AWS S3 or Cloudflare R2 bucket, or from your own machine with AIM Data. Review and publish your listing on ai.market.',
+    'Sell data from your own AWS S3 or Cloudflare R2 bucket, or through the AIM Data gateway on your infrastructure. Manage your listing on ai.market.',
   provider: {
     '@type': 'Organization',
     name: 'ai.market',
@@ -47,7 +47,7 @@ const steps = [
   {
     title: 'YOUR DATA STAYS UNDER YOUR CONTROL',
     description:
-      'Keep your data in your own cloud bucket or on your own machine. Review and approve the prepared listing before you publish. When a sale closes, buyers download directly from your bucket through time-limited links, or AIM Data delivers it peer-to-peer over an encrypted connection. ai.market never stores your data.',
+      'Keep your files in your own cloud bucket or on your own infrastructure. The gateway sends opaque inventory automatically; you confirm each file before it sends structure. Buyers download purchases directly from your bucket or gateway.',
   },
   {
     title: "YOU DON'T CHASE LEADS",
@@ -60,7 +60,7 @@ const features = [
   {
     title: 'Your choice of hosting.',
     description:
-      'Connect your AWS S3 or Cloudflare R2 bucket read-only in the Seller Workspace, with nothing to install. Or run AIM Data on your own machine, where profiling, PII scanning, and quality scoring happen locally.',
+      'Connect your AWS S3 or Cloudflare R2 bucket read-only in Seller Workspace, or run the open-source AIM Data gateway with Docker on your own infrastructure.',
   },
   {
     title: 'AI-assisted listings.',
@@ -68,9 +68,9 @@ const features = [
       'allAI writes the metadata, generates the listing description, and tags the data for discovery by buyers and AI agents.',
   },
   {
-    title: 'Honest PII signals.',
+    title: 'Control what you share.',
     description:
-      'PII scans surface to buyers as one of three states: passed, flagged, or not run. We do not fake clean scans for unscanned data.',
+      'The gateway sends opaque inventory automatically. After you confirm a file, it sends structure and SHA-256, with no data values. You can separately publish a public sample.',
   },
   {
     title: 'Stripe payouts.',
@@ -133,7 +133,7 @@ export default function SellDataPage() {
               List once. Get found everywhere.
             </h1>
             <p className="mt-5 max-w-3xl text-lg leading-8 text-gray-600">
-              Your data stays in your own cloud bucket or on your own machine. Your listing travels the world. Every listing is built to be found by AI assistants and search engines globally, so buyers discover your data without ever visiting ai.market.
+              Your files stay in your own cloud bucket or on your own infrastructure. Manage the listing on ai.market so buyers can find it.
             </p>
             <SellDataCta variant="hero" />
           </div>
@@ -169,14 +169,19 @@ export default function SellDataPage() {
                 I will host it on my own infrastructure.
               </h3>
               <p className="mt-4 text-base leading-7 text-gray-600">
-                Install AIM Data on your own machine or server. It runs sandboxed, profiles your
-                data, scans for PII, scores quality locally and writes the listing. You review,
-                approve and publish.
+                Run the small open-source AIM Data gateway with Docker on your own infrastructure.
+                It sends opaque file IDs and keyed commitments automatically, with your alias if set.
+                Confirm each file before it sends column names, types, row count, bucketed null rates
+                and distinct counts, and raw SHA-256. No data values go to ai.market in these
+                messages. You can separately publish a public sample on your listing. The gateway
+                sends delivery receipts and signed audit entries for every outbound message.
               </p>
               <p className="mt-4 mb-6 text-base leading-7 text-gray-600">
-                AIM Data must run all the time. It is the gateway that delivers your data
-                peer-to-peer, encrypted, to the buyer when a sale closes. Your data stays on
-                your machine until delivery. ai.market never stores your data.
+                The gateway refuses to start as root or the wrong user, with a writable root filesystem,
+                any capability, no-new-privileges off, or a mounted socket. You must restrict outbound
+                access to api.ai.market:443 with a restricted proxy or firewall and DNS. Its egress
+                canary reports open access, which blocks publishing and new permissions. Buyers
+                download purchases directly from your gateway.
               </p>
               <SellDataCta variant="self-hosted" className="mt-auto self-start" />
             </article>
@@ -205,12 +210,6 @@ export default function SellDataPage() {
               />
             ))}
           </ol>
-          <p className="mt-8 text-base leading-7 text-gray-600">
-            For AIM Data listings, the local scan earns the buyer-facing verified shape label.{' '}
-            <Link href="/verified" className="font-semibold text-[#0F6E56] hover:text-[#0c5a47]">
-              How the verified label works →
-            </Link>
-          </p>
         </div>
       </section>
 

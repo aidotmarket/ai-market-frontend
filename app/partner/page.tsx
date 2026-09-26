@@ -62,24 +62,24 @@ const dataPartnerSteps = [
 
 const technologyPartnerSteps = [
   {
-    title: 'Install AIM Data',
+    title: 'Add a gateway',
     description:
-      'Run AIM Data with the CLI, SDK, MCP server, or Docker inside the environment that will connect your platform to ai.market.',
+      'Use Sell Data > Gateways to get a one-time pairing code and Docker Compose file for the open-source gateway.',
   },
   {
     title: 'Authenticate',
     description:
-      'Each instance uses its own Ed25519 keypair. The private key never leaves the machine.',
+      'Pair your gateway from your own infrastructure.',
   },
   {
-    title: 'Search the catalog',
+    title: 'Manage your listings',
     description:
-      'Query ai.market by capability, schema, license, price, and quality score through AIM Data’s developer surface.',
+      'Manage listings, prices, and licences on the ai.market website.',
   },
   {
-    title: 'Connect peer-to-peer',
+    title: 'Deliver directly',
     description:
-      'Delivery uses a signed delivery token and an encrypted P2P channel. Payloads never touch ai.market.',
+      'A buyer downloads a purchase directly from your gateway.',
   },
 ];
 
@@ -87,22 +87,22 @@ const comparisonRows = [
   {
     area: 'Discovery and search',
     market: 'Catalog indexing, marketplace search, listing pages, and request matching.',
-    node: 'Programmatic catalog access from your platform through AIM Data and the MCP API.',
+    node: 'Sends opaque inventory automatically and file structure after your confirmation.',
   },
   {
     area: 'Authentication',
     market: 'Account, partner, and transaction authorization for marketplace workflows.',
-    node: 'Per-instance Ed25519 identity, signed requests, and local private-key custody.',
+    node: 'Pairs to your seller account with a one-time code.',
   },
   {
     area: 'Billing and payouts',
     market: 'Checkout, marketplace billing records, partner accounting, and Stripe payouts.',
-    node: 'Transaction handoff and local entitlement checks after marketplace authorization.',
+    node: 'Serves purchased files directly to buyers.',
   },
   {
     area: 'Delivery channel',
     market: 'Signed delivery token issuance and delivery coordination.',
-    node: 'Encrypted peer-to-peer transfer between buyer and provider infrastructure.',
+    node: 'Direct buyer download from your gateway.',
   },
   {
     area: 'Dispute resolution',
@@ -111,12 +111,16 @@ const comparisonRows = [
   },
   {
     area: 'Raw data and payloads',
-    market: 'Does not receive raw payloads during AIM Data peer-to-peer delivery.',
-    node: 'Keeps raw data movement inside the encrypted P2P channel between peers.',
+    market: 'Does not receive purchased files during direct gateway delivery.',
+      node: 'Serves purchased files directly to buyers.',
   },
 ];
 
-const requirements = ['Python 3.11+ or Docker', '4 GB RAM minimum', 'Outbound network access to ai.market API + P2P connectivity'];
+const requirements = [
+  'Docker and Docker Compose on Linux',
+  'Deny-all egress except api.ai.market:443, using a restricted proxy or firewall and DNS',
+  'A seller reverse proxy serving the gateway door over HTTPS',
+];
 
 const specialistTypes = [
   {
@@ -132,7 +136,7 @@ const specialistTypes = [
   {
     title: 'Deployment specialists.',
     description:
-      'You install and run AIM Data and vectorAIz for clients. You wire up their data sources, get them listed, and keep it running. Setup plus managed service, billed your way.',
+      'You help clients run the AIM Data gateway with Docker on their infrastructure and manage their listings on ai.market.',
   },
   {
     title: 'Sourcing specialists.',
@@ -195,7 +199,7 @@ export default function PartnerPage() {
               <p className="text-sm font-semibold uppercase tracking-[0.16em] text-[#0F6E56]">Technology Partners</p>
               <h2 className="mt-3 text-xl font-bold tracking-tight text-gray-900 group-hover:text-[#3F51B5]">I want to integrate</h2>
               <p className="mt-3 text-sm leading-6 text-gray-600">
-                Connect your platform to ai.market through AIM Data and marketplace APIs.
+                Run the AIM Data gateway on your infrastructure to sell your files through ai.market.
               </p>
             </Link>
 
@@ -249,23 +253,23 @@ export default function PartnerPage() {
           <div className="max-w-4xl">
             <p className="text-sm font-semibold uppercase tracking-[0.18em] text-[#0F6E56]">Technology Partners</p>
             <h2 id="technology-partner-heading" className="mt-3 text-3xl font-extrabold tracking-tight text-gray-900">
-              AIM Data connects your platform to ai.market.
+              Run an AIM Data gateway on your infrastructure.
             </h2>
             <p className="mt-5 text-lg leading-8 text-gray-600">
-              You operate a platform that needs ai.market access. AIM Data is the single conduit.
+              The open-source gateway sends opaque file IDs and keyed commitments automatically, with your alias if set. After you confirm a file, it sends column names, types, row count, bucketed null rates and distinct counts, and raw SHA-256. No data values go to ai.market in these messages. You can separately publish a public sample on your listing.
             </p>
             <blockquote className="mt-8 rounded-2xl border border-[#D8EEE6] bg-white p-6 text-base font-semibold leading-7 text-gray-900 shadow-sm">
-              AIM Data is the local integration layer for partner platforms. It authenticates an instance, exposes a developer surface with CLI, SDK, MCP server, and P2P flows, searches ai.market, and coordinates encrypted peer-to-peer delivery so raw payloads move directly between peers.
+              The gateway refuses to start as root or the wrong user, with a writable root filesystem, any capability, no-new-privileges off, or a mounted socket. You must restrict outbound access to api.ai.market:443 with a restricted proxy or firewall and DNS. Its egress canary reports open access, which blocks publishing and new permissions. Buyers download purchases directly through your HTTPS door.
             </blockquote>
             <p className="mt-5 text-sm leading-6 text-gray-600">
-              Technical runbook:{' '}
+              Open-source project:{' '}
               <a
-                href="https://github.com/aidotmarket/runbooks/blob/main/aim-data.md"
+                href="https://github.com/aidotmarket/aim-data-gateway"
                 className="font-semibold text-[#3F51B5] hover:text-[#303F9F]"
                 rel="noreferrer"
                 target="_blank"
               >
-                AIM Data runbook
+                Gateway source
               </a>
             </p>
           </div>
@@ -300,10 +304,10 @@ export default function PartnerPage() {
                   Talk to a Technology Partner manager →
                 </a>
                 <Link
-                  href="/aim-data"
+                  href="/dashboard/gateways"
                   className="inline-flex items-center justify-center rounded-lg border border-[#3F51B5] px-5 py-3 text-sm font-semibold text-[#3F51B5] transition-colors hover:bg-[#E8EAF6] focus:outline-none focus:ring-2 focus:ring-[#3F51B5] focus:ring-offset-2"
                 >
-                  Install AIM Data →
+                  Open Gateways →
                 </Link>
               </div>
             </aside>

@@ -22,7 +22,7 @@ function refusal(failure: unknown): string | null {
   if (!axios.isAxiosError(failure)) return null;
   const detail = typeof failure.response?.data?.detail === 'string' ? failure.response.data.detail : undefined;
   if (detail === 'verified_sample_unavailable_above_25_column_cap') return 'A verified sample is not available for a dataset above the approved 25-column cap. This is a product limit, not an error in your dataset.';
-  if (detail === 'dictionary_must_match_committed_dataset_schema_republish_through_aim_data') return 'The dictionary must match the committed dataset schema. Republish through AIM Data to restore agreement.';
+  if (detail === 'dictionary_must_match_committed_dataset_schema_republish_through_aim_data') return 'The dictionary must match the committed dataset schema. Update the source file and publish a new listing version to restore agreement.';
   return null;
 }
 
@@ -45,10 +45,10 @@ function SellerPreviewChrome({summary, selectedFields, manifestReceived}: {
       <ul className="mt-1 space-y-1 text-sm text-gray-700">{attribution.map(group => <li key={group.key}>{provenanceLabels[group.key]}: {group.labels.join(', ')}</li>)}</ul>
     </div>
     <div><h4 className="text-sm font-medium text-gray-900">Selected sample fields</h4>
-      <p className="text-xs text-gray-600">Read-only here. Field selection is set and signed in AIM Data.</p>
+      <p className="text-xs text-gray-600">Read-only here. Field selection belongs to this listing&apos;s signed sample.</p>
       {manifestReceived && selectedFields.length > 0 ? <ul className="mt-1 list-inside list-disc text-sm text-gray-700">{selectedFields.map(field => <li key={field} className="font-mono">{field}</li>)}</ul>
         : manifestReceived ? <p className="mt-1 text-sm text-gray-700">No fields are selected for a sample.</p>
-          : <p className="mt-1 text-sm text-gray-700">The current selection is not shown here. Field selection is set and signed in AIM Data.</p>}
+          : <p className="mt-1 text-sm text-gray-700">The current selection is not shown here. Field selection belongs to this listing&apos;s signed sample.</p>}
     </div>
   </aside>;
 }
@@ -132,7 +132,7 @@ export default function SellerAtAGlance({listingId, slug, active = true, revisio
       {preview.state !== 'approved' && !hasBuyerFields && <p className="text-sm text-gray-700">Nothing to show buyers yet. Add more listing details or regenerate.</p>}
       <SellerPreviewChrome summary={preview.at_a_glance} selectedFields={selectedFields} manifestReceived={manifestReceived} />
       <SellerEnrichmentControls listingId={listingId} active={active} onSaved={() => setRetry(value => value + 1)} />
-      <p className="text-sm text-gray-700">Manage signed sample approvals in AIM Data. The block below shows exactly what buyers see; on the listing page, the sample appears after the schema.</p>
+      <p className="text-sm text-gray-700">The block below shows exactly what buyers see; on the listing page, the sample appears after the schema.</p>
       <div data-testid="buyer-preview" className="space-y-4">
         <BuyerPreviewContent summary={preview.at_a_glance} slug={slug}
           listingId={active && preview.state === 'approved' ? listingId : undefined} onManifest={receiveManifest} />

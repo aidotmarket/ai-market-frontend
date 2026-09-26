@@ -123,7 +123,7 @@ export default function FindDataPage() {
       <section className="bg-white py-12 sm:py-16" aria-label="Related marketplace paths">
         <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
           <p className="rounded-2xl border border-gray-200 bg-white p-6 text-sm leading-7 text-gray-600 shadow-sm">
-            WHAT EVERY LISTING GIVES YOU - Scanned for PII before it ever goes live. Scored for quality. Described in structured metadata your tools and your agents can read. And when you buy, delivery is peer-to-peer from the seller&apos;s infrastructure, encrypted end to end. You might also want to{' '}
+            Browse listings and review the details each seller provides. For gateway listings, the seller confirms the file before sharing its structural description, and buyers download purchases directly from the seller&apos;s gateway. You might also want to{' '}
             <Link href="/sell-data" className="font-semibold text-[#3F51B5] hover:text-[#303F9F]">
               Sell Data
             </Link>

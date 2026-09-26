@@ -24,7 +24,7 @@ describe('SellDataCta', () => {
     render(<SellDataCta variant={variant} />);
 
     expect(screen.getByRole('link', { name: 'Create Your Account' }).getAttribute('href')).toBe('/register');
-    expect(screen.queryByRole('link', { name: 'Set up AIM Data' })).toBeNull();
+    expect(screen.queryByRole('link', { name: 'Set up a gateway' })).toBeNull();
     expect(screen.queryByRole('link', { name: 'Your listings' })).toBeNull();
   });
 
@@ -42,18 +42,18 @@ describe('SellDataCta', () => {
     render(<SellDataCta variant="final" />);
 
     expect(screen.getByRole('link', { name: 'Open Seller Workspace' }).getAttribute('href')).toBe('/dashboard/seller-workspace');
-    expect(screen.getByRole('link', { name: 'Set up AIM Data' }).getAttribute('href')).toBe('/aim-data');
+    expect(screen.getByRole('link', { name: 'Set up a gateway' }).getAttribute('href')).toBe('/dashboard/gateways');
     expect(screen.getByRole('link', { name: 'Your listings' }).getAttribute('href')).toBe('/dashboard/listings');
     expect(screen.queryByRole('link', { name: 'Create Your Account' })).toBeNull();
     expect(screen.getByRole('heading', { name: 'List your data' })).toBeTruthy();
-    expect(screen.getByText('Connect your cloud bucket or set up AIM Data on your own infrastructure. Review your listing, approve it, and publish.')).toBeTruthy();
+    expect(screen.getByText('Connect your cloud bucket or set up an AIM Data gateway. Manage your listing, prices, licences, and payouts here.')).toBeTruthy();
   });
 
   it('offers both paths in the authenticated inline variant', () => {
     mocks.auth.isAuthenticated = true;
     render(<SellDataCta variant="inline" />);
     expect(screen.getByRole('link', { name: 'Open Seller Workspace' }).getAttribute('href')).toBe('/dashboard/seller-workspace');
-    expect(screen.getByRole('link', { name: 'Set up AIM Data' }).getAttribute('href')).toBe('/aim-data');
+    expect(screen.getByRole('link', { name: 'Set up a gateway' }).getAttribute('href')).toBe('/dashboard/gateways');
     expect(screen.getByRole('link', { name: 'Your listings' }).getAttribute('href')).toBe('/dashboard/listings');
   });
 
@@ -64,7 +64,7 @@ describe('SellDataCta', () => {
 
     expect(screen.getByRole('link', { name: 'How it works' }).getAttribute('href')).toBe('#how-it-works');
     expect(screen.getByRole('link', { name: 'Open Seller Workspace' }).getAttribute('href')).toBe('/dashboard/seller-workspace');
-    expect(screen.getByRole('link', { name: 'Set up AIM Data' }).getAttribute('href')).toBe('/aim-data');
+    expect(screen.getByRole('link', { name: 'Set up a gateway' }).getAttribute('href')).toBe('/dashboard/gateways');
     expect(screen.getByRole('link', { name: 'Your listings' }).getAttribute('href')).toBe('/dashboard/listings');
     expect(screen.queryByRole('link', { name: 'Create Your Account' })).toBeNull();
   });

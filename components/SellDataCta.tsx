@@ -32,8 +32,8 @@ function AuthenticatedCtas({
       <Link href="/dashboard/seller-workspace" className={primaryClassName}>
         Open Seller Workspace
       </Link>
-      <Link href="/aim-data" className={secondaryClassName}>
-        Set up AIM Data
+      <Link href="/dashboard/gateways" className={secondaryClassName}>
+        Set up a gateway
       </Link>
       <Link href="/dashboard/listings" className={secondaryClassName}>
         Your listings
@@ -47,14 +47,16 @@ export default function SellDataCta({ variant, className }: SellDataCtaProps) {
 
   if (variant === 'cloud' || variant === 'self-hosted') {
     const href = variant === 'self-hosted'
-      ? '/aim-data'
+      ? isAuthenticated
+        ? '/dashboard/gateways'
+        : `/register?redirect=${encodeURIComponent('/dashboard/gateways')}`
       : isAuthenticated
         ? '/dashboard/seller-workspace'
         : `/register?redirect=${encodeURIComponent('/dashboard/seller-workspace')}`;
 
     return (
       <Link href={href} className={withClassName(greenPrimaryClassName, className)}>
-        {variant === 'self-hosted' ? 'Set up AIM Data' : isAuthenticated ? 'Open Seller Workspace' : 'Create Your Account'}
+        {variant === 'self-hosted' ? 'Set up a gateway' : isAuthenticated ? 'Open Seller Workspace' : 'Create Your Account'}
       </Link>
     );
   }
@@ -84,7 +86,7 @@ export default function SellDataCta({ variant, className }: SellDataCtaProps) {
         </h2>
         <p className="mt-4 max-w-3xl text-base leading-7 text-gray-600">
           {isAuthenticated
-            ? 'Connect your cloud bucket or set up AIM Data on your own infrastructure. Review your listing, approve it, and publish.'
+            ? 'Connect your cloud bucket or set up an AIM Data gateway. Manage your listing, prices, licences, and payouts here.'
             : 'Start as a seller. List free and pay nothing until a sale clears.'}
         </p>
         {isAuthenticated ? (
