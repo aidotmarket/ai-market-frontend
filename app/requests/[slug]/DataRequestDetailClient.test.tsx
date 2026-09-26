@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 
-import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { act, cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type React from 'react';
 import type { DataRequestDetail, User } from '@/types';
@@ -260,6 +260,64 @@ describe('DataRequestDetailClient authenticated fallback loading', () => {
     });
   });
 
+  it('keeps the saved text and fresh consent hash when a pre-edit GET finishes after PATCH', async () => {
+    const old = makeOwnerRequest({
+      title: 'Old public request',
+      public_consent_status: 'consented',
+      publication_decision: 'eligible',
+      publication_reason: 'eligible',
+    });
+    const saved = makeOwnerRequest({
+      title: 'Corrected request',
+      description: 'Corrected public description for this request.',
+      public_content_hash: 'b'.repeat(64),
+      publication_reason: 'public_content_changed',
+      publication_next_action: 'Confirm the newly saved public text.',
+    });
+    let finishGet!: (value: DataRequestDetail) => void;
+    let finishPatch!: (value: DataRequestDetail) => void;
+    mocks.getDataRequest.mockReturnValue(new Promise<DataRequestDetail>((resolve) => { finishGet = resolve; }));
+    mocks.updateDataRequest.mockReturnValue(new Promise<DataRequestDetail>((resolve) => { finishPatch = resolve; }));
+    mocks.confirmDataRequestPublication.mockResolvedValue(saved);
+
+    render(<DataRequestDetailClient slug={old.slug} initialRequest={old} />);
+    await waitFor(() => expect(mocks.getDataRequest).toHaveBeenCalledTimes(1));
+    fireEvent.click(screen.getByRole('button', { name: 'Edit request' }));
+    expect(screen.queryByRole('button', { name: 'Delete' })).toBeNull();
+    expect(screen.queryByRole('button', { name: 'Make this request private' })).toBeNull();
+    fireEvent.change(screen.getByRole('textbox', { name: 'Title' }), { target: { value: saved.title } });
+    fireEvent.change(screen.getByRole('textbox', { name: 'Description' }), { target: { value: saved.description } });
+    fireEvent.click(screen.getByRole('button', { name: 'Save changes' }));
+    expect(screen.getByRole('button', { name: 'Saving...' })).toHaveProperty('disabled', true);
+    expect(screen.queryByRole('button', { name: 'Delete' })).toBeNull();
+    expect(screen.queryByRole('button', { name: 'Make this request private' })).toBeNull();
+    await act(async () => { finishPatch(saved); });
+    expect(await screen.findByRole('heading', { name: saved.title })).not.toBeNull();
+    await act(async () => { finishGet(old); });
+
+    expect(screen.getByRole('heading', { name: saved.title })).not.toBeNull();
+    expect(screen.getByText(saved.description)).not.toBeNull();
+    expect(screen.getByText('Public visibility: Private')).not.toBeNull();
+    expect(screen.getByText('Reason: public content changed')).not.toBeNull();
+    expect(screen.queryByText('Public visibility: Public')).toBeNull();
+    fireEvent.click(screen.getByRole('button', { name: 'Make this request public' }));
+    await waitFor(() => {
+      expect(mocks.confirmDataRequestPublication).toHaveBeenCalledWith(
+        old.id, 'b'.repeat(64), 'request-publication-v1'
+      );
+    });
+  });
+
+  it('hides Open and Delete while a draft edit is open', async () => {
+    const draft = makeDraft();
+    mocks.getDataRequest.mockResolvedValue(draft);
+    render(<DataRequestDetailClient slug={draft.slug} initialRequest={draft} />);
+    fireEvent.click(screen.getByRole('button', { name: 'Edit request' }));
+    expect(screen.queryByRole('button', { name: 'Open request' })).toBeNull();
+    expect(screen.queryByRole('button', { name: 'Delete' })).toBeNull();
+    await waitFor(() => expect(mocks.getDataRequestResponses).toHaveBeenCalledWith(draft.id));
+  });
+
   it('cancels an owner edit without sending a mutation', async () => {
     const request = makeDraft();
     mocks.getDataRequest.mockResolvedValue(request);
@@ -283,7 +341,7 @@ describe('DataRequestDetailClient authenticated fallback loading', () => {
       target: { value: 'A corrected description with no contact details.' },
     });
     fireEvent.click(screen.getByRole('button', { name: 'Save changes' }));
-    expect(await screen.findByRole('alert')).toHaveProperty('textContent', 'Could not save request. Check your connection and try again.');
+    expect(await screen.findByRole('alert')).toHaveProperty('textContent', 'Could not save request. Please try again.');
     expect(screen.getByRole('textbox', { name: 'Description' })).toHaveProperty('value', 'A corrected description with no contact details.');
     expect(screen.getByText('Public visibility: Private')).not.toBeNull();
     expect(screen.queryByRole('button', { name: 'Make this request public' })).toBeNull();
@@ -296,6 +354,8 @@ describe('DataRequestDetailClient authenticated fallback loading', () => {
     mocks.getDataRequest.mockResolvedValue(request);
     const view = render(<DataRequestDetailClient slug={request.slug} initialRequest={request} />);
     expect(screen.queryByRole('button', { name: 'Edit request' })).toBeNull();
+    await act(async () => { await mocks.getDataRequest.mock.results[0].value; });
+    expect(mocks.getDataRequestResponses).not.toHaveBeenCalled();
     view.unmount();
 
     mocks.auth.user = owner;
@@ -303,6 +363,9 @@ describe('DataRequestDetailClient authenticated fallback loading', () => {
     mocks.getDataRequest.mockResolvedValue(closed);
     render(<DataRequestDetailClient slug={closed.slug} initialRequest={closed} />);
     expect(screen.queryByRole('button', { name: 'Edit request' })).toBeNull();
+    await act(async () => { await mocks.getDataRequest.mock.results[1].value; });
+    await act(async () => { await mocks.getDataRequestResponses.mock.results[0].value; });
+    expect(mocks.getDataRequestResponses).toHaveBeenCalledWith(closed.id);
     expect(mocks.updateDataRequest).not.toHaveBeenCalled();
   });
 

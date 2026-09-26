@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState, useCallback } from 'react';
+import { useEffect, useState, useCallback, useRef } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { useAuthStore } from '@/store/auth';
@@ -63,6 +63,7 @@ export default function DataRequestDetailClient({
   const [editFormats, setEditFormats] = useState('');
   const [editRegulatory, setEditRegulatory] = useState('');
   const [editProvenance, setEditProvenance] = useState('');
+  const loadGeneration = useRef(0);
 
   // Response form
   const [proposal, setProposal] = useState('');
@@ -73,7 +74,7 @@ export default function DataRequestDetailClient({
   const isOwner = user && request && user.id === request.buyer_id;
 
   function startEditing() {
-    if (!isOwner || !request || !['draft', 'open'].includes(request.status)) return;
+    if (!isOwner || !request || !['draft', 'open'].includes(request.status) || publishing || deleting || updatingPublication) return;
     setEditTitle(request.title || '');
     setEditDescription(request.description);
     setEditCategories(request.categories.join(', '));
@@ -86,10 +87,11 @@ export default function DataRequestDetailClient({
 
   async function handleSaveEdit(e: React.FormEvent) {
     e.preventDefault();
-    if (!isOwner || !request || !['draft', 'open'].includes(request.status) || savingEdit) return;
+    if (!isOwner || !request || !['draft', 'open'].includes(request.status) || !editing || savingEdit || publishing || deleting || updatingPublication) return;
     const splitList = (value: string) => value.split(',').map((item) => item.trim()).filter(Boolean);
     setSavingEdit(true);
     setEditError('');
+    loadGeneration.current++;
     try {
       const updated = await updateDataRequest(request.id, {
         title: editTitle.trim(),
@@ -99,6 +101,7 @@ export default function DataRequestDetailClient({
         regulatory_requirements: splitList(editRegulatory),
         provenance_requirements: editProvenance.trim(),
       });
+      loadGeneration.current++;
       setRequest(updated);
       setEditing(false);
       toast('Request changes saved. Review the public visibility status before confirming.', 'success');
@@ -111,7 +114,7 @@ export default function DataRequestDetailClient({
               const field = item.loc?.filter((part) => part !== 'body').join('.') || 'Field';
               return `${field}: ${item.msg || 'invalid value'}`;
             }).join('; ')
-          : 'Check your connection and try again.';
+          : 'Please try again.';
       setEditError(`Could not save request. ${message}`);
     } finally {
       setSavingEdit(false);
@@ -119,35 +122,41 @@ export default function DataRequestDetailClient({
   }
 
   const loadData = useCallback(async () => {
+    const generation = ++loadGeneration.current;
+    const isCurrent = () => generation === loadGeneration.current;
     try {
       const data = await getDataRequest(slug);
+      if (!isCurrent()) return;
       setRequest(data);
 
       // Load responses if owner
       if (data && user && user.id === data.buyer_id) {
         try {
           const resps = await getDataRequestResponses(data.id);
-          setResponses(resps);
+          if (isCurrent()) setResponses(resps);
         } catch {
           // May not have permission
         }
       }
     } catch {
-      setRequest(null);
+      if (isCurrent()) setRequest(null);
     } finally {
-      setLoading(false);
+      if (isCurrent()) setLoading(false);
     }
   }, [slug, user]);
 
   useEffect(() => {
     loadData();
+    return () => { loadGeneration.current++; };
   }, [loadData]);
 
   async function handlePublish() {
-    if (!request) return;
+    if (!request || editing || savingEdit || publishing || deleting || updatingPublication) return;
+    loadGeneration.current++;
     setPublishing(true);
     try {
       const updated = await publishDataRequest(request.id);
+      loadGeneration.current++;
       setRequest(updated);
       toast(
         updated.publication_decision === 'eligible'
@@ -167,7 +176,8 @@ export default function DataRequestDetailClient({
   }
 
   async function handleDelete() {
-    if (!request) return;
+    if (!request || editing || savingEdit || publishing || deleting || updatingPublication) return;
+    loadGeneration.current++;
     setDeleting(true);
     try {
       await deleteDataRequest(request.id);
@@ -185,7 +195,8 @@ export default function DataRequestDetailClient({
   }
 
   async function handleConfirmPublication() {
-    if (!request?.public_content_hash || !request.required_public_consent_policy_version) return;
+    if (!request?.public_content_hash || !request.required_public_consent_policy_version || editing || savingEdit || publishing || deleting || updatingPublication) return;
+    loadGeneration.current++;
     setUpdatingPublication(true);
     try {
       const updated = await confirmDataRequestPublication(
@@ -193,6 +204,7 @@ export default function DataRequestDetailClient({
         request.public_content_hash,
         request.required_public_consent_policy_version
       );
+      loadGeneration.current++;
       setRequest(updated);
       toast(
         updated.publication_decision === 'eligible'
@@ -212,10 +224,12 @@ export default function DataRequestDetailClient({
   }
 
   async function handleWithdrawPublication() {
-    if (!request) return;
+    if (!request || editing || savingEdit || publishing || deleting || updatingPublication) return;
+    loadGeneration.current++;
     setUpdatingPublication(true);
     try {
       const updated = await withdrawDataRequestPublication(request.id);
+      loadGeneration.current++;
       setRequest(updated);
       toast('Your request is now private.', 'success');
     } catch (err) {
@@ -325,7 +339,7 @@ export default function DataRequestDetailClient({
       {/* Owner actions */}
       {isOwner && (
         <div className="flex gap-3 mb-6">
-          {(request.status === 'draft' || request.status === 'open') && !editing && (
+          {(request.status === 'draft' || request.status === 'open') && !editing && !publishing && !deleting && !updatingPublication && (
             <button
               type="button"
               onClick={startEditing}
@@ -334,7 +348,7 @@ export default function DataRequestDetailClient({
               Edit request
             </button>
           )}
-          {request.status === 'draft' && (
+          {request.status === 'draft' && !editing && (
             <button
               onClick={handlePublish}
               disabled={publishing}
@@ -349,13 +363,15 @@ export default function DataRequestDetailClient({
           >
             Refresh
           </Link>
-          <button
-            onClick={handleDelete}
-            disabled={deleting}
-            className="rounded-lg border border-red-300 px-4 py-2 text-sm font-medium text-red-700 hover:bg-red-50 disabled:opacity-50"
-          >
-            {deleting ? 'Deleting...' : 'Delete'}
-          </button>
+          {!editing && (
+            <button
+              onClick={handleDelete}
+              disabled={deleting || publishing || updatingPublication}
+              className="rounded-lg border border-red-300 px-4 py-2 text-sm font-medium text-red-700 hover:bg-red-50 disabled:opacity-50"
+            >
+              {deleting ? 'Deleting...' : 'Delete'}
+            </button>
+          )}
         </div>
       )}
 
@@ -433,7 +449,7 @@ export default function DataRequestDetailClient({
             </div>
           )}
 
-          {canWithdrawPublication && (
+          {canWithdrawPublication && !editing && (
             <div className="mt-4 border-t border-[#D8DDF4] pt-4">
               <p className="mb-3 text-sm text-gray-700">
                 You can remove this request from public discovery without deleting your work.
