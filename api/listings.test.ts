@@ -1,12 +1,20 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 const apiGet = vi.hoisted(() => vi.fn());
+const apiPost = vi.hoisted(() => vi.fn());
 
 vi.mock('./client', () => ({
-  api: { get: apiGet },
+  api: { get: apiGet, post: apiPost },
 }));
 
-const { getMarketplaceCategoryFacets } = await import('./listings');
+const { createDraftListing, getMarketplaceCategoryFacets } = await import('./listings');
+
+it('posts a typed draft to the listings endpoint', async () => {
+  const body = { title: 'Safe data', description: 'A useful data set', price: 0, model_provider: 'anthropic' as const, listing_type: 'raw' as const, schema_info: { row_count: 2, columns: [{ name: 'safe', type: 'integer' }] } };
+  apiPost.mockResolvedValueOnce({ data: { id: 'listing-1', status: 'draft' } });
+  await expect(createDraftListing(body)).resolves.toEqual({ id: 'listing-1', status: 'draft' });
+  expect(apiPost).toHaveBeenCalledWith('/listings/', body);
+});
 
 describe('getMarketplaceCategoryFacets', () => {
   beforeEach(() => {

@@ -34,6 +34,20 @@ export async function getListing(id: string): Promise<ListingDetail> {
   return res.data;
 }
 
+export interface CreateDraftListingInput {
+  title: string;
+  description: string;
+  price: number;
+  model_provider: 'anthropic';
+  listing_type: 'raw';
+  data_format?: 'csv' | 'json' | 'parquet';
+  schema_info: { row_count: number; columns: Array<{ name: string; type: string }> };
+}
+
+export async function createDraftListing(body: CreateDraftListingInput): Promise<{ id: string; status: 'draft' }> {
+  return (await api.post<{ id: string; status: 'draft' }>('/listings/', body)).data;
+}
+
 export async function getListingVersions(id: string): Promise<ListingVersion[]> {
   const res = await api.get<ListingVersion[]>(`/listings/${id}/versions`);
   return res.data;

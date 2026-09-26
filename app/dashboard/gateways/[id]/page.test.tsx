@@ -9,16 +9,18 @@ import type { SellerGateway } from '@/types/sellerGateway';
 
 const api = vi.hoisted(() => ({
   capabilities: vi.fn(), list: vi.fn(), get: vi.fn(), files: vi.fn(), file: vi.fn(), received: vi.fn(),
-  patch: vi.fn(), door: vi.fn(), ack: vi.fn(), revoke: vi.fn(), describe: vi.fn(),
+  patch: vi.fn(), door: vi.fn(), ack: vi.fn(), revoke: vi.fn(), describe: vi.fn(), createDraft: vi.fn(), saveSource: vi.fn(), push: vi.fn(),
 }));
 const route = vi.hoisted(() => ({ id: 'gateway-1' }));
-vi.mock('next/navigation', () => ({ useParams: () => ({ id: route.id }) }));
+vi.mock('next/navigation', () => ({ useParams: () => ({ id: route.id }), useRouter: () => ({ push: api.push }) }));
 vi.mock('next/link', () => ({ default: ({ children, href }: { children: React.ReactNode; href: string }) => <a href={href}>{children}</a> }));
 vi.mock('@/api/capabilities', () => ({ getCapabilities: api.capabilities }));
+vi.mock('@/api/listings', () => ({ createDraftListing: api.createDraft }));
 vi.mock('@/api/sellerGateways', () => ({
   listSellerGateways: api.list, getSellerGateway: api.get, listGatewayFiles: api.files, getGatewayFile: api.file,
   listReceivedMessages: api.received, patchSellerGateway: api.patch, startDoorCheck: api.door,
   acknowledgeGatewayIdentity: api.ack, revokeSellerGateway: api.revoke, describeGatewayFile: api.describe,
+  saveGatewayListingSource: api.saveSource,
   gatewayErrorDetails: (error: { response?: { data?: { error?: { details?: object } } } }) => error.response?.data?.error?.details ?? null,
 }));
 
@@ -33,10 +35,130 @@ beforeEach(() => {
   api.patch.mockResolvedValue(gateway); api.ack.mockResolvedValue({ ...gateway, identity_ack_at: '2026-01-01T00:00:00Z' });
   api.door.mockResolvedValue({ data: { door_check: { state: 'pending', checked_at: '2026-01-01T00:00:00Z', failure_code: null, certificate_flags: [] } }, retryAfter: 2 });
   api.describe.mockResolvedValue({ data: { ...file, description: { ...file.description, state: 'requested' } }, retryAfter: 10 });
+  api.createDraft.mockResolvedValue({ id: 'listing-1', status: 'draft' });
+  api.saveSource.mockResolvedValue({ type: 'gateway', gateway_id: 'gateway-1', file_ids: [file.file_id] });
   useAuthStore.setState({ hydrated: true, isAuthenticated: true, isLoading: false });
 });
 afterEach(() => { cleanup(); vi.useRealTimers(); });
 async function ready() { render(<GatewayPage />); await screen.findByText('Test gateway', { selector: 'h1' }); }
+
+const describedFile = { ...file, offerable: true, description: { ...file.description, state: 'described' as const, row_count: 2, columns: [{ name: 'safe', type: 'integer', null_rate_pct: 0, distinct_bucket: '2-10' }] } };
+
+it('creates a raw draft from selected offerable files, saves its source, then opens the editor', async () => {
+  const second = { ...describedFile, file_id: 'second', display_name: 'second.csv', description: { ...describedFile.description, row_count: 3 } };
+  api.files.mockResolvedValue({ files: [describedFile, second], next_cursor: null });
+  await ready();
+  fireEvent.click(screen.getByLabelText(`Select ${describedFile.display_name}`));
+  fireEvent.click(screen.getByLabelText('Select second.csv'));
+  fireEvent.click(screen.getByRole('button', { name: 'Create listing' }));
+  fireEvent.change(screen.getByLabelText('Title'), { target: { value: 'Safe data' } });
+  fireEvent.change(screen.getByLabelText('Description'), { target: { value: 'A useful data set' } });
+  fireEvent.change(screen.getByLabelText('Price'), { target: { value: '25' } });
+  fireEvent.click(screen.getByRole('button', { name: 'Create draft' }));
+  await waitFor(() => expect(api.push).toHaveBeenCalledWith('/dashboard/listings/listing-1/edit'));
+  expect(api.createDraft).toHaveBeenCalledWith({ title: 'Safe data', description: 'A useful data set', price: 25, model_provider: 'anthropic', listing_type: 'raw', data_format: 'csv', schema_info: { row_count: 5, columns: [{ name: 'safe', type: 'integer' }] } });
+  expect(api.saveSource).toHaveBeenCalledWith('listing-1', { type: 'gateway', gateway_id: 'gateway-1', file_ids: [describedFile.file_id, 'second'] });
+  expect(api.createDraft.mock.invocationCallOrder[0]).toBeLessThan(api.saveSource.mock.invocationCallOrder[0]);
+  expect(api.saveSource.mock.invocationCallOrder[0]).toBeLessThan(api.push.mock.invocationCallOrder[0]);
+});
+
+it.each([
+  ['application/json', 'json'],
+  ['application/x-parquet', 'parquet'],
+  ['application/vnd.apache.parquet', 'parquet'],
+])('sends %s as %s when the first selected file uses that media type', async (mediaType, dataFormat) => {
+  const otherFile = { ...describedFile, file_id: 'other-file', display_name: 'other-file', media_type: mediaType };
+  api.files.mockResolvedValue({ files: [describedFile, otherFile], next_cursor: null });
+  await ready();
+  fireEvent.click(screen.getByLabelText('Select other-file'));
+  fireEvent.click(screen.getByLabelText(`Select ${describedFile.display_name}`));
+  fireEvent.click(screen.getByRole('button', { name: 'Create listing' }));
+  fireEvent.change(screen.getByLabelText('Title'), { target: { value: 'Safe data' } });
+  fireEvent.change(screen.getByLabelText('Description'), { target: { value: 'A useful data set' } });
+  fireEvent.change(screen.getByLabelText('Price'), { target: { value: '0' } });
+  fireEvent.click(screen.getByRole('button', { name: 'Create draft' }));
+  await waitFor(() => expect(api.createDraft).toHaveBeenCalled());
+  expect(api.createDraft.mock.calls[0][0]).toHaveProperty('data_format', dataFormat);
+  expect(api.saveSource).toHaveBeenCalledWith('listing-1', { type: 'gateway', gateway_id: 'gateway-1', file_ids: ['other-file', describedFile.file_id] });
+});
+
+it('blocks files whose column names or types differ', async () => {
+  const different = { ...describedFile, file_id: 'different', display_name: 'different.csv', description: { ...describedFile.description, columns: [{ ...describedFile.description.columns[0], type: 'string' }] } };
+  api.files.mockResolvedValue({ files: [describedFile, different], next_cursor: null });
+  await ready();
+  fireEvent.click(screen.getByLabelText(`Select ${describedFile.display_name}`));
+  fireEvent.click(screen.getByLabelText('Select different.csv'));
+  fireEvent.click(screen.getByRole('button', { name: 'Create listing' }));
+  fireEvent.change(screen.getByLabelText('Title'), { target: { value: 'Safe data' } });
+  fireEvent.change(screen.getByLabelText('Description'), { target: { value: 'A useful data set' } });
+  fireEvent.change(screen.getByLabelText('Price'), { target: { value: '0' } });
+  fireEvent.click(screen.getByRole('button', { name: 'Create draft' }));
+  expect((await screen.findByRole('alert')).textContent).toContain('Pick files with the same columns and types.');
+  expect(api.createDraft).not.toHaveBeenCalled();
+});
+
+it('does not select a non-offerable file or show creation on a revoked gateway', async () => {
+  api.files.mockResolvedValue({ files: [file], next_cursor: null });
+  await ready();
+  expect((screen.getByLabelText(`Select ${file.display_name}`) as HTMLInputElement).disabled).toBe(true);
+  expect(screen.queryByRole('button', { name: 'Create listing' })).toBeNull();
+  cleanup();
+  api.get.mockResolvedValue({ ...gateway, status: 'revoked' });
+  api.files.mockResolvedValue({ files: [describedFile], next_cursor: null });
+  await ready();
+  expect(screen.queryByLabelText(`Select ${describedFile.display_name}`)).toBeNull();
+  expect(screen.queryByRole('button', { name: 'Create listing' })).toBeNull();
+});
+
+it('shows backend errors and stays on the gateway page', async () => {
+  api.files.mockResolvedValue({ files: [describedFile], next_cursor: null });
+  api.createDraft.mockRejectedValueOnce({ response: { data: { detail: { error: 'capability_required', missing_steps: ['totp_enabled'] } } } });
+  await ready();
+  fireEvent.click(screen.getByLabelText(`Select ${describedFile.display_name}`));
+  fireEvent.click(screen.getByRole('button', { name: 'Create listing' }));
+  fireEvent.change(screen.getByLabelText('Title'), { target: { value: 'Safe data' } });
+  fireEvent.change(screen.getByLabelText('Description'), { target: { value: 'A useful data set' } });
+  fireEvent.change(screen.getByLabelText('Price'), { target: { value: '0' } });
+  fireEvent.click(screen.getByRole('button', { name: 'Create draft' }));
+  expect((await screen.findByRole('alert')).textContent).toContain('capability_required: missing_steps: totp_enabled');
+  expect(api.saveSource).not.toHaveBeenCalled();
+  expect(api.push).not.toHaveBeenCalled();
+  api.createDraft.mockRejectedValueOnce({ response: { data: { detail: { code: 'TERMS_ACCEPTANCE_REQUIRED', terms_url: '/legal/terms', acceptance_url: '/legal/terms' } } } });
+  fireEvent.click(screen.getByRole('button', { name: 'Create draft' }));
+  expect((await screen.findByRole('link', { name: 'Review terms' })).getAttribute('href')).toBe('/legal/terms');
+  expect(api.push).not.toHaveBeenCalled();
+});
+
+it('shows a plain-string detail without crashing', async () => {
+  api.files.mockResolvedValue({ files: [describedFile], next_cursor: null });
+  api.createDraft.mockRejectedValueOnce({ response: { data: { detail: 'Invalid listing details' } } });
+  await ready();
+  fireEvent.click(screen.getByLabelText(`Select ${describedFile.display_name}`));
+  fireEvent.click(screen.getByRole('button', { name: 'Create listing' }));
+  fireEvent.change(screen.getByLabelText('Title'), { target: { value: 'Safe data' } });
+  fireEvent.change(screen.getByLabelText('Description'), { target: { value: 'A useful data set' } });
+  fireEvent.change(screen.getByLabelText('Price'), { target: { value: '0' } });
+  fireEvent.click(screen.getByRole('button', { name: 'Create draft' }));
+  expect((await screen.findByRole('alert')).textContent).toContain('Invalid listing details');
+  expect(screen.queryByRole('link', { name: 'Review terms' })).toBeNull();
+});
+
+it('keeps the created draft for a retry when saving the source fails', async () => {
+  api.files.mockResolvedValue({ files: [describedFile], next_cursor: null });
+  api.saveSource.mockRejectedValueOnce({ response: { data: { error: { code: 'file_not_found' } } } });
+  await ready();
+  fireEvent.click(screen.getByLabelText(`Select ${describedFile.display_name}`));
+  fireEvent.click(screen.getByRole('button', { name: 'Create listing' }));
+  fireEvent.change(screen.getByLabelText('Title'), { target: { value: 'Safe data' } });
+  fireEvent.change(screen.getByLabelText('Description'), { target: { value: 'A useful data set' } });
+  fireEvent.change(screen.getByLabelText('Price'), { target: { value: '0' } });
+  fireEvent.click(screen.getByRole('button', { name: 'Create draft' }));
+  expect((await screen.findByRole('alert')).textContent).toContain('file_not_found');
+  expect(api.push).not.toHaveBeenCalled();
+  fireEvent.click(screen.getByRole('button', { name: 'Create draft' }));
+  await waitFor(() => expect(api.push).toHaveBeenCalledWith('/dashboard/listings/listing-1/edit'));
+  expect(api.createDraft).toHaveBeenCalledTimes(1);
+});
 
 it('hides gateway content when the list is unavailable', async () => {
   api.list.mockRejectedValue({ response: { data: { error: { code: 'gateway_disabled' } } } });
@@ -82,7 +204,7 @@ it('shows the D-A notice, certificate warnings, and saves acknowledgement', asyn
   expect(screen.getByText(/buyer learns your door hostname/)).toBeTruthy();
   expect(screen.getByText(/subject names an organization/)).toBeTruthy();
   expect(screen.getByText(/names hosts besides this door/)).toBeTruthy();
-  fireEvent.click(screen.getByRole('checkbox'));
+  fireEvent.click(screen.getByLabelText('I have read the identity notice.'));
   fireEvent.click(screen.getByRole('button', { name: 'Acknowledge notice' }));
   await waitFor(() => expect(api.ack).toHaveBeenCalledWith('gateway-1'));
   expect(await screen.findByText(/Acknowledged:/)).toBeTruthy();
@@ -192,14 +314,14 @@ it('clears files, cursors and messages while loading a different route id', asyn
   const view = render(<GatewayPage />);
   await screen.findByText('file-01234567.csv');
   await screen.findByText(/test-only-nonce/);
-  fireEvent.click(screen.getByRole('checkbox'));
-  expect((screen.getByRole('checkbox') as HTMLInputElement).checked).toBe(true);
+  fireEvent.click(screen.getByLabelText('I have read the identity notice.'));
+  expect((screen.getByLabelText('I have read the identity notice.') as HTMLInputElement).checked).toBe(true);
   route.id = 'gateway-2';
   api.get.mockResolvedValueOnce({ ...gateway, name: 'Second gateway' });
   view.rerender(<GatewayPage />);
   expect(screen.getByText('Loading…')).toBeTruthy();
   expect(await screen.findByText('Second gateway')).toBeTruthy();
-  expect((screen.getByRole('checkbox') as HTMLInputElement).checked).toBe(false);
+  expect((screen.getByLabelText('I have read the identity notice.') as HTMLInputElement).checked).toBe(false);
   expect(screen.queryByText('file-01234567.csv')).toBeNull();
   expect(screen.queryByText(/test-only-nonce/)).toBeNull();
   expect(screen.queryByRole('button', { name: 'Load more files' })).toBeNull();

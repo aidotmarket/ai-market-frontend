@@ -136,6 +136,7 @@ export default function ListingsPage() {
           </svg>
           <h3 className="mt-4 text-lg font-medium text-gray-900">No listings yet</h3>
           <p className="mt-2 text-sm text-gray-500">Listings you publish will appear here.</p>
+          <p className="mt-2 text-sm text-gray-500">Gateway sellers: go to <Link href="/dashboard/gateways" className="text-indigo-700 underline">Dashboard → Gateways</Link> to create a listing.</p>
         </div>
       ) : (
         <div className="overflow-hidden rounded-xl border border-gray-200 bg-white shadow-sm">
