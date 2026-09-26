@@ -7,6 +7,7 @@ import { useAuthStore } from '@/store/auth';
 import { useToast } from '@/components/Toast';
 import {
   getDataRequest,
+  updateDataRequest,
   publishDataRequest,
   deleteDataRequest,
   submitDataRequestResponse,
@@ -53,6 +54,15 @@ export default function DataRequestDetailClient({
   const [publishing, setPublishing] = useState(false);
   const [deleting, setDeleting] = useState(false);
   const [updatingPublication, setUpdatingPublication] = useState(false);
+  const [editing, setEditing] = useState(false);
+  const [savingEdit, setSavingEdit] = useState(false);
+  const [editError, setEditError] = useState('');
+  const [editTitle, setEditTitle] = useState('');
+  const [editDescription, setEditDescription] = useState('');
+  const [editCategories, setEditCategories] = useState('');
+  const [editFormats, setEditFormats] = useState('');
+  const [editRegulatory, setEditRegulatory] = useState('');
+  const [editProvenance, setEditProvenance] = useState('');
 
   // Response form
   const [proposal, setProposal] = useState('');
@@ -61,6 +71,52 @@ export default function DataRequestDetailClient({
   const [submittingResponse, setSubmittingResponse] = useState(false);
 
   const isOwner = user && request && user.id === request.buyer_id;
+
+  function startEditing() {
+    if (!isOwner || !request || !['draft', 'open'].includes(request.status)) return;
+    setEditTitle(request.title || '');
+    setEditDescription(request.description);
+    setEditCategories(request.categories.join(', '));
+    setEditFormats(request.format_preferences.join(', '));
+    setEditRegulatory(request.regulatory_requirements?.join(', ') || '');
+    setEditProvenance(request.provenance_requirements || '');
+    setEditError('');
+    setEditing(true);
+  }
+
+  async function handleSaveEdit(e: React.FormEvent) {
+    e.preventDefault();
+    if (!isOwner || !request || !['draft', 'open'].includes(request.status) || savingEdit) return;
+    const splitList = (value: string) => value.split(',').map((item) => item.trim()).filter(Boolean);
+    setSavingEdit(true);
+    setEditError('');
+    try {
+      const updated = await updateDataRequest(request.id, {
+        title: editTitle.trim(),
+        description: editDescription.trim(),
+        categories: splitList(editCategories),
+        format_preferences: splitList(editFormats),
+        regulatory_requirements: splitList(editRegulatory),
+        provenance_requirements: editProvenance.trim(),
+      });
+      setRequest(updated);
+      setEditing(false);
+      toast('Request changes saved. Review the public visibility status before confirming.', 'success');
+    } catch (err) {
+      const detail = err instanceof AxiosError ? err.response?.data?.detail : null;
+      const message = typeof detail === 'string'
+        ? detail
+        : Array.isArray(detail)
+          ? detail.map((item: { loc?: (string | number)[]; msg?: string }) => {
+              const field = item.loc?.filter((part) => part !== 'body').join('.') || 'Field';
+              return `${field}: ${item.msg || 'invalid value'}`;
+            }).join('; ')
+          : 'Check your connection and try again.';
+      setEditError(`Could not save request. ${message}`);
+    } finally {
+      setSavingEdit(false);
+    }
+  }
 
   const loadData = useCallback(async () => {
     try {
@@ -269,6 +325,15 @@ export default function DataRequestDetailClient({
       {/* Owner actions */}
       {isOwner && (
         <div className="flex gap-3 mb-6">
+          {(request.status === 'draft' || request.status === 'open') && !editing && (
+            <button
+              type="button"
+              onClick={startEditing}
+              className="rounded-lg border border-gray-300 px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50"
+            >
+              Edit request
+            </button>
+          )}
           {request.status === 'draft' && (
             <button
               onClick={handlePublish}
@@ -294,6 +359,41 @@ export default function DataRequestDetailClient({
         </div>
       )}
 
+      {isOwner && editing && (request.status === 'draft' || request.status === 'open') && (
+        <form onSubmit={handleSaveEdit} className="rounded-xl border border-gray-200 p-6 mb-6 space-y-4" aria-label="Edit request">
+          <p className="text-sm text-gray-600">Remove contact details from every public text field before saving.</p>
+          <div>
+            <label htmlFor="edit-request-title" className="block text-sm font-medium text-gray-700 mb-1">Title</label>
+            <input id="edit-request-title" type="text" required minLength={5} maxLength={255} value={editTitle} onChange={(e) => setEditTitle(e.target.value)} className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-[#3F51B5]" />
+          </div>
+          <div>
+            <label htmlFor="edit-request-description" className="block text-sm font-medium text-gray-700 mb-1">Description</label>
+            <textarea id="edit-request-description" required minLength={20} maxLength={10000} rows={5} value={editDescription} onChange={(e) => setEditDescription(e.target.value)} className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-[#3F51B5]" />
+          </div>
+          <div>
+            <label htmlFor="edit-request-categories" className="block text-sm font-medium text-gray-700 mb-1">Categories</label>
+            <input id="edit-request-categories" type="text" value={editCategories} onChange={(e) => setEditCategories(e.target.value)} placeholder="e.g., retail, marketing (comma-separated)" className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-[#3F51B5]" />
+          </div>
+          <div>
+            <label htmlFor="edit-request-formats" className="block text-sm font-medium text-gray-700 mb-1">Preferred Formats</label>
+            <input id="edit-request-formats" type="text" value={editFormats} onChange={(e) => setEditFormats(e.target.value)} placeholder="e.g., CSV, JSON, Parquet" className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-[#3F51B5]" />
+          </div>
+          <div>
+            <label htmlFor="edit-request-regulatory" className="block text-sm font-medium text-gray-700 mb-1">Regulatory Requirements</label>
+            <input id="edit-request-regulatory" type="text" value={editRegulatory} onChange={(e) => setEditRegulatory(e.target.value)} placeholder="e.g., GDPR (comma-separated)" className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-[#3F51B5]" />
+          </div>
+          <div>
+            <label htmlFor="edit-request-provenance" className="block text-sm font-medium text-gray-700 mb-1">Provenance Requirements</label>
+            <textarea id="edit-request-provenance" rows={3} value={editProvenance} onChange={(e) => setEditProvenance(e.target.value)} placeholder="Requirements for data origin, licensing, or compliance." className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-[#3F51B5]" />
+          </div>
+          {editError && <p role="alert" className="text-sm text-red-700">{editError}</p>}
+          <div className="flex gap-3">
+            <button type="submit" disabled={savingEdit} className="rounded-lg bg-[#3F51B5] px-4 py-2 text-sm font-medium text-white hover:bg-[#3545a0] disabled:opacity-50">{savingEdit ? 'Saving...' : 'Save changes'}</button>
+            <button type="button" disabled={savingEdit} onClick={() => { setEditing(false); setEditError(''); }} className="rounded-lg border border-gray-300 px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50 disabled:opacity-50">Cancel</button>
+          </div>
+        </form>
+      )}
+
       {isOwner && request.publication_decision && (
         <section className="rounded-xl border border-[#D8DDF4] bg-[#F7F8FE] p-5 mb-6" aria-labelledby="publication-status-heading">
           <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
@@ -317,7 +417,7 @@ export default function DataRequestDetailClient({
             )}
           </div>
 
-          {canConfirmPublication && (
+          {canConfirmPublication && !editing && (
             <div className="mt-4 border-t border-[#D8DDF4] pt-4">
               <p className="mb-3 text-sm text-gray-700">
                 By making this request public, you agree that the request details shown on this page may appear on ai.market, in search engines, to AI agents, and in relevant seller alerts. Your full account profile is not included; your existing public buyer name may appear. Do not put contact details in the request text.
