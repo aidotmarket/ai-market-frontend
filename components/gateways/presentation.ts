@@ -12,7 +12,7 @@ export function statusReason(reason: string | null): string | null {
   if (!reason) return null;
   return ({
     egress_open: 'The network can reach more than the allowed ai.market host.',
-    egress_unknown: 'The network restriction check has not passed.',
+    egress_unknown: 'ai.market has not yet verified the network restriction.',
     version_below_minimum: 'Update the gateway to the minimum version.',
     never_connected: 'This gateway has not connected yet.',
   } as Record<string, string>)[reason] ?? 'This gateway needs attention. Check its status and try again.';
@@ -25,6 +25,7 @@ export function blockerMessage(blocker: GatewayBlocker, files: GatewayFile[]): s
     gateway_revoked: 'This gateway has been revoked.',
     version_below_minimum: 'Update the gateway to the minimum version.',
     egress_open: 'Restrict outbound network access to api.ai.market, then rerun the check.',
+    egress_unknown: 'ai.market has not yet verified the network restriction. This usually clears within 15 minutes; if it does not, rerun the check.',
     door_url_missing: 'Add a door URL.',
     door_check_not_passed: 'Run a door check and resolve any failure.',
     door_check_stale: 'Run the door check again. The last pass is over 10 minutes old.',
