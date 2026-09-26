@@ -177,7 +177,7 @@ it('renders every blocker, a file name, and unknown status and blocker fallbacks
   expect(list.textContent).toContain('file-01234567.csv needs a current description');
   expect(list.textContent).toContain('file-01234567.csv changed');
   expect(list.textContent).toContain('file-01234567.csv is missing');
-  expect(list.textContent).toContain('ai.market has not yet verified the network restriction. This usually clears within 15 minutes; if it does not, rerun the check.');
+  expect(list.textContent).toContain('ai.market has not yet verified the network restriction. This usually clears within 15 minutes; if it does not, restart the gateway.');
   expect(list.textContent).toContain('This gateway needs attention. Check its setup');
 });
 
