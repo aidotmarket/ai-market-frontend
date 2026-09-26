@@ -2,11 +2,12 @@
 
 import { useCallback, useEffect, useRef, useState } from 'react';
 import Link from 'next/link';
-import { useParams } from 'next/navigation';
+import { useParams, useRouter } from 'next/navigation';
 import { useAuthStore } from '@/store/auth';
 import { getCapabilities } from '@/api/capabilities';
 import { gatewayErrorCode } from '@/api/gatewayDelivery';
-import { acknowledgeGatewayIdentity, describeGatewayFile, gatewayErrorDetails, getGatewayFile, getSellerGateway, listGatewayFiles, listReceivedMessages, listSellerGateways, patchSellerGateway, revokeSellerGateway, startDoorCheck } from '@/api/sellerGateways';
+import { createDraftListing } from '@/api/listings';
+import { acknowledgeGatewayIdentity, describeGatewayFile, gatewayErrorDetails, getGatewayFile, getSellerGateway, listGatewayFiles, listReceivedMessages, listSellerGateways, patchSellerGateway, revokeSellerGateway, saveGatewayListingSource, startDoorCheck } from '@/api/sellerGateways';
 import { blockerMessage, dateLabel, DESCRIPTION_CONFIRMATION, descriptionFailure, doorFailure, gatewaySummary } from '@/components/gateways/presentation';
 import type { GatewayFile, GatewayMessageType, ReceivedMessage, SellerGateway } from '@/types/sellerGateway';
 
@@ -16,6 +17,7 @@ const wait = (ms: number) => new Promise(resolve => setTimeout(resolve, ms));
 
 export default function GatewayPage() {
   const { id } = useParams<{ id: string }>();
+  const router = useRouter();
   const { hydrated, isAuthenticated } = useAuthStore();
   const [state, setState] = useState<'loading' | 'ready' | 'unavailable'>('loading');
   const [gateway, setGateway] = useState<SellerGateway | null>(null);
@@ -33,6 +35,14 @@ export default function GatewayPage() {
   const [error, setError] = useState<string | null>(null);
   const [doorError, setDoorError] = useState<string | null>(null);
   const [fileError, setFileError] = useState<string | null>(null);
+  const [selectedFileIds, setSelectedFileIds] = useState<string[]>([]);
+  const [showListingForm, setShowListingForm] = useState(false);
+  const [listingTitle, setListingTitle] = useState('');
+  const [listingDescription, setListingDescription] = useState('');
+  const [listingPrice, setListingPrice] = useState('');
+  const [listingError, setListingError] = useState<{ message: string; terms: boolean } | null>(null);
+  const [creatingListing, setCreatingListing] = useState(false);
+  const [draftListingId, setDraftListingId] = useState<string | null>(null);
   const alive = useRef(true);
   const currentId = useRef(id);
   const doorRun = useRef(0);
@@ -91,6 +101,7 @@ export default function GatewayPage() {
     setState('loading'); setGateway(null); setFiles([]); setFileCursor(null); setMessages([]); setMessageCursor(null);
     setName(''); setDoorUrl(''); setMessageType(''); setError(null); setDoorError(null); setFileError(null);
     setAckChecked(false); setConfirmRevoke(false); setOpenOrders(null); setConfirmFile(null);
+    setSelectedFileIds([]); setShowListingForm(false); setListingTitle(''); setListingDescription(''); setListingPrice(''); setListingError(null); setCreatingListing(false); setDraftListingId(null);
     fileRetryDelay.current.clear();
     if (!hydrated || !isAuthenticated) return;
     async function load() {
@@ -225,6 +236,44 @@ export default function GatewayPage() {
     }
   }
 
+  async function createListing(event: React.FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    if (creatingListing || gateway?.status === 'revoked') return;
+    const selectedFiles = selectedFileIds.map(fileId => files.find(file => file.file_id === fileId)).filter((file): file is GatewayFile => !!file && file.offerable);
+    const title = listingTitle.trim();
+    const description = listingDescription.trim();
+    const price = Number(listingPrice);
+    if (selectedFiles.length < 1 || selectedFiles.length > 200 || title.length < 3 || title.length > 255 || description.length < 10 || !listingPrice.trim() || !Number.isFinite(price) || (price !== 0 && price < 25)) {
+      setListingError({ message: 'Select 1 to 200 offerable files. Enter a title of 3–255 characters, a description of at least 10 characters, and a price of 0 or at least 25.', terms: false });
+      return;
+    }
+    const requestId = id;
+    setCreatingListing(true); setListingError(null);
+    try {
+      const listingId = draftListingId ?? (await createDraftListing({
+        title, description, price, model_provider: 'anthropic', listing_type: 'raw',
+        ...(selectedFiles[0].media_type === 'text/csv' ? { data_format: 'csv' as const } : {}),
+        schema_info: {
+          row_count: selectedFiles.reduce((sum, file) => sum + file.description.row_count, 0),
+          columns: selectedFiles[0].description.columns.map(column => ({ name: column.name, type: column.type })),
+        },
+      })).id;
+      if (!isCurrent(requestId)) return;
+      setDraftListingId(listingId);
+      await saveGatewayListingSource(listingId, { type: 'gateway', gateway_id: requestId, file_ids: selectedFiles.map(file => file.file_id) });
+      if (isCurrent(requestId)) router.push(`/dashboard/listings/${encodeURIComponent(listingId)}/edit`);
+    } catch (cause) {
+      if (!isCurrent(requestId)) return;
+      const response = (cause as { response?: { data?: { error?: { code?: string; details?: { missing_steps?: string[] } }; detail?: string; missing_steps?: string[] } } })?.response?.data;
+      const code = gatewayErrorCode(cause);
+      const missingSteps = response?.error?.details?.missing_steps ?? response?.missing_steps;
+      setListingError({
+        message: code ? `${code}${missingSteps?.length ? `: missing_steps: ${missingSteps.join(', ')}` : ''}` : response?.detail || 'We could not create the listing. Try again.',
+        terms: code === 'TERMS_ACCEPTANCE_REQUIRED',
+      });
+    } finally { if (isCurrent(requestId)) setCreatingListing(false); }
+  }
+
   if (state === 'loading') return <p>Loading…</p>;
   if (state === 'unavailable' || !gateway) return <p>Gateways are not available.</p>;
   const sortedMessages = [...messages].sort((a, b) => a.seq - b.seq);
@@ -262,10 +311,21 @@ export default function GatewayPage() {
     <section className="space-y-3"><h2 className="text-xl font-semibold">Files</h2>
       {fileError && <p role="alert" className="text-red-700">{fileError}</p>}
       <div className="overflow-x-auto"><table className="w-full text-left text-sm"><thead><tr>{['Name', 'Size', 'Media type', 'Present', 'Changed', 'Description', 'Offerable', 'Action'].map(label => <th key={label} className="p-2">{label}</th>)}</tr></thead><tbody>{files.map(file => <tr key={file.file_id} className="border-t align-top">
-        <td className="p-2">{file.display_name}</td><td className="p-2">{file.size_bytes.toLocaleString()} bytes</td><td className="p-2">{file.media_type}</td><td className="p-2">{file.present ? 'Yes' : 'No'}</td><td className="p-2">{dateLabel(file.changed_at)}</td><td className="p-2">{file.description.state}{file.description.state === 'stale' && '. Describe again.'}{file.description.state === 'failed' && `: ${descriptionFailure(file.description.failure_code)}`}</td><td className="p-2">{file.offerable ? 'Yes' : 'No'}</td><td className="p-2">{file.description.state !== 'described' && file.description.state !== 'requested' && gateway.status !== 'revoked' && <button type="button" onClick={() => setConfirmFile(file)} className="text-indigo-700 underline">{file.description.state === 'stale' ? 'Describe again' : 'Describe'}</button>}</td>
+        <td className="p-2">{file.display_name}</td><td className="p-2">{file.size_bytes.toLocaleString()} bytes</td><td className="p-2">{file.media_type}</td><td className="p-2">{file.present ? 'Yes' : 'No'}</td><td className="p-2">{dateLabel(file.changed_at)}</td><td className="p-2">{file.description.state}{file.description.state === 'stale' && '. Describe again.'}{file.description.state === 'failed' && `: ${descriptionFailure(file.description.failure_code)}`}</td><td className="p-2">{file.offerable ? 'Yes' : 'No'}</td><td className="p-2">{file.description.state !== 'described' && file.description.state !== 'requested' && gateway.status !== 'revoked' && <button type="button" onClick={() => setConfirmFile(file)} className="text-indigo-700 underline">{file.description.state === 'stale' ? 'Describe again' : 'Describe'}</button>}{gateway.status !== 'revoked' && <label className="ml-2 inline-flex gap-1"><input type="checkbox" aria-label={`Select ${file.display_name}`} checked={selectedFileIds.includes(file.file_id)} disabled={!file.offerable || creatingListing || !!draftListingId} onChange={event => setSelectedFileIds(current => event.target.checked ? [...current, file.file_id] : current.filter(fileId => fileId !== file.file_id))} /> Select</label>}</td>
       </tr>)}</tbody></table></div>
       {files.map(file => file.description.state === 'described' && <div key={`${file.file_id}-description`} className="rounded border p-3"><h3 className="font-semibold">{file.display_name} description</h3><p>Rows: {file.description.row_count} · SHA-256: <code>{file.description.sha256}</code></p><table className="text-left text-sm"><thead><tr><th className="p-2">Column</th><th className="p-2">Type</th><th className="p-2">Null rate</th><th className="p-2">Distinct count</th></tr></thead><tbody>{file.description.columns.map((column, index) => <tr key={`${column.name}-${index}`}><td className="p-2">{column.name}</td><td className="p-2">{column.type}</td><td className="p-2">{column.null_rate_pct === null ? 'Unknown' : `${column.null_rate_pct}%`}</td><td className="p-2">{column.distinct_bucket}</td></tr>)}</tbody></table></div>)}
       {fileCursor && <button type="button" className="rounded border px-3 py-2" onClick={async () => { const requestId = id; try { const page = await listGatewayFiles(requestId, fileCursor); if (!isCurrent(requestId)) return; setFiles(current => [...current, ...page.files]); setFileCursor(page.next_cursor); } catch { if (isCurrent(requestId)) setFileError('We could not load more files. Try again.'); } }}>Load more files</button>}
+      {gateway.status !== 'revoked' && selectedFileIds.length > 0 && !showListingForm && <button type="button" className="rounded border px-3 py-2" onClick={() => setShowListingForm(true)}>Create listing</button>}
+      {gateway.status !== 'revoked' && showListingForm && <form onSubmit={createListing} className="space-y-3 rounded border p-4">
+        <h3 className="font-semibold">Create listing</h3>
+        <label className="block">Title <input className="block w-full rounded border p-2" required minLength={3} maxLength={255} disabled={!!draftListingId} value={listingTitle} onChange={event => setListingTitle(event.target.value)} /></label>
+        <label className="block">Description <textarea className="block w-full rounded border p-2" required minLength={10} disabled={!!draftListingId} value={listingDescription} onChange={event => setListingDescription(event.target.value)} /></label>
+        <label className="block">Price <input className="block w-full rounded border p-2" type="number" required min="0" step="any" disabled={!!draftListingId} value={listingPrice} onChange={event => setListingPrice(event.target.value)} /></label>
+        <p>Price: 0 for free, or at least 25.</p>
+        {listingError && <p role="alert" className="text-red-700">{listingError.message}{listingError.terms && <> <Link href="/legal/terms" className="underline">Review terms</Link></>}</p>}
+        {draftListingId && <p>Draft created. <Link href={`/dashboard/listings/${encodeURIComponent(draftListingId)}/edit`} className="text-indigo-700 underline">Open draft</Link> to change its details or source.</p>}
+        <button type="submit" disabled={creatingListing} className="rounded bg-indigo-700 px-3 py-2 text-white disabled:opacity-50">{creatingListing ? 'Creating…' : 'Create draft'}</button>
+      </form>}
       {confirmFile && <div role="dialog" aria-label="Confirm description" className="space-y-3 rounded border p-4"><p>{DESCRIPTION_CONFIRMATION}</p><p>Preview locally: <code>aim-gateway preview {confirmFile.file_id}</code></p><button type="button" className="rounded bg-indigo-700 px-3 py-2 text-white" onClick={describe}>Confirm describe</button><button type="button" className="ml-2 rounded border px-3 py-2" onClick={() => setConfirmFile(null)}>Cancel</button></div>}
     </section>
     <section className="space-y-3"><h2 className="text-xl font-semibold">What we receive</h2>
