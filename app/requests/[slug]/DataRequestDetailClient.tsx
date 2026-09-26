@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState, useCallback, useRef } from 'react';
+import { useEffect, useLayoutEffect, useState, useCallback, useRef } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { useAuthStore } from '@/store/auth';
@@ -48,7 +48,11 @@ export default function DataRequestDetailClient({
   const router = useRouter();
   const { toast } = useToast();
 
-  const [request, setRequest] = useState<DataRequestDetail | null>(initialRequest);
+  const userId = user?.id;
+  const context = `${slug}\0${isAuthenticated}\0${userId ?? ''}`;
+  const [requestRecord, setRequestRecord] = useState({ context, value: initialRequest });
+  const request = requestRecord.context === context ? requestRecord.value : null;
+  const setRequest = (value: DataRequestDetail | null) => setRequestRecord({ context, value });
   const [responses, setResponses] = useState<DataRequestResponse[]>([]);
   const [loading, setLoading] = useState(initialRequest === null);
   const [publishing, setPublishing] = useState(false);
@@ -64,6 +68,46 @@ export default function DataRequestDetailClient({
   const [editRegulatory, setEditRegulatory] = useState('');
   const [editProvenance, setEditProvenance] = useState('');
   const loadGeneration = useRef(0);
+  const contextEpoch = useRef(0);
+  const currentContext = useRef(context);
+  const mutationPending = useRef(false);
+
+  useLayoutEffect(() => {
+    if (currentContext.current === context) return;
+    currentContext.current = context;
+    contextEpoch.current++;
+    loadGeneration.current++;
+    mutationPending.current = false;
+    setRequest(null);
+    setResponses([]);
+    setLoading(true);
+    setPublishing(false);
+    setDeleting(false);
+    setUpdatingPublication(false);
+    setEditing(false);
+    setSavingEdit(false);
+    setEditError('');
+    setEditTitle('');
+    setEditDescription('');
+    setEditCategories('');
+    setEditFormats('');
+    setEditRegulatory('');
+    setEditProvenance('');
+    setProposal('');
+    setProposedPrice('');
+    setTimeline('');
+    setSubmittingResponse(false);
+  }, [context]);
+
+  function beginMutation() {
+    loadGeneration.current++;
+    mutationPending.current = true;
+    return contextEpoch.current;
+  }
+
+  function isCurrentMutation(epoch: number) {
+    return epoch === contextEpoch.current && currentContext.current === context;
+  }
 
   // Response form
   const [proposal, setProposal] = useState('');
@@ -71,7 +115,7 @@ export default function DataRequestDetailClient({
   const [timeline, setTimeline] = useState('');
   const [submittingResponse, setSubmittingResponse] = useState(false);
 
-  const isOwner = user && request && user.id === request.buyer_id;
+  const isOwner = isAuthenticated && user && request && user.id === request.buyer_id;
 
   function startEditing() {
     if (!isOwner || !request || !['draft', 'open'].includes(request.status) || publishing || deleting || updatingPublication) return;
@@ -91,7 +135,7 @@ export default function DataRequestDetailClient({
     const splitList = (value: string) => value.split(',').map((item) => item.trim()).filter(Boolean);
     setSavingEdit(true);
     setEditError('');
-    loadGeneration.current++;
+    const epoch = beginMutation();
     try {
       const updated = await updateDataRequest(request.id, {
         title: editTitle.trim(),
@@ -101,11 +145,12 @@ export default function DataRequestDetailClient({
         regulatory_requirements: splitList(editRegulatory),
         provenance_requirements: editProvenance.trim(),
       });
-      loadGeneration.current++;
+      if (!isCurrentMutation(epoch)) return;
       setRequest(updated);
       setEditing(false);
       toast('Request changes saved. Review the public visibility status before confirming.', 'success');
     } catch (err) {
+      if (!isCurrentMutation(epoch)) return;
       const detail = err instanceof AxiosError ? err.response?.data?.detail : null;
       const message = typeof detail === 'string'
         ? detail
@@ -117,20 +162,25 @@ export default function DataRequestDetailClient({
           : 'Please try again.';
       setEditError(`Could not save request. ${message}`);
     } finally {
-      setSavingEdit(false);
+      if (isCurrentMutation(epoch)) {
+        mutationPending.current = false;
+        setSavingEdit(false);
+      }
     }
   }
 
   const loadData = useCallback(async () => {
     const generation = ++loadGeneration.current;
-    const isCurrent = () => generation === loadGeneration.current;
+    const epoch = contextEpoch.current;
+    const startedDuringMutation = mutationPending.current;
+    const isCurrent = () => !startedDuringMutation && epoch === contextEpoch.current && generation === loadGeneration.current;
     try {
       const data = await getDataRequest(slug);
       if (!isCurrent()) return;
       setRequest(data);
 
       // Load responses if owner
-      if (data && user && user.id === data.buyer_id) {
+      if (data && userId === data.buyer_id) {
         try {
           const resps = await getDataRequestResponses(data.id);
           if (isCurrent()) setResponses(resps);
@@ -143,7 +193,7 @@ export default function DataRequestDetailClient({
     } finally {
       if (isCurrent()) setLoading(false);
     }
-  }, [slug, user]);
+  }, [slug, context, user, userId]);
 
   useEffect(() => {
     loadData();
@@ -152,11 +202,11 @@ export default function DataRequestDetailClient({
 
   async function handlePublish() {
     if (!request || editing || savingEdit || publishing || deleting || updatingPublication) return;
-    loadGeneration.current++;
+    const epoch = beginMutation();
     setPublishing(true);
     try {
       const updated = await publishDataRequest(request.id);
-      loadGeneration.current++;
+      if (!isCurrentMutation(epoch)) return;
       setRequest(updated);
       toast(
         updated.publication_decision === 'eligible'
@@ -165,38 +215,47 @@ export default function DataRequestDetailClient({
         'success'
       );
     } catch (err) {
+      if (!isCurrentMutation(epoch)) return;
       if (err instanceof AxiosError) {
         toast(err.response?.data?.detail || 'Failed to publish.', 'error');
       } else {
         toast('An unexpected error occurred.', 'error');
       }
     } finally {
-      setPublishing(false);
+      if (isCurrentMutation(epoch)) {
+        mutationPending.current = false;
+        setPublishing(false);
+      }
     }
   }
 
   async function handleDelete() {
     if (!request || editing || savingEdit || publishing || deleting || updatingPublication) return;
-    loadGeneration.current++;
+    const epoch = beginMutation();
     setDeleting(true);
     try {
       await deleteDataRequest(request.id);
+      if (!isCurrentMutation(epoch)) return;
       toast('Data request deleted.', 'success');
       router.push('/dashboard/requests');
     } catch (err) {
+      if (!isCurrentMutation(epoch)) return;
       if (err instanceof AxiosError) {
         toast(err.response?.data?.detail || 'Failed to delete.', 'error');
       } else {
         toast('An unexpected error occurred.', 'error');
       }
     } finally {
-      setDeleting(false);
+      if (isCurrentMutation(epoch)) {
+        mutationPending.current = false;
+        setDeleting(false);
+      }
     }
   }
 
   async function handleConfirmPublication() {
     if (!request?.public_content_hash || !request.required_public_consent_policy_version || editing || savingEdit || publishing || deleting || updatingPublication) return;
-    loadGeneration.current++;
+    const epoch = beginMutation();
     setUpdatingPublication(true);
     try {
       const updated = await confirmDataRequestPublication(
@@ -204,7 +263,7 @@ export default function DataRequestDetailClient({
         request.public_content_hash,
         request.required_public_consent_policy_version
       );
-      loadGeneration.current++;
+      if (!isCurrentMutation(epoch)) return;
       setRequest(updated);
       toast(
         updated.publication_decision === 'eligible'
@@ -213,33 +272,41 @@ export default function DataRequestDetailClient({
         'success'
       );
     } catch (err) {
+      if (!isCurrentMutation(epoch)) return;
       if (err instanceof AxiosError) {
         toast(err.response?.data?.detail || 'Failed to update public visibility.', 'error');
       } else {
         toast('An unexpected error occurred.', 'error');
       }
     } finally {
-      setUpdatingPublication(false);
+      if (isCurrentMutation(epoch)) {
+        mutationPending.current = false;
+        setUpdatingPublication(false);
+      }
     }
   }
 
   async function handleWithdrawPublication() {
     if (!request || editing || savingEdit || publishing || deleting || updatingPublication) return;
-    loadGeneration.current++;
+    const epoch = beginMutation();
     setUpdatingPublication(true);
     try {
       const updated = await withdrawDataRequestPublication(request.id);
-      loadGeneration.current++;
+      if (!isCurrentMutation(epoch)) return;
       setRequest(updated);
       toast('Your request is now private.', 'success');
     } catch (err) {
+      if (!isCurrentMutation(epoch)) return;
       if (err instanceof AxiosError) {
         toast(err.response?.data?.detail || 'Failed to update public visibility.', 'error');
       } else {
         toast('An unexpected error occurred.', 'error');
       }
     } finally {
-      setUpdatingPublication(false);
+      if (isCurrentMutation(epoch)) {
+        mutationPending.current = false;
+        setUpdatingPublication(false);
+      }
     }
   }
 
@@ -247,6 +314,7 @@ export default function DataRequestDetailClient({
     e.preventDefault();
     if (!request || !proposal.trim()) return;
 
+    const epoch = beginMutation();
     setSubmittingResponse(true);
     try {
       await submitDataRequestResponse(request.id, {
@@ -254,6 +322,8 @@ export default function DataRequestDetailClient({
         proposed_price: proposedPrice ? parseFloat(proposedPrice) : undefined,
         timeline: timeline.trim() || undefined,
       });
+      if (!isCurrentMutation(epoch)) return;
+      mutationPending.current = false;
       toast('Response submitted successfully.', 'success');
       setProposal('');
       setProposedPrice('');
@@ -261,17 +331,21 @@ export default function DataRequestDetailClient({
       // Reload to update response count
       loadData();
     } catch (err) {
+      if (!isCurrentMutation(epoch)) return;
       if (err instanceof AxiosError) {
         toast(err.response?.data?.detail || 'Failed to submit response.', 'error');
       } else {
         toast('An unexpected error occurred.', 'error');
       }
     } finally {
-      setSubmittingResponse(false);
+      if (isCurrentMutation(epoch)) {
+        mutationPending.current = false;
+        setSubmittingResponse(false);
+      }
     }
   }
 
-  if (loading) {
+  if (loading || requestRecord.context !== context) {
     return (
       <div className="flex min-h-[60vh] items-center justify-center">
         <div className="h-8 w-8 animate-spin rounded-full border-4 border-[#3F51B5] border-t-transparent" />
