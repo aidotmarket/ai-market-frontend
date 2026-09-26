@@ -168,7 +168,7 @@ it('hides gateway content when the list is unavailable', async () => {
 });
 
 it('renders every blocker, a file name, and unknown status and blocker fallbacks', async () => {
-  const codes = ['gateway_offline', 'gateway_revoked', 'version_below_minimum', 'egress_open', 'door_url_missing', 'door_check_not_passed', 'door_check_stale', 'identity_ack_missing', 'file_not_described', 'file_stale', 'file_missing', 'new_blocker'];
+  const codes = ['gateway_offline', 'gateway_revoked', 'version_below_minimum', 'egress_open', 'egress_unknown', 'door_url_missing', 'door_check_not_passed', 'door_check_stale', 'identity_ack_missing', 'file_not_described', 'file_stale', 'file_missing', 'new_blocker'];
   api.get.mockResolvedValue({ ...gateway, status_reason: 'new_reason', blockers: codes.map(code => ({ code, file_id: code.startsWith('file_') ? file.file_id : undefined })) });
   await ready();
   expect(screen.getByText(/needs attention. Check its status/)).toBeTruthy();
@@ -177,6 +177,7 @@ it('renders every blocker, a file name, and unknown status and blocker fallbacks
   expect(list.textContent).toContain('file-01234567.csv needs a current description');
   expect(list.textContent).toContain('file-01234567.csv changed');
   expect(list.textContent).toContain('file-01234567.csv is missing');
+  expect(list.textContent).toContain('ai.market has not yet verified the network restriction. This usually clears within 15 minutes; if it does not, restart the gateway.');
   expect(list.textContent).toContain('This gateway needs attention. Check its setup');
 });
 
