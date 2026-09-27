@@ -52,6 +52,7 @@ export default function SellerPublication({approval,active,rendered,sampleCount=
       {approval.license_selection&&<p className="text-sm text-gray-700">{approval.license_selection.kind==='standard'?'Standard (recommended)':'My own licence'} · AI/ML training {approval.license_selection.ai_training?'allowed':'not allowed'} · covenant and authority {approval.license_selection.seller_acceptance.authority_confirmed?'confirmed':'not confirmed'}</p>}
       {state.publication_available ? <button type="button" onClick={publish} disabled={busy || !active || !rendered || stale || !licenseReady} className="rounded-lg bg-indigo-700 px-4 py-2.5 text-sm font-semibold text-white disabled:opacity-50">{busy?'Publishing…':'Publish this listing'}</button>:
         <p className="text-sm text-gray-600">Publication is not available in this Workspace yet. Your approval is saved.</p>}
+      {state.publication_available&&!busy&&(!rendered||stale||!licenseReady)&&<p role="status" className="text-sm text-amber-900">{stale?'Refresh the saved review and approve it again before publishing.':!licenseReady?'Complete and save the licence choice in Choose what to sell before publishing.':'Wait for the saved review to finish loading before publishing.'}</p>}
     </>}
     {error && <p role="alert" className="text-sm text-red-800">{error}</p>}
     {!busy && <button type="button" disabled={!active} onClick={()=>setRetry(value=>value+1)} className="text-sm text-indigo-700 underline">Refresh publication status</button>}

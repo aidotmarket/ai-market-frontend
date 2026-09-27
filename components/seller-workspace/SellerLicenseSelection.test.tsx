@@ -43,6 +43,9 @@ describe('Seller licence selection',()=>{
     render(<Harness/>);
     const confirmation=screen.getByLabelText('Confirm covenant and authority') as HTMLInputElement;
     expect(confirmation.disabled).toBe(true);
+    expect(screen.getByText('Open and read the licence summary above first.')).toBeTruthy();
+    fireEvent.click(confirmation.closest('label')!);
+    expect(screen.getByRole('alert').textContent).toBe('Open and read the licence summary above first.');
     const details=screen.getByText('Read the summary and full terms').closest('details')!;
     Object.defineProperty(details,'open',{value:true,configurable:true});
     fireEvent(details,new Event('toggle'));
@@ -54,6 +57,20 @@ describe('Seller licence selection',()=>{
     fireEvent.click(screen.getByLabelText('Allow AI/ML training'));
     expect(JSON.parse(screen.getByTestId('wire').textContent!).seller_acceptance.authority_confirmed).toBe(false);
     expect(confirmation.disabled).toBe(true);
+  });
+
+  it('opens the training variant as a readable page and offers readable terms beside downloads',()=>{
+    render(<Harness/>);
+    const read=screen.getByRole('link',{name:'Read licence'});
+    expect(read.getAttribute('href')).toBe('/licenses/standard/1.0/ai-training');
+    expect(read.getAttribute('target')).toBe('_blank');
+    expect(read.getAttribute('rel')).toBe('noreferrer');
+    fireEvent.click(read);
+    expect((screen.getByLabelText('Confirm covenant and authority') as HTMLInputElement).disabled).toBe(false);
+    expect(screen.getByRole('link',{name:'Read full licence'}).getAttribute('href')).toBe('/licenses/standard/1.0/ai-training');
+    expect(screen.getByRole('link',{name:'Read Marketplace Listing Covenant'}).getAttribute('href')).toBe('/licenses/marketplace-listing/1.0');
+    fireEvent.click(screen.getByLabelText('Allow AI/ML training'));
+    expect(screen.getByRole('link',{name:'Read licence'}).getAttribute('href')).toBe('/licenses/standard/1.0/no-ai-training');
   });
 
   it('submits pasted text, previews verified server text and resets stale approval on edits',async()=>{
@@ -72,6 +89,7 @@ describe('Seller licence selection',()=>{
     expect(screen.getByText(/4 \/ 65,536 Unicode characters after normalization/)).toBeTruthy();
     fireEvent.click(screen.getByRole('button',{name:'Save custom licence text'}));
     await screen.findByText('Custom licence text saved and verified.');
+    expect((screen.getByRole('button',{name:'Save custom licence text'}) as HTMLButtonElement).disabled).toBe(true);
     expect(transport.post).toHaveBeenCalledWith('/licenses/custom',{title:'Terms',ai_training:true,text:submitted},expect.anything());
     await waitFor(()=>expect(JSON.parse(screen.getByTestId('wire').textContent!)).toEqual(expect.objectContaining({kind:'custom',version:'1.0',ai_training:true,license_document_id:response.id,license_sha256:response.license_sha256,rider_sha256:'f9785144dc4d48af6446512cbabd03431a35015d71b92260f4dcfab164084140'})));
     expect(screen.getByLabelText('Verified custom licence preview').textContent).toContain(canonical);

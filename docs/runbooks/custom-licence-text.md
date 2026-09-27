@@ -5,6 +5,14 @@ The seller enters a title and plain text terms. The frontend submits both to
 size, and hashes pass verification. Editing the title, text, or AI training choice
 clears that preview and the prior approval.
 
+The seller data step loads the saved listing draft before enabling licence save.
+An unloaded or failed draft read must never be used as an empty draft for a save.
+On a version conflict, reload the draft and keep the seller's unsaved licence
+choice visible. Save is disabled when the complete choice already matches the
+saved draft. Standard licence, rider, and covenant Read links use the local
+`/licenses/...` page without `?download=1`; the page fetches JSON and renders
+full text. Only explicit `?download=1` requests use the backend attachment rewrite.
+
 The submit response must be HTTP 201 with exactly the eight required fields.
 For a custom text document, the buyer view requires `text/plain; charset=utf-8`,
 `X-Content-Type-Options: nosniff`, `Cache-Control: private, no-store`, the

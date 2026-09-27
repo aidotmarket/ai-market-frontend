@@ -3,7 +3,7 @@ import { act, cleanup, fireEvent, render, screen, waitFor } from '@testing-libra
 import { afterEach, beforeEach, expect, it, vi } from 'vitest';
 import type { SellerWorkspaceConnection } from '@/api/sellerWorkspace';
 import SavedWorkspaceData from './SavedWorkspaceData';
-import {resetSellerListingDraftOwnerForTests,SellerListingDraftProvider,useSellerListingDraftStatus} from './SellerListingDraftStore';
+import {DraftNotLoadedError,resetSellerListingDraftOwnerForTests,SellerListingDraftProvider,useSellerListingDraft,useSellerListingDraftStatus} from './SellerListingDraftStore';
 const api = vi.hoisted(() => ({readListingSource:vi.fn(), saveListingSource:vi.fn(), listWorkspaceObjects:vi.fn(),readListingDraft:vi.fn(),saveListingDraft:vi.fn(),
   createIdempotencyKey:vi.fn(()=> 'sample-key'),uploadWorkspaceSample:vi.fn(),SAMPLE_MAX_FILES:10,SAMPLE_MAX_FILE_BYTES:64*1024*1024,SAMPLE_MAX_TOTAL_BYTES:256*1024*1024}));
 vi.mock('@/api/sellerListingSource', () => api);
@@ -17,23 +17,31 @@ beforeEach(() => {vi.resetAllMocks(); api.listWorkspaceObjects.mockResolvedValue
 const renderData=(connections=[connection],sampleCapability=false)=>render(<SellerListingDraftProvider enabled sampleCapability={sampleCapability}><SavedWorkspaceData enabled connections={connections} /></SellerListingDraftProvider>);
 const renderLicensedData=()=>render(<SellerListingDraftProvider enabled sampleCapability={false}><SavedWorkspaceData enabled connections={[connection]} listingLicensesEnabled /></SellerListingDraftProvider>);
 const DraftStatus=()=>{const status=useSellerListingDraftStatus();return <p data-testid="draft-status">{status.selectionSavePending?`pending:${status.sampleIndices.join(',')}`:status.selectionSaveFailed?'failed':'ready'}</p>;};
+it('refuses any store save before the draft has been read',async()=>{
+ let save!:ReturnType<typeof useSellerListingDraft>['saveFields'];
+ function Capture(){save=useSellerListingDraft().saveFields;return null;}
+ render(<SellerListingDraftProvider enabled sampleCapability={false}><Capture/></SellerListingDraftProvider>);
+ await expect(save({brief:'',title:'',description:'',category:'',tags:'',price:'',license:''})).rejects.toBeInstanceOf(DraftNotLoadedError);
+ expect(api.saveListingDraft).not.toHaveBeenCalled();
+});
 it('restores the selected files from the account', async () => {
   api.readListingSource.mockResolvedValue({version:2, content, connection_current:true});
   renderData();
   const checkbox = await screen.findByRole('checkbox', {name:`Select ${object.key}`});
   expect((checkbox as HTMLInputElement).checked).toBe(true);
   expect(screen.getByText(/File selection saved to your account/)).toBeTruthy();
+  expect((screen.getByRole('button',{name:'Save selected files'}) as HTMLButtonElement).disabled).toBe(true);
 });
-it('omits an incomplete licence choice from a draft save and explains what remains',async()=>{
+it('does not save an incomplete unchanged licence choice',async()=>{
  const draft={version:4,content:{brief:'brief',title:'Offer',description:'Description',category:'Retail',tags:'retail',price:'25',license:'Research'},updated_at:'2026-09-18T12:00:00Z'};
  api.readListingSource.mockResolvedValue({version:2,content,connection_current:true});
  api.readListingDraft.mockResolvedValue(draft);
  api.saveListingDraft.mockImplementation(async saved=>({version:5,content:saved,updated_at:draft.updated_at}));
  renderLicensedData();
- fireEvent.click(await screen.findByRole('button',{name:'Save licence choice'}));
- await waitFor(()=>expect(api.saveListingDraft).toHaveBeenCalledOnce());
- expect(api.saveListingDraft.mock.calls[0][0]).not.toHaveProperty('license_selection');
- expect(screen.getByText(/Draft saved without a licence choice/)).toBeTruthy();
+ const button=await screen.findByRole('button',{name:'Save licence choice'});
+ expect((button as HTMLButtonElement).disabled).toBe(true);
+ expect(screen.getByText(/Licence choice incomplete/)).toBeTruthy();
+ expect(api.saveListingDraft).not.toHaveBeenCalled();
 });
 it('saves only a complete licence selection',async()=>{
  const draft={version:4,content:{brief:'brief',title:'Offer',description:'Description',category:'Retail',tags:'retail',price:'25',license:'Research'},updated_at:'2026-09-18T12:00:00Z'};
@@ -50,7 +58,47 @@ it('saves only a complete licence selection',async()=>{
  fireEvent.click(screen.getByLabelText('Confirm covenant and authority'));
  fireEvent.click(screen.getByRole('button',{name:'Save licence choice'}));
  await waitFor(()=>expect(api.saveListingDraft).toHaveBeenCalledOnce());
+ expect(api.readListingDraft).toHaveBeenCalledOnce();
+ expect(api.saveListingDraft.mock.calls[0][1]).toBe(4);
+ expect(api.saveListingDraft.mock.calls[0][0]).toMatchObject({brief:'brief',title:'Offer',description:'Description',category:'Retail',tags:'retail',price:'25',license:'Research'});
  expect(api.saveListingDraft.mock.calls[0][0].license_selection.seller_acceptance).toEqual({signer_name:'Sam Seller',signer_title:'Director',authority_confirmed:true});
+ await waitFor(()=>expect((screen.getByRole('button',{name:'Save licence choice'}) as HTMLButtonElement).disabled).toBe(true));
+ expect(screen.getByText('Licence choice saved to your account.')).toBeTruthy();
+});
+it('blocks licence save until the draft read finishes and offers retry after a read failure',async()=>{
+ let rejectRead!:(reason:Error)=>void;
+ api.readListingSource.mockResolvedValue({version:2,content,connection_current:true});
+ api.readListingDraft.mockImplementationOnce(()=>new Promise((_resolve,reject)=>{rejectRead=reject;})).mockResolvedValueOnce(null);
+ renderLicensedData();
+ const button=await screen.findByRole('button',{name:'Save licence choice'});
+ expect((button as HTMLButtonElement).disabled).toBe(true);
+ expect(screen.getByText('Loading your saved draft…')).toBeTruthy();
+ expect(api.saveListingDraft).not.toHaveBeenCalled();
+ await act(async()=>rejectRead(new Error('offline')));
+ await screen.findByText(/Your saved draft could not be loaded/);
+ expect((button as HTMLButtonElement).disabled).toBe(true);
+ fireEvent.click(screen.getByRole('button',{name:'Try loading draft again'}));
+ await waitFor(()=>expect(api.readListingDraft).toHaveBeenCalledTimes(2));
+});
+it('reloads on a 409 without discarding the unsaved licence choice',async()=>{
+ const draft={version:4,content:{brief:'brief',title:'Offer',description:'Description',category:'Retail',tags:'retail',price:'25',license:'Research'},updated_at:'2026-09-18T12:00:00Z'};
+ api.readListingSource.mockResolvedValue({version:2,content,connection_current:true});
+ api.readListingDraft.mockResolvedValueOnce(draft).mockResolvedValueOnce({...draft,version:5});
+ api.saveListingDraft.mockRejectedValueOnce({isAxiosError:true,response:{status:409}}).mockImplementation(async saved=>({version:6,content:saved,updated_at:draft.updated_at}));
+ renderLicensedData();
+ await waitFor(()=>expect(api.readListingDraft).toHaveBeenCalledOnce());
+ fireEvent.change(screen.getByLabelText('Signer full name'),{target:{value:'Sam Seller'}});
+ fireEvent.change(screen.getByLabelText('Signer title'),{target:{value:'Director'}});
+ const details=screen.getByText('Read the summary and full terms').closest('details')!;
+ Object.defineProperty(details,'open',{value:true,configurable:true});fireEvent(details,new Event('toggle'));
+ fireEvent.click(screen.getByLabelText('Confirm covenant and authority'));
+ fireEvent.click(screen.getByRole('button',{name:'Save licence choice'}));
+ await screen.findByText('Your draft was changed elsewhere; we reloaded it. Check your licence choice and save again.');
+ await waitFor(()=>expect(api.readListingDraft).toHaveBeenCalledTimes(2));
+ expect((screen.getByLabelText('Signer full name') as HTMLInputElement).value).toBe('Sam Seller');
+ fireEvent.click(screen.getByRole('button',{name:'Save licence choice'}));
+ await waitFor(()=>expect(api.saveListingDraft).toHaveBeenCalledTimes(2));
+ expect(api.saveListingDraft.mock.calls[1][1]).toBe(5);
 });
 it('round-trips the uploaded sample selection inside draft content',async()=>{
   const draft={version:4,content:{brief:'brief',title:'Offer',description:'Description',category:'Retail',tags:'retail',price:'25',license:'Research',sample_decision:'none',sample_object_indices:[]},updated_at:'2026-09-18T12:00:00Z'};
@@ -166,7 +214,7 @@ it('keeps the connection fixed during a save and preserves newer checkbox edits'
   fireEvent.click(checkbox);
   await act(async () => finish({version:1,content,connection_current:true}));
   expect((checkbox as HTMLInputElement).checked).toBe(false);
-  expect(screen.getByText(/Your file choices have not been saved/)).toBeTruthy();
+  expect(screen.getByText(/Your saved file selection remains in your account/)).toBeTruthy();
   expect((screen.getByRole('combobox', {name:'Storage connection'}) as HTMLSelectElement).disabled).toBe(false);
 });
 it('keeps a local selection change when retrying a failed file read', async () => {
@@ -178,7 +226,7 @@ it('keeps a local selection change when retrying a failed file read', async () =
   fireEvent.click(screen.getByRole('button', {name:'Try again'}));
   const checkbox = await screen.findByRole('checkbox', {name:`Select ${object.key}`});
   expect((checkbox as HTMLInputElement).checked).toBe(false);
-  expect(screen.getByText(/Your file choices have not been saved/)).toBeTruthy();
+  expect(screen.getByText(/Your saved file selection remains in your account/)).toBeTruthy();
 });
 
 it('checks a complete folder and requires count-and-size confirmation before saving',async()=>{

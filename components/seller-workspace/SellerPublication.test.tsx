@@ -14,6 +14,7 @@ it('requires a click and the approved render before publishing',async()=>{
   const view=render(<SellerPublication approval={approval} active rendered={false}/>);
   const button=await screen.findByRole('button',{name:'Publish this listing'});
   expect((button as HTMLButtonElement).disabled).toBe(true);expect(api.publishListing).not.toHaveBeenCalled();
+  expect(screen.getByText('Wait for the saved review to finish loading before publishing.')).toBeTruthy();
   view.rerender(<SellerPublication approval={approval} active rendered/>);
   api.publishListing.mockResolvedValue(publication);fireEvent.click(button);
   await screen.findByText(/published and available/);

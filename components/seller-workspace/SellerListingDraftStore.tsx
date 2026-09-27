@@ -4,6 +4,7 @@ import {createContext,useCallback,useContext,useEffect,useMemo,useState} from 'r
 import {readListingDraft,saveListingDraft,type ListingDraftContent,type SavedListingDraft} from '@/api/sellerListingDraft';
 
 const EMPTY_DRAFT:ListingDraftContent={brief:'',title:'',description:'',category:'',tags:'',price:'',license:''};
+export class DraftNotLoadedError extends Error { constructor(){super('Load your saved draft before saving.');this.name='DraftNotLoadedError';} }
 type DraftStore={draft:SavedListingDraft|null;loaded:boolean;error:boolean;sampleCapability:boolean;sampleIndices:number[];
   selectionSavePending:boolean;selectionSaveFailed:boolean;requestLoad:()=>void;retry:()=>void;
   beginSelectionSave:()=>void;finishSelectionSave:(succeeded:boolean)=>void;setVisibleSampleIndices:(indices:number[]|null)=>void;
@@ -12,7 +13,7 @@ const DraftContext=createContext<DraftStore|null>(null);
 
 type OwnerSnapshot={draft:SavedListingDraft|null;selectionSaveCount:number;selectionSaveFailed:boolean};
 const owner={
-  draft:null as SavedListingDraft|null,version:0,queue:Promise.resolve() as Promise<unknown>,
+  draft:null as SavedListingDraft|null,version:0,loaded:false,queue:Promise.resolve() as Promise<unknown>,
   pending:null as {serialized:string;version:number;id:string}|null,
   selectionSaveCount:0,selectionSaveFailed:false,listeners:new Set<(snapshot:OwnerSnapshot)=>void>(),
 };
@@ -22,6 +23,7 @@ const beginOwnerSelectionSave=()=>{if(owner.selectionSaveCount===0)owner.selecti
 const finishOwnerSelectionSave=(succeeded:boolean)=>{owner.selectionSaveCount=Math.max(0,owner.selectionSaveCount-1);if(!succeeded)owner.selectionSaveFailed=true;else if(owner.selectionSaveCount===0)owner.selectionSaveFailed=false;publish();};
 const persist=(build:(base:ListingDraftContent)=>ListingDraftContent)=>{
   const operation=owner.queue.catch(()=>undefined).then(async()=>{
+    if(!owner.loaded)throw new DraftNotLoadedError();
     const content=build(owner.draft?.content??EMPTY_DRAFT);
     const serialized=JSON.stringify(content);
     if(!owner.pending||owner.pending.serialized!==serialized||owner.pending.version!==owner.version)
@@ -36,7 +38,7 @@ const persist=(build:(base:ListingDraftContent)=>ListingDraftContent)=>{
 
 export function resetSellerListingDraftOwnerForTests() {
   if(process.env.NODE_ENV!=='test')return;
-  owner.draft=null;owner.version=0;owner.queue=Promise.resolve();owner.pending=null;
+  owner.draft=null;owner.version=0;owner.loaded=false;owner.queue=Promise.resolve();owner.pending=null;
   owner.selectionSaveCount=0;owner.selectionSaveFailed=false;owner.listeners.clear();
 }
 
@@ -55,10 +57,10 @@ export function SellerListingDraftProvider({enabled,sampleCapability,children}:{
   useEffect(()=>{
     if(!enabled){setDraft(null);setVisibleSampleIndices(null);setLoaded(true);setError(false);return;}
     if(!requested)return;
-    const controller=new AbortController();setLoaded(false);setError(false);
+    const controller=new AbortController();owner.loaded=false;setLoaded(false);setError(false);
     owner.queue.catch(()=>undefined).then(()=>readListingDraft(controller.signal)).then(value=>{
       if(controller.signal.aborted)return;
-      owner.draft=value;owner.version=value?.version??0;owner.pending=null;
+      owner.draft=value;owner.version=value?.version??0;owner.loaded=true;owner.pending=null;
       if(owner.selectionSaveCount===0)owner.selectionSaveFailed=false;
       publish();setLoaded(true);
     }).catch(()=>{if(!controller.signal.aborted){setError(true);setLoaded(false);}});

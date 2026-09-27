@@ -6,6 +6,12 @@ import { AxiosError } from 'axios';
 afterEach(cleanup);
 
 describe('Allai seller listing review', () => {
+  it('explains why drafting is disabled before a brief is entered',()=>{
+    render(<SellerListingEditor assistant={vi.fn()} />);
+    expect((screen.getByRole('button',{name:'Ask Allai to draft my listing'}) as HTMLButtonElement).disabled).toBe(true);
+    expect(screen.getByText('Describe your data above to ask Allai for a draft.')).toBeTruthy();
+    expect(screen.getByText(/Add or accept .* text before marking it reviewed/)).toBeTruthy();
+  });
   it('explains exhausted starter credits while keeping manual editing available', async () => {
     const assistant = vi.fn().mockRejectedValue(new AxiosError('credits', undefined, undefined, undefined, { status: 402 } as never));
     render(<SellerListingEditor assistant={assistant} />);

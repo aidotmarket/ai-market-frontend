@@ -1,7 +1,7 @@
 import type { Metadata } from 'next';
-import { notFound } from 'next/navigation';
+import { notFound, redirect } from 'next/navigation';
 
-type Props = { params: Promise<{ parts: string[] }> };
+type Props = { params: Promise<{ parts: string[] }>; searchParams?:Promise<{download?:string}> };
 type StockDocument = {
   code: string;
   version: string;
@@ -63,8 +63,9 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
   return { title: `${title} — ai.market`, alternates: { canonical: `https://ai.market/licenses/${parts.join('/')}` } };
 }
 
-export default async function LicencePage({ params }: Props) {
+export default async function LicencePage({ params,searchParams }: Props) {
   const { parts } = await params;
+  if((await searchParams)?.download==='1')redirect(`${getApiBase()}/api/v1/licenses/${parts.join('/')}?download=1`);
   const document = await getDocument(parts);
   if ('notice' in document) {
     return <main className="mx-auto max-w-3xl px-6 py-16">
