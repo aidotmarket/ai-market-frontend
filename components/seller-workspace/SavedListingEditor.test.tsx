@@ -3,6 +3,7 @@ import { act, cleanup, fireEvent, render, screen, waitFor } from '@testing-libra
 import { afterEach, beforeEach, expect, it, vi } from 'vitest';
 import { AxiosError } from 'axios';
 import SavedListingEditor from './SavedListingEditor';
+import {createStandardSelection} from '@/api/listingLicenses';
 import {resetSellerListingDraftOwnerForTests,SellerListingDraftProvider} from './SellerListingDraftStore';
 
 const api = vi.hoisted(() => ({ readListingDraft: vi.fn(), saveListingDraft: vi.fn() }));
@@ -94,4 +95,18 @@ it('keeps the legacy draft PUT body byte-identical and round-trips an active sam
   fireEvent.click(screen.getByText('Save private draft'));
   await screen.findByText(/Draft saved to your account/);
   expect(api.saveListingDraft.mock.calls[0][0]).toEqual({...content,title:'Sampled edit',sample_decision:'member_files',sample_object_indices:[2]});
+});
+
+it.each([false,true])('preserves saved licence and sample metadata when sample capability is %s',async(sampleCapability)=>{
+  const selection={...createStandardSelection(),seller_acceptance:{signer_name:'Sam Seller',signer_title:'Director',authority_confirmed:true}};
+  const savedContent={...content,license_selection:selection,sample_decision:'member_files',sample_object_indices:[2],other_metadata:{source:'unchanged'}};
+  api.readListingDraft.mockResolvedValue({version:4,content:savedContent,updated_at:'2026-09-18T00:00:00Z'});
+  api.saveListingDraft.mockImplementation(async(saved)=>({version:5,content:saved,updated_at:'2026-09-18T00:00:00Z'}));
+  renderEditor(sampleCapability);
+  fireEvent.change(await screen.findByLabelText('Title'),{target:{value:'Updated title'}});
+  fireEvent.click(screen.getByText('Save private draft'));
+  await waitFor(()=>expect(api.saveListingDraft).toHaveBeenCalledOnce());
+  expect(api.saveListingDraft).toHaveBeenCalledWith({...savedContent,title:'Updated title'},4,expect.any(String));
+  await screen.findByText(/Draft saved to your account/);
+  expect(api.saveListingDraft.mock.results[0].value).toBeTruthy();
 });

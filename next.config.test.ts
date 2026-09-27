@@ -44,8 +44,9 @@ describe('next.config request discovery rewrites', () => {
 
     const rewrites = await config.rewrites!();
 
-    expect(rewrites).toContainEqual({source:'/licenses/:path*',has:[{type:'query',key:'download',value:'1'}],destination:'https://api.example.test/api/v1/licenses/:path*'});
-    expect(rewrites).not.toContainEqual({source:'/licenses/:path*',destination:'https://api.example.test/api/v1/licenses/:path*'});
+    expect(rewrites.filter(rewrite=>rewrite.source==='/licenses/:path*')).toEqual([
+      {source:'/licenses/:path*',has:[{type:'query',key:'download',value:'1'}],destination:'https://api.example.test/api/v1/licenses/:path*'},
+    ]);
   });
 
   it('uses localhost fallback for requests.txt outside production', async () => {

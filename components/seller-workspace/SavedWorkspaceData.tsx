@@ -4,7 +4,7 @@ import { readListingSource, saveListingSource, type SourceRead, type SourceConte
 import type {SampleLimits,SellerWorkspaceConnection,WorkspaceObject} from '@/api/sellerWorkspace';
 import { WorkspaceData } from './WorkspaceData';
 import {DraftNotLoadedError,useSellerListingDraft} from './SellerListingDraftStore';
-import {createStandardSelection,isCompleteLicenseSelection,type LicenseSelection} from '@/api/listingLicenses';
+import {createStandardSelection,type LicenseSelection} from '@/api/listingLicenses';
 import axios from 'axios';
 
 export default function SavedWorkspaceData({connections, enabled,sampleLimits,listingLicensesEnabled=false}: {connections: SellerWorkspaceConnection[]; enabled: boolean;sampleLimits?:SampleLimits;listingLicensesEnabled?:boolean}) {
@@ -13,7 +13,7 @@ export default function SavedWorkspaceData({connections, enabled,sampleLimits,li
   const [failed, setFailed] = useState(false);
   const [retry, setRetry] = useState(0);
   const [saving, setSaving] = useState(false);
-  const {draft,loaded,error:draftError,retry:retryDraft,requestLoad,sampleCapability,sampleIndices,selectionSavePending,saveFields,saveSamples,beginSelectionSave,finishSelectionSave,setVisibleSampleIndices}=useSellerListingDraft();
+  const {draft,available,loaded,error:draftError,retry:retryDraft,requestLoad,sampleCapability,sampleIndices,selectionSavePending,saveLicenseSelection,saveSamples,beginSelectionSave,finishSelectionSave,setVisibleSampleIndices}=useSellerListingDraft();
   const [licenseSelection,setLicenseSelection]=useState<LicenseSelection>(()=>draft?.content.license_selection??createStandardSelection());
   const [licenseSaving,setLicenseSaving]=useState(false);
   const [licenseSaveMessage,setLicenseSaveMessage]=useState('');
@@ -66,14 +66,12 @@ export default function SavedWorkspaceData({connections, enabled,sampleLimits,li
   return <WorkspaceData connections={connections} enabled={enabled} savedSource={source} onSaveSelection={save} saving={saving}
     sampleFilesAvailable={sampleCapability&&loaded} initialSampleIndices={sampleIndices} onSaveSampleSelection={saveSamples} onVisibleSampleSelectionChange={setVisibleSampleIndices} sampleLimits={sampleLimits}
     licenseSelection={listingLicensesEnabled?licenseSelection:undefined} onLicenseSelectionChange={listingLicensesEnabled?value=>{licenseChanged.current=true;setLicenseSelection(value);setLicenseSaveMessage('');}:undefined} licenseSaving={licenseSaving} licenseSaveMessage={licenseSaveMessage}
-    licenseDraftLoaded={loaded} licenseDraftError={draftError} onRetryLicenseDraft={retryDraft} licenseSelectionSaved={draft?.content.license_selection}
+    licenseDraftAvailable={available} licenseDraftLoaded={loaded} licenseDraftError={draftError} onRetryLicenseDraft={retryDraft} licenseSelectionSaved={draft?.content.license_selection}
     onSaveLicenseSelection={listingLicensesEnabled?async()=>{setLicenseSaving(true);setLicenseSaveMessage('');try{
       if(!loaded)throw new DraftNotLoadedError();
-      const {license_selection: _previousSelection,...fields}=draft?.content??{brief:'',title:'',description:'',category:'',tags:'',price:'',license:''};
-      const complete=isCompleteLicenseSelection(licenseSelection);
-      await saveFields({...fields,...(complete?{license_selection:licenseSelection}:{})});
+      await saveLicenseSelection(licenseSelection);
       licenseChanged.current=false;
-      setLicenseSaveMessage(complete?'Licence choice saved.':'Draft saved without a licence choice. Complete the signer and covenant confirmation to save it.');
+      setLicenseSaveMessage('Licence choice saved.');
     }catch(failure){if(axios.isAxiosError(failure)&&failure.response?.status===409){retryDraft();setLicenseSaveMessage('Your draft was changed elsewhere; we reloaded it. Check your licence choice and save again.');}
       else setLicenseSaveMessage(failure instanceof DraftNotLoadedError?failure.message:'Licence choice could not be saved. Try again.');
     }finally{setLicenseSaving(false);}}:undefined} />;

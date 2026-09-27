@@ -2,7 +2,7 @@ import React from 'react';
 import { renderToStaticMarkup } from 'react-dom/server';
 import { afterEach, expect, it, vi } from 'vitest';
 
-vi.mock('next/navigation', () => ({ notFound: () => { throw new Error('NEXT_NOT_FOUND'); },redirect:(url:string)=>{throw new Error(`NEXT_REDIRECT:${url}`);} }));
+vi.mock('next/navigation', () => ({ notFound: () => { throw new Error('NEXT_NOT_FOUND'); } }));
 
 const { default: LicencePage, generateMetadata } = await import('./page');
 const originalFetch = globalThis.fetch;
@@ -40,14 +40,6 @@ it('renders the backend Standard summary before the full text at its canonical U
   expect(html).toContain('SHA-256:');
   expect((await generateMetadata(props)).alternates).toEqual({ canonical: 'https://ai.market/licenses/standard/1.0/ai-training' });
   expect(fetchMock).toHaveBeenCalledWith('https://api.ai.market/api/v1/licenses/standard/1.0/ai-training?format=json', expect.anything());
-});
-
-it('keeps readable licence pages local and redirects only explicit downloads',async()=>{
-  process.env.API_URL='https://api.ai.market';
-  const {default:nextConfig}=await import('../../../next.config');
-  const rewrites=await nextConfig.rewrites!();
-  expect(rewrites).not.toContainEqual({source:'/licenses/:path*',destination:'https://api.ai.market/api/v1/licenses/:path*'});
-  await expect(LicencePage({params:Promise.resolve({parts:['standard','1.0','ai-training']}),searchParams:Promise.resolve({download:'1'})})).rejects.toThrow('NEXT_REDIRECT:https://api.ai.market/api/v1/licenses/standard/1.0/ai-training?download=1');
 });
 
 it('shows only the backend custom notice and hash', async () => {

@@ -39,13 +39,13 @@ describe('Seller licence selection',()=>{
     });
   });
 
-  it('keeps covenant confirmation disabled until the terms are opened',()=>{
+  it('keeps covenant confirmation disabled until both terms are opened',()=>{
     render(<Harness/>);
     const confirmation=screen.getByLabelText('Confirm covenant and authority') as HTMLInputElement;
     expect(confirmation.disabled).toBe(true);
-    expect(screen.getByText('Open and read the licence summary above first.')).toBeTruthy();
+    expect(screen.getByText('Open the selected licence and Marketplace Listing Covenant first.')).toBeTruthy();
     fireEvent.click(confirmation.closest('label')!);
-    expect(screen.getByRole('alert').textContent).toBe('Open and read the licence summary above first.');
+    expect(screen.getByRole('alert').textContent).toBe('Open the selected licence and Marketplace Listing Covenant first.');
     const details=screen.getByText('Read the summary and full terms').closest('details')!;
     Object.defineProperty(details,'open',{value:true,configurable:true});
     fireEvent(details,new Event('toggle'));
@@ -66,11 +66,24 @@ describe('Seller licence selection',()=>{
     expect(read.getAttribute('target')).toBe('_blank');
     expect(read.getAttribute('rel')).toBe('noreferrer');
     fireEvent.click(read);
+    expect((screen.getByLabelText('Confirm covenant and authority') as HTMLInputElement).disabled).toBe(true);
+    expect(screen.getByText('Open the Marketplace Listing Covenant first.')).toBeTruthy();
+    fireEvent.click(screen.getByRole('link',{name:'Read Marketplace Listing Covenant'}));
     expect((screen.getByLabelText('Confirm covenant and authority') as HTMLInputElement).disabled).toBe(false);
     expect(screen.getByRole('link',{name:'Read full licence'}).getAttribute('href')).toBe('/licenses/standard/1.0/ai-training');
     expect(screen.getByRole('link',{name:'Read Marketplace Listing Covenant'}).getAttribute('href')).toBe('/licenses/marketplace-listing/1.0');
     fireEvent.click(screen.getByLabelText('Allow AI/ML training'));
     expect(screen.getByRole('link',{name:'Read licence'}).getAttribute('href')).toBe('/licenses/standard/1.0/no-ai-training');
+  });
+
+  it('opens the details section to review both the standard licence and covenant',()=>{
+    render(<Harness/>);
+    const confirmation=screen.getByLabelText('Confirm covenant and authority') as HTMLInputElement;
+    const details=screen.getByText('Read the summary and full terms').closest('details')!;
+    Object.defineProperty(details,'open',{value:true,configurable:true});
+    fireEvent(details,new Event('toggle'));
+    expect(confirmation.disabled).toBe(false);
+    expect(screen.queryByText('Open the selected licence and Marketplace Listing Covenant first.')).toBeNull();
   });
 
   it('submits pasted text, previews verified server text and resets stale approval on edits',async()=>{

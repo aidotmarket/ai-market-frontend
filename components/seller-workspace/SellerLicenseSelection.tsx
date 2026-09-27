@@ -24,7 +24,8 @@ export default function SellerLicenseSelection({value, onChange, disabled = fals
   const [submitError, setSubmitError] = useState('');
   const [title, setTitle] = useState('');
   const [text, setText] = useState('');
-  const [termsOpened, setTermsOpened] = useState(false);
+  const [licenseOpened, setLicenseOpened] = useState(false);
+  const [covenantOpened, setCovenantOpened] = useState(false);
   const [lockedHint,setLockedHint]=useState(false);
   const [customPreview,setCustomPreview]=useState<{id:string;title:string;text:string}|null>(null);
   const verifiedTitles = useRef(new Map<string, string>());
@@ -34,7 +35,7 @@ export default function SellerLicenseSelection({value, onChange, disabled = fals
     onChange({...value, seller_acceptance: {...identity, [field]: next}});
   const invalidateCustom = (changes: Partial<LicenseSelection> = {}) => {
     submissionVersion.current += 1;
-    setTermsOpened(false);
+    setLicenseOpened(false);
     setCustomPreview(null);
     setSubmitError('');
     onChange({...value, ...changes, license_document_id: null, license_sha256: '',
@@ -42,7 +43,7 @@ export default function SellerLicenseSelection({value, onChange, disabled = fals
   };
   const chooseKind = (kind: LicenseSelection['kind']) => {
     submissionVersion.current += 1;
-    setTermsOpened(false);
+    setLicenseOpened(false);
     setCustomPreview(null);
     setSubmitError('');
     const invalidatedIdentity={...identity,authority_confirmed:false};
@@ -54,11 +55,11 @@ export default function SellerLicenseSelection({value, onChange, disabled = fals
     if (value.kind === 'standard') onChange({...value, ai_training: aiTraining,
       license_sha256: LICENSE_HASHES.standard[String(aiTraining) as 'true' | 'false'],seller_acceptance:{...identity,authority_confirmed:false}});
     else invalidateCustom({ai_training: aiTraining, rider_sha256: LICENSE_HASHES.rider[String(aiTraining) as 'true' | 'false']});
-    setTermsOpened(false);
+    setLicenseOpened(false);
   };
   async function submit() {
     const version = ++submissionVersion.current;
-    setSubmitting(true); setSubmitError(''); setTermsOpened(false); setCustomPreview(null);
+    setSubmitting(true); setSubmitError(''); setLicenseOpened(false); setCustomPreview(null);
     const submittedTitle = title;
     const submittedText = text;
     const submittedTraining = value.ai_training;
@@ -90,7 +91,7 @@ export default function SellerLicenseSelection({value, onChange, disabled = fals
     <legend className="px-1 text-lg font-semibold text-gray-900">How can buyers use this data?</legend>
     <div className="grid gap-4 sm:grid-cols-2">
       <label className={`rounded-xl border p-4 ${value.kind === 'standard' ? 'border-indigo-500 bg-indigo-50' : 'border-gray-200'}`}>
-        <span className="flex items-center gap-2 font-semibold"><input type="radio" name="listing-license-kind" checked={value.kind === 'standard'} onChange={() => chooseKind('standard')} />Standard <span className="text-xs font-medium text-indigo-700">Recommended</span><a href={licenseDocumentPath('standard',value.ai_training)} target="_blank" rel="noreferrer" onClick={event=>{event.stopPropagation();setTermsOpened(true);}} className="text-xs text-indigo-700 underline">Read licence</a></span>
+        <span className="flex items-center gap-2 font-semibold"><input type="radio" name="listing-license-kind" checked={value.kind === 'standard'} onChange={() => chooseKind('standard')} />Standard <span className="text-xs font-medium text-indigo-700">Recommended</span><a href={licenseDocumentPath('standard',value.ai_training)} target="_blank" rel="noreferrer" onClick={event=>{event.stopPropagation();if(value.kind==='standard')setLicenseOpened(true);}} className="text-xs text-indigo-700 underline">Read licence</a></span>
         <span className="mt-2 block text-sm text-gray-600">Balanced ai.market terms. Buyers may not redistribute or resell the dataset.</span>
       </label>
       <label className={`rounded-xl border p-4 ${value.kind === 'custom' ? 'border-indigo-500 bg-indigo-50' : 'border-gray-200'}`}>
@@ -117,17 +118,18 @@ export default function SellerLicenseSelection({value, onChange, disabled = fals
       {customPreview?.id === value.license_document_id && <section aria-label="Verified custom licence preview" className="rounded-lg border border-green-300 p-4"><h3 className="font-medium">{customPreview.title}</h3><p role="status" className="text-sm text-green-800">Custom licence text saved and verified.</p><pre dir="auto" className="mt-3 max-h-96 overflow-auto whitespace-pre-wrap break-words [tab-size:4] text-sm">{customPreview.text}</pre></section>}
       {submitError && <p role="alert" className="text-sm text-red-800">{submitError}</p>}
     </div>}
-    <details onToggle={event => {if (event.currentTarget.open) setTermsOpened(true);}} className="rounded-lg border border-gray-200 p-4">
+    <details onToggle={event => {if (event.currentTarget.open){if(value.kind==='standard'||customPreview?.id===value.license_document_id)setLicenseOpened(true);setCovenantOpened(true);}}} className="rounded-lg border border-gray-200 p-4">
       <summary className="cursor-pointer font-medium text-indigo-700">Read the summary and full terms</summary>
       <p className="mt-3 whitespace-pre-line text-sm leading-6 text-gray-700">{value.kind === 'standard' ? STANDARD_SELLER_SUMMARY : CUSTOM_NOTICE}</p>
-      <div className="mt-3 flex flex-wrap gap-4 text-sm">{value.kind === 'standard' ? <><a className="text-indigo-700 underline" href={licenseDocumentPath('standard', value.ai_training)} target="_blank" rel="noreferrer">Read full licence</a><a className="text-indigo-700 underline" href={`${licenseDocumentPath('standard', value.ai_training)}?download=1`} target="_blank" rel="noreferrer">Open full licence</a></> : <span className="text-gray-500">Save the text to review the verified full licence above.</span>}{value.kind === 'custom' && <><a className="text-indigo-700 underline" href={licenseDocumentPath('rider', value.ai_training)} target="_blank" rel="noreferrer">Read AI-Training Rider</a><a className="text-indigo-700 underline" href={`${licenseDocumentPath('rider', value.ai_training)}?download=1`} target="_blank" rel="noreferrer">Open AI-Training Rider</a></>}<a className="text-indigo-700 underline" href={licenseDocumentPath('covenant')} target="_blank" rel="noreferrer">Read Marketplace Listing Covenant</a><a className="text-indigo-700 underline" href={`${licenseDocumentPath('covenant')}?download=1`} target="_blank" rel="noreferrer">Open Marketplace Listing Covenant</a></div>
+      {value.kind==='custom'&&customPreview?.id===value.license_document_id&&<pre dir="auto" className="mt-3 max-h-96 overflow-auto whitespace-pre-wrap break-words text-sm">{customPreview.text}</pre>}
+      <div className="mt-3 flex flex-wrap gap-4 text-sm">{value.kind === 'standard' ? <><a className="text-indigo-700 underline" href={licenseDocumentPath('standard', value.ai_training)} target="_blank" rel="noreferrer" onClick={()=>setLicenseOpened(true)}>Read full licence</a><a className="text-indigo-700 underline" href={`${licenseDocumentPath('standard', value.ai_training)}?download=1`} target="_blank" rel="noreferrer" onClick={()=>setLicenseOpened(true)}>Open full licence</a></> : <span className="text-gray-500">Save the text to review the verified full licence above.</span>}{value.kind === 'custom' && <><a className="text-indigo-700 underline" href={licenseDocumentPath('rider', value.ai_training)} target="_blank" rel="noreferrer">Read AI-Training Rider</a><a className="text-indigo-700 underline" href={`${licenseDocumentPath('rider', value.ai_training)}?download=1`} target="_blank" rel="noreferrer">Open AI-Training Rider</a></>}<a className="text-indigo-700 underline" href={licenseDocumentPath('covenant')} target="_blank" rel="noreferrer" onClick={()=>setCovenantOpened(true)}>Read Marketplace Listing Covenant</a><a className="text-indigo-700 underline" href={`${licenseDocumentPath('covenant')}?download=1`} target="_blank" rel="noreferrer" onClick={()=>setCovenantOpened(true)}>Open Marketplace Listing Covenant</a></div>
     </details>
     <div className="grid gap-4 sm:grid-cols-2">
       <label className="text-sm font-medium text-gray-900">Signer full name<input aria-label="Signer full name" value={identity.signer_name} onChange={event => updateIdentity('signer_name', event.target.value)} className="mt-2 block w-full rounded-lg border border-gray-300 px-3 py-2" /></label>
       <label className="text-sm font-medium text-gray-900">Signer title<input aria-label="Signer title" value={identity.signer_title} onChange={event => updateIdentity('signer_title', event.target.value)} className="mt-2 block w-full rounded-lg border border-gray-300 px-3 py-2" /></label>
     </div>
-    <label onClick={()=>{if(!termsOpened)setLockedHint(true);}} className="flex items-start gap-3 text-sm leading-6 text-gray-700"><input aria-label="Confirm covenant and authority" type="checkbox" checked={identity.authority_confirmed} disabled={!termsOpened || (value.kind === 'custom' && !value.license_document_id)} onChange={event => updateIdentity('authority_confirmed', event.target.checked)} className="mt-1 h-4 w-4 accent-indigo-700" /><span>I have read the selected licence and Marketplace Listing Covenant. I confirm the covenant facts and that I am authorised to accept them for the seller.</span></label>
-    {!termsOpened && <p role={lockedHint?'alert':undefined} className="text-xs text-gray-500">Open and read the licence summary above first.</p>}
-    {termsOpened&&value.kind==='custom'&&!value.license_document_id&&<p className="text-xs text-gray-600">Save your custom licence text before confirming.</p>}
+    <label onClick={()=>{if(!licenseOpened||!covenantOpened)setLockedHint(true);}} className="flex items-start gap-3 text-sm leading-6 text-gray-700"><input aria-label="Confirm covenant and authority" type="checkbox" checked={identity.authority_confirmed} disabled={!licenseOpened || !covenantOpened || (value.kind === 'custom' && !value.license_document_id)} onChange={event => updateIdentity('authority_confirmed', event.target.checked)} className="mt-1 h-4 w-4 accent-indigo-700" /><span>I have read the selected licence and Marketplace Listing Covenant. I confirm the covenant facts and that I am authorised to accept them for the seller.</span></label>
+    {(!licenseOpened||!covenantOpened) && <p role={lockedHint?'alert':undefined} className="text-xs text-gray-500">{!licenseOpened&&!covenantOpened?'Open the selected licence and Marketplace Listing Covenant first.':!licenseOpened?'Open the selected licence first.':'Open the Marketplace Listing Covenant first.'}</p>}
+    {licenseOpened&&covenantOpened&&value.kind==='custom'&&!value.license_document_id&&<p className="text-xs text-gray-600">Save your custom licence text before confirming.</p>}
   </fieldset>;
 }

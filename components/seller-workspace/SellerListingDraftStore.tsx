@@ -2,13 +2,14 @@
 
 import {createContext,useCallback,useContext,useEffect,useMemo,useState} from 'react';
 import {readListingDraft,saveListingDraft,type ListingDraftContent,type SavedListingDraft} from '@/api/sellerListingDraft';
+import type {LicenseSelection} from '@/api/listingLicenses';
 
 const EMPTY_DRAFT:ListingDraftContent={brief:'',title:'',description:'',category:'',tags:'',price:'',license:''};
 export class DraftNotLoadedError extends Error { constructor(){super('Load your saved draft before saving.');this.name='DraftNotLoadedError';} }
-type DraftStore={draft:SavedListingDraft|null;loaded:boolean;error:boolean;sampleCapability:boolean;sampleIndices:number[];
+type DraftStore={draft:SavedListingDraft|null;available:boolean;loaded:boolean;error:boolean;sampleCapability:boolean;sampleIndices:number[];
   selectionSavePending:boolean;selectionSaveFailed:boolean;requestLoad:()=>void;retry:()=>void;
   beginSelectionSave:()=>void;finishSelectionSave:(succeeded:boolean)=>void;setVisibleSampleIndices:(indices:number[]|null)=>void;
-  saveFields:(content:ListingDraftContent)=>Promise<void>;saveSamples:(indices:number[])=>Promise<void>};
+  saveListingFields:(fields:ListingDraftContent)=>Promise<void>;saveLicenseSelection:(selection:LicenseSelection)=>Promise<void>;saveSamples:(indices:number[])=>Promise<void>};
 const DraftContext=createContext<DraftStore|null>(null);
 
 type OwnerSnapshot={draft:SavedListingDraft|null;selectionSaveCount:number;selectionSaveFailed:boolean};
@@ -55,7 +56,7 @@ export function SellerListingDraftProvider({enabled,sampleCapability,children}:{
   useEffect(()=>{const listener=(value:OwnerSnapshot)=>{setDraft(value.draft);setSelectionSaveCount(value.selectionSaveCount);setSelectionSaveFailed(value.selectionSaveFailed);};owner.listeners.add(listener);listener(snapshot());return()=>{owner.listeners.delete(listener);};},[]);
   useEffect(()=>{if(sampleCapability)setRequested(true);},[sampleCapability]);
   useEffect(()=>{
-    if(!enabled){setDraft(null);setVisibleSampleIndices(null);setLoaded(true);setError(false);return;}
+    if(!enabled){setDraft(null);setVisibleSampleIndices(null);setLoaded(false);setError(false);return;}
     if(!requested)return;
     const controller=new AbortController();owner.loaded=false;setLoaded(false);setError(false);
     owner.queue.catch(()=>undefined).then(()=>readListingDraft(controller.signal)).then(value=>{
@@ -70,18 +71,19 @@ export function SellerListingDraftProvider({enabled,sampleCapability,children}:{
   const finishSelectionSave=useCallback((succeeded:boolean)=>finishOwnerSelectionSave(succeeded),[]);
   const sampleIndices=sampleCapability&&draft?.content.sample_decision==='member_files'?(draft.content.sample_object_indices??[]):[];
   const selectionMismatch=visibleSampleIndices!==null&&JSON.stringify(visibleSampleIndices)!==JSON.stringify(sampleIndices);
-  const value=useMemo<DraftStore>(()=>({draft,loaded,error,sampleCapability,sampleIndices,
+  const value=useMemo<DraftStore>(()=>({draft,available:enabled,loaded,error,sampleCapability,sampleIndices,
     selectionSavePending:selectionSaveCount>0||selectionMismatch,selectionSaveFailed,requestLoad:()=>setRequested(true),retry:()=>{setRequested(true);setRetryKey(value=>value+1);},
     beginSelectionSave,finishSelectionSave,setVisibleSampleIndices,
-    saveFields:async(fields)=>{await persist(base=>{
-      const indices=base.sample_object_indices??[];
-      return sampleCapability&&indices.length>0?{...fields,sample_decision:'member_files',sample_object_indices:indices}:fields;
-    });},
+    saveListingFields:async(fields)=>{await persist(base=>({
+      ...base,brief:fields.brief,title:fields.title,description:fields.description,category:fields.category,
+      tags:fields.tags,price:fields.price,license:fields.license,
+    }));},
+    saveLicenseSelection:async(selection)=>{await persist(base=>({...base,license_selection:selection}));},
     saveSamples:async(indices)=>{beginSelectionSave();try{await persist(base=>sampleCapability
       ?{...base,sample_decision:indices.length?'member_files':'none',sample_object_indices:[...indices]}
       :base);finishSelectionSave(true);}
       catch(failure){finishSelectionSave(false);throw failure;}},
-  }),[draft,loaded,error,sampleCapability,sampleIndices,selectionSaveCount,selectionSaveFailed,selectionMismatch,beginSelectionSave,finishSelectionSave]);
+  }),[draft,enabled,loaded,error,sampleCapability,sampleIndices,selectionSaveCount,selectionSaveFailed,selectionMismatch,beginSelectionSave,finishSelectionSave]);
   return <DraftContext.Provider value={value}>{children}</DraftContext.Provider>;
 }
 
