@@ -7,21 +7,29 @@ import { acceptTerms, getCurrentTerms, type TermsPartyContext } from '@/api/lega
 import { useAuthStore } from '@/store/auth';
 
 const ACK_BOX_1 = 'I understand ai.market is non-custodial. It never touches, stores, or moves the data. It is not a party to any transaction, it does not mediate deals, and it does not guarantee that any dataset is accurate, lawful, or fit for purpose. The deal and its risks are between the buyer and the seller.';
-const ACK_BOX_2 = 'I understand that if I am introduced to a counterparty through ai.market and I take that transaction off the platform within 24 months, I agree to pay ai.market 10 times (10x) the entire value of that transaction as liquidated damages, and I agree this amount is a fair and reasonable estimate of the harm caused.';
+const ACK_BOX_2 = 'I understand that if I am introduced to a counterparty through ai.market, I must complete that transaction on ai.market. Taking it off the platform within 24 months is a breach of these Terms, and ai.market may pursue the remedies available to it under these Terms and the law.';
 const ACK_BOX_3 = 'I understand that disputes are strictly between the buyer and the seller, that ai.market does not mediate them, and that by using the marketplace I give up and waive all legal recourse and all right to bring any claim or legal action against the ai.market Parties, and I waive any right to a jury trial and to bring or join a class action, to the maximum extent permitted by law.';
+
+export interface TermsAcceptancePrefill {
+  signerFullName?: string;
+  signerTitle?: string;
+  businessLegalName?: string;
+  jurisdiction?: string;
+}
 
 interface TermsAcceptanceFormProps {
   context: TermsPartyContext;
   compact?: boolean;
   onAccepted?: () => void;
+  prefill?: TermsAcceptancePrefill;
 }
 
-export default function TermsAcceptanceForm({ context, compact = false, onAccepted }: TermsAcceptanceFormProps) {
+export default function TermsAcceptanceForm({ context, compact = false, onAccepted, prefill }: TermsAcceptanceFormProps) {
   const user = useAuthStore((s) => s.user);
-  const [signerFullName, setSignerFullName] = useState(fullName(user?.first_name, user?.last_name));
-  const [signerTitle, setSignerTitle] = useState('');
-  const [businessLegalName, setBusinessLegalName] = useState(user?.company_name || '');
-  const [jurisdiction, setJurisdiction] = useState('');
+  const [signerFullName, setSignerFullName] = useState(prefill?.signerFullName ?? fullName(user?.first_name, user?.last_name));
+  const [signerTitle, setSignerTitle] = useState(prefill?.signerTitle ?? '');
+  const [businessLegalName, setBusinessLegalName] = useState(prefill?.businessLegalName ?? user?.company_name ?? '');
+  const [jurisdiction, setJurisdiction] = useState(prefill?.jurisdiction ?? '');
   const [requiresJurisdiction, setRequiresJurisdiction] = useState(false);
   const [termsReady, setTermsReady] = useState(false);
   const [authorityAck, setAuthorityAck] = useState(false);

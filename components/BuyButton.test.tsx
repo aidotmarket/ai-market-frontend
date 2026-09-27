@@ -16,7 +16,9 @@ import {sha256} from '@/lib/customLicenseVerification';
 import { readFileSync } from 'node:fs';
 
 const ordersApi = vi.hoisted(() => ({ getMyOrders: vi.fn() }));
+const legalApi = vi.hoisted(() => ({ getTermsAcceptanceStatus: vi.fn(), getCurrentTerms: vi.fn(), acceptTerms: vi.fn() }));
 vi.mock('@/api/orders', () => ordersApi);
+vi.mock('@/api/legal', () => legalApi);
 vi.mock('@/api/checkout', () => ({ createCheckout: vi.fn() }));
 
 const structuredLicense = {
@@ -97,6 +99,32 @@ describe('BuyButton licence acceptance', () => {
       '/licenses/marketplace-listing/1.0?download=1',
     ]);
     expect((screen.getByRole('button', { name: 'Accept and continue to payment' }) as HTMLButtonElement).disabled).toBe(false);
+  });
+
+  it('carries the listing signer title and jurisdiction into the terms modal', async () => {
+    const priorGate = process.env.NEXT_PUBLIC_TERMS_GATE_ENFORCE;
+    process.env.NEXT_PUBLIC_TERMS_GATE_ENFORCE = 'true';
+    legalApi.getTermsAcceptanceStatus.mockResolvedValue({ accepted: false });
+    legalApi.getCurrentTerms.mockResolvedValue({ terms_version: '1.1' });
+    vi.stubGlobal('fetch', vi.fn(async (input: RequestInfo | URL) => String(input).includes('marketplace-listing')
+      ? documentResponse('Exact covenant text\n')
+      : documentResponse('Exact licence text\n')));
+
+    try {
+      render(<ToastProvider><BuyButton listingId="listing-1" slug="listing" price={20} pricingType="one_time" licenseDetails={verifiedLicense} /></ToastProvider>);
+      completeAcceptanceForm();
+      await waitFor(() => expect(screen.getAllByText('Fetched bytes match the server hash')).toHaveLength(2));
+      fireEvent.click(screen.getByRole('button', { name: 'Accept and continue to payment' }));
+
+      await screen.findByRole('heading', { name: 'Accept Terms and Conditions' });
+      expect((screen.getByLabelText(/Full legal name/) as HTMLInputElement).value).toBe('Ada Buyer');
+      expect((screen.getByLabelText(/^Title/) as HTMLInputElement).value).toBe('Director');
+      expect((screen.getAllByLabelText(/Business legal name/)[1] as HTMLInputElement).value).toBe('Buyer Ltd');
+      expect((screen.getAllByLabelText(/Jurisdiction \(2-letter country code\)/)[1] as HTMLInputElement).value).toBe('GB');
+    } finally {
+      if (priorGate === undefined) delete process.env.NEXT_PUBLIC_TERMS_GATE_ENFORCE;
+      else process.env.NEXT_PUBLIC_TERMS_GATE_ENFORCE = priorGate;
+    }
   });
 
   it.each([

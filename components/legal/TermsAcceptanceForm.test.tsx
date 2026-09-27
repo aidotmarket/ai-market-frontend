@@ -30,6 +30,12 @@ it('sends the required jurisdiction and authority for terms 1.1', async () => {
   await waitFor(() => expect(legal.acceptTerms).toHaveBeenCalledWith(expect.objectContaining({ jurisdiction: 'GB', authority_ack: true })));
 });
 
+it('shows the approved Box 2 checkbox wording', async () => {
+  legal.getCurrentTerms.mockResolvedValue({ terms_version: '1.1' });
+  render(<TermsAcceptanceForm context={{ scope: 'individual', party_id: 'buyer-1' }} />);
+  expect(screen.getByLabelText('I understand that if I am introduced to a counterparty through ai.market, I must complete that transaction on ai.market. Taking it off the platform within 24 months is a breach of these Terms, and ai.market may pursue the remedies available to it under these Terms and the law.')).not.toBeNull();
+});
+
 it('keeps flag-off terms 1.0 acceptance without jurisdiction', async () => {
   legal.getCurrentTerms.mockResolvedValue({ terms_version: '1.0' });
   render(<TermsAcceptanceForm context={{ scope: 'individual', party_id: 'seller-1' }} />);

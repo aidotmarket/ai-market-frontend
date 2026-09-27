@@ -182,7 +182,12 @@ export default function BuyButton({
 
   const handleBuy = async () => {
     setCheckoutRefusal(null);
-    await ensureTermsAccepted(startCheckout);
+    await ensureTermsAccepted(startCheckout, licenseDetails ? {
+      signerFullName: typedName,
+      signerTitle,
+      businessLegalName,
+      jurisdiction,
+    } : undefined);
   };
 
   const acceptanceComplete = !licenseDetails || (
