@@ -12,8 +12,9 @@ import {
 import SellerSetupProgressBar from '@/components/onboarding/SellerSetupProgressBar';
 import { listSellerGateways } from '@/api/sellerGateways';
 
-const isBuyerPurchaseRoute = (pathname: string) =>
-  pathname === '/dashboard/orders' || pathname.startsWith('/dashboard/orders/');
+const isBuyerActivityRoute = (pathname: string) =>
+  pathname === '/dashboard/orders' || pathname.startsWith('/dashboard/orders/') ||
+  pathname === '/dashboard/requests' || pathname.startsWith('/dashboard/requests/');
 
 export default function DashboardLayout({ children }: { children: React.ReactNode }) {
   const { user, isAuthenticated, isLoading, hydrated } = useAuthStore();
@@ -107,7 +108,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
     : user?.role === 'seller' || user?.role === 'admin';
   const isSellerActive = capabilitiesResolved && sellerStatus === 'active';
   const isAdminEmail = user?.email === 'max@ai.market';
-  const usesBuyerPurchaseContext = isBuyerPurchaseRoute(pathname);
+  const usesBuyerActivityContext = isBuyerActivityRoute(pathname);
 
   const navLinks = [
     ...(isSeller
@@ -122,6 +123,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
           : []),
         ...(isSellerActive ? [{ name: 'Sales', href: '/dashboard/sales' }] : []),
         { name: 'Purchases', href: '/dashboard/orders' },
+        { name: 'My Requests', href: '/dashboard/requests' },
         { name: 'Inquiries', href: '/dashboard/seller/inquiries' },
         { name: 'Settings', href: '/dashboard/settings' },
       ]
@@ -140,7 +142,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
       <aside className="flex w-full shrink-0 flex-col border-b border-gray-200 bg-white md:w-56 md:border-b-0 md:border-r lg:w-64">
         <div className="h-16 flex items-center px-6 border-b border-gray-200">
           <span className="text-lg font-semibold text-gray-900 truncate">
-            {user?.company_name || user?.first_name || (capabilitiesResolved && isSeller && !usesBuyerPurchaseContext ? 'Seller Dashboard' : 'Dashboard')}
+            {user?.company_name || user?.first_name || (capabilitiesResolved && isSeller && !usesBuyerActivityContext ? 'Seller Dashboard' : 'Dashboard')}
           </span>
         </div>
         <nav aria-label="Dashboard" className="flex gap-1 overflow-x-auto px-4 py-3 md:block md:flex-1 md:space-y-1 md:py-6">
@@ -172,7 +174,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
           </div>
         </div>
       </main>
-      {!usesBuyerPurchaseContext && <SellerSetupProgressBar />}
+      {!usesBuyerActivityContext && <SellerSetupProgressBar />}
     </div>
   );
 }

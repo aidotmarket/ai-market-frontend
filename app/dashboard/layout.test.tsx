@@ -226,6 +226,31 @@ describe('DashboardLayout hydration guard', () => {
     expect(screen.queryByText('seller setup progress')).toBeNull();
   });
 
+  it.each(['active', 'provisioning'] as const)(
+    'shows an owned request in buyer context for a %s seller-capable user',
+    async (status) => {
+      navigation.pathname = '/dashboard/requests';
+      capabilitiesApi.getCapabilities.mockResolvedValue({ seller: { effective_status: status } });
+      useAuthStore.setState({
+        user: { ...user, first_name: null, company_name: null },
+        token: 'access-token',
+        isAuthenticated: true,
+        isLoading: false,
+        hydrated: true,
+      });
+
+      render(<DashboardLayout><div>owned requests child</div></DashboardLayout>);
+
+      await screen.findByText('owned requests child');
+      await screen.findByRole('link', { name: 'Listings' });
+      expect(screen.getByRole('link', { name: 'My Requests' }).getAttribute('href')).toBe('/dashboard/requests');
+      expect(screen.getByText('Dashboard')).not.toBeNull();
+      expect(screen.queryByText('Seller Dashboard')).toBeNull();
+      expect(screen.queryByText('seller setup progress')).toBeNull();
+      expect(navigation.push).not.toHaveBeenCalledWith('/dashboard/inquiries');
+    }
+  );
+
   it('keeps seller context on a seller route for a provisioning seller-capable user', async () => {
     navigation.pathname = '/dashboard/listings';
     capabilitiesApi.getCapabilities.mockResolvedValue({
@@ -277,13 +302,14 @@ describe('DashboardLayout hydration guard', () => {
         ['Gateways', '/dashboard/gateways'],
         ['Sales', '/dashboard/sales'],
         ['Purchases', '/dashboard/orders'],
+        ['My Requests', '/dashboard/requests'],
         ['Inquiries', '/dashboard/seller/inquiries'],
         ['Settings', '/dashboard/settings'],
       ]);
     });
   });
 
-  it('omits Sales for provisioning sellers but keeps Purchases', async () => {
+  it('omits Sales for provisioning sellers but keeps Purchases and My Requests', async () => {
     navigation.pathname = '/dashboard/listings';
     capabilitiesApi.getCapabilities.mockResolvedValue({
       seller: { effective_status: 'provisioning' },
@@ -304,6 +330,7 @@ describe('DashboardLayout hydration guard', () => {
         ['Overview', '/dashboard'],
         ['Listings', '/dashboard/listings'],
         ['Purchases', '/dashboard/orders'],
+        ['My Requests', '/dashboard/requests'],
         ['Inquiries', '/dashboard/seller/inquiries'],
         ['Settings', '/dashboard/settings'],
       ]);
@@ -386,7 +413,7 @@ describe('DashboardLayout hydration guard', () => {
   });
 
   it('renders exact buyer navigation', async () => {
-    navigation.pathname = '/dashboard';
+    navigation.pathname = '/dashboard/requests';
     capabilitiesApi.getCapabilities.mockResolvedValue({
       seller: { effective_status: 'not_requested' },
     });
@@ -410,6 +437,77 @@ describe('DashboardLayout hydration guard', () => {
       ]);
     });
     expect(sellerWorkspaceApi.getSellerWorkspaceCapabilities).not.toHaveBeenCalled();
+    expect(navigation.push).not.toHaveBeenCalledWith('/dashboard/inquiries');
+  });
+
+  it('keeps My Requests available during capability loading and failure', async () => {
+    navigation.pathname = '/dashboard/requests';
+    let rejectCapabilities!: (reason: Error) => void;
+    capabilitiesApi.getCapabilities.mockReturnValue(new Promise((_resolve, reject) => {
+      rejectCapabilities = reject;
+    }));
+    const errorSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
+    useAuthStore.setState({
+      user: { ...user, role: 'seller' },
+      token: 'access-token',
+      isAuthenticated: true,
+      isLoading: false,
+      hydrated: true,
+    });
+
+    try {
+      render(<DashboardLayout><div>requests during capability load</div></DashboardLayout>);
+      await screen.findByText('requests during capability load');
+      expect(screen.getByRole('link', { name: 'My Requests' })).not.toBeNull();
+
+      await act(async () => rejectCapabilities(new Error('capability unavailable')));
+      expect(screen.getByRole('link', { name: 'My Requests' })).not.toBeNull();
+      expect(navigation.push).not.toHaveBeenCalledWith('/dashboard/inquiries');
+    } finally {
+      errorSpy.mockRestore();
+    }
+  });
+
+  it('drops a stale seller capability result after an account change', async () => {
+    navigation.pathname = '/dashboard/requests';
+    let resolveOldCapabilities!: (value: { seller: { effective_status: string } }) => void;
+    capabilitiesApi.getCapabilities
+      .mockReturnValueOnce(new Promise((resolve) => { resolveOldCapabilities = resolve; }))
+      .mockResolvedValueOnce({ seller: { effective_status: 'not_requested' } });
+    useAuthStore.setState({
+      user: { ...user, role: 'seller' },
+      token: 'access-token',
+      isAuthenticated: true,
+      isLoading: false,
+      hydrated: true,
+    });
+
+    render(<DashboardLayout><div>account requests child</div></DashboardLayout>);
+    await screen.findByRole('link', { name: 'Listings' });
+
+    await act(async () => {
+      useAuthStore.setState({ user: { ...user, id: 'user-2' } });
+    });
+    await screen.findByRole('link', { name: 'My Inquiries' });
+    await act(async () => resolveOldCapabilities({ seller: { effective_status: 'active' } }));
+
+    expect(screen.queryByRole('link', { name: 'Listings' })).toBeNull();
+    expect(screen.getByRole('link', { name: 'My Requests' })).not.toBeNull();
+    expect(sellerWorkspaceApi.getSellerWorkspaceCapabilities).not.toHaveBeenCalled();
+  });
+
+  it('redirects a signed-out direct visit to My Requests with its query intact', async () => {
+    navigation.pathname = '/dashboard/requests';
+    window.history.replaceState(null, '', '/dashboard/requests?from=account');
+    useAuthStore.setState({ hydrated: true, isLoading: false, isAuthenticated: false });
+
+    render(<DashboardLayout><div>private requests child</div></DashboardLayout>);
+
+    await waitFor(() => expect(navigation.push).toHaveBeenCalledWith(
+      `/login?redirect=${encodeURIComponent('/dashboard/requests?from=account')}`
+    ));
+    expect(screen.queryByText('private requests child')).toBeNull();
+    expect(screen.queryByRole('link', { name: 'My Requests' })).toBeNull();
   });
 
   it.each(['gateway_disabled', 'other_error'])('hides Gateways after %s', async (code) => {
