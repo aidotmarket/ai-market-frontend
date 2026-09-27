@@ -10,14 +10,29 @@ import {
 } from '@/api/connect';
 import { useToast } from '@/components/Toast';
 
+type ConnectStatus = {
+  details_submitted?: boolean;
+  charges_enabled?: boolean;
+  payouts_enabled?: boolean;
+  requirements?: {
+    currently_due?: string[];
+    pending_verification?: string[];
+  };
+};
+
+const REVIEWING_MESSAGE = 'Stripe is reviewing your details; this can take a few minutes.';
+
 export default function StripeReturnPage() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const { toast } = useToast();
 
-  const [status, setStatus] = useState<'loading' | 'resuming' | 'success' | 'timeout' | 'abandoned' | 'error'>('loading');
+  const [status, setStatus] = useState<'loading' | 'resuming' | 'success' | 'reviewing' | 'timeout' | 'abandoned' | 'error'>('loading');
   const [connecting, setConnecting] = useState(false);
+  const [reviewingSuccess, setReviewingSuccess] = useState(false);
+  const [retryCount, setRetryCount] = useState(0);
   const cancelledRef = useRef(false);
+  const statusRequestRef = useRef<ReturnType<typeof getConnectStatus> | null>(null);
   const refreshRequestRef = useRef<ReturnType<typeof getConnectOnboarding> | null>(null);
   const refreshTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const redirectTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -25,6 +40,13 @@ export default function StripeReturnPage() {
 
   useEffect(() => {
     cancelledRef.current = false;
+    const showSuccess = (data: ConnectStatus, isCancelled: () => boolean) => {
+      setReviewingSuccess(!data.charges_enabled || !data.payouts_enabled);
+      setStatus('success');
+      redirectTimerRef.current = setTimeout(() => {
+        if (!isCancelled()) router.push('/dashboard');
+      }, 3000);
+    };
 
     const abandoned = searchParams.get('abandoned');
     if (abandoned === '1' || abandoned === 'true') {
@@ -41,30 +63,48 @@ export default function StripeReturnPage() {
         refreshTimerRef.current = null;
         setStatus('abandoned');
       }, 15000);
-      // Reuse only the in-flight mint when Strict Mode replays this effect.
-      refreshRequestRef.current ??= getConnectOnboarding().finally(() => {
-        refreshRequestRef.current = null;
-      });
-      refreshRequestRef.current.then((res) => {
-        if (!cancelled) redirectToConnectOnboarding(res.data);
-      }).catch((err) => {
+      // Reuse the in-flight status check and link mint when Strict Mode replays this effect.
+      const statusRequest = statusRequestRef.current ??= getConnectStatus();
+      statusRequest.then((res) => res.data as ConnectStatus).catch((err) => {
+        console.error('Failed to check Stripe status', err);
+        return null;
+      }).then((data) => {
         if (cancelled) return;
-        if (isConnectOnboardingTwoFactorRequired(err)) {
-          toast('Complete 2FA setup before connecting payouts.', 'info');
+        if (data?.details_submitted) {
+          clearRefreshTimer();
+          showSuccess(data, () => cancelled);
+          return;
         }
-        setStatus('abandoned');
+        const refreshRequest = refreshRequestRef.current ??= getConnectOnboarding();
+        refreshRequest.then((res) => {
+          if (!cancelled) redirectToConnectOnboarding(res.data);
+        }).catch((err) => {
+          if (cancelled) return;
+          if (isConnectOnboardingTwoFactorRequired(err)) {
+            toast('Complete 2FA setup before connecting payouts.', 'info');
+          }
+          setStatus('abandoned');
+        }).finally(() => {
+          if (refreshRequestRef.current === refreshRequest) refreshRequestRef.current = null;
+          if (!cancelled) clearRefreshTimer();
+        });
       }).finally(() => {
-        if (!cancelled) clearRefreshTimer();
+        if (statusRequestRef.current === statusRequest) statusRequestRef.current = null;
       });
       return () => {
         cancelled = true;
         clearRefreshTimer();
+        if (redirectTimerRef.current) {
+          clearTimeout(redirectTimerRef.current);
+          redirectTimerRef.current = null;
+        }
       };
     }
 
     let attempts = 0;
     const maxAttempts = 15; // 30 seconds total (2s * 15)
     let consecutiveErrors = 0;
+    let lastStatus: ConnectStatus | null = null;
 
     const pollStatus = async () => {
       if (cancelledRef.current) return;
@@ -74,13 +114,9 @@ export default function StripeReturnPage() {
         if (cancelledRef.current) return;
 
         consecutiveErrors = 0;
-        if (res.data?.details_submitted) {
-          setStatus('success');
-          redirectTimerRef.current = setTimeout(() => {
-            if (!cancelledRef.current) {
-              router.push('/dashboard');
-            }
-          }, 3000);
+        lastStatus = res.data as ConnectStatus;
+        if (lastStatus?.details_submitted) {
+          showSuccess(lastStatus, () => cancelledRef.current);
           return;
         }
       } catch (err) {
@@ -97,7 +133,14 @@ export default function StripeReturnPage() {
       if (cancelledRef.current) return;
 
       if (attempts >= maxAttempts) {
-        setStatus('timeout');
+        const requirements = lastStatus?.requirements;
+        setStatus(
+          lastStatus?.details_submitted === false &&
+          requirements?.currently_due?.length === 0 &&
+          (requirements?.pending_verification?.length ?? 0) > 0
+            ? 'reviewing'
+            : 'timeout',
+        );
       } else {
         pollTimerRef.current = setTimeout(pollStatus, 2000);
       }
@@ -116,7 +159,7 @@ export default function StripeReturnPage() {
         pollTimerRef.current = null;
       }
     };
-  }, [router, searchParams, toast]);
+  }, [router, searchParams, toast, retryCount]);
 
   const handleResume = async () => {
     setConnecting(true);
@@ -159,7 +202,30 @@ export default function StripeReturnPage() {
               </svg>
             </div>
             <h2 className="text-xl font-semibold text-gray-900 mb-2">Successfully Connected!</h2>
-            <p className="text-gray-500">Your Stripe account is ready. Redirecting to dashboard...</p>
+            <p className="text-gray-500">
+              {reviewingSuccess ? REVIEWING_MESSAGE : 'Your Stripe account is ready. Redirecting to dashboard...'}
+            </p>
+          </>
+        )}
+
+        {status === 'reviewing' && (
+          <>
+            <h2 className="text-xl font-semibold text-gray-900 mb-2">Verification Pending</h2>
+            <p className="text-gray-500 mb-6">{REVIEWING_MESSAGE}</p>
+            <div className="space-y-3">
+              <button
+                onClick={() => { setStatus('loading'); setRetryCount((count) => count + 1); }}
+                className="w-full rounded-lg bg-[#3F51B5] px-4 py-2 text-sm font-medium text-white hover:bg-[#3545a0]"
+              >
+                Retry check
+              </button>
+              <button
+                onClick={() => router.push('/dashboard')}
+                className="w-full rounded-lg px-4 py-2 text-sm font-medium text-gray-500 hover:text-gray-700"
+              >
+                Return to Dashboard
+              </button>
+            </div>
           </>
         )}
 
