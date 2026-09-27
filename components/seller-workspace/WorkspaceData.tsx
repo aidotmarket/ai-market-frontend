@@ -5,7 +5,7 @@ import axios from 'axios';
 import {MAX_SELECTION_FILES,FolderSelectionError,mergeSelection,resolveFolder} from './folderSelection';
 import type { SourceRead } from '@/api/sellerListingSource';
 import {isCompleteLicenseSelection,type LicenseSelection} from '@/api/listingLicenses';
-import SellerLicenseSelection from './SellerLicenseSelection';
+import SellerLicenseSelection,{type IdentityState} from './SellerLicenseSelection';
 import {
   cancelWorkspaceProfileJob, createIdempotencyKey, getWorkspaceProfileEvidence,
   listWorkspaceObjects, listWorkspaceProfileJobs,
@@ -41,6 +41,9 @@ export function WorkspaceData({ connections, enabled, savedSource, onSaveSelecti
   licenseSelection?:LicenseSelection;onLicenseSelectionChange?:(value:LicenseSelection)=>void;onSaveLicenseSelection?:()=>Promise<void>;licenseSaving?:boolean;licenseSaveMessage?:string;licenseDraftAvailable?:boolean;licenseDraftLoaded?:boolean;licenseDraftError?:boolean;onRetryLicenseDraft?:()=>void;licenseSelectionSaved?:LicenseSelection }) {
   const verified = connections.filter((connection) => connection.status === 'verified');
   const [selectedId, setSelectedId] = useState(savedSource?.content.connection_id ?? '');
+  const [legalIdentityState,setLegalIdentityState]=useState<IdentityState>({kind:'checking'});
+  const [legalIdentityDirty,setLegalIdentityDirty]=useState(false);
+  const identityKnown=legalIdentityState.kind==='known';
   const selected = verified.find((connection) => connection.id === selectedId) ?? verified[0];
   if (!enabled) return <WorkspaceNotice title="File browsing is not available yet">Your storage connections are saved. File browsing still needs to be connected in this Workspace. You do not need to run a data analysis or request marketplace verification to prepare a listing.</WorkspaceNotice>;
   if (!selected) return <WorkspaceNotice title="Connect storage to see your data">Add and verify an AWS connection in Storage connections. Only files inside the folder you authorize will be available here.</WorkspaceNotice>;
@@ -58,12 +61,14 @@ export function WorkspaceData({ connections, enabled, savedSource, onSaveSelecti
       <ObjectBrowser key={`${selected.id}:${selected.version}`} connection={selected} onSaveSelection={onSaveSelection} initialSelection={savedSource?.connection_current && savedSource.content.connection_id === selected.id && savedSource.content.connection_version === selected.version ? savedSource.content.objects.map(item => ({...item, last_modified: '', format_candidate: 'unknown'})) : undefined}
         sourceVersion={savedSource?.version} sampleFilesAvailable={sampleFilesAvailable} initialSampleIndices={initialSampleIndices}
         onSaveSampleSelection={onSaveSampleSelection} onVisibleSampleSelectionChange={onVisibleSampleSelectionChange} sampleLimits={sampleLimits} />
-      {licenseSelection && onLicenseSelectionChange && <div className="space-y-3">{!licenseDraftAvailable?<p role="status" className="text-sm text-amber-900">Licence choice is unavailable because listing drafts are not available right now.</p>:<><SellerLicenseSelection value={licenseSelection} onChange={onLicenseSelectionChange} disabled={licenseSaving} />
+      {licenseSelection && onLicenseSelectionChange && <div className="space-y-3">{!licenseDraftAvailable?<p role="status" className="text-sm text-amber-900">Licence choice is unavailable because listing drafts are not available right now.</p>:<>{licenseDraftLoaded&&<SellerLicenseSelection value={licenseSelection} onChange={onLicenseSelectionChange} disabled={licenseSaving} onIdentityStateChange={setLegalIdentityState} onLegalDirtyChange={setLegalIdentityDirty} legalIdentityEnabled />}
+        {licenseDraftLoaded&&!identityKnown&&<p role="status" className="text-sm text-amber-900">Licence choice is not saved because your legal identity is not confirmed. Save your legal name and country or retry the check before saving or publishing.</p>}
+        {licenseDraftLoaded&&identityKnown&&legalIdentityDirty&&<p role="status" className="text-sm text-amber-900">Save your legal name and country first</p>}
         {!isCompleteLicenseSelection(licenseSelection)&&<p role="status" className="text-sm text-amber-900">Licence choice incomplete. Add the signer, open the terms and confirm covenant and authority before saving the choice.</p>}
         {!licenseDraftLoaded && (licenseDraftError?<p role="alert" className="text-sm text-red-800">Your saved draft could not be loaded. <button type="button" className="underline" onClick={onRetryLicenseDraft}>Try loading draft again</button></p>:<p role="status" className="text-sm text-gray-600">Loading your saved draft…</p>)}
         {licenseSaveMessage&&!(licenseSaveMessage==='Licence choice saved.'&&licenseDraftLoaded&&isCompleteLicenseSelection(licenseSelection)&&JSON.stringify(licenseSelection)===JSON.stringify(licenseSelectionSaved))&&<p role={licenseSaveMessage==='Licence choice saved.'?'status':'alert'} className="text-sm text-gray-700">{licenseSaveMessage}</p>}
         {licenseDraftLoaded&&isCompleteLicenseSelection(licenseSelection)&&JSON.stringify(licenseSelection)===JSON.stringify(licenseSelectionSaved)&&<p role="status" className="text-sm text-green-800">Licence choice saved to your account.</p>}
-        {onSaveLicenseSelection && <button type="button" disabled={licenseSaving||!licenseDraftLoaded||!isCompleteLicenseSelection(licenseSelection)||JSON.stringify(licenseSelection)===JSON.stringify(licenseSelectionSaved)} onClick={()=>void onSaveLicenseSelection()} className={buttonClass}>{licenseSaving?'Saving licence choice…':'Save licence choice'}</button>}</>}</div>}
+        {onSaveLicenseSelection && JSON.stringify(licenseSelection)!==JSON.stringify(licenseSelectionSaved) && <button type="button" disabled={licenseSaving||!identityKnown||legalIdentityDirty||!licenseDraftLoaded||!isCompleteLicenseSelection(licenseSelection)} onClick={()=>void onSaveLicenseSelection()} className={buttonClass}>{licenseSaving?'Saving licence choice…':'Save licence choice'}</button>}</>}</div>}
     </section>
   );
 }

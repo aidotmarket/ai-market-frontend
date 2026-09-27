@@ -6,6 +6,7 @@ import { WorkspaceData } from './WorkspaceData';
 import {DraftNotLoadedError,useSellerListingDraft} from './SellerListingDraftStore';
 import {createStandardSelection,type LicenseSelection} from '@/api/listingLicenses';
 import axios from 'axios';
+import {legalIdentityFailure} from '@/api/sellerLegalIdentity';
 
 export default function SavedWorkspaceData({connections, enabled,sampleLimits,listingLicensesEnabled=false}: {connections: SellerWorkspaceConnection[]; enabled: boolean;sampleLimits?:SampleLimits;listingLicensesEnabled?:boolean}) {
   const [source, setSource] = useState<SourceRead | null>(null);
@@ -15,11 +16,12 @@ export default function SavedWorkspaceData({connections, enabled,sampleLimits,li
   const [saving, setSaving] = useState(false);
   const {draft,available,loaded,error:draftError,retry:retryDraft,requestLoad,sampleCapability,sampleIndices,selectionSavePending,saveLicenseSelection,saveSamples,beginSelectionSave,finishSelectionSave,setVisibleSampleIndices}=useSellerListingDraft();
   const [licenseSelection,setLicenseSelection]=useState<LicenseSelection>(()=>draft?.content.license_selection??createStandardSelection());
+  const [licenseReady,setLicenseReady]=useState(false);
   const [licenseSaving,setLicenseSaving]=useState(false);
   const [licenseSaveMessage,setLicenseSaveMessage]=useState('');
   const licenseChanged=useRef(false);
   useEffect(()=>{if(listingLicensesEnabled)requestLoad();},[listingLicensesEnabled,requestLoad]);
-  useEffect(()=>{if(!licenseChanged.current)setLicenseSelection(draft?.content.license_selection??createStandardSelection());},[draft?.content.license_selection,loaded]);
+  useEffect(()=>{if(loaded){if(!licenseChanged.current)setLicenseSelection(draft?.content.license_selection??createStandardSelection());setLicenseReady(true);}},[draft?.content.license_selection,loaded]);
   const inFlight = useRef(false);
   const version = useRef(0);
   const observedVersion=useRef<number|null>(null);
@@ -66,13 +68,17 @@ export default function SavedWorkspaceData({connections, enabled,sampleLimits,li
   return <WorkspaceData connections={connections} enabled={enabled} savedSource={source} onSaveSelection={save} saving={saving}
     sampleFilesAvailable={sampleCapability&&loaded} initialSampleIndices={sampleIndices} onSaveSampleSelection={saveSamples} onVisibleSampleSelectionChange={setVisibleSampleIndices} sampleLimits={sampleLimits}
     licenseSelection={listingLicensesEnabled?licenseSelection:undefined} onLicenseSelectionChange={listingLicensesEnabled?value=>{licenseChanged.current=true;setLicenseSelection(value);setLicenseSaveMessage('');}:undefined} licenseSaving={licenseSaving} licenseSaveMessage={licenseSaveMessage}
-    licenseDraftAvailable={available} licenseDraftLoaded={loaded} licenseDraftError={draftError} onRetryLicenseDraft={retryDraft} licenseSelectionSaved={draft?.content.license_selection}
+    licenseDraftAvailable={available} licenseDraftLoaded={loaded&&licenseReady} licenseDraftError={draftError} onRetryLicenseDraft={retryDraft} licenseSelectionSaved={draft?.content.license_selection}
     onSaveLicenseSelection={listingLicensesEnabled?async()=>{setLicenseSaving(true);setLicenseSaveMessage('');try{
       if(!loaded)throw new DraftNotLoadedError();
       await saveLicenseSelection(licenseSelection);
       licenseChanged.current=false;
       setLicenseSaveMessage('Licence choice saved.');
-    }catch(failure){if(axios.isAxiosError(failure)&&failure.response?.status===409){retryDraft();setLicenseSaveMessage('Your draft was changed elsewhere; we reloaded it. Check your licence choice and save again.');}
+    }catch(failure){const identityFailure=legalIdentityFailure(failure);
+      if(identityFailure==='required')setLicenseSaveMessage('Your legal name and country are not saved. Return to the legal details above before saving the licence choice.');
+      else if(identityFailure==='conflict')setLicenseSaveMessage('Your legal details need a quick check by our support team before you can save the licence choice.');
+      else if(identityFailure==='unavailable')setLicenseSaveMessage('We could not check your legal details right now. Retry before saving the licence choice.');
+      else if(axios.isAxiosError(failure)&&failure.response?.status===409){retryDraft();setLicenseSaveMessage('Your draft was changed elsewhere; we reloaded it. Check your licence choice and save again.');}
       else setLicenseSaveMessage(failure instanceof DraftNotLoadedError?failure.message:'Licence choice could not be saved. Try again.');
     }finally{setLicenseSaving(false);}}:undefined} />;
 }
