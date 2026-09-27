@@ -46,34 +46,42 @@ export function resumeContinuation(redirect?: string | null, fallback = '/listin
 
 const CONNECTOR_KEY = 'connector_authorization_request';
 const CONNECTOR_STATUS_KEY = 'connector_oauth_enabled';
+const CONNECTOR_TTL = 1_800_000;
 export const connectorRequestPath = (request: string) => `/oauth/connect?request=${request}`;
 
 export function setConnectorStatus(enabled: boolean) {
   try {
-    if (enabled) sessionStorage.setItem(CONNECTOR_STATUS_KEY, 'true');
+    if (enabled) localStorage.setItem(CONNECTOR_STATUS_KEY, JSON.stringify({ enabled: true, deadline: Date.now() + CONNECTOR_TTL }));
     else {
-      sessionStorage.removeItem(CONNECTOR_STATUS_KEY);
+      localStorage.removeItem(CONNECTOR_STATUS_KEY);
       clearConnectorContinuation();
     }
   } catch { /* Storage unavailable. */ }
 }
 
 export function connectorEnabled() {
-  try { return sessionStorage.getItem(CONNECTOR_STATUS_KEY) === 'true'; } catch { return false; }
+  try {
+    const value = JSON.parse(localStorage.getItem(CONNECTOR_STATUS_KEY) || 'null');
+    if (value && Object.keys(value).sort().join(',') === 'deadline,enabled'
+      && value.enabled === true && Number.isFinite(value.deadline)
+      && value.deadline > Date.now() && value.deadline <= Date.now() + CONNECTOR_TTL) return true;
+    localStorage.removeItem(CONNECTOR_STATUS_KEY);
+  } catch { /* Invalid or unavailable storage fails closed. */ }
+  return false;
 }
 
 export function clearConnectorContinuation() {
-  try { sessionStorage.removeItem(CONNECTOR_KEY); } catch { /* Storage unavailable. */ }
+  try { localStorage.removeItem(CONNECTOR_KEY); } catch { /* Storage unavailable. */ }
 }
 
 export function readConnectorContinuation(): { request: string; deadline: number } | null {
-  if (!connectorEnabled()) { clearConnectorContinuation(); return null; }
+  if (!connectorEnabled()) return null;
   try {
-    const value = JSON.parse(sessionStorage.getItem(CONNECTOR_KEY) || 'null');
+    const value = JSON.parse(localStorage.getItem(CONNECTOR_KEY) || 'null');
     if (value && Object.keys(value).sort().join(',') === 'deadline,request'
       && typeof value.request === 'string' && CONNECTOR_CONTINUATION.test(connectorRequestPath(value.request))
       && Number.isFinite(value.deadline) && value.deadline > Date.now()
-      && value.deadline <= Date.now() + TTL) return value;
+      && value.deadline <= Date.now() + CONNECTOR_TTL) return value;
   } catch { /* Invalid or unavailable storage fails closed. */ }
   clearConnectorContinuation();
   return null;
@@ -84,8 +92,8 @@ export function saveConnectorContinuation(path: string): boolean {
   if (!connectorEnabled() || !request) return false;
   const existing = readConnectorContinuation();
   try {
-    sessionStorage.setItem(CONNECTOR_KEY, JSON.stringify({
-      request, deadline: existing?.request === request ? existing.deadline : Date.now() + TTL,
+    localStorage.setItem(CONNECTOR_KEY, JSON.stringify({
+      request, deadline: existing?.request === request ? existing.deadline : Date.now() + CONNECTOR_TTL,
     }));
     return true;
   } catch { return false; }

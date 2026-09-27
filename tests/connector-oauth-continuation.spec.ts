@@ -40,19 +40,41 @@ test('same-device continuation survives register and email verify', async ({ pag
   await mockBackend(context);
   await page.goto(path);
   await expect(page).toHaveURL(/\/login\?redirect=/);
-  await page.getByRole('link', { name: 'Sign up' }).click();
+  const signUp = page.getByRole('main').getByRole('link', { name: 'Sign up' });
+  await expect(signUp).toHaveAttribute('href', /\/register\?redirect=/);
+  await signUp.click();
+  await expect(page).toHaveURL(/\/register\?redirect=/);
+  await page.waitForLoadState('networkidle');
   await page.getByLabel('Email').fill('user@example.com');
   await page.getByLabel('Password', { exact: true }).fill('password123');
   await page.getByLabel('Confirm password').fill('password123');
   await page.getByRole('button', { name: 'Create account' }).click();
   await expect(page.getByText(/Account created. We sent a verification link/)).toBeVisible();
-  await page.goto('/auth/verify-email?token=mail-token');
-  await expect(page.getByText("You're verified")).toBeVisible();
-  await page.getByRole('main').getByRole('link', { name: 'Sign in' }).click();
-  await page.getByLabel('Email').fill('user@example.com');
-  await page.getByLabel('Password').fill('password123');
-  await page.getByRole('button', { name: 'Log in', exact: true }).click();
-  await expect(page.getByRole('heading', { name: 'Connect Claude to ai.market' })).toBeVisible();
+  const verificationPage = await context.newPage();
+  await verificationPage.goto('/auth/verify-email?token=mail-token');
+  await expect(verificationPage.getByText("You're verified")).toBeVisible();
+  await verificationPage.getByRole('main').getByRole('link', { name: 'Sign in' }).click();
+  await verificationPage.getByLabel('Email').fill('user@example.com');
+  await verificationPage.getByLabel('Password').fill('password123');
+  await verificationPage.getByRole('button', { name: 'Log in', exact: true }).click();
+  await expect(verificationPage).toHaveURL(new RegExp(`/oauth/connect\\?request=${id}`));
+  await expect(verificationPage.getByRole('heading', { name: 'Connect Claude to ai.market' })).toBeVisible();
+});
+
+test('continuation older than 30 minutes does not resume in a new tab', async ({ page, context }) => {
+  await mockBackend(context);
+  await page.goto(path);
+  await expect(page).toHaveURL(/\/login\?redirect=/);
+  await page.evaluate(() => {
+    localStorage.setItem('connector_authorization_request', JSON.stringify({
+      request: 'a'.repeat(43), deadline: Date.now() - 1,
+    }));
+  });
+  const verificationPage = await context.newPage();
+  await verificationPage.goto('/auth/verify-email?token=mail-token');
+  await expect(verificationPage.getByText('Return to the app you were connecting and start again.')).toBeVisible();
+  await expect(verificationPage.getByRole('main').getByRole('link', { name: 'Sign in' })).toHaveAttribute('href', '/login');
+  expect(await verificationPage.evaluate(() => localStorage.getItem('connector_authorization_request'))).toBeNull();
 });
 
 test('verification in another browser asks for a fresh connection', async ({ browser }) => {

@@ -4,6 +4,7 @@ import { Suspense, useEffect, useState } from 'react';
 import Link from 'next/link';
 import { useSearchParams } from 'next/navigation';
 import { verifyEmail } from '@/api/auth';
+import { getConnectorStatus } from '@/api/connector-oauth';
 import { connectorRequestPath, readConnectorContinuation } from '@/lib/aim-data-continuation';
 
 function VerifyEmailInner() {
@@ -20,7 +21,8 @@ function VerifyEmailInner() {
       return;
     }
     verifyEmail(token)
-      .then((r) => {
+      .then(async (r) => {
+        await getConnectorStatus().catch(() => false);
         const saved = readConnectorContinuation();
         setContinuation(saved ? connectorRequestPath(saved.request) : '');
         setState('success');

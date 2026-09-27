@@ -10,6 +10,7 @@ import { AxiosError } from 'axios';
 import OAuthButtons, { startProviderOAuth } from '@/components/OAuthButtons';
 import TwoFactorChallenge from '@/components/TwoFactorChallenge';
 import { requestMagicLink, resendVerification } from '@/api/auth';
+import { getConnectorStatus } from '@/api/connector-oauth';
 
 export default function LoginForm() {
   const router = useRouter();
@@ -28,38 +29,44 @@ export default function LoginForm() {
   const [magicLinkSentTo, setMagicLinkSentTo] = useState('');
   const [needsVerification, setNeedsVerification] = useState(false);
   const [resendNote, setResendNote] = useState('');
+  const [connectorStatusLoaded, setConnectorStatusLoaded] = useState(false);
 
   const autoStarted = useRef(false);
   const providerHint = searchParams.get('provider');
   const awaitingProviderHydration = !hydrated && (providerHint === 'google' || providerHint === 'github');
 
   useEffect(() => {
+    getConnectorStatus().catch(() => false).finally(() => setConnectorStatusLoaded(true));
+  }, []);
+
+  useEffect(() => {
     const provider = searchParams.get('provider');
-    if (!(aimDataEnabled() && readContinuation() || connectorEnabled() && readConnectorContinuation()) || !hydrated || isAuthenticated || autoStarted.current
+    if (!(aimDataEnabled() && readContinuation() || connectorStatusLoaded && connectorEnabled() && readConnectorContinuation()) || !hydrated || isAuthenticated || autoStarted.current
       || (provider !== 'google' && provider !== 'github')
       ) return;
     autoStarted.current = true;
     startProviderOAuth(provider).catch(() => {
       setError(`Failed to connect to ${provider === 'google' ? 'Google' : 'GitHub'}. Please try again.`);
     });
-  }, [hydrated, isAuthenticated, searchParams]);
+  }, [connectorStatusLoaded, hydrated, isAuthenticated, searchParams]);
 
   useEffect(() => {
-    if (!hydrated || !isAuthenticated) return;
+    if (!hydrated || !isAuthenticated || (!connectorStatusLoaded && !(aimDataEnabled() && readContinuation()))) return;
     if (searchParams.get('reauth') === 'aim-data' && readContinuation()) return;
     if (searchParams.get('reauth') === 'connector' && readConnectorContinuation()) return;
 
     const redirectTo = resumeAuthContinuation(searchParams.get('redirect'), '/dashboard');
     router.replace(redirectTo);
-  }, [hydrated, isAuthenticated, router, searchParams]);
+  }, [connectorStatusLoaded, hydrated, isAuthenticated, router, searchParams]);
 
   useEffect(() => {
     const visible = async () => {
-      if (document.visibilityState !== 'visible' || !(aimDataEnabled() && readContinuation() || connectorEnabled() && readConnectorContinuation())
-        || useAuthStore.getState().pendingTwoFactor) return;
+      if (document.visibilityState !== 'visible' || useAuthStore.getState().pendingTwoFactor) return;
+      const aimSaved = aimDataEnabled() && readContinuation();
+      if (!aimSaved) await getConnectorStatus().catch(() => false);
+      if (!aimSaved && !(connectorEnabled() && readConnectorContinuation())) return;
       await useAuthStore.getState().hydrate();
-      const saved = readContinuation();
-      if (saved && useAuthStore.getState().isAuthenticated) router.replace(requestPath(saved.request));
+      if (aimSaved && useAuthStore.getState().isAuthenticated) router.replace(requestPath(aimSaved.request));
       else {
         const connector = readConnectorContinuation();
         if (connector && useAuthStore.getState().isAuthenticated) router.replace(connectorRequestPath(connector.request));
@@ -95,6 +102,7 @@ export default function LoginForm() {
           return;
         }
         toast('Logged in successfully', 'success');
+        if (!(aimDataEnabled() && readContinuation())) await getConnectorStatus().catch(() => false);
         const redirectTo = resumeAuthContinuation(searchParams.get('redirect'), '/listings');
         router.push(redirectTo);
       }
@@ -118,8 +126,9 @@ export default function LoginForm() {
     }
   };
 
-  const handleTwoFactorVerified = () => {
+  const handleTwoFactorVerified = async () => {
     toast('Logged in successfully', 'success');
+    if (!(aimDataEnabled() && readContinuation())) await getConnectorStatus().catch(() => false);
     const redirectTo = resumeAuthContinuation(searchParams.get('redirect'), '/listings');
     router.push(redirectTo);
   };

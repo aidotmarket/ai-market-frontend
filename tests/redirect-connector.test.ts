@@ -5,7 +5,7 @@ import { clearConnectorContinuation, connectorRequestPath, readConnectorContinua
 import { validateConnectorContinueUrl } from '@/api/connector-oauth';
 
 const path = connectorRequestPath('a'.repeat(43));
-beforeEach(() => sessionStorage.clear());
+beforeEach(() => { sessionStorage.clear(); localStorage.clear(); });
 
 it.each([path, connectorRequestPath('_'.repeat(43)), connectorRequestPath('-'.repeat(43))])('accepts only an exact connector path %s', (value) => {
   expect(CONNECTOR_CONTINUATION.test(value)).toBe(true);
@@ -21,7 +21,7 @@ it.each([
   expect(validateRedirect(value)).toBe('/dashboard');
 });
 
-it('keeps a status-gated same-browser continuation for ten minutes', () => {
+it('keeps a status-gated same-browser continuation for thirty minutes', () => {
   expect(saveConnectorContinuation(path)).toBe(false);
   setConnectorStatus(true);
   expect(saveConnectorContinuation(path)).toBe(true);
@@ -31,6 +31,35 @@ it('keeps a status-gated same-browser continuation for ten minutes', () => {
   expect(resumeAuthContinuation()).toBe('/listings');
   expect(readConnectorContinuation()).toBeNull();
   clearConnectorContinuation();
+});
+
+it('does not clear a valid continuation before the status check runs in a new page', () => {
+  setConnectorStatus(true);
+  expect(saveConnectorContinuation(path)).toBe(true);
+  localStorage.removeItem('connector_oauth_enabled');
+  expect(readConnectorContinuation()).toBeNull();
+  expect(localStorage.getItem('connector_authorization_request')).not.toBeNull();
+  setConnectorStatus(true);
+  expect(readConnectorContinuation()?.request).toBe('a'.repeat(43));
+});
+
+it('rejects and clears an expired connector continuation', () => {
+  setConnectorStatus(true);
+  localStorage.setItem('connector_authorization_request', JSON.stringify({
+    request: 'a'.repeat(43), deadline: Date.now() - 1,
+  }));
+  expect(readConnectorContinuation()).toBeNull();
+  expect(localStorage.getItem('connector_authorization_request')).toBeNull();
+});
+
+it('requires a fresh status check after its thirty-minute cache expires', () => {
+  setConnectorStatus(true);
+  expect(saveConnectorContinuation(path)).toBe(true);
+  localStorage.setItem('connector_oauth_enabled', JSON.stringify({ enabled: true, deadline: Date.now() - 1 }));
+  expect(readConnectorContinuation()).toBeNull();
+  expect(localStorage.getItem('connector_authorization_request')).not.toBeNull();
+  setConnectorStatus(true);
+  expect(readConnectorContinuation()?.request).toBe('a'.repeat(43));
 });
 
 it('opens only the contracted completion URL prefix', () => {
