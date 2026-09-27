@@ -5,7 +5,7 @@ import Link from 'next/link';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { useAuthStore } from '@/store/auth';
 import { useToast } from '@/components/Toast';
-import { aimDataEnabled, resumeAuthContinuation, readContinuation, requestPath, connectorEnabled, readConnectorContinuation, connectorRequestPath } from '@/lib/aim-data-continuation';
+import { aimDataEnabled, resumeAuthContinuation, readContinuation, requestPath, connectorEnabled, readConnectorContinuation, connectorRequestPath, initiateConnectorContinuation } from '@/lib/aim-data-continuation';
 import { AxiosError } from 'axios';
 import OAuthButtons, { startProviderOAuth } from '@/components/OAuthButtons';
 import TwoFactorChallenge from '@/components/TwoFactorChallenge';
@@ -38,6 +38,10 @@ export default function LoginForm() {
   useEffect(() => {
     getConnectorStatus().catch(() => false).finally(() => setConnectorStatusLoaded(true));
   }, []);
+
+  useEffect(() => {
+    initiateConnectorContinuation(searchParams.get('redirect'));
+  }, [connectorStatusLoaded, searchParams]);
 
   useEffect(() => {
     const provider = searchParams.get('provider');

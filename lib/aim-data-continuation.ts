@@ -74,11 +74,14 @@ export function clearConnectorContinuation() {
   try { localStorage.removeItem(CONNECTOR_KEY); } catch { /* Storage unavailable. */ }
 }
 
-export function readConnectorContinuation(): { request: string; deadline: number } | null {
+type ConnectorContinuation = { request: string; deadline: number; initiated?: true };
+
+export function readConnectorContinuation(): ConnectorContinuation | null {
   if (!connectorEnabled()) return null;
   try {
     const value = JSON.parse(localStorage.getItem(CONNECTOR_KEY) || 'null');
-    if (value && Object.keys(value).sort().join(',') === 'deadline,request'
+    const keys = value && Object.keys(value).sort().join(',');
+    if (value && (keys === 'deadline,request' || keys === 'deadline,initiated,request' && value.initiated === true)
       && typeof value.request === 'string' && CONNECTOR_CONTINUATION.test(connectorRequestPath(value.request))
       && Number.isFinite(value.deadline) && value.deadline > Date.now()
       && value.deadline <= Date.now() + CONNECTOR_TTL) return value;
@@ -94,14 +97,24 @@ export function saveConnectorContinuation(path: string): boolean {
   try {
     localStorage.setItem(CONNECTOR_KEY, JSON.stringify({
       request, deadline: existing?.request === request ? existing.deadline : Date.now() + CONNECTOR_TTL,
+      ...(existing?.request === request && existing.initiated ? { initiated: true } : {}),
     }));
+    return true;
+  } catch { return false; }
+}
+
+export function initiateConnectorContinuation(redirect?: string | null): boolean {
+  const saved = readConnectorContinuation();
+  if (!saved || redirect !== connectorRequestPath(saved.request)) return false;
+  try {
+    localStorage.setItem(CONNECTOR_KEY, JSON.stringify({ ...saved, initiated: true }));
     return true;
   } catch { return false; }
 }
 
 export function resumeAuthContinuation(redirect?: string | null, fallback = '/listings'): string {
   const connector = readConnectorContinuation();
-  if (connector && redirect === connectorRequestPath(connector.request)) {
+  if (connector && (redirect === connectorRequestPath(connector.request) || redirect == null && connector.initiated === true)) {
     return connectorRequestPath(connector.request);
   }
   if (CONNECTOR_CONTINUATION.test(redirect || '')) return fallback;

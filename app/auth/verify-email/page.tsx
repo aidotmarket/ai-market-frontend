@@ -5,7 +5,7 @@ import Link from 'next/link';
 import { useSearchParams } from 'next/navigation';
 import { verifyEmail } from '@/api/auth';
 import { getConnectorStatus } from '@/api/connector-oauth';
-import { connectorRequestPath, readConnectorContinuation } from '@/lib/aim-data-continuation';
+import { connectorRequestPath, initiateConnectorContinuation, readConnectorContinuation } from '@/lib/aim-data-continuation';
 
 function VerifyEmailInner() {
   const params = useSearchParams();
@@ -24,7 +24,9 @@ function VerifyEmailInner() {
       .then(async (r) => {
         await getConnectorStatus().catch(() => false);
         const saved = readConnectorContinuation();
-        setContinuation(saved ? connectorRequestPath(saved.request) : '');
+        const redirect = saved ? connectorRequestPath(saved.request) : '';
+        if (redirect) initiateConnectorContinuation(redirect);
+        setContinuation(redirect);
         setState('success');
         setMessage(r?.message || 'Your email is verified.');
       })

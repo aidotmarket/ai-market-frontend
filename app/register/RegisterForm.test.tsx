@@ -4,7 +4,7 @@ import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type React from 'react';
 import { renderToString } from 'react-dom/server';
-import { saveConnectorContinuation, setConnectorStatus } from '@/lib/aim-data-continuation';
+import { readConnectorContinuation, saveConnectorContinuation, setConnectorStatus } from '@/lib/aim-data-continuation';
 import RegisterForm from './RegisterForm';
 
 const authStore = vi.hoisted(() => ({
@@ -119,6 +119,7 @@ describe('RegisterForm', () => {
       render(<RegisterForm />);
       const loginHref = `/login?redirect=${encodeURIComponent(connectorPath)}`;
       await waitFor(() => expect(screen.getByRole('link', { name: 'Log in' }).getAttribute('href')).toBe(loginHref));
+      expect(readConnectorContinuation()?.initiated).toBe(true);
       submitRegistration();
       expect((await screen.findByRole('link', { name: 'sign in' })).getAttribute('href')).toBe(loginHref);
     } finally {

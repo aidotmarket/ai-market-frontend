@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
 import { beforeEach, expect, it } from 'vitest';
 import { CONNECTOR_CONTINUATION, validateRedirect } from '@/lib/redirect';
-import { clearConnectorContinuation, connectorRequestPath, readConnectorContinuation, resumeAuthContinuation, saveConnectorContinuation, setConnectorStatus } from '@/lib/aim-data-continuation';
+import { clearConnectorContinuation, connectorRequestPath, initiateConnectorContinuation, readConnectorContinuation, resumeAuthContinuation, saveConnectorContinuation, setConnectorStatus } from '@/lib/aim-data-continuation';
 import { validateConnectorContinueUrl } from '@/api/connector-oauth';
 
 const path = connectorRequestPath('a'.repeat(43));
@@ -75,6 +75,31 @@ it('resumes only the connector request named by the login redirect', () => {
   expect(saveConnectorContinuation(path)).toBe(true);
   expect(resumeAuthContinuation(connectorRequestPath('b'.repeat(43)))).toBe('/listings');
   expect(resumeAuthContinuation(path)).toBe(path);
+});
+
+it('resumes an initiated connector request after a callback loses the redirect', () => {
+  setConnectorStatus(true);
+  expect(saveConnectorContinuation(path)).toBe(true);
+  expect(initiateConnectorContinuation(connectorRequestPath('b'.repeat(43)))).toBe(false);
+  expect(resumeAuthContinuation()).toBe('/listings');
+  expect(initiateConnectorContinuation(path)).toBe(true);
+  expect(readConnectorContinuation()?.initiated).toBe(true);
+  expect(resumeAuthContinuation()).toBe(path);
+  expect(resumeAuthContinuation('/dashboard')).toBe('/dashboard');
+  expect(saveConnectorContinuation(path)).toBe(true);
+  expect(resumeAuthContinuation()).toBe(path);
+});
+
+it.each([
+  { request: 'a'.repeat(43), deadline: Date.now() + 600_000, initiated: false },
+  { request: 'a'.repeat(43), deadline: Date.now() + 600_000, initiated: 'true' },
+  { request: 'a'.repeat(43), deadline: Date.now() + 600_000, foreign: true },
+  { request: 'a'.repeat(43), deadline: Date.now() + 600_000, initiated: true, foreign: true },
+])('rejects and clears foreign connector continuation shape %j', (value) => {
+  setConnectorStatus(true);
+  localStorage.setItem('connector_authorization_request', JSON.stringify(value));
+  expect(readConnectorContinuation()).toBeNull();
+  expect(localStorage.getItem('connector_authorization_request')).toBeNull();
 });
 
 it('opens only the contracted completion URL prefix', () => {

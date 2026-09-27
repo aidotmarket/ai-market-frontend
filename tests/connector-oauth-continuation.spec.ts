@@ -18,6 +18,7 @@ async function mockBackend(context: BrowserContext, expired = false) {
         expires_at: new Date(Date.now() + 600_000).toISOString(), csrf_nonce: 'nonce' });
     if (pathname === '/api/v1/auth/refresh') return json({ detail: 'no session' }, 401);
     if (pathname === '/api/v1/auth/login' && method === 'POST') return json({ access_token: 'test-token', token_type: 'bearer' });
+    if (pathname === '/api/v1/auth/oauth/google/callback' && method === 'POST') return json({ access_token: 'test-token', token_type: 'bearer' });
     if (pathname === '/api/v1/auth/register' && method === 'POST') return json(user);
     if (pathname === '/api/v1/auth/verify-email' && method === 'POST') return json({ message: 'Your email is verified.' });
     if (pathname === '/api/v1/auth/me') return json(user);
@@ -32,6 +33,17 @@ test('same-device continuation resumes after password login', async ({ page, con
   await page.getByLabel('Email').fill('user@example.com');
   await page.getByLabel('Password').fill('password123');
   await page.getByRole('button', { name: 'Log in', exact: true }).click();
+  await expect(page).toHaveURL(new RegExp(`/oauth/connect\\?request=${id}`));
+  await expect(page.getByRole('heading', { name: 'Connect Claude to ai.market' })).toBeVisible();
+});
+
+test('consent resumes after a social callback without a redirect parameter', async ({ page, context }) => {
+  await mockBackend(context);
+  await page.goto(path);
+  await expect(page).toHaveURL(/\/login\?redirect=/);
+  await expect.poll(async () => page.evaluate(() => JSON.parse(localStorage.getItem('connector_authorization_request') || 'null')?.initiated)).toBe(true);
+  await page.evaluate(() => sessionStorage.setItem('oauth_nonce', 'nonce'));
+  await page.goto('/auth/oauth/google/callback?code=code&state=state');
   await expect(page).toHaveURL(new RegExp(`/oauth/connect\\?request=${id}`));
   await expect(page.getByRole('heading', { name: 'Connect Claude to ai.market' })).toBeVisible();
 });
