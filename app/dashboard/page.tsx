@@ -261,7 +261,7 @@ export default function DashboardOverview() {
         onClose={() => setReauthAction(null)}
         onSuccess={handleReauthSuccess}
         fallbackFocusRef={dashboardHeadingRef}
-        method={user?.totp_enabled ? 'totp' : 'password'}
+        method={user?.totp_enabled ? 'totp' : user?.auth_methods.includes('password') ? 'password' : 'magic_link'}
       />
       <div>
         <h1 ref={dashboardHeadingRef} tabIndex={-1} className="text-2xl font-bold text-gray-900">Welcome back, {user?.first_name || 'there'}</h1>

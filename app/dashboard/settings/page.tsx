@@ -281,7 +281,7 @@ export default function SettingsPage() {
         onClose={closeReauthModal}
         onSuccess={handleReauthSuccess}
         fallbackFocusRef={settingsHeadingRef}
-        method={user?.totp_enabled ? 'totp' : 'password'}
+        method={user?.totp_enabled ? 'totp' : user?.auth_methods.includes('password') ? 'password' : 'magic_link'}
       />
 
       <h1

@@ -12,6 +12,7 @@ const authApi = vi.hoisted(() => ({
   regenerateBackupCodes: vi.fn(),
   setup2FA: vi.fn(),
   submitReauth: vi.fn(),
+  verifyReauthMagicLink: vi.fn(),
   updateProfile: vi.fn(),
   verify2FASetup: vi.fn(),
 }));
@@ -185,6 +186,29 @@ describe('SettingsPage capability refresh', () => {
     expect(screen.queryByRole('dialog', { name: 'Re-authenticate' })).toBeNull();
     expect(screen.getByText('setup-secret')).toBeTruthy();
     expect(screen.getByText('Re-authentication required')).toBeTruthy();
+  });
+
+  it('enables 2FA for a passwordless account using the emailed link', async () => {
+    useAuthStore.setState({ user: { ...user, auth_methods: ['oidc'], primary_auth: 'oidc' } });
+    authApi.submitReauth.mockResolvedValue({ token: null, method: 'magic_link' });
+    authApi.verifyReauthMagicLink.mockResolvedValue({ token: 'magic-reauth-token', method: 'magic_link' });
+    authApi.setup2FA.mockResolvedValue({ secret: 'setup-secret', qr_uri: 'otpauth://example', expires_in: 600 });
+    authApi.verify2FASetup.mockResolvedValue({ backup_codes: ['backup-one'] });
+    render(<SettingsPage />);
+    fireEvent.click(screen.getByRole('button', { name: 'Enable two-factor authentication' }));
+    const dialog = await screen.findByRole('dialog', { name: 'Re-authenticate' });
+    expect(within(dialog).queryByLabelText('Password')).toBeNull();
+    fireEvent.click(within(dialog).getByRole('button', { name: 'Send link' }));
+    await waitFor(() => expect(authApi.submitReauth).toHaveBeenCalledWith('', 'magic_link'));
+    fireEvent.change(within(dialog).getByRole('textbox', { name: 'Email link' }), { target: { value: 'https://www.ai.market/auth/verify?token=email-token&purpose=reauth' } });
+    fireEvent.click(within(dialog).getByRole('button', { name: 'Continue' }));
+    await waitFor(() => expect(authApi.verifyReauthMagicLink).toHaveBeenCalledWith('email-token'));
+    expect(await screen.findByText('setup-secret')).toBeTruthy();
+    expect(authApi.setup2FA).toHaveBeenCalledWith('magic-reauth-token');
+    fireEvent.change(screen.getByRole('textbox', { name: '6-digit code' }), { target: { value: '123456' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Verify and enable' }));
+    await waitFor(() => expect(authApi.verify2FASetup).toHaveBeenCalledWith('123456', 'magic-reauth-token'));
+    expect(await screen.findByRole('heading', { name: 'Backup codes' })).toBeTruthy();
   });
 
   it.each([

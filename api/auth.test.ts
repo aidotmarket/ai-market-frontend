@@ -6,7 +6,7 @@ vi.mock('./client', () => ({
   api: { post: apiPost },
 }));
 
-const { register, submitReauth, setup2FA, verify2FASetup } = await import('./auth');
+const { register, submitReauth, verifyReauthMagicLink, setup2FA, verify2FASetup } = await import('./auth');
 
 describe('auth register API', () => {
   beforeEach(() => {
@@ -85,5 +85,14 @@ describe('auth reauthentication API', () => {
     expect(apiPost).toHaveBeenCalledWith('/auth/reauth', {
       method: 'password', password: 'password with spaces',
     });
+  });
+
+  it('requests a magic link and exchanges its token for reauthentication', async () => {
+    apiPost.mockResolvedValueOnce({ data: { token: null, method: 'magic_link', message: 'Re-authentication link sent' } });
+    apiPost.mockResolvedValueOnce({ data: { token: 'magic-reauth-token', method: 'magic_link' } });
+    await expect(submitReauth('', 'magic_link')).resolves.toMatchObject({ token: null, method: 'magic_link' });
+    await expect(verifyReauthMagicLink('email-token')).resolves.toMatchObject({ token: 'magic-reauth-token' });
+    expect(apiPost).toHaveBeenNthCalledWith(1, '/auth/reauth', { method: 'magic_link' });
+    expect(apiPost).toHaveBeenNthCalledWith(2, '/auth/magic-link/verify', { token: 'email-token' });
   });
 });

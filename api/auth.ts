@@ -71,6 +71,11 @@ export async function magicLinkVerify(token: string): Promise<LoginResult> {
   return res.data;
 }
 
+export async function verifyReauthMagicLink(token: string): Promise<ReauthResponse> {
+  const res = await api.post<ReauthResponse>('/auth/magic-link/verify', { token });
+  return res.data;
+}
+
 export async function verify2FALogin(pre_auth_token: string, code: string): Promise<TokenResponse> {
   const res = await api.post<TokenResponse>('/auth/2fa/verify', { pre_auth_token, code });
   return res.data;
@@ -89,10 +94,10 @@ export async function verify2FASetup(code: string, reauthToken: string): Promise
   return res.data;
 }
 
-export async function submitReauth(credential: string, method: 'password' | 'totp' = 'totp'): Promise<ReauthResponse> {
+export async function submitReauth(credential: string, method: 'password' | 'totp' | 'magic_link' = 'totp'): Promise<ReauthResponse> {
   const res = await api.post<ReauthResponse>('/auth/reauth', method === 'password'
     ? { method, password: credential }
-    : { code: credential });
+    : method === 'magic_link' ? { method } : { code: credential });
   return res.data;
 }
 
