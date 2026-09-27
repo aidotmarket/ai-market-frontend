@@ -44,6 +44,7 @@ describe('next.config request discovery rewrites', () => {
 
     const rewrites = await config.rewrites!();
 
+    if (!Array.isArray(rewrites)) throw new Error('Expected flat rewrites');
     expect(rewrites.filter(rewrite=>rewrite.source==='/licenses/:path*')).toEqual([
       {source:'/licenses/:path*',has:[{type:'query',key:'download',value:'1'}],destination:'https://api.example.test/api/v1/licenses/:path*'},
     ]);

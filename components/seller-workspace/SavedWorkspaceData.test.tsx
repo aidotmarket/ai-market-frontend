@@ -28,7 +28,7 @@ it('refuses any store save before the draft has been read',async()=>{
 });
 it('merges a queued licence save over the latest listing write',async()=>{
  const selection=createStandardSelection();
- const draft={version:4,content:{brief:'brief',title:'Offer',description:'Description',category:'Retail',tags:'retail',price:'25',license:'Research',sample_decision:'member_files',sample_object_indices:[0]},updated_at:'2026-09-18T12:00:00Z'};
+ const draft={version:4,content:{brief:'brief',title:'Offer',description:'Description',category:'Retail',tags:'retail',price:'25',license:'Research',sample_decision:'member_files' as const,sample_object_indices:[0]},updated_at:'2026-09-18T12:00:00Z'};
  api.readListingDraft.mockResolvedValue(draft);
  let finishFirst!:(value:unknown)=>void;
  api.saveListingDraft.mockImplementationOnce(()=>new Promise(resolve=>{finishFirst=resolve;}))
