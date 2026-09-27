@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 import {cleanup,fireEvent,render,screen,waitFor} from '@testing-library/react';
-import {afterEach,describe,expect,it,vi} from 'vitest';
+import {afterEach,beforeEach,describe,expect,it,vi} from 'vitest';
 import {useState} from 'react';
 import {webcrypto} from 'node:crypto';
 import SellerLicenseSelection,{CUSTOM_NOTICE} from './SellerLicenseSelection';
@@ -9,7 +9,10 @@ import {hashLicenseComponentBytes,sha256} from '@/lib/customLicenseVerification'
 
 const transport = vi.hoisted(()=>({post:vi.fn()}));
 vi.mock('@/api/client',()=>({api:transport}));
+const legal=vi.hoisted(()=>({getSellerLegalIdentity:vi.fn(),refreshSellerLegalIdentity:vi.fn(),saveSellerLegalIdentity:vi.fn()}));
+vi.mock('@/api/sellerLegalIdentity',async(importOriginal)=>({...await importOriginal<typeof import('@/api/sellerLegalIdentity')>(),...legal}));
 afterEach(()=>{cleanup();vi.unstubAllGlobals();vi.clearAllMocks();});
+beforeEach(()=>{legal.refreshSellerLegalIdentity.mockResolvedValue({status:'known',source:'stripe_connect',legal_name:'Seller Ltd',jurisdiction:'GB',version:1});legal.getSellerLegalIdentity.mockResolvedValue({status:'known',source:'stripe_connect',legal_name:'Seller Ltd',jurisdiction:'GB',version:1});});
 
 async function responseFor(text:string,title='Terms') {
   const bytes=new TextEncoder().encode(text);
@@ -20,10 +23,82 @@ async function responseFor(text:string,title='Terms') {
 
 function Harness({initial=createStandardSelection()}:{initial?:LicenseSelection}) {
   const [value,setValue]=useState(initial);
-  return <><SellerLicenseSelection value={value} onChange={setValue}/><output data-testid="wire">{JSON.stringify(value)}</output></>;
+  return <><SellerLicenseSelection value={value} onChange={setValue} legalIdentityEnabled/><output data-testid="wire">{JSON.stringify(value)}</output></>;
 }
 
 describe('Seller licence selection',()=>{
+  it('checks refresh before GET and shows a Stripe legal name without a save button',async()=>{
+    const order:string[]=[];
+    legal.refreshSellerLegalIdentity.mockImplementation(async()=>{order.push('refresh');});
+    legal.getSellerLegalIdentity.mockImplementation(async()=>{order.push('get');return {status:'known',source:'stripe_connect',legal_name:'Seller Ltd',jurisdiction:'GB',version:4};});
+    render(<Harness/>);
+    expect(screen.getByText('Checking your legal details…')).toBeTruthy();
+    await screen.findByText('Legal name on the licence: Seller Ltd (GB)');
+    expect(order).toEqual(['refresh','get']);
+    expect(screen.getByText('from your Stripe account')).toBeTruthy();
+    expect(screen.queryByRole('button',{name:'Save legal details'})).toBeNull();
+    expect(JSON.parse(screen.getByTestId('wire').textContent!).identity_version).toBe(4);
+  });
+  it('saves required legal name and country separately from signer fields',async()=>{
+    const required={status:'required',source:null,legal_name:null,jurisdiction:null,version:null};
+    const typed={status:'known',source:'seller_typed',legal_name:'Taylor Seller',jurisdiction:'US',version:1};
+    legal.getSellerLegalIdentity.mockResolvedValueOnce(required).mockResolvedValueOnce(typed);
+    legal.saveSellerLegalIdentity.mockResolvedValue(typed);
+    render(<Harness/>);
+    await screen.findByText(/Your legal name and country are not saved/);
+    fireEvent.change(screen.getByLabelText('Legal name'),{target:{value:'Taylor Seller'}});
+    fireEvent.change(screen.getByLabelText('Country'),{target:{value:'US'}});
+    fireEvent.click(screen.getByRole('button',{name:'Save legal details'}));
+    await screen.findByText('Legal name on the licence: Taylor Seller (US)');
+    expect(legal.saveSellerLegalIdentity).toHaveBeenCalledWith('Taylor Seller','US',null);
+    expect(JSON.parse(screen.getByTestId('wire').textContent!).seller_acceptance.signer_name).toBe('');
+    expect(JSON.parse(screen.getByTestId('wire').textContent!).identity_version).toBe(1);
+    expect(screen.queryByRole('button',{name:'Save legal details'})).toBeNull();
+  });
+  it('allows a seller typed correction until the server refuses it with a reason',async()=>{
+    legal.getSellerLegalIdentity.mockResolvedValue({status:'known',source:'seller_typed',legal_name:'Old Name',jurisdiction:'GB',version:2});
+    legal.saveSellerLegalIdentity.mockRejectedValue({response:{status:409,data:{detail:{code:'SELLER_LEGAL_IDENTITY_REQUIRED'}}}});
+    render(<Harness/>);
+    await screen.findByText('saved by you');
+    fireEvent.click(screen.getByRole('button',{name:'Edit legal details'}));
+    expect((screen.getByRole('button',{name:'Save legal details'}) as HTMLButtonElement).disabled).toBe(true);
+    fireEvent.change(screen.getByLabelText('Legal name'),{target:{value:'New Name'}});
+    fireEvent.click(screen.getByRole('button',{name:'Save legal details'}));
+    expect((await screen.findByText(/Check them and try again/)).textContent).toContain('not saved');
+    expect(legal.saveSellerLegalIdentity).toHaveBeenCalledWith('New Name','GB',2);
+  });
+  it('shows the safe server reason when a typed correction is locked',async()=>{
+    legal.getSellerLegalIdentity.mockResolvedValue({status:'known',source:'seller_typed',legal_name:'Old Name',jurisdiction:'GB',version:2});
+    legal.saveSellerLegalIdentity.mockRejectedValue({response:{status:409,data:{detail:{code:'IDENTITY_ALREADY_ACCEPTED',message:'This legal identity is already used in an accepted licence.'}}}});
+    render(<Harness/>);
+    await screen.findByText('saved by you');
+    fireEvent.click(screen.getByRole('button',{name:'Edit legal details'}));
+    fireEvent.change(screen.getByLabelText('Legal name'),{target:{value:'New Name'}});
+    fireEvent.click(screen.getByRole('button',{name:'Save legal details'}));
+    expect(await screen.findByText('This legal identity is already used in an accepted licence.')).toBeTruthy();
+  });
+  it('hides names on conflict and links to the restricted support path',async()=>{
+    legal.refreshSellerLegalIdentity.mockRejectedValue({response:{status:409,data:{detail:{code:'LEGAL_IDENTITY_CONFLICT',sources:['Secret Name']}}}});
+    legal.getSellerLegalIdentity.mockRejectedValue({response:{status:409,data:{detail:{code:'LEGAL_IDENTITY_CONFLICT',sources:['Secret Name']}}}});
+    render(<Harness/>);
+    expect((await screen.findByRole('alert')).textContent).toContain('quick check by our support team');
+    expect(document.body.textContent).not.toContain('Secret Name');
+    expect(screen.getByRole('link',{name:'Contact support'}).getAttribute('href')).toBe('/seller-workspace/support/legal-identity');
+  });
+  it('offers Retry after a 503 and then accepts a known identity',async()=>{
+    legal.refreshSellerLegalIdentity.mockRejectedValueOnce({response:{status:503,data:{detail:{code:'IDENTITY_SERVICE_UNAVAILABLE'}}}});
+    legal.getSellerLegalIdentity.mockRejectedValueOnce({response:{status:503,data:{detail:{code:'IDENTITY_SERVICE_UNAVAILABLE'}}}});
+    render(<Harness/>);
+    await screen.findByText(/We could not check your legal details right now/);
+    fireEvent.click(screen.getByRole('button',{name:'Retry'}));
+    await screen.findByText('Legal name on the licence: Seller Ltd (GB)');
+  });
+  it('uses a saved identity if Stripe refresh is unavailable',async()=>{
+    legal.refreshSellerLegalIdentity.mockRejectedValueOnce({response:{status:503,data:{detail:{code:'IDENTITY_SERVICE_UNAVAILABLE'}}}});
+    render(<Harness/>);
+    await screen.findByText('Legal name on the licence: Seller Ltd (GB)');
+    expect(screen.getByText(/Your saved legal details are still available/)).toBeTruthy();
+  });
   it('shows exactly two cards, defaults training to Allow, and emits the exact section 9 wire shape',()=>{
     render(<Harness/>);
     expect(screen.getAllByRole('radio')).toHaveLength(2);

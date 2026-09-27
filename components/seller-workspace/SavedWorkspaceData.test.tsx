@@ -11,11 +11,16 @@ const api = vi.hoisted(() => ({readListingSource:vi.fn(), saveListingSource:vi.f
 vi.mock('@/api/sellerListingSource', () => api);
 vi.mock('@/api/sellerListingDraft',()=>api);
 vi.mock('@/api/sellerWorkspace', () => api);
+const legal=vi.hoisted(()=>({getSellerLegalIdentity:vi.fn(),refreshSellerLegalIdentity:vi.fn()}));
+vi.mock('@/api/sellerLegalIdentity',async(importOriginal)=>({...await importOriginal<typeof import('@/api/sellerLegalIdentity')>(),...legal}));
 const connection = {id:'connection-1',version:1,status:'verified',bucket:'synthetic',prefix:'data'} as SellerWorkspaceConnection;
 const object = {key:'data/example.csv',version_id:null,etag:'synthetic',size:42,last_modified:null,format_candidate:'csv'};
 const content = {connection_id:connection.id,connection_version:1,version_mode:'current',objects:[{key:object.key,version_id:null,etag:object.etag,size:42}]};
 afterEach(()=>{cleanup();resetSellerListingDraftOwnerForTests();});
-beforeEach(() => {vi.resetAllMocks(); api.listWorkspaceObjects.mockResolvedValue({objects:[object],next_cursor:null});api.readListingDraft.mockResolvedValue(null);});
+beforeEach(() => {vi.resetAllMocks(); api.listWorkspaceObjects.mockResolvedValue({objects:[object],next_cursor:null});api.readListingDraft.mockResolvedValue(null);
+  const known={status:'known',source:'stripe_connect',legal_name:'Seller Ltd',jurisdiction:'GB',version:1};
+  legal.refreshSellerLegalIdentity.mockResolvedValue(known);legal.getSellerLegalIdentity.mockResolvedValue(known);
+});
 const renderData=(connections=[connection],sampleCapability=false)=>render(<SellerListingDraftProvider enabled sampleCapability={sampleCapability}><SavedWorkspaceData enabled connections={connections} /></SellerListingDraftProvider>);
 const renderLicensedData=(sampleCapability=false)=>render(<SellerListingDraftProvider enabled sampleCapability={sampleCapability}><SavedWorkspaceData enabled connections={[connection]} listingLicensesEnabled /></SellerListingDraftProvider>);
 const DraftStatus=()=>{const status=useSellerListingDraftStatus();return <p data-testid="draft-status">{status.selectionSavePending?`pending:${status.sampleIndices.join(',')}`:status.selectionSaveFailed?'failed':'ready'}</p>;};
@@ -62,6 +67,17 @@ it('does not save an incomplete unchanged licence choice',async()=>{
  expect(screen.getByText(/Licence choice incomplete/)).toBeTruthy();
  expect(api.saveListingDraft).not.toHaveBeenCalled();
 });
+it('blocks licence saving and explains why when legal identity is required',async()=>{
+ const draft={version:4,content:{brief:'brief',title:'Offer',description:'Description',category:'Retail',tags:'retail',price:'25',license:'Research'},updated_at:'2026-09-18T12:00:00Z'};
+ const required={status:'required',source:null,legal_name:null,jurisdiction:null,version:null};
+ legal.refreshSellerLegalIdentity.mockResolvedValue(required);legal.getSellerLegalIdentity.mockResolvedValue(required);
+ api.readListingSource.mockResolvedValue({version:2,content,connection_current:true});api.readListingDraft.mockResolvedValue(draft);
+ renderLicensedData();
+ await screen.findByText(/Your legal name and country are not saved/);
+ expect((screen.getByRole('button',{name:'Save licence choice'}) as HTMLButtonElement).disabled).toBe(true);
+ expect(screen.getByText(/Licence choice is not saved because your legal identity is not confirmed/)).toBeTruthy();
+ expect(api.saveListingDraft).not.toHaveBeenCalled();
+});
 it('saves only a complete licence selection',async()=>{
  const draft={version:4,content:{brief:'brief',title:'Offer',description:'Description',category:'Retail',tags:'retail',price:'25',license:'Research',sample_decision:'member_files',sample_object_indices:[0],other_metadata:{source:'unchanged'}},updated_at:'2026-09-18T12:00:00Z'};
  api.readListingSource.mockResolvedValue({version:2,content,connection_current:true});
@@ -69,7 +85,7 @@ it('saves only a complete licence selection',async()=>{
  api.saveListingDraft.mockImplementation(async saved=>({version:5,content:saved,updated_at:draft.updated_at}));
  renderLicensedData();
  await screen.findByRole('button',{name:'Save licence choice'});
- fireEvent.change(screen.getByLabelText('Signer full name'),{target:{value:'Sam Seller'}});
+ fireEvent.change(await screen.findByLabelText('Signer full name'),{target:{value:'Sam Seller'}});
  fireEvent.change(screen.getByLabelText('Signer title'),{target:{value:'Director'}});
  const details=screen.getByText('Read the summary and full terms').closest('details')!;
  Object.defineProperty(details,'open',{value:true,configurable:true});
@@ -86,7 +102,7 @@ it('saves only a complete licence selection',async()=>{
  expect(screen.queryByText('Licence choice saved.')).toBeNull();
 });
 it.each([false,true])('keeps the saved licence visible after a listing edit with sample capability %s',async(sampleCapability)=>{
- const selection={...createStandardSelection(),seller_acceptance:{signer_name:'Sam Seller',signer_title:'Director',authority_confirmed:true}};
+ const selection={...createStandardSelection(),identity_version:1,seller_acceptance:{signer_name:'Sam Seller',signer_title:'Director',authority_confirmed:true}};
  const draft={version:4,content:{brief:'brief',title:'Offer',description:'Description',category:'Retail',tags:'retail',price:'25',license:'Research',license_selection:selection,sample_decision:'member_files',sample_object_indices:[0]},updated_at:'2026-09-18T12:00:00Z'};
  api.readListingSource.mockResolvedValue({version:2,content,connection_current:true});
  api.readListingDraft.mockResolvedValue(draft);
@@ -127,7 +143,7 @@ it('reloads on a 409 without discarding the unsaved licence choice',async()=>{
  api.saveListingDraft.mockRejectedValueOnce({isAxiosError:true,response:{status:409}}).mockImplementation(async saved=>({version:6,content:saved,updated_at:draft.updated_at}));
  renderLicensedData();
  await waitFor(()=>expect(api.readListingDraft).toHaveBeenCalledOnce());
- fireEvent.change(screen.getByLabelText('Signer full name'),{target:{value:'Sam Seller'}});
+ fireEvent.change(await screen.findByLabelText('Signer full name'),{target:{value:'Sam Seller'}});
  fireEvent.change(screen.getByLabelText('Signer title'),{target:{value:'Director'}});
  const details=screen.getByText('Read the summary and full terms').closest('details')!;
  Object.defineProperty(details,'open',{value:true,configurable:true});fireEvent(details,new Event('toggle'));

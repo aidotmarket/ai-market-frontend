@@ -45,6 +45,25 @@ it('blocks a stale approval and ignores success after leaving the page',async()=
   late.rerender(<SellerPublication approval={approval} active={false} rendered/>);
   await act(async()=>finish(publication));expect(screen.queryByText(/published and available/)).toBeNull();
 });
+it.each([
+  ['SELLER_LEGAL_IDENTITY_REQUIRED','Your legal name and country are not saved',false],
+  ['LEGAL_IDENTITY_CONFLICT','quick check by our support team',true],
+])('maps %s without marking the approval stale',async(code,message,support)=>{
+  api.publishListing.mockRejectedValueOnce({response:{status:409,data:{detail:{code,sources:['Private Name']}}}});
+  render(<SellerPublication approval={approval} active rendered/>);
+  fireEvent.click(await screen.findByRole('button',{name:'Publish this listing'}));
+  expect((await screen.findByRole('alert')).textContent).toContain(message);
+  expect(document.body.textContent).not.toContain('Private Name');
+  expect((screen.getByRole('button',{name:'Publish this listing'}) as HTMLButtonElement).disabled).toBe(false);
+  expect(Boolean(screen.queryByRole('link',{name:'Contact support'}))).toBe(support);
+});
+it('maps identity 503 to retry without marking the approval stale',async()=>{
+  api.publishListing.mockRejectedValueOnce({response:{status:503,data:{detail:{code:'IDENTITY_SERVICE_UNAVAILABLE'}}}});
+  render(<SellerPublication approval={approval} active rendered/>);
+  fireEvent.click(await screen.findByRole('button',{name:'Publish this listing'}));
+  expect((await screen.findByRole('alert')).textContent).toContain('Retry publishing');
+  expect((screen.getByRole('button',{name:'Publish this listing'}) as HTMLButtonElement).disabled).toBe(false);
+});
 it('shows seller copy for the session-only approved free sample count',async()=>{
  const sampled={...approval,sample_decision:'member_files' as const};
  api.readPublication.mockResolvedValue({publication_available:false,publication});
@@ -69,6 +88,12 @@ it('keeps publish disabled until covenant authority and signer facts are complet
  const button=await screen.findByRole('button',{name:'Publish this listing'});
  expect((button as HTMLButtonElement).disabled).toBe(true);fireEvent.click(button);expect(api.publishListing).not.toHaveBeenCalled();
  expect(screen.getByText(/covenant and authority not confirmed/)).toBeTruthy();
+});
+it('keeps publish blocked if the saved licence has no legal identity version',async()=>{
+ const licensed={...approval,license_selection:{...createStandardSelection(),seller_acceptance:{signer_name:'Seller',signer_title:'Owner',authority_confirmed:true}}};
+ render(<SellerPublication approval={licensed} active rendered/>);
+ expect((await screen.findByRole('button',{name:'Publish this listing'}) as HTMLButtonElement).disabled).toBe(true);
+ expect(screen.getByText(/legal identity and licence choice are not yet saved together/)).toBeTruthy();
 });
 it('opens the verified custom document through the listing disclosure',async()=>{
  const licensed={...approval,license_selection:{...createStandardSelection(),kind:'custom' as const}};
