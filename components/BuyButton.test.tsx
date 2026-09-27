@@ -120,7 +120,7 @@ describe('BuyButton licence acceptance', () => {
       expect((screen.getByLabelText(/Full legal name/) as HTMLInputElement).value).toBe('Ada Buyer');
       expect((screen.getByLabelText(/^Title/) as HTMLInputElement).value).toBe('Director');
       expect((screen.getAllByLabelText(/Business legal name/)[1] as HTMLInputElement).value).toBe('Buyer Ltd');
-      expect((document.getElementById('terms-jurisdiction') as HTMLSelectElement).value).toBe('GB');
+      await waitFor(() => expect((document.getElementById('terms-jurisdiction') as HTMLSelectElement).value).toBe('GB'));
       for (const id of ['ack-box-1', 'ack-box-2', 'ack-box-3']) fireEvent.click(document.getElementById(id)!);
       fireEvent.click(screen.getByLabelText('I am authorized to bind this business'));
       fireEvent.click(screen.getByRole('button', { name: 'Accept and sign' }));
