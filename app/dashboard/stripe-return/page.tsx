@@ -27,7 +27,7 @@ export default function StripeReturnPage() {
   const searchParams = useSearchParams();
   const { toast } = useToast();
 
-  const [status, setStatus] = useState<'loading' | 'resuming' | 'success' | 'reviewing' | 'timeout' | 'abandoned' | 'error'>('loading');
+  const [status, setStatus] = useState<'loading' | 'resuming' | 'success' | 'action' | 'reviewing' | 'timeout' | 'abandoned' | 'error'>('loading');
   const [connecting, setConnecting] = useState(false);
   const [reviewingSuccess, setReviewingSuccess] = useState(false);
   const [retryCount, setRetryCount] = useState(0);
@@ -70,7 +70,7 @@ export default function StripeReturnPage() {
         return null;
       }).then((data) => {
         if (cancelled) return;
-        if (data?.details_submitted) {
+        if (data?.details_submitted && !data.requirements?.currently_due?.length) {
           clearRefreshTimer();
           showSuccess(data, () => cancelled);
           return;
@@ -115,6 +115,10 @@ export default function StripeReturnPage() {
 
         consecutiveErrors = 0;
         lastStatus = res.data as ConnectStatus;
+        if (lastStatus?.requirements?.currently_due?.length) {
+          setStatus('action');
+          return;
+        }
         if (lastStatus?.details_submitted) {
           showSuccess(lastStatus, () => cancelledRef.current);
           return;
@@ -226,6 +230,20 @@ export default function StripeReturnPage() {
                 Return to Dashboard
               </button>
             </div>
+          </>
+        )}
+
+        {status === 'action' && (
+          <>
+            <h2 className="text-xl font-semibold text-gray-900 mb-2">Stripe needs more information</h2>
+            <p className="text-gray-500 mb-6">Continue Stripe setup to provide the details Stripe requested.</p>
+            <button
+              onClick={handleResume}
+              disabled={connecting}
+              className="w-full rounded-lg bg-[#3F51B5] px-4 py-2 text-sm font-medium text-white hover:bg-[#3545a0] disabled:opacity-50"
+            >
+              {connecting ? 'Loading...' : 'Continue Stripe setup'}
+            </button>
           </>
         )}
 

@@ -199,6 +199,51 @@ describe('Stripe return', () => {
     expect(navigation.router.push).toHaveBeenCalledExactlyOnceWith('/dashboard');
   });
 
+  it('resumes onboarding once on an abandoned return when submitted details are currently due', async () => {
+    vi.useFakeTimers();
+    navigation.searchParams = new URLSearchParams('abandoned=1');
+    connectApi.getConnectStatus.mockResolvedValue({ data: {
+      details_submitted: true,
+      charges_enabled: false,
+      payouts_enabled: false,
+      requirements: { currently_due: ['external_account'] },
+    } });
+    render(<StrictMode><StripeReturnPage /></StrictMode>);
+
+    await act(async () => { await vi.advanceTimersByTimeAsync(0); });
+    expect(connectApi.getConnectStatus).toHaveBeenCalledOnce();
+    expect(connectApi.getConnectOnboarding).toHaveBeenCalledOnce();
+    expect(connectApi.redirectToConnectOnboarding).toHaveBeenCalledExactlyOnceWith(onboardingData);
+    expect(screen.queryByText('Successfully Connected!')).toBeNull();
+    expect(screen.queryByText('Stripe is reviewing your details; this can take a few minutes.')).toBeNull();
+    await act(async () => { await vi.advanceTimersByTimeAsync(3000); });
+    expect(navigation.router.push).not.toHaveBeenCalled();
+  });
+
+  it('offers setup action without polling or redirect when submitted details are currently due', async () => {
+    vi.useFakeTimers();
+    connectApi.getConnectStatus.mockResolvedValue({ data: {
+      details_submitted: true,
+      charges_enabled: false,
+      payouts_enabled: false,
+      requirements: { currently_due: ['external_account'] },
+    } });
+    render(<StripeReturnPage />);
+
+    await act(async () => { await vi.advanceTimersByTimeAsync(0); });
+    expect(screen.getByText('Stripe needs more information')).not.toBeNull();
+    expect(screen.getByRole('button', { name: 'Continue Stripe setup' })).not.toBeNull();
+    expect(screen.queryByText('Successfully Connected!')).toBeNull();
+    expect(screen.queryByText('Stripe is reviewing your details; this can take a few minutes.')).toBeNull();
+    expect(connectApi.getConnectOnboarding).not.toHaveBeenCalled();
+    await act(async () => { await vi.advanceTimersByTimeAsync(30000); });
+    expect(connectApi.getConnectStatus).toHaveBeenCalledOnce();
+    expect(navigation.router.push).not.toHaveBeenCalled();
+    expect(vi.getTimerCount()).toBe(0);
+    await act(async () => { fireEvent.click(screen.getByRole('button', { name: 'Continue Stripe setup' })); });
+    expect(connectApi.redirectToConnectOnboarding).toHaveBeenCalledExactlyOnceWith(onboardingData);
+  });
+
   it('mints a link after an abandoned status check fails', async () => {
     navigation.searchParams = new URLSearchParams('abandoned=1');
     connectApi.getConnectStatus.mockRejectedValueOnce(new Error('status unavailable'));
@@ -211,7 +256,12 @@ describe('Stripe return', () => {
 
   it('shows review guidance on success while Stripe has not enabled payments', async () => {
     navigation.searchParams = new URLSearchParams('abandoned=1');
-    connectApi.getConnectStatus.mockResolvedValue({ data: { details_submitted: true, charges_enabled: false, payouts_enabled: false } });
+    connectApi.getConnectStatus.mockResolvedValue({ data: {
+      details_submitted: true,
+      charges_enabled: false,
+      payouts_enabled: false,
+      requirements: { currently_due: [], pending_verification: ['individual.verification.document'] },
+    } });
     render(<StripeReturnPage />);
 
     expect(await screen.findByText('Successfully Connected!')).not.toBeNull();
