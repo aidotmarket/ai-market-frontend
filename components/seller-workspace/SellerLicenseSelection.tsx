@@ -64,12 +64,13 @@ export default function SellerLicenseSelection({value, onChange, disabled = fals
     if(!legalName.trim()||!country||legalName.trim().length>255)return;
     setSavingLegal(true);setLegalError('');
     try {
-      await saveSellerLegalIdentity(legalName.trim(),country,legalState.value.version);
+      await saveSellerLegalIdentity(legalName.trim(),country,legalState.value.version??0);
       applyIdentity(await getSellerLegalIdentity());
     } catch(error){
       const kind=legalIdentityFailure(error);
       if(kind==='conflict')setIdentityState({kind:'conflict'});
       else if(kind==='unavailable')setIdentityState({kind:'unavailable'});
+      else if(kind==='invalid')setLegalError('Check the legal name and country');
       else {
         const detail=(error as {response?:{data?:{detail?:{message?:unknown}}}})?.response?.data?.detail;
         const reason=typeof detail?.message==='string'&&detail.message.length<=200?detail.message:null;

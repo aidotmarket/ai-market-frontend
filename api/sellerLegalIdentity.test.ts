@@ -15,10 +15,19 @@ it('uses the three owner scoped legal identity endpoints and carries the expecte
   expect(transport.get).toHaveBeenCalledWith('/seller-workspace/legal-identity');
   expect(transport.put).toHaveBeenCalledWith('/seller-workspace/legal-identity',{legal_name:'Seller',jurisdiction:'GB',expected_version:2});
 });
+it('sends version zero when legal identity is required',async()=>{
+  const required={status:'required',source:null,legal_name:null,jurisdiction:null,version:null} as const;
+  transport.put.mockResolvedValue({data:required});
+  await saveSellerLegalIdentity('Taylor Seller','US',required.version??0);
+  expect(transport.put).toHaveBeenCalledWith('/seller-workspace/legal-identity',{
+    legal_name:'Taylor Seller',jurisdiction:'US',expected_version:0,
+  });
+});
 it.each([
   [409,'LEGAL_IDENTITY_CONFLICT','conflict'],
   [409,'SELLER_LEGAL_IDENTITY_REQUIRED','required'],
   [503,'IDENTITY_SERVICE_UNAVAILABLE','unavailable'],
+  [422,'LEGAL_IDENTITY_INVALID','invalid'],
   [503,'OTHER_SERVICE_UNAVAILABLE','other'],
   [409,'REVIEW_STALE','other'],
 ])('maps HTTP %s detail code %s', (status,code,expected)=>{

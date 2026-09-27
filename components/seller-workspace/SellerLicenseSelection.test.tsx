@@ -50,7 +50,7 @@ describe('Seller licence selection',()=>{
     fireEvent.change(screen.getByLabelText('Country'),{target:{value:'US'}});
     fireEvent.click(screen.getByRole('button',{name:'Save legal details'}));
     await screen.findByText('Legal name on the licence: Taylor Seller (US)');
-    expect(legal.saveSellerLegalIdentity).toHaveBeenCalledWith('Taylor Seller','US',null);
+    expect(legal.saveSellerLegalIdentity).toHaveBeenCalledWith('Taylor Seller','US',0);
     expect(JSON.parse(screen.getByTestId('wire').textContent!).seller_acceptance.signer_name).toBe('');
     expect(JSON.parse(screen.getByTestId('wire').textContent!).identity_version).toBe(1);
     expect(screen.queryByRole('button',{name:'Save legal details'})).toBeNull();
@@ -66,6 +66,16 @@ describe('Seller licence selection',()=>{
     fireEvent.click(screen.getByRole('button',{name:'Save legal details'}));
     expect((await screen.findByText(/Check them and try again/)).textContent).toContain('not saved');
     expect(legal.saveSellerLegalIdentity).toHaveBeenCalledWith('New Name','GB',2);
+  });
+  it('shows a field error for invalid legal identity',async()=>{
+    legal.getSellerLegalIdentity.mockResolvedValue({status:'required',source:null,legal_name:null,jurisdiction:null,version:null});
+    legal.saveSellerLegalIdentity.mockRejectedValue({response:{status:422,data:{detail:{code:'LEGAL_IDENTITY_INVALID'}}}});
+    render(<Harness/>);
+    await screen.findByText(/Your legal name and country are not saved/);
+    fireEvent.change(screen.getByLabelText('Legal name'),{target:{value:'Taylor Seller'}});
+    fireEvent.change(screen.getByLabelText('Country'),{target:{value:'US'}});
+    fireEvent.click(screen.getByRole('button',{name:'Save legal details'}));
+    expect(await screen.findByRole('alert')).toHaveProperty('textContent','Check the legal name and country');
   });
   it('shows the safe server reason when a typed correction is locked',async()=>{
     legal.getSellerLegalIdentity.mockResolvedValue({status:'known',source:'seller_typed',legal_name:'Old Name',jurisdiction:'GB',version:2});
