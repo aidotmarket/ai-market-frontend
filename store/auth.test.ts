@@ -1,5 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import type { User } from '@/types';
+import { saveConnectorContinuation, setConnectorStatus } from '@/lib/aim-data-continuation';
 
 const authApi = vi.hoisted(() => ({
   login: vi.fn(),
@@ -35,6 +36,35 @@ const user: User = {
   auth_methods: ['password'],
   primary_auth: 'password',
 };
+
+it('clears connector continuation and status on logout while preserving AIM Data state', async () => {
+  const local = new Map<string, string>();
+  const session = new Map<string, string>();
+  vi.stubGlobal('localStorage', {
+    getItem: (key: string) => local.get(key) ?? null,
+    setItem: (key: string, value: string) => local.set(key, value),
+    removeItem: (key: string) => local.delete(key),
+  });
+  vi.stubGlobal('sessionStorage', {
+    getItem: (key: string) => session.get(key) ?? null,
+    setItem: (key: string, value: string) => session.set(key, value),
+    removeItem: (key: string) => session.delete(key),
+  });
+  try {
+    setConnectorStatus(true);
+    expect(saveConnectorContinuation(`/oauth/connect?request=${'a'.repeat(43)}`)).toBe(true);
+    sessionStorage.setItem('aim_data_authorization_request', 'saved-aim-data');
+    authApi.logout.mockResolvedValue(undefined);
+
+    await useAuthStore.getState().logout();
+
+    expect(localStorage.getItem('connector_authorization_request')).toBeNull();
+    expect(localStorage.getItem('connector_oauth_enabled')).toBeNull();
+    expect(sessionStorage.getItem('aim_data_authorization_request')).toBe('saved-aim-data');
+  } finally {
+    vi.unstubAllGlobals();
+  }
+});
 
 describe('auth store login-time 2FA', () => {
   beforeEach(() => {

@@ -41,7 +41,9 @@ export default function LoginForm() {
 
   useEffect(() => {
     const provider = searchParams.get('provider');
-    if (!(aimDataEnabled() && readContinuation() || connectorStatusLoaded && connectorEnabled() && readConnectorContinuation()) || !hydrated || isAuthenticated || autoStarted.current
+    const connector = connectorStatusLoaded && connectorEnabled() && readConnectorContinuation();
+    const connectorLogin = connector && searchParams.get('redirect') === connectorRequestPath(connector.request);
+    if (!(aimDataEnabled() && readContinuation() || connectorLogin) || !hydrated || isAuthenticated || autoStarted.current
       || (provider !== 'google' && provider !== 'github')
       ) return;
     autoStarted.current = true;
@@ -64,17 +66,16 @@ export default function LoginForm() {
       if (document.visibilityState !== 'visible' || useAuthStore.getState().pendingTwoFactor) return;
       const aimSaved = aimDataEnabled() && readContinuation();
       if (!aimSaved) await getConnectorStatus().catch(() => false);
-      if (!aimSaved && !(connectorEnabled() && readConnectorContinuation())) return;
+      const connector = connectorEnabled() && readConnectorContinuation();
+      const connectorLogin = connector && searchParams.get('redirect') === connectorRequestPath(connector.request);
+      if (!aimSaved && !connectorLogin) return;
       await useAuthStore.getState().hydrate();
       if (aimSaved && useAuthStore.getState().isAuthenticated) router.replace(requestPath(aimSaved.request));
-      else {
-        const connector = readConnectorContinuation();
-        if (connector && useAuthStore.getState().isAuthenticated) router.replace(connectorRequestPath(connector.request));
-      }
+      else if (connectorLogin && useAuthStore.getState().isAuthenticated) router.replace(connectorRequestPath(connector.request));
     };
     document.addEventListener('visibilitychange', visible);
     return () => document.removeEventListener('visibilitychange', visible);
-  }, [router]);
+  }, [router, searchParams]);
 
   const handleResendVerification = async () => {
     setResendNote('');

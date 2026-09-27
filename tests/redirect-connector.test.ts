@@ -25,7 +25,7 @@ it('keeps a status-gated same-browser continuation for thirty minutes', () => {
   expect(saveConnectorContinuation(path)).toBe(false);
   setConnectorStatus(true);
   expect(saveConnectorContinuation(path)).toBe(true);
-  expect(resumeAuthContinuation()).toBe(path);
+  expect(resumeAuthContinuation(path)).toBe(path);
   expect(readConnectorContinuation()?.request).toBe('a'.repeat(43));
   setConnectorStatus(false);
   expect(resumeAuthContinuation()).toBe('/listings');
@@ -60,6 +60,21 @@ it('requires a fresh status check after its thirty-minute cache expires', () => 
   expect(localStorage.getItem('connector_authorization_request')).not.toBeNull();
   setConnectorStatus(true);
   expect(readConnectorContinuation()?.request).toBe('a'.repeat(43));
+});
+
+it('uses the normal fallback for plain login despite a saved connector request', () => {
+  setConnectorStatus(true);
+  expect(saveConnectorContinuation(path)).toBe(true);
+  expect(resumeAuthContinuation()).toBe('/listings');
+  expect(resumeAuthContinuation(null, '/dashboard')).toBe('/dashboard');
+  expect(readConnectorContinuation()?.request).toBe('a'.repeat(43));
+});
+
+it('resumes only the connector request named by the login redirect', () => {
+  setConnectorStatus(true);
+  expect(saveConnectorContinuation(path)).toBe(true);
+  expect(resumeAuthContinuation(connectorRequestPath('b'.repeat(43)))).toBe('/listings');
+  expect(resumeAuthContinuation(path)).toBe(path);
 });
 
 it('opens only the contracted completion URL prefix', () => {

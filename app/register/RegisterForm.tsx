@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import Link from 'next/link';
 import { useSearchParams } from 'next/navigation';
 import { useAuthStore } from '@/store/auth';
@@ -24,8 +24,12 @@ export default function RegisterForm() {
   }
   const listingRedirect = validateListingRedirect(validatedRedirect);
   const isListingRedirect = Boolean(listingRedirect);
-  const connector = readConnectorContinuation();
-  const continuationRedirect = validatedRedirect || (connector ? connectorRequestPath(connector.request) : '');
+  const [connectorRedirect, setConnectorRedirect] = useState('');
+  useEffect(() => {
+    const connector = readConnectorContinuation();
+    setConnectorRedirect(connector ? connectorRequestPath(connector.request) : '');
+  }, []);
+  const continuationRedirect = validatedRedirect || connectorRedirect;
   const loginHref = continuationRedirect
     ? `/login?redirect=${encodeURIComponent(continuationRedirect)}`
     : '/login';

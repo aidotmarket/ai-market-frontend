@@ -101,7 +101,7 @@ export function saveConnectorContinuation(path: string): boolean {
 
 export function resumeAuthContinuation(redirect?: string | null, fallback = '/listings'): string {
   const connector = readConnectorContinuation();
-  if (connector && (!redirect || redirect === connectorRequestPath(connector.request))) {
+  if (connector && redirect === connectorRequestPath(connector.request)) {
     return connectorRequestPath(connector.request);
   }
   if (CONNECTOR_CONTINUATION.test(redirect || '')) return fallback;

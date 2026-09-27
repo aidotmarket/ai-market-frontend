@@ -3,6 +3,7 @@
 import { create } from 'zustand';
 import type { TokenResponse, User } from '@/types';
 import * as authApi from '@/api/auth';
+import { clearConnectorContinuation, setConnectorStatus } from '@/lib/aim-data-continuation';
 
 export interface PendingTwoFactor {
   preAuthToken: string;
@@ -188,6 +189,8 @@ export const useAuthStore = create<AuthState>((set, get) => ({
     try {
       await authApi.logout();
     } finally {
+      clearConnectorContinuation();
+      setConnectorStatus(false);
       set({
         user: null,
         token: null,

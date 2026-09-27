@@ -3,6 +3,8 @@
 import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type React from 'react';
+import { renderToString } from 'react-dom/server';
+import { saveConnectorContinuation, setConnectorStatus } from '@/lib/aim-data-continuation';
 import RegisterForm from './RegisterForm';
 
 const authStore = vi.hoisted(() => ({
@@ -102,6 +104,27 @@ describe('RegisterForm', () => {
     ).not.toBeNull();
     expect(screen.queryByText('Registration failed.')).toBeNull();
     expect(screen.getByRole('link', { name: 'sign in' }).getAttribute('href')).toBe('/login');
+  });
+
+  it('reads a same-browser connector continuation after the first render', async () => {
+    localStorage.clear();
+    const connectorPath = `/oauth/connect?request=${'a'.repeat(43)}`;
+    setConnectorStatus(true);
+    expect(saveConnectorContinuation(connectorPath)).toBe(true);
+    try {
+      const serverMarkup = renderToString(<RegisterForm />);
+      expect(serverMarkup).toContain('href="/login"');
+      expect(serverMarkup).not.toContain(encodeURIComponent(connectorPath));
+
+      render(<RegisterForm />);
+      const loginHref = `/login?redirect=${encodeURIComponent(connectorPath)}`;
+      await waitFor(() => expect(screen.getByRole('link', { name: 'Log in' }).getAttribute('href')).toBe(loginHref));
+      submitRegistration();
+      expect((await screen.findByRole('link', { name: 'sign in' })).getAttribute('href')).toBe(loginHref);
+    } finally {
+      setConnectorStatus(false);
+      localStorage.clear();
+    }
   });
 
   it('shows listing purchase context and preserves the validated redirect in both login links', async () => {
