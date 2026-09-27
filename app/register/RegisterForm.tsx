@@ -6,6 +6,7 @@ import { useSearchParams } from 'next/navigation';
 import { useAuthStore } from '@/store/auth';
 import { useToast } from '@/components/Toast';
 import { validateListingRedirect, validateRedirect } from '@/lib/redirect';
+import { connectorRequestPath, readConnectorContinuation } from '@/lib/aim-data-continuation';
 import { AxiosError } from 'axios';
 import OAuthButtons from '@/components/OAuthButtons';
 
@@ -23,8 +24,10 @@ export default function RegisterForm() {
   }
   const listingRedirect = validateListingRedirect(validatedRedirect);
   const isListingRedirect = Boolean(listingRedirect);
-  const loginHref = validatedRedirect
-    ? `/login?redirect=${encodeURIComponent(validatedRedirect)}`
+  const connector = readConnectorContinuation();
+  const continuationRedirect = validatedRedirect || (connector ? connectorRequestPath(connector.request) : '');
+  const loginHref = continuationRedirect
+    ? `/login?redirect=${encodeURIComponent(continuationRedirect)}`
     : '/login';
 
   const [email, setEmail] = useState('');

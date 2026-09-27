@@ -4,12 +4,14 @@ import { Suspense, useEffect, useState } from 'react';
 import Link from 'next/link';
 import { useSearchParams } from 'next/navigation';
 import { verifyEmail } from '@/api/auth';
+import { connectorRequestPath, readConnectorContinuation } from '@/lib/aim-data-continuation';
 
 function VerifyEmailInner() {
   const params = useSearchParams();
   const token = params.get('token');
   const [state, setState] = useState<'loading' | 'success' | 'error'>('loading');
   const [message, setMessage] = useState('');
+  const [continuation, setContinuation] = useState('');
 
   useEffect(() => {
     if (!token) {
@@ -19,6 +21,8 @@ function VerifyEmailInner() {
     }
     verifyEmail(token)
       .then((r) => {
+        const saved = readConnectorContinuation();
+        setContinuation(saved ? connectorRequestPath(saved.request) : '');
         setState('success');
         setMessage(r?.message || 'Your email is verified.');
       })
@@ -37,7 +41,8 @@ function VerifyEmailInner() {
           <div className="rounded-lg bg-green-50 border border-green-200 px-4 py-6 text-sm text-green-700">
             <p className="font-medium mb-2">You&apos;re verified</p>
             <p>{message}</p>
-            <Link href="/login" className="mt-4 inline-block font-medium underline">Sign in</Link>
+            {!continuation && <p>Return to the app you were connecting and start again.</p>}
+            <Link href={continuation ? `/login?redirect=${encodeURIComponent(continuation)}` : '/login'} className="mt-4 inline-block font-medium underline">Sign in</Link>
           </div>
         )}
         {state === 'error' && (

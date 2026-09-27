@@ -1,4 +1,4 @@
-import { AIM_DATA_CONTINUATION, validateRedirect } from '@/lib/redirect';
+import { AIM_DATA_CONTINUATION, CONNECTOR_CONTINUATION, validateRedirect } from '@/lib/redirect';
 
 export const CONTINUATION_KEY = 'aim_data_authorization_request';
 const TTL = 600_000;
@@ -42,4 +42,60 @@ export function resumeContinuation(redirect?: string | null, fallback = '/listin
   }
   if (saved && (!redirect || redirect === requestPath(saved.request))) return requestPath(saved.request);
   return AIM_DATA_CONTINUATION.test(redirect || '') ? fallback : validateRedirect(redirect, fallback);
+}
+
+const CONNECTOR_KEY = 'connector_authorization_request';
+const CONNECTOR_STATUS_KEY = 'connector_oauth_enabled';
+export const connectorRequestPath = (request: string) => `/oauth/connect?request=${request}`;
+
+export function setConnectorStatus(enabled: boolean) {
+  try {
+    if (enabled) sessionStorage.setItem(CONNECTOR_STATUS_KEY, 'true');
+    else {
+      sessionStorage.removeItem(CONNECTOR_STATUS_KEY);
+      clearConnectorContinuation();
+    }
+  } catch { /* Storage unavailable. */ }
+}
+
+export function connectorEnabled() {
+  try { return sessionStorage.getItem(CONNECTOR_STATUS_KEY) === 'true'; } catch { return false; }
+}
+
+export function clearConnectorContinuation() {
+  try { sessionStorage.removeItem(CONNECTOR_KEY); } catch { /* Storage unavailable. */ }
+}
+
+export function readConnectorContinuation(): { request: string; deadline: number } | null {
+  if (!connectorEnabled()) { clearConnectorContinuation(); return null; }
+  try {
+    const value = JSON.parse(sessionStorage.getItem(CONNECTOR_KEY) || 'null');
+    if (value && Object.keys(value).sort().join(',') === 'deadline,request'
+      && typeof value.request === 'string' && CONNECTOR_CONTINUATION.test(connectorRequestPath(value.request))
+      && Number.isFinite(value.deadline) && value.deadline > Date.now()
+      && value.deadline <= Date.now() + TTL) return value;
+  } catch { /* Invalid or unavailable storage fails closed. */ }
+  clearConnectorContinuation();
+  return null;
+}
+
+export function saveConnectorContinuation(path: string): boolean {
+  const request = CONNECTOR_CONTINUATION.exec(path)?.[1];
+  if (!connectorEnabled() || !request) return false;
+  const existing = readConnectorContinuation();
+  try {
+    sessionStorage.setItem(CONNECTOR_KEY, JSON.stringify({
+      request, deadline: existing?.request === request ? existing.deadline : Date.now() + TTL,
+    }));
+    return true;
+  } catch { return false; }
+}
+
+export function resumeAuthContinuation(redirect?: string | null, fallback = '/listings'): string {
+  const connector = readConnectorContinuation();
+  if (connector && (!redirect || redirect === connectorRequestPath(connector.request))) {
+    return connectorRequestPath(connector.request);
+  }
+  if (CONNECTOR_CONTINUATION.test(redirect || '')) return fallback;
+  return resumeContinuation(redirect, fallback);
 }

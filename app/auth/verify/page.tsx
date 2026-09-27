@@ -2,7 +2,7 @@
 
 import { Suspense, useEffect, useRef } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
-import { resumeContinuation } from '@/lib/aim-data-continuation';
+import { resumeAuthContinuation } from '@/lib/aim-data-continuation';
 import TwoFactorChallenge from '@/components/TwoFactorChallenge';
 import { useAuthStore } from '@/store/auth';
 
@@ -30,7 +30,7 @@ function MagicLinkVerifyContent() {
     magicLinkVerify(token)
       .then((result) => {
         if (!result.requiresTwoFactor) {
-          router.replace(resumeContinuation());
+          router.replace(resumeAuthContinuation());
         }
       })
       .catch(() => {
@@ -41,7 +41,7 @@ function MagicLinkVerifyContent() {
   if (pendingTwoFactor) {
     return (
       <div className="flex min-h-[calc(100vh-10rem)] items-center justify-center px-4">
-        <TwoFactorChallenge onVerified={() => router.replace(resumeContinuation())} />
+        <TwoFactorChallenge onVerified={() => router.replace(resumeAuthContinuation())} />
       </div>
     );
   }

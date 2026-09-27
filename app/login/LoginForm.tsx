@@ -5,7 +5,7 @@ import Link from 'next/link';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { useAuthStore } from '@/store/auth';
 import { useToast } from '@/components/Toast';
-import { aimDataEnabled, resumeContinuation, readContinuation, requestPath } from '@/lib/aim-data-continuation';
+import { aimDataEnabled, resumeAuthContinuation, readContinuation, requestPath, connectorEnabled, readConnectorContinuation, connectorRequestPath } from '@/lib/aim-data-continuation';
 import { AxiosError } from 'axios';
 import OAuthButtons, { startProviderOAuth } from '@/components/OAuthButtons';
 import TwoFactorChallenge from '@/components/TwoFactorChallenge';
@@ -35,9 +35,9 @@ export default function LoginForm() {
 
   useEffect(() => {
     const provider = searchParams.get('provider');
-    if (!aimDataEnabled() || !hydrated || isAuthenticated || autoStarted.current
+    if (!(aimDataEnabled() && readContinuation() || connectorEnabled() && readConnectorContinuation()) || !hydrated || isAuthenticated || autoStarted.current
       || (provider !== 'google' && provider !== 'github')
-      || !readContinuation()) return;
+      ) return;
     autoStarted.current = true;
     startProviderOAuth(provider).catch(() => {
       setError(`Failed to connect to ${provider === 'google' ? 'Google' : 'GitHub'}. Please try again.`);
@@ -47,18 +47,23 @@ export default function LoginForm() {
   useEffect(() => {
     if (!hydrated || !isAuthenticated) return;
     if (searchParams.get('reauth') === 'aim-data' && readContinuation()) return;
+    if (searchParams.get('reauth') === 'connector' && readConnectorContinuation()) return;
 
-    const redirectTo = resumeContinuation(searchParams.get('redirect'), '/dashboard');
+    const redirectTo = resumeAuthContinuation(searchParams.get('redirect'), '/dashboard');
     router.replace(redirectTo);
   }, [hydrated, isAuthenticated, router, searchParams]);
 
   useEffect(() => {
     const visible = async () => {
-      if (!aimDataEnabled() || document.visibilityState !== 'visible' || !readContinuation()
+      if (document.visibilityState !== 'visible' || !(aimDataEnabled() && readContinuation() || connectorEnabled() && readConnectorContinuation())
         || useAuthStore.getState().pendingTwoFactor) return;
       await useAuthStore.getState().hydrate();
       const saved = readContinuation();
       if (saved && useAuthStore.getState().isAuthenticated) router.replace(requestPath(saved.request));
+      else {
+        const connector = readConnectorContinuation();
+        if (connector && useAuthStore.getState().isAuthenticated) router.replace(connectorRequestPath(connector.request));
+      }
     };
     document.addEventListener('visibilitychange', visible);
     return () => document.removeEventListener('visibilitychange', visible);
@@ -90,7 +95,7 @@ export default function LoginForm() {
           return;
         }
         toast('Logged in successfully', 'success');
-        const redirectTo = resumeContinuation(searchParams.get('redirect'), '/listings');
+        const redirectTo = resumeAuthContinuation(searchParams.get('redirect'), '/listings');
         router.push(redirectTo);
       }
     } catch (err) {
@@ -115,7 +120,7 @@ export default function LoginForm() {
 
   const handleTwoFactorVerified = () => {
     toast('Logged in successfully', 'success');
-    const redirectTo = resumeContinuation(searchParams.get('redirect'), '/listings');
+    const redirectTo = resumeAuthContinuation(searchParams.get('redirect'), '/listings');
     router.push(redirectTo);
   };
 

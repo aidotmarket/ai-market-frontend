@@ -8,6 +8,7 @@ import { notifyCapabilitiesChanged } from '@/components/onboarding/SellerSetupPr
 import { useToast } from '@/components/Toast';
 import { AxiosError } from 'axios';
 import ReauthModal from './ReauthModal';
+import ConnectedApps from './ConnectedApps';
 
 type TwoFactorFlow = 'idle' | 'showing_qr' | 'verifying' | 'showing_backup_codes';
 type SecurityAction = 'disable' | 'regenerate' | null;
@@ -568,6 +569,7 @@ export default function SettingsPage() {
           )}
         </div>
       </section>
+      <ConnectedApps />
     </div>
   );
 }
