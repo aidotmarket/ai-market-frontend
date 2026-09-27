@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState, useCallback } from 'react';
+import { useEffect, useState, useCallback, useRef } from 'react';
 import Link from 'next/link';
 import { useAuthStore } from '@/store/auth';
 import {
@@ -23,6 +23,7 @@ import { useToast } from '@/components/Toast';
 import { formatDate, formatPrice } from '@/lib/format';
 import type { BuyerOrder, OrderStatus, SellerStats } from '@/types';
 import { AxiosError } from 'axios';
+import ReauthModal from './settings/ReauthModal';
 
 type TwoFactorFlow = 'idle' | 'showing_qr' | 'verifying' | 'showing_backup_codes';
 
@@ -55,6 +56,8 @@ export default function DashboardOverview() {
   const [setupExpiresIn, setSetupExpiresIn] = useState<number | null>(null);
   const [totpCode, setTotpCode] = useState('');
   const [backupCodes, setBackupCodes] = useState<string[]>([]);
+  const [isReauthOpen, setIsReauthOpen] = useState(false);
+  const dashboardHeadingRef = useRef<HTMLHeadingElement>(null);
 
   const fetchData = useCallback(async () => {
     setLoading(true);
@@ -141,6 +144,7 @@ export default function DashboardOverview() {
     setSetupExpiresIn(null);
     setTotpCode('');
     setBackupCodes([]);
+    setIsReauthOpen(false);
   };
 
   const handleSetup2FA = async () => {
@@ -165,12 +169,12 @@ export default function DashboardOverview() {
     }
   };
 
-  const handleVerify2FASetup = async () => {
+  const handleVerify2FASetup = async (reauthToken: string) => {
     setSecurityLoading(true);
     setSecurityError('');
     setTwoFactorFlow('verifying');
     try {
-      const res = await verify2FASetup(totpCode.trim());
+      const res = await verify2FASetup(totpCode.trim(), reauthToken);
       setBackupCodes(res.backup_codes);
       setTwoFactorFlow('showing_backup_codes');
       await refreshAuth();
@@ -185,6 +189,14 @@ export default function DashboardOverview() {
       }
     } finally {
       setSecurityLoading(false);
+    }
+  };
+
+  const handleReauthSuccess = async (reauthToken: string) => {
+    try {
+      await handleVerify2FASetup(reauthToken);
+    } finally {
+      setIsReauthOpen(false);
     }
   };
 
@@ -228,8 +240,14 @@ export default function DashboardOverview() {
 
   return (
     <div className="space-y-8">
+      <ReauthModal
+        isOpen={isReauthOpen}
+        onClose={() => setIsReauthOpen(false)}
+        onSuccess={handleReauthSuccess}
+        fallbackFocusRef={dashboardHeadingRef}
+      />
       <div>
-        <h1 className="text-2xl font-bold text-gray-900">Welcome back, {user?.first_name || 'there'}</h1>
+        <h1 ref={dashboardHeadingRef} tabIndex={-1} className="text-2xl font-bold text-gray-900">Welcome back, {user?.first_name || 'there'}</h1>
         <p className="mt-1 text-sm text-gray-500">
           {isSellerActive
             ? "Here's what's happening with your store today."
@@ -395,7 +413,7 @@ export default function DashboardOverview() {
                     </div>
                     <div className="flex gap-3">
                       <button
-                        onClick={handleVerify2FASetup}
+                        onClick={() => setIsReauthOpen(true)}
                         disabled={securityLoading || totpCode.trim().length !== 6}
                         className="rounded-lg bg-[#3F51B5] px-4 py-2 text-sm font-medium text-white hover:bg-[#3545a0] disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
                       >

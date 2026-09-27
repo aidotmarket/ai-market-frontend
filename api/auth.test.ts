@@ -6,7 +6,7 @@ vi.mock('./client', () => ({
   api: { post: apiPost },
 }));
 
-const { register, submitReauth } = await import('./auth');
+const { register, submitReauth, verify2FASetup } = await import('./auth');
 
 describe('auth register API', () => {
   beforeEach(() => {
@@ -57,5 +57,23 @@ describe('auth reauthentication API', () => {
       method: 'totp',
     });
     expect(apiPost).toHaveBeenCalledWith('/auth/reauth', { code: '123456' });
+  });
+});
+
+describe('auth 2FA setup API', () => {
+  beforeEach(() => {
+    apiPost.mockReset();
+  });
+
+  it('sends the reauthentication token with the setup code', async () => {
+    apiPost.mockResolvedValue({ data: { backup_codes: ['backup-one'] } });
+
+    await expect(verify2FASetup('123456', 'reauth-token')).resolves.toEqual({
+      backup_codes: ['backup-one'],
+    });
+    expect(apiPost).toHaveBeenCalledWith('/auth/2fa/verify-setup', {
+      code: '123456',
+      reauth_token: 'reauth-token',
+    });
   });
 });

@@ -11,6 +11,7 @@ import ReauthModal from './ReauthModal';
 
 type TwoFactorFlow = 'idle' | 'showing_qr' | 'verifying' | 'showing_backup_codes';
 type SecurityAction = 'disable' | 'regenerate' | null;
+type ReauthAction = 'enable' | Exclude<SecurityAction, null>;
 
 export default function SettingsPage() {
   const { user, refreshAuth } = useAuthStore();
@@ -34,7 +35,7 @@ export default function SettingsPage() {
   const [backupCodesLabel, setBackupCodesLabel] = useState('Save these backup codes before you continue.');
   const [copiedBackupCodes, setCopiedBackupCodes] = useState(false);
   const [isReauthOpen, setIsReauthOpen] = useState(false);
-  const [pendingReauthAction, setPendingReauthAction] = useState<Exclude<SecurityAction, null> | null>(null);
+  const [pendingReauthAction, setPendingReauthAction] = useState<ReauthAction | null>(null);
   const [sellerStatus, setSellerStatus] = useState<CapabilityStatus | null>(null);
   const settingsHeadingRef = useRef<HTMLHeadingElement>(null);
 
@@ -149,14 +150,14 @@ export default function SettingsPage() {
     }
   };
 
-  const handleVerify2FASetup = async () => {
+  const handleVerify2FASetup = async (reauthToken: string) => {
     setSecurityLoading(true);
     setSecurityError('');
     setVerifyingSetup(true);
     setTwoFactorFlow('verifying');
 
     try {
-      const res = await verify2FASetup(totpCode.trim());
+      const res = await verify2FASetup(totpCode.trim(), reauthToken);
       setBackupCodes(res.backup_codes);
       setBackupCodesLabel('Save these backup codes now. You will need them if you lose access to your authenticator app.');
       setTwoFactorFlow('showing_backup_codes');
@@ -232,7 +233,7 @@ export default function SettingsPage() {
     }
   };
 
-  const openReauthForAction = (action: Exclude<SecurityAction, null>) => {
+  const openReauthForAction = (action: ReauthAction) => {
     setPendingReauthAction(action);
     setIsReauthOpen(true);
   };
@@ -241,7 +242,11 @@ export default function SettingsPage() {
     if (!pendingReauthAction) return;
 
     try {
-      await handleSecurityActionWithReauth(pendingReauthAction, reauthToken);
+      if (pendingReauthAction === 'enable') {
+        await handleVerify2FASetup(reauthToken);
+      } else {
+        await handleSecurityActionWithReauth(pendingReauthAction, reauthToken);
+      }
     } finally {
       closeReauthModal();
     }
@@ -439,7 +444,7 @@ export default function SettingsPage() {
                 </div>
                 <div className="flex gap-3">
                   <button
-                    onClick={handleVerify2FASetup}
+                    onClick={() => openReauthForAction('enable')}
                     disabled={securityLoading || totpCode.trim().length !== 6}
                     className="rounded-lg bg-[#3F51B5] px-4 py-2 text-sm font-medium text-white hover:bg-[#3545a0] disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
                   >

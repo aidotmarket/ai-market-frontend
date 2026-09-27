@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 
-import { cleanup, render, screen, waitFor } from '@testing-library/react';
+import { act, cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import DashboardOverview from './page';
 import { useAuthStore } from '@/store/auth';
@@ -15,6 +15,7 @@ const connectApi = vi.hoisted(() => ({
 
 const authApi = vi.hoisted(() => ({
   setup2FA: vi.fn(),
+  submitReauth: vi.fn(),
   verify2FASetup: vi.fn(),
 }));
 
@@ -88,7 +89,10 @@ const sellerStats = {
 };
 
 describe('DashboardOverview seller setup 2FA state', () => {
+  const refreshAuth = vi.fn();
+
   beforeEach(() => {
+    refreshAuth.mockResolvedValue(undefined);
     capabilitiesApi.getCapabilities.mockResolvedValue({
       buyer: { persisted_status: 'active', effective_status: 'active', missing_steps: [], reason: null },
       seller: {
@@ -107,6 +111,7 @@ describe('DashboardOverview seller setup 2FA state', () => {
       isLoading: false,
       hydrated: true,
       pendingTwoFactor: null,
+      refreshAuth,
     });
   });
 
@@ -130,6 +135,39 @@ describe('DashboardOverview seller setup 2FA state', () => {
     expect(sellerApi.getSellerStats).not.toHaveBeenCalled();
     expect(listingsApi.getMyListings).not.toHaveBeenCalled();
     expect(ordersApi.getMyOrders).toHaveBeenCalledOnce();
+  });
+
+  it('requires reauthentication before enabling 2FA from seller setup', async () => {
+    authApi.setup2FA.mockResolvedValue({
+      secret: 'setup-secret',
+      qr_uri: 'otpauth://totp/example',
+      expires_in: 600,
+    });
+    authApi.submitReauth.mockResolvedValue({ token: 'dashboard-reauth-token' });
+    authApi.verify2FASetup.mockResolvedValue({ backup_codes: ['backup-one'] });
+    render(<DashboardOverview />);
+
+    fireEvent.click(await screen.findByRole('button', { name: 'Enable 2FA' }));
+    fireEvent.change(await screen.findByRole('textbox', { name: '6-digit code' }), {
+      target: { value: '123456' },
+    });
+    fireEvent.click(screen.getByRole('button', { name: 'Verify and enable' }));
+
+    expect(await screen.findByRole('dialog', { name: 'Re-authenticate' })).toBeTruthy();
+    expect(authApi.verify2FASetup).not.toHaveBeenCalled();
+    fireEvent.change(screen.getByRole('textbox', { name: 'Verification code' }), {
+      target: { value: '654321' },
+    });
+    await act(async () => {
+      fireEvent.click(screen.getByRole('button', { name: 'Continue' }));
+    });
+
+    await waitFor(() => {
+      expect(authApi.submitReauth).toHaveBeenCalledWith('654321');
+      expect(authApi.verify2FASetup).toHaveBeenCalledWith('123456', 'dashboard-reauth-token');
+      expect(screen.getByRole('heading', { name: 'Backup codes' })).toBeTruthy();
+    });
+    expect(screen.getByText('backup-one')).toBeTruthy();
   });
 
   it('renders active seller stats from the real contract shape', async () => {

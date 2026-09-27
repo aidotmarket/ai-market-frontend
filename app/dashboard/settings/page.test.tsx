@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 
-import { act, cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { act, cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import SettingsPage from './page';
 import { useAuthStore } from '@/store/auth';
@@ -109,6 +109,62 @@ describe('SettingsPage capability refresh', () => {
       screen.queryByRole('heading', { name: 'Payment method for verification charges' })
     ).toBeNull();
     expect(screen.queryByRole('link', { name: 'Manage payment method' })).toBeNull();
+  });
+
+  it('requests reauthentication before enabling 2FA and shows the returned backup codes', async () => {
+    authApi.setup2FA.mockResolvedValue({
+      secret: 'setup-secret',
+      qr_uri: 'otpauth://totp/example',
+      expires_in: 600,
+    });
+    authApi.verify2FASetup.mockResolvedValue({ backup_codes: ['backup-one', 'backup-two'] });
+    render(<SettingsPage />);
+
+    fireEvent.click(screen.getByRole('button', { name: 'Enable two-factor authentication' }));
+    fireEvent.change(await screen.findByRole('textbox', { name: '6-digit code' }), {
+      target: { value: '123456' },
+    });
+    fireEvent.click(screen.getByRole('button', { name: 'Verify and enable' }));
+
+    expect(await screen.findByRole('dialog', { name: 'Re-authenticate' })).toBeTruthy();
+    expect(authApi.verify2FASetup).not.toHaveBeenCalled();
+    fireEvent.change(screen.getByRole('textbox', { name: 'Verification code' }), {
+      target: { value: '654321' },
+    });
+    await act(async () => {
+      fireEvent.click(screen.getByRole('button', { name: 'Continue' }));
+    });
+
+    await waitFor(() => {
+      expect(authApi.submitReauth).toHaveBeenCalledWith('654321');
+      expect(authApi.verify2FASetup).toHaveBeenCalledWith('123456', 'fresh-settings-token');
+      expect(screen.getByRole('heading', { name: 'Backup codes' })).toBeTruthy();
+    });
+    expect(screen.getByText('backup-one')).toBeTruthy();
+    expect(screen.getByText('backup-two')).toBeTruthy();
+  });
+
+  it('keeps 2FA setup open without enabling it when reauthentication is cancelled', async () => {
+    authApi.setup2FA.mockResolvedValue({
+      secret: 'setup-secret',
+      qr_uri: 'otpauth://totp/example',
+      expires_in: 600,
+    });
+    render(<SettingsPage />);
+
+    fireEvent.click(screen.getByRole('button', { name: 'Enable two-factor authentication' }));
+    fireEvent.change(await screen.findByRole('textbox', { name: '6-digit code' }), {
+      target: { value: '123456' },
+    });
+    fireEvent.click(screen.getByRole('button', { name: 'Verify and enable' }));
+    const dialog = await screen.findByRole('dialog', { name: 'Re-authenticate' });
+    fireEvent.click(within(dialog).getByRole('button', { name: 'Cancel' }));
+
+    await waitFor(() => expect(screen.queryByRole('dialog')).toBeNull());
+    expect(screen.getByRole('textbox', { name: '6-digit code' })).toHaveProperty('value', '123456');
+    expect(authApi.submitReauth).not.toHaveBeenCalled();
+    expect(authApi.verify2FASetup).not.toHaveBeenCalled();
+    expect(screen.queryByRole('heading', { name: 'Backup codes' })).toBeNull();
   });
 
   it.each([

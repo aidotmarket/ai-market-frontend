@@ -81,8 +81,11 @@ export async function setup2FA(): Promise<TOTPSetupResponse> {
   return res.data;
 }
 
-export async function verify2FASetup(code: string): Promise<TOTPVerifySetupResponse> {
-  const res = await api.post<TOTPVerifySetupResponse>('/auth/2fa/verify-setup', { code });
+export async function verify2FASetup(code: string, reauthToken: string): Promise<TOTPVerifySetupResponse> {
+  const res = await api.post<TOTPVerifySetupResponse>('/auth/2fa/verify-setup', {
+    code,
+    reauth_token: reauthToken,
+  });
   return res.data;
 }
 
