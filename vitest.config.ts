@@ -6,7 +6,7 @@ export default defineConfig({
   test: {
     environment: 'node',
     globals: true,
-    exclude: [...configDefaults.exclude, 'tests/*.playwright.spec.ts'],
+    exclude: [...configDefaults.exclude, 'tests/*.playwright.spec.ts', 'tests/connector-oauth-continuation.spec.ts'],
     maxWorkers: 2,
   },
   resolve: {

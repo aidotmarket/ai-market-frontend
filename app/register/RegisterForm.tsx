@@ -1,11 +1,12 @@
 'use client';
 
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import Link from 'next/link';
 import { useSearchParams } from 'next/navigation';
 import { useAuthStore } from '@/store/auth';
 import { useToast } from '@/components/Toast';
 import { validateListingRedirect, validateRedirect } from '@/lib/redirect';
+import { connectorRequestPath, initiateConnectorContinuation, readConnectorContinuation } from '@/lib/aim-data-continuation';
 import { AxiosError } from 'axios';
 import OAuthButtons from '@/components/OAuthButtons';
 
@@ -23,8 +24,17 @@ export default function RegisterForm() {
   }
   const listingRedirect = validateListingRedirect(validatedRedirect);
   const isListingRedirect = Boolean(listingRedirect);
-  const loginHref = validatedRedirect
-    ? `/login?redirect=${encodeURIComponent(validatedRedirect)}`
+  const [connectorRedirect, setConnectorRedirect] = useState('');
+  useEffect(() => {
+    const connector = readConnectorContinuation();
+    setConnectorRedirect(connector ? connectorRequestPath(connector.request) : '');
+  }, []);
+  const continuationRedirect = validatedRedirect || connectorRedirect;
+  useEffect(() => {
+    initiateConnectorContinuation(continuationRedirect);
+  }, [continuationRedirect]);
+  const loginHref = continuationRedirect
+    ? `/login?redirect=${encodeURIComponent(continuationRedirect)}`
     : '/login';
 
   const [email, setEmail] = useState('');
