@@ -21,9 +21,9 @@ ai.market is not a party and gives no legal advice; New York law governs.`;
 
 export const CUSTOM_NOTICE = "The seller's own terms. ai.market did not write these; review them before you accept. The separate ai.market AI-Training Rider and Marketplace Listing Covenant also form part of your record. ai.market is not a party and gives no legal advice.";
 
-export default function SellerLicenseSelection({value, onChange, disabled = false,onIdentityStateChange,legalIdentityEnabled=false}: {
+export default function SellerLicenseSelection({value, onChange, disabled = false,onIdentityStateChange,onLegalDirtyChange,legalIdentityEnabled=false}: {
   value: LicenseSelection; onChange: (value: LicenseSelection) => void; disabled?: boolean;
-  onIdentityStateChange?:(state:IdentityState)=>void;legalIdentityEnabled?:boolean;
+  onIdentityStateChange?:(state:IdentityState)=>void;onLegalDirtyChange?:(dirty:boolean)=>void;legalIdentityEnabled?:boolean;
 }) {
   const [legalState,setLegalState]=useState<IdentityState>({kind:'checking'});
   const [legalName,setLegalName]=useState('');
@@ -61,6 +61,7 @@ export default function SellerLicenseSelection({value, onChange, disabled = fals
   useEffect(()=>{mounted.current=true;if(legalIdentityEnabled)void checkIdentity();return()=>{mounted.current=false;};},[legalIdentityEnabled]);
   async function saveLegal(){
     if(legalState.kind!=='required'&&legalState.kind!=='known')return;
+    if(legalState.kind==='known'&&legalState.value.seller_editable!==true)return;
     if(!legalName.trim()||!country||legalName.trim().length>255)return;
     setSavingLegal(true);setLegalError('');
     try {
@@ -147,16 +148,18 @@ export default function SellerLicenseSelection({value, onChange, disabled = fals
   }
   const knownLegal=legalState.kind==='known'&&legalState.value.status==='known'?legalState.value:null;
   const known=!legalIdentityEnabled||knownLegal!==null;
-  const legalChanged=legalState.kind==='required'||Boolean(knownLegal&&(legalName.trim()!==knownLegal.legal_name||country!==knownLegal.jurisdiction));
+  const legalChanged=legalState.kind==='required'?Boolean(legalName.trim()||country):Boolean(knownLegal&&(legalName.trim()!==knownLegal.legal_name||country!==knownLegal.jurisdiction));
+  const legalDirty=Boolean(knownLegal&&editingLegal&&legalChanged);
+  useEffect(()=>{onLegalDirtyChange?.(legalDirty);},[legalDirty,onLegalDirtyChange]);
   return <div className="space-y-4">
     {legalIdentityEnabled&&<section aria-label="Legal details for the licence" className="space-y-3 rounded-xl border border-gray-200 bg-white p-5">
       {legalState.kind==='checking'&&<p role="status">Checking your legal details…</p>}
       {knownLegal&&<><p>Legal name on the licence: {knownLegal.legal_name} ({knownLegal.jurisdiction})</p><p className="text-sm text-gray-600">{knownLegal.source==='stripe_connect'?'from your Stripe account':'saved by you'}</p></>}
-      {knownLegal?.source==='seller_typed'&&!editingLegal&&<button type="button" className="text-sm text-indigo-700 underline" onClick={()=>setEditingLegal(true)}>Edit legal details</button>}
-      {(legalState.kind==='required'||knownLegal&&editingLegal)&&<div className="grid gap-4 sm:grid-cols-2">
+      {knownLegal?.seller_editable===true&&!editingLegal&&<button type="button" className="text-sm text-indigo-700 underline" onClick={()=>setEditingLegal(true)}>Edit legal details</button>}
+      {(legalState.kind==='required'||knownLegal?.seller_editable===true&&editingLegal)&&<div className="grid gap-4 sm:grid-cols-2">
         <label className="text-sm font-medium">Legal name<input aria-label="Legal name" value={legalName} maxLength={255} onChange={event=>setLegalName(event.target.value)} className="mt-2 block w-full rounded-lg border border-gray-300 px-3 py-2" /></label>
         <label className="text-sm font-medium">Country<select aria-label="Country" value={country} onChange={event=>setCountry(event.target.value)} className="mt-2 block w-full rounded-lg border border-gray-300 px-3 py-2"><option value="">Choose a country</option>{SELLER_COUNTRIES.map(item=><option key={item.code} value={item.code}>{item.name}</option>)}</select></label>
-        <div className="sm:col-span-2"><button type="button" disabled={savingLegal||disabled||!legalChanged||!legalName.trim()||!country} onClick={()=>void saveLegal()} className="rounded-lg bg-indigo-700 px-4 py-2 text-sm text-white disabled:opacity-50">{savingLegal?'Saving legal details…':'Save legal details'}</button></div>
+        {legalChanged&&<div className="sm:col-span-2"><button type="button" disabled={savingLegal||disabled||!legalName.trim()||!country} onClick={()=>void saveLegal()} className="rounded-lg bg-indigo-700 px-4 py-2 text-sm text-white disabled:opacity-50">{savingLegal?'Saving legal details…':'Save legal details'}</button></div>}
       </div>}
       {legalState.kind==='required'&&<p role="status" className="text-sm text-amber-900">Your legal name and country are not saved. Save them before saving the licence choice or publishing.</p>}
       {legalState.kind==='conflict'&&<p role="alert">Your legal details need a quick check by our support team before you can publish. <a className="underline" href={LEGAL_IDENTITY_SUPPORT_PATH}>Contact support</a></p>}

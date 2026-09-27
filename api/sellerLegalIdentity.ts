@@ -3,8 +3,8 @@ import {api} from './client';
 export const LEGAL_IDENTITY_SUPPORT_PATH = '/seller-workspace/support/legal-identity';
 
 export type SellerLegalIdentity =
-  | {status:'known';source:'stripe_connect'|'seller_typed';legal_name:string;jurisdiction:string;version:number}
-  | {status:'required';source:null;legal_name:null;jurisdiction:null;version:null};
+  | {status:'known';source:'stripe_connect'|'seller_typed';legal_name:string;jurisdiction:string;version:number;seller_editable?:boolean}
+  | {status:'required';source:null;legal_name:null;jurisdiction:null;version:null;seller_editable?:boolean};
 
 export type LegalIdentityFailure = 'conflict'|'required'|'unavailable'|'invalid'|'other';
 

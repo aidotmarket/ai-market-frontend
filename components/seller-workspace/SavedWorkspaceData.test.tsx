@@ -97,7 +97,7 @@ it('saves only a complete licence selection',async()=>{
  expect(api.saveListingDraft.mock.calls[0][1]).toBe(4);
  expect(api.saveListingDraft.mock.calls[0][0]).toEqual({...draft.content,license_selection:expect.any(Object)});
  expect(api.saveListingDraft.mock.calls[0][0].license_selection.seller_acceptance).toEqual({signer_name:'Sam Seller',signer_title:'Director',authority_confirmed:true});
- await waitFor(()=>expect((screen.getByRole('button',{name:'Save licence choice'}) as HTMLButtonElement).disabled).toBe(true));
+ await waitFor(()=>expect(screen.queryByRole('button',{name:'Save licence choice'})).toBeNull());
  expect(screen.getByText('Licence choice saved to your account.')).toBeTruthy();
  expect(screen.queryByText('Licence choice saved.')).toBeNull();
 });
@@ -113,6 +113,29 @@ it.each([false,true])('keeps the saved licence visible after a listing edit with
  await waitFor(()=>expect(api.saveListingDraft).toHaveBeenCalledOnce());
  expect(api.saveListingDraft).toHaveBeenCalledWith({...draft.content,title:'Updated title'},4,expect.any(String));
  expect(await screen.findByText('Licence choice saved to your account.')).toBeTruthy();
+});
+it('blocks licence saving while legal edits are unsaved and clears the block after a revert',async()=>{
+ const selection={...createStandardSelection(),identity_version:1,seller_acceptance:{signer_name:'Sam Seller',signer_title:'Director',authority_confirmed:true}};
+ const draft={version:4,content:{license_selection:selection},updated_at:'2026-09-18T12:00:00Z'};
+ const editable={status:'known',source:'seller_typed',legal_name:'Original Name',jurisdiction:'GB',version:1,seller_editable:true};
+ legal.refreshSellerLegalIdentity.mockResolvedValue(editable);legal.getSellerLegalIdentity.mockResolvedValue(editable);
+ api.readListingSource.mockResolvedValue({version:2,content,connection_current:true});api.readListingDraft.mockResolvedValue(draft);
+ renderLicensedData();
+ await screen.findByText('Legal name on the licence: Original Name (GB)');
+ expect(screen.queryByRole('button',{name:'Save licence choice'})).toBeNull();
+ fireEvent.change(screen.getByLabelText('Signer title'),{target:{value:'Owner'}});
+ expect((screen.getByRole('button',{name:'Save licence choice'}) as HTMLButtonElement).disabled).toBe(false);
+ fireEvent.click(screen.getByRole('button',{name:'Edit legal details'}));
+ expect(screen.queryByRole('button',{name:'Save legal details'})).toBeNull();
+ fireEvent.change(screen.getByLabelText('Legal name'),{target:{value:'Changed Name'}});
+ expect(await screen.findByText('Save your legal name and country first')).toBeTruthy();
+ expect((screen.getByRole('button',{name:'Save licence choice'}) as HTMLButtonElement).disabled).toBe(true);
+ fireEvent.click(screen.getByRole('button',{name:'Save licence choice'}));
+ expect(api.saveListingDraft).not.toHaveBeenCalled();
+ fireEvent.change(screen.getByLabelText('Legal name'),{target:{value:'Original Name'}});
+ await waitFor(()=>expect(screen.queryByText('Save your legal name and country first')).toBeNull());
+ expect(screen.queryByRole('button',{name:'Save legal details'})).toBeNull();
+ expect((screen.getByRole('button',{name:'Save licence choice'}) as HTMLButtonElement).disabled).toBe(false);
 });
 it('explains when listing drafts are unavailable and hides licence save',async()=>{
  api.readListingSource.mockResolvedValue({version:2,content,connection_current:true});

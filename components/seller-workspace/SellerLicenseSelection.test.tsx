@@ -56,12 +56,12 @@ describe('Seller licence selection',()=>{
     expect(screen.queryByRole('button',{name:'Save legal details'})).toBeNull();
   });
   it('allows a seller typed correction until the server refuses it with a reason',async()=>{
-    legal.getSellerLegalIdentity.mockResolvedValue({status:'known',source:'seller_typed',legal_name:'Old Name',jurisdiction:'GB',version:2});
+    legal.getSellerLegalIdentity.mockResolvedValue({status:'known',source:'seller_typed',legal_name:'Old Name',jurisdiction:'GB',version:2,seller_editable:true});
     legal.saveSellerLegalIdentity.mockRejectedValue({response:{status:409,data:{detail:{code:'SELLER_LEGAL_IDENTITY_REQUIRED'}}}});
     render(<Harness/>);
     await screen.findByText('saved by you');
     fireEvent.click(screen.getByRole('button',{name:'Edit legal details'}));
-    expect((screen.getByRole('button',{name:'Save legal details'}) as HTMLButtonElement).disabled).toBe(true);
+    expect(screen.queryByRole('button',{name:'Save legal details'})).toBeNull();
     fireEvent.change(screen.getByLabelText('Legal name'),{target:{value:'New Name'}});
     fireEvent.click(screen.getByRole('button',{name:'Save legal details'}));
     expect((await screen.findByText(/Check them and try again/)).textContent).toContain('not saved');
@@ -78,7 +78,7 @@ describe('Seller licence selection',()=>{
     expect(await screen.findByRole('alert')).toHaveProperty('textContent','Check the legal name and country');
   });
   it('shows the safe server reason when a typed correction is locked',async()=>{
-    legal.getSellerLegalIdentity.mockResolvedValue({status:'known',source:'seller_typed',legal_name:'Old Name',jurisdiction:'GB',version:2});
+    legal.getSellerLegalIdentity.mockResolvedValue({status:'known',source:'seller_typed',legal_name:'Old Name',jurisdiction:'GB',version:2,seller_editable:true});
     legal.saveSellerLegalIdentity.mockRejectedValue({response:{status:409,data:{detail:{code:'IDENTITY_ALREADY_ACCEPTED',message:'This legal identity is already used in an accepted licence.'}}}});
     render(<Harness/>);
     await screen.findByText('saved by you');
@@ -86,6 +86,14 @@ describe('Seller licence selection',()=>{
     fireEvent.change(screen.getByLabelText('Legal name'),{target:{value:'New Name'}});
     fireEvent.click(screen.getByRole('button',{name:'Save legal details'}));
     expect(await screen.findByText('This legal identity is already used in an accepted licence.')).toBeTruthy();
+  });
+  it.each([undefined,false])('hides legal edit when seller_editable is %s',async seller_editable=>{
+    legal.getSellerLegalIdentity.mockResolvedValue({status:'known',source:'seller_typed',legal_name:'Reviewed Name',jurisdiction:'GB',version:3,seller_editable});
+    render(<Harness/>);
+    await screen.findByText('Legal name on the licence: Reviewed Name (GB)');
+    expect(screen.queryByRole('button',{name:'Edit legal details'})).toBeNull();
+    expect(screen.queryByLabelText('Legal name')).toBeNull();
+    expect(screen.queryByRole('button',{name:'Save legal details'})).toBeNull();
   });
   it('hides names on conflict and links to the restricted support path',async()=>{
     legal.refreshSellerLegalIdentity.mockRejectedValue({response:{status:409,data:{detail:{code:'LEGAL_IDENTITY_CONFLICT',sources:['Secret Name']}}}});
