@@ -1,11 +1,15 @@
 'use client';
 
-import {useRef,useState} from 'react';
+import {useEffect,useRef,useState} from 'react';
 import {
   LICENSE_HASHES, createStandardSelection, submitCustomLicenseText, licenseDocumentPath,
   type LicenseSelection,
 } from '@/api/listingLicenses';
 import {MAX_CUSTOM_LICENSE_CODEPOINTS,canonicalizeCustomText} from '@/lib/customLicenseVerification';
+import {getSellerLegalIdentity,refreshSellerLegalIdentity,saveSellerLegalIdentity,legalIdentityFailure,LEGAL_IDENTITY_SUPPORT_PATH,type SellerLegalIdentity} from '@/api/sellerLegalIdentity';
+import {SELLER_COUNTRIES} from '@/api/sellerLegalIdentityCountries';
+
+export type IdentityState = {kind:'checking'|'conflict'|'unavailable'} | {kind:'known'|'required';value:SellerLegalIdentity};
 
 export const STANDARD_SELLER_SUMMARY = `Not the contract — read the full licence before choosing it.
 You remain the owner and licensor of the delivered dataset version.
@@ -17,9 +21,64 @@ ai.market is not a party and gives no legal advice; New York law governs.`;
 
 export const CUSTOM_NOTICE = "The seller's own terms. ai.market did not write these; review them before you accept. The separate ai.market AI-Training Rider and Marketplace Listing Covenant also form part of your record. ai.market is not a party and gives no legal advice.";
 
-export default function SellerLicenseSelection({value, onChange, disabled = false}: {
+export default function SellerLicenseSelection({value, onChange, disabled = false,onIdentityStateChange,onLegalDirtyChange,legalIdentityEnabled=false}: {
   value: LicenseSelection; onChange: (value: LicenseSelection) => void; disabled?: boolean;
+  onIdentityStateChange?:(state:IdentityState)=>void;onLegalDirtyChange?:(dirty:boolean)=>void;legalIdentityEnabled?:boolean;
 }) {
+  const [legalState,setLegalState]=useState<IdentityState>({kind:'checking'});
+  const [legalName,setLegalName]=useState('');
+  const [country,setCountry]=useState('');
+  const [editingLegal,setEditingLegal]=useState(false);
+  const [savingLegal,setSavingLegal]=useState(false);
+  const [legalError,setLegalError]=useState('');
+  const current=useRef({value,onChange,onIdentityStateChange});
+  current.current={value,onChange,onIdentityStateChange};
+  const mounted=useRef(true);
+  const setIdentityState=(state:IdentityState)=>{if(mounted.current){setLegalState(state);current.current.onIdentityStateChange?.(state);}};
+  const applyIdentity=(result:SellerLegalIdentity)=>{
+    setIdentityState({kind:result.status,value:result});
+    setLegalName(result.legal_name??'');setCountry(result.jurisdiction??'');setEditingLegal(false);
+    const selection=current.current.value;
+    const version=result.status==='known'?result.version:undefined;
+    if(selection.identity_version!==version)
+      current.current.onChange({...selection,identity_version:version,seller_acceptance:{...selection.seller_acceptance,authority_confirmed:false}});
+  };
+  async function checkIdentity(){
+    setIdentityState({kind:'checking'});setLegalError('');
+    try {
+      let refreshFailed:unknown;
+      try {await refreshSellerLegalIdentity();} catch(error){refreshFailed=error;}
+      // GET is authoritative even when refresh failed: a stored row remains usable during a Stripe outage.
+      const result=await getSellerLegalIdentity();
+      if(refreshFailed && result.status!=='known') throw refreshFailed;
+      applyIdentity(result);
+      if(refreshFailed) setLegalError('We could not refresh your Stripe details right now. Your saved legal details are still available.');
+    } catch(error){
+      const kind=legalIdentityFailure(error);
+      setIdentityState({kind:kind==='conflict'?'conflict':'unavailable'});
+    }
+  }
+  useEffect(()=>{mounted.current=true;if(legalIdentityEnabled)void checkIdentity();return()=>{mounted.current=false;};},[legalIdentityEnabled]);
+  async function saveLegal(){
+    if(legalState.kind!=='required'&&legalState.kind!=='known')return;
+    if(legalState.kind==='known'&&legalState.value.seller_editable!==true)return;
+    if(!legalName.trim()||!country||legalName.trim().length>255)return;
+    setSavingLegal(true);setLegalError('');
+    try {
+      await saveSellerLegalIdentity(legalName.trim(),country,legalState.value.version??0);
+      applyIdentity(await getSellerLegalIdentity());
+    } catch(error){
+      const kind=legalIdentityFailure(error);
+      if(kind==='conflict')setIdentityState({kind:'conflict'});
+      else if(kind==='unavailable')setIdentityState({kind:'unavailable'});
+      else if(kind==='invalid')setLegalError('Check the legal name and country');
+      else {
+        const detail=(error as {response?:{data?:{detail?:{message?:unknown}}}})?.response?.data?.detail;
+        const reason=typeof detail?.message==='string'&&detail.message.length<=200?detail.message:null;
+        setLegalError(reason??(kind==='required'?'Your legal name and country are not saved. Check them and try again.':'Your legal details could not be changed. They may already be used in a licence acceptance. Contact support if they need correction.'));
+      }
+    } finally {setSavingLegal(false);}
+  }
   const [submitting, setSubmitting] = useState(false);
   const [submitError, setSubmitError] = useState('');
   const [title, setTitle] = useState('');
@@ -87,7 +146,27 @@ export default function SellerLicenseSelection({value, onChange, disabled = fals
       setSubmitError(messages[code ?? ''] ?? 'The custom licence could not be submitted or verified. Please try again.');
     } finally { if (version === submissionVersion.current) setSubmitting(false); }
   }
-  return <fieldset disabled={disabled || submitting} className="space-y-5 rounded-xl border border-gray-200 bg-white p-5">
+  const knownLegal=legalState.kind==='known'&&legalState.value.status==='known'?legalState.value:null;
+  const known=!legalIdentityEnabled||knownLegal!==null;
+  const legalChanged=legalState.kind==='required'?Boolean(legalName.trim()||country):Boolean(knownLegal&&(legalName.trim()!==knownLegal.legal_name||country!==knownLegal.jurisdiction));
+  const legalDirty=Boolean(knownLegal&&editingLegal&&legalChanged);
+  useEffect(()=>{onLegalDirtyChange?.(legalDirty);},[legalDirty,onLegalDirtyChange]);
+  return <div className="space-y-4">
+    {legalIdentityEnabled&&<section aria-label="Legal details for the licence" className="space-y-3 rounded-xl border border-gray-200 bg-white p-5">
+      {legalState.kind==='checking'&&<p role="status">Checking your legal details…</p>}
+      {knownLegal&&<><p>Legal name on the licence: {knownLegal.legal_name} ({knownLegal.jurisdiction})</p><p className="text-sm text-gray-600">{knownLegal.source==='stripe_connect'?'from your Stripe account':'saved by you'}</p></>}
+      {knownLegal?.seller_editable===true&&!editingLegal&&<button type="button" className="text-sm text-indigo-700 underline" onClick={()=>setEditingLegal(true)}>Edit legal details</button>}
+      {(legalState.kind==='required'||knownLegal?.seller_editable===true&&editingLegal)&&<div className="grid gap-4 sm:grid-cols-2">
+        <label className="text-sm font-medium">Legal name<input aria-label="Legal name" value={legalName} maxLength={255} onChange={event=>setLegalName(event.target.value)} className="mt-2 block w-full rounded-lg border border-gray-300 px-3 py-2" /></label>
+        <label className="text-sm font-medium">Country<select aria-label="Country" value={country} onChange={event=>setCountry(event.target.value)} className="mt-2 block w-full rounded-lg border border-gray-300 px-3 py-2"><option value="">Choose a country</option>{SELLER_COUNTRIES.map(item=><option key={item.code} value={item.code}>{item.name}</option>)}</select></label>
+        {legalChanged&&<div className="sm:col-span-2"><button type="button" disabled={savingLegal||disabled||!legalName.trim()||!country} onClick={()=>void saveLegal()} className="rounded-lg bg-indigo-700 px-4 py-2 text-sm text-white disabled:opacity-50">{savingLegal?'Saving legal details…':'Save legal details'}</button></div>}
+      </div>}
+      {legalState.kind==='required'&&<p role="status" className="text-sm text-amber-900">Your legal name and country are not saved. Save them before saving the licence choice or publishing.</p>}
+      {legalState.kind==='conflict'&&<p role="alert">Your legal details need a quick check by our support team before you can publish. <a className="underline" href={LEGAL_IDENTITY_SUPPORT_PATH}>Contact support</a></p>}
+      {legalState.kind==='unavailable'&&<p role="alert">We could not check your legal details right now. <button type="button" className="underline" onClick={()=>void checkIdentity()}>Retry</button></p>}
+      {legalError&&<p role="alert" className="text-sm text-red-800">{legalError}</p>}
+    </section>}
+  <fieldset disabled={disabled || submitting || !known} className="space-y-5 rounded-xl border border-gray-200 bg-white p-5">
     <legend className="px-1 text-lg font-semibold text-gray-900">How can buyers use this data?</legend>
     <div className="grid gap-4 sm:grid-cols-2">
       <label className={`rounded-xl border p-4 ${value.kind === 'standard' ? 'border-indigo-500 bg-indigo-50' : 'border-gray-200'}`}>
@@ -131,5 +210,5 @@ export default function SellerLicenseSelection({value, onChange, disabled = fals
     <label onClick={()=>{if(!licenseOpened||!covenantOpened)setLockedHint(true);}} className="flex items-start gap-3 text-sm leading-6 text-gray-700"><input aria-label="Confirm covenant and authority" type="checkbox" checked={identity.authority_confirmed} disabled={!licenseOpened || !covenantOpened || (value.kind === 'custom' && !value.license_document_id)} onChange={event => updateIdentity('authority_confirmed', event.target.checked)} className="mt-1 h-4 w-4 accent-indigo-700" /><span>I have read the selected licence and Marketplace Listing Covenant. I confirm the covenant facts and that I am authorised to accept them for the seller.</span></label>
     {(!licenseOpened||!covenantOpened) && <p role={lockedHint?'alert':undefined} className="text-xs text-gray-500">{!licenseOpened&&!covenantOpened?'Open the selected licence and Marketplace Listing Covenant first.':!licenseOpened?'Open the selected licence first.':'Open the Marketplace Listing Covenant first.'}</p>}
     {licenseOpened&&covenantOpened&&value.kind==='custom'&&!value.license_document_id&&<p className="text-xs text-gray-600">Save your custom licence text before confirming.</p>}
-  </fieldset>;
+  </fieldset></div>;
 }

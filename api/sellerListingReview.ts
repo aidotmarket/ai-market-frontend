@@ -33,6 +33,7 @@ export interface ReviewSourcePage {
 function sameLicenseSelection(left?: LicenseSelection, right?: LicenseSelection): boolean {
   if (!left || !right) return left === right;
   return left.kind === right.kind && left.version === right.version &&
+    left.identity_version === right.identity_version &&
     left.ai_training === right.ai_training && left.license_document_id === right.license_document_id &&
     left.license_sha256 === right.license_sha256 && left.rider_sha256 === right.rider_sha256 &&
     left.covenant_code === right.covenant_code && left.covenant_version === right.covenant_version &&

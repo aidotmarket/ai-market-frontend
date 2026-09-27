@@ -8,6 +8,7 @@ export interface SellerAcceptance {
 }
 
 export interface LicenseSelection {
+  identity_version?: number;
   kind: 'standard' | 'custom';
   version: '1.0';
   ai_training: boolean;
