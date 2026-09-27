@@ -9,7 +9,7 @@ import {
   isConnectOnboardingTwoFactorRequired,
   redirectToConnectOnboarding,
 } from '@/api/connect';
-import { setup2FA, verify2FASetup } from '@/api/auth';
+import { isSsoManaged2FAError, setup2FA, SSO_MANAGED_2FA_MESSAGE, verify2FASetup } from '@/api/auth';
 import { getSellerStats } from '@/api/seller';
 import { getMyListings } from '@/api/listings';
 import { getMyOrders } from '@/api/orders';
@@ -168,7 +168,9 @@ export default function DashboardOverview() {
       setBackupCodes([]);
       setTwoFactorFlow('showing_qr');
     } catch (err) {
-      if (err instanceof AxiosError) {
+      if (isSsoManaged2FAError(err)) {
+        setSecurityError(SSO_MANAGED_2FA_MESSAGE);
+      } else if (err instanceof AxiosError) {
         setSecurityError(err.response?.data?.detail || 'Failed to start 2FA setup.');
       } else {
         setSecurityError('Failed to start 2FA setup.');
@@ -186,8 +188,6 @@ export default function DashboardOverview() {
       const res = await verify2FASetup(totpCode.trim(), reauthToken);
       setBackupCodes(res.backup_codes);
       setTwoFactorFlow('showing_backup_codes');
-      await refreshAuth();
-      await fetchData();
       toast('Two-factor authentication enabled', 'success');
     } catch (err) {
       setTwoFactorFlow('showing_qr');
@@ -195,13 +195,25 @@ export default function DashboardOverview() {
         setReauthAction('retry');
         return;
       }
-      if (err instanceof AxiosError) {
+      if (isSsoManaged2FAError(err)) {
+        setSecurityError(SSO_MANAGED_2FA_MESSAGE);
+      } else if (err instanceof AxiosError) {
         setSecurityError(err.response?.data?.detail || 'Failed to verify the code.');
       } else {
         setSecurityError('Failed to verify the code.');
       }
     } finally {
       setSecurityLoading(false);
+    }
+  };
+
+  const handleTwoFactorDone = async () => {
+    resetTwoFactorState();
+    try {
+      await refreshAuth();
+      await fetchData();
+    } catch {
+      toast('Failed to refresh your account state', 'error');
     }
   };
 
@@ -253,6 +265,8 @@ export default function DashboardOverview() {
     isSellerProvisioning &&
     !(twoFactorEnabled && payoutsEnabled);
   const showHeldPublishedNotice = isSellerActive && heldPublishedCount > 0 && !payoutsEnabled;
+  const ssoManaged2FA = (user?.sso_enforced === true && !user.auth_methods?.includes('password')) ||
+    securityError === SSO_MANAGED_2FA_MESSAGE;
 
   return (
     <div className="space-y-8">
@@ -261,7 +275,7 @@ export default function DashboardOverview() {
         onClose={() => setReauthAction(null)}
         onSuccess={handleReauthSuccess}
         fallbackFocusRef={dashboardHeadingRef}
-        method={user?.totp_enabled ? 'totp' : user?.auth_methods.includes('password') ? 'password' : 'magic_link'}
+        method={user?.totp_enabled ? 'totp' : user?.auth_methods?.includes('password') ? 'password' : 'magic_link'}
       />
       <div>
         <h1 ref={dashboardHeadingRef} tabIndex={-1} className="text-2xl font-bold text-gray-900">Welcome back, {user?.first_name || 'there'}</h1>
@@ -367,9 +381,9 @@ export default function DashboardOverview() {
                 <div className="min-w-0 flex-1">
                   <p className="text-sm font-semibold text-gray-900">Secure your account (2FA)</p>
                   <p className="mt-1 text-sm text-gray-600">
-                    {twoFactorEnabled ? 'Two-factor authentication is enabled.' : 'Enable authenticator-app verification before connecting payouts.'}
+                    {ssoManaged2FA ? SSO_MANAGED_2FA_MESSAGE : twoFactorEnabled ? 'Two-factor authentication is enabled.' : 'Enable authenticator-app verification before connecting payouts.'}
                   </p>
-                  {!twoFactorEnabled && twoFactorFlow === 'idle' && (
+                  {!twoFactorEnabled && !ssoManaged2FA && twoFactorFlow === 'idle' && (
                     <button
                       onClick={() => setReauthAction('setup')}
                       disabled={securityLoading}
@@ -381,7 +395,7 @@ export default function DashboardOverview() {
                 </div>
               </div>
 
-              {securityError && (
+              {securityError && !ssoManaged2FA && (
                 <div className="mt-4 rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
                   {securityError}
                 </div>
@@ -462,7 +476,20 @@ export default function DashboardOverview() {
                     ))}
                   </div>
                   <button
-                    onClick={resetTwoFactorState}
+                    onClick={async () => {
+                      try {
+                        await navigator.clipboard.writeText(backupCodes.join('\n'));
+                        toast('Backup codes copied', 'success');
+                      } catch {
+                        toast('Failed to copy backup codes', 'error');
+                      }
+                    }}
+                    className="mt-4 rounded-lg border border-amber-300 bg-white px-3 py-2 text-sm font-medium text-amber-900 hover:bg-amber-100"
+                  >
+                    Copy all
+                  </button>
+                  <button
+                    onClick={handleTwoFactorDone}
                     className="mt-4 rounded-lg bg-[#3F51B5] px-4 py-2 text-sm font-medium text-white hover:bg-[#3545a0]"
                   >
                     Done

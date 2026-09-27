@@ -18,6 +18,7 @@ export interface User {
   totp_enabled: boolean;
   auth_methods: string[];
   primary_auth: string;
+  sso_enforced?: boolean;
 }
 
 export interface TokenResponse {

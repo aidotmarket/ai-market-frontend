@@ -2,7 +2,7 @@
 
 import { useEffect, useRef, useState, type RefObject } from 'react';
 import { AxiosError } from 'axios';
-import { submitReauth, verifyReauthMagicLink } from '@/api/auth';
+import { isSsoManaged2FAError, SSO_MANAGED_2FA_MESSAGE, submitReauth, verifyReauthMagicLink } from '@/api/auth';
 
 const DIALOG_DESCRIPTION_ID = 'reauth-dialog-description';
 const ERROR_ID = 'reauth-error';
@@ -55,6 +55,7 @@ function isExplicitFallbackFocusTarget(element: HTMLElement | null): element is 
 }
 
 function getReauthErrorMessage(error: unknown): string {
+  if (isSsoManaged2FAError(error)) return SSO_MANAGED_2FA_MESSAGE;
   if (!(error instanceof AxiosError)) {
     return 'Failed to verify the re-authentication code.';
   }

@@ -4,12 +4,13 @@ import { useState } from 'react';
 import { act, cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { ReauthResponse } from '@/types';
+import { AxiosError } from 'axios';
 
 const auth = vi.hoisted(() => ({
   submitReauth: vi.fn(),
 }));
 
-vi.mock('@/api/auth', () => auth);
+vi.mock('@/api/auth', async (importOriginal) => ({ ...await importOriginal<typeof import('@/api/auth')>(), ...auth }));
 
 import ReauthModal from './ReauthModal';
 
@@ -183,5 +184,16 @@ describe('ReauthModal backend contract and accessibility', () => {
       'Failed to verify the re-authentication code.'
     );
     expect(onSuccess).not.toHaveBeenCalled();
+  });
+
+  it('explains the enforced SSO policy when magic-link reauth is refused', async () => {
+    auth.submitReauth.mockRejectedValueOnce(Object.assign(new AxiosError('SSO'), {
+      response: { status: 409, data: { detail: 'two_factor_managed_by_sso' } },
+    }));
+    render(<ReauthModal isOpen onClose={vi.fn()} onSuccess={vi.fn()} method="magic_link" />);
+    fireEvent.click(screen.getByRole('button', { name: 'Send link' }));
+    expect((await screen.findByRole('alert')).textContent).toBe(
+      "Two-factor authentication for your account is managed by your organization's single sign-on."
+    );
   });
 });

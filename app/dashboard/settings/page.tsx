@@ -2,7 +2,7 @@
 
 import { useEffect, useRef, useState } from 'react';
 import { useAuthStore } from '@/store/auth';
-import { disable2FA, regenerateBackupCodes, setup2FA, updateProfile, verify2FASetup } from '@/api/auth';
+import { disable2FA, isSsoManaged2FAError, regenerateBackupCodes, setup2FA, SSO_MANAGED_2FA_MESSAGE, updateProfile, verify2FASetup } from '@/api/auth';
 import { getCapabilities, type CapabilityStatus } from '@/api/capabilities';
 import { notifyCapabilitiesChanged } from '@/components/onboarding/SellerSetupProgressBar';
 import { useToast } from '@/components/Toast';
@@ -149,7 +149,9 @@ export default function SettingsPage() {
       setBackupCodesLabel('Save these backup codes before you continue.');
       setTwoFactorFlow('showing_qr');
     } catch (err) {
-      if (err instanceof AxiosError) {
+      if (isSsoManaged2FAError(err)) {
+        setSecurityError(SSO_MANAGED_2FA_MESSAGE);
+      } else if (err instanceof AxiosError) {
         setSecurityError(err.response?.data?.detail || 'Failed to start 2FA setup.');
       } else {
         setSecurityError('Failed to start 2FA setup.');
@@ -178,7 +180,9 @@ export default function SettingsPage() {
         openReauthForAction('enable_retry');
         return;
       }
-      if (err instanceof AxiosError) {
+      if (isSsoManaged2FAError(err)) {
+        setSecurityError(SSO_MANAGED_2FA_MESSAGE);
+      } else if (err instanceof AxiosError) {
         setSecurityError(err.response?.data?.detail || 'Failed to verify the code.');
       } else {
         setSecurityError('Failed to verify the code.');
@@ -201,9 +205,9 @@ export default function SettingsPage() {
 
   const handleTwoFactorDone = async () => {
     setSecurityLoading(true);
+    resetTwoFactorState();
     try {
       await refreshAuth();
-      resetTwoFactorState();
     } catch {
       toast('Failed to refresh your account state', 'error');
     } finally {
@@ -273,6 +277,8 @@ export default function SettingsPage() {
     sellerStatus === 'provisioning' ||
     user.role === 'seller' ||
     user.role === 'admin';
+  const ssoManaged2FA = (user.sso_enforced === true && !user.auth_methods?.includes('password')) ||
+    securityError === SSO_MANAGED_2FA_MESSAGE;
 
   return (
     <div className="max-w-2xl">
@@ -281,7 +287,7 @@ export default function SettingsPage() {
         onClose={closeReauthModal}
         onSuccess={handleReauthSuccess}
         fallbackFocusRef={settingsHeadingRef}
-        method={user?.totp_enabled ? 'totp' : user?.auth_methods.includes('password') ? 'password' : 'magic_link'}
+        method={user?.totp_enabled ? 'totp' : user?.auth_methods?.includes('password') ? 'password' : 'magic_link'}
       />
 
       <h1
@@ -397,10 +403,10 @@ export default function SettingsPage() {
             <div>
               <p className="text-sm font-medium text-gray-900">Two-factor authentication</p>
               <p className="text-sm text-gray-500">
-                {user.totp_enabled ? 'Your account requires an authenticator code at sign-in.' : 'Add an authenticator app for stronger account protection.'}
+                {ssoManaged2FA ? SSO_MANAGED_2FA_MESSAGE : user.totp_enabled ? 'Your account requires an authenticator code at sign-in.' : 'Add an authenticator app for stronger account protection.'}
               </p>
             </div>
-            {!user.totp_enabled && (
+            {!user.totp_enabled && !ssoManaged2FA && (
               <button
                 onClick={() => openReauthForAction('enable_setup')}
                 disabled={securityLoading}
@@ -411,7 +417,7 @@ export default function SettingsPage() {
             )}
           </div>
 
-          {securityError && (
+          {securityError && !ssoManaged2FA && (
             <div className="rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
               {securityError}
             </div>

@@ -12,6 +12,14 @@ import type {
   TOTPSetupResponse,
   TOTPVerifySetupResponse,
 } from '@/types';
+import { AxiosError } from 'axios';
+
+export const SSO_MANAGED_2FA_MESSAGE = "Two-factor authentication for your account is managed by your organization's single sign-on.";
+
+export function isSsoManaged2FAError(error: unknown): boolean {
+  return error instanceof AxiosError && error.response?.status === 409 &&
+    error.response.data?.detail === 'two_factor_managed_by_sso';
+}
 
 export function isTwoFactorChallenge(r: LoginResult): r is PreAuthRequiredResponse {
   return (r as PreAuthRequiredResponse).requires_2fa === true;
