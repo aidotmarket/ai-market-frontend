@@ -3,7 +3,9 @@ import { act, cleanup, fireEvent, render, screen, waitFor } from '@testing-libra
 import { afterEach, beforeEach, expect, it, vi } from 'vitest';
 import type { SellerWorkspaceConnection } from '@/api/sellerWorkspace';
 import SavedWorkspaceData from './SavedWorkspaceData';
-import {resetSellerListingDraftOwnerForTests,SellerListingDraftProvider,useSellerListingDraftStatus} from './SellerListingDraftStore';
+import SavedListingEditor from './SavedListingEditor';
+import {createStandardSelection} from '@/api/listingLicenses';
+import {DraftNotLoadedError,resetSellerListingDraftOwnerForTests,SellerListingDraftProvider,useSellerListingDraft,useSellerListingDraftStatus} from './SellerListingDraftStore';
 const api = vi.hoisted(() => ({readListingSource:vi.fn(), saveListingSource:vi.fn(), listWorkspaceObjects:vi.fn(),readListingDraft:vi.fn(),saveListingDraft:vi.fn(),
   createIdempotencyKey:vi.fn(()=> 'sample-key'),uploadWorkspaceSample:vi.fn(),SAMPLE_MAX_FILES:10,SAMPLE_MAX_FILE_BYTES:64*1024*1024,SAMPLE_MAX_TOTAL_BYTES:256*1024*1024}));
 vi.mock('@/api/sellerListingSource', () => api);
@@ -15,28 +17,53 @@ const content = {connection_id:connection.id,connection_version:1,version_mode:'
 afterEach(()=>{cleanup();resetSellerListingDraftOwnerForTests();});
 beforeEach(() => {vi.resetAllMocks(); api.listWorkspaceObjects.mockResolvedValue({objects:[object],next_cursor:null});api.readListingDraft.mockResolvedValue(null);});
 const renderData=(connections=[connection],sampleCapability=false)=>render(<SellerListingDraftProvider enabled sampleCapability={sampleCapability}><SavedWorkspaceData enabled connections={connections} /></SellerListingDraftProvider>);
-const renderLicensedData=()=>render(<SellerListingDraftProvider enabled sampleCapability={false}><SavedWorkspaceData enabled connections={[connection]} listingLicensesEnabled /></SellerListingDraftProvider>);
+const renderLicensedData=(sampleCapability=false)=>render(<SellerListingDraftProvider enabled sampleCapability={sampleCapability}><SavedWorkspaceData enabled connections={[connection]} listingLicensesEnabled /></SellerListingDraftProvider>);
 const DraftStatus=()=>{const status=useSellerListingDraftStatus();return <p data-testid="draft-status">{status.selectionSavePending?`pending:${status.sampleIndices.join(',')}`:status.selectionSaveFailed?'failed':'ready'}</p>;};
+it('refuses any store save before the draft has been read',async()=>{
+ let save!:ReturnType<typeof useSellerListingDraft>['saveListingFields'];
+ function Capture(){save=useSellerListingDraft().saveListingFields;return null;}
+ render(<SellerListingDraftProvider enabled sampleCapability={false}><Capture/></SellerListingDraftProvider>);
+ await expect(save({brief:'',title:'',description:'',category:'',tags:'',price:'',license:''})).rejects.toBeInstanceOf(DraftNotLoadedError);
+ expect(api.saveListingDraft).not.toHaveBeenCalled();
+});
+it('merges a queued licence save over the latest listing write',async()=>{
+ const selection=createStandardSelection();
+ const draft={version:4,content:{brief:'brief',title:'Offer',description:'Description',category:'Retail',tags:'retail',price:'25',license:'Research',sample_decision:'member_files' as const,sample_object_indices:[0]},updated_at:'2026-09-18T12:00:00Z'};
+ api.readListingDraft.mockResolvedValue(draft);
+ let finishFirst!:(value:unknown)=>void;
+ api.saveListingDraft.mockImplementationOnce(()=>new Promise(resolve=>{finishFirst=resolve;}))
+   .mockImplementationOnce(async saved=>({version:6,content:saved,updated_at:draft.updated_at}));
+ let store!:ReturnType<typeof useSellerListingDraft>;
+ function Capture(){store=useSellerListingDraft();return null;}
+ render(<SellerListingDraftProvider enabled sampleCapability><Capture/></SellerListingDraftProvider>);
+ await waitFor(()=>expect(store.loaded).toBe(true));
+ let first!:Promise<void>;let second!:Promise<void>;
+ await act(async()=>{first=store.saveListingFields({...draft.content,title:'Updated title'});second=store.saveLicenseSelection(selection);await waitFor(()=>expect(api.saveListingDraft).toHaveBeenCalledOnce());});
+ await act(async()=>{finishFirst({version:5,content:{...draft.content,title:'Updated title'},updated_at:draft.updated_at});await Promise.all([first,second]);});
+ expect(api.saveListingDraft.mock.calls[1][0]).toEqual({...draft.content,title:'Updated title',license_selection:selection});
+ expect(api.saveListingDraft.mock.calls[1][1]).toBe(5);
+});
 it('restores the selected files from the account', async () => {
   api.readListingSource.mockResolvedValue({version:2, content, connection_current:true});
   renderData();
   const checkbox = await screen.findByRole('checkbox', {name:`Select ${object.key}`});
   expect((checkbox as HTMLInputElement).checked).toBe(true);
   expect(screen.getByText(/File selection saved to your account/)).toBeTruthy();
+  expect((screen.getByRole('button',{name:'Save selected files'}) as HTMLButtonElement).disabled).toBe(true);
 });
-it('omits an incomplete licence choice from a draft save and explains what remains',async()=>{
+it('does not save an incomplete unchanged licence choice',async()=>{
  const draft={version:4,content:{brief:'brief',title:'Offer',description:'Description',category:'Retail',tags:'retail',price:'25',license:'Research'},updated_at:'2026-09-18T12:00:00Z'};
  api.readListingSource.mockResolvedValue({version:2,content,connection_current:true});
  api.readListingDraft.mockResolvedValue(draft);
  api.saveListingDraft.mockImplementation(async saved=>({version:5,content:saved,updated_at:draft.updated_at}));
  renderLicensedData();
- fireEvent.click(await screen.findByRole('button',{name:'Save licence choice'}));
- await waitFor(()=>expect(api.saveListingDraft).toHaveBeenCalledOnce());
- expect(api.saveListingDraft.mock.calls[0][0]).not.toHaveProperty('license_selection');
- expect(screen.getByText(/Draft saved without a licence choice/)).toBeTruthy();
+ const button=await screen.findByRole('button',{name:'Save licence choice'});
+ expect((button as HTMLButtonElement).disabled).toBe(true);
+ expect(screen.getByText(/Licence choice incomplete/)).toBeTruthy();
+ expect(api.saveListingDraft).not.toHaveBeenCalled();
 });
 it('saves only a complete licence selection',async()=>{
- const draft={version:4,content:{brief:'brief',title:'Offer',description:'Description',category:'Retail',tags:'retail',price:'25',license:'Research'},updated_at:'2026-09-18T12:00:00Z'};
+ const draft={version:4,content:{brief:'brief',title:'Offer',description:'Description',category:'Retail',tags:'retail',price:'25',license:'Research',sample_decision:'member_files',sample_object_indices:[0],other_metadata:{source:'unchanged'}},updated_at:'2026-09-18T12:00:00Z'};
  api.readListingSource.mockResolvedValue({version:2,content,connection_current:true});
  api.readListingDraft.mockResolvedValue(draft);
  api.saveListingDraft.mockImplementation(async saved=>({version:5,content:saved,updated_at:draft.updated_at}));
@@ -50,7 +77,68 @@ it('saves only a complete licence selection',async()=>{
  fireEvent.click(screen.getByLabelText('Confirm covenant and authority'));
  fireEvent.click(screen.getByRole('button',{name:'Save licence choice'}));
  await waitFor(()=>expect(api.saveListingDraft).toHaveBeenCalledOnce());
+ expect(api.readListingDraft).toHaveBeenCalledOnce();
+ expect(api.saveListingDraft.mock.calls[0][1]).toBe(4);
+ expect(api.saveListingDraft.mock.calls[0][0]).toEqual({...draft.content,license_selection:expect.any(Object)});
  expect(api.saveListingDraft.mock.calls[0][0].license_selection.seller_acceptance).toEqual({signer_name:'Sam Seller',signer_title:'Director',authority_confirmed:true});
+ await waitFor(()=>expect((screen.getByRole('button',{name:'Save licence choice'}) as HTMLButtonElement).disabled).toBe(true));
+ expect(screen.getByText('Licence choice saved to your account.')).toBeTruthy();
+ expect(screen.queryByText('Licence choice saved.')).toBeNull();
+});
+it.each([false,true])('keeps the saved licence visible after a listing edit with sample capability %s',async(sampleCapability)=>{
+ const selection={...createStandardSelection(),seller_acceptance:{signer_name:'Sam Seller',signer_title:'Director',authority_confirmed:true}};
+ const draft={version:4,content:{brief:'brief',title:'Offer',description:'Description',category:'Retail',tags:'retail',price:'25',license:'Research',license_selection:selection,sample_decision:'member_files',sample_object_indices:[0]},updated_at:'2026-09-18T12:00:00Z'};
+ api.readListingSource.mockResolvedValue({version:2,content,connection_current:true});
+ api.readListingDraft.mockResolvedValue(draft);
+ api.saveListingDraft.mockImplementation(async saved=>({version:5,content:saved,updated_at:draft.updated_at}));
+ render(<SellerListingDraftProvider enabled sampleCapability={sampleCapability}><SavedWorkspaceData enabled connections={[connection]} listingLicensesEnabled/><SavedListingEditor active/></SellerListingDraftProvider>);
+ fireEvent.change(await screen.findByLabelText('Title'),{target:{value:'Updated title'}});
+ fireEvent.click(screen.getByRole('button',{name:'Save private draft'}));
+ await waitFor(()=>expect(api.saveListingDraft).toHaveBeenCalledOnce());
+ expect(api.saveListingDraft).toHaveBeenCalledWith({...draft.content,title:'Updated title'},4,expect.any(String));
+ expect(await screen.findByText('Licence choice saved to your account.')).toBeTruthy();
+});
+it('explains when listing drafts are unavailable and hides licence save',async()=>{
+ api.readListingSource.mockResolvedValue({version:2,content,connection_current:true});
+ render(<SellerListingDraftProvider enabled={false} sampleCapability={false}><SavedWorkspaceData enabled connections={[connection]} listingLicensesEnabled/></SellerListingDraftProvider>);
+ expect(await screen.findByText('Licence choice is unavailable because listing drafts are not available right now.')).toBeTruthy();
+ expect(screen.queryByRole('button',{name:'Save licence choice'})).toBeNull();
+ expect(api.readListingDraft).not.toHaveBeenCalled();
+});
+it('blocks licence save until the draft read finishes and offers retry after a read failure',async()=>{
+ let rejectRead!:(reason:Error)=>void;
+ api.readListingSource.mockResolvedValue({version:2,content,connection_current:true});
+ api.readListingDraft.mockImplementationOnce(()=>new Promise((_resolve,reject)=>{rejectRead=reject;})).mockResolvedValueOnce(null);
+ renderLicensedData();
+ const button=await screen.findByRole('button',{name:'Save licence choice'});
+ expect((button as HTMLButtonElement).disabled).toBe(true);
+ expect(screen.getByText('Loading your saved draft…')).toBeTruthy();
+ expect(api.saveListingDraft).not.toHaveBeenCalled();
+ await act(async()=>rejectRead(new Error('offline')));
+ await screen.findByText(/Your saved draft could not be loaded/);
+ expect((button as HTMLButtonElement).disabled).toBe(true);
+ fireEvent.click(screen.getByRole('button',{name:'Try loading draft again'}));
+ await waitFor(()=>expect(api.readListingDraft).toHaveBeenCalledTimes(2));
+});
+it('reloads on a 409 without discarding the unsaved licence choice',async()=>{
+ const draft={version:4,content:{brief:'brief',title:'Offer',description:'Description',category:'Retail',tags:'retail',price:'25',license:'Research'},updated_at:'2026-09-18T12:00:00Z'};
+ api.readListingSource.mockResolvedValue({version:2,content,connection_current:true});
+ api.readListingDraft.mockResolvedValueOnce(draft).mockResolvedValueOnce({...draft,version:5});
+ api.saveListingDraft.mockRejectedValueOnce({isAxiosError:true,response:{status:409}}).mockImplementation(async saved=>({version:6,content:saved,updated_at:draft.updated_at}));
+ renderLicensedData();
+ await waitFor(()=>expect(api.readListingDraft).toHaveBeenCalledOnce());
+ fireEvent.change(screen.getByLabelText('Signer full name'),{target:{value:'Sam Seller'}});
+ fireEvent.change(screen.getByLabelText('Signer title'),{target:{value:'Director'}});
+ const details=screen.getByText('Read the summary and full terms').closest('details')!;
+ Object.defineProperty(details,'open',{value:true,configurable:true});fireEvent(details,new Event('toggle'));
+ fireEvent.click(screen.getByLabelText('Confirm covenant and authority'));
+ fireEvent.click(screen.getByRole('button',{name:'Save licence choice'}));
+ expect((await screen.findByRole('alert')).textContent).toContain('Your draft was changed elsewhere; we reloaded it. Check your licence choice and save again.');
+ await waitFor(()=>expect(api.readListingDraft).toHaveBeenCalledTimes(2));
+ expect((screen.getByLabelText('Signer full name') as HTMLInputElement).value).toBe('Sam Seller');
+ fireEvent.click(screen.getByRole('button',{name:'Save licence choice'}));
+ await waitFor(()=>expect(api.saveListingDraft).toHaveBeenCalledTimes(2));
+ expect(api.saveListingDraft.mock.calls[1][1]).toBe(5);
 });
 it('round-trips the uploaded sample selection inside draft content',async()=>{
   const draft={version:4,content:{brief:'brief',title:'Offer',description:'Description',category:'Retail',tags:'retail',price:'25',license:'Research',sample_decision:'none',sample_object_indices:[]},updated_at:'2026-09-18T12:00:00Z'};
@@ -166,7 +254,7 @@ it('keeps the connection fixed during a save and preserves newer checkbox edits'
   fireEvent.click(checkbox);
   await act(async () => finish({version:1,content,connection_current:true}));
   expect((checkbox as HTMLInputElement).checked).toBe(false);
-  expect(screen.getByText(/Your file choices have not been saved/)).toBeTruthy();
+  expect(screen.getByText(/Your saved file selection remains in your account/)).toBeTruthy();
   expect((screen.getByRole('combobox', {name:'Storage connection'}) as HTMLSelectElement).disabled).toBe(false);
 });
 it('keeps a local selection change when retrying a failed file read', async () => {
@@ -178,7 +266,7 @@ it('keeps a local selection change when retrying a failed file read', async () =
   fireEvent.click(screen.getByRole('button', {name:'Try again'}));
   const checkbox = await screen.findByRole('checkbox', {name:`Select ${object.key}`});
   expect((checkbox as HTMLInputElement).checked).toBe(false);
-  expect(screen.getByText(/Your file choices have not been saved/)).toBeTruthy();
+  expect(screen.getByText(/Your saved file selection remains in your account/)).toBeTruthy();
 });
 
 it('checks a complete folder and requires count-and-size confirmation before saving',async()=>{

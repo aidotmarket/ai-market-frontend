@@ -573,6 +573,7 @@ export default function SellerWorkspacePage() {
       <WorkspacePanel active={view === 'manage'}><SellerPublications active={view === 'manage'} enabled={capabilities?.master.enabled === true && capabilities.review?.enabled === true && capabilities.review.status === 'available'} /></WorkspacePanel>
       <WorkspacePanel active={view === 'review'}><SellerReview active={view === 'review'} enabled={capabilities?.master.enabled === true && capabilities.review?.enabled === true && capabilities.review.status === 'available'} /></WorkspacePanel>
       <WorkspacePanel active={view === 'storage'}>
+      {busyAction!==null&&<p role="status" className="text-sm text-gray-600">A storage connection action is in progress. Other connection actions will be available when it finishes.</p>}
       {capabilities && <SellerJourney capabilities={capabilities} connected={currentConnections.some((connection) => connection.status === 'verified')} />}
       <StorageProviders capabilities={capabilities} busy={busyAction} onConnectAWS={handleCreate} onConnectR2={() => {clearSensitive();setR2Target(partitionConnections(connections).current.find(connection => connection.provider === 'r2' && connection.status === 'pending_authorization') ?? null);}} />
       {view === 'storage' && r2Target !== undefined && <R2ConnectionForm key={r2Target?.id ?? 'new-r2'} connection={r2Target} onClose={() => setR2Target(undefined)} onSaved={saved => {setConnections(current => [...current.filter(item => item.id !== saved.id),saved]);setR2Target(undefined);}} />}

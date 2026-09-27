@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
 import { act, cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { SAMPLE_REFUSALS, sampleUploadRefusal, WorkspaceActivity, WorkspaceData } from './WorkspaceData';
+import { SAMPLE_REFUSALS, sampleUploadRefusal, WorkspaceActivity, WorkspaceData, objectFormatLabel } from './WorkspaceData';
 import type { SellerWorkspaceConnection, WorkspaceProfileJob } from '@/api/sellerWorkspace';
 import {createStandardSelection} from '@/api/listingLicenses';
 
@@ -27,6 +27,20 @@ afterEach(cleanup);
 
 describe('Seller data browser', () => {
   const savedSource={version:3,connection_current:true,content:{connection_id:connection.id,connection_version:connection.version,version_mode:'current' as const,objects:[{key:object.key,version_id:object.version_id,etag:object.etag,size:object.size}]}};
+
+  it('labels unknown document extensions without changing backend format values',()=>{
+    for(const extension of ['md','markdown','txt','pdf','rtf'])expect(objectFormatLabel({...object,key:`datasets/note.${extension}`,format_candidate:'unknown'})).toBe('Document');
+    expect(objectFormatLabel({...object,key:'datasets/archive.zip',format_candidate:'unknown'})).toBe('Other file');
+    expect(objectFormatLabel({...object,format_candidate:'csv'})).toBe('csv');
+  });
+
+  it('explains why an empty file selection cannot be saved',async()=>{
+    api.listWorkspaceObjects.mockResolvedValue({objects:[object],next_cursor:null});
+    render(<WorkspaceData enabled connections={[connection]} savedSource={null} onSaveSelection={vi.fn()} />);
+    await screen.findByRole('checkbox',{name:`Select ${object.key}`});
+    expect((screen.getByRole('button',{name:'Save selected files'}) as HTMLButtonElement).disabled).toBe(true);
+    expect(screen.getByText(/Choose at least one file before saving a selection/)).toBeTruthy();
+  });
 
   it('does not call profile APIs while the profile stage is unavailable', () => {
     render(<><WorkspaceData enabled={false} connections={[connection]} /><WorkspaceActivity enabled={false} connections={[connection]} /></>);

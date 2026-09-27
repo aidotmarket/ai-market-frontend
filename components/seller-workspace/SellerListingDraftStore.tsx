@@ -2,17 +2,19 @@
 
 import {createContext,useCallback,useContext,useEffect,useMemo,useState} from 'react';
 import {readListingDraft,saveListingDraft,type ListingDraftContent,type SavedListingDraft} from '@/api/sellerListingDraft';
+import type {LicenseSelection} from '@/api/listingLicenses';
 
 const EMPTY_DRAFT:ListingDraftContent={brief:'',title:'',description:'',category:'',tags:'',price:'',license:''};
-type DraftStore={draft:SavedListingDraft|null;loaded:boolean;error:boolean;sampleCapability:boolean;sampleIndices:number[];
+export class DraftNotLoadedError extends Error { constructor(){super('Load your saved draft before saving.');this.name='DraftNotLoadedError';} }
+type DraftStore={draft:SavedListingDraft|null;available:boolean;loaded:boolean;error:boolean;sampleCapability:boolean;sampleIndices:number[];
   selectionSavePending:boolean;selectionSaveFailed:boolean;requestLoad:()=>void;retry:()=>void;
   beginSelectionSave:()=>void;finishSelectionSave:(succeeded:boolean)=>void;setVisibleSampleIndices:(indices:number[]|null)=>void;
-  saveFields:(content:ListingDraftContent)=>Promise<void>;saveSamples:(indices:number[])=>Promise<void>};
+  saveListingFields:(fields:ListingDraftContent)=>Promise<void>;saveLicenseSelection:(selection:LicenseSelection)=>Promise<void>;saveSamples:(indices:number[])=>Promise<void>};
 const DraftContext=createContext<DraftStore|null>(null);
 
 type OwnerSnapshot={draft:SavedListingDraft|null;selectionSaveCount:number;selectionSaveFailed:boolean};
 const owner={
-  draft:null as SavedListingDraft|null,version:0,queue:Promise.resolve() as Promise<unknown>,
+  draft:null as SavedListingDraft|null,version:0,loaded:false,queue:Promise.resolve() as Promise<unknown>,
   pending:null as {serialized:string;version:number;id:string}|null,
   selectionSaveCount:0,selectionSaveFailed:false,listeners:new Set<(snapshot:OwnerSnapshot)=>void>(),
 };
@@ -22,6 +24,7 @@ const beginOwnerSelectionSave=()=>{if(owner.selectionSaveCount===0)owner.selecti
 const finishOwnerSelectionSave=(succeeded:boolean)=>{owner.selectionSaveCount=Math.max(0,owner.selectionSaveCount-1);if(!succeeded)owner.selectionSaveFailed=true;else if(owner.selectionSaveCount===0)owner.selectionSaveFailed=false;publish();};
 const persist=(build:(base:ListingDraftContent)=>ListingDraftContent)=>{
   const operation=owner.queue.catch(()=>undefined).then(async()=>{
+    if(!owner.loaded)throw new DraftNotLoadedError();
     const content=build(owner.draft?.content??EMPTY_DRAFT);
     const serialized=JSON.stringify(content);
     if(!owner.pending||owner.pending.serialized!==serialized||owner.pending.version!==owner.version)
@@ -36,7 +39,7 @@ const persist=(build:(base:ListingDraftContent)=>ListingDraftContent)=>{
 
 export function resetSellerListingDraftOwnerForTests() {
   if(process.env.NODE_ENV!=='test')return;
-  owner.draft=null;owner.version=0;owner.queue=Promise.resolve();owner.pending=null;
+  owner.draft=null;owner.version=0;owner.loaded=false;owner.queue=Promise.resolve();owner.pending=null;
   owner.selectionSaveCount=0;owner.selectionSaveFailed=false;owner.listeners.clear();
 }
 
@@ -53,12 +56,12 @@ export function SellerListingDraftProvider({enabled,sampleCapability,children}:{
   useEffect(()=>{const listener=(value:OwnerSnapshot)=>{setDraft(value.draft);setSelectionSaveCount(value.selectionSaveCount);setSelectionSaveFailed(value.selectionSaveFailed);};owner.listeners.add(listener);listener(snapshot());return()=>{owner.listeners.delete(listener);};},[]);
   useEffect(()=>{if(sampleCapability)setRequested(true);},[sampleCapability]);
   useEffect(()=>{
-    if(!enabled){setDraft(null);setVisibleSampleIndices(null);setLoaded(true);setError(false);return;}
+    if(!enabled){setDraft(null);setVisibleSampleIndices(null);setLoaded(false);setError(false);return;}
     if(!requested)return;
-    const controller=new AbortController();setLoaded(false);setError(false);
+    const controller=new AbortController();owner.loaded=false;setLoaded(false);setError(false);
     owner.queue.catch(()=>undefined).then(()=>readListingDraft(controller.signal)).then(value=>{
       if(controller.signal.aborted)return;
-      owner.draft=value;owner.version=value?.version??0;owner.pending=null;
+      owner.draft=value;owner.version=value?.version??0;owner.loaded=true;owner.pending=null;
       if(owner.selectionSaveCount===0)owner.selectionSaveFailed=false;
       publish();setLoaded(true);
     }).catch(()=>{if(!controller.signal.aborted){setError(true);setLoaded(false);}});
@@ -68,18 +71,19 @@ export function SellerListingDraftProvider({enabled,sampleCapability,children}:{
   const finishSelectionSave=useCallback((succeeded:boolean)=>finishOwnerSelectionSave(succeeded),[]);
   const sampleIndices=sampleCapability&&draft?.content.sample_decision==='member_files'?(draft.content.sample_object_indices??[]):[];
   const selectionMismatch=visibleSampleIndices!==null&&JSON.stringify(visibleSampleIndices)!==JSON.stringify(sampleIndices);
-  const value=useMemo<DraftStore>(()=>({draft,loaded,error,sampleCapability,sampleIndices,
+  const value=useMemo<DraftStore>(()=>({draft,available:enabled,loaded,error,sampleCapability,sampleIndices,
     selectionSavePending:selectionSaveCount>0||selectionMismatch,selectionSaveFailed,requestLoad:()=>setRequested(true),retry:()=>{setRequested(true);setRetryKey(value=>value+1);},
     beginSelectionSave,finishSelectionSave,setVisibleSampleIndices,
-    saveFields:async(fields)=>{await persist(base=>{
-      const indices=base.sample_object_indices??[];
-      return sampleCapability&&indices.length>0?{...fields,sample_decision:'member_files',sample_object_indices:indices}:fields;
-    });},
+    saveListingFields:async(fields)=>{await persist(base=>({
+      ...base,brief:fields.brief,title:fields.title,description:fields.description,category:fields.category,
+      tags:fields.tags,price:fields.price,license:fields.license,
+    }));},
+    saveLicenseSelection:async(selection)=>{await persist(base=>({...base,license_selection:selection}));},
     saveSamples:async(indices)=>{beginSelectionSave();try{await persist(base=>sampleCapability
       ?{...base,sample_decision:indices.length?'member_files':'none',sample_object_indices:[...indices]}
       :base);finishSelectionSave(true);}
       catch(failure){finishSelectionSave(false);throw failure;}},
-  }),[draft,loaded,error,sampleCapability,sampleIndices,selectionSaveCount,selectionSaveFailed,selectionMismatch,beginSelectionSave,finishSelectionSave]);
+  }),[draft,enabled,loaded,error,sampleCapability,sampleIndices,selectionSaveCount,selectionSaveFailed,selectionMismatch,beginSelectionSave,finishSelectionSave]);
   return <DraftContext.Provider value={value}>{children}</DraftContext.Provider>;
 }
 

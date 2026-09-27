@@ -16,6 +16,7 @@ it('requires an explicit sample choice, all confirmations and a loaded render', 
   expect(screen.getAllByRole('checkbox').every(item => !(item as HTMLInputElement).checked)).toBe(true);
   confirmAll();
   expect((screen.getByRole('button',{name:'Approve this review'}) as HTMLButtonElement).disabled).toBe(true);
+  expect(screen.getByText('Wait for the saved listing and file preview to finish loading.')).toBeTruthy();
   rerender(<SellerApproval review={review} active rendered />);
   api.approveListingReview.mockResolvedValue({id:'approved'});
   fireEvent.click(screen.getByRole('button',{name:'Approve this review'}));
@@ -36,7 +37,7 @@ it('requires refreshing a changed review before another approval attempt', async
   api.approveListingReview.mockRejectedValue({isAxiosError:true,response:{status:409}});
   render(<SellerApproval review={review} active rendered />);confirmAll();
   fireEvent.click(screen.getByRole('button',{name:'Approve this review'}));
-  await screen.findByText(/Refresh the saved review/);
+  await screen.findByRole('alert');
   expect((screen.getByRole('button',{name:'Approve this review'}) as HTMLButtonElement).disabled).toBe(true);
 });
 it('does not display a late success after leaving the review', async () => {
