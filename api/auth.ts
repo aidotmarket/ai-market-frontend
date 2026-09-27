@@ -76,18 +76,23 @@ export async function verify2FALogin(pre_auth_token: string, code: string): Prom
   return res.data;
 }
 
-export async function setup2FA(): Promise<TOTPSetupResponse> {
-  const res = await api.post<TOTPSetupResponse>('/auth/2fa/setup');
+export async function setup2FA(reauthToken: string): Promise<TOTPSetupResponse> {
+  const res = await api.post<TOTPSetupResponse>('/auth/2fa/setup', { reauth_token: reauthToken });
   return res.data;
 }
 
-export async function verify2FASetup(code: string): Promise<TOTPVerifySetupResponse> {
-  const res = await api.post<TOTPVerifySetupResponse>('/auth/2fa/verify-setup', { code });
+export async function verify2FASetup(code: string, reauthToken: string): Promise<TOTPVerifySetupResponse> {
+  const res = await api.post<TOTPVerifySetupResponse>('/auth/2fa/verify-setup', {
+    code,
+    reauth_token: reauthToken,
+  });
   return res.data;
 }
 
-export async function submitReauth(code: string): Promise<ReauthResponse> {
-  const res = await api.post<ReauthResponse>('/auth/reauth', { code });
+export async function submitReauth(credential: string, method: 'password' | 'totp' = 'totp'): Promise<ReauthResponse> {
+  const res = await api.post<ReauthResponse>('/auth/reauth', method === 'password'
+    ? { method, password: credential }
+    : { code: credential });
   return res.data;
 }
 

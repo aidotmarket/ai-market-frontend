@@ -1,7 +1,8 @@
 // @vitest-environment jsdom
 
-import { cleanup, render, screen, waitFor } from '@testing-library/react';
+import { act, cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { AxiosError } from 'axios';
 import DashboardOverview from './page';
 import { useAuthStore } from '@/store/auth';
 import type { User } from '@/types';
@@ -15,6 +16,7 @@ const connectApi = vi.hoisted(() => ({
 
 const authApi = vi.hoisted(() => ({
   setup2FA: vi.fn(),
+  submitReauth: vi.fn(),
   verify2FASetup: vi.fn(),
 }));
 
@@ -88,7 +90,23 @@ const sellerStats = {
 };
 
 describe('DashboardOverview seller setup 2FA state', () => {
+  const refreshAuth = vi.fn();
+  const completeReauth = async () => {
+    const dialog = await screen.findByRole('dialog', { name: 'Re-authenticate' });
+    fireEvent.change(within(dialog).getByLabelText('Password'), {
+      target: { value: '654321' },
+    });
+    await act(async () => {
+      fireEvent.click(within(dialog).getByRole('button', { name: 'Continue' }));
+    });
+  };
+  const expiredReauth = Object.assign(new AxiosError('expired'), {
+    response: { status: 400, data: { detail: 'Re-authentication required' } },
+  });
+
   beforeEach(() => {
+    refreshAuth.mockResolvedValue(undefined);
+    authApi.submitReauth.mockResolvedValue({ token: 'dashboard-token' });
     capabilitiesApi.getCapabilities.mockResolvedValue({
       buyer: { persisted_status: 'active', effective_status: 'active', missing_steps: [], reason: null },
       seller: {
@@ -107,6 +125,7 @@ describe('DashboardOverview seller setup 2FA state', () => {
       isLoading: false,
       hydrated: true,
       pendingTwoFactor: null,
+      refreshAuth,
     });
   });
 
@@ -130,6 +149,48 @@ describe('DashboardOverview seller setup 2FA state', () => {
     expect(sellerApi.getSellerStats).not.toHaveBeenCalled();
     expect(listingsApi.getMyListings).not.toHaveBeenCalled();
     expect(ordersApi.getMyOrders).toHaveBeenCalledOnce();
+  });
+
+  it('reauthenticates before setup and uses the same token for verification', async () => {
+    authApi.setup2FA.mockResolvedValue({ secret: 'setup-secret', qr_uri: 'otpauth://example', expires_in: 600 });
+    authApi.verify2FASetup.mockResolvedValue({ backup_codes: ['backup-one'] });
+    render(<DashboardOverview />);
+    fireEvent.click(await screen.findByRole('button', { name: 'Enable 2FA' }));
+    expect(authApi.setup2FA).not.toHaveBeenCalled();
+    expect(screen.queryByText('setup-secret')).toBeNull();
+    await completeReauth();
+    expect(authApi.setup2FA).toHaveBeenCalledWith('dashboard-token');
+    expect(screen.getByText('setup-secret')).toBeTruthy();
+    fireEvent.change(screen.getByRole('textbox', { name: '6-digit code' }), { target: { value: '123456' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Verify and enable' }));
+    await waitFor(() => expect(authApi.verify2FASetup).toHaveBeenCalledWith('123456', 'dashboard-token'));
+    expect(await screen.findByRole('heading', { name: 'Backup codes' })).toBeTruthy();
+  });
+
+  it('cancels before setup without enabling 2FA', async () => {
+    render(<DashboardOverview />);
+    fireEvent.click(await screen.findByRole('button', { name: 'Enable 2FA' }));
+    const dialog = await screen.findByRole('dialog', { name: 'Re-authenticate' });
+    fireEvent.click(within(dialog).getByRole('button', { name: 'Cancel' }));
+    expect(authApi.setup2FA).not.toHaveBeenCalled();
+    expect(authApi.verify2FASetup).not.toHaveBeenCalled();
+    expect(screen.getByText('Enable authenticator-app verification before connecting payouts.')).toBeTruthy();
+  });
+
+  it('reauthenticates once after expiry and retries verification without restarting setup', async () => {
+    authApi.setup2FA.mockResolvedValue({ secret: 'setup-secret', qr_uri: 'otpauth://example', expires_in: 600 });
+    authApi.verify2FASetup.mockRejectedValueOnce(expiredReauth).mockResolvedValueOnce({ backup_codes: ['backup-one'] });
+    authApi.submitReauth.mockResolvedValueOnce({ token: 'first-token' }).mockResolvedValueOnce({ token: 'fresh-token' });
+    render(<DashboardOverview />);
+    fireEvent.click(await screen.findByRole('button', { name: 'Enable 2FA' }));
+    await completeReauth();
+    fireEvent.change(screen.getByRole('textbox', { name: '6-digit code' }), { target: { value: '123456' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Verify and enable' }));
+    await completeReauth();
+    expect(authApi.setup2FA).toHaveBeenCalledOnce();
+    expect(authApi.verify2FASetup).toHaveBeenNthCalledWith(1, '123456', 'first-token');
+    expect(authApi.verify2FASetup).toHaveBeenNthCalledWith(2, '123456', 'fresh-token');
+    expect(screen.getByRole('heading', { name: 'Backup codes' })).toBeTruthy();
   });
 
   it('renders active seller stats from the real contract shape', async () => {

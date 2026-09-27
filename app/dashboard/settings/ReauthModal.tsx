@@ -12,6 +12,7 @@ interface ReauthModalProps {
   onClose: () => void;
   onSuccess: (reauthToken: string) => void | Promise<void>;
   fallbackFocusRef?: RefObject<HTMLElement | null>;
+  method?: 'password' | 'totp';
 }
 
 function isAvailableFocusTarget(element: HTMLElement | null): element is HTMLElement {
@@ -75,6 +76,7 @@ export default function ReauthModal({
   onClose,
   onSuccess,
   fallbackFocusRef,
+  method = 'totp',
 }: ReauthModalProps) {
   const [code, setCode] = useState('');
   const [submitting, setSubmitting] = useState(false);
@@ -120,7 +122,9 @@ export default function ReauthModal({
     setError('');
 
     try {
-      const result = await submitReauth(code.trim());
+      const result = method === 'password'
+        ? await submitReauth(code, 'password')
+        : await submitReauth(code.trim());
       if (typeof result.token !== 'string' || result.token.length === 0) {
         throw new Error('Missing re-authentication token');
       }
@@ -178,7 +182,7 @@ export default function ReauthModal({
               Re-authenticate
             </h2>
             <p id={DIALOG_DESCRIPTION_ID} className="mt-1 text-sm text-gray-500">
-              Enter the current code from your authenticator app to continue.
+              {method === 'password' ? 'Enter your password to continue.' : 'Enter the current code from your authenticator app to continue.'}
             </p>
           </div>
           <button
@@ -205,20 +209,20 @@ export default function ReauthModal({
 
         <div className="mt-4">
           <label htmlFor="reauthCode" className="block text-sm font-medium text-gray-700 mb-1">
-            Verification code
+            {method === 'password' ? 'Password' : 'Verification code'}
           </label>
           <input
             ref={initialFocusRef}
             id="reauthCode"
-            type="text"
-            inputMode="numeric"
-            autoComplete="one-time-code"
-            maxLength={8}
+            type={method === 'password' ? 'password' : 'text'}
+            inputMode={method === 'password' ? undefined : 'numeric'}
+            autoComplete={method === 'password' ? 'current-password' : 'one-time-code'}
+            maxLength={method === 'password' ? undefined : 8}
             value={code}
             aria-describedby={error ? ERROR_ID : undefined}
-            onChange={(event) => setCode(event.target.value.replace(/\s/g, ''))}
+            onChange={(event) => setCode(method === 'password' ? event.target.value : event.target.value.replace(/\s/g, ''))}
             className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:border-transparent focus:outline-none focus:ring-2 focus:ring-[#3F51B5]"
-            placeholder="Enter code"
+            placeholder={method === 'password' ? 'Enter password' : 'Enter code'}
           />
         </div>
 

@@ -6,7 +6,7 @@ vi.mock('./client', () => ({
   api: { post: apiPost },
 }));
 
-const { register, submitReauth } = await import('./auth');
+const { register, submitReauth, setup2FA, verify2FASetup } = await import('./auth');
 
 describe('auth register API', () => {
   beforeEach(() => {
@@ -29,6 +29,26 @@ describe('auth register API', () => {
       first_name: 'Buyer',
       last_name: 'User',
       role: 'buyer',
+    });
+  });
+});
+
+describe('auth 2FA setup API', () => {
+  beforeEach(() => apiPost.mockReset());
+
+  it('sends the reauthentication token to both setup endpoints', async () => {
+    apiPost.mockResolvedValueOnce({ data: { secret: 'secret', qr_uri: 'uri', expires_in: 600 } });
+    apiPost.mockResolvedValueOnce({ data: { backup_codes: ['backup-one'] } });
+
+    await setup2FA('reauth-token');
+    await verify2FASetup('123456', 'reauth-token');
+
+    expect(apiPost).toHaveBeenNthCalledWith(1, '/auth/2fa/setup', {
+      reauth_token: 'reauth-token',
+    });
+    expect(apiPost).toHaveBeenNthCalledWith(2, '/auth/2fa/verify-setup', {
+      code: '123456',
+      reauth_token: 'reauth-token',
     });
   });
 });
@@ -57,5 +77,13 @@ describe('auth reauthentication API', () => {
       method: 'totp',
     });
     expect(apiPost).toHaveBeenCalledWith('/auth/reauth', { code: '123456' });
+  });
+
+  it('sends a password for an account that has not enabled 2FA', async () => {
+    apiPost.mockResolvedValue({ data: { token: 'password-reauth-token' } });
+    await submitReauth('password with spaces', 'password');
+    expect(apiPost).toHaveBeenCalledWith('/auth/reauth', {
+      method: 'password', password: 'password with spaces',
+    });
   });
 });
