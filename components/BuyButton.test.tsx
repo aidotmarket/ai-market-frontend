@@ -44,7 +44,7 @@ function completeAcceptanceForm() {
   fireEvent.change(screen.getByLabelText('Typed full name'), { target: { value: 'Ada Buyer' } });
   fireEvent.change(screen.getByLabelText('Signer title'), { target: { value: 'Director' } });
   fireEvent.change(screen.getByLabelText('Business legal name'), { target: { value: 'Buyer Ltd' } });
-  fireEvent.change(screen.getByLabelText('Jurisdiction (2-letter country code)'), { target: { value: 'gb' } });
+  fireEvent.change(screen.getByLabelText('Country'), { target: { value: 'GB' } });
   fireEvent.click(screen.getByRole('checkbox', { name: 'Confirm licence authority' }));
 }
 
@@ -70,7 +70,7 @@ describe('BuyButton licence acceptance', () => {
     expect(screen.getByLabelText('Typed full name')).not.toBeNull();
     expect(screen.getByLabelText('Signer title')).not.toBeNull();
     expect(screen.getByLabelText('Business legal name')).not.toBeNull();
-    expect(screen.getByLabelText('Jurisdiction (2-letter country code)')).not.toBeNull();
+    expect(screen.getByLabelText('Country')).not.toBeNull();
     expect((screen.getByRole('button', { name: 'Accept and continue to payment' }) as HTMLButtonElement).disabled).toBe(true);
     await waitFor(() => expect(ordersApi.getMyOrders).toHaveBeenCalled());
   });
@@ -120,7 +120,11 @@ describe('BuyButton licence acceptance', () => {
       expect((screen.getByLabelText(/Full legal name/) as HTMLInputElement).value).toBe('Ada Buyer');
       expect((screen.getByLabelText(/^Title/) as HTMLInputElement).value).toBe('Director');
       expect((screen.getAllByLabelText(/Business legal name/)[1] as HTMLInputElement).value).toBe('Buyer Ltd');
-      expect((screen.getAllByLabelText(/Jurisdiction \(2-letter country code\)/)[1] as HTMLInputElement).value).toBe('GB');
+      expect((document.getElementById('terms-jurisdiction') as HTMLSelectElement).value).toBe('GB');
+      for (const id of ['ack-box-1', 'ack-box-2', 'ack-box-3']) fireEvent.click(document.getElementById(id)!);
+      fireEvent.click(screen.getByLabelText('I am authorized to bind this business'));
+      fireEvent.click(screen.getByRole('button', { name: 'Accept and sign' }));
+      await waitFor(() => expect(legalApi.acceptTerms).toHaveBeenCalledWith(expect.objectContaining({ context: 'buyer' })));
     } finally {
       if (priorGate === undefined) delete process.env.NEXT_PUBLIC_TERMS_GATE_ENFORCE;
       else process.env.NEXT_PUBLIC_TERMS_GATE_ENFORCE = priorGate;

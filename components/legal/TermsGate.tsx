@@ -2,7 +2,7 @@
 
 import { useCallback, useRef, useState } from 'react';
 import Link from 'next/link';
-import { getTermsAcceptanceStatus, type TermsPartyContext } from '@/api/legal';
+import { getTermsAcceptanceStatus, type TermsAcceptanceContext, type TermsPartyContext } from '@/api/legal';
 import { useToast } from '@/components/Toast';
 import { useAuthStore } from '@/store/auth';
 import TermsAcceptanceForm, { type TermsAcceptancePrefill } from '@/components/legal/TermsAcceptanceForm';
@@ -10,7 +10,7 @@ import { getTermsPartyContext, isTermsGateEnforced } from '@/components/legal/te
 
 type PendingAction = () => unknown | Promise<unknown>;
 
-export function useTermsGate() {
+export function useTermsGate(acceptanceContext: TermsAcceptanceContext = 'buyer') {
   const user = useAuthStore((s) => s.user);
   const { toast } = useToast();
   const [promptContext, setPromptContext] = useState<TermsPartyContext | null>(null);
@@ -83,6 +83,7 @@ export function useTermsGate() {
             </div>
             <TermsAcceptanceForm
               context={promptContext}
+              acceptanceContext={acceptanceContext}
               prefill={promptPrefill}
               compact
               onAccepted={async () => {
@@ -105,7 +106,7 @@ export function useTermsGate() {
             Please review and accept the ai.market Terms and Conditions. You can continue for now.
           </p>
           <div className="flex shrink-0 items-center gap-3">
-            <Link href="/legal/terms/accept" className="font-semibold underline underline-offset-2">
+            <Link href={acceptanceContext === 'seller' ? '/legal/terms/accept?context=seller' : '/legal/terms/accept'} className="font-semibold underline underline-offset-2">
               Review and accept
             </Link>
             <button
@@ -119,7 +120,7 @@ export function useTermsGate() {
         </div>
       </div>
     );
-  }, [hardGateOpen, promptContext, promptPrefill]);
+  }, [acceptanceContext, hardGateOpen, promptContext, promptPrefill]);
 
   return { ensureTermsAccepted, TermsGatePrompt, checkingTerms };
 }

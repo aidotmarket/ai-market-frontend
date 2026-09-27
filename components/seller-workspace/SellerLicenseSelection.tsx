@@ -7,7 +7,7 @@ import {
 } from '@/api/listingLicenses';
 import {MAX_CUSTOM_LICENSE_CODEPOINTS,canonicalizeCustomText} from '@/lib/customLicenseVerification';
 import {getSellerLegalIdentity,refreshSellerLegalIdentity,saveSellerLegalIdentity,legalIdentityFailure,LEGAL_IDENTITY_SUPPORT_PATH,type SellerLegalIdentity} from '@/api/sellerLegalIdentity';
-import {SELLER_COUNTRIES} from '@/api/sellerLegalIdentityCountries';
+import CountrySelect from '@/components/CountrySelect';
 
 export type IdentityState = {kind:'checking'|'conflict'|'unavailable'} | {kind:'known'|'required';value:SellerLegalIdentity};
 
@@ -158,7 +158,7 @@ export default function SellerLicenseSelection({value, onChange, disabled = fals
       {knownLegal?.seller_editable===true&&!editingLegal&&<button type="button" className="text-sm text-indigo-700 underline" onClick={()=>setEditingLegal(true)}>Edit legal details</button>}
       {(legalState.kind==='required'||knownLegal?.seller_editable===true&&editingLegal)&&<div className="grid gap-4 sm:grid-cols-2">
         <label className="text-sm font-medium">Legal name<input aria-label="Legal name" value={legalName} maxLength={255} onChange={event=>setLegalName(event.target.value)} className="mt-2 block w-full rounded-lg border border-gray-300 px-3 py-2" /></label>
-        <label className="text-sm font-medium">Country<select aria-label="Country" value={country} onChange={event=>setCountry(event.target.value)} className="mt-2 block w-full rounded-lg border border-gray-300 px-3 py-2"><option value="">Choose a country</option>{SELLER_COUNTRIES.map(item=><option key={item.code} value={item.code}>{item.name}</option>)}</select></label>
+        <label className="text-sm font-medium">Country<CountrySelect aria-label="Country" value={country} onChange={setCountry} className="mt-2 block w-full rounded-lg border border-gray-300 px-3 py-2" /></label>
         {legalChanged&&<div className="sm:col-span-2"><button type="button" disabled={savingLegal||disabled||!legalName.trim()||!country} onClick={()=>void saveLegal()} className="rounded-lg bg-indigo-700 px-4 py-2 text-sm text-white disabled:opacity-50">{savingLegal?'Saving legal details…':'Save legal details'}</button></div>}
       </div>}
       {legalState.kind==='required'&&<p role="status" className="text-sm text-amber-900">Your legal name and country are not saved. Save them before saving the licence choice or publishing.</p>}

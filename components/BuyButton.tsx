@@ -8,6 +8,7 @@ import { createCheckout } from '@/api/checkout';
 import { getMyOrders } from '@/api/orders';
 import { formatPrice } from '@/lib/format';
 import { useTermsGate } from '@/components/legal/TermsGate';
+import CountrySelect from '@/components/CountrySelect';
 import type { BuyerOrder, LicenseAcceptanceFields, ListingLicenseDetails } from '@/types';
 import { AxiosError } from 'axios';
 import ListingLicenseDisclosure from '@/components/ListingLicenseDisclosure';
@@ -56,7 +57,7 @@ export default function BuyButton({
   const [licenseVerified, setLicenseVerified] = useState(false);
   const [checkoutRefusal, setCheckoutRefusal] = useState<CheckoutRefusal | null>(null);
   const inflightRef = useRef<string | null>(null);
-  const { ensureTermsAccepted, TermsGatePrompt, checkingTerms } = useTermsGate();
+  const { ensureTermsAccepted, TermsGatePrompt, checkingTerms } = useTermsGate('buyer');
   const handleVerificationChange = useCallback((verified: boolean) => setLicenseVerified(verified), []);
 
   useEffect(() => {
@@ -210,8 +211,8 @@ export default function BuyButton({
           <label className="text-sm font-medium text-gray-900">Business legal name
             <input value={businessLegalName} onChange={(event) => { setBusinessLegalName(event.target.value); setAuthorityConfirmed(false); }} maxLength={255} autoComplete="organization" className="mt-2 block w-full rounded-lg border border-gray-300 px-3 py-2" />
           </label>
-          <label className="text-sm font-medium text-gray-900">Jurisdiction (2-letter country code)
-            <input value={jurisdiction} onChange={(event) => { setJurisdiction(event.target.value.toUpperCase().slice(0, 2)); setAuthorityConfirmed(false); }} minLength={2} maxLength={2} autoComplete="country" className="mt-2 block w-full rounded-lg border border-gray-300 px-3 py-2 uppercase" />
+          <label className="text-sm font-medium text-gray-900">Country
+            <CountrySelect value={jurisdiction} onChange={(code) => { setJurisdiction(code); setAuthorityConfirmed(false); }} autoComplete="country" className="mt-2 block w-full rounded-lg border border-gray-300 px-3 py-2" />
           </label>
         </div>
         <label className="flex items-start gap-3 text-sm leading-6 text-gray-700">

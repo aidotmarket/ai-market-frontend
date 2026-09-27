@@ -12,7 +12,9 @@ export default function TermsAcceptClient() {
   const searchParams = useSearchParams();
   const { user, isAuthenticated, isLoading, hydrated } = useAuthStore();
   const context = getTermsPartyContext(user);
+  const acceptanceContext = searchParams.get('context') === 'seller' ? 'seller' : 'buyer';
   const redirectTo = validateRedirect(searchParams.get('redirect'), '/dashboard');
+  const acceptPath = `/legal/terms/accept${searchParams.toString() ? `?${searchParams.toString()}` : ''}`;
 
   if (isLoading || !hydrated) {
     return (
@@ -30,7 +32,7 @@ export default function TermsAcceptClient() {
           You need an ai.market account before we can record your electronic signature.
         </p>
         <Link
-          href={`/login?redirect=${encodeURIComponent('/legal/terms/accept')}`}
+          href={`/login?redirect=${encodeURIComponent(acceptPath)}`}
           className="mt-6 inline-flex rounded-lg bg-[#3F51B5] px-4 py-2.5 text-sm font-medium text-white hover:bg-[#3545a0]"
         >
           Log in
@@ -47,7 +49,7 @@ export default function TermsAcceptClient() {
           Complete the required acknowledgements and electronic signature before trading on ai.market.
         </p>
       </div>
-      <TermsAcceptanceForm context={context} onAccepted={() => router.push(redirectTo)} />
+      <TermsAcceptanceForm context={context} acceptanceContext={acceptanceContext} onAccepted={() => router.push(redirectTo)} />
     </div>
   );
 }

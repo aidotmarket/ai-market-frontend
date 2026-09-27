@@ -100,7 +100,7 @@ export default function OrderDetailPage() {
   const txIdParam = searchParams.get('tx');
   const { toast } = useToast();
   const userId = useAuthStore((s) => s.user?.id);
-  const { ensureTermsAccepted, TermsGatePrompt, checkingTerms } = useTermsGate();
+  const { ensureTermsAccepted, TermsGatePrompt, checkingTerms } = useTermsGate('buyer');
 
   const [order, setOrder] = useState<DirectoryOrder | null>(null);
   const isDirectoryOrder = order?.memberMode === 'directory' || order?.memberMode === 'unavailable';
