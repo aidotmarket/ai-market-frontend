@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState, useCallback } from 'react';
+import { useEffect, useState, useCallback, useRef } from 'react';
 import Link from 'next/link';
 import { useAuthStore } from '@/store/auth';
 import {
@@ -9,7 +9,7 @@ import {
   isConnectOnboardingTwoFactorRequired,
   redirectToConnectOnboarding,
 } from '@/api/connect';
-import { setup2FA, verify2FASetup } from '@/api/auth';
+import { isSsoManaged2FAError, setup2FA, SSO_MANAGED_2FA_MESSAGE, verify2FASetup } from '@/api/auth';
 import { getSellerStats } from '@/api/seller';
 import { getMyListings } from '@/api/listings';
 import { getMyOrders } from '@/api/orders';
@@ -23,8 +23,15 @@ import { useToast } from '@/components/Toast';
 import { formatDate, formatPrice } from '@/lib/format';
 import type { BuyerOrder, OrderStatus, SellerStats } from '@/types';
 import { AxiosError } from 'axios';
+import ReauthModal from './settings/ReauthModal';
 
 type TwoFactorFlow = 'idle' | 'showing_qr' | 'verifying' | 'showing_backup_codes';
+type ReauthAction = 'setup' | 'retry' | null;
+
+function isExpiredReauth(error: unknown): boolean {
+  return error instanceof AxiosError && error.response?.status === 400 &&
+    error.response.data?.detail === 'Re-authentication required';
+}
 
 const ORDER_STATUS_LABEL: Record<OrderStatus, string> = {
   pending_fulfillment: 'Pending',
@@ -55,6 +62,10 @@ export default function DashboardOverview() {
   const [setupExpiresIn, setSetupExpiresIn] = useState<number | null>(null);
   const [totpCode, setTotpCode] = useState('');
   const [backupCodes, setBackupCodes] = useState<string[]>([]);
+  const [setupReauthToken, setSetupReauthToken] = useState('');
+  const [reauthAction, setReauthAction] = useState<ReauthAction>(null);
+  const dashboardHeadingRef = useRef<HTMLHeadingElement>(null);
+  const twoFactorDoneInFlight = useRef(false);
 
   const fetchData = useCallback(async () => {
     setLoading(true);
@@ -141,13 +152,16 @@ export default function DashboardOverview() {
     setSetupExpiresIn(null);
     setTotpCode('');
     setBackupCodes([]);
+    setSetupReauthToken('');
+    setReauthAction(null);
   };
 
-  const handleSetup2FA = async () => {
+  const handleSetup2FA = async (reauthToken: string) => {
     setSecurityLoading(true);
     setSecurityError('');
     try {
-      const res = await setup2FA();
+      const res = await setup2FA(reauthToken);
+      setSetupReauthToken(reauthToken);
       setTotpSecret(res.secret);
       setTotpQrUri(res.qr_uri);
       setSetupExpiresIn(res.expires_in);
@@ -155,7 +169,9 @@ export default function DashboardOverview() {
       setBackupCodes([]);
       setTwoFactorFlow('showing_qr');
     } catch (err) {
-      if (err instanceof AxiosError) {
+      if (isSsoManaged2FAError(err)) {
+        setSecurityError(SSO_MANAGED_2FA_MESSAGE);
+      } else if (err instanceof AxiosError) {
         setSecurityError(err.response?.data?.detail || 'Failed to start 2FA setup.');
       } else {
         setSecurityError('Failed to start 2FA setup.');
@@ -165,26 +181,56 @@ export default function DashboardOverview() {
     }
   };
 
-  const handleVerify2FASetup = async () => {
+  const handleVerify2FASetup = async (reauthToken: string, allowReauthRetry = true) => {
     setSecurityLoading(true);
     setSecurityError('');
     setTwoFactorFlow('verifying');
     try {
-      const res = await verify2FASetup(totpCode.trim());
+      const res = await verify2FASetup(totpCode.trim(), reauthToken);
       setBackupCodes(res.backup_codes);
       setTwoFactorFlow('showing_backup_codes');
-      await refreshAuth();
-      await fetchData();
       toast('Two-factor authentication enabled', 'success');
     } catch (err) {
       setTwoFactorFlow('showing_qr');
-      if (err instanceof AxiosError) {
+      if (allowReauthRetry && isExpiredReauth(err)) {
+        setReauthAction('retry');
+        return;
+      }
+      if (isSsoManaged2FAError(err)) {
+        setSecurityError(SSO_MANAGED_2FA_MESSAGE);
+      } else if (err instanceof AxiosError) {
         setSecurityError(err.response?.data?.detail || 'Failed to verify the code.');
       } else {
         setSecurityError('Failed to verify the code.');
       }
     } finally {
       setSecurityLoading(false);
+    }
+  };
+
+  const handleTwoFactorDone = async () => {
+    if (twoFactorDoneInFlight.current) return;
+    twoFactorDoneInFlight.current = true;
+    setSecurityLoading(true);
+    try {
+      await refreshAuth();
+      await fetchData();
+    } catch {
+      toast('Failed to refresh your account state', 'error');
+    } finally {
+      resetTwoFactorState();
+      twoFactorDoneInFlight.current = false;
+    }
+  };
+
+  const handleReauthSuccess = async (reauthToken: string) => {
+    const action = reauthAction;
+    setReauthAction(null);
+    if (action === 'setup') {
+      await handleSetup2FA(reauthToken);
+    } else if (action === 'retry') {
+      setSetupReauthToken(reauthToken);
+      await handleVerify2FASetup(reauthToken, false);
     }
   };
 
@@ -225,11 +271,20 @@ export default function DashboardOverview() {
     isSellerProvisioning &&
     !(twoFactorEnabled && payoutsEnabled);
   const showHeldPublishedNotice = isSellerActive && heldPublishedCount > 0 && !payoutsEnabled;
+  const ssoManaged2FA = (user?.sso_enforced === true && !user.auth_methods?.includes('password')) ||
+    securityError === SSO_MANAGED_2FA_MESSAGE;
 
   return (
     <div className="space-y-8">
+      <ReauthModal
+        isOpen={reauthAction !== null}
+        onClose={() => setReauthAction(null)}
+        onSuccess={handleReauthSuccess}
+        fallbackFocusRef={dashboardHeadingRef}
+        method={user?.totp_enabled ? 'totp' : user?.auth_methods?.includes('password') ? 'password' : 'magic_link'}
+      />
       <div>
-        <h1 className="text-2xl font-bold text-gray-900">Welcome back, {user?.first_name || 'there'}</h1>
+        <h1 ref={dashboardHeadingRef} tabIndex={-1} className="text-2xl font-bold text-gray-900">Welcome back, {user?.first_name || 'there'}</h1>
         <p className="mt-1 text-sm text-gray-500">
           {isSellerActive
             ? "Here's what's happening with your store today."
@@ -332,11 +387,11 @@ export default function DashboardOverview() {
                 <div className="min-w-0 flex-1">
                   <p className="text-sm font-semibold text-gray-900">Secure your account (2FA)</p>
                   <p className="mt-1 text-sm text-gray-600">
-                    {twoFactorEnabled ? 'Two-factor authentication is enabled.' : 'Enable authenticator-app verification before connecting payouts.'}
+                    {ssoManaged2FA ? SSO_MANAGED_2FA_MESSAGE : twoFactorEnabled ? 'Two-factor authentication is enabled.' : 'Enable authenticator-app verification before connecting payouts.'}
                   </p>
-                  {!twoFactorEnabled && twoFactorFlow === 'idle' && (
+                  {!twoFactorEnabled && !ssoManaged2FA && twoFactorFlow === 'idle' && (
                     <button
-                      onClick={handleSetup2FA}
+                      onClick={() => setReauthAction('setup')}
                       disabled={securityLoading}
                       className="mt-3 rounded-lg bg-[#3F51B5] px-4 py-2 text-sm font-medium text-white hover:bg-[#3545a0] disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
                     >
@@ -346,7 +401,7 @@ export default function DashboardOverview() {
                 </div>
               </div>
 
-              {securityError && (
+              {securityError && !ssoManaged2FA && (
                 <div className="mt-4 rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
                   {securityError}
                 </div>
@@ -395,7 +450,7 @@ export default function DashboardOverview() {
                     </div>
                     <div className="flex gap-3">
                       <button
-                        onClick={handleVerify2FASetup}
+                        onClick={() => handleVerify2FASetup(setupReauthToken)}
                         disabled={securityLoading || totpCode.trim().length !== 6}
                         className="rounded-lg bg-[#3F51B5] px-4 py-2 text-sm font-medium text-white hover:bg-[#3545a0] disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
                       >
@@ -427,8 +482,22 @@ export default function DashboardOverview() {
                     ))}
                   </div>
                   <button
-                    onClick={resetTwoFactorState}
-                    className="mt-4 rounded-lg bg-[#3F51B5] px-4 py-2 text-sm font-medium text-white hover:bg-[#3545a0]"
+                    onClick={async () => {
+                      try {
+                        await navigator.clipboard.writeText(backupCodes.join('\n'));
+                        toast('Backup codes copied', 'success');
+                      } catch {
+                        toast('Failed to copy backup codes', 'error');
+                      }
+                    }}
+                    className="mt-4 rounded-lg border border-amber-300 bg-white px-3 py-2 text-sm font-medium text-amber-900 hover:bg-amber-100"
+                  >
+                    Copy all
+                  </button>
+                  <button
+                    onClick={handleTwoFactorDone}
+                    disabled={securityLoading}
+                    className="mt-4 rounded-lg bg-[#3F51B5] px-4 py-2 text-sm font-medium text-white hover:bg-[#3545a0] disabled:opacity-50"
                   >
                     Done
                   </button>

@@ -12,6 +12,14 @@ import type {
   TOTPSetupResponse,
   TOTPVerifySetupResponse,
 } from '@/types';
+import { AxiosError } from 'axios';
+
+export const SSO_MANAGED_2FA_MESSAGE = "Two-factor authentication for your account is managed by your organization's single sign-on.";
+
+export function isSsoManaged2FAError(error: unknown): boolean {
+  return error instanceof AxiosError && error.response?.status === 409 &&
+    error.response.data?.detail === 'two_factor_managed_by_sso';
+}
 
 export function isTwoFactorChallenge(r: LoginResult): r is PreAuthRequiredResponse {
   return (r as PreAuthRequiredResponse).requires_2fa === true;
@@ -71,23 +79,33 @@ export async function magicLinkVerify(token: string): Promise<LoginResult> {
   return res.data;
 }
 
+export async function verifyReauthMagicLink(token: string): Promise<ReauthResponse> {
+  const res = await api.post<ReauthResponse>('/auth/magic-link/verify', { token });
+  return res.data;
+}
+
 export async function verify2FALogin(pre_auth_token: string, code: string): Promise<TokenResponse> {
   const res = await api.post<TokenResponse>('/auth/2fa/verify', { pre_auth_token, code });
   return res.data;
 }
 
-export async function setup2FA(): Promise<TOTPSetupResponse> {
-  const res = await api.post<TOTPSetupResponse>('/auth/2fa/setup');
+export async function setup2FA(reauthToken: string): Promise<TOTPSetupResponse> {
+  const res = await api.post<TOTPSetupResponse>('/auth/2fa/setup', { reauth_token: reauthToken });
   return res.data;
 }
 
-export async function verify2FASetup(code: string): Promise<TOTPVerifySetupResponse> {
-  const res = await api.post<TOTPVerifySetupResponse>('/auth/2fa/verify-setup', { code });
+export async function verify2FASetup(code: string, reauthToken: string): Promise<TOTPVerifySetupResponse> {
+  const res = await api.post<TOTPVerifySetupResponse>('/auth/2fa/verify-setup', {
+    code,
+    reauth_token: reauthToken,
+  });
   return res.data;
 }
 
-export async function submitReauth(code: string): Promise<ReauthResponse> {
-  const res = await api.post<ReauthResponse>('/auth/reauth', { code });
+export async function submitReauth(credential: string, method: 'password' | 'totp' | 'magic_link' = 'totp'): Promise<ReauthResponse> {
+  const res = await api.post<ReauthResponse>('/auth/reauth', method === 'password'
+    ? { method, password: credential }
+    : method === 'magic_link' ? { method } : { code: credential });
   return res.data;
 }
 

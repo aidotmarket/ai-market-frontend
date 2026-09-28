@@ -2,7 +2,7 @@
 
 import { useEffect, useRef, useState, type RefObject } from 'react';
 import { AxiosError } from 'axios';
-import { submitReauth } from '@/api/auth';
+import { isSsoManaged2FAError, SSO_MANAGED_2FA_MESSAGE, submitReauth, verifyReauthMagicLink } from '@/api/auth';
 
 const DIALOG_DESCRIPTION_ID = 'reauth-dialog-description';
 const ERROR_ID = 'reauth-error';
@@ -12,6 +12,7 @@ interface ReauthModalProps {
   onClose: () => void;
   onSuccess: (reauthToken: string) => void | Promise<void>;
   fallbackFocusRef?: RefObject<HTMLElement | null>;
+  method?: 'password' | 'totp' | 'magic_link';
 }
 
 function isAvailableFocusTarget(element: HTMLElement | null): element is HTMLElement {
@@ -54,6 +55,7 @@ function isExplicitFallbackFocusTarget(element: HTMLElement | null): element is 
 }
 
 function getReauthErrorMessage(error: unknown): string {
+  if (isSsoManaged2FAError(error)) return SSO_MANAGED_2FA_MESSAGE;
   if (!(error instanceof AxiosError)) {
     return 'Failed to verify the re-authentication code.';
   }
@@ -75,19 +77,23 @@ export default function ReauthModal({
   onClose,
   onSuccess,
   fallbackFocusRef,
+  method = 'totp',
 }: ReauthModalProps) {
   const [code, setCode] = useState('');
+  const [linkSent, setLinkSent] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState('');
   const dialogRef = useRef<HTMLDivElement>(null);
   const initialFocusRef = useRef<HTMLInputElement>(null);
+  const sendButtonRef = useRef<HTMLButtonElement>(null);
+  const linkInputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
     if (!isOpen) return;
 
     const previouslyFocused =
       document.activeElement instanceof HTMLElement ? document.activeElement : null;
-    initialFocusRef.current?.focus();
+    (method === 'magic_link' ? sendButtonRef : initialFocusRef).current?.focus();
 
     return () => {
       queueMicrotask(() => {
@@ -107,25 +113,60 @@ export default function ReauthModal({
   useEffect(() => {
     if (!isOpen) {
       setCode('');
+      setLinkSent(false);
       setError('');
       setSubmitting(false);
     }
   }, [isOpen]);
 
+  useEffect(() => {
+    if (isOpen && method === 'magic_link' && linkSent) linkInputRef.current?.focus();
+  }, [isOpen, linkSent, method]);
+
   if (!isOpen) return null;
 
   const handleSubmit = async () => {
-    initialFocusRef.current?.focus();
+    (method === 'magic_link' ? linkSent ? linkInputRef : sendButtonRef : initialFocusRef).current?.focus();
     setSubmitting(true);
     setError('');
 
     try {
-      const result = await submitReauth(code.trim());
+      if (method === 'magic_link' && !linkSent) {
+        const result = await submitReauth('', 'magic_link');
+        if (result.method !== 'magic_link' || result.token) {
+          throw new Error('Unexpected magic-link response');
+        }
+        setLinkSent(true);
+        return;
+      }
+      let magicLinkToken = '';
+      if (method === 'magic_link') {
+        try {
+          const link = new URL(code.trim());
+          if (link.origin !== 'https://www.ai.market' || link.pathname !== '/auth/verify' || link.searchParams.get('purpose') !== 'reauth') {
+            throw new Error('Invalid link');
+          }
+          magicLinkToken = link.searchParams.get('token') ?? '';
+        } catch {
+          setError('Paste the re-authentication link from your email.');
+          return;
+        }
+        if (!magicLinkToken) {
+          setError('Paste the re-authentication link from your email.');
+          return;
+        }
+      }
+      const result = method === 'password'
+        ? await submitReauth(code, 'password')
+        : method === 'magic_link'
+          ? await verifyReauthMagicLink(magicLinkToken)
+          : await submitReauth(code.trim());
       if (typeof result.token !== 'string' || result.token.length === 0) {
         throw new Error('Missing re-authentication token');
       }
       await onSuccess(result.token);
       setCode('');
+      setLinkSent(false);
     } catch (error) {
       setError(getReauthErrorMessage(error));
     } finally {
@@ -178,7 +219,7 @@ export default function ReauthModal({
               Re-authenticate
             </h2>
             <p id={DIALOG_DESCRIPTION_ID} className="mt-1 text-sm text-gray-500">
-              Enter the current code from your authenticator app to continue.
+              {method === 'password' ? 'Enter your password to continue.' : method === 'magic_link' ? linkSent ? 'Copy the link from your email and paste it here to continue.' : 'Send a re-authentication link to your account email.' : 'Enter the current code from your authenticator app to continue.'}
             </p>
           </div>
           <button
@@ -203,24 +244,24 @@ export default function ReauthModal({
           </div>
         )}
 
-        <div className="mt-4">
+        {method !== 'magic_link' || linkSent ? <div className="mt-4">
           <label htmlFor="reauthCode" className="block text-sm font-medium text-gray-700 mb-1">
-            Verification code
+            {method === 'password' ? 'Password' : method === 'magic_link' ? 'Email link' : 'Verification code'}
           </label>
           <input
-            ref={initialFocusRef}
+            ref={method === 'magic_link' ? linkInputRef : initialFocusRef}
             id="reauthCode"
-            type="text"
-            inputMode="numeric"
-            autoComplete="one-time-code"
-            maxLength={8}
+            type={method === 'password' ? 'password' : 'text'}
+            inputMode={method === 'magic_link' || method === 'password' ? undefined : 'numeric'}
+            autoComplete={method === 'password' ? 'current-password' : method === 'magic_link' ? 'off' : 'one-time-code'}
+            maxLength={method === 'magic_link' || method === 'password' ? undefined : 8}
             value={code}
             aria-describedby={error ? ERROR_ID : undefined}
-            onChange={(event) => setCode(event.target.value.replace(/\s/g, ''))}
+            onChange={(event) => setCode(method === 'password' || method === 'magic_link' ? event.target.value : event.target.value.replace(/\s/g, ''))}
             className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:border-transparent focus:outline-none focus:ring-2 focus:ring-[#3F51B5]"
-            placeholder="Enter code"
+            placeholder={method === 'password' ? 'Enter password' : method === 'magic_link' ? 'Paste email link' : 'Enter code'}
           />
-        </div>
+        </div> : null}
 
         <div className="mt-6 flex justify-end gap-3">
           <div className="flex gap-3">
@@ -233,12 +274,13 @@ export default function ReauthModal({
               Cancel
             </button>
             <button
+              ref={method === 'magic_link' && !linkSent ? sendButtonRef : undefined}
               type="button"
               onClick={handleSubmit}
-              disabled={submitting || code.trim().length === 0}
+              disabled={submitting || (method !== 'magic_link' || linkSent) && code.trim().length === 0}
               className="rounded-lg bg-[#3F51B5] px-4 py-2 text-sm font-medium text-white hover:bg-[#3545a0] disabled:cursor-not-allowed disabled:opacity-50"
             >
-              {submitting ? 'Verifying...' : 'Continue'}
+              {submitting ? 'Verifying...' : method === 'magic_link' && !linkSent ? 'Send link' : 'Continue'}
             </button>
           </div>
         </div>

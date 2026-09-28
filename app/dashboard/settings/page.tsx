@@ -2,7 +2,7 @@
 
 import { useEffect, useRef, useState } from 'react';
 import { useAuthStore } from '@/store/auth';
-import { disable2FA, regenerateBackupCodes, setup2FA, updateProfile, verify2FASetup } from '@/api/auth';
+import { disable2FA, isSsoManaged2FAError, regenerateBackupCodes, setup2FA, SSO_MANAGED_2FA_MESSAGE, updateProfile, verify2FASetup } from '@/api/auth';
 import { getCapabilities, type CapabilityStatus } from '@/api/capabilities';
 import { notifyCapabilitiesChanged } from '@/components/onboarding/SellerSetupProgressBar';
 import { useToast } from '@/components/Toast';
@@ -12,6 +12,12 @@ import ConnectedApps from './ConnectedApps';
 
 type TwoFactorFlow = 'idle' | 'showing_qr' | 'verifying' | 'showing_backup_codes';
 type SecurityAction = 'disable' | 'regenerate' | null;
+type ReauthAction = 'enable_setup' | 'enable_retry' | Exclude<SecurityAction, null>;
+
+function isExpiredReauth(error: unknown): boolean {
+  return error instanceof AxiosError && error.response?.status === 400 &&
+    error.response.data?.detail === 'Re-authentication required';
+}
 
 export default function SettingsPage() {
   const { user, refreshAuth } = useAuthStore();
@@ -35,7 +41,8 @@ export default function SettingsPage() {
   const [backupCodesLabel, setBackupCodesLabel] = useState('Save these backup codes before you continue.');
   const [copiedBackupCodes, setCopiedBackupCodes] = useState(false);
   const [isReauthOpen, setIsReauthOpen] = useState(false);
-  const [pendingReauthAction, setPendingReauthAction] = useState<Exclude<SecurityAction, null> | null>(null);
+  const [pendingReauthAction, setPendingReauthAction] = useState<ReauthAction | null>(null);
+  const [setupReauthToken, setSetupReauthToken] = useState('');
   const [sellerStatus, setSellerStatus] = useState<CapabilityStatus | null>(null);
   const settingsHeadingRef = useRef<HTMLHeadingElement>(null);
 
@@ -118,6 +125,7 @@ export default function SettingsPage() {
     setCopiedBackupCodes(false);
     setIsReauthOpen(false);
     setPendingReauthAction(null);
+    setSetupReauthToken('');
   };
 
   const closeReauthModal = () => {
@@ -125,13 +133,14 @@ export default function SettingsPage() {
     setPendingReauthAction(null);
   };
 
-  const handleSetup2FA = async () => {
+  const handleSetup2FA = async (reauthToken: string) => {
     setSecurityLoading(true);
     setVerifyingSetup(false);
     setSecurityError('');
 
     try {
-      const res = await setup2FA();
+      const res = await setup2FA(reauthToken);
+      setSetupReauthToken(reauthToken);
       setTotpSecret(res.secret);
       setTotpQrUri(res.qr_uri);
       setSetupExpiresIn(res.expires_in);
@@ -140,7 +149,9 @@ export default function SettingsPage() {
       setBackupCodesLabel('Save these backup codes before you continue.');
       setTwoFactorFlow('showing_qr');
     } catch (err) {
-      if (err instanceof AxiosError) {
+      if (isSsoManaged2FAError(err)) {
+        setSecurityError(SSO_MANAGED_2FA_MESSAGE);
+      } else if (err instanceof AxiosError) {
         setSecurityError(err.response?.data?.detail || 'Failed to start 2FA setup.');
       } else {
         setSecurityError('Failed to start 2FA setup.');
@@ -150,14 +161,14 @@ export default function SettingsPage() {
     }
   };
 
-  const handleVerify2FASetup = async () => {
+  const handleVerify2FASetup = async (reauthToken: string, allowReauthRetry = true) => {
     setSecurityLoading(true);
     setSecurityError('');
     setVerifyingSetup(true);
     setTwoFactorFlow('verifying');
 
     try {
-      const res = await verify2FASetup(totpCode.trim());
+      const res = await verify2FASetup(totpCode.trim(), reauthToken);
       setBackupCodes(res.backup_codes);
       setBackupCodesLabel('Save these backup codes now. You will need them if you lose access to your authenticator app.');
       setTwoFactorFlow('showing_backup_codes');
@@ -165,7 +176,13 @@ export default function SettingsPage() {
       toast('Two-factor authentication enabled', 'success');
     } catch (err) {
       setTwoFactorFlow('showing_qr');
-      if (err instanceof AxiosError) {
+      if (allowReauthRetry && isExpiredReauth(err)) {
+        openReauthForAction('enable_retry');
+        return;
+      }
+      if (isSsoManaged2FAError(err)) {
+        setSecurityError(SSO_MANAGED_2FA_MESSAGE);
+      } else if (err instanceof AxiosError) {
         setSecurityError(err.response?.data?.detail || 'Failed to verify the code.');
       } else {
         setSecurityError('Failed to verify the code.');
@@ -188,9 +205,9 @@ export default function SettingsPage() {
 
   const handleTwoFactorDone = async () => {
     setSecurityLoading(true);
+    resetTwoFactorState();
     try {
       await refreshAuth();
-      resetTwoFactorState();
     } catch {
       toast('Failed to refresh your account state', 'error');
     } finally {
@@ -233,7 +250,7 @@ export default function SettingsPage() {
     }
   };
 
-  const openReauthForAction = (action: Exclude<SecurityAction, null>) => {
+  const openReauthForAction = (action: ReauthAction) => {
     setPendingReauthAction(action);
     setIsReauthOpen(true);
   };
@@ -241,10 +258,15 @@ export default function SettingsPage() {
   const handleReauthSuccess = async (reauthToken: string) => {
     if (!pendingReauthAction) return;
 
-    try {
-      await handleSecurityActionWithReauth(pendingReauthAction, reauthToken);
-    } finally {
-      closeReauthModal();
+    const action = pendingReauthAction;
+    closeReauthModal();
+    if (action === 'enable_setup') {
+      await handleSetup2FA(reauthToken);
+    } else if (action === 'enable_retry') {
+      setSetupReauthToken(reauthToken);
+      await handleVerify2FASetup(reauthToken, false);
+    } else {
+      await handleSecurityActionWithReauth(action, reauthToken);
     }
   };
 
@@ -255,6 +277,8 @@ export default function SettingsPage() {
     sellerStatus === 'provisioning' ||
     user.role === 'seller' ||
     user.role === 'admin';
+  const ssoManaged2FA = (user.sso_enforced === true && !user.auth_methods?.includes('password')) ||
+    securityError === SSO_MANAGED_2FA_MESSAGE;
 
   return (
     <div className="max-w-2xl">
@@ -263,6 +287,7 @@ export default function SettingsPage() {
         onClose={closeReauthModal}
         onSuccess={handleReauthSuccess}
         fallbackFocusRef={settingsHeadingRef}
+        method={user?.totp_enabled ? 'totp' : user?.auth_methods?.includes('password') ? 'password' : 'magic_link'}
       />
 
       <h1
@@ -378,12 +403,12 @@ export default function SettingsPage() {
             <div>
               <p className="text-sm font-medium text-gray-900">Two-factor authentication</p>
               <p className="text-sm text-gray-500">
-                {user.totp_enabled ? 'Your account requires an authenticator code at sign-in.' : 'Add an authenticator app for stronger account protection.'}
+                {ssoManaged2FA ? SSO_MANAGED_2FA_MESSAGE : user.totp_enabled ? 'Your account requires an authenticator code at sign-in.' : 'Add an authenticator app for stronger account protection.'}
               </p>
             </div>
-            {!user.totp_enabled && (
+            {!user.totp_enabled && !ssoManaged2FA && (
               <button
-                onClick={handleSetup2FA}
+                onClick={() => openReauthForAction('enable_setup')}
                 disabled={securityLoading}
                 className="rounded-lg bg-[#3F51B5] px-4 py-2 text-sm font-medium text-white hover:bg-[#3545a0] disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
               >
@@ -392,7 +417,7 @@ export default function SettingsPage() {
             )}
           </div>
 
-          {securityError && (
+          {securityError && !ssoManaged2FA && (
             <div className="rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
               {securityError}
             </div>
@@ -440,7 +465,7 @@ export default function SettingsPage() {
                 </div>
                 <div className="flex gap-3">
                   <button
-                    onClick={handleVerify2FASetup}
+                    onClick={() => handleVerify2FASetup(setupReauthToken)}
                     disabled={securityLoading || totpCode.trim().length !== 6}
                     className="rounded-lg bg-[#3F51B5] px-4 py-2 text-sm font-medium text-white hover:bg-[#3545a0] disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
                   >
