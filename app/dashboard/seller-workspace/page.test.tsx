@@ -331,8 +331,14 @@ describe('SellerWorkspacePage safety boundaries', () => {
     });
 
     render(<SellerWorkspacePage />);
-    fireEvent.click(await screen.findByRole('button', { name: 'Add AWS connection' }));
-    await screen.findByText('server-external-id');
+    const createButton = await screen.findByRole('button', { name: 'Add AWS connection' });
+    const listenerTarget = eventName === 'visibilitychange' ? document : window;
+    const addEventListenerSpy = vi.spyOn(listenerTarget, 'addEventListener');
+    await act(async () => {
+      fireEvent.click(createButton);
+    });
+    expect(screen.getByText('server-external-id')).not.toBeNull();
+    expect(addEventListenerSpy).toHaveBeenCalledWith(eventName, expect.any(Function));
 
     monotonicTime = 61_001;
     act(() => {
