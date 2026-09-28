@@ -614,7 +614,14 @@ describe('DataRequestDetailClient authenticated fallback loading', () => {
     expect(await screen.findByText(/The automated check was unavailable/)).not.toBeNull();
     expect(screen.getByText(/A recovery check is scheduled/)).not.toBeNull();
     expect(screen.getByText(/This schedule does not confirm a check ran/)).not.toBeNull();
-    expect(screen.getAllByText(/Sep 28, 2026/)).toHaveLength(2);
+    const checkTimes = Array.from(document.querySelectorAll('time'));
+    expect(checkTimes.map((time) => time.getAttribute('datetime'))).toEqual([
+      '2026-09-28T02:08:00.000Z',
+      '2026-09-28T03:08:00.000Z',
+    ]);
+    for (const time of checkTimes) {
+      expect(time.textContent?.trim()).toMatch(/^[A-Z][a-z]{2} \d{1,2}, 2026, \d{1,2}:\d{2} (?:AM|PM) \S+$/);
+    }
     expect(screen.queryByText(/safe to publish/i)).toBeNull();
     expect(screen.getByText('Public visibility: Private')).not.toBeNull();
   });
