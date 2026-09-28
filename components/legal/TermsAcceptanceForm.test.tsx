@@ -60,6 +60,8 @@ it('sends seller context only when explicitly requested', async () => {
 
 it.each([
   ['SELLER_ACCESS_REQUIRED', 403, 'Only sellers can accept these terms as a seller.', null],
+  ['LEGAL_IDENTITY_REQUIRED', 409, 'Enter your business legal name and choose a country to continue.', null],
+  ['LEGAL_IDENTITY_REQUIRED', 422, 'Enter your business legal name and choose a country to continue.', null],
   ['SELLER_LEGAL_IDENTITY_REQUIRED', 409, 'Add your legal name in Seller Workspace before accepting as a seller.', '/dashboard/seller-workspace'],
   ['LEGAL_IDENTITY_CONFLICT', 409, "Your legal name doesn't match our records. Contact support.", '/seller-workspace/support/legal-identity'],
   ['LEGAL_IDENTITY_INVALID', 422, 'Check the name and country and try again.', null],
@@ -77,6 +79,7 @@ it.each([
   fireEvent.click(screen.getByLabelText('I am authorized to bind this business'));
   fireEvent.click(screen.getByRole('button', { name: 'Accept and sign' }));
   expect(await screen.findByText(message, { exact: false })).toBeTruthy();
+  expect(screen.queryByText(code)).toBeNull();
   if (href) expect(screen.getByRole('link', { name: href.includes('dashboard') ? 'Open Seller Workspace' : 'Contact support' }).getAttribute('href')).toBe(href);
 });
 

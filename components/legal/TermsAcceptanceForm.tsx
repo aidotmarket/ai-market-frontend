@@ -93,6 +93,7 @@ export default function TermsAcceptanceForm({ context, acceptanceContext = 'buye
       const detail = response?.data?.detail;
       const code = typeof detail === 'object' && detail !== null ? detail.code : undefined;
       if (code === 'SELLER_ACCESS_REQUIRED' || response?.data?.code === 'SELLER_ACCESS_REQUIRED') setError('Only sellers can accept these terms as a seller.');
+      else if (code === 'LEGAL_IDENTITY_REQUIRED') setError('Enter your business legal name and choose a country to continue.');
       else if (code === 'SELLER_LEGAL_IDENTITY_REQUIRED') setError('seller_identity_required');
       else if (code === 'LEGAL_IDENTITY_CONFLICT') setError('identity_conflict');
       else if (code === 'LEGAL_IDENTITY_INVALID') setError('identity_invalid');
