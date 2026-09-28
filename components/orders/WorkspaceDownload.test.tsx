@@ -8,7 +8,7 @@ vi.mock('./workspaceDownloadStream',async importOriginal => ({...await importOri
 import WorkspaceDownload from './WorkspaceDownload';
 const bundle=()=>({delivery_type:'workspace_direct' as const,session_id:'00000000-0000-4000-8000-000000000001',download_number:1,downloads_remaining:2,files:[{index:0,filename:'retail.csv',size:3,
   url:'https://synthetic.s3.eu-west-1.amazonaws.com/file?X-Amz-SignedHeaders=host%3Bif-match',headers:{'If-Match':'"e"'},expires_at:new Date(Date.now()+60000).toISOString()}]});
-afterEach(() => {cleanup();Reflect.deleteProperty(window,'showDirectoryPicker');vi.unstubAllGlobals();vi.restoreAllMocks();vi.resetAllMocks();});
+afterEach(() => {cleanup();vi.useRealTimers();Reflect.deleteProperty(window,'showDirectoryPicker');vi.unstubAllGlobals();vi.restoreAllMocks();vi.resetAllMocks();});
 const returnedFile=()=>({filename:'retail.csv',size:3,url:'https://synthetic.s3.eu-west-1.amazonaws.com/file?X-Amz-SignedHeaders=host%3Bif-match',headers:{'If-Match':'"e"'},expires_at:new Date(Date.now()+60000).toISOString()});
 it('enables the browser download when the picker is absent and shows fallback copy',async () => {
   render(<WorkspaceDownload orderId="order-1" requestGrant={vi.fn()} />);
@@ -27,13 +27,32 @@ it('saves each verified fallback file with a sanitized download name and revokes
   vi.stubGlobal('URL',Object.assign(class extends URL {},{createObjectURL:create,revokeObjectURL:revoke}));
   const clicks:string[]=[];vi.spyOn(HTMLAnchorElement.prototype,'click').mockImplementation(function(this:HTMLAnchorElement){clicks.push(this.download);});
   render(<WorkspaceDownload orderId="order-1" requestGrant={grant} />);
-  fireEvent.click(await screen.findByRole('button',{name:'Download files'}));
-  await screen.findByText(/Saved 2 files/);
+  await screen.findByRole('button',{name:'Download files'});
+  vi.useFakeTimers();
+  await act(async () => {fireEvent.click(screen.getByRole('button',{name:'Download files'}));});
+  expect(screen.getByText(/Saved 2 files/)).toBeTruthy();
   expect(clicks).toEqual(['001-.._retail.csv','002-second.csv']);
-  expect(create).toHaveBeenCalledTimes(2);expect(revoke).toHaveBeenCalledTimes(2);
+  expect(create).toHaveBeenCalledTimes(2);expect(revoke).not.toHaveBeenCalled();
+  await act(async () => {vi.advanceTimersByTime(30000);});
+  expect(revoke).toHaveBeenCalledTimes(2);
   expect(fetcher).toHaveBeenCalledWith(returnedFile().url,expect.objectContaining({headers:{'If-Match':'"e"'},credentials:'omit',redirect:'error'}));
   expect(fileGrant).toHaveBeenCalledTimes(2);
   expect(grant.mock.calls[0][2]).toBeTruthy();
+});
+it('revokes a pending fallback URL when the component unmounts',async () => {
+  fileGrant.mockResolvedValue(returnedFile());
+  vi.stubGlobal('fetch',vi.fn(async () => new Response(new Uint8Array([1,2,3]),{status:200})));
+  const revoke=vi.fn();vi.stubGlobal('URL',Object.assign(class extends URL {},{createObjectURL:vi.fn(() => 'blob:synthetic'),revokeObjectURL:revoke}));
+  vi.spyOn(HTMLAnchorElement.prototype,'click').mockImplementation(() => undefined);
+  const view=render(<WorkspaceDownload orderId="order-1" requestGrant={vi.fn(async () => bundle())} />);
+  await screen.findByRole('button',{name:'Download files'});
+  vi.useFakeTimers();
+  await act(async () => {fireEvent.click(screen.getByRole('button',{name:'Download files'}));});
+  expect(revoke).not.toHaveBeenCalled();
+  view.unmount();
+  expect(revoke).toHaveBeenCalledOnce();
+  vi.advanceTimersByTime(30000);
+  expect(revoke).toHaveBeenCalledOnce();
 });
 it('rejects changed or truncated fallback files before triggering a browser save',async () => {
   fileGrant.mockResolvedValue(returnedFile());
@@ -79,6 +98,14 @@ it('reports a clear error when a fallback file cannot fit in memory',async () =>
   render(<WorkspaceDownload orderId="order-1" requestGrant={vi.fn(async () => bundle())} />);
   fireEvent.click(await screen.findByRole('button',{name:'Download files'}));
   expect((await screen.findByRole('alert')).textContent).toContain('too large for your browser');
+});
+it('rejects an oversized fallback file before requesting its file grant or fetching it',async () => {
+  const data=bundle();data.files[0].size=1_000_000_001;
+  const fetcher=vi.fn();vi.stubGlobal('fetch',fetcher);
+  render(<WorkspaceDownload orderId="order-1" requestGrant={vi.fn(async () => data)} />);
+  fireEvent.click(await screen.findByRole('button',{name:'Download files'}));
+  expect((await screen.findByRole('alert')).textContent).toContain('Chrome, Edge, or another browser that can save to a folder');
+  expect(fileGrant).not.toHaveBeenCalled();expect(fetcher).not.toHaveBeenCalled();
 });
 it('chooses a folder before requesting access and downloads only after an explicit click',async () => {
   const directory={};const picker=vi.fn(async () => directory);Object.defineProperty(window,'showDirectoryPicker',{value:picker,configurable:true});

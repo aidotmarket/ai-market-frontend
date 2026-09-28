@@ -9,6 +9,7 @@ saves verified files one at a time to the browser's usual Downloads location.
 The browser may ask the buyer to allow multiple downloads. This path holds one
 complete file in memory as a Blob, so a very large file may fail on a device
 with little available memory.
+The fallback rejects files over 1,000,000,000 bytes (1 GB); use Chrome, Edge, or another browser that can save to a folder for larger files.
 
 ## Checks and recovery
 

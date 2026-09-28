@@ -6,6 +6,7 @@ import {requestWorkspaceDownload,requestWorkspaceFile,validateWorkspaceDownload,
 import {saveWorkspaceFile,streamWorkspaceDownload,WorkspaceDownloadError,type DownloadDirectory} from './workspaceDownloadStream';
 
 type PickerWindow = Window & {showDirectoryPicker?: (options:{mode:'readwrite'}) => Promise<DownloadDirectory>};
+const FALLBACK_MAX_BYTES=1_000_000_000;
 export default function WorkspaceDownload({orderId,requestGrant=requestWorkspaceDownload}: {
   orderId:string;requestGrant?: (orderId:string,signal:AbortSignal,requestId?:string) => Promise<DownloadBundle>;
 }) {
@@ -17,9 +18,16 @@ export default function WorkspaceDownload({orderId,requestGrant=requestWorkspace
   const controller=useRef<AbortController|null>(null);
   const working=useRef(false);
   const pendingStart=useRef<string|null>(null);
+  const pendingUrls=useRef(new Map<number,string>());
+  const revokePendingUrls=() => {
+    for (const [timer,url] of pendingUrls.current) {
+      window.clearTimeout(timer);URL.revokeObjectURL(url);
+    }
+    pendingUrls.current.clear();
+  };
   useEffect(() => {
     mounted.current=true;setSupported(typeof (window as PickerWindow).showDirectoryPicker === 'function');
-    return () => {mounted.current=false;controller.current?.abort();};
+    return () => {mounted.current=false;controller.current?.abort();revokePendingUrls();};
   },[]);
   const download=async () => {
     if (working.current) return;
@@ -27,6 +35,7 @@ export default function WorkspaceDownload({orderId,requestGrant=requestWorkspace
     working.current=true;setBusy(true);setError('');
     setMessage(picker ? 'Choose a folder inside Downloads, or create one in the folder picker.' : 'Checking access to your purchase…');
     const operation=new AbortController();controller.current=operation;
+    operation.signal.addEventListener('abort',revokePendingUrls,{once:true});
     let choosingFolder=Boolean(picker);
     try {
       // The picker runs directly in the click gesture, before any network await.
@@ -51,6 +60,7 @@ export default function WorkspaceDownload({orderId,requestGrant=requestWorkspace
         if (mounted.current) setMessage(`Saved ${bundle.files.length} file${bundle.files.length === 1 ? '' : 's'} in ${folder}. ${bundle.downloads_remaining} download${bundle.downloads_remaining === 1 ? '' : 's'} remaining.`);
       } else {
         for (const [index,entry] of bundle.files.entries()) {
+          if (entry.size>FALLBACK_MAX_BYTES) throw new WorkspaceDownloadError('memory');
           const chunks:Uint8Array[]=[];
           const filename=await saveWorkspaceFile(entry,index,operation.signal,progress,loadGrant,async () => ({
             async write(data) { chunks.push(data); },async close() {},async abort() { chunks.length=0; },
@@ -69,7 +79,12 @@ export default function WorkspaceDownload({orderId,requestGrant=requestWorkspace
             const anchor=document.createElement('a');anchor.href=url;anchor.download=filename;
             anchor.style.display='none';document.body.append(anchor);
             try {anchor.click();} finally {anchor.remove();}
-          } finally {URL.revokeObjectURL(url);}
+          } finally {
+            if (mounted.current && !operation.signal.aborted) {
+              const timer=window.setTimeout(() => {pendingUrls.current.delete(timer);URL.revokeObjectURL(url);},30000);
+              pendingUrls.current.set(timer,url);
+            } else URL.revokeObjectURL(url);
+          }
         }
         if (mounted.current) setMessage(`Saved ${bundle.files.length} file${bundle.files.length === 1 ? '' : 's'} to your browser’s Downloads location. ${bundle.downloads_remaining} download${bundle.downloads_remaining === 1 ? '' : 's'} remaining.`);
       }
@@ -78,7 +93,7 @@ export default function WorkspaceDownload({orderId,requestGrant=requestWorkspace
         setMessage('');
         if (operation.signal.aborted || (choosingFolder && failure instanceof DOMException && failure.name === 'AbortError')) setMessage(`Download cancelled. Any completed files remain in ${picker ? 'your selected folder' : 'your Downloads location'}.`);
         else if (failure instanceof WorkspaceDownloadError && failure.code === 'file_changed') setError('The seller’s file has changed since approval. Contact the seller before downloading it again.');
-        else if (failure instanceof WorkspaceDownloadError && failure.code === 'memory') setError('This file is too large for your browser to hold in memory. Try a device with more available memory.');
+        else if (failure instanceof WorkspaceDownloadError && failure.code === 'memory') setError('This file is too large for your browser to hold in memory. Use Chrome, Edge, or another browser that can save to a folder to download large files.');
         else if (axios.isAxiosError(failure) && [403,404].includes(failure.response?.status ?? 0)) setError('Download access is not available for this purchase. Check the order or contact support.');
         else setError(`The download could not be completed. Any completed files remain in ${picker ? 'your selected folder' : 'your Downloads location'}. Check your purchase before trying again.`);
       }
