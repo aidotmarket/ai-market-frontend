@@ -2,7 +2,7 @@
 
 import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import type { BuyerOrderDetail, Transaction } from '@/types';
+import type { BuyerOrderDetail, OrderEvent, Transaction } from '@/types';
 
 const navigation = vi.hoisted(() => ({ orderId: 'order-1', txId: 'tx-1' }));
 const auth = vi.hoisted(() => ({ userId: 'viewer-1', role: 'seller' }));
@@ -216,6 +216,27 @@ describe('OrderDetailPage viewer relationship gating', () => {
     render(<OrderDetailPage />);
 
     expect(await screen.findByRole('button', { name: 'Confirm Receipt' })).not.toBeNull();
+  });
+
+  it('shows descriptions and readable labels in the order timeline', async () => {
+    const created_at = '2026-09-28T10:00:00Z';
+    const events: OrderEvent[] = [
+      { id: 'described', event_type: 'created', description: 'Custom order note', created_at },
+      { id: 'empty', event_type: 'paid', description: '', created_at },
+      { id: 'null', event_type: 'disputed', description: null, created_at },
+      { id: 'unknown', event_type: 'future_event', created_at },
+      { id: 'blank', event_type: '_', description: ' ', created_at },
+    ];
+    ordersApi.getOrderEvents.mockResolvedValue(events);
+
+    render(<OrderDetailPage />);
+
+    expect(await screen.findByText('Custom order note')).not.toBeNull();
+    expect(screen.getByText('Payment received')).not.toBeNull();
+    expect(screen.getByText('Issue reported')).not.toBeNull();
+    expect(screen.getByText('Future event')).not.toBeNull();
+    expect(screen.getByText('Order updated')).not.toBeNull();
+    expect(screen.queryByText('Order placed')).toBeNull();
   });
 
   it('prepares fulfilled downloads exactly once for the buyer of record', async () => {

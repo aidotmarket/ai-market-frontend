@@ -767,7 +767,7 @@ export interface PurchasedVersion {
 export interface OrderEvent {
   id: string;
   event_type: string;
-  description: string;
+  description?: string | null;
   created_at: string;
 }
 
