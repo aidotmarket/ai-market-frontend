@@ -9,33 +9,40 @@ import { getTermsPartyContext } from '@/components/legal/termsContext';
 import { useAuthStore } from '@/store/auth';
 import { validateRedirect } from '@/lib/redirect';
 
+type SellerCapability =
+  | { userId: string; status: 'loading' | 'failed' }
+  | { userId: string; status: 'known'; enabled: boolean };
+
 export default function TermsAcceptClient() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const { user, isAuthenticated, isLoading, hydrated } = useAuthStore();
   const context = getTermsPartyContext(user);
   const sellerRequested = searchParams.get('context') === 'seller';
-  const [sellerCapability, setSellerCapability] = useState<{ userId: string; enabled: boolean } | null>(null);
-  const capabilityReady = !sellerRequested || sellerCapability?.userId === user?.id;
-  const acceptanceContext = sellerRequested && capabilityReady && sellerCapability?.enabled ? 'seller' : 'buyer';
+  const [sellerCapability, setSellerCapability] = useState<SellerCapability>({ userId: '', status: 'loading' });
+  const [retryCount, setRetryCount] = useState(0);
+  const capabilityReady = !sellerRequested || (sellerCapability.userId === user?.id && sellerCapability.status === 'known');
+  const acceptanceContext = sellerRequested && sellerCapability.status === 'known' && sellerCapability.enabled ? 'seller' : 'buyer';
   const redirectTo = validateRedirect(searchParams.get('redirect'), '/dashboard');
   const acceptPath = `/legal/terms/accept${searchParams.toString() ? `?${searchParams.toString()}` : ''}`;
 
   useEffect(() => {
     if (!sellerRequested || !hydrated || isLoading || !isAuthenticated || !user) return;
     let cancelled = false;
+    setSellerCapability({ userId: user.id, status: 'loading' });
     getCapabilities()
       .then((capabilities) => {
         if (!cancelled) setSellerCapability({
           userId: user.id,
+          status: 'known',
           enabled: capabilities.seller.effective_status === 'provisioning' || capabilities.seller.effective_status === 'active',
         });
       })
       .catch(() => {
-        if (!cancelled) setSellerCapability({ userId: user.id, enabled: false });
+        if (!cancelled) setSellerCapability({ userId: user.id, status: 'failed' });
       });
     return () => { cancelled = true; };
-  }, [sellerRequested, hydrated, isLoading, isAuthenticated, user?.id]);
+  }, [sellerRequested, hydrated, isLoading, isAuthenticated, user?.id, retryCount]);
 
   if (isLoading || !hydrated) {
     return (
@@ -58,6 +65,17 @@ export default function TermsAcceptClient() {
         >
           Log in
         </Link>
+      </div>
+    );
+  }
+
+  if (sellerRequested && sellerCapability.userId === user?.id && sellerCapability.status === 'failed') {
+    return (
+      <div role="alert" className="mx-auto max-w-2xl px-6 py-16">
+        <p>We couldn&apos;t confirm your seller account. Try again.</p>
+        <button type="button" onClick={() => setRetryCount((count) => count + 1)} className="mt-4 rounded-lg bg-[#3F51B5] px-4 py-2.5 text-sm font-medium text-white">
+          Retry
+        </button>
       </div>
     );
   }
