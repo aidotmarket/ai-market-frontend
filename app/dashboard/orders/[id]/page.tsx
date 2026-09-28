@@ -69,6 +69,25 @@ const STATUS_LABEL: Record<OrderStatus, string> = {
   payment_failed: 'Payment Failed',
 };
 
+const ORDER_EVENT_LABELS: Record<string, string> = {
+  created: 'Order placed',
+  paid: 'Payment received',
+  payment_received: 'Payment received',
+  delivery_completed: 'Delivered',
+  delivered: 'Delivered',
+  confirmed: 'Confirmed',
+  auto_confirmed: 'Confirmed',
+  disputed: 'Issue reported',
+  refunded: 'Refunded',
+};
+
+function orderEventLabel(event: OrderEvent): string {
+  if (event.description?.trim()) return event.description;
+  const type = event.event_type?.trim() ?? '';
+  const readableType = type.replace(/_/g, ' ').trim();
+  return ORDER_EVENT_LABELS[type] ?? (readableType ? readableType[0].toUpperCase() + readableType.slice(1) : 'Order updated');
+}
+
 const TX_STATUS_BADGE: Record<TransactionStatus, string> = {
   initiated: 'bg-gray-100 text-gray-600',
   quoted: 'bg-gray-100 text-gray-600',
@@ -588,7 +607,7 @@ export default function OrderDetailPage() {
                       <div className="w-px flex-1 bg-gray-200"></div>
                     </div>
                     <div className="pb-4">
-                      <p className="text-sm text-gray-900">{event.description}</p>
+                      <p className="text-sm text-gray-900">{orderEventLabel(event)}</p>
                       <p className="text-xs text-gray-500 mt-0.5">{formatDate(event.created_at)}</p>
                     </div>
                   </div>
