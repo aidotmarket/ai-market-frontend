@@ -236,7 +236,7 @@ describe('OrderDetailPage viewer relationship gating', () => {
     ordersApi.getOrder.mockResolvedValue({...order(),workspace_delivery:true,status:'delivered'});
     render(<OrderDetailPage />);
     fireEvent.click(await screen.findByRole('button',{name:'Continue to download'}));
-    expect(await screen.findByRole('button',{name:'Choose folder and download'})).not.toBeNull();
+    expect(await screen.findByRole('button',{name:'Download files'})).not.toBeNull();
     expect(ordersApi.requestDownload).not.toHaveBeenCalled();
   });
 
