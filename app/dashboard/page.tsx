@@ -65,6 +65,7 @@ export default function DashboardOverview() {
   const [setupReauthToken, setSetupReauthToken] = useState('');
   const [reauthAction, setReauthAction] = useState<ReauthAction>(null);
   const dashboardHeadingRef = useRef<HTMLHeadingElement>(null);
+  const twoFactorDoneInFlight = useRef(false);
 
   const fetchData = useCallback(async () => {
     setLoading(true);
@@ -208,12 +209,17 @@ export default function DashboardOverview() {
   };
 
   const handleTwoFactorDone = async () => {
-    resetTwoFactorState();
+    if (twoFactorDoneInFlight.current) return;
+    twoFactorDoneInFlight.current = true;
+    setSecurityLoading(true);
     try {
       await refreshAuth();
       await fetchData();
     } catch {
       toast('Failed to refresh your account state', 'error');
+    } finally {
+      resetTwoFactorState();
+      twoFactorDoneInFlight.current = false;
     }
   };
 
@@ -490,7 +496,8 @@ export default function DashboardOverview() {
                   </button>
                   <button
                     onClick={handleTwoFactorDone}
-                    className="mt-4 rounded-lg bg-[#3F51B5] px-4 py-2 text-sm font-medium text-white hover:bg-[#3545a0]"
+                    disabled={securityLoading}
+                    className="mt-4 rounded-lg bg-[#3F51B5] px-4 py-2 text-sm font-medium text-white hover:bg-[#3545a0] disabled:opacity-50"
                   >
                     Done
                   </button>

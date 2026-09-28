@@ -139,12 +139,12 @@ describe('SettingsPage capability refresh', () => {
     expect(screen.queryByText('setup-secret')).toBeNull();
     await completeReauth();
     expect(authApi.setup2FA).toHaveBeenCalledWith('fresh-settings-token');
-    expect(screen.getByText('setup-secret')).toBeTruthy();
+    expect(await screen.findByText('setup-secret')).toBeTruthy();
 
     fireEvent.change(screen.getByRole('textbox', { name: '6-digit code' }), { target: { value: '123456' } });
     fireEvent.click(screen.getByRole('button', { name: 'Verify and enable' }));
     await waitFor(() => expect(authApi.verify2FASetup).toHaveBeenCalledWith('123456', 'fresh-settings-token'));
-    expect(screen.getByRole('heading', { name: 'Backup codes' })).toBeTruthy();
+    expect(await screen.findByRole('heading', { name: 'Backup codes' })).toBeTruthy();
   });
 
   it('shows the SSO managed message without offering setup', () => {
@@ -214,7 +214,7 @@ describe('SettingsPage capability refresh', () => {
     expect(authApi.setup2FA).toHaveBeenCalledOnce();
     expect(authApi.verify2FASetup).toHaveBeenNthCalledWith(1, '123456', 'first-token');
     expect(authApi.verify2FASetup).toHaveBeenNthCalledWith(2, '123456', 'fresh-token');
-    expect(screen.getByRole('heading', { name: 'Backup codes' })).toBeTruthy();
+    expect(await screen.findByRole('heading', { name: 'Backup codes' })).toBeTruthy();
   });
 
   it('stops after a second expired token and leaves the setup visible', async () => {
@@ -230,8 +230,8 @@ describe('SettingsPage capability refresh', () => {
     expect(authApi.verify2FASetup).toHaveBeenCalledTimes(2);
     expect(authApi.setup2FA).toHaveBeenCalledOnce();
     expect(screen.queryByRole('dialog', { name: 'Re-authenticate' })).toBeNull();
-    expect(screen.getByText('setup-secret')).toBeTruthy();
-    expect(screen.getByText('Re-authentication required')).toBeTruthy();
+    expect(await screen.findByText('setup-secret')).toBeTruthy();
+    expect(await screen.findByText('Re-authentication required')).toBeTruthy();
   });
 
   it('enables 2FA for a passwordless account using the emailed link', async () => {
