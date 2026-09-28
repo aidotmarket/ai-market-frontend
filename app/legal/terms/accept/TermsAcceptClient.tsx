@@ -1,7 +1,9 @@
 'use client';
 
+import { useEffect, useState } from 'react';
 import Link from 'next/link';
 import { useRouter, useSearchParams } from 'next/navigation';
+import { getCapabilities } from '@/api/capabilities';
 import TermsAcceptanceForm from '@/components/legal/TermsAcceptanceForm';
 import { getTermsPartyContext } from '@/components/legal/termsContext';
 import { useAuthStore } from '@/store/auth';
@@ -12,9 +14,28 @@ export default function TermsAcceptClient() {
   const searchParams = useSearchParams();
   const { user, isAuthenticated, isLoading, hydrated } = useAuthStore();
   const context = getTermsPartyContext(user);
-  const acceptanceContext = searchParams.get('context') === 'seller' ? 'seller' : 'buyer';
+  const sellerRequested = searchParams.get('context') === 'seller';
+  const [sellerCapability, setSellerCapability] = useState<{ userId: string; enabled: boolean } | null>(null);
+  const capabilityReady = !sellerRequested || sellerCapability?.userId === user?.id;
+  const acceptanceContext = sellerRequested && capabilityReady && sellerCapability?.enabled ? 'seller' : 'buyer';
   const redirectTo = validateRedirect(searchParams.get('redirect'), '/dashboard');
   const acceptPath = `/legal/terms/accept${searchParams.toString() ? `?${searchParams.toString()}` : ''}`;
+
+  useEffect(() => {
+    if (!sellerRequested || !hydrated || isLoading || !isAuthenticated || !user) return;
+    let cancelled = false;
+    getCapabilities()
+      .then((capabilities) => {
+        if (!cancelled) setSellerCapability({
+          userId: user.id,
+          enabled: capabilities.seller.effective_status === 'provisioning' || capabilities.seller.effective_status === 'active',
+        });
+      })
+      .catch(() => {
+        if (!cancelled) setSellerCapability({ userId: user.id, enabled: false });
+      });
+    return () => { cancelled = true; };
+  }, [sellerRequested, hydrated, isLoading, isAuthenticated, user?.id]);
 
   if (isLoading || !hydrated) {
     return (
@@ -37,6 +58,15 @@ export default function TermsAcceptClient() {
         >
           Log in
         </Link>
+      </div>
+    );
+  }
+
+  if (!capabilityReady) {
+    return (
+      <div role="status" className="flex min-h-[60vh] items-center justify-center">
+        <div className="h-8 w-8 animate-spin rounded-full border-4 border-[#3F51B5] border-t-transparent"></div>
+        <span className="sr-only">Loading seller capability</span>
       </div>
     );
   }

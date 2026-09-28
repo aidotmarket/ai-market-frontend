@@ -59,10 +59,11 @@ it('sends seller context only when explicitly requested', async () => {
 });
 
 it.each([
+  ['SELLER_ACCESS_REQUIRED', 403, 'Only sellers can accept these terms as a seller.', null],
   ['SELLER_LEGAL_IDENTITY_REQUIRED', 409, 'Add your legal name in Seller Workspace before accepting as a seller.', '/dashboard/seller-workspace'],
   ['LEGAL_IDENTITY_CONFLICT', 409, "Your legal name doesn't match our records. Contact support.", '/seller-workspace/support/legal-identity'],
-  ['LEGAL_IDENTITY_INVALID', 409, 'Check the name and country and try again.', null],
-  ['OTHER', 422, 'Check the name and country and try again.', null],
+  ['LEGAL_IDENTITY_INVALID', 422, 'Check the name and country and try again.', null],
+  ['OTHER', 422, 'Could not record acceptance. Please try again.', null],
   ['OTHER', 500, 'Could not record acceptance. Please try again.', null],
 ])('shows the server failure reason for %s / %s', async (code, status, message, href) => {
   legal.getCurrentTerms.mockResolvedValue({ terms_version: '1.1' });
@@ -77,4 +78,23 @@ it.each([
   fireEvent.click(screen.getByRole('button', { name: 'Accept and sign' }));
   expect(await screen.findByText(message, { exact: false })).toBeTruthy();
   if (href) expect(screen.getByRole('link', { name: href.includes('dashboard') ? 'Open Seller Workspace' : 'Contact support' }).getAttribute('href')).toBe(href);
+});
+
+it.each([
+  [403, { code: 'SELLER_ACCESS_REQUIRED' }, 'Only sellers can accept these terms as a seller.'],
+  [409, { detail: 'Internal identity provider diagnostics' }, 'Could not record acceptance. Please try again.'],
+  [422, { detail: 'Unmapped validation diagnostics' }, 'Could not record acceptance. Please try again.'],
+])('uses approved copy for response %s / %j', async (status, data, message) => {
+  legal.getCurrentTerms.mockResolvedValue({ terms_version: '1.1' });
+  const error = new AxiosError('failure');
+  error.response = { data, status } as never;
+  legal.acceptTerms.mockRejectedValue(error);
+  render(<TermsAcceptanceForm context={{ scope: 'individual', party_id: 'buyer-1' }} />);
+  await screen.findByLabelText(/Country/);
+  fillForm();
+  fireEvent.change(screen.getByLabelText(/Country/), { target: { value: 'US' } });
+  fireEvent.click(screen.getByLabelText('I am authorized to bind this business'));
+  fireEvent.click(screen.getByRole('button', { name: 'Accept and sign' }));
+  expect(await screen.findByText(message)).toBeTruthy();
+  expect(screen.queryByText(/diagnostics/)).toBeNull();
 });
