@@ -24,6 +24,7 @@ import { formatDate, formatPrice } from '@/lib/format';
 import type { BuyerOrder, OrderStatus, SellerStats } from '@/types';
 import { AxiosError } from 'axios';
 import ReauthModal from './settings/ReauthModal';
+import TotpQrCode from '@/components/TotpQrCode';
 
 type TwoFactorFlow = 'idle' | 'showing_qr' | 'verifying' | 'showing_backup_codes';
 type ReauthAction = 'setup' | 'retry' | null;
@@ -411,10 +412,8 @@ export default function DashboardOverview() {
                 <div className="mt-4 rounded-lg border border-gray-200 bg-white p-4">
                   <h3 className="text-sm font-semibold text-gray-900 mb-3">Set up your authenticator app</h3>
                   <div className="flex flex-col gap-4 sm:flex-row sm:items-start">
-                    {/* eslint-disable-next-line @next/next/no-img-element */}
-                    <img
-                      src={`https://api.qrserver.com/v1/create-qr-code/?size=200x200&data=${encodeURIComponent(totpQrUri)}`}
-                      alt="QR code for two-factor authentication setup"
+                    <TotpQrCode
+                      uri={totpQrUri}
                       className="h-36 w-36 rounded-lg border border-gray-200 bg-white p-2"
                     />
                     <div className="flex-1 space-y-3">

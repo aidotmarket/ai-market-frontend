@@ -27,6 +27,9 @@ vi.mock('@/api/capabilities', () => capabilitiesApi);
 vi.mock('@/components/Toast', () => ({
   useToast: () => ({ toast: vi.fn() }),
 }));
+vi.mock('qrcode', () => ({
+  default: { toDataURL: vi.fn().mockResolvedValue('data:image/png;base64,cG5n') },
+}));
 const user: User = {
   id: 'user-1',
   email: 'seller@example.com',
@@ -140,6 +143,8 @@ describe('SettingsPage capability refresh', () => {
     await completeReauth();
     expect(authApi.setup2FA).toHaveBeenCalledWith('fresh-settings-token');
     expect(await screen.findByText('setup-secret')).toBeTruthy();
+    expect((await screen.findByRole('img', { name: 'QR code for two-factor authentication setup' })).getAttribute('src'))
+      .toMatch(/^data:image\/png;base64,/);
 
     fireEvent.change(screen.getByRole('textbox', { name: '6-digit code' }), { target: { value: '123456' } });
     fireEvent.click(screen.getByRole('button', { name: 'Verify and enable' }));
