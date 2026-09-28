@@ -9,6 +9,7 @@ import { useToast } from '@/components/Toast';
 import { AxiosError } from 'axios';
 import ReauthModal from './ReauthModal';
 import ConnectedApps from './ConnectedApps';
+import TotpQrCode from '@/components/TotpQrCode';
 
 type TwoFactorFlow = 'idle' | 'showing_qr' | 'verifying' | 'showing_backup_codes';
 type SecurityAction = 'disable' | 'regenerate' | null;
@@ -427,9 +428,8 @@ export default function SettingsPage() {
             <div className="rounded-lg border border-gray-200 p-4">
               <h3 className="text-sm font-semibold text-gray-900 mb-3">Set up your authenticator app</h3>
               <div className="flex flex-col gap-4 sm:flex-row sm:items-start">
-                <img
-                  src={`https://api.qrserver.com/v1/create-qr-code/?size=200x200&data=${encodeURIComponent(totpQrUri)}`}
-                  alt="QR code for two-factor authentication setup"
+                <TotpQrCode
+                  uri={totpQrUri}
                   className="h-40 w-40 rounded-lg border border-gray-200 bg-white p-2"
                 />
                 <div className="flex-1 space-y-3">

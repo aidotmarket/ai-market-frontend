@@ -51,6 +51,9 @@ vi.mock('@/components/onboarding/SellerSetupProgressBar', () => ({
 vi.mock('@/components/Toast', () => ({
   useToast: () => ({ toast: vi.fn() }),
 }));
+vi.mock('qrcode', () => ({
+  default: { toDataURL: vi.fn().mockResolvedValue('data:image/png;base64,cG5n') },
+}));
 
 const baseUser: User = {
   id: 'user-1',
@@ -164,6 +167,8 @@ describe('DashboardOverview seller setup 2FA state', () => {
     await completeReauth();
     expect(authApi.setup2FA).toHaveBeenCalledWith('dashboard-token');
     expect(await screen.findByText('setup-secret')).toBeTruthy();
+    expect((await screen.findByRole('img', { name: 'QR code for two-factor authentication setup' })).getAttribute('src'))
+      .toMatch(/^data:image\/png;base64,/);
     fireEvent.change(screen.getByRole('textbox', { name: '6-digit code' }), { target: { value: '123456' } });
     fireEvent.click(screen.getByRole('button', { name: 'Verify and enable' }));
     await waitFor(() => expect(authApi.verify2FASetup).toHaveBeenCalledWith('123456', 'dashboard-token'));
