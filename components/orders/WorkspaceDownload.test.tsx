@@ -32,7 +32,8 @@ it('saves each verified fallback file with a sanitized download name and revokes
   await act(async () => {fireEvent.click(screen.getByRole('button',{name:'Download files'}));});
   expect(screen.getByText(/Saved 2 files/)).toBeTruthy();
   expect(clicks).toEqual(['001-.._retail.csv','002-second.csv']);
-  expect(create).toHaveBeenCalledTimes(2);expect(revoke).not.toHaveBeenCalled();
+  expect(create).toHaveBeenCalledTimes(2);expect(revoke).toHaveBeenCalledOnce();
+  expect(revoke.mock.invocationCallOrder[0]).toBeLessThan(create.mock.invocationCallOrder[1]);
   await act(async () => {vi.advanceTimersByTime(30000);});
   expect(revoke).toHaveBeenCalledTimes(2);
   expect(fetcher).toHaveBeenCalledWith(returnedFile().url,expect.objectContaining({headers:{'If-Match':'"e"'},credentials:'omit',redirect:'error'}));
@@ -171,4 +172,31 @@ it('shows the rate wait and leaves cancellation available without allocating aga
   fireEvent.click(screen.getByRole('button',{name:'Cancel download'}));
   await screen.findByText(/Download cancelled/);
   expect(fileGrant).toHaveBeenCalledOnce();expect(grant).toHaveBeenCalledOnce();
+});
+it('keeps at most one fallback object URL alive across a multi-file download',async () => {
+  const data=bundle();for (let i=1;i<5;i++) data.files.push({...data.files[0],index:i,filename:`f${i}.csv`});
+  fileGrant.mockImplementation(async (_order,_session,index) => ({...returnedFile(),filename:data.files[index].filename}));
+  vi.stubGlobal('fetch',vi.fn(async () => new Response(new Uint8Array([1,2,3]),{status:200})));
+  const live=new Set<string>();let peak=0;let n=0;
+  vi.stubGlobal('URL',Object.assign(class extends URL {},{
+    createObjectURL:vi.fn(() => {const url=`blob:${n++}`;live.add(url);peak=Math.max(peak,live.size);return url;}),
+    revokeObjectURL:vi.fn((url:string) => {live.delete(url);}),
+  }));
+  vi.spyOn(HTMLAnchorElement.prototype,'click').mockImplementation(() => undefined);
+  render(<WorkspaceDownload orderId="order-1" requestGrant={vi.fn(async () => data)} />);
+  await screen.findByRole('button',{name:'Download files'});
+  vi.useFakeTimers();
+  await act(async () => {fireEvent.click(screen.getByRole('button',{name:'Download files'}));});
+  expect(screen.getByText(/Saved 5 files/)).toBeTruthy();
+  expect(n).toBe(5);expect(peak).toBe(1);
+  await act(async () => {vi.advanceTimersByTime(30000);});
+  expect(live.size).toBe(0);
+});
+it('refuses an oversized later fallback file before fetching any file',async () => {
+  const data=bundle();data.files.push({...data.files[0],index:1,filename:'big.csv',size:1_000_000_001});
+  const fetcher=vi.fn();vi.stubGlobal('fetch',fetcher);
+  render(<WorkspaceDownload orderId="order-1" requestGrant={vi.fn(async () => data)} />);
+  fireEvent.click(await screen.findByRole('button',{name:'Download files'}));
+  expect((await screen.findByRole('alert')).textContent).toContain('Chrome, Edge, or another browser that can save to a folder');
+  expect(fileGrant).not.toHaveBeenCalled();expect(fetcher).not.toHaveBeenCalled();
 });

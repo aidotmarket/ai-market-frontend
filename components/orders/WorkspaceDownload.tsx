@@ -59,8 +59,9 @@ export default function WorkspaceDownload({orderId,requestGrant=requestWorkspace
         const folder=await streamWorkspaceDownload(bundle,directory,operation.signal,progress,loadGrant);
         if (mounted.current) setMessage(`Saved ${bundle.files.length} file${bundle.files.length === 1 ? '' : 's'} in ${folder}. ${bundle.downloads_remaining} download${bundle.downloads_remaining === 1 ? '' : 's'} remaining.`);
       } else {
+        // Refuse before any file is fetched, so a later oversized file cannot leave a partial set.
+        if (bundle.files.some(entry => entry.size>FALLBACK_MAX_BYTES)) throw new WorkspaceDownloadError('memory');
         for (const [index,entry] of bundle.files.entries()) {
-          if (entry.size>FALLBACK_MAX_BYTES) throw new WorkspaceDownloadError('memory');
           const chunks:Uint8Array[]=[];
           const filename=await saveWorkspaceFile(entry,index,operation.signal,progress,loadGrant,async () => ({
             async write(data) { chunks.push(data); },async close() {},async abort() { chunks.length=0; },
@@ -74,6 +75,8 @@ export default function WorkspaceDownload({orderId,requestGrant=requestWorkspace
           }
           chunks.length=0;
           operation.signal.throwIfAborted();
+          // The previous file's click started its save a whole fetch ago; keep at most one live Blob URL.
+          revokePendingUrls();
           const url=URL.createObjectURL(blob);
           try {
             const anchor=document.createElement('a');anchor.href=url;anchor.download=filename;

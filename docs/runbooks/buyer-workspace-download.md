@@ -8,8 +8,13 @@ When the picker is absent, **Download files** requests the same allocation and
 saves verified files one at a time to the browser's usual Downloads location.
 The browser may ask the buyer to allow multiple downloads. This path holds one
 complete file in memory as a Blob, so a very large file may fail on a device
-with little available memory.
-The fallback rejects files over 1,000,000,000 bytes (1 GB); use Chrome, Edge, or another browser that can save to a folder for larger files.
+with little available memory. Each file's object URL stays alive until the next
+file is ready (or 30 seconds, or cancel/unmount), so at most one saved Blob is
+retained while the next file is fetched.
+The fallback rejects the whole purchase before fetching any file if any file is
+over 1,000,000,000 bytes (1 GB); use Chrome, Edge, or another browser that can
+save to a folder for larger files. The download allowance is still consumed by
+that attempt, because file sizes arrive with the allocation.
 
 ## Checks and recovery
 
