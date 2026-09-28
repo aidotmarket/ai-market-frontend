@@ -1,5 +1,5 @@
 // @vitest-environment jsdom
-import {cleanup, render, screen} from '@testing-library/react';
+import {act, cleanup, render, screen, waitFor} from '@testing-library/react';
 import {afterEach, beforeEach, expect, it, vi} from 'vitest';
 import * as api from '@/lib/api';
 import type {Manifest} from '@/lib/listing-preview/types';
@@ -25,9 +25,21 @@ beforeEach(() => {
 afterEach(cleanup);
 
 it('does not claim no fields are selected when the approved manifest request rejects', async () => {
+  let rejectManifest!: (reason: Error) => void;
+  const manifestRequest = new Promise<Manifest>((_, reject) => {
+    rejectManifest = reject;
+  });
+  vi.mocked(api.fetchPreviewManifest).mockReturnValue(manifestRequest);
   render(<SellerAtAGlance listingId="listing" slug="sales" />);
   await screen.findByRole('button', {name: 'Withdraw'});
-  expect(api.fetchPreviewManifest).toHaveBeenCalled();
+  await waitFor(() => expect(api.fetchPreviewManifest).toHaveBeenCalledWith('sales', expect.any(AbortSignal)));
+  expect(screen.queryByText('No fields are selected for a sample.')).toBeNull();
+  expect(screen.getByText("The current selection is not shown here. Field selection belongs to this listing's signed sample.")).toBeTruthy();
+
+  await act(async () => {
+    rejectManifest(new Error('manifest offline'));
+    await expect(manifestRequest).rejects.toThrow('manifest offline');
+  });
   expect(screen.queryByText('No fields are selected for a sample.')).toBeNull();
   expect(screen.getByText("The current selection is not shown here. Field selection belongs to this listing's signed sample.")).toBeTruthy();
 });
