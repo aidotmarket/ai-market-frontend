@@ -35,6 +35,44 @@ const STATUS_BADGE: Record<string, string> = {
   expired: 'bg-red-100 text-red-700',
 };
 
+const CHECK_OUTCOME_TEXT: Record<string, string> = {
+  clean: 'The last automated check found no contact or personal data.',
+  contact_or_personal_data: 'The last automated check found contact or personal data. Review the request text before publishing.',
+  rejected: 'The last automated check rejected this request for publication.',
+  uncertain: 'The last automated check could not make a clear safety decision.',
+  unavailable: 'The automated check was unavailable. This request is not public while the check remains unresolved.',
+};
+
+function checkedTime(value: unknown): { iso: string; label: string } | null {
+  if (typeof value !== 'string') return null;
+  const match = /^(\d{4})-(\d{2})-(\d{2})T(\d{2}):(\d{2}):(\d{2})(?:\.\d+)?(Z|[+-]\d{2}:\d{2})$/.exec(value);
+  if (!match) return null;
+  const [, year, month, day, hour, minute, second, zone] = match;
+  const y = Number(year), m = Number(month), d = Number(day);
+  const calendar = new Date(Date.UTC(y, m - 1, d));
+  if (calendar.getUTCFullYear() !== y || calendar.getUTCMonth() + 1 !== m || calendar.getUTCDate() !== d) return null;
+  if (Number(hour) > 23 || Number(minute) > 59 || Number(second) > 59) return null;
+  if (zone !== 'Z' && (Number(zone.slice(1, 3)) > 23 || Number(zone.slice(4)) > 59)) return null;
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return null;
+  return {
+    iso: date.toISOString(),
+    label: new Intl.DateTimeFormat('en-US', {
+      year: 'numeric', month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit', timeZoneName: 'short',
+    }).format(date),
+  };
+}
+
+function retryDescription(request: DataRequestDetail): string {
+  const { publication_retry_stage: stage, publication_retry_count: count } = request;
+  if (request.publication_retry_at == null && (stage == null || stage === 'none')) return 'No next check is scheduled.';
+  const next = checkedTime(request.publication_retry_at);
+  if (!next) return 'Next check time unknown.';
+  if (stage === 'fast_retry' && typeof count === 'number' && Number.isInteger(count) && count >= 1 && count <= 5) return 'A fast retry is scheduled.';
+  if (stage === 'recovery_probe' && count === 6) return 'A recovery check is scheduled.';
+  return 'Retry stage unknown.';
+}
+
 interface DataRequestDetailClientProps {
   slug: string;
   initialRequest: DataRequestDetail | null;
@@ -116,6 +154,8 @@ export default function DataRequestDetailClient({
   const [submittingResponse, setSubmittingResponse] = useState(false);
 
   const isOwner = isAuthenticated && user && request && user.id === request.buyer_id;
+  const lastCheckTime = checkedTime(request?.publication_checked_at);
+  const nextCheckTime = checkedTime(request?.publication_retry_at);
 
   function startEditing() {
     if (!isOwner || !request || !['draft', 'open'].includes(request.status) || publishing || deleting || updatingPublication) return;
@@ -499,6 +539,17 @@ export default function DataRequestDetailClient({
                   Reason: {request.publication_reason.replaceAll('_', ' ')}
                 </p>
               )}
+              <div className="mt-3 space-y-1 text-sm text-gray-700">
+                <p>Last check outcome: {typeof request.publication_check_outcome === 'string' && Object.hasOwn(CHECK_OUTCOME_TEXT, request.publication_check_outcome)
+                  ? CHECK_OUTCOME_TEXT[request.publication_check_outcome]
+                  : request.publication_check_outcome == null ? 'Not checked yet.' : 'Unknown.'}</p>
+                <p>Last check: {lastCheckTime
+                  ? <time dateTime={lastCheckTime.iso}>{lastCheckTime.label}</time>
+                  : request.publication_checked_at == null ? 'Not checked yet.' : 'Unknown.'}</p>
+                <p>{retryDescription(request)} {nextCheckTime && (
+                  <>Next check: <time dateTime={nextCheckTime.iso}>{nextCheckTime.label}</time>. This schedule does not confirm a check ran.</>
+                )}</p>
+              </div>
             </div>
             {request.publication_reason === 'automated_check_unavailable' && (
               <span className="inline-flex w-fit rounded-full bg-amber-100 px-2.5 py-1 text-xs font-medium text-amber-800">

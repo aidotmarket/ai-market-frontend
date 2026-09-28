@@ -586,6 +586,7 @@ describe('DataRequestDetailClient authenticated fallback loading', () => {
     const request = makeOwnerRequest({
       publication_decision: 'needs_review',
       publication_reason: 'safety_uncertain',
+      publication_check_outcome: 'uncertain',
       publication_next_action: 'The safety check needs a bounded exception review.',
     });
     mocks.getDataRequest.mockResolvedValue(request);
@@ -593,6 +594,68 @@ describe('DataRequestDetailClient authenticated fallback loading', () => {
     render(<DataRequestDetailClient slug={request.slug} initialRequest={request} />);
 
     expect(await screen.findByText('The safety check needs a bounded exception review.')).not.toBeNull();
+    expect(screen.getByText(/could not make a clear safety decision/)).not.toBeNull();
     expect(screen.queryByText('Automatic check pending')).toBeNull();
+  });
+
+  it('shows an unavailable check and a bounded recovery schedule to the owner', async () => {
+    const request = makeOwnerRequest({
+      publication_decision: 'needs_review',
+      publication_reason: 'automated_check_unavailable',
+      publication_check_outcome: 'unavailable',
+      publication_checked_at: '2026-09-28T02:08:00Z',
+      publication_retry_count: 6,
+      publication_retry_stage: 'recovery_probe',
+      publication_retry_at: '2026-09-28T03:08:00Z',
+    });
+    mocks.getDataRequest.mockResolvedValue(request);
+    render(<DataRequestDetailClient slug={request.slug} initialRequest={request} />);
+
+    expect(await screen.findByText(/The automated check was unavailable/)).not.toBeNull();
+    expect(screen.getByText(/A recovery check is scheduled/)).not.toBeNull();
+    expect(screen.getByText(/This schedule does not confirm a check ran/)).not.toBeNull();
+    const checkTimes = Array.from(document.querySelectorAll('time'));
+    expect(checkTimes.map((time) => time.getAttribute('datetime'))).toEqual([
+      '2026-09-28T02:08:00.000Z',
+      '2026-09-28T03:08:00.000Z',
+    ]);
+    for (const time of checkTimes) {
+      expect(time.textContent?.trim()).toMatch(/^[A-Z][a-z]{2} \d{1,2}, 2026, \d{1,2}:\d{2} (?:AM|PM) \S+$/);
+    }
+    expect(screen.queryByText(/safe to publish/i)).toBeNull();
+    expect(screen.getByText('Public visibility: Private')).not.toBeNull();
+  });
+
+  it.each([
+    [{ publication_check_outcome: null, publication_checked_at: null, publication_retry_at: null, publication_retry_stage: 'none' }, 'Not checked yet.', 'No next check is scheduled.'],
+    [{ publication_check_outcome: 'bogus', publication_checked_at: '2026-02-30T10:00:00Z', publication_retry_at: 'bad date', publication_retry_stage: 'fast_retry', publication_retry_count: 2 }, 'Unknown.', 'Next check time unknown.'],
+    [{ publication_check_outcome: 'unavailable', publication_checked_at: '2026-09-28T02:08:00Z', publication_retry_at: '2026-09-28T03:08:00Z', publication_retry_stage: 'fast_retry', publication_retry_count: 5 }, 'A fast retry is scheduled.', 'A fast retry is scheduled.'],
+    [{ publication_check_outcome: 'unavailable', publication_checked_at: null, publication_retry_at: '2026-09-28T03:08:00Z', publication_retry_stage: 'fast_retry', publication_retry_count: 6 }, 'Retry stage unknown.', 'Retry stage unknown.'],
+  ] as const)('handles absent or malformed check state without inventing a completed check %#', async (fields, expected, retry) => {
+    const request = makeOwnerRequest(fields as Partial<DataRequestDetail>);
+    mocks.getDataRequest.mockResolvedValue(request);
+    render(<DataRequestDetailClient slug={request.slug} initialRequest={request} />);
+    expect(await screen.findAllByText((content) => content.includes(expected))).not.toHaveLength(0);
+    expect(screen.getByText((content) => content.includes(retry))).not.toBeNull();
+    expect(screen.queryByText('Invalid Date')).toBeNull();
+  });
+
+  it.each(['anonymous', 'another buyer'])('keeps check and retry details out of the %s view', async (viewer) => {
+    const request = makeOwnerRequest({
+      publication_check_outcome: 'unavailable',
+      publication_checked_at: '2026-09-28T02:08:00Z',
+      publication_retry_count: 6,
+      publication_retry_stage: 'recovery_probe',
+      publication_retry_at: '2026-09-28T03:08:00Z',
+    });
+    mocks.auth.user = viewer === 'anonymous' ? null : { ...owner, id: 'other-buyer' };
+    mocks.auth.isAuthenticated = viewer !== 'anonymous';
+    mocks.getDataRequest.mockResolvedValue(request);
+    render(<DataRequestDetailClient slug={request.slug} initialRequest={request} />);
+
+    await waitFor(() => expect(mocks.getDataRequest).toHaveBeenCalled());
+    expect(screen.queryByText(/Last check outcome:/)).toBeNull();
+    expect(screen.queryByText(/Next check:/)).toBeNull();
+    expect(screen.queryByText(/A recovery check is scheduled/)).toBeNull();
   });
 });

@@ -923,6 +923,8 @@ export interface ConversationDetail {
 export type DataRequestStatus = 'draft' | 'open' | 'matched' | 'responses_received' | 'fulfilled' | 'closed' | 'expired';
 export type DataRequestUrgency = 'low' | 'normal' | 'high' | 'urgent';
 export type RequestPublicationDecision = 'eligible' | 'action_required' | 'needs_review' | 'ineligible';
+export type RequestPublicationCheckOutcome = 'clean' | 'contact_or_personal_data' | 'rejected' | 'uncertain' | 'unavailable';
+export type RequestPublicationRetryStage = 'none' | 'fast_retry' | 'recovery_probe';
 export type RequestPublicationReason =
   | 'eligible'
   | 'email_verification_required'
@@ -972,6 +974,11 @@ export interface DataRequestDetail extends DataRequestListItem {
   publication_reason?: RequestPublicationReason;
   publication_decision_version?: number;
   publication_next_action?: string;
+  publication_check_outcome?: RequestPublicationCheckOutcome | null;
+  publication_checked_at?: string | null;
+  publication_retry_count?: number;
+  publication_retry_at?: string | null;
+  publication_retry_stage?: RequestPublicationRetryStage;
 }
 
 export interface CreateDataRequestPayload {
