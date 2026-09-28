@@ -163,7 +163,7 @@ export async function fetchDataRequests(params?: {
 
   const qs = searchParams.toString();
   const res = await fetch(`${API_URL}/api/v1/data-requests${qs ? `?${qs}` : ''}`, {
-    next: { revalidate: 60 },
+    cache: 'no-store',
   });
   if (!res.ok) return null;
   return res.json();
@@ -172,7 +172,7 @@ export async function fetchDataRequests(params?: {
 export async function fetchDataRequest(slugOrId: string) {
   const res = await fetch(
     `${API_URL}/api/v1/data-requests/${encodeURIComponent(slugOrId)}`,
-    { next: { revalidate: 60 } }
+    { cache: 'no-store' }
   );
   if (!res.ok) return null;
   return res.json();
