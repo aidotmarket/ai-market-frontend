@@ -1,6 +1,7 @@
 import { api } from './client';
 
 export type TermsAcceptanceScope = 'individual' | 'organization';
+export type TermsAcceptanceContext = 'buyer' | 'seller';
 
 export interface TermsPartyContext {
   scope: TermsAcceptanceScope;
@@ -15,6 +16,7 @@ export interface TermsAcceptanceStatus {
 }
 
 export interface TermsAcceptRequest extends TermsPartyContext {
+  context?: TermsAcceptanceContext;
   signer_full_name: string;
   signer_title: string;
   business_legal_name: string;
@@ -50,7 +52,7 @@ export async function getTermsAcceptanceStatus(context: TermsPartyContext): Prom
 }
 
 export async function acceptTerms(payload: TermsAcceptRequest): Promise<TermsAcceptResponse> {
-  const res = await api.post<TermsAcceptResponse>('/legal/terms/accept', payload);
+  const res = await api.post<TermsAcceptResponse>('/legal/terms/accept', { ...payload, context: payload.context ?? 'buyer' });
   return res.data;
 }
 

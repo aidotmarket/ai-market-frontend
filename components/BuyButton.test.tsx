@@ -16,7 +16,9 @@ import {sha256} from '@/lib/customLicenseVerification';
 import { readFileSync } from 'node:fs';
 
 const ordersApi = vi.hoisted(() => ({ getMyOrders: vi.fn() }));
+const legalApi = vi.hoisted(() => ({ getTermsAcceptanceStatus: vi.fn(), getCurrentTerms: vi.fn(), acceptTerms: vi.fn() }));
 vi.mock('@/api/orders', () => ordersApi);
+vi.mock('@/api/legal', () => legalApi);
 vi.mock('@/api/checkout', () => ({ createCheckout: vi.fn() }));
 
 const structuredLicense = {
@@ -42,7 +44,7 @@ function completeAcceptanceForm() {
   fireEvent.change(screen.getByLabelText('Typed full name'), { target: { value: 'Ada Buyer' } });
   fireEvent.change(screen.getByLabelText('Signer title'), { target: { value: 'Director' } });
   fireEvent.change(screen.getByLabelText('Business legal name'), { target: { value: 'Buyer Ltd' } });
-  fireEvent.change(screen.getByLabelText('Jurisdiction (2-letter country code)'), { target: { value: 'gb' } });
+  fireEvent.change(screen.getByLabelText('Country'), { target: { value: 'GB' } });
   fireEvent.click(screen.getByRole('checkbox', { name: 'Confirm licence authority' }));
 }
 
@@ -68,7 +70,7 @@ describe('BuyButton licence acceptance', () => {
     expect(screen.getByLabelText('Typed full name')).not.toBeNull();
     expect(screen.getByLabelText('Signer title')).not.toBeNull();
     expect(screen.getByLabelText('Business legal name')).not.toBeNull();
-    expect(screen.getByLabelText('Jurisdiction (2-letter country code)')).not.toBeNull();
+    expect(screen.getByLabelText('Country')).not.toBeNull();
     expect((screen.getByRole('button', { name: 'Accept and continue to payment' }) as HTMLButtonElement).disabled).toBe(true);
     await waitFor(() => expect(ordersApi.getMyOrders).toHaveBeenCalled());
   });
@@ -97,6 +99,36 @@ describe('BuyButton licence acceptance', () => {
       '/licenses/marketplace-listing/1.0?download=1',
     ]);
     expect((screen.getByRole('button', { name: 'Accept and continue to payment' }) as HTMLButtonElement).disabled).toBe(false);
+  });
+
+  it('carries the listing signer title and jurisdiction into the terms modal', async () => {
+    const priorGate = process.env.NEXT_PUBLIC_TERMS_GATE_ENFORCE;
+    process.env.NEXT_PUBLIC_TERMS_GATE_ENFORCE = 'true';
+    legalApi.getTermsAcceptanceStatus.mockResolvedValue({ accepted: false });
+    legalApi.getCurrentTerms.mockResolvedValue({ terms_version: '1.1' });
+    vi.stubGlobal('fetch', vi.fn(async (input: RequestInfo | URL) => String(input).includes('marketplace-listing')
+      ? documentResponse('Exact covenant text\n')
+      : documentResponse('Exact licence text\n')));
+
+    try {
+      render(<ToastProvider><BuyButton listingId="listing-1" slug="listing" price={20} pricingType="one_time" licenseDetails={verifiedLicense} /></ToastProvider>);
+      completeAcceptanceForm();
+      await waitFor(() => expect(screen.getAllByText('Fetched bytes match the server hash')).toHaveLength(2));
+      fireEvent.click(screen.getByRole('button', { name: 'Accept and continue to payment' }));
+
+      await screen.findByRole('heading', { name: 'Accept Terms and Conditions' });
+      expect((screen.getByLabelText(/Full legal name/) as HTMLInputElement).value).toBe('Ada Buyer');
+      expect((screen.getByLabelText(/^Title/) as HTMLInputElement).value).toBe('Director');
+      expect((screen.getAllByLabelText(/Business legal name/)[1] as HTMLInputElement).value).toBe('Buyer Ltd');
+      await waitFor(() => expect((document.getElementById('terms-jurisdiction') as HTMLSelectElement).value).toBe('GB'));
+      for (const id of ['ack-box-1', 'ack-box-2', 'ack-box-3']) fireEvent.click(document.getElementById(id)!);
+      fireEvent.click(screen.getByLabelText('I am authorized to bind this business'));
+      fireEvent.click(screen.getByRole('button', { name: 'Accept and sign' }));
+      await waitFor(() => expect(legalApi.acceptTerms).toHaveBeenCalledWith(expect.objectContaining({ context: 'buyer' })));
+    } finally {
+      if (priorGate === undefined) delete process.env.NEXT_PUBLIC_TERMS_GATE_ENFORCE;
+      else process.env.NEXT_PUBLIC_TERMS_GATE_ENFORCE = priorGate;
+    }
   });
 
   it.each([

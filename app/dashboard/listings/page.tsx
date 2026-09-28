@@ -40,7 +40,7 @@ export default function ListingsPage() {
   const [payoutsStatus, setPayoutsStatus] = useState<'unknown' | 'enabled' | 'disabled'>('unknown');
   const router = useRouter();
   const { toast } = useToast();
-  const { ensureTermsAccepted, TermsGatePrompt, checkingTerms } = useTermsGate();
+  const { ensureTermsAccepted, TermsGatePrompt, checkingTerms } = useTermsGate('seller');
 
   const fetchListings = useCallback(async () => {
     setLoading(true);
@@ -123,7 +123,7 @@ export default function ListingsPage() {
       {pendingTermsCount > 0 && <div role="status" className="rounded-lg border border-amber-300 bg-amber-50 p-4 text-sm text-amber-950">
         <p className="font-semibold">{pendingTermsCount} inherited {pendingTermsCount === 1 ? 'listing is' : 'listings are'} not yet available to buy.</p>
         <p className="mt-1">Review and accept Terms 1.1 to make eligible listings available for purchase.</p>
-        <Link href="/legal/terms/accept?redirect=%2Fdashboard%2Flistings" className="mt-2 inline-block font-semibold underline">Review and accept Terms 1.1</Link>
+        <Link href="/legal/terms/accept?context=seller&redirect=%2Fdashboard%2Flistings" className="mt-2 inline-block font-semibold underline">Review and accept Terms 1.1</Link>
       </div>}
       <div className="flex items-center justify-between">
         <h1 className="text-2xl font-bold text-gray-900">Your Listings</h1>

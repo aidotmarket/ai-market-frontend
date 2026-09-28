@@ -2,23 +2,24 @@
 
 import { useCallback, useRef, useState } from 'react';
 import Link from 'next/link';
-import { getTermsAcceptanceStatus, type TermsPartyContext } from '@/api/legal';
+import { getTermsAcceptanceStatus, type TermsAcceptanceContext, type TermsPartyContext } from '@/api/legal';
 import { useToast } from '@/components/Toast';
 import { useAuthStore } from '@/store/auth';
-import TermsAcceptanceForm from '@/components/legal/TermsAcceptanceForm';
+import TermsAcceptanceForm, { type TermsAcceptancePrefill } from '@/components/legal/TermsAcceptanceForm';
 import { getTermsPartyContext, isTermsGateEnforced } from '@/components/legal/termsContext';
 
 type PendingAction = () => unknown | Promise<unknown>;
 
-export function useTermsGate() {
+export function useTermsGate(acceptanceContext: TermsAcceptanceContext = 'buyer') {
   const user = useAuthStore((s) => s.user);
   const { toast } = useToast();
   const [promptContext, setPromptContext] = useState<TermsPartyContext | null>(null);
+  const [promptPrefill, setPromptPrefill] = useState<TermsAcceptancePrefill | undefined>();
   const [hardGateOpen, setHardGateOpen] = useState(false);
   const [checkingTerms, setCheckingTerms] = useState(false);
   const pendingActionRef = useRef<PendingAction | null>(null);
 
-  const ensureTermsAccepted = useCallback(async <T,>(action: () => T | Promise<T>): Promise<T | undefined> => {
+  const ensureTermsAccepted = useCallback(async <T,>(action: () => T | Promise<T>, prefill?: TermsAcceptancePrefill): Promise<T | undefined> => {
     const context = getTermsPartyContext(user);
     if (!context) {
       return action();
@@ -45,6 +46,7 @@ export function useTermsGate() {
     }
 
     setPromptContext(context);
+    setPromptPrefill(prefill);
     if (isTermsGateEnforced()) {
       pendingActionRef.current = action;
       setHardGateOpen(true);
@@ -81,6 +83,8 @@ export function useTermsGate() {
             </div>
             <TermsAcceptanceForm
               context={promptContext}
+              acceptanceContext={acceptanceContext}
+              prefill={promptPrefill}
               compact
               onAccepted={async () => {
                 setHardGateOpen(false);
@@ -102,7 +106,7 @@ export function useTermsGate() {
             Please review and accept the ai.market Terms and Conditions. You can continue for now.
           </p>
           <div className="flex shrink-0 items-center gap-3">
-            <Link href="/legal/terms/accept" className="font-semibold underline underline-offset-2">
+            <Link href={acceptanceContext === 'seller' ? '/legal/terms/accept?context=seller' : '/legal/terms/accept'} className="font-semibold underline underline-offset-2">
               Review and accept
             </Link>
             <button
@@ -116,7 +120,7 @@ export function useTermsGate() {
         </div>
       </div>
     );
-  }, [hardGateOpen, promptContext]);
+  }, [acceptanceContext, hardGateOpen, promptContext, promptPrefill]);
 
   return { ensureTermsAccepted, TermsGatePrompt, checkingTerms };
 }

@@ -3,25 +3,35 @@
 import { useEffect, useMemo, useState } from 'react';
 import Link from 'next/link';
 import { AxiosError } from 'axios';
-import { acceptTerms, getCurrentTerms, type TermsPartyContext } from '@/api/legal';
+import { acceptTerms, getCurrentTerms, type TermsAcceptanceContext, type TermsPartyContext } from '@/api/legal';
+import CountrySelect from '@/components/CountrySelect';
 import { useAuthStore } from '@/store/auth';
 
 const ACK_BOX_1 = 'I understand ai.market is non-custodial. It never touches, stores, or moves the data. It is not a party to any transaction, it does not mediate deals, and it does not guarantee that any dataset is accurate, lawful, or fit for purpose. The deal and its risks are between the buyer and the seller.';
-const ACK_BOX_2 = 'I understand that if I am introduced to a counterparty through ai.market and I take that transaction off the platform within 24 months, I agree to pay ai.market 10 times (10x) the entire value of that transaction as liquidated damages, and I agree this amount is a fair and reasonable estimate of the harm caused.';
+const ACK_BOX_2 = 'I understand that if I am introduced to a counterparty through ai.market, I must complete that transaction on ai.market. Taking it off the platform within 24 months is a breach of these Terms, and ai.market may pursue the remedies available to it under these Terms and the law.';
 const ACK_BOX_3 = 'I understand that disputes are strictly between the buyer and the seller, that ai.market does not mediate them, and that by using the marketplace I give up and waive all legal recourse and all right to bring any claim or legal action against the ai.market Parties, and I waive any right to a jury trial and to bring or join a class action, to the maximum extent permitted by law.';
+
+export interface TermsAcceptancePrefill {
+  signerFullName?: string;
+  signerTitle?: string;
+  businessLegalName?: string;
+  jurisdiction?: string;
+}
 
 interface TermsAcceptanceFormProps {
   context: TermsPartyContext;
+  acceptanceContext?: TermsAcceptanceContext;
   compact?: boolean;
   onAccepted?: () => void;
+  prefill?: TermsAcceptancePrefill;
 }
 
-export default function TermsAcceptanceForm({ context, compact = false, onAccepted }: TermsAcceptanceFormProps) {
+export default function TermsAcceptanceForm({ context, acceptanceContext = 'buyer', compact = false, onAccepted, prefill }: TermsAcceptanceFormProps) {
   const user = useAuthStore((s) => s.user);
-  const [signerFullName, setSignerFullName] = useState(fullName(user?.first_name, user?.last_name));
-  const [signerTitle, setSignerTitle] = useState('');
-  const [businessLegalName, setBusinessLegalName] = useState(user?.company_name || '');
-  const [jurisdiction, setJurisdiction] = useState('');
+  const [signerFullName, setSignerFullName] = useState(prefill?.signerFullName ?? fullName(user?.first_name, user?.last_name));
+  const [signerTitle, setSignerTitle] = useState(prefill?.signerTitle ?? '');
+  const [businessLegalName, setBusinessLegalName] = useState(prefill?.businessLegalName ?? user?.company_name ?? '');
+  const [jurisdiction, setJurisdiction] = useState(prefill?.jurisdiction ?? '');
   const [requiresJurisdiction, setRequiresJurisdiction] = useState(false);
   const [termsReady, setTermsReady] = useState(false);
   const [authorityAck, setAuthorityAck] = useState(false);
@@ -66,6 +76,7 @@ export default function TermsAcceptanceForm({ context, compact = false, onAccept
     try {
       await acceptTerms({
         ...context,
+        context: acceptanceContext,
         signer_full_name: signerFullName.trim(),
         signer_title: signerTitle.trim(),
         business_legal_name: businessLegalName.trim(),
@@ -78,12 +89,14 @@ export default function TermsAcceptanceForm({ context, compact = false, onAccept
       setSubmitted(true);
       onAccepted?.();
     } catch (err) {
-      if (err instanceof AxiosError) {
-        const detail = err.response?.data?.detail;
-        setError(typeof detail === 'string' ? detail : 'Could not record acceptance. Please try again.');
-      } else {
-        setError('Could not record acceptance. Please try again.');
-      }
+      const response = err instanceof AxiosError ? err.response : undefined;
+      const detail = response?.data?.detail;
+      const code = typeof detail === 'object' && detail !== null ? detail.code : undefined;
+      if (code === 'SELLER_ACCESS_REQUIRED' || response?.data?.code === 'SELLER_ACCESS_REQUIRED') setError('Only sellers can accept these terms as a seller.');
+      else if (code === 'SELLER_LEGAL_IDENTITY_REQUIRED') setError('seller_identity_required');
+      else if (code === 'LEGAL_IDENTITY_CONFLICT') setError('identity_conflict');
+      else if (code === 'LEGAL_IDENTITY_INVALID') setError('identity_invalid');
+      else setError('Could not record acceptance. Please try again.');
     } finally {
       setSubmitting(false);
     }
@@ -108,7 +121,9 @@ export default function TermsAcceptanceForm({ context, compact = false, onAccept
 
       {error && (
         <div className="rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
-          {error}
+          {error === 'seller_identity_required' ? <>Add your legal name in Seller Workspace before accepting as a seller. <Link href="/dashboard/seller-workspace" className="underline">Open Seller Workspace</Link></>
+            : error === 'identity_conflict' ? <>Your legal name doesn&apos;t match our records. Contact support. <Link href="/seller-workspace/support/legal-identity" className="underline">Contact support</Link></>
+            : error === 'identity_invalid' ? 'Check the name and country and try again.' : error}
         </div>
       )}
 
@@ -124,8 +139,8 @@ export default function TermsAcceptanceForm({ context, compact = false, onAccept
         <TextField id="signer-title" label="Title" value={signerTitle} onChange={setSignerTitle} />
         <TextField id="business-legal-name" label="Business legal name" value={businessLegalName} onChange={setBusinessLegalName} />
         {requiresJurisdiction && <div>
-          <label htmlFor="terms-jurisdiction" className="mb-1 block text-sm font-medium text-gray-700">Jurisdiction (2-letter country code) <span className="text-red-500">*</span></label>
-          <input id="terms-jurisdiction" required minLength={2} maxLength={2} value={jurisdiction} onChange={(event) => setJurisdiction(event.target.value.toUpperCase().slice(0, 2))} className="w-full rounded-lg border border-gray-300 px-3 py-2 uppercase" />
+          <label htmlFor="terms-jurisdiction" className="mb-1 block text-sm font-medium text-gray-700">Country <span className="text-red-500">*</span></label>
+          <CountrySelect id="terms-jurisdiction" required value={jurisdiction} onChange={setJurisdiction} className="w-full rounded-lg border border-gray-300 px-3 py-2" />
         </div>}
       </div>
 

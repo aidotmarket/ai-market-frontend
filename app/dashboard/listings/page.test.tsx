@@ -11,12 +11,13 @@ const api = vi.hoisted(() => ({
   unpublishListing: vi.fn(),
   deleteListing: vi.fn(),
 }));
+const termsGate = vi.hoisted(() => vi.fn(() => ({ TermsGatePrompt: () => null, checkingTerms: false, ensureTermsAccepted: vi.fn() })));
 vi.mock('@/api/listings', () => api);
 vi.mock('@/api/connect', () => api);
 vi.mock('next/navigation', () => ({ useRouter: () => ({ push: vi.fn() }) }));
 vi.mock('@/components/Toast', () => ({ useToast: () => ({ toast: vi.fn() }) }));
 vi.mock('@/components/legal/TermsGate', () => ({
-  useTermsGate: () => ({ TermsGatePrompt: () => null, checkingTerms: false, ensureTermsAccepted: vi.fn() }),
+  useTermsGate: termsGate,
 }));
 vi.mock('@/components/listings/SellerShareControls', () => ({ default: () => null }));
 
@@ -62,6 +63,7 @@ it('prompts sellers with inherited listings to accept Terms 1.1', async () => {
   api.getPendingSellerTermsListings.mockResolvedValue({ data: { count: 1, listings: [{ id: 'listing-1', slug: 'seller-dataset', title: 'Seller dataset', status: 'published', license_status: 'pending_seller_terms' }] } });
   render(<ListingsPage />);
   const link = await screen.findByRole('link', { name: 'Review and accept Terms 1.1' });
-  expect(link.getAttribute('href')).toBe('/legal/terms/accept?redirect=%2Fdashboard%2Flistings');
+  expect(link.getAttribute('href')).toBe('/legal/terms/accept?context=seller&redirect=%2Fdashboard%2Flistings');
+  expect(termsGate).toHaveBeenCalledWith('seller');
   expect(screen.getByText(/not yet available to buy/)).toBeTruthy();
 });
