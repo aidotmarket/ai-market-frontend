@@ -53,6 +53,17 @@ export default function ConnectorDocsPage() {
         <p className="mt-3 leading-7">Some tools may be unavailable during early access.</p>
       </section>
 
+      <section className="mt-10" aria-labelledby="try-asking-claude">
+        <h2 id="try-asking-claude" className="text-xl font-semibold text-gray-900">Try asking Claude</h2>
+        <ul className="mt-4 list-disc space-y-2 pl-6 leading-7">
+          <li><q>Find datasets on ai.market about vehicle collisions in New York City.</q></li>
+          <li><q>Show me the AlphaFold protein structures listing on ai.market and what fields it includes.</q></li>
+          <li><q>What competitive programming datasets are listed on ai.market?</q></li>
+          <li><q>Which of my data requests on ai.market are still open?</q></li>
+          <li><q>What&apos;s new on my ai.market account?</q></li>
+        </ul>
+      </section>
+
       <section className="mt-10">
         <h2 className="text-xl font-semibold text-gray-900">How to connect</h2>
         <ol className="mt-4 list-decimal space-y-2 pl-6 leading-7">
@@ -74,7 +85,7 @@ export default function ConnectorDocsPage() {
 
       <section className="mt-10">
         <h2 className="text-xl font-semibold text-gray-900">What the connector cannot do</h2>
-        <p className="mt-3 leading-7">You cannot pay or move money in Claude. Checkout happens on ai.market. Buyers and sellers do not talk directly; allAI mediates their contact. Raw customer data does not pass through ai.market.</p>
+        <p className="mt-3 leading-7">You cannot pay or move money in Claude. Checkout happens on ai.market. Buyers and sellers do not talk directly; our assistant, allAI, handles communication between them. Raw customer data does not pass through ai.market.</p>
       </section>
 
       <section className="mt-10">
