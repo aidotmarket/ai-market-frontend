@@ -9,7 +9,7 @@ export default function PrivacyNoticePage() {
   return (
     <div className="mx-auto max-w-3xl px-6 py-16 lg:py-24">
       <h1 className="text-3xl font-bold text-gray-900 mb-2">ai.market Privacy Notice</h1>
-      <p className="text-sm text-gray-500 mb-10">Last Updated: March 25, 2026</p>
+      <p className="text-sm text-gray-500 mb-10">Last Updated: September 29, 2026</p>
 
       <div className="prose prose-gray max-w-none prose-headings:text-gray-900 prose-p:text-gray-700 prose-a:text-[#3F51B5] [&>h2]:mb-4 [&>h2]:mt-10 [&>p]:mb-6">
         <p>
@@ -46,6 +46,17 @@ export default function PrivacyNoticePage() {
         <h2>Data Retention</h2>
         <p>
           We retain personal information for as long as necessary to fulfill the purposes for which it was collected, including to satisfy any legal, accounting, or reporting requirements. To determine the appropriate retention period for personal information, we consider the amount, nature, and sensitivity of the personal information, the potential risk of harm from unauthorized use or disclosure, the purposes for which we process the information, whether we can achieve those purposes through other means, and applicable legal requirements.
+        </p>
+
+        <h2>AI assistants and the ai.market connector</h2>
+        <p>
+          If you connect an AI assistant to ai.market, the connector can access only the information allowed by the permissions you grant while signed in. Its current tools read your account details, public marketplace listings, your activity summaries, and your data requests. They do not change your account or make a purchase.
+        </p>
+        <p>
+          We record connector tool calls, access failures, and connection events. For tool calls, we record when the call happened, whether it succeeded, IDs used to trace the request, your account and organization IDs, IDs for the connected app and its permission grant, the app type, the tool used, the permissions used, any error code, and how long the call took. We store tool inputs, results, and browser or app identification as keyed hashes, not as readable text. For failed access attempts, we record the network address and a count for each minute, with excess addresses grouped together.
+        </p>
+        <p>
+          We do not collect your conversation with your AI assistant beyond the tool calls it sends to us. We issue access and refresh tokens for the connection. You can revoke access in Settings under Connected apps and also remove the connection in your AI assistant. We retain connector information for as long as needed to provide and protect the service and meet legal requirements.
         </p>
 
         <h2>Security</h2>

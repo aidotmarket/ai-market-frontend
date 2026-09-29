@@ -33,6 +33,7 @@ const footerLinkSections = [
     title: 'Support',
     links: [
       { label: 'Contact and Support', href: '/support' },
+      { label: 'Use ai.market in Claude', href: '/docs/connector' },
       { label: 'Become a Partner', href: '/partner' },
     ],
   },

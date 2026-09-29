@@ -13,6 +13,12 @@ export default function SupportPage() {
       </p>
 
       <div className="space-y-10">
+        <div className="rounded-xl border border-gray-200 p-6 sm:p-8">
+          <h2 className="text-xl font-semibold text-gray-900 mb-2">Use ai.market in Claude</h2>
+          <p className="text-gray-600 mb-4">Learn how to connect, review permissions, and disconnect.</p>
+          <a href="/docs/connector" className="font-medium text-[#3F51B5] hover:underline">Read the connector guide</a>
+        </div>
+
         {/* Email */}
         <div className="rounded-xl border border-gray-200 p-6 sm:p-8">
           <div className="flex items-start gap-4">
