@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import Link from 'next/link';
 import { useParams, useSearchParams } from 'next/navigation';
 import { getOrder, getOrderAccess, getOrderEvents } from '@/api/orders';
@@ -90,6 +90,10 @@ export default function OrderDetailPage() {
   const [events, setEvents] = useState<OrderEvent[]>([]);
   const [tx, setTx] = useState<Transaction | null>(null);
   const [orderAccess, setOrderAccess] = useState<OrderAccessResponse | null>(null);
+  const [gatewayOrderId, setGatewayOrderId] = useState<string | null>(null);
+  const handleGatewayPresence = useCallback((present: boolean) => {
+    setGatewayOrderId(present ? orderId : null);
+  }, [orderId]);
   const [downloadLoading, setDownloadLoading] = useState(false);
   const [workspaceDownloadReady, setWorkspaceDownloadReady] = useState(false);
   useEffect(() => {setWorkspaceDownloadReady(false);}, [orderId]);
@@ -210,7 +214,7 @@ export default function OrderDetailPage() {
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
         {/* Main info */}
         <div className="lg:col-span-2 space-y-6">
-          {isBuyerOfRecord && <GatewayDeliverySection key={order.id} orderId={order.id} />}
+          {isBuyerOfRecord && <GatewayDeliverySection key={order.id} orderId={order.id} onPresenceChange={handleGatewayPresence} />}
           <div className="rounded-lg border border-gray-200 p-6">
             <div className="flex items-center justify-between mb-4">
               <h1 className="text-xl font-bold text-gray-900">Order #{order.id.slice(0, 8)}</h1>
@@ -352,7 +356,7 @@ export default function OrderDetailPage() {
           {order.workspace_delivery && isBuyerOfRecord && !order.access_expired && String(order.status)==='pending_delivery' && <WorkspacePurchaseRecovery key={order.id} orderId={order.id} onReady={setOrder} />}
           {order.workspace_delivery && isBuyerOfRecord && !order.access_expired && ['delivered','completed','fulfilled'].includes(String(order.status)) && (workspaceDownloadReady ? <WorkspaceDownload key={order.id} orderId={order.id} /> : <button type="button" disabled={checkingTerms} onClick={() => ensureTermsAccepted(() => setWorkspaceDownloadReady(true))} className="rounded-lg bg-indigo-700 px-4 py-2 text-sm font-semibold text-white disabled:opacity-50">Continue to download</button>)}
 
-          {['fulfilled', 'delivered', 'completed'].includes(String(order.status)) && !order.workspace_delivery && isBuyerOfRecord && !order.access_expired && (
+          {['fulfilled', 'delivered', 'completed'].includes(String(order.status)) && !order.workspace_delivery && gatewayOrderId !== order.id && isBuyerOfRecord && !order.access_expired && (
             <div className="rounded-lg border border-gray-200 p-6">
               <h2 className="text-lg font-semibold text-gray-900">Downloads</h2>
               {downloadLoading ? (
@@ -361,21 +365,15 @@ export default function OrderDetailPage() {
                 <ul className="mt-4 space-y-3">
                   {orderAccess.download_urls.filter((file) => /^https?:\/\//i.test(file.url)).map((file) => (
                     <li key={file.url}>
-                      <a href={file.url} rel="noopener noreferrer" referrerPolicy="no-referrer"
-                        onClick={(event) => {
-                          event.preventDefault();
+                      <button type="button" disabled={checkingTerms}
+                        onClick={() => {
                           void ensureTermsAccepted(() => {
-                            const link = document.createElement('a');
-                            link.href = file.url;
-                            link.download = file.filename || '';
-                            link.rel = 'noopener noreferrer';
-                            link.referrerPolicy = 'no-referrer';
-                            link.click();
+                            window.open(file.url, '_blank', 'noopener,noreferrer');
                           });
                         }}
                         className="text-sm text-[#3F51B5] hover:underline">
                         {file.filename ? `Download ${file.filename}` : 'Download'}
-                      </a>
+                      </button>
                     </li>
                   ))}
                 </ul>

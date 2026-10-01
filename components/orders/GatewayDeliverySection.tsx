@@ -103,7 +103,7 @@ function FileRow({ file, orderId, reload, report, disputable }: { file: GatewayD
   </li>;
 }
 
-export default function GatewayDeliverySection({ orderId }: { orderId: string }) {
+export default function GatewayDeliverySection({ orderId, onPresenceChange }: { orderId: string; onPresenceChange?: (present: boolean) => void }) {
   const [delivery, setDelivery] = useState<GatewayDelivery | null>(null);
   const [selected, setSelected] = useState<string[]>([]);
   const [formOpen, setFormOpen] = useState(false);
@@ -145,6 +145,8 @@ export default function GatewayDeliverySection({ orderId }: { orderId: string })
     refresh.current();
     return () => { active = false; generation++; if (timer) clearTimeout(timer); timer = undefined; refresh.current = () => {}; };
   }, [orderId]);
+
+  useEffect(() => { onPresenceChange?.(delivery !== null); }, [delivery, onPresenceChange]);
 
   if (!delivery) return null;
   const allDelivered = delivery.files.length > 0 && delivery.files.every((file) => file.state === 'delivered');

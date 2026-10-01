@@ -5,7 +5,12 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { BuyerOrderDetail, OrderEvent, Transaction } from '@/types';
 
 const navigation = vi.hoisted(() => ({ orderId: 'order-1', txId: 'tx-1' }));
-const terms = vi.hoisted(() => ({ ensureTermsAccepted: vi.fn() }));
+const terms = vi.hoisted(() => ({ ensureTermsAccepted: vi.fn(), realGate: false }));
+const legalApi = vi.hoisted(() => ({ getTermsAcceptanceStatus: vi.fn() }));
+vi.mock('@/api/legal', () => legalApi);
+vi.mock('@/components/legal/TermsAcceptanceForm', () => ({
+  default: ({ onAccepted }: { onAccepted: () => Promise<void> }) => <button onClick={() => void onAccepted()}>Accept terms</button>,
+}));
 const auth = vi.hoisted(() => ({ userId: 'viewer-1', role: 'seller' }));
 const gatewayApi = vi.hoisted(() => ({ getGatewayDelivery: vi.fn(), reissueGatewayPermission: vi.fn(), reportGatewayProblem: vi.fn() }));
 vi.mock('@/api/gatewayDelivery', () => ({ ...gatewayApi, gatewayErrorCode: () => null }));
@@ -34,13 +39,14 @@ vi.mock('@/store/auth', () => ({
 vi.mock('@/components/Toast', () => ({
   useToast: () => ({ toast: vi.fn() }),
 }));
-vi.mock('@/components/legal/TermsGate', () => ({
-  useTermsGate: () => ({
+vi.mock('@/components/legal/TermsGate', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('@/components/legal/TermsGate')>();
+  return { useTermsGate: () => terms.realGate ? actual.useTermsGate('buyer') : ({
     ensureTermsAccepted: terms.ensureTermsAccepted,
     TermsGatePrompt: () => null,
     checkingTerms: false,
-  }),
-}));
+  }) };
+});
 vi.mock('@/components/orders/OrderVersionAccessSummary', () => ({
   default: () => null,
 }));
@@ -93,6 +99,7 @@ function transaction(overrides: Partial<Transaction> = {}): Transaction {
 
 describe('OrderDetailPage viewer relationship gating', () => {
   beforeEach(() => {
+    terms.realGate = false;
     navigation.orderId = 'order-1';
     navigation.txId = 'tx-1';
     auth.userId = 'viewer-1';
@@ -108,6 +115,8 @@ describe('OrderDetailPage viewer relationship gating', () => {
   afterEach(() => {
     cleanup();
     vi.clearAllMocks();
+    vi.restoreAllMocks();
+    vi.unstubAllEnvs();
   });
 
   it('does not offer Mark Delivered to a buyer of record who also has global seller role', async () => {
@@ -240,22 +249,51 @@ describe('OrderDetailPage viewer relationship gating', () => {
       download_urls: [{ url: 'https://public.example.test/data.csv', filename: 'data.csv', expires_at: null }],
     });
     render(<OrderDetailPage />);
-    const link = await screen.findByRole('link', { name: 'Download data.csv' });
-    expect(link.getAttribute('href')).toBe('https://public.example.test/data.csv');
-    expect(link.getAttribute('referrerpolicy')).toBe('no-referrer');
+    const button = await screen.findByRole('button', { name: 'Download data.csv' });
+    expect(button.hasAttribute('href')).toBe(false);
+    expect(screen.queryByRole('link', { name: 'Download data.csv' })).toBeNull();
     expect(ordersApi.getOrderAccess).toHaveBeenCalledExactlyOnceWith('order-1');
     expect(screen.queryByRole('button', { name: /Refresh|Get download access/ })).toBeNull();
   });
 
-  it('keeps reference navigation behind the existing buyer terms gate', async () => {
-    terms.ensureTermsAccepted.mockResolvedValueOnce(false);
+  it('requires acceptance before opening a reference URL with enforcement on', async () => {
+    terms.realGate = true;
+    vi.stubEnv('NEXT_PUBLIC_TERMS_GATE_ENFORCE', 'true');
+    legalApi.getTermsAcceptanceStatus.mockResolvedValue({ accepted: false });
+    const open = vi.spyOn(window, 'open').mockReturnValue(null);
     ordersApi.getOrder.mockResolvedValue({ ...order(), status: 'delivered' });
     ordersApi.getOrderAccess.mockResolvedValue({ delivery_type: 'reference', can_download: true,
       download_urls: [{ url: 'https://public.example.test/data.csv' }] });
     render(<OrderDetailPage />);
-    fireEvent.click(await screen.findByRole('link', { name: 'Download' }));
-    expect(terms.ensureTermsAccepted).toHaveBeenCalledTimes(1);
-    expect(terms.ensureTermsAccepted).toHaveBeenCalledWith(expect.any(Function));
+    const button = await screen.findByRole('button', { name: 'Download' });
+    expect(button.hasAttribute('href')).toBe(false);
+    expect(document.querySelector('a[href="https://public.example.test/data.csv"]')).toBeNull();
+    fireEvent(button, new MouseEvent('auxclick', { button: 1, bubbles: true }));
+    fireEvent.contextMenu(button);
+    expect(open).not.toHaveBeenCalled();
+    fireEvent.click(button);
+    await screen.findByRole('heading', { name: 'Accept Terms and Conditions' });
+    expect(open).not.toHaveBeenCalled();
+    fireEvent.click(screen.getByRole('button', { name: 'Accept terms' }));
+    await waitFor(() => expect(open).toHaveBeenCalledExactlyOnceWith(
+      'https://public.example.test/data.csv', '_blank', 'noopener,noreferrer',
+    ));
+  });
+
+  it('opens a reference URL with referrer protections when terms are already accepted', async () => {
+    terms.realGate = true;
+    vi.stubEnv('NEXT_PUBLIC_TERMS_GATE_ENFORCE', 'true');
+    legalApi.getTermsAcceptanceStatus.mockResolvedValue({ accepted: true });
+    const open = vi.spyOn(window, 'open').mockReturnValue(null);
+    ordersApi.getOrder.mockResolvedValue({ ...order(), status: 'delivered' });
+    ordersApi.getOrderAccess.mockResolvedValue({ delivery_type: 'reference', can_download: true,
+      download_urls: [{ url: 'https://public.example.test/data.csv' }] });
+    render(<OrderDetailPage />);
+    fireEvent.click(await screen.findByRole('button', { name: 'Download' }));
+    await waitFor(() => expect(open).toHaveBeenCalledExactlyOnceWith(
+      'https://public.example.test/data.csv', '_blank', 'noopener,noreferrer',
+    ));
+    expect(screen.queryByRole('heading', { name: 'Accept Terms and Conditions' })).toBeNull();
   });
 
   it.each([
@@ -292,8 +330,14 @@ describe('OrderDetailPage viewer relationship gating', () => {
     expect(screen.queryByRole('link', { name: /^Download/ })).toBeNull();
   });
 
-  it('keeps the gateway delivery link on its own route', async () => {
-    ordersApi.getOrder.mockResolvedValue(order());
+  it.each(['delivered', 'completed'])('keeps gateway delivery without contradictory unavailable copy for a %s order', async (status) => {
+    ordersApi.getOrder.mockResolvedValue({ ...order(), status });
+    ordersApi.getOrderAccess.mockResolvedValue({
+      order_id: 'order-1', listing_title: 'Order dataset', status,
+      is_delivered: true, is_revoked: false, delivered_at: '2026-08-21T10:30:00Z',
+      delivery_method: 'gateway', downloads_remaining: 3,
+      access_url: null, can_download: false, message: 'Download access is unavailable.',
+    });
     gatewayApi.getGatewayDelivery.mockResolvedValue({ delivery: {
       door_url: 'https://gateway.example.test/door',
       hold: { state: 'no_hold', until: null, disputable: false }, problem: null,
@@ -306,6 +350,8 @@ describe('OrderDetailPage viewer relationship gating', () => {
     const link = await screen.findByRole('link', { name: 'Download file' });
     expect(link.getAttribute('href')).toBe('https://gateway.example.test/file');
     expect(screen.getByRole('region', { name: 'Gateway delivery' })).toBeTruthy();
-    expect(ordersApi.getOrderAccess).not.toHaveBeenCalled();
+    await waitFor(() => expect(ordersApi.getOrderAccess).toHaveBeenCalledExactlyOnceWith('order-1'));
+    expect(screen.queryByRole('heading', { name: 'Downloads' })).toBeNull();
+    expect(screen.queryByText('Download access is unavailable.')).toBeNull();
   });
 });
