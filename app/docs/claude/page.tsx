@@ -24,7 +24,7 @@ export default function ClaudeDocsPage() {
           <p><strong>What Claude can do.</strong> Search published listings. Look at a listing&apos;s description, columns, row count, update frequency and price. Show your account details, your recent activity and your data requests.</p>
         </section>
         <section>
-          <p><strong>What Claude cannot do.</strong> Claude cannot buy, sell, pay, publish or message anyone for you in this version. It never sees dataset files, because ai.market never holds them. When you want to buy, Claude gives you the link and you finish on ai.market.</p>
+          <p><strong>What Claude cannot do.</strong> Claude cannot buy, sell, pay, publish or message anyone for you in this version. It never sees dataset files. When you want to buy, Claude gives you the link and you finish on ai.market.</p>
         </section>
         <section>
           <p><strong>Your data.</strong> We record each tool call for security, with a one-way fingerprint instead of what you asked. We do not get your Claude conversation. See the <a href="/legal/privacy#ai-assistants">privacy notice</a> for details.</p>
