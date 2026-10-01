@@ -227,6 +227,7 @@ export default async function ListingDetailPage({ params, searchParams }: Props)
               price={listing.pricing.price}
               scanFindings={listing.scan_findings ?? null}
             />
+            {/* Ownership replaces active purchase controls only; terms/hold states mount no BuyButton. */}
             {pendingSellerTerms ? null : approved && !listing.purchasable ? <p role="status" className="rounded-lg bg-gray-50 p-4 text-sm text-gray-700">
               {listing.purchase_hold_reason === 'workspace_sales_paused' ? 'The seller has paused new sales. Existing buyers can access their purchase from their orders.' : 'This listing is temporarily unavailable for new purchases. Please try again later.'}
             </p> : hasVersionRows ? (

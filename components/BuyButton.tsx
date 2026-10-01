@@ -48,8 +48,8 @@ export default function BuyButton({
   disabledReason,
 }: BuyButtonProps) {
   const termsVersion = useServedTermsVersion();
-  const { user, isAuthenticated } = useAuthStore();
-  const { isOwner, checkingOwnership } = useListingOwnership(listingId, isAuthenticated ? user?.id : undefined, sellerId, isAuthenticated);
+  const { user, isAuthenticated, hydrated, isLoading } = useAuthStore();
+  const { isOwner, checkingOwnership } = useListingOwnership(listingId, isAuthenticated ? user?.id : undefined, sellerId, isAuthenticated, !hydrated || isLoading);
   const { toast } = useToast();
   const [loading, setLoading] = useState(false);
   const [purchasedOrder, setPurchasedOrder] = useState<BuyerOrder | null>(null);
@@ -100,6 +100,9 @@ export default function BuyButton({
     return () => { cancelled = true; };
   }, [isAuthenticated, user, isOwner, checkingOwnership, listingId]);
 
+  // Hide purchase and licence controls from the first render, including auth hydration.
+  if (checkingOwnership) return null;
+
   // Unauthenticated: redirect to login
   if (!isAuthenticated) {
     if (disabledReason) {
@@ -122,9 +125,6 @@ export default function BuyButton({
       </>
     );
   }
-
-  // Hide purchase and licence acceptance controls until ownership is resolved.
-  if (checkingOwnership) return null;
 
   if (isOwner) {
     return (
