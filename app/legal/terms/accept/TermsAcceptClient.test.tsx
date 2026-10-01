@@ -89,3 +89,14 @@ it('submits buyer context without a seller capability lookup on a direct visit',
   expect(capabilities.getCapabilities).not.toHaveBeenCalled();
   await waitFor(() => expect(legal.acceptTerms).toHaveBeenCalledWith(expect.objectContaining({ context: 'buyer' })));
 });
+
+it.each(['buyer', 'seller'] as const)('accepts served 1.2 and preserves the %s redirect/context flow', async (context) => {
+  navigation.search = `context=${context}&redirect=%2Fdashboard%2Flistings`;
+  capabilities.getCapabilities.mockResolvedValue({ seller: { effective_status: 'active' } });
+  legal.getCurrentTerms.mockResolvedValue({ terms_version: '1.2' });
+  legal.acceptTerms.mockResolvedValue({ terms_version: '1.2' });
+  render(<TermsAcceptClient />);
+  await submit();
+  await waitFor(() => expect(legal.acceptTerms).toHaveBeenCalledWith(expect.objectContaining({ context, jurisdiction: 'US', authority_ack: true })));
+  await waitFor(() => expect(navigation.push).toHaveBeenCalledWith('/dashboard/listings'));
+});

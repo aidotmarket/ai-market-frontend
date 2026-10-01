@@ -4,6 +4,7 @@ import { useEffect, useMemo, useState } from 'react';
 import Link from 'next/link';
 import { AxiosError } from 'axios';
 import { acceptTerms, getCurrentTerms, type TermsAcceptanceContext, type TermsPartyContext } from '@/api/legal';
+import { TERMS_1_2_BOX_1, TERMS_1_2_BOX_3 } from './terms12Copy';
 import CountrySelect from '@/components/CountrySelect';
 import { useAuthStore } from '@/store/auth';
 
@@ -32,6 +33,7 @@ export default function TermsAcceptanceForm({ context, acceptanceContext = 'buye
   const [signerTitle, setSignerTitle] = useState(prefill?.signerTitle ?? '');
   const [businessLegalName, setBusinessLegalName] = useState(prefill?.businessLegalName ?? user?.company_name ?? '');
   const [jurisdiction, setJurisdiction] = useState(prefill?.jurisdiction ?? '');
+  const [termsVersion, setTermsVersion] = useState<string | null>(null);
   const [requiresJurisdiction, setRequiresJurisdiction] = useState(false);
   const [termsReady, setTermsReady] = useState(false);
   const [authorityAck, setAuthorityAck] = useState(false);
@@ -46,7 +48,9 @@ export default function TermsAcceptanceForm({ context, acceptanceContext = 'buye
     let cancelled = false;
     getCurrentTerms().then((terms) => {
       if (!cancelled) {
-        setRequiresJurisdiction(terms.terms_version === '1.1');
+        if (!['1.0', '1.1', '1.2'].includes(terms.terms_version)) throw new Error('Unsupported terms version');
+        setTermsVersion(terms.terms_version);
+        setRequiresJurisdiction(terms.terms_version === '1.1' || terms.terms_version === '1.2');
         setTermsReady(true);
       }
     }).catch(() => {
@@ -74,6 +78,19 @@ export default function TermsAcceptanceForm({ context, acceptanceContext = 'buye
     setSubmitting(true);
     setError('');
     try {
+      // An open 1.1 form must not silently sign the newly published 1.2 boxes.
+      const current = await getCurrentTerms();
+      if (!['1.0', '1.1', '1.2'].includes(current.terms_version)) throw new Error('Unsupported terms version');
+      if (current.terms_version !== termsVersion) {
+        setTermsVersion(current.terms_version);
+        setRequiresJurisdiction(current.terms_version === '1.1' || current.terms_version === '1.2');
+        setAckBox1(false);
+        setAckBox2(false);
+        setAckBox3(false);
+        setAuthorityAck(false);
+        setError('Terms have changed. Review the current terms and sign again.');
+        return;
+      }
       await acceptTerms({
         ...context,
         context: acceptanceContext,
@@ -127,11 +144,11 @@ export default function TermsAcceptanceForm({ context, acceptanceContext = 'buye
         </div>
       )}
 
-      <fieldset className="space-y-3">
+      <fieldset disabled={!termsReady} className="space-y-3">
         <legend className="text-sm font-semibold text-gray-900">Required acknowledgements</legend>
-        <RequiredCheckbox id="ack-box-1" checked={ackBox1} onChange={setAckBox1} label={ACK_BOX_1} />
+        <RequiredCheckbox id="ack-box-1" checked={ackBox1} onChange={setAckBox1} label={termsVersion === '1.2' ? TERMS_1_2_BOX_1 : ACK_BOX_1} />
         <RequiredCheckbox id="ack-box-2" checked={ackBox2} onChange={setAckBox2} label={ACK_BOX_2} />
-        <RequiredCheckbox id="ack-box-3" checked={ackBox3} onChange={setAckBox3} label={ACK_BOX_3} />
+        <RequiredCheckbox id="ack-box-3" checked={ackBox3} onChange={setAckBox3} label={termsVersion === '1.2' ? TERMS_1_2_BOX_3 : ACK_BOX_3} />
       </fieldset>
 
       <div className="grid gap-4 sm:grid-cols-3">

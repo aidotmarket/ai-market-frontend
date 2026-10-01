@@ -8,7 +8,7 @@ const legal = vi.hoisted(() => ({ getCurrentTerms: vi.fn(), acceptTerms: vi.fn()
 vi.mock('@/api/legal', () => legal);
 vi.mock('@/store/auth', () => ({ useAuthStore: (select: (state: { user: null }) => unknown) => select({ user: null }) }));
 
-beforeEach(() => legal.acceptTerms.mockResolvedValue({ terms_version: '1.1' }));
+beforeEach(() => { legal.acceptTerms.mockResolvedValue({ terms_version: '1.1' }); });
 afterEach(() => { cleanup(); vi.resetAllMocks(); });
 
 function fillForm() {
@@ -97,4 +97,36 @@ it.each([
   fireEvent.click(screen.getByRole('button', { name: 'Accept and sign' }));
   expect(await screen.findByText(message)).toBeTruthy();
   expect(screen.queryByText(/diagnostics/)).toBeNull();
+});
+
+it.each(['buyer', 'seller'] as const)('accepts 1.2 in %s context with approved boxes, country and authority', async (context) => {
+  legal.getCurrentTerms.mockResolvedValue({ terms_version: '1.2' });
+  legal.acceptTerms.mockResolvedValue({ terms_version: '1.2' });
+  render(<TermsAcceptanceForm context={{ scope: 'individual', party_id: 'user-1' }} acceptanceContext={context} />);
+  await screen.findByLabelText(/Country/);
+  expect(screen.getByLabelText(/controls captured proceeds in its Stripe platform balance/)).toBeTruthy();
+  expect(screen.getByLabelText(/I acknowledge the risk allocation and waivers in Section 13/)).toBeTruthy();
+  expect(screen.queryByLabelText(/give up and waive all legal recourse/)).toBeNull();
+  fillForm();
+  expect((screen.getByRole('button', { name: 'Accept and sign' }) as HTMLButtonElement).disabled).toBe(true);
+  fireEvent.change(screen.getByLabelText(/Country/), { target: { value: 'GB' } });
+  expect((screen.getByRole('button', { name: 'Accept and sign' }) as HTMLButtonElement).disabled).toBe(true);
+  fireEvent.click(screen.getByLabelText('I am authorized to bind this business'));
+  fireEvent.click(screen.getByRole('button', { name: 'Accept and sign' }));
+  await waitFor(() => expect(legal.acceptTerms).toHaveBeenCalledWith(expect.objectContaining({ context, jurisdiction: 'GB', authority_ack: true, ack_box1: true, ack_box2: true, ack_box3: true })));
+  expect(await screen.findByText('Terms accepted. You can continue using ai.market.')).toBeTruthy();
+});
+
+it('resets acknowledgements when publication changes an already open 1.1 form to 1.2', async () => {
+  legal.getCurrentTerms.mockResolvedValueOnce({ terms_version: '1.1' }).mockResolvedValue({ terms_version: '1.2' });
+  render(<TermsAcceptanceForm context={{ scope: 'individual', party_id: 'user-1' }} />);
+  await screen.findByLabelText(/Country/);
+  fillForm();
+  fireEvent.change(screen.getByLabelText(/Country/), { target: { value: 'US' } });
+  fireEvent.click(screen.getByLabelText('I am authorized to bind this business'));
+  fireEvent.click(screen.getByRole('button', { name: 'Accept and sign' }));
+  expect(await screen.findByText('Terms have changed. Review the current terms and sign again.')).toBeTruthy();
+  expect(legal.acceptTerms).not.toHaveBeenCalled();
+  expect(screen.getByLabelText(/I acknowledge the risk allocation and waivers in Section 13/)).toBeTruthy();
+  for (const id of ['ack-box-1', 'ack-box-2', 'ack-box-3', 'authority-ack']) expect((document.getElementById(id) as HTMLInputElement).checked).toBe(false);
 });

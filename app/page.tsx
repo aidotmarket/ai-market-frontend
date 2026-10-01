@@ -1,4 +1,7 @@
 import Link from 'next/link';
+import { getPublicTermsVersion } from '@/lib/publicTermsVersion';
+import VersionedTermsCopy, { TermsVersionProvider } from '@/components/legal/VersionedTermsCopy';
+import { CARD_PAYOUT } from '@/components/legal/terms12Copy';
 import type { Metadata } from 'next';
 import {
   fetchDataRequests,
@@ -261,6 +264,7 @@ const howItWorks = [
 ];
 
 export default async function LandingPage() {
+  const termsVersion = await getPublicTermsVersion();
   const [listingsData, featuredFeed, requestData]: [
     PaginatedListings | null,
     Awaited<ReturnType<typeof fetchFeaturedFeed>>,
@@ -283,7 +287,7 @@ export default async function LandingPage() {
   const showLiveDemand = buyerRequests.length >= 3;
 
   return (
-    <>
+    <TermsVersionProvider initialVersion={termsVersion}>
       <script type="application/ld+json">{JSON.stringify(LANDING_JSONLD)}</script>
       {activityItemList ? (
         <script type="application/ld+json">{JSON.stringify(activityItemList)}</script>
@@ -606,7 +610,7 @@ export default async function LandingPage() {
                 <div key={step.title}>
                   <div className="flex h-10 w-10 items-center justify-center rounded-full bg-[#3F51B5] text-white text-sm font-bold">{idx + 1}</div>
                   <h3 className="mt-4 text-lg font-bold text-[#1A1A1A]">{step.title}</h3>
-                  <p className="mt-2 text-sm leading-6 text-[#666666]">{step.description}</p>
+                  <p className="mt-2 text-sm leading-6 text-[#666666]"><VersionedTermsCopy legacy={step.description} terms12={step.title === 'Get paid.' ? CARD_PAYOUT : step.description} /></p>
                 </div>
               ))}
             </div>
@@ -660,6 +664,6 @@ export default async function LandingPage() {
           </div>
         </section>
       </div>
-    </>
+    </TermsVersionProvider>
   );
 }

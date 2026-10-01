@@ -2,6 +2,8 @@ import React from 'react';
 import { renderToStaticMarkup } from 'react-dom/server';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
+const serverTerms = vi.hoisted(() => ({ getPublicTermsVersion: vi.fn().mockResolvedValue('1.1') }));
+vi.mock('@/lib/publicTermsVersion', () => serverTerms);
 const fetchDataRequests = vi.fn();
 const fetchFeaturedFeed = vi.fn();
 const fetchPublicListings = vi.fn();
@@ -78,4 +80,15 @@ describe('homepage buyer requests', () => {
     expect(html).toContain('Tell the market what data you need');
     expect(html).not.toContain('Buyer demand, live now');
   });
+});
+
+it('server-renders the 1.2 payout claim before client hydration', async () => {
+  serverTerms.getPublicTermsVersion.mockResolvedValue('1.2');
+  fetchPublicListings.mockResolvedValue({ items: [] });
+  fetchFeaturedFeed.mockResolvedValue(null);
+  fetchDataRequests.mockResolvedValue({ items: [] });
+  const { default: LandingPage } = await import('./page');
+  const html = renderToStaticMarkup(await LandingPage());
+  expect(html).toContain('48-hour post-confirmation hold');
+  expect(html).not.toContain('Buyers find your listing wherever they search, on ai.market or through their AI assistant. Stripe handles the payout.');
 });
