@@ -14,6 +14,7 @@ import CountrySelect from '@/components/CountrySelect';
 import type { BuyerOrder, LicenseAcceptanceFields, ListingLicenseDetails } from '@/types';
 import { AxiosError } from 'axios';
 import ListingLicenseDisclosure from '@/components/ListingLicenseDisclosure';
+import { useListingOwnership } from '@/hooks/useListingOwnership';
 
 interface BuyButtonProps {
   listingId: string;
@@ -48,6 +49,7 @@ export default function BuyButton({
 }: BuyButtonProps) {
   const termsVersion = useServedTermsVersion();
   const { user, isAuthenticated } = useAuthStore();
+  const { isOwner, checkingOwnership } = useListingOwnership(listingId, isAuthenticated ? user?.id : undefined, sellerId);
   const { toast } = useToast();
   const [loading, setLoading] = useState(false);
   const [purchasedOrder, setPurchasedOrder] = useState<BuyerOrder | null>(null);
@@ -75,7 +77,7 @@ export default function BuyButton({
 
   // Check if user already purchased this listing
   useEffect(() => {
-    if (!isAuthenticated || !user || (sellerId && user.id === sellerId)) return;
+    if (!isAuthenticated || !user || isOwner || checkingOwnership) return;
 
     let cancelled = false;
     setCheckingPurchase(true);
@@ -96,7 +98,7 @@ export default function BuyButton({
       });
 
     return () => { cancelled = true; };
-  }, [isAuthenticated, user, sellerId, listingId]);
+  }, [isAuthenticated, user, isOwner, checkingOwnership, listingId]);
 
   // Unauthenticated: redirect to login
   if (!isAuthenticated) {
@@ -121,9 +123,10 @@ export default function BuyButton({
     );
   }
 
-  // Authenticated/private callers may provide seller identity. Public listing
-  // responses intentionally do not expose it.
-  if (sellerId && user?.id === sellerId) {
+  // Hide purchase and licence acceptance controls until ownership is resolved.
+  if (checkingOwnership) return null;
+
+  if (isOwner) {
     return (
       <div className="rounded-lg bg-[#E8EAF6] border border-[#C5CAE9] px-4 py-3">
         <div className="flex items-center gap-2">
