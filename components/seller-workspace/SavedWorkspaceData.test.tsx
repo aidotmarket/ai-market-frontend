@@ -47,7 +47,7 @@ it('merges a queued licence save over the latest listing write',async()=>{
  function Capture(){store=useSellerListingDraft();return null;}
  render(<SellerListingDraftProvider enabled sampleCapability><Capture/></SellerListingDraftProvider>);
  await waitFor(()=>expect(store.loaded).toBe(true));
- let first!:Promise<void>;let second!:Promise<void>;
+ let first!:Promise<number>;let second!:Promise<void>;
  await act(async()=>{first=store.saveListingFields({...draft.content,title:'Updated title',description_source_version:null});second=store.saveLicenseSelection(selection);await waitFor(()=>expect(api.saveListingDraft).toHaveBeenCalledOnce());});
  await act(async()=>{finishFirst({version:5,content:{...draft.content,title:'Updated title',description_source_version:null},updated_at:draft.updated_at});await Promise.all([first,second]);});
  expect(api.saveListingDraft.mock.calls[1][0]).toEqual({...draft.content,title:'Updated title',description_source_version:null,license_selection:selection});

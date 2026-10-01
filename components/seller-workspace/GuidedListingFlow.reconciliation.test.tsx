@@ -1,6 +1,10 @@
 // @vitest-environment jsdom
 import {cleanup,fireEvent,render,screen,waitFor} from '@testing-library/react';
 import {afterEach,beforeEach,it,expect,vi} from 'vitest';
+import {useState} from 'react';
+import {AxiosError} from 'axios';
+import type {WorkspaceView} from './WorkspaceOverview';
+import SavedListingEditor from './SavedListingEditor';
 import SellerReview from './SellerReview';
 import {GuidedListingFlow,useListingFlow} from './GuidedListingFlow';
 import {SellerListingDraftProvider,resetSellerListingDraftOwnerForTests} from './SellerListingDraftStore';
@@ -49,4 +53,60 @@ it('keeps approval blocked with a recovery reason when authoritative reload fail
  start();await readyApproval();expect(screen.getByTestId('completion').textContent).toBe('done');
  mocks.review.mockResolvedValue({approval_available:true,review_hash:'r2',render_hash:'r2',rendered_html:'<p>Saved listing</p>',confirmation_statements:{},draft_version:2,source_version:2,missing_fields:[],approval:null});mocks.get.mockRejectedValue(new Error('offline'));
  fireEvent.click(screen.getByRole('button',{name:'Refresh saved review'}));await waitFor(()=>expect(screen.getAllByText(/Your saved review could not be reconciled/).length).toBeGreaterThan(0));expect(screen.getByTestId('completion').textContent).not.toBe('done');expect((screen.getByRole('button',{name:'Approve this review'}) as HTMLButtonElement).disabled).toBe(true);expect(mocks.save).not.toHaveBeenCalled();
+});
+
+function MountedEditorFlow(){
+ const [view,setView]=useState<WorkspaceView>('listing');
+ return <SellerListingDraftProvider enabled sampleCapability={false}><GuidedListingFlow capabilities={guidedCapabilities} connections={[guidedConnection]} view={view} navigate={setView}>
+  <div hidden={view!=='listing'}><SavedListingEditor active={view==='listing'}/></div>
+  <div hidden={view!=='review'}><SellerReview active={view==='review'} enabled/></div>
+ </GuidedListingFlow></SellerListingDraftProvider>;
+}
+async function refreshExternalTitle(){
+ mocks.draft.mockResolvedValue({...draft,version:2,content:{...draft.content,title:'New external title'}});
+ mocks.review.mockResolvedValue({approval_available:true,review_hash:'r2',render_hash:'r2',rendered_html:'<p>New external title</p>',confirmation_statements:{},draft_version:2,source_version:1,missing_fields:[],approval:null});
+ fireEvent.click(screen.getByRole('button',{name:/5\. Review/}));
+ fireEvent.click(await screen.findByRole('button',{name:'Refresh saved review'}));
+ await waitFor(()=>expect(mocks.draft).toHaveBeenCalledTimes(2));
+ await waitFor(()=>expect(screen.queryByText(/The saved review changed elsewhere/)).toBeNull());
+ fireEvent.click(screen.getByRole('button',{name:/4\. Describe and price/}));
+}
+it('reconciles a pristine mounted editor and its baseline before saving a different field',async()=>{
+ mocks.save.mockImplementation(async content=>({version:3,updated_at:'now',content}));
+ render(<MountedEditorFlow/>);
+ await screen.findByDisplayValue('Sales');
+ expect(screen.queryByRole('button',{name:'Save private draft'})).toBeNull();
+ await refreshExternalTitle();
+ await screen.findByDisplayValue('New external title');
+ expect(screen.queryByRole('button',{name:'Save private draft'})).toBeNull();
+ fireEvent.change(screen.getByLabelText('Your price (USD)'),{target:{value:'30'}});
+ fireEvent.click(screen.getByRole('button',{name:'Save private draft'}));
+ await waitFor(()=>expect(mocks.save).toHaveBeenCalledOnce());
+ expect(mocks.save).toHaveBeenCalledWith(expect.objectContaining({title:'New external title',price:'30'}),2,expect.any(String));
+ await waitFor(()=>expect(screen.queryByRole('button',{name:'Save private draft'})).toBeNull());
+ // A successful save advances the editor baseline for its next edit as well.
+ fireEvent.change(screen.getByLabelText('Your price (USD)'),{target:{value:'35'}});
+ fireEvent.click(screen.getByRole('button',{name:'Save private draft'}));
+ await waitFor(()=>expect(mocks.save).toHaveBeenCalledTimes(2));
+ expect(mocks.save).toHaveBeenLastCalledWith(expect.objectContaining({title:'New external title',price:'35'}),3,expect.any(String));
+});
+it('keeps dirty mounted edits on their original baseline and conflicts instead of overwriting an external title',async()=>{
+ let saved={...draft,version:2,content:{...draft.content,title:'New external title'}};
+ mocks.save.mockImplementation(async(content,version)=>{
+  if(version!==saved.version)throw new AxiosError('Conflict',undefined,undefined,undefined,{status:409,data:{},headers:{},statusText:'Conflict',config:{} as never});
+  saved={...saved,version:version+1,content};return saved;
+ });
+ render(<MountedEditorFlow/>);
+ await screen.findByDisplayValue('Sales');
+ fireEvent.change(screen.getByLabelText('Your price (USD)'),{target:{value:'30'}});
+ await refreshExternalTitle();
+ expect((screen.getByLabelText('Title') as HTMLTextAreaElement).value).toBe('Sales');
+ expect((screen.getByLabelText('Your price (USD)') as HTMLInputElement).value).toBe('30');
+ fireEvent.change(screen.getByLabelText('Tags'),{target:{value:'edited tags'}});
+ fireEvent.click(screen.getByRole('button',{name:'Save private draft'}));
+ await screen.findByText(/This draft was saved elsewhere\. Your edits are still here\./);
+ expect(mocks.save).toHaveBeenCalledWith(expect.objectContaining({title:'Sales',price:'30',tags:'edited tags'}),1,expect.any(String));
+ expect(saved.content.title).toBe('New external title');expect(saved.version).toBe(2);
+ expect((screen.getByLabelText('Your price (USD)') as HTMLInputElement).value).toBe('30');
+ expect(screen.getByRole('button',{name:'Save private draft'})).toBeTruthy();
 });

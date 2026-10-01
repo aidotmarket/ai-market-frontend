@@ -131,3 +131,36 @@ R1 logs: `/tmp/s1787-r1-lint.log`, `/tmp/s1787-r1-tests.json`, `/tmp/s1787-r1-te
 - `components/seller-workspace/listingSteps.test.ts`
 - `components/seller-workspace/listingSteps.ts`
 - `docs/reports/s1787-guided-flow-chunk-b.md`
+
+## Gate 3 R2 review fold (2026-10-01)
+
+Base: `ef776a9caf45b679d15cdaa080a3a2f5431f1eb6`. Worked and tested in the assigned checkout `/var/tmp/koskadeux/minimal-bridge-worktrees/1c7c91b3bbe7-3a7bd1`; publication is one fold commit on `build/guided-flow-chunk-b-s1787`.
+
+The mounted editor now owns the version its editable fields were based on. A refreshed saved draft updates pristine fields and their baseline together, without exposing a save button for unchanged content. Dirty fields and their baseline remain intact across Review reconciliation. Listing saves pass that baseline through the shared queue as `expected_version`, rather than silently adopting the owner's latest version. A successful response advances the editor baseline even when the seller has made additional edits during saving. Existing server conflict messages and the fallback explanation/reload instructions remain intact; no automatic overwrite or rebase occurs.
+
+Two new regression tests mount the real draft provider, GuidedListingFlow, SavedListingEditor and Review together, preserve the editor across navigation, simulate another tab changing the saved title and refresh Review. The pristine case adopts the external title, saves a price against v2, and checks a subsequent save uses v3. The dirty case retains local edits, submits against v1, receives a simulated backend 409, keeps the external v2 title unchanged and shows recovery instructions. Existing R1 reconciliation and unavailable-draft tests remain in the full suite. The queued-save test's promise type now reflects the returned saved version; its existing merge assertions are unchanged.
+
+No backend, money, auth or licence text changed.
+
+### R2 verification and provenance
+
+Exact tested code commit: `c985ba2d6e3670fe9208f82f05b6ef7ea9e59f87`. Its parent is the base above. The final publication amends only this report into that commit to retain a single fold commit. All executable code, tests and configuration are identical to the tested commit; the tested `components` Git tree is `e2eac2bf8c0eba14082b714004f722ab74184e19`. Verify equivalence with `rtk git rev-parse HEAD:components`.
+
+- Typecheck: exit 0.
+- Lint: exit 0, zero errors, six existing image warnings outside changed files.
+- Full Vitest: 1,465/1,465 tests passed in 145 files (260 suites), zero skipped. Two new integrated tests over the R1 base.
+- Focused provider/editor/reconciliation check during implementation: 35/35 tests passed in four files.
+- Diff whitespace check: passed.
+
+Commands run (all shell entry points and explicit subprocess commands use RTK):
+
+```sh
+rtk npm ci
+rtk proxy env NODE_OPTIONS=--no-experimental-webstorage rtk npm test -- components/seller-workspace/GuidedListingFlow.reconciliation.test.tsx components/seller-workspace/SavedListingEditor.test.tsx components/seller-workspace/SellerListingEditor.test.tsx components/seller-workspace/SellerListingEditor.guided.test.tsx
+rtk proxy sh -c 'rtk npm run typecheck > /tmp/s1787-r2-typecheck.log 2>&1'
+rtk proxy sh -c 'rtk npm run lint > /tmp/s1787-r2-lint.log 2>&1'
+rtk proxy sh -c 'rtk proxy env NODE_OPTIONS=--no-experimental-webstorage rtk npm test -- --reporter=json --outputFile=/tmp/s1787-r2-tests.json > /tmp/s1787-r2-tests.log 2>&1'
+rtk git diff --check ef776a9caf45b679d15cdaa080a3a2f5431f1eb6
+```
+
+An initial full run caught a change to existing server conflict-message precedence (1,464 passed / 1 failed). That change was reverted; the successful full run above tests the corrected commit. No existing test was skipped or weakened. Local API fixtures exercise the optimistic-version conflict contract; this fold is not a production deployment.

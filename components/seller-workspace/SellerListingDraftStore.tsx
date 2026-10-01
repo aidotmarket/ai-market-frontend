@@ -9,7 +9,7 @@ export class DraftNotLoadedError extends Error { constructor(){super('Load your 
 type DraftStore={draft:SavedListingDraft|null;available:boolean;loaded:boolean;error:boolean;sampleCapability:boolean;sampleIndices:number[];
   selectionSavePending:boolean;selectionSaveFailed:boolean;requestLoad:()=>void;reload:(signal?:AbortSignal,onLoaded?:()=>void)=>Promise<SavedListingDraft|null>;retry:()=>void;
   beginSelectionSave:()=>void;finishSelectionSave:(succeeded:boolean)=>void;setVisibleSampleIndices:(indices:number[]|null)=>void;
-  saveListingFields:(fields:ListingDraftContent)=>Promise<void>;saveLicenseSelection:(selection:LicenseSelection)=>Promise<void>;saveSamples:(indices:number[])=>Promise<void>};
+  saveListingFields:(fields:ListingDraftContent,baselineVersion?:number)=>Promise<number>;saveLicenseSelection:(selection:LicenseSelection)=>Promise<void>;saveSamples:(indices:number[])=>Promise<void>};
 const DraftContext=createContext<DraftStore|null>(null);
 
 type OwnerSnapshot={draft:SavedListingDraft|null;selectionSaveCount:number;selectionSaveFailed:boolean};
@@ -22,13 +22,14 @@ const snapshot=():OwnerSnapshot=>({draft:owner.draft,selectionSaveCount:owner.se
 const publish=()=>{const value=snapshot();owner.listeners.forEach(listener=>listener(value));};
 const beginOwnerSelectionSave=()=>{if(owner.selectionSaveCount===0)owner.selectionSaveFailed=false;owner.selectionSaveCount+=1;publish();};
 const finishOwnerSelectionSave=(succeeded:boolean)=>{owner.selectionSaveCount=Math.max(0,owner.selectionSaveCount-1);if(!succeeded)owner.selectionSaveFailed=true;else if(owner.selectionSaveCount===0)owner.selectionSaveFailed=false;publish();};
-const persist=(build:(base:ListingDraftContent)=>ListingDraftContent)=>{
+const persist=(build:(base:ListingDraftContent)=>ListingDraftContent,baselineVersion?:number)=>{
   const operation=owner.queue.catch(()=>undefined).then(async()=>{
     if(!owner.loaded)throw new DraftNotLoadedError();
     const content=build(owner.draft?.content??EMPTY_DRAFT);
     const serialized=JSON.stringify(content);
-    if(!owner.pending||owner.pending.serialized!==serialized||owner.pending.version!==owner.version)
-      owner.pending={serialized,version:owner.version,id:crypto.randomUUID()};
+    const version=baselineVersion??owner.version;
+    if(!owner.pending||owner.pending.serialized!==serialized||owner.pending.version!==version)
+      owner.pending={serialized,version,id:crypto.randomUUID()};
     const result=await saveListingDraft(content,owner.pending.version,owner.pending.id);
     owner.pending=null;owner.draft=result;owner.version=result.version;publish();
     return result;
@@ -82,10 +83,10 @@ export function SellerListingDraftProvider({enabled,sampleCapability,children}:{
   const value=useMemo<DraftStore>(()=>({draft,available:enabled,loaded,error,sampleCapability,sampleIndices,
     selectionSavePending:selectionSaveCount>0||selectionMismatch,selectionSaveFailed,reload,requestLoad:()=>setRequested(true),retry:()=>{setRequested(true);setRetryKey(value=>value+1);},
     beginSelectionSave,finishSelectionSave,setVisibleSampleIndices,
-    saveListingFields:async(fields)=>{await persist(base=>({
+    saveListingFields:async(fields,baselineVersion)=>{const result=await persist(base=>({
       ...base,brief:fields.brief,title:fields.title,description:fields.description,category:fields.category,
       tags:fields.tags,price:fields.price,license:fields.license,description_source_version:fields.description_source_version??null,
-    }));},
+    }),baselineVersion);return result.version;},
     saveLicenseSelection:async(selection)=>{await persist(base=>({...base,license_selection:selection}));},
     saveSamples:async(indices)=>{beginSelectionSave();try{await persist(base=>sampleCapability
       ?{...base,sample_decision:indices.length?'member_files':'none',sample_object_indices:[...indices]}

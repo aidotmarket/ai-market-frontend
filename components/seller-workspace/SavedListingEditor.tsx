@@ -10,5 +10,5 @@ export default function SavedListingEditor({ active, assistant }: { active: bool
   if (!loaded) return <div className="rounded-xl border border-gray-200 bg-white p-6">
     {error ? <><p role="alert">Your saved draft could not be loaded. Try again before editing.</p><button type="button" className="mt-3 text-indigo-700 underline" onClick={retry}>Try loading draft again</button></> : <p role="status">Loading your saved draft…</p>}
   </div>;
-  return <SellerListingEditor active={active} assistant={assistant} initialContent={draft?.content} onSave={saveListingFields} />;
+  return <SellerListingEditor active={active} assistant={assistant} initialContent={draft?.content} savedVersion={draft?.version??0} onSave={saveListingFields} />;
 }

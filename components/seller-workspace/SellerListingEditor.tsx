@@ -23,7 +23,7 @@ const limits: Record<DraftField, number> = { title: 255, description: 10000, cat
 const fieldClass = 'mt-2 block w-full rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm text-gray-900 focus:border-[#3F51B5] focus:outline-none focus:ring-1 focus:ring-[#3F51B5]';
 const buttonClass = 'rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50 disabled:opacity-50';
 
-export default function SellerListingEditor({ assistant, active = true, initialContent, onSave, sourceVersion: providedSourceVersion, categories: providedCategories, licensesEnabled: providedLicensesEnabled = false, onNext }: { sourceVersion?: number | null; categories?: SellerCategory[]; licensesEnabled?: boolean; onNext?:()=>void; assistant?: ListingAssistant; active?: boolean; initialContent?: ListingDraftContent; onSave?: (content: ListingDraftContent) => Promise<void> }) {
+export default function SellerListingEditor({ assistant, active = true, initialContent, savedVersion, onSave, sourceVersion: providedSourceVersion, categories: providedCategories, licensesEnabled: providedLicensesEnabled = false, onNext }: { sourceVersion?: number | null; categories?: SellerCategory[]; licensesEnabled?: boolean; onNext?:()=>void; assistant?: ListingAssistant; active?: boolean; initialContent?: ListingDraftContent; savedVersion?: number; onSave?: (content: ListingDraftContent, baselineVersion?: number) => Promise<number | void> }) {
   const flow=useListingFlow();
   const sourceVersion=flow?flow.source?.version??null:providedSourceVersion;
   const currentRevision=useRef(flow?.fileRevision);currentRevision.current=flow?.fileRevision;
@@ -49,6 +49,7 @@ export default function SellerListingEditor({ assistant, active = true, initialC
   const [previewOpen, setPreviewOpen] = useState(false);
   const snapshot = JSON.stringify({ brief, ...draft, price, license, description_source_version:descriptionSourceVersion });
   const [savedSnapshot, setSavedSnapshot] = useState(snapshot);
+  const [baselineVersion,setBaselineVersion]=useState(savedVersion);
   const [saving, setSaving] = useState(false);
   const savingRef = useRef(false);
   const [saveError, setSaveError] = useState<string | null>(null);
@@ -58,8 +59,8 @@ export default function SellerListingEditor({ assistant, active = true, initialC
     savingRef.current = true; setSaving(true); setSaveError(null);
     const submitted = snapshot;
     try {
-      await onSave(JSON.parse(submitted));
-      if (mounted.current) setSavedSnapshot(submitted);
+      const version=await onSave(JSON.parse(submitted),baselineVersion);
+      if (mounted.current) {setSavedSnapshot(submitted);if(typeof version==='number')setBaselineVersion(version);}
       return true;
     } catch (error) {
       const detail=axios.isAxiosError(error)?error.response?.data?.detail:null;
@@ -68,6 +69,18 @@ export default function SellerListingEditor({ assistant, active = true, initialC
         : 'Saving could not be confirmed. Your edits are still here. Try saving again.');
     } finally { savingRef.current = false; if (mounted.current) setSaving(false); }
   };
+  // Reconcile content and version together only while the editor is pristine.
+  // Dirty fields retain the version they were based on, including across Review refreshes.
+  useEffect(()=>{
+    if(savedVersion===undefined||savedVersion===baselineVersion||snapshot!==savedSnapshot||saving)return;
+    const content=initialContent;
+    const nextDraft=content?{title:content.title,description:content.description,category:content.category,tags:content.tags}:emptyDraft;
+    const next={brief:content?.brief??'',...nextDraft,price:content?.price??'',license:content?.license??'',description_source_version:content?.description_source_version??null};
+    setDraft(nextDraft);setBrief(next.brief);setPrice(next.price);setLicense(next.license);setDescriptionSourceVersion(next.description_source_version);
+    setSavedSnapshot(JSON.stringify(next));setBaselineVersion(savedVersion);setSaveError(null);
+    setProposals({});setReviewed([]);setMessages([]);completedHistory.current=[];setRequested(false);setProposalSourceVersion(null);
+    controller.current?.abort();requesting.current=false;setIsStreaming(false);
+  },[initialContent,savedVersion,baselineVersion,snapshot,savedSnapshot,saving]);
   const flowRef=useRef(flow);flowRef.current=flow;
   useEffect(()=>{flowRef.current?.setListingDirty(snapshot!==savedSnapshot);},[snapshot,savedSnapshot]);
   const requesting = useRef(false);
