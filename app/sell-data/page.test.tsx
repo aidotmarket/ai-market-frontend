@@ -3,6 +3,8 @@
 import { cleanup, render, screen, within } from '@testing-library/react';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
+const serverTerms = vi.hoisted(() => ({ getPublicTermsVersion: vi.fn().mockResolvedValue('1.1') }));
+vi.mock('@/lib/publicTermsVersion', () => serverTerms);
 const mocks = vi.hoisted(() => ({ auth: { isAuthenticated: false } }));
 vi.mock('@/store/auth', () => ({ useAuthStore: () => mocks.auth }));
 
@@ -11,9 +13,9 @@ import SellDataPage, { metadata } from './page';
 afterEach(cleanup);
 
 describe('SellDataPage', () => {
-  it.each([false, true])('offers both hosting choices when authenticated=%s', (isAuthenticated) => {
+  it.each([false, true])('offers both hosting choices when authenticated=%s', async (isAuthenticated) => {
     mocks.auth.isAuthenticated = isAuthenticated;
-    const { container } = render(<SellDataPage />);
+    const { container } = render(await SellDataPage());
     const section = screen.getByRole('region', { name: 'Where is your data?' });
     const cards = within(section).getAllByRole('article');
 
@@ -46,4 +48,13 @@ describe('SellDataPage', () => {
     expect(metadata.description).toContain('AWS S3 or Cloudflare R2');
     expect(metadata.description).toContain('AIM Data gateway');
   });
+});
+
+it('server-renders the approved 1.2 payout text without the old payout claim', async () => {
+  serverTerms.getPublicTermsVersion.mockResolvedValue('1.2');
+  render(await SellDataPage());
+  expect(screen.getByText('When a buyer purchases, the payment flows through ai.market. You keep the price less our 5% commission and the card fee, paid through Stripe 48 hours after the buyer confirms delivery.')).toBeTruthy();
+  expect(screen.getByText("Sellers list free and pay nothing until a buyer pays. You're paid through Stripe once the buyer confirms delivery.")).toBeTruthy();
+  expect(screen.queryByText(/90.day/)).toBeNull();
+  expect(screen.queryByText('Sellers list free and pay nothing until a buyer pays. Stripe handles the payout.')).toBeNull();
 });

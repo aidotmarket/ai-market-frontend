@@ -9,6 +9,8 @@ import { validateListingRedirect, validateRedirect } from '@/lib/redirect';
 import { connectorRequestPath, initiateConnectorContinuation, readConnectorContinuation } from '@/lib/aim-data-continuation';
 import { AxiosError } from 'axios';
 import OAuthButtons from '@/components/OAuthButtons';
+import VersionedTermsCopy from '@/components/legal/VersionedTermsCopy';
+import { CARD_REGISTER_CHECKOUT } from '@/components/legal/terms12Copy';
 
 export default function RegisterForm() {
   const searchParams = useSearchParams();
@@ -86,7 +88,7 @@ export default function RegisterForm() {
         {isListingRedirect && (
           <div className="rounded-lg bg-[#E8EAF6] border border-[#C5CAE9] px-4 py-3 text-sm text-[#3F51B5] mb-4">
             <p>
-              Creating an account or signing in does not charge you. After you sign in, you will return to this listing. Checkout shows the final total, including payment-provider costs and applicable tax, before you choose whether to confirm.
+              Creating an account or signing in does not charge you. After you sign in, you will return to this listing. <VersionedTermsCopy legacy="Checkout shows the final total, including payment-provider costs and applicable tax, before you choose whether to confirm." terms12={CARD_REGISTER_CHECKOUT} />
             </p>
             <p className="mt-2 flex flex-wrap gap-x-3 gap-y-1">
               <Link href={listingRedirect} className="underline font-medium">Back to listing</Link>

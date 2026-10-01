@@ -61,3 +61,28 @@ it('refuses a mismatched 1.1 document and does not treat other failures as flag-
   vi.stubGlobal('fetch', vi.fn().mockResolvedValue({ status: 503, ok: false }));
   await expect(TermsAndConditionsPage()).rejects.toThrow('Current terms are unavailable');
 });
+
+const backendDocument12 = readFileSync('app/legal/terms/terms_v1_2.test.md', 'utf8')
+  .replace('{{TERMS_1_2_EFFECTIVE_AT}}', effectiveAt);
+
+it('renders the hash-verified 1.2 document without old fee or hold wording', async () => {
+  process.env.API_URL = 'https://api.example';
+  vi.stubGlobal('fetch', vi.fn()
+    .mockResolvedValueOnce({ ok: true, json: async () => ({ terms_version: '1.2', terms_hash_sha256: hash(backendDocument12), effective_at: effectiveAt, text_url: '/api/v1/legal/terms/document' }) })
+    .mockResolvedValueOnce({ ok: true, text: async () => backendDocument12 }));
+  const html = renderToStaticMarkup(await TermsAndConditionsPage());
+  expect(html).toContain('Version 1.2');
+  expect(html).toContain('48-hour post-confirmation hold');
+  expect(html).toContain('seller pays the actual Stripe card processing fee');
+  expect(html).not.toContain('The buyer pays the transaction costs.');
+  expect(html).not.toContain('Card money is held until the refund window closes');
+});
+
+it.each(['tampered', 'old document', 'old heading'])('refuses 1.2 with %s and never falls back to static text', async (scenario) => {
+  process.env.API_URL = 'https://api.example';
+  const text = scenario === 'old document' ? backendDocument : scenario === 'old heading' ? backendDocument12.replace('Version 1.2', 'Version 1.1') : backendDocument12 + 'changed';
+  vi.stubGlobal('fetch', vi.fn()
+    .mockResolvedValueOnce({ ok: true, json: async () => ({ terms_version: '1.2', terms_hash_sha256: scenario === 'tampered' ? hash(backendDocument12) : hash(text), effective_at: effectiveAt, text_url: '/api/v1/legal/terms/document' }) })
+    .mockResolvedValueOnce({ ok: true, text: async () => text }));
+  await expect(TermsAndConditionsPage()).rejects.toThrow(scenario === 'tampered' ? 'hash mismatch' : 'Invalid current terms document');
+});

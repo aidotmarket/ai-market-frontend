@@ -8,6 +8,8 @@ import { createCheckout } from '@/api/checkout';
 import { getMyOrders } from '@/api/orders';
 import { formatPrice } from '@/lib/format';
 import { useTermsGate } from '@/components/legal/TermsGate';
+import { useServedTermsVersion } from '@/components/legal/VersionedTermsCopy';
+import { CARD_BUYER_TOTAL } from '@/components/legal/terms12Copy';
 import CountrySelect from '@/components/CountrySelect';
 import type { BuyerOrder, LicenseAcceptanceFields, ListingLicenseDetails } from '@/types';
 import { AxiosError } from 'axios';
@@ -44,6 +46,7 @@ export default function BuyButton({
   fulfillmentType,
   disabledReason,
 }: BuyButtonProps) {
+  const termsVersion = useServedTermsVersion();
   const { user, isAuthenticated } = useAuthStore();
   const { toast } = useToast();
   const [loading, setLoading] = useState(false);
@@ -210,6 +213,7 @@ export default function BuyButton({
     return (
       <div className="space-y-5">
         <TermsGatePrompt />
+        {termsVersion === '1.2' && <p className="text-sm text-gray-600">{CARD_BUYER_TOTAL}</p>}
         <ListingLicenseDisclosure license={licenseDetails} compact onVerificationChange={handleVerificationChange} onReadChange={handleRead} />
         <div className="grid gap-4 sm:grid-cols-2">
           <label className="text-sm font-medium text-gray-900">Typed full name
@@ -259,6 +263,7 @@ export default function BuyButton({
   return (
     <div>
       <TermsGatePrompt />
+      {termsVersion === '1.2' && <p className="text-sm text-gray-600">{CARD_BUYER_TOTAL}</p>}
       <button
         onClick={handleBuy}
         disabled={loading || checkingPurchase || checkingTerms || !!disabledReason}

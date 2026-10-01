@@ -15,6 +15,9 @@ const toastApi = vi.hoisted(() => ({
   toast: vi.fn(),
 }));
 
+const legal = vi.hoisted(() => ({ getCurrentTerms: vi.fn() }));
+vi.mock('@/api/legal', () => legal);
+
 const navigation = vi.hoisted(() => ({
   search: '',
 }));
@@ -53,6 +56,7 @@ function submitRegistration(email: string = 'buyer@example.com') {
 describe('RegisterForm', () => {
   beforeEach(() => {
     navigation.search = '';
+    legal.getCurrentTerms.mockResolvedValue({ terms_version: '1.1' });
     authStore.register.mockResolvedValue(undefined);
     toastApi.toast.mockClear();
   });
@@ -150,6 +154,14 @@ describe('RegisterForm', () => {
 
     expect(await screen.findByRole('link', { name: 'sign in' })).not.toBeNull();
     expect(screen.getByRole('link', { name: 'sign in' }).getAttribute('href')).toBe(loginHref);
+  });
+
+  it('renders the approved 1.2 checkout disclosure without buyer provider-cost claims', async () => {
+    navigation.search = new URLSearchParams({ redirect: '/listings/dataset' }).toString();
+    legal.getCurrentTerms.mockResolvedValue({ terms_version: '1.2' });
+    const { container } = render(<RegisterForm />);
+    expect(await screen.findByText(/Checkout shows the final total, the listing price plus any applicable tax, before you choose whether to confirm\./)).not.toBeNull();
+    expect(container.textContent).not.toMatch(/payment-provider|provider costs|transaction costs/i);
   });
 
   it.each([

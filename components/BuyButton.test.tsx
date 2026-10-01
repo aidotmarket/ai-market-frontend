@@ -11,6 +11,7 @@ import { useAuthStore } from '@/store/auth';
 import { ToastProvider } from './Toast';
 import { AxiosError } from 'axios';
 import { api } from '@/api/client';
+import { createCheckout } from '@/api/checkout';
 import { hashLicenseComponentBytes } from './ListingLicenseDisclosure';
 import {sha256} from '@/lib/customLicenseVerification';
 import { readFileSync } from 'node:fs';
@@ -66,6 +67,18 @@ describe('BuyButton licence acceptance', () => {
     useAuthStore.setState({ isAuthenticated: false, user: null });
   });
 
+  it.each(['1.1', '1.2'])('keeps the same displayed buyer price and checkout request with served %s', async (version) => {
+    legalApi.getCurrentTerms.mockResolvedValue({ terms_version: version });
+    legalApi.getTermsAcceptanceStatus.mockResolvedValue({ accepted: true, current_version: version, accepted_version: version });
+    vi.mocked(createCheckout).mockResolvedValue({ checkout_url: 'https://invalid.example/' } as never);
+    render(<ToastProvider><BuyButton listingId="listing-1" slug="listing" price={20} pricingType="one_time" /></ToastProvider>);
+    await waitFor(() => expect((screen.getByRole('button', { name: 'Buy Now - $20.00' }) as HTMLButtonElement).disabled).toBe(false));
+    if (version === '1.2') expect(await screen.findByText('The price shown is what you pay. No added card fee.')).toBeTruthy();
+    else expect(screen.queryByText('The price shown is what you pay. No added card fee.')).toBeNull();
+    fireEvent.click(screen.getByRole('button', { name: 'Buy Now - $20.00' }));
+    await waitFor(() => expect(createCheckout).toHaveBeenCalledWith('listing-1', undefined, undefined));
+  });
+
   it('starts authority unchecked and shows the exact acceptance fields under flag-on data', async () => {
     render(<ToastProvider><BuyButton listingId="listing-1" slug="listing" price={20} pricingType="one_time" licenseDetails={structuredLicense} /></ToastProvider>);
 
@@ -106,11 +119,12 @@ describe('BuyButton licence acceptance', () => {
     expect((screen.getByRole('button', { name: 'Accept and continue to payment' }) as HTMLButtonElement).disabled).toBe(false);
   });
 
-  it('carries the listing signer title and jurisdiction into the terms modal', async () => {
+  it.each(['1.1', '1.2'])('carries the listing signer title and jurisdiction into the %s re-acceptance modal', async (version) => {
     const priorGate = process.env.NEXT_PUBLIC_TERMS_GATE_ENFORCE;
     process.env.NEXT_PUBLIC_TERMS_GATE_ENFORCE = 'true';
-    legalApi.getTermsAcceptanceStatus.mockResolvedValue({ accepted: false });
-    legalApi.getCurrentTerms.mockResolvedValue({ terms_version: '1.1' });
+    legalApi.getTermsAcceptanceStatus.mockResolvedValue({ accepted: false, current_version: version, accepted_version: '1.1' });
+    legalApi.getCurrentTerms.mockResolvedValue({ terms_version: version });
+    legalApi.acceptTerms.mockResolvedValue({ terms_version: version });
     vi.stubGlobal('fetch', vi.fn(async (input: RequestInfo | URL) => String(input).includes('marketplace-listing')
       ? documentResponse('Exact covenant text\n')
       : documentResponse('Exact licence text\n')));
@@ -123,6 +137,11 @@ describe('BuyButton licence acceptance', () => {
       fireEvent.click(screen.getByRole('button', { name: 'Accept and continue to payment' }));
 
       await screen.findByRole('heading', { name: 'Accept Terms and Conditions' });
+      if (version === '1.2') {
+        expect(await screen.findByText('The price shown is what you pay. No added card fee.')).toBeTruthy();
+        expect(screen.getByLabelText(/I acknowledge the risk allocation and waivers in Section 13/)).toBeTruthy();
+      }
+      expect(screen.getByRole('button', { name: 'Accept and continue to payment' })).toBeTruthy();
       expect((screen.getByLabelText(/Full legal name/) as HTMLInputElement).value).toBe('Ada Buyer');
       expect((screen.getByLabelText(/^Title/) as HTMLInputElement).value).toBe('Director');
       expect((screen.getAllByLabelText(/Business legal name/)[1] as HTMLInputElement).value).toBe('Buyer Ltd');

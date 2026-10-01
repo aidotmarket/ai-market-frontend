@@ -13,6 +13,8 @@ export interface TermsAcceptanceStatus {
   accepted: boolean;
   accepted_at?: string | null;
   terms_version?: string | null;
+  current_version?: string | null;
+  accepted_version?: string | null;
 }
 
 export interface TermsAcceptRequest extends TermsPartyContext {
@@ -64,7 +66,9 @@ function normalizeTermsStatus(data: Record<string, unknown>): TermsAcceptanceSta
     data.is_accepted === true;
 
   return {
-    accepted,
+    accepted: accepted && !(typeof data.current_version === 'string' && typeof data.accepted_version === 'string' && data.current_version !== data.accepted_version),
+    current_version: typeof data.current_version === 'string' ? data.current_version : null,
+    accepted_version: typeof data.accepted_version === 'string' ? data.accepted_version : null,
     accepted_at: typeof data.accepted_at === 'string' ? data.accepted_at : null,
     terms_version: typeof data.terms_version === 'string' ? data.terms_version : null,
   };

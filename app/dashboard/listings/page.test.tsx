@@ -11,6 +11,8 @@ const api = vi.hoisted(() => ({
   unpublishListing: vi.fn(),
   deleteListing: vi.fn(),
 }));
+const legal = vi.hoisted(() => ({ getCurrentTerms: vi.fn() }));
+vi.mock('@/api/legal', () => legal);
 const termsGate = vi.hoisted(() => vi.fn(() => ({ TermsGatePrompt: () => null, checkingTerms: false, ensureTermsAccepted: vi.fn() })));
 vi.mock('@/api/listings', () => api);
 vi.mock('@/api/connect', () => api);
@@ -22,6 +24,7 @@ vi.mock('@/components/legal/TermsGate', () => ({
 vi.mock('@/components/listings/SellerShareControls', () => ({ default: () => null }));
 
 beforeEach(() => {
+  legal.getCurrentTerms.mockResolvedValue({ terms_version: '1.1' });
   api.getMyListings.mockResolvedValue({ data: [{
     id: 'listing-1', title: 'Seller dataset', status: 'published',
     category: 'Research', price: 100, created_at: '2026-09-01T12:00:00Z',
@@ -66,4 +69,22 @@ it('prompts sellers with inherited listings to accept Terms 1.1', async () => {
   expect(link.getAttribute('href')).toBe('/legal/terms/accept?context=seller&redirect=%2Fdashboard%2Flistings');
   expect(termsGate).toHaveBeenCalledWith('seller');
   expect(screen.getByText(/not yet available to buy/)).toBeTruthy();
+});
+
+it('prompts inherited sellers with the backend-served 1.2 version', async () => {
+  legal.getCurrentTerms.mockResolvedValue({ terms_version: '1.2' });
+  api.getPendingSellerTermsListings.mockResolvedValue({ data: { count: 1, listings: [] } });
+  render(<ListingsPage />);
+  const link = await screen.findByRole('link', { name: 'Review and accept Terms 1.2' });
+  expect(link.getAttribute('href')).toBe('/legal/terms/accept?context=seller&redirect=%2Fdashboard%2Flistings');
+  expect(screen.queryByText(/Terms 1.1/)).toBeNull();
+});
+
+it.each(['loading', 'failure'])('keeps the base Terms 1.1 prompt during metadata %s', async (state) => {
+  if (state === 'loading') legal.getCurrentTerms.mockReturnValue(new Promise(() => {}));
+  else legal.getCurrentTerms.mockRejectedValue(new Error('Metadata unavailable'));
+  api.getPendingSellerTermsListings.mockResolvedValue({ data: { count: 1, listings: [] } });
+  render(<ListingsPage />);
+  expect(await screen.findByRole('link', { name: 'Review and accept Terms 1.1' })).toBeTruthy();
+  expect(screen.getByText('Review and accept Terms 1.1 to make eligible listings available for purchase.')).toBeTruthy();
 });

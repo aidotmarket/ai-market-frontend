@@ -24,7 +24,7 @@ export default async function TermsAndConditionsPage() {
   if (createHash('sha256').update(markdown, 'utf8').digest('hex') !== config.terms_hash_sha256) {
     throw new Error('Current terms document hash mismatch');
   }
-  if (!markdown.startsWith(`# ai.market — Terms and Conditions\n\nEffective date: ${config.effective_at} · Version 1.1\n`)) {
+  if (!markdown.startsWith(`# ai.market — Terms and Conditions\n\nEffective date: ${config.effective_at} · Version ${config.terms_version}\n`)) {
     throw new Error('Invalid current terms document');
   }
 
@@ -36,14 +36,14 @@ export default async function TermsAndConditionsPage() {
 }
 
 function isTermsConfig(value: unknown): value is {
-  terms_version: '1.1';
+  terms_version: '1.1' | '1.2';
   terms_hash_sha256: string;
   effective_at: string;
   text_url: '/api/v1/legal/terms/document';
 } {
   if (!value || typeof value !== 'object') return false;
   const config = value as Record<string, unknown>;
-  return config.terms_version === '1.1' &&
+  return (config.terms_version === '1.1' || config.terms_version === '1.2') &&
     typeof config.terms_hash_sha256 === 'string' && /^[a-f0-9]{64}$/.test(config.terms_hash_sha256) &&
     typeof config.effective_at === 'string' && config.effective_at.length > 0 &&
     config.text_url === '/api/v1/legal/terms/document';

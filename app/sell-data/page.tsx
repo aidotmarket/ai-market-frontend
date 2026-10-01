@@ -1,3 +1,7 @@
+import type { ReactNode } from 'react';
+import { getPublicTermsVersion } from '@/lib/publicTermsVersion';
+import VersionedTermsCopy, { TermsVersionProvider } from '@/components/legal/VersionedTermsCopy';
+import { CARD_SELL_PAYOUT, CARD_SELL_SUMMARY } from '@/components/legal/terms12Copy';
 import Link from 'next/link';
 import type { Metadata } from 'next';
 import SellDataCta from '@/components/SellDataCta';
@@ -86,7 +90,7 @@ function StepCard({
 }: {
   step: number;
   title: string;
-  description: string;
+  description: ReactNode;
 }) {
   return (
     <li className="rounded-2xl border border-gray-200 bg-white p-5 shadow-sm">
@@ -108,7 +112,7 @@ function FeatureCard({
   description,
 }: {
   title: string;
-  description: string;
+  description: ReactNode;
 }) {
   return (
     <div className="rounded-2xl border border-gray-200 bg-white p-6 shadow-sm">
@@ -118,9 +122,10 @@ function FeatureCard({
   );
 }
 
-export default function SellDataPage() {
+export default async function SellDataPage() {
+  const termsVersion = await getPublicTermsVersion();
   return (
-    <>
+    <TermsVersionProvider initialVersion={termsVersion}>
       <script type="application/ld+json">{JSON.stringify(SELL_DATA_JSONLD)}</script>
       <div className="bg-white">
       <section className="bg-gradient-to-b from-[#F7FCFA] to-white">
@@ -229,7 +234,7 @@ export default function SellDataPage() {
               <FeatureCard
                 key={feature.title}
                 title={feature.title}
-                description={feature.description}
+                description={<VersionedTermsCopy legacy={feature.description} terms12={feature.title === 'Stripe payouts.' ? CARD_SELL_PAYOUT : feature.description} />}
               />
             ))}
           </div>
@@ -247,7 +252,7 @@ export default function SellDataPage() {
                 List free. Pay 5% when a sale clears.
               </h2>
               <p className="mt-4 max-w-3xl text-base leading-7 text-gray-600">
-                Sellers list free and pay nothing until a buyer pays. Stripe handles the payout.
+                <VersionedTermsCopy legacy="Sellers list free and pay nothing until a buyer pays. Stripe handles the payout." terms12={CARD_SELL_SUMMARY} />
               </p>
               <SellDataCta variant="inline" />
             </div>
@@ -292,6 +297,6 @@ export default function SellDataPage() {
         </div>
       </section>
       </div>
-    </>
+    </TermsVersionProvider>
   );
 }
