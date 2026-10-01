@@ -6,7 +6,17 @@ import {fetchSummaryPreview} from '@/lib/api';
 import {preview} from '@/tests/summaryFixture';
 vi.mock('@/lib/api',()=>({fetchSummaryPreview:vi.fn()}));
 const api=vi.hoisted(()=>({readPublicationPage:vi.fn()}));vi.mock('@/api/sellerListingPublication',()=>api);
-afterEach(cleanup);beforeEach(()=>vi.resetAllMocks());
+afterEach(()=>{cleanup();vi.unstubAllEnvs();});beforeEach(()=>vi.resetAllMocks());
+it.each(['UTC','Europe/Madrid','America/Los_Angeles'])('shows UTC publication dates near midnight in %s',async(timeZone)=>{
+  vi.stubEnv('TZ',timeZone);
+  api.readPublicationPage.mockResolvedValue({page:0,has_more:false,items:[
+    {id:'late',title:'Late UTC',slug:'late',status:'published',is_listed:true,published_at:'2026-09-27T23:30:00Z'},
+    {id:'early',title:'Early UTC',slug:'early',status:'published',is_listed:true,published_at:'2026-09-28T00:30:00Z'},
+  ]});
+  render(<SellerPublications active enabled/>);
+  expect(await screen.findByText('Published Sep 27, 2026')).toBeTruthy();
+  expect(screen.getByText('Published Sep 28, 2026')).toBeTruthy();
+});
 it('loads only when opened and pages through saved publications',async()=>{
   api.readPublicationPage.mockResolvedValueOnce({page:0,has_more:true,items:[{id:'one',title:'Retail',slug:'retail',status:'published',is_listed:true,published_at:'2026-09-08T00:00:00Z'}]})
     .mockResolvedValueOnce({page:1,has_more:false,items:[]});
