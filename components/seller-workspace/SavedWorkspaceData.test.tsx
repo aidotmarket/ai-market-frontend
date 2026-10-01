@@ -24,6 +24,11 @@ beforeEach(() => {vi.resetAllMocks(); api.listWorkspaceObjects.mockResolvedValue
 const renderData=(connections=[connection],sampleCapability=false)=>render(<SellerListingDraftProvider enabled sampleCapability={sampleCapability}><SavedWorkspaceData enabled connections={connections} /></SellerListingDraftProvider>);
 const renderLicensedData=(sampleCapability=false)=>render(<SellerListingDraftProvider enabled sampleCapability={sampleCapability}><SavedWorkspaceData enabled connections={[connection]} listingLicensesEnabled /></SellerListingDraftProvider>);
 const DraftStatus=()=>{const status=useSellerListingDraftStatus();return <p data-testid="draft-status">{status.selectionSavePending?`pending:${status.sampleIndices.join(',')}`:status.selectionSaveFailed?'failed':'ready'}</p>;};
+function openTerms(){
+ fireEvent.click(screen.getByRole('button',{name:'Read licence'}));fireEvent.keyDown(document,{key:'Escape'});
+ fireEvent.click(screen.getByRole('button',{name:'Read Marketplace Listing Covenant'}));fireEvent.keyDown(document,{key:'Escape'});
+}
+
 it('refuses any store save before the draft has been read',async()=>{
  let save!:ReturnType<typeof useSellerListingDraft>['saveListingFields'];
  function Capture(){save=useSellerListingDraft().saveListingFields;return null;}
@@ -43,9 +48,9 @@ it('merges a queued licence save over the latest listing write',async()=>{
  render(<SellerListingDraftProvider enabled sampleCapability><Capture/></SellerListingDraftProvider>);
  await waitFor(()=>expect(store.loaded).toBe(true));
  let first!:Promise<void>;let second!:Promise<void>;
- await act(async()=>{first=store.saveListingFields({...draft.content,title:'Updated title'});second=store.saveLicenseSelection(selection);await waitFor(()=>expect(api.saveListingDraft).toHaveBeenCalledOnce());});
- await act(async()=>{finishFirst({version:5,content:{...draft.content,title:'Updated title'},updated_at:draft.updated_at});await Promise.all([first,second]);});
- expect(api.saveListingDraft.mock.calls[1][0]).toEqual({...draft.content,title:'Updated title',license_selection:selection});
+ await act(async()=>{first=store.saveListingFields({...draft.content,title:'Updated title',description_source_version:null});second=store.saveLicenseSelection(selection);await waitFor(()=>expect(api.saveListingDraft).toHaveBeenCalledOnce());});
+ await act(async()=>{finishFirst({version:5,content:{...draft.content,title:'Updated title',description_source_version:null},updated_at:draft.updated_at});await Promise.all([first,second]);});
+ expect(api.saveListingDraft.mock.calls[1][0]).toEqual({...draft.content,title:'Updated title',description_source_version:null,license_selection:selection});
  expect(api.saveListingDraft.mock.calls[1][1]).toBe(5);
 });
 it('restores the selected files from the account', async () => {
@@ -54,7 +59,7 @@ it('restores the selected files from the account', async () => {
   const checkbox = await screen.findByRole('checkbox', {name:`Select ${object.key}`});
   expect((checkbox as HTMLInputElement).checked).toBe(true);
   expect(screen.getByText(/File selection saved to your account/)).toBeTruthy();
-  expect((screen.getByRole('button',{name:'Save selected files'}) as HTMLButtonElement).disabled).toBe(true);
+  expect(screen.queryByRole('button',{name:'Save selected files'})).toBeNull();
 });
 it('does not save an incomplete unchanged licence choice',async()=>{
  const draft={version:4,content:{brief:'brief',title:'Offer',description:'Description',category:'Retail',tags:'retail',price:'25',license:'Research'},updated_at:'2026-09-18T12:00:00Z'};
@@ -90,6 +95,7 @@ it('saves only a complete licence selection',async()=>{
  const details=screen.getByText('Read the summary and full terms').closest('details')!;
  Object.defineProperty(details,'open',{value:true,configurable:true});
  fireEvent(details,new Event('toggle'));
+ openTerms();
  fireEvent.click(screen.getByLabelText('Confirm covenant and authority'));
  fireEvent.click(screen.getByRole('button',{name:'Save licence choice'}));
  await waitFor(()=>expect(api.saveListingDraft).toHaveBeenCalledOnce());
@@ -111,7 +117,7 @@ it.each([false,true])('keeps the saved licence visible after a listing edit with
  fireEvent.change(await screen.findByLabelText('Title'),{target:{value:'Updated title'}});
  fireEvent.click(screen.getByRole('button',{name:'Save private draft'}));
  await waitFor(()=>expect(api.saveListingDraft).toHaveBeenCalledOnce());
- expect(api.saveListingDraft).toHaveBeenCalledWith({...draft.content,title:'Updated title'},4,expect.any(String));
+ expect(api.saveListingDraft).toHaveBeenCalledWith({...draft.content,title:'Updated title',description_source_version:null},4,expect.any(String));
  expect(await screen.findByText('Licence choice saved to your account.')).toBeTruthy();
 });
 it('blocks licence saving while legal edits are unsaved and clears the block after a revert',async()=>{
@@ -169,7 +175,7 @@ it('reloads on a 409 without discarding the unsaved licence choice',async()=>{
  fireEvent.change(await screen.findByLabelText('Signer full name'),{target:{value:'Sam Seller'}});
  fireEvent.change(screen.getByLabelText('Signer title'),{target:{value:'Director'}});
  const details=screen.getByText('Read the summary and full terms').closest('details')!;
- Object.defineProperty(details,'open',{value:true,configurable:true});fireEvent(details,new Event('toggle'));
+ Object.defineProperty(details,'open',{value:true,configurable:true});fireEvent(details,new Event('toggle'));openTerms();
  fireEvent.click(screen.getByLabelText('Confirm covenant and authority'));
  fireEvent.click(screen.getByRole('button',{name:'Save licence choice'}));
  expect((await screen.findByRole('alert')).textContent).toContain('Your draft was changed elsewhere; we reloaded it. Check your licence choice and save again.');

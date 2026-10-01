@@ -1,3 +1,5 @@
+import SellerWorkspacePage from '@/app/dashboard/seller-workspace/page';
+import {useAuthStore} from '@/store/auth';
 import {createRoot} from 'react-dom/client';
 import ListingSamplePreview from '@/components/listings/ListingSamplePreview';
 import SellerAtAGlance from '@/components/listings/SellerAtAGlance';
@@ -8,7 +10,9 @@ import '@/app/globals.css';
 const listingId = '00000000-0000-4000-8000-000000000004';
 const parity = new URLSearchParams(window.location.search).has('parity');
 const gateway = new URLSearchParams(window.location.search).has('gateway');
-createRoot(document.getElementById('root')!).render(gateway ? <GatewayDeliverySection orderId="order-1" /> : parity ? <main className="mx-auto max-w-7xl space-y-8 px-4 py-8">
+const guided=new URLSearchParams(window.location.search).has('guided');
+if(guided)useAuthStore.setState({isAuthenticated:true,isLoading:false,hydrated:true,token:'synthetic-seller-token'});
+createRoot(document.getElementById('root')!).render(guided ? <main className="mx-auto max-w-7xl px-4 py-8"><SellerWorkspacePage/></main> : gateway ? <GatewayDeliverySection orderId="order-1" /> : parity ? <main className="mx-auto max-w-7xl space-y-8 px-4 py-8">
   <section aria-label="Seller preview"><SellerAtAGlance listingId={listingId} slug="synthetic-current" /></section>
   <section aria-label="Buyer output">
     <BuyerAtAGlance slug="synthetic-current" listingId={listingId} initialSummary={preview.at_a_glance} includeSample={false} />

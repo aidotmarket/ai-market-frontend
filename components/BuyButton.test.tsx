@@ -40,6 +40,10 @@ function documentResponse(text: string) {
   return { ok: true, arrayBuffer: async () => bytes.buffer, headers: new Headers({ 'content-type': 'text/plain' }) };
 }
 
+function readAcceptanceDocuments(){
+  fireEvent.click(screen.getByRole('button',{name:'Read full licence'}));fireEvent.keyDown(document,{key:'Escape'});
+  fireEvent.click(screen.getByRole('button',{name:'Read Marketplace Listing Covenant'}));fireEvent.keyDown(document,{key:'Escape'});
+}
 function completeAcceptanceForm() {
   fireEvent.change(screen.getByLabelText('Typed full name'), { target: { value: 'Ada Buyer' } });
   fireEvent.change(screen.getByLabelText('Signer title'), { target: { value: 'Director' } });
@@ -94,6 +98,7 @@ describe('BuyButton licence acceptance', () => {
     completeAcceptanceForm();
 
     await waitFor(() => expect(screen.getAllByText('Fetched bytes match the server hash')).toHaveLength(2));
+    readAcceptanceDocuments();completeAcceptanceForm();
     expect(fetchMock.mock.calls.map(([url]) => String(url))).toEqual([
       '/licenses/standard/1.0/ai-training?download=1',
       '/licenses/marketplace-listing/1.0?download=1',
@@ -114,6 +119,7 @@ describe('BuyButton licence acceptance', () => {
       render(<ToastProvider><BuyButton listingId="listing-1" slug="listing" price={20} pricingType="one_time" licenseDetails={verifiedLicense} /></ToastProvider>);
       completeAcceptanceForm();
       await waitFor(() => expect(screen.getAllByText('Fetched bytes match the server hash')).toHaveLength(2));
+    readAcceptanceDocuments();completeAcceptanceForm();
       fireEvent.click(screen.getByRole('button', { name: 'Accept and continue to payment' }));
 
       await screen.findByRole('heading', { name: 'Accept Terms and Conditions' });
@@ -260,6 +266,7 @@ describe('BuyButton licence acceptance', () => {
     const { calls, fetchMock, createdBlobs, createObjectURL, revokeObjectURL, license, unmount, restore } = await renderCustom();
     try {
       await waitFor(() => expect(screen.getAllByText('Fetched bytes match the server hash')).toHaveLength(3));
+      readAcceptanceDocuments();completeAcceptanceForm();
       expect(calls).toEqual(['/listings/listing-1/license-document?download=1']);
       expect(fetchMock).toHaveBeenCalledTimes(2);
       const canonical = screen.getByRole('link', { name: '/api/v1/listings/listing-1/license-document' }) as HTMLAnchorElement;
@@ -289,7 +296,9 @@ describe('BuyButton licence acceptance', () => {
       expect(await sha256(new Uint8Array(bytes))).toBe(license.params.source_sha256);
       expect(await hashLicenseComponentBytes(new Uint8Array(bytes),{kind:'license',code:'custom',version:'1',params:license.params})).toBe(license.sha256);
       expect(document.querySelector('script')).toBeNull();
+      fireEvent.click(screen.getByRole('button',{name:'Read full licence'}));
       expect(screen.getByText(/<script>alert\(1\)<\/script>/).textContent).toContain('**bold**');
+      fireEvent.keyDown(document,{key:'Escape'});
       expect((screen.getByRole('button', { name: 'Accept and continue to payment' }) as HTMLButtonElement).disabled).toBe(false);
       unmount();
       expect(revokeObjectURL).toHaveBeenCalledWith(activated[0]);
@@ -300,6 +309,7 @@ describe('BuyButton licence acceptance', () => {
     const {restore, createdBlobs, license} = await renderCustom(undefined, undefined, {}, true);
     try {
       await waitFor(() => expect(screen.getAllByText('Fetched bytes match the server hash')).toHaveLength(3));
+      readAcceptanceDocuments();completeAcceptanceForm();
       const download = screen.getAllByRole('link', {name: 'Download exact document'})[0] as HTMLAnchorElement;
       expect(download.getAttribute('download')).toBe('custom-licence.pdf');
       const blob = createdBlobs.get(download.href);

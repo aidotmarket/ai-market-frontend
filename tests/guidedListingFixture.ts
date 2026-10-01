@@ -1,0 +1,9 @@
+import type {SellerWorkspaceCapabilities,SellerWorkspaceConnection} from '@/api/sellerWorkspace';
+import type {ListingDraftContent} from '@/api/sellerListingDraft';
+export const categoryRows=['financial-data','alternative-data','consumer-retail','healthcare-life-sciences','geospatial-location','environmental-climate','technology-web','government-public','energy-utilities','transportation-logistics','real-estate-property','ai-machine-learning'].map(slug=>({slug,name:slug.replaceAll('-',' ')}));
+const available={enabled:true,status:'available' as const,reason:'enabled'};
+const unavailable={enabled:false,status:'unavailable' as const,reason:'not_implemented'};
+export const guidedCapabilities:SellerWorkspaceCapabilities={master:available,providers:{aws:{connect:available,discovery:available,profile:unavailable,publish:available,delivery:unavailable},r2:{connect:unavailable,profile:unavailable,publish:unavailable,delivery:unavailable}},sources:available,drafts:available,review:available,listing_assistant:available,listing_licenses:true};
+export const guidedConnection:SellerWorkspaceConnection={id:'00000000-0000-4000-8000-000000000001',provider:'aws',status:'verified',rotation_substate:'none',version:1,provider_account_id:null,role_arn:null,bucket:'synthetic-sales',prefix:'weekly/',region:'eu-west-1',authorization_expires_at:'2099-01-01T00:00:00Z',rotation_deadline:null,verified_at:'2026-10-01T00:00:00Z',rotated_at:null,revoked_at:null,disabled_at:null,expired_at:null,last_verification_status:null,redacted_error_code:null};
+export const guidedObjects=[{key:'weekly/sales.csv',version_id:null,etag:'synthetic-etag',size:2048,last_modified:'2026-10-01T00:00:00Z',format_candidate:'csv' as const}];
+export const emptyGuidedDraft:ListingDraftContent={brief:'',title:'',description:'',category:'',tags:'',price:'',license:'',description_source_version:null};

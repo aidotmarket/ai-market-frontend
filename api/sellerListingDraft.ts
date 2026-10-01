@@ -5,6 +5,7 @@ export interface ListingDraftContent {
   brief: string;
   title: string;
   description: string;
+  description_source_version?: number | null;
   category: string;
   tags: string;
   price: string;

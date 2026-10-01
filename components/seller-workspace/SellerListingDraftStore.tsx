@@ -48,7 +48,7 @@ export function SellerListingDraftProvider({enabled,sampleCapability,children}:{
   const [draft,setDraft]=useState<SavedListingDraft|null>(initial.draft);
   const [loaded,setLoaded]=useState(!enabled);
   const [error,setError]=useState(false);
-  const [requested,setRequested]=useState(sampleCapability);
+  const [requested,setRequested]=useState(enabled);
   const [selectionSaveCount,setSelectionSaveCount]=useState(initial.selectionSaveCount);
   const [selectionSaveFailed,setSelectionSaveFailed]=useState(initial.selectionSaveFailed);
   const [visibleSampleIndices,setVisibleSampleIndices]=useState<number[]|null>(null);
@@ -56,7 +56,7 @@ export function SellerListingDraftProvider({enabled,sampleCapability,children}:{
   useEffect(()=>{const listener=(value:OwnerSnapshot)=>{setDraft(value.draft);setSelectionSaveCount(value.selectionSaveCount);setSelectionSaveFailed(value.selectionSaveFailed);};owner.listeners.add(listener);listener(snapshot());return()=>{owner.listeners.delete(listener);};},[]);
   useEffect(()=>{if(sampleCapability)setRequested(true);},[sampleCapability]);
   useEffect(()=>{
-    if(!enabled){setDraft(null);setVisibleSampleIndices(null);setLoaded(false);setError(false);return;}
+    if(!enabled){owner.loaded=false;setDraft(null);setVisibleSampleIndices(null);setLoaded(false);setError(false);return;}
     if(!requested)return;
     const controller=new AbortController();owner.loaded=false;setLoaded(false);setError(false);
     owner.queue.catch(()=>undefined).then(()=>readListingDraft(controller.signal)).then(value=>{
@@ -76,7 +76,7 @@ export function SellerListingDraftProvider({enabled,sampleCapability,children}:{
     beginSelectionSave,finishSelectionSave,setVisibleSampleIndices,
     saveListingFields:async(fields)=>{await persist(base=>({
       ...base,brief:fields.brief,title:fields.title,description:fields.description,category:fields.category,
-      tags:fields.tags,price:fields.price,license:fields.license,
+      tags:fields.tags,price:fields.price,license:fields.license,description_source_version:fields.description_source_version??null,
     }));},
     saveLicenseSelection:async(selection)=>{await persist(base=>({...base,license_selection:selection}));},
     saveSamples:async(indices)=>{beginSelectionSave();try{await persist(base=>sampleCapability
@@ -95,6 +95,6 @@ export function useSellerListingDraft() {
 
 export function useSellerListingDraftStatus() {
   const value=useContext(DraftContext);
-  return value ? {available:true,selectionSavePending:value.selectionSavePending,selectionSaveFailed:value.selectionSaveFailed,sampleIndices:value.sampleIndices} :
+  return value ? {available:value.available,selectionSavePending:value.selectionSavePending,selectionSaveFailed:value.selectionSaveFailed,sampleIndices:value.sampleIndices} :
     {available:false,selectionSavePending:false,selectionSaveFailed:false,sampleIndices:[] as number[]};
 }

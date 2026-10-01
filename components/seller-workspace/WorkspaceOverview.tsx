@@ -1,7 +1,8 @@
+import { LISTING_STEPS } from './listingSteps';
 import { partitionConnections } from './connectionList';
-import type { SellerWorkspaceCapabilities, SellerWorkspaceConnection } from '@/api/sellerWorkspace';
+import type { SellerWorkspaceConnection } from '@/api/sellerWorkspace';
 
-export type WorkspaceView = 'storage' | 'data' | 'listing' | 'review' | 'manage';
+export type WorkspaceView = 'storage' | 'data' | 'listing' | 'review' | 'license' | 'publish' | 'manage';
 
 export function WorkspaceOverview({ connections, view, onViewChange }: {
   connections: SellerWorkspaceConnection[];
@@ -34,33 +35,10 @@ export function WorkspaceOverview({ connections, view, onViewChange }: {
         </dl>
       </header>
       <nav aria-label="Workspace sections" className="flex gap-1 overflow-x-auto border-b border-gray-200">
-        {([['storage', 'Storage connections'], ['data', 'Choose what to sell'], ['listing', 'Prepare with Allai'], ['review', 'Review listing'], ['manage', 'Your listings']] as const).map(([key, label]) => (
+        {([...LISTING_STEPS, ['manage', 'Your listings']] as const).map(([key, label]) => (
           <button key={key} type="button" aria-current={view === key ? 'page' : undefined} onClick={() => onViewChange(key)} className={`shrink-0 border-b-2 px-4 py-3 text-sm font-medium focus-visible:outline-2 focus-visible:outline-[#3F51B5] ${view === key ? 'border-[#3F51B5] text-[#3F51B5]' : 'border-transparent text-gray-600 hover:border-gray-300 hover:text-gray-900'}`}>{label}</button>
         ))}
       </nav>
     </>
-  );
-}
-
-export function SellerJourney({ capabilities, connected }: { capabilities: SellerWorkspaceCapabilities; connected: boolean }) {
-  const publish = capabilities.providers.aws.publish;
-  const stages = [
-    { title: 'Connect storage', description: 'Give access to a specific folder in your cloud storage.', state: connected ? 'Connected' : 'Start here' },
-    { title: 'Choose what to sell', description: 'Choose the files or folder you want to offer to buyers.', state: connected ? 'Choose your source' : 'Connect storage first' },
-    { title: 'Describe and price it', description: 'Allai drafts the description and tags. You review, set the price, and choose the license.', state: 'Prepare with Allai' },
-    { title: 'Review and publish', description: 'Approve exactly what buyers will see before publishing.', state: publish.enabled && publish.status === 'available' ? 'Review and publish' : 'Prepare your review' },
-  ];
-  return (
-    <section aria-labelledby="seller-journey-title" className="rounded-xl border border-gray-200 bg-white p-5 sm:p-6">
-      <h2 id="seller-journey-title" className="font-semibold text-gray-900">From your storage to a listing</h2>
-      <ol className="mt-5 grid gap-5 sm:grid-cols-2 xl:grid-cols-4">
-        {stages.map((stage, index) => (
-          <li key={stage.title} className="flex gap-3">
-            <span aria-hidden="true" className={`flex h-7 w-7 shrink-0 items-center justify-center rounded-full text-xs font-semibold ${index === 0 ? 'bg-indigo-100 text-indigo-800' : 'bg-gray-100 text-gray-500'}`}>{index === 0 && connected ? '✓' : index + 1}</span>
-            <div><h3 className="text-sm font-semibold text-gray-900">{stage.title}</h3><p className="mt-1 text-xs leading-5 text-gray-500">{stage.description}</p><p className={`mt-2 text-xs font-medium ${index === 0 ? 'text-indigo-700' : 'text-gray-500'}`}>{stage.state}</p></div>
-          </li>
-        ))}
-      </ol>
-    </section>
   );
 }

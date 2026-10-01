@@ -79,13 +79,13 @@ it('explains an unsupported price before saving and allows correction', async ()
   expect(api.saveListingDraft.mock.calls[0][0].price).toBe('999999.99');
 });
 
-it('keeps the legacy draft PUT body byte-identical and round-trips an active sample selection',async()=>{
+it('adds a nullable source stamp to the draft PUT body and round-trips an active sample selection',async()=>{
   api.saveListingDraft.mockImplementation(async(saved)=>({version:4,content:saved,updated_at:'2026-09-18T00:00:00Z'}));
   renderEditor();
   fireEvent.change(await screen.findByLabelText('Title'),{target:{value:'Legacy edit'}});
   fireEvent.click(screen.getByText('Save private draft'));
   await screen.findByText(/Draft saved to your account/);
-  expect(JSON.stringify(api.saveListingDraft.mock.calls[0][0])).toBe(JSON.stringify({...content,title:'Legacy edit'}));
+  expect(JSON.stringify(api.saveListingDraft.mock.calls[0][0])).toBe(JSON.stringify({...content,title:'Legacy edit',description_source_version:null}));
   cleanup();vi.clearAllMocks();
   const sampled={...content,sample_decision:'member_files' as const,sample_object_indices:[2]};
   api.readListingDraft.mockResolvedValue({version:3,content:sampled,updated_at:'2026-09-18T00:00:00Z'});
@@ -94,7 +94,7 @@ it('keeps the legacy draft PUT body byte-identical and round-trips an active sam
   fireEvent.change(await screen.findByLabelText('Title'),{target:{value:'Sampled edit'}});
   fireEvent.click(screen.getByText('Save private draft'));
   await screen.findByText(/Draft saved to your account/);
-  expect(api.saveListingDraft.mock.calls[0][0]).toEqual({...content,title:'Sampled edit',sample_decision:'member_files',sample_object_indices:[2]});
+  expect(api.saveListingDraft.mock.calls[0][0]).toEqual({...content,title:'Sampled edit',description_source_version:null,sample_decision:'member_files',sample_object_indices:[2]});
 });
 
 it.each([false,true])('preserves saved licence and sample metadata when sample capability is %s',async(sampleCapability)=>{
@@ -106,7 +106,7 @@ it.each([false,true])('preserves saved licence and sample metadata when sample c
   fireEvent.change(await screen.findByLabelText('Title'),{target:{value:'Updated title'}});
   fireEvent.click(screen.getByText('Save private draft'));
   await waitFor(()=>expect(api.saveListingDraft).toHaveBeenCalledOnce());
-  expect(api.saveListingDraft).toHaveBeenCalledWith({...savedContent,title:'Updated title'},4,expect.any(String));
+  expect(api.saveListingDraft).toHaveBeenCalledWith({...savedContent,title:'Updated title',description_source_version:null},4,expect.any(String));
   await screen.findByText(/Draft saved to your account/);
   expect(api.saveListingDraft.mock.results[0].value).toBeTruthy();
 });

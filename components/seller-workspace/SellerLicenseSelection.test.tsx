@@ -7,12 +7,12 @@ import SellerLicenseSelection,{CUSTOM_NOTICE} from './SellerLicenseSelection';
 import {createStandardSelection,type LicenseSelection} from '@/api/listingLicenses';
 import {hashLicenseComponentBytes,sha256} from '@/lib/customLicenseVerification';
 
-const transport = vi.hoisted(()=>({post:vi.fn()}));
+const transport = vi.hoisted(()=>({post:vi.fn(),get:vi.fn().mockResolvedValue({data:{full_text:'The full terms'}})}));
 vi.mock('@/api/client',()=>({api:transport}));
 const legal=vi.hoisted(()=>({getSellerLegalIdentity:vi.fn(),refreshSellerLegalIdentity:vi.fn(),saveSellerLegalIdentity:vi.fn()}));
 vi.mock('@/api/sellerLegalIdentity',async(importOriginal)=>({...await importOriginal<typeof import('@/api/sellerLegalIdentity')>(),...legal}));
 afterEach(()=>{cleanup();vi.unstubAllGlobals();vi.clearAllMocks();});
-beforeEach(()=>{legal.refreshSellerLegalIdentity.mockResolvedValue({status:'known',source:'stripe_connect',legal_name:'Seller Ltd',jurisdiction:'GB',version:1});legal.getSellerLegalIdentity.mockResolvedValue({status:'known',source:'stripe_connect',legal_name:'Seller Ltd',jurisdiction:'GB',version:1});});
+beforeEach(()=>{vi.stubGlobal('URL',Object.assign(URL,{createObjectURL:vi.fn(()=> 'blob:licence'),revokeObjectURL:vi.fn()}));legal.refreshSellerLegalIdentity.mockResolvedValue({status:'known',source:'stripe_connect',legal_name:'Seller Ltd',jurisdiction:'GB',version:1});legal.getSellerLegalIdentity.mockResolvedValue({status:'known',source:'stripe_connect',legal_name:'Seller Ltd',jurisdiction:'GB',version:1});});
 
 async function responseFor(text:string,title='Terms') {
   const bytes=new TextEncoder().encode(text);
@@ -25,6 +25,11 @@ function Harness({initial=createStandardSelection()}:{initial?:LicenseSelection}
   const [value,setValue]=useState(initial);
   return <><SellerLicenseSelection value={value} onChange={setValue} legalIdentityEnabled/><output data-testid="wire">{JSON.stringify(value)}</output></>;
 }
+
+function readTerms(label='Read licence'){
+ fireEvent.click(screen.getByRole('button',{name:label}));fireEvent.keyDown(document,{key:'Escape'});
+}
+function openBoth(){readTerms();readTerms('Read Marketplace Listing Covenant');}
 
 describe('Seller licence selection',()=>{
   it('checks refresh before GET and shows a Stripe legal name without a save button',async()=>{
@@ -142,6 +147,8 @@ describe('Seller licence selection',()=>{
     const details=screen.getByText('Read the summary and full terms').closest('details')!;
     Object.defineProperty(details,'open',{value:true,configurable:true});
     fireEvent(details,new Event('toggle'));
+    expect(confirmation.disabled).toBe(true);
+    openBoth();
     expect(confirmation.disabled).toBe(false);
     fireEvent.change(screen.getByLabelText('Signer full name'),{target:{value:'Sam Seller'}});
     fireEvent.change(screen.getByLabelText('Signer title'),{target:{value:'Director'}});
@@ -152,21 +159,19 @@ describe('Seller licence selection',()=>{
     expect(confirmation.disabled).toBe(true);
   });
 
-  it('opens the training variant as a readable page and offers readable terms beside downloads',()=>{
+  it('opens the matching training variant in a reading dialog',async()=>{
     render(<Harness/>);
-    const read=screen.getByRole('link',{name:'Read licence'});
-    expect(read.getAttribute('href')).toBe('/licenses/standard/1.0/ai-training');
-    expect(read.getAttribute('target')).toBe('_blank');
-    expect(read.getAttribute('rel')).toBe('noreferrer');
-    fireEvent.click(read);
+    await screen.findByText('Legal name on the licence: Seller Ltd (GB)');
+    fireEvent.click(screen.getByRole('button',{name:'Read licence'}));
+    expect(screen.getByRole('dialog',{name:'Read licence'})).toBeTruthy();
+    expect(screen.getByRole('link',{name:'Open in new tab'}).getAttribute('href')).toBe('/licenses/standard/1.0/ai-training');
+    fireEvent.keyDown(document,{key:'Escape'});
     expect((screen.getByLabelText('Confirm covenant and authority') as HTMLInputElement).disabled).toBe(true);
-    expect(screen.getByText('Open the Marketplace Listing Covenant first.')).toBeTruthy();
-    fireEvent.click(screen.getByRole('link',{name:'Read Marketplace Listing Covenant'}));
+    readTerms('Read Marketplace Listing Covenant');
     expect((screen.getByLabelText('Confirm covenant and authority') as HTMLInputElement).disabled).toBe(false);
-    expect(screen.getByRole('link',{name:'Read full licence'}).getAttribute('href')).toBe('/licenses/standard/1.0/ai-training');
-    expect(screen.getByRole('link',{name:'Read Marketplace Listing Covenant'}).getAttribute('href')).toBe('/licenses/marketplace-listing/1.0');
     fireEvent.click(screen.getByLabelText('Allow AI/ML training'));
-    expect(screen.getByRole('link',{name:'Read licence'}).getAttribute('href')).toBe('/licenses/standard/1.0/no-ai-training');
+    fireEvent.click(screen.getByRole('button',{name:'Read licence'}));
+    expect(screen.getByRole('link',{name:'Open in new tab'}).getAttribute('href')).toBe('/licenses/standard/1.0/no-ai-training');
   });
 
   it('opens the details section to review both the standard licence and covenant',()=>{
@@ -175,6 +180,8 @@ describe('Seller licence selection',()=>{
     const details=screen.getByText('Read the summary and full terms').closest('details')!;
     Object.defineProperty(details,'open',{value:true,configurable:true});
     fireEvent(details,new Event('toggle'));
+    expect(confirmation.disabled).toBe(true);
+    openBoth();
     expect(confirmation.disabled).toBe(false);
     expect(screen.queryByText('Open the selected licence and Marketplace Listing Covenant first.')).toBeNull();
   });
@@ -195,14 +202,15 @@ describe('Seller licence selection',()=>{
     expect(screen.getByText(/4 \/ 65,536 Unicode characters after normalization/)).toBeTruthy();
     fireEvent.click(screen.getByRole('button',{name:'Save custom licence text'}));
     await screen.findByText('Custom licence text saved and verified.');
-    expect((screen.getByRole('button',{name:'Save custom licence text'}) as HTMLButtonElement).disabled).toBe(true);
+    expect(screen.queryByRole('button',{name:'Save custom licence text'})).toBeNull();
     expect(transport.post).toHaveBeenCalledWith('/licenses/custom',{title:'Terms',ai_training:true,text:submitted},expect.anything());
     await waitFor(()=>expect(JSON.parse(screen.getByTestId('wire').textContent!)).toEqual(expect.objectContaining({kind:'custom',version:'1.0',ai_training:true,license_document_id:response.id,license_sha256:response.license_sha256,rider_sha256:'f9785144dc4d48af6446512cbabd03431a35015d71b92260f4dcfab164084140'})));
     expect(screen.getByLabelText('Verified custom licence preview').textContent).toContain(canonical);
-    expect(screen.getByRole('link',{name:'Open AI-Training Rider'}).getAttribute('href')).toBe('/licenses/ai-training-rider/1.0/permitted?download=1');
+    readTerms('Read AI-Training Rider');
     const details=screen.getByText('Read the summary and full terms').closest('details')!;
     Object.defineProperty(details,'open',{value:true,configurable:true});
     fireEvent(details,new Event('toggle'));
+    readTerms('Read full licence');readTerms('Read Marketplace Listing Covenant');
     fireEvent.change(screen.getByLabelText('Signer full name'),{target:{value:'Sam Seller'}});
     fireEvent.change(screen.getByLabelText('Signer title'),{target:{value:'Director'}});
     fireEvent.click(screen.getByLabelText('Confirm covenant and authority'));
