@@ -2,7 +2,7 @@
 
 import { useMemo, useState } from 'react';
 import BuyButton from '@/components/BuyButton';
-import { formatDate } from '@/lib/format';
+import { formatPublishedDate } from '@/lib/format';
 import type { ListingLicenseDetails, ListingVersion } from '@/types';
 
 interface ListingPurchasePanelProps {
@@ -130,7 +130,7 @@ export function VersionSelector({
                 </span>
               </div>
               <p className="mt-1 text-gray-600">
-                Published {formatDate(version.published_at)} · {formatBytes(version.total_size_bytes)} · {version.object_count.toLocaleString()} objects
+                Published {formatPublishedDate(version.published_at)} · {formatBytes(version.total_size_bytes)} · {version.object_count.toLocaleString()} objects
               </p>
               {version.status === 'superseded' && (
                 <p className="mt-1 text-gray-500">Visible for provenance. Not purchasable.</p>

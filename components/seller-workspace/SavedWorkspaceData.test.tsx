@@ -348,6 +348,7 @@ it('confirms 22,000 files while rendering only one selected-file preview page',a
  await screen.findByRole('checkbox',{name:`Select ${files[0].key}`});
  fireEvent.click(screen.getByRole('button',{name:'Select entire connected folder'}));
  await screen.findByText(/22000 files selected/);
+ await waitFor(()=>expect((screen.getByRole('button',{name:'Select entire connected folder'}) as HTMLButtonElement).disabled).toBe(false));
  expect(screen.getByRole('list',{name:'Selected files'}).children).toHaveLength(50);
  fireEvent.click(screen.getByRole('button',{name:'Next selected files'}));
  expect(screen.getByText('Showing 51–100 of 22,000')).toBeTruthy();

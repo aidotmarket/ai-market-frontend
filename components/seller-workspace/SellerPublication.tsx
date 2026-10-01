@@ -64,6 +64,6 @@ export default function SellerPublication({approval,active,rendered,sampleCount=
       {state.publication_available&&!busy&&(!rendered||stale||!licenseReady)&&<p role="status" className="text-sm text-amber-900">{stale?'Refresh the saved review and approve it again before publishing.':!licenseReady?(approval.license_selection&&!isCompleteLicenseSelection(approval.license_selection)?'Complete and save the licence choice in Choose a licence before publishing.':'Your legal identity and licence choice are not yet saved together. Return to Choose a licence before publishing.'):'Wait for the saved review to finish loading before publishing.'}</p>}
     </>}
     {error && <p role="alert" className="text-sm text-red-800">{error}{error.startsWith('Your legal details need')&&<> <a className="underline" href={LEGAL_IDENTITY_SUPPORT_PATH}>Contact support</a></>}</p>}
-    {!busy && <button type="button" disabled={!active} onClick={()=>flow?flow.refreshPublication():setRetry(value=>value+1)} className="ml-4 inline-block text-sm text-indigo-700 underline">Refresh publication status</button>}
+    {!busy && <button type="button" disabled={!active} onClick={()=>flow?flow.refreshPublication():setRetry(value=>value+1)} className="block w-fit pt-2 text-sm text-indigo-700 underline">Refresh publication status</button>}
   </section>;
 }

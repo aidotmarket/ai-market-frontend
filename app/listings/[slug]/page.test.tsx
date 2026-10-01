@@ -32,7 +32,7 @@ vi.mock('@/lib/api', () => ({
 vi.mock('@/components/BuyButton', () => ({
   default: (props: Record<string, unknown>) => {
     buyButtonProps(props);
-    return <button type="button">Buy</button>;
+    return <>{props.licenseDetails&&<section aria-label="Licence terms">Purchase licence cards</section>}<button type="button">Buy</button></>;
   },
 }));
 
@@ -543,4 +543,16 @@ describe('S1717 member_files and verification scope', () => {
     expect(html).toContain(scope);
     expect(html).not.toContain('free-sample-heading');
   });
+});
+
+it.each([false,true])('shows one licence disclosure when seller terms are pending: %s',async pending=>{
+ const license={code:'standard' as const,version:'1.0',params:{ai_training:true},summary:['Standard summary'],full_text_url:'/licenses/standard/1.0/ai-training',download_url:'/licenses/standard/1.0/ai-training?download=1',sha256:'a'.repeat(64),covenant_sha256:'b'.repeat(64),rider_sha256:null};
+ const html=await renderPage(makeListing({license,license_status:pending?'pending_seller_terms':'bound'}));
+ expect(html.match(/aria-label="Licence terms"/g)).toHaveLength(1);
+});
+
+it('uses the same UTC Published date in the header and version card near midnight',async()=>{
+ const timestamp='2026-09-27T23:30:00Z';
+ const html=await renderPage(makeListing({published_at:timestamp}),[{version_id:'v1',version_label:'v1',published_at:timestamp,object_count:1,total_size_bytes:1024,status:'active'}]);
+ expect(html.match(/Published Sep 27, 2026/g)).toHaveLength(2);
 });

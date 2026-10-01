@@ -74,9 +74,9 @@ it('shows the v2 sample statement with basename, size and index',async()=>{
 it('keeps v1 review markup unchanged when explicit none fields arrive',async()=>{
  const value={rendered_html:'<p>Legacy</p>',fields:{},source_page:null,missing_fields:[],approval_available:false};
  api.readListingReview.mockResolvedValue(value);const first=render(<SellerReview active enabled/>);
- await screen.findByTitle('Saved listing buyers would see');const legacy=first.container.innerHTML;first.unmount();
+ await screen.findByTitle('Saved listing buyers would see');await screen.findByTitle('Preview layout measurement');const legacy=first.container.innerHTML;first.unmount();
  api.readListingReview.mockResolvedValue({...value,sample_decision:'none',sample_object_indices:[],sample_status:'not_selected'});
- const second=render(<SellerReview active enabled/>);await screen.findByTitle('Saved listing buyers would see');
+ const second=render(<SellerReview active enabled/>);await screen.findByTitle('Saved listing buyers would see');await screen.findByTitle('Preview layout measurement');
  expect(second.container.innerHTML).toBe(legacy);
 });
 
@@ -122,4 +122,11 @@ it('aborts pending file navigation when the review closes',async()=>{
  expect(signal.aborted).toBe(true);
  resolve({...first,files:files(50),offset:50});
  expect(screen.queryByText('private/50.csv')).toBeNull();
+});
+
+function DisabledDraftProbe(){const status=useSellerListingDraftStatus();const store=useSellerListingDraft();return <output>{JSON.stringify({available:status.available,loaded:store.loaded})}</output>;}
+it('reports a disabled draft store as unavailable and not loaded',()=>{
+ render(<SellerListingDraftProvider enabled={false} sampleCapability={false}><DisabledDraftProbe/></SellerListingDraftProvider>);
+ expect(screen.getByRole('status').textContent).toBe('{"available":false,"loaded":false}');
+ expect(drafts.readListingDraft).not.toHaveBeenCalled();
 });

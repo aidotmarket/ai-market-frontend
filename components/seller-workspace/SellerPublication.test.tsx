@@ -102,3 +102,10 @@ it('opens the verified custom document through the listing disclosure',async()=>
  render(<SellerPublication approval={licensed} active rendered/>);
  expect((await screen.findByRole('link',{name:'Open verified custom licence on listing'})).getAttribute('href')).toBe('/listings/retail');
 });
+
+it('puts publication refresh on its own spaced line',async()=>{
+ api.readPublication.mockResolvedValue({publication_available:true,publication:null});
+ render(<SellerPublication approval={approval} active rendered/>);
+ await screen.findByRole('button',{name:'Publish this listing'});
+ expect(screen.getByRole('button',{name:'Refresh publication status'}).className).toContain('block w-fit pt-2');
+});

@@ -6,6 +6,7 @@ import {useListingFlow} from './GuidedListingFlow';
 import {MAX_SELECTION_FILES,FolderSelectionError,mergeSelection,resolveFolder} from './folderSelection';
 import type { SourceRead } from '@/api/sellerListingSource';
 import {isCompleteLicenseSelection,type LicenseSelection} from '@/api/listingLicenses';
+import {sameLicenseSelection} from '@/api/sellerListingReview';
 import SellerLicenseSelection,{type IdentityState} from './SellerLicenseSelection';
 import {
   cancelWorkspaceProfileJob, createIdempotencyKey, getWorkspaceProfileEvidence,
@@ -67,9 +68,9 @@ export function WorkspaceData({ connections, enabled, savedSource, onSaveSelecti
         {licenseDraftLoaded&&identityKnown&&legalIdentityDirty&&<p role="status" className="text-sm text-amber-900">Save your legal name and country first</p>}
         {!isCompleteLicenseSelection(licenseSelection)&&<p role="status" className="text-sm text-amber-900">Licence choice incomplete. Add the signer, open the terms and confirm covenant and authority before saving the choice.</p>}
         {!licenseDraftLoaded && (licenseDraftError?<p role="alert" className="text-sm text-red-800">Your saved draft could not be loaded. <button type="button" className="underline" onClick={onRetryLicenseDraft}>Try loading draft again</button></p>:<p role="status" className="text-sm text-gray-600">Loading your saved draft…</p>)}
-        {licenseSaveMessage&&!(licenseSaveMessage==='Licence choice saved.'&&licenseDraftLoaded&&isCompleteLicenseSelection(licenseSelection)&&JSON.stringify(licenseSelection)===JSON.stringify(licenseSelectionSaved))&&<p role={licenseSaveMessage==='Licence choice saved.'?'status':'alert'} className="text-sm text-gray-700">{licenseSaveMessage}</p>}
-        {licenseDraftLoaded&&isCompleteLicenseSelection(licenseSelection)&&JSON.stringify(licenseSelection)===JSON.stringify(licenseSelectionSaved)&&<p role="status" className="text-sm text-green-800">Licence choice saved to your account.</p>}
-        {onSaveLicenseSelection && JSON.stringify(licenseSelection)!==JSON.stringify(licenseSelectionSaved) && <button type="button" disabled={licenseSaving||!identityKnown||legalIdentityDirty||!licenseDraftLoaded||!isCompleteLicenseSelection(licenseSelection)} onClick={()=>void onSaveLicenseSelection()} className={buttonClass}>{licenseSaving?'Saving licence choice…':'Save licence choice'}</button>}</>}</div>}
+        {licenseSaveMessage&&!(licenseSaveMessage==='Licence choice saved.'&&licenseDraftLoaded&&isCompleteLicenseSelection(licenseSelection)&&sameLicenseSelection(licenseSelection,licenseSelectionSaved))&&<p role={licenseSaveMessage==='Licence choice saved.'?'status':'alert'} className="text-sm text-gray-700">{licenseSaveMessage}</p>}
+        {licenseDraftLoaded&&isCompleteLicenseSelection(licenseSelection)&&sameLicenseSelection(licenseSelection,licenseSelectionSaved)&&<p role="status" className="text-sm text-green-800">Licence choice saved to your account.</p>}
+        {onSaveLicenseSelection && !sameLicenseSelection(licenseSelection,licenseSelectionSaved) && <button type="button" disabled={licenseSaving||!identityKnown||legalIdentityDirty||!licenseDraftLoaded||!isCompleteLicenseSelection(licenseSelection)} onClick={()=>void onSaveLicenseSelection()} className={buttonClass}>{licenseSaving?'Saving licence choice…':'Save licence choice'}</button>}</>}</div>}
     </section>
   );
 }

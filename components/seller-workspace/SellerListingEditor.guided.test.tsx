@@ -62,3 +62,11 @@ describe('guided editor source binding and saving',()=>{
   const assistant=vi.fn().mockResolvedValue({source_version:6,message:'Old text',proposals:[{field:'title',value:'Wrong title',reasoning:''}]});render(<SellerListingEditor initialContent={content} sourceVersion={7} categories={categories} assistant={assistant}/>);ask();await screen.findByText('Your files changed while Allai was drafting. Ask again.');expect((screen.getByLabelText('Title') as HTMLInputElement).value).toBe('Sales');expect(screen.queryByText('Wrong title')).toBeNull();
  });
 });
+
+it('uses growing wrapped title and tag fields and a wrapped category label without changing its slug',()=>{
+ const long='A very long category name '.repeat(6);
+ render(<SellerListingEditor initialContent={content} categories={[{slug:'financial-data',name:long}]}/>);
+ for(const label of ['Title','Tags'])expect(screen.getByLabelText(label).tagName).toBe('TEXTAREA');
+ expect((screen.getByLabelText('Category') as HTMLSelectElement).value).toBe('financial-data');
+ const display=screen.getByText(long.trim(),{selector:'span'});expect(display.className).toContain('whitespace-normal');
+});

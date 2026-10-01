@@ -6,7 +6,7 @@ import type { Metadata } from 'next';
 import { fetchListingAccessWindowDays, fetchListingVersions, fetchPublicListing, resolveListingUUID } from '@/lib/api';
 import {
   formatPrice,
-  formatDate,
+  formatPublishedDate,
   privacyScoreColor,
 } from '@/lib/format';
 import type { ListingDetail } from '@/types';
@@ -20,6 +20,7 @@ import ReactMarkdown from 'react-markdown';
 import rehypeSanitize from 'rehype-sanitize';
 import SampleFiles, { type ListingWithSamples } from './SampleFiles';
 import ListingLicenseDisclosure from '@/components/ListingLicenseDisclosure';
+import ApprovedListingPreview from '@/components/ApprovedListingPreview';
 import { isListingLicenseDetails } from '@/lib/listingLicense';
 
 export const dynamic = 'force-dynamic';
@@ -141,7 +142,7 @@ export default async function ListingDetailPage({ params, searchParams }: Props)
           <div>
             {!approved && <h1 className="text-3xl font-bold text-gray-900 mb-2">{listing.title}</h1>}
             <div className="flex flex-wrap items-center gap-3 text-sm text-gray-500">
-              <span>Published {listing.published_at ? formatDate(listing.published_at) : 'N/A'}</span>
+              <span>Published {listing.published_at ? formatPublishedDate(listing.published_at) : 'N/A'}</span>
               <span>&middot;</span>
               <span>{listing.view_count} views</span>
               <span>&middot;</span>
@@ -151,8 +152,7 @@ export default async function ListingDetailPage({ params, searchParams }: Props)
 
           <BuyerAtAGlance slug={listing.slug} listingId={listing.id} initialSummary={atAGlanceSummary} includeSample={false} hideSampleAvailability={pendingSellerTerms} />
 
-          {approved ? <iframe title="Seller-approved listing" sandbox="" referrerPolicy="no-referrer"
-            srcDoc={approved.rendered_html} className="h-[min(720px,80vh)] min-h-96 w-full rounded-xl border border-gray-200 bg-white" /> : <>
+          {approved ? <ApprovedListingPreview title="Seller-approved listing" html={approved.rendered_html} /> : <>
           {/* Description - rendered as sanitized markdown */}
           <div className="prose prose-sm max-w-none">
             <ReactMarkdown rehypePlugins={[rehypeSanitize]}>{listing.description}</ReactMarkdown>
@@ -194,7 +194,7 @@ export default async function ListingDetailPage({ params, searchParams }: Props)
           {publicLicenseUrl && <Link href={publicLicenseUrl} className={`inline-flex rounded-full px-3 py-1 text-sm font-medium ${licenseDetails?.code === 'standard' ? 'bg-green-50 text-green-900' : 'bg-amber-50 text-amber-950'}`}>
             {licenseDetails?.code === 'standard' ? 'ai.market standard terms' : "Seller's own licence"}
           </Link>}
-          {licenseDetails && <ListingLicenseDisclosure license={licenseDetails} />}
+          {licenseDetails && (pendingSellerTerms || approved && !listing.purchasable) && <ListingLicenseDisclosure license={licenseDetails} />}
           {pendingSellerTerms && <div role="status" className="rounded-lg border border-amber-200 bg-amber-50 p-4 text-sm text-amber-950">
             <p className="font-medium">Not yet available to buy. The seller needs to accept the current terms.</p>
           </div>}
