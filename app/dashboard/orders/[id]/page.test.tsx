@@ -5,18 +5,14 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { BuyerOrderDetail, OrderEvent, Transaction } from '@/types';
 
 const navigation = vi.hoisted(() => ({ orderId: 'order-1', txId: 'tx-1' }));
+const terms = vi.hoisted(() => ({ ensureTermsAccepted: vi.fn() }));
 const auth = vi.hoisted(() => ({ userId: 'viewer-1', role: 'seller' }));
-const membersApi = vi.hoisted(() => ({ get: vi.fn(), post: vi.fn() }));
-vi.mock('@/api/client', () => ({ api: membersApi }));
 const gatewayApi = vi.hoisted(() => ({ getGatewayDelivery: vi.fn(), reissueGatewayPermission: vi.fn(), reportGatewayProblem: vi.fn() }));
 vi.mock('@/api/gatewayDelivery', () => ({ ...gatewayApi, gatewayErrorCode: () => null }));
 const ordersApi = vi.hoisted(() => ({
   getOrder: vi.fn(),
   getOrderAccess: vi.fn(),
   getOrderEvents: vi.fn(),
-  refreshOrderAccess: vi.fn(),
-  refreshScopedDelivery: vi.fn(),
-  requestDownload: vi.fn(),
 }));
 const transactionsApi = vi.hoisted(() => ({
   getTransaction: vi.fn(),
@@ -40,7 +36,7 @@ vi.mock('@/components/Toast', () => ({
 }));
 vi.mock('@/components/legal/TermsGate', () => ({
   useTermsGate: () => ({
-    ensureTermsAccepted: async (action: () => unknown) => action(),
+    ensureTermsAccepted: terms.ensureTermsAccepted,
     TermsGatePrompt: () => null,
     checkingTerms: false,
   }),
@@ -48,11 +44,6 @@ vi.mock('@/components/legal/TermsGate', () => ({
 vi.mock('@/components/orders/OrderVersionAccessSummary', () => ({
   default: () => null,
 }));
-vi.mock('@/components/orders/ScopedCredentialDownload', () => ({
-  default: () => <div>Scoped downloads</div>,
-  isS3ScopedDeliveryResponse: () => false,
-}));
-
 const { default: OrderDetailPage } = await import('./page');
 
 function order(overrides: Partial<BuyerOrderDetail> = {}): BuyerOrderDetail {
@@ -106,16 +97,11 @@ describe('OrderDetailPage viewer relationship gating', () => {
     navigation.txId = 'tx-1';
     auth.userId = 'viewer-1';
     auth.role = 'seller';
-    membersApi.get.mockRejectedValue({ response: { status: 404 } });
+    terms.ensureTermsAccepted.mockImplementation(async (action: () => unknown) => action());
     gatewayApi.getGatewayDelivery.mockRejectedValue({ response: { status: 404, data: { error: { code: 'not_a_gateway_order' } } } });
     ordersApi.getOrder.mockResolvedValue(order());
     ordersApi.getOrderEvents.mockResolvedValue([]);
-    ordersApi.requestDownload.mockResolvedValue({
-      download_url: 'https://downloads.example.test/order-1',
-      download_number: 1,
-      downloads_remaining: 4,
-      s3_download_urls: [],
-    });
+    ordersApi.getOrderAccess.mockResolvedValue({ can_download: false });
     transactionsApi.getTransaction.mockResolvedValue(transaction());
   });
 
@@ -206,7 +192,7 @@ describe('OrderDetailPage viewer relationship gating', () => {
 
     expect(await screen.findByText(/available to the buyer/)).not.toBeNull();
     expect(screen.queryByRole('button', { name: 'Confirm Receipt' })).toBeNull();
-    expect(ordersApi.requestDownload).not.toHaveBeenCalled();
+    expect(ordersApi.getOrderAccess).not.toHaveBeenCalled();
   });
 
   it('offers Confirm Receipt to the buyer of record', async () => {
@@ -239,127 +225,87 @@ describe('OrderDetailPage viewer relationship gating', () => {
     expect(screen.queryByText('Order placed')).toBeNull();
   });
 
-  it('prepares fulfilled downloads exactly once for the buyer of record', async () => {
-    ordersApi.getOrder.mockResolvedValue(order({
-      buyer_id: auth.userId,
-      seller_id: 'seller-1',
-      status: 'fulfilled',
-    }));
-
-    render(<OrderDetailPage />);
-
-    await waitFor(() => {
-      expect(ordersApi.requestDownload).toHaveBeenCalledTimes(1);
-      expect(ordersApi.requestDownload).toHaveBeenCalledWith('order-1');
-    });
-  });
   it('shows Workspace downloads without automatically consuming an allowance', async () => {
     ordersApi.getOrder.mockResolvedValue({...order(),workspace_delivery:true,status:'delivered'});
     render(<OrderDetailPage />);
     fireEvent.click(await screen.findByRole('button',{name:'Continue to download'}));
     expect(await screen.findByRole('button',{name:'Download files'})).not.toBeNull();
-    expect(ordersApi.requestDownload).not.toHaveBeenCalled();
+    expect(ordersApi.getOrderAccess).not.toHaveBeenCalled();
   });
 
-  it('treats an empty 200 without a hash as a directory without legacy download', async () => {
-    ordersApi.getOrder.mockResolvedValue(order({ status: 'fulfilled' }));
-    membersApi.get.mockResolvedValue({ status: 200, data: { members: [] } });
+  it.each(['fulfilled', 'delivered', 'completed'])('uses retained reference access for a %s order', async (status) => {
+    ordersApi.getOrder.mockResolvedValue({ ...order(), status });
+    ordersApi.getOrderAccess.mockResolvedValue({
+      delivery_type: 'reference', can_download: true,
+      download_urls: [{ url: 'https://public.example.test/data.csv', filename: 'data.csv', expires_at: null }],
+    });
     render(<OrderDetailPage />);
-    await screen.findByText('Files in this dataset');
-    expect(await screen.findByText('No files are available yet.')).toBeTruthy();
-    expect(ordersApi.requestDownload).not.toHaveBeenCalled();
-    expect(membersApi.post).not.toHaveBeenCalled();
+    const link = await screen.findByRole('link', { name: 'Download data.csv' });
+    expect(link.getAttribute('href')).toBe('https://public.example.test/data.csv');
+    expect(link.getAttribute('referrerpolicy')).toBe('no-referrer');
+    expect(ordersApi.getOrderAccess).toHaveBeenCalledExactlyOnceWith('order-1');
+    expect(screen.queryByRole('button', { name: /Refresh|Get download access/ })).toBeNull();
   });
 
-  it('recognizes directory rows when the order serializer omits the hash', async () => {
-    ordersApi.getOrder.mockResolvedValue(order({ status: 'fulfilled' }));
-    membersApi.get.mockResolvedValue({ status: 200, data: { members: [{ index: 0, basename: 'rows.csv', size_bytes: 10, sha256: 'hash', state: 'delivered' }] } });
+  it('keeps reference navigation behind the existing buyer terms gate', async () => {
+    terms.ensureTermsAccepted.mockResolvedValueOnce(false);
+    ordersApi.getOrder.mockResolvedValue({ ...order(), status: 'delivered' });
+    ordersApi.getOrderAccess.mockResolvedValue({ delivery_type: 'reference', can_download: true,
+      download_urls: [{ url: 'https://public.example.test/data.csv' }] });
     render(<OrderDetailPage />);
-    await screen.findByText('rows.csv');
-    expect(ordersApi.requestDownload).not.toHaveBeenCalled();
-  });
-
-  it.each([
-    [410, 'delivery_retention_expired', 'This dataset is no longer available for download.'],
-    [403, 'download_window_expired', 'This order’s download window has ended.'],
-    [403, 'access_closed', 'Download access for this order has been closed.'],
-    [403, 'Download access has been closed', 'Download access for this order has been closed.'],
-  ])('renders permanent member refusal %s/%s without retry', async (status, detail, copy) => {
-    ordersApi.getOrder.mockResolvedValue(order({ status: 'fulfilled' }));
-    membersApi.get.mockRejectedValue({ response: { status, data: { detail: detail === 'download_window_expired' || detail === 'access_closed' ? { code: detail } : detail } } });
-    render(<OrderDetailPage />);
-    await screen.findByText('Order dataset');
-    expect(screen.queryByText('Failed to load order details.')).toBeNull();
-    expect(screen.getByRole('alert').textContent).toContain(copy);
-    expect(screen.queryByRole('button', { name: 'Get download access' })).toBeNull();
-    expect(screen.queryByRole('button', { name: 'Retry loading files' })).toBeNull();
-    expect(membersApi.get).toHaveBeenCalledTimes(1);
-    expect(ordersApi.requestDownload).not.toHaveBeenCalled();
+    fireEvent.click(await screen.findByRole('link', { name: 'Download' }));
+    expect(terms.ensureTermsAccepted).toHaveBeenCalledTimes(1);
+    expect(terms.ensureTermsAccepted).toHaveBeenCalledWith(expect.any(Function));
   });
 
   it.each([
-    ['500', { response: { status: 500 } }],
-    ['transport error', new Error('network')],
-  ])('keeps order details and offers read-only retry for %s', async (_label, failure) => {
+    { can_download: false },
+    { delivery_type: 'reference', can_download: false, download_urls: [{ url: 'https://public.example.test/data.csv' }] },
+    { delivery_type: 'reference', can_download: true, download_urls: [] },
+    { delivery_type: 'reference', can_download: true, download_urls: [{ url: 'javascript:alert(1)' }] },
+  ])('shows neutral unavailable access without a download control for %j', async (access) => {
     ordersApi.getOrder.mockResolvedValue(order({ status: 'fulfilled' }));
-    membersApi.get.mockRejectedValue(failure);
+    ordersApi.getOrderAccess.mockResolvedValue(access);
     render(<OrderDetailPage />);
-    await screen.findByText('Order dataset');
-    expect(screen.getByRole('heading', { name: 'Transaction' })).toBeTruthy();
+    expect(await screen.findByText('Download access is unavailable.')).toBeTruthy();
+    await waitFor(() => expect(screen.queryByText('Preparing download access...')).toBeNull());
+    expect(screen.queryByRole('link', { name: /^Download/ })).toBeNull();
+    expect(screen.queryByRole('button', { name: /Download|Refresh/ })).toBeNull();
     expect(screen.getByRole('link', { name: 'Report Issue' })).toBeTruthy();
-    expect(screen.getByRole('alert').textContent).toContain('files_unavailable');
-    const retry = screen.getByRole('button', { name: 'Retry loading files' });
-    membersApi.get.mockResolvedValue({ status: 200, data: { members: [] } });
-    fireEvent.click(retry);
-    await screen.findByText('No files are available yet.');
-    expect(membersApi.get).toHaveBeenCalledTimes(2);
-    expect(membersApi.post).not.toHaveBeenCalled();
-    expect(ordersApi.requestDownload).not.toHaveBeenCalled();
   });
 
-  it('keeps unexpected successful probe statuses unavailable', async () => {
+  it('keeps order details available when retained access is refused', async () => {
     ordersApi.getOrder.mockResolvedValue(order({ status: 'fulfilled' }));
-    membersApi.get.mockResolvedValue({ status: 204 });
+    ordersApi.getOrderAccess.mockRejectedValue({ response: { status: 403 } });
     render(<OrderDetailPage />);
-    await screen.findByText('Order dataset');
-    expect(screen.queryByRole('button', { name: 'Retry loading files' })).toBeNull();
-    expect(ordersApi.requestDownload).not.toHaveBeenCalled();
+    await screen.findByText('Download access is unavailable.');
+    expect(screen.getByText('Order dataset')).toBeTruthy();
+    expect(screen.getByRole('heading', { name: 'Transaction' })).toBeTruthy();
+    expect(screen.queryByRole('button', { name: /Download|Refresh/ })).toBeNull();
   });
 
-  it('treats a 200 without a members array as unavailable rather than a directory', async () => {
-    ordersApi.getOrder.mockResolvedValue(order({ status: 'fulfilled' }));
-    membersApi.get.mockResolvedValue({ status: 200, data: {} });
+  it('does not fetch or offer reference access after the download window expires', async () => {
+    ordersApi.getOrder.mockResolvedValue(order({ status: 'fulfilled', access_expired: true }));
     render(<OrderDetailPage />);
-    await screen.findByText('Order dataset');
-    expect(screen.getByRole('alert').textContent).toContain('files_unavailable');
-    expect(screen.queryByText('No files are available yet.')).toBeNull();
-    expect(screen.queryByRole('button', { name: 'Retry loading files' })).toBeNull();
-    expect(ordersApi.requestDownload).not.toHaveBeenCalled();
+    await screen.findByText('Download window expired');
+    expect(ordersApi.getOrderAccess).not.toHaveBeenCalled();
+    expect(screen.queryByRole('link', { name: /^Download/ })).toBeNull();
   });
 
-  it('permits legacy access only after a retry returns a definitive 404', async () => {
-    ordersApi.getOrder.mockResolvedValue(order({ status: 'fulfilled' }));
-    membersApi.get.mockRejectedValue({ response: { status: 503 } });
+  it('keeps the gateway delivery link on its own route', async () => {
+    ordersApi.getOrder.mockResolvedValue(order());
+    gatewayApi.getGatewayDelivery.mockResolvedValue({ delivery: {
+      door_url: 'https://gateway.example.test/door',
+      hold: { state: 'no_hold', until: null, disputable: false }, problem: null,
+      files: [{ file_id: 'file-1', display_name: 'gateway.csv', size_bytes: 10, sha256: 'abc',
+        state: 'not_started', transmitted_bytes: 0,
+        permission: { token: 'permission', browser_url: 'https://gateway.example.test/file', download_url: 'https://gateway.example.test/file' },
+        reissue: { allowed: false, remaining_24h: 5, blocked_code: null } }],
+    } });
     render(<OrderDetailPage />);
-    const retry = await screen.findByRole('button', { name: 'Retry loading files' });
-    expect(ordersApi.requestDownload).not.toHaveBeenCalled();
-    fireEvent.click(retry);
-    await waitFor(() => expect(membersApi.get).toHaveBeenCalledTimes(2));
-    await waitFor(() => expect((retry as HTMLButtonElement).disabled).toBe(false));
-    expect(ordersApi.requestDownload).not.toHaveBeenCalled();
-    membersApi.get.mockRejectedValue({ response: { status: 404 } });
-    fireEvent.click(retry);
-    await waitFor(() => expect(ordersApi.requestDownload).toHaveBeenCalledTimes(1));
-    expect(screen.queryByText('Files in this dataset')).toBeNull();
+    const link = await screen.findByRole('link', { name: 'Download file' });
+    expect(link.getAttribute('href')).toBe('https://gateway.example.test/file');
+    expect(screen.getByRole('region', { name: 'Gateway delivery' })).toBeTruthy();
+    expect(ordersApi.getOrderAccess).not.toHaveBeenCalled();
   });
-
-  it('does not show directory access controls to the seller', async () => {
-    ordersApi.getOrder.mockResolvedValue(order({ buyer_id: 'buyer-2', seller_id: auth.userId, status: 'fulfilled' }));
-    render(<OrderDetailPage />);
-    await screen.findByText(/available to the buyer/);
-    expect(screen.queryByText('Files in this dataset')).toBeNull();
-    expect(membersApi.get).not.toHaveBeenCalled();
-    expect(membersApi.post).not.toHaveBeenCalled();
-  });
-
 });
