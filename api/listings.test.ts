@@ -7,7 +7,22 @@ vi.mock('./client', () => ({
   api: { get: apiGet, post: apiPost },
 }));
 
-const { createDraftListing, getMarketplaceCategoryFacets } = await import('./listings');
+const { createDraftListing, getMarketplaceCategoryFacets, getListingOwnership } = await import('./listings');
+
+describe('getListingOwnership', () => {
+  it.each([true, false, 'true', 1, null, undefined])('accepts only literal true from is_owner: %s', async (is_owner) => {
+    apiGet.mockResolvedValue({ data: { is_owner } });
+    await expect(getListingOwnership('listing-1')).resolves.toBe(is_owner === true);
+    expect(apiGet).toHaveBeenCalledWith('/listings/listing-1/ownership', {
+      headers: { 'Cache-Control': 'no-store' },
+    });
+  });
+
+  it('treats a missing payload as nonownership', async () => {
+    apiGet.mockResolvedValue({ data: null });
+    await expect(getListingOwnership('listing-1')).resolves.toBe(false);
+  });
+});
 
 it('posts a typed draft to the listings endpoint', async () => {
   const body = { title: 'Safe data', description: 'A useful data set', price: 0, model_provider: 'anthropic' as const, listing_type: 'raw' as const, schema_info: { row_count: 2, columns: [{ name: 'safe', type: 'integer' }] } };

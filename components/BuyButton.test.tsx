@@ -16,9 +16,9 @@ import { hashLicenseComponentBytes } from './ListingLicenseDisclosure';
 import {sha256} from '@/lib/customLicenseVerification';
 import { readFileSync } from 'node:fs';
 
-const listingsApi = vi.hoisted(() => ({ getMyListings: vi.fn() }));
+const listingsApi = vi.hoisted(() => ({ getListingOwnership: vi.fn() }));
 vi.mock('@/api/listings', () => listingsApi);
-beforeEach(() => { listingsApi.getMyListings.mockResolvedValue({ data: [] }); });
+beforeEach(() => { listingsApi.getListingOwnership.mockResolvedValue(false); });
 
 async function renderBuyer(ui: React.ReactNode) {
   let view!: ReturnType<typeof render>;
@@ -71,27 +71,28 @@ describe('BuyButton listing ownership', () => {
   afterEach(() => {
     cleanup();
     vi.clearAllMocks();
+    vi.useRealTimers();
     useAuthStore.setState({ isAuthenticated: false, user: null });
   });
   const props = { listingId: 'listing-1', slug: 'listing', price: 20, pricingType: 'one_time' };
 
   it('hides all purchase controls while pending and shows the owner panel without licence acceptance', async () => {
-    let resolve!: (value: { data: Array<{ id: string }> }) => void;
-    listingsApi.getMyListings.mockReturnValue(new Promise((done) => { resolve = done; }));
+    let resolve!: (value: boolean) => void;
+    listingsApi.getListingOwnership.mockReturnValue(new Promise((done) => { resolve = done; }));
     const view = render(<React.StrictMode><ToastProvider><BuyButton {...props} licenseDetails={structuredLicense} /></ToastProvider></React.StrictMode>);
     expect(view.container.textContent).toBe('');
     expect(screen.queryByRole('button')).toBeNull();
-    await act(async () => resolve({ data: [{ id: 'listing-1' }] }));
+    await act(async () => resolve(true));
     expect(screen.getByText('This is your listing')).toBeTruthy();
     expect(screen.queryByRole('button')).toBeNull();
     expect(screen.queryByLabelText('Typed full name')).toBeNull();
     expect(ordersApi.getMyOrders).not.toHaveBeenCalled();
     view.rerender(<React.StrictMode><ToastProvider><BuyButton {...props} price={25} /></ToastProvider></React.StrictMode>);
-    expect(listingsApi.getMyListings).toHaveBeenCalledOnce();
+    expect(listingsApi.getListingOwnership).toHaveBeenCalledOnce();
   });
 
   it('shows Buy for a non-owner, including a nonmatching sellerId', async () => {
-    listingsApi.getMyListings.mockResolvedValue({ data: [{ id: 'another-listing' }] });
+    listingsApi.getListingOwnership.mockResolvedValue(false);
     await renderBuyer(<ToastProvider><BuyButton {...props} sellerId="another-seller" /></ToastProvider>);
     expect(screen.getByRole('button', { name: 'Buy Now - $20.00' })).toBeTruthy();
     expect(screen.queryByText('This is your listing')).toBeNull();
@@ -101,31 +102,117 @@ describe('BuyButton listing ownership', () => {
     useAuthStore.setState({ isAuthenticated: false, user: null });
     render(<ToastProvider><BuyButton {...props} /></ToastProvider>);
     expect(screen.getByRole('link', { name: 'Buy Now - $20.00' })).toBeTruthy();
-    expect(listingsApi.getMyListings).not.toHaveBeenCalled();
+    expect(listingsApi.getListingOwnership).not.toHaveBeenCalled();
   });
 
-  it('falls back to Buy on an ownership API failure', async () => {
-    listingsApi.getMyListings.mockRejectedValue(new Error('Unavailable'));
+  it.each([new Error('Network unavailable'), { response: { status: 404 } }])('falls back to Buy on an ownership API failure: %s', async (error) => {
+    listingsApi.getListingOwnership.mockRejectedValue(error);
     await renderBuyer(<ToastProvider><BuyButton {...props} /></ToastProvider>);
     expect(screen.getByRole('button', { name: 'Buy Now - $20.00' })).toBeTruthy();
-    expect(listingsApi.getMyListings).toHaveBeenCalledOnce();
+    expect(listingsApi.getListingOwnership).toHaveBeenCalledOnce();
   });
 
-  it('keeps the matching sellerId path immediate without calling mine', () => {
+  it('recovers after three seconds and ignores a late owner response', async () => {
+    vi.useFakeTimers();
+    let resolve!: (value: boolean) => void;
+    listingsApi.getListingOwnership.mockReturnValue(new Promise((done) => { resolve = done; }));
+    const view = render(<ToastProvider><BuyButton {...props} /></ToastProvider>);
+    expect(view.container.textContent).toBe('');
+    await act(async () => { await vi.advanceTimersByTimeAsync(2999); });
+    expect(screen.queryByRole('button')).toBeNull();
+    await act(async () => { await vi.advanceTimersByTimeAsync(1); });
+    expect(screen.getByRole('button', { name: 'Buy Now - $20.00' })).toBeTruthy();
+    await act(async () => resolve(true));
+    expect(screen.queryByText('This is your listing')).toBeNull();
+    expect(screen.getByRole('button', { name: 'Buy Now - $20.00' })).toBeTruthy();
+  });
+
+  it('keeps purchase and licence controls hidden from identity loading through owner resolution', async () => {
+    useAuthStore.setState({ user: null });
+    let resolve!: (value: boolean) => void;
+    listingsApi.getListingOwnership.mockReturnValue(new Promise((done) => { resolve = done; }));
+    const view = render(<ToastProvider><BuyButton {...props} licenseDetails={structuredLicense} /></ToastProvider>);
+    expect(view.container.textContent).toBe('');
+    expect(listingsApi.getListingOwnership).not.toHaveBeenCalled();
+    await act(async () => useAuthStore.setState({ user: { id: 'seller-1' } as never }));
+    expect(view.container.textContent).toBe('');
+    expect(screen.queryByRole('button')).toBeNull();
+    expect(screen.queryByLabelText('Typed full name')).toBeNull();
+    await act(async () => resolve(true));
+    expect(screen.getByText('This is your listing')).toBeTruthy();
+    expect(screen.queryByRole('button')).toBeNull();
+    expect(screen.queryByLabelText('Typed full name')).toBeNull();
+    expect(ordersApi.getMyOrders).not.toHaveBeenCalled();
+  });
+
+  it('bounds identity loading and does not restart the deadline when the user arrives', async () => {
+    vi.useFakeTimers();
+    useAuthStore.setState({ user: null });
+    let resolve!: (value: boolean) => void;
+    listingsApi.getListingOwnership.mockReturnValue(new Promise((done) => { resolve = done; }));
+    render(<ToastProvider><BuyButton {...props} /></ToastProvider>);
+    await act(async () => { await vi.advanceTimersByTimeAsync(2500); });
+    await act(async () => useAuthStore.setState({ user: { id: 'seller-1' } as never }));
+    expect(screen.queryByRole('button')).toBeNull();
+    await act(async () => { await vi.advanceTimersByTimeAsync(500); });
+    expect(screen.getByRole('button', { name: 'Buy Now - $20.00' })).toBeTruthy();
+    await act(async () => resolve(true));
+    expect(screen.queryByText('This is your listing')).toBeNull();
+  });
+
+  it('falls back when the user record never loads, including after a late identity arrives', async () => {
+    vi.useFakeTimers();
+    useAuthStore.setState({ user: null });
+    render(<ToastProvider><BuyButton {...props} /></ToastProvider>);
+    await act(async () => { await vi.advanceTimersByTimeAsync(3000); });
+    expect(screen.getByRole('button', { name: 'Buy Now - $20.00' })).toBeTruthy();
+    await act(async () => useAuthStore.setState({ user: { id: 'seller-1' } as never }));
+    expect(screen.getByRole('button', { name: 'Buy Now - $20.00' })).toBeTruthy();
+    expect(listingsApi.getListingOwnership).not.toHaveBeenCalled();
+  });
+
+  it('clears the deadline on unmount and ignores a late response', async () => {
+    vi.useFakeTimers();
+    let resolve!: (value: boolean) => void;
+    listingsApi.getListingOwnership.mockReturnValue(new Promise((done) => { resolve = done; }));
+    const view = render(<ToastProvider><BuyButton {...props} /></ToastProvider>);
+    view.unmount();
+    expect(vi.getTimerCount()).toBe(0);
+    await act(async () => resolve(true));
+    expect(view.container.textContent).toBe('');
+    expect(ordersApi.getMyOrders).not.toHaveBeenCalled();
+  });
+
+  it('keeps the matching sellerId path immediate without calling the ownership route', () => {
     render(<ToastProvider><BuyButton {...props} sellerId="seller-1" licenseDetails={structuredLicense} /></ToastProvider>);
     expect(screen.getByText('This is your listing')).toBeTruthy();
     expect(screen.queryByRole('button')).toBeNull();
-    expect(listingsApi.getMyListings).not.toHaveBeenCalled();
+    expect(listingsApi.getListingOwnership).not.toHaveBeenCalled();
   });
 
   it('checks again for a different authenticated user without showing the previous ownership result', async () => {
-    listingsApi.getMyListings.mockResolvedValueOnce({ data: [{ id: 'listing-1' }] });
+    listingsApi.getListingOwnership.mockResolvedValueOnce(true);
     await renderBuyer(<ToastProvider><BuyButton {...props} /></ToastProvider>);
     expect(screen.getByText('This is your listing')).toBeTruthy();
-    listingsApi.getMyListings.mockResolvedValueOnce({ data: [] });
+    listingsApi.getListingOwnership.mockResolvedValueOnce(false);
     await act(async () => useAuthStore.setState({ user: { id: 'buyer-2' } as never }));
     expect(screen.getByRole('button', { name: 'Buy Now - $20.00' })).toBeTruthy();
-    expect(listingsApi.getMyListings).toHaveBeenCalledTimes(2);
+    expect(listingsApi.getListingOwnership).toHaveBeenCalledTimes(2);
+  });
+
+  it('checks the new listing and ignores the previous listing response', async () => {
+    let resolveFirst!: (value: boolean) => void;
+    let resolveSecond!: (value: boolean) => void;
+    listingsApi.getListingOwnership
+      .mockReturnValueOnce(new Promise((done) => { resolveFirst = done; }))
+      .mockReturnValueOnce(new Promise((done) => { resolveSecond = done; }));
+    const view = render(<ToastProvider><BuyButton {...props} /></ToastProvider>);
+    view.rerender(<ToastProvider><BuyButton {...props} listingId="listing-2" /></ToastProvider>);
+    await act(async () => resolveFirst(true));
+    expect(view.container.textContent).toBe('');
+    await act(async () => resolveSecond(false));
+    expect(screen.getByRole('button', { name: 'Buy Now - $20.00' })).toBeTruthy();
+    expect(listingsApi.getListingOwnership.mock.calls).toEqual([['listing-1'], ['listing-2']]);
   });
 });
 

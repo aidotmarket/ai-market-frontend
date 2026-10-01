@@ -49,7 +49,7 @@ export default function BuyButton({
 }: BuyButtonProps) {
   const termsVersion = useServedTermsVersion();
   const { user, isAuthenticated } = useAuthStore();
-  const { isOwner, checkingOwnership } = useListingOwnership(listingId, isAuthenticated ? user?.id : undefined, sellerId);
+  const { isOwner, checkingOwnership } = useListingOwnership(listingId, isAuthenticated ? user?.id : undefined, sellerId, isAuthenticated);
   const { toast } = useToast();
   const [loading, setLoading] = useState(false);
   const [purchasedOrder, setPurchasedOrder] = useState<BuyerOrder | null>(null);
