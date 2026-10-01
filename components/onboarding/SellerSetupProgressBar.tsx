@@ -17,7 +17,7 @@ import { useToast } from '@/components/Toast';
 
 const CAPABILITIES_CHANGED_EVENT = 'capabilities:changed';
 
-const STEPS: Array<{ id: CapabilityStep; label: string; href?: string }> = [
+export const SELLER_SETUP_STEPS: Array<{ id: CapabilityStep; label: string; href?: string }> = [
   { id: 'profile_name', label: 'Profile name', href: '/dashboard/settings#profile' },
   { id: 'company_name', label: 'Company name', href: '/dashboard/settings#company' },
   { id: 'totp_enabled', label: '2FA', href: '/dashboard/settings#security' },
@@ -73,13 +73,10 @@ export default function SellerSetupProgressBar() {
 
   const seller = capabilities?.seller;
   const missingSteps = useMemo(() => new Set(seller?.missing_steps ?? []), [seller?.missing_steps]);
-  const doneCount = seller ? STEPS.length - seller.missing_steps.length : 0;
+  const doneCount = seller ? SELLER_SETUP_STEPS.length - seller.missing_steps.length : 0;
   const nextStep = capabilities?.next_action?.capability === 'seller' ? capabilities.next_action.step : null;
   const stripeChecking = seller?.reason === 'durable_signal_unavailable' && missingSteps.has('stripe_payouts_live');
 
-  if (!isAuthenticated || isLoading || seller?.effective_status !== 'provisioning') {
-    return null;
-  }
 
   const goToStep = async (step: CapabilityStep) => {
     if (step === 'stripe_payouts_live') {
@@ -98,9 +95,19 @@ export default function SellerSetupProgressBar() {
       return;
     }
 
-    const href = STEPS.find((item) => item.id === step)?.href ?? '/dashboard/settings';
+    const href = SELLER_SETUP_STEPS.find((item) => item.id === step)?.href ?? '/dashboard/settings';
     router.push(href);
   };
+
+  useEffect(()=>{
+    const next=()=>{setCollapsed(false);if(nextStep)void goToStep(nextStep);};
+    window.addEventListener('seller-setup:next',next);
+    return()=>window.removeEventListener('seller-setup:next',next);
+  });
+
+  if (!isAuthenticated || isLoading || seller?.effective_status !== 'provisioning') {
+    return null;
+  }
 
   if (collapsed) {
     return (
@@ -110,17 +117,17 @@ export default function SellerSetupProgressBar() {
         className="fixed bottom-5 right-5 z-40 rounded-full border border-[#C5CAE9] bg-white px-4 py-3 text-sm font-semibold text-[#3F51B5] shadow-lg hover:bg-[#F8F9FF]"
         aria-label="Expand seller setup progress"
       >
-        Seller setup {doneCount} of {STEPS.length}
+        Seller setup {doneCount} of {SELLER_SETUP_STEPS.length}
       </button>
     );
   }
 
   return (
-    <div className="fixed bottom-5 right-5 z-40 w-[calc(100vw-2.5rem)] max-w-md rounded-lg border border-gray-200 bg-white shadow-xl">
+    <div id="seller-setup-next" className="fixed bottom-5 right-5 z-40 w-[calc(100vw-2.5rem)] max-w-md rounded-lg border border-gray-200 bg-white shadow-xl">
       <div className="flex items-start justify-between gap-4 border-b border-gray-100 px-4 py-3">
         <div>
           <p className="text-sm font-semibold text-gray-900">Finish seller setup</p>
-          <p className="mt-0.5 text-xs text-gray-500">{doneCount} of {STEPS.length} complete</p>
+          <p className="mt-0.5 text-xs text-gray-500">{doneCount} of {SELLER_SETUP_STEPS.length} complete</p>
         </div>
         <button
           type="button"
@@ -136,12 +143,12 @@ export default function SellerSetupProgressBar() {
         <div className="h-2 overflow-hidden rounded-full bg-gray-100">
           <div
             className="h-full rounded-full bg-[#3F51B5] transition-all"
-            style={{ width: `${(doneCount / STEPS.length) * 100}%` }}
+            style={{ width: `${(doneCount / SELLER_SETUP_STEPS.length) * 100}%` }}
           />
         </div>
 
         <div className="space-y-2">
-          {STEPS.map((step) => {
+          {SELLER_SETUP_STEPS.map((step) => {
             const done = !missingSteps.has(step.id);
             const isNext = nextStep === step.id;
             const label = step.id === 'stripe_payouts_live' && stripeChecking ? 'Checking payouts...' : step.label;
@@ -175,7 +182,7 @@ export default function SellerSetupProgressBar() {
             disabled={stripeLoading}
             className="w-full rounded-lg bg-[#3F51B5] px-4 py-2.5 text-sm font-semibold text-white transition-colors hover:bg-[#3545a0] disabled:cursor-not-allowed disabled:opacity-60"
           >
-            {stripeLoading ? 'Opening Stripe...' : `Continue: ${STEPS.find((step) => step.id === nextStep)?.label ?? 'Next step'}`}
+            {stripeLoading ? 'Opening Stripe...' : `Continue: ${SELLER_SETUP_STEPS.find((step) => step.id === nextStep)?.label ?? 'Next step'}`}
           </button>
         )}
       </div>

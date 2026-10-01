@@ -10,3 +10,11 @@ export async function readListingSource(): Promise<SourceRead | null> {
 export async function saveListingSource(content: SourceContent, expected_version: number, request_id: string): Promise<SourceRead> {
   return (await api.put('/seller-workspace/listing-source', {content, expected_version, request_id})).data.source;
 }
+
+export interface SellerCategory {slug: string; name: string}
+export async function readSellerCategories(signal?: AbortSignal): Promise<SellerCategory[]> {
+  const data: unknown = (await api.get('/seller-workspace/categories', {signal})).data;
+  if (!Array.isArray(data) || !data.every(item => item && typeof item.slug === 'string' && typeof item.name === 'string'))
+    throw new Error('The seller category list could not be read.');
+  return data;
+}

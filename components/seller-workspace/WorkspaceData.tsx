@@ -2,6 +2,7 @@
 
 import { useEffect, useMemo, useRef, useState } from 'react';
 import axios from 'axios';
+import {useListingFlow} from './GuidedListingFlow';
 import {MAX_SELECTION_FILES,FolderSelectionError,mergeSelection,resolveFolder} from './folderSelection';
 import type { SourceRead } from '@/api/sellerListingSource';
 import {isCompleteLicenseSelection,type LicenseSelection} from '@/api/listingLicenses';
@@ -32,7 +33,7 @@ export function WorkspaceNotice({ title, children }: { title: string; children: 
   return <div className="rounded-xl border border-gray-200 bg-white p-6 sm:p-8"><h2 className="text-lg font-semibold text-gray-900">{title}</h2><div className="mt-2 max-w-2xl text-sm leading-6 text-gray-600">{children}</div></div>;
 }
 
-type SaveSelection = (connection: SellerWorkspaceConnection, objects: WorkspaceObject[]) => Promise<void>;
+type SaveSelection = (connection: SellerWorkspaceConnection, objects: WorkspaceObject[]) => Promise<void|boolean>;
 type SaveSampleSelection=(indices:number[])=>Promise<void>;
 export function WorkspaceData({ connections, enabled, savedSource, onSaveSelection, saving = false,
   sampleFilesAvailable=false,initialSampleIndices=[],onSaveSampleSelection,onVisibleSampleSelectionChange,sampleLimits=DEFAULT_LIMITS,
@@ -46,11 +47,11 @@ export function WorkspaceData({ connections, enabled, savedSource, onSaveSelecti
   const identityKnown=legalIdentityState.kind==='known';
   const selected = verified.find((connection) => connection.id === selectedId) ?? verified[0];
   if (!enabled) return <WorkspaceNotice title="File browsing is not available yet">Your storage connections are saved. File browsing still needs to be connected in this Workspace. You do not need to run a data analysis or request marketplace verification to prepare a listing.</WorkspaceNotice>;
-  if (!selected) return <WorkspaceNotice title="Connect storage to see your data">Add and verify an AWS connection in Storage connections. Only files inside the folder you authorize will be available here.</WorkspaceNotice>;
+  if (!selected) return <WorkspaceNotice title="Connect storage to see your data">Add and verify an AWS connection in Connect your storage. Only files inside the folder you authorize will be available here.</WorkspaceNotice>;
   return (
-    <section className="space-y-5" aria-label="Choose what to sell">
+    <section className="space-y-5" aria-label="Choose your files">
       <div className="flex flex-wrap items-end justify-between gap-4">
-        <div><h2 className="text-xl font-semibold text-gray-900">Choose what to sell</h2><p className="mt-1 text-sm text-gray-600">Browse file names, formats, and sizes in your connected folder. File contents stay in your cloud account.</p></div>
+        <div><h2 className="text-xl font-semibold text-gray-900">Choose your files</h2><p className="mt-1 text-sm text-gray-600">Browse file names, formats, and sizes in your connected folder. File contents stay in your cloud account.</p></div>
         <label className="text-sm font-medium text-gray-700">Storage connection
           <select disabled={saving} value={selected.id} onChange={(event) => setSelectedId(event.target.value)} className="mt-1 block w-full max-w-sm rounded-lg border border-gray-300 bg-white px-3 py-2 disabled:opacity-50">
             {verified.map((connection) => <option key={connection.id} value={connection.id}>{connection.bucket} / {connection.prefix}</option>)}
@@ -107,6 +108,7 @@ export function sampleUploadRefusal(detail:unknown) {
 function ObjectBrowser({ connection, initialSelection, onSaveSelection,sourceVersion,sampleFilesAvailable,initialSampleIndices,
   onSaveSampleSelection,onVisibleSampleSelectionChange,sampleLimits }: { connection: SellerWorkspaceConnection; initialSelection?: WorkspaceObject[]; onSaveSelection?: SaveSelection;
   sourceVersion?:number;sampleFilesAvailable:boolean;initialSampleIndices:number[];onSaveSampleSelection?:SaveSampleSelection;onVisibleSampleSelectionChange?:(indices:number[]|null)=>void;sampleLimits:SampleLimits }) {
+  const flow=useListingFlow();
   const initial = useRef(initialSelection ?? []);
   const [savedSelection, setSavedSelection] = useState(JSON.stringify((initialSelection ?? []).map(objectIdentity)));
   const [savingSelection, setSavingSelection] = useState(false);
@@ -188,15 +190,20 @@ function ObjectBrowser({ connection, initialSelection, onSaveSelection,sourceVer
   const selectedIdentities=useMemo(()=>new Set(selected.map(objectIdentity)),[selected]);
   const selectionBytes=useMemo(()=>selected.reduce((sum,item)=>sum+item.size,0),[selected]);
   useEffect(()=>setSelectionPage(0),[selected]);
-  const saveSelection = async () => {
-    if (!onSaveSelection || saving.current || resolvingRef.current || selected.length === 0 || confirmation !== selectionSnapshot) return;
+  const flowRef=useRef(flow);flowRef.current=flow;
+  useEffect(()=>{flowRef.current?.setFilesDirty(selectionSnapshot!==savedSelection);},[selectionSnapshot,savedSelection]);
+  const saveSelection = async (movingOn = false) => {
+    if (!onSaveSelection || saving.current || resolvingRef.current || selected.length === 0 || (!movingOn && confirmation !== selectionSnapshot)) return false;
     saving.current = true; setSavingSelection(true); setSelectionError(null);
     const submitted = selectionSnapshot;
     try {
-      await onSaveSelection(connection, [...selected]);
+      const complete=await onSaveSelection(connection, [...selected]);
       if (mounted.current) {setSavedSelection(submitted);setConfirmation(null);}
+      if(complete===false){setSelectionError('Your files were saved, but your sample choice could not be saved. Finish or clear the sample choice before continuing.');return false;}
+      return true;
     } catch (error) {
-      if (mounted.current) setSelectionError(axios.isAxiosError(error) && error.response?.status === 409
+      const detail=axios.isAxiosError(error)?error.response?.data?.detail:null;
+      if (mounted.current) setSelectionError(typeof detail==='string'?detail:axios.isAxiosError(error)&&typeof detail?.message==='string'?detail.message:axios.isAxiosError(error) && error.response?.status === 409
         ? 'The files, connection or saved selection changed. Your choices are still here. Reload the Workspace and choose the current files before saving again.'
         : 'Saving could not be confirmed. Your choices are still here. Try saving again.');
     } finally { saving.current = false; if (mounted.current) setSavingSelection(false); }
@@ -288,12 +295,17 @@ function ObjectBrowser({ connection, initialSelection, onSaveSelection,sourceVer
         {selectedFolders.length>0 && <p className="break-all text-sm text-gray-700">Folders: {selectedFolders.join(', ')} (including subfolders)</p>}
         <p className="text-sm text-gray-900">You have chosen {selected.length.toLocaleString('en')} {selected.length===1?'file':'files'} totaling {formatBytes(selectionBytes)} from {connection.bucket}. Is this correct?</p>
         <p className="text-sm text-gray-600">This confirms all selected files, including those on other preview pages. We checked file names and sizes; we did not read or analyze their contents.</p>
-        <div className="flex gap-3"><button type="button" disabled={savingSelection} onClick={saveSelection} className={buttonClass}>{savingSelection?'Saving selection…':'Confirm selection'}</button><button type="button" disabled={savingSelection} onClick={()=>setConfirmation(null)} className={buttonClass}>Change selection</button></div>
+        <div className="flex gap-3"><button type="button" disabled={savingSelection} onClick={()=>void saveSelection()} className={buttonClass}>{savingSelection?'Saving selection…':'Confirm selection'}</button><button type="button" disabled={savingSelection} onClick={()=>setConfirmation(null)} className={buttonClass}>Change selection</button></div>
       </section>}
       <div className="border-t border-gray-200 bg-gray-50 px-5 py-4">
         <div className="flex flex-wrap items-center justify-between gap-3"><p role="status" className="text-sm font-medium text-gray-900">{selected.length} {selected.length === 1 ? 'file' : 'files'} selected · {formatBytes(selectionBytes)}</p>{selected.length > 0 && <button type="button" disabled={resolving} onClick={() => {setSelected([]);setSelectedFolders([]);setConfirmation(null);}} className={buttonClass}>Clear selection</button>}</div>
-        {onSaveSelection ? <div className="mt-3 space-y-3"><button type="button" disabled={resolving || savingSelection || selected.length === 0 || selectionSnapshot === savedSelection} onClick={() => setConfirmation(selectionSnapshot)} className={buttonClass}>{savingSelection ? 'Saving selection…' : 'Save selected files'}</button><p role="status" className="text-sm text-gray-600">{selectionSnapshot === savedSelection && selected.length > 0 ? 'File selection saved to your account.' : selected.length===0 ? savedSelection!=='[]' ? 'Your saved file selection remains in your account. Choose files to replace it.' : 'Choose at least one file before saving a selection.' : 'Your file choices have not been saved.'} Saving does not publish or analyze your data.</p>{selected.length > 0 && <ul aria-label="Selected files" className="space-y-1 text-xs text-gray-600">{selected.slice(selectionPage*50,(selectionPage+1)*50).map(item => <li key={objectIdentity(item)} className="break-all">{item.key}</li>)}</ul>}{selected.length>50 && <div className="flex items-center gap-3 text-xs text-gray-600" aria-label="Selected file preview pages"><button type="button" className={buttonClass} disabled={selectionPage===0} onClick={()=>setSelectionPage(page=>page-1)}>Previous selected files</button><span>Showing {selectionPage*50+1}–{Math.min((selectionPage+1)*50,selected.length)} of {selected.length.toLocaleString('en')}</span><button type="button" className={buttonClass} disabled={(selectionPage+1)*50>=selected.length} onClick={()=>setSelectionPage(page=>page+1)}>Next selected files</button></div>}{selectionError && <p role="alert" className="text-sm text-red-800">{selectionError}</p>}<p className="text-xs text-gray-600">Choose files, folders, or both, up to 50,000 files per selection. Folder choices include subfolders. Files added later require a new selection and confirmation. Your file choices are saved privately; the files stay in your cloud account.</p></div> : <p className="mt-2 text-xs leading-5 text-gray-600">Choosing files does not read or analyze their contents. Your selection stays when you switch Workspace sections. Changing the storage connection, reloading, or leaving the Workspace clears it. Saving it to a listing is not available yet.</p>}
+        {onSaveSelection ? <div className="mt-3 space-y-3">{selectionSnapshot !== savedSelection && <button type="button" disabled={resolving || savingSelection || selected.length === 0 || selectionSnapshot === savedSelection} onClick={() => setConfirmation(selectionSnapshot)} className={buttonClass}>{savingSelection ? 'Saving selection…' : 'Save selected files'}</button>}<p role="status" className="text-sm text-gray-600">{selectionSnapshot === savedSelection && selected.length > 0 ? 'File selection saved to your account.' : selected.length===0 ? savedSelection!=='[]' ? 'Your saved file selection remains in your account. Choose files to replace it.' : 'Choose at least one file before saving a selection.' : 'Your file choices have not been saved.'} Saving does not publish or analyze your data.</p>{selected.length > 0 && <ul aria-label="Selected files" className="space-y-1 text-xs text-gray-600">{selected.slice(selectionPage*50,(selectionPage+1)*50).map(item => <li key={objectIdentity(item)} className="break-all">{item.key}</li>)}</ul>}{selected.length>50 && <div className="flex items-center gap-3 text-xs text-gray-600" aria-label="Selected file preview pages"><button type="button" className={buttonClass} disabled={selectionPage===0} onClick={()=>setSelectionPage(page=>page-1)}>Previous selected files</button><span>Showing {selectionPage*50+1}–{Math.min((selectionPage+1)*50,selected.length)} of {selected.length.toLocaleString('en')}</span><button type="button" className={buttonClass} disabled={(selectionPage+1)*50>=selected.length} onClick={()=>setSelectionPage(page=>page+1)}>Next selected files</button></div>}{selectionError && <p role="alert" className="text-sm text-red-800">{selectionError}</p>}<p className="text-xs text-gray-600">Choose files, folders, or both, up to 50,000 files per selection. Folder choices include subfolders. Files added later require a new selection and confirmation. Your file choices are saved privately; the files stay in your cloud account.</p></div> : <p className="mt-2 text-xs leading-5 text-gray-600">Choosing files does not read or analyze their contents. Your selection stays when you switch Workspace sections. Changing the storage connection, reloading, or leaving the Workspace clears it. Saving it to a listing is not available yet.</p>}
       </div>
+      {flow&&onSaveSelection&&<div className="p-5"><button type="button" disabled={resolving||savingSelection||selected.length===0||(selectionSnapshot===savedSelection&&flow.samplesBlocked)} onClick={async()=>{
+        if(selectionSnapshot!==savedSelection){if(!await saveSelection(true))return;}
+        flow.navigate(flow.licensesEnabled?'license':'listing');
+      }} className="rounded-lg bg-indigo-700 px-4 py-2 text-sm font-semibold text-white">Next: {flow.licensesEnabled?'Choose a licence':'Describe and price'} →</button>
+      {(resolving||savingSelection||selected.length===0||(selectionSnapshot===savedSelection&&flow.samplesBlocked))&&<p className="mt-2 text-sm text-amber-900">{resolving||savingSelection?'Wait for your file selection to finish saving.':selected.length===0?'Choose at least one file before continuing.':'Finish saving your sample choice or clear it before continuing.'}</p>}</div>}
     </div>
   );
 }

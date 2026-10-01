@@ -176,9 +176,9 @@ describe('SellerWorkspacePage safety boundaries', () => {
       providers: { ...enabledCapabilities.providers, aws: { ...enabledCapabilities.providers.aws, connect: { enabled: false, status: 'disabled', reason: 'stage_disabled' } } },
     });
     render(<SellerWorkspacePage />);
-    const prepare=await screen.findByRole('button', { name: 'Prepare with Allai' });
-    expect(draftsApi.readListingDraft).not.toHaveBeenCalled();
+    const prepare=await screen.findByRole('button', { name: 'Describe and price' });
     fireEvent.click(prepare);
+    fireEvent.change(await screen.findByLabelText('Title'),{target:{value:'My listing'}});
     await screen.findByRole('button', { name: 'Save private draft' });
     expect(draftsApi.readListingDraft).toHaveBeenCalledTimes(1);
     expect(sellerWorkspaceApi.listSellerWorkspaceConnections).not.toHaveBeenCalled();
@@ -193,7 +193,7 @@ describe('SellerWorkspacePage safety boundaries', () => {
 
   it('does not request saved drafts unless backend capability enables them', async () => {
     render(<SellerWorkspacePage />);
-    fireEvent.click(await screen.findByRole('button', { name: 'Prepare with Allai' }));
+    fireEvent.click(await screen.findByRole('button', { name: 'Describe and price' }));
     expect(screen.queryByRole('button', { name: 'Save private draft' })).toBeNull();
     expect(draftsApi.readListingDraft).not.toHaveBeenCalled();
   });
@@ -205,11 +205,11 @@ describe('SellerWorkspacePage safety boundaries', () => {
     await screen.findByText('server-external-id');
     expect(screen.queryByRole('button', { name: 'Profiling activity' })).toBeNull();
     expect(screen.queryByRole('heading', { name: 'Understand your data' })).toBeNull();
-    expect(screen.getByRole('heading', { name: 'Describe and price it' })).toBeTruthy();
-    fireEvent.click(screen.getByRole('button', { name: 'Choose what to sell' }));
+    expect(screen.queryByRole('heading', { name: 'From your storage to a listing' })).toBeNull();
+    fireEvent.click(screen.getByRole('button', { name: 'Choose your files' }));
     expect(screen.queryByText('server-external-id')).toBeNull();
     expect(screen.getByText('File browsing is not available yet')).toBeTruthy();
-    fireEvent.click(screen.getByRole('button', { name: 'Storage connections' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Connect your storage' }));
     expect(screen.queryByText('server-external-id')).toBeNull();
   });
 

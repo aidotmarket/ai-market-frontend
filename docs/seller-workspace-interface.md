@@ -1,6 +1,14 @@
 # Seller Workspace interface
 
-The seller dashboard now includes a journey overview, storage management, and a scoped file browser with temporary file selection. This is an incomplete frontend increment toward the browser seller journey.
+The guided listing frontend (S1787 chunk B) follows `aidotmarket/runbooks:specs/BQ-SELLER-GUIDED-LISTING-FLOW-S1787-GATE1.md`, sections 2.1–2.6. The earlier rollout notes below are historical and describe the previous interface.
+
+The current task tabs are Connect your storage, Choose your files, Choose a licence, Describe and price, Review, Publish, followed by Your listings. One pure saved-progress function drives a checklist on every tab, with a collapsible phone layout. Next saves changed files, licence choices or listing fields before moving on; unchanged saved choices need no save. Failed saves retain the current step and show the reason.
+
+Allai receives file metadata from the backend, never a browser summary. A reply for a different saved source is discarded; file changes clear pending suggestions and chat. The description stamp persists only after accepting the matching description suggestion or confirming that the description matches the files. Manual description edits clear it. Approval and Publish remain unavailable while the description is unconfirmed or changes remain unsaved.
+
+The category dropdown reads `/seller-workspace/categories`. Legacy non-slug values display an empty choice and survive saves of other fields. With listing licences enabled, the free-text licence input is absent; the preview uses the real selection. Seller and buyer terms use the same labelled, focus-trapping reading dialog with Escape, focus return and a new-tab link. Seller confirmation requires opening both the licence and covenant; the buyer retains exact-byte verification as well.
+
+Verify frontend changes with `rtk npm run typecheck`, `rtk npm run lint`, `rtk npm test`, and the synthetic desktop/phone walk: `rtk proxy npx playwright test --config=playwright.preview.config.ts tests/preview-browser/guided.pw.ts`. A plain production build requires the existing Keystatic environment; the build-only fixture command is documented in `docs/reports/s1716-s1294-p1-frontend.md`. These local checks do not prove production rollout or Max's sign-off. Category admission on the backend is the later A2 chunk; the smaller walkthrough fixes in spec 2.7 are chunk C.
 
 ## Agreed seller journey, September 7
 

@@ -1,3 +1,4 @@
+import axios from 'axios';
 import { api } from './client';
 import type { ListingDraftContent } from './sellerListingDraft';
 import type {LicenseSelection} from './listingLicenses';
@@ -30,7 +31,7 @@ export interface ReviewSourcePage {
   files: Array<{key: string; size: number; etag: string; version_id: string | null}>;
   next_cursor: string | null;
 }
-function sameLicenseSelection(left?: LicenseSelection, right?: LicenseSelection): boolean {
+export function sameLicenseSelection(left?: LicenseSelection, right?: LicenseSelection): boolean {
   if (!left || !right) return left === right;
   return left.kind === right.kind && left.version === right.version &&
     left.identity_version === right.identity_version &&
@@ -124,4 +125,14 @@ export async function approveListingReview(review: ListingReview, request_id: st
       (review.license_selection && !sameLicenseSelection(receipt.license_selection, review.license_selection)))
     throw new Error('Approval could not be verified');
   return receipt;
+}
+
+export function listingReviewErrorReason(error: unknown): string {
+  const detail=axios.isAxiosError(error)?error.response?.data?.detail:null;
+  const code=typeof detail==='string'?detail:detail?.code;
+  if(code==='source_required')return 'Choose and save your files before reviewing the listing.';
+  if(code==='draft_required')return 'Save your listing in Describe and price before reviewing it.';
+  if(code==='source_connection_changed')return 'Your storage connection has changed. Choose and save the current files before reviewing.';
+  const message=typeof detail==='string'?detail:detail?.message;
+  return typeof message==='string'?message:'Your saved listing could not be loaded. Try again.';
 }

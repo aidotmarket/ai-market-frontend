@@ -38,7 +38,7 @@ describe('Seller data browser', () => {
     api.listWorkspaceObjects.mockResolvedValue({objects:[object],next_cursor:null});
     render(<WorkspaceData enabled connections={[connection]} savedSource={null} onSaveSelection={vi.fn()} />);
     await screen.findByRole('checkbox',{name:`Select ${object.key}`});
-    expect((screen.getByRole('button',{name:'Save selected files'}) as HTMLButtonElement).disabled).toBe(true);
+    expect(screen.queryByRole('button',{name:'Save selected files'})).toBeNull();
     expect(screen.getByText(/Choose at least one file before saving a selection/)).toBeTruthy();
   });
 

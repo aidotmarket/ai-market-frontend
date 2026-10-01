@@ -7,9 +7,9 @@ import type {LicenseSelection} from '@/api/listingLicenses';
 const EMPTY_DRAFT:ListingDraftContent={brief:'',title:'',description:'',category:'',tags:'',price:'',license:''};
 export class DraftNotLoadedError extends Error { constructor(){super('Load your saved draft before saving.');this.name='DraftNotLoadedError';} }
 type DraftStore={draft:SavedListingDraft|null;available:boolean;loaded:boolean;error:boolean;sampleCapability:boolean;sampleIndices:number[];
-  selectionSavePending:boolean;selectionSaveFailed:boolean;requestLoad:()=>void;retry:()=>void;
+  selectionSavePending:boolean;selectionSaveFailed:boolean;requestLoad:()=>void;reload:(signal?:AbortSignal,onLoaded?:()=>void)=>Promise<SavedListingDraft|null>;retry:()=>void;
   beginSelectionSave:()=>void;finishSelectionSave:(succeeded:boolean)=>void;setVisibleSampleIndices:(indices:number[]|null)=>void;
-  saveListingFields:(fields:ListingDraftContent)=>Promise<void>;saveLicenseSelection:(selection:LicenseSelection)=>Promise<void>;saveSamples:(indices:number[])=>Promise<void>};
+  saveListingFields:(fields:ListingDraftContent,baselineVersion?:number)=>Promise<number>;saveLicenseSelection:(selection:LicenseSelection)=>Promise<void>;saveSamples:(indices:number[])=>Promise<void>};
 const DraftContext=createContext<DraftStore|null>(null);
 
 type OwnerSnapshot={draft:SavedListingDraft|null;selectionSaveCount:number;selectionSaveFailed:boolean};
@@ -22,13 +22,14 @@ const snapshot=():OwnerSnapshot=>({draft:owner.draft,selectionSaveCount:owner.se
 const publish=()=>{const value=snapshot();owner.listeners.forEach(listener=>listener(value));};
 const beginOwnerSelectionSave=()=>{if(owner.selectionSaveCount===0)owner.selectionSaveFailed=false;owner.selectionSaveCount+=1;publish();};
 const finishOwnerSelectionSave=(succeeded:boolean)=>{owner.selectionSaveCount=Math.max(0,owner.selectionSaveCount-1);if(!succeeded)owner.selectionSaveFailed=true;else if(owner.selectionSaveCount===0)owner.selectionSaveFailed=false;publish();};
-const persist=(build:(base:ListingDraftContent)=>ListingDraftContent)=>{
+const persist=(build:(base:ListingDraftContent)=>ListingDraftContent,baselineVersion?:number)=>{
   const operation=owner.queue.catch(()=>undefined).then(async()=>{
     if(!owner.loaded)throw new DraftNotLoadedError();
     const content=build(owner.draft?.content??EMPTY_DRAFT);
     const serialized=JSON.stringify(content);
-    if(!owner.pending||owner.pending.serialized!==serialized||owner.pending.version!==owner.version)
-      owner.pending={serialized,version:owner.version,id:crypto.randomUUID()};
+    const version=baselineVersion??owner.version;
+    if(!owner.pending||owner.pending.serialized!==serialized||owner.pending.version!==version)
+      owner.pending={serialized,version,id:crypto.randomUUID()};
     const result=await saveListingDraft(content,owner.pending.version,owner.pending.id);
     owner.pending=null;owner.draft=result;owner.version=result.version;publish();
     return result;
@@ -48,7 +49,7 @@ export function SellerListingDraftProvider({enabled,sampleCapability,children}:{
   const [draft,setDraft]=useState<SavedListingDraft|null>(initial.draft);
   const [loaded,setLoaded]=useState(!enabled);
   const [error,setError]=useState(false);
-  const [requested,setRequested]=useState(sampleCapability);
+  const [requested,setRequested]=useState(enabled);
   const [selectionSaveCount,setSelectionSaveCount]=useState(initial.selectionSaveCount);
   const [selectionSaveFailed,setSelectionSaveFailed]=useState(initial.selectionSaveFailed);
   const [visibleSampleIndices,setVisibleSampleIndices]=useState<number[]|null>(null);
@@ -56,7 +57,7 @@ export function SellerListingDraftProvider({enabled,sampleCapability,children}:{
   useEffect(()=>{const listener=(value:OwnerSnapshot)=>{setDraft(value.draft);setSelectionSaveCount(value.selectionSaveCount);setSelectionSaveFailed(value.selectionSaveFailed);};owner.listeners.add(listener);listener(snapshot());return()=>{owner.listeners.delete(listener);};},[]);
   useEffect(()=>{if(sampleCapability)setRequested(true);},[sampleCapability]);
   useEffect(()=>{
-    if(!enabled){setDraft(null);setVisibleSampleIndices(null);setLoaded(false);setError(false);return;}
+    if(!enabled){owner.loaded=false;setDraft(null);setVisibleSampleIndices(null);setLoaded(false);setError(false);return;}
     if(!requested)return;
     const controller=new AbortController();owner.loaded=false;setLoaded(false);setError(false);
     owner.queue.catch(()=>undefined).then(()=>readListingDraft(controller.signal)).then(value=>{
@@ -67,23 +68,31 @@ export function SellerListingDraftProvider({enabled,sampleCapability,children}:{
     }).catch(()=>{if(!controller.signal.aborted){setError(true);setLoaded(false);}});
     return()=>controller.abort();
   },[enabled,retryKey,requested]);
+  const reload=useCallback(async(signal?:AbortSignal,onLoaded?:()=>void)=>{
+    await owner.queue.catch(()=>undefined);
+    const value=await readListingDraft(signal);
+    if(signal?.aborted)return value;
+    owner.draft=value;owner.version=value?.version??0;owner.loaded=true;owner.pending=null;
+    onLoaded?.();publish();setLoaded(true);setError(false);
+    return value;
+  },[]);
   const beginSelectionSave=useCallback(()=>beginOwnerSelectionSave(),[]);
   const finishSelectionSave=useCallback((succeeded:boolean)=>finishOwnerSelectionSave(succeeded),[]);
   const sampleIndices=sampleCapability&&draft?.content.sample_decision==='member_files'?(draft.content.sample_object_indices??[]):[];
   const selectionMismatch=visibleSampleIndices!==null&&JSON.stringify(visibleSampleIndices)!==JSON.stringify(sampleIndices);
   const value=useMemo<DraftStore>(()=>({draft,available:enabled,loaded,error,sampleCapability,sampleIndices,
-    selectionSavePending:selectionSaveCount>0||selectionMismatch,selectionSaveFailed,requestLoad:()=>setRequested(true),retry:()=>{setRequested(true);setRetryKey(value=>value+1);},
+    selectionSavePending:selectionSaveCount>0||selectionMismatch,selectionSaveFailed,reload,requestLoad:()=>setRequested(true),retry:()=>{setRequested(true);setRetryKey(value=>value+1);},
     beginSelectionSave,finishSelectionSave,setVisibleSampleIndices,
-    saveListingFields:async(fields)=>{await persist(base=>({
+    saveListingFields:async(fields,baselineVersion)=>{const result=await persist(base=>({
       ...base,brief:fields.brief,title:fields.title,description:fields.description,category:fields.category,
-      tags:fields.tags,price:fields.price,license:fields.license,
-    }));},
+      tags:fields.tags,price:fields.price,license:fields.license,description_source_version:fields.description_source_version??null,
+    }),baselineVersion);return result.version;},
     saveLicenseSelection:async(selection)=>{await persist(base=>({...base,license_selection:selection}));},
     saveSamples:async(indices)=>{beginSelectionSave();try{await persist(base=>sampleCapability
       ?{...base,sample_decision:indices.length?'member_files':'none',sample_object_indices:[...indices]}
       :base);finishSelectionSave(true);}
       catch(failure){finishSelectionSave(false);throw failure;}},
-  }),[draft,enabled,loaded,error,sampleCapability,sampleIndices,selectionSaveCount,selectionSaveFailed,selectionMismatch,beginSelectionSave,finishSelectionSave]);
+  }),[draft,enabled,loaded,error,sampleCapability,sampleIndices,selectionSaveCount,selectionSaveFailed,selectionMismatch,reload,beginSelectionSave,finishSelectionSave]);
   return <DraftContext.Provider value={value}>{children}</DraftContext.Provider>;
 }
 
@@ -95,6 +104,6 @@ export function useSellerListingDraft() {
 
 export function useSellerListingDraftStatus() {
   const value=useContext(DraftContext);
-  return value ? {available:true,selectionSavePending:value.selectionSavePending,selectionSaveFailed:value.selectionSaveFailed,sampleIndices:value.sampleIndices} :
+  return value ? {available:value.available,selectionSavePending:value.selectionSavePending,selectionSaveFailed:value.selectionSaveFailed,sampleIndices:value.sampleIndices} :
     {available:false,selectionSavePending:false,selectionSaveFailed:false,sampleIndices:[] as number[]};
 }
