@@ -5,6 +5,7 @@ import {useState} from 'react';
 import {AxiosError} from 'axios';
 import type {WorkspaceView} from './WorkspaceOverview';
 import SavedListingEditor from './SavedListingEditor';
+import SavedLicenseStep from './SavedLicenseStep';
 import SellerReview from './SellerReview';
 import {GuidedListingFlow,useListingFlow} from './GuidedListingFlow';
 import {SellerListingDraftProvider,resetSellerListingDraftOwnerForTests} from './SellerListingDraftStore';
@@ -15,6 +16,7 @@ vi.mock('@/api/client',()=>({api:{get:mocks.get}}));
 vi.mock('@/api/sellerListingDraft',()=>({readListingDraft:mocks.draft,saveListingDraft:mocks.save}));
 vi.mock('@/api/sellerListingReview',async original=>({...await original<typeof import('@/api/sellerListingReview')>(),readListingReview:mocks.review}));
 vi.mock('@/api/capabilities',()=>({getCapabilities:vi.fn().mockResolvedValue({})}));
+vi.mock('@/api/sellerLegalIdentity',async original=>({...await original<typeof import('@/api/sellerLegalIdentity')>(),getSellerLegalIdentity:vi.fn().mockResolvedValue({status:'known',source:'stripe_connect',legal_name:'Synthetic Seller',jurisdiction:'ES',version:1})}));
 const source={version:1,connection_current:true,content:{connection_id:guidedConnection.id,connection_version:1,objects:[],version_mode:'current' as const}};
 const draft={version:1,updated_at:'now',content:{...emptyGuidedDraft,title:'Sales',description:'Sales description',description_source_version:1,category:'financial-data',tags:'sales',price:'25',license_selection:{...createStandardSelection(),seller_acceptance:{signer_name:'Sam',signer_title:'Owner',authority_confirmed:true}}}};
 function Probe(){const flow=useListingFlow()!;return <><SellerReview active enabled/><output data-testid="completion">{flow.steps[3].state}</output></>;}
@@ -55,13 +57,42 @@ it('keeps approval blocked with a recovery reason when authoritative reload fail
  fireEvent.click(screen.getByRole('button',{name:'Refresh saved review'}));await waitFor(()=>expect(screen.getAllByText(/Your saved review could not be reconciled/).length).toBeGreaterThan(0));expect(screen.getByTestId('completion').textContent).not.toBe('done');expect((screen.getByRole('button',{name:'Approve this review'}) as HTMLButtonElement).disabled).toBe(true);expect(mocks.save).not.toHaveBeenCalled();
 });
 
-function MountedEditorFlow(){
+function MountedEditorFlow({withLicense=false}:{withLicense?:boolean}){
  const [view,setView]=useState<WorkspaceView>('listing');
  return <SellerListingDraftProvider enabled sampleCapability={false}><GuidedListingFlow capabilities={guidedCapabilities} connections={[guidedConnection]} view={view} navigate={setView}>
   <div hidden={view!=='listing'}><SavedListingEditor active={view==='listing'}/></div>
+  {withLicense&&<div hidden={view!=='license'}><SavedLicenseStep/></div>}
   <div hidden={view!=='review'}><SellerReview active={view==='review'} enabled/></div>
  </GuidedListingFlow></SellerListingDraftProvider>;
 }
+it('advances a dirty mounted editor baseline after saving a licence without losing either edit',async()=>{
+ mocks.draft.mockResolvedValue({...draft,content:{...draft.content,license_selection:{...draft.content.license_selection,identity_version:1}}});
+ let version=1;
+ mocks.save.mockImplementation(async(content,expectedVersion)=>{
+  if(expectedVersion!==version)throw new AxiosError('Conflict',undefined,undefined,undefined,{status:409,data:{},headers:{},statusText:'Conflict',config:{} as never});
+  const saved={version:++version,updated_at:'now',content};
+  mocks.draft.mockResolvedValue(saved);
+  mocks.review.mockResolvedValue({approval_available:true,review_hash:'r',render_hash:'r',rendered_html:'<p>Saved listing</p>',confirmation_statements:{},draft_version:version,source_version:1,missing_fields:[],approval:null});
+  return saved;
+ });
+ render(<MountedEditorFlow withLicense/>);
+ await screen.findByDisplayValue('Sales');
+ fireEvent.change(screen.getByLabelText('Title'),{target:{value:'My dirty title'}});
+ fireEvent.click(screen.getByRole('button',{name:/3\. Choose a licence/}));
+ await screen.findByText('Legal name on the licence: Synthetic Seller (ES)');
+ fireEvent.change(screen.getByLabelText('Signer title'),{target:{value:'Director'}});
+ fireEvent.click(screen.getByRole('button',{name:'Save licence choice'}));
+ await waitFor(()=>expect(mocks.save).toHaveBeenCalledOnce());
+ await waitFor(()=>expect(screen.queryByRole('button',{name:'Save licence choice'})).toBeNull());
+ expect(mocks.save).toHaveBeenCalledWith(expect.objectContaining({title:'Sales',license_selection:expect.objectContaining({seller_acceptance:expect.objectContaining({signer_title:'Director'})})}),1,expect.any(String));
+ fireEvent.click(screen.getByRole('button',{name:/4\. Describe and price/}));
+ expect((screen.getByLabelText('Title') as HTMLInputElement).value).toBe('My dirty title');
+ fireEvent.click(screen.getByRole('button',{name:'Save private draft'}));
+ await waitFor(()=>expect(mocks.save).toHaveBeenCalledTimes(2));
+ expect(mocks.save).toHaveBeenLastCalledWith(expect.objectContaining({title:'My dirty title',license_selection:mocks.save.mock.calls[0][0].license_selection}),2,expect.any(String));
+ await waitFor(()=>expect(screen.queryByRole('button',{name:'Save private draft'})).toBeNull());
+ expect(version).toBe(3);
+});
 async function refreshExternalTitle(){
  mocks.draft.mockResolvedValue({...draft,version:2,content:{...draft.content,title:'New external title'}});
  mocks.review.mockResolvedValue({approval_available:true,review_hash:'r2',render_hash:'r2',rendered_html:'<p>New external title</p>',confirmation_statements:{},draft_version:2,source_version:1,missing_fields:[],approval:null});

@@ -69,13 +69,16 @@ export default function SellerListingEditor({ assistant, active = true, initialC
         : 'Saving could not be confirmed. Your edits are still here. Try saving again.');
     } finally { savingRef.current = false; if (mounted.current) setSaving(false); }
   };
-  // Reconcile content and version together only while the editor is pristine.
-  // Dirty fields retain the version they were based on, including across Review refreshes.
+  // Adopt content only while pristine; dirty edits can follow non-editor version changes.
   useEffect(()=>{
-    if(savedVersion===undefined||savedVersion===baselineVersion||snapshot!==savedSnapshot||saving)return;
+    if(savedVersion===undefined||savedVersion===baselineVersion||saving)return;
     const content=initialContent;
     const nextDraft=content?{title:content.title,description:content.description,category:content.category,tags:content.tags}:emptyDraft;
     const next={brief:content?.brief??'',...nextDraft,price:content?.price??'',license:content?.license??'',description_source_version:content?.description_source_version??null};
+    if(snapshot!==savedSnapshot){
+      if(JSON.stringify(next)===savedSnapshot)setBaselineVersion(savedVersion);
+      return;
+    }
     setDraft(nextDraft);setBrief(next.brief);setPrice(next.price);setLicense(next.license);setDescriptionSourceVersion(next.description_source_version);
     setSavedSnapshot(JSON.stringify(next));setBaselineVersion(savedVersion);setSaveError(null);
     setProposals({});setReviewed([]);setMessages([]);completedHistory.current=[];setRequested(false);setProposalSourceVersion(null);
