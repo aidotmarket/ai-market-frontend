@@ -68,7 +68,7 @@ describe('BuyButton licence acceptance', () => {
   });
 
   it.each(['1.1', '1.2'])('keeps the same displayed buyer price and checkout request with served %s', async (version) => {
-    legalApi.getCurrentTerms.mockResolvedValue({ terms_version: version });
+    legalApi.getCurrentTerms.mockResolvedValue({ terms_version: version, terms_hash_sha256: `hash-${version}` });
     legalApi.getTermsAcceptanceStatus.mockResolvedValue({ accepted: true, current_version: version, accepted_version: version });
     vi.mocked(createCheckout).mockResolvedValue({ checkout_url: 'https://invalid.example/' } as never);
     render(<ToastProvider><BuyButton listingId="listing-1" slug="listing" price={20} pricingType="one_time" /></ToastProvider>);
@@ -123,7 +123,7 @@ describe('BuyButton licence acceptance', () => {
     const priorGate = process.env.NEXT_PUBLIC_TERMS_GATE_ENFORCE;
     process.env.NEXT_PUBLIC_TERMS_GATE_ENFORCE = 'true';
     legalApi.getTermsAcceptanceStatus.mockResolvedValue({ accepted: false, current_version: version, accepted_version: '1.1' });
-    legalApi.getCurrentTerms.mockResolvedValue({ terms_version: version });
+    legalApi.getCurrentTerms.mockResolvedValue({ terms_version: version, terms_hash_sha256: `hash-${version}` });
     legalApi.acceptTerms.mockResolvedValue({ terms_version: version });
     vi.stubGlobal('fetch', vi.fn(async (input: RequestInfo | URL) => String(input).includes('marketplace-listing')
       ? documentResponse('Exact covenant text\n')

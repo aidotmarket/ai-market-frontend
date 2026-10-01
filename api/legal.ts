@@ -19,6 +19,8 @@ export interface TermsAcceptanceStatus {
 
 export interface TermsAcceptRequest extends TermsPartyContext {
   context?: TermsAcceptanceContext;
+  terms_version: string;
+  terms_hash_sha256: string;
   signer_full_name: string;
   signer_title: string;
   business_legal_name: string;
@@ -38,7 +40,10 @@ export interface CurrentTerms {
 }
 
 export async function getCurrentTerms(): Promise<CurrentTerms> {
-  const res = await api.get<CurrentTerms>('/legal/terms/current');
+  const res = await api.get<CurrentTerms>('/legal/terms/current', {
+    adapter: 'fetch',
+    fetchOptions: { cache: 'no-store' },
+  });
   return res.data;
 }
 
@@ -49,6 +54,8 @@ export interface TermsAcceptResponse extends TermsAcceptanceStatus {
 export async function getTermsAcceptanceStatus(context: TermsPartyContext): Promise<TermsAcceptanceStatus> {
   const res = await api.get<Record<string, unknown>>('/legal/terms/acceptance-status', {
     params: context,
+    adapter: 'fetch',
+    fetchOptions: { cache: 'no-store' },
   });
   return normalizeTermsStatus(res.data);
 }

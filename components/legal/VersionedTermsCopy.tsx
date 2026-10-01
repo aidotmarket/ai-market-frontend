@@ -5,7 +5,7 @@ import { getCurrentTerms } from '@/api/legal';
 
 const TermsVersionContext = createContext<string | null | undefined>(undefined);
 
-// Fetch on mount rather than retaining a version across publication or rollback.
+// Fetch only when there is no server-selected version.
 function useFetchedTermsVersion(initialVersion: string | null, enabled: boolean) {
   const [version, setVersion] = useState(initialVersion);
   useEffect(() => {
@@ -20,7 +20,8 @@ function useFetchedTermsVersion(initialVersion: string | null, enabled: boolean)
 }
 
 export function TermsVersionProvider({ initialVersion, children }: { initialVersion: string | null; children: ReactNode }) {
-  const version = useFetchedTermsVersion(initialVersion, true);
+  const fetched = useFetchedTermsVersion(null, initialVersion === null);
+  const version = initialVersion ?? fetched;
   return <TermsVersionContext.Provider value={version}>{children}</TermsVersionContext.Provider>;
 }
 
