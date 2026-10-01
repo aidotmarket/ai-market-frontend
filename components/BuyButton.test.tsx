@@ -73,8 +73,8 @@ describe('BuyButton licence acceptance', () => {
     vi.mocked(createCheckout).mockResolvedValue({ checkout_url: 'https://invalid.example/' } as never);
     render(<ToastProvider><BuyButton listingId="listing-1" slug="listing" price={20} pricingType="one_time" /></ToastProvider>);
     await waitFor(() => expect((screen.getByRole('button', { name: 'Buy Now - $20.00' }) as HTMLButtonElement).disabled).toBe(false));
-    if (version === '1.2') expect(await screen.findByText(/no added seller-sale card Processing fee/)).toBeTruthy();
-    else expect(screen.queryByText(/no added seller-sale card Processing fee/)).toBeNull();
+    if (version === '1.2') expect(await screen.findByText('The price shown is what you pay. No added card fee.')).toBeTruthy();
+    else expect(screen.queryByText('The price shown is what you pay. No added card fee.')).toBeNull();
     fireEvent.click(screen.getByRole('button', { name: 'Buy Now - $20.00' }));
     await waitFor(() => expect(createCheckout).toHaveBeenCalledWith('listing-1', undefined, undefined));
   });
@@ -138,7 +138,7 @@ describe('BuyButton licence acceptance', () => {
 
       await screen.findByRole('heading', { name: 'Accept Terms and Conditions' });
       if (version === '1.2') {
-        expect(await screen.findByText(/no added seller-sale card Processing fee/)).toBeTruthy();
+        expect(await screen.findByText('The price shown is what you pay. No added card fee.')).toBeTruthy();
         expect(screen.getByLabelText(/I acknowledge the risk allocation and waivers in Section 13/)).toBeTruthy();
       }
       expect(screen.getByRole('button', { name: 'Accept and continue to payment' })).toBeTruthy();

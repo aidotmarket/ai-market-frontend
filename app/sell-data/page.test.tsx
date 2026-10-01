@@ -53,6 +53,8 @@ describe('SellDataPage', () => {
 it('server-renders the approved 1.2 payout text without the old payout claim', async () => {
   serverTerms.getPublicTermsVersion.mockResolvedValue('1.2');
   render(await SellDataPage());
-  expect(screen.getAllByText(/48-hour post-confirmation hold/).length).toBeGreaterThan(0);
+  expect(screen.getByText('When a buyer purchases, the payment flows through ai.market. You keep the price less our 5% commission and the card fee, paid through Stripe 48 hours after the buyer confirms delivery.')).toBeTruthy();
+  expect(screen.getByText("Sellers list free and pay nothing until a buyer pays. You're paid through Stripe once the buyer confirms delivery.")).toBeTruthy();
+  expect(screen.queryByText(/90.day/)).toBeNull();
   expect(screen.queryByText('Sellers list free and pay nothing until a buyer pays. Stripe handles the payout.')).toBeNull();
 });

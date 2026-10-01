@@ -1,7 +1,7 @@
 import type { ReactNode } from 'react';
 import { getPublicTermsVersion } from '@/lib/publicTermsVersion';
 import VersionedTermsCopy, { TermsVersionProvider } from '@/components/legal/VersionedTermsCopy';
-import { CARD_PAYOUT } from '@/components/legal/terms12Copy';
+import { CARD_SELL_PAYOUT, CARD_SELL_SUMMARY } from '@/components/legal/terms12Copy';
 import Link from 'next/link';
 import type { Metadata } from 'next';
 import SellDataCta from '@/components/SellDataCta';
@@ -211,7 +211,7 @@ export default async function SellDataPage() {
                 key={step.title}
                 step={index + 1}
                 title={step.title}
-                description={<VersionedTermsCopy legacy={step.description} terms12={step.title === 'Stripe payouts.' ? CARD_PAYOUT : step.description} />}
+                description={step.description}
               />
             ))}
           </ol>
@@ -234,7 +234,7 @@ export default async function SellDataPage() {
               <FeatureCard
                 key={feature.title}
                 title={feature.title}
-                description={feature.description}
+                description={<VersionedTermsCopy legacy={feature.description} terms12={feature.title === 'Stripe payouts.' ? CARD_SELL_PAYOUT : feature.description} />}
               />
             ))}
           </div>
@@ -252,7 +252,7 @@ export default async function SellDataPage() {
                 List free. Pay 5% when a sale clears.
               </h2>
               <p className="mt-4 max-w-3xl text-base leading-7 text-gray-600">
-                <VersionedTermsCopy legacy="Sellers list free and pay nothing until a buyer pays. Stripe handles the payout." terms12={CARD_PAYOUT} />
+                <VersionedTermsCopy legacy="Sellers list free and pay nothing until a buyer pays. Stripe handles the payout." terms12={CARD_SELL_SUMMARY} />
               </p>
               <SellDataCta variant="inline" />
             </div>

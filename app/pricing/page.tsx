@@ -2,7 +2,7 @@ import type { Metadata } from 'next';
 import Link from 'next/link';
 import { getPublicTermsVersion } from '@/lib/publicTermsVersion';
 import VersionedTermsCopy, { TermsVersionProvider } from '@/components/legal/VersionedTermsCopy';
-import { CARD_BUYER_TOTAL, CARD_SELLER_FEES, CARD_SELLER_AMOUNT } from '@/components/legal/terms12Copy';
+import { CARD_PRICING_HEADLINE, CARD_SELLER_FEES, CARD_BUYER_HEADLINE, CARD_BUYER_DETAIL, CARD_PRICING_SUMMARY, CARD_CHECKOUT_NOTE } from '@/components/legal/terms12Copy';
 
 export const metadata: Metadata = {
   title: 'Pricing and fees — ai.market',
@@ -15,19 +15,19 @@ export const metadata: Metadata = {
 const feeCards = [
   {
     audience: 'Sellers',
-    headline: <VersionedTermsCopy legacy="List free. Keep 95% when data sells." terms12={CARD_SELLER_AMOUNT} />,
+    headline: <VersionedTermsCopy legacy="List free. Keep 95% when data sells." terms12={CARD_PRICING_HEADLINE} />,
     details: [
       'There are no listing fees.',
       'ai.market deducts a 5% commission from each successful transaction.',
-      <VersionedTermsCopy legacy="The seller receives the remaining 95% of the listing price." terms12={CARD_SELLER_AMOUNT} />,
+      <VersionedTermsCopy legacy="The seller receives the remaining 95% of the listing price." terms12={CARD_SELLER_FEES} />,
     ],
   },
   {
     audience: 'Buyers',
-    headline: <VersionedTermsCopy legacy="Pay the listing price plus transaction costs." terms12={CARD_BUYER_TOTAL} />,
+    headline: <VersionedTermsCopy legacy="Pay the listing price plus transaction costs." terms12={CARD_BUYER_HEADLINE} />,
     details: [
       'Buyers do not pay the 5% marketplace commission on top of the listing price.',
-      <VersionedTermsCopy legacy="Buyers pay the applicable payment-provider costs, including Stripe, stablecoin, or escrow fees." terms12={CARD_SELLER_FEES} />,
+      <VersionedTermsCopy legacy="Buyers pay the applicable payment-provider costs, including Stripe, stablecoin, or escrow fees." terms12={CARD_BUYER_DETAIL} />,
       'Applicable sales tax, VAT, or similar tax is added where required.',
     ],
   },
@@ -44,7 +44,7 @@ export default async function PricingPage() {
             One published fee schedule.
           </h1>
           <p className="mx-auto mt-5 max-w-2xl text-lg leading-8 text-gray-600">
-            <VersionedTermsCopy legacy={"Sellers list for free and pay 5% only when a transaction succeeds. Buyers pay the listing price, payment-provider costs, and any applicable tax."} terms12={<>{CARD_SELLER_FEES} {CARD_BUYER_TOTAL}</>} />
+            <VersionedTermsCopy legacy={"Sellers list for free and pay 5% only when a transaction succeeds. Buyers pay the listing price, payment-provider costs, and any applicable tax."} terms12={CARD_PRICING_SUMMARY} />
           </p>
         </div>
       </section>
@@ -70,7 +70,7 @@ export default async function PricingPage() {
         <section className="mt-10 rounded-2xl bg-[#1b2332] p-7 text-white sm:p-9">
           <h2 className="text-2xl font-bold">Before you confirm a purchase</h2>
           <p className="mt-3 max-w-3xl text-base leading-7 text-[#c1c9d4]">
-            <VersionedTermsCopy legacy={"Review the checkout total for the listing price, the transaction-specific payment costs, and any tax. Provider costs vary by payment method, so ai.market does not quote one fixed processing-fee amount on this page."} terms12={CARD_BUYER_TOTAL} />
+            <VersionedTermsCopy legacy={"Review the checkout total for the listing price, the transaction-specific payment costs, and any tax. Provider costs vary by payment method, so ai.market does not quote one fixed processing-fee amount on this page."} terms12={CARD_CHECKOUT_NOTE} />
           </p>
         </section>
 

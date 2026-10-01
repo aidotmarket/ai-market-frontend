@@ -1,7 +1,7 @@
 import Link from 'next/link';
 import { getPublicTermsVersion } from '@/lib/publicTermsVersion';
 import VersionedTermsCopy, { TermsVersionProvider } from '@/components/legal/VersionedTermsCopy';
-import { CARD_PAYOUT } from '@/components/legal/terms12Copy';
+import { CARD_HOME_PAYOUT } from '@/components/legal/terms12Copy';
 import type { Metadata } from 'next';
 import {
   fetchDataRequests,
@@ -610,7 +610,7 @@ export default async function LandingPage() {
                 <div key={step.title}>
                   <div className="flex h-10 w-10 items-center justify-center rounded-full bg-[#3F51B5] text-white text-sm font-bold">{idx + 1}</div>
                   <h3 className="mt-4 text-lg font-bold text-[#1A1A1A]">{step.title}</h3>
-                  <p className="mt-2 text-sm leading-6 text-[#666666]"><VersionedTermsCopy legacy={step.description} terms12={step.title === 'Get paid.' ? CARD_PAYOUT : step.description} /></p>
+                  <p className="mt-2 text-sm leading-6 text-[#666666]"><VersionedTermsCopy legacy={step.description} terms12={step.title === 'Get paid.' ? CARD_HOME_PAYOUT : step.description} /></p>
                 </div>
               ))}
             </div>

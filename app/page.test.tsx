@@ -89,6 +89,7 @@ it('server-renders the 1.2 payout claim before client hydration', async () => {
   fetchDataRequests.mockResolvedValue({ items: [] });
   const { default: LandingPage } = await import('./page');
   const html = renderToStaticMarkup(await LandingPage());
-  expect(html).toContain('48-hour post-confirmation hold');
+  expect(html).toContain("Buyers find your listing wherever they search, on ai.market or through their AI assistant. You&#x27;re paid through Stripe 48 hours after the buyer confirms delivery.");
+  expect(html).not.toMatch(/90.day/);
   expect(html).not.toContain('Buyers find your listing wherever they search, on ai.market or through their AI assistant. Stripe handles the payout.');
 });

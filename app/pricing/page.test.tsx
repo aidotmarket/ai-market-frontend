@@ -33,10 +33,17 @@ it('switches 1.2 card claims to the approved seller-bears text', async () => {
   serverTerms.getPublicTermsVersion.mockResolvedValue('1.2');
   legal.getCurrentTerms.mockResolvedValue({ terms_version: '1.2' });
   render(await PricingPage());
-  expect((await screen.findAllByText(/no added seller-sale card Processing fee/)).length).toBeGreaterThan(0);
+  for (const copy of [
+    'List free. When your data sells, you keep 95% of the price, less the card processing fee.',
+    'You receive the listing price less our 5% commission and the card processing fee.',
+    'You pay the price shown. No added card fees.',
+    'The seller covers the card processing fee, so the price you see is the price you pay, plus any applicable tax.',
+    'Sellers list for free and pay 5% plus the card processing fee only when a sale goes through. Buyers pay the listing price and any applicable tax.',
+    'The total at checkout is the listing price plus any applicable tax.',
+  ]) expect(screen.getByText(copy)).toBeTruthy();
   expect(screen.queryByText('List free. Keep 95% when data sells.')).toBeNull();
   expect(screen.queryByText(/Stripe, stablecoin, or escrow fees/)).toBeNull();
-  expect(screen.getAllByText(/normally 95%, subject to cent rounding/).length).toBeGreaterThan(0);
+  expect(screen.queryByText(/90.day/)).toBeNull();
 });
 
 it('keeps served 1.1 pricing text exactly at the fda22fca base snapshot', async () => {
