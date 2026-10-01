@@ -33,7 +33,7 @@ it('reloads an externally changed source and draft on Review refresh and blocks 
  mocks.get.mockImplementation(url=>url.endsWith('categories')?Promise.resolve({data:categoryRows}):new Promise(resolve=>{finishSource=resolve;}));
  mocks.draft.mockResolvedValue({...draft,version:2});mocks.review.mockResolvedValue({approval_available:true,review_hash:'r',render_hash:'r',rendered_html:'<p>Saved listing</p>',confirmation_statements:{},draft_version:2,source_version:2,missing_fields:[],approval:null});
  fireEvent.click(screen.getByRole('button',{name:'Refresh saved review'}));
- await waitFor(()=>expect(screen.getAllByText(/The saved review changed elsewhere/).length).toBeGreaterThan(0));expect((screen.getByRole('button',{name:'Approve this review'}) as HTMLButtonElement).disabled).toBe(true);
+ await waitFor(()=>expect(screen.getAllByText(/The saved review changed elsewhere/).length).toBeGreaterThan(0));expect(screen.queryByRole('button',{name:'Approve this review'})).toBeNull();
  await waitFor(()=>expect(finishSource).toBeTruthy());finishSource({data:{source:{...source,version:2}}});
  await waitFor(()=>expect(screen.getAllByText(/Your files changed after this description/).length).toBeGreaterThan(0));expect(screen.getByTestId('completion').textContent).not.toBe('done');expect(mocks.draft).toHaveBeenCalledTimes(2);expect(mocks.save).not.toHaveBeenCalled();
 });
@@ -54,7 +54,7 @@ it('keeps a pre-stamp existing approval visible without saving while step 4 asks
 it('keeps approval blocked with a recovery reason when authoritative reload fails',async()=>{
  start();await readyApproval();expect(screen.getByTestId('completion').textContent).toBe('done');
  mocks.review.mockResolvedValue({approval_available:true,review_hash:'r2',render_hash:'r2',rendered_html:'<p>Saved listing</p>',confirmation_statements:{},draft_version:2,source_version:2,missing_fields:[],approval:null});mocks.get.mockRejectedValue(new Error('offline'));
- fireEvent.click(screen.getByRole('button',{name:'Refresh saved review'}));await waitFor(()=>expect(screen.getAllByText(/Your saved review could not be reconciled/).length).toBeGreaterThan(0));expect(screen.getByTestId('completion').textContent).not.toBe('done');expect((screen.getByRole('button',{name:'Approve this review'}) as HTMLButtonElement).disabled).toBe(true);expect(mocks.save).not.toHaveBeenCalled();
+ fireEvent.click(screen.getByRole('button',{name:'Refresh saved review'}));await waitFor(()=>expect(screen.getAllByText(/Your saved review could not be reconciled/).length).toBeGreaterThan(0));expect(screen.getByTestId('completion').textContent).not.toBe('done');expect(screen.queryByRole('button',{name:'Approve this review'})).toBeNull();expect(mocks.save).not.toHaveBeenCalled();
 });
 
 function MountedEditorFlow({withLicense=false}:{withLicense?:boolean}){

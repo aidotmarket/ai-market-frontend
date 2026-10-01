@@ -77,3 +77,8 @@ it('uses separate price, licence and covenant authority confirmations for a lice
  expect(screen.getByText('Price')).toBeTruthy();expect(screen.getByText('Licence')).toBeTruthy();expect(screen.getByText('Covenant authority')).toBeTruthy();
  expect(screen.queryByText('I confirm price and license.')).toBeNull();expect(screen.getAllByRole('checkbox')).toHaveLength(7);
 });
+
+it('shows the complete saved file count beside the review confirmations, independently of the sample count',()=>{
+ render(<SellerApproval review={{...review,source_page:{total_count:22000} as ListingReview['source_page']}} active rendered/>);
+ expect(screen.getByText('Files included (22,000)').closest('fieldset')).toBeTruthy();
+});

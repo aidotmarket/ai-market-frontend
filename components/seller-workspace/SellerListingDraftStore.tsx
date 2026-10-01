@@ -47,7 +47,7 @@ export function resetSellerListingDraftOwnerForTests() {
 export function SellerListingDraftProvider({enabled,sampleCapability,children}:{enabled:boolean;sampleCapability:boolean;children:React.ReactNode}) {
   const initial=snapshot();
   const [draft,setDraft]=useState<SavedListingDraft|null>(initial.draft);
-  const [loaded,setLoaded]=useState(!enabled);
+  const [loaded,setLoaded]=useState(false);
   const [error,setError]=useState(false);
   const [requested,setRequested]=useState(enabled);
   const [selectionSaveCount,setSelectionSaveCount]=useState(initial.selectionSaveCount);

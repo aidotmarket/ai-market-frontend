@@ -220,3 +220,12 @@ describe('Seller profiling activity', () => {
     expect(screen.queryByRole('region', { name: 'Profile result' })).toBeNull();
   });
 });
+
+it('does not ask to save an equivalent licence with reordered object keys',async()=>{
+ api.listWorkspaceObjects.mockResolvedValue({objects:[],next_cursor:null});
+ const selection={...createStandardSelection(),seller_acceptance:{signer_name:'Sam',signer_title:'Owner',authority_confirmed:true}};
+ const reordered=Object.fromEntries(Object.entries(selection).reverse()) as typeof selection;
+ render(<WorkspaceData enabled connections={[connection]} licenseSelection={selection} licenseSelectionSaved={reordered} onLicenseSelectionChange={vi.fn()} onSaveLicenseSelection={vi.fn()}/>);
+ expect(await screen.findByText('Licence choice saved to your account.')).toBeTruthy();
+ expect(screen.queryByRole('button',{name:'Save licence choice'})).toBeNull();
+});

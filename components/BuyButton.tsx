@@ -98,10 +98,12 @@ export default function BuyButton({
   // Unauthenticated: redirect to login
   if (!isAuthenticated) {
     if (disabledReason) {
-      return <DisabledBuyButton price={price} reason={disabledReason} />;
+      return <>{licenseDetails && <ListingLicenseDisclosure license={licenseDetails} />}<DisabledBuyButton price={price} reason={disabledReason} /></>;
     }
 
     return (
+      <>
+      {licenseDetails && <ListingLicenseDisclosure license={licenseDetails} />}
       <SignedOutPurchase
         slug={slug}
         price={price}
@@ -112,6 +114,7 @@ export default function BuyButton({
         dataFormat={dataFormat}
         fulfillmentType={fulfillmentType}
       />
+      </>
     );
   }
 
@@ -133,12 +136,15 @@ export default function BuyButton({
   // Already purchased
   if (purchasedOrder) {
     return (
+      <>
+      {licenseDetails && <ListingLicenseDisclosure license={licenseDetails} />}
       <Link
         href={`/dashboard/orders/${purchasedOrder.id}`}
         className="block w-full rounded-lg bg-green-600 px-4 py-2.5 text-sm font-medium text-white text-center hover:bg-green-700"
       >
         Access Data
       </Link>
+      </>
     );
   }
 

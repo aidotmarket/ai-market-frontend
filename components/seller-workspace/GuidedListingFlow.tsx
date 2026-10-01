@@ -64,15 +64,17 @@ export function GuidedListingFlow({connections, capabilities, view, navigate, ch
     const controller=new AbortController();setReviewLoading(true);
     readListingReview(controller.signal).then(async r=>{
       if(controller.signal.aborted)return;
-      setReview(r);
       if(r.source_version!==source.version||r.draft_version!==draft.version){
         const key=`${reviewRetry}:${r.source_version}:${r.draft_version}`;
-        if(reconciled.current===key)return;
+        if(reconciled.current===key){setReviewError('The saved review is still out of date. Refresh Review to load your saved changes.');return;}
         reconciled.current=key;
+        setReviewError('The saved review changed elsewhere. Reloading your saved files and draft…');
         const savedSource=await readListingSource();
         if(controller.signal.aborted)return;
         await reload(controller.signal,()=>setSource(savedSource));
+        return;
       }
+      setReview(r);
     }).catch(error=>{
       if(controller.signal.aborted)return;
       setReviewError('Your saved review could not be reconciled. Refresh Review to reload your saved files and draft. '+listingReviewErrorReason(error));

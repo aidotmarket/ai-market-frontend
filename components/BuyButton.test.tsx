@@ -439,3 +439,16 @@ describe('SignedOutPurchase', () => {
     expect(unavailableFacts).not.toContain('Fulfillment type');
   });
 });
+
+describe('one licence disclosure across purchase display states',()=>{
+ beforeEach(()=>{vi.stubGlobal('fetch',vi.fn().mockResolvedValue(documentResponse('Licence text')));legalApi.getTermsAcceptanceStatus.mockResolvedValue({accepted:true});});
+ afterEach(()=>{cleanup();vi.clearAllMocks();vi.unstubAllGlobals();useAuthStore.setState({isAuthenticated:false,user:null});});
+ it.each(['signed out','buyer','purchased','disabled'])('shows one set of licence cards for %s',async state=>{
+  useAuthStore.setState({isAuthenticated:state!=='signed out'&&state!=='disabled',user:state==='signed out'||state==='disabled'?null:{id:'buyer-1'} as never});
+  ordersApi.getMyOrders.mockResolvedValue(state==='purchased'?[{id:'order-1',listing_id:'listing-1',status:'fulfilled'}]:[]);
+  render(<ToastProvider><BuyButton listingId="listing-1" slug="listing" price={25} pricingType="one_time" licenseDetails={structuredLicense} disabledReason={state==='disabled'?'Superseded version':undefined}/></ToastProvider>);
+  if(state==='purchased')await screen.findByRole('link',{name:'Access Data'});
+  expect(screen.getAllByRole('region',{name:'Licence terms'})).toHaveLength(1);
+  expect(screen.getAllByText('Licence summary — not the contract')).toHaveLength(1);
+ });
+});
