@@ -1,7 +1,7 @@
 import Link from 'next/link';
 import { getPublicTermsVersion } from '@/lib/publicTermsVersion';
 import VersionedTermsCopy, { TermsVersionProvider } from '@/components/legal/VersionedTermsCopy';
-import { CARD_HOME_PAYOUT } from '@/components/legal/terms12Copy';
+import { CARD_HOME_FEES, CARD_HOME_PAYOUT } from '@/components/legal/terms12Copy';
 import type { Metadata } from 'next';
 import {
   fetchDataRequests,
@@ -396,7 +396,7 @@ export default async function LandingPage() {
               <div>
                 <div className="flex h-10 w-10 items-center justify-center rounded-full bg-[#3F51B5] text-sm font-bold text-white">3</div>
                 <p className="mt-4 text-sm leading-6 text-[#666666]">
-                  After purchase, buyers download through your gateway&apos;s HTTPS door. Stripe moves the money. We deduct 5% from the seller; the buyer pays any payment-provider costs and applicable tax shown at checkout.
+                  After purchase, buyers download through your gateway&apos;s HTTPS door. Stripe moves the money. <VersionedTermsCopy legacy="We deduct 5% from the seller; the buyer pays any payment-provider costs and applicable tax shown at checkout." terms12={CARD_HOME_FEES} />
                 </p>
               </div>
             </div>

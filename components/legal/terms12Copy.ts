@@ -12,3 +12,5 @@ export const CARD_HOME_PAYOUT = "Buyers find your listing wherever they search, 
 export const CARD_SELL_PAYOUT = 'When a buyer purchases, the payment flows through ai.market. You keep the price less our 5% commission and the card fee, paid through Stripe 48 hours after the buyer confirms delivery.';
 export const CARD_SELL_SUMMARY = "Sellers list free and pay nothing until a buyer pays. You're paid through Stripe once the buyer confirms delivery.";
 export const CARD_BUYER_TOTAL = 'The price shown is what you pay. No added card fee.';
+export const CARD_HOME_FEES = 'We deduct 5% and the card processing fee from the seller; the buyer pays the price shown plus any applicable tax.';
+export const CARD_REGISTER_CHECKOUT = 'Checkout shows the final total, the listing price plus any applicable tax, before you choose whether to confirm.';

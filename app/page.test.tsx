@@ -44,6 +44,7 @@ function request(id: string) {
 describe('homepage buyer requests', () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    serverTerms.getPublicTermsVersion.mockResolvedValue('1.1');
     fetchPublicListings.mockResolvedValue({ items: [] });
     fetchFeaturedFeed.mockResolvedValue(null);
   });
@@ -54,6 +55,7 @@ describe('homepage buyer requests', () => {
 
     const html = renderToStaticMarkup(await LandingPage());
 
+    expect(html).toContain('We deduct 5% from the seller; the buyer pays any payment-provider costs and applicable tax shown at checkout.');
     expect(html).toContain('Buyer demand, live now');
     expect(html).toContain('Request 1');
     expect(html).toContain('href="/requests/request-3"');
@@ -92,4 +94,15 @@ it('server-renders the 1.2 payout claim before client hydration', async () => {
   expect(html).toContain("Buyers find your listing wherever they search, on ai.market or through their AI assistant. You&#x27;re paid through Stripe 48 hours after the buyer confirms delivery.");
   expect(html).not.toMatch(/90.day/);
   expect(html).not.toContain('Buyers find your listing wherever they search, on ai.market or through their AI assistant. Stripe handles the payout.');
+});
+
+it('server-renders seller-bears fees under 1.2 without buyer provider-cost claims', async () => {
+  serverTerms.getPublicTermsVersion.mockResolvedValue('1.2');
+  fetchPublicListings.mockResolvedValue({ items: [] });
+  fetchFeaturedFeed.mockResolvedValue(null);
+  fetchDataRequests.mockResolvedValue({ items: [] });
+  const { default: LandingPage } = await import('./page');
+  const html = renderToStaticMarkup(await LandingPage());
+  expect(html).toContain('We deduct 5% and the card processing fee from the seller; the buyer pays the price shown plus any applicable tax.');
+  expect(html).not.toMatch(/payment-provider|provider costs|transaction costs/i);
 });

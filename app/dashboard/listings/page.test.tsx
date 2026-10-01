@@ -79,3 +79,12 @@ it('prompts inherited sellers with the backend-served 1.2 version', async () => 
   expect(link.getAttribute('href')).toBe('/legal/terms/accept?context=seller&redirect=%2Fdashboard%2Flistings');
   expect(screen.queryByText(/Terms 1.1/)).toBeNull();
 });
+
+it.each(['loading', 'failure'])('keeps the base Terms 1.1 prompt during metadata %s', async (state) => {
+  if (state === 'loading') legal.getCurrentTerms.mockReturnValue(new Promise(() => {}));
+  else legal.getCurrentTerms.mockRejectedValue(new Error('Metadata unavailable'));
+  api.getPendingSellerTermsListings.mockResolvedValue({ data: { count: 1, listings: [] } });
+  render(<ListingsPage />);
+  expect(await screen.findByRole('link', { name: 'Review and accept Terms 1.1' })).toBeTruthy();
+  expect(screen.getByText('Review and accept Terms 1.1 to make eligible listings available for purchase.')).toBeTruthy();
+});

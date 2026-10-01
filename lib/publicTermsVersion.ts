@@ -3,7 +3,7 @@ export async function getPublicTermsVersion(): Promise<string | null> {
   const apiUrl = process.env.API_URL || process.env.NEXT_PUBLIC_API_URL;
   if (!apiUrl) return null;
   try {
-    const response = await fetch(`${apiUrl.replace(/\/$/, '')}/api/v1/legal/terms/current`, { cache: 'no-store' });
+    const response = await fetch(`${apiUrl.replace(/\/$/, '')}/api/v1/legal/terms/current`, { cache: 'no-store', signal: AbortSignal.timeout(3000) });
     if (!response.ok) return null;
     const terms = await response.json();
     return ['1.0', '1.1', '1.2'].includes(terms?.terms_version) ? terms.terms_version : null;
