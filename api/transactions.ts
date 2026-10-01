@@ -20,8 +20,3 @@ export async function confirmTransaction(txId: string): Promise<Transaction> {
   const res = await api.post<Transaction>(`/transactions/${encodeURIComponent(txId)}/confirm`);
   return res.data;
 }
-
-export async function getDownloadLink(txId: string): Promise<{ download_url: string }> {
-  const res = await api.get<{ download_url: string }>(`/transactions/${encodeURIComponent(txId)}/download`);
-  return res.data;
-}

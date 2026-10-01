@@ -1,57 +1,20 @@
 'use client';
 
-import { useEffect, useRef, useState, useCallback } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import Link from 'next/link';
 import { useParams, useSearchParams } from 'next/navigation';
-import { getOrder, getOrderAccess, getOrderEvents, refreshOrderAccess, refreshScopedDelivery, requestDownload } from '@/api/orders';
+import { getOrder, getOrderAccess, getOrderEvents } from '@/api/orders';
 import { getTransaction, confirmTransaction, deliverTransaction } from '@/api/transactions';
 import { formatPrice, formatDate } from '@/lib/format';
 import { useToast } from '@/components/Toast';
 import { useAuthStore } from '@/store/auth';
 import WorkspaceDownload from '@/components/orders/WorkspaceDownload';
 import WorkspacePurchaseRecovery from '@/components/orders/WorkspacePurchaseRecovery';
-import ScopedCredentialDownload, { isS3ScopedDeliveryResponse } from '@/components/orders/ScopedCredentialDownload';
 import OrderVersionAccessSummary from '@/components/orders/OrderVersionAccessSummary';
 import { useTermsGate } from '@/components/legal/TermsGate';
-import type { BuyerOrderDetail, OrderAccessResponse, OrderEvent, OrderStatus, S3DownloadFile, S3ScopedDeliveryResponse, Transaction, TransactionStatus, TransactionEvent } from '@/types';
+import type { BuyerOrderDetail, OrderAccessResponse, OrderEvent, OrderStatus, Transaction, TransactionStatus, TransactionEvent } from '@/types';
 import { AxiosError } from 'axios';
-import { api } from '@/api/client';
-import DatasetMembers, { type DatasetMember } from './DatasetMembers';
 import GatewayDeliverySection from '@/components/orders/GatewayDeliverySection';
-
-type DirectoryOrder = BuyerOrderDetail & {
-  memberMode?: 'legacy' | 'directory' | 'unavailable';
-  dataset_members?: DatasetMember[];
-  memberUnavailableReason?: 'delivery_retention_expired' | 'download_window_expired' | 'access_closed' | 'files_unavailable';
-  memberRetryable?: boolean;
-};
-
-function memberProbeReason(status: number | undefined, detail: unknown): DirectoryOrder['memberUnavailableReason'] {
-  const code = detail && typeof detail === 'object' && 'code' in detail ? String(detail.code) : undefined;
-  if (status === 410 || detail === 'delivery_retention_expired') return 'delivery_retention_expired';
-  if (status === 403 && code === 'download_window_expired') return 'download_window_expired';
-  if (status === 403 && (code === 'access_closed' || (typeof detail === 'string' && /closed|revoked/i.test(detail)))) return 'access_closed';
-  return 'files_unavailable';
-}
-
-async function probeMembers(data: BuyerOrderDetail): Promise<DirectoryOrder> {
-  try {
-    const response = await api.get<{ members: DatasetMember[] }>(`/orders/${encodeURIComponent(data.id)}/members`, { timeout: 10000 });
-    if (response.status === 200 && Array.isArray(response.data?.members)) {
-      return { ...data, memberMode: 'directory', dataset_members: response.data.members };
-    }
-    return { ...data, memberMode: 'unavailable', dataset_members: undefined,
-      memberUnavailableReason: 'files_unavailable', memberRetryable: false };
-  } catch (err) {
-    // Only a definitive 404 permits legacy automatic download preparation.
-    const response = (err as { response?: { status?: number; data?: { detail?: unknown } } }).response;
-    const status = response?.status;
-    const legacy = status === 404;
-    return { ...data, memberMode: legacy ? 'legacy' : 'unavailable', dataset_members: undefined,
-      memberUnavailableReason: legacy ? undefined : memberProbeReason(status, response?.data?.detail),
-      memberRetryable: !legacy && (status === undefined || status >= 500) };
-  }
-}
 
 const STATUS_BADGE: Record<OrderStatus, string> = {
   pending_fulfillment: 'bg-yellow-100 text-yellow-800',
@@ -121,38 +84,30 @@ export default function OrderDetailPage() {
   const userId = useAuthStore((s) => s.user?.id);
   const { ensureTermsAccepted, TermsGatePrompt, checkingTerms } = useTermsGate('buyer');
 
-  const [order, setOrder] = useState<DirectoryOrder | null>(null);
-  const isDirectoryOrder = order?.memberMode === 'directory' || order?.memberMode === 'unavailable';
-  const [retryingMembers, setRetryingMembers] = useState(false);
+  const [order, setOrder] = useState<BuyerOrderDetail | null>(null);
   const isBuyerOfRecord = order !== null && userId === order.buyer_id;
   const isSellerOfRecord = order !== null && userId === order.seller_id;
   const [events, setEvents] = useState<OrderEvent[]>([]);
   const [tx, setTx] = useState<Transaction | null>(null);
-  const [downloadPackage, setDownloadPackage] = useState<OrderAccessResponse | null>(null);
-  const [scopedDelivery, setScopedDelivery] = useState<S3ScopedDeliveryResponse | null>(null);
+  const [orderAccess, setOrderAccess] = useState<OrderAccessResponse | null>(null);
+  const [gatewayOrderId, setGatewayOrderId] = useState<string | null>(null);
+  const handleGatewayPresence = useCallback((present: boolean) => {
+    setGatewayOrderId(present ? orderId : null);
+  }, [orderId]);
   const [downloadLoading, setDownloadLoading] = useState(false);
   const [workspaceDownloadReady, setWorkspaceDownloadReady] = useState(false);
   useEffect(() => {setWorkspaceDownloadReady(false);}, [orderId]);
   const [downloadError, setDownloadError] = useState('');
-  const [scopedRefreshError, setScopedRefreshError] = useState('');
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
-  const [activeFilePath, setActiveFilePath] = useState<string | null>(null);
-  const [refreshingFilePath, setRefreshingFilePath] = useState<string | null>(null);
-  const [refreshingAccess, setRefreshingAccess] = useState(false);
-  const [now, setNow] = useState(() => Date.now());
   const [confirming, setConfirming] = useState(false);
   const [delivering, setDelivering] = useState(false);
-  const scopedRefreshPromiseRef = useRef<Promise<S3ScopedDeliveryResponse> | null>(null);
 
   useEffect(() => {
     let cancelled = false;
 
     const fetches: [Promise<BuyerOrderDetail>, Promise<OrderEvent[]>, Promise<Transaction | null>] = [
-      getOrder(orderId).then(async (data) => {
-        if (data.buyer_id !== userId || data.workspace_delivery) return data;
-        return probeMembers(data);
-      }),
+      getOrder(orderId),
       getOrderEvents(orderId).catch(() => [] as OrderEvent[]),
       txIdParam ? getTransaction(txIdParam).catch(() => null) : Promise.resolve(null),
     ];
@@ -180,37 +135,19 @@ export default function OrderDetailPage() {
   }, [orderId, txIdParam, userId]);
 
   useEffect(() => {
-    if (isDirectoryOrder || !isBuyerOfRecord || order?.workspace_delivery || order?.status !== 'fulfilled' || order.access_expired) return;
+    setOrderAccess(null);
+    setDownloadError('');
+    setDownloadLoading(false);
+    if (!isBuyerOfRecord || order?.workspace_delivery || !['fulfilled', 'delivered', 'completed'].includes(String(order?.status)) || order?.access_expired) return;
 
     let cancelled = false;
     setDownloadLoading(true);
-    setDownloadError('');
-
-    requestDownload(orderId)
-      .then((data) => {
-        if (cancelled) return;
-        if (isS3ScopedDeliveryResponse(data)) {
-          setScopedDelivery(data);
-          setDownloadPackage(null);
-        } else {
-          setDownloadPackage(data);
-          setScopedDelivery(null);
-        }
-      })
-      .catch(() => {
-        if (!cancelled) setDownloadError('Could not prepare download access.');
-      })
-      .finally(() => {
-        if (!cancelled) setDownloadLoading(false);
-      });
-
+    getOrderAccess(orderId)
+      .then((data) => { if (!cancelled) setOrderAccess(data); })
+      .catch(() => { if (!cancelled) setDownloadError('Download access is unavailable.'); })
+      .finally(() => { if (!cancelled) setDownloadLoading(false); });
     return () => { cancelled = true; };
-  }, [isDirectoryOrder, isBuyerOfRecord, order?.workspace_delivery, order?.access_expired, order?.status, orderId]);
-
-  useEffect(() => {
-    const interval = window.setInterval(() => setNow(Date.now()), 1000);
-    return () => window.clearInterval(interval);
-  }, []);
+  }, [isBuyerOfRecord, order?.workspace_delivery, order?.access_expired, order?.status, orderId]);
 
   const handleConfirm = async () => {
     await ensureTermsAccepted(confirmReceipt);
@@ -248,91 +185,6 @@ export default function OrderDetailPage() {
     }
   };
 
-  const getFreshDownloadPackage = useCallback(async (filePath?: string) => {
-    if (filePath) setRefreshingFilePath(filePath);
-    setDownloadError(filePath ? 'Link expired - refreshing.' : '');
-    try {
-      await refreshOrderAccess(orderId);
-      const updatedPackage = await getOrderAccess(orderId);
-      setDownloadPackage(updatedPackage);
-      setDownloadError('');
-      return updatedPackage;
-    } catch {
-      setDownloadError('Failed to refresh download links.');
-      throw new Error('refresh_failed');
-    } finally {
-      if (filePath) setRefreshingFilePath(null);
-    }
-  }, [orderId]);
-
-  const downloadFile = useCallback(async (file: S3DownloadFile) => {
-    if (activeFilePath || refreshingFilePath) return;
-    setActiveFilePath(file.path);
-
-    try {
-      let fileToOpen = file;
-      if (isNearExpiry(file.expires_at, now)) {
-        const refreshedPackage = await getFreshDownloadPackage(file.path);
-        const refreshedFile = refreshedPackage.s3_download_urls?.find((candidate) => candidate.path === file.path);
-        if (!refreshedFile) throw new Error('file_missing_after_refresh');
-        fileToOpen = refreshedFile;
-      }
-
-      openPresignedUrl(fileToOpen);
-    } catch {
-      toast('Failed to prepare this download. Please try again.', 'error');
-    } finally {
-      setActiveFilePath(null);
-    }
-  }, [activeFilePath, refreshingFilePath, now, getFreshDownloadPackage, toast]);
-
-  const handleDownloadFile = useCallback(async (file: S3DownloadFile) => {
-    await ensureTermsAccepted(() => downloadFile(file));
-  }, [downloadFile, ensureTermsAccepted]);
-
-  const handleRefresh = async () => {
-    await ensureTermsAccepted(refreshDownloads);
-  };
-
-  const refreshDownloads = async () => {
-    if (refreshingAccess) return;
-    setRefreshingAccess(true);
-    try {
-      await getFreshDownloadPackage();
-      toast('Download links refreshed.', 'success');
-    } catch {
-      toast('Failed to refresh access.', 'error');
-    } finally {
-      setRefreshingAccess(false);
-    }
-  };
-
-  const handleScopedRefresh = async () => {
-    return ensureTermsAccepted(refreshScopedCredentials);
-  };
-
-  const refreshScopedCredentials = async () => {
-    if (scopedRefreshPromiseRef.current) return scopedRefreshPromiseRef.current;
-
-    setScopedRefreshError('');
-    const refreshPromise = refreshScopedDelivery(orderId);
-    scopedRefreshPromiseRef.current = refreshPromise;
-
-    try {
-      const refreshed = await refreshPromise;
-      setScopedDelivery(refreshed);
-      return refreshed;
-    } catch (err) {
-      const message = scopedRefreshFailureMessage(err);
-      setScopedRefreshError(message);
-      throw err;
-    } finally {
-      if (scopedRefreshPromiseRef.current === refreshPromise) {
-        scopedRefreshPromiseRef.current = null;
-      }
-    }
-  };
-
   if (loading) {
     return (
       <div className="flex min-h-[40vh] items-center justify-center">
@@ -362,7 +214,7 @@ export default function OrderDetailPage() {
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
         {/* Main info */}
         <div className="lg:col-span-2 space-y-6">
-          {isBuyerOfRecord && <GatewayDeliverySection key={order.id} orderId={order.id} />}
+          {isBuyerOfRecord && <GatewayDeliverySection key={order.id} orderId={order.id} onPresenceChange={handleGatewayPresence} />}
           <div className="rounded-lg border border-gray-200 p-6">
             <div className="flex items-center justify-between mb-4">
               <h1 className="text-xl font-bold text-gray-900">Order #{order.id.slice(0, 8)}</h1>
@@ -488,25 +340,11 @@ export default function OrderDetailPage() {
           )}
 
           {/* Access / Download section */}
-          {isDirectoryOrder && isBuyerOfRecord && (
-            <DatasetMembers key={`${order.id}:${userId}`} orderId={order.id} initialMembers={order.dataset_members}
-              filesUnavailable={order.memberMode === 'unavailable'} retrying={retryingMembers}
-              unavailableReason={order.memberUnavailableReason} retryable={order.memberRetryable}
-              onRetry={async () => {
-                setRetryingMembers(true);
-                try {
-                  const updated = await probeMembers(order);
-                  setOrder((current) => current === order ? updated : current);
-                }
-                finally { setRetryingMembers(false); }
-              }}
-              accessExpired={!!order.access_expired} ensureTermsAccepted={ensureTermsAccepted} />
-          )}
           {order.status === 'fulfilled' && isSellerOfRecord && !isBuyerOfRecord && (
             <p>Downloads are available to the buyer of this order.</p>
           )}
 
-          {(order.status === 'fulfilled' || order.workspace_delivery) && isBuyerOfRecord && order.access_expired && (
+          {(['fulfilled', 'delivered', 'completed'].includes(String(order.status)) || order.workspace_delivery) && isBuyerOfRecord && order.access_expired && (
             <div className="rounded-lg border border-red-200 bg-red-50 p-6">
               <h2 className="text-lg font-semibold text-red-900">Download window expired</h2>
               <p className="mt-2 text-sm text-red-700">
@@ -518,81 +356,23 @@ export default function OrderDetailPage() {
           {order.workspace_delivery && isBuyerOfRecord && !order.access_expired && String(order.status)==='pending_delivery' && <WorkspacePurchaseRecovery key={order.id} orderId={order.id} onReady={setOrder} />}
           {order.workspace_delivery && isBuyerOfRecord && !order.access_expired && ['delivered','completed','fulfilled'].includes(String(order.status)) && (workspaceDownloadReady ? <WorkspaceDownload key={order.id} orderId={order.id} /> : <button type="button" disabled={checkingTerms} onClick={() => ensureTermsAccepted(() => setWorkspaceDownloadReady(true))} className="rounded-lg bg-indigo-700 px-4 py-2 text-sm font-semibold text-white disabled:opacity-50">Continue to download</button>)}
 
-          {!isDirectoryOrder && order.status === 'fulfilled' && !order.workspace_delivery && isBuyerOfRecord && !order.access_expired && (
-            scopedDelivery ? (
-              <ScopedCredentialDownload
-                orderId={order.id}
-                delivery={scopedDelivery}
-                onRefresh={handleScopedRefresh}
-                refreshError={scopedRefreshError}
-              />
-            ) : (
+          {['fulfilled', 'delivered', 'completed'].includes(String(order.status)) && !order.workspace_delivery && gatewayOrderId !== order.id && isBuyerOfRecord && !order.access_expired && (
             <div className="rounded-lg border border-gray-200 p-6">
-              <div className="mb-4 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-                <div>
-                  <h2 className="text-lg font-semibold text-gray-900">Downloads</h2>
-                </div>
-                <button
-                  onClick={handleRefresh}
-                  disabled={refreshingAccess || downloadLoading || !!activeFilePath || checkingTerms}
-                  className="rounded-lg border border-gray-300 px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50 disabled:cursor-not-allowed disabled:opacity-50"
-                >
-                  {refreshingAccess ? 'Refreshing...' : 'Refresh Links'}
-                </button>
-              </div>
-
-              {downloadLoading && (
-                <div className="rounded-lg bg-gray-50 px-4 py-3 text-sm text-gray-600">
-                  Preparing download access...
-                </div>
-              )}
-
-              {downloadError && (
-                <div className="mb-3 rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
-                  {downloadError}
-                </div>
-              )}
-
-              {!downloadLoading && !downloadError && (!downloadPackage?.s3_download_urls || downloadPackage.s3_download_urls.length === 0) && (
-                <div className="rounded-lg bg-gray-50 px-4 py-3 text-sm text-gray-600">
-                  No S3 files are available yet. The seller may still be completing fulfillment.
-                </div>
-              )}
-
-              {downloadPackage?.s3_download_urls && downloadPackage.s3_download_urls.length > 0 && (
-                <div className="divide-y divide-gray-100 rounded-lg border border-gray-200">
-                  {downloadPackage.s3_download_urls.map((file) => {
-                    const secondsLeft = secondsUntil(file.expires_at, now);
-                    const expired = secondsLeft <= 0;
-                    const refreshing = refreshingFilePath === file.path;
-                    const active = activeFilePath === file.path;
-                    return (
-                      <div key={file.path} className="flex flex-col gap-3 px-4 py-3 sm:flex-row sm:items-center sm:justify-between">
-                        <div className="min-w-0">
-                          <p className="truncate text-sm font-medium text-gray-900" title={file.path}>
-                            {fileNameFromPath(file.path)}
-                          </p>
-                          <p className="mt-1 truncate text-xs text-gray-500" title={file.path}>
-                            {file.path}
-                          </p>
-                          <p className={`mt-1 text-xs ${expired ? 'text-red-700' : 'text-gray-500'}`}>
-                            {refreshing ? 'Link expired - refreshing.' : formatValidity(secondsLeft)}
-                          </p>
-                        </div>
-                        <button
-                          onClick={() => handleDownloadFile(file)}
-                          disabled={!!activeFilePath || !!refreshingFilePath}
-                          className="rounded-lg bg-green-600 px-4 py-2 text-sm font-medium text-white hover:bg-green-700 disabled:cursor-not-allowed disabled:opacity-50"
-                        >
-                          {active || refreshing ? 'Preparing...' : 'Download'}
-                        </button>
-                      </div>
-                    );
-                  })}
-                </div>
+              <h2 className="text-lg font-semibold text-gray-900">Downloads</h2>
+              {downloadLoading ? (
+                <p className="mt-2 text-sm text-gray-600">Preparing download access...</p>
+              ) : orderAccess?.delivery_type === 'reference' && orderAccess.can_download && orderAccess.download_urls?.some((file) => /^https?:\/\//i.test(file.url)) ? (
+                <ul className="mt-4 space-y-3">
+                  {orderAccess.download_urls.filter((file) => /^https?:\/\//i.test(file.url)).map((file) => (
+                    <li key={file.url}>
+                      <ReferenceDownload url={file.url} filename={file.filename} />
+                    </li>
+                  ))}
+                </ul>
+              ) : (
+                <p className="mt-2 text-sm text-gray-600">{downloadError || 'Download access is unavailable.'}</p>
               )}
             </div>
-            )
           )}
 
           {/* Event Timeline */}
@@ -634,44 +414,34 @@ export default function OrderDetailPage() {
   );
 }
 
-function openPresignedUrl(file: S3DownloadFile) {
-  const a = document.createElement('a');
-  a.href = file.presigned_url;
-  a.download = fileNameFromPath(file.path);
-  a.rel = 'noopener noreferrer';
-  a.referrerPolicy = 'no-referrer';
-  a.style.display = 'none';
-  document.body.appendChild(a);
-  a.click();
-  a.remove();
-}
+function ReferenceDownload({ url, filename }: { url: string; filename?: string | null }) {
+  const { ensureTermsAccepted, TermsGatePrompt, checkingTerms, termsAccepted } = useTermsGate('buyer', {
+    preloadAcceptance: true,
+    requireAcceptance: true,
+  });
+  const [ready, setReady] = useState(false);
 
-function fileNameFromPath(path: string) {
-  const cleanPath = path.split('?')[0] || path;
-  return cleanPath.split('/').filter(Boolean).pop() || 'data';
-}
-
-function secondsUntil(expiresAt: string, now: number) {
-  const expiry = new Date(expiresAt).getTime();
-  if (Number.isNaN(expiry)) return 0;
-  return Math.max(0, Math.floor((expiry - now) / 1000));
-}
-
-function isNearExpiry(expiresAt: string, now: number) {
-  return secondsUntil(expiresAt, now) <= 60;
-}
-
-function formatValidity(secondsLeft: number) {
-  if (secondsLeft <= 0) return 'Link expired.';
-  const minutes = Math.floor(secondsLeft / 60);
-  const seconds = secondsLeft % 60;
-  if (minutes === 0) return `Valid for ${seconds}s.`;
-  return `Valid for ${minutes}m ${seconds.toString().padStart(2, '0')}s.`;
-}
-
-function scopedRefreshFailureMessage(err: unknown) {
-  if (err instanceof AxiosError && err.response?.status === 429) {
-    return 'Credential refresh is temporarily rate limited. Please wait before trying again.';
-  }
-  return 'Could not refresh credentials. Try again in a moment.';
+  return (
+    <>
+      {ready && termsAccepted ? (
+        <a href={url} target="_blank" rel="noopener noreferrer" referrerPolicy="no-referrer"
+          className="text-sm text-[#3F51B5] hover:underline">
+          {filename ? `Open download ${filename}` : 'Open download'}
+        </a>
+      ) : (
+        <button type="button" disabled={checkingTerms}
+          onClick={() => {
+            if (termsAccepted) {
+              window.open(url, '_blank', 'noopener,noreferrer');
+            } else {
+              void ensureTermsAccepted(() => setReady(true));
+            }
+          }}
+          className="text-sm text-[#3F51B5] hover:underline">
+          {filename ? `Download ${filename}` : 'Download'}
+        </button>
+      )}
+      <TermsGatePrompt />
+    </>
+  );
 }
