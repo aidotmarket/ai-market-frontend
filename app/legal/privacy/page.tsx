@@ -9,7 +9,7 @@ export default function PrivacyNoticePage() {
   return (
     <div className="mx-auto max-w-3xl px-6 py-16 lg:py-24">
       <h1 className="text-3xl font-bold text-gray-900 mb-2">ai.market Privacy Notice</h1>
-      <p className="text-sm text-gray-500 mb-10">Last Updated: March 25, 2026</p>
+      <p className="text-sm text-gray-500 mb-10">Last Updated: October 1, 2026</p>
 
       <div className="prose prose-gray max-w-none prose-headings:text-gray-900 prose-p:text-gray-700 prose-a:text-[#3F51B5] [&>h2]:mb-4 [&>h2]:mt-10 [&>p]:mb-6">
         <p>
@@ -33,6 +33,20 @@ export default function PrivacyNoticePage() {
         </p>
         <p>
           We may use your information to monitor and analyze trends, usage, and activities in connection with the Services, to detect, investigate, and prevent fraudulent transactions and other illegal activities, to protect the rights and property of ai.market and others, and to personalize and improve the Services and provide content and features that match your profile or interests.
+        </p>
+
+        <h2 id="ai-assistants">AI assistants and connectors</h2>
+        <p>
+          You can connect your ai.market account to an AI assistant such as Claude. You sign in on ai.market and approve what the assistant may access. You can revoke that access at any time under Connected apps in your account settings, or in the assistant.
+        </p>
+        <p>
+          When the assistant uses ai.market on your behalf, we process your account details, organization membership, marketplace listings, your activity notices and your data requests, only to answer that request. We do not receive your conversation with the assistant.
+        </p>
+        <p>
+          For security and abuse prevention we keep a record of each request: the time, which tool was used, whether it succeeded, the app and approval it came through, your account and organization, and one-way fingerprints of the request contents, the response and your browser details. We do not store the request text or the response. If a connection attempt fails authentication, we also record the IP address it came from. We keep these records for 12 months, then delete them.
+        </p>
+        <p>
+          The assistant provider handles your conversation under its own privacy terms. Questions: <a href="mailto:privacy@ai.market">privacy@ai.market</a>.
         </p>
 
         <h2>How We Share Your Information</h2>
