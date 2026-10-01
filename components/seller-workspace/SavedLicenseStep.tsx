@@ -27,6 +27,7 @@ export default function SavedLicenseStep(){
     }finally{setBusy(false);}
   }
   if(!flow?.licensesEnabled)return <><p>Licences are off in this Workspace. Continue to Describe and price to enter your licence.</p><button onClick={()=>flow?.navigate('listing')}>Next: Describe and price →</button></>;
+  if(!store.available)return <p role="status">Saved drafts are unavailable in this Workspace, so your licence choice cannot be saved. Continue to Describe and price to prepare your listing, then return when saved drafts are available. <button onClick={()=>flow.navigate('listing')}>Continue to Describe and price →</button></p>;
   if(!store.loaded)return <p role="status">{store.error?'Your saved draft could not be loaded. Retry before choosing a licence.':'Loading your saved licence choice…'} {store.error&&<button onClick={store.retry}>Retry</button>}</p>;
   return <section className="space-y-4" aria-label="Choose a licence"><h2 className="text-xl font-semibold">Choose a licence</h2>
     <SellerLicenseSelection value={value} onChange={v=>{setEdited(v);setError('');}} disabled={busy} onIdentityStateChange={setIdentity} onLegalDirtyChange={setLegalDirty} legalIdentityEnabled />

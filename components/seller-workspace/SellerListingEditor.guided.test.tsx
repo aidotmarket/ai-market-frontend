@@ -20,6 +20,7 @@ describe('guided editor source binding and saving',()=>{
   fireEvent.change(category,{target:{value:''}});fireEvent.click(screen.getByRole('button',{name:'Save private draft'}));await waitFor(()=>expect(save).toHaveBeenCalledTimes(2));expect(save.mock.calls[1][0].category).toBe('');
   fireEvent.change(category,{target:{value:'ai-machine-learning'}});expect(category.value).toBe('ai-machine-learning');
  });
+ it('hides the dead Review advance in an editor without draft saves',()=>{render(<SellerListingEditor initialContent={content} licensesEnabled onNext={vi.fn()}/>);expect(screen.queryByRole('button',{name:'Next: Review →'})).toBeNull();});
  it('removes the dead licence input only with licences on and previews the actual training choice',()=>{
   const view=render(<SellerListingEditor initialContent={content} licensesEnabled sourceVersion={7} categories={categories}/>);
   expect(screen.queryByLabelText('Your license')).toBeNull();fireEvent.click(screen.getByRole('button',{name:'Preview my listing'}));expect(screen.getByText(/ai.market Standard Data Licence v1.0.*training not allowed/)).toBeTruthy();

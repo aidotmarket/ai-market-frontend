@@ -13,5 +13,8 @@ export async function saveListingSource(content: SourceContent, expected_version
 
 export interface SellerCategory {slug: string; name: string}
 export async function readSellerCategories(signal?: AbortSignal): Promise<SellerCategory[]> {
-  return (await api.get('/seller-workspace/categories', {signal})).data;
+  const data: unknown = (await api.get('/seller-workspace/categories', {signal})).data;
+  if (!Array.isArray(data) || !data.every(item => item && typeof item.slug === 'string' && typeof item.name === 'string'))
+    throw new Error('The seller category list could not be read.');
+  return data;
 }

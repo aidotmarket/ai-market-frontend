@@ -25,6 +25,11 @@ describe('separate saved licence task',()=>{
   fireEvent.click(screen.getByRole('button',{name:'Next: Describe and price →'}));expect(await screen.findByText('The licence choice changed elsewhere. Retry the saved draft.')).toBeTruthy();expect(mocks.navigate).not.toHaveBeenCalled();
   fireEvent.click(screen.getByRole('button',{name:'Next: Describe and price →'}));await waitFor(()=>expect(mocks.navigate).toHaveBeenCalledWith('listing'));expect(mocks.save.mock.calls[1][0].category).toBe('');expect(mocks.save.mock.calls[1][0].license_selection.seller_acceptance.signer_title).toBe('Director');expect(screen.queryByRole('button',{name:'Save licence choice'})).toBeNull();
  });
+ it('explains unavailable drafts with the real provider, offers a next step and never saves',async()=>{
+  render(<SellerListingDraftProvider enabled={false} sampleCapability={false}><SavedLicenseStep/></SellerListingDraftProvider>);
+  expect(await screen.findByText(/Saved drafts are unavailable/)).toBeTruthy();expect(screen.queryByText(/Loading your saved licence/)).toBeNull();
+  fireEvent.click(screen.getByRole('button',{name:'Continue to Describe and price →'}));expect(mocks.navigate).toHaveBeenCalledWith('listing');expect(mocks.read).not.toHaveBeenCalled();expect(mocks.save).not.toHaveBeenCalled();
+ });
  it('skips selection when the existing licence capability is off',async()=>{
   mocks.enabled=false;renderStep();expect(screen.queryByText('How can buyers use this data?')).toBeNull();fireEvent.click(screen.getByRole('button',{name:'Next: Describe and price →'}));expect(mocks.navigate).toHaveBeenCalledWith('listing');await waitFor(()=>expect(mocks.read).toHaveBeenCalled());
  });

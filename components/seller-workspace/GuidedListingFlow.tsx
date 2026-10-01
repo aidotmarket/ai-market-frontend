@@ -1,5 +1,5 @@
 'use client';
-import {createContext, useContext, useEffect, useState, type ReactNode} from 'react';
+import {createContext, useContext, useEffect, useState, useRef, type ReactNode} from 'react';
 import type {ListingDraftContent} from '@/api/sellerListingDraft';
 import {readListingSource, readSellerCategories, type SourceRead, type SellerCategory} from '@/api/sellerListingSource';
 import {listingReviewErrorReason,readListingReview, type ListingReview, type ApprovalReceipt} from '@/api/sellerListingReview';
@@ -20,7 +20,7 @@ const Context = createContext<Flow|null>(null);
 export function useListingFlow(){return useContext(Context);}
 
 export function GuidedListingFlow({connections, capabilities, view, navigate, children}: {connections:SellerWorkspaceConnection[]; capabilities:SellerWorkspaceCapabilities|null; view:WorkspaceView; navigate:(view:WorkspaceView)=>void; children:ReactNode}) {
-  const {draft, requestLoad, selectionSavePending, selectionSaveFailed} = useSellerListingDraft();
+  const {draft, requestLoad, reload, selectionSavePending, selectionSaveFailed} = useSellerListingDraft();
   const [filesDirty,setFilesDirty]=useState(false);
   const [listingDirty,setListingDirty]=useState(false);
   const [licenceDirty,setLicenceDirty]=useState(false);
@@ -56,14 +56,26 @@ export function GuidedListingFlow({connections, capabilities, view, navigate, ch
     Promise.all([readListingSource(),readSellerCategories()]).then(([s,c])=>{if(alive){setSource(s);setCategories(c);setSourceLoaded(true);}}).catch(()=>{if(alive)setReadError('Your saved files and category list could not be loaded. Retry before continuing.');});
     return()=>{alive=false;};
   },[sourcesEnabled,readRetry]);
+  const reconciled=useRef('');
   const pending=selectionSavePending||selectionSaveFailed||filesDirty;
   useEffect(()=>{
     setReview(null);setReviewError('');setReviewLoading(false);setPublication(null);
     if(!reviewEnabled||!source||!draft||pending)return;
     const controller=new AbortController();setReviewLoading(true);
-    readListingReview(controller.signal).then(r=>{if(!controller.signal.aborted)setReview(r);}).catch(error=>{
+    readListingReview(controller.signal).then(async r=>{
       if(controller.signal.aborted)return;
-      setReviewError(listingReviewErrorReason(error));
+      setReview(r);
+      if(r.source_version!==source.version||r.draft_version!==draft.version){
+        const key=`${reviewRetry}:${r.source_version}:${r.draft_version}`;
+        if(reconciled.current===key)return;
+        reconciled.current=key;
+        const savedSource=await readListingSource();
+        if(controller.signal.aborted)return;
+        await reload(controller.signal,()=>setSource(savedSource));
+      }
+    }).catch(error=>{
+      if(controller.signal.aborted)return;
+      setReviewError('Your saved review could not be reconciled. Refresh Review to reload your saved files and draft. '+listingReviewErrorReason(error));
     }).finally(()=>{if(!controller.signal.aborted)setReviewLoading(false);});
     return()=>controller.abort();
   },[reviewEnabled,source,draft,pending,reviewRetry]);

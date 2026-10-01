@@ -20,7 +20,7 @@ export default function SellerReview({active, enabled}: {active: boolean; enable
   const review=flow?flow.review:localReview;
   const error=flow?flow.reviewError:localError;
   const loading=flow?flow.reviewLoading:localLoading;
-  const descriptionBlocked=!!flow&&flow.steps.slice(0,4).some(s=>s.state!=='done');
+  const descriptionBlocked=!!flow&&flow.steps.slice(0,4).some(s=>s.state!=='done'&&s.state!=='skipped');
   const selectionBlocked=draftStatus.selectionSavePending||draftStatus.selectionSaveFailed;
   useEffect(() => {
     if (flow || !active || !enabled) return;

@@ -19,7 +19,7 @@ No backend changes, new libraries or new flags. Backend A2 category admission, s
 
 - Typecheck: passed, exit 0.
 - Lint: exit 0, zero errors, six pre-existing image warnings outside changed files.
-- Full Vitest: 1,453/1,453 tests passed in 259 files, zero skipped. Relevant seller-workspace, buyer and dialog coverage: 237 tests in 25 files. Base archive with the same Node compatibility setting: 1,407/1,407 tests in 246 files passed. Net new coverage: 46 tests.
+- Full Vitest: 1,453/1,453 tests passed in 144 files (259 suites), zero skipped. Relevant seller-workspace, buyer and dialog coverage: 237 tests in 25 files. Base archive with the same Node compatibility setting: 1,407/1,407 tests in 137 files (246 suites) passed. Net new coverage: 46 tests.
 - Playwright: 2/2 passed, at 1280px and 390px, using the actual workspace page and synthetic HTTP responses. Each walk reloads and resumes the saved file selection, saves an empty-category licence, accepts Allai's draft, approves and publishes using checklist/Next. Exactly one source PUT and two draft PUTs; no duplicate saves. Dialog keyboard behaviour is checked in Chromium and Vitest.
 - Production Next build: exit 0, 50/50 static pages generated. Workspace route: 37.4 kB, 191 kB first-load JS.
 - `git diff --check`: passed.
@@ -87,3 +87,47 @@ Browser evidence uses synthetic endpoints, not live storage, a live model, real 
 - `tests/guidedListingFixture.ts`
 - `tests/preview-browser/guided.pw.ts`
 - `tests/preview-browser/main.tsx`
+
+## Gate 3 R1 review fold (2026-10-01)
+
+Continued from `1e30e6572bf2b3ea33a85b1dff4a0aeae017bed7` in the assigned detached checkout. New commits only; publication remains limited to `build/guided-flow-chunk-b-s1787`. Reviews: codex2 `response-20261001-072757-464194-ea681538.md` (REVISE) and DeepSeek `response-20261001-072754-705014-a622c23a.md` (AWN).
+
+- F1: a refreshed Review with different source or draft versions immediately withdraws step 4 with a recovery reason. Reload the authoritative source and draft through the real provider, then re-read Review. Approval stays disabled until versions and description binding agree. Failed reconciliation stays blocked with a refresh action; each refresh attempts reconciliation once per reported version pair, avoiding repeated reads on persistent divergence. A current server missing-fields refusal withdraws step 4.
+- F2: licences enabled with drafts unavailable now explains that the licence cannot be saved, offers Describe and price as the preparation step and asks the seller to return when drafts are available. It never shows perpetual loading or sends a draft save.
+- F3: corrected the original file counts above using the original JSON artifacts: candidate 144 files / 259 suites, base 137 files / 246 suites.
+- DeepSeek 1: pre-stamp drafts still show the warning and leave step 4 incomplete until a matching Allai description or “This description matches my files” confirms them. Opening the page does not write a stamp or save a draft. A server-provided approval matching the current source and draft remains visible and counted as approved if the missing stamp is the only description issue; a new approval remains blocked. Saving a confirmation still changes the backend draft/review binding and requires a new approval, as before. Changed sources, mismatched versions, other invalid fields and server refusals receive no exemption.
+- DeepSeek 2–5: licence checklist state is skipped when licences are off; Your listings empty-state copy uses Describe and price; the editor without draft saves hides Next: Review; categories validate the array and every slug/name pair, with malformed responses entering read recovery.
+
+Regression coverage uses the real draft provider and real Review/approval UI: externally changed source and draft, initially enabled approval becoming unavailable, current missing-field refusal, failed reload, pre-stamp approval preservation without saves, malformed category payloads, unavailable licences without saves, skipped licences and the legacy editor's hidden Next.
+
+### R1 verification
+
+- Typecheck: exit 0.
+- Lint: exit 0; zero errors, six existing image warnings.
+- Full Vitest with `NODE_OPTIONS=--no-experimental-webstorage`: 1,463/1,463 passed in 145 files (260 suites), zero skipped. R1 adds 10 tests and one test file; total chunk-B gain over the original base is 56 tests..
+- Guided Playwright: 2/2 passed (1280px and 390px), synthetic HTTP fixtures using the actual workspace page.
+- Next production build: exit 0; 50/50 static pages. Seller workspace 37.8 kB, 191 kB first-load JS. Same documented build-only Keystatic fixtures as the original run.
+- Diff whitespace check: passed.
+
+The full-suite rerun encountered the already documented unchanged gateway polling timing failure (1,462 passed / 1 failed); no test was skipped or altered to hide it. A subsequent full rerun is recorded below. The strengthened real-approval regression file also passed 7/7 separately.
+
+R1 logs: `/tmp/s1787-r1-lint.log`, `/tmp/s1787-r1-tests.json`, `/tmp/s1787-r1-tests.log`, `/tmp/s1787-r1-browser.log` and `/tmp/s1787-r1-build.log`. Commands are the original validation commands above with `s1787-r1` artifact names; npm subprocesses also run through `rtk`. These are local fixture checks, not production deployment or live acceptance.
+
+### R1 changed files
+
+14 files changed relative to the R1 base; 148 added lines, 17 removed lines; net +131 lines.
+
+- `api/sellerListingSource.ts`
+- `components/seller-workspace/GuidedListingFlow.reconciliation.test.tsx`
+- `components/seller-workspace/GuidedListingFlow.test.tsx`
+- `components/seller-workspace/GuidedListingFlow.tsx`
+- `components/seller-workspace/SavedLicenseStep.test.tsx`
+- `components/seller-workspace/SavedLicenseStep.tsx`
+- `components/seller-workspace/SellerListingDraftStore.tsx`
+- `components/seller-workspace/SellerListingEditor.guided.test.tsx`
+- `components/seller-workspace/SellerListingEditor.tsx`
+- `components/seller-workspace/SellerPublications.tsx`
+- `components/seller-workspace/SellerReview.tsx`
+- `components/seller-workspace/listingSteps.test.ts`
+- `components/seller-workspace/listingSteps.ts`
+- `docs/reports/s1787-guided-flow-chunk-b.md`

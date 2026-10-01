@@ -45,6 +45,6 @@ describe('checklist reads owned at the workspace page',()=>{
  });
  it('withdraws approval and publication on a new source, retaining a plain description warning',async()=>{
   mocks.review.mockResolvedValue({draft_version:2,source_version:1,missing_fields:[],approval:{id:'a'}});mocks.publication.mockResolvedValue({publication_available:true,publication:{approval_id:'a',slug:'synthetic-sales'}});render(<Harness/>);await screen.findByRole('link',{name:'Published: view your listing'});
-  fireEvent.click(screen.getByRole('button',{name:'Save new files'}));await waitFor(()=>expect(screen.queryByRole('link',{name:'Published: view your listing'})).toBeNull());expect(screen.getByText(/Your files changed after this description was written/)).toBeTruthy();
+  mocks.review.mockResolvedValue({draft_version:2,source_version:2,missing_fields:[],approval:null});fireEvent.click(screen.getByRole('button',{name:'Save new files'}));await waitFor(()=>expect(screen.queryByRole('link',{name:'Published: view your listing'})).toBeNull());expect(screen.getByText(/Your files changed after this description was written/)).toBeTruthy();
  });
 });
