@@ -3,6 +3,7 @@ import {useEffect,useState} from 'react';
 import {readPublicationPage,type PublicationPage} from '@/api/sellerListingPublication';
 import SellerAtAGlance from '@/components/listings/SellerAtAGlance';
 import SellerListingVisibility from './SellerListingVisibility';
+import {formatPublishedDate} from '@/lib/format';
 export default function SellerPublications({active,enabled}:{active:boolean;enabled:boolean}) {
   const [page,setPage]=useState(0);
   const [openSummaries,setOpenSummaries]=useState<Record<string,boolean>>({});
@@ -24,7 +25,7 @@ export default function SellerPublications({active,enabled}:{active:boolean;enab
       {result.items.length===0 && <p className="rounded-xl border border-gray-200 bg-white p-6 text-sm text-gray-600">No Workspace listings on this page. Your saved draft stays in Describe and price until you approve and publish it.</p>}
       <ul className="space-y-4">{result.items.map(item=><li key={item.id} className="rounded-xl border border-gray-200 bg-white p-5">
         <div className="flex flex-wrap items-center justify-between gap-3"><h3 className="font-semibold text-gray-900">{item.title}</h3><span className="rounded-full bg-gray-100 px-3 py-1 text-xs text-gray-700">{item.status==='published' && item.is_listed?'Published':'Not listed'}</span></div>
-        <p className="mt-2 text-xs text-gray-500">Published {new Date(item.published_at).toLocaleDateString('en',{year:'numeric',month:'short',day:'numeric'})}</p>
+        <p className="mt-2 text-xs text-gray-500">Published {formatPublishedDate(item.published_at)}</p>
         <a href={`/listings/${encodeURIComponent(item.slug)}`} className="mt-4 inline-block text-sm font-medium text-indigo-700 underline">View listing</a>
         {item.listing_id && <details className="mt-4" onToggle={event=>{const open=event.currentTarget.open;setOpenSummaries(current=>({...current,[item.id]:open}));}}><summary className="cursor-pointer text-sm font-medium text-indigo-700">Review At a glance</summary>{openSummaries[item.id] && <SellerAtAGlance listingId={item.listing_id} slug={item.slug} active={active} revision={retry} />}</details>}
         <SellerListingVisibility publication={item} active={active} onChange={updated=>setResult(current=>current?{...current,items:current.items.map(value=>value.id===updated.id?updated:value)}:current)} />

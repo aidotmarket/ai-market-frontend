@@ -163,3 +163,38 @@ it.each([
   expect(legal.acceptTerms).toHaveBeenLastCalledWith(expect.objectContaining({ terms_version: nextVersion, terms_hash_sha256: nextHash }));
   expect(onAccepted).toHaveBeenCalledTimes(1);
 });
+
+it('retries a failed conflict refresh without accepting until fresh acknowledgements are signed', async () => {
+  const previous = { terms_version: '1.1', terms_hash_sha256: 'hash-1.1' };
+  const current = { terms_version: '1.2', terms_hash_sha256: 'hash-1.2' };
+  legal.getCurrentTerms.mockResolvedValueOnce(previous).mockResolvedValueOnce(previous)
+    .mockRejectedValueOnce(new Error('network')).mockResolvedValue(current);
+  const error = new AxiosError('publication changed');
+  error.response = { status: 409, data: { detail: { code: 'TERMS_VERSION_CHANGED' } } } as never;
+  legal.acceptTerms.mockRejectedValueOnce(error).mockResolvedValue(current);
+  const onAccepted = vi.fn();
+  render(<TermsAcceptanceForm context={{ scope: 'individual' }} onAccepted={onAccepted} />);
+  await screen.findByLabelText(/Country/);
+  fillForm();
+  fireEvent.change(screen.getByLabelText(/Country/), { target: { value: 'GB' } });
+  fireEvent.click(screen.getByLabelText('I am authorized to bind this business'));
+  fireEvent.click(screen.getByRole('button', { name: 'Accept and sign' }));
+  await screen.findByText(/Could not load the current terms/);
+  expect(document.getElementById('ack-box-1')!.closest('fieldset')!.disabled).toBe(true);
+  const retry = screen.getByRole('button', { name: 'Try again' });
+  await waitFor(() => expect((retry as HTMLButtonElement).disabled).toBe(false));
+  fireEvent.click(retry);
+  await waitFor(() => expect(document.getElementById('ack-box-1')!.closest('fieldset')!.disabled).toBe(false));
+  expect(screen.getByLabelText(/I acknowledge the risk allocation and waivers in Section 13/)).toBeTruthy();
+  for (const id of ['ack-box-1', 'ack-box-2', 'ack-box-3', 'authority-ack']) expect((document.getElementById(id) as HTMLInputElement).checked).toBe(false);
+  expect(legal.getCurrentTerms).toHaveBeenCalledTimes(4);
+  expect(legal.acceptTerms).toHaveBeenCalledTimes(1);
+  expect(onAccepted).not.toHaveBeenCalled();
+  expect((screen.getByRole('button', { name: 'Accept and sign' }) as HTMLButtonElement).disabled).toBe(true);
+  fillForm();
+  fireEvent.click(screen.getByLabelText('I am authorized to bind this business'));
+  fireEvent.click(screen.getByRole('button', { name: 'Accept and sign' }));
+  await screen.findByText('Terms accepted. You can continue using ai.market.');
+  expect(legal.acceptTerms).toHaveBeenLastCalledWith(expect.objectContaining({ terms_version: '1.2', terms_hash_sha256: 'hash-1.2', ack_box1: true, ack_box2: true, ack_box3: true, authority_ack: true }));
+  expect(onAccepted).toHaveBeenCalledTimes(1);
+});

@@ -42,6 +42,7 @@ export default function TermsAcceptanceForm({ context, acceptanceContext = 'buye
   const [ackBox2, setAckBox2] = useState(false);
   const [ackBox3, setAckBox3] = useState(false);
   const [submitting, setSubmitting] = useState(false);
+  const [refreshing, setRefreshing] = useState(false);
   const [submitted, setSubmitted] = useState(false);
   const [error, setError] = useState('');
 
@@ -72,6 +73,29 @@ export default function TermsAcceptanceForm({ context, acceptanceContext = 'buye
     businessLegalName.trim().length > 0 &&
     (context.scope === 'organization' || requiresJurisdiction ? authorityAck : true)
   ), [termsReady, termsHash, requiresJurisdiction, jurisdiction, ackBox1, ackBox2, ackBox3, authorityAck, businessLegalName, context.scope, signerFullName, signerTitle]);
+
+  const refreshTerms = async () => {
+    setRefreshing(true);
+    setTermsReady(false);
+    setAckBox1(false);
+    setAckBox2(false);
+    setAckBox3(false);
+    setAuthorityAck(false);
+    const reviewMessage = termsVersion ? 'The terms were just updated. Please review the new version and accept again.' : '';
+    setError(reviewMessage);
+    try {
+      const current = await getCurrentTerms();
+      if (!['1.0', '1.1', '1.2'].includes(current.terms_version)) throw new Error('Unsupported terms version');
+      setTermsVersion(current.terms_version);
+      setTermsHash(current.terms_hash_sha256);
+      setRequiresJurisdiction(current.terms_version === '1.1' || current.terms_version === '1.2');
+      setTermsReady(true);
+    } catch {
+      setError(`${reviewMessage ? `${reviewMessage} ` : ''}Could not load the current terms. Please try again.`);
+    } finally {
+      setRefreshing(false);
+    }
+  };
 
   const handleSubmit = async (event: React.FormEvent) => {
     event.preventDefault();
@@ -115,22 +139,7 @@ export default function TermsAcceptanceForm({ context, acceptanceContext = 'buye
       const detail = response?.data?.detail;
       const code = typeof detail === 'object' && detail !== null ? detail.code : undefined;
       if (response?.status === 409 && code === 'TERMS_VERSION_CHANGED') {
-        setTermsReady(false);
-        setAckBox1(false);
-        setAckBox2(false);
-        setAckBox3(false);
-        setAuthorityAck(false);
-        setError('The terms were just updated. Please review the new version and accept again.');
-        try {
-          const current = await getCurrentTerms();
-          if (!['1.0', '1.1', '1.2'].includes(current.terms_version)) throw new Error('Unsupported terms version');
-          setTermsVersion(current.terms_version);
-          setTermsHash(current.terms_hash_sha256);
-          setRequiresJurisdiction(current.terms_version === '1.1' || current.terms_version === '1.2');
-          setTermsReady(true);
-        } catch {
-          setError('The terms were just updated. Please review the new version and accept again. Could not load the current terms. Please try again.');
-        }
+        await refreshTerms();
       } else if (code === 'SELLER_ACCESS_REQUIRED' || response?.data?.code === 'SELLER_ACCESS_REQUIRED') setError('Only sellers can accept these terms as a seller.');
       else if (code === 'SELLER_LEGAL_IDENTITY_REQUIRED') setError('seller_identity_required');
       else if (code === 'LEGAL_IDENTITY_CONFLICT') setError('identity_conflict');
@@ -163,6 +172,11 @@ export default function TermsAcceptanceForm({ context, acceptanceContext = 'buye
           {error === 'seller_identity_required' ? <>Add your legal name in Seller Workspace before accepting as a seller. <Link href="/dashboard/seller-workspace" className="underline">Open Seller Workspace</Link></>
             : error === 'identity_conflict' ? <>Your legal name doesn&apos;t match our records. Contact support. <Link href="/seller-workspace/support/legal-identity" className="underline">Contact support</Link></>
             : error === 'identity_invalid' ? 'Check the name and country and try again.' : error}
+          {!termsReady && (
+            <button type="button" onClick={refreshTerms} disabled={refreshing || submitting} className="ml-2 font-semibold underline underline-offset-2 disabled:opacity-50">
+              {refreshing ? 'Loading terms...' : 'Try again'}
+            </button>
+          )}
         </div>
       )}
 
