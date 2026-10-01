@@ -43,7 +43,7 @@ export default function PrivacyNoticePage() {
           When the assistant uses ai.market on your behalf, we process your account details, organization membership, marketplace listings, your activity notices and your data requests, only to answer that request. We do not receive your conversation with the assistant.
         </p>
         <p>
-          For security and abuse prevention we keep a record of each request: the time, which tool was used, the result, the app and approval it came through, your account and organization, your IP address, and one-way fingerprints of the request contents and your browser details. We do not store the request text or the results. We keep these records for 12 months, then delete them.
+          For security and abuse prevention we keep a record of each request: the time, which tool was used, whether it succeeded, the app and approval it came through, your account and organization, and one-way fingerprints of the request contents, the response and your browser details. We do not store the request text or the response. If a connection attempt fails authentication, we also record the IP address it came from. We keep these records for 12 months, then delete them.
         </p>
         <p>
           The assistant provider handles your conversation under its own privacy terms. Questions: <a href="mailto:privacy@ai.market">privacy@ai.market</a>.

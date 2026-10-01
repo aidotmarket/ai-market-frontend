@@ -7,7 +7,7 @@ import PrivacyNoticePage from './page';
 
 describe('PrivacyNoticePage', () => {
   it('publishes the AI assistants section after information use with the approved retention period', () => {
-    render(<PrivacyNoticePage />);
+    const { container } = render(<PrivacyNoticePage />);
     const heading = screen.getByRole('heading', { name: 'AI assistants and connectors' });
 
     expect(heading.id).toBe('ai-assistants');
@@ -18,7 +18,9 @@ describe('PrivacyNoticePage', () => {
     expect(screen.getByText('Last Updated: October 1, 2026')).toBeTruthy();
     expect(heading.nextElementSibling?.textContent?.trim()).toBe('You can connect your ai.market account to an AI assistant such as Claude. You sign in on ai.market and approve what the assistant may access. You can revoke that access at any time under Connected apps in your account settings, or in the assistant.');
     expect(heading.nextElementSibling?.nextElementSibling?.textContent?.trim()).toBe('When the assistant uses ai.market on your behalf, we process your account details, organization membership, marketplace listings, your activity notices and your data requests, only to answer that request. We do not receive your conversation with the assistant.');
-    expect(screen.getByText(/We keep these records for 12 months, then delete them\./).textContent?.trim()).toBe('For security and abuse prevention we keep a record of each request: the time, which tool was used, the result, the app and approval it came through, your account and organization, your IP address, and one-way fingerprints of the request contents and your browser details. We do not store the request text or the results. We keep these records for 12 months, then delete them.');
+    expect(screen.getByText(/We keep these records for 12 months, then delete them\./).textContent?.trim()).toBe('For security and abuse prevention we keep a record of each request: the time, which tool was used, whether it succeeded, the app and approval it came through, your account and organization, and one-way fingerprints of the request contents, the response and your browser details. We do not store the request text or the response. If a connection attempt fails authentication, we also record the IP address it came from. We keep these records for 12 months, then delete them.');
+    expect(container.textContent).not.toContain('sample, license');
+    expect(container.textContent).not.toContain('your IP address, and one-way');
     const providerParagraph = headings[index + 1].previousElementSibling;
     expect(providerParagraph?.textContent?.trim()).toBe('The assistant provider handles your conversation under its own privacy terms. Questions: privacy@ai.market.');
     expect(providerParagraph?.querySelector('a')?.getAttribute('href')).toBe('mailto:privacy@ai.market');

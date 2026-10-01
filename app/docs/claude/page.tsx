@@ -21,7 +21,7 @@ export default function ClaudeDocsPage() {
           <p><strong>Connect.</strong> In Claude, open Settings, then Connectors, find ai.market and choose Connect. You sign in on ai.market, see exactly what Claude is asking for, and approve. During early access your account has to be on our early-access list. Write to <a href="mailto:support@ai.market">support@ai.market</a> to join.</p>
         </section>
         <section>
-          <p><strong>What Claude can do.</strong> Search published listings. Look at a listing&apos;s description, fields, sample, license and price. Show your account details, your recent activity and your data requests.</p>
+          <p><strong>What Claude can do.</strong> Search published listings. Look at a listing&apos;s description, columns, row count, update frequency and price. Show your account details, your recent activity and your data requests.</p>
         </section>
         <section>
           <p><strong>What Claude cannot do.</strong> Claude cannot buy, sell, pay, publish or message anyone for you in this version. It never sees dataset files, because ai.market never holds them. When you want to buy, Claude gives you the link and you finish on ai.market.</p>
