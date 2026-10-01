@@ -1,6 +1,6 @@
 'use client';
 
-import { useCallback, useRef, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import Link from 'next/link';
 import { getTermsAcceptanceStatus, type TermsAcceptanceContext, type TermsPartyContext } from '@/api/legal';
 import { useToast } from '@/components/Toast';
@@ -10,7 +10,7 @@ import { getTermsPartyContext, isTermsGateEnforced } from '@/components/legal/te
 
 type PendingAction = () => unknown | Promise<unknown>;
 
-export function useTermsGate(acceptanceContext: TermsAcceptanceContext = 'buyer') {
+export function useTermsGate(acceptanceContext: TermsAcceptanceContext = 'buyer', options: { preloadAcceptance?: boolean; requireAcceptance?: boolean } = {}) {
   const user = useAuthStore((s) => s.user);
   const { toast } = useToast();
   const [promptContext, setPromptContext] = useState<TermsPartyContext | null>(null);
@@ -18,10 +18,26 @@ export function useTermsGate(acceptanceContext: TermsAcceptanceContext = 'buyer'
   const [hardGateOpen, setHardGateOpen] = useState(false);
   const [checkingTerms, setCheckingTerms] = useState(false);
   const pendingActionRef = useRef<PendingAction | null>(null);
+  const context = getTermsPartyContext(user);
+  const contextKey = context ? JSON.stringify(context) : null;
+  const [acceptedContextKey, setAcceptedContextKey] = useState<string | null>(null);
+  const termsAccepted = contextKey !== null && acceptedContextKey === contextKey;
+  const { preloadAcceptance = false, requireAcceptance = false } = options;
+
+  useEffect(() => {
+    if (!preloadAcceptance || !contextKey) return;
+    let cancelled = false;
+    getTermsAcceptanceStatus(JSON.parse(contextKey) as TermsPartyContext).then((status) => {
+      if (!cancelled && status.accepted) setAcceptedContextKey(contextKey);
+    }).catch(() => { /* Click-time verification can retry. */ });
+    return () => { cancelled = true; };
+  }, [contextKey, preloadAcceptance]);
 
   const ensureTermsAccepted = useCallback(async <T,>(action: () => T | Promise<T>, prefill?: TermsAcceptancePrefill): Promise<T | undefined> => {
+    if (preloadAcceptance && termsAccepted) return action();
     const context = getTermsPartyContext(user);
     if (!context) {
+      if (requireAcceptance) return;
       return action();
     }
 
@@ -31,7 +47,7 @@ export function useTermsGate(acceptanceContext: TermsAcceptanceContext = 'buyer'
       const status = await getTermsAcceptanceStatus(context);
       accepted = status.accepted;
     } catch {
-      if (isTermsGateEnforced()) {
+      if (requireAcceptance || isTermsGateEnforced()) {
         toast('Could not verify terms acceptance. Please try again.', 'error');
         return;
       }
@@ -42,12 +58,13 @@ export function useTermsGate(acceptanceContext: TermsAcceptanceContext = 'buyer'
     }
 
     if (accepted) {
+      setAcceptedContextKey(contextKey);
       return await action();
     }
 
     setPromptContext(context);
     setPromptPrefill(prefill);
-    if (isTermsGateEnforced()) {
+    if (requireAcceptance || isTermsGateEnforced()) {
       pendingActionRef.current = action;
       setHardGateOpen(true);
       return;
@@ -55,7 +72,7 @@ export function useTermsGate(acceptanceContext: TermsAcceptanceContext = 'buyer'
 
     toast('Please review and accept the ai.market Terms and Conditions.', 'info');
     return await action();
-  }, [toast, user]);
+  }, [contextKey, preloadAcceptance, requireAcceptance, termsAccepted, toast, user]);
 
   const TermsGatePrompt = useCallback(() => {
     if (!promptContext) return null;
@@ -73,6 +90,7 @@ export function useTermsGate(acceptanceContext: TermsAcceptanceContext = 'buyer'
                 type="button"
                 onClick={() => {
                   setHardGateOpen(false);
+                  if (requireAcceptance) setPromptContext(null);
                   pendingActionRef.current = null;
                 }}
                 className="rounded-md px-2 py-1 text-sm text-gray-500 hover:bg-gray-100 hover:text-gray-700"
@@ -87,6 +105,7 @@ export function useTermsGate(acceptanceContext: TermsAcceptanceContext = 'buyer'
               prefill={promptPrefill}
               compact
               onAccepted={async () => {
+                setAcceptedContextKey(JSON.stringify(promptContext));
                 setHardGateOpen(false);
                 setPromptContext(null);
                 const action = pendingActionRef.current;
@@ -120,7 +139,7 @@ export function useTermsGate(acceptanceContext: TermsAcceptanceContext = 'buyer'
         </div>
       </div>
     );
-  }, [acceptanceContext, hardGateOpen, promptContext, promptPrefill]);
+  }, [acceptanceContext, hardGateOpen, promptContext, promptPrefill, requireAcceptance]);
 
-  return { ensureTermsAccepted, TermsGatePrompt, checkingTerms };
+  return { ensureTermsAccepted, TermsGatePrompt, checkingTerms, termsAccepted };
 }

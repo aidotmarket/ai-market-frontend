@@ -365,15 +365,7 @@ export default function OrderDetailPage() {
                 <ul className="mt-4 space-y-3">
                   {orderAccess.download_urls.filter((file) => /^https?:\/\//i.test(file.url)).map((file) => (
                     <li key={file.url}>
-                      <button type="button" disabled={checkingTerms}
-                        onClick={() => {
-                          void ensureTermsAccepted(() => {
-                            window.open(file.url, '_blank', 'noopener,noreferrer');
-                          });
-                        }}
-                        className="text-sm text-[#3F51B5] hover:underline">
-                        {file.filename ? `Download ${file.filename}` : 'Download'}
-                      </button>
+                      <ReferenceDownload url={file.url} filename={file.filename} />
                     </li>
                   ))}
                 </ul>
@@ -419,5 +411,37 @@ export default function OrderDetailPage() {
         </div>
       </div>
     </div>
+  );
+}
+
+function ReferenceDownload({ url, filename }: { url: string; filename?: string | null }) {
+  const { ensureTermsAccepted, TermsGatePrompt, checkingTerms, termsAccepted } = useTermsGate('buyer', {
+    preloadAcceptance: true,
+    requireAcceptance: true,
+  });
+  const [ready, setReady] = useState(false);
+
+  return (
+    <>
+      {ready && termsAccepted ? (
+        <a href={url} target="_blank" rel="noopener noreferrer" referrerPolicy="no-referrer"
+          className="text-sm text-[#3F51B5] hover:underline">
+          {filename ? `Open download ${filename}` : 'Open download'}
+        </a>
+      ) : (
+        <button type="button" disabled={checkingTerms}
+          onClick={() => {
+            if (termsAccepted) {
+              window.open(url, '_blank', 'noopener,noreferrer');
+            } else {
+              void ensureTermsAccepted(() => setReady(true));
+            }
+          }}
+          className="text-sm text-[#3F51B5] hover:underline">
+          {filename ? `Download ${filename}` : 'Download'}
+        </button>
+      )}
+      <TermsGatePrompt />
+    </>
   );
 }

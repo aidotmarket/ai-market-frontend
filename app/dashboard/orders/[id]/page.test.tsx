@@ -41,10 +41,11 @@ vi.mock('@/components/Toast', () => ({
 }));
 vi.mock('@/components/legal/TermsGate', async (importOriginal) => {
   const actual = await importOriginal<typeof import('@/components/legal/TermsGate')>();
-  return { useTermsGate: () => terms.realGate ? actual.useTermsGate('buyer') : ({
+  return { useTermsGate: (...args: Parameters<typeof actual.useTermsGate>) => terms.realGate ? actual.useTermsGate(...args) : ({
     ensureTermsAccepted: terms.ensureTermsAccepted,
     TermsGatePrompt: () => null,
     checkingTerms: false,
+    termsAccepted: false,
   }) };
 });
 vi.mock('@/components/orders/OrderVersionAccessSummary', () => ({
@@ -256,7 +257,7 @@ describe('OrderDetailPage viewer relationship gating', () => {
     expect(screen.queryByRole('button', { name: /Refresh|Get download access/ })).toBeNull();
   });
 
-  it('requires acceptance before opening a reference URL with enforcement on', async () => {
+  it('offers an explicit protected download link only after new acceptance', async () => {
     terms.realGate = true;
     vi.stubEnv('NEXT_PUBLIC_TERMS_GATE_ENFORCE', 'true');
     legalApi.getTermsAcceptanceStatus.mockResolvedValue({ accepted: false });
@@ -275,9 +276,12 @@ describe('OrderDetailPage viewer relationship gating', () => {
     await screen.findByRole('heading', { name: 'Accept Terms and Conditions' });
     expect(open).not.toHaveBeenCalled();
     fireEvent.click(screen.getByRole('button', { name: 'Accept terms' }));
-    await waitFor(() => expect(open).toHaveBeenCalledExactlyOnceWith(
-      'https://public.example.test/data.csv', '_blank', 'noopener,noreferrer',
-    ));
+    const link = await screen.findByRole('link', { name: 'Open download' });
+    expect(link.getAttribute('href')).toBe('https://public.example.test/data.csv');
+    expect(link.getAttribute('target')).toBe('_blank');
+    expect(link.getAttribute('rel')).toBe('noopener noreferrer');
+    expect(link.getAttribute('referrerpolicy')).toBe('no-referrer');
+    expect(open).not.toHaveBeenCalled();
   });
 
   it('opens a reference URL with referrer protections when terms are already accepted', async () => {
@@ -289,11 +293,59 @@ describe('OrderDetailPage viewer relationship gating', () => {
     ordersApi.getOrderAccess.mockResolvedValue({ delivery_type: 'reference', can_download: true,
       download_urls: [{ url: 'https://public.example.test/data.csv' }] });
     render(<OrderDetailPage />);
-    fireEvent.click(await screen.findByRole('button', { name: 'Download' }));
-    await waitFor(() => expect(open).toHaveBeenCalledExactlyOnceWith(
+    const button = await screen.findByRole('button', { name: 'Download' });
+    await waitFor(() => expect(legalApi.getTermsAcceptanceStatus).toHaveBeenCalledTimes(1));
+    fireEvent.click(button);
+    expect(open).toHaveBeenCalledExactlyOnceWith(
       'https://public.example.test/data.csv', '_blank', 'noopener,noreferrer',
-    ));
+    );
+    expect(legalApi.getTermsAcceptanceStatus).toHaveBeenCalledTimes(1);
+    expect(screen.queryByRole('link', { name: 'Open download' })).toBeNull();
     expect(screen.queryByRole('heading', { name: 'Accept Terms and Conditions' })).toBeNull();
+  });
+
+  it('offers a fresh download activation when acceptance verification finishes after the click', async () => {
+    terms.realGate = true;
+    let verify!: (status: { accepted: boolean }) => void;
+    legalApi.getTermsAcceptanceStatus.mockReturnValue(new Promise((resolve) => { verify = resolve; }));
+    const open = vi.spyOn(window, 'open').mockReturnValue(null);
+    ordersApi.getOrder.mockResolvedValue({ ...order(), status: 'delivered' });
+    ordersApi.getOrderAccess.mockResolvedValue({ delivery_type: 'reference', can_download: true,
+      download_urls: [{ url: 'https://public.example.test/data.csv' }] });
+    render(<OrderDetailPage />);
+    fireEvent.click(await screen.findByRole('button', { name: 'Download' }));
+    expect(screen.queryByRole('link', { name: 'Open download' })).toBeNull();
+    verify({ accepted: true });
+    const link = await screen.findByRole('link', { name: 'Open download' });
+    expect(link.getAttribute('href')).toBe('https://public.example.test/data.csv');
+    expect(link.getAttribute('target')).toBe('_blank');
+    expect(link.getAttribute('rel')).toBe('noopener noreferrer');
+    expect(link.getAttribute('referrerpolicy')).toBe('no-referrer');
+    expect(open).not.toHaveBeenCalled();
+  });
+
+  it.each(['denied', 'dismissed'])('exposes no reference link when acceptance is %s', async (outcome) => {
+    terms.realGate = true;
+    // Reference downloads require verified acceptance even when the general gate is advisory.
+    vi.stubEnv('NEXT_PUBLIC_TERMS_GATE_ENFORCE', 'false');
+    legalApi.getTermsAcceptanceStatus.mockImplementation(() => outcome === 'denied'
+      ? Promise.reject(new Error('Denied')) : Promise.resolve({ accepted: false }));
+    const open = vi.spyOn(window, 'open').mockReturnValue(null);
+    ordersApi.getOrder.mockResolvedValue({ ...order(), status: 'delivered' });
+    ordersApi.getOrderAccess.mockResolvedValue({ delivery_type: 'reference', can_download: true,
+      download_urls: [{ url: 'https://public.example.test/data.csv' }] });
+    render(<OrderDetailPage />);
+    fireEvent.click(await screen.findByRole('button', { name: 'Download' }));
+    if (outcome === 'dismissed') {
+      await screen.findByRole('heading', { name: 'Accept Terms and Conditions' });
+      fireEvent.click(screen.getByRole('button', { name: 'Close' }));
+    } else {
+      await waitFor(() => expect(legalApi.getTermsAcceptanceStatus).toHaveBeenCalledTimes(2));
+      await waitFor(() => expect((screen.getByRole('button', { name: 'Download' }) as HTMLButtonElement).disabled).toBe(false));
+    }
+    expect(screen.queryByRole('link', { name: 'Open download' })).toBeNull();
+    expect(document.querySelector('a[href="https://public.example.test/data.csv"]')).toBeNull();
+    expect(open).not.toHaveBeenCalled();
   });
 
   it.each([
