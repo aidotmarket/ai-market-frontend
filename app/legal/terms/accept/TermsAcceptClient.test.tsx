@@ -23,7 +23,7 @@ vi.mock('@/store/auth', () => {
 
 beforeEach(() => {
   navigation.search = 'context=seller&redirect=%2Fdashboard%2Flistings';
-  legal.getCurrentTerms.mockResolvedValue({ terms_version: '1.1' });
+  legal.getCurrentTerms.mockResolvedValue({ terms_version: '1.1', terms_hash_sha256: 'hash-1.1' });
   legal.acceptTerms.mockResolvedValue({ terms_version: '1.1' });
 });
 afterEach(() => { cleanup(); vi.resetAllMocks(); });
@@ -93,7 +93,7 @@ it('submits buyer context without a seller capability lookup on a direct visit',
 it.each(['buyer', 'seller'] as const)('accepts served 1.2 and preserves the %s redirect/context flow', async (context) => {
   navigation.search = `context=${context}&redirect=%2Fdashboard%2Flistings`;
   capabilities.getCapabilities.mockResolvedValue({ seller: { effective_status: 'active' } });
-  legal.getCurrentTerms.mockResolvedValue({ terms_version: '1.2' });
+  legal.getCurrentTerms.mockResolvedValue({ terms_version: '1.2', terms_hash_sha256: 'hash-1.2' });
   legal.acceptTerms.mockResolvedValue({ terms_version: '1.2' });
   render(<TermsAcceptClient />);
   await submit();

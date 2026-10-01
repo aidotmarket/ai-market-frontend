@@ -34,6 +34,7 @@ export default function TermsAcceptanceForm({ context, acceptanceContext = 'buye
   const [businessLegalName, setBusinessLegalName] = useState(prefill?.businessLegalName ?? user?.company_name ?? '');
   const [jurisdiction, setJurisdiction] = useState(prefill?.jurisdiction ?? '');
   const [termsVersion, setTermsVersion] = useState<string | null>(null);
+  const [termsHash, setTermsHash] = useState<string | null>(null);
   const [requiresJurisdiction, setRequiresJurisdiction] = useState(false);
   const [termsReady, setTermsReady] = useState(false);
   const [authorityAck, setAuthorityAck] = useState(false);
@@ -50,6 +51,7 @@ export default function TermsAcceptanceForm({ context, acceptanceContext = 'buye
       if (!cancelled) {
         if (!['1.0', '1.1', '1.2'].includes(terms.terms_version)) throw new Error('Unsupported terms version');
         setTermsVersion(terms.terms_version);
+        setTermsHash(terms.terms_hash_sha256);
         setRequiresJurisdiction(terms.terms_version === '1.1' || terms.terms_version === '1.2');
         setTermsReady(true);
       }
@@ -60,7 +62,7 @@ export default function TermsAcceptanceForm({ context, acceptanceContext = 'buye
   }, []);
 
   const canSubmit = useMemo(() => (
-    termsReady &&
+    termsReady && !!termsHash &&
     (!requiresJurisdiction || /^[A-Za-z]{2}$/.test(jurisdiction.trim())) &&
     ackBox1 &&
     ackBox2 &&
@@ -69,7 +71,7 @@ export default function TermsAcceptanceForm({ context, acceptanceContext = 'buye
     signerTitle.trim().length > 0 &&
     businessLegalName.trim().length > 0 &&
     (context.scope === 'organization' || requiresJurisdiction ? authorityAck : true)
-  ), [termsReady, requiresJurisdiction, jurisdiction, ackBox1, ackBox2, ackBox3, authorityAck, businessLegalName, context.scope, signerFullName, signerTitle]);
+  ), [termsReady, termsHash, requiresJurisdiction, jurisdiction, ackBox1, ackBox2, ackBox3, authorityAck, businessLegalName, context.scope, signerFullName, signerTitle]);
 
   const handleSubmit = async (event: React.FormEvent) => {
     event.preventDefault();
@@ -81,19 +83,22 @@ export default function TermsAcceptanceForm({ context, acceptanceContext = 'buye
       // An open 1.1 form must not silently sign the newly published 1.2 boxes.
       const current = await getCurrentTerms();
       if (!['1.0', '1.1', '1.2'].includes(current.terms_version)) throw new Error('Unsupported terms version');
-      if (current.terms_version !== termsVersion) {
+      if (current.terms_version !== termsVersion || current.terms_hash_sha256 !== termsHash) {
         setTermsVersion(current.terms_version);
+        setTermsHash(current.terms_hash_sha256);
         setRequiresJurisdiction(current.terms_version === '1.1' || current.terms_version === '1.2');
         setAckBox1(false);
         setAckBox2(false);
         setAckBox3(false);
         setAuthorityAck(false);
-        setError('Terms have changed. Review the current terms and sign again.');
+        setError('The terms were just updated. Please review the new version and accept again.');
         return;
       }
       await acceptTerms({
         ...context,
         context: acceptanceContext,
+        terms_version: termsVersion!,
+        terms_hash_sha256: termsHash!,
         signer_full_name: signerFullName.trim(),
         signer_title: signerTitle.trim(),
         business_legal_name: businessLegalName.trim(),
@@ -109,7 +114,24 @@ export default function TermsAcceptanceForm({ context, acceptanceContext = 'buye
       const response = err instanceof AxiosError ? err.response : undefined;
       const detail = response?.data?.detail;
       const code = typeof detail === 'object' && detail !== null ? detail.code : undefined;
-      if (code === 'SELLER_ACCESS_REQUIRED' || response?.data?.code === 'SELLER_ACCESS_REQUIRED') setError('Only sellers can accept these terms as a seller.');
+      if (response?.status === 409 && code === 'TERMS_VERSION_CHANGED') {
+        setTermsReady(false);
+        setAckBox1(false);
+        setAckBox2(false);
+        setAckBox3(false);
+        setAuthorityAck(false);
+        setError('The terms were just updated. Please review the new version and accept again.');
+        try {
+          const current = await getCurrentTerms();
+          if (!['1.0', '1.1', '1.2'].includes(current.terms_version)) throw new Error('Unsupported terms version');
+          setTermsVersion(current.terms_version);
+          setTermsHash(current.terms_hash_sha256);
+          setRequiresJurisdiction(current.terms_version === '1.1' || current.terms_version === '1.2');
+          setTermsReady(true);
+        } catch {
+          setError('The terms were just updated. Please review the new version and accept again. Could not load the current terms. Please try again.');
+        }
+      } else if (code === 'SELLER_ACCESS_REQUIRED' || response?.data?.code === 'SELLER_ACCESS_REQUIRED') setError('Only sellers can accept these terms as a seller.');
       else if (code === 'SELLER_LEGAL_IDENTITY_REQUIRED') setError('seller_identity_required');
       else if (code === 'LEGAL_IDENTITY_CONFLICT') setError('identity_conflict');
       else if (code === 'LEGAL_IDENTITY_INVALID') setError('identity_invalid');
