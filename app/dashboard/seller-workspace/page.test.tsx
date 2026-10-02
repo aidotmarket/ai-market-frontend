@@ -125,7 +125,9 @@ describe('SellerWorkspacePage safety boundaries', () => {
     expect(screen.queryByText('synthetic')).toBeNull();
     expect(screen.getByText('Connected storage').nextElementSibling?.textContent).toBe('1');
     expect(screen.getByText('Needs attention').nextElementSibling?.textContent).toBe('1');
-    fireEvent.click(history);
+    act(() => {
+      fireEvent.click(history);
+    });
     const rows = within(screen.getByRole('list', { name: 'Previous connections' })).getAllByRole('listitem').filter(item => item.parentElement?.id === 'previous-connections');
     expect(rows).toHaveLength(3);
     expect(rows[0].textContent).toContain('expired-setup');
@@ -179,7 +181,10 @@ describe('SellerWorkspacePage safety boundaries', () => {
     });
     sellerWorkspaceApi.listSellerWorkspaceConnections.mockResolvedValue([{ ...pendingConnection, provider: 'r2', bucket: 'existing-r2', region: 'default' }]);
     render(<SellerWorkspacePage />);
-    fireEvent.click(await screen.findByRole('button', { name: 'Add Cloudflare R2 connection' }));
+    const button = await screen.findByRole('button', { name: 'Add Cloudflare R2 connection' });
+    act(() => {
+      fireEvent.click(button);
+    });
     expect((screen.getByLabelText('Bucket name') as HTMLInputElement).value).toBe('existing-r2');
     expect(screen.getByRole('button', { name: 'Verify and replace keys' })).toBeTruthy();
     expect(sellerWorkspaceApi.createSellerWorkspaceConnection).not.toHaveBeenCalled();
@@ -209,7 +214,10 @@ describe('SellerWorkspacePage safety boundaries', () => {
 
   it('does not request saved drafts unless backend capability enables them', async () => {
     render(<SellerWorkspacePage />);
-    fireEvent.click(await screen.findByRole('button', { name: 'Describe and price' }));
+    const button = await screen.findByRole('button', { name: 'Describe and price' });
+    act(() => {
+      fireEvent.click(button);
+    });
     expect(screen.queryByRole('button', { name: 'Save private draft' })).toBeNull();
     expect(draftsApi.readListingDraft).not.toHaveBeenCalled();
   });
@@ -222,10 +230,14 @@ describe('SellerWorkspacePage safety boundaries', () => {
     expect(screen.queryByRole('button', { name: 'Profiling activity' })).toBeNull();
     expect(screen.queryByRole('heading', { name: 'Understand your data' })).toBeNull();
     expect(screen.queryByRole('heading', { name: 'From your storage to a listing' })).toBeNull();
-    fireEvent.click(screen.getByRole('button', { name: 'Choose your files' }));
+    act(() => {
+      fireEvent.click(screen.getByRole('button', { name: 'Choose your files' }));
+    });
     expect(screen.queryByText('server-external-id')).toBeNull();
     expect(screen.getByText('File browsing is not available yet')).toBeTruthy();
-    fireEvent.click(screen.getByRole('button', { name: 'Connect your storage' }));
+    act(() => {
+      fireEvent.click(screen.getByRole('button', { name: 'Connect your storage' }));
+    });
     expect(screen.queryByText('server-external-id')).toBeNull();
   });
 
@@ -417,7 +429,10 @@ describe('SellerWorkspacePage safety boundaries', () => {
 
     render(<SellerWorkspacePage />);
 
-    fireEvent.click(await screen.findByRole('button', { name: 'Previous connections (1)' }));
+    const button = await screen.findByRole('button', { name: 'Previous connections (1)' });
+    act(() => {
+      fireEvent.click(button);
+    });
     expect(screen.getAllByText('Expired').length).toBeGreaterThan(0);
     expect(screen.queryByRole('button', { name: 'Open setup values' })).toBeNull();
     expect(screen.queryByRole('button', { name: 'Verify AWS connection' })).toBeNull();
