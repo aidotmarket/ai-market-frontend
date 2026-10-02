@@ -151,8 +151,8 @@ export default function ProtocolPage() {
               The ai.market Protocol
             </h1>
             <p className="mx-auto mt-6 max-w-3xl text-lg leading-8 text-gray-600 sm:text-xl">
-              Buyers find and purchase data on ai.market, then download purchased files directly
-              from the seller&apos;s HTTPS door. ai.market does not relay the file bytes.
+              Buyers find and pay for data on ai.market. The data itself goes straight from the
+              seller to the buyer. It never passes through us.
             </p>
           </div>
         </div>
