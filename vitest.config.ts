@@ -7,7 +7,8 @@ export default defineConfig({
     environment: 'node',
     globals: true,
     exclude: [...configDefaults.exclude, 'tests/*.playwright.spec.ts', 'tests/connector-oauth-continuation.spec.ts'],
-    maxWorkers: 2,
+    // Leave CPU headroom for React effects and jsdom on shared CI runners.
+    maxWorkers: process.env.CI ? 1 : 2,
   },
   resolve: {
     alias: {

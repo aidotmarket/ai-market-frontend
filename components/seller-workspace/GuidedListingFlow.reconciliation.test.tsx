@@ -113,8 +113,14 @@ it('reconciles a pristine mounted editor and its baseline before saving a differ
  fireEvent.change(screen.getByLabelText('Your price (USD)'),{target:{value:'30'}});
  fireEvent.click(screen.getByRole('button',{name:'Save private draft'}));
  await waitFor(()=>expect(mocks.save).toHaveBeenCalledOnce());
- expect(mocks.save).toHaveBeenCalledWith(expect.objectContaining({title:'New external title',price:'30'}),2,expect.any(String));
- await waitFor(()=>expect(screen.queryByRole('button',{name:'Save private draft'})).toBeNull());
+ expect(mocks.save).toHaveBeenNthCalledWith(1,expect.objectContaining({title:'New external title',price:'30'}),2,expect.any(String));
+ // The save button also disappears while it says Saving draft. Wait for the
+ // committed saved snapshot, which advances the baseline to version 3.
+ await waitFor(()=>{
+  expect(screen.getByText(/^Draft saved to your account\./)).toBeTruthy();
+  expect(screen.queryByRole('button',{name:'Saving draft…'})).toBeNull();
+  expect(screen.queryByRole('button',{name:'Save private draft'})).toBeNull();
+ });
  // A successful save advances the editor baseline for its next edit as well.
  fireEvent.change(screen.getByLabelText('Your price (USD)'),{target:{value:'35'}});
  fireEvent.click(screen.getByRole('button',{name:'Save private draft'}));
