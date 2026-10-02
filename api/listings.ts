@@ -34,6 +34,11 @@ export async function getListing(id: string): Promise<ListingDetail> {
   return res.data;
 }
 
+export async function getListingOwnership(id: string): Promise<boolean> {
+  const res = await api.get<{ is_owner?: unknown }>(`/listings/${id}/ownership`);
+  return res.data?.is_owner === true;
+}
+
 export interface CreateDraftListingInput {
   title: string;
   description: string;
