@@ -4,7 +4,7 @@ import Link from 'next/link';
 import { useAuthStore } from '@/store/auth';
 
 type SellDataCtaProps = {
-  variant: 'hero' | 'inline' | 'final' | 'cloud' | 'self-hosted';
+  variant: 'hero' | 'inline' | 'final' | 'cloud' | 'self-hosted' | 'homepage';
   className?: string;
 };
 
@@ -44,6 +44,17 @@ function AuthenticatedCtas({
 
 export default function SellDataCta({ variant, className }: SellDataCtaProps) {
   const { isAuthenticated } = useAuthStore();
+
+  if (variant === 'homepage') {
+    return (
+      <Link
+        href={isAuthenticated ? '/dashboard/seller-workspace' : '/register'}
+        className={withClassName('inline-flex items-center justify-center rounded-lg bg-[#3F51B5] px-8 py-3.5 text-sm font-semibold text-white transition-colors hover:bg-[#3545a0]', className)}
+      >
+        {isAuthenticated ? 'Open Seller Workspace' : 'Create Your Account'}
+      </Link>
+    );
+  }
 
   if (variant === 'cloud' || variant === 'self-hosted') {
     const href = variant === 'self-hosted'
