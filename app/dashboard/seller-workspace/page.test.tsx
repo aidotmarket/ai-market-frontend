@@ -23,6 +23,22 @@ vi.mock('@/api/sellerWorkspace', async (importOriginal) => ({
   ...sellerWorkspaceApi,
 }));
 
+async function openAwsSetup() {
+  const button = await screen.findByRole('button', { name: 'Open setup values' });
+  await waitFor(() => expect((button as HTMLButtonElement).disabled).toBe(false));
+  await act(async () => {
+    fireEvent.click(button);
+  });
+}
+
+async function verifyAwsConnection() {
+  const button = screen.getByRole('button', { name: 'Verify AWS connection' });
+  await waitFor(() => expect((button as HTMLButtonElement).disabled).toBe(false));
+  await act(async () => {
+    fireEvent.click(button);
+  });
+}
+
 const enabledCapabilities = {
   master: { enabled: true, status: 'available' as const, reason: 'enabled' },
   providers: {
@@ -109,7 +125,9 @@ describe('SellerWorkspacePage safety boundaries', () => {
     expect(screen.queryByText('synthetic')).toBeNull();
     expect(screen.getByText('Connected storage').nextElementSibling?.textContent).toBe('1');
     expect(screen.getByText('Needs attention').nextElementSibling?.textContent).toBe('1');
-    fireEvent.click(history);
+    act(() => {
+      fireEvent.click(history);
+    });
     const rows = within(screen.getByRole('list', { name: 'Previous connections' })).getAllByRole('listitem').filter(item => item.parentElement?.id === 'previous-connections');
     expect(rows).toHaveLength(3);
     expect(rows[0].textContent).toContain('expired-setup');
@@ -163,7 +181,10 @@ describe('SellerWorkspacePage safety boundaries', () => {
     });
     sellerWorkspaceApi.listSellerWorkspaceConnections.mockResolvedValue([{ ...pendingConnection, provider: 'r2', bucket: 'existing-r2', region: 'default' }]);
     render(<SellerWorkspacePage />);
-    fireEvent.click(await screen.findByRole('button', { name: 'Add Cloudflare R2 connection' }));
+    const button = await screen.findByRole('button', { name: 'Add Cloudflare R2 connection' });
+    act(() => {
+      fireEvent.click(button);
+    });
     expect((screen.getByLabelText('Bucket name') as HTMLInputElement).value).toBe('existing-r2');
     expect(screen.getByRole('button', { name: 'Verify and replace keys' })).toBeTruthy();
     expect(sellerWorkspaceApi.createSellerWorkspaceConnection).not.toHaveBeenCalled();
@@ -193,7 +214,10 @@ describe('SellerWorkspacePage safety boundaries', () => {
 
   it('does not request saved drafts unless backend capability enables them', async () => {
     render(<SellerWorkspacePage />);
-    fireEvent.click(await screen.findByRole('button', { name: 'Describe and price' }));
+    const button = await screen.findByRole('button', { name: 'Describe and price' });
+    act(() => {
+      fireEvent.click(button);
+    });
     expect(screen.queryByRole('button', { name: 'Save private draft' })).toBeNull();
     expect(draftsApi.readListingDraft).not.toHaveBeenCalled();
   });
@@ -206,10 +230,14 @@ describe('SellerWorkspacePage safety boundaries', () => {
     expect(screen.queryByRole('button', { name: 'Profiling activity' })).toBeNull();
     expect(screen.queryByRole('heading', { name: 'Understand your data' })).toBeNull();
     expect(screen.queryByRole('heading', { name: 'From your storage to a listing' })).toBeNull();
-    fireEvent.click(screen.getByRole('button', { name: 'Choose your files' }));
+    act(() => {
+      fireEvent.click(screen.getByRole('button', { name: 'Choose your files' }));
+    });
     expect(screen.queryByText('server-external-id')).toBeNull();
     expect(screen.getByText('File browsing is not available yet')).toBeTruthy();
-    fireEvent.click(screen.getByRole('button', { name: 'Connect your storage' }));
+    act(() => {
+      fireEvent.click(screen.getByRole('button', { name: 'Connect your storage' }));
+    });
     expect(screen.queryByText('server-external-id')).toBeNull();
   });
 
@@ -401,7 +429,10 @@ describe('SellerWorkspacePage safety boundaries', () => {
 
     render(<SellerWorkspacePage />);
 
-    fireEvent.click(await screen.findByRole('button', { name: 'Previous connections (1)' }));
+    const button = await screen.findByRole('button', { name: 'Previous connections (1)' });
+    act(() => {
+      fireEvent.click(button);
+    });
     expect(screen.getAllByText('Expired').length).toBeGreaterThan(0);
     expect(screen.queryByRole('button', { name: 'Open setup values' })).toBeNull();
     expect(screen.queryByRole('button', { name: 'Verify AWS connection' })).toBeNull();
@@ -417,18 +448,20 @@ describe('SellerWorkspacePage safety boundaries', () => {
     );
 
     render(<SellerWorkspacePage />);
-    fireEvent.click(await screen.findByRole('button', { name: 'Open setup values' }));
+    await openAwsSetup();
     await screen.findByText('server-external-id');
 
-    fireEvent.change(screen.getByLabelText('Role ARN'), {
-      target: { value: 'arn:aws:iam::123456789012:role/seller-data' },
+    await act(async () => {
+      fireEvent.change(screen.getByLabelText('Role ARN'), {
+        target: { value: 'arn:aws:iam::123456789012:role/seller-data' },
+      });
+      fireEvent.change(screen.getByLabelText('Bucket'), { target: { value: 'seller-bucket' } });
+      fireEvent.change(screen.getByLabelText('Non-root prefix'), {
+        target: { value: '/bounded/data/' },
+      });
+      fireEvent.change(screen.getByLabelText('AWS region'), { target: { value: 'eu-west-1' } });
     });
-    fireEvent.change(screen.getByLabelText('Bucket'), { target: { value: 'seller-bucket' } });
-    fireEvent.change(screen.getByLabelText('Non-root prefix'), {
-      target: { value: '/bounded/data/' },
-    });
-    fireEvent.change(screen.getByLabelText('AWS region'), { target: { value: 'eu-west-1' } });
-    fireEvent.click(screen.getByRole('button', { name: 'Verify AWS connection' }));
+    await verifyAwsConnection();
 
     await screen.findByText('The action could not be completed. Try again.');
     expect(screen.queryByText('server-external-id')).toBeNull();
@@ -460,15 +493,23 @@ describe('SellerWorkspacePage safety boundaries', () => {
       sellerWorkspaceApi.getSellerWorkspaceAuthorization.mockResolvedValue(authorization);
 
       render(<SellerWorkspacePage />);
-      fireEvent.click(await screen.findByRole('button', { name: 'Open setup values' }));
+      await openAwsSetup();
       await screen.findByText('server-external-id');
-      fireEvent.change(screen.getByLabelText('Role ARN'), {
-        target: { value: 'arn:aws:iam::123456789012:role/seller-data' },
+      await act(async () => {
+        fireEvent.change(screen.getByLabelText('Role ARN'), {
+          target: { value: 'arn:aws:iam::123456789012:role/seller-data' },
+        });
+        fireEvent.change(screen.getByLabelText('Bucket'), { target: { value: 'seller-bucket' } });
+        fireEvent.change(screen.getByLabelText('Non-root prefix'), { target: { value: prefix } });
+        fireEvent.change(screen.getByLabelText('AWS region'), { target: { value: 'eu-west-1' } });
       });
-      fireEvent.change(screen.getByLabelText('Bucket'), { target: { value: 'seller-bucket' } });
-      fireEvent.change(screen.getByLabelText('Non-root prefix'), { target: { value: prefix } });
-      fireEvent.change(screen.getByLabelText('AWS region'), { target: { value: 'eu-west-1' } });
-      fireEvent.click(screen.getByRole('button', { name: 'Verify AWS connection' }));
+      await waitFor(() => {
+        expect((screen.getByLabelText('Role ARN') as HTMLInputElement).value).toBe('arn:aws:iam::123456789012:role/seller-data');
+        expect((screen.getByLabelText('Bucket') as HTMLInputElement).value).toBe('seller-bucket');
+        expect((screen.getByLabelText('Non-root prefix') as HTMLInputElement).value).toBe(prefix);
+        expect((screen.getByLabelText('AWS region') as HTMLInputElement).value).toBe('eu-west-1');
+      });
+      await verifyAwsConnection();
 
       expect(await screen.findByText('Prefix must identify a bounded, non-root S3 location.')).not.toBeNull();
       expect(sellerWorkspaceApi.verifySellerWorkspaceConnection).not.toHaveBeenCalled();
@@ -494,17 +535,19 @@ describe('SellerWorkspacePage safety boundaries', () => {
 
     render(<SellerWorkspacePage />);
     for (let attempt = 0; attempt < 2; attempt += 1) {
-      fireEvent.click(await screen.findByRole('button', { name: 'Open setup values' }));
+      await openAwsSetup();
       await screen.findByText('server-external-id');
-      fireEvent.change(screen.getByLabelText('Role ARN'), {
-        target: { value: 'arn:aws:iam::123456789012:role/seller-data' },
+      await act(async () => {
+        fireEvent.change(screen.getByLabelText('Role ARN'), {
+          target: { value: 'arn:aws:iam::123456789012:role/seller-data' },
+        });
+        fireEvent.change(screen.getByLabelText('Bucket'), { target: { value: 'seller-bucket' } });
+        fireEvent.change(screen.getByLabelText('Non-root prefix'), {
+          target: { value: 'bounded/data' },
+        });
+        fireEvent.change(screen.getByLabelText('AWS region'), { target: { value: 'eu-west-1' } });
       });
-      fireEvent.change(screen.getByLabelText('Bucket'), { target: { value: 'seller-bucket' } });
-      fireEvent.change(screen.getByLabelText('Non-root prefix'), {
-        target: { value: 'bounded/data' },
-      });
-      fireEvent.change(screen.getByLabelText('AWS region'), { target: { value: 'eu-west-1' } });
-      fireEvent.click(screen.getByRole('button', { name: 'Verify AWS connection' }));
+      await verifyAwsConnection();
       await waitFor(() =>
         expect(sellerWorkspaceApi.verifySellerWorkspaceConnection).toHaveBeenCalledTimes(attempt + 1)
       );
@@ -533,31 +576,35 @@ describe('SellerWorkspacePage safety boundaries', () => {
       });
 
     render(<SellerWorkspacePage />);
-    fireEvent.click(await screen.findByRole('button', { name: 'Open setup values' }));
+    await openAwsSetup();
     await screen.findByText('server-external-id');
 
-    fireEvent.change(screen.getByLabelText('Role ARN'), {
-      target: { value: 'arn:aws:iam::123456789012:role/seller-data' },
+    await act(async () => {
+      fireEvent.change(screen.getByLabelText('Role ARN'), {
+        target: { value: 'arn:aws:iam::123456789012:role/seller-data' },
+      });
+      fireEvent.change(screen.getByLabelText('Bucket'), { target: { value: 'first-bucket' } });
+      fireEvent.change(screen.getByLabelText('Non-root prefix'), {
+        target: { value: 'bounded/data' },
+      });
+      fireEvent.change(screen.getByLabelText('AWS region'), { target: { value: 'eu-west-1' } });
     });
-    fireEvent.change(screen.getByLabelText('Bucket'), { target: { value: 'first-bucket' } });
-    fireEvent.change(screen.getByLabelText('Non-root prefix'), {
-      target: { value: 'bounded/data' },
-    });
-    fireEvent.change(screen.getByLabelText('AWS region'), { target: { value: 'eu-west-1' } });
-    fireEvent.click(screen.getByRole('button', { name: 'Verify AWS connection' }));
+    await verifyAwsConnection();
     await screen.findByText('The action could not be completed. Try again.');
 
-    fireEvent.click(screen.getByRole('button', { name: 'Open setup values' }));
+    await openAwsSetup();
     await screen.findByText('server-external-id');
-    fireEvent.change(screen.getByLabelText('Role ARN'), {
-      target: { value: 'arn:aws:iam::123456789012:role/seller-data' },
+    await act(async () => {
+      fireEvent.change(screen.getByLabelText('Role ARN'), {
+        target: { value: 'arn:aws:iam::123456789012:role/seller-data' },
+      });
+      fireEvent.change(screen.getByLabelText('Bucket'), { target: { value: 'corrected-bucket' } });
+      fireEvent.change(screen.getByLabelText('Non-root prefix'), {
+        target: { value: 'bounded/data' },
+      });
+      fireEvent.change(screen.getByLabelText('AWS region'), { target: { value: 'eu-west-1' } });
     });
-    fireEvent.change(screen.getByLabelText('Bucket'), { target: { value: 'corrected-bucket' } });
-    fireEvent.change(screen.getByLabelText('Non-root prefix'), {
-      target: { value: 'bounded/data' },
-    });
-    fireEvent.change(screen.getByLabelText('AWS region'), { target: { value: 'eu-west-1' } });
-    fireEvent.click(screen.getByRole('button', { name: 'Verify AWS connection' }));
+    await verifyAwsConnection();
 
     await waitFor(() => expect(sellerWorkspaceApi.verifySellerWorkspaceConnection).toHaveBeenCalledTimes(2));
     expect(sellerWorkspaceApi.verifySellerWorkspaceConnection.mock.calls[0][2]).not.toBe(

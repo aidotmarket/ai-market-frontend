@@ -1,5 +1,5 @@
 // @vitest-environment jsdom
-import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { act, cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { afterEach, beforeEach, expect, it, vi } from 'vitest';
 import EditListingPage from './page';
 import { file, gateway } from '@/app/dashboard/gateways/fixtures';
@@ -7,7 +7,8 @@ import { file, gateway } from '@/app/dashboard/gateways/fixtures';
 const listingApi = vi.hoisted(() => ({ getListing: vi.fn(), updateListing: vi.fn(), publishListing: vi.fn(), unpublishListing: vi.fn() }));
 const gatewayApi = vi.hoisted(() => ({ listSellerGateways: vi.fn(), listGatewayFiles: vi.fn(), getGatewayListingSource: vi.fn(), saveGatewayListingSource: vi.fn() }));
 const toast = vi.hoisted(() => vi.fn());
-vi.mock('next/navigation', () => ({ useParams: () => ({ id: 'listing-1' }), useRouter: () => ({ push: vi.fn() }) }));
+const router = vi.hoisted(() => ({ push: vi.fn() }));
+vi.mock('next/navigation', () => ({ useParams: () => ({ id: 'listing-1' }), useRouter: () => router }));
 vi.mock('next/link', () => ({ default: ({ href, children }: { href: string; children: React.ReactNode }) => <a href={href}>{children}</a> }));
 vi.mock('@/api/listings', () => listingApi);
 vi.mock('@/api/sellerGateways', () => gatewayApi);
@@ -33,7 +34,9 @@ afterEach(cleanup);
 async function chooseGateway() {
   render(<EditListingPage />);
   const select = await screen.findByRole('combobox', { name: 'Gateway' });
-  fireEvent.change(select, { target: { value: gateway.gateway_id } });
+  await act(async () => {
+    fireEvent.change(select, { target: { value: gateway.gateway_id } });
+  });
   await screen.findByText(file.display_name);
 }
 
@@ -60,7 +63,9 @@ it('keeps Publish and the identity reminder hidden for a draft without a saved g
   expect(gatewayApi.getGatewayListingSource).toHaveBeenCalledWith('listing-1');
   expect(screen.queryByRole('button', { name: 'Publish' })).toBeNull();
   expect(screen.queryByText(/Before this listing goes live/)).toBeNull();
-  fireEvent.change(screen.getByRole('combobox', { name: 'Gateway' }), { target: { value: gateway.gateway_id } });
+  await act(async () => {
+    fireEvent.change(screen.getByRole('combobox', { name: 'Gateway' }), { target: { value: gateway.gateway_id } });
+  });
   await screen.findByText(file.display_name);
   expect(screen.queryByRole('button', { name: 'Publish' })).toBeNull();
   expect(screen.queryByText(/Before this listing goes live/)).toBeNull();
@@ -78,14 +83,21 @@ it('restores the saved gateway and files, then hides Publish on the first change
   expect(screen.getByText('1 selected file is not in the current file list.')).toBeTruthy();
   expect(screen.getByRole('button', { name: 'Publish' })).toBeTruthy();
   expect(screen.getByRole('link', { name: 'Review and acknowledge the gateway identity notice' })).toBeTruthy();
-  fireEvent.click(screen.getByRole('button', { name: 'Load more files' }));
+  await act(async () => {
+    fireEvent.click(screen.getByRole('button', { name: 'Load more files' }));
+  });
   await screen.findByText('later.csv');
   expect(screen.getByText('later.csv').closest('label')!.querySelector('input')!.checked).toBe(true);
   expect(screen.queryByText(/not in the current file list/)).toBeNull();
-  fireEvent.click(screen.getByText(file.display_name).closest('label')!.querySelector('input')!);
+  act(() => {
+    fireEvent.click(screen.getByText(file.display_name).closest('label')!.querySelector('input')!);
+  });
+  // Flush the edit synchronously: a delayed dirty-state update must fail here.
   expect(screen.queryByRole('button', { name: 'Publish' })).toBeNull();
   expect(screen.queryByText(/Before this listing goes live/)).toBeNull();
-  fireEvent.click(screen.getByRole('button', { name: 'Save gateway source' }));
+  await act(async () => {
+    fireEvent.click(screen.getByRole('button', { name: 'Save gateway source' }));
+  });
   await waitFor(() => expect(screen.getByRole('button', { name: 'Publish' })).toBeTruthy());
   expect(gatewayApi.saveGatewayListingSource).toHaveBeenCalledWith('listing-1', { type: 'gateway', gateway_id: gateway.gateway_id, file_ids: ['later'] });
 });
@@ -104,7 +116,9 @@ it('keeps the existing Publish action for an unlisted listing', async () => {
   const publish = await screen.findByRole('button', { name: 'Publish' });
   expect(screen.queryByText('Deliver from a gateway')).toBeNull();
   expect(screen.queryByText(/Before this listing goes live/)).toBeNull();
-  fireEvent.click(publish);
+  await act(async () => {
+    fireEvent.click(publish);
+  });
   await waitFor(() => expect(listingApi.publishListing).toHaveBeenCalledWith('listing-1'));
 });
 
@@ -120,11 +134,17 @@ it('does not offer source editing for a published listing', async () => {
 it('explains both undescribed and missing selected files', async () => {
   gatewayApi.listGatewayFiles.mockResolvedValue({ files: [file, { ...file, file_id: 'missing', display_name: 'missing.csv', present: false }], next_cursor: null });
   await chooseGateway();
-  fireEvent.click(screen.getByText(file.display_name).closest('label')!.querySelector('input')!);
-  fireEvent.click(screen.getByText('missing.csv').closest('label')!.querySelector('input')!);
-  expect(screen.getByText(/file-01234567.csv needs a current description/)).toBeTruthy();
-  expect(screen.getByText(/missing.csv is missing from the latest inventory/)).toBeTruthy();
-  expect(screen.getAllByText('Review gateway file')).toHaveLength(2);
+  await act(async () => {
+    fireEvent.click(screen.getByText(file.display_name).closest('label')!.querySelector('input')!);
+  });
+  await act(async () => {
+    fireEvent.click(screen.getByText('missing.csv').closest('label')!.querySelector('input')!);
+  });
+  await waitFor(() => {
+    expect(screen.getByText(/file-01234567.csv needs a current description/)).toBeTruthy();
+    expect(screen.getByText(/missing.csv is missing from the latest inventory/)).toBeTruthy();
+    expect(screen.getAllByText('Review gateway file')).toHaveLength(2);
+  });
 });
 
 it('paginates, shows only safe file fields, explains non-offerable selections, and saves the exact source', async () => {
@@ -133,14 +153,20 @@ it('paginates, shows only safe file fields, explains non-offerable selections, a
   await chooseGateway();
   expect(screen.queryByRole('button', { name: 'Publish' })).toBeNull();
   expect(screen.queryByText(/after purchase, buyers learn your door hostname/)).toBeNull();
-  fireEvent.click(screen.getByRole('button', { name: 'Load more files' }));
+  await act(async () => {
+    fireEvent.click(screen.getByRole('button', { name: 'Load more files' }));
+  });
   await screen.findByText('second.csv');
-  fireEvent.click(screen.getByText('second.csv').closest('label')!.querySelector('input')!);
-  expect(screen.getByText(/second.csv changed. Describe it again/)).toBeTruthy();
+  await act(async () => {
+    fireEvent.click(screen.getByText('second.csv').closest('label')!.querySelector('input')!);
+  });
+  expect(await screen.findByText(/second.csv changed. Describe it again/)).toBeTruthy();
   expect(document.body.textContent).not.toContain('/private/source/data.csv');
-  fireEvent.click(screen.getByRole('button', { name: 'Save gateway source' }));
+  await act(async () => {
+    fireEvent.click(screen.getByRole('button', { name: 'Save gateway source' }));
+  });
   await waitFor(() => expect(gatewayApi.saveGatewayListingSource).toHaveBeenCalledWith('listing-1', { type: 'gateway', gateway_id: gateway.gateway_id, file_ids: ['second'] }));
-  expect(screen.getByText('Gateway source saved.')).toBeTruthy();
+  expect(await screen.findByText('Gateway source saved.')).toBeTruthy();
   expect(screen.getByRole('button', { name: 'Publish' })).toBeTruthy();
   expect(screen.getByText(/after purchase, buyers learn your door hostname/)).toBeTruthy();
   expect(screen.getByText(/Review and acknowledge the gateway identity notice/).closest('a')?.getAttribute('href')).toBe(`/dashboard/gateways/${gateway.gateway_id}`);
@@ -152,30 +178,52 @@ it('hides Publish on the first source change and restores it only after a succes
   gatewayApi.listSellerGateways.mockResolvedValue([{ ...gateway, identity_ack_at: null }, secondGateway]);
   gatewayApi.listGatewayFiles.mockResolvedValue({ files: [file, secondFile], next_cursor: null });
   await chooseGateway();
-  fireEvent.click(screen.getByText(file.display_name).closest('label')!.querySelector('input')!);
-  fireEvent.click(screen.getByRole('button', { name: 'Save gateway source' }));
+  await act(async () => {
+    fireEvent.click(screen.getByText(file.display_name).closest('label')!.querySelector('input')!);
+  });
+  await act(async () => {
+    fireEvent.click(screen.getByRole('button', { name: 'Save gateway source' }));
+  });
   await screen.findByText(/Gateway source saved/);
   expect(screen.getByRole('button', { name: 'Publish' })).toBeTruthy();
   expect(screen.getByRole('link', { name: 'Review and acknowledge the gateway identity notice' }).getAttribute('href')).toBe(`/dashboard/gateways/${gateway.gateway_id}`);
 
-  fireEvent.click(screen.getByText(secondFile.display_name).closest('label')!.querySelector('input')!);
+  act(() => {
+    fireEvent.click(screen.getByText(secondFile.display_name).closest('label')!.querySelector('input')!);
+  });
+  // Flush the edit synchronously: a delayed dirty-state update must fail here.
   expect(screen.queryByRole('button', { name: 'Publish' })).toBeNull();
   expect(screen.queryByText(/Before this listing goes live/)).toBeNull();
-  fireEvent.click(screen.getByRole('button', { name: 'Save gateway source' }));
+  await act(async () => {
+    fireEvent.click(screen.getByRole('button', { name: 'Save gateway source' }));
+  });
   await waitFor(() => expect(screen.getByRole('button', { name: 'Publish' })).toBeTruthy());
   expect(gatewayApi.saveGatewayListingSource).toHaveBeenLastCalledWith('listing-1', { type: 'gateway', gateway_id: gateway.gateway_id, file_ids: [file.file_id, secondFile.file_id] });
 
-  fireEvent.change(screen.getByRole('combobox', { name: 'Gateway' }), { target: { value: secondGateway.gateway_id } });
+  act(() => {
+    fireEvent.change(screen.getByRole('combobox', { name: 'Gateway' }), { target: { value: secondGateway.gateway_id } });
+  });
   expect(screen.queryByRole('button', { name: 'Publish' })).toBeNull();
+  expect(screen.queryByText(/Before this listing goes live/)).toBeNull();
   await screen.findByText(secondFile.display_name);
-  fireEvent.click(screen.getByText(secondFile.display_name).closest('label')!.querySelector('input')!);
+  expect(screen.queryByRole('button', { name: 'Publish' })).toBeNull();
+  expect(screen.queryByText(/Before this listing goes live/)).toBeNull();
+  act(() => {
+    fireEvent.click(screen.getByText(secondFile.display_name).closest('label')!.querySelector('input')!);
+  });
+  expect(screen.queryByRole('button', { name: 'Publish' })).toBeNull();
+  expect(screen.queryByText(/Before this listing goes live/)).toBeNull();
   gatewayApi.saveGatewayListingSource.mockRejectedValueOnce(error('file_not_found'));
-  fireEvent.click(screen.getByRole('button', { name: 'Save gateway source' }));
+  await act(async () => {
+    fireEvent.click(screen.getByRole('button', { name: 'Save gateway source' }));
+  });
   expect(await screen.findByText(/selected file is no longer available/)).toBeTruthy();
   expect(screen.queryByRole('button', { name: 'Publish' })).toBeNull();
   expect(screen.queryByText(/Before this listing goes live/)).toBeNull();
 
-  fireEvent.click(screen.getByRole('button', { name: 'Save gateway source' }));
+  await act(async () => {
+    fireEvent.click(screen.getByRole('button', { name: 'Save gateway source' }));
+  });
   await waitFor(() => expect(screen.getByRole('button', { name: 'Publish' })).toBeTruthy());
   expect(gatewayApi.saveGatewayListingSource).toHaveBeenLastCalledWith('listing-1', { type: 'gateway', gateway_id: secondGateway.gateway_id, file_ids: [secondFile.file_id] });
   expect(screen.queryByText(/Before this listing goes live/)).toBeNull();
@@ -188,8 +236,12 @@ it.each([
 ])('shows a specific save error for %s', async (code, text) => {
   gatewayApi.saveGatewayListingSource.mockRejectedValue(error(code));
   await chooseGateway();
-  fireEvent.click(screen.getByText(file.display_name).closest('label')!.querySelector('input')!);
-  fireEvent.click(screen.getByRole('button', { name: 'Save gateway source' }));
+  await act(async () => {
+    fireEvent.click(screen.getByText(file.display_name).closest('label')!.querySelector('input')!);
+  });
+  await act(async () => {
+    fireEvent.click(screen.getByRole('button', { name: 'Save gateway source' }));
+  });
   expect(await screen.findByText(new RegExp(text))).toBeTruthy();
   expect(screen.queryByRole('button', { name: 'Publish' })).toBeNull();
   expect(screen.queryByText(/Before this listing goes live/)).toBeNull();
@@ -197,16 +249,26 @@ it.each([
 
 it('renders publish blockers with known file names and handles other gateway publish codes', async () => {
   await chooseGateway();
-  fireEvent.click(screen.getByText(file.display_name).closest('label')!.querySelector('input')!);
-  fireEvent.click(screen.getByRole('button', { name: 'Save gateway source' }));
+  await act(async () => {
+    fireEvent.click(screen.getByText(file.display_name).closest('label')!.querySelector('input')!);
+  });
+  await act(async () => {
+    fireEvent.click(screen.getByRole('button', { name: 'Save gateway source' }));
+  });
   await screen.findByText('Gateway source saved.');
   listingApi.publishListing.mockRejectedValueOnce(error('gateway_not_publishable', { blockers: [{ code: 'file_not_described', file_id: file.file_id }, { code: 'identity_ack_missing' }] }))
     .mockRejectedValueOnce(error('gateway_offline')).mockRejectedValueOnce(error('listing_not_draft'));
-  fireEvent.click(screen.getByRole('button', { name: 'Publish' }));
-  expect(await screen.findByText(new RegExp(`${file.display_name} needs a current description`))).toBeTruthy();
+  await act(async () => {
+    fireEvent.click(screen.getByRole('button', { name: 'Publish' }));
+  });
+  expect(await screen.findByText(new RegExp(`${file.display_name} needs a current description`), { selector: 'li' })).toBeTruthy();
   expect(screen.getAllByText(/Read and acknowledge the identity notice/).length).toBeGreaterThan(0);
-  fireEvent.click(screen.getByRole('button', { name: 'Publish' }));
+  await act(async () => {
+    fireEvent.click(screen.getByRole('button', { name: 'Publish' }));
+  });
   expect(await screen.findByText(/gateway is offline. Reconnect it before publishing/)).toBeTruthy();
-  fireEvent.click(screen.getByRole('button', { name: 'Publish' }));
+  await act(async () => {
+    fireEvent.click(screen.getByRole('button', { name: 'Publish' }));
+  });
   expect(await screen.findByText(/Only a draft listing can be published/)).toBeTruthy();
 });
