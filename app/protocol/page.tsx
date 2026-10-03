@@ -42,7 +42,7 @@ const platformDoes = [
   {
     label: 'Trust',
     description:
-      'Short-lived download links to the exact purchased files in cloud storage, and signed delivery permissions that the seller gateway verifies before serving a file',
+      'Short-lived download links to the purchased files in cloud storage, and signed delivery permissions that the seller gateway verifies before serving a file',
   },
   {
     label: 'Billing',
@@ -76,12 +76,12 @@ const securitySections = [
   {
     label: 'CLOUD STORAGE ACCESS',
     description:
-      'AWS sellers create a role that only ai.market can use, with a unique external ID and read access limited to the bucket folder they choose. Cloudflare sellers give an R2 key with Object Read only permission for one bucket. ai.market keeps these encrypted, uses them to list file names and sizes and to create each buyer\'s download link, and never copies the files. Disconnecting removes the access.',
+      'AWS sellers create a role that only ai.market can use, with a unique external ID and read access limited to the bucket folder they choose. Cloudflare sellers give an R2 key with Object Read only permission for one bucket. ai.market keeps these encrypted, uses them to list file names and sizes and to create each buyer\'s download link, and never copies the files. Disconnecting stops new download links. Links already issued can remain usable for up to five minutes.',
   },
   {
     label: 'CLOUD DOWNLOAD LINKS',
     description:
-      'After a purchase, ai.market creates a short-lived link to the exact file version the buyer paid for. The buyer downloads it directly from AWS or Cloudflare. If the file has changed since the listing was published, the download is refused rather than serving different data.',
+      'After a purchase, ai.market creates a link to each purchased file that works for at most five minutes. The buyer downloads directly from AWS or Cloudflare, and the file never passes through ai.market.',
   },
   {
     label: 'DEVICE IDENTITY',
