@@ -14,5 +14,7 @@ it('describes signed permission and direct delivery without legacy cryptography 
   expect(text).toContain('seller gateway checks each signature');
   expect(text).toContain('HTTPS door');
   expect(text).toContain('signed audit entries');
+  expect(text).toContain('nothing to download');
+  expect(text).toContain('Links already issued can remain usable for up to five minutes');
   expect(text).not.toMatch(/Verifiable Credentials|X25519|opaque to the platform|endpoints can decrypt|trust score/i);
 });
