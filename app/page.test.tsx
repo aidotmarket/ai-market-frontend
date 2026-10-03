@@ -1,6 +1,13 @@
+// @vitest-environment jsdom
+
 import React from 'react';
 import { renderToStaticMarkup } from 'react-dom/server';
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { cleanup, render, screen, within } from '@testing-library/react';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+
+const auth = vi.hoisted(() => ({ isAuthenticated: false }));
+vi.mock('@/store/auth', () => ({ useAuthStore: () => auth }));
+afterEach(cleanup);
 
 const serverTerms = vi.hoisted(() => ({ getPublicTermsVersion: vi.fn().mockResolvedValue('1.1') }));
 vi.mock('@/lib/publicTermsVersion', () => serverTerms);
@@ -81,6 +88,27 @@ describe('homepage buyer requests', () => {
 
     expect(html).toContain('Tell the market what data you need');
     expect(html).not.toContain('Buyer demand, live now');
+  });
+});
+
+describe('homepage final CTA', () => {
+  it.each([false, true])('keeps buyer navigation and offers the seller destination when authenticated=%s', async (isAuthenticated) => {
+    auth.isAuthenticated = isAuthenticated;
+    fetchPublicListings.mockResolvedValue({ items: [] });
+    fetchFeaturedFeed.mockResolvedValue(null);
+    fetchDataRequests.mockResolvedValue({ items: [] });
+    const { default: LandingPage } = await import('./page');
+
+    render(await LandingPage());
+    const section = screen.getByRole('heading', { name: 'Ready to get started?' }).closest('section')!;
+    const cta = within(section);
+
+    expect(cta.getByRole('link', { name: 'Find Data' }).getAttribute('href')).toBe('/find-data');
+    expect(cta.getByText('Buyers search free. No account needed to look. Sellers list free and pay nothing until a sale clears.')).toBeTruthy();
+    const sellerLink = cta.getByRole('link', { name: isAuthenticated ? 'Open Seller Workspace' : 'Create Your Account' });
+    expect(sellerLink.getAttribute('href')).toBe(isAuthenticated ? '/dashboard/seller-workspace' : '/register');
+    expect(sellerLink.className).toBe('inline-flex items-center justify-center rounded-lg bg-[#3F51B5] px-8 py-3.5 text-sm font-semibold text-white transition-colors hover:bg-[#3545a0]');
+    if (isAuthenticated) expect(cta.queryByRole('link', { name: 'Create Your Account' })).toBeNull();
   });
 });
 

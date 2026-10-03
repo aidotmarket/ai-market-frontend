@@ -1,4 +1,5 @@
 import Link from 'next/link';
+import SellDataCta from '@/components/SellDataCta';
 import { getPublicTermsVersion } from '@/lib/publicTermsVersion';
 import VersionedTermsCopy, { TermsVersionProvider } from '@/components/legal/VersionedTermsCopy';
 import { CARD_HOME_FEES, CARD_HOME_PAYOUT } from '@/components/legal/terms12Copy';
@@ -633,12 +634,7 @@ export default async function LandingPage() {
               >
                 Find Data
               </Link>
-              <Link
-                href="/register"
-                className="inline-flex items-center justify-center rounded-lg bg-[#3F51B5] px-8 py-3.5 text-sm font-semibold text-white transition-colors hover:bg-[#3545a0]"
-              >
-                Create Your Account
-              </Link>
+              <SellDataCta variant="homepage" />
             </div>
           </div>
         </section>
