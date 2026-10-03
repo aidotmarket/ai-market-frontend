@@ -5,9 +5,9 @@ import Link from 'next/link';
 const howItWorks = [
   {
     eyebrow: 'List',
-    title: 'Files stay on your infrastructure',
+    title: 'Files stay where they are',
     description:
-      'Sellers run the open-source AIM Data gateway with Docker. It sends opaque inventory automatically and file structure after confirmation, with no data values. A seller can separately publish a public sample on the listing.',
+      'Sellers with data in AWS S3 or Cloudflare R2 connect their bucket in the browser with read-only access and pick the files to sell. Nothing to download or install. Sellers who keep data on their own servers run the open-source AIM Data gateway with Docker. Either way the files never move to ai.market.',
   },
   {
     eyebrow: 'Discover',
@@ -25,7 +25,7 @@ const howItWorks = [
     eyebrow: 'Deliver',
     title: 'Direct delivery',
     description:
-      "The buyer downloads purchased files directly from the seller's AIM Data gateway. ai.market does not store the files.",
+      "The buyer downloads purchased files straight from the seller's own AWS or Cloudflare storage, or from the seller's AIM Data gateway. ai.market does not store the files.",
   },
 ];
 
@@ -42,7 +42,7 @@ const platformDoes = [
   {
     label: 'Trust',
     description:
-      'Signed delivery permissions that the seller gateway verifies before serving a file',
+      'Short-lived download links to the exact purchased files in cloud storage, and signed delivery permissions that the seller gateway verifies before serving a file',
   },
   {
     label: 'Billing',
@@ -58,20 +58,31 @@ const platformDoesNot = [
   {
     label: 'Store data',
     description:
-      'Purchased file bytes go from the seller gateway directly to the buyer, without passing through ai.market.',
+      "Purchased files go from the seller's cloud storage or gateway directly to the buyer, without passing through ai.market.",
   },
   {
     label: 'Serve files',
-    description: 'The seller gateway serves purchased files through the seller’s HTTPS door',
+    description:
+      "Files are served by the seller's own AWS or Cloudflare bucket, or by the seller gateway through the seller's HTTPS door",
   },
   {
     label: 'Lock in sellers',
     description:
-      'AIM Data is an open-source Docker gateway that sellers run on their own infrastructure',
+      'Sellers keep their files in their own cloud account or behind AIM Data, an open-source gateway they run themselves, and can disconnect at any time',
   },
 ];
 
 const securitySections = [
+  {
+    label: 'CLOUD STORAGE ACCESS',
+    description:
+      'AWS sellers create a role that only ai.market can use, with a unique external ID and read access limited to the bucket folder they choose. Cloudflare sellers give an R2 key with Object Read only permission for one bucket. ai.market keeps these encrypted, uses them to list file names and sizes and to create each buyer\'s download link, and never copies the files. Disconnecting removes the access.',
+  },
+  {
+    label: 'CLOUD DOWNLOAD LINKS',
+    description:
+      'After a purchase, ai.market creates a short-lived link to the exact file version the buyer paid for. The buyer downloads it directly from AWS or Cloudflare. If the file has changed since the listing was published, the download is refused rather than serving different data.',
+  },
   {
     label: 'DEVICE IDENTITY',
     description:
@@ -90,7 +101,7 @@ const securitySections = [
   {
     label: 'NETWORK BOUNDARY',
     description:
-      'The seller restricts gateway egress to api.ai.market:443 with a restricted proxy or firewall and DNS. The gateway reports open egress through its canary; ai.market blocks publishing and new permissions until the check passes.',
+      'The seller restricts gateway egress to api.ai.market:443 with a restricted proxy or firewall and DNS. The gateway reports open egress through its canary, and ai.market blocks publishing and new permissions until the check passes.',
   },
 ];
 
@@ -99,6 +110,11 @@ const stackRows = [
     component: 'ai.market',
     role: 'Discovery, auth, billing, trust tokens',
     operator: 'ai.market (cloud)',
+  },
+  {
+    component: 'Seller cloud storage',
+    role: 'Holds the files in the seller’s own AWS S3 or Cloudflare R2 account and serves purchased files to buyers through short-lived links.',
+    operator: 'Sellers (their own cloud account)',
   },
   {
     component: 'AIM Data',
@@ -167,6 +183,11 @@ export default function ProtocolPage() {
             <h2 className="mt-3 text-3xl font-extrabold tracking-tight text-gray-900 sm:text-4xl">
               Central discovery, direct delivery
             </h2>
+            <p className="mt-4 text-base leading-7 text-gray-600">
+              Data in AWS or Cloudflare? Sell it from your browser. There is nothing to download
+              or install. The AIM Data gateway is only for sellers who keep data on their own
+              servers.
+            </p>
           </div>
 
           <div className="mx-auto mt-12 grid max-w-6xl grid-cols-1 gap-6 sm:grid-cols-2 lg:grid-cols-4">
@@ -278,7 +299,8 @@ export default function ProtocolPage() {
             </h2>
             <p className="mt-4 text-base leading-7 text-gray-600">
               The platform coordinates trust, authentication, and billing without taking custody
-              of datasets or any payload bytes.
+              of datasets or any payload bytes, whether the files sit in cloud storage or behind a
+              gateway.
             </p>
           </div>
 
