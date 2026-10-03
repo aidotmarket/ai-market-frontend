@@ -201,10 +201,9 @@ export function AllAIProvider({ children }: { children: ReactNode }) {
   const [formSnapshotGetterState, setFormSnapshotGetterState] = useState<(() => Record<string, any>) | null>(null);
 
   useEffect(() => {
-    setLocale(
-      anonymousSurfaceActive ? preferredAnonymousAllAILocale(navigator.language) : 'en'
-    );
-  }, [anonymousSurfaceActive]);
+    // Initialize once. Route and authentication changes keep the visitor's choice.
+    setLocale(preferredAnonymousAllAILocale(navigator.language));
+  }, []);
 
   useEffect(() => {
     if (!anonymousSurfaceActive) return;
@@ -386,7 +385,7 @@ export function AllAIProvider({ children }: { children: ReactNode }) {
           session_id: sessionId,
           message: trimmed,
           context,
-          ...(anonymousSurfaceActive ? { locale } : {}),
+          locale,
           stream: true,
         };
 
@@ -451,8 +450,10 @@ export function AllAIProvider({ children }: { children: ReactNode }) {
 
         try {
           await readAnonymousMessageStream(res.body, (evt) => {
-            if (anonymousSurfaceActive && evt.type === 'answer' && typeof evt.text === 'string') {
-              const nextStep = isAnonymousNextStep(evt.next_step) ? evt.next_step : undefined;
+            if (evt.type === 'answer' && typeof evt.text === 'string') {
+              const nextStep = anonymousSurfaceActive && isAnonymousNextStep(evt.next_step)
+                ? evt.next_step
+                : undefined;
               setMessages((prev) =>
                 prev.map((m) =>
                   m.id === assistantId
@@ -471,7 +472,7 @@ export function AllAIProvider({ children }: { children: ReactNode }) {
               return;
             }
 
-            if (anonymousSurfaceActive && evt.type === 'safe_failure' && isAnonymousSafeOutcome(evt.outcome)) {
+            if (evt.type === 'safe_failure' && isAnonymousSafeOutcome(evt.outcome)) {
               const outcome = evt.outcome;
               const fallback = resources.safeOutcomes[outcome];
               setMessages((prev) =>

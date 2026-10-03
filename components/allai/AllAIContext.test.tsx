@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 
-import { act, cleanup, render, waitFor } from '@testing-library/react';
+import { act, cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 const mocks = vi.hoisted(() => ({
@@ -24,6 +24,9 @@ vi.mock('@/store/auth', () => ({
 }));
 
 import { AllAIProvider, useAllAI } from './AllAIContext';
+import AllAIPanel from './AllAIPanel';
+import { anonymousAllAIResources, ANONYMOUS_ALLAI_LOCALES } from '@/lib/i18n/anonymous-allai';
+vi.mock('./WizardAllAIBridge', () => ({ useWizardBridge: () => null }));
 
 const SESSION_KEY = 'allai-session-id';
 const SESSION_URL = 'http://localhost:8000/api/allai/support/anonymous/session';
@@ -204,6 +207,7 @@ describe('signed-in message contract', () => {
       session_id: 'stale-session',
       message: 'hello',
       context: { page: '/listings/example-listing', listing_id: 'example-listing' },
+      locale: 'en',
       stream: true,
     });
     expect(requestInit(messageCalls()[0]).headers).toEqual({
@@ -545,6 +549,7 @@ describe('anonymous initial-message stale-session recovery', () => {
       session_id: 'stale-session',
       message: 'hello',
       context: { page: '/listings/example-listing', listing_id: 'example-listing' },
+      locale: 'en',
       stream: true,
     });
     expect(retryPayload).toEqual({ ...initialPayload, session_id: 'fresh-session' });
@@ -869,4 +874,130 @@ describe('mount validation ownership', () => {
       ]);
     }
   );
+});
+
+
+describe('supported locales across normal buyer and seller chat surfaces', () => {
+  const journeys = [
+    { page: '/find-data', role: 'buyer' },
+    { page: '/sell-data', role: 'seller' },
+  ];
+  const cases = journeys.flatMap((journey) => [true, false].flatMap((signedIn) =>
+    ANONYMOUS_ALLAI_LOCALES.map((locale) => ({ ...journey, signedIn, locale }))
+  ));
+
+  it.each(cases)('$page signedIn=$signedIn sends $locale from the normal UI with history and 404 recovery', async ({ page, role, signedIn, locale }) => {
+    mocks.pathname = page;
+    mocks.auth.user = signedIn ? { role, first_name: 'Synthetic' } : null;
+    mocks.auth.token = signedIn ? 'signed-in-token' : null;
+    const resources = anonymousAllAIResources(locale);
+    const freshAnswer = {
+      en: 'AWS S3 and Cloudflare R2 via Seller Workspace. Local mounted files via AIM Data.',
+      es: 'AWS S3 y Cloudflare R2 mediante Seller Workspace. Archivos locales montados mediante AIM Data.',
+      'zh-Hans': 'Seller Workspace 支持 AWS S3 和 Cloudflare R2。AIM Data 支持本地挂载文件。',
+    }[locale];
+    let attempt = 0;
+    fetchMock.mockImplementation(async (input, init) => {
+      const url = String(input);
+      if (url === STATUS_URL) return response(200, { available: true, supported_locales: [...ANONYMOUS_ALLAI_LOCALES], cache_seconds: 5 });
+      if (url === `${SESSION_URL}/stale-session`) return response(200, {
+        messages: [{ role: 'assistant', content: 'Earlier answer', fact_revision_set: 'old-revision' }],
+      });
+      if (url === SESSION_URL && init?.method === 'POST') return response(200, { session_id: 'fresh-session' });
+      if (url === MESSAGE_URL) {
+        attempt += 1;
+        if (attempt === 1) return response(404);
+        return sseEvents({ type: 'answer', text: freshAnswer, source_revision_set: 'c'.repeat(64), next_step: {
+          action: 'publish_listing', label: 'Sell Data', url: '/partner', requires_account: true,
+        } });
+      }
+      throw new Error(`Unexpected request: ${url}`);
+    });
+    sessionStorage.setItem(SESSION_KEY, 'stale-session');
+    render(<AllAIProvider><Probe /><AllAIPanel /></AllAIProvider>);
+    await waitFor(() => expect(context().messages).toHaveLength(1));
+    act(() => context().open());
+    await waitFor(() => expect(screen.getByText('Earlier answer')).not.toBeNull());
+    await waitFor(() => expect(context().anonymousAvailable).toBe(true));
+    fireEvent.change(screen.getByRole('combobox', { name: anonymousAllAIResources(context().locale).languageLabel }), { target: { value: locale } });
+    fireEvent.change(screen.getByPlaceholderText(resources.inputPlaceholder), { target: { value: 'What cloud provider do you support?' } });
+    fireEvent.click(screen.getByRole('button', { name: resources.sendMessage }));
+    await waitFor(() => expect(screen.getByText(freshAnswer)).not.toBeNull());
+    expect(messageCalls()).toHaveLength(2);
+    const [initial, retry] = messageCalls();
+    expect(messagePayload(initial)).toEqual({ session_id: 'stale-session', message: 'What cloud provider do you support?', context: { page }, locale, stream: true });
+    expect(messagePayload(retry)).toEqual({ ...messagePayload(initial), session_id: 'fresh-session' });
+    expect(requestInit(retry).headers).toBe(requestInit(initial).headers);
+    expect(requestInit(retry).headers).toEqual({ 'Content-Type': 'application/json', ...(signedIn ? { Authorization: 'Bearer signed-in-token' } : {}) });
+    expect(requestInit(retry).signal).toBe(requestInit(initial).signal);
+    expect(sessionStorage.getItem(SESSION_KEY)).toBe('fresh-session');
+    expect(context().messages[0]).toMatchObject({ content: 'Earlier answer', historical: true, factRevisionSet: 'old-revision' });
+    expect(context().messages.at(-1)).toMatchObject({ content: freshAnswer, factRevisionSet: 'c'.repeat(64) });
+    if (context().anonymousSurfaceActive) {
+      expect(context().messages.at(-1)?.nextStep).toMatchObject({ url: '/partner' });
+    } else {
+      expect(context().messages.at(-1)?.nextStep).toBeUndefined();
+    }
+    expect(creationCalls()).toHaveLength(1);
+    await send('Another question');
+    expect(messagePayload(messageCalls()[2])).toMatchObject({ session_id: 'fresh-session', locale });
+  });
+
+  it('keeps the chosen locale and session/history through public routes and sign-in/out transitions', async () => {
+    mocks.pathname = '/';
+    fetchMock.mockImplementation(async (input) => {
+      const url = String(input);
+      if (url === STATUS_URL) return response(200, { available: true, supported_locales: [...ANONYMOUS_ALLAI_LOCALES], cache_seconds: 5 });
+      if (url === `${SESSION_URL}/stale-session`) return response(200, { messages: [{ role: 'assistant', content: 'History' }] });
+      if (url === MESSAGE_URL) return sseEvents({ type: 'answer', text: 'Fresh answer', source_revision_set: 'd'.repeat(64) });
+      throw new Error(`Unexpected request: ${url}`);
+    });
+    sessionStorage.setItem(SESSION_KEY, 'stale-session');
+    const view = render(<AllAIProvider><Probe /></AllAIProvider>);
+    await waitFor(() => expect(context().messages).toHaveLength(1));
+    act(() => context().setLocale('zh-Hans'));
+    for (const [page, signedIn] of [['/sell-data', false], ['/sell-data', true], ['/find-data', true], ['/find-data', false], ['/listings/example-listing', false]] as const) {
+      mocks.pathname = page;
+      mocks.auth.user = signedIn ? { role: 'buyer' } : null;
+      mocks.auth.token = signedIn ? 'signed-in-token' : null;
+      view.rerender(<AllAIProvider><Probe /></AllAIProvider>);
+      await waitFor(() => expect(context().anonymousAvailable).toBe(true));
+      expect(context().locale).toBe('zh-Hans');
+      await send();
+      expect(messagePayload(messageCalls().at(-1)!)).toMatchObject({ session_id: 'stale-session', locale: 'zh-Hans', context: { page } });
+    }
+    expect(context().messages).toHaveLength(11);
+    expect(context().messages[0].content).toBe('History');
+    expect(creationCalls()).toHaveLength(0);
+  });
+
+  it.each(ANONYMOUS_ALLAI_LOCALES)('keeps legacy safe failures meaningful in %s and protects wizard callbacks', async (locale) => {
+    mocks.auth.user = { role: 'seller' };
+    mocks.auth.token = 'signed-in-token';
+    mocks.pathname = '/sell-data';
+    let attempt = 0;
+    fetchMock.mockImplementation(async (input) => {
+      const url = String(input);
+      if (url === `${SESSION_URL}/stale-session`) return response(200, { messages: [] });
+      if (url === MESSAGE_URL) {
+        attempt += 1;
+        return attempt === 1
+          ? sseEvents({ type: 'safe_failure', outcome: 'answer_unverified', proposals: [{ field: 'title', value: 'Untrusted' }] })
+          : sseEvents({ type: 'field_proposal', field: 'title', value: 'Draft', reasoning: 'Reason' }, { type: 'batch_proposal', proposals: [{ field: 'description', value: 'Description', reasoning: 'Reason' }] }, { type: 'answer', text: 'Validated', source_revision_set: 'e'.repeat(64), field: 'title', value: 'Untrusted' });
+      }
+      throw new Error(`Unexpected request: ${url}`);
+    });
+    renderProvider();
+    const field = vi.fn();
+    const batch = vi.fn();
+    act(() => { context().setLocale(locale); context().setOnFieldProposal(field); context().setOnBatchProposal(batch); });
+    await send();
+    expect(context().messages.at(-1)).toMatchObject({ safeOutcome: 'answer_unverified', content: anonymousAllAIResources(locale).safeOutcomes.answer_unverified });
+    expect(field).not.toHaveBeenCalled();
+    expect(batch).not.toHaveBeenCalled();
+    await send();
+    expect(field).toHaveBeenCalledExactlyOnceWith({ field: 'title', value: 'Draft', reasoning: 'Reason' });
+    expect(batch).toHaveBeenCalledExactlyOnceWith([{ field: 'description', value: 'Description', reasoning: 'Reason' }]);
+    expect(context().messages.at(-1)).toMatchObject({ content: 'Validated', factRevisionSet: 'e'.repeat(64) });
+  });
 });
