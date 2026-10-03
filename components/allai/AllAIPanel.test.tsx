@@ -52,12 +52,29 @@ describe('AllAIPanel accessibility and locale boundary', () => {
     expect(mocks.context.close).toHaveBeenCalledOnce();
   });
 
-  it('preserves the legacy panel outside the active anonymous mode', () => {
+  it('exposes the existing locale selector in the legacy panel', () => {
     mocks.context.anonymousSurfaceActive = false;
     render(<AllAIPanel />);
     expect(screen.getByRole('dialog', { name: 'allAI' })).not.toBeNull();
-    expect(screen.queryByRole('combobox')).toBeNull();
-    expect(screen.getByPlaceholderText('Ask allAI anything...')).not.toBeNull();
+    expect(screen.getByRole('combobox', { name: 'Language' })).not.toBeNull();
+    expect(screen.getByPlaceholderText('Ask allAI anything…')).not.toBeNull();
+  });
+
+  it.each([390, 1024])('keeps the localized selector usable at %s pixels', (width) => {
+    Object.defineProperty(window, 'innerWidth', { configurable: true, value: width });
+    mocks.context.anonymousSurfaceActive = false;
+    mocks.context.locale = 'es';
+    const view = render(<AllAIPanel />);
+    const selector = screen.getByRole('combobox', { name: 'Idioma' });
+    expect(screen.getAllByRole('option').map((item) => item.textContent)).toEqual(['English', 'Español', '简体中文']);
+    fireEvent.mouseDown(selector);
+    expect(document.body.style.cursor).not.toBe('grabbing');
+    fireEvent.change(selector, { target: { value: 'zh-Hans' } });
+    expect(mocks.context.setLocale).toHaveBeenCalledWith('zh-Hans');
+    mocks.context.locale = 'zh-Hans';
+    view.rerender(<AllAIPanel />);
+    expect(screen.getByRole('combobox', { name: '语言' })).not.toBeNull();
+    expect(screen.getByRole('button', { name: '关闭 allAI · AI 助手' })).not.toBeNull();
   });
 
   it('exposes validated revision provenance in the rendered answer', () => {

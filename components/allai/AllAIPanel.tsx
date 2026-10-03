@@ -250,7 +250,7 @@ export default function AllAIPanel() {
         type="button"
         onClick={close}
         className="absolute top-3 right-3 z-10 p-1.5 rounded-full text-white/40 hover:text-white/80 hover:bg-white/10 transition-all"
-        aria-label={anonymousSurfaceActive ? resources.closeAssistant : 'Close allAI assistant'}
+        aria-label={resources.closeAssistant}
       >
         <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
           <path d="M18 6L6 18" />
@@ -272,7 +272,6 @@ export default function AllAIPanel() {
           <h2 id="allai-assistant-title" className="text-sm font-semibold text-white/80">
             {anonymousSurfaceActive ? resources.assistantLabel : 'allAI'}
           </h2>
-          {anonymousSurfaceActive && (
             <label className="ml-auto mr-8 flex items-center gap-2 text-xs text-white/50">
               <span className="sr-only">{resources.languageLabel}</span>
               <select
@@ -288,7 +287,6 @@ export default function AllAIPanel() {
                 ))}
               </select>
             </label>
-          )}
         </div>
       </div>
 

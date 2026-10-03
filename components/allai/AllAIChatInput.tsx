@@ -38,7 +38,7 @@ export default function AllAIChatInput({
   onSend: (text: string) => void;
   disabled?: boolean;
 }) {
-  const { page, messages, locale, anonymousSurfaceActive } = useAllAI();
+  const { page, messages, locale } = useAllAI();
   const resources = anonymousAllAIResources(locale);
   const [value, setValue] = useState('');
   const textareaRef = useRef<HTMLTextAreaElement>(null);
@@ -95,7 +95,7 @@ export default function AllAIChatInput({
           value={value}
           onChange={(e) => setValue(e.target.value)}
           onKeyDown={handleKeyDown}
-          placeholder={anonymousSurfaceActive ? resources.inputPlaceholder : 'Ask allAI anything...'}
+          placeholder={resources.inputPlaceholder}
           disabled={disabled}
           rows={1}
           className="flex-1 resize-none rounded-sm bg-transparent text-sm text-white/90 placeholder:text-white/30 outline-none leading-snug focus-visible:ring-2 focus-visible:ring-blue-300"
@@ -103,7 +103,7 @@ export default function AllAIChatInput({
         <button
           onClick={handleSend}
           disabled={disabled || !value.trim()}
-          aria-label={anonymousSurfaceActive ? resources.sendMessage : 'Send message'}
+          aria-label={resources.sendMessage}
           className="flex-shrink-0 p-1.5 rounded-lg text-white/40 hover:text-white/80 disabled:opacity-30 transition-colors"
         >
           <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
