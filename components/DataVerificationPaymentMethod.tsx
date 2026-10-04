@@ -31,16 +31,16 @@ const RETURN_REAUTH = 'Confirm it is you again to finish adding your payment met
 const SETUP_REQUIRED = 'Choose Add payment method to continue.';
 const READY =
   'A payment method is ready for verification charges. Your Stripe payouts are separate and were not changed.';
-const CANCELLED =
-  'No payment method was changed and no verification charge was made. Select Back to settings to start again.';
+const cancelledCopy = (returnLabel: string) =>
+  `No payment method was changed and no verification charge was made. Select ${returnLabel} to start again.`;
 const SETUP_PENDING =
   'Stripe is still confirming your payment method. Return to this page later to check its status.';
 const RETURN_PENDING =
   'Stripe is still confirming your payment method. Select Check again in a moment.';
 const RETURN_TRANSIENT =
   'We could not confirm your payment method. No verification charge was made. Select Check again to retry.';
-const FAILED =
-  'We could not confirm your payment method. No verification charge was made. Select Back to settings to start again.';
+const failedCopy = (returnLabel: string) =>
+  `We could not confirm your payment method. No verification charge was made. Select ${returnLabel} to start again.`;
 const SUCCESS =
   'Your payment method is ready for verification charges. Your Stripe payouts were not changed.';
 const BLOCKED =
@@ -69,15 +69,15 @@ interface DataVerificationPaymentMethodProps {
   initialCheckoutSessionId?: string | null;
 }
 
-function fixedCopy(state: DisplayState, mode: 'setup' | 'return'): string | null {
-  if (state === 'cancelled') return CANCELLED;
+function fixedCopy(state: DisplayState, mode: 'setup' | 'return', returnLabel: string): string | null {
+  if (state === 'cancelled') return cancelledCopy(returnLabel);
   if (state === 'setup_required') return SETUP_REQUIRED;
   if (state === 'setup_pending') return SETUP_PENDING;
   if (state === 'pending') return RETURN_PENDING;
   if (state === 'ready') return mode === 'return' ? SUCCESS : READY;
   if (state === 'blocked') return BLOCKED;
-  if (state === 'network_error') return mode === 'return' ? RETURN_TRANSIENT : FAILED;
-  if (state === 'failed') return FAILED;
+  if (state === 'network_error') return mode === 'return' ? RETURN_TRANSIENT : failedCopy(returnLabel);
+  if (state === 'failed') return failedCopy(returnLabel);
   return null;
 }
 
@@ -277,7 +277,7 @@ export default function DataVerificationPaymentMethod({
     }
   };
 
-  const copy = fixedCopy(displayState, mode)?.replaceAll('Back to settings', listingReturn ? 'Back to verification' : 'Back to settings');
+  const copy = fixedCopy(displayState, mode, listingReturn ? 'Back to verification' : 'Back to settings');
   const canStart = mode === 'setup' && displayState === 'setup_required';
   const canReplace = mode === 'setup' && displayState === 'ready';
   const canRecheck =

@@ -136,6 +136,21 @@ describe('data-verification payment-method return page', () => {
     expect(screen.getByRole('link', { name: 'Back to verification' }).getAttribute('href')).toBe('/dashboard/listings/listing');
     expect(payinApi.createDataVerificationPayInSetupSession).not.toHaveBeenCalled();
   });
+  it.each(['failed', 'cancelled'] as const)('uses the listing destination in %s payment copy', async outcome => {
+    saveVerificationReturn({ sellerId: 'seller', listingId: 'listing' });
+    payinApi.reconcileDataVerificationPayInSetupSession.mockResolvedValueOnce({ version: 'data_verification_payin_reconcile_result_v1', state: 'failed', message: 'ignored' });
+    render(await returnPage());
+    if (outcome === 'failed') await completeReturnReauth();
+    else {
+      const cancel = await screen.findByRole('button', { name: 'Cancel' });
+      await waitFor(() => expect((cancel as HTMLButtonElement).disabled).toBe(false));
+      fireEvent.click(cancel);
+    }
+    await screen.findByText(outcome === 'failed'
+      ? 'We could not confirm your payment method. No verification charge was made. Select Back to verification to start again.'
+      : 'No payment method was changed and no verification charge was made. Select Back to verification to start again.');
+    expect(screen.getByRole('link', { name: 'Back to verification' }).getAttribute('href')).toBe('/dashboard/listings/listing');
+  });
   it('ignores a different seller’s saved listing destination', async () => {
     saveVerificationReturn({ sellerId: 'different-seller', listingId: 'listing' });
     render(await returnPage());
