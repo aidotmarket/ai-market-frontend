@@ -216,3 +216,25 @@ describe('ScanFindingsBadge', () => {
     expect(html).toContain('not a continuing audit, warranty, compliance certification, or guarantee');
   });
 });
+
+describe('S1791 immutable server-supplied provenance', () => {
+  it.each([
+    ['gateway', 'self-hosted AIM Data gateway'],
+    ['aws', 'AWS account'],
+    ['r2', 'Cloudflare account'],
+  ] as const)('renders %s copy verbatim with its covered version', (kind, environment) => {
+    const provenance = `Facts computed in the seller's own ${environment}`;
+    const attestation = `On 2026-08-23 12:00:00 UTC, at the data owner's authorization and expense, ai.market directed a scan of the seller-designated source for this listing inside the owner's own ${environment}; the structural facts below were computed by ai.market-authored open-source scanner code (version 1.2.3) executed in that owner-controlled environment, and the findings are published unedited.`;
+    const disclaimer = `This is a seller-published, point-in-time scan of what the seller-designated source exposed to the scanner in the owner's own ${environment} on 2026-08-23; the source may change at any time, and this is not a continuing audit, warranty, compliance certification, or guarantee that data delivered later will match or remain available, accurate, complete, or unchanged. Verification does not assess data accuracy, legality, or fitness for any purpose.`;
+    const artifact = makePublishedFindings({ provenance_label: provenance, attestation, disclaimer });
+    artifact.spec.listing_version_id = 'frozen-listing-version';
+    artifact.execution = { ...artifact.execution, runner_kind: kind, scanner_version: '1.2.3', connector_type: 'aim_gateway', connector_version: 'aim_gateway-v1' };
+    const container = document.createElement('div');
+    container.innerHTML = renderToStaticMarkup(<ScanFindingsBadge scanFindings={artifact} />);
+    expect(container.textContent).toContain(provenance);
+    expect(container.textContent).toContain(attestation);
+    expect(container.textContent).toContain(disclaimer);
+    expect(container.textContent).toContain('Covered listing versionfrozen-listing-version');
+    expect(container.textContent).toContain('Scanner version1.2.3');
+  });
+});

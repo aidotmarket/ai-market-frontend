@@ -2,7 +2,7 @@
 
 import { api } from './client';
 import type {LicenseSelection} from './listingLicenses';
-import type { FulfillmentType, ListingListItem, ListingDetail, ListingVersion, SearchResponse } from '@/types';
+import type { FulfillmentType, ListingListItem, ListingDetail, ListingVersion, SearchResponse, SellerListingItem } from '@/types';
 
 type FulfillmentTypeParam = FulfillmentType | FulfillmentType[];
 
@@ -31,6 +31,13 @@ export async function listListings(params: ListListingsParams = {}): Promise<Lis
 
 export async function getListing(id: string): Promise<ListingDetail> {
   const res = await api.get<ListingDetail>(`/listings/${id}`);
+  return res.data;
+}
+
+// Owner-facing fields from the existing single-listing endpoint. Call only
+// after establishing ownership; the public detail type omits listing status.
+export async function getSellerListing(id: string): Promise<Pick<SellerListingItem, 'id' | 'title' | 'status'>> {
+  const res = await api.get<Pick<SellerListingItem, 'id' | 'title' | 'status'>>(`/listings/${id}`);
   return res.data;
 }
 

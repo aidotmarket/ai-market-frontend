@@ -198,6 +198,7 @@ export interface PublishedScanFindings {
   duration_ms: number;
   published_at_utc: string;
   spec: {
+    listing_version_id?: string;
     id: string;
     version: '1';
     hash: string;
@@ -206,8 +207,10 @@ export interface PublishedScanFindings {
   };
   execution: {
     agent_version: string;
-    connector_type: 'eolymp';
-    connector_version: 'eolymp-v1';
+    runner_kind?: 'gateway' | 'aws' | 'r2';
+    scanner_version?: string;
+    connector_type: 'eolymp' | 'aim_gateway';
+    connector_version: 'eolymp-v1' | 'aim_gateway-v1';
     content_sha256_reference: string;
   };
   methods: {
@@ -227,9 +230,15 @@ export interface PublishedScanFindings {
   preview_requested: boolean;
   schema_preview?: VerificationSchemaObject[];
   row_counts?: VerificationRowCount[];
+  provenance_label?: string;
   attestation: string;
   disclaimer: string;
 }
+
+export type SellerScanFindings = Omit<PublishedScanFindings, 'publication_state' | 'published_at_utc'> & {
+  publication_state: 'PUBLISHED' | 'NOT_PUBLISHED';
+  published_at_utc: string | null;
+};
 
 export interface WithdrawnScanFindings {
   publication_state: 'WITHDRAWN';
@@ -961,4 +970,57 @@ export interface DataRequestResponse {
   status: string;
   created_at: string;
   updated_at: string | null;
+}
+
+// S1791 seller-session gateway verification contracts.
+export interface GatewayVerificationDescription {
+  domain_class: 'education_learning' | 'software_technology' | 'business_finance' | 'health_life_sciences' | 'public_social' | 'physical_environment';
+  record_granularity: 'entity' | 'event' | 'measurement' | 'document' | 'relationship' | 'aggregate';
+  temporal_scope: 'current_snapshot' | 'historical_period' | 'time_series' | 'mixed_periods' | 'not_time_based';
+  update_cadence: 'one_time' | 'irregular' | 'continuous' | 'daily' | 'weekly' | 'monthly' | 'quarterly' | 'yearly';
+  intended_use_tags: Array<'analysis_reporting' | 'research_education' | 'machine_learning' | 'benchmarking' | 'reference_lookup' | 'operations_planning'>;
+  known_limitation_tags: Array<'incomplete_coverage' | 'missing_values' | 'estimated_fields' | 'historical_cutoff' | 'sampled_source' | 'known_duplicates' | 'source_defined_categories'>;
+}
+export interface GatewayVerificationProbeCommand {
+  confirm: true;
+  preview_requested: boolean;
+  idempotency_key: string;
+}
+export interface GatewayVerificationProbe {
+  probe_id: string;
+  state: 'queued' | 'complete' | 'refused';
+  quote_id?: string | null;
+  refusal?: string | null;
+  maximum_hold_usd?: string | null;
+}
+export interface GatewayVerificationStartCommand {
+  quote_id: string;
+  idempotency_key: string;
+  d6_description: GatewayVerificationDescription;
+  preview_requested: boolean;
+  publication_terms_acknowledged: true;
+  corpus_consent_acknowledged: true;
+}
+export type GatewayVerificationAction = 'cancel' | 'publish' | 'decline' | 'withdraw';
+export interface GatewayVerificationLifecycleCommand {
+  verification_id: string;
+  listing_id: string;
+  source_handle_id: string;
+  requested_action: GatewayVerificationAction;
+  confirm: true;
+}
+export interface GatewayVerificationEpoch {
+  listing_id?: string;
+  source_handle_id?: string;
+  findings?: SellerScanFindings | null;
+  verification_id: string;
+  state: 'CREATED' | 'QUOTED' | 'AUTHORIZING' | 'AUTHORIZED' | 'SCANNING_LOCAL' | 'NARRATING_CLOUD' | 'CAPTURE_PENDING' | 'CAPTURE_RECONCILING' | 'CAPTURED' | 'PUBLISHED' | 'DECLINED' | 'WITHDRAWN' | 'SUPERSEDED' | 'AUTH_FAILED' | 'CANCELLED_VOIDED' | 'FAILED_VOIDED' | 'CAPTURE_FAILED';
+  authorization_usd: string | null;
+  captured_usd: string | null;
+  result_available: boolean;
+  publication_allowed: boolean;
+  reconciliation_required: boolean;
+  narrative: string | null;
+  listing_claim_comparison: string | null;
+  withdrawn_at_utc: string | null;
 }
