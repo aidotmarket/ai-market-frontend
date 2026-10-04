@@ -1,11 +1,11 @@
 import type {
-  PublishedScanFindings,
+  SellerScanFindings,
   ScanFindings,
   VerificationFactColumn,
 } from '@/types';
 
 interface ScanFindingsBadgeProps {
-  scanFindings: ScanFindings | null;
+  scanFindings: ScanFindings | SellerScanFindings | null;
 }
 
 export default function ScanFindingsBadge({ scanFindings }: ScanFindingsBadgeProps) {
@@ -54,17 +54,17 @@ export default function ScanFindingsBadge({ scanFindings }: ScanFindingsBadgePro
   );
 }
 
-function ArtifactProvenance({ artifact }: { artifact: PublishedScanFindings }) {
+function ArtifactProvenance({ artifact }: { artifact: SellerScanFindings }) {
   return (
     <section aria-labelledby="scan-provenance-heading">
       <h3 id="scan-provenance-heading" className="font-semibold text-gray-900">Report provenance</h3>
       <dl className="mt-2 grid gap-x-6 gap-y-2 sm:grid-cols-2">
-        <ReportField label="Publication state">{artifact.publication_state}</ReportField>
+        <ReportField label="Publication state">{artifact.publication_state === 'NOT_PUBLISHED' ? 'Private — not published' : artifact.publication_state}</ReportField>
         <ReportField label="Scan date (UTC)"><time dateTime={artifact.scan_date_utc}>{artifact.scan_date_utc}</time></ReportField>
         <ReportField label="Scan started (UTC)"><time dateTime={artifact.scanned_at_utc}>{artifact.scanned_at_utc}</time></ReportField>
         <ReportField label="Scan completed (UTC)"><time dateTime={artifact.completed_at_utc}>{artifact.completed_at_utc}</time></ReportField>
         <ReportField label="Scan duration (ms)">{artifact.duration_ms}</ReportField>
-        <ReportField label="Published timestamp (UTC)"><time dateTime={artifact.published_at_utc}>{artifact.published_at_utc}</time></ReportField>
+        <ReportField label="Published timestamp (UTC)">{artifact.published_at_utc ? <time dateTime={artifact.published_at_utc}>{artifact.published_at_utc}</time> : 'Not published'}</ReportField>
         <ReportField label="Artifact version">{artifact.artifact_version}</ReportField>
         <ReportField label="Verification series ID">{artifact.verification_series_id}</ReportField>
         <ReportField label="Epoch ID">{artifact.epoch_id}</ReportField>
@@ -92,7 +92,7 @@ function ArtifactProvenance({ artifact }: { artifact: PublishedScanFindings }) {
   );
 }
 
-function Coverage({ artifact }: { artifact: PublishedScanFindings }) {
+function Coverage({ artifact }: { artifact: SellerScanFindings }) {
   return (
     <section aria-labelledby="scan-coverage-heading">
       <h3 id="scan-coverage-heading" className="font-semibold text-gray-900">Coverage</h3>
@@ -121,7 +121,7 @@ function Coverage({ artifact }: { artifact: PublishedScanFindings }) {
   );
 }
 
-function DeterministicFacts({ artifact }: { artifact: PublishedScanFindings }) {
+function DeterministicFacts({ artifact }: { artifact: SellerScanFindings }) {
   return (
     <section aria-labelledby="scan-facts-heading">
       <h3 id="scan-facts-heading" className="font-semibold text-gray-900">{artifact.provenance_label ?? 'Facts computed by AIM Data'}</h3>
@@ -163,7 +163,7 @@ function FactColumn({ column }: { column: VerificationFactColumn }) {
   );
 }
 
-function Interpretation({ artifact }: { artifact: PublishedScanFindings }) {
+function Interpretation({ artifact }: { artifact: SellerScanFindings }) {
   return (
     <section aria-labelledby="scan-interpretation-heading">
       <h3 id="scan-interpretation-heading" className="font-semibold text-gray-900">allAI interpretation</h3>
@@ -177,7 +177,7 @@ function Interpretation({ artifact }: { artifact: PublishedScanFindings }) {
   );
 }
 
-function D8Preview({ artifact }: { artifact: PublishedScanFindings }) {
+function D8Preview({ artifact }: { artifact: SellerScanFindings }) {
   const hasSchemaPreview = artifact.schema_preview !== undefined;
   const hasRowCounts = artifact.row_counts !== undefined;
   if (!hasSchemaPreview && !hasRowCounts) return null;

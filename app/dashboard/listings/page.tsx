@@ -169,7 +169,7 @@ export default function ListingsPage() {
               {listings.map((listing) => (
                 <tr key={listing.id} className="hover:bg-gray-50">
                   <td className="whitespace-nowrap px-6 py-4">
-                    <div className="text-sm font-medium text-gray-900">{listing.title}</div>
+                    <Link href={`/dashboard/listings/${encodeURIComponent(listing.id)}`} className="text-sm font-medium text-indigo-700 hover:underline">{listing.title}</Link>
                   </td>
                   <td className="whitespace-nowrap px-6 py-4">
                     <span className={`inline-flex rounded-full px-2.5 py-0.5 text-xs font-medium ${STATUS_STYLES[listing.status] || 'bg-gray-100 text-gray-800'}`}>

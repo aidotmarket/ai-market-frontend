@@ -235,6 +235,11 @@ export interface PublishedScanFindings {
   disclaimer: string;
 }
 
+export type SellerScanFindings = Omit<PublishedScanFindings, 'publication_state' | 'published_at_utc'> & {
+  publication_state: 'PUBLISHED' | 'NOT_PUBLISHED';
+  published_at_utc: string | null;
+};
+
 export interface WithdrawnScanFindings {
   publication_state: 'WITHDRAWN';
   withdrawn_at_utc: string;
@@ -1005,6 +1010,9 @@ export interface GatewayVerificationLifecycleCommand {
   confirm: true;
 }
 export interface GatewayVerificationEpoch {
+  listing_id?: string;
+  source_handle_id?: string;
+  findings?: SellerScanFindings | null;
   verification_id: string;
   state: 'CREATED' | 'QUOTED' | 'AUTHORIZING' | 'AUTHORIZED' | 'SCANNING_LOCAL' | 'NARRATING_CLOUD' | 'CAPTURE_PENDING' | 'CAPTURE_RECONCILING' | 'CAPTURED' | 'PUBLISHED' | 'DECLINED' | 'WITHDRAWN' | 'SUPERSEDED' | 'AUTH_FAILED' | 'CANCELLED_VOIDED' | 'FAILED_VOIDED' | 'CAPTURE_FAILED';
   authorization_usd: string | null;

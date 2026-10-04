@@ -37,6 +37,7 @@ afterEach(() => { cleanup(); vi.resetAllMocks(); });
 it('renders listings with enabled payouts on the happy path', async () => {
   render(<ListingsPage />);
   expect(await screen.findByText('Seller dataset')).toBeTruthy();
+  expect(screen.getByRole('link', { name: 'Seller dataset' }).getAttribute('href')).toBe('/dashboard/listings/listing-1');
   expect(screen.queryByText(/Finish payout setup/)).toBeNull();
 });
 

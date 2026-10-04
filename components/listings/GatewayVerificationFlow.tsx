@@ -11,14 +11,11 @@ import ScanFindingsBadge from './ScanFindingsBadge';
 import type {
   GatewayVerificationAction, GatewayVerificationDescription, GatewayVerificationEpoch,
   GatewayVerificationProbe, GatewayVerificationProbeCommand, GatewayVerificationStartCommand,
-  PublishedScanFindings,
 } from '@/types';
 
 interface Props {
   listingId: string;
   sellerId: string;
-  sourceHandleId?: string;
-  reviewArtifact?: PublishedScanFindings | null;
   onChanged?: () => void;
 }
 interface Attempt {
@@ -42,7 +39,7 @@ const useChoices: GatewayVerificationDescription['intended_use_tags'] = ['analys
 const limitationChoices: GatewayVerificationDescription['known_limitation_tags'] = ['incomplete_coverage', 'missing_values', 'estimated_fields', 'historical_cutoff', 'sampled_source', 'known_duplicates', 'source_defined_categories'];
 const label = (value: string) => value.replaceAll('_', ' ').replace(/^./, c => c.toUpperCase());
 
-export default function GatewayVerificationFlow({ listingId, sellerId, sourceHandleId, reviewArtifact, onChanged }: Props) {
+export default function GatewayVerificationFlow({ listingId, sellerId, onChanged }: Props) {
   const storageKey = `gateway-verification:${sellerId}:${listingId}`;
   const attempt = useRef<Attempt | null>(null);
   const lock = useRef(false);
@@ -166,20 +163,19 @@ export default function GatewayVerificationFlow({ listingId, sellerId, sourceHan
       const response = await startGatewayVerification(listingId, command);
       if (!mounted.current) return;
       save({ ...attempt.current!, epochId: response.data.verification_id });
-      setEpoch(response.data);
-      nextPollAt.current = Date.now() + response.retryAfter * 1000;
-      setDelay(response.retryAfter);
+      await checkStatus();
     });
   }
   function lifecycle(action: GatewayVerificationAction) {
     void run(async () => {
-      if (!epoch || !sourceHandleId) return;
+      if (!epoch || epoch.listing_id !== listingId || !epoch.source_handle_id) return;
       const response = await gatewayVerificationLifecycle(listingId, {
-        verification_id: epoch.verification_id, listing_id: listingId,
-        source_handle_id: sourceHandleId, requested_action: action, confirm: true,
+        verification_id: epoch.verification_id, listing_id: epoch.listing_id,
+        source_handle_id: epoch.source_handle_id, requested_action: action, confirm: true,
       });
       if (!mounted.current) return;
       setEpoch(response.data);
+      await checkStatus();
       setConfirmAction(null);
       onChanged?.();
     });
@@ -190,11 +186,12 @@ export default function GatewayVerificationFlow({ listingId, sellerId, sourceHan
     setProbe(null); setEpoch(null); setPublicationAck(false); setCorpusAck(false); setConfirmAction(null); setError('');
   }
   const completeDescription = Object.keys(choices).every(key => description[key as keyof typeof choices]);
-  const fullReview = reviewArtifact?.epoch_id === epoch?.verification_id ? reviewArtifact : null;
-  const canReview = epoch?.state === 'CAPTURED' && epoch.publication_allowed && fullReview && sourceHandleId;
+  const fullReview = epoch?.findings?.epoch_id === epoch?.verification_id && epoch?.findings?.listing_id === listingId ? epoch.findings : null;
+  const hasBinding = epoch?.listing_id === listingId && !!epoch.source_handle_id;
+  const canReview = epoch?.state === 'CAPTURED' && epoch.publication_allowed && fullReview && hasBinding;
   const canNewAttempt = (!attempt.current?.startCommand && !!probe && probe.state !== 'queued') || (epoch && (terminalStates.has(epoch.state) || epoch.state === 'PUBLISHED'));
   return <section className="space-y-5 rounded-xl border border-gray-200 bg-white p-6" aria-labelledby="gateway-verification-heading">
-    <h2 id="gateway-verification-heading" className="text-xl font-semibold">Verify this data</h2>
+    <h2 id="gateway-verification-heading" className="text-xl font-semibold">{probe?.state === 'complete' && probe.quote_id ? 'Verify this data' : epoch ? 'Data verification' : 'Check verification availability'}</h2>
     <p>Check your data in your own gateway, then review a quote. The check and quote are free and do not need a card. Data values stay in your gateway.</p>
     {error && <p role="alert">{error}</p>}
     {!probe && !epoch && <>
@@ -220,23 +217,21 @@ export default function GatewayVerificationFlow({ listingId, sellerId, sourceHan
       <label className="block"><input type="checkbox" checked={corpusAck} onChange={e => setCorpusAck(e.target.checked)} /> I agree that the verification record and approved aggregate findings will be retained in ai.market’s verification records, including if I decline publication.</label>
       <button className={buttonClass} disabled={busy || !publicationAck || !corpusAck || !completeDescription} onClick={paidStart}>Start paid verification</button>
     </>}
-    {setup && <><DataVerificationPaymentMethod /><button className={buttonClass} onClick={() => setSetup(false)}>Back to verification</button><p>After adding your card, return here and choose Start paid verification to continue.</p></>}
+    {setup && <><DataVerificationPaymentMethod returnToListing={{ listingId, sellerId }} /><button className={buttonClass} onClick={() => setSetup(false)}>Back to verification</button><p>After adding your card, return here and choose Start paid verification to continue.</p></>}
     {epoch && <>
       {runningStates.has(epoch.state) && <p role="status">{epoch.reconciliation_required ? 'We are confirming your payment. Please wait before starting again.' : 'Verification is in progress. You can return to this page to check it.'}</p>}
       {epoch.state === 'CAPTURED' && <>
-        <h3 className="font-semibold">Review your findings</h3><p>Charged: ${epoch.captured_usd}</p>
-        {epoch.narrative && <p className="whitespace-pre-wrap">{epoch.narrative}</p>}
-        {epoch.listing_claim_comparison && <p className="whitespace-pre-wrap">{epoch.listing_claim_comparison}</p>}
+        <h3 className="font-semibold">Review your findings</h3><p>These findings are private. Buyers can see them only if you publish them.</p><p>Charged: ${epoch.captured_usd}</p>
         {fullReview ? <ScanFindingsBadge scanFindings={fullReview} /> : <p>The complete findings are not available to review yet. Please check again before deciding whether to publish.</p>}
         <div className="flex gap-3"><button className={buttonClass} disabled={busy || !canReview} onClick={() => setConfirmAction('publish')}>Publish all findings</button><button className={buttonClass} disabled={busy || !canReview} onClick={() => setConfirmAction('decline')}>Decline publication</button></div>
       </>}
-      {epoch.state === 'PUBLISHED' && <><p>These findings are published. Publishing a new verification will replace the previous findings.</p><button className={buttonClass} disabled={busy || !sourceHandleId} onClick={() => setConfirmAction('withdraw')}>Withdraw findings</button></>}
+      {epoch.state === 'PUBLISHED' && <><p>These findings are published. Publishing a new verification will replace the previous findings.</p><button className={buttonClass} disabled={busy || !hasBinding} onClick={() => setConfirmAction('withdraw')}>Withdraw findings</button></>}
       {epoch.state === 'SUPERSEDED' && <p>These findings were replaced by a newer published verification.</p>}
       {epoch.state === 'WITHDRAWN' && <p>These findings have been withdrawn.</p>}
       {epoch.state === 'DECLINED' && <p>You declined publication. The completed verification charge is unchanged.</p>}
       {['FAILED_VOIDED', 'CANCELLED_VOIDED'].includes(epoch.state) && <p>Verification ended and the temporary hold was released. No completed verification charge was made.</p>}
       {['AUTH_FAILED', 'CAPTURE_FAILED'].includes(epoch.state) && <p>The payment could not be completed. Please check your payment status before starting again.</p>}
-      {['AUTHORIZED', 'SCANNING_LOCAL'].includes(epoch.state) && <button className={buttonClass} disabled={busy || !sourceHandleId} onClick={() => setConfirmAction('cancel')}>Cancel verification</button>}
+      {['AUTHORIZED', 'SCANNING_LOCAL'].includes(epoch.state) && <button className={buttonClass} disabled={busy || !hasBinding} onClick={() => setConfirmAction('cancel')}>Cancel verification</button>}
     </>}
     {confirmAction && <div role="group" aria-label="Confirm your decision"><p>{confirmAction === 'publish' ? 'Publish the complete findings unedited? This replaces any previous published findings.' : confirmAction === 'decline' ? 'Decline publication? The completed verification charge is unchanged.' : confirmAction === 'withdraw' ? 'Withdraw these findings from the public listing?' : 'Cancel verification and release any unsettled hold?'}</p><button className={buttonClass} disabled={busy} onClick={() => lifecycle(confirmAction)}>Confirm {confirmAction === 'publish' ? 'publication' : confirmAction === 'decline' ? 'decline' : confirmAction === 'withdraw' ? 'withdrawal' : 'cancellation'}</button><button className={buttonClass} disabled={busy} onClick={() => setConfirmAction(null)}>Keep reviewing</button></div>}
     {attempt.current && <button className={buttonClass} disabled={busy} onClick={() => void run(checkStatus)}>Check again</button>}

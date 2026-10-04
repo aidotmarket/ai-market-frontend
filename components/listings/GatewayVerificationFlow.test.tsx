@@ -12,7 +12,7 @@ vi.mock('@/components/DataVerificationPaymentMethod', () => ({ default: () => <p
 const key = 'gateway-verification:seller:listing';
 const queued = { data: { probe_id: 'probe', state: 'queued' as const }, retryAfter: 0.001 };
 const quote = { data: { probe_id: 'probe', state: 'complete' as const, quote_id: 'quote', refusal: null, maximum_hold_usd: '25.00' }, retryAfter: 2 };
-const epoch: GatewayVerificationEpoch = { verification_id: 'epoch', state: 'SCANNING_LOCAL', authorization_usd: '25.00', captured_usd: null, result_available: false, publication_allowed: false, reconciliation_required: false, narrative: null, listing_claim_comparison: null, withdrawn_at_utc: null };
+const epoch: GatewayVerificationEpoch = { listing_id: 'listing', source_handle_id: 'source', verification_id: 'epoch', state: 'SCANNING_LOCAL', authorization_usd: '25.00', captured_usd: null, result_available: false, publication_allowed: false, reconciliation_required: false, narrative: null, listing_claim_comparison: null, withdrawn_at_utc: null };
 const artifact: PublishedScanFindings = {
   publication_state: 'PUBLISHED', artifact_version: 'data-verification-public-artifact-v1',
   verification_series_id: 'series', epoch_id: 'epoch', listing_id: 'listing',
@@ -113,17 +113,19 @@ describe('gateway seller verification flow', () => {
     window.localStorage.setItem(key, JSON.stringify({ probeCommand: { confirm: true, preview_requested: false, idempotency_key: 'key' }, epochId: 'epoch' }));
     vi.mocked(gateway.getGatewayVerificationEpoch).mockResolvedValue({ data: { ...epoch, state: 'CAPTURED', captured_usd: '2.00', result_available: true, publication_allowed: true, narrative: 'Complete summary' }, retryAfter: 2 });
     render(<GatewayVerificationFlow listingId="listing" sellerId="seller" />);
-    await screen.findByText('Complete summary');
+    await screen.findByText('Review your findings');
     const publish = screen.getByRole('button', { name: 'Publish all findings' }) as HTMLButtonElement;
     const decline = screen.getByRole('button', { name: 'Decline publication' }) as HTMLButtonElement;
     expect(publish.className).toBe(decline.className); expect(publish.disabled).toBe(true); expect(decline.disabled).toBe(true);
   });
   it.each(['publish', 'decline'] as const)('requires a fresh confirmation and sends the complete %s binding after full review', async action => {
     window.localStorage.setItem(key, JSON.stringify({ probeCommand: { confirm: true, preview_requested: false, idempotency_key: 'key' }, epochId: 'epoch' }));
-    vi.mocked(gateway.getGatewayVerificationEpoch).mockResolvedValue({ data: { ...epoch, state: 'CAPTURED', captured_usd: '2.00', result_available: true, publication_allowed: true }, retryAfter: 2 });
+    vi.mocked(gateway.getGatewayVerificationEpoch).mockResolvedValue({ data: { ...epoch, state: 'CAPTURED', captured_usd: '2.00', result_available: true, publication_allowed: true, findings: { ...artifact, publication_state: 'NOT_PUBLISHED', published_at_utc: null } }, retryAfter: 2 });
     vi.mocked(gateway.gatewayVerificationLifecycle).mockResolvedValue({ data: { ...epoch, state: action === 'publish' ? 'PUBLISHED' : 'DECLINED' }, retryAfter: 2 });
-    render(<GatewayVerificationFlow listingId="listing" sellerId="seller" sourceHandleId="source" reviewArtifact={artifact} />);
+    render(<GatewayVerificationFlow listingId="listing" sellerId="seller" />);
     await screen.findByText('Written findings');
+    expect(screen.getByText('These findings are private. Buyers can see them only if you publish them.')).toBeTruthy();
+    expect(screen.getByText('Private — not published')).toBeTruthy();
     expect(screen.getByText('Listing comparison')).toBeTruthy();
     fireEvent.click(screen.getByRole('button', { name: action === 'publish' ? 'Publish all findings' : 'Decline publication' }));
     expect(gateway.gatewayVerificationLifecycle).not.toHaveBeenCalled();
@@ -134,10 +136,11 @@ describe('gateway seller verification flow', () => {
     window.localStorage.setItem(key, JSON.stringify({ probeCommand: { confirm: true, preview_requested: false, idempotency_key: 'key' }, epochId: 'epoch' }));
     vi.mocked(gateway.getGatewayVerificationEpoch).mockResolvedValue({ data: { ...epoch, state: 'PUBLISHED' }, retryAfter: 2 });
     vi.mocked(gateway.gatewayVerificationLifecycle).mockResolvedValue({ data: { ...epoch, state: 'WITHDRAWN' }, retryAfter: 2 });
-    render(<GatewayVerificationFlow listingId="listing" sellerId="seller" sourceHandleId="source" />);
+    render(<GatewayVerificationFlow listingId="listing" sellerId="seller" />);
     const withdraw = await screen.findByRole('button', { name: 'Withdraw findings' });
     expect(screen.getByRole('button', { name: 'Get a new quote' })).toBeTruthy();
     fireEvent.click(withdraw); expect(gateway.gatewayVerificationLifecycle).not.toHaveBeenCalled();
+    vi.mocked(gateway.getGatewayVerificationEpoch).mockResolvedValue({ data: { ...epoch, state: 'WITHDRAWN' }, retryAfter: 2 });
     fireEvent.click(screen.getByRole('button', { name: 'Confirm withdrawal' }));
     await screen.findByText('These findings have been withdrawn.');
   });
