@@ -55,7 +55,34 @@ it('rejects an unsafe continue URL', async () => {
   vi.mocked(decideConnectorRequest).mockRejectedValue(new Error('invalid_redirect'));
   render(<ConnectorConsentPage />);
   fireEvent.click(await screen.findByRole('button', { name: 'Approve' }));
-  expect(await screen.findByRole('alert')).toBeTruthy();
+  expect((await screen.findByRole('alert')).textContent).toBe('Unable to complete this connection request.');
+  expect(screen.getByRole('button', { name: 'Retry' })).toBeTruthy();
+  expect(assign).not.toHaveBeenCalled();
+});
+
+it('shows the fixed early-access message when the GET request is refused', async () => {
+  vi.mocked(getConnectorRequest).mockRejectedValue({ response: { status: 403, data: { code: 'EARLY_ACCESS_ONLY', message: 'Untrusted server message' } } });
+  render(<ConnectorConsentPage />);
+  const alert = await screen.findByRole('alert');
+  expect(alert.textContent).toBe('Connector access is limited during early access. See ai.market/docs/claude.');
+  expect(screen.getByRole('link', { name: 'ai.market/docs/claude' }).getAttribute('href')).toBe('/docs/claude');
+  expect(screen.queryByRole('button', { name: 'Retry' })).toBeNull();
+  expect(screen.queryByRole('button', { name: 'Approve' })).toBeNull();
+  expect(screen.queryByRole('button', { name: 'Deny' })).toBeNull();
+  expect(screen.queryByRole('button', { name: 'Sign in again' })).toBeNull();
+});
+
+it('shows the fixed early-access message when the decision POST is refused', async () => {
+  vi.mocked(decideConnectorRequest).mockRejectedValue({ response: { status: 403, data: { code: 'EARLY_ACCESS_ONLY', message: 'Untrusted server message' } } });
+  render(<ConnectorConsentPage />);
+  fireEvent.click(await screen.findByRole('button', { name: 'Approve' }));
+  const alert = await screen.findByRole('alert');
+  expect(alert.textContent).toBe('Connector access is limited during early access. See ai.market/docs/claude.');
+  expect(screen.getByRole('link', { name: 'ai.market/docs/claude' }).getAttribute('href')).toBe('/docs/claude');
+  expect(screen.queryByRole('button', { name: 'Retry' })).toBeNull();
+  expect(screen.queryByRole('button', { name: 'Approve' })).toBeNull();
+  expect(screen.queryByRole('button', { name: 'Deny' })).toBeNull();
+  expect(screen.queryByRole('button', { name: 'Sign in again' })).toBeNull();
   expect(assign).not.toHaveBeenCalled();
 });
 
