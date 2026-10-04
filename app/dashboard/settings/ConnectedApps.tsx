@@ -45,11 +45,16 @@ export default function ConnectedApps() {
       <ul>{grant.scopes.map((scope) => <li key={scope.scope}>{scope.description}</li>)}</ul>
       <p>Connected {new Date(grant.created_at).toLocaleDateString()}</p>
       <p>Last used {grant.last_used_at ? new Date(grant.last_used_at).toLocaleDateString() : 'Never'}</p>
-      {confirmId === grant.id ? <div>
+      {confirmId === grant.id ? <div className="mt-3 space-y-3">
         <p>Revoke access for {grant.client.name}?</p>
-        <button disabled={busyId === grant.id} onClick={() => revoke(grant.id)}>Confirm revoke</button>
-        <button disabled={busyId === grant.id} onClick={() => setConfirmId(null)}>Cancel</button>
-      </div> : <button onClick={() => setConfirmId(grant.id)}>Revoke</button>}
+        <div className="flex flex-wrap gap-3">
+          <button type="button" disabled={busyId === grant.id} onClick={() => revoke(grant.id)}
+            className="min-h-11 cursor-pointer rounded-lg bg-red-700 px-4 py-2 text-sm font-medium text-white transition-colors enabled:hover:bg-red-800 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-red-700 disabled:cursor-not-allowed disabled:opacity-50">Confirm revoke</button>
+          <button type="button" disabled={busyId === grant.id} onClick={() => setConfirmId(null)}
+            className="min-h-11 cursor-pointer rounded-lg border border-gray-300 bg-white px-4 py-2 text-sm font-medium text-gray-700 transition-colors enabled:hover:bg-gray-50 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#3F51B5] disabled:cursor-not-allowed disabled:opacity-50">Cancel</button>
+        </div>
+      </div> : <button type="button" onClick={() => setConfirmId(grant.id)}
+        className="mt-3 min-h-11 cursor-pointer rounded-lg border border-red-300 bg-white px-4 py-2 text-sm font-medium text-red-700 transition-colors hover:bg-red-50 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-red-700">Revoke</button>}
     </div>)}
   </section>;
 }
