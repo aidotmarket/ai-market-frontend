@@ -8,6 +8,7 @@ import { clearConnectorContinuation, connectorRequestPath, readConnectorContinua
 import { decideConnectorRequest, getConnectorRequest, getConnectorStatus, type ConnectorRequest } from '@/api/connector-oauth';
 
 const expiredMessage = 'This connection request expired. Go back to the app and connect again.';
+const earlyAccessMessage = <>Connector access is limited during early access. See <a href="/docs/claude">ai.market/docs/claude</a>.</>;
 
 function errorKind(error: unknown): string {
   const response = (error as { response?: { status?: number; data?: { code?: string } } })?.response;
@@ -96,6 +97,7 @@ export default function ConnectorConsentPage() {
   return <main className="mx-auto max-w-lg space-y-6 px-6 py-16">
     {enabled === false ? <h1>Page not found</h1> : error ? <>
       <p role="alert">{error === 'expired' ? expiredMessage
+        : error === 'EARLY_ACCESS_ONLY' ? earlyAccessMessage
         : error === 'email_unverified' ? 'Verify your email before connecting this app.'
         : error === 'insufficient_assurance' ? 'Sign in again and complete two-factor authentication to continue.'
         : error === 'sso_required' ? 'Sign in with your organization’s SSO to continue.'
