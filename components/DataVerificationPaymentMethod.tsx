@@ -12,6 +12,8 @@ import {
   navigateToDataVerificationPayInSetup,
   reconcileDataVerificationPayInSetupSession,
 } from '@/api/dataVerificationPayin';
+import { getVerificationReturn, saveVerificationReturn } from '@/lib/dataVerificationReturn';
+import { useAuthStore } from '@/store/auth';
 import ReauthModal from '@/app/dashboard/settings/ReauthModal';
 import type {
   DataVerificationPayInReadinessState,
@@ -61,6 +63,7 @@ interface ReturnValues {
 }
 
 interface DataVerificationPaymentMethodProps {
+  returnToListing?: { sellerId: string; listingId: string };
   mode?: 'setup' | 'return';
   initialSetupAttemptId?: string | null;
   initialCheckoutSessionId?: string | null;
@@ -79,11 +82,15 @@ function fixedCopy(state: DisplayState, mode: 'setup' | 'return'): string | null
 }
 
 export default function DataVerificationPaymentMethod({
+  returnToListing,
   mode = 'setup',
   initialSetupAttemptId = null,
   initialCheckoutSessionId = null,
 }: DataVerificationPaymentMethodProps) {
   const router = useRouter();
+  const sellerId = useAuthStore(state => state.user?.id);
+  const [listingReturn, setListingReturn] = useState<string | null>(null);
+  useEffect(() => { setListingReturn(getVerificationReturn(sellerId)); }, [sellerId]);
   const [displayState, setDisplayState] = useState<DisplayState>('checking');
   const [queryRemoved, setQueryRemoved] = useState(false);
   const [isReauthOpen, setIsReauthOpen] = useState(false);
@@ -229,6 +236,7 @@ export default function DataVerificationPaymentMethod({
     setIsWorking(true);
     try {
       const setupSession = await createDataVerificationPayInSetupSession(reauthToken);
+      saveVerificationReturn(returnToListing);
       navigateToDataVerificationPayInSetup(setupSession.checkout_url);
     } catch (error: unknown) {
       setIsReauthOpen(false);
@@ -269,7 +277,7 @@ export default function DataVerificationPaymentMethod({
     }
   };
 
-  const copy = fixedCopy(displayState, mode);
+  const copy = fixedCopy(displayState, mode)?.replaceAll('Back to settings', listingReturn ? 'Back to verification' : 'Back to settings');
   const canStart = mode === 'setup' && displayState === 'setup_required';
   const canReplace = mode === 'setup' && displayState === 'ready';
   const canRecheck =
@@ -281,10 +289,10 @@ export default function DataVerificationPaymentMethod({
   const backToSettings = (
     <Link
       ref={backToSettingsRef}
-      href="/dashboard/settings"
+      href={listingReturn ?? '/dashboard/settings'}
       className="mt-6 inline-flex text-sm font-medium text-[#3F51B5] hover:underline"
     >
-      Back to settings
+      {listingReturn ? 'Back to verification' : 'Back to settings'}
     </Link>
   );
 

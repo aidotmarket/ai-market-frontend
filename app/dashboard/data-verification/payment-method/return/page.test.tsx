@@ -4,6 +4,7 @@ import { StrictMode } from 'react';
 import { act, cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import DataVerificationPaymentMethodReturnPage from './page';
+import { saveVerificationReturn } from '@/lib/dataVerificationReturn';
 
 const attemptId = '123e4567-e89b-12d3-a456-426614174000';
 const checkoutSessionId = 'cs_test_return_value';
@@ -36,6 +37,8 @@ vi.mock('next/navigation', () => ({
 }));
 vi.mock('@/api/dataVerificationPayin', () => payinApi);
 vi.mock('@/api/auth', () => auth);
+const seller = vi.hoisted(() => ({ id: 'seller' }));
+vi.mock('@/store/auth', () => ({ useAuthStore: (select: (state: { user: { id: string } }) => unknown) => select({ user: seller }) }));
 
 function deferred<T>() {
   let resolve!: (value: T | PromiseLike<T>) => void;
@@ -102,6 +105,8 @@ function expectOnlyGenericSettingsNavigation() {
 
 describe('data-verification payment-method return page', () => {
   beforeEach(() => {
+    window.sessionStorage.clear();
+    seller.id = 'seller';
     setReturnUrl();
     payinApi.getDataVerificationPayInReadiness.mockResolvedValue({
       version: 'data_verification_payin_readiness_v1',
@@ -123,6 +128,20 @@ describe('data-verification payment-method return page', () => {
     vi.clearAllMocks();
   });
 
+  it('returns to the same seller listing after hosted setup without another authorization', async () => {
+    saveVerificationReturn({ sellerId: 'seller', listingId: 'listing' });
+    render(await returnPage());
+    await completeReturnReauth();
+    await screen.findByText('Your payment method is ready for verification charges. Your Stripe payouts were not changed.');
+    expect(screen.getByRole('link', { name: 'Back to verification' }).getAttribute('href')).toBe('/dashboard/listings/listing');
+    expect(payinApi.createDataVerificationPayInSetupSession).not.toHaveBeenCalled();
+  });
+  it('ignores a different seller’s saved listing destination', async () => {
+    saveVerificationReturn({ sellerId: 'different-seller', listingId: 'listing' });
+    render(await returnPage());
+    expect(await screen.findByRole('link', { name: 'Back to settings' })).toBeTruthy();
+    expect(screen.queryByRole('link', { name: 'Back to verification' })).toBeNull();
+  });
   it('maps the return URL query to the initial payment-method props intact', async () => {
     const attempt = '9bd1c6b2-1472-4a6c-9d6c-e61d14023163';
     const sessionId = 'cs_test_a1AbCdEf';

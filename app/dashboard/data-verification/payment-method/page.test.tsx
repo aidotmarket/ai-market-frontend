@@ -5,6 +5,8 @@ import { resolve } from 'node:path';
 import { act, cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import DataVerificationPaymentMethodPage from './page';
+import DataVerificationPaymentMethod from '@/components/DataVerificationPaymentMethod';
+import { getVerificationReturn, saveVerificationReturn } from '@/lib/dataVerificationReturn';
 
 const payinApi = vi.hoisted(() => ({
   createDataVerificationPayInSetupSession: vi.fn(),
@@ -93,6 +95,7 @@ const readiness = (state: 'setup_required' | 'setup_pending' | 'ready' | 'blocke
 
 describe('data-verification payment-method page', () => {
   beforeEach(() => {
+    window.sessionStorage.clear();
     window.history.replaceState({}, '', '/dashboard/data-verification/payment-method');
     payinApi.getDataVerificationPayInReadiness.mockResolvedValue(readiness('setup_required'));
     auth.submitReauth.mockResolvedValue({ token: 'fresh-setup-token' });
@@ -103,6 +106,23 @@ describe('data-verification payment-method page', () => {
     vi.clearAllMocks();
   });
 
+  it('remembers only the listing destination before handing off to hosted setup', async () => {
+    payinApi.createDataVerificationPayInSetupSession.mockResolvedValue({ checkout_url: 'https://checkout.stripe.com/setup', setup_attempt_id: '123e4567-e89b-12d3-a456-426614174000' });
+    render(<DataVerificationPaymentMethod returnToListing={{ sellerId: 'seller', listingId: 'listing' }} />);
+    fireEvent.click(await screen.findByRole('button', { name: 'Add payment method' }));
+    await completeSetupReauth();
+    expect(getVerificationReturn('seller')).toBe('/dashboard/listings/listing');
+    expect(window.sessionStorage.getItem('data-verification:listing-return')).toBe(JSON.stringify({ sellerId: 'seller', listingId: 'listing' }));
+    expect(payinApi.navigateToDataVerificationPayInSetup).toHaveBeenCalledWith('https://checkout.stripe.com/setup');
+  });
+  it('clears a previous listing destination when setup starts from the dedicated page', async () => {
+    saveVerificationReturn({ sellerId: 'seller', listingId: 'listing' });
+    payinApi.createDataVerificationPayInSetupSession.mockResolvedValue({ checkout_url: 'https://checkout.stripe.com/setup' });
+    render(<DataVerificationPaymentMethodPage />);
+    fireEvent.click(await screen.findByRole('button', { name: 'Add payment method' }));
+    await completeSetupReauth();
+    expect(getVerificationReturn('seller')).toBeNull();
+  });
   it('renders fixed setup copy, reauthenticates, and uses direct top-level navigation', async () => {
     const hostedCheckoutUrl =
       'https://checkout.stripe.com/c/pay/cs_test_exact_navigation_sentinel';

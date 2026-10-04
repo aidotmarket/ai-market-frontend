@@ -81,7 +81,7 @@ export default function GatewayVerificationFlow({ listingId, sellerId, onChanged
         if (!parsed.probeCommand || typeof parsed.probeCommand.idempotency_key !== 'string') throw new Error('Invalid saved attempt');
         attempt.current = parsed;
         setPreview(parsed.probeCommand.preview_requested);
-        setProbe(parsed.probe ?? null);
+        setProbe(parsed.probeId ? { probe_id: parsed.probeId, state: 'queued' } : null);
         if (parsed.startCommand) setDescription(parsed.startCommand.d6_description);
       }
       setReady(true);
