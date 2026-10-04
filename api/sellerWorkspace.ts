@@ -102,6 +102,7 @@ export interface ConnectionVerifyRequest {
 
 export type SellerWorkspaceErrorCode =
   | 'authentication_required'
+  | 'two_factor_required'
   | 'active_seller_required'
   | 'unavailable'
   | 'authorization_expired'
@@ -127,6 +128,7 @@ function safeError(error: unknown): SellerWorkspaceApiError {
   const status = error.response?.status;
   const detail = error.response?.data?.detail;
   if (status === 401) return new SellerWorkspaceApiError('authentication_required');
+  if (status === 403 && detail === 'Complete 2FA setup before connecting cloud storage') return new SellerWorkspaceApiError('two_factor_required');
   if (status === 403) return new SellerWorkspaceApiError('active_seller_required');
   if (status === 404) return new SellerWorkspaceApiError('not_found');
   if (status === 429) return new SellerWorkspaceApiError('rate_limited');

@@ -4,6 +4,8 @@ import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 import { act, cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import {useAuthStore} from '@/store/auth';
+import type {User} from '@/types';
 import DataVerificationPaymentMethodPage from './page';
 import DataVerificationPaymentMethod from '@/components/DataVerificationPaymentMethod';
 import { getVerificationReturn, saveVerificationReturn } from '@/lib/dataVerificationReturn';
@@ -99,6 +101,20 @@ describe('data-verification payment-method page', () => {
     window.history.replaceState({}, '', '/dashboard/data-verification/payment-method');
     payinApi.getDataVerificationPayInReadiness.mockResolvedValue(readiness('setup_required'));
     auth.submitReauth.mockResolvedValue({ token: 'fresh-setup-token' });
+  });
+
+  it('uses current-session magic-link reauth for provider sign-in without changing payment readiness',async()=>{
+    const previous=useAuthStore.getState().user;
+    useAuthStore.setState({user:{id:'seller',totp_enabled:false,auth_methods:['google','password'],reauth_method:'magic_link'} as User});
+    try {
+      auth.submitReauth.mockResolvedValue({method:'magic_link',token:null});
+      render(<DataVerificationPaymentMethodPage/>);
+      fireEvent.click(await screen.findByRole('button',{name:'Add payment method'}));
+      expect(screen.queryByLabelText('Password')).toBeNull();expect(screen.queryByLabelText('Verification code')).toBeNull();
+      expect(auth.submitReauth).not.toHaveBeenCalled();expect(payinApi.createDataVerificationPayInSetupSession).not.toHaveBeenCalled();
+      fireEvent.click(screen.getByRole('button',{name:'Send link'}));await screen.findByLabelText('Email link');
+      expect(auth.submitReauth).toHaveBeenCalledWith('', 'magic_link');expect(payinApi.createDataVerificationPayInSetupSession).not.toHaveBeenCalled();
+    } finally { useAuthStore.setState({user:previous}); }
   });
 
   afterEach(() => {

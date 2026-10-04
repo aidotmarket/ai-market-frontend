@@ -1,0 +1,13 @@
+[2m[WebServer] [22m(node:78687) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+[2m[WebServer] [22m(Use `node --trace-warnings ...` to show where the warning was created)
+
+Running 2 tests using 1 worker
+
+(node:78706) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:78706) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+  ✓  1 tests/preview-browser/guided.pw.ts:10:31 › 1280px synthetic seller publishes using checklist and Next (2.9s)
+  ✓  2 tests/preview-browser/guided.pw.ts:10:31 › 390px synthetic seller publishes using checklist and Next (3.0s)
+
+  2 passed (6.9s)

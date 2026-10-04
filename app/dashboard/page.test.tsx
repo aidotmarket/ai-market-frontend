@@ -135,6 +135,27 @@ describe('DashboardOverview seller setup 2FA state', () => {
     });
   });
 
+  it.each(['google','github'] as const)('unlocks Stripe from server current-policy missing steps for %s, without native MFA',async provider=>{
+    useAuthStore.setState({user:{...baseUser,two_factor_setup_eligible:false,two_factor_setup_reason:'two_factor_managed_by_provider',
+      two_factor_provider:provider,seller_two_factor_satisfied:true,reauth_method:'magic_link'}});
+    capabilitiesApi.getCapabilities.mockResolvedValue({seller:{effective_status:'provisioning',missing_steps:['stripe_payouts_live']},next_action:{capability:'seller',step:'stripe_payouts_live'}});
+    connectApi.getConnectStatus.mockResolvedValue({data:{details_submitted:false}});sellerApi.getSellerStats.mockResolvedValue({data:sellerStats});listingsApi.getMyListings.mockResolvedValue({data:[]});
+    connectApi.getConnectOnboarding.mockResolvedValue({data:{url:'https://connect.stripe.com/synthetic'}});
+    render(<DashboardOverview/>);
+    const connect=await screen.findByRole('button',{name:'Connect Stripe'});expect((connect as HTMLButtonElement).disabled).toBe(false);
+    expect(screen.queryByRole('button',{name:'Enable 2FA'})).toBeNull();
+    expect(screen.getByText(`Sign-in security is managed by your ${provider==='google'?'Google':'GitHub'} account.`)).toBeTruthy();
+    fireEvent.click(connect);await waitFor(()=>expect(connectApi.getConnectOnboarding).toHaveBeenCalledOnce());
+    expect(useAuthStore.getState().user?.totp_enabled).toBe(false);expect(authApi.setup2FA).not.toHaveBeenCalled();
+  });
+
+  it('keeps server missing-step refusal when /me assurance is stale',async()=>{
+    useAuthStore.setState({user:{...baseUser,seller_two_factor_satisfied:true}});
+    connectApi.getConnectStatus.mockResolvedValue({data:{details_submitted:false}});sellerApi.getSellerStats.mockResolvedValue({data:sellerStats});listingsApi.getMyListings.mockResolvedValue({data:[]});
+    render(<DashboardOverview/>);const connect=await screen.findByRole('button',{name:'Connect Stripe'});
+    expect((connect as HTMLButtonElement).disabled).toBe(true);fireEvent.click(connect);expect(connectApi.getConnectOnboarding).not.toHaveBeenCalled();
+  });
+
   afterEach(() => {
     cleanup();
     vi.clearAllMocks();

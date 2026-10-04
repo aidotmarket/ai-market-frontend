@@ -1,0 +1,379 @@
+
+ RUN  v4.1.8 /private/var/tmp/koskadeux/minimal-bridge-worktrees/11d0752113cf-37f2af
+
+ ❯ app/dashboard/gateways/[id]/page.test.tsx (53 tests | 1 failed) 924ms
+   × confirms exact description text, polls to described, and renders columns 18ms
+Not implemented: navigation to another Document
+Not implemented: navigation to another Document
+
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 1 ⎯⎯⎯⎯⎯⎯⎯
+
+ FAIL  app/dashboard/gateways/[id]/page.test.tsx > confirms exact description text, polls to described, and renders columns
+TestingLibraryElementError: Unable to find an element with the text: safe. This could be because the text is broken up by multiple elements. In this case, you can provide a function for your text matcher to make your matcher more flexible.
+
+Ignored nodes: comments, script, style
+[36m<body>[39m
+  [36m<div>[39m
+    [36m<div[39m
+      [33mclass[39m=[32m"space-y-8"[39m
+    [36m>[39m
+      [36m<a[39m
+        [33mhref[39m=[32m"/dashboard/gateways"[39m
+      [36m>[39m
+        [0mBack to gateways[0m
+      [36m</a>[39m
+      [36m<header>[39m
+        [36m<h1[39m
+          [33mclass[39m=[32m"text-2xl font-semibold"[39m
+        [36m>[39m
+          [0mTest gateway[0m
+        [36m</h1>[39m
+        [36m<p>[39m
+          [0mStatus: [0m
+          [0monline[0m
+        [36m</p>[39m
+        [36m<p>[39m
+          [0mVersion: [0m
+          [0m1.0.0[0m
+          [0m / minimum [0m
+          [0m1.0.0[0m
+        [36m</p>[39m
+        [36m<p>[39m
+          [0mLast seen: [0m
+          [0m1/1/2026, 1:00:00 AM[0m
+        [36m</p>[39m
+        [36m<p>[39m
+          [0mListings: [0m
+          [0m1[0m
+          [0m · Open orders: [0m
+          [0m0[0m
+          [0m · Can publish: [0m
+          [0mNo[0m
+        [36m</p>[39m
+      [36m</header>[39m
+      [36m<section>[39m
+        [36m<h2[39m
+          [33mclass[39m=[32m"text-xl font-semibold"[39m
+        [36m>[39m
+          [0mWhat needs attention[0m
+        [36m</h2>[39m
+        [36m<p>[39m
+          [0mNo blockers.[0m
+        [36m</p>[39m
+      [36m</section>[39m
+      [36m<section[39m
+        [33mclass[39m=[32m"space-y-3"[39m
+      [36m>[39m
+        [36m<h2[39m
+          [33mclass[39m=[32m"text-xl font-semibold"[39m
+        [36m>[39m
+          [0mSettings[0m
+        [36m</h2>[39m
+        [36m<label[39m
+          [33mclass[39m=[32m"block"[39m
+        [36m>[39m
+          [0mGateway name [0m
+          [36m<input[39m
+            [33mclass[39m=[32m"block w-full rounded border p-2"[39m
+            [33mmaxlength[39m=[32m"80"[39m
+            [33mvalue[39m=[32m"Test gateway"[39m
+          [36m/>[39m
+        [36m</label>[39m
+        [36m<button[39m
+          [33mclass[39m=[32m"rounded border px-3 py-2"[39m
+          [33mtype[39m=[32m"button"[39m
+        [36m>[39m
+          [0mSave name[0m
+        [36m</button>[39m
+        [36m<label[39m
+          [33mclass[39m=[32m"block"[39m
+        [36m>[39m
+          [0mDoor URL [0m
+          [36m<input[39m
+            [33mclass[39m=[32m"block w-full rounded border p-2"[39m
+            [33mplaceholder[39m=[32m"https://door.example.com"[39m
+            [33mtype[39m=[32m"url"[39m
+            [33mvalue[39m=[32m"https://door.example"[39m
+          [36m/>[39m
+        [36m</label>[39m
+        [36m<p>[39m
+          [0mChanging the door URL resets its door check. Run a new check before publishing.[0m
+        [36m</p>[39m
+        [36m<button[39m
+          [33mclass[39m=[32m"rounded border px-3 py-2"[39m
+          [33mtype[39m=[32m"button"[39m
+        [36m>[39m
+          [0mSave door URL[0m
+        [36m</button>[39m
+      [36m</section>[39m
+      [36m<section[39m
+        [33mclass[39m=[32m"space-y-2"[39m
+      [36m>[39m
+        [36m<h2[39m
+          [33mclass[39m=[32m"text-xl font-semibold"[39m
+        [36m>[39m
+          [0mDoor check[0m
+        [36m</h2>[39m
+        [36m<p>[39m
+          [0mState: [0m
+          [0mnever[0m
+          [0m · Checked: [0m
+          [0mNever[0m
+        [36m</p>[39m
+        [36m<button[39m
+          [33mclass[39m=[32m"rounded border px-3 py-2"[39m
+          [33mtype[39m=[32m"button"[39m
+        [36m>[39m
+          [0mRun door check[0m
+        [36m</button>[39m
+      [36m</section>[39m
+      [36m<section[39m
+        [33mclass[39m=[32m"space-y-2"[39m
+      [36m>[39m
+        [36m<h2[39m
+          [33mclass[39m=[32m"text-xl font-semibold"[39m
+        [36m>[39m
+          [0mIdentity notice[0m
+        [36m</h2>[39m
+        [36m<p>[39m
+          [0mAfter purchase, the buyer learns your door hostname and its certificate. Your door sees the buyer’s network address. Use a neutral hostname and a domain-validated certificate that names nothing else.[0m
+        [36m</p>[39m
+        [36m<label[39m
+          [33mclass[39m=[32m"block"[39m
+        [36m>[39m
+          [36m<input[39m
+            [33mtype[39m=[32m"checkbox"[39m
+          [36m/>[39m
+          [0m I have read the identity notice.[0m
+        [36m</label>[39m
+        [36m<button[39m
+          [33mclass[39m=[32m"rounded border px-3 py-2 disabled:opacity-50"[39m
+          [33mdisabled[39m=[32m""[39m
+          [33mtype[39m=[32m"button"[39m
+        [36m>[39m
+          [0mAcknowledge notice[0m
+        [36m</button>[39m
+      [36m</section>[39m
+      [36m<section[39m
+        [33mclass[39m=[32m"space-y-2"[39m
+      [36m>[39m
+        [36m<h2[39m
+          [33mclass[39m=[32m"text-xl font-semibold"[39m
+        [36m>[39m
+          [0mRevoke gateway[0m
+        [36m</h2>[39m
+        [36m<button[39m
+          [33mclass[39m=[32m"rounded border border-red-700 px-3 py-2 text-red-700"[39m
+          [33mtype[39m=[32m"button"[39m
+        [36m>[39m
+          [0mRevoke gateway[0m
+        [36m</button>[39m
+      [36m</section>[39m
+      [36m<section[39m
+        [33mclass[39m=[32m"space-y-3"[39m
+      [36m>[39m
+        [36m<h2[39m
+          [33mclass[39m=[32m"text-xl font-semibold"[39m
+        [36m>[39m
+          [0mFiles[0m
+        [36m</h2>[39m
+        [36m<div[39m
+          [33mclass[39m=[32m"overflow-x-auto"[39m
+        [36m>[39m
+          [36m<table[39m
+            [33mclass[39m=[32m"w-full text-left text-sm"[39m
+          [36m>[39m
+            [36m<thead>[39m
+              [36m<tr>[39m
+                [36m<th[39m
+                  [33mclass[39m=[32m"p-2"[39m
+                [36m>[39m
+                  [0mName[0m
+                [36m</th>[39m
+                [36m<th[39m
+                  [33mclass[39m=[32m"p-2"[39m
+                [36m>[39m
+                  [0mSize[0m
+                [36m</th>[39m
+                [36m<th[39m
+                  [33mclass[39m=[32m"p-2"[39m
+                [36m>[39m
+                  [0mMedia type[0m
+                [36m</th>[39m
+                [36m<th[39m
+                  [33mclass[39m=[32m"p-2"[39m
+                [36m>[39m
+                  [0mPresent[0m
+                [36m</th>[39m
+                [36m<th[39m
+                  [33mclass[39m=[32m"p-2"[39m
+                [36m>[39m
+                  [0mChanged[0m
+                [36m</th>[39m
+                [36m<th[39m
+                  [33mclass[39m=[32m"p-2"[39m
+                [36m>[39m
+                  [0mDescription[0m
+                [36m</th>[39m
+                [36m<th[39m
+                  [33mclass[39m=[32m"p-2"[39m
+                [36m>[39m
+                  [0mOfferable[0m
+                [36m</th>[39m
+                [36m<th[39m
+                  [33mclass[39m=[32m"p-2"[39m
+                [36m>[39m
+                  [0mAction[0m
+                [36m</th>[39m
+              [36m</tr>[39m
+            [36m</thead>[39m
+            [36m<tbody>[39m
+              [36m<tr[39m
+                [33mclass[39m=[32m"border-t align-top"[39m
+              [36m>[39m
+                [36m<td[39m
+                  [33mclass[39m=[32m"p-2"[39m
+                [36m>[39m
+                  [0mfile-01234567.csv[0m
+                [36m</td>[39m
+                [36m<td[39m
+                  [33mclass[39m=[32m"p-2"[39m
+                [36m>[39m
+                  [0m2[0m
+                  [0m bytes[0m
+                [36m</td>[39m
+                [36m<td[39m
+                  [33mclass[39m=[32m"p-2"[39m
+                [36m>[39m
+                  [0mtext/csv[0m
+                [36m</td>[39m
+                [36m<td[39m
+                  [33mclass[39m=[32m"p-2"[39m
+                [36m>[39m
+                  [0mYes[0m
+                [36m</td>[39m
+                [36m<td[39m
+                  [33mclass[39m=[32m"p-2"[39m
+                [36m>[39m
+                  [0m1/1/2026, 1:00:00 AM[0m
+                [36m</td>[39m
+                [36m<td[39m
+                  [33mclass[39m=[32m"p-2"[39m
+                [36m>[39m
+                  [0mrequested[0m
+                [36m</td>[39m
+                [36m<td[39m
+                  [33mclass[39m=[32m"p-2"[39m
+                [36m>[39m
+                  [0mNo[0m
+                [36m</td>[39m
+                [36m<td[39m
+                  [33mclass[39m=[32m"p-2"[39m
+                [36m>[39m
+                  [36m<label[39m
+                    [33mclass[39m=[32m"ml-2 inline-flex gap-1"[39m
+                  [36m>[39m
+                    [36m<input[39m
+                      [33maria-label[39m=[32m"Select file-01234567.csv"[39m
+                      [33mdisabled[39m=[32m""[39m
+                      [33mtype[39m=[32m"checkbox"[39m
+                    [36m/>[39m
+                    [0m Select[0m
+                  [36m</label>[39m
+                [36m</td>[39m
+              [36m</tr>[39m
+            [36m</tbody>[39m
+          [36m</table>[39m
+        [36m</div>[39m
+      [36m</section>[39m
+      [36m<section[39m
+        [33mclass[39m=[32m"space-y-3"[39m
+      [36m>[39m
+        [36m<h2[39m
+          [33mclass[39m=[32m"text-xl font-semibold"[39m
+        [36m>[39m
+          [0mWhat we receive[0m
+        [36m</h2>[39m
+        [36m<label>[39m
+          [0mMessage type [0m
+          [36m<select[39m
+            [33mclass[39m=[32m"ml-2 rounded border p-2"[39m
+          [36m>[39m
+            [36m<option[39m
+              [33mvalue[39m=[32m""[39m
+            [36m>[39m
+              [0mAll types[0m
+            [36m</option>[39m
+            [36m<option[39m
+              [33mvalue[39m=[32m"hello"[39m
+            [36m>[39m
+              [0mhello[0m
+            [36m</option>[39m
+            [36m<option[39m
+              [33mvalue[39m=[32m"inventory"[39m
+            [36m>[39m
+              [0minventory[0m
+            [36m</option>[39m
+            [36m<option[39m
+              [33mvalue[39m=[32m"description"[39m
+            [36m>[39m
+              [0mdescription[0m
+            [36m</option>[39m
+            [36m<option[39m
+              [33mvalue[39m=[32m"receipt"[39m
+            [36m>[39m
+              [0mreceipt[0m
+            [36m</option>[39m
+            [36m<option[39m
+              [33mvalue[39m=[32m"canary_result"[39m
+            [36m>[39m
+              [0mcanary_result[0m
+            [36m</option>[39m
+            [36m<option[39m
+              [33mvalue[39m=[32m"offer_ack"[39m
+            [36m>[39m
+              [0moffer_ack[0m
+            [36m</option>[39m
+            [36m<option[39m
+              [33mvalue[39m=[32m"prepare_ack"[39m
+            [36m>[39m
+              [0mprepare_ack[0m
+            [36m</option>[39m
+            [36m<option[39m
+              [33mvalue[39m=[32m"revocation_ack"[39m
+            [36m>[39m
+              [0mrevocation_ack[0m
+            [36m</option>[39m
+            [36m<option[39m
+              [33mvalue[39m=[32m"error"[39m
+            [36m>[39m
+              [0merror[0m
+            [36m</option>[39m
+          [36m</select>[39m
+        [36m</label>[39m
+        [36m<ol[39m
+          [33mclass[39m=[32m"space-y-3"[39m
+        [36m/>[39m
+      [36m</section>[39m
+    [36m</div>[39m
+  [36m</div>[39m
+[36m</body>[39m
+ ❯ Object.getElementError node_modules/@testing-library/dom/dist/config.js:37:19
+ ❯ node_modules/@testing-library/dom/dist/query-helpers.js:76:38
+ ❯ node_modules/@testing-library/dom/dist/query-helpers.js:52:17
+ ❯ node_modules/@testing-library/dom/dist/query-helpers.js:95:19
+ ❯ app/dashboard/gateways/[id]/page.test.tsx:276:17
+    274|   vi.useFakeTimers();
+    275|   await act(async () => { await vi.advanceTimersByTimeAsync(3_000); });
+    276|   expect(screen.getByText('safe')).toBeTruthy();
+       |                 ^
+    277|   expect(screen.getByText(/Rows: 2/)).toBeTruthy();
+    278| });
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/1]⎯
+
+
+ Test Files  1 failed | 155 passed (156)
+      Tests  1 failed | 1617 passed (1618)
+   Start at  19:26:13
+   Duration  75.28s (transform 1.66s, setup 0ms, import 8.79s, tests 32.02s, environment 24.60s)

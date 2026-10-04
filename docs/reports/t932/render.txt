@@ -1,0 +1,20 @@
+[2m[WebServer] [22m(node:93541) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+[2m[WebServer] [22m(Use `node --trace-warnings ...` to show where the warning was created)
+
+Running 9 tests using 1 worker
+
+(node:93566) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:93566) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+  ✓  1 tests/t932/render.pw.ts:51:82 › google 1440: settings, wizard navigation, Stripe refusal and explicit magic link (2.2s)
+  ✓  2 tests/t932/render.pw.ts:51:82 › github 1440: settings, wizard navigation, Stripe refusal and explicit magic link (1.6s)
+  ✓  3 tests/t932/render.pw.ts:51:82 › google 390: settings, wizard navigation, Stripe refusal and explicit magic link (1.9s)
+  ✓  4 tests/t932/render.pw.ts:51:82 › github 390: settings, wizard navigation, Stripe refusal and explicit magic link (2.2s)
+  ✓  5 tests/t932/render.pw.ts:75:31 › first publish 1440: server next step appears; cloud security guards remain (1.2s)
+  ✓  6 tests/t932/render.pw.ts:75:31 › first publish 390: server next step appears; cloud security guards remain (918ms)
+  ✓  7 tests/t932/render.pw.ts:90:56 › native: native/password/SSO controls remain (505ms)
+  ✓  8 tests/t932/render.pw.ts:90:56 › password: native/password/SSO controls remain (480ms)
+  ✓  9 tests/t932/render.pw.ts:90:56 › sso: native/password/SSO controls remain (343ms)
+
+  9 passed (13.0s)

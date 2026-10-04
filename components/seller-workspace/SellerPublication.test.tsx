@@ -16,8 +16,10 @@ it('requires a click and the approved render before publishing',async()=>{
   expect((button as HTMLButtonElement).disabled).toBe(true);expect(api.publishListing).not.toHaveBeenCalled();
   expect(screen.getByText('Wait for the saved review to finish loading before publishing.')).toBeTruthy();
   view.rerender(<SellerPublication approval={approval} active rendered/>);
+  const changed=vi.fn();window.addEventListener('capabilities:changed',changed);
   api.publishListing.mockResolvedValue(publication);fireEvent.click(button);
   await screen.findByText(/published and available/);
+  expect(changed).toHaveBeenCalledOnce();window.removeEventListener('capabilities:changed',changed);
   expect(api.publishListing).toHaveBeenCalledOnce();expect(screen.getByRole('link',{name:'View Retail'}).getAttribute('href')).toBe('/listings/retail');
 });
 it('restores publication status without publishing again',async()=>{

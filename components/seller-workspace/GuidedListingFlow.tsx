@@ -45,8 +45,8 @@ export function GuidedListingFlow({connections, capabilities, view, navigate, ch
   useEffect(()=>{requestLoad();},[requestLoad]);
   useEffect(()=>{
     const controller=new AbortController();
-    getCapabilities().then(c=>{if(!controller.signal.aborted)setAccountNext(c.seller?.effective_status==='provisioning' ? c.next_action?.step??'profile_name' : null);}).catch(()=>{});
-    const changed=()=>getCapabilities().then(c=>setAccountNext(c.seller?.effective_status==='provisioning'?c.next_action?.step??'profile_name':null)).catch(()=>{});
+    getCapabilities().then(c=>{if(!controller.signal.aborted)setAccountNext(c.seller?.effective_status==='provisioning' ? c.next_action?.step??c.seller.missing_steps?.[0]??null : null);}).catch(()=>{});
+    const changed=()=>getCapabilities().then(c=>setAccountNext(c.seller?.effective_status==='provisioning'?c.next_action?.step??c.seller.missing_steps?.[0]??null:null)).catch(()=>{});
     window.addEventListener('capabilities:changed',changed);
     return()=>{controller.abort();window.removeEventListener('capabilities:changed',changed);};
   },[]);

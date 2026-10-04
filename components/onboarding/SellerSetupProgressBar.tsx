@@ -13,6 +13,7 @@ import {
   type CapabilityStep,
 } from '@/api/capabilities';
 import { useAuthStore } from '@/store/auth';
+import { setupRestriction, providerSecurityMessage } from '@/lib/two-factor-policy';
 import { useToast } from '@/components/Toast';
 
 const CAPABILITIES_CHANGED_EVENT = 'capabilities:changed';
@@ -31,7 +32,7 @@ export function notifyCapabilitiesChanged() {
 }
 
 export default function SellerSetupProgressBar() {
-  const { isAuthenticated, isLoading } = useAuthStore();
+  const { isAuthenticated, isLoading, user } = useAuthStore();
   const router = useRouter();
   const { toast } = useToast();
   const [capabilities, setCapabilities] = useState<CapabilitySetResponse | null>(null);
@@ -73,12 +74,16 @@ export default function SellerSetupProgressBar() {
 
   const seller = capabilities?.seller;
   const missingSteps = useMemo(() => new Set(seller?.missing_steps ?? []), [seller?.missing_steps]);
-  const doneCount = seller ? SELLER_SETUP_STEPS.length - seller.missing_steps.length : 0;
+  const doneCount = seller ? SELLER_SETUP_STEPS.filter(step => !missingSteps.has(step.id)).length : 0;
   const nextStep = capabilities?.next_action?.capability === 'seller' ? capabilities.next_action.step : null;
   const stripeChecking = seller?.reason === 'durable_signal_unavailable' && missingSteps.has('stripe_payouts_live');
 
 
   const goToStep = async (step: CapabilityStep) => {
+    if (step === 'totp_enabled' && setupRestriction(user)) {
+      toast(setupRestriction(user)!, 'info');
+      return;
+    }
     if (step === 'stripe_payouts_live') {
       setStripeLoading(true);
       try {
@@ -86,7 +91,8 @@ export default function SellerSetupProgressBar() {
         redirectToConnectOnboarding(res.data);
       } catch (err) {
         if (isConnectOnboardingTwoFactorRequired(err)) {
-          toast('Complete 2FA setup before connecting payouts.', 'info');
+          toast('Complete the sign-in security step before connecting payouts. Refresh seller setup if you already completed it.', 'info');
+          void fetchCapabilities();
         } else {
           toast('Failed to start Stripe connection', 'error');
         }
@@ -151,14 +157,15 @@ export default function SellerSetupProgressBar() {
           {SELLER_SETUP_STEPS.map((step) => {
             const done = !missingSteps.has(step.id);
             const isNext = nextStep === step.id;
-            const label = step.id === 'stripe_payouts_live' && stripeChecking ? 'Checking payouts...' : step.label;
+            const providerManaged = step.id === 'totp_enabled' && !user?.totp_enabled && user?.two_factor_setup_reason === 'two_factor_managed_by_provider';
+            const label = providerManaged ? 'Provider sign-in' : step.id === 'stripe_payouts_live' && stripeChecking ? 'Checking payouts...' : step.label;
 
             return (
               <button
                 key={step.id}
                 type="button"
                 onClick={() => goToStep(step.id)}
-                disabled={stripeLoading && step.id === 'stripe_payouts_live'}
+                disabled={(stripeLoading && step.id === 'stripe_payouts_live') || (step.id === 'totp_enabled' && !!setupRestriction(user))}
                 className={`flex w-full items-center justify-between rounded-lg px-3 py-2 text-left text-sm transition-colors ${
                   isNext ? 'bg-[#F8F9FF] text-gray-900' : 'text-gray-700 hover:bg-gray-50'
                 } disabled:cursor-not-allowed disabled:opacity-60`}
@@ -174,6 +181,8 @@ export default function SellerSetupProgressBar() {
             );
           })}
         </div>
+
+        {user?.two_factor_setup_reason === 'two_factor_managed_by_provider' && !user.totp_enabled && <p className="text-xs text-gray-600">{providerSecurityMessage(user)}</p>}
 
         {nextStep && (
           <button

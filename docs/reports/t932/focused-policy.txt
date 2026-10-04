@@ -1,0 +1,10 @@
+
+ RUN  v4.1.8 /private/var/tmp/koskadeux/minimal-bridge-worktrees/11d0752113cf-37f2af
+
+Not implemented: navigation to another Document
+Not implemented: navigation to another Document
+
+ Test Files  15 passed (15)
+      Tests  186 passed (186)
+   Start at  19:29:09
+   Duration  13.67s (transform 498ms, setup 0ms, import 1.93s, tests 5.84s, environment 4.58s)

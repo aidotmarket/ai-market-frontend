@@ -89,6 +89,7 @@ export default function DataVerificationPaymentMethod({
 }: DataVerificationPaymentMethodProps) {
   const router = useRouter();
   const sellerId = useAuthStore(state => state.user?.id);
+  const reauthMethod = useAuthStore(state => state.user?.reauth_method);
   const [listingReturn, setListingReturn] = useState<string | null>(null);
   useEffect(() => { setListingReturn(getVerificationReturn(sellerId)); }, [sellerId]);
   const [displayState, setDisplayState] = useState<DisplayState>('checking');
@@ -301,6 +302,7 @@ export default function DataVerificationPaymentMethod({
   return (
     <section className="max-w-2xl" aria-labelledby={HEADING_ID}>
       <ReauthModal
+        method={reauthMethod ?? 'totp'}
         isOpen={isReauthOpen}
         onClose={closeReauth}
         onSuccess={mode === 'return' ? handleReturnReauth : handleSetupReauth}

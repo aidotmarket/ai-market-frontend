@@ -1,0 +1,8 @@
+
+ RUN  v4.1.8 /private/var/tmp/t932-baseline-0cd0b39
+
+
+ Test Files  1 passed (1)
+      Tests  53 passed (53)
+   Start at  19:28:11
+   Duration  1.49s (transform 83ms, setup 0ms, import 155ms, tests 976ms, environment 249ms)

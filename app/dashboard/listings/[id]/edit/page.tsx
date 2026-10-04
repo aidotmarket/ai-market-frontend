@@ -3,6 +3,7 @@
 import { useState, useEffect, useCallback } from 'react';
 import { useRouter, useParams } from 'next/navigation';
 import { getListing, updateListing, unpublishListing, publishListing } from '@/api/listings';
+import { notifyCapabilitiesChanged } from '@/components/onboarding/SellerSetupProgressBar';
 import { useToast } from '@/components/Toast';
 import SellerAtAGlance from '@/components/listings/SellerAtAGlance';
 import SellerShareControls from '@/components/listings/SellerShareControls';
@@ -174,6 +175,7 @@ export default function EditListingPage() {
       if (listingLicensesEnabled) await publishListing(id, licenseSelection);
       else await publishListing(id);
       toast('Listing published', 'success');
+      notifyCapabilitiesChanged();
       setData((prev) => ({ ...prev, status: 'published' }));
     } catch (err: any) {
       const code = gatewayErrorCode(err);
