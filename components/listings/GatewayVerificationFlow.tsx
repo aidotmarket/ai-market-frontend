@@ -2,7 +2,7 @@
 
 import { useEffect, useRef, useState } from 'react';
 import {
-  getGatewayVerificationEpoch, getGatewayVerificationProbe, gatewayVerificationLifecycle,
+  getGatewayVerificationEpoch, getGatewayVerificationProbe, gatewayVerificationLifecycle, gatewayVerificationError,
   probeGatewayVerification, startGatewayVerification, verificationErrorCopy, verificationRefusalCopy,
 } from '@/api/dataVerificationGateway';
 import { getDataVerificationPayInReadiness } from '@/api/dataVerificationPayin';
@@ -90,7 +90,7 @@ export default function GatewayVerificationFlow({ listingId, sellerId, onChanged
         if (!parsed.probeCommand || typeof parsed.probeCommand.idempotency_key !== 'string') throw new Error('Invalid saved attempt');
         attempt.current = parsed;
         setPreview(parsed.quoteRefused ? false : parsed.probeCommand.preview_requested);
-        setProbe(parsed.probeId ? { probe_id: parsed.probeId, state: 'queued' } : null);
+        setProbe(!parsed.epochId && parsed.probeId ? { probe_id: parsed.probeId, state: 'queued' } : null);
         if (parsed.startCommand) setDescription(parsed.startCommand.d6_description);
       }
       setReady(true);
@@ -131,15 +131,16 @@ export default function GatewayVerificationFlow({ listingId, sellerId, onChanged
       if (!stopped) timer = setTimeout(() => void poll(), delay * 1000);
     }
     if (attempt.current?.epochId || attempt.current?.probeId) {
-      const pending = epoch ? runningStates.has(epoch.state) : !probe || probe.state === 'queued';
+      const pending = epoch ? runningStates.has(epoch.state) || epoch.reconciliation_required : !probe || probe.state === 'queued';
       if (pending) timer = setTimeout(() => void poll(), Math.max(0, nextPollAt.current - Date.now()));
     }
     return () => { stopped = true; clearTimeout(timer); };
     // Status changes reschedule the read-only polling loop.
-  }, [ready, probe?.state, epoch?.state, delay, storageKey]);
+  }, [ready, probe?.state, epoch?.state, epoch?.reconciliation_required, delay, storageKey]);
 
   function checkData() {
     void run(async () => {
+      if (attempt.current?.epochId) { await checkStatus(); return; }
       const saved = (attempt.current?.quoteRefused ? null : attempt.current) ?? { probeCommand: { confirm: true as const, preview_requested: preview, idempotency_key: crypto.randomUUID() } };
       save(saved);
       const response = await probeGatewayVerification(listingId, saved.probeCommand);
@@ -173,9 +174,17 @@ export default function GatewayVerificationFlow({ listingId, sellerId, onChanged
       let response;
       try { response = await startGatewayVerification(listingId, command); }
       catch (cause) {
-        const refusal = (cause as { response?: { status?: number; data?: { detail?: unknown } } })?.response;
-        if (refusal?.status === 409 && ['quote_binding_or_expiry', 'source_changed'].includes(String(refusal.data?.detail))) {
-          // These explicit refusals precede authorization. All uncertain outcomes
+        const refusal = gatewayVerificationError(cause);
+        if (refusal.status === 409 && refusal.code === 'verification_in_progress' && refusal.epochId) {
+          // Persist recovery before GET: even a lost status response must not
+          // allow this listing to start a second paid command.
+          save({ ...attempt.current!, epochId: refusal.epochId });
+          setProbe(null); setSetup(false);
+          await checkStatus();
+          return;
+        }
+        if (refusal.status === 409 && (refusal.code === 'quote_binding_or_expiry' || refusal.code === 'source_changed')) {
+          // Backend guarantees no matching or unresolved epoch. Uncertain outcomes
           // retain the original command and key for an idempotent retry.
           save({ probeCommand: saved.probeCommand, quoteRefused: true });
           resetAttemptFields();
@@ -215,18 +224,19 @@ export default function GatewayVerificationFlow({ listingId, sellerId, onChanged
   const fullReview = epoch?.findings?.epoch_id === epoch?.verification_id && epoch?.findings?.listing_id === listingId ? epoch.findings : null;
   const hasBinding = epoch?.listing_id === listingId && !!epoch.source_handle_id;
   const canReview = epoch?.state === 'CAPTURED' && epoch.publication_allowed && fullReview && hasBinding;
-  const canNewAttempt = (!attempt.current?.startCommand && !!probe && probe.state !== 'queued') || (epoch && (terminalStates.has(epoch.state) || epoch.state === 'PUBLISHED'));
+  const canNewAttempt = (!attempt.current?.epochId && !attempt.current?.startCommand && !!probe && probe.state !== 'queued') || (epoch && !epoch.reconciliation_required && (terminalStates.has(epoch.state) || epoch.state === 'PUBLISHED'));
   return <section className="space-y-5 rounded-xl border border-gray-200 bg-white p-6" aria-labelledby="gateway-verification-heading">
-    <h2 id="gateway-verification-heading" className="text-xl font-semibold">{probe?.state === 'complete' && probe.quote_id ? 'Verify this data' : epoch || probe ? 'Data verification' : 'Check verification availability'}</h2>
+    <h2 id="gateway-verification-heading" className="text-xl font-semibold">{probe?.state === 'complete' && probe.quote_id ? 'Verify this data' : epoch || attempt.current?.epochId || (probe && probe.state !== 'queued') ? 'Data verification' : 'Check verification availability'}</h2>
     <p>Check your data in your own gateway, then review a quote. The check and quote are free and do not need a card. Data values stay in your gateway.</p>
     {error && <p role="alert">{error}</p>}
-    {!probe && !epoch && <>
+    {!probe && !epoch && !attempt.current?.epochId && <>
       <label className="block"><input type="checkbox" checked={preview} disabled={busy || (!!attempt.current && !attempt.current.quoteRefused)} onChange={e => setPreview(e.target.checked)} /> Include column names and row counts in the findings</label>
       <button className={buttonClass} disabled={!ready || busy} onClick={checkData}>{busy ? 'Checking…' : attempt.current?.quoteRefused ? 'Get a new quote' : 'Check data and get quote'}</button>
     </>}
+    {attempt.current?.epochId && !epoch && <p role="status">Loading your existing verification. Check again to follow its status.</p>}
     {probe?.state === 'queued' && <p role="status">Waiting for your gateway to check the data. No charge has been made.</p>}
     {probe?.state === 'refused' && <p role="alert">{verificationRefusalCopy(probe.refusal)}</p>}
-    {probe?.state === 'complete' && probe.quote_id && probe.maximum_hold_usd && !epoch && !setup && <>
+    {probe?.state === 'complete' && probe.quote_id && probe.maximum_hold_usd && !epoch && !attempt.current?.epochId && !setup && <>
       <h3 className="font-semibold">Your verification quote</h3>
       <p>A temporary hold of up to ${probe.maximum_hold_usd} will be placed on your card. The final charge is twice the cost of preparing the written findings, between $1 and $25. You pay for completed findings whether you publish or decline them. If verification fails before completion, the hold is released.</p>
       <p>Verification covers the complete supported data for this listing version. It does not assess accuracy, legality, or fitness for a purpose. Your gateway runs ai.market’s open-source scanner in an environment you control.</p>
@@ -245,7 +255,7 @@ export default function GatewayVerificationFlow({ listingId, sellerId, onChanged
     </>}
     {setup && <><DataVerificationPaymentMethod returnToListing={{ listingId, sellerId }} /><button className={buttonClass} onClick={() => setSetup(false)}>Back to verification</button><p>After adding your card, return here and choose Start paid verification to continue.</p></>}
     {epoch && <>
-      {runningStates.has(epoch.state) && <p role="status">{epoch.reconciliation_required ? 'We are confirming your payment. Please wait before starting again.' : 'Verification is in progress. You can return to this page to check it.'}</p>}
+      {(runningStates.has(epoch.state) || epoch.reconciliation_required) && <p role="status">{epoch.reconciliation_required ? 'We are confirming your payment. Please wait before starting again.' : 'Verification is in progress. You can return to this page to check it.'}</p>}
       {epoch.state === 'CAPTURED' && <>
         <h3 className="font-semibold">Review your findings</h3><p>These findings are private. Buyers can see them only if you publish them.</p><p>Charged: ${epoch.captured_usd}</p>
         {fullReview ? <ScanFindingsBadge scanFindings={fullReview} /> : <p>The complete findings are not available to review yet. Please check again before deciding whether to publish.</p>}
@@ -260,7 +270,7 @@ export default function GatewayVerificationFlow({ listingId, sellerId, onChanged
       {['AUTHORIZED', 'SCANNING_LOCAL'].includes(epoch.state) && <button className={buttonClass} disabled={busy || !hasBinding} onClick={() => setConfirmAction('cancel')}>Cancel verification</button>}
     </>}
     {confirmAction && <div role="group" aria-label="Confirm your decision"><p>{confirmAction === 'publish' ? 'Publish the complete findings unedited? This replaces any previous published findings.' : confirmAction === 'decline' ? 'Decline publication? The completed verification charge is unchanged.' : confirmAction === 'withdraw' ? 'Withdraw these findings from the public listing?' : 'Cancel verification and release any unsettled hold?'}</p><button className={buttonClass} disabled={busy} onClick={() => lifecycle(confirmAction)}>Confirm {confirmAction === 'publish' ? 'publication' : confirmAction === 'decline' ? 'decline' : confirmAction === 'withdraw' ? 'withdrawal' : 'cancellation'}</button><button className={buttonClass} disabled={busy} onClick={() => setConfirmAction(null)}>Keep reviewing</button></div>}
-    {attempt.current && <button className={buttonClass} disabled={busy} onClick={() => void run(checkStatus)}>Check again</button>}
+    {(attempt.current?.probeId || attempt.current?.epochId) && <button className={buttonClass} disabled={busy} onClick={() => void run(checkStatus)}>Check again</button>}
     {ready && canNewAttempt && <button className={buttonClass} disabled={busy} onClick={newAttempt}>Get a new quote</button>}
   </section>;
 }

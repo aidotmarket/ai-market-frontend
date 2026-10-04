@@ -143,7 +143,72 @@ describe('gateway seller verification flow', () => {
     await waitFor(() => expect(gateway.startGatewayVerification).toHaveBeenCalledTimes(2));
     expect(vi.mocked(gateway.startGatewayVerification).mock.calls[1][1]).toEqual(original);
   });
-  it.each(['quote_binding_or_expiry', 'source_changed'])('renews after definite %s refusal during card setup and across refresh', async detail => {
+  it('recovers an uncertain authorization after quote expiry with the original command and key', async () => {
+    vi.mocked(gateway.startGatewayVerification).mockRejectedValueOnce(new Error('authorization response lost'));
+    await getQuote(); acknowledge();
+    fireEvent.click(screen.getByRole('button', { name: 'Start paid verification' }));
+    await screen.findByRole('alert');
+    const original = vi.mocked(gateway.startGatewayVerification).mock.calls[0][1];
+    // The backend now resolves this command before expiry/source checks, even
+    // when its AUTHORIZING epoch has no scan spec yet.
+    vi.setSystemTime(Date.now() + 24 * 60 * 60 * 1000);
+    const authorizing = { ...epoch, state: 'AUTHORIZING' as const, reconciliation_required: true };
+    vi.mocked(gateway.startGatewayVerification).mockResolvedValueOnce({ data: authorizing, retryAfter: 2 });
+    vi.mocked(gateway.getGatewayVerificationEpoch).mockResolvedValue({ data: authorizing, retryAfter: 2 });
+    cleanup(); render(<GatewayVerificationFlow listingId="listing" sellerId="seller" />);
+    await screen.findByText('Your verification quote');
+    screen.getAllByRole('checkbox').filter(el => /I understand|I agree/.test(el.parentElement?.textContent ?? '')).forEach(el => fireEvent.click(el));
+    fireEvent.click(screen.getByRole('button', { name: 'Start paid verification' }));
+    await screen.findByText('We are confirming your payment. Please wait before starting again.');
+    expect(vi.mocked(gateway.startGatewayVerification).mock.calls[1][1]).toEqual(original);
+    expect(JSON.parse(window.localStorage.getItem(key)!)).toMatchObject({ startCommand: original, epochId: 'epoch' });
+    expect(gateway.probeGatewayVerification).toHaveBeenCalledTimes(1);
+    expect(screen.queryByRole('button', { name: 'Get a new quote' })).toBeNull();
+    expect(screen.queryByRole('button', { name: 'Start paid verification' })).toBeNull();
+  });
+  it.each(['AUTHORIZING', 'SCANNING_LOCAL', 'CAPTURED'] as const)('follows the existing %s epoch when a new command is refused', async state => {
+    const existing = { ...epoch, verification_id: 'existing-epoch', state, reconciliation_required: state === 'AUTHORIZING' };
+    vi.mocked(gateway.startGatewayVerification).mockRejectedValueOnce({ response: { status: 409, data: { detail: { code: 'verification_in_progress', epoch_id: 'existing-epoch' } } } });
+    vi.mocked(gateway.getGatewayVerificationEpoch).mockResolvedValue({ data: existing, retryAfter: 2 });
+    await getQuote(); acknowledge();
+    fireEvent.click(screen.getByRole('button', { name: 'Start paid verification' }));
+    await screen.findByText(state === 'AUTHORIZING' ? 'We are confirming your payment. Please wait before starting again.' : state === 'CAPTURED' ? 'Review your findings' : 'Verification is in progress. You can return to this page to check it.');
+    expect(gateway.getGatewayVerificationEpoch).toHaveBeenCalledWith('listing', 'existing-epoch');
+    const saved = JSON.parse(window.localStorage.getItem(key)!);
+    expect(saved.epochId).toBe('existing-epoch');
+    expect(saved.startCommand).toEqual(vi.mocked(gateway.startGatewayVerification).mock.calls[0][1]);
+    expect(saved.quoteRefused).toBeUndefined();
+    expect(screen.queryByRole('button', { name: 'Get a new quote' })).toBeNull();
+    expect(screen.queryByRole('button', { name: 'Start paid verification' })).toBeNull();
+    if (state === 'SCANNING_LOCAL') expect(screen.getByRole('button', { name: 'Cancel verification' })).toBeTruthy();
+    if (state === 'CAPTURED') expect(screen.getByRole('button', { name: 'Publish all findings' })).toBeTruthy();
+    cleanup(); render(<GatewayVerificationFlow listingId="listing" sellerId="seller" />);
+    await screen.findByText(state === 'AUTHORIZING' ? 'We are confirming your payment. Please wait before starting again.' : state === 'CAPTURED' ? 'Review your findings' : 'Verification is in progress. You can return to this page to check it.');
+    expect(gateway.startGatewayVerification).toHaveBeenCalledTimes(1);
+    expect(gateway.probeGatewayVerification).toHaveBeenCalledTimes(1);
+  });
+  it('does not offer renewal for a terminal status still awaiting payment reconciliation', async () => {
+    window.localStorage.setItem(key, JSON.stringify({ probeCommand: { confirm: true, preview_requested: false, idempotency_key: 'key' }, epochId: 'epoch' }));
+    vi.mocked(gateway.getGatewayVerificationEpoch).mockResolvedValue({ data: { ...epoch, state: 'DECLINED', reconciliation_required: true }, retryAfter: 2 });
+    render(<GatewayVerificationFlow listingId="listing" sellerId="seller" />);
+    await screen.findByText('We are confirming your payment. Please wait before starting again.');
+    expect(screen.queryByRole('button', { name: 'Get a new quote' })).toBeNull();
+    expect(screen.queryByRole('button', { name: 'Start paid verification' })).toBeNull();
+  });
+  it('retains the existing epoch when its first status read is lost', async () => {
+    vi.mocked(gateway.startGatewayVerification).mockRejectedValueOnce({ response: { status: 409, data: { detail: { code: 'verification_in_progress', epoch_id: 'epoch' } } } });
+    vi.mocked(gateway.getGatewayVerificationEpoch).mockRejectedValueOnce(new Error('lost status'));
+    await getQuote(); acknowledge();
+    fireEvent.click(screen.getByRole('button', { name: 'Start paid verification' }));
+    await screen.findByRole('alert');
+    expect(JSON.parse(window.localStorage.getItem(key)!).epochId).toBe('epoch');
+    expect(screen.queryByRole('button', { name: 'Start paid verification' })).toBeNull();
+    expect(screen.queryByRole('button', { name: 'Get a new quote' })).toBeNull();
+    fireEvent.click(screen.getByRole('button', { name: 'Check again' }));
+    await screen.findByText('Verification is in progress. You can return to this page to check it.');
+    expect(gateway.startGatewayVerification).toHaveBeenCalledTimes(1);
+  });
+  it.each(['quote_binding_or_expiry', 'source_changed', { code: 'quote_binding_or_expiry' }, { code: 'source_changed' }])('renews after definite %s refusal during card setup and across refresh', async detail => {
     vi.mocked(payin.getDataVerificationPayInReadiness).mockResolvedValueOnce({ version: 'data_verification_payin_readiness_v1', state: 'setup_required', can_start_setup: true, can_replace_payment_method: false, message: 'ignored' });
     await getQuote(); acknowledge();
     const oldProbe = JSON.parse(window.localStorage.getItem(key)!).probeCommand;
@@ -158,6 +223,7 @@ describe('gateway seller verification flow', () => {
     await screen.findByRole('alert');
     expect(vi.mocked(gateway.startGatewayVerification).mock.calls[0][1]).toEqual(oldStart);
     expect(JSON.parse(window.localStorage.getItem(key)!)).toEqual({ probeCommand: oldProbe, quoteRefused: true });
+    expect(screen.queryByRole('button', { name: 'Check again' })).toBeNull();
     cleanup(); render(<GatewayVerificationFlow listingId="listing" sellerId="seller" />);
     fireEvent.click(await screen.findByRole('button', { name: 'Get a new quote' }));
     await screen.findByText('Your verification quote');
@@ -174,6 +240,7 @@ describe('gateway seller verification flow', () => {
   it.each([
     { response: { status: 500, data: { detail: 'source_changed' } } },
     { response: { status: 409, data: { detail: 'unknown_conflict' } } },
+    { response: { status: 409, data: { detail: { code: 'verification_in_progress' } } } },
   ])('retains the paid command on an ambiguous response: %j', async cause => {
     vi.mocked(gateway.startGatewayVerification).mockRejectedValueOnce(cause);
     await getQuote(); acknowledge(); fireEvent.click(screen.getByRole('button', { name: 'Start paid verification' }));
@@ -273,6 +340,7 @@ describe('gateway seller verification flow', () => {
     await act(async () => { render(<GatewayVerificationFlow listingId="listing" sellerId="seller" />); });
     await act(async () => { fireEvent.click(screen.getByRole('button', { name: 'Check data and get quote' })); });
     expect(gateway.getGatewayVerificationProbe).not.toHaveBeenCalled();
+    expect(screen.getByRole('heading', { name: 'Check verification availability' })).toBeTruthy();
     await act(async () => { await vi.advanceTimersByTimeAsync(1); });
     const count = vi.mocked(gateway.getGatewayVerificationProbe).mock.calls.length;
     await act(async () => { await vi.advanceTimersByTimeAsync(6999); });

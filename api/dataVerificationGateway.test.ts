@@ -1,6 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { api } from './client';
-import { E7_REFUSAL, gatewayVerificationLifecycle, getGatewayVerificationEpoch, getGatewayVerificationProbe, probeGatewayVerification, startGatewayVerification, verificationErrorCopy } from './dataVerificationGateway';
+import { gatewayVerificationError, E7_REFUSAL, gatewayVerificationLifecycle, getGatewayVerificationEpoch, getGatewayVerificationProbe, probeGatewayVerification, startGatewayVerification, verificationErrorCopy } from './dataVerificationGateway';
 import type { GatewayVerificationStartCommand } from '@/types';
 vi.mock('./client', () => ({ api: { get: vi.fn(), post: vi.fn() } }));
 const path = '/data-verification/gateway/listings/listing';
@@ -35,6 +35,14 @@ describe('gateway seller-session verification API', () => {
     vi.mocked(api.get).mockResolvedValue({ data: {}, headers: { 'retry-after': '-9' } });
     expect((await getGatewayVerificationProbe('a/b', 'c/d')).retryAfter).toBe(2);
     expect(api.get).toHaveBeenCalledWith('/data-verification/gateway/listings/a%2Fb/probes/c%2Fd');
+  });
+  it('parses string and object details without coercing malformed errors', () => {
+    expect(gatewayVerificationError({ response: { status: 409, data: { detail: 'source_changed' } } })).toEqual({ status: 409, code: 'source_changed', epochId: undefined });
+    expect(gatewayVerificationError({ response: { status: 409, data: { detail: { code: 'verification_in_progress', epoch_id: 'epoch' } } } })).toEqual({ status: 409, code: 'verification_in_progress', epochId: 'epoch' });
+    for (const detail of [null, 42, {}, { code: 42, epoch_id: 42 }]) {
+      expect(gatewayVerificationError({ response: { status: 409, data: { detail } } }).code).toBeUndefined();
+    }
+    expect(verificationErrorCopy({ response: { status: 409, data: { detail: { code: 'source_changed' } } } })).toBe('Your data has changed. Check your data again for a new quote.');
   });
   it('preserves E7 exactly and suppresses raw errors and ownership detail', () => {
     expect(verificationErrorCopy({ response: { status: 409, data: { detail: E7_REFUSAL } } })).toBe(E7_REFUSAL);
