@@ -115,9 +115,11 @@ export default function ConnectorConsentPage() {
       <h2>Access requested</h2>
       <ul>{metadata.scopes.map((scope) => <li key={scope.scope}>{scope.description}</li>)}</ul>
       <p>Expires {new Date(metadata.expires_at).toLocaleString()}</p>
-      <div className="flex gap-4">
-        <button disabled={busy} onClick={() => decide('approve')}>Approve</button>
-        <button disabled={busy} onClick={() => decide('deny')}>Deny</button>
+      <div className="flex flex-wrap gap-4">
+        <button type="button" disabled={busy} onClick={() => decide('approve')}
+          className="min-h-11 cursor-pointer rounded-lg bg-[#3F51B5] px-4 py-2 text-sm font-medium text-white transition-colors enabled:hover:bg-[#3545a0] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#3F51B5] disabled:cursor-not-allowed disabled:opacity-50">Approve</button>
+        <button type="button" disabled={busy} onClick={() => decide('deny')}
+          className="min-h-11 cursor-pointer rounded-lg border border-gray-300 bg-white px-4 py-2 text-sm font-medium text-gray-700 transition-colors enabled:hover:bg-gray-50 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#3F51B5] disabled:cursor-not-allowed disabled:opacity-50">Deny</button>
       </div>
     </> : <p role="status">Preparing connection request…</p>}
   </main>;
