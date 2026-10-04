@@ -29,9 +29,10 @@ const artifact: PublishedScanFindings = {
   provenance_label: "Facts computed in the seller's own self-hosted AIM Data gateway",
   attestation: 'The findings are published unedited.', disclaimer: 'This scan is not a guarantee of future data.',
 };
-async function getQuote() {
+async function getQuote(preview = false) {
   render(<GatewayVerificationFlow listingId="listing" sellerId="seller" />);
   await waitFor(() => expect((screen.getByRole('button', { name: 'Check data and get quote' }) as HTMLButtonElement).disabled).toBe(false));
+  if (preview) fireEvent.click(screen.getByRole('checkbox', { name: 'Include column names and row counts in the findings' }));
   fireEvent.click(screen.getByRole('button', { name: 'Check data and get quote' }));
   await screen.findByText('Your verification quote');
 }
@@ -185,7 +186,7 @@ describe('gateway seller verification flow', () => {
     expect(vi.mocked(gateway.startGatewayVerification).mock.calls[1][1]).toEqual(original);
   });
   it('resets description and preview on a new attempt and guards incomplete paid start', async () => {
-    await getQuote(); acknowledge();
+    await getQuote(true); acknowledge();
     fireEvent.click(screen.getByRole('button', { name: 'Get a new quote' }));
     const preview = screen.getByRole('checkbox', { name: 'Include column names and row counts in the findings' });
     expect((preview as HTMLInputElement).checked).toBe(false);

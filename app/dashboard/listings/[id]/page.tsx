@@ -2,12 +2,12 @@
 
 import { use, useEffect, useState } from 'react';
 import Link from 'next/link';
-import { getListing, getListingOwnership } from '@/api/listings';
+import { getSellerListing, getListingOwnership } from '@/api/listings';
 import { getGatewayListingSource } from '@/api/sellerGateways';
 import { useAuthStore } from '@/store/auth';
 import GatewayVerificationFlow from '@/components/listings/GatewayVerificationFlow';
 
-interface OwnedListing { id: string; title: string; status: string; slug: string }
+type OwnedListing = Awaited<ReturnType<typeof getSellerListing>>;
 
 export default function ListingPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = use(params);
@@ -26,7 +26,7 @@ export default function ListingPage({ params }: { params: Promise<{ id: string }
         const isOwner = await getListingOwnership(id);
         if (!current) return;
         if (!isOwner) { setState('unavailable'); return; }
-        const owned = await getListing(id);
+        const owned = await getSellerListing(id);
         if (!current) return;
         const source = await getGatewayListingSource(id);
         if (!current) return;
