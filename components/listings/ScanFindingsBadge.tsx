@@ -74,6 +74,8 @@ function ArtifactProvenance({ artifact }: { artifact: PublishedScanFindings }) {
         <ReportField label="Spec hash">{artifact.spec.hash}</ReportField>
         <ReportField label="Depth class">{artifact.spec.depth_class}</ReportField>
         <ReportField label="Canonicalization version">{artifact.spec.canonicalization_version}</ReportField>
+        {artifact.spec.listing_version_id && <ReportField label="Covered listing version">{artifact.spec.listing_version_id}</ReportField>}
+        {artifact.execution.scanner_version && <ReportField label="Scanner version">{artifact.execution.scanner_version}</ReportField>}
         <ReportField label="Agent version">{artifact.execution.agent_version}</ReportField>
         <ReportField label="Connector type">{artifact.execution.connector_type}</ReportField>
         <ReportField label="Connector version">{artifact.execution.connector_version}</ReportField>
@@ -122,7 +124,7 @@ function Coverage({ artifact }: { artifact: PublishedScanFindings }) {
 function DeterministicFacts({ artifact }: { artifact: PublishedScanFindings }) {
   return (
     <section aria-labelledby="scan-facts-heading">
-      <h3 id="scan-facts-heading" className="font-semibold text-gray-900">Facts computed by AIM Data</h3>
+      <h3 id="scan-facts-heading" className="font-semibold text-gray-900">{artifact.provenance_label ?? 'Facts computed by AIM Data'}</h3>
       <div className="mt-3 space-y-5">
         {artifact.deterministic_facts.length > 0 ? artifact.deterministic_facts.map((object) => (
           <article key={object.object_id} className="rounded-lg border border-gray-200 bg-white p-4">
