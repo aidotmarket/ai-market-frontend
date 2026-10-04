@@ -1,6 +1,6 @@
 'use client';
 import {useRef,useState,type FormEvent} from 'react';
-import {createIdempotencyKey,saveR2Connection,type R2ConnectionInput,type SellerWorkspaceConnection} from '@/api/sellerWorkspace';
+import {createIdempotencyKey,saveR2Connection,SellerWorkspaceApiError,type R2ConnectionInput,type SellerWorkspaceConnection} from '@/api/sellerWorkspace';
 
 export default function R2ConnectionForm({connection,onSaved,onClose}: {
   connection?:SellerWorkspaceConnection|null; onSaved:(connection:SellerWorkspaceConnection)=>void; onClose:()=>void;
@@ -24,8 +24,10 @@ export default function R2ConnectionForm({connection,onSaved,onClose}: {
       const result=await saveR2Connection({...values,dedicated_bucket_readonly:true,expected_version:connection?.version ?? 0},requestId.current,connection?.id);
       setValues(current=>({...current,access_key_id:'',secret_access_key:''}));
       onSaved(result.connection);
-    } catch {
-      setError('Connection could not be confirmed. Check the account, bucket, folder and read-only keys. The folder must contain at least one file. You can retry with the same values.');
+    } catch (failure) {
+      if (failure instanceof SellerWorkspaceApiError && failure.code === 'two_factor_required') {
+        setError('Complete the sign-in security step in seller setup before connecting cloud storage. Refresh seller setup if you already completed it.');
+      } else setError('Connection could not be confirmed. Check the account, bucket, folder and read-only keys. The folder must contain at least one file. You can retry with the same values.');
     } finally {submitting.current=false;setBusy(false);}
   };
   const inputClass='mt-1 block w-full rounded-lg border border-gray-300 px-3 py-2 text-sm disabled:bg-gray-100';

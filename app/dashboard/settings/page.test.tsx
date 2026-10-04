@@ -86,6 +86,53 @@ describe('SettingsPage capability refresh', () => {
     vi.clearAllMocks();
   });
 
+  it.each(['google', 'github'] as const)('hides new native setup for current %s sign-in with a legacy password', async provider => {
+    useAuthStore.setState({user:{...user, auth_methods:['password',provider], primary_auth:'password',
+      two_factor_setup_eligible:false,two_factor_setup_reason:'two_factor_managed_by_provider',two_factor_provider:provider,
+      seller_two_factor_satisfied:true,reauth_method:'magic_link'}});
+    render(<SettingsPage/>);
+    expect(screen.getByText(`Sign-in security is managed by your ${provider==='google'?'Google':'GitHub'} account.`)).toBeTruthy();
+    expect(screen.queryByRole('button',{name:'Enable two-factor authentication'})).toBeNull();
+    expect(authApi.setup2FA).not.toHaveBeenCalled();expect(authApi.submitReauth).not.toHaveBeenCalled();
+  });
+
+  it('keeps enabled native recovery protected during provider sign-in', async()=>{
+    useAuthStore.setState({user:{...user,totp_enabled:true,two_factor_setup_eligible:false,
+      two_factor_setup_reason:'two_factor_already_enabled',two_factor_provider:'google',reauth_method:'totp'}});
+    render(<SettingsPage/>);
+    fireEvent.click(screen.getByRole('button',{name:'Disable 2FA'}));
+    expect(screen.getByText('Confirm 2FA disable')).toBeTruthy();
+    expect(authApi.disable2FA).not.toHaveBeenCalled();
+    expect(screen.queryByText('Sign-in security is managed by your Google account.')).toBeNull();
+  });
+
+  it('uses the returned magic-link method without automatically sending email',async()=>{
+    useAuthStore.setState({user:{...user,reauth_method:'magic_link'}});
+    authApi.submitReauth.mockResolvedValue({token:null,method:'magic_link'});
+    render(<SettingsPage/>);fireEvent.click(screen.getByRole('button',{name:'Enable two-factor authentication'}));
+    const dialog=await screen.findByRole('dialog');
+    expect(within(dialog).queryByLabelText('Password')).toBeNull();expect(authApi.submitReauth).not.toHaveBeenCalled();
+    fireEvent.click(within(dialog).getByRole('button',{name:'Send link'}));
+    await screen.findByLabelText('Email link');expect(authApi.submitReauth).toHaveBeenCalledWith('', 'magic_link');
+  });
+
+  it('handles a provider 409 on an older server snapshot without leaving enrollment controls',async()=>{
+    authApi.setup2FA.mockRejectedValueOnce(Object.assign(new AxiosError('policy'),{response:{status:409,data:{detail:'two_factor_managed_by_provider'}}}));
+    render(<SettingsPage/>);fireEvent.click(screen.getByRole('button',{name:'Enable two-factor authentication'}));await completeReauth();
+    await screen.findByText('Sign-in security is managed by your identity provider account.');
+    expect(screen.queryByRole('button',{name:'Enable two-factor authentication'})).toBeNull();
+    expect(authApi.verify2FASetup).not.toHaveBeenCalled();
+  });
+
+  it('refuses verification and hides a pending native enrollment when current policy changes',async()=>{
+    authApi.setup2FA.mockResolvedValueOnce({secret:'fixture-secret',qr_uri:'otpauth://totp/fixture',expires_in:300});
+    render(<SettingsPage/>);fireEvent.click(screen.getByRole('button',{name:'Enable two-factor authentication'}));await completeReauth();
+    await screen.findByText('Set up your authenticator app');
+    act(()=>useAuthStore.setState({user:{...user,two_factor_setup_eligible:false,two_factor_setup_reason:'two_factor_managed_by_provider',two_factor_provider:'github',reauth_method:'magic_link'}}));
+    expect(screen.queryByText('Set up your authenticator app')).toBeNull();expect(screen.queryByText('fixture-secret')).toBeNull();
+    expect(authApi.verify2FASetup).not.toHaveBeenCalled();expect(screen.getByText('Sign-in security is managed by your GitHub account.')).toBeTruthy();
+  });
+
   it('dispatches capabilities:changed after a successful profile save', async () => {
     const onCapabilitiesChanged = vi.fn();
     window.addEventListener('capabilities:changed', onCapabilitiesChanged);

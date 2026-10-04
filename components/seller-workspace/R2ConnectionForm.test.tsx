@@ -3,7 +3,8 @@ import {afterEach,expect,it,vi} from 'vitest';
 import {cleanup,fireEvent,render,screen,waitFor} from '@testing-library/react';
 import R2ConnectionForm from './R2ConnectionForm';
 const api=vi.hoisted(()=>({save:vi.fn()}));
-vi.mock('@/api/sellerWorkspace',()=>({createIdempotencyKey:()=> 'r2-test-id',saveR2Connection:api.save}));
+vi.mock('@/api/sellerWorkspace',async(importOriginal)=>({...await importOriginal<typeof import('@/api/sellerWorkspace')>(),createIdempotencyKey:()=> 'r2-test-id',saveR2Connection:api.save}));
+import {SellerWorkspaceApiError} from '@/api/sellerWorkspace';
 afterEach(()=>{cleanup();vi.resetAllMocks();});
 
 it('keeps keys hidden and requires dedicated read-only confirmation before saving',async()=>{
@@ -28,4 +29,11 @@ it('does not echo a failed request or provider secret',async()=>{
   fireEvent.submit(screen.getByRole('button',{name:'Verify and connect R2'}).closest('form')!);
   await screen.findByRole('alert');
   expect(screen.queryByText(/private-provider-secret/)).toBeNull();
+});
+
+it('keeps the R2 server security refusal distinct from invalid keys',async()=>{
+ api.save.mockRejectedValue(new SellerWorkspaceApiError('two_factor_required'));const saved=vi.fn();
+ render(<R2ConnectionForm onSaved={saved} onClose={vi.fn()}/>);fireEvent.click(screen.getByRole('checkbox'));
+ fireEvent.submit(screen.getByRole('button',{name:'Verify and connect R2'}).closest('form')!);
+ expect((await screen.findByRole('alert')).textContent).toContain('sign-in security step');expect(saved).not.toHaveBeenCalled();
 });

@@ -81,7 +81,7 @@ export default function StripeReturnPage() {
         }).catch((err) => {
           if (cancelled) return;
           if (isConnectOnboardingTwoFactorRequired(err)) {
-            toast('Complete 2FA setup before connecting payouts.', 'info');
+            toast('Complete the sign-in security step before connecting payouts. Refresh seller setup if you already completed it.', 'info');
           }
           setStatus('abandoned');
         }).finally(() => {
@@ -172,7 +172,7 @@ export default function StripeReturnPage() {
       redirectToConnectOnboarding(res.data);
     } catch (err) {
       if (isConnectOnboardingTwoFactorRequired(err)) {
-        toast('Complete 2FA setup before connecting payouts.', 'info');
+        toast('Complete the sign-in security step before connecting payouts. Refresh seller setup if you already completed it.', 'info');
       } else {
         toast('Failed to resume Stripe connection', 'error');
       }

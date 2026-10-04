@@ -1,0 +1,128 @@
+{
+  "calls": [
+    {
+      "path": "/auth/refresh",
+      "method": "POST",
+      "body": {}
+    },
+    {
+      "path": "/auth/me",
+      "method": "GET",
+      "body": null
+    },
+    {
+      "path": "/notifications",
+      "method": "GET",
+      "body": null
+    },
+    {
+      "path": "/notifications/unread-count",
+      "method": "GET",
+      "body": null
+    },
+    {
+      "path": "/auth/capabilities",
+      "method": "GET",
+      "body": null
+    },
+    {
+      "path": "/listings/fixture",
+      "method": "GET",
+      "body": null
+    },
+    {
+      "path": "/seller-workspace/capabilities",
+      "method": "GET",
+      "body": null
+    },
+    {
+      "path": "/auth/capabilities",
+      "method": "GET",
+      "body": null
+    },
+    {
+      "path": "/seller-workspace/capabilities",
+      "method": "GET",
+      "body": null
+    },
+    {
+      "path": "/gateways",
+      "method": "GET",
+      "body": null
+    },
+    {
+      "path": "/listings/fixture/at-a-glance/preview",
+      "method": "GET",
+      "body": null
+    },
+    {
+      "path": "/listings/fixture/publish",
+      "method": "POST",
+      "body": null
+    },
+    {
+      "path": "/auth/capabilities",
+      "method": "GET",
+      "body": null
+    },
+    {
+      "path": "/listings/fixture/at-a-glance/preview",
+      "method": "GET",
+      "body": null
+    },
+    {
+      "path": "/auth/refresh",
+      "method": "POST",
+      "body": {}
+    },
+    {
+      "path": "/auth/me",
+      "method": "GET",
+      "body": null
+    },
+    {
+      "path": "/notifications",
+      "method": "GET",
+      "body": null
+    },
+    {
+      "path": "/notifications/unread-count",
+      "method": "GET",
+      "body": null
+    },
+    {
+      "path": "/auth/capabilities",
+      "method": "GET",
+      "body": null
+    },
+    {
+      "path": "/seller-workspace/capabilities",
+      "method": "GET",
+      "body": null
+    },
+    {
+      "path": "/auth/capabilities",
+      "method": "GET",
+      "body": null
+    },
+    {
+      "path": "/seller-workspace/connections",
+      "method": "GET",
+      "body": null
+    },
+    {
+      "path": "/auth/capabilities",
+      "method": "GET",
+      "body": null
+    },
+    {
+      "path": "/seller-workspace/connections",
+      "method": "POST",
+      "body": {
+        "provider": "aws"
+      }
+    }
+  ],
+  "blocked": [],
+  "errors": []
+}

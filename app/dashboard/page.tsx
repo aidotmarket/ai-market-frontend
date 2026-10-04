@@ -1,5 +1,7 @@
 'use client';
 
+import { accountReauthMethod, setupRestriction, setupRefusal, sellerSecuritySatisfied } from '@/lib/two-factor-policy';
+
 import { useEffect, useState, useCallback, useRef } from 'react';
 import Link from 'next/link';
 import { useAuthStore } from '@/store/auth';
@@ -9,7 +11,7 @@ import {
   isConnectOnboardingTwoFactorRequired,
   redirectToConnectOnboarding,
 } from '@/api/connect';
-import { isSsoManaged2FAError, setup2FA, SSO_MANAGED_2FA_MESSAGE, verify2FASetup } from '@/api/auth';
+import { setup2FA, SSO_MANAGED_2FA_MESSAGE, verify2FASetup } from '@/api/auth';
 import { getSellerStats } from '@/api/seller';
 import { getMyListings } from '@/api/listings';
 import { getMyOrders } from '@/api/orders';
@@ -121,7 +123,8 @@ export default function DashboardOverview() {
       redirectToConnectOnboarding(res.data);
     } catch (err) {
       if (isConnectOnboardingTwoFactorRequired(err)) {
-        toast('Complete 2FA setup before connecting payouts.', 'info');
+        toast('Complete the sign-in security step before connecting payouts. Refresh seller setup if you already completed it.', 'info');
+        notifyCapabilitiesChanged();
       } else {
         toast('Failed to start Stripe connection', 'error');
       }
@@ -158,6 +161,7 @@ export default function DashboardOverview() {
   };
 
   const handleSetup2FA = async (reauthToken: string) => {
+    if (setupRestriction(user)) { setSecurityError(setupRestriction(user)!); return; }
     setSecurityLoading(true);
     setSecurityError('');
     try {
@@ -170,8 +174,9 @@ export default function DashboardOverview() {
       setBackupCodes([]);
       setTwoFactorFlow('showing_qr');
     } catch (err) {
-      if (isSsoManaged2FAError(err)) {
-        setSecurityError(SSO_MANAGED_2FA_MESSAGE);
+      if (setupRefusal(err, user)) {
+        setSecurityError(setupRefusal(err, user)!);
+        setTwoFactorFlow('idle');
       } else if (err instanceof AxiosError) {
         setSecurityError(err.response?.data?.detail || 'Failed to start 2FA setup.');
       } else {
@@ -183,6 +188,7 @@ export default function DashboardOverview() {
   };
 
   const handleVerify2FASetup = async (reauthToken: string, allowReauthRetry = true) => {
+    if (setupRestriction(user)) { setSecurityError(setupRestriction(user)!); setTwoFactorFlow('idle'); return; }
     setSecurityLoading(true);
     setSecurityError('');
     setTwoFactorFlow('verifying');
@@ -197,8 +203,9 @@ export default function DashboardOverview() {
         setReauthAction('retry');
         return;
       }
-      if (isSsoManaged2FAError(err)) {
-        setSecurityError(SSO_MANAGED_2FA_MESSAGE);
+      if (setupRefusal(err, user)) {
+        setSecurityError(setupRefusal(err, user)!);
+        setTwoFactorFlow('idle');
       } else if (err instanceof AxiosError) {
         setSecurityError(err.response?.data?.detail || 'Failed to verify the code.');
       } else {
@@ -268,12 +275,13 @@ export default function DashboardOverview() {
   const isBuyerView = !isSellerActive && !isSellerProvisioning;
   const canStartSelling = sellerStatus === 'not_requested';
   const twoFactorEnabled = !!user?.totp_enabled;
+  const sellerSecurityReady = sellerSecuritySatisfied(user, capabilities?.seller.missing_steps);
   const showSetupFlow =
     isSellerProvisioning &&
-    !(twoFactorEnabled && payoutsEnabled);
+    !(sellerSecurityReady && payoutsEnabled);
   const showHeldPublishedNotice = isSellerActive && heldPublishedCount > 0 && !payoutsEnabled;
-  const ssoManaged2FA = (user?.sso_enforced === true && !user.auth_methods?.includes('password')) ||
-    securityError === SSO_MANAGED_2FA_MESSAGE;
+  const managedSetupMessage = user?.totp_enabled ? null : setupRestriction(user) ?? (securityError === SSO_MANAGED_2FA_MESSAGE || securityError.startsWith('Sign-in security is managed by your ') ? securityError : null);
+  const ssoManaged2FA = !!managedSetupMessage;
 
   return (
     <div className="space-y-8">
@@ -282,7 +290,7 @@ export default function DashboardOverview() {
         onClose={() => setReauthAction(null)}
         onSuccess={handleReauthSuccess}
         fallbackFocusRef={dashboardHeadingRef}
-        method={user?.totp_enabled ? 'totp' : user?.auth_methods?.includes('password') ? 'password' : 'magic_link'}
+        method={accountReauthMethod(user)}
       />
       <div>
         <h1 ref={dashboardHeadingRef} tabIndex={-1} className="text-2xl font-bold text-gray-900">Welcome back, {user?.first_name || 'there'}</h1>
@@ -374,10 +382,10 @@ export default function DashboardOverview() {
           </div>
 
           <div className="grid gap-4 lg:grid-cols-2">
-            <div className={`rounded-lg border p-4 ${twoFactorEnabled ? 'border-green-200 bg-green-50' : 'border-[#C5CAE9] bg-[#F8F9FF]'}`}>
+            <div className={`rounded-lg border p-4 ${sellerSecurityReady ? 'border-green-200 bg-green-50' : 'border-[#C5CAE9] bg-[#F8F9FF]'}`}>
               <div className="flex items-start gap-3">
-                <div className={`flex h-8 w-8 flex-shrink-0 items-center justify-center rounded-full ${twoFactorEnabled ? 'bg-green-100 text-green-700' : 'bg-[#E8EAF6] text-[#3F51B5]'}`}>
-                  {twoFactorEnabled ? (
+                <div className={`flex h-8 w-8 flex-shrink-0 items-center justify-center rounded-full ${sellerSecurityReady ? 'bg-green-100 text-green-700' : 'bg-[#E8EAF6] text-[#3F51B5]'}`}>
+                  {sellerSecurityReady ? (
                     <svg className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
                     </svg>
@@ -386,11 +394,11 @@ export default function DashboardOverview() {
                   )}
                 </div>
                 <div className="min-w-0 flex-1">
-                  <p className="text-sm font-semibold text-gray-900">Secure your account (2FA)</p>
+                  <p className="text-sm font-semibold text-gray-900">Sign-in security</p>
                   <p className="mt-1 text-sm text-gray-600">
-                    {ssoManaged2FA ? SSO_MANAGED_2FA_MESSAGE : twoFactorEnabled ? 'Two-factor authentication is enabled.' : 'Enable authenticator-app verification before connecting payouts.'}
+                    {ssoManaged2FA ? managedSetupMessage : twoFactorEnabled ? 'Two-factor authentication is enabled.' : sellerSecurityReady ? 'The sign-in security step is complete.' : 'Enable authenticator-app verification before connecting payouts.'}
                   </p>
-                  {!twoFactorEnabled && !ssoManaged2FA && twoFactorFlow === 'idle' && (
+                  {!sellerSecurityReady && !ssoManaged2FA && twoFactorFlow === 'idle' && (
                     <button
                       onClick={() => setReauthAction('setup')}
                       disabled={securityLoading}
@@ -408,7 +416,7 @@ export default function DashboardOverview() {
                 </div>
               )}
 
-              {!twoFactorEnabled && twoFactorFlow === 'showing_qr' && (
+              {!twoFactorEnabled && !ssoManaged2FA && twoFactorFlow === 'showing_qr' && (
                 <div className="mt-4 rounded-lg border border-gray-200 bg-white p-4">
                   <h3 className="text-sm font-semibold text-gray-900 mb-3">Set up your authenticator app</h3>
                   <div className="flex flex-col gap-4 sm:flex-row sm:items-start">
@@ -504,9 +512,9 @@ export default function DashboardOverview() {
               )}
             </div>
 
-            <div className={`rounded-lg border p-4 ${payoutsEnabled ? 'border-green-200 bg-green-50' : twoFactorEnabled ? 'border-[#C5CAE9] bg-[#F8F9FF]' : 'border-gray-200 bg-gray-50'}`}>
+            <div className={`rounded-lg border p-4 ${payoutsEnabled ? 'border-green-200 bg-green-50' : sellerSecurityReady ? 'border-[#C5CAE9] bg-[#F8F9FF]' : 'border-gray-200 bg-gray-50'}`}>
               <div className="flex items-start gap-3">
-                <div className={`flex h-8 w-8 flex-shrink-0 items-center justify-center rounded-full ${payoutsEnabled ? 'bg-green-100 text-green-700' : twoFactorEnabled ? 'bg-[#E8EAF6] text-[#3F51B5]' : 'bg-gray-100 text-gray-500'}`}>
+                <div className={`flex h-8 w-8 flex-shrink-0 items-center justify-center rounded-full ${payoutsEnabled ? 'bg-green-100 text-green-700' : sellerSecurityReady ? 'bg-[#E8EAF6] text-[#3F51B5]' : 'bg-gray-100 text-gray-500'}`}>
                   {payoutsEnabled ? (
                     <svg className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
@@ -520,14 +528,14 @@ export default function DashboardOverview() {
                   <p className="mt-1 text-sm text-gray-600">
                     {payoutsEnabled
                       ? 'Stripe payouts are live.'
-                      : twoFactorEnabled
+                      : sellerSecurityReady
                         ? 'Connect Stripe payouts to enable purchases on published listings.'
-                        : 'Locked until 2FA is enabled.'}
+                        : 'Complete the sign-in security step before connecting payouts.'}
                   </p>
                   {!payoutsEnabled && (
                     <button
                       onClick={handleConnectStripe}
-                      disabled={connecting || !twoFactorEnabled}
+                      disabled={connecting || !sellerSecurityReady}
                       className="mt-3 rounded-lg bg-[#3F51B5] px-4 py-2 text-sm font-medium text-white hover:bg-[#3545a0] disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
                     >
                       {connecting ? 'Connecting...' : isStripeConnected ? 'Resume Stripe setup' : 'Connect Stripe'}

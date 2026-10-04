@@ -181,6 +181,7 @@ describe('Seller Workspace frozen routes', () => {
 
 describe('Seller Workspace safe errors', () => {
   it.each([
+    [403, 'Complete 2FA setup before connecting cloud storage', 'two_factor_required'],
     [403, { reason: 'secret seller response' }, 'active_seller_required'],
     [409, 'Connection authorization is unavailable', 'authorization_expired'],
     [422, 'Connection scope is invalid', 'invalid_scope'],

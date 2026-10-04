@@ -1,4 +1,5 @@
 'use client';
+import {notifyCapabilitiesChanged} from '@/components/onboarding/SellerSetupProgressBar';
 import {useEffect,useRef,useState} from 'react';
 import {useListingFlow} from './GuidedListingFlow';
 import SellerAtAGlance from '@/components/listings/SellerAtAGlance';
@@ -35,7 +36,7 @@ export default function SellerPublication({approval,active,rendered,sampleCount=
     setBusy(true);setError('');
     try {
       const publication=await publishListing(approval,identity.current,request.signal);
-      if (!request.signal.aborted) {const saved={publication_available:state.publication_available,publication};setState(saved);flow?.published(saved);}
+      if (!request.signal.aborted) {const saved={publication_available:state.publication_available,publication};setState(saved);flow?.published(saved);notifyCapabilitiesChanged();}
     } catch (failure) {
       if (request.signal.aborted) return;
       const identityFailure=legalIdentityFailure(failure);

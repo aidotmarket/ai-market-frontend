@@ -93,6 +93,8 @@ function errorCode(error: unknown) {
 
 function safeActionMessage(error: unknown): string {
   switch (errorCode(error)) {
+    case 'two_factor_required':
+      return 'Complete the sign-in security step in seller setup before connecting cloud storage. Refresh seller setup if you already completed it.';
     case 'authorization_expired':
       return 'This setup has expired and cannot be verified. Create a new connection.';
     case 'invalid_scope':

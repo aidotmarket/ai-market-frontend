@@ -142,7 +142,7 @@ describe('Stripe return', () => {
 
     expect(await screen.findByText('Setup Incomplete')).not.toBeNull();
     expect(connectApi.isConnectOnboardingTwoFactorRequired).toHaveBeenCalledWith(error);
-    expect(toast).toHaveBeenCalledWith('Complete 2FA setup before connecting payouts.', 'info');
+    expect(toast).toHaveBeenCalledWith('Complete the sign-in security step before connecting payouts. Refresh seller setup if you already completed it.', 'info');
     fireEvent.click(screen.getByRole('button', { name: 'Resume Onboarding' }));
     await waitFor(() => expect(toast).toHaveBeenCalledTimes(2));
     expect(screen.getByRole('button', { name: 'Resume Onboarding' }).hasAttribute('disabled')).toBe(false);

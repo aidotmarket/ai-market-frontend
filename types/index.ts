@@ -19,6 +19,12 @@ export interface User {
   auth_methods: string[];
   primary_auth: string;
   sso_enforced?: boolean;
+  /** Current-request policy from authenticated /auth/me; optional for older servers. */
+  two_factor_setup_eligible?: boolean;
+  two_factor_setup_reason?: string | null;
+  two_factor_provider?: 'google' | 'github' | null;
+  seller_two_factor_satisfied?: boolean;
+  reauth_method?: 'password' | 'totp' | 'magic_link';
 }
 
 export interface TokenResponse {

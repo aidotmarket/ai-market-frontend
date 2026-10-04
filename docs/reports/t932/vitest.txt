@@ -1,0 +1,561 @@
+
+ RUN  v4.1.8 /private/var/tmp/koskadeux/minimal-bridge-worktrees/11d0752113cf-37f2af
+
+ ❯ app/dashboard/gateways/[id]/page.test.tsx (53 tests | 1 failed) 842ms
+   × confirms exact description text, polls to described, and renders columns 16ms
+Not implemented: navigation to another Document
+Not implemented: navigation to another Document
+(node:54491) Warning: `--localstorage-file` was provided without a valid path
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:54825) Warning: `--localstorage-file` was provided without a valid path
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:54999) Warning: `--localstorage-file` was provided without a valid path
+(Use `node --trace-warnings ...` to show where the warning was created)
+ ❯ app/register/RegisterForm.test.tsx (9 tests | 1 failed) 190ms
+     × reads a same-browser connector continuation after the first render 1ms
+(node:55138) Warning: `--localstorage-file` was provided without a valid path
+(Use `node --trace-warnings ...` to show where the warning was created)
+ ❯ tests/redirect-connector.test.ts (26 tests | 26 failed) 5ms
+   × accepts only an exact connector path /oauth/connect?request=aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa 2ms
+   × accepts only an exact connector path /oauth/connect?request=___________________________________________ 0ms
+   × accepts only an exact connector path /oauth/connect?request=------------------------------------------- 0ms
+   × rejects malformed or external path /oauth/connect?request=aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa 0ms
+   × rejects malformed or external path /oauth/connect?request=aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa 0ms
+   × rejects malformed or external path /oauth/connect?request=aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa&x=1 0ms
+   × rejects malformed or external path /oauth/connect?request=aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa#x 0ms
+   × rejects malformed or external path /oauth/connect?request=aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa
+ 0ms
+   × rejects malformed or external path /oauth/connect?%72equest=aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa 0ms
+   × rejects malformed or external path /%6fauth/connect?request=aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa 0ms
+   × rejects malformed or external path %2Foauth%2Fconnect%3Frequest%3Daaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa 0ms
+   × rejects malformed or external path https://evil.example/oauth/connect?request=aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa 0ms
+   × rejects malformed or external path //evil.example/oauth/connect?request=aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa 0ms
+   × rejects malformed or external path /oauth/connect?request=aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa%26x=1 0ms
+   × keeps a status-gated same-browser continuation for thirty minutes 0ms
+   × does not clear a valid continuation before the status check runs in a new page 0ms
+   × rejects and clears an expired connector continuation 0ms
+   × requires a fresh status check after its thirty-minute cache expires 0ms
+   × uses the normal fallback for plain login despite a saved connector request 0ms
+   × resumes only the connector request named by the login redirect 0ms
+   × resumes an initiated connector request after a callback loses the redirect 0ms
+   × rejects and clears foreign connector continuation shape {"request":"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa","deadline":1791134553000,"initiated":false} 0ms
+   × rejects and clears foreign connector continuation shape {"request":"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa","deadline":1791134553000,"initiated":"true"} 0ms
+   × rejects and clears foreign connector continuation shape {"request":"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa","deadline":1791134553000,"foreign":true} 0ms
+   × rejects and clears foreign connector continuation shape {"request":"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa","deadline":1791134553000,"initiated":true,"foreign":true} 0ms
+   × opens only the contracted completion URL prefix 0ms
+(node:55781) Warning: `--localstorage-file` was provided without a valid path
+(Use `node --trace-warnings ...` to show where the warning was created)
+ ❯ app/oauth/connect/page.test.tsx (7 tests | 3 failed) 2154ms
+   × approve sends the nonce and navigates to the guarded URL 1046ms
+   × deny sends the nonce and navigates to the guarded URL 1008ms
+   × offers sign-in and 2FA for insufficient assurance 4ms
+(node:55988) Warning: `--localstorage-file` was provided without a valid path
+(Use `node --trace-warnings ...` to show where the warning was created)
+ ❯ tests/connector-auth-callbacks.test.tsx (11 tests | 11 failed) 4ms
+   × resumes initiated connector login from google callback 2ms
+   × resumes initiated connector login from github callback 0ms
+   × resumes initiated connector login from sso callback 0ms
+   × does not resume a non-initiated connector from google callback 0ms
+   × does not resume a non-initiated connector from github callback 0ms
+   × does not resume a non-initiated connector from sso callback 0ms
+   × magic-link verify resumes only when initiated=true 0ms
+   × magic-link verify resumes only when initiated=false 0ms
+   × resumes an initiated connector after oauth two-factor verification 0ms
+   × resumes an initiated connector after magic two-factor verification 0ms
+   × marks the connector request when email verification hands off to login 0ms
+
+⎯⎯⎯⎯⎯⎯ Failed Tests 42 ⎯⎯⎯⎯⎯⎯⎯
+
+ FAIL  tests/connector-auth-callbacks.test.tsx > resumes initiated connector login from google callback
+ FAIL  tests/connector-auth-callbacks.test.tsx > resumes initiated connector login from github callback
+ FAIL  tests/connector-auth-callbacks.test.tsx > resumes initiated connector login from sso callback
+ FAIL  tests/connector-auth-callbacks.test.tsx > does not resume a non-initiated connector from google callback
+ FAIL  tests/connector-auth-callbacks.test.tsx > does not resume a non-initiated connector from github callback
+ FAIL  tests/connector-auth-callbacks.test.tsx > does not resume a non-initiated connector from sso callback
+ FAIL  tests/connector-auth-callbacks.test.tsx > magic-link verify resumes only when initiated=true
+ FAIL  tests/connector-auth-callbacks.test.tsx > magic-link verify resumes only when initiated=false
+ FAIL  tests/connector-auth-callbacks.test.tsx > resumes an initiated connector after oauth two-factor verification
+ FAIL  tests/connector-auth-callbacks.test.tsx > resumes an initiated connector after magic two-factor verification
+ FAIL  tests/connector-auth-callbacks.test.tsx > marks the connector request when email verification hands off to login
+TypeError: localStorage.clear is not a function
+ ❯ tests/connector-auth-callbacks.test.tsx:30:16
+     28|
+     29| beforeEach(() => {
+     30|   localStorage.clear(); sessionStorage.clear();
+       |                ^
+     31|   setConnectorStatus(true);
+     32|   saveConnectorContinuation(path);
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/42]⎯
+
+ FAIL  tests/redirect-connector.test.ts > accepts only an exact connector path /oauth/connect?request=aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa
+ FAIL  tests/redirect-connector.test.ts > accepts only an exact connector path /oauth/connect?request=___________________________________________
+ FAIL  tests/redirect-connector.test.ts > accepts only an exact connector path /oauth/connect?request=-------------------------------------------
+ FAIL  tests/redirect-connector.test.ts > rejects malformed or external path /oauth/connect?request=aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa
+ FAIL  tests/redirect-connector.test.ts > rejects malformed or external path /oauth/connect?request=aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa
+ FAIL  tests/redirect-connector.test.ts > rejects malformed or external path /oauth/connect?request=aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa&x=1
+ FAIL  tests/redirect-connector.test.ts > rejects malformed or external path /oauth/connect?request=aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa#x
+ FAIL  tests/redirect-connector.test.ts > rejects malformed or external path /oauth/connect?request=aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa
+
+ FAIL  tests/redirect-connector.test.ts > rejects malformed or external path /oauth/connect?%72equest=aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa
+ FAIL  tests/redirect-connector.test.ts > rejects malformed or external path /%6fauth/connect?request=aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa
+ FAIL  tests/redirect-connector.test.ts > rejects malformed or external path %2Foauth%2Fconnect%3Frequest%3Daaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa
+ FAIL  tests/redirect-connector.test.ts > rejects malformed or external path https://evil.example/oauth/connect?request=aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa
+ FAIL  tests/redirect-connector.test.ts > rejects malformed or external path //evil.example/oauth/connect?request=aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa
+ FAIL  tests/redirect-connector.test.ts > rejects malformed or external path /oauth/connect?request=aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa%26x=1
+ FAIL  tests/redirect-connector.test.ts > keeps a status-gated same-browser continuation for thirty minutes
+ FAIL  tests/redirect-connector.test.ts > does not clear a valid continuation before the status check runs in a new page
+ FAIL  tests/redirect-connector.test.ts > rejects and clears an expired connector continuation
+ FAIL  tests/redirect-connector.test.ts > requires a fresh status check after its thirty-minute cache expires
+ FAIL  tests/redirect-connector.test.ts > uses the normal fallback for plain login despite a saved connector request
+ FAIL  tests/redirect-connector.test.ts > resumes only the connector request named by the login redirect
+ FAIL  tests/redirect-connector.test.ts > resumes an initiated connector request after a callback loses the redirect
+ FAIL  tests/redirect-connector.test.ts > rejects and clears foreign connector continuation shape {"request":"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa","deadline":1791134553000,"initiated":false}
+ FAIL  tests/redirect-connector.test.ts > rejects and clears foreign connector continuation shape {"request":"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa","deadline":1791134553000,"initiated":"true"}
+ FAIL  tests/redirect-connector.test.ts > rejects and clears foreign connector continuation shape {"request":"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa","deadline":1791134553000,"foreign":true}
+ FAIL  tests/redirect-connector.test.ts > rejects and clears foreign connector continuation shape {"request":"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa","deadline":1791134553000,"initiated":true,"foreign":true}
+ FAIL  tests/redirect-connector.test.ts > opens only the contracted completion URL prefix
+TypeError: localStorage.clear is not a function
+ ❯ tests/redirect-connector.test.ts:8:57
+      6|
+      7| const path = connectorRequestPath('a'.repeat(43));
+      8| beforeEach(() => { sessionStorage.clear(); localStorage.clear(); });
+       |                                                         ^
+      9|
+     10| it.each([path, connectorRequestPath('_'.repeat(43)), connectorRequestP…
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[2/42]⎯
+
+ FAIL  app/register/RegisterForm.test.tsx > RegisterForm > reads a same-browser connector continuation after the first render
+TypeError: localStorage.clear is not a function
+ ❯ app/register/RegisterForm.test.tsx:114:18
+    112|
+    113|   it('reads a same-browser connector continuation after the first rend…
+    114|     localStorage.clear();
+       |                  ^
+    115|     const connectorPath = `/oauth/connect?request=${'a'.repeat(43)}`;
+    116|     setConnectorStatus(true);
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[3/42]⎯
+
+ FAIL  app/oauth/connect/page.test.tsx > approve sends the nonce and navigates to the guarded URL
+ FAIL  app/oauth/connect/page.test.tsx > deny sends the nonce and navigates to the guarded URL
+AssertionError: expected "vi.fn()" to be called with arguments: [ …(4) ]
+
+Number of calls: 0
+
+
+Ignored nodes: comments, script, style
+[36m<html>[39m
+  [36m<head />[39m
+  [36m<body>[39m
+    [36m<div>[39m
+      [36m<main[39m
+        [33mclass[39m=[32m"mx-auto max-w-lg space-y-6 px-6 py-16"[39m
+      [36m>[39m
+        [36m<p[39m
+          [33mrole[39m=[32m"alert"[39m
+        [36m>[39m
+          [0mThis connection request expired. Go back to the app and connect again.[0m
+        [36m</p>[39m
+      [36m</main>[39m
+    [36m</div>[39m
+  [36m</body>[39m
+[36m</html>[39m
+ ❯ app/oauth/connect/page.test.tsx:50:54
+     48|   render(<ConnectorConsentPage />);
+     49|   fireEvent.click(await screen.findByRole('button', { name: decision =…
+     50|   await waitFor(() => expect(decideConnectorRequest).toHaveBeenCalledW…
+       |                                                      ^
+     51|   expect(assign).toHaveBeenCalledWith(`https://auth.ai.market/oauth/au…
+     52| });
+ ❯ runWithExpensiveErrorDiagnosticsDisabled node_modules/@testing-library/dom/dist/config.js:47:12
+ ❯ checkCallback node_modules/@testing-library/dom/dist/wait-for.js:124:77
+ ❯ Timeout.checkRealTimersCallback node_modules/@testing-library/dom/dist/wait-for.js:118:16
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[4/42]⎯
+
+ FAIL  app/oauth/connect/page.test.tsx > offers sign-in and 2FA for insufficient assurance
+AssertionError: expected "vi.fn()" to be called with arguments: [ Array(1) ]
+
+Number of calls: 0
+
+ ❯ app/oauth/connect/page.test.tsx:73:27
+     71|   render(<ConnectorConsentPage />);
+     72|   fireEvent.click(await screen.findByRole('button', { name: 'Sign in a…
+     73|   expect(navigation.push).toHaveBeenCalledWith(`/login?reauth=connecto…
+       |                           ^
+     74| });
+     75|
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[5/42]⎯
+
+ FAIL  app/dashboard/gateways/[id]/page.test.tsx > confirms exact description text, polls to described, and renders columns
+TestingLibraryElementError: Unable to find an element with the text: safe. This could be because the text is broken up by multiple elements. In this case, you can provide a function for your text matcher to make your matcher more flexible.
+
+Ignored nodes: comments, script, style
+[36m<body>[39m
+  [36m<div>[39m
+    [36m<div[39m
+      [33mclass[39m=[32m"space-y-8"[39m
+    [36m>[39m
+      [36m<a[39m
+        [33mhref[39m=[32m"/dashboard/gateways"[39m
+      [36m>[39m
+        [0mBack to gateways[0m
+      [36m</a>[39m
+      [36m<header>[39m
+        [36m<h1[39m
+          [33mclass[39m=[32m"text-2xl font-semibold"[39m
+        [36m>[39m
+          [0mTest gateway[0m
+        [36m</h1>[39m
+        [36m<p>[39m
+          [0mStatus: [0m
+          [0monline[0m
+        [36m</p>[39m
+        [36m<p>[39m
+          [0mVersion: [0m
+          [0m1.0.0[0m
+          [0m / minimum [0m
+          [0m1.0.0[0m
+        [36m</p>[39m
+        [36m<p>[39m
+          [0mLast seen: [0m
+          [0m1/1/2026, 1:00:00 AM[0m
+        [36m</p>[39m
+        [36m<p>[39m
+          [0mListings: [0m
+          [0m1[0m
+          [0m · Open orders: [0m
+          [0m0[0m
+          [0m · Can publish: [0m
+          [0mNo[0m
+        [36m</p>[39m
+      [36m</header>[39m
+      [36m<section>[39m
+        [36m<h2[39m
+          [33mclass[39m=[32m"text-xl font-semibold"[39m
+        [36m>[39m
+          [0mWhat needs attention[0m
+        [36m</h2>[39m
+        [36m<p>[39m
+          [0mNo blockers.[0m
+        [36m</p>[39m
+      [36m</section>[39m
+      [36m<section[39m
+        [33mclass[39m=[32m"space-y-3"[39m
+      [36m>[39m
+        [36m<h2[39m
+          [33mclass[39m=[32m"text-xl font-semibold"[39m
+        [36m>[39m
+          [0mSettings[0m
+        [36m</h2>[39m
+        [36m<label[39m
+          [33mclass[39m=[32m"block"[39m
+        [36m>[39m
+          [0mGateway name [0m
+          [36m<input[39m
+            [33mclass[39m=[32m"block w-full rounded border p-2"[39m
+            [33mmaxlength[39m=[32m"80"[39m
+            [33mvalue[39m=[32m"Test gateway"[39m
+          [36m/>[39m
+        [36m</label>[39m
+        [36m<button[39m
+          [33mclass[39m=[32m"rounded border px-3 py-2"[39m
+          [33mtype[39m=[32m"button"[39m
+        [36m>[39m
+          [0mSave name[0m
+        [36m</button>[39m
+        [36m<label[39m
+          [33mclass[39m=[32m"block"[39m
+        [36m>[39m
+          [0mDoor URL [0m
+          [36m<input[39m
+            [33mclass[39m=[32m"block w-full rounded border p-2"[39m
+            [33mplaceholder[39m=[32m"https://door.example.com"[39m
+            [33mtype[39m=[32m"url"[39m
+            [33mvalue[39m=[32m"https://door.example"[39m
+          [36m/>[39m
+        [36m</label>[39m
+        [36m<p>[39m
+          [0mChanging the door URL resets its door check. Run a new check before publishing.[0m
+        [36m</p>[39m
+        [36m<button[39m
+          [33mclass[39m=[32m"rounded border px-3 py-2"[39m
+          [33mtype[39m=[32m"button"[39m
+        [36m>[39m
+          [0mSave door URL[0m
+        [36m</button>[39m
+      [36m</section>[39m
+      [36m<section[39m
+        [33mclass[39m=[32m"space-y-2"[39m
+      [36m>[39m
+        [36m<h2[39m
+          [33mclass[39m=[32m"text-xl font-semibold"[39m
+        [36m>[39m
+          [0mDoor check[0m
+        [36m</h2>[39m
+        [36m<p>[39m
+          [0mState: [0m
+          [0mnever[0m
+          [0m · Checked: [0m
+          [0mNever[0m
+        [36m</p>[39m
+        [36m<button[39m
+          [33mclass[39m=[32m"rounded border px-3 py-2"[39m
+          [33mtype[39m=[32m"button"[39m
+        [36m>[39m
+          [0mRun door check[0m
+        [36m</button>[39m
+      [36m</section>[39m
+      [36m<section[39m
+        [33mclass[39m=[32m"space-y-2"[39m
+      [36m>[39m
+        [36m<h2[39m
+          [33mclass[39m=[32m"text-xl font-semibold"[39m
+        [36m>[39m
+          [0mIdentity notice[0m
+        [36m</h2>[39m
+        [36m<p>[39m
+          [0mAfter purchase, the buyer learns your door hostname and its certificate. Your door sees the buyer’s network address. Use a neutral hostname and a domain-validated certificate that names nothing else.[0m
+        [36m</p>[39m
+        [36m<label[39m
+          [33mclass[39m=[32m"block"[39m
+        [36m>[39m
+          [36m<input[39m
+            [33mtype[39m=[32m"checkbox"[39m
+          [36m/>[39m
+          [0m I have read the identity notice.[0m
+        [36m</label>[39m
+        [36m<button[39m
+          [33mclass[39m=[32m"rounded border px-3 py-2 disabled:opacity-50"[39m
+          [33mdisabled[39m=[32m""[39m
+          [33mtype[39m=[32m"button"[39m
+        [36m>[39m
+          [0mAcknowledge notice[0m
+        [36m</button>[39m
+      [36m</section>[39m
+      [36m<section[39m
+        [33mclass[39m=[32m"space-y-2"[39m
+      [36m>[39m
+        [36m<h2[39m
+          [33mclass[39m=[32m"text-xl font-semibold"[39m
+        [36m>[39m
+          [0mRevoke gateway[0m
+        [36m</h2>[39m
+        [36m<button[39m
+          [33mclass[39m=[32m"rounded border border-red-700 px-3 py-2 text-red-700"[39m
+          [33mtype[39m=[32m"button"[39m
+        [36m>[39m
+          [0mRevoke gateway[0m
+        [36m</button>[39m
+      [36m</section>[39m
+      [36m<section[39m
+        [33mclass[39m=[32m"space-y-3"[39m
+      [36m>[39m
+        [36m<h2[39m
+          [33mclass[39m=[32m"text-xl font-semibold"[39m
+        [36m>[39m
+          [0mFiles[0m
+        [36m</h2>[39m
+        [36m<div[39m
+          [33mclass[39m=[32m"overflow-x-auto"[39m
+        [36m>[39m
+          [36m<table[39m
+            [33mclass[39m=[32m"w-full text-left text-sm"[39m
+          [36m>[39m
+            [36m<thead>[39m
+              [36m<tr>[39m
+                [36m<th[39m
+                  [33mclass[39m=[32m"p-2"[39m
+                [36m>[39m
+                  [0mName[0m
+                [36m</th>[39m
+                [36m<th[39m
+                  [33mclass[39m=[32m"p-2"[39m
+                [36m>[39m
+                  [0mSize[0m
+                [36m</th>[39m
+                [36m<th[39m
+                  [33mclass[39m=[32m"p-2"[39m
+                [36m>[39m
+                  [0mMedia type[0m
+                [36m</th>[39m
+                [36m<th[39m
+                  [33mclass[39m=[32m"p-2"[39m
+                [36m>[39m
+                  [0mPresent[0m
+                [36m</th>[39m
+                [36m<th[39m
+                  [33mclass[39m=[32m"p-2"[39m
+                [36m>[39m
+                  [0mChanged[0m
+                [36m</th>[39m
+                [36m<th[39m
+                  [33mclass[39m=[32m"p-2"[39m
+                [36m>[39m
+                  [0mDescription[0m
+                [36m</th>[39m
+                [36m<th[39m
+                  [33mclass[39m=[32m"p-2"[39m
+                [36m>[39m
+                  [0mOfferable[0m
+                [36m</th>[39m
+                [36m<th[39m
+                  [33mclass[39m=[32m"p-2"[39m
+                [36m>[39m
+                  [0mAction[0m
+                [36m</th>[39m
+              [36m</tr>[39m
+            [36m</thead>[39m
+            [36m<tbody>[39m
+              [36m<tr[39m
+                [33mclass[39m=[32m"border-t align-top"[39m
+              [36m>[39m
+                [36m<td[39m
+                  [33mclass[39m=[32m"p-2"[39m
+                [36m>[39m
+                  [0mfile-01234567.csv[0m
+                [36m</td>[39m
+                [36m<td[39m
+                  [33mclass[39m=[32m"p-2"[39m
+                [36m>[39m
+                  [0m2[0m
+                  [0m bytes[0m
+                [36m</td>[39m
+                [36m<td[39m
+                  [33mclass[39m=[32m"p-2"[39m
+                [36m>[39m
+                  [0mtext/csv[0m
+                [36m</td>[39m
+                [36m<td[39m
+                  [33mclass[39m=[32m"p-2"[39m
+                [36m>[39m
+                  [0mYes[0m
+                [36m</td>[39m
+                [36m<td[39m
+                  [33mclass[39m=[32m"p-2"[39m
+                [36m>[39m
+                  [0m1/1/2026, 1:00:00 AM[0m
+                [36m</td>[39m
+                [36m<td[39m
+                  [33mclass[39m=[32m"p-2"[39m
+                [36m>[39m
+                  [0mrequested[0m
+                [36m</td>[39m
+                [36m<td[39m
+                  [33mclass[39m=[32m"p-2"[39m
+                [36m>[39m
+                  [0mNo[0m
+                [36m</td>[39m
+                [36m<td[39m
+                  [33mclass[39m=[32m"p-2"[39m
+                [36m>[39m
+                  [36m<label[39m
+                    [33mclass[39m=[32m"ml-2 inline-flex gap-1"[39m
+                  [36m>[39m
+                    [36m<input[39m
+                      [33maria-label[39m=[32m"Select file-01234567.csv"[39m
+                      [33mdisabled[39m=[32m""[39m
+                      [33mtype[39m=[32m"checkbox"[39m
+                    [36m/>[39m
+                    [0m Select[0m
+                  [36m</label>[39m
+                [36m</td>[39m
+              [36m</tr>[39m
+            [36m</tbody>[39m
+          [36m</table>[39m
+        [36m</div>[39m
+      [36m</section>[39m
+      [36m<section[39m
+        [33mclass[39m=[32m"space-y-3"[39m
+      [36m>[39m
+        [36m<h2[39m
+          [33mclass[39m=[32m"text-xl font-semibold"[39m
+        [36m>[39m
+          [0mWhat we receive[0m
+        [36m</h2>[39m
+        [36m<label>[39m
+          [0mMessage type [0m
+          [36m<select[39m
+            [33mclass[39m=[32m"ml-2 rounded border p-2"[39m
+          [36m>[39m
+            [36m<option[39m
+              [33mvalue[39m=[32m""[39m
+            [36m>[39m
+              [0mAll types[0m
+            [36m</option>[39m
+            [36m<option[39m
+              [33mvalue[39m=[32m"hello"[39m
+            [36m>[39m
+              [0mhello[0m
+            [36m</option>[39m
+            [36m<option[39m
+              [33mvalue[39m=[32m"inventory"[39m
+            [36m>[39m
+              [0minventory[0m
+            [36m</option>[39m
+            [36m<option[39m
+              [33mvalue[39m=[32m"description"[39m
+            [36m>[39m
+              [0mdescription[0m
+            [36m</option>[39m
+            [36m<option[39m
+              [33mvalue[39m=[32m"receipt"[39m
+            [36m>[39m
+              [0mreceipt[0m
+            [36m</option>[39m
+            [36m<option[39m
+              [33mvalue[39m=[32m"canary_result"[39m
+            [36m>[39m
+              [0mcanary_result[0m
+            [36m</option>[39m
+            [36m<option[39m
+              [33mvalue[39m=[32m"offer_ack"[39m
+            [36m>[39m
+              [0moffer_ack[0m
+            [36m</option>[39m
+            [36m<option[39m
+              [33mvalue[39m=[32m"prepare_ack"[39m
+            [36m>[39m
+              [0mprepare_ack[0m
+            [36m</option>[39m
+            [36m<option[39m
+              [33mvalue[39m=[32m"revocation_ack"[39m
+            [36m>[39m
+              [0mrevocation_ack[0m
+            [36m</option>[39m
+            [36m<option[39m
+              [33mvalue[39m=[32m"error"[39m
+            [36m>[39m
+              [0merror[0m
+            [36m</option>[39m
+          [36m</select>[39m
+        [36m</label>[39m
+        [36m<ol[39m
+          [33mclass[39m=[32m"space-y-3"[39m
+        [36m/>[39m
+      [36m</section>[39m
+    [36m</div>[39m
+  [36m</div>[39m
+[36m</body>[39m
+ ❯ Object.getElementError node_modules/@testing-library/dom/dist/config.js:37:19
+ ❯ node_modules/@testing-library/dom/dist/query-helpers.js:76:38
+ ❯ node_modules/@testing-library/dom/dist/query-helpers.js:52:17
+ ❯ node_modules/@testing-library/dom/dist/query-helpers.js:95:19
+ ❯ app/dashboard/gateways/[id]/page.test.tsx:276:17
+    274|   vi.useFakeTimers();
+    275|   await act(async () => { await vi.advanceTimersByTimeAsync(3_000); });
+    276|   expect(screen.getByText('safe')).toBeTruthy();
+       |                 ^
+    277|   expect(screen.getByText(/Rows: 2/)).toBeTruthy();
+    278| });
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[6/42]⎯
+
+
+ Test Files  5 failed | 151 passed (156)
+      Tests  42 failed | 1573 passed (1615)
+   Start at  19:11:49
+   Duration  74.76s (transform 1.76s, setup 0ms, import 8.92s, tests 31.85s, environment 23.62s)

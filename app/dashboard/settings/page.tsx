@@ -1,8 +1,10 @@
 'use client';
 
+import { accountReauthMethod, setupRestriction, setupRefusal } from '@/lib/two-factor-policy';
+
 import { useEffect, useRef, useState } from 'react';
 import { useAuthStore } from '@/store/auth';
-import { disable2FA, isSsoManaged2FAError, regenerateBackupCodes, setup2FA, SSO_MANAGED_2FA_MESSAGE, updateProfile, verify2FASetup } from '@/api/auth';
+import { disable2FA, regenerateBackupCodes, setup2FA, SSO_MANAGED_2FA_MESSAGE, updateProfile, verify2FASetup } from '@/api/auth';
 import { getCapabilities, type CapabilityStatus } from '@/api/capabilities';
 import { notifyCapabilitiesChanged } from '@/components/onboarding/SellerSetupProgressBar';
 import { useToast } from '@/components/Toast';
@@ -135,6 +137,7 @@ export default function SettingsPage() {
   };
 
   const handleSetup2FA = async (reauthToken: string) => {
+    if (setupRestriction(user)) { setSecurityError(setupRestriction(user)!); return; }
     setSecurityLoading(true);
     setVerifyingSetup(false);
     setSecurityError('');
@@ -150,8 +153,9 @@ export default function SettingsPage() {
       setBackupCodesLabel('Save these backup codes before you continue.');
       setTwoFactorFlow('showing_qr');
     } catch (err) {
-      if (isSsoManaged2FAError(err)) {
-        setSecurityError(SSO_MANAGED_2FA_MESSAGE);
+      if (setupRefusal(err, user)) {
+        setSecurityError(setupRefusal(err, user)!);
+        setTwoFactorFlow('idle');
       } else if (err instanceof AxiosError) {
         setSecurityError(err.response?.data?.detail || 'Failed to start 2FA setup.');
       } else {
@@ -163,6 +167,7 @@ export default function SettingsPage() {
   };
 
   const handleVerify2FASetup = async (reauthToken: string, allowReauthRetry = true) => {
+    if (setupRestriction(user)) { setSecurityError(setupRestriction(user)!); setTwoFactorFlow('idle'); return; }
     setSecurityLoading(true);
     setSecurityError('');
     setVerifyingSetup(true);
@@ -181,8 +186,9 @@ export default function SettingsPage() {
         openReauthForAction('enable_retry');
         return;
       }
-      if (isSsoManaged2FAError(err)) {
-        setSecurityError(SSO_MANAGED_2FA_MESSAGE);
+      if (setupRefusal(err, user)) {
+        setSecurityError(setupRefusal(err, user)!);
+        setTwoFactorFlow('idle');
       } else if (err instanceof AxiosError) {
         setSecurityError(err.response?.data?.detail || 'Failed to verify the code.');
       } else {
@@ -278,8 +284,8 @@ export default function SettingsPage() {
     sellerStatus === 'provisioning' ||
     user.role === 'seller' ||
     user.role === 'admin';
-  const ssoManaged2FA = (user.sso_enforced === true && !user.auth_methods?.includes('password')) ||
-    securityError === SSO_MANAGED_2FA_MESSAGE;
+  const managedSetupMessage = user?.totp_enabled ? null : setupRestriction(user) ?? (securityError === SSO_MANAGED_2FA_MESSAGE || securityError.startsWith('Sign-in security is managed by your ') ? securityError : null);
+  const ssoManaged2FA = !!managedSetupMessage;
 
   return (
     <div className="max-w-2xl">
@@ -288,7 +294,7 @@ export default function SettingsPage() {
         onClose={closeReauthModal}
         onSuccess={handleReauthSuccess}
         fallbackFocusRef={settingsHeadingRef}
-        method={user?.totp_enabled ? 'totp' : user?.auth_methods?.includes('password') ? 'password' : 'magic_link'}
+        method={accountReauthMethod(user)}
       />
 
       <h1
@@ -394,7 +400,7 @@ export default function SettingsPage() {
             </span>
           ) : (
             <span className="inline-flex items-center rounded-full bg-gray-100 px-3 py-1 text-xs font-medium text-gray-700">
-              2FA Disabled
+              {user.two_factor_setup_reason === 'two_factor_managed_by_provider' ? 'Provider sign-in' : '2FA Disabled'}
             </span>
           )}
         </div>
@@ -404,7 +410,7 @@ export default function SettingsPage() {
             <div>
               <p className="text-sm font-medium text-gray-900">Two-factor authentication</p>
               <p className="text-sm text-gray-500">
-                {ssoManaged2FA ? SSO_MANAGED_2FA_MESSAGE : user.totp_enabled ? 'Your account requires an authenticator code at sign-in.' : 'Add an authenticator app for stronger account protection.'}
+                {ssoManaged2FA ? managedSetupMessage : user.totp_enabled ? 'Your account requires an authenticator code at sign-in.' : 'Add an authenticator app for stronger account protection.'}
               </p>
             </div>
             {!user.totp_enabled && !ssoManaged2FA && (
@@ -424,7 +430,7 @@ export default function SettingsPage() {
             </div>
           )}
 
-          {twoFactorFlow === 'showing_qr' && (
+          {!ssoManaged2FA && twoFactorFlow === 'showing_qr' && (
             <div className="rounded-lg border border-gray-200 p-4">
               <h3 className="text-sm font-semibold text-gray-900 mb-3">Set up your authenticator app</h3>
               <div className="flex flex-col gap-4 sm:flex-row sm:items-start">
