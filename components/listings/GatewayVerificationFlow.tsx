@@ -24,6 +24,7 @@ interface Attempt {
   probe?: GatewayVerificationProbe;
   startCommand?: GatewayVerificationStartCommand;
   epochId?: string;
+  quoteRefused?: boolean;
 }
 const runningStates = new Set(['CREATED', 'QUOTED', 'AUTHORIZING', 'AUTHORIZED', 'SCANNING_LOCAL', 'NARRATING_CLOUD', 'CAPTURE_PENDING', 'CAPTURE_RECONCILING']);
 const terminalStates = new Set(['DECLINED', 'WITHDRAWN', 'SUPERSEDED', 'AUTH_FAILED', 'CANCELLED_VOIDED', 'FAILED_VOIDED', 'CAPTURE_FAILED']);
@@ -37,9 +38,17 @@ const choices = {
 const fieldLabels = { domain_class: 'Subject area', record_granularity: 'What each record describes', temporal_scope: 'Time covered', update_cadence: 'How often the data changes' };
 const useChoices: GatewayVerificationDescription['intended_use_tags'] = ['analysis_reporting', 'research_education', 'machine_learning', 'benchmarking', 'reference_lookup', 'operations_planning'];
 const limitationChoices: GatewayVerificationDescription['known_limitation_tags'] = ['incomplete_coverage', 'missing_values', 'estimated_fields', 'historical_cutoff', 'sampled_source', 'known_duplicates', 'source_defined_categories'];
-const label = (value: string) => value.replaceAll('_', ' ').replace(/^./, c => c.toUpperCase());
+const displayLabels: Record<string, string> = {
+  entity: 'A person, organization, or item', event: 'An event or activity',
+  measurement: 'A measurement or observation', document: 'A document or text',
+  relationship: 'A relationship between items', aggregate: 'A summary of multiple records',
+  source_defined_categories: 'Categories defined by the data source',
+};
+const label = (value: string) => displayLabels[value] ?? value.replaceAll('_', ' ').replace(/^./, c => c.toUpperCase());
 
 export default function GatewayVerificationFlow({ listingId, sellerId, onChanged }: Props) {
+  // Recovery uses this browser’s localStorage only. Clearing it or switching
+  // browsers loses the attempt/epoch ID; this contract cannot discover it again.
   const storageKey = `gateway-verification:${sellerId}:${listingId}`;
   const attempt = useRef<Attempt | null>(null);
   const lock = useRef(false);
@@ -80,7 +89,7 @@ export default function GatewayVerificationFlow({ listingId, sellerId, onChanged
         const parsed: Attempt = JSON.parse(stored);
         if (!parsed.probeCommand || typeof parsed.probeCommand.idempotency_key !== 'string') throw new Error('Invalid saved attempt');
         attempt.current = parsed;
-        setPreview(parsed.probeCommand.preview_requested);
+        setPreview(parsed.quoteRefused ? false : parsed.probeCommand.preview_requested);
         setProbe(parsed.probeId ? { probe_id: parsed.probeId, state: 'queued' } : null);
         if (parsed.startCommand) setDescription(parsed.startCommand.d6_description);
       }
@@ -131,7 +140,7 @@ export default function GatewayVerificationFlow({ listingId, sellerId, onChanged
 
   function checkData() {
     void run(async () => {
-      const saved = attempt.current ?? { probeCommand: { confirm: true as const, preview_requested: preview, idempotency_key: crypto.randomUUID() } };
+      const saved = (attempt.current?.quoteRefused ? null : attempt.current) ?? { probeCommand: { confirm: true as const, preview_requested: preview, idempotency_key: crypto.randomUUID() } };
       save(saved);
       const response = await probeGatewayVerification(listingId, saved.probeCommand);
       if (!mounted.current) return;
@@ -143,6 +152,7 @@ export default function GatewayVerificationFlow({ listingId, sellerId, onChanged
     });
   }
   function paidStart() {
+    if (!completeDescription) return;
     void run(async () => {
       const stored = window.localStorage.getItem(storageKey);
       const saved: Attempt | null = stored ? JSON.parse(stored) : attempt.current;
@@ -160,7 +170,18 @@ export default function GatewayVerificationFlow({ listingId, sellerId, onChanged
       if (!mounted.current) return;
       if (readiness.state === 'setup_required' || readiness.state === 'setup_pending') { setSetup(true); return; }
       if (readiness.state !== 'ready') { setError('Your payment method is not ready. Please try again later.'); return; }
-      const response = await startGatewayVerification(listingId, command);
+      let response;
+      try { response = await startGatewayVerification(listingId, command); }
+      catch (cause) {
+        const refusal = (cause as { response?: { status?: number; data?: { detail?: unknown } } })?.response;
+        if (refusal?.status === 409 && ['quote_binding_or_expiry', 'source_changed'].includes(String(refusal.data?.detail))) {
+          // These explicit refusals precede authorization. All uncertain outcomes
+          // retain the original command and key for an idempotent retry.
+          save({ probeCommand: saved.probeCommand, quoteRefused: true });
+          resetAttemptFields();
+        }
+        throw cause;
+      }
       if (!mounted.current) return;
       save({ ...attempt.current!, epochId: response.data.verification_id });
       await checkStatus();
@@ -180,10 +201,15 @@ export default function GatewayVerificationFlow({ listingId, sellerId, onChanged
       onChanged?.();
     });
   }
+  function resetAttemptFields() {
+    setDescription({ intended_use_tags: [], known_limitation_tags: [] });
+    setPreview(false); setSetup(false);
+    setProbe(null); setEpoch(null); setPublicationAck(false); setCorpusAck(false); setConfirmAction(null); setError('');
+  }
   function newAttempt() {
     window.localStorage.removeItem(storageKey);
     attempt.current = null;
-    setProbe(null); setEpoch(null); setPublicationAck(false); setCorpusAck(false); setConfirmAction(null); setError('');
+    resetAttemptFields();
   }
   const completeDescription = Object.keys(choices).every(key => description[key as keyof typeof choices]);
   const fullReview = epoch?.findings?.epoch_id === epoch?.verification_id && epoch?.findings?.listing_id === listingId ? epoch.findings : null;
@@ -191,12 +217,12 @@ export default function GatewayVerificationFlow({ listingId, sellerId, onChanged
   const canReview = epoch?.state === 'CAPTURED' && epoch.publication_allowed && fullReview && hasBinding;
   const canNewAttempt = (!attempt.current?.startCommand && !!probe && probe.state !== 'queued') || (epoch && (terminalStates.has(epoch.state) || epoch.state === 'PUBLISHED'));
   return <section className="space-y-5 rounded-xl border border-gray-200 bg-white p-6" aria-labelledby="gateway-verification-heading">
-    <h2 id="gateway-verification-heading" className="text-xl font-semibold">{probe?.state === 'complete' && probe.quote_id ? 'Verify this data' : epoch ? 'Data verification' : 'Check verification availability'}</h2>
+    <h2 id="gateway-verification-heading" className="text-xl font-semibold">{probe?.state === 'complete' && probe.quote_id ? 'Verify this data' : epoch || probe ? 'Data verification' : 'Check verification availability'}</h2>
     <p>Check your data in your own gateway, then review a quote. The check and quote are free and do not need a card. Data values stay in your gateway.</p>
     {error && <p role="alert">{error}</p>}
     {!probe && !epoch && <>
-      <label className="block"><input type="checkbox" checked={preview} disabled={busy || !!attempt.current} onChange={e => setPreview(e.target.checked)} /> Include column names and row counts in the findings</label>
-      <button className={buttonClass} disabled={!ready || busy} onClick={checkData}>{busy ? 'Checking…' : 'Check data and get quote'}</button>
+      <label className="block"><input type="checkbox" checked={preview} disabled={busy || (!!attempt.current && !attempt.current.quoteRefused)} onChange={e => setPreview(e.target.checked)} /> Include column names and row counts in the findings</label>
+      <button className={buttonClass} disabled={!ready || busy} onClick={checkData}>{busy ? 'Checking…' : attempt.current?.quoteRefused ? 'Get a new quote' : 'Check data and get quote'}</button>
     </>}
     {probe?.state === 'queued' && <p role="status">Waiting for your gateway to check the data. No charge has been made.</p>}
     {probe?.state === 'refused' && <p role="alert">{verificationRefusalCopy(probe.refusal)}</p>}
@@ -214,7 +240,7 @@ export default function GatewayVerificationFlow({ listingId, sellerId, onChanged
         </fieldset>)}
       </fieldset>
       <label className="block"><input type="checkbox" checked={publicationAck} onChange={e => setPublicationAck(e.target.checked)} /> I understand the charge and that I can publish all findings unedited or decline publication after reviewing them.</label>
-      <label className="block"><input type="checkbox" checked={corpusAck} onChange={e => setCorpusAck(e.target.checked)} /> I agree that the verification record and approved aggregate findings will be retained in ai.market’s verification records, including if I decline publication.</label>
+      <label className="block"><input type="checkbox" checked={corpusAck} onChange={e => setCorpusAck(e.target.checked)} /> I agree that the verification record and approved summary statistics will be retained in ai.market’s verification records, including if I decline publication.</label>
       <button className={buttonClass} disabled={busy || !publicationAck || !corpusAck || !completeDescription} onClick={paidStart}>Start paid verification</button>
     </>}
     {setup && <><DataVerificationPaymentMethod returnToListing={{ listingId, sellerId }} /><button className={buttonClass} onClick={() => setSetup(false)}>Back to verification</button><p>After adding your card, return here and choose Start paid verification to continue.</p></>}

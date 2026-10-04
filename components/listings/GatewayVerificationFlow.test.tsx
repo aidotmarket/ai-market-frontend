@@ -100,6 +100,7 @@ describe('gateway seller verification flow', () => {
     fireEvent.click(await screen.findByRole('button', { name: 'Check data and get quote' }));
     expect((await screen.findByRole('alert')).textContent).toBe(gateway.E7_REFUSAL);
     expect(screen.queryByText('Your verification quote')).toBeNull();
+    expect(screen.getByRole('heading', { name: 'Data verification' })).toBeTruthy();
     expect(payin.getDataVerificationPayInReadiness).not.toHaveBeenCalled();
   });
   it('opens card setup only after deliberate paid start and never starts automatically', async () => {
@@ -140,6 +141,67 @@ describe('gateway seller verification flow', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Start paid verification' }));
     await waitFor(() => expect(gateway.startGatewayVerification).toHaveBeenCalledTimes(2));
     expect(vi.mocked(gateway.startGatewayVerification).mock.calls[1][1]).toEqual(original);
+  });
+  it.each(['quote_binding_or_expiry', 'source_changed'])('renews after definite %s refusal during card setup and across refresh', async detail => {
+    vi.mocked(payin.getDataVerificationPayInReadiness).mockResolvedValueOnce({ version: 'data_verification_payin_readiness_v1', state: 'setup_required', can_start_setup: true, can_replace_payment_method: false, message: 'ignored' });
+    await getQuote(); acknowledge();
+    const oldProbe = JSON.parse(window.localStorage.getItem(key)!).probeCommand;
+    fireEvent.click(screen.getByRole('button', { name: 'Start paid verification' }));
+    await screen.findByText('Hosted card setup');
+    const oldStart = JSON.parse(window.localStorage.getItem(key)!).startCommand;
+    cleanup(); render(<GatewayVerificationFlow listingId="listing" sellerId="seller" />);
+    await screen.findByText('Your verification quote');
+    screen.getAllByRole('checkbox').filter(el => /I understand|I agree/.test(el.parentElement?.textContent ?? '')).forEach(el => fireEvent.click(el));
+    vi.mocked(gateway.startGatewayVerification).mockRejectedValueOnce({ response: { status: 409, data: { detail } } });
+    fireEvent.click(screen.getByRole('button', { name: 'Start paid verification' }));
+    await screen.findByRole('alert');
+    expect(vi.mocked(gateway.startGatewayVerification).mock.calls[0][1]).toEqual(oldStart);
+    expect(JSON.parse(window.localStorage.getItem(key)!)).toEqual({ probeCommand: oldProbe, quoteRefused: true });
+    cleanup(); render(<GatewayVerificationFlow listingId="listing" sellerId="seller" />);
+    fireEvent.click(await screen.findByRole('button', { name: 'Get a new quote' }));
+    await screen.findByText('Your verification quote');
+    const newProbe = vi.mocked(gateway.probeGatewayVerification).mock.calls[1][1];
+    expect(newProbe.idempotency_key).not.toBe(oldProbe.idempotency_key);
+    screen.getAllByRole('combobox').forEach(el => {
+      expect((el as HTMLSelectElement).disabled).toBe(false);
+      expect((el as HTMLSelectElement).value).toBe('');
+    });
+    acknowledge(); fireEvent.click(screen.getByRole('button', { name: 'Start paid verification' }));
+    await screen.findByText('Verification is in progress. You can return to this page to check it.');
+    expect(vi.mocked(gateway.startGatewayVerification).mock.calls[1][1].idempotency_key).not.toBe(oldStart.idempotency_key);
+  });
+  it.each([
+    { response: { status: 500, data: { detail: 'source_changed' } } },
+    { response: { status: 409, data: { detail: 'unknown_conflict' } } },
+  ])('retains the paid command on an ambiguous response: %j', async cause => {
+    vi.mocked(gateway.startGatewayVerification).mockRejectedValueOnce(cause);
+    await getQuote(); acknowledge(); fireEvent.click(screen.getByRole('button', { name: 'Start paid verification' }));
+    await screen.findByRole('alert');
+    const original = vi.mocked(gateway.startGatewayVerification).mock.calls[0][1];
+    expect(JSON.parse(window.localStorage.getItem(key)!).startCommand).toEqual(original);
+    expect(screen.queryByRole('button', { name: 'Get a new quote' })).toBeNull();
+    fireEvent.click(screen.getByRole('button', { name: 'Start paid verification' }));
+    await waitFor(() => expect(gateway.startGatewayVerification).toHaveBeenCalledTimes(2));
+    expect(vi.mocked(gateway.startGatewayVerification).mock.calls[1][1]).toEqual(original);
+  });
+  it('resets description and preview on a new attempt and guards incomplete paid start', async () => {
+    await getQuote(); acknowledge();
+    fireEvent.click(screen.getByRole('button', { name: 'Get a new quote' }));
+    const preview = screen.getByRole('checkbox', { name: 'Include column names and row counts in the findings' });
+    expect((preview as HTMLInputElement).checked).toBe(false);
+    fireEvent.click(preview);
+    fireEvent.click(screen.getByRole('button', { name: 'Check data and get quote' }));
+    await screen.findByText('Your verification quote');
+    screen.getAllByRole('combobox').forEach(el => expect((el as HTMLSelectElement).value).toBe(''));
+    screen.getAllByRole('checkbox').filter(el => /I understand|I agree/.test(el.parentElement?.textContent ?? '')).forEach(el => fireEvent.click(el));
+    const start = screen.getByRole('button', { name: 'Start paid verification' }) as HTMLButtonElement;
+    start.disabled = false;
+    fireEvent.click(start);
+    expect(payin.getDataVerificationPayInReadiness).not.toHaveBeenCalled();
+    expect(gateway.startGatewayVerification).not.toHaveBeenCalled();
+    expect(screen.getByRole('option', { name: 'A summary of multiple records' }).getAttribute('value')).toBe('aggregate');
+    expect(screen.getByLabelText('Categories defined by the data source')).toBeTruthy();
+    expect(screen.getByText(/approved summary statistics/)).toBeTruthy();
   });
   it('restores an accepted attempt by reading status without another authorization', async () => {
     window.localStorage.setItem(key, JSON.stringify({ probeCommand: { confirm: true, preview_requested: false, idempotency_key: 'key' }, epochId: 'epoch' }));
