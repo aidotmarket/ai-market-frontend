@@ -2,7 +2,7 @@
 
 import { use, useEffect, useState } from 'react';
 import Link from 'next/link';
-import { getMyListings } from '@/api/listings';
+import { getListing, getListingOwnership } from '@/api/listings';
 import { getGatewayListingSource } from '@/api/sellerGateways';
 import { useAuthStore } from '@/store/auth';
 import GatewayVerificationFlow from '@/components/listings/GatewayVerificationFlow';
@@ -22,11 +22,12 @@ export default function ListingPage({ params }: { params: Promise<{ id: string }
     setState('loading'); setListing(null); setGateway(false);
     async function load() {
       try {
-        // The seller's authenticated inventory is authoritative for ownership.
-        const response = await getMyListings();
-        const owned = (response.data as OwnedListing[]).find(item => item.id === id);
+        // Check this listing directly; the inventory endpoint is paginated.
+        const isOwner = await getListingOwnership(id);
         if (!current) return;
-        if (!owned) { setState('unavailable'); return; }
+        if (!isOwner) { setState('unavailable'); return; }
+        const owned = await getListing(id);
+        if (!current) return;
         const source = await getGatewayListingSource(id);
         if (!current) return;
         setListing(owned); setGateway(source?.type === 'gateway'); setState('ready');
