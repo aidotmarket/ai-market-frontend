@@ -21,6 +21,8 @@ export interface AWSSetupResponse {
 }
 export interface AWSVerifierStatus {
   state: 'none' | 'waiting' | 'ready' | 'removed';
+  eligible: boolean;
+  connection_id: string | null;
   runner_id: string | null;
   region: string | null;
   code_sha256: string | null;

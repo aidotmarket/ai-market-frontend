@@ -352,7 +352,7 @@ describe('gateway seller verification flow', () => {
 });
 
 const awsStatus: gateway.AWSVerifierStatus = {
-  state: 'none', runner_id: null, region: 'eu-north-1', code_sha256: null,
+  state: 'none', eligible: true, connection_id: 'connection', runner_id: null, region: 'eu-north-1', code_sha256: null,
   registered_at: null, last_seen_at: null, poll_interval_minutes: 1, setup_expires_at: null,
 };
 const registered = { ...awsStatus, state: 'waiting' as const, runner_id: 'aws-runner', code_sha256: 'a'.repeat(64), registered_at: '2026-10-05T12:00:00Z' };

@@ -64,7 +64,7 @@ describe('AWS seller-session setup/status and shared removal', () => {
     expect(api.post).toHaveBeenLastCalledWith('/verification-runners/setup', { connection_id: 'connection', replace_runner_id: 'old', confirm_replace: true });
   });
   it('reads exactly the listing status contract without a setup token', async () => {
-    const data = { state: 'waiting', runner_id: null, region: 'eu-north-1', code_sha256: null, registered_at: null, last_seen_at: null, poll_interval_minutes: null, setup_expires_at: '2026-10-05T12:00:00Z' };
+    const data = { state: 'waiting', eligible: true, connection_id: 'connection', runner_id: null, region: 'eu-north-1', code_sha256: null, registered_at: null, last_seen_at: null, poll_interval_minutes: null, setup_expires_at: '2026-10-05T12:00:00Z' };
     vi.mocked(api.get).mockResolvedValue({ data });
     expect(await getAwsVerifierStatus('listing')).toEqual(data);
     expect(api.get).toHaveBeenCalledWith('/verification-runners/aws/status', { params: { listing_id: 'listing' } });
