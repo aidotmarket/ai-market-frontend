@@ -52,6 +52,18 @@ describe('Layout registration links', () => {
     navigation.push.mockClear();
   });
 
+  it('renders one on-site newsletter form in the signed-out footer with existing legal links', () => {
+    render(<Layout><div>Page content</div></Layout>);
+    const form = screen.getByRole('form', { name: 'Newsletter subscription' });
+    expect(form.closest('footer')).not.toBeNull();
+    expect(screen.getAllByRole('textbox', { name: 'Newsletter email' })).toHaveLength(1);
+    expect(document.querySelector('a[href^="mailto:support@ai.market?subject=Newsletter"]')).toBeNull();
+    expect(screen.getByRole('link', { name: 'Terms' }).getAttribute('href')).toBe('/legal/terms');
+    for (const link of screen.getAllByRole('link', { name: 'Privacy Notice' })) {
+      expect(link.getAttribute('href')).toBe('/legal/privacy');
+    }
+  });
+
   it('restores a validated listing redirect from both desktop and mobile terms Sign up actions', () => {
     const listingRedirect = '/listings/new-york-city-vehicle-collisions-281a2b31';
     navigation.search = new URLSearchParams({ redirect: listingRedirect }).toString();
