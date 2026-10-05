@@ -9,6 +9,7 @@ export default function NewsletterForm() {
   const input = useRef<HTMLInputElement>(null);
   const submitting = useRef(false);
   const [email, setEmail] = useState('');
+  const [name, setName] = useState('');
   const [pending, setPending] = useState(false);
   const [savedEmail, setSavedEmail] = useState('');
   const [error, setError] = useState('');
@@ -31,7 +32,8 @@ export default function NewsletterForm() {
     submitting.current = true;
     setPending(true);
     try {
-      await subscribeToNewsletter({ email: address });
+      const trimmedName = name.trim();
+      await subscribeToNewsletter({ email: address, ...(trimmedName ? { name: trimmedName } : {}) });
       setSavedEmail(address);
     } catch {
       setError('We could not save your newsletter preference. Please try again.');
@@ -43,6 +45,20 @@ export default function NewsletterForm() {
 
   return (
     <form onSubmit={handleSubmit} noValidate aria-label="Newsletter subscription" className="w-full sm:max-w-sm">
+      <label htmlFor={`${id}-name`} className="block text-sm font-medium text-[#e2e8f0] mb-2">
+        Name (optional)
+      </label>
+      <input
+        id={`${id}-name`}
+        name="name"
+        type="text"
+        autoComplete="name"
+        maxLength={200}
+        readOnly={pending}
+        value={name}
+        onChange={(event) => setName(event.target.value)}
+        className="mb-3 w-full rounded-md border border-[#6b7a8d] bg-[#1b2332] px-3 py-2.5 text-sm text-white focus:outline-none focus:ring-2 focus:ring-white"
+      />
       <label htmlFor={`${id}-email`} className="block text-sm font-medium text-[#e2e8f0] mb-2">
         Newsletter email
       </label>

@@ -35,6 +35,13 @@ for (const viewport of [{ width: 1280, height: 900 }, { width: 390, height: 844 
     await page.goto('/legal/privacy');
     const form = page.getByRole('form', { name: 'Newsletter subscription' });
     const input = form.getByRole('textbox', { name: 'Newsletter email' });
+    const name = form.getByRole('textbox', { name: 'Name (optional)' });
+    await expect(name).not.toHaveAttribute('required');
+    await expect(name).toHaveAttribute('autocomplete', 'name');
+    await expect(name).toHaveAttribute('maxlength', '200');
+    await name.focus();
+    await page.keyboard.press('Tab');
+    await expect(input).toBeFocused();
     await input.fill('invalid');
     await input.press('Enter');
     await expect(form.getByRole('alert')).toContainText('Enter a valid email address');
@@ -42,15 +49,22 @@ for (const viewport of [{ width: 1280, height: 900 }, { width: 390, height: 844 
     expect(payloads).toHaveLength(0);
 
     await input.fill('keyboard@example.com');
+    await name.fill('  Keyboard Reader  ');
     await input.press('Enter');
     await expect(form.getByRole('button', { name: 'Saving...' })).toBeDisabled();
     await expect(input).toHaveAttribute('readonly');
+    await expect(name).toHaveAttribute('readonly');
+    await name.press('x');
+    await expect(name).toHaveValue('  Keyboard Reader  ');
+    await input.press('x');
+    await expect(input).toHaveValue('keyboard@example.com');
     await input.press('Enter');
     await expect.poll(() => payloads.length).toBe(1);
-    expect(payloads[0]).toEqual({ email: 'keyboard@example.com' });
+    expect(payloads[0]).toEqual({ email: 'keyboard@example.com', name: 'Keyboard Reader' });
     release();
     await expect(form.getByRole('alert')).toContainText('Please try again');
     await expect(input).toHaveValue('keyboard@example.com');
+    await expect(name).toHaveValue('  Keyboard Reader  ');
 
     await input.focus();
     await page.keyboard.press('Tab');
@@ -59,7 +73,15 @@ for (const viewport of [{ width: 1280, height: 900 }, { width: 390, height: 844 
     await page.keyboard.press('Enter');
     await expect(form.getByRole('status')).toHaveText('Your newsletter preference has been saved.');
     await expect(subscribe).toBeDisabled();
-    expect(payloads).toEqual([{ email: 'keyboard@example.com' }, { email: 'keyboard@example.com' }]);
+    expect(payloads).toEqual([
+      { email: 'keyboard@example.com', name: 'Keyboard Reader' },
+      { email: 'keyboard@example.com', name: 'Keyboard Reader' },
+    ]);
+    await name.fill('   ');
+    await input.fill('email-only@example.com');
+    await input.press('Enter');
+    await expect(form.getByRole('status')).toHaveText('Your newsletter preference has been saved.');
+    expect(payloads[2]).toEqual({ email: 'email-only@example.com' });
     await expect(page).toHaveURL('http://127.0.0.1:3176/legal/privacy');
     await expect(form.getByRole('link', { name: 'Privacy Notice' })).toHaveAttribute('href', '/legal/privacy');
     await expect(form).toBeInViewport();

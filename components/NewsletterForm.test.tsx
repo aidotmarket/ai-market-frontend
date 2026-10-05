@@ -23,8 +23,14 @@ function submit() {
   fireEvent.submit(screen.getByRole('form', { name: 'Newsletter subscription' }));
 }
 
+function enterName(name = '  Max Reader  ') {
+  const input = screen.getByRole('textbox', { name: 'Name (optional)' }) as HTMLInputElement;
+  fireEvent.change(input, { target: { value: name } });
+  return input;
+}
+
 describe('NewsletterForm', () => {
-  it('has a labelled native email input, submit button and linked consent without an account or name field', () => {
+  it('has required email and accessible optional name with native keyboard access and linked consent', () => {
     render(<NewsletterForm />);
     const input = screen.getByRole('textbox', { name: 'Newsletter email' }) as HTMLInputElement;
     expect(input.type).toBe('email');
@@ -32,7 +38,15 @@ describe('NewsletterForm', () => {
     expect(input.autocomplete).toBe('email');
     expect(input.tabIndex).toBe(0);
     expect((screen.getByRole('button', { name: 'Subscribe' }) as HTMLButtonElement).type).toBe('submit');
-    expect(screen.getAllByRole('textbox')).toHaveLength(1);
+    expect(screen.getAllByRole('textbox')).toHaveLength(2);
+    const name = screen.getByRole('textbox', { name: 'Name (optional)' }) as HTMLInputElement;
+    expect(name.required).toBe(false);
+    expect(name.hasAttribute('required')).toBe(false);
+    expect(name.autocomplete).toBe('name');
+    expect(name.maxLength).toBe(200);
+    expect(name.tabIndex).toBe(0);
+    name.focus();
+    expect(document.activeElement).toBe(name);
     const consent = document.getElementById(input.getAttribute('aria-describedby')!);
     expect(consent?.textContent).toContain('you subscribe to the ai.market newsletter');
     expect(screen.getByRole('link', { name: 'Privacy Notice' }).getAttribute('href')).toBe('/legal/privacy');
@@ -65,19 +79,41 @@ describe('NewsletterForm', () => {
     expect(screen.queryByText(/email.*sent|confirmation.*sent/i)).toBeNull();
   });
 
+  it('includes a trimmed nonblank optional name', async () => {
+    render(<NewsletterForm />);
+    enterEmail();
+    enterName();
+    submit();
+    await screen.findByText('Your newsletter preference has been saved.');
+    expect(post.mock.calls[0][1]).toEqual({ email: 'reader@example.com', name: 'Max Reader' });
+  });
+
+  it.each(['', '   ', '\t  '])('omits blank optional name %j', async (name) => {
+    render(<NewsletterForm />);
+    enterEmail();
+    enterName(name);
+    submit();
+    await screen.findByText('Your newsletter preference has been saved.');
+    expect(post.mock.calls[0][1]).toEqual({ email: 'reader@example.com' });
+  });
+
   it('prevents repeated submits while pending and preserves the submitted value', async () => {
     let resolve!: (value: unknown) => void;
     post.mockReturnValue(new Promise((done) => { resolve = done; }));
     render(<NewsletterForm />);
     const input = enterEmail();
+    const name = enterName();
     act(() => { submit(); submit(); });
     expect(post).toHaveBeenCalledOnce();
     expect(screen.getByRole('status').textContent).toBe('Saving your newsletter preference...');
     expect((screen.getByRole('button', { name: 'Saving...' }) as HTMLButtonElement).disabled).toBe(true);
     expect(input.readOnly).toBe(true);
+    expect(name.readOnly).toBe(true);
+    expect(name.value).toBe('  Max Reader  ');
     expect(input.value).toBe('reader@example.com');
     await act(async () => { resolve({ data: { success: true, message: 'Saved' } }); });
     expect(input.readOnly).toBe(false);
+    expect(name.readOnly).toBe(false);
     expect(screen.getByRole('status').textContent).toBe('Your newsletter preference has been saved.');
   });
 
@@ -86,13 +122,16 @@ describe('NewsletterForm', () => {
     ['persistence failure', () => Promise.reject({ response: { status: 503 } })],
     ['structured validation failure', () => Promise.reject({ response: { status: 422, data: { detail: [{ msg: 'invalid' }] } } })],
     ['unconfirmed response', () => Promise.resolve({ data: { success: false, message: 'not saved' } })],
-  ])('keeps email and offers retry after %s, then succeeds', async (_label, failure) => {
+  ])('keeps email and name and offers retry after %s, then succeeds', async (_label, failure) => {
     post.mockImplementationOnce(failure);
     render(<NewsletterForm />);
     const input = enterEmail();
+    const name = enterName();
     submit();
     expect((await screen.findByRole('alert')).textContent).toContain('Please try again');
     expect(input.value).toBe('reader@example.com');
+    expect(name.value).toBe('  Max Reader  ');
+    expect(name.readOnly).toBe(false);
     expect(input.getAttribute('aria-invalid')).toBe('false');
     expect(screen.getByRole('status').textContent).toBe('');
     const button = screen.getByRole('button', { name: 'Subscribe' }) as HTMLButtonElement;
@@ -102,7 +141,7 @@ describe('NewsletterForm', () => {
     fireEvent.click(button, { detail: 0 });
     await screen.findByText('Your newsletter preference has been saved.');
     expect(post).toHaveBeenCalledTimes(2);
-    expect(post.mock.calls[1][1]).toEqual({ email: 'reader@example.com' });
+    expect(post.mock.calls[1][1]).toEqual({ email: 'reader@example.com', name: 'Max Reader' });
     expect(screen.queryByRole('alert')).toBeNull();
   });
 
