@@ -179,7 +179,7 @@ export default function SellerLicenseSelection({value, onChange, disabled = fals
     <legend className="px-1 text-lg font-semibold text-gray-900">How can buyers use this data?</legend>
     <div className="grid gap-4 sm:grid-cols-2">
       <label className={`rounded-xl border p-4 ${value.kind === 'standard' ? 'border-indigo-500 bg-indigo-50' : 'border-gray-200'}`}>
-        <span className="flex items-center gap-2 font-semibold"><input type="radio" name="listing-license-kind" checked={value.kind === 'standard'} onChange={() => chooseKind('standard')} />Standard <span className="text-xs font-medium text-indigo-700">Recommended</span><LicenseReadingDialog label="Read licence" href={licenseDocumentPath('standard',value.ai_training)} onOpen={()=>{if(value.kind==='standard')setLicenseOpened(true);}} /></span>
+        <span className="flex items-center gap-2 font-semibold"><input type="radio" name="listing-license-kind" checked={value.kind === 'standard'} onChange={() => chooseKind('standard')} />Standard <span className="text-xs font-medium text-indigo-700">Recommended</span><a className="text-sm font-medium text-indigo-700 underline" href={licenseDocumentPath('standard',value.ai_training)} target="_blank" rel="noopener noreferrer" onClick={event=>{event.stopPropagation();if(value.kind==='standard')setLicenseOpened(true);}}>Read licence</a></span>
         <span className="mt-2 block text-sm text-gray-600">Balanced ai.market terms. Buyers may not redistribute or resell the dataset.</span>
       </label>
       <label className={`rounded-xl border p-4 ${value.kind === 'custom' ? 'border-indigo-500 bg-indigo-50' : 'border-gray-200'}`}>

@@ -1,5 +1,5 @@
 // @vitest-environment jsdom
-import {cleanup,fireEvent,render,screen,waitFor} from '@testing-library/react';
+import {act,cleanup,fireEvent,render,screen,waitFor} from '@testing-library/react';
 import {afterEach,beforeEach,describe,expect,it,vi} from 'vitest';
 import {useState} from 'react';
 import {webcrypto} from 'node:crypto';
@@ -27,7 +27,7 @@ function Harness({initial=createStandardSelection()}:{initial?:LicenseSelection}
 }
 
 function readTerms(label='Read licence'){
- fireEvent.click(screen.getByRole('button',{name:label}));fireEvent.keyDown(document,{key:'Escape'});
+ fireEvent.click(screen.getByRole(label==='Read licence'?'link':'button',{name:label}));fireEvent.keyDown(document,{key:'Escape'});
 }
 function openBoth(){readTerms();readTerms('Read Marketplace Listing Covenant');}
 
@@ -159,19 +159,100 @@ describe('Seller licence selection',()=>{
     expect(confirmation.disabled).toBe(true);
   });
 
-  it('opens the matching training variant in a reading dialog',async()=>{
+  it('links to the current training variant and only records reading the selected Standard licence',async()=>{
     render(<Harness/>);
     await screen.findByText('Legal name on the licence: Seller Ltd (GB)');
-    fireEvent.click(screen.getByRole('button',{name:'Read licence'}));
-    expect(screen.getByRole('dialog',{name:'Read licence'})).toBeTruthy();
-    expect(screen.getByRole('link',{name:'Open in new tab'}).getAttribute('href')).toBe('/licenses/standard/1.0/ai-training');
-    fireEvent.keyDown(document,{key:'Escape'});
+    const link=screen.getByRole('link',{name:'Read licence'});
+    expect(link.getAttribute('href')).toBe('/licenses/standard/1.0/ai-training');
+    fireEvent.click(link);
+    expect(screen.queryByRole('dialog')).toBeNull();
     expect((screen.getByLabelText('Confirm covenant and authority') as HTMLInputElement).disabled).toBe(true);
     readTerms('Read Marketplace Listing Covenant');
     expect((screen.getByLabelText('Confirm covenant and authority') as HTMLInputElement).disabled).toBe(false);
     fireEvent.click(screen.getByLabelText('Allow AI/ML training'));
-    fireEvent.click(screen.getByRole('button',{name:'Read licence'}));
-    expect(screen.getByRole('link',{name:'Open in new tab'}).getAttribute('href')).toBe('/licenses/standard/1.0/no-ai-training');
+    expect((screen.getByLabelText('Confirm covenant and authority') as HTMLInputElement).disabled).toBe(true);
+    expect(link.getAttribute('href')).toBe('/licenses/standard/1.0/no-ai-training');
+    fireEvent.click(link);
+    expect((screen.getByLabelText('Confirm covenant and authority') as HTMLInputElement).disabled).toBe(false);
+    expect(JSON.parse(screen.getByTestId('wire').textContent!).seller_acceptance.authority_confirmed).toBe(false);
+  });
+
+  it.each([
+    ['required legal identity',true,true],['required legal identity',true,false],
+    ['disabled while saving',false,true],['disabled while saving',false,false],
+  ] as const)('keeps reading enabled with %s and training %s/%s',async(_reason,required,training)=>{
+    if(required)legal.getSellerLegalIdentity.mockResolvedValue({status:'required',source:null,legal_name:null,jurisdiction:null,version:null});
+    const value={...createStandardSelection(training),identity_version:required?undefined:1};
+    const onChange=vi.fn();
+    render(<SellerLicenseSelection value={value} onChange={onChange} disabled={!required} legalIdentityEnabled/>);
+    if(required)await screen.findByText(/Your legal name and country are not saved/);
+    else await screen.findByText('Legal name on the licence: Seller Ltd (GB)');
+    const link=screen.getByRole('link',{name:'Read licence'}) as HTMLAnchorElement;
+    const fieldset=link.closest('fieldset')!;
+    expect(fieldset.disabled).toBe(true);
+    expect(link.matches(':disabled')).toBe(false);
+    expect(link.hasAttribute('aria-disabled')).toBe(false);
+    expect(link.getAttribute('href')).toBe(`/licenses/standard/1.0/${training?'ai-training':'no-ai-training'}`);
+    expect(link.search).toBe('');
+    expect(link.hasAttribute('download')).toBe(false);
+    expect(link.target).toBe('_blank');
+    expect(link.rel.split(' ')).toContain('noopener');
+    for(const control of fieldset.querySelectorAll('input,button,textarea,select'))expect(control.matches(':disabled')).toBe(true);
+    const calls=[legal.getSellerLegalIdentity.mock.calls.length,legal.refreshSellerLegalIdentity.mock.calls.length];
+    act(()=>link.click());
+    expect((screen.getByRole('radio',{name:/Standard/}) as HTMLInputElement).checked).toBe(true);
+    expect((screen.getByRole('radio',{name:/My own licence/}) as HTMLInputElement).checked).toBe(false);
+    expect(onChange).not.toHaveBeenCalled();
+    expect(value.seller_acceptance.authority_confirmed).toBe(false);
+    expect(legal.saveSellerLegalIdentity).not.toHaveBeenCalled();
+    expect([legal.getSellerLegalIdentity.mock.calls.length,legal.refreshSellerLegalIdentity.mock.calls.length]).toEqual(calls);
+    expect(transport.get).not.toHaveBeenCalled();
+    expect(transport.post).not.toHaveBeenCalled();
+    expect(screen.queryByRole('dialog')).toBeNull();
+  });
+
+  it.each([false,true])('does not select Standard or record it as read from a custom choice (disabled=%s)',disabled=>{
+    const value={...createStandardSelection(false),kind:'custom' as const,license_document_id:null};
+    const onChange=vi.fn();
+    render(<SellerLicenseSelection value={value} onChange={onChange} disabled={disabled}/>);
+    const link=screen.getByRole('link',{name:'Read licence'}) as HTMLAnchorElement;
+    act(()=>link.click());
+    expect(link.getAttribute('href')).toBe('/licenses/standard/1.0/no-ai-training');
+    expect((screen.getByRole('radio',{name:/My own licence/}) as HTMLInputElement).checked).toBe(true);
+    expect((screen.getByRole('radio',{name:/Standard/}) as HTMLInputElement).checked).toBe(false);
+    expect(screen.getByText('Open the selected licence and Marketplace Listing Covenant first.')).toBeTruthy();
+    expect(onChange).not.toHaveBeenCalled();
+    expect(transport.get).not.toHaveBeenCalled();
+    expect(transport.post).not.toHaveBeenCalled();
+    expect(legal.saveSellerLegalIdentity).not.toHaveBeenCalled();
+  });
+
+  it('keeps the Standard link usable during custom submission without selecting or resubmitting',async()=>{
+    vi.stubGlobal('crypto',webcrypto);
+    const response=await responseFor('The custom terms.\n');
+    let finish!:(result:unknown)=>void;
+    transport.post.mockImplementationOnce(()=>new Promise(resolve=>{finish=resolve;}));
+    render(<Harness/>);
+    await screen.findByText('Legal name on the licence: Seller Ltd (GB)');
+    fireEvent.click(screen.getByRole('radio',{name:/My own licence/}));
+    fireEvent.change(screen.getByLabelText('Licence title'),{target:{value:'Terms'}});
+    fireEvent.change(screen.getByLabelText('Your licence text'),{target:{value:'The custom terms.\n'}});
+    fireEvent.click(screen.getByRole('button',{name:'Save custom licence text'}));
+    expect(transport.post).toHaveBeenCalledOnce();
+    const link=screen.getByRole('link',{name:'Read licence'}) as HTMLAnchorElement;
+    const fieldset=link.closest('fieldset')!;
+    expect(fieldset.disabled).toBe(true);
+    expect(link.matches(':disabled')).toBe(false);
+    for(const control of fieldset.querySelectorAll('input,button,textarea,select'))expect(control.matches(':disabled')).toBe(true);
+    const wire=screen.getByTestId('wire').textContent;
+    act(()=>link.click());
+    expect(screen.getByTestId('wire').textContent).toBe(wire);
+    expect(screen.getByText('Open the selected licence and Marketplace Listing Covenant first.')).toBeTruthy();
+    expect(transport.post).toHaveBeenCalledOnce();
+    expect(transport.get).not.toHaveBeenCalled();
+    expect(legal.saveSellerLegalIdentity).not.toHaveBeenCalled();
+    await act(async()=>{finish({status:201,data:response});});
+    expect(await screen.findByText('Custom licence text saved and verified.')).toBeTruthy();
   });
 
   it('opens the details section to review both the standard licence and covenant',()=>{
@@ -184,6 +265,9 @@ describe('Seller licence selection',()=>{
     openBoth();
     expect(confirmation.disabled).toBe(false);
     expect(screen.queryByText('Open the selected licence and Marketplace Listing Covenant first.')).toBeNull();
+    fireEvent.click(screen.getByRole('button',{name:'Read full licence'}));
+    expect(screen.getByRole('dialog',{name:'Read full licence'})).toBeTruthy();
+    expect(screen.getByRole('link',{name:'Open in new tab'}).getAttribute('href')).toBe('/licenses/standard/1.0/ai-training');
   });
 
   it.each([

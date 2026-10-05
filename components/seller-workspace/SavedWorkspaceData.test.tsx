@@ -25,7 +25,7 @@ const renderData=(connections=[connection],sampleCapability=false)=>render(<Sell
 const renderLicensedData=(sampleCapability=false)=>render(<SellerListingDraftProvider enabled sampleCapability={sampleCapability}><SavedWorkspaceData enabled connections={[connection]} listingLicensesEnabled /></SellerListingDraftProvider>);
 const DraftStatus=()=>{const status=useSellerListingDraftStatus();return <p data-testid="draft-status">{status.selectionSavePending?`pending:${status.sampleIndices.join(',')}`:status.selectionSaveFailed?'failed':'ready'}</p>;};
 function openTerms(){
- fireEvent.click(screen.getByRole('button',{name:'Read licence'}));fireEvent.keyDown(document,{key:'Escape'});
+ fireEvent.click(screen.getByRole('link',{name:'Read licence'}));fireEvent.keyDown(document,{key:'Escape'});
  fireEvent.click(screen.getByRole('button',{name:'Read Marketplace Listing Covenant'}));fireEvent.keyDown(document,{key:'Escape'});
 }
 
