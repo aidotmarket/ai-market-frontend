@@ -1,9 +1,12 @@
 'use client';
 
 import { useEffect, useRef, useState } from 'react';
+import Link from 'next/link';
 import {
   getGatewayVerificationEpoch, getGatewayVerificationProbe, gatewayVerificationLifecycle, gatewayVerificationError,
   probeGatewayVerification, startGatewayVerification, verificationErrorCopy, verificationRefusalCopy,
+  getAwsVerifierStatus, setupAwsVerifier, removeVerificationRunner,
+  type AWSVerifierStatus,
 } from '@/api/dataVerificationGateway';
 import { getDataVerificationPayInReadiness } from '@/api/dataVerificationPayin';
 import DataVerificationPaymentMethod from '@/components/DataVerificationPaymentMethod';
@@ -16,6 +19,7 @@ import type {
 interface Props {
   listingId: string;
   sellerId: string;
+  verifier?: { kind: 'aws'; connectionId: string } | { kind: 'gateway'; runnerId?: string };
   onChanged?: () => void;
 }
 interface Attempt {
@@ -46,7 +50,10 @@ const displayLabels: Record<string, string> = {
 };
 const label = (value: string) => displayLabels[value] ?? value.replaceAll('_', ' ').replace(/^./, c => c.toUpperCase());
 
-export default function GatewayVerificationFlow({ listingId, sellerId, onChanged }: Props) {
+export const AWS_COST_DISCLOSURE = 'Runs in your AWS account; typical cost about one cent per scan plus a small monthly amount. The strict network option costs more. The free probe also runs a scan in your AWS account; AWS charges are separate from the ai.market verification fee.';
+
+export default function GatewayVerificationFlow({ listingId, sellerId, verifier, onChanged }: Props) {
+  const aws = verifier?.kind === 'aws';
   // Recovery uses this browser’s localStorage only. Clearing it or switching
   // browsers loses the attempt/epoch ID; this contract cannot discover it again.
   const storageKey = `gateway-verification:${sellerId}:${listingId}`;
@@ -66,6 +73,80 @@ export default function GatewayVerificationFlow({ listingId, sellerId, onChanged
   const [description, setDescription] = useState<Partial<GatewayVerificationDescription>>({ intended_use_tags: [], known_limitation_tags: [] });
   const [confirmAction, setConfirmAction] = useState<GatewayVerificationAction | null>(null);
   const [delay, setDelay] = useState(2);
+  const [opened, setOpened] = useState(!aws);
+  const [awsStatus, setAwsStatus] = useState<AWSVerifierStatus | null>(null);
+  const [statusFresh, setStatusFresh] = useState(false);
+  const [verifierDecision, setVerifierDecision] = useState<'setup' | 'replace' | 'remove' | null>(null);
+  const statusRead = useRef(0);
+  const runnerId = aws ? awsStatus?.runner_id : verifier?.kind === 'gateway' ? verifier.runnerId : undefined;
+
+  async function readVerifierStatus() {
+    const read = ++statusRead.current;
+    try {
+      const status = await getAwsVerifierStatus(listingId);
+      if (mounted.current && read === statusRead.current) { setAwsStatus(status); setStatusFresh(true); }
+    } catch (cause) {
+      if (mounted.current && read === statusRead.current) setStatusFresh(false);
+      throw cause;
+    }
+  }
+  useEffect(() => {
+    if (!aws || !opened) return;
+    let stopped = false;
+    let timer: ReturnType<typeof setTimeout>;
+    async function poll() {
+      if (document.visibilityState !== 'hidden') {
+        try { await readVerifierStatus(); }
+        catch (cause) { if (!stopped) setError(verificationErrorCopy(cause)); }
+      }
+      // Setup/registration is minute-scale. Avoid background-tab traffic and
+      // keep all reads sequential, including after a transient failure.
+      if (!stopped) timer = setTimeout(() => void poll(), 30000);
+    }
+    void poll();
+    return () => { stopped = true; statusRead.current++; clearTimeout(timer); };
+  }, [aws, opened, listingId, sellerId]);
+
+  function confirmVerifierDecision() {
+    if (verifierDecision === 'remove') {
+      void run(async () => {
+        if (!runnerId) return;
+        statusRead.current++;
+        setStatusFresh(false);
+        await removeVerificationRunner(runnerId);
+        if (!mounted.current) return;
+        setVerifierDecision(null);
+        if (aws) { setStatusFresh(false); await readVerifierStatus(); }
+        await checkStatus();
+        onChanged?.();
+      });
+      return;
+    }
+    if (verifier?.kind !== 'aws' || (verifierDecision === 'replace' && !runnerId)) return;
+    // Open during the user gesture so the console survives popup blockers.
+    const consoleTab = window.open('about:blank', '_blank');
+    if (!consoleTab) { setError('Allow a new tab for the AWS console, then try again.'); return; }
+    consoleTab.opener = null;
+    void run(async () => {
+      try {
+        const result = await setupAwsVerifier(verifierDecision === 'replace' && runnerId
+          ? { connection_id: verifier.connectionId, replace_runner_id: runnerId, confirm_replace: true }
+          : { connection_id: verifier.connectionId });
+        if (!mounted.current) { consoleTab.close(); return; }
+        consoleTab.location.replace(result.quick_create_url);
+        setVerifierDecision(null);
+        setStatusFresh(false);
+        await readVerifierStatus();
+      } catch (cause) {
+        consoleTab.close();
+        if (gatewayVerificationError(cause).code === 'replacement_confirmation_required') {
+          await readVerifierStatus();
+          if (mounted.current) setVerifierDecision('replace');
+        }
+        throw cause;
+      }
+    });
+  }
 
   function save(value: Attempt) {
     // Persist before any authorization request, including when its response is lost.
@@ -139,6 +220,7 @@ export default function GatewayVerificationFlow({ listingId, sellerId, onChanged
   }, [ready, probe?.state, epoch?.state, epoch?.reconciliation_required, delay, storageKey]);
 
   function checkData() {
+    if (aws && (!statusFresh || awsStatus?.state !== 'ready')) return;
     void run(async () => {
       if (attempt.current?.epochId) { await checkStatus(); return; }
       const saved = (attempt.current?.quoteRefused ? null : attempt.current) ?? { probeCommand: { confirm: true as const, preview_requested: preview, idempotency_key: crypto.randomUUID() } };
@@ -225,21 +307,43 @@ export default function GatewayVerificationFlow({ listingId, sellerId, onChanged
   const hasBinding = epoch?.listing_id === listingId && !!epoch.source_handle_id;
   const canReview = epoch?.state === 'CAPTURED' && epoch.publication_allowed && fullReview && hasBinding;
   const canNewAttempt = (!attempt.current?.epochId && !attempt.current?.startCommand && !!probe && probe.state !== 'queued') || (epoch && !epoch.reconciliation_required && (terminalStates.has(epoch.state) || epoch.state === 'PUBLISHED'));
+  if (!opened) return <button className={buttonClass} onClick={() => setOpened(true)}>Verify this data</button>;
   return <section className="space-y-5 rounded-xl border border-gray-200 bg-white p-6" aria-labelledby="gateway-verification-heading">
     <h2 id="gateway-verification-heading" className="text-xl font-semibold">{probe?.state === 'complete' && probe.quote_id ? 'Verify this data' : epoch || attempt.current?.epochId || (probe && probe.state !== 'queued') ? 'Data verification' : 'Check verification availability'}</h2>
-    <p>Check your data in your own gateway, then review a quote. The check and quote are free and do not need a card. Data values stay in your gateway.</p>
+    <p>{aws ? 'Check your data in your own AWS account, then review a quote. The check and quote do not need a card. Data values stay in your AWS account.' : 'Check your data in your own gateway, then review a quote. The check and quote are free and do not need a card. Data values stay in your gateway.'}</p>
     {error && <p role="alert">{error}</p>}
+    {aws && (probe?.refusal === 'aws_source_too_large' || error === verificationRefusalCopy('aws_source_too_large')) && <p><Link href="/dashboard/gateways" className="underline">Set up your own AIM Data gateway</Link> with a seller-owned S3 mount using Mountpoint for Amazon S3 or rclone.</p>}
+    {aws && <>
+      <h3 className="font-semibold">AWS verifier</h3>
+      <p role="status">{!statusFresh ? 'Checking verifier status…' : awsStatus?.state === 'ready' ? 'Ready' : awsStatus?.state === 'removed' ? 'Removed' : awsStatus?.state === 'waiting' ? 'Waiting for verifier' : 'Set up the verifier to check this data.'}</p>
+      {awsStatus?.region && <p>Region: {awsStatus.region}</p>}
+      {awsStatus?.code_sha256 && <p>Registered code hash: <code>{awsStatus.code_sha256}</code></p>}
+      {awsStatus?.registered_at && <p>Registered at: <time dateTime={awsStatus.registered_at}>{awsStatus.registered_at}</time></p>}
+      {awsStatus?.poll_interval_minutes && <p>Work may wait up to {awsStatus.poll_interval_minutes} minute(s) for the next verifier poll.</p>}
+      {awsStatus?.state === 'waiting' && awsStatus.setup_expires_at && <p>Setup expires at {awsStatus.setup_expires_at}. If registration expires or has already been used by an unexpected verifier, check its registered hash and time, then remove it and set up a fresh verifier. An exact registration retry recovers its acknowledgment without creating another verifier.</p>}
+      <button className={buttonClass} disabled={busy || !statusFresh} onClick={() => setVerifierDecision(runnerId && awsStatus?.state !== 'removed' ? 'replace' : 'setup')}>Set up the verifier</button>
+      <button className={buttonClass} disabled={busy} onClick={() => void run(readVerifierStatus)}>Check verifier status</button>
+      <p>{AWS_COST_DISCLOSURE}</p>
+      <p>The setup link contains a single-use registration that expires after 30 minutes. It is visible in your AWS console, stack parameters and browser history. Check the registered code hash and time before proceeding. Setup does not authorize a probe.</p>
+    </>}
+    {runnerId && (!aws || awsStatus?.state !== 'removed') && <button className={buttonClass} disabled={busy} onClick={() => setVerifierDecision('remove')}>Remove verifier</button>}
+    {verifierDecision && <div role="group" aria-label="Confirm verifier change">
+      <p>{verifierDecision === 'remove' ? 'Remove this verifier and stop new verification work?' : verifierDecision === 'replace' ? 'Replace the existing verifier and its receipt key? This stops its verification work.' : 'Set up a scoped verifier in your own AWS account?'}</p>
+      <p>{aws ? 'Deleting the CloudFormation stack stops its AWS resources and costs. Removing the verifier here does not delete the stack. Marketplace delivery is unchanged.' : 'Marketplace delivery is unchanged.'}</p>
+      <button className={buttonClass} disabled={busy || (verifierDecision !== 'setup' && !runnerId)} onClick={confirmVerifierDecision}>Confirm {verifierDecision === 'remove' ? 'removal' : verifierDecision === 'replace' ? 'replacement' : 'setup'}</button>
+      <button className={buttonClass} disabled={busy} onClick={() => setVerifierDecision(null)}>Keep current verifier</button>
+    </div>}
     {!probe && !epoch && !attempt.current?.epochId && <>
       <label className="block"><input type="checkbox" checked={preview} disabled={busy || (!!attempt.current && !attempt.current.quoteRefused)} onChange={e => setPreview(e.target.checked)} /> Include column names and row counts in the findings</label>
-      <button className={buttonClass} disabled={!ready || busy} onClick={checkData}>{busy ? 'Checking…' : attempt.current?.quoteRefused ? 'Get a new quote' : 'Check data and get quote'}</button>
+      <button className={buttonClass} disabled={!ready || busy || (aws && (!statusFresh || awsStatus?.state !== 'ready'))} onClick={checkData}>{busy ? 'Checking…' : attempt.current?.quoteRefused ? 'Get a new quote' : 'Check data and get quote'}</button>
     </>}
     {attempt.current?.epochId && !epoch && <p role="status">Loading your existing verification. Check again to follow its status.</p>}
-    {probe?.state === 'queued' && <p role="status">Waiting for your gateway to check the data. No charge has been made.</p>}
+    {probe?.state === 'queued' && <p role="status">{aws ? 'Waiting for your AWS verifier to check the data. No ai.market charge has been made; AWS charges apply.' : 'Waiting for your gateway to check the data. No charge has been made.'}</p>}
     {probe?.state === 'refused' && <p role="alert">{verificationRefusalCopy(probe.refusal)}</p>}
     {probe?.state === 'complete' && probe.quote_id && probe.maximum_hold_usd && !epoch && !attempt.current?.epochId && !setup && <>
       <h3 className="font-semibold">Your verification quote</h3>
       <p>A temporary hold of up to ${probe.maximum_hold_usd} will be placed on your card. The final charge is twice the cost of preparing the written findings, between $1 and $25. You pay for completed findings whether you publish or decline them. If verification fails before completion, the hold is released.</p>
-      <p>Verification covers the complete supported data for this listing version. It does not assess accuracy, legality, or fitness for a purpose. Your gateway runs ai.market’s open-source scanner in an environment you control.</p>
+      <p>Verification covers the complete supported data for this listing version. It does not assess accuracy, legality, or fitness for a purpose. {aws ? 'Your AWS verifier' : 'Your gateway'} runs ai.market’s open-source scanner in an environment you control.</p>
       <fieldset disabled={busy || !!attempt.current?.startCommand} className="space-y-3">
         <legend className="font-semibold">Describe your data</legend>
         {(Object.keys(choices) as Array<keyof typeof choices>).map(key => <label key={key} className="block">{fieldLabels[key]}<select className="ml-3 rounded border p-2" value={description[key] ?? ''} onChange={e => setDescription(current => ({ ...current, [key]: e.target.value }))}>

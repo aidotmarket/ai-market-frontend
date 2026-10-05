@@ -2,7 +2,8 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { api } from './client';
 import { gatewayVerificationError, E7_REFUSAL, gatewayVerificationLifecycle, getGatewayVerificationEpoch, getGatewayVerificationProbe, probeGatewayVerification, startGatewayVerification, verificationErrorCopy } from './dataVerificationGateway';
 import type { GatewayVerificationStartCommand } from '@/types';
-vi.mock('./client', () => ({ api: { get: vi.fn(), post: vi.fn() } }));
+import { getAwsVerifierStatus, setupAwsVerifier, removeVerificationRunner, verificationRefusalCopy } from './dataVerificationGateway';
+vi.mock('./client', () => ({ api: { get: vi.fn(), post: vi.fn(), delete: vi.fn() } }));
 const path = '/data-verification/gateway/listings/listing';
 const start: GatewayVerificationStartCommand = {
   quote_id: 'quote', idempotency_key: 'attempt', preview_requested: false,
@@ -49,5 +50,42 @@ describe('gateway seller-session verification API', () => {
     expect(verificationErrorCopy({ response: { status: 404, data: { detail: 'unowned secret' } } })).toBe('This listing or verification is not available.');
     expect(verificationErrorCopy({ response: { status: 401 } })).toBe('Sign in to verify your data.');
     expect(verificationErrorCopy(new Error('private path'))).not.toContain('private path');
+  });
+});
+
+describe('AWS seller-session setup/status and shared removal', () => {
+  beforeEach(() => vi.clearAllMocks());
+  it('uses only the scoped setup and explicit replacement commands', async () => {
+    const data = { connection_id: 'connection', quick_create_url: 'https://console.aws.amazon.com/?param_RegistrationToken=secret', expires_at_utc: '2026-10-05T12:00:00Z', scanner_version: '1.2.3', image_digest: 'sha256:hash' };
+    vi.mocked(api.post).mockResolvedValue({ data });
+    expect(await setupAwsVerifier({ connection_id: 'connection' })).toEqual(data);
+    expect(api.post).toHaveBeenLastCalledWith('/verification-runners/setup', { connection_id: 'connection' });
+    await setupAwsVerifier({ connection_id: 'connection', replace_runner_id: 'old', confirm_replace: true });
+    expect(api.post).toHaveBeenLastCalledWith('/verification-runners/setup', { connection_id: 'connection', replace_runner_id: 'old', confirm_replace: true });
+  });
+  it('reads exactly the listing status contract without a setup token', async () => {
+    const data = { state: 'waiting', eligible: true, connection_id: 'connection', runner_id: null, region: 'eu-north-1', code_sha256: null, registered_at: null, last_seen_at: null, poll_interval_minutes: null, setup_expires_at: '2026-10-05T12:00:00Z' };
+    vi.mocked(api.get).mockResolvedValue({ data });
+    expect(await getAwsVerifierStatus('listing')).toEqual(data);
+    expect(api.get).toHaveBeenCalledWith('/verification-runners/aws/status', { params: { listing_id: 'listing' } });
+  });
+  it.each(['aws-runner', 'gateway-runner'])('accepts DELETE 204 and sends confirm for %s', async runner => {
+    vi.mocked(api.delete).mockResolvedValue({ status: 204, data: '' });
+    expect(await removeVerificationRunner(runner)).toBeUndefined();
+    expect(api.delete).toHaveBeenCalledWith(`/verification-runners/${runner}`, { data: { confirm: true } });
+  });
+  it.each([
+    'verification_disabled', 'aws_connection_unavailable', 'aws_region_unsupported', 'aws_release_unavailable',
+    'aws_source_scope_unrepresentable', 'replacement_runner_mismatch', 'replacement_confirmation_required',
+    'aws_source_too_large', 'unsupported_type', 'listing_source_mismatch', 'aws_setup_refused',
+    'registration_expired', 'registration_replayed', 'registration_refused',
+  ])('explains %s without showing backend details', code => {
+    const copy = verificationRefusalCopy(code);
+    expect(copy).not.toBe('We could not complete this request. Try again.');
+    expect(copy).not.toContain(code);
+    expect(verificationErrorCopy({ response: { status: 409, data: { detail: code } } })).toBe(copy);
+  });
+  it('preserves the exact AWS size refusal', () => {
+    expect(verificationRefusalCopy('aws_source_too_large')).toBe('This source is too large for the AWS verifier. Verify it with your own AIM Data gateway instead.');
   });
 });
