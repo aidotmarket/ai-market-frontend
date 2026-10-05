@@ -20,6 +20,8 @@ it('shows provider sign-in completion, routes the actual wizard Next to Stripe, 
  render(<SellerSetupProgressBar/>);await screen.findByText('3 of 4 complete');
  const security=screen.getByRole('button',{name:/Provider sign-in/});expect((security as HTMLButtonElement).disabled).toBe(true);
  fireEvent.click(security);expect(mocks.push).not.toHaveBeenCalled();expect(mocks.onboarding).not.toHaveBeenCalled();
+ // The visible state precedes the effect that installs its current Next handler.
+ await act(async()=>{});
  act(()=>window.dispatchEvent(new Event('seller-setup:next')));
  await waitFor(()=>expect(mocks.redirect).toHaveBeenCalledWith({url:'https://connect.stripe.com/fixture'}));
  expect(useAuthStore.getState().user?.totp_enabled).toBe(false);
