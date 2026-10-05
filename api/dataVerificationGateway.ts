@@ -8,6 +8,37 @@ import type {
 } from '@/types';
 
 const root = (listingId: string) => `/data-verification/gateway/listings/${encodeURIComponent(listingId)}`;
+export type AWSSetupCommand = { connection_id: string } & (
+  { replace_runner_id?: never; confirm_replace?: never } |
+  { replace_runner_id: string; confirm_replace: true }
+);
+export interface AWSSetupResponse {
+  connection_id: string;
+  expires_at_utc: string;
+  quick_create_url: string;
+  scanner_version: string;
+  image_digest: string;
+}
+export interface AWSVerifierStatus {
+  state: 'none' | 'waiting' | 'ready' | 'removed';
+  runner_id: string | null;
+  region: string | null;
+  code_sha256: string | null;
+  registered_at: string | null;
+  last_seen_at: string | null;
+  poll_interval_minutes: number | null;
+  setup_expires_at: string | null;
+}
+export async function setupAwsVerifier(command: AWSSetupCommand): Promise<AWSSetupResponse> {
+  // The caller sends this directly to the console tab, never to saved attempts.
+  return (await api.post<AWSSetupResponse>('/verification-runners/setup', command)).data;
+}
+export async function getAwsVerifierStatus(listingId: string): Promise<AWSVerifierStatus> {
+  return (await api.get<AWSVerifierStatus>('/verification-runners/aws/status', { params: { listing_id: listingId } })).data;
+}
+export async function removeVerificationRunner(runnerId: string): Promise<void> {
+  await api.delete(`/verification-runners/${encodeURIComponent(runnerId)}`, { data: { confirm: true } });
+}
 export type GatewayVerificationErrorDetail = string | { code: string; epoch_id?: string };
 export interface GatewayVerificationErrorResponse { detail: GatewayVerificationErrorDetail }
 
@@ -50,6 +81,19 @@ export function verificationErrorCopy(error: unknown): string {
 }
 export function verificationRefusalCopy(code?: string | null): string {
   switch (code) {
+    case 'aws_connection_unavailable': return 'Your AWS storage connection is unavailable. Reconnect it before setting up the verifier.';
+    case 'aws_region_unsupported': return 'The AWS verifier is not available in this storage region.';
+    case 'aws_release_unavailable': return 'The AWS verifier release is unavailable in this region. Try again later.';
+    case 'aws_source_scope_unrepresentable': return 'This source has too many storage locations or needs permissions the AWS verifier cannot safely scope. Verify it with your own AIM Data gateway instead.';
+    case 'aws_source_too_large': return 'This source is too large for the AWS verifier. Verify it with your own AIM Data gateway instead.';
+    case 'unsupported_type': return 'This source contains a file type the verifier does not support.';
+    case 'listing_source_mismatch': return 'The saved source for this listing could not be confirmed. Review and publish its source before trying again.';
+    case 'replacement_runner_mismatch': return 'The verifier has changed. Check its status before confirming a replacement.';
+    case 'replacement_confirmation_required': return 'A verifier already exists. Confirm replacement before setting up a new verifier.';
+    case 'registration_expired': return 'This verifier setup has expired. Set up the verifier again to get a fresh registration.';
+    case 'registration_replayed': return 'This registration has already been used. Check the registered verifier or remove it before setting up a replacement.';
+    case 'registration_refused': return 'The verifier registration was refused. Check its status and set up a fresh verifier if needed.';
+    case 'aws_setup_refused': return 'The AWS verifier could not be set up. Check your storage connection and try again.';
     case E7_REFUSAL: return E7_REFUSAL;
     case 'verifier_upgrade_or_offline': return 'Reconnect your gateway or upgrade it to a version that supports data verification, then try again.';
     case 'source_unreachable': return 'Your gateway or data is offline. Reconnect it and try again.';

@@ -215,8 +215,8 @@ export interface PublishedScanFindings {
     agent_version: string;
     runner_kind?: 'gateway' | 'aws' | 'r2';
     scanner_version?: string;
-    connector_type: 'eolymp' | 'aim_gateway';
-    connector_version: 'eolymp-v1' | 'aim_gateway-v1';
+    connector_type: 'eolymp' | 'aim_gateway' | 'aws_s3_verifier';
+    connector_version: 'eolymp-v1' | 'aim_gateway-v1' | 'aws_s3_verifier-v1';
     content_sha256_reference: string;
   };
   methods: {
