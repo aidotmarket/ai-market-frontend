@@ -8,6 +8,8 @@ import {
 import {MAX_CUSTOM_LICENSE_CODEPOINTS,canonicalizeCustomText} from '@/lib/customLicenseVerification';
 import {getSellerLegalIdentity,refreshSellerLegalIdentity,saveSellerLegalIdentity,legalIdentityFailure,LEGAL_IDENTITY_SUPPORT_PATH,type SellerLegalIdentity} from '@/api/sellerLegalIdentity';
 import LicenseReadingDialog from '@/components/LicenseReadingDialog';
+import CustomLicenseMarkdown from '@/components/CustomLicenseMarkdown';
+import CustomLicenseEditor from './CustomLicenseEditor';
 import CountrySelect from '@/components/CountrySelect';
 
 export type IdentityState = {kind:'checking'|'conflict'|'unavailable'} | {kind:'known'|'required';value:SellerLegalIdentity};
@@ -194,21 +196,19 @@ export default function SellerLicenseSelection({value, onChange, disabled = fals
       <label className="block text-sm font-medium text-gray-900">Licence title
         <input aria-label="Licence title" value={title} onChange={event => {setTitle(event.target.value); invalidateCustom();}} className="mt-2 block w-full rounded-lg border border-gray-300 px-3 py-2" />
       </label>
-      <label className="block text-sm font-medium text-gray-900">Your licence text
-        <textarea aria-label="Your licence text" value={text} onChange={event => {setText(event.target.value); invalidateCustom();}} rows={12} className="mt-2 block w-full rounded-lg border border-gray-300 px-3 py-2 font-mono text-sm" />
-      </label>
+      <CustomLicenseEditor text={text} onChange={next=>{setText(next); invalidateCustom();}} />
       <p role="status" className="text-xs text-gray-600">{(text ? Array.from(canonicalizeCustomText(text)).length : 0).toLocaleString()} / {MAX_CUSTOM_LICENSE_CODEPOINTS.toLocaleString()} Unicode characters after normalization</p>
       <p className="text-xs text-gray-600">Use English terms with at least 200 letters. Do not include passwords, private keys or terms that conflict with marketplace rules. Your text is stored as plain text.</p>
       {(title.trim()||text.trim())&&!(customPreview?.title===title&&customPreview.text===canonicalizeCustomText(text))&&<button type="button" disabled={!title.trim() || !text.trim() || Array.from(canonicalizeCustomText(text)).length > MAX_CUSTOM_LICENSE_CODEPOINTS || customPreview?.title===title && customPreview.text===canonicalizeCustomText(text)} onClick={() => void submit()} className="rounded-lg bg-indigo-700 px-4 py-2 text-sm font-medium text-white disabled:opacity-50">Save custom licence text</button>}
       {!title.trim()||!text.trim()?<p className="text-xs text-gray-600">Enter a title and licence text to save it.</p>:Array.from(canonicalizeCustomText(text)).length>MAX_CUSTOM_LICENSE_CODEPOINTS?<p className="text-xs text-red-800">Shorten the licence text before saving.</p>:customPreview?.title===title&&customPreview.text===canonicalizeCustomText(text)?<p className="text-xs text-green-800">Custom licence text saved.</p>:null}
-      {customPreview?.id === value.license_document_id && <section aria-label="Verified custom licence preview" className="rounded-lg border border-green-300 p-4"><h3 className="font-medium">{customPreview.title}</h3><p role="status" className="text-sm text-green-800">Custom licence text saved and verified.</p><pre dir="auto" className="mt-3 max-h-96 overflow-auto whitespace-pre-wrap break-words [tab-size:4] text-sm">{customPreview.text}</pre></section>}
+      {customPreview?.id === value.license_document_id && <section aria-label="Verified custom licence preview" className="rounded-lg border border-green-300 p-4"><h3 className="font-medium">{customPreview.title}</h3><p role="status" className="text-sm text-green-800">Custom licence text saved and verified.</p><div className="mt-3 max-h-96 overflow-auto"><CustomLicenseMarkdown text={customPreview.text}/></div></section>}
       {submitError && <p role="alert" className="text-sm text-red-800">{submitError}</p>}
     </div>}
     <details className="rounded-lg border border-gray-200 p-4">
       <summary className="cursor-pointer font-medium text-indigo-700">Read the summary and full terms</summary>
       <p className="mt-3 whitespace-pre-line text-sm leading-6 text-gray-700">{value.kind === 'standard' ? STANDARD_SELLER_SUMMARY : CUSTOM_NOTICE}</p>
-      {value.kind==='custom'&&customPreview?.id===value.license_document_id&&<pre dir="auto" className="mt-3 max-h-96 overflow-auto whitespace-pre-wrap break-words text-sm">{customPreview.text}</pre>}
-      <div className="mt-3 flex flex-wrap gap-4 text-sm">{value.kind==='standard'?<LicenseReadingDialog label="Read full licence" href={licenseDocumentPath('standard',value.ai_training)} onOpen={()=>setLicenseOpened(true)}/>:customPreview?.id===value.license_document_id?<LicenseReadingDialog label="Read full licence" href={customPreviewUrl} text={customPreview.text} onOpen={()=>setLicenseOpened(true)}/>:<span>Save your custom licence text first to read the verified full licence.</span>}
+      {value.kind==='custom'&&customPreview?.id===value.license_document_id&&<div className="mt-3 max-h-96 overflow-auto"><CustomLicenseMarkdown text={customPreview.text}/></div>}
+      <div className="mt-3 flex flex-wrap gap-4 text-sm">{value.kind==='standard'?<LicenseReadingDialog label="Read full licence" href={licenseDocumentPath('standard',value.ai_training)} onOpen={()=>setLicenseOpened(true)}/>:customPreview?.id===value.license_document_id?<LicenseReadingDialog label="Read full licence" href={customPreviewUrl} text={customPreview.text} customMarkdown onOpen={()=>setLicenseOpened(true)}/>:<span>Save your custom licence text first to read the verified full licence.</span>}
       {value.kind==='custom'&&<LicenseReadingDialog label="Read AI-Training Rider" href={licenseDocumentPath('rider',value.ai_training)} />}
       <LicenseReadingDialog label="Read Marketplace Listing Covenant" href={licenseDocumentPath('covenant')} onOpen={()=>setCovenantOpened(true)} /></div>
     </details>
