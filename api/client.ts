@@ -160,11 +160,13 @@ api.interceptors.response.use(
       return Promise.reject(error);
     }
 
-    // Only retry once and only for 401s (not on the refresh endpoint itself)
+    // Only retry once and only for 401s. Newsletter subscription is public:
+    // a refusal must stay at the form rather than refresh auth or redirect.
     if (
       error.response.status === 401 &&
       !(originalRequest as { _retry?: boolean })._retry &&
       !originalRequest.url?.includes('/auth/refresh') &&
+      originalRequest.url !== '/newsletter-subscribe' &&
       !originalRequest.url?.includes('/auth/2fa/verify')
     ) {
       (originalRequest as { _retry?: boolean })._retry = true;

@@ -7,6 +7,7 @@ import { useRouter, usePathname } from 'next/navigation';
 import { useAuthStore } from '@/store/auth';
 import NotificationCenter from '@/components/NotificationCenter';
 import { TermsSignUpLink } from '@/components/TermsSignUpLink';
+import NewsletterForm from '@/components/NewsletterForm';
 
 const footerLinkSections = [
   {
@@ -199,16 +200,7 @@ export function Layout({ children }: { children: React.ReactNode }) {
             <p className="text-sm text-[#96a0af] flex-1 sm:mx-8">
               Be the first to know about new data products and providers added to ai.market.
             </p>
-            <a
-              href="mailto:support@ai.market?subject=Newsletter%20Subscription"
-              className="inline-flex items-center gap-2.5 px-5 py-2.5 border border-[#3d4a5c] rounded-md text-sm font-medium text-[#e2e8f0] hover:border-[#6b7a8d] hover:bg-white/[0.04] transition-colors whitespace-nowrap"
-            >
-              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
-                <rect x="2" y="4" width="20" height="16" rx="2" />
-                <path d="M22 7l-10 6L2 7" />
-              </svg>
-              Subscribe to Newsletter
-            </a>
+            <NewsletterForm />
           </div>
         </div>
         <div className="mx-auto max-w-7xl px-6 lg:px-8"><div className="border-t border-[#2a3545]" /></div>
