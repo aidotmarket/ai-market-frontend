@@ -1,11 +1,18 @@
 import Markdown from 'react-markdown';
 import rehypeSanitize from 'rehype-sanitize';
+import type {Processor} from 'unified';
+import type {} from 'remark-parse';
 
 // Display only: never return rendered/parsed text to storage or hash verification.
 type Node = {type:string; children?:Node[]; value?:string; position?:{start:{offset?:number};end:{offset?:number}}};
 const allowed = new Set(['root','paragraph','heading','list','listItem','strong','emphasis','text']);
 const formatted = new Set(['heading','list','strong','emphasis']);
-function restrictedSyntax() {
+function restrictedSyntax(this:Processor) {
+  // Disable decoding before parsing so text keeps literal entity spellings and
+  // unsupported nodes still refer to offsets in the original source.
+  const data=this.data();
+  const extensions=data.micromarkExtensions||(data.micromarkExtensions=[]);
+  extensions.push({disable:{null:['characterReference']}});
   return (tree:Node, file:{value:unknown}) => {
     const source=String(file.value);
     let hasFormatting=false;

@@ -8,11 +8,12 @@ import type {ListingLicenseDetails} from '@/types';
 const get=vi.hoisted(()=>vi.fn());
 vi.mock('@/api/client',()=>({api:{get}}));
 afterEach(()=>{cleanup();vi.unstubAllGlobals();vi.clearAllMocks();});
-it.each([false,true])('buyer renders only verified custom source and reads only on opening (tampered: %s)',async tampered=>{
+it.each([[false,false],[true,false],[false,true],[true,true]])('buyer renders verified source and reads only on opening (tampered: %s, plain: %s)',async(tampered,plain)=>{
  vi.stubGlobal('crypto',webcrypto);
  const createObjectURL=vi.fn((_blob:Blob)=> 'blob:verified');
  vi.stubGlobal('URL',Object.assign(URL,{createObjectURL,revokeObjectURL:vi.fn()}));
- const source='# Terms\n\n**Café** and *rights*\n\n![image](https://evil.test/a) [link](javascript:alert(1))\n\n<script>alert(1)</script>\n';
+ const entities='&copy; &#x1F600; &#x1D504; &#x4E2D; &#x202E; &#8238; &rlm;';
+ const source=plain?'Plain   terms\n\\*literal\\* '+entities+'\n\tCafé 🦊 é\n':'# Terms\n\n**Café** and *rights '+entities+'*\n\n![image](https://evil.test/a) [link](javascript:alert(1))\n\n[ref]: https://evil.test/a\n\n<script>alert(1)</script>\n';
  const bytes=new TextEncoder().encode(source);
  const source_sha256=await sha256(bytes);
  const params={ai_training:true,source_sha256};
@@ -34,14 +35,21 @@ it.each([false,true])('buyer renders only verified custom source and reads only 
   await waitFor(()=>expect(verified).toHaveBeenLastCalledWith(true));
   fireEvent.click(screen.getByRole('button',{name:'Read full licence'}));
   const dialog=screen.getByRole('dialog');
-  expect(dialog.querySelector('h1')?.textContent).toBe('Terms');
-  expect(dialog.querySelector('strong')?.textContent).toBe('Café');
-  expect(dialog.querySelector('em')?.textContent).toBe('rights');
+  if(plain){
+   expect(dialog.querySelector('.whitespace-pre-wrap')?.textContent).toBe(source);
+   expect(dialog.querySelector('h1,strong,em')).toBeNull();
+  }else{
+   expect(dialog.querySelector('h1')?.textContent).toBe('Terms');
+   expect(dialog.querySelector('strong')?.textContent).toBe('Café');
+   expect(dialog.querySelector('em')?.textContent).toBe('rights '+entities);
+   expect(dialog.textContent).toContain('[ref]: https://evil.test/a');
+  }
   expect(dialog.querySelector('img,script')).toBeNull();
   expect(get).toHaveBeenCalledTimes(1);
   expect(fetch).toHaveBeenCalledTimes(1);
   const blob=createObjectURL.mock.calls[0]?.[0] as Blob;
   expect(blob.size).toBe(bytes.length);
+  expect(Array.from(new Uint8Array(await blob.arrayBuffer()))).toEqual(Array.from(bytes));
   expect(dialog.querySelectorAll('a')).toHaveLength(1); // existing exact-document link only
   expect(read).toHaveBeenCalledExactlyOnceWith('license');
   fireEvent.keyDown(document,{key:'Escape'});

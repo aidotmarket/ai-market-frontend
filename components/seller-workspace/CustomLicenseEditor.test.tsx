@@ -42,3 +42,18 @@ it('keeps toolbar and textarea inside the existing disabled fieldset',()=>{
  expect(screen.getByLabelText('Your licence text').matches(':disabled')).toBe(true);
  expect(screen.getByRole('group',{name:'Licence formatting'})).toBeTruthy();
 });
+
+it.each([
+ ['# Terms\n\n**&copy; &#x1F600; &#x4E2D;** and *&#x202E; &rlm;*',true],
+ ['Plain   terms\n\\*literal\\* &copy; &#x1F600;\n\tCafé 🦊 e\u0301\n',false],
+] as const)('preview preserves entities and leaves editor source unchanged (formatted: %s)',(source,formatted)=>{
+ render(<Harness source={source}/>);
+ expect((screen.getByLabelText('Your licence text') as HTMLTextAreaElement).value).toBe(source);
+ const preview=screen.getByLabelText('Live custom licence preview');
+ if(formatted){
+  expect(preview.querySelector('h1')?.textContent).toBe('Terms');
+  expect(preview.querySelector('strong')?.textContent).toBe('&copy; &#x1F600; &#x4E2D;');
+  expect(preview.querySelector('em')?.textContent).toBe('&#x202E; &rlm;');
+ }else expect(preview.querySelector('.whitespace-pre-wrap')?.textContent).toBe(source);
+ expect(preview.querySelector('a,img,script')).toBeNull();
+});
