@@ -186,10 +186,11 @@ describe('Seller licence selection',()=>{
     expect(screen.queryByText('Open the selected licence and Marketplace Listing Covenant first.')).toBeNull();
   });
 
-  it('submits pasted text, previews verified server text and resets stale approval on edits',async()=>{
+  it.each([
+    ['A  \nB','A\nB\n'],
+    ['Plain   terms\n\\*literal\\* &copy; &#x1F600; end.\n\tCafé 🦊  e\u0301','Plain   terms\n\\*literal\\* &copy; &#x1F600; end.\n\tCafé 🦊  é\n'],
+  ])('submits pasted text, previews verified server text and resets stale approval on edits: %s',async(submitted,canonical)=>{
     vi.stubGlobal('crypto',webcrypto);
-    const submitted='A  \nB';
-    const canonical='A\nB\n';
     const response=await responseFor(canonical);
     transport.post.mockResolvedValue({status:201,data:response});
     render(<Harness/>);
@@ -199,7 +200,7 @@ describe('Seller licence selection',()=>{
     expect(document.querySelector('input[type=file]')).toBeNull();
     fireEvent.change(screen.getByLabelText('Licence title'),{target:{value:'Terms'}});
     fireEvent.change(screen.getByLabelText('Your licence text'),{target:{value:submitted}});
-    expect(screen.getByText(/4 \/ 65,536 Unicode characters after normalization/)).toBeTruthy();
+    expect(screen.getByLabelText('Live custom licence preview').textContent).toContain(submitted);
     fireEvent.click(screen.getByRole('button',{name:'Save custom licence text'}));
     await screen.findByText('Custom licence text saved and verified.');
     expect(screen.queryByRole('button',{name:'Save custom licence text'})).toBeNull();
@@ -210,7 +211,10 @@ describe('Seller licence selection',()=>{
     const details=screen.getByText('Read the summary and full terms').closest('details')!;
     Object.defineProperty(details,'open',{value:true,configurable:true});
     fireEvent(details,new Event('toggle'));
-    readTerms('Read full licence');readTerms('Read Marketplace Listing Covenant');
+    fireEvent.click(screen.getByRole('button',{name:'Read full licence'}));
+    expect(screen.getByRole('dialog').querySelector('.whitespace-pre-wrap')?.textContent).toBe(canonical);
+    fireEvent.keyDown(document,{key:'Escape'});
+    readTerms('Read Marketplace Listing Covenant');
     fireEvent.change(screen.getByLabelText('Signer full name'),{target:{value:'Sam Seller'}});
     fireEvent.change(screen.getByLabelText('Signer title'),{target:{value:'Director'}});
     fireEvent.click(screen.getByLabelText('Confirm covenant and authority'));
@@ -290,4 +294,48 @@ describe('Seller licence selection',()=>{
     fireEvent.click(screen.getByLabelText('Allow AI/ML training'));
     expect(JSON.parse(screen.getByTestId('wire').textContent!).ai_training).toBe(false);
   });
+});
+
+
+describe('custom Markdown editing',()=>{
+ it('keeps exact edited source, toolbar selection, verified hashes and reading authority',async()=>{
+  vi.stubGlobal('crypto',webcrypto);
+  render(<Harness/>);
+  await screen.findByText('Legal name on the licence: Seller Ltd (GB)');
+  fireEvent.click(screen.getByRole('radio',{name:/My own licence/}));
+  fireEvent.change(screen.getByLabelText('Licence title'),{target:{value:'Terms'}});
+  const input=screen.getByLabelText('Your licence text') as HTMLTextAreaElement;
+  const entities='&copy; &#x1F600; &#x1D504; &#x4E2D; &#x202E; &#8238; &rlm;';
+  const source='# Terms\n\nCafé 🦊  rights\t'+entities+' and *'+entities+'*\n';
+  fireEvent.change(input,{target:{value:source}});
+  input.setSelectionRange(source.indexOf('rights'),source.indexOf('rights')+6);
+  fireEvent.click(screen.getByRole('button',{name:'Bold'}));
+  const edited=source.replace('rights','**rights**');
+  expect(input.value).toBe(edited);
+  await waitFor(()=>expect(input.selectionStart).toBe(edited.indexOf('rights')));
+  expect(input.selectionEnd).toBe(edited.indexOf('rights')+6);
+  expect(screen.getByLabelText('Live custom licence preview').querySelector('strong')?.textContent).toBe('rights');
+  expect(screen.getByLabelText('Live custom licence preview').querySelector('em')?.textContent).toBe(entities);
+  expect((screen.getByLabelText('Confirm covenant and authority') as HTMLInputElement).disabled).toBe(true);
+  const response=await responseFor(edited);
+  transport.post.mockResolvedValue({status:201,data:response});
+  fireEvent.click(screen.getByRole('button',{name:'Save custom licence text'}));
+  await screen.findByText('Custom licence text saved and verified.');
+  expect(transport.post).toHaveBeenCalledWith('/licenses/custom',{title:'Terms',ai_training:true,text:edited},expect.anything());
+  expect(input.value).toBe(edited);
+  expect(JSON.parse(screen.getByTestId('wire').textContent!).license_sha256).toBe(response.license_sha256);
+  expect(screen.getByLabelText('Verified custom licence preview').querySelector('strong')?.textContent).toBe('rights');
+  expect(screen.getByLabelText('Verified custom licence preview').querySelector('em')?.textContent).toBe(entities);
+  expect(screen.getByLabelText('Verified custom licence preview').textContent).toContain('Café 🦊  rights\t'+entities);
+  expect((screen.getByLabelText('Confirm covenant and authority') as HTMLInputElement).disabled).toBe(true);
+  fireEvent.click(screen.getByRole('button',{name:'Read full licence'}));
+  expect(screen.getByRole('dialog').querySelector('h1')?.textContent).toBe('Terms');
+  expect(screen.getByRole('dialog').querySelector('em')?.textContent).toBe(entities);
+  fireEvent.keyDown(document,{key:'Escape'});
+  readTerms('Read Marketplace Listing Covenant');
+  expect((screen.getByLabelText('Confirm covenant and authority') as HTMLInputElement).disabled).toBe(false);
+  fireEvent.change(input,{target:{value:edited+'More'}});
+  expect(JSON.parse(screen.getByTestId('wire').textContent!).license_sha256).toBe('');
+  expect((screen.getByLabelText('Confirm covenant and authority') as HTMLInputElement).disabled).toBe(true);
+ });
 });

@@ -1,7 +1,7 @@
 # Custom licence text in the seller form
 
-The seller enters a title and plain text terms. The frontend submits both to
-`POST /licenses/custom` and shows a preview only after the response text, title,
+The seller enters a title and Markdown terms. The frontend submits both to
+`POST /licenses/custom` and shows a verified saved preview only after the response text, title,
 size, and hashes pass verification. Editing the title, text, or AI training choice
 clears that preview and the prior approval.
 
@@ -29,3 +29,27 @@ an unverified response or the seller's proposed title as the stored title.
 Check with `rtk proxy npm run lint`, `rtk proxy npm run typecheck`, and
 `rtk proxy npm test -- --maxWorkers=1`. The focused cases are in
 `components/seller-workspace/SellerLicenseSelection.test.tsx`.
+
+## T-2026-000878 frontend implementation
+
+The existing textarea keeps the source verbatim while a small labelled toolbar
+inserts Markdown at its selection (heading, bulleted/numbered list, bold, italic).
+The live preview does not count as reading the verified licence. One shared
+`CustomLicenseMarkdown` display renders the live and verified seller previews
+and the buyer's verified custom-text reading dialog. Standard documents and
+historical PDF display retain their existing reading surfaces.
+
+The renderer permits headings, lists, bold and italic only. A remark transform
+replaces every unsupported node with its literal source slice before conversion
+(including HTML, images, links, code and reference definitions). The text handler
+preserves whitespace; terms without supported formatting retain exact literal
+text. A restricted rehype-sanitize schema permits only the display tags, with no
+URL attributes. No raw HTML plugin, editor framework or new dependency is used.
+Only display is transformed: source submission, normalization, both hashes,
+verified Blob bytes, document contracts and legal/read callbacks stay unchanged.
+Editing through the toolbar uses the same invalidation as typing.
+
+Backend matching PDF remains a separate portion of this same ticket; this
+frontend candidate does not complete T-2026-000878. Focused verification includes
+CustomLicenseMarkdown, SellerLicenseSelection, LicenseReadingDialog,
+ListingLicenseDisclosure (hash and buyer rendering cases), and listingLicenses.
