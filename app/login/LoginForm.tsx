@@ -11,6 +11,7 @@ import OAuthButtons, { startProviderOAuth } from '@/components/OAuthButtons';
 import TwoFactorChallenge from '@/components/TwoFactorChallenge';
 import { requestMagicLink, resendVerification } from '@/api/auth';
 import { getConnectorStatus } from '@/api/connector-oauth';
+import { saveRequestAuthReturn } from '@/lib/request-auth-return';
 
 export default function LoginForm() {
   const router = useRouter();
@@ -26,7 +27,7 @@ export default function LoginForm() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
   const [loginMode, setLoginMode] = useState<'password' | 'magic-link'>('password');
-  const [magicLinkSentTo, setMagicLinkSentTo] = useState('');
+  const [magicLinkRequestedFor, setMagicLinkRequestedFor] = useState('');
   const [needsVerification, setNeedsVerification] = useState(false);
   const [resendNote, setResendNote] = useState('');
   const [connectorStatusLoaded, setConnectorStatusLoaded] = useState(false);
@@ -51,7 +52,7 @@ export default function LoginForm() {
       || (provider !== 'google' && provider !== 'github')
       ) return;
     autoStarted.current = true;
-    startProviderOAuth(provider).catch(() => {
+    startProviderOAuth(provider, searchParams.get('redirect')).catch(() => {
       setError(`Failed to connect to ${provider === 'google' ? 'Google' : 'GitHub'}. Please try again.`);
     });
   }, [connectorStatusLoaded, hydrated, isAuthenticated, searchParams]);
@@ -98,9 +99,11 @@ export default function LoginForm() {
 
     try {
       if (loginMode === 'magic-link') {
-        await requestMagicLink(email);
-        setMagicLinkSentTo(email);
-        toast('Magic link sent', 'success');
+        setMagicLinkRequestedFor('');
+        saveRequestAuthReturn('email', searchParams.get('redirect'));
+        await requestMagicLink(email, 'register');
+        setMagicLinkRequestedFor(email);
+        toast('Email link requested', 'success');
       } else {
         const result = await login(email, password);
         if (result.requiresTwoFactor) {
@@ -114,7 +117,7 @@ export default function LoginForm() {
     } catch (err) {
       if (err instanceof AxiosError) {
         if (loginMode === 'magic-link') {
-          setError(err.response?.status === 429 ? 'Too many requests. Try again in a minute.' : 'Failed to send magic link. Please try again.');
+          setError(err.response?.status === 429 ? 'Too many requests. Try again in a minute.' : 'Could not request an email link. Please try again.');
         } else {
           const detail = err.response?.data?.detail as unknown;
           if (detail && typeof detail === 'object' && (detail as { email_verification_required?: boolean }).email_verification_required) {
@@ -124,7 +127,7 @@ export default function LoginForm() {
           }
         }
       } else {
-        setError(loginMode === 'magic-link' ? 'Failed to send magic link. Please try again.' : 'An unexpected error occurred.');
+        setError(loginMode === 'magic-link' ? 'Could not request an email link. Please try again.' : 'An unexpected error occurred.');
       }
     } finally {
       setLoading(false);
@@ -142,13 +145,13 @@ export default function LoginForm() {
     setLoginMode('magic-link');
     setPassword('');
     setError('');
-    setMagicLinkSentTo('');
+    setMagicLinkRequestedFor('');
   };
 
   const switchToPassword = () => {
     setLoginMode('password');
     setError('');
-    setMagicLinkSentTo('');
+    setMagicLinkRequestedFor('');
   };
 
   return (
@@ -178,7 +181,7 @@ export default function LoginForm() {
           </div>
         )}
 
-        {awaitingProviderHydration ? <p role="status">Preparing sign-in…</p> : <OAuthButtons mode="login" />}
+        {awaitingProviderHydration ? <p role="status">Preparing sign-in…</p> : <OAuthButtons mode="login" redirect={searchParams.get('redirect')} />}
 
         <form onSubmit={handleSubmit} className="space-y-4">
           {error && (
@@ -197,9 +200,9 @@ export default function LoginForm() {
             </div>
           )}
 
-          {magicLinkSentTo && loginMode === 'magic-link' && (
-            <div className="rounded-lg bg-green-50 border border-green-200 px-4 py-3 text-sm text-green-700">
-              Check your email - we sent a sign-in link to {magicLinkSentTo}
+          {magicLinkRequestedFor && loginMode === 'magic-link' && (
+            <div role="status" className="rounded-lg bg-green-50 border border-green-200 px-4 py-3 text-sm text-green-700">
+              Email link requested for {magicLinkRequestedFor}. Check your inbox and spam folder. If it does not arrive, try again or continue with Google.
             </div>
           )}
 
@@ -241,7 +244,7 @@ export default function LoginForm() {
                   onClick={switchToMagicLink}
                   className="text-sm text-[#3F51B5] hover:underline"
                 >
-                  Sign in with a magic link instead
+                  Sign in or sign up with email
                 </button>
                 <Link href="/forgot-password" className="text-sm text-[#3F51B5] hover:underline">
                   Forgot your password?
@@ -249,7 +252,8 @@ export default function LoginForm() {
               </div>
             </>
           ) : (
-            <div className="text-right">
+            <div>
+              <p className="text-sm text-gray-600 mb-2">Use an email link to sign in or create an account. New accounts are created only after you verify the link.</p>
               <button
                 type="button"
                 onClick={switchToPassword}
@@ -265,7 +269,7 @@ export default function LoginForm() {
             disabled={loading}
             className="w-full rounded-lg bg-[#3F51B5] px-4 py-2.5 text-sm font-medium text-white hover:bg-[#3545a0] disabled:opacity-50 disabled:cursor-not-allowed"
           >
-            {loading ? (loginMode === 'magic-link' ? 'Sending magic link...' : 'Logging in...') : (loginMode === 'magic-link' ? 'Send magic link' : 'Log in')}
+            {loading ? (loginMode === 'magic-link' ? 'Requesting email link...' : 'Logging in...') : (loginMode === 'magic-link' ? 'Send email link' : 'Log in')}
           </button>
         </form>
 

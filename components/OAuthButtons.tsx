@@ -2,9 +2,11 @@
 
 import { useState, useSyncExternalStore } from 'react';
 import * as authApi from '@/api/auth';
+import { saveRequestAuthReturn } from '@/lib/request-auth-return';
 
 interface OAuthButtonsProps {
   mode: 'login' | 'register';
+  redirect?: string | null;
 }
 
 type Provider = 'google' | 'github';
@@ -18,13 +20,14 @@ const subscribe = (listener: () => void) => {
 const getSnapshot = () => loadingProvider;
 const getServerSnapshot = () => null;
 
-export function startProviderOAuth(provider: Provider): Promise<void> {
+export function startProviderOAuth(provider: Provider, redirect?: string | null): Promise<void> {
   if (providerStart) return providerStart;
   loadingProvider = provider;
   // Install the shared flight before invoking the API or notifying subscribers.
   providerStart = Promise.resolve().then(async () => {
     const data = await authApi.oauthAuthorize(provider);
     sessionStorage.setItem('oauth_nonce', data.nonce);
+    saveRequestAuthReturn('oauth', redirect);
     window.location.href = data.authorization_url;
   }).catch((error) => {
     providerStart = null;
@@ -37,14 +40,14 @@ export function startProviderOAuth(provider: Provider): Promise<void> {
   return providerStart;
 }
 
-export default function OAuthButtons({ mode }: OAuthButtonsProps) {
+export default function OAuthButtons({ mode, redirect }: OAuthButtonsProps) {
   const loadingProvider = useSyncExternalStore(subscribe, getSnapshot, getServerSnapshot);
   const [error, setError] = useState('');
 
   const handleOAuth = async (provider: 'google' | 'github') => {
     setError('');
     try {
-      await startProviderOAuth(provider);
+      await startProviderOAuth(provider, redirect);
     } catch {
       setError(`Failed to connect to ${provider === 'google' ? 'Google' : 'GitHub'}. Please try again.`);
     }

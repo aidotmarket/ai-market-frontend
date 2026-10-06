@@ -5,15 +5,16 @@ import { afterEach, beforeEach, expect, it, vi } from 'vitest';
 let LoginForm: typeof import('./LoginForm').default;
 let OAuthButtons: typeof import('@/components/OAuthButtons').default;
 let AuthorizationPage: typeof import('@/app/oauth/authorize/page').default;
-import { oauthAuthorize } from '@/api/auth';
+import { oauthAuthorize, requestMagicLink } from '@/api/auth';
 import { getAuthorization } from '@/api/aim-data-oauth';
 let useAuthStore: typeof import('@/store/auth').useAuthStore;
 import { CONTINUATION_KEY, requestPath, saveContinuation } from '@/lib/aim-data-continuation';
+import { consumeRequestAuthReturn } from '@/lib/request-auth-return';
 
 const navigation = vi.hoisted(() => ({ push: vi.fn(), replace: vi.fn(), query: new URLSearchParams() }));
 vi.mock('next/navigation', () => ({ useRouter: () => navigation, useSearchParams: () => navigation.query }));
 vi.mock('@/components/Toast', () => ({ useToast: () => ({ toast: vi.fn() }) }));
-vi.mock('@/api/auth', () => ({ oauthAuthorize: vi.fn() }));
+vi.mock('@/api/auth', () => ({ oauthAuthorize: vi.fn(), requestMagicLink: vi.fn() }));
 
 vi.mock('@/api/aim-data-oauth', () => ({ getAuthorization: vi.fn() }));
 
@@ -26,12 +27,54 @@ beforeEach(async () => {
   vi.resetAllMocks();
   vi.stubEnv('NEXT_PUBLIC_AIM_DATA_OAUTH_ENABLED', 'true');
   sessionStorage.clear();
+  localStorage.clear();
   navigation.query = new URLSearchParams();
   useAuthStore.setState({ hydrated: true, isLoading: false, isAuthenticated: false, user: null, pendingTwoFactor: null });
   vi.stubGlobal('window', { document, location: { href: '' } });
   vi.mocked(oauthAuthorize).mockResolvedValue({ nonce: 'test-nonce', authorization_url: 'https://provider.example/authorize' });
 });
 afterEach(() => { cleanup(); vi.unstubAllGlobals(); vi.unstubAllEnvs(); });
+
+it('offers email sign-in/sign-up without promising delivery on a generic 200', async () => {
+  const request = '/requests/i-need-an-entirely-synthetic-retail-sales-dataset-to-test-a-sales-292929f3?source=retail%20sales';
+  navigation.query = new URLSearchParams({ redirect: request });
+  vi.mocked(requestMagicLink).mockResolvedValue({ message: 'If an account exists, a magic link has been sent' });
+  render(<LoginForm />);
+  // The existing password path remains available by default.
+  expect(screen.getByLabelText('Password')).toBeTruthy();
+  fireEvent.click(screen.getByRole('button', { name: 'Sign in or sign up with email' }));
+  expect(screen.queryByLabelText('Password')).toBeNull();
+  expect(screen.getByText(/New accounts are created only after you verify the link/)).toBeTruthy();
+  fireEvent.change(screen.getByLabelText('Email'), { target: { value: 'new-customer@example.test' } });
+  fireEvent.click(screen.getByRole('button', { name: 'Send email link' }));
+  await waitFor(() => expect(requestMagicLink).toHaveBeenCalledExactlyOnceWith('new-customer@example.test', 'register'));
+  expect(await screen.findByText(/Email link requested for new-customer@example.test/)).toBeTruthy();
+  expect(screen.getByText(/If it does not arrive, try again or continue with Google/)).toBeTruthy();
+  expect(screen.queryByText(/we sent/i)).toBeNull();
+  expect(consumeRequestAuthReturn('email', '/listings')).toBe(request);
+  fireEvent.click(screen.getByRole('button', { name: 'Use password instead' }));
+  expect(screen.getByLabelText('Password')).toBeTruthy();
+});
+
+it('saves the customer request alongside the origin-local Google nonce', async () => {
+  const request = '/requests/i-need-an-entirely-synthetic-retail-sales-dataset-to-test-a-sales-292929f3?source=a%26b';
+  navigation.query = new URLSearchParams({ redirect: request });
+  render(<LoginForm />);
+  fireEvent.click(screen.getByRole('button', { name: 'Continue with Google' }));
+  await waitFor(() => expect(window.location.href).toBe('https://provider.example/authorize'));
+  expect(sessionStorage.getItem('oauth_nonce')).toBe('test-nonce');
+  expect(consumeRequestAuthReturn('oauth', '/listings')).toBe(request);
+});
+
+it('shows an email request failure without a delivery confirmation', async () => {
+  vi.mocked(requestMagicLink).mockRejectedValue(new Error('network'));
+  render(<LoginForm />);
+  fireEvent.click(screen.getByRole('button', { name: 'Sign in or sign up with email' }));
+  fireEvent.change(screen.getByLabelText('Email'), { target: { value: 'new-customer@example.test' } });
+  fireEvent.click(screen.getByRole('button', { name: 'Send email link' }));
+  expect(await screen.findByText('Could not request an email link. Please try again.')).toBeTruthy();
+  expect(screen.queryByText(/Email link requested for/)).toBeNull();
+});
 
 it.each(['google', 'github'])('auto-starts %s once under StrictMode and across rerenders', async (provider) => {
   saveContinuation(requestPath('a'.repeat(43)));
