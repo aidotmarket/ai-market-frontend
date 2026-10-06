@@ -1,4 +1,24 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
+import { unstable_getResponseFromNextConfig } from 'next/experimental/testing/server';
+
+describe('canonical auth origin', () => {
+  const request = '/requests/i-need-an-entirely-synthetic-retail-sales-dataset-to-test-a-sales-292929f3';
+  it.each([`${request}?source=customer&campaign=t943`, `/login?redirect=${encodeURIComponent(request + '?reply=1')}`, '/auth/oauth/google/callback?code=test&state=test'])
+    ('redirects www before auth with path and query intact: %s', async (path) => {
+      const { default: nextConfig } = await import('./next.config');
+      const response = await unstable_getResponseFromNextConfig({ url: `https://www.ai.market${path}`, nextConfig });
+      expect(response.status).toBe(308);
+      expect(response.headers.get('location')).toBe(`https://ai.market${path}`);
+    });
+
+  it.each(['ai.market', 'localhost:3000', '127.0.0.1:3000', 'preview.example.test', 'wwwXaiXmarket'])
+    ('keeps %s on its own origin', async (host) => {
+      const { default: nextConfig } = await import('./next.config');
+      const response = await unstable_getResponseFromNextConfig({ url: `http://${host}/login?redirect=${encodeURIComponent(request)}`, nextConfig });
+      expect(response.status).toBe(200);
+      expect(response.headers.get('location')).toBeNull();
+    });
+});
 
 describe('next.config listing redirects', () => {
   it('permanently redirects the branded listing slug to the neutral slug', async () => {

@@ -4,6 +4,13 @@ const nextConfig: NextConfig = {
   reactStrictMode: true,
   async redirects() {
     return [
+      // Auth callbacks use apex; redirect before origin-scoped OAuth state is created.
+      {
+        source: '/:path*',
+        has: [{ type: 'host', value: 'www\\.ai\\.market' }],
+        destination: 'https://ai.market/:path*',
+        permanent: true,
+      },
       {
         source: '/listings/eolymp-problem-dataset-5ab53e16',
         destination: '/listings/competitive-programming-problems-5ab53e16',

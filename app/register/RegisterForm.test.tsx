@@ -31,7 +31,7 @@ vi.mock('@/components/Toast', () => ({
 }));
 
 vi.mock('@/components/OAuthButtons', () => ({
-  default: ({ mode }: { mode: string }) => <div data-testid="oauth-buttons">{mode}</div>,
+  default: ({ mode, redirect }: { mode: string; redirect?: string | null }) => <div data-testid="oauth-buttons" data-redirect={redirect}>{mode}</div>,
 }));
 
 vi.mock('next/navigation', () => ({
@@ -76,6 +76,13 @@ describe('RegisterForm', () => {
 
     const dashboardLink = screen.getByRole('link', { name: 'dashboard' });
     expect(dashboardLink.getAttribute('href')).toBe('/dashboard');
+  });
+
+  it.each(['a%26b', 'a%23b', 'retail%20sales'])('preserves request query %s in the provider handoff', (value) => {
+    const target = `/requests/test?source=${value}&reply=1`;
+    navigation.search = new URLSearchParams({ redirect: target }).toString();
+    render(<RegisterForm />);
+    expect(screen.getByTestId('oauth-buttons').getAttribute('data-redirect')).toBe(target);
   });
 
   it('submits every registration as a buyer without company name and keeps the verify-email success banner', async () => {

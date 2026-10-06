@@ -98,7 +98,7 @@ export default function RegisterForm() {
           </div>
         )}
 
-        <OAuthButtons mode="register" />
+        <OAuthButtons mode="register" redirect={rawRedirect} />
 
         <form onSubmit={handleSubmit} className="space-y-4">
           {error && (

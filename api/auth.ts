@@ -54,8 +54,8 @@ export async function forgotPassword(email: string): Promise<{ message: string }
   return res.data;
 }
 
-export async function requestMagicLink(email: string): Promise<{ message: string }> {
-  const res = await api.post<{ message: string }>('/auth/magic-link/request', { email });
+export async function requestMagicLink(email: string, purpose: 'login' | 'register' = 'login'): Promise<{ message: string }> {
+  const res = await api.post<{ message: string }>('/auth/magic-link/request', { email, purpose });
   return res.data;
 }
 
