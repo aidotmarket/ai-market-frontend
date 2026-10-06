@@ -55,6 +55,13 @@ export const AWS_COST_DISCLOSURE = 'Runs in your AWS account; typical cost about
 
 export const CLOUDFLARE_COST_DISCLOSURE = 'Runs in your Cloudflare account. Workers Paid has a $5/month base subscription; container time, Worker/Durable Object usage and R2 read operations may add costs. R2 has no egress fee; Infrequent Access data retrieval can cost extra. The free probe also runs a complete scan. Cloudflare charges are separate from the ai.market verification fee.';
 export const CLOUDFLARE_REMOVE_COPY = 'This stops new verification work. Delete the verifier Worker, Container deployment and Durable Object state in your Cloudflare account to stop its resource costs. Your R2 data and marketplace delivery remain unchanged.';
+// The deployed Worker accepts only a 32-byte base64url secret (43 characters).
+// It is generated here, shown once, and never sent to ai.market or stored.
+export function generateRunNowSecret(): string {
+  const bytes = new Uint8Array(32);
+  crypto.getRandomValues(bytes);
+  return btoa(String.fromCharCode(...bytes)).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
+}
 export const CLOUDFLARE_RUN_NOW_COPY = "Open the verifier’s control page in your own Cloudflare account and press Run now. The scheduled trigger is best-effort; if polling is delayed, press Run now again. ai.market never invokes your verifier.";
 
 export default function GatewayVerificationFlow({ listingId, sellerId, verifier, onChanged }: Props) {
@@ -82,6 +89,7 @@ export default function GatewayVerificationFlow({ listingId, sellerId, verifier,
   const [delay, setDelay] = useState(2);
   const [opened, setOpened] = useState(!cloud);
   const [cloudflareSetup, setCloudflareSetup] = useState<CloudflareSetupResponse | null>(null);
+  const [runNowSecret, setRunNowSecret] = useState<string | null>(null);
   const [cloudflareStatus, setCloudflareStatus] = useState<CloudflareVerifierStatus | null>(null);
   const [awsStatus, setAwsStatus] = useState<AWSVerifierStatus | null>(null);
   const [statusFresh, setStatusFresh] = useState(false);
@@ -147,6 +155,7 @@ export default function GatewayVerificationFlow({ listingId, sellerId, verifier,
             ? { ...command, replace_runner_id: runnerId, confirm_replace: true } : command);
           if (!mounted.current) return;
           setCloudflareSetup(result);
+          setRunNowSecret(generateRunNowSecret());
           setVerifierDecision(null);
           setStatusFresh(false);
           await readVerifierStatus();
@@ -382,7 +391,11 @@ export default function GatewayVerificationFlow({ listingId, sellerId, verifier,
         <label className="block">Registration token<input className="block w-full rounded border p-2" readOnly value={cloudflareSetup.registration_token} onFocus={event => event.target.select()} /></label>
         <button className={buttonClass} onClick={() => void run(async () => { await navigator.clipboard.writeText(cloudflareSetup.registration_token); })}>Copy registration token</button>
         <p>Registration token expires at {cloudflareSetup.expires_at_utc}.</p>
-        <p>The deployment button prompts for two secrets: REGISTRATION_TOKEN (copy the token above) and RUN_NOW_SECRET (32 random bytes you choose and retain). Enter both in Cloudflare. The setup token is shown to you, as with AWS. Your run-now secret never reaches ai.market.</p>
+        {runNowSecret && <>
+          <label className="block">Run-now secret<input className="block w-full rounded border p-2" readOnly value={runNowSecret} onFocus={event => event.target.select()} /></label>
+          <button className={buttonClass} onClick={() => void run(async () => { await navigator.clipboard.writeText(runNowSecret); })}>Copy run-now secret</button>
+        </>}
+        <p>The deployment button prompts for two secrets: REGISTRATION_TOKEN (paste the registration token above) and RUN_NOW_SECRET (paste the run-now secret above). Save the run-now secret somewhere private now: you need it to press Run now on your verifier’s control page, and it is not shown again. It was created in this browser and never reaches ai.market. The setup token is shown to you, as with AWS.</p>
         <p>Binary SHA-256: <code>{cloudflareSetup.binary_sha256}</code></p>
         <p>Worker identity: {cloudflareSetup.worker_identity.mode} <code>{cloudflareSetup.worker_identity.sha256}</code></p>
         <p>{CLOUDFLARE_RUN_NOW_COPY}</p>

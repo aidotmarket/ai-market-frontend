@@ -2,7 +2,7 @@
 import React from 'react';
 import { act, cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import GatewayVerificationFlow, { AWS_COST_DISCLOSURE, CLOUDFLARE_COST_DISCLOSURE, CLOUDFLARE_REMOVE_COPY, CLOUDFLARE_RUN_NOW_COPY } from './GatewayVerificationFlow';
+import GatewayVerificationFlow, { AWS_COST_DISCLOSURE, CLOUDFLARE_COST_DISCLOSURE, CLOUDFLARE_REMOVE_COPY, CLOUDFLARE_RUN_NOW_COPY, generateRunNowSecret } from './GatewayVerificationFlow';
 import * as gateway from '@/api/dataVerificationGateway';
 import * as payin from '@/api/dataVerificationPayin';
 import type { GatewayVerificationEpoch, PublishedScanFindings } from '@/types';
@@ -652,8 +652,13 @@ describe('Cloudflare verifier in the shared seller flow', () => {
     expect(screen.getByText(/Registration token expires at/).textContent).toContain(cloudflareSetup.expires_at_utc);
     expect(screen.getByText(/two secrets: REGISTRATION_TOKEN/)).toBeTruthy();
     expect(screen.getAllByText(CLOUDFLARE_RUN_NOW_COPY).length).toBeGreaterThan(0);
-    expect(screen.queryByRole('textbox', { name: /run.now|provider/i })).toBeNull();
+    expect(screen.queryByRole('textbox', { name: /provider/i })).toBeNull();
+    const secretBox = screen.getByRole('textbox', { name: 'Run-now secret' }) as HTMLInputElement;
+    expect(secretBox.readOnly).toBe(true);
+    expect(secretBox.value).toMatch(/^[A-Za-z0-9_-]{43}$/);
     fireEvent.click(screen.getByRole('button', { name: 'Copy registration token' })); await waitFor(() => expect(copy).toHaveBeenCalledWith(cloudflareSetup.registration_token));
+    fireEvent.click(screen.getByRole('button', { name: 'Copy run-now secret' })); await waitFor(() => expect(copy).toHaveBeenCalledWith(secretBox.value));
+    for (const mock of Object.values(gateway)) if (vi.isMockFunction(mock)) expect(JSON.stringify(vi.mocked(mock).mock.calls)).not.toContain(secretBox.value);
     expect(window.localStorage.setItem).not.toHaveBeenCalled(); expect(window.sessionStorage.setItem).not.toHaveBeenCalled(); expect(storage).not.toHaveBeenCalled(); expect(log).not.toHaveBeenCalled(); expect(error).not.toHaveBeenCalled(); expect(beacon).not.toHaveBeenCalled(); expect(analytics).not.toHaveBeenCalled();
     expect(window.localStorage.length).toBe(0); expect(window.sessionStorage.length).toBe(0);
     expect((screen.getByRole('button', { name: 'Check data and get quote' }) as HTMLButtonElement).disabled).toBe(true);
@@ -661,6 +666,10 @@ describe('Cloudflare verifier in the shared seller flow', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Check verifier status' })); await screen.findByText('Ready');
     expect((screen.getByRole('button', { name: 'Check data and get quote' }) as HTMLButtonElement).disabled).toBe(false);
     vi.unstubAllGlobals();
+  });
+  it('generates a fresh 32-byte base64url run-now secret each time', () => {
+    const a = generateRunNowSecret(); const b = generateRunNowSecret();
+    expect(a).toMatch(/^[A-Za-z0-9_-]{43}$/); expect(b).toMatch(/^[A-Za-z0-9_-]{43}$/); expect(a).not.toBe(b);
   });
   it('confirms replacement with the old runner ID and offers the new release button', async () => {
     vi.mocked(gateway.getCloudflareVerifierStatus).mockResolvedValue(cloudflareRegistered);
