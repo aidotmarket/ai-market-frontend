@@ -40,7 +40,7 @@ for (const width of [360, 375, 390]) test(`${width}px native keyboard table and 
   expect(logs.join('\n')).not.toContain('ROW_MARKER'); expect(logs.join('\n')).not.toContain(filterMarker); expect(errors).toEqual([]);
 });
 
-test('seller preview and buyer output render the same verified sample in Chrome', async ({page}) => {
+test('shared sample rendering is deterministic and the browser harness preserves structure and proof labels in Chrome', async ({page}) => {
   const schema: Descriptor[] = [['amount', 'decimal', false, {precision: 12, scale: 2}], ['id', 'signed_integer', false, {}]];
   const f = await makePreview([{amount: '12.50', id: '7'}], schema);
   const cors = {'content-type': 'application/json', 'cache-control': 'no-store', 'access-control-allow-origin': 'http://127.0.0.1:4178', 'access-control-allow-credentials': 'true'};
@@ -93,5 +93,7 @@ test('seller preview and buyer output render the same verified sample in Chrome'
   await expect(buyerSample.getByRole('table', {name: 'Seller-selected sample'})).toBeVisible();
   await expect(buyerSample.getByText('This sample row matches the dataset commitment recorded by the seller.', {exact: true}).first()).toBeVisible();
   await expect(buyerSample.getByText('This proof does not establish quality, representativeness, legality, compliance, seller identity, or completeness against an external source.', {exact: true})).toBeVisible();
+  // Both harness regions use the same sample component and props: this equality
+  // checks determinism, not independent seller/buyer parity or actual route composition.
   expect(await sellerSample.innerText()).toBe(await buyerSample.innerText());
 });

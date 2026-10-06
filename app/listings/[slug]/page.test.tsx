@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
 import React from 'react';
 import { renderToStaticMarkup } from 'react-dom/server';
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { within } from '@testing-library/react';
 
 import type { ListingDetail, ListingVersion } from '@/types';
@@ -16,6 +16,29 @@ const fetchListingVersions = vi.fn();
 const fetchListingAccessWindowDays = vi.fn();
 const resolveListingUUID = vi.fn();
 const buyButtonProps = vi.hoisted(() => vi.fn());
+const composition = vi.hoisted(() => ({
+  enabled: false,
+  atAGlanceProps: vi.fn(),
+  sampleProps: vi.fn(),
+}));
+
+vi.mock('@/components/listings/BuyerAtAGlance', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('@/components/listings/BuyerAtAGlance')>();
+  return {
+    ...actual,
+    default: (props: React.ComponentProps<typeof actual.default>) => {
+      // Existing behavioral tests and snapshots still render the actual component.
+      if (!composition.enabled) return <actual.default {...props} />;
+      composition.atAGlanceProps(props);
+      return <div data-buyer-at-a-glance />;
+    },
+    BuyerSamplePreview: (props: React.ComponentProps<typeof actual.BuyerSamplePreview>) => {
+      if (!composition.enabled) return <actual.BuyerSamplePreview {...props} />;
+      composition.sampleProps(props);
+      return <div data-standalone-buyer-sample />;
+    },
+  };
+});
 
 vi.mock('next/navigation', () => ({
   notFound,
@@ -120,6 +143,64 @@ function extractJsonLdScripts(html: string): string[] {
     (match) => match[1],
   );
 }
+
+describe('real public listing route sample composition', () => {
+  beforeEach(() => {
+    fetchPublicListing.mockReset();
+    fetchListingVersions.mockReset();
+    fetchListingAccessWindowDays.mockReset();
+    composition.atAGlanceProps.mockClear();
+    composition.sampleProps.mockClear();
+    composition.enabled = true;
+  });
+
+  afterEach(() => {
+    composition.enabled = false;
+    document.body.innerHTML = '';
+  });
+
+  it.each(['normal', 'approved Workspace'] as const)(
+    'passes includeSample=false and mounts one standalone sample after the actual schema on the %s listing',
+    async (route) => {
+      const listing = makeListing();
+      if (route === 'approved Workspace') {
+        const { createHash } = await import('node:crypto');
+        const rendered_html = '<html><body><h1>Approved listing</h1></body></html>';
+        listing.approved_presentation = {
+          presentation_version: 'seller-listing-review-v2',
+          rendered_html,
+          render_hash: createHash('sha256').update(rendered_html).digest('hex'),
+        };
+      }
+
+      // renderPage calls the imported app/listings/[slug]/page.tsx. Only the two
+      // client boundaries become markers; the route and SchemaTable stay real.
+      document.body.innerHTML = await renderPage(listing);
+      expect(composition.atAGlanceProps).toHaveBeenCalledTimes(1);
+      expect(composition.atAGlanceProps.mock.calls[0][0]).toEqual(expect.objectContaining({
+        slug: listing.slug, listingId: listing.id, includeSample: false,
+      }));
+      expect(composition.sampleProps).toHaveBeenCalledTimes(1);
+      expect(composition.sampleProps.mock.calls[0][0]).toEqual({
+        slug: listing.slug, listingId: listing.id,
+      });
+
+      const page = within(document.body);
+      const schemaHeading = page.getByRole('heading', { name: 'Schema Information', level: 2 });
+      const schemaBlock = schemaHeading.parentElement!;
+      expect(within(schemaBlock).getByRole('table')).toBeTruthy();
+      expect(within(schemaBlock).getByText('region', { exact: true })).toBeTruthy();
+      expect(within(schemaBlock).getByText('10 rows', { exact: true })).toBeTruthy();
+      const samples = document.body.querySelectorAll('[data-standalone-buyer-sample]');
+      expect(samples).toHaveLength(1);
+      expect(schemaBlock.contains(samples[0])).toBe(false);
+      expect(schemaBlock.compareDocumentPosition(samples[0]) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+      if (route === 'approved Workspace') {
+        expect(page.getByTitle('Seller-approved listing')).toBeTruthy();
+      }
+    },
+  );
+});
 
 it('marks inherited listings unavailable and preserves seller licence provenance', async () => {
   const html = await renderPage(makeListing({
