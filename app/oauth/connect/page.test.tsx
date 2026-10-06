@@ -51,6 +51,28 @@ it.each(['approve', 'deny'] as const)('%s sends the nonce and navigates to the g
   expect(assign).toHaveBeenCalledWith(`https://auth.ai.market/oauth/authorize/complete?request=${id}`);
 });
 
+it.each(['', 'org-1'])('renders a styled native account dropdown and preserves selection %s', async (value) => {
+  vi.mocked(getConnectorRequest).mockResolvedValue({ ...metadata, accounts: [
+    { organization_id: 'org-1', label: 'Team account', kind: 'organization' },
+    ...metadata.accounts,
+  ] });
+  render(<ConnectorConsentPage />);
+  const select = await screen.findByRole('combobox', { name: 'Connect account' }) as HTMLSelectElement;
+  expect(select.classList.contains('border-gray-300')).toBe(true);
+  expect(select.classList.contains('pr-10')).toBe(true);
+  expect(select.classList.contains('focus:ring-2')).toBe(true);
+  const caret = select.parentElement?.querySelector('svg');
+  expect(caret?.getAttribute('aria-hidden')).toBe('true');
+  expect(caret?.classList.contains('pointer-events-none')).toBe(true);
+  expect(Array.from(select.options, (option) => [option.text, option.value])).toEqual([
+    ['Personal', ''], ['Team account', 'org-1'],
+  ]);
+  expect(select.value).toBe('org-1');
+  fireEvent.change(select, { target: { value } });
+  fireEvent.click(screen.getByRole('button', { name: 'Approve' }));
+  await waitFor(() => expect(decideConnectorRequest).toHaveBeenCalledWith(id, 'approve', value || null, 'nonce'));
+});
+
 it('rejects an unsafe continue URL', async () => {
   vi.mocked(decideConnectorRequest).mockRejectedValue(new Error('invalid_redirect'));
   render(<ConnectorConsentPage />);

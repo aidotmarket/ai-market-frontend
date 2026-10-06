@@ -109,11 +109,19 @@ export default function ConnectorConsentPage() {
       <h1 className="text-2xl font-bold">Connect {metadata.client.name} to ai.market</h1>
       <p>{metadata.client.host} {metadata.client.verified && <span>Verified</span>}</p>
       <p>Signed in as {user.email}</p>
-      <label htmlFor="connector-account">Connect account</label>
-      <select id="connector-account" value={organizationId ?? ''} onChange={(event) => setOrganizationId(event.target.value || null)}>
-        {[...metadata.accounts].sort((a, b) => (a.kind === 'personal' ? -1 : 1) - (b.kind === 'personal' ? -1 : 1)).map((account) =>
-          <option key={account.organization_id ?? 'personal'} value={account.organization_id ?? ''}>{account.kind === 'personal' ? 'Personal' : account.label}</option>)}
-      </select>
+      <div>
+        <label htmlFor="connector-account" className="mb-1 block text-sm font-medium text-gray-700">Connect account</label>
+        <div className="relative">
+          <select id="connector-account" value={organizationId ?? ''} onChange={(event) => setOrganizationId(event.target.value || null)}
+            className="min-h-11 w-full appearance-none rounded-lg border border-gray-300 bg-white py-2 pl-3 pr-10 text-sm text-gray-900 focus:outline-none focus:ring-2 focus:ring-[#3F51B5] focus:border-transparent">
+            {[...metadata.accounts].sort((a, b) => (a.kind === 'personal' ? -1 : 1) - (b.kind === 'personal' ? -1 : 1)).map((account) =>
+              <option key={account.organization_id ?? 'personal'} value={account.organization_id ?? ''}>{account.kind === 'personal' ? 'Personal' : account.label}</option>)}
+          </select>
+          <svg aria-hidden="true" focusable="false" viewBox="0 0 20 20" fill="none" className="pointer-events-none absolute right-3 top-1/2 h-5 w-5 -translate-y-1/2 text-gray-500">
+            <path d="m5 7.5 5 5 5-5" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
+          </svg>
+        </div>
+      </div>
       <h2>Access requested</h2>
       <ul>{metadata.scopes.map((scope) => <li key={scope.scope}>{scope.description}</li>)}</ul>
       <p>Expires {new Date(metadata.expires_at).toLocaleString()}</p>

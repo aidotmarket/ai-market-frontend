@@ -7,6 +7,7 @@ import axios from 'axios';
 import SettingsPage from './page';
 import { useAuthStore } from '@/store/auth';
 import type { User } from '@/types';
+import { getConnectorGrants, getConnectorStatus } from '@/api/connector-oauth';
 
 const authApi = vi.hoisted(() => ({
   disable2FA: vi.fn(),
@@ -24,6 +25,7 @@ const capabilitiesApi = vi.hoisted(() => ({
 
 vi.mock('@/api/auth', async (importOriginal) => ({ ...await importOriginal<typeof import('@/api/auth')>(), ...authApi }));
 vi.mock('@/api/capabilities', () => capabilitiesApi);
+vi.mock('@/api/connector-oauth', () => ({ getConnectorStatus: vi.fn(), getConnectorGrants: vi.fn(), revokeConnectorGrant: vi.fn() }));
 vi.mock('@/components/Toast', () => ({
   useToast: () => ({ toast: vi.fn() }),
 }));
@@ -64,6 +66,8 @@ describe('SettingsPage capability refresh', () => {
   });
 
   beforeEach(() => {
+    vi.mocked(getConnectorStatus).mockResolvedValue(false);
+    vi.mocked(getConnectorGrants).mockResolvedValue([]);
     refreshAuth.mockResolvedValue(undefined);
     authApi.updateProfile.mockResolvedValue(undefined);
     authApi.submitReauth.mockResolvedValue({ token: 'fresh-settings-token' });
@@ -84,6 +88,22 @@ describe('SettingsPage capability refresh', () => {
   afterEach(() => {
     cleanup();
     vi.clearAllMocks();
+  });
+
+  it('shows Connected apps for a buyer while keeping seller profile fields hidden', async () => {
+    useAuthStore.setState({ user: { ...user, role: 'buyer', email: 'buyer@example.com' } });
+    capabilitiesApi.getCapabilities.mockResolvedValue({ seller: { effective_status: 'not_requested' } });
+    vi.mocked(getConnectorStatus).mockResolvedValue(true);
+
+    render(<SettingsPage />);
+
+    expect(await screen.findByRole('heading', { name: 'Connected apps' })).toBeTruthy();
+    await screen.findByText('To connect ai.market, choose it in Claude or ChatGPT.');
+    await waitFor(() => expect(capabilitiesApi.getCapabilities).toHaveBeenCalled());
+    expect(screen.getByRole('heading', { name: 'Settings' })).toBeTruthy();
+    expect(screen.getByLabelText('First name')).toBeTruthy();
+    expect(screen.queryByLabelText('Company name')).toBeNull();
+    expect(getConnectorGrants).toHaveBeenCalledOnce();
   });
 
   it.each(['google', 'github'] as const)('hides new native setup for current %s sign-in with a legacy password', async provider => {
