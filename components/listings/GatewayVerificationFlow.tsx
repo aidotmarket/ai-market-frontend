@@ -6,7 +6,8 @@ import {
   getGatewayVerificationEpoch, getGatewayVerificationProbe, gatewayVerificationLifecycle, gatewayVerificationError,
   probeGatewayVerification, startGatewayVerification, verificationErrorCopy, verificationRefusalCopy,
   getAwsVerifierStatus, setupAwsVerifier, removeVerificationRunner,
-  type AWSVerifierStatus,
+  getCloudflareVerifierStatus, setupCloudflareVerifier,
+  type CloudflareVerifierStatus, type CloudflareSetupResponse, type AWSVerifierStatus,
 } from '@/api/dataVerificationGateway';
 import { getDataVerificationPayInReadiness } from '@/api/dataVerificationPayin';
 import DataVerificationPaymentMethod from '@/components/DataVerificationPaymentMethod';
@@ -19,7 +20,7 @@ import type {
 interface Props {
   listingId: string;
   sellerId: string;
-  verifier?: { kind: 'aws'; connectionId: string } | { kind: 'gateway'; runnerId?: string };
+  verifier?: { kind: 'cloudflare'; connectionId: string } | { kind: 'aws'; connectionId: string } | { kind: 'gateway'; runnerId?: string };
   onChanged?: () => void;
 }
 interface Attempt {
@@ -52,8 +53,14 @@ const label = (value: string) => displayLabels[value] ?? value.replaceAll('_', '
 
 export const AWS_COST_DISCLOSURE = 'Runs in your AWS account; typical cost about one cent per scan plus a small monthly amount. The strict network option costs more. The free probe also runs a scan in your AWS account; AWS charges are separate from the ai.market verification fee.';
 
+export const CLOUDFLARE_COST_DISCLOSURE = 'Runs in your Cloudflare account. Workers Paid has a $5/month base subscription; container time, Worker/Durable Object usage and R2 read operations may add costs. R2 has no egress fee; Infrequent Access data retrieval can cost extra. The free probe also runs a complete scan. Cloudflare charges are separate from the ai.market verification fee.';
+export const CLOUDFLARE_REMOVE_COPY = 'This stops new verification work. Delete the verifier Worker, Container deployment and Durable Object state in your Cloudflare account to stop its resource costs. Your R2 data and marketplace delivery remain unchanged.';
+export const CLOUDFLARE_RUN_NOW_COPY = "Open the verifier’s control page in your own Cloudflare account and press Run now. The scheduled trigger is best-effort; if polling is delayed, press Run now again. ai.market never invokes your verifier.";
+
 export default function GatewayVerificationFlow({ listingId, sellerId, verifier, onChanged }: Props) {
   const aws = verifier?.kind === 'aws';
+  const cloudflare = verifier?.kind === 'cloudflare';
+  const cloud = aws || cloudflare;
   // Recovery uses this browser’s localStorage only. Clearing it or switching
   // browsers loses the attempt/epoch ID; this contract cannot discover it again.
   const storageKey = `gateway-verification:${sellerId}:${listingId}`;
@@ -73,25 +80,33 @@ export default function GatewayVerificationFlow({ listingId, sellerId, verifier,
   const [description, setDescription] = useState<Partial<GatewayVerificationDescription>>({ intended_use_tags: [], known_limitation_tags: [] });
   const [confirmAction, setConfirmAction] = useState<GatewayVerificationAction | null>(null);
   const [delay, setDelay] = useState(2);
-  const [opened, setOpened] = useState(!aws);
+  const [opened, setOpened] = useState(!cloud);
+  const [cloudflareSetup, setCloudflareSetup] = useState<CloudflareSetupResponse | null>(null);
+  const [cloudflareStatus, setCloudflareStatus] = useState<CloudflareVerifierStatus | null>(null);
   const [awsStatus, setAwsStatus] = useState<AWSVerifierStatus | null>(null);
   const [statusFresh, setStatusFresh] = useState(false);
   const [verifierDecision, setVerifierDecision] = useState<'setup' | 'replace' | 'remove' | null>(null);
   const statusRead = useRef(0);
-  const runnerId = aws ? awsStatus?.runner_id : verifier?.kind === 'gateway' ? verifier.runnerId : undefined;
+  const verifierStatus = cloudflare ? cloudflareStatus : awsStatus;
+  const runnerId = cloudflare ? cloudflareStatus?.runner_id : aws ? awsStatus?.runner_id : verifier?.kind === 'gateway' ? verifier.runnerId : undefined;
 
   async function readVerifierStatus() {
     const read = ++statusRead.current;
     try {
-      const status = await getAwsVerifierStatus(listingId);
-      if (mounted.current && read === statusRead.current) { setAwsStatus(status); setStatusFresh(true); }
+      if (cloudflare) {
+        const status = await getCloudflareVerifierStatus(listingId);
+        if (mounted.current && read === statusRead.current) { setCloudflareStatus(status); setStatusFresh(true); }
+      } else {
+        const status = await getAwsVerifierStatus(listingId);
+        if (mounted.current && read === statusRead.current) { setAwsStatus(status); setStatusFresh(true); }
+      }
     } catch (cause) {
       if (mounted.current && read === statusRead.current) setStatusFresh(false);
       throw cause;
     }
   }
   useEffect(() => {
-    if (!aws || !opened) return;
+    if (!cloud || !opened) return;
     let stopped = false;
     let timer: ReturnType<typeof setTimeout>;
     async function poll() {
@@ -105,7 +120,7 @@ export default function GatewayVerificationFlow({ listingId, sellerId, verifier,
     }
     void poll();
     return () => { stopped = true; statusRead.current++; clearTimeout(timer); };
-  }, [aws, opened, listingId, sellerId]);
+  }, [cloud, cloudflare, opened, listingId, sellerId]);
 
   function confirmVerifierDecision() {
     if (verifierDecision === 'remove') {
@@ -116,9 +131,32 @@ export default function GatewayVerificationFlow({ listingId, sellerId, verifier,
         await removeVerificationRunner(runnerId);
         if (!mounted.current) return;
         setVerifierDecision(null);
-        if (aws) { setStatusFresh(false); await readVerifierStatus(); }
+        if (cloud) { setCloudflareSetup(null); setStatusFresh(false); await readVerifierStatus(); }
         await checkStatus();
         onChanged?.();
+      });
+      return;
+    }
+    if (verifier?.kind === 'cloudflare') {
+      if (verifierDecision === 'replace' && !runnerId) return;
+      void run(async () => {
+        setCloudflareSetup(null);
+        try {
+          const command = { kind: 'cloudflare' as const, connection_id: verifier.connectionId, jurisdiction: 'default' as const };
+          const result = await setupCloudflareVerifier(verifierDecision === 'replace' && runnerId
+            ? { ...command, replace_runner_id: runnerId, confirm_replace: true } : command);
+          if (!mounted.current) return;
+          setCloudflareSetup(result);
+          setVerifierDecision(null);
+          setStatusFresh(false);
+          await readVerifierStatus();
+        } catch (cause) {
+          if (gatewayVerificationError(cause).code === 'replacement_confirmation_required') {
+            await readVerifierStatus();
+            if (mounted.current) setVerifierDecision('replace');
+          }
+          throw cause;
+        }
       });
       return;
     }
@@ -220,7 +258,7 @@ export default function GatewayVerificationFlow({ listingId, sellerId, verifier,
   }, [ready, probe?.state, epoch?.state, epoch?.reconciliation_required, delay, storageKey]);
 
   function checkData() {
-    if (aws && (!statusFresh || awsStatus?.state !== 'ready')) return;
+    if (cloud && (!statusFresh || (cloudflare && !verifierStatus?.eligible) || verifierStatus?.state !== 'ready')) return;
     void run(async () => {
       if (attempt.current?.epochId) { await checkStatus(); return; }
       const saved = (attempt.current?.quoteRefused ? null : attempt.current) ?? { probeCommand: { confirm: true as const, preview_requested: preview, idempotency_key: crypto.randomUUID() } };
@@ -310,7 +348,7 @@ export default function GatewayVerificationFlow({ listingId, sellerId, verifier,
   if (!opened) return <button className={buttonClass} onClick={() => setOpened(true)}>Verify this data</button>;
   return <section className="space-y-5 rounded-xl border border-gray-200 bg-white p-6" aria-labelledby="gateway-verification-heading">
     <h2 id="gateway-verification-heading" className="text-xl font-semibold">{probe?.state === 'complete' && probe.quote_id ? 'Verify this data' : epoch || attempt.current?.epochId || (probe && probe.state !== 'queued') ? 'Data verification' : 'Check verification availability'}</h2>
-    <p>{aws ? 'Check your data in your own AWS account, then review a quote. The check and quote do not need a card. Data values stay in your AWS account.' : 'Check your data in your own gateway, then review a quote. The check and quote are free and do not need a card. Data values stay in your gateway.'}</p>
+    <p>{aws ? 'Check your data in your own AWS account, then review a quote. The check and quote do not need a card. Data values stay in your AWS account.' : cloudflare ? 'Check your data in your own Cloudflare account, then review a quote. The check and quote do not need a card. Data values stay in your Cloudflare account.' : 'Check your data in your own gateway, then review a quote. The check and quote are free and do not need a card. Data values stay in your gateway.'}</p>
     {error && <p role="alert">{error}</p>}
     {aws && (probe?.refusal === 'aws_source_too_large' || error === verificationRefusalCopy('aws_source_too_large')) && <p><Link href="/dashboard/gateways" className="underline">Set up your own AIM Data gateway</Link> with a seller-owned S3 mount using Mountpoint for Amazon S3 or rclone.</p>}
     {aws && <>
@@ -326,24 +364,53 @@ export default function GatewayVerificationFlow({ listingId, sellerId, verifier,
       <p>{AWS_COST_DISCLOSURE}</p>
       <p>The setup link contains a single-use registration that expires after 30 minutes. It is visible in your AWS console, stack parameters and browser history. Check the registered code hash and time before proceeding. Setup does not authorize a probe.</p>
     </>}
-    {runnerId && (!aws || awsStatus?.state !== 'removed') && <button className={buttonClass} disabled={busy} onClick={() => setVerifierDecision('remove')}>Remove verifier</button>}
+    {cloudflare && <>
+      <h3 className="font-semibold">Cloudflare verifier</h3>
+      <p role="status">{!statusFresh ? 'Checking verifier status…' : cloudflareStatus?.state === 'ready' ? 'Ready' : cloudflareStatus?.state === 'removed' ? 'Removed' : cloudflareStatus?.state === 'waiting' ? 'Waiting for verifier' : 'Set up the verifier to check this data.'}</p>
+      <p>You need a GitHub or GitLab account and Cloudflare Workers Paid.</p>
+      {cloudflareStatus?.binary_sha256 && <p>Registered binary SHA-256: <code>{cloudflareStatus.binary_sha256}</code></p>}
+      {cloudflareStatus?.worker_identity && <p>Registered Worker identity: {cloudflareStatus.worker_identity.mode} <code>{cloudflareStatus.worker_identity.sha256}</code></p>}
+      {cloudflareStatus?.registered_at && <p>Registered at: <time dateTime={cloudflareStatus.registered_at}>{cloudflareStatus.registered_at}</time></p>}
+      {cloudflareStatus?.state === 'waiting' && <p>{CLOUDFLARE_RUN_NOW_COPY}</p>}
+      {cloudflareStatus?.setup_expires_at && <p>Setup expires at {cloudflareStatus.setup_expires_at}. An exact registration retry recovers its acknowledgment without creating another verifier. If setup expires, request a fresh setup token.</p>}
+      <button className={buttonClass} disabled={busy || !statusFresh || !cloudflareStatus?.eligible} onClick={() => setVerifierDecision(runnerId && cloudflareStatus?.state !== 'removed' ? 'replace' : 'setup')}>Set up the verifier</button>
+      <button className={buttonClass} disabled={busy} onClick={() => void run(readVerifierStatus)}>Check verifier status</button>
+      <p>For a version update, confirm replacement to get the new release’s button and fresh registration. Remove the old deployment and Durable Object state after exporting your audit records privately. ai.market never pushes updates or invokes anything in your account.</p>
+      {cloudflareSetup && <div className="space-y-3">
+        <a className={buttonClass} href={cloudflareSetup.deploy_button_url} target="_blank" rel="noopener noreferrer">Deploy to Cloudflare</a>
+        <p>Release: {cloudflareSetup.release_id}; scanner version: {cloudflareSetup.scanner_version}</p>
+        <label className="block">Registration token<input className="block w-full rounded border p-2" readOnly value={cloudflareSetup.registration_token} onFocus={event => event.target.select()} /></label>
+        <button className={buttonClass} onClick={() => void run(async () => { await navigator.clipboard.writeText(cloudflareSetup.registration_token); })}>Copy registration token</button>
+        <p>Registration token expires at {cloudflareSetup.expires_at_utc}.</p>
+        <p>The deployment button prompts for two secrets: REGISTRATION_TOKEN (copy the token above) and RUN_NOW_SECRET (32 random bytes you choose and retain). Enter both in Cloudflare. The setup token is shown to you, as with AWS. Your run-now secret never reaches ai.market.</p>
+        <p>Binary SHA-256: <code>{cloudflareSetup.binary_sha256}</code></p>
+        <p>Worker identity: {cloudflareSetup.worker_identity.mode} <code>{cloudflareSetup.worker_identity.sha256}</code></p>
+        <p>{CLOUDFLARE_RUN_NOW_COPY}</p>
+      </div>}
+      <p>{CLOUDFLARE_COST_DISCLOSURE}</p>
+      <p><a href="https://developers.cloudflare.com/workers/platform/pricing/" target="_blank" rel="noopener noreferrer" className="underline">Workers pricing</a>; <a href="https://developers.cloudflare.com/containers/platform/pricing/" target="_blank" rel="noopener noreferrer" className="underline">Containers pricing</a>; <a href="https://developers.cloudflare.com/r2/pricing/" target="_blank" rel="noopener noreferrer" className="underline">R2 pricing</a></p>
+      {(probe?.refusal === 'cloudflare_source_too_large' || error === verificationRefusalCopy('cloudflare_source_too_large')) && <Link href="/dashboard/gateways" className="underline">Set up your own AIM Data gateway</Link>}
+    </>}
+    {runnerId && (!cloud || verifierStatus?.state !== 'removed') && <button className={buttonClass} disabled={busy} onClick={() => setVerifierDecision('remove')}>Remove verifier</button>}
     {verifierDecision && <div role="group" aria-label="Confirm verifier change">
-      <p>{verifierDecision === 'remove' ? 'Remove this verifier and stop new verification work?' : verifierDecision === 'replace' ? 'Replace the existing verifier and its receipt key? This stops its verification work.' : 'Set up a scoped verifier in your own AWS account?'}</p>
-      <p>{aws ? 'Deleting the CloudFormation stack stops its AWS resources and costs. Removing the verifier here does not delete the stack. Marketplace delivery is unchanged.' : 'Marketplace delivery is unchanged.'}</p>
+      <p>{verifierDecision === 'remove' ? 'Remove this verifier and stop new verification work?' : verifierDecision === 'replace' ? 'Replace the existing verifier and its receipt key? This stops its verification work.' : cloudflare ? 'Set up a scoped verifier in your own Cloudflare account?' : 'Set up a scoped verifier in your own AWS account?'}</p>
+      {cloudflare && verifierDecision === 'replace' && <p>Replace runner {runnerId}. Remove the old deployment after setting up the new release.</p>}
+      <p>{cloudflare ? CLOUDFLARE_REMOVE_COPY : aws ? 'Deleting the CloudFormation stack stops its AWS resources and costs. Removing the verifier here does not delete the stack. Marketplace delivery is unchanged.' : 'Marketplace delivery is unchanged.'}</p>
       <button className={buttonClass} disabled={busy || (verifierDecision !== 'setup' && !runnerId)} onClick={confirmVerifierDecision}>Confirm {verifierDecision === 'remove' ? 'removal' : verifierDecision === 'replace' ? 'replacement' : 'setup'}</button>
       <button className={buttonClass} disabled={busy} onClick={() => setVerifierDecision(null)}>Keep current verifier</button>
     </div>}
     {!probe && !epoch && !attempt.current?.epochId && <>
       <label className="block"><input type="checkbox" checked={preview} disabled={busy || (!!attempt.current && !attempt.current.quoteRefused)} onChange={e => setPreview(e.target.checked)} /> Include column names and row counts in the findings</label>
-      <button className={buttonClass} disabled={!ready || busy || (aws && (!statusFresh || awsStatus?.state !== 'ready'))} onClick={checkData}>{busy ? 'Checking…' : attempt.current?.quoteRefused ? 'Get a new quote' : 'Check data and get quote'}</button>
+      <button className={buttonClass} disabled={!ready || busy || (cloud && (!statusFresh || (cloudflare && !verifierStatus?.eligible) || verifierStatus?.state !== 'ready'))} onClick={checkData}>{busy ? 'Checking…' : attempt.current?.quoteRefused ? 'Get a new quote' : 'Check data and get quote'}</button>
     </>}
     {attempt.current?.epochId && !epoch && <p role="status">Loading your existing verification. Check again to follow its status.</p>}
-    {probe?.state === 'queued' && <p role="status">{aws ? 'Waiting for your AWS verifier to check the data. No ai.market charge has been made; AWS charges apply.' : 'Waiting for your gateway to check the data. No charge has been made.'}</p>}
+    {probe?.state === 'queued' && <p role="status">{aws ? 'Waiting for your AWS verifier to check the data. No ai.market charge has been made; AWS charges apply.' : cloudflare ? 'Waiting for your Cloudflare verifier to check the data. No ai.market charge has been made; Cloudflare charges apply.' : 'Waiting for your gateway to check the data. No charge has been made.'}</p>}
+    {cloudflare && (probe?.state === 'queued' || (epoch && runningStates.has(epoch.state))) && <p>{CLOUDFLARE_RUN_NOW_COPY}</p>}
     {probe?.state === 'refused' && <p role="alert">{verificationRefusalCopy(probe.refusal)}</p>}
     {probe?.state === 'complete' && probe.quote_id && probe.maximum_hold_usd && !epoch && !attempt.current?.epochId && !setup && <>
       <h3 className="font-semibold">Your verification quote</h3>
       <p>A temporary hold of up to ${probe.maximum_hold_usd} will be placed on your card. The final charge is twice the cost of preparing the written findings, between $1 and $25. You pay for completed findings whether you publish or decline them. If verification fails before completion, the hold is released.</p>
-      <p>Verification covers the complete supported data for this listing version. It does not assess accuracy, legality, or fitness for a purpose. {aws ? 'Your AWS verifier' : 'Your gateway'} runs ai.market’s open-source scanner in an environment you control.</p>
+      <p>Verification covers the complete supported data for this listing version. It does not assess accuracy, legality, or fitness for a purpose. {aws ? 'Your AWS verifier' : cloudflare ? 'Your Cloudflare verifier' : 'Your gateway'} runs ai.market’s open-source scanner in an environment you control.</p>
       <fieldset disabled={busy || !!attempt.current?.startCommand} className="space-y-3">
         <legend className="font-semibold">Describe your data</legend>
         {(Object.keys(choices) as Array<keyof typeof choices>).map(key => <label key={key} className="block">{fieldLabels[key]}<select className="ml-3 rounded border p-2" value={description[key] ?? ''} onChange={e => setDescription(current => ({ ...current, [key]: e.target.value }))}>

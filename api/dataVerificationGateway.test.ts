@@ -2,7 +2,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { api } from './client';
 import { gatewayVerificationError, E7_REFUSAL, gatewayVerificationLifecycle, getGatewayVerificationEpoch, getGatewayVerificationProbe, probeGatewayVerification, startGatewayVerification, verificationErrorCopy } from './dataVerificationGateway';
 import type { GatewayVerificationStartCommand } from '@/types';
-import { getAwsVerifierStatus, setupAwsVerifier, removeVerificationRunner, verificationRefusalCopy } from './dataVerificationGateway';
+import { getCloudflareVerifierStatus, setupCloudflareVerifier, getAwsVerifierStatus, setupAwsVerifier, removeVerificationRunner, verificationRefusalCopy } from './dataVerificationGateway';
 vi.mock('./client', () => ({ api: { get: vi.fn(), post: vi.fn(), delete: vi.fn() } }));
 const path = '/data-verification/gateway/listings/listing';
 const start: GatewayVerificationStartCommand = {
@@ -87,5 +87,27 @@ describe('AWS seller-session setup/status and shared removal', () => {
   });
   it('preserves the exact AWS size refusal', () => {
     expect(verificationRefusalCopy('aws_source_too_large')).toBe('This source is too large for the AWS verifier. Verify it with your own AIM Data gateway instead.');
+  });
+});
+
+describe('Cloudflare seller-session contracts', () => {
+  it('sends exact setup and confirmed replacement fields and reads listing status', async () => {
+    const data = { registration_token: 'private', deploy_button_url: 'https://deploy.workers.cloudflare.com/?url=release' };
+    vi.mocked(api.post).mockResolvedValue({ data });
+    const command = { kind: 'cloudflare' as const, jurisdiction: 'default' as const, connection_id: 'connection' };
+    expect(await setupCloudflareVerifier(command)).toEqual(data);
+    expect(api.post).toHaveBeenLastCalledWith('/verification-runners/setup', command);
+    await setupCloudflareVerifier({ ...command, replace_runner_id: 'old', confirm_replace: true });
+    expect(api.post).toHaveBeenLastCalledWith('/verification-runners/setup', { ...command, replace_runner_id: 'old', confirm_replace: true });
+    const status = { state: 'ready', eligible: true, binary_sha256: 'a'.repeat(64), worker_identity: { mode: 'bundle', sha256: 'b'.repeat(64) } };
+    vi.mocked(api.get).mockResolvedValue({ data: status });
+    expect(await getCloudflareVerifierStatus('listing')).toEqual(status);
+    expect(api.get).toHaveBeenLastCalledWith('/verification-runners/cloudflare/status', { params: { listing_id: 'listing' } });
+  });
+  it.each(['connection_unavailable', 'context_incomplete', 'jurisdiction_unsupported', 'read_credentials_unconfigured', 'read_failed', 'release_unavailable', 'setup_refused', 'source_scope_unrepresentable', 'source_too_large', 'worker_deployment'])('explains cloudflare_%s without raw details', suffix => {
+    const code = `cloudflare_${suffix}`;
+    const copy = verificationRefusalCopy(code);
+    expect(copy).not.toBe('We could not complete this request. Try again.'); expect(copy).not.toContain(code);
+    expect(verificationErrorCopy({ response: { status: 409, data: { detail: code } } })).toBe(copy);
   });
 });

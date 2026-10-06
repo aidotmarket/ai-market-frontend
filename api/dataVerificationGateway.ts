@@ -31,6 +31,41 @@ export interface AWSVerifierStatus {
   poll_interval_minutes: number | null;
   setup_expires_at: string | null;
 }
+export type CloudflareSetupCommand = AWSSetupCommand & { kind: 'cloudflare'; jurisdiction: 'default' };
+export interface CloudflareWorkerIdentity {
+  mode: 'bundle' | 'source_tree_lockfile';
+  sha256: string;
+}
+export interface CloudflareSetupResponse {
+  connection_id: string;
+  expires_at_utc: string;
+  registration_token: string;
+  release_id: string;
+  scanner_version: string;
+  binary_sha256: string;
+  worker_identity: CloudflareWorkerIdentity;
+  template_repo_url: string;
+  template_commit: string;
+  deploy_button_url: string;
+  bundle_url: string;
+  bundle_sha256: string;
+  deployment_config: { connection_id: string; bucket: string; prefix: string; jurisdiction: string; keys: string[] };
+}
+export interface CloudflareVerifierStatus extends Omit<AWSVerifierStatus, 'region' | 'code_sha256' | 'poll_interval_minutes'> {
+  jurisdiction: string | null;
+  release_id: string | null;
+  scanner_version: string | null;
+  binary_sha256: string | null;
+  worker_identity: CloudflareWorkerIdentity | null;
+  image_digest: string | null;
+  poll_interval_minutes: 1 | 5 | 15 | null;
+}
+export async function setupCloudflareVerifier(command: CloudflareSetupCommand): Promise<CloudflareSetupResponse> {
+  return (await api.post<CloudflareSetupResponse>('/verification-runners/setup', command)).data;
+}
+export async function getCloudflareVerifierStatus(listingId: string): Promise<CloudflareVerifierStatus> {
+  return (await api.get<CloudflareVerifierStatus>('/verification-runners/cloudflare/status', { params: { listing_id: listingId } })).data;
+}
 export async function setupAwsVerifier(command: AWSSetupCommand): Promise<AWSSetupResponse> {
   // The caller sends this directly to the console tab, never to saved attempts.
   return (await api.post<AWSSetupResponse>('/verification-runners/setup', command)).data;
@@ -83,6 +118,17 @@ export function verificationErrorCopy(error: unknown): string {
 }
 export function verificationRefusalCopy(code?: string | null): string {
   switch (code) {
+    case 'cloudflare_connection_unavailable': return 'Your Cloudflare storage connection is unavailable. Reconnect it before setting up the verifier.';
+    case 'cloudflare_context_incomplete': return 'Your Cloudflare storage details are incomplete. Review your storage connection before setting up the verifier.';
+    case 'cloudflare_jurisdiction_unsupported': return 'The Cloudflare verifier is not available in this storage jurisdiction.';
+    case 'cloudflare_read_credentials_unconfigured': return 'Your Cloudflare storage connection cannot read this source yet. Review your storage connection and try again.';
+    case 'cloudflare_read_failed': return 'Your Cloudflare storage connection could not read this source. Review its access and try again.';
+    case 'cloudflare_release_unavailable': return 'The Cloudflare verifier release is unavailable. Try again later.';
+    case 'cloudflare_setup_refused': return 'The Cloudflare verifier could not be set up. Check your storage connection and try again.';
+    case 'cloudflare_source_scope_unrepresentable': return 'This source has too many storage locations or needs permissions the Cloudflare verifier cannot safely scope. Verify it with your own AIM Data gateway instead.';
+    case 'cloudflare_source_too_large': return 'This source is too large for the Cloudflare verifier. Verify it with your own AIM Data gateway instead.';
+    case 'cloudflare_worker_deployment': return 'The Cloudflare verifier deployment could not be confirmed. Check the deployment in your Cloudflare account and try again.';
+
     case 'aws_connection_unavailable': return 'Your AWS storage connection is unavailable. Reconnect it before setting up the verifier.';
     case 'aws_region_unsupported': return 'The AWS verifier is not available in this storage region.';
     case 'aws_release_unavailable': return 'The AWS verifier release is unavailable in this region. Try again later.';
