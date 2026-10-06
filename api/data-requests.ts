@@ -59,7 +59,7 @@ export async function deleteDataRequest(requestId: string): Promise<void> {
 
 export async function submitDataRequestResponse(
   requestId: string,
-  payload: { proposal: string; proposed_price?: number; timeline?: string }
+  payload: { proposal: string; proposed_price?: number; proposed_timeline?: string }
 ): Promise<DataRequestResponse> {
   const res = await api.post<DataRequestResponse>(
     `/data-requests/${encodeURIComponent(requestId)}/responses`,
@@ -69,10 +69,10 @@ export async function submitDataRequestResponse(
 }
 
 export async function getDataRequestResponses(requestId: string): Promise<DataRequestResponse[]> {
-  const res = await api.get<DataRequestResponse[]>(
+  const res = await api.get<DataRequestResponse[] | { items: DataRequestResponse[] }>(
     `/data-requests/${encodeURIComponent(requestId)}/responses`
   );
-  return res.data;
+  return Array.isArray(res.data) ? res.data : res.data.items;
 }
 
 export async function getMyDataRequests(): Promise<DataRequestListItem[]> {
