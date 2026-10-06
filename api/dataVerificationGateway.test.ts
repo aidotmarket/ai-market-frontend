@@ -111,3 +111,18 @@ describe('Cloudflare seller-session contracts', () => {
     expect(verificationErrorCopy({ response: { status: 409, data: { detail: code } } })).toBe(copy);
   });
 });
+
+
+describe('runner-specific probe refusals', () => {
+  it.each([
+    ['source_unreachable', "Your verifier could not read this listing's files. Check that the verifier's SOURCE binding is your listed bucket, then try again.", 'Your gateway or data is offline. Reconnect it and try again.'],
+    ['artifact_changed', "This listing's files changed since it was published. Re-publish the listing or start a new check.", 'We could not complete this request. Try again.'],
+  ])('changes %s only for Cloudflare', (code, cloudflareCopy, existingCopy) => {
+    expect(verificationRefusalCopy(code, 'cloudflare')).toBe(cloudflareCopy);
+    expect(verificationErrorCopy({ response: { status: 409, data: { detail: code } } }, 'cloudflare')).toBe(cloudflareCopy);
+    for (const kind of ['aws', 'gateway', undefined] as const) {
+      expect(verificationRefusalCopy(code, kind)).toBe(existingCopy);
+      expect(verificationErrorCopy({ response: { status: 409, data: { detail: code } } }, kind)).toBe(existingCopy);
+    }
+  });
+});

@@ -110,13 +110,17 @@ export async function gatewayVerificationLifecycle(listingId: string, command: G
   return withRetry(await api.post<GatewayVerificationEpoch>(`${root(listingId)}/epochs/${encodeURIComponent(command.verification_id)}/${command.requested_action}`, command));
 }
 export const E7_REFUSAL = "Some columns of this data are hidden in your gateway settings, so it can't be verified.";
-export function verificationErrorCopy(error: unknown): string {
+export function verificationErrorCopy(error: unknown, runnerKind?: 'cloudflare' | 'aws' | 'gateway'): string {
   const response = gatewayVerificationError(error);
   if (response?.status === 401) return 'Sign in to verify your data.';
   if (response?.status === 404 || response?.status === 403) return 'This listing or verification is not available.';
-  return verificationRefusalCopy(response.code);
+  return verificationRefusalCopy(response.code, runnerKind);
 }
-export function verificationRefusalCopy(code?: string | null): string {
+export function verificationRefusalCopy(code?: string | null, runnerKind?: 'cloudflare' | 'aws' | 'gateway'): string {
+  if (runnerKind === 'cloudflare') {
+    if (code === 'source_unreachable') return "Your verifier could not read this listing's files. Check that the verifier's SOURCE binding is your listed bucket, then try again.";
+    if (code === 'artifact_changed') return "This listing's files changed since it was published. Re-publish the listing or start a new check.";
+  }
   switch (code) {
     case 'cloudflare_connection_unavailable': return 'Your Cloudflare storage connection is unavailable. Reconnect it before setting up the verifier.';
     case 'cloudflare_context_incomplete': return 'Your Cloudflare storage details are incomplete. Review your storage connection before setting up the verifier.';

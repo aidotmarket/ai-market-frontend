@@ -399,6 +399,17 @@ describe('AWS verifier in the shared seller flow', () => {
     vi.mocked(payin.getDataVerificationPayInReadiness).mockReset().mockResolvedValue({ version: 'data_verification_payin_readiness_v1', state: 'ready', can_start_setup: false, can_replace_payment_method: true, message: 'ignored' });
   });
   afterEach(() => { cleanup(); vi.restoreAllMocks(); vi.useRealTimers(); Object.defineProperty(window, 'localStorage', originalStorage); });
+  it.each([
+    ['source_unreachable', 'Your gateway or data is offline. Reconnect it and try again.'],
+    ['artifact_changed', 'We could not complete this request. Try again.'],
+  ])('preserves AWS probe refusal copy for %s', async (refusal, copy) => {
+    vi.mocked(gateway.getAwsVerifierStatus).mockResolvedValue({ ...awsStatus, state: 'ready', runner_id: 'aws-runner' });
+    vi.mocked(gateway.getGatewayVerificationProbe).mockResolvedValue({ data: { probe_id: 'probe', state: 'refused', refusal }, retryAfter: 2 });
+    await openAws(); await screen.findByText('Ready');
+    fireEvent.click(screen.getByRole('button', { name: 'Check data and get quote' }));
+    expect((await screen.findByRole('alert')).textContent).toBe(copy);
+    expect(screen.queryByText(/SOURCE binding/)).toBeNull();
+  });
   it('confirms setup, passes the prefilled URL directly to a new tab, and waits for status ready after registration', async () => {
     await openAws();
     fireEvent.click(await screen.findByRole('button', { name: 'Set up the verifier' }));
@@ -593,7 +604,7 @@ const cloudflareSetup: gateway.CloudflareSetupResponse = {
   release_id: 'cloudflare-v1', scanner_version: '1.2.3', binary_sha256: 'a'.repeat(64), worker_identity: { mode: 'bundle', sha256: 'b'.repeat(64) },
   template_repo_url: 'https://github.com/aidotmarket/verifier-v1', template_commit: 'c'.repeat(40),
   deploy_button_url: 'https://deploy.workers.cloudflare.com/?url=release-v1', bundle_url: 'https://example.com/worker.mjs', bundle_sha256: 'b'.repeat(64),
-  deployment_config: { connection_id: 'connection', bucket: 'bucket', prefix: 'data/', jurisdiction: 'default', keys: ['data/file.csv'] },
+  deployment_config: { connection_id: 'connection', bucket: 'listed-source-bucket', prefix: 'private-source-prefix/', jurisdiction: 'default', keys: ['private-source-prefix/private-file.csv'] },
 };
 const cloudflareArtifact: PublishedScanFindings = {
   ...awsArtifact,
@@ -651,7 +662,15 @@ describe('Cloudflare verifier in the shared seller flow', () => {
     expect((screen.getByRole('textbox', { name: 'Registration token' }) as HTMLInputElement).value).toBe(cloudflareSetup.registration_token);
     expect(screen.getByText(/Registration token expires at/).textContent).toContain(cloudflareSetup.expires_at_utc);
     expect(screen.getByText(/two secrets: REGISTRATION_TOKEN/)).toBeTruthy();
-    expect(screen.getAllByText(CLOUDFLARE_RUN_NOW_COPY).length).toBeGreaterThan(0);
+    expect(CLOUDFLARE_RUN_NOW_COPY).toBe("Deployment is waiting for its first check. Open your verifier's seller control page and select Run now. Scheduled checks are a best-effort backstop.");
+    expect(screen.getAllByText(CLOUDFLARE_RUN_NOW_COPY)).toHaveLength(1);
+    const bucketInstruction = screen.getByText(/When Cloudflare asks for the SOURCE R2 bucket/);
+    expect(bucketInstruction.textContent).toBe('When Cloudflare asks for the SOURCE R2 bucket, enter exactly listed-source-bucket. If Cloudflare creates a new bucket instead, open your Worker → Settings → Bindings, set SOURCE to listed-source-bucket, and delete the empty bucket.');
+    expect(Array.from(bucketInstruction.querySelectorAll('code'), node => node.textContent)).toEqual(['listed-source-bucket', 'listed-source-bucket']);
+    expect(document.body.textContent).not.toContain(cloudflareSetup.deployment_config.prefix);
+    for (const key of cloudflareSetup.deployment_config.keys) expect(document.body.textContent).not.toContain(key);
+    expect(screen.queryByRole('textbox', { name: /config/i })).toBeNull();
+    expect(screen.getByText(/two secrets: REGISTRATION_TOKEN/).textContent).toContain('RUN_NOW_SECRET (paste the generated run-now secret above)');
     expect(screen.queryByRole('textbox', { name: /provider/i })).toBeNull();
     const secretBox = screen.getByRole('textbox', { name: 'Run-now secret' }) as HTMLInputElement;
     expect(secretBox.readOnly).toBe(true);
@@ -664,6 +683,7 @@ describe('Cloudflare verifier in the shared seller flow', () => {
     expect((screen.getByRole('button', { name: 'Check data and get quote' }) as HTMLButtonElement).disabled).toBe(true);
     vi.mocked(gateway.getCloudflareVerifierStatus).mockResolvedValue(cloudflareRegistered);
     fireEvent.click(screen.getByRole('button', { name: 'Check verifier status' })); await screen.findByText('Ready');
+    expect(screen.queryByText(CLOUDFLARE_RUN_NOW_COPY)).toBeNull();
     expect((screen.getByRole('button', { name: 'Check data and get quote' }) as HTMLButtonElement).disabled).toBe(false);
     vi.unstubAllGlobals();
   });
@@ -690,6 +710,50 @@ describe('Cloudflare verifier in the shared seller flow', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Confirm removal' })); await screen.findByText('Removed');
     expect(gateway.removeVerificationRunner).toHaveBeenCalledWith('cloudflare-runner');
   });
+  it('clears the setup token and generated secret after confirmed removal', async () => {
+    await openCloudflare();
+    fireEvent.click(await screen.findByRole('button', { name: 'Set up the verifier' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Confirm setup' }));
+    await screen.findByRole('textbox', { name: 'Run-now secret' });
+    vi.mocked(gateway.getCloudflareVerifierStatus).mockResolvedValue(cloudflareRegistered);
+    fireEvent.click(screen.getByRole('button', { name: 'Check verifier status' }));
+    await screen.findByText('Ready');
+    fireEvent.click(screen.getByRole('button', { name: 'Remove verifier' }));
+    expect(screen.getByRole('textbox', { name: 'Run-now secret' })).toBeTruthy();
+    vi.mocked(gateway.getCloudflareVerifierStatus).mockResolvedValue({ ...cloudflareRegistered, state: 'removed' });
+    fireEvent.click(screen.getByRole('button', { name: 'Confirm removal' }));
+    await screen.findByText('Removed');
+    expect(screen.queryByRole('textbox', { name: 'Run-now secret' })).toBeNull();
+    expect(screen.queryByRole('textbox', { name: 'Registration token' })).toBeNull();
+    expect(screen.queryByRole('link', { name: 'Deploy to Cloudflare' })).toBeNull();
+  });
+  it('clears previous setup secrets when replacement fails', async () => {
+    await openCloudflare();
+    fireEvent.click(await screen.findByRole('button', { name: 'Set up the verifier' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Confirm setup' }));
+    await screen.findByRole('textbox', { name: 'Run-now secret' });
+    vi.mocked(gateway.getCloudflareVerifierStatus).mockResolvedValue(cloudflareRegistered);
+    fireEvent.click(screen.getByRole('button', { name: 'Check verifier status' }));
+    await screen.findByText('Ready');
+    fireEvent.click(screen.getByRole('button', { name: 'Set up the verifier' }));
+    vi.mocked(gateway.setupCloudflareVerifier).mockRejectedValueOnce(new Error('failed'));
+    fireEvent.click(screen.getByRole('button', { name: 'Confirm replacement' }));
+    await screen.findByRole('alert');
+    expect(screen.queryByRole('textbox', { name: 'Run-now secret' })).toBeNull();
+    expect(screen.queryByRole('textbox', { name: 'Registration token' })).toBeNull();
+  });
+  it.each([
+    ['source_unreachable', "Your verifier could not read this listing's files. Check that the verifier's SOURCE binding is your listed bucket, then try again."],
+    ['artifact_changed', "This listing's files changed since it was published. Re-publish the listing or start a new check."],
+  ])('shows Cloudflare probe refusal %s before quote or payment', async (refusal, copy) => {
+    vi.mocked(gateway.getCloudflareVerifierStatus).mockResolvedValue(cloudflareRegistered);
+    vi.mocked(gateway.getGatewayVerificationProbe).mockResolvedValue({ data: { probe_id: 'probe', state: 'refused', refusal }, retryAfter: 2 });
+    await openCloudflare(); await screen.findByText('Ready');
+    fireEvent.click(screen.getByRole('button', { name: 'Check data and get quote' }));
+    expect((await screen.findByRole('alert')).textContent).toBe(copy);
+    expect(screen.queryByText('Your verification quote')).toBeNull();
+    expect(payin.getDataVerificationPayInReadiness).not.toHaveBeenCalled();
+  });
   it('discloses exact costs and pricing before the probe, with no card and unchecked acknowledgments', async () => {
     await cloudflareQuote();
     expect(screen.getByText('Runs in your Cloudflare account. Workers Paid has a $5/month base subscription; container time, Worker/Durable Object usage and R2 read operations may add costs. R2 has no egress fee; Infrequent Access data retrieval can cost extra. The free probe also runs a complete scan. Cloudflare charges are separate from the ai.market verification fee.')).toBeTruthy();
@@ -702,7 +766,9 @@ describe('Cloudflare verifier in the shared seller flow', () => {
     vi.mocked(gateway.getGatewayVerificationProbe).mockResolvedValue({ ...queued, retryAfter: 60 });
     vi.mocked(gateway.getCloudflareVerifierStatus).mockResolvedValue(cloudflareRegistered);
     await openCloudflare(); await screen.findByText('Ready'); fireEvent.click(screen.getByRole('button', { name: 'Check data and get quote' }));
-    await screen.findByText(CLOUDFLARE_RUN_NOW_COPY);
+    await screen.findByText('If polling is delayed, press Run now again on your verifier’s seller control page.');
+    expect(screen.getAllByText(/press Run now again/)).toHaveLength(1);
+    expect(screen.queryByText(CLOUDFLARE_RUN_NOW_COPY)).toBeNull();
     expect(screen.queryByText('Your verification quote')).toBeNull();
   });
   it.each(['connection_unavailable', 'context_incomplete', 'jurisdiction_unsupported', 'read_credentials_unconfigured', 'read_failed', 'release_unavailable', 'setup_refused', 'source_scope_unrepresentable', 'source_too_large', 'worker_deployment'])('shows cloudflare_%s without a quote or payment', async suffix => {

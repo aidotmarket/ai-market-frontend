@@ -62,7 +62,7 @@ export function generateRunNowSecret(): string {
   crypto.getRandomValues(bytes);
   return btoa(String.fromCharCode(...bytes)).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
 }
-export const CLOUDFLARE_RUN_NOW_COPY = "Open the verifier’s control page in your own Cloudflare account and press Run now. The scheduled trigger is best-effort; if polling is delayed, press Run now again. ai.market never invokes your verifier.";
+export const CLOUDFLARE_RUN_NOW_COPY = "Deployment is waiting for its first check. Open your verifier's seller control page and select Run now. Scheduled checks are a best-effort backstop.";
 
 export default function GatewayVerificationFlow({ listingId, sellerId, verifier, onChanged }: Props) {
   const aws = verifier?.kind === 'aws';
@@ -120,7 +120,7 @@ export default function GatewayVerificationFlow({ listingId, sellerId, verifier,
     async function poll() {
       if (document.visibilityState !== 'hidden') {
         try { await readVerifierStatus(); }
-        catch (cause) { if (!stopped) setError(verificationErrorCopy(cause)); }
+        catch (cause) { if (!stopped) setError(verificationErrorCopy(cause, verifier?.kind)); }
       }
       // Setup/registration is minute-scale. Avoid background-tab traffic and
       // keep all reads sequential, including after a transient failure.
@@ -139,7 +139,7 @@ export default function GatewayVerificationFlow({ listingId, sellerId, verifier,
         await removeVerificationRunner(runnerId);
         if (!mounted.current) return;
         setVerifierDecision(null);
-        if (cloud) { setCloudflareSetup(null); setStatusFresh(false); await readVerifierStatus(); }
+        if (cloud) { setRunNowSecret(null); setCloudflareSetup(null); setStatusFresh(false); await readVerifierStatus(); }
         await checkStatus();
         onChanged?.();
       });
@@ -149,6 +149,7 @@ export default function GatewayVerificationFlow({ listingId, sellerId, verifier,
       if (verifierDecision === 'replace' && !runnerId) return;
       void run(async () => {
         setCloudflareSetup(null);
+        setRunNowSecret(null);
         try {
           const command = { kind: 'cloudflare' as const, connection_id: verifier.connectionId, jurisdiction: 'default' as const };
           const result = await setupCloudflareVerifier(verifierDecision === 'replace' && runnerId
@@ -206,7 +207,7 @@ export default function GatewayVerificationFlow({ listingId, sellerId, verifier,
     setBusy(true);
     setError('');
     try { await operation(); }
-    catch (cause) { if (mounted.current) setError(verificationErrorCopy(cause)); }
+    catch (cause) { if (mounted.current) setError(verificationErrorCopy(cause, verifier?.kind)); }
     finally { lock.current = false; if (mounted.current) setBusy(false); }
   }
   useEffect(() => {
@@ -254,7 +255,7 @@ export default function GatewayVerificationFlow({ listingId, sellerId, verifier,
       if (stopped) return;
       if (!lock.current) {
         try { await checkStatus(); }
-        catch (cause) { if (!stopped) { setError(verificationErrorCopy(cause)); return; } }
+        catch (cause) { if (!stopped) { setError(verificationErrorCopy(cause, verifier?.kind)); return; } }
       }
       if (!stopped) timer = setTimeout(() => void poll(), delay * 1000);
     }
@@ -380,7 +381,7 @@ export default function GatewayVerificationFlow({ listingId, sellerId, verifier,
       {cloudflareStatus?.binary_sha256 && <p>Registered binary SHA-256: <code>{cloudflareStatus.binary_sha256}</code></p>}
       {cloudflareStatus?.worker_identity && <p>Registered Worker identity: {cloudflareStatus.worker_identity.mode} <code>{cloudflareStatus.worker_identity.sha256}</code></p>}
       {cloudflareStatus?.registered_at && <p>Registered at: <time dateTime={cloudflareStatus.registered_at}>{cloudflareStatus.registered_at}</time></p>}
-      {cloudflareStatus?.state === 'waiting' && <p>{CLOUDFLARE_RUN_NOW_COPY}</p>}
+      {(cloudflareStatus?.state === 'waiting' || (cloudflareSetup && cloudflareStatus?.state !== 'ready' && cloudflareStatus?.state !== 'removed')) && <p>{CLOUDFLARE_RUN_NOW_COPY}</p>}
       {cloudflareStatus?.setup_expires_at && <p>Setup expires at {cloudflareStatus.setup_expires_at}. An exact registration retry recovers its acknowledgment without creating another verifier. If setup expires, request a fresh setup token.</p>}
       <button className={buttonClass} disabled={busy || !statusFresh || !cloudflareStatus?.eligible} onClick={() => setVerifierDecision(runnerId && cloudflareStatus?.state !== 'removed' ? 'replace' : 'setup')}>Set up the verifier</button>
       <button className={buttonClass} disabled={busy} onClick={() => void run(readVerifierStatus)}>Check verifier status</button>
@@ -395,10 +396,10 @@ export default function GatewayVerificationFlow({ listingId, sellerId, verifier,
           <label className="block">Run-now secret<input className="block w-full rounded border p-2" readOnly value={runNowSecret} onFocus={event => event.target.select()} /></label>
           <button className={buttonClass} onClick={() => void run(async () => { await navigator.clipboard.writeText(runNowSecret); })}>Copy run-now secret</button>
         </>}
-        <p>The deployment button prompts for two secrets: REGISTRATION_TOKEN (paste the registration token above) and RUN_NOW_SECRET (paste the run-now secret above). Save the run-now secret somewhere private now: you need it to press Run now on your verifier’s control page, and it is not shown again. It was created in this browser and never reaches ai.market. The setup token is shown to you, as with AWS.</p>
+        <p>The deployment button prompts for two secrets: REGISTRATION_TOKEN (paste the registration token above) and RUN_NOW_SECRET (paste the generated run-now secret above). Save the run-now secret somewhere private now: you need it to press Run now on your verifier’s control page, and it is not shown again. It was created in this browser and never reaches ai.market. The setup token is shown to you, as with AWS.</p>
         <p>Binary SHA-256: <code>{cloudflareSetup.binary_sha256}</code></p>
         <p>Worker identity: {cloudflareSetup.worker_identity.mode} <code>{cloudflareSetup.worker_identity.sha256}</code></p>
-        <p>{CLOUDFLARE_RUN_NOW_COPY}</p>
+        <p>When Cloudflare asks for the SOURCE R2 bucket, enter exactly <code>{cloudflareSetup.deployment_config.bucket}</code>. If Cloudflare creates a new bucket instead, open your Worker → Settings → Bindings, set SOURCE to <code>{cloudflareSetup.deployment_config.bucket}</code>, and delete the empty bucket.</p>
       </div>}
       <p>{CLOUDFLARE_COST_DISCLOSURE}</p>
       <p><a href="https://developers.cloudflare.com/workers/platform/pricing/" target="_blank" rel="noopener noreferrer" className="underline">Workers pricing</a>; <a href="https://developers.cloudflare.com/containers/platform/pricing/" target="_blank" rel="noopener noreferrer" className="underline">Containers pricing</a>; <a href="https://developers.cloudflare.com/r2/pricing/" target="_blank" rel="noopener noreferrer" className="underline">R2 pricing</a></p>
@@ -418,8 +419,8 @@ export default function GatewayVerificationFlow({ listingId, sellerId, verifier,
     </>}
     {attempt.current?.epochId && !epoch && <p role="status">Loading your existing verification. Check again to follow its status.</p>}
     {probe?.state === 'queued' && <p role="status">{aws ? 'Waiting for your AWS verifier to check the data. No ai.market charge has been made; AWS charges apply.' : cloudflare ? 'Waiting for your Cloudflare verifier to check the data. No ai.market charge has been made; Cloudflare charges apply.' : 'Waiting for your gateway to check the data. No charge has been made.'}</p>}
-    {cloudflare && (probe?.state === 'queued' || (epoch && runningStates.has(epoch.state))) && <p>{CLOUDFLARE_RUN_NOW_COPY}</p>}
-    {probe?.state === 'refused' && <p role="alert">{verificationRefusalCopy(probe.refusal)}</p>}
+    {cloudflare && (probe?.state === 'queued' || (epoch && runningStates.has(epoch.state))) && <p>If polling is delayed, press Run now again on your verifier’s seller control page.</p>}
+    {probe?.state === 'refused' && <p role="alert">{verificationRefusalCopy(probe.refusal, verifier?.kind)}</p>}
     {probe?.state === 'complete' && probe.quote_id && probe.maximum_hold_usd && !epoch && !attempt.current?.epochId && !setup && <>
       <h3 className="font-semibold">Your verification quote</h3>
       <p>A temporary hold of up to ${probe.maximum_hold_usd} will be placed on your card. The final charge is twice the cost of preparing the written findings, between $1 and $25. You pay for completed findings whether you publish or decline them. If verification fails before completion, the hold is released.</p>
