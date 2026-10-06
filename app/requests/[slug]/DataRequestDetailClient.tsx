@@ -73,6 +73,25 @@ function retryDescription(request: DataRequestDetail): string {
   return 'Retry stage unknown.';
 }
 
+function quoteErrorMessage(err: unknown): string {
+  const status = err instanceof AxiosError ? err.response?.status : undefined;
+  const detail: unknown = err instanceof AxiosError ? err.response?.data?.detail : undefined;
+  if (status === 403 && detail && typeof detail === 'object' && 'error' in detail && detail.error === 'capability_required') {
+    const steps = 'missing_steps' in detail && Array.isArray(detail.missing_steps) ? detail.missing_steps : [];
+    const labels: Record<string, string> = { profile_name: 'profile name', company_name: 'company name', totp_enabled: 'two-factor authentication' };
+    const basic = steps.filter((step): step is string => typeof step === 'string' && step in labels).map((step) => labels[step]);
+    return `Quote not recorded. ${basic.length ? `Complete basic seller setup (${basic.join(', ')}) in your account, then try again.` : 'The service blocked seller access. Check your seller account setup or contact support.'}${steps.includes('stripe_payouts_live') ? ' The service also reported a Stripe requirement. Nonbinding quotes do not require Stripe; contact support if this block remains. Stripe is required for paid transactions.' : ''}`;
+  }
+  if (status === 403 || status === 400 || status === 422) {
+    const reason = typeof detail === 'string' ? detail : Array.isArray(detail)
+      ? detail.map((item) => item && typeof item.msg === 'string' ? item.msg : '').filter(Boolean).join('; ')
+      : detail && typeof detail === 'object' && 'message' in detail && typeof detail.message === 'string' ? detail.message : '';
+    return `Quote not recorded. ${reason ? `${reason} ` : ''}${status === 403 ? 'Check your seller account setup or contact support before trying again.' : 'Review the quote fields and try again.'}`;
+  }
+  if (status === 409) return 'The service reports an existing quote. Check saved quotes below or reload before trying again.';
+  return 'Could not confirm whether your quote was recorded. Check saved quotes below or reload before trying again. Your entered quote is preserved.';
+}
+
 interface DataRequestDetailClientProps {
   slug: string;
   initialRequest: DataRequestDetail | null;
@@ -116,6 +135,7 @@ export default function DataRequestDetailClient({
     contextEpoch.current++;
     loadGeneration.current++;
     mutationPending.current = false;
+    responsePending.current = false;
     setRequest(null);
     setResponses([]);
     setLoading(true);
@@ -135,6 +155,7 @@ export default function DataRequestDetailClient({
     setProposedPrice('');
     setTimeline('');
     setSubmittingResponse(false);
+    setResponseError('');
   }, [context]);
 
   function beginMutation() {
@@ -152,8 +173,11 @@ export default function DataRequestDetailClient({
   const [proposedPrice, setProposedPrice] = useState('');
   const [timeline, setTimeline] = useState('');
   const [submittingResponse, setSubmittingResponse] = useState(false);
+  const [responseError, setResponseError] = useState('');
+  const responsePending = useRef(false);
 
   const isOwner = isAuthenticated && user && request && user.id === request.buyer_id;
+  const ownResponses = isOwner ? [] : responses;
   const lastCheckTime = checkedTime(request?.publication_checked_at);
   const nextCheckTime = checkedTime(request?.publication_retry_at);
 
@@ -219,11 +243,17 @@ export default function DataRequestDetailClient({
       if (!isCurrent()) return;
       setRequest(data);
 
-      // Load responses if owner
-      if (data && userId === data.buyer_id) {
+      // The API restricts nonowners to their own supplier responses.
+      if (data && isAuthenticated && userId) {
         try {
           const resps = await getDataRequestResponses(data.id);
-          if (isCurrent()) setResponses(resps);
+          if (isCurrent()) {
+            setResponses((existing) => userId === data.buyer_id ? resps : [
+              ...resps,
+              ...existing.filter((item) => !resps.some((saved) => saved.id === item.id)),
+            ]);
+            if (resps.length > 0) setResponseError('');
+          }
         } catch {
           // May not have permission
         }
@@ -233,7 +263,7 @@ export default function DataRequestDetailClient({
     } finally {
       if (isCurrent()) setLoading(false);
     }
-  }, [slug, context, user, userId]);
+  }, [slug, context, user, userId, isAuthenticated]);
 
   useEffect(() => {
     loadData();
@@ -352,35 +382,39 @@ export default function DataRequestDetailClient({
 
   async function handleSubmitResponse(e: React.FormEvent) {
     e.preventDefault();
-    if (!request || !proposal.trim()) return;
+    if (!request || !proposal.trim() || responsePending.current || ownResponses.length > 0) return;
 
     const epoch = beginMutation();
+    responsePending.current = true;
     setSubmittingResponse(true);
+    setResponseError('');
     try {
-      await submitDataRequestResponse(request.id, {
+      const response = await submitDataRequestResponse(request.id, {
         proposal: proposal.trim(),
         proposed_price: proposedPrice ? parseFloat(proposedPrice) : undefined,
-        timeline: timeline.trim() || undefined,
+        proposed_timeline: timeline.trim() || undefined,
       });
       if (!isCurrentMutation(epoch)) return;
-      mutationPending.current = false;
-      toast('Response submitted successfully.', 'success');
-      setProposal('');
-      setProposedPrice('');
-      setTimeline('');
-      // Reload to update response count
-      loadData();
+      setResponses((existing) => [...existing.filter((item) => item.id !== response.id), response]);
+      setRequest({ ...request, response_count: request.response_count + 1 });
     } catch (err) {
       if (!isCurrentMutation(epoch)) return;
-      if (err instanceof AxiosError) {
-        toast(err.response?.data?.detail || 'Failed to submit response.', 'error');
-      } else {
-        toast('An unexpected error occurred.', 'error');
+      setResponseError(quoteErrorMessage(err));
+      // Reconcile a lost POST result or conflict with a read; never retry the POST.
+      try {
+        const saved = await getDataRequestResponses(request.id);
+        if (isCurrentMutation(epoch)) {
+          setResponses(saved);
+          if (saved.length > 0) setResponseError('');
+        }
+      } catch {
+        // Keep the original outcome and entered fields visible.
       }
     } finally {
       if (isCurrentMutation(epoch)) {
         mutationPending.current = false;
         setSubmittingResponse(false);
+        responsePending.current = false;
       }
     }
   }
@@ -650,7 +684,7 @@ export default function DataRequestDetailClient({
                   {resp.proposed_price != null && (
                     <span>Price: <span className="font-medium text-gray-700">${resp.proposed_price.toLocaleString()}</span></span>
                   )}
-                  {resp.timeline && <span>Timeline: {resp.timeline}</span>}
+                  {(resp.proposed_timeline ?? resp.timeline) && <span>Timeline: {resp.proposed_timeline ?? resp.timeline}</span>}
                 </div>
               </div>
             ))}
@@ -658,10 +692,31 @@ export default function DataRequestDetailClient({
         </div>
       )}
 
+      {isAuthenticated && !isOwner && ownResponses.length > 0 && (
+        <div role="status" className="mb-6 rounded-xl border border-green-200 bg-green-50 p-6">
+          <h2 className="text-lg font-semibold">Quote recorded</h2>
+          {ownResponses.map((response) => (
+            <div key={response.id} className="mt-3 text-sm">
+              <p>Response ID: {response.id} · Status: {response.status}</p>
+              <p className="whitespace-pre-wrap">{response.proposal}</p>
+              {response.proposed_price != null && <p>Price: ${response.proposed_price.toLocaleString()}</p>}
+              {(response.proposed_timeline ?? response.timeline) && <p>Timeline: {response.proposed_timeline ?? response.timeline}</p>}
+            </div>
+          ))}
+          <p className="mt-3 text-sm">Your nonbinding quote is saved. No further submission is needed.</p>
+        </div>
+      )}
+
       {/* Seller: Submit Response form */}
       {isAuthenticated && !isOwner && (request.status === 'open' || request.status === 'responses_received') && (
         <div className="rounded-xl border border-gray-200 p-6">
           <h2 className="text-lg font-semibold text-gray-900 mb-4">Respond to Request</h2>
+          {responseError && (
+            <div role="alert" className="mb-4 text-sm text-red-700">
+              <p>{responseError}</p>
+              <button type="button" onClick={() => loadData()} className="mt-2 underline">Check saved quotes</button>
+            </div>
+          )}
           <form onSubmit={handleSubmitResponse} className="space-y-4">
             <div>
               <label htmlFor="proposal" className="block text-sm font-medium text-gray-700 mb-1">
@@ -708,7 +763,7 @@ export default function DataRequestDetailClient({
             </div>
             <button
               type="submit"
-              disabled={submittingResponse || !proposal.trim()}
+              disabled={submittingResponse || ownResponses.length > 0 || !proposal.trim()}
               className="rounded-lg bg-[#3F51B5] px-4 py-2.5 text-sm font-medium text-white hover:bg-[#3545a0] disabled:opacity-50 disabled:cursor-not-allowed"
             >
               {submittingResponse ? 'Submitting...' : 'Submit Response'}

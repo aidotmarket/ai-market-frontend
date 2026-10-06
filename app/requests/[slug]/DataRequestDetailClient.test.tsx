@@ -4,6 +4,7 @@ import { act, cleanup, fireEvent, render, screen, waitFor } from '@testing-libra
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type React from 'react';
 import type { DataRequestDetail, User } from '@/types';
+import { AxiosError, AxiosHeaders } from 'axios';
 import DataRequestDetailClient from './DataRequestDetailClient';
 
 const mocks = vi.hoisted(() => ({
@@ -134,6 +135,115 @@ describe('DataRequestDetailClient authenticated fallback loading', () => {
   afterEach(() => {
     cleanup();
     vi.clearAllMocks();
+  });
+
+  const savedQuote = {
+    id: 'response-1', request_id: 'request-1', proposal: 'Available dataset',
+    proposed_price: 125, proposed_timeline: '2 weeks', status: 'submitted',
+    created_at: '2026-10-06T00:00:00Z', updated_at: null,
+  };
+
+  async function renderSupplier() {
+    mocks.auth.user = { ...owner, id: 'supplier-1', role: 'seller' };
+    const request = makeOwnerRequest();
+    mocks.getDataRequest.mockResolvedValue(request);
+    render(<DataRequestDetailClient slug={request.slug} initialRequest={request} />);
+    await waitFor(() => expect(mocks.getDataRequestResponses).toHaveBeenCalledWith(request.id));
+    await act(async () => { await mocks.getDataRequestResponses.mock.results.at(-1)?.value; });
+  }
+
+  function fillQuote() {
+    fireEvent.change(screen.getByRole('textbox', { name: 'Proposal' }), { target: { value: 'Available dataset' } });
+    fireEvent.change(screen.getByRole('spinbutton', { name: 'Proposed Price (USD)' }), { target: { value: '125' } });
+    fireEvent.change(screen.getByRole('textbox', { name: 'Timeline' }), { target: { value: '2 weeks' } });
+  }
+
+  function responseFailure(status: number, detail: unknown) {
+    return new AxiosError('Request failed', undefined, undefined, undefined, {
+      data: { detail }, status, statusText: 'Failed', headers: {}, config: { headers: new AxiosHeaders() },
+    });
+  }
+
+  it('shows structured 403 inline and preserves all quote fields without requiring Stripe for quotes', async () => {
+    mocks.submitDataRequestResponse.mockRejectedValue(responseFailure(403, {
+      error: 'capability_required', missing_steps: ['company_name', 'stripe_payouts_live'],
+    }));
+    await renderSupplier();
+    fillQuote();
+    fireEvent.click(screen.getByRole('button', { name: 'Submit Response' }));
+    const alert = await screen.findByRole('alert');
+    expect(alert.textContent).toContain('Quote not recorded.');
+    expect(alert.textContent).toContain('company name');
+    expect(alert.textContent).toContain('Nonbinding quotes do not require Stripe');
+    expect(screen.getByRole('textbox', { name: 'Proposal' })).toHaveProperty('value', 'Available dataset');
+    expect(screen.getByRole('spinbutton', { name: 'Proposed Price (USD)' })).toHaveProperty('value', '125');
+    expect(screen.getByRole('textbox', { name: 'Timeline' })).toHaveProperty('value', '2 weeks');
+    await waitFor(() => expect(screen.getByRole('button', { name: 'Submit Response' })).toHaveProperty('disabled', false));
+    expect(mocks.submitDataRequestResponse).toHaveBeenCalledTimes(1);
+  });
+
+  it('retains the returned ID and status receipt and prevents repeated submit', async () => {
+    const post = deferred<typeof savedQuote>();
+    mocks.submitDataRequestResponse.mockReturnValue(post.promise);
+    await renderSupplier();
+    fillQuote();
+    fireEvent.click(screen.getByRole('button', { name: 'Submit Response' }));
+    fireEvent.submit(screen.getByRole('button', { name: 'Submitting...' }).closest('form')!);
+    expect(mocks.submitDataRequestResponse).toHaveBeenCalledTimes(1);
+    expect(mocks.submitDataRequestResponse).toHaveBeenCalledWith('request-1', {
+      proposal: 'Available dataset', proposed_price: 125, proposed_timeline: '2 weeks',
+    });
+    await act(async () => { post.resolve(savedQuote); });
+    expect(screen.getByRole('status').textContent).toContain('Response ID: response-1 · Status: submitted');
+    expect(screen.getByRole('status').textContent).toContain('Timeline: 2 weeks');
+    expect(screen.getByRole('button', { name: 'Submit Response' })).toHaveProperty('disabled', true);
+    fireEvent.submit(screen.getByRole('button', { name: 'Submit Response' }).closest('form')!);
+    expect(mocks.submitDataRequestResponse).toHaveBeenCalledTimes(1);
+  });
+
+  it('loads a supplier existing response as a receipt on reload, including legacy timeline', async () => {
+    mocks.getDataRequestResponses.mockResolvedValue([{ ...savedQuote, proposed_timeline: undefined, timeline: 'legacy timeline' }]);
+    await renderSupplier();
+    expect(screen.getByRole('status').textContent).toContain('response-1');
+    expect(screen.getByRole('status').textContent).toContain('legacy timeline');
+    fillQuote();
+    expect(screen.getByRole('button', { name: 'Submit Response' })).toHaveProperty('disabled', true);
+    expect(mocks.submitDataRequestResponse).not.toHaveBeenCalled();
+  });
+
+  it.each(['network', '409'])('recovers a recorded quote after %s without a second POST', async (outcome) => {
+    mocks.submitDataRequestResponse.mockRejectedValue(outcome === '409' ? responseFailure(409, 'Already responded') : new Error('Lost result'));
+    await renderSupplier();
+    mocks.getDataRequestResponses.mockResolvedValue([savedQuote]);
+    fillQuote();
+    fireEvent.click(screen.getByRole('button', { name: 'Submit Response' }));
+    expect((await screen.findByRole('status')).textContent).toContain('response-1');
+    expect(screen.queryByRole('alert')).toBeNull();
+    expect(mocks.submitDataRequestResponse).toHaveBeenCalledTimes(1);
+    expect(screen.getByRole('button', { name: 'Submit Response' })).toHaveProperty('disabled', true);
+  });
+
+  it('keeps an uncertain failure retryable and lets the supplier check saved quotes', async () => {
+    mocks.submitDataRequestResponse.mockRejectedValue(new Error('Lost result'));
+    await renderSupplier();
+    mocks.getDataRequestResponses.mockRejectedValue(new Error('Offline'));
+    fillQuote();
+    fireEvent.click(screen.getByRole('button', { name: 'Submit Response' }));
+    expect((await screen.findByRole('alert')).textContent).toContain('Could not confirm whether your quote was recorded');
+    await waitFor(() => expect(screen.getByRole('button', { name: 'Submit Response' })).toHaveProperty('disabled', false));
+    expect(screen.getByRole('textbox', { name: 'Proposal' })).toHaveProperty('value', 'Available dataset');
+    mocks.getDataRequestResponses.mockResolvedValue([savedQuote]);
+    fireEvent.click(screen.getByRole('button', { name: 'Check saved quotes' }));
+    expect((await screen.findByRole('status')).textContent).toContain('response-1');
+    expect(mocks.submitDataRequestResponse).toHaveBeenCalledTimes(1);
+  });
+
+  it('shows validation details as a definite rejection', async () => {
+    mocks.submitDataRequestResponse.mockRejectedValue(responseFailure(422, [{ loc: ['body', 'proposed_timeline'], msg: 'Timeline is too long' }]));
+    await renderSupplier();
+    fillQuote();
+    fireEvent.click(screen.getByRole('button', { name: 'Submit Response' }));
+    expect((await screen.findByRole('alert')).textContent).toContain('Quote not recorded. Timeline is too long');
   });
 
   it('renders an owner draft and its open action after the authenticated fetch succeeds', async () => {
@@ -482,7 +592,7 @@ describe('DataRequestDetailClient authenticated fallback loading', () => {
     const view = render(<DataRequestDetailClient slug={request.slug} initialRequest={request} />);
     expect(screen.queryByRole('button', { name: 'Edit request' })).toBeNull();
     await act(async () => { await mocks.getDataRequest.mock.results[0].value; });
-    expect(mocks.getDataRequestResponses).not.toHaveBeenCalled();
+    expect(mocks.getDataRequestResponses).toHaveBeenCalledWith(request.id);
     view.unmount();
 
     mocks.auth.user = owner;

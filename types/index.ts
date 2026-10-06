@@ -969,10 +969,11 @@ export interface CreateDataRequestPayload {
 export interface DataRequestResponse {
   id: string;
   request_id: string;
-  responder_id: string;
+  responder_id?: string;
   proposal: string;
   proposed_price: number | null;
-  timeline: string | null;
+  timeline?: string | null;
+  proposed_timeline?: string | null;
   status: string;
   created_at: string;
   updated_at: string | null;
