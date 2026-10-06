@@ -132,6 +132,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
         { name: 'My Inquiries', href: '/dashboard/inquiries' },
         { name: 'Purchases', href: '/dashboard/orders' },
         { name: 'My Requests', href: '/dashboard/requests' },
+        { name: 'Settings', href: '/dashboard/settings' },
       ]),
     ...(isAdminEmail ? [{ name: 'Blog Admin', href: '/keystatic' }] : []),
   ];

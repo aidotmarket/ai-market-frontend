@@ -53,7 +53,7 @@ describe('AI crawler middleware', () => {
     expect(waitUntil).not.toHaveBeenCalled();
   });
 
-  it.each(['/dashboard', '/listings-private', '/requests-private'])('excludes %s even for GPTBot', (path) => {
+  it.each(['/dashboard', '/dashboard/settings', '/dashboard/settings/connected-apps', '/listings-private', '/requests-private'])('excludes %s even for GPTBot', (path) => {
     expect(unstable_doesMiddlewareMatch({ config, nextConfig: {}, url: path })).toBe(false);
     expectNext(middleware(request(path), event));
     expect(fetchMock).not.toHaveBeenCalled();

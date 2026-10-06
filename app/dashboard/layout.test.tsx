@@ -434,11 +434,36 @@ describe('DashboardLayout hydration guard', () => {
         ['My Inquiries', '/dashboard/inquiries'],
         ['Purchases', '/dashboard/orders'],
         ['My Requests', '/dashboard/requests'],
+        ['Settings', '/dashboard/settings'],
       ]);
     });
     expect(sellerWorkspaceApi.getSellerWorkspaceCapabilities).not.toHaveBeenCalled();
     expect(navigation.push).not.toHaveBeenCalledWith('/dashboard/inquiries');
   });
+
+  it.each(['/dashboard/settings', '/dashboard/settings/connected-apps'])(
+    'allows a buyer direct visit to %s before and after capabilities resolve', async (pathname) => {
+      navigation.pathname = pathname;
+      let resolveCapabilities!: (value: { seller: { effective_status: string } }) => void;
+      capabilitiesApi.getCapabilities.mockReturnValue(new Promise((resolve) => {
+        resolveCapabilities = resolve;
+      }));
+      useAuthStore.setState({ user, isAuthenticated: true, isLoading: false, hydrated: true });
+
+      render(<DashboardLayout><div>buyer settings child</div></DashboardLayout>);
+
+      await screen.findByText('buyer settings child');
+      expect(screen.getByRole('link', { name: 'Settings' }).getAttribute('href')).toBe('/dashboard/settings');
+      expect(navigation.push).not.toHaveBeenCalled();
+
+      await act(async () => {
+        resolveCapabilities({ seller: { effective_status: 'not_requested' } });
+      });
+      expect(screen.getByText('buyer settings child')).toBeTruthy();
+      expect(navigation.push).not.toHaveBeenCalled();
+      expect(screen.queryByRole('link', { name: 'Listings' })).toBeNull();
+    }
+  );
 
   it('keeps My Requests available during capability loading and failure', async () => {
     navigation.pathname = '/dashboard/requests';
