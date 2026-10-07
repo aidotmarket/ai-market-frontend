@@ -76,7 +76,17 @@ it('lists price, licence and covenant authority statements under one confirmatio
  render(<SellerApproval review={licensed} active rendered/>);
  expect(screen.getByText('Price')).toBeTruthy();expect(screen.getByText('Licence')).toBeTruthy();expect(screen.getByText('Covenant authority')).toBeTruthy();
  expect(screen.queryByText('I confirm price and license.')).toBeNull();expect(screen.getByText('This listing has no public sample.')).toBeTruthy();expect(screen.getAllByRole('checkbox')).toHaveLength(1);
- expect(screen.getByLabelText('Confirm all review statements')).toBeTruthy();
+ expect(screen.getByRole('checkbox',{name:'I confirm all of the above.'})).toBeTruthy();
+});
+
+it('never approves while the single confirmation is unticked',()=>{
+ render(<SellerApproval review={review} active rendered/>);
+ const box=screen.getByRole('checkbox',{name:'I confirm all of the above.'});
+ const button=screen.getByRole('button',{name:'Approve this review'}) as HTMLButtonElement;
+ expect(button.disabled).toBe(true);fireEvent.submit(button.closest('form')!);expect(api.approveListingReview).not.toHaveBeenCalled();
+ fireEvent.click(box);expect(button.disabled).toBe(false);
+ fireEvent.click(box);expect(button.disabled).toBe(true);fireEvent.submit(button.closest('form')!);expect(api.approveListingReview).not.toHaveBeenCalled();
+ expect(screen.getByText('Tick the confirmation box to continue.')).toBeTruthy();
 });
 
 it('shows the complete saved file count beside the review confirmations, independently of the sample count',()=>{
