@@ -22,6 +22,8 @@ const authApi = vi.hoisted(() => ({
 const capabilitiesApi = vi.hoisted(() => ({
   getCapabilities: vi.fn(),
 }));
+const navigation = vi.hoisted(() => ({ push: vi.fn() }));
+vi.mock('next/navigation', () => ({ useRouter: () => navigation }));
 
 vi.mock('@/api/auth', async (importOriginal) => ({ ...await importOriginal<typeof import('@/api/auth')>(), ...authApi }));
 vi.mock('@/api/capabilities', () => capabilitiesApi);
@@ -66,6 +68,7 @@ describe('SettingsPage capability refresh', () => {
   });
 
   beforeEach(() => {
+    window.history.replaceState(null, '', '/dashboard/settings');
     vi.mocked(getConnectorStatus).mockResolvedValue(false);
     vi.mocked(getConnectorGrants).mockResolvedValue([]);
     refreshAuth.mockResolvedValue(undefined);
@@ -86,6 +89,7 @@ describe('SettingsPage capability refresh', () => {
   });
 
   afterEach(() => {
+    window.history.replaceState(null, '', '/');
     cleanup();
     vi.clearAllMocks();
   });
@@ -217,6 +221,26 @@ describe('SettingsPage capability refresh', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Verify and enable' }));
     await waitFor(() => expect(authApi.verify2FASetup).toHaveBeenCalledWith('123456', 'fresh-settings-token'));
     expect(await screen.findByRole('heading', { name: 'Backup codes' })).toBeTruthy();
+  });
+  it.each([
+    `/confirm/11111111-1111-4111-8111-111111111111?t=${'a'.repeat(42)}A`,
+    'https://evil.test/confirm', '//evil.test', '/confirm/invalid?t=token',
+    `/confirm/11111111-1111-4111-8111-111111111111?t=${'a'.repeat(42)}A&next=https://evil.test`,
+  ])('only resumes an exact safe confirmation after verified enrollment and Done: %s', async redirect => {
+    window.history.replaceState(null, '', `/dashboard/settings?redirect=${encodeURIComponent(redirect)}#security`);
+    authApi.setup2FA.mockResolvedValue({ secret: 'setup-secret', qr_uri: 'otpauth://example', expires_in: 600 });
+    authApi.verify2FASetup.mockResolvedValue({ backup_codes: ['backup-one'] });
+    render(<SettingsPage />);
+    fireEvent.click(screen.getByRole('button', { name: 'Enable two-factor authentication' }));
+    await completeReauth();
+    fireEvent.change(screen.getByRole('textbox', { name: '6-digit code' }), { target: { value: '123456' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Verify and enable' }));
+    await screen.findByRole('heading', { name: 'Backup codes' });
+    expect(navigation.push).not.toHaveBeenCalled();
+    fireEvent.click(screen.getByRole('button', { name: 'Done' }));
+    await waitFor(() => expect(refreshAuth).toHaveBeenCalledOnce());
+    if (redirect.endsWith(`?t=${'a'.repeat(42)}A`)) expect(navigation.push).toHaveBeenCalledExactlyOnceWith(redirect);
+    else expect(navigation.push).not.toHaveBeenCalled();
   });
 
   it('shows the SSO managed message without offering setup', () => {

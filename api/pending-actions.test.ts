@@ -81,7 +81,8 @@ it.each([
   [404, 'UNAVAILABLE', 'not_found'], [404, 'Not Found', 'not_found'],
   [403, 'RECENT_LOGIN_REQUIRED', 'login'], [403, 'SECOND_FACTOR_REQUIRED', 'second_factor'],
   [401, 'FIRST_PARTY_SESSION_REQUIRED', 'login'], [401, 'REAUTH_REQUIRED', 'login'],
-  [409, 'SUMMARY_CHANGED', 'changed'], [403, 'CSRF_REQUIRED', 'unavailable'], [503, 'ACTION_UNAVAILABLE', 'unavailable'],
+  [403, 'SECOND_FACTOR_ENROLLMENT_REQUIRED', 'enrollment'], [503, 'SUMMARY_CONTENT_UNAVAILABLE', 'summary_unavailable'],
+  [409, 'SUMMARY_CHANGED', 'changed'], [403, 'CSRF_REQUIRED', 'unavailable'], [503, 'ACTION_UNAVAILABLE', 'unavailable'], [503, 'CONFIRMATION_UNAVAILABLE', 'unavailable'],
 ] as const)('maps backend %s %s to %s', (status, detail, kind) => {
   expect(pendingActionError({ response: { status, data: { detail } } })).toBe(kind);
 });

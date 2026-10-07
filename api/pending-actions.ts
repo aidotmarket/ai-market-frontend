@@ -73,9 +73,11 @@ export async function decidePendingAction(id: string, token: string, decision: '
   return response(data, id);
 }
 
-export function pendingActionError(error: unknown): 'not_found' | 'login' | 'second_factor' | 'changed' | 'unavailable' {
+export function pendingActionError(error: unknown): 'not_found' | 'login' | 'second_factor' | 'enrollment' | 'summary_unavailable' | 'changed' | 'unavailable' {
   const reply = (error as { response?: { status?: number; data?: { detail?: string } } })?.response;
   if (reply?.status === 404) return 'not_found';
+  if (reply?.data?.detail === 'SUMMARY_CONTENT_UNAVAILABLE') return 'summary_unavailable';
+  if (reply?.data?.detail === 'SECOND_FACTOR_ENROLLMENT_REQUIRED') return 'enrollment';
   if (reply?.data?.detail === 'SECOND_FACTOR_REQUIRED') return 'second_factor';
   if (reply?.status === 401 || reply?.data?.detail === 'RECENT_LOGIN_REQUIRED' || reply?.data?.detail === 'REAUTH_REQUIRED') return 'login';
   if (reply?.status === 409 && reply.data?.detail === 'SUMMARY_CHANGED') return 'changed';
