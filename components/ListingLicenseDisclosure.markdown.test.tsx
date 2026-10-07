@@ -23,10 +23,9 @@ it.each([[false,false],[true,false],[false,true],[true,true]])('buyer renders ve
  const licence:ListingLicenseDetails={code:'custom',version:'1',params,sha256:hash,covenant_sha256:covenantHash,rider_sha256:null,summary:[],full_text_url:'/api/v1/listings/id/license-document',download_url:'/api/v1/listings/id/license-document?download=1'};
  get.mockResolvedValue({data:tampered?new TextEncoder().encode(source+'altered').buffer:bytes.buffer,headers:{'content-type':'text/plain; charset=utf-8','x-content-type-options':'nosniff','cache-control':'private, no-store','content-disposition':'attachment; filename="listing-id-licence.txt"','x-license-source-sha256':source_sha256,'x-license-sha256':hash}});
  vi.stubGlobal('fetch',vi.fn().mockResolvedValue(new Response(covenant,{headers:{'content-type':'text/plain'}})));
- const read=vi.fn(),verified=vi.fn();
- render(<ListingLicenseDisclosure license={licence} onReadChange={read} onVerificationChange={verified}/>);
+ const verified=vi.fn();
+ render(<ListingLicenseDisclosure license={licence} onVerificationChange={verified}/>);
  await screen.findByRole('button',{name:'Read Marketplace Listing Covenant'});
- expect(read).not.toHaveBeenCalled();
  if(tampered){
   expect(screen.queryByRole('button',{name:'Read full licence'})).toBeNull();
   expect(createObjectURL).not.toHaveBeenCalled();
@@ -51,7 +50,6 @@ it.each([[false,false],[true,false],[false,true],[true,true]])('buyer renders ve
   expect(blob.size).toBe(bytes.length);
   expect(Array.from(new Uint8Array(await blob.arrayBuffer()))).toEqual(Array.from(bytes));
   expect(dialog.querySelectorAll('a')).toHaveLength(1); // existing exact-document link only
-  expect(read).toHaveBeenCalledExactlyOnceWith('license');
   fireEvent.keyDown(document,{key:'Escape'});
  }
  fireEvent.click(screen.getByRole('button',{name:'Read Marketplace Listing Covenant'}));
