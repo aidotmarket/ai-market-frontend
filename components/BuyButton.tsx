@@ -59,9 +59,6 @@ export default function BuyButton({
   const [businessLegalName, setBusinessLegalName] = useState('');
   const [jurisdiction, setJurisdiction] = useState('');
   const [authorityConfirmed, setAuthorityConfirmed] = useState(false);
-  const [readDocuments,setReadDocuments]=useState<string[]>([]);
-  const handleRead=useCallback((kind:string)=>setReadDocuments(current=>[...new Set([...current,kind])]),[]);
-  const documentsRead=readDocuments.includes('license')&&readDocuments.includes('covenant');
   const [licenseVerified, setLicenseVerified] = useState(false);
   const [checkoutRefusal, setCheckoutRefusal] = useState<CheckoutRefusal | null>(null);
   const inflightRef = useRef<string | null>(null);
@@ -70,7 +67,6 @@ export default function BuyButton({
 
   useEffect(() => {
     setAuthorityConfirmed(false);
-    setReadDocuments([]);
     setLicenseVerified(false);
     setCheckoutRefusal(null);
   }, [licenseDetails?.sha256, licenseDetails?.covenant_sha256, licenseDetails?.rider_sha256]);
@@ -208,7 +204,7 @@ export default function BuyButton({
   };
 
   const acceptanceComplete = !licenseDetails || (
-    licenseVerified && documentsRead && typedName.trim() && signerTitle.trim() && businessLegalName.trim() &&
+    licenseVerified && typedName.trim() && signerTitle.trim() && businessLegalName.trim() &&
     /^[A-Za-z]{2}$/.test(jurisdiction.trim()) && authorityConfirmed
   );
 
@@ -217,7 +213,7 @@ export default function BuyButton({
       <div className="space-y-5">
         <TermsGatePrompt />
         {termsVersion === '1.2' && <p className="text-sm text-gray-600">{CARD_BUYER_TOTAL}</p>}
-        <ListingLicenseDisclosure license={licenseDetails} compact onVerificationChange={handleVerificationChange} onReadChange={handleRead} />
+        <ListingLicenseDisclosure license={licenseDetails} compact onVerificationChange={handleVerificationChange} />
         <div className="grid gap-4 sm:grid-cols-2">
           <label className="text-sm font-medium text-gray-900">Typed full name
             <input value={typedName} onChange={(event) => { setTypedName(event.target.value); setAuthorityConfirmed(false); }} maxLength={255} autoComplete="name" className="mt-2 block w-full rounded-lg border border-gray-300 px-3 py-2" />
@@ -235,7 +231,7 @@ export default function BuyButton({
         <label className="flex items-start gap-3 text-sm leading-6 text-gray-700">
           <input
             aria-label="Confirm licence authority"
-            disabled={!documentsRead||!licenseVerified}
+            disabled={!licenseVerified}
             type="checkbox"
             checked={authorityConfirmed}
             onChange={(event) => setAuthorityConfirmed(event.target.checked)}
@@ -243,7 +239,6 @@ export default function BuyButton({
           />
           <span>I am authorised to accept for {businessLegalName.trim() || 'the named legal business'}.</span>
         </label>
-        {!documentsRead&&<p className="text-xs text-gray-600">Open the selected licence and Marketplace Listing Covenant before confirming authority.</p>}
         {!licenseVerified && <p className="text-xs text-gray-600">Acceptance unlocks after every displayed licence component is fetched and its bytes match the server hash.</p>}
         {checkoutRefusal && (
           <div role="alert" className="rounded-lg border border-red-200 bg-red-50 p-4 text-sm text-red-800">

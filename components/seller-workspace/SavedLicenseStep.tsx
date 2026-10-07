@@ -31,7 +31,7 @@ export default function SavedLicenseStep(){
   if(!store.loaded)return <p role="status">{store.error?'Your saved draft could not be loaded. Retry before choosing a licence.':'Loading your saved licence choice…'} {store.error&&<button onClick={store.retry}>Retry</button>}</p>;
   return <section className="space-y-4" aria-label="Choose a licence"><h2 className="text-xl font-semibold">Choose a licence</h2>
     <SellerLicenseSelection value={value} onChange={v=>{setEdited(v);setError('');}} disabled={busy} onIdentityStateChange={setIdentity} onLegalDirtyChange={setLegalDirty} legalIdentityEnabled />
-    {!ready&&<p role="status" className="text-sm text-amber-900">{legalDirty?'Save your legal name and country first.':identity.kind!=='known'?'Confirm your legal name and country before saving the licence choice.':'Read both documents, add signer details and confirm covenant and authority before continuing.'}</p>}
+    {!ready&&<p role="status" className="text-sm text-amber-900">{legalDirty?'Save your legal name and country first.':identity.kind!=='known'?'Confirm your legal name and country before saving the licence choice.':'Add signer details and tick the confirmation box to continue.'}</p>}
     {!changed&&<p role="status">Licence choice saved to your account.</p>}
     {changed&&<button type="button" disabled={busy||!ready} onClick={()=>void save()} className="rounded-lg border px-4 py-2">{busy?'Saving licence choice…':'Save licence choice'}</button>}
     <button type="button" disabled={busy||!ready} onClick={()=>void save(true)} className="rounded-lg bg-indigo-700 px-4 py-2 text-white">Next: Describe and price →</button>

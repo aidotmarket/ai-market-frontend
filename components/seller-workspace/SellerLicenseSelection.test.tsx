@@ -137,26 +137,20 @@ describe('Seller licence selection',()=>{
     });
   });
 
-  it('keeps covenant confirmation disabled until both terms are opened',()=>{
+  it('lets the seller tick the confirmation without opening the documents first',()=>{
     render(<Harness/>);
     const confirmation=screen.getByLabelText('Confirm covenant and authority') as HTMLInputElement;
-    expect(confirmation.disabled).toBe(true);
-    expect(screen.getByText('Open the selected licence and Marketplace Listing Covenant first.')).toBeTruthy();
-    fireEvent.click(confirmation.closest('label')!);
-    expect(screen.getByRole('alert').textContent).toBe('Open the selected licence and Marketplace Listing Covenant first.');
-    const details=screen.getByText('Read the summary and full terms').closest('details')!;
-    Object.defineProperty(details,'open',{value:true,configurable:true});
-    fireEvent(details,new Event('toggle'));
-    expect(confirmation.disabled).toBe(true);
-    openBoth();
     expect(confirmation.disabled).toBe(false);
+    expect(screen.queryByText('Open the selected licence and Marketplace Listing Covenant first.')).toBeNull();
+    const details=screen.getByText('Read the summary and full terms').closest('details')!;
+    for(const name of ['Read full licence','Read Marketplace Listing Covenant'])expect(details.contains(screen.getByRole('button',{name}))).toBe(false);
     fireEvent.change(screen.getByLabelText('Signer full name'),{target:{value:'Sam Seller'}});
     fireEvent.change(screen.getByLabelText('Signer title'),{target:{value:'Director'}});
     fireEvent.click(confirmation);
     expect(JSON.parse(screen.getByTestId('wire').textContent!).seller_acceptance).toEqual({signer_name:'Sam Seller',signer_title:'Director',authority_confirmed:true});
     fireEvent.click(screen.getByLabelText('Allow AI/ML training'));
     expect(JSON.parse(screen.getByTestId('wire').textContent!).seller_acceptance.authority_confirmed).toBe(false);
-    expect(confirmation.disabled).toBe(true);
+    expect(confirmation.disabled).toBe(false);
   });
 
   it('links to the current training variant and only records reading the selected Standard licence',async()=>{
@@ -166,11 +160,9 @@ describe('Seller licence selection',()=>{
     expect(link.getAttribute('href')).toBe('/licenses/standard/1.0/ai-training');
     fireEvent.click(link);
     expect(screen.queryByRole('dialog')).toBeNull();
-    expect((screen.getByLabelText('Confirm covenant and authority') as HTMLInputElement).disabled).toBe(true);
-    readTerms('Read Marketplace Listing Covenant');
     expect((screen.getByLabelText('Confirm covenant and authority') as HTMLInputElement).disabled).toBe(false);
+    readTerms('Read Marketplace Listing Covenant');
     fireEvent.click(screen.getByLabelText('Allow AI/ML training'));
-    expect((screen.getByLabelText('Confirm covenant and authority') as HTMLInputElement).disabled).toBe(true);
     expect(link.getAttribute('href')).toBe('/licenses/standard/1.0/no-ai-training');
     fireEvent.click(link);
     expect((screen.getByLabelText('Confirm covenant and authority') as HTMLInputElement).disabled).toBe(false);
@@ -220,7 +212,7 @@ describe('Seller licence selection',()=>{
     expect(link.getAttribute('href')).toBe('/licenses/standard/1.0/no-ai-training');
     expect((screen.getByRole('radio',{name:/My own licence/}) as HTMLInputElement).checked).toBe(true);
     expect((screen.getByRole('radio',{name:/Standard/}) as HTMLInputElement).checked).toBe(false);
-    expect(screen.getByText('Open the selected licence and Marketplace Listing Covenant first.')).toBeTruthy();
+    expect(screen.getByText('Save your custom licence text before confirming.')).toBeTruthy();
     expect(onChange).not.toHaveBeenCalled();
     expect(transport.get).not.toHaveBeenCalled();
     expect(transport.post).not.toHaveBeenCalled();
@@ -247,7 +239,7 @@ describe('Seller licence selection',()=>{
     const wire=screen.getByTestId('wire').textContent;
     act(()=>link.click());
     expect(screen.getByTestId('wire').textContent).toBe(wire);
-    expect(screen.getByText('Open the selected licence and Marketplace Listing Covenant first.')).toBeTruthy();
+    expect(screen.queryByText('Open the selected licence and Marketplace Listing Covenant first.')).toBeNull();
     expect(transport.post).toHaveBeenCalledOnce();
     expect(transport.get).not.toHaveBeenCalled();
     expect(legal.saveSellerLegalIdentity).not.toHaveBeenCalled();
@@ -261,10 +253,9 @@ describe('Seller licence selection',()=>{
     const details=screen.getByText('Read the summary and full terms').closest('details')!;
     Object.defineProperty(details,'open',{value:true,configurable:true});
     fireEvent(details,new Event('toggle'));
-    expect(confirmation.disabled).toBe(true);
+    expect(confirmation.disabled).toBe(false);
     openBoth();
     expect(confirmation.disabled).toBe(false);
-    expect(screen.queryByText('Open the selected licence and Marketplace Listing Covenant first.')).toBeNull();
     fireEvent.click(screen.getByRole('button',{name:'Read full licence'}));
     expect(screen.getByRole('dialog',{name:'Read full licence'})).toBeTruthy();
     expect(screen.getByRole('link',{name:'Open in new tab'}).getAttribute('href')).toBe('/licenses/standard/1.0/ai-training');
@@ -411,7 +402,7 @@ describe('custom Markdown editing',()=>{
   expect(screen.getByLabelText('Verified custom licence preview').querySelector('strong')?.textContent).toBe('rights');
   expect(screen.getByLabelText('Verified custom licence preview').querySelector('em')?.textContent).toBe(entities);
   expect(screen.getByLabelText('Verified custom licence preview').textContent).toContain('Café 🦊  rights\t'+entities);
-  expect((screen.getByLabelText('Confirm covenant and authority') as HTMLInputElement).disabled).toBe(true);
+  expect((screen.getByLabelText('Confirm covenant and authority') as HTMLInputElement).disabled).toBe(false);
   fireEvent.click(screen.getByRole('button',{name:'Read full licence'}));
   expect(screen.getByRole('dialog').querySelector('h1')?.textContent).toBe('Terms');
   expect(screen.getByRole('dialog').querySelector('em')?.textContent).toBe(entities);

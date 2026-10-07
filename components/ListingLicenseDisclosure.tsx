@@ -138,11 +138,9 @@ export default function ListingLicenseDisclosure({
   license,
   compact = false,
   onVerificationChange,
-  onReadChange,
 }: {
   license: ListingLicenseDetails;
   compact?: boolean;
-  onReadChange?: (kind: 'license'|'covenant'|'rider')=>void;
   onVerificationChange?: (verified: boolean) => void;
 }) {
   const references = useMemo(() => referencesFor(license), [license]);
@@ -239,8 +237,8 @@ export default function ListingLicenseDisclosure({
             </div>
             <p className="mt-2 break-all font-mono text-[11px] text-gray-600">SHA-256: {document.sha256}</p>
             <div className="mt-3 flex flex-wrap gap-4 text-sm">
-              {document.text && <LicenseReadingDialog label={document.kind==='covenant'?'Read Marketplace Listing Covenant':document.kind==='rider'?'Read AI-Training Rider':'Read full licence'} href={canonicalHref??downloadHref??''} text={document.text} customMarkdown={customDocument} onOpen={()=>onReadChange?.(document.kind)} />}
-              {document.verifiedMediaType==='application/pdf'&&canonicalHref&&<LicenseReadingDialog label="Read full licence" href={canonicalHref} pdf onOpen={()=>onReadChange?.(document.kind)} />}
+              {document.text && <LicenseReadingDialog label={document.kind==='covenant'?'Read Marketplace Listing Covenant':document.kind==='rider'?'Read AI-Training Rider':'Read full licence'} href={canonicalHref??downloadHref??''} text={document.text} customMarkdown={customDocument} />}
+              {document.verifiedMediaType==='application/pdf'&&canonicalHref&&<LicenseReadingDialog label="Read full licence" href={canonicalHref} pdf />}
               {downloadHref
                 ? <a href={downloadHref} download={customDocument ? `custom-licence.${document.verifiedMediaType === 'application/pdf' ? 'pdf' : 'txt'}` : true} className="font-medium text-indigo-700 underline">Download exact document</a>
                 : <span className="font-medium text-gray-500">Download exact document</span>}
