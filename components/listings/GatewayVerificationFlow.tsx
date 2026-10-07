@@ -238,7 +238,7 @@ export default function GatewayVerificationFlow({ listingId, sellerId, verifier,
     } catch {
       setError('We could not restore your verification request. Please contact support before starting again.');
     }
-    return () => { mounted.current = false; };
+    return () => { mounted.current = false; clearTimeout(copiedTimer.current); };
   }, [storageKey]);
 
   async function checkStatus() {
