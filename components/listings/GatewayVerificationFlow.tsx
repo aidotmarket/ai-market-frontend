@@ -90,6 +90,15 @@ export default function GatewayVerificationFlow({ listingId, sellerId, verifier,
   const [opened, setOpened] = useState(!cloud);
   const [cloudflareSetup, setCloudflareSetup] = useState<CloudflareSetupResponse | null>(null);
   const [runNowSecret, setRunNowSecret] = useState<string | null>(null);
+  const [copied, setCopied] = useState<'token' | 'secret' | null>(null);
+  const copiedTimer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
+  async function copyValue(kind: 'token' | 'secret', value: string) {
+    await navigator.clipboard.writeText(value);
+    if (!mounted.current) return;
+    setCopied(kind);
+    clearTimeout(copiedTimer.current);
+    copiedTimer.current = setTimeout(() => { if (mounted.current) setCopied(null); }, 2500);
+  }
   const [cloudflareStatus, setCloudflareStatus] = useState<CloudflareVerifierStatus | null>(null);
   const [awsStatus, setAwsStatus] = useState<AWSVerifierStatus | null>(null);
   const [statusFresh, setStatusFresh] = useState(false);
@@ -117,8 +126,11 @@ export default function GatewayVerificationFlow({ listingId, sellerId, verifier,
     if (!cloud || !opened) return;
     let stopped = false;
     let timer: ReturnType<typeof setTimeout>;
+    let first = true;
     async function poll() {
-      if (document.visibilityState !== 'hidden') {
+      // Always read once on open, even in a background tab, so the status never sticks at "Checking".
+      if (first || document.visibilityState !== 'hidden') {
+        first = false;
         try { await readVerifierStatus(); }
         catch (cause) { if (!stopped) setError(verificationErrorCopy(cause, verifier?.kind)); }
       }
@@ -226,7 +238,7 @@ export default function GatewayVerificationFlow({ listingId, sellerId, verifier,
     } catch {
       setError('We could not restore your verification request. Please contact support before starting again.');
     }
-    return () => { mounted.current = false; };
+    return () => { mounted.current = false; clearTimeout(copiedTimer.current); };
   }, [storageKey]);
 
   async function checkStatus() {
@@ -390,11 +402,11 @@ export default function GatewayVerificationFlow({ listingId, sellerId, verifier,
         <a className={buttonClass} href={cloudflareSetup.deploy_button_url} target="_blank" rel="noopener noreferrer">Deploy to Cloudflare</a>
         <p>Release: {cloudflareSetup.release_id}; scanner version: {cloudflareSetup.scanner_version}</p>
         <label className="block">Registration token<input className="block w-full rounded border p-2" readOnly value={cloudflareSetup.registration_token} onFocus={event => event.target.select()} /></label>
-        <button className={buttonClass} onClick={() => void run(async () => { await navigator.clipboard.writeText(cloudflareSetup.registration_token); })}>Copy registration token</button>
+        <button className={buttonClass} onClick={() => void run(() => copyValue('token', cloudflareSetup.registration_token))}>{copied === 'token' ? 'Copied ✓' : 'Copy registration token'}</button>
         <p>Registration token expires at {cloudflareSetup.expires_at_utc}.</p>
         {runNowSecret && <>
           <label className="block">Run-now secret<input className="block w-full rounded border p-2" readOnly value={runNowSecret} onFocus={event => event.target.select()} /></label>
-          <button className={buttonClass} onClick={() => void run(async () => { await navigator.clipboard.writeText(runNowSecret); })}>Copy run-now secret</button>
+          <button className={buttonClass} onClick={() => void run(() => copyValue('secret', runNowSecret))}>{copied === 'secret' ? 'Copied ✓' : 'Copy run-now secret'}</button>
         </>}
         <p>The deployment button prompts for two secrets: REGISTRATION_TOKEN (paste the registration token above) and RUN_NOW_SECRET (paste the generated run-now secret above). Save the run-now secret somewhere private now: you need it to press Run now on your verifier’s control page, and it is not shown again. It was created in this browser and never reaches ai.market. The setup token is shown to you, as with AWS.</p>
         <p>Binary SHA-256: <code>{cloudflareSetup.binary_sha256}</code></p>

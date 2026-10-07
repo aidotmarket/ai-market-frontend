@@ -676,7 +676,10 @@ describe('Cloudflare verifier in the shared seller flow', () => {
     expect(secretBox.readOnly).toBe(true);
     expect(secretBox.value).toMatch(/^[A-Za-z0-9_-]{43}$/);
     fireEvent.click(screen.getByRole('button', { name: 'Copy registration token' })); await waitFor(() => expect(copy).toHaveBeenCalledWith(cloudflareSetup.registration_token));
+    expect(await screen.findByRole('button', { name: 'Copied ✓' })).toBeTruthy();
     fireEvent.click(screen.getByRole('button', { name: 'Copy run-now secret' })); await waitFor(() => expect(copy).toHaveBeenCalledWith(secretBox.value));
+    await waitFor(() => expect(screen.getByRole('button', { name: 'Copy registration token' })).toBeTruthy());
+    expect(screen.getByRole('button', { name: 'Copied ✓' })).toBeTruthy();
     for (const mock of Object.values(gateway)) if (vi.isMockFunction(mock)) expect(JSON.stringify(vi.mocked(mock).mock.calls)).not.toContain(secretBox.value);
     expect(window.localStorage.setItem).not.toHaveBeenCalled(); expect(window.sessionStorage.setItem).not.toHaveBeenCalled(); expect(storage).not.toHaveBeenCalled(); expect(log).not.toHaveBeenCalled(); expect(error).not.toHaveBeenCalled(); expect(beacon).not.toHaveBeenCalled(); expect(analytics).not.toHaveBeenCalled();
     expect(window.localStorage.length).toBe(0); expect(window.sessionStorage.length).toBe(0);
