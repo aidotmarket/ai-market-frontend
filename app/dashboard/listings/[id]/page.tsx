@@ -4,7 +4,7 @@ import { use, useEffect, useState } from 'react';
 import Link from 'next/link';
 import { getSellerListing, getListingOwnership } from '@/api/listings';
 import { getGatewayListingSource } from '@/api/sellerGateways';
-import { getAwsVerifierStatus } from '@/api/dataVerificationGateway';
+import { getAwsVerifierStatus, getCloudflareVerifierStatus } from '@/api/dataVerificationGateway';
 import { useAuthStore } from '@/store/auth';
 import GatewayVerificationFlow from '@/components/listings/GatewayVerificationFlow';
 
@@ -15,13 +15,14 @@ export default function ListingPage({ params }: { params: Promise<{ id: string }
   const { user, isAuthenticated, hydrated } = useAuthStore();
   const [listing, setListing] = useState<OwnedListing | null>(null);
   const [gateway, setGateway] = useState(false);
+  const [cloudflareConnectionId, setCloudflareConnectionId] = useState<string | null>(null);
   const [awsConnectionId, setAwsConnectionId] = useState<string | null>(null);
   const [state, setState] = useState<'loading' | 'ready' | 'unavailable' | 'error'>('loading');
   const [retry, setRetry] = useState(0);
   useEffect(() => {
     if (!hydrated || !isAuthenticated || !user) return;
     let current = true;
-    setState('loading'); setListing(null); setGateway(false); setAwsConnectionId(null);
+    setState('loading'); setListing(null); setGateway(false); setAwsConnectionId(null); setCloudflareConnectionId(null);
     async function load() {
       try {
         // Check this listing directly; the inventory endpoint is paginated.
@@ -39,6 +40,13 @@ export default function ListingPage({ params }: { params: Promise<{ id: string }
             if (status.eligible && status.connection_id) setAwsConnectionId(status.connection_id);
           } catch {
             // Verification is optional; an unavailable status hides its entry.
+            if (!current) return;
+          }
+          try {
+            const status = await getCloudflareVerifierStatus(id);
+            if (!current) return;
+            if (status.eligible && status.connection_id) setCloudflareConnectionId(status.connection_id);
+          } catch {
             if (!current) return;
           }
         }
@@ -62,6 +70,7 @@ export default function ListingPage({ params }: { params: Promise<{ id: string }
     <h1 className="text-2xl font-semibold">{listing?.title}</h1>
     <Link href={`/dashboard/listings/${encodeURIComponent(id)}/edit`} className="text-indigo-700 underline">Edit listing</Link>
     {listing?.status === 'published' && gateway && <GatewayVerificationFlow key={`${user.id}:${id}`} listingId={id} sellerId={user.id} />}
-    {listing?.status === 'published' && !gateway && awsConnectionId && <GatewayVerificationFlow key={`${user.id}:${id}:${awsConnectionId}`} listingId={id} sellerId={user.id} verifier={{ kind: 'aws', connectionId: awsConnectionId }} />}
+    {listing?.status === 'published' && !gateway && !cloudflareConnectionId && awsConnectionId && <GatewayVerificationFlow key={`${user.id}:${id}:${awsConnectionId}`} listingId={id} sellerId={user.id} verifier={{ kind: 'aws', connectionId: awsConnectionId }} />}
+    {listing?.status === 'published' && !gateway && cloudflareConnectionId && <GatewayVerificationFlow key={`${user.id}:${id}:${cloudflareConnectionId}`} listingId={id} sellerId={user.id} verifier={{ kind: 'cloudflare', connectionId: cloudflareConnectionId }} />}
   </div>;
 }

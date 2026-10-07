@@ -2,14 +2,15 @@
 import React from 'react';
 import { act, cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import GatewayVerificationFlow, { AWS_COST_DISCLOSURE } from './GatewayVerificationFlow';
+import GatewayVerificationFlow, { AWS_COST_DISCLOSURE, CLOUDFLARE_COST_DISCLOSURE, CLOUDFLARE_REMOVE_COPY, CLOUDFLARE_RUN_NOW_COPY, generateRunNowSecret } from './GatewayVerificationFlow';
 import * as gateway from '@/api/dataVerificationGateway';
 import * as payin from '@/api/dataVerificationPayin';
 import type { GatewayVerificationEpoch, PublishedScanFindings } from '@/types';
-vi.mock('@/api/dataVerificationGateway', async importOriginal => ({ ...await importOriginal<typeof gateway>(), probeGatewayVerification: vi.fn(), getGatewayVerificationProbe: vi.fn(), startGatewayVerification: vi.fn(), getGatewayVerificationEpoch: vi.fn(), gatewayVerificationLifecycle: vi.fn(), getAwsVerifierStatus: vi.fn(), setupAwsVerifier: vi.fn(), removeVerificationRunner: vi.fn() }));
+vi.mock('@/api/dataVerificationGateway', async importOriginal => ({ ...await importOriginal<typeof gateway>(), probeGatewayVerification: vi.fn(), getGatewayVerificationProbe: vi.fn(), startGatewayVerification: vi.fn(), getGatewayVerificationEpoch: vi.fn(), gatewayVerificationLifecycle: vi.fn(), getCloudflareVerifierStatus: vi.fn(), setupCloudflareVerifier: vi.fn(), getAwsVerifierStatus: vi.fn(), setupAwsVerifier: vi.fn(), removeVerificationRunner: vi.fn() }));
 vi.mock('@/api/dataVerificationPayin', () => ({ getDataVerificationPayInReadiness: vi.fn() }));
 vi.mock('@/components/DataVerificationPaymentMethod', () => ({ default: () => <p>Hosted card setup</p> }));
 const originalStorage = Object.getOwnPropertyDescriptor(window, 'localStorage')!;
+const originalSessionStorage = Object.getOwnPropertyDescriptor(window, 'sessionStorage')!;
 const key = 'gateway-verification:seller:listing';
 const queued = { data: { probe_id: 'probe', state: 'queued' as const }, retryAfter: 0.001 };
 const quote = { data: { probe_id: 'probe', state: 'complete' as const, quote_id: 'quote', refusal: null, maximum_hold_usd: '25.00' }, retryAfter: 2 };
@@ -398,6 +399,17 @@ describe('AWS verifier in the shared seller flow', () => {
     vi.mocked(payin.getDataVerificationPayInReadiness).mockReset().mockResolvedValue({ version: 'data_verification_payin_readiness_v1', state: 'ready', can_start_setup: false, can_replace_payment_method: true, message: 'ignored' });
   });
   afterEach(() => { cleanup(); vi.restoreAllMocks(); vi.useRealTimers(); Object.defineProperty(window, 'localStorage', originalStorage); });
+  it.each([
+    ['source_unreachable', 'Your gateway or data is offline. Reconnect it and try again.'],
+    ['artifact_changed', 'We could not complete this request. Try again.'],
+  ])('preserves AWS probe refusal copy for %s', async (refusal, copy) => {
+    vi.mocked(gateway.getAwsVerifierStatus).mockResolvedValue({ ...awsStatus, state: 'ready', runner_id: 'aws-runner' });
+    vi.mocked(gateway.getGatewayVerificationProbe).mockResolvedValue({ data: { probe_id: 'probe', state: 'refused', refusal }, retryAfter: 2 });
+    await openAws(); await screen.findByText('Ready');
+    fireEvent.click(screen.getByRole('button', { name: 'Check data and get quote' }));
+    expect((await screen.findByRole('alert')).textContent).toBe(copy);
+    expect(screen.queryByText(/SOURCE binding/)).toBeNull();
+  });
   it('confirms setup, passes the prefilled URL directly to a new tab, and waits for status ready after registration', async () => {
     await openAws();
     fireEvent.click(await screen.findByRole('button', { name: 'Set up the verifier' }));
@@ -577,5 +589,279 @@ describe('AWS verifier in the shared seller flow', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Check verifier status' }));
     await screen.findByRole('alert');
     expect((screen.getByRole('button', { name: 'Check data and get quote' }) as HTMLButtonElement).disabled).toBe(true);
+  });
+});
+
+const cloudflareStatus: gateway.CloudflareVerifierStatus = {
+  state: 'none', eligible: true, connection_id: 'connection', runner_id: null,
+  jurisdiction: 'default', release_id: null, scanner_version: null, binary_sha256: null,
+  worker_identity: null, image_digest: null, registered_at: null, last_seen_at: null,
+  poll_interval_minutes: 1, setup_expires_at: null,
+};
+const cloudflareRegistered = { ...cloudflareStatus, runner_id: 'cloudflare-runner', state: 'ready' as const, binary_sha256: 'a'.repeat(64), worker_identity: { mode: 'bundle' as const, sha256: 'b'.repeat(64) } };
+const cloudflareSetup: gateway.CloudflareSetupResponse = {
+  connection_id: 'connection', expires_at_utc: '2026-10-06T12:30:00Z', registration_token: 'private-registration-token',
+  release_id: 'cloudflare-v1', scanner_version: '1.2.3', binary_sha256: 'a'.repeat(64), worker_identity: { mode: 'bundle', sha256: 'b'.repeat(64) },
+  template_repo_url: 'https://github.com/aidotmarket/verifier-v1', template_commit: 'c'.repeat(40),
+  deploy_button_url: 'https://deploy.workers.cloudflare.com/?url=release-v1', bundle_url: 'https://example.com/worker.mjs', bundle_sha256: 'b'.repeat(64),
+  deployment_config: { connection_id: 'connection', bucket: 'listed-source-bucket', prefix: 'private-source-prefix/', jurisdiction: 'default', keys: ['private-source-prefix/private-file.csv'] },
+};
+const cloudflareArtifact: PublishedScanFindings = {
+  ...awsArtifact,
+  execution: { ...awsArtifact.execution, runner_kind: 'cloudflare', connector_type: 'r2_verifier', connector_version: 'r2_verifier-v1' },
+  provenance_label: awsArtifact.provenance_label!.replace('AWS account', 'Cloudflare account'),
+  attestation: awsArtifact.attestation.replace('AWS account', 'Cloudflare account'),
+  disclaimer: awsArtifact.disclaimer.replace('AWS account', 'Cloudflare account'),
+};
+async function openCloudflare() {
+  render(<GatewayVerificationFlow listingId="listing" sellerId="seller" verifier={{ kind: 'cloudflare', connectionId: 'connection' }} />);
+  fireEvent.click(screen.getByRole('button', { name: 'Verify this data' }));
+  await waitFor(() => expect(gateway.getCloudflareVerifierStatus).toHaveBeenCalled());
+}
+async function cloudflareQuote() {
+  vi.mocked(gateway.getCloudflareVerifierStatus).mockResolvedValue(cloudflareRegistered);
+  await openCloudflare(); await screen.findByText('Ready');
+  fireEvent.click(screen.getByRole('button', { name: 'Check data and get quote' }));
+  await screen.findByText('Your verification quote');
+}
+describe('Cloudflare verifier in the shared seller flow', () => {
+  beforeEach(() => {
+    vi.resetAllMocks();
+    for (const storage of ['localStorage', 'sessionStorage'] as const) {
+      const values = new Map<string, string>();
+      Object.defineProperty(window, storage, { configurable: true, value: {
+        getItem: (key: string) => values.get(key) ?? null,
+        setItem: vi.fn((key: string, value: string) => values.set(key, value)),
+        removeItem: (key: string) => values.delete(key),
+        get length() { return values.size; },
+      } });
+    }
+    vi.mocked(gateway.getCloudflareVerifierStatus).mockResolvedValue(cloudflareStatus);
+    vi.mocked(gateway.setupCloudflareVerifier).mockResolvedValue(cloudflareSetup);
+    vi.mocked(gateway.probeGatewayVerification).mockResolvedValue(queued);
+    vi.mocked(gateway.getGatewayVerificationProbe).mockResolvedValue(quote);
+    vi.mocked(gateway.startGatewayVerification).mockResolvedValue({ data: epoch, retryAfter: 2 });
+    vi.mocked(gateway.getGatewayVerificationEpoch).mockResolvedValue({ data: epoch, retryAfter: 2 });
+    vi.mocked(payin.getDataVerificationPayInReadiness).mockResolvedValue({ version: 'data_verification_payin_readiness_v1', state: 'ready', can_start_setup: false, can_replace_payment_method: true, message: 'ignored' });
+  });
+  afterEach(() => { cleanup(); vi.restoreAllMocks(); vi.unstubAllGlobals(); Object.defineProperty(window, 'localStorage', originalStorage); Object.defineProperty(window, 'sessionStorage', originalSessionStorage); });
+  it('confirms setup, shows the release button and copyable token, and keeps secrets out of storage and telemetry', async () => {
+    const storage = vi.spyOn(Storage.prototype, 'setItem');
+    const log = vi.spyOn(console, 'log'); const error = vi.spyOn(console, 'error');
+    const beacon = vi.fn(); Object.defineProperty(navigator, 'sendBeacon', { configurable: true, value: beacon });
+    const analytics = vi.fn(); vi.stubGlobal('gtag', analytics);
+    const copy = vi.fn().mockResolvedValue(undefined); Object.defineProperty(navigator, 'clipboard', { configurable: true, value: { writeText: copy } });
+    await openCloudflare();
+    fireEvent.click(await screen.findByRole('button', { name: 'Set up the verifier' }));
+    expect(gateway.setupCloudflareVerifier).not.toHaveBeenCalled();
+    vi.mocked(gateway.getCloudflareVerifierStatus).mockResolvedValue({ ...cloudflareStatus, state: 'waiting' });
+    fireEvent.click(screen.getByRole('button', { name: 'Confirm setup' }));
+    const button = await screen.findByRole('link', { name: 'Deploy to Cloudflare' });
+    expect(button.getAttribute('href')).toBe(cloudflareSetup.deploy_button_url); expect(button.getAttribute('target')).toBe('_blank');
+    expect(gateway.setupCloudflareVerifier).toHaveBeenCalledWith({ kind: 'cloudflare', connection_id: 'connection', jurisdiction: 'default' });
+    expect((screen.getByRole('textbox', { name: 'Registration token' }) as HTMLInputElement).value).toBe(cloudflareSetup.registration_token);
+    expect(screen.getByText(/Registration token expires at/).textContent).toContain(cloudflareSetup.expires_at_utc);
+    expect(screen.getByText(/two secrets: REGISTRATION_TOKEN/)).toBeTruthy();
+    expect(CLOUDFLARE_RUN_NOW_COPY).toBe("Deployment is waiting for its first check. Open your verifier's seller control page and select Run now. Scheduled checks are a best-effort backstop.");
+    expect(screen.getAllByText(CLOUDFLARE_RUN_NOW_COPY)).toHaveLength(1);
+    const bucketInstruction = screen.getByText(/When Cloudflare asks for the SOURCE R2 bucket/);
+    expect(bucketInstruction.textContent).toBe('When Cloudflare asks for the SOURCE R2 bucket, enter exactly listed-source-bucket. If Cloudflare creates a new bucket instead, open your Worker → Settings → Bindings, set SOURCE to listed-source-bucket, and delete the empty bucket.');
+    expect(Array.from(bucketInstruction.querySelectorAll('code'), node => node.textContent)).toEqual(['listed-source-bucket', 'listed-source-bucket']);
+    expect(document.body.textContent).not.toContain(cloudflareSetup.deployment_config.prefix);
+    for (const key of cloudflareSetup.deployment_config.keys) expect(document.body.textContent).not.toContain(key);
+    expect(screen.queryByRole('textbox', { name: /config/i })).toBeNull();
+    expect(screen.getByText(/two secrets: REGISTRATION_TOKEN/).textContent).toContain('RUN_NOW_SECRET (paste the generated run-now secret above)');
+    expect(screen.queryByRole('textbox', { name: /provider/i })).toBeNull();
+    const secretBox = screen.getByRole('textbox', { name: 'Run-now secret' }) as HTMLInputElement;
+    expect(secretBox.readOnly).toBe(true);
+    expect(secretBox.value).toMatch(/^[A-Za-z0-9_-]{43}$/);
+    fireEvent.click(screen.getByRole('button', { name: 'Copy registration token' })); await waitFor(() => expect(copy).toHaveBeenCalledWith(cloudflareSetup.registration_token));
+    fireEvent.click(screen.getByRole('button', { name: 'Copy run-now secret' })); await waitFor(() => expect(copy).toHaveBeenCalledWith(secretBox.value));
+    for (const mock of Object.values(gateway)) if (vi.isMockFunction(mock)) expect(JSON.stringify(vi.mocked(mock).mock.calls)).not.toContain(secretBox.value);
+    expect(window.localStorage.setItem).not.toHaveBeenCalled(); expect(window.sessionStorage.setItem).not.toHaveBeenCalled(); expect(storage).not.toHaveBeenCalled(); expect(log).not.toHaveBeenCalled(); expect(error).not.toHaveBeenCalled(); expect(beacon).not.toHaveBeenCalled(); expect(analytics).not.toHaveBeenCalled();
+    expect(window.localStorage.length).toBe(0); expect(window.sessionStorage.length).toBe(0);
+    expect((screen.getByRole('button', { name: 'Check data and get quote' }) as HTMLButtonElement).disabled).toBe(true);
+    vi.mocked(gateway.getCloudflareVerifierStatus).mockResolvedValue(cloudflareRegistered);
+    fireEvent.click(screen.getByRole('button', { name: 'Check verifier status' })); await screen.findByText('Ready');
+    expect(screen.queryByText(CLOUDFLARE_RUN_NOW_COPY)).toBeNull();
+    expect((screen.getByRole('button', { name: 'Check data and get quote' }) as HTMLButtonElement).disabled).toBe(false);
+    vi.unstubAllGlobals();
+  });
+  it('generates a fresh 32-byte base64url run-now secret each time', () => {
+    const a = generateRunNowSecret(); const b = generateRunNowSecret();
+    expect(a).toMatch(/^[A-Za-z0-9_-]{43}$/); expect(b).toMatch(/^[A-Za-z0-9_-]{43}$/); expect(a).not.toBe(b);
+  });
+  it('confirms replacement with the old runner ID and offers the new release button', async () => {
+    vi.mocked(gateway.getCloudflareVerifierStatus).mockResolvedValue(cloudflareRegistered);
+    await openCloudflare(); await screen.findByText('Ready');
+    fireEvent.click(screen.getByRole('button', { name: 'Set up the verifier' }));
+    expect(gateway.setupCloudflareVerifier).not.toHaveBeenCalled();
+    expect(screen.getByText(/Replace runner cloudflare-runner/)).toBeTruthy();
+    fireEvent.click(screen.getByRole('button', { name: 'Confirm replacement' }));
+    await screen.findByRole('link', { name: 'Deploy to Cloudflare' });
+    expect(gateway.setupCloudflareVerifier).toHaveBeenCalledWith({ kind: 'cloudflare', jurisdiction: 'default', connection_id: 'connection', replace_runner_id: 'cloudflare-runner', confirm_replace: true });
+    expect(screen.getByText(/Remove the old deployment and Durable Object state/)).toBeTruthy();
+  });
+  it('removes only after confirmation and shows the exact resource cost warning', async () => {
+    vi.mocked(gateway.getCloudflareVerifierStatus).mockResolvedValue(cloudflareRegistered);
+    await openCloudflare(); fireEvent.click(await screen.findByRole('button', { name: 'Remove verifier' }));
+    expect(screen.getByText(CLOUDFLARE_REMOVE_COPY)).toBeTruthy(); expect(gateway.removeVerificationRunner).not.toHaveBeenCalled();
+    vi.mocked(gateway.getCloudflareVerifierStatus).mockResolvedValue({ ...cloudflareRegistered, state: 'removed' });
+    fireEvent.click(screen.getByRole('button', { name: 'Confirm removal' })); await screen.findByText('Removed');
+    expect(gateway.removeVerificationRunner).toHaveBeenCalledWith('cloudflare-runner');
+  });
+  it('clears the setup token and generated secret after confirmed removal', async () => {
+    await openCloudflare();
+    fireEvent.click(await screen.findByRole('button', { name: 'Set up the verifier' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Confirm setup' }));
+    await screen.findByRole('textbox', { name: 'Run-now secret' });
+    vi.mocked(gateway.getCloudflareVerifierStatus).mockResolvedValue(cloudflareRegistered);
+    fireEvent.click(screen.getByRole('button', { name: 'Check verifier status' }));
+    await screen.findByText('Ready');
+    fireEvent.click(screen.getByRole('button', { name: 'Remove verifier' }));
+    expect(screen.getByRole('textbox', { name: 'Run-now secret' })).toBeTruthy();
+    vi.mocked(gateway.getCloudflareVerifierStatus).mockResolvedValue({ ...cloudflareRegistered, state: 'removed' });
+    fireEvent.click(screen.getByRole('button', { name: 'Confirm removal' }));
+    await screen.findByText('Removed');
+    expect(screen.queryByRole('textbox', { name: 'Run-now secret' })).toBeNull();
+    expect(screen.queryByRole('textbox', { name: 'Registration token' })).toBeNull();
+    expect(screen.queryByRole('link', { name: 'Deploy to Cloudflare' })).toBeNull();
+  });
+  it('clears previous setup secrets when replacement fails', async () => {
+    await openCloudflare();
+    fireEvent.click(await screen.findByRole('button', { name: 'Set up the verifier' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Confirm setup' }));
+    await screen.findByRole('textbox', { name: 'Run-now secret' });
+    vi.mocked(gateway.getCloudflareVerifierStatus).mockResolvedValue(cloudflareRegistered);
+    fireEvent.click(screen.getByRole('button', { name: 'Check verifier status' }));
+    await screen.findByText('Ready');
+    fireEvent.click(screen.getByRole('button', { name: 'Set up the verifier' }));
+    vi.mocked(gateway.setupCloudflareVerifier).mockRejectedValueOnce(new Error('failed'));
+    fireEvent.click(screen.getByRole('button', { name: 'Confirm replacement' }));
+    await screen.findByRole('alert');
+    expect(screen.queryByRole('textbox', { name: 'Run-now secret' })).toBeNull();
+    expect(screen.queryByRole('textbox', { name: 'Registration token' })).toBeNull();
+  });
+  it.each([
+    ['source_unreachable', "Your verifier could not read this listing's files. Check that the verifier's SOURCE binding is your listed bucket, then try again."],
+    ['artifact_changed', "This listing's files changed since it was published. Re-publish the listing or start a new check."],
+  ])('shows Cloudflare probe refusal %s before quote or payment', async (refusal, copy) => {
+    vi.mocked(gateway.getCloudflareVerifierStatus).mockResolvedValue(cloudflareRegistered);
+    vi.mocked(gateway.getGatewayVerificationProbe).mockResolvedValue({ data: { probe_id: 'probe', state: 'refused', refusal }, retryAfter: 2 });
+    await openCloudflare(); await screen.findByText('Ready');
+    fireEvent.click(screen.getByRole('button', { name: 'Check data and get quote' }));
+    expect((await screen.findByRole('alert')).textContent).toBe(copy);
+    expect(screen.queryByText('Your verification quote')).toBeNull();
+    expect(payin.getDataVerificationPayInReadiness).not.toHaveBeenCalled();
+  });
+  it('discloses exact costs and pricing before the probe, with no card and unchecked acknowledgments', async () => {
+    await cloudflareQuote();
+    expect(screen.getByText('Runs in your Cloudflare account. Workers Paid has a $5/month base subscription; container time, Worker/Durable Object usage and R2 read operations may add costs. R2 has no egress fee; Infrequent Access data retrieval can cost extra. The free probe also runs a complete scan. Cloudflare charges are separate from the ai.market verification fee.')).toBeTruthy();
+    for (const name of ['Workers pricing', 'Containers pricing', 'R2 pricing']) expect(screen.getByRole('link', { name }).getAttribute('href')).toContain('developers.cloudflare.com');
+    expect(payin.getDataVerificationPayInReadiness).not.toHaveBeenCalled();
+    screen.getAllByRole('checkbox').filter(el => /I understand|I agree/.test(el.parentElement?.textContent ?? '')).forEach(el => expect((el as HTMLInputElement).checked).toBe(false));
+    expect(screen.getByText(CLOUDFLARE_COST_DISCLOSURE)).toBeTruthy();
+  });
+  it('repeats Run now guidance when a queued probe is delayed', async () => {
+    vi.mocked(gateway.getGatewayVerificationProbe).mockResolvedValue({ ...queued, retryAfter: 60 });
+    vi.mocked(gateway.getCloudflareVerifierStatus).mockResolvedValue(cloudflareRegistered);
+    await openCloudflare(); await screen.findByText('Ready'); fireEvent.click(screen.getByRole('button', { name: 'Check data and get quote' }));
+    await screen.findByText('If polling is delayed, press Run now again on your verifier’s seller control page.');
+    expect(screen.getAllByText(/press Run now again/)).toHaveLength(1);
+    expect(screen.queryByText(CLOUDFLARE_RUN_NOW_COPY)).toBeNull();
+    expect(screen.queryByText('Your verification quote')).toBeNull();
+  });
+  it.each(['connection_unavailable', 'context_incomplete', 'jurisdiction_unsupported', 'read_credentials_unconfigured', 'read_failed', 'release_unavailable', 'setup_refused', 'source_scope_unrepresentable', 'source_too_large', 'worker_deployment'])('shows cloudflare_%s without a quote or payment', async suffix => {
+    const code = `cloudflare_${suffix}`;
+    vi.mocked(gateway.setupCloudflareVerifier).mockRejectedValue({ response: { status: 409, data: { detail: code } } });
+    await openCloudflare(); fireEvent.click(await screen.findByRole('button', { name: 'Set up the verifier' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Confirm setup' }));
+    expect((await screen.findByRole('alert')).textContent).toBe(gateway.verificationRefusalCopy(code));
+    expect(gateway.probeGatewayVerification).not.toHaveBeenCalled(); expect(payin.getDataVerificationPayInReadiness).not.toHaveBeenCalled();
+  });
+  it('recovers a concurrent registration with explicit replacement confirmation', async () => {
+    vi.mocked(gateway.setupCloudflareVerifier).mockRejectedValueOnce({ response: { status: 409, data: { detail: 'replacement_confirmation_required' } } });
+    await openCloudflare(); fireEvent.click(await screen.findByRole('button', { name: 'Set up the verifier' }));
+    vi.mocked(gateway.getCloudflareVerifierStatus).mockResolvedValue(cloudflareRegistered);
+    fireEvent.click(screen.getByRole('button', { name: 'Confirm setup' }));
+    fireEvent.click(await screen.findByRole('button', { name: 'Confirm replacement' }));
+    await screen.findByRole('link', { name: 'Deploy to Cloudflare' });
+    expect(gateway.setupCloudflareVerifier).toHaveBeenLastCalledWith({ kind: 'cloudflare', jurisdiction: 'default', connection_id: 'connection', replace_runner_id: 'cloudflare-runner', confirm_replace: true });
+  });
+  it('blocks a new probe when status is ineligible or cannot be refreshed', async () => {
+    vi.mocked(gateway.getCloudflareVerifierStatus).mockResolvedValue({ ...cloudflareRegistered, eligible: false });
+    await openCloudflare(); await screen.findByText('Ready');
+    expect((screen.getByRole('button', { name: 'Check data and get quote' }) as HTMLButtonElement).disabled).toBe(true);
+    vi.mocked(gateway.getCloudflareVerifierStatus).mockRejectedValue(new Error('offline'));
+    fireEvent.click(screen.getByRole('button', { name: 'Check verifier status' })); await screen.findByRole('alert');
+    expect((screen.getByRole('button', { name: 'Check data and get quote' }) as HTMLButtonElement).disabled).toBe(true);
+  });
+  it('shows superseded findings and allows a fresh quote', async () => {
+    window.localStorage.setItem(key, JSON.stringify({ probeCommand: { confirm: true, preview_requested: false, idempotency_key: 'key' }, epochId: 'epoch' }));
+    vi.mocked(gateway.getGatewayVerificationEpoch).mockResolvedValue({ data: { ...epoch, state: 'SUPERSEDED' }, retryAfter: 2 });
+    await openCloudflare(); await screen.findByText('These findings were replaced by a newer published verification.');
+    expect(screen.getByRole('button', { name: 'Get a new quote' })).toBeTruthy();
+  });
+  it('keeps JIT setup deliberate and resumes the same paid request after refresh', async () => {
+    vi.mocked(payin.getDataVerificationPayInReadiness).mockResolvedValueOnce({ version: 'data_verification_payin_readiness_v1', state: 'setup_required', can_start_setup: true, can_replace_payment_method: false, message: 'ignored' });
+    await cloudflareQuote(); acknowledge(); fireEvent.click(screen.getByRole('button', { name: 'Start paid verification' }));
+    await screen.findByText('Hosted card setup');
+    const saved = JSON.parse(window.localStorage.getItem(key)!).startCommand;
+    expect(gateway.startGatewayVerification).not.toHaveBeenCalled();
+    cleanup(); await openCloudflare(); await screen.findByText('Your verification quote');
+    screen.getAllByRole('checkbox').filter(el => /I understand|I agree/.test(el.parentElement?.textContent ?? '')).forEach(el => fireEvent.click(el));
+    fireEvent.click(screen.getByRole('button', { name: 'Start paid verification' }));
+    await waitFor(() => expect(gateway.startGatewayVerification).toHaveBeenCalledWith('listing', saved));
+  });
+  it.each(['publish', 'decline'] as const)('reviews the frozen Cloudflare copy and confirms %s with equal decision buttons', async action => {
+    const captured = { ...epoch, state: 'CAPTURED' as const, captured_usd: '2.00', publication_allowed: true, findings: cloudflareArtifact };
+    vi.mocked(gateway.getGatewayVerificationEpoch).mockResolvedValue({ data: captured, retryAfter: 2 });
+    window.localStorage.setItem(key, JSON.stringify({ probeCommand: { confirm: true, preview_requested: false, idempotency_key: 'key' }, epochId: 'epoch' }));
+    await openCloudflare(); await screen.findByText('Review your findings');
+    expect(screen.getByText(cloudflareArtifact.provenance_label!)).toBeTruthy();
+    expect(screen.getByText(cloudflareArtifact.attestation)).toBeTruthy(); expect(screen.getByText(cloudflareArtifact.disclaimer)).toBeTruthy();
+    expect(screen.getByRole('button', { name: 'Publish all findings' }).className).toBe(screen.getByRole('button', { name: 'Decline publication' }).className);
+    fireEvent.click(screen.getByRole('button', { name: action === 'publish' ? 'Publish all findings' : 'Decline publication' }));
+    expect(gateway.gatewayVerificationLifecycle).not.toHaveBeenCalled();
+    const state = action === 'publish' ? 'PUBLISHED' : 'DECLINED';
+    vi.mocked(gateway.gatewayVerificationLifecycle).mockResolvedValue({ data: { ...captured, state }, retryAfter: 2 });
+    vi.mocked(gateway.getGatewayVerificationEpoch).mockResolvedValue({ data: { ...captured, state }, retryAfter: 2 });
+    fireEvent.click(screen.getByRole('button', { name: action === 'publish' ? 'Confirm publication' : 'Confirm decline' }));
+    await waitFor(() => expect(gateway.gatewayVerificationLifecycle).toHaveBeenCalledWith('listing', { verification_id: 'epoch', listing_id: 'listing', source_handle_id: 'source', requested_action: action, confirm: true }));
+  });
+  it('retries a lost Cloudflare paid response after refresh with the exact saved command', async () => {
+    vi.mocked(gateway.startGatewayVerification).mockRejectedValueOnce(new Error('lost response'));
+    await cloudflareQuote(); acknowledge();
+    fireEvent.click(screen.getByRole('button', { name: 'Start paid verification' }));
+    await screen.findByRole('alert');
+    const original = vi.mocked(gateway.startGatewayVerification).mock.calls[0][1];
+    cleanup(); await openCloudflare(); await screen.findByText('Your verification quote');
+    screen.getAllByRole('checkbox').filter(el => /I understand|I agree/.test(el.parentElement?.textContent ?? '')).forEach(el => fireEvent.click(el));
+    fireEvent.click(screen.getByRole('button', { name: 'Start paid verification' }));
+    await waitFor(() => expect(gateway.startGatewayVerification).toHaveBeenCalledTimes(2));
+    expect(vi.mocked(gateway.startGatewayVerification).mock.calls[1][1]).toEqual(original);
+  });
+  it('retries a lost Cloudflare probe after refresh with the same confirmation and key', async () => {
+    vi.mocked(gateway.getCloudflareVerifierStatus).mockResolvedValue({ ...cloudflareRegistered, state: 'ready' });
+    vi.mocked(gateway.probeGatewayVerification).mockRejectedValueOnce(new Error('lost response'));
+    await openCloudflare(); await screen.findByText('Ready');
+    fireEvent.click(screen.getByRole('button', { name: 'Check data and get quote' }));
+    await screen.findByRole('alert');
+    const original = vi.mocked(gateway.probeGatewayVerification).mock.calls[0][1];
+    cleanup(); await openCloudflare(); await screen.findByText('Ready');
+    fireEvent.click(screen.getByRole('button', { name: 'Check data and get quote' }));
+    await screen.findByText('Your verification quote');
+    expect(gateway.probeGatewayVerification).toHaveBeenLastCalledWith('listing', original);
+  });
+  it('confirms withdrawal using the frozen Cloudflare epoch binding', async () => {
+    window.localStorage.setItem(key, JSON.stringify({ probeCommand: { confirm: true, preview_requested: false, idempotency_key: 'key' }, epochId: 'epoch' }));
+    vi.mocked(gateway.getGatewayVerificationEpoch).mockResolvedValue({ data: { ...epoch, state: 'PUBLISHED' }, retryAfter: 2 });
+    await openCloudflare(); fireEvent.click(await screen.findByRole('button', { name: 'Withdraw findings' }));
+    expect(gateway.gatewayVerificationLifecycle).not.toHaveBeenCalled();
+    vi.mocked(gateway.gatewayVerificationLifecycle).mockResolvedValue({ data: { ...epoch, state: 'WITHDRAWN' }, retryAfter: 2 });
+    vi.mocked(gateway.getGatewayVerificationEpoch).mockResolvedValue({ data: { ...epoch, state: 'WITHDRAWN' }, retryAfter: 2 });
+    fireEvent.click(screen.getByRole('button', { name: 'Confirm withdrawal' }));
+    await screen.findByText('These findings have been withdrawn.');
+    expect(gateway.gatewayVerificationLifecycle).toHaveBeenCalledWith('listing', { verification_id: 'epoch', listing_id: 'listing', source_handle_id: 'source', requested_action: 'withdraw', confirm: true });
   });
 });

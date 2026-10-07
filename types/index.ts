@@ -213,10 +213,10 @@ export interface PublishedScanFindings {
   };
   execution: {
     agent_version: string;
-    runner_kind?: 'gateway' | 'aws' | 'r2';
+    runner_kind?: 'gateway' | 'aws' | 'r2' | 'cloudflare';
     scanner_version?: string;
-    connector_type: 'eolymp' | 'aim_gateway' | 'aws_s3_verifier';
-    connector_version: 'eolymp-v1' | 'aim_gateway-v1' | 'aws_s3_verifier-v1';
+    connector_type: 'eolymp' | 'aim_gateway' | 'aws_s3_verifier' | 'r2_verifier';
+    connector_version: 'eolymp-v1' | 'aim_gateway-v1' | 'aws_s3_verifier-v1' | 'r2_verifier-v1';
     content_sha256_reference: string;
   };
   methods: {

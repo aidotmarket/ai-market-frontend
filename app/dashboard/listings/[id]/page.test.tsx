@@ -5,12 +5,12 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import ListingPage from './page';
 import { getMyListings, getSellerListing, getListingOwnership } from '@/api/listings';
 import { getGatewayListingSource } from '@/api/sellerGateways';
-import { getAwsVerifierStatus, setupAwsVerifier, type AWSVerifierStatus } from '@/api/dataVerificationGateway';
+import { getCloudflareVerifierStatus, getAwsVerifierStatus, setupAwsVerifier, type AWSVerifierStatus } from '@/api/dataVerificationGateway';
 const auth = vi.hoisted(() => ({ user: { id: 'seller' }, isAuthenticated: true, hydrated: true }));
 vi.mock('@/store/auth', () => ({ useAuthStore: () => auth }));
 vi.mock('@/api/listings', () => ({ getMyListings: vi.fn(), getSellerListing: vi.fn(), getListingOwnership: vi.fn() }));
 vi.mock('@/api/sellerGateways', () => ({ getGatewayListingSource: vi.fn() }));
-vi.mock('@/api/dataVerificationGateway', async importOriginal => ({ ...await importOriginal<typeof import('@/api/dataVerificationGateway')>(), getAwsVerifierStatus: vi.fn(), setupAwsVerifier: vi.fn() }));
+vi.mock('@/api/dataVerificationGateway', async importOriginal => ({ ...await importOriginal<typeof import('@/api/dataVerificationGateway')>(), getCloudflareVerifierStatus: vi.fn(), getAwsVerifierStatus: vi.fn(), setupAwsVerifier: vi.fn() }));
 const originalStorage = Object.getOwnPropertyDescriptor(window, 'localStorage')!;
 const awsStatus: AWSVerifierStatus = {
   state: 'none', eligible: true, connection_id: 'verified-aws-connection',
@@ -26,6 +26,7 @@ describe('seller listing verification entry', () => {
     vi.mocked(getListingOwnership).mockResolvedValue(true);
     vi.mocked(getSellerListing).mockResolvedValue({ id: 'listing', title: 'My data', status: 'published' } as Awaited<ReturnType<typeof getSellerListing>>);
     vi.mocked(getGatewayListingSource).mockResolvedValue({ type: 'gateway', gateway_id: 'gateway', file_ids: ['a'.repeat(32)] });
+    vi.mocked(getCloudflareVerifierStatus).mockResolvedValue({ eligible: false, connection_id: null } as Awaited<ReturnType<typeof getCloudflareVerifierStatus>>);
     vi.mocked(getAwsVerifierStatus).mockResolvedValue(awsStatus);
     vi.mocked(setupAwsVerifier).mockResolvedValue({ connection_id: 'verified-aws-connection', quick_create_url: 'https://console.aws.amazon.com/cloudformation/', expires_at_utc: '2026-10-05T12:30:00Z', scanner_version: '1.2.3', image_digest: 'sha256:hash' });
   });
@@ -105,5 +106,20 @@ describe('seller listing verification entry', () => {
     if (kind === 'aws') vi.mocked(getGatewayListingSource).mockResolvedValue(null);
     vi.mocked(getSellerListing).mockResolvedValue({ id: 'listing', title: 'Draft data', status: 'draft' } as Awaited<ReturnType<typeof getSellerListing>>);
     await page(); await screen.findByRole('heading', { name: 'Draft data' }); expect(screen.queryByText(/Verify this data/)).toBeNull();
+  });
+  it.each([true, false])('uses Cloudflare server eligibility (%s) rather than source naming', async eligible => {
+    vi.mocked(getGatewayListingSource).mockResolvedValue(null);
+    vi.mocked(getAwsVerifierStatus).mockResolvedValue({ ...awsStatus, eligible: false });
+    vi.mocked(getCloudflareVerifierStatus).mockResolvedValue({ eligible, connection_id: 'r2-connection', state: 'none' } as Awaited<ReturnType<typeof getCloudflareVerifierStatus>>);
+    await page('s3-looking-name'); await screen.findByRole('heading', { name: 'My data' });
+    expect(getCloudflareVerifierStatus).toHaveBeenCalledWith('s3-looking-name');
+    if (eligible) { fireEvent.click(screen.getByRole('button', { name: 'Verify this data' })); await screen.findByRole('heading', { name: 'Cloudflare verifier' }); }
+    else expect(screen.queryByText('Verify this data')).toBeNull();
+  });
+  it('hides Cloudflare verification when status has no registered connection pair', async () => {
+    vi.mocked(getGatewayListingSource).mockResolvedValue(null);
+    vi.mocked(getAwsVerifierStatus).mockResolvedValue({ ...awsStatus, eligible: false });
+    vi.mocked(getCloudflareVerifierStatus).mockResolvedValue({ eligible: true, connection_id: null } as Awaited<ReturnType<typeof getCloudflareVerifierStatus>>);
+    await page(); await screen.findByRole('heading', { name: 'My data' }); expect(screen.queryByText('Verify this data')).toBeNull();
   });
 });
