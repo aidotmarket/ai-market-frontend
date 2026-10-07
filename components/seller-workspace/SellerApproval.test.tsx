@@ -57,9 +57,9 @@ it('requires the v2 sample statement and shows its exact file list beside it',as
   confirmation_statements:{...review.confirmation_statements,sample_files_confirmed:'These uploaded sample files are free copies.'}};
  api.approveListingReview.mockResolvedValue({id:'approved',sample_decision:'member_files'});
  render(<SellerApproval review={sampleReview} active rendered/>);
- expect(screen.queryByText('Do not include a public sample in this listing.')).toBeNull();
+ expect(screen.queryByText('This listing has no public sample.')).toBeNull();
  expect(screen.getByText('free.csv · 4,096 bytes · index 2')).toBeTruthy();
- expect(screen.getAllByRole('checkbox')).toHaveLength(5);confirmAll();
+ expect(screen.getByText('These uploaded sample files are free copies.')).toBeTruthy();expect(screen.getAllByRole('checkbox')).toHaveLength(1);confirmAll();
  fireEvent.click(screen.getByRole('button',{name:'Approve this review'}));
  await screen.findByText(/Review approved and saved/);
  expect(api.approveListingReview).toHaveBeenCalledWith(sampleReview,expect.any(String),expect.any(AbortSignal));
@@ -71,11 +71,12 @@ it('keeps the v1 markup unchanged when explicit none fields arrive',()=>{
  const second=render(<SellerApproval review={explicit} active rendered/>);
  expect(second.container.innerHTML).toBe(legacy);
 });
-it('uses separate price, licence and covenant authority confirmations for a licensed review',()=>{
+it('lists price, licence and covenant authority statements under one confirmation for a licensed review',()=>{
  const licensed={...review,confirmation_version:'seller-listing-confirmation-v3' as const,license_selection:createStandardSelection(),confirmation_statements:{ownership_confirmed:'Ownership',privacy_confirmed:'Privacy',price_confirmed:'Price',license_confirmed:'Licence',covenant_authority_confirmed:'Covenant authority',public_disclosure_confirmed:'Disclosure'}};
  render(<SellerApproval review={licensed} active rendered/>);
  expect(screen.getByText('Price')).toBeTruthy();expect(screen.getByText('Licence')).toBeTruthy();expect(screen.getByText('Covenant authority')).toBeTruthy();
- expect(screen.queryByText('I confirm price and license.')).toBeNull();expect(screen.getAllByRole('checkbox')).toHaveLength(7);
+ expect(screen.queryByText('I confirm price and license.')).toBeNull();expect(screen.getByText('This listing has no public sample.')).toBeTruthy();expect(screen.getAllByRole('checkbox')).toHaveLength(1);
+ expect(screen.getByLabelText('Confirm all review statements')).toBeTruthy();
 });
 
 it('shows the complete saved file count beside the review confirmations, independently of the sample count',()=>{
