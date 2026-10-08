@@ -60,6 +60,20 @@ describe('seller listing verification entry', () => {
     expect(getListingOwnership).not.toHaveBeenCalled(); expect(getSellerListing).not.toHaveBeenCalled(); expect(getMyListings).not.toHaveBeenCalled(); expect(getGatewayListingSource).not.toHaveBeenCalled();
     expect(getAwsVerifierStatus).not.toHaveBeenCalled();
   });
+  it('keeps the opened verification panel when a token refresh replaces the user object', async () => {
+    vi.mocked(getGatewayListingSource).mockResolvedValue(null);
+    const params = Promise.resolve({ id: 'listing' });
+    const tree = <Suspense fallback={<p>Loading…</p>}><ListingPage params={params} /></Suspense>;
+    let view!: ReturnType<typeof render>;
+    await act(async () => { view = render(tree); await params; });
+    fireEvent.click(await screen.findByRole('button', { name: 'Verify this data' }));
+    await screen.findByRole('heading', { level: 2 });
+    auth.user = { id: 'seller' };
+    await act(async () => { view.rerender(<Suspense fallback={<p>Loading…</p>}><ListingPage params={params} /></Suspense>); });
+    expect(screen.getByRole('heading', { level: 2 })).toBeTruthy();
+    expect(screen.queryByRole('button', { name: 'Verify this data' })).toBeNull();
+    expect(getListingOwnership).toHaveBeenCalledTimes(1);
+  });
   it('offers verification for an eligible AWS listing and sets up its verified connection', async () => {
     vi.mocked(getGatewayListingSource).mockResolvedValue(null);
     const replace = vi.fn();
