@@ -7,6 +7,7 @@ import type { Metadata } from 'next';
 import SellDataCta from '@/components/SellDataCta';
 
 export const metadata: Metadata = {
+  alternates: { canonical: '/sell-data' },
   title: { absolute: 'Sell data on ai.market' },
   description:
     'Sell data from your own AWS S3 or Cloudflare R2 bucket, or through the AIM Data gateway on your infrastructure. Manage your listing on ai.market.',

@@ -2,6 +2,7 @@ import type { Metadata } from 'next';
 import { MarketplaceSearchExperience } from '@/components/search/MarketplaceSearchExperience';
 
 export const metadata: Metadata = {
+  alternates: { canonical: '/listings' },
   title: 'Browse Marketplace',
   description: 'Explore marketplace listings on ai.market with text search, filters, and incremental discovery.',
 };

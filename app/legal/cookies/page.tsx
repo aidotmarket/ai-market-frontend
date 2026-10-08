@@ -1,6 +1,7 @@
 import type { Metadata } from 'next';
 
 export const metadata: Metadata = {
+  alternates: { canonical: '/legal/cookies' },
   title: 'Cookie Policy | ai.market',
   description: 'ai.market cookie policy describing the functional cookies we use to provide and secure our services.',
 };

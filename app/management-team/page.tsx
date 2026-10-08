@@ -1,6 +1,7 @@
 import type { Metadata } from 'next';
 
 export const metadata: Metadata = {
+  alternates: { canonical: '/management-team' },
   title: 'Management Team | ai.market',
   description:
     'Meet the leadership team behind ai.market, the non-custodial B2B data marketplace.',

@@ -1,6 +1,7 @@
 import type { Metadata } from 'next';
 
 export const metadata: Metadata = {
+  alternates: { canonical: '/investors' },
   title: 'Investors | ai.market',
   description:
     'Our investment partners, private equity firms backing ai.market and the future of AI-native commerce.',

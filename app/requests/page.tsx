@@ -5,6 +5,7 @@ import { formatDate } from '@/lib/format';
 import type { DataRequestListItem, DataRequestUrgency } from '@/types';
 
 export const metadata: Metadata = {
+  alternates: { canonical: '/requests' },
   title: 'Data Requests',
   description: 'Browse open data requests on ai.market - tell the market what data you need.',
 };

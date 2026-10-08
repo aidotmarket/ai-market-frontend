@@ -24,9 +24,6 @@ export const metadata: Metadata = {
     icon: '/favicon.svg',
     apple: '/apple-touch-icon.png',
   },
-  alternates: {
-    canonical: '/',
-  },
   openGraph: {
     siteName: 'ai.market',
     type: 'website',

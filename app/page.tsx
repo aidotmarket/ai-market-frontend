@@ -16,6 +16,7 @@ import { HeroSearch } from '@/components/HeroSearch';
 import type { DataRequestListItem } from '@/types';
 
 export const metadata: Metadata = {
+  alternates: { canonical: '/' },
   title: { absolute: 'ai.market — Sell data without giving it away' },
   description:
     'Non-custodial B2B data marketplace. List with AIM Data, find with semantic search and data requests.',

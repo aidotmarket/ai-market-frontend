@@ -2,6 +2,7 @@ import Link from 'next/link';
 import type { Metadata } from 'next';
 
 export const metadata: Metadata = {
+  alternates: { canonical: '/partner' },
   title: { absolute: 'Partner with ai.market' },
   description:
     'Data partners and Technology partners. Integrate AIM Data, list datasets, co-sell.',

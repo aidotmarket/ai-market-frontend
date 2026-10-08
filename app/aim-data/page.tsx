@@ -4,6 +4,7 @@ import SellDataCta from '@/components/SellDataCta';
 const description = 'AIM Data is an open-source Docker gateway that lists files on your own infrastructure. Confirm each file before sharing its structural description with ai.market.';
 
 export const metadata: Metadata = {
+  alternates: { canonical: '/aim-data' },
   title: 'AIM Data gateway | ai.market',
   description,
   openGraph: {
