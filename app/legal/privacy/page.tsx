@@ -1,6 +1,7 @@
 import type { Metadata } from 'next';
 
 export const metadata: Metadata = {
+  alternates: { canonical: '/legal/privacy' },
   title: 'Privacy Notice | ai.market',
   description: 'ai.market privacy notice describing how we collect, use, and protect your personal information.',
 };

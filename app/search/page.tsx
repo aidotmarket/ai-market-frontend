@@ -2,6 +2,7 @@ import type { Metadata } from 'next';
 import { MarketplaceSearchExperience } from '@/components/search/MarketplaceSearchExperience';
 
 export const metadata: Metadata = {
+  alternates: { canonical: '/search' },
   title: 'Search Datasets',
   description: 'Semantic search across the ai.market dataset catalog with faceted filters.',
 };

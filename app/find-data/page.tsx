@@ -4,6 +4,7 @@ import { MarketplaceSearchExperience } from '@/components/search/MarketplaceSear
 import { MarketplaceCategoryCards } from '@/components/categories/MarketplaceCategoryCards';
 
 export const metadata: Metadata = {
+  alternates: { canonical: '/find-data' },
   title: { absolute: 'Find data on ai.market' },
   description:
     'Semantic search across the marketplace data catalog, or post a data request and let providers respond.',

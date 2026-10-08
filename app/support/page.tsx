@@ -1,5 +1,6 @@
 import type { Metadata } from 'next';
 export const metadata: Metadata = {
+  alternates: { canonical: '/support' },
   title: 'Contact & Support | ai.market',
   description: 'Get help with ai.market. Reach us by email or through allAI on the site.',
 };
