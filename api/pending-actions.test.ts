@@ -1,5 +1,5 @@
 import { createHash } from 'node:crypto';
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 const mocks = vi.hoisted(() => ({ get: vi.fn(), post: vi.fn(), token: 'signed-session-credential' }));
 vi.mock('axios', () => ({ default: { create: () => ({ get: mocks.get, post: mocks.post }) } }));
 vi.mock('@/store/auth', () => ({ useAuthStore: { getState: () => ({ token: mocks.token }) } }));
@@ -85,4 +85,16 @@ it.each([
   [409, 'SUMMARY_CHANGED', 'changed'], [403, 'CSRF_REQUIRED', 'unavailable'], [503, 'ACTION_UNAVAILABLE', 'unavailable'], [503, 'CONFIRMATION_UNAVAILABLE', 'unavailable'],
 ] as const)('maps backend %s %s to %s', (status, detail, kind) => {
   expect(pendingActionError({ response: { status, data: { detail } } })).toBe(kind);
+});
+
+
+afterEach(() => vi.unstubAllEnvs());
+it('uses the new browser contract CSRF digest when checkout is enabled', async () => {
+  vi.stubEnv('NEXT_PUBLIC_CHECKOUT_DOMAIN_SERVICE_ENABLED', 'true');
+  const digest = createHash('sha256').update(mocks.token).digest('hex');
+  expect(pendingActionCsrf(mocks.token)).toBe(digest);
+  await getPendingAction(id, token);
+  expect(mocks.get.mock.lastCall?.[1].headers['X-CSRF-Token']).toBe(digest);
+  await decidePendingAction(id, token, 'confirm', action.summary_hash);
+  expect(mocks.post.mock.lastCall?.[1].csrf).toBe(digest);
 });

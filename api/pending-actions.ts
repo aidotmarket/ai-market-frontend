@@ -3,6 +3,7 @@ import { sha256 } from '@noble/hashes/sha2.js';
 import { bytesToHex } from '@noble/hashes/utils.js';
 import { useAuthStore } from '@/store/auth';
 import { PENDING_ACTION_CONTINUATION } from '@/lib/redirect';
+import { checkoutDomainEnabled } from '@/lib/checkout-domain';
 
 export type PendingActionStatus = 'pending_review' | 'confirmed' | 'denied' | 'expired' | 'failed';
 export interface PendingAction {
@@ -25,6 +26,7 @@ const client = axios.create({
 });
 
 export function pendingActionCsrf(accessToken: string): string {
+  if (checkoutDomainEnabled()) return bytesToHex(sha256(new TextEncoder().encode(accessToken)));
   return bytesToHex(sha256(new TextEncoder().encode(`aim.pending.csrf.v1\0${accessToken}`)));
 }
 

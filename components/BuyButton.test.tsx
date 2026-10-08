@@ -711,3 +711,73 @@ describe('one licence disclosure across purchase display states',()=>{
   expect(screen.getAllByText('Licence summary — not the contract')).toHaveLength(1);
  });
 });
+
+
+describe('connector checkout handoff and domain purchase', () => {
+  const props = { listingId: 'listing-1', slug: 'listing', price: 20, pricingType: 'one_time', licenseDetails: verifiedLicense };
+  const handoffToken = 'a'.repeat(43);
+  beforeEach(() => {
+    vi.stubEnv('NEXT_PUBLIC_CHECKOUT_DOMAIN_SERVICE_ENABLED', 'true');
+    useAuthStore.setState({ isAuthenticated: true, user: { id: 'buyer-1' } as never });
+    ordersApi.getMyOrders.mockResolvedValue([]);
+    legalApi.getTermsAcceptanceStatus.mockResolvedValue({ accepted: true });
+    legalApi.getCurrentTerms.mockResolvedValue({ version: '1.1' });
+    vi.stubGlobal('crypto', webcrypto);
+    vi.stubGlobal('fetch', vi.fn().mockImplementation((url: string) => Promise.resolve(documentResponse(
+      String(url).includes('marketplace-listing') ? 'Exact covenant text\n' : 'Exact licence text\n'
+    ))));
+    vi.mocked(createCheckout).mockReset();
+  });
+  afterEach(() => { cleanup(); vi.unstubAllEnvs(); vi.unstubAllGlobals(); vi.clearAllMocks(); });
+  async function accept(context?: { handoffToken: string }) {
+    const view = await renderBuyer(<ToastProvider><BuyButton {...props} checkoutContext={context} /></ToastProvider>);
+    await waitFor(() => expect((screen.getByRole('checkbox', { name: 'Confirm licence authority' }) as HTMLInputElement).disabled).toBe(false));
+    expect(createCheckout).not.toHaveBeenCalled();
+    expect((screen.getByRole('checkbox', { name: 'Confirm licence authority' }) as HTMLInputElement).checked).toBe(false);
+    completeAcceptanceForm();
+    await waitFor(() => expect((screen.getByRole('button', { name: 'Accept and continue to payment' }) as HTMLButtonElement).disabled).toBe(false));
+    fireEvent.click(screen.getByRole('button', { name: 'Accept and continue to payment' }));
+    return view;
+  }
+  function error(status: number, detail: unknown) {
+    const result = new AxiosError('checkout');
+    result.response = { status, data: { detail }, statusText: 'refused', headers: {}, config: {} as never };
+    return result;
+  }
+  it.each(['SELLER_PAYOUT_READINESS_UNKNOWN', 'SELLER_PAYOUT_NOT_READY', 'REFERENCE_DELIVERY_UNREADY'])('renders %s as a block with its web path and never redirects', async code => {
+    vi.mocked(createCheckout).mockRejectedValue(error(409, { code, web_path: '/listings/listing-1' }));
+    await accept({ handoffToken });
+    await screen.findByRole('link', { name: 'Review listing' });
+    expect(screen.getByRole('link', { name: 'Review listing' }).getAttribute('href')).toBe('/listings/listing-1');
+    expect(screen.getAllByRole('alert').some(element => element.textContent?.includes('Checkout is blocked'))).toBe(true);
+    expect((screen.getByRole('button', { name: 'Accept and continue to payment' }) as HTMLButtonElement).disabled).toBe(true);
+    expect(createCheckout).toHaveBeenCalledOnce();
+    expect(window.location.pathname).toBe('/');
+  });
+  it.each(['handoff', 'direct'])('retries 503 processing with the identical accepted %s request and never a new claim', async kind => {
+    vi.mocked(createCheckout).mockRejectedValue(error(503, 'CHECKOUT_PROCESSING'));
+    const view = await accept(kind === 'handoff' ? { handoffToken } : undefined);
+    const retry = await screen.findByRole('button', { name: 'Retry checkout' });
+    const first = vi.mocked(createCheckout).mock.calls[0];
+    expect(first[2]).toMatchObject({ authority_confirmed: true, typed_name: 'Ada Buyer', jurisdiction: 'GB' });
+    if (kind === 'handoff') expect(first[3]).toEqual({ handoffToken });
+    else expect(first[3]).toEqual({ checkoutRequestId: expect.stringMatching(/^[a-f0-9-]{36}$/) });
+    expect(screen.queryByLabelText('Typed full name')).toBeNull();
+    view.rerender(<ToastProvider><BuyButton {...props} licenseDetails={undefined} disabledReason="Listing changed after reservation" checkoutContext={kind === 'handoff' ? { handoffToken } : undefined} /></ToastProvider>);
+    fireEvent.click(retry);
+    await waitFor(() => expect(createCheckout).toHaveBeenCalledTimes(2));
+    expect(vi.mocked(createCheckout).mock.calls[1]).toEqual(first);
+    expect(window.location.pathname).toBe('/');
+  });
+  it('keeps flag-off markup byte-identical with unset, false and unrecognised flags', async () => {
+    vi.stubEnv('NEXT_PUBLIC_CHECKOUT_DOMAIN_SERVICE_ENABLED', '');
+    const view = await renderBuyer(<ToastProvider><BuyButton {...props} /></ToastProvider>);
+    await waitFor(() => expect((screen.getByRole('checkbox', { name: 'Confirm licence authority' }) as HTMLInputElement).disabled).toBe(false));
+    const baseline = view.container.innerHTML;
+    for (const value of ['false', 'TRUE']) {
+      vi.stubEnv('NEXT_PUBLIC_CHECKOUT_DOMAIN_SERVICE_ENABLED', value);
+      view.rerender(<ToastProvider><BuyButton {...props} /></ToastProvider>);
+      expect(view.container.innerHTML).toBe(baseline);
+    }
+  });
+});
