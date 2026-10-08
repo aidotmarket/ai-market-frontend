@@ -133,6 +133,14 @@ describe('gateway seller verification flow', () => {
     expect(screen.queryByText('Checking your payment method…')).toBeNull();
     expect(gateway.startGatewayVerification).not.toHaveBeenCalled();
   });
+  it('does not announce a payment check while only refreshing the quote', async () => {
+    await getQuote();
+    let resolve!: (value: typeof quote) => void;
+    vi.mocked(gateway.getGatewayVerificationProbe).mockReturnValue(new Promise(ok => { resolve = ok; }));
+    fireEvent.click(screen.getByRole('button', { name: 'Check again' }));
+    expect(screen.queryByText('Checking your payment method…')).toBeNull();
+    await act(async () => { resolve(quote); });
+  });
   it('resumes the persisted paid command after hosted card setup', async () => {
     vi.mocked(payin.getDataVerificationPayInReadiness).mockResolvedValueOnce({ version: 'data_verification_payin_readiness_v1', state: 'setup_required', can_start_setup: true, can_replace_payment_method: false, message: 'ignored' });
     await getQuote(); acknowledge();

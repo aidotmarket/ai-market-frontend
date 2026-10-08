@@ -93,6 +93,7 @@ export default function GatewayVerificationFlow({ listingId, sellerId, verifier,
   const [copied, setCopied] = useState<'token' | 'secret' | null>(null);
   const copiedTimer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
   const errorRef = useRef<HTMLParagraphElement>(null);
+  const [paying, setPaying] = useState(false);
   async function copyValue(kind: 'token' | 'secret', value: string) {
     await navigator.clipboard.writeText(value);
     if (!mounted.current) return;
@@ -304,6 +305,7 @@ export default function GatewayVerificationFlow({ listingId, sellerId, verifier,
   }
   function paidStart() {
     if (!completeDescription) return;
+    setPaying(true);
     void run(async () => {
       const stored = window.localStorage.getItem(storageKey);
       const saved: Attempt | null = stored ? JSON.parse(stored) : attempt.current;
@@ -352,7 +354,7 @@ export default function GatewayVerificationFlow({ listingId, sellerId, verifier,
       if (!mounted.current) return;
       save({ ...attempt.current!, epochId: response.data.verification_id });
       await checkStatus();
-    });
+    }).finally(() => { if (mounted.current) setPaying(false); });
   }
   function lifecycle(action: GatewayVerificationAction) {
     void run(async () => {
@@ -465,7 +467,7 @@ export default function GatewayVerificationFlow({ listingId, sellerId, verifier,
       <label className="block"><input type="checkbox" checked={publicationAck} onChange={e => setPublicationAck(e.target.checked)} /> I understand the charge and that I can publish all findings unedited or decline publication after reviewing them.</label>
       <label className="block"><input type="checkbox" checked={corpusAck} onChange={e => setCorpusAck(e.target.checked)} /> I agree that the verification record and approved summary statistics will be retained in ai.market’s verification records, including if I decline publication.</label>
       <button className={buttonClass} disabled={busy || !publicationAck || !corpusAck || !completeDescription} onClick={paidStart}>Start paid verification</button>
-      {busy && <p role="status" className="text-gray-600">Checking your payment method…</p>}
+      {busy && paying && <p role="status" className="text-gray-600">Checking your payment method…</p>}
     </>}
     {setup && <><DataVerificationPaymentMethod returnToListing={{ listingId, sellerId }} /><button className={buttonClass} onClick={() => setSetup(false)}>Back to verification</button><p>After adding your card, return here and choose Start paid verification to continue.</p></>}
     {epoch && <>
