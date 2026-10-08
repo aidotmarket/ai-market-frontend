@@ -1,0 +1,129 @@
+Chunk 3 frontend Gate 3 fold
+
+Assigned checkout: /var/tmp/koskadeux/minimal-bridge-worktrees/4c3e4b5e12dd-04f6ff
+Starting SHA: f668c16ce988f45d17a07f85de389e82930b1aba
+Publication branch: build/connector-action-path-chunk3-frontend-s1795
+Backend reference read via git show only: 78c853d4f868fa7d4b2bc5cbdec12fb35f1e2c55
+Contract: docs/connector/chunk3-frontend-contract.md at that backend SHA.
+Authority: /Users/max/Projects/ai-market/runbooks/specs/BQ-CONNECTOR-ACTION-PATH-GATE2.md section 4.3.
+No main checkout/ref changes or deployment.
+
+M1: OAuth and email continuations now accept exactly /checkout/h/<token>.
+The backend's 32-byte HMAC is unpadded base64url: 42 URL-safe characters plus
+one of AEIMQUYcgkosw048. Validation rejects external URLs, extra parameters,
+fragments, encoding, wrong lengths and noncanonical trailing bits. OAuth/email
+callback and 2FA tests consume the same return once; provider authorization
+receives only its provider, and magic-link requests receive no handoff token.
+
+M2: No-response errors and uncoded 5xx responses retain the frozen acceptance
+and original request claim. Recovery remains enabled and never automatically
+POSTs on reload. Session storage is scoped by buyer, listing, version and a
+one-way handoff hash; it contains only acceptance fields and the direct checkout
+UUID, never a handoff/access/refresh token or CSRF. Restore uses a field allowlist.
+Writes happen before the POST, reads/writes/removal are caught, and terminal
+results clear stored replay. Tests simulate a reserved claim with a lost response,
+retry then remount, and assert identical calls and one claim for both purchase
+paths. Confirmed terminal refusals still block. In-memory retry works with browser
+storage throwing; reload persistence naturally requires available sessionStorage.
+
+M3: The expiry timer re-inspects authoritative handoff status before rendering
+expiry, including if loading listing details crosses the original deadline.
+Consumed processing handoffs retain read-only status and recovery controls past
+that deadline. Failed expiry inspection keeps the mounted recovery and offers
+another status check while disabling fresh purchases. Terminal consumed reads
+clear any remaining stored replay. Tests cover the before-expiry start, consumed
+provider_unknown state after expiry, and failed authoritative refresh.
+
+N1: Review identities use user id and a non-secret session generation. The access
+token stays out of identity strings and React keys; token rotation invalidates the
+old review. N2: successful handoff confirmation uses router.replace, and the
+fallback continuation Link also replaces the consumed confirmation history entry.
+
+Flag-off comparison is deliberately scoped to checkout behavior, not the whole
+application. The parity test executes immutable origin/main snapshot 8074c2ca
+with the same dependencies and compares signed-out/buyer, disabled, versioned,
+and licence checkout markup plus POST URL and serialized acceptance bodies.
+Those match. Differences from that snapshot with the flag off remain:
+* no-store/no-referrer/frame-ancestors-none headers also protect handoff routes
+  and auth routes whose redirect carries a confirmation/handoff;
+* AllAI page context redacts handoff tokens to /checkout/h;
+* auth return storage now accepts the exact handoff route even with the flag off
+  (the handoff route itself remains inert/404);
+* the inherited checkout guard handles an absent Stripe URL explicitly instead
+  of letting startsWith throw. This does not change successful legacy requests.
+The privacy protections were retained as requested.
+
+All verification commands were run via rtk proxy. Runtime: Node v25.6.0.
+NODE_OPTIONS=--no-experimental-webstorage for npm/typecheck/lint/build/Vitest.
+This disables Node Web Storage; jsdom provides its own browser Storage in DOM
+modules. A separate BuyButton test makes browser sessionStorage throw too.
+
+typecheck-complete:
+  cwd: /private/var/tmp/koskadeux/minimal-bridge-worktrees/4c3e4b5e12dd-04f6ff
+  command: rtk proxy npm run typecheck
+  exit: 0
+
+lint-complete:
+  cwd: /private/var/tmp/koskadeux/minimal-bridge-worktrees/4c3e4b5e12dd-04f6ff
+  command: rtk proxy npm run lint
+  exit: 0
+
+build-local-final-off:
+  cwd: /private/var/tmp/koskadeux/minimal-bridge-worktrees/4c3e4b5e12dd-04f6ff
+  command: rtk proxy npm run build
+  exit: 0
+  environment: KEYSTATIC_GITHUB_CLIENT_ID=fake-local-client KEYSTATIC_GITHUB_CLIENT_SECRET=fake-local-secret KEYSTATIC_SECRET=fake-local-keystatic-secret-at-least-32-characters NEXT_PUBLIC_KEYSTATIC_GITHUB_APP_SLUG=fake-local-app NEXT_PUBLIC_CHECKOUT_DOMAIN_SERVICE_ENABLED=false API_URL=http://127.0.0.1:43195 NEXT_PUBLIC_API_URL=http://127.0.0.1:43195
+
+build-local-on:
+  cwd: /private/var/tmp/koskadeux/minimal-bridge-worktrees/4c3e4b5e12dd-04f6ff
+  command: rtk proxy npm run build
+  exit: 0
+  environment: KEYSTATIC_GITHUB_CLIENT_ID=fake-local-client KEYSTATIC_GITHUB_CLIENT_SECRET=fake-local-secret KEYSTATIC_SECRET=fake-local-keystatic-secret-at-least-32-characters NEXT_PUBLIC_KEYSTATIC_GITHUB_APP_SLUG=fake-local-app NEXT_PUBLIC_CHECKOUT_DOMAIN_SERVICE_ENABLED=true API_URL=http://127.0.0.1:43195 NEXT_PUBLIC_API_URL=http://127.0.0.1:43195
+
+relevant-final-all:
+  cwd: /private/var/tmp/koskadeux/minimal-bridge-worktrees/4c3e4b5e12dd-04f6ff
+  command: rtk proxy npx vitest run lib/request-auth-return.test.ts lib/checkout-handoff.test.ts lib/session-csrf.test.ts components/BuyButton.test.tsx 'app/checkout/h/[token]/checkout-handoff.test.tsx' 'app/confirm/[id]/pending-actions.test.tsx' tests/connector-auth-callbacks.test.tsx app/login/pending-actions.test.tsx api/checkout.test.ts api/checkout-handoff.test.ts tests/checkout-flag-off-parity.test.tsx
+  exit: 0
+
+test-node-final:
+  cwd: /private/var/tmp/koskadeux/minimal-bridge-worktrees/4c3e4b5e12dd-04f6ff
+  command: rtk proxy npm test -- --reporter=json --outputFile=/var/tmp/chunk3-gate3-evidence/test-node-final.json
+  exit: 1
+
+baseline-node:
+  cwd: /private/var/tmp/chunk3-gate3-evidence/base-8074c2ca
+  command: rtk proxy npm test -- --reporter=json --outputFile=/var/tmp/chunk3-gate3-evidence/baseline-node.json
+  exit: 1
+
+node-compare:
+  cwd: /private/var/tmp/koskadeux/minimal-bridge-worktrees/4c3e4b5e12dd-04f6ff
+  command: rtk proxy node --no-experimental-webstorage /var/tmp/chunk3-gate3-evidence/compare-node.mjs
+  exit: 0
+
+Results: typecheck passed; lint passed with six existing img warnings; both
+production builds passed against a local empty-data API fixture at 127.0.0.1:43195
+(the terms endpoint returns 404 to exercise the supported StaticTerms fallback).
+Fake Keystatic values appear above; no production API or credentials were used.
+Relevant Vitest: 11 modules, 276 tests passed, exit 0.
+Full npm test: candidate 2118/2119 passed, baseline 1984/1985 passed.
+Both full runs exit 1 for exactly the same existing assertion:
+  app/docs/claude/page.test.tsx
+  ClaudeDocsPage renders all seven sections with the approved copy and links
+Node comparison exit 0: no new failures.
+The baseline was extracted using rtk proxy git archive 8074c2ca and rtk proxy tar
+into the private evidence directory; no preserved checkout or git ref was changed.
+Its node_modules symlink points to the assigned checkout's locked dependencies.
+
+Initial failures were preserved: build-off failed because API_URL was absent;
+relevant-final failed when esbuild was loaded in jsdom (the reference loader now
+uses TypeScript transpileModule); initial lint caught its local module variable
+name, now fixed. Final successful commands above supersede these attempts.
+An earlier targeted invocation spelled api/checkout.handoff.test.ts incorrectly;
+the final targeted command explicitly includes api/checkout-handoff.test.ts.
+
+Full untruncated private logs, command/environment JSON, test JSON, comparison
+with failure messages, runner and local fixture are in:
+  /var/tmp/chunk3-gate3-evidence
+Console excerpts are bounded; durable evidence is unabridged. Earlier inspection
+output was truncated in the tool display; the backend checkout source and large
+BuyButton/confirmation test reads were also captured privately in that directory.

@@ -109,3 +109,25 @@ it('marks the connector request when email verification hands off to login', asy
   expect(link.getAttribute('href')).toBe(`/login?redirect=${encodeURIComponent(path)}`);
   expect(readConnectorContinuation()?.initiated).toBe(true);
 });
+
+const handoff = `/checkout/h/${'a'.repeat(42)}A`;
+it.each(['oauth', 'email'] as const)('returns to the handoff once after %s verification', async method => {
+  saveRequestAuthReturn(method, handoff);
+  if (method === 'oauth') render(<OAuthCallbackPage />);
+  else { sessionStorage.clear(); render(<MagicLinkVerifyPage />); }
+  await waitFor(() => expect(navigation.replace).toHaveBeenCalledExactlyOnceWith(handoff));
+  expect(consumeRequestAuthReturn(method, '/listings')).toBe('/listings');
+});
+it.each(['oauth', 'email'] as const)('keeps the handoff local until %s 2FA finishes', async method => {
+  saveRequestAuthReturn(method, handoff);
+  auth.pendingTwoFactor = { preAuthToken: 'pre-auth', expiresAt: Date.now() + 60_000 };
+  const verify = method === 'oauth' ? auth.oauthLogin : auth.magicLinkVerify;
+  verify.mockResolvedValue({ requiresTwoFactor: true });
+  render(method === 'oauth' ? <OAuthCallbackPage /> : <MagicLinkVerifyPage />);
+  await waitFor(() => expect(verify).toHaveBeenCalled());
+  expect(navigation.replace).not.toHaveBeenCalled();
+  expect(JSON.stringify(verify.mock.calls)).not.toContain(handoff);
+  fireEvent.click(screen.getByRole('button', { name: 'Finish 2FA' }));
+  expect(navigation.replace).toHaveBeenCalledExactlyOnceWith(handoff);
+  expect(consumeRequestAuthReturn(method, '/listings')).toBe('/listings');
+});

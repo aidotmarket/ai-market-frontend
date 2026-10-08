@@ -15,6 +15,7 @@ import CountrySelect from '@/components/CountrySelect';
 import type { BuyerOrder, LicenseAcceptanceFields, ListingLicenseDetails } from '@/types';
 import { AxiosError } from 'axios';
 import ListingLicenseDisclosure from '@/components/ListingLicenseDisclosure';
+import { checkoutReplayKey, readCheckoutReplay, saveCheckoutReplay, clearCheckoutReplay } from '@/lib/checkout-replay';
 import { useListingOwnership } from '@/hooks/useListingOwnership';
 
 interface BuyButtonProps {
@@ -32,6 +33,7 @@ interface BuyButtonProps {
   fulfillmentType?: string | null;
   disabledReason?: string;
   checkoutContext?: DomainCheckoutOptions;
+  onCheckoutStarted?: () => void;
 }
 
 export default function BuyButton({
@@ -49,6 +51,7 @@ export default function BuyButton({
   fulfillmentType,
   disabledReason,
   checkoutContext,
+  onCheckoutStarted,
 }: BuyButtonProps) {
   const termsVersion = useServedTermsVersion();
   const { user, isAuthenticated, hydrated, isLoading } = useAuthStore();
@@ -65,7 +68,7 @@ export default function BuyButton({
   const [licenseVerified, setLicenseVerified] = useState(false);
   const [checkoutRefusal, setCheckoutRefusal] = useState<CheckoutRefusal | null>(null);
   const domainEnabled = checkoutDomainEnabled();
-  const requestIdentity = `${user?.id || ''}:${listingId}:${versionId || ''}:${checkoutContext?.handoffToken || ''}`;
+  const requestIdentity = checkoutReplayKey(user?.id || '', listingId, versionId, checkoutContext?.handoffToken);
   const currentRequestIdentity = useRef(requestIdentity);
   currentRequestIdentity.current = requestIdentity;
   const acceptedRequest = useRef<{ identity: string; acceptance: LicenseAcceptanceFields; options: DomainCheckoutOptions } | null>(null);
@@ -77,8 +80,21 @@ export default function BuyButton({
   useEffect(() => {
     setAuthorityConfirmed(false);
     setLicenseVerified(false);
+    setCheckoutRefusal(previous => domainEnabled && previous?.blocked ? previous : null);
+  }, [domainEnabled, licenseDetails?.sha256, licenseDetails?.covenant_sha256, licenseDetails?.rider_sha256]);
+
+  useEffect(() => {
+    acceptedRequest.current = null;
+    setProcessingIdentity(null);
     setCheckoutRefusal(null);
-  }, [licenseDetails?.sha256, licenseDetails?.covenant_sha256, licenseDetails?.rider_sha256]);
+    if (!domainEnabled || !isAuthenticated || !user?.id) return;
+    const replay = readCheckoutReplay(requestIdentity, !!checkoutContext?.handoffToken);
+    if (replay) {
+      acceptedRequest.current = { identity: requestIdentity, acceptance: replay.acceptance,
+        options: checkoutContext?.handoffToken ? { handoffToken: checkoutContext.handoffToken } : { checkoutRequestId: replay.checkoutRequestId! } };
+      setProcessingIdentity(requestIdentity);
+    }
+  }, [domainEnabled, isAuthenticated, user?.id, requestIdentity, checkoutContext?.handoffToken]);
 
   // Check if user already purchased this listing
   useEffect(() => {
@@ -186,10 +202,16 @@ export default function BuyButton({
             options: checkoutContext ? { ...checkoutContext } : { checkoutRequestId: crypto.randomUUID() } };
         }
         const request = acceptedRequest.current;
+        // Write before POST: a lost response or reload must reuse the accepted claim.
+        saveCheckoutReplay(requestIdentity, { acceptance: request.acceptance,
+          ...(request.options.checkoutRequestId ? { checkoutRequestId: request.options.checkoutRequestId } : {}) });
+        onCheckoutStarted?.();
         const result = await createCheckout(listingId, versionId, request.acceptance, request.options);
         if (currentRequestIdentity.current !== requestIdentity) return;
         const destination = checkoutDestination(result);
-        if (!destination) { toast('Invalid checkout URL received. Please try again.', 'error'); return; }
+        if (!destination) { setProcessingIdentity(requestIdentity); toast('Invalid checkout URL received. Retry to check the same purchase.', 'error'); return; }
+        clearCheckoutReplay(requestIdentity);
+        acceptedRequest.current = null;
         window.location.href = destination;
         return;
       }
@@ -204,8 +226,7 @@ export default function BuyButton({
       window.location.href = checkout_url;
     } catch (err) {
       if (domainEnabled && currentRequestIdentity.current !== requestIdentity) return;
-      if (domainEnabled && checkoutErrorCode(err) === 'CHECKOUT_PROCESSING'
-        && (err as { response?: { status?: number } }).response?.status === 503) {
+      if (domainEnabled && checkoutOutcomeUnknown(err)) {
         setProcessingIdentity(requestIdentity);
         setCheckoutRefusal(null);
         return;
@@ -213,7 +234,11 @@ export default function BuyButton({
       if (err instanceof AxiosError) {
         const refusal = parseCheckoutRefusal(err, domainEnabled);
         setCheckoutRefusal(refusal);
-        if (domainEnabled && err.response?.status === 409 && processingIdentity !== requestIdentity) acceptedRequest.current = null;
+        if (domainEnabled) {
+          clearCheckoutReplay(requestIdentity);
+          acceptedRequest.current = null;
+          if (!refusal.blocked) setProcessingIdentity(null);
+        }
         toast(refusal.message, 'error');
       } else {
         toast('An unexpected error occurred.', 'error');
@@ -337,10 +362,18 @@ export interface CheckoutRefusal {
   blocked?: boolean;
 }
 
+/** No authoritative rejection: preserve the original claim and frozen acceptance. */
+export function checkoutOutcomeUnknown(error: unknown): boolean {
+  const status = (error as { response?: { status?: number } })?.response?.status;
+  return checkoutErrorCode(error) === 'CHECKOUT_PROCESSING' || status == null
+    || (status >= 500 && !checkoutErrorCode(error));
+}
+
 export function parseCheckoutRefusal(error: AxiosError, domainEnabled = checkoutDomainEnabled()): CheckoutRefusal {
   const data = error.response?.data as { detail?: unknown } | undefined;
   const detail = data?.detail;
   if (domainEnabled) {
+    if (checkoutOutcomeUnknown(error)) return { code: 'CHECKOUT_OUTCOME_UNKNOWN', blocked: false, message: 'Checkout outcome is unknown. Retry to check the same purchase.' };
     const code = checkoutErrorCode(error) || 'CHECKOUT_FAILED';
     const value = detail && typeof detail === 'object' ? detail as Record<string, unknown> : {};
     const block = checkoutBlock(code, value.web_path);

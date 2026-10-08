@@ -1,7 +1,7 @@
 import { expect, it } from 'vitest';
 import { checkoutContinuation, checkoutDestination, checkoutWebPath } from './checkout-domain';
 
-const path = `/checkout/h/${'a'.repeat(43)}`;
+const path = `/checkout/h/${('a'.repeat(42) + 'A')}`;
 it('continues only to an exact canonical handoff URL', () => {
   expect(checkoutContinuation(`https://ai.market${path}`)).toBe(path);
 });

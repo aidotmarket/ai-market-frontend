@@ -9,6 +9,8 @@ vi.mock('@/api/connector-oauth', () => ({ getConnectorStatus: vi.fn().mockResolv
 vi.mock('@/api/auth', () => ({ oauthAuthorize: vi.fn(), requestMagicLink: vi.fn(), resendVerification: vi.fn() }));
 import { useAuthStore } from '@/store/auth';
 import LoginForm from './LoginForm';
+import { oauthAuthorize, requestMagicLink } from '@/api/auth';
+import { consumeRequestAuthReturn } from '@/lib/request-auth-return';
 
 beforeEach(() => {
   vi.clearAllMocks(); localStorage.clear(); sessionStorage.clear();
@@ -56,4 +58,30 @@ it('completes the existing login 2FA challenge before returning to exact pending
 it('does not let an unsafe pending redirect bypass normal authenticated login handling', async () => {
   navigation.query = new URLSearchParams({ reauth: 'pending-action', redirect: `https://evil.test${path}` });
   render(<LoginForm />); await waitFor(() => expect(navigation.replace).toHaveBeenCalledWith('/dashboard'));
+});
+
+it('keeps a handoff continuation local when requesting the email sign-in link', async () => {
+  const handoff = `/checkout/h/${'a'.repeat(42)}A`;
+  navigation.query = new URLSearchParams({ redirect: handoff });
+  useAuthStore.setState({ isAuthenticated: false });
+  vi.mocked(requestMagicLink).mockResolvedValue({ message: 'Sent' });
+  render(<LoginForm />);
+  fireEvent.click(screen.getByRole('button', { name: 'Sign in or sign up with email' }));
+  fireEvent.change(screen.getByLabelText('Email'), { target: { value: 'buyer@example.test' } });
+  fireEvent.click(screen.getByRole('button', { name: 'Send email link' }));
+  await waitFor(() => expect(requestMagicLink).toHaveBeenCalledExactlyOnceWith('buyer@example.test', 'register'));
+  expect(consumeRequestAuthReturn('email', '/listings')).toBe(handoff);
+});
+it('keeps the handoff token out of provider authorization and stores the return only locally', async () => {
+  const handoff = `/checkout/h/${'a'.repeat(42)}A`;
+  navigation.query = new URLSearchParams({ redirect: handoff });
+  useAuthStore.setState({ isAuthenticated: false });
+  const authorization_url = 'https://accounts.google.com/o/oauth2/v2/auth?state=opaque';
+  vi.mocked(oauthAuthorize).mockResolvedValue({ authorization_url, nonce: 'nonce' });
+  render(<LoginForm />);
+  fireEvent.click(screen.getByRole('button', { name: 'Continue with Google' }));
+  await waitFor(() => expect(sessionStorage.getItem('oauth_nonce')).toBe('nonce'));
+  expect(oauthAuthorize).toHaveBeenCalledExactlyOnceWith('google');
+  expect(authorization_url).not.toContain(handoff.slice('/checkout/h/'.length));
+  expect(consumeRequestAuthReturn('oauth', '/listings')).toBe(handoff);
 });

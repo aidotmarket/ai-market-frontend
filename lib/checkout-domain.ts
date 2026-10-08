@@ -1,7 +1,7 @@
 export const checkoutDomainEnabled = () => process.env.NEXT_PUBLIC_CHECKOUT_DOMAIN_SERVICE_ENABLED === 'true';
 
-export const CHECKOUT_HANDOFF_PATH = /^\/checkout\/h\/[A-Za-z0-9_-]{43}(?![\s\S])/;
-export const validHandoffToken = (token: string) => /^[A-Za-z0-9_-]{43}(?![\s\S])/.test(token);
+export const CHECKOUT_HANDOFF_PATH = /^\/checkout\/h\/[A-Za-z0-9_-]{42}[AEIMQUYcgkosw048](?![\s\S])/;
+export const validHandoffToken = (token: string) => /^[A-Za-z0-9_-]{42}[AEIMQUYcgkosw048](?![\s\S])/.test(token);
 
 /** Accept only the canonical first-party handoff returned by the server. */
 export function checkoutContinuation(value: unknown): string | null {

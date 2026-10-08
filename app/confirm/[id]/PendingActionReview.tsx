@@ -9,6 +9,7 @@ import { startProviderOAuth } from '@/components/OAuthButtons';
 import { decidePendingAction, getPendingAction, pendingActionError, type PendingAction } from '@/api/pending-actions';
 import { checkoutBlock, checkoutContinuation, checkoutDomainEnabled, checkoutErrorCode } from '@/lib/checkout-domain';
 import Link from 'next/link';
+import { useSessionGeneration } from '@/hooks/useSessionGeneration';
 
 function Terms({ value }: { value: unknown }) {
   if (Array.isArray(value)) return <ol className="space-y-2">{value.map((item, index) => <li key={index}><Terms value={item} /></li>)}</ol>;
@@ -28,7 +29,8 @@ export default function PendingActionReview() {
   const path = `/confirm/${id}?${query.toString()}`;
   const valid = PENDING_ACTION_CONTINUATION.test(path);
   const token = query.get('t') || '';
-  const identity = `${user?.id || ''}:${accessToken || ''}:${path}`;
+  const sessionGeneration = useSessionGeneration(accessToken);
+  const identity = `${user?.id || ''}:${sessionGeneration}:${path}`;
   const currentIdentity = useRef(identity);
   currentIdentity.current = identity;
   const [review, setReview] = useState<{ identity: string; data: PendingAction } | null>(null);
@@ -81,7 +83,7 @@ export default function PendingActionReview() {
         setReview({ identity, data: result }); setError(null);
         const next = checkoutDomainEnabled() && decision === 'confirm' && result.status === 'confirmed' && !result.error_code
           && result.summary.action === 'aim.checkout.handoff.create' ? checkoutContinuation(result.result?.checkout_url) : null;
-        if (next) router.push(next);
+        if (next) router.replace(next);
       }
     } catch (cause) {
       if (currentIdentity.current === identity) {
@@ -138,7 +140,7 @@ export default function PendingActionReview() {
         </section>}
         {data?.status === 'confirmed' && <p role="status">Confirmed. This request has been completed.</p>}
         {continuation && !checkoutRefusal && <><p>Review the licence and confirm your authority at checkout.</p>
-          <Link href={continuation} prefetch={false} rel="noreferrer">Continue to checkout</Link></>}
+          <Link href={continuation} replace prefetch={false} rel="noreferrer">Continue to checkout</Link></>}
         {checkoutRefusal && <div role="alert"><p>{checkoutRefusal.message}</p>
           {checkoutRefusal.webPath && <Link href={checkoutRefusal.webPath}>Review listing</Link>}</div>}
         {data?.status === 'denied' && <p role="status">Declined. This request will not be carried out.</p>}

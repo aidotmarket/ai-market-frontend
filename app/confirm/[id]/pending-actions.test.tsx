@@ -2,10 +2,10 @@
 import { act, cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { afterEach, beforeEach, expect, it, vi } from 'vitest';
 const mocks = vi.hoisted(() => ({
-  get: vi.fn(), decide: vi.fn(), push: vi.fn(), provider: vi.fn(), query: new URLSearchParams(), id: '11111111-1111-4111-8111-111111111111',
+  get: vi.fn(), decide: vi.fn(), push: vi.fn(), replace: vi.fn(), provider: vi.fn(), query: new URLSearchParams(), id: '11111111-1111-4111-8111-111111111111',
   auth: { hydrated: true, isLoading: false, user: { id: 'owner', totp_enabled: true }, token: 'session' } as { hydrated: boolean; isLoading: boolean; user: Pick<User, 'id'> & Partial<User> | null; token: string | null },
 }));
-vi.mock('next/navigation', () => ({ useRouter: () => ({ push: mocks.push }), useParams: () => ({ id: mocks.id }), useSearchParams: () => mocks.query }));
+vi.mock('next/navigation', () => ({ useRouter: () => ({ push: mocks.push, replace: mocks.replace }), useParams: () => ({ id: mocks.id }), useSearchParams: () => mocks.query }));
 vi.mock('@/components/OAuthButtons', () => ({ startProviderOAuth: mocks.provider }));
 vi.mock('@/store/auth', () => ({ useAuthStore: () => mocks.auth }));
 vi.mock('@/api/pending-actions', async (importOriginal) => ({ ...await importOriginal<typeof import('@/api/pending-actions')>(), getPendingAction: mocks.get, decidePendingAction: mocks.decide }));
@@ -247,7 +247,7 @@ it('continues straight from confirmed handoff to browser checkout without anothe
   mocks.get.mockResolvedValue({ ...checkoutAction, result: null });
   mocks.decide.mockResolvedValue({ ...checkoutAction, status: 'confirmed' });
   await review(); fireEvent.click(screen.getByRole('button', { name: 'Confirm' }));
-  await waitFor(() => expect(mocks.push).toHaveBeenCalledExactlyOnceWith(`/checkout/h/${token}`));
+  await waitFor(() => expect(mocks.replace).toHaveBeenCalledExactlyOnceWith(`/checkout/h/${token}`));
   expect(mocks.get).toHaveBeenCalledOnce(); expect(mocks.decide).toHaveBeenCalledOnce();
   expect(screen.getByRole('link', { name: 'Continue to checkout' }).getAttribute('href')).toBe(`/checkout/h/${token}`);
   expect(document.querySelector('input')).toBeNull();

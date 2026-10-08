@@ -2,6 +2,8 @@
 
 import { useEffect, useState } from 'react';
 import Link from 'next/link';
+import { checkoutReplayKey, clearCheckoutReplay } from '@/lib/checkout-replay';
+import { useSessionGeneration } from '@/hooks/useSessionGeneration';
 import { useParams } from 'next/navigation';
 import { useAuthStore } from '@/store/auth';
 import { getCheckoutHandoff, type CheckoutHandoff } from '@/api/checkout';
@@ -17,33 +19,64 @@ export default function CheckoutHandoffReview() {
   const { user, token: accessToken, hydrated, isLoading } = useAuthStore();
   const enabled = checkoutDomainEnabled();
   const valid = validHandoffToken(token);
-  const identity = `${user?.id || ''}:${accessToken || ''}:${token}`;
+  const sessionGeneration = useSessionGeneration(accessToken);
+  const identity = `${user?.id || ''}:${sessionGeneration}:${token}`;
   const [review, setReview] = useState<{ identity: string; handoff: CheckoutHandoff; listing: ListingDetail | null } | null>(null);
   const [error, setError] = useState<{ identity: string; cause: unknown } | null>(null);
   const [reload, setReload] = useState(0);
+  const [expiryCheck, setExpiryCheck] = useState<{ identity: string; failed: boolean } | null>(null);
+  const [purchaseStarted, setPurchaseStarted] = useState<string | null>(null);
   const [now, setNow] = useState(() => Date.now());
   useEffect(() => {
     if (!enabled || !valid || !hydrated || isLoading || !accessToken || !user) return;
     let active = true;
-    setReview(null);
+    setReview(previous => previous?.identity === identity ? previous : null);
     setError(null);
+    setExpiryCheck(null);
     // Inspection never accepts a licence or starts a purchase.
-    getCheckoutHandoff(token).then(async handoff => {
+    getCheckoutHandoff(token).then(async inspected => {
+      let handoff = inspected;
       const listing = handoff.status === 'open' && Date.parse(handoff.expires_at) > Date.now()
         ? await getListing(encodeURIComponent(handoff.listing_id)) : null;
-      if (active) { setNow(Date.now()); setReview({ identity, handoff, listing }); }
+      if (handoff.status === 'open' && Date.parse(handoff.expires_at) <= Date.now()) {
+        handoff = await getCheckoutHandoff(token);
+      }
+      if (active) {
+        setNow(Date.now()); setReview({ identity, handoff, listing });
+      }
     }).catch(cause => { if (active) setError({ identity, cause }); });
     return () => { active = false; };
   }, [enabled, valid, hydrated, isLoading, accessToken, user, token, identity, reload]);
   const data = review?.identity === identity ? review : null;
   const failure = error?.identity === identity ? error : null;
   useEffect(() => {
+    const handoff = data?.handoff;
+    if (user && handoff?.status === 'consumed'
+      && ['finalised', 'failed', 'payment_conflict', 'refunded'].includes(handoff.checkout_status || '')) {
+      clearCheckoutReplay(checkoutReplayKey(user.id, handoff.listing_id, handoff.version_id, token));
+    }
+  }, [data, user, token]);
+  useEffect(() => {
     if (data?.handoff.status !== 'open') return;
     const remaining = Date.parse(data.handoff.expires_at) - Date.now();
     if (remaining <= 0) return;
-    const timer = setTimeout(() => setNow(Date.now()), Math.max(0, Math.min(remaining, 2_147_483_647)));
-    return () => clearTimeout(timer);
-  }, [data, now]);
+    let active = true;
+    const timer = setTimeout(async () => {
+      setExpiryCheck({ identity, failed: false });
+      try {
+        // An open inspection may now be consumed. Its original expiry is not authoritative.
+        const handoff = await getCheckoutHandoff(token);
+        if (active) {
+          setNow(Date.now());
+          setReview({ ...data, handoff });
+          setExpiryCheck(null);
+        }
+      } catch {
+        if (active) setExpiryCheck({ identity, failed: true });
+      }
+    }, Math.min(remaining, 2_147_483_647));
+    return () => { active = false; clearTimeout(timer); };
+  }, [data, identity, token]);
   const path = `/checkout/h/${token}`;
   const status = (failure?.cause as { response?: { status?: number } })?.response?.status;
   const refusal = failure?.cause instanceof AxiosError ? parseCheckoutRefusal(failure.cause) : null;
@@ -51,7 +84,7 @@ export default function CheckoutHandoffReview() {
   if (!enabled || !valid) content = <><h1>Checkout link unavailable</h1><p>Return to the listing to review checkout.</p></>;
   else if (!hydrated || isLoading) content = <p role="status">Loading checkout…</p>;
   else if (!user || !accessToken || status === 401) content = <><h1>Review checkout</h1><Link href={`/login?redirect=${encodeURIComponent(path)}`} prefetch={false}>Sign in to review checkout</Link></>;
-  else if (failure) content = <><h1>Checkout link unavailable</h1><p role="alert">{refusal?.message || 'Return to the listing or try again later.'}</p>
+  else if (failure && (!data || status === 403 || status === 404)) content = <><h1>Checkout link unavailable</h1><p role="alert">{refusal?.message || 'Return to the listing or try again later.'}</p>
     {refusal?.webPath && <Link href={refusal.webPath}>Review listing</Link>}</>;
   else if (!data) content = <p role="status">Loading checkout…</p>;
   else {
@@ -77,8 +110,15 @@ export default function CheckoutHandoffReview() {
         <p>Review the licence and confirm your authority before continuing to payment.</p>
         <BuyButton key={identity} listingId={listing.id} slug={listing.slug} price={listing.pricing.price}
           pricingType={listing.pricing.pricing_type} versionId={handoff.version_id} licenseDetails={license}
-          checkoutContext={{ handoffToken: token }} disabledReason={listing.purchase_hold_reason || (!listing.purchasable ? 'This listing is currently unavailable for purchase.' : undefined)} /></>;
+          checkoutContext={{ handoffToken: token }} onCheckoutStarted={() => setPurchaseStarted(identity)}
+          disabledReason={(expiryCheck?.identity === identity ? 'Checking checkout status before starting a purchase.' : undefined) || listing.purchase_hold_reason || (!listing.purchasable ? 'This listing is currently unavailable for purchase.' : undefined)} /></>;
     }
   }
-  return <main className="mx-auto max-w-xl space-y-6 px-6 py-12">{content}</main>;
+  return <main className="mx-auto max-w-xl space-y-6 px-6 py-12">{failure && data && status !== 401 && status !== 403 && status !== 404
+    && <p role="alert">Could not refresh checkout status. Retry the status check.</p>}
+    {expiryCheck?.identity === identity && <div role={expiryCheck.failed ? 'alert' : 'status'}>
+    {expiryCheck.failed ? 'Could not check checkout status. Retry the status check.' : 'Checking checkout status…'}
+    {purchaseStarted === identity && <p>Your purchase may have started. Keep checking the same checkout.</p>}
+    {expiryCheck.failed && <button onClick={() => setReload(value => value + 1)}>Check checkout status</button>}
+  </div>}{content}</main>;
 }
