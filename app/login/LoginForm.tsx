@@ -12,6 +12,7 @@ import TwoFactorChallenge from '@/components/TwoFactorChallenge';
 import { requestMagicLink, resendVerification } from '@/api/auth';
 import { getConnectorStatus } from '@/api/connector-oauth';
 import { saveRequestAuthReturn } from '@/lib/request-auth-return';
+import { PENDING_ACTION_CONTINUATION } from '@/lib/redirect';
 
 export default function LoginForm() {
   const router = useRouter();
@@ -61,6 +62,7 @@ export default function LoginForm() {
     if (!hydrated || !isAuthenticated || (!connectorStatusLoaded && !(aimDataEnabled() && readContinuation()))) return;
     if (searchParams.get('reauth') === 'aim-data' && readContinuation()) return;
     if (searchParams.get('reauth') === 'connector' && readConnectorContinuation()) return;
+    if (searchParams.get('reauth') === 'pending-action' && PENDING_ACTION_CONTINUATION.test(searchParams.get('redirect') || '')) return;
 
     const redirectTo = resumeAuthContinuation(searchParams.get('redirect'), '/dashboard');
     router.replace(redirectTo);

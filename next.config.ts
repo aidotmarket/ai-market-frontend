@@ -2,6 +2,13 @@ import type { NextConfig } from 'next';
 
 const nextConfig: NextConfig = {
   reactStrictMode: true,
+  async headers() {
+    return [{ source: '/confirm/:path*', headers: [
+      { key: 'Cache-Control', value: 'no-store' },
+      { key: 'Referrer-Policy', value: 'no-referrer' },
+      { key: 'Content-Security-Policy', value: "frame-ancestors 'none'" },
+    ] }];
+  },
   async redirects() {
     return [
       // Auth callbacks use apex; redirect before origin-scoped OAuth state is created.

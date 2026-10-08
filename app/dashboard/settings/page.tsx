@@ -3,6 +3,8 @@
 import { accountReauthMethod, setupRestriction, setupRefusal } from '@/lib/two-factor-policy';
 
 import { useEffect, useRef, useState } from 'react';
+import { useRouter } from 'next/navigation';
+import { PENDING_ACTION_CONTINUATION } from '@/lib/redirect';
 import { useAuthStore } from '@/store/auth';
 import { disable2FA, regenerateBackupCodes, setup2FA, SSO_MANAGED_2FA_MESSAGE, updateProfile, verify2FASetup } from '@/api/auth';
 import { getCapabilities, type CapabilityStatus } from '@/api/capabilities';
@@ -23,6 +25,7 @@ function isExpiredReauth(error: unknown): boolean {
 }
 
 export default function SettingsPage() {
+  const router = useRouter();
   const { user, refreshAuth } = useAuthStore();
   const { toast } = useToast();
 
@@ -46,6 +49,7 @@ export default function SettingsPage() {
   const [isReauthOpen, setIsReauthOpen] = useState(false);
   const [pendingReauthAction, setPendingReauthAction] = useState<ReauthAction | null>(null);
   const [setupReauthToken, setSetupReauthToken] = useState('');
+  const [enrolledForContinuation, setEnrolledForContinuation] = useState(false);
   const [sellerStatus, setSellerStatus] = useState<CapabilityStatus | null>(null);
   const settingsHeadingRef = useRef<HTMLHeadingElement>(null);
 
@@ -129,6 +133,7 @@ export default function SettingsPage() {
     setIsReauthOpen(false);
     setPendingReauthAction(null);
     setSetupReauthToken('');
+    setEnrolledForContinuation(false);
   };
 
   const closeReauthModal = () => {
@@ -175,6 +180,7 @@ export default function SettingsPage() {
 
     try {
       const res = await verify2FASetup(totpCode.trim(), reauthToken);
+      setEnrolledForContinuation(true);
       setBackupCodes(res.backup_codes);
       setBackupCodesLabel('Save these backup codes now. You will need them if you lose access to your authenticator app.');
       setTwoFactorFlow('showing_backup_codes');
@@ -211,10 +217,13 @@ export default function SettingsPage() {
   };
 
   const handleTwoFactorDone = async () => {
+    const redirect = new URLSearchParams(window.location.search).get('redirect') || '';
+    const returnToReview = enrolledForContinuation && PENDING_ACTION_CONTINUATION.test(redirect);
     setSecurityLoading(true);
     resetTwoFactorState();
     try {
       await refreshAuth();
+      if (returnToReview) router.push(redirect);
     } catch {
       toast('Failed to refresh your account state', 'error');
     } finally {

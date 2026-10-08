@@ -1,6 +1,7 @@
 'use client';
 
 import axios, { type AxiosError, type InternalAxiosRequestConfig } from 'axios';
+import { PENDING_ACTION_CONTINUATION } from '@/lib/redirect';
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000';
 
@@ -73,6 +74,10 @@ function isRefreshErrorStatus(error: unknown, statuses: readonly number[]): bool
 
 function redirectToLogin(): void {
   if (typeof window !== 'undefined' && window.location.pathname !== '/login') {
+    // Confirmation owns API admission: a flag-off 404 must stay inert, and an
+    // enabled request offers login with its validated continuation intact.
+    const path = window.location.pathname + window.location.search + window.location.hash;
+    if (PENDING_ACTION_CONTINUATION.test(path)) return;
     window.location.href = '/login';
   }
 }

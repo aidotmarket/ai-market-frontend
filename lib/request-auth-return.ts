@@ -1,10 +1,11 @@
-import { validateRedirect } from '@/lib/redirect';
+import { PENDING_ACTION_CONTINUATION, validateRedirect } from '@/lib/redirect';
 
 type Method = 'oauth' | 'email';
 const KEY = 'request_auth_return';
 const TTL = 30 * 60_000;
 
 function safeRequestPath(path?: string | null): string {
+  if (path && PENDING_ACTION_CONTINUATION.test(path)) return path;
   const validated = validateRedirect(path, '');
   if (!validated || !path?.startsWith('/') || /[\u0000-\u001f\u007f-\u009f]/u.test(validated)) return '';
   // Validate a decoded copy, but keep encoded query delimiters and values intact.
@@ -15,7 +16,7 @@ function safeRequestPath(path?: string | null): string {
     ? `${url.pathname}${url.search}${url.hash}` : '';
 }
 
-// Only a public return path is saved. Email links may open in a new tab.
+// Email links may open in a new tab. Confirmation tokens still require the owner session.
 const storage = (method: Method) => method === 'email' ? localStorage : sessionStorage;
 
 export function saveRequestAuthReturn(method: Method, path?: string | null): void {
