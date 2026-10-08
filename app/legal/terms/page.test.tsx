@@ -34,6 +34,7 @@ it('renders the full base marketplace 1.0 page on flag-off 404', async () => {
   expect(html).toContain('Effective date: July 7, 2026 · Version 1.0');
   expect(html).toContain('href="https://ai.market/legal/privacy"');
   expect(html).toContain('19.6 Notices.');
+  expect(html).toContain('id="fees" class="mt-10 space-y-4 scroll-mt-24"');
   expect(html).not.toContain('Listings without a chosen licence are offered under');
   expect(fetchMock).toHaveBeenCalledTimes(1);
 });
@@ -49,6 +50,9 @@ it('renders the verified backend marketplace 1.1 document once', async () => {
   expect(html.match(/Effective date: 2026-10-01T00:00:00Z · Version 1.1/g)).toHaveLength(1);
   expect(html).toContain('Listings without a chosen licence are offered under the ai.market Standard Data Licence with AI training permitted, and the seller accepts the ai.market Marketplace Listing Covenant for them.');
   expect(html).toContain('Privacy Policy: https://ai.market/legal/privacy');
+  expect(html).toContain('<h2 id="fees" class="scroll-mt-24">5. Commission, transaction costs, payment, and tax</h2>');
+  expect(html.match(/id="fees"/g)).toHaveLength(1);
+  expect(html).toContain('<h2>4. What the Platform is, and what it is not</h2>');
   expect(fetchMock.mock.calls[1][0]).toBe('https://api.example/api/v1/legal/terms/document');
 });
 
@@ -74,6 +78,8 @@ it('renders the hash-verified 1.2 document without old fee or hold wording', asy
   expect(html).toContain('Version 1.2');
   expect(html).toContain('48-hour post-confirmation hold');
   expect(html).toContain('seller pays the actual Stripe card processing fee');
+  expect(html).toContain('<h2 id="fees" class="scroll-mt-24">5. Commission, transaction costs, payment, and tax</h2>');
+  expect(html.match(/id="fees"/g)).toHaveLength(1);
   expect(html).not.toContain('The buyer pays the transaction costs.');
   expect(html).not.toContain('Card money is held until the refund window closes');
 });
