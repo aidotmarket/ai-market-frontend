@@ -30,7 +30,11 @@ export default async function TermsAndConditionsPage() {
 
   return <main className="mx-auto max-w-3xl px-6 py-16 lg:py-24">
     <article className="prose max-w-none text-gray-700">
-      <ReactMarkdown rehypePlugins={[rehypeSanitize]}>{markdown}</ReactMarkdown>
+      <ReactMarkdown rehypePlugins={[rehypeSanitize]} components={{
+        h2: ({ children }) => children === '5. Commission, transaction costs, payment, and tax'
+          ? <h2 id="fees" className="scroll-mt-24">{children}</h2>
+          : <h2>{children}</h2>,
+      }}>{markdown}</ReactMarkdown>
     </article>
   </main>;
 }
