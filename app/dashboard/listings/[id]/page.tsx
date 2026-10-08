@@ -19,8 +19,11 @@ export default function ListingPage({ params }: { params: Promise<{ id: string }
   const [awsConnectionId, setAwsConnectionId] = useState<string | null>(null);
   const [state, setState] = useState<'loading' | 'ready' | 'unavailable' | 'error'>('loading');
   const [retry, setRetry] = useState(0);
+  // Reload only when the signed-in account changes. A token refresh replaces the
+  // user object; reloading then remounted the panel and dropped the seller's click.
+  const userId = user?.id;
   useEffect(() => {
-    if (!hydrated || !isAuthenticated || !user) return;
+    if (!hydrated || !isAuthenticated || !userId) return;
     let current = true;
     setState('loading'); setListing(null); setGateway(false); setAwsConnectionId(null); setCloudflareConnectionId(null);
     async function load() {
@@ -59,7 +62,7 @@ export default function ListingPage({ params }: { params: Promise<{ id: string }
     }
     void load();
     return () => { current = false; };
-  }, [hydrated, isAuthenticated, user, id, retry]);
+  }, [hydrated, isAuthenticated, userId, id, retry]);
   if (!hydrated) return <p>Loading your listing…</p>;
   if (!isAuthenticated || !user) return <p><Link href="/login" className="underline">Sign in</Link> to manage your listing.</p>;
   if (state === 'loading') return <p>Loading your listing…</p>;

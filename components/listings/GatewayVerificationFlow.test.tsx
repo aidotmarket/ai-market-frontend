@@ -117,6 +117,30 @@ describe('gateway seller verification flow', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Back to verification' }));
     expect(gateway.startGatewayVerification).not.toHaveBeenCalled();
   });
+  it('explains an unavailable card surface next to the paid start and shows progress', async () => {
+    let reject!: (cause: unknown) => void;
+    vi.mocked(payin.getDataVerificationPayInReadiness).mockReturnValue(new Promise((_, no) => { reject = no; }));
+    const scroll = vi.fn();
+    Element.prototype.scrollIntoView = scroll;
+    await getQuote(); acknowledge();
+    fireEvent.click(screen.getByRole('button', { name: 'Start paid verification' }));
+    expect(await screen.findByText('Checking your payment method…')).toBeTruthy();
+    await act(async () => { reject({ response: { status: 404, data: { detail: { code: 'PAYIN_ONBOARDING_DISABLED', message: 'Not found' } } } }); });
+    const alert = await screen.findByRole('alert');
+    expect(alert.textContent).toBe('Card setup for this paid service is unavailable for your account. Contact support if you think this is wrong.');
+    expect(scroll).toHaveBeenCalled();
+    expect(document.activeElement).toBe(alert);
+    expect(screen.queryByText('Checking your payment method…')).toBeNull();
+    expect(gateway.startGatewayVerification).not.toHaveBeenCalled();
+  });
+  it('does not announce a payment check while only refreshing the quote', async () => {
+    await getQuote();
+    let resolve!: (value: typeof quote) => void;
+    vi.mocked(gateway.getGatewayVerificationProbe).mockReturnValue(new Promise(ok => { resolve = ok; }));
+    fireEvent.click(screen.getByRole('button', { name: 'Check again' }));
+    expect(screen.queryByText('Checking your payment method…')).toBeNull();
+    await act(async () => { resolve(quote); });
+  });
   it('resumes the persisted paid command after hosted card setup', async () => {
     vi.mocked(payin.getDataVerificationPayInReadiness).mockResolvedValueOnce({ version: 'data_verification_payin_readiness_v1', state: 'setup_required', can_start_setup: true, can_replace_payment_method: false, message: 'ignored' });
     await getQuote(); acknowledge();

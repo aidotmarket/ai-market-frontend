@@ -92,6 +92,8 @@ export default function GatewayVerificationFlow({ listingId, sellerId, verifier,
   const [runNowSecret, setRunNowSecret] = useState<string | null>(null);
   const [copied, setCopied] = useState<'token' | 'secret' | null>(null);
   const copiedTimer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
+  const errorRef = useRef<HTMLParagraphElement>(null);
+  const [paying, setPaying] = useState(false);
   async function copyValue(kind: 'token' | 'secret', value: string) {
     await navigator.clipboard.writeText(value);
     if (!mounted.current) return;
@@ -241,6 +243,13 @@ export default function GatewayVerificationFlow({ listingId, sellerId, verifier,
     return () => { mounted.current = false; clearTimeout(copiedTimer.current); };
   }, [storageKey]);
 
+  useEffect(() => {
+    // The panel is long; bring a new error into view next to where the seller is.
+    if (!error) return;
+    errorRef.current?.scrollIntoView?.({ block: 'center' });
+    errorRef.current?.focus?.();
+  }, [error]);
+
   async function checkStatus() {
     const saved = attempt.current;
     if (!saved) return;
@@ -296,6 +305,7 @@ export default function GatewayVerificationFlow({ listingId, sellerId, verifier,
   }
   function paidStart() {
     if (!completeDescription) return;
+    setPaying(true);
     void run(async () => {
       const stored = window.localStorage.getItem(storageKey);
       const saved: Attempt | null = stored ? JSON.parse(stored) : attempt.current;
@@ -309,7 +319,15 @@ export default function GatewayVerificationFlow({ listingId, sellerId, verifier,
         publication_terms_acknowledged: true, corpus_consent_acknowledged: true,
       };
       save({ ...saved, startCommand: command });
-      const readiness = await getDataVerificationPayInReadiness();
+      let readiness;
+      try { readiness = await getDataVerificationPayInReadiness(); }
+      catch (cause) {
+        if (gatewayVerificationError(cause).status === 404) {
+          if (mounted.current) setError('Card setup for this paid service is unavailable for your account. Contact support if you think this is wrong.');
+          return;
+        }
+        throw cause;
+      }
       if (!mounted.current) return;
       if (readiness.state === 'setup_required' || readiness.state === 'setup_pending') { setSetup(true); return; }
       if (readiness.state !== 'ready') { setError('Your payment method is not ready. Please try again later.'); return; }
@@ -336,7 +354,7 @@ export default function GatewayVerificationFlow({ listingId, sellerId, verifier,
       if (!mounted.current) return;
       save({ ...attempt.current!, epochId: response.data.verification_id });
       await checkStatus();
-    });
+    }).finally(() => { if (mounted.current) setPaying(false); });
   }
   function lifecycle(action: GatewayVerificationAction) {
     void run(async () => {
@@ -371,7 +389,7 @@ export default function GatewayVerificationFlow({ listingId, sellerId, verifier,
   return <section className="space-y-5 rounded-xl border border-gray-200 bg-white p-6" aria-labelledby="gateway-verification-heading">
     <h2 id="gateway-verification-heading" className="text-xl font-semibold">{probe?.state === 'complete' && probe.quote_id ? 'Verify this data' : epoch || attempt.current?.epochId || (probe && probe.state !== 'queued') ? 'Data verification' : 'Check verification availability'}</h2>
     <p>{aws ? 'Check your data in your own AWS account, then review a quote. The check and quote do not need a card. Data values stay in your AWS account.' : cloudflare ? 'Check your data in your own Cloudflare account, then review a quote. The check and quote do not need a card. Data values stay in your Cloudflare account.' : 'Check your data in your own gateway, then review a quote. The check and quote are free and do not need a card. Data values stay in your gateway.'}</p>
-    {error && <p role="alert">{error}</p>}
+    {error && <p ref={errorRef} role="alert" tabIndex={-1} className="rounded-lg bg-red-50 p-3 text-red-800">{error}</p>}
     {aws && (probe?.refusal === 'aws_source_too_large' || error === verificationRefusalCopy('aws_source_too_large')) && <p><Link href="/dashboard/gateways" className="underline">Set up your own AIM Data gateway</Link> with a seller-owned S3 mount using Mountpoint for Amazon S3 or rclone.</p>}
     {aws && <>
       <h3 className="font-semibold">AWS verifier</h3>
@@ -449,6 +467,7 @@ export default function GatewayVerificationFlow({ listingId, sellerId, verifier,
       <label className="block"><input type="checkbox" checked={publicationAck} onChange={e => setPublicationAck(e.target.checked)} /> I understand the charge and that I can publish all findings unedited or decline publication after reviewing them.</label>
       <label className="block"><input type="checkbox" checked={corpusAck} onChange={e => setCorpusAck(e.target.checked)} /> I agree that the verification record and approved summary statistics will be retained in ai.market’s verification records, including if I decline publication.</label>
       <button className={buttonClass} disabled={busy || !publicationAck || !corpusAck || !completeDescription} onClick={paidStart}>Start paid verification</button>
+      {busy && paying && <p role="status" className="text-gray-600">Checking your payment method…</p>}
     </>}
     {setup && <><DataVerificationPaymentMethod returnToListing={{ listingId, sellerId }} /><button className={buttonClass} onClick={() => setSetup(false)}>Back to verification</button><p>After adding your card, return here and choose Start paid verification to continue.</p></>}
     {epoch && <>
