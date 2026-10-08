@@ -1,10 +1,11 @@
 import { api } from './client';
 import axios from 'axios';
-import { sha256 } from '@noble/hashes/sha2.js';
-import { bytesToHex } from '@noble/hashes/utils.js';
+import { sessionCsrf as checkoutCsrf } from '@/lib/session-csrf';
 import { useAuthStore } from '@/store/auth';
 import { checkoutDomainEnabled, validHandoffToken } from '@/lib/checkout-domain';
 import type { CheckoutCreateResponse, CheckoutVerifyResponse, LicenseAcceptanceFields } from '@/types';
+
+export { checkoutCsrf };
 
 export type DomainCheckoutOptions =
   | { handoffToken: string; checkoutRequestId?: never }
@@ -33,10 +34,6 @@ const web = axios.create({
   withCredentials: true,
   headers: { 'Content-Type': 'application/json' },
 });
-
-export function checkoutCsrf(accessToken: string): string {
-  return bytesToHex(sha256(new TextEncoder().encode(accessToken)));
-}
 
 function session() {
   const token = useAuthStore.getState().token;

@@ -1,4 +1,3 @@
-import { createHash } from 'node:crypto';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 const mocks = vi.hoisted(() => ({ get: vi.fn(), post: vi.fn(), token: 'signed-session-credential' }));
 vi.mock('axios', () => ({ default: { create: () => ({ get: mocks.get, post: mocks.post }) } }));
@@ -7,6 +6,7 @@ import { decidePendingAction, getPendingAction, listPendingActions, pendingActio
 
 const id = '11111111-1111-4111-8111-111111111111';
 const token = 'a'.repeat(42) + 'A';
+const sessionDigest = '3cf0a84f5ca58f2f3724c254c3e593be5694d0a6f2c03cb8d240a9a39434591b';
 const action: PendingAction = {
   id, request_id: '22222222-2222-4222-8222-222222222222', status: 'pending_review',
   summary: { action: 'confirm_receipt', price_cents: 50001, currency: 'USD', licence: { sha256: 'b'.repeat(64) } },
@@ -17,16 +17,16 @@ beforeEach(() => {
   mocks.get.mockResolvedValue({ data: action }); mocks.post.mockResolvedValue({ data: { ...action, status: 'confirmed' } });
 });
 
-describe('pending-actions contract', () => {
+describe.each(['false', 'true'])('pending-actions contract with checkout flag %s', flag => {
+  beforeEach(() => vi.stubEnv('NEXT_PUBLIC_CHECKOUT_DOMAIN_SERVICE_ENABLED', flag));
   it('matches the backend SHA-256 domain and signed access credential exactly', () => {
-    const expected = createHash('sha256').update(Buffer.from('aim.pending.csrf.v1\0')).update(mocks.token).digest('hex');
-    expect(pendingActionCsrf(mocks.token)).toBe(expected);
+    expect(pendingActionCsrf(mocks.token)).toBe(sessionDigest);
   });
 
   it('loads exact summary and hash with token in query and CSRF in header only', async () => {
     expect(await getPendingAction(id, token)).toEqual(action);
     expect(mocks.get).toHaveBeenCalledExactlyOnceWith(`/pending-actions/${id}`, {
-      params: { t: token }, headers: { Authorization: `Bearer ${mocks.token}`, 'X-CSRF-Token': pendingActionCsrf(mocks.token) },
+      params: { t: token }, headers: { Authorization: `Bearer ${mocks.token}`, 'X-CSRF-Token': sessionDigest },
     });
     expect(mocks.post).not.toHaveBeenCalled();
   });
@@ -34,7 +34,7 @@ describe('pending-actions contract', () => {
   it('confirms using precisely token, csrf and the displayed backend summary hash', async () => {
     expect((await decidePendingAction(id, token, 'confirm', action.summary_hash)).status).toBe('confirmed');
     expect(mocks.post).toHaveBeenCalledExactlyOnceWith(`/pending-actions/${id}/confirm`, {
-      token, csrf: pendingActionCsrf(mocks.token), summary_hash: action.summary_hash,
+      token, csrf: sessionDigest, summary_hash: action.summary_hash,
     }, { headers: { Authorization: `Bearer ${mocks.token}` } });
   });
 
@@ -42,7 +42,7 @@ describe('pending-actions contract', () => {
     mocks.post.mockResolvedValue({ data: { ...action, status: 'denied' } });
     expect((await decidePendingAction(id, token, 'decline', action.summary_hash)).status).toBe('denied');
     expect(mocks.post).toHaveBeenCalledExactlyOnceWith(`/pending-actions/${id}/decline`, {
-      token, csrf: pendingActionCsrf(mocks.token),
+      token, csrf: sessionDigest,
     }, { headers: { Authorization: `Bearer ${mocks.token}` } });
   });
 
@@ -50,7 +50,7 @@ describe('pending-actions contract', () => {
     mocks.get.mockResolvedValue({ data: [action] });
     expect(await listPendingActions()).toEqual([action]);
     expect(mocks.get).toHaveBeenCalledExactlyOnceWith('/pending-actions', {
-      params: { status: 'pending_review' }, headers: { Authorization: `Bearer ${mocks.token}`, 'X-CSRF-Token': pendingActionCsrf(mocks.token) },
+      params: { status: 'pending_review' }, headers: { Authorization: `Bearer ${mocks.token}`, 'X-CSRF-Token': sessionDigest },
     });
   });
 
@@ -86,15 +86,4 @@ it.each([
 ] as const)('maps backend %s %s to %s', (status, detail, kind) => {
   expect(pendingActionError({ response: { status, data: { detail } } })).toBe(kind);
 });
-
-
 afterEach(() => vi.unstubAllEnvs());
-it('uses the new browser contract CSRF digest when checkout is enabled', async () => {
-  vi.stubEnv('NEXT_PUBLIC_CHECKOUT_DOMAIN_SERVICE_ENABLED', 'true');
-  const digest = createHash('sha256').update(mocks.token).digest('hex');
-  expect(pendingActionCsrf(mocks.token)).toBe(digest);
-  await getPendingAction(id, token);
-  expect(mocks.get.mock.lastCall?.[1].headers['X-CSRF-Token']).toBe(digest);
-  await decidePendingAction(id, token, 'confirm', action.summary_hash);
-  expect(mocks.post.mock.lastCall?.[1].csrf).toBe(digest);
-});

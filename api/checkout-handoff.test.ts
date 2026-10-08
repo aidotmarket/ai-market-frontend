@@ -1,4 +1,3 @@
-import { createHash } from 'node:crypto';
 import { afterEach, beforeEach, expect, it, vi } from 'vitest';
 
 const mocks = vi.hoisted(() => ({ get: vi.fn(), post: vi.fn(), legacyPost: vi.fn(), token: 'web-session' as string | null }));
@@ -9,6 +8,7 @@ import { checkoutCsrf, createCheckout, getCheckoutHandoff, type CheckoutHandoff 
 
 const token = 'a'.repeat(42) + 'A';
 const requestId = '11111111-1111-4111-8111-111111111111';
+const sessionDigest = 'b70ecc869f6b960f4974d6393c8d77c144efb35447d2a0a8b801c37f6644ec37';
 const acceptance = { accept_license_sha256: 'b'.repeat(64), accept_covenant_sha256: 'c'.repeat(64), accept_rider_sha256: null,
   authority_confirmed: true as const, typed_name: 'Ada Buyer', signer_title: 'Director', business_legal_name: 'Buyer Ltd', jurisdiction: 'GB' };
 const handoff: CheckoutHandoff = { handoff_id: requestId, listing_id: 'listing', version_id: 'version', status: 'open',
@@ -21,20 +21,20 @@ beforeEach(() => {
 });
 afterEach(() => vi.unstubAllEnvs());
 
-it('uses the contract SHA-256 of the session credential', () => {
-  expect(checkoutCsrf('web-session')).toBe(createHash('sha256').update('web-session').digest('hex'));
+it('uses the backend domain-separated session CSRF vector', () => {
+  expect(checkoutCsrf('web-session')).toBe(sessionDigest);
 });
 it('inspects only by GET with the first-party session and CSRF header', async () => {
   expect(await getCheckoutHandoff(token)).toEqual(handoff);
   expect(mocks.get).toHaveBeenCalledExactlyOnceWith(`/checkout-handoffs/${token}`, {
-    headers: { Authorization: 'Bearer web-session', 'X-CSRF-Token': checkoutCsrf('web-session') },
+    headers: { Authorization: 'Bearer web-session', 'X-CSRF-Token': sessionDigest },
   });
   expect(mocks.post).not.toHaveBeenCalled(); expect(mocks.legacyPost).not.toHaveBeenCalled();
 });
 it('posts only the contract handoff and human acceptance fields with session CSRF', async () => {
   expect(await createCheckout('listing', 'version', acceptance, { handoffToken: token })).toMatchObject({ order_id: 'order', checkout_url: null });
   expect(mocks.post).toHaveBeenCalledExactlyOnceWith('/checkout/create', {
-    listing_id: 'listing', version_id: 'version', handoff_token: token, ...acceptance, csrf: checkoutCsrf('web-session'),
+    listing_id: 'listing', version_id: 'version', handoff_token: token, ...acceptance, csrf: sessionDigest,
   }, { headers: { Authorization: 'Bearer web-session' } });
   expect(mocks.legacyPost).not.toHaveBeenCalled();
 });
