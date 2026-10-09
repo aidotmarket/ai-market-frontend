@@ -5,12 +5,15 @@ import { PENDING_ACTION_CONTINUATION } from '@/lib/redirect';
 
 export { pendingActionCsrf };
 
+export type { SellerBatchSummary, SellerBatchItemSummary } from '@/lib/seller-batch';
+import type { SellerBatchSummary } from '@/lib/seller-batch';
+
 export type PendingActionStatus = 'pending_review' | 'confirmed' | 'denied' | 'expired' | 'failed';
 export interface PendingAction {
   id: string;
   request_id: string;
   status: PendingActionStatus;
-  summary: Record<string, unknown>;
+  summary: Record<string, unknown> | SellerBatchSummary;
   summary_hash: string;
   expires_at: string;
   result: Record<string, unknown> | null;
