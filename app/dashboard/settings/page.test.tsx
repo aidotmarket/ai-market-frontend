@@ -7,9 +7,11 @@ import axios from 'axios';
 import SettingsPage from './page';
 import { useAuthStore } from '@/store/auth';
 import type { User } from '@/types';
+import { checkCompanySignIn } from '@/lib/company-sign-in';
 import { getConnectorGrants, getConnectorStatus } from '@/api/connector-oauth';
 
 const authApi = vi.hoisted(() => ({
+  getMe: vi.fn(), companySetup: vi.fn(), companyVerify: vi.fn(), companyRecover: vi.fn(),
   disable2FA: vi.fn(),
   regenerateBackupCodes: vi.fn(),
   setup2FA: vi.fn(),
@@ -22,10 +24,13 @@ const authApi = vi.hoisted(() => ({
 const capabilitiesApi = vi.hoisted(() => ({
   getCapabilities: vi.fn(),
 }));
+const companySignIn = vi.hoisted(() => ({ start: vi.fn() }));
+vi.mock('@/lib/company-sign-in', async original => ({ ...await original<typeof import('@/lib/company-sign-in')>(), startCompanySignIn: companySignIn.start }));
 const navigation = vi.hoisted(() => ({ push: vi.fn() }));
 vi.mock('next/navigation', () => ({ useRouter: () => navigation }));
 
 vi.mock('@/api/auth', async (importOriginal) => ({ ...await importOriginal<typeof import('@/api/auth')>(), ...authApi }));
+vi.mock('@/api/company-authenticator', async original => ({ ...await original<typeof import('@/api/company-authenticator')>(), setupCompanyAuthenticator: authApi.companySetup, verifyCompanyAuthenticator: authApi.companyVerify, recoverCompanyAuthenticator: authApi.companyRecover }));
 vi.mock('@/api/capabilities', () => capabilitiesApi);
 vi.mock('@/api/connector-oauth', () => ({ getConnectorStatus: vi.fn(), getConnectorGrants: vi.fn(), revokeConnectorGrant: vi.fn() }));
 vi.mock('@/components/Toast', () => ({
@@ -400,4 +405,127 @@ describe('SettingsPage capability refresh', () => {
         .toHaveBeenCalledWith('fresh-settings-token', '123456');
     }
   );
+});
+
+
+describe('Company settings enrollment', () => {
+  beforeEach(() => { vi.clearAllMocks(); useAuthStore.setState({ user, token: 'session', refreshAuth: vi.fn().mockResolvedValue(undefined) }); });
+  afterEach(() => { cleanup(); vi.unstubAllEnvs(); window.history.replaceState(null, '', '/'); });
+it('shows only the new server-eligible passwordless company enrollment and preserves legacy APIs', async () => {
+  useAuthStore.setState({ user: { ...user, auth_methods: ['oidc'], sso_enforced: true, two_factor_setup_eligible: true,
+    seller_binding_factor_readiness: { code: 'SECOND_FACTOR_ENROLLMENT_REQUIRED', path: '/dashboard/settings' } } });
+  authApi.companySetup.mockResolvedValue({ secret: 'COMPANYSECRET', qr_uri: 'otpauth://fixture', expires_in: 600 });
+  render(<SettingsPage />);
+  expect(screen.queryByRole('button', { name: 'Enable two-factor authentication' })).toBeNull();
+  fireEvent.click(screen.getByRole('button', { name: 'Set up company authenticator' }));
+  await screen.findByText('COMPANYSECRET');
+  expect(authApi.setup2FA).not.toHaveBeenCalled(); expect(authApi.submitReauth).not.toHaveBeenCalled();
+});
+it('does not offer company setup when readiness is present but the enrollment flag is off', async () => {
+  useAuthStore.setState({ user: { ...user, auth_methods: ['oidc'], sso_enforced: true, two_factor_setup_eligible: false,
+    two_factor_setup_reason: 'two_factor_managed_by_sso', seller_binding_factor_readiness: { code: 'SECOND_FACTOR_ENROLLMENT_REQUIRED', path: '/dashboard/settings' } } });
+  render(<SettingsPage />);
+  expect(screen.queryByRole('button', { name: 'Set up company authenticator' })).toBeNull();
+  expect(screen.queryByRole('button', { name: 'Enable two-factor authentication' })).toBeNull();
+  expect(authApi.companySetup).not.toHaveBeenCalled();
+});
+
+it('preserves password-bearing enforced-company flag-off setup request shapes', async () => {
+  useAuthStore.setState({ user: { ...user, sso_enforced: true, two_factor_setup_eligible: true,
+    seller_binding_factor_readiness: { code: 'SECOND_FACTOR_ENROLLMENT_REQUIRED', path: '/dashboard/settings' } } });
+  authApi.setup2FA.mockResolvedValue({ secret: 'LEGACY', qr_uri: 'otpauth://fixture', expires_in: 600 });
+  authApi.submitReauth.mockResolvedValue({ token: 'legacy-proof' });
+  render(<SettingsPage />);
+  expect(screen.queryByRole('button', { name: 'Set up company authenticator' })).toBeNull();
+  fireEvent.click(screen.getByRole('button', { name: 'Enable two-factor authentication' }));
+  const dialog = await screen.findByRole('dialog');
+  fireEvent.change(within(dialog).getByLabelText('Password'), { target: { value: 'password' } });
+  fireEvent.click(within(dialog).getByRole('button', { name: 'Continue' }));
+  await waitFor(() => expect(authApi.setup2FA).toHaveBeenCalledExactlyOnceWith('legacy-proof'));
+  expect(authApi.companySetup).not.toHaveBeenCalled();
+});
+it('switches password-bearing users to strict company setup only on backend CSRF refusal', async () => {
+  useAuthStore.setState({ user: { ...user, sso_enforced: true, two_factor_setup_eligible: true } });
+  authApi.setup2FA.mockRejectedValueOnce(Object.assign(new AxiosError('csrf'), { response: { status: 403, data: { detail: 'CSRF_REQUIRED' } } }));
+  authApi.submitReauth.mockResolvedValue({ token: 'legacy-proof' });
+  render(<SettingsPage />);
+  fireEvent.click(screen.getByRole('button', { name: 'Enable two-factor authentication' }));
+  const dialog = await screen.findByRole('dialog');
+  fireEvent.change(within(dialog).getByLabelText('Password'), { target: { value: 'password' } });
+  fireEvent.click(within(dialog).getByRole('button', { name: 'Continue' }));
+  await screen.findByRole('button', { name: 'Set up company authenticator' });
+  expect(authApi.companySetup).not.toHaveBeenCalled();
+});
+
+it('recovers an enrolled company authenticator and re-enrolls with the retained company session', async () => {
+  const company = { ...user, sso_enforced: true, auth_methods: ['oidc'], totp_enabled: true, two_factor_setup_eligible: false };
+  useAuthStore.setState({ user: company, refreshAuth: vi.fn().mockImplementation(async () => {
+    useAuthStore.setState({ token: 'refreshed-after-disable', user: { ...company, totp_enabled: false, two_factor_setup_eligible: true,
+      seller_binding_factor_readiness: { code: 'SECOND_FACTOR_ENROLLMENT_REQUIRED', path: '/dashboard/settings' } } });
+  }) });
+  authApi.companyRecover.mockResolvedValue({ message: '2FA disabled' });
+  authApi.companySetup.mockResolvedValue({ secret: 'NEWSECRET', qr_uri: 'otpauth://fixture', expires_in: 600 });
+  authApi.companyVerify.mockResolvedValue({ backup_codes: ['new-backup'] });
+  render(<SettingsPage />);
+  fireEvent.change(screen.getByLabelText('Backup code'), { target: { value: 'old-backup' } });
+  fireEvent.click(screen.getByRole('button', { name: 'Disable lost authenticator' }));
+  fireEvent.click(await screen.findByRole('button', { name: 'Set up company authenticator' }));
+  await screen.findByText('NEWSECRET');
+  fireEvent.change(screen.getByLabelText('Authenticator code'), { target: { value: '654321' } });
+  fireEvent.click(screen.getByRole('button', { name: 'Verify and enable' }));
+  await screen.findByText('new-backup');
+  expect(authApi.companyRecover).toHaveBeenCalledExactlyOnceWith('old-backup');
+  expect(authApi.companyVerify).toHaveBeenCalledExactlyOnceWith('654321');
+  expect(authApi.disable2FA).not.toHaveBeenCalled(); expect(authApi.submitReauth).not.toHaveBeenCalled();
+});
+
+it.each([
+  { methods: ['password', 'oidc'], route: 'popup' }, { methods: ['oidc'], route: 'popup' },
+  { methods: ['password', 'oidc'], route: 'external check' }, { methods: ['oidc'], route: 'external check' },
+])('stale $route company Settings session $methods refreshes eligibility before reaching QR setup and readiness continuation', async ({ methods, route }) => {
+  vi.stubEnv('NEXT_PUBLIC_ORG_SSO_WEB_RETURN_ENABLED', 'true');
+  const path = `/confirm/11111111-1111-4111-8111-111111111111?t=${'a'.repeat(42)}A`;
+  window.history.replaceState(null, '', `/dashboard/settings?redirect=${encodeURIComponent(path)}#security`);
+  const company: User = { ...user, auth_methods: methods, sso_enforced: true, two_factor_setup_eligible: false,
+    two_factor_setup_reason: 'two_factor_managed_by_sso',
+    seller_binding_factor_readiness: { code: 'SECOND_FACTOR_ENROLLMENT_REQUIRED', path: '/dashboard/settings' } };
+  useAuthStore.setState({ user: company });
+  const refresh = vi.fn().mockImplementation(async () => { useAuthStore.setState({ token: 'fresh-company' }); });
+  useAuthStore.setState({ refreshAuth: refresh });
+  authApi.getMe.mockResolvedValue({ ...company, two_factor_setup_eligible: true });
+  authApi.companySetup.mockImplementation(async () => {
+    expect(authApi.getMe).toHaveBeenCalledOnce();
+    expect(useAuthStore.getState().user?.two_factor_setup_eligible).toBe(true);
+    return { secret: 'FRESHSECRET', qr_uri: 'otpauth://fixture', expires_in: 600 };
+  });
+  authApi.companyVerify.mockResolvedValue({ backup_codes: ['new-backup'] });
+  render(<SettingsPage />);
+  expect(screen.getByLabelText('Company sign-in ID')).toBeTruthy();
+  expect(authApi.companySetup).not.toHaveBeenCalled();
+  if (route === 'popup') {
+    companySignIn.start.mockImplementation(() => checkCompanySignIn());
+    fireEvent.change(screen.getByLabelText('Company sign-in ID'), { target: { value: 'company-id' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Sign in through your company' }));
+  } else fireEvent.click(screen.getByRole('button', { name: 'Check company sign-in' }));
+  await screen.findByText('FRESHSECRET');
+  if (route === 'popup') expect(companySignIn.start).toHaveBeenCalledExactlyOnceWith('company-id', '/dashboard/settings');
+  expect(refresh).toHaveBeenCalledOnce();
+  fireEvent.change(screen.getByLabelText('Authenticator code'), { target: { value: '123456' } });
+  fireEvent.click(screen.getByRole('button', { name: 'Verify and enable' }));
+  await screen.findByText('new-backup');
+  expect(navigation.push).not.toHaveBeenCalled();
+  fireEvent.click(screen.getByRole('button', { name: 'I saved my backup codes' }));
+  await waitFor(() => expect(navigation.push).toHaveBeenCalledExactlyOnceWith(path));
+  expect(authApi.setup2FA).not.toHaveBeenCalled(); expect(authApi.submitReauth).not.toHaveBeenCalled();
+});
+it('flag-on company sign-in cannot enroll while refreshed server eligibility stays false', async () => {
+  vi.stubEnv('NEXT_PUBLIC_ORG_SSO_WEB_RETURN_ENABLED', 'true');
+  const company = { ...user, auth_methods: ['oidc'], sso_enforced: true, two_factor_setup_eligible: false };
+  useAuthStore.setState({ user: company }); authApi.getMe.mockResolvedValue(company);
+  render(<SettingsPage />);
+  fireEvent.click(screen.getByRole('button', { name: 'Check company sign-in' }));
+  await screen.findByText('Sign in again through your company, then restart setup.');
+  expect(authApi.companySetup).not.toHaveBeenCalled();
+});
+
 });

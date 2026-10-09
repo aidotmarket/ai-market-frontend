@@ -5,6 +5,9 @@ import { useParams, useRouter, useSearchParams } from 'next/navigation';
 import { useAuthStore } from '@/store/auth';
 import { PENDING_ACTION_CONTINUATION } from '@/lib/redirect';
 import { hasRequiredReviewContent, safeLicenseUrl } from '@/lib/pending-action-review';
+import CompanySignIn from '@/components/CompanySignIn';
+import { companySignInEnabled } from '@/lib/company-sign-in';
+import ReauthModal from '@/app/dashboard/settings/ReauthModal';
 import { startProviderOAuth } from '@/components/OAuthButtons';
 import { decidePendingAction, getPendingAction, pendingActionError, type PendingAction } from '@/api/pending-actions';
 import { checkoutBlock, checkoutContinuation, checkoutDomainEnabled, checkoutErrorCode } from '@/lib/checkout-domain';
@@ -35,8 +38,10 @@ export default function PendingActionReview() {
   currentIdentity.current = identity;
   const [review, setReview] = useState<{ identity: string; data: PendingAction } | null>(null);
   const [error, setError] = useState<{ identity: string; kind: ErrorKind } | null>(null);
+  const [authenticatorOpen, setAuthenticatorOpen] = useState(false);
   const [busy, setBusy] = useState(false);
   const [checkoutFailure, setCheckoutFailure] = useState<{ identity: string; block: NonNullable<ReturnType<typeof checkoutBlock>> } | null>(null);
+  const [reload, setReload] = useState(0);
   const [reauthError, setReauthError] = useState('');
   const submitting = useRef(false);
   const data = review?.identity === identity ? review.data : null;
@@ -58,7 +63,7 @@ export default function PendingActionReview() {
       if (active) setReview({ identity, data });
     }).catch((cause) => { if (active) setError({ identity, kind: pendingActionError(cause) }); });
     return () => { active = false; };
-  }, [hydrated, isLoading, valid, id, token, identity]);
+  }, [hydrated, isLoading, valid, id, token, identity, reload]);
 
   useEffect(() => {
     if (!data || data.status !== 'pending_review') return;
@@ -72,19 +77,21 @@ export default function PendingActionReview() {
     return () => clearTimeout(timer);
   }, [data, identity]);
 
-  const decide = async (decision: 'confirm' | 'decline') => {
+  const decide = async (decision: 'confirm' | 'decline', reauthToken?: string) => {
     if (!data || data.status !== 'pending_review' || submitting.current || Date.parse(data.expires_at) <= Date.now()) return;
-    if (decision === 'confirm' && (kind || !hasRequiredReviewContent(data.summary))) return;
+    if (decision === 'confirm' && ((kind && !(kind === 'second_factor' && reauthToken)) || !hasRequiredReviewContent(data.summary))) return;
+    if (decision === 'confirm' && user?.sso_enforced && user.totp_enabled && !reauthToken) { setAuthenticatorOpen(true); return; }
     submitting.current = true;
     setBusy(true);
     try {
-      const result = await decidePendingAction(id, token, decision, data.summary_hash);
+      const result = await decidePendingAction(id, token, decision, data.summary_hash, ...(reauthToken ? [reauthToken] : []));
       if (currentIdentity.current === identity) {
         setReview({ identity, data: result }); setError(null);
         const next = checkoutDomainEnabled() && decision === 'confirm' && result.status === 'confirmed' && !result.error_code
           && result.summary.action === 'aim.checkout.handoff.create' ? checkoutContinuation(result.result?.checkout_url) : null;
         if (next) router.replace(next);
       }
+
     } catch (cause) {
       if (currentIdentity.current === identity) {
         const detail = (cause as { response?: { data?: { detail?: { web_path?: unknown } } } })?.response?.data?.detail;
@@ -97,11 +104,14 @@ export default function PendingActionReview() {
 
   // /auth/me reports the actual provider session. Linked account methods and
   // primary_auth are not evidence of how this session signed in.
+  const companyLogin = companySignInEnabled() && user?.sso_enforced && !user.two_factor_provider && kind === 'login';
   const provider = user?.two_factor_provider;
   const enroll = kind === 'enrollment' || (kind === 'second_factor' && !provider && !user?.totp_enabled);
   const login = async () => {
     if (!valid) return;
-    if (enroll) {
+    if (kind === 'second_factor' && user?.sso_enforced && user.totp_enabled) {
+      setAuthenticatorOpen(true);
+    } else if (enroll) {
       router.push(`/dashboard/settings?redirect=${encodeURIComponent(path)}#security`);
     } else if (provider === 'google' || provider === 'github') {
       setReauthError('');
@@ -117,6 +127,10 @@ export default function PendingActionReview() {
   const actionable = data?.status === 'pending_review' && !expired && !notFound && kind !== 'unavailable' && !checkoutRefusal;
 
   return <main className="mx-auto max-w-xl space-y-6 px-6 py-16">
+    <ReauthModal key={identity} isOpen={authenticatorOpen && !!data && data.status === 'pending_review'} method="totp" onRecentLoginRequired={companySignInEnabled() && user?.sso_enforced && !user.two_factor_provider ? () => {
+      if (currentIdentity.current !== identity) return;
+      setAuthenticatorOpen(false); setError({ identity, kind: 'login' });
+    } : undefined} onClose={() => setAuthenticatorOpen(false)} onSuccess={async proof => { if (currentIdentity.current !== identity) return; setAuthenticatorOpen(false); await decide('confirm', proof); }} />
     {notFound ? <><h1 className="text-2xl font-bold">Confirmation not found</h1><p>This confirmation is unavailable.</p></>
       : !hydrated || isLoading || (!data && !kind) ? <p role="status">Loading confirmation…</p>
       : <>
@@ -151,7 +165,7 @@ export default function PendingActionReview() {
         {(kind === 'login' || kind === 'second_factor' || kind === 'enrollment') && <div className="space-y-3" role="alert">
           <p>{enroll ? 'Set up two-factor authentication before confirming this binding action. After setup, return here to review and click Confirm.' : provider
             ? 'Sign in again with your provider, then return here to review and click Confirm.' : kind === 'login' ? 'Sign in again to confirm. Login must be within the last 15 minutes.' : 'Verify your second factor again before confirming this binding action.'}</p>
-          <button type="button" onClick={login} className="text-[#3F51B5] font-medium underline">{enroll ? 'Set up two-factor authentication' : provider ? `Sign in again with ${provider === 'google' ? 'Google' : 'GitHub'}` : kind === 'login' ? 'Sign in again' : 'Sign in and verify second factor'}</button>
+          {companyLogin ? <CompanySignIn allowOidc={!user?.auth_methods?.includes('saml')} returnPath={`/confirm/${id.toLowerCase()}`} onSuccess={() => { if (!currentIdentity.current.startsWith(`${user?.id}:`) || !currentIdentity.current.endsWith(`:${path}`)) return; setReauthError(''); setReview(null); setError(null); setReload(value => value + 1); }} /> : <button type="button" onClick={login} className="text-[#3F51B5] font-medium underline">{enroll ? 'Set up two-factor authentication' : provider ? `Sign in again with ${provider === 'google' ? 'Google' : 'GitHub'}` : kind === 'login' ? 'Sign in again' : 'Sign in and verify second factor'}</button>}
           {reauthError && <p>{reauthError}</p>}
         </div>}
         {actionable && <>

@@ -3,12 +3,13 @@
 import { useState, useEffect } from 'react';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { ToastProvider } from '@/components/Toast';
+import { isCompanySignInReturnPopup } from '@/lib/company-sign-in';
 import { useAuthStore } from '@/store/auth';
 
 function AuthHydrator({ children }: { children: React.ReactNode }) {
   const hydrate = useAuthStore((s) => s.hydrate);
   useEffect(() => {
-    hydrate();
+    if (!isCompanySignInReturnPopup()) hydrate();
   }, [hydrate]);
   return <>{children}</>;
 }

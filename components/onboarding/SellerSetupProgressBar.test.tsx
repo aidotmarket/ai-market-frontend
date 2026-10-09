@@ -48,3 +48,11 @@ it.each(['active','suspended','not_requested'])('does not invent provisioning fo
  mocks.getCapabilities.mockResolvedValue({seller:{effective_status:status,missing_steps:[]},next_action:null});render(<SellerSetupProgressBar/>);
  await act(async()=>{});expect(screen.queryByText('Finish seller setup')).toBeNull();
 });
+
+it('continues fresh company enrollment to fixed settings without inferring it from linked providers', async () => {
+ useAuthStore.setState({user:{totp_enabled:false,sso_enforced:true,auth_methods:['oidc'],two_factor_setup_eligible:true,
+ seller_binding_factor_readiness:{code:'SECOND_FACTOR_ENROLLMENT_REQUIRED',path:'/dashboard/settings'}} as User});
+ mocks.getCapabilities.mockResolvedValue({seller:{effective_status:'provisioning',missing_steps:['totp_enabled']},next_action:{capability:'seller',step:'totp_enabled'}});
+ render(<SellerSetupProgressBar/>);fireEvent.click(await screen.findByRole('button',{name:'Continue: 2FA'}));
+ expect(mocks.push).toHaveBeenCalledWith('/dashboard/settings#security');expect(mocks.onboarding).not.toHaveBeenCalled();
+});

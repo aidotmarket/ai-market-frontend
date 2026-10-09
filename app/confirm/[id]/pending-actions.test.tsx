@@ -1,11 +1,13 @@
 // @vitest-environment jsdom
-import { act, cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { act, cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { afterEach, beforeEach, expect, it, vi } from 'vitest';
 const mocks = vi.hoisted(() => ({
-  get: vi.fn(), decide: vi.fn(), push: vi.fn(), replace: vi.fn(), provider: vi.fn(), query: new URLSearchParams(), id: '11111111-1111-4111-8111-111111111111',
+  checkSignIn: vi.fn(), signIn: vi.fn(), reauth: vi.fn(), get: vi.fn(), decide: vi.fn(), push: vi.fn(), replace: vi.fn(), provider: vi.fn(), query: new URLSearchParams(), id: '11111111-1111-4111-8111-111111111111',
   auth: { hydrated: true, isLoading: false, user: { id: 'owner', totp_enabled: true }, token: 'session' } as { hydrated: boolean; isLoading: boolean; user: Pick<User, 'id'> & Partial<User> | null; token: string | null },
 }));
 vi.mock('next/navigation', () => ({ useRouter: () => ({ push: mocks.push, replace: mocks.replace }), useParams: () => ({ id: mocks.id }), useSearchParams: () => mocks.query }));
+vi.mock('@/api/auth', async original => ({ ...await original<typeof import('@/api/auth')>(), submitReauth: mocks.reauth }));
+vi.mock('@/lib/company-sign-in', async original => ({ ...await original<typeof import('@/lib/company-sign-in')>(), startCompanySignIn: mocks.signIn, checkCompanySignIn: mocks.checkSignIn }));
 vi.mock('@/components/OAuthButtons', () => ({ startProviderOAuth: mocks.provider }));
 vi.mock('@/store/auth', () => ({ useAuthStore: () => mocks.auth }));
 vi.mock('@/api/pending-actions', async (importOriginal) => ({ ...await importOriginal<typeof import('@/api/pending-actions')>(), getPendingAction: mocks.get, decidePendingAction: mocks.decide }));
@@ -240,6 +242,34 @@ it('renders backend text literally without executing markup or linking arbitrary
 });
 
 
+it('requires an authenticator code for enrolled company users and sends the native proof with the exact hash', async () => {
+  mocks.auth.user = { id: 'owner', totp_enabled: true, sso_enforced: true };
+  mocks.reauth.mockResolvedValue({ token: 'native-totp-proof' });
+  await review(); fireEvent.click(screen.getByRole('button', { name: 'Confirm' }));
+  expect(mocks.decide).not.toHaveBeenCalled();
+  const dialog = await screen.findByRole('dialog');
+  fireEvent.change(within(dialog).getByLabelText('Verification code'), { target: { value: '123456' } });
+  fireEvent.click(within(dialog).getByRole('button', { name: 'Continue' }));
+  await waitFor(() => expect(mocks.decide).toHaveBeenCalledExactlyOnceWith(mocks.id, token, 'confirm', action.summary_hash, 'native-totp-proof'));
+  expect(mocks.reauth).toHaveBeenCalledWith('123456');
+});
+it('does not confirm with an invalid company authenticator code', async () => {
+  mocks.auth.user = { id: 'owner', totp_enabled: true, sso_enforced: true };
+  mocks.reauth.mockRejectedValue(new Error('invalid'));
+  await review(); fireEvent.click(screen.getByRole('button', { name: 'Confirm' }));
+  const dialog = await screen.findByRole('dialog');
+  fireEvent.change(within(dialog).getByLabelText('Verification code'), { target: { value: '123456' } });
+  fireEvent.click(within(dialog).getByRole('button', { name: 'Continue' }));
+  await screen.findByRole('alert'); expect(mocks.decide).not.toHaveBeenCalled();
+});
+it('company enrollment-required errors use the fixed settings continuation', async () => {
+  mocks.auth.user = { id: 'owner', totp_enabled: false, sso_enforced: true };
+  mocks.get.mockRejectedValue({ response: { status: 403, data: { detail: 'SECOND_FACTOR_ENROLLMENT_REQUIRED' } } });
+  render(<PendingActionPage />);
+  fireEvent.click(await screen.findByRole('button', { name: 'Set up two-factor authentication' }));
+  expect(mocks.push).toHaveBeenCalledWith(`/dashboard/settings?redirect=${encodeURIComponent(`/confirm/${mocks.id}?t=${token}`)}#security`);
+  expect(mocks.reauth).not.toHaveBeenCalled(); expect(mocks.decide).not.toHaveBeenCalled();
+});
 const checkoutAction: PendingAction = { ...action, summary: { ...action.summary, action: 'aim.checkout.handoff.create' },
   result: { handoff_id: 'handoff', expires_at: '2099-01-01T00:00:00Z', checkout_url: `https://ai.market/checkout/h/${token}` } };
 it('continues straight from confirmed handoff to browser checkout without another chat call', async () => {
@@ -292,4 +322,55 @@ it('renders a readiness refusal returned by confirmation POST as a block', async
   mocks.decide.mockRejectedValue({ response: { status: 409, data: { detail: { code: 'REFERENCE_DELIVERY_UNREADY', web_path: '/listings/listing' } } } });
   await review(); fireEvent.click(screen.getByRole('button', { name: 'Confirm' }));
   await screen.findByRole('link', { name: 'Review listing' }); noDecisions(); expect(mocks.push).not.toHaveBeenCalled();
+});
+
+it.each(['oidc', 'saml'])('GET succeeds then TOTP freshness refusal starts %s company sign-in, reloads review and requires explicit Confirm with a new proof', async method => {
+  vi.stubEnv('NEXT_PUBLIC_ORG_SSO_WEB_RETURN_ENABLED', 'true');
+  mocks.auth.user = { id: 'owner', totp_enabled: true, sso_enforced: true, auth_methods: [method] };
+  mocks.reauth.mockRejectedValueOnce({ response: { status: 403, data: { detail: 'RECENT_LOGIN_REQUIRED' } } }).mockResolvedValueOnce({ token: 'new-totp-proof' });
+  mocks.signIn.mockImplementation(async () => { mocks.auth = { ...mocks.auth, token: 'new-company-session' }; });
+  mocks.checkSignIn.mockImplementation(async () => { mocks.auth = { ...mocks.auth, token: 'fresh-saml-session' }; });
+  const storage = vi.spyOn(Storage.prototype, 'setItem');
+  const url = window.location.href;
+  render(<PendingActionPage />);
+  fireEvent.click(await screen.findByRole('button', { name: 'Confirm' }));
+  const dialog = await screen.findByRole('dialog');
+  fireEvent.change(within(dialog).getByLabelText('Verification code'), { target: { value: '123456' } });
+  fireEvent.click(within(dialog).getByRole('button', { name: 'Continue' }));
+  await screen.findByRole('button', { name: 'Check company sign-in' });
+  expect(screen.queryByRole('dialog')).toBeNull(); expect(mocks.decide).not.toHaveBeenCalled();
+  if (method === 'saml') {
+    expect(screen.queryByLabelText('Company sign-in ID')).toBeNull();
+    expect(screen.getByText(/then return here and check this page/)).toBeTruthy();
+    fireEvent.click(screen.getByRole('button', { name: 'Check company sign-in' }));
+    await waitFor(() => expect(mocks.checkSignIn).toHaveBeenCalledOnce());
+    expect(mocks.signIn).not.toHaveBeenCalled();
+  } else {
+    fireEvent.change(screen.getByLabelText('Company sign-in ID'), { target: { value: 'company-id' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Sign in through your company' }));
+    await waitFor(() => expect(mocks.signIn).toHaveBeenCalledWith('company-id', `/confirm/${mocks.id}`));
+  }
+  await waitFor(() => expect(mocks.get.mock.calls.length).toBeGreaterThanOrEqual(2));
+  await waitFor(() => expect((screen.getByRole('button', { name: 'Confirm' }) as HTMLButtonElement).disabled).toBe(false));
+  expect(mocks.get).toHaveBeenLastCalledWith(mocks.id, token);
+  expect(mocks.decide).not.toHaveBeenCalled(); expect(mocks.reauth).toHaveBeenCalledTimes(1);
+  fireEvent.click(screen.getByRole('button', { name: 'Confirm' }));
+  const freshDialog = await screen.findByRole('dialog');
+  expect((within(freshDialog).getByLabelText('Verification code') as HTMLInputElement).value).toBe('');
+  fireEvent.change(within(freshDialog).getByLabelText('Verification code'), { target: { value: '654321' } });
+  fireEvent.click(within(freshDialog).getByRole('button', { name: 'Continue' }));
+  await screen.findByText(/Confirmed\./);
+  expect(mocks.reauth).toHaveBeenNthCalledWith(2, '654321');
+  expect(mocks.decide).toHaveBeenCalledExactlyOnceWith(mocks.id, token, 'confirm', action.summary_hash, 'new-totp-proof');
+  expect(mocks.provider).not.toHaveBeenCalled(); expect(mocks.push).not.toHaveBeenCalled();
+  expect(storage).not.toHaveBeenCalled(); expect(window.location.href).toBe(url); storage.mockRestore();
+});
+it('preserves the original company login route with the return flag off', async () => {
+  vi.stubEnv('NEXT_PUBLIC_ORG_SSO_WEB_RETURN_ENABLED', 'false');
+  mocks.auth.user = { id: 'owner', totp_enabled: true, sso_enforced: true };
+  mocks.get.mockRejectedValue({ response: { status: 403, data: { detail: 'RECENT_LOGIN_REQUIRED' } } });
+  render(<PendingActionPage />);
+  fireEvent.click(await screen.findByRole('button', { name: 'Sign in again' }));
+  expect(mocks.push).toHaveBeenCalledWith(`/login?reauth=pending-action&redirect=${encodeURIComponent(`/confirm/${mocks.id}?t=${token}`)}`);
+  expect(mocks.signIn).not.toHaveBeenCalled();
 });
