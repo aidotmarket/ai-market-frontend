@@ -4,7 +4,7 @@ import { useAuthStore } from '@/store/auth';
 import type { User } from '@/types';
 const mocks = vi.hoisted(() => ({ me: vi.fn(), refresh: vi.fn() }));
 vi.mock('@/api/auth', () => ({ getMe: mocks.me }));
-import { COMPANY_SIGN_IN_ERROR, companyReturnAllowed, isCompanySignInReturnPopup, startCompanySignIn } from './company-sign-in';
+import { checkCompanySignIn, COMPANY_SIGN_IN_ERROR, companyReturnAllowed, isCompanySignInReturnPopup, startCompanySignIn } from './company-sign-in';
 const id = '11111111-1111-4111-8111-111111111111';
 const owner = { id: 'owner', sso_enforced: true } as User;
 let navigation: HTMLAnchorElement;
@@ -84,4 +84,20 @@ it('leaves cookie restoration to the original window on popup return only', () =
   window.history.replaceState(null, '', '/dashboard/settings?tampered=1');
   expect(isCompanySignInReturnPopup()).toBe(false);
   Object.defineProperty(window, 'opener', { configurable: true, value: null });
+});
+
+it('external company check reloads server eligibility without navigation or credential storage', async () => {
+  const storage = vi.spyOn(Storage.prototype, 'setItem');
+  const url = window.location.href;
+  mocks.me.mockResolvedValue({ ...owner, auth_methods: ['saml'], two_factor_setup_eligible: true });
+  await checkCompanySignIn();
+  expect(mocks.refresh).toHaveBeenCalledOnce(); expect(mocks.me).toHaveBeenCalledOnce();
+  expect(useAuthStore.getState().user?.two_factor_setup_eligible).toBe(true);
+  expect(window.open).not.toHaveBeenCalled(); expect(storage).not.toHaveBeenCalled();
+  expect(window.location.href).toBe(url);
+});
+it('external company check refuses failed /auth/me even when refresh retained old user data', async () => {
+  mocks.me.mockRejectedValueOnce(new Error('unavailable'));
+  await expect(checkCompanySignIn()).rejects.toThrow('unavailable');
+  expect(window.open).not.toHaveBeenCalled();
 });

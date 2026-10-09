@@ -1,7 +1,6 @@
 # Chunk 0 fresh company sign-in frontend
 
-Contract read at backend `ab0a6be461c7af7e27a5b80f7e2d64ce08a26555`,
-including `fb545f135debf4fd8e504b627fb50cd1486a4d50` and
+Contract rechecked at merged backend `4a1b1452` (PR #666), including
 `specs/BQ-CONNECTOR-SELLER-CHUNK0-COMPATIBILITY.md`. Backend remains unchanged.
 
 Build-time `NEXT_PUBLIC_ORG_SSO_WEB_RETURN_ENABLED=true` enables this transport.
@@ -10,12 +9,27 @@ operators enable it only alongside backend `ORG_SSO_NATIVE_TOTP_ENROLLMENT_ENABL
 No backend capability field advertises this return transport. Server setup
 eligibility continues to govern enrollment; Google/GitHub behavior is unchanged.
 
-Enrollment and lost-authenticator recovery authorize with `/dashboard/settings`;
+OIDC enrollment and stale-session lost-authenticator recovery authorize with `/dashboard/settings`;
 binding-action fresh login authorizes with `/confirm/<lowercase UUID>`. The
 organization slug is entered as Company sign-in ID because `/auth/me` does not
 supply it. No organization is inferred from email or selected for a decision.
 
-Sign-in opens in a popup. This preserves the original confirmation link credential
+SSO protocol is not advertised by the backend. Accounts with a linked SAML method
+use the existing external company sign-in and **Check company sign-in** path,
+without calling OIDC authorize. That check remains available alongside the popup
+for other accounts, including non-OIDC organizations. No SAML callback is added.
+Both paths refresh the cookie session and explicitly reload `/auth/me` for the
+same company user. Settings offers sign-in even when stale-session eligibility is
+false, but setup starts only after refreshed server eligibility is true.
+
+Recovery first accepts a backup code with the retained session. The backend
+enforces freshness; only `RECENT_LOGIN_REQUIRED` moves it to company sign-in.
+Invalid backup codes preserve the retry form without an additional sign-in gate.
+TOTP reauthentication freshness refusal in confirmation also moves to company
+sign-in. Returning reloads the review and requires another explicit Confirm with
+a new TOTP proof. Neither check replays a recovery or decision mutation.
+
+OIDC sign-in opens in a popup. This preserves the original confirmation link credential
 in the original page's memory: the backend pending-action read and decision still
 require that credential, while the new return path forbids queries. No credentials
 or continuation state are written to browser storage. Popup navigation explicitly

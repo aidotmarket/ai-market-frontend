@@ -299,7 +299,7 @@ export default function SettingsPage() {
     sellerStatus === 'provisioning' ||
     user.role === 'seller' ||
     user.role === 'admin';
-  const companySetup = (companySignInEnabled() && user.sso_enforced && !user.totp_enabled && user.two_factor_setup_eligible === true && !user.two_factor_provider) || companyEnrollmentOffered(user) || (user.sso_enforced && user.two_factor_setup_eligible === true && strictCompanySetup === `${user.id}:${useAuthStore.getState().token}`);
+  const companySetup = (companySignInEnabled() && user.sso_enforced && !user.totp_enabled && !user.two_factor_provider) || companyEnrollmentOffered(user) || (user.sso_enforced && user.two_factor_setup_eligible === true && strictCompanySetup === `${user.id}:${useAuthStore.getState().token}`);
   const managedSetupMessage = user?.totp_enabled ? null : setupRestriction(user) ?? (securityError === SSO_MANAGED_2FA_MESSAGE || securityError.startsWith('Sign-in security is managed by your ') ? securityError : null);
   const ssoManaged2FA = !!managedSetupMessage;
 

@@ -23,7 +23,8 @@ export function companyEnrollmentOffered(user: ReturnType<typeof useAuthStore.ge
 export default function CompanyAuthenticator({ recovery = false }: { recovery?: boolean }) {
   const router = useRouter();
   const freshFlow = companySignInEnabled();
-  const [fresh, setFresh] = useState(false);
+  // Recovery may use the retained session; the mutation enforces freshness.
+  const [signInRequired, setSignInRequired] = useState(!recovery);
   const [stage, setStage] = useState<'start' | 'qr' | 'backups' | 'disabled'>('start');
   const [setup, setSetup] = useState<{ secret: string; qr_uri: string; expires: number } | null>(null);
   const [codes, setCodes] = useState<string[]>([]);
@@ -38,8 +39,9 @@ export default function CompanyAuthenticator({ recovery = false }: { recovery?: 
     try { await action(); }
     catch (cause) {
       setError(companyAuthenticatorError(cause));
-      setFresh(false);
-      if ((cause as { response?: { data?: { detail?: string } } })?.response?.data?.detail !== 'Invalid verification code') {
+      const detail = (cause as { response?: { data?: { detail?: string } } })?.response?.data?.detail;
+      if (!freshFlow || detail === 'RECENT_LOGIN_REQUIRED' || (cause instanceof Error && cause.message === 'SETUP_INELIGIBLE')) setSignInRequired(true);
+      if (detail !== 'Invalid verification code') {
         setSetup(null); setCode(''); setStage('start');
       }
     } finally { locked.current = false; setBusy(false); }
@@ -47,6 +49,7 @@ export default function CompanyAuthenticator({ recovery = false }: { recovery?: 
   const sameSession = () => identity === `${useAuthStore.getState().user?.id}:${useAuthStore.getState().token}`;
   const start = () => run(async () => {
     const session = freshFlow ? `${useAuthStore.getState().user?.id}:${useAuthStore.getState().token}` : identity;
+    if (freshFlow && useAuthStore.getState().user?.two_factor_setup_eligible !== true) throw new Error('SETUP_INELIGIBLE');
     const result = await setupCompanyAuthenticator();
     if (session !== `${useAuthStore.getState().user?.id}:${useAuthStore.getState().token}`) return;
     setSetup({ ...result, expires: Date.now() + result.expires_in * 1000 }); setStage('qr');
@@ -75,10 +78,10 @@ export default function CompanyAuthenticator({ recovery = false }: { recovery?: 
   return <section aria-label={recovery ? 'Lost authenticator' : 'Company authenticator'} className="space-y-3 rounded-lg border p-4">
     <h3 className="font-semibold">{recovery ? 'Lost your authenticator?' : 'Set up your authenticator'}</h3>
     {!freshFlow && <p>Your company sign-in is still required. Sign in through your company within the last 15 minutes, then return here.</p>}
-    {freshFlow && !fresh && stage === 'start' && <CompanySignIn returnPath="/dashboard/settings" onSuccess={async () => { setFresh(true); if (!recovery) await start(); }} />}
+    {freshFlow && signInRequired && stage === 'start' && <CompanySignIn allowOidc={!useAuthStore.getState().user?.auth_methods.includes('saml')} returnPath="/dashboard/settings" onSuccess={async () => { setSignInRequired(false); if (!recovery) await start(); }} />}
     {!freshFlow && stage === 'start' && <button disabled={busy} onClick={() => run(() => useAuthStore.getState().refreshAuth())}>Check company sign-in</button>}
     {error && <p role="alert">{error}</p>}
-    {stage === 'start' && (!freshFlow || fresh) && <>
+    {stage === 'start' && (!freshFlow || !signInRequired) && <>
       {recovery ? <>
         <p>Use one backup code to disable your lost authenticator. Then set up a new one.</p>
         <label className="block">Backup code <input autoComplete="off" value={code} onChange={e => setCode(e.target.value)} /></label>

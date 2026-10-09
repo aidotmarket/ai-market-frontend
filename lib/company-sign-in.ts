@@ -55,8 +55,14 @@ export async function startCompanySignIn(orgSlug: string, returnPath: string): P
       } catch { /* Cross-origin IdP/backend pages stay in the popup. */ }
     }, 300);
   });
+  await checkCompanySignIn(owner);
+}
+
+// SAML and other upstream integrations establish their session externally.
+// Refresh /auth/me explicitly: refreshAuth may retain a stale user on failure.
+export async function checkCompanySignIn(owner = useAuthStore.getState().user?.id): Promise<void> {
   await useAuthStore.getState().refreshAuth();
   const user = await getMe();
-  if (!owner || user.id !== owner || !user.sso_enforced || user.two_factor_provider) throw new Error(COMPANY_SIGN_IN_ERROR);
+  if (!owner || user.id !== owner || useAuthStore.getState().user?.id !== owner || !user.sso_enforced || user.two_factor_provider) throw new Error(COMPANY_SIGN_IN_ERROR);
   useAuthStore.setState({ user });
 }

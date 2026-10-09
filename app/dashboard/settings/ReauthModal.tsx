@@ -11,6 +11,7 @@ interface ReauthModalProps {
   isOpen: boolean;
   onClose: () => void;
   onSuccess: (reauthToken: string) => void | Promise<void>;
+  onRecentLoginRequired?: () => void;
   fallbackFocusRef?: RefObject<HTMLElement | null>;
   method?: 'password' | 'totp' | 'magic_link';
 }
@@ -76,6 +77,7 @@ export default function ReauthModal({
   isOpen,
   onClose,
   onSuccess,
+  onRecentLoginRequired,
   fallbackFocusRef,
   method = 'totp',
 }: ReauthModalProps) {
@@ -168,7 +170,10 @@ export default function ReauthModal({
       setCode('');
       setLinkSent(false);
     } catch (error) {
-      setError(getReauthErrorMessage(error));
+      if (onRecentLoginRequired && (error as { response?: { data?: { detail?: string } } })?.response?.data?.detail === 'RECENT_LOGIN_REQUIRED') {
+        setCode('');
+        onRecentLoginRequired();
+      } else setError(getReauthErrorMessage(error));
     } finally {
       setSubmitting(false);
     }

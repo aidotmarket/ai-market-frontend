@@ -2,12 +2,12 @@
 import { act, cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { afterEach, beforeEach, expect, it, vi } from 'vitest';
 const mocks = vi.hoisted(() => ({
-  signIn: vi.fn(), reauth: vi.fn(), get: vi.fn(), decide: vi.fn(), push: vi.fn(), replace: vi.fn(), provider: vi.fn(), query: new URLSearchParams(), id: '11111111-1111-4111-8111-111111111111',
+  checkSignIn: vi.fn(), signIn: vi.fn(), reauth: vi.fn(), get: vi.fn(), decide: vi.fn(), push: vi.fn(), replace: vi.fn(), provider: vi.fn(), query: new URLSearchParams(), id: '11111111-1111-4111-8111-111111111111',
   auth: { hydrated: true, isLoading: false, user: { id: 'owner', totp_enabled: true }, token: 'session' } as { hydrated: boolean; isLoading: boolean; user: Pick<User, 'id'> & Partial<User> | null; token: string | null },
 }));
 vi.mock('next/navigation', () => ({ useRouter: () => ({ push: mocks.push, replace: mocks.replace }), useParams: () => ({ id: mocks.id }), useSearchParams: () => mocks.query }));
 vi.mock('@/api/auth', async original => ({ ...await original<typeof import('@/api/auth')>(), submitReauth: mocks.reauth }));
-vi.mock('@/lib/company-sign-in', async original => ({ ...await original<typeof import('@/lib/company-sign-in')>(), startCompanySignIn: mocks.signIn }));
+vi.mock('@/lib/company-sign-in', async original => ({ ...await original<typeof import('@/lib/company-sign-in')>(), startCompanySignIn: mocks.signIn, checkCompanySignIn: mocks.checkSignIn }));
 vi.mock('@/components/OAuthButtons', () => ({ startProviderOAuth: mocks.provider }));
 vi.mock('@/store/auth', () => ({ useAuthStore: () => mocks.auth }));
 vi.mock('@/api/pending-actions', async (importOriginal) => ({ ...await importOriginal<typeof import('@/api/pending-actions')>(), getPendingAction: mocks.get, decidePendingAction: mocks.decide }));
@@ -324,19 +324,46 @@ it('renders a readiness refusal returned by confirmation POST as a block', async
   await screen.findByRole('link', { name: 'Review listing' }); noDecisions(); expect(mocks.push).not.toHaveBeenCalled();
 });
 
-it('uses the bare company confirmation return, retains the link only in memory and requires another Confirm', async () => {
+it.each(['oidc', 'saml'])('GET succeeds then TOTP freshness refusal starts %s company sign-in, reloads review and requires explicit Confirm with a new proof', async method => {
   vi.stubEnv('NEXT_PUBLIC_ORG_SSO_WEB_RETURN_ENABLED', 'true');
-  mocks.auth.user = { id: 'owner', totp_enabled: true, sso_enforced: true };
-  mocks.get.mockRejectedValueOnce({ response: { status: 403, data: { detail: 'RECENT_LOGIN_REQUIRED' } } });
+  mocks.auth.user = { id: 'owner', totp_enabled: true, sso_enforced: true, auth_methods: [method] };
+  mocks.reauth.mockRejectedValueOnce({ response: { status: 403, data: { detail: 'RECENT_LOGIN_REQUIRED' } } }).mockResolvedValueOnce({ token: 'new-totp-proof' });
   mocks.signIn.mockImplementation(async () => { mocks.auth = { ...mocks.auth, token: 'new-company-session' }; });
-  const view = render(<PendingActionPage />);
-  fireEvent.change(await screen.findByLabelText('Company sign-in ID'), { target: { value: 'company-id' } });
-  fireEvent.click(screen.getByRole('button', { name: 'Sign in through your company' }));
-  await waitFor(() => expect(mocks.signIn).toHaveBeenCalledWith('company-id', `/confirm/${mocks.id}`));
-  view.rerender(<PendingActionPage />);
-  await screen.findByRole('button', { name: 'Confirm' });
+  mocks.checkSignIn.mockImplementation(async () => { mocks.auth = { ...mocks.auth, token: 'fresh-saml-session' }; });
+  const storage = vi.spyOn(Storage.prototype, 'setItem');
+  const url = window.location.href;
+  render(<PendingActionPage />);
+  fireEvent.click(await screen.findByRole('button', { name: 'Confirm' }));
+  const dialog = await screen.findByRole('dialog');
+  fireEvent.change(within(dialog).getByLabelText('Verification code'), { target: { value: '123456' } });
+  fireEvent.click(within(dialog).getByRole('button', { name: 'Continue' }));
+  await screen.findByRole('button', { name: 'Check company sign-in' });
+  expect(screen.queryByRole('dialog')).toBeNull(); expect(mocks.decide).not.toHaveBeenCalled();
+  if (method === 'saml') {
+    expect(screen.queryByLabelText('Company sign-in ID')).toBeNull();
+    expect(screen.getByText(/then return here and check this page/)).toBeTruthy();
+    fireEvent.click(screen.getByRole('button', { name: 'Check company sign-in' }));
+    await waitFor(() => expect(mocks.checkSignIn).toHaveBeenCalledOnce());
+    expect(mocks.signIn).not.toHaveBeenCalled();
+  } else {
+    fireEvent.change(screen.getByLabelText('Company sign-in ID'), { target: { value: 'company-id' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Sign in through your company' }));
+    await waitFor(() => expect(mocks.signIn).toHaveBeenCalledWith('company-id', `/confirm/${mocks.id}`));
+  }
+  await waitFor(() => expect(mocks.get.mock.calls.length).toBeGreaterThanOrEqual(2));
+  await waitFor(() => expect((screen.getByRole('button', { name: 'Confirm' }) as HTMLButtonElement).disabled).toBe(false));
   expect(mocks.get).toHaveBeenLastCalledWith(mocks.id, token);
-  expect(mocks.decide).not.toHaveBeenCalled(); expect(mocks.provider).not.toHaveBeenCalled();
+  expect(mocks.decide).not.toHaveBeenCalled(); expect(mocks.reauth).toHaveBeenCalledTimes(1);
+  fireEvent.click(screen.getByRole('button', { name: 'Confirm' }));
+  const freshDialog = await screen.findByRole('dialog');
+  expect((within(freshDialog).getByLabelText('Verification code') as HTMLInputElement).value).toBe('');
+  fireEvent.change(within(freshDialog).getByLabelText('Verification code'), { target: { value: '654321' } });
+  fireEvent.click(within(freshDialog).getByRole('button', { name: 'Continue' }));
+  await screen.findByText(/Confirmed\./);
+  expect(mocks.reauth).toHaveBeenNthCalledWith(2, '654321');
+  expect(mocks.decide).toHaveBeenCalledExactlyOnceWith(mocks.id, token, 'confirm', action.summary_hash, 'new-totp-proof');
+  expect(mocks.provider).not.toHaveBeenCalled(); expect(mocks.push).not.toHaveBeenCalled();
+  expect(storage).not.toHaveBeenCalled(); expect(window.location.href).toBe(url); storage.mockRestore();
 });
 it('preserves the original company login route with the return flag off', async () => {
   vi.stubEnv('NEXT_PUBLIC_ORG_SSO_WEB_RETURN_ENABLED', 'false');
