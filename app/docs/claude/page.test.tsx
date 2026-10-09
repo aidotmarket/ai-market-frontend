@@ -13,7 +13,7 @@ describe('ClaudeDocsPage', () => {
     expect(screen.getByRole('heading', { name: 'Use ai.market in Claude' })).toBeTruthy();
     expect(sections.map((section) => section.textContent)).toEqual([
       'Use ai.market in Claude. Ask Claude to find and inspect data on ai.market in plain language. Claude works with your own ai.market account and only sees what you allow.',
-      'Connect. In Claude, open Settings, then Connectors, find ai.market and choose Connect. You sign in on ai.market, see exactly what Claude is asking for, and approve. During early access your account has to be on our early-access list. Write to support@ai.market to join.',
+      'Connect. In Claude, open Settings, then Connectors, find ai.market and choose Connect. You sign in on ai.market, see exactly what Claude is asking for, and approve.',
       "What Claude can do. Search published listings. Look at a listing's description, columns, row count, update frequency and price. Show your account details, your recent activity and your data requests.",
       'What Claude cannot do. Claude cannot buy, sell, pay, publish or message anyone for you in this version. It never sees dataset files. When you want to buy, Claude gives you the link and you finish on ai.market.',
       'Your data. We record each tool call for security, with a one-way fingerprint instead of what you asked. We do not get your Claude conversation. See the privacy notice for details.',
