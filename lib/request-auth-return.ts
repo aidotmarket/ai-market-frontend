@@ -1,11 +1,13 @@
 import { PENDING_ACTION_CONTINUATION, validateRedirect } from '@/lib/redirect';
 
+import { CHECKOUT_HANDOFF_PATH } from '@/lib/checkout-domain';
+
 type Method = 'oauth' | 'email';
 const KEY = 'request_auth_return';
 const TTL = 30 * 60_000;
 
 function safeRequestPath(path?: string | null): string {
-  if (path && PENDING_ACTION_CONTINUATION.test(path)) return path;
+  if (path && (PENDING_ACTION_CONTINUATION.test(path) || CHECKOUT_HANDOFF_PATH.test(path))) return path;
   const validated = validateRedirect(path, '');
   if (!validated || !path?.startsWith('/') || /[\u0000-\u001f\u007f-\u009f]/u.test(validated)) return '';
   // Validate a decoded copy, but keep encoded query delimiters and values intact.

@@ -3,11 +3,16 @@ import type { NextConfig } from 'next';
 const nextConfig: NextConfig = {
   reactStrictMode: true,
   async headers() {
-    return [{ source: '/confirm/:path*', headers: [
+    const privateHeaders = [
       { key: 'Cache-Control', value: 'no-store' },
       { key: 'Referrer-Policy', value: 'no-referrer' },
       { key: 'Content-Security-Policy', value: "frame-ancestors 'none'" },
-    ] }];
+    ];
+    return [
+      ...['/confirm/:path*', '/checkout/h/:path*'].map(source => ({ source, headers: privateHeaders })),
+      // Login and other auth pages can carry the private link in redirect.
+      { source: '/:path*', has: [{ type: 'query' as const, key: 'redirect', value: '.*(?:/checkout/h/|/confirm/).*' }], headers: privateHeaders },
+    ];
   },
   async redirects() {
     return [

@@ -4,7 +4,8 @@ import { useState, useEffect, useRef, useCallback } from 'react';
 import Link from 'next/link';
 import { useAuthStore } from '@/store/auth';
 import { useToast } from '@/components/Toast';
-import { createCheckout } from '@/api/checkout';
+import { createCheckout, type DomainCheckoutOptions } from '@/api/checkout';
+import { checkoutBlock, checkoutDestination, checkoutDomainEnabled, checkoutErrorCode, checkoutOutcome, checkoutWebPath } from '@/lib/checkout-domain';
 import { getMyOrders } from '@/api/orders';
 import { formatPrice } from '@/lib/format';
 import { useTermsGate } from '@/components/legal/TermsGate';
@@ -14,6 +15,7 @@ import CountrySelect from '@/components/CountrySelect';
 import type { BuyerOrder, LicenseAcceptanceFields, ListingLicenseDetails } from '@/types';
 import { AxiosError } from 'axios';
 import ListingLicenseDisclosure from '@/components/ListingLicenseDisclosure';
+import { checkoutReplayKey, readCheckoutReplay, saveCheckoutReplay, clearCheckoutReplay } from '@/lib/checkout-replay';
 import { useListingOwnership } from '@/hooks/useListingOwnership';
 
 interface BuyButtonProps {
@@ -30,6 +32,9 @@ interface BuyButtonProps {
   dataFormat?: string | null;
   fulfillmentType?: string | null;
   disabledReason?: string;
+  checkoutContext?: DomainCheckoutOptions;
+  onCheckoutStarted?: () => void;
+  recoveryOnly?: boolean;
 }
 
 export default function BuyButton({
@@ -46,6 +51,9 @@ export default function BuyButton({
   dataFormat,
   fulfillmentType,
   disabledReason,
+  checkoutContext,
+  onCheckoutStarted,
+  recoveryOnly = false,
 }: BuyButtonProps) {
   const termsVersion = useServedTermsVersion();
   const { user, isAuthenticated, hydrated, isLoading } = useAuthStore();
@@ -61,6 +69,12 @@ export default function BuyButton({
   const [authorityConfirmed, setAuthorityConfirmed] = useState(false);
   const [licenseVerified, setLicenseVerified] = useState(false);
   const [checkoutRefusal, setCheckoutRefusal] = useState<CheckoutRefusal | null>(null);
+  const domainEnabled = checkoutDomainEnabled();
+  const requestIdentity = checkoutReplayKey(user?.id || '', listingId, versionId, checkoutContext?.handoffToken);
+  const currentRequestIdentity = useRef(requestIdentity);
+  currentRequestIdentity.current = requestIdentity;
+  const acceptedRequest = useRef<{ identity: string; acceptance: LicenseAcceptanceFields; options: DomainCheckoutOptions } | null>(null);
+  const [processingIdentity, setProcessingIdentity] = useState<string | null>(null);
   const inflightRef = useRef<string | null>(null);
   const { ensureTermsAccepted, TermsGatePrompt, checkingTerms } = useTermsGate('buyer');
   const handleVerificationChange = useCallback((verified: boolean) => setLicenseVerified(verified), []);
@@ -68,8 +82,26 @@ export default function BuyButton({
   useEffect(() => {
     setAuthorityConfirmed(false);
     setLicenseVerified(false);
+    setCheckoutRefusal(previous => domainEnabled && previous?.blocked ? previous : null);
+  }, [domainEnabled, licenseDetails?.sha256, licenseDetails?.covenant_sha256, licenseDetails?.rider_sha256]);
+
+  useEffect(() => {
+    // Session renewal must not discard an in-memory claim when storage is unavailable.
+    if (domainEnabled && acceptedRequest.current?.identity === requestIdentity) {
+      setProcessingIdentity(requestIdentity);
+      return;
+    }
+    acceptedRequest.current = null;
+    setProcessingIdentity(null);
     setCheckoutRefusal(null);
-  }, [licenseDetails?.sha256, licenseDetails?.covenant_sha256, licenseDetails?.rider_sha256]);
+    if (!domainEnabled || !isAuthenticated || !user?.id) return;
+    const replay = readCheckoutReplay(requestIdentity, !!checkoutContext?.handoffToken);
+    if (replay) {
+      acceptedRequest.current = { identity: requestIdentity, acceptance: replay.acceptance,
+        options: checkoutContext?.handoffToken ? { handoffToken: checkoutContext.handoffToken } : { checkoutRequestId: replay.checkoutRequestId! } };
+      setProcessingIdentity(requestIdentity);
+    }
+  }, [domainEnabled, isAuthenticated, user?.id, requestIdentity, checkoutContext?.handoffToken]);
 
   // Check if user already purchased this listing
   useEffect(() => {
@@ -151,7 +183,8 @@ export default function BuyButton({
   }
 
   const startCheckout = async () => {
-    if (disabledReason) return;
+    if (recoveryOnly && acceptedRequest.current?.identity !== requestIdentity) return;
+    if (disabledReason && !(domainEnabled && acceptedRequest.current?.identity === requestIdentity)) return;
     // Dedupe guard: ignore if same listing checkout is in-flight
     const inflightKey = `${listingId}:${versionId ?? 'latest'}`;
     if (inflightRef.current === inflightKey) return;
@@ -170,19 +203,48 @@ export default function BuyButton({
         business_legal_name: businessLegalName.trim(),
         jurisdiction: jurisdiction.trim().toUpperCase(),
       } : undefined;
+      if (domainEnabled) {
+        if (acceptedRequest.current?.identity !== requestIdentity) {
+          if (!acceptance) { toast('Review the current licence before purchasing.', 'error'); return; }
+          acceptedRequest.current = { identity: requestIdentity, acceptance: { ...acceptance },
+            options: checkoutContext ? { ...checkoutContext } : { checkoutRequestId: crypto.randomUUID() } };
+        }
+        const request = acceptedRequest.current;
+        // Write before POST: a lost response or reload must reuse the accepted claim.
+        saveCheckoutReplay(requestIdentity, { acceptance: request.acceptance,
+          ...(request.options.checkoutRequestId ? { checkoutRequestId: request.options.checkoutRequestId } : {}) });
+        onCheckoutStarted?.();
+        const result = await createCheckout(listingId, versionId, request.acceptance, request.options);
+        if (currentRequestIdentity.current !== requestIdentity) return;
+        const destination = checkoutDestination(result);
+        if (!destination) { setProcessingIdentity(requestIdentity); toast('Invalid checkout URL received. Retry to check the same purchase.', 'error'); return; }
+        clearCheckoutReplay(requestIdentity);
+        acceptedRequest.current = null;
+        window.location.href = destination;
+        return;
+      }
       const { checkout_url } = await createCheckout(listingId, versionId, acceptance);
 
       // Validate Stripe URL before redirect (AG-G2-M4)
-      if (!checkout_url.startsWith('https://checkout.stripe.com/')) {
+      if (!checkout_url || !checkout_url.startsWith('https://checkout.stripe.com/')) {
         toast('Invalid checkout URL received. Please try again.', 'error');
         return;
       }
 
       window.location.href = checkout_url;
     } catch (err) {
+      if (domainEnabled && currentRequestIdentity.current !== requestIdentity) return;
+      const outcome = domainEnabled ? checkoutOutcome(err) : null;
+      if (outcome === 'retry' || outcome === 'auth' || outcome === 'operator') setProcessingIdentity(requestIdentity);
+      if (outcome === 'retry') { setCheckoutRefusal(null); return; }
       if (err instanceof AxiosError) {
-        const refusal = parseCheckoutRefusal(err);
+        const refusal = parseCheckoutRefusal(err, domainEnabled);
         setCheckoutRefusal(refusal);
+        if (outcome === 'terminal' || outcome === 'rejected') {
+          clearCheckoutReplay(requestIdentity);
+          acceptedRequest.current = null;
+          if (!refusal.blocked) setProcessingIdentity(null);
+        }
         toast(refusal.message, 'error');
       } else {
         toast('An unexpected error occurred.', 'error');
@@ -207,6 +269,16 @@ export default function BuyButton({
     licenseVerified && typedName.trim() && signerTitle.trim() && businessLegalName.trim() &&
     /^[A-Za-z]{2}$/.test(jurisdiction.trim()) && authorityConfirmed
   );
+
+  if (domainEnabled && processingIdentity === requestIdentity) return <div className="space-y-4">
+    {!checkoutRefusal?.blocked && <p role="status">Checkout is processing. Retry to check the same purchase.</p>}
+    {checkoutRefusal && <div role="alert"><p>{checkoutRefusal.message}</p>{checkoutRefusal.webPath && <Link href={checkoutRefusal.webPath}>Review listing</Link>}</div>}
+    <button type="button" disabled={loading || !!checkoutRefusal?.blocked} onClick={startCheckout} className="rounded-lg bg-[#3F51B5] px-5 py-2.5 text-white disabled:opacity-50">
+      {loading ? 'Checking checkout…' : 'Retry checkout'}
+    </button>
+  </div>;
+
+  if (recoveryOnly) return null;
 
   if (licenseDetails) {
     return (
@@ -244,11 +316,12 @@ export default function BuyButton({
           <div role="alert" className="rounded-lg border border-red-200 bg-red-50 p-4 text-sm text-red-800">
             <p>{checkoutRefusal.message}</p>
             {checkoutRefusal.reconciliationUrl && <Link href={checkoutRefusal.reconciliationUrl} className="mt-2 inline-block font-medium underline">Reconcile legal identity</Link>}
+            {checkoutRefusal.webPath && <Link href={checkoutRefusal.webPath} className="mt-2 inline-block font-medium underline">Review listing</Link>}
           </div>
         )}
         <button
           onClick={handleBuy}
-          disabled={loading || checkingPurchase || checkingTerms || !!disabledReason || !acceptanceComplete}
+          disabled={loading || checkingPurchase || checkingTerms || !!disabledReason || !acceptanceComplete || (domainEnabled && !!checkoutRefusal?.blocked)}
           className="w-full rounded-lg bg-[#3F51B5] px-4 py-2.5 text-sm font-medium text-white hover:bg-[#3545a0] disabled:cursor-not-allowed disabled:opacity-50"
         >
           {loading || checkingTerms ? (checkingTerms ? 'Checking terms...' : 'Opening Stripe…') : 'Accept and continue to payment'}
@@ -264,7 +337,7 @@ export default function BuyButton({
       {termsVersion === '1.2' && <p className="text-sm text-gray-600">{CARD_BUYER_TOTAL}</p>}
       <button
         onClick={handleBuy}
-        disabled={loading || checkingPurchase || checkingTerms || !!disabledReason}
+        disabled={loading || checkingPurchase || checkingTerms || !!disabledReason || domainEnabled}
         className="w-full rounded-lg bg-[#3F51B5] px-4 py-2.5 text-sm font-medium text-white hover:bg-[#3545a0] disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center"
       >
         {loading || checkingTerms ? (
@@ -293,11 +366,40 @@ export interface CheckoutRefusal {
   code: string;
   message: string;
   reconciliationUrl?: string;
+  webPath?: string;
+  blocked?: boolean;
 }
 
-export function parseCheckoutRefusal(error: AxiosError): CheckoutRefusal {
+/** No authoritative rejection: preserve the original claim and frozen acceptance. */
+export function checkoutOutcomeUnknown(error: unknown): boolean {
+  return checkoutOutcome(error) === 'retry';
+}
+
+export function parseCheckoutRefusal(error: AxiosError, domainEnabled = checkoutDomainEnabled()): CheckoutRefusal {
   const data = error.response?.data as { detail?: unknown } | undefined;
   const detail = data?.detail;
+  if (domainEnabled) {
+    const outcome = checkoutOutcome(error);
+    if (outcome === 'auth') return { code: checkoutErrorCode(error) || 'FIRST_PARTY_SESSION_REQUIRED',
+      message: 'Sign in again, then retry the same purchase.' };
+    if (outcome === 'operator') return { code: 'CHECKOUT_OPERATOR_RECONCILIATION_REQUIRED', blocked: true,
+      message: 'This purchase requires operator reconciliation. Keep this checkout for recovery.' };
+    if (checkoutOutcomeUnknown(error)) return { code: 'CHECKOUT_OUTCOME_UNKNOWN', blocked: false, message: 'Checkout outcome is unknown. Retry to check the same purchase.' };
+    const code = checkoutErrorCode(error) || 'CHECKOUT_FAILED';
+    const value = detail && typeof detail === 'object' ? detail as Record<string, unknown> : {};
+    const block = checkoutBlock(code, value.web_path);
+    if (block) return { ...block, blocked: true };
+    const messages: Record<string, string> = {
+      CHECKOUT_FAILED: 'Checkout failed. Review its status before starting again.',
+      CHECKOUT_PAYMENT_CONFLICT: 'A payment is being reconciled. This cancelled order will not be fulfilled.',
+      CHECKOUT_REFUNDED: 'This checkout was refunded. This cancelled order will not be fulfilled.',
+      CHECKOUT_TERMINAL: 'This checkout has ended. Review its order status.',
+    };
+    if (Object.hasOwn(messages, code) || checkoutWebPath(value.web_path)) return { code, blocked: true,
+      message: Object.hasOwn(messages, code) ? messages[code] : (typeof value.message === 'string' ? value.message : 'Checkout is blocked. Review the listing.'),
+      ...(checkoutWebPath(value.web_path) ? { webPath: checkoutWebPath(value.web_path) } : {}),
+    };
+  }
   if (typeof detail === 'string') return { code: 'CHECKOUT_FAILED', message: detail };
   const value = detail && typeof detail === 'object' ? detail as Record<string, unknown> : {};
   const code = typeof value.code === 'string' ? value.code : 'CHECKOUT_FAILED';
