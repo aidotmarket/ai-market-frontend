@@ -2,10 +2,10 @@
 import { act, cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { afterEach, beforeEach, expect, it, vi } from 'vitest';
 const mocks = vi.hoisted(() => ({
-  reauth: vi.fn(), get: vi.fn(), decide: vi.fn(), push: vi.fn(), provider: vi.fn(), query: new URLSearchParams(), id: '11111111-1111-4111-8111-111111111111',
+  reauth: vi.fn(), get: vi.fn(), decide: vi.fn(), push: vi.fn(), replace: vi.fn(), provider: vi.fn(), query: new URLSearchParams(), id: '11111111-1111-4111-8111-111111111111',
   auth: { hydrated: true, isLoading: false, user: { id: 'owner', totp_enabled: true }, token: 'session' } as { hydrated: boolean; isLoading: boolean; user: Pick<User, 'id'> & Partial<User> | null; token: string | null },
 }));
-vi.mock('next/navigation', () => ({ useRouter: () => ({ push: mocks.push }), useParams: () => ({ id: mocks.id }), useSearchParams: () => mocks.query }));
+vi.mock('next/navigation', () => ({ useRouter: () => ({ push: mocks.push, replace: mocks.replace }), useParams: () => ({ id: mocks.id }), useSearchParams: () => mocks.query }));
 vi.mock('@/api/auth', async original => ({ ...await original<typeof import('@/api/auth')>(), submitReauth: mocks.reauth }));
 vi.mock('@/components/OAuthButtons', () => ({ startProviderOAuth: mocks.provider }));
 vi.mock('@/store/auth', () => ({ useAuthStore: () => mocks.auth }));
@@ -27,7 +27,7 @@ beforeEach(() => {
   mocks.auth = { hydrated: true, isLoading: false, user: { id: 'owner', totp_enabled: true }, token: 'session' };
   mocks.get.mockResolvedValue(action); mocks.decide.mockResolvedValue({ ...action, status: 'confirmed' });
 });
-afterEach(() => { cleanup(); vi.useRealTimers(); });
+afterEach(() => { cleanup(); vi.useRealTimers(); vi.unstubAllEnvs(); });
 const review = async () => { render(<PendingActionPage />); await screen.findByRole('button', { name: 'Confirm' }); };
 const noDecisions = () => { expect(screen.queryByRole('button', { name: 'Confirm' })).toBeNull(); expect(screen.queryByRole('button', { name: 'Decline' })).toBeNull(); };
 
@@ -268,4 +268,57 @@ it('company enrollment-required errors use the fixed settings continuation', asy
   fireEvent.click(await screen.findByRole('button', { name: 'Set up two-factor authentication' }));
   expect(mocks.push).toHaveBeenCalledWith(`/dashboard/settings?redirect=${encodeURIComponent(`/confirm/${mocks.id}?t=${token}`)}#security`);
   expect(mocks.reauth).not.toHaveBeenCalled(); expect(mocks.decide).not.toHaveBeenCalled();
+});
+const checkoutAction: PendingAction = { ...action, summary: { ...action.summary, action: 'aim.checkout.handoff.create' },
+  result: { handoff_id: 'handoff', expires_at: '2099-01-01T00:00:00Z', checkout_url: `https://ai.market/checkout/h/${token}` } };
+it('continues straight from confirmed handoff to browser checkout without another chat call', async () => {
+  vi.stubEnv('NEXT_PUBLIC_CHECKOUT_DOMAIN_SERVICE_ENABLED', 'true');
+  mocks.get.mockResolvedValue({ ...checkoutAction, result: null });
+  mocks.decide.mockResolvedValue({ ...checkoutAction, status: 'confirmed' });
+  await review(); fireEvent.click(screen.getByRole('button', { name: 'Confirm' }));
+  await waitFor(() => expect(mocks.replace).toHaveBeenCalledExactlyOnceWith(`/checkout/h/${token}`));
+  expect(mocks.get).toHaveBeenCalledOnce(); expect(mocks.decide).toHaveBeenCalledOnce();
+  expect(screen.getByRole('link', { name: 'Continue to checkout' }).getAttribute('href')).toBe(`/checkout/h/${token}`);
+  expect(document.querySelector('input')).toBeNull();
+});
+it('offers the same checkout continuation on a confirmed owner read without repeating the decision', async () => {
+  vi.stubEnv('NEXT_PUBLIC_CHECKOUT_DOMAIN_SERVICE_ENABLED', 'true');
+  mocks.get.mockResolvedValue({ ...checkoutAction, status: 'confirmed' }); render(<PendingActionPage />);
+  await screen.findByRole('link', { name: 'Continue to checkout' });
+  expect(mocks.decide).not.toHaveBeenCalled(); expect(mocks.push).not.toHaveBeenCalled();
+});
+it.each(['https://evil.test/checkout/h/' + token, 'https://ai.market/checkout/h/' + token + '?extra=1', null])('blocks unsafe or missing confirmed continuation %s', async checkout_url => {
+  vi.stubEnv('NEXT_PUBLIC_CHECKOUT_DOMAIN_SERVICE_ENABLED', 'true');
+  mocks.get.mockResolvedValue({ ...checkoutAction, result: null });
+  mocks.decide.mockResolvedValue({ ...checkoutAction, status: 'confirmed', result: { checkout_url } });
+  await review(); fireEvent.click(screen.getByRole('button', { name: 'Confirm' })); await screen.findByText(/Confirmed\./);
+  expect(mocks.push).not.toHaveBeenCalled(); expect(screen.queryByRole('link', { name: 'Continue to checkout' })).toBeNull();
+});
+it.each(['denied', 'expired', 'failed'] as const)('does not continue a %s handoff', async status => {
+  vi.stubEnv('NEXT_PUBLIC_CHECKOUT_DOMAIN_SERVICE_ENABLED', 'true');
+  mocks.get.mockResolvedValue({ ...checkoutAction, status }); render(<PendingActionPage />);
+  await screen.findByRole('region');
+  expect(mocks.push).not.toHaveBeenCalled(); expect(screen.queryByRole('link', { name: 'Continue to checkout' })).toBeNull();
+});
+it('preserves flag-off confirmation behaviour even if a checkout link is present', async () => {
+  vi.stubEnv('NEXT_PUBLIC_CHECKOUT_DOMAIN_SERVICE_ENABLED', 'false');
+  mocks.decide.mockResolvedValue({ ...checkoutAction, status: 'confirmed' });
+  await review(); fireEvent.click(screen.getByRole('button', { name: 'Confirm' })); await screen.findByText(/Confirmed\./);
+  expect(mocks.push).not.toHaveBeenCalled(); expect(screen.queryByRole('link', { name: 'Continue to checkout' })).toBeNull();
+});
+
+
+it.each(['SELLER_PAYOUT_READINESS_UNKNOWN', 'SELLER_PAYOUT_NOT_READY', 'REFERENCE_DELIVERY_UNREADY'])('blocks confirmation checkout failure %s with its web path and no continuation', async code => {
+  vi.stubEnv('NEXT_PUBLIC_CHECKOUT_DOMAIN_SERVICE_ENABLED', 'true');
+  mocks.decide.mockResolvedValue({ ...checkoutAction, status: 'failed', error_code: code, result: { web_path: '/listings/listing' } });
+  await review(); fireEvent.click(screen.getByRole('button', { name: 'Confirm' }));
+  await screen.findByRole('link', { name: 'Review listing' });
+  expect(screen.getByRole('alert').textContent).toContain('Checkout is blocked');
+  expect(mocks.push).not.toHaveBeenCalled(); expect(screen.queryByRole('link', { name: 'Continue to checkout' })).toBeNull(); noDecisions();
+});
+it('renders a readiness refusal returned by confirmation POST as a block', async () => {
+  vi.stubEnv('NEXT_PUBLIC_CHECKOUT_DOMAIN_SERVICE_ENABLED', 'true');
+  mocks.decide.mockRejectedValue({ response: { status: 409, data: { detail: { code: 'REFERENCE_DELIVERY_UNREADY', web_path: '/listings/listing' } } } });
+  await review(); fireEvent.click(screen.getByRole('button', { name: 'Confirm' }));
+  await screen.findByRole('link', { name: 'Review listing' }); noDecisions(); expect(mocks.push).not.toHaveBeenCalled();
 });

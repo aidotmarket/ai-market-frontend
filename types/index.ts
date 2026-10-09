@@ -618,6 +618,9 @@ export interface CheckoutCreateRequest {
   signer_title?: string;
   business_legal_name?: string;
   jurisdiction?: string;
+  checkout_request_id?: string;
+  handoff_token?: string;
+  csrf?: string;
 }
 
 export interface LicenseAcceptanceFields {
@@ -632,8 +635,12 @@ export interface LicenseAcceptanceFields {
 }
 
 export interface CheckoutCreateResponse {
-  checkout_url: string;
-  session_id: string;
+  checkout_url: string | null;
+  session_id?: string;
+  order_id?: string;
+  order_number?: string;
+  transaction_id?: string;
+  card_quote?: Record<string, unknown>;
 }
 
 export interface CheckoutVerifyResponse {

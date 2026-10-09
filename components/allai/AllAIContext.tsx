@@ -175,6 +175,7 @@ export function useAllAI() {
 
 export function AllAIProvider({ children }: { children: ReactNode }) {
   const pathname = usePathname();
+  const contextPath = pathname.startsWith('/checkout/h/') ? '/checkout/h' : pathname;
   const { user, token } = useAuthStore();
   const [isOpen, setIsOpen] = useState(false);
   const [messages, setMessages] = useState<Message[]>([]);
@@ -378,7 +379,7 @@ export function AllAIProvider({ children }: { children: ReactNode }) {
         abortRef.current = controller;
 
         const listingMatch = pathname.match(/^\/listings\/([^/]+)/);
-        const context: AnonymousMessagePayload['context'] = { page: pathname };
+        const context: AnonymousMessagePayload['context'] = { page: contextPath };
         if (listingMatch) context.listing_id = listingMatch[1];
 
         const bodyPayload: AnonymousMessagePayload = {
@@ -574,7 +575,7 @@ export function AllAIProvider({ children }: { children: ReactNode }) {
         abortRef.current = null;
       }
     },
-    [anonymousAvailable, anonymousSurfaceActive, ensureSession, isStreaming, locale, pathname, token]
+    [anonymousAvailable, anonymousSurfaceActive, ensureSession, isStreaming, locale, pathname, contextPath, token]
   );
 
   const open = useCallback(() => {
@@ -600,7 +601,7 @@ export function AllAIProvider({ children }: { children: ReactNode }) {
   return (
     <AllAIContext.Provider
       value={{
-        isOpen, open, close, toggle, messages, isStreaming, sendMessage, page: pathname,
+        isOpen, open, close, toggle, messages, isStreaming, sendMessage, page: contextPath,
         locale, setLocale, anonymousSurfaceActive, anonymousAvailable,
         onFieldProposal: onFieldProposalState, setOnFieldProposal,
         onBatchProposal: onBatchProposalState, setOnBatchProposal,

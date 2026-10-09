@@ -8,6 +8,9 @@ import { hasRequiredReviewContent, safeLicenseUrl } from '@/lib/pending-action-r
 import ReauthModal from '@/app/dashboard/settings/ReauthModal';
 import { startProviderOAuth } from '@/components/OAuthButtons';
 import { decidePendingAction, getPendingAction, pendingActionError, type PendingAction } from '@/api/pending-actions';
+import { checkoutBlock, checkoutContinuation, checkoutDomainEnabled, checkoutErrorCode } from '@/lib/checkout-domain';
+import Link from 'next/link';
+import { useSessionGeneration } from '@/hooks/useSessionGeneration';
 
 function Terms({ value }: { value: unknown }) {
   if (Array.isArray(value)) return <ol className="space-y-2">{value.map((item, index) => <li key={index}><Terms value={item} /></li>)}</ol>;
@@ -27,23 +30,30 @@ export default function PendingActionReview() {
   const path = `/confirm/${id}?${query.toString()}`;
   const valid = PENDING_ACTION_CONTINUATION.test(path);
   const token = query.get('t') || '';
-  const identity = `${user?.id || ''}:${accessToken || ''}:${path}`;
+  const sessionGeneration = useSessionGeneration(accessToken);
+  const identity = `${user?.id || ''}:${sessionGeneration}:${path}`;
   const currentIdentity = useRef(identity);
   currentIdentity.current = identity;
   const [review, setReview] = useState<{ identity: string; data: PendingAction } | null>(null);
   const [error, setError] = useState<{ identity: string; kind: ErrorKind } | null>(null);
   const [authenticatorOpen, setAuthenticatorOpen] = useState(false);
   const [busy, setBusy] = useState(false);
+  const [checkoutFailure, setCheckoutFailure] = useState<{ identity: string; block: NonNullable<ReturnType<typeof checkoutBlock>> } | null>(null);
   const [reauthError, setReauthError] = useState('');
   const submitting = useRef(false);
   const data = review?.identity === identity ? review.data : null;
   const kind = error?.identity === identity ? error.kind : '';
+  const continuation = checkoutDomainEnabled() && data?.status === 'confirmed' && !data.error_code
+    && data.summary.action === 'aim.checkout.handoff.create' ? checkoutContinuation(data.result?.checkout_url) : null;
+  const checkoutRefusal = checkoutDomainEnabled() ? (checkoutFailure?.identity === identity ? checkoutFailure.block
+    : checkoutBlock(data?.error_code, data?.result?.web_path)) : null;
 
   useEffect(() => {
     if (!hydrated || isLoading || !valid) return;
     let active = true;
     setReview(null);
     setError(null);
+    setCheckoutFailure(null);
     setReauthError('');
     // Probe the API even without a session: flag-off 404 must stay inert.
     getPendingAction(id, token).then((data) => {
@@ -72,9 +82,20 @@ export default function PendingActionReview() {
     setBusy(true);
     try {
       const result = await decidePendingAction(id, token, decision, data.summary_hash, ...(reauthToken ? [reauthToken] : []));
-      if (currentIdentity.current === identity) { setReview({ identity, data: result }); setError(null); }
+      if (currentIdentity.current === identity) {
+        setReview({ identity, data: result }); setError(null);
+        const next = checkoutDomainEnabled() && decision === 'confirm' && result.status === 'confirmed' && !result.error_code
+          && result.summary.action === 'aim.checkout.handoff.create' ? checkoutContinuation(result.result?.checkout_url) : null;
+        if (next) router.replace(next);
+      }
+
     } catch (cause) {
-      if (currentIdentity.current === identity) setError({ identity, kind: pendingActionError(cause) });
+      if (currentIdentity.current === identity) {
+        const detail = (cause as { response?: { data?: { detail?: { web_path?: unknown } } } })?.response?.data?.detail;
+        const block = checkoutDomainEnabled() ? checkoutBlock(checkoutErrorCode(cause), detail?.web_path) : null;
+        if (block) setCheckoutFailure({ identity, block });
+        else setError({ identity, kind: pendingActionError(cause) });
+      }
     } finally { submitting.current = false; setBusy(false); }
   };
 
@@ -99,7 +120,7 @@ export default function PendingActionReview() {
   const notFound = !valid || kind === 'not_found';
   const expired = kind === 'changed' || data?.status === 'expired' || (data?.status === 'pending_review' && Date.parse(data.expires_at) <= Date.now());
   const contentUnavailable = kind === 'summary_unavailable' || data?.error_code === 'SUMMARY_CONTENT_UNAVAILABLE' || (!!data && !hasRequiredReviewContent(data.summary));
-  const actionable = data?.status === 'pending_review' && !expired && !notFound && kind !== 'unavailable';
+  const actionable = data?.status === 'pending_review' && !expired && !notFound && kind !== 'unavailable' && !checkoutRefusal;
 
   return <main className="mx-auto max-w-xl space-y-6 px-6 py-16">
     <ReauthModal key={identity} isOpen={authenticatorOpen && !!data && data.status === 'pending_review'} method="totp" onClose={() => setAuthenticatorOpen(false)} onSuccess={async proof => { if (currentIdentity.current !== identity) return; setAuthenticatorOpen(false); await decide('confirm', proof); }} />
@@ -125,8 +146,12 @@ export default function PendingActionReview() {
           <p className="text-sm text-gray-600">Expires: <time dateTime={data.expires_at}>{data.expires_at}</time></p>
         </section>}
         {data?.status === 'confirmed' && <p role="status">Confirmed. This request has been completed.</p>}
+        {continuation && !checkoutRefusal && <><p>Review the licence and confirm your authority at checkout.</p>
+          <Link href={continuation} replace prefetch={false} rel="noreferrer">Continue to checkout</Link></>}
+        {checkoutRefusal && <div role="alert"><p>{checkoutRefusal.message}</p>
+          {checkoutRefusal.webPath && <Link href={checkoutRefusal.webPath}>Review listing</Link>}</div>}
         {data?.status === 'denied' && <p role="status">Declined. This request will not be carried out.</p>}
-        {data?.status === 'failed' && <p role="alert">This request could not be completed. Ask your assistant for a new request.</p>}
+        {data?.status === 'failed' && !checkoutRefusal && <p role="alert">This request could not be completed. Ask your assistant for a new request.</p>}
         {expired && <p role="alert">This request expired or its terms changed. Ask your assistant for a new request.</p>}
         {kind === 'unavailable' && <p role="alert">This request is temporarily unavailable. Please reload to check its status.</p>}
         {contentUnavailable && <p role="alert">Required request details are missing. Confirmation is disabled. Ask your assistant for a new request with complete app, time, effect and terms.</p>}

@@ -45,3 +45,17 @@ it('keeps auth usable when storage is unavailable', () => {
   expect(() => saveRequestAuthReturn('email', path)).not.toThrow();
   expect(consumeRequestAuthReturn('email', '/listings')).toBe('/listings');
 });
+
+const handoff = `/checkout/h/${'a'.repeat(42)}A`;
+it.each(['oauth', 'email'] as const)('consumes the exact handoff once for %s', method => {
+  saveRequestAuthReturn(method, handoff);
+  expect(consumeRequestAuthReturn(method, '/listings')).toBe(handoff);
+  expect(consumeRequestAuthReturn(method, '/listings')).toBe('/listings');
+});
+it.each([`${handoff}?x=1`, `${handoff}#fragment`, `${handoff}/`, `${handoff}\n`,
+  `/checkout/h/${'a'.repeat(43)}`, `/checkout/h/${'a'.repeat(42)}`, `/checkout/h/${'a'.repeat(44)}`,
+  `https://ai.market${handoff}`, `https://evil.test${handoff}`, `//evil.test${handoff}`,
+  handoff.replace('A', '%41'), '/checkout/h/../listings'])('rejects malformed handoff %s', target => {
+  saveRequestAuthReturn('email', target);
+  expect(consumeRequestAuthReturn('email', '/listings')).toBe('/listings');
+});

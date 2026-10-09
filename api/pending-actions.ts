@@ -1,8 +1,9 @@
 import axios from 'axios';
-import { sha256 } from '@noble/hashes/sha2.js';
-import { bytesToHex } from '@noble/hashes/utils.js';
+import { sessionCsrf as pendingActionCsrf } from '@/lib/session-csrf';
 import { useAuthStore } from '@/store/auth';
 import { PENDING_ACTION_CONTINUATION } from '@/lib/redirect';
+
+export { pendingActionCsrf };
 
 export type PendingActionStatus = 'pending_review' | 'confirmed' | 'denied' | 'expired' | 'failed';
 export interface PendingAction {
@@ -23,10 +24,6 @@ const client = axios.create({
   withCredentials: true,
   headers: { 'Content-Type': 'application/json' },
 });
-
-export function pendingActionCsrf(accessToken: string): string {
-  return bytesToHex(sha256(new TextEncoder().encode(`aim.pending.csrf.v1\0${accessToken}`)));
-}
 
 function session() {
   const token = useAuthStore.getState().token;

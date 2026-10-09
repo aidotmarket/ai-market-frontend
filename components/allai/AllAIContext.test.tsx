@@ -1001,3 +1001,17 @@ describe('supported locales across normal buyer and seller chat surfaces', () =>
     expect(context().messages.at(-1)).toMatchObject({ content: 'Validated', factRevisionSet: 'e'.repeat(64) });
   });
 });
+
+
+it('omits a checkout handoff token from support page context', async () => {
+  mocks.pathname = '/checkout/h/' + 'a'.repeat(43);
+  fetchMock.mockImplementation(async input => {
+    const url = String(input);
+    if (url === `${SESSION_URL}/stale-session`) return response(200, { messages: [] });
+    if (url === MESSAGE_URL) return sseResponse();
+    throw new Error(`Unexpected request: ${url}`);
+  });
+  renderProvider(); await send();
+  expect(messagePayload(messageCalls()[0]).context).toEqual({ page: '/checkout/h' });
+  expect(JSON.stringify(messagePayload(messageCalls()[0]))).not.toContain('a'.repeat(43));
+});

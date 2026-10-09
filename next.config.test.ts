@@ -119,3 +119,15 @@ describe('next.config request discovery rewrites', () => {
     });
   });
 });
+
+
+describe('checkout handoff token privacy', () => {
+  it.each([`/checkout/h/${'a'.repeat(43)}`, `/confirm/11111111-1111-4111-8111-111111111111?t=${'a'.repeat(43)}`,
+    `/login?redirect=${encodeURIComponent('/checkout/h/' + 'a'.repeat(43))}`])('protects %s from cache, referrers and framing', async path => {
+    const { default: nextConfig } = await import('./next.config');
+    const response = await unstable_getResponseFromNextConfig({ url: `https://ai.market${path}`, nextConfig });
+    expect(response.headers.get('cache-control')).toBe('no-store');
+    expect(response.headers.get('referrer-policy')).toBe('no-referrer');
+    expect(response.headers.get('content-security-policy')).toBe("frame-ancestors 'none'");
+  });
+});

@@ -13,6 +13,7 @@ import { AxiosError } from 'axios';
 import { api } from '@/api/client';
 import { createCheckout } from '@/api/checkout';
 import { hashLicenseComponentBytes } from './ListingLicenseDisclosure';
+import { checkoutReplayKey } from '@/lib/checkout-replay';
 import {sha256} from '@/lib/customLicenseVerification';
 import { readFileSync } from 'node:fs';
 
@@ -710,4 +711,171 @@ describe('one licence disclosure across purchase display states',()=>{
   expect(screen.getAllByRole('region',{name:'Licence terms'})).toHaveLength(1);
   expect(screen.getAllByText('Licence summary — not the contract')).toHaveLength(1);
  });
+});
+
+
+describe('connector checkout handoff and domain purchase', () => {
+  const props = { listingId: 'listing-1', slug: 'listing', price: 20, pricingType: 'one_time', licenseDetails: verifiedLicense };
+  const handoffToken = ('a'.repeat(42) + 'A');
+  beforeEach(() => {
+    sessionStorage.clear();
+    vi.stubEnv('NEXT_PUBLIC_CHECKOUT_DOMAIN_SERVICE_ENABLED', 'true');
+    useAuthStore.setState({ isAuthenticated: true, user: { id: 'buyer-1' } as never });
+    ordersApi.getMyOrders.mockResolvedValue([]);
+    legalApi.getTermsAcceptanceStatus.mockResolvedValue({ accepted: true });
+    legalApi.getCurrentTerms.mockResolvedValue({ version: '1.1' });
+    vi.stubGlobal('crypto', webcrypto);
+    vi.stubGlobal('fetch', vi.fn().mockImplementation((url: string) => Promise.resolve(documentResponse(
+      String(url).includes('marketplace-listing') ? 'Exact covenant text\n' : 'Exact licence text\n'
+    ))));
+    vi.mocked(createCheckout).mockReset();
+  });
+  afterEach(() => { cleanup(); vi.unstubAllEnvs(); vi.unstubAllGlobals(); vi.clearAllMocks(); });
+  async function accept(context?: { handoffToken: string }) {
+    const view = await renderBuyer(<ToastProvider><BuyButton {...props} checkoutContext={context} /></ToastProvider>);
+    await waitFor(() => expect((screen.getByRole('checkbox', { name: 'Confirm licence authority' }) as HTMLInputElement).disabled).toBe(false));
+    expect(createCheckout).not.toHaveBeenCalled();
+    expect((screen.getByRole('checkbox', { name: 'Confirm licence authority' }) as HTMLInputElement).checked).toBe(false);
+    completeAcceptanceForm();
+    await waitFor(() => expect((screen.getByRole('button', { name: 'Accept and continue to payment' }) as HTMLButtonElement).disabled).toBe(false));
+    fireEvent.click(screen.getByRole('button', { name: 'Accept and continue to payment' }));
+    return view;
+  }
+  function error(status: number, detail: unknown) {
+    const result = new AxiosError('checkout');
+    result.response = { status, data: { detail }, statusText: 'refused', headers: {}, config: {} as never };
+    return result;
+  }
+  it.each(['SELLER_PAYOUT_READINESS_UNKNOWN', 'SELLER_PAYOUT_NOT_READY', 'REFERENCE_DELIVERY_UNREADY'])('renders %s as a block with its web path and never redirects', async code => {
+    vi.mocked(createCheckout).mockRejectedValue(error(409, { code, web_path: '/listings/listing-1' }));
+    await accept({ handoffToken });
+    await screen.findByRole('link', { name: 'Review listing' });
+    expect(screen.getByRole('link', { name: 'Review listing' }).getAttribute('href')).toBe('/listings/listing-1');
+    expect(screen.getAllByRole('alert').some(element => element.textContent?.includes('Checkout is blocked'))).toBe(true);
+    expect((screen.getByRole('button', { name: 'Accept and continue to payment' }) as HTMLButtonElement).disabled).toBe(true);
+    expect(createCheckout).toHaveBeenCalledOnce();
+    expect(window.location.pathname).toBe('/');
+  });
+  it.each(['handoff', 'direct'])('retries 503 processing with the identical accepted %s request and never a new claim', async kind => {
+    vi.mocked(createCheckout).mockRejectedValue(error(503, 'CHECKOUT_PROCESSING'));
+    const view = await accept(kind === 'handoff' ? { handoffToken } : undefined);
+    const retry = await screen.findByRole('button', { name: 'Retry checkout' });
+    const first = vi.mocked(createCheckout).mock.calls[0];
+    expect(first[2]).toMatchObject({ authority_confirmed: true, typed_name: 'Ada Buyer', jurisdiction: 'GB' });
+    if (kind === 'handoff') expect(first[3]).toEqual({ handoffToken });
+    else expect(first[3]).toEqual({ checkoutRequestId: expect.stringMatching(/^[a-f0-9-]{36}$/) });
+    expect(screen.queryByLabelText('Typed full name')).toBeNull();
+    view.rerender(<ToastProvider><BuyButton {...props} licenseDetails={undefined} disabledReason="Listing changed after reservation" checkoutContext={kind === 'handoff' ? { handoffToken } : undefined} /></ToastProvider>);
+    fireEvent.click(retry);
+    await waitFor(() => expect(createCheckout).toHaveBeenCalledTimes(2));
+    expect(vi.mocked(createCheckout).mock.calls[1]).toEqual(first);
+    expect(window.location.pathname).toBe('/');
+  });
+  it.each(['handoff', 'direct'])('replays a lost response after reservation across reload for %s without a new claim', async kind => {
+    const claims = new Set<string>();
+    vi.mocked(createCheckout).mockImplementation(async (_listing, _version, _acceptance, options) => {
+      claims.add(options?.handoffToken || options?.checkoutRequestId || 'missing');
+      throw new AxiosError('response lost after backend reservation', 'ERR_NETWORK');
+    });
+    const context = kind === 'handoff' ? { handoffToken } : undefined;
+    const view = await accept(context);
+    const first = vi.mocked(createCheckout).mock.calls[0];
+    const retry = await screen.findByRole('button', { name: 'Retry checkout' });
+    expect((retry as HTMLButtonElement).disabled).toBe(false);
+    fireEvent.click(retry);
+    await waitFor(() => expect(createCheckout).toHaveBeenCalledTimes(2));
+    expect(vi.mocked(createCheckout).mock.calls[1]).toEqual(first);
+    const key = checkoutReplayKey('buyer-1', props.listingId, undefined, context?.handoffToken);
+    const stored = sessionStorage.getItem(key)!;
+    expect(stored).toContain('Ada Buyer');
+    expect(key + stored).not.toContain(handoffToken);
+    expect(stored).not.toContain('csrf');
+    view.unmount();
+    await renderBuyer(<ToastProvider><BuyButton {...props} licenseDetails={undefined} disabledReason="Changed after reservation" checkoutContext={context} /></ToastProvider>);
+    expect(createCheckout).toHaveBeenCalledTimes(2);
+    fireEvent.click(await screen.findByRole('button', { name: 'Retry checkout' }));
+    await waitFor(() => expect(createCheckout).toHaveBeenCalledTimes(3));
+    expect(vi.mocked(createCheckout).mock.calls[2]).toEqual(first);
+    expect(claims.size).toBe(1);
+    vi.mocked(createCheckout).mockRejectedValue(error(409, { code: 'CHECKOUT_FAILED' }));
+    fireEvent.click(await screen.findByRole('button', { name: 'Retry checkout' }));
+    await waitFor(() => expect(sessionStorage.getItem(key)).toBeNull());
+    expect((screen.getByRole('button', { name: 'Retry checkout' }) as HTMLButtonElement).disabled).toBe(true);
+  });
+  it.each([error(502, undefined), new Error('Connection closed')])('keeps an unconfirmed transport outcome retryable: %s', async failure => {
+    vi.mocked(createCheckout).mockRejectedValue(failure);
+    await accept();
+    const first = vi.mocked(createCheckout).mock.calls[0];
+    fireEvent.click(await screen.findByRole('button', { name: 'Retry checkout' }));
+    await waitFor(() => expect(createCheckout).toHaveBeenCalledTimes(2));
+    expect(vi.mocked(createCheckout).mock.calls[1]).toEqual(first);
+  });
+  it('retains the reserved direct UUID and acceptance through auth failure and session renewal', async () => {
+    vi.mocked(createCheckout).mockRejectedValueOnce(new AxiosError('response lost', 'ERR_NETWORK'))
+      .mockRejectedValueOnce(error(401, 'FIRST_PARTY_SESSION_REQUIRED'))
+      .mockRejectedValue(error(503, 'CHECKOUT_PROCESSING'));
+    await accept();
+    const first = vi.mocked(createCheckout).mock.calls[0];
+    const key = checkoutReplayKey('buyer-1', props.listingId);
+    const frozen = sessionStorage.getItem(key);
+    fireEvent.click(await screen.findByRole('button', { name: 'Retry checkout' }));
+    await screen.findAllByText('Sign in again, then retry the same purchase.');
+    expect(sessionStorage.getItem(key)).toBe(frozen);
+    await act(async () => { useAuthStore.setState({ isAuthenticated: false }); });
+    await act(async () => { useAuthStore.setState({ isAuthenticated: true, token: 'renewed-session' }); });
+    fireEvent.click(await screen.findByRole('button', { name: 'Retry checkout' }));
+    await waitFor(() => expect(createCheckout).toHaveBeenCalledTimes(3));
+    expect(vi.mocked(createCheckout).mock.calls[1]).toEqual(first);
+    expect(vi.mocked(createCheckout).mock.calls[2]).toEqual(first);
+    expect(sessionStorage.getItem(key)).toBe(frozen);
+  });
+  it('retains a reconciliation-required claim across reload without offering a fresh purchase', async () => {
+    vi.mocked(createCheckout).mockRejectedValueOnce(new AxiosError('response lost', 'ERR_NETWORK'))
+      .mockRejectedValue(error(503, 'CHECKOUT_OPERATOR_RECONCILIATION_REQUIRED'));
+    const view = await accept();
+    const first = vi.mocked(createCheckout).mock.calls[0];
+    const key = checkoutReplayKey('buyer-1', props.listingId);
+    const frozen = sessionStorage.getItem(key);
+    fireEvent.click(await screen.findByRole('button', { name: 'Retry checkout' }));
+    await screen.findAllByText('This purchase requires operator reconciliation. Keep this checkout for recovery.');
+    expect(sessionStorage.getItem(key)).toBe(frozen);
+    expect((screen.getByRole('button', { name: 'Retry checkout' }) as HTMLButtonElement).disabled).toBe(true);
+    view.unmount();
+    await renderBuyer(<ToastProvider><BuyButton {...props} licenseDetails={undefined} /></ToastProvider>);
+    expect(screen.queryByRole('button', { name: 'Accept and continue to payment' })).toBeNull();
+    fireEvent.click(await screen.findByRole('button', { name: 'Retry checkout' }));
+    await waitFor(() => expect(createCheckout).toHaveBeenCalledTimes(3));
+    expect(vi.mocked(createCheckout).mock.calls[2]).toEqual(first);
+    expect(sessionStorage.getItem(key)).toBe(frozen);
+  });
+  it('clears persisted identity on a successful terminal outcome', async () => {
+    vi.mocked(createCheckout).mockResolvedValue({ checkout_url: 'https://checkout.stripe.com/c/pay/test', order_id: 'order' } as never);
+    await accept();
+    await waitFor(() => expect(createCheckout).toHaveBeenCalledOnce());
+    expect(sessionStorage.getItem(checkoutReplayKey('buyer-1', props.listingId))).toBeNull();
+  });
+  it('retries the same acceptance with Web Storage disabled', async () => {
+    vi.stubGlobal('sessionStorage', {
+      getItem: () => { throw new Error('disabled'); },
+      setItem: () => { throw new Error('disabled'); },
+      removeItem: () => { throw new Error('disabled'); },
+    });
+    vi.mocked(createCheckout).mockRejectedValue(new AxiosError('network', 'ERR_NETWORK'));
+    await accept();
+    const first = vi.mocked(createCheckout).mock.calls[0];
+    fireEvent.click(await screen.findByRole('button', { name: 'Retry checkout' }));
+    await waitFor(() => expect(createCheckout).toHaveBeenCalledTimes(2));
+    expect(vi.mocked(createCheckout).mock.calls[1]).toEqual(first);
+  });
+  it('keeps flag-off markup byte-identical with unset, false and unrecognised flags', async () => {
+    vi.stubEnv('NEXT_PUBLIC_CHECKOUT_DOMAIN_SERVICE_ENABLED', '');
+    const view = await renderBuyer(<ToastProvider><BuyButton {...props} /></ToastProvider>);
+    await waitFor(() => expect((screen.getByRole('checkbox', { name: 'Confirm licence authority' }) as HTMLInputElement).disabled).toBe(false));
+    const baseline = view.container.innerHTML;
+    for (const value of ['false', 'TRUE']) {
+      vi.stubEnv('NEXT_PUBLIC_CHECKOUT_DOMAIN_SERVICE_ENABLED', value);
+      view.rerender(<ToastProvider><BuyButton {...props} /></ToastProvider>);
+      expect(view.container.innerHTML).toBe(baseline);
+    }
+  });
 });
