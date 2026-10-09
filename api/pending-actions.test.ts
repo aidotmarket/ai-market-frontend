@@ -86,3 +86,11 @@ it.each([
 ] as const)('maps backend %s %s to %s', (status, detail, kind) => {
   expect(pendingActionError({ response: { status, data: { detail } } })).toBe(kind);
 });
+
+
+it('adds same-session TOTP proof only to company confirmation, never decline', async () => {
+  await decidePendingAction(id, token, 'confirm', action.summary_hash, 'native-proof');
+  expect(mocks.post.mock.lastCall?.[1]).toEqual({ token, csrf: pendingActionCsrf(mocks.token), summary_hash: action.summary_hash, reauth_token: 'native-proof' });
+  await decidePendingAction(id, token, 'decline', action.summary_hash, 'native-proof');
+  expect(mocks.post.mock.lastCall?.[1]).toEqual({ token, csrf: pendingActionCsrf(mocks.token) });
+});

@@ -24,6 +24,7 @@ export interface User {
   two_factor_setup_reason?: string | null;
   two_factor_provider?: 'google' | 'github' | null;
   seller_two_factor_satisfied?: boolean;
+  seller_binding_factor_readiness?: { code: 'SECOND_FACTOR_ENROLLMENT_REQUIRED'; path: '/dashboard/settings' } | null;
   reauth_method?: 'password' | 'totp' | 'magic_link';
 }
 

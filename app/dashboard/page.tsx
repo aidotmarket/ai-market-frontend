@@ -1,6 +1,7 @@
 'use client';
 
 import { accountReauthMethod, setupRestriction, setupRefusal, sellerSecuritySatisfied } from '@/lib/two-factor-policy';
+import { companyEnrollmentOffered } from '@/components/CompanyAuthenticator';
 
 import { useEffect, useState, useCallback, useRef } from 'react';
 import Link from 'next/link';
@@ -174,6 +175,10 @@ export default function DashboardOverview() {
       setBackupCodes([]);
       setTwoFactorFlow('showing_qr');
     } catch (err) {
+      if (user?.sso_enforced && err instanceof AxiosError && err.response?.data?.detail === 'CSRF_REQUIRED') {
+        window.location.assign('/dashboard/settings#security');
+        return;
+      }
       if (setupRefusal(err, user)) {
         setSecurityError(setupRefusal(err, user)!);
         setTwoFactorFlow('idle');
@@ -400,7 +405,7 @@ export default function DashboardOverview() {
                   </p>
                   {!sellerSecurityReady && !ssoManaged2FA && twoFactorFlow === 'idle' && (
                     <button
-                      onClick={() => setReauthAction('setup')}
+                      onClick={() => companyEnrollmentOffered(user) ? window.location.assign('/dashboard/settings#security') : setReauthAction('setup')}
                       disabled={securityLoading}
                       className="mt-3 rounded-lg bg-[#3F51B5] px-4 py-2 text-sm font-medium text-white hover:bg-[#3545a0] disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
                     >

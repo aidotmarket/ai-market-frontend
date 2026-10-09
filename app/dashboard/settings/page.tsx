@@ -13,6 +13,7 @@ import { useToast } from '@/components/Toast';
 import { AxiosError } from 'axios';
 import ReauthModal from './ReauthModal';
 import ConnectedApps from './ConnectedApps';
+import CompanyAuthenticator, { companyEnrollmentOffered } from '@/components/CompanyAuthenticator';
 import TotpQrCode from '@/components/TotpQrCode';
 
 type TwoFactorFlow = 'idle' | 'showing_qr' | 'verifying' | 'showing_backup_codes';
@@ -29,6 +30,7 @@ export default function SettingsPage() {
   const { user, refreshAuth } = useAuthStore();
   const { toast } = useToast();
 
+  const [strictCompanySetup, setStrictCompanySetup] = useState('');
   const [firstName, setFirstName] = useState('');
   const [lastName, setLastName] = useState('');
   const [companyName, setCompanyName] = useState('');
@@ -158,6 +160,9 @@ export default function SettingsPage() {
       setBackupCodesLabel('Save these backup codes before you continue.');
       setTwoFactorFlow('showing_qr');
     } catch (err) {
+      if (user?.sso_enforced && err instanceof AxiosError && err.response?.data?.detail === 'CSRF_REQUIRED') {
+        setStrictCompanySetup(`${user.id}:${useAuthStore.getState().token}`); setTwoFactorFlow('idle'); return;
+      }
       if (setupRefusal(err, user)) {
         setSecurityError(setupRefusal(err, user)!);
         setTwoFactorFlow('idle');
@@ -293,6 +298,7 @@ export default function SettingsPage() {
     sellerStatus === 'provisioning' ||
     user.role === 'seller' ||
     user.role === 'admin';
+  const companySetup = companyEnrollmentOffered(user) || (user.sso_enforced && user.two_factor_setup_eligible === true && strictCompanySetup === `${user.id}:${useAuthStore.getState().token}`);
   const managedSetupMessage = user?.totp_enabled ? null : setupRestriction(user) ?? (securityError === SSO_MANAGED_2FA_MESSAGE || securityError.startsWith('Sign-in security is managed by your ') ? securityError : null);
   const ssoManaged2FA = !!managedSetupMessage;
 
@@ -415,6 +421,8 @@ export default function SettingsPage() {
         </div>
 
         <div className="space-y-4">
+          {companySetup && <CompanyAuthenticator key={`${user.id}:${useAuthStore.getState().token}`} />}
+          {user.sso_enforced && user.totp_enabled && <CompanyAuthenticator recovery key={`recovery:${user.id}:${useAuthStore.getState().token}`} />}
           <div className="flex items-center justify-between gap-4 rounded-lg border border-gray-200 bg-gray-50 px-4 py-3">
             <div>
               <p className="text-sm font-medium text-gray-900">Two-factor authentication</p>
@@ -422,7 +430,7 @@ export default function SettingsPage() {
                 {ssoManaged2FA ? managedSetupMessage : user.totp_enabled ? 'Your account requires an authenticator code at sign-in.' : 'Add an authenticator app for stronger account protection.'}
               </p>
             </div>
-            {!user.totp_enabled && !ssoManaged2FA && (
+            {!user.totp_enabled && !ssoManaged2FA && !companySetup && (
               <button
                 onClick={() => openReauthForAction('enable_setup')}
                 disabled={securityLoading}

@@ -65,10 +65,10 @@ export async function listPendingActions(): Promise<PendingAction[]> {
   return data.map((item) => response(item));
 }
 
-export async function decidePendingAction(id: string, token: string, decision: 'confirm' | 'decline', summaryHash: string): Promise<PendingAction> {
+export async function decidePendingAction(id: string, token: string, decision: 'confirm' | 'decline', summaryHash: string, reauthToken?: string): Promise<PendingAction> {
   requireLink(id, token);
   const { csrf, headers } = session();
-  const body = decision === 'confirm' ? { token, csrf, summary_hash: summaryHash } : { token, csrf };
+  const body = decision === 'confirm' ? { token, csrf, summary_hash: summaryHash, ...(reauthToken ? { reauth_token: reauthToken } : {}) } : { token, csrf };
   const { data } = await client.post<PendingAction>(`/pending-actions/${id}/${decision}`, body, { headers });
   return response(data, id);
 }

@@ -5,6 +5,7 @@ import { useParams, useRouter, useSearchParams } from 'next/navigation';
 import { useAuthStore } from '@/store/auth';
 import { PENDING_ACTION_CONTINUATION } from '@/lib/redirect';
 import { hasRequiredReviewContent, safeLicenseUrl } from '@/lib/pending-action-review';
+import ReauthModal from '@/app/dashboard/settings/ReauthModal';
 import { startProviderOAuth } from '@/components/OAuthButtons';
 import { decidePendingAction, getPendingAction, pendingActionError, type PendingAction } from '@/api/pending-actions';
 
@@ -31,6 +32,7 @@ export default function PendingActionReview() {
   currentIdentity.current = identity;
   const [review, setReview] = useState<{ identity: string; data: PendingAction } | null>(null);
   const [error, setError] = useState<{ identity: string; kind: ErrorKind } | null>(null);
+  const [authenticatorOpen, setAuthenticatorOpen] = useState(false);
   const [busy, setBusy] = useState(false);
   const [reauthError, setReauthError] = useState('');
   const submitting = useRef(false);
@@ -62,13 +64,14 @@ export default function PendingActionReview() {
     return () => clearTimeout(timer);
   }, [data, identity]);
 
-  const decide = async (decision: 'confirm' | 'decline') => {
+  const decide = async (decision: 'confirm' | 'decline', reauthToken?: string) => {
     if (!data || data.status !== 'pending_review' || submitting.current || Date.parse(data.expires_at) <= Date.now()) return;
-    if (decision === 'confirm' && (kind || !hasRequiredReviewContent(data.summary))) return;
+    if (decision === 'confirm' && ((kind && !(kind === 'second_factor' && reauthToken)) || !hasRequiredReviewContent(data.summary))) return;
+    if (decision === 'confirm' && user?.sso_enforced && user.totp_enabled && !reauthToken) { setAuthenticatorOpen(true); return; }
     submitting.current = true;
     setBusy(true);
     try {
-      const result = await decidePendingAction(id, token, decision, data.summary_hash);
+      const result = await decidePendingAction(id, token, decision, data.summary_hash, ...(reauthToken ? [reauthToken] : []));
       if (currentIdentity.current === identity) { setReview({ identity, data: result }); setError(null); }
     } catch (cause) {
       if (currentIdentity.current === identity) setError({ identity, kind: pendingActionError(cause) });
@@ -81,7 +84,9 @@ export default function PendingActionReview() {
   const enroll = kind === 'enrollment' || (kind === 'second_factor' && !provider && !user?.totp_enabled);
   const login = async () => {
     if (!valid) return;
-    if (enroll) {
+    if (kind === 'second_factor' && user?.sso_enforced && user.totp_enabled) {
+      setAuthenticatorOpen(true);
+    } else if (enroll) {
       router.push(`/dashboard/settings?redirect=${encodeURIComponent(path)}#security`);
     } else if (provider === 'google' || provider === 'github') {
       setReauthError('');
@@ -97,6 +102,7 @@ export default function PendingActionReview() {
   const actionable = data?.status === 'pending_review' && !expired && !notFound && kind !== 'unavailable';
 
   return <main className="mx-auto max-w-xl space-y-6 px-6 py-16">
+    <ReauthModal key={identity} isOpen={authenticatorOpen && !!data && data.status === 'pending_review'} method="totp" onClose={() => setAuthenticatorOpen(false)} onSuccess={async proof => { if (currentIdentity.current !== identity) return; setAuthenticatorOpen(false); await decide('confirm', proof); }} />
     {notFound ? <><h1 className="text-2xl font-bold">Confirmation not found</h1><p>This confirmation is unavailable.</p></>
       : !hydrated || isLoading || (!data && !kind) ? <p role="status">Loading confirmation…</p>
       : <>
