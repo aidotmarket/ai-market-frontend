@@ -4,15 +4,26 @@ import { afterEach, beforeEach, expect, it, vi } from 'vitest';
 import { AxiosError } from 'axios';
 import type { CheckoutHandoff } from '@/api/checkout';
 import type { ListingDetail } from '@/types';
+import { checkoutReplayKey, saveCheckoutReplay } from '@/lib/checkout-replay';
 
-const mocks = vi.hoisted(() => ({ get: vi.fn(), listing: vi.fn(), buy: vi.fn(), notFound: vi.fn(),
+const mocks = vi.hoisted(() => ({ get: vi.fn(), create: vi.fn(), listing: vi.fn(), buy: vi.fn(), realBuy: false, notFound: vi.fn(),
   token: ('a'.repeat(42) + 'A'), auth: { user: { id: 'owner' } as { id: string } | null, token: 'session' as string | null, hydrated: true, isLoading: false } }));
 vi.mock('next/navigation', () => ({ useParams: () => ({ token: mocks.token }), notFound: () => { mocks.notFound(); throw new Error('NOT_FOUND'); } }));
-vi.mock('@/store/auth', () => ({ useAuthStore: () => mocks.auth }));
-vi.mock('@/api/checkout', () => ({ getCheckoutHandoff: mocks.get }));
+vi.mock('@/store/auth', () => ({ useAuthStore: () => ({ ...mocks.auth, isAuthenticated: !!mocks.auth.token }) }));
+vi.mock('@/api/checkout', () => ({ getCheckoutHandoff: mocks.get, createCheckout: mocks.create }));
+vi.mock('@/hooks/useListingOwnership', () => ({ useListingOwnership: () => ({ isOwner: false, checkingOwnership: false }) }));
+vi.mock('@/api/orders', () => ({ getMyOrders: async () => [] }));
+vi.mock('@/components/Toast', () => ({ useToast: () => ({ toast: vi.fn() }) }));
+vi.mock('@/components/legal/TermsGate', () => ({ useTermsGate: () => ({ ensureTermsAccepted: async (start: () => Promise<void>) => start(), TermsGatePrompt: () => null, checkingTerms: false }) }));
+vi.mock('@/components/legal/VersionedTermsCopy', () => ({ useServedTermsVersion: () => '1.2' }));
+vi.mock('@/components/ListingLicenseDisclosure', () => ({ default: ({ onVerificationChange }: { onVerificationChange: (verified: boolean) => void }) => <button onClick={() => onVerificationChange(true)}>Verify licence</button> }));
 vi.mock('@/api/listings', () => ({ getListing: mocks.listing }));
-vi.mock('@/components/BuyButton', async importOriginal => ({ ...await importOriginal<typeof import('@/components/BuyButton')>(),
-  default: (props: unknown) => { mocks.buy(props); return <div>Human licence and authority form</div>; } }));
+vi.mock('@/components/BuyButton', async importOriginal => {
+  const original = await importOriginal<typeof import('@/components/BuyButton')>();
+  return { ...original, default: (props: React.ComponentProps<typeof original.default>) => {
+    mocks.buy(props); return mocks.realBuy ? <original.default {...props} /> : <div>Human licence and authority form</div>;
+  } };
+});
 import CheckoutHandoffReview from './CheckoutHandoffReview';
 import Page from './page';
 
@@ -25,6 +36,7 @@ const listing = { id: 'listing', slug: 'listing-slug', title: 'Example data', pu
   pricing: { price: 12, pricing_type: 'one_time' }, license } as unknown as ListingDetail;
 beforeEach(() => {
   vi.clearAllMocks(); vi.stubEnv('NEXT_PUBLIC_CHECKOUT_DOMAIN_SERVICE_ENABLED', 'true');
+  sessionStorage.clear(); mocks.realBuy = false; mocks.create.mockReset();
   mocks.token = ('a'.repeat(42) + 'A'); mocks.auth = { user: { id: 'owner' }, token: 'session', hydrated: true, isLoading: false };
   mocks.get.mockResolvedValue(handoff); mocks.listing.mockResolvedValue(listing);
 });
@@ -61,16 +73,63 @@ it.each([{ license: { ...license, sha256: 'd'.repeat(64) } }, { license: { ...li
   mocks.listing.mockResolvedValue({ ...listing, ...fields }); render(<CheckoutHandoffReview />);
   await screen.findByText('The terms changed'); expect(mocks.buy).not.toHaveBeenCalled();
 });
-it.each(['reserved', 'provider_unknown', 'failed', 'payment_conflict', 'refunded'] as const)('renders consumed %s read-only and never continues to a provider URL', async checkout_status => {
+it.each(['reserved', 'provider_unknown', 'failed', 'payment_conflict', 'refunded'] as const)('renders consumed %s without a fresh purchase or provider continuation', async checkout_status => {
   mocks.get.mockResolvedValue({ ...handoff, status: 'consumed', checkout_status, checkout_url: 'https://checkout.stripe.com/pay', order_id: 'order' });
   render(<CheckoutHandoffReview />); await screen.findByRole('link', { name: 'View order' });
   expect(screen.queryByRole('link', { name: 'Continue to payment' })).toBeNull();
   expect(mocks.listing).not.toHaveBeenCalled(); expect(mocks.buy).not.toHaveBeenCalled();
+  expect(screen.queryByRole('button', { name: 'Retry checkout' })).toBeNull();
 });
 it('checks consumed processing status with another GET only', async () => {
   mocks.get.mockResolvedValue({ ...handoff, status: 'consumed', checkout_status: 'provider_unknown' }); render(<CheckoutHandoffReview />);
   fireEvent.click(await screen.findByRole('button', { name: 'Check checkout status' }));
   await waitFor(() => expect(mocks.get).toHaveBeenCalledTimes(2)); expect(mocks.buy).not.toHaveBeenCalled();
+});
+it.each(['reserved', 'provider_unknown'] as const)('recovers consumed %s after a full route reload with the original handoff acceptance', async checkout_status => {
+  mocks.realBuy = true;
+  mocks.create.mockRejectedValueOnce(new AxiosError('response lost after reservation', 'ERR_NETWORK'))
+    .mockRejectedValue(new AxiosError('still processing', 'ERR_NETWORK'));
+  const uuid = vi.spyOn(crypto, 'randomUUID');
+  const view = render(<CheckoutHandoffReview />);
+  fireEvent.click(await screen.findByRole('button', { name: 'Verify licence' }));
+  for (const [label, value] of [['Typed full name', 'Ada Buyer'], ['Signer title', 'Director'], ['Business legal name', 'Buyer Ltd'], ['Country', 'GB']]) {
+    fireEvent.change(screen.getByLabelText(label), { target: { value } });
+  }
+  fireEvent.click(screen.getByRole('checkbox', { name: 'Confirm licence authority' }));
+  await waitFor(() => expect((screen.getByRole('button', { name: 'Accept and continue to payment' }) as HTMLButtonElement).disabled).toBe(false));
+  fireEvent.click(screen.getByRole('button', { name: 'Accept and continue to payment' }));
+  await screen.findByRole('button', { name: 'Retry checkout' });
+  const first = mocks.create.mock.calls[0];
+  expect(first).toEqual(['listing', 'version', expect.objectContaining({ typed_name: 'Ada Buyer', authority_confirmed: true }), { handoffToken: mocks.token }]);
+  const key = checkoutReplayKey('owner', 'listing', 'version', mocks.token);
+  const frozen = sessionStorage.getItem(key);
+  view.unmount();
+  mocks.get.mockResolvedValue({ ...handoff, status: 'consumed', checkout_status });
+  mocks.listing.mockClear();
+  render(<CheckoutHandoffReview />);
+  const retry = await screen.findByRole('button', { name: 'Retry checkout' });
+  expect(mocks.create).toHaveBeenCalledTimes(1);
+  expect(mocks.listing).not.toHaveBeenCalled();
+  expect(screen.queryByLabelText('Typed full name')).toBeNull();
+  fireEvent.click(retry);
+  await waitFor(() => expect(mocks.create).toHaveBeenCalledTimes(2));
+  expect(mocks.create.mock.calls[1]).toEqual(first);
+  expect(sessionStorage.getItem(key)).toBe(frozen);
+  expect(uuid).not.toHaveBeenCalled();
+  uuid.mockRestore();
+});
+it.each(['finalised', 'failed', 'payment_conflict', 'refunded'] as const)('never exposes replay recovery for terminal consumed %s', async checkout_status => {
+  mocks.realBuy = true;
+  const key = checkoutReplayKey('owner', 'listing', 'version', mocks.token);
+  saveCheckoutReplay(key, { acceptance: { accept_license_sha256: license.sha256, accept_covenant_sha256: license.covenant_sha256,
+    accept_rider_sha256: null, authority_confirmed: true, typed_name: 'Ada Buyer', signer_title: 'Director', business_legal_name: 'Buyer Ltd', jurisdiction: 'GB' } });
+  mocks.get.mockResolvedValue({ ...handoff, status: 'consumed', checkout_status, order_id: 'order' });
+  render(<CheckoutHandoffReview />);
+  await screen.findByRole('link', { name: 'View order' });
+  expect(screen.queryByRole('button', { name: 'Retry checkout' })).toBeNull();
+  expect(mocks.create).not.toHaveBeenCalled();
+  expect(mocks.buy).not.toHaveBeenCalled();
+  expect(sessionStorage.getItem(key)).toBeNull();
 });
 it.each(['https://checkout.stripe.com/c/pay/test', 'https://evil.test/c/pay/test', null])('allows only a finalised safe provider URL: %s', async checkout_url => {
   mocks.get.mockResolvedValue({ ...handoff, status: 'consumed', checkout_status: 'finalised', checkout_url, order_id: 'order' });

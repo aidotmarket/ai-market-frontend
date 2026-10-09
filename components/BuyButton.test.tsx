@@ -810,6 +810,44 @@ describe('connector checkout handoff and domain purchase', () => {
     await waitFor(() => expect(createCheckout).toHaveBeenCalledTimes(2));
     expect(vi.mocked(createCheckout).mock.calls[1]).toEqual(first);
   });
+  it('retains the reserved direct UUID and acceptance through auth failure and session renewal', async () => {
+    vi.mocked(createCheckout).mockRejectedValueOnce(new AxiosError('response lost', 'ERR_NETWORK'))
+      .mockRejectedValueOnce(error(401, 'FIRST_PARTY_SESSION_REQUIRED'))
+      .mockRejectedValue(error(503, 'CHECKOUT_PROCESSING'));
+    await accept();
+    const first = vi.mocked(createCheckout).mock.calls[0];
+    const key = checkoutReplayKey('buyer-1', props.listingId);
+    const frozen = sessionStorage.getItem(key);
+    fireEvent.click(await screen.findByRole('button', { name: 'Retry checkout' }));
+    await screen.findAllByText('Sign in again, then retry the same purchase.');
+    expect(sessionStorage.getItem(key)).toBe(frozen);
+    await act(async () => { useAuthStore.setState({ isAuthenticated: false }); });
+    await act(async () => { useAuthStore.setState({ isAuthenticated: true, token: 'renewed-session' }); });
+    fireEvent.click(await screen.findByRole('button', { name: 'Retry checkout' }));
+    await waitFor(() => expect(createCheckout).toHaveBeenCalledTimes(3));
+    expect(vi.mocked(createCheckout).mock.calls[1]).toEqual(first);
+    expect(vi.mocked(createCheckout).mock.calls[2]).toEqual(first);
+    expect(sessionStorage.getItem(key)).toBe(frozen);
+  });
+  it('retains a reconciliation-required claim across reload without offering a fresh purchase', async () => {
+    vi.mocked(createCheckout).mockRejectedValueOnce(new AxiosError('response lost', 'ERR_NETWORK'))
+      .mockRejectedValue(error(503, 'CHECKOUT_OPERATOR_RECONCILIATION_REQUIRED'));
+    const view = await accept();
+    const first = vi.mocked(createCheckout).mock.calls[0];
+    const key = checkoutReplayKey('buyer-1', props.listingId);
+    const frozen = sessionStorage.getItem(key);
+    fireEvent.click(await screen.findByRole('button', { name: 'Retry checkout' }));
+    await screen.findAllByText('This purchase requires operator reconciliation. Keep this checkout for recovery.');
+    expect(sessionStorage.getItem(key)).toBe(frozen);
+    expect((screen.getByRole('button', { name: 'Retry checkout' }) as HTMLButtonElement).disabled).toBe(true);
+    view.unmount();
+    await renderBuyer(<ToastProvider><BuyButton {...props} licenseDetails={undefined} /></ToastProvider>);
+    expect(screen.queryByRole('button', { name: 'Accept and continue to payment' })).toBeNull();
+    fireEvent.click(await screen.findByRole('button', { name: 'Retry checkout' }));
+    await waitFor(() => expect(createCheckout).toHaveBeenCalledTimes(3));
+    expect(vi.mocked(createCheckout).mock.calls[2]).toEqual(first);
+    expect(sessionStorage.getItem(key)).toBe(frozen);
+  });
   it('clears persisted identity on a successful terminal outcome', async () => {
     vi.mocked(createCheckout).mockResolvedValue({ checkout_url: 'https://checkout.stripe.com/c/pay/test', order_id: 'order' } as never);
     await accept();

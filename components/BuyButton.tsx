@@ -5,7 +5,7 @@ import Link from 'next/link';
 import { useAuthStore } from '@/store/auth';
 import { useToast } from '@/components/Toast';
 import { createCheckout, type DomainCheckoutOptions } from '@/api/checkout';
-import { checkoutBlock, checkoutDestination, checkoutDomainEnabled, checkoutErrorCode, checkoutWebPath } from '@/lib/checkout-domain';
+import { checkoutBlock, checkoutDestination, checkoutDomainEnabled, checkoutErrorCode, checkoutOutcome, checkoutWebPath } from '@/lib/checkout-domain';
 import { getMyOrders } from '@/api/orders';
 import { formatPrice } from '@/lib/format';
 import { useTermsGate } from '@/components/legal/TermsGate';
@@ -34,6 +34,7 @@ interface BuyButtonProps {
   disabledReason?: string;
   checkoutContext?: DomainCheckoutOptions;
   onCheckoutStarted?: () => void;
+  recoveryOnly?: boolean;
 }
 
 export default function BuyButton({
@@ -52,6 +53,7 @@ export default function BuyButton({
   disabledReason,
   checkoutContext,
   onCheckoutStarted,
+  recoveryOnly = false,
 }: BuyButtonProps) {
   const termsVersion = useServedTermsVersion();
   const { user, isAuthenticated, hydrated, isLoading } = useAuthStore();
@@ -84,6 +86,11 @@ export default function BuyButton({
   }, [domainEnabled, licenseDetails?.sha256, licenseDetails?.covenant_sha256, licenseDetails?.rider_sha256]);
 
   useEffect(() => {
+    // Session renewal must not discard an in-memory claim when storage is unavailable.
+    if (domainEnabled && acceptedRequest.current?.identity === requestIdentity) {
+      setProcessingIdentity(requestIdentity);
+      return;
+    }
     acceptedRequest.current = null;
     setProcessingIdentity(null);
     setCheckoutRefusal(null);
@@ -176,6 +183,7 @@ export default function BuyButton({
   }
 
   const startCheckout = async () => {
+    if (recoveryOnly && acceptedRequest.current?.identity !== requestIdentity) return;
     if (disabledReason && !(domainEnabled && acceptedRequest.current?.identity === requestIdentity)) return;
     // Dedupe guard: ignore if same listing checkout is in-flight
     const inflightKey = `${listingId}:${versionId ?? 'latest'}`;
@@ -226,15 +234,13 @@ export default function BuyButton({
       window.location.href = checkout_url;
     } catch (err) {
       if (domainEnabled && currentRequestIdentity.current !== requestIdentity) return;
-      if (domainEnabled && checkoutOutcomeUnknown(err)) {
-        setProcessingIdentity(requestIdentity);
-        setCheckoutRefusal(null);
-        return;
-      }
+      const outcome = domainEnabled ? checkoutOutcome(err) : null;
+      if (outcome === 'retry' || outcome === 'auth' || outcome === 'operator') setProcessingIdentity(requestIdentity);
+      if (outcome === 'retry') { setCheckoutRefusal(null); return; }
       if (err instanceof AxiosError) {
         const refusal = parseCheckoutRefusal(err, domainEnabled);
         setCheckoutRefusal(refusal);
-        if (domainEnabled) {
+        if (outcome === 'terminal' || outcome === 'rejected') {
           clearCheckoutReplay(requestIdentity);
           acceptedRequest.current = null;
           if (!refusal.blocked) setProcessingIdentity(null);
@@ -271,6 +277,8 @@ export default function BuyButton({
       {loading ? 'Checking checkout…' : 'Retry checkout'}
     </button>
   </div>;
+
+  if (recoveryOnly) return null;
 
   if (licenseDetails) {
     return (
@@ -364,15 +372,18 @@ export interface CheckoutRefusal {
 
 /** No authoritative rejection: preserve the original claim and frozen acceptance. */
 export function checkoutOutcomeUnknown(error: unknown): boolean {
-  const status = (error as { response?: { status?: number } })?.response?.status;
-  return checkoutErrorCode(error) === 'CHECKOUT_PROCESSING' || status == null
-    || (status >= 500 && !checkoutErrorCode(error));
+  return checkoutOutcome(error) === 'retry';
 }
 
 export function parseCheckoutRefusal(error: AxiosError, domainEnabled = checkoutDomainEnabled()): CheckoutRefusal {
   const data = error.response?.data as { detail?: unknown } | undefined;
   const detail = data?.detail;
   if (domainEnabled) {
+    const outcome = checkoutOutcome(error);
+    if (outcome === 'auth') return { code: checkoutErrorCode(error) || 'FIRST_PARTY_SESSION_REQUIRED',
+      message: 'Sign in again, then retry the same purchase.' };
+    if (outcome === 'operator') return { code: 'CHECKOUT_OPERATOR_RECONCILIATION_REQUIRED', blocked: true,
+      message: 'This purchase requires operator reconciliation. Keep this checkout for recovery.' };
     if (checkoutOutcomeUnknown(error)) return { code: 'CHECKOUT_OUTCOME_UNKNOWN', blocked: false, message: 'Checkout outcome is unknown. Retry to check the same purchase.' };
     const code = checkoutErrorCode(error) || 'CHECKOUT_FAILED';
     const value = detail && typeof detail === 'object' ? detail as Record<string, unknown> : {};
@@ -382,6 +393,7 @@ export function parseCheckoutRefusal(error: AxiosError, domainEnabled = checkout
       CHECKOUT_FAILED: 'Checkout failed. Review its status before starting again.',
       CHECKOUT_PAYMENT_CONFLICT: 'A payment is being reconciled. This cancelled order will not be fulfilled.',
       CHECKOUT_REFUNDED: 'This checkout was refunded. This cancelled order will not be fulfilled.',
+      CHECKOUT_TERMINAL: 'This checkout has ended. Review its order status.',
     };
     if (Object.hasOwn(messages, code) || checkoutWebPath(value.web_path)) return { code, blocked: true,
       message: Object.hasOwn(messages, code) ? messages[code] : (typeof value.message === 'string' ? value.message : 'Checkout is blocked. Review the listing.'),

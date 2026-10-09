@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from 'react';
 import Link from 'next/link';
-import { checkoutReplayKey, clearCheckoutReplay } from '@/lib/checkout-replay';
+import { checkoutReplayKey, clearCheckoutReplay, readCheckoutReplay } from '@/lib/checkout-replay';
 import { useSessionGeneration } from '@/hooks/useSessionGeneration';
 import { useParams } from 'next/navigation';
 import { useAuthStore } from '@/store/auth';
@@ -94,6 +94,10 @@ export default function CheckoutHandoffReview() {
       const processing = handoff.checkout_status === 'reserved' || handoff.checkout_status === 'provider_unknown';
       content = <><h1>Checkout {finalised ? 'started' : handoff.checkout_status === 'failed' ? 'failed' : handoff.checkout_status === 'refunded' ? 'refunded' : handoff.checkout_status === 'payment_conflict' ? 'needs review' : 'processing'}</h1>
         {processing && <><p role="status">Checkout is processing. Check its status before continuing.</p><button onClick={() => setReload(value => value + 1)}>Check checkout status</button></>}
+        {processing && readCheckoutReplay(checkoutReplayKey(user.id, handoff.listing_id, handoff.version_id, token), true) &&
+          <BuyButton key={identity} listingId={handoff.listing_id} versionId={handoff.version_id}
+            slug="" price={handoff.price_cents / 100} pricingType="one_time"
+            checkoutContext={{ handoffToken: token }} recoveryOnly />}
         {handoff.checkout_status === 'payment_conflict' && <p role="alert">A payment is being reconciled. This cancelled order will not be fulfilled.</p>}
         {finalised && paymentUrl(handoff.checkout_url) && <a href={handoff.checkout_url} rel="noreferrer" referrerPolicy="no-referrer">Continue to payment</a>}
         {handoff.order_id && <Link href={`/dashboard/orders/${encodeURIComponent(handoff.order_id)}`}>View order</Link>}</>;

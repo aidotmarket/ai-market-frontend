@@ -36,6 +36,27 @@ export function checkoutErrorCode(error: unknown): string | undefined {
   if (detail && typeof detail === 'object' && 'code' in detail && typeof detail.code === 'string') return detail.code;
 }
 
+/** Only explicit domain outcomes can release a possibly reserved purchase claim. */
+export function checkoutOutcome(error: unknown): 'retry' | 'auth' | 'operator' | 'terminal' | 'rejected' {
+  const status = (error as { response?: { status?: number } })?.response?.status;
+  const code = checkoutErrorCode(error);
+  if (status === 401 || status === 403) return 'auth';
+  if (code === 'CHECKOUT_OPERATOR_RECONCILIATION_REQUIRED') return 'operator';
+  if (status === 409 && ['CHECKOUT_FAILED', 'CHECKOUT_PAYMENT_CONFLICT', 'CHECKOUT_REFUNDED', 'CHECKOUT_TERMINAL'].includes(code || '')) return 'terminal';
+  // These checks run only after the backend has found no existing attempt.
+  if (status != null && [400, 409, 422].includes(status) && [
+    'HANDOFF_UNAVAILABLE', 'HANDOFF_TERMS_CHANGED', 'CHECKOUT_FACTS_CHANGED',
+    'LISTING_UNAVAILABLE', 'OWN_LISTING', 'PRICE_INVALID', 'CURRENCY_UNSUPPORTED',
+    'ACTIVE_ORDER', 'LISTING_VERSION_UNAVAILABLE', 'SELLER_TERMS_ACCEPTANCE_PENDING',
+    'SELLER_PAYOUT_READINESS_UNKNOWN', 'SELLER_PAYOUT_NOT_READY', 'REFERENCE_DELIVERY_UNREADY',
+    'WORKSPACE_DELIVERY_UNREADY', 'DELIVERY_READINESS_UNKNOWN', 'SYNTHETIC_PURCHASE_REQUIRES_E2E_GUARD',
+    'TERMS_ACCEPTANCE_REQUIRED', 'LICENSE_ACCEPTANCE_STALE', 'LICENSE_RIDER_ACCEPTANCE_STALE',
+    'LICENSE_ACCEPTANCE_INVALID', 'LICENSE_AUTHORITY_REQUIRED', 'BUYER_LEGAL_IDENTITY_REQUIRED',
+    'LEGAL_IDENTITY_CONFLICT',
+  ].includes(code || '')) return 'rejected';
+  return 'retry';
+}
+
 export function checkoutBlock(code: unknown, path: unknown): { code: string; message: string; webPath?: string } | null {
   const messages: Record<string, string> = {
     SELLER_PAYOUT_READINESS_UNKNOWN: 'Seller payout readiness could not be verified. Checkout is blocked.',
