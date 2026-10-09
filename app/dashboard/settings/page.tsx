@@ -13,6 +13,7 @@ import { useToast } from '@/components/Toast';
 import { AxiosError } from 'axios';
 import ReauthModal from './ReauthModal';
 import ConnectedApps from './ConnectedApps';
+import { companySignInEnabled } from '@/lib/company-sign-in';
 import CompanyAuthenticator, { companyEnrollmentOffered } from '@/components/CompanyAuthenticator';
 import TotpQrCode from '@/components/TotpQrCode';
 
@@ -298,7 +299,7 @@ export default function SettingsPage() {
     sellerStatus === 'provisioning' ||
     user.role === 'seller' ||
     user.role === 'admin';
-  const companySetup = companyEnrollmentOffered(user) || (user.sso_enforced && user.two_factor_setup_eligible === true && strictCompanySetup === `${user.id}:${useAuthStore.getState().token}`);
+  const companySetup = (companySignInEnabled() && user.sso_enforced && !user.totp_enabled && user.two_factor_setup_eligible === true && !user.two_factor_provider) || companyEnrollmentOffered(user) || (user.sso_enforced && user.two_factor_setup_eligible === true && strictCompanySetup === `${user.id}:${useAuthStore.getState().token}`);
   const managedSetupMessage = user?.totp_enabled ? null : setupRestriction(user) ?? (securityError === SSO_MANAGED_2FA_MESSAGE || securityError.startsWith('Sign-in security is managed by your ') ? securityError : null);
   const ssoManaged2FA = !!managedSetupMessage;
 
@@ -421,8 +422,8 @@ export default function SettingsPage() {
         </div>
 
         <div className="space-y-4">
-          {companySetup && <CompanyAuthenticator key={`${user.id}:${useAuthStore.getState().token}`} />}
-          {user.sso_enforced && user.totp_enabled && <CompanyAuthenticator recovery key={`recovery:${user.id}:${useAuthStore.getState().token}`} />}
+          {companySetup && <CompanyAuthenticator key={companySignInEnabled() ? user.id : `${user.id}:${useAuthStore.getState().token}`} />}
+          {user.sso_enforced && user.totp_enabled && <CompanyAuthenticator recovery key={companySignInEnabled() ? `recovery:${user.id}` : `recovery:${user.id}:${useAuthStore.getState().token}`} />}
           <div className="flex items-center justify-between gap-4 rounded-lg border border-gray-200 bg-gray-50 px-4 py-3">
             <div>
               <p className="text-sm font-medium text-gray-900">Two-factor authentication</p>

@@ -5,6 +5,8 @@ import { useParams, useRouter, useSearchParams } from 'next/navigation';
 import { useAuthStore } from '@/store/auth';
 import { PENDING_ACTION_CONTINUATION } from '@/lib/redirect';
 import { hasRequiredReviewContent, safeLicenseUrl } from '@/lib/pending-action-review';
+import CompanySignIn from '@/components/CompanySignIn';
+import { companySignInEnabled } from '@/lib/company-sign-in';
 import ReauthModal from '@/app/dashboard/settings/ReauthModal';
 import { startProviderOAuth } from '@/components/OAuthButtons';
 import { decidePendingAction, getPendingAction, pendingActionError, type PendingAction } from '@/api/pending-actions';
@@ -101,6 +103,7 @@ export default function PendingActionReview() {
 
   // /auth/me reports the actual provider session. Linked account methods and
   // primary_auth are not evidence of how this session signed in.
+  const companyLogin = companySignInEnabled() && user?.sso_enforced && !user.two_factor_provider && kind === 'login';
   const provider = user?.two_factor_provider;
   const enroll = kind === 'enrollment' || (kind === 'second_factor' && !provider && !user?.totp_enabled);
   const login = async () => {
@@ -158,7 +161,7 @@ export default function PendingActionReview() {
         {(kind === 'login' || kind === 'second_factor' || kind === 'enrollment') && <div className="space-y-3" role="alert">
           <p>{enroll ? 'Set up two-factor authentication before confirming this binding action. After setup, return here to review and click Confirm.' : provider
             ? 'Sign in again with your provider, then return here to review and click Confirm.' : kind === 'login' ? 'Sign in again to confirm. Login must be within the last 15 minutes.' : 'Verify your second factor again before confirming this binding action.'}</p>
-          <button type="button" onClick={login} className="text-[#3F51B5] font-medium underline">{enroll ? 'Set up two-factor authentication' : provider ? `Sign in again with ${provider === 'google' ? 'Google' : 'GitHub'}` : kind === 'login' ? 'Sign in again' : 'Sign in and verify second factor'}</button>
+          {companyLogin ? <CompanySignIn returnPath={`/confirm/${id.toLowerCase()}`} onSuccess={() => { setReauthError(''); }} /> : <button type="button" onClick={login} className="text-[#3F51B5] font-medium underline">{enroll ? 'Set up two-factor authentication' : provider ? `Sign in again with ${provider === 'google' ? 'Google' : 'GitHub'}` : kind === 'login' ? 'Sign in again' : 'Sign in and verify second factor'}</button>}
           {reauthError && <p>{reauthError}</p>}
         </div>}
         {actionable && <>

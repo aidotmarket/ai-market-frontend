@@ -3,20 +3,21 @@ import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/re
 import { afterEach, beforeEach, expect, it, vi } from 'vitest';
 import { useAuthStore } from '@/store/auth';
 import type { User } from '@/types';
-const mocks = vi.hoisted(() => ({ setup: vi.fn(), verify: vi.fn(), recover: vi.fn(), push: vi.fn(), refresh: vi.fn() }));
+const mocks = vi.hoisted(() => ({ setup: vi.fn(), verify: vi.fn(), recover: vi.fn(), push: vi.fn(), refresh: vi.fn(), signIn: vi.fn() }));
 vi.mock('next/navigation', () => ({ useRouter: () => ({ push: mocks.push }) }));
 vi.mock('@/api/company-authenticator', async original => ({ ...await original<typeof import('@/api/company-authenticator')>(), setupCompanyAuthenticator: mocks.setup, verifyCompanyAuthenticator: mocks.verify, recoverCompanyAuthenticator: mocks.recover }));
+vi.mock('@/lib/company-sign-in', async original => ({ ...await original<typeof import('@/lib/company-sign-in')>(), startCompanySignIn: mocks.signIn }));
 vi.mock('qrcode', () => ({ default: { toDataURL: async () => 'data:image/png;base64,cG5n' } }));
 import CompanyAuthenticator, { companyEnrollmentOffered } from './CompanyAuthenticator';
 const user = { id: 'owner', sso_enforced: true, auth_methods: ['oidc'], totp_enabled: false,
   two_factor_setup_eligible: true, seller_binding_factor_readiness: { code: 'SECOND_FACTOR_ENROLLMENT_REQUIRED', path: '/dashboard/settings' } } as User;
 beforeEach(() => {
-  vi.resetAllMocks(); window.history.replaceState(null, '', '/dashboard/settings');
+  vi.resetAllMocks(); vi.stubEnv('NEXT_PUBLIC_ORG_SSO_WEB_RETURN_ENABLED', 'false'); window.history.replaceState(null, '', '/dashboard/settings');
   useAuthStore.setState({ user, token: 'session', refreshAuth: mocks.refresh });
   mocks.setup.mockResolvedValue({ secret: 'SECRET', qr_uri: 'otpauth://totp/fixture?secret=SECRET', expires_in: 600 });
   mocks.verify.mockResolvedValue({ backup_codes: ['backup-one', 'backup-two'] });
 });
-afterEach(() => { cleanup(); vi.useRealTimers(); });
+afterEach(() => { cleanup(); vi.useRealTimers(); vi.unstubAllEnvs(); });
 const start = async () => { render(<CompanyAuthenticator />); fireEvent.click(screen.getByRole('button', { name: 'Set up company authenticator' })); await screen.findByText('SECRET'); };
 const verify = () => { fireEvent.change(screen.getByLabelText('Authenticator code'), { target: { value: '123456' } }); fireEvent.click(screen.getByRole('button', { name: 'Verify and enable' })); };
 it.each(['oidc', 'saml'])('offers fresh server-approved %s enrollment', method => {
@@ -69,4 +70,38 @@ it('keeps recovery unavailable after an invalid backup code', async () => {
   fireEvent.click(screen.getByRole('button', { name: 'Disable lost authenticator' }));
   await screen.findByRole('alert'); expect(mocks.refresh).not.toHaveBeenCalled();
   expect(screen.queryByRole('link', { name: 'Set up a new authenticator' })).toBeNull();
+});
+
+it('starts fresh enrollment at settings and resumes setup automatically', async () => {
+  vi.stubEnv('NEXT_PUBLIC_ORG_SSO_WEB_RETURN_ENABLED', 'true');
+  mocks.signIn.mockResolvedValue(undefined);
+  render(<CompanyAuthenticator />);
+  expect(screen.queryByRole('button', { name: 'Check company sign-in' })).toBeNull();
+  expect(screen.queryByRole('button', { name: 'Set up company authenticator' })).toBeNull();
+  fireEvent.change(screen.getByLabelText('Company sign-in ID'), { target: { value: 'company-id' } });
+  fireEvent.click(screen.getByRole('button', { name: 'Sign in through your company' }));
+  await screen.findByText('SECRET');
+  expect(mocks.signIn).toHaveBeenCalledWith('company-id', '/dashboard/settings');
+  expect(mocks.setup).toHaveBeenCalledOnce();
+});
+it('resumes lost-authenticator recovery without submitting the backup code', async () => {
+  vi.stubEnv('NEXT_PUBLIC_ORG_SSO_WEB_RETURN_ENABLED', 'true');
+  mocks.signIn.mockResolvedValue(undefined);
+  render(<CompanyAuthenticator recovery />);
+  expect(screen.queryByLabelText('Backup code')).toBeNull();
+  fireEvent.change(screen.getByLabelText('Company sign-in ID'), { target: { value: 'company-id' } });
+  fireEvent.click(screen.getByRole('button', { name: 'Sign in through your company' }));
+  await screen.findByLabelText('Backup code');
+  expect(mocks.signIn).toHaveBeenCalledWith('company-id', '/dashboard/settings');
+  expect(mocks.recover).not.toHaveBeenCalled(); expect(mocks.setup).not.toHaveBeenCalled();
+});
+it('shows a refused sign-in and retries before setup', async () => {
+  vi.stubEnv('NEXT_PUBLIC_ORG_SSO_WEB_RETURN_ENABLED', 'true');
+  mocks.signIn.mockRejectedValueOnce(new Error('Company sign-in did not finish or expired. Try again.')).mockResolvedValueOnce(undefined);
+  render(<CompanyAuthenticator />);
+  fireEvent.change(screen.getByLabelText('Company sign-in ID'), { target: { value: 'company-id' } });
+  fireEvent.click(screen.getByRole('button', { name: 'Sign in through your company' }));
+  await screen.findByRole('alert'); expect(mocks.setup).not.toHaveBeenCalled();
+  fireEvent.click(screen.getByRole('button', { name: 'Retry company sign-in' }));
+  await screen.findByText('SECRET'); expect(mocks.signIn).toHaveBeenCalledTimes(2);
 });

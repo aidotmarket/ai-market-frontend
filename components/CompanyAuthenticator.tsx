@@ -6,6 +6,8 @@ import { useRouter } from 'next/navigation';
 import { useAuthStore } from '@/store/auth';
 import { setupCompanyAuthenticator, verifyCompanyAuthenticator, recoverCompanyAuthenticator, companyAuthenticatorError } from '@/api/company-authenticator';
 import { PENDING_ACTION_CONTINUATION } from '@/lib/redirect';
+import CompanySignIn from './CompanySignIn';
+import { companySignInEnabled } from '@/lib/company-sign-in';
 import TotpQrCode from './TotpQrCode';
 import { notifyCapabilitiesChanged } from './onboarding/SellerSetupProgressBar';
 
@@ -20,6 +22,8 @@ export function companyEnrollmentOffered(user: ReturnType<typeof useAuthStore.ge
 
 export default function CompanyAuthenticator({ recovery = false }: { recovery?: boolean }) {
   const router = useRouter();
+  const freshFlow = companySignInEnabled();
+  const [fresh, setFresh] = useState(false);
   const [stage, setStage] = useState<'start' | 'qr' | 'backups' | 'disabled'>('start');
   const [setup, setSetup] = useState<{ secret: string; qr_uri: string; expires: number } | null>(null);
   const [codes, setCodes] = useState<string[]>([]);
@@ -34,6 +38,7 @@ export default function CompanyAuthenticator({ recovery = false }: { recovery?: 
     try { await action(); }
     catch (cause) {
       setError(companyAuthenticatorError(cause));
+      setFresh(false);
       if ((cause as { response?: { data?: { detail?: string } } })?.response?.data?.detail !== 'Invalid verification code') {
         setSetup(null); setCode(''); setStage('start');
       }
@@ -41,8 +46,9 @@ export default function CompanyAuthenticator({ recovery = false }: { recovery?: 
   };
   const sameSession = () => identity === `${useAuthStore.getState().user?.id}:${useAuthStore.getState().token}`;
   const start = () => run(async () => {
+    const session = freshFlow ? `${useAuthStore.getState().user?.id}:${useAuthStore.getState().token}` : identity;
     const result = await setupCompanyAuthenticator();
-    if (!sameSession()) return;
+    if (session !== `${useAuthStore.getState().user?.id}:${useAuthStore.getState().token}`) return;
     setSetup({ ...result, expires: Date.now() + result.expires_in * 1000 }); setStage('qr');
   });
   const verify = () => run(async () => {
@@ -68,10 +74,11 @@ export default function CompanyAuthenticator({ recovery = false }: { recovery?: 
 
   return <section aria-label={recovery ? 'Lost authenticator' : 'Company authenticator'} className="space-y-3 rounded-lg border p-4">
     <h3 className="font-semibold">{recovery ? 'Lost your authenticator?' : 'Set up your authenticator'}</h3>
-    <p>Your company sign-in is still required. Sign in through your company within the last 15 minutes, then return here.</p>
-    {stage === 'start' && <button disabled={busy} onClick={() => run(() => useAuthStore.getState().refreshAuth())}>Check company sign-in</button>}
+    {!freshFlow && <p>Your company sign-in is still required. Sign in through your company within the last 15 minutes, then return here.</p>}
+    {freshFlow && !fresh && stage === 'start' && <CompanySignIn returnPath="/dashboard/settings" onSuccess={async () => { setFresh(true); if (!recovery) await start(); }} />}
+    {!freshFlow && stage === 'start' && <button disabled={busy} onClick={() => run(() => useAuthStore.getState().refreshAuth())}>Check company sign-in</button>}
     {error && <p role="alert">{error}</p>}
-    {stage === 'start' && <>
+    {stage === 'start' && (!freshFlow || fresh) && <>
       {recovery ? <>
         <p>Use one backup code to disable your lost authenticator. Then set up a new one.</p>
         <label className="block">Backup code <input autoComplete="off" value={code} onChange={e => setCode(e.target.value)} /></label>
