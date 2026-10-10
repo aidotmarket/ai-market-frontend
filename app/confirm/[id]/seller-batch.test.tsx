@@ -5,15 +5,16 @@ import type { User } from '@/types';
 import type { PendingAction, SellerBatchSummary } from '@/api/pending-actions';
 
 const mocks = vi.hoisted(() => ({
-  get: vi.fn(), decide: vi.fn(), push: vi.fn(), replace: vi.fn(), reauth: vi.fn(), provider: vi.fn(),
+  capability: vi.fn(), activity: vi.fn(), retry: vi.fn(), signIn: vi.fn(), checkSignIn: vi.fn(), get: vi.fn(), decide: vi.fn(), push: vi.fn(), replace: vi.fn(), reauth: vi.fn(), provider: vi.fn(),
   id: '11111111-1111-4111-8111-111111111111', query: new URLSearchParams(),
   auth: { hydrated: true, isLoading: false, user: { id: 'owner', totp_enabled: true }, token: 'session' } as { hydrated: boolean; isLoading: boolean; user: Partial<User> | null; token: string | null },
 }));
-vi.mock('next/navigation', () => ({ useRouter: () => ({ push: mocks.push, replace: mocks.replace }), useParams: () => ({ id: mocks.id }), useSearchParams: () => mocks.query }));
+vi.mock('next/navigation', () => ({ useRouter: () => ({ push: mocks.push, replace: mocks.replace }), useParams: () => ({ id: mocks.id }), usePathname: () => window.location.pathname, useSearchParams: () => window.location.pathname === '/dashboard/settings' ? new URLSearchParams(window.location.search) : mocks.query }));
 vi.mock('@/store/auth', () => ({ useAuthStore: () => mocks.auth }));
-vi.mock('@/api/pending-actions', async original => ({ ...await original<typeof import('@/api/pending-actions')>(), getPendingAction: mocks.get, decidePendingAction: mocks.decide }));
+vi.mock('@/api/pending-actions', async original => ({ ...await original<typeof import('@/api/pending-actions')>(), getPendingAction: mocks.get, decidePendingAction: mocks.decide, getSellerCapability: mocks.capability, getSellerActivity: mocks.activity, retrySellerFailures: mocks.retry }));
 vi.mock('@/api/auth', async original => ({ ...await original<typeof import('@/api/auth')>(), submitReauth: mocks.reauth }));
 vi.mock('@/components/OAuthButtons', () => ({ startProviderOAuth: mocks.provider }));
+vi.mock('@/lib/company-sign-in', async original => ({ ...await original<typeof import('@/lib/company-sign-in')>(), startCompanySignIn: mocks.signIn, checkCompanySignIn: mocks.checkSignIn }));
 import PendingActionPage from './page';
 import SellerOperationContinuation from '@/app/dashboard/settings/SellerOperationContinuation';
 import { isSellerBatchSummary } from '@/lib/seller-batch';
@@ -43,14 +44,17 @@ function batch(): SellerBatchSummary {
     })),
   };
 }
+function admission() {
+  return { effective: true, reason: null, checked_at: new Date().toISOString(), switch_snapshot: { connector_enabled: true, action_path_enabled: true, seller_enabled: true, seller_bulk_enabled: true, global_enabled: true, profile_enabled: true, tool_enabled: true } };
+}
 function pending(): PendingAction {
-  return { id: mocks.id, request_id: uuid(97), status: 'pending_review', summary: batch(),
+  return { admission: admission(), id: mocks.id, request_id: uuid(97), status: 'pending_review', summary: batch(),
     summary_hash: '9'.repeat(64), expires_at: '2099-01-01T00:00:00Z', error_code: null,
     result: { operation_id: uuid(96), execution_status: 'queued', requested_count: 50, eligible_count: 25, blocked_count: 25,
       succeeded_count: 0, no_change_count: 0, failed_count: 0, cancelled_count: 0 } };
 }
 beforeEach(() => {
-  vi.resetAllMocks(); mocks.query = new URLSearchParams({ t: token });
+  vi.resetAllMocks(); mocks.capability.mockImplementation(async () => admission()); mocks.activity.mockResolvedValue({ operation: pending().result, items: [], offset: 0, limit: 20, has_more: false }); mocks.query = new URLSearchParams({ t: token });
   mocks.auth = { hydrated: true, isLoading: false, user: { id: 'owner', totp_enabled: true }, token: 'session' };
   mocks.get.mockResolvedValue(pending()); mocks.decide.mockResolvedValue({ ...pending(), status: 'confirmed' });
   window.history.replaceState({}, '', '/');
@@ -156,4 +160,84 @@ it('loads a known owner-only pending receipt on the settings operation continuat
   await screen.findByRole('region', { name: 'Seller operation in settings' });
   expect(mocks.get).toHaveBeenCalledExactlyOnceWith(mocks.id, token);
   expect(screen.getByRole('link', { name: 'Return to complete batch review' }).getAttribute('href')).toBe(`/confirm/${mocks.id}?t=${token}`);
+});
+
+it.each(['false', 'absent', 'stale', 'malformed', 'unavailable'] as const)('fails closed for %s capability but keeps receipt and decline', async status => {
+  const data = pending();
+  if (status === 'false') data.admission = { ...admission(), effective: false, reason: 'SELLER_DISABLED' };
+  if (status === 'absent') delete data.admission;
+  if (status === 'stale') data.admission = { ...admission(), checked_at: '2020-01-01T00:00:00Z' };
+  if (status === 'malformed') data.admission = { ...admission(), switch_snapshot: { ...admission().switch_snapshot, tool_enabled: false } };
+  if (status === 'unavailable') data.admission = { ...admission(), effective: false, reason: 'STATUS_UNAVAILABLE' };
+  mocks.get.mockResolvedValue(data); await review();
+  expect((screen.getByRole('button', { name: 'Confirm' }) as HTMLButtonElement).disabled).toBe(true);
+  expect(screen.queryByRole('link', { name: 'Open Workspace for legal signing' })).toBeNull();
+  expect(screen.getByRole('region', { name: 'Live seller operation receipt' })).toBeTruthy();
+  fireEvent.click(screen.getByRole('button', { name: 'Decline' }));
+  await waitFor(() => expect(mocks.decide).toHaveBeenCalledWith(mocks.id, token, 'decline', data.summary_hash));
+});
+it('rechecks switches before submission and refuses a switched-off capability', async () => {
+  await review(); mocks.capability.mockResolvedValue({ ...admission(), effective: false, reason: 'BULK_DISABLED' });
+  fireEvent.click(screen.getByRole('button', { name: 'Confirm' }));
+  await screen.findByText(/Seller confirmation is disabled/);
+  expect(mocks.decide).not.toHaveBeenCalled();
+});
+it('fails closed when capability refresh fails or stalls past its freshness lease', async () => {
+  vi.useFakeTimers(); await act(async () => { render(<PendingActionPage />); });
+  mocks.capability.mockReturnValue(new Promise(() => {}));
+  await act(async () => { await vi.advanceTimersByTimeAsync(15000); });
+  expect((screen.getByRole('button', { name: 'Confirm' }) as HTMLButtonElement).disabled).toBe(true);
+  mocks.capability.mockRejectedValue(new Error('offline'));
+  await act(async () => { await vi.advanceTimersByTimeAsync(5000); });
+  expect((screen.getByRole('button', { name: 'Confirm' }) as HTMLButtonElement).disabled).toBe(true);
+});
+it('retains completed receipts with all effect switches off', async () => {
+  mocks.get.mockResolvedValue({ ...pending(), status: 'confirmed', admission: { ...admission(), effective: false }, result: { ...pending().result, execution_status: 'completed' } });
+  render(<PendingActionPage />); await screen.findByText('Execution: completed');
+  expect(screen.queryByRole('button', { name: 'Confirm' })).toBeNull();
+});
+it.each(['oidc', 'saml'].flatMap(authMethod => ['GET', 'POST'].map(method => ({ authMethod, method }))))('recovers $method $authMethod SSO_REQUIRED through company sign-in then refetches without auto consent', async ({ method, authMethod }) => {
+  vi.stubEnv('NEXT_PUBLIC_ORG_SSO_WEB_RETURN_ENABLED', 'true');
+  mocks.auth.user = { id: 'owner', sso_enforced: true, totp_enabled: true, auth_methods: [authMethod] };
+  const refusal = { response: { status: 403, data: { detail: 'SSO_REQUIRED', continuation: { path: '/dashboard/settings', refetch_required: true, automatic_confirmation: false } } } };
+  if (method === 'GET') { mocks.get.mockRejectedValueOnce(refusal); render(<PendingActionPage />); }
+  else {
+    mocks.decide.mockRejectedValueOnce(refusal); mocks.reauth.mockResolvedValue({ token: 'first-proof' }); await review();
+    fireEvent.click(screen.getByRole('button', { name: 'Confirm' }));
+    fireEvent.change(await screen.findByPlaceholderText('Enter code'), { target: { value: '123456' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Continue' }));
+  }
+  if (authMethod === 'oidc') {
+    fireEvent.change(await screen.findByRole('textbox', { name: 'Company sign-in ID' }), { target: { value: 'company' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Sign in through your company' }));
+    await waitFor(() => expect(mocks.signIn).toHaveBeenCalledWith('company', '/dashboard/settings'));
+  } else {
+    fireEvent.click(await screen.findByRole('button', { name: 'Check company sign-in' }));
+    await waitFor(() => expect(mocks.checkSignIn).toHaveBeenCalledTimes(1));
+  }
+  await waitFor(() => expect(mocks.get).toHaveBeenCalledTimes(2));
+  expect(mocks.decide).toHaveBeenCalledTimes(method === 'POST' ? 1 : 0);
+  mocks.reauth.mockResolvedValue({ token: 'fresh-native-proof' });
+  fireEvent.click(await screen.findByRole('button', { name: 'Confirm' }));
+  fireEvent.change(await screen.findByPlaceholderText('Enter code'), { target: { value: '654321' } });
+  fireEvent.click(screen.getByRole('button', { name: 'Continue' }));
+  await waitFor(() => expect(mocks.decide).toHaveBeenLastCalledWith(mocks.id, token, 'confirm', pending().summary_hash, 'fresh-native-proof'));
+});
+it('clears settings receipts on hash navigation and retries after a transient read failure', async () => {
+  window.history.replaceState({}, '', `/dashboard/settings?redirect=${encodeURIComponent(`/confirm/${mocks.id}?t=${token}`)}#seller-operation`);
+  mocks.get.mockRejectedValueOnce(new Error('offline'));
+  vi.useFakeTimers(); await act(async () => { render(<SellerOperationContinuation />); });
+  expect(screen.getByText('Unable to refresh this receipt. Retrying…')).toBeTruthy(); await act(async () => { await vi.advanceTimersByTimeAsync(5000); });
+  expect(screen.getByRole('region', { name: 'Seller operation in settings' })).toBeTruthy();
+  await act(async () => { window.history.replaceState({}, '', '/dashboard/settings#security'); window.dispatchEvent(new HashChangeEvent('hashchange')); });
+  expect(screen.queryByRole('region', { name: 'Seller operation in settings' })).toBeNull();
+});
+
+it('disables pending review when live polling reports shutdown after load', async () => {
+  vi.useFakeTimers(); await act(async () => { render(<PendingActionPage />); });
+  mocks.capability.mockResolvedValue({ ...admission(), effective: false, reason: 'TOOL_DISABLED' });
+  await act(async () => { await vi.advanceTimersByTimeAsync(5000); });
+  expect((screen.getByRole('button', { name: 'Confirm' }) as HTMLButtonElement).disabled).toBe(true);
+  expect((screen.getByRole('button', { name: 'Decline' }) as HTMLButtonElement).disabled).toBe(false);
+  expect(screen.queryByRole('link', { name: 'Open Workspace for legal signing' })).toBeNull();
 });

@@ -1,4 +1,4 @@
-// Wire contract: backend 8374a4e6, app/schemas/pending_action.py.
+// Wire contract: backend 2bc41701, app/schemas/pending_action.py.
 export type SafeBatchValue = string | number | boolean | null;
 export interface SellerBatchItemSummary {
   item_id: string;
