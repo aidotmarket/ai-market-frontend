@@ -157,3 +157,13 @@ it('loads a known owner-only pending receipt on the settings operation continuat
   expect(mocks.get).toHaveBeenCalledExactlyOnceWith(mocks.id, token);
   expect(screen.getByRole('link', { name: 'Return to complete batch review' }).getAttribute('href')).toBe(`/confirm/${mocks.id}?t=${token}`);
 });
+
+it('renders Chunk 4 typed single summary and confirms its exact saved hash without claiming queued batch completion', async () => {
+  const data = pending(); const manifest = batch();
+  data.summary = { ...manifest, summary_type: 'seller_single_v1', execution_semantics: 'single', requested_count: 1, eligible_count: 1, blocked_count: 0, proposed_usage: 1, items: [{ ...manifest.items[0], result_index: 0 }] };
+  mocks.get.mockResolvedValue(data); mocks.decide.mockResolvedValue({ ...data, status: 'confirmed' });
+  await review(); expect(screen.getByRole('region', { name: 'Seller item review' })).toBeTruthy();
+  fireEvent.click(screen.getByRole('button', { name: 'Confirm' }));
+  await screen.findByText('Confirmed. This request has been completed.');
+  expect(mocks.decide).toHaveBeenCalledExactlyOnceWith(mocks.id, token, 'confirm', data.summary_hash);
+});

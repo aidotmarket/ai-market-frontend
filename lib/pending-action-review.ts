@@ -1,4 +1,4 @@
-import { isSellerBatchSummary } from './seller-batch';
+import { isSellerBatchSummary, isSellerSingleSummary } from './seller-batch';
 
 // Display requirements from backend cea28992 PendingActionSummary and its
 // registered licence rules. Never derive human copy from IDs or hashes.
@@ -19,6 +19,7 @@ export function safeLicenseUrl(value: unknown): value is string {
 }
 
 export function hasRequiredReviewContent(summary: Record<string, unknown>): boolean {
+  if (summary.summary_type === 'seller_single_v1') return isSellerSingleSummary(summary);
   if (summary.summary_type === 'seller_batch_v1') return isSellerBatchSummary(summary);
   if (summary.summary_type != null) return false;
   if (!text(summary.client_display_name) || !text(summary.effect) || summary.effect.startsWith('UNVERIFIED:')

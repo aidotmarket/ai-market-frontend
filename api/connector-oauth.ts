@@ -12,6 +12,7 @@ export interface ConnectorRequest {
   scopes: ConnectorScope[];
   expires_at: string;
   csrf_nonce: string;
+  tool_sets?: ('buyer' | 'seller')[];
 }
 export interface ConnectorGrant {
   id: string;
@@ -38,7 +39,8 @@ export async function getConnectorRequest(request: string): Promise<ConnectorReq
   const { data } = await api.get<ConnectorRequest>(`/connector-oauth/requests/${request}`);
   if (data.request !== request || !Number.isFinite(Date.parse(data.expires_at))
     || !data.client || !Array.isArray(data.accounts) || !Array.isArray(data.scopes)
-    || typeof data.csrf_nonce !== 'string') throw new Error('invalid_request');
+    || typeof data.csrf_nonce !== 'string'
+    || (data.tool_sets !== undefined && (!Array.isArray(data.tool_sets) || !data.tool_sets.length || new Set(data.tool_sets).size !== data.tool_sets.length || !data.tool_sets.every(v => v === 'buyer' || v === 'seller')))) throw new Error('invalid_request');
   return data;
 }
 
@@ -50,11 +52,11 @@ export function validateConnectorContinueUrl(value: unknown): string {
 }
 
 export async function decideConnectorRequest(
-  request: string, decision: 'approve' | 'deny', organization_id: string | null, csrf_nonce: string,
+  request: string, decision: 'approve' | 'deny', organization_id: string | null, csrf_nonce: string, tool_set?: 'buyer' | 'seller',
 ): Promise<string> {
   requireRequest(request);
   const { data } = await api.post<{ continue_url: string }>(`/connector-oauth/requests/${request}/decision`,
-    { decision, organization_id, csrf_nonce });
+    { decision, organization_id, csrf_nonce, ...(tool_set ? { tool_set } : {}) });
   return validateConnectorContinueUrl(data.continue_url);
 }
 

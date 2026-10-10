@@ -3,6 +3,7 @@ import {useEffect,useState} from 'react';
 import {readPublicationPage,type PublicationPage} from '@/api/sellerListingPublication';
 import SellerAtAGlance from '@/components/listings/SellerAtAGlance';
 import SellerListingVisibility from './SellerListingVisibility';
+import SellerPreviewConsent from './SellerPreviewConsent';
 import {formatPublishedDate} from '@/lib/format';
 export default function SellerPublications({active,enabled}:{active:boolean;enabled:boolean}) {
   const [page,setPage]=useState(0);
@@ -28,6 +29,7 @@ export default function SellerPublications({active,enabled}:{active:boolean;enab
         <p className="mt-2 text-xs text-gray-500">Published {formatPublishedDate(item.published_at)}</p>
         <a href={`/listings/${encodeURIComponent(item.slug)}`} className="mt-4 inline-block text-sm font-medium text-indigo-700 underline">View listing</a>
         {item.listing_id && <details className="mt-4" onToggle={event=>{const open=event.currentTarget.open;setOpenSummaries(current=>({...current,[item.id]:open}));}}><summary className="cursor-pointer text-sm font-medium text-indigo-700">Review At a glance</summary>{openSummaries[item.id] && <SellerAtAGlance listingId={item.listing_id} slug={item.slug} active={active} revision={retry} />}</details>}
+        <SellerPreviewConsent listingId={item.listing_id} />
         <SellerListingVisibility publication={item} active={active} onChange={updated=>setResult(current=>current?{...current,items:current.items.map(value=>value.id===updated.id?updated:value)}:current)} />
       </li>)}</ul>
       <div className="flex gap-4"><button type="button" disabled={page===0} onClick={()=>setPage(value=>value-1)} className="text-sm text-indigo-700 disabled:opacity-50">Previous page</button><button type="button" disabled={!result.has_more || page>=500} onClick={()=>setPage(value=>value+1)} className="text-sm text-indigo-700 disabled:opacity-50">Next page</button></div>

@@ -14,7 +14,7 @@ import { checkoutBlock, checkoutContinuation, checkoutDomainEnabled, checkoutErr
 import Link from 'next/link';
 import SellerBatchReview from '@/components/SellerBatchReview';
 import SellerOperationReceipt from '@/components/SellerOperationReceipt';
-import { isSellerBatchSummary } from '@/lib/seller-batch';
+import { isSellerBatchSummary, isSellerSingleSummary } from '@/lib/seller-batch';
 import { useSessionGeneration } from '@/hooks/useSessionGeneration';
 
 function Terms({ value }: { value: unknown }) {
@@ -48,7 +48,7 @@ export default function PendingActionReview() {
   const [reauthError, setReauthError] = useState('');
   const submitting = useRef(false);
   const data = review?.identity === identity ? review.data : null;
-  const batch = data && isSellerBatchSummary(data.summary) ? data.summary : null;
+  const batch = data && (isSellerBatchSummary(data.summary) || isSellerSingleSummary(data.summary)) ? data.summary : null;
   const kind = error?.identity === identity ? error.kind : '';
   const continuation = checkoutDomainEnabled() && data?.status === 'confirmed' && !data.error_code
     && data.summary.action === 'aim.checkout.handoff.create' ? checkoutContinuation(data.result?.checkout_url) : null;
@@ -82,7 +82,7 @@ export default function PendingActionReview() {
   }, [data, identity]);
 
   useEffect(() => {
-    if (!batch || data?.status !== 'confirmed' || !['queued', 'running'].includes(String(data.result?.execution_status))) return;
+    if (!batch || batch.summary_type !== 'seller_batch_v1' || data?.status !== 'confirmed' || !['queued', 'running'].includes(String(data.result?.execution_status))) return;
     let active = true;
     let timer: ReturnType<typeof setTimeout>;
     const poll = async () => {
@@ -156,7 +156,7 @@ export default function PendingActionReview() {
       : !hydrated || isLoading || (!data && !kind) ? <p role="status">Loading confirmation…</p>
       : <>
         <h1 className="text-2xl font-bold">{data ? 'Your assistant asks to…' : 'Review assistant request'}</h1>
-        {batch && <SellerBatchReview key={data!.summary_hash} summary={batch} expiresAt={data!.expires_at} />}
+        {batch && <SellerBatchReview key={data!.summary_hash} summary={batch} expiresAt={data!.expires_at} reviewHash={data!.summary_hash} />}
         {data && !batch && data.summary.summary_type !== 'seller_batch_v1' && <section aria-label="Requested action and exact terms" className="rounded-lg border border-gray-200 bg-white p-6 space-y-4">
           <dl className="space-y-4">
             <div><dt className="font-medium">App asking</dt><dd className="text-xl font-semibold">{typeof data.summary.client_display_name === 'string' ? data.summary.client_display_name : 'Unavailable'}</dd></div>
@@ -174,7 +174,7 @@ export default function PendingActionReview() {
           </details>
           <p className="text-sm text-gray-600">Expires: <time dateTime={data.expires_at}>{data.expires_at}</time></p>
         </section>}
-        {data?.status === 'confirmed' && <p role="status">{batch ? 'Authorized. Execution is queued separately; this decision does not mean all members completed.' : 'Confirmed. This request has been completed.'}</p>}
+        {data?.status === 'confirmed' && <p role="status">{batch?.summary_type === 'seller_batch_v1' ? 'Authorized. Execution is queued separately; this decision does not mean all members completed.' : 'Confirmed. This request has been completed.'}</p>}
         {batch && <SellerOperationReceipt result={data!.result} />}
         {batch && data?.result?.operation_id != null && <Link href={`/dashboard/settings?redirect=${encodeURIComponent(path)}#seller-operation`} prefetch={false} rel="noreferrer">View seller operation in settings</Link>}
         {continuation && !checkoutRefusal && <><p>Review the licence and confirm your authority at checkout.</p>

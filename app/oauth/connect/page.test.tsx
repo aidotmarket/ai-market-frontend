@@ -121,3 +121,12 @@ it('offers sign-in and 2FA for insufficient assurance', async () => {
   fireEvent.click(await screen.findByRole('button', { name: 'Sign in again' }));
   expect(navigation.push).toHaveBeenCalledWith(`/login?reauth=connector&redirect=${encodeURIComponent(path)}`);
 });
+
+it('offers only server-provided seller persona choices and sends explicit selection', async () => {
+  vi.mocked(getConnectorRequest).mockResolvedValue({ ...metadata, tool_sets: ['buyer', 'seller'] });
+  render(<ConnectorConsentPage />);
+  const seller = await screen.findByRole('radio', { name: 'Seller' });
+  expect((screen.getByRole('radio', { name: 'Buyer' }) as HTMLInputElement).checked).toBe(true);
+  fireEvent.click(seller); fireEvent.click(screen.getByRole('button', { name: 'Approve' }));
+  await waitFor(() => expect(decideConnectorRequest).toHaveBeenCalledWith(id, 'approve', null, 'nonce', 'seller'));
+});

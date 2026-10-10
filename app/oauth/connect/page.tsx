@@ -23,6 +23,7 @@ export default function ConnectorConsentPage() {
   const { user, hydrated, isLoading, isAuthenticated } = useAuthStore();
   const [enabled, setEnabled] = useState<boolean | null>(null);
   const [metadata, setMetadata] = useState<ConnectorRequest | null>(null);
+  const [toolSet, setToolSet] = useState<'buyer' | 'seller'>('buyer');
   const [organizationId, setOrganizationId] = useState<string | null>(null);
   const [error, setError] = useState('');
   const [busy, setBusy] = useState(false);
@@ -52,6 +53,7 @@ export default function ConnectorConsentPage() {
         saveConnectorContinuation(path);
         setOrganizationId(data.accounts.find((account) => account.kind === 'personal')?.organization_id ?? data.accounts[0]?.organization_id ?? null);
         setError('');
+        setToolSet('buyer');
         setMetadata(data);
       } catch (cause) {
         if (!active) return;
@@ -78,7 +80,7 @@ export default function ConnectorConsentPage() {
     submitting.current = true;
     setBusy(true);
     try {
-      const url = await decideConnectorRequest(metadata.request, decision, organizationId, metadata.csrf_nonce);
+      const url = await decideConnectorRequest(metadata.request, decision, organizationId, metadata.csrf_nonce, ...(metadata.tool_sets?.includes('seller') ? [toolSet] as const : []));
       clearConnectorContinuation();
       window.location.assign(url);
     } catch (cause) {
@@ -99,11 +101,11 @@ export default function ConnectorConsentPage() {
       <p role="alert">{error === 'expired' ? expiredMessage
         : error === 'EARLY_ACCESS_ONLY' ? earlyAccessMessage
         : error === 'email_unverified' ? 'Verify your email before connecting this app.'
-        : error === 'insufficient_assurance' ? 'Sign in again and complete two-factor authentication to continue.'
+        : (error === 'insufficient_assurance' || error === 'recent_login_required') ? 'Sign in again and complete two-factor authentication to continue.'
         : error === 'sso_required' ? 'Sign in with your organization’s SSO to continue.'
         : error === 'invalid' ? 'This connection request is invalid.'
         : 'Unable to complete this connection request.'}</p>
-      {error === 'insufficient_assurance' && <button onClick={signInAgain}>Sign in again</button>}
+      {(error === 'insufficient_assurance' || error === 'recent_login_required') && <button onClick={signInAgain}>Sign in again</button>}
       {error === 'error' && <button onClick={() => setRevision((value) => value + 1)}>Retry</button>}
     </> : metadata && isAuthenticated && user ? <>
       <h1 className="text-2xl font-bold">Connect {metadata.client.name} to ai.market</h1>
@@ -122,6 +124,10 @@ export default function ConnectorConsentPage() {
           </svg>
         </div>
       </div>
+      {metadata.tool_sets?.includes('seller') && <fieldset disabled={busy}><legend>Choose connector persona</legend>
+        {metadata.tool_sets.map(choice => <label key={choice} className="mr-4"><input type="radio" name="connector-persona" checked={toolSet === choice} onChange={() => setToolSet(choice)} />{choice === 'buyer' ? 'Buyer' : 'Seller'}</label>)}
+        <p>Seller access uses the displayed scopes and verified client identity. It requires a retained native sign-in within the last 15 minutes. Existing grants remain buyer until explicit consent.</p>
+      </fieldset>}
       <h2>Access requested</h2>
       <ul>{metadata.scopes.map((scope) => <li key={scope.scope}>{scope.description}</li>)}</ul>
       <p>Expires {new Date(metadata.expires_at).toLocaleString()}</p>
