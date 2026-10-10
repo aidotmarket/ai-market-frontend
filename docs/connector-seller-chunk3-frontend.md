@@ -1,6 +1,6 @@
 # Seller connector Chunk 3 frontend
 
-Companion to backend `8374a4e6ba0302bca60b82985e0957abc326170b`,
+Companion to backend `2bc41701`,
 `docs/connector-seller-chunk3.md` / “Frontend companion PR”, and runbooks
 `origin/main:specs/BQ-CONNECTOR-SELLER-GATE2.md` AP-S5/AP-S6 and Chunk 3.
 Base frontend: `68b036ed8685bf2d3334327fd67498883934a2a1`.
@@ -37,32 +37,37 @@ Base frontend: `68b036ed8685bf2d3334327fd67498883934a2a1`.
   an unavailable/flag-off pending endpoint remains inert. Saved operation results
   can continue to be read after effect switches turn off.
 
-## Backend contract gaps: acceptance remains incomplete
+## Folded native contracts
 
-The pinned backend has no native web route to report seller/bulk switches, page
-operation child activity, refresh retry targets, or submit a new failed-only
-batch. Its four `/pending-actions` routes expose summaries and live counters;
-`/connector-oauth/status` exposes global `enabled` only. A saved batch response
-proves backend admission, but cannot prove the current seller switches are on.
-Consequently explicit current-switch gating cannot be implemented from this
-native contract.
+- Current `admission` is outside the frozen summary/hash. Confirm and pending
+  seller review fail closed for missing, malformed, stale or unavailable status.
+  Seven current switch floors must be true. A 15-second UI freshness lease,
+  five-second refresh, focus refresh and pre-confirm capability read detect
+  shutdown. Backend confirmation independently rechecks authority and facts.
+  Decline and saved operation receipts remain available with seller effects off.
+- `403 SSO_REQUIRED` on pending GET or POST uses the existing CompanySignIn
+  OIDC/SAML flow with the fixed `/dashboard/settings` popup return. The original
+  signed pending continuation stays in the original window. Recovery refetches
+  the complete review, requires native TOTP, and never automatically confirms.
+- Settings reads native owner/org operation activity with first-party bearer,
+  Origin and CSRF. Signed cursors are opaque and passed unchanged with the same
+  operation, including size-trimmed pages; no offset is manufactured. Individual
+  receipts and all seven counters remain available with effect switches off.
+- Failed members are selected explicitly across activity pages. Retry sends only
+  source token, session CSRF, a new UUID key and 1–50 distinct target IDs. The
+  backend refreshes revisions and validates failed-only membership. No success,
+  unchanged, blocked or cancelled child is selected, and no batch is split.
+  The returned native link opens a new complete frozen review requiring a fresh
+  explicit decision and native factors. Refusals never automatically resubmit;
+  an ambiguous POST directs the owner to recover pending receipts.
+- Hash, path, account, session and pending continuation changes invalidate
+  settings state. Receipt/activity refresh failures retry after five seconds;
+  stale activity selections are removed before retry can be prepared.
 
-Individual receipts and signed cursors exist exclusively in the resource MCP
-tool `get_activity(operation_id,cursor)`, in
-`app/mcp/connector/tools/get_activity.py` and
-`app/mcp/connector/discovery/activity.py`. That tool authenticates a delegated
-connector principal, rather than the native browser session. No browser proxy,
-delegated token, new endpoint, cursor key, or owner/org supplied in a body is
-invented here. The settings receipt tells the owner how to request those pages
-through their connected assistant. It does **not** provide an integrated native
-signed-cursor activity view.
+No browser storage, delegated credentials, new token-bearing URL format,
+owner/org fields, browser revisions, cursor signing keys, or legal signing
+are introduced. Legacy non-batch and flag-off pending flows remain unchanged.
 
-The settings receipt explains that retry requires a fresh explicit set/key of
-failed targets with current revisions, excluding all successful/unchanged,
-blocked and cancelled members. It does **not** submit a retry or manufacture
-current revisions from historical receipts. Completing the requested interactive
-retry and activity surfaces requires an approved native backend contract.
-
-No PR or deployment is part of this change. Test/build evidence, including failed
-attempts and environmental limitations, is kept in
-`/var/tmp/chunk3-fe-evidence/summary.json` and adjacent complete private logs.
+Full logs, initial failures, test totals, and production build evidence are in
+`/var/tmp/chunk3-fe-fold-evidence/summary.json`. Tests consume API mocks; no live
+browser/backend, provider sign-in, deployment or production effects are claimed.

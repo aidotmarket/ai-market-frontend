@@ -95,3 +95,7 @@ it('adds same-session TOTP proof only to company confirmation, never decline', a
   expect(mocks.post.mock.lastCall?.[1]).toEqual({ token, csrf: pendingActionCsrf(mocks.token) });
 });
 afterEach(() => vi.unstubAllEnvs());
+
+it('maps company SSO refusal to its native recovery state', () => {
+  expect(pendingActionError({ response: { status: 403, data: { detail: 'SSO_REQUIRED' } } })).toBe('company_login');
+});

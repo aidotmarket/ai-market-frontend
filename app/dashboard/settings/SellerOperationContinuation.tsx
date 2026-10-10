@@ -7,19 +7,28 @@ import { PENDING_ACTION_CONTINUATION } from '@/lib/redirect';
 import { isSellerBatchSummary } from '@/lib/seller-batch';
 import { useAuthStore } from '@/store/auth';
 import { useSessionGeneration } from '@/hooks/useSessionGeneration';
+import SellerOperationActivity from '@/components/SellerOperationActivity';
+import { useSearchParams, usePathname } from 'next/navigation';
 import SellerOperationReceipt from '@/components/SellerOperationReceipt';
 
-// The existing private pending continuation is the only native results read
-// exposed by Chunk 3. Do not treat global connector enablement as seller enablement.
 export default function SellerOperationContinuation() {
+  const pathname = usePathname();
+  const query = useSearchParams();
+  const [hash, setHash] = useState('');
+  useEffect(() => {
+    const changed = () => setHash(window.location.hash);
+    changed(); window.addEventListener('hashchange', changed); window.addEventListener('popstate', changed);
+    return () => { window.removeEventListener('hashchange', changed); window.removeEventListener('popstate', changed); };
+  }, []);
+  const path = query.get('redirect') || '';
   const { user, token } = useAuthStore();
   const generation = useSessionGeneration(token);
-  const identity = `${user?.id}:${generation}`;
+  const identity = `${user?.id}:${generation}:${pathname}:${path}:${hash}`;
   const [saved, setSaved] = useState<{ identity: string; data: PendingAction; path: string } | null>(null);
   const [unavailable, setUnavailable] = useState(false);
   useEffect(() => {
-    if (!user || window.location.hash !== '#seller-operation') return;
-    const path = new URLSearchParams(window.location.search).get('redirect') || '';
+    setSaved(null); setUnavailable(false);
+    if (!user || pathname !== '/dashboard/settings' || hash !== '#seller-operation') return;
     const match = PENDING_ACTION_CONTINUATION.exec(path);
     if (!match) return;
     let active = true;
@@ -31,17 +40,16 @@ export default function SellerOperationContinuation() {
         if (!isSellerBatchSummary(data.summary) || !data.result?.operation_id) { setSaved(null); return; }
         setSaved({ identity, data, path }); setUnavailable(false);
         if (['queued', 'running'].includes(String(data.result.execution_status))) timer = setTimeout(read, 5000);
-      } catch { if (active) setUnavailable(true); }
+      } catch { if (active) { setUnavailable(true); timer = setTimeout(read, 5000); } }
     };
     void read();
     return () => { active = false; clearTimeout(timer); };
-  }, [user, identity]);
-  if (!saved || saved.identity !== identity) return null;
+  }, [user, identity, pathname, path, hash]);
+  if (!saved || saved.identity !== identity) return unavailable ? <p role="alert">Unable to refresh this receipt. Retrying…</p> : null;
   return <section id="seller-operation" aria-label="Seller operation in settings" className="mt-6 space-y-4">
     <SellerOperationReceipt result={saved.data.result} />
-    {unavailable && <p role="alert">Unable to refresh this receipt. Reload to check current counts.</p>}
+    {unavailable && <p role="alert">Unable to refresh this receipt. Retrying…</p>}
     <Link href={saved.path} prefetch={false} rel="noreferrer">Return to complete batch review</Link>
-    <p>For individual receipts, ask your connected assistant to call get_activity with this operation ID and the returned signed cursor for each next page.</p>
-    <p>To retry failed members, request a new explicit batch of failed targets only, with fresh revisions and a new key and review. Exclude successful, unchanged, blocked and cancelled members. Never automatically split a submission over 50 members.</p>
+    <SellerOperationActivity key={identity} operationId={String(saved.data.result!.operation_id)} pendingId={saved.data.id} token={PENDING_ACTION_CONTINUATION.exec(saved.path)![2]} />
   </section>;
 }

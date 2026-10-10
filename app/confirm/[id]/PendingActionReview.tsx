@@ -9,7 +9,7 @@ import CompanySignIn from '@/components/CompanySignIn';
 import { companySignInEnabled } from '@/lib/company-sign-in';
 import ReauthModal from '@/app/dashboard/settings/ReauthModal';
 import { startProviderOAuth } from '@/components/OAuthButtons';
-import { decidePendingAction, getPendingAction, pendingActionError, type PendingAction } from '@/api/pending-actions';
+import { decidePendingAction, getPendingAction, getSellerCapability, sellerAdmissionEnabled, pendingActionError, type PendingAction } from '@/api/pending-actions';
 import { checkoutBlock, checkoutContinuation, checkoutDomainEnabled, checkoutErrorCode } from '@/lib/checkout-domain';
 import Link from 'next/link';
 import SellerBatchReview from '@/components/SellerBatchReview';
@@ -47,8 +47,13 @@ export default function PendingActionReview() {
   const [reload, setReload] = useState(0);
   const [reauthError, setReauthError] = useState('');
   const submitting = useRef(false);
+  const capabilityRequest = useRef(0);
   const data = review?.identity === identity ? review.data : null;
   const batch = data && (isSellerBatchSummary(data.summary) || isSellerSingleSummary(data.summary)) ? data.summary : null;
+  const [capability, setCapability] = useState<{ identity: string; admission: unknown } | null>(null);
+  const [capabilityTick, setCapabilityTick] = useState(0);
+  const seller = data?.summary.summary_type === 'seller_batch_v1';
+  const admitted = !seller || (capability?.identity === identity && sellerAdmissionEnabled(capability.admission));
   const kind = error?.identity === identity ? error.kind : '';
   const continuation = checkoutDomainEnabled() && data?.status === 'confirmed' && !data.error_code
     && data.summary.action === 'aim.checkout.handoff.create' ? checkoutContinuation(data.result?.checkout_url) : null;
@@ -64,7 +69,7 @@ export default function PendingActionReview() {
     setReauthError('');
     // Probe the API even without a session: flag-off 404 must stay inert.
     getPendingAction(id, token).then((data) => {
-      if (active) setReview({ identity, data });
+      if (active) { setReview({ identity, data }); setCapability({ identity, admission: data.admission }); }
     }).catch((cause) => { if (active) setError({ identity, kind: pendingActionError(cause) }); });
     return () => { active = false; };
   }, [hydrated, isLoading, valid, id, token, identity, reload]);
@@ -98,13 +103,55 @@ export default function PendingActionReview() {
     return () => { active = false; clearTimeout(timer); };
   }, [batch, data, id, token, identity]);
 
+  useEffect(() => {
+    if (!seller || data?.status !== 'pending_review') return;
+    let active = true;
+    const refresh = async () => {
+      if (submitting.current) return;
+      const request = ++capabilityRequest.current;
+      setCapability({ identity, admission: null });
+      try {
+        const admission = await getSellerCapability(id, token);
+        if (active && request === capabilityRequest.current) setCapability({ identity, admission });
+      } catch (cause) {
+        if (active && request === capabilityRequest.current) {
+          setCapability({ identity, admission: null });
+          const refusal = pendingActionError(cause);
+          if (refusal === 'company_login' || refusal === 'login') setError({ identity, kind: refusal });
+        }
+      }
+      if (active) setCapabilityTick(value => value + 1);
+    };
+    const timer = setInterval(() => { setCapabilityTick(value => value + 1); void refresh(); }, 5000);
+    const focus = () => { setCapability({ identity, admission: null }); void refresh(); };
+    window.addEventListener('focus', focus);
+    return () => { active = false; clearInterval(timer); window.removeEventListener('focus', focus); };
+  }, [seller, data?.status, id, token, identity]);
+  // Re-render at each freshness boundary even when a status request stalls.
+  void capabilityTick;
+
   const decide = async (decision: 'confirm' | 'decline', reauthToken?: string) => {
     if (!data || data.status !== 'pending_review' || submitting.current || Date.parse(data.expires_at) <= Date.now()) return;
-    if (decision === 'confirm' && ((kind && !(kind === 'second_factor' && reauthToken)) || !hasRequiredReviewContent(data.summary))) return;
+    if (decision === 'confirm' && (!admitted || (kind && !(kind === 'second_factor' && reauthToken)) || !hasRequiredReviewContent(data.summary))) return;
     if (decision === 'confirm' && user?.sso_enforced && user.totp_enabled && !reauthToken) { setAuthenticatorOpen(true); return; }
     submitting.current = true;
     setBusy(true);
     try {
+      if (decision === 'confirm' && seller) {
+        ++capabilityRequest.current;
+        setCapability({ identity, admission: null });
+        let admission;
+        try { admission = await getSellerCapability(id, token); } catch (cause) {
+          if (currentIdentity.current === identity) {
+            const refusal = pendingActionError(cause);
+            if (refusal === 'company_login' || refusal === 'login') setError({ identity, kind: refusal });
+          }
+          return;
+        }
+        if (currentIdentity.current !== identity) return;
+        setCapability({ identity, admission });
+        if (!sellerAdmissionEnabled(admission)) return;
+      }
       const result = await decidePendingAction(id, token, decision, data.summary_hash, ...(reauthToken ? [reauthToken] : []));
       if (currentIdentity.current === identity) {
         setReview({ identity, data: result }); setError(null);
@@ -125,12 +172,14 @@ export default function PendingActionReview() {
 
   // /auth/me reports the actual provider session. Linked account methods and
   // primary_auth are not evidence of how this session signed in.
-  const companyLogin = companySignInEnabled() && user?.sso_enforced && !user.two_factor_provider && kind === 'login';
+  const companyLogin = companySignInEnabled() && (kind === 'company_login' || (user?.sso_enforced && !user.two_factor_provider && kind === 'login'));
   const provider = user?.two_factor_provider;
   const enroll = kind === 'enrollment' || (kind === 'second_factor' && !provider && !user?.totp_enabled);
   const login = async () => {
     if (!valid) return;
-    if (kind === 'second_factor' && user?.sso_enforced && user.totp_enabled) {
+    if (kind === 'company_login') {
+      router.push(`/dashboard/settings?redirect=${encodeURIComponent(path)}#security`);
+    } else if (kind === 'second_factor' && user?.sso_enforced && user.totp_enabled) {
       setAuthenticatorOpen(true);
     } else if (enroll) {
       router.push(`/dashboard/settings?redirect=${encodeURIComponent(path)}#security`);
@@ -156,7 +205,7 @@ export default function PendingActionReview() {
       : !hydrated || isLoading || (!data && !kind) ? <p role="status">Loading confirmation…</p>
       : <>
         <h1 className="text-2xl font-bold">{data ? 'Your assistant asks to…' : 'Review assistant request'}</h1>
-        {batch && <SellerBatchReview key={data!.summary_hash} summary={batch} expiresAt={data!.expires_at} reviewHash={data!.summary_hash} />}
+        {batch && (data?.status !== 'pending_review' || admitted) && <SellerBatchReview key={data!.summary_hash} summary={batch} expiresAt={data!.expires_at} reviewHash={data!.summary_hash} />}
         {data && !batch && data.summary.summary_type !== 'seller_batch_v1' && <section aria-label="Requested action and exact terms" className="rounded-lg border border-gray-200 bg-white p-6 space-y-4">
           <dl className="space-y-4">
             <div><dt className="font-medium">App asking</dt><dd className="text-xl font-semibold">{typeof data.summary.client_display_name === 'string' ? data.summary.client_display_name : 'Unavailable'}</dd></div>
@@ -186,16 +235,17 @@ export default function PendingActionReview() {
         {expired && <p role="alert">This request expired or its terms changed. Ask your assistant for a new request.</p>}
         {kind === 'unavailable' && <p role="alert">This request is temporarily unavailable. Please reload to check its status.</p>}
         {contentUnavailable && <p role="alert">Required request details are missing. Confirmation is disabled. Ask your assistant for a new request with complete app, time, effect and terms.</p>}
-        {(kind === 'login' || kind === 'second_factor' || kind === 'enrollment') && <div className="space-y-3" role="alert">
+        {seller && data?.status === 'pending_review' && !admitted && <p role="alert">Seller confirmation is disabled while current capability is off or unavailable.</p>}
+        {(kind === 'company_login' || kind === 'login' || kind === 'second_factor' || kind === 'enrollment') && <div className="space-y-3" role="alert">
           <p>{enroll ? 'Set up two-factor authentication before confirming this binding action. After setup, return here to review and click Confirm.' : provider
-            ? 'Sign in again with your provider, then return here to review and click Confirm.' : kind === 'login' ? 'Sign in again to confirm. Login must be within the last 15 minutes.' : 'Verify your second factor again before confirming this binding action.'}</p>
-          {companyLogin ? <CompanySignIn allowOidc={!user?.auth_methods?.includes('saml')} returnPath={`/confirm/${id.toLowerCase()}`} onSuccess={() => { if (!currentIdentity.current.startsWith(`${user?.id}:`) || !currentIdentity.current.endsWith(`:${path}`)) return; setReauthError(''); setReview(null); setError(null); setReload(value => value + 1); }} /> : <button type="button" onClick={login} className="text-[#3F51B5] font-medium underline">{enroll ? 'Set up two-factor authentication' : provider ? `Sign in again with ${provider === 'google' ? 'Google' : 'GitHub'}` : kind === 'login' ? 'Sign in again' : 'Sign in and verify second factor'}</button>}
+            ? 'Sign in again with your provider, then return here to review and click Confirm.' : (kind === 'login' || kind === 'company_login') ? 'Sign in again to confirm. Login must be within the last 15 minutes.' : 'Verify your second factor again before confirming this binding action.'}</p>
+          {companyLogin ? <CompanySignIn allowOidc={!user?.auth_methods?.includes('saml')} returnPath={kind === 'company_login' ? '/dashboard/settings' : `/confirm/${id.toLowerCase()}`} onSuccess={() => { if (!currentIdentity.current.startsWith(`${user?.id}:`) || !currentIdentity.current.endsWith(`:${path}`)) return; setReauthError(''); setReview(null); setError(null); setReload(value => value + 1); }} /> : <button type="button" onClick={login} className="text-[#3F51B5] font-medium underline">{enroll ? 'Set up two-factor authentication' : provider ? `Sign in again with ${provider === 'google' ? 'Google' : 'GitHub'}` : kind === 'login' ? 'Sign in again' : 'Sign in and verify second factor'}</button>}
           {reauthError && <p>{reauthError}</p>}
         </div>}
         {actionable && <>
           <p className="font-medium">Only confirm if you asked for this.</p>
           <div className="flex gap-3">
-            <button type="button" disabled={busy || !!kind || contentUnavailable} onClick={() => decide('confirm')} className="rounded-lg bg-[#3F51B5] px-5 py-2.5 text-white font-medium disabled:opacity-50">Confirm</button>
+            <button type="button" disabled={busy || !!kind || contentUnavailable || !admitted} onClick={() => decide('confirm')} className="rounded-lg bg-[#3F51B5] px-5 py-2.5 text-white font-medium disabled:opacity-50">Confirm</button>
             <button type="button" disabled={busy} onClick={() => decide('decline')} className="rounded-lg border border-gray-300 px-5 py-2.5 font-medium disabled:opacity-50">Decline</button>
           </div>
           {busy && <p role="status">Saving your decision…</p>}
