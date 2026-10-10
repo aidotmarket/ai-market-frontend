@@ -13,6 +13,7 @@ import { useToast } from '@/components/Toast';
 import { AxiosError } from 'axios';
 import ReauthModal from './ReauthModal';
 import ConnectedApps from './ConnectedApps';
+import SellerAuthority from './SellerAuthority';
 import SellerOperationContinuation from './SellerOperationContinuation';
 import { companySignInEnabled } from '@/lib/company-sign-in';
 import CompanyAuthenticator, { companyEnrollmentOffered } from '@/components/CompanyAuthenticator';
@@ -620,6 +621,7 @@ export default function SettingsPage() {
         </div>
       </section>
       <ConnectedApps />
+      <SellerAuthority />
       <SellerOperationContinuation />
     </div>
   );

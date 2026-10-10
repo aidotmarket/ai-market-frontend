@@ -16,8 +16,7 @@ export interface SellerBatchItemSummary {
   references: Record<string, SafeBatchValue>;
   policy_reasons: string[];
 }
-export interface SellerBatchSummary extends Record<string, unknown> {
-  summary_type: 'seller_batch_v1';
+interface SellerManifest {
   format_version: '1';
   action: string;
   action_version: string;
@@ -36,8 +35,11 @@ export interface SellerBatchSummary extends Record<string, unknown> {
   blocked_count: number;
   limit_version: number;
   proposed_usage: number;
-  execution_semantics: 'best_effort_partial';
   items: SellerBatchItemSummary[];
+}
+
+export interface SellerBatchSummary extends SellerManifest, Record<string, unknown> {
+  summary_type: 'seller_batch_v1'; execution_semantics: 'best_effort_partial';
 }
 
 const text = (value: unknown): value is string => typeof value === 'string' && !!value.trim();
@@ -77,4 +79,10 @@ export function isSellerBatchSummary(value: Record<string, unknown>): value is S
     && new Set(items.map(item => item.target_id)).size === items.length
     && items.every((item, i) => i === 0 || items[i - 1].target_id < item.target_id)
     && items.map(item => item.result_index).sort((a, b) => a - b).every((index, i) => index === i);
+}
+
+export interface SellerSingleSummary extends SellerManifest, Record<string, unknown> { summary_type: 'seller_single_v1'; execution_semantics: 'single' }
+export function isSellerSingleSummary(value: Record<string, unknown>): value is SellerSingleSummary {
+  return value.summary_type === 'seller_single_v1' && value.execution_semantics === 'single' && value.requested_count === 1
+    && isSellerBatchSummary({ ...value, summary_type: 'seller_batch_v1', execution_semantics: 'best_effort_partial' });
 }

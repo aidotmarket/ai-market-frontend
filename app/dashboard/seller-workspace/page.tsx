@@ -1,4 +1,5 @@
 'use client';
+import WorkspaceBatchSigning from '@/components/seller-workspace/WorkspaceBatchSigning';
 
 import { type FormEvent, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import Link from 'next/link';
@@ -575,7 +576,7 @@ export default function SellerWorkspacePage() {
     <div className="space-y-6">
       <WorkspaceOverview connections={currentConnections} view={view} onViewChange={(nextView) => { setR2Target(undefined); clearSensitive(); setActionError(null); setDisconnectConfirmation(null); setView(nextView); }} />
       <WorkspacePanel active={view === 'data'}>{capabilities?.master.enabled && capabilities.sources?.enabled && capabilities.sources.status === 'available' ? <SavedWorkspaceData connections={connections} enabled={isStorageDiscoveryAvailable(capabilities)} sampleLimits={DEFAULT_SAMPLE_LIMITS} /> : <WorkspaceData connections={connections} enabled={capabilities !== null && isStorageDiscoveryAvailable(capabilities)} />}</WorkspacePanel>
-      <WorkspacePanel active={view === 'license'}><SavedLicenseStep /></WorkspacePanel>
+      <WorkspacePanel active={view === 'license'}><SavedLicenseStep /><WorkspaceBatchSigning /></WorkspacePanel>
       <WorkspacePanel active={view === 'publish'}><GuidedPublishStep active={view === 'publish'} /></WorkspacePanel>
       <WorkspacePanel active={view === 'listing'}>{capabilities?.master.enabled && capabilities?.drafts?.enabled && capabilities.drafts.status === 'available' ? <SavedListingEditor active={view === 'listing'} assistant={capabilities.listing_assistant?.enabled && capabilities.listing_assistant.status === 'available' ? listingAssistant : undefined} /> : <SellerListingEditor active={view === 'listing'} assistant={capabilities?.master.enabled && capabilities.listing_assistant?.enabled && capabilities.listing_assistant.status === 'available' ? listingAssistant : undefined} />}</WorkspacePanel>
       <WorkspacePanel active={view === 'manage'}><SellerPublications active={view === 'manage'} enabled={capabilities?.master.enabled === true && capabilities.review?.enabled === true && capabilities.review.status === 'available'} /></WorkspacePanel>

@@ -11,8 +11,10 @@ const headers = { Authorization: 'Bearer native-session', Origin: window.locatio
 const page = { operation: { operation_id: id, execution_status: 'partial', execution_deadline: '2099-01-01T00:00:00Z', requested_count: 1, eligible_count: 1, blocked_count: 0, succeeded_count: 0, no_change_count: 0, failed_count: 1, cancelled_count: 0 }, items: [{ id: target, target_id: target, kind: 'seller_operation_item', action: 'aim.listing.publish', status: 'failed', summary: 'Seller item failed.', result_index: 0 }], limit: 20, offset: 0, has_more: true, next_cursor: 'signed_trimmed_prefix' };
 beforeEach(() => { vi.resetAllMocks(); mocks.get.mockResolvedValue({ data: page }); });
 it('reads current owner capability with existing session/link and no new authority', async () => {
-  await getSellerCapability(id, token);
-  expect(mocks.get).toHaveBeenCalledWith(`/pending-actions/${id}/capability`, { params: { t: token }, headers: { Authorization: headers.Authorization, 'X-CSRF-Token': headers['X-CSRF-Token'] } });
+  const admission = { effective: true, reason: null, checked_at: new Date().toISOString(), switch_snapshot: { connector_enabled: true, action_path_enabled: true, seller_enabled: true, seller_bulk_enabled: true, global_enabled: true, profile_enabled: true, tool_enabled: true } };
+  mocks.get.mockResolvedValueOnce({ data: admission });
+  expect(await getSellerCapability(id, token)).toEqual(admission);
+  expect(mocks.get).toHaveBeenCalledWith(`/pending-actions/${id}/capability`, { params: { t: token }, headers });
 });
 it('passes the signed cursor unchanged after a trimmed page using native Origin/CSRF only', async () => {
   const first = await getSellerActivity(id);
