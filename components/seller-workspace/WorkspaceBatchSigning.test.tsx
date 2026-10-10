@@ -58,5 +58,5 @@ it('cannot sign after stale prepared coverage and offers fresh review', async ()
 });
 it('keeps effect-off signing disabled', () => {
   vi.mocked(useSellerSwitches).mockReturnValue({ seller: true, effects: false, bulk: true }); render(<WorkspaceBatchSigning />);
-  expect((screen.getByRole('button', { name: 'Load complete licence batch' }) as HTMLButtonElement).disabled).toBe(true); expect(signInstruments).not.toHaveBeenCalled();
+  expect(screen.queryByRole('region')).toBeNull(); expect(signInstruments).not.toHaveBeenCalled();
 });

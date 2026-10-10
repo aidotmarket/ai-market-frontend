@@ -62,7 +62,9 @@ export function newDecision(version: number): WebDecision {
 }
 const base = '/connector-seller-settings';
 export async function readAuthority(): Promise<AuthorityStatus> {
-  const { data } = await nativeClient.get<AuthorityStatus>(base, { headers: nativeSession().headers });
+  const session = nativeSession();
+  const { data } = await nativeClient.get<AuthorityStatus>(base, { headers: session.headers });
+  if (useAuthStore.getState().token !== session.token) throw new Error('SESSION_CHANGED');
   if (!data || !integer(data.version) || typeof data.enabled !== 'boolean' || !/^\d{4}-\d{2}-\d{2}$/.test(data.utc_day)
     || !(data.limits === null || Object.keys(data.limits).length === 0 || validLimits(data.limits)) || !Array.isArray(data.usage)
     || !data.usage.every(u => verbs.some(v => u.action === `aim.listing.${v}`) && integer(u.reserved) && integer(u.success))) throw new Error('INVALID_RESPONSE');
@@ -70,7 +72,9 @@ export async function readAuthority(): Promise<AuthorityStatus> {
 }
 export async function readPreview(listing: string): Promise<PreviewStatus> {
   if (!uuid(listing)) throw new Error('INVALID_REQUEST');
-  const { data } = await nativeClient.get<PreviewStatus>(`${base}/preview-consent/${listing}`, { headers: nativeSession().headers });
+  const session = nativeSession();
+  const { data } = await nativeClient.get<PreviewStatus>(`${base}/preview-consent/${listing}`, { headers: session.headers });
+  if (useAuthStore.getState().token !== session.token) throw new Error('SESSION_CHANGED');
   if (!data || data.listing_id !== listing || !uuid(data.publication_version_id) || !integer(data.version)
     || typeof data.enabled !== 'boolean' || typeof data.sample_available !== 'boolean'
     || !(data.sample_set_hash === null || digest(data.sample_set_hash))
@@ -102,7 +106,9 @@ async function receipt(path: string, body: WebDecision): Promise<DecisionReceipt
 }
 export const reviewAuthority = (body: AuthoritySet) => review('/authority/review', 'aim.seller.connector_limits.set', body);
 export const setAuthority = (body: AuthoritySet) => receipt('/authority', body);
+export const reviewStopAuthority = (body: WebDecision) => review('/authority/stop/review', 'aim.seller.connector_limits.revoke', body);
 export const stopAuthority = (body: WebDecision) => receipt('/authority/stop', body);
 export const reviewPreview = (body: PreviewSet) => review('/preview-consent/review', 'aim.listing.ai_preview_consent.set', body);
 export const setPreview = (body: PreviewSet) => receipt('/preview-consent', body);
+export const reviewRevokePreview = (body: PreviewRevoke) => review('/preview-consent/revoke/review', 'aim.listing.ai_preview_consent.revoke', body);
 export const revokePreview = (body: PreviewRevoke) => receipt('/preview-consent/revoke', body);

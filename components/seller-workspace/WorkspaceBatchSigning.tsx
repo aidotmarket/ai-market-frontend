@@ -9,7 +9,7 @@ import NativeSellerAuth from '@/components/NativeSellerAuth';
 
 export default function WorkspaceBatchSigning() {
   const switches = useSellerSwitches(); const { user, token } = useAuthStore();
-  if (!user || switches?.seller !== true || !switches.bulk) return null;
+  if (!user || switches?.seller !== true || !switches.bulk || !switches.effects) return null;
   return <BatchSigningScreen key={`${user.id}:${token}`} switches={switches} />;
 }
 export function BatchSigningScreen({ switches }: { switches: SellerSwitchReport }) {
@@ -59,7 +59,7 @@ export function BatchSigningScreen({ switches }: { switches: SellerSwitchReport 
       await signInstruments(request.current); if (active.current) setDone(true);
     } catch(e) { if (active.current) setError(e); } finally { if (active.current) setBusy(false); }
   };
-  if (!switches.seller || !switches.bulk) return null;
+  if (!switches.seller || !switches.bulk || !switches.effects) return null;
   return <section aria-label="Workspace batch licence signing" className="space-y-4 rounded-xl border bg-white p-6">
     <h2 className="text-xl font-semibold">Workspace step: Sign licences</h2>
     <p>Display and sign all selected instruments in one native session before a fresh action-batch review. Generic Confirm never signs licences.</p>

@@ -4,25 +4,33 @@ import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/re
 import SellerAuthority from './SellerAuthority';
 import { useSellerSwitches } from '@/hooks/useSellerSwitches';
 import { useAuthStore } from '@/store/auth';
-import { readAuthority, reviewAuthority, setAuthority, stopAuthority } from '@/api/connector-seller-settings';
+import { readAuthority, reviewAuthority, setAuthority, reviewStopAuthority, stopAuthority } from '@/api/connector-seller-settings';
 import { authority, hash, id } from '@/tests/fixtures/seller-authority';
 import { submitReauth } from '@/api/auth';
+import { checkCompanySignIn } from '@/lib/company-sign-in';
 import type { User } from '@/types';
 vi.mock('@/hooks/useSellerSwitches', () => ({ useSellerSwitches: vi.fn() }));
-vi.mock('@/api/connector-seller-settings', async original => ({ ...await original<typeof import('@/api/connector-seller-settings')>(), readAuthority: vi.fn(), reviewAuthority: vi.fn(), setAuthority: vi.fn(), stopAuthority: vi.fn() }));
+vi.mock('@/api/connector-seller-settings', async original => ({ ...await original<typeof import('@/api/connector-seller-settings')>(), readAuthority: vi.fn(), reviewAuthority: vi.fn(), setAuthority: vi.fn(), reviewStopAuthority: vi.fn(), stopAuthority: vi.fn() }));
 vi.mock('@/api/auth', async original => ({ ...await original<typeof import('@/api/auth')>(), submitReauth: vi.fn() }));
+vi.mock('@/lib/company-sign-in', async original => ({ ...await original<typeof import('@/lib/company-sign-in')>(), checkCompanySignIn: vi.fn() }));
 beforeEach(() => {
   vi.resetAllMocks(); useAuthStore.setState({ user: { id: id(99), totp_enabled: true } as User, token: 'retained-session' });
   vi.mocked(useSellerSwitches).mockReturnValue({ seller: true, effects: true, bulk: true });
   vi.mocked(readAuthority).mockResolvedValue(structuredClone(authority));
   vi.mocked(reviewAuthority).mockImplementation(async body => { const { csrf: _csrf, reauth_token: _token, ...decision } = body; return { action: 'aim.seller.connector_limits.set', decision, review_hash: hash }; });
   vi.mocked(setAuthority).mockResolvedValue({ decision_id: id(90), version: 5, enabled: true });
+  vi.mocked(reviewStopAuthority).mockImplementation(async body => { const { csrf: _csrf, reauth_token: _token, review_hash: _hash, ...decision } = body; return { action: 'aim.seller.connector_limits.revoke', decision, review_hash: hash }; });
   vi.mocked(stopAuthority).mockResolvedValue({ decision_id: id(90), version: 5, enabled: false });
 });
 afterEach(() => { cleanup(); vi.unstubAllEnvs(); });
-it.each([null, { seller: false, effects: true, bulk: true }])('hides settings and performs no reads without positive seller reporting: %j', async report => {
+it.each([null, { seller: false, effects: true, bulk: true }, { seller: true, effects: false, bulk: true }])('keeps authenticated status and reviewed Stop visible while edits are hidden: %j', async report => {
   vi.mocked(useSellerSwitches).mockReturnValue(report); render(<SellerAuthority />);
-  expect(screen.queryByRole('region')).toBeNull(); expect(readAuthority).not.toHaveBeenCalled();
+  await screen.findByText(/Authority version 4/);
+  expect(screen.queryByRole('button', { name: 'Review exact standing limits' })).toBeNull();
+  fireEvent.click(screen.getByRole('button', { name: 'Stop automatic seller actions' }));
+  fireEvent.click(await screen.findByRole('button', { name: 'Confirm Stop automatic seller actions' }));
+  await waitFor(() => expect(stopAuthority).toHaveBeenCalledWith({ ...vi.mocked(reviewStopAuthority).mock.calls[0][0], review_hash: hash }));
+  expect(setAuthority).not.toHaveBeenCalled();
 });
 it('shows selected identities, expiry and shared budget after reservations and successes', async () => {
   render(<SellerAuthority />); await screen.findByText(/Authority version 4/);
@@ -46,14 +54,6 @@ it('invalidates review on editing and refuses 51 without auto splitting', async 
   expect(screen.queryByRole('button', { name: 'Save reviewed standing authority' })).toBeNull();
   expect((screen.getByRole('button', { name: 'Review exact standing limits' }) as HTMLButtonElement).disabled).toBe(true);
   expect(setAuthority).not.toHaveBeenCalled();
-});
-it('keeps Stop and status available with effects off, without factor/review', async () => {
-  vi.mocked(useSellerSwitches).mockReturnValue({ seller: true, effects: false, bulk: false });
-  render(<SellerAuthority />); await screen.findByText(/Authority version 4/);
-  fireEvent.click(screen.getByRole('button', { name: 'Stop automatic seller actions' }));
-  await waitFor(() => expect(stopAuthority).toHaveBeenCalledTimes(1)); expect(reviewAuthority).not.toHaveBeenCalled();
-  expect(vi.mocked(stopAuthority).mock.calls[0][0]).toMatchObject({ expected_version: 4, csrf: expect.any(String) });
-  expect((screen.getByRole('button', { name: 'Review exact standing limits' }) as HTMLButtonElement).disabled).toBe(true);
 });
 it('offers Chunk 0 enrollment and company sign-in on exact native refusals', async () => {
   vi.stubEnv('NEXT_PUBLIC_ORG_SSO_WEB_RETURN_ENABLED', 'true');
@@ -85,4 +85,45 @@ it('retains the exact typed decision while retrying review with native TOTP proo
   const calls = vi.mocked(reviewAuthority).mock.calls;
   expect(calls[1][0].idempotency_key).toBe(calls[0][0].idempotency_key); expect(calls[1][0].reauth_token).toBe('native-totp-proof');
   expect(setAuthority).not.toHaveBeenCalled();
+});
+
+it.each(['review', 'submit'])('retains Stop through TOTP and never retries as a set (%s)', async stage => {
+  vi.mocked(useSellerSwitches).mockReturnValue(null);
+  vi.mocked(submitReauth).mockResolvedValue({ token: 'native-totp-proof' } as never);
+  vi.mocked(stage === 'review' ? reviewStopAuthority : stopAuthority).mockRejectedValueOnce({ response: { status: 403, data: { detail: 'SECOND_FACTOR_REQUIRED' } } });
+  render(<SellerAuthority />); await screen.findByText(/Authority version 4/);
+  fireEvent.click(screen.getByRole('button', { name: 'Stop automatic seller actions' }));
+  if (stage === 'submit') fireEvent.click(await screen.findByRole('button', { name: 'Confirm Stop automatic seller actions' }));
+  fireEvent.click(await screen.findByRole('button', { name: 'Verify authenticator code' }));
+  fireEvent.change(screen.getByPlaceholderText('Enter code'), { target: { value: '123456' } }); fireEvent.click(screen.getByRole('button', { name: 'Continue' }));
+  const confirm = await screen.findByRole('button', { name: 'Confirm Stop automatic seller actions' });
+  expect(stopAuthority).toHaveBeenCalledTimes(stage === 'submit' ? 1 : 0);
+  const calls = vi.mocked(reviewStopAuthority).mock.calls;
+  expect(calls[1][0]).toEqual({ ...calls[0][0], reauth_token: 'native-totp-proof' });
+  fireEvent.click(confirm); await waitFor(() => expect(stopAuthority).toHaveBeenCalledWith({ ...calls[1][0], review_hash: hash }));
+  expect(reviewAuthority).not.toHaveBeenCalled(); expect(setAuthority).not.toHaveBeenCalled();
+});
+
+it.each(['oidc', 'saml'])('preserves withdrawal through %s SSO_REQUIRED and waits for explicit consent', async method => {
+  vi.stubEnv('NEXT_PUBLIC_ORG_SSO_WEB_RETURN_ENABLED', 'true');
+  useAuthStore.setState({ user: { id: id(99), sso_enforced: true, totp_enabled: true, auth_methods: [method] } as User });
+  vi.mocked(reviewStopAuthority).mockRejectedValueOnce({ response: { status: 403, data: { detail: 'SSO_REQUIRED' } } });
+  vi.mocked(checkCompanySignIn).mockImplementation(async () => { useAuthStore.setState({ token: 'fresh-company-session' }); });
+  vi.mocked(submitReauth).mockResolvedValue({ token: 'fresh-company-totp' } as never);
+  vi.mocked(reviewStopAuthority).mockRejectedValueOnce({ response: { status: 403, data: { detail: 'SECOND_FACTOR_REQUIRED' } } });
+  render(<SellerAuthority />); await screen.findByText(/Authority version 4/);
+  fireEvent.click(screen.getByRole('button', { name: 'Stop automatic seller actions' }));
+  fireEvent.click(await screen.findByRole('button', { name: 'Check company sign-in' }));
+  fireEvent.click(await screen.findByRole('button', { name: 'Verify authenticator code' }));
+  fireEvent.change(screen.getByPlaceholderText('Enter code'), { target: { value: '123456' } }); fireEvent.click(screen.getByRole('button', { name: 'Continue' }));
+  await screen.findByRole('button', { name: 'Confirm Stop automatic seller actions' });
+  expect(checkCompanySignIn).toHaveBeenCalledTimes(1);
+  const calls = vi.mocked(reviewStopAuthority).mock.calls;
+  expect(calls[1][0].idempotency_key).toBe(calls[0][0].idempotency_key);
+  expect(calls[2][0].csrf).not.toBe(calls[0][0].csrf);
+  expect(calls[2][0].reauth_token).toBe('fresh-company-totp');
+  expect(calls[2][0].idempotency_key).toBe(calls[0][0].idempotency_key);
+  expect(stopAuthority).not.toHaveBeenCalled();
+  fireEvent.click(screen.getByRole('button', { name: 'Confirm Stop automatic seller actions' }));
+  await waitFor(() => expect(stopAuthority).toHaveBeenCalledWith({ ...calls[2][0], review_hash: hash }));
 });

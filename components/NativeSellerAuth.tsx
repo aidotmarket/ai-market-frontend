@@ -18,7 +18,7 @@ export default function NativeSellerAuth({ error, onToken, onRetry }: { error: u
   const company = companySignInEnabled() && user?.sso_enforced && !user.two_factor_provider;
   if (!error) return null;
   if (kind === 'enrollment') return <p role="alert">Set up an authenticator in <Link href="/dashboard/settings">Settings</Link>, then return and review again. Company sign-in remains required.</p>;
-  if (kind === 'login') return <div role="alert"><p>Sign in again within the last 15 minutes, then review again.</p>{company
+  if (kind === 'login' || kind === 'company_login') return <div role="alert"><p>Sign in again within the last 15 minutes, then review again.</p>{(company || kind === 'company_login')
     ? <CompanySignIn returnPath="/dashboard/settings" allowOidc={!user?.auth_methods?.includes('saml')} onSuccess={() => { setStale(false); onRetry(); }} />
     : <Link href="/login?redirect=%2Fdashboard%2Fsettings">Sign in again</Link>}</div>;
   if (kind === 'second_factor') return <div role="alert"><p>Verify your binding factor to continue. Company accounts require fresh company sign-in and a native authenticator code.</p>
