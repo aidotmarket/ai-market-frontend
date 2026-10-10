@@ -142,6 +142,7 @@ export default function TermsAcceptanceForm({ context, acceptanceContext = 'buye
         await refreshTerms();
       } else if (code === 'SELLER_ACCESS_REQUIRED' || response?.data?.code === 'SELLER_ACCESS_REQUIRED') setError('Only sellers can accept these terms as a seller.');
       else if (code === 'SELLER_LEGAL_IDENTITY_REQUIRED') setError('seller_identity_required');
+      else if (code === 'LEGAL_IDENTITY_REQUIRED') setError('identity_required');
       else if (code === 'LEGAL_IDENTITY_CONFLICT') setError('identity_conflict');
       else if (code === 'LEGAL_IDENTITY_INVALID') setError('identity_invalid');
       else setError('Could not record acceptance. Please try again.');
@@ -170,6 +171,7 @@ export default function TermsAcceptanceForm({ context, acceptanceContext = 'buye
       {error && (
         <div className="rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
           {error === 'seller_identity_required' ? <>Add your legal name in Seller Workspace before accepting as a seller. <Link href="/dashboard/seller-workspace" className="underline">Open Seller Workspace</Link></>
+            : error === 'identity_required' ? <>We could not confirm your legal identity for this acceptance. Contact support from the email address on your ai.market account and include reference code: <strong>LEGAL_IDENTITY_REQUIRED</strong>. <Link href="/support" className="underline">Contact support</Link></>
             : error === 'identity_conflict' ? <>Your legal name doesn&apos;t match our records. Contact support. <Link href="/seller-workspace/support/legal-identity" className="underline">Contact support</Link></>
             : error === 'identity_invalid' ? 'Check the name and country and try again.' : error}
           {!termsReady && (

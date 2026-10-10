@@ -102,7 +102,8 @@ it.each([
 it.each(['buyer', 'seller'] as const)('accepts 1.2 in %s context with approved boxes, country and authority', async (context) => {
   legal.getCurrentTerms.mockResolvedValue({ terms_version: '1.2', terms_hash_sha256: 'hash-1.2' });
   legal.acceptTerms.mockResolvedValue({ terms_version: '1.2', terms_hash_sha256: 'hash-1.2' });
-  render(<TermsAcceptanceForm context={{ scope: 'individual', party_id: 'user-1' }} acceptanceContext={context} />);
+  const onAccepted = vi.fn();
+  render(<TermsAcceptanceForm context={{ scope: 'individual', party_id: 'user-1' }} acceptanceContext={context} onAccepted={onAccepted} />);
   await screen.findByLabelText(/Country/);
   expect(screen.getByLabelText(/controls captured proceeds in its Stripe platform balance/)).toBeTruthy();
   expect(screen.getByLabelText(/I acknowledge the risk allocation and waivers in Section 13/)).toBeTruthy();
@@ -115,7 +116,90 @@ it.each(['buyer', 'seller'] as const)('accepts 1.2 in %s context with approved b
   fireEvent.click(screen.getByRole('button', { name: 'Accept and sign' }));
   await waitFor(() => expect(legal.acceptTerms).toHaveBeenCalledWith(expect.objectContaining({ context, terms_version: '1.2', terms_hash_sha256: 'hash-1.2', jurisdiction: 'GB', authority_ack: true, ack_box1: true, ack_box2: true, ack_box3: true })));
   expect(await screen.findByText('Terms accepted. You can continue using ai.market.')).toBeTruthy();
+  expect(onAccepted).toHaveBeenCalledTimes(1);
+  expect(legal.acceptTerms).toHaveBeenCalledTimes(1);
 });
+
+it.each([
+  ['buyer', 'individual'],
+  ['seller', 'individual'],
+  ['buyer', 'organization'],
+  ['seller', 'organization'],
+] as const)('shows fixed legal identity recovery for a real 409 refusal in %s / %s context', async (acceptanceContext, scope) => {
+  legal.getCurrentTerms.mockResolvedValue({ terms_version: '1.2', terms_hash_sha256: 'hash-1.2' });
+  const error = new AxiosError('private-exception-token');
+  error.response = {
+    status: 409,
+    data: { detail: {
+      code: 'LEGAL_IDENTITY_REQUIRED',
+      message: 'private-backend-diagnostics',
+      token: 'private-session-token',
+      support_url: 'https://untrusted.example/recovery',
+      reconciliation_url: '/dashboard/seller-workspace',
+    } },
+  } as never;
+  legal.acceptTerms.mockRejectedValue(error);
+  const onAccepted = vi.fn();
+  const { container } = render(<TermsAcceptanceForm context={{ scope }} acceptanceContext={acceptanceContext} onAccepted={onAccepted} />);
+  await screen.findByLabelText(/Country/);
+  fillForm();
+  fireEvent.change(screen.getByLabelText(/Country/), { target: { value: 'GB' } });
+  fireEvent.click(screen.getByLabelText('I am authorized to bind this business'));
+  fireEvent.click(screen.getByRole('button', { name: 'Accept and sign' }));
+
+  const message = await screen.findByText(/We could not confirm your legal identity for this acceptance\./);
+  expect(message.textContent).toBe('We could not confirm your legal identity for this acceptance. Contact support from the email address on your ai.market account and include reference code: LEGAL_IDENTITY_REQUIRED. Contact support');
+  expect(screen.getByText('LEGAL_IDENTITY_REQUIRED').textContent).toBe('LEGAL_IDENTITY_REQUIRED');
+  expect(screen.getByRole('link', { name: 'Contact support' }).getAttribute('href')).toBe('/support');
+  expect(screen.queryByRole('link', { name: 'Open Seller Workspace' })).toBeNull();
+  expect(screen.queryByText('Could not record acceptance. Please try again.')).toBeNull();
+  expect(container.innerHTML).not.toMatch(/private-|untrusted\.example|\/dashboard\/seller-workspace/);
+  await waitFor(() => expect((screen.getByRole('button', { name: 'Accept and sign' }) as HTMLButtonElement).disabled).toBe(false));
+  expect(legal.acceptTerms).toHaveBeenCalledTimes(1);
+  expect(legal.acceptTerms).toHaveBeenCalledWith(expect.objectContaining({ context: acceptanceContext, scope }));
+  expect(legal.getCurrentTerms).toHaveBeenCalledTimes(2); // Initial load and existing pre-submit freshness check only.
+  expect(onAccepted).not.toHaveBeenCalled();
+  expect(screen.queryByText('Terms accepted. You can continue using ai.market.')).toBeNull();
+});
+
+it.each([
+  { detail: { code: 'UNKNOWN_CODE', message: 'private-diagnostics' } },
+  { detail: null },
+  { detail: 'LEGAL_IDENTITY_REQUIRED private-diagnostics' },
+  { detail: [{ code: 'LEGAL_IDENTITY_REQUIRED', message: 'private-diagnostics' }] },
+  { detail: { code: 409, message: 'private-diagnostics' } },
+  { detail: { code: { value: 'LEGAL_IDENTITY_REQUIRED' } } },
+  { code: 'LEGAL_IDENTITY_REQUIRED' },
+  null,
+])('keeps unknown or malformed identity responses generic: %j', async (data) => {
+  const error = new AxiosError('private-exception-token');
+  error.response = { status: 409, data } as never;
+  await expectSafeFailure(error);
+});
+
+it.each([new AxiosError('private-network-token'), new Error('private-exception-token')])('keeps network and non-Axios failures generic: %s', async (error) => {
+  await expectSafeFailure(error);
+});
+
+async function expectSafeFailure(error: Error) {
+  legal.getCurrentTerms.mockResolvedValue({ terms_version: '1.2', terms_hash_sha256: 'hash-1.2' });
+  legal.acceptTerms.mockRejectedValue(error);
+  const onAccepted = vi.fn();
+  const { container } = render(<TermsAcceptanceForm context={{ scope: 'individual' }} onAccepted={onAccepted} />);
+  await screen.findByLabelText(/Country/);
+  fillForm();
+  fireEvent.change(screen.getByLabelText(/Country/), { target: { value: 'GB' } });
+  fireEvent.click(screen.getByLabelText('I am authorized to bind this business'));
+  fireEvent.click(screen.getByRole('button', { name: 'Accept and sign' }));
+  expect(await screen.findByText('Could not record acceptance. Please try again.')).toBeTruthy();
+  expect(container.innerHTML).not.toMatch(/private-|LEGAL_IDENTITY_REQUIRED/);
+  expect(screen.queryByRole('link', { name: 'Contact support' })).toBeNull();
+  await waitFor(() => expect((screen.getByRole('button', { name: 'Accept and sign' }) as HTMLButtonElement).disabled).toBe(false));
+  expect(legal.acceptTerms).toHaveBeenCalledTimes(1);
+  expect(legal.getCurrentTerms).toHaveBeenCalledTimes(2);
+  expect(onAccepted).not.toHaveBeenCalled();
+  expect(screen.queryByText('Terms accepted. You can continue using ai.market.')).toBeNull();
+}
 
 it('resets acknowledgements when publication changes an already open 1.1 form to 1.2', async () => {
   legal.getCurrentTerms.mockResolvedValueOnce({ terms_version: '1.1', terms_hash_sha256: 'hash-1.1' }).mockResolvedValue({ terms_version: '1.2', terms_hash_sha256: 'hash-1.2' });
