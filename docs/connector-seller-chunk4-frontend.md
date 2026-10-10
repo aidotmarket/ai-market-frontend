@@ -1,10 +1,15 @@
 # Connector seller Chunk 4 frontend companion
 
-Fold base: `87ac44ce4c88692b900921668167908352dd68d2`. First merged the current
-Chunk 3 frontend head `887e3134e253e2f79402abda8cbd825c83bdfece`; that branch
-may continue to move after this fold. Chunk 3 native contracts are pinned at backend `2bc41701`.
-Backend: `44a1366823bde32bb9217495efe73e6691d5cbf0`, branch
-`build/connector-seller-chunk4-authority-consent-s1796`.
+Integration fold: merge frontend main `852fa9ec423c706e28d802c73b02d6c695543923`
+into Chunk 4 head `1e3369ca` with a real merge commit. Production admission
+contract: backend `fee44edb`, `PendingActionResponse.admission` and
+`GET /api/v1/pending-actions/{id}/capability?t={token}`. This owner read requires
+native bearer, exact browser Origin and credential-derived CSRF; the frontend
+sends all three. This production contract resolves codex2's prior MEDIUM
+finding against the older backend pin with no capability route.
+Chunk 4 authority/consent schema: backend PR #672 head
+`c3e6832e36c51c5076d2bc497944f9178a39b3da`. Revocation review and submission
+both require fresh binding authentication and the exact reviewed material/hash.
 Authority: runbooks `8f6c96f49fff6db39ac8bc0d04905d6847b7a132`,
 `specs/BQ-CONNECTOR-SELLER-GATE2.md` 4.3, 6.1, 6.2, AP-S12/AP-S13/AP-S15,
 and the Chunk 4 row. Backend checkout is read-only.
@@ -99,13 +104,13 @@ seller choice.
 
 ## Exact contract gaps and safe degradation
 
-1. **Status is pending-link scoped.** `useSellerSwitches` consumes Chunk 3's
-   actual `GET /pending-actions/{id}/capability?t={token}` with retained native
+1. **Status is pending-link scoped.** `useSellerSwitches` consumes the production
+   route `GET /pending-actions/{id}/capability?t={token}` with retained native
    bearer/CSRF when a valid existing pending link or settings `redirect` continuation
    is present. It checks all seven floors, effective admission, reason and timestamp;
    polling, focus, five-second request timeout and 15-second freshness expiry fail
    closed. No connector-global or standing-authority enabled field substitutes for
-   rollout. Without a valid link, there is no global status endpoint at either pin;
+   rollout. Without a valid link, there is no global status endpoint in the inspected contracts;
    effects/signing remain closed. Owner status and Stop remain independently visible.
 2. **No verified native sample adapter or projection-capability report.** The pin
    explicitly has no production selected-sample adapter. `sample_available` on
@@ -158,3 +163,27 @@ Fold verification runs the complete frontend suite and the actual native backend
 of `44a13668`, using disposable PostgreSQL clones. Both successful withdrawals with
 all effects off and stale/factor/unreviewed/tampered refusal are covered. UI auth
 and capability tests use mocks; this does not claim live browser/provider proof.
+
+
+## Main integration verification (2026-10-10)
+
+Final checks used Node `v22.23.3` with
+`PATH=/Users/max/.nvm/versions/node/v22.23.3/bin:$PATH`:
+
+- `rtk proxy npm run lint`: exit 0, zero errors, six existing image warnings.
+- `rtk proxy npm run typecheck`: exit 0.
+- `rtk proxy npm test`: exit 0, 187 files and 2,315 tests passed.
+- Focused command below: exit 0, nine files and 125 tests passed.
+- Configured build command below: exit 0.
+
+```sh
+rtk proxy npx vitest run app/dashboard/settings/SellerAuthority.test.tsx components/seller-workspace/SellerPreviewConsent.test.tsx components/seller-workspace/WorkspaceBatchSigning.test.tsx api/connector-seller-settings.test.ts api/seller-batch-signing.test.ts hooks/useSellerSwitches.test.tsx 'app/confirm/[id]/seller-batch.test.tsx' api/seller-operations.test.ts app/oauth/connect/page.test.tsx
+API_URL=https://api.ai.market NEXT_PUBLIC_API_URL=https://api.ai.market KEYSTATIC_GITHUB_CLIENT_ID=local-build-check KEYSTATIC_GITHUB_CLIENT_SECRET=local-build-check KEYSTATIC_SECRET=local-build-check-only-0000000000 NEXT_PUBLIC_KEYSTATIC_GITHUB_APP_SLUG=local-build-check rtk proxy npm run build
+```
+
+Keystatic values are local build placeholders. Initial Node 25 test runs failed
+on native storage configuration (focused: eight failed; full: 145 failed).
+Initial builds failed on absent Keystatic configuration, then absent API_URL.
+Full untruncated outputs, failures, inspected backend schemas and command results
+are private local evidence in `/var/tmp/chunk4-s1796-evidence/`.
+These checks do not establish live authenticated browser/provider behavior.

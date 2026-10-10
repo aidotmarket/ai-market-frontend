@@ -108,7 +108,7 @@ export async function getSellerCapability(id: string, token: string): Promise<Se
   requireLink(id, token);
   const { csrf, headers } = session();
   const { data } = await client.get<SellerAdmission>(`/pending-actions/${id}/capability`, {
-    params: { t: token }, headers: { ...headers, 'X-CSRF-Token': csrf },
+    params: { t: token }, headers: nativeHeaders({ ...headers, 'X-CSRF-Token': csrf }),
   });
   return data;
 }
