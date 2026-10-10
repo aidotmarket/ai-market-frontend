@@ -171,7 +171,7 @@ it.each(['false', 'absent', 'stale', 'malformed', 'unavailable'] as const)('fail
   if (status === 'unavailable') data.admission = { ...admission(), effective: false, reason: 'STATUS_UNAVAILABLE' };
   mocks.get.mockResolvedValue(data); await review();
   expect((screen.getByRole('button', { name: 'Confirm' }) as HTMLButtonElement).disabled).toBe(true);
-  expect(screen.queryByRole('link', { name: 'Open Workspace for legal signing' })).toBeNull();
+  expect(screen.getByRole('link', { name: 'Open Workspace for legal signing' })).toBeTruthy();
   expect(screen.getByRole('region', { name: 'Live seller operation receipt' })).toBeTruthy();
   fireEvent.click(screen.getByRole('button', { name: 'Decline' }));
   await waitFor(() => expect(mocks.decide).toHaveBeenCalledWith(mocks.id, token, 'decline', data.summary_hash));
@@ -190,6 +190,34 @@ it('fails closed when capability refresh fails or stalls past its freshness leas
   mocks.capability.mockRejectedValue(new Error('offline'));
   await act(async () => { await vi.advanceTimersByTimeAsync(5000); });
   expect((screen.getByRole('button', { name: 'Confirm' }) as HTMLButtonElement).disabled).toBe(true);
+});
+it.each([2, 5])('preserves page %s through delayed polling and focus capability refreshes', async page => {
+  vi.useFakeTimers(); await act(async () => { render(<PendingActionPage />); });
+  for (let i = 1; i < page; i++) fireEvent.click(screen.getByRole('button', { name: 'Next members' }));
+  const review = screen.getByRole('region', { name: 'Seller batch review' });
+  const assertPosition = () => {
+    expect(screen.getByRole('region', { name: 'Seller batch review' })).toBe(review);
+    expect(screen.getByText(`Page ${page} of 5`)).toBeTruthy();
+    expect(screen.getByRole('heading', { name: `Target ${uuid((page - 1) * 10 + 1)}` })).toBeTruthy();
+  };
+  for (const trigger of ['poll', 'focus']) {
+    let resolve!: (value: ReturnType<typeof admission>) => void;
+    mocks.capability.mockImplementationOnce(() => new Promise<ReturnType<typeof admission>>(done => { resolve = done; }));
+    await act(async () => {
+      if (trigger === 'poll') await vi.advanceTimersByTimeAsync(5000);
+      else window.dispatchEvent(new Event('focus'));
+    });
+    expect(mocks.capability).toHaveBeenCalledTimes(trigger === 'poll' ? 1 : 2);
+    assertPosition();
+    expect((screen.getByRole('button', { name: 'Confirm' }) as HTMLButtonElement).disabled).toBe(true);
+    fireEvent.click(screen.getByRole('button', { name: 'Confirm' }));
+    expect(mocks.decide).not.toHaveBeenCalled();
+    await act(async () => { await vi.advanceTimersByTimeAsync(1000); });
+    assertPosition();
+    await act(async () => { resolve(admission()); });
+    assertPosition();
+    expect((screen.getByRole('button', { name: 'Confirm' }) as HTMLButtonElement).disabled).toBe(false);
+  }
 });
 it('retains completed receipts with all effect switches off', async () => {
   mocks.get.mockResolvedValue({ ...pending(), status: 'confirmed', admission: { ...admission(), effective: false }, result: { ...pending().result, execution_status: 'completed' } });
@@ -235,9 +263,11 @@ it('clears settings receipts on hash navigation and retries after a transient re
 
 it('disables pending review when live polling reports shutdown after load', async () => {
   vi.useFakeTimers(); await act(async () => { render(<PendingActionPage />); });
+  fireEvent.click(screen.getByRole('button', { name: 'Next members' }));
   mocks.capability.mockResolvedValue({ ...admission(), effective: false, reason: 'TOOL_DISABLED' });
   await act(async () => { await vi.advanceTimersByTimeAsync(5000); });
   expect((screen.getByRole('button', { name: 'Confirm' }) as HTMLButtonElement).disabled).toBe(true);
   expect((screen.getByRole('button', { name: 'Decline' }) as HTMLButtonElement).disabled).toBe(false);
-  expect(screen.queryByRole('link', { name: 'Open Workspace for legal signing' })).toBeNull();
+  expect(screen.getByText('Page 2 of 5')).toBeTruthy();
+  expect(screen.getByRole('link', { name: 'Open Workspace for legal signing' })).toBeTruthy();
 });

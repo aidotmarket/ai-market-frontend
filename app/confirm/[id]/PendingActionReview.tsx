@@ -205,7 +205,7 @@ export default function PendingActionReview() {
       : !hydrated || isLoading || (!data && !kind) ? <p role="status">Loading confirmation…</p>
       : <>
         <h1 className="text-2xl font-bold">{data ? 'Your assistant asks to…' : 'Review assistant request'}</h1>
-        {batch && (data?.status !== 'pending_review' || admitted) && <SellerBatchReview key={data!.summary_hash} summary={batch} expiresAt={data!.expires_at} />}
+        {batch && <SellerBatchReview key={data!.summary_hash} summary={batch} expiresAt={data!.expires_at} />}
         {data && !batch && data.summary.summary_type !== 'seller_batch_v1' && <section aria-label="Requested action and exact terms" className="rounded-lg border border-gray-200 bg-white p-6 space-y-4">
           <dl className="space-y-4">
             <div><dt className="font-medium">App asking</dt><dd className="text-xl font-semibold">{typeof data.summary.client_display_name === 'string' ? data.summary.client_display_name : 'Unavailable'}</dd></div>
