@@ -39,8 +39,10 @@ Base frontend: `68b036ed8685bf2d3334327fd67498883934a2a1`.
 
 ## Folded native contracts
 
-- Current `admission` is outside the frozen summary/hash. Confirm and pending
-  seller review fail closed for missing, malformed, stale or unavailable status.
+- Current `admission` is outside the frozen summary/hash. Confirm fails closed
+  for missing, malformed, stale or unavailable status. The saved seller review
+  stays mounted at the selected display page through polling and focus refreshes,
+  including delayed responses and shutdown; a changed summary hash resets it.
   Seven current switch floors must be true. A 15-second UI freshness lease,
   five-second refresh, focus refresh and pre-confirm capability read detect
   shutdown. Backend confirmation independently rechecks authority and facts.
@@ -71,3 +73,6 @@ are introduced. Legacy non-batch and flag-off pending flows remain unchanged.
 Full logs, initial failures, test totals, and production build evidence are in
 `/var/tmp/chunk3-fe-fold-evidence/summary.json`. Tests consume API mocks; no live
 browser/backend, provider sign-in, deployment or production effects are claimed.
+
+Fold 2 pagination regression and both Chunk 3/Chunk 4 head validation are recorded
+in `/var/tmp/chunk3-fe-fold2-evidence/summary.json`.
