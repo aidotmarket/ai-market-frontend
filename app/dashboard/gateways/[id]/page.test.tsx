@@ -269,9 +269,10 @@ it('confirms exact description text, polls to described, and renders columns', a
   expect(screen.getByText(`aim-gateway preview ${file.file_id}`)).toBeTruthy();
   api.file.mockResolvedValueOnce({ data: { ...file, description: { ...file.description, state: 'described', row_count: 2, sha256: 'a'.repeat(64), columns: [{ name: 'safe', type: 'integer', null_rate_pct: 0, distinct_bucket: '2-10' }] } }, retryAfter: null });
   api.describe.mockResolvedValueOnce({ data: { ...file, description: { ...file.description, state: 'requested' } }, retryAfter: 3 });
-  fireEvent.click(screen.getByRole('button', { name: 'Confirm describe' }));
-  await waitFor(() => expect(api.describe).toHaveBeenCalledWith('gateway-1', file.file_id));
+  // Install fake timers before the response schedules its polling timeout.
   vi.useFakeTimers();
+  await act(async () => { fireEvent.click(screen.getByRole('button', { name: 'Confirm describe' })); });
+  expect(api.describe).toHaveBeenCalledWith('gateway-1', file.file_id);
   await act(async () => { await vi.advanceTimersByTimeAsync(3_000); });
   expect(screen.getByText('safe')).toBeTruthy();
   expect(screen.getByText(/Rows: 2/)).toBeTruthy();

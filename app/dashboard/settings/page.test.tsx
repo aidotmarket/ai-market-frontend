@@ -27,7 +27,7 @@ const capabilitiesApi = vi.hoisted(() => ({
 const companySignIn = vi.hoisted(() => ({ start: vi.fn() }));
 vi.mock('@/lib/company-sign-in', async original => ({ ...await original<typeof import('@/lib/company-sign-in')>(), startCompanySignIn: companySignIn.start }));
 const navigation = vi.hoisted(() => ({ push: vi.fn() }));
-vi.mock('next/navigation', () => ({ useRouter: () => navigation }));
+vi.mock('next/navigation', () => ({ useRouter: () => navigation, usePathname: () => window.location.pathname, useSearchParams: () => new URLSearchParams(window.location.search) }));
 
 vi.mock('@/api/auth', async (importOriginal) => ({ ...await importOriginal<typeof import('@/api/auth')>(), ...authApi }));
 vi.mock('@/api/company-authenticator', async original => ({ ...await original<typeof import('@/api/company-authenticator')>(), setupCompanyAuthenticator: authApi.companySetup, verifyCompanyAuthenticator: authApi.companyVerify, recoverCompanyAuthenticator: authApi.companyRecover }));

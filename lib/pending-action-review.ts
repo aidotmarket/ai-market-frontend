@@ -1,3 +1,5 @@
+import { isSellerBatchSummary } from './seller-batch';
+
 // Display requirements from backend cea28992 PendingActionSummary and its
 // registered licence rules. Never derive human copy from IDs or hashes.
 const LICENSE_ACTIONS = new Set([
@@ -17,6 +19,8 @@ export function safeLicenseUrl(value: unknown): value is string {
 }
 
 export function hasRequiredReviewContent(summary: Record<string, unknown>): boolean {
+  if (summary.summary_type === 'seller_batch_v1') return isSellerBatchSummary(summary);
+  if (summary.summary_type != null) return false;
   if (!text(summary.client_display_name) || !text(summary.effect) || summary.effect.startsWith('UNVERIFIED:')
     || !text(summary.requested_at) || !/^\d{4}-\d{2}-\d{2}T.+(?:Z|[+-]\d{2}:\d{2})$/.test(summary.requested_at)
     || !Number.isFinite(Date.parse(summary.requested_at))) return false;
