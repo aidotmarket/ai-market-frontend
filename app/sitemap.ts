@@ -17,6 +17,26 @@ interface SitemapEntry {
   updated_at?: string;
 }
 
+async function loadPages(
+  url: string,
+  feed: string,
+  mapEntry: (entry: SitemapEntry) => MetadataRoute.Sitemap[number],
+): Promise<MetadataRoute.Sitemap> {
+  try {
+    const res = await fetch(url, { next: { revalidate: 3600 } });
+    if (!res.ok) {
+      console.warn(`[sitemap] API responded with status ${res.status} — ${feed} pages will be omitted`);
+      return [];
+    }
+    const data = await res.json();
+    const entries: SitemapEntry[] = data.entries || [];
+    return entries.map(mapEntry);
+  } catch (error) {
+    console.error(`Failed to fetch ${feed} for sitemap:`, error);
+    return [];
+  }
+}
+
 export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
   const staticPages: MetadataRoute.Sitemap = [
     {
@@ -78,46 +98,20 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
   const apiUrl = getApiUrl();
   if (!apiUrl) return staticPages;
 
-  try {
-    const res = await fetch(`${apiUrl}/api/v1/public/sitemap-entries`, {
-      next: { revalidate: 3600 },
-    });
-
-    if (!res.ok) {
-      console.warn(`[sitemap] API responded with status ${res.status} — listing pages will be omitted`);
-      return staticPages;
-    }
-
-    const data = await res.json();
-    const entries: SitemapEntry[] = data.entries || [];
-
-    const listingPages: MetadataRoute.Sitemap = entries.map((entry) => ({
+  const [listingPages, requestPages] = await Promise.all([
+    loadPages(`${apiUrl}/api/v1/public/sitemap-entries`, 'listing', (entry) => ({
       url: `${SITE_URL}/listings/${entry.slug}`,
       lastModified: new Date(entry.published_at),
       changeFrequency: 'weekly' as const,
       priority: 0.8,
-    }));
+    })),
+    loadPages(`${apiUrl}/api/v1/public/request-sitemap-entries`, 'request', (entry) => ({
+      url: `${SITE_URL}/requests/${entry.slug}`,
+      lastModified: new Date(entry.updated_at || entry.published_at),
+      changeFrequency: 'weekly' as const,
+      priority: 0.7,
+    })),
+  ]);
 
-    let requestPages: MetadataRoute.Sitemap = [];
-    const requestRes = await fetch(`${apiUrl}/api/v1/public/request-sitemap-entries`, {
-      next: { revalidate: 3600 },
-    });
-    if (requestRes.ok) {
-      const requestData = await requestRes.json();
-      const requestEntries: SitemapEntry[] = requestData.entries || [];
-      requestPages = requestEntries.map((entry) => ({
-        url: `${SITE_URL}/requests/${entry.slug}`,
-        lastModified: new Date(entry.updated_at || entry.published_at),
-        changeFrequency: 'weekly' as const,
-        priority: 0.7,
-      }));
-    } else {
-      console.warn(`[sitemap] API responded with status ${requestRes.status} — request pages will be omitted`);
-    }
-
-    return [...staticPages, ...listingPages, ...requestPages];
-  } catch (error) {
-    console.error('Failed to fetch listings for sitemap:', error);
-    return staticPages;
-  }
+  return [...staticPages, ...listingPages, ...requestPages];
 }
