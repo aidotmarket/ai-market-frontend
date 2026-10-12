@@ -91,8 +91,12 @@ export function MarketplaceSearchExperience({
   const [localMinPrice, setLocalMinPrice] = useState(searchParams.get('min_price') ?? '');
   const [localMaxPrice, setLocalMaxPrice] = useState(searchParams.get('max_price') ?? '');
   const priceTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const pendingPricesRef = useRef<Record<string, string>>({});
 
   useEffect(() => {
+    if (priceTimerRef.current) clearTimeout(priceTimerRef.current);
+    priceTimerRef.current = null;
+    pendingPricesRef.current = {};
     setListingCategory(parseListingType(searchParams.get('type')));
     setLocalMinPrice(searchParams.get('min_price') ?? '');
     setLocalMaxPrice(searchParams.get('max_price') ?? '');
@@ -155,7 +159,12 @@ export function MarketplaceSearchExperience({
   const updateParams = useCallback((updates: Record<string, string | number | undefined>) => {
     const next = new URLSearchParams(searchParams.toString());
 
-    for (const [key, value] of Object.entries(updates)) {
+    if (priceTimerRef.current) clearTimeout(priceTimerRef.current);
+    priceTimerRef.current = null;
+    const combinedUpdates = { ...pendingPricesRef.current, ...updates };
+    pendingPricesRef.current = {};
+
+    for (const [key, value] of Object.entries(combinedUpdates)) {
       if (value === undefined || value === '') {
         next.delete(key);
       } else {
@@ -172,9 +181,10 @@ export function MarketplaceSearchExperience({
   }, [pathname, router, searchParams]);
 
   const debouncePriceUpdate = useCallback((key: string, value: string) => {
+    pendingPricesRef.current[key] = value;
     if (priceTimerRef.current) clearTimeout(priceTimerRef.current);
     priceTimerRef.current = setTimeout(() => {
-      updateParams({ [key]: value });
+      updateParams({});
     }, PRICE_DEBOUNCE_MS);
   }, [updateParams]);
 
@@ -263,7 +273,14 @@ export function MarketplaceSearchExperience({
                 <h2 className="text-sm font-semibold text-slate-900">Filters</h2>
                 <button
                   type="button"
-                  onClick={() => router.push(pathname)}
+                  onClick={() => {
+                    if (priceTimerRef.current) clearTimeout(priceTimerRef.current);
+                    priceTimerRef.current = null;
+                    pendingPricesRef.current = {};
+                    setLocalMinPrice('');
+                    setLocalMaxPrice('');
+                    router.push(pathname);
+                  }}
                   className="text-xs font-medium text-[#3F51B5] hover:text-[#3F51B5]"
                 >
                   Clear all
