@@ -30,6 +30,14 @@ it('is hidden when disabled', async () => {
   expect(getConnectorGrants).not.toHaveBeenCalled();
 });
 
+it('explains a failed status check without loading grants', async () => {
+  vi.mocked(getConnectorStatus).mockRejectedValue(new Error('unavailable'));
+  render(<ConnectedApps />);
+  expect((await screen.findByRole('alert')).textContent).toBe('Unable to load connected apps. Refresh this page to try again.');
+  expect(getConnectorGrants).not.toHaveBeenCalled();
+  expect(screen.queryByRole('button', { name: 'Revoke' })).toBeNull();
+});
+
 it('confirms revoke and removes only after a successful DELETE', async () => {
   let resolve!: () => void;
   vi.mocked(revokeConnectorGrant).mockReturnValue(new Promise((done) => { resolve = done; }));
