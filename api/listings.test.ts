@@ -34,16 +34,11 @@ describe('getMarketplaceCategoryFacets', () => {
     apiGet.mockReset();
   });
 
-  it('returns facets.categories from the public search payload', async () => {
+  it('loads public inventory counts without a semantic search request', async () => {
     apiGet.mockResolvedValue({
       data: {
-        results: [],
-        total: 0,
-        query: '*',
-        facets: {
-          categories: { healthcare: 2, finance: 0 },
-          price: { min: 0, max: 10 },
-        },
+        categories: { healthcare: 2, finance: 0 },
+        price: { min: 0, max: 10 },
       },
     });
 
@@ -51,22 +46,12 @@ describe('getMarketplaceCategoryFacets', () => {
       healthcare: 2,
       finance: 0,
     });
-    expect(apiGet).toHaveBeenCalledWith('/search/listings', {
-      params: { q: '*', limit: 1, offset: 0 },
-      paramsSerializer: { indexes: null },
-    });
+    expect(apiGet).toHaveBeenCalledTimes(1);
+    expect(apiGet).toHaveBeenCalledWith('/search/facets');
   });
 
-  it('fails when the search payload has no category facet data', async () => {
-    apiGet.mockResolvedValue({
-      data: {
-        results: [],
-        total: 0,
-        query: '*',
-        facets: undefined,
-      },
-    });
-
+  it('fails when the facet payload has no category data', async () => {
+    apiGet.mockResolvedValue({ data: { categories: undefined } });
     await expect(getMarketplaceCategoryFacets()).rejects.toThrow(
       'Category facets are unavailable',
     );

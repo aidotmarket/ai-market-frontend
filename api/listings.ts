@@ -89,10 +89,9 @@ export async function searchListings(
 }
 
 export async function getMarketplaceCategoryFacets(): Promise<Record<string, number>> {
-  // The search endpoint requires a non-empty query. Its category facets describe
-  // the full publicly visible inventory, independent of the result matches.
-  const response = await searchListings('*', { limit: 1, offset: 0 });
-  const categories = response.facets?.categories;
+  // Load inventory counts without performing semantic search for a dummy query.
+  const response = await api.get<{ categories: Record<string, number> }>('/search/facets');
+  const categories = response.data?.categories;
 
   if (!categories || typeof categories !== 'object') {
     throw new Error('Category facets are unavailable');
