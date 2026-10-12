@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 
-import { cleanup, fireEvent, render, screen } from '@testing-library/react';
+import { act, cleanup, fireEvent, render, screen } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 const mocks = vi.hoisted(() => ({
@@ -40,6 +40,8 @@ vi.mock('@/components/search/MarketplaceListingCard', () => ({
 import { MarketplaceSearchExperience } from './MarketplaceSearchExperience';
 
 beforeEach(() => {
+  mocks.replace.mockReset();
+  mocks.push.mockReset();
   mocks.pathname = '/listings';
   mocks.searchParams = new URLSearchParams('category=finance');
   mocks.facetQuery.data = { healthcare: 2 };
@@ -48,6 +50,7 @@ beforeEach(() => {
 
 afterEach(() => {
   cleanup();
+  vi.useRealTimers();
   mocks.useSearchListings.mockReset();
 });
 
@@ -74,6 +77,60 @@ describe('MarketplaceSearchExperience', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Clear all' }));
 
     expect(mocks.push).toHaveBeenCalledWith('/listings');
+  });
+
+  function renderPriceFilters() {
+    vi.useFakeTimers();
+    mocks.useSearchListings.mockReturnValue({
+      items: [], facets: null, total: 0, semanticMode: false,
+      isLoading: false, isError: false, error: null, hasNextPage: false,
+      isFetchingNextPage: false, fetchNextPage: vi.fn(), refetch: vi.fn(),
+    });
+    return render(<MarketplaceSearchExperience mode="browse" />);
+  }
+
+  it('retains both prices entered within one debounce interval', () => {
+    renderPriceFilters();
+    fireEvent.change(screen.getByRole('spinbutton', { name: 'Minimum price' }), { target: { value: '10' } });
+    fireEvent.change(screen.getByRole('spinbutton', { name: 'Maximum price' }), { target: { value: '20' } });
+    act(() => vi.advanceTimersByTime(500));
+    expect(mocks.replace).toHaveBeenCalledTimes(1);
+    const url = new URL(mocks.replace.mock.calls[0][0], 'https://ai.market');
+    expect(url.searchParams.get('min_price')).toBe('10');
+    expect(url.searchParams.get('max_price')).toBe('20');
+    expect(url.searchParams.get('category')).toBe('finance');
+  });
+
+  it('does not restore an old search after clearing a pending price edit', () => {
+    mocks.searchParams = new URLSearchParams('q=traffic&category=finance');
+    renderPriceFilters();
+    fireEvent.change(screen.getByRole('spinbutton', { name: 'Minimum price' }), { target: { value: '10' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Clear all' }));
+    act(() => vi.advanceTimersByTime(500));
+    expect(mocks.push).toHaveBeenCalledWith('/listings');
+    expect(mocks.replace).not.toHaveBeenCalled();
+    expect((screen.getByRole('spinbutton', { name: 'Minimum price' }) as HTMLInputElement).value).toBe('');
+  });
+
+  it('keeps a pending price when another filter changes', () => {
+    renderPriceFilters();
+    fireEvent.change(screen.getByRole('spinbutton', { name: 'Minimum price' }), { target: { value: '10' } });
+    fireEvent.change(screen.getByRole('combobox', { name: 'Sort' }), { target: { value: 'price-asc' } });
+    act(() => vi.advanceTimersByTime(500));
+    expect(mocks.replace).toHaveBeenCalledTimes(1);
+    const url = new URL(mocks.replace.mock.calls[0][0], 'https://ai.market');
+    expect(url.searchParams.get('min_price')).toBe('10');
+    expect(url.searchParams.get('sort')).toBe('price-asc');
+  });
+
+  it('cancels a pending price edit when navigation changes the URL', () => {
+    const view = renderPriceFilters();
+    fireEvent.change(screen.getByRole('spinbutton', { name: 'Minimum price' }), { target: { value: '10' } });
+    mocks.searchParams = new URLSearchParams('category=healthcare');
+    view.rerender(<MarketplaceSearchExperience mode="browse" />);
+    act(() => vi.advanceTimersByTime(500));
+    expect(mocks.replace).not.toHaveBeenCalled();
+    expect((screen.getByRole('spinbutton', { name: 'Minimum price' }) as HTMLInputElement).value).toBe('');
   });
 
   it('keeps a direct link to an empty category active and shows the empty state', () => {
