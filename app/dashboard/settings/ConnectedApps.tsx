@@ -17,7 +17,7 @@ export default function ConnectedApps() {
       setEnabled(true);
       try { const data = await getConnectorGrants(); if (active) setGrants(data); }
       catch { if (active) setError('Unable to load connected apps.'); }
-    }).catch(() => { if (active) setError('Unable to load connected apps.'); });
+    }).catch(() => { if (active) setError('Unable to load connected apps. Refresh this page to try again.'); });
     return () => { active = false; };
   }, []);
 
@@ -33,7 +33,7 @@ export default function ConnectedApps() {
     finally { setBusyId(null); }
   };
 
-  if (!enabled) return null;
+  if (!enabled && !error) return null;
   return <section id="connected-apps" className="scroll-mt-6 bg-white rounded-xl border border-gray-200 shadow-sm p-6 mt-6">
     <h2 className="text-lg font-semibold text-gray-900">Connected apps</h2>
     {error && <p role="alert">{error}</p>}
