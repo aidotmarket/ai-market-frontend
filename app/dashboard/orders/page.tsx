@@ -85,7 +85,7 @@ export default function OrdersListPage() {
       .then(([orderData, txData]) => {
         if (cancelled) return;
         setOrders(orderData);
-        // Index transactions by tx_number prefix matching order IDs
+        // Keep transaction iteration order for the first exact order-ID match.
         const map: Record<string, Transaction> = {};
         for (const tx of txData) {
           map[tx.id] = tx;
@@ -155,7 +155,7 @@ export default function OrdersListPage() {
           </thead>
           <tbody className="divide-y divide-gray-100">
             {orders.map((order) => {
-              const tx = Object.values(txMap).find((t) => t.listing_title === order.listing_title);
+              const tx = Object.values(txMap).find((t) => t.order_id === order.id);
               return (
                 <tr key={order.id} className="hover:bg-gray-50">
                   <td className="px-4 py-3">
@@ -209,7 +209,7 @@ export default function OrdersListPage() {
       {/* Mobile card view */}
       <div className="md:hidden space-y-3">
         {orders.map((order) => {
-          const tx = Object.values(txMap).find((t) => t.listing_title === order.listing_title);
+          const tx = Object.values(txMap).find((t) => t.order_id === order.id);
           return (
             <div key={order.id}>
             <Link
