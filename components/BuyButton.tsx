@@ -8,6 +8,7 @@ import { createCheckout, type DomainCheckoutOptions } from '@/api/checkout';
 import { checkoutBlock, checkoutDestination, checkoutDomainEnabled, checkoutErrorCode, checkoutOutcome, checkoutWebPath } from '@/lib/checkout-domain';
 import { getMyOrders } from '@/api/orders';
 import { formatPrice } from '@/lib/format';
+import { validateRedirect } from '@/lib/redirect';
 import { useTermsGate } from '@/components/legal/TermsGate';
 import { useServedTermsVersion } from '@/components/legal/VersionedTermsCopy';
 import { CARD_BUYER_TOTAL } from '@/components/legal/terms12Copy';
@@ -238,7 +239,7 @@ export default function BuyButton({
       if (outcome === 'retry' || outcome === 'auth' || outcome === 'operator') setProcessingIdentity(requestIdentity);
       if (outcome === 'retry') { setCheckoutRefusal(null); return; }
       if (err instanceof AxiosError) {
-        const refusal = parseCheckoutRefusal(err, domainEnabled);
+        const refusal = parseCheckoutRefusal(err, domainEnabled, window.location.pathname);
         setCheckoutRefusal(refusal);
         if (outcome === 'terminal' || outcome === 'rejected') {
           clearCheckoutReplay(requestIdentity);
@@ -375,7 +376,7 @@ export function checkoutOutcomeUnknown(error: unknown): boolean {
   return checkoutOutcome(error) === 'retry';
 }
 
-export function parseCheckoutRefusal(error: AxiosError, domainEnabled = checkoutDomainEnabled()): CheckoutRefusal {
+export function parseCheckoutRefusal(error: AxiosError, domainEnabled = checkoutDomainEnabled(), currentPath?: string): CheckoutRefusal {
   const data = error.response?.data as { detail?: unknown } | undefined;
   const detail = data?.detail;
   if (domainEnabled) {
@@ -387,10 +388,13 @@ export function parseCheckoutRefusal(error: AxiosError, domainEnabled = checkout
     if (checkoutOutcomeUnknown(error)) return { code: 'CHECKOUT_OUTCOME_UNKNOWN', blocked: false, message: 'Checkout outcome is unknown. Retry to check the same purchase.' };
     const code = checkoutErrorCode(error) || 'CHECKOUT_FAILED';
     const value = detail && typeof detail === 'object' ? detail as Record<string, unknown> : {};
-    if (code === 'TERMS_ACCEPTANCE_REQUIRED') return { code, blocked: true,
-      message: 'Accept the current ai.market platform terms before purchasing.',
-      webPath: checkoutWebPath(value.acceptance_url) || checkoutWebPath(value.terms_url) || '/legal/terms',
-    };
+    if (code === 'TERMS_ACCEPTANCE_REQUIRED') {
+      const redirect = validateRedirect(currentPath, '');
+      return { code, blocked: true,
+        message: 'Accept the current ai.market platform terms before purchasing.',
+        webPath: `/legal/terms/accept?context=buyer${redirect ? `&redirect=${encodeURIComponent(redirect)}` : ''}`,
+      };
+    }
     const block = checkoutBlock(code, value.web_path);
     if (block) return { ...block, blocked: true };
     const messages: Record<string, string> = {

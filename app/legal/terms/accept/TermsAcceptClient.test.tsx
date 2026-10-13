@@ -100,3 +100,11 @@ it.each(['buyer', 'seller'] as const)('accepts served 1.2 and preserves the %s r
   await waitFor(() => expect(legal.acceptTerms).toHaveBeenCalledWith(expect.objectContaining({ context, jurisdiction: 'US', authority_ack: true })));
   await waitFor(() => expect(navigation.push).toHaveBeenCalledWith('/dashboard/listings'));
 });
+
+it('preserves buyer context and returns to the listing after acceptance', async () => {
+  navigation.search = 'context=buyer&redirect=%2Flistings%2Flisting';
+  render(<TermsAcceptClient />);
+  await submit();
+  await waitFor(() => expect(legal.acceptTerms).toHaveBeenCalledWith(expect.objectContaining({ context: 'buyer' })));
+  await waitFor(() => expect(navigation.push).toHaveBeenCalledWith('/listings/listing'));
+});
