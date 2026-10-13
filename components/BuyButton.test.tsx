@@ -746,6 +746,48 @@ describe('connector checkout handoff and domain purchase', () => {
     result.response = { status, data: { detail }, statusText: 'refused', headers: {}, config: {} as never };
     return result;
   }
+  it.each([
+    [{ acceptance_url: '/legal/terms/accept' }, '/legal/terms/accept'],
+    [{ terms_url: '/legal/terms/current' }, '/legal/terms/current'],
+    [{ acceptance_url: '/legal/terms/accept', terms_url: '/legal/terms/current' }, '/legal/terms/accept'],
+    [{ acceptance_url: 'https://evil.test/terms' }, '/legal/terms'],
+    [{ acceptance_url: 'https://ai.market/legal/terms' }, '/legal/terms'],
+    [{ acceptance_url: '//evil.test/terms' }, '/legal/terms'],
+    [{ acceptance_url: '/legal/../settings' }, '/legal/terms'],
+    [{ acceptance_url: '/legal/terms?next=evil' }, '/legal/terms'],
+    [{ terms_url: '//evil.test/terms' }, '/legal/terms'],
+    [{ acceptance_url: '//evil.test/terms', terms_url: '/legal/terms/current' }, '/legal/terms/current'],
+    [{}, '/legal/terms'],
+  ])('routes a domain terms refusal safely for %j', (paths, webPath) => {
+    expect(parseCheckoutRefusal(error(403, { code: 'TERMS_ACCEPTANCE_REQUIRED', ...paths }), true)).toEqual({
+      code: 'TERMS_ACCEPTANCE_REQUIRED', blocked: true,
+      message: 'Accept the current ai.market platform terms before purchasing.', webPath,
+    });
+  });
+  it.each([
+    [403, 'FIRST_PARTY_SESSION_REQUIRED'], [403, 'SELLER_TERMS_ACCEPTANCE_PENDING'],
+    [403, 'UNKNOWN_CODE'], [401, 'TERMS_ACCEPTANCE_REQUIRED'], [401, 'FIRST_PARTY_SESSION_REQUIRED'],
+  ])('keeps the sign-in refusal for status %s and code %s', (status, code) => {
+    expect(parseCheckoutRefusal(error(status, { code }), true)).toEqual({
+      code, message: 'Sign in again, then retry the same purchase.',
+    });
+  });
+  it('blocks a terms refusal with an acceptance link and releases the unreserved claim', async () => {
+    vi.mocked(createCheckout).mockRejectedValue(error(403, {
+      code: 'TERMS_ACCEPTANCE_REQUIRED', acceptance_url: '/legal/terms/accept',
+    }));
+    await accept();
+    const link = await screen.findByRole('link', { name: 'Accept platform terms' });
+    expect(link.getAttribute('href')).toBe('/legal/terms/accept');
+    expect(screen.getAllByRole('alert').some(element => element.textContent?.includes(
+      'Accept the current ai.market platform terms before purchasing.'
+    ))).toBe(true);
+    expect(screen.queryByText('Sign in again, then retry the same purchase.')).toBeNull();
+    expect((screen.getByRole('button', { name: 'Accept and continue to payment' }) as HTMLButtonElement).disabled).toBe(true);
+    expect(sessionStorage.getItem(checkoutReplayKey('buyer-1', props.listingId))).toBeNull();
+    expect(createCheckout).toHaveBeenCalledOnce();
+    expect(window.location.pathname).toBe('/');
+  });
   it.each(['SELLER_PAYOUT_READINESS_UNKNOWN', 'SELLER_PAYOUT_NOT_READY', 'REFERENCE_DELIVERY_UNREADY'])('renders %s as a block with its web path and never redirects', async code => {
     vi.mocked(createCheckout).mockRejectedValue(error(409, { code, web_path: '/listings/listing-1' }));
     await accept({ handoffToken });
