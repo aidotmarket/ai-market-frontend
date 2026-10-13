@@ -40,6 +40,8 @@ export function checkoutErrorCode(error: unknown): string | undefined {
 export function checkoutOutcome(error: unknown): 'retry' | 'auth' | 'operator' | 'terminal' | 'rejected' {
   const status = (error as { response?: { status?: number } })?.response?.status;
   const code = checkoutErrorCode(error);
+  // Platform terms are checked before any purchase reservation.
+  if (status === 403 && code === 'TERMS_ACCEPTANCE_REQUIRED') return 'rejected';
   if (status === 401 || status === 403) return 'auth';
   if (code === 'CHECKOUT_OPERATOR_RECONCILIATION_REQUIRED') return 'operator';
   if (status === 409 && ['CHECKOUT_FAILED', 'CHECKOUT_PAYMENT_CONFLICT', 'CHECKOUT_REFUNDED', 'CHECKOUT_TERMINAL'].includes(code || '')) return 'terminal';
