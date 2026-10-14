@@ -85,18 +85,18 @@ export default function OrderDetailPage() {
   const { ensureTermsAccepted, TermsGatePrompt, checkingTerms } = useTermsGate('buyer');
 
   const [order, setOrder] = useState<BuyerOrderDetail | null>(null);
-  const isBuyerOfRecord = order !== null && userId === order.buyer_id;
+  const isBuyerOfRecord = order !== null && order.id === orderId && userId === order.buyer_id;
   const isSellerOfRecord = order !== null && userId === order.seller_id;
   const [events, setEvents] = useState<OrderEvent[]>([]);
   const [tx, setTx] = useState<Transaction | null>(null);
-  const [orderAccess, setOrderAccess] = useState<OrderAccessResponse | null>(null);
+  const [orderAccess, setOrderAccess] = useState<{ orderId: string; buyerId: string; status: string; data: OrderAccessResponse } | null>(null);
   const [gatewayOrderId, setGatewayOrderId] = useState<string | null>(null);
   const handleGatewayPresence = useCallback((present: boolean) => {
     setGatewayOrderId(present ? orderId : null);
   }, [orderId]);
   const [downloadLoading, setDownloadLoading] = useState(false);
-  const [workspaceDownloadReady, setWorkspaceDownloadReady] = useState(false);
-  useEffect(() => {setWorkspaceDownloadReady(false);}, [orderId]);
+  const [workspaceDownloadReady, setWorkspaceDownloadReady] = useState<string | null>(null);
+  useEffect(() => {setWorkspaceDownloadReady(null);}, [orderId]);
   const [downloadError, setDownloadError] = useState('');
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
@@ -138,16 +138,19 @@ export default function OrderDetailPage() {
     setOrderAccess(null);
     setDownloadError('');
     setDownloadLoading(false);
-    if (!isBuyerOfRecord || order?.workspace_delivery || !['fulfilled', 'delivered', 'completed'].includes(String(order?.status)) || order?.access_expired) return;
+    if (!isBuyerOfRecord || !order || order.access_expired) return;
+    const status = String(order.status);
+    if (status !== 'partially_refunded' && (order.workspace_delivery || !['fulfilled', 'delivered', 'completed'].includes(status))) return;
+    const buyerId = order.buyer_id;
 
     let cancelled = false;
     setDownloadLoading(true);
     getOrderAccess(orderId)
-      .then((data) => { if (!cancelled) setOrderAccess(data); })
+      .then((data) => { if (!cancelled) setOrderAccess({ orderId, buyerId, status, data }); })
       .catch(() => { if (!cancelled) setDownloadError('Download access is unavailable.'); })
       .finally(() => { if (!cancelled) setDownloadLoading(false); });
     return () => { cancelled = true; };
-  }, [isBuyerOfRecord, order?.workspace_delivery, order?.access_expired, order?.status, orderId]);
+  }, [isBuyerOfRecord, order?.buyer_id, order?.workspace_delivery, order?.access_expired, order?.status, orderId]);
 
   const handleConfirm = async () => {
     await ensureTermsAccepted(confirmReceipt);
@@ -185,7 +188,7 @@ export default function OrderDetailPage() {
     }
   };
 
-  if (loading) {
+  if (loading || (order && order.id !== orderId)) {
     return (
       <div className="flex min-h-[40vh] items-center justify-center">
         <div className="h-8 w-8 animate-spin rounded-full border-4 border-[#3F51B5] border-t-transparent"></div>
@@ -200,6 +203,19 @@ export default function OrderDetailPage() {
       </div>
     );
   }
+
+  const access = orderAccess?.orderId === orderId && orderAccess.buyerId === userId && orderAccess.status === String(order.status)
+    ? orderAccess.data : null;
+  // Partial refunds retain only rights evidenced by this order's server read.
+  // Workspace metadata never contains credentials; the explicit download still reauthorizes.
+  const retainedPartialAccess = String(order.status) === 'partially_refunded' &&
+    access?.order_id === orderId && access.is_delivered === true && access.is_revoked === false &&
+    !order.access_expired && (order.workspace_delivery
+      ? Number.isFinite(access.downloads_remaining) && (access.downloads_remaining ?? 0) > 0 &&
+        access.message === 'Download access is unavailable.'
+      : access.delivery_type === 'reference' && access.can_download === true &&
+        access.download_urls?.some((file) => /^https?:\/\//i.test(file.url)) === true);
+  const downloadEligible = ['fulfilled', 'delivered', 'completed'].includes(String(order.status)) || retainedPartialAccess;
 
   const statusCss = STATUS_BADGE[order.status as OrderStatus] || 'bg-gray-100 text-gray-600';
   const statusLabel = STATUS_LABEL[order.status as OrderStatus] || order.status;
@@ -354,18 +370,18 @@ export default function OrderDetailPage() {
           )}
 
           {order.workspace_delivery && isBuyerOfRecord && !order.access_expired && String(order.status)==='pending_delivery' && <WorkspacePurchaseRecovery key={order.id} orderId={order.id} onReady={setOrder} />}
-          {order.workspace_delivery && isBuyerOfRecord && !order.access_expired && ['delivered','completed','fulfilled'].includes(String(order.status)) && (workspaceDownloadReady ? <WorkspaceDownload key={order.id} orderId={order.id} /> : <button type="button" disabled={checkingTerms} onClick={() => ensureTermsAccepted(() => setWorkspaceDownloadReady(true))} className="rounded-lg bg-indigo-700 px-4 py-2 text-sm font-semibold text-white disabled:opacity-50">Continue to download</button>)}
+          {order.workspace_delivery && isBuyerOfRecord && !order.access_expired && downloadEligible && (workspaceDownloadReady === `${orderId}:${userId}` ? <WorkspaceDownload key={order.id} orderId={order.id} /> : <button type="button" disabled={checkingTerms} onClick={() => ensureTermsAccepted(() => setWorkspaceDownloadReady(`${orderId}:${userId}`))} className="rounded-lg bg-indigo-700 px-4 py-2 text-sm font-semibold text-white disabled:opacity-50">Continue to download</button>)}
 
-          {['fulfilled', 'delivered', 'completed'].includes(String(order.status)) && !order.workspace_delivery && gatewayOrderId !== order.id && isBuyerOfRecord && !order.access_expired && (
+          {downloadEligible && !order.workspace_delivery && gatewayOrderId !== order.id && isBuyerOfRecord && !order.access_expired && (
             <div className="rounded-lg border border-gray-200 p-6">
               <h2 className="text-lg font-semibold text-gray-900">Downloads</h2>
               {downloadLoading ? (
                 <p className="mt-2 text-sm text-gray-600">Preparing download access...</p>
-              ) : orderAccess?.delivery_type === 'reference' && orderAccess.can_download && orderAccess.download_urls?.some((file) => /^https?:\/\//i.test(file.url)) ? (
+              ) : access?.delivery_type === 'reference' && access.can_download && access.download_urls?.some((file) => /^https?:\/\//i.test(file.url)) ? (
                 <ul className="mt-4 space-y-3">
-                  {orderAccess.download_urls.filter((file) => /^https?:\/\//i.test(file.url)).map((file) => (
+                  {access.download_urls.filter((file) => /^https?:\/\//i.test(file.url)).map((file) => (
                     <li key={file.url}>
-                      <ReferenceDownload url={file.url} filename={file.filename} />
+                      <ReferenceDownload key={`${orderId}:${userId}`} url={file.url} filename={file.filename} />
                     </li>
                   ))}
                 </ul>

@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 
-import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { act, cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { BuyerOrderDetail, OrderEvent, Transaction } from '@/types';
 
@@ -18,6 +18,10 @@ const ordersApi = vi.hoisted(() => ({
   getOrder: vi.fn(),
   getOrderAccess: vi.fn(),
   getOrderEvents: vi.fn(),
+}));
+const workspaceApi = vi.hoisted(() => ({ requestWorkspaceDownload: vi.fn(), requestWorkspaceFile: vi.fn() }));
+vi.mock('@/api/sellerWorkspaceDownload', async (original) => ({
+  ...await original<typeof import('@/api/sellerWorkspaceDownload')>(), ...workspaceApi,
 }));
 const transactionsApi = vi.hoisted(() => ({
   getTransaction: vi.fn(),
@@ -406,4 +410,166 @@ describe('OrderDetailPage viewer relationship gating', () => {
     expect(screen.queryByRole('heading', { name: 'Downloads' })).toBeNull();
     expect(screen.queryByText('Download access is unavailable.')).toBeNull();
   });
+
+  describe('retained partial-refund download presentation', () => {
+    function partial(workspace_delivery: boolean, overrides = {}) {
+      // No frontend delivery timestamp: the server can establish transaction fallback.
+      return { ...order(), status: 'partially_refunded', workspace_delivery, ...overrides };
+    }
+    function metadata(workspace: boolean, overrides = {}) {
+      return { order_id: 'order-1', is_delivered: true, is_revoked: false,
+        downloads_remaining: workspace ? 2 : null,
+        message: workspace ? 'Download access is unavailable.' : 'Ready to download.',
+        can_download: !workspace,
+        ...(workspace ? {} : { delivery_type: 'reference', download_urls: [{ url: 'https://public.example.test/data.csv', filename: 'data.csv' }] }),
+        ...overrides };
+    }
+    function expectNoControls() {
+      expect(screen.queryByRole('button', { name: /Continue to download|Download data.csv|Download files/ })).toBeNull();
+      expect(screen.queryByRole('link', { name: /Open download/ })).toBeNull();
+      expect(workspaceApi.requestWorkspaceDownload).not.toHaveBeenCalled();
+      expect(workspaceApi.requestWorkspaceFile).not.toHaveBeenCalled();
+    }
+    for (const workspace of [false, true]) {
+      it(`restores server-evidenced prior delivery with explicit terms and click, workspace=${workspace}`, async () => {
+        terms.realGate = true;
+        vi.stubEnv('NEXT_PUBLIC_TERMS_GATE_ENFORCE', 'true');
+        legalApi.getTermsAcceptanceStatus.mockResolvedValue({ accepted: false });
+        const open = vi.spyOn(window, 'open').mockReturnValue(null);
+        ordersApi.getOrder.mockResolvedValue(partial(workspace));
+        ordersApi.getOrderAccess.mockResolvedValue(metadata(workspace));
+        render(<OrderDetailPage />);
+        const button = await screen.findByRole('button', { name: workspace ? 'Continue to download' : 'Download data.csv' });
+        expect(ordersApi.getOrderAccess).toHaveBeenCalledExactlyOnceWith('order-1');
+        expect(workspaceApi.requestWorkspaceDownload).not.toHaveBeenCalled();
+        expect(open).not.toHaveBeenCalled();
+        fireEvent.click(button);
+        await screen.findByRole('heading', { name: 'Accept Terms and Conditions' });
+        expect(workspaceApi.requestWorkspaceDownload).not.toHaveBeenCalled();
+        fireEvent.click(screen.getByRole('button', { name: 'Accept terms' }));
+        if (workspace) {
+          const download = await screen.findByRole('button', { name: 'Download files' });
+          expect(workspaceApi.requestWorkspaceDownload).not.toHaveBeenCalled();
+          workspaceApi.requestWorkspaceDownload.mockRejectedValue({ response: { status: 403 } });
+          fireEvent.click(download);
+          await waitFor(() => expect(workspaceApi.requestWorkspaceDownload).toHaveBeenCalledTimes(1));
+          expect(workspaceApi.requestWorkspaceDownload.mock.calls[0][0]).toBe('order-1');
+          expect(workspaceApi.requestWorkspaceFile).not.toHaveBeenCalled();
+        } else {
+          expect((await screen.findByRole('link', { name: 'Open download data.csv' })).getAttribute('href')).toBe('https://public.example.test/data.csv');
+        }
+        expect(open).not.toHaveBeenCalled();
+      });
+
+      const transportRefusals: Array<[string, Record<string, unknown>]> = workspace ? [
+          ['zero allowance', { downloads_remaining: 0 }], ['unknown allowance', { downloads_remaining: null }],
+          ['expired or denied admission', { message: 'Download access has been revoked.' }],
+          ['unknown admission', { message: undefined }],
+        ] : [
+          ['denied', { can_download: false }], ['empty URLs', { download_urls: [] }],
+          ['unsafe URLs', { download_urls: [{ url: 'javascript:alert(1)' }] }],
+        ];
+      it.each<[string, Record<string, unknown>]>([
+        ['undelivered', { is_delivered: false }], ['revoked', { is_revoked: true }],
+        ['foreign', { order_id: 'other-order' }], ['missing identity', { order_id: undefined }],
+        ['unknown delivery', { is_delivered: undefined }], ['unknown revocation', { is_revoked: undefined }],
+        ...transportRefusals,
+      ])(`refuses %s metadata, workspace=${workspace}`, async (_name, overrides) => {
+        ordersApi.getOrder.mockResolvedValue(partial(workspace));
+        ordersApi.getOrderAccess.mockResolvedValue(metadata(workspace, overrides));
+        render(<OrderDetailPage />);
+        await screen.findByText('Order dataset');
+        await act(async () => {});
+        expect(ordersApi.getOrderAccess).toHaveBeenCalledTimes(1);
+        expectNoControls();
+      });
+
+      it.each(['seller', 'foreign viewer', 'full refund', 'expired']) (`does not read or grant for %s, workspace=${workspace}`, async (kind) => {
+        if (kind === 'seller') auth.userId = 'seller-1';
+        if (kind === 'foreign viewer') auth.userId = 'foreign';
+        ordersApi.getOrder.mockResolvedValue(partial(workspace, {
+          ...(kind === 'full refund' ? { status: 'refunded' } : {}),
+          ...(kind === 'expired' ? { access_expired: true } : {}),
+        }));
+        ordersApi.getOrderAccess.mockResolvedValue(metadata(workspace));
+        render(<OrderDetailPage />);
+        await screen.findByText('Order dataset');
+        await act(async () => {});
+        expect(ordersApi.getOrderAccess).not.toHaveBeenCalled();
+        expectNoControls();
+      });
+
+      it.each(['empty', 'failure', 'loading'])(`fails closed for %s read, workspace=${workspace}`, async (kind) => {
+        ordersApi.getOrder.mockResolvedValue(partial(workspace));
+        if (kind === 'empty') ordersApi.getOrderAccess.mockResolvedValue(null);
+        if (kind === 'failure') ordersApi.getOrderAccess.mockRejectedValue({ response: { status: 403 } });
+        if (kind === 'loading') ordersApi.getOrderAccess.mockReturnValue(new Promise(() => {}));
+        render(<OrderDetailPage />);
+        await screen.findByText('Order dataset');
+        await act(async () => {});
+        expectNoControls();
+      });
+
+      it.each(['denied', 'dismissed'])(`does not activate after terms are %s, workspace=${workspace}`, async (outcome) => {
+        terms.realGate = true;
+        vi.stubEnv('NEXT_PUBLIC_TERMS_GATE_ENFORCE', 'true');
+        legalApi.getTermsAcceptanceStatus.mockImplementation(() => outcome === 'denied'
+          ? Promise.reject(new Error('Denied')) : Promise.resolve({ accepted: false }));
+        ordersApi.getOrder.mockResolvedValue(partial(workspace));
+        ordersApi.getOrderAccess.mockResolvedValue(metadata(workspace));
+        render(<OrderDetailPage />);
+        fireEvent.click(await screen.findByRole('button', { name: workspace ? 'Continue to download' : 'Download data.csv' }));
+        if (outcome === 'dismissed') {
+          await screen.findByRole('heading', { name: 'Accept Terms and Conditions' });
+          fireEvent.click(screen.getByRole('button', { name: 'Close' }));
+        } else await waitFor(() => expect(legalApi.getTermsAcceptanceStatus).toHaveBeenCalled());
+        expect(screen.queryByRole('button', { name: 'Download files' })).toBeNull();
+        expect(screen.queryByRole('link', { name: /Open download/ })).toBeNull();
+        expect(workspaceApi.requestWorkspaceDownload).not.toHaveBeenCalled();
+      });
+
+      it(`withdraws resolved metadata when the viewer becomes the seller, workspace=${workspace}`, async () => {
+        ordersApi.getOrder.mockResolvedValue(partial(workspace));
+        ordersApi.getOrderAccess.mockResolvedValue(metadata(workspace));
+        const view = render(<OrderDetailPage />);
+        await screen.findByRole('button', { name: workspace ? 'Continue to download' : 'Download data.csv' });
+        auth.userId = 'seller-1';
+        view.rerender(<OrderDetailPage />);
+        expectNoControls();
+        await act(async () => {});
+        expect(ordersApi.getOrderAccess).toHaveBeenCalledTimes(1);
+      });
+
+      it.each(['resolved', 'pending'])(`never borrows %s access after route changes, workspace=${workspace}`, async (kind) => {
+        let finish!: (data: unknown) => void;
+        ordersApi.getOrder.mockResolvedValue(partial(workspace));
+        ordersApi.getOrderAccess.mockReturnValueOnce(kind === 'resolved' ? Promise.resolve(metadata(workspace)) : new Promise(resolve => { finish = resolve; }));
+        const view = render(<OrderDetailPage />);
+        await screen.findByText('Order dataset');
+        if (kind === 'resolved') await screen.findByRole('button', { name: workspace ? 'Continue to download' : 'Download data.csv' });
+        navigation.orderId = 'order-2';
+        ordersApi.getOrder.mockResolvedValue(partial(workspace, { id: 'order-2', listing_title: 'Second dataset' }));
+        ordersApi.getOrderAccess.mockRejectedValue({ response: { status: 403 } });
+        view.rerender(<OrderDetailPage />);
+        expectNoControls();
+        await screen.findByText('Second dataset');
+        if (kind === 'pending') await act(async () => finish(metadata(workspace)));
+        await act(async () => {});
+        expect(ordersApi.getOrderAccess.mock.calls.map(call => call[0])).toEqual(['order-1', 'order-2']);
+        expectNoControls();
+      });
+
+      it(`cancels a pending metadata result on unmount, workspace=${workspace}`, async () => {
+        let finish!: (data: unknown) => void;
+        ordersApi.getOrder.mockResolvedValue(partial(workspace));
+        ordersApi.getOrderAccess.mockReturnValueOnce(new Promise(resolve => { finish = resolve; }));
+        const view = render(<OrderDetailPage />);
+        await screen.findByText('Order dataset');
+        view.unmount();
+        await act(async () => finish(metadata(workspace)));
+        expectNoControls();
+      });
+    }
+  });
+
 });

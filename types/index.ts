@@ -796,6 +796,11 @@ export interface OrderEvent {
 }
 
 export interface OrderAccessResponse {
+  order_id?: string;
+  is_delivered?: boolean;
+  is_revoked?: boolean;
+  downloads_remaining?: number | null;
+  message?: string;
   delivery_type?: 'reference';
   can_download?: boolean;
   download_urls?: Array<{ url: string; filename?: string | null; expires_at?: string | null }>;
