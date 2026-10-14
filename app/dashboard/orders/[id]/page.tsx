@@ -105,6 +105,9 @@ export default function OrderDetailPage() {
 
   useEffect(() => {
     let cancelled = false;
+    setOrder(null);
+    setLoading(true);
+    setError('');
 
     const fetches: [Promise<BuyerOrderDetail>, Promise<OrderEvent[]>, Promise<Transaction | null>] = [
       getOrder(orderId),

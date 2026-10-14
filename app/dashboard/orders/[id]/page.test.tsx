@@ -1,5 +1,6 @@
 // @vitest-environment jsdom
 
+import { AxiosError } from 'axios';
 import { act, cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { BuyerOrderDetail, OrderEvent, Transaction } from '@/types';
@@ -559,6 +560,32 @@ describe('OrderDetailPage viewer relationship gating', () => {
         await act(async () => {});
         expect(ordersApi.getOrderAccess.mock.calls.map(call => call[0])).toEqual(['order-1', 'order-2']);
         expectNoControls();
+      });
+
+      it.each(['404', 'network'])(`renders failed route request and recovers, failure=%s, workspace=${workspace}`, async (failure) => {
+        ordersApi.getOrder.mockResolvedValue(partial(workspace));
+        ordersApi.getOrderAccess.mockResolvedValue(metadata(workspace));
+        const view = render(<OrderDetailPage />);
+        await screen.findByRole('button', { name: workspace ? 'Continue to download' : 'Download data.csv' });
+        navigation.orderId = 'order-2';
+        const requestError = failure === '404'
+          ? Object.assign(new AxiosError('Not found'), { response: { status: 404 } })
+          : new Error('Network failed');
+        ordersApi.getOrder.mockRejectedValue(requestError);
+        view.rerender(<OrderDetailPage />);
+        expectNoControls();
+        await screen.findByText(failure === '404' ? 'Order not found.' : 'Failed to load order details.');
+        expect(screen.queryByText('Order dataset')).toBeNull();
+        expectNoControls();
+        navigation.orderId = 'order-3';
+        ordersApi.getOrder.mockResolvedValue(partial(workspace, { id: 'order-3', listing_title: 'Recovered dataset' }));
+        ordersApi.getOrderAccess.mockResolvedValue(metadata(workspace, { order_id: 'order-3' }));
+        view.rerender(<OrderDetailPage />);
+        await screen.findByText('Recovered dataset');
+        await screen.findByRole('button', { name: workspace ? 'Continue to download' : 'Download data.csv' });
+        expect(screen.queryByText('Order not found.')).toBeNull();
+        expect(screen.queryByText('Failed to load order details.')).toBeNull();
+        expect(workspaceApi.requestWorkspaceDownload).not.toHaveBeenCalled();
       });
 
       it(`cancels a pending metadata result on unmount, workspace=${workspace}`, async () => {
