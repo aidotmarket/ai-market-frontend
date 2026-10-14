@@ -304,6 +304,29 @@ describe('gateway seller verification flow', () => {
     expect(gateway.startGatewayVerification).not.toHaveBeenCalled();
     expect(payin.getDataVerificationPayInReadiness).not.toHaveBeenCalled();
   });
+  it('reviews captured private findings with withheld text omitted without starting or publishing again', async () => {
+    window.localStorage.setItem(key, JSON.stringify({ probeCommand: { confirm: true, preview_requested: false, idempotency_key: 'key' }, epochId: 'epoch' }));
+    const { narrative: _narrative, listing_claim_comparison: _comparison, ...withoutText } = artifact;
+    const notice = 'allAI interpretation withheld because grounding validation failed';
+    vi.mocked(gateway.getGatewayVerificationEpoch).mockResolvedValue({ data: {
+      ...epoch, state: 'CAPTURED', captured_usd: '2.00', result_available: true, publication_allowed: true,
+      findings: { ...withoutText, publication_state: 'NOT_PUBLISHED', published_at_utc: null, narrative_state: 'withheld_grounding_failed', narrative_notice: notice },
+    }, retryAfter: 2 });
+    render(<GatewayVerificationFlow listingId="listing" sellerId="seller" />);
+    await screen.findByText(notice);
+    expect(screen.getByText('Private — not published')).toBeTruthy();
+    expect(screen.getByText('These findings are private. Buyers can see them only if you publish them.')).toBeTruthy();
+    expect(screen.getByText('Charged: $2.00')).toBeTruthy();
+    expect(screen.getByText(artifact.provenance_label!)).toBeTruthy();
+    expect(screen.getByText('Fingerprint hash').nextElementSibling?.textContent).toBe(artifact.fingerprint_hash);
+    expect(screen.queryByText('Written findings')).toBeNull();
+    expect(screen.queryByText('Listing comparison')).toBeNull();
+    expect((screen.getByRole('button', { name: 'Publish all findings' }) as HTMLButtonElement).disabled).toBe(false);
+    expect((screen.getByRole('button', { name: 'Decline publication' }) as HTMLButtonElement).disabled).toBe(false);
+    expect(gateway.startGatewayVerification).not.toHaveBeenCalled();
+    expect(gateway.gatewayVerificationLifecycle).not.toHaveBeenCalled();
+    expect(payin.getDataVerificationPayInReadiness).not.toHaveBeenCalled();
+  });
   it('keeps publish and decline equal and unavailable when full review is missing from the server', async () => {
     window.localStorage.setItem(key, JSON.stringify({ probeCommand: { confirm: true, preview_requested: false, idempotency_key: 'key' }, epochId: 'epoch' }));
     vi.mocked(gateway.getGatewayVerificationEpoch).mockResolvedValue({ data: { ...epoch, state: 'CAPTURED', captured_usd: '2.00', result_available: true, publication_allowed: true, narrative: 'Complete summary' }, retryAfter: 2 });
