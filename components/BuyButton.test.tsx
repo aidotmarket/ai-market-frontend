@@ -378,6 +378,7 @@ describe('BuyButton licence acceptance', () => {
       fireEvent.click(screen.getByRole('button', { name: 'Accept and continue to payment' }));
 
       await screen.findByRole('heading', { name: 'Accept Terms and Conditions' });
+      await waitFor(() => expect((screen.getByRole('group', { name: 'Required acknowledgements' }) as HTMLFieldSetElement).disabled).toBe(false));
       if (version === '1.2') {
         expect(await screen.findByText('The price shown is what you pay. No added card fee.')).toBeTruthy();
         expect(screen.getByLabelText(/I acknowledge the risk allocation and waivers in Section 13/)).toBeTruthy();
