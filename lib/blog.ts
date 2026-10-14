@@ -60,6 +60,12 @@ export function getAllPosts(): BlogPost[] {
 }
 
 export function getPostBySlug(slug: string): BlogPost | null {
+  // Next route parameters are decoded and can contain path separators.
+  // Accept a single filename stem without restricting Unicode or punctuation.
+  if (!slug || slug === '.' || slug === '..' || /[/\\\0]/.test(slug)) {
+    return null;
+  }
+
   const candidates = [`${slug}.mdx`, `${slug}.md`];
 
   for (const file of candidates) {
