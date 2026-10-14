@@ -417,7 +417,7 @@ describe('OrderDetailPage viewer relationship gating', () => {
       return { ...order(), status: 'partially_refunded', workspace_delivery, ...overrides };
     }
     function metadata(workspace: boolean, overrides = {}) {
-      return { order_id: 'order-1', is_delivered: true, is_revoked: false,
+      return { order_id: 'order-1', is_delivered: true, is_revoked: false, access_open: true,
         downloads_remaining: workspace ? 2 : null,
         message: workspace ? 'Download access is unavailable.' : 'Ready to download.',
         can_download: !workspace,
@@ -437,7 +437,7 @@ describe('OrderDetailPage viewer relationship gating', () => {
         legalApi.getTermsAcceptanceStatus.mockResolvedValue({ accepted: false });
         const open = vi.spyOn(window, 'open').mockReturnValue(null);
         ordersApi.getOrder.mockResolvedValue(partial(workspace));
-        ordersApi.getOrderAccess.mockResolvedValue(metadata(workspace));
+        ordersApi.getOrderAccess.mockResolvedValue(metadata(workspace, { message: 'A display message may change independently.' }));
         render(<OrderDetailPage />);
         const button = await screen.findByRole('button', { name: workspace ? 'Continue to download' : 'Download data.csv' });
         expect(ordersApi.getOrderAccess).toHaveBeenCalledExactlyOnceWith('order-1');
@@ -463,14 +463,16 @@ describe('OrderDetailPage viewer relationship gating', () => {
 
       const transportRefusals: Array<[string, Record<string, unknown>]> = workspace ? [
           ['zero allowance', { downloads_remaining: 0 }], ['unknown allowance', { downloads_remaining: null }],
-          ['expired or denied admission', { message: 'Download access has been revoked.' }],
-          ['unknown admission', { message: undefined }],
+          
         ] : [
           ['denied', { can_download: false }], ['empty URLs', { download_urls: [] }],
           ['unsafe URLs', { download_urls: [{ url: 'javascript:alert(1)' }] }],
         ];
       it.each<[string, Record<string, unknown>]>([
         ['undelivered', { is_delivered: false }], ['revoked', { is_revoked: true }],
+        ['closed despite unrevoked flag', { access_open: false }],
+        ['unknown closure decision', { access_open: undefined }],
+        ['non-boolean closure decision', { access_open: 'true' }],
         ['foreign', { order_id: 'other-order' }], ['missing identity', { order_id: undefined }],
         ['unknown delivery', { is_delivered: undefined }], ['unknown revocation', { is_revoked: undefined }],
         ...transportRefusals,

@@ -209,10 +209,9 @@ export default function OrderDetailPage() {
   // Partial refunds retain only rights evidenced by this order's server read.
   // Workspace metadata never contains credentials; the explicit download still reauthorizes.
   const retainedPartialAccess = String(order.status) === 'partially_refunded' &&
-    access?.order_id === orderId && access.is_delivered === true && access.is_revoked === false &&
+    access?.order_id === orderId && access.is_delivered === true && access.is_revoked === false && access.access_open === true &&
     !order.access_expired && (order.workspace_delivery
-      ? Number.isFinite(access.downloads_remaining) && (access.downloads_remaining ?? 0) > 0 &&
-        access.message === 'Download access is unavailable.'
+      ? Number.isFinite(access.downloads_remaining) && (access.downloads_remaining ?? 0) > 0
       : access.delivery_type === 'reference' && access.can_download === true &&
         access.download_urls?.some((file) => /^https?:\/\//i.test(file.url)) === true);
   const downloadEligible = ['fulfilled', 'delivered', 'completed'].includes(String(order.status)) || retainedPartialAccess;

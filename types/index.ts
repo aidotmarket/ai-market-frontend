@@ -796,6 +796,8 @@ export interface OrderEvent {
 }
 
 export interface OrderAccessResponse {
+  /** Existing server closure decision; delivery and transport limits also apply. */
+  access_open?: boolean;
   order_id?: string;
   is_delivered?: boolean;
   is_revoked?: boolean;
