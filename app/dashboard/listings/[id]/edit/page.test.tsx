@@ -15,6 +15,9 @@ const listingsApi = vi.hoisted(() => ({
 }));
 const capabilitiesApi = vi.hoisted(() => ({getSellerWorkspaceCapabilities:vi.fn()}));
 vi.mock('@/api/sellerWorkspace',()=>capabilitiesApi);
+const identityApi = vi.hoisted(() => ({getSellerLegalIdentity:vi.fn(),refreshSellerLegalIdentity:vi.fn(),saveSellerLegalIdentity:vi.fn()}));
+vi.mock('@/api/sellerLegalIdentity',async(importOriginal)=>({...(await importOriginal<typeof import('@/api/sellerLegalIdentity')>()),...identityApi}));
+const knownIdentity={status:'known',source:'stripe_connect',legal_name:'Sam Seller Ltd',jurisdiction:'US',version:4,seller_editable:false};
 
 const toast = vi.hoisted(() => vi.fn());
 
@@ -47,6 +50,8 @@ const baseListing = {
 describe('EditListingPage', () => {
   beforeEach(() => {
     capabilitiesApi.getSellerWorkspaceCapabilities.mockResolvedValue({});
+    identityApi.refreshSellerLegalIdentity.mockResolvedValue(knownIdentity);
+    identityApi.getSellerLegalIdentity.mockResolvedValue(knownIdentity);
     listingsApi.updateListing.mockResolvedValue({});
     listingsApi.unpublishListing.mockResolvedValue({});
     listingsApi.publishListing.mockResolvedValue({});
@@ -73,6 +78,8 @@ describe('EditListingPage', () => {
     await waitFor(() => {
       expect(listingsApi.publishListing).toHaveBeenCalledWith('listing-1');
     });
+    expect(identityApi.refreshSellerLegalIdentity).not.toHaveBeenCalled();
+    expect(identityApi.getSellerLegalIdentity).not.toHaveBeenCalled();
     expect(toast).toHaveBeenCalledWith('Listing published', 'success');
     expect(await screen.findByText('published')).toBeTruthy();
     expect(screen.queryByText('How can buyers use this data?')).toBeNull();
@@ -96,7 +103,58 @@ describe('EditListingPage', () => {
       license_sha256:'4b05dbcd0c186746d3deab6c68beaebba88610de8e85122efb4d527edb1263c6',rider_sha256:null,
       covenant_code:'marketplace-listing',covenant_version:'1.0',covenant_sha256:'a91234b67bf7467a0c80f6e1caa47b563032e94751146901b796eaaf220431af',
       seller_acceptance:{signer_name:'Sam Seller',signer_title:'Director',authority_confirmed:true},
+      identity_version:4,
     }));
+  });
+
+  async function completeLicence(){
+    const publish=await screen.findByRole('button',{name:'Publish'}) as HTMLButtonElement;
+    const details=screen.getByText('Read the summary and full terms').closest('details')!;
+    Object.defineProperty(details,'open',{value:true,configurable:true});fireEvent(details,new Event('toggle'));
+    fireEvent.change(screen.getByLabelText('Signer full name'),{target:{value:'Sam Seller'}});
+    fireEvent.change(screen.getByLabelText('Signer title'),{target:{value:'Director'}});
+    fireEvent.click(screen.getByLabelText('Confirm covenant and authority'));
+    expect(publish.disabled).toBe(false);
+    return publish;
+  }
+
+  it('refreshes then reads the legal identity at publish time and sends its version',async()=>{
+    const order:string[]=[];
+    identityApi.refreshSellerLegalIdentity.mockImplementation(async()=>{order.push('refresh');return knownIdentity;});
+    identityApi.getSellerLegalIdentity.mockImplementation(async()=>{order.push('get');return knownIdentity;});
+    listingsApi.getListing.mockResolvedValue({...baseListing,status:'unlisted'});
+    capabilitiesApi.getSellerWorkspaceCapabilities.mockResolvedValue({listing_licenses:true});
+    render(<EditListingPage/>);
+    const publish=await completeLicence();
+    expect(order).toEqual([]);
+    fireEvent.click(publish);
+    await waitFor(()=>expect(listingsApi.publishListing).toHaveBeenCalled());
+    expect(order).toEqual(['refresh','get']);
+    expect(listingsApi.publishListing.mock.calls[0][1].identity_version).toBe(4);
+  });
+
+  it('does not block a seller without a personal legal identity (organization sellers resolve identity server-side)',async()=>{
+    const required={status:'required',source:null,legal_name:null,jurisdiction:null,version:null,seller_editable:true};
+    identityApi.refreshSellerLegalIdentity.mockRejectedValue(new Error('stripe unavailable'));identityApi.getSellerLegalIdentity.mockResolvedValue(required);
+    listingsApi.getListing.mockResolvedValue({...baseListing,status:'unlisted'});
+    capabilitiesApi.getSellerWorkspaceCapabilities.mockResolvedValue({listing_licenses:true});
+    render(<EditListingPage/>);
+    fireEvent.click(await completeLicence());
+    await waitFor(()=>expect(listingsApi.publishListing).toHaveBeenCalled());
+    expect(listingsApi.publishListing.mock.calls[0][1]).not.toHaveProperty('identity_version');
+    expect(listingsApi.publishListing.mock.calls[0][1].seller_acceptance.authority_confirmed).toBe(true);
+  });
+
+  it('explains a backend legal identity refusal instead of a generic failure',async()=>{
+    const required={status:'required',source:null,legal_name:null,jurisdiction:null,version:null,seller_editable:true};
+    identityApi.getSellerLegalIdentity.mockResolvedValue(required);
+    listingsApi.publishListing.mockRejectedValue({response:{status:409,data:{detail:{code:'SELLER_LEGAL_IDENTITY_REQUIRED'}}}});
+    listingsApi.getListing.mockResolvedValue({...baseListing,status:'unlisted'});
+    capabilitiesApi.getSellerWorkspaceCapabilities.mockResolvedValue({listing_licenses:true});
+    render(<EditListingPage/>);
+    fireEvent.click(await completeLicence());
+    expect((await screen.findByRole('alert')).textContent).toContain('Save your legal name and country before publishing a licensed listing.');
+    expect(toast).not.toHaveBeenCalledWith(expect.anything(),'error');
   });
 
   it('shows Unpublish and not Publish for published listings, then switches local status to unlisted', async () => {

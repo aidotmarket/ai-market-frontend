@@ -10,6 +10,7 @@ import SellerShareControls from '@/components/listings/SellerShareControls';
 import SellerLicenseSelection from '@/components/seller-workspace/SellerLicenseSelection';
 import {createStandardSelection,isCompleteLicenseSelection,type LicenseSelection} from '@/api/listingLicenses';
 import {getSellerWorkspaceCapabilities} from '@/api/sellerWorkspace';
+import {getSellerLegalIdentity,refreshSellerLegalIdentity,legalIdentityFailure,LEGAL_IDENTITY_SUPPORT_PATH} from '@/api/sellerLegalIdentity';
 import { gatewayErrorCode } from '@/api/gatewayDelivery';
 import { blockerMessage } from '@/components/gateways/presentation';
 import ListingGatewaySource from '@/components/gateways/ListingGatewaySource';
@@ -168,18 +169,35 @@ export default function EditListingPage() {
     }
   };
 
+  // A sole-trader seller's licence acceptance is bound to their saved legal identity version; without it the backend
+  // refuses publication with 409 SELLER_LEGAL_IDENTITY_REQUIRED. Organization sellers resolve identity server-side and
+  // ignore the version, so a missing personal identity must not block them here: send the version only when known.
+  const withLegalIdentityVersion = async (selection: LicenseSelection): Promise<LicenseSelection> => {
+    const rest: LicenseSelection = { ...selection };
+    delete rest.identity_version;
+    try { await refreshSellerLegalIdentity(); } catch { /* a saved identity stays usable during a Stripe outage */ }
+    try {
+      const identity = await getSellerLegalIdentity();
+      if (identity.status === 'known') return { ...rest, identity_version: identity.version };
+    } catch { /* the publish response reports any identity refusal */ }
+    return rest;
+  };
+
   const handlePublish = async () => {
     setSaving(true);
     setPublishError(null); setPublishBlockers([]);
     try {
-      if (listingLicensesEnabled) await publishListing(id, licenseSelection);
+      if (listingLicensesEnabled) await publishListing(id, await withLegalIdentityVersion(licenseSelection));
       else await publishListing(id);
       toast('Listing published', 'success');
       notifyCapabilitiesChanged();
       setData((prev) => ({ ...prev, status: 'published' }));
     } catch (err: any) {
       const code = gatewayErrorCode(err);
-      if (code === 'gateway_not_publishable') {
+      const identityFailure = listingLicensesEnabled ? legalIdentityFailure(err) : 'other';
+      if (identityFailure === 'required') setPublishError('Save your legal name and country before publishing a licensed listing. You can add them in the licence step of Seller Workspace.');
+      else if (identityFailure === 'conflict') setPublishError(`Your legal details need a quick check by our support team before you can publish. Contact support: ${LEGAL_IDENTITY_SUPPORT_PATH}`);
+      else if (code === 'gateway_not_publishable') {
         const blockers = err.response?.data?.error?.details?.blockers;
         setPublishError('This gateway listing cannot be published yet. Resolve these issues and try again.');
         setPublishBlockers(Array.isArray(blockers) ? blockers : []);

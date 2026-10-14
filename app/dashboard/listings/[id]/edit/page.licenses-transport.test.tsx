@@ -15,6 +15,8 @@ vi.mock('@/components/listings/SellerShareControls',()=>({default:()=>null}));
 const listing={title:'Example listing',description:'Useful data',category:'Technology',tags:[],price:25,
   pricing_type:'one_time',status:'unlisted',listing_licenses_enabled:true};
 afterEach(()=>{cleanup();vi.resetAllMocks();});
+const identity={status:'known',source:'stripe_connect',legal_name:'Sam Seller Ltd',jurisdiction:'US',version:2,seller_editable:false};
+const getFor=(capability:unknown)=>async(path:string)=>({data:path==='/seller-workspace/capabilities'?capability:path==='/seller-workspace/legal-identity'?identity:listing});
 
 it('omits the unpublished licence choice from the edit-page draft PATCH',async()=>{
   transport.get.mockImplementation(async(path:string)=>({data:path==='/seller-workspace/capabilities'?enabled:listing}));
@@ -28,8 +30,8 @@ it('omits the unpublished licence choice from the edit-page draft PATCH',async()
 });
 
 it.each([[enabled,true],[disabled,false]])('uses only the capability response for licence UI and publish payload',async(capability,shown)=>{
-  transport.get.mockImplementation(async(path:string)=>({data:path==='/seller-workspace/capabilities'?capability:listing}));
-  transport.post.mockResolvedValue({data:{}});
+  transport.get.mockImplementation(getFor(capability));
+  transport.post.mockImplementation(async(path:string)=>({data:path==='/seller-workspace/legal-identity/refresh'?identity:{}}));
   render(<EditListingPage/>);
   const publish=await screen.findByRole('button',{name:'Publish'}) as HTMLButtonElement;
   expect(Boolean(screen.queryByText('How can buyers use this data?'))).toBe(shown);
@@ -44,7 +46,8 @@ it.each([[enabled,true],[disabled,false]])('uses only the capability response fo
     fireEvent.click(screen.getByLabelText('Confirm covenant and authority'));
   }
   fireEvent.click(publish);
-  await waitFor(()=>expect(transport.post).toHaveBeenCalled());
-  expect(transport.post.mock.calls[0][0]).toBe('/listings/listing-1/publish');
-  expect(transport.post.mock.calls[0][1]).toEqual(shown?{license_selection:expect.objectContaining({kind:'standard',seller_acceptance:{signer_name:'Sam Seller',signer_title:'Director',authority_confirmed:true}})}:undefined);
+  await waitFor(()=>expect(transport.post).toHaveBeenCalledWith('/listings/listing-1/publish',...(shown?[expect.anything()]:[])));
+  const call=transport.post.mock.calls.find(([path])=>path==='/listings/listing-1/publish')!;
+  expect(call[1]).toEqual(shown?{license_selection:expect.objectContaining({kind:'standard',identity_version:2,seller_acceptance:{signer_name:'Sam Seller',signer_title:'Director',authority_confirmed:true}})}:undefined);
+  expect(transport.get.mock.calls.some(([path])=>path==='/seller-workspace/legal-identity')).toBe(shown);
 });
