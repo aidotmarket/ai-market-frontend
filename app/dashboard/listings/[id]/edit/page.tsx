@@ -7,7 +7,7 @@ import { notifyCapabilitiesChanged } from '@/components/onboarding/SellerSetupPr
 import { useToast } from '@/components/Toast';
 import SellerAtAGlance from '@/components/listings/SellerAtAGlance';
 import SellerShareControls from '@/components/listings/SellerShareControls';
-import SellerLicenseSelection from '@/components/seller-workspace/SellerLicenseSelection';
+import SellerLicenseSelection, { type IdentityState } from '@/components/seller-workspace/SellerLicenseSelection';
 import {createStandardSelection,isCompleteLicenseSelection,type LicenseSelection} from '@/api/listingLicenses';
 import {getSellerWorkspaceCapabilities} from '@/api/sellerWorkspace';
 import { gatewayErrorCode } from '@/api/gatewayDelivery';
@@ -63,6 +63,11 @@ export default function EditListingPage() {
   const [tagInput, setTagInput] = useState('');
   const [listingLicensesEnabled, setListingLicensesEnabled] = useState(false);
   const [licenseSelection, setLicenseSelection] = useState<LicenseSelection>(createStandardSelection());
+  const [legalIdentity, setLegalIdentity] = useState<IdentityState>({ kind: 'checking' });
+  const [legalDirty, setLegalDirty] = useState(false);
+  // Publishing needs the seller's saved legal identity version (backend 409 SELLER_LEGAL_IDENTITY_REQUIRED otherwise).
+  const licenceReady = isCompleteLicenseSelection(licenseSelection) && legalIdentity.kind === 'known' && !legalDirty &&
+    Number.isSafeInteger(licenseSelection.identity_version);
   const [savedGatewaySourceListingId, setSavedGatewaySourceListingId] = useState<string | null>(null);
   const [savedGateway, setSavedGateway] = useState<SellerGateway | null>(null);
   const [sourceFiles, setSourceFiles] = useState<GatewayFile[]>([]);
@@ -403,7 +408,7 @@ export default function EditListingPage() {
         </div>
       </div>
 
-      {listingLicensesEnabled && <SellerLicenseSelection value={licenseSelection} onChange={setLicenseSelection} disabled={saving} />}
+      {listingLicensesEnabled && <SellerLicenseSelection value={licenseSelection} onChange={setLicenseSelection} disabled={saving} onIdentityStateChange={setLegalIdentity} onLegalDirtyChange={setLegalDirty} legalIdentityEnabled />}
 
       {data.status === 'draft' && <ListingGatewaySource listingId={id} onSourceDirty={onSourceDirty} onSourceSaved={onSourceSaved} />}
 
@@ -429,7 +434,7 @@ export default function EditListingPage() {
           {canPublish && (
             <button
               onClick={handlePublish}
-              disabled={saving || (listingLicensesEnabled && !isCompleteLicenseSelection(licenseSelection))}
+              disabled={saving || (listingLicensesEnabled && !licenceReady)}
               className="rounded-lg border border-yellow-300 px-4 py-2 text-sm font-medium text-yellow-700 hover:bg-yellow-50 disabled:opacity-50"
             >
               Publish

@@ -15,6 +15,9 @@ const listingsApi = vi.hoisted(() => ({
 }));
 const capabilitiesApi = vi.hoisted(() => ({getSellerWorkspaceCapabilities:vi.fn()}));
 vi.mock('@/api/sellerWorkspace',()=>capabilitiesApi);
+const identityApi = vi.hoisted(() => ({getSellerLegalIdentity:vi.fn(),refreshSellerLegalIdentity:vi.fn(),saveSellerLegalIdentity:vi.fn()}));
+vi.mock('@/api/sellerLegalIdentity',async(importOriginal)=>({...(await importOriginal<typeof import('@/api/sellerLegalIdentity')>()),...identityApi}));
+const knownIdentity={status:'known',source:'stripe_connect',legal_name:'Sam Seller Ltd',jurisdiction:'US',version:4,seller_editable:false};
 
 const toast = vi.hoisted(() => vi.fn());
 
@@ -47,6 +50,8 @@ const baseListing = {
 describe('EditListingPage', () => {
   beforeEach(() => {
     capabilitiesApi.getSellerWorkspaceCapabilities.mockResolvedValue({});
+    identityApi.refreshSellerLegalIdentity.mockResolvedValue(knownIdentity);
+    identityApi.getSellerLegalIdentity.mockResolvedValue(knownIdentity);
     listingsApi.updateListing.mockResolvedValue({});
     listingsApi.unpublishListing.mockResolvedValue({});
     listingsApi.publishListing.mockResolvedValue({});
@@ -85,6 +90,7 @@ describe('EditListingPage', () => {
     const publish=await screen.findByRole('button',{name:'Publish'}) as HTMLButtonElement;
     expect(within(screen.getByText('How can buyers use this data?').closest('fieldset')!).getAllByRole('radio')).toHaveLength(2);expect((screen.getByLabelText('Allow AI/ML training') as HTMLInputElement).checked).toBe(true);
     expect(publish.disabled).toBe(true);
+    expect(await screen.findByText('Legal name on the licence: Sam Seller Ltd (US)')).toBeTruthy();
     const details=screen.getByText('Read the summary and full terms').closest('details')!;
     Object.defineProperty(details,'open',{value:true,configurable:true});fireEvent(details,new Event('toggle'));
     fireEvent.change(screen.getByLabelText('Signer full name'),{target:{value:'Sam Seller'}});
@@ -96,7 +102,21 @@ describe('EditListingPage', () => {
       license_sha256:'4b05dbcd0c186746d3deab6c68beaebba88610de8e85122efb4d527edb1263c6',rider_sha256:null,
       covenant_code:'marketplace-listing',covenant_version:'1.0',covenant_sha256:'a91234b67bf7467a0c80f6e1caa47b563032e94751146901b796eaaf220431af',
       seller_acceptance:{signer_name:'Sam Seller',signer_title:'Director',authority_confirmed:true},
+      identity_version:4,
     }));
+  });
+
+  it('keeps publish disabled while the seller legal identity is required, even with a complete licence selection',async()=>{
+    const required={status:'required',source:null,legal_name:null,jurisdiction:null,version:null,seller_editable:true};
+    identityApi.refreshSellerLegalIdentity.mockResolvedValue(required);identityApi.getSellerLegalIdentity.mockResolvedValue(required);
+    listingsApi.getListing.mockResolvedValue({...baseListing,status:'unlisted'});
+    capabilitiesApi.getSellerWorkspaceCapabilities.mockResolvedValue({listing_licenses:true});
+    render(<EditListingPage/>);
+    const publish=await screen.findByRole('button',{name:'Publish'}) as HTMLButtonElement;
+    expect(await screen.findByText(/Your legal name and country are not saved/)).toBeTruthy();
+    expect(publish.disabled).toBe(true);
+    expect(identityApi.getSellerLegalIdentity).toHaveBeenCalled();
+    expect(listingsApi.publishListing).not.toHaveBeenCalled();
   });
 
   it('shows Unpublish and not Publish for published listings, then switches local status to unlisted', async () => {
