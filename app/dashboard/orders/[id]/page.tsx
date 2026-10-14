@@ -78,7 +78,7 @@ const TX_STATUS_LABEL: Record<TransactionStatus, string> = {
 export default function OrderDetailPage() {
   const params = useParams<{ id: string }>();
   const searchParams = useSearchParams();
-  const orderId = params.id;
+  const orderId = params.id.replace(/^([0-9a-f]{8})-?([0-9a-f]{4})-?([0-9a-f]{4})-?([0-9a-f]{4})-?([0-9a-f]{12})$/i, (_, a, b, c, d, e) => [a, b, c, d, e].join('-').toLowerCase());
   const txIdParam = searchParams.get('tx');
   const { toast } = useToast();
   const userId = useAuthStore((s) => s.user?.id);

@@ -562,6 +562,19 @@ describe('OrderDetailPage viewer relationship gating', () => {
         expectNoControls();
       });
 
+      it.each(['uppercase', 'compact'])(`accepts equivalent UUID route spelling %s, workspace=${workspace}`, async (spelling) => {
+        const canonical = 'aaaaaaaa-bbbb-4ccc-8ddd-eeeeeeeeeeee';
+        navigation.orderId = spelling === 'uppercase' ? canonical.toUpperCase() : canonical.replaceAll('-', '');
+        ordersApi.getOrder.mockResolvedValue(partial(workspace, { id: canonical }));
+        ordersApi.getOrderAccess.mockResolvedValue(metadata(workspace, { order_id: canonical }));
+        render(<OrderDetailPage />);
+        await screen.findByText('Order dataset');
+        await screen.findByRole('button', { name: workspace ? 'Continue to download' : 'Download data.csv' });
+        expect(ordersApi.getOrder).toHaveBeenCalledWith(canonical);
+        expect(ordersApi.getOrderAccess).toHaveBeenCalledWith(canonical);
+        expect(workspaceApi.requestWorkspaceDownload).not.toHaveBeenCalled();
+      });
+
       it.each(['404', 'network'])(`renders failed route request and recovers, failure=%s, workspace=${workspace}`, async (failure) => {
         ordersApi.getOrder.mockResolvedValue(partial(workspace));
         ordersApi.getOrderAccess.mockResolvedValue(metadata(workspace));
