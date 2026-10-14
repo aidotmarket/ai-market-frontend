@@ -1,6 +1,6 @@
 'use client';
 
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import {
   getNotifications,
@@ -99,29 +99,42 @@ export default function NotificationCenter({ enabled }: { enabled: boolean }) {
   const allAI = useAllAI();
   const [isOpen, setIsOpen] = useState(false);
   const [notifications, setNotifications] = useState<NotificationItem[]>([]);
-  const [unreadCount, setUnreadCount] = useState(0);
+  const [unreadCount, setUnreadCount] = useState<number | null>(null);
   const [isLoading, setIsLoading] = useState(false);
+  const [hasSnapshot, setHasSnapshot] = useState(false);
+  const [isUnavailable, setIsUnavailable] = useState(false);
+  // Only the latest read may replace the snapshot; writes and lifecycle cleanup invalidate it.
+  const readVersion = useRef(0);
   const containerRef = useRef<HTMLDivElement>(null);
 
-  const visibleUnreadCount = useMemo(() => Math.min(unreadCount, 99), [unreadCount]);
+  const visibleUnreadCount = Math.min(unreadCount ?? 0, 99);
 
   const refresh = useCallback(async () => {
     if (!enabled) return;
+    const version = ++readVersion.current;
     setIsLoading(true);
     try {
       const [list, count] = await Promise.all([
         getNotifications({ limit: 20 }),
         getUnreadNotificationCount(),
       ]);
+      if (version !== readVersion.current) return;
+      setHasSnapshot(true);
+      setIsUnavailable(false);
       setNotifications(list.items);
       setUnreadCount(count.unread_count);
+    } catch {
+      if (version !== readVersion.current) return;
+      setIsUnavailable(true);
+      setUnreadCount(null);
     } finally {
-      setIsLoading(false);
+      if (version === readVersion.current) setIsLoading(false);
     }
   }, [enabled]);
 
   useEffect(() => {
-    refresh().catch(() => undefined);
+    void refresh();
+    return () => { readVersion.current += 1; };
   }, [refresh]);
 
   useEffect(() => {
@@ -137,13 +150,17 @@ export default function NotificationCenter({ enabled }: { enabled: boolean }) {
 
   const handleNotificationClick = async (notification: NotificationItem) => {
     if (!notification.read_at) {
+      const version = ++readVersion.current;
+      setIsLoading(false);
       setNotifications((prev) =>
         prev.map((item) =>
           item.id === notification.id ? { ...item, read_at: new Date().toISOString() } : item
         )
       );
-      setUnreadCount((prev) => Math.max(0, prev - 1));
-      markNotificationRead(notification.id).catch(() => refresh().catch(() => undefined));
+      setUnreadCount((prev) => prev === null ? null : Math.max(0, prev - 1));
+      markNotificationRead(notification.id).catch(() => {
+        if (version === readVersion.current) void refresh();
+      });
     }
 
     const action = getNotificationClickAction(notification);
@@ -157,25 +174,32 @@ export default function NotificationCenter({ enabled }: { enabled: boolean }) {
   };
 
   const handleMarkAllRead = async () => {
+    const version = ++readVersion.current;
+    setIsLoading(false);
     setNotifications((prev) => prev.map((item) => ({ ...item, read_at: item.read_at ?? new Date().toISOString() })));
-    setUnreadCount(0);
-    await markAllNotificationsRead().catch(() => refresh().catch(() => undefined));
+    setUnreadCount((prev) => prev === null ? null : 0);
+    await markAllNotificationsRead().catch(() => {
+      if (version === readVersion.current) void refresh();
+    });
   };
 
   return (
     <div ref={containerRef} className="relative">
       <button
         type="button"
-        onClick={() => setIsOpen((value) => !value)}
+        onClick={() => {
+          if (!isOpen) void refresh();
+          setIsOpen(!isOpen);
+        }}
         className="relative rounded-full p-2 text-gray-500 transition-colors hover:bg-gray-100 hover:text-gray-800"
-        aria-label={`Notifications${unreadCount ? `, ${unreadCount} unread` : ''}`}
+        aria-label={`Notifications${unreadCount === null ? ', unread count unavailable' : unreadCount ? `, ${unreadCount} unread` : ''}`}
         aria-expanded={isOpen}
       >
         <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
           <path d="M18 8a6 6 0 00-12 0c0 7-3 7-3 9h18c0-2-3-2-3-9" />
           <path d="M13.73 21a2 2 0 01-3.46 0" />
         </svg>
-        {unreadCount > 0 && (
+        {unreadCount !== null && unreadCount > 0 && (
           <span className="absolute -right-1 -top-1 min-w-5 rounded-full bg-blue-600 px-1.5 py-0.5 text-center text-[10px] font-semibold leading-none text-white">
             {visibleUnreadCount}
           </span>
@@ -189,15 +213,29 @@ export default function NotificationCenter({ enabled }: { enabled: boolean }) {
             <button
               type="button"
               onClick={handleMarkAllRead}
-              disabled={unreadCount === 0}
+              disabled={isLoading || unreadCount === null || unreadCount === 0}
               className="text-xs font-medium text-blue-600 disabled:text-gray-300"
             >
               Mark all read
             </button>
           </div>
-          {isLoading && notifications.length === 0 ? (
-            <p className="px-4 py-6 text-sm text-gray-500">Loading notifications...</p>
-          ) : (
+          {isLoading && (
+            <p role="status" className="px-4 py-3 text-sm text-gray-500">Loading notifications...</p>
+          )}
+          {isUnavailable && (
+            <div role="alert" className="px-4 py-3 text-sm text-gray-600">
+              <p>Notifications unavailable. {hasSnapshot ? 'Previously loaded notifications may be out of date. ' : ''}Unread count unavailable.</p>
+              <button
+                type="button"
+                onClick={() => void refresh()}
+                disabled={isLoading}
+                className="mt-2 text-xs font-medium text-blue-600 disabled:text-gray-300"
+              >
+                Retry
+              </button>
+            </div>
+          )}
+          {(notifications.length > 0 || (hasSnapshot && !isLoading && !isUnavailable)) && (
             <NotificationList notifications={notifications} onNotificationClick={handleNotificationClick} />
           )}
         </div>
