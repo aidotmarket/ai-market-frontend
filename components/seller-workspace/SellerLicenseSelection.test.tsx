@@ -44,6 +44,16 @@ describe('Seller licence selection',()=>{
     expect(screen.queryByRole('button',{name:'Save legal details'})).toBeNull();
     expect(JSON.parse(screen.getByTestId('wire').textContent!).identity_version).toBe(4);
   });
+  it('keeps the verified identity version when switching Standard to custom and back',async()=>{
+    legal.getSellerLegalIdentity.mockResolvedValue({status:'known',source:'stripe_connect',legal_name:'Seller Ltd',jurisdiction:'GB',version:4});
+    render(<Harness/>);
+    await screen.findByText('Legal name on the licence: Seller Ltd (GB)');
+    fireEvent.click(screen.getByRole('radio',{name:/My own licence/}));
+    expect(JSON.parse(screen.getByTestId('wire').textContent!).identity_version).toBe(4);
+    fireEvent.click(screen.getByRole('radio',{name:/Standard/}));
+    const wire=JSON.parse(screen.getByTestId('wire').textContent!);
+    expect(wire.kind).toBe('standard');expect(wire.identity_version).toBe(4);expect(wire.seller_acceptance.authority_confirmed).toBe(false);
+  });
   it('saves required legal name and country separately from signer fields',async()=>{
     const required={status:'required',source:null,legal_name:null,jurisdiction:null,version:null};
     const typed={status:'known',source:'seller_typed',legal_name:'Taylor Seller',jurisdiction:'US',version:1};

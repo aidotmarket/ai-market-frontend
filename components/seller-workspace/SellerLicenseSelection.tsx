@@ -104,7 +104,9 @@ export default function SellerLicenseSelection({value, onChange, disabled = fals
     setCustomPreview(null);
     setSubmitError('');
     const invalidatedIdentity={...identity,authority_confirmed:false};
-    if (kind === 'standard') onChange({...createStandardSelection(value.ai_training), seller_acceptance: invalidatedIdentity});
+    // Keep the verified legal identity version across licence-kind changes; only authority is re-confirmed.
+    if (kind === 'standard') onChange({...createStandardSelection(value.ai_training), seller_acceptance: invalidatedIdentity,
+      ...(value.identity_version === undefined ? {} : {identity_version: value.identity_version})});
     else onChange({...value, kind: 'custom', version: '1.0', license_document_id: null, license_sha256: '',
       rider_sha256: LICENSE_HASHES.rider[String(value.ai_training) as 'true' | 'false'],seller_acceptance:invalidatedIdentity});
   };

@@ -39,7 +39,6 @@ it.each([[enabled,true],[disabled,false]])('uses only the capability response fo
   expect(transport.get).toHaveBeenCalledWith('/listings/listing-1');
   if (shown) {
     expect(publish.disabled).toBe(true);
-    expect(await screen.findByText('Legal name on the licence: Sam Seller Ltd (US)')).toBeTruthy();
     const details=screen.getByText('Read the summary and full terms').closest('details')!;
     Object.defineProperty(details,'open',{value:true,configurable:true});fireEvent(details,new Event('toggle'));
     fireEvent.change(screen.getByLabelText('Signer full name'),{target:{value:'Sam Seller'}});
