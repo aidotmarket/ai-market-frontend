@@ -161,8 +161,9 @@ export default async function SellDataPage() {
               </h3>
               <p className="mt-4 text-base leading-7 text-gray-600">
                 Your data stays in your own AWS S3 or Cloudflare R2 bucket. There is nothing to install.
-                Connect the bucket read-only in the Seller Workspace. allAI reads the structure and
-                prepares the listing. You review, approve and publish.
+                Connect the bucket read-only in Seller Workspace and choose the files to list.
+                allAI helps draft the listing from your description and the selected file names and sizes.
+                You review, approve and publish.
               </p>
               <p className="mt-4 mb-6 text-base leading-7 text-gray-600">
                 Buyers purchase on ai.market and download directly from your bucket through
