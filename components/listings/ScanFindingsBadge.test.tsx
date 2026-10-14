@@ -3,7 +3,7 @@
 import React from 'react';
 import { renderToStaticMarkup } from 'react-dom/server';
 import { describe, expect, it } from 'vitest';
-import type { PublishedScanFindings, ScanFindings, VerificationObjectId } from '@/types';
+import type { PublishedScanFindings, ScanFindings, SellerScanFindings, VerificationObjectId } from '@/types';
 import ScanFindingsBadge, { decodeHtmlEscapeEntities } from './ScanFindingsBadge';
 
 const ATTESTATION = "On 2026-08-23 12:00:00 UTC, at the data owner's authorization and expense, ai.market directed AIM Data to scan the seller-designated source for this listing inside the owner's environment; the structural facts below were computed by ai.market-authored conduit code executed by the owner's AIM Data installation, and the findings are published unedited.";
@@ -84,11 +84,11 @@ function makePublishedFindings(overrides: Partial<PublishedScanFindings> = {}): 
   };
 }
 
-function render(scanFindings: ScanFindings | null): string {
+function render(scanFindings: ScanFindings | SellerScanFindings | null): string {
   return renderToStaticMarkup(<ScanFindingsBadge scanFindings={scanFindings} />);
 }
 
-function renderText(scanFindings: ScanFindings | null): string {
+function renderText(scanFindings: ScanFindings | SellerScanFindings | null): string {
   document.body.innerHTML = render(scanFindings);
   return document.body.textContent ?? '';
 }
@@ -237,5 +237,98 @@ describe('S1791 immutable server-supplied provenance', () => {
     expect(container.textContent).toContain(disclaimer);
     expect(container.textContent).toContain('Covered listing versionfrozen-listing-version');
     expect(container.textContent).toContain('Scanner version1.2.3');
+  });
+});
+
+
+describe.each(['PUBLISHED', 'NOT_PUBLISHED'] as const)('optional scan text in %s findings', publicationState => {
+  const notice = 'allAI interpretation withheld because grounding validation failed';
+
+  function findings(overrides: Partial<PublishedScanFindings> = {}): SellerScanFindings {
+    return {
+      ...makePublishedFindings(overrides),
+      publication_state: publicationState,
+      published_at_utc: publicationState === 'PUBLISHED' ? '2026-08-23T12:01:00Z' : null,
+    };
+  }
+
+  function fields(artifact: SellerScanFindings): Record<string, string | null> {
+    document.body.innerHTML = render(artifact);
+    return Object.fromEntries(Array.from(document.body.querySelectorAll('dt'), dt => [
+      dt.textContent, dt.nextElementSibling?.textContent ?? null,
+    ]));
+  }
+
+  it.each([
+    ['both omitted', undefined, undefined],
+    ['narrative omitted', undefined, null],
+    ['comparison omitted', null, undefined],
+    ['explicit nulls', null, null],
+  ] as const)('preserves the withheld report with %s', (_name, narrative, comparison) => {
+    const artifact = findings({
+      narrative_state: 'withheld_grounding_failed',
+      narrative: null,
+      listing_claim_comparison: null,
+      narrative_notice: notice,
+      provenance_label: "Facts computed in the seller's own Cloudflare account",
+    });
+    if (narrative === undefined) delete artifact.narrative;
+    if (comparison === undefined) delete artifact.listing_claim_comparison;
+    const input = JSON.stringify(artifact);
+    const rendered = fields(artifact);
+
+    expect(rendered['Narrative state']).toBe('withheld_grounding_failed');
+    expect(rendered.Narrative).toBe('null');
+    expect(rendered['Listing claim comparison']).toBe('null');
+    expect(rendered['Narrative notice']).toBe(notice);
+    expect(rendered['Publication state']).toBe(publicationState === 'PUBLISHED' ? 'PUBLISHED' : 'Private — not published');
+    expect(rendered['Published timestamp (UTC)']).toBe(publicationState === 'PUBLISHED' ? artifact.published_at_utc : 'Not published');
+    expect(rendered['Fingerprint hash']).toBe(artifact.fingerprint_hash);
+    expect(rendered['Null rate']).toBe('0.125000');
+    expect(rendered['Approximate distinct estimate']).toBe('7');
+    expect(document.body.textContent).toContain(artifact.provenance_label);
+    expect(document.body.textContent).toContain(artifact.attestation);
+    expect(document.body.textContent).toContain(artifact.disclaimer);
+    expect(document.body.textContent).not.toContain('one readable object');
+    expect(document.body.textContent).not.toContain('The listing says');
+    expect(JSON.stringify(artifact)).toBe(input);
+
+    // Apart from the interpretation, the complete report is identical to the
+    // existing explicit-null representation, including facts and provenance.
+    const actual = document.body.cloneNode(true) as HTMLElement;
+    actual.querySelector('[aria-labelledby="scan-interpretation-heading"]')?.remove();
+    fields({ ...artifact, narrative: null, listing_claim_comparison: null });
+    document.body.querySelector('[aria-labelledby="scan-interpretation-heading"]')?.remove();
+    expect(actual.innerHTML).toBe(document.body.innerHTML);
+  });
+
+  it.each(['narrative', 'listing_claim_comparison'] as const)('keeps the supplied sibling when %s is omitted', omitted => {
+    const artifact = findings();
+    delete artifact[omitted];
+    const rendered = fields(artifact);
+    expect(rendered.Narrative).toBe(omitted === 'narrative' ? 'null' : "The dataset's A & B source contains one readable object.");
+    expect(rendered['Listing claim comparison']).toBe(omitted === 'listing_claim_comparison' ? 'null' : 'The listing says "A & B"; one object was scanned and one was skipped.');
+    expect(rendered['Narrative state']).toBe('grounded');
+  });
+
+  it('renders grounded strings as escaped text and tolerates an omitted notice', () => {
+    const encoded = '&lt;img src=x onerror=&quot;alert(1)&quot;&gt; &amp; &#x27; &amp;lt;';
+    const artifact = findings({ narrative: encoded, listing_claim_comparison: encoded });
+    delete artifact.narrative_notice;
+    const rendered = fields(artifact);
+    expect(rendered.Narrative).toBe('<img src=x onerror="alert(1)"> & \' &lt;');
+    expect(rendered['Listing claim comparison']).toBe(rendered.Narrative);
+    expect(rendered['Narrative notice']).toBe('null');
+    expect(document.body.querySelector('img, script')).toBeNull();
+    expect(fields(findings({ narrative: '', listing_claim_comparison: '' })).Narrative).toBe('');
+  });
+});
+
+describe('scan text contract boundaries', () => {
+  it.each(['narrative', 'listing_claim_comparison'] as const)('does not coerce malformed %s into supported text', field => {
+    for (const value of [0, false, {}, []]) {
+      const artifact = { ...makePublishedFindings(), [field]: value } as unknown as PublishedScanFindings;
+      expect(() => render(artifact)).toThrow(TypeError);
+    }
   });
 });

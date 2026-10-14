@@ -230,9 +230,10 @@ export interface PublishedScanFindings {
   deterministic_facts: VerificationFactObject[];
   fingerprint_hash: string;
   narrative_state: 'grounded' | 'withheld_grounding_failed';
-  narrative: string | null;
-  listing_claim_comparison: string | null;
-  narrative_notice: string | null;
+  // Artifact serialization can omit null text fields.
+  narrative?: string | null;
+  listing_claim_comparison?: string | null;
+  narrative_notice?: string | null;
   seller_context_provided: boolean;
   preview_requested: boolean;
   schema_preview?: VerificationSchemaObject[];

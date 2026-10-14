@@ -233,12 +233,12 @@ function displayAggregate(value: number[] | 'suppressed_low_occupancy' | null | 
   return Array.isArray(value) ? JSON.stringify(value) : value;
 }
 
-function displayNullable(value: string | null): string {
-  return value === null ? 'null' : value;
+function displayNullable(value: string | null | undefined): string {
+  return value ?? 'null';
 }
 
-function displaySafeNullable(value: string | null): string {
-  return value === null ? 'null' : decodeHtmlEscapeEntities(value);
+function displaySafeNullable(value: string | null | undefined): string {
+  return value === null || value === undefined ? 'null' : decodeHtmlEscapeEntities(value);
 }
 
 const HTML_ESCAPE_ENTITIES: Record<string, string> = {
