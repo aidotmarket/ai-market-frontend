@@ -81,3 +81,17 @@ export async function getMyDataRequests(): Promise<DataRequestListItem[]> {
   });
   return Array.isArray(res.data) ? res.data : res.data.items;
 }
+
+export interface MyDataRequestsPage {
+  items: DataRequestListItem[];
+  total: number;
+  page: number;
+  per_page: number;
+}
+
+export async function getMyDataRequestsPage(page = 1): Promise<MyDataRequestsPage> {
+  const res = await api.get<MyDataRequestsPage>('/data-requests', {
+    params: { mine: true, page, per_page: 20 },
+  });
+  return res.data;
+}

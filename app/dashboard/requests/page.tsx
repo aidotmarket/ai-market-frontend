@@ -3,11 +3,10 @@
 import { useEffect, useState } from 'react';
 import Link from 'next/link';
 import { useAuthStore } from '@/store/auth';
-import { useToast } from '@/components/Toast';
-import { getMyDataRequests } from '@/api/data-requests';
+import { getMyDataRequestsPage, type MyDataRequestsPage as RequestsPage } from '@/api/data-requests';
 import { formatDate } from '@/lib/format';
 import { AxiosError } from 'axios';
-import type { DataRequestListItem, DataRequestStatus, DataRequestUrgency } from '@/types';
+import type { DataRequestStatus, DataRequestUrgency } from '@/types';
 
 const STATUS_BADGE: Record<DataRequestStatus, { css: string; label: string }> = {
   draft: { css: 'bg-gray-100 text-gray-600', label: 'Draft' },
@@ -36,32 +35,51 @@ function statusBadge(status: DataRequestStatus) {
 }
 
 export default function MyDataRequestsPage() {
-  const { isAuthenticated } = useAuthStore();
-  const { toast } = useToast();
-  const [requests, setRequests] = useState<DataRequestListItem[]>([]);
+  const { isAuthenticated, user } = useAuthStore();
+  // Remount the controller on identity changes, clearing records and returning to page 1.
+  if (!isAuthenticated || !user?.id) return null;
+  return <OwnedRequests key={user.id} />;
+}
+
+function OwnedRequests() {
+  const [page, setPage] = useState(1);
+  const [attempt, setAttempt] = useState(0);
+  const [result, setResult] = useState<RequestsPage | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
-    if (!isAuthenticated) return;
-
-    getMyDataRequests()
-      .then((data) => setRequests(data))
-      .catch((err) => {
-        if (err instanceof AxiosError) {
-          setError(err.response?.data?.detail || 'Failed to load your data requests.');
-        } else {
-          setError('An unexpected error occurred.');
-        }
-        toast('Failed to load data requests.', 'error');
+    let obsolete = false;
+    getMyDataRequestsPage(page)
+      .then((data) => {
+        if (!obsolete) setResult(data);
       })
-      .finally(() => setLoading(false));
-  }, [isAuthenticated, toast]);
+      .catch((err) => {
+        if (obsolete) return;
+        const detail = err instanceof AxiosError ? err.response?.data?.detail : undefined;
+        setError(typeof detail === 'string' && detail.trim() ? detail : 'Failed to load your data requests.');
+      })
+      .finally(() => {
+        if (!obsolete) setLoading(false);
+      });
+    return () => { obsolete = true; };
+  }, [page, attempt]);
+
+  function loadPage(nextPage: number) {
+    if (loading) return;
+    setLoading(true);
+    setError(null);
+    setResult(null);
+    setPage(nextPage);
+    setAttempt((value) => value + 1);
+  }
 
   if (loading) {
     return (
-      <div className="flex min-h-[40vh] items-center justify-center">
-        <div className="h-8 w-8 animate-spin rounded-full border-4 border-[#3F51B5] border-t-transparent" />
+      <div className="flex min-h-[40vh] flex-wrap items-center justify-center gap-4 text-sm">
+        <button className="rounded-lg border px-4 py-2 opacity-50" disabled>Previous</button>
+        <p role="status">Loading data requests…</p>
+        <button className="rounded-lg border px-4 py-2 opacity-50" disabled>Next</button>
       </div>
     );
   }
@@ -69,12 +87,15 @@ export default function MyDataRequestsPage() {
   if (error) {
     return (
       <div className="rounded-lg bg-red-50 border border-red-200 px-4 py-3 text-sm text-red-700">
-        {error}
+        <p role="alert">Could not load page {page}. {error}</p>
+        <button className="mt-3 underline" onClick={() => loadPage(page)}>Retry</button>
+        {page > 1 && <button className="ml-4 underline" onClick={() => loadPage(page - 1)}>Previous</button>}
       </div>
     );
   }
 
-  if (requests.length === 0) {
+  const requests = result?.items ?? [];
+  if (requests.length === 0 && page === 1) {
     return (
       <div className="flex min-h-[40vh] items-center justify-center">
         <div className="text-center">
@@ -158,6 +179,18 @@ export default function MyDataRequestsPage() {
           </Link>
         ))}
       </div>
+
+      {result && (
+        <nav aria-label="Data request pages" className="mt-6 flex flex-wrap items-center justify-center gap-4 text-sm">
+          <button className="rounded-lg border px-4 py-2 disabled:opacity-50" disabled={result.page <= 1} onClick={() => loadPage(result.page - 1)}>
+            Previous
+          </button>
+          <p role="status">Page {result.page} of {Math.max(1, Math.ceil(result.total / result.per_page))} · {result.total} requests</p>
+          <button className="rounded-lg border px-4 py-2 disabled:opacity-50" disabled={result.page * result.per_page >= result.total} onClick={() => loadPage(result.page + 1)}>
+            Next
+          </button>
+        </nav>
+      )}
     </div>
   );
 }
