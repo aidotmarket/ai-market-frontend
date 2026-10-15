@@ -57,6 +57,12 @@ export default function DashboardOverview() {
   const [stats, setStats] = useState<SellerStats | null>(null);
   const [heldPublishedCount, setHeldPublishedCount] = useState(0);
   const [buyerOrders, setBuyerOrders] = useState<BuyerOrder[]>([]);
+  const [purchaseError, setPurchaseError] = useState(false);
+  const [purchaseRecoveryVisible, setPurchaseRecoveryVisible] = useState(false);
+  const [purchasesLoading, setPurchasesLoading] = useState(true);
+  const purchaseRequest = useRef(0);
+  const purchasesMounted = useRef(false);
+  const purchaseUserId = user?.id;
   const [requestingSeller, setRequestingSeller] = useState(false);
   const [twoFactorFlow, setTwoFactorFlow] = useState<TwoFactorFlow>('idle');
   const [securityLoading, setSecurityLoading] = useState(false);
@@ -71,14 +77,35 @@ export default function DashboardOverview() {
   const dashboardHeadingRef = useRef<HTMLHeadingElement>(null);
   const twoFactorDoneInFlight = useRef(false);
 
+  const loadPurchases = useCallback(async () => {
+    if (!purchasesMounted.current || purchaseUserId !== useAuthStore.getState().user?.id) return;
+    // New reads and effect cleanup invalidate older completions without changing the GET contract.
+    const request = ++purchaseRequest.current;
+    const isCurrent = () => purchasesMounted.current && request === purchaseRequest.current &&
+      purchaseUserId === useAuthStore.getState().user?.id;
+    setPurchasesLoading(true);
+    try {
+      const orders = await getMyOrders();
+      if (isCurrent()) {
+        setBuyerOrders(orders);
+        setPurchaseError(false);
+      }
+    } catch (err) {
+      console.error('Failed to fetch dashboard purchase data', err);
+      if (isCurrent()) {
+        setPurchaseError(true);
+        setPurchaseRecoveryVisible(true);
+      }
+    } finally {
+      if (isCurrent()) setPurchasesLoading(false);
+    }
+  }, [purchaseUserId]);
+
   const fetchData = useCallback(async () => {
     setLoading(true);
     setError(false);
     try {
-      const ordersPromise = getMyOrders().catch((err) => {
-        console.error('Failed to fetch dashboard purchase data', err);
-        return [];
-      });
+      void loadPurchases();
       const capabilityRes = await getCapabilities();
       setCapabilities(capabilityRes);
 
@@ -87,23 +114,18 @@ export default function DashboardOverview() {
       setStripeStatus(null);
       setStats(null);
       setHeldPublishedCount(0);
-      setBuyerOrders([]);
 
       if (sellerIsActive) {
-        const [statusRes, statsRes, listingsRes, orders] = await Promise.all([
+        const [statusRes, statsRes, listingsRes] = await Promise.all([
           getConnectStatus(),
           getSellerStats(),
           getMyListings(),
-          ordersPromise,
         ]);
         const listings = Array.isArray(listingsRes.data) ? listingsRes.data : [];
 
         setStripeStatus(statusRes.data);
         setStats(statsRes.data);
         setHeldPublishedCount(listings.filter((listing: any) => listing.status === 'published').length);
-        setBuyerOrders(orders);
-      } else {
-        setBuyerOrders(await ordersPromise);
       }
     } catch (err) {
       console.error('Failed to fetch dashboard data', err);
@@ -111,10 +133,18 @@ export default function DashboardOverview() {
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [loadPurchases]);
 
   useEffect(() => {
-    fetchData();
+    purchasesMounted.current = true;
+    setBuyerOrders([]);
+    setPurchaseError(false);
+    setPurchaseRecoveryVisible(false);
+    void fetchData();
+    return () => {
+      purchasesMounted.current = false;
+      purchaseRequest.current += 1;
+    };
   }, [fetchData]);
 
   const handleConnectStripe = async () => {
@@ -308,7 +338,7 @@ export default function DashboardOverview() {
         </p>
       </div>
 
-      {(isBuyerView || buyerOrders.length > 0) && (
+      {(isBuyerView || buyerOrders.length > 0 || purchaseRecoveryVisible || purchasesLoading) && (
         <section className="rounded-xl border border-gray-200 bg-white p-6 shadow-sm" aria-labelledby="purchases-heading">
           <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
             <div>
@@ -322,7 +352,22 @@ export default function DashboardOverview() {
             )}
           </div>
 
-          {buyerOrders.length === 0 ? (
+          {purchaseError && (
+            <div role="alert" className="mt-6 rounded-lg border border-red-200 bg-red-50 p-4 text-sm text-red-700">
+              <p>Unable to load your purchase history. Please try again.</p>
+              {buyerOrders.length > 0 && <p className="mt-1">Showing your last loaded purchases.</p>}
+              <button
+                type="button"
+                onClick={loadPurchases}
+                disabled={purchasesLoading}
+                className="mt-3 rounded-lg border border-red-300 px-4 py-2 font-medium disabled:opacity-50"
+              >
+                {purchasesLoading ? 'Retrying purchases...' : 'Retry purchases'}
+              </button>
+            </div>
+          )}
+          {purchasesLoading && !purchaseError && <p role="status" className="mt-6 text-sm text-gray-600">Loading purchases...</p>}
+          {buyerOrders.length === 0 ? (!purchaseError && !purchasesLoading && (
             <div className="mt-6 rounded-lg border border-dashed border-gray-300 bg-gray-50 px-6 py-8 text-center">
               <h3 className="text-base font-semibold text-gray-900">You haven&apos;t bought anything yet</h3>
               <p className="mt-1 text-sm text-gray-600">Browse available datasets to make your first purchase.</p>
@@ -333,7 +378,7 @@ export default function DashboardOverview() {
                 Browse data
               </Link>
             </div>
-          ) : (
+          )) : (
             <div className="mt-6 space-y-3">
               {buyerOrders.slice(0, 3).map((order) => (
                 <Link
