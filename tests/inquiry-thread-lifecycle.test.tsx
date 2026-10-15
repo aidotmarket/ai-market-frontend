@@ -7,11 +7,12 @@ import { useConversationPoll } from '@/hooks/useConversationPoll';
 import { pollConversation, replyToConversation } from '@/api/conversations';
 import DetailPage from '@/app/dashboard/inquiries/[id]/page';
 import SellerPage from '@/app/dashboard/seller/inquiries/page';
+import InquiryWidget from '@/components/InquiryWidget';
 import type { ConversationDetail, ConversationMessage } from '@/types';
 
 const client = vi.hoisted(() => ({ get: vi.fn(), post: vi.fn(), listError: '' }));
 vi.mock('@/api/client', () => ({ api: client }));
-vi.mock('@/store/auth', () => ({ useAuthStore: () => ({ user: { id: 'viewer' } }) }));
+vi.mock('@/store/auth', () => ({ useAuthStore: () => ({ user: { id: 'viewer' }, isAuthenticated: true }) }));
 vi.mock('@/hooks/useInquiryList', () => ({ useInquiryList: () => ({
   inquiries: [
     { id: 'a', listing_title: 'Listing a', status: 'awaiting_seller', last_message_at: '2026-10-15T00:00:00Z', unread_by_seller: 1 },
@@ -100,8 +101,17 @@ describe('actual API and mounted poll transport', () => {
   });
 });
 
-async function mountPage(kind: 'detail' | 'seller', response?: Promise<{ data: ConversationDetail }>) {
+async function mountPage(kind: 'detail' | 'seller' | 'widget', response?: Promise<{ data: ConversationDetail }>) {
   client.get.mockImplementation((url: string) => url.endsWith('/poll') ? Promise.resolve(envelope()) : response ?? Promise.resolve({ data: detail('a', [message()], kind === 'seller') }));
+  if (kind === 'widget') {
+    client.post.mockResolvedValueOnce({ data: detail() });
+    const view = render(<InquiryWidget listingId="listing-a" listingSlug="a" listingTitle="Listing a" />);
+    fireEvent.change(screen.getByRole('textbox'), { target: { value: 'Initial server question' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Submit Question' }));
+    await settle();
+    client.post.mockClear();
+    return view;
+  }
   if (kind === 'seller') {
     const view = render(<SellerPage />); fireEvent.click(screen.getByRole('button', { name: /Listing a/ }));
     await settle(); return view;
@@ -112,8 +122,17 @@ async function mountPage(kind: 'detail' | 'seller', response?: Promise<{ data: C
   await settle(); return view;
 }
 
-describe.each(['detail', 'seller'] as const)('%s mounted reply form', (kind) => {
+describe.each(['detail', 'seller', 'widget'] as const)('%s mounted reply form', (kind) => {
   it('starts polls after deferred detail, renders actual messages once, and reflects current status', async () => {
+    if (kind === 'widget') {
+      await mountPage(kind);
+      client.get.mockResolvedValue(envelope([message('m2', 'a', later, 'Actual mediated record')], 'awaiting_buyer'));
+      await tick(1000); await tick(3000);
+      expect(screen.getAllByText('Actual mediated record')).toHaveLength(1);
+      expect(screen.queryByText(/Escalated to seller/)).toBeNull();
+      expect(client.get).toHaveBeenLastCalledWith('/conversations/a/poll', { params: { since: later } });
+      return;
+    }
     const pending = deferred<{ data: ConversationDetail }>();
     await mountPage(kind, pending.promise); await tick(4000); expect(client.get).toHaveBeenCalledTimes(1);
     pending.resolve({ data: detail('a', [message()], kind === 'seller') }); await settle();
@@ -176,6 +195,20 @@ describe.each(['detail', 'seller'] as const)('%s mounted reply form', (kind) => 
     expect(screen.getAllByText('Concurrent server reply')).toHaveLength(1);
     expect(screen.queryByText('Unmediated draft')).toBeNull();
   });
+  it('preserves newer poll status when an older post-ack read completes', async () => {
+    await mountPage(kind);
+    const pending = deferred<{ data: ConversationDetail }>();
+    const server = message('m2', 'a', later, 'Mediated reply');
+    client.post.mockResolvedValue({ data: { success: true, message_id: 'm2', filtered: true } });
+    client.get.mockImplementation((url: string) => url.endsWith('/poll') ? Promise.resolve(envelope([server], 'closed')) : pending.promise);
+    fireEvent.change(screen.getByRole('textbox'), { target: { value: 'Draft' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Reply' })); await settle(); await tick(1000);
+    pending.resolve({ data: detail('a', [message(), server]) }); await settle();
+    if (kind === 'seller') expect(screen.getByText('Closed')).toBeTruthy();
+    else if (kind === 'detail') expect(screen.getByText('Status: closed')).toBeTruthy();
+    else expect(screen.queryByText(/Escalated to seller/)).toBeNull();
+    expect(screen.getAllByText('Mediated reply')).toHaveLength(1);
+  });
   it('recovers an accepted reply through polling when the immediate read fails', async () => {
     await mountPage(kind);
     client.post.mockResolvedValue({ data: { success: true, message_id: 'm2', filtered: true } });
@@ -196,13 +229,18 @@ describe.each(['detail', 'seller'] as const)('%s mounted reply form', (kind) => 
     fireEvent.change(screen.getByRole('textbox'), { target: { value: 'Old reply' } });
     fireEvent.click(screen.getByRole('button', { name: 'Reply' })); await settle();
     client.get.mockResolvedValue({ data: detail('b', [message('b1', 'b', first, 'New thread question')]) });
-    if (kind === 'seller') fireEvent.click(screen.getByRole('button', { name: /Listing b/ }));
+    if (kind === 'widget') {
+      view.rerender(<InquiryWidget listingId="listing-b" listingSlug="b" listingTitle="Listing b" />);
+      client.post.mockResolvedValueOnce({ data: detail('b', [message('b1', 'b', first, 'New thread question')]) });
+      fireEvent.change(screen.getByRole('textbox'), { target: { value: 'New thread question' } });
+      fireEvent.click(screen.getByRole('button', { name: 'Submit Question' }));
+    } else if (kind === 'seller') fireEvent.click(screen.getByRole('button', { name: /Listing b/ }));
     else { const params = Promise.resolve({ id: 'b' }); await act(async () => { view.rerender(<Suspense fallback="Suspended"><DetailPage params={params} /></Suspense>); }); }
     await settle();
     pending.resolve({ data: detail('a', [message('old', 'a', later, 'Late old reply')]) }); await settle();
     expect(screen.getByText('New thread question')).toBeTruthy(); expect(screen.queryByText('Late old reply')).toBeNull();
   });
-  it('keeps a new thread clear of late initial detail', async () => {
+  if (kind !== 'widget') it('keeps a new thread clear of late initial detail', async () => {
     const pending = deferred<{ data: ConversationDetail }>(); const view = await mountPage(kind, pending.promise);
     client.get.mockResolvedValue({ data: detail('b', [message('b1', 'b', first, 'New thread question')]) });
     if (kind === 'seller') fireEvent.click(screen.getByRole('button', { name: /Listing b/ }));
@@ -214,16 +252,35 @@ describe.each(['detail', 'seller'] as const)('%s mounted reply form', (kind) => 
     const view = await mountPage(kind); const pending = deferred<ReturnType<typeof envelope>>();
     client.get.mockReturnValueOnce(pending.promise); await tick(1000);
     client.get.mockResolvedValue({ data: detail('b', [message('b1', 'b', first, 'New thread question')]) });
-    if (kind === 'seller') fireEvent.click(screen.getByRole('button', { name: /Listing b/ }));
+    if (kind === 'widget') {
+      view.rerender(<InquiryWidget listingId="listing-b" listingSlug="b" listingTitle="Listing b" />);
+      client.post.mockResolvedValueOnce({ data: detail('b', [message('b1', 'b', first, 'New thread question')]) });
+      fireEvent.change(screen.getByRole('textbox'), { target: { value: 'New thread question' } });
+      fireEvent.click(screen.getByRole('button', { name: 'Submit Question' }));
+    } else if (kind === 'seller') fireEvent.click(screen.getByRole('button', { name: /Listing b/ }));
     else { const params = Promise.resolve({ id: 'b' }); await act(async () => { view.rerender(<Suspense fallback="Suspended"><DetailPage params={params} /></Suspense>); }); }
     await settle(); pending.resolve(envelope([message('old', 'a', later, 'Late poll reply')], 'closed')); await settle();
     expect(screen.getByText('New thread question')).toBeTruthy(); expect(screen.queryByText('Late poll reply')).toBeNull();
+  });
+  it('does not refresh after a pending reply completes on an unmounted form', async () => {
+    const view = await mountPage(kind);
+    const pending = deferred<{ data: unknown }>(); client.post.mockReturnValueOnce(pending.promise);
+    fireEvent.change(screen.getByRole('textbox'), { target: { value: 'Old draft' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Reply' }));
+    view.unmount(); const reads = client.get.mock.calls.length;
+    pending.resolve({ data: { success: true, message_id: 'old', filtered: false } }); await settle();
+    expect(client.get).toHaveBeenCalledTimes(reads);
   });
   it('ignores pending reply completion after the thread is left', async () => {
     const view = await mountPage(kind); const pending = deferred<{ data: unknown }>(); client.post.mockReturnValue(pending.promise);
     fireEvent.change(screen.getByRole('textbox'), { target: { value: 'Old draft' } }); fireEvent.click(screen.getByRole('button', { name: 'Reply' }));
     client.get.mockResolvedValue({ data: detail('b', [message('b1', 'b', first, 'New thread question')]) });
-    if (kind === 'seller') fireEvent.click(screen.getByRole('button', { name: /Listing b/ }));
+    if (kind === 'widget') {
+      view.rerender(<InquiryWidget listingId="listing-b" listingSlug="b" listingTitle="Listing b" />);
+      client.post.mockResolvedValueOnce({ data: detail('b', [message('b1', 'b', first, 'New thread question')]) });
+      fireEvent.change(screen.getByRole('textbox'), { target: { value: 'New thread question' } });
+      fireEvent.click(screen.getByRole('button', { name: 'Submit Question' }));
+    } else if (kind === 'seller') fireEvent.click(screen.getByRole('button', { name: /Listing b/ }));
     else { const params = Promise.resolve({ id: 'b' }); await act(async () => { view.rerender(<Suspense fallback="Suspended"><DetailPage params={params} /></Suspense>); }); }
     await settle(); const reads = client.get.mock.calls.length;
     pending.resolve({ data: { success: true, message_id: 'old', filtered: false } }); await settle();
