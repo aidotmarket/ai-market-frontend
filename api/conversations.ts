@@ -2,7 +2,8 @@ import { api } from './client';
 import type {
   ConversationListItem,
   ConversationDetail,
-  ConversationMessage,
+  ConversationReplyAck,
+  ConversationPollResponse,
 } from '@/types';
 
 export async function createInquiry(
@@ -40,8 +41,8 @@ export async function replyToConversation(
   id: string,
   content: string,
   role: 'buyer' | 'seller'
-): Promise<ConversationMessage> {
-  const res = await api.post<ConversationMessage>(
+): Promise<ConversationReplyAck> {
+  const res = await api.post<ConversationReplyAck>(
     `/conversations/${encodeURIComponent(id)}/reply`,
     { content, role }
   );
@@ -51,8 +52,8 @@ export async function replyToConversation(
 export async function pollConversation(
   id: string,
   since: string
-): Promise<ConversationMessage[]> {
-  const res = await api.get<ConversationMessage[]>(
+): Promise<ConversationPollResponse> {
+  const res = await api.get<ConversationPollResponse>(
     `/conversations/${encodeURIComponent(id)}/poll`,
     { params: { since } }
   );

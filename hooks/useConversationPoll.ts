@@ -2,70 +2,80 @@
 
 import { useEffect, useRef, useCallback, useState } from 'react';
 import { pollConversation } from '@/api/conversations';
-import type { ConversationMessage } from '@/types';
+import type { ConversationMessage, ConversationStatus } from '@/types';
 
 export function useConversationPoll(
   conversationId: string | null,
   initialSince: string | null,
-  onNewMessages: (msgs: ConversationMessage[]) => void
+  onNewMessages: (msgs: ConversationMessage[], status: ConversationStatus) => void
 ) {
   const [polling, setPolling] = useState(false);
-  const sinceRef = useRef(initialSince);
+  const cursor = useRef<{ id: string | null; since: string | null }>({ id: null, since: null });
+  const revision = useRef(0);
   const callbackRef = useRef(onNewMessages);
   callbackRef.current = onNewMessages;
 
-  // Update since watermark externally
   const updateSince = useCallback((s: string) => {
-    sinceRef.current = s;
+    revision.current += 1;
+    if (Number.isFinite(Date.parse(s)) && (!cursor.current.since || Date.parse(s) > Date.parse(cursor.current.since))) {
+      cursor.current.since = s;
+    }
   }, []);
 
+  // A late initial detail may enable polling. Ordinary message rerenders must
+  // neither restart the timer nor rewind the cursor.
+  const ready = !!initialSince && Number.isFinite(Date.parse(initialSince));
   useEffect(() => {
-    if (!conversationId || !sinceRef.current) return;
+    if (cursor.current.id !== conversationId) cursor.current = { id: conversationId, since: null };
+    if (ready && !cursor.current.since) cursor.current.since = initialSince;
+  }, [conversationId, initialSince, ready]);
 
+  useEffect(() => {
+    setPolling(false);
+    if (!conversationId || !ready) return;
     let active = true;
+    let inFlight = false;
     let timer: ReturnType<typeof setTimeout>;
-
     const poll = async () => {
-      if (!active || !sinceRef.current || document.hidden) {
-        if (active) timer = setTimeout(poll, 3000);
+      if (!active || inFlight) return;
+      if (document.hidden || !cursor.current.since) {
+        timer = setTimeout(poll, 3000);
         return;
       }
-
+      inFlight = true;
+      let delay = 3000;
       try {
         setPolling(true);
-        const msgs = await pollConversation(conversationId, sinceRef.current);
-        if (!active) return;
-        if (msgs.length > 0) {
-          // Advance watermark to latest message
-          sinceRef.current = msgs[msgs.length - 1].created_at;
-          callbackRef.current(msgs);
-        }
+        const requestRevision = revision.current;
+        const result = await pollConversation(conversationId, cursor.current.since);
+        if (!active || requestRevision !== revision.current) return;
+        result.new_messages.forEach((msg) => updateSince(msg.created_at));
+        callbackRef.current(result.new_messages, result.inquiry_status);
+        if (result.has_more && result.new_messages.length) delay = 500;
       } catch {
-        // Network error — silently retry
+        // Retry reads on the normal interval. Never retry a reply here.
       } finally {
+        inFlight = false;
         if (active) {
           setPolling(false);
-          timer = setTimeout(poll, 3000);
+          timer = setTimeout(poll, delay);
         }
       }
     };
-
-    timer = setTimeout(poll, 1000); // Start after 1s delay
-
+    timer = setTimeout(poll, 1000);
     const onVisibility = () => {
-      if (!document.hidden && active) {
+      if (!document.hidden && active && !inFlight) {
         clearTimeout(timer);
         timer = setTimeout(poll, 500);
       }
     };
     document.addEventListener('visibilitychange', onVisibility);
-
     return () => {
       active = false;
       clearTimeout(timer);
       document.removeEventListener('visibilitychange', onVisibility);
     };
-  }, [conversationId]);
+  }, [conversationId, ready, updateSince]);
 
   return { polling, updateSince };
 }

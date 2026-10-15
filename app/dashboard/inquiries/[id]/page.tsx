@@ -1,14 +1,14 @@
 'use client';
 
-import { useEffect, useState, useCallback, use } from 'react';
+import { useEffect, useState, useCallback, useRef, use } from 'react';
 import Link from 'next/link';
 import { getConversation, replyToConversation } from '@/api/conversations';
 import { useConversationPoll } from '@/hooks/useConversationPoll';
-import { useToast } from '@/components/Toast';
 import { useAuthStore } from '@/store/auth';
 import ConversationThread from '@/components/ConversationThread';
 import type { ConversationDetail, ConversationMessage } from '@/types';
 import { AxiosError } from 'axios';
+import { mergeConversationMessages } from '@/lib/conversationMessages';
 
 interface Props {
   params: Promise<{ id: string }>;
@@ -16,8 +16,11 @@ interface Props {
 
 export default function ConversationDetailPage({ params }: Props) {
   const { id } = use(params);
+  return <ConversationView key={id} id={id} />;
+}
+
+function ConversationView({ id }: { id: string }) {
   const { user } = useAuthStore();
-  const { toast } = useToast();
 
   const [conversation, setConversation] = useState<ConversationDetail | null>(null);
   const [messages, setMessages] = useState<ConversationMessage[]>([]);
@@ -29,52 +32,85 @@ export default function ConversationDetailPage({ params }: Props) {
   // Determine if viewer is buyer or seller
   const viewerRole = user?.id === conversation?.seller_id ? 'seller' : 'buyer';
 
-  const handleNewMessages = useCallback((newMsgs: ConversationMessage[]) => {
-    setMessages((prev) => [...prev, ...newMsgs]);
+  const [replyError, setReplyError] = useState('');
+  const [accepted, setAccepted] = useState<string | null>(null);
+  const [refreshing, setRefreshing] = useState(false);
+  const active = useRef(false);
+  const sending = useRef(false);
+  const readVersion = useRef(0);
+  const statusVersion = useRef(0);
+
+  const handleNewMessages = useCallback((newMsgs: ConversationMessage[], status: ConversationDetail['status']) => {
+    statusVersion.current += 1;
+    setMessages((prev) => mergeConversationMessages(prev, newMsgs));
+    setConversation((prev) => prev ? { ...prev, status } : prev);
   }, []);
 
   const lastMsgTime = messages.length > 0 ? messages[messages.length - 1].created_at : null;
-  const { updateSince } = useConversationPoll(
-    conversation ? id : null,
-    lastMsgTime,
-    handleNewMessages
-  );
+  const { updateSince } = useConversationPoll(conversation ? id : null, lastMsgTime, handleNewMessages);
+
+  const refresh = useCallback(async () => {
+    const version = ++readVersion.current;
+    const statusAtStart = statusVersion.current;
+    setRefreshing(true);
+    try {
+      const data = await getConversation(id);
+      if (!active.current || version !== readVersion.current) return;
+      setConversation((prev) => statusAtStart === statusVersion.current || !prev
+        ? data : { ...data, status: prev.status });
+      setMessages((prev) => mergeConversationMessages(prev, data.messages ?? []));
+      const latest = (data.messages ?? []).at(-1)?.created_at;
+      if (latest) updateSince(latest);
+      setError('');
+      setAccepted((pending) => pending && !(data.messages ?? []).some((msg) => msg.id === pending) ? pending : null);
+    } catch {
+      if (active.current && version === readVersion.current) setError('Failed to refresh conversation.');
+    } finally {
+      if (active.current && version === readVersion.current) {
+        setRefreshing(false);
+        setLoading(false);
+      }
+    }
+  }, [id, updateSince]);
 
   useEffect(() => {
-    let cancelled = false;
-    setLoading(true);
+    active.current = true;
+    void refresh();
+    return () => { active.current = false; readVersion.current += 1; };
+  }, [refresh]);
 
-    getConversation(id)
-      .then((data) => {
-        if (cancelled) return;
-        setConversation(data);
-        setMessages(data.messages);
-      })
-      .catch(() => {
-        if (!cancelled) setError('Failed to load conversation.');
-      })
-      .finally(() => {
-        if (!cancelled) setLoading(false);
-      });
-
-    return () => { cancelled = true; };
-  }, [id]);
+  useEffect(() => {
+    if (accepted && messages.some((message) => message.id === accepted)) {
+      setAccepted(null);
+      setError('');
+    }
+  }, [accepted, messages]);
 
   const handleReply = async () => {
-    if (!replyText.trim() || !conversation) return;
+    if (sending.current || accepted || !replyText.trim() || !conversation) return;
+    sending.current = true;
     setReplying(true);
+    setReplyError('');
+    let ack;
     try {
-      const msg = await replyToConversation(conversation.id, replyText.trim(), viewerRole);
-      setMessages((prev) => [...prev, msg]);
-      setReplyText('');
-      updateSince(msg.created_at);
+      ack = await replyToConversation(id, replyText.trim(), viewerRole);
+      if (!ack.success) throw new Error('Reply not accepted');
     } catch (err) {
-      if (err instanceof AxiosError) {
-        toast(err.response?.data?.detail || 'Failed to send reply.', 'error');
-      } else {
-        toast('An unexpected error occurred.', 'error');
+      if (active.current) {
+        const detail = err instanceof AxiosError ? err.response?.data?.detail : null;
+        setReplyError(typeof detail === 'string' ? detail : 'Failed to send reply. Please revise and try again.');
+        sending.current = false;
+        setReplying(false);
       }
-    } finally {
+      return;
+    }
+    if (!active.current) return;
+    setAccepted(ack.message_id);
+    setReplyText('');
+    // A confirmed write stays accepted even when the following read fails.
+    await refresh();
+    if (active.current) {
+      sending.current = false;
       setReplying(false);
     }
   };
@@ -87,10 +123,11 @@ export default function ConversationDetailPage({ params }: Props) {
     );
   }
 
-  if (error || !conversation) {
+  if (!conversation) {
     return (
       <div className="rounded-lg bg-red-50 border border-red-200 px-4 py-3 text-sm text-red-700">
         {error || 'Conversation not found.'}
+        <button onClick={() => void refresh()} disabled={refreshing}>Refresh conversation</button>
       </div>
     );
   }
@@ -111,6 +148,7 @@ export default function ConversationDetailPage({ params }: Props) {
         <p className="text-sm text-gray-500 mt-1">
           Inquiry started {new Date(conversation.created_at).toLocaleDateString()}
         </p>
+        <p className="text-sm text-gray-500">Status: {conversation.status.replaceAll('_', ' ')}</p>
       </div>
 
       <div className="rounded-xl border border-gray-200 p-6">
@@ -126,9 +164,14 @@ export default function ConversationDetailPage({ params }: Props) {
           </div>
         )}
 
+        {accepted && <p role="status">Reply accepted. Waiting to refresh the server thread.</p>}
+        {error && <p role="alert">{error}</p>}
+        {(accepted || error) && <button onClick={() => void refresh()} disabled={refreshing}>Refresh conversation</button>}
+        {replyError && <p role="alert">{replyError}</p>}
         <div className="flex gap-2">
           <input
             type="text"
+            disabled={replying || !!accepted}
             value={replyText}
             onChange={(e) => setReplyText(e.target.value)}
             onKeyDown={(e) => e.key === 'Enter' && !e.shiftKey && handleReply()}
@@ -137,7 +180,7 @@ export default function ConversationDetailPage({ params }: Props) {
           />
           <button
             onClick={handleReply}
-            disabled={replying || !replyText.trim()}
+            disabled={replying || !!accepted || !replyText.trim()}
             className="rounded-lg bg-[#3F51B5] px-4 py-2 text-sm font-medium text-white hover:bg-[#3545a0] disabled:opacity-50 disabled:cursor-not-allowed"
           >
             {replying ? 'Sending...' : 'Reply'}
