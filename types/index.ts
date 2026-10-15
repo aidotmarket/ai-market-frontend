@@ -868,11 +868,15 @@ export type ConversationStatus =
   | 'escalated'
   | 'awaiting_seller'
   | 'seller_replied'
+  | 'awaiting_buyer'
+  | 'closed'
   | 'resolved';
 
 export interface ConversationMessage {
   id: string;
-  conversation_id: string;
+  /** Native inquiry records use inquiry_id; legacy widget records use conversation_id. */
+  inquiry_id?: string;
+  conversation_id?: string;
   role: MessageRole;
   content: string;
   created_at: string;
@@ -894,10 +898,10 @@ export interface ConversationDetail {
   id: string;
   listing_id: string;
   listing_title: string;
-  buyer_id: string;
-  seller_id: string;
+  buyer_id: string | null;
+  seller_id: string | null;
   status: ConversationStatus;
-  last_message_at: string;
+  last_message_at: string | null;
   unread_by_buyer: number;
   unread_by_seller: number;
   messages: ConversationMessage[];
@@ -1046,4 +1050,17 @@ export interface GatewayVerificationEpoch {
   narrative: string | null;
   listing_claim_comparison: string | null;
   withdrawn_at_utc: string | null;
+}
+
+export interface ConversationReplyAck {
+  success: boolean;
+  message_id: string;
+  filtered: boolean;
+  mediation_disclosure?: string | null;
+}
+
+export interface ConversationPollResponse {
+  new_messages: ConversationMessage[];
+  inquiry_status: ConversationStatus;
+  has_more: boolean;
 }

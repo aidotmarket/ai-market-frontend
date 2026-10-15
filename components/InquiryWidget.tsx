@@ -4,7 +4,7 @@ import { useState, useCallback, useEffect, useRef } from 'react';
 import Link from 'next/link';
 import { useAuthStore } from '@/store/auth';
 import { useToast } from '@/components/Toast';
-import { createInquiry, replyToConversation } from '@/api/conversations';
+import { createInquiry, getConversation, replyToConversation } from '@/api/conversations';
 import {
   createAnonymousSession,
   readAnonymousMessageStream,
@@ -14,6 +14,7 @@ import { useConversationPoll } from '@/hooks/useConversationPoll';
 import ConversationThread from '@/components/ConversationThread';
 import type { ConversationDetail, ConversationMessage } from '@/types';
 import { AxiosError } from 'axios';
+import { mergeConversationMessages } from '@/lib/conversationMessages';
 
 interface Props {
   listingId: string;
@@ -42,6 +43,34 @@ export default function InquiryWidget({ listingId, listingSlug, listingTitle }: 
   const [showTyping, setShowTyping] = useState(false);
   const [replyText, setReplyText] = useState('');
   const [replying, setReplying] = useState(false);
+  const [replyError, setReplyError] = useState('');
+  const [accepted, setAccepted] = useState<string | null>(null);
+  const [refreshError, setRefreshError] = useState('');
+  const [refreshing, setRefreshing] = useState(false);
+  const sending = useRef(false);
+  const readVersion = useRef(0);
+  const statusVersion = useRef(0);
+  const threadScope = useRef({ listingId, id: conversation?.id });
+  if (threadScope.current.listingId !== listingId || threadScope.current.id !== conversation?.id) {
+    threadScope.current = { listingId, id: conversation?.id };
+  }
+
+  useEffect(() => {
+    return () => { readVersion.current += 1; };
+  }, []);
+
+  useEffect(() => {
+    setConversation(null);
+    setMessages([]);
+    setReplyText('');
+    setReplyError('');
+    setAccepted(null);
+    setRefreshError('');
+    setRefreshing(false);
+    setReplying(false);
+    sending.current = false;
+    readVersion.current += 1;
+  }, [listingId]);
   const [anonymousMessages, setAnonymousMessages] = useState<ConversationMessage[]>([]);
   const [anonymousError, setAnonymousError] = useState<string | null>(null);
   const [anonymousTimedOut, setAnonymousTimedOut] = useState(false);
@@ -106,14 +135,16 @@ export default function InquiryWidget({ listingId, listingSlug, listingTitle }: 
   }, [listingId, question]);
 
   // Poll for new messages after submission
-  const handleNewMessages = useCallback((newMsgs: ConversationMessage[]) => {
-    setMessages((prev) => [...prev, ...newMsgs]);
+  const handleNewMessages = useCallback((newMsgs: ConversationMessage[], status: ConversationDetail['status']) => {
+    statusVersion.current += 1;
+    setMessages((prev) => mergeConversationMessages(prev, newMsgs));
+    setConversation((prev) => prev ? { ...prev, status } : prev);
     setShowTyping(false);
   }, []);
 
   const { updateSince } = useConversationPoll(
     conversation?.id ?? null,
-    conversation ? conversation.messages[conversation.messages.length - 1]?.created_at ?? conversation.created_at : null,
+    conversation ? messages.at(-1)?.created_at ?? conversation.created_at : null,
     handleNewMessages
   );
 
@@ -319,21 +350,65 @@ export default function InquiryWidget({ listingId, listingSlug, listingTitle }: 
     }
   };
 
-  const handleReply = async () => {
-    if (!replyText.trim() || !conversation) return;
-    setReplying(true);
+  const refresh = async () => {
+    if (!conversation) return;
+    const scope = threadScope.current;
+    const current = () => mountedRef.current
+      && threadScope.current === scope;
+    const version = ++readVersion.current;
+    const statusAtStart = statusVersion.current;
+    setRefreshing(true);
     try {
-      const msg = await replyToConversation(conversation.id, replyText.trim(), 'buyer');
-      setMessages((prev) => [...prev, msg]);
-      setReplyText('');
-      updateSince(msg.created_at);
-    } catch (err) {
-      if (err instanceof AxiosError) {
-        toast(err.response?.data?.detail || 'Failed to send reply.', 'error');
-      } else {
-        toast('An unexpected error occurred.', 'error');
-      }
+      const data = await getConversation(conversation.id);
+      if (!current() || version !== readVersion.current) return;
+      setConversation((prev) => statusAtStart === statusVersion.current || !prev
+        ? data : { ...data, status: prev.status });
+      setMessages((prev) => mergeConversationMessages(prev, data.messages ?? []));
+      const latest = (data.messages ?? []).at(-1)?.created_at;
+      if (latest) updateSince(latest);
+      setRefreshError('');
+      setShowTyping(false);
+    } catch {
+      if (current() && version === readVersion.current) setRefreshError('Failed to refresh conversation.');
     } finally {
+      if (current() && version === readVersion.current) setRefreshing(false);
+    }
+  };
+
+  useEffect(() => {
+    if (accepted && messages.some((message) => message.id === accepted)) {
+      setAccepted(null);
+      setRefreshError('');
+    }
+  }, [accepted, messages]);
+
+  const handleReply = async () => {
+    if (sending.current || accepted || !replyText.trim() || !conversation) return;
+    const scope = threadScope.current;
+    const current = () => mountedRef.current
+      && threadScope.current === scope;
+    sending.current = true;
+    setReplying(true);
+    setReplyError('');
+    let ack;
+    try {
+      ack = await replyToConversation(conversation.id, replyText.trim(), 'buyer');
+      if (!ack.success) throw new Error('Reply not accepted');
+    } catch (err) {
+      if (current()) {
+        const detail = err instanceof AxiosError ? err.response?.data?.detail : null;
+        setReplyError(typeof detail === 'string' ? detail : 'Failed to send reply. Please revise and try again.');
+        sending.current = false;
+        setReplying(false);
+      }
+      return;
+    }
+    if (!current()) return;
+    setAccepted(ack.message_id);
+    setReplyText('');
+    await refresh();
+    if (current()) {
+      sending.current = false;
       setReplying(false);
     }
   };
@@ -362,9 +437,14 @@ export default function InquiryWidget({ listingId, listingSlug, listingTitle }: 
           </div>
         )}
 
+        {accepted && <p role="status">Reply accepted. Waiting to refresh the server thread.</p>}
+        {refreshError && <p role="alert">{refreshError}</p>}
+        {(accepted || refreshError) && <button onClick={() => void refresh()} disabled={refreshing}>Refresh conversation</button>}
+        {replyError && <p role="alert">{replyError}</p>}
         <div className="flex gap-2">
           <input
             type="text"
+            disabled={replying || !!accepted}
             value={replyText}
             onChange={(e) => setReplyText(e.target.value)}
             onKeyDown={(e) => e.key === 'Enter' && !e.shiftKey && handleReply()}
@@ -373,7 +453,7 @@ export default function InquiryWidget({ listingId, listingSlug, listingTitle }: 
           />
           <button
             onClick={handleReply}
-            disabled={replying || !replyText.trim()}
+            disabled={replying || !!accepted || !replyText.trim()}
             className="rounded-lg bg-[#3F51B5] px-4 py-2 text-sm font-medium text-white hover:bg-[#3545a0] disabled:opacity-50 disabled:cursor-not-allowed"
           >
             {replying ? 'Sending...' : 'Reply'}

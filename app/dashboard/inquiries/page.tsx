@@ -10,6 +10,8 @@ const STATUS_BADGE: Record<ConversationStatus, { css: string; label: string }> =
   escalated: { css: 'bg-yellow-100 text-yellow-800', label: 'Escalated' },
   awaiting_seller: { css: 'bg-yellow-100 text-yellow-800', label: 'Awaiting seller' },
   seller_replied: { css: 'bg-[#E8EAF6] text-[#303F9F]', label: 'Seller replied' },
+  awaiting_buyer: { css: 'bg-[#E8EAF6] text-[#303F9F]', label: 'Awaiting buyer' },
+  closed: { css: 'bg-gray-100 text-gray-600', label: 'Closed' },
   resolved: { css: 'bg-gray-100 text-gray-600', label: 'Resolved' },
 };
 
