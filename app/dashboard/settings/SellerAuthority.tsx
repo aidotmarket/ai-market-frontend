@@ -27,8 +27,18 @@ export function AuthorityScreen({ switches }: { switches: SellerSwitchReport | n
   const [message, setMessage] = useState('');
   const mounted = useRef(true); const pending = useRef<AuthoritySet | null>(null);
   const stopping = useRef<ReturnType<typeof newDecision> | null>(null);
-  const refresh = async () => { setStopReview(null); setReview(null); pending.current = null; try { const data = await readAuthority(); if (mounted.current) { setStatus(data); setLimits(data.limits && validLimits(data.limits) ? data.limits : empty); setError(null); } } catch(e) { if (mounted.current) setError(e); } };
-  useEffect(() => { mounted.current = true; setStatus(null); setLimits(empty); void refresh(); return () => { mounted.current = false; }; }, [token]);
+  const readGeneration = useRef(0);
+  const refresh = async () => {
+    const generation = ++readGeneration.current;
+    const current = () => mounted.current && generation === readGeneration.current && token === useAuthStore.getState().token;
+    setStopReview(null); setReview(null); pending.current = null;
+    try {
+      const data = await readAuthority();
+      if (current()) { setStatus(data); setLimits(data.limits && validLimits(data.limits) ? data.limits : empty); setError(null); }
+    } catch(e) { if (current()) setError(e); }
+  };
+  // Cleanup invalidates reads even if a later effect sets mounted back to true.
+  useEffect(() => { mounted.current = true; setStatus(null); setLimits(empty); void refresh(); return () => { mounted.current = false; ++readGeneration.current; }; }, [token]);
   const edit = (next: StandingLimits) => { stopping.current = null; setStopReview(null); setLimits(next); setReview(null); pending.current = null; setMessage(''); };
   const prepare = async (reauth?: string) => {
     if (!status || busy || !effects || !validLimits(limits) || Date.parse(limits.expires_at) <= Date.now()) return;
