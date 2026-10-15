@@ -70,8 +70,10 @@ export default async function BrowseRequestsPage({ searchParams }: Props) {
 
       {/* Category filter */}
       <div className="flex gap-3 mb-8">
-        <form>
+        <form action="/requests" method="get" className="flex flex-wrap items-center gap-3">
+          <label htmlFor="request-category" className="text-sm font-medium text-gray-700">Category</label>
           <select
+            id="request-category"
             name="category"
             defaultValue={category}
             className="rounded-lg border border-gray-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-[#3F51B5]"
@@ -86,22 +88,39 @@ export default async function BrowseRequestsPage({ searchParams }: Props) {
             <option value="government">Government</option>
             <option value="other">Other</option>
           </select>
+          <button
+            type="submit"
+            className="rounded-lg bg-[#3F51B5] px-5 py-2.5 text-sm font-medium text-white hover:bg-[#3545a0] transition-colors"
+          >
+            Apply filter
+          </button>
         </form>
       </div>
 
-      {/* Empty state */}
-      {sorted.length === 0 && (
+      {data === null && (
         <div className="text-center py-16">
-          <p className="text-gray-500 text-lg mb-2">No data requests yet</p>
-          <p className="text-gray-400 text-sm mb-6">
-            Be the first to tell the market what you need.
+          <p className="text-gray-500 text-lg mb-2">Requests are unavailable</p>
+          <p className="text-gray-400 text-sm mb-6">Please try again later.</p>
+        </div>
+      )}
+
+      {/* Empty state */}
+      {data !== null && sorted.length === 0 && (
+        <div className="text-center py-16">
+          <p className="text-gray-500 text-lg mb-2">
+            {category ? 'No requests match this category' : 'No data requests yet'}
           </p>
-          <Link
-            href="/requests/new"
-            className="rounded-lg bg-[#3F51B5] px-6 py-2.5 text-sm font-medium text-white hover:bg-[#3545a0]"
-          >
-            Post a Data Request
-          </Link>
+          <p className="text-gray-400 text-sm mb-6">
+            {category ? 'Try another category.' : 'Be the first to tell the market what you need.'}
+          </p>
+          {!category && (
+            <Link
+              href="/requests/new"
+              className="rounded-lg bg-[#3F51B5] px-6 py-2.5 text-sm font-medium text-white hover:bg-[#3545a0]"
+            >
+              Post a Data Request
+            </Link>
+          )}
         </div>
       )}
 
@@ -140,6 +159,8 @@ export default async function BrowseRequestsPage({ searchParams }: Props) {
 }
 
 function RequestCard({ request }: { request: DataRequestListItem }) {
+  const hasResponseCount = typeof request.response_count === 'number'
+    && Number.isFinite(request.response_count) && request.response_count >= 0;
   const urgencyCss = URGENCY_BADGE[request.urgency] || URGENCY_BADGE.low;
 
   const priceRange =
@@ -176,7 +197,9 @@ function RequestCard({ request }: { request: DataRequestListItem }) {
         <span>{formatDate(request.created_at)}</span>
         <div className="flex items-center gap-3">
           {priceRange && <span className="font-medium text-gray-700">{priceRange}</span>}
-          <span>{request.response_count} response{request.response_count !== 1 ? 's' : ''}</span>
+          {hasResponseCount && (
+            <span>{request.response_count} response{request.response_count !== 1 ? 's' : ''}</span>
+          )}
         </div>
       </div>
     </Link>
