@@ -3,6 +3,7 @@
 import { act, cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { AxiosError } from 'axios';
+import { StrictMode } from 'react';
 import axios from 'axios';
 import DashboardOverview from './page';
 import { useAuthStore } from '@/store/auth';
@@ -507,7 +508,8 @@ describe('DashboardOverview seller setup 2FA state', () => {
     expect(screen.getByText('Total Views')).not.toBeNull();
     expect(screen.getByText('12')).not.toBeNull();
     expect(screen.getByRole('link', { name: 'Sales awaiting delivery' }).textContent).toContain('2');
-    expect(screen.queryByRole('heading', { name: 'Your purchases' })).toBeNull();
+    expect(screen.getByRole('heading', { name: 'Your purchases' })).not.toBeNull();
+    expect(screen.getByRole('alert').textContent).toContain('Unable to load your purchase history');
     expect(consoleError).toHaveBeenCalledWith('Failed to fetch dashboard purchase data', purchaseError);
   });
 
@@ -535,5 +537,234 @@ describe('DashboardOverview seller setup 2FA state', () => {
     const salesPointer = await screen.findByRole('link', { name: 'Sales awaiting delivery' });
     expect(salesPointer.getAttribute('href')).toBe('/dashboard/sales?status=pending_delivery');
     expect(salesPointer.textContent).toContain('0');
+  });
+});
+
+describe('dashboard purchase read recovery', () => {
+  const unavailable = new Error('purchase GET unavailable');
+  const originalAuth = useAuthStore.getState();
+  const capability = (status = 'not_requested') => ({
+    buyer: { effective_status: 'active', missing_steps: [] },
+    seller: { effective_status: status, missing_steps: [] },
+    next_action: null,
+  });
+  const deferred = <T,>() => {
+    let resolve!: (value: T) => void;
+    let reject!: (reason: unknown) => void;
+    const promise = new Promise<T>((yes, no) => { resolve = yes; reject = no; });
+    return { promise, resolve, reject };
+  };
+  const expectOnlyPurchaseRetry = (purchaseCalls: number, sellerCalls = 0) => {
+    expect(ordersApi.getMyOrders).toHaveBeenCalledTimes(purchaseCalls);
+    expect(capabilitiesApi.getCapabilities).toHaveBeenCalledOnce();
+    expect(connectApi.getConnectStatus).toHaveBeenCalledTimes(sellerCalls);
+    expect(sellerApi.getSellerStats).toHaveBeenCalledTimes(sellerCalls);
+    expect(listingsApi.getMyListings).toHaveBeenCalledTimes(sellerCalls);
+    expect(capabilitiesApi.requestSellerCapability).not.toHaveBeenCalled();
+    expect(connectApi.getConnectOnboarding).not.toHaveBeenCalled();
+    expect(authApi.setup2FA).not.toHaveBeenCalled();
+    expect(authApi.verify2FASetup).not.toHaveBeenCalled();
+    expect(useAuthStore.getState().refreshAuth).not.toHaveBeenCalled();
+  };
+
+  beforeEach(() => {
+    vi.resetAllMocks();
+    vi.spyOn(console, 'error').mockImplementation(() => undefined);
+    useAuthStore.setState({ user: baseUser, refreshAuth: vi.fn() });
+    capabilitiesApi.getCapabilities.mockResolvedValue(capability());
+    ordersApi.getMyOrders.mockRejectedValue(unavailable);
+    connectApi.getConnectStatus.mockResolvedValue({ data: { details_submitted: true, payouts_enabled: true } });
+    sellerApi.getSellerStats.mockResolvedValue({ data: sellerStats });
+    listingsApi.getMyListings.mockResolvedValue({ data: [] });
+  });
+  afterEach(() => {
+    cleanup();
+    vi.restoreAllMocks();
+    useAuthStore.setState(originalAuth);
+  });
+
+  it('keeps buyer welcome and selling entry usable and persists the error across a failed read-only retry', async () => {
+    render(<DashboardOverview />);
+    expect(await screen.findByRole('alert')).toBeTruthy();
+    expect(screen.getByRole('heading', { name: 'Welcome back, Seller' })).toBeTruthy();
+    expect(screen.getByRole('button', { name: 'Start selling' }).hasAttribute('disabled')).toBe(false);
+    expect(screen.queryByText("You haven't bought anything yet")).toBeNull();
+    const retry = deferred<never>();
+    ordersApi.getMyOrders.mockReturnValueOnce(retry.promise);
+    fireEvent.click(screen.getByRole('button', { name: 'Retry purchases' }));
+    const busy = screen.getByRole('button', { name: 'Retrying purchases...' });
+    expect(busy.hasAttribute('disabled')).toBe(true);
+    fireEvent.click(busy);
+    expect(screen.getByRole('alert')).toBeTruthy();
+    await act(async () => retry.reject(unavailable));
+    expect(await screen.findByRole('button', { name: 'Retry purchases' })).toBeTruthy();
+    expect(screen.queryByText("You haven't bought anything yet")).toBeNull();
+    expectOnlyPurchaseRetry(2);
+    expect(console.error).toHaveBeenCalledWith('Failed to fetch dashboard purchase data', unavailable);
+  });
+
+  it.each(['empty', 'populated'])('clears the error after explicit %s recovery', async (result) => {
+    render(<DashboardOverview />);
+    await screen.findByRole('alert');
+    ordersApi.getMyOrders.mockResolvedValueOnce(result === 'empty' ? [] : [buyerOrder]);
+    fireEvent.click(screen.getByRole('button', { name: 'Retry purchases' }));
+    if (result === 'empty') {
+      expect(await screen.findByText("You haven't bought anything yet")).toBeTruthy();
+      expect(screen.getByRole('link', { name: 'Browse data' }).getAttribute('href')).toBe('/find-data');
+    } else {
+      expect(await screen.findByText('Climate Dataset')).toBeTruthy();
+      expect(screen.getByText('Fulfilled')).toBeTruthy();
+      expect(screen.getByText('$25.00')).toBeTruthy();
+      expect(screen.queryByText("You haven't bought anything yet")).toBeNull();
+    }
+    expect(screen.queryByRole('alert')).toBeNull();
+    expectOnlyPurchaseRetry(2);
+  });
+
+  it.each(['empty', 'populated'])('keeps active seller statistics and notices unchanged during failure and %s recovery', async (result) => {
+    capabilitiesApi.getCapabilities.mockResolvedValue(capability('active'));
+    connectApi.getConnectStatus.mockResolvedValue({ data: { details_submitted: true, payouts_enabled: false } });
+    listingsApi.getMyListings.mockResolvedValue({ data: [{ status: 'published' }] });
+    render(<DashboardOverview />);
+    await screen.findByRole('alert');
+    const views = screen.getByText('12');
+    const revenue = screen.getByText('$45.50');
+    const notice = screen.getByText('Published listings are not yet purchasable. Finish payout setup to enable sales.');
+    const retry = deferred<typeof buyerOrder[]>();
+    ordersApi.getMyOrders.mockReturnValueOnce(retry.promise);
+    fireEvent.click(screen.getByRole('button', { name: 'Retry purchases' }));
+    expect(screen.getByText('12')).toBe(views);
+    expect(screen.getByText('$45.50')).toBe(revenue);
+    expect(screen.getByText(notice.textContent!)).toBe(notice);
+    expect(screen.getByRole('link', { name: 'Sales awaiting delivery' }).textContent).toContain('2');
+    await act(async () => retry.resolve(result === 'empty' ? [] : [buyerOrder]));
+    expect(await screen.findByText(result === 'empty' ? "You haven't bought anything yet" : 'Climate Dataset')).toBeTruthy();
+    expect(screen.getByText('12')).toBe(views);
+    expect(screen.queryByRole('alert')).toBeNull();
+    expectOnlyPurchaseRetry(2, 1);
+  });
+
+  it('retains the last purchases when a seller setup refresh fails, then replaces them on recovery', async () => {
+    ordersApi.getMyOrders.mockResolvedValueOnce([buyerOrder]);
+    capabilitiesApi.requestSellerCapability.mockResolvedValue(capability('provisioning'));
+    render(<DashboardOverview />);
+    await screen.findByText('Climate Dataset');
+    fireEvent.click(screen.getByRole('button', { name: 'Start selling' }));
+    await screen.findByRole('alert');
+    expect(screen.getByText('Climate Dataset')).toBeTruthy();
+    expect(screen.getByText('Showing your last loaded purchases.')).toBeTruthy();
+    ordersApi.getMyOrders.mockResolvedValueOnce([]);
+    fireEvent.click(screen.getByRole('button', { name: 'Retry purchases' }));
+    await screen.findByText("You haven't bought anything yet");
+    expect(screen.queryByText('Climate Dataset')).toBeNull();
+    expect(screen.queryByRole('alert')).toBeNull();
+    expect(capabilitiesApi.getCapabilities).toHaveBeenCalledTimes(2);
+  });
+
+  it('keeps provisioning setup usable while a purchase read is pending or failed', async () => {
+    capabilitiesApi.getCapabilities.mockResolvedValue({ ...capability('provisioning'), seller: { effective_status: 'provisioning', missing_steps: ['totp_enabled', 'stripe_payouts_live'] } });
+    const pending = deferred<never>();
+    ordersApi.getMyOrders.mockReturnValueOnce(pending.promise);
+    render(<DashboardOverview />);
+    expect(await screen.findByRole('button', { name: 'Enable 2FA' })).toBeTruthy();
+    expect(screen.getByRole('status').textContent).toBe('Loading purchases...');
+    expect(screen.queryByText("You haven't bought anything yet")).toBeNull();
+    await act(async () => pending.reject(unavailable));
+    await screen.findByRole('alert');
+    expect(screen.getByRole('button', { name: 'Enable 2FA' })).toBeTruthy();
+    expect(screen.getByRole('button', { name: 'Connect Stripe' }).hasAttribute('disabled')).toBe(true);
+  });
+
+  it.each(['resolve', 'reject'])('ignores an obsolete identity read that later %ss after recovery', async (completion) => {
+    const obsolete = deferred<typeof buyerOrder[]>();
+    ordersApi.getMyOrders.mockReturnValueOnce(obsolete.promise);
+    render(<DashboardOverview />);
+    await screen.findByRole('heading', { name: 'Welcome back, Seller' });
+    act(() => useAuthStore.setState({ user: { ...baseUser, id: 'user-2', first_name: 'New buyer' } }));
+    await screen.findByRole('alert');
+    ordersApi.getMyOrders.mockResolvedValueOnce([]);
+    fireEvent.click(screen.getByRole('button', { name: 'Retry purchases' }));
+    await screen.findByText("You haven't bought anything yet");
+    await act(async () => completion === 'resolve' ? obsolete.resolve([buyerOrder]) : obsolete.reject(unavailable));
+    expect(screen.queryByText('Climate Dataset')).toBeNull();
+    expect(screen.queryByRole('alert')).toBeNull();
+    expect(screen.getByRole('heading', { name: 'Welcome back, New buyer' })).toBeTruthy();
+  });
+
+  it('clears retained purchases when the account identity changes', async () => {
+    ordersApi.getMyOrders.mockResolvedValueOnce([buyerOrder]);
+    render(<DashboardOverview />);
+    await screen.findByText('Climate Dataset');
+    act(() => useAuthStore.setState({ user: { ...baseUser, id: 'user-2' } }));
+    await screen.findByRole('alert');
+    expect(screen.queryByText('Climate Dataset')).toBeNull();
+    expect(screen.queryByText('Showing your last loaded purchases.')).toBeNull();
+    expect(screen.queryByText("You haven't bought anything yet")).toBeNull();
+  });
+
+  it('invalidates a pending read on unmount', async () => {
+    const obsolete = deferred<typeof buyerOrder[]>();
+    ordersApi.getMyOrders.mockReturnValueOnce(obsolete.promise).mockResolvedValue([]);
+    const { unmount } = render(<DashboardOverview />);
+    await screen.findByRole('heading', { name: 'Welcome back, Seller' });
+    unmount();
+    render(<DashboardOverview />);
+    await screen.findByText("You haven't bought anything yet");
+    await act(async () => obsolete.resolve([buyerOrder]));
+    expect(screen.queryByText('Climate Dataset')).toBeNull();
+    expect(screen.queryByRole('alert')).toBeNull();
+  });
+
+  it('does not start a purchase read when a seller action finishes after unmount', async () => {
+    const request = deferred<ReturnType<typeof capability>>();
+    ordersApi.getMyOrders.mockResolvedValue([]);
+    capabilitiesApi.requestSellerCapability.mockReturnValueOnce(request.promise);
+    const { unmount } = render(<DashboardOverview />);
+    fireEvent.click(await screen.findByRole('button', { name: 'Start selling' }));
+    expect(capabilitiesApi.requestSellerCapability).toHaveBeenCalledOnce();
+    unmount();
+    await act(async () => request.resolve(capability('provisioning')));
+    expect(ordersApi.getMyOrders).toHaveBeenCalledOnce();
+  });
+
+  it('ignores a read invalidated by StrictMode effect cleanup on the same component', async () => {
+    const obsolete = deferred<typeof buyerOrder[]>();
+    ordersApi.getMyOrders.mockReturnValueOnce(obsolete.promise).mockResolvedValue([]);
+    render(<StrictMode><DashboardOverview /></StrictMode>);
+    await screen.findByText("You haven't bought anything yet");
+    expect(ordersApi.getMyOrders).toHaveBeenCalledTimes(2);
+    await act(async () => obsolete.resolve([buyerOrder]));
+    expect(screen.queryByText('Climate Dataset')).toBeNull();
+    expect(screen.getByText("You haven't bought anything yet")).toBeTruthy();
+  });
+
+  it.each(['resolve', 'reject'])('ignores an older same-user read after a newer retry succeeds (%s)', async (completion) => {
+    const obsolete = deferred<typeof buyerOrder[]>();
+    ordersApi.getMyOrders.mockReturnValueOnce(obsolete.promise);
+    capabilitiesApi.requestSellerCapability.mockResolvedValue(capability('provisioning'));
+    render(<DashboardOverview />);
+    fireEvent.click(await screen.findByRole('button', { name: 'Start selling' }));
+    await screen.findByRole('alert');
+    ordersApi.getMyOrders.mockResolvedValueOnce([buyerOrder]);
+    fireEvent.click(screen.getByRole('button', { name: 'Retry purchases' }));
+    await screen.findByText('Climate Dataset');
+    await act(async () => completion === 'resolve' ? obsolete.resolve([]) : obsolete.reject(unavailable));
+    expect(screen.getByText('Climate Dataset')).toBeTruthy();
+    expect(screen.queryByRole('alert')).toBeNull();
+    expect(screen.queryByText("You haven't bought anything yet")).toBeNull();
+  });
+
+  it('preserves the top-three purchase links, amounts and statuses on successful reads', async () => {
+    ordersApi.getMyOrders.mockResolvedValue(Array.from({ length: 4 }, (_, i) => ({ ...buyerOrder, id: `order-${i}`, listing_title: `Dataset ${i}` })));
+    render(<DashboardOverview />);
+    await screen.findByText('Dataset 0');
+    for (let i = 0; i < 3; i++) {
+      const row = screen.getByRole('link', { name: new RegExp(`Dataset ${i}`) });
+      expect(row.getAttribute('href')).toBe(`/dashboard/orders/order-${i}`);
+      expect(row.textContent).toContain('$25.00');
+      expect(row.textContent).toContain('Fulfilled');
+    }
+    expect(screen.queryByText('Dataset 3')).toBeNull();
+    expect(screen.getByRole('link', { name: 'View all orders' }).getAttribute('href')).toBe('/dashboard/orders');
   });
 });
