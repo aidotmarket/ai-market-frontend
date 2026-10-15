@@ -78,7 +78,7 @@ export default function DashboardOverview() {
   const twoFactorDoneInFlight = useRef(false);
 
   const loadPurchases = useCallback(async () => {
-    if (!purchasesMounted.current) return;
+    if (!purchasesMounted.current || purchaseUserId !== useAuthStore.getState().user?.id) return;
     // New reads and effect cleanup invalidate older completions without changing the GET contract.
     const request = ++purchaseRequest.current;
     const isCurrent = () => purchasesMounted.current && request === purchaseRequest.current &&

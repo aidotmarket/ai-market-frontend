@@ -691,6 +691,42 @@ describe('dashboard purchase read recovery', () => {
     expect(screen.getByRole('heading', { name: 'Welcome back, New buyer' })).toBeTruthy();
   });
 
+  it.each(['resolve', 'reject'])('preserves the current account pending read when an old seller action finishes (%s)', async (completion) => {
+    const sellerRequest = deferred<ReturnType<typeof capability>>();
+    const currentRead = deferred<typeof buyerOrder[]>();
+    capabilitiesApi.requestSellerCapability.mockReturnValueOnce(sellerRequest.promise);
+    ordersApi.getMyOrders.mockResolvedValueOnce([]).mockReturnValueOnce(currentRead.promise).mockResolvedValue([]);
+    render(<DashboardOverview />);
+    await screen.findByText("You haven't bought anything yet");
+    fireEvent.click(screen.getByRole('button', { name: 'Start selling' }));
+    expect(capabilitiesApi.requestSellerCapability).toHaveBeenCalledOnce();
+
+    act(() => useAuthStore.setState({ user: { ...baseUser, id: 'user-2', first_name: 'Current buyer' } }));
+    await screen.findByRole('heading', { name: 'Welcome back, Current buyer' });
+    expect(ordersApi.getMyOrders).toHaveBeenCalledTimes(2);
+    expect(screen.getByRole('status').textContent).toBe('Loading purchases...');
+    await act(async () => sellerRequest.resolve(capability()));
+    expect(screen.getByRole('status').textContent).toBe('Loading purchases...');
+
+    await act(async () => completion === 'resolve'
+      ? currentRead.resolve([{ ...buyerOrder, listing_title: 'Current account purchase' }])
+      : currentRead.reject(unavailable));
+    if (completion === 'resolve') {
+      expect(screen.getByText('Current account purchase')).toBeTruthy();
+      expect(screen.queryByRole('alert')).toBeNull();
+    } else {
+      expect(screen.getByRole('alert')).toBeTruthy();
+      expect(screen.getByRole('button', { name: 'Retry purchases' }).hasAttribute('disabled')).toBe(false);
+    }
+    expect(screen.queryByRole('status')).toBeNull();
+    expect(screen.queryByText("You haven't bought anything yet")).toBeNull();
+    expect(ordersApi.getMyOrders).toHaveBeenCalledTimes(2);
+    expect(connectApi.getConnectOnboarding).not.toHaveBeenCalled();
+    expect(authApi.setup2FA).not.toHaveBeenCalled();
+    expect(authApi.verify2FASetup).not.toHaveBeenCalled();
+    expect(useAuthStore.getState().refreshAuth).not.toHaveBeenCalled();
+  });
+
   it('clears retained purchases when the account identity changes', async () => {
     ordersApi.getMyOrders.mockResolvedValueOnce([buyerOrder]);
     render(<DashboardOverview />);
