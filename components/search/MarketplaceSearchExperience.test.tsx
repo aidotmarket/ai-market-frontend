@@ -55,6 +55,50 @@ afterEach(() => {
 });
 
 describe('MarketplaceSearchExperience', () => {
+  describe.each([
+    { mode: 'browse' as const, semanticMode: false, params: 'type=data&data_type=json' },
+    { mode: 'search' as const, semanticMode: true, params: 'q=traffic&type=data&data_type=json' },
+  ])('$mode result loading', ({ mode, semanticMode, params }) => {
+    it.each([0, 1, 2])('replaces pending text with the completed count of %i', (count) => {
+      mocks.pathname = mode === 'search' ? '/search' : '/listings';
+      mocks.searchParams = new URLSearchParams(params);
+      const pending = {
+        items: [], facets: null, total: 0, semanticMode,
+        isLoading: true, isError: false, error: null, hasNextPage: false,
+        isFetchingNextPage: false, fetchNextPage: vi.fn(), refetch: vi.fn(),
+      };
+      mocks.useSearchListings.mockReturnValue(pending);
+
+      const view = render(<MarketplaceSearchExperience mode={mode} />);
+
+      expect(screen.getByText('Loading results...')).toBeTruthy();
+      expect(screen.queryByText(/0 (results|suggestions)/)).toBeNull();
+      expect(screen.queryByText('No data found')).toBeNull();
+      expect(screen.queryByText(/Try adjusting the search text or filters/)).toBeNull();
+
+      mocks.useSearchListings.mockReturnValue({
+        ...pending,
+        isLoading: false,
+        total: count,
+        items: Array.from({ length: count }, (_, index) => ({
+          id: `listing-${index}`, price: 10, data_format: 'json',
+        })),
+      });
+      view.rerender(<MarketplaceSearchExperience mode={mode} />);
+
+      expect(screen.queryByText('Loading results...')).toBeNull();
+      const noun = semanticMode && count > 0 ? 'suggestion' : 'result';
+      expect(screen.getByText(`${count} ${noun}${count === 1 ? '' : 's'} filtered to JSON`)).toBeTruthy();
+      expect(screen.queryAllByTestId('listing-card')).toHaveLength(count);
+      if (count === 0) {
+        expect(screen.getByText('No data found')).toBeTruthy();
+        expect(screen.getByText(/Try adjusting the search text or filters/)).toBeTruthy();
+      } else {
+        expect(screen.queryByText('No data found')).toBeNull();
+      }
+    });
+  });
+
   it('clears the search query and filters from the marketplace URL', () => {
     mocks.searchParams = new URLSearchParams(
       'q=financial+markets&type=data&category=finance&sort=price-asc',

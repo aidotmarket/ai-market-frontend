@@ -393,8 +393,12 @@ export function MarketplaceSearchExperience({
                       : `${typeLabel} results`}
                 </p>
                 <p className="mt-1 text-sm text-slate-500">
-                  {resultCount} {hasSemanticSuggestions ? 'suggestion' : 'result'}{resultCount === 1 ? '' : 's'}
-                  {listingCategory === 'data' && dataType ? ` filtered to ${dataType.toUpperCase()}` : ''}
+                  {isLoading ? 'Loading results...' : (
+                    <>
+                      {resultCount} {hasSemanticSuggestions ? 'suggestion' : 'result'}{resultCount === 1 ? '' : 's'}
+                      {listingCategory === 'data' && dataType ? ` filtered to ${dataType.toUpperCase()}` : ''}
+                    </>
+                  )}
                 </p>
                 {hasSemanticSuggestions && (
                   <p className="mt-2 max-w-2xl text-sm leading-6 text-slate-600">
