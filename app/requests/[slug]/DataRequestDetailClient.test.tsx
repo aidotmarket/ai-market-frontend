@@ -292,6 +292,8 @@ describe('DataRequestDetailClient authenticated fallback loading', () => {
     ['unknown not-found text', new Error('not found')],
     ['malformed error', { response: { status: 404 }, message: 'not found' }],
     ['empty error', null],
+    ['malformed gone', { response: { status: 410 } }],
+    ['unknown gone text', new Error('410 Gone')],
   ])('shows unavailable for %s without inferring absence or retrying automatically', async (_, error) => {
     mocks.getDataRequest.mockRejectedValue(error);
     render(<DataRequestDetailClient slug="existing-request" initialRequest={makeOwnerRequest()} />);
@@ -313,7 +315,7 @@ describe('DataRequestDetailClient authenticated fallback loading', () => {
     expect(screen.queryByRole('button', { name: 'Retry' })).toBeNull();
   });
 
-  it('explicitly retries only the same request GET, handles repeated failure, then clears the error on success', async () => {
+  it('explicitly retries the same request with normal scoped reads, handles repeated failure, then clears the error on success', async () => {
     const pending = deferred<DataRequestDetail>();
     const draft = makeDraft();
     mocks.getDataRequest.mockRejectedValueOnce(new Error('Offline')).mockReturnValueOnce(pending.promise)
@@ -329,7 +331,8 @@ describe('DataRequestDetailClient authenticated fallback loading', () => {
     expect(screen.queryByRole('button', { name: 'Retry' })).toBeNull();
     expect(screen.queryByText(/temporarily unavailable/)).toBeNull();
     expect(mocks.getDataRequest.mock.calls).toEqual([[draft.slug], [draft.slug], [draft.slug]]);
-    for (const api of [mocks.getDataRequestResponses, mocks.updateDataRequest, mocks.publishDataRequest,
+    expect(mocks.getDataRequestResponses.mock.calls).toEqual([[draft.id]]);
+    for (const api of [mocks.updateDataRequest, mocks.publishDataRequest,
       mocks.confirmDataRequestPublication, mocks.withdrawDataRequestPublication,
       mocks.deleteDataRequest, mocks.submitDataRequestResponse]) expect(api).not.toHaveBeenCalled();
   });
@@ -346,7 +349,7 @@ describe('DataRequestDetailClient authenticated fallback loading', () => {
     expect(screen.queryByRole('button', { name: 'Retry' })).toBeNull();
   });
 
-  it.each([['slug', 'success'], ['slug', 'failure'], ['user', 'success'], ['user', 'failure']] as const)('ignores stale retry %s/%s after context change', async (transition, outcome) => {
+  it.each([['slug', 'success'], ['slug', 'failure'], ['user', 'success'], ['user', 'failure'], ['slug', 'gone'], ['user', 'gone']] as const)('ignores stale retry %s/%s after context change', async (transition, outcome) => {
     const pending = deferred<DataRequestDetail>();
     mocks.getDataRequest.mockRejectedValueOnce(new Error('Offline')).mockReturnValueOnce(pending.promise)
       .mockResolvedValueOnce(makeOwnerRequest());
@@ -357,11 +360,94 @@ describe('DataRequestDetailClient authenticated fallback loading', () => {
     expect(await screen.findByRole('heading', { name: 'Buyer Request' })).not.toBeNull();
     await act(async () => {
       if (outcome === 'success') pending.resolve(makeDraft());
-      else pending.reject(new Error('Old retry failed'));
+      else pending.reject(outcome === 'gone' ? responseFailure(410, 'Old private reason') : new Error('Old retry failed'));
     });
+    expect(screen.queryByRole('heading', { name: 'Request no longer available' })).toBeNull();
     expect(screen.queryByRole('heading', { name: 'Private Draft Request' })).toBeNull();
     expect(screen.getByRole('heading', { name: 'Buyer Request' })).not.toBeNull();
     expect(screen.queryByRole('button', { name: 'Retry' })).toBeNull();
+  });
+
+  function expectNoWrites() {
+    for (const api of [mocks.updateDataRequest, mocks.publishDataRequest,
+      mocks.confirmDataRequestPublication, mocks.withdrawDataRequestPublication,
+      mocks.deleteDataRequest, mocks.submitDataRequestResponse]) expect(api).not.toHaveBeenCalled();
+  }
+
+  it.each(['initial', 'retry'] as const)('shows definitive generic unavailability for Axios 410 on %s read', async (phase) => {
+    const gone = responseFailure(410, 'Private owner-only publication reason');
+    if (phase === 'retry') mocks.getDataRequest.mockRejectedValueOnce(new Error('Offline'));
+    mocks.getDataRequest.mockRejectedValue(gone);
+    render(<DataRequestDetailClient slug="gone-request" initialRequest={makeOwnerRequest()} />);
+    if (phase === 'retry') fireEvent.click(await screen.findByRole('button', { name: 'Retry' }));
+    expect(await screen.findByRole('heading', { name: 'Request no longer available' })).not.toBeNull();
+    expect(screen.queryByText(/temporarily unavailable|Private owner-only|removed or does not exist/)).toBeNull();
+    expect(screen.queryByRole('button')).toBeNull();
+    expect(screen.getByRole('link', { name: 'Browse Requests' }).getAttribute('href')).toBe('/requests');
+    expect(mocks.getDataRequest.mock.calls).toEqual(Array.from({ length: phase === 'retry' ? 2 : 1 }, () => ['gone-request']));
+    expect(mocks.getDataRequestResponses).not.toHaveBeenCalled();
+    expectNoWrites();
+  });
+
+  it.each(['slug', 'user'] as const)('clears gone and saved responses on %s change', async (transition) => {
+    const request = makeOwnerRequest();
+    mocks.auth.user = { ...owner, id: 'supplier-1', role: 'seller' };
+    mocks.getDataRequest.mockResolvedValueOnce(request).mockRejectedValueOnce(responseFailure(410, 'Private reason'))
+      .mockResolvedValueOnce(request);
+    mocks.getDataRequestResponses.mockResolvedValueOnce([savedQuote]).mockResolvedValueOnce([]);
+    const view = render(<DataRequestDetailClient slug="old-request" initialRequest={null} />);
+    expect((await screen.findByRole('status')).textContent).toContain(savedQuote.id);
+    // A real account/slug transition starts the gone read, then another restores normal reads.
+    if (transition === 'user') mocks.auth.user = { ...owner, id: 'supplier-2', role: 'seller' };
+    view.rerender(<DataRequestDetailClient slug={transition === 'slug' ? 'gone-request' : 'old-request'} initialRequest={null} />);
+    expect(await screen.findByRole('heading', { name: 'Request no longer available' })).not.toBeNull();
+    expect(screen.queryByRole('status')).toBeNull();
+    if (transition === 'user') mocks.auth.user = { ...owner, id: 'supplier-3', role: 'seller' };
+    view.rerender(<DataRequestDetailClient slug={transition === 'slug' ? 'new-request' : 'old-request'} initialRequest={null} />);
+    expect(await screen.findByRole('heading', { name: request.title })).not.toBeNull();
+    expect(screen.queryByText(/Request no longer available|Private reason/)).toBeNull();
+    expect(screen.queryByRole('status')).toBeNull();
+    expect(screen.queryByRole('button', { name: 'Retry' })).toBeNull();
+    expectNoWrites();
+  });
+
+  it.each(['supplier', 'owner'] as const)('restores saved %s responses after explicit detail retry without writes', async (role) => {
+    const request = makeOwnerRequest();
+    if (role === 'supplier') mocks.auth.user = { ...owner, id: 'supplier-1', role: 'seller' };
+    const responsesRead = deferred<typeof savedQuote[]>();
+    mocks.getDataRequest.mockRejectedValueOnce(new Error('Offline')).mockResolvedValueOnce(request);
+    mocks.getDataRequestResponses.mockReturnValueOnce(responsesRead.promise);
+    render(<DataRequestDetailClient slug={request.slug} initialRequest={null} />);
+    fireEvent.click(await screen.findByRole('button', { name: 'Retry' }));
+    await waitFor(() => expect(mocks.getDataRequestResponses.mock.calls).toEqual([[request.id]]));
+    expect(screen.queryByRole('button', { name: 'Submit Response' })).toBeNull();
+    await act(async () => { responsesRead.resolve([savedQuote]); });
+    if (role === 'supplier') {
+      expect((await screen.findByRole('status')).textContent).toContain('Response ID: response-1 · Status: submitted');
+      fillQuote();
+      expect(screen.getByRole('button', { name: 'Submit Response' })).toHaveProperty('disabled', true);
+      fireEvent.submit(screen.getByRole('button', { name: 'Submit Response' }).closest('form')!);
+    } else {
+      expect(await screen.findByRole('heading', { name: 'Responses (1)' })).not.toBeNull();
+      expect(screen.getByText(savedQuote.proposal)).not.toBeNull();
+      expect(screen.getByText('submitted')).not.toBeNull();
+    }
+    expect(mocks.getDataRequest.mock.calls).toEqual([[request.slug], [request.slug]]);
+    expectNoWrites();
+  });
+
+  it('preserves existing response-read failure behavior after detail recovery without replaying a write', async () => {
+    mocks.auth.user = { ...owner, id: 'supplier-1', role: 'seller' };
+    const request = makeOwnerRequest();
+    mocks.getDataRequest.mockRejectedValueOnce(new Error('Offline')).mockResolvedValueOnce(request);
+    mocks.getDataRequestResponses.mockRejectedValueOnce(new Error('Response read offline'));
+    render(<DataRequestDetailClient slug={request.slug} initialRequest={null} />);
+    fireEvent.click(await screen.findByRole('button', { name: 'Retry' }));
+    expect(await screen.findByRole('heading', { name: request.title })).not.toBeNull();
+    expect(mocks.getDataRequestResponses.mock.calls).toEqual([[request.id]]);
+    expect(screen.queryByRole('status')).toBeNull();
+    expect(screen.queryByText(/No saved quotes|Quote not recorded|Quote recorded/)).toBeNull();
+    expectNoWrites();
   });
 
   it('shows the authoritative reason and confirms the exact current request text', async () => {

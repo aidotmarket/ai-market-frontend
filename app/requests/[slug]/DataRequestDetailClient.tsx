@@ -112,7 +112,7 @@ export default function DataRequestDetailClient({
   const setRequest = (value: DataRequestDetail | null) => setRequestRecord({ context, value });
   const [responses, setResponses] = useState<DataRequestResponse[]>([]);
   const [loading, setLoading] = useState(initialRequest === null);
-  const [readUnavailable, setReadUnavailable] = useState(false);
+  const [readError, setReadError] = useState<'unavailable' | 'gone' | null>(null);
   const retryPending = useRef(false);
   const [publishing, setPublishing] = useState(false);
   const [deleting, setDeleting] = useState(false);
@@ -141,7 +141,7 @@ export default function DataRequestDetailClient({
     setRequest(null);
     setResponses([]);
     setLoading(true);
-    setReadUnavailable(false);
+    setReadError(null);
     retryPending.current = false;
     setPublishing(false);
     setDeleting(false);
@@ -237,7 +237,7 @@ export default function DataRequestDetailClient({
     }
   }
 
-  const loadData = useCallback(async (requestOnly = false) => {
+  const loadData = useCallback(async () => {
     const generation = ++loadGeneration.current;
     const epoch = contextEpoch.current;
     const startedDuringMutation = mutationPending.current;
@@ -246,10 +246,10 @@ export default function DataRequestDetailClient({
       const data = await getDataRequest(slug);
       if (!isCurrent()) return;
       setRequest(data);
-      setReadUnavailable(false);
+      setReadError(null);
 
       // The API restricts nonowners to their own supplier responses.
-      if (!requestOnly && data && isAuthenticated && userId) {
+      if (data && isAuthenticated && userId) {
         try {
           const resps = await getDataRequestResponses(data.id);
           if (isCurrent()) {
@@ -267,7 +267,7 @@ export default function DataRequestDetailClient({
       if (isCurrent()) {
         const status = err instanceof AxiosError ? err.response?.status : undefined;
         setRequest(null);
-        setReadUnavailable(status !== 404 && status !== 403);
+        setReadError(status === 410 ? 'gone' : status === 404 || status === 403 ? null : 'unavailable');
       }
     } finally {
       if (isCurrent()) setLoading(false);
@@ -285,7 +285,7 @@ export default function DataRequestDetailClient({
     const epoch = contextEpoch.current;
     setLoading(true);
     try {
-      await loadData(true);
+      await loadData();
     } finally {
       if (epoch === contextEpoch.current) retryPending.current = false;
     }
@@ -451,9 +451,9 @@ export default function DataRequestDetailClient({
   if (!request) {
     return (
       <div className="mx-auto max-w-3xl px-4 sm:px-6 lg:px-8 py-16 text-center">
-        <h1 className="text-2xl font-bold text-gray-900 mb-2">{readUnavailable ? 'Request could not be loaded' : 'Request not found'}</h1>
-        <p className="text-gray-500 mb-6">{readUnavailable ? 'This request is temporarily unavailable. Try loading it again.' : 'This data request was removed or does not exist.'}</p>
-        {readUnavailable && (
+        <h1 className="text-2xl font-bold text-gray-900 mb-2">{readError === 'gone' ? 'Request no longer available' : readError === 'unavailable' ? 'Request could not be loaded' : 'Request not found'}</h1>
+        <p className="text-gray-500 mb-6">{readError === 'gone' ? 'This request is no longer available.' : readError === 'unavailable' ? 'This request is temporarily unavailable. Try loading it again.' : 'This data request was removed or does not exist.'}</p>
+        {readError === 'unavailable' && (
           <button type="button" onClick={retryRead} className="mr-3 rounded-lg border border-gray-300 px-6 py-2.5 text-sm font-medium text-gray-700 hover:bg-gray-50">
             Retry
           </button>
