@@ -2,6 +2,7 @@
 
 import { useState, useEffect, useRef, useCallback } from 'react';
 import Link from 'next/link';
+import InquiryListPager from '@/components/InquiryListPager';
 import { useInquiryList } from '@/hooks/useInquiryList';
 import { replyToConversation, getConversation } from '@/api/conversations';
 import { useConversationPoll } from '@/hooks/useConversationPoll';
@@ -41,23 +42,30 @@ function sortInquiries(items: ConversationListItem[]): ConversationListItem[] {
 }
 
 export default function SellerInquiriesPage() {
-  const { inquiries, loading, error, refetch } = useInquiryList('seller');
+  const { inquiries, loading, error, refetch, page, changePage, hasNext } = useInquiryList('seller');
   const [expandedId, setExpandedId] = useState<string | null>(null);
+  const navigate = (nextPage: number) => {
+    setExpandedId(null);
+    changePage(nextPage);
+  };
+  const pager = <InquiryListPager page={page} hasNext={hasNext} loading={loading}
+    onPageChange={navigate} />;
+  const failure = error && (
+    <div role="alert" className="rounded-lg bg-red-50 border border-red-200 px-4 py-3 text-sm text-red-700">
+      {error} <button type="button" onClick={() => void refetch()}>Retry inquiries</button>
+    </div>
+  );
 
   if (loading) {
-    return (
-      <div className="flex min-h-[40vh] items-center justify-center">
-        <div className="h-8 w-8 animate-spin rounded-full border-4 border-[#3F51B5] border-t-transparent" />
-      </div>
-    );
+    return <div><p role="status">Loading inquiries...</p>{pager}</div>;
   }
 
   if (error && inquiries.length === 0) {
-    return (
-      <div className="rounded-lg bg-red-50 border border-red-200 px-4 py-3 text-sm text-red-700">
-        {error}
-      </div>
-    );
+    return <div>{failure}{pager}</div>;
+  }
+
+  if (page > 1 && inquiries.length === 0) {
+    return <div><p>No inquiries on this page. Use Previous to return to earlier pages.</p>{pager}</div>;
   }
 
   if (inquiries.length === 0) {
@@ -76,7 +84,7 @@ export default function SellerInquiriesPage() {
   return (
     <div>
       <h1 className="text-2xl font-bold text-gray-900 mb-6">Buyer Inquiries</h1>
-      {error && <p role="alert">{error}</p>}
+      {failure}
 
       <div className="space-y-3">
         {sorted.map((inq) => (
@@ -89,6 +97,7 @@ export default function SellerInquiriesPage() {
           />
         ))}
       </div>
+      {pager}
     </div>
   );
 }
