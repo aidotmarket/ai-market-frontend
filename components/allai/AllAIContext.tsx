@@ -148,6 +148,9 @@ function isAnonymousNextStep(value: unknown): value is AnonymousNextStep {
     refine_search: '/find-data',
     view_terms: '/legal/terms',
     view_pricing: '/pricing',
+    view_privacy: '/legal/privacy',
+    view_protocol: '/protocol',
+    view_aim_data: '/aim-data',
   };
   const accountRoutes: Record<string, string> = {
     post_request: '/requests/new',
