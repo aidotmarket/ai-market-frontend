@@ -112,6 +112,8 @@ export default function DataRequestDetailClient({
   const setRequest = (value: DataRequestDetail | null) => setRequestRecord({ context, value });
   const [responses, setResponses] = useState<DataRequestResponse[]>([]);
   const [loading, setLoading] = useState(initialRequest === null);
+  const [readUnavailable, setReadUnavailable] = useState(false);
+  const retryPending = useRef(false);
   const [publishing, setPublishing] = useState(false);
   const [deleting, setDeleting] = useState(false);
   const [updatingPublication, setUpdatingPublication] = useState(false);
@@ -139,6 +141,8 @@ export default function DataRequestDetailClient({
     setRequest(null);
     setResponses([]);
     setLoading(true);
+    setReadUnavailable(false);
+    retryPending.current = false;
     setPublishing(false);
     setDeleting(false);
     setUpdatingPublication(false);
@@ -233,7 +237,7 @@ export default function DataRequestDetailClient({
     }
   }
 
-  const loadData = useCallback(async () => {
+  const loadData = useCallback(async (requestOnly = false) => {
     const generation = ++loadGeneration.current;
     const epoch = contextEpoch.current;
     const startedDuringMutation = mutationPending.current;
@@ -242,9 +246,10 @@ export default function DataRequestDetailClient({
       const data = await getDataRequest(slug);
       if (!isCurrent()) return;
       setRequest(data);
+      setReadUnavailable(false);
 
       // The API restricts nonowners to their own supplier responses.
-      if (data && isAuthenticated && userId) {
+      if (!requestOnly && data && isAuthenticated && userId) {
         try {
           const resps = await getDataRequestResponses(data.id);
           if (isCurrent()) {
@@ -258,8 +263,12 @@ export default function DataRequestDetailClient({
           // May not have permission
         }
       }
-    } catch {
-      if (isCurrent()) setRequest(null);
+    } catch (err) {
+      if (isCurrent()) {
+        const status = err instanceof AxiosError ? err.response?.status : undefined;
+        setRequest(null);
+        setReadUnavailable(status !== 404 && status !== 403);
+      }
     } finally {
       if (isCurrent()) setLoading(false);
     }
@@ -269,6 +278,18 @@ export default function DataRequestDetailClient({
     loadData();
     return () => { loadGeneration.current++; };
   }, [loadData]);
+
+  async function retryRead() {
+    if (retryPending.current || mutationPending.current) return;
+    retryPending.current = true;
+    const epoch = contextEpoch.current;
+    setLoading(true);
+    try {
+      await loadData(true);
+    } finally {
+      if (epoch === contextEpoch.current) retryPending.current = false;
+    }
+  }
 
   async function handlePublish() {
     if (!request || editing || savingEdit || publishing || deleting || updatingPublication) return;
@@ -430,8 +451,13 @@ export default function DataRequestDetailClient({
   if (!request) {
     return (
       <div className="mx-auto max-w-3xl px-4 sm:px-6 lg:px-8 py-16 text-center">
-        <h1 className="text-2xl font-bold text-gray-900 mb-2">Request not found</h1>
-        <p className="text-gray-500 mb-6">This data request was removed or does not exist.</p>
+        <h1 className="text-2xl font-bold text-gray-900 mb-2">{readUnavailable ? 'Request could not be loaded' : 'Request not found'}</h1>
+        <p className="text-gray-500 mb-6">{readUnavailable ? 'This request is temporarily unavailable. Try loading it again.' : 'This data request was removed or does not exist.'}</p>
+        {readUnavailable && (
+          <button type="button" onClick={retryRead} className="mr-3 rounded-lg border border-gray-300 px-6 py-2.5 text-sm font-medium text-gray-700 hover:bg-gray-50">
+            Retry
+          </button>
+        )}
         <Link
           href="/requests"
           className="rounded-lg bg-[#3F51B5] px-6 py-2.5 text-sm font-medium text-white hover:bg-[#3545a0]"
