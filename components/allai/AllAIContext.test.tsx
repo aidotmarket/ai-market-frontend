@@ -25,6 +25,7 @@ vi.mock('@/store/auth', () => ({
 
 import { AllAIProvider, useAllAI } from './AllAIContext';
 import AllAIPanel from './AllAIPanel';
+import AllAIMessage from './AllAIMessage';
 import { anonymousAllAIResources, ANONYMOUS_ALLAI_LOCALES } from '@/lib/i18n/anonymous-allai';
 vi.mock('./WizardAllAIBridge', () => ({ useWizardBridge: () => null }));
 
@@ -51,11 +52,19 @@ function context(): ContextValue {
   return currentContext;
 }
 
-function renderProvider(storedSessionId = 'stale-session') {
+function RenderedMessages() {
+  const { messages, isStreaming } = useAllAI();
+  return messages.map((message) => (
+    <AllAIMessage key={message.id} message={message} isStreaming={isStreaming} />
+  ));
+}
+
+function renderProvider(storedSessionId = 'stale-session', showMessages = false) {
   sessionStorage.setItem(SESSION_KEY, storedSessionId);
   render(
     <AllAIProvider>
       <Probe />
+      {showMessages && <RenderedMessages />}
     </AllAIProvider>
   );
 }
@@ -1014,4 +1023,101 @@ it('omits a checkout handoff token from support page context', async () => {
   renderProvider(); await send();
   expect(messagePayload(messageCalls()[0]).context).toEqual({ page: '/checkout/h' });
   expect(JSON.stringify(messagePayload(messageCalls()[0]))).not.toContain('a'.repeat(43));
+});
+
+// Canonical action/route pairs from backend public_marketplace_fact_service.py,
+// b1084d0e5d05f49f7b557c39caae818eda3bff35; exercised through the real SSE parser.
+const publicNextSteps = [
+  { action: 'browse_listings', url: '/listings' },
+  { action: 'refine_search', url: '/find-data' },
+  { action: 'view_terms', url: '/legal/terms' },
+  { action: 'view_pricing', url: '/pricing' },
+  { action: 'view_privacy', url: '/legal/privacy' },
+  { action: 'view_protocol', url: '/protocol' },
+  { action: 'view_aim_data', url: '/aim-data' },
+].map((step) => ({ ...step, label: step.action, requires_account: false }));
+const accountNextSteps = [
+  { action: 'post_request', url: '/requests/new' },
+  { action: 'publish_listing', url: '/partner' },
+  { action: 'buy_listing', url: '/listings' },
+  { action: 'save_listing', url: '/listings' },
+  { action: 'view_account', url: '/dashboard' },
+].map((step) => ({ ...step, label: step.action, requires_account: true }));
+
+describe('mounted anonymous next-step navigation', () => {
+  async function mountAnswer(nextStep: Record<string, unknown>, safeFailure = false) {
+    mocks.pathname = '/';
+    fetchMock.mockImplementation(async (input) => {
+      const url = String(input);
+      if (url === STATUS_URL) return response(200, {
+        available: true, supported_locales: [...ANONYMOUS_ALLAI_LOCALES], cache_seconds: 5,
+      });
+      if (url === `${SESSION_URL}/stale-session`) return response(200, { messages: [] });
+      if (url === MESSAGE_URL) {
+        const answer = {
+          type: 'answer', text: 'Validated public answer.',
+          source_revision_set: 'f'.repeat(64), next_step: nextStep,
+        };
+        return safeFailure
+          ? sseEvents(answer, { type: 'safe_failure', outcome: 'answer_unverified', text: 'Unable to verify this answer.', next_step: nextStep })
+          : sseEvents(answer);
+      }
+      throw new Error(`Unexpected request: ${url}`);
+    });
+    renderProvider('stale-session', true);
+    await waitFor(() => expect(context().anonymousAvailable).toBe(true));
+  }
+
+  it.each(publicNextSteps.flatMap((step) => ANONYMOUS_ALLAI_LOCALES.map((locale) => ({ ...step, locale }))))(
+    'renders $action as an ungated public link in $locale', async ({ locale, ...step }) => {
+      await mountAnswer(step);
+      act(() => context().setLocale(locale));
+      await send();
+      expect(screen.getByText('Validated public answer.')).not.toBeNull();
+      const link = screen.getByRole('link', { name: step.label });
+      expect(link.getAttribute('href')).toBe(step.url);
+      expect(link.closest('[data-testid="allai-next-step"]')).not.toBeNull();
+      expect(screen.queryByText(anonymousAllAIResources(locale).accountRequired)).toBeNull();
+    }
+  );
+
+  it.each(accountNextSteps)('preserves registration redirect for $action', async (step) => {
+    await mountAnswer(step);
+    await send();
+    expect(screen.getByRole('link', { name: step.label }).getAttribute('href')).toBe(
+      `/register?redirect=${encodeURIComponent(step.url)}`
+    );
+    expect(screen.getByText(anonymousAllAIResources(context().locale).accountRequired)).not.toBeNull();
+  });
+
+  it.each([...publicNextSteps, ...accountNextSteps])('rejects the wrong account flag for $action', async (step) => {
+    await mountAnswer({ ...step, requires_account: !step.requires_account });
+    await send();
+    expect(screen.getByText('Validated public answer.')).not.toBeNull();
+    expect(screen.queryByTestId('allai-next-step')).toBeNull();
+    expect(screen.queryByRole('link')).toBeNull();
+  });
+
+  it.each([
+    ...publicNextSteps.slice(4).map((step) => ({ ...step, url: '/pricing' })),
+    ...publicNextSteps.slice(4).map((step) => ({ ...step, url: `${step.url}/unexpected` })),
+    { ...publicNextSteps[4], action: 'unknown_action' },
+    { ...publicNextSteps[4], url: 'https://example.test/legal/privacy' },
+    { ...publicNextSteps[4], url: '//example.test/legal/privacy' },
+  ])('rejects mismatched or unapproved $action / $url', async (step) => {
+    await mountAnswer(step);
+    await send();
+    expect(screen.getByText('Validated public answer.')).not.toBeNull();
+    expect(screen.queryByTestId('allai-next-step')).toBeNull();
+    expect(screen.queryByRole('link')).toBeNull();
+  });
+
+  it.each(publicNextSteps.slice(4))('hides $action after a safe failure even with a supplied next step', async (step) => {
+    await mountAnswer(step, true);
+    await send();
+    expect(screen.getByText('Unable to verify this answer.')).not.toBeNull();
+    expect(context().messages.at(-1)?.safeOutcome).toBe('answer_unverified');
+    expect(screen.queryByTestId('allai-next-step')).toBeNull();
+    expect(screen.queryByRole('link')).toBeNull();
+  });
 });
