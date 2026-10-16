@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import {
   fetchListingShare,
   updateListingShareCaption,
@@ -40,6 +40,15 @@ function selectDraftCaption(
 export default function SellerShareControls({
   listingId,
   locale,
+  compact,
+}: SellerShareControlsProps) {
+  // Each listing/locale starts closed, without carrying share data or pending work.
+  return <ShareControls key={JSON.stringify([listingId, locale])} listingId={listingId} locale={locale} compact={compact} />;
+}
+
+function ShareControls({
+  listingId,
+  locale,
   compact = false,
 }: SellerShareControlsProps) {
   const [open, setOpen] = useState(false);
@@ -51,6 +60,17 @@ export default function SellerShareControls({
   const [copied, setCopied] = useState(false);
   const [fallbackUsed, setFallbackUsed] = useState<boolean | null>(null);
   const [kitOpen, setKitOpen] = useState(false);
+  const active = useRef(false);
+  const copiedTimer = useRef<number | undefined>(undefined);
+
+  useLayoutEffect(() => {
+    active.current = true;
+    return () => {
+      // Already-started writes may finish remotely; ignore their local results.
+      active.current = false;
+      window.clearTimeout(copiedTimer.current);
+    };
+  }, []);
 
   useEffect(() => {
     if (!open || share) return;
@@ -63,13 +83,12 @@ export default function SellerShareControls({
         if (!active) return;
         setShare(data);
         setForm(toCaptionForm(data.caption));
+        setLoading(false);
       })
       .catch(() => {
         if (!active) return;
         setError('Share controls are unavailable right now.');
-      })
-      .finally(() => {
-        if (active) setLoading(false);
+        setLoading(false);
       });
 
     return () => {
@@ -90,18 +109,20 @@ export default function SellerShareControls({
   }, [captionStatus, fallbackUsed, isFlagged]);
 
   async function copyLink() {
-    if (!share?.share_url) return;
+    if (!active.current || !share?.share_url) return;
     try {
       await navigator.clipboard.writeText(share.share_url);
+      if (!active.current) return;
       setCopied(true);
-      window.setTimeout(() => setCopied(false), 1800);
+      window.clearTimeout(copiedTimer.current);
+      copiedTimer.current = window.setTimeout(() => setCopied(false), 1800);
     } catch {
-      setError('Could not copy the share link.');
+      if (active.current) setError('Could not copy the share link.');
     }
   }
 
   async function nativeShare() {
-    if (!share) return;
+    if (!active.current || !share) return;
     if (typeof navigator.share === 'function') {
       try {
         await navigator.share({
@@ -111,6 +132,7 @@ export default function SellerShareControls({
         });
         return;
       } catch (err) {
+        if (!active.current) return;
         if (err instanceof DOMException && err.name === 'AbortError') return;
       }
     }
@@ -118,6 +140,7 @@ export default function SellerShareControls({
   }
 
   async function regenerateCaption() {
+    if (!active.current) return;
     setSaving(true);
     setError('');
     try {
@@ -125,6 +148,7 @@ export default function SellerShareControls({
         mode: 'regenerate',
         locale,
       });
+      if (!active.current) return;
       if ('captions' in result) {
         const caption = selectDraftCaption(result.captions, locale);
         setFallbackUsed(!!result.fallback_used);
@@ -134,13 +158,14 @@ export default function SellerShareControls({
         }
       }
     } catch {
-      setError('Could not regenerate the caption.');
+      if (active.current) setError('Could not regenerate the caption.');
     } finally {
-      setSaving(false);
+      if (active.current) setSaving(false);
     }
   }
 
   async function saveCaption() {
+    if (!active.current) return;
     setSaving(true);
     setError('');
     try {
@@ -149,15 +174,16 @@ export default function SellerShareControls({
         locale,
         ...form,
       });
+      if (!active.current) return;
       if ('caption' in result) {
         setShare((prev) => prev ? { ...prev, caption: result.caption } : prev);
         setForm(toCaptionForm(result.caption));
         setFallbackUsed(null);
       }
     } catch {
-      setError('Could not save the caption.');
+      if (active.current) setError('Could not save the caption.');
     } finally {
-      setSaving(false);
+      if (active.current) setSaving(false);
     }
   }
 
