@@ -8,6 +8,10 @@ import { getOrganization, reconcileOrganizationLegalIdentity, type OrganizationL
 
 function OrganizationLegalIdentityContent() {
   const organizationId = useSearchParams().get('org');
+  return <OrganizationLegalIdentityForm key={organizationId} organizationId={organizationId} />;
+}
+
+function OrganizationLegalIdentityForm({ organizationId }: { organizationId: string | null }) {
   const [organization, setOrganization] = useState<OrganizationLegalIdentity | null>(null);
   const [state, setState] = useState<'loading' | 'ready' | 'forbidden' | 'error'>('loading');
   const [legalName, setLegalName] = useState('');
