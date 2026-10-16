@@ -395,7 +395,7 @@ export default function PartnerPage() {
               <div className="mt-8 rounded-2xl border border-gray-200 bg-white p-6 shadow-sm">
                 <h3 className="text-2xl font-bold tracking-tight text-gray-900">Why do this on ai.market?</h3>
                 <p className="mt-4 text-base leading-7 text-gray-600">
-                  The model is simple. You set your own pricing and keep what you earn, and we take 5% only when a deal closes. No listing fees. So your incentive and ours are the same, more good data changing hands. The rails are non-custodial, so raw data never touches us, and it never touches you unless your client wants it to. allAI does the grunt work so you can focus on the part only a person can do.
+                  The model is simple. You set your own pricing and keep what you earn, and we take 5% only when a deal closes. No listing fees. So your incentive and ours are the same, more good data changing hands. The rails are non-custodial. Purchased files go directly from seller to buyer. We can store and show a public sample only when the seller chooses to publish it. You work with a client's raw data only when they want your help. allAI does the grunt work so you can focus on the part only a person can do.
                 </p>
                 <p className="mt-5 text-base font-semibold leading-7 text-gray-900">Want in? Talk to us.</p>
               </div>
