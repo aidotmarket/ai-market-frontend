@@ -4,48 +4,64 @@ import { useEffect, useState, useCallback, useRef } from 'react';
 import { getMyConversations } from '@/api/conversations';
 import type { ConversationListItem } from '@/types';
 
+const PAGE_SIZE = 20;
+
 export function useInquiryList(role: 'buyer' | 'seller') {
+  const [page, setPage] = useState(1);
   const [inquiries, setInquiries] = useState<ConversationListItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
-  const activeRef = useRef(true);
+  const generation = useRef(0);
+  const read = useRef<() => Promise<void>>(async () => {});
+  const refetch = useCallback(() => read.current(), []);
 
-  const fetch = useCallback(async () => {
-    try {
-      const data = await getMyConversations(role);
-      if (activeRef.current) {
-        setInquiries(data);
-        setError('');
-      }
-    } catch {
-      if (activeRef.current) {
-        setError('Failed to load inquiries.');
-      }
-    } finally {
-      if (activeRef.current) setLoading(false);
-    }
-  }, [role]);
+  const changePage = useCallback((nextPage: number) => {
+    if (!Number.isSafeInteger(nextPage) || nextPage < 1 || nextPage === page) return;
+    // Invalidate immediately, including reads that finish before effect cleanup.
+    generation.current += 1;
+    read.current = async () => {};
+    setInquiries([]);
+    setError('');
+    setLoading(true);
+    setPage(nextPage);
+  }, [page]);
 
   useEffect(() => {
-    activeRef.current = true;
+    const current = ++generation.current;
+    let version = 0;
+    setInquiries([]);
+    setError('');
     setLoading(true);
-    fetch();
-
-    const interval = setInterval(() => {
-      if (!document.hidden) fetch();
-    }, 10000);
-
-    const onVisibility = () => {
-      if (!document.hidden) fetch();
+    const fetchPage = async () => {
+      const request = ++version;
+      const isCurrent = () => generation.current === current && request === version;
+      try {
+        const data = await getMyConversations(role, page, PAGE_SIZE);
+        if (isCurrent()) {
+          setInquiries(data);
+          setError('');
+        }
+      } catch {
+        if (isCurrent()) setError('Failed to load inquiries.');
+      } finally {
+        if (isCurrent()) setLoading(false);
+      }
     };
-    document.addEventListener('visibilitychange', onVisibility);
-
+    read.current = fetchPage;
+    void fetchPage();
+    const refreshVisible = () => {
+      if (!document.hidden) void fetchPage();
+    };
+    const interval = setInterval(refreshVisible, 10000);
+    document.addEventListener('visibilitychange', refreshVisible);
     return () => {
-      activeRef.current = false;
+      generation.current += 1;
+      read.current = async () => {};
       clearInterval(interval);
-      document.removeEventListener('visibilitychange', onVisibility);
+      document.removeEventListener('visibilitychange', refreshVisible);
     };
-  }, [fetch]);
+  }, [role, page]);
 
-  return { inquiries, loading, error, refetch: fetch };
+  return { inquiries, loading, error, refetch, page, changePage,
+    hasNext: inquiries.length === PAGE_SIZE };
 }

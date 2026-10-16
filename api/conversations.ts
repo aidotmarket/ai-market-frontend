@@ -20,10 +20,16 @@ export async function createInquiry(
 }
 
 export async function getMyConversations(
-  role: 'buyer' | 'seller'
+  role: 'buyer' | 'seller',
+  page = 1,
+  perPage = 20
 ): Promise<ConversationListItem[]> {
   const res = await api.get<ConversationListItem[]>('/conversations/mine', {
-    params: { role },
+    params: {
+      role,
+      page: Number.isFinite(page) ? Math.max(1, Math.floor(page)) : 1,
+      per_page: Number.isFinite(perPage) ? Math.min(100, Math.max(1, Math.floor(perPage))) : 20,
+    },
   });
   return res.data;
 }

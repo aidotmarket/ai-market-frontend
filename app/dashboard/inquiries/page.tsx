@@ -1,6 +1,7 @@
 'use client';
 
 import Link from 'next/link';
+import InquiryListPager from '@/components/InquiryListPager';
 import { useInquiryList } from '@/hooks/useInquiryList';
 import { formatDate } from '@/lib/format';
 import type { ConversationStatus } from '@/types';
@@ -25,22 +26,25 @@ function statusBadge(status: ConversationStatus) {
 }
 
 export default function BuyerInquiriesPage() {
-  const { inquiries, loading, error } = useInquiryList('buyer');
+  const { inquiries, loading, error, refetch, page, changePage, hasNext } = useInquiryList('buyer');
+  const pager = <InquiryListPager page={page} hasNext={hasNext} loading={loading}
+    onPageChange={changePage} />;
+  const failure = error && (
+    <div role="alert" className="rounded-lg bg-red-50 border border-red-200 px-4 py-3 text-sm text-red-700">
+      {error} <button type="button" onClick={() => void refetch()}>Retry inquiries</button>
+    </div>
+  );
 
   if (loading) {
-    return (
-      <div className="flex min-h-[40vh] items-center justify-center">
-        <div className="h-8 w-8 animate-spin rounded-full border-4 border-[#3F51B5] border-t-transparent" />
-      </div>
-    );
+    return <div><p role="status">Loading inquiries...</p>{pager}</div>;
   }
 
-  if (error) {
-    return (
-      <div className="rounded-lg bg-red-50 border border-red-200 px-4 py-3 text-sm text-red-700">
-        {error}
-      </div>
-    );
+  if (error && inquiries.length === 0) {
+    return <div>{failure}{pager}</div>;
+  }
+
+  if (page > 1 && inquiries.length === 0) {
+    return <div><p>No inquiries on this page. Use Previous to return to earlier pages.</p>{pager}</div>;
   }
 
   if (inquiries.length === 0) {
@@ -63,6 +67,8 @@ export default function BuyerInquiriesPage() {
   return (
     <div>
       <h1 className="text-2xl font-bold text-gray-900 mb-6">My Inquiries</h1>
+
+      {failure}
 
       {/* Desktop table */}
       <div className="hidden md:block overflow-x-auto rounded-lg border border-gray-200">
@@ -125,6 +131,7 @@ export default function BuyerInquiriesPage() {
           </Link>
         ))}
       </div>
+      {pager}
     </div>
   );
 }
