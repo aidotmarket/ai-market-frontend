@@ -2,7 +2,7 @@ import SchemaTable from './SchemaTable';
 import type {AggregateStatistics, DerivationSource, ListingSummary, SummaryField} from '@/lib/api';
 
 export const provenanceLabels = {
-  aim_metadata: 'from AIM Data', seller_entered: 'provided by the seller',
+  aim_metadata: 'from listing metadata', seller_entered: 'provided by the seller',
   allai_generated: 'generated and checked', absent: 'not available',
 } as const;
 
