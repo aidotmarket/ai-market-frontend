@@ -74,6 +74,7 @@ export default function SellerEnrichmentControls({listingId, active = true, onSa
   const [view, setView] = useState<EnrichmentView | null>(null);
   const [form, setForm] = useState<Form | null>(null);
   const [busy, setBusy] = useState(false), [error, setError] = useState(''), [message, setMessage] = useState('');
+  const [loadAttempt, setLoadAttempt] = useState(0);
   const request = useRef<AbortController | null>(null);
   const retry = useRef<{signature: string; requestId: string} | null>(null);
 
@@ -88,7 +89,7 @@ export default function SellerEnrichmentControls({listingId, active = true, onSa
     load(controller).catch(() => {if (!controller.signal.aborted) setError('Optional listing details could not be loaded. Try again.');})
       .finally(() => {if (!controller.signal.aborted) {setBusy(false); request.current = null;}});
     return () => {controller.abort(); request.current = null;};
-  }, [active, load]);
+  }, [active, load, loadAttempt]);
 
   async function save() {
     if (!view || !form || request.current || !active) return;
@@ -160,6 +161,9 @@ export default function SellerEnrichmentControls({listingId, active = true, onSa
     <div className="mt-4 space-y-5">
       <p className="text-sm text-gray-700">These details are optional. You can approve At a glance without adding or changing them.</p>
       {busy && !form && <p role="status" className="text-sm text-gray-600">Loading optional details…</p>}
+      {!form && (error || loadAttempt > 0) && <button type="button" disabled={busy || !active}
+        onClick={() => {if (active && !busy && !request.current) setLoadAttempt(attempt => attempt + 1);}}
+        className="rounded-lg border border-indigo-700 bg-white px-4 py-2 text-sm font-medium text-indigo-700 disabled:opacity-50">Retry optional details</button>}
       {form && <>
         {form.dictionary.length > 0 && <fieldset className="space-y-3"><legend className="text-sm font-semibold text-gray-900">Dictionary units</legend>
           <p className="text-xs text-gray-600">Units attach to the existing field names. Schema fields come from the listing source.</p>
