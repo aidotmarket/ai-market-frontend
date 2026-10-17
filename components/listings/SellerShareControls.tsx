@@ -77,6 +77,7 @@ export default function SellerShareControls({
     };
   }, [listingId, locale, open, share]);
 
+  const effectiveLocale = locale ?? share?.locale;
   const captionStatus = share?.caption?.status;
   const isFlagged = captionStatus === 'flagged';
   const shareTitle = form.og_title || share?.caption?.og_title || 'ai.market listing';
@@ -123,10 +124,10 @@ export default function SellerShareControls({
     try {
       const result = await updateListingShareCaption(listingId, {
         mode: 'regenerate',
-        locale,
+        locale: effectiveLocale,
       });
       if ('captions' in result) {
-        const caption = selectDraftCaption(result.captions, locale);
+        const caption = selectDraftCaption(result.captions, effectiveLocale);
         setFallbackUsed(!!result.fallback_used);
         if (caption) {
           setShare((prev) => prev ? { ...prev, caption } : prev);
@@ -146,7 +147,7 @@ export default function SellerShareControls({
     try {
       const result = await updateListingShareCaption(listingId, {
         mode: 'accept_edit',
-        locale,
+        locale: effectiveLocale,
         ...form,
       });
       if ('caption' in result) {
