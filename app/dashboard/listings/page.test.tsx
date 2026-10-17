@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 
-import { cleanup, render, screen } from '@testing-library/react';
+import { cleanup, render, screen, within } from '@testing-library/react';
 import { afterEach, beforeEach, expect, it, vi } from 'vitest';
 import ListingsPage from './page';
 
@@ -46,6 +46,58 @@ it('shows the payout setup warning when Connect confirms disabled payouts', asyn
   render(<ListingsPage />);
   expect(await screen.findByText('Seller dataset')).toBeTruthy();
   expect(screen.getByText(/Finish payout setup/)).toBeTruthy();
+});
+
+const publicReference = {
+  url: 'https://example.org/emissions', label: 'Emissions and allowances',
+  publisher: 'Public data agency', license_url: 'https://example.org/license',
+  metadata_url: 'https://example.org/metadata',
+};
+
+it.each([
+  ['disabled', publicReference],
+  ['enabled', publicReference],
+  ['unknown', publicReference],
+  ['disabled', null],
+  ['disabled', false],
+  ['disabled', 'malformed'],
+] as const)('describes an opted-in public reference with %s payouts and marker %j', async (payouts, marker) => {
+  api.getMyListings.mockResolvedValue({ data: [{
+    id: 'source-reference', title: 'Emissions and allowances', status: 'published',
+    category: 'Science', price: 0, fulfillment_type: 'reference',
+    source_delivery: { kind: 'public_url', url: 'https://example.org/emissions' },
+    structured_metadata: { public_reference: marker }, created_at: '2026-09-01T12:00:00Z',
+  }] });
+  if (payouts === 'unknown') api.getConnectStatus.mockRejectedValue(new Error('Connect unavailable'));
+  else api.getConnectStatus.mockResolvedValue({ data: { payouts_enabled: payouts === 'enabled' } });
+  render(<ListingsPage />);
+  const row = (await screen.findByRole('link', { name: 'Emissions and allowances' })).closest('tr')!;
+  expect(within(row).getByText('Public source reference — no checkout.')).toBeTruthy();
+  expect(within(row).queryByText(/Finish payout setup/)).toBeNull();
+  expect(within(row).getByText('Published')).toBeTruthy();
+  expect(within(row).getByRole('link').getAttribute('href')).toBe('/dashboard/listings/source-reference');
+  for (const name of ['Edit', 'Unpublish', 'Delete']) expect(within(row).getByRole('button', { name })).toBeTruthy();
+  expect(api.getMyListings).toHaveBeenCalledTimes(1);
+  expect(api.getConnectStatus).toHaveBeenCalledTimes(1);
+  expect(api.getPendingSellerTermsListings).toHaveBeenCalledTimes(1);
+  expect(api.unpublishListing).not.toHaveBeenCalled();
+  expect(api.deleteListing).not.toHaveBeenCalled();
+});
+
+it.each([
+  undefined, null, {}, [], Object.assign([], { public_reference: null }),
+  Object.create({ public_reference: {} }),
+])('preserves payout warnings for legacy free references without an own metadata marker: %j', async (metadata) => {
+  api.getMyListings.mockResolvedValue({ data: [{
+    id: 'legacy-reference', title: 'Legacy reference', status: 'published',
+    category: 'Research', price: 0, fulfillment_type: 'reference',
+    structured_metadata: metadata, created_at: '2026-09-01T12:00:00Z',
+  }] });
+  api.getConnectStatus.mockResolvedValue({ data: { payouts_enabled: false } });
+  render(<ListingsPage />);
+  const row = (await screen.findByRole('link', { name: 'Legacy reference' })).closest('tr')!;
+  expect(within(row).getByText(/Finish payout setup/)).toBeTruthy();
+  expect(within(row).queryByText('Public source reference — no checkout.')).toBeNull();
 });
 
 it.each([403, 500])('renders listings with unknown payouts after Connect returns %s', async (status) => {

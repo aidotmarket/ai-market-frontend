@@ -31,6 +31,11 @@ const STATUS_LABELS: Record<string, string> = {
   archived: 'Archived',
 };
 
+function isPublicReference(metadata: unknown): boolean {
+  return metadata !== null && typeof metadata === 'object' && !Array.isArray(metadata)
+    && Object.prototype.hasOwnProperty.call(metadata, 'public_reference');
+}
+
 export default function ListingsPage() {
   const termsVersion = useServedTermsVersion();
   const [listings, setListings] = useState<any[]>([]);
@@ -175,11 +180,15 @@ export default function ListingsPage() {
                     <span className={`inline-flex rounded-full px-2.5 py-0.5 text-xs font-medium ${STATUS_STYLES[listing.status] || 'bg-gray-100 text-gray-800'}`}>
                       {STATUS_LABELS[listing.status] || listing.status}
                     </span>
-                    {listing.status === 'published' && payoutsStatus === 'disabled' && (
+                    {listing.status === 'published' && (isPublicReference(listing.structured_metadata) ? (
+                      <p className="mt-2 max-w-xs whitespace-normal text-xs leading-5 text-gray-500">
+                        Public source reference — no checkout.
+                      </p>
+                    ) : payoutsStatus === 'disabled' && (
                       <p className="mt-2 max-w-xs whitespace-normal text-xs leading-5 text-amber-700">
                         Published &mdash; not yet purchasable. Finish payout setup to enable sales.
                       </p>
-                    )}
+                    ))}
                   </td>
                   <td className="whitespace-nowrap px-6 py-4 text-sm text-gray-500">
                     {listing.category}
