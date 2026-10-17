@@ -314,7 +314,7 @@ export default async function ListingDetailPage({ params, searchParams }: Props)
               <div>
                 <p className="text-sm font-medium text-green-800">Non-Custodial</p>
                 <p className="text-xs text-green-700 mt-0.5">
-                  Data never touches ai.market. Transactions are peer-to-peer.
+                  Purchased files go directly from seller to buyer. We can store and show a public sample only when the seller chooses to publish it.
                 </p>
               </div>
             </div>
