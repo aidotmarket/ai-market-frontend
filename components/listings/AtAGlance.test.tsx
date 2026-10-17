@@ -46,7 +46,7 @@ it('always uses buyer-visible attribution wording and has no audience input', ()
   const html = renderToStaticMarkup(<AtAGlance summary={summary} />);
   expect(html).toContain('provided by the seller');
   expect(html).not.toMatch(/entered by you/i);
-  expect(provenanceLabels).toEqual({aim_metadata: 'from AIM Data', seller_entered: 'provided by the seller', allai_generated: 'generated and checked', absent: 'not available'});
+  expect(provenanceLabels).toEqual({aim_metadata: 'from listing metadata', seller_entered: 'provided by the seller', allai_generated: 'generated and checked', absent: 'not available'});
 });
 
 it('does not render unreviewed unknown fields', () => {
@@ -79,4 +79,17 @@ it('keeps duplicate and malformed legacy columns non-throwing', () => {
     field_descriptions: field([{name: 'id', description: 'ambiguous'}, {name: 'id', description: 'duplicate'}] as never),
   };
   expect(() => renderToStaticMarkup(<AtAGlance summary={malformed} />)).not.toThrow();
+});
+
+it('attributes VZ publish metadata neutrally while retaining its value and seller/local qualifier', () => {
+  const html = renderToStaticMarkup(<AtAGlance summary={{
+    profile: summary.profile,
+    row_count: {
+      value: 123, provenance: 'aim_metadata', authority: 'seller_local_report',
+      source_reference: 'VZPublishPayload.schema_info.row_count', source_revision: 'a'.repeat(64),
+    },
+  }} />);
+  expect(html).toContain('>Row count</h3><p class="text-sm text-gray-700">123</p>');
+  expect(html).toContain('Source: from listing metadata (seller/local report)</p>');
+  expect(html).not.toContain('from AIM Data');
 });
