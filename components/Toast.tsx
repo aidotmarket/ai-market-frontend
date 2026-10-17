@@ -78,6 +78,7 @@ function ToastItem({ toast, onDismiss }: { toast: Toast; onDismiss: (id: number)
       <div className="flex items-center justify-between gap-3">
         <p className="text-sm">{toast.message}</p>
         <button
+          aria-label="Dismiss notification"
           onClick={() => onDismiss(toast.id)}
           className="text-white/70 hover:text-white shrink-0"
         >
