@@ -1,5 +1,5 @@
 // @vitest-environment jsdom
-import {cleanup, fireEvent, render, screen, waitFor} from '@testing-library/react';
+import {act, cleanup, fireEvent, render, screen, waitFor} from '@testing-library/react';
 import {afterEach, beforeEach, expect, it, vi} from 'vitest';
 import {AxiosError} from 'axios';
 import * as api from '@/lib/api';
@@ -141,4 +141,100 @@ it('counts Unicode characters like the backend instead of UTF-16 units', async (
   expect(screen.getByText('Optional seller statement. 2,000 / 2,000 characters.')).toBeTruthy();
   fireEvent.click(screen.getByRole('button', {name: 'Save optional details'}));
   await waitFor(() => expect(api.saveListingEnrichment).toHaveBeenCalledOnce());
+});
+
+
+it('recovers an initial load failure through retry without saving or remounting', async () => {
+  vi.mocked(api.fetchListingEnrichment).mockRejectedValueOnce(new Error('offline'));
+  render(<SellerEnrichmentControls listingId="listing" />);
+  const summary = screen.getByText('Optional listing details');
+  fireEvent.click(summary);
+  await screen.findByRole('alert');
+  fireEvent.click(summary);
+  fireEvent.click(summary);
+  expect(api.fetchListingEnrichment).toHaveBeenCalledTimes(1);
+  expect(screen.queryByLabelText(/^Dataset origin statement/)).toBeNull();
+  fireEvent.click(screen.getByRole('button', {name: 'Retry optional details'}));
+  expect(await screen.findByLabelText(/^Dataset origin statement/)).toBeTruthy();
+  expect(api.fetchListingEnrichment).toHaveBeenCalledTimes(2);
+  expect(screen.queryByRole('alert')).toBeNull();
+  expect(screen.queryByRole('button', {name: 'Retry optional details'})).toBeNull();
+  expect(api.saveListingEnrichment).not.toHaveBeenCalled();
+});
+
+it('keeps initial load retry usable after another failure', async () => {
+  vi.mocked(api.fetchListingEnrichment)
+    .mockRejectedValueOnce(new Error('offline'))
+    .mockRejectedValueOnce(new Error('still offline'));
+  render(<SellerEnrichmentControls listingId="listing" />);
+  fireEvent.click(screen.getByText('Optional listing details'));
+  await screen.findByRole('alert');
+  fireEvent.click(screen.getByRole('button', {name: 'Retry optional details'}));
+  await screen.findByRole('alert');
+  const retryButton = screen.getByRole('button', {name: 'Retry optional details'});
+  expect(retryButton.hasAttribute('disabled')).toBe(false);
+  fireEvent.click(retryButton);
+  await screen.findByLabelText(/^Dataset origin statement/);
+  expect(api.fetchListingEnrichment).toHaveBeenCalledTimes(3);
+  expect(screen.queryByRole('alert')).toBeNull();
+  expect(api.saveListingEnrichment).not.toHaveBeenCalled();
+});
+
+it('prevents duplicate requests while an initial load retry is pending', async () => {
+  let resolveRetry!: (result: api.EnrichmentView) => void;
+  vi.mocked(api.fetchListingEnrichment)
+    .mockRejectedValueOnce(new Error('offline'))
+    .mockImplementationOnce(() => new Promise(resolve => {resolveRetry = resolve;}));
+  render(<SellerEnrichmentControls listingId="listing" />);
+  fireEvent.click(screen.getByText('Optional listing details'));
+  await screen.findByRole('alert');
+  const retryButton = screen.getByRole('button', {name: 'Retry optional details'});
+  act(() => {fireEvent.click(retryButton); fireEvent.click(retryButton);});
+  expect(api.fetchListingEnrichment).toHaveBeenCalledTimes(2);
+  expect(retryButton.hasAttribute('disabled')).toBe(true);
+  expect(screen.getByRole('status').textContent).toBe('Loading optional details…');
+  fireEvent.click(retryButton);
+  expect(api.fetchListingEnrichment).toHaveBeenCalledTimes(2);
+  await act(async () => {resolveRetry(view);});
+  expect(screen.getByLabelText(/^Dataset origin statement/)).toBeTruthy();
+  expect(api.saveListingEnrichment).not.toHaveBeenCalled();
+});
+
+it('does not retry an initial load failure while inactive', async () => {
+  vi.mocked(api.fetchListingEnrichment).mockRejectedValueOnce(new Error('offline'));
+  const {rerender} = render(<SellerEnrichmentControls listingId="listing" active={false} />);
+  fireEvent.click(screen.getByText('Optional listing details'));
+  expect(api.fetchListingEnrichment).not.toHaveBeenCalled();
+  rerender(<SellerEnrichmentControls listingId="listing" />);
+  await screen.findByRole('alert');
+  rerender(<SellerEnrichmentControls listingId="listing" active={false} />);
+  const retryButton = screen.getByRole('button', {name: 'Retry optional details'});
+  expect(retryButton.hasAttribute('disabled')).toBe(true);
+  fireEvent.click(retryButton);
+  expect(api.fetchListingEnrichment).toHaveBeenCalledTimes(1);
+  expect(api.saveListingEnrichment).not.toHaveBeenCalled();
+});
+
+it.each(['inactive', 'unmount', 'listing change'] as const)('cancels a pending initial load retry on %s', async transition => {
+  let resolveRetry!: (result: api.EnrichmentView) => void;
+  vi.mocked(api.fetchListingEnrichment)
+    .mockRejectedValueOnce(new Error('offline'))
+    .mockImplementationOnce(() => new Promise(resolve => {resolveRetry = resolve;}))
+    .mockResolvedValueOnce({...view, values: {dataset_origin_statement: {value: 'New listing'}}} as api.EnrichmentView);
+  const {rerender, unmount} = render(<SellerEnrichmentControls listingId="listing" />);
+  fireEvent.click(screen.getByText('Optional listing details'));
+  await screen.findByRole('alert');
+  fireEvent.click(screen.getByRole('button', {name: 'Retry optional details'}));
+  const signal = vi.mocked(api.fetchListingEnrichment).mock.calls[1][1];
+  expect(signal?.aborted).toBe(false);
+  if (transition === 'unmount') unmount();
+  else rerender(<SellerEnrichmentControls listingId={transition === 'listing change' ? 'new-listing' : 'listing'} active={transition !== 'inactive'} />);
+  expect(signal?.aborted).toBe(true);
+  await act(async () => {resolveRetry({...view, values: {dataset_origin_statement: {value: 'Cancelled result'}}} as api.EnrichmentView);});
+  if (transition === 'listing change') {
+    expect((screen.getByLabelText(/^Dataset origin statement/) as HTMLTextAreaElement).value).toBe('New listing');
+    expect(vi.mocked(api.fetchListingEnrichment).mock.calls[2][0]).toBe('new-listing');
+  } else expect(screen.queryByLabelText(/^Dataset origin statement/)).toBeNull();
+  expect(api.fetchListingEnrichment).toHaveBeenCalledTimes(transition === 'listing change' ? 3 : 2);
+  expect(api.saveListingEnrichment).not.toHaveBeenCalled();
 });
