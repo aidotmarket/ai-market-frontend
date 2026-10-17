@@ -133,6 +133,126 @@ describe('SellerShareControls', () => {
     });
   });
 
+  it('saves German edits using the loaded share locale when the parent omits locale', async () => {
+    const caption = {
+      og_title: 'Deutscher Datensatz',
+      og_description: 'Beschreibung',
+      caption_text: 'Deutscher Text',
+      status: 'seller_edited',
+    };
+    fetchListingShare.mockResolvedValueOnce(makeShare({ locale: 'de', caption }));
+    updateListingShareCaption.mockResolvedValueOnce({ status: 'accepted', caption });
+
+    render(<SellerShareControls listingId="listing-1" />);
+    fireEvent.click(screen.getByRole('button', { name: 'Share' }));
+    await screen.findByDisplayValue('Deutscher Text');
+    expect(fetchListingShare).toHaveBeenCalledWith('listing-1', undefined);
+    fireEvent.change(screen.getByLabelText('Caption'), { target: { value: 'Bearbeiteter Text' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Save edit' }));
+
+    await waitFor(() => expect(updateListingShareCaption).toHaveBeenCalledTimes(1));
+    expect(JSON.parse(JSON.stringify(updateListingShareCaption.mock.calls[0][1]))).toEqual({
+      mode: 'accept_edit',
+      locale: 'de',
+      og_title: caption.og_title,
+      og_description: caption.og_description,
+      caption_text: 'Bearbeiteter Text',
+    });
+  });
+
+  it('regenerates in the loaded German locale and selects its draft even when it is not first', async () => {
+    const caption = {
+      og_title: 'Deutscher Datensatz',
+      og_description: 'Beschreibung',
+      caption_text: 'Deutscher Text',
+      status: 'seller_edited',
+    };
+    fetchListingShare.mockResolvedValueOnce(makeShare({ locale: 'de', caption }));
+    updateListingShareCaption.mockResolvedValueOnce({
+      status: 'drafted',
+      captions: [
+        { ...caption, locale: 'en', caption_text: 'English draft' },
+        { ...caption, locale: 'de', caption_text: 'Neuer deutscher Text' },
+      ],
+    });
+
+    render(<SellerShareControls listingId="listing-1" />);
+    fireEvent.click(screen.getByRole('button', { name: 'Share' }));
+    await screen.findByDisplayValue('Deutscher Text');
+    expect(fetchListingShare).toHaveBeenCalledWith('listing-1', undefined);
+    fireEvent.click(screen.getByRole('button', { name: 'Regenerate' }));
+
+    expect(await screen.findByDisplayValue('Neuer deutscher Text')).toBeTruthy();
+    expect(JSON.parse(JSON.stringify(updateListingShareCaption.mock.calls[0][1]))).toEqual({
+      mode: 'regenerate',
+      locale: 'de',
+    });
+  });
+
+  it.each([
+    { name: 'explicit prop overrides loaded locale', locale: 'fr', loadedLocale: 'de', expectedLocale: 'fr' },
+    { name: 'missing compatibility locale remains omitted', locale: undefined, loadedLocale: undefined, expectedLocale: undefined },
+  ])('$name for both mutations and draft selection', async ({ locale, loadedLocale, expectedLocale }) => {
+    const caption = {
+      og_title: 'Loaded title',
+      og_description: 'Loaded description',
+      caption_text: 'Loaded caption',
+      status: 'machine',
+    };
+    const selected = { ...caption, locale: expectedLocale, caption_text: 'Selected draft' };
+    fetchListingShare.mockResolvedValueOnce(makeShare({ locale: loadedLocale, caption }));
+    updateListingShareCaption
+      .mockResolvedValueOnce({
+        status: 'drafted',
+        captions: [{ ...caption, locale: 'de', caption_text: 'First draft' }, selected],
+      })
+      .mockResolvedValueOnce({ status: 'accepted', caption: selected });
+
+    render(<SellerShareControls listingId="listing-1" locale={locale} />);
+    fireEvent.click(screen.getByRole('button', { name: 'Share' }));
+    await screen.findByDisplayValue('Loaded caption');
+    expect(fetchListingShare).toHaveBeenCalledWith('listing-1', locale);
+    fireEvent.click(screen.getByRole('button', { name: 'Regenerate' }));
+    await screen.findByDisplayValue('Selected draft');
+    await waitFor(() => expect(screen.getByRole('button', { name: 'Save edit' }).hasAttribute('disabled')).toBe(false));
+    fireEvent.click(screen.getByRole('button', { name: 'Save edit' }));
+
+    await waitFor(() => expect(updateListingShareCaption).toHaveBeenCalledTimes(2));
+    const bodies = updateListingShareCaption.mock.calls.map(([, body]) => JSON.parse(JSON.stringify(body)));
+    expect(bodies[0]).toEqual({ mode: 'regenerate', ...(expectedLocale === undefined ? {} : { locale: expectedLocale }) });
+    expect(bodies[1]).toEqual({
+      mode: 'accept_edit',
+      ...(expectedLocale === undefined ? {} : { locale: expectedLocale }),
+      og_title: selected.og_title,
+      og_description: selected.og_description,
+      caption_text: selected.caption_text,
+    });
+    if (expectedLocale === undefined) {
+      for (const body of bodies) expect(body).not.toHaveProperty('locale');
+    }
+  });
+
+  it.each(['unmatched', 'empty'])('preserves %s regenerated draft fallback behavior', async (kind) => {
+    const share = makeShare({ locale: 'de' });
+    const firstDraft = { ...share.caption!, locale: 'fr', caption_text: 'First available draft' };
+    fetchListingShare.mockResolvedValueOnce(share);
+    updateListingShareCaption.mockResolvedValueOnce({
+      status: 'drafted',
+      captions: kind === 'empty' ? [] : [firstDraft, { ...firstDraft, locale: 'en', caption_text: 'Other draft' }],
+    });
+
+    render(<SellerShareControls listingId="listing-1" />);
+    fireEvent.click(screen.getByRole('button', { name: 'Share' }));
+    await screen.findByDisplayValue(share.caption!.caption_text);
+    fireEvent.click(screen.getByRole('button', { name: 'Regenerate' }));
+
+    await waitFor(() => expect(updateListingShareCaption).toHaveBeenCalledTimes(1));
+    await waitFor(() => expect(screen.getByRole('button', { name: 'Regenerate' }).hasAttribute('disabled')).toBe(false));
+    expect((screen.getByLabelText('Caption') as HTMLTextAreaElement).value).toBe(
+      kind === 'empty' ? share.caption!.caption_text : firstDraft.caption_text,
+    );
+  });
+
   it('copies the share URL when native share is unavailable', async () => {
     const share = makeShare();
     fetchListingShare.mockResolvedValueOnce(share);
