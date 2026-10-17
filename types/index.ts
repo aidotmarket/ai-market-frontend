@@ -343,7 +343,16 @@ export interface ListingLicenseDetails {
   rider_sha256: string | null;
 }
 
+export interface PublicSourceReference {
+  url: string;
+  label: string;
+  publisher: string;
+  license_url: string;
+  metadata_url: string;
+}
+
 export interface ListingDetail {
+  public_reference?: PublicSourceReference | null;
   at_a_glance?: import('@/lib/api').ListingSummary | null;
   approved_presentation?: {presentation_version: 'seller-listing-review-v2'; rendered_html: string; render_hash: string};
   id: string;

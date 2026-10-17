@@ -1,3 +1,4 @@
+import PublicSourceReferencePage, { isPublicSourceReference } from './PublicSourceReferencePage';
 import SchemaTable from '@/components/listings/SchemaTable';
 import { createHash } from 'node:crypto';
 import { notFound, redirect } from 'next/navigation';
@@ -47,7 +48,9 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
     return { title: 'Not Found' };
   }
 
-  const description = listing.short_description || listing.description?.slice(0, 200) || '';
+  const description = isPublicSourceReference(listing)
+    ? listing.description?.slice(0, 200) || ''
+    : listing.short_description || listing.description?.slice(0, 200) || '';
 
   return {
     title: listing.title,
@@ -88,6 +91,10 @@ export default async function ListingDetailPage({ params, searchParams }: Props)
   const listing: ListingWithSamples | null = await fetchPublicListing(slug);
   if (!listing) {
     notFound();
+  }
+
+  if (isPublicSourceReference(listing)) {
+    return <PublicSourceReferencePage listing={listing} emitJsonLd={DATASET_JSONLD_ENABLED} />;
   }
 
   const approved = listing.approved_presentation;
