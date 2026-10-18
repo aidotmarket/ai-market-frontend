@@ -258,7 +258,10 @@ function SellerInquiryThread({ id, onReplied }: { id: string; onReplied: () => v
       <div className="flex gap-2">
         <input type="text" value={replyText} disabled={replying || !!accepted || !conversation}
           onChange={(e) => setReplyText(e.target.value)}
-          onKeyDown={(e) => e.key === 'Enter' && !e.shiftKey && handleReply()}
+          onKeyDown={(e) => {
+            if (e.nativeEvent.isComposing || e.nativeEvent.keyCode === 229) return;
+            if (e.key === 'Enter' && !e.shiftKey) void handleReply();
+          }}
           placeholder="Reply to buyer..."
           className="flex-1 rounded-lg border border-gray-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-[#3F51B5] focus:border-transparent" />
         <button onClick={handleReply} disabled={replying || !!accepted || !conversation || !replyText.trim()}
