@@ -25,6 +25,18 @@ beforeEach(() => fetchDataRequests.mockReset());
 afterEach(cleanup);
 
 describe('public request browsing', () => {
+  it.each([true, false, undefined, 'true', 1, null])('tags only an explicit sample flag (%s) beside the card title', async is_sample => {
+    const extra = is_sample === undefined ? {} : { is_sample };
+    fetchDataRequests.mockResolvedValue({ items: [request('sample', extra), request('ordinary', { title: 'Synthetic data request' })] });
+    await renderPage();
+    const heading = screen.getByRole('heading', { name: 'Request sample' });
+    const header = within(heading.parentElement!);
+    expect(header.queryByText('(SAMPLE)') !== null).toBe(is_sample === true);
+    expect(header.getByText('normal')).toBeTruthy();
+    expect(screen.queryAllByText('(SAMPLE)')).toHaveLength(is_sample === true ? 1 : 0);
+    expect(screen.getByRole('link', { name: /Synthetic data request/ }).getAttribute('href')).toBe('/requests/request-ordinary');
+  });
+
   it('renders newest requests first with existing detail, budget and post links', async () => {
     fetchDataRequests.mockResolvedValue({ items: [
       request('older'), request('newer', { created_at: '2026-10-02T12:00:00Z' }),

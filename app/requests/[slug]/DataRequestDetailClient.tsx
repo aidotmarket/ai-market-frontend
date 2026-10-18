@@ -492,8 +492,13 @@ export default function DataRequestDetailClient({
 
       {/* Header */}
       <div className="mb-6">
-        <div className="flex items-start gap-3 mb-3">
+        <div className="flex flex-wrap items-start gap-3 mb-3">
           <h1 className="text-2xl font-bold text-gray-900 flex-1">{request.title}</h1>
+          {request.is_sample === true && (
+            <span className="inline-flex items-center rounded-full bg-amber-100 px-2.5 py-0.5 text-xs font-medium text-amber-800 shrink-0">
+              (SAMPLE)
+            </span>
+          )}
           <span className={`inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-medium shrink-0 ${statusCss}`}>
             {request.status.replace('_', ' ')}
           </span>

@@ -941,6 +941,7 @@ export type RequestPublicationReason =
   | 'request_expired';
 
 export interface DataRequestListItem {
+  is_sample?: boolean;
   id: string;
   slug: string;
   title?: string;
