@@ -24,7 +24,10 @@ beforeEach(()=>{
 describe('checklist reads owned at the workspace page',()=>{
  it('renders the six task tabs plus Your listings, and one next action on every tab including manage',async()=>{
   render(<Harness/>);const checklist=screen.getByRole('complementary',{name:'Listing checklist'});
-  await waitFor(()=>expect(within(checklist).getByRole('button',{name:'Next: Review →'})).toBeTruthy());
+  await waitFor(()=>{
+   expect(within(checklist).getByRole('button',{name:'Next: Review →'})).toBeTruthy();
+   expect(mocks.review).toHaveBeenCalledOnce();
+  });
   expect(within(checklist).getAllByRole('listitem')).toHaveLength(6);expect(within(within(checklist).getByRole('list')).getAllByText(/· Next/)).toHaveLength(1);
   const sections=screen.getByRole('navigation',{name:'Workspace sections'});expect(within(sections).getAllByRole('button').map(b=>b.textContent)).toEqual(['Connect your storage','Choose your files','Choose a licence','Describe and price','Review','Publish','Your listings']);
   fireEvent.click(within(checklist).getByRole('button',{name:'Next: Review →'}));expect(navigate).toHaveBeenCalledWith('review');expect(mocks.review).toHaveBeenCalledOnce();
