@@ -167,7 +167,11 @@ export default function SellerWorkspacePage() {
   const [pageState, setPageState] = useState<PageState>('loading');
   const [capabilities, setCapabilities] = useState<SellerWorkspaceCapabilities | null>(null);
   const [view, setView] = useState<WorkspaceView>('storage');
-  const [r2Target,setR2Target]=useState<SellerWorkspaceConnection|null|undefined>(undefined);
+  const [r2Form, setR2Form] = useState<{ visit: number; connection: SellerWorkspaceConnection | null }>();
+  const r2Visit = useRef(0);
+  const setR2Target = (connection: SellerWorkspaceConnection | null | undefined) => {
+    setR2Form(connection === undefined ? undefined : { visit: ++r2Visit.current, connection });
+  };
   const [connections, setConnections] = useState<SellerWorkspaceConnection[]>([]);
   const [previousExpanded, setPreviousExpanded] = useState(false);
   const { current: currentConnections, previous: previousConnections, groups: previousGroups } = partitionConnections(connections);
@@ -506,6 +510,14 @@ export default function SellerWorkspacePage() {
     }
   };
 
+  const navigate = (nextView: WorkspaceView) => {
+    setR2Target(undefined);
+    clearSensitive();
+    setActionError(null);
+    setDisconnectConfirmation(null);
+    setView(nextView);
+  };
+
   if (pageState === 'loading') {
     return (
       <div className="space-y-6">
@@ -572,9 +584,9 @@ export default function SellerWorkspacePage() {
     <SellerListingDraftProvider
       enabled={capabilities?.master.enabled===true&&capabilities?.drafts?.enabled===true&&capabilities.drafts.status==='available'}
       sampleCapability={capabilities?.master.enabled===true&&capabilities?.drafts?.enabled===true&&capabilities.drafts.status==='available'&&capabilities?.samples?.enabled===true&&capabilities.samples.status==='available'}>
-    <GuidedListingFlow connections={currentConnections} capabilities={capabilities} view={view} navigate={setView}>
+    <GuidedListingFlow connections={currentConnections} capabilities={capabilities} view={view} navigate={navigate}>
     <div className="space-y-6">
-      <WorkspaceOverview connections={currentConnections} view={view} onViewChange={(nextView) => { setR2Target(undefined); clearSensitive(); setActionError(null); setDisconnectConfirmation(null); setView(nextView); }} />
+      <WorkspaceOverview connections={currentConnections} view={view} onViewChange={navigate} />
       <WorkspacePanel active={view === 'data'}>{capabilities?.master.enabled && capabilities.sources?.enabled && capabilities.sources.status === 'available' ? <SavedWorkspaceData connections={connections} enabled={isStorageDiscoveryAvailable(capabilities)} sampleLimits={DEFAULT_SAMPLE_LIMITS} /> : <WorkspaceData connections={connections} enabled={capabilities !== null && isStorageDiscoveryAvailable(capabilities)} />}</WorkspacePanel>
       <WorkspacePanel active={view === 'license'}><SavedLicenseStep /><WorkspaceBatchSigning /></WorkspacePanel>
       <WorkspacePanel active={view === 'publish'}><GuidedPublishStep active={view === 'publish'} /></WorkspacePanel>
@@ -585,7 +597,21 @@ export default function SellerWorkspacePage() {
       {busyAction!==null&&<p role="status" className="text-sm text-gray-600">A storage connection action is in progress. Other connection actions will be available when it finishes.</p>}
 
       <StorageProviders capabilities={capabilities} busy={busyAction} onConnectAWS={handleCreate} onConnectR2={() => {clearSensitive();setR2Target(partitionConnections(connections).current.find(connection => connection.provider === 'r2' && connection.status === 'pending_authorization') ?? null);}} />
-      {view === 'storage' && r2Target !== undefined && <R2ConnectionForm key={r2Target?.id ?? 'new-r2'} connection={r2Target} onClose={() => setR2Target(undefined)} onSaved={saved => {setConnections(current => [...current.filter(item => item.id !== saved.id),saved]);setR2Target(undefined);}} />}
+      {view === 'storage' && r2Form && <R2ConnectionForm
+        key={r2Form.visit}
+        connection={r2Form.connection}
+        onClose={() => setR2Form(current => current?.visit === r2Form.visit ? undefined : current)}
+        onSaved={saved => {
+          // Reconcile successful saves even after navigation, without rolling back a newer result.
+          setConnections(current => {
+            const existing = current.find(item => item.id === saved.id);
+            if (existing && existing.version > saved.version) return current;
+            return existing ? current.map(item => item.id === saved.id ? saved : item) : [...current, saved];
+          });
+          // Only the visit that submitted this save owns its dismissal.
+          setR2Form(current => current?.visit === r2Form.visit ? undefined : current);
+        }}
+      />}
 
       {actionError && (
         <div className="rounded-lg border border-red-200 bg-red-50 p-4 text-sm text-red-800" role="alert">
