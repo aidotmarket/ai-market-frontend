@@ -170,7 +170,13 @@ export default function SellerWorkspacePage() {
   const [r2Form, setR2Form] = useState<{ visit: number; connection: SellerWorkspaceConnection | null }>();
   const r2Visit = useRef(0);
   const setR2Target = (connection: SellerWorkspaceConnection | null | undefined) => {
-    setR2Form(connection === undefined ? undefined : { visit: ++r2Visit.current, connection });
+    if (connection === undefined) {
+      setR2Form(undefined);
+      return;
+    }
+    const next = { visit: ++r2Visit.current, connection };
+    // Re-clicking the active target preserves its draft and in-flight submission.
+    setR2Form(current => current && current.connection?.id === connection?.id ? current : next);
   };
   const [connections, setConnections] = useState<SellerWorkspaceConnection[]>([]);
   const [previousExpanded, setPreviousExpanded] = useState(false);
@@ -599,7 +605,7 @@ export default function SellerWorkspacePage() {
       <StorageProviders capabilities={capabilities} busy={busyAction} onConnectAWS={handleCreate} onConnectR2={() => {clearSensitive();setR2Target(partitionConnections(connections).current.find(connection => connection.provider === 'r2' && connection.status === 'pending_authorization') ?? null);}} />
       {view === 'storage' && r2Form && <R2ConnectionForm
         key={r2Form.visit}
-        connection={r2Form.connection}
+        connection={connections.find(connection => connection.id === r2Form.connection?.id) ?? r2Form.connection}
         onClose={() => setR2Form(current => current?.visit === r2Form.visit ? undefined : current)}
         onSaved={saved => {
           // Reconcile successful saves even after navigation, without rolling back a newer result.

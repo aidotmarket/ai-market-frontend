@@ -116,7 +116,7 @@ it('preserves a new draft when an older replacement succeeds, while retaining th
 });
 
 it.each(['switch target', 'overview navigation', 'checklist navigation'])('preserves a same-target revisit after %s', async route => {
-  const save = deferred(); api.saveR2Connection.mockReturnValue(save.promise);
+  const save = deferred(); api.saveR2Connection.mockReturnValueOnce(save.promise).mockReturnValue(new Promise(() => {}));
   await setup();
   if (route === 'switch target') add();
   else if (route === 'overview navigation') {
@@ -136,6 +136,13 @@ it.each(['switch target', 'overview navigation', 'checklist navigation'])('prese
   expect(input('Secret Access Key').value).toBe('e'.repeat(64));
   expect((screen.getByRole('checkbox') as HTMLInputElement).checked).toBe(true);
   expect((screen.getByRole('button', { name: 'Verify and replace keys' }) as HTMLButtonElement).disabled).toBe(false);
+  expect(api.saveR2Connection).toHaveBeenCalledTimes(1);
+  fireEvent.submit(input('Access Key ID').closest('form')!);
+  expect(api.saveR2Connection).toHaveBeenCalledTimes(2);
+  expect(api.saveR2Connection.mock.calls[1][0]).toMatchObject({
+    expected_version: 2, access_key_id: 'c'.repeat(32), secret_access_key: 'e'.repeat(64),
+  });
+  expect(api.saveR2Connection.mock.calls[1][2]).toBe('r2-a');
 });
 
 it('preserves a closed and reopened create visit after an earlier create succeeds', async () => {
@@ -149,13 +156,39 @@ it('preserves a closed and reopened create visit after an earlier create succeed
   expect(screen.getAllByRole('button', { name: 'Replace access keys' })).toHaveLength(2);
 });
 
-it('opens a fresh visit even when Add is clicked again for the same new target', async () => {
+it.each(['replacement', 'creation'])('retains the idle %s child and typed keys on same-target re-click', async target => {
+  render(<SellerWorkspacePage />);
+  await screen.findByRole('button', { name: 'Replace access keys' });
+  const open = target === 'replacement' ? replace : add;
+  open();
+  change('Access Key ID', 'c'.repeat(32));
+  change('Secret Access Key', 'e'.repeat(64));
+  fireEvent.click(screen.getByRole('checkbox'));
+  const field = input('Access Key ID');
+  open(); open();
+  expect(input('Access Key ID')).toBe(field);
+  expect(field.value).toBe('c'.repeat(32));
+  expect(input('Secret Access Key').value).toBe('e'.repeat(64));
+  expect((screen.getByRole('checkbox') as HTMLInputElement).checked).toBe(true);
+  expect(api.saveR2Connection).not.toHaveBeenCalled();
+});
+
+it.each(['replacement', 'creation'])('keeps the pending %s child busy on same-target re-click and completes normally', async target => {
   const save = deferred(); api.saveR2Connection.mockReturnValue(save.promise);
-  await setup(true);
-  add(); change('Bucket name', 'synthetic-new-draft');
-  await act(async () => save.resolve(result(1, 'r2-created')));
-  expectDraft();
-  expect(input('Secret Access Key').value).toBe('');
+  await setup(target === 'creation');
+  const form = input('Access Key ID').closest('form')!;
+  const open = target === 'replacement' ? replace : add;
+  open(); open();
+  expect(input('Access Key ID').closest('form')).toBe(form);
+  expect((form.querySelector('fieldset') as HTMLFieldSetElement).disabled).toBe(true);
+  expect((screen.getByRole('button', { name: 'Checking connection…' }) as HTMLButtonElement).disabled).toBe(true);
+  expect((screen.getByRole('button', { name: 'Cancel' }) as HTMLButtonElement).disabled).toBe(true);
+  fireEvent.submit(form); fireEvent.submit(form);
+  expect(api.saveR2Connection).toHaveBeenCalledTimes(1);
+  expect(api.createIdempotencyKey).toHaveBeenCalledTimes(1);
+  await act(async () => save.resolve(target === 'creation' ? result(1, 'r2-created') : result()));
+  expect(screen.queryByRole('heading', { name: target === 'creation' ? 'Connect Cloudflare R2' : 'Replace Cloudflare access keys' })).toBeNull();
+  expect(screen.getAllByRole('button', { name: 'Replace access keys' })).toHaveLength(target === 'creation' ? 2 : 1);
 });
 
 it('an old failure leaves a newer pending form busy and untouched', async () => {
@@ -183,6 +216,9 @@ it('keeps current errors safe, blocks duplicate submissions, and reuses only unc
   expect(screen.getByRole('alert').textContent).toContain('Connection could not be confirmed');
   expect(screen.getByRole('alert').textContent).not.toContain('synthetic-private-provider-detail');
   expect(input('Secret Access Key').value).toBe('b'.repeat(64));
+  replace();
+  expect(input('Access Key ID').closest('form')).toBe(form);
+  expect(screen.getByRole('alert').textContent).toContain('Connection could not be confirmed');
   fireEvent.submit(form);
   expect(api.saveR2Connection.mock.calls[1]).toEqual(api.saveR2Connection.mock.calls[0]);
   await act(async () => retry.reject(new Error('synthetic-retry-failure')));
