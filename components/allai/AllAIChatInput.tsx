@@ -62,6 +62,8 @@ export default function AllAIChatInput({
   const handleKeyDown = useCallback(
     (e: KeyboardEvent) => {
       if (e.key === 'Enter' && !e.shiftKey) {
+        // Let the browser confirm composition, including legacy IME key events.
+        if (e.nativeEvent.isComposing || e.nativeEvent.keyCode === 229) return;
         e.preventDefault();
         handleSend();
       }
