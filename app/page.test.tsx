@@ -49,6 +49,21 @@ function request(id: string) {
 }
 
 describe('homepage buyer requests', () => {
+  it.each([true, false, undefined, 'true', 1, null])('tags only an explicit sample flag (%s) next to its buyer demand title', async is_sample => {
+    const extra = is_sample === undefined ? {} : { is_sample };
+    fetchDataRequests.mockResolvedValue({ items: [{ ...request('1'), ...extra }, { ...request('2'), title: 'Synthetic data request' }, request('3')] });
+    const { default: LandingPage } = await import('./page');
+    render(await LandingPage());
+    const heading = screen.getByRole('heading', { name: 'Request 1' });
+    const card = heading.closest('a')!;
+    expect(card.getAttribute('href')).toBe('/requests/request-1');
+    const badge = within(card).queryByText('(SAMPLE)');
+    expect(badge !== null).toBe(is_sample === true);
+    if (badge) expect(heading.nextElementSibling).toBe(badge);
+    expect(screen.queryAllByText('(SAMPLE)')).toHaveLength(is_sample === true ? 1 : 0);
+    expect(screen.getByRole('link', { name: /Synthetic data request/ }).getAttribute('href')).toBe('/requests/request-2');
+  });
+
   beforeEach(() => {
     vi.clearAllMocks();
     serverTerms.getPublicTermsVersion.mockResolvedValue('1.1');

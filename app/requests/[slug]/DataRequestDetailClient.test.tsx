@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 
-import { act, cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { act, cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type React from 'react';
 import http from 'node:http';
@@ -144,6 +144,22 @@ describe('DataRequestDetailClient authenticated fallback loading', () => {
     vi.resetAllMocks();
     vi.restoreAllMocks();
     vi.unstubAllGlobals();
+  });
+
+  it.each([true, false, undefined, 'true', 1, null])('tags only an explicit sample flag (%s) in the detail title/status row', async is_sample => {
+    mocks.auth.user = null;
+    mocks.auth.isAuthenticated = false;
+    const extra = is_sample === undefined ? {} : { is_sample };
+    const request = { ...makeOwnerRequest(), title: 'Synthetic data request', ...extra } as DataRequestDetail;
+    mocks.getDataRequest.mockResolvedValue(request);
+    render(<DataRequestDetailClient slug={request.slug} initialRequest={request} />);
+    await waitFor(() => expect(mocks.getDataRequest).toHaveBeenCalled());
+    const heading = screen.getByRole('heading', { name: 'Synthetic data request' });
+    const header = within(heading.parentElement!);
+    expect(header.queryByText('(SAMPLE)') !== null).toBe(is_sample === true);
+    expect(header.getByText('open')).toBeTruthy();
+    expect(screen.queryAllByText('(SAMPLE)')).toHaveLength(is_sample === true ? 1 : 0);
+    expect(screen.getByRole('link', { name: /Back to requests/ }).getAttribute('href')).toBe('/requests');
   });
 
   const savedQuote = {

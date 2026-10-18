@@ -516,6 +516,11 @@ export default async function LandingPage() {
                       <h3 className="mt-4 text-lg font-bold leading-snug text-[#1A1A1A]">
                         {request.title || 'Buyer data request'}
                       </h3>
+                      {request.is_sample === true && (
+                        <span className="inline-flex items-center rounded-full bg-amber-100 px-2.5 py-0.5 text-xs font-medium text-amber-800 shrink-0">
+                          (SAMPLE)
+                        </span>
+                      )}
                       <p className="mt-2 line-clamp-3 text-sm leading-6 text-[#666666]">
                         {request.description}
                       </p>
