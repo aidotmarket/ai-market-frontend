@@ -41,11 +41,14 @@ export function preparationErrorCode(error:unknown):string|undefined {
   const detail=axios.isAxiosError(error)?error.response?.data?.detail:undefined;
   return typeof detail==='string'?detail:typeof detail?.code==='string'?detail.code:error instanceof Error?error.message:undefined;
 }
+export function preparationUnavailable(error:unknown):boolean {
+  return axios.isAxiosError(error)&&error.response?.status===404&&preparationErrorCode(error)==='UNAVAILABLE';
+}
 export function preparationError(error:unknown):string {
   const status=axios.isAxiosError(error)?error.response?.status:undefined;
   const code=preparationErrorCode(error);
   if(status===401||code==='FIRST_PARTY_SESSION_REQUIRED')return 'Sign in again to prepare this listing.';
-  if(status===403)return 'Preparation is not allowed by the current seller policy.';
+  if(status===403)return 'Preparation is not allowed by the current seller policy. Retry the status check before publishing.';
   if(status===404)return 'Listing preparation is currently unavailable.';
   if(status===503)return 'Approval or policy checks are currently unavailable. Retry this same preparation.';
   switch(code) {
@@ -53,7 +56,7 @@ export function preparationError(error:unknown):string {
     case 'IDEMPOTENCY_CONFLICT':return 'This request no longer matches the saved preparation. Refresh the saved review before preparing again.';
     case 'LICENSE_SIGNING_UNAVAILABLE':return 'Licence signing is currently unavailable for this listing.';
     case 'PREPARATION_STALE':return 'The listing or files changed. Refresh the saved review and approve it again.';
-    default:return 'Preparation could not be confirmed. Retry the same preparation or refresh its status.';
+    default:return 'Preparation could not be confirmed. Retry the same preparation or refresh its status before publishing.';
   }
 }
 export const preparationStatus = {prepared:'Needs signing',signed:'Ready to publish here or from Claude',published:'Published',superseded:'Superseded'};
