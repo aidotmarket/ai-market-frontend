@@ -14,7 +14,7 @@ const DraftContext=createContext<DraftStore|null>(null);
 
 type OwnerSnapshot={draft:SavedListingDraft|null;selectionSaveCount:number;selectionSaveFailed:boolean};
 const owner={
-  draft:null as SavedListingDraft|null,version:0,loaded:false,queue:Promise.resolve() as Promise<unknown>,
+  draft:null as SavedListingDraft|null,version:0,saveRevision:0,loaded:false,queue:Promise.resolve() as Promise<unknown>,
   pending:null as {serialized:string;version:number;id:string}|null,
   selectionSaveCount:0,selectionSaveFailed:false,listeners:new Set<(snapshot:OwnerSnapshot)=>void>(),
 };
@@ -31,7 +31,7 @@ const persist=(build:(base:ListingDraftContent)=>ListingDraftContent,baselineVer
     if(!owner.pending||owner.pending.serialized!==serialized||owner.pending.version!==version)
       owner.pending={serialized,version,id:crypto.randomUUID()};
     const result=await saveListingDraft(content,owner.pending.version,owner.pending.id);
-    owner.pending=null;owner.draft=result;owner.version=result.version;publish();
+    owner.pending=null;owner.draft=result;owner.version=result.version;owner.saveRevision+=1;publish();
     return result;
   });
   owner.queue=operation;
@@ -40,7 +40,7 @@ const persist=(build:(base:ListingDraftContent)=>ListingDraftContent,baselineVer
 
 export function resetSellerListingDraftOwnerForTests() {
   if(process.env.NODE_ENV!=='test')return;
-  owner.draft=null;owner.version=0;owner.loaded=false;owner.queue=Promise.resolve();owner.pending=null;
+  owner.draft=null;owner.version=0;owner.saveRevision=0;owner.loaded=false;owner.queue=Promise.resolve();owner.pending=null;
   owner.selectionSaveCount=0;owner.selectionSaveFailed=false;owner.listeners.clear();
 }
 
@@ -70,8 +70,12 @@ export function SellerListingDraftProvider({enabled,sampleCapability,children}:{
   },[enabled,retryKey,requested]);
   const reload=useCallback(async(signal?:AbortSignal,onLoaded?:()=>void)=>{
     await owner.queue.catch(()=>undefined);
+    const saveRevision=owner.saveRevision;
     const value=await readListingDraft(signal);
     if(signal?.aborted)return value;
+    // Only an overlapping successful save makes an older read stale. Fresh
+    // reads must still be able to load an intentional reset (including null).
+    if(owner.saveRevision!==saveRevision&&(!value||value.version<owner.version))return owner.draft;
     owner.draft=value;owner.version=value?.version??0;owner.loaded=true;owner.pending=null;
     onLoaded?.();publish();setLoaded(true);setError(false);
     return value;
