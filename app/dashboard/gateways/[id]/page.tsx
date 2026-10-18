@@ -50,6 +50,8 @@ export default function GatewayPage() {
   const [fileCursor, setFileCursor] = useState<string | null>(null);
   const [messages, setMessages] = useState<ReceivedMessage[]>([]);
   const [messageCursor, setMessageCursor] = useState<string | null>(null);
+  const [messageError, setMessageError] = useState<string | null>(null);
+  const [messagesPending, setMessagesPending] = useState(false);
   const [messageType, setMessageType] = useState<GatewayMessageType | ''>('');
   const [name, setName] = useState('');
   const [doorUrl, setDoorUrl] = useState('');
@@ -70,6 +72,8 @@ export default function GatewayPage() {
   const [draftListingId, setDraftListingId] = useState<string | null>(null);
   const alive = useRef(true);
   const currentId = useRef(id);
+  // A fresh read owns its rows, cursor, error and in-flight pagination.
+  const messageRead = useRef<{ pending: boolean; cursor: string | null } | null>(null);
   const doorRun = useRef(0);
   const doorWaitTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const fileRuns = useRef(new Map<string, number>());
@@ -81,10 +85,34 @@ export default function GatewayPage() {
   }, []);
 
   const loadMessages = useCallback(async (cursor?: string, type: GatewayMessageType | '' = '') => {
-    const page = await listReceivedMessages(id, cursor, 100, type || undefined);
-    if (isCurrent(id)) {
+    if (!isCurrent(id)) return;
+    let read = messageRead.current;
+    if (cursor) {
+      if (!read || read.pending || read.cursor !== cursor) return;
+    } else {
+      read = { pending: false, cursor: null };
+      messageRead.current = read;
+      setMessages([]);
+      setMessageCursor(null);
+    }
+    const owner = read;
+    const ownsRead = () => isCurrent(id) && messageRead.current === owner;
+    owner.pending = true;
+    setMessagesPending(true);
+    setMessageError(null);
+    try {
+      const page = await listReceivedMessages(id, cursor, 100, type || undefined);
+      if (!ownsRead()) return;
       setMessages(current => cursor ? [...current, ...page.messages] : page.messages);
+      owner.cursor = page.next_cursor;
       setMessageCursor(page.next_cursor);
+    } catch {
+      if (ownsRead()) setMessageError(cursor ? 'We could not load more messages. Try again.' : 'We could not load messages. Try again.');
+    } finally {
+      if (ownsRead()) {
+        owner.pending = false;
+        setMessagesPending(false);
+      }
     }
   }, [id, isCurrent]);
 
@@ -123,6 +151,8 @@ export default function GatewayPage() {
     currentId.current = id;
     alive.current = true;
     let cancelled = false;
+    messageRead.current = null;
+    setMessageError(null); setMessagesPending(false);
     setState('loading'); setGateway(null); setFiles([]); setFileCursor(null); setMessages([]); setMessageCursor(null);
     setName(''); setDoorUrl(''); setMessageType(''); setError(null); setDoorError(null); setFileError(null);
     setAckChecked(false); setConfirmRevoke(false); setOpenOrders(null); setConfirmFile(null);
@@ -144,7 +174,7 @@ export default function GatewayPage() {
       } catch { if (!cancelled && isCurrent(id)) setState('unavailable'); }
     }
     void load();
-    return () => { cancelled = true; alive.current = false; doorRun.current++; if (doorWaitTimer.current) clearTimeout(doorWaitTimer.current); doorWaitTimer.current = null; fileRuns.current.clear(); };
+    return () => { cancelled = true; messageRead.current = null; alive.current = false; doorRun.current++; if (doorWaitTimer.current) clearTimeout(doorWaitTimer.current); doorWaitTimer.current = null; fileRuns.current.clear(); };
   }, [hydrated, isAuthenticated, id, isCurrent, loadMessages, pollDoor]);
 
   useEffect(() => {
@@ -353,9 +383,10 @@ export default function GatewayPage() {
       {confirmFile && <div role="dialog" aria-label="Confirm description" className="space-y-3 rounded border p-4"><p>{DESCRIPTION_CONFIRMATION}</p><p>Preview locally: <code>aim-gateway preview {confirmFile.file_id}</code></p><button type="button" className="rounded bg-indigo-700 px-3 py-2 text-white" onClick={describe}>Confirm describe</button><button type="button" className="ml-2 rounded border px-3 py-2" onClick={() => setConfirmFile(null)}>Cancel</button></div>}
     </section>
     <section className="space-y-3"><h2 className="text-xl font-semibold">What we receive</h2>
-      <label>Message type <select value={messageType} onChange={event => { const type = event.target.value as GatewayMessageType | ''; setMessageType(type); setMessages([]); setMessageCursor(null); void loadMessages(undefined, type).catch(() => { if (isCurrent(id)) setError('We could not load messages. Try again.'); }); }} className="ml-2 rounded border p-2"><option value="">All types</option>{MESSAGE_TYPES.map(type => <option key={type} value={type}>{type}</option>)}</select></label>
+      <label>Message type <select value={messageType} onChange={event => { const type = event.target.value as GatewayMessageType | ''; setMessageType(type); void loadMessages(undefined, type); }} className="ml-2 rounded border p-2"><option value="">All types</option>{MESSAGE_TYPES.map(type => <option key={type} value={type}>{type}</option>)}</select></label>
+      {messageError && <p role="alert" className="text-red-700">{messageError}</p>}
       <ol className="space-y-3">{sortedMessages.map((message, index) => <li key={message.seq}>{index > 0 && message.seq > sortedMessages[index - 1].seq + 1 && <p className="rounded bg-amber-50 p-2">Messages {sortedMessages[index - 1].seq + 1} to {message.seq - 1} {messageType ? 'not shown by this filter or missing' : 'missing'}</p>}<article className="rounded border bg-white p-3"><p>Seq {message.seq} · {message.message_type} · {dateLabel(message.received_at)}</p><pre className="overflow-auto whitespace-pre-wrap text-xs">{JSON.stringify(message.body, null, 2)}</pre></article></li>)}</ol>
-      {messageCursor && <button type="button" className="rounded border px-3 py-2" onClick={() => void loadMessages(messageCursor, messageType).catch(() => { if (isCurrent(id)) setError('We could not load more messages. Try again.'); })}>Load more messages</button>}
+      {messageCursor && <button type="button" className="rounded border px-3 py-2" disabled={messagesPending} onClick={() => void loadMessages(messageCursor, messageType)}>Load more messages</button>}
     </section>
   </div>;
 }
