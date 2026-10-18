@@ -2,7 +2,6 @@
 
 import { useState } from 'react';
 import Link from 'next/link';
-import { AxiosError } from 'axios';
 import { forgotPassword } from '@/api/auth';
 import { useToast } from '@/components/Toast';
 
@@ -24,15 +23,8 @@ export default function ForgotPasswordPage() {
       setMessage(res.message);
       setSubmitted(true);
       toast(res.message, 'success');
-    } catch (err) {
-      const fallbackMessage = 'If an account exists for that email, a reset link has been sent.';
-      if (err instanceof AxiosError) {
-        setMessage(err.response?.data?.message || fallbackMessage);
-      } else {
-        setMessage(fallbackMessage);
-      }
-      setSubmitted(true);
-      toast(fallbackMessage, 'success');
+    } catch {
+      setError("We couldn't confirm your reset request. Please try again.");
     } finally {
       setLoading(false);
     }
@@ -53,7 +45,7 @@ export default function ForgotPasswordPage() {
         ) : (
           <form onSubmit={handleSubmit} className="space-y-4">
             {error && (
-              <div className="rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
+              <div role="alert" className="rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
                 {error}
               </div>
             )}
