@@ -2,8 +2,12 @@
 const key = 'data-verification:listing-return';
 interface Destination { sellerId: string; listingId: string }
 export function saveVerificationReturn(destination?: Destination) {
-  if (destination) window.sessionStorage.setItem(key, JSON.stringify(destination));
-  else window.sessionStorage.removeItem(key);
+  try {
+    if (destination) window.sessionStorage.setItem(key, JSON.stringify(destination));
+    else window.sessionStorage.removeItem(key);
+  } catch {
+    // Optional navigation storage must not prevent hosted setup navigation.
+  }
 }
 export function getVerificationReturn(sellerId?: string): string | null {
   try {
