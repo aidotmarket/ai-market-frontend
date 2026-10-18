@@ -2,7 +2,7 @@ import type { Metadata } from 'next';
 
 export const metadata: Metadata = {
   title: 'Use ai.market in Claude',
-  description: 'Ask Claude to find and inspect data on ai.market in plain language.',
+  description: 'Use ai.market from Claude in plain language.',
   alternates: {
     canonical: '/docs/claude',
   },
@@ -15,16 +15,16 @@ export default function ClaudeDocsPage() {
 
       <div className="prose prose-gray max-w-none prose-headings:text-gray-900 prose-p:text-gray-700 prose-a:text-[#3F51B5] [&>section]:mb-6">
         <section>
-          <p><strong>Use ai.market in Claude.</strong> Ask Claude to find and inspect data on ai.market in plain language. Claude works with your own ai.market account and only sees what you allow.</p>
+          <p><strong>Use ai.market in Claude.</strong> Use ai.market from Claude in plain language. Buyers can find and inspect data. Sellers can manage their listings. Claude works with your own ai.market account and only does what you approve.</p>
         </section>
         <section>
-          <p><strong>Connect.</strong> In Claude, open Settings, then Connectors, find ai.market and choose Connect. You sign in on ai.market, see exactly what Claude is asking for, and approve.</p>
+          <p><strong>Connect.</strong> In Claude, open Settings, then Connectors, find ai.market and choose Connect. You sign in on ai.market, see exactly what Claude is asking for, and approve. If you sell for a company, choose the company account on that screen.</p>
         </section>
         <section>
-          <p><strong>What Claude can do.</strong> Search published listings. Look at a listing&apos;s description, columns, row count, update frequency and price. Show your account details, your recent activity and your data requests.</p>
+          <p><strong>What Claude can do.</strong> For buyers. Search published listings. Look at a listing&apos;s description, columns, row count, update frequency and price. Show your account, your recent activity and your data requests. For sellers. Show your listings and drafts. Create a new draft or update one. Add a better description and other details to a listing draft. Tell you what is still missing before a listing can go live. Update several listings at once. Read and answer buyer questions and data requests through ai.market. Show your orders and mark an order as delivered. Some actions take effect straight away, like replying to a buyer or marking an order delivered, so be clear about what you ask Claude to do.</p>
         </section>
         <section>
-          <p><strong>What Claude cannot do.</strong> Claude cannot buy, sell, pay, publish or message anyone for you in this version. It never sees dataset files. When you want to buy, Claude gives you the link and you finish on ai.market.</p>
+          <p><strong>What Claude cannot do.</strong> Claude cannot buy, pay or publish for you in this version. To make a listing live, or take it down, use your ai.market dashboard. Claude cannot upload sample files. Use the website for those. Claude never sees your dataset files, and buyers and sellers never get each other&apos;s contact details.</p>
         </section>
         <section>
           <p><strong>Your data.</strong> We record each tool call for security, with a one-way fingerprint instead of what you asked. We do not get your Claude conversation. See the <a href="/legal/privacy#ai-assistants">privacy notice</a> for details.</p>
