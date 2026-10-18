@@ -9,9 +9,15 @@ export default function CheckoutCancelPage() {
             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
           </svg>
         </div>
-        <h1 className="text-2xl font-bold text-gray-900 mb-2">Checkout cancelled</h1>
-        <p className="text-gray-600 mb-6">No charges were made to your account.</p>
+        <h1 className="text-2xl font-bold text-gray-900 mb-2">Returned from checkout</h1>
+        <p className="text-gray-600 mb-6">Returning here does not confirm whether payment was made. Check your purchases or contact support before attempting another checkout.</p>
         <div className="flex flex-col sm:flex-row gap-3 justify-center">
+          <Link
+            href="/dashboard/orders"
+            className="rounded-lg border border-gray-300 px-6 py-2.5 text-sm font-medium text-gray-700 hover:bg-gray-50"
+          >
+            Check My Purchases
+          </Link>
           <Link
             href="/listings"
             className="rounded-lg bg-[#3F51B5] px-6 py-2.5 text-sm font-medium text-white hover:bg-[#3545a0]"
