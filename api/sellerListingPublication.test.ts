@@ -1,6 +1,8 @@
 import {beforeEach,expect,it,vi} from 'vitest';
 import {readPublication,publishListing,readPublicationPage,setPublicationVisibility} from './sellerListingPublication';
 import type {ApprovalReceipt} from './sellerListingReview';
+import {nativeClient,nativeSession} from './connector-seller-settings';
+import {useAuthStore} from '@/store/auth';
 import {createStandardSelection} from './listingLicenses';
 const api=vi.hoisted(()=>({get:vi.fn(),post:vi.fn()}));vi.mock('./client',()=>({api}));
 const id='00000000-0000-4000-8000-000000000001';
@@ -36,4 +38,12 @@ it('checks that visibility changes return the same immutable listing',async()=>{
   await expect(setPublicationVisibility(receipt,false,id,new AbortController().signal)).rejects.toThrow(/verified/);
   api.post.mockResolvedValue({data:{...receipt,status:'unlisted',is_listed:false}});
   expect((await setPublicationVisibility(receipt,false,id,new AbortController().signal)).status).toBe('unlisted');
+});
+
+it('publishes a signed preparation through the first-party session client',async()=>{
+  useAuthStore.setState({token:'native-session'});
+  const post=vi.spyOn(nativeClient,'post').mockResolvedValue({data:receipt});const signal=new AbortController().signal;
+  await publishListing(approval,id,signal,id);
+  expect(post).toHaveBeenCalledWith('/seller-workspace/listing-publication',{request_id:id,approval_id:id,review_hash:approval.review_hash,render_hash:approval.render_hash,preparation_id:id},{signal,headers:nativeSession().headers});
+  expect(api.post).not.toHaveBeenCalled();post.mockRestore();
 });

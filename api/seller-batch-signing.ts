@@ -8,14 +8,15 @@ export interface PreparationBinding {
 }
 export interface PreparationView {
   id: string; status: 'prepared' | 'signed' | 'published' | 'superseded'; binding: PreparationBinding;
-  coverage_hash: string; acceptance_id: string | null; signing_required: boolean;
+  signed_coverage_hash: string | null; coverage_hash: string; acceptance_id: string | null; signing_required: boolean;
 }
 export interface SigningInstrument extends PreparationView { license_selection: LicenseSelection }
 export interface SigningRequest { request_id: string; csrf: string; reauth_token?: string; instruments: { preparation_id: string; coverage_hash: string; selection: LicenseSelection }[] }
 const base = '/seller-workspace';
-function validView(v: PreparationView) {
+export function validView(v: PreparationView) {
   const b = v?.binding;
   return v && uuid(v.id) && b && b.preparation_id === v.id && digest(v.coverage_hash)
+    && (['signed','published'].includes(v.status) ? digest(v.signed_coverage_hash) : v.signed_coverage_hash === null)
     && ['prepared', 'signed', 'published', 'superseded'].includes(v.status) && typeof v.signing_required === 'boolean'
     && (v.acceptance_id === null || uuid(v.acceptance_id))
     && [b.seller_id, b.draft_id, b.approval_id, b.listing_id, b.version_id].every(uuid)

@@ -1,4 +1,5 @@
 import axios from 'axios';
+import {nativeClient,nativeSession} from './connector-seller-settings';
 import { api } from './client';
 import type { ListingDraftContent } from './sellerListingDraft';
 import type {LicenseSelection} from './listingLicenses';
@@ -8,11 +9,13 @@ export type ConfirmationKey = typeof CONFIRMATION_KEYS[number] | typeof LICENSE_
 export interface ReviewSampleFile { index: number; sha256: string; key_basename: string; size: number }
 export type SampleStatus = 'not_selected' | {state:'selected';files:ReviewSampleFile[]};
 export interface ApprovalReceipt {
+  draft_id?: string;
   id: string; review_hash: string; render_hash: string; draft_version: number; source_version: number;
   approved_at: string; sample_decision: 'none' | 'member_files';
   license_selection?: LicenseSelection;
 }
 export interface ListingReview {
+  draft_id?: string;
   fields: Pick<ListingDraftContent, 'title' | 'description' | 'category' | 'tags' | 'price' | 'license'>;
   draft_version: number; source_version: number; presentation_version: string; review_hash: string;
   missing_fields: string[]; approval_available: boolean; sample_status?: SampleStatus;
@@ -65,13 +68,14 @@ function verifySourcePage(page: ReviewSourcePage, review: ListingReview, offset:
     throw new Error('Saved review files could not be verified');
 }
 export async function readReviewSourcePage(review: ListingReview, cursor: string, offset: number, signal: AbortSignal): Promise<ReviewSourcePage> {
-  const page: ReviewSourcePage = (await api.get('/seller-workspace/listing-review/files', {params:{cursor}, signal})).data;
+  const page: ReviewSourcePage = (await api.get('/seller-workspace/listing-review/files', {params:{cursor,...(review.draft_id ? {draft_id:review.draft_id} : {})}, signal})).data;
   verifySourcePage(page, review, offset);
   if (signal.aborted) throw new Error('Saved review files could not be verified');
   return page;
 }
-export async function readListingReview(signal: AbortSignal): Promise<ListingReview> {
-  const review: ListingReview = (await api.get('/seller-workspace/listing-review', {signal})).data;
+export async function readListingReview(signal: AbortSignal, draft_id?: string | null): Promise<ListingReview> {
+  const review: ListingReview = (await api.get('/seller-workspace/listing-review', {signal,...(draft_id ? {params:{draft_id}} : {})})).data;
+  if (draft_id && review.draft_id !== draft_id) throw new Error('Saved review could not be verified');
   if (review.presentation_version !== 'seller-listing-review-v2' || typeof review.rendered_html !== 'string' ||
       !/^[a-f0-9]{64}$/.test(review.render_hash)) throw new Error('Saved review could not be verified');
   const bytes = new TextEncoder().encode(review.rendered_html);
@@ -108,23 +112,24 @@ export async function readListingReview(signal: AbortSignal): Promise<ListingRev
       review.approval.draft_version !== review.draft_version || review.approval.source_version !== review.source_version || review.approval.sample_decision !== sampleDecision ||
       (review.license_selection && !sameLicenseSelection(review.approval.license_selection, review.license_selection))))
     throw new Error('Saved review could not be verified');
+  if (review.approval) review.approval = {...review.approval, draft_id:review.draft_id};
   return review;
 }
 
 export async function approveListingReview(review: ListingReview, request_id: string, signal: AbortSignal): Promise<ApprovalReceipt> {
   const sampleDecision=review.sample_decision??'none';
   const licenseConfirmations=review.license_selection ? {price_confirmed:true,license_confirmed:true,covenant_authority_confirmed:true,license_selection:review.license_selection} : {price_license_confirmed:true};
-  const body = {request_id,review_hash:review.review_hash,render_hash:review.render_hash,
+  const body = {request_id,...(review.draft_id ? {draft_id:review.draft_id} : {}),review_hash:review.review_hash,render_hash:review.render_hash,
     confirmation_version:review.confirmation_version,sample_decision:sampleDecision,
     ownership_confirmed:true,privacy_confirmed:true,...licenseConfirmations,public_disclosure_confirmed:true,
     ...(sampleDecision === 'member_files' ? {sample_files_confirmed:true} : {})};
-  const receipt: ApprovalReceipt = (await api.post('/seller-workspace/listing-approval',body,{signal})).data;
+  const receipt: ApprovalReceipt = (await (review.draft_id ? nativeClient : api).post('/seller-workspace/listing-approval',body,{signal,...(review.draft_id ? {headers:nativeSession().headers} : {})})).data;
   if (receipt.review_hash !== review.review_hash || receipt.render_hash !== review.render_hash ||
       receipt.draft_version !== review.draft_version || receipt.source_version !== review.source_version ||
       receipt.sample_decision !== sampleDecision || signal.aborted ||
       (review.license_selection && !sameLicenseSelection(receipt.license_selection, review.license_selection)))
     throw new Error('Approval could not be verified');
-  return receipt;
+  return {...receipt,draft_id:review.draft_id};
 }
 
 export function listingReviewErrorReason(error: unknown): string {

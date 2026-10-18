@@ -1,3 +1,4 @@
+import {nativeClient,nativeSession} from './connector-seller-settings';
 import {api} from './client';
 import type {ApprovalReceipt} from './sellerListingReview';
 export interface PublicationReceipt {
@@ -21,11 +22,12 @@ export async function readPublication(approval:ApprovalReceipt,signal:AbortSigna
     throw new Error('Publication status could not be verified');
   return {...state,publication:state.publication===null?null:validateReceipt(state.publication,approval)};
 }
-export async function publishListing(approval:ApprovalReceipt,request_id:string,signal:AbortSignal):Promise<PublicationReceipt> {
-  const receipt=(await api.post('/seller-workspace/listing-publication',{
-    request_id,approval_id:approval.id,review_hash:approval.review_hash,render_hash:approval.render_hash,
+export async function publishListing(approval:ApprovalReceipt,request_id:string,signal:AbortSignal,preparation_id?:string):Promise<PublicationReceipt> {
+  const session=preparation_id?nativeSession():null;
+  const receipt=(await (session?nativeClient:api).post('/seller-workspace/listing-publication',{
+    request_id,approval_id:approval.id,...(preparation_id?{preparation_id}:{}),review_hash:approval.review_hash,render_hash:approval.render_hash,
     ...(approval.license_selection ? {license_selection:approval.license_selection} : {}),
-  },{signal})).data;
+  },{signal,...(session?{headers:session.headers}:{})})).data;
   signal.throwIfAborted();return validateReceipt(receipt,approval);
 }
 

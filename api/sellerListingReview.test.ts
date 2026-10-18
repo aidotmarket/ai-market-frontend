@@ -1,6 +1,9 @@
 import { createHash, webcrypto } from 'node:crypto';
 import { afterEach, beforeEach, expect, it, vi } from 'vitest';
 import { readListingReview, readReviewSourcePage, approveListingReview, type ListingReview } from './sellerListingReview';
+import {nativeClient,nativeSession} from './connector-seller-settings';
+import {useAuthStore} from '@/store/auth';
+import {id} from '@/tests/fixtures/seller-authority';
 import {createStandardSelection} from './listingLicenses';
 const client = vi.hoisted(() => ({get:vi.fn(),post:vi.fn()}));
 vi.mock('./client', () => ({api:client}));
@@ -102,4 +105,23 @@ it('requests one cursor-bound page and refuses a cancelled response',async()=>{
  expect(client.get).toHaveBeenCalledWith('/seller-workspace/listing-review/files',{params:{cursor:'next'},signal:controller.signal});
  controller.abort();
  await expect(readReviewSourcePage(complete,'next',50,controller.signal)).rejects.toThrow();
+});
+
+it('keeps named draft identity through review, pagination, restored approval and approval POST',async()=>{
+  useAuthStore.setState({token:'native-session'});
+  const named={...complete,draft_id:id(101),draft_version:3,approval:{id:id(201),review_hash:complete.review_hash,render_hash:complete.render_hash,draft_version:3,source_version:1,sample_decision:'none' as const}};
+  const signal=new AbortController().signal;
+  client.get.mockResolvedValueOnce({data:named});
+  const saved=await readListingReview(signal,id(101));
+  expect(client.get).toHaveBeenCalledWith('/seller-workspace/listing-review',{signal,params:{draft_id:id(101)}});
+  expect(saved.approval?.draft_id).toBe(id(101));
+  client.get.mockResolvedValueOnce({data:{...page,offset:50}});
+  await readReviewSourcePage(saved,'next',50,signal);
+  expect(client.get).toHaveBeenLastCalledWith('/seller-workspace/listing-review/files',{params:{cursor:'next',draft_id:id(101)},signal});
+  const post=vi.spyOn(nativeClient,'post').mockResolvedValue({data:named.approval});
+  try {
+    const receipt=await approveListingReview(saved,id(9),signal);
+    expect(receipt.draft_id).toBe(id(101));expect(receipt.draft_version).toBe(3);
+    expect(post).toHaveBeenCalledWith('/seller-workspace/listing-approval',expect.objectContaining({draft_id:id(101),review_hash:saved.review_hash}),{signal,headers:nativeSession().headers});
+  } finally {post.mockRestore();}
 });

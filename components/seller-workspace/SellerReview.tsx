@@ -28,12 +28,12 @@ export default function SellerReview({active, enabled}: {active: boolean; enable
     if(selectionBlocked){setReview(null);setLoading(false);return;}
     const request = new AbortController();
     setLoading(true); setError(null); setReview(null); setLoadedRender(null); setFilesReady(true);
-    readListingReview(request.signal).then(result => { if (!request.signal.aborted) setReview(result); }).catch(error => {
+    readListingReview(request.signal,draftStatus.draft_id).then(result => { if (!request.signal.aborted) setReview(result); }).catch(error => {
       if (request.signal.aborted) return;
       setError(listingReviewErrorReason(error));
     }).finally(() => { if (!request.signal.aborted) setLoading(false); });
     return () => request.abort();
-  }, [active, enabled, retry,selectionBlocked]);
+  }, [active, enabled, retry,selectionBlocked,draftStatus.draft_id]);
   if (!enabled) return <p className="rounded-xl border border-gray-200 bg-white p-6 text-sm text-gray-600">Saved listing review is not available yet. You can continue preparing your listing with Allai.</p>;
   return <section aria-label="Review saved listing" className="space-y-5">
     <div className="flex flex-wrap items-center justify-between gap-3"><div><h2 className="text-xl font-semibold text-gray-900">Review your saved listing</h2><p className="mt-2 text-sm text-gray-600">This review uses your saved file choices and listing edits. Publication status appears below your approved review.</p></div><button type="button" disabled={loading||selectionBlocked} onClick={() => flow?flow.refreshReview():setRetry(value => value + 1)} className="rounded-lg border border-gray-300 bg-white px-4 py-2 text-sm disabled:opacity-50">Refresh saved review</button></div>
@@ -74,7 +74,7 @@ function ReviewFiles({review, active, onReady}:{review:ListingReview; active:boo
     try {
       // Returning to the first page also revalidates the entire saved review.
       const result=next.cursor ? await readReviewSourcePage(review,next.cursor,next.offset,request.signal) :
-        (await readListingReview(request.signal)).source_page;
+        (await readListingReview(request.signal,review.draft_id)).source_page;
       if(request.signal.aborted) return;
       if(!result || result.review_hash!==review.review_hash || result.source_hash!==review.source_hash ||
         result.source_version!==review.source_version || result.total_count!==review.source_page!.total_count ||

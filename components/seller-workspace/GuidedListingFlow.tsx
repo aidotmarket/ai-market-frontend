@@ -53,23 +53,23 @@ export function GuidedListingFlow({connections, capabilities, view, navigate, ch
   useEffect(()=>{
     if(!sourcesEnabled)return;
     let alive=true;setReadError('');setSourceLoaded(false);
-    Promise.all([readListingSource(),readSellerCategories()]).then(([s,c])=>{if(alive){setSource(s);setCategories(c);setSourceLoaded(true);}}).catch(()=>{if(alive)setReadError('Your saved files and category list could not be loaded. Retry before continuing.');});
+    Promise.all([readListingSource(draft?.draft_id),readSellerCategories()]).then(([s,c])=>{if(alive){setSource(s);setCategories(c);setSourceLoaded(true);}}).catch(()=>{if(alive)setReadError('Your saved files and category list could not be loaded. Retry before continuing.');});
     return()=>{alive=false;};
-  },[sourcesEnabled,readRetry]);
+  },[sourcesEnabled,readRetry,draft?.draft_id]);
   const reconciled=useRef('');
   const pending=selectionSavePending||selectionSaveFailed||filesDirty;
   useEffect(()=>{
     setReview(null);setReviewError('');setReviewLoading(false);setPublication(null);
     if(!reviewEnabled||!source||!draft||pending)return;
     const controller=new AbortController();setReviewLoading(true);
-    readListingReview(controller.signal).then(async r=>{
+    readListingReview(controller.signal,draft.draft_id).then(async r=>{
       if(controller.signal.aborted)return;
       if(r.source_version!==source.version||r.draft_version!==draft.version){
         const key=`${reviewRetry}:${r.source_version}:${r.draft_version}`;
         if(reconciled.current===key){setReviewError('The saved review is still out of date. Refresh Review to load your saved changes.');return;}
         reconciled.current=key;
         setReviewError('The saved review changed elsewhere. Reloading your saved files and draft…');
-        const savedSource=await readListingSource();
+        const savedSource=await readListingSource(draft?.draft_id);
         if(controller.signal.aborted)return;
         await reload(controller.signal,()=>setSource(savedSource));
         return;

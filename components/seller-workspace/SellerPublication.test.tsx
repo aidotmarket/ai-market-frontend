@@ -3,6 +3,9 @@ import {act,cleanup,fireEvent,render,screen} from '@testing-library/react';
 import {afterEach,beforeEach,expect,it,vi} from 'vitest';
 import SellerPublication from './SellerPublication';
 import type {ApprovalReceipt} from '@/api/sellerListingReview';
+import {nativeClient} from '@/api/connector-seller-settings';
+import {useAuthStore} from '@/store/auth';
+import {instrument,id,hash} from '@/tests/fixtures/seller-authority';
 import {createStandardSelection} from '@/api/listingLicenses';
 const api=vi.hoisted(()=>({readPublication:vi.fn(),publishListing:vi.fn()}));
 vi.mock('@/api/sellerListingPublication',()=>api);
@@ -110,4 +113,21 @@ it('puts publication refresh on its own spaced line',async()=>{
  render(<SellerPublication approval={approval} active rendered/>);
  await screen.findByRole('button',{name:'Publish this listing'});
  expect(screen.getByRole('button',{name:'Refresh publication status'}).className).toContain('block w-fit pt-2');
+});
+
+it('waits for preparation recovery and forwards the signed preparation on the website publish action',async()=>{
+  useAuthStore.setState({token:'native-session'});
+  const row={...instrument(),status:'signed',signing_required:false,acceptance_id:id(20),signed_coverage_hash:hash};
+  const named={...approval,id:row.binding.approval_id,draft_id:row.binding.draft_id,draft_version:3,render_hash:hash};
+  let finish!:(value:unknown)=>void;
+  const get=vi.spyOn(nativeClient,'get').mockReturnValue(new Promise(resolve=>{finish=resolve;}));
+  try {
+    render(<SellerPublication approval={named} active rendered/>);
+    const button=await screen.findByRole('button',{name:'Publish this listing'});
+    expect((button as HTMLButtonElement).disabled).toBe(true);
+    await act(async()=>finish({data:row}));await screen.findByText('Ready to publish here or from Claude');
+    api.publishListing.mockResolvedValue(publication);fireEvent.click(button);
+    await screen.findByText('Published');
+    expect(api.publishListing).toHaveBeenCalledWith(named,expect.any(String),expect.any(AbortSignal),row.id);
+  } finally {get.mockRestore();}
 });

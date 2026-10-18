@@ -30,7 +30,7 @@ const persist=(build:(base:ListingDraftContent)=>ListingDraftContent,baselineVer
     const version=baselineVersion??owner.version;
     if(!owner.pending||owner.pending.serialized!==serialized||owner.pending.version!==version)
       owner.pending={serialized,version,id:crypto.randomUUID()};
-    const result=await saveListingDraft(content,owner.pending.version,owner.pending.id);
+    const result=await saveListingDraft(content,owner.pending.version,owner.pending.id,...(owner.draft?.draft_id ? [owner.draft.draft_id] : []));
     owner.pending=null;owner.draft=result;owner.version=result.version;owner.saveRevision+=1;publish();
     return result;
   });
@@ -108,6 +108,6 @@ export function useSellerListingDraft() {
 
 export function useSellerListingDraftStatus() {
   const value=useContext(DraftContext);
-  return value ? {available:value.available,selectionSavePending:value.selectionSavePending,selectionSaveFailed:value.selectionSaveFailed,sampleIndices:value.sampleIndices} :
-    {available:false,selectionSavePending:false,selectionSaveFailed:false,sampleIndices:[] as number[]};
+  return value ? {draft_id:value.draft?.draft_id,available:value.available,selectionSavePending:value.selectionSavePending,selectionSaveFailed:value.selectionSaveFailed,sampleIndices:value.sampleIndices} :
+    {draft_id:undefined,available:false,selectionSavePending:false,selectionSaveFailed:false,sampleIndices:[] as number[]};
 }

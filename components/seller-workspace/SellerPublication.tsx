@@ -1,4 +1,6 @@
 'use client';
+import SellerPreparation from './SellerPreparation';
+import type {PreparedListing} from '@/api/sellerListingPreparation';
 import {notifyCapabilitiesChanged} from '@/components/onboarding/SellerSetupProgressBar';
 import {useEffect,useRef,useState} from 'react';
 import {useListingFlow} from './GuidedListingFlow';
@@ -10,6 +12,8 @@ import {isCompleteLicenseSelection} from '@/api/listingLicenses';
 import {legalIdentityFailure,LEGAL_IDENTITY_SUPPORT_PATH} from '@/api/sellerLegalIdentity';
 export default function SellerPublication({approval,active,rendered,sampleCount=0}:{approval:ApprovalReceipt;active:boolean;rendered:boolean;sampleCount?:number}) {
   const flow=useListingFlow();
+  const [preparationLoaded,setPreparationLoaded]=useState(false);
+  const [preparation,setPreparation]=useState<PreparedListing|null>(null);
   const [localState,setState]=useState<PublicationState|null>(null);
   const [busy,setBusy]=useState(false);
   const [localError,setError]=useState('');
@@ -30,12 +34,12 @@ export default function SellerPublication({approval,active,rendered,sampleCount=
   useEffect(()=>()=>{action.current?.abort();},[]);
   useEffect(()=>{if (!active) {action.current?.abort();action.current=null;setBusy(false);}},[active]);
   async function publish() {
-    if (!active || !rendered || !state?.publication_available || state.publication || stale || action.current ||
+    if (!active || !rendered || !state?.publication_available || state.publication || stale || action.current || (!!approval.draft_id && !preparationLoaded) || (preparation && preparation.status!=='signed') ||
       (approval.license_selection && (!isCompleteLicenseSelection(approval.license_selection)||!Number.isSafeInteger(approval.license_selection.identity_version)))) return;
     const request=new AbortController();action.current=request;identity.current ??= crypto.randomUUID();
     setBusy(true);setError('');
     try {
-      const publication=await publishListing(approval,identity.current,request.signal);
+      const publication=await publishListing(approval,identity.current,request.signal,preparation?.status==='signed'?preparation.id:undefined);
       if (!request.signal.aborted) {const saved={publication_available:state.publication_available,publication};setState(saved);flow?.published(saved);notifyCapabilitiesChanged();}
     } catch (failure) {
       if (request.signal.aborted) return;
@@ -52,6 +56,7 @@ export default function SellerPublication({approval,active,rendered,sampleCount=
   const licenseReady=!approval.license_selection||isCompleteLicenseSelection(approval.license_selection)&&Number.isSafeInteger(approval.license_selection.identity_version);
   return <section aria-label="Publish approved listing" className="space-y-4 rounded-xl border border-indigo-200 bg-white p-5">
     <h3 className="text-lg font-semibold text-gray-900">Publish your listing</h3>
+    {approval.draft_id&&<SellerPreparation key={approval.id} approval={approval} active={active} onChange={setPreparation} onLoaded={setPreparationLoaded} published={!!publication}/>}
     {!state && !error && <p role="status" className="text-sm text-gray-600">Checking publication status…</p>}
     {publication ? <><p role="status" className="text-sm text-green-900">{publication.status==='published' && publication.is_listed?'Your listing is published and available in the marketplace.':'This review has been published. The listing is currently not available in marketplace discovery.'}</p>
       {approval.sample_decision==='member_files'&&<p className="text-sm text-gray-700">{sampleCount===0?'No free sample files':`${sampleCount} free sample ${sampleCount===1?'file is':'files are'} part of the purchased set.`}</p>}
@@ -60,7 +65,7 @@ export default function SellerPublication({approval,active,rendered,sampleCount=
       {publication.listing_id && <SellerAtAGlance listingId={publication.listing_id} slug={publication.slug} active={active} />}</> : state && <>
       <p className="text-sm leading-6 text-gray-700">Your approved listing is private. Publishing makes the approved description, tags, price and licence public. The files stay in your storage.</p>
       {approval.license_selection&&<p className="text-sm text-gray-700">{approval.license_selection.kind==='standard'?'Standard (recommended)':'My own licence'} · AI/ML training {approval.license_selection.ai_training?'allowed':'not allowed'} · covenant and authority {approval.license_selection.seller_acceptance.authority_confirmed?'confirmed':'not confirmed'}</p>}
-      {state.publication_available ? <button type="button" onClick={publish} disabled={busy || !active || !rendered || stale || !licenseReady} className="rounded-lg bg-indigo-700 px-4 py-2.5 text-sm font-semibold text-white disabled:opacity-50">{busy?'Publishing…':'Publish this listing'}</button>:
+      {state.publication_available ? <button type="button" onClick={publish} disabled={busy || !active || !rendered || stale || !licenseReady || (!!approval.draft_id && !preparationLoaded) || (!!preparation && preparation.status!=='signed')} className="rounded-lg bg-indigo-700 px-4 py-2.5 text-sm font-semibold text-white disabled:opacity-50">{busy?'Publishing…':'Publish this listing'}</button>:
         <p className="text-sm text-gray-600">Publication is not available in this Workspace yet. Your approval is saved.</p>}
       {state.publication_available&&!busy&&(!rendered||stale||!licenseReady)&&<p role="status" className="text-sm text-amber-900">{stale?'Refresh the saved review and approve it again before publishing.':!licenseReady?(approval.license_selection&&!isCompleteLicenseSelection(approval.license_selection)?'Complete and save the licence choice in Choose a licence before publishing.':'Your legal identity and licence choice are not yet saved together. Return to Choose a licence before publishing.'):'Wait for the saved review to finish loading before publishing.'}</p>}
     </>}
