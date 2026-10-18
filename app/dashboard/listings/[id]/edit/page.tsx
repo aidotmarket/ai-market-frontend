@@ -19,7 +19,6 @@ import Link from 'next/link';
 
 const CATEGORIES = ['Finance', 'Healthcare', 'Technology', 'Real Estate', 'Government', 'Marketing'];
 const FORMATS = ['csv', 'parquet', 'json', 'xlsx', 'other'];
-const CURRENCIES = ['USD', 'EUR', 'GBP'];
 const COMPLIANCE_FRAMEWORKS = ['GDPR', 'HIPAA', 'CCPA', 'SOC2', 'ISO27001'];
 
 interface EditData {
@@ -29,7 +28,6 @@ interface EditData {
   tags: string[];
   price: number;
   pricing_type: 'one_time' | 'subscription';
-  currency: string;
   data_format: string;
   source_row_count: number;
   compliance_frameworks: string[];
@@ -54,7 +52,6 @@ export default function EditListingPage() {
     tags: [],
     price: 10,
     pricing_type: 'one_time',
-    currency: 'USD',
     data_format: 'csv',
     source_row_count: 0,
     compliance_frameworks: [],
@@ -91,7 +88,6 @@ export default function EditListingPage() {
         tags: l.tags || [],
         price: l.pricing?.price ?? l.price ?? 10,
         pricing_type: l.pricing?.pricing_type ?? l.pricing_type ?? 'one_time',
-        currency: 'USD',
         data_format: l.data_format || 'csv',
         source_row_count: l.source_row_count ?? l.row_count ?? 0,
         compliance_frameworks: l.compliance_frameworks || [],
@@ -352,7 +348,7 @@ export default function EditListingPage() {
           </div>
           <div className="grid grid-cols-2 gap-4">
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">Price ({data.currency})</label>
+              <label className="block text-sm font-medium text-gray-700 mb-1">Price (USD)</label>
               <div className="relative">
                 <div className="pointer-events-none absolute inset-y-0 left-0 flex items-center pl-3">
                   <span className="text-gray-500 text-sm">$</span>
@@ -368,16 +364,14 @@ export default function EditListingPage() {
               </div>
             </div>
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">Currency</label>
-              <select
-                value={data.currency}
-                onChange={(e) => update({ currency: e.target.value })}
-                className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-[#3F51B5] bg-white"
-              >
-                {CURRENCIES.map((c) => (
-                  <option key={c} value={c}>{c}</option>
-                ))}
-              </select>
+              <label htmlFor="listing-currency" className="block text-sm font-medium text-gray-700 mb-1">Currency</label>
+              <input
+                id="listing-currency"
+                type="text"
+                value="USD"
+                readOnly
+                className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm bg-gray-50"
+              />
             </div>
           </div>
         </div>
