@@ -2,6 +2,7 @@
 import {afterEach,beforeEach,expect,it,vi} from 'vitest';
 import {cleanup,fireEvent,render,screen,waitFor} from '@testing-library/react';
 import SellerPreparation from './SellerPreparation';
+vi.mock('@/components/CompanySignIn',()=>({default:()=> <button>Company sign-in</button>}));
 import {nativeClient,nativeSession} from '@/api/connector-seller-settings';
 import {useAuthStore} from '@/store/auth';
 import {instrument,id,hash} from '@/tests/fixtures/seller-authority';
@@ -62,4 +63,19 @@ it('hides signing when B3 returns 200 with floors off',async()=>{
   render(<SellerPreparation approval={approval} active onChange={vi.fn()} onLoaded={vi.fn()}/>);
   await screen.findByText('Needs signing');await screen.findByText('Licence signing is currently unavailable.');
   expect(screen.queryByRole('region',{name:'Workspace batch licence signing'})).toBeNull();
+});
+
+it.each(['SSO_REQUIRED','BAD_ORIGIN','CSRF_REQUIRED','FIRST_PARTY_SESSION_REQUIRED','RECENT_LOGIN_REQUIRED'])('offers native authentication for session 403 %s',async detail=>{
+  mockReads(false).mockRejectedValue({isAxiosError:true,response:{status:403,data:{detail:{code:detail}}}});
+  render(<SellerPreparation approval={approval} active onChange={vi.fn()} onLoaded={vi.fn()}/>);
+  await screen.findByText('Sign in again to prepare this listing.');
+  if(detail==='SSO_REQUIRED') expect(screen.getByRole('button',{name:'Company sign-in'})).toBeTruthy();
+  else expect(screen.getByRole('link',{name:'Sign in again'})).toBeTruthy();
+  expect(screen.queryByText(/not allowed by the current seller policy/)).toBeNull();
+});
+it('keeps a policy denial distinct from authentication failures',async()=>{
+  mockReads(false).mockRejectedValue({isAxiosError:true,response:{status:403,data:{detail:'POLICY_DENIED'}}});
+  render(<SellerPreparation approval={approval} active onChange={vi.fn()} onLoaded={vi.fn()}/>);
+  await screen.findByText(/not allowed by the current seller policy/);
+  expect(screen.queryByRole('link',{name:'Sign in again'})).toBeNull();
 });

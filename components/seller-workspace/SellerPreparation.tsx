@@ -1,6 +1,6 @@
 'use client';
 import {useEffect,useRef,useState} from 'react';
-import axios from 'axios';
+import {nativeAuthError} from '@/api/connector-seller-settings';
 import {useAuthStore} from '@/store/auth';
 import type {ApprovalReceipt} from '@/api/sellerListingReview';
 import {lookupPreparation,prepareListing,preparationRequest,preparationError,preparationErrorCode,preparationUnavailable,preparationStatus,type PreparationRequest,type PreparedListing} from '@/api/sellerListingPreparation';
@@ -47,13 +47,13 @@ export default function SellerPreparation({approval,active,onChange,onLoaded,pub
       } else setError(e);
     } finally {if(action.current===controller){action.current=null;setBusy(false);}}
   }
-  const needsLogin=preparationErrorCode(error)==='FIRST_PARTY_SESSION_REQUIRED'||axios.isAxiosError(error)&&error.response?.status===401;
+  const authError=nativeAuthError(error);
   if(unavailable)return null;
   return <section aria-label="Listing preparation" className="space-y-4">
     <p role="status">{published?preparationStatus.published:value?preparationStatus[value.status]:loaded?'Ready to prepare the approved review':'Checking preparation status…'}</p>
     {!published&&loaded&&!value&&<button disabled={!active||busy||publicationBlocked} onClick={()=>void prepare()}>{busy?'Preparing…':'Prepare for publishing'}</button>}
     {!!error&&<p role="alert">{preparationError(error)}</p>}
-    {needsLogin&&<NativeSellerAuth error={axios.isAxiosError(error)?error:{isAxiosError:true,response:{status:401}}} onRetry={()=>setRetry(n=>n+1)} onToken={async()=>{setRetry(n=>n+1);}}/>}
+    {!!authError&&<NativeSellerAuth error={authError} onRetry={()=>setRetry(n=>n+1)} onToken={async()=>{setRetry(n=>n+1);}}/>}
     {!busy&&<button disabled={!active} onClick={()=>setRetry(n=>n+1)}>Refresh preparation status</button>}
     {!published&&active&&value?.status==='prepared'&&value.license_selection&&<WorkspaceBatchSigning preparation={value as SigningInstrument} onSigned={rows=>{const signed=rows.find(row=>row.id===value.id);if(signed){const next={...value,...signed};setValue(next);changed.current(next);}}}/>}
   </section>;

@@ -1,5 +1,4 @@
 import {afterEach,beforeEach,expect,it,vi} from 'vitest';
-import {nativeClient,nativeSession} from './connector-seller-settings';
 import {useAuthStore} from '@/store/auth';
 import {readListingSource,saveListingSource} from './sellerListingSource';
 import {saveListingDraft} from './sellerListingDraft';
@@ -7,15 +6,15 @@ import {api} from './client';
 import {id} from '@/tests/fixtures/seller-authority';
 beforeEach(()=>useAuthStore.setState({token:'native-session'}));
 afterEach(()=>vi.restoreAllMocks());
-it('carries the draft ID into source reads and native source/draft saves',async()=>{
+it('carries the draft ID into source reads and current-draft saves on the refreshing client',async()=>{
   const content={connection_id:id(2),connection_version:1,version_mode:'current' as const,objects:[{key:'data.csv',etag:'e',size:1,version_id:null}]};
   const get=vi.spyOn(api,'get').mockResolvedValue({data:{source:{version:1,content}}});
   await readListingSource(id(101));
   expect(get).toHaveBeenCalledWith('/seller-workspace/listing-source',{params:{draft_id:id(101)}});
-  const put=vi.spyOn(nativeClient,'put').mockResolvedValue({data:{source:{version:1,content},draft:{draft_id:id(101),version:4}}});
-  await saveListingSource(content,1,id(8),id(101));
-  expect(put).toHaveBeenCalledWith('/seller-workspace/listing-source',{content,expected_version:1,request_id:id(8),draft_id:id(101)},{headers:nativeSession().headers});
+  const put=vi.spyOn(api,'put').mockResolvedValue({data:{source:{version:1,content},draft:{draft_id:id(101),version:4}}});
+  await saveListingSource(content,1,id(8));
+  expect(put).toHaveBeenCalledWith('/seller-workspace/listing-source',{content,expected_version:1,request_id:id(8)});
   const draft={brief:'',title:'Sales',description:'Sales data',category:'finance',tags:'sales',price:'25',license:''};
-  expect((await saveListingDraft(draft,3,id(9),id(101))).draft_id).toBe(id(101));
-  expect(put).toHaveBeenLastCalledWith('/seller-workspace/listing-draft',{content:draft,expected_version:3,request_id:id(9),draft_id:id(101)},{headers:nativeSession().headers});
+  expect((await saveListingDraft(draft,3,id(9))).draft_id).toBe(id(101));
+  expect(put).toHaveBeenLastCalledWith('/seller-workspace/listing-draft',{content:draft,expected_version:3,request_id:id(9)});
 });

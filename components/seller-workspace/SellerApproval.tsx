@@ -1,6 +1,8 @@
 'use client';
 import { useEffect, useRef, useState } from 'react';
 import axios from 'axios';
+import NativeSellerAuth from '@/components/NativeSellerAuth';
+import {nativeAuthError} from '@/api/connector-seller-settings';
 import {useListingFlow} from './GuidedListingFlow';
 import SellerPublication from './SellerPublication';
 import { approveListingReview, CONFIRMATION_KEYS, LICENSE_CONFIRMATION_KEYS, type ConfirmationKey, type ListingReview } from '@/api/sellerListingReview';
@@ -11,6 +13,7 @@ export default function SellerApproval({review, active, rendered,disabled=false}
   const [receipt, setReceipt] = useState(review.approval ?? null);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [authError,setAuthError] = useState<unknown>(null);
   const [stale, setStale] = useState(false);
   const identity = useRef<string | null>(null);
   const controller = useRef<AbortController | null>(null);
@@ -28,12 +31,13 @@ export default function SellerApproval({review, active, rendered,disabled=false}
     if (!ready || controller.current) return;
     const request = new AbortController();controller.current = request;
     identity.current ??= crypto.randomUUID();
-    setBusy(true);setError(null);
+    setBusy(true);setError(null);setAuthError(null);
     try {
       const saved = await approveListingReview(review, identity.current, request.signal);
       if (!request.signal.aborted) {setReceipt(saved);flow?.approved(saved);}
     } catch (failure) {
       if (request.signal.aborted) return;
+      setAuthError(nativeAuthError(failure));
       if (axios.isAxiosError(failure) && failure.response?.status === 409) {
         setStale(true);setError('The listing or files changed. Refresh the saved review and confirm it again.');
       } else setError('Approval saving could not be confirmed. Your choices are still here. Try approving again.');
@@ -56,6 +60,7 @@ export default function SellerApproval({review, active, rendered,disabled=false}
     <button type="submit" disabled={!ready || busy} className="rounded-lg bg-indigo-700 px-4 py-2.5 text-sm font-semibold text-white hover:bg-indigo-800 disabled:cursor-not-allowed disabled:opacity-50">{busy ? 'Saving approval…' : 'Approve this review'}</button>
     {!ready&&!busy&&<p role="status" className="text-sm text-amber-900">{stale?'Refresh the saved review before approving.':disabled?'Finish saving your file or sample choice in Choose your files, then refresh this review.':!rendered?'Wait for the saved listing and file preview to finish loading.':'Tick the confirmation box to continue.'}</p>}
     <p className="text-sm text-gray-600">Approval saves this exact review. It does not publish your listing.</p>
+    {!!authError&&<NativeSellerAuth error={authError} onRetry={()=>setAuthError(null)} onToken={async()=>{setAuthError(null);}}/>}
     {error && <p role="alert" className="text-sm text-red-800">{error}</p>}
   </form>;
 }

@@ -1,5 +1,5 @@
 import axios from 'axios';
-import {nativeClient,nativeSession} from './connector-seller-settings';
+import {nativeWrite} from './connector-seller-settings';
 import { api } from './client';
 import type { ListingDraftContent } from './sellerListingDraft';
 import type {LicenseSelection} from './listingLicenses';
@@ -123,7 +123,7 @@ export async function approveListingReview(review: ListingReview, request_id: st
     confirmation_version:review.confirmation_version,sample_decision:sampleDecision,
     ownership_confirmed:true,privacy_confirmed:true,...licenseConfirmations,public_disclosure_confirmed:true,
     ...(sampleDecision === 'member_files' ? {sample_files_confirmed:true} : {})};
-  const receipt: ApprovalReceipt = (await (review.draft_id ? nativeClient : api).post('/seller-workspace/listing-approval',body,{signal,...(review.draft_id ? {headers:nativeSession().headers} : {})})).data;
+  const receipt: ApprovalReceipt = review.draft_id ? await nativeWrite<ApprovalReceipt>('/seller-workspace/listing-approval',body,signal) : (await api.post('/seller-workspace/listing-approval',body,{signal})).data;
   if (receipt.review_hash !== review.review_hash || receipt.render_hash !== review.render_hash ||
       receipt.draft_version !== review.draft_version || receipt.source_version !== review.source_version ||
       receipt.sample_decision !== sampleDecision || signal.aborted ||

@@ -1,5 +1,5 @@
 import axios from 'axios';
-import {nativeClient,nativeSession} from './connector-seller-settings';
+import {nativeClient,nativeSession,nativeWrite,nativeAuthError} from './connector-seller-settings';
 import {validView,type PreparationView,type SigningInstrument} from './seller-batch-signing';
 import {sameLicenseSelection,type ApprovalReceipt} from './sellerListingReview';
 import {isCompleteLicenseSelection} from './listingLicenses';
@@ -32,9 +32,7 @@ export async function lookupPreparation(approval:ApprovalReceipt,signal:AbortSig
   }
 }
 export async function prepareListing(request:PreparationRequest,approval:ApprovalReceipt,signal:AbortSignal):Promise<PreparedListing> {
-  const session=nativeSession();
-  const {data}=await nativeClient.post('/seller-workspace/listing-preparation', {...request,csrf:session.csrf}, {signal,headers:session.headers});
-  if(nativeSession().token!==session.token)throw new Error('SESSION_CHANGED');
+  const data=await nativeWrite<PreparedListing>('/seller-workspace/listing-preparation',request,signal);
   return {...verified(data,approval),license_selection:approval.license_selection};
 }
 export function preparationErrorCode(error:unknown):string|undefined {
@@ -47,8 +45,8 @@ export function preparationUnavailable(error:unknown):boolean {
 export function preparationError(error:unknown):string {
   const status=axios.isAxiosError(error)?error.response?.status:undefined;
   const code=preparationErrorCode(error);
-  if(status===401||code==='FIRST_PARTY_SESSION_REQUIRED')return 'Sign in again to prepare this listing.';
-  if(status===403)return 'Preparation is not allowed by the current seller policy. Retry the status check before publishing.';
+  if(nativeAuthError(error))return 'Sign in again to prepare this listing.';
+  if(status===403&&code==='POLICY_DENIED')return 'Preparation is not allowed by the current seller policy. Retry the status check before publishing.';
   if(status===404)return 'Listing preparation is currently unavailable.';
   if(status===503)return 'Approval or policy checks are currently unavailable. Retry this same preparation.';
   switch(code) {

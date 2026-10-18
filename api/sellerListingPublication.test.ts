@@ -44,6 +44,6 @@ it('publishes a signed preparation through the first-party session client',async
   useAuthStore.setState({token:'native-session'});
   const post=vi.spyOn(nativeClient,'post').mockResolvedValue({data:receipt});const signal=new AbortController().signal;
   await publishListing(approval,id,signal,id);
-  expect(post).toHaveBeenCalledWith('/seller-workspace/listing-publication',{request_id:id,approval_id:id,review_hash:approval.review_hash,render_hash:approval.render_hash,preparation_id:id},{signal,headers:nativeSession().headers});
+  expect(post).toHaveBeenCalledWith('/seller-workspace/listing-publication',{request_id:id,approval_id:id,review_hash:approval.review_hash,render_hash:approval.render_hash,preparation_id:id,csrf:nativeSession().csrf},{signal,headers:nativeSession().headers});
   expect(api.post).not.toHaveBeenCalled();post.mockRestore();
 });

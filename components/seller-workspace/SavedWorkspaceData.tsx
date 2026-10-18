@@ -59,7 +59,7 @@ export default function SavedWorkspaceData({connections, enabled,sampleLimits,li
       const serialized = JSON.stringify(content);
       if (!pending.current || pending.current.serialized !== serialized || pending.current.version !== version.current)
         pending.current = {serialized, id:crypto.randomUUID(), version:version.current};
-      const result = await saveListingSource(content, pending.current.version, pending.current.id,sampleState.draft?.draft_id);
+      const result = await saveListingSource(content, pending.current.version, pending.current.id);
       version.current = result.version;observedVersion.current=result.version; pending.current = null; setSource(result);flow?.sourceSaved(result);
       succeeded=true;
       if (sampleCapability&&sampleState.loaded&&(sampleState.selectionSavePending||sampleState.sampleIndices.length>0||sampleState.draft?.content.sample_decision==='member_files')) {

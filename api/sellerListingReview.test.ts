@@ -122,6 +122,6 @@ it('keeps named draft identity through review, pagination, restored approval and
   try {
     const receipt=await approveListingReview(saved,id(9),signal);
     expect(receipt.draft_id).toBe(id(101));expect(receipt.draft_version).toBe(3);
-    expect(post).toHaveBeenCalledWith('/seller-workspace/listing-approval',expect.objectContaining({draft_id:id(101),review_hash:saved.review_hash}),{signal,headers:nativeSession().headers});
+    expect(post).toHaveBeenCalledWith('/seller-workspace/listing-approval',expect.objectContaining({draft_id:id(101),review_hash:saved.review_hash,csrf:nativeSession().csrf}),{signal,headers:nativeSession().headers});
   } finally {post.mockRestore();}
 });

@@ -224,3 +224,18 @@ it.each([
   fireEvent.click(screen.getByRole('button',{name:'Refresh preparation status'}));
   await waitFor(()=>expect(publish.disabled).toBe(false));
 });
+
+it('unblocks standalone preparation after recovery confirms no publication',async()=>{
+  namedReads();api.publishListing.mockRejectedValue(new Error('timeout'));
+  render(<SellerPublication approval={namedApproval} active rendered/>);
+  const prepare=await screen.findByRole('button',{name:'Prepare for publishing'}) as HTMLButtonElement;
+  await waitFor(()=>expect(prepare.disabled).toBe(false));
+  fireEvent.click(screen.getByRole('button',{name:'Publish this listing'}));await screen.findByRole('alert');
+  expect(prepare.disabled).toBe(true);
+  api.readPublication.mockRejectedValueOnce(new Error('status unavailable'));
+  await act(async()=>fireEvent.click(screen.getByRole('button',{name:'Refresh publication status'})));
+  expect(prepare.disabled).toBe(true);
+  api.readPublication.mockResolvedValue({publication_available:true,publication:null});
+  fireEvent.click(screen.getByRole('button',{name:'Refresh publication status'}));
+  await waitFor(()=>expect(prepare.disabled).toBe(false));
+});

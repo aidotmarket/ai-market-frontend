@@ -1,4 +1,5 @@
 import axios from 'axios';
+import { refreshAccessToken } from './client';
 import { useAuthStore } from '@/store/auth';
 import { sessionCsrf } from '@/lib/session-csrf';
 
@@ -50,12 +51,44 @@ export function validLimits(value: unknown): value is StandingLimits {
     && (l.price_min_cents === null || l.price_max_cents === null || l.price_min_cents <= l.price_max_cents);
 }
 
-// No refresh interceptor: a native decision must retain one credential and CSRF pair.
+// Native requests bind headers and body to one credential pair per attempt.
 export const nativeClient = axios.create({ baseURL: `${process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000'}/api/v1`, withCredentials: true, headers: { 'Content-Type': 'application/json' } });
 export function nativeSession() {
   const token = useAuthStore.getState().token;
   if (!token) throw new Error('FIRST_PARTY_SESSION_REQUIRED');
-  return { token, csrf: sessionCsrf(token), headers: { Authorization: `Bearer ${token}`, 'X-CSRF-Token': sessionCsrf(token) } };
+  const csrf = sessionCsrf(token);
+  return { token, csrf, headers: { Authorization: `Bearer ${token}`, 'X-CSRF-Token': csrf } };
+}
+// Only use for idempotent seller writes: retries retain the original action identity.
+export async function nativeWrite<T>(path: string, body: object, signal?: AbortSignal): Promise<T> {
+  for (let attempt = 0; ; attempt++) {
+    signal?.throwIfAborted();
+    const session = nativeSession();
+    try {
+      const { data } = await nativeClient.post<T>(path, { ...body, csrf: session.csrf }, {
+        ...(signal ? { signal } : {}), headers: session.headers,
+      });
+      if (useAuthStore.getState().token !== session.token) throw new Error('SESSION_CHANGED');
+      signal?.throwIfAborted();
+      return data;
+    } catch (error) {
+      if (useAuthStore.getState().token !== session.token) throw new Error('SESSION_CHANGED');
+      signal?.throwIfAborted();
+      if (attempt !== 0 || !axios.isAxiosError(error) || error.response?.status !== 401) throw error;
+      await refreshAccessToken();
+    }
+  }
+}
+// Normalize session failures for the shared native sign-in and verification affordances.
+export function nativeAuthError(error: unknown): unknown | null {
+  const response = axios.isAxiosError(error) ? error.response : undefined;
+  const detail = response?.data?.detail;
+  const code = typeof detail === 'string' ? detail : detail?.code ?? (error instanceof Error ? error.message : undefined);
+  if (['SSO_REQUIRED', 'SECOND_FACTOR_REQUIRED', 'SECOND_FACTOR_ENROLLMENT_REQUIRED', 'RECENT_LOGIN_REQUIRED', 'REAUTH_REQUIRED'].includes(code))
+    return { response: { status: response?.status, data: { detail: code } } };
+  if (response?.status === 401 || ['FIRST_PARTY_SESSION_REQUIRED', 'SESSION_CHANGED', 'BAD_ORIGIN', 'CSRF_REQUIRED'].includes(code))
+    return { response: { status: 401 } };
+  return null;
 }
 export function newDecision(version: number): WebDecision {
   return { expected_version: version, idempotency_key: crypto.randomUUID(), csrf: nativeSession().csrf };

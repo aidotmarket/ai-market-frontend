@@ -17,6 +17,7 @@ it('sends exactly seven fields and reuses the action binding across refreshed CS
   const first=post.mock.calls[0][1] as Record<string,unknown>,second=post.mock.calls[1][1] as Record<string,unknown>;
   expect(Object.keys(second).sort()).toEqual(['request_id','draft_id','expected_draft_version','approval_id','review_hash','render_hash','csrf'].sort());
   expect({...first,csrf:second.csrf}).toEqual(second);expect(first.csrf).not.toBe(second.csrf);
+  expect(second.csrf).toBe(nativeSession().csrf);
   expect(second.expected_draft_version).toBe(approval.draft_version);
   expect(post.mock.calls[1][2]).toEqual({signal,headers:nativeSession().headers});
 });

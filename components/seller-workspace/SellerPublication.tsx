@@ -1,5 +1,7 @@
 'use client';
 import SellerPreparation from './SellerPreparation';
+import NativeSellerAuth from '@/components/NativeSellerAuth';
+import {nativeAuthError} from '@/api/connector-seller-settings';
 import type {PreparedListing} from '@/api/sellerListingPreparation';
 import {notifyCapabilitiesChanged} from '@/components/onboarding/SellerSetupProgressBar';
 import {useEffect,useRef,useState} from 'react';
@@ -19,11 +21,17 @@ export default function SellerPublication({approval,active,rendered,sampleCount=
   const [publicationUnresolved,setPublicationUnresolved]=useState(false);
   const [busy,setBusy]=useState(false);
   const [localError,setError]=useState('');
+  const [authError,setAuthError]=useState<unknown>(null);
   const [stale,setStale]=useState(false);
   const [retry,setRetry]=useState(0);
   const identity=useRef<string|null>(null);
   const action=useRef<AbortController|null>(null);
   const state=flow?flow.publication:localState;
+  const flowPublication=flow?.publication;
+  useEffect(()=>{
+    // The provider clears publication while loading and leaves it null on failure.
+    if (flowPublication && !action.current) setPublicationUnresolved(false);
+  },[flowPublication]);
   const error=localError||(flow?.publicationError??'');
   useEffect(()=>{
     if (flow || !active) return;
@@ -39,12 +47,13 @@ export default function SellerPublication({approval,active,rendered,sampleCount=
     if (!active || !rendered || !state?.publication_available || state.publication || stale || action.current || (!!approval.draft_id && !preparationResolved) || (preparation && preparation.status!=='signed') ||
       (approval.license_selection && (!isCompleteLicenseSelection(approval.license_selection)||!Number.isSafeInteger(approval.license_selection.identity_version)))) return;
     const request=new AbortController();action.current=request;identity.current ??= crypto.randomUUID();
-    setBusy(true);setPublicationUnresolved(true);setError('');
+    setBusy(true);setPublicationUnresolved(true);setError('');setAuthError(null);
     try {
       const publication=await publishListing(approval,identity.current,request.signal,preparation?.status==='signed'?preparation.id:undefined);
       if (!request.signal.aborted) {const saved={publication_available:state.publication_available,publication};setState(saved);flow?.published(saved);notifyCapabilitiesChanged();}
     } catch (failure) {
       if (request.signal.aborted) return;
+      setAuthError(nativeAuthError(failure));
       const identityFailure=legalIdentityFailure(failure);
       if(identityFailure==='required') setError('Your legal name and country are not saved; return to Choose a licence. Publishing is not done.');
       else if(identityFailure==='conflict') setError('Your legal details need a quick check by our support team before you can publish.');
@@ -71,6 +80,7 @@ export default function SellerPublication({approval,active,rendered,sampleCount=
         <p className="text-sm text-gray-600">Publication is not available in this Workspace yet. Your approval is saved.</p>}
       {state.publication_available&&!busy&&(!rendered||stale||!licenseReady)&&<p role="status" className="text-sm text-amber-900">{stale?'Refresh the saved review and approve it again before publishing.':!licenseReady?(approval.license_selection&&!isCompleteLicenseSelection(approval.license_selection)?'Complete and save the licence choice in Choose a licence before publishing.':'Your legal identity and licence choice are not yet saved together. Return to Choose a licence before publishing.'):'Wait for the saved review to finish loading before publishing.'}</p>}
     </>}
+    {!!authError&&<NativeSellerAuth error={authError} onRetry={()=>setAuthError(null)} onToken={async()=>{setAuthError(null);}}/>}
     {error && <p role="alert" className="text-sm text-red-800">{error}{error.startsWith('Your legal details need')&&<> <a className="underline" href={LEGAL_IDENTITY_SUPPORT_PATH}>Contact support</a></>}</p>}
     {!busy && <button type="button" disabled={!active} onClick={()=>flow?flow.refreshPublication():setRetry(value=>value+1)} className="block w-fit pt-2 text-sm text-indigo-700 underline">Refresh publication status</button>}
   </section>;

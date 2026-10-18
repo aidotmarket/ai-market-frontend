@@ -1,4 +1,3 @@
-import {nativeClient,nativeSession} from './connector-seller-settings';
 import { api } from './client';
 export interface SourceContent {
   connection_id: string; connection_version: number; version_mode: 'current' | 'versions';
@@ -8,8 +7,8 @@ export interface SourceRead { version: number; content: SourceContent; connectio
 export async function readListingSource(draft_id?: string | null): Promise<SourceRead | null> {
   return (await api.get('/seller-workspace/listing-source', draft_id ? {params:{draft_id}} : undefined)).data.source;
 }
-export async function saveListingSource(content: SourceContent, expected_version: number, request_id: string, draft_id?: string | null): Promise<SourceRead> {
-  return (await (draft_id ? nativeClient : api).put('/seller-workspace/listing-source', {content, expected_version, request_id, ...(draft_id ? {draft_id} : {})}, draft_id ? {headers:nativeSession().headers} : undefined)).data.source;
+export async function saveListingSource(content: SourceContent, expected_version: number, request_id: string): Promise<SourceRead> {
+  return (await api.put('/seller-workspace/listing-source', {content, expected_version, request_id})).data.source;
 }
 
 export interface SellerCategory {slug: string; name: string}

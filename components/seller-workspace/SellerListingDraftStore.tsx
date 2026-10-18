@@ -30,7 +30,7 @@ const persist=(build:(base:ListingDraftContent)=>ListingDraftContent,baselineVer
     const version=baselineVersion??owner.version;
     if(!owner.pending||owner.pending.serialized!==serialized||owner.pending.version!==version)
       owner.pending={serialized,version,id:crypto.randomUUID()};
-    const result=await saveListingDraft(content,owner.pending.version,owner.pending.id,...(owner.draft?.draft_id ? [owner.draft.draft_id] : []));
+    const result=await saveListingDraft(content,owner.pending.version,owner.pending.id);
     owner.pending=null;owner.draft=result;owner.version=result.version;owner.saveRevision+=1;publish();
     return result;
   });
