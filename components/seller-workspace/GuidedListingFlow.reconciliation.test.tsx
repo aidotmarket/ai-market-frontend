@@ -25,8 +25,8 @@ async function readyApproval(){
  await screen.findByRole('button',{name:'Approve this review'});fireEvent.load(screen.getByTitle('Saved listing buyers would see'));screen.getAllByRole('checkbox').forEach(box=>fireEvent.click(box));
  await waitFor(()=>expect((screen.getByRole('button',{name:'Approve this review'}) as HTMLButtonElement).disabled).toBe(false));
 }
-beforeEach(()=>{resetSellerListingDraftOwnerForTests();mocks.get.mockImplementation(async url=>({data:url.endsWith('categories')?categoryRows:{source}}));mocks.draft.mockResolvedValue(draft);mocks.review.mockResolvedValue({approval_available:true,review_hash:'r',render_hash:'r',rendered_html:'<p>Saved listing</p>',confirmation_statements:{},draft_version:1,source_version:1,missing_fields:[],approval:null});});
-afterEach(()=>{cleanup();vi.clearAllMocks();});
+beforeEach(()=>{let id=0;vi.spyOn(globalThis.crypto,'randomUUID').mockImplementation(()=>`00000000-0000-4000-8000-${String(++id).padStart(12,'0')}`);vi.stubGlobal('fetch',vi.fn(()=>{throw new Error('Unexpected network request');}));resetSellerListingDraftOwnerForTests();mocks.get.mockImplementation(async url=>({data:url.endsWith('categories')?categoryRows:{source}}));mocks.draft.mockResolvedValue(draft);mocks.review.mockResolvedValue({approval_available:true,review_hash:'r',render_hash:'r',rendered_html:'<p>Saved listing</p>',confirmation_statements:{},draft_version:1,source_version:1,missing_fields:[],approval:null});});
+afterEach(()=>{cleanup();vi.clearAllMocks();vi.restoreAllMocks();vi.unstubAllGlobals();});
 it('reloads an externally changed source and draft on Review refresh and blocks a stale description',async()=>{
  start();await readyApproval();expect(screen.getByTestId('completion').textContent).toBe('done');
  let finishSource!:(value:unknown)=>void;
@@ -103,7 +103,13 @@ async function refreshExternalTitle(){
  fireEvent.click(screen.getByRole('button',{name:/4\. Describe and price/}));
 }
 it('reconciles a pristine mounted editor and its baseline before saving a different field',async()=>{
- mocks.save.mockImplementation(async content=>({version:3,updated_at:'now',content}));
+ let version=2;
+ mocks.save.mockImplementation(async content=>{
+  const saved={version:++version,updated_at:'now',content};
+  mocks.draft.mockResolvedValue(saved);
+  mocks.review.mockResolvedValue({approval_available:true,review_hash:`r${version}`,render_hash:`r${version}`,rendered_html:'<p>New external title</p>',confirmation_statements:{},draft_version:version,source_version:1,missing_fields:[],approval:null});
+  return saved;
+ });
  render(<MountedEditorFlow/>);
  await screen.findByDisplayValue('Sales');
  expect(screen.queryByRole('button',{name:'Save private draft'})).toBeNull();
