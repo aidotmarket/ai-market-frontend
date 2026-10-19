@@ -85,29 +85,19 @@ export default function OrderDetailPage() {
   const token = useAuthStore((s) => s.token);
   const sessionGeneration = useSessionGeneration(token);
 
-  // A new visit owns fresh reads, Terms callbacks and action state. Credentials
-  // never enter the key; returning A -> B -> A creates a distinct A instance.
-  return <OrderDetailVisit key={JSON.stringify([orderId, txIdParam, userId, sessionGeneration])}
-    orderId={orderId} txIdParam={txIdParam} userId={userId} />;
+  // Order/query/account changes retire the whole visit. Routine credential
+  // rotation retires only transaction actions, preserving active downloads.
+  return <OrderDetailVisit key={JSON.stringify([orderId, txIdParam, userId])}
+    orderId={orderId} txIdParam={txIdParam} userId={userId} sessionGeneration={sessionGeneration} />;
 }
 
-function OrderDetailVisit({ orderId, txIdParam, userId }: {
-  orderId: string; txIdParam: string | null; userId: string | undefined;
+function OrderDetailVisit({ orderId, txIdParam, userId, sessionGeneration }: {
+  orderId: string; txIdParam: string | null; userId: string | undefined; sessionGeneration: number;
 }) {
-  const { toast } = useToast();
-  const lifetime = useRef<object | null>(null);
-  const actionPending = useRef(false);
-  useLayoutEffect(() => {
-    lifetime.current = {};
-    return () => { lifetime.current = null; };
-  }, []);
-  const { ensureTermsAccepted, TermsGatePrompt, checkingTerms } = useTermsGate('buyer');
-
   const [order, setOrder] = useState<BuyerOrderDetail | null>(null);
   const isBuyerOfRecord = order !== null && order.id === orderId && userId === order.buyer_id;
   const isSellerOfRecord = order !== null && order.id === orderId && userId === order.seller_id;
   const [events, setEvents] = useState<OrderEvent[]>([]);
-  const [tx, setTx] = useState<Transaction | null>(null);
   const [orderAccess, setOrderAccess] = useState<{ orderId: string; buyerId: string; status: string; data: OrderAccessResponse } | null>(null);
   // Keep legacy downloads hidden until the gateway check has completed for this order.
   const [nonGatewayOrderId, setNonGatewayOrderId] = useState<string | null>(null);
@@ -120,8 +110,6 @@ function OrderDetailVisit({ orderId, txIdParam, userId }: {
   const [downloadError, setDownloadError] = useState('');
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
-  const [confirming, setConfirming] = useState(false);
-  const [delivering, setDelivering] = useState(false);
 
   useEffect(() => {
     let cancelled = false;
@@ -130,18 +118,16 @@ function OrderDetailVisit({ orderId, txIdParam, userId }: {
     setLoading(true);
     setError('');
 
-    const fetches: [Promise<BuyerOrderDetail>, Promise<OrderEvent[]>, Promise<Transaction | null>] = [
+    const fetches: [Promise<BuyerOrderDetail>, Promise<OrderEvent[]>] = [
       getOrder(orderId),
       getOrderEvents(orderId).catch(() => [] as OrderEvent[]),
-      txIdParam ? getTransaction(txIdParam).catch(() => null) : Promise.resolve(null),
     ];
 
     Promise.all(fetches)
-      .then(([orderData, eventsData, txData]) => {
+      .then(([orderData, eventsData]) => {
         if (cancelled) return;
         setOrder(orderData);
         setEvents(eventsData);
-        setTx(txData?.order_id === orderId ? txData : null);
       })
       .catch((err) => {
         if (cancelled) return;
@@ -175,6 +161,199 @@ function OrderDetailVisit({ orderId, txIdParam, userId }: {
       .finally(() => { if (!cancelled) setDownloadLoading(false); });
     return () => { cancelled = true; };
   }, [isBuyerOfRecord, order?.buyer_id, order?.workspace_delivery, order?.access_expired, order?.status, orderId]);
+
+  if (loading || (order && order.id !== orderId)) {
+    return (
+      <div className="flex min-h-[40vh] items-center justify-center">
+        <div className="h-8 w-8 animate-spin rounded-full border-4 border-[#3F51B5] border-t-transparent"></div>
+      </div>
+    );
+  }
+
+  if (error || !order) {
+    return (
+      <div className="rounded-lg bg-red-50 border border-red-200 px-4 py-3 text-sm text-red-700">
+        {error || 'Order not found.'}
+      </div>
+    );
+  }
+
+  const access = orderAccess?.orderId === orderId && orderAccess.buyerId === userId && orderAccess.status === String(order.status)
+    ? orderAccess.data : null;
+  // Partial refunds retain only rights evidenced by this order's server read.
+  // Workspace metadata never contains credentials; the explicit download still reauthorizes.
+  const retainedPartialAccess = String(order.status) === 'partially_refunded' &&
+    access?.order_id === orderId && access.is_delivered === true && access.is_revoked === false && access.access_open === true &&
+    !order.access_expired && (order.workspace_delivery
+      ? Number.isFinite(access.downloads_remaining) && (access.downloads_remaining ?? 0) > 0
+      : access.delivery_type === 'reference' && access.can_download === true &&
+        access.download_urls?.some((file) => /^https?:\/\//i.test(file.url)) === true);
+  const downloadEligible = ['fulfilled', 'delivered', 'completed'].includes(String(order.status)) || retainedPartialAccess;
+
+  const statusCss = STATUS_BADGE[order.status as OrderStatus] || 'bg-gray-100 text-gray-600';
+  const statusLabel = STATUS_LABEL[order.status as OrderStatus] || order.status;
+
+  return (
+    <div>
+      <Link href="/dashboard/orders" className="text-sm text-[#3F51B5] hover:underline mb-4 inline-block">
+        &larr; Back to Purchases
+      </Link>
+
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+        {/* Main info */}
+        <div className="lg:col-span-2 space-y-6">
+          {isBuyerOfRecord && <GatewayDeliverySection key={order.id} orderId={order.id} onPresenceChange={handleGatewayPresence} />}
+          <div className="rounded-lg border border-gray-200 p-6">
+            <div className="flex items-center justify-between mb-4">
+              <h1 className="text-xl font-bold text-gray-900">Order #{order.id.slice(0, 8)}</h1>
+              <span className={`inline-flex items-center rounded-full px-3 py-1 text-sm font-medium ${statusCss}`}>
+                {statusLabel}
+              </span>
+            </div>
+
+            <dl className="grid grid-cols-1 sm:grid-cols-2 gap-4 text-sm">
+              <div>
+                <dt className="text-gray-500">Listing</dt>
+                <dd className="font-medium text-gray-900">{order.listing_title}</dd>
+              </div>
+              <div>
+                <dt className="text-gray-500">Seller</dt>
+                <dd className="font-medium text-gray-900">Identified to ai.market for this order</dd>
+              </div>
+              <div>
+                <dt className="text-gray-500">Amount Paid</dt>
+                <dd className="font-medium text-gray-900">{formatPrice(order.amount)}</dd>
+              </div>
+              <div>
+                <dt className="text-gray-500">Purchase Date</dt>
+                <dd className="font-medium text-gray-900">{formatDate(order.created_at)}</dd>
+              </div>
+            </dl>
+            <div className="mt-4">
+              <OrderVersionAccessSummary order={order} />
+            </div>
+          </div>
+
+          <OrderTransaction key={sessionGeneration} orderId={orderId} txIdParam={txIdParam}
+            isBuyerOfRecord={isBuyerOfRecord} isSellerOfRecord={isSellerOfRecord} />
+
+          {/* Access / Download section */}
+          {order.status === 'fulfilled' && isSellerOfRecord && !isBuyerOfRecord && (
+            <p>Downloads are available to the buyer of this order.</p>
+          )}
+
+          {(['fulfilled', 'delivered', 'completed'].includes(String(order.status)) || order.workspace_delivery) && isBuyerOfRecord && order.access_expired && (
+            <div className="rounded-lg border border-red-200 bg-red-50 p-6">
+              <h2 className="text-lg font-semibold text-red-900">Download window expired</h2>
+              <p className="mt-2 text-sm text-red-700">
+                This order&apos;s download window has ended. No download access is available for this purchase.
+              </p>
+            </div>
+          )}
+
+          {order.workspace_delivery && isBuyerOfRecord && !order.access_expired && String(order.status)==='pending_delivery' && <WorkspacePurchaseRecovery key={order.id} orderId={order.id} onReady={setOrder} />}
+          {order.workspace_delivery && isBuyerOfRecord && !order.access_expired && downloadEligible && (workspaceDownloadReady === `${orderId}:${userId}` ? <WorkspaceDownload key={order.id} orderId={order.id} /> : <WorkspaceDownloadActivation key={sessionGeneration} onReady={() => setWorkspaceDownloadReady(`${orderId}:${userId}`)} />)}
+
+          {downloadEligible && !order.workspace_delivery && nonGatewayOrderId === order.id && isBuyerOfRecord && !order.access_expired && (
+            <div className="rounded-lg border border-gray-200 p-6">
+              <h2 className="text-lg font-semibold text-gray-900">Downloads</h2>
+              {downloadLoading ? (
+                <p className="mt-2 text-sm text-gray-600">Preparing download access...</p>
+              ) : access?.delivery_type === 'reference' && access.can_download && access.download_urls?.some((file) => /^https?:\/\//i.test(file.url)) ? (
+                <ul className="mt-4 space-y-3">
+                  {access.download_urls.filter((file) => /^https?:\/\//i.test(file.url)).map((file) => (
+                    <li key={file.url}>
+                      <ReferenceDownload key={`${orderId}:${userId}:${sessionGeneration}`} url={file.url} filename={file.filename} />
+                    </li>
+                  ))}
+                </ul>
+              ) : (
+                <p className="mt-2 text-sm text-gray-600">{downloadError || 'Download access is unavailable.'}</p>
+              )}
+            </div>
+          )}
+
+          {/* Event Timeline */}
+          {events.length > 0 && (
+            <div className="rounded-lg border border-gray-200 p-6">
+              <h2 className="text-lg font-semibold text-gray-900 mb-4">Timeline</h2>
+              <div className="space-y-4">
+                {events.map((event) => (
+                  <div key={event.id} className="flex gap-3">
+                    <div className="flex flex-col items-center">
+                      <div className="h-2 w-2 rounded-full bg-gray-400 mt-2"></div>
+                      <div className="w-px flex-1 bg-gray-200"></div>
+                    </div>
+                    <div className="pb-4">
+                      <p className="text-sm text-gray-900">{orderEventLabel(event)}</p>
+                      <p className="text-xs text-gray-500 mt-0.5">{formatDate(event.created_at)}</p>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+        </div>
+
+        {/* Sidebar actions */}
+        <div className="space-y-4">
+          <div className="rounded-lg border border-gray-200 p-6">
+            <h3 className="font-semibold text-gray-900 mb-3">Actions</h3>
+            <a
+              href={`mailto:support@ai.market?subject=Issue with Order ${order.id.slice(0, 8)}`}
+              className="block w-full rounded-lg border border-gray-300 px-4 py-2.5 text-sm font-medium text-gray-700 text-center hover:bg-gray-50"
+            >
+              Report Issue
+            </a>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// A pending activation belongs to its credential generation; an activated downloader
+// lives outside this boundary and keeps its operation and completed-file progress.
+function WorkspaceDownloadActivation({ onReady }: { onReady: () => void }) {
+  const { ensureTermsAccepted, TermsGatePrompt, checkingTerms } = useTermsGate('buyer');
+  const lifetime = useRef<object | null>(null);
+  useLayoutEffect(() => {
+    lifetime.current = {};
+    return () => { lifetime.current = null; };
+  }, []);
+  return <>
+    <TermsGatePrompt />
+    <button type="button" disabled={checkingTerms} onClick={() => {
+      const owner = lifetime.current;
+      return ensureTermsAccepted(() => { if (owner && lifetime.current === owner) onReady(); });
+    }} className="rounded-lg bg-indigo-700 px-4 py-2 text-sm font-semibold text-white disabled:opacity-50">Continue to download</button>
+  </>;
+}
+
+// Only transaction reads, Terms and action ownership restart on credential rotation.
+function OrderTransaction({ orderId, txIdParam, isBuyerOfRecord, isSellerOfRecord }: {
+  orderId: string; txIdParam: string | null; isBuyerOfRecord: boolean; isSellerOfRecord: boolean;
+}) {
+  const { toast } = useToast();
+  const lifetime = useRef<object | null>(null);
+  const actionPending = useRef(false);
+  useLayoutEffect(() => {
+    lifetime.current = {};
+    return () => { lifetime.current = null; };
+  }, []);
+  const { ensureTermsAccepted, TermsGatePrompt, checkingTerms } = useTermsGate('buyer');
+  const [tx, setTx] = useState<Transaction | null>(null);
+  const [confirming, setConfirming] = useState(false);
+  const [delivering, setDelivering] = useState(false);
+  useEffect(() => {
+    let cancelled = false;
+    if (txIdParam) {
+      getTransaction(txIdParam).then((data) => {
+        if (!cancelled) setTx(data.order_id === orderId ? data : null);
+      }).catch(() => {});
+    }
+    return () => { cancelled = true; };
+  }, [orderId, txIdParam]);
 
   const handleConfirm = async () => {
     const owner = lifetime.current;
@@ -226,79 +405,8 @@ function OrderDetailVisit({ orderId, txIdParam, userId }: {
     });
   };
 
-  if (loading || (order && order.id !== orderId)) {
-    return (
-      <div className="flex min-h-[40vh] items-center justify-center">
-        <div className="h-8 w-8 animate-spin rounded-full border-4 border-[#3F51B5] border-t-transparent"></div>
-      </div>
-    );
-  }
-
-  if (error || !order) {
-    return (
-      <div className="rounded-lg bg-red-50 border border-red-200 px-4 py-3 text-sm text-red-700">
-        {error || 'Order not found.'}
-      </div>
-    );
-  }
-
-  const access = orderAccess?.orderId === orderId && orderAccess.buyerId === userId && orderAccess.status === String(order.status)
-    ? orderAccess.data : null;
-  // Partial refunds retain only rights evidenced by this order's server read.
-  // Workspace metadata never contains credentials; the explicit download still reauthorizes.
-  const retainedPartialAccess = String(order.status) === 'partially_refunded' &&
-    access?.order_id === orderId && access.is_delivered === true && access.is_revoked === false && access.access_open === true &&
-    !order.access_expired && (order.workspace_delivery
-      ? Number.isFinite(access.downloads_remaining) && (access.downloads_remaining ?? 0) > 0
-      : access.delivery_type === 'reference' && access.can_download === true &&
-        access.download_urls?.some((file) => /^https?:\/\//i.test(file.url)) === true);
-  const downloadEligible = ['fulfilled', 'delivered', 'completed'].includes(String(order.status)) || retainedPartialAccess;
-
-  const statusCss = STATUS_BADGE[order.status as OrderStatus] || 'bg-gray-100 text-gray-600';
-  const statusLabel = STATUS_LABEL[order.status as OrderStatus] || order.status;
-
-  return (
-    <div>
-      <TermsGatePrompt />
-      <Link href="/dashboard/orders" className="text-sm text-[#3F51B5] hover:underline mb-4 inline-block">
-        &larr; Back to Purchases
-      </Link>
-
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-        {/* Main info */}
-        <div className="lg:col-span-2 space-y-6">
-          {isBuyerOfRecord && <GatewayDeliverySection key={order.id} orderId={order.id} onPresenceChange={handleGatewayPresence} />}
-          <div className="rounded-lg border border-gray-200 p-6">
-            <div className="flex items-center justify-between mb-4">
-              <h1 className="text-xl font-bold text-gray-900">Order #{order.id.slice(0, 8)}</h1>
-              <span className={`inline-flex items-center rounded-full px-3 py-1 text-sm font-medium ${statusCss}`}>
-                {statusLabel}
-              </span>
-            </div>
-
-            <dl className="grid grid-cols-1 sm:grid-cols-2 gap-4 text-sm">
-              <div>
-                <dt className="text-gray-500">Listing</dt>
-                <dd className="font-medium text-gray-900">{order.listing_title}</dd>
-              </div>
-              <div>
-                <dt className="text-gray-500">Seller</dt>
-                <dd className="font-medium text-gray-900">Identified to ai.market for this order</dd>
-              </div>
-              <div>
-                <dt className="text-gray-500">Amount Paid</dt>
-                <dd className="font-medium text-gray-900">{formatPrice(order.amount)}</dd>
-              </div>
-              <div>
-                <dt className="text-gray-500">Purchase Date</dt>
-                <dd className="font-medium text-gray-900">{formatDate(order.created_at)}</dd>
-              </div>
-            </dl>
-            <div className="mt-4">
-              <OrderVersionAccessSummary order={order} />
-            </div>
-          </div>
-
+  return <>
+    <TermsGatePrompt />
           {/* Transaction detail */}
           {tx && (
             <div className="rounded-lg border border-gray-200 p-6">
@@ -392,79 +500,7 @@ function OrderDetailVisit({ orderId, txIdParam, userId }: {
             </div>
           )}
 
-          {/* Access / Download section */}
-          {order.status === 'fulfilled' && isSellerOfRecord && !isBuyerOfRecord && (
-            <p>Downloads are available to the buyer of this order.</p>
-          )}
-
-          {(['fulfilled', 'delivered', 'completed'].includes(String(order.status)) || order.workspace_delivery) && isBuyerOfRecord && order.access_expired && (
-            <div className="rounded-lg border border-red-200 bg-red-50 p-6">
-              <h2 className="text-lg font-semibold text-red-900">Download window expired</h2>
-              <p className="mt-2 text-sm text-red-700">
-                This order&apos;s download window has ended. No download access is available for this purchase.
-              </p>
-            </div>
-          )}
-
-          {order.workspace_delivery && isBuyerOfRecord && !order.access_expired && String(order.status)==='pending_delivery' && <WorkspacePurchaseRecovery key={order.id} orderId={order.id} onReady={setOrder} />}
-          {order.workspace_delivery && isBuyerOfRecord && !order.access_expired && downloadEligible && (workspaceDownloadReady === `${orderId}:${userId}` ? <WorkspaceDownload key={order.id} orderId={order.id} /> : <button type="button" disabled={checkingTerms} onClick={() => ensureTermsAccepted(() => setWorkspaceDownloadReady(`${orderId}:${userId}`))} className="rounded-lg bg-indigo-700 px-4 py-2 text-sm font-semibold text-white disabled:opacity-50">Continue to download</button>)}
-
-          {downloadEligible && !order.workspace_delivery && nonGatewayOrderId === order.id && isBuyerOfRecord && !order.access_expired && (
-            <div className="rounded-lg border border-gray-200 p-6">
-              <h2 className="text-lg font-semibold text-gray-900">Downloads</h2>
-              {downloadLoading ? (
-                <p className="mt-2 text-sm text-gray-600">Preparing download access...</p>
-              ) : access?.delivery_type === 'reference' && access.can_download && access.download_urls?.some((file) => /^https?:\/\//i.test(file.url)) ? (
-                <ul className="mt-4 space-y-3">
-                  {access.download_urls.filter((file) => /^https?:\/\//i.test(file.url)).map((file) => (
-                    <li key={file.url}>
-                      <ReferenceDownload key={`${orderId}:${userId}`} url={file.url} filename={file.filename} />
-                    </li>
-                  ))}
-                </ul>
-              ) : (
-                <p className="mt-2 text-sm text-gray-600">{downloadError || 'Download access is unavailable.'}</p>
-              )}
-            </div>
-          )}
-
-          {/* Event Timeline */}
-          {events.length > 0 && (
-            <div className="rounded-lg border border-gray-200 p-6">
-              <h2 className="text-lg font-semibold text-gray-900 mb-4">Timeline</h2>
-              <div className="space-y-4">
-                {events.map((event) => (
-                  <div key={event.id} className="flex gap-3">
-                    <div className="flex flex-col items-center">
-                      <div className="h-2 w-2 rounded-full bg-gray-400 mt-2"></div>
-                      <div className="w-px flex-1 bg-gray-200"></div>
-                    </div>
-                    <div className="pb-4">
-                      <p className="text-sm text-gray-900">{orderEventLabel(event)}</p>
-                      <p className="text-xs text-gray-500 mt-0.5">{formatDate(event.created_at)}</p>
-                    </div>
-                  </div>
-                ))}
-              </div>
-            </div>
-          )}
-        </div>
-
-        {/* Sidebar actions */}
-        <div className="space-y-4">
-          <div className="rounded-lg border border-gray-200 p-6">
-            <h3 className="font-semibold text-gray-900 mb-3">Actions</h3>
-            <a
-              href={`mailto:support@ai.market?subject=Issue with Order ${order.id.slice(0, 8)}`}
-              className="block w-full rounded-lg border border-gray-300 px-4 py-2.5 text-sm font-medium text-gray-700 text-center hover:bg-gray-50"
-            >
-              Report Issue
-            </a>
-          </div>
-        </div>
-      </div>
-    </div>
-  );
+  </>;
 }
 
 function ReferenceDownload({ url, filename }: { url: string; filename?: string | null }) {
