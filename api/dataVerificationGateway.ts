@@ -65,6 +65,7 @@ export interface CloudflareInstallStatus {
   intent_id: string;
   phase: 'start' | 'callback_claimed' | 'callback_refused' | 'expired' | 'closed' | 'cancelled';
   error: string | null;
+  cleanup: 'unconfirmed' | 'not_started';
   claimed_at: number | null;
   updated_at: number | null;
   cancel_requested: boolean | null;

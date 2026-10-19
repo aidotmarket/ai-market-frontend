@@ -12,7 +12,7 @@ const id = '11111111-1111-4111-8111-111111111111';
 const key = 'cloudflare-install:seller:listing:connection';
 const originalStorage = Object.getOwnPropertyDescriptor(window, 'localStorage')!;
 const verifier: api.CloudflareVerifierStatus = { installer_enabled: true, eligible: true, connection_id: 'connection', state: 'none', runner_id: null, jurisdiction: 'default', release_id: null, scanner_version: null, binary_sha256: null, worker_identity: null, image_digest: null, poll_interval_minutes: null, registered_at: null, last_seen_at: null, setup_expires_at: null };
-const initial: api.CloudflareInstallStatus = { intent_id: id, phase: 'start', error: null, claimed_at: null, updated_at: null, cancel_requested: null, access_removal_confirmed_by_seller: false, runtime: { state: 'pending' } };
+const initial: api.CloudflareInstallStatus = { intent_id: id, phase: 'start', error: null, cleanup: 'not_started', claimed_at: null, updated_at: null, cancel_requested: null, access_removal_confirmed_by_seller: false, runtime: { state: 'pending' } };
 function Harness({ status = verifier, pasted = false }: { status?: api.CloudflareVerifierStatus; pasted?: boolean }) {
   const install = useCloudflareInstaller('listing', 'seller', 'connection', status, true, pasted);
   return <>{install.panel}{!install.active && <p>Existing setup</p>}</>;
@@ -65,6 +65,7 @@ it('renders verbatim pre-consent and navigates only after saving the returned in
   const authorize = 'https://dash.cloudflare.com/oauth2/auth?state=secret-state&code_challenge=challenge';
   vi.mocked(api.startCloudflareInstall).mockResolvedValue({ intent_id: id, authorize_url: authorize, expires_at: 123 });
   await mount(false);
+  expect(screen.getByText('Existing setup')).toBeTruthy();
   for (const copy of [
     'Install your verifier',
     'The check runs in your Cloudflare account. Your files stay there; ai.market receives only signed summary findings.',
@@ -80,6 +81,14 @@ it('renders verbatim pre-consent and navigates only after saving the returned in
   expect(document.body.textContent).not.toMatch(/secret-state|challenge/);
   expect([localStorage.getItem(key), localStorage.getItem(`${key}:request`)].join()).not.toMatch(/secret-state|challenge/);
   vi.unstubAllGlobals();
+});
+it('refuses a foreign authorize URL before storing the intent', async () => {
+  const assign = vi.fn();
+  vi.stubGlobal('window', Object.create(window, { location: { value: { assign } } }));
+  vi.mocked(api.startCloudflareInstall).mockResolvedValue({ intent_id: id, authorize_url: 'https://foreign.example/oauth2/auth', expires_at: 123 });
+  await mount(false); await click('Connect Cloudflare');
+  expect(assign).not.toHaveBeenCalled(); expect(localStorage.getItem(key)).toBeNull();
+  expect(screen.getByText('Existing setup')).toBeTruthy();
 });
 it('keeps the idempotency key after a lost start response and suppresses its raw error', async () => {
   vi.mocked(api.startCloudflareInstall).mockRejectedValue(new Error('secret-token'));
@@ -124,15 +133,19 @@ it('cancels and cannot be overwritten by an older status read', async () => {
   expect(api.getCloudflareInstall).toHaveBeenCalledTimes(2);
 });
 it.each(['cleanup_unconfirmed', 'oauth_refused'])('requires explicit access-removal attestation for %s', async error => {
-  const status = { ...initial, phase: 'closed' as const, error };
+  const status = { ...initial, phase: 'closed' as const, error, cleanup: error === 'cleanup_unconfirmed' ? 'unconfirmed' as const : 'not_started' as const };
   await mount(true, status);
+  expect(!!screen.queryByText('Existing setup')).toBe(error === 'oauth_refused');
+  expect(screen.queryByRole('button', { name: 'Dismiss' })).toBeNull();
   expect((screen.getByRole('button', { name: 'Record access removal' }) as HTMLButtonElement).disabled).toBe(true);
   fireEvent.click(screen.getByRole('checkbox'));
   vi.mocked(api.controlCloudflareInstall).mockResolvedValue({ ...status, access_removal_confirmed_by_seller: true });
   await click('Record access removal');
   expect(api.controlCloudflareInstall).toHaveBeenCalledWith(id, 'cleanup-attestation');
   expect(screen.getByText('Access removal recorded as your statement, not provider proof.')).toBeTruthy();
-  expect(screen.queryByRole('button', { name: 'Try again' })).toBeNull();
+  expect(screen.queryByRole('button', { name: 'Dismiss' })).toBeNull();
+  expect(screen.getByText('Existing setup')).toBeTruthy();
+  expect(localStorage.getItem(key)).toBe(id);
 });
 it.each([
   { installer_enabled: false }, { installer_enabled: undefined }, { state: 'ready', runner_id: 'runner' },
@@ -149,17 +162,52 @@ it('hides installer when a pasted setup is still in this component', async () =>
   await act(async () => { render(<Harness pasted />); });
   expect(screen.queryByRole('button', { name: 'Connect Cloudflare' })).toBeNull();
 });
-it('resumes after reload with capability off and no query, without enabling a free check', async () => {
-  const view = await mount(); view.unmount();
-  vi.mocked(api.getCloudflareVerifierStatus).mockResolvedValue({ ...verifier, installer_enabled: false, state: 'ready', runner_id: 'new-runner' });
-  vi.mocked(api.getCloudflareInstall).mockResolvedValue({ ...initial, phase: 'closed', error: 'oauth_complete' });
+it.each([
+  ['closed', 'oauth_complete', true, 'ready'], ['closed', 'memory_lost', true, 'none'],
+  ['closed', 'install_mint_refused', false, 'none'], ['closed', 'callback_invalid', false, 'none'],
+  ['cancelled', null, false, 'none'], ['expired', 'expired', false, 'none'],
+  ['callback_refused', null, false, 'none'], ['cancelled', null, false, 'ready'],
+] as const)('dismisses saved %s/%s with capability %s and legacy %s', async (phase, error, enabled, state) => {
+  localStorage.setItem(`${key}:request`, id);
+  const view = await mount(true, { ...initial, phase, error }); view.unmount();
+  vi.mocked(api.getCloudflareVerifierStatus).mockResolvedValue({ ...verifier, installer_enabled: enabled, state, runner_id: state === 'ready' ? 'new-runner' : null });
   await act(async () => { render(<GatewayVerificationFlow listingId="listing" sellerId="seller" verifier={{ kind: 'cloudflare', connectionId: 'connection' }} />); });
   expect(api.getCloudflareInstall).toHaveBeenLastCalledWith(id);
-  expect(screen.getByRole('status').textContent).toBe('Installation status is unavailable. No data check can start yet.');
+  expect(screen.queryByText(/^Ready/)).toBeNull();
+  expect(screen.queryByRole('heading', { name: 'Cloudflare verifier' })).toBeNull();
   expect(screen.queryByRole('button', { name: 'Check data and get quote' })).toBeNull();
-  expect(screen.queryByText(/Run now/)).toBeNull();
+  await click('Dismiss');
+  expect(localStorage.getItem(key)).toBeNull(); expect(localStorage.getItem(`${key}:request`)).toBeNull();
+  expect(screen.getByRole('heading', { name: 'Cloudflare verifier' })).toBeTruthy();
+  expect(screen.getByRole('button', { name: 'Set up the verifier' })).toBeTruthy();
+  expect((screen.getByRole('button', { name: 'Check data and get quote' }) as HTMLButtonElement).disabled).toBe(state !== 'ready');
   expect(window.location.search).toBe('');
   expect(api.probeGatewayVerification).not.toHaveBeenCalled();
+});
+it.each([[404, 1], [503, 3]])('stops after HTTP %s with %s failed reads and offers Dismiss', async (code, count) => {
+  localStorage.setItem(key, id); localStorage.setItem(`${key}:request`, id);
+  vi.mocked(api.getCloudflareInstall).mockRejectedValue({ response: { status: code } });
+  await act(async () => { render(<Harness />); });
+  await act(async () => { await vi.advanceTimersByTimeAsync((count - 1) * 3000); });
+  expect(api.getCloudflareInstall).toHaveBeenCalledTimes(count);
+  expect(screen.getByRole('button', { name: 'Dismiss' })).toBeTruthy();
+  expect(screen.queryByText('Checking installation status…')).toBeNull();
+  await visible('hidden'); await visible('visible');
+  await act(async () => { await vi.advanceTimersByTimeAsync(9000); });
+  expect(api.getCloudflareInstall).toHaveBeenCalledTimes(count);
+  await click('Dismiss');
+  expect(screen.getByText('Existing setup')).toBeTruthy();
+  expect(localStorage.getItem(key)).toBeNull(); expect(localStorage.getItem(`${key}:request`)).toBeNull();
+});
+it('resets the consecutive failure budget after a successful read', async () => {
+  await mount();
+  vi.mocked(api.getCloudflareInstall).mockRejectedValueOnce(new Error()).mockRejectedValueOnce(new Error());
+  await act(async () => { await vi.advanceTimersByTimeAsync(9000); });
+  vi.mocked(api.getCloudflareInstall).mockRejectedValue(new Error());
+  await act(async () => { await vi.advanceTimersByTimeAsync(6000); });
+  expect(screen.queryByRole('button', { name: 'Dismiss' })).toBeNull();
+  await act(async () => { await vi.advanceTimersByTimeAsync(3000); });
+  expect(screen.getByRole('button', { name: 'Dismiss' })).toBeTruthy();
 });
 it('ignores query, raw messages and extra secret fields; hides phase times by default', async () => {
   window.history.replaceState({}, '', '/?code=code-canary&state=state-canary#token-canary');
@@ -168,18 +216,24 @@ it('ignores query, raw messages and extra secret fields; hides phase times by de
   expect(localStorage.getItem(key)).toBe(id);
   const details = screen.getByText('Verification details').parentElement as HTMLDetailsElement;
   expect(details.open).toBe(false);
-  expect(details.textContent).toContain('Authorization received: 123');
+  expect(details.textContent).toContain('Authorization received (UTC epoch seconds): 123');
 });
-it('refuses invalid stored identifiers without reading them as URLs or enabling start', async () => {
-  localStorage.setItem(key, 'code=secret'); await mount(false);
+it.each([true, false])('keeps legacy setup for corrupt storage with capability %s', async enabled => {
+  localStorage.setItem(key, 'code=secret');
+  vi.mocked(api.getCloudflareVerifierStatus).mockResolvedValue({ ...verifier, installer_enabled: enabled });
+  await act(async () => { render(<GatewayVerificationFlow listingId="listing" sellerId="seller" verifier={{ kind: 'cloudflare', connectionId: 'connection' }} />); });
+  await click('Verify this data');
   expect(api.getCloudflareInstall).not.toHaveBeenCalled();
-  expect((screen.getByRole('button', { name: 'Connect Cloudflare' }) as HTMLButtonElement).disabled).toBe(true);
+  if (enabled) expect((screen.getByRole('button', { name: 'Connect Cloudflare' }) as HTMLButtonElement).disabled).toBe(true);
+  else expect(screen.queryByRole('button', { name: 'Connect Cloudflare' })).toBeNull();
+  expect(screen.getByRole('button', { name: 'Set up the verifier' })).toBeTruthy();
+  expect(screen.getByRole('alert').textContent).toContain('Could not restore installation');
   expect(document.body.textContent).not.toContain('code=secret');
 });
-it('retry clears only the completed intent and creates a fresh request', async () => {
+it('dismiss clears only the completed intent and request, keeping start available', async () => {
   localStorage.setItem(`${key}:request`, id);
   await mount(true, { ...initial, phase: 'expired', error: 'expired' });
-  await click('Try again');
+  await click('Dismiss');
   expect(localStorage.getItem(key)).toBeNull(); expect(localStorage.getItem(`${key}:request`)).toBeNull();
   expect(screen.getByRole('button', { name: 'Connect Cloudflare' })).toBeTruthy();
 });

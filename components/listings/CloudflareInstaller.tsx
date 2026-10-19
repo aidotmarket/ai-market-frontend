@@ -1,7 +1,7 @@
 'use client';
 
 import { useEffect, useRef, useState } from 'react';
-import { startCloudflareInstall, getCloudflareInstall, controlCloudflareInstall, type CloudflareInstallStatus, type CloudflareVerifierStatus } from '@/api/dataVerificationGateway';
+import { startCloudflareInstall, getCloudflareInstall, controlCloudflareInstall, gatewayVerificationError, type CloudflareInstallStatus, type CloudflareVerifierStatus } from '@/api/dataVerificationGateway';
 import { listSellerWorkspaceConnections } from '@/api/sellerWorkspace';
 
 const uuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
@@ -18,6 +18,7 @@ const fixedCopy: Record<string, string> = {
   oauth_refused: 'Installation failed. Some verifier resources may remain in Cloudflare and incur charges. Open cleanup details.',
 };
 const unavailable = 'Installation status is unavailable. No data check can start yet.';
+// Incomplete increment: installer Ready, phase details and free-check CTA await backend I2c.
 export function cloudflareInstallCopy(status: CloudflareInstallStatus): string {
   if (status.error) return Object.hasOwn(fixedCopy, status.error) ? fixedCopy[status.error] : unavailable;
   if (status.phase === 'cancelled') return fixedCopy.consent_cancelled;
@@ -32,17 +33,18 @@ export function useCloudflareInstaller(listingId: string, sellerId: string, conn
   const [intent, setIntent] = useState<string | null>(null);
   const [restored, setRestored] = useState(false);
   const [status, setStatus] = useState<CloudflareInstallStatus | null>(null);
+  const [unreadable, setUnreadable] = useState(false);
   const [error, setError] = useState('');
   const [busy, setBusy] = useState(false);
   const [attest, setAttest] = useState(false);
   const [account, setAccount] = useState<string | null>(null);
   const lock = useRef(false);
   const revision = useRef(0);
-  const finished = !!status && terminal.has(status.phase);
+  const finished = unreadable || (!!status && terminal.has(status.phase));
   const allowed = !!connectionId && fresh && verifier?.connection_id === connectionId && verifier.installer_enabled === true && verifier.eligible &&
     (verifier.state === 'none' || verifier.state === 'removed') && (!verifier.runner_id || verifier.state === 'removed') && !verifier.setup_expires_at && !pasted;
   useEffect(() => {
-    setIntent(null); setStatus(null); setError(''); setRestored(false); setAttest(false); setAccount(null);
+    setIntent(null); setStatus(null); setUnreadable(false); setError(''); setRestored(false); setAttest(false); setAccount(null);
     if (!connectionId) return;
     try {
       const saved = window.localStorage.getItem(key);
@@ -54,6 +56,7 @@ export function useCloudflareInstaller(listingId: string, sellerId: string, conn
   useEffect(() => {
     if (!intent || finished) return;
     let stopped = false, inFlight = false, ended = false;
+    let failures = 0;
     let timer: ReturnType<typeof setTimeout>;
     async function poll() {
       clearTimeout(timer);
@@ -62,8 +65,13 @@ export function useCloudflareInstaller(listingId: string, sellerId: string, conn
       const read = revision.current;
       try {
         const next = await getCloudflareInstall(intent!);
-        if (!stopped && read === revision.current) { setStatus(next); setError(''); ended = terminal.has(next.phase); }
-      } catch { if (!stopped && read === revision.current) setError(unavailable); }
+        if (!stopped && read === revision.current) { failures = 0; setStatus(next); setError(''); ended = terminal.has(next.phase); }
+      } catch (cause) {
+        if (!stopped && read === revision.current) {
+          ended = gatewayVerificationError(cause).status === 404 || ++failures >= 3;
+          setUnreadable(ended); setError(unavailable);
+        }
+      }
       finally { inFlight = false; }
       if (!stopped && !ended && visible()) timer = setTimeout(() => void poll(), 3000);
     }
@@ -79,13 +87,13 @@ export function useCloudflareInstaller(listingId: string, sellerId: string, conn
       if (read === revision.current) setAccount(match?.provider_account_id ?? null);
     } catch { /* Optional account details must never display raw failures. */ }
   }
-  async function act(action: 'start' | 'cancel' | 'cleanup-attestation' | 'retry') {
+  async function act(action: 'start' | 'cancel' | 'cleanup-attestation' | 'dismiss') {
     if (lock.current) return;
     lock.current = true; setBusy(true); setError('');
     const read = ++revision.current;
     try {
-      if (action === 'retry') {
-        window.localStorage.removeItem(key); window.localStorage.removeItem(`${key}:request`); setIntent(null); setStatus(null);
+      if (action === 'dismiss') {
+        window.localStorage.removeItem(key); window.localStorage.removeItem(`${key}:request`); setIntent(null); setStatus(null); setUnreadable(false);
       } else if (action === 'start' && allowed && restored) {
         const request = window.localStorage.getItem(`${key}:request`) ?? crypto.randomUUID();
         if (!uuid.test(request)) throw new Error();
@@ -93,9 +101,9 @@ export function useCloudflareInstaller(listingId: string, sellerId: string, conn
         const next = await startCloudflareInstall(listingId, connectionId!, request);
         if (read !== revision.current) return;
         if (!uuid.test(next.intent_id)) throw new Error();
-        window.localStorage.setItem(key, next.intent_id); setIntent(next.intent_id);
         const url = new URL(next.authorize_url);
         if (url.origin !== 'https://dash.cloudflare.com' || url.pathname !== '/oauth2/auth' || url.username || url.password || url.hash) throw new Error();
+        window.localStorage.setItem(key, next.intent_id); setIntent(next.intent_id);
         window.location.assign(url.href);
       } else if (intent && (action === 'cancel' || (action === 'cleanup-attestation' && attest))) {
         const next = await controlCloudflareInstall(intent, action);
@@ -104,11 +112,13 @@ export function useCloudflareInstaller(listingId: string, sellerId: string, conn
     } catch { if (read === revision.current) setError('Could not complete the installation request. Try again or contact support.'); }
     finally { lock.current = false; if (read === revision.current) setBusy(false); }
   }
-  const active = !!connectionId && (!!intent || allowed || !!error);
   const cleanup = status?.error === 'cleanup_unconfirmed' || status?.error === 'oauth_refused';
-  const retry = status && ['expired', 'cancelled', 'callback_refused'].includes(status.phase);
-  const panel = active && <section className="space-y-3" aria-label="Cloudflare installation">
-    {!intent ? <>
+  const needsAttestation = (status?.cleanup === 'unconfirmed' || status?.error === 'cleanup_unconfirmed') && !status?.access_removal_confirmed_by_seller;
+  // Retain cleanup history; backend admission requires attestation only for unconfirmed cleanup.
+  const active = !!connectionId && !!intent && (!finished || !cleanup || needsAttestation);
+  const dismiss = unreadable || (finished && !cleanup);
+  const panel = !!connectionId && (!!intent || allowed || !!error) && <section className="space-y-3" aria-label="Cloudflare installation">
+    {!intent ? allowed && <>
       <h3 className="font-semibold">Install your verifier</h3>
       <p>The check runs in your Cloudflare account. Your files stay there; ai.market receives only signed summary findings.</p>
       <p>You need a Cloudflare account and Workers Paid ($5/month plus usage). Cloudflare charges are separate from the verification fee.</p>
@@ -119,9 +129,9 @@ export function useCloudflareInstaller(listingId: string, sellerId: string, conn
       <details onToggle={event => { if (event.currentTarget.open) void readAccount(); }}><summary>Cloudflare account</summary><p>{account ? `Account ID: ${account}` : 'Account details unavailable.'}</p></details>
       <button className={buttonClass} disabled={busy || !allowed || !restored} onClick={() => void act('start')}>Connect Cloudflare</button>
     </> : <>
-      <p role="status">{status ? cloudflareInstallCopy(status) : 'Checking installation status…'}</p>
-      {status && !terminal.has(status.phase) && <button className={buttonClass} disabled={busy || !!status.cancel_requested} onClick={() => void act('cancel')}>{status.cancel_requested ? 'Cancellation requested' : 'Cancel installation'}</button>}
-      {retry && allowed && <button className={buttonClass} disabled={busy} onClick={() => void act('retry')}>Try again</button>}
+      {error !== unavailable && <p role="status">{status ? cloudflareInstallCopy(status) : 'Checking installation status…'}</p>}
+      {status && !finished && <button className={buttonClass} disabled={busy || !!status.cancel_requested} onClick={() => void act('cancel')}>{status.cancel_requested ? 'Cancellation requested' : 'Cancel installation'}</button>}
+      {dismiss && <button className={buttonClass} disabled={busy} onClick={() => void act('dismiss')}>Dismiss</button>}
       {cleanup && <>
         <details><summary>Cleanup details</summary><p>Disconnect the app in Cloudflare. Check your account for verifier resources and remove them to stop their charges. Resource identifiers are not available from installation status.</p></details>
         {status?.access_removal_confirmed_by_seller ? <p>Access removal recorded as your statement, not provider proof.</p> : <>
@@ -130,7 +140,7 @@ export function useCloudflareInstaller(listingId: string, sellerId: string, conn
         </>}
       </>}
       <details><summary>Verification details</summary>
-        {(['claimed_at', 'updated_at'] as const).map(field => typeof status?.[field] === 'number' && Number.isFinite(status[field]) && <p key={field}>{field === 'claimed_at' ? 'Authorization received' : 'Last updated'}: {status[field]}</p>)}
+        {(['claimed_at', 'updated_at'] as const).map(field => typeof status?.[field] === 'number' && Number.isFinite(status[field]) && <p key={field}>{field === 'claimed_at' ? 'Authorization received' : 'Last updated'} (UTC epoch seconds): {status[field]}</p>)}
       </details>
     </>}
     {error && <p role="alert">{error}</p>}
