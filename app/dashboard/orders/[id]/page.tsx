@@ -1,7 +1,8 @@
 'use client';
 
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react';
 import Link from 'next/link';
+import { useSessionGeneration } from '@/hooks/useSessionGeneration';
 import { useParams, useSearchParams } from 'next/navigation';
 import { getOrder, getOrderAccess, getOrderEvents } from '@/api/orders';
 import { getTransaction, confirmTransaction, deliverTransaction } from '@/api/transactions';
@@ -80,15 +81,23 @@ export default function OrderDetailPage() {
   const searchParams = useSearchParams();
   const orderId = params.id.replace(/^([0-9a-f]{8})-?([0-9a-f]{4})-?([0-9a-f]{4})-?([0-9a-f]{4})-?([0-9a-f]{12})$/i, (_, a, b, c, d, e) => [a, b, c, d, e].join('-').toLowerCase());
   const txIdParam = searchParams.get('tx');
-  const { toast } = useToast();
   const userId = useAuthStore((s) => s.user?.id);
-  const { ensureTermsAccepted, TermsGatePrompt, checkingTerms } = useTermsGate('buyer');
+  const token = useAuthStore((s) => s.token);
+  const sessionGeneration = useSessionGeneration(token);
 
+  // Order/query/account changes retire the whole visit. Routine credential
+  // rotation retires only transaction actions, preserving active downloads.
+  return <OrderDetailVisit key={JSON.stringify([orderId, txIdParam, userId])}
+    orderId={orderId} txIdParam={txIdParam} userId={userId} sessionGeneration={sessionGeneration} />;
+}
+
+function OrderDetailVisit({ orderId, txIdParam, userId, sessionGeneration }: {
+  orderId: string; txIdParam: string | null; userId: string | undefined; sessionGeneration: number;
+}) {
   const [order, setOrder] = useState<BuyerOrderDetail | null>(null);
   const isBuyerOfRecord = order !== null && order.id === orderId && userId === order.buyer_id;
-  const isSellerOfRecord = order !== null && userId === order.seller_id;
+  const isSellerOfRecord = order !== null && order.id === orderId && userId === order.seller_id;
   const [events, setEvents] = useState<OrderEvent[]>([]);
-  const [tx, setTx] = useState<Transaction | null>(null);
   const [orderAccess, setOrderAccess] = useState<{ orderId: string; buyerId: string; status: string; data: OrderAccessResponse } | null>(null);
   // Keep legacy downloads hidden until the gateway check has completed for this order.
   const [nonGatewayOrderId, setNonGatewayOrderId] = useState<string | null>(null);
@@ -101,8 +110,6 @@ export default function OrderDetailPage() {
   const [downloadError, setDownloadError] = useState('');
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
-  const [confirming, setConfirming] = useState(false);
-  const [delivering, setDelivering] = useState(false);
 
   useEffect(() => {
     let cancelled = false;
@@ -111,18 +118,16 @@ export default function OrderDetailPage() {
     setLoading(true);
     setError('');
 
-    const fetches: [Promise<BuyerOrderDetail>, Promise<OrderEvent[]>, Promise<Transaction | null>] = [
+    const fetches: [Promise<BuyerOrderDetail>, Promise<OrderEvent[]>] = [
       getOrder(orderId),
       getOrderEvents(orderId).catch(() => [] as OrderEvent[]),
-      txIdParam ? getTransaction(txIdParam).catch(() => null) : Promise.resolve(null),
     ];
 
     Promise.all(fetches)
-      .then(([orderData, eventsData, txData]) => {
+      .then(([orderData, eventsData]) => {
         if (cancelled) return;
         setOrder(orderData);
         setEvents(eventsData);
-        setTx(txData?.order_id === orderId ? txData : null);
       })
       .catch((err) => {
         if (cancelled) return;
@@ -157,42 +162,6 @@ export default function OrderDetailPage() {
     return () => { cancelled = true; };
   }, [isBuyerOfRecord, order?.buyer_id, order?.workspace_delivery, order?.access_expired, order?.status, orderId]);
 
-  const handleConfirm = async () => {
-    await ensureTermsAccepted(confirmReceipt);
-  };
-
-  const confirmReceipt = async () => {
-    if (!isBuyerOfRecord || !tx || confirming) return;
-    setConfirming(true);
-    try {
-      const updated = await confirmTransaction(tx.id);
-      setTx(updated);
-      toast('Receipt confirmed!', 'success');
-    } catch {
-      toast('Failed to confirm receipt.', 'error');
-    } finally {
-      setConfirming(false);
-    }
-  };
-
-  const handleDeliver = async () => {
-    await ensureTermsAccepted(markDelivered);
-  };
-
-  const markDelivered = async () => {
-    if (!isSellerOfRecord || !tx || delivering) return;
-    setDelivering(true);
-    try {
-      const updated = await deliverTransaction(tx.id, { proof_type: 'manual', notes: 'Marked delivered by seller' });
-      setTx(updated);
-      toast('Marked as delivered!', 'success');
-    } catch {
-      toast('Failed to mark as delivered.', 'error');
-    } finally {
-      setDelivering(false);
-    }
-  };
-
   if (loading || (order && order.id !== orderId)) {
     return (
       <div className="flex min-h-[40vh] items-center justify-center">
@@ -226,7 +195,6 @@ export default function OrderDetailPage() {
 
   return (
     <div>
-      <TermsGatePrompt />
       <Link href="/dashboard/orders" className="text-sm text-[#3F51B5] hover:underline mb-4 inline-block">
         &larr; Back to Purchases
       </Link>
@@ -266,6 +234,179 @@ export default function OrderDetailPage() {
             </div>
           </div>
 
+          <OrderTransaction key={`transaction:${sessionGeneration}`} orderId={orderId} txIdParam={txIdParam}
+            isBuyerOfRecord={isBuyerOfRecord} isSellerOfRecord={isSellerOfRecord} />
+
+          {/* Access / Download section */}
+          {order.status === 'fulfilled' && isSellerOfRecord && !isBuyerOfRecord && (
+            <p>Downloads are available to the buyer of this order.</p>
+          )}
+
+          {(['fulfilled', 'delivered', 'completed'].includes(String(order.status)) || order.workspace_delivery) && isBuyerOfRecord && order.access_expired && (
+            <div className="rounded-lg border border-red-200 bg-red-50 p-6">
+              <h2 className="text-lg font-semibold text-red-900">Download window expired</h2>
+              <p className="mt-2 text-sm text-red-700">
+                This order&apos;s download window has ended. No download access is available for this purchase.
+              </p>
+            </div>
+          )}
+
+          {order.workspace_delivery && isBuyerOfRecord && !order.access_expired && String(order.status)==='pending_delivery' && <WorkspacePurchaseRecovery key={order.id} orderId={order.id} onReady={setOrder} />}
+          {order.workspace_delivery && isBuyerOfRecord && !order.access_expired && downloadEligible && (workspaceDownloadReady === `${orderId}:${userId}` ? <WorkspaceDownload key={order.id} orderId={order.id} /> : <WorkspaceDownloadActivation key={`activation:${sessionGeneration}`} onReady={() => setWorkspaceDownloadReady(`${orderId}:${userId}`)} />)}
+
+          {downloadEligible && !order.workspace_delivery && nonGatewayOrderId === order.id && isBuyerOfRecord && !order.access_expired && (
+            <div className="rounded-lg border border-gray-200 p-6">
+              <h2 className="text-lg font-semibold text-gray-900">Downloads</h2>
+              {downloadLoading ? (
+                <p className="mt-2 text-sm text-gray-600">Preparing download access...</p>
+              ) : access?.delivery_type === 'reference' && access.can_download && access.download_urls?.some((file) => /^https?:\/\//i.test(file.url)) ? (
+                <ul className="mt-4 space-y-3">
+                  {access.download_urls.filter((file) => /^https?:\/\//i.test(file.url)).map((file) => (
+                    <li key={file.url}>
+                      <ReferenceDownload key={`${orderId}:${userId}:${sessionGeneration}`} url={file.url} filename={file.filename} />
+                    </li>
+                  ))}
+                </ul>
+              ) : (
+                <p className="mt-2 text-sm text-gray-600">{downloadError || 'Download access is unavailable.'}</p>
+              )}
+            </div>
+          )}
+
+          {/* Event Timeline */}
+          {events.length > 0 && (
+            <div className="rounded-lg border border-gray-200 p-6">
+              <h2 className="text-lg font-semibold text-gray-900 mb-4">Timeline</h2>
+              <div className="space-y-4">
+                {events.map((event) => (
+                  <div key={event.id} className="flex gap-3">
+                    <div className="flex flex-col items-center">
+                      <div className="h-2 w-2 rounded-full bg-gray-400 mt-2"></div>
+                      <div className="w-px flex-1 bg-gray-200"></div>
+                    </div>
+                    <div className="pb-4">
+                      <p className="text-sm text-gray-900">{orderEventLabel(event)}</p>
+                      <p className="text-xs text-gray-500 mt-0.5">{formatDate(event.created_at)}</p>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+        </div>
+
+        {/* Sidebar actions */}
+        <div className="space-y-4">
+          <div className="rounded-lg border border-gray-200 p-6">
+            <h3 className="font-semibold text-gray-900 mb-3">Actions</h3>
+            <a
+              href={`mailto:support@ai.market?subject=Issue with Order ${order.id.slice(0, 8)}`}
+              className="block w-full rounded-lg border border-gray-300 px-4 py-2.5 text-sm font-medium text-gray-700 text-center hover:bg-gray-50"
+            >
+              Report Issue
+            </a>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// A pending activation belongs to its credential generation; an activated downloader
+// lives outside this boundary and keeps its operation and completed-file progress.
+function WorkspaceDownloadActivation({ onReady }: { onReady: () => void }) {
+  const { ensureTermsAccepted, TermsGatePrompt, checkingTerms } = useTermsGate('buyer');
+  const lifetime = useRef<object | null>(null);
+  useLayoutEffect(() => {
+    lifetime.current = {};
+    return () => { lifetime.current = null; };
+  }, []);
+  return <>
+    <TermsGatePrompt />
+    <button type="button" disabled={checkingTerms} onClick={() => {
+      const owner = lifetime.current;
+      return ensureTermsAccepted(() => { if (owner && lifetime.current === owner) onReady(); });
+    }} className="rounded-lg bg-indigo-700 px-4 py-2 text-sm font-semibold text-white disabled:opacity-50">Continue to download</button>
+  </>;
+}
+
+// Only transaction reads, Terms and action ownership restart on credential rotation.
+function OrderTransaction({ orderId, txIdParam, isBuyerOfRecord, isSellerOfRecord }: {
+  orderId: string; txIdParam: string | null; isBuyerOfRecord: boolean; isSellerOfRecord: boolean;
+}) {
+  const { toast } = useToast();
+  const lifetime = useRef<object | null>(null);
+  const actionPending = useRef(false);
+  useLayoutEffect(() => {
+    lifetime.current = {};
+    return () => { lifetime.current = null; };
+  }, []);
+  const { ensureTermsAccepted, TermsGatePrompt, checkingTerms } = useTermsGate('buyer');
+  const [tx, setTx] = useState<Transaction | null>(null);
+  const [confirming, setConfirming] = useState(false);
+  const [delivering, setDelivering] = useState(false);
+  useEffect(() => {
+    let cancelled = false;
+    if (txIdParam) {
+      getTransaction(txIdParam).then((data) => {
+        if (!cancelled) setTx(data.order_id === orderId ? data : null);
+      }).catch(() => {});
+    }
+    return () => { cancelled = true; };
+  }, [orderId, txIdParam]);
+
+  const handleConfirm = async () => {
+    const owner = lifetime.current;
+    let dispatched = false;
+    await ensureTermsAccepted(async () => {
+      if (!owner || lifetime.current !== owner || dispatched || actionPending.current || !isBuyerOfRecord || !tx) return;
+      dispatched = true;
+      actionPending.current = true;
+      setConfirming(true);
+      try {
+        const updated = await confirmTransaction(tx.id);
+        if (lifetime.current !== owner) return;
+        if (updated.order_id !== orderId || updated.id !== tx.id) throw new Error('Transaction response mismatch');
+        setTx(updated);
+        toast('Receipt confirmed!', 'success');
+      } catch {
+        if (lifetime.current === owner) toast('Failed to confirm receipt.', 'error');
+      } finally {
+        if (lifetime.current === owner) {
+          actionPending.current = false;
+          setConfirming(false);
+        }
+      }
+    });
+  };
+
+  const handleDeliver = async () => {
+    const owner = lifetime.current;
+    let dispatched = false;
+    await ensureTermsAccepted(async () => {
+      if (!owner || lifetime.current !== owner || dispatched || actionPending.current || !isSellerOfRecord || !tx) return;
+      dispatched = true;
+      actionPending.current = true;
+      setDelivering(true);
+      try {
+        const updated = await deliverTransaction(tx.id, { proof_type: 'manual', notes: 'Marked delivered by seller' });
+        if (lifetime.current !== owner) return;
+        if (updated.order_id !== orderId || updated.id !== tx.id) throw new Error('Transaction response mismatch');
+        setTx(updated);
+        toast('Marked as delivered!', 'success');
+      } catch {
+        if (lifetime.current === owner) toast('Failed to mark as delivered.', 'error');
+      } finally {
+        if (lifetime.current === owner) {
+          actionPending.current = false;
+          setDelivering(false);
+        }
+      }
+    });
+  };
+
+  return <>
+    <TermsGatePrompt />
           {/* Transaction detail */}
           {tx && (
             <div className="rounded-lg border border-gray-200 p-6">
@@ -359,79 +500,7 @@ export default function OrderDetailPage() {
             </div>
           )}
 
-          {/* Access / Download section */}
-          {order.status === 'fulfilled' && isSellerOfRecord && !isBuyerOfRecord && (
-            <p>Downloads are available to the buyer of this order.</p>
-          )}
-
-          {(['fulfilled', 'delivered', 'completed'].includes(String(order.status)) || order.workspace_delivery) && isBuyerOfRecord && order.access_expired && (
-            <div className="rounded-lg border border-red-200 bg-red-50 p-6">
-              <h2 className="text-lg font-semibold text-red-900">Download window expired</h2>
-              <p className="mt-2 text-sm text-red-700">
-                This order&apos;s download window has ended. No download access is available for this purchase.
-              </p>
-            </div>
-          )}
-
-          {order.workspace_delivery && isBuyerOfRecord && !order.access_expired && String(order.status)==='pending_delivery' && <WorkspacePurchaseRecovery key={order.id} orderId={order.id} onReady={setOrder} />}
-          {order.workspace_delivery && isBuyerOfRecord && !order.access_expired && downloadEligible && (workspaceDownloadReady === `${orderId}:${userId}` ? <WorkspaceDownload key={order.id} orderId={order.id} /> : <button type="button" disabled={checkingTerms} onClick={() => ensureTermsAccepted(() => setWorkspaceDownloadReady(`${orderId}:${userId}`))} className="rounded-lg bg-indigo-700 px-4 py-2 text-sm font-semibold text-white disabled:opacity-50">Continue to download</button>)}
-
-          {downloadEligible && !order.workspace_delivery && nonGatewayOrderId === order.id && isBuyerOfRecord && !order.access_expired && (
-            <div className="rounded-lg border border-gray-200 p-6">
-              <h2 className="text-lg font-semibold text-gray-900">Downloads</h2>
-              {downloadLoading ? (
-                <p className="mt-2 text-sm text-gray-600">Preparing download access...</p>
-              ) : access?.delivery_type === 'reference' && access.can_download && access.download_urls?.some((file) => /^https?:\/\//i.test(file.url)) ? (
-                <ul className="mt-4 space-y-3">
-                  {access.download_urls.filter((file) => /^https?:\/\//i.test(file.url)).map((file) => (
-                    <li key={file.url}>
-                      <ReferenceDownload key={`${orderId}:${userId}`} url={file.url} filename={file.filename} />
-                    </li>
-                  ))}
-                </ul>
-              ) : (
-                <p className="mt-2 text-sm text-gray-600">{downloadError || 'Download access is unavailable.'}</p>
-              )}
-            </div>
-          )}
-
-          {/* Event Timeline */}
-          {events.length > 0 && (
-            <div className="rounded-lg border border-gray-200 p-6">
-              <h2 className="text-lg font-semibold text-gray-900 mb-4">Timeline</h2>
-              <div className="space-y-4">
-                {events.map((event) => (
-                  <div key={event.id} className="flex gap-3">
-                    <div className="flex flex-col items-center">
-                      <div className="h-2 w-2 rounded-full bg-gray-400 mt-2"></div>
-                      <div className="w-px flex-1 bg-gray-200"></div>
-                    </div>
-                    <div className="pb-4">
-                      <p className="text-sm text-gray-900">{orderEventLabel(event)}</p>
-                      <p className="text-xs text-gray-500 mt-0.5">{formatDate(event.created_at)}</p>
-                    </div>
-                  </div>
-                ))}
-              </div>
-            </div>
-          )}
-        </div>
-
-        {/* Sidebar actions */}
-        <div className="space-y-4">
-          <div className="rounded-lg border border-gray-200 p-6">
-            <h3 className="font-semibold text-gray-900 mb-3">Actions</h3>
-            <a
-              href={`mailto:support@ai.market?subject=Issue with Order ${order.id.slice(0, 8)}`}
-              className="block w-full rounded-lg border border-gray-300 px-4 py-2.5 text-sm font-medium text-gray-700 text-center hover:bg-gray-50"
-            >
-              Report Issue
-            </a>
-          </div>
-        </div>
-      </div>
-    </div>
-  );
+  </>;
 }
 
 function ReferenceDownload({ url, filename }: { url: string; filename?: string | null }) {
