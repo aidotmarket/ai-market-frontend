@@ -13,8 +13,8 @@ const key = 'cloudflare-install:seller:listing:connection';
 const originalStorage = Object.getOwnPropertyDescriptor(window, 'localStorage')!;
 const verifier: api.CloudflareVerifierStatus = { installer_enabled: true, eligible: true, connection_id: 'connection', state: 'none', runner_id: null, jurisdiction: 'default', release_id: null, scanner_version: null, binary_sha256: null, worker_identity: null, image_digest: null, poll_interval_minutes: null, registered_at: null, last_seen_at: null, setup_expires_at: null };
 const initial: api.CloudflareInstallStatus = { intent_id: id, phase: 'start', error: null, cleanup: 'not_started', claimed_at: null, updated_at: null, cancel_requested: null, access_removal_confirmed_by_seller: false, runtime: { state: 'pending' } };
-function Harness({ status = verifier, pasted = false }: { status?: api.CloudflareVerifierStatus; pasted?: boolean }) {
-  const install = useCloudflareInstaller('listing', 'seller', 'connection', status, true, pasted);
+function Harness({ status = verifier }: { status?: api.CloudflareVerifierStatus }) {
+  const install = useCloudflareInstaller('listing', 'seller', 'connection', status, true);
   return <>{install.panel}{!install.active && <p>Existing setup</p>}</>;
 }
 async function mount(resume = true, status = initial) {
@@ -151,23 +151,21 @@ it.each([
   { installer_enabled: false }, { installer_enabled: undefined }, { state: 'ready', runner_id: 'runner' },
   { state: 'waiting', runner_id: 'runner' }, { state: 'waiting', setup_expires_at: '2099-01-01' },
   { state: 'removed', setup_expires_at: '2099-01-01' }, { eligible: false }, { connection_id: 'other' },
-] as Partial<api.CloudflareVerifierStatus>[])('keeps existing flow for %j', async override => {
+] as Partial<api.CloudflareVerifierStatus>[])('keeps verifier status without legacy setup for %j', async override => {
   vi.mocked(api.getCloudflareVerifierStatus).mockResolvedValue({ ...verifier, ...override });
   await act(async () => { render(<GatewayVerificationFlow listingId="listing" sellerId="seller" verifier={{ kind: 'cloudflare', connectionId: 'connection' }} />); });
   await click('Verify this data');
   expect(screen.queryByRole('button', { name: 'Connect Cloudflare' })).toBeNull();
-  expect(screen.getByRole('button', { name: 'Set up the verifier' })).toBeTruthy();
-});
-it('hides installer when a pasted setup is still in this component', async () => {
-  await act(async () => { render(<Harness pasted />); });
-  expect(screen.queryByRole('button', { name: 'Connect Cloudflare' })).toBeNull();
+  expect(screen.getByRole('heading', { name: 'Cloudflare verifier' })).toBeTruthy();
+  expect(screen.getByRole('button', { name: 'Check verifier status' })).toBeTruthy();
+  expect(screen.queryByRole('button', { name: 'Set up the verifier' })).toBeNull();
 });
 it.each([
   ['closed', 'oauth_complete', true, 'ready'], ['closed', 'memory_lost', true, 'none'],
   ['closed', 'install_mint_refused', false, 'none'], ['closed', 'callback_invalid', false, 'none'],
   ['cancelled', null, false, 'none'], ['expired', 'expired', false, 'none'],
   ['callback_refused', null, false, 'none'], ['cancelled', null, false, 'ready'],
-] as const)('dismisses saved %s/%s with capability %s and legacy %s', async (phase, error, enabled, state) => {
+] as const)('dismisses saved %s/%s with capability %s and verifier state %s', async (phase, error, enabled, state) => {
   localStorage.setItem(`${key}:request`, id);
   const view = await mount(true, { ...initial, phase, error }); view.unmount();
   vi.mocked(api.getCloudflareVerifierStatus).mockResolvedValue({ ...verifier, installer_enabled: enabled, state, runner_id: state === 'ready' ? 'new-runner' : null });
@@ -179,7 +177,9 @@ it.each([
   await click('Dismiss');
   expect(localStorage.getItem(key)).toBeNull(); expect(localStorage.getItem(`${key}:request`)).toBeNull();
   expect(screen.getByRole('heading', { name: 'Cloudflare verifier' })).toBeTruthy();
-  expect(screen.getByRole('button', { name: 'Set up the verifier' })).toBeTruthy();
+  expect(screen.getByRole('button', { name: 'Check verifier status' })).toBeTruthy();
+  expect(screen.queryByRole('button', { name: 'Set up the verifier' })).toBeNull();
+  expect(!!screen.queryByRole('button', { name: 'Connect Cloudflare' })).toBe(enabled === true && state === 'none');
   expect((screen.getByRole('button', { name: 'Check data and get quote' }) as HTMLButtonElement).disabled).toBe(state !== 'ready');
   expect(window.location.search).toBe('');
   expect(api.probeGatewayVerification).not.toHaveBeenCalled();
@@ -218,7 +218,7 @@ it('ignores query, raw messages and extra secret fields; hides phase times by de
   expect(details.open).toBe(false);
   expect(details.textContent).toContain('Authorization received (UTC epoch seconds): 123');
 });
-it.each([true, false])('keeps legacy setup for corrupt storage with capability %s', async enabled => {
+it.each([true, false])('keeps installer disabled with the restore alert for corrupt storage with capability %s', async enabled => {
   localStorage.setItem(key, 'code=secret');
   vi.mocked(api.getCloudflareVerifierStatus).mockResolvedValue({ ...verifier, installer_enabled: enabled });
   await act(async () => { render(<GatewayVerificationFlow listingId="listing" sellerId="seller" verifier={{ kind: 'cloudflare', connectionId: 'connection' }} />); });
@@ -226,7 +226,9 @@ it.each([true, false])('keeps legacy setup for corrupt storage with capability %
   expect(api.getCloudflareInstall).not.toHaveBeenCalled();
   if (enabled) expect((screen.getByRole('button', { name: 'Connect Cloudflare' }) as HTMLButtonElement).disabled).toBe(true);
   else expect(screen.queryByRole('button', { name: 'Connect Cloudflare' })).toBeNull();
-  expect(screen.getByRole('button', { name: 'Set up the verifier' })).toBeTruthy();
+  expect(screen.getByRole('heading', { name: 'Cloudflare verifier' })).toBeTruthy();
+  expect(screen.getByRole('button', { name: 'Check verifier status' })).toBeTruthy();
+  expect(screen.queryByRole('button', { name: 'Set up the verifier' })).toBeNull();
   expect(screen.getByRole('alert').textContent).toContain('Could not restore installation');
   expect(document.body.textContent).not.toContain('code=secret');
 });

@@ -31,25 +31,9 @@ export interface AWSVerifierStatus {
   poll_interval_minutes: number | null;
   setup_expires_at: string | null;
 }
-export type CloudflareSetupCommand = AWSSetupCommand & { kind: 'cloudflare'; jurisdiction: 'default' };
 export interface CloudflareWorkerIdentity {
   mode: 'bundle' | 'source_tree_lockfile';
   sha256: string;
-}
-export interface CloudflareSetupResponse {
-  connection_id: string;
-  expires_at_utc: string;
-  registration_token: string;
-  release_id: string;
-  scanner_version: string;
-  binary_sha256: string;
-  worker_identity: CloudflareWorkerIdentity;
-  template_repo_url: string;
-  template_commit: string;
-  deploy_button_url: string;
-  bundle_url: string;
-  bundle_sha256: string;
-  deployment_config: { connection_id: string; bucket: string; prefix: string; jurisdiction: string; keys: string[] };
 }
 export interface CloudflareVerifierStatus extends Omit<AWSVerifierStatus, 'region' | 'code_sha256' | 'poll_interval_minutes'> {
   installer_enabled?: boolean;
@@ -81,9 +65,6 @@ export async function getCloudflareInstall(intent: string): Promise<CloudflareIn
 }
 export async function controlCloudflareInstall(intent: string, action: 'cancel' | 'cleanup-attestation'): Promise<CloudflareInstallStatus> {
   return (await api.post(`${installRoot}/${encodeURIComponent(intent)}/${action}`, action === 'cleanup-attestation' ? { confirm: true } : {})).data;
-}
-export async function setupCloudflareVerifier(command: CloudflareSetupCommand): Promise<CloudflareSetupResponse> {
-  return (await api.post<CloudflareSetupResponse>('/verification-runners/setup', command)).data;
 }
 export async function getCloudflareVerifierStatus(listingId: string): Promise<CloudflareVerifierStatus> {
   return (await api.get<CloudflareVerifierStatus>('/verification-runners/cloudflare/status', { params: { listing_id: listingId } })).data;

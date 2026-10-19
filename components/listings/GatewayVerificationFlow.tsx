@@ -6,8 +6,8 @@ import {
   getGatewayVerificationEpoch, getGatewayVerificationProbe, gatewayVerificationLifecycle, gatewayVerificationError,
   probeGatewayVerification, startGatewayVerification, verificationErrorCopy, verificationRefusalCopy,
   getAwsVerifierStatus, setupAwsVerifier, removeVerificationRunner,
-  getCloudflareVerifierStatus, setupCloudflareVerifier,
-  type CloudflareVerifierStatus, type CloudflareSetupResponse, type AWSVerifierStatus,
+  getCloudflareVerifierStatus,
+  type CloudflareVerifierStatus, type AWSVerifierStatus,
 } from '@/api/dataVerificationGateway';
 import { getDataVerificationPayInReadiness } from '@/api/dataVerificationPayin';
 import DataVerificationPaymentMethod from '@/components/DataVerificationPaymentMethod';
@@ -56,14 +56,7 @@ export const AWS_COST_DISCLOSURE = 'Runs in your AWS account; typical cost about
 
 export const CLOUDFLARE_COST_DISCLOSURE = 'Runs in your Cloudflare account. Workers Paid has a $5/month base subscription; container time, Worker/Durable Object usage and R2 read operations may add costs. R2 has no egress fee; Infrequent Access data retrieval can cost extra. The free probe also runs a complete scan. Cloudflare charges are separate from the ai.market verification fee.';
 export const CLOUDFLARE_REMOVE_COPY = 'This stops new verification work. Delete the verifier Worker, Container deployment and Durable Object state in your Cloudflare account to stop its resource costs. Your R2 data and marketplace delivery remain unchanged.';
-// The deployed Worker accepts only a 32-byte base64url secret (43 characters).
-// It is generated here, shown once, and never sent to ai.market or stored.
-export function generateRunNowSecret(): string {
-  const bytes = new Uint8Array(32);
-  crypto.getRandomValues(bytes);
-  return btoa(String.fromCharCode(...bytes)).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
-}
-export const CLOUDFLARE_RUN_NOW_COPY = "Deployment is waiting for its first check. Open your verifier's seller control page and select Run now. Scheduled checks are a best-effort backstop.";
+export const CLOUDFLARE_RUN_NOW_COPY = "Waiting for the verifier's first check. This usually completes within a few minutes.";
 
 export default function GatewayVerificationFlow({ listingId, sellerId, verifier, onChanged }: Props) {
   const aws = verifier?.kind === 'aws';
@@ -89,19 +82,8 @@ export default function GatewayVerificationFlow({ listingId, sellerId, verifier,
   const [confirmAction, setConfirmAction] = useState<GatewayVerificationAction | null>(null);
   const [delay, setDelay] = useState(2);
   const [opened, setOpened] = useState(!cloud);
-  const [cloudflareSetup, setCloudflareSetup] = useState<CloudflareSetupResponse | null>(null);
-  const [runNowSecret, setRunNowSecret] = useState<string | null>(null);
-  const [copied, setCopied] = useState<'token' | 'secret' | null>(null);
-  const copiedTimer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
   const errorRef = useRef<HTMLParagraphElement>(null);
   const [paying, setPaying] = useState(false);
-  async function copyValue(kind: 'token' | 'secret', value: string) {
-    await navigator.clipboard.writeText(value);
-    if (!mounted.current) return;
-    setCopied(kind);
-    clearTimeout(copiedTimer.current);
-    copiedTimer.current = setTimeout(() => { if (mounted.current) setCopied(null); }, 2500);
-  }
   const [cloudflareStatus, setCloudflareStatus] = useState<CloudflareVerifierStatus | null>(null);
   const [awsStatus, setAwsStatus] = useState<AWSVerifierStatus | null>(null);
   const [statusFresh, setStatusFresh] = useState(false);
@@ -109,7 +91,7 @@ export default function GatewayVerificationFlow({ listingId, sellerId, verifier,
   const statusRead = useRef(0);
   const verifierStatus = cloudflare ? cloudflareStatus : awsStatus;
   const runnerId = cloudflare ? cloudflareStatus?.runner_id : aws ? awsStatus?.runner_id : verifier?.kind === 'gateway' ? verifier.runnerId : undefined;
-  const installer = useCloudflareInstaller(listingId, sellerId, verifier?.kind === 'cloudflare' ? verifier.connectionId : undefined, cloudflareStatus, statusFresh, !!cloudflareSetup);
+  const installer = useCloudflareInstaller(listingId, sellerId, verifier?.kind === 'cloudflare' ? verifier.connectionId : undefined, cloudflareStatus, statusFresh);
   useEffect(() => { if (installer.resumed) setOpened(true); }, [installer.resumed]);
 
   async function readVerifierStatus() {
@@ -156,34 +138,9 @@ export default function GatewayVerificationFlow({ listingId, sellerId, verifier,
         await removeVerificationRunner(runnerId);
         if (!mounted.current) return;
         setVerifierDecision(null);
-        if (cloud) { setRunNowSecret(null); setCloudflareSetup(null); setStatusFresh(false); await readVerifierStatus(); }
+        if (cloud) { setStatusFresh(false); await readVerifierStatus(); }
         await checkStatus();
         onChanged?.();
-      });
-      return;
-    }
-    if (verifier?.kind === 'cloudflare') {
-      if (verifierDecision === 'replace' && !runnerId) return;
-      void run(async () => {
-        setCloudflareSetup(null);
-        setRunNowSecret(null);
-        try {
-          const command = { kind: 'cloudflare' as const, connection_id: verifier.connectionId, jurisdiction: 'default' as const };
-          const result = await setupCloudflareVerifier(verifierDecision === 'replace' && runnerId
-            ? { ...command, replace_runner_id: runnerId, confirm_replace: true } : command);
-          if (!mounted.current) return;
-          setCloudflareSetup(result);
-          setRunNowSecret(generateRunNowSecret());
-          setVerifierDecision(null);
-          setStatusFresh(false);
-          await readVerifierStatus();
-        } catch (cause) {
-          if (gatewayVerificationError(cause).code === 'replacement_confirmation_required') {
-            await readVerifierStatus();
-            if (mounted.current) setVerifierDecision('replace');
-          }
-          throw cause;
-        }
       });
       return;
     }
@@ -243,7 +200,7 @@ export default function GatewayVerificationFlow({ listingId, sellerId, verifier,
     } catch {
       setError('We could not restore your verification request. Please contact support before starting again.');
     }
-    return () => { mounted.current = false; clearTimeout(copiedTimer.current); };
+    return () => { mounted.current = false; };
   }, [storageKey]);
 
   useEffect(() => {
@@ -410,39 +367,19 @@ export default function GatewayVerificationFlow({ listingId, sellerId, verifier,
     {installer.panel}
     {cloudflare && !installer.active && <>
       <h3 className="font-semibold">Cloudflare verifier</h3>
-      <p role="status">{!statusFresh ? 'Checking verifier status…' : cloudflareStatus?.state === 'ready' ? 'Ready' : cloudflareStatus?.state === 'removed' ? 'Removed' : cloudflareStatus?.state === 'waiting' ? 'Waiting for verifier' : 'Set up the verifier to check this data.'}</p>
-      <p>You need a GitHub or GitLab account and Cloudflare Workers Paid.</p>
+      <p role="status">{!statusFresh ? 'Checking verifier status…' : cloudflareStatus?.state === 'ready' ? 'Ready' : cloudflareStatus?.state === 'removed' ? 'Removed' : cloudflareStatus?.state === 'waiting' ? 'Waiting for verifier' : 'No verifier is set up for this data yet.'}</p>
       {cloudflareStatus?.binary_sha256 && <p>Registered binary SHA-256: <code>{cloudflareStatus.binary_sha256}</code></p>}
       {cloudflareStatus?.worker_identity && <p>Registered Worker identity: {cloudflareStatus.worker_identity.mode} <code>{cloudflareStatus.worker_identity.sha256}</code></p>}
       {cloudflareStatus?.registered_at && <p>Registered at: <time dateTime={cloudflareStatus.registered_at}>{cloudflareStatus.registered_at}</time></p>}
-      {(cloudflareStatus?.state === 'waiting' || (cloudflareSetup && cloudflareStatus?.state !== 'ready' && cloudflareStatus?.state !== 'removed')) && <p>{CLOUDFLARE_RUN_NOW_COPY}</p>}
-      {cloudflareStatus?.setup_expires_at && <p>Setup expires at {cloudflareStatus.setup_expires_at}. An exact registration retry recovers its acknowledgment without creating another verifier. If setup expires, request a fresh setup token.</p>}
-      <button className={buttonClass} disabled={busy || !statusFresh || !cloudflareStatus?.eligible} onClick={() => setVerifierDecision(runnerId && cloudflareStatus?.state !== 'removed' ? 'replace' : 'setup')}>Set up the verifier</button>
+      {cloudflareStatus?.state === 'waiting' && <p>{CLOUDFLARE_RUN_NOW_COPY}</p>}
       <button className={buttonClass} disabled={busy} onClick={() => void run(readVerifierStatus)}>Check verifier status</button>
-      <p>For a version update, confirm replacement to get the new release’s button and fresh registration. Remove the old deployment and Durable Object state after exporting your audit records privately. ai.market never pushes updates or invokes anything in your account.</p>
-      {cloudflareSetup && <div className="space-y-3">
-        <a className={buttonClass} href={cloudflareSetup.deploy_button_url} target="_blank" rel="noopener noreferrer">Deploy to Cloudflare</a>
-        <p>Release: {cloudflareSetup.release_id}; scanner version: {cloudflareSetup.scanner_version}</p>
-        <label className="block">Registration token<input className="block w-full rounded border p-2" readOnly value={cloudflareSetup.registration_token} onFocus={event => event.target.select()} /></label>
-        <button className={buttonClass} onClick={() => void run(() => copyValue('token', cloudflareSetup.registration_token))}>{copied === 'token' ? 'Copied ✓' : 'Copy registration token'}</button>
-        <p>Registration token expires at {cloudflareSetup.expires_at_utc}.</p>
-        {runNowSecret && <>
-          <label className="block">Run-now secret<input className="block w-full rounded border p-2" readOnly value={runNowSecret} onFocus={event => event.target.select()} /></label>
-          <button className={buttonClass} onClick={() => void run(() => copyValue('secret', runNowSecret))}>{copied === 'secret' ? 'Copied ✓' : 'Copy run-now secret'}</button>
-        </>}
-        <p>The deployment button prompts for two secrets: REGISTRATION_TOKEN (paste the registration token above) and RUN_NOW_SECRET (paste the generated run-now secret above). Save the run-now secret somewhere private now: you need it to press Run now on your verifier’s control page, and it is not shown again. It was created in this browser and never reaches ai.market. The setup token is shown to you, as with AWS.</p>
-        <p>Binary SHA-256: <code>{cloudflareSetup.binary_sha256}</code></p>
-        <p>Worker identity: {cloudflareSetup.worker_identity.mode} <code>{cloudflareSetup.worker_identity.sha256}</code></p>
-        <p>When Cloudflare asks for the SOURCE R2 bucket, enter exactly <code>{cloudflareSetup.deployment_config.bucket}</code>. If Cloudflare creates a new bucket instead, open your Worker → Settings → Bindings, set SOURCE to <code>{cloudflareSetup.deployment_config.bucket}</code>, and delete the empty bucket.</p>
-      </div>}
       <p>{CLOUDFLARE_COST_DISCLOSURE}</p>
       <p><a href="https://developers.cloudflare.com/workers/platform/pricing/" target="_blank" rel="noopener noreferrer" className="underline">Workers pricing</a>; <a href="https://developers.cloudflare.com/containers/platform/pricing/" target="_blank" rel="noopener noreferrer" className="underline">Containers pricing</a>; <a href="https://developers.cloudflare.com/r2/pricing/" target="_blank" rel="noopener noreferrer" className="underline">R2 pricing</a></p>
       {(probe?.refusal === 'cloudflare_source_too_large' || error === verificationRefusalCopy('cloudflare_source_too_large')) && <Link href="/dashboard/gateways" className="underline">Set up your own AIM Data gateway</Link>}
     </>}
     {runnerId && (!cloud || verifierStatus?.state !== 'removed') && <button className={buttonClass} disabled={busy} onClick={() => setVerifierDecision('remove')}>Remove verifier</button>}
     {verifierDecision && <div role="group" aria-label="Confirm verifier change">
-      <p>{verifierDecision === 'remove' ? 'Remove this verifier and stop new verification work?' : verifierDecision === 'replace' ? 'Replace the existing verifier and its receipt key? This stops its verification work.' : cloudflare ? 'Set up a scoped verifier in your own Cloudflare account?' : 'Set up a scoped verifier in your own AWS account?'}</p>
-      {cloudflare && verifierDecision === 'replace' && <p>Replace runner {runnerId}. Remove the old deployment after setting up the new release.</p>}
+      <p>{verifierDecision === 'remove' ? 'Remove this verifier and stop new verification work?' : verifierDecision === 'replace' ? 'Replace the existing verifier and its receipt key? This stops its verification work.' : 'Set up a scoped verifier in your own AWS account?'}</p>
       <p>{cloudflare ? CLOUDFLARE_REMOVE_COPY : aws ? 'Deleting the CloudFormation stack stops its AWS resources and costs. Removing the verifier here does not delete the stack. Marketplace delivery is unchanged.' : 'Marketplace delivery is unchanged.'}</p>
       <button className={buttonClass} disabled={busy || (verifierDecision !== 'setup' && !runnerId)} onClick={confirmVerifierDecision}>Confirm {verifierDecision === 'remove' ? 'removal' : verifierDecision === 'replace' ? 'replacement' : 'setup'}</button>
       <button className={buttonClass} disabled={busy} onClick={() => setVerifierDecision(null)}>Keep current verifier</button>
