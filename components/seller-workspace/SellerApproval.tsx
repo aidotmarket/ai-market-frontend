@@ -1,4 +1,5 @@
 'use client';
+import {authSessionIdentity,useAuthStore} from '@/store/auth';
 import { useEffect, useRef, useState } from 'react';
 import axios from 'axios';
 import NativeSellerAuth from '@/components/NativeSellerAuth';
@@ -9,6 +10,7 @@ import { approveListingReview, CONFIRMATION_KEYS, LICENSE_CONFIRMATION_KEYS, typ
 
 export default function SellerApproval({review, active, rendered,disabled=false}: {review: ListingReview; active: boolean; rendered: boolean;disabled?:boolean}) {
   const flow=useListingFlow();
+  const sessionIdentity=useAuthStore(authSessionIdentity);
   const [confirmed, setConfirmed] = useState(false);
   const [receipt, setReceipt] = useState(review.approval ?? null);
   const [busy, setBusy] = useState(false);
@@ -18,8 +20,8 @@ export default function SellerApproval({review, active, rendered,disabled=false}
   const identity = useRef<string | null>(null);
   const controller = useRef<AbortController | null>(null);
   useEffect(() => {
-    return () => {controller.current?.abort();controller.current = null;};
-  }, []);
+    return () => {controller.current?.abort();controller.current = null;setBusy(false);};
+  }, [sessionIdentity]);
   useEffect(() => {
     if (!active) {controller.current?.abort();controller.current = null;setBusy(false);}
   }, [active]);

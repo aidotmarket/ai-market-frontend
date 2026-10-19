@@ -1,6 +1,6 @@
 'use client';
 import { useEffect, useRef, useState } from 'react';
-import { useAuthStore } from '@/store/auth';
+import { authSessionIdentity, useAuthStore } from '@/store/auth';
 import { useSellerSwitches, type SellerSwitchReport } from '@/hooks/useSellerSwitches';
 import { nativeClient, nativeSession } from '@/api/connector-seller-settings';
 import { LICENSE_HASHES, licenseDocumentPath } from '@/api/listingLicenses';
@@ -8,16 +8,17 @@ import { readSigningInstruments, signInstruments, type SigningInstrument, type S
 import NativeSellerAuth from '@/components/NativeSellerAuth';
 
 export default function WorkspaceBatchSigning({preparation,onSigned}:{preparation?: SigningInstrument;onSigned?:(rows:PreparationView[])=>void}) {
-  const switches = useSellerSwitches(); const { user, token } = useAuthStore();
-  if (!user || switches?.seller !== true || !switches.bulk || !switches.effects) return <p role="status">Licence signing is currently unavailable.</p>;
-  return <BatchSigningScreen key={`${user.id}:${token}`} switches={switches} preparation={preparation} onSigned={onSigned} />;
+  const switches = useSellerSwitches(); const sessionIdentity = useAuthStore(authSessionIdentity);
+  if (!sessionIdentity) return <p role="status">Licence signing is currently unavailable.</p>;
+  return <BatchSigningScreen key={sessionIdentity} switches={switches ?? {seller:false,bulk:false,effects:false}} preparation={preparation} onSigned={onSigned} />;
 }
 export function BatchSigningScreen({ switches, preparation, onSigned }: { switches: SellerSwitchReport; preparation?: SigningInstrument; onSigned?:(rows:PreparationView[])=>void }) {
   const [ids, setIds] = useState(''); const [instruments, setInstruments] = useState<SigningInstrument[]>([]);
   const [texts, setTexts] = useState<Record<string, string>>({}); const [consent, setConsent] = useState(false);
   const [busy, setBusy] = useState(false); const [error, setError] = useState<unknown>(null); const [done, setDone] = useState(false);
   const request = useRef<SigningRequest | null>(null); const active = useRef(true);
-  useEffect(() => { active.current = true; return () => { active.current = false; }; }, []);
+  const action = useRef<AbortController | null>(null);
+  useEffect(() => { active.current = true; return () => { active.current = false; action.current?.abort(); }; }, []);
   const load = async (preloaded?: SigningInstrument) => {
     if (busy) return;
     setBusy(true); setError(null); setInstruments([]); setTexts({}); setConsent(false); setDone(false); request.current = null;
@@ -44,7 +45,15 @@ export function BatchSigningScreen({ switches, preparation, onSigned }: { switch
       if (active.current) setTexts(Object.fromEntries(loaded));
     } catch(e) { if (active.current) setError(e); } finally { if (active.current) setBusy(false); }
   };
-  useEffect(() => { if (preparation) void load(preparation); }, [preparation]);
+  const loadedPreparation = useRef<SigningInstrument | null>(null);
+  const enabled = switches.seller && switches.bulk && switches.effects;
+  // Revalidation may temporarily hide the screen, but must retain the displayed action.
+  useEffect(() => {
+    if (preparation && enabled && loadedPreparation.current !== preparation && !busy) {
+      loadedPreparation.current = preparation;
+      void load(preparation);
+    }
+  }, [preparation, enabled]);
   const ready = switches.seller && switches.bulk && switches.effects && !error && consent && instruments.length > 0 && instruments.length <= 50
     && instruments.every(i => i.status === 'prepared' && i.signing_required && i.license_selection.kind === 'standard'
       && !!texts[licenseDocumentPath('standard', i.license_selection.ai_training)] && !!texts[licenseDocumentPath('covenant')]);
@@ -53,15 +62,16 @@ export function BatchSigningScreen({ switches, preparation, onSigned }: { switch
     // A factor retry is permitted only for the retained displayed request.
     if (reauth && !request.current) return;
     setBusy(true); setError(null);
+    const controller = new AbortController(); action.current = controller;
     try {
       request.current ??= { request_id: crypto.randomUUID(), csrf: nativeSession().csrf,
         instruments: instruments.map(i => ({ preparation_id: i.id, coverage_hash: i.coverage_hash, selection: i.license_selection })) };
       if (reauth) request.current.reauth_token = reauth;
       request.current.csrf = nativeSession().csrf;
-      const rows = await signInstruments(request.current); if (active.current) {setDone(true);onSigned?.(rows);}
+      const rows = await signInstruments(request.current, controller.signal); if (active.current) {setDone(true);onSigned?.(rows);}
     } catch(e) { if (active.current) setError(e); } finally { if (active.current) setBusy(false); }
   };
-  if (!switches.seller || !switches.bulk || !switches.effects) return null;
+  if (!enabled) return <><p role="status">Licence signing is currently unavailable.</p>{!!error&&<p role="alert">Licence signing could not be confirmed. Refresh and review again before signing.</p>}</>;
   return <section aria-label="Workspace batch licence signing" className="space-y-4 rounded-xl border bg-white p-6">
     <h2 className="text-xl font-semibold">Workspace step: Sign licences</h2>
     <p>Display and sign all selected instruments in one native session before a fresh action-batch review. Generic Confirm never signs licences.</p>

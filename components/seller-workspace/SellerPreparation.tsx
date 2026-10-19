@@ -1,7 +1,7 @@
 'use client';
 import {useEffect,useRef,useState} from 'react';
 import {nativeAuthError} from '@/api/connector-seller-settings';
-import {useAuthStore} from '@/store/auth';
+import {authSessionIdentity,useAuthStore} from '@/store/auth';
 import type {ApprovalReceipt} from '@/api/sellerListingReview';
 import {lookupPreparation,prepareListing,preparationRequest,preparationError,preparationErrorCode,preparationUnavailable,preparationStatus,type PreparationRequest,type PreparedListing} from '@/api/sellerListingPreparation';
 import type {SigningInstrument} from '@/api/seller-batch-signing';
@@ -9,7 +9,7 @@ import NativeSellerAuth from '@/components/NativeSellerAuth';
 import WorkspaceBatchSigning from './WorkspaceBatchSigning';
 
 export default function SellerPreparation({approval,active,onChange,onLoaded,published=false,publicationBlocked=false}:{approval:ApprovalReceipt;active:boolean;published?:boolean;publicationBlocked?:boolean;onChange:(value:PreparedListing|null)=>void;onLoaded:(ready:boolean)=>void}) {
-  const token=useAuthStore(s=>s.token);
+  const sessionIdentity=useAuthStore(authSessionIdentity);
   const [value,setValue]=useState<PreparedListing|null>(null);
   const [loaded,setLoaded]=useState(false);
   const [unavailable,setUnavailable]=useState(false);
@@ -30,7 +30,7 @@ export default function SellerPreparation({approval,active,onChange,onLoaded,pub
         else setError(e);
       }});
     return()=>{controller.abort();action.current?.abort();action.current=null;setBusy(false);};
-  },[approval,active,retry,token]);
+  },[approval,active,retry,sessionIdentity]);
   async function prepare() {
     if(!active||!loaded||value||published||publicationBlocked||unavailable||action.current)return;
     // Publication must wait until this create has a confirmed outcome or B2 recovers it.

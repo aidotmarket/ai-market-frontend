@@ -1,6 +1,7 @@
 // @vitest-environment jsdom
 import {afterEach,beforeEach,expect,it,vi} from 'vitest';
-import {cleanup,fireEvent,render,screen,waitFor} from '@testing-library/react';
+import {act,cleanup,fireEvent,render,screen,waitFor} from '@testing-library/react';
+import axios from 'axios';
 import SellerPreparation from './SellerPreparation';
 vi.mock('@/components/CompanySignIn',()=>({default:()=> <button>Company sign-in</button>}));
 import {nativeClient,nativeSession} from '@/api/connector-seller-settings';
@@ -78,4 +79,91 @@ it('keeps a policy denial distinct from authentication failures',async()=>{
   render(<SellerPreparation approval={approval} active onChange={vi.fn()} onLoaded={vi.fn()}/>);
   await screen.findByText(/not allowed by the current seller policy/);
   expect(screen.queryByRole('link',{name:'Sign in again'})).toBeNull();
+});
+
+function refreshedWrite(data: unknown) {
+  const first = nativeSession();
+  let finish!: (value: {data: unknown}) => void;
+  const delayed = new Promise<{data: unknown}>(resolve => {finish=resolve;});
+  const post=vi.spyOn(nativeClient,'post')
+    .mockRejectedValueOnce({isAxiosError:true,response:{status:401}})
+    .mockImplementationOnce(()=>delayed);
+  const refresh=vi.spyOn(axios,'post').mockResolvedValue({data:{access_token:'refreshed-session'}});
+  return {post,refresh,first,complete:()=>finish({data})};
+}
+function expectRefreshedPair(post: ReturnType<typeof vi.spyOn>, first: ReturnType<typeof nativeSession>) {
+  const [path,body,config]=post.mock.calls[0];
+  expect(body.request_id).toEqual(expect.any(String));
+  expect(config.headers).toEqual(first.headers);
+  expect(body.csrf).toBe(first.csrf);
+  expect(post.mock.calls[1]).toEqual([path,{...body,csrf:nativeSession().csrf},{...config,headers:nativeSession().headers}]);
+}
+it.each(['success','failure'])('keeps mounted preparation alive across refresh and shows its %s',async outcome=>{
+  mockReads(false);
+  const write=refreshedWrite(outcome==='success'?row:{});
+  const onChange=vi.fn();
+  render(<SellerPreparation approval={approval} active onChange={onChange} onLoaded={vi.fn()}/>);
+  fireEvent.click(await screen.findByRole('button',{name:'Prepare for publishing'}));
+  await waitFor(()=>expect(write.post).toHaveBeenCalledTimes(2));
+  expect(write.refresh).toHaveBeenCalledOnce();
+  expectRefreshedPair(write.post,write.first);
+  const signal=write.post.mock.calls[0][2]?.signal;
+  expect(signal?.aborted).toBe(false);
+  await act(async()=>write.complete());
+  if(outcome==='success') {
+    await screen.findByText('Needs signing');
+    expect(onChange).toHaveBeenLastCalledWith(expect.objectContaining({id:row.id}));
+  } else await screen.findByRole('alert');
+});
+it.each(['success','failure'])('keeps mounted signing alive through refresh and capability revalidation: %s',async outcome=>{
+  const reads=mockReads(true);
+  const signed={...row,status:'signed',signed_coverage_hash:row.coverage_hash,signing_required:false,acceptance_id:id(88)};
+  const write=refreshedWrite(outcome==='success'?{instruments:[signed]}:{});
+  const onChange=vi.fn();
+  render(<SellerPreparation approval={approval} active onChange={onChange} onLoaded={vi.fn()}/>);
+  await waitFor(()=>expect(screen.getAllByText('Complete fixture legal terms')).toHaveLength(2));
+  // Capability revalidation stays pending while the write completes.
+  reads.mockImplementation(()=>new Promise(()=>{}));
+  fireEvent.click(screen.getByRole('checkbox'));
+  fireEvent.click(screen.getByRole('button',{name:'Sign 1 licences'}));
+  await waitFor(()=>expect(write.post).toHaveBeenCalledTimes(2));
+  expectRefreshedPair(write.post,write.first);
+  expect(write.post.mock.calls[0][2]?.signal?.aborted).toBe(false);
+  await act(async()=>write.complete());
+  if(outcome==='success') {
+    await screen.findByText('Ready to publish here or from Claude');
+    expect(onChange).toHaveBeenLastCalledWith(expect.objectContaining({status:'signed'}));
+  } else await screen.findByRole('alert');
+});
+it.each(['identity','logout','unmount'])('cancels pending preparation on %s',async change=>{
+  mockReads(false);
+  let finish!: (value:{data:typeof row})=>void;
+  const post=vi.spyOn(nativeClient,'post').mockImplementation(()=>new Promise(resolve=>{finish=resolve;}));
+  const onChange=vi.fn();
+  const view=render(<SellerPreparation approval={approval} active onChange={onChange} onLoaded={vi.fn()}/>);
+  fireEvent.click(await screen.findByRole('button',{name:'Prepare for publishing'}));
+  await waitFor(()=>expect(post).toHaveBeenCalledOnce());
+  if(change==='unmount') view.unmount();
+  else act(()=>useAuthStore.setState(change==='logout'?{token:null,user:null}:{user:{id:id(98)} as User}));
+  expect(post.mock.calls[0][2]?.signal?.aborted).toBe(true);
+  await act(async()=>finish({data:row}));
+  expect(onChange).not.toHaveBeenCalledWith(expect.objectContaining({id:row.id}));
+});
+
+it.each(['identity','logout','unmount'])('cancels pending signing on %s',async change=>{
+  mockReads(true);
+  const write=refreshedWrite({instruments:[]});
+  const onChange=vi.fn();
+  const view=render(<SellerPreparation approval={approval} active onChange={onChange} onLoaded={vi.fn()}/>);
+  await waitFor(()=>expect(screen.getAllByText('Complete fixture legal terms')).toHaveLength(2));
+  fireEvent.click(screen.getByRole('checkbox'));
+  fireEvent.click(screen.getByRole('button',{name:'Sign 1 licences'}));
+  await waitFor(()=>expect(write.post).toHaveBeenCalledTimes(2));
+  const signal=write.post.mock.calls[0][2]?.signal;
+  expect(signal?.aborted).toBe(false);
+  if(change==='unmount') view.unmount();
+  else act(()=>useAuthStore.setState(change==='logout'?{token:null,user:null}:{user:{id:id(98)} as User}));
+  expect(signal?.aborted).toBe(true);
+  await act(async()=>write.complete());
+  expect(onChange).not.toHaveBeenCalledWith(expect.objectContaining({status:'signed'}));
 });

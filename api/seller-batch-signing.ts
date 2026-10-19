@@ -36,10 +36,10 @@ export async function readSigningInstruments(ids: string[]): Promise<SigningInst
   if (nativeSession().token !== session.token) throw new Error('SESSION_CHANGED');
   return results;
 }
-export async function signInstruments(body: SigningRequest): Promise<PreparationView[]> {
+export async function signInstruments(body: SigningRequest, signal?: AbortSignal): Promise<PreparationView[]> {
   if (!uuid(body.request_id) || !body.instruments.length || body.instruments.length > 50
     || new Set(body.instruments.map(i => i.preparation_id)).size !== body.instruments.length) throw new Error('INVALID_BATCH');
-  const data = await nativeWrite<{ instruments: PreparationView[] }>(`${base}/listing-licences/sign`, body);
+  const data = await nativeWrite<{ instruments: PreparationView[] }>(`${base}/listing-licences/sign`, body, signal);
   if (!Array.isArray(data?.instruments) || data.instruments.length !== body.instruments.length
     || new Set(data.instruments.map(i => i.id)).size !== body.instruments.length
     || !data.instruments.every(v => validView(v) && v.status === 'signed' && !v.signing_required && uuid(v.acceptance_id)

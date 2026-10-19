@@ -1,6 +1,6 @@
 import axios from 'axios';
 import { refreshAccessToken } from './client';
-import { useAuthStore } from '@/store/auth';
+import { authSessionIdentity, useAuthStore } from '@/store/auth';
 import { sessionCsrf } from '@/lib/session-csrf';
 
 export type Verb = 'update' | 'publish' | 'unpublish';
@@ -61,20 +61,27 @@ export function nativeSession() {
 }
 // Only use for idempotent seller writes: retries retain the original action identity.
 export async function nativeWrite<T>(path: string, body: object, signal?: AbortSignal): Promise<T> {
+  const owner = authSessionIdentity(useAuthStore.getState());
   for (let attempt = 0; ; attempt++) {
+    if (authSessionIdentity(useAuthStore.getState()) !== owner) throw new Error('SESSION_CHANGED');
     signal?.throwIfAborted();
     const session = nativeSession();
     try {
       const { data } = await nativeClient.post<T>(path, { ...body, csrf: session.csrf }, {
         ...(signal ? { signal } : {}), headers: session.headers,
       });
-      if (useAuthStore.getState().token !== session.token) throw new Error('SESSION_CHANGED');
+      if (authSessionIdentity(useAuthStore.getState()) !== owner) throw new Error('SESSION_CHANGED');
       signal?.throwIfAborted();
       return data;
     } catch (error) {
-      if (useAuthStore.getState().token !== session.token) throw new Error('SESSION_CHANGED');
+      if (authSessionIdentity(useAuthStore.getState()) !== owner) throw new Error('SESSION_CHANGED');
       signal?.throwIfAborted();
-      if (attempt !== 0 || !axios.isAxiosError(error) || error.response?.status !== 401) throw error;
+      const retryable = attempt === 0 && axios.isAxiosError(error) && error.response?.status === 401;
+      if (useAuthStore.getState().token !== session.token) {
+        if (retryable && useAuthStore.getState().token) continue;
+        throw new Error('SESSION_CHANGED');
+      }
+      if (!retryable) throw error;
       await refreshAccessToken();
     }
   }

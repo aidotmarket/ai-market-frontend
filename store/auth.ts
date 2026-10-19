@@ -55,6 +55,10 @@ function isEmailVerificationRequiredError(error: unknown): boolean {
   return false;
 }
 
+// Credential rotation keeps the same action owner; logout and account changes do not.
+export const authSessionIdentity = (state: Pick<AuthState, 'user' | 'token'>): string | null =>
+  state.token ? state.user?.id ?? null : null;
+
 export const useAuthStore = create<AuthState>((set, get) => ({
   user: null,
   token: null,

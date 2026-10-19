@@ -1,4 +1,5 @@
 'use client';
+import {authSessionIdentity,useAuthStore} from '@/store/auth';
 import SellerPreparation from './SellerPreparation';
 import NativeSellerAuth from '@/components/NativeSellerAuth';
 import {nativeAuthError} from '@/api/connector-seller-settings';
@@ -14,6 +15,7 @@ import {isCompleteLicenseSelection} from '@/api/listingLicenses';
 import {legalIdentityFailure,LEGAL_IDENTITY_SUPPORT_PATH} from '@/api/sellerLegalIdentity';
 export default function SellerPublication({approval,active,rendered,sampleCount=0}:{approval:ApprovalReceipt;active:boolean;rendered:boolean;sampleCount?:number}) {
   const flow=useListingFlow();
+  const sessionIdentity=useAuthStore(authSessionIdentity);
   const [preparationResolved,setPreparationResolved]=useState(false);
   const [preparation,setPreparation]=useState<PreparedListing|null>(null);
   const [localState,setState]=useState<PublicationState|null>(null);
@@ -41,7 +43,7 @@ export default function SellerPublication({approval,active,rendered,sampleCount=
     });
     return ()=>request.abort();
   },[active,approval,retry]);
-  useEffect(()=>()=>{action.current?.abort();},[]);
+  useEffect(()=>()=>{action.current?.abort();action.current=null;setBusy(false);},[sessionIdentity]);
   useEffect(()=>{if (!active) {action.current?.abort();action.current=null;setBusy(false);}},[active]);
   async function publish() {
     if (!active || !rendered || !state?.publication_available || state.publication || stale || action.current || (!!approval.draft_id && !preparationResolved) || (preparation && preparation.status!=='signed') ||
