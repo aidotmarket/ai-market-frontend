@@ -28,7 +28,7 @@ export function cloudflareInstallCopy(status: CloudflareInstallStatus): string {
   return unavailable;
 }
 
-export function useCloudflareInstaller(listingId: string, sellerId: string, connectionId: string | undefined, verifier: CloudflareVerifierStatus | null, fresh: boolean, pasted: boolean) {
+export function useCloudflareInstaller(listingId: string, sellerId: string, connectionId: string | undefined, verifier: CloudflareVerifierStatus | null, fresh: boolean) {
   const key = `cloudflare-install:${sellerId}:${listingId}:${connectionId}`;
   const [intent, setIntent] = useState<string | null>(null);
   const [restored, setRestored] = useState(false);
@@ -42,7 +42,7 @@ export function useCloudflareInstaller(listingId: string, sellerId: string, conn
   const revision = useRef(0);
   const finished = unreadable || (!!status && terminal.has(status.phase));
   const allowed = !!connectionId && fresh && verifier?.connection_id === connectionId && verifier.installer_enabled === true && verifier.eligible &&
-    (verifier.state === 'none' || verifier.state === 'removed') && (!verifier.runner_id || verifier.state === 'removed') && !verifier.setup_expires_at && !pasted;
+    (verifier.state === 'none' || verifier.state === 'removed') && (!verifier.runner_id || verifier.state === 'removed') && !verifier.setup_expires_at;
   useEffect(() => {
     setIntent(null); setStatus(null); setUnreadable(false); setError(''); setRestored(false); setAttest(false); setAccount(null);
     if (!connectionId) return;

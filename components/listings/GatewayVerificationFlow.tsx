@@ -56,7 +56,7 @@ export const AWS_COST_DISCLOSURE = 'Runs in your AWS account; typical cost about
 
 export const CLOUDFLARE_COST_DISCLOSURE = 'Runs in your Cloudflare account. Workers Paid has a $5/month base subscription; container time, Worker/Durable Object usage and R2 read operations may add costs. R2 has no egress fee; Infrequent Access data retrieval can cost extra. The free probe also runs a complete scan. Cloudflare charges are separate from the ai.market verification fee.';
 export const CLOUDFLARE_REMOVE_COPY = 'This stops new verification work. Delete the verifier Worker, Container deployment and Durable Object state in your Cloudflare account to stop its resource costs. Your R2 data and marketplace delivery remain unchanged.';
-export const CLOUDFLARE_RUN_NOW_COPY = "Deployment is waiting for its first check. Open your verifier's seller control page and select Run now. Scheduled checks are a best-effort backstop.";
+export const CLOUDFLARE_RUN_NOW_COPY = "Waiting for the verifier's first check. This usually completes within a few minutes.";
 
 export default function GatewayVerificationFlow({ listingId, sellerId, verifier, onChanged }: Props) {
   const aws = verifier?.kind === 'aws';
@@ -91,7 +91,7 @@ export default function GatewayVerificationFlow({ listingId, sellerId, verifier,
   const statusRead = useRef(0);
   const verifierStatus = cloudflare ? cloudflareStatus : awsStatus;
   const runnerId = cloudflare ? cloudflareStatus?.runner_id : aws ? awsStatus?.runner_id : verifier?.kind === 'gateway' ? verifier.runnerId : undefined;
-  const installer = useCloudflareInstaller(listingId, sellerId, verifier?.kind === 'cloudflare' ? verifier.connectionId : undefined, cloudflareStatus, statusFresh, false);
+  const installer = useCloudflareInstaller(listingId, sellerId, verifier?.kind === 'cloudflare' ? verifier.connectionId : undefined, cloudflareStatus, statusFresh);
   useEffect(() => { if (installer.resumed) setOpened(true); }, [installer.resumed]);
 
   async function readVerifierStatus() {
@@ -367,7 +367,7 @@ export default function GatewayVerificationFlow({ listingId, sellerId, verifier,
     {installer.panel}
     {cloudflare && !installer.active && <>
       <h3 className="font-semibold">Cloudflare verifier</h3>
-      <p role="status">{!statusFresh ? 'Checking verifier status…' : cloudflareStatus?.state === 'ready' ? 'Ready' : cloudflareStatus?.state === 'removed' ? 'Removed' : cloudflareStatus?.state === 'waiting' ? 'Waiting for verifier' : 'Set up the verifier to check this data.'}</p>
+      <p role="status">{!statusFresh ? 'Checking verifier status…' : cloudflareStatus?.state === 'ready' ? 'Ready' : cloudflareStatus?.state === 'removed' ? 'Removed' : cloudflareStatus?.state === 'waiting' ? 'Waiting for verifier' : 'No verifier is set up for this data yet.'}</p>
       {cloudflareStatus?.binary_sha256 && <p>Registered binary SHA-256: <code>{cloudflareStatus.binary_sha256}</code></p>}
       {cloudflareStatus?.worker_identity && <p>Registered Worker identity: {cloudflareStatus.worker_identity.mode} <code>{cloudflareStatus.worker_identity.sha256}</code></p>}
       {cloudflareStatus?.registered_at && <p>Registered at: <time dateTime={cloudflareStatus.registered_at}>{cloudflareStatus.registered_at}</time></p>}
