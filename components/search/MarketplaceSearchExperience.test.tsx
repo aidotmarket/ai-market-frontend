@@ -1,7 +1,8 @@
 // @vitest-environment jsdom
 
-import { act, cleanup, fireEvent, render, screen } from '@testing-library/react';
+import { act, cleanup, fireEvent, render, screen, within } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import type { ListingListItem, SearchResultItem } from '@/types';
 
 const mocks = vi.hoisted(() => ({
   replace: vi.fn(),
@@ -34,7 +35,9 @@ vi.mock('@/components/search/SearchForm', () => ({
 }));
 
 vi.mock('@/components/search/MarketplaceListingCard', () => ({
-  MarketplaceListingCard: () => <div data-testid="listing-card" />,
+  MarketplaceListingCard: ({ listing }: { listing: { id: string } }) => (
+    <div data-testid="listing-card" data-listing-id={listing.id} />
+  ),
 }));
 
 import { MarketplaceSearchExperience } from './MarketplaceSearchExperience';
@@ -55,6 +58,123 @@ afterEach(() => {
 });
 
 describe('MarketplaceSearchExperience', () => {
+  describe('loaded format metadata', () => {
+    const legacyListing: ListingListItem = {
+      id: 'legacy', slug: 'legacy', title: 'Legacy listing', short_description: null,
+      price: 10, pricing_type: 'one_time', access_window_days: 7,
+      category: 'finance', tags: [], privacy_score: null, listing_type: 'raw',
+      fulfillment_type: 'file_download', task_category: null, domain_tags: null,
+      model_provider: null, trust_level: 'L0', view_count: 0,
+      created_at: '2026-10-19T00:00:00Z',
+    };
+    const browseItems: ListingListItem[] = [
+      { ...legacyListing, id: 'csv-1', data_format: 'csv' },
+      { ...legacyListing, id: 'csv-2', data_format: 'csv' },
+      { ...legacyListing, id: 'json', data_format: 'json' },
+      { ...legacyListing, id: 'parquet', data_format: 'parquet' },
+      { ...legacyListing, id: 'null-format', data_format: null },
+      legacyListing,
+    ];
+
+    function mockLoadedItems(items: ListingListItem[] | SearchResultItem[], semanticMode = false) {
+      mocks.useSearchListings.mockReturnValue({
+        items, facets: null, total: items.length, semanticMode,
+        isLoading: false, isError: false, error: null, hasNextPage: false,
+        isFetchingNextPage: false, fetchNextPage: vi.fn(), refetch: vi.fn(),
+      });
+    }
+
+    function renderedListingIds() {
+      return screen.queryAllByTestId('listing-card').map((card) => card.getAttribute('data-listing-id'));
+    }
+
+    it('offers counted formats from loaded browse metadata without inventing legacy formats', () => {
+      mocks.searchParams = new URLSearchParams('type=data');
+      mockLoadedItems(browseItems);
+      render(<MarketplaceSearchExperience mode="browse" />);
+
+      const select = screen.getByRole('combobox', { name: 'Data type' });
+      expect(within(select).getAllByRole('option').map((option) => option.textContent)).toEqual([
+        'All formats', 'CSV (2)', 'JSON (1)', 'PARQUET (1)',
+      ]);
+      expect(screen.getByText('Counts reflect loaded results only')).toBeTruthy();
+      expect(screen.getByText('6 results')).toBeTruthy();
+      expect(renderedListingIds()).toEqual(browseItems.map((item) => item.id));
+    });
+
+    it.each([
+      { format: 'csv', ids: ['csv-1', 'csv-2'] },
+      { format: 'json', ids: ['json'] },
+      { format: 'parquet', ids: ['parquet'] },
+    ])('selects $format through the URL and excludes other and unknown formats', ({ format, ids }) => {
+      mocks.searchParams = new URLSearchParams('type=data&category=finance');
+      mockLoadedItems(browseItems);
+      const view = render(<MarketplaceSearchExperience mode="browse" />);
+
+      fireEvent.change(screen.getByRole('combobox', { name: 'Data type' }), { target: { value: format } });
+      expect(mocks.replace).toHaveBeenCalledTimes(1);
+      const url = new URL(mocks.replace.mock.calls[0][0], 'https://ai.market');
+      expect(url.pathname).toBe('/listings');
+      expect(url.searchParams.get('type')).toBe('data');
+      expect(url.searchParams.get('category')).toBe('finance');
+      expect(url.searchParams.get('data_type')).toBe(format);
+      mocks.searchParams = url.searchParams;
+      view.rerender(<MarketplaceSearchExperience mode="browse" />);
+
+      expect((screen.getByRole('combobox', { name: 'Data type' }) as HTMLSelectElement).value).toBe(format);
+      expect(renderedListingIds()).toEqual(ids);
+      expect(screen.getByText(`${ids.length} result${ids.length === 1 ? '' : 's'} filtered to ${format.toUpperCase()}`)).toBeTruthy();
+      expect(screen.getByText('Counts reflect loaded results only')).toBeTruthy();
+
+      fireEvent.change(screen.getByRole('combobox', { name: 'Data type' }), { target: { value: '' } });
+      const clearedUrl = new URL(mocks.replace.mock.calls[1][0], 'https://ai.market');
+      expect(clearedUrl.searchParams.has('data_type')).toBe(false);
+      mocks.searchParams = clearedUrl.searchParams;
+      view.rerender(<MarketplaceSearchExperience mode="browse" />);
+      expect(renderedListingIds()).toEqual(browseItems.map((item) => item.id));
+    });
+
+    it('keeps null and absent legacy metadata visible with only the all-formats choice', () => {
+      mocks.searchParams = new URLSearchParams('type=data');
+      mockLoadedItems(browseItems.slice(4));
+      render(<MarketplaceSearchExperience mode="browse" />);
+
+      const select = screen.getByRole('combobox', { name: 'Data type' });
+      expect(within(select).getAllByRole('option').map((option) => option.textContent)).toEqual(['All formats']);
+      expect(renderedListingIds()).toEqual(['null-format', 'legacy']);
+      expect(screen.getByText('2 results')).toBeTruthy();
+    });
+
+    it('continues filtering semantic format metadata through the URL', () => {
+      mocks.pathname = '/search';
+      mocks.searchParams = new URLSearchParams('q=traffic&type=data');
+      const semanticItems: SearchResultItem[] = ['csv', 'json', null].map((data_format, index) => ({
+        id: `semantic-${index}`, slug: `semantic-${index}`, title: 'Related listing',
+        description: null, short_description: null, category: 'finance', price: 10,
+        privacy_score: null, compliance_status: null, data_format, source_row_count: null, tags: [],
+      }));
+      mockLoadedItems(semanticItems, true);
+      const view = render(<MarketplaceSearchExperience mode="search" />);
+      expect(renderedListingIds()).toEqual(semanticItems.map((item) => item.id));
+      expect(screen.getByRole('option', { name: 'CSV (1)' })).toBeTruthy();
+      expect(screen.getByRole('option', { name: 'JSON (1)' })).toBeTruthy();
+
+      fireEvent.change(screen.getByRole('combobox', { name: 'Data type' }), { target: { value: 'csv' } });
+      const url = new URL(mocks.replace.mock.calls[0][0], 'https://ai.market');
+      expect(url.pathname).toBe('/search');
+      expect(url.searchParams.get('q')).toBe('traffic');
+      expect(url.searchParams.get('type')).toBe('data');
+      expect(url.searchParams.get('data_type')).toBe('csv');
+      mocks.searchParams = url.searchParams;
+      view.rerender(<MarketplaceSearchExperience mode="search" />);
+
+      expect(renderedListingIds()).toEqual(['semantic-0']);
+      expect(screen.getByText('Marketplace suggestions for "traffic"')).toBeTruthy();
+      expect(screen.getByText(/ranked by meaning and may be related rather than exact/i)).toBeTruthy();
+      expect(screen.getByText('Counts reflect loaded results only')).toBeTruthy();
+    });
+  });
+
   describe.each([
     { mode: 'browse' as const, semanticMode: false, params: 'type=data&data_type=json' },
     { mode: 'search' as const, semanticMode: true, params: 'q=traffic&type=data&data_type=json' },
