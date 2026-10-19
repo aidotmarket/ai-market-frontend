@@ -261,6 +261,7 @@ export interface ListingListItem {
   slug: string;
   title: string;
   short_description: string | null;
+  data_format?: string | null;
   price: number;
   pricing_type: PricingType;
   access_window_days: number;
