@@ -234,7 +234,7 @@ function OrderDetailVisit({ orderId, txIdParam, userId, sessionGeneration }: {
             </div>
           </div>
 
-          <OrderTransaction key={sessionGeneration} orderId={orderId} txIdParam={txIdParam}
+          <OrderTransaction key={`transaction:${sessionGeneration}`} orderId={orderId} txIdParam={txIdParam}
             isBuyerOfRecord={isBuyerOfRecord} isSellerOfRecord={isSellerOfRecord} />
 
           {/* Access / Download section */}
@@ -252,7 +252,7 @@ function OrderDetailVisit({ orderId, txIdParam, userId, sessionGeneration }: {
           )}
 
           {order.workspace_delivery && isBuyerOfRecord && !order.access_expired && String(order.status)==='pending_delivery' && <WorkspacePurchaseRecovery key={order.id} orderId={order.id} onReady={setOrder} />}
-          {order.workspace_delivery && isBuyerOfRecord && !order.access_expired && downloadEligible && (workspaceDownloadReady === `${orderId}:${userId}` ? <WorkspaceDownload key={order.id} orderId={order.id} /> : <WorkspaceDownloadActivation key={sessionGeneration} onReady={() => setWorkspaceDownloadReady(`${orderId}:${userId}`)} />)}
+          {order.workspace_delivery && isBuyerOfRecord && !order.access_expired && downloadEligible && (workspaceDownloadReady === `${orderId}:${userId}` ? <WorkspaceDownload key={order.id} orderId={order.id} /> : <WorkspaceDownloadActivation key={`activation:${sessionGeneration}`} onReady={() => setWorkspaceDownloadReady(`${orderId}:${userId}`)} />)}
 
           {downloadEligible && !order.workspace_delivery && nonGatewayOrderId === order.id && isBuyerOfRecord && !order.access_expired && (
             <div className="rounded-lg border border-gray-200 p-6">

@@ -81,6 +81,71 @@ afterEach(() => {
 });
 
 
+
+describe('Workspace transaction retirement before download activation', () => {
+  for (const outcome of ['deferred Terms', 'success', 'error'] as const) {
+    it(`retires old transaction ${outcome} on same-user refresh before activation`, async () => {
+      const pending = deferred();
+      calls.confirmTransaction.mockReturnValue(pending.promise);
+      state.deferTerms = outcome === 'deferred Terms';
+      const fetcher = vi.fn(() => { throw new Error('Unexpected network before activation'); });
+      vi.stubGlobal('fetch', fetcher);
+      const randomUUID = vi.fn(() => '00000000-0000-4000-8000-000000000002');
+      vi.stubGlobal('crypto', { randomUUID });
+      const create = vi.fn(() => 'blob:fake'); const revoke = vi.fn();
+      vi.stubGlobal('URL', Object.assign(class extends URL {}, { createObjectURL: create, revokeObjectURL: revoke }));
+      const click = vi.spyOn(HTMLAnchorElement.prototype, 'click').mockImplementation(() => undefined);
+      const page = () => <StrictMode><OrderDetailPage /></StrictMode>;
+      const view = render(page());
+      fireEvent.click(await screen.findByRole('button', { name: 'Confirm Receipt' }));
+      expect(screen.getByRole('button', { name: 'Continue to download' })).toBeTruthy();
+      const oldTerms = termsCallbacks[termsCallbacks.length - 1];
+      expect(calls.confirmTransaction).toHaveBeenCalledTimes(outcome === 'deferred Terms' ? 0 : 1);
+
+      // Hold the new read so immediate retirement cannot be hidden by a replacement response.
+      const currentRead = deferred();
+      calls.getTransaction.mockReturnValue(currentRead.promise);
+      state.token = 'test-session-2'; view.rerender(page());
+      expect(screen.queryByText('TX-A')).toBeNull();
+      expect(screen.queryByRole('heading', { name: /^Transaction$/ })).toBeNull();
+      expect(screen.getByRole('button', { name: 'Continue to download' })).toBeTruthy();
+      await act(async () => { currentRead.resolve(tx('A')); });
+      expect(screen.getAllByRole('heading', { name: /^Transaction$/ })).toHaveLength(1);
+      expect(screen.getAllByText('TX-A')).toHaveLength(1);
+
+      const current = deferred();
+      state.deferTerms = false;
+      calls.confirmTransaction.mockReturnValue(current.promise);
+      fireEvent.click(screen.getByRole('button', { name: 'Confirm Receipt' }));
+      await act(async () => {
+        if (outcome === 'success') pending.resolve(tx('A', 'confirmed'));
+        else if (outcome === 'error') pending.reject(new Error('old failure'));
+        await oldTerms(); await oldTerms();
+      });
+      expect(calls.confirmTransaction).toHaveBeenCalledTimes(outcome === 'deferred Terms' ? 1 : 2);
+      expect(calls.toast).not.toHaveBeenCalled();
+      expect(screen.queryByText('Confirmed')).toBeNull();
+      expect((screen.getByRole('button', { name: 'Confirming…' }) as HTMLButtonElement).disabled).toBe(true);
+      expect(screen.getAllByRole('heading', { name: /^Transaction$/ })).toHaveLength(1);
+      await act(async () => { current.resolve(tx('A', 'confirmed')); });
+      expect(calls.toast).toHaveBeenCalledExactlyOnceWith('Receipt confirmed!', 'success');
+      expect(calls.confirmTransaction).toHaveBeenLastCalledWith('tx-A');
+      expect(screen.getByText('Confirmed')).toBeTruthy();
+      expect(screen.getAllByText('TX-A')).toHaveLength(1);
+      expect(screen.getAllByRole('heading', { name: /^Transaction$/ })).toHaveLength(1);
+      expect(screen.getByRole('button', { name: 'Continue to download' })).toBeTruthy();
+      expect(screen.queryByRole('button', { name: 'Download files' })).toBeNull();
+      expect(downloads.allocate).not.toHaveBeenCalled();
+      expect(downloads.file).not.toHaveBeenCalled();
+      expect(fetcher).not.toHaveBeenCalled();
+      expect(randomUUID).not.toHaveBeenCalled();
+      expect(create).not.toHaveBeenCalled();
+      expect(revoke).not.toHaveBeenCalled();
+      expect(click).not.toHaveBeenCalled();
+    });
+  }
+});
+
 const grant = (index: number) => ({
   filename: `file-${index}.csv`, size: 3,
   url: `https://synthetic.s3.eu-west-1.amazonaws.com/file-${index}?X-Amz-SignedHeaders=host%3Bif-match`,
