@@ -1,7 +1,8 @@
 'use client';
 
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react';
 import Link from 'next/link';
+import { useSessionGeneration } from '@/hooks/useSessionGeneration';
 import { useParams, useSearchParams } from 'next/navigation';
 import { getOrder, getOrderAccess, getOrderEvents } from '@/api/orders';
 import { getTransaction, confirmTransaction, deliverTransaction } from '@/api/transactions';
@@ -80,13 +81,31 @@ export default function OrderDetailPage() {
   const searchParams = useSearchParams();
   const orderId = params.id.replace(/^([0-9a-f]{8})-?([0-9a-f]{4})-?([0-9a-f]{4})-?([0-9a-f]{4})-?([0-9a-f]{12})$/i, (_, a, b, c, d, e) => [a, b, c, d, e].join('-').toLowerCase());
   const txIdParam = searchParams.get('tx');
-  const { toast } = useToast();
   const userId = useAuthStore((s) => s.user?.id);
+  const token = useAuthStore((s) => s.token);
+  const sessionGeneration = useSessionGeneration(token);
+
+  // A new visit owns fresh reads, Terms callbacks and action state. Credentials
+  // never enter the key; returning A -> B -> A creates a distinct A instance.
+  return <OrderDetailVisit key={JSON.stringify([orderId, txIdParam, userId, sessionGeneration])}
+    orderId={orderId} txIdParam={txIdParam} userId={userId} />;
+}
+
+function OrderDetailVisit({ orderId, txIdParam, userId }: {
+  orderId: string; txIdParam: string | null; userId: string | undefined;
+}) {
+  const { toast } = useToast();
+  const lifetime = useRef<object | null>(null);
+  const actionPending = useRef(false);
+  useLayoutEffect(() => {
+    lifetime.current = {};
+    return () => { lifetime.current = null; };
+  }, []);
   const { ensureTermsAccepted, TermsGatePrompt, checkingTerms } = useTermsGate('buyer');
 
   const [order, setOrder] = useState<BuyerOrderDetail | null>(null);
   const isBuyerOfRecord = order !== null && order.id === orderId && userId === order.buyer_id;
-  const isSellerOfRecord = order !== null && userId === order.seller_id;
+  const isSellerOfRecord = order !== null && order.id === orderId && userId === order.seller_id;
   const [events, setEvents] = useState<OrderEvent[]>([]);
   const [tx, setTx] = useState<Transaction | null>(null);
   const [orderAccess, setOrderAccess] = useState<{ orderId: string; buyerId: string; status: string; data: OrderAccessResponse } | null>(null);
@@ -158,39 +177,53 @@ export default function OrderDetailPage() {
   }, [isBuyerOfRecord, order?.buyer_id, order?.workspace_delivery, order?.access_expired, order?.status, orderId]);
 
   const handleConfirm = async () => {
-    await ensureTermsAccepted(confirmReceipt);
-  };
-
-  const confirmReceipt = async () => {
-    if (!isBuyerOfRecord || !tx || confirming) return;
-    setConfirming(true);
-    try {
-      const updated = await confirmTransaction(tx.id);
-      setTx(updated);
-      toast('Receipt confirmed!', 'success');
-    } catch {
-      toast('Failed to confirm receipt.', 'error');
-    } finally {
-      setConfirming(false);
-    }
+    const owner = lifetime.current;
+    let dispatched = false;
+    await ensureTermsAccepted(async () => {
+      if (!owner || lifetime.current !== owner || dispatched || actionPending.current || !isBuyerOfRecord || !tx) return;
+      dispatched = true;
+      actionPending.current = true;
+      setConfirming(true);
+      try {
+        const updated = await confirmTransaction(tx.id);
+        if (lifetime.current !== owner) return;
+        if (updated.order_id !== orderId || updated.id !== tx.id) throw new Error('Transaction response mismatch');
+        setTx(updated);
+        toast('Receipt confirmed!', 'success');
+      } catch {
+        if (lifetime.current === owner) toast('Failed to confirm receipt.', 'error');
+      } finally {
+        if (lifetime.current === owner) {
+          actionPending.current = false;
+          setConfirming(false);
+        }
+      }
+    });
   };
 
   const handleDeliver = async () => {
-    await ensureTermsAccepted(markDelivered);
-  };
-
-  const markDelivered = async () => {
-    if (!isSellerOfRecord || !tx || delivering) return;
-    setDelivering(true);
-    try {
-      const updated = await deliverTransaction(tx.id, { proof_type: 'manual', notes: 'Marked delivered by seller' });
-      setTx(updated);
-      toast('Marked as delivered!', 'success');
-    } catch {
-      toast('Failed to mark as delivered.', 'error');
-    } finally {
-      setDelivering(false);
-    }
+    const owner = lifetime.current;
+    let dispatched = false;
+    await ensureTermsAccepted(async () => {
+      if (!owner || lifetime.current !== owner || dispatched || actionPending.current || !isSellerOfRecord || !tx) return;
+      dispatched = true;
+      actionPending.current = true;
+      setDelivering(true);
+      try {
+        const updated = await deliverTransaction(tx.id, { proof_type: 'manual', notes: 'Marked delivered by seller' });
+        if (lifetime.current !== owner) return;
+        if (updated.order_id !== orderId || updated.id !== tx.id) throw new Error('Transaction response mismatch');
+        setTx(updated);
+        toast('Marked as delivered!', 'success');
+      } catch {
+        if (lifetime.current === owner) toast('Failed to mark as delivered.', 'error');
+      } finally {
+        if (lifetime.current === owner) {
+          actionPending.current = false;
+          setDelivering(false);
+        }
+      }
+    });
   };
 
   if (loading || (order && order.id !== orderId)) {
