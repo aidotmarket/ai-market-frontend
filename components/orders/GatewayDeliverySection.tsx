@@ -104,6 +104,7 @@ function FileRow({ file, orderId, reload, report, disputable }: { file: GatewayD
 }
 
 export default function GatewayDeliverySection({ orderId, onPresenceChange }: { orderId: string; onPresenceChange?: (present: boolean) => void }) {
+  const [checked, setChecked] = useState(false);
   const [delivery, setDelivery] = useState<GatewayDelivery | null>(null);
   const [selected, setSelected] = useState<string[]>([]);
   const [formOpen, setFormOpen] = useState(false);
@@ -139,6 +140,8 @@ export default function GatewayDeliverySection({ orderId, onPresenceChange }: { 
         const retry = Number(headers?.get?.('retry-after') ?? headers?.['retry-after']);
         const seconds = Number.isFinite(retry) && retry > 0 ? retry : lastDelivery?.files.some((file) => file.state === 'in_progress') ? 5 : 60;
         timer = setTimeout(() => { timer = undefined; void load(current); }, seconds * 1000);
+      } finally {
+        if (active && current === generation) setChecked(true);
       }
     }
     refresh.current = () => { generation++; if (timer) clearTimeout(timer); timer = undefined; void load(generation); };
@@ -146,7 +149,8 @@ export default function GatewayDeliverySection({ orderId, onPresenceChange }: { 
     return () => { active = false; generation++; if (timer) clearTimeout(timer); timer = undefined; refresh.current = () => {}; };
   }, [orderId]);
 
-  useEffect(() => { onPresenceChange?.(delivery !== null); }, [delivery, onPresenceChange]);
+  // An unresolved request is not evidence that this is a non-gateway order.
+  useEffect(() => { if (checked) onPresenceChange?.(delivery !== null); }, [checked, delivery, onPresenceChange]);
 
   if (!delivery) return null;
   const allDelivered = delivery.files.length > 0 && delivery.files.every((file) => file.state === 'delivered');

@@ -90,9 +90,10 @@ export default function OrderDetailPage() {
   const [events, setEvents] = useState<OrderEvent[]>([]);
   const [tx, setTx] = useState<Transaction | null>(null);
   const [orderAccess, setOrderAccess] = useState<{ orderId: string; buyerId: string; status: string; data: OrderAccessResponse } | null>(null);
-  const [gatewayOrderId, setGatewayOrderId] = useState<string | null>(null);
+  // Keep legacy downloads hidden until the gateway check has completed for this order.
+  const [nonGatewayOrderId, setNonGatewayOrderId] = useState<string | null>(null);
   const handleGatewayPresence = useCallback((present: boolean) => {
-    setGatewayOrderId(present ? orderId : null);
+    setNonGatewayOrderId(present ? null : orderId);
   }, [orderId]);
   const [downloadLoading, setDownloadLoading] = useState(false);
   const [workspaceDownloadReady, setWorkspaceDownloadReady] = useState<string | null>(null);
@@ -106,6 +107,7 @@ export default function OrderDetailPage() {
   useEffect(() => {
     let cancelled = false;
     setOrder(null);
+    setNonGatewayOrderId(null);
     setLoading(true);
     setError('');
 
@@ -374,7 +376,7 @@ export default function OrderDetailPage() {
           {order.workspace_delivery && isBuyerOfRecord && !order.access_expired && String(order.status)==='pending_delivery' && <WorkspacePurchaseRecovery key={order.id} orderId={order.id} onReady={setOrder} />}
           {order.workspace_delivery && isBuyerOfRecord && !order.access_expired && downloadEligible && (workspaceDownloadReady === `${orderId}:${userId}` ? <WorkspaceDownload key={order.id} orderId={order.id} /> : <button type="button" disabled={checkingTerms} onClick={() => ensureTermsAccepted(() => setWorkspaceDownloadReady(`${orderId}:${userId}`))} className="rounded-lg bg-indigo-700 px-4 py-2 text-sm font-semibold text-white disabled:opacity-50">Continue to download</button>)}
 
-          {downloadEligible && !order.workspace_delivery && gatewayOrderId !== order.id && isBuyerOfRecord && !order.access_expired && (
+          {downloadEligible && !order.workspace_delivery && nonGatewayOrderId === order.id && isBuyerOfRecord && !order.access_expired && (
             <div className="rounded-lg border border-gray-200 p-6">
               <h2 className="text-lg font-semibold text-gray-900">Downloads</h2>
               {downloadLoading ? (
