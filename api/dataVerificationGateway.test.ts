@@ -3,7 +3,21 @@ import { api } from './client';
 import { gatewayVerificationError, E7_REFUSAL, gatewayVerificationLifecycle, getGatewayVerificationEpoch, getGatewayVerificationProbe, probeGatewayVerification, startGatewayVerification, verificationErrorCopy } from './dataVerificationGateway';
 import type { GatewayVerificationStartCommand } from '@/types';
 import { getCloudflareVerifierStatus, setupCloudflareVerifier, getAwsVerifierStatus, setupAwsVerifier, removeVerificationRunner, verificationRefusalCopy } from './dataVerificationGateway';
+import { startCloudflareInstall, getCloudflareInstall, controlCloudflareInstall } from './dataVerificationGateway';
 vi.mock('./client', () => ({ api: { get: vi.fn(), post: vi.fn(), delete: vi.fn() } }));
+it('uses the actual installer endpoints, explicit consent, binder credentials and attestation shape', async () => {
+  const root = '/verification-runners/cloudflare/install';
+  vi.mocked(api.post).mockResolvedValue({ data: { intent_id: 'intent', authorize_url: 'https://dash.cloudflare.com/oauth2/auth?state=private' } });
+  expect((await startCloudflareInstall('listing', 'connection', 'request')).intent_id).toBe('intent');
+  expect(api.post).toHaveBeenLastCalledWith(`${root}/oauth/start`, { listing_id: 'listing', connection_id: 'connection', idempotency_key: 'request', consent: true }, { withCredentials: true });
+  vi.mocked(api.get).mockResolvedValue({ data: { phase: 'start' } });
+  expect((await getCloudflareInstall('a/b')).phase).toBe('start');
+  expect(api.get).toHaveBeenLastCalledWith(`${root}/a%2Fb`);
+  await controlCloudflareInstall('intent', 'cancel');
+  expect(api.post).toHaveBeenLastCalledWith(`${root}/intent/cancel`, {});
+  await controlCloudflareInstall('intent', 'cleanup-attestation');
+  expect(api.post).toHaveBeenLastCalledWith(`${root}/intent/cleanup-attestation`, { confirm: true });
+});
 const path = '/data-verification/gateway/listings/listing';
 const start: GatewayVerificationStartCommand = {
   quote_id: 'quote', idempotency_key: 'attempt', preview_requested: false,

@@ -52,6 +52,7 @@ export interface CloudflareSetupResponse {
   deployment_config: { connection_id: string; bucket: string; prefix: string; jurisdiction: string; keys: string[] };
 }
 export interface CloudflareVerifierStatus extends Omit<AWSVerifierStatus, 'region' | 'code_sha256' | 'poll_interval_minutes'> {
+  installer_enabled?: boolean;
   jurisdiction: string | null;
   release_id: string | null;
   scanner_version: string | null;
@@ -59,6 +60,26 @@ export interface CloudflareVerifierStatus extends Omit<AWSVerifierStatus, 'regio
   worker_identity: CloudflareWorkerIdentity | null;
   image_digest: string | null;
   poll_interval_minutes: 1 | 5 | 15 | null;
+}
+export interface CloudflareInstallStatus {
+  intent_id: string;
+  phase: 'start' | 'callback_claimed' | 'callback_refused' | 'expired' | 'closed' | 'cancelled';
+  error: string | null;
+  claimed_at: number | null;
+  updated_at: number | null;
+  cancel_requested: boolean | null;
+  access_removal_confirmed_by_seller: boolean;
+  runtime: { state: 'pending' }; // Backend 8f95254e cannot yet assert Ready.
+}
+const installRoot = '/verification-runners/cloudflare/install';
+export async function startCloudflareInstall(listing_id: string, connection_id: string, idempotency_key: string): Promise<{ intent_id: string; authorize_url: string; expires_at: number }> {
+  return (await api.post(`${installRoot}/oauth/start`, { listing_id, connection_id, idempotency_key, consent: true }, { withCredentials: true })).data;
+}
+export async function getCloudflareInstall(intent: string): Promise<CloudflareInstallStatus> {
+  return (await api.get(`${installRoot}/${encodeURIComponent(intent)}`)).data;
+}
+export async function controlCloudflareInstall(intent: string, action: 'cancel' | 'cleanup-attestation'): Promise<CloudflareInstallStatus> {
+  return (await api.post(`${installRoot}/${encodeURIComponent(intent)}/${action}`, action === 'cleanup-attestation' ? { confirm: true } : {})).data;
 }
 export async function setupCloudflareVerifier(command: CloudflareSetupCommand): Promise<CloudflareSetupResponse> {
   return (await api.post<CloudflareSetupResponse>('/verification-runners/setup', command)).data;
