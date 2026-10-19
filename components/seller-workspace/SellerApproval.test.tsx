@@ -93,3 +93,10 @@ it('shows the complete saved file count beside the review confirmations, indepen
  render(<SellerApproval review={{...review,source_page:{total_count:22000} as ListingReview['source_page']}} active rendered/>);
  expect(screen.getByText('Files included (22,000)').closest('fieldset')).toBeTruthy();
 });
+
+it('offers native sign-in when approval still returns 401 after refresh',async()=>{
+  api.approveListingReview.mockRejectedValue({isAxiosError:true,response:{status:401}});
+  render(<SellerApproval review={review} active rendered/>);confirmAll();
+  fireEvent.click(screen.getByRole('button',{name:'Approve this review'}));
+  expect(await screen.findByRole('link',{name:'Sign in again'})).toBeTruthy();
+});

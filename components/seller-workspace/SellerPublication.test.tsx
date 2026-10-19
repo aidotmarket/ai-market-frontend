@@ -1,14 +1,17 @@
 // @vitest-environment jsdom
-import {act,cleanup,fireEvent,render,screen} from '@testing-library/react';
+import {act,cleanup,fireEvent,render,screen,waitFor} from '@testing-library/react';
 import {afterEach,beforeEach,expect,it,vi} from 'vitest';
 import SellerPublication from './SellerPublication';
 import type {ApprovalReceipt} from '@/api/sellerListingReview';
+import {nativeClient} from '@/api/connector-seller-settings';
+import {useAuthStore} from '@/store/auth';
+import {instrument,id,hash} from '@/tests/fixtures/seller-authority';
 import {createStandardSelection} from '@/api/listingLicenses';
 const api=vi.hoisted(()=>({readPublication:vi.fn(),publishListing:vi.fn()}));
 vi.mock('@/api/sellerListingPublication',()=>api);
 const approval={id:'approval',review_hash:'a',render_hash:'b'} as ApprovalReceipt;
 const publication={title:'Retail',slug:'retail',status:'published',is_listed:true};
-afterEach(cleanup);
+afterEach(()=>{cleanup();vi.restoreAllMocks();});
 beforeEach(()=>{vi.resetAllMocks();api.readPublication.mockResolvedValue({publication_available:true,publication:null});});
 it('requires a click and the approved render before publishing',async()=>{
   const view=render(<SellerPublication approval={approval} active rendered={false}/>);
@@ -110,4 +113,129 @@ it('puts publication refresh on its own spaced line',async()=>{
  render(<SellerPublication approval={approval} active rendered/>);
  await screen.findByRole('button',{name:'Publish this listing'});
  expect(screen.getByRole('button',{name:'Refresh publication status'}).className).toContain('block w-fit pt-2');
+});
+
+it('waits for preparation recovery and forwards the signed preparation on the website publish action',async()=>{
+  useAuthStore.setState({token:'native-session'});
+  const row={...instrument(),status:'signed',signing_required:false,acceptance_id:id(20),signed_coverage_hash:hash};
+  const named={...approval,id:row.binding.approval_id,draft_id:row.binding.draft_id,draft_version:3,render_hash:hash};
+  let finish!:(value:unknown)=>void;
+  const get=vi.spyOn(nativeClient,'get').mockReturnValue(new Promise(resolve=>{finish=resolve;}));
+  try {
+    render(<SellerPublication approval={named} active rendered/>);
+    const button=await screen.findByRole('button',{name:'Publish this listing'});
+    expect((button as HTMLButtonElement).disabled).toBe(true);
+    await act(async()=>finish({data:row}));await screen.findByText('Ready to publish here or from Claude');
+    api.publishListing.mockResolvedValue(publication);fireEvent.click(button);
+    await screen.findByText('Published');
+    expect(api.publishListing).toHaveBeenCalledWith(named,expect.any(String),expect.any(AbortSignal),row.id);
+  } finally {get.mockRestore();}
+});
+
+const prepared={...instrument(),license_selection:undefined};
+const namedApproval={...approval,id:prepared.binding.approval_id,draft_id:prepared.binding.draft_id,draft_version:3,render_hash:hash};
+const notFound={isAxiosError:true,response:{status:404,data:{detail:'NOT_FOUND'}}};
+function namedReads() {
+  useAuthStore.setState({token:'native-session'});
+  return vi.spyOn(nativeClient,'get').mockRejectedValue(notFound);
+}
+function deferred<T>() {
+  let resolve!:(value:T)=>void, reject!:(error:unknown)=>void;
+  const promise=new Promise<T>((yes,no)=>{resolve=yes;reject=no;});
+  return {promise,resolve,reject};
+}
+it('blocks publish while prepare is pending and after a lost response until B2 recovers its signed ID',async()=>{
+  const get=namedReads();const create=deferred<unknown>();
+  const post=vi.spyOn(nativeClient,'post').mockReturnValue(create.promise);
+  render(<SellerPublication approval={namedApproval} active rendered/>);
+  const prepare=await screen.findByRole('button',{name:'Prepare for publishing'});
+  const publish=screen.getByRole('button',{name:'Publish this listing'}) as HTMLButtonElement;
+  fireEvent.click(prepare);expect(publish.disabled).toBe(true);
+  fireEvent.click(publish);expect(api.publishListing).not.toHaveBeenCalled();
+  await act(async()=>create.reject(new Error('timeout')));
+  await screen.findByText(/Preparation could not be confirmed/);
+  expect(publish.disabled).toBe(true);fireEvent.click(publish);expect(api.publishListing).not.toHaveBeenCalled();
+  const recovery=deferred<unknown>();get.mockReturnValue(recovery.promise);
+  fireEvent.click(screen.getByRole('button',{name:'Refresh preparation status'}));
+  expect(publish.disabled).toBe(true);
+  const signed={...prepared,status:'signed',signing_required:false,acceptance_id:id(20),signed_coverage_hash:hash};
+  await act(async()=>recovery.resolve({data:signed}));
+  await waitFor(()=>expect(publish.disabled).toBe(false));
+  api.publishListing.mockResolvedValue(publication);fireEvent.click(publish);
+  await screen.findByText(/published and available/);
+  expect(post).toHaveBeenCalledOnce();
+  expect(api.publishListing).toHaveBeenCalledWith(namedApproval,expect.any(String),expect.any(AbortSignal),signed.id);
+});
+it('keeps publish blocked after a delayed successful preparation still needs signing',async()=>{
+  namedReads();const create=deferred<unknown>();vi.spyOn(nativeClient,'post').mockReturnValue(create.promise);
+  render(<SellerPublication approval={namedApproval} active rendered/>);
+  fireEvent.click(await screen.findByRole('button',{name:'Prepare for publishing'}));
+  const publish=screen.getByRole('button',{name:'Publish this listing'}) as HTMLButtonElement;
+  expect(publish.disabled).toBe(true);
+  await act(async()=>create.resolve({data:prepared}));await screen.findByText('Needs signing');
+  expect(publish.disabled).toBe(true);fireEvent.click(publish);expect(api.publishListing).not.toHaveBeenCalled();
+});
+it('blocks prepare while ordinary publication is pending and hides it after publication',async()=>{
+  namedReads();const post=vi.spyOn(nativeClient,'post');const pending=deferred<unknown>();api.publishListing.mockReturnValue(pending.promise);
+  render(<SellerPublication approval={namedApproval} active rendered/>);
+  const prepare=await screen.findByRole('button',{name:'Prepare for publishing'}) as HTMLButtonElement;
+  fireEvent.click(screen.getByRole('button',{name:'Publish this listing'}));
+  expect(prepare.disabled).toBe(true);fireEvent.click(prepare);expect(post).not.toHaveBeenCalled();
+  await act(async()=>pending.resolve(publication));await screen.findByText(/published and available/);
+  expect(screen.queryByRole('button',{name:'Prepare for publishing'})).toBeNull();
+});
+it('keeps prepare blocked after an unknown publication outcome until publication recovery',async()=>{
+  namedReads();api.publishListing.mockRejectedValue(new Error('timeout'));
+  render(<SellerPublication approval={namedApproval} active rendered/>);
+  const prepare=await screen.findByRole('button',{name:'Prepare for publishing'}) as HTMLButtonElement;
+  fireEvent.click(screen.getByRole('button',{name:'Publish this listing'}));await screen.findByRole('alert');
+  expect(prepare.disabled).toBe(true);
+  api.readPublication.mockResolvedValue({publication_available:true,publication});
+  fireEvent.click(screen.getByRole('button',{name:'Refresh publication status'}));
+  await screen.findByText(/published and available/);
+  expect(screen.queryByRole('button',{name:'Prepare for publishing'})).toBeNull();
+});
+it('never offers prepare for a recovered ordinary publication',async()=>{
+  namedReads();api.readPublication.mockResolvedValue({publication_available:true,publication});
+  render(<SellerPublication approval={namedApproval} active rendered/>);
+  await screen.findByText(/published and available/);
+  expect(screen.queryByRole('button',{name:'Prepare for publishing'})).toBeNull();
+});
+it('allows named-draft website publication without preparation_id when B2 is 404 UNAVAILABLE',async()=>{
+  namedReads().mockRejectedValue({isAxiosError:true,response:{status:404,data:{detail:'UNAVAILABLE'}}});
+  api.publishListing.mockResolvedValue(publication);
+  render(<SellerPublication approval={namedApproval} active rendered/>);
+  const publish=await screen.findByRole('button',{name:'Publish this listing'}) as HTMLButtonElement;
+  await waitFor(()=>expect(publish.disabled).toBe(false));
+  expect(screen.queryByRole('region',{name:'Listing preparation'})).toBeNull();
+  expect(screen.queryByRole('region',{name:'Workspace batch licence signing'})).toBeNull();
+  fireEvent.click(publish);await screen.findByText(/published and available/);
+  expect(api.publishListing).toHaveBeenCalledWith(namedApproval,expect.any(String),expect.any(AbortSignal),undefined);
+});
+it.each([
+  [401,'FIRST_PARTY_SESSION_REQUIRED'],[403,'FORBIDDEN'],[500,'UNAVAILABLE'],[503,'UNAVAILABLE'],[404,'OTHER'],[0,'network'],
+])('blocks publication on B2 failure %s %s until a successful retry',async(status,detail)=>{
+  const get=namedReads().mockRejectedValue(status?{isAxiosError:true,response:{status,data:{detail}}}:new Error(detail));
+  render(<SellerPublication approval={namedApproval} active rendered/>);
+  await screen.findAllByRole('alert');
+  const publish=screen.getByRole('button',{name:'Publish this listing'}) as HTMLButtonElement;
+  expect(publish.disabled).toBe(true);fireEvent.click(publish);expect(api.publishListing).not.toHaveBeenCalled();
+  get.mockRejectedValue(notFound);
+  fireEvent.click(screen.getByRole('button',{name:'Refresh preparation status'}));
+  await waitFor(()=>expect(publish.disabled).toBe(false));
+});
+
+it('unblocks standalone preparation after recovery confirms no publication',async()=>{
+  namedReads();api.publishListing.mockRejectedValue(new Error('timeout'));
+  render(<SellerPublication approval={namedApproval} active rendered/>);
+  const prepare=await screen.findByRole('button',{name:'Prepare for publishing'}) as HTMLButtonElement;
+  await waitFor(()=>expect(prepare.disabled).toBe(false));
+  fireEvent.click(screen.getByRole('button',{name:'Publish this listing'}));await screen.findByRole('alert');
+  expect(prepare.disabled).toBe(true);
+  api.readPublication.mockRejectedValueOnce(new Error('status unavailable'));
+  await act(async()=>fireEvent.click(screen.getByRole('button',{name:'Refresh publication status'})));
+  expect(prepare.disabled).toBe(true);
+  api.readPublication.mockResolvedValue({publication_available:true,publication:null});
+  fireEvent.click(screen.getByRole('button',{name:'Refresh publication status'}));
+  await waitFor(()=>expect(prepare.disabled).toBe(false));
 });

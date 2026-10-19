@@ -108,6 +108,6 @@ export function useSellerListingDraft() {
 
 export function useSellerListingDraftStatus() {
   const value=useContext(DraftContext);
-  return value ? {available:value.available,selectionSavePending:value.selectionSavePending,selectionSaveFailed:value.selectionSaveFailed,sampleIndices:value.sampleIndices} :
-    {available:false,selectionSavePending:false,selectionSaveFailed:false,sampleIndices:[] as number[]};
+  return value ? {draft_id:value.draft?.draft_id,available:value.available,selectionSavePending:value.selectionSavePending,selectionSaveFailed:value.selectionSaveFailed,sampleIndices:value.sampleIndices} :
+    {draft_id:undefined,available:false,selectionSavePending:false,selectionSaveFailed:false,sampleIndices:[] as number[]};
 }

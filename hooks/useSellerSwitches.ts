@@ -2,6 +2,7 @@
 import { useEffect, useState } from 'react';
 import { getSellerCapability, sellerAdmissionEnabled } from '@/api/pending-actions';
 import { PENDING_ACTION_CONTINUATION } from '@/lib/redirect';
+import {nativeClient,nativeSession} from '@/api/connector-seller-settings';
 import { useAuthStore } from '@/store/auth';
 
 export interface SellerSwitchReport { seller: boolean; effects: boolean; bulk: boolean }
@@ -26,7 +27,8 @@ export function useSellerSwitches(): SellerSwitchReport | null {
   useEffect(() => {
     setSaved(null);
     const match = PENDING_ACTION_CONTINUATION.exec(path);
-    if (!user || !token || !match) return;
+    const workspace = path.split('?')[0] === '/dashboard/seller-workspace';
+    if (!user || !token || (!match && !workspace)) return;
     let active = true; let request = 0; let inFlight = false; let expiry: ReturnType<typeof setTimeout> | undefined;
     const read = async () => {
       if (inFlight) return;
@@ -35,12 +37,18 @@ export function useSellerSwitches(): SellerSwitchReport | null {
       // Fail closed if the request stalls, as well as on malformed/stale replies.
       const timeout = setTimeout(() => { if (active && request === generation) { ++request; inFlight = false; setSaved(null); } }, 5000);
       try {
-        const admission = await getSellerCapability(match[1], match[2]);
-        const report = sellerSwitchReport(admission);
+        const admission = workspace ? null : await getSellerCapability(match![1], match![2]);
+        let report: SellerSwitchReport | null = null;
+        if (workspace) {
+          const response = await nativeClient.get('/seller-workspace/connector-switches', {headers:nativeSession().headers});
+          const value = response.data;
+          if (response.status === 200 && value && ['seller','bulk','floors'].every(key => typeof value[key] === 'boolean'))
+            report = {seller:value.seller,bulk:value.bulk,effects:value.floors};
+        } else report = sellerSwitchReport(admission);
         if (active && request === generation && report) {
           clearTimeout(expiry);
           setSaved({ owner: user.id, token, path, report });
-          expiry = setTimeout(() => { if (active) setSaved(null); }, Math.max(0, Date.parse(admission.checked_at) + 15000 - Date.now()));
+          expiry = setTimeout(() => { if (active) setSaved(null); }, Math.max(0, (admission ? Date.parse(admission.checked_at) : Date.now()) + 15000 - Date.now()));
         } else if (active && request === generation) setSaved(null);
       } catch { if (active && request === generation) setSaved(null); }
       finally { clearTimeout(timeout); if (request === generation) inFlight = false; }

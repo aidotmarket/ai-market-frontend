@@ -1,4 +1,4 @@
-import { nativeClient, nativeSession, uuid, digest } from '@/api/connector-seller-settings';
+import { nativeClient, nativeSession, nativeWrite, uuid, digest } from '@/api/connector-seller-settings';
 import { isCompleteLicenseSelection, type LicenseSelection } from '@/api/listingLicenses';
 export interface PreparationBinding {
   preparation_id: string; seller_id: string; organization_id: string | null; draft_id: string; draft_version: number;
@@ -8,14 +8,15 @@ export interface PreparationBinding {
 }
 export interface PreparationView {
   id: string; status: 'prepared' | 'signed' | 'published' | 'superseded'; binding: PreparationBinding;
-  coverage_hash: string; acceptance_id: string | null; signing_required: boolean;
+  signed_coverage_hash: string | null; coverage_hash: string; acceptance_id: string | null; signing_required: boolean;
 }
 export interface SigningInstrument extends PreparationView { license_selection: LicenseSelection }
 export interface SigningRequest { request_id: string; csrf: string; reauth_token?: string; instruments: { preparation_id: string; coverage_hash: string; selection: LicenseSelection }[] }
 const base = '/seller-workspace';
-function validView(v: PreparationView) {
+export function validView(v: PreparationView) {
   const b = v?.binding;
   return v && uuid(v.id) && b && b.preparation_id === v.id && digest(v.coverage_hash)
+    && (['signed','published'].includes(v.status) ? digest(v.signed_coverage_hash) : v.signed_coverage_hash === null)
     && ['prepared', 'signed', 'published', 'superseded'].includes(v.status) && typeof v.signing_required === 'boolean'
     && (v.acceptance_id === null || uuid(v.acceptance_id))
     && [b.seller_id, b.draft_id, b.approval_id, b.listing_id, b.version_id].every(uuid)
@@ -35,12 +36,11 @@ export async function readSigningInstruments(ids: string[]): Promise<SigningInst
   if (nativeSession().token !== session.token) throw new Error('SESSION_CHANGED');
   return results;
 }
-export async function signInstruments(body: SigningRequest): Promise<PreparationView[]> {
-  const session = nativeSession();
-  if (body.csrf !== session.csrf || !uuid(body.request_id) || !body.instruments.length || body.instruments.length > 50
+export async function signInstruments(body: SigningRequest, signal?: AbortSignal): Promise<PreparationView[]> {
+  if (!uuid(body.request_id) || !body.instruments.length || body.instruments.length > 50
     || new Set(body.instruments.map(i => i.preparation_id)).size !== body.instruments.length) throw new Error('INVALID_BATCH');
-  const { data } = await nativeClient.post<{ instruments: PreparationView[] }>(`${base}/listing-licences/sign`, body, { headers: session.headers });
-  if (nativeSession().token !== session.token || !Array.isArray(data?.instruments) || data.instruments.length !== body.instruments.length
+  const data = await nativeWrite<{ instruments: PreparationView[] }>(`${base}/listing-licences/sign`, body, signal);
+  if (!Array.isArray(data?.instruments) || data.instruments.length !== body.instruments.length
     || new Set(data.instruments.map(i => i.id)).size !== body.instruments.length
     || !data.instruments.every(v => validView(v) && v.status === 'signed' && !v.signing_required && uuid(v.acceptance_id)
       && body.instruments.some(i => i.preparation_id === v.id && i.coverage_hash === v.coverage_hash))) throw new Error('INVALID_RECEIPT');

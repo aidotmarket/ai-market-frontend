@@ -1,14 +1,18 @@
 // @vitest-environment jsdom
-import {cleanup,fireEvent,render,screen,waitFor,within} from '@testing-library/react';
+import {act,cleanup,fireEvent,render,screen,waitFor,within} from '@testing-library/react';
 import {afterEach,beforeEach,describe,it,expect,vi} from 'vitest';
 import {GuidedListingFlow,useListingFlow} from './GuidedListingFlow';
+import SellerPublication from './SellerPublication';
+import {nativeClient} from '@/api/connector-seller-settings';
+import {useAuthStore} from '@/store/auth';
+import {instrument,hash} from '@/tests/fixtures/seller-authority';
 import {WorkspaceOverview} from './WorkspaceOverview';
 import {categoryRows,guidedCapabilities,guidedConnection,emptyGuidedDraft} from '@/tests/guidedListingFixture';
 import {createStandardSelection} from '@/api/listingLicenses';
-const mocks=vi.hoisted(()=>({source:vi.fn(),categories:vi.fn(),review:vi.fn(),publication:vi.fn(),account:vi.fn(),load:vi.fn(),draft:null as unknown}));
+const mocks=vi.hoisted(()=>({source:vi.fn(),categories:vi.fn(),review:vi.fn(),publication:vi.fn(),publish:vi.fn(),account:vi.fn(),load:vi.fn(),draft:null as unknown}));
 vi.mock('@/api/sellerListingSource',()=>({readListingSource:mocks.source,readSellerCategories:mocks.categories}));
 vi.mock('@/api/sellerListingReview',()=>({readListingReview:mocks.review}));
-vi.mock('@/api/sellerListingPublication',()=>({readPublication:mocks.publication}));
+vi.mock('@/api/sellerListingPublication',()=>({readPublication:mocks.publication,publishListing:mocks.publish}));
 vi.mock('@/api/capabilities',()=>({getCapabilities:mocks.account}));
 vi.mock('./SellerListingDraftStore',()=>({useSellerListingDraft:()=>({draft:mocks.draft,requestLoad:mocks.load,selectionSavePending:false,selectionSaveFailed:false})}));
 const source={version:1,connection_current:true,content:{connection_id:guidedConnection.id,connection_version:1,objects:[],version_mode:'current' as const}};
@@ -50,4 +54,37 @@ describe('checklist reads owned at the workspace page',()=>{
   mocks.review.mockResolvedValue({draft_version:2,source_version:1,missing_fields:[],approval:{id:'a'}});mocks.publication.mockResolvedValue({publication_available:true,publication:{approval_id:'a',slug:'synthetic-sales'}});render(<Harness/>);await screen.findByRole('link',{name:'Published: view your listing'});
   mocks.review.mockResolvedValue({draft_version:2,source_version:2,missing_fields:[],approval:null});fireEvent.click(screen.getByRole('button',{name:'Save new files'}));await waitFor(()=>expect(screen.queryByRole('link',{name:'Published: view your listing'})).toBeNull());expect(screen.getByText(/Your files changed after this description was written/)).toBeTruthy();
  });
+});
+
+function GuidedPublicationProbe(){
+ const flow=useListingFlow();
+ return flow?.review?.approval?<SellerPublication approval={flow.review.approval} active rendered/>:null;
+}
+it('unblocks preparation only after guided publication recovery succeeds for the current approval',async()=>{
+ const row=instrument();
+ const approval={id:row.binding.approval_id,draft_id:row.binding.draft_id,draft_version:3,review_hash:hash,render_hash:hash};
+ mocks.draft={...(mocks.draft as object),version:3,draft_id:row.binding.draft_id};
+ mocks.review.mockResolvedValue({draft_version:3,source_version:1,missing_fields:[],approval});
+ mocks.publish.mockRejectedValue(new Error('publish timeout'));
+ useAuthStore.setState({token:'native-session'});
+ const get=vi.spyOn(nativeClient,'get').mockRejectedValue({isAxiosError:true,response:{status:404,data:{detail:'NOT_FOUND'}}});
+ try {
+  render(<GuidedListingFlow capabilities={guidedCapabilities} connections={[guidedConnection]} view="publish" navigate={navigate}><GuidedPublicationProbe/></GuidedListingFlow>);
+  const prepare=await screen.findByRole('button',{name:'Prepare for publishing'}) as HTMLButtonElement;
+  await waitFor(()=>expect(prepare.disabled).toBe(false));
+  fireEvent.click(screen.getByRole('button',{name:'Publish this listing'}));
+  await screen.findByText(/Publication could not be confirmed/);
+  expect(prepare.disabled).toBe(true);
+  mocks.publication.mockRejectedValueOnce(new Error('recovery failed'));
+  await act(async()=>fireEvent.click(screen.getByRole('button',{name:'Refresh publication status'})));
+  expect(mocks.publication).toHaveBeenCalledTimes(2);
+  expect(prepare.disabled).toBe(true);
+  let finish!:(value:unknown)=>void;
+  mocks.publication.mockReturnValueOnce(new Promise(resolve=>{finish=resolve;}));
+  fireEvent.click(screen.getByRole('button',{name:'Refresh publication status'}));
+  await waitFor(()=>expect(mocks.publication).toHaveBeenCalledTimes(3));
+  expect(prepare.disabled).toBe(true);
+  finish({publication_available:true,publication:null});
+  await waitFor(()=>expect(prepare.disabled).toBe(false));
+ } finally {get.mockRestore();}
 });

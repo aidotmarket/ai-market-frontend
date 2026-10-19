@@ -1,8 +1,10 @@
+import * as client from './client';
+import type {User} from '@/types';
 import { afterEach, beforeEach, expect, it, vi } from 'vitest';
-import { nativeClient, nativeSession, newDecision, readAuthority, reviewAuthority, setAuthority, reviewStopAuthority, stopAuthority, readPreview, reviewRevokePreview, revokePreview, validLimits } from './connector-seller-settings';
+import { nativeClient, nativeSession, nativeWrite, newDecision, readAuthority, reviewAuthority, setAuthority, reviewStopAuthority, stopAuthority, readPreview, reviewRevokePreview, revokePreview, validLimits } from './connector-seller-settings';
 import { useAuthStore } from '@/store/auth';
 import { authority, limits, hash, id, preview } from '@/tests/fixtures/seller-authority';
-beforeEach(() => { useAuthStore.setState({ token: 'retained-native-credential' }); });
+beforeEach(() => { useAuthStore.setState({ user: {id:id(99)} as User, token: 'retained-native-credential' }); });
 afterEach(() => vi.restoreAllMocks());
 it('reads the exact authority path with retained authorization and CSRF', async () => {
   const get = vi.spyOn(nativeClient, 'get').mockResolvedValue({ data: authority }); expect(await readAuthority()).toEqual(authority);
@@ -43,3 +45,66 @@ it('reads preview status for the exact listing', async () => {
   expect(get).toHaveBeenCalledWith(`/connector-seller-settings/preview-consent/${id(10)}`, { headers: nativeSession().headers });
 });
 it.each([{ max_batch: 51 }, { concurrent_operations: 0 }, { daily_items: {} }, { operations: ['publish', 'publish'] }, { expires_at: '2099-01-01' }, { price_min_cents: 10001 }])('refuses unsafe standing limits %j', patch => { expect(validLimits({ ...limits, ...patch })).toBe(false); });
+
+it.each(['listing-approval','listing-preparation','listing-licences/sign','listing-publication'])('refreshes once for %s with the same action and a fresh credential pair', async endpoint => {
+  const expired = {isAxiosError:true,response:{status:401}};
+  const post = vi.spyOn(nativeClient,'post').mockRejectedValueOnce(expired).mockResolvedValue({data:{ok:true}});
+  const refresh = vi.spyOn(client,'refreshAccessToken').mockImplementation(async()=>{
+    useAuthStore.setState({token:'fresh-native-session'});
+    return 'fresh-native-session';
+  });
+  const firstSession = nativeSession();
+  const body = {request_id:id(91),approval_id:id(92)};
+  expect(await nativeWrite('/seller-workspace/'+endpoint,body)).toEqual({ok:true});
+  expect(refresh).toHaveBeenCalledOnce();
+  expect(post.mock.calls[0]).toEqual(['/seller-workspace/'+endpoint,{...body,csrf:firstSession.csrf},{headers:firstSession.headers}]);
+  expect(post.mock.calls[1]).toEqual(['/seller-workspace/'+endpoint,{...body,csrf:nativeSession().csrf},{headers:nativeSession().headers}]);
+});
+it('surfaces a second 401 without a second refresh', async()=>{
+  const expired={isAxiosError:true,response:{status:401}};
+  const post=vi.spyOn(nativeClient,'post').mockRejectedValue(expired);
+  const refresh=vi.spyOn(client,'refreshAccessToken').mockResolvedValue('retained-native-credential');
+  await expect(nativeWrite('/seller-workspace/listing-approval',{request_id:id(91)})).rejects.toBe(expired);
+  expect(post).toHaveBeenCalledTimes(2);expect(refresh).toHaveBeenCalledOnce();
+});
+it('rejects a session change without retrying the write', async()=>{
+  const post=vi.spyOn(nativeClient,'post').mockImplementation(async()=>{
+    useAuthStore.setState({user:{id:id(98)} as User,token:'other-account-session'});
+    return {data:{ok:true}};
+  });
+  const refresh=vi.spyOn(client,'refreshAccessToken');
+  await expect(nativeWrite('/seller-workspace/listing-approval',{request_id:id(91)})).rejects.toThrow('SESSION_CHANGED');
+  expect(post).toHaveBeenCalledOnce();expect(refresh).not.toHaveBeenCalled();
+});
+
+it('retries a concurrent refresh 401 with the re-read credential pair without refreshing again', async()=>{
+  const first=nativeSession();
+  const body={request_id:id(91)};
+  const post=vi.spyOn(nativeClient,'post').mockImplementationOnce(async()=>{
+    useAuthStore.setState({token:'concurrently-refreshed'});
+    throw {isAxiosError:true,response:{status:401}};
+  }).mockResolvedValueOnce({data:{ok:true}});
+  const refresh=vi.spyOn(client,'refreshAccessToken');
+  expect(await nativeWrite('/seller-workspace/listing-preparation',body)).toEqual({ok:true});
+  expect(post.mock.calls).toEqual([
+    ['/seller-workspace/listing-preparation',{...body,csrf:first.csrf},{headers:first.headers}],
+    ['/seller-workspace/listing-preparation',{...body,csrf:nativeSession().csrf},{headers:nativeSession().headers}],
+  ]);
+  expect(refresh).not.toHaveBeenCalled();
+});
+it('never retries a concurrent 401 across an account change',async()=>{
+  const post=vi.spyOn(nativeClient,'post').mockImplementation(async()=>{
+    useAuthStore.setState({user:null,token:null});
+    throw {isAxiosError:true,response:{status:401}};
+  });
+  await expect(nativeWrite('/seller-workspace/listing-preparation',{request_id:id(91)})).rejects.toThrow('SESSION_CHANGED');
+  expect(post).toHaveBeenCalledOnce();
+});
+
+it('accepts a confirmed write when credentials rotate for the same user during the response',async()=>{
+  vi.spyOn(nativeClient,'post').mockImplementation(async()=>{
+    useAuthStore.setState({token:'concurrently-refreshed'});
+    return {data:{ok:true}};
+  });
+  expect(await nativeWrite('/seller-workspace/listing-preparation',{request_id:id(91)})).toEqual({ok:true});
+});

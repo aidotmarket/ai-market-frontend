@@ -34,7 +34,7 @@ export default function SavedWorkspaceData({connections, enabled,sampleLimits,li
     if(flow){version.current=flow.source?.version??0;observedVersion.current=version.current;setLoading(false);return;}
     let current = true;
     setLoading(true); setFailed(false);
-    readListingSource()
+    readListingSource(draft?.draft_id)
       .then(async result => { if (current) {
         const nextVersion=result?.version??0;const changed=observedVersion.current!==null&&observedVersion.current!==nextVersion;
         observedVersion.current=nextVersion;setSource(result);version.current=nextVersion;
@@ -47,7 +47,7 @@ export default function SavedWorkspaceData({connections, enabled,sampleLimits,li
       } })
       .catch(() => { if (current) setFailed(true); }).finally(() => { if (current) setLoading(false); });
     return () => { current = false; };
-  }, [retry,flow?.source]);
+  }, [retry,flow?.source,draft?.draft_id]);
   async function save(connection: SellerWorkspaceConnection, objects: WorkspaceObject[]) {
     if (inFlight.current) throw new Error('A file selection save is already pending');
     const sampleState=draftState.current;

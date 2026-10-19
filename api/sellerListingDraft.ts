@@ -15,6 +15,7 @@ export interface ListingDraftContent {
   sample_object_indices?: number[];
 }
 export interface SavedListingDraft {
+  draft_id?: string | null;
   version: number;
   content: ListingDraftContent;
   updated_at: string;
