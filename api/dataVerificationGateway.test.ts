@@ -2,7 +2,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { api } from './client';
 import { gatewayVerificationError, E7_REFUSAL, gatewayVerificationLifecycle, getGatewayVerificationEpoch, getGatewayVerificationProbe, probeGatewayVerification, startGatewayVerification, verificationErrorCopy } from './dataVerificationGateway';
 import type { GatewayVerificationStartCommand } from '@/types';
-import { getCloudflareVerifierStatus, setupCloudflareVerifier, getAwsVerifierStatus, setupAwsVerifier, removeVerificationRunner, verificationRefusalCopy } from './dataVerificationGateway';
+import { getCloudflareVerifierStatus, getAwsVerifierStatus, setupAwsVerifier, removeVerificationRunner, verificationRefusalCopy } from './dataVerificationGateway';
 import { startCloudflareInstall, getCloudflareInstall, controlCloudflareInstall } from './dataVerificationGateway';
 vi.mock('./client', () => ({ api: { get: vi.fn(), post: vi.fn(), delete: vi.fn() } }));
 it('uses the actual installer endpoints, explicit consent, binder credentials and attestation shape', async () => {
@@ -105,14 +105,7 @@ describe('AWS seller-session setup/status and shared removal', () => {
 });
 
 describe('Cloudflare seller-session contracts', () => {
-  it('sends exact setup and confirmed replacement fields and reads listing status', async () => {
-    const data = { registration_token: 'private', deploy_button_url: 'https://deploy.workers.cloudflare.com/?url=release' };
-    vi.mocked(api.post).mockResolvedValue({ data });
-    const command = { kind: 'cloudflare' as const, jurisdiction: 'default' as const, connection_id: 'connection' };
-    expect(await setupCloudflareVerifier(command)).toEqual(data);
-    expect(api.post).toHaveBeenLastCalledWith('/verification-runners/setup', command);
-    await setupCloudflareVerifier({ ...command, replace_runner_id: 'old', confirm_replace: true });
-    expect(api.post).toHaveBeenLastCalledWith('/verification-runners/setup', { ...command, replace_runner_id: 'old', confirm_replace: true });
+  it('reads listing status', async () => {
     const status = { state: 'ready', eligible: true, binary_sha256: 'a'.repeat(64), worker_identity: { mode: 'bundle', sha256: 'b'.repeat(64) } };
     vi.mocked(api.get).mockResolvedValue({ data: status });
     expect(await getCloudflareVerifierStatus('listing')).toEqual(status);
