@@ -395,20 +395,40 @@ describe('OrderDetailPage viewer relationship gating', () => {
       delivery_method: 'gateway', downloads_remaining: 3,
       access_url: null, can_download: false, message: 'Download access is unavailable.',
     });
-    gatewayApi.getGatewayDelivery.mockResolvedValue({ delivery: {
+    let finishGateway!: (value: unknown) => void;
+    gatewayApi.getGatewayDelivery.mockReturnValue(new Promise((resolve) => { finishGateway = resolve; }));
+    const gatewayResponse = { delivery: {
       door_url: 'https://gateway.example.test/door',
       hold: { state: 'no_hold', until: null, disputable: false }, problem: null,
       files: [{ file_id: 'file-1', display_name: 'gateway.csv', size_bytes: 10, sha256: 'abc',
         state: 'not_started', transmitted_bytes: 0,
         permission: { token: 'permission', browser_url: 'https://gateway.example.test/file', download_url: 'https://gateway.example.test/file' },
         reissue: { allowed: false, remaining_24h: 5, blocked_code: null } }],
-    } });
+    } };
     render(<OrderDetailPage />);
+    await screen.findByText('Order dataset');
+    // Finish reference-access loading while gateway classification is still pending.
+    await act(async () => {});
+    expect(ordersApi.getOrderAccess).toHaveBeenCalledExactlyOnceWith('order-1');
+    expect(screen.queryByRole('heading', { name: 'Downloads' })).toBeNull();
+    expect(screen.queryByText('Download access is unavailable.')).toBeNull();
+    await act(async () => finishGateway(gatewayResponse));
     const link = await screen.findByRole('link', { name: 'Download file' });
     expect(link.getAttribute('href')).toBe('https://gateway.example.test/file');
     expect(screen.getByRole('region', { name: 'Gateway delivery' })).toBeTruthy();
     await waitFor(() => expect(ordersApi.getOrderAccess).toHaveBeenCalledExactlyOnceWith('order-1'));
     expect(screen.queryByRole('heading', { name: 'Downloads' })).toBeNull();
+    expect(screen.queryByText('Download access is unavailable.')).toBeNull();
+  });
+
+  it('keeps reference downloads available when the initial gateway check fails transiently', async () => {
+    ordersApi.getOrder.mockResolvedValue(order({ status: 'fulfilled' }));
+    ordersApi.getOrderAccess.mockResolvedValue({ delivery_type: 'reference', can_download: true,
+      download_urls: [{ url: 'https://public.example.test/data.csv' }] });
+    gatewayApi.getGatewayDelivery.mockRejectedValue(new Error('Network failed'));
+    render(<OrderDetailPage />);
+    expect(await screen.findByRole('button', { name: 'Download' })).toBeTruthy();
+    expect(screen.getByRole('heading', { name: 'Downloads' })).toBeTruthy();
     expect(screen.queryByText('Download access is unavailable.')).toBeNull();
   });
 
