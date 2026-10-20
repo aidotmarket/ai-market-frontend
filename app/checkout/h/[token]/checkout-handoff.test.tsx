@@ -96,7 +96,22 @@ it.each(['reserved', 'provider_unknown'] as const)('recovers consumed %s after a
     fireEvent.change(screen.getByLabelText(label), { target: { value } });
   }
   fireEvent.click(screen.getByRole('checkbox', { name: 'Confirm licence authority' }));
-  await waitFor(() => expect((screen.getByRole('button', { name: 'Accept and continue to payment' }) as HTMLButtonElement).disabled).toBe(false));
+  await waitFor(() => {
+    const authority = screen.getByRole('checkbox', { name: 'Confirm licence authority' }) as HTMLInputElement;
+    // Keep prerequisite state visible even when the country options truncate the DOM diagnostic.
+    expect({
+      typedName: (screen.getByLabelText('Typed full name') as HTMLInputElement).value,
+      signerTitle: (screen.getByLabelText('Signer title') as HTMLInputElement).value,
+      businessLegalName: (screen.getByLabelText('Business legal name') as HTMLInputElement).value,
+      country: (screen.getByLabelText('Country') as HTMLSelectElement).value,
+      authorityDisabled: authority.disabled,
+      authorityChecked: authority.checked,
+      acceptDisabled: (screen.getByRole('button', { name: 'Accept and continue to payment' }) as HTMLButtonElement).disabled,
+    }).toEqual({
+      typedName: 'Ada Buyer', signerTitle: 'Director', businessLegalName: 'Buyer Ltd', country: 'GB',
+      authorityDisabled: false, authorityChecked: true, acceptDisabled: false,
+    });
+  });
   fireEvent.click(screen.getByRole('button', { name: 'Accept and continue to payment' }));
   await screen.findByRole('button', { name: 'Retry checkout' });
   const first = mocks.create.mock.calls[0];
@@ -129,7 +144,7 @@ it.each(['finalised', 'failed', 'payment_conflict', 'refunded'] as const)('never
   expect(screen.queryByRole('button', { name: 'Retry checkout' })).toBeNull();
   expect(mocks.create).not.toHaveBeenCalled();
   expect(mocks.buy).not.toHaveBeenCalled();
-  expect(sessionStorage.getItem(key)).toBeNull();
+  await waitFor(() => expect(sessionStorage.getItem(key)).toBeNull());
 });
 it.each(['https://checkout.stripe.com/c/pay/test', 'https://evil.test/c/pay/test', null])('allows only a finalised safe provider URL: %s', async checkout_url => {
   mocks.get.mockResolvedValue({ ...handoff, status: 'consumed', checkout_status: 'finalised', checkout_url, order_id: 'order' });
