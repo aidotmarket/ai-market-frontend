@@ -4,6 +4,7 @@ import { accountReauthMethod, setupRestriction, setupRefusal } from '@/lib/two-f
 
 import { useEffect, useRef, useState } from 'react';
 import { useRouter } from 'next/navigation';
+import Link from 'next/link';
 import { PENDING_ACTION_CONTINUATION } from '@/lib/redirect';
 import { useAuthStore } from '@/store/auth';
 import { disable2FA, regenerateBackupCodes, setup2FA, SSO_MANAGED_2FA_MESSAGE, updateProfile, verify2FASetup } from '@/api/auth';
@@ -322,6 +323,8 @@ export default function SettingsPage() {
       >
         Settings
       </h1>
+
+      <p className="mb-6"><Link className="text-[#3F51B5] underline" href="/dashboard/settings/wallet">Marketplace wallet</Link></p>
 
       {/* Profile Section */}
       <section id="profile" className="scroll-mt-6 bg-white rounded-xl border border-gray-200 shadow-sm p-6 mb-6">

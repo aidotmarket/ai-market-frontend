@@ -58,6 +58,15 @@ describe('SettingsPage capability refresh', () => {
   const realRefreshAuth = useAuthStore.getState().refreshAuth;
   const refreshAuth = vi.fn();
 
+  it.each(['buyer', 'seller'] as const)('makes Marketplace wallet findable for a %s without seller activation', async role => {
+    useAuthStore.setState({ user: { ...user, role } });
+    capabilitiesApi.getCapabilities.mockResolvedValue({ seller: { effective_status: 'inactive' } });
+    render(<SettingsPage />);
+    expect(screen.getByRole('link', { name: 'Marketplace wallet' }).getAttribute('href')).toBe('/dashboard/settings/wallet');
+    await waitFor(() => expect(capabilitiesApi.getCapabilities).toHaveBeenCalled());
+    expect(screen.getByRole('link', { name: 'Marketplace wallet' })).toBeTruthy();
+  });
+
   const completeReauth = async (code = '654321') => {
     const dialog = await screen.findByRole('dialog', { name: 'Re-authenticate' });
     fireEvent.change(within(dialog).getByLabelText('Password'), {
