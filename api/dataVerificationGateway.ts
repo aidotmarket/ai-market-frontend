@@ -37,6 +37,7 @@ export interface CloudflareWorkerIdentity {
 }
 export interface CloudflareVerifierStatus extends Omit<AWSVerifierStatus, 'region' | 'code_sha256' | 'poll_interval_minutes'> {
   installer_enabled?: boolean;
+  latest_intent_id?: string | null;
   jurisdiction: string | null;
   release_id: string | null;
   scanner_version: string | null;
@@ -49,12 +50,14 @@ export interface CloudflareInstallStatus {
   intent_id: string;
   phase: 'start' | 'callback_claimed' | 'callback_refused' | 'expired' | 'closed' | 'cancelled';
   error: string | null;
-  cleanup: 'unconfirmed' | 'not_started';
+  cleanup: 'proven' | 'unconfirmed' | 'not_started';
+  message: string;
+  residual_resources?: string[];
   claimed_at: number | null;
   updated_at: number | null;
   cancel_requested: boolean | null;
   access_removal_confirmed_by_seller: boolean;
-  runtime: { state: 'pending' }; // Backend 8f95254e cannot yet assert Ready.
+  runtime: { state: 'authorizing' | 'installing' | 'disconnecting' | 'waiting_registration' | 'ready' | 'ready_attested' | 'consent_cancelled' | 'scope_refused' | 'failed_removed' | 'failed_residue' | 'boot_timed_out' | 'cleanup_unconfirmed' | 'failed' } & Partial<Record<'claimed_observed_at' | 'closed_observed_at' | 'token_consumed_observed_at' | 'first_empty_poll_observed_at' | 'last_poll_observed_at', number>>;
 }
 const installRoot = '/verification-runners/cloudflare/install';
 export async function startCloudflareInstall(listing_id: string, connection_id: string, idempotency_key: string): Promise<{ intent_id: string; authorize_url: string; expires_at: number }> {

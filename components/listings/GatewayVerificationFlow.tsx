@@ -384,13 +384,13 @@ export default function GatewayVerificationFlow({ listingId, sellerId, verifier,
       <button className={buttonClass} disabled={busy || (verifierDecision !== 'setup' && !runnerId)} onClick={confirmVerifierDecision}>Confirm {verifierDecision === 'remove' ? 'removal' : verifierDecision === 'replace' ? 'replacement' : 'setup'}</button>
       <button className={buttonClass} disabled={busy} onClick={() => setVerifierDecision(null)}>Keep current verifier</button>
     </div>}
-    {!installer.active && !probe && !epoch && !attempt.current?.epochId && <>
+    {(!installer.resumed || installer.ready) && !probe && !epoch && !attempt.current?.epochId && <>
       <label className="block"><input type="checkbox" checked={preview} disabled={busy || (!!attempt.current && !attempt.current.quoteRefused)} onChange={e => setPreview(e.target.checked)} /> Include column names and row counts in the findings</label>
-      <button className={buttonClass} disabled={!ready || busy || (cloud && (!statusFresh || (cloudflare && !verifierStatus?.eligible) || verifierStatus?.state !== 'ready'))} onClick={checkData}>{busy ? 'Checking…' : attempt.current?.quoteRefused ? 'Get a new quote' : 'Check data and get quote'}</button>
+      <button className={buttonClass} disabled={!ready || busy || (cloud && (!statusFresh || (cloudflare && !verifierStatus?.eligible) || verifierStatus?.state !== 'ready'))} onClick={checkData}>{installer.resumed ? 'Start free check' : busy ? 'Checking…' : attempt.current?.quoteRefused ? 'Get a new quote' : 'Check data and get quote'}</button>
     </>}
     {attempt.current?.epochId && !epoch && <p role="status">Loading your existing verification. Check again to follow its status.</p>}
     {probe?.state === 'queued' && <p role="status">{aws ? 'Waiting for your AWS verifier to check the data. No ai.market charge has been made; AWS charges apply.' : cloudflare ? 'Waiting for your Cloudflare verifier to check the data. No ai.market charge has been made; Cloudflare charges apply.' : 'Waiting for your gateway to check the data. No charge has been made.'}</p>}
-    {cloudflare && !installer.active && (probe?.state === 'queued' || (epoch && runningStates.has(epoch.state))) && <p>If polling is delayed, press Run now again on your verifier’s seller control page.</p>}
+    {cloudflare && !installer.active && (probe?.state === 'queued' || (epoch && runningStates.has(epoch.state))) && <p>Your Cloudflare verifier checks for work automatically. If work is delayed, check verifier status.</p>}
     {probe?.state === 'refused' && <p role="alert">{verificationRefusalCopy(probe.refusal, verifier?.kind)}</p>}
     {probe?.state === 'complete' && probe.quote_id && probe.maximum_hold_usd && !epoch && !attempt.current?.epochId && !setup && <>
       <h3 className="font-semibold">Your verification quote</h3>

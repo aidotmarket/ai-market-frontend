@@ -734,12 +734,12 @@ describe('Cloudflare verifier in the shared seller flow', () => {
     screen.getAllByRole('checkbox').filter(el => /I understand|I agree/.test(el.parentElement?.textContent ?? '')).forEach(el => expect((el as HTMLInputElement).checked).toBe(false));
     expect(screen.getByText(CLOUDFLARE_COST_DISCLOSURE)).toBeTruthy();
   });
-  it('repeats Run now guidance when a queued probe is delayed', async () => {
+  it('explains automatic polling when a queued probe is delayed', async () => {
     vi.mocked(gateway.getGatewayVerificationProbe).mockResolvedValue({ ...queued, retryAfter: 60 });
     vi.mocked(gateway.getCloudflareVerifierStatus).mockResolvedValue(cloudflareRegistered);
     await openCloudflare(); await screen.findByText('Ready'); fireEvent.click(screen.getByRole('button', { name: 'Check data and get quote' }));
-    await screen.findByText('If polling is delayed, press Run now again on your verifier’s seller control page.');
-    expect(screen.getAllByText(/press Run now again/)).toHaveLength(1);
+    await screen.findByText('Your Cloudflare verifier checks for work automatically. If work is delayed, check verifier status.');
+    expect(screen.queryByText(/press Run now again/)).toBeNull();
     expect(screen.queryByText(CLOUDFLARE_RUN_NOW_COPY)).toBeNull();
     expect(screen.queryByText('Your verification quote')).toBeNull();
   });
