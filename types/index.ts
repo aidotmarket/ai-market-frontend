@@ -256,7 +256,21 @@ export interface WithdrawnScanFindings {
 
 export type ScanFindings = PublishedScanFindings | WithdrawnScanFindings;
 
-export interface ListingListItem {
+/** Safe public projection of the controlled version-1 display-only marker.
+ * Raw structured_metadata is never a public presentation contract. */
+export interface GeneratedSampleProjection {
+  label: 'SAMPLE';
+  display_only: true;
+}
+export interface GeneratedSampleFields {
+  generated_sample?: GeneratedSampleProjection | null;
+  availability?: 'display_only' | 'unavailable';
+  fulfillment_method?: 'none';
+}
+
+export interface ListingListItem extends GeneratedSampleFields {
+  purchasable?: boolean;
+  purchase_hold_reason?: string | null;
   id: string;
   slug: string;
   title: string;
@@ -278,7 +292,7 @@ export interface ListingListItem {
   created_at: string;
 }
 
-export interface ListingPublicListItem {
+export interface ListingPublicListItem extends GeneratedSampleFields {
   id: string;
   slug: string;
   title: string;
@@ -352,7 +366,7 @@ export interface PublicSourceReference {
   metadata_url: string;
 }
 
-export interface ListingDetail {
+export interface ListingDetail extends GeneratedSampleFields {
   public_reference?: PublicSourceReference | null;
   at_a_glance?: import('@/lib/api').ListingSummary | null;
   approved_presentation?: {presentation_version: 'seller-listing-review-v2'; rendered_html: string; render_hash: string};
@@ -424,7 +438,9 @@ export interface SearchRequest {
   offset?: number;
 }
 
-export interface SearchResultItem {
+export interface SearchResultItem extends GeneratedSampleFields {
+  purchasable?: boolean;
+  purchase_hold_reason?: string | null;
   id: string;
   title: string | null;
   slug: string;

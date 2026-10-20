@@ -1,3 +1,5 @@
+import GeneratedSampleCard from '@/components/listings/GeneratedSampleCard';
+import { generatedSampleState } from '@/lib/generatedSample';
 import Link from 'next/link';
 import SellDataCta from '@/components/SellDataCta';
 import { getPublicTermsVersion } from '@/lib/publicTermsVersion';
@@ -572,7 +574,9 @@ export default async function LandingPage() {
 
             <div className="mt-10 grid grid-cols-1 gap-6 sm:grid-cols-2 lg:grid-cols-4">
               {featuredListings.length > 0 ? (
-                featuredListings.map((l) => (
+                featuredListings.map((l) => generatedSampleState(l) !== 'ordinary' ? (
+                  <GeneratedSampleCard key={l.id} listing={l} />
+                ) : (
                   <Link
                     key={l.id}
                     href={`/listings/${l.slug}`}

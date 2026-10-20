@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { fetchDataRequest, fetchDataRequests, fetchPublicListing } from './api';
+import { fetchDataRequest, fetchDataRequests, fetchPublicListing, fetchPublicListings, fetchFeaturedFeed, fetchListingVersions, fetchShareMetadata } from './api';
 
 describe('fetchPublicListing', () => {
   afterEach(() => {
@@ -50,5 +50,22 @@ describe('public data request freshness', () => {
     expect(await fetchDataRequest('request-1')).toBeNull();
     expect(fetchMock).toHaveBeenCalledTimes(2);
     expect(fetchMock).toHaveBeenCalledWith(expect.stringContaining('/api/v1/data-requests/request-1'), { cache: 'no-store' });
+  });
+});
+
+
+describe('narrow homepage mutable projection reads', () => {
+  afterEach(() => vi.unstubAllGlobals());
+  it('fetches both inputs current while retaining unrelated version/share caching', async () => {
+    const fetchMock = vi.fn().mockResolvedValue({ok: true, json: async () => ({items: []})});
+    vi.stubGlobal('fetch', fetchMock);
+    await fetchPublicListings({page: 2, per_page: 4, category: 'Business', sort: 'newest'});
+    await fetchFeaturedFeed({locale: 'en', currency: 'USD', limit: 4});
+    await fetchListingVersions('ordinary');
+    await fetchShareMetadata('ordinary');
+    expect(fetchMock).toHaveBeenNthCalledWith(1, expect.stringContaining('/public/listings?page=2&per_page=4&category=Business&sort=newest'), {cache: 'no-store'});
+    expect(fetchMock).toHaveBeenNthCalledWith(2, expect.stringContaining('/public/featured-listings?locale=en&currency=USD&limit=4'), {cache: 'no-store'});
+    expect(fetchMock).toHaveBeenNthCalledWith(3, expect.stringContaining('/listings/ordinary/versions'), {next: {revalidate: 10}});
+    expect(fetchMock).toHaveBeenNthCalledWith(4, expect.stringContaining('/public/share/ordinary'), {next: {revalidate: 60}});
   });
 });
