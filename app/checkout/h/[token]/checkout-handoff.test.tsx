@@ -129,7 +129,7 @@ it.each(['finalised', 'failed', 'payment_conflict', 'refunded'] as const)('never
   expect(screen.queryByRole('button', { name: 'Retry checkout' })).toBeNull();
   expect(mocks.create).not.toHaveBeenCalled();
   expect(mocks.buy).not.toHaveBeenCalled();
-  expect(sessionStorage.getItem(key)).toBeNull();
+  await waitFor(() => expect(sessionStorage.getItem(key)).toBeNull());
 });
 it.each(['https://checkout.stripe.com/c/pay/test', 'https://evil.test/c/pay/test', null])('allows only a finalised safe provider URL: %s', async checkout_url => {
   mocks.get.mockResolvedValue({ ...handoff, status: 'consumed', checkout_status: 'finalised', checkout_url, order_id: 'order' });
