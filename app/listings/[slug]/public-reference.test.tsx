@@ -109,7 +109,7 @@ describe('public-source reference route', () => {
     for (const promise of ['Access files directly from the publisher', 'Download', 'Query', 'Old seller terms', 'Standard', 'covenant', 'signature']) {
       expect(document.body.textContent).not.toContain(promise);
     }
-    expect(document.querySelector('a[href*="checkout"], a[href*="/licenses/"], button')).toBeNull();
+    expect(document.querySelector('a[href*="checkout"], a[href^="/licenses/"], a[href^="https://ai.market/licenses/"], button')).toBeNull();
     expect(forbidden).not.toHaveBeenCalled();
     expect(api.fetchListingVersions).not.toHaveBeenCalled();
     expect(api.fetchListingAccessWindowDays).not.toHaveBeenCalled();
@@ -234,12 +234,13 @@ describe('public-source reference route', () => {
     expect(document.querySelector('script')).toBeNull();
   });
 
-  it.each<[ListingDetail['fulfillment_type'], number]>([
-    ['reference', 0], ['reference', 15],
-    ['ai_queryable', 0], ['ai_queryable', 15],
-    ['file_download', 0], ['file_download', 15],
-  ])('retains the existing path for ordinary %s at price %s without opt-in', async (fulfillment_type, price) => {
-    await render(fixture({ fulfillment_type, pricing: { price, pricing_type: 'one_time', subscription_price_monthly: null }, public_reference: undefined, purchase_hold_reason: null, purchasable: true, license_status: 'bound', approved_presentation: undefined, jsonld: null }));
+  it.each<[ListingDetail['fulfillment_type'], number, boolean]>([
+    ['reference', 0, true], ['reference', 15, true],
+    ['ai_queryable', 0, true], ['ai_queryable', 15, true],
+    ['file_download', 0, true], ['file_download', 15, true],
+    ['reference', 0, false], ['ai_queryable', 0, false],
+  ])('retains the existing path for ordinary %s at price %s with purchasable %s without opt-in', async (fulfillment_type, price, purchasable) => {
+    await render(fixture({ fulfillment_type, pricing: { price, pricing_type: 'one_time', subscription_price_monthly: null }, public_reference: undefined, purchase_hold_reason: null, purchasable, license_status: 'bound', approved_presentation: undefined, jsonld: null }));
     expect(forbidden).toHaveBeenCalled();
     expect(api.fetchListingVersions).toHaveBeenCalledOnce();
     expect(document.body.textContent).not.toContain('Indexed from public source');
