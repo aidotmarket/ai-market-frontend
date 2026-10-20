@@ -350,6 +350,7 @@ export interface PublicSourceReference {
   publisher: string;
   license_url: string;
   metadata_url: string;
+  access_kind?: 'download' | 'instructions';
 }
 
 export interface ListingDetail {

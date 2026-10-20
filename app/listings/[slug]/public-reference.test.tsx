@@ -3,7 +3,8 @@ import React from 'react';
 import { renderToStaticMarkup } from 'react-dom/server';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { within } from '@testing-library/react';
-import type { ListingDetail } from '@/types';
+import type { ListingDetail, PublicSourceReference } from '@/types';
+import PublicSourceReferencePage from './PublicSourceReferencePage';
 
 const api = vi.hoisted(() => ({
   fetchPublicListing: vi.fn(), fetchListingVersions: vi.fn(),
@@ -29,6 +30,16 @@ const reference = {
   publisher: 'European Environment Agency (EEA)',
   license_url: 'https://creativecommons.org/licenses/by/4.0/',
   metadata_url: 'https://sdi.eea.europa.eu/catalogue/srv/api/records/9eee3fc9-3060-4e3f-bc8d-e22e7c3f6bda?language=all',
+};
+// Design-shaped API fixture only: not a saved row, source availability check,
+// executed backend serialization result, or browser proof.
+const instructionsReference = {
+  url: 'https://github.com/google-deepmind/alphafold/blob/main/afdb/README.md',
+  label: 'Read complete-species AlphaFold v4 access instructions',
+  publisher: 'Google DeepMind and EMBL-EBI (AlphaFold DB)',
+  license_url: 'https://creativecommons.org/licenses/by/4.0/',
+  metadata_url: 'https://alphafold.ebi.ac.uk/download',
+  access_kind: 'instructions' as const,
 };
 function fixture(overrides: Record<string, unknown> = {}): ListingDetail {
   return {
@@ -63,6 +74,100 @@ beforeEach(() => {
   document.body.innerHTML = '';
 });
 describe('public-source reference route', () => {
+  it.each<[string, PublicSourceReference]>([
+    ['absent', reference],
+    ['explicit download', { ...reference, access_kind: 'download' as const }],
+  ])('retains existing download copy for %s access_kind', async (_name, public_reference) => {
+    const before = { ...public_reference };
+    const page = await render(fixture({ public_reference }));
+    expect(page.getByText('ai.market indexes this public source. Access files directly from the publisher; no purchase or checkout is required.')).toBeTruthy();
+    expect(page.getByRole('link', { name: reference.label }).getAttribute('href')).toBe(reference.url);
+    expect(public_reference).toEqual(before);
+    expect(Object.keys(reference)).toEqual(['url', 'label', 'publisher', 'license_url', 'metadata_url']);
+    expect(forbidden).not.toHaveBeenCalled();
+    expect(api.fetchListingVersions).not.toHaveBeenCalled();
+    expect(api.fetchListingAccessWindowDays).not.toHaveBeenCalled();
+  });
+
+  it('renders AlphaFold instructions with upstream rights and no marketplace delivery promise', async () => {
+    const page = await render(fixture({
+      public_reference: instructionsReference,
+      title: 'AlphaFold predicted protein structures: Maize proteome (taxonomy 4577)',
+      description: 'Complete-species AlphaFold v4 GCS access instructions. A normal Google Cloud account is required. CC BY 4.0; Google DeepMind and EMBL-EBI. Source object availability and complete coverage have not been freshly verified.',
+    }));
+    const cta = page.getByRole('link', { name: instructionsReference.label });
+    expect(cta.getAttribute('href')).toBe(instructionsReference.url);
+    expect(cta.getAttribute('target')).toBe('_blank');
+    expect(cta.getAttribute('rel')).toBe('noopener noreferrer');
+    expect(page.getByText(instructionsReference.publisher)).toBeTruthy();
+    expect(page.getByText('Free', { exact: true })).toBeTruthy();
+    expect(page.getByRole('link', { name: 'License' }).getAttribute('href')).toBe(instructionsReference.license_url);
+    expect(page.getByRole('link', { name: 'Source metadata' }).getAttribute('href')).toBe(instructionsReference.metadata_url);
+    expect(document.body.textContent).toContain('Follow the publisher’s access instructions');
+    expect(document.body.textContent).toContain('ai.market does not host or relay the dataset');
+    expect(document.body.textContent).toContain('No purchase or checkout is required');
+    for (const promise of ['Access files directly from the publisher', 'Download', 'Query', 'Old seller terms', 'Standard', 'covenant', 'signature']) {
+      expect(document.body.textContent).not.toContain(promise);
+    }
+    expect(document.querySelector('a[href*="checkout"], a[href*="/licenses/"], button')).toBeNull();
+    expect(forbidden).not.toHaveBeenCalled();
+    expect(api.fetchListingVersions).not.toHaveBeenCalled();
+    expect(api.fetchListingAccessWindowDays).not.toHaveBeenCalled();
+    const jsonld = JSON.parse(document.querySelector('script[type="application/ld+json"]')!.textContent!);
+    expect(jsonld.license).toBe(instructionsReference.license_url);
+    expect(jsonld.publisher.name).toBe(instructionsReference.publisher);
+    expect(jsonld.sameAs).toBe(instructionsReference.metadata_url);
+    expect(jsonld.isAccessibleForFree).toBe(true);
+    expect(jsonld.url).toBe('https://ai.market/listings/arbitrary-slug');
+    expect(jsonld.offers).toBeUndefined();
+    expect(jsonld.distribution).toBeUndefined();
+    expect(JSON.stringify(jsonld)).not.toMatch(/DataDownload|contentUrl|Old facility claims/);
+  });
+
+  it.each<[string, unknown]>([
+    ['null', null], ['unknown', 'other'], ['empty', ''], ['number', 42],
+    ['boolean', false], ['object', {}], ['array', []], ['present undefined', undefined],
+  ])('fails closed for %s access_kind without commercial fallback', async (_name, access_kind) => {
+    const page = await render(fixture({ public_reference: { ...instructionsReference, access_kind } }));
+    expect(page.getByRole('status').textContent).toContain('Public source reference unavailable');
+    expect(page.queryByRole('link', { name: instructionsReference.label })).toBeNull();
+    expect(page.queryByRole('link', { name: 'License' })).toBeNull();
+    expect(page.queryByText('Free', { exact: true })).toBeNull();
+    expect(document.querySelector('script[type="application/ld+json"]')).toBeNull();
+    expect(forbidden).not.toHaveBeenCalled();
+    expect(api.fetchListingVersions).not.toHaveBeenCalled();
+    expect(api.fetchListingAccessWindowDays).not.toHaveBeenCalled();
+  });
+
+  it.each([
+    { emitJsonLd: false, noindex: false },
+    { emitJsonLd: true, noindex: true },
+  ])('honors instructions component JSON-LD controls %j', ({ emitJsonLd, noindex }) => {
+    document.body.innerHTML = renderToStaticMarkup(<PublicSourceReferencePage
+      listing={fixture({ public_reference: instructionsReference, noindex })} emitJsonLd={emitJsonLd}
+    />);
+    expect(document.querySelector('script[type="application/ld+json"]')).toBeNull();
+    expect(within(document.body).getByRole('link', { name: instructionsReference.label }).getAttribute('href')).toBe(instructionsReference.url);
+  });
+
+  it.each(['url', 'license_url', 'metadata_url'])('rejects unsafe instructions %s', async field => {
+    const page = await render(fixture({ public_reference: { ...instructionsReference, [field]: 'https://user:secret@example.org' } }));
+    expect(page.getByRole('status').textContent).toContain('Public source reference unavailable');
+    expect(page.queryByRole('link', { name: instructionsReference.label })).toBeNull();
+    expect(document.querySelector('script[type="application/ld+json"]')).toBeNull();
+    expect(forbidden).not.toHaveBeenCalled();
+    expect(api.fetchListingVersions).not.toHaveBeenCalled();
+  });
+
+  it('preserves instructions page noindex and canonical metadata', async () => {
+    const listing = fixture({ public_reference: instructionsReference, noindex: true });
+    await render(listing);
+    expect(document.querySelector('script[type="application/ld+json"]')).toBeNull();
+    const metadata = await generateMetadata({ params: Promise.resolve({ slug: listing.slug }) });
+    expect(metadata.robots).toEqual({ index: false, follow: false });
+    expect(metadata.alternates?.canonical).toBe('https://ai.market/listings/arbitrary-slug');
+  });
+
   it('renders factual markdown, attribution and safe external access without purchase or inferred content', async () => {
     const page = await render();
     expect(page.getByText('Indexed from public source')).toBeTruthy();
@@ -86,6 +191,8 @@ describe('public-source reference route', () => {
     expect(jsonld.license).toBe(reference.license_url);
     expect(jsonld.publisher.name).toBe(reference.publisher);
     expect(jsonld.offers).toBeUndefined();
+    expect(jsonld.sameAs).toBe(reference.metadata_url);
+    expect(jsonld.distribution).toBeUndefined();
   });
 
   it.each<[string, unknown]>([
@@ -121,14 +228,18 @@ describe('public-source reference route', () => {
     expect(page.getByText('Another public agency')).toBeTruthy();
   });
 
-  it('keeps reference links safe inside source markdown and honors noindex', async () => {
-    await render(fixture({ noindex: true, description: '[Unsafe](https://user:secret@example.org) <script>alert(1)</script>' }));
+  it.each([reference, instructionsReference])('keeps reference links safe inside source markdown and honors noindex for $label', async public_reference => {
+    await render(fixture({ public_reference, noindex: true, description: '[Unsafe](https://user:secret@example.org) <script>alert(1)</script>' }));
     expect(document.querySelector('a[href*="secret"]')).toBeNull();
     expect(document.querySelector('script')).toBeNull();
   });
 
-  it.each(['reference', 'ai_queryable'] as const)('retains the existing path for legacy %s without opt-in', async fulfillment_type => {
-    await render(fixture({ fulfillment_type, public_reference: undefined, purchase_hold_reason: null, license_status: 'bound', approved_presentation: undefined, jsonld: null }));
+  it.each<[ListingDetail['fulfillment_type'], number]>([
+    ['reference', 0], ['reference', 15],
+    ['ai_queryable', 0], ['ai_queryable', 15],
+    ['file_download', 0], ['file_download', 15],
+  ])('retains the existing path for ordinary %s at price %s without opt-in', async (fulfillment_type, price) => {
+    await render(fixture({ fulfillment_type, pricing: { price, pricing_type: 'one_time', subscription_price_monthly: null }, public_reference: undefined, purchase_hold_reason: null, purchasable: true, license_status: 'bound', approved_presentation: undefined, jsonld: null }));
     expect(forbidden).toHaveBeenCalled();
     expect(api.fetchListingVersions).toHaveBeenCalledOnce();
     expect(document.body.textContent).not.toContain('Indexed from public source');

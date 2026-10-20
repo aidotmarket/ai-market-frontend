@@ -25,6 +25,7 @@ function validReference(listing: ListingDetail): PublicSourceReference | null {
   if (listing.fulfillment_type !== 'reference' || listing.pricing.price !== 0 ||
       listing.purchasable !== false || listing.purchase_hold_reason !== 'public_source_reference' ||
       !reference || typeof reference !== 'object' || Array.isArray(reference) ||
+      ('access_kind' in reference && reference.access_kind !== 'download' && reference.access_kind !== 'instructions') ||
       typeof reference.label !== 'string' || !reference.label.trim() ||
       typeof reference.publisher !== 'string' || !reference.publisher.trim() ||
       !safeExternalHttps(reference.url) || !safeExternalHttps(reference.license_url) ||
@@ -73,7 +74,9 @@ export default function PublicSourceReferencePage({ listing, emitJsonLd }: { lis
           <p className="text-3xl font-bold text-gray-900">Free</p>
           <h2 className="font-semibold text-gray-900">Publisher</h2>
           <p className="text-sm text-gray-600">{reference.publisher}</p>
-          <p className="text-sm text-gray-600">ai.market indexes this public source. Access files directly from the publisher; no purchase or checkout is required.</p>
+          <p className="text-sm text-gray-600">{reference.access_kind === 'instructions'
+            ? 'ai.market indexes this public source. Follow the publisher’s access instructions; ai.market does not host or relay the dataset. No purchase or checkout is required.'
+            : 'ai.market indexes this public source. Access files directly from the publisher; no purchase or checkout is required.'}</p>
           <a href={reference.url} target="_blank" rel="noopener noreferrer" className="block rounded-lg bg-[#3F51B5] px-4 py-3 text-center font-medium text-white">{reference.label}</a>
           <div className="flex flex-wrap gap-4 text-sm text-[#3F51B5]">
             <a href={reference.license_url} target="_blank" rel="noopener noreferrer">License</a>
