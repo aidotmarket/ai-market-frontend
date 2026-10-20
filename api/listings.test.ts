@@ -7,7 +7,7 @@ vi.mock('./client', () => ({
   api: { get: apiGet, post: apiPost },
 }));
 
-const { createDraftListing, getMarketplaceCategoryFacets, getListingOwnership } = await import('./listings');
+const { createDraftListing, getMarketplaceCategoryFacets, getListingOwnership, getMyListings } = await import('./listings');
 
 describe('getListingOwnership', () => {
   it.each([true, false, 'true', 1, null, undefined])('accepts only literal true from is_owner: %s', async (is_owner) => {
@@ -55,5 +55,29 @@ describe('getMarketplaceCategoryFacets', () => {
     await expect(getMarketplaceCategoryFacets()).rejects.toThrow(
       'Category facets are unavailable',
     );
+  });
+});
+
+
+describe('getMyListings paging compatibility', () => {
+  beforeEach(() => {
+    apiGet.mockReset();
+  });
+  it('preserves the overview no-argument request and array response', async () => {
+    const response = { data: [{ id: 'owner-row', status: 'unlisted' }] };
+    apiGet.mockResolvedValue(response);
+    await expect(getMyListings()).resolves.toBe(response);
+    expect(apiGet).toHaveBeenCalledExactlyOnceWith('/listings/mine');
+  });
+  it.each([{ skip: 0, limit: 21 }, { skip: 20, limit: 21 }, { skip: 40 }, { limit: 100 }])(
+    'passes optional typed paging without owner or status filters: %j', async paging => {
+      const response = { data: [] }; apiGet.mockResolvedValue(response);
+      await expect(getMyListings(paging)).resolves.toBe(response);
+      expect(apiGet).toHaveBeenCalledExactlyOnceWith('/listings/mine', { params: paging });
+    },
+  );
+  it('propagates a rejected owner read rather than returning empty inventory', async () => {
+    const error = new Error('unavailable'); apiGet.mockRejectedValue(error);
+    await expect(getMyListings({ skip: 20, limit: 21 })).rejects.toBe(error);
   });
 });
