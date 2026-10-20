@@ -101,7 +101,15 @@ export async function getMarketplaceCategoryFacets(): Promise<Record<string, num
 }
 
 export const getListings = () => api.get('/listings/');
-export const getMyListings = () => api.get('/listings/mine');
+export interface MyListingsPaging {
+  skip?: number;
+  limit?: number;
+}
+
+// Preserve the overview's no-argument request and the existing array response.
+export const getMyListings = (paging?: MyListingsPaging) => paging === undefined
+  ? api.get('/listings/mine')
+  : api.get('/listings/mine', { params: paging });
 
 export interface PendingSellerTermsListing {
   id: string;

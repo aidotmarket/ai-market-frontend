@@ -1,6 +1,7 @@
 'use client';
 
-import { useEffect, useState, useCallback } from 'react';
+import { useEffect, useState, useCallback, useRef } from 'react';
+import { useAuthStore } from '@/store/auth';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { getMyListings, getPendingSellerTermsListings, unpublishListing, deleteListing } from '@/api/listings';
@@ -36,7 +37,19 @@ function isPublicReference(metadata: unknown): boolean {
     && Object.prototype.hasOwnProperty.call(metadata, 'public_reference');
 }
 
+const PAGE_SIZE = 20;
+
 export default function ListingsPage() {
+  const { user, hydrated, isAuthenticated, isLoading } = useAuthStore();
+  if (!hydrated || isLoading || !isAuthenticated || !user?.id) {
+    return <p role="status">Loading listings...</p>;
+  }
+  // Existing layout owns seller admission. Retire page work when auth admission
+  // or the principal changes, without introducing another capability policy.
+  return <OwnerListings key={user.id} userId={user.id} />;
+}
+
+function OwnerListings({ userId }: { userId: string }) {
   const termsVersion = useServedTermsVersion();
   const [listings, setListings] = useState<any[]>([]);
   const [pendingTermsCount, setPendingTermsCount] = useState(0);
@@ -49,16 +62,37 @@ export default function ListingsPage() {
   const { toast } = useToast();
   const { ensureTermsAccepted, TermsGatePrompt, checkingTerms } = useTermsGate('seller');
 
-  const fetchListings = useCallback(async () => {
+  const [offset, setOffset] = useState(0);
+  const [hasNext, setHasNext] = useState(false);
+  const mounted = useRef(false);
+  const sequence = useRef(0);
+  const busy = useRef(false);
+  const mutating = useRef(false);
+  const pageOffset = useRef(0);
+  const isCurrent = useCallback((request: number) => {
+    const auth = useAuthStore.getState();
+    return mounted.current && sequence.current === request &&
+      auth.user?.id === userId && auth.hydrated && auth.isAuthenticated && !auth.isLoading;
+  }, [userId]);
+
+  const fetchListings = useCallback(async (target: number) => {
+    const request = ++sequence.current;
+    busy.current = true;
+    pageOffset.current = target;
+    setOffset(target);
+    setDeleteConfirm(null);
     setLoading(true);
     setError('');
     const [listingsRes, connectRes, pendingRes] = await Promise.allSettled([
-      getMyListings(),
+      getMyListings({ skip: target, limit: PAGE_SIZE + 1 }),
       getConnectStatus(),
       getPendingSellerTermsListings(),
     ]);
+    if (!isCurrent(request)) return;
     if (listingsRes.status === 'fulfilled') {
-      setListings(listingsRes.value.data || []);
+      const rows = listingsRes.value.data || [];
+      setListings(rows.slice(0, PAGE_SIZE));
+      setHasNext(rows.length > PAGE_SIZE);
     } else {
       setError('Failed to load listings.');
     }
@@ -68,61 +102,57 @@ export default function ListingsPage() {
         : 'unknown'
     );
     setPendingTermsCount(pendingRes.status === 'fulfilled' ? pendingRes.value.data.count : 0);
+    busy.current = false;
     setLoading(false);
-  }, []);
+  }, [isCurrent]);
 
   useEffect(() => {
-    fetchListings();
+    mounted.current = true;
+    void fetchListings(0);
+    return () => {
+      mounted.current = false;
+      sequence.current += 1;
+    };
   }, [fetchListings]);
 
-  const handleUnpublish = async (id: string) => {
-    setActionLoading(id);
-    try {
-      await unpublishListing(id);
-      toast('Listing unpublished', 'success');
-      fetchListings();
-    } catch (err: any) {
-      toast(err.response?.data?.detail || 'Failed to unpublish', 'error');
-    } finally {
-      setActionLoading(null);
-    }
+  const changePage = (target: number) => {
+    if (!isCurrent(sequence.current) || busy.current || mutating.current || target < 0) return;
+    void fetchListings(target);
   };
 
-  const handleDelete = async (id: string) => {
+  const handleMutation = async (id: string, kind: 'delete' | 'unpublish') => {
+    const request = sequence.current;
+    if (!isCurrent(request) || busy.current || mutating.current ||
+        !listings.some(listing => listing.id === id)) return;
+    mutating.current = true;
     setActionLoading(id);
     try {
-      await deleteListing(id);
-      toast('Listing deleted', 'success');
+      await (kind === 'delete' ? deleteListing(id) : unpublishListing(id));
+      if (!isCurrent(request)) return;
+      toast(kind === 'delete' ? 'Listing deleted' : 'Listing unpublished', 'success');
       setDeleteConfirm(null);
-      fetchListings();
+      await fetchListings(pageOffset.current);
     } catch (err: any) {
-      toast(err.response?.data?.detail || 'Failed to delete', 'error');
+      if (isCurrent(request)) toast(err.response?.data?.detail || `Failed to ${kind}`, 'error');
     } finally {
-      setActionLoading(null);
+      // Refresh increments the request sequence; only this mounted principal may
+      // release the mutation lock. Paging stays disabled through acknowledgement.
+      if (mounted.current && useAuthStore.getState().user?.id === userId) {
+        mutating.current = false;
+        setActionLoading(null);
+      }
     }
   };
 
-  if (loading) {
-    return (
-      <div className="flex justify-center py-12">
-        <div className="h-8 w-8 animate-spin rounded-full border-4 border-[#3F51B5] border-t-transparent"></div>
-      </div>
-    );
-  }
-
-  if (error) {
-    return (
-      <div className="rounded-lg bg-red-50 border border-red-200 p-6 text-center">
-        <p className="text-sm text-red-700 mb-4">{error}</p>
-        <button
-          onClick={fetchListings}
-          className="inline-flex items-center rounded-lg bg-red-600 px-4 py-2 text-sm font-medium text-white hover:bg-red-700"
-        >
-          Retry
-        </button>
-      </div>
-    );
-  }
+  const handleEdit = (id: string) => {
+    const request = sequence.current;
+    if (!isCurrent(request) || busy.current || mutating.current) return;
+    void ensureTermsAccepted(() => {
+      if (isCurrent(request) && !busy.current && !mutating.current) {
+        router.push(`/dashboard/listings/${id}/edit`);
+      }
+    });
+  };
 
   return (
     <div className="space-y-6">
@@ -136,13 +166,24 @@ export default function ListingsPage() {
         <h1 className="text-2xl font-bold text-gray-900">Your Listings</h1>
       </div>
 
-      {listings.length === 0 ? (
+      <nav aria-label="Listing pages" className="flex items-center justify-between gap-4">
+        <button className="rounded-lg border px-4 py-2 text-sm disabled:opacity-50" onClick={() => changePage(offset - PAGE_SIZE)} disabled={loading || !!actionLoading || offset === 0}>Previous</button>
+        <p>Page {offset / PAGE_SIZE + 1}{!loading && !error && listings.length > 0 ? ` · Showing ${offset + 1}–${offset + listings.length}` : ''}</p>
+        <button className="rounded-lg border px-4 py-2 text-sm disabled:opacity-50" onClick={() => changePage(offset + PAGE_SIZE)} disabled={loading || !!actionLoading || !!error || !hasNext}>Next</button>
+      </nav>
+      {loading ? <p role="status">Loading listings...</p> : error ? (
+        <div role="alert" className="rounded-lg border border-red-200 bg-red-50 p-6">
+          <p>{error}</p>
+          <p>Page {offset / PAGE_SIZE + 1} could not be loaded. Retry or return to the previous page.</p>
+          <button onClick={() => changePage(offset)}>Retry</button>
+        </div>
+      ) : listings.length === 0 ? (
         <div className="rounded-xl border border-gray-200 bg-white p-12 text-center shadow-sm">
           <svg className="mx-auto h-12 w-12 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1} d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 012-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10" />
           </svg>
-          <h3 className="mt-4 text-lg font-medium text-gray-900">No listings yet</h3>
-          <p className="mt-2 text-sm text-gray-500">Listings you publish will appear here.</p>
+          <h3 className="mt-4 text-lg font-medium text-gray-900">{offset > 0 ? 'No listings on this page' : 'No listings yet'}</h3>
+          <p className="mt-2 text-sm text-gray-500">{offset > 0 ? 'Use Previous to return to earlier listings.' : 'Listings you publish will appear here.'}</p>
           <p className="mt-2 text-sm text-gray-500">Gateway sellers: go to <Link href="/dashboard/gateways" className="text-indigo-700 underline">Dashboard → Gateways</Link> to create a listing.</p>
         </div>
       ) : (
@@ -202,16 +243,16 @@ export default function ListingsPage() {
                   <td className="whitespace-nowrap px-6 py-4 text-right">
                     <div className="flex items-center justify-end gap-2">
                       <button
-                        onClick={() => ensureTermsAccepted(() => router.push(`/dashboard/listings/${listing.id}/edit`))}
-                        disabled={checkingTerms}
+                        onClick={() => handleEdit(listing.id)}
+                        disabled={checkingTerms || !!actionLoading}
                         className="text-xs font-medium text-gray-600 hover:text-gray-800 disabled:opacity-50"
                       >
                         Edit
                       </button>
                       {(listing.status === 'published' || listing.status === 'unlisted') && (
                         <button
-                          onClick={() => handleUnpublish(listing.id)}
-                          disabled={actionLoading === listing.id}
+                          onClick={() => handleMutation(listing.id, 'unpublish')}
+                          disabled={!!actionLoading}
                           className="text-xs font-medium text-yellow-600 hover:text-yellow-800 disabled:opacity-50"
                         >
                           Unpublish
@@ -223,8 +264,8 @@ export default function ListingsPage() {
                       {deleteConfirm === listing.id ? (
                         <span className="flex items-center gap-1">
                           <button
-                            onClick={() => handleDelete(listing.id)}
-                            disabled={actionLoading === listing.id}
+                            onClick={() => handleMutation(listing.id, 'delete')}
+                            disabled={!!actionLoading}
                             className="text-xs font-medium text-red-600 hover:text-red-800 disabled:opacity-50"
                           >
                             Confirm
@@ -238,6 +279,7 @@ export default function ListingsPage() {
                         </span>
                       ) : (
                         <button
+                          disabled={!!actionLoading}
                           onClick={() => setDeleteConfirm(listing.id)}
                           className="text-xs font-medium text-red-600 hover:text-red-800"
                         >
