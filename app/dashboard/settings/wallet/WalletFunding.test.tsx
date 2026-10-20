@@ -230,7 +230,7 @@ it.each(['logout', 'owner', 'rotation', 'gap', 'A-B-A', 'A-logout-A'])('revokes 
     config.method === 'post' ? await post.promise : config.url === '/auth/me' && calls('/auth/me').length > 1 ? await nextOwner.promise : defaultData(config)));
   const assign = vi.fn();
   const originalWindow = window;
-  render(<WalletPage />); await ready(); await screen.findByText('USD 12.01'); amount(); submit();
+  render(<WalletPage />); await ready(); await within(screen.getByRole('region', { name: 'Balance' })).findByText('USD 12.01'); amount(); submit();
   await waitFor(() => expect(postCalls()).toHaveLength(1));
   vi.stubGlobal('window', { ...originalWindow, location: { ...originalWindow.location, origin: originalWindow.location.origin, assign } });
   act(() => {
@@ -283,7 +283,7 @@ it('rejects delayed resolver A after A -> B -> A and ignores shared stale getMe'
 });
 
 it.each(['mismatch', 'failure', 'delayed'])('retained A/token B (%s) accepts no wallet work until the exact captured B resolves coherent owner', async mode => {
-  render(<WalletPage />); await ready(); await screen.findByText('USD 12.01');
+  render(<WalletPage />); await ready(); await within(screen.getByRole('region', { name: 'Balance' })).findByText('USD 12.01');
   const owner = deferred<unknown>();
   net.adapter.mockImplementation(async config => {
     if (config.url === '/auth/me') {
@@ -364,7 +364,7 @@ it('recovers an expired resolver with one explicit refreshAuth invocation, and r
 it.each(['delayed', 'failed', 'stale'] as const)('blocks token-before-user from actual completeSession with %s shared getMe', async outcome => {
   const sharedOwner = deferred<User>();
   shared.getMe.mockReturnValue(sharedOwner.promise);
-  render(<WalletPage />); await ready(); await screen.findByText('USD 12.01');
+  render(<WalletPage />); await ready(); await within(screen.getByRole('region', { name: 'Balance' })).findByText('USD 12.01');
   const before = walletCalls().length;
   let session!: Promise<void>;
   act(() => { session = useAuthStore.getState().completeSession({ access_token: 'token-b', token_type: 'bearer' }).catch(() => {}); });
