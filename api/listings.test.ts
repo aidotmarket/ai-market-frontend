@@ -60,7 +60,9 @@ describe('getMarketplaceCategoryFacets', () => {
 
 
 describe('getMyListings paging compatibility', () => {
-  beforeEach(() => apiGet.mockReset());
+  beforeEach(() => {
+    apiGet.mockReset();
+  });
   it('preserves the overview no-argument request and array response', async () => {
     const response = { data: [{ id: 'owner-row', status: 'unlisted' }] };
     apiGet.mockResolvedValue(response);
