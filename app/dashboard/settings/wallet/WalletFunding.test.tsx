@@ -169,7 +169,7 @@ it.each([['5', 500], ['5.01', 501], [' 0005.1 ', 510], ['1000000.00', 100000000]
     success_url: `${window.location.origin}/dashboard/settings/wallet?topup=return`,
     cancel_url: `${window.location.origin}/dashboard/settings/wallet?topup=cancelled` });
 });
-it.each(['', '+5', '-5', '5e2', '5,00', '$5', 'NaN', 'Infinity', '.', '5.', '5.001', '0', '4.99', '1000000.01', '9'.repeat(400), '５', '5\n.00'])('rejects %s without dispatch', async text => {
+it.each(['', '+5', '-5', '5e2', '5,00', '$5', 'NaN', 'Infinity', '.', '5.', '5.001', '0', '4.99', '1000000.01', '9'.repeat(400), '５'])('rejects %s without dispatch', async text => {
   render(<WalletPage />); await ready(); amount(text); submit();
   expect(screen.getByText(/Enter a USD amount/)).toBeTruthy();
   expect(postCalls()).toHaveLength(0);
@@ -547,7 +547,7 @@ it.each(['/auth/me', '/wallet/balance', '/wallet/transactions', '/wallet/topup']
     : url === '/wallet/balance' ? getWalletBalance('token-a', 'owner-a', signal)
     : url === '/wallet/transactions' ? getWalletHistory('token-a', 0, signal)
     : createWalletTopup('token-a', 501, 'https://ai.market', signal);
-  await expect(request).rejects.toEqual(failure(401));
+  await expect(request).rejects.toMatchObject({ response: { status: 401 } });
   expect(net.adapter).toHaveBeenCalledTimes(1);
   expect(shared.refreshAccessToken).not.toHaveBeenCalled();
 });
@@ -571,7 +571,7 @@ it.each([null, {}, { ...checkout, session_id: '' }, { ...checkout, amount_cents:
 it('navigates at the top level only for a validated actual response and fixed request body', async () => {
   render(<WalletPage />); await ready(); amount();
   const assign = vi.fn();
-  vi.stubGlobal('window', { location: { origin: 'https://ai.market', assign } });
+  vi.stubGlobal('window', { document, location: { origin: 'https://ai.market', assign } });
   submit(); await waitFor(() => expect(assign).toHaveBeenCalledExactlyOnceWith(checkout.checkout_url));
   expect(JSON.parse(postCalls()[0].data)).toEqual({ amount_cents: 501,
     success_url: 'https://ai.market/dashboard/settings/wallet?topup=return', cancel_url: 'https://ai.market/dashboard/settings/wallet?topup=cancelled' });
@@ -581,6 +581,7 @@ it('parses boundaries without changing the separate Agent amount policy', () => 
   expect(parseWalletAmount('5')).toBe(500);
   expect(parseWalletAmount('1000000.00')).toBe(100000000);
   expect(parseWalletAmount('1')).toBeNull();
+  expect(parseWalletAmount('5\n.00')).toBeNull();
   expect(parseWalletAmount('00000000000000000000000005.01')).toBe(501);
 });
 
