@@ -24,6 +24,7 @@ export function useCloudflareInstaller(listingId: string, sellerId: string, conn
   const [account, setAccount] = useState<string | null>(null);
   const lock = useRef(false);
   const revision = useRef(0);
+  const savedIntent = useRef<string | null>(null);
   const finished = unreadable || (!!status && !polling(status));
   const allowed = !!connectionId && fresh && verifier?.connection_id === connectionId && verifier.installer_enabled === true && verifier.eligible &&
     (verifier.state === 'none' || verifier.state === 'removed') && (!verifier.runner_id || verifier.state === 'removed') && !verifier.setup_expires_at;
@@ -33,18 +34,19 @@ export function useCloudflareInstaller(listingId: string, sellerId: string, conn
     try {
       const saved = window.localStorage.getItem(key);
       if (saved && !uuid.test(saved)) throw new Error();
-      setIntent(saved); setRestored(true);
+      savedIntent.current = saved; setIntent(saved); setRestored(true);
     } catch { setError('Could not restore installation. Contact support before starting again.'); }
     return () => { revision.current++; };
   }, [key, connectionId]);
   useEffect(() => {
     const latest = verifier?.connection_id === connectionId && fresh ? verifier?.latest_intent_id : null;
-    if (!restored || intent || !latest || !uuid.test(latest)) return;
+    if (lock.current || !restored || !latest || latest === intent || !uuid.test(latest)) return;
+    if (intent && (intent !== savedIntent.current || status?.intent_id !== intent || !terminal.has(status.phase))) return;
     try {
       if (window.localStorage.getItem(`${key}:dismissed`) === latest) return;
-      window.localStorage.setItem(key, latest); setIntent(latest);
+      window.localStorage.setItem(key, latest); revision.current++; setIntent(latest); setStatus(null); setUnreadable(false); setAttest(false);
     } catch { setError('Could not restore installation. Contact support before starting again.'); }
-  }, [restored, intent, fresh, verifier?.latest_intent_id, verifier?.connection_id, connectionId, key]);
+  }, [restored, intent, status, fresh, verifier?.latest_intent_id, verifier?.connection_id, connectionId, key]);
   useEffect(() => {
     if (!intent || finished) return;
     let stopped = false, inFlight = false, ended = false;
@@ -91,6 +93,7 @@ export function useCloudflareInstaller(listingId: string, sellerId: string, conn
         if (intent) window.localStorage.setItem(`${key}:dismissed`, intent);
         window.localStorage.removeItem(key); window.localStorage.removeItem(`${key}:request`); setIntent(null); setStatus(null); setUnreadable(false);
       } else if (action === 'start' && allowed && restored) {
+        savedIntent.current = null;
         const request = window.localStorage.getItem(`${key}:request`) ?? crypto.randomUUID();
         if (!uuid.test(request)) throw new Error();
         window.localStorage.setItem(`${key}:request`, request);
@@ -117,7 +120,7 @@ export function useCloudflareInstaller(listingId: string, sellerId: string, conn
     finally { lock.current = false; if (read === revision.current) setBusy(false); }
   }
   const state = status?.runtime.state;
-  const resources = state === 'boot_timed_out' || state === 'failed_residue' || (state === 'failed' && !!status?.residual_resources?.length);
+  const resources = status?.resource_cleanup_pending ?? (state === 'boot_timed_out' || state === 'failed_residue' || (state === 'failed' && !!status?.residual_resources?.length));
   const cleanup = state === 'cleanup_unconfirmed' || resources;
   const needsAttestation = resources || (cleanup && !status?.access_removal_confirmed_by_seller);
   const active = !!connectionId && !!intent;
@@ -139,10 +142,10 @@ export function useCloudflareInstaller(listingId: string, sellerId: string, conn
       {status && !terminal.has(status.phase) && <button className={buttonClass} disabled={busy || !!status.cancel_requested} onClick={() => void act('cancel')}>{status.cancel_requested ? 'Cancellation requested' : 'Cancel installation'}</button>}
       {dismiss && <button className={buttonClass} disabled={busy} onClick={() => void act('dismiss')}>Dismiss</button>}
       {cleanup && <>
-        <details><summary>Cleanup details</summary><p>Disconnect the app in Cloudflare. Check your account for verifier resources and remove them to stop their charges. Confirm you removed the verifier resources and app access in Cloudflare before trying again.</p>{status?.residual_resources?.map(resource => <p key={resource}>{resource}</p>)}</details>
+        <details><summary>Cleanup details</summary><p>{resources ? 'Disconnect the app in Cloudflare. Check your account for verifier resources and remove them to stop their charges. Confirm you removed the verifier resources and app access in Cloudflare before trying again.' : 'Disconnect the app in Cloudflare and confirm you removed its access.'}</p>{status?.residual_resources?.map(resource => <p key={resource}>{resource}</p>)}</details>
         {status?.access_removal_confirmed_by_seller && <p>Access removal recorded as your statement, not provider proof.</p>}
         {needsAttestation && <>
-          <label><input type="checkbox" checked={attest} onChange={event => setAttest(event.target.checked)} /> {resources ? 'I have removed the verifier resources and app access in Cloudflare.' : 'I have removed the app’s access in Cloudflare.'}</label>
+          <label><input type="checkbox" checked={attest} onChange={event => setAttest(event.target.checked)} /> {resources ? (status?.access_removal_confirmed_by_seller ? 'I have removed the listed verifier resources in Cloudflare.' : 'I have removed the listed verifier resources and app access in Cloudflare.') : 'I have removed the app’s access in Cloudflare.'}</label>
           <button className={buttonClass} disabled={busy || !attest} onClick={() => void act('cleanup-attestation')}>Record access removal</button>
         </>}
       </>}

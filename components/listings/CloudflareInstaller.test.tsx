@@ -249,10 +249,10 @@ it.each(['ready', 'ready_attested'] as const)('polls a closed intent through wai
   await act(async () => { await vi.advanceTimersByTimeAsync(9000); });
   expect(api.getCloudflareInstall).toHaveBeenCalledTimes(2);
 });
-it('allows resource attestation after earlier access attestation and a later boot timeout', async () => {
+it.each([undefined, true])('allows resource attestation after earlier access attestation and a later boot timeout (pending %s)', async resource_cleanup_pending => {
   const attested = { ...initial, phase: 'closed' as const, runtime: { state: 'waiting_registration' as const }, access_removal_confirmed_by_seller: true };
   await mount(true, attested);
-  const timedOut = { ...attested, runtime: { state: 'boot_timed_out' as const }, residual_resources: ['owned-resource'] };
+  const timedOut = { ...attested, resource_cleanup_pending, runtime: { state: 'boot_timed_out' as const }, residual_resources: ['owned-resource'] };
   vi.mocked(api.getCloudflareInstall).mockResolvedValue(timedOut);
   await act(async () => { await vi.advanceTimersByTimeAsync(3000); });
   expect(screen.getByText('owned-resource')).toBeTruthy();
@@ -261,6 +261,22 @@ it('allows resource attestation after earlier access attestation and a later boo
   vi.mocked(api.controlCloudflareInstall).mockResolvedValue(timedOut);
   await click('Record access removal');
   expect(api.controlCloudflareInstall).toHaveBeenCalledExactlyOnceWith(id, 'cleanup-attestation');
+});
+it.each([true, false])('uses the cleanup flag for mixed or healthy access-only consent (pending %s)', async resource_cleanup_pending => {
+  await mount(true, { ...initial, phase: 'closed', runtime: { state: 'cleanup_unconfirmed' }, resource_cleanup_pending, residual_resources: ['listed-resource'] });
+  expect(screen.getByRole('checkbox', { name: resource_cleanup_pending ? 'I have removed the listed verifier resources and app access in Cloudflare.' : 'I have removed the app’s access in Cloudflare.' })).toBeTruthy();
+  if (!resource_cleanup_pending) expect(document.body.textContent).not.toMatch(/removed the.*resources|remove them/);
+});
+it('offers resource-only attestation regardless of runtime state after access was attested', async () => {
+  await mount(true, { ...initial, phase: 'closed', runtime: { state: 'ready_attested' }, resource_cleanup_pending: true, access_removal_confirmed_by_seller: true });
+  expect(screen.getByRole('checkbox', { name: 'I have removed the listed verifier resources in Cloudflare.' })).toBeTruthy();
+});
+it('keeps saved terminal residue when the latest intent was dismissed', async () => {
+  const latest = '22222222-2222-4222-8222-222222222222';
+  localStorage.setItem(`${key}:dismissed`, latest);
+  const view = await mount(true, { ...initial, phase: 'closed', runtime: { state: 'failed_residue' } });
+  await act(async () => { view.rerender(<Harness status={{ ...verifier, latest_intent_id: latest }} />); });
+  expect(localStorage.getItem(key)).toBe(id); expect(api.getCloudflareInstall).not.toHaveBeenCalledWith(latest);
 });
 it('explains the fixed residue refusal on start', async () => {
   vi.mocked(api.startCloudflareInstall).mockRejectedValue({ response: { status: 409, data: { detail: 'install_residue_unresolved' } } });
@@ -283,12 +299,14 @@ it.each([true, false])('discovers a finished intent with installer flag %s and r
   expect(screen.queryByRole('button', { name: 'Dismiss' })).toBeNull();
   expect(localStorage.getItem(`${key}:dismissed`)).toBe(id);
 });
-it.each(['ready', 'ready_attested'] as const)('starts only the deliberate free probe from %s', async state => {
+it.each(['ready', 'ready_attested'] as const)('reconciles saved residue with latest %s and starts only the deliberate free probe', async state => {
   localStorage.setItem(key, id);
-  vi.mocked(api.getCloudflareInstall).mockResolvedValue({ ...initial, phase: 'closed', runtime: { state }, residual_resources: ['healthy-resource'] });
-  vi.mocked(api.getCloudflareVerifierStatus).mockResolvedValue({ ...verifier, state: 'ready', runner_id: 'runner' });
+  const latest = '22222222-2222-4222-8222-222222222222';
+  vi.mocked(api.getCloudflareInstall).mockImplementation(async intent_id => ({ ...initial, intent_id, phase: 'closed', access_removal_confirmed_by_seller: true, runtime: { state: intent_id === id ? 'failed_residue' : state }, resource_cleanup_pending: false, residual_resources: ['healthy-resource'] }));
+  vi.mocked(api.getCloudflareVerifierStatus).mockResolvedValue({ ...verifier, latest_intent_id: latest, state: 'ready', runner_id: 'runner' });
   vi.mocked(api.probeGatewayVerification).mockResolvedValue({ data: { probe_id: 'probe', state: 'queued' }, retryAfter: 60 });
   await act(async () => { render(<GatewayVerificationFlow listingId="listing" sellerId="seller" verifier={{ kind: 'cloudflare', connectionId: 'connection' }} />); });
+  expect(api.getCloudflareInstall).toHaveBeenLastCalledWith(latest); expect(localStorage.getItem(key)).toBe(latest);
   expect(api.probeGatewayVerification).not.toHaveBeenCalled();
   expect(screen.queryByRole('button', { name: 'Check data and get quote' })).toBeNull();
   expect(screen.queryByText('Cleanup details')).toBeNull();
@@ -312,11 +330,13 @@ it('starts a fresh intent beside a finished intent and resumes polling it', asyn
   const nextId = '22222222-2222-4222-8222-222222222222';
   const assign = vi.fn();
   vi.stubGlobal('window', Object.create(window, { location: { value: { assign } } }));
-  await mount(true, { ...initial, phase: 'closed', runtime: { state: 'failed_removed' } });
+  const view = await mount(true, { ...initial, phase: 'closed', runtime: { state: 'failed_removed' } });
   expect(screen.getByRole('status').textContent).toBe(initial.message);
   vi.mocked(api.startCloudflareInstall).mockResolvedValue({ intent_id: nextId, authorize_url: 'https://dash.cloudflare.com/oauth2/auth', expires_at: 123 });
-  vi.mocked(api.getCloudflareInstall).mockResolvedValue({ ...initial, intent_id: nextId });
+  vi.mocked(api.getCloudflareInstall).mockResolvedValue({ ...initial, intent_id: nextId, phase: 'closed', runtime: { state: 'ready' } });
   await click('Connect Cloudflare');
   expect(vi.mocked(api.startCloudflareInstall).mock.calls[0][2]).not.toBe(id);
+  await act(async () => { view.rerender(<Harness status={{ ...verifier, latest_intent_id: id }} />); });
+  expect(localStorage.getItem(key)).toBe(nextId);
   expect(assign).toHaveBeenCalled(); expect(api.getCloudflareInstall).toHaveBeenLastCalledWith(nextId);
 });

@@ -53,6 +53,7 @@ export interface CloudflareInstallStatus {
   cleanup: 'proven' | 'unconfirmed' | 'not_started';
   message: string;
   residual_resources?: string[];
+  resource_cleanup_pending?: boolean;
   claimed_at: number | null;
   updated_at: number | null;
   cancel_requested: boolean | null;
