@@ -10,6 +10,8 @@ import Link from 'next/link';
 import { sellerLicenseRecordPath } from '@/lib/licenseRecordRoutes';
 
 type SalesFilter = 'pending_delivery' | 'all' | 'delivered' | 'completed';
+const PAGE_SIZE = 100;
+type SalesRequest = { filter: SalesFilter; offset: number; retryKey: number };
 
 const FILTERS: { value: SalesFilter; label: string }[] = [
   { value: 'pending_delivery', label: 'Awaiting delivery' },
@@ -104,23 +106,34 @@ function SalesPageContent() {
   const initialFilter = FILTERS.some(({ value }) => value === requestedFilter)
     ? (requestedFilter as SalesFilter)
     : 'pending_delivery';
-  const [filter, setFilter] = useState<SalesFilter>(initialFilter);
+  const [request, setRequest] = useState<SalesRequest>({ filter: initialFilter, offset: 0, retryKey: 0 });
+  const currentRequest = useRef(request);
+  const { filter, offset } = request;
   const [rows, setRows] = useState<SellerOrder[]>([]);
   const [pageState, setPageState] = useState<
     'loading' | 'active' | 'provisioning' | 'blocked' | 'error'
   >('loading');
-  const [retryKey, setRetryKey] = useState(0);
   const reportedUnknownStatuses = useRef(new Set<string>());
+
+  function changeRequest(next: SalesRequest) {
+    if (currentRequest.current !== request) return;
+    // Retire callbacks immediately, including before the effect cleanup runs.
+    currentRequest.current = next;
+    setRows([]);
+    setPageState('loading');
+    setRequest(next);
+  }
 
   useEffect(() => {
     let cancelled = false;
+    const isCurrent = () => !cancelled && currentRequest.current === request;
     setPageState('loading');
     setRows([]);
 
     async function fetchSales() {
       try {
         const capabilities = await getCapabilities();
-        if (cancelled) return;
+        if (!isCurrent()) return;
 
         const sellerStatus = capabilities.seller.effective_status;
         if (sellerStatus === 'provisioning') {
@@ -133,16 +146,16 @@ function SalesPageContent() {
         }
 
         const params: SellerOrderListParams =
-          filter === 'all'
-            ? { limit: 100, offset: 0 }
-            : { status_filter: filter, limit: 100, offset: 0 };
+          request.filter === 'all'
+            ? { limit: PAGE_SIZE, offset: request.offset }
+            : { status_filter: request.filter, limit: PAGE_SIZE, offset: request.offset };
         const response = await getSellerOrders(params);
-        if (cancelled) return;
+        if (!isCurrent()) return;
 
-        setRows(sortSellerOrders(response.data, filter));
+        setRows(sortSellerOrders(response.data, request.filter));
         setPageState('active');
       } catch {
-        if (!cancelled) {
+        if (isCurrent()) {
           setRows([]);
           setPageState('error');
         }
@@ -153,7 +166,7 @@ function SalesPageContent() {
     return () => {
       cancelled = true;
     };
-  }, [filter, retryKey]);
+  }, [request]);
 
   useEffect(() => {
     for (const { status } of rows) {
@@ -214,7 +227,9 @@ function SalesPageContent() {
               key={value}
               type="button"
               aria-pressed={filter === value}
-              onClick={() => setFilter(value)}
+              onClick={() => {
+                if (value !== filter) changeRequest({ filter: value, offset: 0, retryKey: 0 });
+              }}
               className={`rounded-lg border px-4 py-2 text-sm font-medium ${
                 filter === value
                   ? 'border-[#3F51B5] bg-[#3F51B5] text-white'
@@ -240,7 +255,7 @@ function SalesPageContent() {
           <p className="mt-2 text-sm text-red-700">We couldn&apos;t load your sales. Try again.</p>
           <button
             type="button"
-            onClick={() => setRetryKey((value) => value + 1)}
+            onClick={() => changeRequest({ ...request, retryKey: request.retryKey + 1 })}
             className="mt-4 inline-flex items-center rounded-lg bg-red-600 px-4 py-2 text-sm font-medium text-white hover:bg-red-700"
           >
             Try again
@@ -248,21 +263,28 @@ function SalesPageContent() {
         </div>
       )}
 
-      {pageState === 'active' && rows.length === 0 && filter === 'pending_delivery' && (
+      {pageState === 'active' && rows.length === 0 && offset > 0 && (
+        <div className="rounded-xl border border-gray-200 bg-white p-12 text-center shadow-sm">
+          <h2 className="text-lg font-medium text-gray-900">End of sales results</h2>
+          <p className="mt-2 text-sm text-gray-500">No sales on this page. Use Previous to return to earlier results.</p>
+        </div>
+      )}
+
+      {pageState === 'active' && rows.length === 0 && offset === 0 && filter === 'pending_delivery' && (
         <div className="rounded-xl border border-gray-200 bg-white p-12 text-center shadow-sm">
           <h2 className="text-lg font-medium text-gray-900">No sales awaiting delivery</h2>
           <p className="mt-2 text-sm text-gray-500">Paid sales awaiting delivery will appear here.</p>
         </div>
       )}
 
-      {pageState === 'active' && rows.length === 0 && filter === 'all' && (
+      {pageState === 'active' && rows.length === 0 && offset === 0 && filter === 'all' && (
         <div className="rounded-xl border border-gray-200 bg-white p-12 text-center shadow-sm">
           <h2 className="text-lg font-medium text-gray-900">No sales yet</h2>
           <p className="mt-2 text-sm text-gray-500">Sales will appear here after a buyer completes payment.</p>
         </div>
       )}
 
-      {pageState === 'active' && rows.length === 0 && (filter === 'delivered' || filter === 'completed') && (
+      {pageState === 'active' && rows.length === 0 && offset === 0 && (filter === 'delivered' || filter === 'completed') && (
         <div className="rounded-xl border border-gray-200 bg-white p-12 text-center shadow-sm">
           <h2 className="text-lg font-medium text-gray-900">No sales match this filter</h2>
           <p className="mt-2 text-sm text-gray-500">Choose another status to view your sales.</p>
@@ -314,6 +336,27 @@ function SalesPageContent() {
             ))}
           </div>
         </>
+      )}
+      {(pageState === 'active' || pageState === 'loading' || pageState === 'error') && (
+        <nav aria-label="Sales pagination" className="flex flex-wrap items-center justify-center gap-3">
+          <button
+            type="button"
+            disabled={offset === 0 || pageState === 'loading'}
+            onClick={() => changeRequest({ ...request, offset: Math.max(0, offset - PAGE_SIZE) })}
+            className="rounded-lg border border-gray-300 px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50 disabled:cursor-not-allowed disabled:opacity-50"
+          >
+            Previous
+          </button>
+          <span aria-live="polite" className="text-sm text-gray-600">Page {offset / PAGE_SIZE + 1}</span>
+          <button
+            type="button"
+            disabled={pageState !== 'active' || rows.length < PAGE_SIZE}
+            onClick={() => changeRequest({ ...request, offset: offset + PAGE_SIZE })}
+            className="rounded-lg border border-gray-300 px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50 disabled:cursor-not-allowed disabled:opacity-50"
+          >
+            Next
+          </button>
+        </nav>
       )}
     </div>
   );
