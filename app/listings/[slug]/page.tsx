@@ -1,3 +1,5 @@
+import GeneratedSamplePage from './GeneratedSamplePage';
+import { generatedSampleState, samplePresentation } from '@/lib/generatedSample';
 import PublicSourceReferencePage, { isPublicSourceReference } from './PublicSourceReferencePage';
 import SchemaTable from '@/components/listings/SchemaTable';
 import { createHash } from 'node:crypto';
@@ -48,16 +50,18 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
     return { title: 'Not Found' };
   }
 
-  const description = isPublicSourceReference(listing)
+  const sample = generatedSampleState(listing) !== 'ordinary' ? samplePresentation(listing) : null;
+  const title = sample?.title ?? listing.title;
+  const description = sample ? sample.description : isPublicSourceReference(listing)
     ? listing.description?.slice(0, 200) || ''
     : listing.short_description || listing.description?.slice(0, 200) || '';
 
   return {
-    title: listing.title,
+    title,
     description,
     alternates: { canonical: `https://ai.market/listings/${listing.slug}` },
     openGraph: {
-      title: listing.title,
+      title,
       description,
       url: `https://ai.market/listings/${listing.slug}`,
       type: 'website',
@@ -65,7 +69,7 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
     },
     twitter: {
       card: 'summary_large_image',
-      title: listing.title,
+      title,
       description,
     },
     robots:
@@ -91,6 +95,10 @@ export default async function ListingDetailPage({ params, searchParams }: Props)
   const listing: ListingWithSamples | null = await fetchPublicListing(slug);
   if (!listing) {
     notFound();
+  }
+
+  if (generatedSampleState(listing) !== 'ordinary') {
+    return <GeneratedSamplePage listing={listing} emitJsonLd={DATASET_JSONLD_ENABLED} />;
   }
 
   if (isPublicSourceReference(listing)) {
