@@ -258,10 +258,7 @@ export default function OrdersListPage() {
           const tx = Object.values(txMap).find((t) => t.order_id === order.id);
           return (
             <div key={order.id}>
-            <Link
-              href={`/dashboard/orders/${order.id}`}
-              className="block rounded-lg border border-gray-200 p-4 hover:bg-gray-50"
-            >
+            <div className="block rounded-lg border border-gray-200 p-4 hover:bg-gray-50">
               <div className="flex items-center justify-between mb-2">
                 <span className="font-mono text-xs text-gray-500">#{order.id.slice(0, 8)}</span>
                 <div className="flex items-center gap-2">
@@ -269,7 +266,9 @@ export default function OrdersListPage() {
                   {tx && txStatusBadge(tx.status)}
                 </div>
               </div>
-              <p className="font-medium text-gray-900 mb-1">{order.listing_title}</p>
+              <p className="font-medium text-gray-900 mb-1">
+                <Link href={`/dashboard/orders/${order.id}`} className="hover:underline">{order.listing_title}</Link>
+              </p>
               <OrderVersionAccessSummary order={order} compact />
               <div className="flex items-center justify-between text-sm">
                 <span className="font-medium text-gray-900">{formatPrice(order.amount)}</span>
@@ -279,12 +278,14 @@ export default function OrdersListPage() {
                 </div>
               </div>
               {order.status === 'fulfilled' && !order.access_expired && (
-                <p className="mt-3 text-sm font-medium text-[#3F51B5]">View downloads</p>
+                <Link href={`/dashboard/orders/${order.id}`} className="mt-3 block text-sm font-medium text-[#3F51B5] hover:underline">
+                  View downloads
+                </Link>
               )}
               {order.access_expired && (
                 <p className="mt-3 text-sm font-medium text-red-700">Download window expired</p>
               )}
-            </Link>
+            </div>
             {order.license_record_available && (
               <Link href={buyerLicenseRecordPath(order.id)} className="mt-1 block px-4 py-2 text-sm font-medium text-[#3F51B5] underline">
                 Licence record
