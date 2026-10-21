@@ -96,7 +96,23 @@ it.each(['reserved', 'provider_unknown'] as const)('recovers consumed %s after a
     fireEvent.change(screen.getByLabelText(label), { target: { value } });
   }
   fireEvent.click(screen.getByRole('checkbox', { name: 'Confirm licence authority' }));
-  await waitFor(() => expect((screen.getByRole('button', { name: 'Accept and continue to payment' }) as HTMLButtonElement).disabled).toBe(false), {
+  await waitFor(() => {
+    expect((screen.getByRole('button', { name: 'Accept and continue to payment' }) as HTMLButtonElement).disabled).toBe(false);
+    const authority = screen.getByRole('checkbox', { name: 'Confirm licence authority' }) as HTMLInputElement;
+    // Keep prerequisite state visible even when the country options truncate the DOM diagnostic.
+    expect({
+      typedName: (screen.getByLabelText('Typed full name') as HTMLInputElement).value,
+      signerTitle: (screen.getByLabelText('Signer title') as HTMLInputElement).value,
+      businessLegalName: (screen.getByLabelText('Business legal name') as HTMLInputElement).value,
+      country: (screen.getByLabelText('Country') as HTMLSelectElement).value,
+      authorityDisabled: authority.disabled,
+      authorityChecked: authority.checked,
+      acceptDisabled: (screen.getByRole('button', { name: 'Accept and continue to payment' }) as HTMLButtonElement).disabled,
+    }).toEqual({
+      typedName: 'Ada Buyer', signerTitle: 'Director', businessLegalName: 'Buyer Ltd', country: 'GB',
+      authorityDisabled: false, authorityChecked: true, acceptDisabled: false,
+    });
+  }, {
     // Keep the original readiness assertion and deadline. A visible form alone
     // does not identify which acceptance gate is holding the hosted failure.
     onTimeout: error => {
