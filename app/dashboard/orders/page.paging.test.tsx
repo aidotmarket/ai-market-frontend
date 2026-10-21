@@ -79,7 +79,7 @@ describe('bounded purchase paging on the production page', () => {
     expect(transactionsApi.getMyTransactions).toHaveBeenCalledExactlyOnceWith();
     expect(screen.getAllByRole('row').slice(1).map(row => within(row).getByText(/^Purchase /).textContent))
       .toEqual(first50.map(purchase => purchase.listing_title));
-    expect(view.container.querySelectorAll('a.block.rounded-lg')).toHaveLength(50);
+    expect(view.container.querySelectorAll('div.block.rounded-lg')).toHaveLength(50);
     expect(previous().disabled).toBe(true);
     expect(next().disabled).toBe(false);
     await pageTwo();
@@ -264,7 +264,7 @@ describe('bounded purchase paging on the production page', () => {
     const view = await start();
     await pageTwo();
     const desktop = screen.getAllByRole('row').slice(1);
-    const mobile = Array.from(view.container.querySelectorAll<HTMLAnchorElement>('a.block.rounded-lg'));
+    const mobile = Array.from(view.container.querySelectorAll<HTMLElement>('div.block.rounded-lg'));
     expect(desktop).toHaveLength(3);
     expect(mobile).toHaveLength(3);
     for (const region of [desktop[0], mobile[0]]) {
@@ -278,7 +278,7 @@ describe('bounded purchase paging on the production page', () => {
     }
     if (!failTransactions) expect(within(desktop[0]).getByRole('link', { name: 'ConfirmedSYN-first' }).getAttribute('href')).toBe('/dashboard/orders/purchase-51?tx=first');
     else expect(view.container.querySelector('a[href*="?tx="]')).toBeNull();
-    expect(mobile[0].getAttribute('href')).toBe('/dashboard/orders/purchase-51');
+    expect(within(mobile[0]).getByRole('link', { name: 'Purchase 51' }).getAttribute('href')).toBe('/dashboard/orders/purchase-51');
     expect(within(desktop[0]).getByRole('link', { name: 'View downloads' }).getAttribute('href')).toBe('/dashboard/orders/purchase-51');
     expect(screen.getAllByRole('link', { name: 'Licence record' }).map(link => link.getAttribute('href')))
       .toEqual(['/dashboard/orders/purchase-51/license-record', '/dashboard/orders/purchase-51/license-record']);
@@ -291,4 +291,52 @@ describe('bounded purchase paging on the production page', () => {
     }
     expect(screen.queryByRole('alert')).toBeNull();
   });
+
+  it.each([false, true])('keeps real mobile order, version and licence anchors separate on later page=%s', async (laterPage) => {
+    const purchases = [
+      order(51, { license_record_available: true, purchased_version: { version_id: 'v1', version_label: 'Stored v1', status: 'superseded' },
+        newer_version_available: true, access_expired: false, access_expires_at: '2099-01-01T00:00:00Z' }),
+      order(52, { newer_version_available: true, access_expired: true, access_expires_at: '2026-01-01T00:00:00Z' }),
+      order(53, { status: 'pending_fulfillment', newer_version_available: false }),
+    ];
+    if (laterPage) ordersApi.getMyOrders.mockResolvedValueOnce(first50).mockResolvedValueOnce(purchases);
+    else ordersApi.getMyOrders.mockResolvedValueOnce(purchases);
+    const view = await start();
+    if (laterPage) await pageTwo();
+    const mobile = view.container.querySelector<HTMLElement>('.md\\:hidden')!;
+    // Read the mounted DOM with the production summary and real Next links.
+    const versions = within(mobile).getAllByRole('link', { name: 'Newer version available' });
+    expect(versions.map(link => link.getAttribute('href'))).toEqual(['/listings/repeated-listing', '/listings/repeated-listing']);
+    for (const purchase of purchases) {
+      expect(mobile.querySelector(`a[href="/dashboard/orders/${purchase.id}"]`)).not.toBeNull();
+    }
+    expect(within(mobile).getByRole('link', { name: 'Licence record' }).getAttribute('href'))
+      .toBe('/dashboard/orders/purchase-51/license-record');
+    expect(within(mobile).getByText('Stored v1')).not.toBeNull();
+    expect(within(mobile).getByText('(superseded)')).not.toBeNull();
+    expect(within(mobile).getByText(/Download window ends /)).not.toBeNull();
+    expect(within(mobile).getByText(/Download window ended /)).not.toBeNull();
+    expect(within(mobile).getByText('Download window expired')).not.toBeNull();
+    expect(within(mobile).getAllByText('View downloads')).toHaveLength(1);
+    expect(view.container.querySelectorAll('a a')).toHaveLength(0);
+    const cards = Array.from(mobile.querySelectorAll<HTMLElement>('div.block.rounded-lg'));
+    expect(cards).toHaveLength(3);
+    for (const [index, card] of cards.entries()) {
+      const detail = within(card).getByRole<HTMLAnchorElement>('link', { name: purchases[index].listing_title });
+      expect(detail.getAttribute('href')).toBe(`/dashboard/orders/${purchases[index].id}`);
+      expect(detail.tabIndex).toBe(0);
+      expect(within(card).queryAllByRole('link', { name: 'Newer version available' })).toHaveLength(index < 2 ? 1 : 0);
+      expect(within(card.parentElement!).queryAllByRole('link', { name: 'Licence record' })).toHaveLength(index === 0 ? 1 : 0);
+      expect(within(card).queryAllByRole('link', { name: 'View downloads' })).toHaveLength(index === 0 ? 1 : 0);
+    }
+    const download = within(cards[0]).getByRole<HTMLAnchorElement>('link', { name: 'View downloads' });
+    expect(download.getAttribute('href')).toBe('/dashboard/orders/purchase-51');
+    expect(download.tabIndex).toBe(0);
+    for (const version of versions) {
+      expect(version.tabIndex).toBe(0);
+      expect(version.parentElement!.closest('a')).toBeNull();
+    }
+    expect(ordersApi.getMyOrders).toHaveBeenLastCalledWith({ limit: 50, offset: laterPage ? 50 : 0 });
+  });
+
 });

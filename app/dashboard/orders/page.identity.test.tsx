@@ -32,7 +32,7 @@ async function purchases() {
   const view = render(<OrdersListPage />);
   await screen.findByRole('heading', { name: 'Purchases' });
   const desktop = screen.getAllByRole('row').slice(1);
-  const mobile = Array.from(view.container.querySelectorAll<HTMLAnchorElement>('a.block.rounded-lg'));
+  const mobile = Array.from(view.container.querySelectorAll<HTMLElement>('div.block.rounded-lg'));
   expect(ordersApi.getMyOrders).toHaveBeenCalledOnce();
   expect(transactionsApi.getMyTransactions).toHaveBeenCalledOnce();
   expect(mobile).toHaveLength(desktop.length);
@@ -45,7 +45,7 @@ function expectAssociation(desktop: HTMLElement, mobile: HTMLElement, purchase: 
   expect(within(desktop).getByText(label)).not.toBeNull();
   expect(within(mobile).getByText(label)).not.toBeNull();
   expect(within(mobile).getByText(tx.tx_number)).not.toBeNull();
-  expect(mobile.getAttribute('href')).toBe(`/dashboard/orders/${purchase.id}`);
+  expect(within(mobile).getByRole('link', { name: purchase.listing_title }).getAttribute('href')).toBe(`/dashboard/orders/${purchase.id}`);
 }
 
 describe('purchase transaction identity in the mounted desktop and mobile page', () => {
