@@ -100,17 +100,21 @@ it.each(['reserved', 'provider_unknown'] as const)('recovers consumed %s after a
     // Keep the original readiness assertion and deadline. A visible form alone
     // does not identify which acceptance gate is holding the hosted failure.
     onTimeout: error => {
-      const authority = screen.queryByRole('checkbox', { name: 'Confirm licence authority' }) as HTMLInputElement | null;
-      error.message += `\nCheckout acceptance state: ${JSON.stringify({
-        typedName: (screen.queryByLabelText('Typed full name') as HTMLInputElement | null)?.value,
-        signerTitle: (screen.queryByLabelText('Signer title') as HTMLInputElement | null)?.value,
-        businessLegalName: (screen.queryByLabelText('Business legal name') as HTMLInputElement | null)?.value,
-        country: (screen.queryByLabelText('Country') as HTMLSelectElement | null)?.value,
-        authorityDisabled: authority?.disabled,
-        authorityChecked: authority?.checked,
-        verificationPending: screen.queryByText('Acceptance unlocks after every displayed licence component is fetched and its bytes match the server hash.') !== null,
-        checkoutCalls: mocks.create.mock.calls.length,
-      })}`;
+      let diagnostic = 'diagnostic-unavailable';
+      try {
+        const authority = screen.queryByRole('checkbox', { name: 'Confirm licence authority' }) as HTMLInputElement | null;
+        diagnostic = JSON.stringify({
+          typedName: (screen.queryByLabelText('Typed full name') as HTMLInputElement | null)?.value,
+          signerTitle: (screen.queryByLabelText('Signer title') as HTMLInputElement | null)?.value,
+          businessLegalName: (screen.queryByLabelText('Business legal name') as HTMLInputElement | null)?.value,
+          country: (screen.queryByLabelText('Country') as HTMLSelectElement | null)?.value,
+          authorityDisabled: authority?.disabled,
+          authorityChecked: authority?.checked,
+          verificationPending: screen.queryByText('Acceptance unlocks after every displayed licence component is fetched and its bytes match the server hash.') !== null,
+          checkoutCalls: mocks.create.mock.calls.length,
+        });
+      } catch { /* Diagnostic queries must not replace the readiness error. */ }
+      error.message += `\nCheckout acceptance state: ${diagnostic}`;
       return error;
     },
   });

@@ -1,3 +1,12 @@
+Current same-component followup (2026-10-21): diagnostic guard only.
+Assigned checkout: /var/tmp/koskadeux/minimal-bridge-worktrees/6b7897efd6fe-fe3510
+Base: cf91f53051ac9146fc6f874b42320604cee289d9
+Supplied base tree: dbc89589788323164ccc7bec30cc6b01b3f39b09
+Wrapper publication branch: build/athena-r517-diagnostic-guard-s1808
+Author only; no agents. ACTIVE_INCOMPLETE; hosted cause remains unreproduced.
+The original full report is preserved below, followed by current evidence.
+Its claim about missing controls did not cover duplicate-match exceptions.
+
 R517 S1808 author report — diagnostic candidate, cause unresolved
 
 Assigned checkout: /var/tmp/koskadeux/minimal-bridge-worktrees/66ff7aa012b1-37a03c
@@ -134,3 +143,323 @@ merge/deploy or backend action. Only normal wrapper publication is intended.
 The business audit remains full 516 + new R517 records / 16-repository audit
 ACTIVE_INCOMPLETE, all holds/PendingMax/history preserved; no acceptance or runtime
 authority is expanded. Hosted checkout cause and any justified repair remain open.
+
+Same-component diagnostic-guard followup
+Read the original full report and actual full test before editing. Source-backed
+advisory resilience finding supplied by root; no reviewer verdict was read.
+No duplicate controls were observed in the hosted failure. This does not establish
+or fix its cause. Only the existing onTimeout callback and this report change.
+
+Installed source inspected (read-only s1632 node_modules):
+@testing-library/dom/dist/query-helpers.js:50-61: makeSingleQuery throws on >1
+matches and returns the first match or null otherwise. queryByRole, queryByLabelText
+and queryByText use single-result query semantics.
+@testing-library/dom/dist/wait-for.js:99-110,143-156: handleTimeout calls
+onDone(onTimeout(error), null); onDone performs cleanup and promise rejection.
+A synchronous diagnostic exception occurs before onDone, so it can escape the
+callback and leave waitFor unresolved until an outer test deadline.
+
+The callback now collects the identical eight safe fixture fields inside try/catch.
+On any collection/serialization failure it appends exactly:
+Checkout acceptance state: diagnostic-unavailable
+It never appends the caught error, DOM, tokens, storage or request options.
+It returns the original error object. Null-safe controls retain original behavior;
+undefined field values remain omitted by JSON.stringify. Missing controls do not
+become diagnostic failures. All eight fields remain present with complete controls.
+Readiness assertion, default deadline, intervals, acceptance gates and all other
+source bytes are unchanged. Exact payload/store assertions and all 36 handoff
+cases remain. Four R515 files compare unchanged against 09d54, exit 0.
+
+Private evidence: /var/tmp/r517-s1808-evidence/diagnostic-guard
+Original evidence remains untouched in its parent directory. Private snapshots,
+controlled-harness.test.ts, full untruncated logs, source-preservation.txt and copies
+of the existing private config/setup/hash adapters/preload are retained there.
+No installations/acquisition. Reused the original installed s1632 node_modules.
+Node25/hash adapter limitations and explicit api/client mock boundary from the
+original report still apply. All executions used env -i and the network-denying
+NODE_OPTIONS preload before config/test imports. Setup tripwire checks passed;
+no provider/auth/customer/payment calls were made.
+
+Commands (all stdout+stderr captured in full before display):
+Common prefix:
+rtk proxy env -i PATH="$PATH" CI=1 NODE_OPTIONS=--require=/var/tmp/r517-s1808-evidence/deny-network.cjs node node_modules/vitest/vitest.mjs run --config .r517-vitest.config.ts
+baseline-focused.log / candidate-focused.log: suffix
+'app/checkout/h/[token]/checkout-handoff.test.tsx' lib/checkout-domain.test.ts lib/checkout-handoff.test.ts
+Both exit 0, 62 passed; baseline is exact cf91 callback, candidate is guard.
+controlled-guard.log: suffix .r517-diagnostic-guard.test.ts; exit 0, 5 passed.
+The private harness extracts both callbacks verbatim. It confirms the old callback
+throws on duplicate role/label/text, swallowing that error without printing it.
+It invokes the new callback through real Testing Library waitFor with an original
+sentinel assertion error, asserting rejection object identity and elapsed time
+between default 1000ms minus 10ms and plus 500ms; no timeout override is supplied.
+Complete, missing and duplicate role/label/text fixtures all retain the original
+error at 1001-1005ms, without an uncaught callback exception or outer timeout.
+Complete fixture asserts exact eight-field diagnostics; missing asserts original
+null-safe JSON; duplicate cases assert exact fixed marker and no other details.
+These isolated diagnostic fixtures supplement the real BuyButton/replay tests;
+they do not replace that component or store in the 62-case comparison.
+
+control-verification-denied.log: suffix
+'app/checkout/h/[token]/checkout-handoff.test.tsx' -t 'recovers consumed'
+Expected exit 1: 2 failed at original readiness assertion, 34 unselected by -t.
+Only private temporary test mutation: onVerificationChange(true) -> false.
+No button/checkbox force-enable or production change. Exact same eight safe
+fields show verificationPending=true, authorityDisabled=true, checkoutCalls=0.
+Mutation restored byte-for-byte to tested candidate before lint/preservation checks.
+Original baseline62PASS / candidate62PASS / controlverificationdenied2FAIL retained.
+No retries, skips in source, sleep or timeout changes, broad suite or typecheck.
+Targeted eslint exit 0 (empty log); git diff --check exit 0.
+
+Publication/review holds remain: normal wrapper publication only; no manual push,
+PR207 promotion, main merge, deploy or CI invocation. Source review/root and first
+full CC against 09d54 remain required; same-component Astra followup afterward.
+No independent review is claimed by this author-only task. All R339/R340 holds
+remain. No R289 or exact R328 was read. Full 16-repository audit / 517 records
+remains ACTIVE_INCOMPLETE, with no scope reduction or hosted-cause repair claim.
+
+Full safe evidence copies follow. ANSI color escapes alone are removed for the
+plain-text report; no lines are truncated or omitted. Assertion failure output is
+expected controlled evidence; caught diagnostic exceptions are never printed.
+
+--- Original baseline 62PASS (/var/tmp/r517-s1808-evidence/baseline-focused.log) ---
+
+ RUN  v4.1.8 /private/var/tmp/koskadeux/minimal-bridge-worktrees/66ff7aa012b1-37a03c
+
+ ✓ app/checkout/h/[token]/checkout-handoff.test.tsx (36 tests) 354ms
+ ✓ lib/checkout-handoff.test.ts (18 tests) 3ms
+ ✓ lib/checkout-domain.test.ts (8 tests) 2ms
+
+ Test Files  3 passed (3)
+      Tests  62 passed (62)
+   Start at  03:34:28
+   Duration  1.11s (transform 93ms, setup 108ms, import 156ms, tests 359ms, environment 260ms)
+
+
+--- Original candidate 62PASS (/var/tmp/r517-s1808-evidence/candidate-final-focused.log) ---
+
+ RUN  v4.1.8 /private/var/tmp/koskadeux/minimal-bridge-worktrees/66ff7aa012b1-37a03c
+
+ ✓ app/checkout/h/[token]/checkout-handoff.test.tsx (36 tests) 341ms
+ ✓ lib/checkout-handoff.test.ts (18 tests) 2ms
+ ✓ lib/checkout-domain.test.ts (8 tests) 2ms
+
+ Test Files  3 passed (3)
+      Tests  62 passed (62)
+   Start at  03:34:45
+   Duration  1.08s (transform 90ms, setup 106ms, import 149ms, tests 345ms, environment 257ms)
+
+
+--- Original verification-denied expected 2FAIL (/var/tmp/r517-s1808-evidence/control-verification-denied.log) ---
+
+ RUN  v4.1.8 /private/var/tmp/koskadeux/minimal-bridge-worktrees/66ff7aa012b1-37a03c
+
+ ❯ app/checkout/h/[token]/checkout-handoff.test.tsx (36 tests | 2 failed | 34 skipped) 2201ms
+   ↓ only inspects on load and delegates fresh human acceptance with the pinned version to BuyButton
+   ↓ blocks expired without loading a listing or purchase form
+   ↓ blocks superseded without loading a listing or purchase form
+   ↓ blocks an expired open link
+   ↓ removes the purchase form when the displayed handoff expires
+   ↓ blocks changed snapshots {"license":{"code":"standard","version":"1.0","params":{"ai_training":false},"summary":[],"full_text_url":"/licenses/standard/1.0","download_url":"/licenses/standard/1.0?download=1","sha256":"dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd","covenant_sha256":"cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc","rider_sha256":null}}
+   ↓ blocks changed snapshots {"license":{"code":"standard","version":"1.0","params":{"ai_training":false},"summary":[],"full_text_url":"/licenses/standard/1.0","download_url":"/licenses/standard/1.0?download=1","sha256":"bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb","covenant_sha256":"dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd","rider_sha256":null}}
+   ↓ blocks changed snapshots {"license":{"code":"standard","version":"1.0","params":{"ai_training":false},"summary":[],"full_text_url":"/licenses/standard/1.0","download_url":"/licenses/standard/1.0?download=1","sha256":"bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb","covenant_sha256":"cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc","rider_sha256":"dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd"}}
+   ↓ blocks changed snapshots {"pricing":{"price":15,"pricing_type":"one_time"}}
+   ↓ blocks changed snapshots {"license":null}
+   ↓ renders consumed reserved without a fresh purchase or provider continuation
+   ↓ renders consumed provider_unknown without a fresh purchase or provider continuation
+   ↓ renders consumed failed without a fresh purchase or provider continuation
+   ↓ renders consumed payment_conflict without a fresh purchase or provider continuation
+   ↓ renders consumed refunded without a fresh purchase or provider continuation
+   ↓ checks consumed processing status with another GET only
+   × recovers consumed reserved after a full route reload with the original handoff acceptance 1142ms
+   × recovers consumed provider_unknown after a full route reload with the original handoff acceptance 1058ms
+   ↓ never exposes replay recovery for terminal consumed finalised
+   ↓ never exposes replay recovery for terminal consumed failed
+   ↓ never exposes replay recovery for terminal consumed payment_conflict
+   ↓ never exposes replay recovery for terminal consumed refunded
+   ↓ allows only a finalised safe provider URL: https://checkout.stripe.com/c/pay/test
+   ↓ allows only a finalised safe provider URL: https://evil.test/c/pay/test
+   ↓ allows only a finalised safe provider URL: null
+   ↓ requires sign-in and preserves only the handoff route without automatic purchase
+   ↓ renders wrong-owner 404 without exposing terms
+   ↓ hides the old owner review immediately and ignores late replies
+   ↓ renders SELLER_PAYOUT_READINESS_UNKNOWN blocks with web paths without a purchase form
+   ↓ renders SELLER_PAYOUT_NOT_READY blocks with web paths without a purchase form
+   ↓ renders REFERENCE_DELIVERY_UNREADY blocks with web paths without a purchase form
+   ↓ keeps the new route inert when the flag is off
+   ↓ rejects malformed links before loading
+   ↓ rechecks authoritative status at expiry and keeps a purchase started just before expiry recoverable
+   ↓ keeps recovery mounted if authoritative expiry inspection fails
+   ↓ invalidates a same-user review when the session rotates without using its access token as a key
+
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 2 ⎯⎯⎯⎯⎯⎯⎯
+
+ FAIL  app/checkout/h/[token]/checkout-handoff.test.tsx > recovers consumed reserved after a full route reload with the original handoff acceptance
+ FAIL  app/checkout/h/[token]/checkout-handoff.test.tsx > recovers consumed provider_unknown after a full route reload with the original handoff acceptance
+AssertionError: expected true to be false // Object.is equality
+Checkout acceptance state: {"typedName":"Ada Buyer","signerTitle":"Director","businessLegalName":"Buyer Ltd","country":"GB","authorityDisabled":true,"authorityChecked":true,"verificationPending":true,"checkoutCalls":0}
+
+- Expected
++ Received
+
+- false
++ true
+
+ ❯ waitFor.onTimeout.screen.queryByRole.name app/checkout/h/[token]/checkout-handoff.test.tsx:99:134
+     97|   }
+     98|   fireEvent.click(screen.getByRole('checkbox', { name: 'Confirm licenc…
+     99|   await waitFor(() => expect((screen.getByRole('button', { name: 'Acce…
+       |                                                                                                                                      ^
+    100|     // Keep the original readiness assertion and deadline. A visible f…
+    101|     // does not identify which acceptance gate is holding the hosted f…
+ ❯ runWithExpensiveErrorDiagnosticsDisabled ../../../../../../Users/max/Projects/ai-market/worktrees/s1632-frontend/node_modules/@testing-library/dom/dist/config.js:47:12
+ ❯ checkCallback ../../../../../../Users/max/Projects/ai-market/worktrees/s1632-frontend/node_modules/@testing-library/dom/dist/wait-for.js:124:77
+ ❯ Timeout.checkRealTimersCallback ../../../../../../Users/max/Projects/ai-market/worktrees/s1632-frontend/node_modules/@testing-library/dom/dist/wait-for.js:118:16
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/2]⎯
+
+
+ Test Files  1 failed (1)
+      Tests  2 failed | 34 skipped (36)
+   Start at  03:34:00
+   Duration  2.74s (transform 81ms, setup 39ms, import 141ms, tests 2.20s, environment 281ms)
+
+
+--- Followup baseline 62PASS (/var/tmp/r517-s1808-evidence/diagnostic-guard/baseline-focused.log) ---
+
+ RUN  v4.1.8 /private/var/tmp/koskadeux/minimal-bridge-worktrees/6b7897efd6fe-fe3510
+
+ ✓ app/checkout/h/[token]/checkout-handoff.test.tsx (36 tests) 357ms
+ ✓ lib/checkout-handoff.test.ts (18 tests) 3ms
+ ✓ lib/checkout-domain.test.ts (8 tests) 2ms
+
+ Test Files  3 passed (3)
+      Tests  62 passed (62)
+   Start at  03:47:41
+   Duration  1.16s (transform 95ms, setup 112ms, import 196ms, tests 362ms, environment 259ms)
+
+
+--- Followup candidate 62PASS (/var/tmp/r517-s1808-evidence/diagnostic-guard/candidate-focused.log) ---
+
+ RUN  v4.1.8 /private/var/tmp/koskadeux/minimal-bridge-worktrees/6b7897efd6fe-fe3510
+
+ ✓ app/checkout/h/[token]/checkout-handoff.test.tsx (36 tests) 360ms
+ ✓ lib/checkout-handoff.test.ts (18 tests) 3ms
+ ✓ lib/checkout-domain.test.ts (8 tests) 2ms
+
+ Test Files  3 passed (3)
+      Tests  62 passed (62)
+   Start at  03:47:42
+   Duration  1.12s (transform 97ms, setup 111ms, import 156ms, tests 365ms, environment 266ms)
+
+
+--- Followup controlled diagnostic guard 5PASS (/var/tmp/r517-s1808-evidence/diagnostic-guard/controlled-guard.log) ---
+
+ RUN  v4.1.8 /private/var/tmp/koskadeux/minimal-bridge-worktrees/6b7897efd6fe-fe3510
+
+stdout | .r517-diagnostic-guard.test.ts > preserves original error and default deadline: complete
+{"mode":"complete","baselineThrows":false,"sameError":true,"deadline":1000,"elapsedMs":1005,"diagnostic":"{\"typedName\":\"Ada Buyer\",\"signerTitle\":\"Director\",\"businessLegalName\":\"Buyer Ltd\",\"country\":\"GB\",\"authorityDisabled\":true,\"authorityChecked\":true,\"verificationPending\":true,\"checkoutCalls\":0}"}
+
+stdout | .r517-diagnostic-guard.test.ts > preserves original error and default deadline: missing
+{"mode":"missing","baselineThrows":false,"sameError":true,"deadline":1000,"elapsedMs":1001,"diagnostic":"{\"verificationPending\":false,\"checkoutCalls\":0}"}
+
+stdout | .r517-diagnostic-guard.test.ts > preserves original error and default deadline: duplicate-role
+{"mode":"duplicate-role","baselineThrows":true,"sameError":true,"deadline":1000,"elapsedMs":1002,"diagnostic":"diagnostic-unavailable"}
+
+stdout | .r517-diagnostic-guard.test.ts > preserves original error and default deadline: duplicate-label
+{"mode":"duplicate-label","baselineThrows":true,"sameError":true,"deadline":1000,"elapsedMs":1003,"diagnostic":"diagnostic-unavailable"}
+
+stdout | .r517-diagnostic-guard.test.ts > preserves original error and default deadline: duplicate-text
+{"mode":"duplicate-text","baselineThrows":true,"sameError":true,"deadline":1000,"elapsedMs":1003,"diagnostic":"diagnostic-unavailable"}
+
+ ✓ .r517-diagnostic-guard.test.ts (5 tests) 5094ms
+   ✓ preserves original error and default deadline: complete  1069ms
+   ✓ preserves original error and default deadline: missing  1002ms
+   ✓ preserves original error and default deadline: duplicate-role  1007ms
+   ✓ preserves original error and default deadline: duplicate-label  1007ms
+   ✓ preserves original error and default deadline: duplicate-text  1007ms
+
+ Test Files  1 passed (1)
+      Tests  5 passed (5)
+   Start at  03:47:20
+   Duration  6.49s (transform 26ms, setup 90ms, import 135ms, tests 5.09s, environment 1.07s)
+
+
+--- Followup verification-denied expected 2FAIL (/var/tmp/r517-s1808-evidence/diagnostic-guard/control-verification-denied.log) ---
+
+ RUN  v4.1.8 /private/var/tmp/koskadeux/minimal-bridge-worktrees/6b7897efd6fe-fe3510
+
+ ❯ app/checkout/h/[token]/checkout-handoff.test.tsx (36 tests | 2 failed | 34 skipped) 2209ms
+   ↓ only inspects on load and delegates fresh human acceptance with the pinned version to BuyButton
+   ↓ blocks expired without loading a listing or purchase form
+   ↓ blocks superseded without loading a listing or purchase form
+   ↓ blocks an expired open link
+   ↓ removes the purchase form when the displayed handoff expires
+   ↓ blocks changed snapshots {"license":{"code":"standard","version":"1.0","params":{"ai_training":false},"summary":[],"full_text_url":"/licenses/standard/1.0","download_url":"/licenses/standard/1.0?download=1","sha256":"dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd","covenant_sha256":"cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc","rider_sha256":null}}
+   ↓ blocks changed snapshots {"license":{"code":"standard","version":"1.0","params":{"ai_training":false},"summary":[],"full_text_url":"/licenses/standard/1.0","download_url":"/licenses/standard/1.0?download=1","sha256":"bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb","covenant_sha256":"dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd","rider_sha256":null}}
+   ↓ blocks changed snapshots {"license":{"code":"standard","version":"1.0","params":{"ai_training":false},"summary":[],"full_text_url":"/licenses/standard/1.0","download_url":"/licenses/standard/1.0?download=1","sha256":"bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb","covenant_sha256":"cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc","rider_sha256":"dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd"}}
+   ↓ blocks changed snapshots {"pricing":{"price":15,"pricing_type":"one_time"}}
+   ↓ blocks changed snapshots {"license":null}
+   ↓ renders consumed reserved without a fresh purchase or provider continuation
+   ↓ renders consumed provider_unknown without a fresh purchase or provider continuation
+   ↓ renders consumed failed without a fresh purchase or provider continuation
+   ↓ renders consumed payment_conflict without a fresh purchase or provider continuation
+   ↓ renders consumed refunded without a fresh purchase or provider continuation
+   ↓ checks consumed processing status with another GET only
+   × recovers consumed reserved after a full route reload with the original handoff acceptance 1147ms
+   × recovers consumed provider_unknown after a full route reload with the original handoff acceptance 1061ms
+   ↓ never exposes replay recovery for terminal consumed finalised
+   ↓ never exposes replay recovery for terminal consumed failed
+   ↓ never exposes replay recovery for terminal consumed payment_conflict
+   ↓ never exposes replay recovery for terminal consumed refunded
+   ↓ allows only a finalised safe provider URL: https://checkout.stripe.com/c/pay/test
+   ↓ allows only a finalised safe provider URL: https://evil.test/c/pay/test
+   ↓ allows only a finalised safe provider URL: null
+   ↓ requires sign-in and preserves only the handoff route without automatic purchase
+   ↓ renders wrong-owner 404 without exposing terms
+   ↓ hides the old owner review immediately and ignores late replies
+   ↓ renders SELLER_PAYOUT_READINESS_UNKNOWN blocks with web paths without a purchase form
+   ↓ renders SELLER_PAYOUT_NOT_READY blocks with web paths without a purchase form
+   ↓ renders REFERENCE_DELIVERY_UNREADY blocks with web paths without a purchase form
+   ↓ keeps the new route inert when the flag is off
+   ↓ rejects malformed links before loading
+   ↓ rechecks authoritative status at expiry and keeps a purchase started just before expiry recoverable
+   ↓ keeps recovery mounted if authoritative expiry inspection fails
+   ↓ invalidates a same-user review when the session rotates without using its access token as a key
+
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 2 ⎯⎯⎯⎯⎯⎯⎯
+
+ FAIL  app/checkout/h/[token]/checkout-handoff.test.tsx > recovers consumed reserved after a full route reload with the original handoff acceptance
+ FAIL  app/checkout/h/[token]/checkout-handoff.test.tsx > recovers consumed provider_unknown after a full route reload with the original handoff acceptance
+AssertionError: expected true to be false // Object.is equality
+Checkout acceptance state: {"typedName":"Ada Buyer","signerTitle":"Director","businessLegalName":"Buyer Ltd","country":"GB","authorityDisabled":true,"authorityChecked":true,"verificationPending":true,"checkoutCalls":0}
+
+- Expected
++ Received
+
+- false
++ true
+
+ ❯ waitFor.onTimeout.diagnostic app/checkout/h/[token]/checkout-handoff.test.tsx:99:134
+     97|   }
+     98|   fireEvent.click(screen.getByRole('checkbox', { name: 'Confirm licenc…
+     99|   await waitFor(() => expect((screen.getByRole('button', { name: 'Acce…
+       |                                                                                                                                      ^
+    100|     // Keep the original readiness assertion and deadline. A visible f…
+    101|     // does not identify which acceptance gate is holding the hosted f…
+ ❯ runWithExpensiveErrorDiagnosticsDisabled ../../../../../../Users/max/Projects/ai-market/worktrees/s1632-frontend/node_modules/@testing-library/dom/dist/config.js:47:12
+ ❯ checkCallback ../../../../../../Users/max/Projects/ai-market/worktrees/s1632-frontend/node_modules/@testing-library/dom/dist/wait-for.js:124:77
+ ❯ Timeout.checkRealTimersCallback ../../../../../../Users/max/Projects/ai-market/worktrees/s1632-frontend/node_modules/@testing-library/dom/dist/wait-for.js:118:16
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/2]⎯
+
+
+ Test Files  1 failed (1)
+      Tests  2 failed | 34 skipped (36)
+   Start at  03:47:44
+   Duration  2.74s (transform 85ms, setup 40ms, import 144ms, tests 2.21s, environment 272ms)
+
+
+--- Source preservation (/var/tmp/r517-s1808-evidence/diagnostic-guard/source-preservation.txt) ---
+PASS: byte-identical outside onTimeout callback versus cf91f53051ac9146fc6f874b42320604cee289d9 test snapshot.
+PASS: final source equals tested candidate snapshot; temporary verification-denied mutation restored.
+PASS: four R515 files unchanged versus 09d54 (git diff exit 0).
