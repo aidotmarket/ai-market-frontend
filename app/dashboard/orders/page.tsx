@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import Link from 'next/link';
 import { buyerLicenseRecordPath } from '@/lib/licenseRecordRoutes';
 import { getMyOrders } from '@/api/orders';
@@ -69,21 +69,39 @@ function txStatusBadge(status: string) {
   );
 }
 
+const PAGE_SIZE = 50;
+
 export default function OrdersListPage() {
   const [orders, setOrders] = useState<BuyerOrder[]>([]);
   const [txMap, setTxMap] = useState<Record<string, Transaction>>({});
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
 
+  const [page, setPage] = useState(1);
+  const [attempt, setAttempt] = useState(0);
+  const generation = useRef(0);
+
+  function loadPage(nextPage: number) {
+    // Retire work immediately, including the window before effect cleanup.
+    generation.current += 1;
+    setLoading(true);
+    setError('');
+    setOrders([]);
+    setTxMap({});
+    setPage(nextPage);
+    setAttempt((value) => value + 1);
+  }
+
   useEffect(() => {
-    let cancelled = false;
+    const request = ++generation.current;
+    const current = () => generation.current === request;
 
     Promise.all([
-      getMyOrders(),
+      getMyOrders({ limit: PAGE_SIZE, offset: (page - 1) * PAGE_SIZE }),
       getMyTransactions().catch(() => [] as Transaction[]),
     ])
       .then(([orderData, txData]) => {
-        if (cancelled) return;
+        if (!current()) return;
         setOrders(orderData);
         // Keep transaction iteration order for the first exact order-ID match.
         const map: Record<string, Transaction> = {};
@@ -93,26 +111,54 @@ export default function OrdersListPage() {
         setTxMap(map);
       })
       .catch(() => {
-        if (!cancelled) setError('Failed to load orders.');
+        if (current()) setError('Failed to load orders.');
       })
       .finally(() => {
-        if (!cancelled) setLoading(false);
+        if (current()) setLoading(false);
       });
-    return () => { cancelled = true; };
-  }, []);
+    return () => { generation.current += 1; };
+  }, [page, attempt]);
+
+  const paging = (
+    <nav aria-label="Purchase pages" className="mt-6 flex items-center gap-4">
+      <button type="button" onClick={() => loadPage(page - 1)} disabled={page === 1}
+        className="rounded border px-3 py-2 disabled:opacity-50">Previous</button>
+      <span>Page {page}</span>
+      <button type="button" onClick={() => loadPage(page + 1)}
+        disabled={loading || !!error || orders.length !== PAGE_SIZE}
+        className="rounded border px-3 py-2 disabled:opacity-50">Next</button>
+    </nav>
+  );
 
   if (loading) {
     return (
-      <div className="flex min-h-[40vh] items-center justify-center">
-        <div className="h-8 w-8 animate-spin rounded-full border-4 border-[#3F51B5] border-t-transparent"></div>
+      <div>
+        <div className="flex min-h-[40vh] items-center justify-center" role="status" aria-label="Loading purchases">
+          <div className="h-8 w-8 animate-spin rounded-full border-4 border-[#3F51B5] border-t-transparent"></div>
+        </div>
+        {page > 1 && paging}
       </div>
     );
   }
 
   if (error) {
     return (
-      <div className="rounded-lg bg-red-50 border border-red-200 px-4 py-3 text-sm text-red-700">
-        {error}
+      <div>
+        <div role="alert" className="rounded-lg bg-red-50 border border-red-200 px-4 py-3 text-sm text-red-700">
+          {error}
+          <button type="button" onClick={() => loadPage(page)} className="ml-4 underline">Retry</button>
+        </div>
+        {paging}
+      </div>
+    );
+  }
+
+  if (orders.length === 0 && page > 1) {
+    return (
+      <div>
+        <h1 className="text-2xl font-bold text-gray-900 mb-6">Purchases</h1>
+        <p>No more purchases. You have reached the end of the available orders.</p>
+        {paging}
       </div>
     );
   }
@@ -248,6 +294,7 @@ export default function OrdersListPage() {
           );
         })}
       </div>
+      {paging}
     </div>
   );
 }

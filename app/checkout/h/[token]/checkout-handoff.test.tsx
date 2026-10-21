@@ -96,13 +96,37 @@ it.each(['reserved', 'provider_unknown'] as const)('recovers consumed %s after a
     fireEvent.change(screen.getByLabelText(label), { target: { value } });
   }
   fireEvent.click(screen.getByRole('checkbox', { name: 'Confirm licence authority' }));
-  await waitFor(() => expect((screen.getByRole('button', { name: 'Accept and continue to payment' }) as HTMLButtonElement).disabled).toBe(false));
+  await waitFor(() => expect((screen.getByRole('button', { name: 'Accept and continue to payment' }) as HTMLButtonElement).disabled).toBe(false), {
+    // Keep the original readiness assertion and deadline. A visible form alone
+    // does not identify which acceptance gate is holding the hosted failure.
+    onTimeout: error => {
+      let diagnostic = 'diagnostic-unavailable';
+      try {
+        const authority = screen.queryByRole('checkbox', { name: 'Confirm licence authority' }) as HTMLInputElement | null;
+        diagnostic = JSON.stringify({
+          typedName: (screen.queryByLabelText('Typed full name') as HTMLInputElement | null)?.value,
+          signerTitle: (screen.queryByLabelText('Signer title') as HTMLInputElement | null)?.value,
+          businessLegalName: (screen.queryByLabelText('Business legal name') as HTMLInputElement | null)?.value,
+          country: (screen.queryByLabelText('Country') as HTMLSelectElement | null)?.value,
+          authorityDisabled: authority?.disabled,
+          authorityChecked: authority?.checked,
+          verificationPending: screen.queryByText('Acceptance unlocks after every displayed licence component is fetched and its bytes match the server hash.') !== null,
+          checkoutCalls: mocks.create.mock.calls.length,
+        });
+      } catch { /* Diagnostic queries must not replace the readiness error. */ }
+      error.message += `\nCheckout acceptance state: ${diagnostic}`;
+      return error;
+    },
+  });
   fireEvent.click(screen.getByRole('button', { name: 'Accept and continue to payment' }));
   await screen.findByRole('button', { name: 'Retry checkout' });
   const first = mocks.create.mock.calls[0];
-  expect(first).toEqual(['listing', 'version', expect.objectContaining({ typed_name: 'Ada Buyer', authority_confirmed: true }), { handoffToken: mocks.token }]);
+  expect(first).toEqual(['listing', 'version', { accept_license_sha256: license.sha256, accept_covenant_sha256: license.covenant_sha256,
+    accept_rider_sha256: null, typed_name: 'Ada Buyer', signer_title: 'Director', business_legal_name: 'Buyer Ltd', jurisdiction: 'GB', authority_confirmed: true }, { handoffToken: mocks.token }]);
   const key = checkoutReplayKey('owner', 'listing', 'version', mocks.token);
   const frozen = sessionStorage.getItem(key);
+  expect(mocks.create).toHaveBeenCalledTimes(1);
+  expect(JSON.parse(frozen!)).toEqual({ acceptance: first[2] });
   view.unmount();
   mocks.get.mockResolvedValue({ ...handoff, status: 'consumed', checkout_status });
   mocks.listing.mockClear();

@@ -1,8 +1,19 @@
 import { api } from './client';
 import type { BuyerOrder, BuyerOrderDetail, OrderEvent, OrderAccessResponse } from '@/types';
 
-export async function getMyOrders(): Promise<BuyerOrder[]> {
-  const res = await api.get<(BuyerOrder & {amount_cents?: number})[]>('/orders/mine');
+export interface MyOrdersPaging {
+  limit?: number;
+  offset?: number;
+}
+
+export async function getMyOrders(paging?: MyOrdersPaging): Promise<BuyerOrder[]> {
+  const params = paging === undefined ? undefined : {
+    limit: Number.isFinite(paging.limit) ? Math.min(100, Math.max(1, Math.trunc(paging.limit!))) : 50,
+    offset: Number.isFinite(paging.offset) ? Math.min(Number.MAX_SAFE_INTEGER, Math.max(0, Math.trunc(paging.offset!))) : 0,
+  };
+  const res = await (params === undefined
+    ? api.get<(BuyerOrder & {amount_cents?: number})[]>('/orders/mine')
+    : api.get<(BuyerOrder & {amount_cents?: number})[]>('/orders/mine', { params }));
   return res.data.map(order => ({...order,
     amount: typeof order.amount_cents === 'number' ? order.amount_cents / 100 : order.amount,
   }));
