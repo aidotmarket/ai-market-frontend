@@ -1,3 +1,5 @@
+import GeneratedSampleCard from '@/components/listings/GeneratedSampleCard';
+import { generatedSampleState } from '@/lib/generatedSample';
 import Link from 'next/link';
 import { formatPrice, privacyScoreColor } from '@/lib/format';
 import type { ListingListItem, SearchResultItem } from '@/types';
@@ -5,6 +7,7 @@ import type { ListingListItem, SearchResultItem } from '@/types';
 type CardListing = ListingListItem | SearchResultItem;
 
 export function MarketplaceListingCard({ listing }: { listing: CardListing }) {
+  if (generatedSampleState(listing) !== 'ordinary') return <GeneratedSampleCard listing={listing} />;
   const tags = Array.isArray(listing.tags) ? listing.tags.slice(0, 3) : [];
   const views = 'view_count' in listing ? listing.view_count : undefined;
   const description = listing.short_description || ('description' in listing ? listing.description : null);

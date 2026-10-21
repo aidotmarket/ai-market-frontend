@@ -25,6 +25,11 @@ type SearchResultItemFields = Expect<Equal<
   | 'data_format'
   | 'source_row_count'
   | 'tags'
+  | 'generated_sample'
+  | 'availability'
+  | 'fulfillment_method'
+  | 'purchasable'
+  | 'purchase_hold_reason'
 >>;
 
 type FeaturedItemFields = Expect<Equal<
@@ -44,7 +49,11 @@ type FeaturedItemFields = Expect<Equal<
 
 type SearchResultItemOptionalFields = Expect<Equal<
   OptionalKeys<SearchResultItem>,
-  never
+  | 'generated_sample'
+  | 'availability'
+  | 'fulfillment_method'
+  | 'purchasable'
+  | 'purchase_hold_reason'
 >>;
 
 type FeaturedItemOptionalFields = Expect<Equal<

@@ -61,6 +61,8 @@ export interface FeaturedFeedResponse {
   item_list: Record<string, unknown>;
 }
 
+// Both homepage catalogue inputs must cross the current backend marker boundary.
+// Keep these reads out of Next's Data Cache; unrelated fetch caches stay scoped.
 export async function fetchPublicListings(params?: {
   page?: number;
   per_page?: number;
@@ -75,7 +77,7 @@ export async function fetchPublicListings(params?: {
 
   const qs = searchParams.toString();
   const res = await fetch(`${API_URL}/api/v1/public/listings${qs ? `?${qs}` : ''}`, {
-    next: { revalidate: 60 },
+    cache: 'no-store',
   });
   if (!res.ok) return null;
   return res.json();
@@ -93,7 +95,7 @@ export async function fetchFeaturedFeed(params?: {
 
   const qs = searchParams.toString();
   const res = await fetch(`${API_URL}/api/v1/public/featured-listings${qs ? `?${qs}` : ''}`, {
-    next: { revalidate: 60 },
+    cache: 'no-store',
   });
   if (!res.ok) return null;
   return res.json();
