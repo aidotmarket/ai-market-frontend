@@ -27,7 +27,8 @@ interface Props {
 
 export default async function BrowseRequestsPage({ searchParams }: Props) {
   const params = await searchParams;
-  const page = parseInt(params.page || '1', 10);
+  const parsedPage = params.page && /^\d+$/.test(params.page) ? Number(params.page) : NaN;
+  const page = Number.isSafeInteger(parsedPage) && parsedPage > 0 ? parsedPage : 1;
   const category = params.category || '';
 
   const data = await fetchDataRequests({
@@ -37,6 +38,10 @@ export default async function BrowseRequestsPage({ searchParams }: Props) {
   });
 
   const requests: DataRequestListItem[] = Array.isArray(data) ? data : data?.items ?? [];
+  const total = Array.isArray(data) ? undefined : data?.total;
+  const hasNext = typeof total === 'number' && Number.isSafeInteger(total) && total >= 0
+    ? page * PAGE_SIZE < total
+    : requests.length === PAGE_SIZE;
 
   const sorted = [...requests].sort(
     (a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime()
@@ -108,12 +113,12 @@ export default async function BrowseRequestsPage({ searchParams }: Props) {
       {data !== null && sorted.length === 0 && (
         <div className="text-center py-16">
           <p className="text-gray-500 text-lg mb-2">
-            {category ? 'No requests match this category' : 'No data requests yet'}
+            {page > 1 ? 'No requests on this page' : category ? 'No requests match this category' : 'No data requests yet'}
           </p>
           <p className="text-gray-400 text-sm mb-6">
-            {category ? 'Try another category.' : 'Be the first to tell the market what you need.'}
+            {page > 1 ? 'Return to the first page or try the previous page.' : category ? 'Try another category.' : 'Be the first to tell the market what you need.'}
           </p>
-          {!category && (
+          {page === 1 && !category && (
             <Link
               href="/requests/new"
               className="rounded-lg bg-[#3F51B5] px-6 py-2.5 text-sm font-medium text-white hover:bg-[#3545a0]"
@@ -126,33 +131,41 @@ export default async function BrowseRequestsPage({ searchParams }: Props) {
 
       {/* Results */}
       {sorted.length > 0 && (
-        <>
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-            {sorted.map((req) => (
-              <RequestCard key={req.id} request={req} />
-            ))}
-          </div>
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+          {sorted.map((req) => (
+            <RequestCard key={req.id} request={req} />
+          ))}
+        </div>
+      )}
 
-          {/* Pagination */}
-          <div className="flex justify-center gap-2 mt-8">
-            {page > 1 && (
-              <Link
-                href={buildUrl({ page: String(page - 1) })}
-                className="rounded-lg border border-gray-300 px-4 py-2 text-sm hover:bg-gray-50"
-              >
-                Previous
-              </Link>
-            )}
-            {sorted.length === PAGE_SIZE && (
-              <Link
-                href={buildUrl({ page: String(page + 1) })}
-                className="rounded-lg border border-gray-300 px-4 py-2 text-sm hover:bg-gray-50"
-              >
-                Next
-              </Link>
-            )}
-          </div>
-        </>
+      {/* Pagination and empty-page recovery */}
+      {data !== null && (sorted.length > 0 || page > 1) && (
+        <div className="flex justify-center gap-2 mt-8">
+          {page > 1 && sorted.length === 0 && (
+            <Link
+              href={buildUrl({ page: '1' })}
+              className="rounded-lg border border-gray-300 px-4 py-2 text-sm hover:bg-gray-50"
+            >
+              First page
+            </Link>
+          )}
+          {page > 1 && (
+            <Link
+              href={buildUrl({ page: String(page - 1) })}
+              className="rounded-lg border border-gray-300 px-4 py-2 text-sm hover:bg-gray-50"
+            >
+              Previous
+            </Link>
+          )}
+          {hasNext && (
+            <Link
+              href={buildUrl({ page: String(page + 1) })}
+              className="rounded-lg border border-gray-300 px-4 py-2 text-sm hover:bg-gray-50"
+            >
+              Next
+            </Link>
+          )}
+        </div>
       )}
     </div>
   );

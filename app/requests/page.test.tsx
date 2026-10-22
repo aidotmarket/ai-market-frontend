@@ -62,7 +62,7 @@ describe('public request browsing', () => {
     expect((screen.getByRole('button', { name: 'Apply filter' }) as HTMLButtonElement).disabled).toBe(false);
   });
 
-  it.each([{ items: [] }, []])('keeps the unfiltered valid-empty invitation for %j', async payload => {
+  it.each([{ items: [], total: 0 }, { items: [] }, []])('keeps the unfiltered valid-empty invitation for %j', async payload => {
     fetchDataRequests.mockResolvedValue(payload);
     await renderPage();
     expect(screen.getByText('No data requests yet')).toBeTruthy();
@@ -72,7 +72,7 @@ describe('public request browsing', () => {
   });
 
   it('helps a buyer recover from a valid filtered empty result', async () => {
-    fetchDataRequests.mockResolvedValue({ items: [] });
+    fetchDataRequests.mockResolvedValue({ items: [], total: 0 });
     await renderPage({ category: 'finance' });
     expect(screen.getByText('No requests match this category')).toBeTruthy();
     expect(screen.getByText('Try another category.')).toBeTruthy();
@@ -114,6 +114,72 @@ describe('public request browsing', () => {
     expect(screen.getByRole('link', { name: 'Previous' }).getAttribute('href')).toBe('/requests?page=1&category=healthcare');
     expect(screen.getByRole('link', { name: 'Next' }).getAttribute('href')).toBe('/requests?page=3&category=healthcare');
   });
+
+  it.each([20, 40])('omits Next on a full final page (total=%s)', async total => {
+    fetchDataRequests.mockResolvedValue({ items: Array.from({ length: 20 }, (_, i) => request(String(i))), total });
+    await renderPage({ page: String(total / 20), category: 'healthcare' });
+    expect(screen.queryByRole('link', { name: 'Next' })).toBeNull();
+    if (total === 40) {
+      expect(screen.getByRole('link', { name: 'Previous' }).getAttribute('href')).toBe('/requests?page=1&category=healthcare');
+    }
+  });
+
+  it.each([1, 20])('uses total to offer Next on a nonfinal page with %s items', async count => {
+    fetchDataRequests.mockResolvedValue({ items: Array.from({ length: count }, (_, i) => request(String(i))), total: 41 });
+    await renderPage({ page: '2', category: 'finance' });
+    expect(screen.getByRole('link', { name: 'Next' }).getAttribute('href')).toBe('/requests?page=3&category=finance');
+  });
+
+  it.each([undefined, null, -1, 1.5, NaN, Infinity, '40', Number.MAX_SAFE_INTEGER + 1])(
+    'falls back to full-page paging for an untrustworthy total (%s)', async total => {
+      fetchDataRequests.mockResolvedValue({ items: Array.from({ length: 20 }, (_, i) => request(String(i))), total });
+      await renderPage();
+      expect(screen.getByRole('link', { name: 'Next' }).getAttribute('href')).toBe('/requests?page=2');
+      cleanup();
+      fetchDataRequests.mockResolvedValue({ items: [request('short')], total });
+      await renderPage();
+      expect(screen.queryByRole('link', { name: 'Next' })).toBeNull();
+    }
+  );
+
+  it.each([0, 1])('trusts a valid total (%s) instead of the full-page fallback', async total => {
+    fetchDataRequests.mockResolvedValue({ items: Array.from({ length: 20 }, (_, i) => request(String(i))), total });
+    await renderPage();
+    expect(screen.queryByRole('link', { name: 'Next' })).toBeNull();
+  });
+
+  it.each([
+    ['', { items: [], total: 40 }], ['finance', { items: [], total: 40 }],
+    ['finance', []], ['finance', { items: [] }],
+  ])('offers category-preserving recovery on an empty later page (category=%s, payload=%j)', async (category, payload) => {
+    fetchDataRequests.mockResolvedValue(payload);
+    await renderPage({ page: '4', category });
+    expect(screen.getByText('No requests on this page')).toBeTruthy();
+    expect(screen.queryByText(/No data requests yet|No requests match this category|Be the first/)).toBeNull();
+    expect(screen.getAllByRole('link', { name: 'Post a Data Request' })).toHaveLength(1);
+    const suffix = category ? '&category=finance' : '';
+    expect(screen.getByRole('link', { name: 'First page' }).getAttribute('href')).toBe(`/requests?page=1${suffix}`);
+    expect(screen.getByRole('link', { name: 'Previous' }).getAttribute('href')).toBe(`/requests?page=3${suffix}`);
+    expect(screen.queryByRole('link', { name: 'Next' })).toBeNull();
+  });
+
+  it.each(['', 'finance'])('keeps later-page failures separate from empty-page recovery (category=%s)', async category => {
+    fetchDataRequests.mockResolvedValue(null);
+    await renderPage({ page: '3', category });
+    expect(screen.getByText('Requests are unavailable')).toBeTruthy();
+    expect(screen.queryByText('No requests on this page')).toBeNull();
+    expect(screen.queryByRole('link', { name: 'Previous' })).toBeNull();
+  });
+
+  it.each(['', 'abc', '2junk', '1.5', '0', '-2', 'Infinity', '9007199254740992', '1e2', '0x10', ' 2 '])(
+    'normalizes invalid page %j to the first page before fetching and linking', async page => {
+      fetchDataRequests.mockResolvedValue({ items: Array.from({ length: 20 }, (_, i) => request(String(i))), total: 40 });
+      await renderPage({ page, category: 'finance' });
+      expect(fetchDataRequests).toHaveBeenCalledExactlyOnceWith({ page: 1, per_page: 20, category: 'finance' });
+      expect(screen.queryByRole('link', { name: 'Previous' })).toBeNull();
+      expect(screen.getByRole('link', { name: 'Next' }).getAttribute('href')).toBe('/requests?page=2&category=finance');
+    }
+  );
 
   it.each([
     ['absent', {}, null], ['zero', { response_count: 0 }, '0 responses'],
