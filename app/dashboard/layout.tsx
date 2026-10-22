@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
 import { useAuthStore } from '@/store/auth';
@@ -16,81 +16,107 @@ const isBuyerActivityRoute = (pathname: string) =>
   pathname === '/dashboard/orders' || pathname.startsWith('/dashboard/orders/') ||
   pathname === '/dashboard/requests' || pathname.startsWith('/dashboard/requests/');
 
+type CapabilitySnapshot = {
+  owner: string;
+  token: string | null;
+  phase: 'loading' | 'ready' | 'error';
+  sellerStatus: CapabilityStatus | null;
+  workspace: boolean;
+  gateways: boolean;
+};
+
+const buyerAllowedRoutes = ['/dashboard', '/dashboard/inquiries', '/dashboard/orders', '/dashboard/requests', '/dashboard/settings'];
+
 export default function DashboardLayout({ children }: { children: React.ReactNode }) {
-  const { user, isAuthenticated, isLoading, hydrated } = useAuthStore();
+  const { user, token, isAuthenticated, isLoading, hydrated } = useAuthStore();
   const router = useRouter();
   const pathname = usePathname();
-  const [routeReady, setRouteReady] = useState(false);
-  const [sellerStatus, setSellerStatus] = useState<CapabilityStatus | null>(null);
-  const [sellerWorkspaceAvailable, setSellerWorkspaceAvailable] = useState(false);
-  const [gatewaysAvailable, setGatewaysAvailable] = useState(false);
-  const [capabilitiesResolved, setCapabilitiesResolved] = useState(false);
+  const owner = user?.id;
+  const request = useRef(0);
+  const [snapshot, setSnapshot] = useState<CapabilitySnapshot | null>(null);
 
-  useEffect(() => {
-    let cancelled = false;
-    setSellerStatus(null);
-    setSellerWorkspaceAvailable(false);
-    setGatewaysAvailable(false);
-    setCapabilitiesResolved(false);
+  const refreshCapabilities = useCallback(async () => {
+    const version = ++request.current;
+    if (isLoading || !hydrated || !isAuthenticated || !owner) return;
 
-    if (isLoading || !hydrated || !isAuthenticated) return;
-
-    getCapabilities()
-      .then(async (capabilities) => {
-        if (cancelled) return;
-        const status = capabilities.seller.effective_status;
-        setSellerStatus(status);
-        if (status !== 'active') return;
-
-        const [workspace, gateways] = await Promise.allSettled([
-          getSellerWorkspaceCapabilities(), listSellerGateways(),
-        ]);
-        if (!cancelled) {
-          setSellerWorkspaceAvailable(workspace.status === 'fulfilled' && isAWSConnectionAvailable(workspace.value));
-          setGatewaysAvailable(gateways.status === 'fulfilled');
-        }
-      })
-      .catch((err) => {
-        console.error('Failed to fetch dashboard capabilities', err);
-      })
-      .finally(() => {
-        if (!cancelled) {
-          setCapabilitiesResolved(true);
-        }
-      });
-
-    return () => {
-      cancelled = true;
+    // Check the live store as well as request ownership: auth may change before
+    // React has run the previous effect's cleanup.
+    const isCurrent = () => {
+      const auth = useAuthStore.getState();
+      return request.current === version && auth.user?.id === owner &&
+        auth.token === token && auth.isAuthenticated && auth.hydrated && !auth.isLoading;
     };
-  }, [hydrated, isAuthenticated, isLoading, user?.id]);
+    if (!isCurrent()) return;
+    const pending: CapabilitySnapshot = {
+      owner, token, phase: 'loading', sellerStatus: null, workspace: false, gateways: false,
+    };
+    setSnapshot(pending);
+    try {
+      const capabilities = await getCapabilities();
+      if (!isCurrent()) return;
+      const status = capabilities.seller.effective_status;
+      const ready: CapabilitySnapshot = { ...pending, phase: 'ready', sellerStatus: status };
+      setSnapshot(ready);
+      if (status !== 'active') return;
+
+      const [workspace, gateways] = await Promise.allSettled([
+        getSellerWorkspaceCapabilities(), listSellerGateways(),
+      ]);
+      if (!isCurrent()) return;
+      setSnapshot({
+        ...ready,
+        workspace: workspace.status === 'fulfilled' && isAWSConnectionAvailable(workspace.value),
+        gateways: gateways.status === 'fulfilled',
+      });
+    } catch (err) {
+      if (!isCurrent()) return;
+      console.error('Failed to fetch dashboard capabilities', err);
+      setSnapshot({ ...pending, phase: 'error' });
+    }
+  }, [hydrated, isAuthenticated, isLoading, owner, token]);
 
   useEffect(() => {
-    setRouteReady(false);
-    if (isLoading || !hydrated) return;
+    void refreshCapabilities();
+    const onCapabilitiesChanged = () => { void refreshCapabilities(); };
+    window.addEventListener('capabilities:changed', onCapabilitiesChanged);
+    return () => {
+      ++request.current;
+      window.removeEventListener('capabilities:changed', onCapabilitiesChanged);
+    };
+  }, [refreshCapabilities]);
 
+  // Derive access during render so a previous owner's ready state can never
+  // render seller navigation or children while an identity change is pending.
+  const current = snapshot?.owner === owner && snapshot?.token === token ? snapshot : null;
+  const capabilitiesResolved = current?.phase === 'ready';
+  const isSeller = capabilitiesResolved &&
+    (current.sellerStatus === 'active' || current.sellerStatus === 'provisioning');
+  const isSellerActive = capabilitiesResolved && current.sellerStatus === 'active';
+  const sellerWorkspaceAvailable = current?.workspace === true;
+  const gatewaysAvailable = current?.gateways === true;
+  const buyerRoute = buyerAllowedRoutes.some((p) =>
+    pathname === p || (p !== '/dashboard' && pathname.startsWith(`${p}/`)));
+  const authenticated = !isLoading && hydrated && isAuthenticated && !!owner;
+  const routeReady = authenticated && (buyerRoute || isSeller);
+
+  useEffect(() => {
+    if (isLoading || !hydrated) return;
     if (!isAuthenticated) {
       router.push(`/login?redirect=${encodeURIComponent(pathname + (typeof window !== 'undefined' ? window.location.search : ''))}`);
-      return;
-    }
-
-    const roleSellerFallback = user?.role === 'seller' || user?.role === 'admin';
-    const isSeller = capabilitiesResolved
-      ? sellerStatus === 'active' || sellerStatus === 'provisioning'
-      : roleSellerFallback;
-    const buyerAllowedRoutes = ['/dashboard', '/dashboard/inquiries', '/dashboard/orders', '/dashboard/requests', '/dashboard/settings'];
-    const isBuyer = user && !isSeller;
-    if (isBuyer && !buyerAllowedRoutes.some((p) => pathname === p || (p !== '/dashboard' && pathname.startsWith(`${p}/`)))) {
+    } else if (owner && !buyerRoute && capabilitiesResolved && !isSeller) {
       router.push('/dashboard/inquiries');
-      return;
     }
+  }, [buyerRoute, capabilitiesResolved, hydrated, isAuthenticated, isLoading, isSeller, owner, pathname, router]);
 
-    setRouteReady(true);
-  }, [capabilitiesResolved, hydrated, isAuthenticated, isLoading, pathname, router, sellerStatus, user]);
-
-  if (isLoading || !hydrated || !isAuthenticated) {
+  if (authenticated && !buyerRoute && current?.phase === 'error') {
     return (
-      <div className="flex min-h-screen items-center justify-center">
-        <div className="h-8 w-8 animate-spin rounded-full border-4 border-[#3F51B5] border-t-transparent"></div>
+      <div className="flex min-h-screen flex-col items-center justify-center gap-4">
+        <p role="alert">Unable to check seller access. Please try again.</p>
+        <button type="button" onClick={() => { void refreshCapabilities(); }}
+          className="rounded-md bg-[#3F51B5] px-4 py-2 text-white">
+          Retry seller access
+        </button>
+        <Link href="/dashboard">Back to Overview</Link>
       </div>
     );
   }
@@ -103,10 +129,6 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
     );
   }
 
-  const isSeller = capabilitiesResolved
-    ? sellerStatus === 'active' || sellerStatus === 'provisioning'
-    : user?.role === 'seller' || user?.role === 'admin';
-  const isSellerActive = capabilitiesResolved && sellerStatus === 'active';
   const isAdminEmail = user?.email === 'max@ai.market';
   const usesBuyerActivityContext = isBuyerActivityRoute(pathname);
 
@@ -175,7 +197,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
           </div>
         </div>
       </main>
-      {!usesBuyerActivityContext && <SellerSetupProgressBar />}
+      {!usesBuyerActivityContext && isSeller && <SellerSetupProgressBar />}
     </div>
   );
 }
