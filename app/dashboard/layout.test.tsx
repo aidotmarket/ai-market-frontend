@@ -1,8 +1,8 @@
 // @vitest-environment jsdom
 
-import { act, cleanup, render, screen, waitFor } from '@testing-library/react';
+import { act, cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import type React from 'react';
+import { useEffect, useState, type ReactNode } from 'react';
 import type { User } from '@/types';
 import DashboardLayout from './layout';
 import { useAuthStore } from '@/store/auth';
@@ -31,7 +31,7 @@ vi.mock('next/navigation', () => ({
 }));
 
 vi.mock('next/link', () => ({
-  default: ({ children, href }: { children: React.ReactNode; href: string }) => (
+  default: ({ children, href }: { children: ReactNode; href: string }) => (
     <a href={href}>{children}</a>
   ),
 }));
@@ -119,7 +119,7 @@ describe('DashboardLayout hydration guard', () => {
 
     expect(container.querySelector('.animate-spin')).not.toBeNull();
     expect(screen.queryByText('dashboard child')).toBeNull();
-    await new Promise((resolve) => setTimeout(resolve, 0));
+    await act(async () => {});
     expect(navigation.push).not.toHaveBeenCalled();
   });
 
@@ -448,7 +448,7 @@ describe('DashboardLayout hydration guard', () => {
       capabilitiesApi.getCapabilities.mockReturnValue(new Promise((resolve) => {
         resolveCapabilities = resolve;
       }));
-      useAuthStore.setState({ user, isAuthenticated: true, isLoading: false, hydrated: true });
+      useAuthStore.setState({ user, token: 'access-token', isAuthenticated: true, isLoading: false, hydrated: true });
 
       render(<DashboardLayout><div>buyer settings child</div></DashboardLayout>);
 
@@ -508,7 +508,9 @@ describe('DashboardLayout hydration guard', () => {
     });
 
     render(<DashboardLayout><div>account requests child</div></DashboardLayout>);
-    await screen.findByRole('link', { name: 'Listings' });
+    // A legacy seller role grants no navigation while canonical readiness is pending.
+    expect(screen.queryByRole('link', { name: 'Listings' })).toBeNull();
+    expect(screen.getByRole('link', { name: 'My Requests' })).not.toBeNull();
 
     await act(async () => {
       useAuthStore.setState({ user: { ...user, id: 'user-2' } });
@@ -566,8 +568,399 @@ describe('DashboardLayout hydration guard', () => {
     render(<DashboardLayout><div>{childLabel} child must not render</div></DashboardLayout>);
 
     await waitFor(() => {
-      expect(navigation.push).toHaveBeenCalledWith('/dashboard/inquiries');
+      expect(navigation.push).toHaveBeenCalledWith('/dashboard');
     });
     expect(screen.queryByText(`${childLabel} child must not render`)).toBeNull();
+  });
+});
+
+// Controlled transports make every pending and superseded request observable.
+function deferred<T>() {
+  let resolve!: (value: T) => void;
+  let reject!: (reason: Error) => void;
+  const promise = new Promise<T>((yes, no) => { resolve = yes; reject = no; });
+  return { promise, resolve, reject };
+}
+const capability = (effective_status: string) => ({ seller: { effective_status } });
+const signIn = (overrides: Partial<User> = {}) => useAuthStore.setState({
+  user: { ...user, ...overrides }, token: 'access-token',
+  isAuthenticated: true, isLoading: false, hydrated: true,
+});
+const changed = () => window.dispatchEvent(new Event('capabilities:changed'));
+
+describe('DashboardLayout canonical capability ownership', () => {
+  beforeEach(() => {
+    vi.resetAllMocks();
+    navigation.pathname = '/dashboard/listings';
+    window.history.replaceState(null, '', '/');
+    capabilitiesApi.getCapabilities.mockResolvedValue(capability('not_requested'));
+    sellerWorkspaceApi.getSellerWorkspaceCapabilities.mockResolvedValue(enabledWorkspaceCapabilities);
+    gatewaysApi.listSellerGateways.mockResolvedValue([]);
+    signIn();
+  });
+  afterEach(() => { cleanup(); vi.restoreAllMocks(); });
+
+  it.each(['buyer', 'pending'] as const)('waits for canonical readiness for legacy %s direct visits', async (role) => {
+    for (const pathname of ['/dashboard/listings', '/dashboard/seller-workspace']) {
+      for (const status of ['active', 'provisioning']) {
+        navigation.pathname = pathname;
+        navigation.push.mockClear();
+        // Exercise the legacy wire value even though UserRole excludes pending.
+        signIn({ role: role as User['role'] });
+        const read = deferred<ReturnType<typeof capability>>();
+        capabilitiesApi.getCapabilities.mockReturnValueOnce(read.promise);
+        const mounted = render(<DashboardLayout><div>guarded child</div></DashboardLayout>);
+        expect(screen.queryByText('guarded child')).toBeNull();
+        expect(screen.queryByRole('link', { name: 'Listings' })).toBeNull();
+        expect(navigation.push).not.toHaveBeenCalled();
+        await act(async () => read.resolve(capability(status)));
+        expect(screen.getByText('guarded child')).toBeTruthy();
+        expect(screen.getByRole('link', { name: 'Listings' })).toBeTruthy();
+        expect(navigation.push).not.toHaveBeenCalled();
+        mounted.unmount();
+      }
+    }
+  });
+
+  it('refreshes the same persistent layout on the actual opt-in event, then allows a seller link', async () => {
+    navigation.pathname = '/dashboard';
+    const read = deferred<ReturnType<typeof capability>>();
+    capabilitiesApi.getCapabilities.mockResolvedValueOnce(capability('not_requested')).mockReturnValueOnce(read.promise);
+    const view = render(<DashboardLayout><div>persistent child</div></DashboardLayout>);
+    await act(async () => {});
+    expect(screen.queryByRole('link', { name: 'Listings' })).toBeNull();
+    act(changed);
+    expect(capabilitiesApi.getCapabilities).toHaveBeenCalledTimes(2);
+    expect(screen.getByText('persistent child')).toBeTruthy();
+    await act(async () => read.resolve(capability('provisioning')));
+    expect(screen.getByRole('link', { name: 'Listings' }).getAttribute('href')).toBe('/dashboard/listings');
+    navigation.pathname = '/dashboard/listings';
+    view.rerender(<DashboardLayout><div>listing setup child</div></DashboardLayout>);
+    expect(screen.getByText('listing setup child')).toBeTruthy();
+    expect(navigation.push).not.toHaveBeenCalled();
+    expect(capabilitiesApi.getCapabilities).toHaveBeenCalledTimes(2);
+    expect(sellerWorkspaceApi.getSellerWorkspaceCapabilities).not.toHaveBeenCalled();
+    expect(gatewaysApi.listSellerGateways).not.toHaveBeenCalled();
+  });
+
+  it('offers one explicit retry per click after a failed read without redirecting or mounting seller content', async () => {
+    vi.spyOn(console, 'error').mockImplementation(() => {});
+    const first = deferred<ReturnType<typeof capability>>();
+    const retry = deferred<ReturnType<typeof capability>>();
+    capabilitiesApi.getCapabilities.mockReturnValueOnce(first.promise).mockReturnValueOnce(retry.promise);
+    render(<DashboardLayout><div>private child</div></DashboardLayout>);
+    await act(async () => first.reject(new Error('offline')));
+    expect(screen.getByRole('alert').textContent).toContain('Unable to check seller access');
+    expect(screen.queryByText('private child')).toBeNull();
+    expect(navigation.push).not.toHaveBeenCalled();
+    expect(capabilitiesApi.getCapabilities).toHaveBeenCalledTimes(1);
+    fireEvent.click(screen.getByRole('button', { name: 'Retry seller access' }));
+    expect(screen.queryByRole('button')).toBeNull();
+    expect(screen.queryByText('private child')).toBeNull();
+    expect(capabilitiesApi.getCapabilities).toHaveBeenCalledTimes(2);
+    await act(async () => retry.resolve(capability('provisioning')));
+    expect(screen.getByText('private child')).toBeTruthy();
+    expect(navigation.push).not.toHaveBeenCalled();
+  });
+
+  it.each(['not_requested', 'suspended'])('denies %s even for an admin with the admin email', async (status) => {
+    signIn({ role: 'admin', email: 'max@ai.market' });
+    const read = deferred<ReturnType<typeof capability>>();
+    capabilitiesApi.getCapabilities.mockReturnValueOnce(read.promise);
+    render(<DashboardLayout><div>denied child</div></DashboardLayout>);
+    expect(screen.queryByText('denied child')).toBeNull();
+    expect(navigation.push).not.toHaveBeenCalled();
+    await act(async () => read.resolve(capability(status)));
+    expect(navigation.push).toHaveBeenCalledWith(status === 'not_requested' ? '/dashboard' : '/dashboard/inquiries');
+    expect(screen.queryByText('denied child')).toBeNull();
+    expect(sellerWorkspaceApi.getSellerWorkspaceCapabilities).not.toHaveBeenCalled();
+    expect(gatewaysApi.listSellerGateways).not.toHaveBeenCalled();
+  });
+
+  it.each([
+    ['/dashboard/seller-workspace', 'not_requested', '/dashboard'],
+    ['/dashboard/gateways', 'not_requested', '/dashboard'],
+    ['/dashboard/listings', 'not_requested', '/dashboard'],
+    ['/dashboard/seller-workspace', 'suspended', '/dashboard/inquiries'],
+    ['/dashboard/gateways', 'suspended', '/dashboard/inquiries'],
+    ['/dashboard/listings', 'suspended', '/dashboard/inquiries'],
+  ])('routes normal %s entry for %s to %s without guarded children', async (pathname, status, destination) => {
+    navigation.pathname = pathname;
+    const read = deferred<ReturnType<typeof capability>>();
+    capabilitiesApi.getCapabilities.mockReturnValueOnce(read.promise);
+    const view = render(<DashboardLayout><div>guarded entry child</div></DashboardLayout>);
+    expect(navigation.push).not.toHaveBeenCalled();
+    expect(screen.queryByText('guarded entry child')).toBeNull();
+
+    await act(async () => read.resolve(capability(status)));
+    expect(navigation.push.mock.calls).toEqual([[destination]]);
+    expect(screen.queryByText('guarded entry child')).toBeNull();
+    navigation.pathname = destination;
+    view.rerender(<DashboardLayout><div>existing destination child</div></DashboardLayout>);
+    expect(screen.getByText('existing destination child')).toBeTruthy();
+    expect(screen.queryByText('guarded entry child')).toBeNull();
+    expect(screen.queryByRole('link', { name: 'Listings' })).toBeNull();
+    expect(screen.queryByText('seller setup progress')).toBeNull();
+    expect(capabilitiesApi.getCapabilities).toHaveBeenCalledTimes(1);
+    expect(sellerWorkspaceApi.getSellerWorkspaceCapabilities).not.toHaveBeenCalled();
+    expect(gatewaysApi.listSellerGateways).not.toHaveBeenCalled();
+    expect(useAuthStore.getState().user).toEqual(user);
+  });
+
+  it.each(['unknown', undefined, null, { status: 'not_requested' }])(
+    'fails closed for malformed or unknown canonical status %s', async (status) => {
+      capabilitiesApi.getCapabilities.mockResolvedValueOnce({ seller: { effective_status: status } });
+      render(<DashboardLayout><div>unknown status child</div></DashboardLayout>);
+      await act(async () => {});
+      expect(navigation.push.mock.calls).toEqual([['/dashboard/inquiries']]);
+      expect(screen.queryByText('unknown status child')).toBeNull();
+      expect(screen.queryByRole('link', { name: 'Listings' })).toBeNull();
+      expect(sellerWorkspaceApi.getSellerWorkspaceCapabilities).not.toHaveBeenCalled();
+      expect(gatewaysApi.listSellerGateways).not.toHaveBeenCalled();
+    }
+  );
+
+  it.each(['/dashboard', '/dashboard/inquiries/thread', '/dashboard/orders/item', '/dashboard/requests/item', '/dashboard/settings/profile'])(
+    'keeps %s available through capability loading and failure', async (pathname) => {
+      vi.spyOn(console, 'error').mockImplementation(() => {});
+      navigation.pathname = pathname;
+      const read = deferred<ReturnType<typeof capability>>();
+      capabilitiesApi.getCapabilities.mockReturnValueOnce(read.promise);
+      render(<DashboardLayout><div>buyer route child</div></DashboardLayout>);
+      expect(screen.getByText('buyer route child')).toBeTruthy();
+      expect(screen.queryByRole('link', { name: 'Listings' })).toBeNull();
+      await act(async () => read.reject(new Error('offline')));
+      expect(screen.getByText('buyer route child')).toBeTruthy();
+      expect(navigation.push).not.toHaveBeenCalled();
+      expect(capabilitiesApi.getCapabilities).toHaveBeenCalledTimes(1);
+    }
+  );
+
+  it('hides ready seller children immediately on account change, until the new owner resolves', async () => {
+    capabilitiesApi.getCapabilities.mockResolvedValueOnce(capability('active'));
+    const next = deferred<ReturnType<typeof capability>>();
+    capabilitiesApi.getCapabilities.mockReturnValueOnce(next.promise);
+    render(<DashboardLayout><div>seller private child</div></DashboardLayout>);
+    await screen.findByRole('link', { name: 'Seller Workspace' });
+    act(() => signIn({ id: 'user-2' }));
+    expect(screen.queryByText('seller private child')).toBeNull();
+    expect(screen.queryByRole('link', { name: 'Listings' })).toBeNull();
+    expect(navigation.push).not.toHaveBeenCalled();
+    await act(async () => next.resolve(capability('not_requested')));
+    expect(screen.queryByText('seller private child')).toBeNull();
+    expect(navigation.push).toHaveBeenCalledWith('/dashboard');
+  });
+
+  it.each(['account change', 'token change', 'signout', 'newer refresh'])(
+    'rejects a stale capability completion after %s', async (transition) => {
+      const old = deferred<ReturnType<typeof capability>>();
+      const next = deferred<ReturnType<typeof capability>>();
+      capabilitiesApi.getCapabilities.mockReturnValueOnce(old.promise).mockReturnValueOnce(next.promise);
+      render(<DashboardLayout><div>seller private child</div></DashboardLayout>);
+      act(() => {
+        if (transition === 'account change') signIn({ id: 'user-2' });
+        else if (transition === 'token change') useAuthStore.setState({ token: 'replacement-token' });
+        else if (transition === 'signout') useAuthStore.setState({ user: null, token: null, isAuthenticated: false });
+        else changed();
+      });
+      await act(async () => old.resolve(capability('active')));
+      expect(screen.queryByText('seller private child')).toBeNull();
+      expect(screen.queryByRole('link', { name: 'Listings' })).toBeNull();
+      expect(sellerWorkspaceApi.getSellerWorkspaceCapabilities).not.toHaveBeenCalled();
+      expect(gatewaysApi.listSellerGateways).not.toHaveBeenCalled();
+      if (transition !== 'signout') {
+        expect(navigation.push).not.toHaveBeenCalled();
+        await act(async () => next.resolve(capability('provisioning')));
+        expect(screen.getByText('seller private child')).toBeTruthy();
+      } else {
+        expect(navigation.push).toHaveBeenCalledWith('/login?redirect=%2Fdashboard%2Flistings');
+        expect(capabilitiesApi.getCapabilities).toHaveBeenCalledTimes(1);
+      }
+    }
+  );
+
+  it('keeps the newest refresh when older reads finish out of order (including rejection)', async () => {
+    const older = deferred<ReturnType<typeof capability>>();
+    const middle = deferred<ReturnType<typeof capability>>();
+    const newest = deferred<ReturnType<typeof capability>>();
+    capabilitiesApi.getCapabilities.mockReturnValueOnce(older.promise).mockReturnValueOnce(middle.promise).mockReturnValueOnce(newest.promise);
+    render(<DashboardLayout><div>newest child</div></DashboardLayout>);
+    act(changed);
+    act(changed);
+    await act(async () => newest.resolve(capability('provisioning')));
+    expect(screen.getByText('newest child')).toBeTruthy();
+    await act(async () => {
+      older.resolve(capability('not_requested'));
+      middle.reject(new Error('stale error'));
+    });
+    expect(screen.getByText('newest child')).toBeTruthy();
+    expect(navigation.push).not.toHaveBeenCalled();
+    expect(screen.queryByRole('alert')).toBeNull();
+    expect(capabilitiesApi.getCapabilities).toHaveBeenCalledTimes(3);
+  });
+
+  it.each(['account change', 'token change', 'signout', 'newer refresh'])(
+    'rejects old workspace/gateway subreads after %s', async (transition) => {
+      const workspace = deferred<typeof enabledWorkspaceCapabilities>();
+      const gateways = deferred<never[]>();
+      const next = deferred<ReturnType<typeof capability>>();
+      capabilitiesApi.getCapabilities.mockResolvedValueOnce(capability('active')).mockReturnValueOnce(next.promise);
+      sellerWorkspaceApi.getSellerWorkspaceCapabilities.mockReturnValueOnce(workspace.promise);
+      gatewaysApi.listSellerGateways.mockReturnValueOnce(gateways.promise);
+      render(<DashboardLayout><div>subread child</div></DashboardLayout>);
+      await act(async () => {});
+      expect(screen.getByText('subread child')).toBeTruthy();
+      expect(sellerWorkspaceApi.getSellerWorkspaceCapabilities).toHaveBeenCalledTimes(1);
+      act(() => {
+        if (transition === 'account change') signIn({ id: 'user-2' });
+        else if (transition === 'token change') useAuthStore.setState({ token: 'replacement-token' });
+        else if (transition === 'signout') useAuthStore.setState({ user: null, token: null, isAuthenticated: false });
+        else changed();
+      });
+      // A ready same-owner view survives revalidation; auth loss still hides it.
+      if (transition === 'token change' || transition === 'newer refresh') {
+        expect(screen.getByText('subread child')).toBeTruthy();
+        expect(screen.getByRole('link', { name: 'Listings' })).toBeTruthy();
+      } else {
+        expect(screen.queryByText('subread child')).toBeNull();
+        expect(screen.queryByRole('link', { name: 'Listings' })).toBeNull();
+      }
+      if (transition !== 'signout') await act(async () => next.resolve(capability('provisioning')));
+      await act(async () => { workspace.resolve(enabledWorkspaceCapabilities); gateways.resolve([]); });
+      expect(screen.queryByRole('link', { name: 'Seller Workspace' })).toBeNull();
+      expect(screen.queryByRole('link', { name: 'Gateways' })).toBeNull();
+      expect(screen.queryByRole('link', { name: 'Sales' })).toBeNull();
+      if (transition !== 'signout') {
+        expect(screen.getByText('subread child')).toBeTruthy();
+        expect(navigation.push).not.toHaveBeenCalled();
+      } else expect(screen.queryByText('subread child')).toBeNull();
+    }
+  );
+
+  const refreshCases = ['event', 'rotation'] as const;
+  const revalidate = (trigger: typeof refreshCases[number]) => {
+    if (trigger === 'event') changed();
+    else useAuthStore.setState({ token: 'replacement-token' });
+  };
+
+  it.each(refreshCases.flatMap((trigger) =>
+    ['active', 'provisioning'].flatMap((initial) =>
+      ['active', 'provisioning', 'not_requested', 'suspended', 'failure'].map((result) =>
+        ({ trigger, initial, result }))))
+  )('preserves local publish state during $trigger ($initial → $result), then applies the owned result', async ({ trigger, initial, result }) => {
+    let mounts = 0;
+    function PublicationStep() {
+      const [draft, setDraft] = useState('');
+      useEffect(() => { mounts += 1; }, []);
+      return <input aria-label="Unsaved publication" value={draft} onChange={(event) => setDraft(event.target.value)} />;
+    }
+    navigation.pathname = '/dashboard/seller-workspace';
+    const next = deferred<ReturnType<typeof capability>>();
+    capabilitiesApi.getCapabilities.mockResolvedValueOnce(capability(initial)).mockReturnValueOnce(next.promise);
+    const error = vi.spyOn(console, 'error').mockImplementation(() => {});
+    try {
+      render(<DashboardLayout><PublicationStep /></DashboardLayout>);
+      const input = await screen.findByRole('textbox', { name: 'Unsaved publication' });
+      fireEvent.change(input, { target: { value: 'publish step: unsaved title' } });
+      expect(mounts).toBe(1);
+      act(() => revalidate(trigger));
+      expect(screen.getByRole('textbox', { name: 'Unsaved publication' })).toBe(input);
+      expect((input as HTMLInputElement).value).toBe('publish step: unsaved title');
+      expect(mounts).toBe(1);
+      expect(navigation.push).not.toHaveBeenCalled();
+      expect(capabilitiesApi.getCapabilities).toHaveBeenCalledTimes(2);
+      if (result === 'failure') await act(async () => next.reject(new Error('latest read failed')));
+      else await act(async () => next.resolve(capability(result)));
+      if (result === 'active' || result === 'provisioning') {
+        expect(screen.getByRole('textbox', { name: 'Unsaved publication' })).toBe(input);
+        expect((input as HTMLInputElement).value).toBe('publish step: unsaved title');
+        expect(navigation.push).not.toHaveBeenCalled();
+        expect(screen.queryByRole('link', { name: 'Sales' }) !== null).toBe(result === 'active');
+      } else {
+        expect(screen.queryByRole('textbox')).toBeNull();
+        expect(screen.queryByRole('link', { name: 'Listings' })).toBeNull();
+        if (result === 'failure') {
+          expect(screen.getByRole('alert')).toBeTruthy();
+          expect(navigation.push).not.toHaveBeenCalled();
+          await act(async () => {});
+          expect(capabilitiesApi.getCapabilities).toHaveBeenCalledTimes(2);
+          capabilitiesApi.getCapabilities.mockResolvedValueOnce(capability('provisioning'));
+          fireEvent.click(screen.getByRole('button', { name: 'Retry seller access' }));
+          await screen.findByRole('textbox');
+          expect(capabilitiesApi.getCapabilities).toHaveBeenCalledTimes(3);
+          expect(mounts).toBe(2);
+          return;
+        }
+        expect(navigation.push).toHaveBeenCalledExactlyOnceWith(result === 'not_requested' ? '/dashboard' : '/dashboard/inquiries');
+      }
+      expect(mounts).toBe(1);
+    } finally { error.mockRestore(); }
+  });
+
+  it.each(['success', 'error'])(
+    'rejects an in-flight old-token %s after same-owner rotation resolves a denial', async (completion) => {
+      const old = deferred<ReturnType<typeof capability>>();
+      const latest = deferred<ReturnType<typeof capability>>();
+      capabilitiesApi.getCapabilities.mockResolvedValueOnce(capability('active'))
+        .mockReturnValueOnce(old.promise).mockReturnValueOnce(latest.promise);
+      render(<DashboardLayout><div>rotation child</div></DashboardLayout>);
+      await screen.findByRole('link', { name: 'Seller Workspace' });
+      act(changed);
+      act(() => useAuthStore.setState({ token: 'replacement-token' }));
+      expect(screen.getByText('rotation child')).toBeTruthy();
+      await act(async () => latest.resolve(capability('suspended')));
+      expect(screen.queryByText('rotation child')).toBeNull();
+      await act(async () => {
+        if (completion === 'success') old.resolve(capability('active'));
+        else old.reject(new Error('superseded credential error'));
+      });
+      expect(screen.queryByText('rotation child')).toBeNull();
+      expect(screen.queryByRole('alert')).toBeNull();
+      expect(navigation.push).toHaveBeenCalledExactlyOnceWith('/dashboard/inquiries');
+      expect(sellerWorkspaceApi.getSellerWorkspaceCapabilities).toHaveBeenCalledTimes(1);
+      expect(gatewaysApi.listSellerGateways).toHaveBeenCalledTimes(1);
+    }
+  );
+
+  it.each(['account change', 'signout', 'missing token', 'loading auth', 'unhydrated'])(
+    'immediately hides a ready snapshot during refresh on %s', async (transition) => {
+      const read = deferred<ReturnType<typeof capability>>();
+      capabilitiesApi.getCapabilities.mockResolvedValueOnce(capability('active')).mockReturnValueOnce(read.promise);
+      render(<DashboardLayout><div>private publish step</div></DashboardLayout>);
+      await screen.findByRole('link', { name: 'Seller Workspace' });
+      act(changed);
+      expect(screen.getByText('private publish step')).toBeTruthy();
+      act(() => {
+        if (transition === 'account change') signIn({ id: 'user-2' });
+        else if (transition === 'signout') useAuthStore.setState({ user: null, token: null, isAuthenticated: false });
+        else if (transition === 'missing token') useAuthStore.setState({ token: null });
+        else if (transition === 'loading auth') useAuthStore.setState({ isLoading: true });
+        else useAuthStore.setState({ hydrated: false });
+      });
+      expect(screen.queryByText('private publish step')).toBeNull();
+      expect(screen.queryByRole('link', { name: 'Listings' })).toBeNull();
+      await act(async () => read.resolve(capability('active')));
+      expect(screen.queryByText('private publish step')).toBeNull();
+      expect(screen.queryByRole('link', { name: 'Seller Workspace' })).toBeNull();
+      expect(sellerWorkspaceApi.getSellerWorkspaceCapabilities).toHaveBeenCalledTimes(1);
+      expect(gatewaysApi.listSellerGateways).toHaveBeenCalledTimes(1);
+    }
+  );
+
+  it('cleans up the event listener and rejects late completions on unmount', async () => {
+    const add = vi.spyOn(window, 'addEventListener');
+    const remove = vi.spyOn(window, 'removeEventListener');
+    const read = deferred<ReturnType<typeof capability>>();
+    capabilitiesApi.getCapabilities.mockReturnValueOnce(read.promise);
+    const view = render(<DashboardLayout><div>unmounted child</div></DashboardLayout>);
+    const listener = add.mock.calls.find(([name]) => name === 'capabilities:changed')?.[1];
+    expect(listener).toBeTypeOf('function');
+    view.unmount();
+    expect(remove).toHaveBeenCalledWith('capabilities:changed', listener);
+    act(changed);
+    await act(async () => read.resolve(capability('active')));
+    expect(capabilitiesApi.getCapabilities).toHaveBeenCalledTimes(1);
+    expect(sellerWorkspaceApi.getSellerWorkspaceCapabilities).not.toHaveBeenCalled();
+    expect(gatewaysApi.listSellerGateways).not.toHaveBeenCalled();
   });
 });
