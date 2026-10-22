@@ -105,6 +105,8 @@ export default function NotificationCenter({ enabled }: { enabled: boolean }) {
   const [isUnavailable, setIsUnavailable] = useState(false);
   // Only the latest read may replace the snapshot; writes and lifecycle cleanup invalidate it.
   const readVersion = useRef(0);
+  const lifecycle = useRef(0);
+  const pendingWrites = useRef(0);
   const containerRef = useRef<HTMLDivElement>(null);
 
   const visibleUnreadCount = Math.min(unreadCount ?? 0, 99);
@@ -119,10 +121,12 @@ export default function NotificationCenter({ enabled }: { enabled: boolean }) {
         getUnreadNotificationCount(),
       ]);
       if (version !== readVersion.current) return;
+      const nextItems = list.items;
+      const nextCount = count.unread_count;
       setHasSnapshot(true);
       setIsUnavailable(false);
-      setNotifications(list.items);
-      setUnreadCount(count.unread_count);
+      setNotifications(nextItems);
+      setUnreadCount(nextCount);
     } catch {
       if (version !== readVersion.current) return;
       setIsUnavailable(true);
@@ -134,7 +138,11 @@ export default function NotificationCenter({ enabled }: { enabled: boolean }) {
 
   useEffect(() => {
     void refresh();
-    return () => { readVersion.current += 1; };
+    return () => {
+      readVersion.current += 1;
+      lifecycle.current += 1;
+      pendingWrites.current = 0;
+    };
   }, [refresh]);
 
   useEffect(() => {
@@ -146,21 +154,36 @@ export default function NotificationCenter({ enabled }: { enabled: boolean }) {
     return () => window.removeEventListener('mousedown', onPointerDown);
   }, [isOpen]);
 
+  // A read during a save may observe pre-save state. Reconcile after every
+  // overlapping save has settled (including failures), independent of read versions.
+  const saveReadStatus = async (save: () => Promise<unknown>) => {
+    const generation = lifecycle.current;
+    pendingWrites.current += 1;
+    readVersion.current += 1;
+    setIsLoading(false);
+    try {
+      await save();
+    } catch {
+      // The paired refresh recovers the saved state without guessing a rollback.
+    } finally {
+      if (generation === lifecycle.current) {
+        pendingWrites.current -= 1;
+        if (pendingWrites.current === 0) void refresh();
+      }
+    }
+  };
+
   if (!enabled) return null;
 
   const handleNotificationClick = async (notification: NotificationItem) => {
     if (!notification.read_at) {
-      const version = ++readVersion.current;
-      setIsLoading(false);
+      void saveReadStatus(() => markNotificationRead(notification.id));
       setNotifications((prev) =>
         prev.map((item) =>
           item.id === notification.id ? { ...item, read_at: new Date().toISOString() } : item
         )
       );
       setUnreadCount((prev) => prev === null ? null : Math.max(0, prev - 1));
-      markNotificationRead(notification.id).catch(() => {
-        if (version === readVersion.current) void refresh();
-      });
     }
 
     const action = getNotificationClickAction(notification);
@@ -174,13 +197,9 @@ export default function NotificationCenter({ enabled }: { enabled: boolean }) {
   };
 
   const handleMarkAllRead = async () => {
-    const version = ++readVersion.current;
-    setIsLoading(false);
+    void saveReadStatus(markAllNotificationsRead);
     setNotifications((prev) => prev.map((item) => ({ ...item, read_at: item.read_at ?? new Date().toISOString() })));
     setUnreadCount((prev) => prev === null ? null : 0);
-    await markAllNotificationsRead().catch(() => {
-      if (version === readVersion.current) void refresh();
-    });
   };
 
   return (

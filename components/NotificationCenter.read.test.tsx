@@ -34,7 +34,13 @@ beforeEach(() => {
   mocks.get.mockImplementation((url: string) => url === failing
     ? Promise.reject(new Error('offline'))
     : Promise.resolve({ data: url === '/notifications' ? { items, total: items.length } : { unread_count: count } }));
-  mocks.patch.mockResolvedValue({ data: {} });
+  mocks.patch.mockImplementation((url: string) => {
+    const all = url === '/notifications/read-all';
+    const newlyRead = items.filter(item => !item.read_at && (all || url === `/notifications/${encodeURIComponent(item.id)}/read`));
+    items = items.map(item => newlyRead.includes(item) ? { ...item, read_at: '2026-10-22T10:01:00Z' } : item);
+    count = all ? 0 : Math.max(0, count - newlyRead.length);
+    return Promise.resolve({ data: {} });
+  });
 });
 afterEach(cleanup);
 
@@ -154,12 +160,17 @@ describe('NotificationCenter customer reads', () => {
     await open();
     fireEvent.click(bell());
     const old = deferred<{ data: { items: NotificationItem[] } }>();
+    const write = deferred<{ data: object }>();
+    mocks.patch.mockReturnValue(write.promise);
     mocks.get.mockImplementation((url: string) => url === '/notifications' ? old.promise : Promise.resolve({ data: { unread_count: 1 } }));
     fireEvent.click(bell());
     fireEvent.click(screen.getByRole('button', { name: /Ticket updated/ }));
     await act(async () => old.resolve({ data: { items: [notice] } }));
     expect(bell().getAttribute('aria-label')).toBe('Notifications');
     expect(mocks.patch).toHaveBeenCalledWith('/notifications/n%2F1/read');
+    mocks.get.mockImplementation((url: string) => Promise.resolve({ data: url === '/notifications' ? { items: [{ ...notice, read_at: 'saved' }] } : { unread_count: 0 } }));
+    await act(async () => write.resolve({ data: {} }));
+    expect(bell().getAttribute('aria-label')).toBe('Notifications');
   });
 
   it('ignores reads from before the component was disabled', async () => {
@@ -200,4 +211,163 @@ describe('NotificationCenter customer reads', () => {
     await waitFor(() => expect(mocks.patch).toHaveBeenCalledWith('/notifications/read-all'));
     expect(screen.getByLabelText('Read notification')).toBeTruthy();
   });
+
+  it.each(['one', 'all'])('reconciles a failed %s save after an intervening successful read', async kind => {
+    items = [notice]; count = 7; // Count includes unread records outside the displayed page.
+    const write = deferred<{ data: object }>();
+    mocks.patch.mockReturnValue(write.promise);
+    render(<NotificationCenter enabled />);
+    await open();
+    fireEvent.click(screen.getByRole('button', { name: kind === 'all' ? 'Mark all read' : /Ticket updated/ }));
+    if (kind === 'all') fireEvent.click(bell());
+    await open();
+    const before = mocks.get.mock.calls.length;
+    await act(async () => write.reject(new Error('save failed')));
+    expect(mocks.get.mock.calls.length).toBe(before + 2);
+    expect(bell().getAttribute('aria-label')).toBe('Notifications, 7 unread');
+    expect(screen.getByLabelText('Unread notification')).toBeTruthy();
+  });
+
+  it.each(['success', 'failure'])('waits for overlapping single/all saves when the single save ends in %s', async outcome => {
+    items = [notice, { ...notice, id: 'n-2', title: 'Second notice' }]; count = 9;
+    const single = deferred<{ data: object }>();
+    const all = deferred<{ data: object }>();
+    mocks.patch.mockImplementation((url: string) => url === '/notifications/read-all' ? all.promise : single.promise);
+    render(<NotificationCenter enabled />);
+    await open();
+    fireEvent.click(screen.getByRole('button', { name: /Ticket updated/ }));
+    await open(); // Successful pre-save read restores the unread records.
+    fireEvent.click(screen.getByRole('button', { name: 'Mark all read' }));
+    const before = mocks.get.mock.calls.length;
+    items = items.map(item => ({ ...item, read_at: 'saved' })); count = 0;
+    await act(async () => all.resolve({ data: {} })); // Later-started save finishes first.
+    expect(mocks.get.mock.calls.length).toBe(before);
+    fireEvent.click(bell());
+    await open(); // Newer read must not suppress reconciliation of the remaining save.
+    const afterOpen = mocks.get.mock.calls.length;
+    await act(async () => outcome === 'success' ? single.resolve({ data: {} }) : single.reject(new Error('save failed')));
+    expect(mocks.get.mock.calls.length).toBe(afterOpen + 2);
+    expect(bell().getAttribute('aria-label')).toBe('Notifications');
+    expect(screen.getAllByLabelText('Read notification')).toHaveLength(2);
+  });
+
+  it('recovers the successful single save when the overlapping mark-all fails last', async () => {
+    const second = { ...notice, id: 'n-2', title: 'Second notice' };
+    items = [notice, second]; count = 9;
+    const single = deferred<{ data: object }>();
+    const all = deferred<{ data: object }>();
+    mocks.patch.mockImplementation((url: string) => url === '/notifications/read-all' ? all.promise : single.promise);
+    render(<NotificationCenter enabled />);
+    await open();
+    fireEvent.click(screen.getByRole('button', { name: /Ticket updated/ }));
+    await open();
+    fireEvent.click(screen.getByRole('button', { name: 'Mark all read' }));
+    const before = mocks.get.mock.calls.length;
+    items = [{ ...notice, read_at: 'saved' }, second]; count = 8;
+    await act(async () => single.resolve({ data: {} }));
+    expect(mocks.get.mock.calls.length).toBe(before);
+    await act(async () => all.reject(new Error('save failed')));
+    expect(mocks.get.mock.calls.length).toBe(before + 2);
+    expect(bell().getAttribute('aria-label')).toBe('Notifications, 8 unread');
+    expect(screen.getAllByLabelText('Read notification')).toHaveLength(1);
+    expect(screen.getAllByLabelText('Unread notification')).toHaveLength(1);
+  });
+
+  it.each(['success', 'failure'])('ignores a pre-save read completing with %s after reconciliation', async outcome => {
+    items = [notice]; count = 1;
+    const write = deferred<{ data: object }>();
+    mocks.patch.mockReturnValue(write.promise);
+    render(<NotificationCenter enabled />);
+    await open();
+    fireEvent.click(screen.getByRole('button', { name: /Ticket updated/ }));
+    const old = deferred<{ data: { items: NotificationItem[] } }>();
+    mocks.get.mockImplementation((url: string) => url === '/notifications' ? old.promise : Promise.resolve({ data: { unread_count: 1 } }));
+    fireEvent.click(bell());
+    items = [{ ...notice, read_at: 'saved' }]; count = 0;
+    mocks.get.mockImplementation((url: string) => Promise.resolve({ data: url === '/notifications' ? { items } : { unread_count: count } }));
+    await act(async () => write.resolve({ data: {} }));
+    await act(async () => outcome === 'success' ? old.resolve({ data: { items: [notice] } }) : old.reject(new Error('old read failed')));
+    expect(bell().getAttribute('aria-label')).toBe('Notifications');
+    expect(screen.getByLabelText('Read notification')).toBeTruthy();
+    expect(screen.queryByRole('alert')).toBeNull();
+  });
+
+  it.each(['reject', 'null list', 'null count'])('retains known list and unknown count when post-save reconciliation returns %s', async outcome => {
+    items = [notice]; count = 1;
+    const write = deferred<{ data: object }>();
+    mocks.patch.mockReturnValue(write.promise);
+    render(<NotificationCenter enabled />);
+    await open();
+    fireEvent.click(screen.getByRole('button', { name: 'Mark all read' }));
+    mocks.get.mockImplementation((url: string) => outcome === 'reject' ? Promise.reject(new Error('offline')) : Promise.resolve({ data:
+      url === '/notifications'
+        ? outcome === 'null list' ? null : { items: [{ ...notice, title: 'Partial snapshot' }] }
+        : outcome === 'null count' ? null : { unread_count: 0 } }));
+    await act(async () => write.resolve({ data: {} }));
+    expect(screen.getByText(notice.title)).toBeTruthy();
+    expect(screen.getByLabelText('Read notification')).toBeTruthy();
+    expect(screen.getByRole('alert').textContent).toContain('may be out of date');
+    expect(bell().getAttribute('aria-label')).toContain('unread count unavailable');
+    expect((screen.getByRole('button', { name: 'Mark all read' }) as HTMLButtonElement).disabled).toBe(true);
+    items = [{ ...notice, read_at: 'saved' }]; count = 0;
+    mocks.get.mockImplementation((url: string) => Promise.resolve({ data: url === '/notifications' ? { items } : { unread_count: count } }));
+    fireEvent.click(screen.getByRole('button', { name: 'Retry' }));
+    await waitFor(() => expect(screen.queryByRole('alert')).toBeNull());
+    expect(bell().getAttribute('aria-label')).toBe('Notifications');
+  });
+
+  it.each(['disable', 'unmount', 'reenable'] as const)('retires pending write callbacks on %s', async mode => {
+    items = [notice]; count = 1;
+    const writes = [deferred<{ data: object }>(), deferred<{ data: object }>()];
+    mocks.patch.mockReturnValueOnce(writes[0].promise).mockReturnValueOnce(writes[1].promise);
+    const view = render(<NotificationCenter enabled />);
+    await open();
+    fireEvent.click(screen.getByRole('button', { name: /Ticket updated/ }));
+    await open();
+    fireEvent.click(screen.getByRole('button', { name: 'Mark all read' }));
+    if (mode === 'unmount') view.unmount();
+    else view.rerender(<NotificationCenter enabled={false} />);
+    let currentWrite: ReturnType<typeof deferred<{ data: object }>> | undefined;
+    if (mode === 'reenable') {
+      items = [{ ...notice, id: 'new-session', title: 'New session notice' }]; count = 4;
+      view.rerender(<NotificationCenter enabled />);
+      await waitFor(() => expect(bell().getAttribute('aria-label')).toBe('Notifications, 4 unread'));
+      currentWrite = deferred<{ data: object }>();
+      mocks.patch.mockReturnValue(currentWrite.promise);
+      fireEvent.click(screen.getByRole('button', { name: 'Mark all read' }));
+    }
+    const before = mocks.get.mock.calls.length;
+    await act(async () => {
+      writes[0].resolve({ data: {} });
+      writes[1].reject(new Error('retired failure'));
+    });
+    expect(mocks.get.mock.calls.length).toBe(before);
+    if (mode === 'reenable') {
+      expect(screen.getByText('New session notice')).toBeTruthy();
+      expect(bell().getAttribute('aria-label')).toBe('Notifications');
+      items = items.map(item => ({ ...item, read_at: 'saved' })); count = 0;
+      await act(async () => currentWrite!.resolve({ data: {} }));
+      expect(mocks.get.mock.calls.length).toBe(before + 2);
+      expect(bell().getAttribute('aria-label')).toBe('Notifications');
+    } else expect(screen.queryByRole('button', { name: /^Notifications/ })).toBeNull();
+  });
+
+
+  it('keeps an unknown count unknown during a single save and makes no reads while initially disabled', async () => {
+    items = [notice]; count = 1;
+    const write = deferred<{ data: object }>();
+    mocks.patch.mockReturnValue(write.promise);
+    const view = render(<NotificationCenter enabled={false} />);
+    expect(mocks.get).not.toHaveBeenCalled();
+    view.rerender(<NotificationCenter enabled />);
+    await open();
+    fireEvent.click(bell());
+    failing = '/notifications/unread-count';
+    await open();
+    fireEvent.click(screen.getByRole('button', { name: /Ticket updated/ }));
+    expect(bell().getAttribute('aria-label')).toContain('unread count unavailable');
+    await act(async () => write.reject(new Error('save failed')));
+    expect(bell().getAttribute('aria-label')).toContain('unread count unavailable');
+  });
+
 });
