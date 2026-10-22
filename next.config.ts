@@ -1,6 +1,13 @@
 import type { NextConfig } from 'next';
 
 const nextConfig: NextConfig = {
+  // Next substitutes a build-time literal, independent of runtime metadata.
+  env: {
+    FRONTEND_BUILD_REVISION: process.env.RAILWAY_GIT_COMMIT_SHA?.length === 40
+      && /^[0-9a-f]{40}$/i.test(process.env.RAILWAY_GIT_COMMIT_SHA)
+      ? process.env.RAILWAY_GIT_COMMIT_SHA!.toLowerCase()
+      : '',
+  },
   reactStrictMode: true,
   async headers() {
     const privateHeaders = [
