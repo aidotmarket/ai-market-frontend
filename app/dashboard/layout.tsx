@@ -36,8 +36,12 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
   const [snapshot, setSnapshot] = useState<CapabilitySnapshot | null>(null);
 
   const refreshCapabilities = useCallback(async () => {
+    // Invalidate in-flight reads even when authentication is no longer usable.
     const version = ++request.current;
-    if (isLoading || !hydrated || !isAuthenticated || !owner) return;
+    if (isLoading || !hydrated || !isAuthenticated || !owner || !token) {
+      setSnapshot(null);
+      return;
+    }
 
     // Check the live store as well as request ownership: auth may change before
     // React has run the previous effect's cleanup.
@@ -50,7 +54,10 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
     const pending: CapabilitySnapshot = {
       owner, token, phase: 'loading', sellerStatus: null, workspace: false, gateways: false,
     };
-    setSnapshot(pending);
+    // Credentials own requests; a ready view belongs to the stable action owner.
+    // Revalidation must not remount the seller page and discard unsaved state.
+    setSnapshot((previous) => previous?.owner === owner && previous.phase === 'ready'
+      ? previous : pending);
     try {
       const capabilities = await getCapabilities();
       if (!isCurrent()) return;
@@ -87,7 +94,8 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
 
   // Derive access during render so a previous owner's ready state can never
   // render seller navigation or children while an identity change is pending.
-  const current = snapshot?.owner === owner && snapshot?.token === token ? snapshot : null;
+  const current = !isLoading && hydrated && isAuthenticated && !!token &&
+    snapshot?.owner === owner ? snapshot : null;
   const capabilitiesResolved = current?.phase === 'ready';
   const isSeller = capabilitiesResolved &&
     (current.sellerStatus === 'active' || current.sellerStatus === 'provisioning');
@@ -96,7 +104,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
   const gatewaysAvailable = current?.gateways === true;
   const buyerRoute = buyerAllowedRoutes.some((p) =>
     pathname === p || (p !== '/dashboard' && pathname.startsWith(`${p}/`)));
-  const authenticated = !isLoading && hydrated && isAuthenticated && !!owner;
+  const authenticated = !isLoading && hydrated && isAuthenticated && !!owner && !!token;
   const routeReady = authenticated && (buyerRoute || isSeller);
 
   useEffect(() => {

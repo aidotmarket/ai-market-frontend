@@ -2,7 +2,7 @@
 
 import { act, cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import type React from 'react';
+import { useEffect, useState, type ReactNode } from 'react';
 import type { User } from '@/types';
 import DashboardLayout from './layout';
 import { useAuthStore } from '@/store/auth';
@@ -31,7 +31,7 @@ vi.mock('next/navigation', () => ({
 }));
 
 vi.mock('next/link', () => ({
-  default: ({ children, href }: { children: React.ReactNode; href: string }) => (
+  default: ({ children, href }: { children: ReactNode; href: string }) => (
     <a href={href}>{children}</a>
   ),
 }));
@@ -448,7 +448,7 @@ describe('DashboardLayout hydration guard', () => {
       capabilitiesApi.getCapabilities.mockReturnValue(new Promise((resolve) => {
         resolveCapabilities = resolve;
       }));
-      useAuthStore.setState({ user, isAuthenticated: true, isLoading: false, hydrated: true });
+      useAuthStore.setState({ user, token: 'access-token', isAuthenticated: true, isLoading: false, hydrated: true });
 
       render(<DashboardLayout><div>buyer settings child</div></DashboardLayout>);
 
@@ -817,8 +817,14 @@ describe('DashboardLayout canonical capability ownership', () => {
         else if (transition === 'signout') useAuthStore.setState({ user: null, token: null, isAuthenticated: false });
         else changed();
       });
-      expect(screen.queryByText('subread child')).toBeNull();
-      expect(screen.queryByRole('link', { name: 'Listings' })).toBeNull();
+      // A ready same-owner view survives revalidation; auth loss still hides it.
+      if (transition === 'token change' || transition === 'newer refresh') {
+        expect(screen.getByText('subread child')).toBeTruthy();
+        expect(screen.getByRole('link', { name: 'Listings' })).toBeTruthy();
+      } else {
+        expect(screen.queryByText('subread child')).toBeNull();
+        expect(screen.queryByRole('link', { name: 'Listings' })).toBeNull();
+      }
       if (transition !== 'signout') await act(async () => next.resolve(capability('provisioning')));
       await act(async () => { workspace.resolve(enabledWorkspaceCapabilities); gateways.resolve([]); });
       expect(screen.queryByRole('link', { name: 'Seller Workspace' })).toBeNull();
@@ -828,6 +834,116 @@ describe('DashboardLayout canonical capability ownership', () => {
         expect(screen.getByText('subread child')).toBeTruthy();
         expect(navigation.push).not.toHaveBeenCalled();
       } else expect(screen.queryByText('subread child')).toBeNull();
+    }
+  );
+
+  const refreshCases = ['event', 'rotation'] as const;
+  const revalidate = (trigger: typeof refreshCases[number]) => {
+    if (trigger === 'event') changed();
+    else useAuthStore.setState({ token: 'replacement-token' });
+  };
+
+  it.each(refreshCases.flatMap((trigger) =>
+    ['active', 'provisioning'].flatMap((initial) =>
+      ['active', 'provisioning', 'not_requested', 'suspended', 'failure'].map((result) =>
+        ({ trigger, initial, result }))))
+  )('preserves local publish state during $trigger ($initial → $result), then applies the owned result', async ({ trigger, initial, result }) => {
+    let mounts = 0;
+    function PublicationStep() {
+      const [draft, setDraft] = useState('');
+      useEffect(() => { mounts += 1; }, []);
+      return <input aria-label="Unsaved publication" value={draft} onChange={(event) => setDraft(event.target.value)} />;
+    }
+    navigation.pathname = '/dashboard/seller-workspace';
+    const next = deferred<ReturnType<typeof capability>>();
+    capabilitiesApi.getCapabilities.mockResolvedValueOnce(capability(initial)).mockReturnValueOnce(next.promise);
+    const error = vi.spyOn(console, 'error').mockImplementation(() => {});
+    try {
+      render(<DashboardLayout><PublicationStep /></DashboardLayout>);
+      const input = await screen.findByRole('textbox', { name: 'Unsaved publication' });
+      fireEvent.change(input, { target: { value: 'publish step: unsaved title' } });
+      expect(mounts).toBe(1);
+      act(() => revalidate(trigger));
+      expect(screen.getByRole('textbox', { name: 'Unsaved publication' })).toBe(input);
+      expect((input as HTMLInputElement).value).toBe('publish step: unsaved title');
+      expect(mounts).toBe(1);
+      expect(navigation.push).not.toHaveBeenCalled();
+      expect(capabilitiesApi.getCapabilities).toHaveBeenCalledTimes(2);
+      if (result === 'failure') await act(async () => next.reject(new Error('latest read failed')));
+      else await act(async () => next.resolve(capability(result)));
+      if (result === 'active' || result === 'provisioning') {
+        expect(screen.getByRole('textbox', { name: 'Unsaved publication' })).toBe(input);
+        expect((input as HTMLInputElement).value).toBe('publish step: unsaved title');
+        expect(navigation.push).not.toHaveBeenCalled();
+        expect(screen.queryByRole('link', { name: 'Sales' }) !== null).toBe(result === 'active');
+      } else {
+        expect(screen.queryByRole('textbox')).toBeNull();
+        expect(screen.queryByRole('link', { name: 'Listings' })).toBeNull();
+        if (result === 'failure') {
+          expect(screen.getByRole('alert')).toBeTruthy();
+          expect(navigation.push).not.toHaveBeenCalled();
+          await act(async () => {});
+          expect(capabilitiesApi.getCapabilities).toHaveBeenCalledTimes(2);
+          capabilitiesApi.getCapabilities.mockResolvedValueOnce(capability('provisioning'));
+          fireEvent.click(screen.getByRole('button', { name: 'Retry seller access' }));
+          await screen.findByRole('textbox');
+          expect(capabilitiesApi.getCapabilities).toHaveBeenCalledTimes(3);
+          expect(mounts).toBe(2);
+          return;
+        }
+        expect(navigation.push).toHaveBeenCalledExactlyOnceWith(result === 'not_requested' ? '/dashboard' : '/dashboard/inquiries');
+      }
+      expect(mounts).toBe(1);
+    } finally { error.mockRestore(); }
+  });
+
+  it.each(['success', 'error'])(
+    'rejects an in-flight old-token %s after same-owner rotation resolves a denial', async (completion) => {
+      const old = deferred<ReturnType<typeof capability>>();
+      const latest = deferred<ReturnType<typeof capability>>();
+      capabilitiesApi.getCapabilities.mockResolvedValueOnce(capability('active'))
+        .mockReturnValueOnce(old.promise).mockReturnValueOnce(latest.promise);
+      render(<DashboardLayout><div>rotation child</div></DashboardLayout>);
+      await screen.findByRole('link', { name: 'Seller Workspace' });
+      act(changed);
+      act(() => useAuthStore.setState({ token: 'replacement-token' }));
+      expect(screen.getByText('rotation child')).toBeTruthy();
+      await act(async () => latest.resolve(capability('suspended')));
+      expect(screen.queryByText('rotation child')).toBeNull();
+      await act(async () => {
+        if (completion === 'success') old.resolve(capability('active'));
+        else old.reject(new Error('superseded credential error'));
+      });
+      expect(screen.queryByText('rotation child')).toBeNull();
+      expect(screen.queryByRole('alert')).toBeNull();
+      expect(navigation.push).toHaveBeenCalledExactlyOnceWith('/dashboard/inquiries');
+      expect(sellerWorkspaceApi.getSellerWorkspaceCapabilities).toHaveBeenCalledTimes(1);
+      expect(gatewaysApi.listSellerGateways).toHaveBeenCalledTimes(1);
+    }
+  );
+
+  it.each(['account change', 'signout', 'missing token', 'loading auth', 'unhydrated'])(
+    'immediately hides a ready snapshot during refresh on %s', async (transition) => {
+      const read = deferred<ReturnType<typeof capability>>();
+      capabilitiesApi.getCapabilities.mockResolvedValueOnce(capability('active')).mockReturnValueOnce(read.promise);
+      render(<DashboardLayout><div>private publish step</div></DashboardLayout>);
+      await screen.findByRole('link', { name: 'Seller Workspace' });
+      act(changed);
+      expect(screen.getByText('private publish step')).toBeTruthy();
+      act(() => {
+        if (transition === 'account change') signIn({ id: 'user-2' });
+        else if (transition === 'signout') useAuthStore.setState({ user: null, token: null, isAuthenticated: false });
+        else if (transition === 'missing token') useAuthStore.setState({ token: null });
+        else if (transition === 'loading auth') useAuthStore.setState({ isLoading: true });
+        else useAuthStore.setState({ hydrated: false });
+      });
+      expect(screen.queryByText('private publish step')).toBeNull();
+      expect(screen.queryByRole('link', { name: 'Listings' })).toBeNull();
+      await act(async () => read.resolve(capability('active')));
+      expect(screen.queryByText('private publish step')).toBeNull();
+      expect(screen.queryByRole('link', { name: 'Seller Workspace' })).toBeNull();
+      expect(sellerWorkspaceApi.getSellerWorkspaceCapabilities).toHaveBeenCalledTimes(1);
+      expect(gatewaysApi.listSellerGateways).toHaveBeenCalledTimes(1);
     }
   );
 
