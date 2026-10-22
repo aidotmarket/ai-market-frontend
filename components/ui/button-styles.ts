@@ -1,0 +1,8 @@
+const base = 'inline-flex min-h-10 w-full cursor-pointer items-center justify-center gap-2 rounded-lg border px-4 py-2 text-sm font-semibold shadow-sm transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-600 focus-visible:ring-offset-2 enabled:active:translate-y-px disabled:cursor-not-allowed disabled:border-gray-200 disabled:bg-gray-200 disabled:text-gray-500 disabled:shadow-none motion-reduce:transition-none sm:w-auto';
+
+export const primaryButtonClass = `${base} border-[#3F51B5] bg-[#3F51B5] text-white enabled:hover:bg-[#34449C] enabled:active:bg-[#293880]`;
+export const secondaryButtonClass = `${base} border-gray-300 bg-white text-gray-700 enabled:hover:bg-gray-50 enabled:active:bg-gray-100`;
+export const dangerSecondaryButtonClass = `${base} border-red-300 bg-white text-red-700 enabled:hover:bg-red-50 enabled:active:bg-red-100 focus-visible:ring-red-600`;
+export const buttonRowClass = 'flex flex-wrap items-center gap-3 border-t border-gray-100 pt-4';
+export const buttonSpinnerClass = 'h-4 w-4 shrink-0 animate-spin rounded-full border-2 border-current border-r-transparent motion-reduce:animate-none';
+export const disclosureSummaryClass = "flex min-h-10 cursor-pointer items-center gap-3 rounded-lg px-3 py-2 text-sm font-semibold text-gray-700 hover:bg-gray-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-600 focus-visible:ring-offset-2 list-none before:h-2 before:w-2 before:shrink-0 before:-rotate-45 before:border-r-2 before:border-b-2 before:content-[''] group-open:before:rotate-45 [&::-webkit-details-marker]:hidden";

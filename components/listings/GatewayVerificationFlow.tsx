@@ -13,6 +13,7 @@ import { getDataVerificationPayInReadiness } from '@/api/dataVerificationPayin';
 import DataVerificationPaymentMethod from '@/components/DataVerificationPaymentMethod';
 import ScanFindingsBadge from './ScanFindingsBadge';
 import { useCloudflareInstaller } from './CloudflareInstaller';
+import { primaryButtonClass, secondaryButtonClass, dangerSecondaryButtonClass, buttonRowClass, buttonSpinnerClass } from '@/components/ui/button-styles';
 import type {
   GatewayVerificationAction, GatewayVerificationDescription, GatewayVerificationEpoch,
   GatewayVerificationProbe, GatewayVerificationProbeCommand, GatewayVerificationStartCommand,
@@ -34,7 +35,6 @@ interface Attempt {
 }
 const runningStates = new Set(['CREATED', 'QUOTED', 'AUTHORIZING', 'AUTHORIZED', 'SCANNING_LOCAL', 'NARRATING_CLOUD', 'CAPTURE_PENDING', 'CAPTURE_RECONCILING']);
 const terminalStates = new Set(['DECLINED', 'WITHDRAWN', 'SUPERSEDED', 'AUTH_FAILED', 'CANCELLED_VOIDED', 'FAILED_VOIDED', 'CAPTURE_FAILED']);
-const buttonClass = 'rounded-lg border border-indigo-600 px-4 py-2 font-medium text-indigo-700 disabled:opacity-50';
 const choices = {
   domain_class: ['education_learning', 'software_technology', 'business_finance', 'health_life_sciences', 'public_social', 'physical_environment'],
   record_granularity: ['entity', 'event', 'measurement', 'document', 'relationship', 'aggregate'],
@@ -67,6 +67,8 @@ export default function GatewayVerificationFlow({ listingId, sellerId, verifier,
   const storageKey = `gateway-verification:${sellerId}:${listingId}`;
   const attempt = useRef<Attempt | null>(null);
   const lock = useRef(false);
+  // Presentation only; the existing busy flag still controls every request.
+  const busyPrimary = useRef(false);
   const mounted = useRef(false);
   const nextPollAt = useRef(0);
   const [ready, setReady] = useState(false);
@@ -91,7 +93,7 @@ export default function GatewayVerificationFlow({ listingId, sellerId, verifier,
   const statusRead = useRef(0);
   const verifierStatus = cloudflare ? cloudflareStatus : awsStatus;
   const runnerId = cloudflare ? cloudflareStatus?.runner_id : aws ? awsStatus?.runner_id : verifier?.kind === 'gateway' ? verifier.runnerId : undefined;
-  const installer = useCloudflareInstaller(listingId, sellerId, verifier?.kind === 'cloudflare' ? verifier.connectionId : undefined, cloudflareStatus, statusFresh);
+  const installer = useCloudflareInstaller(listingId, sellerId, verifier?.kind === 'cloudflare' ? verifier.connectionId : undefined, cloudflareStatus, statusFresh, !probe && !epoch && !attempt.current?.epochId);
   useEffect(() => { if (installer.resumed) setOpened(true); }, [installer.resumed]);
 
   async function readVerifierStatus() {
@@ -182,7 +184,7 @@ export default function GatewayVerificationFlow({ listingId, sellerId, verifier,
     setError('');
     try { await operation(); }
     catch (cause) { if (mounted.current) setError(verificationErrorCopy(cause, verifier?.kind)); }
-    finally { lock.current = false; if (mounted.current) setBusy(false); }
+    finally { lock.current = false; busyPrimary.current = false; if (mounted.current) setBusy(false); }
   }
   useEffect(() => {
     mounted.current = true;
@@ -250,6 +252,7 @@ export default function GatewayVerificationFlow({ listingId, sellerId, verifier,
 
   function checkData() {
     if (cloud && (!statusFresh || (cloudflare && !verifierStatus?.eligible) || verifierStatus?.state !== 'ready')) return;
+    busyPrimary.current = true;
     void run(async () => {
       if (attempt.current?.epochId) { await checkStatus(); return; }
       const saved = (attempt.current?.quoteRefused ? null : attempt.current) ?? { probeCommand: { confirm: true as const, preview_requested: preview, idempotency_key: crypto.randomUUID() } };
@@ -345,13 +348,23 @@ export default function GatewayVerificationFlow({ listingId, sellerId, verifier,
   const hasBinding = epoch?.listing_id === listingId && !!epoch.source_handle_id;
   const canReview = epoch?.state === 'CAPTURED' && epoch.publication_allowed && fullReview && hasBinding;
   const canNewAttempt = (!attempt.current?.epochId && !attempt.current?.startCommand && !!probe && probe.state !== 'queued') || (epoch && !epoch.reconciliation_required && (terminalStates.has(epoch.state) || epoch.state === 'PUBLISHED'));
-  if (!opened) return <button className={buttonClass} onClick={() => setOpened(true)}>Verify this data</button>;
-  return <section className="space-y-5 rounded-xl border border-gray-200 bg-white p-6" aria-labelledby="gateway-verification-heading">
-    <h2 id="gateway-verification-heading" className="text-xl font-semibold">{probe?.state === 'complete' && probe.quote_id ? 'Verify this data' : epoch || attempt.current?.epochId || (probe && probe.state !== 'queued') ? 'Data verification' : 'Check verification availability'}</h2>
-    <p>{aws ? 'Check your data in your own AWS account, then review a quote. The check and quote do not need a card. Data values stay in your AWS account.' : cloudflare ? 'Check your data in your own Cloudflare account, then review a quote. The check and quote do not need a card. Data values stay in your Cloudflare account.' : 'Check your data in your own gateway, then review a quote. The check and quote are free and do not need a card. Data values stay in your gateway.'}</p>
+  const checking = busy && (busyPrimary.current || paying) || probe?.state === 'queued' || !!attempt.current?.epochId && !epoch || !!epoch && (runningStates.has(epoch.state) || epoch.reconciliation_required);
+  const statusLabel = checking ? 'Checking' : epoch ? epoch.state === 'CAPTURED' ? 'Ready to review' : epoch.state === 'PUBLISHED' ? 'Published' : ['AUTH_FAILED', 'CAPTURE_FAILED', 'FAILED_VOIDED'].includes(epoch.state) ? 'Unavailable' : 'Completed'
+    : probe?.state === 'complete' && probe.quote_id ? 'Quote ready' : error || probe?.state === 'refused' ? 'Unavailable'
+    : installer.active || installer.hasPrimaryAction ? installer.statusLabel : !ready || (cloud && !statusFresh) ? 'Checking'
+    : cloud && verifierStatus?.state === 'waiting' ? 'Installing' : cloud && (verifierStatus?.state !== 'ready' || (cloudflare && !verifierStatus?.eligible)) ? 'Unavailable' : 'Ready';
+  const statusClass = statusLabel === 'Unavailable' || statusLabel === 'Needs attention' ? 'bg-amber-50 text-amber-800 ring-amber-200' : statusLabel === 'Ready' || statusLabel === 'Quote ready' || statusLabel === 'Published' || statusLabel === 'Ready to review' ? 'bg-emerald-50 text-emerald-800 ring-emerald-200' : 'bg-indigo-50 text-indigo-800 ring-indigo-200';
+  const checkButtonClass = installer.hasPrimaryAction || attempt.current?.quoteRefused ? secondaryButtonClass : primaryButtonClass;
+  if (!opened) return <button className={secondaryButtonClass} onClick={() => setOpened(true)}>Verify this data</button>;
+  return <section className="space-y-5 rounded-xl border border-gray-200 bg-white p-5 text-sm leading-6 text-gray-700 shadow-sm sm:p-6" aria-labelledby="gateway-verification-heading">
+    <div className="flex flex-wrap items-start justify-between gap-3">
+      <h2 id="gateway-verification-heading" className="text-xl font-semibold text-gray-900">{probe?.state === 'complete' && probe.quote_id ? 'Verify this data' : epoch || attempt.current?.epochId || (probe && probe.state !== 'queued') ? 'Data verification' : 'Check verification availability'}</h2>
+      <span className={`inline-flex shrink-0 items-center rounded-full px-3 py-1 text-xs font-semibold ring-1 ring-inset ${statusClass}`}>Status: {statusLabel}</span>
+    </div>
+    <p className="max-w-3xl">{aws ? 'Check your data in your own AWS account, then review a quote. The check and quote do not need a card. Data values stay in your AWS account.' : cloudflare ? 'Check your data in your own Cloudflare account, then review a quote. The check and quote do not need a card. Data values stay in your Cloudflare account.' : 'Check your data in your own gateway, then review a quote. The check and quote are free and do not need a card. Data values stay in your gateway.'}</p>
     {error && <p ref={errorRef} role="alert" tabIndex={-1} className="rounded-lg bg-red-50 p-3 text-red-800">{error}</p>}
     {aws && (probe?.refusal === 'aws_source_too_large' || error === verificationRefusalCopy('aws_source_too_large')) && <p><Link href="/dashboard/gateways" className="underline">Set up your own AIM Data gateway</Link> with a seller-owned S3 mount using Mountpoint for Amazon S3 or rclone.</p>}
-    {aws && <>
+    {aws && <div className="space-y-3 rounded-xl border border-gray-200 bg-gray-50/50 p-4 sm:p-5">
       <h3 className="font-semibold">AWS verifier</h3>
       <p role="status">{!statusFresh ? 'Checking verifier status…' : awsStatus?.state === 'ready' ? 'Ready' : awsStatus?.state === 'removed' ? 'Removed' : awsStatus?.state === 'waiting' ? 'Waiting for verifier' : 'Set up the verifier to check this data.'}</p>
       {awsStatus?.region && <p>Region: {awsStatus.region}</p>}
@@ -359,75 +372,85 @@ export default function GatewayVerificationFlow({ listingId, sellerId, verifier,
       {awsStatus?.registered_at && <p>Registered at: <time dateTime={awsStatus.registered_at}>{awsStatus.registered_at}</time></p>}
       {awsStatus?.poll_interval_minutes && <p>Work may wait up to {awsStatus.poll_interval_minutes} minute(s) for the next verifier poll.</p>}
       {awsStatus?.state === 'waiting' && awsStatus.setup_expires_at && <p>Setup expires at {awsStatus.setup_expires_at}. If registration expires or has already been used by an unexpected verifier, check its registered hash and time, then remove it and set up a fresh verifier. An exact registration retry recovers its acknowledgment without creating another verifier.</p>}
-      <button className={buttonClass} disabled={busy || !statusFresh} onClick={() => setVerifierDecision(runnerId && awsStatus?.state !== 'removed' ? 'replace' : 'setup')}>Set up the verifier</button>
-      <button className={buttonClass} disabled={busy} onClick={() => void run(readVerifierStatus)}>Check verifier status</button>
+      <div className={buttonRowClass}>
+        <button className={secondaryButtonClass} disabled={busy || !statusFresh} onClick={() => setVerifierDecision(runnerId && awsStatus?.state !== 'removed' ? 'replace' : 'setup')}>Set up the verifier</button>
+        <button className={secondaryButtonClass} disabled={busy} onClick={() => void run(readVerifierStatus)}>Check verifier status</button>
+      </div>
       <p>{AWS_COST_DISCLOSURE}</p>
       <p>The setup link contains a single-use registration that expires after 30 minutes. It is visible in your AWS console, stack parameters and browser history. Check the registered code hash and time before proceeding. Setup does not authorize a probe.</p>
-    </>}
+    </div>}
     {installer.panel}
-    {cloudflare && !installer.active && <>
+    {cloudflare && !installer.active && <div className="space-y-3 rounded-xl border border-gray-200 bg-gray-50/50 p-4 sm:p-5">
       <h3 className="font-semibold">Cloudflare verifier</h3>
       <p role="status">{!statusFresh ? 'Checking verifier status…' : cloudflareStatus?.state === 'ready' ? 'Ready' : cloudflareStatus?.state === 'removed' ? 'Removed' : cloudflareStatus?.state === 'waiting' ? 'Waiting for verifier' : 'No verifier is set up for this data yet.'}</p>
       {cloudflareStatus?.binary_sha256 && <p>Registered binary SHA-256: <code>{cloudflareStatus.binary_sha256}</code></p>}
       {cloudflareStatus?.worker_identity && <p>Registered Worker identity: {cloudflareStatus.worker_identity.mode} <code>{cloudflareStatus.worker_identity.sha256}</code></p>}
       {cloudflareStatus?.registered_at && <p>Registered at: <time dateTime={cloudflareStatus.registered_at}>{cloudflareStatus.registered_at}</time></p>}
       {cloudflareStatus?.state === 'waiting' && <p>{CLOUDFLARE_RUN_NOW_COPY}</p>}
-      <button className={buttonClass} disabled={busy} onClick={() => void run(readVerifierStatus)}>Check verifier status</button>
+      <div className={buttonRowClass}><button className={secondaryButtonClass} disabled={busy} onClick={() => void run(readVerifierStatus)}>Check verifier status</button></div>
       <p>{CLOUDFLARE_COST_DISCLOSURE}</p>
       <p><a href="https://developers.cloudflare.com/workers/platform/pricing/" target="_blank" rel="noopener noreferrer" className="underline">Workers pricing</a>; <a href="https://developers.cloudflare.com/containers/platform/pricing/" target="_blank" rel="noopener noreferrer" className="underline">Containers pricing</a>; <a href="https://developers.cloudflare.com/r2/pricing/" target="_blank" rel="noopener noreferrer" className="underline">R2 pricing</a></p>
       {(probe?.refusal === 'cloudflare_source_too_large' || error === verificationRefusalCopy('cloudflare_source_too_large')) && <Link href="/dashboard/gateways" className="underline">Set up your own AIM Data gateway</Link>}
-    </>}
-    {runnerId && (!cloud || verifierStatus?.state !== 'removed') && <button className={buttonClass} disabled={busy} onClick={() => setVerifierDecision('remove')}>Remove verifier</button>}
-    {verifierDecision && <div role="group" aria-label="Confirm verifier change">
+    </div>}
+    {runnerId && (!cloud || verifierStatus?.state !== 'removed') && <div className={buttonRowClass}><button className={dangerSecondaryButtonClass} disabled={busy} onClick={() => setVerifierDecision('remove')}>Remove verifier</button></div>}
+    {verifierDecision && <div className="space-y-3 rounded-xl border border-gray-200 bg-gray-50 p-4" role="group" aria-label="Confirm verifier change">
       <p>{verifierDecision === 'remove' ? 'Remove this verifier and stop new verification work?' : verifierDecision === 'replace' ? 'Replace the existing verifier and its receipt key? This stops its verification work.' : 'Set up a scoped verifier in your own AWS account?'}</p>
       <p>{cloudflare ? CLOUDFLARE_REMOVE_COPY : aws ? 'Deleting the CloudFormation stack stops its AWS resources and costs. Removing the verifier here does not delete the stack. Marketplace delivery is unchanged.' : 'Marketplace delivery is unchanged.'}</p>
-      <button className={buttonClass} disabled={busy || (verifierDecision !== 'setup' && !runnerId)} onClick={confirmVerifierDecision}>Confirm {verifierDecision === 'remove' ? 'removal' : verifierDecision === 'replace' ? 'replacement' : 'setup'}</button>
-      <button className={buttonClass} disabled={busy} onClick={() => setVerifierDecision(null)}>Keep current verifier</button>
+      <div className={buttonRowClass}>
+        <button className={verifierDecision === 'remove' || verifierDecision === 'replace' ? dangerSecondaryButtonClass : secondaryButtonClass} disabled={busy || (verifierDecision !== 'setup' && !runnerId)} onClick={confirmVerifierDecision}>Confirm {verifierDecision === 'remove' ? 'removal' : verifierDecision === 'replace' ? 'replacement' : 'setup'}</button>
+        <button className={secondaryButtonClass} disabled={busy} onClick={() => setVerifierDecision(null)}>Keep current verifier</button>
+      </div>
     </div>}
     {(!installer.resumed || installer.ready) && !probe && !epoch && !attempt.current?.epochId && <>
-      <label className="block"><input type="checkbox" checked={preview} disabled={busy || (!!attempt.current && !attempt.current.quoteRefused)} onChange={e => setPreview(e.target.checked)} /> Include column names and row counts in the findings</label>
-      <button className={buttonClass} disabled={!ready || busy || (cloud && (!statusFresh || (cloudflare && !verifierStatus?.eligible) || verifierStatus?.state !== 'ready'))} onClick={checkData}>{installer.resumed ? 'Start free check' : busy ? 'Checking…' : attempt.current?.quoteRefused ? 'Get a new quote' : 'Check data and get quote'}</button>
+      <label className="flex items-start gap-3"><input className="mt-1 h-4 w-4 shrink-0 accent-[#3F51B5]" type="checkbox" checked={preview} disabled={busy || (!!attempt.current && !attempt.current.quoteRefused)} onChange={e => setPreview(e.target.checked)} /> Include column names and row counts in the findings</label>
+      <div className={buttonRowClass}><button className={checkButtonClass} aria-busy={busy && busyPrimary.current} disabled={!ready || busy || (cloud && (!statusFresh || (cloudflare && !verifierStatus?.eligible) || verifierStatus?.state !== 'ready'))} onClick={checkData}>{busy && busyPrimary.current && <span aria-hidden="true" className={buttonSpinnerClass} />}{installer.resumed ? 'Start free check' : busy ? 'Checking…' : attempt.current?.quoteRefused ? 'Get a new quote' : 'Check data and get quote'}</button></div>
     </>}
     {attempt.current?.epochId && !epoch && <p role="status">Loading your existing verification. Check again to follow its status.</p>}
     {probe?.state === 'queued' && <p role="status">{aws ? 'Waiting for your AWS verifier to check the data. No ai.market charge has been made; AWS charges apply.' : cloudflare ? 'Waiting for your Cloudflare verifier to check the data. No ai.market charge has been made; Cloudflare charges apply.' : 'Waiting for your gateway to check the data. No charge has been made.'}</p>}
     {cloudflare && !installer.active && (probe?.state === 'queued' || (epoch && runningStates.has(epoch.state))) && <p>Your Cloudflare verifier checks for work automatically. If work is delayed, check verifier status.</p>}
     {probe?.state === 'refused' && <p role="alert">{verificationRefusalCopy(probe.refusal, verifier?.kind)}</p>}
     {probe?.state === 'complete' && probe.quote_id && probe.maximum_hold_usd && !epoch && !attempt.current?.epochId && !setup && <>
-      <h3 className="font-semibold">Your verification quote</h3>
-      <p>A temporary hold of up to ${probe.maximum_hold_usd} will be placed on your card. The final charge is twice the cost of preparing the written findings, between $1 and $25. You pay for completed findings whether you publish or decline them. If verification fails before completion, the hold is released.</p>
+      <div className="space-y-2 rounded-xl border border-indigo-200 bg-indigo-50/50 p-4 sm:p-5">
+        <h3 className="text-base font-semibold text-gray-900">Your verification quote</h3>
+        <p><strong className="block text-lg font-semibold text-gray-900">A temporary hold of up to ${probe.maximum_hold_usd} will be placed on your card.</strong> The final charge is twice the cost of preparing the written findings, between $1 and $25. You pay for completed findings whether you publish or decline them. If verification fails before completion, the hold is released.</p>
+      </div>
       <p>Verification covers the complete supported data for this listing version. It does not assess accuracy, legality, or fitness for a purpose. {aws ? 'Your AWS verifier' : cloudflare ? 'Your Cloudflare verifier' : 'Your gateway'} runs ai.market’s open-source scanner in an environment you control.</p>
       <fieldset disabled={busy || !!attempt.current?.startCommand} className="space-y-3">
         <legend className="font-semibold">Describe your data</legend>
-        {(Object.keys(choices) as Array<keyof typeof choices>).map(key => <label key={key} className="block">{fieldLabels[key]}<select className="ml-3 rounded border p-2" value={description[key] ?? ''} onChange={e => setDescription(current => ({ ...current, [key]: e.target.value }))}>
+        {(Object.keys(choices) as Array<keyof typeof choices>).map(key => <label key={key} className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">{fieldLabels[key]}<select className="min-w-0 rounded-lg border border-gray-300 bg-white p-2 sm:w-1/2" value={description[key] ?? ''} onChange={e => setDescription(current => ({ ...current, [key]: e.target.value }))}>
           <option value="">Choose one</option>{choices[key].map(value => <option key={value} value={value}>{label(value)}</option>)}
         </select></label>)}
         {(['intended_use_tags', 'known_limitation_tags'] as const).map(key => <fieldset key={key}><legend>{key === 'intended_use_tags' ? 'Intended uses (choose up to five)' : 'Known limitations (choose up to five)'}</legend>
           {(key === 'intended_use_tags' ? useChoices : limitationChoices).map(value => <label key={value} className="mr-4 inline-block"><input type="checkbox" checked={(description[key] as string[]).includes(value)} disabled={(description[key]?.length ?? 0) >= 5 && !(description[key] as string[]).includes(value)} onChange={e => setDescription(current => ({ ...current, [key]: e.target.checked ? [...current[key]!, value].sort() : current[key]!.filter(tag => tag !== value) }))} /> {label(value)}</label>)}
         </fieldset>)}
       </fieldset>
-      <label className="block"><input type="checkbox" checked={publicationAck} onChange={e => setPublicationAck(e.target.checked)} /> I understand the charge and that I can publish all findings unedited or decline publication after reviewing them.</label>
-      <label className="block"><input type="checkbox" checked={corpusAck} onChange={e => setCorpusAck(e.target.checked)} /> I agree that the verification record and approved summary statistics will be retained in ai.market’s verification records, including if I decline publication.</label>
-      <button className={buttonClass} disabled={busy || !publicationAck || !corpusAck || !completeDescription} onClick={paidStart}>Start paid verification</button>
+      <div className="space-y-3 rounded-xl border border-gray-200 p-4">
+        <label className="flex items-start gap-3"><input className="mt-1 h-4 w-4 shrink-0 accent-[#3F51B5]" type="checkbox" checked={publicationAck} onChange={e => setPublicationAck(e.target.checked)} /> I understand the charge and that I can publish all findings unedited or decline publication after reviewing them.</label>
+        <label className="flex items-start gap-3"><input className="mt-1 h-4 w-4 shrink-0 accent-[#3F51B5]" type="checkbox" checked={corpusAck} onChange={e => setCorpusAck(e.target.checked)} /> I agree that the verification record and approved summary statistics will be retained in ai.market’s verification records, including if I decline publication.</label>
+      </div>
+      <div className={buttonRowClass}><button className={primaryButtonClass} aria-busy={busy && paying} disabled={busy || !publicationAck || !corpusAck || !completeDescription} onClick={paidStart}>{busy && paying && <span aria-hidden="true" className={buttonSpinnerClass} />}Start paid verification</button></div>
       {busy && paying && <p role="status" className="text-gray-600">Checking your payment method…</p>}
     </>}
-    {setup && <><DataVerificationPaymentMethod returnToListing={{ listingId, sellerId }} /><button className={buttonClass} onClick={() => setSetup(false)}>Back to verification</button><p>After adding your card, return here and choose Start paid verification to continue.</p></>}
+    {setup && <><DataVerificationPaymentMethod returnToListing={{ listingId, sellerId }} /><div className={buttonRowClass}><button className={secondaryButtonClass} onClick={() => setSetup(false)}>Back to verification</button></div><p>After adding your card, return here and choose Start paid verification to continue.</p></>}
     {epoch && <>
       {(runningStates.has(epoch.state) || epoch.reconciliation_required) && <p role="status">{epoch.reconciliation_required ? 'We are confirming your payment. Please wait before starting again.' : 'Verification is in progress. You can return to this page to check it.'}</p>}
       {epoch.state === 'CAPTURED' && <>
         <h3 className="font-semibold">Review your findings</h3><p>These findings are private. Buyers can see them only if you publish them.</p><p>Charged: ${epoch.captured_usd}</p>
         {fullReview ? <ScanFindingsBadge scanFindings={fullReview} /> : <p>The complete findings are not available to review yet. Please check again before deciding whether to publish.</p>}
-        <div className="flex gap-3"><button className={buttonClass} disabled={busy || !canReview} onClick={() => setConfirmAction('publish')}>Publish all findings</button><button className={buttonClass} disabled={busy || !canReview} onClick={() => setConfirmAction('decline')}>Decline publication</button></div>
+        <div className={buttonRowClass}><button className={secondaryButtonClass} disabled={busy || !canReview} onClick={() => setConfirmAction('publish')}>Publish all findings</button><button className={secondaryButtonClass} disabled={busy || !canReview} onClick={() => setConfirmAction('decline')}>Decline publication</button></div>
       </>}
-      {epoch.state === 'PUBLISHED' && <><p>These findings are published. Publishing a new verification will replace the previous findings.</p><button className={buttonClass} disabled={busy || !hasBinding} onClick={() => setConfirmAction('withdraw')}>Withdraw findings</button></>}
+      {epoch.state === 'PUBLISHED' && <><p>These findings are published. Publishing a new verification will replace the previous findings.</p><div className={buttonRowClass}><button className={secondaryButtonClass} disabled={busy || !hasBinding} onClick={() => setConfirmAction('withdraw')}>Withdraw findings</button></div></>}
       {epoch.state === 'SUPERSEDED' && <p>These findings were replaced by a newer published verification.</p>}
       {epoch.state === 'WITHDRAWN' && <p>These findings have been withdrawn.</p>}
       {epoch.state === 'DECLINED' && <p>You declined publication. The completed verification charge is unchanged.</p>}
       {['FAILED_VOIDED', 'CANCELLED_VOIDED'].includes(epoch.state) && <p>Verification ended and the temporary hold was released. No completed verification charge was made.</p>}
       {['AUTH_FAILED', 'CAPTURE_FAILED'].includes(epoch.state) && <p>The payment could not be completed. Please check your payment status before starting again.</p>}
-      {['AUTHORIZED', 'SCANNING_LOCAL'].includes(epoch.state) && <button className={buttonClass} disabled={busy || !hasBinding} onClick={() => setConfirmAction('cancel')}>Cancel verification</button>}
+      {['AUTHORIZED', 'SCANNING_LOCAL'].includes(epoch.state) && <div className={buttonRowClass}><button className={secondaryButtonClass} disabled={busy || !hasBinding} onClick={() => setConfirmAction('cancel')}>Cancel verification</button></div>}
     </>}
-    {confirmAction && <div role="group" aria-label="Confirm your decision"><p>{confirmAction === 'publish' ? 'Publish the complete findings unedited? This replaces any previous published findings.' : confirmAction === 'decline' ? 'Decline publication? The completed verification charge is unchanged.' : confirmAction === 'withdraw' ? 'Withdraw these findings from the public listing?' : 'Cancel verification and release any unsettled hold?'}</p><button className={buttonClass} disabled={busy} onClick={() => lifecycle(confirmAction)}>Confirm {confirmAction === 'publish' ? 'publication' : confirmAction === 'decline' ? 'decline' : confirmAction === 'withdraw' ? 'withdrawal' : 'cancellation'}</button><button className={buttonClass} disabled={busy} onClick={() => setConfirmAction(null)}>Keep reviewing</button></div>}
-    {(attempt.current?.probeId || attempt.current?.epochId) && <button className={buttonClass} disabled={busy} onClick={() => void run(checkStatus)}>Check again</button>}
-    {ready && canNewAttempt && <button className={buttonClass} disabled={busy} onClick={newAttempt}>Get a new quote</button>}
+    {confirmAction && <div className="space-y-3 rounded-xl border border-gray-200 bg-gray-50 p-4" role="group" aria-label="Confirm your decision"><p>{confirmAction === 'publish' ? 'Publish the complete findings unedited? This replaces any previous published findings.' : confirmAction === 'decline' ? 'Decline publication? The completed verification charge is unchanged.' : confirmAction === 'withdraw' ? 'Withdraw these findings from the public listing?' : 'Cancel verification and release any unsettled hold?'}</p><div className={buttonRowClass}><button className={secondaryButtonClass} disabled={busy} onClick={() => lifecycle(confirmAction)}>Confirm {confirmAction === 'publish' ? 'publication' : confirmAction === 'decline' ? 'decline' : confirmAction === 'withdraw' ? 'withdrawal' : 'cancellation'}</button><button className={secondaryButtonClass} disabled={busy} onClick={() => setConfirmAction(null)}>Keep reviewing</button></div></div>}
+    {((attempt.current?.probeId || attempt.current?.epochId) || (ready && canNewAttempt)) && <div className={buttonRowClass}>
+      {(attempt.current?.probeId || attempt.current?.epochId) && <button className={secondaryButtonClass} disabled={busy} onClick={() => void run(checkStatus)}>Check again</button>}
+      {ready && canNewAttempt && <button className={secondaryButtonClass} disabled={busy} onClick={newAttempt}>Get a new quote</button>}
+    </div>}
   </section>;
 }
