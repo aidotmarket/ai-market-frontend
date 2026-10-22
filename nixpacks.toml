@@ -1,7 +1,8 @@
-[variables]
-NIXPACKS_NODE_VERSION = "24.22.1"
-
 [phases.setup]
+# NixOS/nixpkgs commit 62ef8c83d850a195c2dfc95975ac1d4b915e6086:
+# pkgs/development/web/nodejs/v24.nix contains Node 24.22.1 (CVE-2026-111497 fix).
+# https://github.com/NixOS/nixpkgs/blob/62ef8c83d850a195c2dfc95975ac1d4b915e6086/pkgs/development/web/nodejs/v24.nix
+nixpkgsArchive = "62ef8c83d850a195c2dfc95975ac1d4b915e6086"
 nixPkgs = ["nodejs_24"]
 # Nixpacks selects a major line; reject snapshots older than the security fix.
 cmds = ['''node -e "const [major, minor, patch] = process.versions.node.split('.').map(Number); if (major !== 24 || minor < 22 || (minor === 22 && patch < 1)) throw new Error('Node >=24.22.1 <25 required; found ' + process.versions.node)"''']
