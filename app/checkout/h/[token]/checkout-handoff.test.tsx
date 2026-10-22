@@ -90,8 +90,11 @@ it.each(['reserved', 'provider_unknown'] as const)('recovers consumed %s after a
   mocks.create.mockRejectedValueOnce(new AxiosError('response lost after reservation', 'ERR_NETWORK'))
     .mockRejectedValue(new AxiosError('still processing', 'ERR_NETWORK'));
   const uuid = vi.spyOn(crypto, 'randomUUID');
-  const view = render(<CheckoutHandoffReview />);
+  // The asynchronously loaded BuyButton must finish its mount effects before
+  // the human verification click; finding its DOM alone does not flush them.
+  const view = await act(async () => render(<CheckoutHandoffReview />));
   fireEvent.click(await screen.findByRole('button', { name: 'Verify licence' }));
+  expect((screen.getByRole('checkbox', { name: 'Confirm licence authority' }) as HTMLInputElement).disabled).toBe(false);
   for (const [label, value] of [['Typed full name', 'Ada Buyer'], ['Signer title', 'Director'], ['Business legal name', 'Buyer Ltd'], ['Country', 'GB']]) {
     fireEvent.change(screen.getByLabelText(label), { target: { value } });
   }
