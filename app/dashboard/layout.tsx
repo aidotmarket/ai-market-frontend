@@ -104,9 +104,9 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
     if (!isAuthenticated) {
       router.push(`/login?redirect=${encodeURIComponent(pathname + (typeof window !== 'undefined' ? window.location.search : ''))}`);
     } else if (owner && !buyerRoute && capabilitiesResolved && !isSeller) {
-      router.push('/dashboard/inquiries');
+      router.push(current?.sellerStatus === 'not_requested' ? '/dashboard' : '/dashboard/inquiries');
     }
-  }, [buyerRoute, capabilitiesResolved, hydrated, isAuthenticated, isLoading, isSeller, owner, pathname, router]);
+  }, [buyerRoute, capabilitiesResolved, current?.sellerStatus, hydrated, isAuthenticated, isLoading, isSeller, owner, pathname, router]);
 
   if (authenticated && !buyerRoute && current?.phase === 'error') {
     return (

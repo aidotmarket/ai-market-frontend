@@ -568,7 +568,7 @@ describe('DashboardLayout hydration guard', () => {
     render(<DashboardLayout><div>{childLabel} child must not render</div></DashboardLayout>);
 
     await waitFor(() => {
-      expect(navigation.push).toHaveBeenCalledWith('/dashboard/inquiries');
+      expect(navigation.push).toHaveBeenCalledWith('/dashboard');
     });
     expect(screen.queryByText(`${childLabel} child must not render`)).toBeNull();
   });
@@ -671,11 +671,54 @@ describe('DashboardLayout canonical capability ownership', () => {
     expect(screen.queryByText('denied child')).toBeNull();
     expect(navigation.push).not.toHaveBeenCalled();
     await act(async () => read.resolve(capability(status)));
-    expect(navigation.push).toHaveBeenCalledWith('/dashboard/inquiries');
+    expect(navigation.push).toHaveBeenCalledWith(status === 'not_requested' ? '/dashboard' : '/dashboard/inquiries');
     expect(screen.queryByText('denied child')).toBeNull();
     expect(sellerWorkspaceApi.getSellerWorkspaceCapabilities).not.toHaveBeenCalled();
     expect(gatewaysApi.listSellerGateways).not.toHaveBeenCalled();
   });
+
+  it.each([
+    ['/dashboard/seller-workspace', 'not_requested', '/dashboard'],
+    ['/dashboard/gateways', 'not_requested', '/dashboard'],
+    ['/dashboard/listings', 'not_requested', '/dashboard'],
+    ['/dashboard/seller-workspace', 'suspended', '/dashboard/inquiries'],
+    ['/dashboard/gateways', 'suspended', '/dashboard/inquiries'],
+    ['/dashboard/listings', 'suspended', '/dashboard/inquiries'],
+  ])('routes normal %s entry for %s to %s without guarded children', async (pathname, status, destination) => {
+    navigation.pathname = pathname;
+    const read = deferred<ReturnType<typeof capability>>();
+    capabilitiesApi.getCapabilities.mockReturnValueOnce(read.promise);
+    const view = render(<DashboardLayout><div>guarded entry child</div></DashboardLayout>);
+    expect(navigation.push).not.toHaveBeenCalled();
+    expect(screen.queryByText('guarded entry child')).toBeNull();
+
+    await act(async () => read.resolve(capability(status)));
+    expect(navigation.push.mock.calls).toEqual([[destination]]);
+    expect(screen.queryByText('guarded entry child')).toBeNull();
+    navigation.pathname = destination;
+    view.rerender(<DashboardLayout><div>existing destination child</div></DashboardLayout>);
+    expect(screen.getByText('existing destination child')).toBeTruthy();
+    expect(screen.queryByText('guarded entry child')).toBeNull();
+    expect(screen.queryByRole('link', { name: 'Listings' })).toBeNull();
+    expect(screen.queryByText('seller setup progress')).toBeNull();
+    expect(capabilitiesApi.getCapabilities).toHaveBeenCalledTimes(1);
+    expect(sellerWorkspaceApi.getSellerWorkspaceCapabilities).not.toHaveBeenCalled();
+    expect(gatewaysApi.listSellerGateways).not.toHaveBeenCalled();
+    expect(useAuthStore.getState().user).toEqual(user);
+  });
+
+  it.each(['unknown', undefined, null, { status: 'not_requested' }])(
+    'fails closed for malformed or unknown canonical status %s', async (status) => {
+      capabilitiesApi.getCapabilities.mockResolvedValueOnce({ seller: { effective_status: status } });
+      render(<DashboardLayout><div>unknown status child</div></DashboardLayout>);
+      await act(async () => {});
+      expect(navigation.push.mock.calls).toEqual([['/dashboard/inquiries']]);
+      expect(screen.queryByText('unknown status child')).toBeNull();
+      expect(screen.queryByRole('link', { name: 'Listings' })).toBeNull();
+      expect(sellerWorkspaceApi.getSellerWorkspaceCapabilities).not.toHaveBeenCalled();
+      expect(gatewaysApi.listSellerGateways).not.toHaveBeenCalled();
+    }
+  );
 
   it.each(['/dashboard', '/dashboard/inquiries/thread', '/dashboard/orders/item', '/dashboard/requests/item', '/dashboard/settings/profile'])(
     'keeps %s available through capability loading and failure', async (pathname) => {
@@ -705,7 +748,7 @@ describe('DashboardLayout canonical capability ownership', () => {
     expect(navigation.push).not.toHaveBeenCalled();
     await act(async () => next.resolve(capability('not_requested')));
     expect(screen.queryByText('seller private child')).toBeNull();
-    expect(navigation.push).toHaveBeenCalledWith('/dashboard/inquiries');
+    expect(navigation.push).toHaveBeenCalledWith('/dashboard');
   });
 
   it.each(['account change', 'token change', 'signout', 'newer refresh'])(
