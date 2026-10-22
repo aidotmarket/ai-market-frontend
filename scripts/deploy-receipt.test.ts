@@ -12,7 +12,7 @@ const context = { sha, repository: 'aidotmarket/ai-market-frontend', actor: 'aut
 const appUrl = 'https://app.example.test';
 const eventsUrl = 'https://events.example.test/';
 
-function harness({ revisions = [sha] as unknown[], health = [200], post = 201, transport = false,
+function harness({ revisions = [sha] as unknown[], health = [200] as (number | Error)[], post = 201, transport = false,
   revisionDelay = 0 } = {}) {
   let clock = 0;
   let healthIndex = 0;
@@ -26,7 +26,11 @@ function harness({ revisions = [sha] as unknown[], health = [200], post = 201, t
       return { status: post };
     }
     expect(options.cache).toBe('no-store');
-    if (url === `${appUrl}/`) return { status: last(health, healthIndex++) };
+    if (url === `${appUrl}/`) {
+      const status = last(health, healthIndex++);
+      if (status instanceof Error) throw status;
+      return { status };
+    }
     expect(url).toBe(`${appUrl}/api/build-revision`);
     clock += revisionDelay;
     const revision = last(revisions, revisionIndex++);
@@ -39,6 +43,20 @@ function harness({ revisions = [sha] as unknown[], health = [200], post = 201, t
   return { fetch, now: () => clock, sleep: async (ms: number) => { clock += ms; },
     initialWaitMs: 0, budgetMs: 180_000, appUrl, eventsUrl, key: 'fake-key', context };
 }
+
+const healthCases = [
+  { name: '11 healthy old revisions then 503', health: [...Array(11).fill(200), 503],
+    revisions: [old], state: 'pending', healthy: false },
+  { name: '11 healthy old revisions then timeout', health: [...Array(11).fill(200), new Error('timeout')],
+    revisions: [old], state: 'pending', healthy: false },
+  { name: 'all 503', health: [503], revisions: [sha], state: 'unhealthy', healthy: false },
+  { name: 'all health requests throw', health: [new Error('timeout')],
+    revisions: [sha], state: 'unhealthy', healthy: false },
+  { name: '11 failed health samples then healthy matching revision', health: [...Array(11).fill(503), 200],
+    revisions: [sha], state: 'verified', healthy: true },
+  { name: 'healthy old revision', health: [200], revisions: [old], state: 'pending', healthy: true },
+  { name: 'healthy unknown revision', health: [200], revisions: [null], state: 'pending', healthy: true },
+];
 
 afterEach(() => { vi.unstubAllGlobals(); vi.restoreAllMocks(); vi.useRealTimers(); process.exitCode = 0; });
 
@@ -84,9 +102,23 @@ describe('workflow receipt decisions', () => {
     });
   });
 
-  it('uses latest health rather than a previous healthy observation', async () => {
-    const h = harness({ health: [200, 503], revisions: [old] });
-    expect((await reportDeployment(h)).observation.state).toBe('unhealthy');
+  it.each(healthCases)('preserves original health failure semantics: $name', async scenario => {
+    const h = harness(scenario);
+    const result = await reportDeployment(h);
+    expect(result.observation.state).toBe(scenario.state);
+    expect(result.observation.healthy).toBe(scenario.healthy);
+    expect(h.fetch.mock.calls.filter(([url]) => url === `${appUrl}/`)).toHaveLength(12);
+    const posts = h.fetch.mock.calls.filter(([, options]) => options.method === 'POST');
+    expect(posts).toHaveLength(scenario.state === 'pending' ? 0 : 1);
+    if (scenario.state === 'pending') expect(result.submission).toBeNull();
+    else expect(JSON.parse(posts[0][1].body as string).event_type)
+      .toBe(scenario.state === 'verified' ? 'deploy' : 'alert');
+    if (!scenario.healthy && scenario.state === 'pending') {
+      expect(result.observation.revision).toBeNull();
+      expect(summary(result)).toContain('Latest health: unhealthy/unavailable');
+      expect(summary(result)).toContain('earlier HTTP 200 observed');
+      expect(summary(result)).not.toContain('did not become healthy');
+    }
   });
 
   it('never treats unknown expected metadata as a matching revision', async () => {
@@ -144,14 +176,16 @@ describe('workflow receipt decisions', () => {
     expect(summary(result)).not.toContain('accepted');
   });
 
-  it.each(['pending', 'verified', 'refused', 'unhealthy'])
-    ('executes the actual workflow entry with fake transports and filesystem event data: %s', async state => {
+  it.each([...healthCases.map(scenario => ({ ...scenario, post: 201, transport: false })),
+    { name: 'HTTP refusal', state: 'refused', health: [200], revisions: [sha], healthy: true, post: 409, transport: false },
+    { name: 'transport ambiguity', state: 'unknown', health: [200], revisions: [sha], healthy: true, post: 201, transport: true }])
+    ('executes the actual workflow entry with fake transports and filesystem event data: $name', async scenario => {
+      const { state } = scenario;
       const dir = await mkdtemp(join(tmpdir(), 'r539-'));
       const eventPath = join(dir, 'event.json');
       const summaryPath = join(dir, 'summary.txt');
       await writeFile(eventPath, JSON.stringify({ head_commit: { message: context.commitMessage } }));
-      const h = harness({ revisions: [state === 'pending' ? old : sha], health: [state === 'unhealthy' ? 503 : 200],
-        post: state === 'refused' ? 409 : 201 });
+      const h = harness(scenario);
       vi.stubGlobal('fetch', h.fetch);
       vi.useFakeTimers();
       const log = vi.spyOn(console, 'log').mockImplementation(() => {});
@@ -168,7 +202,16 @@ describe('workflow receipt decisions', () => {
         const text = await readFile(summaryPath, 'utf8');
         expect(text).not.toContain('fake-key');
         expect(text).not.toContain(context.commitMessage);
-        expect(text).toContain(state === 'refused' ? 'refused (HTTP 409)' : state === 'pending' ? 'No deploy receipt submitted' : state === 'verified' ? 'accepted (HTTP 201)' : 'did not become healthy');
+        expect(text).toContain(state === 'refused' ? 'refused (HTTP 409)' : state === 'unknown' ? 'unknown (transport uncertainty)' : state === 'pending' ? 'No deploy receipt submitted' : state === 'verified' ? 'accepted (HTTP 201)' : 'did not become healthy');
+        const posts = h.fetch.mock.calls.filter(([, options]) => options.method === 'POST');
+        expect(posts).toHaveLength(state === 'pending' ? 0 : 1);
+        if (posts.length) expect(JSON.parse(posts[0][1].body as string).event_type)
+          .toBe(state === 'unhealthy' ? 'alert' : 'deploy');
+        if (state === 'pending' && !scenario.healthy) {
+          expect(text).toContain('Latest health: unhealthy/unavailable');
+          expect(text).toContain('earlier HTTP 200 observed');
+          expect(text).not.toContain('did not become healthy');
+        }
       } finally {
         vi.useRealTimers(); log.mockRestore(); await rm(dir, { recursive: true });
       }

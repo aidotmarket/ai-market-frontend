@@ -18,6 +18,7 @@ export async function observeDeployment({
   await sleep(initialWaitMs);
   const deadline = now() + budgetMs;
   let healthy = false;
+  let everHealthy = false;
   let revision = null;
   let attempts = 0;
   while (now() < deadline && attempts++ < 12) {
@@ -27,7 +28,8 @@ export async function observeDeployment({
     try {
       healthy = await request(fetch, `${appUrl}/`, { cache: 'no-store' },
         Math.max(1, Math.min(10_000, deadline - now())), response => response.status === 200);
-    } catch { /* unavailable health retains existing unhealthy semantics */ }
+    } catch { /* unavailable health is not evidence of HTTP 200 */ }
+    everHealthy ||= healthy;
     if (healthy && now() < deadline) {
       try {
         revision = await request(fetch, `${appUrl}/api/build-revision`, { cache: 'no-store' },
@@ -43,7 +45,7 @@ export async function observeDeployment({
     }
     if (attempts < 12 && now() < deadline) await sleep(Math.min(intervalMs, deadline - now()));
   }
-  return { state: healthy ? 'pending' : 'unhealthy', healthy, revision };
+  return { state: everHealthy ? 'pending' : 'unhealthy', healthy, revision };
 }
 
 export function receiptPayload(context, healthy) {
@@ -91,12 +93,12 @@ export function summary({ observation, submission, expected }) {
   const result = observation.state === 'verified'
     ? 'Expected revision observed with health.'
     : observation.state === 'pending'
-      ? 'Pending: health-only; expected revision unverified. No deploy receipt submitted.'
+      ? `Pending: ${observation.healthy ? 'health-only' : 'earlier HTTP 200 observed; latest health unhealthy/unavailable'}; expected revision unverified. No deploy receipt submitted.`
       : 'App did not become healthy within the observation window.';
   const receipt = submission
     ? `Event submission: ${submission.state}${submission.status === null ? ' (transport uncertainty)' : ` (HTTP ${submission.status})`}. HTTP acceptance does not establish durable storage.`
     : '';
-  return `Expected revision: ${validRevision(expected) ? expected.toLowerCase() : 'unknown'}. Health: ${health}. Observed revision: ${revision}.\n${result}\n${receipt}\n`;
+  return `Expected revision: ${validRevision(expected) ? expected.toLowerCase() : 'unknown'}. Latest health: ${health}. Observed revision: ${revision}.\n${result}\n${receipt}\n`;
 }
 
 export async function runFromEnvironment(env = process.env) {
