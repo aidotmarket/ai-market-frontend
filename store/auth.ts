@@ -61,9 +61,15 @@ export const authSessionIdentity = (state: Pick<AuthState, 'user' | 'token'>): s
   state.token ? state.user?.id ?? null : null;
 
 export const useAuthStore = create<AuthState>((set, get) => {
+  // An admitted login takes precedence over background session restoration.
+  // Keep its owner so an older completion cannot release a replacement login.
+  let pendingLogin: { owner: number } | null = null;
+  const hasPendingLogin = () => pendingLogin !== null && isAuthSessionOwner(pendingLogin.owner);
+
   async function completeOwnedSession(tokenRes: TokenResponse, owner: number) {
     assertAuthSessionOwner(owner);
     const session = advanceAuthSessionOwner();
+    if (pendingLogin?.owner === owner) pendingLogin.owner = session;
     set({ token: tokenRes.access_token, user: null, isAuthenticated: true,
       pendingTwoFactor: null, isLoading: false, hydrated: true });
     const user = await authApi.getMe();
@@ -91,8 +97,19 @@ export const useAuthStore = create<AuthState>((set, get) => {
 
   function beginLogin(): number {
     const owner = advanceAuthSessionOwner();
+    pendingLogin = { owner };
     set({ pendingTwoFactor: null, isLoading: false, hydrated: true });
     return owner;
+  }
+
+  async function runLogin(request: () => Promise<LoginResult>): Promise<AuthFlowResult> {
+    const owner = beginLogin();
+    const admitted = pendingLogin;
+    try {
+      return await acceptLogin(await request(), owner);
+    } finally {
+      if (pendingLogin === admitted) pendingLogin = null;
+    }
   }
 
   return {
@@ -108,10 +125,7 @@ export const useAuthStore = create<AuthState>((set, get) => {
     },
 
     login: async (email, password) => {
-      const owner = beginLogin();
-      const res = await authApi.login({ email, password });
-
-      return acceptLogin(res, owner);
+      return runLogin(() => authApi.login({ email, password }));
     },
 
     register: async (email, password, firstName, lastName, role = "buyer" as "buyer" | "seller" | "model_provider" | "admin", companyName) => {
@@ -134,17 +148,11 @@ export const useAuthStore = create<AuthState>((set, get) => {
     },
 
     oauthLogin: async (provider, code, state, nonce) => {
-      const owner = beginLogin();
-      const res = await authApi.oauthCallback(provider, code, state, nonce);
-
-      return acceptLogin(res, owner);
+      return runLogin(() => authApi.oauthCallback(provider, code, state, nonce));
     },
 
     magicLinkVerify: async (token) => {
-      const owner = beginLogin();
-      const res = await authApi.magicLinkVerify(token);
-
-      return acceptLogin(res, owner);
+      return runLogin(() => authApi.magicLinkVerify(token));
     },
 
     verifyTwoFactor: async (code) => {
@@ -206,7 +214,7 @@ export const useAuthStore = create<AuthState>((set, get) => {
 
     refreshAuth: async () => {
       const owner = authSessionOwner();
-      if (get().pendingTwoFactor) return;
+      if (hasPendingLogin() || get().pendingTwoFactor) return;
       const { refreshAccessToken } = await import('@/api/client');
       assertAuthSessionOwner(owner);
       await refreshAccessToken();
@@ -223,8 +231,8 @@ export const useAuthStore = create<AuthState>((set, get) => {
 
     hydrate: async () => {
       const owner = authSessionOwner();
-      // Hydration must not replace an admitted 2FA challenge.
-      if (get().pendingTwoFactor) return;
+      // Restoration must not compete with an admitted login or 2FA challenge.
+      if (hasPendingLogin() || get().pendingTwoFactor) return;
       set({ isLoading: true, pendingTwoFactor: null });
 
       try {
