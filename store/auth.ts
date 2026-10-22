@@ -1,7 +1,8 @@
 'use client';
 
 import { create } from 'zustand';
-import type { TokenResponse, User } from '@/types';
+import { authSessionOwner, advanceAuthSessionOwner, assertAuthSessionOwner, isAuthSessionOwner } from '@/lib/auth-session-owner';
+import type { LoginResult, TokenResponse, User } from '@/types';
 import * as authApi from '@/api/auth';
 import { clearConnectorContinuation, setConnectorStatus } from '@/lib/aim-data-continuation';
 
@@ -59,175 +60,186 @@ function isEmailVerificationRequiredError(error: unknown): boolean {
 export const authSessionIdentity = (state: Pick<AuthState, 'user' | 'token'>): string | null =>
   state.token ? state.user?.id ?? null : null;
 
-export const useAuthStore = create<AuthState>((set, get) => ({
-  user: null,
-  token: null,
-  isAuthenticated: false,
-  isLoading: false,
-  hydrated: false,
-  pendingTwoFactor: null,
-
-  completeSession: async (tokenRes) => {
-    set({
-      token: tokenRes.access_token,
-      isAuthenticated: true,
-      pendingTwoFactor: null,
-    });
-
+export const useAuthStore = create<AuthState>((set, get) => {
+  async function completeOwnedSession(tokenRes: TokenResponse, owner: number) {
+    assertAuthSessionOwner(owner);
+    const session = advanceAuthSessionOwner();
+    set({ token: tokenRes.access_token, user: null, isAuthenticated: true,
+      pendingTwoFactor: null, isLoading: false, hydrated: true });
     const user = await authApi.getMe();
+    assertAuthSessionOwner(session);
     set({ user });
-  },
+  }
 
-  login: async (email, password) => {
-    const res = await authApi.login({ email, password });
-
+  async function acceptLogin(res: LoginResult, owner: number): Promise<AuthFlowResult> {
+    assertAuthSessionOwner(owner);
     if (authApi.isTwoFactorChallenge(res)) {
+      advanceAuthSessionOwner();
       set({
+        isLoading: false, hydrated: true,
         pendingTwoFactor: {
           preAuthToken: res.pre_auth_token,
           expiresAt: Date.now() + res.expires_in * 1000,
         },
-        token: null,
-        user: null,
-        isAuthenticated: false,
+        token: null, user: null, isAuthenticated: false,
       });
       return { requiresTwoFactor: true };
     }
-
-    await get().completeSession(res);
+    await completeOwnedSession(res, owner);
     return { requiresTwoFactor: false };
-  },
+  }
 
-  register: async (email, password, firstName, lastName, role = "buyer" as "buyer" | "seller" | "model_provider" | "admin", companyName) => {
-    try {
-      await authApi.register({
-        email,
-        password,
-        first_name: firstName,
-        last_name: lastName,
-        role,
-        company_name: companyName,
-      });
-    } catch (error) {
-      if (isEmailVerificationRequiredError(error)) {
-        return;
+  function beginLogin(): number {
+    const owner = advanceAuthSessionOwner();
+    set({ pendingTwoFactor: null, isLoading: false, hydrated: true });
+    return owner;
+  }
+
+  return {
+    user: null,
+    token: null,
+    isAuthenticated: false,
+    isLoading: false,
+    hydrated: false,
+    pendingTwoFactor: null,
+
+    completeSession: async (tokenRes) => {
+      await completeOwnedSession(tokenRes, authSessionOwner());
+    },
+
+    login: async (email, password) => {
+      const owner = beginLogin();
+      const res = await authApi.login({ email, password });
+
+      return acceptLogin(res, owner);
+    },
+
+    register: async (email, password, firstName, lastName, role = "buyer" as "buyer" | "seller" | "model_provider" | "admin", companyName) => {
+      try {
+        await authApi.register({
+          email,
+          password,
+          first_name: firstName,
+          last_name: lastName,
+          role,
+          company_name: companyName,
+        });
+      } catch (error) {
+        if (isEmailVerificationRequiredError(error)) {
+          return;
+        }
+
+        throw error;
+      }
+    },
+
+    oauthLogin: async (provider, code, state, nonce) => {
+      const owner = beginLogin();
+      const res = await authApi.oauthCallback(provider, code, state, nonce);
+
+      return acceptLogin(res, owner);
+    },
+
+    magicLinkVerify: async (token) => {
+      const owner = beginLogin();
+      const res = await authApi.magicLinkVerify(token);
+
+      return acceptLogin(res, owner);
+    },
+
+    verifyTwoFactor: async (code) => {
+      const pending = get().pendingTwoFactor;
+      if (!pending) {
+        return { ok: false, reason: 'missing_challenge' };
       }
 
-      throw error;
-    }
-  },
+      const owner = advanceAuthSessionOwner();
+      let tokenRes: TokenResponse;
+      try {
+        tokenRes = await authApi.verify2FALogin(pending.preAuthToken, code);
+      } catch (error) {
+        assertAuthSessionOwner(owner);
+        const status = typeof error === 'object' && error !== null && 'response' in error
+          ? (error as { response?: { status?: number } }).response?.status
+          : undefined;
 
-  oauthLogin: async (provider, code, state, nonce) => {
-    const res = await authApi.oauthCallback(provider, code, state, nonce);
+        if (status === 400) {
+          return { ok: false, reason: 'invalid_code' };
+        }
 
-    if (authApi.isTwoFactorChallenge(res)) {
-      set({
-        pendingTwoFactor: {
-          preAuthToken: res.pre_auth_token,
-          expiresAt: Date.now() + res.expires_in * 1000,
-        },
-        token: null,
-        user: null,
-        isAuthenticated: false,
-      });
-      return { requiresTwoFactor: true };
-    }
+        if (status === 401) {
+          get().clearPendingTwoFactor();
+          return { ok: false, reason: 'expired' };
+        }
 
-    await get().completeSession(res);
-    return { requiresTwoFactor: false };
-  },
-
-  magicLinkVerify: async (token) => {
-    const res = await authApi.magicLinkVerify(token);
-
-    if (authApi.isTwoFactorChallenge(res)) {
-      set({
-        pendingTwoFactor: {
-          preAuthToken: res.pre_auth_token,
-          expiresAt: Date.now() + res.expires_in * 1000,
-        },
-        token: null,
-        user: null,
-        isAuthenticated: false,
-      });
-      return { requiresTwoFactor: true };
-    }
-
-    await get().completeSession(res);
-    return { requiresTwoFactor: false };
-  },
-
-  verifyTwoFactor: async (code) => {
-    const pending = get().pendingTwoFactor;
-    if (!pending) {
-      return { ok: false, reason: 'missing_challenge' };
-    }
-
-    try {
-      const tokenRes = await authApi.verify2FALogin(pending.preAuthToken, code);
-      await get().completeSession(tokenRes);
+        throw error;
+      }
+      await completeOwnedSession(tokenRes, owner);
       return { ok: true };
-    } catch (error) {
-      const status = typeof error === 'object' && error !== null && 'response' in error
-        ? (error as { response?: { status?: number } }).response?.status
-        : undefined;
+    },
 
-      if (status === 400) {
-        return { ok: false, reason: 'invalid_code' };
+    clearPendingTwoFactor: () => {
+      if (get().pendingTwoFactor) {
+        advanceAuthSessionOwner();
+        set({ pendingTwoFactor: null });
       }
+    },
 
-      if (status === 401) {
-        get().clearPendingTwoFactor();
-        return { ok: false, reason: 'expired' };
+    logout: async () => {
+      const owner = advanceAuthSessionOwner();
+      const clear = () => {
+        clearConnectorContinuation();
+        setConnectorStatus(false);
+        set({ user: null, token: null, isAuthenticated: false, pendingTwoFactor: null,
+          isLoading: false, hydrated: true });
+      };
+      try {
+        // Dispatch with the existing bearer for best-effort server revocation,
+        // then clear locally without waiting for the response.
+        const request = authApi.logout();
+        clear();
+        await request;
+      } finally {
+        if (isAuthSessionOwner(owner)) clear();
       }
+    },
 
-      throw error;
-    }
-  },
-
-  clearPendingTwoFactor: () => {
-    set({ pendingTwoFactor: null });
-  },
-
-  logout: async () => {
-    try {
-      await authApi.logout();
-    } finally {
-      clearConnectorContinuation();
-      setConnectorStatus(false);
-      set({
-        user: null,
-        token: null,
-        isAuthenticated: false,
-        pendingTwoFactor: null,
-      });
-    }
-  },
-
-  refreshAuth: async () => {
-    const { refreshAccessToken } = await import('@/api/client');
-    await refreshAccessToken();
-
-    try {
-      const user = await authApi.getMe();
-      set({ user, isAuthenticated: true, pendingTwoFactor: null });
-    } catch {
-      // Keep the current authenticated state if reloading the user fails transiently.
-    }
-  },
-
-  hydrate: async () => {
-    set({ isLoading: true, pendingTwoFactor: null });
-
-    try {
+    refreshAuth: async () => {
+      const owner = authSessionOwner();
+      if (get().pendingTwoFactor) return;
       const { refreshAccessToken } = await import('@/api/client');
+      assertAuthSessionOwner(owner);
       await refreshAccessToken();
-      const user = await authApi.getMe();
-      set({ user, isAuthenticated: true, isLoading: false, hydrated: true, pendingTwoFactor: null });
-    } catch {
-      // refreshAccessToken owns terminal 401/403 clearing. Hydration must not
-      // erase an existing session for a transient 429, network error, or 5xx.
-      set({ isLoading: false, hydrated: true, pendingTwoFactor: null });
-    }
-  },
-}));
+      assertAuthSessionOwner(owner);
+
+      try {
+        const user = await authApi.getMe();
+        assertAuthSessionOwner(owner);
+        set({ user, isAuthenticated: true, pendingTwoFactor: null });
+      } catch {
+        // Keep the current authenticated state if reloading the user fails transiently.
+      }
+    },
+
+    hydrate: async () => {
+      const owner = authSessionOwner();
+      // Hydration must not replace an admitted 2FA challenge.
+      if (get().pendingTwoFactor) return;
+      set({ isLoading: true, pendingTwoFactor: null });
+
+      try {
+        const { refreshAccessToken } = await import('@/api/client');
+        assertAuthSessionOwner(owner);
+        await refreshAccessToken();
+        assertAuthSessionOwner(owner);
+        const user = await authApi.getMe();
+        assertAuthSessionOwner(owner);
+        set({ user, isAuthenticated: true, isLoading: false, hydrated: true, pendingTwoFactor: null });
+      } catch {
+        // refreshAccessToken owns terminal 401/403 clearing. Hydration must not
+        // erase an existing session for a transient 429, network error, or 5xx.
+        if (isAuthSessionOwner(owner)) set({ isLoading: false, hydrated: true });
+      }
+    },
+  };
+});

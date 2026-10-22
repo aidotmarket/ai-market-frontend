@@ -195,6 +195,7 @@ describe('refreshAccessToken', () => {
       token: null,
       isAuthenticated: false,
       pendingTwoFactor: null,
+      isLoading: false, hydrated: true,
     });
     expect(window.location.href).toBe('/login');
   });
@@ -214,6 +215,7 @@ describe('refreshAccessToken', () => {
       token: null,
       isAuthenticated: false,
       pendingTwoFactor: null,
+      isLoading: false, hydrated: true,
     });
     expect(window.location.href).toBe('/listings');
   });
