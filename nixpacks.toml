@@ -1,5 +1,10 @@
+[variables]
+NIXPACKS_NODE_VERSION = "24.22.1"
+
 [phases.setup]
-nixPkgs = ["nodejs_20"]
+nixPkgs = ["nodejs_24"]
+# Nixpacks selects a major line; reject snapshots older than the security fix.
+cmds = ['''node -e "const [major, minor, patch] = process.versions.node.split('.').map(Number); if (major !== 24 || minor < 22 || (minor === 22 && patch < 1)) throw new Error('Node >=24.22.1 <25 required; found ' + process.versions.node)"''']
 
 [phases.build]
 cmds = ["npm ci", "npm run build"]
