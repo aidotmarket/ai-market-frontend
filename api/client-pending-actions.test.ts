@@ -15,7 +15,7 @@ it.each([401, 403])('lets the confirmation page handle terminal refresh %s and A
   vi.stubGlobal('window', { location: { pathname: url.pathname, search: url.search, hash: '', href: path } });
   const { refreshAccessToken } = await import('./client');
   await expect(refreshAccessToken()).rejects.toBe(failure);
-  expect(clear).toHaveBeenCalledWith({ user: null, token: null, isAuthenticated: false, pendingTwoFactor: null });
+  expect(clear).toHaveBeenCalledWith({ user: null, token: null, isAuthenticated: false, pendingTwoFactor: null, isLoading: false, hydrated: true });
   expect(window.location.href).toBe(path);
 });
 

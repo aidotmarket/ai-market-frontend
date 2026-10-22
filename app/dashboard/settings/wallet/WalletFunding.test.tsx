@@ -368,7 +368,7 @@ it.each(['delayed', 'failed', 'stale'] as const)('blocks token-before-user from 
   const before = walletCalls().length;
   let session!: Promise<void>;
   act(() => { session = useAuthStore.getState().completeSession({ access_token: 'token-b', token_type: 'bearer' }).catch(() => {}); });
-  await screen.findByText(/Wallet blocked/);
+  await screen.findByText(/Waiting to verify wallet sign-in\./);
   expect(walletCalls()).toHaveLength(before);
   expect(screen.queryByText('USD 12.01')).toBeNull();
   if (outcome === 'failed') await act(async () => { sharedOwner.reject(new Error('shared getMe failed')); await session; });
