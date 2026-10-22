@@ -40,6 +40,64 @@ beforeEach(() => {
 });
 afterEach(() => { cleanup(); vi.useRealTimers(); vi.unstubAllGlobals(); Object.defineProperty(window, 'localStorage', originalStorage); window.history.replaceState({}, '', '/'); });
 
+it('styles Connect Cloudflare as primary and keeps its label while the request is busy', async () => {
+  let reject!: (cause: unknown) => void;
+  vi.mocked(api.startCloudflareInstall).mockReturnValue(new Promise((_, no) => { reject = no; }));
+  await mount(false);
+  const connect = screen.getByRole('button', { name: 'Connect Cloudflare' });
+  expect(connect.classList.contains('bg-[#3F51B5]')).toBe(true);
+  expect(connect.classList.contains('text-white')).toBe(true);
+  expect(connect.getAttribute('aria-busy')).toBe('false');
+  await click('Connect Cloudflare');
+  expect(connect.getAttribute('aria-busy')).toBe('true');
+  expect(connect.querySelector('.animate-spin[aria-hidden="true"]')).toBeTruthy();
+  expect(connect.textContent).toBe('Connect Cloudflare');
+  expect((connect as HTMLButtonElement).disabled).toBe(true);
+  await act(async () => { reject(new Error('unavailable')); });
+  expect(connect.getAttribute('aria-busy')).toBe('false');
+  expect(connect.querySelector('.animate-spin')).toBeNull();
+});
+it('gives installation the only primary button before the verifier is ready', async () => {
+  await act(async () => { render(<GatewayVerificationFlow listingId="listing" sellerId="seller" verifier={{ kind: 'cloudflare', connectionId: 'connection' }} />); });
+  await click('Verify this data');
+  expect(screen.getByRole('button', { name: 'Connect Cloudflare' }).classList.contains('bg-[#3F51B5]')).toBe(true);
+  const check = screen.getByRole('button', { name: 'Check data and get quote' });
+  expect(check.classList.contains('bg-white')).toBe(true);
+  expect(check.classList.contains('border-gray-300')).toBe(true);
+  expect(screen.getAllByRole('button').filter(button => button.classList.contains('bg-[#3F51B5]'))).toHaveLength(1);
+});
+it('styles cancellation as danger-secondary and Dismiss as secondary', async () => {
+  const view = await mount();
+  const cancel = screen.getByRole('button', { name: 'Cancel installation' });
+  expect(cancel.classList.contains('bg-white')).toBe(true);
+  expect(cancel.classList.contains('text-red-700')).toBe(true);
+  expect(cancel.classList.contains('border-red-300')).toBe(true);
+  view.unmount();
+  await mount(true, { ...initial, phase: 'expired' });
+  const dismiss = screen.getByRole('button', { name: 'Dismiss' });
+  expect(dismiss.classList.contains('bg-white')).toBe(true);
+  expect(dismiss.classList.contains('border-gray-300')).toBe(true);
+});
+it('keeps Start free check primary with a spinner while its request is pending', async () => {
+  localStorage.setItem(key, id);
+  vi.mocked(api.getCloudflareInstall).mockResolvedValue({ ...initial, phase: 'closed', runtime: { state: 'ready' } });
+  vi.mocked(api.getCloudflareVerifierStatus).mockResolvedValue({ ...verifier, state: 'ready', runner_id: 'runner' });
+  let reject!: (cause: unknown) => void;
+  vi.mocked(api.probeGatewayVerification).mockReturnValue(new Promise((_, no) => { reject = no; }));
+  await act(async () => { render(<GatewayVerificationFlow listingId="listing" sellerId="seller" verifier={{ kind: 'cloudflare', connectionId: 'connection' }} />); });
+  const check = screen.getByRole('button', { name: 'Start free check' });
+  expect(check.classList.contains('bg-[#3F51B5]')).toBe(true);
+  expect(screen.getAllByRole('button').filter(button => button.classList.contains('bg-[#3F51B5]'))).toHaveLength(1);
+  expect(screen.getByText('Status: Ready')).toBeTruthy();
+  await click('Start free check');
+  expect(check.getAttribute('aria-busy')).toBe('true');
+  expect(check.querySelector('.animate-spin[aria-hidden="true"]')).toBeTruthy();
+  expect(check.textContent).toBe('Start free check');
+  await act(async () => { reject(new Error('unavailable')); });
+  expect(check.getAttribute('aria-busy')).toBe('false');
+  expect(check.querySelector('.animate-spin')).toBeNull();
+});
+
 it.each(['authorizing', 'installing', 'disconnecting', 'waiting_registration', 'ready', 'ready_attested', 'consent_cancelled', 'scope_refused', 'failed_removed', 'failed_residue', 'boot_timed_out', 'cleanup_unconfirmed', 'failed'] as const)('renders the server message for %s', async state => {
   await mount(true, { ...initial, message: `Server says ${state}`, runtime: { state } });
   expect(screen.getByRole('status').textContent).toBe(`Server says ${state}`);

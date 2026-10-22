@@ -66,6 +66,32 @@ describe('gateway seller verification flow', () => {
     expect(screen.getByRole('heading', { name: 'Check verification availability' })).toBeTruthy();
     expect(gateway.probeGatewayVerification).not.toHaveBeenCalled();
   });
+  it('gives the free check priority and removal a danger treatment', async () => {
+    render(<GatewayVerificationFlow listingId="listing" sellerId="seller" verifier={{ kind: 'gateway', runnerId: 'runner' }} />);
+    const check = await screen.findByRole('button', { name: 'Check data and get quote' });
+    expect(check.classList.contains('bg-[#3F51B5]')).toBe(true);
+    expect(check.classList.contains('text-white')).toBe(true);
+    for (const affordance of ['min-h-10', 'sm:w-auto', 'focus-visible:ring-2', 'disabled:bg-gray-200', 'disabled:cursor-not-allowed']) expect(check.classList.contains(affordance)).toBe(true);
+    const remove = screen.getByRole('button', { name: 'Remove verifier' });
+    expect(remove.classList.contains('bg-white')).toBe(true);
+    expect(remove.classList.contains('text-red-700')).toBe(true);
+    expect(remove.classList.contains('border-red-300')).toBe(true);
+    expect(screen.getAllByRole('button').filter(button => button.classList.contains('bg-[#3F51B5]'))).toHaveLength(1);
+  });
+  it('makes paid verification the only primary action in a quote', async () => {
+    await getQuote();
+    const paid = screen.getByRole('button', { name: 'Start paid verification' });
+    expect(paid.classList.contains('bg-[#3F51B5]')).toBe(true);
+    expect(paid.classList.contains('text-white')).toBe(true);
+    expect(paid.getAttribute('aria-busy')).toBe('false');
+    for (const name of ['Check again', 'Get a new quote']) {
+      const button = screen.getByRole('button', { name });
+      expect(button.classList.contains('bg-white')).toBe(true);
+      expect(button.classList.contains('border-gray-300')).toBe(true);
+    }
+    expect(screen.getAllByRole('button').filter(button => button.classList.contains('bg-[#3F51B5]'))).toHaveLength(1);
+    expect(screen.getByText('Status: Quote ready')).toBeTruthy();
+  });
   it('cancels using the owned GET binding after a fresh confirmation', async () => {
     window.localStorage.setItem(key, JSON.stringify({ probeCommand: { confirm: true, preview_requested: false, idempotency_key: 'key' }, epochId: 'epoch' }));
     vi.mocked(gateway.gatewayVerificationLifecycle).mockResolvedValue({ data: { ...epoch, state: 'CANCELLED_VOIDED' }, retryAfter: 2 });
@@ -125,12 +151,18 @@ describe('gateway seller verification flow', () => {
     await getQuote(); acknowledge();
     fireEvent.click(screen.getByRole('button', { name: 'Start paid verification' }));
     expect(await screen.findByText('Checking your payment method…')).toBeTruthy();
+    const paid = screen.getByRole('button', { name: 'Start paid verification' });
+    expect(paid.getAttribute('aria-busy')).toBe('true');
+    expect(paid.querySelector('.animate-spin[aria-hidden="true"]')).toBeTruthy();
+    expect(paid.textContent).toBe('Start paid verification');
     await act(async () => { reject({ response: { status: 404, data: { detail: { code: 'PAYIN_ONBOARDING_DISABLED', message: 'Not found' } } } }); });
     const alert = await screen.findByRole('alert');
     expect(alert.textContent).toBe('Card setup for this paid service is unavailable for your account. Contact support if you think this is wrong.');
     expect(scroll).toHaveBeenCalled();
     expect(document.activeElement).toBe(alert);
     expect(screen.queryByText('Checking your payment method…')).toBeNull();
+    expect(paid.getAttribute('aria-busy')).toBe('false');
+    expect(paid.querySelector('.animate-spin')).toBeNull();
     expect(gateway.startGatewayVerification).not.toHaveBeenCalled();
   });
   it('does not announce a payment check while only refreshing the quote', async () => {
@@ -139,6 +171,9 @@ describe('gateway seller verification flow', () => {
     vi.mocked(gateway.getGatewayVerificationProbe).mockReturnValue(new Promise(ok => { resolve = ok; }));
     fireEvent.click(screen.getByRole('button', { name: 'Check again' }));
     expect(screen.queryByText('Checking your payment method…')).toBeNull();
+    const paid = screen.getByRole('button', { name: 'Start paid verification' });
+    expect(paid.getAttribute('aria-busy')).toBe('false');
+    expect(paid.querySelector('.animate-spin')).toBeNull();
     await act(async () => { resolve(quote); });
   });
   it('resumes the persisted paid command after hosted card setup', async () => {
