@@ -15,6 +15,7 @@ import { AxiosError } from 'axios';
 import ReauthModal from './ReauthModal';
 import ConnectedApps from './ConnectedApps';
 import SellerAuthority from './SellerAuthority';
+import SellerPublicName from './SellerPublicName';
 import SellerOperationContinuation from './SellerOperationContinuation';
 import { companySignInEnabled } from '@/lib/company-sign-in';
 import CompanyAuthenticator, { companyEnrollmentOffered } from '@/components/CompanyAuthenticator';
@@ -467,6 +468,7 @@ function SettingsVisit({ accountId, retireVisit }: {
             </button>
           </div>
         </div>
+        {isSeller && <SellerPublicName ownOperation={ownOperation} />}
       </section>
 
       {/* Account Info Section */}

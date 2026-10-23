@@ -9,6 +9,11 @@ import { useAuthStore } from '@/store/auth';
 import type { User } from '@/types';
 import { checkCompanySignIn } from '@/lib/company-sign-in';
 import { getConnectorGrants, getConnectorStatus } from '@/api/connector-oauth';
+import { getSellerPublicProfile } from '@/api/sellerProfile';
+
+vi.mock('@/api/sellerProfile', async (original) => ({ ...await original<typeof import('@/api/sellerProfile')>(),
+  getSellerPublicProfile: vi.fn(), updateSellerPublicProfile: vi.fn(),
+}));
 
 const authApi = vi.hoisted(() => ({
   getMe: vi.fn(), companySetup: vi.fn(), companyVerify: vi.fn(), companyRecover: vi.fn(),
@@ -82,6 +87,7 @@ describe('SettingsPage capability refresh', () => {
   });
 
   beforeEach(() => {
+    vi.mocked(getSellerPublicProfile).mockResolvedValue({ public_display_name: null, show_public_display_name: false });
     window.history.replaceState(null, '', '/dashboard/settings');
     vi.mocked(getConnectorStatus).mockResolvedValue(false);
     vi.mocked(getConnectorGrants).mockResolvedValue([]);
