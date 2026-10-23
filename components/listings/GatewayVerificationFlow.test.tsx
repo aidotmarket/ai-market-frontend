@@ -138,6 +138,56 @@ describe('gateway seller verification flow', () => {
     expect(scroll).toHaveBeenCalledTimes(1);
     expect(focus).toHaveBeenCalledTimes(1);
   });
+  it('scrolls and focuses each completed attempt once on the same mount', async () => {
+    const scroll = vi.fn();
+    Element.prototype.scrollIntoView = scroll;
+    const focus = vi.spyOn(HTMLElement.prototype, 'focus');
+    window.localStorage.setItem(key, JSON.stringify({ probeCommand: { confirm: true, preview_requested: false, idempotency_key: 'key' }, epochId: 'epoch' }));
+    render(<GatewayVerificationFlow listingId="listing" sellerId="seller" />);
+    await screen.findByText('Verification is in progress. You can return to this page to check it.');
+
+    async function completeAndReread(verificationId: string, count: number) {
+      const captured = { ...epoch, verification_id: verificationId, state: 'CAPTURED' as const, captured_usd: '2.00', publication_allowed: true, findings: { ...artifact, epoch_id: verificationId } };
+      vi.mocked(gateway.getGatewayVerificationEpoch).mockImplementation(async () => ({ data: { ...captured }, retryAfter: 60 }));
+      fireEvent.click(screen.getByRole('button', { name: 'Check again' }));
+      const heading = await screen.findByRole('heading', { name: 'Review your findings' });
+      expect(scroll).toHaveBeenCalledTimes(count);
+      expect(scroll).toHaveBeenLastCalledWith({ block: 'start' });
+      expect(scroll.mock.contexts[count - 1]).toBe(heading);
+      expect(focus).toHaveBeenCalledTimes(count);
+      expect(focus.mock.contexts[count - 1]).toBe(heading);
+      expect(document.activeElement).toBe(heading);
+      for (let read = 0; read < 2; read++) {
+        const calls = vi.mocked(gateway.getGatewayVerificationEpoch).mock.calls.length;
+        fireEvent.click(screen.getByRole('button', { name: 'Check again' }));
+        await waitFor(() => expect(gateway.getGatewayVerificationEpoch).toHaveBeenCalledTimes(calls + 1));
+        await waitFor(() => expect((screen.getByRole('button', { name: 'Check again' }) as HTMLButtonElement).disabled).toBe(false));
+        expect(scroll).toHaveBeenCalledTimes(count);
+        expect(focus).toHaveBeenCalledTimes(count);
+      }
+      return captured;
+    }
+
+    const captured = await completeAndReread('epoch', 1);
+    const declined = { ...captured, state: 'DECLINED' as const };
+    vi.mocked(gateway.gatewayVerificationLifecycle).mockResolvedValue({ data: declined, retryAfter: 60 });
+    vi.mocked(gateway.getGatewayVerificationEpoch).mockResolvedValue({ data: declined, retryAfter: 60 });
+    fireEvent.click(screen.getByRole('button', { name: 'Decline publication' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Confirm decline' }));
+    fireEvent.click(await screen.findByRole('button', { name: 'Get a new quote' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Check data and get quote' }));
+    await screen.findByText('Your verification quote');
+    const secondEpoch = { ...epoch, verification_id: 'second-epoch' };
+    vi.mocked(gateway.startGatewayVerification).mockResolvedValue({ data: secondEpoch, retryAfter: 60 });
+    vi.mocked(gateway.getGatewayVerificationEpoch).mockResolvedValue({ data: secondEpoch, retryAfter: 60 });
+    acknowledge();
+    fireEvent.click(screen.getByRole('button', { name: 'Start paid verification' }));
+    await screen.findByText('Verification is in progress. You can return to this page to check it.');
+    expect(gateway.getGatewayVerificationEpoch).toHaveBeenLastCalledWith('listing', 'second-epoch');
+    expect(scroll).toHaveBeenCalledTimes(1);
+    expect(focus).toHaveBeenCalledTimes(1);
+    await completeAndReread('second-epoch', 2);
+  });
   it('cancels using the owned GET binding after a fresh confirmation', async () => {
     window.localStorage.setItem(key, JSON.stringify({ probeCommand: { confirm: true, preview_requested: false, idempotency_key: 'key' }, epochId: 'epoch' }));
     vi.mocked(gateway.gatewayVerificationLifecycle).mockResolvedValue({ data: { ...epoch, state: 'CANCELLED_VOIDED' }, retryAfter: 2 });

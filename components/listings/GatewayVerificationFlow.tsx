@@ -94,7 +94,7 @@ export default function GatewayVerificationFlow({ listingId, sellerId, verifier,
   const errorRef = useRef<HTMLParagraphElement>(null);
   const findingsRef = useRef<HTMLHeadingElement>(null);
   const previousEpoch = useRef<GatewayVerificationEpoch | null>(null);
-  const focusedFindings = useRef(false);
+  const focusedFindingsFor = useRef<string | null>(null);
   const [paying, setPaying] = useState(false);
   const [cloudflareStatus, setCloudflareStatus] = useState<CloudflareVerifierStatus | null>(null);
   const [awsStatus, setAwsStatus] = useState<AWSVerifierStatus | null>(null);
@@ -226,8 +226,8 @@ export default function GatewayVerificationFlow({ listingId, sellerId, verifier,
   useEffect(() => {
     const previous = previousEpoch.current;
     previousEpoch.current = epoch;
-    if (focusedFindings.current || epoch?.state !== 'CAPTURED' || previous?.verification_id !== epoch.verification_id || !runningStates.has(previous.state)) return;
-    focusedFindings.current = true;
+    if (epoch?.state !== 'CAPTURED' || focusedFindingsFor.current === epoch.verification_id || previous?.verification_id !== epoch.verification_id || !runningStates.has(previous.state)) return;
+    focusedFindingsFor.current = epoch.verification_id;
     findingsRef.current?.scrollIntoView?.({ block: 'start' });
     findingsRef.current?.focus?.();
   }, [epoch]);
