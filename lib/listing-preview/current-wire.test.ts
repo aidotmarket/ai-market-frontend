@@ -144,11 +144,15 @@ describe('typed source overlay and bounded metadata', () => {
     m.approval.platform_envelope.binding.proof_ids = m.proofs.map(p => p.proof_id);
     // Fill only already bounded producer fields. This is schema/budget proof,
     // deliberately not a claim that these duplicated synthetic proofs are signed.
+    let storedBytes = jcs(m).length;
     for (const p of m.proofs) {
-      const room = Math.floor((LIMITS.manifest_bytes - jcs(m).length) / 2);
-      p.preview_package_url += 'x'.repeat(Math.max(0, Math.min(2048 - p.preview_package_url.length, room)));
+      const room = Math.floor((LIMITS.manifest_bytes - storedBytes) / 2);
+      const padding = Math.max(0, Math.min(2048 - p.preview_package_url.length, room));
+      p.preview_package_url += 'x'.repeat(padding);
+      // Each ASCII x adds one byte in both manifest and commitment proofs.
+      storedBytes += 2 * padding;
     }
-    m.package.url += 'x'.repeat(LIMITS.manifest_bytes - jcs(m).length);
+    m.package.url += 'x'.repeat(LIMITS.manifest_bytes - storedBytes);
     expect(jcs(m)).toHaveLength(LIMITS.manifest_bytes);
     expect(() => validateManifest(m)).not.toThrow();
     Object.assign(m, {source_stale: true, source_stale_since: m.generated_at});
