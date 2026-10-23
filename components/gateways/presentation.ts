@@ -30,6 +30,7 @@ export function blockerMessage(blocker: GatewayBlocker, files: GatewayFile[]): s
     door_check_not_passed: 'Run a door check and resolve any failure.',
     door_check_stale: 'Run the door check again. The last pass is over 10 minutes old.',
     identity_ack_missing: 'Read and acknowledge the identity notice.',
+    data_format_mismatch: "This listing's format doesn't match all of its table files. Create a new listing from this gateway and leave the format empty.",
     file_not_described: `${name} needs a current description.`,
     file_stale: `${name} changed. Describe it again.`,
     file_missing: `${name} is missing from the latest inventory.`,

@@ -205,6 +205,9 @@ describe('EditListingPage', () => {
     listingsApi.getListing.mockResolvedValue({ ...baseListing, data_format });
     render(<EditListingPage />);
     const title = await screen.findByDisplayValue(baseListing.title);
+    const initialFormat = screen.getAllByRole('combobox').find(select => within(select).queryByRole('option', { name: 'CSV' })) as HTMLSelectElement;
+    expect(within(initialFormat).getByRole('option', { name: 'No common table format' })).toBeTruthy();
+    expect(initialFormat.value).toBe('');
     fireEvent.change(title, { target: { value: 'Updated title only' } });
     fireEvent.click(screen.getByRole('button', { name: 'Save Draft' }));
     await waitFor(() => expect(listingsApi.updateListing).toHaveBeenCalledWith('listing-1', expect.objectContaining({
