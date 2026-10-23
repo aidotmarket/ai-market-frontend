@@ -112,7 +112,7 @@ export async function fetchPublicListing(slug: string) {
 export async function fetchShareMetadata(code: string): Promise<ShareMetadataFetchResult> {
   try {
     const res = await fetch(`${API_URL}/api/v1/public/share/${encodeURIComponent(code)}`, {
-      next: { revalidate: 60 },
+      cache: 'no-store',
     });
     if (res.ok) {
       return { status: 'published', data: await res.json() };

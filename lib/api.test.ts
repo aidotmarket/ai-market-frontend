@@ -56,7 +56,7 @@ describe('public data request freshness', () => {
 
 describe('narrow homepage mutable projection reads', () => {
   afterEach(() => vi.unstubAllGlobals());
-  it('fetches both inputs current while retaining unrelated version/share caching', async () => {
+  it('fetches identity-bearing inputs current while retaining unrelated version caching', async () => {
     const fetchMock = vi.fn().mockResolvedValue({ok: true, json: async () => ({items: []})});
     vi.stubGlobal('fetch', fetchMock);
     await fetchPublicListings({page: 2, per_page: 4, category: 'Business', sort: 'newest'});
@@ -66,6 +66,6 @@ describe('narrow homepage mutable projection reads', () => {
     expect(fetchMock).toHaveBeenNthCalledWith(1, expect.stringContaining('/public/listings?page=2&per_page=4&category=Business&sort=newest'), {cache: 'no-store'});
     expect(fetchMock).toHaveBeenNthCalledWith(2, expect.stringContaining('/public/featured-listings?locale=en&currency=USD&limit=4'), {cache: 'no-store'});
     expect(fetchMock).toHaveBeenNthCalledWith(3, expect.stringContaining('/listings/ordinary/versions'), {next: {revalidate: 10}});
-    expect(fetchMock).toHaveBeenNthCalledWith(4, expect.stringContaining('/public/share/ordinary'), {next: {revalidate: 60}});
+    expect(fetchMock).toHaveBeenNthCalledWith(4, expect.stringContaining('/public/share/ordinary'), {cache: 'no-store'});
   });
 });

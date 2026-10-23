@@ -2,6 +2,7 @@ import GeneratedSamplePage from './GeneratedSamplePage';
 import { generatedSampleState, samplePresentation } from '@/lib/generatedSample';
 import PublicSourceReferencePage, { isPublicSourceReference } from './PublicSourceReferencePage';
 import SchemaTable from '@/components/listings/SchemaTable';
+import PublisherCard from '@/components/listings/PublisherCard';
 import { createHash } from 'node:crypto';
 import { notFound, redirect } from 'next/navigation';
 import Link from 'next/link';
@@ -116,7 +117,6 @@ export default async function ListingDetailPage({ params, searchParams }: Props)
   const schemaColumns = Array.isArray(schemaSummary?.columns) ? schemaSummary.columns : [];
   const rowCount = listing.row_count;
   const shouldEmitJsonLd = shouldEmitDatasetJsonLd(listing);
-  const publisherName = listing.publisher.display_name;
   const licenseDetails = isListingLicenseDetails(listing.license) ? listing.license : undefined;
   const publicLicenseUrl = licenseDetails && typeof listing.jsonld?.license === 'string' &&
     listing.jsonld.license.startsWith('https://ai.market/licenses/')
@@ -302,12 +302,7 @@ export default async function ListingDetailPage({ params, searchParams }: Props)
           </div>
 
           {/* Publisher card */}
-          {publisherName && (
-            <div className="rounded-xl border border-gray-200 p-6">
-              <h3 className="font-semibold text-gray-900 mb-3">Publisher</h3>
-              <p className="text-sm text-gray-600">{publisherName}</p>
-            </div>
-          )}
+          <PublisherCard publisher={listing.publisher} />
 
           {/* Inquiry Widget */}
           <InquiryWidget
