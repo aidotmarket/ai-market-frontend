@@ -96,16 +96,20 @@ export default function ConnectorConsentPage() {
     router.push(`/login?reauth=connector&redirect=${encodeURIComponent(connectorRequestPath(saved.request))}`);
   };
 
+  const needsSignIn = error === 'insufficient_assurance' || error === 'recent_login_required';
+
   return <main className="mx-auto max-w-lg space-y-6 px-6 py-16">
     {enabled === false ? <h1>Page not found</h1> : error ? <>
-      <p role="alert">{error === 'expired' ? expiredMessage
+      {needsSignIn && <h1 className="text-2xl font-bold">{"Confirm it's you"}</h1>}
+      <p role={needsSignIn ? 'status' : 'alert'} className={needsSignIn ? 'rounded-lg border border-gray-200 bg-gray-50 p-4 text-sm text-gray-700' : undefined}>{error === 'expired' ? expiredMessage
         : error === 'EARLY_ACCESS_ONLY' ? earlyAccessMessage
         : error === 'email_unverified' ? 'Verify your email before connecting this app.'
-        : (error === 'insufficient_assurance' || error === 'recent_login_required') ? 'Sign in again and complete two-factor authentication to continue.'
+        : error === 'insufficient_assurance' ? `Your account uses two-factor authentication. Before ${metadata?.client.name || 'this app'} can work with your ai.market account, sign in again and enter your code. This makes sure only you can connect apps to your account.`
+        : error === 'recent_login_required' ? 'For your security, connecting an app needs a recent sign-in. Sign in again to continue; it only takes a moment.'
         : error === 'sso_required' ? 'Sign in with your organization’s SSO to continue.'
         : error === 'invalid' ? 'This connection request is invalid.'
         : 'Unable to complete this connection request.'}</p>
-      {(error === 'insufficient_assurance' || error === 'recent_login_required') && <button onClick={signInAgain}>Sign in again</button>}
+      {needsSignIn && <button onClick={signInAgain}>Sign in to continue</button>}
       {error === 'error' && <button onClick={() => setRevision((value) => value + 1)}>Retry</button>}
     </> : metadata && isAuthenticated && user ? <>
       <h1 className="text-2xl font-bold">Connect {metadata.client.name} to ai.market</h1>

@@ -102,6 +102,9 @@ it.each(['login_required', 'invalid_session', 'insufficient_assurance'])('offers
   vi.mocked(decideAuthorization).mockRejectedValue(failure(kind));
   render(<AuthorizationPage />); fireEvent.click(await screen.findByRole('button', { name: 'Continue' }));
   fireEvent.click(await screen.findByRole('button', { name: 'Sign in again' }));
+  if (kind === 'insufficient_assurance') {
+    expect(screen.getByRole('alert').textContent).toBe('Your account uses two-factor authentication. Before AIM Data can work with your ai.market account, sign in again and enter your code. This makes sure only you can connect apps to your account.');
+  }
   expect(navigation.push).toHaveBeenCalledWith(`/login?reauth=aim-data&redirect=${encodeURIComponent(path)}`);
   cleanup(); navigation.query = new URLSearchParams({ reauth: 'aim-data', redirect: path });
   render(<LoginForm />); expect(navigation.replace).not.toHaveBeenCalled();

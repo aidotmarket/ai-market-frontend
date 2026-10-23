@@ -22,7 +22,7 @@ function errorKind(error: unknown): string {
 const messages: Record<string, string> = {
   login_required: 'Please sign in again to continue to AIM Data.',
   invalid_session: 'Please sign in again to continue to AIM Data.',
-  insufficient_assurance: 'Please sign in again and complete two-factor authentication.',
+  insufficient_assurance: 'Your account uses two-factor authentication. Before AIM Data can work with your ai.market account, sign in again and enter your code. This makes sure only you can connect apps to your account.',
   access_denied: 'This account cannot authorize AIM Data. Access was denied.',
   binding_failed: 'This request belongs to another browser. Restart sign-in from AIM Data in this browser.',
   transaction_expired: 'This request has expired. Restart sign-in from AIM Data.',
