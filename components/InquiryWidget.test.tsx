@@ -6,14 +6,15 @@ import type { ConversationDetail } from '@/types';
 import { AxiosError } from 'axios';
 
 const mocks = vi.hoisted(() => ({
-  auth: { isAuthenticated: false },
+  auth: { isAuthenticated: false, user: { id: 'viewer' }, token: 'synthetic' },
   createInquiry: vi.fn(),
   replyToConversation: vi.fn(),
   updateSince: vi.fn(),
 }));
 
-vi.mock('@/store/auth', () => ({
-  useAuthStore: () => mocks.auth,
+vi.mock('@/store/auth', async (importOriginal) => ({
+  ...await importOriginal<typeof import('@/store/auth')>(),
+  useAuthStore: Object.assign(() => mocks.auth, { getState: () => mocks.auth, subscribe: () => () => {} }),
 }));
 
 vi.mock('@/api/conversations', () => ({

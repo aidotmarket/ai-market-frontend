@@ -42,10 +42,12 @@ function sortInquiries(items: ConversationListItem[]): ConversationListItem[] {
 }
 
 export default function SellerInquiriesPage() {
-  const { inquiries, loading, error, refetch, page, changePage, hasNext } = useInquiryList('seller');
-  const [expandedId, setExpandedId] = useState<string | null>(null);
+  const { inquiries, loading, error, refetch, page, changePage, hasNext, visit, isCurrent } = useInquiryList('seller');
+  const [expanded, setExpanded] = useState<{ visit: typeof visit; id: string } | null>(null);
+  const expandedId = expanded && expanded.visit === visit ? expanded.id : null;
   const navigate = (nextPage: number) => {
-    setExpandedId(null);
+    if (!isCurrent()) return;
+    setExpanded(null);
     changePage(nextPage);
   };
   const pager = <InquiryListPager page={page} hasNext={hasNext} loading={loading}
@@ -92,7 +94,8 @@ export default function SellerInquiriesPage() {
             key={inq.id}
             inquiry={inq}
             isExpanded={expandedId === inq.id}
-            onToggle={() => setExpandedId(expandedId === inq.id ? null : inq.id)}
+            onToggle={() => { if (isCurrent()) setExpanded(expandedId === inq.id ? null : { visit, id: inq.id }); }}
+            isCurrent={isCurrent}
             onReplied={refetch}
           />
         ))}
@@ -107,11 +110,13 @@ function SellerInquiryCard({
   isExpanded,
   onToggle,
   onReplied,
+  isCurrent,
 }: {
   inquiry: ConversationListItem;
   isExpanded: boolean;
   onToggle: () => void;
   onReplied: () => void;
+  isCurrent: () => boolean;
 }) {
   return (
     <div className="rounded-lg border border-gray-200 overflow-hidden">
@@ -143,14 +148,14 @@ function SellerInquiryCard({
 
       {isExpanded && (
         <div className="border-t border-gray-200 p-4">
-          <SellerInquiryThread key={inquiry.id} id={inquiry.id} onReplied={onReplied} />
+          <SellerInquiryThread key={inquiry.id} id={inquiry.id} onReplied={onReplied} isCurrent={isCurrent} />
         </div>
       )}
     </div>
   );
 }
 
-function SellerInquiryThread({ id, onReplied }: { id: string; onReplied: () => void }) {
+function SellerInquiryThread({ id, onReplied, isCurrent }: { id: string; onReplied: () => void; isCurrent: () => boolean }) {
   const [conversation, setConversation] = useState<ConversationDetail | null>(null);
   const [messages, setMessages] = useState<ConversationMessage[]>([]);
   const [loading, setLoading] = useState(true);
@@ -169,21 +174,23 @@ function SellerInquiryThread({ id, onReplied }: { id: string; onReplied: () => v
   const statusVersion = useRef(0);
 
   const handleNewMessages = useCallback((newMsgs: ConversationMessage[], status: ConversationDetail['status']) => {
+    if (!active.current || !isCurrent()) return;
     statusVersion.current += 1;
     setMessages((prev) => mergeConversationMessages(prev, newMsgs));
     setConversation((prev) => prev ? { ...prev, status } : prev);
-  }, []);
+  }, [isCurrent]);
 
   const lastMsgTime = messages.length > 0 ? messages[messages.length - 1].created_at : null;
-  const { updateSince } = useConversationPoll(conversation ? id : null, lastMsgTime, handleNewMessages);
+  const { updateSince } = useConversationPoll(conversation ? id : null, lastMsgTime, handleNewMessages, isCurrent);
 
   const refresh = useCallback(async () => {
+    if (!active.current || !isCurrent()) return;
     const version = ++readVersion.current;
     const statusAtStart = statusVersion.current;
     setRefreshing(true);
     try {
       const data = await getConversation(id);
-      if (!active.current || version !== readVersion.current) return;
+      if (!active.current || !isCurrent() || version !== readVersion.current) return;
       setConversation((prev) => statusAtStart === statusVersion.current || !prev
         ? data : { ...data, status: prev.status });
       setMessages((prev) => mergeConversationMessages(prev, data.messages ?? []));
@@ -192,14 +199,14 @@ function SellerInquiryThread({ id, onReplied }: { id: string; onReplied: () => v
       setError('');
       setAccepted((pending) => pending && !(data.messages ?? []).some((msg) => msg.id === pending) ? pending : null);
     } catch {
-      if (active.current && version === readVersion.current) setError('Failed to refresh conversation.');
+      if (active.current && isCurrent() && version === readVersion.current) setError('Failed to refresh conversation.');
     } finally {
-      if (active.current && version === readVersion.current) {
+      if (active.current && isCurrent() && version === readVersion.current) {
         setRefreshing(false);
         setLoading(false);
       }
     }
-  }, [id, updateSince]);
+  }, [id, updateSince, isCurrent]);
 
   useEffect(() => {
     active.current = true;
@@ -215,7 +222,7 @@ function SellerInquiryThread({ id, onReplied }: { id: string; onReplied: () => v
   }, [accepted, messages]);
 
   const handleReply = async () => {
-    if (sending.current || accepted || !replyText.trim() || !conversation) return;
+    if (!active.current || !isCurrent() || sending.current || accepted || !replyText.trim() || !conversation) return;
     sending.current = true;
     setReplying(true);
     setReplyError('');
@@ -224,7 +231,7 @@ function SellerInquiryThread({ id, onReplied }: { id: string; onReplied: () => v
       ack = await replyToConversation(id, replyText.trim(), viewerRole);
       if (!ack.success) throw new Error('Reply not accepted');
     } catch (err) {
-      if (active.current) {
+      if (active.current && isCurrent()) {
         const detail = err instanceof AxiosError ? err.response?.data?.detail : null;
         setReplyError(typeof detail === 'string' ? detail : 'Failed to send reply. Please revise and try again.');
         sending.current = false;
@@ -232,12 +239,12 @@ function SellerInquiryThread({ id, onReplied }: { id: string; onReplied: () => v
       }
       return;
     }
-    if (!active.current) return;
+    if (!active.current || !isCurrent()) return;
     setAccepted(ack.message_id);
     setReplyText('');
     // A confirmed write stays accepted even when the following read fails.
     await refresh();
-    if (active.current) {
+    if (active.current && isCurrent()) {
       sending.current = false;
       setReplying(false);
       onReplied();

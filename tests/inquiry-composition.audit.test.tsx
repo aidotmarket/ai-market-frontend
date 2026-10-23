@@ -8,14 +8,17 @@ import InquiryWidget from '@/components/InquiryWidget';
 
 const api = vi.hoisted(() => ({
   getConversation: vi.fn(), createInquiry: vi.fn(), replyToConversation: vi.fn(),
-  updateSince: vi.fn(), refetch: vi.fn(), toast: vi.fn(),
+  updateSince: vi.fn(), refetch: vi.fn(), toast: vi.fn(), isCurrent: () => true,
 }));
 vi.mock('@/api/conversations', () => api);
 vi.mock('@/api/anonymousChat', () => ({ createAnonymousSession: vi.fn(() => { throw new Error('No anonymous session'); }), sendAnonymousMessage: vi.fn(() => { throw new Error('No messages'); }), readAnonymousMessageStream: vi.fn() }));
-vi.mock('@/store/auth', () => ({ useAuthStore: () => ({ user: { id: 'viewer' }, isAuthenticated: true }) }));
+vi.mock('@/store/auth', async (importOriginal) => {
+  const state = { user: { id: 'viewer' }, token: 'synthetic', isAuthenticated: true };
+  return { ...await importOriginal<typeof import('@/store/auth')>(), useAuthStore: Object.assign((select?: (value: typeof state) => unknown) => select ? select(state) : state, { getState: () => state, subscribe: () => () => {} }) };
+});
 vi.mock('@/components/Toast', () => ({ useToast: () => ({ toast: api.toast }) }));
 vi.mock('@/hooks/useConversationPoll', () => ({ useConversationPoll: () => ({ updateSince: api.updateSince }) }));
-vi.mock('@/hooks/useInquiryList', () => ({ useInquiryList: () => ({ inquiries: [{ id: 'thread', listing_title: 'Synthetic listing', status: 'awaiting_seller', last_message_at: '2026-10-18T00:00:00Z', unread_by_seller: 0 }], loading: false, error: '', refetch: api.refetch, page: 1, changePage: vi.fn(), hasNext: false }) }));
+vi.mock('@/hooks/useInquiryList', () => ({ useInquiryList: () => ({ inquiries: [{ id: 'thread', listing_title: 'Synthetic listing', status: 'awaiting_seller', last_message_at: '2026-10-18T00:00:00Z', unread_by_seller: 0 }], loading: false, error: '', refetch: api.refetch, isCurrent: api.isCurrent, page: 1, changePage: vi.fn(), hasNext: false }) }));
 vi.mock('@/components/ConversationThread', () => ({ default: () => null }));
 const detail = { id: 'thread', listing_id: 'listing', listing_title: 'Synthetic listing', buyer_id: 'viewer', seller_id: 'seller', status: 'awaiting_seller', created_at: '2026-10-18T00:00:00Z', messages: [] };
 const draft = '  candidate reply  ';

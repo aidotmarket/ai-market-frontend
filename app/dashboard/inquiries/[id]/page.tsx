@@ -4,7 +4,7 @@ import { useEffect, useState, useCallback, useRef, use } from 'react';
 import Link from 'next/link';
 import { getConversation, replyToConversation } from '@/api/conversations';
 import { useConversationPoll } from '@/hooks/useConversationPoll';
-import { useAuthStore } from '@/store/auth';
+import { authSessionIdentity, useAuthStore } from '@/store/auth';
 import ConversationThread from '@/components/ConversationThread';
 import type { ConversationDetail, ConversationMessage } from '@/types';
 import { AxiosError } from 'axios';
@@ -16,10 +16,25 @@ interface Props {
 
 export default function ConversationDetailPage({ params }: Props) {
   const { id } = use(params);
-  return <ConversationView key={id} id={id} />;
+  const owner = useAuthStore(authSessionIdentity);
+  const visitRef = useRef({ owner, sequence: 0 });
+  const [, notify] = useState(0);
+  if (visitRef.current.owner !== owner) visitRef.current = { owner, sequence: visitRef.current.sequence + 1 };
+  const visit = visitRef.current;
+  // Retire before React commits, including a batched A -> B -> A transition.
+  useEffect(() => useAuthStore.subscribe((state) => {
+    const next = authSessionIdentity(state);
+    if (visitRef.current.owner !== next) {
+      visitRef.current = { owner: next, sequence: visitRef.current.sequence + 1 };
+      notify((value) => value + 1);
+    }
+  }), []);
+  const isCurrent = useCallback(() => visit.owner !== null && visitRef.current === visit
+    && authSessionIdentity(useAuthStore.getState()) === visit.owner, [visit]);
+  return owner ? <ConversationView key={`${id}:${visit.sequence}`} id={id} isCurrent={isCurrent} /> : null;
 }
 
-function ConversationView({ id }: { id: string }) {
+function ConversationView({ id, isCurrent }: { id: string; isCurrent: () => boolean }) {
   const { user } = useAuthStore();
 
   const [conversation, setConversation] = useState<ConversationDetail | null>(null);
@@ -41,21 +56,23 @@ function ConversationView({ id }: { id: string }) {
   const statusVersion = useRef(0);
 
   const handleNewMessages = useCallback((newMsgs: ConversationMessage[], status: ConversationDetail['status']) => {
+    if (!active.current || !isCurrent()) return;
     statusVersion.current += 1;
     setMessages((prev) => mergeConversationMessages(prev, newMsgs));
     setConversation((prev) => prev ? { ...prev, status } : prev);
-  }, []);
+  }, [isCurrent]);
 
   const lastMsgTime = messages.length > 0 ? messages[messages.length - 1].created_at : null;
-  const { updateSince } = useConversationPoll(conversation ? id : null, lastMsgTime, handleNewMessages);
+  const { updateSince } = useConversationPoll(conversation ? id : null, lastMsgTime, handleNewMessages, isCurrent);
 
   const refresh = useCallback(async () => {
+    if (!active.current || !isCurrent()) return;
     const version = ++readVersion.current;
     const statusAtStart = statusVersion.current;
     setRefreshing(true);
     try {
       const data = await getConversation(id);
-      if (!active.current || version !== readVersion.current) return;
+      if (!active.current || !isCurrent() || version !== readVersion.current) return;
       setConversation((prev) => statusAtStart === statusVersion.current || !prev
         ? data : { ...data, status: prev.status });
       setMessages((prev) => mergeConversationMessages(prev, data.messages ?? []));
@@ -64,14 +81,14 @@ function ConversationView({ id }: { id: string }) {
       setError('');
       setAccepted((pending) => pending && !(data.messages ?? []).some((msg) => msg.id === pending) ? pending : null);
     } catch {
-      if (active.current && version === readVersion.current) setError('Failed to refresh conversation.');
+      if (active.current && isCurrent() && version === readVersion.current) setError('Failed to refresh conversation.');
     } finally {
-      if (active.current && version === readVersion.current) {
+      if (active.current && isCurrent() && version === readVersion.current) {
         setRefreshing(false);
         setLoading(false);
       }
     }
-  }, [id, updateSince]);
+  }, [id, updateSince, isCurrent]);
 
   useEffect(() => {
     active.current = true;
@@ -87,7 +104,7 @@ function ConversationView({ id }: { id: string }) {
   }, [accepted, messages]);
 
   const handleReply = async () => {
-    if (sending.current || accepted || !replyText.trim() || !conversation) return;
+    if (!active.current || !isCurrent() || sending.current || accepted || !replyText.trim() || !conversation) return;
     sending.current = true;
     setReplying(true);
     setReplyError('');
@@ -96,7 +113,7 @@ function ConversationView({ id }: { id: string }) {
       ack = await replyToConversation(id, replyText.trim(), viewerRole);
       if (!ack.success) throw new Error('Reply not accepted');
     } catch (err) {
-      if (active.current) {
+      if (active.current && isCurrent()) {
         const detail = err instanceof AxiosError ? err.response?.data?.detail : null;
         setReplyError(typeof detail === 'string' ? detail : 'Failed to send reply. Please revise and try again.');
         sending.current = false;
@@ -104,12 +121,12 @@ function ConversationView({ id }: { id: string }) {
       }
       return;
     }
-    if (!active.current) return;
+    if (!active.current || !isCurrent()) return;
     setAccepted(ack.message_id);
     setReplyText('');
     // A confirmed write stays accepted even when the following read fails.
     await refresh();
-    if (active.current) {
+    if (active.current && isCurrent()) {
       sending.current = false;
       setReplying(false);
     }

@@ -6,6 +6,8 @@ import Buyer from '@/app/dashboard/inquiries/page';
 import Seller from '@/app/dashboard/seller/inquiries/page';
 import { useInquiryList } from '@/hooks/useInquiryList';
 import { getMyConversations } from '@/api/conversations';
+import { useAuthStore } from '@/store/auth';
+import type { User } from '@/types';
 import type { ConversationListItem } from '@/types';
 
 const client = vi.hoisted(() => ({ get: vi.fn(), post: vi.fn() }));
@@ -39,6 +41,7 @@ function onlyListReads() {
 }
 beforeEach(() => {
   vi.useFakeTimers(); vi.resetAllMocks(); backend();
+  useAuthStore.setState({ user: { id: 'viewer' } as User, token: 'synthetic', isAuthenticated: true, hydrated: true, isLoading: false });
   Element.prototype.scrollIntoView = vi.fn();
   Object.defineProperty(document, 'hidden', { configurable: true, value: false });
   vi.stubGlobal('fetch', () => { throw new Error('Network forbidden'); });

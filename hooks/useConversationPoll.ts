@@ -7,7 +7,8 @@ import type { ConversationMessage, ConversationStatus } from '@/types';
 export function useConversationPoll(
   conversationId: string | null,
   initialSince: string | null,
-  onNewMessages: (msgs: ConversationMessage[], status: ConversationStatus) => void
+  onNewMessages: (msgs: ConversationMessage[], status: ConversationStatus) => void,
+  isCurrent?: () => boolean
 ) {
   const [polling, setPolling] = useState(false);
   const cursor = useRef<{ id: string | null; since: string | null }>({ id: null, since: null });
@@ -37,7 +38,7 @@ export function useConversationPoll(
     let inFlight = false;
     let timer: ReturnType<typeof setTimeout>;
     const poll = async () => {
-      if (!active || inFlight) return;
+      if (!active || inFlight || (isCurrent && !isCurrent())) return;
       if (document.hidden || !cursor.current.since) {
         timer = setTimeout(poll, 3000);
         return;
@@ -48,7 +49,7 @@ export function useConversationPoll(
         setPolling(true);
         const requestRevision = revision.current;
         const result = await pollConversation(conversationId, cursor.current.since);
-        if (!active || requestRevision !== revision.current) return;
+        if (!active || (isCurrent && !isCurrent()) || requestRevision !== revision.current) return;
         result.new_messages.forEach((msg) => updateSince(msg.created_at));
         callbackRef.current(result.new_messages, result.inquiry_status);
         if (result.has_more && result.new_messages.length) delay = 500;
@@ -56,7 +57,7 @@ export function useConversationPoll(
         // Retry reads on the normal interval. Never retry a reply here.
       } finally {
         inFlight = false;
-        if (active) {
+        if (active && (!isCurrent || isCurrent())) {
           setPolling(false);
           timer = setTimeout(poll, delay);
         }
@@ -75,7 +76,7 @@ export function useConversationPoll(
       clearTimeout(timer);
       document.removeEventListener('visibilitychange', onVisibility);
     };
-  }, [conversationId, ready, updateSince]);
+  }, [conversationId, ready, updateSince, isCurrent]);
 
   return { polling, updateSince };
 }
