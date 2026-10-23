@@ -1,6 +1,7 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useEffect, useLayoutEffect, useRef, useState } from 'react';
+import { authSessionIdentity, useAuthStore } from '@/store/auth';
 import Link from 'next/link';
 import { useParams } from 'next/navigation';
 import { confirmLicenseRecordDeletion, downloadLicenseRecordPdf, getLicenseRecord } from '@/api/licenseRecords';
@@ -28,37 +29,90 @@ function DocumentSection({ document, title }: { document: RecordDocument; title:
 
 export default function LicenseRecordView({ party }: { party: 'buyer' | 'seller' }) {
   const { id } = useParams<{ id: string }>();
+  const identity = useAuthStore(authSessionIdentity);
+  const [accountVisit, setAccountVisit] = useState(0);
+  useLayoutEffect(() => useAuthStore.subscribe((next, previous) => {
+    if (authSessionIdentity(next) !== authSessionIdentity(previous)) {
+      setAccountVisit((visit) => visit + 1);
+    }
+  }), []);
+  return <LicenseRecordVisit key={JSON.stringify([id, party, identity, accountVisit])} id={id} party={party} />;
+}
+
+function LicenseRecordVisit({ id, party }: { id: string; party: 'buyer' | 'seller' }) {
   const [record, setRecord] = useState<LicenseRecord | null>(null);
   const [state, setState] = useState<'loading' | 'ready' | 'error'>('loading');
+  const [readAttempt, setReadAttempt] = useState(0);
   const [actionPending, setActionPending] = useState(false);
+  const [actionError, setActionError] = useState<'pdf' | 'confirmation' | null>(null);
+  const live = useRef(false);
+  const pending = useRef(false);
+  const confirmed = useRef(false);
+
+  // Retire retained callbacks before the replacement visit can accept actions.
+  // Observe account transitions synchronously, including a batched A → B → A.
+  useLayoutEffect(() => {
+    live.current = true;
+    const unsubscribe = useAuthStore.subscribe((next, previous) => {
+      if (authSessionIdentity(next) !== authSessionIdentity(previous)) live.current = false;
+    });
+    return () => { live.current = false; unsubscribe(); };
+  }, []);
 
   useEffect(() => {
     let cancelled = false;
-    getLicenseRecord(id).then((value) => {
-      if (!cancelled) { setRecord(value); setState('ready'); }
-    }).catch(() => { if (!cancelled) setState('error'); });
+    setState('loading');
+    setRecord(null);
+    async function read() {
+      try {
+        const value = await getLicenseRecord(id);
+        if (!cancelled && live.current) {
+          setRecord(value);
+          setState('ready');
+        }
+      } catch {
+        if (!cancelled && live.current) setState('error');
+      }
+    }
+    void read();
     return () => { cancelled = true; };
-  }, [id]);
+  }, [id, readAttempt]);
 
   async function downloadPdf() {
+    if (!live.current || state !== 'ready' || !record || pending.current) return;
+    pending.current = true;
     setActionPending(true);
+    setActionError(null);
     try {
       const blob = await downloadLicenseRecordPdf(id);
+      if (!live.current) return;
       const url = URL.createObjectURL(blob);
-      const link = document.createElement('a');
-      link.href = url;
-      link.download = `licence-record-${id}.pdf`;
-      link.click();
-      URL.revokeObjectURL(url);
+      try {
+        const link = document.createElement('a');
+        link.href = url;
+        link.download = `licence-record-${id}.pdf`;
+        link.click();
+      } finally {
+        URL.revokeObjectURL(url);
+      }
+    } catch {
+      if (live.current) setActionError('pdf');
     } finally {
-      setActionPending(false);
+      if (live.current) { pending.current = false; setActionPending(false); }
     }
   }
 
   async function confirmDeletion() {
+    if (!live.current || state !== 'ready' || !record || pending.current || confirmed.current ||
+        party !== 'buyer' || record.status !== 'terminated' ||
+        record.lifecycle_events.some((event) => event.event_type === 'deletion_confirmed')) return;
+    pending.current = true;
     setActionPending(true);
+    setActionError(null);
     try {
       const confirmation = await confirmLicenseRecordDeletion(id);
+      if (!live.current) return;
+      confirmed.current = true;
       setRecord((current) => current ? {
         ...current,
         lifecycle_events: [...current.lifecycle_events, {
@@ -67,13 +121,15 @@ export default function LicenseRecordView({ party }: { party: 'buyer' | 'seller'
           deletion_due_at: null, metadata: null,
         }],
       } : current);
+    } catch {
+      if (live.current) setActionError('confirmation');
     } finally {
-      setActionPending(false);
+      if (live.current) { pending.current = false; setActionPending(false); }
     }
   }
 
   if (state === 'loading') return <p className="text-sm text-gray-600">Loading licence record…</p>;
-  if (state === 'error' || !record) return <p role="alert" className="rounded-lg bg-red-50 p-4 text-sm text-red-800">The licence record is unavailable.</p>;
+  if (state === 'error' || !record) return <div><p role="alert" className="rounded-lg bg-red-50 p-4 text-sm text-red-800">The licence record is unavailable.</p><button type="button" onClick={() => { if (live.current) setReadAttempt((attempt) => attempt + 1); }} className="mt-3 text-sm text-indigo-700 underline">Retry licence record</button></div>;
 
   const termination = record.lifecycle_events.find((event) => event.event_type === 'terminated');
   const deletionConfirmation = record.lifecycle_events.find((event) => event.event_type === 'deletion_confirmed');
@@ -90,6 +146,7 @@ export default function LicenseRecordView({ party }: { party: 'buyer' | 'seller'
           <button type="button" disabled={actionPending} onClick={downloadPdf} className="rounded-lg bg-[#3F51B5] px-4 py-2 text-sm font-medium text-white disabled:opacity-50">Download PDF</button>
         </div>
       </div>
+      {actionError === 'pdf' && <p role="alert" className="text-sm text-red-800">The licence record PDF could not be downloaded. Please try again.</p>}
       <dl className="grid gap-4 rounded-lg border border-gray-200 p-5 text-sm sm:grid-cols-2">
         <div><dt className="text-gray-500">Order</dt><dd className="mt-1 break-all font-mono text-gray-900">{record.order.number ?? record.order.id}</dd></div>
         <div><dt className="text-gray-500">Accepted</dt><dd className="mt-1 text-gray-900">{formatDate(record.signature.accepted_at)}</dd></div>
@@ -102,6 +159,7 @@ export default function LicenseRecordView({ party }: { party: 'buyer' | 'seller'
       {record.status === 'terminated' && (
         <section className="rounded-lg border border-amber-300 bg-amber-50 p-5 text-sm text-amber-950">
           <h2 className="font-semibold">Deletion duty</h2>
+          {actionError === 'confirmation' && <p role="alert" className="mt-2 text-red-800">The deletion confirmation could not be recorded. Please try again.</p>}
           <p className="mt-2">The licence is terminated. Delete the dataset and all copies under your control{termination?.deletion_due_at ? ` by ${formatDate(termination.deletion_due_at)}` : ' within the recorded deadline'}.</p>
           {deletionConfirmation ? <p className="mt-2 font-medium">Deletion confirmed {formatDate(deletionConfirmation.occurred_at)}.</p> : canConfirmDeletion && <button type="button" disabled={actionPending} onClick={confirmDeletion} className="mt-3 rounded-lg bg-amber-900 px-4 py-2 font-medium text-white disabled:opacity-50">Confirm deletion</button>}
         </section>
