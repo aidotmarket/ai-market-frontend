@@ -18,12 +18,13 @@ export interface Commitment {
   aim_data_signer_reference: string; signature_algorithm: 'ed25519'; seller_signature: string;
   signed_at: string; proofs: Proof[];
 }
+export type AggregateHashProfile = 'aim-approved-aggregates-v1' | 'aim-approved-aggregates-v2';
 export interface Binding {
   profile: 'aim-preview-disclosure-v1'; decision: 'approve' | 'withdraw'; summary_id: string;
   disclosure_version: string; seller_id: string; listing_id: string; listing_version_id: string | null;
   content_revision: string; source_revision: string; summary_approval_id: string; summary_hash: string; render_hash: string;
   selected_fields: string[]; preview_type: PreviewType | null; content_type: string | null;
-  sample_decision: 'none' | 'approved'; sample_hash: string | null; aggregate_hash: string;
+  sample_decision: 'none' | 'approved'; sample_hash: string | null; aggregate_hash: string; aggregate_hash_profile?: AggregateHashProfile;
   commitment_id: string | null; schema_digest: string | null; seller_dataset_version: string | null;
   schema_descriptors: Descriptor[]; proof_ids: string[]; sampled_leaf_list_digest: string | null;
   scan_attestation_digest: string | null; rights_basis_digest: string | null;
@@ -53,10 +54,12 @@ export interface Manifest {
   profile: 'aim-listing-preview-v1'; package_profile: 'aim-preview-package-v2'; listing_id: string;
   listing_version_id: string | null; content_revision: string; source_revision: string;
   summary_approval_id: string; summary_hash: string; render_hash: string; disclosure_version: string;
-  approval_status: 'approved'; sample_hash: string; aggregate_hash: string; preview_type: PreviewType; content_type: string;
+  approval_status: 'approved'; sample_hash: string; aggregate_hash: string; aggregate_hash_profile?: AggregateHashProfile; preview_type: PreviewType; content_type: string;
   columns: {name: string; type: LogicalType}[]; selected_fields: string[]; schema_descriptors: Descriptor[];
   commitment: Commitment; proofs: Proof[]; checkpoint: Checkpoint; log_evidence: LogEvidence;
   approval: {platform_envelope: PlatformEnvelope}; package: {url: string; media_type: string; byte_ceiling: number};
+  signed_last_attested_by_seller_at?: string;
+  source_stale?: boolean; source_stale_since?: string | null;
   last_attested_by_seller_at: string; stale: boolean; freshness_stale_at: string; freshness_expires_at: string | null;
   generated_at: string; valid_until: string; limits: typeof LIMITS;
 }

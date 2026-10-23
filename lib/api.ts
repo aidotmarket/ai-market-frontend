@@ -350,7 +350,7 @@ export async function fetchPreviewManifest(slug: string, signal: AbortSignal): P
     });
     if (response.status !== 200 || signal.aborted) return null;
     const {metadataResponse} = await import('./listing-preview/transport');
-    const value = await metadataResponse(response, signal) as import('./listing-preview/types').Manifest;
+    const value = await metadataResponse(response, signal, true) as import('./listing-preview/types').Manifest;
     return value?.profile === 'aim-listing-preview-v1' && value.package_profile === 'aim-preview-package-v2' && value.preview_type === 'table' && value.content_type === 'tabular' ? value : null;
   } catch {return null;}
 }

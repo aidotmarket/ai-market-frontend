@@ -1,4 +1,5 @@
 import {LIMITS} from './types';
+import {MANIFEST_RESPONSE_BYTES, manifestBudget} from './wire';
 import {parseJson, requirePreview as check} from './primitives';
 
 /** Static admission matches the backend and additionally rejects numeric host
@@ -36,6 +37,9 @@ export async function fetchPackage(url: string, byteCeiling: number, signal: Abo
   const response = await fetch(url, {credentials: 'omit', referrerPolicy: 'no-referrer', redirect: 'error', cache: 'no-store', mode: 'cors', signal});
   return boundedBody(response, Math.min(LIMITS.envelope_bytes, byteCeiling), signal);
 }
-export async function metadataResponse(response: Response, signal: AbortSignal): Promise<unknown> {
-  return parseJson(await boundedBody(response, LIMITS.manifest_bytes, signal), LIMITS.manifest_bytes);
+export async function metadataResponse(response: Response, signal: AbortSignal, previewManifest = false): Promise<unknown> {
+  const ceiling = previewManifest ? MANIFEST_RESPONSE_BYTES : LIMITS.manifest_bytes;
+  const value = parseJson(await boundedBody(response, ceiling, signal), ceiling);
+  if (previewManifest) manifestBudget(value);
+  return value;
 }

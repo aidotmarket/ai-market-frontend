@@ -1,7 +1,7 @@
 import type {Binding, Checkpoint, Commitment, Manifest, PlatformEnvelope, Proof} from './types';
 import {requirePolicyVersion} from './policy';
 import {LIMITS} from './types';
-import {canonical, closed, natural, requirePreview as check, timestamp, unb64} from './primitives';
+import {canonical, closed, jcs, natural, requirePreview as check, timestamp, unb64} from './primitives';
 
 export const bindingFields = 'profile decision summary_id disclosure_version seller_id listing_id listing_version_id content_revision source_revision summary_approval_id summary_hash render_hash selected_fields preview_type content_type sample_decision sample_hash aggregate_hash commitment_id schema_digest seller_dataset_version schema_descriptors proof_ids sampled_leaf_list_digest scan_attestation_digest rights_basis_digest rights_basis_code public_preview_permission approved_by approved_at last_attested_by_seller_at update_cadence_days approval_expires_at supersedes request_id expected_current_disclosure_id signer_reference signature_algorithm signature_profile';
 export const proofFields = 'proof_id base_row_digest duplicate_ordinal leaf_index tree_size siblings preview_package_url package_media_type package_profile package_byte_ceiling scan_policy scan_policy_version scan_verdict scanned_at sampled_leaf_list_digest signer_reference signature_algorithm signature';
@@ -12,7 +12,7 @@ function code(value: unknown, max = 255) {check(typeof value === 'string' && val
 function digest(value: unknown) {check(typeof value === 'string' && /^[0-9a-f]{64}$/.test(value), 'invalid_digest');}
 function ref(value: unknown) {check(typeof value === 'string' && value.length === 101, 'invalid_signer'); uuid(value.slice(0, 36)); check(value[36] === ':'); digest(value.slice(37));}
 export function validateBinding(b: Binding) {
-  closed(b, bindingFields); canonical(b);
+  closed(b, bindingFields, 'aggregate_hash_profile'); canonical(b); validateAggregateProfile(b);
   for (const k of ['summary_id', 'disclosure_version', 'seller_id', 'listing_id', 'content_revision', 'summary_approval_id', 'approved_by', 'request_id'] as const) uuid(b[k]);
   for (const k of ['listing_version_id', 'commitment_id', 'supersedes', 'expected_current_disclosure_id'] as const) if (b[k] !== null) uuid(b[k]);
   for (const k of ['source_revision', 'summary_hash', 'render_hash', 'aggregate_hash'] as const) digest(b[k]);
@@ -72,7 +72,9 @@ export function validateCheckpoint(c: Checkpoint) {
   unb64(c.root_hash, 32); unb64(c.signature, 64); timestamp(c.checkpoint_at);
 }
 export function validateManifest(raw: unknown): asserts raw is Manifest {
-  closed(raw, manifestFields); const m = raw as unknown as Manifest;
+  closed(raw, manifestFields, 'aggregate_hash_profile signed_last_attested_by_seller_at source_stale source_stale_since'); const m = raw as unknown as Manifest;
+  validateAggregateProfile(m); validateSourceOverlay(m);
+  if (Object.hasOwn(m, 'signed_last_attested_by_seller_at')) timestamp(m.signed_last_attested_by_seller_at!);
   check(m.profile === 'aim-listing-preview-v1' && m.package_profile === 'aim-preview-package-v2' && m.preview_type === 'table' && m.content_type === 'tabular' && m.approval_status === 'approved');
   closed(m.approval, 'platform_envelope'); validateEnvelope(m.approval.platform_envelope); validateCommitment(m.commitment); validateCheckpoint(m.checkpoint);
   check(Array.isArray(m.proofs) && m.proofs.length >= 1 && m.proofs.length <= 100); m.proofs.forEach(validateProof);
@@ -88,4 +90,33 @@ export function validateManifest(raw: unknown): asserts raw is Manifest {
   if (m.log_evidence.previous_root !== null) unb64(m.log_evidence.previous_root, 32);
   for (const k of ['generated_at', 'valid_until', 'freshness_stale_at', 'last_attested_by_seller_at'] as const) timestamp(m[k]);
   check(typeof m.stale === 'boolean' && m.freshness_expires_at === null, 'unrecognized_expiry_policy');
+}
+
+function validateAggregateProfile(value: {aggregate_hash_profile?: unknown}) {
+  if (Object.hasOwn(value, 'aggregate_hash_profile')) check(
+    value.aggregate_hash_profile === 'aim-approved-aggregates-v1' || value.aggregate_hash_profile === 'aim-approved-aggregates-v2', 'aggregate_profile_unknown');
+}
+
+/** Read-time metadata only; never admitted inside a signed envelope/binding. */
+export function validateSourceOverlay(m: {source_stale?: unknown; source_stale_since?: unknown}) {
+  if (Object.hasOwn(m, 'source_stale')) check(typeof m.source_stale === 'boolean', 'source_overlay_invalid');
+  if (Object.hasOwn(m, 'source_stale_since') && m.source_stale_since !== null) {
+    timestamp(m.source_stale_since as string);
+    check(m.source_stale === true, 'source_overlay_invalid');
+  }
+  if (m.source_stale === true) check(typeof m.source_stale_since === 'string', 'source_overlay_invalid');
+}
+
+// Max canonical contribution, including the separating commas, of the two
+// typed overlay members (true plus a 27-character timestamp). No other member
+// is exempt from the producer's stored-manifest cap.
+export const SOURCE_OVERLAY_BYTES = 71;
+export const MANIFEST_RESPONSE_BYTES = LIMITS.manifest_bytes + SOURCE_OVERLAY_BYTES;
+export function manifestBudget(raw: unknown): void {
+  check(jcs(raw).length <= MANIFEST_RESPONSE_BYTES, 'manifest_limit');
+  check(raw !== null && typeof raw === 'object' && !Array.isArray(raw), 'contract_mismatch');
+  validateSourceOverlay(raw);
+  const stored = {...raw} as Record<string, unknown>;
+  delete stored.source_stale; delete stored.source_stale_since;
+  check(jcs(stored).length <= LIMITS.manifest_bytes, 'manifest_limit');
 }
