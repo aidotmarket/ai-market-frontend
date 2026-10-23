@@ -3,6 +3,7 @@ import { beforeEach, afterEach, expect, it, vi } from 'vitest';
 import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import ConnectedApps from './ConnectedApps';
 import { getConnectorGrants, getConnectorStatus, revokeConnectorGrant } from '@/api/connector-oauth';
+import { sellerPermissions } from '@/tests/fixtures/connector-consent';
 
 vi.mock('@/api/connector-oauth', () => ({ getConnectorStatus: vi.fn(), getConnectorGrants: vi.fn(), revokeConnectorGrant: vi.fn() }));
 const grant = { id: 'grant-1', client: { name: '<img src=x onerror=alert(1)>', host: 'client.example', verified: true },
@@ -20,6 +21,13 @@ it('renders grant details as text and a verified badge', async () => {
   expect(screen.getByText('Personal')).toBeTruthy();
   expect(screen.getByText(grant.scopes[0].description)).toBeTruthy();
   expect(document.querySelector('img, script')).toBeNull();
+});
+
+it('shows all saved Seller permissions without narrowing them to the original requested scopes', async () => {
+  vi.mocked(getConnectorGrants).mockResolvedValue([{ ...grant, scopes: sellerPermissions }]);
+  render(<ConnectedApps />);
+  await screen.findByText(grant.client.name);
+  sellerPermissions.forEach(permission => expect(screen.getByText(permission.description)).toBeTruthy());
 });
 
 it('is hidden when disabled', async () => {

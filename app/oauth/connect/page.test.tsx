@@ -148,11 +148,11 @@ it('uses the client name as text when insufficient assurance follows loaded meta
   expect(navigation.push).toHaveBeenCalledWith(`/login?reauth=connector&redirect=${encodeURIComponent(path)}`);
 });
 
-it('offers only server-provided seller persona choices and sends explicit selection', async () => {
+it('withholds legacy seller offers without permission metadata', async () => {
   vi.mocked(getConnectorRequest).mockResolvedValue({ ...metadata, tool_sets: ['buyer', 'seller'] });
   render(<ConnectorConsentPage />);
-  const seller = await screen.findByRole('radio', { name: 'Seller' });
-  expect((screen.getByRole('radio', { name: 'Buyer' }) as HTMLInputElement).checked).toBe(true);
-  fireEvent.click(seller); fireEvent.click(screen.getByRole('button', { name: 'Approve' }));
-  await waitFor(() => expect(decideConnectorRequest).toHaveBeenCalledWith(id, 'approve', null, 'nonce', 'seller'));
+  await screen.findByRole('button', { name: 'Approve' });
+  expect(screen.queryByRole('radio', { name: 'Seller' })).toBeNull();
+  fireEvent.click(screen.getByRole('button', { name: 'Approve' }));
+  await waitFor(() => expect(decideConnectorRequest).toHaveBeenCalledWith(id, 'approve', null, 'nonce'));
 });

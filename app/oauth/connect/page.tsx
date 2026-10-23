@@ -26,6 +26,7 @@ export default function ConnectorConsentPage() {
   const [toolSet, setToolSet] = useState<'buyer' | 'seller'>('buyer');
   const [organizationId, setOrganizationId] = useState<string | null>(null);
   const [error, setError] = useState('');
+  const [notice, setNotice] = useState('');
   const [busy, setBusy] = useState(false);
   const [revision, setRevision] = useState(0);
   const submitting = useRef(false);
@@ -72,19 +73,36 @@ export default function ConnectorConsentPage() {
     return () => clearTimeout(timer);
   }, [metadata]);
 
+  const sellerOffered = metadata?.tool_sets?.includes('seller')
+    && metadata.seller_permissions_version === 1 && !!metadata.tool_set_scopes?.seller;
+  const permissions = metadata?.tool_set_scopes?.[toolSet] ?? metadata?.scopes ?? [];
+
   const decide = async (decision: 'approve' | 'deny') => {
     if (!metadata || submitting.current) return;
+    if (toolSet === 'seller' && !sellerOffered) return;
     if (!readConnectorContinuation() || Date.parse(metadata.expires_at) <= Date.now()) {
       clearConnectorContinuation(); setMetadata(null); setError('expired'); return;
     }
     submitting.current = true;
     setBusy(true);
+    setNotice('');
     try {
-      const url = await decideConnectorRequest(metadata.request, decision, organizationId, metadata.csrf_nonce, ...(metadata.tool_sets?.includes('seller') ? [toolSet] as const : []));
+      const persona: [toolSet?: 'buyer' | 'seller', version?: number] = !sellerOffered ? []
+        : decision === 'approve' && toolSet === 'seller' ? [toolSet, metadata.seller_permissions_version] : [toolSet];
+      const url = await decideConnectorRequest(metadata.request, decision, organizationId, metadata.csrf_nonce,
+        ...persona);
       clearConnectorContinuation();
       window.location.assign(url);
     } catch (cause) {
       const kind = errorKind(cause);
+      if (kind === 'seller_permissions_stale' || kind === 'seller_consent_unavailable') {
+        setMetadata(null);
+        setToolSet('buyer');
+        setError('');
+        setNotice('Connection permissions changed. Review them and approve again.');
+        setRevision(value => value + 1);
+        return;
+      }
       if (kind === 'expired') { clearConnectorContinuation(); setMetadata(null); }
       setError(kind);
     } finally { submitting.current = false; setBusy(false); }
@@ -118,7 +136,7 @@ export default function ConnectorConsentPage() {
       <div>
         <label htmlFor="connector-account" className="mb-1 block text-sm font-medium text-gray-700">Connect account</label>
         <div className="relative">
-          <select id="connector-account" value={organizationId ?? ''} onChange={(event) => setOrganizationId(event.target.value || null)}
+          <select id="connector-account" disabled={busy} value={organizationId ?? ''} onChange={(event) => setOrganizationId(event.target.value || null)}
             className="min-h-11 w-full appearance-none rounded-lg border border-gray-300 bg-white py-2 pl-3 pr-10 text-sm text-gray-900 focus:outline-none focus:ring-2 focus:ring-[#3F51B5] focus:border-transparent">
             {[...metadata.accounts].sort((a, b) => (a.kind === 'personal' ? -1 : 1) - (b.kind === 'personal' ? -1 : 1)).map((account) =>
               <option key={account.organization_id ?? 'personal'} value={account.organization_id ?? ''}>{account.kind === 'personal' ? 'Personal' : account.label}</option>)}
@@ -128,12 +146,13 @@ export default function ConnectorConsentPage() {
           </svg>
         </div>
       </div>
-      {metadata.tool_sets?.includes('seller') && <fieldset disabled={busy}><legend>Choose connector persona</legend>
-        {metadata.tool_sets.map(choice => <label key={choice} className="mr-4"><input type="radio" name="connector-persona" checked={toolSet === choice} onChange={() => setToolSet(choice)} />{choice === 'buyer' ? 'Buyer' : 'Seller'}</label>)}
-        <p>Seller access uses the displayed scopes and verified client identity. It requires a retained native sign-in within the last 15 minutes. Existing grants remain buyer until explicit consent.</p>
+      {notice && <p role="status">{notice}</p>}
+      {sellerOffered && <fieldset disabled={busy}><legend>Choose connector persona</legend>
+        {metadata.tool_sets?.map(choice => <label key={choice} className="mr-4"><input type="radio" name="connector-persona" checked={toolSet === choice} onChange={() => setToolSet(choice)} />{choice === 'buyer' ? 'Buyer' : 'Seller'}</label>)}
       </fieldset>}
-      <h2>Access requested</h2>
-      <ul>{metadata.scopes.map((scope) => <li key={scope.scope}>{scope.description}</li>)}</ul>
+      <h2>{toolSet === 'seller' ? 'Seller permissions you are granting' : 'Buyer permissions you are granting'}</h2>
+      <ul>{permissions.map((scope) => <li key={scope.scope}>{scope.description}</li>)}</ul>
+      {toolSet === 'seller' && <p>Available actions depend on enabled tools and account eligibility. Licenses and required human reviews are completed on ai.market.</p>}
       <p>Expires {new Date(metadata.expires_at).toLocaleString()}</p>
       <div className="flex flex-wrap gap-4">
         <button type="button" disabled={busy} onClick={() => decide('approve')}

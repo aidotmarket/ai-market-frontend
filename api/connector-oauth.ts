@@ -4,6 +4,9 @@ import { connectorRequestPath, setConnectorStatus } from '@/lib/aim-data-continu
 
 export interface ConnectorClient { client_id: string; name: string; host: string; verified: boolean }
 export interface ConnectorScope { scope: string; description: string }
+export type ConnectorToolSet = 'buyer' | 'seller';
+const SELLER_PERMISSIONS_VERSION = 1;
+const SELLER_SCOPES = ['account.read', 'market.read', 'orders.read', 'orders.write', 'seller.fulfil', 'seller.publish', 'seller.read', 'seller.write'];
 export interface ConnectorAccount { organization_id: string | null; label: string; kind: 'personal' | 'organization' }
 export interface ConnectorRequest {
   request: string;
@@ -12,7 +15,9 @@ export interface ConnectorRequest {
   scopes: ConnectorScope[];
   expires_at: string;
   csrf_nonce: string;
-  tool_sets?: ('buyer' | 'seller')[];
+  tool_sets?: ConnectorToolSet[];
+  tool_set_scopes?: Partial<Record<ConnectorToolSet, ConnectorScope[]>>;
+  seller_permissions_version?: number;
 }
 export interface ConnectorGrant {
   id: string;
@@ -34,14 +39,36 @@ function requireRequest(request: string) {
   if (!CONNECTOR_CONTINUATION.test(connectorRequestPath(request))) throw new Error('invalid_request');
 }
 
+function isScopeList(value: unknown): value is ConnectorScope[] {
+  return Array.isArray(value) && value.every(item => item && typeof item.scope === 'string'
+    && item.scope.trim().length > 0 && typeof item.description === 'string' && item.description.trim().length > 0)
+    && new Set(value.map(item => item.scope)).size === value.length;
+}
+
+function sameScopes(scopes: ConnectorScope[], expected: string[]): boolean {
+  return scopes.length === expected.length && scopes.every(item => expected.includes(item.scope));
+}
+
 export async function getConnectorRequest(request: string): Promise<ConnectorRequest> {
   requireRequest(request);
   const { data } = await api.get<ConnectorRequest>(`/connector-oauth/requests/${request}`);
   if (data.request !== request || !Number.isFinite(Date.parse(data.expires_at))
-    || !data.client || !Array.isArray(data.accounts) || !Array.isArray(data.scopes)
+    || !data.client || !Array.isArray(data.accounts) || !isScopeList(data.scopes)
     || typeof data.csrf_nonce !== 'string'
     || (data.tool_sets !== undefined && (!Array.isArray(data.tool_sets) || !data.tool_sets.length || new Set(data.tool_sets).size !== data.tool_sets.length || !data.tool_sets.every(v => v === 'buyer' || v === 'seller')))) throw new Error('invalid_request');
-  return data;
+  const permissions = data.tool_set_scopes;
+  const validBuyer = isScopeList(permissions?.buyer) && sameScopes(permissions.buyer, data.scopes.map(item => item.scope));
+  // Seller is an expanded grant. Older or incompatible metadata must never offer it.
+  const sellerOffered = data.tool_sets?.includes('buyer') && data.tool_sets.includes('seller')
+    && data.seller_permissions_version === SELLER_PERMISSIONS_VERSION
+    && permissions && Object.keys(permissions).every(key => key === 'buyer' || key === 'seller')
+    && validBuyer && isScopeList(permissions.seller) && sameScopes(permissions.seller, SELLER_SCOPES);
+  return {
+    ...data,
+    tool_sets: data.tool_sets?.filter(choice => choice === 'buyer' || sellerOffered),
+    tool_set_scopes: { buyer: validBuyer ? permissions!.buyer : data.scopes, ...(sellerOffered ? { seller: permissions.seller } : {}) },
+    seller_permissions_version: sellerOffered ? SELLER_PERMISSIONS_VERSION : undefined,
+  };
 }
 
 export function validateConnectorContinueUrl(value: unknown): string {
@@ -52,11 +79,15 @@ export function validateConnectorContinueUrl(value: unknown): string {
 }
 
 export async function decideConnectorRequest(
-  request: string, decision: 'approve' | 'deny', organization_id: string | null, csrf_nonce: string, tool_set?: 'buyer' | 'seller',
+  request: string, decision: 'approve' | 'deny', organization_id: string | null, csrf_nonce: string, tool_set?: ConnectorToolSet,
+  seller_permissions_version?: number,
 ): Promise<string> {
   requireRequest(request);
+  const sellerApproval = decision === 'approve' && tool_set === 'seller';
+  if (sellerApproval && seller_permissions_version !== SELLER_PERMISSIONS_VERSION) throw new Error('seller_permissions_stale');
   const { data } = await api.post<{ continue_url: string }>(`/connector-oauth/requests/${request}/decision`,
-    { decision, organization_id, csrf_nonce, ...(tool_set ? { tool_set } : {}) });
+    { decision, organization_id, csrf_nonce, ...(tool_set ? { tool_set } : {}),
+      ...(sellerApproval ? { seller_permissions_version } : {}) });
   return validateConnectorContinueUrl(data.continue_url);
 }
 
