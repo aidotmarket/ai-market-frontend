@@ -54,6 +54,32 @@ describe('public data request freshness', () => {
 });
 
 
+describe('share metadata identity freshness', () => {
+  afterEach(() => vi.unstubAllGlobals());
+
+  it('reads a subsequent opt-out without reusing the previous identity or revalidation', async () => {
+    const fetchMock = vi.fn()
+      .mockResolvedValueOnce({ ok: true, json: async () => ({ og: { 'og:title': 'Synthetic Co' } }) })
+      .mockResolvedValueOnce({ ok: true, json: async () => ({ og: { 'og:title': 'ai.market Seller' } }) });
+    vi.stubGlobal('fetch', fetchMock);
+    expect(await fetchShareMetadata('same code')).toMatchObject({ status: 'published', data: { og: { 'og:title': 'Synthetic Co' } } });
+    expect(await fetchShareMetadata('same code')).toMatchObject({ status: 'published', data: { og: { 'og:title': 'ai.market Seller' } } });
+    expect(fetchMock).toHaveBeenCalledTimes(2);
+    for (const [url, options] of fetchMock.mock.calls) {
+      expect(url).toContain('/public/share/same%20code');
+      expect(options).toEqual({ cache: 'no-store' });
+    }
+  });
+  it.each([404, 410, 503])('preserves share status behavior for HTTP %s', async (status) => {
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue({ ok: false, status }));
+    expect(await fetchShareMetadata('fixture')).toEqual({ status: status === 503 ? 'error' : 'gone' });
+  });
+  it('preserves the error state on a failed share read', async () => {
+    vi.stubGlobal('fetch', vi.fn().mockRejectedValue(new Error('Offline')));
+    expect(await fetchShareMetadata('fixture')).toEqual({ status: 'error' });
+  });
+});
+
 describe('narrow homepage mutable projection reads', () => {
   afterEach(() => vi.unstubAllGlobals());
   it('fetches identity-bearing inputs current while retaining unrelated version caching', async () => {

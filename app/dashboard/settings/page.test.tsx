@@ -63,6 +63,22 @@ describe('SettingsPage capability refresh', () => {
   const realRefreshAuth = useAuthStore.getState().refreshAuth;
   const refreshAuth = vi.fn();
 
+  it('offers public business name settings to sellers without repurposing Company name', async () => {
+    render(<SettingsPage />);
+    expect(await screen.findByLabelText('Public business name')).toBeTruthy();
+    expect(screen.getByLabelText('Company name')).toBeTruthy();
+    await waitFor(() => expect(vi.mocked(getSellerPublicProfile)).toHaveBeenCalled());
+  });
+
+  it('keeps public business name settings absent for buyers', async () => {
+    capabilitiesApi.getCapabilities.mockResolvedValue({ seller: { effective_status: 'not_requested' } });
+    useAuthStore.setState({ user: { ...user, role: 'buyer' } });
+    render(<SettingsPage />);
+    await waitFor(() => expect(capabilitiesApi.getCapabilities).toHaveBeenCalled());
+    expect(screen.queryByLabelText('Public business name')).toBeNull();
+    expect(getSellerPublicProfile).not.toHaveBeenCalled();
+  });
+
   it.each(['buyer', 'seller'] as const)('makes Marketplace wallet findable for a %s without seller activation', async role => {
     useAuthStore.setState({ user: { ...user, role } });
     capabilitiesApi.getCapabilities.mockResolvedValue({ seller: { effective_status: 'inactive' } });
