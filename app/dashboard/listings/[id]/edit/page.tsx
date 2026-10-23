@@ -45,6 +45,7 @@ export default function EditListingPage() {
   const [saving, setSaving] = useState(false);
   const [summaryRevision, setSummaryRevision] = useState(0);
   const [listingSlug, setListingSlug] = useState<string | undefined>();
+  const [hasStoredFormat, setHasStoredFormat] = useState(false);
   const [data, setData] = useState<EditData>({
     title: '',
     description: '',
@@ -81,6 +82,7 @@ export default function EditListingPage() {
       setListingLicensesEnabled(licensesEnabled);
       if (licensesEnabled && l.license_selection) setLicenseSelection(l.license_selection);
       setListingSlug(typeof l.slug === 'string' ? l.slug : undefined);
+      setHasStoredFormat(Boolean(l.data_format));
       setData({
         title: l.title || '',
         description: l.description || '',
@@ -138,11 +140,13 @@ export default function EditListingPage() {
         tags: data.tags,
         price: data.price,
         pricing_type: data.pricing_type,
-        data_format: data.data_format || null,
+        // Empty formats must be omitted: the backend cannot clear a stored format consistently.
+        ...(data.data_format ? { data_format: data.data_format } : {}),
         source_row_count: data.source_row_count,
         compliance_frameworks: data.compliance_frameworks,
         compliance_notes: data.compliance_notes,
       });
+      setHasStoredFormat(Boolean(data.data_format));
       setSummaryRevision(value => value + 1);
       toast('Listing saved', 'success');
     } catch (err: any) {
@@ -309,7 +313,7 @@ export default function EditListingPage() {
               onChange={(e) => update({ data_format: e.target.value })}
               className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-[#3F51B5] bg-white"
             >
-              <option value="">No common table format</option>
+              {!hasStoredFormat && <option value="">No common table format</option>}
               {FORMATS.map((fmt) => (
                 <option key={fmt} value={fmt}>{fmt.toUpperCase()}</option>
               ))}

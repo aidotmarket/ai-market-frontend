@@ -582,7 +582,7 @@ export interface UpdateListingRequest {
   tags?: string[];
   price?: number;
   pricing_type?: PricingType;
-  data_format?: string | null;
+  data_format?: string;
   source_row_count?: number;
   schema_info?: Record<string, string>;
   license?: string;
