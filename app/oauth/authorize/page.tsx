@@ -22,7 +22,7 @@ function errorKind(error: unknown): string {
 const messages: Record<string, string> = {
   login_required: 'Please sign in again to continue to AIM Data.',
   invalid_session: 'Please sign in again to continue to AIM Data.',
-  insufficient_assurance: 'Please sign in again and complete two-factor authentication.',
+  insufficient_assurance: 'Your account uses two-factor authentication. Before AIM Data can work with your ai.market account, sign in again and enter your code. This makes sure only you can connect apps to your account.',
   access_denied: 'This account cannot authorize AIM Data. Access was denied.',
   binding_failed: 'This request belongs to another browser. Restart sign-in from AIM Data in this browser.',
   transaction_expired: 'This request has expired. Restart sign-in from AIM Data.',
@@ -147,7 +147,7 @@ export default function AuthorizationPage() {
       {!enabled ? <h1>AIM Data sign-in is currently unavailable.</h1> : error ? (
         <>
           <p role="alert">{messages[error] || messages.retry}</p>
-          {needsLogin && <button onClick={signIn}>Sign in again</button>}
+          {needsLogin && <button onClick={signIn} className="min-h-11 cursor-pointer rounded-lg bg-[#3F51B5] px-4 py-2 text-sm font-medium text-white transition-colors enabled:hover:bg-[#3545a0] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#3F51B5]">Sign in again</button>}
           {!needsLogin && (error === 'retry' || !messages[error]) &&
             <button disabled={busy} onClick={() => setRevision((value) => value + 1)}>Retry</button>}
         </>
