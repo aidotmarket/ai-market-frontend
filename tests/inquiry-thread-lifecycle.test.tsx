@@ -12,7 +12,10 @@ import type { ConversationDetail, ConversationMessage } from '@/types';
 
 const client = vi.hoisted(() => ({ get: vi.fn(), post: vi.fn(), listError: '' }));
 vi.mock('@/api/client', () => ({ api: client }));
-vi.mock('@/store/auth', () => ({ useAuthStore: () => ({ user: { id: 'viewer' }, isAuthenticated: true }) }));
+vi.mock('@/store/auth', async (importOriginal) => {
+  const state = { user: { id: 'viewer' }, token: 'synthetic', isAuthenticated: true };
+  return { ...await importOriginal<typeof import('@/store/auth')>(), useAuthStore: Object.assign(() => state, { getState: () => state, subscribe: () => () => {} }) };
+});
 vi.mock('@/hooks/useInquiryList', () => ({ useInquiryList: () => ({
   inquiries: [
     { id: 'a', listing_title: 'Listing a', status: 'awaiting_seller', last_message_at: '2026-10-15T00:00:00Z', unread_by_seller: 1 },

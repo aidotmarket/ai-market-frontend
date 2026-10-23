@@ -2,7 +2,7 @@
 
 import { useState, useCallback, useEffect, useRef } from 'react';
 import Link from 'next/link';
-import { useAuthStore } from '@/store/auth';
+import { authSessionIdentity, useAuthStore } from '@/store/auth';
 import { useToast } from '@/components/Toast';
 import { createInquiry, getConversation, replyToConversation } from '@/api/conversations';
 import {
@@ -31,7 +31,12 @@ interface AnonymousAttemptResource<T> {
   value: T;
 }
 
-export default function InquiryWidget({ listingId, listingSlug, listingTitle }: Props) {
+// A listing is a separate public attempt/session as well as a private visit.
+export default function InquiryWidget(props: Props) {
+  return <ListingInquiryWidget key={props.listingId} {...props} />;
+}
+
+function ListingInquiryWidget({ listingId, listingSlug, listingTitle }: Props) {
   const { isAuthenticated } = useAuthStore();
   const { toast } = useToast();
 
@@ -50,16 +55,26 @@ export default function InquiryWidget({ listingId, listingSlug, listingTitle }: 
   const sending = useRef(false);
   const readVersion = useRef(0);
   const statusVersion = useRef(0);
-  const threadScope = useRef({ listingId, id: conversation?.id });
-  if (threadScope.current.listingId !== listingId || threadScope.current.id !== conversation?.id) {
-    threadScope.current = { listingId, id: conversation?.id };
-  }
+  const owner = authSessionIdentity(useAuthStore.getState());
+  const visitRef = useRef({ owner });
+  const [renderedVisit, setRenderedVisit] = useState(visitRef.current);
+  const [, notifyOwnerChange] = useState(0);
+  const creating = useRef(false);
+  if (visitRef.current.owner !== owner) visitRef.current = { owner };
+  const visit = visitRef.current;
 
-  useEffect(() => {
-    return () => { readVersion.current += 1; };
-  }, []);
+  // Store notifications retire visits synchronously, including A -> B -> A
+  // transitions batched before React renders. Token rotation keeps the owner.
+  useEffect(() => useAuthStore.subscribe((state) => {
+    const nextOwner = authSessionIdentity(state);
+    if (visitRef.current.owner !== nextOwner) {
+      visitRef.current = { owner: nextOwner };
+      notifyOwnerChange((version) => version + 1);
+    }
+  }), []);
 
-  useEffect(() => {
+  if (renderedVisit !== visit) {
+    setRenderedVisit(visit);
     setConversation(null);
     setMessages([]);
     setReplyText('');
@@ -68,9 +83,14 @@ export default function InquiryWidget({ listingId, listingSlug, listingTitle }: 
     setRefreshError('');
     setRefreshing(false);
     setReplying(false);
+    setShowTyping(false);
+    setSubmissionError(null);
+    if (renderedVisit.owner !== null) setQuestion('');
+    if (creating.current) setSubmitting(false);
+    creating.current = false;
     sending.current = false;
     readVersion.current += 1;
-  }, [listingId]);
+  }
   const [anonymousMessages, setAnonymousMessages] = useState<ConversationMessage[]>([]);
   const [anonymousError, setAnonymousError] = useState<string | null>(null);
   const [anonymousTimedOut, setAnonymousTimedOut] = useState(false);
@@ -134,22 +154,28 @@ export default function InquiryWidget({ listingId, listingSlug, listingTitle }: 
     }
   }, [listingId, question]);
 
+  const current = useCallback(() => mountedRef.current
+    && visitRef.current === visit
+    && authSessionIdentity(useAuthStore.getState()) === visit.owner, [visit]);
+
   // Poll for new messages after submission
   const handleNewMessages = useCallback((newMsgs: ConversationMessage[], status: ConversationDetail['status']) => {
+    if (!current()) return;
     statusVersion.current += 1;
     setMessages((prev) => mergeConversationMessages(prev, newMsgs));
     setConversation((prev) => prev ? { ...prev, status } : prev);
     setShowTyping(false);
-  }, []);
+  }, [current]);
 
   const { updateSince } = useConversationPoll(
     conversation?.id ?? null,
     conversation ? messages.at(-1)?.created_at ?? conversation.created_at : null,
-    handleNewMessages
+    handleNewMessages,
+    current
   );
 
   const handleSubmit = async () => {
-    if (!question.trim()) return;
+    if (!current() || creating.current || anonymousAbortRef.current || !question.trim()) return;
 
     setSubmissionError(null);
     setAnonymousError(null);
@@ -165,7 +191,6 @@ export default function InquiryWidget({ listingId, listingSlug, listingTitle }: 
 
       anonymousAttemptRef.current = attemptId;
       clearAnonymousAttemptTimers();
-      anonymousAbortRef.current?.value.abort();
       anonymousAbortRef.current = { attemptId, value: controller };
       anonymousSubmittedQuestionRef.current = trimmedQuestion;
       setSubmitting(true);
@@ -318,9 +343,12 @@ export default function InquiryWidget({ listingId, listingSlug, listingTitle }: 
       return;
     }
 
+    if (visit.owner === null) return;
+    creating.current = true;
     setSubmitting(true);
     try {
       const conv = await createInquiry(listingId, question.trim());
+      if (!current()) return;
       setConversation(conv);
       setMessages(conv.messages);
       setQuestion('');
@@ -329,6 +357,7 @@ export default function InquiryWidget({ listingId, listingSlug, listingTitle }: 
       const lastMsg = conv.messages[conv.messages.length - 1];
       if (lastMsg) updateSince(lastMsg.created_at);
     } catch (err) {
+      if (!current()) return;
       if (err instanceof AxiosError) {
         const detail = err.response?.data?.detail;
         if (err.response?.status === 409) {
@@ -346,15 +375,15 @@ export default function InquiryWidget({ listingId, listingSlug, listingTitle }: 
         toast(message, 'error');
       }
     } finally {
-      setSubmitting(false);
+      if (current()) {
+        creating.current = false;
+        setSubmitting(false);
+      }
     }
   };
 
   const refresh = async () => {
-    if (!conversation) return;
-    const scope = threadScope.current;
-    const current = () => mountedRef.current
-      && threadScope.current === scope;
+    if (!current() || !conversation) return;
     const version = ++readVersion.current;
     const statusAtStart = statusVersion.current;
     setRefreshing(true);
@@ -383,10 +412,7 @@ export default function InquiryWidget({ listingId, listingSlug, listingTitle }: 
   }, [accepted, messages]);
 
   const handleReply = async () => {
-    if (sending.current || accepted || !replyText.trim() || !conversation) return;
-    const scope = threadScope.current;
-    const current = () => mountedRef.current
-      && threadScope.current === scope;
+    if (!current() || sending.current || accepted || !replyText.trim() || !conversation) return;
     sending.current = true;
     setReplying(true);
     setReplyError('');
