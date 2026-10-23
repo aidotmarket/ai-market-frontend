@@ -18,7 +18,7 @@ import type { GatewayBlocker, GatewayFile, SellerGateway } from '@/types/sellerG
 import Link from 'next/link';
 
 const CATEGORIES = ['Finance', 'Healthcare', 'Technology', 'Real Estate', 'Government', 'Marketing'];
-const FORMATS = ['csv', 'parquet', 'json', 'xlsx', 'other'];
+const FORMATS = ['csv', 'tsv', 'jsonl', 'parquet', 'json', 'xlsx', 'other'];
 const COMPLIANCE_FRAMEWORKS = ['GDPR', 'HIPAA', 'CCPA', 'SOC2', 'ISO27001'];
 
 interface EditData {
@@ -45,6 +45,7 @@ export default function EditListingPage() {
   const [saving, setSaving] = useState(false);
   const [summaryRevision, setSummaryRevision] = useState(0);
   const [listingSlug, setListingSlug] = useState<string | undefined>();
+  const [hasStoredFormat, setHasStoredFormat] = useState(false);
   const [data, setData] = useState<EditData>({
     title: '',
     description: '',
@@ -52,7 +53,7 @@ export default function EditListingPage() {
     tags: [],
     price: 10,
     pricing_type: 'one_time',
-    data_format: 'csv',
+    data_format: '',
     source_row_count: 0,
     compliance_frameworks: [],
     compliance_notes: '',
@@ -81,6 +82,7 @@ export default function EditListingPage() {
       setListingLicensesEnabled(licensesEnabled);
       if (licensesEnabled && l.license_selection) setLicenseSelection(l.license_selection);
       setListingSlug(typeof l.slug === 'string' ? l.slug : undefined);
+      setHasStoredFormat(Boolean(l.data_format));
       setData({
         title: l.title || '',
         description: l.description || '',
@@ -88,7 +90,7 @@ export default function EditListingPage() {
         tags: l.tags || [],
         price: l.pricing?.price ?? l.price ?? 10,
         pricing_type: l.pricing?.pricing_type ?? l.pricing_type ?? 'one_time',
-        data_format: l.data_format || 'csv',
+        data_format: l.data_format ?? '',
         source_row_count: l.source_row_count ?? l.row_count ?? 0,
         compliance_frameworks: l.compliance_frameworks || [],
         compliance_notes: l.compliance_notes || '',
@@ -130,6 +132,7 @@ export default function EditListingPage() {
 
   const handleSave = async () => {
     setSaving(true);
+    const submittedFormat = data.data_format;
     try {
       await updateListing(id, {
         title: data.title,
@@ -138,11 +141,13 @@ export default function EditListingPage() {
         tags: data.tags,
         price: data.price,
         pricing_type: data.pricing_type,
-        data_format: data.data_format,
+        // Empty formats must be omitted: the backend cannot clear a stored format consistently.
+        ...(submittedFormat ? { data_format: submittedFormat } : {}),
         source_row_count: data.source_row_count,
         compliance_frameworks: data.compliance_frameworks,
         compliance_notes: data.compliance_notes,
       });
+      setHasStoredFormat(previous => submittedFormat ? true : previous);
       setSummaryRevision(value => value + 1);
       toast('Listing saved', 'success');
     } catch (err: any) {
@@ -306,9 +311,11 @@ export default function EditListingPage() {
             <label className="block text-sm font-medium text-gray-700 mb-1">Format</label>
             <select
               value={data.data_format}
+              disabled={saving}
               onChange={(e) => update({ data_format: e.target.value })}
               className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-[#3F51B5] bg-white"
             >
+              {!hasStoredFormat && <option value="">No common table format</option>}
               {FORMATS.map((fmt) => (
                 <option key={fmt} value={fmt}>{fmt.toUpperCase()}</option>
               ))}

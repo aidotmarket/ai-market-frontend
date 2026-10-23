@@ -67,6 +67,97 @@ describe('gateway seller verification flow', () => {
     expect(screen.getByRole('heading', { name: 'Check verification availability' })).toBeTruthy();
     expect(gateway.probeGatewayVerification).not.toHaveBeenCalled();
   });
+
+  it.each([
+    ['verification_not_applicable', 'This listing has no tables to verify.'],
+    ['verification_scanner_upgrade_required', 'Update your gateway to verify listings that include other files.'],
+    ['verification_republish_required', 'Republish this listing so its files are classified again, then verify.'],
+  ])('shows %s at the probe and resets a refused paid command for a fresh check', async (code, copy) => {
+    vi.mocked(gateway.getGatewayVerificationProbe).mockResolvedValueOnce({ data: { probe_id: 'probe', state: 'refused', refusal: code }, retryAfter: 2 });
+    render(<GatewayVerificationFlow listingId="listing" sellerId="seller" />);
+    fireEvent.click(screen.getByRole('button', { name: 'Check data and get quote' }));
+    expect((await screen.findByRole('alert')).textContent).toBe(copy);
+    expect(payin.getDataVerificationPayInReadiness).not.toHaveBeenCalled();
+    expect(gateway.startGatewayVerification).not.toHaveBeenCalled();
+    fireEvent.click(screen.getByRole('button', { name: 'Get a new quote' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Check data and get quote' }));
+    await screen.findByText('Your verification quote');
+    acknowledge();
+    vi.mocked(gateway.startGatewayVerification).mockRejectedValueOnce({ response: { status: 409, data: { detail: { code } } } });
+    fireEvent.click(screen.getByRole('button', { name: 'Start paid verification' }));
+    expect((await screen.findByRole('alert')).textContent).toBe(copy);
+    const saved = JSON.parse(window.localStorage.getItem(key)!);
+    expect(saved).toMatchObject({ quoteRefused: true, quoteRefusalCode: code });
+    expect(saved.startCommand).toBeUndefined();
+    expect(saved.epochId).toBeUndefined();
+    expect(screen.queryByText('Status: Quote expired')).toBeNull();
+    cleanup();
+    render(<GatewayVerificationFlow listingId="listing" sellerId="seller" />);
+    fireEvent.click(await screen.findByRole('button', { name: 'Get a new quote' }));
+    await screen.findByText('Your verification quote');
+    expect(vi.mocked(gateway.probeGatewayVerification).mock.calls[2][1].idempotency_key).not.toBe(saved.probeCommand.idempotency_key);
+  });
+
+  it.each([
+    ['verification_not_applicable', 'This listing has no tables to verify.'],
+    ['verification_scanner_upgrade_required', 'Update your gateway to verify listings that include other files.'],
+    ['verification_republish_required', 'Republish this listing so its files are classified again, then verify.'],
+  ])('handles a probe POST 409 %s before a probe exists and allows retry', async (code, copy) => {
+    vi.mocked(gateway.probeGatewayVerification).mockRejectedValueOnce({ response: { status: 409, data: { detail: code } } });
+    render(<GatewayVerificationFlow listingId="listing" sellerId="seller" />);
+    fireEvent.click(screen.getByRole('button', { name: 'Check data and get quote' }));
+    expect((await screen.findByRole('alert')).textContent).toBe(copy);
+    expect(screen.getByText('Status: Unavailable')).toBeTruthy();
+    expect(gateway.getGatewayVerificationProbe).not.toHaveBeenCalled();
+    expect(payin.getDataVerificationPayInReadiness).not.toHaveBeenCalled();
+    expect(gateway.startGatewayVerification).not.toHaveBeenCalled();
+    const saved = JSON.parse(window.localStorage.getItem(key)!);
+    expect(saved.probeId).toBeUndefined();
+    const retry = screen.getByRole('button', { name: 'Check data and get quote' }) as HTMLButtonElement;
+    expect(retry.disabled).toBe(false);
+    fireEvent.click(retry);
+    await screen.findByText('Your verification quote');
+    expect(gateway.probeGatewayVerification).toHaveBeenCalledTimes(2);
+    expect(vi.mocked(gateway.probeGatewayVerification).mock.calls[1][1]).toEqual(saved.probeCommand);
+    expect(gateway.getGatewayVerificationProbe).toHaveBeenCalledWith('listing', 'probe');
+    expect(screen.queryByRole('alert')).toBeNull();
+    expect(screen.getByText('Status: Quote ready')).toBeTruthy();
+  });
+
+  it.each(['queued', 'refused'] as const)('labels %s probe scope as published findings', async state => {
+    window.localStorage.setItem(key, JSON.stringify({ probeCommand: { confirm: true, preview_requested: false, idempotency_key: 'key' }, probeId: 'probe' }));
+    const scope = '1 of 2 table files scanned; 3 other files are not scanned';
+    vi.mocked(gateway.getGatewayVerificationProbe).mockResolvedValue({ data: { probe_id: 'probe', state, refusal: state === 'refused' ? 'source_unreachable' : null, verification_scope: scope }, retryAfter: 60 });
+    render(<GatewayVerificationFlow listingId="listing" sellerId="seller" />);
+    expect(await screen.findByText(`Published findings cover: ${scope}`)).toBeTruthy();
+    expect(screen.queryByText(scope)).toBeNull();
+  });
+
+  it('uses backend probe scope in place of the fixed complete-coverage claim', async () => {
+    const scope = '1 of 2 table files scanned; 3 other files are not scanned; 1 skipped as an unsupported type';
+    vi.mocked(gateway.getGatewayVerificationProbe).mockResolvedValue({ ...quote, data: { ...quote.data, verification_scope: scope } });
+    await getQuote();
+    expect(screen.getByText(new RegExp(scope)).textContent).toContain(scope);
+    expect(screen.queryByText(/Verification covers the complete supported data/)).toBeNull();
+    expect(screen.queryByText(/Published findings cover:/)).toBeNull();
+  });
+
+  it.each([null, undefined])('retains legacy quote copy when backend scope is %s', async verification_scope => {
+    vi.mocked(gateway.getGatewayVerificationProbe).mockResolvedValue({ ...quote, data: { ...quote.data, verification_scope } });
+    await getQuote();
+    expect(screen.getByText(/Verification covers the complete supported data for this listing version/)).toBeTruthy();
+  });
+
+  it('labels backend epoch scope as published findings and replaces it when status changes', async () => {
+    window.localStorage.setItem(key, JSON.stringify({ probeCommand: { confirm: true, preview_requested: false, idempotency_key: 'key' }, epochId: 'epoch' }));
+    const scope = '1 of 1 table files scanned; 2 other files are not scanned';
+    vi.mocked(gateway.getGatewayVerificationEpoch).mockResolvedValue({ data: { ...epoch, verification_scope: scope }, retryAfter: 60 });
+    render(<GatewayVerificationFlow listingId="listing" sellerId="seller" />);
+    expect(await screen.findByText(`Published findings cover: ${scope}`)).toBeTruthy();
+    vi.mocked(gateway.getGatewayVerificationEpoch).mockResolvedValue({ data: { ...epoch, verification_scope: null }, retryAfter: 60 });
+    fireEvent.click(screen.getByRole('button', { name: 'Check again' }));
+    await waitFor(() => expect(screen.queryByText(`Published findings cover: ${scope}`)).toBeNull());
+  });
   it('gives the free check priority and removal a danger treatment', async () => {
     render(<GatewayVerificationFlow listingId="listing" sellerId="seller" verifier={{ kind: 'gateway', runnerId: 'runner' }} />);
     const check = await screen.findByRole('button', { name: 'Check data and get quote' });
@@ -382,7 +473,7 @@ describe('gateway seller verification flow', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Start paid verification' }));
     await screen.findByRole('alert');
     expect(vi.mocked(gateway.startGatewayVerification).mock.calls[0][1]).toEqual(oldStart);
-    expect(JSON.parse(window.localStorage.getItem(key)!)).toEqual({ probeCommand: oldProbe, quoteRefused: true });
+    expect(JSON.parse(window.localStorage.getItem(key)!)).toEqual({ probeCommand: oldProbe, quoteRefused: true, quoteRefusalCode: typeof detail === 'string' ? detail : detail.code });
     expect(screen.getByText('Status: Quote expired').classList.contains('bg-amber-50')).toBe(true);
     expect(screen.getByRole('alert').textContent).toBe(gateway.verificationErrorCopy({ response: { status: 409, data: { detail } } }));
     expect(screen.getByText('No charge was made. Get a new quote to continue.')).toBeTruthy();
@@ -516,7 +607,7 @@ describe('gateway seller verification flow', () => {
   });
   it.each([
     ['verifier_upgrade_or_offline', 'Reconnect your gateway or upgrade it to a version that supports data verification, then try again.'],
-    ['source_unreachable', 'Your gateway or data is offline. Reconnect it and try again.'],
+    ['source_unreachable', 'Your gateway or data is offline. Reconnect it and try again. If one of your files is text that looks like a table, create a new listing without it.'],
   ])('shows plain copy for %s without opening card setup', async (refusal, copy) => {
     vi.mocked(gateway.getGatewayVerificationProbe).mockResolvedValue({ data: { probe_id: 'probe', state: 'refused', refusal, quote_id: null, maximum_hold_usd: null }, retryAfter: 2 });
     render(<GatewayVerificationFlow listingId="listing" sellerId="seller" />);

@@ -31,6 +31,14 @@ beforeEach(() => {
 });
 afterEach(cleanup);
 
+it('labels described other files with their media type and size in the source selector', async () => {
+  gatewayApi.listGatewayFiles.mockResolvedValue({ files: [{ ...file, media_type: 'application/octet-stream', size_bytes: 17,
+    description: { ...file.description, state: 'described', row_count: 0, columns: [] } }], next_cursor: null });
+  await chooseGateway();
+  const label = screen.getByText(file.display_name).closest('label')!;
+  expect(label.textContent).toContain('17 bytes · application/octet-stream · File (not a table)');
+});
+
 async function chooseGateway() {
   render(<EditListingPage />);
   const select = await screen.findByRole('combobox', { name: 'Gateway' });

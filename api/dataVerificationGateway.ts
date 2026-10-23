@@ -154,6 +154,9 @@ export function verificationRefusalCopy(code?: string | null, runnerKind?: 'clou
     case 'registration_refused': return 'The verifier registration was refused. Check its status and set up a fresh verifier if needed.';
     case 'aws_setup_refused': return 'The AWS verifier could not be set up. Check your storage connection and try again.';
     case E7_REFUSAL: return E7_REFUSAL;
+    case 'verification_not_applicable': return 'This listing has no tables to verify.';
+    case 'verification_scanner_upgrade_required': return 'Update your gateway to verify listings that include other files.';
+    case 'verification_republish_required': return 'Republish this listing so its files are classified again, then verify.';
     case 'verifier_upgrade_or_offline': return 'Reconnect your gateway or upgrade it to a version that supports data verification, then try again.';
     case 'source_unreachable': return 'Your gateway or data is offline. Reconnect it and try again.';
     case 'verification_disabled': return 'Data verification is currently unavailable.';

@@ -367,7 +367,16 @@ export interface PublicSourceReference {
   access_kind?: 'download' | 'instructions';
 }
 
+/** Count-only gateway groups from backend app/services/gateway_file_metadata.py. */
+export interface FileBreakdownGroup {
+  format: 'csv' | 'tsv' | 'jsonl' | 'parquet' | 'other';
+  count: number;
+  size_bytes: number;
+}
+
 export interface ListingDetail extends GeneratedSampleFields {
+  verification_scope?: string | null;
+  file_breakdown?: FileBreakdownGroup[] | null;
   public_reference?: PublicSourceReference | null;
   at_a_glance?: import('@/lib/api').ListingSummary | null;
   approved_presentation?: {presentation_version: 'seller-listing-review-v2'; rendered_html: string; render_hash: string};
@@ -1042,6 +1051,7 @@ export interface GatewayVerificationProbeCommand {
   idempotency_key: string;
 }
 export interface GatewayVerificationProbe {
+  verification_scope?: string | null;
   probe_id: string;
   state: 'queued' | 'complete' | 'refused';
   quote_id?: string | null;
@@ -1065,6 +1075,7 @@ export interface GatewayVerificationLifecycleCommand {
   confirm: true;
 }
 export interface GatewayVerificationEpoch {
+  verification_scope?: string | null;
   listing_id?: string;
   source_handle_id?: string;
   findings?: SellerScanFindings | null;

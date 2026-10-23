@@ -1,6 +1,6 @@
 import type { GatewayBlocker, GatewayFile, SellerGateway } from '@/types/sellerGateway';
 
-export const DESCRIPTION_CONFIRMATION = "ai.market will receive this file's column names (after your gateway's rename and drop settings), their types, the row count, null rates rounded to 5%, bucketed distinct counts, and the file's SHA-256. It will not receive any values.";
+export const DESCRIPTION_CONFIRMATION = "For tables, ai.market receives column names (after your gateway's rename and drop settings), their types and counts: the row count, null rates rounded to 5%, and bucketed distinct counts. For other files, ai.market receives only a SHA-256 fingerprint and the size. A fingerprint lets someone who already holds the same public file recognise it. A text file whose first line looks like a table row may be read as a table, and its first-line values would be sent as column names. Leave such files out before describing.";
 
 export function dateLabel(value: string | null): string {
   if (!value) return 'Never';
@@ -30,6 +30,7 @@ export function blockerMessage(blocker: GatewayBlocker, files: GatewayFile[]): s
     door_check_not_passed: 'Run a door check and resolve any failure.',
     door_check_stale: 'Run the door check again. The last pass is over 10 minutes old.',
     identity_ack_missing: 'Read and acknowledge the identity notice.',
+    data_format_mismatch: "This listing's format doesn't match all of its table files. Create a new listing from this gateway and leave the format empty.",
     file_not_described: `${name} needs a current description.`,
     file_stale: `${name} changed. Describe it again.`,
     file_missing: `${name} is missing from the latest inventory.`,
@@ -52,7 +53,6 @@ export function doorFailure(code: string | null): string | null {
 
 export function descriptionFailure(code: string | null): string {
   return ({
-    unsupported_format: 'This file format cannot be described.',
     read_error: 'The gateway could not read this file.',
     gateway_timeout: 'The gateway did not finish describing this file in time.',
   } as Record<string, string>)[code ?? ''] ?? 'The file could not be described. Check the gateway and try again.';

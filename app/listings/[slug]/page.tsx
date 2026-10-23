@@ -21,6 +21,7 @@ import InquiryWidget from '@/components/InquiryWidget';
 import ScanFindingsBadge from '@/components/listings/ScanFindingsBadge';
 import ReactMarkdown from 'react-markdown';
 import rehypeSanitize from 'rehype-sanitize';
+import FileBreakdown from './FileBreakdown';
 import SampleFiles, { type ListingWithSamples } from './SampleFiles';
 import ListingLicenseDisclosure from '@/components/ListingLicenseDisclosure';
 import ApprovedListingPreview from '@/components/ApprovedListingPreview';
@@ -176,6 +177,7 @@ export default async function ListingDetailPage({ params, searchParams }: Props)
 
           <ScanFindingsBadge scanFindings={listing.scan_findings ?? null} />
           {listing.verification_scope != null && <p className="text-sm text-gray-600">{listing.verification_scope}</p>}
+          <FileBreakdown groups={listing.file_breakdown} />
 
           {/* Tags */}
           <div className="flex flex-wrap gap-2">
@@ -204,6 +206,7 @@ export default async function ListingDetailPage({ params, searchParams }: Props)
           {approved && <>
             <ScanFindingsBadge scanFindings={listing.scan_findings ?? null} />
             {listing.verification_scope != null && <p className="text-sm text-gray-600">{listing.verification_scope}</p>}
+            <FileBreakdown groups={listing.file_breakdown} />
           </>}
 
           {publicLicenseUrl && <Link href={publicLicenseUrl} className={`inline-flex rounded-full px-3 py-1 text-sm font-medium ${licenseDetails?.code === 'standard' ? 'bg-green-50 text-green-900' : 'bg-amber-50 text-amber-950'}`}>

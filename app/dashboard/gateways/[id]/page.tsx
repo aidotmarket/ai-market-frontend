@@ -9,17 +9,12 @@ import { gatewayErrorCode } from '@/api/gatewayDelivery';
 import { createDraftListing } from '@/api/listings';
 import { acknowledgeGatewayIdentity, describeGatewayFile, gatewayErrorDetails, getGatewayFile, getSellerGateway, listGatewayFiles, listReceivedMessages, listSellerGateways, patchSellerGateway, revokeSellerGateway, saveGatewayListingSource, startDoorCheck } from '@/api/sellerGateways';
 import { blockerMessage, dateLabel, DESCRIPTION_CONFIRMATION, descriptionFailure, doorFailure, gatewaySummary } from '@/components/gateways/presentation';
+import { gatewayListingMetadata, isTableMember } from '@/components/gateways/fileMetadata';
 import type { GatewayFile, GatewayMessageType, ReceivedMessage, SellerGateway } from '@/types/sellerGateway';
 
 const MESSAGE_TYPES: GatewayMessageType[] = ['hello', 'inventory', 'description', 'receipt', 'canary_result', 'offer_ack', 'prepare_ack', 'revocation_ack', 'error'];
 const revokeEffect = 'Revoking stops new permissions and offers and unlists this gateway’s listings. Orders with undelivered files become blocked and a delivery problem freezes payout until support resolves or refunds them. Already bound permissions may finish before their deadline.';
 const wait = (ms: number) => new Promise(resolve => setTimeout(resolve, ms));
-const dataFormats: Record<string, 'csv' | 'json' | 'parquet'> = {
-  'text/csv': 'csv',
-  'application/json': 'json',
-  'application/x-parquet': 'parquet',
-  'application/vnd.apache.parquet': 'parquet',
-};
 
 function listingFailure(cause: unknown): { message: string; terms: boolean } {
   const record = (value: unknown): Record<string, unknown> | null =>
@@ -302,21 +297,12 @@ export default function GatewayPage() {
       setListingError({ message: 'Select 1 to 200 offerable files. Enter a title of 3–255 characters, a description of at least 10 characters, and a price of 0 or at least 25.', terms: false });
       return;
     }
-    const columns = selectedFiles[0].description.columns;
-    if (selectedFiles.some(file => file.description.columns.length !== columns.length || file.description.columns.some((column, index) => column.name !== columns[index].name || column.type !== columns[index].type))) {
-      setListingError({ message: 'Pick files with the same columns and types.', terms: false });
-      return;
-    }
     const requestId = id;
     setCreatingListing(true); setListingError(null);
     try {
       const listingId = draftListingId ?? (await createDraftListing({
         title, description, price, model_provider: 'anthropic', listing_type: 'raw',
-        ...(dataFormats[selectedFiles[0].media_type] ? { data_format: dataFormats[selectedFiles[0].media_type] } : {}),
-        schema_info: {
-          row_count: selectedFiles.reduce((sum, file) => sum + file.description.row_count, 0),
-          columns: columns.map(column => ({ name: column.name, type: column.type })),
-        },
+        ...gatewayListingMetadata(selectedFiles),
       })).id;
       if (!isCurrent(requestId)) return;
       setDraftListingId(listingId);
@@ -367,7 +353,7 @@ export default function GatewayPage() {
       <div className="overflow-x-auto"><table className="w-full text-left text-sm"><thead><tr>{['Name', 'Size', 'Media type', 'Present', 'Changed', 'Description', 'Offerable', 'Action'].map(label => <th key={label} className="p-2">{label}</th>)}</tr></thead><tbody>{files.map(file => <tr key={file.file_id} className="border-t align-top">
         <td className="p-2">{file.display_name}</td><td className="p-2">{file.size_bytes.toLocaleString()} bytes</td><td className="p-2">{file.media_type}</td><td className="p-2">{file.present ? 'Yes' : 'No'}</td><td className="p-2">{dateLabel(file.changed_at)}</td><td className="p-2">{file.description.state}{file.description.state === 'stale' && '. Describe again.'}{file.description.state === 'failed' && `: ${descriptionFailure(file.description.failure_code)}`}</td><td className="p-2">{file.offerable ? 'Yes' : 'No'}</td><td className="p-2">{file.description.state !== 'described' && file.description.state !== 'requested' && gateway.status !== 'revoked' && <button type="button" onClick={() => setConfirmFile(file)} className="text-indigo-700 underline">{file.description.state === 'stale' ? 'Describe again' : 'Describe'}</button>}{gateway.status !== 'revoked' && <label className="ml-2 inline-flex gap-1"><input type="checkbox" aria-label={`Select ${file.display_name}`} checked={selectedFileIds.includes(file.file_id)} disabled={!file.offerable || creatingListing || !!draftListingId} onChange={event => setSelectedFileIds(current => event.target.checked ? [...current, file.file_id] : current.filter(fileId => fileId !== file.file_id))} /> Select</label>}</td>
       </tr>)}</tbody></table></div>
-      {files.map(file => file.description.state === 'described' && <div key={`${file.file_id}-description`} className="rounded border p-3"><h3 className="font-semibold">{file.display_name} description</h3><p>Rows: {file.description.row_count} · SHA-256: <code>{file.description.sha256}</code></p><table className="text-left text-sm"><thead><tr><th className="p-2">Column</th><th className="p-2">Type</th><th className="p-2">Null rate</th><th className="p-2">Distinct count</th></tr></thead><tbody>{file.description.columns.map((column, index) => <tr key={`${column.name}-${index}`}><td className="p-2">{column.name}</td><td className="p-2">{column.type}</td><td className="p-2">{column.null_rate_pct === null ? 'Unknown' : `${column.null_rate_pct}%`}</td><td className="p-2">{column.distinct_bucket}</td></tr>)}</tbody></table></div>)}
+      {files.map(file => file.description.state === 'described' && <div key={`${file.file_id}-description`} className="rounded border p-3"><h3 className="font-semibold">{file.display_name} description</h3>{!isTableMember(file) && <p>File (not a table) · {file.media_type} · {file.size_bytes.toLocaleString()} bytes</p>}<p>{isTableMember(file) && <>Rows: {file.description.row_count} · </>}SHA-256: <code>{file.description.sha256}</code></p>{isTableMember(file) && <table className="text-left text-sm"><thead><tr><th className="p-2">Column</th><th className="p-2">Type</th><th className="p-2">Null rate</th><th className="p-2">Distinct count</th></tr></thead><tbody>{file.description.columns.map((column, index) => <tr key={`${column.name}-${index}`}><td className="p-2">{column.name}</td><td className="p-2">{column.type}</td><td className="p-2">{column.null_rate_pct === null ? 'Unknown' : `${column.null_rate_pct}%`}</td><td className="p-2">{column.distinct_bucket}</td></tr>)}</tbody></table>}</div>)}
       {fileCursor && <button type="button" className="rounded border px-3 py-2" onClick={async () => { const requestId = id; try { const page = await listGatewayFiles(requestId, fileCursor); if (!isCurrent(requestId)) return; setFiles(current => [...current, ...page.files]); setFileCursor(page.next_cursor); } catch { if (isCurrent(requestId)) setFileError('We could not load more files. Try again.'); } }}>Load more files</button>}
       {gateway.status !== 'revoked' && selectedFileIds.length > 0 && !showListingForm && <button type="button" className="rounded border px-3 py-2" onClick={() => setShowListingForm(true)}>Create listing</button>}
       {gateway.status !== 'revoked' && showListingForm && <form onSubmit={createListing} className="space-y-3 rounded border p-4">

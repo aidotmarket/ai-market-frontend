@@ -15,7 +15,6 @@ export type ListingWithSamples = ListingDetail & {
   approved_presentation?: NonNullable<ListingDetail['approved_presentation']> & {
     sample_files?: SampleFile<'etag_md5' | 'size_only'>[] | null;
   };
-  verification_scope?: string | null;
 };
 
 const bindingLabels = {

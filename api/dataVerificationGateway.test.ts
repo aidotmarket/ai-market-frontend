@@ -19,6 +19,15 @@ it('uses the actual installer endpoints, explicit consent, binder credentials an
   expect(api.post).toHaveBeenLastCalledWith(`${root}/intent/cleanup-attestation`, { confirm: true });
 });
 const path = '/data-verification/gateway/listings/listing';
+it.each([
+  ['verification_not_applicable', 'This listing has no tables to verify.'],
+  ['verification_scanner_upgrade_required', 'Update your gateway to verify listings that include other files.'],
+  ['verification_republish_required', 'Republish this listing so its files are classified again, then verify.'],
+])('explains %s for both stored and immediate refusals', (code, copy) => {
+  expect(verificationRefusalCopy(code)).toBe(copy);
+  expect(verificationErrorCopy({ response: { status: 409, data: { detail: code } } })).toBe(copy);
+  expect(verificationErrorCopy({ response: { status: 409, data: { detail: { code } } } })).toBe(copy);
+});
 const start: GatewayVerificationStartCommand = {
   quote_id: 'quote', idempotency_key: 'attempt', preview_requested: false,
   publication_terms_acknowledged: true, corpus_consent_acknowledged: true,
