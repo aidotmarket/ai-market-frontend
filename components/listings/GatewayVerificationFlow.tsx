@@ -32,6 +32,7 @@ interface Attempt {
   startCommand?: GatewayVerificationStartCommand;
   epochId?: string;
   quoteRefused?: boolean;
+  quoteRefusalCode?: string;
 }
 const runningStates = new Set(['CREATED', 'QUOTED', 'AUTHORIZING', 'AUTHORIZED', 'SCANNING_LOCAL', 'NARRATING_CLOUD', 'CAPTURE_PENDING', 'CAPTURE_RECONCILING']);
 const progressSteps = [
@@ -326,10 +327,10 @@ export default function GatewayVerificationFlow({ listingId, sellerId, verifier,
           await checkStatus();
           return;
         }
-        if (refusal.status === 409 && (refusal.code === 'quote_binding_or_expiry' || refusal.code === 'source_changed')) {
+        if (refusal.status === 409 && ['quote_binding_or_expiry', 'source_changed', 'verification_not_applicable', 'verification_scanner_upgrade_required', 'verification_republish_required'].includes(refusal.code ?? '')) {
           // Backend guarantees no matching or unresolved epoch. Uncertain outcomes
           // retain the original command and key for an idempotent retry.
-          save({ probeCommand: saved.probeCommand, quoteRefused: true });
+          save({ probeCommand: saved.probeCommand, quoteRefused: true, quoteRefusalCode: refusal.code });
           resetAttemptFields();
         }
         throw cause;
@@ -369,7 +370,7 @@ export default function GatewayVerificationFlow({ listingId, sellerId, verifier,
   const canReview = epoch?.state === 'CAPTURED' && epoch.publication_allowed && fullReview && hasBinding;
   const canNewAttempt = (!attempt.current?.epochId && !attempt.current?.startCommand && !!probe && probe.state !== 'queued') || (epoch && !epoch.reconciliation_required && (terminalStates.has(epoch.state) || epoch.state === 'PUBLISHED'));
   const checking = busy && (busyPrimary.current || paying) || probe?.state === 'queued' || !!attempt.current?.epochId && !epoch || !!epoch && (runningStates.has(epoch.state) || epoch.reconciliation_required);
-  const quoteExpired = !!attempt.current?.quoteRefused && !probe && !epoch && !attempt.current?.probeId && !attempt.current?.epochId;
+  const quoteExpired = (!attempt.current?.quoteRefusalCode || ['quote_binding_or_expiry', 'source_changed'].includes(attempt.current.quoteRefusalCode)) && !!attempt.current?.quoteRefused && !probe && !epoch && !attempt.current?.probeId && !attempt.current?.epochId;
   const progressStep = progressSteps.findIndex(step => step.states.includes(epoch?.state ?? '')) + 1;
   const statusLabel = checking ? 'Checking' : epoch ? epoch.state === 'CAPTURED' ? 'Ready to review' : epoch.state === 'PUBLISHED' ? 'Published' : ['AUTH_FAILED', 'CAPTURE_FAILED', 'FAILED_VOIDED'].includes(epoch.state) ? 'Unavailable' : 'Completed'
     : quoteExpired ? 'Quote expired' : probe?.state === 'complete' && probe.quote_id ? 'Quote ready' : error || probe?.state === 'refused' ? 'Unavailable'
@@ -385,6 +386,7 @@ export default function GatewayVerificationFlow({ listingId, sellerId, verifier,
     </div>
     <p className="max-w-3xl">{aws ? 'Check your data in your own AWS account, then review a quote. The check and quote do not need a card. Data values stay in your AWS account.' : cloudflare ? 'Check your data in your own Cloudflare account, then review a quote. The check and quote do not need a card. Data values stay in your Cloudflare account.' : 'Check your data in your own gateway, then review a quote. The check and quote are free and do not need a card. Data values stay in your gateway.'}</p>
     {error && <p ref={errorRef} role="alert" tabIndex={-1} className="rounded-lg bg-red-50 p-3 text-red-800">{error}</p>}
+    {epoch?.verification_scope != null && <p>{epoch.verification_scope}</p>}
     {epoch && <>
       {progressStep > 0 && <div className="space-y-3">
         <div role="progressbar" aria-label="Paid verification progress" aria-valuemin={0} aria-valuemax={progressSteps.length} aria-valuenow={progressStep} aria-valuetext={progressSteps[progressStep - 1].label} className="h-2 overflow-hidden rounded-full bg-gray-200">
@@ -455,13 +457,14 @@ export default function GatewayVerificationFlow({ listingId, sellerId, verifier,
     {attempt.current?.epochId && !epoch && <p role="status">Loading your existing verification. Check again to follow its status.</p>}
     {probe?.state === 'queued' && <p role="status">{aws ? 'Waiting for your AWS verifier to check the data. No ai.market charge has been made; AWS charges apply.' : cloudflare ? 'Waiting for your Cloudflare verifier to check the data. No ai.market charge has been made; Cloudflare charges apply.' : 'Waiting for your gateway to check the data. No charge has been made.'}</p>}
     {cloudflare && !installer.active && (probe?.state === 'queued' || (epoch && runningStates.has(epoch.state))) && <p>Your Cloudflare verifier checks for work automatically. If work is delayed, check verifier status.</p>}
-    {probe?.state === 'refused' && <p role="alert">{verificationRefusalCopy(probe.refusal, verifier?.kind)}</p>}
+    {probe?.state === 'refused' && <p role="alert">{verificationRefusalCopy(probe.refusal, verifier?.kind)}{!cloud && probe.refusal === 'source_unreachable' && ' If one of your files is text that looks like a table, create a new listing without it.'}</p>}
+    {!epoch && probe?.verification_scope != null && probe.state !== 'complete' && <p>{probe.verification_scope}</p>}
     {probe?.state === 'complete' && probe.quote_id && probe.maximum_hold_usd && !epoch && !attempt.current?.epochId && !setup && <>
       <div className="space-y-2 rounded-xl border border-indigo-200 bg-indigo-50/50 p-4 sm:p-5">
         <h3 className="text-base font-semibold text-gray-900">Your verification quote</h3>
         <p><strong className="block text-lg font-semibold text-gray-900">A temporary hold of up to ${probe.maximum_hold_usd} will be placed on your card.</strong> The final charge is twice the cost of preparing the written findings, between $1 and $25. You pay for completed findings whether you publish or decline them. If verification fails before completion, the hold is released.</p>
       </div>
-      <p>Verification covers the complete supported data for this listing version. It does not assess accuracy, legality, or fitness for a purpose. {aws ? 'Your AWS verifier' : cloudflare ? 'Your Cloudflare verifier' : 'Your gateway'} runs ai.market’s open-source scanner in an environment you control.</p>
+      <p>{probe.verification_scope ?? 'Verification covers the complete supported data for this listing version.'} It does not assess accuracy, legality, or fitness for a purpose. {aws ? 'Your AWS verifier' : cloudflare ? 'Your Cloudflare verifier' : 'Your gateway'} runs ai.market’s open-source scanner in an environment you control.</p>
       <fieldset disabled={busy || !!attempt.current?.startCommand} className="space-y-3">
         <legend className="font-semibold">Describe your data</legend>
         {(Object.keys(choices) as Array<keyof typeof choices>).map(key => <label key={key} className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">{fieldLabels[key]}<select className="min-w-0 rounded-lg border border-gray-300 bg-white p-2 sm:w-1/2" value={description[key] ?? ''} onChange={e => setDescription(current => ({ ...current, [key]: e.target.value }))}>

@@ -18,7 +18,7 @@ import type { GatewayBlocker, GatewayFile, SellerGateway } from '@/types/sellerG
 import Link from 'next/link';
 
 const CATEGORIES = ['Finance', 'Healthcare', 'Technology', 'Real Estate', 'Government', 'Marketing'];
-const FORMATS = ['csv', 'parquet', 'json', 'xlsx', 'other'];
+const FORMATS = ['csv', 'tsv', 'jsonl', 'parquet', 'json', 'xlsx', 'other'];
 const COMPLIANCE_FRAMEWORKS = ['GDPR', 'HIPAA', 'CCPA', 'SOC2', 'ISO27001'];
 
 interface EditData {
@@ -52,7 +52,7 @@ export default function EditListingPage() {
     tags: [],
     price: 10,
     pricing_type: 'one_time',
-    data_format: 'csv',
+    data_format: '',
     source_row_count: 0,
     compliance_frameworks: [],
     compliance_notes: '',
@@ -88,7 +88,7 @@ export default function EditListingPage() {
         tags: l.tags || [],
         price: l.pricing?.price ?? l.price ?? 10,
         pricing_type: l.pricing?.pricing_type ?? l.pricing_type ?? 'one_time',
-        data_format: l.data_format || 'csv',
+        data_format: l.data_format ?? '',
         source_row_count: l.source_row_count ?? l.row_count ?? 0,
         compliance_frameworks: l.compliance_frameworks || [],
         compliance_notes: l.compliance_notes || '',
@@ -309,6 +309,7 @@ export default function EditListingPage() {
               onChange={(e) => update({ data_format: e.target.value })}
               className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-[#3F51B5] bg-white"
             >
+              <option value="">No common table format</option>
               {FORMATS.map((fmt) => (
                 <option key={fmt} value={fmt}>{fmt.toUpperCase()}</option>
               ))}

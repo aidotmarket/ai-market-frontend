@@ -201,6 +201,20 @@ describe('EditListingPage', () => {
     });
   });
 
+  it.each(['', null, undefined])('keeps an empty format through a title-only save (%s)', async (data_format) => {
+    listingsApi.getListing.mockResolvedValue({ ...baseListing, data_format });
+    render(<EditListingPage />);
+    const title = await screen.findByDisplayValue(baseListing.title);
+    fireEvent.change(title, { target: { value: 'Updated title only' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Save Draft' }));
+    await waitFor(() => expect(listingsApi.updateListing).toHaveBeenCalledWith('listing-1', expect.objectContaining({
+      title: 'Updated title only', data_format: '',
+    })));
+    const format = screen.getAllByRole('combobox').find(select => within(select).queryByRole('option', { name: 'CSV' })) as HTMLSelectElement;
+    expect(format.value).toBe('');
+    expect(within(format).getByRole('option', { name: 'No common table format' })).toBeTruthy();
+  });
+
   it('prefers source_row_count when both row count fields are present', async () => {
     listingsApi.getListing.mockResolvedValue({
       ...baseListing,

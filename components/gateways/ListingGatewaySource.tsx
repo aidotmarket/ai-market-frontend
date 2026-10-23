@@ -5,6 +5,7 @@ import Link from 'next/link';
 import { gatewayErrorCode } from '@/api/gatewayDelivery';
 import { getGatewayListingSource, listGatewayFiles, listSellerGateways, saveGatewayListingSource } from '@/api/sellerGateways';
 import { blockerMessage } from './presentation';
+import { isTableMember } from './fileMetadata';
 import type { GatewayFile, SellerGateway } from '@/types/sellerGateway';
 
 const saveErrors: Record<string, string> = {
@@ -127,7 +128,7 @@ export default function ListingGatewaySource({ listingId, onSourceSaved, onSourc
           <input type="checkbox" checked={selected.includes(file.file_id)} disabled={saving} onChange={() => {
             setSelected(current => current.includes(file.file_id) ? current.filter(id => id !== file.file_id) : [...current, file.file_id]); markDirty();
           }} />
-          <span><strong>{file.display_name}</strong> · {file.size_bytes.toLocaleString()} bytes · {file.media_type} · Description: {file.description.state} · Offerable: {file.offerable ? 'Yes' : 'No'}
+          <span><strong>{file.display_name}</strong> · {file.size_bytes.toLocaleString()} bytes · {file.media_type}{file.description.state === 'described' && !isTableMember(file) && ' · File (not a table)'} · Description: {file.description.state} · Offerable: {file.offerable ? 'Yes' : 'No'}
             {selected.includes(file.file_id) && !file.offerable && <span className="block text-amber-800">{blockerMessage(fileBlocker(file), files)} <Link className="underline" href={gatewayLink}>Review gateway file</Link></span>}
           </span>
         </label>)}

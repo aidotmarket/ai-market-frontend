@@ -63,38 +63,79 @@ it('creates a raw draft from selected offerable files, saves its source, then op
 });
 
 it.each([
-  ['application/json', 'json'],
-  ['application/x-parquet', 'parquet'],
+  ['text/csv', 'csv'],
+  ['text/tab-separated-values', 'tsv'],
+  ['application/x-ndjson', 'jsonl'],
   ['application/vnd.apache.parquet', 'parquet'],
-])('sends %s as %s when the first selected file uses that media type', async (mediaType, dataFormat) => {
-  const otherFile = { ...describedFile, file_id: 'other-file', display_name: 'other-file', media_type: mediaType };
-  api.files.mockResolvedValue({ files: [describedFile, otherFile], next_cursor: null });
+])('sends the common table format %s as %s', async (mediaType, dataFormat) => {
+  const table = { ...describedFile, media_type: mediaType };
+  api.files.mockResolvedValue({ files: [table], next_cursor: null });
   await ready();
-  fireEvent.click(screen.getByLabelText('Select other-file'));
-  fireEvent.click(screen.getByLabelText(`Select ${describedFile.display_name}`));
-  fireEvent.click(screen.getByRole('button', { name: 'Create listing' }));
-  fireEvent.change(screen.getByLabelText('Title'), { target: { value: 'Safe data' } });
-  fireEvent.change(screen.getByLabelText('Description'), { target: { value: 'A useful data set' } });
-  fireEvent.change(screen.getByLabelText('Price'), { target: { value: '0' } });
-  fireEvent.click(screen.getByRole('button', { name: 'Create draft' }));
-  await waitFor(() => expect(api.createDraft).toHaveBeenCalled());
+  await createFrom([table.display_name]);
   expect(api.createDraft.mock.calls[0][0]).toHaveProperty('data_format', dataFormat);
-  expect(api.saveSource).toHaveBeenCalledWith('listing-1', { type: 'gateway', gateway_id: 'gateway-1', file_ids: ['other-file', describedFile.file_id] });
 });
 
-it('blocks files whose column names or types differ', async () => {
-  const different = { ...describedFile, file_id: 'different', display_name: 'different.csv', description: { ...describedFile.description, columns: [{ ...describedFile.description.columns[0], type: 'string' }] } };
-  api.files.mockResolvedValue({ files: [describedFile, different], next_cursor: null });
-  await ready();
-  fireEvent.click(screen.getByLabelText(`Select ${describedFile.display_name}`));
-  fireEvent.click(screen.getByLabelText('Select different.csv'));
+async function createFrom(names: string[]) {
+  names.forEach(name => fireEvent.click(screen.getByLabelText(`Select ${name}`)));
   fireEvent.click(screen.getByRole('button', { name: 'Create listing' }));
   fireEvent.change(screen.getByLabelText('Title'), { target: { value: 'Safe data' } });
   fireEvent.change(screen.getByLabelText('Description'), { target: { value: 'A useful data set' } });
   fireEvent.change(screen.getByLabelText('Price'), { target: { value: '0' } });
   fireEvent.click(screen.getByRole('button', { name: 'Create draft' }));
-  expect((await screen.findByRole('alert')).textContent).toContain('Pick files with the same columns and types.');
-  expect(api.createDraft).not.toHaveBeenCalled();
+  await waitFor(() => expect(api.push).toHaveBeenCalledWith('/dashboard/listings/listing-1/edit'));
+}
+
+it.each(['name', 'type'] as const)('accepts tables with different column %ss without claiming a common schema', async key => {
+  const different = { ...describedFile, file_id: 'different', display_name: 'different.csv', description: { ...describedFile.description, columns: [{ ...describedFile.description.columns[0], [key]: 'different' }] } };
+  api.files.mockResolvedValue({ files: [describedFile, different], next_cursor: null });
+  await ready();
+  await createFrom([describedFile.display_name, different.display_name]);
+  expect(api.createDraft.mock.calls[0][0]).toMatchObject({ data_format: 'csv', schema_info: { row_count: 4, columns: [] } });
+  expect(api.saveSource.mock.calls[0][1].file_ids).toEqual([describedFile.file_id, different.file_id]);
+});
+
+const opaqueFile = { ...describedFile, file_id: 'opaque', display_name: 'file-12345678.bin', media_type: 'application/octet-stream', size_bytes: 17, description: { ...describedFile.description, row_count: 0, columns: [] } };
+
+it.each([false, true])('accepts mixed tables and other files (other first: %s)', async otherFirst => {
+  api.files.mockResolvedValue({ files: [describedFile, opaqueFile], next_cursor: null });
+  await ready();
+  await createFrom(otherFirst ? [opaqueFile.display_name, describedFile.display_name] : [describedFile.display_name, opaqueFile.display_name]);
+  expect(api.createDraft.mock.calls[0][0]).toMatchObject({ data_format: 'csv', schema_info: { row_count: 2, columns: [{ name: 'safe', type: 'integer' }] } });
+  expect(api.saveSource.mock.calls[0][1].file_ids).toEqual(otherFirst ? [opaqueFile.file_id, describedFile.file_id] : [describedFile.file_id, opaqueFile.file_id]);
+});
+
+it('creates an all-other-files listing without claiming a table format or rows', async () => {
+  api.files.mockResolvedValue({ files: [opaqueFile], next_cursor: null });
+  await ready();
+  await createFrom([opaqueFile.display_name]);
+  expect(api.createDraft.mock.calls[0][0]).not.toHaveProperty('data_format');
+  expect(api.createDraft.mock.calls[0][0].schema_info).toEqual({ row_count: 0, columns: [] });
+});
+
+it('creates mixed table formats with shared columns and no single data_format', async () => {
+  const second = { ...describedFile, file_id: 'ndjson', display_name: 'table.bin', media_type: 'application/x-ndjson' };
+  api.files.mockResolvedValue({ files: [opaqueFile, second, describedFile], next_cursor: null });
+  await ready();
+  await createFrom([opaqueFile.display_name, second.display_name, describedFile.display_name]);
+  expect(api.createDraft.mock.calls[0][0]).not.toHaveProperty('data_format');
+  expect(api.createDraft.mock.calls[0][0].schema_info).toEqual({ row_count: 4, columns: [{ name: 'safe', type: 'integer' }] });
+});
+
+it('labels other files with their type and size without an empty column table', async () => {
+  api.files.mockResolvedValue({ files: [opaqueFile], next_cursor: null });
+  await ready();
+  const description = screen.getByRole('heading', { name: `${opaqueFile.display_name} description` }).parentElement!;
+  expect(within(description).getByText('File (not a table) · application/octet-stream · 17 bytes')).toBeTruthy();
+  expect(within(description).queryByRole('table')).toBeNull();
+  expect(description.textContent).not.toContain('Rows:');
+});
+
+it('still renders row counts for tables with all columns dropped', async () => {
+  const table = { ...describedFile, description: { ...describedFile.description, columns: [] } };
+  api.files.mockResolvedValue({ files: [table], next_cursor: null });
+  await ready();
+  expect(screen.getByText(/Rows: 2/)).toBeTruthy();
+  expect(screen.queryByText(/File \(not a table\)/)).toBeNull();
 });
 
 it('does not select a non-offerable file or show creation on a revoked gateway', async () => {
@@ -292,7 +333,7 @@ it('renders failed and stale descriptions', async () => {
   expect(screen.getByText(/stale. Describe again/)).toBeTruthy();
 });
 
-it.each([['unsupported_format', 'format cannot be described'], ['read_error', 'could not read'], ['gateway_timeout', 'did not finish'], ['future_failure', 'could not be described']])('renders description failure %s', async (code, text) => {
+it.each([['unsupported_format', 'could not be described'], ['read_error', 'could not read'], ['gateway_timeout', 'did not finish'], ['future_failure', 'could not be described']])('renders description failure %s', async (code, text) => {
   api.files.mockResolvedValue({ files: [{ ...file, description: { ...file.description, state: 'failed', failure_code: code } }], next_cursor: null });
   await ready();
   expect(screen.getByText(new RegExp(text))).toBeTruthy();

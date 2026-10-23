@@ -546,6 +546,42 @@ describe('S1717 member_files and verification scope', () => {
   });
 
   for (const route of ['local', 'workspace'] as const) {
+    it(`renders the gateway file breakdown under scope on the ${route} page`, async () => {
+      const listing = await memberFilesListing(route);
+      listing.verification_scope = '3 of 4 table files scanned; 2 other files are not scanned; 1 skipped as an unsupported type';
+      listing.file_breakdown = [
+        { format: 'csv', count: 1, size_bytes: 1200 },
+        { format: 'tsv', count: 1, size_bytes: 34 },
+        { format: 'jsonl', count: 1, size_bytes: 56 },
+        { format: 'parquet', count: 1, size_bytes: 78 },
+        { format: 'other', count: 2, size_bytes: 4096 },
+      ];
+      document.body.innerHTML = await renderPage(listing);
+      const breakdown = within(document.body).getByRole('region', { name: 'File breakdown' });
+      expect(breakdown.previousElementSibling?.textContent).toBe(listing.verification_scope);
+      const rows = within(breakdown).getAllByRole('listitem').map(row => row.textContent);
+      expect(rows).toEqual(['CSV tables: 1 file · 1,200 bytes', 'TSV tables: 1 file · 34 bytes', 'JSONL tables: 1 file · 56 bytes', 'PARQUET tables: 1 file · 78 bytes', 'Other files: 2 files · 4,096 bytes']);
+      expect(within(document.body).getAllByRole('region', { name: 'File breakdown' })).toHaveLength(1);
+    });
+
+    it(`renders an all-other-files breakdown without scope on the ${route} page`, async () => {
+      const listing = await memberFilesListing(route);
+      listing.verification_scope = null;
+      listing.file_breakdown = [{ format: 'other', count: 1, size_bytes: 0 }];
+      document.body.innerHTML = await renderPage(listing);
+      const breakdown = within(document.body).getByRole('region', { name: 'File breakdown' });
+      expect(breakdown.textContent).toContain('Other files: 1 file · 0 bytes');
+      expect(breakdown.textContent).not.toMatch(/CSV|PARQUET|scanned/);
+    });
+
+    it(`keeps absent, null and empty file breakdowns identical on the ${route} page`, async () => {
+      const listing = await memberFilesListing(route);
+      const absent = await renderPage(listing);
+      for (const file_breakdown of [null, []]) {
+        expect(await renderPage({ ...listing, file_breakdown })).toBe(absent);
+      }
+    });
+
     it(`renders the three-file ${route} member_files fixture with named download links`, async () => {
       const html = await renderPage(await memberFilesListing(route));
       document.body.innerHTML = html;

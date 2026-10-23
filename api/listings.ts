@@ -3,6 +3,7 @@
 import { api } from './client';
 import type {LicenseSelection} from './listingLicenses';
 import type { FulfillmentType, ListingListItem, ListingDetail, ListingVersion, SearchResponse, SellerListingItem } from '@/types';
+import type { TableFormat } from '@/components/gateways/fileMetadata';
 
 type FulfillmentTypeParam = FulfillmentType | FulfillmentType[];
 
@@ -52,7 +53,7 @@ export interface CreateDraftListingInput {
   price: number;
   model_provider: 'anthropic';
   listing_type: 'raw';
-  data_format?: 'csv' | 'json' | 'parquet';
+  data_format?: TableFormat;
   schema_info: { row_count: number; columns: Array<{ name: string; type: string }> };
 }
 
