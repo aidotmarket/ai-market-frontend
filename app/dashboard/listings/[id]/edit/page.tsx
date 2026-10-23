@@ -138,7 +138,7 @@ export default function EditListingPage() {
         tags: data.tags,
         price: data.price,
         pricing_type: data.pricing_type,
-        data_format: data.data_format,
+        data_format: data.data_format || null,
         source_row_count: data.source_row_count,
         compliance_frameworks: data.compliance_frameworks,
         compliance_notes: data.compliance_notes,

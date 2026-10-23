@@ -386,7 +386,7 @@ export default function GatewayVerificationFlow({ listingId, sellerId, verifier,
     </div>
     <p className="max-w-3xl">{aws ? 'Check your data in your own AWS account, then review a quote. The check and quote do not need a card. Data values stay in your AWS account.' : cloudflare ? 'Check your data in your own Cloudflare account, then review a quote. The check and quote do not need a card. Data values stay in your Cloudflare account.' : 'Check your data in your own gateway, then review a quote. The check and quote are free and do not need a card. Data values stay in your gateway.'}</p>
     {error && <p ref={errorRef} role="alert" tabIndex={-1} className="rounded-lg bg-red-50 p-3 text-red-800">{error}</p>}
-    {epoch?.verification_scope != null && <p>{epoch.verification_scope}</p>}
+    {epoch?.verification_scope != null && <p>Published findings cover: {epoch.verification_scope}</p>}
     {epoch && <>
       {progressStep > 0 && <div className="space-y-3">
         <div role="progressbar" aria-label="Paid verification progress" aria-valuemin={0} aria-valuemax={progressSteps.length} aria-valuenow={progressStep} aria-valuetext={progressSteps[progressStep - 1].label} className="h-2 overflow-hidden rounded-full bg-gray-200">
@@ -458,7 +458,7 @@ export default function GatewayVerificationFlow({ listingId, sellerId, verifier,
     {probe?.state === 'queued' && <p role="status">{aws ? 'Waiting for your AWS verifier to check the data. No ai.market charge has been made; AWS charges apply.' : cloudflare ? 'Waiting for your Cloudflare verifier to check the data. No ai.market charge has been made; Cloudflare charges apply.' : 'Waiting for your gateway to check the data. No charge has been made.'}</p>}
     {cloudflare && !installer.active && (probe?.state === 'queued' || (epoch && runningStates.has(epoch.state))) && <p>Your Cloudflare verifier checks for work automatically. If work is delayed, check verifier status.</p>}
     {probe?.state === 'refused' && <p role="alert">{verificationRefusalCopy(probe.refusal, verifier?.kind)}{!cloud && probe.refusal === 'source_unreachable' && ' If one of your files is text that looks like a table, create a new listing without it.'}</p>}
-    {!epoch && probe?.verification_scope != null && probe.state !== 'complete' && <p>{probe.verification_scope}</p>}
+    {!epoch && probe?.verification_scope != null && probe.state !== 'complete' && <p>Published findings cover: {probe.verification_scope}</p>}
     {probe?.state === 'complete' && probe.quote_id && probe.maximum_hold_usd && !epoch && !attempt.current?.epochId && !setup && <>
       <div className="space-y-2 rounded-xl border border-indigo-200 bg-indigo-50/50 p-4 sm:p-5">
         <h3 className="text-base font-semibold text-gray-900">Your verification quote</h3>

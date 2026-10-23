@@ -201,14 +201,14 @@ describe('EditListingPage', () => {
     });
   });
 
-  it.each(['', null, undefined])('keeps an empty format through a title-only save (%s)', async (data_format) => {
+  it.each(['', null, undefined])('sends null for an empty format on a title-only save (%s)', async (data_format) => {
     listingsApi.getListing.mockResolvedValue({ ...baseListing, data_format });
     render(<EditListingPage />);
     const title = await screen.findByDisplayValue(baseListing.title);
     fireEvent.change(title, { target: { value: 'Updated title only' } });
     fireEvent.click(screen.getByRole('button', { name: 'Save Draft' }));
     await waitFor(() => expect(listingsApi.updateListing).toHaveBeenCalledWith('listing-1', expect.objectContaining({
-      title: 'Updated title only', data_format: '',
+      title: 'Updated title only', data_format: null,
     })));
     const format = screen.getAllByRole('combobox').find(select => within(select).queryByRole('option', { name: 'CSV' })) as HTMLSelectElement;
     expect(format.value).toBe('');

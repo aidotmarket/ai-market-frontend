@@ -98,12 +98,48 @@ describe('gateway seller verification flow', () => {
     expect(vi.mocked(gateway.probeGatewayVerification).mock.calls[2][1].idempotency_key).not.toBe(saved.probeCommand.idempotency_key);
   });
 
+  it.each([
+    ['verification_not_applicable', 'This listing has no tables to verify.'],
+    ['verification_scanner_upgrade_required', 'Update your gateway to verify listings that include other files.'],
+    ['verification_republish_required', 'Republish this listing so its files are classified again, then verify.'],
+  ])('handles a probe POST 409 %s before a probe exists and allows retry', async (code, copy) => {
+    vi.mocked(gateway.probeGatewayVerification).mockRejectedValueOnce({ response: { status: 409, data: { detail: code } } });
+    render(<GatewayVerificationFlow listingId="listing" sellerId="seller" />);
+    fireEvent.click(screen.getByRole('button', { name: 'Check data and get quote' }));
+    expect((await screen.findByRole('alert')).textContent).toBe(copy);
+    expect(screen.getByText('Status: Unavailable')).toBeTruthy();
+    expect(gateway.getGatewayVerificationProbe).not.toHaveBeenCalled();
+    expect(payin.getDataVerificationPayInReadiness).not.toHaveBeenCalled();
+    expect(gateway.startGatewayVerification).not.toHaveBeenCalled();
+    const saved = JSON.parse(window.localStorage.getItem(key)!);
+    expect(saved.probeId).toBeUndefined();
+    const retry = screen.getByRole('button', { name: 'Check data and get quote' }) as HTMLButtonElement;
+    expect(retry.disabled).toBe(false);
+    fireEvent.click(retry);
+    await screen.findByText('Your verification quote');
+    expect(gateway.probeGatewayVerification).toHaveBeenCalledTimes(2);
+    expect(vi.mocked(gateway.probeGatewayVerification).mock.calls[1][1]).toEqual(saved.probeCommand);
+    expect(gateway.getGatewayVerificationProbe).toHaveBeenCalledWith('listing', 'probe');
+    expect(screen.queryByRole('alert')).toBeNull();
+    expect(screen.getByText('Status: Quote ready')).toBeTruthy();
+  });
+
+  it.each(['queued', 'refused'] as const)('labels %s probe scope as published findings', async state => {
+    window.localStorage.setItem(key, JSON.stringify({ probeCommand: { confirm: true, preview_requested: false, idempotency_key: 'key' }, probeId: 'probe' }));
+    const scope = '1 of 2 table files scanned; 3 other files are not scanned';
+    vi.mocked(gateway.getGatewayVerificationProbe).mockResolvedValue({ data: { probe_id: 'probe', state, refusal: state === 'refused' ? 'source_unreachable' : null, verification_scope: scope }, retryAfter: 60 });
+    render(<GatewayVerificationFlow listingId="listing" sellerId="seller" />);
+    expect(await screen.findByText(`Published findings cover: ${scope}`)).toBeTruthy();
+    expect(screen.queryByText(scope)).toBeNull();
+  });
+
   it('uses backend probe scope in place of the fixed complete-coverage claim', async () => {
     const scope = '1 of 2 table files scanned; 3 other files are not scanned; 1 skipped as an unsupported type';
     vi.mocked(gateway.getGatewayVerificationProbe).mockResolvedValue({ ...quote, data: { ...quote.data, verification_scope: scope } });
     await getQuote();
     expect(screen.getByText(new RegExp(scope)).textContent).toContain(scope);
     expect(screen.queryByText(/Verification covers the complete supported data/)).toBeNull();
+    expect(screen.queryByText(/Published findings cover:/)).toBeNull();
   });
 
   it.each([null, undefined])('retains legacy quote copy when backend scope is %s', async verification_scope => {
@@ -112,15 +148,15 @@ describe('gateway seller verification flow', () => {
     expect(screen.getByText(/Verification covers the complete supported data for this listing version/)).toBeTruthy();
   });
 
-  it('renders backend epoch scope and replaces it when status changes', async () => {
+  it('labels backend epoch scope as published findings and replaces it when status changes', async () => {
     window.localStorage.setItem(key, JSON.stringify({ probeCommand: { confirm: true, preview_requested: false, idempotency_key: 'key' }, epochId: 'epoch' }));
     const scope = '1 of 1 table files scanned; 2 other files are not scanned';
     vi.mocked(gateway.getGatewayVerificationEpoch).mockResolvedValue({ data: { ...epoch, verification_scope: scope }, retryAfter: 60 });
     render(<GatewayVerificationFlow listingId="listing" sellerId="seller" />);
-    expect(await screen.findByText(scope)).toBeTruthy();
+    expect(await screen.findByText(`Published findings cover: ${scope}`)).toBeTruthy();
     vi.mocked(gateway.getGatewayVerificationEpoch).mockResolvedValue({ data: { ...epoch, verification_scope: null }, retryAfter: 60 });
     fireEvent.click(screen.getByRole('button', { name: 'Check again' }));
-    await waitFor(() => expect(screen.queryByText(scope)).toBeNull());
+    await waitFor(() => expect(screen.queryByText(`Published findings cover: ${scope}`)).toBeNull());
   });
   it('gives the free check priority and removal a danger treatment', async () => {
     render(<GatewayVerificationFlow listingId="listing" sellerId="seller" verifier={{ kind: 'gateway', runnerId: 'runner' }} />);
