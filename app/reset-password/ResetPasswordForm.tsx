@@ -7,6 +7,27 @@ import { AxiosError } from 'axios';
 import { resetPassword } from '@/api/auth';
 import { useToast } from '@/components/Toast';
 
+function resetErrorMessage(err: unknown): string {
+  const fallback = 'This reset link is invalid or has expired.';
+  if (!(err instanceof AxiosError)) return fallback;
+
+  const data: unknown = err.response?.data;
+  if (!data || typeof data !== 'object') return fallback;
+
+  const { message, detail } = data as { message?: unknown; detail?: unknown };
+  if (typeof message === 'string' && message.trim()) return message;
+  if (typeof detail === 'string' && detail.trim()) return detail;
+  if (Array.isArray(detail)) {
+    const messages = detail.flatMap((entry: unknown) => {
+      if (!entry || typeof entry !== 'object') return [];
+      const { msg } = entry as { msg?: unknown };
+      return typeof msg === 'string' && msg.trim() ? [msg] : [];
+    });
+    if (messages.length) return messages.join(' ');
+  }
+  return fallback;
+}
+
 export default function ResetPasswordForm() {
   const searchParams = useSearchParams();
   const { toast } = useToast();
@@ -44,10 +65,7 @@ export default function ResetPasswordForm() {
       setSuccessMessage(res.message);
       toast(res.message, 'success');
     } catch (err) {
-      const message =
-        err instanceof AxiosError
-          ? err.response?.data?.message || err.response?.data?.detail || 'This reset link is invalid or has expired.'
-          : 'This reset link is invalid or has expired.';
+      const message = resetErrorMessage(err);
       setError(message);
       toast(message, 'error');
     } finally {
@@ -70,7 +88,7 @@ export default function ResetPasswordForm() {
         ) : (
           <form onSubmit={handleSubmit} className="space-y-4">
             {error && (
-              <div className="rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
+              <div role="alert" className="rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
                 {error}{' '}
                 <Link href="/forgot-password" className="text-[#3F51B5] hover:underline">
                   Request a new reset link
