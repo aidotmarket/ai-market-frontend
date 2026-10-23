@@ -2,7 +2,7 @@
 
 import { accountReauthMethod, setupRestriction, setupRefusal } from '@/lib/two-factor-policy';
 
-import { useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { PENDING_ACTION_CONTINUATION } from '@/lib/redirect';
@@ -29,10 +29,49 @@ function isExpiredReauth(error: unknown): boolean {
     error.response.data?.detail === 'Re-authentication required';
 }
 
+// A token refresh keeps the visit; even a transient identity loss retires it.
+const settingsIdentity = (state: ReturnType<typeof useAuthStore.getState>) =>
+  state.isAuthenticated && state.token ? state.user?.id ?? null : null;
+
 export default function SettingsPage() {
+  const accountId = useAuthStore(settingsIdentity);
+  const [visit, setVisit] = useState(0);
+  const retireVisit = useCallback(() => setVisit((value) => value + 1), []);
+  return <SettingsVisit key={JSON.stringify([accountId, visit])}
+    accountId={accountId} retireVisit={retireVisit} />;
+}
+
+function SettingsVisit({ accountId, retireVisit }: {
+  accountId: string | null;
+  retireVisit: () => void;
+}) {
   const router = useRouter();
   const { user, refreshAuth } = useAuthStore();
   const { toast } = useToast();
+
+  const lifetime = useRef<{ active: boolean } | null>(null);
+  useLayoutEffect(() => {
+    // Effect replay must create a fresh owner, never reactivate retired work.
+    const owner = { active: true };
+    lifetime.current = owner;
+    const unsubscribe = useAuthStore.subscribe((state) => {
+      if (owner.active && settingsIdentity(state) !== accountId) {
+        owner.active = false;
+        // Observe every store transition, including coalesced A -> B -> A.
+        retireVisit();
+      }
+    });
+    return () => {
+      owner.active = false;
+      unsubscribe();
+    };
+  }, [accountId, retireVisit]);
+
+  const ownOperation = useCallback(() => {
+    const owner = lifetime.current;
+    return () => !!owner?.active && lifetime.current === owner && accountId !== null
+      && settingsIdentity(useAuthStore.getState()) === accountId;
+  }, [accountId]);
 
   const [strictCompanySetup, setStrictCompanySetup] = useState('');
   const [firstName, setFirstName] = useState('');
@@ -60,48 +99,52 @@ export default function SettingsPage() {
   const settingsHeadingRef = useRef<HTMLHeadingElement>(null);
 
   useEffect(() => {
-    if (user) {
+    if (ownOperation()() && user) {
       setFirstName(user.first_name || '');
       setLastName(user.last_name || '');
       setCompanyName(user.company_name || '');
     }
-  }, [user]);
+  }, [user, ownOperation]);
 
   useEffect(() => {
-    if (!user) return;
+    if (!ownOperation()() || !user) return;
     const changed =
       firstName !== (user.first_name || '') ||
       lastName !== (user.last_name || '') ||
       companyName !== (user.company_name || '');
     setDirty(changed);
-  }, [firstName, lastName, companyName, user]);
+  }, [firstName, lastName, companyName, user, ownOperation]);
 
   useEffect(() => {
     if (!copiedBackupCodes) return;
-    const timer = window.setTimeout(() => setCopiedBackupCodes(false), 2000);
+    const isCurrent = ownOperation();
+    const timer = window.setTimeout(() => { if (isCurrent()) setCopiedBackupCodes(false); }, 2000);
     return () => window.clearTimeout(timer);
-  }, [copiedBackupCodes]);
+  }, [copiedBackupCodes, ownOperation]);
 
   useEffect(() => {
     let cancelled = false;
-    if (!user) return;
+    const isCurrent = ownOperation();
+    if (!isCurrent() || !user) return;
 
     getCapabilities()
       .then((capabilities) => {
-        if (!cancelled) {
+        if (!cancelled && isCurrent()) {
           setSellerStatus(capabilities.seller.effective_status);
         }
       })
       .catch((err) => {
-        console.error('Failed to fetch settings capabilities', err);
+        if (!cancelled && isCurrent()) console.error('Failed to fetch settings capabilities', err);
       });
 
     return () => {
       cancelled = true;
     };
-  }, [user]);
+  }, [user, ownOperation]);
 
   const handleSave = async () => {
+    const isCurrent = ownOperation();
+    if (!isCurrent()) return;
     setSaving(true);
     try {
       await updateProfile({
@@ -109,22 +152,29 @@ export default function SettingsPage() {
         last_name: lastName.trim() || undefined,
         company_name: companyName.trim() || undefined,
       });
+      if (!isCurrent()) return;
       await refreshAuth();
+      if (!isCurrent()) return;
       notifyCapabilitiesChanged();
+      if (!isCurrent()) return;
       toast('Profile updated', 'success');
+      if (!isCurrent()) return;
       setDirty(false);
     } catch (err) {
+      if (!isCurrent()) return;
       if (err instanceof AxiosError) {
         toast(err.response?.data?.detail || 'Failed to update profile', 'error');
       } else {
         toast('An unexpected error occurred', 'error');
       }
     } finally {
-      setSaving(false);
+      if (isCurrent()) setSaving(false);
     }
   };
 
   const resetTwoFactorState = () => {
+    const isCurrent = ownOperation();
+    if (!isCurrent()) return;
     setTwoFactorFlow('idle');
     setSecurityAction(null);
     setSecurityError('');
@@ -143,11 +193,15 @@ export default function SettingsPage() {
   };
 
   const closeReauthModal = () => {
+    const isCurrent = ownOperation();
+    if (!isCurrent()) return;
     setIsReauthOpen(false);
     setPendingReauthAction(null);
   };
 
   const handleSetup2FA = async (reauthToken: string) => {
+    const isCurrent = ownOperation();
+    if (!isCurrent()) return;
     if (setupRestriction(user)) { setSecurityError(setupRestriction(user)!); return; }
     setSecurityLoading(true);
     setVerifyingSetup(false);
@@ -155,6 +209,7 @@ export default function SettingsPage() {
 
     try {
       const res = await setup2FA(reauthToken);
+      if (!isCurrent()) return;
       setSetupReauthToken(reauthToken);
       setTotpSecret(res.secret);
       setTotpQrUri(res.qr_uri);
@@ -164,6 +219,7 @@ export default function SettingsPage() {
       setBackupCodesLabel('Save these backup codes before you continue.');
       setTwoFactorFlow('showing_qr');
     } catch (err) {
+      if (!isCurrent()) return;
       if (user?.sso_enforced && err instanceof AxiosError && err.response?.data?.detail === 'CSRF_REQUIRED') {
         setStrictCompanySetup(`${user.id}:${useAuthStore.getState().token}`); setTwoFactorFlow('idle'); return;
       }
@@ -176,11 +232,13 @@ export default function SettingsPage() {
         setSecurityError('Failed to start 2FA setup.');
       }
     } finally {
-      setSecurityLoading(false);
+      if (isCurrent()) setSecurityLoading(false);
     }
   };
 
   const handleVerify2FASetup = async (reauthToken: string, allowReauthRetry = true) => {
+    const isCurrent = ownOperation();
+    if (!isCurrent()) return;
     if (setupRestriction(user)) { setSecurityError(setupRestriction(user)!); setTwoFactorFlow('idle'); return; }
     setSecurityLoading(true);
     setSecurityError('');
@@ -189,13 +247,16 @@ export default function SettingsPage() {
 
     try {
       const res = await verify2FASetup(totpCode.trim(), reauthToken);
+      if (!isCurrent()) return;
       setEnrolledForContinuation(true);
       setBackupCodes(res.backup_codes);
       setBackupCodesLabel('Save these backup codes now. You will need them if you lose access to your authenticator app.');
       setTwoFactorFlow('showing_backup_codes');
       notifyCapabilitiesChanged();
+      if (!isCurrent()) return;
       toast('Two-factor authentication enabled', 'success');
     } catch (err) {
+      if (!isCurrent()) return;
       setTwoFactorFlow('showing_qr');
       if (allowReauthRetry && isExpiredReauth(err)) {
         openReauthForAction('enable_retry');
@@ -210,51 +271,67 @@ export default function SettingsPage() {
         setSecurityError('Failed to verify the code.');
       }
     } finally {
-      setVerifyingSetup(false);
-      setSecurityLoading(false);
+      if (isCurrent()) {
+        setVerifyingSetup(false);
+        setSecurityLoading(false);
+      }
     }
   };
 
   const handleCopyBackupCodes = async () => {
+    const isCurrent = ownOperation();
+    if (!isCurrent()) return;
     try {
       await navigator.clipboard.writeText(backupCodes.join('\n'));
+      if (!isCurrent()) return;
       setCopiedBackupCodes(true);
       toast('Backup codes copied', 'success');
     } catch {
+      if (!isCurrent()) return;
       toast('Failed to copy backup codes', 'error');
     }
   };
 
   const handleTwoFactorDone = async () => {
+    const isCurrent = ownOperation();
+    if (!isCurrent()) return;
     const redirect = new URLSearchParams(window.location.search).get('redirect') || '';
     const returnToReview = enrolledForContinuation && PENDING_ACTION_CONTINUATION.test(redirect);
     setSecurityLoading(true);
     resetTwoFactorState();
     try {
       await refreshAuth();
+      if (!isCurrent()) return;
       if (returnToReview) router.push(redirect);
     } catch {
+      if (!isCurrent()) return;
       toast('Failed to refresh your account state', 'error');
     } finally {
-      setSecurityLoading(false);
+      if (isCurrent()) setSecurityLoading(false);
     }
   };
 
   const handleSecurityActionWithReauth = async (action: Exclude<SecurityAction, null>, reauthToken: string) => {
+    const isCurrent = ownOperation();
+    if (!isCurrent()) return;
     setSecurityLoading(true);
     setSecurityError('');
 
     try {
       if (action === 'disable') {
         const res = await disable2FA(reauthToken, totpCode.trim());
+        if (!isCurrent()) return;
         await refreshAuth();
+        if (!isCurrent()) return;
         notifyCapabilitiesChanged();
+        if (!isCurrent()) return;
         resetTwoFactorState();
         toast(res.message || 'Two-factor authentication disabled', 'success');
         return;
       }
 
       const res = await regenerateBackupCodes(reauthToken, totpCode.trim());
+      if (!isCurrent()) return;
       setBackupCodes(res.backup_codes);
       setBackupCodesLabel('Your backup codes were regenerated. Store this new set securely; older codes are no longer valid.');
       setTwoFactorFlow('showing_backup_codes');
@@ -262,6 +339,7 @@ export default function SettingsPage() {
       setTotpCode('');
       toast('Backup codes regenerated', 'success');
     } catch (err) {
+      if (!isCurrent()) return;
       if (err instanceof AxiosError) {
         setSecurityError(
           err.response?.data?.detail ||
@@ -271,31 +349,38 @@ export default function SettingsPage() {
         setSecurityError(action === 'disable' ? 'Failed to disable 2FA.' : 'Failed to regenerate backup codes.');
       }
     } finally {
-      setSecurityLoading(false);
+      if (isCurrent()) setSecurityLoading(false);
     }
   };
 
   const openReauthForAction = (action: ReauthAction) => {
+    const isCurrent = ownOperation();
+    if (!isCurrent()) return;
     setPendingReauthAction(action);
     setIsReauthOpen(true);
   };
 
   const handleReauthSuccess = async (reauthToken: string) => {
+    const isCurrent = ownOperation();
+    if (!isCurrent()) return;
     if (!pendingReauthAction) return;
 
     const action = pendingReauthAction;
     closeReauthModal();
     if (action === 'enable_setup') {
       await handleSetup2FA(reauthToken);
+      if (!isCurrent()) return;
     } else if (action === 'enable_retry') {
       setSetupReauthToken(reauthToken);
       await handleVerify2FASetup(reauthToken, false);
+      if (!isCurrent()) return;
     } else {
       await handleSecurityActionWithReauth(action, reauthToken);
+      if (!isCurrent()) return;
     }
   };
 
-  if (!user) return null;
+  if (!accountId || !user || user.id !== accountId) return null;
 
   const isSeller =
     sellerStatus === 'active' ||
@@ -339,7 +424,7 @@ export default function SettingsPage() {
                 id="firstName"
                 type="text"
                 value={firstName}
-                onChange={(e) => setFirstName(e.target.value)}
+                onChange={(e) => { if (ownOperation()()) setFirstName(e.target.value); }}
                 className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-[#3F51B5] focus:border-transparent"
               />
             </div>
@@ -351,7 +436,7 @@ export default function SettingsPage() {
                 id="lastName"
                 type="text"
                 value={lastName}
-                onChange={(e) => setLastName(e.target.value)}
+                onChange={(e) => { if (ownOperation()()) setLastName(e.target.value); }}
                 className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-[#3F51B5] focus:border-transparent"
               />
             </div>
@@ -366,7 +451,7 @@ export default function SettingsPage() {
                 id="companyName"
                 type="text"
                 value={companyName}
-                onChange={(e) => setCompanyName(e.target.value)}
+                onChange={(e) => { if (ownOperation()()) setCompanyName(e.target.value); }}
                 className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-[#3F51B5] focus:border-transparent"
               />
             </div>
@@ -487,7 +572,7 @@ export default function SettingsPage() {
                     autoComplete="one-time-code"
                     maxLength={6}
                     value={totpCode}
-                    onChange={(e) => setTotpCode(e.target.value.replace(/\D/g, '').slice(0, 6))}
+                    onChange={(e) => { if (ownOperation()()) setTotpCode(e.target.value.replace(/\D/g, '').slice(0, 6)); }}
                     className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-[#3F51B5] focus:border-transparent"
                     placeholder="123456"
                   />
@@ -551,6 +636,7 @@ export default function SettingsPage() {
             <div className="flex flex-wrap gap-3">
               <button
                 onClick={() => {
+                  if (!ownOperation()()) return;
                   setSecurityAction('disable');
                   setSecurityError('');
                   setTotpCode('');
@@ -562,6 +648,7 @@ export default function SettingsPage() {
               </button>
               <button
                 onClick={() => {
+                  if (!ownOperation()()) return;
                   setSecurityAction('regenerate');
                   setSecurityError('');
                   setTotpCode('');
@@ -594,7 +681,7 @@ export default function SettingsPage() {
                     autoComplete="one-time-code"
                     maxLength={6}
                     value={totpCode}
-                    onChange={(e) => setTotpCode(e.target.value.replace(/\D/g, '').slice(0, 6))}
+                    onChange={(e) => { if (ownOperation()()) setTotpCode(e.target.value.replace(/\D/g, '').slice(0, 6)); }}
                     className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-[#3F51B5] focus:border-transparent"
                     placeholder="123456"
                   />
@@ -609,6 +696,7 @@ export default function SettingsPage() {
                   </button>
                   <button
                     onClick={() => {
+                  if (!ownOperation()()) return;
                       setSecurityAction(null);
                       setTotpCode('');
                     }}
