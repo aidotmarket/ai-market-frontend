@@ -147,7 +147,7 @@ export default function AuthorizationPage() {
       {!enabled ? <h1>AIM Data sign-in is currently unavailable.</h1> : error ? (
         <>
           <p role="alert">{messages[error] || messages.retry}</p>
-          {needsLogin && <button onClick={signIn}>Sign in again</button>}
+          {needsLogin && <button onClick={signIn} className="min-h-11 cursor-pointer rounded-lg bg-[#3F51B5] px-4 py-2 text-sm font-medium text-white transition-colors enabled:hover:bg-[#3545a0] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#3F51B5]">Sign in again</button>}
           {!needsLogin && (error === 'retry' || !messages[error]) &&
             <button disabled={busy} onClick={() => setRevision((value) => value + 1)}>Retry</button>}
         </>

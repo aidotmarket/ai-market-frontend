@@ -109,7 +109,7 @@ export default function ConnectorConsentPage() {
         : error === 'sso_required' ? 'Sign in with your organization’s SSO to continue.'
         : error === 'invalid' ? 'This connection request is invalid.'
         : 'Unable to complete this connection request.'}</p>
-      {needsSignIn && <button onClick={signInAgain}>Sign in to continue</button>}
+      {needsSignIn && <button onClick={signInAgain} className="min-h-11 cursor-pointer rounded-lg bg-[#3F51B5] px-4 py-2 text-sm font-medium text-white transition-colors enabled:hover:bg-[#3545a0] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#3F51B5]">Sign in to continue</button>}
       {error === 'error' && <button onClick={() => setRevision((value) => value + 1)}>Retry</button>}
     </> : metadata && isAuthenticated && user ? <>
       <h1 className="text-2xl font-bold">Connect {metadata.client.name} to ai.market</h1>
