@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 
-import { cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
+import { act, cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import EditListingPage from './page';
 
@@ -248,6 +248,40 @@ describe('EditListingPage', () => {
     })));
     await waitFor(() => expect(Array.from(format.options).map(option => option.value)).not.toContain(''));
     expect(format.value).toBe('parquet');
+  });
+
+  it('keeps a newly selected format consistent through a deferred save and a second title-only save', async () => {
+    listingsApi.getListing.mockResolvedValue({ ...baseListing, data_format: null });
+    let resolveSave!: (value: object) => void;
+    listingsApi.updateListing.mockReturnValueOnce(new Promise(resolve => { resolveSave = resolve; }));
+    render(<EditListingPage />);
+    const title = await screen.findByDisplayValue(baseListing.title);
+    const format = screen.getAllByRole('combobox').find(select => within(select).queryByRole('option', { name: 'CSV' })) as HTMLSelectElement;
+    expect(format.value).toBe('');
+    expect(format.disabled).toBe(false);
+    expect(within(format).getByRole('option', { name: 'No common table format' })).toBeTruthy();
+
+    fireEvent.change(format, { target: { value: 'parquet' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Save Draft' }));
+    expect(listingsApi.updateListing).toHaveBeenNthCalledWith(1, 'listing-1', expect.objectContaining({ data_format: 'parquet' }));
+    expect(format.disabled).toBe(true);
+    expect(toast).not.toHaveBeenCalledWith('Listing saved', 'success');
+
+    await act(async () => { resolveSave({}); });
+    expect(format.disabled).toBe(false);
+    expect(format.value).toBe('parquet');
+    expect(format.selectedOptions[0].textContent).toBe('PARQUET');
+    expect(Array.from(format.options).map(option => option.value)).not.toContain('');
+    expect(toast).toHaveBeenCalledWith('Listing saved', 'success');
+
+    fireEvent.change(title, { target: { value: 'Updated title after format save' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Save Draft' }));
+    await waitFor(() => expect(listingsApi.updateListing).toHaveBeenNthCalledWith(2, 'listing-1', expect.objectContaining({
+      title: 'Updated title after format save', data_format: 'parquet',
+    })));
+    await waitFor(() => expect(toast).toHaveBeenCalledTimes(2));
+    expect(format.value).toBe('parquet');
+    expect(Array.from(format.options).map(option => option.value)).not.toContain('');
   });
 
   it('prefers source_row_count when both row count fields are present', async () => {

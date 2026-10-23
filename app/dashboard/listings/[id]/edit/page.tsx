@@ -132,6 +132,7 @@ export default function EditListingPage() {
 
   const handleSave = async () => {
     setSaving(true);
+    const submittedFormat = data.data_format;
     try {
       await updateListing(id, {
         title: data.title,
@@ -141,12 +142,12 @@ export default function EditListingPage() {
         price: data.price,
         pricing_type: data.pricing_type,
         // Empty formats must be omitted: the backend cannot clear a stored format consistently.
-        ...(data.data_format ? { data_format: data.data_format } : {}),
+        ...(submittedFormat ? { data_format: submittedFormat } : {}),
         source_row_count: data.source_row_count,
         compliance_frameworks: data.compliance_frameworks,
         compliance_notes: data.compliance_notes,
       });
-      setHasStoredFormat(Boolean(data.data_format));
+      setHasStoredFormat(previous => submittedFormat ? true : previous);
       setSummaryRevision(value => value + 1);
       toast('Listing saved', 'success');
     } catch (err: any) {
@@ -310,6 +311,7 @@ export default function EditListingPage() {
             <label className="block text-sm font-medium text-gray-700 mb-1">Format</label>
             <select
               value={data.data_format}
+              disabled={saving}
               onChange={(e) => update({ data_format: e.target.value })}
               className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-[#3F51B5] bg-white"
             >
