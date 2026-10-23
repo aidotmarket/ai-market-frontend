@@ -293,6 +293,8 @@ export default function AllAIPanel() {
       {/* Messages */}
       <div
         ref={scrollRef}
+        role="log"
+        aria-label="Conversation history"
         className="flex-1 overflow-y-auto px-5 pb-2 space-y-3 scrollbar-thin"
         aria-live="polite"
       >
