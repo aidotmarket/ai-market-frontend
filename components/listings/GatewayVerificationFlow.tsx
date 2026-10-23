@@ -34,6 +34,13 @@ interface Attempt {
   quoteRefused?: boolean;
 }
 const runningStates = new Set(['CREATED', 'QUOTED', 'AUTHORIZING', 'AUTHORIZED', 'SCANNING_LOCAL', 'NARRATING_CLOUD', 'CAPTURE_PENDING', 'CAPTURE_RECONCILING']);
+const progressSteps = [
+  { label: 'Payment hold', states: ['CREATED', 'QUOTED', 'AUTHORIZING'] },
+  { label: 'Scanning your data', states: ['AUTHORIZED', 'SCANNING_LOCAL'] },
+  { label: 'Writing findings', states: ['NARRATING_CLOUD'] },
+  { label: 'Finalising charge', states: ['CAPTURE_PENDING', 'CAPTURE_RECONCILING'] },
+  { label: 'Ready to review', states: ['CAPTURED', 'PUBLISHED', 'DECLINED', 'WITHDRAWN', 'SUPERSEDED'] },
+];
 const terminalStates = new Set(['DECLINED', 'WITHDRAWN', 'SUPERSEDED', 'AUTH_FAILED', 'CANCELLED_VOIDED', 'FAILED_VOIDED', 'CAPTURE_FAILED']);
 const choices = {
   domain_class: ['education_learning', 'software_technology', 'business_finance', 'health_life_sciences', 'public_social', 'physical_environment'],
@@ -85,6 +92,9 @@ export default function GatewayVerificationFlow({ listingId, sellerId, verifier,
   const [delay, setDelay] = useState(2);
   const [opened, setOpened] = useState(!cloud);
   const errorRef = useRef<HTMLParagraphElement>(null);
+  const findingsRef = useRef<HTMLHeadingElement>(null);
+  const previousEpoch = useRef<GatewayVerificationEpoch | null>(null);
+  const focusedFindings = useRef(false);
   const [paying, setPaying] = useState(false);
   const [cloudflareStatus, setCloudflareStatus] = useState<CloudflareVerifierStatus | null>(null);
   const [awsStatus, setAwsStatus] = useState<AWSVerifierStatus | null>(null);
@@ -194,6 +204,7 @@ export default function GatewayVerificationFlow({ listingId, sellerId, verifier,
         const parsed: Attempt = JSON.parse(stored);
         if (!parsed.probeCommand || typeof parsed.probeCommand.idempotency_key !== 'string') throw new Error('Invalid saved attempt');
         attempt.current = parsed;
+        if (parsed.probeId || parsed.epochId) setOpened(true);
         setPreview(parsed.quoteRefused ? false : parsed.probeCommand.preview_requested);
         setProbe(!parsed.epochId && parsed.probeId ? { probe_id: parsed.probeId, state: 'queued' } : null);
         if (parsed.startCommand) setDescription(parsed.startCommand.d6_description);
@@ -211,6 +222,15 @@ export default function GatewayVerificationFlow({ listingId, sellerId, verifier,
     errorRef.current?.scrollIntoView?.({ block: 'center' });
     errorRef.current?.focus?.();
   }, [error]);
+
+  useEffect(() => {
+    const previous = previousEpoch.current;
+    previousEpoch.current = epoch;
+    if (focusedFindings.current || epoch?.state !== 'CAPTURED' || previous?.verification_id !== epoch.verification_id || !runningStates.has(previous.state)) return;
+    focusedFindings.current = true;
+    findingsRef.current?.scrollIntoView?.({ block: 'start' });
+    findingsRef.current?.focus?.();
+  }, [epoch]);
 
   async function checkStatus() {
     const saved = attempt.current;
@@ -349,12 +369,14 @@ export default function GatewayVerificationFlow({ listingId, sellerId, verifier,
   const canReview = epoch?.state === 'CAPTURED' && epoch.publication_allowed && fullReview && hasBinding;
   const canNewAttempt = (!attempt.current?.epochId && !attempt.current?.startCommand && !!probe && probe.state !== 'queued') || (epoch && !epoch.reconciliation_required && (terminalStates.has(epoch.state) || epoch.state === 'PUBLISHED'));
   const checking = busy && (busyPrimary.current || paying) || probe?.state === 'queued' || !!attempt.current?.epochId && !epoch || !!epoch && (runningStates.has(epoch.state) || epoch.reconciliation_required);
+  const quoteExpired = !!attempt.current?.quoteRefused && !probe && !epoch && !attempt.current?.probeId && !attempt.current?.epochId;
+  const progressStep = progressSteps.findIndex(step => step.states.includes(epoch?.state ?? '')) + 1;
   const statusLabel = checking ? 'Checking' : epoch ? epoch.state === 'CAPTURED' ? 'Ready to review' : epoch.state === 'PUBLISHED' ? 'Published' : ['AUTH_FAILED', 'CAPTURE_FAILED', 'FAILED_VOIDED'].includes(epoch.state) ? 'Unavailable' : 'Completed'
-    : probe?.state === 'complete' && probe.quote_id ? 'Quote ready' : error || probe?.state === 'refused' ? 'Unavailable'
+    : quoteExpired ? 'Quote expired' : probe?.state === 'complete' && probe.quote_id ? 'Quote ready' : error || probe?.state === 'refused' ? 'Unavailable'
     : installer.active || installer.hasPrimaryAction ? installer.statusLabel : !ready || (cloud && !statusFresh) ? 'Checking'
     : cloud && verifierStatus?.state === 'waiting' ? 'Installing' : cloud && (verifierStatus?.state !== 'ready' || (cloudflare && !verifierStatus?.eligible)) ? 'Unavailable' : 'Ready';
-  const statusClass = statusLabel === 'Unavailable' || statusLabel === 'Needs attention' ? 'bg-amber-50 text-amber-800 ring-amber-200' : statusLabel === 'Ready' || statusLabel === 'Quote ready' || statusLabel === 'Published' || statusLabel === 'Ready to review' ? 'bg-emerald-50 text-emerald-800 ring-emerald-200' : 'bg-indigo-50 text-indigo-800 ring-indigo-200';
-  const checkButtonClass = installer.hasPrimaryAction || attempt.current?.quoteRefused ? secondaryButtonClass : primaryButtonClass;
+  const statusClass = statusLabel === 'Unavailable' || statusLabel === 'Needs attention' || statusLabel === 'Quote expired' ? 'bg-amber-50 text-amber-800 ring-amber-200' : statusLabel === 'Ready' || statusLabel === 'Quote ready' || statusLabel === 'Published' || statusLabel === 'Ready to review' ? 'bg-emerald-50 text-emerald-800 ring-emerald-200' : 'bg-indigo-50 text-indigo-800 ring-indigo-200';
+  const checkButtonClass = installer.hasPrimaryAction ? secondaryButtonClass : primaryButtonClass;
   if (!opened) return <button className={secondaryButtonClass} onClick={() => setOpened(true)}>Verify this data</button>;
   return <section className="space-y-5 rounded-xl border border-gray-200 bg-white p-5 text-sm leading-6 text-gray-700 shadow-sm sm:p-6" aria-labelledby="gateway-verification-heading">
     <div className="flex flex-wrap items-start justify-between gap-3">
@@ -363,6 +385,30 @@ export default function GatewayVerificationFlow({ listingId, sellerId, verifier,
     </div>
     <p className="max-w-3xl">{aws ? 'Check your data in your own AWS account, then review a quote. The check and quote do not need a card. Data values stay in your AWS account.' : cloudflare ? 'Check your data in your own Cloudflare account, then review a quote. The check and quote do not need a card. Data values stay in your Cloudflare account.' : 'Check your data in your own gateway, then review a quote. The check and quote are free and do not need a card. Data values stay in your gateway.'}</p>
     {error && <p ref={errorRef} role="alert" tabIndex={-1} className="rounded-lg bg-red-50 p-3 text-red-800">{error}</p>}
+    {epoch && <>
+      {progressStep > 0 && <div className="space-y-3">
+        <div role="progressbar" aria-label="Paid verification progress" aria-valuemin={0} aria-valuemax={progressSteps.length} aria-valuenow={progressStep} aria-valuetext={progressSteps[progressStep - 1].label} className="h-2 overflow-hidden rounded-full bg-gray-200">
+          <div className="h-full bg-indigo-600 transition-[width] motion-reduce:transition-none" style={{ width: `${progressStep / progressSteps.length * 100}%` }} />
+        </div>
+        <ol className="grid gap-2 sm:grid-cols-5" aria-label="Verification steps">
+          {progressSteps.map((step, index) => <li key={step.label} aria-current={progressStep === index + 1 ? 'step' : undefined} className={progressStep === index + 1 ? 'font-semibold text-indigo-800' : 'text-gray-600'}>{index + 1}. {step.label}{progressStep === index + 1 && ' (Current step)'}</li>)}
+        </ol>
+      </div>}
+      {(runningStates.has(epoch.state) || epoch.reconciliation_required) && <p role="status">{epoch.reconciliation_required ? 'We are confirming your payment. Please wait before starting again.' : 'Verification is in progress. You can return to this page to check it.'}</p>}
+      {epoch.state === 'CAPTURED' && <>
+        <h3 ref={findingsRef} tabIndex={-1} className="font-semibold">Review your findings</h3><p>These findings are private. Buyers can see them only if you publish them.</p><p>Charged: ${epoch.captured_usd}</p>
+        {fullReview ? <ScanFindingsBadge scanFindings={fullReview} /> : <p>The complete findings are not available to review yet. Please check again before deciding whether to publish.</p>}
+        <div className={buttonRowClass}><button className={secondaryButtonClass} disabled={busy || !canReview} onClick={() => setConfirmAction('publish')}>Publish all findings</button><button className={secondaryButtonClass} disabled={busy || !canReview} onClick={() => setConfirmAction('decline')}>Decline publication</button></div>
+      </>}
+      {epoch.state === 'PUBLISHED' && <><p>These findings are published. Publishing a new verification will replace the previous findings.</p><div className={buttonRowClass}><button className={dangerSecondaryButtonClass} disabled={busy || !hasBinding} onClick={() => setConfirmAction('withdraw')}>Withdraw findings</button></div></>}
+      {epoch.state === 'SUPERSEDED' && <p>These findings were replaced by a newer published verification.</p>}
+      {epoch.state === 'WITHDRAWN' && <p>These findings have been withdrawn.</p>}
+      {epoch.state === 'DECLINED' && <p>You declined publication. The completed verification charge is unchanged.</p>}
+      {['FAILED_VOIDED', 'CANCELLED_VOIDED'].includes(epoch.state) && <p>Verification ended and the temporary hold was released. No completed verification charge was made.</p>}
+      {['AUTH_FAILED', 'CAPTURE_FAILED'].includes(epoch.state) && <p>The payment could not be completed. Please check your payment status before starting again.</p>}
+      {['AUTHORIZED', 'SCANNING_LOCAL'].includes(epoch.state) && <div className={buttonRowClass}><button className={dangerSecondaryButtonClass} disabled={busy || !hasBinding} onClick={() => setConfirmAction('cancel')}>Cancel verification</button></div>}
+    </>}
+    {confirmAction && <div className="space-y-3 rounded-xl border border-gray-200 bg-gray-50 p-4" role="group" aria-label="Confirm your decision"><p>{confirmAction === 'publish' ? 'Publish the complete findings unedited? This replaces any previous published findings.' : confirmAction === 'decline' ? 'Decline publication? The completed verification charge is unchanged.' : confirmAction === 'withdraw' ? 'Withdraw these findings from the public listing?' : 'Cancel verification and release any unsettled hold?'}</p><div className={buttonRowClass}><button className={confirmAction === 'withdraw' || confirmAction === 'cancel' ? dangerSecondaryButtonClass : secondaryButtonClass} disabled={busy} onClick={() => lifecycle(confirmAction)}>Confirm {confirmAction === 'publish' ? 'publication' : confirmAction === 'decline' ? 'decline' : confirmAction === 'withdraw' ? 'withdrawal' : 'cancellation'}</button><button className={secondaryButtonClass} disabled={busy} onClick={() => setConfirmAction(null)}>Keep reviewing</button></div></div>}
     {aws && (probe?.refusal === 'aws_source_too_large' || error === verificationRefusalCopy('aws_source_too_large')) && <p><Link href="/dashboard/gateways" className="underline">Set up your own AIM Data gateway</Link> with a seller-owned S3 mount using Mountpoint for Amazon S3 or rclone.</p>}
     {aws && <div className="space-y-3 rounded-xl border border-gray-200 bg-gray-50/50 p-4 sm:p-5">
       <h3 className="font-semibold">AWS verifier</h3>
@@ -404,6 +450,7 @@ export default function GatewayVerificationFlow({ listingId, sellerId, verifier,
     {(!installer.resumed || installer.ready) && !probe && !epoch && !attempt.current?.epochId && <>
       <label className="flex items-start gap-3"><input className="mt-1 h-4 w-4 shrink-0 accent-[#3F51B5]" type="checkbox" checked={preview} disabled={busy || (!!attempt.current && !attempt.current.quoteRefused)} onChange={e => setPreview(e.target.checked)} /> Include column names and row counts in the findings</label>
       <div className={buttonRowClass}><button className={checkButtonClass} aria-busy={busy && busyPrimary.current} disabled={!ready || busy || (cloud && (!statusFresh || (cloudflare && !verifierStatus?.eligible) || verifierStatus?.state !== 'ready'))} onClick={checkData}>{busy && busyPrimary.current && <span aria-hidden="true" className={buttonSpinnerClass} />}{installer.resumed ? 'Start free check' : busy ? 'Checking…' : attempt.current?.quoteRefused ? 'Get a new quote' : 'Check data and get quote'}</button></div>
+      {quoteExpired && <p role="status">No charge was made. Get a new quote to continue.</p>}
     </>}
     {attempt.current?.epochId && !epoch && <p role="status">Loading your existing verification. Check again to follow its status.</p>}
     {probe?.state === 'queued' && <p role="status">{aws ? 'Waiting for your AWS verifier to check the data. No ai.market charge has been made; AWS charges apply.' : cloudflare ? 'Waiting for your Cloudflare verifier to check the data. No ai.market charge has been made; Cloudflare charges apply.' : 'Waiting for your gateway to check the data. No charge has been made.'}</p>}
@@ -432,22 +479,6 @@ export default function GatewayVerificationFlow({ listingId, sellerId, verifier,
       {busy && paying && <p role="status" className="text-gray-600">Checking your payment method…</p>}
     </>}
     {setup && <><DataVerificationPaymentMethod returnToListing={{ listingId, sellerId }} /><div className={buttonRowClass}><button className={secondaryButtonClass} onClick={() => setSetup(false)}>Back to verification</button></div><p>After adding your card, return here and choose Start paid verification to continue.</p></>}
-    {epoch && <>
-      {(runningStates.has(epoch.state) || epoch.reconciliation_required) && <p role="status">{epoch.reconciliation_required ? 'We are confirming your payment. Please wait before starting again.' : 'Verification is in progress. You can return to this page to check it.'}</p>}
-      {epoch.state === 'CAPTURED' && <>
-        <h3 className="font-semibold">Review your findings</h3><p>These findings are private. Buyers can see them only if you publish them.</p><p>Charged: ${epoch.captured_usd}</p>
-        {fullReview ? <ScanFindingsBadge scanFindings={fullReview} /> : <p>The complete findings are not available to review yet. Please check again before deciding whether to publish.</p>}
-        <div className={buttonRowClass}><button className={secondaryButtonClass} disabled={busy || !canReview} onClick={() => setConfirmAction('publish')}>Publish all findings</button><button className={secondaryButtonClass} disabled={busy || !canReview} onClick={() => setConfirmAction('decline')}>Decline publication</button></div>
-      </>}
-      {epoch.state === 'PUBLISHED' && <><p>These findings are published. Publishing a new verification will replace the previous findings.</p><div className={buttonRowClass}><button className={secondaryButtonClass} disabled={busy || !hasBinding} onClick={() => setConfirmAction('withdraw')}>Withdraw findings</button></div></>}
-      {epoch.state === 'SUPERSEDED' && <p>These findings were replaced by a newer published verification.</p>}
-      {epoch.state === 'WITHDRAWN' && <p>These findings have been withdrawn.</p>}
-      {epoch.state === 'DECLINED' && <p>You declined publication. The completed verification charge is unchanged.</p>}
-      {['FAILED_VOIDED', 'CANCELLED_VOIDED'].includes(epoch.state) && <p>Verification ended and the temporary hold was released. No completed verification charge was made.</p>}
-      {['AUTH_FAILED', 'CAPTURE_FAILED'].includes(epoch.state) && <p>The payment could not be completed. Please check your payment status before starting again.</p>}
-      {['AUTHORIZED', 'SCANNING_LOCAL'].includes(epoch.state) && <div className={buttonRowClass}><button className={secondaryButtonClass} disabled={busy || !hasBinding} onClick={() => setConfirmAction('cancel')}>Cancel verification</button></div>}
-    </>}
-    {confirmAction && <div className="space-y-3 rounded-xl border border-gray-200 bg-gray-50 p-4" role="group" aria-label="Confirm your decision"><p>{confirmAction === 'publish' ? 'Publish the complete findings unedited? This replaces any previous published findings.' : confirmAction === 'decline' ? 'Decline publication? The completed verification charge is unchanged.' : confirmAction === 'withdraw' ? 'Withdraw these findings from the public listing?' : 'Cancel verification and release any unsettled hold?'}</p><div className={buttonRowClass}><button className={secondaryButtonClass} disabled={busy} onClick={() => lifecycle(confirmAction)}>Confirm {confirmAction === 'publish' ? 'publication' : confirmAction === 'decline' ? 'decline' : confirmAction === 'withdraw' ? 'withdrawal' : 'cancellation'}</button><button className={secondaryButtonClass} disabled={busy} onClick={() => setConfirmAction(null)}>Keep reviewing</button></div></div>}
     {((attempt.current?.probeId || attempt.current?.epochId) || (ready && canNewAttempt)) && <div className={buttonRowClass}>
       {(attempt.current?.probeId || attempt.current?.epochId) && <button className={secondaryButtonClass} disabled={busy} onClick={() => void run(checkStatus)}>Check again</button>}
       {ready && canNewAttempt && <button className={secondaryButtonClass} disabled={busy} onClick={newAttempt}>Get a new quote</button>}

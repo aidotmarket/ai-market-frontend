@@ -5,6 +5,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import GatewayVerificationFlow, { AWS_COST_DISCLOSURE, CLOUDFLARE_COST_DISCLOSURE, CLOUDFLARE_REMOVE_COPY, CLOUDFLARE_RUN_NOW_COPY } from './GatewayVerificationFlow';
 import * as gateway from '@/api/dataVerificationGateway';
 import * as payin from '@/api/dataVerificationPayin';
+import { dangerSecondaryButtonClass, primaryButtonClass } from '@/components/ui/button-styles';
 import type { GatewayVerificationEpoch, PublishedScanFindings } from '@/types';
 vi.mock('@/api/dataVerificationGateway', async importOriginal => ({ ...await importOriginal<typeof gateway>(), probeGatewayVerification: vi.fn(), getGatewayVerificationProbe: vi.fn(), startGatewayVerification: vi.fn(), getGatewayVerificationEpoch: vi.fn(), gatewayVerificationLifecycle: vi.fn(), getCloudflareVerifierStatus: vi.fn(), getAwsVerifierStatus: vi.fn(), setupAwsVerifier: vi.fn(), removeVerificationRunner: vi.fn() }));
 vi.mock('@/api/dataVerificationPayin', () => ({ getDataVerificationPayInReadiness: vi.fn() }));
@@ -59,7 +60,7 @@ describe('gateway seller verification flow', () => {
     vi.mocked(gateway.getGatewayVerificationEpoch).mockResolvedValue({ data: epoch, retryAfter: 2 });
     vi.mocked(payin.getDataVerificationPayInReadiness).mockResolvedValue({ version: 'data_verification_payin_readiness_v1', state: 'ready', can_start_setup: false, can_replace_payment_method: true, message: 'ignored' });
   });
-  afterEach(() => { cleanup(); vi.useRealTimers(); Object.defineProperty(window, 'localStorage', originalStorage); });
+  afterEach(() => { cleanup(); vi.restoreAllMocks(); vi.useRealTimers(); Object.defineProperty(window, 'localStorage', originalStorage); });
   it('hides Verify this data until the backend confirms a quote', async () => {
     render(<GatewayVerificationFlow listingId="listing" sellerId="seller" />);
     expect(screen.queryByRole('heading', { name: 'Verify this data' })).toBeNull();
@@ -92,13 +93,61 @@ describe('gateway seller verification flow', () => {
     expect(screen.getAllByRole('button').filter(button => button.classList.contains('bg-[#3F51B5]'))).toHaveLength(1);
     expect(screen.getByText('Status: Quote ready')).toBeTruthy();
   });
+  it.each([
+    ['CREATED', 1, 'Payment hold'], ['QUOTED', 1, 'Payment hold'], ['AUTHORIZING', 1, 'Payment hold'],
+    ['AUTHORIZED', 2, 'Scanning your data'], ['SCANNING_LOCAL', 2, 'Scanning your data'],
+    ['NARRATING_CLOUD', 3, 'Writing findings'], ['CAPTURE_PENDING', 4, 'Finalising charge'],
+    ['CAPTURE_RECONCILING', 4, 'Finalising charge'], ['CAPTURED', 5, 'Ready to review'],
+  ] as const)('shows the paid progress step for %s', async (state, step, label) => {
+    window.localStorage.setItem(key, JSON.stringify({ probeCommand: { confirm: true, preview_requested: false, idempotency_key: 'key' }, epochId: 'epoch' }));
+    vi.mocked(gateway.getGatewayVerificationEpoch).mockResolvedValue({ data: { ...epoch, state }, retryAfter: 60 });
+    render(<GatewayVerificationFlow listingId="listing" sellerId="seller" />);
+    const progress = await screen.findByRole('progressbar', { name: 'Paid verification progress' });
+    expect(progress.getAttribute('aria-valuemin')).toBe('0');
+    expect(progress.getAttribute('aria-valuemax')).toBe('5');
+    expect(progress.getAttribute('aria-valuenow')).toBe(String(step));
+    expect(progress.getAttribute('aria-valuetext')).toBe(label);
+    expect(screen.getByText(`${step}. ${label} (Current step)`).getAttribute('aria-current')).toBe('step');
+    if (state !== 'CAPTURED') expect(screen.getByText('Verification is in progress. You can return to this page to check it.')).toBeTruthy();
+  });
+  it.each([false, true])('scrolls and focuses findings only after a running transition (initially captured: %s)', async initiallyCaptured => {
+    const scroll = vi.fn();
+    Element.prototype.scrollIntoView = scroll;
+    const focus = vi.spyOn(HTMLElement.prototype, 'focus');
+    window.localStorage.setItem(key, JSON.stringify({ probeCommand: { confirm: true, preview_requested: false, idempotency_key: 'key' }, epochId: 'epoch' }));
+    const captured = { ...epoch, state: 'CAPTURED' as const, captured_usd: '2.00' };
+    vi.mocked(gateway.getGatewayVerificationEpoch).mockResolvedValue({ data: initiallyCaptured ? captured : epoch, retryAfter: 60 });
+    render(<GatewayVerificationFlow listingId="listing" sellerId="seller" />);
+    await screen.findByRole('progressbar');
+    expect(scroll).not.toHaveBeenCalled();
+    expect(focus).not.toHaveBeenCalled();
+    if (initiallyCaptured) {
+      expect(screen.getByRole('heading', { name: 'Review your findings' }).getAttribute('tabindex')).toBe('-1');
+      return;
+    }
+    vi.mocked(gateway.getGatewayVerificationEpoch).mockResolvedValue({ data: captured, retryAfter: 60 });
+    fireEvent.click(screen.getByRole('button', { name: 'Check again' }));
+    const heading = await screen.findByRole('heading', { name: 'Review your findings' });
+    expect(scroll).toHaveBeenCalledExactlyOnceWith({ block: 'start' });
+    expect(scroll.mock.contexts[0]).toBe(heading);
+    expect(focus).toHaveBeenCalledTimes(1);
+    expect(focus.mock.contexts[0]).toBe(heading);
+    expect(document.activeElement).toBe(heading);
+    fireEvent.click(screen.getByRole('button', { name: 'Check again' }));
+    await waitFor(() => expect(gateway.getGatewayVerificationEpoch).toHaveBeenCalledTimes(3));
+    expect(scroll).toHaveBeenCalledTimes(1);
+    expect(focus).toHaveBeenCalledTimes(1);
+  });
   it('cancels using the owned GET binding after a fresh confirmation', async () => {
     window.localStorage.setItem(key, JSON.stringify({ probeCommand: { confirm: true, preview_requested: false, idempotency_key: 'key' }, epochId: 'epoch' }));
     vi.mocked(gateway.gatewayVerificationLifecycle).mockResolvedValue({ data: { ...epoch, state: 'CANCELLED_VOIDED' }, retryAfter: 2 });
     render(<GatewayVerificationFlow listingId="listing" sellerId="seller" />);
-    fireEvent.click(await screen.findByRole('button', { name: 'Cancel verification' }));
+    const cancel = await screen.findByRole('button', { name: 'Cancel verification' });
+    expect(cancel.className).toBe(dangerSecondaryButtonClass);
+    fireEvent.click(cancel);
     expect(gateway.gatewayVerificationLifecycle).not.toHaveBeenCalled();
     vi.mocked(gateway.getGatewayVerificationEpoch).mockResolvedValue({ data: { ...epoch, state: 'CANCELLED_VOIDED' }, retryAfter: 2 });
+    expect(screen.getByRole('button', { name: 'Confirm cancellation' }).className).toBe(dangerSecondaryButtonClass);
     fireEvent.click(screen.getByRole('button', { name: 'Confirm cancellation' }));
     await screen.findByText('Verification ended and the temporary hold was released. No completed verification charge was made.');
     expect(gateway.gatewayVerificationLifecycle).toHaveBeenCalledWith('listing', { verification_id: 'epoch', listing_id: 'listing', source_handle_id: 'source', requested_action: 'cancel', confirm: true });
@@ -284,6 +333,10 @@ describe('gateway seller verification flow', () => {
     await screen.findByRole('alert');
     expect(vi.mocked(gateway.startGatewayVerification).mock.calls[0][1]).toEqual(oldStart);
     expect(JSON.parse(window.localStorage.getItem(key)!)).toEqual({ probeCommand: oldProbe, quoteRefused: true });
+    expect(screen.getByText('Status: Quote expired').classList.contains('bg-amber-50')).toBe(true);
+    expect(screen.getByRole('alert').textContent).toBe(gateway.verificationErrorCopy({ response: { status: 409, data: { detail } } }));
+    expect(screen.getByText('No charge was made. Get a new quote to continue.')).toBeTruthy();
+    expect(screen.getByRole('button', { name: 'Get a new quote' }).className).toBe(primaryButtonClass);
     expect(screen.queryByRole('button', { name: 'Check again' })).toBeNull();
     cleanup(); render(<GatewayVerificationFlow listingId="listing" sellerId="seller" />);
     fireEvent.click(await screen.findByRole('button', { name: 'Get a new quote' }));
@@ -393,8 +446,10 @@ describe('gateway seller verification flow', () => {
     render(<GatewayVerificationFlow listingId="listing" sellerId="seller" />);
     const withdraw = await screen.findByRole('button', { name: 'Withdraw findings' });
     expect(screen.getByRole('button', { name: 'Get a new quote' })).toBeTruthy();
+    expect(withdraw.className).toBe(dangerSecondaryButtonClass);
     fireEvent.click(withdraw); expect(gateway.gatewayVerificationLifecycle).not.toHaveBeenCalled();
     vi.mocked(gateway.getGatewayVerificationEpoch).mockResolvedValue({ data: { ...epoch, state: 'WITHDRAWN' }, retryAfter: 2 });
+    expect(screen.getByRole('button', { name: 'Confirm withdrawal' }).className).toBe(dangerSecondaryButtonClass);
     fireEvent.click(screen.getByRole('button', { name: 'Confirm withdrawal' }));
     await screen.findByText('These findings have been withdrawn.');
   });
@@ -448,7 +503,8 @@ const awsArtifact: PublishedScanFindings = {
 };
 async function openAws(sellerId = 'seller') {
   render(<GatewayVerificationFlow listingId="listing" sellerId={sellerId} verifier={{ kind: 'aws', connectionId: 'connection' }} />);
-  fireEvent.click(screen.getByRole('button', { name: 'Verify this data' }));
+  const open = screen.queryByRole('button', { name: 'Verify this data' });
+  if (open) fireEvent.click(open);
   await waitFor(() => expect(gateway.getAwsVerifierStatus).toHaveBeenCalled());
 }
 async function awsQuote() {
@@ -690,7 +746,8 @@ const cloudflareArtifact: PublishedScanFindings = {
 };
 async function openCloudflare() {
   render(<GatewayVerificationFlow listingId="listing" sellerId="seller" verifier={{ kind: 'cloudflare', connectionId: 'connection' }} />);
-  fireEvent.click(screen.getByRole('button', { name: 'Verify this data' }));
+  const open = screen.queryByRole('button', { name: 'Verify this data' });
+  if (open) fireEvent.click(open);
   await waitFor(() => expect(gateway.getCloudflareVerifierStatus).toHaveBeenCalled());
 }
 async function cloudflareQuote() {
@@ -719,6 +776,20 @@ describe('Cloudflare verifier in the shared seller flow', () => {
     vi.mocked(payin.getDataVerificationPayInReadiness).mockResolvedValue({ version: 'data_verification_payin_readiness_v1', state: 'ready', can_start_setup: false, can_replace_payment_method: true, message: 'ignored' });
   });
   afterEach(() => { cleanup(); vi.restoreAllMocks(); vi.unstubAllGlobals(); Object.defineProperty(window, 'localStorage', originalStorage); Object.defineProperty(window, 'sessionStorage', originalSessionStorage); });
+  it.each(['probeId', 'epochId'])('opens automatically for a saved Cloudflare %s and puts findings above verifier details', async savedId => {
+    window.localStorage.setItem(key, JSON.stringify({ probeCommand: { confirm: true, preview_requested: false, idempotency_key: 'key' }, [savedId]: savedId === 'epochId' ? 'epoch' : 'probe' }));
+    vi.mocked(gateway.getGatewayVerificationEpoch).mockResolvedValue({ data: { ...epoch, state: 'CAPTURED' }, retryAfter: 60 });
+    render(<GatewayVerificationFlow listingId="listing" sellerId="seller" verifier={{ kind: 'cloudflare', connectionId: 'connection' }} />);
+    expect(screen.queryByRole('button', { name: 'Verify this data' })).toBeNull();
+    if (savedId === 'epochId') {
+      const heading = await screen.findByRole('heading', { name: 'Review your findings' });
+      const details = screen.getByRole('heading', { name: 'Cloudflare verifier' });
+      expect(heading.compareDocumentPosition(details) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    } else {
+      expect(await screen.findByRole('heading', { name: 'Your verification quote' })).toBeTruthy();
+    }
+    await waitFor(() => expect(gateway.getCloudflareVerifierStatus).toHaveBeenCalled());
+  });
   it.each([undefined, false, true])('never offers legacy deployment with installer capability %s', async installer_enabled => {
     vi.mocked(gateway.getCloudflareVerifierStatus).mockResolvedValue({ ...cloudflareStatus, installer_enabled });
     await openCloudflare();
