@@ -118,7 +118,7 @@ describe('typed source overlay and bounded metadata', () => {
     {source_stale: false, source_stale_since: '2026-09-17T00:00:00.000000Z'},
     {source_stale_since: '2026-09-17T00:00:00.000000Z'},
     {source_stale: true, source_stale_since: '2026-02-30T00:00:00.000000Z'},
-    {source_stale: true, source_stale_since: '2027-01-01T00:00:00.000000Z'},
+    {source_stale: true, source_stale_since: '2026-09-17T00:00:00.000Z'},
     {source_stale: true, source_stale_since: 'x'.repeat(1000)}, {source_stale_extra: false},
   ])('rejects malformed overlay %j', overlay => {
     const {manifest} = producerV2ManifestFixture(); Object.assign(manifest, overlay);
@@ -128,6 +128,10 @@ describe('typed source overlay and bounded metadata', () => {
     const {manifest} = producerV2ManifestFixture();
     expect(() => validateManifest(manifest)).not.toThrow();
     Object.assign(manifest, {source_stale: false, source_stale_since: null});
+    expect(() => validateManifest(manifest)).not.toThrow();
+    // The producer samples now before reading the mutable head; do not invent
+    // an ordering rule between generated_at and a concurrent source change.
+    Object.assign(manifest, {source_stale: true, source_stale_since: '2026-09-17T00:00:02.000000Z'});
     expect(() => validateManifest(manifest)).not.toThrow();
     Object.assign(manifest.approval.platform_envelope.binding, {source_stale: false});
     expect(() => validateBinding(manifest.approval.platform_envelope.binding)).toThrow('contract_mismatch');

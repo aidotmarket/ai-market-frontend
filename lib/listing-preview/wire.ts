@@ -98,12 +98,11 @@ function validateAggregateProfile(value: {aggregate_hash_profile?: unknown}) {
 }
 
 /** Read-time metadata only; never admitted inside a signed envelope/binding. */
-export function validateSourceOverlay(m: {source_stale?: unknown; source_stale_since?: unknown; generated_at?: unknown}) {
+export function validateSourceOverlay(m: {source_stale?: unknown; source_stale_since?: unknown}) {
   if (Object.hasOwn(m, 'source_stale')) check(typeof m.source_stale === 'boolean', 'source_overlay_invalid');
   if (Object.hasOwn(m, 'source_stale_since') && m.source_stale_since !== null) {
     timestamp(m.source_stale_since as string);
-    check(m.source_stale === true && typeof m.generated_at === 'string'
-      && (m.source_stale_since as string) <= m.generated_at, 'source_overlay_invalid');
+    check(m.source_stale === true, 'source_overlay_invalid');
   }
   if (m.source_stale === true) check(typeof m.source_stale_since === 'string', 'source_overlay_invalid');
 }
