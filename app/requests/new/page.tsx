@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useCallback, useLayoutEffect, useRef, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { useAuthStore } from '@/store/auth';
 import { useToast } from '@/components/Toast';
@@ -14,6 +14,19 @@ const CATEGORIES = [
 ];
 
 export default function NewDataRequestPage() {
+  const { user, isAuthenticated } = useAuthStore();
+  const [visit, setVisit] = useState(0);
+  const retireVisit = useCallback(() => setVisit((value) => value + 1), []);
+  const accountId = isAuthenticated ? user?.id ?? null : null;
+
+  return <RequestForm key={JSON.stringify([accountId, visit])} accountId={accountId}
+    retireVisit={retireVisit} />;
+}
+
+function RequestForm({ accountId, retireVisit }: {
+  accountId: string | null;
+  retireVisit: () => void;
+}) {
   const { isAuthenticated, isLoading, hydrated } = useAuthStore();
   const router = useRouter();
   const { toast } = useToast();
@@ -27,8 +40,27 @@ export default function NewDataRequestPage() {
   const [urgency, setUrgency] = useState<DataRequestUrgency>('normal');
   const [provenanceRequirements, setProvenanceRequirements] = useState('');
   const [submitting, setSubmitting] = useState(false);
+  const lifetime = useRef<{ active: boolean } | null>(null);
 
-  if (isLoading || !hydrated) {
+  useLayoutEffect(() => {
+    // Each setup gets a fresh owner, including StrictMode effect replay.
+    const owner = { active: true };
+    lifetime.current = owner;
+    const unsubscribe = useAuthStore.subscribe((state) => {
+      const identity = state.isAuthenticated ? state.user?.id ?? null : null;
+      if (owner.active && identity !== accountId) {
+        owner.active = false;
+        // Also retire a batched A -> B -> A visit whose final React key is A.
+        retireVisit();
+      }
+    });
+    return () => {
+      owner.active = false;
+      unsubscribe();
+    };
+  }, [accountId, retireVisit]);
+
+  if (isLoading || !hydrated || (isAuthenticated && !accountId)) {
     return (
       <div className="flex min-h-[60vh] items-center justify-center">
         <div className="h-8 w-8 animate-spin rounded-full border-4 border-[#3F51B5] border-t-transparent" />
@@ -43,7 +75,13 @@ export default function NewDataRequestPage() {
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
-    if (!description.trim()) return;
+    const owner = lifetime.current;
+    const isCurrent = () => {
+      const state = useAuthStore.getState();
+      return owner?.active && lifetime.current === owner && state.isAuthenticated
+        && state.user?.id === accountId;
+    };
+    if (!description.trim() || submitting || !isCurrent()) return;
 
     setSubmitting(true);
     try {
@@ -65,9 +103,11 @@ export default function NewDataRequestPage() {
         provenance_requirements: provenanceRequirements.trim() || undefined,
       });
 
+      if (!isCurrent()) return;
       toast('Data request created as a draft. Open it from the detail page.', 'success');
       router.push(`/requests/${result.slug}`);
     } catch (err) {
+      if (!isCurrent()) return;
       if (err instanceof AxiosError) {
         const detail = err.response?.data?.detail;
         let message = 'Failed to create data request.';
@@ -89,7 +129,7 @@ export default function NewDataRequestPage() {
         toast('An unexpected error occurred.', 'error');
       }
     } finally {
-      setSubmitting(false);
+      if (isCurrent()) setSubmitting(false);
     }
   }
 
