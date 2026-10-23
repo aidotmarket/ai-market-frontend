@@ -85,6 +85,7 @@ function VerifiedTable({sample, columns}: {sample: VerifiedSample; columns: read
     <p className="text-sm">This sample row matches the dataset commitment recorded by the seller.</p>
     <p className="text-sm text-gray-600">This proof does not establish quality, representativeness, legality, compliance, seller identity, or completeness against an external source.</p>
     <p className="text-sm">Last attested by seller: {inertText(sample.manifest.last_attested_by_seller_at)}{sample.manifest.stale && <strong className="ml-2">Stale</strong>}</p>
+    {sample.manifest.source_stale && <p className="text-sm">Sample predates the current version (since {inertText(sample.manifest.source_stale_since!)}).</p>}
     <div className="flex min-w-0 flex-wrap items-end gap-3">
       <div className="min-w-0 flex-1"><label htmlFor={searchId} className="block text-sm">Search sample</label>
         <input id={searchId} value={query} onChange={e => setQuery(e.target.value)} type="search" autoComplete="off"

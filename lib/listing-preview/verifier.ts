@@ -4,7 +4,7 @@ import {requirePolicyVersion} from './policy';
 import {LIMITS} from './types';
 import {b64, canonical, closed, concat, consistency, hex, inclusion, jcs, leaf, parseJson, requirePreview as check, sha, timestamp, unb64, utf8, verifyEd25519} from './primitives';
 import {canonicalRow, schemaDescriptors} from './canonical-row';
-import {validateBinding, validateCheckpoint, validateCommitment, validateEnvelope, validateManifest, validateProof} from './wire';
+import {manifestBudget, validateBinding, validateCheckpoint, validateCommitment, validateEnvelope, validateManifest, validateProof} from './wire';
 
 const without = <T extends object>(object: T, field: keyof T) => Object.fromEntries(Object.entries(object).filter(([k]) => k !== field));
 const domain = (name: string, value: unknown) => concat(utf8(name + '\0'), jcs(value));
@@ -66,22 +66,29 @@ export function fresh(m: Manifest, now: number) {
   const b = m.approval.platform_envelope.binding, generated = timestamp(m.generated_at), until = timestamp(m.valid_until);
   check(Number.isFinite(now) && now >= generated, 'clock_uncertain');
   check(now < until && until - generated <= 30000 && until > generated, 'manifest_expired');
-  const attested = timestamp(b.last_attested_by_seller_at), threshold = attested + Math.min(90, b.update_cadence_days === null ? 90 : Math.max(7, Math.min(90, b.update_cadence_days) * 2)) * 86400000;
+  // current_manifest overlays the latest same-commitment attestation (or the
+  // immutable source anchor for a stale source). B's original timestamp is
+  // still signature-checked, compared via signed provenance below, and bounded
+  // by approved_at; effective freshness is current endpoint metadata.
+  const attested = timestamp(m.last_attested_by_seller_at), threshold = attested + Math.min(90, b.update_cadence_days === null ? 90 : Math.max(7, Math.min(90, b.update_cadence_days) * 2)) * 86400000;
   check(timestamp(m.freshness_stale_at) === threshold && m.stale === (generated >= threshold) && attested <= generated, 'freshness_mismatch');
   if (!m.stale) check(until <= threshold, 'freshness_mismatch');
   check(m.freshness_expires_at === null, 'unrecognized_expiry_policy');
   if (b.approval_expires_at !== null) check(until <= timestamp(b.approval_expires_at) && now < timestamp(b.approval_expires_at), 'approval_expired');
 }
 export async function verifyManifest(raw: unknown, keys: TrustedKeys, listingId: string, now: number, previous?: TrustedCheckpoint): Promise<Manifest> {
-  check(jcs(raw).length <= LIMITS.manifest_bytes, 'manifest_limit'); validateManifest(raw);
+  manifestBudget(raw); validateManifest(raw);
   // Snapshot before any await. No caller mutation can change the checked bytes.
   const m = JSON.parse(canonical(raw)) as Manifest, b = m.approval.platform_envelope.binding, c = m.commitment;
   check(m.listing_id === listingId, 'listing_mismatch'); fresh(m, now);
   await verifySignatures(m.approval.platform_envelope, c, keys, now);
   check(b.decision === 'approve' && b.sample_decision === 'approved' && b.public_preview_permission === true, 'approval_missing');
-  for (const k of ['listing_id', 'listing_version_id', 'content_revision', 'source_revision', 'summary_approval_id', 'summary_hash', 'render_hash', 'disclosure_version', 'sample_hash', 'aggregate_hash', 'preview_type', 'content_type', 'selected_fields', 'schema_descriptors', 'last_attested_by_seller_at'] as const) {
+  for (const k of ['listing_id', 'listing_version_id', 'content_revision', 'source_revision', 'summary_approval_id', 'summary_hash', 'render_hash', 'disclosure_version', 'sample_hash', 'aggregate_hash', 'preview_type', 'content_type', 'selected_fields', 'schema_descriptors'] as const) {
     check(canonical(m[k]) === canonical(b[k]), 'manifest_binding_mismatch');
   }
+  // Omission is a legacy signed identity, never inject a default into B.
+  check(m.aggregate_hash_profile === b.aggregate_hash_profile, 'manifest_binding_mismatch');
+  check((m.signed_last_attested_by_seller_at ?? m.last_attested_by_seller_at) === b.last_attested_by_seller_at, 'manifest_binding_mismatch');
   for (const k of ['listing_id', 'commitment_id', 'schema_digest', 'seller_dataset_version'] as const) check(c[k] === b[k], 'commitment_binding_mismatch');
   check(c.aim_data_signer_reference === b.signer_reference && m.proofs.every(p => p.signer_reference === b.signer_reference), 'signer_mismatch');
   const descriptors = schemaDescriptors(m.schema_descriptors);
@@ -178,9 +185,15 @@ export async function verifySample(manifest: unknown, raw: Uint8Array, options: 
   check(sampled === m.approval.platform_envelope.binding.sampled_leaf_list_digest, 'sampled_list_mismatch');
   check(!options.signal.aborted, 'cancelled');
   const current = await verifyManifest(await options.readCurrent(), options.keys, options.listingId, options.now(), options.previous);
-  // Only eligibility timestamps may advance. Every signed identity/evidence byte
-  // must still be the same at final insertion, including the selected columns.
-  const identity = (value: Manifest) => {const copy = {...value} as Record<string, unknown>; delete copy.generated_at; delete copy.valid_until; delete copy.stale; return canonical(copy);};
+  // The producer may refresh effective freshness and source overlays on the
+  // same immutable disclosure. Both reads independently validate these values;
+  // retain every signed byte and use only the final read's display metadata.
+  const identity = (value: Manifest) => {
+    const copy = {...value} as Record<string, unknown>;
+    for (const key of ['generated_at', 'valid_until', 'stale', 'last_attested_by_seller_at', 'freshness_stale_at',
+      'signed_last_attested_by_seller_at', 'source_stale', 'source_stale_since']) delete copy[key];
+    return canonical(copy);
+  };
   check(identity(m) === identity(current), 'current_pointer_changed');
   fresh(current, options.now()); check(!options.signal.aborted, 'cancelled');
   const sample = freeze({manifest: current, entries}) as unknown as VerifiedSample;

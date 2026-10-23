@@ -5,7 +5,7 @@ import {testSign} from '@/tests/previewFixture';
 import {webcrypto} from 'node:crypto';
 import {act, cleanup, fireEvent, render, screen, waitFor} from '@testing-library/react';
 import {afterEach, beforeEach, expect, it, vi} from 'vitest';
-import {makePreview} from '@/tests/previewFixture';
+import {makeCurrentPreview, makeFreshnessTransitionPreview, makePreview} from '@/tests/previewFixture';
 import {fetchPreviewKeys, fetchPreviewManifest, fetchSignedSummaryPayload} from '@/lib/api';
 import {fetchPackage} from '@/lib/listing-preview/transport';
 import ListingSamplePreview from './ListingSamplePreview';
@@ -124,4 +124,39 @@ it('hides all rows before seller contact for an F2-signed attestation digest mis
   await mount(); fireEvent.click(screen.getByRole('button', {name: 'View sample'})); await screen.findByText('Sample unavailable');
   expect(fetchPackage).not.toHaveBeenCalled(); expect(screen.queryByRole('table')).toBeNull();
   expect(screen.queryByText('scan_mismatch')).toBeNull();
+});
+
+it.each([false, true])('shows source staleness separately from freshness staleness=%s through the full viewer', async freshnessStale => {
+  f = await makeCurrentPreview();
+  if (freshnessStale) {
+    const threshold = Date.parse(f.manifest.freshness_stale_at);
+    f.manifest.generated_at = f.manifest.freshness_stale_at;
+    f.manifest.valid_until = new Date(threshold + 30_000).toISOString().replace('000Z', '000000Z');
+    f.manifest.stale = true; f.now = threshold + 1_000;
+  }
+  f.manifest.source_stale = true; f.manifest.source_stale_since = f.manifest.generated_at;
+  vi.spyOn(Date, 'now').mockReturnValue(f.now);
+  vi.mocked(fetchPreviewManifest).mockResolvedValue(f.manifest); vi.mocked(fetchPackage).mockResolvedValue(f.raw);
+  await view();
+  expect(screen.getByText(`Sample predates the current version (since ${f.manifest.source_stale_since}).`)).toBeTruthy();
+  expect(Boolean(screen.queryByText('Stale'))).toBe(freshnessStale);
+  const calls = vi.mocked(fetchPreviewManifest).mock.calls.length;
+  vi.useFakeTimers({toFake: ['setTimeout', 'clearTimeout']});
+  await act(async () => {await vi.advanceTimersByTimeAsync(120000);});
+  expect(fetchPreviewManifest).toHaveBeenCalledTimes(calls); expect(screen.getByRole('table')).toBeTruthy();
+});
+it('renders effective re-attestation while retaining the original authenticated binding', async () => {
+  f = (await makeFreshnessTransitionPreview()).reattested;
+  vi.spyOn(Date, 'now').mockReturnValue(f.now);
+  vi.mocked(fetchPreviewManifest).mockResolvedValue(f.manifest); vi.mocked(fetchPackage).mockResolvedValue(f.raw);
+  await view();
+  expect(screen.getByText(`Last attested by seller: ${f.manifest.last_attested_by_seller_at}`)).toBeTruthy();
+  expect(screen.queryByText('Stale')).toBeNull();
+  expect(screen.queryByText(/Sample predates the current version/)).toBeNull();
+});
+it('hides malformed source overlays before requesting the seller package', async () => {
+  f.manifest.source_stale = true; f.manifest.source_stale_since = null;
+  await mount(); fireEvent.click(screen.getByRole('button', {name: 'View sample'}));
+  await screen.findByText('Sample unavailable'); expect(fetchPackage).not.toHaveBeenCalled();
+  expect(screen.queryByRole('table')).toBeNull();
 });

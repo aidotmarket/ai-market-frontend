@@ -76,8 +76,7 @@ export async function makeFreshnessTransitionPreview() {
   const currentManifest = cloneManifest(staleManifest);
   const envelope = currentManifest.approval.platform_envelope;
   const reattestedAt = stale.now;
-  envelope.binding.last_attested_by_seller_at = wireTime(reattestedAt);
-  envelope.binding.approved_at = wireTime(reattestedAt);
+  currentManifest.signed_last_attested_by_seller_at = envelope.binding.last_attested_by_seller_at;
   currentManifest.last_attested_by_seller_at = wireTime(reattestedAt);
   currentManifest.generated_at = wireTime(reattestedAt);
   currentManifest.valid_until = wireTime(reattestedAt + 30_000);
@@ -85,8 +84,6 @@ export async function makeFreshnessTransitionPreview() {
   const freshnessDays = Math.min(90, cadence === null ? 90 : Math.max(7, 2 * cadence));
   currentManifest.freshness_stale_at = wireTime(reattestedAt + freshnessDays * 86_400_000);
   currentManifest.stale = false;
-  envelope.seller_signature = testSign(disclosureBytes(envelope.binding));
-  envelope.signature = testSign(platformBytes(envelope));
   const reattested = {...base, manifest: currentManifest, now: stale.now};
 
   const claimsCurrentPastFreshnessDeadlineManifest = cloneManifest(staleManifest);
@@ -103,4 +100,18 @@ export async function verifiedFixture(rows?: Record<string, Json>[], schema?: De
   const f = await makePreview(rows, schema);
   const sample = await verifySample(f.manifest, f.raw, {listingId: f.manifest.listing_id, keys: f.keys, now: () => f.now, readCurrent: async () => f.manifest, signal: new AbortController().signal});
   return {...f, sample};
+}
+
+/** Current wire extensions over the same synthetic F2 chain; hosted CI only. */
+export async function makeCurrentPreview(profile: NonNullable<Binding['aggregate_hash_profile']> = 'aim-approved-aggregates-v2') {
+  const f = await makePreview();
+  const e = f.manifest.approval.platform_envelope;
+  e.binding.aggregate_hash_profile = profile;
+  f.manifest.aggregate_hash_profile = profile;
+  f.manifest.signed_last_attested_by_seller_at = e.binding.last_attested_by_seller_at;
+  f.manifest.source_stale = false;
+  f.manifest.source_stale_since = null;
+  e.seller_signature = testSign(disclosureBytes(e.binding));
+  e.signature = testSign(platformBytes(e));
+  return f;
 }
