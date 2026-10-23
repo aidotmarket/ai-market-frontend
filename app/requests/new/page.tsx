@@ -1,6 +1,6 @@
 'use client';
 
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useLayoutEffect, useRef, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { useAuthStore } from '@/store/auth';
 import { useToast } from '@/components/Toast';
@@ -42,7 +42,7 @@ function RequestForm({ accountId, retireVisit }: {
   const [submitting, setSubmitting] = useState(false);
   const lifetime = useRef<{ active: boolean } | null>(null);
 
-  useEffect(() => {
+  useLayoutEffect(() => {
     // Each setup gets a fresh owner, including StrictMode effect replay.
     const owner = { active: true };
     lifetime.current = owner;

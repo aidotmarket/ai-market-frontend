@@ -66,10 +66,21 @@ async function mounted(strict = false, state = initialAuth()) {
   const el = document.createElement('div');
   document.body.appendChild(el);
   let root;
+  let passiveCleanup = false;
+  function DepartureWitness() {
+    React.useEffect(() => {
+      passiveCleanup = false;
+      return () => { passiveCleanup = true; };
+    }, []);
+    return React.createElement(vmModule.exports.default);
+  }
+  const renderPage = async () => React.act(async () => {
+    const page = React.createElement(DepartureWitness);
+    root.render(strict ? React.createElement(React.StrictMode, null, page) : page);
+  });
   async function mount() {
     root = createRoot(el);
-    const page = React.createElement(vmModule.exports.default);
-    await React.act(async () => root.render(strict ? React.createElement(React.StrictMode, null, page) : page));
+    await renderPage();
   }
   await mount();
   const button = () => el.querySelector('button');
@@ -94,8 +105,34 @@ async function mounted(strict = false, state = initialAuth()) {
     else pending[index].resolve({ slug: `synthetic-${index}` });
   });
   const unmount = async () => React.act(async () => root.unmount());
+  const departAndSettle = async (error) => {
+    // Deliberately schedule outside act: act would flush passive cleanup first.
+    const previousActEnvironment = global.IS_REACT_ACT_ENVIRONMENT;
+    global.IS_REACT_ACT_ENVIRONMENT = false;
+    try {
+      await new Promise((resolve, reject) => {
+        const observer = new window.MutationObserver(() => {
+          if (el.querySelector('form')) return;
+          observer.disconnect();
+          try {
+            assert.equal(passiveCleanup, false, 'completion must precede passive cleanup');
+            if (error) pending[0].reject(error);
+            else pending[0].resolve({ slug: 'obsolete-departure' });
+            resolve();
+          } catch (failure) { reject(failure); }
+        });
+        observer.observe(el, { childList: true, subtree: true });
+        React.startTransition(() => root.render(null));
+      });
+      // Let the create continuation run before act flushes the remaining effects.
+      await Promise.resolve();
+    } finally { global.IS_REACT_ACT_ENVIRONMENT = previousActEnvironment; }
+    await React.act(async () => {});
+    assert.equal(passiveCleanup, true);
+  };
   const close = async () => { await unmount(); el.remove(); };
-  return { el, calls, pushes, toasts, button, values, fill, submit, update, settle, unmount, mount, close };
+  return { el, calls, pushes, toasts, button, values, fill, submit, update, settle, unmount, mount,
+    departAndSettle, renderPage, close };
 }
 
 function validationError(detail) {
@@ -231,6 +268,29 @@ test('loading/hydration, identity resolution and anonymous redirect remain gated
     assert.deepEqual(h.calls, []);
   } finally { await h.close(); }
 });
+
+for (const strict of [false, true]) for (const error of [null, validationError('Obsolete departure')]) {
+  test(`async DOM departure suppresses ${error ? 'error' : 'success'} before passive cleanup (StrictMode=${strict})`, async () => {
+    const h = await mounted(strict);
+    try {
+      await h.fill(); await h.submit();
+      await h.departAndSettle(error);
+      assert.equal(h.el.querySelector('form') === null, true);
+      assert.deepEqual(h.toasts, []); assert.deepEqual(h.pushes, []);
+      await h.renderPage();
+      assert.deepEqual(h.values(), blank);
+      await h.fill(); await h.submit();
+      assert.equal(h.calls.length, 2);
+      assert.equal(h.button().textContent, 'Creating...');
+      assert.equal(h.button().disabled, true);
+      await h.submit(); assert.equal(h.calls.length, 2);
+      await h.settle(1);
+      assert.deepEqual(h.toasts, [success]);
+      assert.deepEqual(h.pushes, ['/requests/synthetic-1']);
+      assert.equal(h.button().disabled, false);
+    } finally { await h.close(); }
+  });
+}
 
 module.exports = { cases, dispose: () => dom.window.close() };
 
