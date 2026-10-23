@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 
-import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 const mocks = vi.hoisted(() => ({
@@ -44,6 +44,33 @@ describe('AllAIPanel accessibility and locale boundary', () => {
     await waitFor(() =>
       expect(document.activeElement).toBe(screen.getByPlaceholderText('Ask allAI anything…'))
     );
+  });
+
+  it.each([390, 1024])('names the scrollable message history at %s pixels', (width) => {
+    Object.defineProperty(window, 'innerWidth', { configurable: true, value: width });
+    mocks.context.messages = [
+      { id: 'question-1', role: 'user', content: 'Earlier question', timestamp: 1 },
+      { id: 'answer-1', role: 'assistant', content: 'Current answer', timestamp: 2 },
+    ] as never[];
+    const view = render(<AllAIPanel />);
+
+    const history = screen.getByRole('log', { name: 'Conversation history' });
+    expect(history.classList.contains('overflow-y-auto')).toBe(true);
+    expect(history.getAttribute('aria-live')).toBe('polite');
+    expect(within(history).getByText('Earlier question')).not.toBeNull();
+    expect(within(history).getByText('Current answer')).not.toBeNull();
+
+    Object.defineProperty(history, 'scrollHeight', { configurable: true, value: 600 });
+    history.scrollTop = 0;
+    mocks.context.messages = [
+      ...mocks.context.messages,
+      { id: 'answer-2', role: 'assistant', content: 'Latest answer', timestamp: 3 },
+    ] as never[];
+    view.rerender(<AllAIPanel />);
+
+    expect(screen.getByRole('log', { name: 'Conversation history' })).toBe(history);
+    expect(within(history).getByText('Latest answer')).not.toBeNull();
+    expect(history.scrollTop).toBe(600);
   });
 
   it('closes on Escape', () => {
