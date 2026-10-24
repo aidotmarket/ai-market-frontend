@@ -293,6 +293,7 @@ export interface ListingListItem extends GeneratedSampleFields {
 }
 
 export interface ListingPublicListItem extends GeneratedSampleFields {
+  publisher?: PublisherPublicInfo | null;
   id: string;
   slug: string;
   title: string;
@@ -374,6 +375,35 @@ export interface FileBreakdownGroup {
   size_bytes: number;
 }
 
+/** Flag-off responses retain only the legacy name and optional trust field. */
+export interface LegacyPublisher {
+  display_name: string;
+  trust_level?: string | null;
+  schema_version?: null;
+  kind?: 'marketplace';
+}
+
+export interface MarketplacePublisher {
+  display_name: string;
+  schema_version: 'seller-presentation-v1';
+  kind: 'marketplace';
+  name_source?: 'seller_supplied' | 'anonymous' | null;
+  stripe_connected?: boolean | null;
+  provider_observed_at?: string | null;
+  completed_order_count?: number | null;
+  // Seller-wide reputation is independent of listing.rating_avg/rating_count.
+  seller_rating_count?: number | null;
+  seller_rating_average?: number | null;
+}
+
+export interface SourcePublisher {
+  display_name: string;
+  schema_version: 'seller-presentation-v1';
+  kind: 'reference' | 'generated_sample';
+}
+
+export type PublisherPublicInfo = LegacyPublisher | MarketplacePublisher | SourcePublisher;
+
 export interface ListingDetail extends GeneratedSampleFields {
   verification_scope?: string | null;
   file_breakdown?: FileBreakdownGroup[] | null;
@@ -385,10 +415,7 @@ export interface ListingDetail extends GeneratedSampleFields {
   title: string;
   description: string;
   short_description: string | null;
-  publisher: {
-    display_name: string;
-    trust_level: string;
-  };
+  publisher?: PublisherPublicInfo | null;
   pricing: {
     price: number;
     pricing_type: PricingType;

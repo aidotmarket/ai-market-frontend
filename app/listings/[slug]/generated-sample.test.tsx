@@ -43,6 +43,13 @@ function assertNoCommercialMounts() {
   }
 }
 describe('actual public sample detail SSR and metadata', () => {
+  it('omits all seller copy even with a retained seller presentation', async () => {
+    await render(sampleFixture({ publisher: {
+      schema_version: 'seller-presentation-v1', kind: 'marketplace', display_name: 'Synthetic seller business',
+      stripe_connected: true, completed_order_count: 12, seller_rating_count: 9, seller_rating_average: 4.7,
+    } }));
+    expect(document.body.textContent).not.toMatch(/Synthetic seller business|Stripe connected|completed purchases|ratings|ai.market Seller/);
+  });
   it.each(['file_download', 'model_access', 'pipeline_invocation'])('short-circuits %s before price, previews, versions, licence, service and purchase UI', async fulfillment_type => {
     const listing = sampleFixture({fulfillment_type, pricing: {price: 2500}, approved_presentation: {rendered_html: 'RETAINED_UNSUPPORTED', render_hash: 'invalid'}});
     const page = await render(listing);

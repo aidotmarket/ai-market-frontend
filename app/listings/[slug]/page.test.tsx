@@ -144,6 +144,29 @@ function extractJsonLdScripts(html: string): string[] {
   );
 }
 
+describe('seller presentation on the real listing route', () => {
+  beforeEach(() => { fetchPublicListing.mockReset(); fetchListingVersions.mockReset(); });
+  it('uses seller-wide evidence in the publisher card independently of listing trust', async () => {
+    const html = await renderPage(makeListing({ publisher: {
+      schema_version: 'seller-presentation-v1', kind: 'marketplace', display_name: 'Synthetic Co', name_source: 'seller_supplied',
+      stripe_connected: true, completed_order_count: 12, seller_rating_count: 9, seller_rating_average: 4.7,
+    } }));
+    expect(html).toContain('Synthetic Co');
+    expect(html).toContain('Stripe connected');
+    expect(html).toContain('12 completed purchases');
+    expect(html).toContain('4.7/5 from 9 ratings');
+    expect(html).toContain('Trust Level');
+    expect(html).toContain('L1');
+  });
+  it('renders a name-only legacy publisher and tolerates an absent flag-off publisher', async () => {
+    const legacy = await renderPage(makeListing());
+    expect(legacy).toContain('Seller Co');
+    expect(legacy).not.toMatch(/completed purchases|No ratings yet|Stripe connected/);
+    const absent = await renderPage(makeListing({ publisher: undefined }));
+    expect(absent).not.toMatch(/>Publisher<|completed purchases|No ratings yet|Stripe connected/);
+  });
+});
+
 describe('real public listing route sample composition', () => {
   beforeEach(() => {
     fetchPublicListing.mockReset();

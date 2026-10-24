@@ -74,6 +74,14 @@ beforeEach(() => {
   document.body.innerHTML = '';
 });
 describe('public-source reference route', () => {
+  it('keeps external attribution alone even with a seller presentation in the payload', async () => {
+    const page = await render(fixture({ publisher: {
+      schema_version: 'seller-presentation-v1', kind: 'marketplace', display_name: 'Synthetic seller business',
+      stripe_connected: true, completed_order_count: 12, seller_rating_count: 9, seller_rating_average: 4.7,
+    } }));
+    expect(page.getByText(reference.publisher)).toBeTruthy();
+    expect(document.body.textContent).not.toMatch(/Synthetic seller business|Stripe connected|completed purchases|ratings|ai.market Seller/);
+  });
   it.each<[string, PublicSourceReference]>([
     ['absent', reference],
     ['explicit download', { ...reference, access_kind: 'download' as const }],
