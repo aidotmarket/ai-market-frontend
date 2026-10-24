@@ -1,9 +1,9 @@
 import type { Metadata } from 'next';
 import Link from 'next/link';
 
-const title = 'What our verified shape label means | ai.market';
+const title = 'What the verified label means | ai.market';
 const description =
-  "When you see the verified shape label on a listing, it means our scanner measured the shape of that dataset in the seller's environment, at the stated point in time, and the published result carries cryptographic proof that it arrived unaltered.";
+  "Seller-initiated verification measures the shape of listed data in the seller's own environment. Learn where the check runs, what it costs and what sellers choose to publish.";
 
 export const metadata: Metadata = {
   title: { absolute: title },
@@ -41,25 +41,65 @@ export default function VerifiedPage() {
               id="what-it-means-heading"
               className="text-4xl font-extrabold tracking-tight text-gray-900 sm:text-5xl lg:text-6xl"
             >
-              What our verified shape label means
+              What the verified label means
             </h1>
             <p className="mt-6 max-w-3xl text-lg leading-8 text-gray-600 sm:text-xl">
-              When you see the verified shape label on a listing, it means{' '}
-              <Link href="/protocol" className={linkClassName}>
-                our scanner
-              </Link>{' '}
-              measured the shape of that dataset in the seller&apos;s environment, at the stated
-              point in time, and the published result carries cryptographic proof that it arrived
-              unaltered. Not the seller&apos;s claims about the data. A measurement, from a tool the
-              seller cannot quietly edit.
+              The verified label means the shape of the listed data was measured in the
+              seller&apos;s own environment, at the stated date and within the stated scope. The
+              seller chose to publish the findings.
+            </p>
+            <p className="mt-6 max-w-3xl text-lg leading-8 text-gray-600 sm:text-xl">
+              Verification is optional and started by the seller. Listing, sampling, selling and
+              delivery never depend on it.
             </p>
           </div>
         </div>
       </section>
 
       <section
-        id="how-it-works"
+        id="where-the-check-runs"
         className="bg-white py-16 sm:py-20"
+        aria-labelledby="where-the-check-runs-heading"
+      >
+        <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
+          <div className="max-w-3xl">
+            <h2
+              id="where-the-check-runs-heading"
+              className="text-3xl font-extrabold tracking-tight text-gray-900 sm:text-4xl"
+            >
+              Where the check runs
+            </h2>
+            <ul className="mt-6 space-y-6 text-base leading-8 text-gray-600 sm:text-lg">
+              <li>
+                <h3 className="font-semibold text-gray-900">AIM Data gateway</h3>
+                <p>
+                  For sellers who keep data on their own servers with our open-source, self-hosted
+                  gateway. The check runs inside the gateway.
+                </p>
+              </li>
+              <li>
+                <h3 className="font-semibold text-gray-900">AWS S3</h3>
+                <p>
+                  You set up a verifier in your own AWS account using a CloudFormation stack.
+                  ai.market gets no read access to your bucket.
+                </p>
+              </li>
+              <li>
+                <h3 className="font-semibold text-gray-900">Cloudflare R2</h3>
+                <p>
+                  This option is opening to sellers now. Install the verifier into your own
+                  Cloudflare account with one click: Connect Cloudflare, approve, install. You need
+                  a Cloudflare account with Workers Paid ($5/month plus usage).
+                </p>
+              </li>
+            </ul>
+          </div>
+        </div>
+      </section>
+
+      <section
+        id="how-it-works"
+        className="bg-gray-50 py-16 sm:py-20"
         aria-labelledby="how-it-works-heading"
       >
         <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
@@ -68,28 +108,52 @@ export default function VerifiedPage() {
               id="how-it-works-heading"
               className="text-3xl font-extrabold tracking-tight text-gray-900 sm:text-4xl"
             >
-              How it works
+              How it works, step by step
+            </h2>
+            <ol className="mt-6 list-decimal space-y-6 pl-6 text-base leading-8 text-gray-600 sm:text-lg">
+              <li>
+                Run the free check. It confirms the verifier can read the listed data and gives you
+                a quote. There is no ai.market charge for this check; your own cloud resource costs
+                may apply.
+              </li>
+              <li>
+                Describe the data, accept the publication terms, then start the paid verification.
+                A card hold of $1 to $25 is placed.
+              </li>
+              <li>
+                Review the findings. They are private to you first. Nothing is published without
+                your choice.
+              </li>
+              <li>
+                Choose Publish all findings or Decline publication. You can later choose Withdraw
+                findings.
+              </li>
+            </ol>
+          </div>
+        </div>
+      </section>
+
+      <section
+        id="what-it-costs"
+        className="bg-white py-16 sm:py-20"
+        aria-labelledby="what-it-costs-heading"
+      >
+        <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
+          <div className="max-w-3xl">
+            <h2
+              id="what-it-costs-heading"
+              className="text-3xl font-extrabold tracking-tight text-gray-900 sm:text-4xl"
+            >
+              What it costs
             </h2>
             <div className="mt-6 space-y-6 text-base leading-8 text-gray-600 sm:text-lg">
               <p>
-                The seller installs our scanner and it runs where the data lives. It sends us only
-                the signed shape report. The raw data stays in the seller&apos;s environment, we do not
-                receive it. That is by design. A marketplace that holds everyone&apos;s data is a
-                marketplace nobody should trust.
+                The final charge is twice the measured cloud AI cost, with a $1 minimum, and is
+                never more than the hold or $25.
               </p>
               <p>
-                The scanner reads the dataset and produces a report of its shape at that moment. Row
-                counts, with the counting method stated on the report. Column names and types. The
-                share of missing values in each column. An estimate of how many distinct values each
-                column holds, with its margin stated. How values are distributed by size and length.
-              </p>
-              <p>
-                The report is signed with a private key created on the seller&apos;s machine at install.
-                Only its public half is shared with us, so our servers can check the signature. On
-                receipt we verify the signature and independently recompute the report&apos;s fingerprint
-                from its contents. If the signed measurements were altered after signing, the report
-                is rejected. The same privacy and consistency checks the scanner applies before
-                sending, our servers apply again on receipt. Both sides have to agree.
+                Cancelling before the AI step voids the hold with no charge. The completed charge
+                stands if you decide not to publish.
               </p>
             </div>
           </div>
@@ -97,36 +161,8 @@ export default function VerifiedPage() {
       </section>
 
       <section
-        id="privacy-floor"
-        className="bg-gray-50 py-16 sm:py-20"
-        aria-labelledby="privacy-floor-heading"
-      >
-        <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
-          <div className="max-w-3xl rounded-3xl border border-[#D8EEE6] bg-[#F7FCFA] p-8 sm:p-10">
-            <h2
-              id="privacy-floor-heading"
-              className="text-3xl font-extrabold tracking-tight text-gray-900 sm:text-4xl"
-            >
-              The privacy floor
-            </h2>
-            <p className="mt-6 text-base leading-8 text-gray-600 sm:text-lg">
-              Some statistics can quietly reveal individual records. A column where only two values
-              are missing says something about two specific rows. So the statistics that could do
-              this, missing-value rates, distinct-value estimates, and distribution buckets, have a
-              floor. If one would reflect fewer underlying values than the floor allows, it is
-              withheld and the report shows a privacy label in its place. Structural facts like row
-              counts and column names are not statistics about individuals, so when a report includes
-              them, this privacy floor does not hide them. The floor is enforced twice, once by the
-              scanner before anything is sent and once by our servers, using the same arithmetic. A
-              report that tries to carry a number the floor forbids does not get verified.
-            </p>
-          </div>
-        </div>
-      </section>
-
-      <section
         id="what-it-is-not"
-        className="bg-white py-16 sm:py-20"
+        className="bg-gray-50 py-16 sm:py-20"
         aria-labelledby="what-it-is-not-heading"
       >
         <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
@@ -135,44 +171,85 @@ export default function VerifiedPage() {
               id="what-it-is-not-heading"
               className="text-3xl font-extrabold tracking-tight text-gray-900 sm:text-4xl"
             >
-              What the label is not
+              What buyers see, and what it does not mean
             </h2>
             <div className="mt-6 space-y-6 text-base leading-8 text-gray-600 sm:text-lg">
               <p>
-                It is a snapshot, not a promise about the future. The data can change after the
-                timestamp, and the label always shows you when the measurement was taken.{' '}
+                Buyers see a dated verification result on the listing, with the scope it covered.
+                It describes what the scanner measured, such as row counts, column names and types,
+                the share of missing values and value distributions.
+              </p>
+              <p>
+                This is a measurement of the data&apos;s shape at a date. The data can change after
+                that date. It is not a guarantee of quality, accuracy, legality or fitness for a
+                purpose, or a statement about the seller&apos;s company.{' '}
                 <Link href="/legal/terms" className={linkClassName}>
                   Read the Terms.
                 </Link>
               </p>
               <p>
-                It is not an opinion on whether the data is good, accurate, or right for your use. It
-                tells you what is there, not whether you should want it.
-              </p>
-              <p>
-                And it is not based on us reading the data. We verify shape, at arm&apos;s length, with
-                cryptographic proof. What the data says remains between you and the seller.
+                Findings are signed by ai.market&apos;s verification service and checked on receipt.
               </p>
             </div>
           </div>
         </div>
       </section>
 
-      <section id="why" className="bg-gray-50 py-16 sm:py-20" aria-labelledby="why-heading">
+      <section
+        id="privacy-floor"
+        className="bg-white py-16 sm:py-20"
+        aria-labelledby="privacy-floor-heading"
+      >
+        <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
+          <div className="max-w-3xl rounded-3xl border border-[#D8EEE6] bg-[#F7FCFA] p-8 sm:p-10">
+            <h2
+              id="privacy-floor-heading"
+              className="text-3xl font-extrabold tracking-tight text-gray-900 sm:text-4xl"
+            >
+              Your data stays with you
+            </h2>
+            <div className="mt-6 space-y-6 text-base leading-8 text-gray-600 sm:text-lg">
+              <p>
+                Raw data never leaves your environment. Only approved aggregate and structural
+                findings and your consent record reach ai.market. We never receive cell values,
+                sample rows, file locations or credentials from verification.
+              </p>
+              <p>
+                Some statistics can reveal individual records. Missing-value rates, distinct-value
+                estimates and distribution buckets have a privacy floor. If a statistic would
+                reflect fewer underlying values than the floor allows, it is withheld and the
+                report shows a privacy label in its place. The floor does not hide structural facts
+                such as row counts and column names when the report includes them.
+              </p>
+              <p>
+                The privacy floor is enforced before findings are sent and again by our servers,
+                using the same arithmetic. A report containing a number the floor forbids does not
+                get verified.
+              </p>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <section
+        id="how-to-start"
+        className="bg-gray-50 py-16 sm:py-20"
+        aria-labelledby="how-to-start-heading"
+      >
         <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
           <div className="max-w-3xl">
             <h2
-              id="why-heading"
+              id="how-to-start-heading"
               className="text-3xl font-extrabold tracking-tight text-gray-900 sm:text-4xl"
             >
-              Why we built it this way
+              How to start (for sellers)
             </h2>
             <p className="mt-6 text-base leading-8 text-gray-600 sm:text-lg">
-              Buying data usually means trusting a stranger&apos;s spreadsheet about their own product.
-              We think you should be able to see what a dataset actually looks like before you pay,
-              measured by a tool the seller cannot quietly edit, published by a marketplace that
-              does not hold the data. The seller chooses what the scanner points at, the label tells
-              you honestly what was there when it looked. That is the whole idea.
+              Open{' '}
+              <Link href="/dashboard/listings" className={linkClassName}>
+                Listings in your dashboard
+              </Link>
+              , then open the published listing and choose Verify this data.
             </p>
           </div>
         </div>
