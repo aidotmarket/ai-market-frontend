@@ -141,7 +141,9 @@ export function MarketplaceSearchExperience({
 
   const dataTypeCounts = buildDataTypeCounts(rawItems);
   const priceStats = facets?.price || null;
-  const resultCount = semanticMode ? total : items.length;
+  const isFormatFiltered = listingCategory === 'data' && Boolean(dataType);
+  const selectedDataTypeIsMissing = Boolean(dataType) && !dataTypeCounts.some(([value]) => value === dataType);
+  const resultCount = semanticMode && !isFormatFiltered ? total : items.length;
   const typeLabel = listingCategory === 'data' ? 'Data' : listingCategory === 'models' ? 'Models' : 'Marketplace';
   const searchPlaceholder = listingCategory === 'models'
     ? 'Search models by provider, task, capability, or category'
@@ -324,13 +326,18 @@ export function MarketplaceSearchExperience({
                   className="w-full rounded-2xl border border-slate-200 px-3 py-2.5 text-sm text-slate-900 focus:border-[#3F51B5] focus:outline-none"
                 >
                   <option value="">All formats</option>
+                  {selectedDataTypeIsMissing && (
+                    <option value={dataType}>
+                      {dataType.toUpperCase()} (0 loaded)
+                    </option>
+                  )}
                   {dataTypeCounts.map(([value, count]) => (
                     <option key={value} value={value}>
                       {value.toUpperCase()} ({count})
                     </option>
                   ))}
                 </select>
-                {dataTypeCounts.length > 0 && (
+                {(dataTypeCounts.length > 0 || dataType) && (
                   <p className="text-xs text-slate-400">Counts reflect loaded results only</p>
                 )}
               </div>
@@ -453,9 +460,13 @@ export function MarketplaceSearchExperience({
 
             {!isLoading && !isError && items.length === 0 && (
               <div className="mt-6 rounded-3xl border border-dashed border-slate-300 bg-white px-6 py-16 text-center shadow-sm">
-                <p className="text-lg font-semibold text-slate-900">No {emptyLabel} found</p>
+                <p className="text-lg font-semibold text-slate-900">
+                  {hasNextPage ? `No matching ${emptyLabel} loaded yet` : `No ${emptyLabel} found`}
+                </p>
                 <p className="mt-2 text-sm text-slate-500">
-                  Try adjusting the search text or filters to widen the result set.
+                  {hasNextPage
+                    ? 'Load more results to look for matches, or adjust the search text or filters.'
+                    : 'Try adjusting the search text or filters to widen the result set.'}
                 </p>
                 {semanticMode && q && (
                   <Link
@@ -475,22 +486,24 @@ export function MarketplaceSearchExperience({
                     <MarketplaceListingCard key={item.id} listing={item} />
                   ))}
                 </div>
-
-                <div className="mt-8 flex justify-center">
-                  {hasNextPage ? (
-                    <button
-                      type="button"
-                      onClick={() => fetchNextPage()}
-                      disabled={isFetchingNextPage}
-                      className="rounded-full border border-slate-300 bg-white px-5 py-3 text-sm font-medium text-slate-700 transition-colors hover:border-slate-400 hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-60"
-                    >
-                      {isFetchingNextPage ? 'Loading more...' : 'Load more'}
-                    </button>
-                  ) : (
-                    <p className="text-sm text-slate-400">You&apos;ve reached the end of the results.</p>
-                  )}
-                </div>
               </>
+            )}
+
+            {!isLoading && !isError && (hasNextPage || items.length > 0) && (
+              <div className="mt-8 flex justify-center">
+                {hasNextPage ? (
+                  <button
+                    type="button"
+                    onClick={() => fetchNextPage()}
+                    disabled={isFetchingNextPage}
+                    className="rounded-full border border-slate-300 bg-white px-5 py-3 text-sm font-medium text-slate-700 transition-colors hover:border-slate-400 hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-60"
+                  >
+                    {isFetchingNextPage ? 'Loading more...' : 'Load more'}
+                  </button>
+                ) : (
+                  <p className="text-sm text-slate-400">You&apos;ve reached the end of the results.</p>
+                )}
+              </div>
             )}
           </section>
         </div>
