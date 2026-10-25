@@ -17,7 +17,7 @@ const DraftContext=createContext<DraftStore|null>(null);
 type OwnerSnapshot={draft:SavedListingDraft|null;selectionSaveCount:number;selectionSaveFailed:boolean};
 const createOwner=(session:number)=>({
   session,
-  draft:null as SavedListingDraft|null,version:0,saveRevision:0,loaded:false,queue:Promise.resolve() as Promise<unknown>,
+  draft:null as SavedListingDraft|null,version:0,saveRevision:0,saveAttempt:0,loaded:false,queue:Promise.resolve() as Promise<unknown>,
   pending:null as {serialized:string;version:number;id:string}|null,
   selectionSaveCount:0,selectionSaveFailed:false,listeners:new Set<(snapshot:OwnerSnapshot)=>void>(),
 });
@@ -36,6 +36,8 @@ const persist=(owner:Owner,build:(base:ListingDraftContent)=>ListingDraftContent
     const version=baselineVersion??owner.version;
     if(!owner.pending||owner.pending.serialized!==serialized||owner.pending.version!==version)
       owner.pending={serialized,version,id:crypto.randomUUID()};
+    // Count every attempt, including identical retries that reuse pending.
+    owner.saveAttempt+=1;
     const result=await saveListingDraft(content,owner.pending.version,owner.pending.id);
     assertAuthSessionOwner(owner.session);
     owner.pending=null;owner.draft=result;owner.version=result.version;owner.saveRevision+=1;publish(owner);
@@ -43,6 +45,17 @@ const persist=(owner:Owner,build:(base:ListingDraftContent)=>ListingDraftContent
   });
   owner.queue=operation;
   return operation;
+};
+const readCheckpoint=(owner:Owner)=>({saveAttempt:owner.saveAttempt,saveRevision:owner.saveRevision});
+const reconcileRead=(owner:Owner,value:SavedListingDraft|null,checkpoint:ReturnType<typeof readCheckpoint>)=>{
+  // An intervening uncertain/in-flight attempt retains its content, expected
+  // version and request identity even if this GET reports equal/newer data.
+  if(owner.saveAttempt!==checkpoint.saveAttempt&&owner.pending)return false;
+  // A committed save only invalidates older overlapping reads. Without such
+  // activity, an intentional reset (including null/lower versions) is valid.
+  if(owner.saveRevision!==checkpoint.saveRevision&&(!value||value.version<owner.version))return false;
+  owner.draft=value;owner.version=value?.version??0;owner.loaded=true;owner.pending=null;
+  return true;
 };
 
 export function resetSellerListingDraftOwnerForTests() {
@@ -76,10 +89,11 @@ function OwnedSellerListingDraftProvider({owner,enabled,sampleCapability,childre
     // A remount must not revoke saves already admitted by this lifecycle.
     // The local loaded flag still gates new edits until this visit has loaded.
     const controller=new AbortController();setLoaded(false);setError(false);
-    owner.queue.catch(()=>undefined).then(()=>{assertAuthSessionOwner(owner.session);if(controller.signal.aborted)return null;return readListingDraft(controller.signal);}).then(value=>{
+    let checkpoint=readCheckpoint(owner);
+    owner.queue.catch(()=>undefined).then(()=>{assertAuthSessionOwner(owner.session);if(controller.signal.aborted)return null;checkpoint=readCheckpoint(owner);return readListingDraft(controller.signal);}).then(value=>{
       if(controller.signal.aborted||!isAuthSessionOwner(owner.session))return;
-      owner.draft=value;owner.version=value?.version??0;owner.loaded=true;owner.pending=null;
-      if(owner.selectionSaveCount===0)owner.selectionSaveFailed=false;
+      const accepted=reconcileRead(owner,value,checkpoint);
+      if(accepted&&owner.selectionSaveCount===0)owner.selectionSaveFailed=false;
       publish(owner);setLoaded(true);
     }).catch(()=>{if(!controller.signal.aborted&&isAuthSessionOwner(owner.session)){setError(true);setLoaded(false);}});
     return()=>controller.abort();
@@ -87,14 +101,11 @@ function OwnedSellerListingDraftProvider({owner,enabled,sampleCapability,childre
   const reload=useCallback(async(signal?:AbortSignal,onLoaded?:()=>void)=>{
     await owner.queue.catch(()=>undefined);
     assertAuthSessionOwner(owner.session);
-    const saveRevision=owner.saveRevision;
+    const checkpoint=readCheckpoint(owner);
     const value=await readListingDraft(signal);
     assertAuthSessionOwner(owner.session);
     if(signal?.aborted)return value;
-    // Only an overlapping successful save makes an older read stale. Fresh
-    // reads must still be able to load an intentional reset (including null).
-    if(owner.saveRevision!==saveRevision&&(!value||value.version<owner.version))return owner.draft;
-    owner.draft=value;owner.version=value?.version??0;owner.loaded=true;owner.pending=null;
+    if(!reconcileRead(owner,value,checkpoint))return owner.draft;
     onLoaded?.();publish(owner);setLoaded(true);setError(false);
     return value;
   },[owner]);
