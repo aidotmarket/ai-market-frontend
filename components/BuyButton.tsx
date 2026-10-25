@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect, useRef, useCallback } from 'react';
+import { useState, useEffect, useLayoutEffect, useRef, useCallback } from 'react';
 import Link from 'next/link';
 import { useAuthStore } from '@/store/auth';
 import { useToast } from '@/components/Toast';
@@ -10,6 +10,7 @@ import { getMyOrders } from '@/api/orders';
 import { formatPrice } from '@/lib/format';
 import { validateRedirect } from '@/lib/redirect';
 import { useTermsGate } from '@/components/legal/TermsGate';
+import { getTermsPartyContext } from '@/components/legal/termsContext';
 import { useServedTermsVersion } from '@/components/legal/VersionedTermsCopy';
 import { CARD_BUYER_TOTAL } from '@/components/legal/terms12Copy';
 import CountrySelect from '@/components/CountrySelect';
@@ -72,12 +73,23 @@ export default function BuyButton({
   const [checkoutRefusal, setCheckoutRefusal] = useState<CheckoutRefusal | null>(null);
   const domainEnabled = checkoutDomainEnabled();
   const requestIdentity = checkoutReplayKey(user?.id || '', listingId, versionId, checkoutContext?.handoffToken);
-  const currentRequestIdentity = useRef(requestIdentity);
-  currentRequestIdentity.current = requestIdentity;
+  // Only committed context changes retire work; object/token refresh and field edits do not.
+  const visitContext = JSON.stringify([requestIdentity, isAuthenticated, isOwner, domainEnabled, getTermsPartyContext(user)]);
+  const checkoutVisit = useRef<{ context: string } | null>(null);
   const acceptedRequest = useRef<{ identity: string; acceptance: LicenseAcceptanceFields; options: DomainCheckoutOptions } | null>(null);
   const [processingIdentity, setProcessingIdentity] = useState<string | null>(null);
   const inflightRef = useRef<string | null>(null);
-  const { ensureTermsAccepted, TermsGatePrompt, checkingTerms } = useTermsGate('buyer');
+  const { ensureTermsAccepted, TermsGatePrompt, checkingTerms } = useTermsGate('buyer', { actionContextKey: visitContext });
+
+  useLayoutEffect(() => {
+    // A fresh object on every setup prevents StrictMode cleanup/setup from reviving work.
+    const visit = { context: visitContext };
+    checkoutVisit.current = visit;
+    inflightRef.current = null;
+    setLoading(false);
+    setCheckoutRefusal(null);
+    return () => { checkoutVisit.current = null; };
+  }, [visitContext]);
   const handleVerificationChange = useCallback((verified: boolean) => setLicenseVerified(verified), []);
 
   useEffect(() => {
@@ -184,6 +196,9 @@ export default function BuyButton({
   }
 
   const startCheckout = async () => {
+    const visit = checkoutVisit.current;
+    const isCurrent = () => visit !== null && checkoutVisit.current === visit;
+    if (!isCurrent() || visit?.context !== visitContext) return;
     if (recoveryOnly && acceptedRequest.current?.identity !== requestIdentity) return;
     if (disabledReason && !(domainEnabled && acceptedRequest.current?.identity === requestIdentity)) return;
     // Dedupe guard: ignore if same listing checkout is in-flight
@@ -215,8 +230,9 @@ export default function BuyButton({
         saveCheckoutReplay(requestIdentity, { acceptance: request.acceptance,
           ...(request.options.checkoutRequestId ? { checkoutRequestId: request.options.checkoutRequestId } : {}) });
         onCheckoutStarted?.();
+        if (!isCurrent()) return;
         const result = await createCheckout(listingId, versionId, request.acceptance, request.options);
-        if (currentRequestIdentity.current !== requestIdentity) return;
+        if (!isCurrent()) return;
         const destination = checkoutDestination(result);
         if (!destination) { setProcessingIdentity(requestIdentity); toast('Invalid checkout URL received. Retry to check the same purchase.', 'error'); return; }
         clearCheckoutReplay(requestIdentity);
@@ -226,6 +242,8 @@ export default function BuyButton({
       }
       const { checkout_url } = await createCheckout(listingId, versionId, acceptance);
 
+      if (!isCurrent()) return;
+
       // Validate Stripe URL before redirect (AG-G2-M4)
       if (!checkout_url || !checkout_url.startsWith('https://checkout.stripe.com/')) {
         toast('Invalid checkout URL received. Please try again.', 'error');
@@ -234,7 +252,7 @@ export default function BuyButton({
 
       window.location.href = checkout_url;
     } catch (err) {
-      if (domainEnabled && currentRequestIdentity.current !== requestIdentity) return;
+      if (!isCurrent()) return;
       const outcome = domainEnabled ? checkoutOutcome(err) : null;
       if (outcome === 'retry' || outcome === 'auth' || outcome === 'operator') setProcessingIdentity(requestIdentity);
       if (outcome === 'retry') { setCheckoutRefusal(null); return; }
@@ -251,14 +269,20 @@ export default function BuyButton({
         toast('An unexpected error occurred.', 'error');
       }
     } finally {
-      setLoading(false);
-      inflightRef.current = null;
+      if (isCurrent()) {
+        setLoading(false);
+        inflightRef.current = null;
+      }
     }
   };
 
   const handleBuy = async () => {
+    const visit = checkoutVisit.current;
+    if (!visit || visit.context !== visitContext) return;
     setCheckoutRefusal(null);
-    await ensureTermsAccepted(startCheckout, licenseDetails ? {
+    await ensureTermsAccepted(() => {
+      if (checkoutVisit.current === visit) return startCheckout();
+    }, licenseDetails ? {
       signerFullName: typedName,
       signerTitle,
       businessLegalName,
