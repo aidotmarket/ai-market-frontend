@@ -219,6 +219,113 @@ describe('MarketplaceSearchExperience', () => {
     });
   });
 
+  describe.each([
+    { mode: 'browse' as const, semanticMode: false },
+    { mode: 'search' as const, semanticMode: true },
+  ])('$mode format pagination', ({ mode, semanticMode }) => {
+    const csv = { id: 'first-csv', price: 10, data_format: 'csv' };
+    const json = { id: 'later-json', price: 20, data_format: 'json' };
+
+    function setup(overrides = {}) {
+      mocks.pathname = semanticMode ? '/search' : '/listings';
+      mocks.searchParams = new URLSearchParams({
+        type: 'data', data_type: 'json', ...(semanticMode ? { q: 'traffic' } : {}),
+      });
+      const state = {
+        items: [csv], facets: null, total: 24, semanticMode,
+        isLoading: false, isError: false, error: null, hasNextPage: true,
+        isFetchingNextPage: false, fetchNextPage: vi.fn(), refetch: vi.fn(),
+        ...overrides,
+      };
+      mocks.useSearchListings.mockReturnValue(state);
+      return state;
+    }
+
+    it('retains an absent selected format and reaches a later match only after explicit continuation', () => {
+      const state = setup();
+      const view = render(<MarketplaceSearchExperience mode={mode} />);
+
+      expect(screen.queryAllByTestId('listing-card')).toHaveLength(0);
+      expect(screen.getByText('No matching data loaded yet')).toBeTruthy();
+      expect(screen.queryByText('No data found')).toBeNull();
+      expect(screen.getByText(/Load more results to look for matches/)).toBeTruthy();
+      expect((screen.getByRole('combobox', { name: 'Data type' }) as HTMLSelectElement).value).toBe('json');
+      expect(screen.getByRole('option', { name: 'JSON (0 loaded)' })).toBeTruthy();
+      expect(screen.getByText('0 results filtered to JSON')).toBeTruthy();
+      expect(screen.getByText('Counts reflect loaded results only')).toBeTruthy();
+      expect(state.fetchNextPage).not.toHaveBeenCalled();
+      expect(mocks.replace).not.toHaveBeenCalled();
+      expect(mocks.push).not.toHaveBeenCalled();
+
+      fireEvent.click(screen.getByRole('button', { name: 'Load more' }));
+      expect(state.fetchNextPage).toHaveBeenCalledTimes(1);
+      mocks.useSearchListings.mockReturnValue({ ...state, items: [csv, json], hasNextPage: false });
+      view.rerender(<MarketplaceSearchExperience mode={mode} />);
+
+      expect(screen.getByTestId('listing-card').getAttribute('data-listing-id')).toBe('later-json');
+      expect(screen.getByRole('option', { name: 'JSON (1)' })).toBeTruthy();
+      expect(screen.getByText(`1 ${semanticMode ? 'suggestion' : 'result'} filtered to JSON`)).toBeTruthy();
+      expect(screen.queryByText(/24 (results|suggestions) filtered/)).toBeNull();
+      expect(screen.queryByRole('button', { name: 'Load more' })).toBeNull();
+      expect(screen.getByText("You've reached the end of the results.")).toBeTruthy();
+      expect(state.fetchNextPage).toHaveBeenCalledTimes(1);
+    });
+
+    it('preserves definitive empty recovery when no pages remain', () => {
+      const state = setup({ hasNextPage: false });
+      render(<MarketplaceSearchExperience mode={mode} />);
+      expect(screen.getByText('No data found')).toBeTruthy();
+      expect(screen.getByText(/Try adjusting the search text or filters/)).toBeTruthy();
+      expect(screen.queryByRole('button', { name: 'Load more' })).toBeNull();
+      expect(state.fetchNextPage).not.toHaveBeenCalled();
+      if (semanticMode) expect(screen.getByRole('link', { name: 'Browse all marketplace listings' }).getAttribute('href')).toBe('/listings');
+    });
+
+    it('disables continuation while the next page is pending', () => {
+      const state = setup({ isFetchingNextPage: true });
+      render(<MarketplaceSearchExperience mode={mode} />);
+      const button = screen.getByRole('button', { name: 'Loading more...' }) as HTMLButtonElement;
+      expect(button.disabled).toBe(true);
+      fireEvent.click(button);
+      expect(state.fetchNextPage).not.toHaveBeenCalled();
+    });
+
+    it.each(['loading', 'error'])('withholds continuation during initial %s and preserves recovery', (status) => {
+      const state = setup({ isLoading: status === 'loading', isError: status === 'error', error: new Error('Synthetic failure') });
+      render(<MarketplaceSearchExperience mode={mode} />);
+      expect(screen.queryByRole('button', { name: 'Load more' })).toBeNull();
+      expect(screen.queryByText('No matching data loaded yet')).toBeNull();
+      expect(state.fetchNextPage).not.toHaveBeenCalled();
+      if (status === 'loading') expect(screen.getByText('Loading results...')).toBeTruthy();
+      else {
+        expect(screen.getByText('Synthetic failure')).toBeTruthy();
+        fireEvent.click(screen.getByRole('button', { name: 'Retry' }));
+        expect(state.refetch).toHaveBeenCalledTimes(1);
+      }
+    });
+
+    it('preserves ordinary unfiltered counts, ordering and explicit pagination', () => {
+      const state = setup({ items: [csv, json] });
+      mocks.searchParams.delete('data_type');
+      render(<MarketplaceSearchExperience mode={mode} />);
+      expect(screen.getByText(semanticMode ? '24 suggestions' : '2 results')).toBeTruthy();
+      expect(screen.getAllByTestId('listing-card').map((card) => card.getAttribute('data-listing-id'))).toEqual(['first-csv', 'later-json']);
+      expect((screen.getByRole('combobox', { name: 'Sort' }) as HTMLSelectElement).value).toBe(semanticMode ? 'relevance' : 'newest');
+      expect(state.fetchNextPage).not.toHaveBeenCalled();
+      fireEvent.click(screen.getByRole('button', { name: 'Load more' }));
+      expect(state.fetchNextPage).toHaveBeenCalledTimes(1);
+    });
+
+    it('keeps an exact case-sensitive URL format without assigning missing metadata', () => {
+      setup({ items: [csv, json, { id: 'unknown', price: 10 }] });
+      mocks.searchParams.set('data_type', 'JSON');
+      render(<MarketplaceSearchExperience mode={mode} />);
+      expect((screen.getByRole('combobox', { name: 'Data type' }) as HTMLSelectElement).value).toBe('JSON');
+      expect(screen.getByRole('option', { name: 'JSON (0 loaded)' })).toBeTruthy();
+      expect(screen.queryAllByTestId('listing-card')).toHaveLength(0);
+    });
+  });
+
   it('clears the search query and filters from the marketplace URL', () => {
     mocks.searchParams = new URLSearchParams(
       'q=financial+markets&type=data&category=finance&sort=price-asc',
