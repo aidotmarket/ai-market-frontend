@@ -570,7 +570,15 @@ describe('dashboard purchase read recovery', () => {
   beforeEach(() => {
     vi.resetAllMocks();
     vi.spyOn(console, 'error').mockImplementation(() => undefined);
-    useAuthStore.setState({ user: baseUser, refreshAuth: vi.fn() });
+    useAuthStore.setState({
+      user: baseUser,
+      token: 'access-token',
+      isAuthenticated: true,
+      isLoading: false,
+      hydrated: true,
+      pendingTwoFactor: null,
+      refreshAuth: vi.fn(),
+    });
     capabilitiesApi.getCapabilities.mockResolvedValue(capability());
     ordersApi.getMyOrders.mockRejectedValue(unavailable);
     connectApi.getConnectStatus.mockResolvedValue({ data: { details_submitted: true, payouts_enabled: true } });
