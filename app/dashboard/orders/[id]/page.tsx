@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react';
 import Link from 'next/link';
+import { orderStatusPresentation } from '@/lib/order-status';
 import { useSessionGeneration } from '@/hooks/useSessionGeneration';
 import { useParams, useSearchParams } from 'next/navigation';
 import { getOrder, getOrderAccess, getOrderEvents } from '@/api/orders';
@@ -13,25 +14,9 @@ import WorkspaceDownload from '@/components/orders/WorkspaceDownload';
 import WorkspacePurchaseRecovery from '@/components/orders/WorkspacePurchaseRecovery';
 import OrderVersionAccessSummary from '@/components/orders/OrderVersionAccessSummary';
 import { useTermsGate } from '@/components/legal/TermsGate';
-import type { BuyerOrderDetail, OrderAccessResponse, OrderEvent, OrderStatus, Transaction, TransactionStatus, TransactionEvent } from '@/types';
+import type { BuyerOrderDetail, OrderAccessResponse, OrderEvent, Transaction, TransactionStatus, TransactionEvent } from '@/types';
 import { AxiosError } from 'axios';
 import GatewayDeliverySection from '@/components/orders/GatewayDeliverySection';
-
-const STATUS_BADGE: Record<OrderStatus, string> = {
-  pending_fulfillment: 'bg-yellow-100 text-yellow-800',
-  fulfilled: 'bg-green-100 text-green-800',
-  refunded: 'bg-gray-100 text-gray-600',
-  disputed: 'bg-red-100 text-red-800',
-  payment_failed: 'bg-red-100 text-red-800',
-};
-
-const STATUS_LABEL: Record<OrderStatus, string> = {
-  pending_fulfillment: 'Pending Fulfillment',
-  fulfilled: 'Fulfilled',
-  refunded: 'Refunded',
-  disputed: 'Disputed',
-  payment_failed: 'Payment Failed',
-};
 
 const ORDER_EVENT_LABELS: Record<string, string> = {
   created: 'Order placed',
@@ -190,8 +175,7 @@ function OrderDetailVisit({ orderId, txIdParam, userId, sessionGeneration }: {
         access.download_urls?.some((file) => /^https?:\/\//i.test(file.url)) === true);
   const downloadEligible = ['fulfilled', 'delivered', 'completed'].includes(String(order.status)) || retainedPartialAccess;
 
-  const statusCss = STATUS_BADGE[order.status as OrderStatus] || 'bg-gray-100 text-gray-600';
-  const statusLabel = STATUS_LABEL[order.status as OrderStatus] || order.status;
+  const { badge: statusCss, label: statusLabel } = orderStatusPresentation(order.status);
 
   return (
     <div>
