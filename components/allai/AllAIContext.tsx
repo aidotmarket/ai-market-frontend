@@ -34,6 +34,7 @@ export interface Message {
   id: string;
   role: 'user' | 'assistant' | 'system';
   content: string;
+  failureNotice?: string;
   timestamp: number;
   ticketStatusCards?: TicketStatusCardData[];
   historical?: boolean;
@@ -567,8 +568,10 @@ export function AllAIProvider({ children }: { children: ReactNode }) {
         if (err?.name !== 'AbortError') {
           setMessages((prev) =>
             prev.map((m) =>
-              m.id === assistantId && !m.content
-                ? { ...m, content: resources.genericError }
+              m.id === assistantId
+                ? m.content
+                  ? { ...m, failureNotice: resources.genericError }
+                  : { ...m, content: resources.genericError }
                 : m
             )
           );

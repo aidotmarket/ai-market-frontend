@@ -81,6 +81,11 @@ export default function AllAIMessage({
             {message.content}
           </Markdown>
         )}
+        {message.failureNotice && (
+          <p role="alert" className="mt-2 text-amber-200">
+            {message.failureNotice}
+          </p>
+        )}
         {ticketStatusCards.map((card) => (
           <TicketStatusCard key={`${message.id}-${card.public_ref}-${card.updated_at}`} card={card} />
         ))}
