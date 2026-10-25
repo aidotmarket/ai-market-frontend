@@ -128,8 +128,20 @@ export default function DataRequestDetailClient({
   const [editProvenance, setEditProvenance] = useState('');
   const loadGeneration = useRef(0);
   const contextEpoch = useRef(0);
+  const visitActive = useRef(false);
   const currentContext = useRef(context);
   const mutationPending = useRef(false);
+
+  // Retire in the departure commit, before any queued promise continuation.
+  // Each setup has a new epoch so StrictMode cannot revive retired work.
+  useLayoutEffect(() => {
+    visitActive.current = true;
+    return () => {
+      visitActive.current = false;
+      contextEpoch.current++;
+      loadGeneration.current++;
+    };
+  }, []);
 
   useLayoutEffect(() => {
     if (currentContext.current === context) return;
@@ -169,7 +181,7 @@ export default function DataRequestDetailClient({
   }
 
   function isCurrentMutation(epoch: number) {
-    return epoch === contextEpoch.current && currentContext.current === context;
+    return visitActive.current && epoch === contextEpoch.current && currentContext.current === context;
   }
 
   // Response form
@@ -241,7 +253,7 @@ export default function DataRequestDetailClient({
     const generation = ++loadGeneration.current;
     const epoch = contextEpoch.current;
     const startedDuringMutation = mutationPending.current;
-    const isCurrent = () => !startedDuringMutation && epoch === contextEpoch.current && generation === loadGeneration.current;
+    const isCurrent = () => visitActive.current && !startedDuringMutation && epoch === contextEpoch.current && currentContext.current === context && generation === loadGeneration.current;
     try {
       const data = await getDataRequest(slug);
       if (!isCurrent()) return;
@@ -287,7 +299,7 @@ export default function DataRequestDetailClient({
     try {
       await loadData();
     } finally {
-      if (epoch === contextEpoch.current) retryPending.current = false;
+      if (isCurrentMutation(epoch)) retryPending.current = false;
     }
   }
 
