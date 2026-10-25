@@ -219,7 +219,8 @@ describe('gateway seller verification flow', () => {
     vi.mocked(gateway.getGatewayVerificationEpoch).mockResolvedValue({ data: captured, retryAfter: 60 });
     fireEvent.click(screen.getByRole('button', { name: 'Check again' }));
     const heading = await screen.findByRole('heading', { name: 'Review your findings' });
-    expect(scroll).toHaveBeenCalledExactlyOnceWith({ block: 'start' });
+    // The heading can be in the DOM before React flushes the passive effect that scrolls.
+    await waitFor(() => expect(scroll).toHaveBeenCalledExactlyOnceWith({ block: 'start' }));
     expect(scroll.mock.contexts[0]).toBe(heading);
     expect(focus).toHaveBeenCalledTimes(1);
     expect(focus.mock.contexts[0]).toBe(heading);
@@ -242,7 +243,8 @@ describe('gateway seller verification flow', () => {
       vi.mocked(gateway.getGatewayVerificationEpoch).mockImplementation(async () => ({ data: { ...captured }, retryAfter: 60 }));
       fireEvent.click(screen.getByRole('button', { name: 'Check again' }));
       const heading = await screen.findByRole('heading', { name: 'Review your findings' });
-      expect(scroll).toHaveBeenCalledTimes(count);
+      // The heading can be in the DOM before React flushes the passive effect that scrolls.
+      await waitFor(() => expect(scroll).toHaveBeenCalledTimes(count));
       expect(scroll).toHaveBeenLastCalledWith({ block: 'start' });
       expect(scroll.mock.contexts[count - 1]).toBe(heading);
       expect(focus).toHaveBeenCalledTimes(count);
