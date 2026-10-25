@@ -570,7 +570,15 @@ describe('dashboard purchase read recovery', () => {
   beforeEach(() => {
     vi.resetAllMocks();
     vi.spyOn(console, 'error').mockImplementation(() => undefined);
-    useAuthStore.setState({ user: baseUser, refreshAuth: vi.fn() });
+    useAuthStore.setState({
+      user: baseUser,
+      token: 'access-token',
+      isAuthenticated: true,
+      isLoading: false,
+      hydrated: true,
+      pendingTwoFactor: null,
+      refreshAuth: vi.fn(),
+    });
     capabilitiesApi.getCapabilities.mockResolvedValue(capability());
     ordersApi.getMyOrders.mockRejectedValue(unavailable);
     connectApi.getConnectStatus.mockResolvedValue({ data: { details_submitted: true, payouts_enabled: true } });
@@ -763,15 +771,18 @@ describe('dashboard purchase read recovery', () => {
     expect(ordersApi.getMyOrders).toHaveBeenCalledOnce();
   });
 
-  it('ignores a read invalidated by StrictMode effect cleanup on the same component', async () => {
-    const obsolete = deferred<typeof buyerOrder[]>();
-    ordersApi.getMyOrders.mockReturnValueOnce(obsolete.promise).mockResolvedValue([]);
+  it('keeps the current purchase read usable after StrictMode effect replay', async () => {
+    const currentRead = deferred<typeof buyerOrder[]>();
+    ordersApi.getMyOrders.mockReturnValueOnce(currentRead.promise);
     render(<StrictMode><DashboardOverview /></StrictMode>);
-    await screen.findByText("You haven't bought anything yet");
-    expect(ordersApi.getMyOrders).toHaveBeenCalledTimes(2);
-    await act(async () => obsolete.resolve([buyerOrder]));
-    expect(screen.queryByText('Climate Dataset')).toBeNull();
-    expect(screen.getByText("You haven't bought anything yet")).toBeTruthy();
+    await screen.findByRole('status');
+    expect(ordersApi.getMyOrders).toHaveBeenCalledOnce();
+    expect(screen.getByRole('status').textContent).toBe('Loading purchases...');
+    await act(async () => currentRead.resolve([buyerOrder]));
+    expect(screen.getByText('Climate Dataset')).toBeTruthy();
+    expect(screen.queryByRole('status')).toBeNull();
+    expect(screen.queryByRole('alert')).toBeNull();
+    expect(ordersApi.getMyOrders).toHaveBeenCalledOnce();
   });
 
   it.each(['resolve', 'reject'])('ignores an older same-user read after a newer retry succeeds (%s)', async (completion) => {

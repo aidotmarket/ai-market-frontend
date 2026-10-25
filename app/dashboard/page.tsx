@@ -3,9 +3,10 @@
 import { accountReauthMethod, setupRestriction, setupRefusal, sellerSecuritySatisfied } from '@/lib/two-factor-policy';
 import { companyEnrollmentOffered } from '@/components/CompanyAuthenticator';
 
-import { useEffect, useState, useCallback, useRef } from 'react';
+import { useEffect, useLayoutEffect, useState, useCallback, useRef } from 'react';
 import Link from 'next/link';
 import { useAuthStore } from '@/store/auth';
+import { authSessionOwner } from '@/lib/auth-session-owner';
 import {
   getConnectStatus,
   getConnectOnboarding,
@@ -38,7 +39,38 @@ function isExpiredReauth(error: unknown): boolean {
     error.response.data?.detail === 'Re-authentication required';
 }
 
+// Credentials never enter the key; ordinary token/details refresh keeps the visit.
+const overviewIdentity = (state: ReturnType<typeof useAuthStore.getState>) =>
+  JSON.stringify([state.isAuthenticated && state.token ? state.user?.id ?? null : null, authSessionOwner()]);
+
 export default function DashboardOverview() {
+  const identity = useAuthStore(overviewIdentity);
+  const [visit, setVisit] = useState(0);
+  const retireVisit = useCallback(() => setVisit(value => value + 1), []);
+  return <OverviewVisit key={JSON.stringify([identity, visit])} identity={identity} retireVisit={retireVisit} />;
+}
+
+function OverviewVisit({ identity, retireVisit }: { identity: string; retireVisit: () => void }) {
+  const lifetime = useRef<{ active: boolean } | null>(null);
+  const [owner, setOwner] = useState<{ active: boolean } | null>(null);
+  useLayoutEffect(() => {
+    // Replay creates a new lifetime; retired callbacks are never reactivated.
+    const current = { active: true };
+    lifetime.current = current;
+    setOwner(current);
+    const unsubscribe = useAuthStore.subscribe(state => {
+      if (current.active && overviewIdentity(state) !== identity) {
+        current.active = false;
+        retireVisit();
+      }
+    });
+    return () => { current.active = false; unsubscribe(); };
+  }, [identity, retireVisit]);
+  const isOwner = useCallback(() => {
+    const state = useAuthStore.getState();
+    return !!owner?.active && lifetime.current === owner && !!state.user?.id &&
+      state.isAuthenticated && !!state.token && overviewIdentity(state) === identity;
+  }, [identity, owner]);
   const { user, refreshAuth } = useAuthStore();
   const { toast } = useToast();
 
@@ -54,8 +86,7 @@ export default function DashboardOverview() {
   const [purchaseRecoveryVisible, setPurchaseRecoveryVisible] = useState(false);
   const [purchasesLoading, setPurchasesLoading] = useState(true);
   const purchaseRequest = useRef(0);
-  const purchasesMounted = useRef(false);
-  const purchaseUserId = user?.id;
+  const dataRequest = useRef(0);
   const [requestingSeller, setRequestingSeller] = useState(false);
   const [twoFactorFlow, setTwoFactorFlow] = useState<TwoFactorFlow>('idle');
   const [securityLoading, setSecurityLoading] = useState(false);
@@ -71,11 +102,10 @@ export default function DashboardOverview() {
   const twoFactorDoneInFlight = useRef(false);
 
   const loadPurchases = useCallback(async () => {
-    if (!purchasesMounted.current || purchaseUserId !== useAuthStore.getState().user?.id) return;
+    if (!isOwner()) return;
     // New reads and effect cleanup invalidate older completions without changing the GET contract.
     const request = ++purchaseRequest.current;
-    const isCurrent = () => purchasesMounted.current && request === purchaseRequest.current &&
-      purchaseUserId === useAuthStore.getState().user?.id;
+    const isCurrent = () => isOwner() && request === purchaseRequest.current;
     setPurchasesLoading(true);
     try {
       const orders = await getMyOrders();
@@ -84,22 +114,26 @@ export default function DashboardOverview() {
         setPurchaseError(false);
       }
     } catch (err) {
-      console.error('Failed to fetch dashboard purchase data', err);
       if (isCurrent()) {
+        console.error('Failed to fetch dashboard purchase data', err);
         setPurchaseError(true);
         setPurchaseRecoveryVisible(true);
       }
     } finally {
       if (isCurrent()) setPurchasesLoading(false);
     }
-  }, [purchaseUserId]);
+  }, [isOwner]);
 
   const fetchData = useCallback(async () => {
+    if (!isOwner()) return;
+    const request = ++dataRequest.current;
+    const isCurrent = () => isOwner() && request === dataRequest.current;
     setLoading(true);
     setError(false);
     try {
       void loadPurchases();
       const capabilityRes = await getCapabilities();
+      if (!isCurrent()) return;
       setCapabilities(capabilityRes);
 
       const sellerIsActive = capabilityRes.seller.effective_status === 'active';
@@ -114,6 +148,7 @@ export default function DashboardOverview() {
           getSellerStats(),
           getMyListings(),
         ]);
+        if (!isCurrent()) return;
         const listings = Array.isArray(listingsRes.data) ? listingsRes.data : [];
 
         setStripeStatus(statusRes.data);
@@ -121,31 +156,31 @@ export default function DashboardOverview() {
         setHeldPublishedCount(listings.filter((listing: any) => listing.status === 'published').length);
       }
     } catch (err) {
+      if (!isCurrent()) return;
       console.error('Failed to fetch dashboard data', err);
       setError(true);
     } finally {
-      setLoading(false);
+      if (isCurrent()) setLoading(false);
     }
-  }, [loadPurchases]);
+  }, [isOwner, loadPurchases]);
 
   useEffect(() => {
-    purchasesMounted.current = true;
-    setBuyerOrders([]);
-    setPurchaseError(false);
-    setPurchaseRecoveryVisible(false);
     void fetchData();
     return () => {
-      purchasesMounted.current = false;
       purchaseRequest.current += 1;
+      dataRequest.current += 1;
     };
   }, [fetchData]);
 
   const handleConnectStripe = async () => {
+    if (!isOwner()) return;
     setConnecting(true);
     try {
       const res = await getConnectOnboarding();
+      if (!isOwner()) return;
       redirectToConnectOnboarding(res.data);
     } catch (err) {
+      if (!isOwner()) return;
       if (isConnectOnboardingTwoFactorRequired(err)) {
         toast('Complete the sign-in security step before connecting payouts. Refresh seller setup if you already completed it.', 'info');
         notifyCapabilitiesChanged();
@@ -157,21 +192,26 @@ export default function DashboardOverview() {
   };
 
   const handleStartSelling = async () => {
+    if (!isOwner()) return;
     setRequestingSeller(true);
     try {
       const capabilityRes = await requestSellerCapability();
+      if (!isOwner()) return;
       setCapabilities(capabilityRes);
       notifyCapabilitiesChanged();
       toast('Seller setup started', 'success');
       await fetchData();
     } catch (err) {
+      if (!isOwner()) return;
       toast('Failed to start seller setup', 'error');
     } finally {
+      if (!isOwner()) return;
       setRequestingSeller(false);
     }
   };
 
   const resetTwoFactorState = () => {
+    if (!isOwner()) return;
     setTwoFactorFlow('idle');
     setSecurityError('');
     setSecurityLoading(false);
@@ -185,11 +225,13 @@ export default function DashboardOverview() {
   };
 
   const handleSetup2FA = async (reauthToken: string) => {
+    if (!isOwner()) return;
     if (setupRestriction(user)) { setSecurityError(setupRestriction(user)!); return; }
     setSecurityLoading(true);
     setSecurityError('');
     try {
       const res = await setup2FA(reauthToken);
+      if (!isOwner()) return;
       setSetupReauthToken(reauthToken);
       setTotpSecret(res.secret);
       setTotpQrUri(res.qr_uri);
@@ -198,6 +240,7 @@ export default function DashboardOverview() {
       setBackupCodes([]);
       setTwoFactorFlow('showing_qr');
     } catch (err) {
+      if (!isOwner()) return;
       if (user?.sso_enforced && err instanceof AxiosError && err.response?.data?.detail === 'CSRF_REQUIRED') {
         window.location.assign('/dashboard/settings#security');
         return;
@@ -211,21 +254,25 @@ export default function DashboardOverview() {
         setSecurityError('Failed to start 2FA setup.');
       }
     } finally {
+      if (!isOwner()) return;
       setSecurityLoading(false);
     }
   };
 
   const handleVerify2FASetup = async (reauthToken: string, allowReauthRetry = true) => {
+    if (!isOwner()) return;
     if (setupRestriction(user)) { setSecurityError(setupRestriction(user)!); setTwoFactorFlow('idle'); return; }
     setSecurityLoading(true);
     setSecurityError('');
     setTwoFactorFlow('verifying');
     try {
       const res = await verify2FASetup(totpCode.trim(), reauthToken);
+      if (!isOwner()) return;
       setBackupCodes(res.backup_codes);
       setTwoFactorFlow('showing_backup_codes');
       toast('Two-factor authentication enabled', 'success');
     } catch (err) {
+      if (!isOwner()) return;
       setTwoFactorFlow('showing_qr');
       if (allowReauthRetry && isExpiredReauth(err)) {
         setReauthAction('retry');
@@ -240,26 +287,32 @@ export default function DashboardOverview() {
         setSecurityError('Failed to verify the code.');
       }
     } finally {
+      if (!isOwner()) return;
       setSecurityLoading(false);
     }
   };
 
   const handleTwoFactorDone = async () => {
+    if (!isOwner()) return;
     if (twoFactorDoneInFlight.current) return;
     twoFactorDoneInFlight.current = true;
     setSecurityLoading(true);
     try {
       await refreshAuth();
+      if (!isOwner()) return;
       await fetchData();
     } catch {
+      if (!isOwner()) return;
       toast('Failed to refresh your account state', 'error');
     } finally {
+      if (!isOwner()) return;
       resetTwoFactorState();
       twoFactorDoneInFlight.current = false;
     }
   };
 
   const handleReauthSuccess = async (reauthToken: string) => {
+    if (!isOwner()) return;
     const action = reauthAction;
     setReauthAction(null);
     if (action === 'setup') {
@@ -315,7 +368,7 @@ export default function DashboardOverview() {
     <div className="space-y-8">
       <ReauthModal
         isOpen={reauthAction !== null}
-        onClose={() => setReauthAction(null)}
+        onClose={() => { if (isOwner()) setReauthAction(null); }}
         onSuccess={handleReauthSuccess}
         fallbackFocusRef={dashboardHeadingRef}
         method={accountReauthMethod(user)}
@@ -443,7 +496,7 @@ export default function DashboardOverview() {
                   </p>
                   {!sellerSecurityReady && !ssoManaged2FA && twoFactorFlow === 'idle' && (
                     <button
-                      onClick={() => companyEnrollmentOffered(user) ? window.location.assign('/dashboard/settings#security') : setReauthAction('setup')}
+                      onClick={() => { if (isOwner()) { companyEnrollmentOffered(user) ? window.location.assign('/dashboard/settings#security') : setReauthAction('setup'); } }}
                       disabled={securityLoading}
                       className="mt-3 rounded-lg bg-[#3F51B5] px-4 py-2 text-sm font-medium text-white hover:bg-[#3545a0] disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
                     >
@@ -493,7 +546,7 @@ export default function DashboardOverview() {
                         autoComplete="one-time-code"
                         maxLength={6}
                         value={totpCode}
-                        onChange={(e) => setTotpCode(e.target.value.replace(/\D/g, '').slice(0, 6))}
+                        onChange={(e) => { if (isOwner()) setTotpCode(e.target.value.replace(/\D/g, '').slice(0, 6)); }}
                         className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-[#3F51B5] focus:border-transparent"
                         placeholder="123456"
                       />
@@ -533,10 +586,13 @@ export default function DashboardOverview() {
                   </div>
                   <button
                     onClick={async () => {
+                      if (!isOwner()) return;
                       try {
                         await navigator.clipboard.writeText(backupCodes.join('\n'));
+                        if (!isOwner()) return;
                         toast('Backup codes copied', 'success');
                       } catch {
+                        if (!isOwner()) return;
                         toast('Failed to copy backup codes', 'error');
                       }
                     }}
