@@ -25,7 +25,8 @@ import {
 import { notifyCapabilitiesChanged } from '@/components/onboarding/SellerSetupProgressBar';
 import { useToast } from '@/components/Toast';
 import { formatDate, formatPrice } from '@/lib/format';
-import type { BuyerOrder, OrderStatus, SellerStats } from '@/types';
+import type { BuyerOrder, SellerStats } from '@/types';
+import { orderStatusPresentation } from '@/lib/order-status';
 import { AxiosError } from 'axios';
 import ReauthModal from './settings/ReauthModal';
 import TotpQrCode from '@/components/TotpQrCode';
@@ -37,14 +38,6 @@ function isExpiredReauth(error: unknown): boolean {
   return error instanceof AxiosError && error.response?.status === 400 &&
     error.response.data?.detail === 'Re-authentication required';
 }
-
-const ORDER_STATUS_LABEL: Record<OrderStatus, string> = {
-  pending_fulfillment: 'Pending',
-  fulfilled: 'Fulfilled',
-  refunded: 'Refunded',
-  disputed: 'Disputed',
-  payment_failed: 'Failed',
-};
 
 // Credentials never enter the key; ordinary token/details refresh keeps the visit.
 const overviewIdentity = (state: ReturnType<typeof useAuthStore.getState>) =>
@@ -444,7 +437,7 @@ function OverviewVisit({ identity, retireVisit }: { identity: string; retireVisi
                     <p className="mt-1 text-xs text-gray-500">Ordered {formatDate(order.created_at)}</p>
                   </div>
                   <div className="flex items-center gap-3 text-sm">
-                    <span className="text-gray-600">{ORDER_STATUS_LABEL[order.status] ?? order.status}</span>
+                    <span className="text-gray-600">{orderStatusPresentation(order.status).label}</span>
                     <span className="font-semibold text-gray-900">{formatPrice(order.amount)}</span>
                   </div>
                 </Link>

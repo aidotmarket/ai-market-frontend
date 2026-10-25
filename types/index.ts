@@ -721,10 +721,22 @@ export interface CheckoutVerifyResponse {
 // ============================================================================
 
 export type OrderStatus =
+  // Current backend wire values (schemas/order.py).
+  | 'created'
+  | 'paid'
+  | 'in_escrow'
+  | 'pending_delivery'
+  | 'delivered'
+  | 'completed'
+  | 'disputed'
+  | 'resolved'
+  | 'delivery_failed'
+  | 'partially_refunded'
+  | 'refunded'
+  | 'cancelled'
+  // Legacy compatibility values; the current backend does not emit these.
   | 'pending_fulfillment'
   | 'fulfilled'
-  | 'refunded'
-  | 'disputed'
   | 'payment_failed';
 
 export interface BuyerOrder {

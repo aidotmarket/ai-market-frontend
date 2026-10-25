@@ -19,6 +19,7 @@ import { AxiosError } from 'axios';
 import ListingLicenseDisclosure from '@/components/ListingLicenseDisclosure';
 import { checkoutReplayKey, readCheckoutReplay, saveCheckoutReplay, clearCheckoutReplay } from '@/lib/checkout-replay';
 import { useListingOwnership } from '@/hooks/useListingOwnership';
+import { hasDeliveredOrderNavigation, isExistingPurchaseStatus } from '@/lib/order-status';
 
 interface BuyButtonProps {
   listingId: string;
@@ -127,7 +128,7 @@ export default function BuyButton({
       .then((orders) => {
         if (cancelled) return;
         const match = orders.find(
-          (o) => o.listing_id === listingId && (o.status === 'fulfilled' || o.status === 'pending_fulfillment')
+          (o) => o.listing_id === listingId && isExistingPurchaseStatus(o.status)
         );
         if (match) setPurchasedOrder(match);
       })
@@ -177,21 +178,6 @@ export default function BuyButton({
           <p className="text-sm font-medium text-[#303F9F]">This is your listing</p>
         </div>
       </div>
-    );
-  }
-
-  // Already purchased
-  if (purchasedOrder) {
-    return (
-      <>
-      {licenseDetails && <ListingLicenseDisclosure license={licenseDetails} />}
-      <Link
-        href={`/dashboard/orders/${purchasedOrder.id}`}
-        className="block w-full rounded-lg bg-green-600 px-4 py-2.5 text-sm font-medium text-white text-center hover:bg-green-700"
-      >
-        Access Data
-      </Link>
-      </>
     );
   }
 
@@ -302,6 +288,21 @@ export default function BuyButton({
       {loading ? 'Checking checkout…' : 'Retry checkout'}
     </button>
   </div>;
+
+  // Existing-order navigation follows recovery of the current accepted claim.
+  if (purchasedOrder) {
+    return (
+      <>
+      {licenseDetails && <ListingLicenseDisclosure license={licenseDetails} />}
+      <Link
+        href={`/dashboard/orders/${purchasedOrder.id}`}
+        className="block w-full rounded-lg bg-green-600 px-4 py-2.5 text-sm font-medium text-white text-center hover:bg-green-700"
+      >
+        {hasDeliveredOrderNavigation(purchasedOrder.status) && !purchasedOrder.access_expired ? 'Access Data' : 'View purchase'}
+      </Link>
+      </>
+    );
+  }
 
   if (recoveryOnly) return null;
 

@@ -58,6 +58,7 @@ async function mount(plan) {
     '@/components/onboarding/SellerSetupProgressBar': { notifyCapabilitiesChanged: () => { calls.notify = (calls.notify || 0) + 1; } },
     '@/components/Toast': { useToast: () => ({ toast: (...args) => { (calls.toasts ||= []).push(args); } }) },
     '@/lib/format': { formatDate: () => 'Synthetic date', formatPrice: n => String(n) },
+    '@/lib/order-status': { orderStatusPresentation: () => ({ label: 'Synthetic order status' }) },
     axios: { AxiosError: FakeAxiosError },
     './settings/ReauthModal': { __esModule: true, default: props => { modal = props; return null; } },
     '@/components/TotpQrCode': { __esModule: true, default: () => null },

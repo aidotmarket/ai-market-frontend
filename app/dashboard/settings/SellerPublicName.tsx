@@ -12,6 +12,8 @@ export default function SellerPublicName({ ownOperation }: { ownOperation: () =>
   const [error, setError] = useState<SellerProfileError | null>(null);
   const [success, setSuccess] = useState(false);
   const [attempt, setAttempt] = useState(0);
+  // No seller profile yet (404): there is nothing to name, so the panel stays hidden.
+  const [noProfile, setNoProfile] = useState(false);
   const saveRequest = useRef<AbortController | null>(null);
 
   useEffect(() => {
@@ -26,7 +28,9 @@ export default function SellerPublicName({ ownOperation }: { ownOperation: () =>
       setName(profile.public_display_name ?? '');
       setVisible(profile.show_public_display_name);
     }).catch((failure: SellerProfileError) => {
-      if (!controller.signal.aborted && isCurrent()) setError(failure);
+      if (controller.signal.aborted || !isCurrent()) return;
+      if (failure.status === 404) setNoProfile(true);
+      else setError(failure);
     }).finally(() => {
       if (!controller.signal.aborted && isCurrent()) setLoading(false);
     });
@@ -63,6 +67,7 @@ export default function SellerPublicName({ ownOperation }: { ownOperation: () =>
     }
   };
 
+  if (noProfile) return null;
   const disabled = loading || saving || !saved;
   const dirty = !!saved && (name !== (saved.public_display_name ?? '') || visible !== saved.show_public_display_name);
   const fieldErrors = error?.fieldErrors ?? {};
