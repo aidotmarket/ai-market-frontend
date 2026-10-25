@@ -2,28 +2,13 @@
 
 import { useEffect, useRef, useState } from 'react';
 import Link from 'next/link';
+import { hasDeliveredOrderNavigation, orderStatusPresentation } from '@/lib/order-status';
 import { buyerLicenseRecordPath } from '@/lib/licenseRecordRoutes';
 import { getMyOrders } from '@/api/orders';
 import { getMyTransactions } from '@/api/transactions';
 import { formatPrice, formatDate } from '@/lib/format';
 import OrderVersionAccessSummary from '@/components/orders/OrderVersionAccessSummary';
-import type { BuyerOrder, OrderStatus, Transaction, TransactionStatus } from '@/types';
-
-const STATUS_BADGE: Record<OrderStatus, string> = {
-  pending_fulfillment: 'bg-yellow-100 text-yellow-800',
-  fulfilled: 'bg-green-100 text-green-800',
-  refunded: 'bg-gray-100 text-gray-600',
-  disputed: 'bg-red-100 text-red-800',
-  payment_failed: 'bg-red-100 text-red-800',
-};
-
-const STATUS_LABEL: Record<OrderStatus, string> = {
-  pending_fulfillment: 'Pending',
-  fulfilled: 'Fulfilled',
-  refunded: 'Refunded',
-  disputed: 'Disputed',
-  payment_failed: 'Failed',
-};
+import type { BuyerOrder, Transaction, TransactionStatus } from '@/types';
 
 const TX_STATUS_BADGE: Record<TransactionStatus, string> = {
   initiated: 'bg-gray-100 text-gray-600',
@@ -50,8 +35,7 @@ const TX_STATUS_LABEL: Record<TransactionStatus, string> = {
 };
 
 function statusBadge(status: string) {
-  const css = STATUS_BADGE[status as OrderStatus] || 'bg-gray-100 text-gray-600';
-  const label = STATUS_LABEL[status as OrderStatus] || status;
+  const { badge: css, label } = orderStatusPresentation(status);
   return (
     <span className={`inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-medium ${css}`}>
       {label}
@@ -232,7 +216,7 @@ export default function OrdersListPage() {
                   </td>
                   <td className="px-4 py-3 text-gray-500">{formatDate(order.created_at)}</td>
                   <td className="px-4 py-3">
-                    {order.status === 'fulfilled' && !order.access_expired ? (
+                    {hasDeliveredOrderNavigation(order.status) && !order.access_expired ? (
                       <Link
                         href={`/dashboard/orders/${order.id}`}
                         className="text-sm font-medium text-[#3F51B5] hover:underline"
@@ -277,7 +261,7 @@ export default function OrdersListPage() {
                   <span className="text-gray-500">{formatDate(order.created_at)}</span>
                 </div>
               </div>
-              {order.status === 'fulfilled' && !order.access_expired && (
+              {hasDeliveredOrderNavigation(order.status) && !order.access_expired && (
                 <Link href={`/dashboard/orders/${order.id}`} className="mt-3 block text-sm font-medium text-[#3F51B5] hover:underline">
                   View downloads
                 </Link>
