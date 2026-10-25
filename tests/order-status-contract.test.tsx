@@ -17,7 +17,7 @@ const ports = vi.hoisted(() => ({
   orders: vi.fn(), order: vi.fn(), access: vi.fn(), transactions: vi.fn(),
   refused: vi.fn(() => { throw new Error('Unexpected operation'); }),
 }));
-vi.mock('@/store/auth', () => ({ useAuthStore: Object.assign((select?: (s: typeof ports.state) => unknown) => select ? select(ports.state) : ports.state, { getState: () => ports.state }) }));
+vi.mock('@/store/auth', () => ({ useAuthStore: Object.assign((select?: (s: typeof ports.state) => unknown) => select ? select(ports.state) : ports.state, { getState: () => ports.state, subscribe: (_listener: (state: typeof ports.state) => void) => () => {} }) }));
 vi.mock('@/api/capabilities', () => ({ getCapabilities: async () => ({ seller: { effective_status: 'not_requested', missing_steps: [] } }), requestSellerCapability: ports.refused }));
 vi.mock('@/api/connect', () => ({ getConnectStatus: ports.refused, getConnectOnboarding: ports.refused, isConnectOnboardingTwoFactorRequired: ports.refused, redirectToConnectOnboarding: ports.refused }));
 vi.mock('@/api/auth', () => ({ setup2FA: ports.refused, verify2FASetup: ports.refused, SSO_MANAGED_2FA_MESSAGE: 'Synthetic' }));
