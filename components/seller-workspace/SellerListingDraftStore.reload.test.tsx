@@ -100,6 +100,23 @@ it("does not treat a failed save as a committed local revision",async()=>{
   await mount();const read=await startRead();api.save.mockRejectedValueOnce(new Error("offline"));
   fireEvent.change(screen.getByLabelText("Your price (USD)"),{target:{value:"30"}});
   fireEvent.click(screen.getByRole("button",{name:"Save private draft"}));await screen.findByText(/Saving could not be confirmed/);
-  await finishRead(read,null);expect(screen.getByTestId("version").textContent).toBe("empty");expect(onLoaded).toHaveBeenCalledOnce();
+  expect(api.save).toHaveBeenCalledExactlyOnceWith(expect.objectContaining({price:"30"}),2,"00000000-0000-4000-8000-000000000001");
+  // An uncertain attempt is not a commit, but the older read must preserve its retry identity.
+  expect(await finishRead(read,null)).toEqual(initial);
+  expect(screen.getByTestId("version").textContent).toBe("2");expect(screen.getByTestId("price").textContent).toBe("25");
+  expect(onLoaded).not.toHaveBeenCalled();expect(api.save).toHaveBeenCalledOnce();
   expect((screen.getByLabelText("Your price (USD)") as HTMLInputElement).value).toBe("30");
+  expect(screen.getByText(/You have unsaved changes/)).toBeTruthy();
+  const retry=deferred<SavedListingDraft>();api.save.mockReturnValueOnce(retry.promise);
+  fireEvent.click(screen.getByRole("button",{name:"Save private draft"}));
+  await waitFor(()=>expect(api.save).toHaveBeenCalledTimes(2));
+  expect(api.save).toHaveBeenLastCalledWith(expect.objectContaining({price:"30"}),2,"00000000-0000-4000-8000-000000000001");
+  expect(api.save.mock.calls[1]).toEqual(api.save.mock.calls[0]);
+  expect(screen.getByTestId("version").textContent).toBe("2");expect(screen.getByTestId("price").textContent).toBe("25");
+  await act(async()=>{retry.resolve(saved);});
+  await waitFor(()=>expect(screen.getByTestId("version").textContent).toBe("3"));
+  expect(screen.getByTestId("price").textContent).toBe("30");
+  expect((screen.getByLabelText("Your price (USD)") as HTMLInputElement).value).toBe("30");
+  expect(screen.getByText(/Draft saved to your account/)).toBeTruthy();
+  expect(onLoaded).not.toHaveBeenCalled();expect(api.save).toHaveBeenCalledTimes(2);expect(api.read).toHaveBeenCalledTimes(2);
 });

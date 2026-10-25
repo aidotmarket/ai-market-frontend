@@ -1,7 +1,9 @@
 'use client';
 
-import {createContext,useCallback,useContext,useEffect,useMemo,useState} from 'react';
+import {createContext,useCallback,useContext,useEffect,useMemo,useState,useSyncExternalStore} from 'react';
 import {readListingDraft,saveListingDraft,type ListingDraftContent,type SavedListingDraft} from '@/api/sellerListingDraft';
+import {authSessionOwner,assertAuthSessionOwner,isAuthSessionOwner} from '@/lib/auth-session-owner';
+import {useAuthStore} from '@/store/auth';
 import type {LicenseSelection} from '@/api/listingLicenses';
 
 const EMPTY_DRAFT:ListingDraftContent={brief:'',title:'',description:'',category:'',tags:'',price:'',license:''};
@@ -13,39 +15,64 @@ type DraftStore={draft:SavedListingDraft|null;available:boolean;loaded:boolean;e
 const DraftContext=createContext<DraftStore|null>(null);
 
 type OwnerSnapshot={draft:SavedListingDraft|null;selectionSaveCount:number;selectionSaveFailed:boolean};
-const owner={
-  draft:null as SavedListingDraft|null,version:0,saveRevision:0,loaded:false,queue:Promise.resolve() as Promise<unknown>,
+const createOwner=(session:number)=>({
+  session,
+  draft:null as SavedListingDraft|null,version:0,saveRevision:0,saveAttempt:0,loaded:false,queue:Promise.resolve() as Promise<unknown>,
   pending:null as {serialized:string;version:number;id:string}|null,
   selectionSaveCount:0,selectionSaveFailed:false,listeners:new Set<(snapshot:OwnerSnapshot)=>void>(),
-};
-const snapshot=():OwnerSnapshot=>({draft:owner.draft,selectionSaveCount:owner.selectionSaveCount,selectionSaveFailed:owner.selectionSaveFailed});
-const publish=()=>{const value=snapshot();owner.listeners.forEach(listener=>listener(value));};
-const beginOwnerSelectionSave=()=>{if(owner.selectionSaveCount===0)owner.selectionSaveFailed=false;owner.selectionSaveCount+=1;publish();};
-const finishOwnerSelectionSave=(succeeded:boolean)=>{owner.selectionSaveCount=Math.max(0,owner.selectionSaveCount-1);if(!succeeded)owner.selectionSaveFailed=true;else if(owner.selectionSaveCount===0)owner.selectionSaveFailed=false;publish();};
-const persist=(build:(base:ListingDraftContent)=>ListingDraftContent,baselineVersion?:number)=>{
+});
+let currentOwner=createOwner(authSessionOwner());
+type Owner=ReturnType<typeof createOwner>;
+const snapshot=(owner:Owner):OwnerSnapshot=>({draft:owner.draft,selectionSaveCount:owner.selectionSaveCount,selectionSaveFailed:owner.selectionSaveFailed});
+const publish=(owner:Owner)=>{if(!isAuthSessionOwner(owner.session))return;const value=snapshot(owner);owner.listeners.forEach(listener=>listener(value));};
+const beginOwnerSelectionSave=(owner:Owner)=>{if(!isAuthSessionOwner(owner.session))return;if(owner.selectionSaveCount===0)owner.selectionSaveFailed=false;owner.selectionSaveCount+=1;publish(owner);};
+const finishOwnerSelectionSave=(owner:Owner,succeeded:boolean)=>{if(!isAuthSessionOwner(owner.session))return;owner.selectionSaveCount=Math.max(0,owner.selectionSaveCount-1);if(!succeeded)owner.selectionSaveFailed=true;else if(owner.selectionSaveCount===0)owner.selectionSaveFailed=false;publish(owner);};
+const persist=(owner:Owner,build:(base:ListingDraftContent)=>ListingDraftContent,baselineVersion?:number)=>{
   const operation=owner.queue.catch(()=>undefined).then(async()=>{
+    assertAuthSessionOwner(owner.session);
     if(!owner.loaded)throw new DraftNotLoadedError();
     const content=build(owner.draft?.content??EMPTY_DRAFT);
     const serialized=JSON.stringify(content);
     const version=baselineVersion??owner.version;
     if(!owner.pending||owner.pending.serialized!==serialized||owner.pending.version!==version)
       owner.pending={serialized,version,id:crypto.randomUUID()};
+    // Count every attempt, including identical retries that reuse pending.
+    owner.saveAttempt+=1;
     const result=await saveListingDraft(content,owner.pending.version,owner.pending.id);
-    owner.pending=null;owner.draft=result;owner.version=result.version;owner.saveRevision+=1;publish();
+    assertAuthSessionOwner(owner.session);
+    owner.pending=null;owner.draft=result;owner.version=result.version;owner.saveRevision+=1;publish(owner);
     return result;
   });
   owner.queue=operation;
   return operation;
 };
+const readCheckpoint=(owner:Owner)=>({saveAttempt:owner.saveAttempt,saveRevision:owner.saveRevision});
+const reconcileRead=(owner:Owner,value:SavedListingDraft|null,checkpoint:ReturnType<typeof readCheckpoint>)=>{
+  // An intervening uncertain/in-flight attempt retains its content, expected
+  // version and request identity even if this GET reports equal/newer data.
+  if(owner.saveAttempt!==checkpoint.saveAttempt&&owner.pending)return false;
+  // A committed save only invalidates older overlapping reads. Without such
+  // activity, an intentional reset (including null/lower versions) is valid.
+  if(owner.saveRevision!==checkpoint.saveRevision&&(!value||value.version<owner.version))return false;
+  owner.draft=value;owner.version=value?.version??0;owner.loaded=true;owner.pending=null;
+  return true;
+};
 
 export function resetSellerListingDraftOwnerForTests() {
   if(process.env.NODE_ENV!=='test')return;
-  owner.draft=null;owner.version=0;owner.saveRevision=0;owner.loaded=false;owner.queue=Promise.resolve();owner.pending=null;
-  owner.selectionSaveCount=0;owner.selectionSaveFailed=false;owner.listeners.clear();
+  currentOwner=createOwner(authSessionOwner());
 }
 
 export function SellerListingDraftProvider({enabled,sampleCapability,children}:{enabled:boolean;sampleCapability:boolean;children:React.ReactNode}) {
-  const initial=snapshot();
+  // Auth store notifications expose even coalesced account changes via the
+  // existing monotonic lifecycle. Token refresh keeps this snapshot unchanged.
+  const session=useSyncExternalStore(useAuthStore.subscribe,authSessionOwner,authSessionOwner);
+  if(currentOwner.session!==session)currentOwner=createOwner(session);
+  return <OwnedSellerListingDraftProvider key={session} owner={currentOwner} enabled={enabled} sampleCapability={sampleCapability}>{children}</OwnedSellerListingDraftProvider>;
+}
+
+function OwnedSellerListingDraftProvider({owner,enabled,sampleCapability,children}:{owner:Owner;enabled:boolean;sampleCapability:boolean;children:React.ReactNode}) {
+  const initial=snapshot(owner);
   const [draft,setDraft]=useState<SavedListingDraft|null>(initial.draft);
   const [loaded,setLoaded]=useState(false);
   const [error,setError]=useState(false);
@@ -54,49 +81,51 @@ export function SellerListingDraftProvider({enabled,sampleCapability,children}:{
   const [selectionSaveFailed,setSelectionSaveFailed]=useState(initial.selectionSaveFailed);
   const [visibleSampleIndices,setVisibleSampleIndices]=useState<number[]|null>(null);
   const [retryKey,setRetryKey]=useState(0);
-  useEffect(()=>{const listener=(value:OwnerSnapshot)=>{setDraft(value.draft);setSelectionSaveCount(value.selectionSaveCount);setSelectionSaveFailed(value.selectionSaveFailed);};owner.listeners.add(listener);listener(snapshot());return()=>{owner.listeners.delete(listener);};},[]);
+  useEffect(()=>{const listener=(value:OwnerSnapshot)=>{setDraft(value.draft);setSelectionSaveCount(value.selectionSaveCount);setSelectionSaveFailed(value.selectionSaveFailed);};owner.listeners.add(listener);listener(snapshot(owner));return()=>{owner.listeners.delete(listener);};},[owner]);
   useEffect(()=>{if(sampleCapability)setRequested(true);},[sampleCapability]);
   useEffect(()=>{
     if(!enabled){owner.loaded=false;setDraft(null);setVisibleSampleIndices(null);setLoaded(false);setError(false);return;}
     if(!requested)return;
-    const controller=new AbortController();owner.loaded=false;setLoaded(false);setError(false);
-    owner.queue.catch(()=>undefined).then(()=>readListingDraft(controller.signal)).then(value=>{
-      if(controller.signal.aborted)return;
-      owner.draft=value;owner.version=value?.version??0;owner.loaded=true;owner.pending=null;
-      if(owner.selectionSaveCount===0)owner.selectionSaveFailed=false;
-      publish();setLoaded(true);
-    }).catch(()=>{if(!controller.signal.aborted){setError(true);setLoaded(false);}});
+    // A remount must not revoke saves already admitted by this lifecycle.
+    // The local loaded flag still gates new edits until this visit has loaded.
+    const controller=new AbortController();setLoaded(false);setError(false);
+    let checkpoint=readCheckpoint(owner);
+    owner.queue.catch(()=>undefined).then(()=>{assertAuthSessionOwner(owner.session);if(controller.signal.aborted)return null;checkpoint=readCheckpoint(owner);return readListingDraft(controller.signal);}).then(value=>{
+      if(controller.signal.aborted||!isAuthSessionOwner(owner.session))return;
+      const accepted=reconcileRead(owner,value,checkpoint);
+      if(accepted&&owner.selectionSaveCount===0)owner.selectionSaveFailed=false;
+      publish(owner);setLoaded(true);
+    }).catch(()=>{if(!controller.signal.aborted&&isAuthSessionOwner(owner.session)){setError(true);setLoaded(false);}});
     return()=>controller.abort();
-  },[enabled,retryKey,requested]);
+  },[owner,enabled,retryKey,requested]);
   const reload=useCallback(async(signal?:AbortSignal,onLoaded?:()=>void)=>{
     await owner.queue.catch(()=>undefined);
-    const saveRevision=owner.saveRevision;
+    assertAuthSessionOwner(owner.session);
+    const checkpoint=readCheckpoint(owner);
     const value=await readListingDraft(signal);
+    assertAuthSessionOwner(owner.session);
     if(signal?.aborted)return value;
-    // Only an overlapping successful save makes an older read stale. Fresh
-    // reads must still be able to load an intentional reset (including null).
-    if(owner.saveRevision!==saveRevision&&(!value||value.version<owner.version))return owner.draft;
-    owner.draft=value;owner.version=value?.version??0;owner.loaded=true;owner.pending=null;
-    onLoaded?.();publish();setLoaded(true);setError(false);
+    if(!reconcileRead(owner,value,checkpoint))return owner.draft;
+    onLoaded?.();publish(owner);setLoaded(true);setError(false);
     return value;
-  },[]);
-  const beginSelectionSave=useCallback(()=>beginOwnerSelectionSave(),[]);
-  const finishSelectionSave=useCallback((succeeded:boolean)=>finishOwnerSelectionSave(succeeded),[]);
+  },[owner]);
+  const beginSelectionSave=useCallback(()=>beginOwnerSelectionSave(owner),[owner]);
+  const finishSelectionSave=useCallback((succeeded:boolean)=>finishOwnerSelectionSave(owner,succeeded),[owner]);
   const sampleIndices=sampleCapability&&draft?.content.sample_decision==='member_files'?(draft.content.sample_object_indices??[]):[];
   const selectionMismatch=visibleSampleIndices!==null&&JSON.stringify(visibleSampleIndices)!==JSON.stringify(sampleIndices);
   const value=useMemo<DraftStore>(()=>({draft,available:enabled,loaded,error,sampleCapability,sampleIndices,
     selectionSavePending:selectionSaveCount>0||selectionMismatch,selectionSaveFailed,reload,requestLoad:()=>setRequested(true),retry:()=>{setRequested(true);setRetryKey(value=>value+1);},
     beginSelectionSave,finishSelectionSave,setVisibleSampleIndices,
-    saveListingFields:async(fields,baselineVersion)=>{const result=await persist(base=>({
+    saveListingFields:async(fields,baselineVersion)=>{if(!loaded)throw new DraftNotLoadedError();const result=await persist(owner,base=>({
       ...base,brief:fields.brief,title:fields.title,description:fields.description,category:fields.category,
       tags:fields.tags,price:fields.price,license:fields.license,description_source_version:fields.description_source_version??null,
     }),baselineVersion);return result.version;},
-    saveLicenseSelection:async(selection)=>{await persist(base=>({...base,license_selection:selection}));},
-    saveSamples:async(indices)=>{beginSelectionSave();try{await persist(base=>sampleCapability
+    saveLicenseSelection:async(selection)=>{if(!loaded)throw new DraftNotLoadedError();await persist(owner,base=>({...base,license_selection:selection}));},
+    saveSamples:async(indices)=>{if(!loaded)throw new DraftNotLoadedError();beginSelectionSave();try{await persist(owner,base=>sampleCapability
       ?{...base,sample_decision:indices.length?'member_files':'none',sample_object_indices:[...indices]}
       :base);finishSelectionSave(true);}
       catch(failure){finishSelectionSave(false);throw failure;}},
-  }),[draft,enabled,loaded,error,sampleCapability,sampleIndices,selectionSaveCount,selectionSaveFailed,selectionMismatch,reload,beginSelectionSave,finishSelectionSave]);
+  }),[owner,draft,enabled,loaded,error,sampleCapability,sampleIndices,selectionSaveCount,selectionSaveFailed,selectionMismatch,reload,beginSelectionSave,finishSelectionSave]);
   return <DraftContext.Provider value={value}>{children}</DraftContext.Provider>;
 }
 
