@@ -95,6 +95,15 @@ describe('public business name settings', () => {
     await waitFor(() => expect((screen.getByRole('switch') as HTMLInputElement).disabled).toBe(false));
     expect(updateProfile).not.toHaveBeenCalled();
   });
+  it('renders nothing when the account has no seller profile yet (HTTP 404)', async () => {
+    getProfile.mockRejectedValueOnce(new SellerProfileError('Not found', 404));
+    const { container } = render(<SellerPublicName ownOperation={ownOperation} />);
+    await waitFor(() => expect(getProfile).toHaveBeenCalledTimes(1));
+    await waitFor(() => expect(container.innerHTML).toBe(''));
+    expect(screen.queryByRole('alert')).toBeNull();
+    expect(screen.queryByText('Could not load public business name settings. Please try again.')).toBeNull();
+    expect(updateProfile).not.toHaveBeenCalled();
+  });
   it('shows general save failures and keeps the draft retryable', async () => {
     updateProfile.mockRejectedValue(new SellerProfileError('Please try again.', undefined));
     await mount(); edit(); save(); await screen.findByText('Please try again.');
