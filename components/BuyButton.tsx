@@ -181,21 +181,6 @@ export default function BuyButton({
     );
   }
 
-  // Already purchased
-  if (purchasedOrder) {
-    return (
-      <>
-      {licenseDetails && <ListingLicenseDisclosure license={licenseDetails} />}
-      <Link
-        href={`/dashboard/orders/${purchasedOrder.id}`}
-        className="block w-full rounded-lg bg-green-600 px-4 py-2.5 text-sm font-medium text-white text-center hover:bg-green-700"
-      >
-        {hasDeliveredOrderNavigation(purchasedOrder.status) && !purchasedOrder.access_expired ? 'Access Data' : 'View purchase'}
-      </Link>
-      </>
-    );
-  }
-
   const startCheckout = async () => {
     const visit = checkoutVisit.current;
     const isCurrent = () => visit !== null && checkoutVisit.current === visit;
@@ -303,6 +288,21 @@ export default function BuyButton({
       {loading ? 'Checking checkout…' : 'Retry checkout'}
     </button>
   </div>;
+
+  // Existing-order navigation follows recovery of the current accepted claim.
+  if (purchasedOrder) {
+    return (
+      <>
+      {licenseDetails && <ListingLicenseDisclosure license={licenseDetails} />}
+      <Link
+        href={`/dashboard/orders/${purchasedOrder.id}`}
+        className="block w-full rounded-lg bg-green-600 px-4 py-2.5 text-sm font-medium text-white text-center hover:bg-green-700"
+      >
+        {hasDeliveredOrderNavigation(purchasedOrder.status) && !purchasedOrder.access_expired ? 'Access Data' : 'View purchase'}
+      </Link>
+      </>
+    );
+  }
 
   if (recoveryOnly) return null;
 
