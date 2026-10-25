@@ -465,7 +465,12 @@ it('renders real stable rows, signed cents and independent stale/error states; r
   render(<WalletPage />); await ready(); await screen.findByText('<b>Actual credit</b>');
   expect(screen.getByText('+USD 5.01')).toBeTruthy();
   expect(screen.getByRole('table').querySelector('[data-transaction-id="tx-1"]')).toBeTruthy();
-  expect(screen.getByText(row.created_at)).toBeTruthy();
+  const transactionTime = screen.getByRole('table').querySelector('time')!;
+  expect(transactionTime.getAttribute('datetime')).toBe(row.created_at);
+  expect(transactionTime.getAttribute('title')).toBe(row.created_at);
+  expect(transactionTime.textContent).toMatch(/Oct \d{1,2}, 2026/);
+  expect(transactionTime.textContent).toMatch(/\d{1,2}:\d{2}/);
+  expect(screen.queryByText(row.created_at)).toBeNull();
   const page = deferred<unknown>();
   net.adapter.mockImplementation(async config => {
     if (config.url === '/wallet/transactions' && config.params.offset === 20) return response(config, await page.promise);
