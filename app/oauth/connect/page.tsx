@@ -75,10 +75,12 @@ export default function ConnectorConsentPage() {
 
   const sellerOffered = metadata?.tool_sets?.includes('seller')
     && metadata.seller_permissions_version === 1 && !!metadata.tool_set_scopes?.seller;
-  const permissions = metadata?.tool_set_scopes?.[toolSet] ?? metadata?.scopes ?? [];
+  const buyerOffered = !!metadata?.tool_set_scopes?.buyer;
+  const permissions = metadata?.tool_set_scopes?.[toolSet] ?? [];
 
   const decide = async (decision: 'approve' | 'deny') => {
     if (!metadata || submitting.current) return;
+    if (decision === 'approve' && toolSet === 'buyer' && !buyerOffered) return;
     if (toolSet === 'seller' && !sellerOffered) return;
     if (!readConnectorContinuation() || Date.parse(metadata.expires_at) <= Date.now()) {
       clearConnectorContinuation(); setMetadata(null); setError('expired'); return;
@@ -87,14 +89,22 @@ export default function ConnectorConsentPage() {
     setBusy(true);
     setNotice('');
     try {
-      const persona: [toolSet?: 'buyer' | 'seller', version?: number] = !sellerOffered ? []
-        : decision === 'approve' && toolSet === 'seller' ? [toolSet, metadata.seller_permissions_version] : [toolSet];
+      let persona: [toolSet?: 'buyer' | 'seller', sellerVersion?: number, buyerVersion?: number] = sellerOffered ? [toolSet] : [];
+      if (decision === 'approve' && toolSet === 'seller') persona = [toolSet, metadata.seller_permissions_version];
+      if (decision === 'approve' && toolSet === 'buyer' && metadata.buyer_permissions_version !== undefined) {
+        persona = [sellerOffered ? toolSet : undefined, undefined, metadata.buyer_permissions_version];
+      }
       const url = await decideConnectorRequest(metadata.request, decision, organizationId, metadata.csrf_nonce,
         ...persona);
       clearConnectorContinuation();
       window.location.assign(url);
     } catch (cause) {
       const kind = errorKind(cause);
+      if (kind === 'buyer_permissions_stale') {
+        setMetadata(null);
+        setError(kind);
+        return;
+      }
       if (kind === 'seller_permissions_stale' || kind === 'seller_consent_unavailable') {
         setMetadata(null);
         setToolSet('buyer');
@@ -126,9 +136,11 @@ export default function ConnectorConsentPage() {
         : error === 'recent_login_required' ? 'For your security, connecting an app needs a recent sign-in. Sign in again to continue; it only takes a moment.'
         : error === 'sso_required' ? 'Sign in with your organization’s SSO to continue.'
         : error === 'invalid' ? 'This connection request is invalid.'
+        : error === 'buyer_permissions_stale' ? 'Buyer permissions changed. Reload permissions, review them, and approve again.'
         : 'Unable to complete this connection request.'}</p>
       {needsSignIn && <button onClick={signInAgain} className="min-h-11 cursor-pointer rounded-lg bg-[#3F51B5] px-4 py-2 text-sm font-medium text-white transition-colors enabled:hover:bg-[#3545a0] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#3F51B5]">Sign in to continue</button>}
       {error === 'error' && <button onClick={() => setRevision((value) => value + 1)}>Retry</button>}
+      {error === 'buyer_permissions_stale' && <button onClick={() => setRevision((value) => value + 1)}>Reload permissions</button>}
     </> : metadata && isAuthenticated && user ? <>
       <h1 className="text-2xl font-bold">Connect {metadata.client.name} to ai.market</h1>
       <p>{metadata.client.host} {metadata.client.verified && <span>Verified</span>}</p>
@@ -151,12 +163,17 @@ export default function ConnectorConsentPage() {
         {metadata.tool_sets?.map(choice => <label key={choice} className="mr-4"><input type="radio" name="connector-persona" checked={toolSet === choice} onChange={() => setToolSet(choice)} />{choice === 'buyer' ? 'Buyer' : 'Seller'}</label>)}
       </fieldset>}
       <h2>{toolSet === 'seller' ? 'Seller permissions you are granting' : 'Buyer permissions you are granting'}</h2>
+      {toolSet === 'buyer' && !buyerOffered && <>
+        <p role="alert">Unable to verify Buyer permissions. Reload permissions before approving.</p>
+        <button type="button" disabled={busy} onClick={() => setRevision(value => value + 1)}>Reload permissions</button>
+      </>}
       <ul>{permissions.map((scope) => <li key={scope.scope}>{scope.description}</li>)}</ul>
+      {toolSet === 'buyer' && permissions.some(item => item.scope === 'buyer.write') && <p>This lets {metadata.client.name} request seller approval and take buyer actions you approve, including inquiries and data requests. Available actions depend on enabled tools and account eligibility.</p>}
       {toolSet === 'seller' && <p>Available actions depend on enabled tools and account eligibility. Licenses and required human reviews are completed on ai.market.</p>}
       <p>Expires {new Date(metadata.expires_at).toLocaleString()}</p>
       <div className="flex flex-wrap gap-4">
-        <button type="button" disabled={busy} onClick={() => decide('approve')}
-          className="min-h-11 cursor-pointer rounded-lg bg-[#3F51B5] px-4 py-2 text-sm font-medium text-white transition-colors enabled:hover:bg-[#3545a0] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#3F51B5] disabled:cursor-not-allowed disabled:opacity-50">Approve</button>
+        {(toolSet === 'seller' || buyerOffered) && <button type="button" disabled={busy} onClick={() => decide('approve')}
+          className="min-h-11 cursor-pointer rounded-lg bg-[#3F51B5] px-4 py-2 text-sm font-medium text-white transition-colors enabled:hover:bg-[#3545a0] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#3F51B5] disabled:cursor-not-allowed disabled:opacity-50">Approve</button>}
         <button type="button" disabled={busy} onClick={() => decide('deny')}
           className="min-h-11 cursor-pointer rounded-lg border border-gray-300 bg-white px-4 py-2 text-sm font-medium text-gray-700 transition-colors enabled:hover:bg-gray-50 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#3F51B5] disabled:cursor-not-allowed disabled:opacity-50">Deny</button>
       </div>

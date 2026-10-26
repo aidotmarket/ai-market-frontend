@@ -14,6 +14,7 @@ const path = `/oauth/connect?request=${id}`;
 const metadata = { request: id, client: { client_id: 'client', name: '<b>Claude</b>', host: 'claude.ai', verified: true },
   accounts: [{ organization_id: null, label: 'Personal', kind: 'personal' as const }],
   scopes: [{ scope: 'search', description: '<script>Search the marketplace</script>' }],
+  tool_set_scopes: { buyer: [{ scope: 'search', description: '<script>Search the marketplace</script>' }] },
   expires_at: new Date(Date.now() + 600_000).toISOString(), csrf_nonce: 'nonce' };
 const assign = vi.fn();
 

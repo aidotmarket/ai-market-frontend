@@ -44,7 +44,7 @@ test('same-device continuation resumes after password login', async ({ page, con
   await expect(page).toHaveURL(new RegExp(`/oauth/connect\\?request=${id}`));
   await expect(page.getByRole('heading', { name: 'Connect Claude to ai.market' })).toBeVisible();
   await expect(page.getByRole('radio', { name: 'Buyer' })).toBeChecked();
-  await expect(page.getByRole('main').last().getByRole('listitem')).toHaveCount(2);
+  await expect(page.getByRole('main').last().getByRole('listitem')).toHaveCount(3);
 });
 
 test('consent resumes after a social callback without a redirect parameter', async ({ page, context }) => {
