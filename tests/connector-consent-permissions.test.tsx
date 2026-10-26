@@ -5,7 +5,7 @@ import ConnectorConsentPage from '@/app/oauth/connect/page';
 import { api } from '@/api/client';
 import { useAuthStore } from '@/store/auth';
 import { readConnectorContinuation } from '@/lib/aim-data-continuation';
-import { buyerPermissions, consentId, consentMetadata, sellerPermissions } from './fixtures/connector-consent';
+import { buyerPermissions, invalidBuyerMetadata, consentId, consentMetadata, sellerPermissions } from './fixtures/connector-consent';
 
 const navigation = vi.hoisted(() => ({ replace: vi.fn(), push: vi.fn() }));
 vi.mock('next/navigation', () => ({ useRouter: () => navigation }));
@@ -29,22 +29,29 @@ it('defaults to Buyer, shows all eight Seller descriptions before approval, and 
   render(<ConnectorConsentPage />);
   const buyer = await screen.findByRole('radio', { name: 'Buyer' }) as HTMLInputElement;
   expect(buyer.checked).toBe(true);
-  expect(screen.getAllByRole('listitem')).toHaveLength(2);
+  expect(screen.getAllByRole('listitem').map(item => item.textContent)).toEqual(buyerPermissions.map(item => item.description));
   buyerPermissions.forEach(item => expect(screen.getByText(item.description)).toBeTruthy());
+  expect(screen.getByText(/This lets Claude request seller approval and take buyer actions you approve, including inquiries and data requests/)).toBeTruthy();
   fireEvent.click(screen.getByRole('radio', { name: 'Seller' }));
   expect(screen.getByRole('heading', { name: 'Seller permissions you are granting' })).toBeTruthy();
   expect(screen.getAllByRole('listitem')).toHaveLength(8);
+  expect(screen.getAllByRole('listitem').map(item => item.textContent)).toEqual(sellerPermissions.map(item => item.description));
+  expect(screen.queryByText(/This lets Claude/)).toBeNull();
   sellerPermissions.forEach(item => expect(screen.getByText(item.description)).toBeTruthy());
   expect(screen.getByText(/Licenses and required human reviews are completed on ai.market/)).toBeTruthy();
   expect(api.post).not.toHaveBeenCalled();
   fireEvent.click(buyer);
-  expect(screen.getAllByRole('listitem')).toHaveLength(2);
+  expect(screen.getAllByRole('listitem').map(item => item.textContent)).toEqual(buyerPermissions.map(item => item.description));
   expect(screen.queryByText(/Licenses/)).toBeNull();
   expect(screen.queryByRole('heading', { name: 'Seller permissions you are granting' })).toBeNull();
+  fireEvent.click(screen.getByRole('button', { name: 'Approve' }));
+  await waitFor(() => expect(api.post).toHaveBeenCalledExactlyOnceWith(postPath, {
+    decision: 'approve', organization_id: null, csrf_nonce: 'nonce', tool_set: 'buyer', buyer_permissions_version: 1,
+  }));
 });
 
-it.each(['absent', 'incomplete', 'unknown-scope', 'blank-description', 'unsupported-version'] as const)('hides Seller and permits only Buyer approval when metadata is %s', async reason => {
-  if (reason === 'absent') delete metadata.tool_set_scopes;
+it.each(['absent', 'incomplete', 'unknown-scope', 'blank-description', 'unsupported-version'] as const)('hides Seller and permits only Buyer approval when Seller metadata is %s', async reason => {
+  if (reason === 'absent') delete metadata.tool_set_scopes!.seller;
   if (reason === 'incomplete') metadata.tool_set_scopes!.seller = sellerPermissions.slice(1);
   if (reason === 'unknown-scope') metadata.tool_set_scopes!.seller = [...sellerPermissions.slice(1), { scope: 'other', description: 'Other' }];
   if (reason === 'blank-description') metadata.tool_set_scopes!.seller = sellerPermissions.map(item => ({ ...item, description: ' ' }));
@@ -53,11 +60,11 @@ it.each(['absent', 'incomplete', 'unknown-scope', 'blank-description', 'unsuppor
   fireEvent.click(await screen.findByRole('button', { name: 'Approve' }));
   expect(screen.queryByRole('radio', { name: 'Seller' })).toBeNull();
   await waitFor(() => expect(api.post).toHaveBeenCalledExactlyOnceWith(postPath, {
-    decision: 'approve', organization_id: null, csrf_nonce: 'nonce',
+    decision: 'approve', organization_id: null, csrf_nonce: 'nonce', buyer_permissions_version: 1,
   }));
 });
 
-it.each(['seller', 'buyer', 'deny'] as const)('echoes the version only on Seller approval: %s', async choice => {
+it.each(['seller', 'buyer', 'deny'] as const)('echoes only the selected persona version on approval: %s', async choice => {
   render(<ConnectorConsentPage />);
   await screen.findByRole('radio', { name: 'Seller' });
   fireEvent.change(screen.getByRole('combobox'), { target: { value: '' } });
@@ -65,15 +72,30 @@ it.each(['seller', 'buyer', 'deny'] as const)('echoes the version only on Seller
   fireEvent.click(screen.getByRole('button', { name: choice === 'deny' ? 'Deny' : 'Approve' }));
   await waitFor(() => expect(api.post).toHaveBeenCalledExactlyOnceWith(postPath, {
     decision: choice === 'deny' ? 'deny' : 'approve', organization_id: null, csrf_nonce: 'nonce',
-    tool_set: choice === 'buyer' ? 'buyer' : 'seller', ...(choice === 'seller' ? { seller_permissions_version: 1 } : {}),
+    tool_set: choice === 'buyer' ? 'buyer' : 'seller', ...(choice === 'seller' ? { seller_permissions_version: 1 } : choice === 'buyer' ? { buyer_permissions_version: 1 } : {}),
   }));
 });
 
-it('freezes persona and account selection plus decision buttons while a decision is pending', async () => {
+it('keeps Seller selection and approval available for a Seller-only request', async () => {
+  metadata.scopes = [{ scope: 'seller.write', description: 'Create and update drafts' }];
+  metadata.tool_set_scopes!.buyer = metadata.scopes;
+  delete metadata.buyer_permissions_version;
+  render(<ConnectorConsentPage />);
+  await screen.findByRole('alert');
+  expect(screen.queryByRole('button', { name: 'Approve' })).toBeNull();
+  fireEvent.click(screen.getByRole('radio', { name: 'Seller' }));
+  expect(screen.getAllByRole('listitem').map(item => item.textContent)).toEqual(sellerPermissions.map(item => item.description));
+  fireEvent.click(screen.getByRole('button', { name: 'Approve' }));
+  await waitFor(() => expect(api.post).toHaveBeenCalledExactlyOnceWith(postPath, {
+    decision: 'approve', organization_id: null, csrf_nonce: 'nonce', tool_set: 'seller', seller_permissions_version: 1,
+  }));
+});
+
+it.each(['Buyer', 'Seller'])('freezes persona and account selection plus decision buttons while a %s decision is pending', async persona => {
   let resolve!: (value: unknown) => void;
   vi.mocked(api.post).mockReturnValue(new Promise(done => { resolve = done; }));
   render(<ConnectorConsentPage />);
-  fireEvent.click(await screen.findByRole('radio', { name: 'Seller' }));
+  fireEvent.click(await screen.findByRole('radio', { name: persona }));
   fireEvent.click(screen.getByRole('button', { name: 'Approve' }));
   expect(screen.getByRole('group').hasAttribute('disabled')).toBe(true);
   for (const control of [...screen.getAllByRole('radio'), screen.getByRole('combobox'), ...screen.getAllByRole('button')]) {
@@ -168,5 +190,99 @@ it('requires explicit Seller selection and approval again after reauthentication
   expect(api.post).toHaveBeenCalledOnce();
   fireEvent.click(screen.getByRole('radio', { name: 'Seller' }));
   sellerPermissions.forEach(item => expect(screen.getByText(item.description)).toBeTruthy());
+  expect(api.post).toHaveBeenCalledOnce();
+});
+
+it.each(invalidBuyerMetadata)('refuses malformed or missing Buyer metadata without offering Approve: %j', async patch => {
+  vi.mocked(api.get).mockImplementation(async url => ({ data: url === '/connector-oauth/status'
+    ? { enabled: true } : { ...metadata, ...patch } }));
+  render(<ConnectorConsentPage />);
+  expect((await screen.findByRole('alert')).textContent).toBe('Unable to verify Buyer permissions. Reload permissions before approving.');
+  expect(screen.queryByRole('button', { name: 'Approve' })).toBeNull();
+  expect(screen.queryAllByRole('listitem')).toHaveLength(0);
+  expect(screen.getByRole('button', { name: 'Reload permissions' })).toBeTruthy();
+  expect(api.post).not.toHaveBeenCalled();
+  fireEvent.click(screen.getByRole('button', { name: 'Deny' }));
+  await waitFor(() => expect(api.post).toHaveBeenCalledExactlyOnceWith(postPath, {
+    decision: 'deny', organization_id: null, csrf_nonce: 'nonce',
+  }));
+});
+
+it('reloads malformed Buyer metadata and waits for explicit approval of the complete set', async () => {
+  delete metadata.buyer_permissions_version;
+  render(<ConnectorConsentPage />);
+  fireEvent.click(await screen.findByRole('button', { name: 'Reload permissions' }));
+  expect(api.post).not.toHaveBeenCalled();
+  metadata = consentMetadata();
+  await screen.findByRole('button', { name: 'Approve' });
+  expect(screen.getAllByRole('listitem').map(item => item.textContent)).toEqual(buyerPermissions.map(item => item.description));
+  expect(api.post).not.toHaveBeenCalled();
+});
+
+it.each([true, false])('prompts after stale Buyer refusal, then requires fresh explicit approval (Seller offered: %s)', async sellerOffered => {
+  if (!sellerOffered) {
+    metadata.tool_sets = ['buyer'];
+    delete metadata.tool_set_scopes!.seller;
+    delete metadata.seller_permissions_version;
+  }
+  vi.mocked(api.post).mockRejectedValueOnce({ response: { status: 403, data: { code: 'buyer_permissions_stale' } } });
+  render(<ConnectorConsentPage />);
+  fireEvent.click(await screen.findByRole('button', { name: 'Approve' }));
+  expect((await screen.findByRole('alert')).textContent).toBe('Buyer permissions changed. Reload permissions, review them, and approve again.');
+  expect(screen.queryByRole('button', { name: 'Approve' })).toBeNull();
+  expect(api.get).toHaveBeenCalledTimes(2);
+  expect(api.post).toHaveBeenCalledExactlyOnceWith(postPath, {
+    decision: 'approve', organization_id: null, csrf_nonce: 'nonce', buyer_permissions_version: 1,
+    ...(sellerOffered ? { tool_set: 'buyer' } : {}),
+  });
+  expect(assign).not.toHaveBeenCalled();
+  expect(readConnectorContinuation()?.request).toBe(consentId);
+  let resolve!: (value: unknown) => void;
+  vi.mocked(api.get).mockImplementation(async url => url === '/connector-oauth/status'
+    ? { data: { enabled: true } } : new Promise(done => { resolve = done; }));
+  fireEvent.click(screen.getByRole('button', { name: 'Reload permissions' }));
+  await waitFor(() => expect(resolve).toBeTypeOf('function'));
+  expect(screen.queryByRole('button', { name: 'Approve' })).toBeNull();
+  const updated = buyerPermissions.map(item => ({ ...item, description: `Updated: ${item.description}` }));
+  await act(async () => resolve({ data: { ...metadata, csrf_nonce: 'fresh-buyer-nonce',
+    tool_set_scopes: { ...metadata.tool_set_scopes, buyer: updated } } }));
+  await screen.findByRole('button', { name: 'Approve' });
+  expect(screen.getAllByRole('listitem').map(item => item.textContent)).toEqual(updated.map(item => item.description));
+  expect(api.post).toHaveBeenCalledOnce();
+  fireEvent.click(screen.getByRole('button', { name: 'Approve' }));
+  await waitFor(() => expect(api.post).toHaveBeenCalledTimes(2));
+  expect(api.post).toHaveBeenLastCalledWith(postPath, {
+    decision: 'approve', organization_id: null, csrf_nonce: 'fresh-buyer-nonce', buyer_permissions_version: 1,
+    ...(sellerOffered ? { tool_set: 'buyer' } : {}),
+  });
+});
+
+it.each(['invalid', 'expired', 'unavailable'] as const)('keeps Buyer approval unavailable when a stale reload is %s', async reason => {
+  vi.mocked(api.post).mockRejectedValueOnce({ response: { status: 403, data: { code: 'buyer_permissions_stale' } } });
+  render(<ConnectorConsentPage />);
+  fireEvent.click(await screen.findByRole('button', { name: 'Approve' }));
+  await screen.findByRole('button', { name: 'Reload permissions' });
+  vi.mocked(api.get).mockImplementation(async url => {
+    if (url === '/connector-oauth/status') return { data: { enabled: true } };
+    if (reason === 'invalid') return { data: { ...metadata, buyer_permissions_version: 2 } };
+    throw { response: { status: reason === 'expired' ? 410 : 503 } };
+  });
+  fireEvent.click(screen.getByRole('button', { name: 'Reload permissions' }));
+  await waitFor(() => expect(screen.getByRole('alert').textContent).not.toContain('Buyer permissions changed'));
+  expect(screen.queryByRole('button', { name: 'Approve' })).toBeNull();
+  expect(api.post).toHaveBeenCalledOnce();
+  expect(assign).not.toHaveBeenCalled();
+});
+
+it('requires explicit Buyer approval after reauthentication', async () => {
+  vi.mocked(api.post).mockRejectedValueOnce({ response: { status: 403, data: { code: 'recent_login_required' } } });
+  const first = render(<ConnectorConsentPage />);
+  fireEvent.click(await screen.findByRole('button', { name: 'Approve' }));
+  fireEvent.click(await screen.findByRole('button', { name: 'Sign in to continue' }));
+  expect(navigation.push).toHaveBeenCalledWith(`/login?reauth=connector&redirect=${encodeURIComponent(path)}`);
+  first.unmount();
+  render(<ConnectorConsentPage />);
+  expect((await screen.findByRole('radio', { name: 'Buyer' }) as HTMLInputElement).checked).toBe(true);
+  expect(screen.getAllByRole('listitem').map(item => item.textContent)).toEqual(buyerPermissions.map(item => item.description));
   expect(api.post).toHaveBeenCalledOnce();
 });
