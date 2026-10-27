@@ -123,6 +123,10 @@ export default async function ListingDetailPage({ params, searchParams }: Props)
     ? listing.jsonld.license : null;
   const legacyLicense = typeof listing.license === 'string' ? listing.license : null;
   const pendingSellerTerms = listing.license_status === 'pending_seller_terms';
+  // This explicit hold applies only to new purchases, not existing orders or checkout recovery.
+  const purchaseDisabledReason = listing.purchase_hold_reason === 'listing_publication_unavailable'
+    ? 'This listing is currently unavailable for new purchases.'
+    : undefined;
   const atAGlanceSummary = pendingSellerTerms && listing.at_a_glance
     ? {...listing.at_a_glance, sample_availability: undefined}
     : listing.at_a_glance;
@@ -260,6 +264,7 @@ export default async function ListingDetailPage({ params, searchParams }: Props)
                 licenseDetails={licenseDetails}
                 dataFormat={listing.data_format}
                 fulfillmentType={listing.fulfillment_type}
+                disabledReason={purchaseDisabledReason}
                 initialVersionId={requestedVersionId}
               />
             ) : (
@@ -272,6 +277,7 @@ export default async function ListingDetailPage({ params, searchParams }: Props)
                 licenseDetails={licenseDetails}
                 dataFormat={listing.data_format}
                 fulfillmentType={listing.fulfillment_type}
+                disabledReason={purchaseDisabledReason}
               />
             )}
           </div>

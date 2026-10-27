@@ -18,6 +18,7 @@ interface ListingPurchasePanelProps {
   dataFormat?: string | null;
   fulfillmentType?: string | null;
   initialVersionId?: string | null;
+  disabledReason?: string;
 }
 
 export default function ListingPurchasePanel({
@@ -33,6 +34,7 @@ export default function ListingPurchasePanel({
   dataFormat,
   fulfillmentType,
   initialVersionId,
+  disabledReason: listingDisabledReason,
 }: ListingPurchasePanelProps) {
   const visibleVersions = useMemo(() => sortVersions(versions), [versions]);
   const defaultVersion = useMemo(
@@ -43,7 +45,7 @@ export default function ListingPurchasePanel({
   const selectedVersion = visibleVersions.find((version) => version.version_id === selectedVersionId) ?? defaultVersion;
   const disabledReason = selectedVersion?.status === 'superseded'
     ? 'This version has been superseded and is shown for provenance only.'
-    : undefined;
+    : listingDisabledReason;
 
   return (
     <div>
