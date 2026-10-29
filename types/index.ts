@@ -1025,6 +1025,7 @@ export interface DataRequestListItem {
 }
 
 export interface DataRequestDetail extends DataRequestListItem {
+  response_refusal?: string | null;
   format_preferences: string[];
   regulatory_requirements?: string[];
   provenance_requirements: string | null;

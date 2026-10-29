@@ -170,9 +170,9 @@ describe('DataRequestDetailClient authenticated fallback loading', () => {
     created_at: '2026-10-06T00:00:00Z', updated_at: null,
   };
 
-  async function renderSupplier() {
+  async function renderSupplier(overrides: Partial<DataRequestDetail> = {}) {
     mocks.auth.user = { ...owner, id: 'supplier-1', role: 'seller' };
-    const request = makeOwnerRequest();
+    const request = makeOwnerRequest(overrides);
     mocks.getDataRequest.mockResolvedValue(request);
     render(<DataRequestDetailClient slug={request.slug} initialRequest={request} />);
     await waitFor(() => expect(mocks.getDataRequestResponses).toHaveBeenCalledWith(request.id));
@@ -184,6 +184,47 @@ describe('DataRequestDetailClient authenticated fallback loading', () => {
     fireEvent.change(screen.getByRole('spinbutton', { name: 'Proposed Price (USD)' }), { target: { value: '125' } });
     fireEvent.change(screen.getByRole('textbox', { name: 'Timeline' }), { target: { value: '2 weeks' } });
   }
+
+  const responseRefusal = 'Cannot respond: this is a sample request for demonstration; nobody will review proposals';
+
+  it.each(['open', 'responses_received'] as const)('shows the refusal and blocks seller submissions for %s requests', async status => {
+    await renderSupplier({ status, response_refusal: responseRefusal });
+    expect(screen.getByRole('status').textContent).toBe(responseRefusal);
+    const submit = screen.getByRole('button', { name: 'Submit Response' });
+    expect(submit).toHaveProperty('disabled', true);
+    fillQuote();
+    expect(submit).toHaveProperty('disabled', true);
+    fireEvent.click(submit);
+    fireEvent.submit(submit.closest('form')!);
+    expect(mocks.submitDataRequestResponse).not.toHaveBeenCalled();
+  });
+
+  it.each([null, undefined, ''])('preserves seller submission when response_refusal is %s', async response_refusal => {
+    mocks.submitDataRequestResponse.mockResolvedValue(savedQuote);
+    await renderSupplier(response_refusal === undefined ? {} : { response_refusal });
+    expect(screen.queryByRole('status')).toBeNull();
+    const submit = screen.getByRole('button', { name: 'Submit Response' });
+    expect(submit).toHaveProperty('disabled', true);
+    fillQuote();
+    expect(submit).toHaveProperty('disabled', false);
+    fireEvent.click(submit);
+    await screen.findByText('Your nonbinding quote is saved. No further submission is needed.');
+    expect(mocks.submitDataRequestResponse).toHaveBeenCalledExactlyOnceWith('request-1', {
+      proposal: 'Available dataset', proposed_price: 125, proposed_timeline: '2 weeks',
+    });
+  });
+
+  it('shows the refusal and disables the anonymous respond entry button', async () => {
+    mocks.auth.user = null;
+    mocks.auth.isAuthenticated = false;
+    const request = makeOwnerRequest({ response_refusal: responseRefusal });
+    mocks.getDataRequest.mockResolvedValue(request);
+    render(<DataRequestDetailClient slug={request.slug} initialRequest={request} />);
+    await waitFor(() => expect(mocks.getDataRequest).toHaveBeenCalled());
+    expect(screen.getByRole('status').textContent).toBe(responseRefusal);
+    expect(screen.getByRole('button', { name: 'Log in to Respond' })).toHaveProperty('disabled', true);
+    expect(screen.queryByRole('link', { name: 'Log in to Respond' })).toBeNull();
+  });
 
   function responseFailure(status: number, detail: unknown) {
     return new AxiosError('Request failed', undefined, undefined, undefined, {
