@@ -194,6 +194,7 @@ export default function DataRequestDetailClient({
 
   const isOwner = isAuthenticated && user && request && user.id === request.buyer_id;
   const ownResponses = isOwner ? [] : responses;
+  const responseRefusal = request?.response_refusal || null;
   const lastCheckTime = checkedTime(request?.publication_checked_at);
   const nextCheckTime = checkedTime(request?.publication_retry_at);
 
@@ -415,7 +416,7 @@ export default function DataRequestDetailClient({
 
   async function handleSubmitResponse(e: React.FormEvent) {
     e.preventDefault();
-    if (!request || !proposal.trim() || responsePending.current || ownResponses.length > 0) return;
+    if (!request || responseRefusal || !proposal.trim() || responsePending.current || ownResponses.length > 0) return;
 
     const epoch = beginMutation();
     responsePending.current = true;
@@ -750,6 +751,12 @@ export default function DataRequestDetailClient({
         </div>
       )}
 
+      {!isOwner && responseRefusal && (request.status === 'open' || request.status === 'responses_received') && (
+        <p role="status" className="mb-4 rounded-xl border border-amber-200 bg-amber-50 p-4 text-sm text-amber-900">
+          {responseRefusal}
+        </p>
+      )}
+
       {/* Seller: Submit Response form */}
       {isAuthenticated && !isOwner && (request.status === 'open' || request.status === 'responses_received') && (
         <div className="rounded-xl border border-gray-200 p-6">
@@ -806,7 +813,7 @@ export default function DataRequestDetailClient({
             </div>
             <button
               type="submit"
-              disabled={submittingResponse || ownResponses.length > 0 || !proposal.trim()}
+              disabled={Boolean(responseRefusal) || submittingResponse || ownResponses.length > 0 || !proposal.trim()}
               className="rounded-lg bg-[#3F51B5] px-4 py-2.5 text-sm font-medium text-white hover:bg-[#3545a0] disabled:opacity-50 disabled:cursor-not-allowed"
             >
               {submittingResponse ? 'Submitting...' : 'Submit Response'}
@@ -819,12 +826,18 @@ export default function DataRequestDetailClient({
       {!isAuthenticated && (request.status === 'open' || request.status === 'responses_received') && (
         <div className="rounded-xl border border-gray-200 p-6 text-center">
           <p className="text-gray-600 mb-4">Have the data this buyer needs?</p>
-          <Link
-            href={`/login?redirect=${encodeURIComponent(`/requests/${request.slug}`)}`}
-            className="rounded-lg bg-[#3F51B5] px-6 py-2.5 text-sm font-medium text-white hover:bg-[#3545a0]"
-          >
-            Log in to Respond
-          </Link>
+          {responseRefusal ? (
+            <button type="button" disabled className="rounded-lg bg-[#3F51B5] px-6 py-2.5 text-sm font-medium text-white disabled:opacity-50 disabled:cursor-not-allowed">
+              Log in to Respond
+            </button>
+          ) : (
+            <Link
+              href={`/login?redirect=${encodeURIComponent(`/requests/${request.slug}`)}`}
+              className="rounded-lg bg-[#3F51B5] px-6 py-2.5 text-sm font-medium text-white hover:bg-[#3545a0]"
+            >
+              Log in to Respond
+            </Link>
+          )}
         </div>
       )}
     </div>
