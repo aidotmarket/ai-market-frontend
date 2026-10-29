@@ -25,6 +25,8 @@ export function validView(v: PreparationView) {
     && (b.legal_identity_version === null || Number.isSafeInteger(b.legal_identity_version))
     && [b.source_hash, b.render_hash, b.enrichment_hash, b.sample_set_hash, b.legal_selection_hash, b.legal_document_hash, b.legal_identity_hash].every(digest);
 }
+// Each read rejects data fetched under a superseded token, so a batch that straddles a
+// sibling's refresh fails closed with SESSION_CHANGED and the user reloads the batch.
 export async function readSigningInstruments(ids: string[]): Promise<SigningInstrument[]> {
   if (!ids.length || ids.length > 50 || new Set(ids).size !== ids.length || !ids.every(uuid)) throw new Error('INVALID_BATCH');
   const sameSession = sessionLifecycle();

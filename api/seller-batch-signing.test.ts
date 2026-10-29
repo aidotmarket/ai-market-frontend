@@ -22,7 +22,7 @@ it('uses the dedicated native licence signing endpoint and verifies every covera
   post.mockResolvedValue({ data: { instruments: [{ ...signed, coverage_hash: 'b'.repeat(64) }] } }); await expect(signInstruments(body)).rejects.toThrow('INVALID_RECEIPT');
 });
 
-it('keeps a batch read valid when one instrument refreshes the same session', async () => {
+it('keeps a batch read valid when sibling responses settle before one instrument refreshes', async () => {
   const expired = { isAxiosError: true, response: { status: 401 } };
   const get = vi.spyOn(nativeClient, 'get')
     .mockRejectedValueOnce(expired)
@@ -37,4 +37,20 @@ it('keeps a batch read valid when one instrument refreshes the same session', as
   expect(await readSigningInstruments([id(1), id(2)])).toEqual([instrument(1), instrument(2)]);
   expect(get).toHaveBeenCalledTimes(3);
   expect(refresh).toHaveBeenCalledOnce();
+});
+
+it('fails closed when a sibling response settles after another instrument refreshed the token', async () => {
+  const expired = { isAxiosError: true, response: { status: 401 } };
+  let releaseFirst!: (v: unknown) => void;
+  vi.spyOn(nativeClient, 'get')
+    .mockImplementationOnce(() => new Promise(resolve => { releaseFirst = resolve; }))
+    .mockRejectedValueOnce(expired)
+    .mockResolvedValueOnce({ data: instrument(2) });
+  vi.spyOn(client, 'refreshAccessToken').mockImplementation(async () => {
+    useAuthStore.setState({ token: 'fresh-batch-session' });
+    queueMicrotask(() => releaseFirst({ data: instrument(1) }));
+    return 'fresh-batch-session';
+  });
+  // A batch never mixes responses from two tokens; the user can reload the batch.
+  await expect(readSigningInstruments([id(1), id(2)])).rejects.toThrow('SESSION_CHANGED');
 });
