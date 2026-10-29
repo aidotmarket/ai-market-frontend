@@ -59,6 +59,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
     setSnapshot((previous) => previous?.owner === owner && previous.phase === 'ready'
       ? previous : pending);
     try {
+      // The shared API client already refreshes and retries a 401 once.
       const capabilities = await getCapabilities();
       if (!isCurrent()) return;
       const status = capabilities.seller.effective_status;
@@ -177,6 +178,15 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
           </span>
         </div>
         <nav aria-label="Dashboard" className="flex gap-1 overflow-x-auto px-4 py-3 md:block md:flex-1 md:space-y-1 md:py-6">
+          {current?.phase === 'error' && (
+            <div className="shrink-0 rounded-md bg-amber-50 px-3 py-2 text-sm text-amber-900">
+              <p role="alert">Unable to check seller access.</p>
+              <button type="button" onClick={() => { void refreshCapabilities(); }}
+                className="mt-2 font-medium underline">
+                Retry seller access
+              </button>
+            </div>
+          )}
           {navLinks.map((link) => {
             const isActive = pathname === link.href || (link.href !== '/dashboard' && pathname.startsWith(link.href));
             return (

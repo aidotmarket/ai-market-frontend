@@ -70,6 +70,20 @@ describe('SettingsPage capability refresh', () => {
     await waitFor(() => expect(vi.mocked(getSellerPublicProfile)).toHaveBeenCalled());
   });
 
+  it.each([
+    ['active', 'buyer', 'Seller'],
+    ['provisioning', 'buyer', 'Seller (setting up)'],
+    ['not_requested', 'admin', 'Admin'],
+    ['not_requested', 'buyer', 'Buyer'],
+    ['active', 'admin', 'Seller'],
+  ] as const)('displays account type for seller status %s and legacy role %s', async (status, role, label) => {
+    capabilitiesApi.getCapabilities.mockResolvedValue({ seller: { effective_status: status } });
+    useAuthStore.setState({ user: { ...user, role } });
+    render(<SettingsPage />);
+    const account = screen.getByRole('heading', { name: 'Account' }).closest('section')!;
+    await waitFor(() => expect(within(account).getByText('Role').nextElementSibling?.textContent).toBe(label));
+  });
+
   it('keeps public business name settings absent for buyers', async () => {
     capabilitiesApi.getCapabilities.mockResolvedValue({ seller: { effective_status: 'not_requested' } });
     useAuthStore.setState({ user: { ...user, role: 'buyer' } });

@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 
-import { act, cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { act, cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { useEffect, useState, type ReactNode } from 'react';
 import type { User } from '@/types';
@@ -488,6 +488,17 @@ describe('DashboardLayout hydration guard', () => {
       await act(async () => rejectCapabilities(new Error('capability unavailable')));
       expect(screen.getByRole('link', { name: 'My Requests' })).not.toBeNull();
       expect(navigation.push).not.toHaveBeenCalledWith('/dashboard/inquiries');
+      const nav = screen.getByRole('navigation', { name: 'Dashboard' });
+      expect(within(nav).getByRole('alert').textContent).toBe('Unable to check seller access.');
+      expect(screen.getByText('requests during capability load')).toBeTruthy();
+      expect(screen.queryByRole('link', { name: 'Listings' })).toBeNull();
+      expect(capabilitiesApi.getCapabilities).toHaveBeenCalledTimes(1);
+      capabilitiesApi.getCapabilities.mockResolvedValue({ seller: { effective_status: 'active' } });
+      fireEvent.click(within(nav).getByRole('button', { name: 'Retry seller access' }));
+      await screen.findByRole('link', { name: 'Listings' });
+      expect(screen.queryByRole('alert')).toBeNull();
+      expect(screen.getByText('requests during capability load')).toBeTruthy();
+      expect(capabilitiesApi.getCapabilities).toHaveBeenCalledTimes(2);
     } finally {
       errorSpy.mockRestore();
     }

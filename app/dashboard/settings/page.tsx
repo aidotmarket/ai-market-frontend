@@ -383,6 +383,9 @@ function SettingsVisit({ accountId, retireVisit }: {
 
   if (!accountId || !user || user.id !== accountId) return null;
 
+  const accountType = sellerStatus === 'active' ? 'Seller'
+    : sellerStatus === 'provisioning' ? 'Seller (setting up)'
+    : user.role === 'admin' ? 'Admin' : 'Buyer';
   const isSeller =
     sellerStatus === 'active' ||
     sellerStatus === 'provisioning' ||
@@ -481,7 +484,7 @@ function SettingsVisit({ accountId, retireVisit }: {
           </div>
           <div className="flex justify-between">
             <dt className="text-sm text-gray-500">Role</dt>
-            <dd className="text-sm font-medium text-gray-900 capitalize">{user.role}</dd>
+            <dd className="text-sm font-medium text-gray-900">{accountType}</dd>
           </div>
           <div className="flex justify-between">
             <dt className="text-sm text-gray-500">Member since</dt>

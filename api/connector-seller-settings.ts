@@ -59,6 +59,32 @@ export function nativeSession() {
   const csrf = sessionCsrf(token);
   return { token, csrf, headers: { Authorization: `Bearer ${token}`, 'X-CSRF-Token': csrf } };
 }
+// Pure reads may refresh once, but must never cross a session identity change.
+export async function nativeRead<T>(path: string, options: { signal?: AbortSignal; params?: Record<string, unknown> } = {}): Promise<T> {
+  const owner = authSessionIdentity(useAuthStore.getState());
+  for (let attempt = 0; ; attempt++) {
+    if (authSessionIdentity(useAuthStore.getState()) !== owner) throw new Error('SESSION_CHANGED');
+    options.signal?.throwIfAborted();
+    const session = nativeSession();
+    try {
+      const { data } = await nativeClient.get<T>(path, { ...options, headers: session.headers });
+      if (authSessionIdentity(useAuthStore.getState()) !== owner) throw new Error('SESSION_CHANGED');
+      if (useAuthStore.getState().token !== session.token) throw new Error('SESSION_CHANGED');
+      options.signal?.throwIfAborted();
+      return data;
+    } catch (error) {
+      if (authSessionIdentity(useAuthStore.getState()) !== owner) throw new Error('SESSION_CHANGED');
+      options.signal?.throwIfAborted();
+      const retryable = attempt === 0 && axios.isAxiosError(error) && error.response?.status === 401;
+      if (useAuthStore.getState().token !== session.token) {
+        if (retryable && useAuthStore.getState().token) continue;
+        throw new Error('SESSION_CHANGED');
+      }
+      if (!retryable) throw error;
+      await refreshAccessToken();
+    }
+  }
+}
 // Only use for idempotent seller writes: retries retain the original action identity.
 export async function nativeWrite<T>(path: string, body: object, signal?: AbortSignal): Promise<T> {
   const owner = authSessionIdentity(useAuthStore.getState());
@@ -102,9 +128,7 @@ export function newDecision(version: number): WebDecision {
 }
 const base = '/connector-seller-settings';
 export async function readAuthority(): Promise<AuthorityStatus> {
-  const session = nativeSession();
-  const { data } = await nativeClient.get<AuthorityStatus>(base, { headers: session.headers });
-  if (useAuthStore.getState().token !== session.token) throw new Error('SESSION_CHANGED');
+  const data = await nativeRead<AuthorityStatus>(base);
   if (!data || !integer(data.version) || typeof data.enabled !== 'boolean' || !/^\d{4}-\d{2}-\d{2}$/.test(data.utc_day)
     || !(data.limits === null || Object.keys(data.limits).length === 0 || validLimits(data.limits)) || !Array.isArray(data.usage)
     || !data.usage.every(u => verbs.some(v => u.action === `aim.listing.${v}`) && integer(u.reserved) && integer(u.success))) throw new Error('INVALID_RESPONSE');
@@ -112,9 +136,7 @@ export async function readAuthority(): Promise<AuthorityStatus> {
 }
 export async function readPreview(listing: string): Promise<PreviewStatus> {
   if (!uuid(listing)) throw new Error('INVALID_REQUEST');
-  const session = nativeSession();
-  const { data } = await nativeClient.get<PreviewStatus>(`${base}/preview-consent/${listing}`, { headers: session.headers });
-  if (useAuthStore.getState().token !== session.token) throw new Error('SESSION_CHANGED');
+  const data = await nativeRead<PreviewStatus>(`${base}/preview-consent/${listing}`);
   if (!data || data.listing_id !== listing || !uuid(data.publication_version_id) || !integer(data.version)
     || typeof data.enabled !== 'boolean' || typeof data.sample_available !== 'boolean'
     || !(data.sample_set_hash === null || digest(data.sample_set_hash))

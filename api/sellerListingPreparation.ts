@@ -1,5 +1,5 @@
 import axios from 'axios';
-import {nativeClient,nativeSession,nativeWrite,nativeAuthError} from './connector-seller-settings';
+import {nativeRead,nativeWrite,nativeAuthError} from './connector-seller-settings';
 import {validView,type PreparationView,type SigningInstrument} from './seller-batch-signing';
 import {sameLicenseSelection,type ApprovalReceipt} from './sellerListingReview';
 import {isCompleteLicenseSelection} from './listingLicenses';
@@ -20,11 +20,9 @@ function verified(value:PreparedListing, approval:ApprovalReceipt):PreparedListi
   return value;
 }
 export async function lookupPreparation(approval:ApprovalReceipt,signal:AbortSignal):Promise<PreparedListing|null> {
-  const session=nativeSession();
   try {
-    const {data}=await nativeClient.get('/seller-workspace/listing-preparation', {signal,headers:session.headers,
+    const data=await nativeRead<PreparedListing>('/seller-workspace/listing-preparation', {signal,
       params:{draft_id:approval.draft_id,draft_version:approval.draft_version}});
-    if(nativeSession().token!==session.token)throw new Error('SESSION_CHANGED');
     return verified(data,approval);
   } catch(error) {
     if(axios.isAxiosError(error)&&error.response?.status===404&&error.response.data?.detail==='NOT_FOUND')return null;

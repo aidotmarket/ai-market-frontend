@@ -1,3 +1,4 @@
+import * as client from './client';
 import { afterEach, beforeEach, expect, it, vi } from 'vitest';
 import { readSigningInstruments, signInstruments } from './seller-batch-signing';
 import { nativeClient, nativeSession } from './connector-seller-settings';
@@ -19,4 +20,21 @@ it('uses the dedicated native licence signing endpoint and verifies every covera
   expect(await signInstruments(body)).toEqual([signed]); expect(post).toHaveBeenCalledWith('/seller-workspace/listing-licences/sign', body, { headers: nativeSession().headers });
   expect((post.mock.calls[0][1] as {csrf:string}).csrf).toBe(nativeSession().csrf);
   post.mockResolvedValue({ data: { instruments: [{ ...signed, coverage_hash: 'b'.repeat(64) }] } }); await expect(signInstruments(body)).rejects.toThrow('INVALID_RECEIPT');
+});
+
+it('keeps a batch read valid when one instrument refreshes the same session', async () => {
+  const expired = { isAxiosError: true, response: { status: 401 } };
+  const get = vi.spyOn(nativeClient, 'get')
+    .mockRejectedValueOnce(expired)
+    .mockResolvedValueOnce({ data: instrument(2) })
+    .mockResolvedValueOnce({ data: instrument(1) });
+  const refresh = vi.spyOn(client, 'refreshAccessToken').mockImplementation(async () => {
+    // Let the other instrument's already completed response settle first.
+    await Promise.resolve();
+    useAuthStore.setState({ token: 'fresh-batch-session' });
+    return 'fresh-batch-session';
+  });
+  expect(await readSigningInstruments([id(1), id(2)])).toEqual([instrument(1), instrument(2)]);
+  expect(get).toHaveBeenCalledTimes(3);
+  expect(refresh).toHaveBeenCalledOnce();
 });

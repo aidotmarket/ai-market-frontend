@@ -1,4 +1,5 @@
-import { nativeClient, nativeSession, nativeWrite, uuid, digest } from '@/api/connector-seller-settings';
+import { nativeRead, nativeWrite, uuid, digest } from '@/api/connector-seller-settings';
+import { authSessionIdentity, useAuthStore } from '@/store/auth';
 import { isCompleteLicenseSelection, type LicenseSelection } from '@/api/listingLicenses';
 export interface PreparationBinding {
   preparation_id: string; seller_id: string; organization_id: string | null; draft_id: string; draft_version: number;
@@ -27,13 +28,13 @@ export function validView(v: PreparationView) {
 }
 export async function readSigningInstruments(ids: string[]): Promise<SigningInstrument[]> {
   if (!ids.length || ids.length > 50 || new Set(ids).size !== ids.length || !ids.every(uuid)) throw new Error('INVALID_BATCH');
-  const session = nativeSession();
+  const owner = authSessionIdentity(useAuthStore.getState());
   const results = await Promise.all(ids.map(async id => {
-    const { data } = await nativeClient.get<SigningInstrument>(`${base}/listing-preparation/${id}`, { headers: session.headers });
+    const data = await nativeRead<SigningInstrument>(`${base}/listing-preparation/${id}`);
     if (!validView(data) || data.id !== id || !data.license_selection || !isCompleteLicenseSelection(data.license_selection)) throw new Error('INVALID_INSTRUMENT');
     return data;
   }));
-  if (nativeSession().token !== session.token) throw new Error('SESSION_CHANGED');
+  if (authSessionIdentity(useAuthStore.getState()) !== owner) throw new Error('SESSION_CHANGED');
   return results;
 }
 export async function signInstruments(body: SigningRequest, signal?: AbortSignal): Promise<PreparationView[]> {

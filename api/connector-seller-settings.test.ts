@@ -1,7 +1,7 @@
 import * as client from './client';
 import type {User} from '@/types';
 import { afterEach, beforeEach, expect, it, vi } from 'vitest';
-import { nativeClient, nativeSession, nativeWrite, newDecision, readAuthority, reviewAuthority, setAuthority, reviewStopAuthority, stopAuthority, readPreview, reviewRevokePreview, revokePreview, validLimits } from './connector-seller-settings';
+import { nativeClient, nativeSession, nativeWrite, nativeAuthError, newDecision, readAuthority, reviewAuthority, setAuthority, reviewStopAuthority, stopAuthority, readPreview, reviewRevokePreview, revokePreview, validLimits } from './connector-seller-settings';
 import { useAuthStore } from '@/store/auth';
 import { authority, limits, hash, id, preview } from '@/tests/fixtures/seller-authority';
 beforeEach(() => { useAuthStore.setState({ user: {id:id(99)} as User, token: 'retained-native-credential' }); });
@@ -107,4 +107,69 @@ it('accepts a confirmed write when credentials rotate for the same user during t
     return {data:{ok:true}};
   });
   expect(await nativeWrite('/seller-workspace/listing-preparation',{request_id:id(91)})).toEqual({ok:true});
+});
+
+it('refreshes an authority read once and retries with the fresh credential pair', async () => {
+  const expired = { isAxiosError: true, response: { status: 401 } };
+  const first = nativeSession();
+  const get = vi.spyOn(nativeClient, 'get').mockRejectedValueOnce(expired).mockResolvedValueOnce({ data: authority });
+  const refresh = vi.spyOn(client, 'refreshAccessToken').mockImplementation(async () => {
+    useAuthStore.setState({ token: 'fresh-read-session' });
+    return 'fresh-read-session';
+  });
+  expect(await readAuthority()).toEqual(authority);
+  expect(refresh).toHaveBeenCalledOnce();
+  expect(get.mock.calls).toEqual([
+    ['/connector-seller-settings', { headers: first.headers }],
+    ['/connector-seller-settings', { headers: nativeSession().headers }],
+  ]);
+});
+it('does not refresh an authority read twice after repeated 401s', async () => {
+  const expired = { isAxiosError: true, response: { status: 401 } };
+  const get = vi.spyOn(nativeClient, 'get').mockRejectedValue(expired);
+  const refresh = vi.spyOn(client, 'refreshAccessToken').mockResolvedValue('retained-native-credential');
+  await expect(readAuthority()).rejects.toBe(expired);
+  expect(get).toHaveBeenCalledTimes(2);
+  expect(refresh).toHaveBeenCalledOnce();
+});
+it('rejects an identity change during authority refresh without replaying', async () => {
+  const get = vi.spyOn(nativeClient, 'get').mockRejectedValue({ isAxiosError: true, response: { status: 401 } });
+  const refresh = vi.spyOn(client, 'refreshAccessToken').mockImplementation(async () => {
+    useAuthStore.setState({ user: { id: id(98) } as User, token: 'other-account' });
+    return 'other-account';
+  });
+  await expect(readAuthority()).rejects.toThrow('SESSION_CHANGED');
+  expect(get).toHaveBeenCalledOnce();
+  expect(refresh).toHaveBeenCalledOnce();
+});
+it('propagates an authority refresh failure to the native sign-in affordance', async () => {
+  const expired = { isAxiosError: true, response: { status: 401 } };
+  const failedRefresh = { isAxiosError: true, response: { status: 401, data: { detail: 'expired' } } };
+  const get = vi.spyOn(nativeClient, 'get').mockRejectedValue(expired);
+  vi.spyOn(client, 'refreshAccessToken').mockRejectedValue(failedRefresh);
+  await expect(readAuthority()).rejects.toBe(failedRefresh);
+  expect(nativeAuthError(failedRefresh)).toEqual({ response: { status: 401 } });
+  expect(get).toHaveBeenCalledOnce();
+});
+it('retries an authority read with concurrently refreshed credentials without refreshing again', async () => {
+  const get = vi.spyOn(nativeClient, 'get').mockImplementationOnce(async () => {
+    useAuthStore.setState({ token: 'concurrently-refreshed-read' });
+    throw { isAxiosError: true, response: { status: 401 } };
+  }).mockResolvedValueOnce({ data: authority });
+  const refresh = vi.spyOn(client, 'refreshAccessToken');
+  expect(await readAuthority()).toEqual(authority);
+  expect(get).toHaveBeenCalledTimes(2);
+  expect(refresh).not.toHaveBeenCalled();
+});
+
+it('refreshes a preview read and still validates the listing binding', async () => {
+  const get = vi.spyOn(nativeClient, 'get')
+    .mockRejectedValueOnce({ isAxiosError: true, response: { status: 401 } })
+    .mockResolvedValueOnce({ data: { ...preview, listing_id: id(11) } });
+  vi.spyOn(client, 'refreshAccessToken').mockImplementation(async () => {
+    useAuthStore.setState({ token: 'fresh-preview-session' });
+    return 'fresh-preview-session';
+  });
+  await expect(readPreview(id(10))).rejects.toThrow('INVALID_RESPONSE');
+  expect(get).toHaveBeenCalledTimes(2);
 });
