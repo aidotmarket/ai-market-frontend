@@ -1,6 +1,7 @@
 import axios from 'axios';
 import { refreshAccessToken } from './client';
 import { authSessionIdentity, useAuthStore } from '@/store/auth';
+import { authSessionOwner, isAuthSessionOwner } from '@/lib/auth-session-owner';
 import { sessionCsrf } from '@/lib/session-csrf';
 
 export type Verb = 'update' | 'publish' | 'unpublish';
@@ -59,21 +60,28 @@ export function nativeSession() {
   const csrf = sessionCsrf(token);
   return { token, csrf, headers: { Authorization: `Bearer ${token}`, 'X-CSRF-Token': csrf } };
 }
-// Pure reads may refresh once, but must never cross a session identity change.
+// A session lifecycle is the signed-in identity plus the page-local login generation.
+// Token rotation keeps both; logout or any re-login (even the same account) changes the generation.
+export function sessionLifecycle(): () => boolean {
+  const identity = authSessionIdentity(useAuthStore.getState());
+  const generation = authSessionOwner();
+  return () => isAuthSessionOwner(generation) && authSessionIdentity(useAuthStore.getState()) === identity;
+}
+// Pure reads may refresh once, but must never cross a session lifecycle change.
 export async function nativeRead<T>(path: string, options: { signal?: AbortSignal; params?: Record<string, unknown> } = {}): Promise<T> {
-  const owner = authSessionIdentity(useAuthStore.getState());
+  const sameSession = sessionLifecycle();
   for (let attempt = 0; ; attempt++) {
-    if (authSessionIdentity(useAuthStore.getState()) !== owner) throw new Error('SESSION_CHANGED');
+    if (!sameSession()) throw new Error('SESSION_CHANGED');
     options.signal?.throwIfAborted();
     const session = nativeSession();
     try {
       const { data } = await nativeClient.get<T>(path, { ...options, headers: session.headers });
-      if (authSessionIdentity(useAuthStore.getState()) !== owner) throw new Error('SESSION_CHANGED');
+      if (!sameSession()) throw new Error('SESSION_CHANGED');
       if (useAuthStore.getState().token !== session.token) throw new Error('SESSION_CHANGED');
       options.signal?.throwIfAborted();
       return data;
     } catch (error) {
-      if (authSessionIdentity(useAuthStore.getState()) !== owner) throw new Error('SESSION_CHANGED');
+      if (!sameSession()) throw new Error('SESSION_CHANGED');
       options.signal?.throwIfAborted();
       const retryable = attempt === 0 && axios.isAxiosError(error) && error.response?.status === 401;
       if (useAuthStore.getState().token !== session.token) {
@@ -87,20 +95,20 @@ export async function nativeRead<T>(path: string, options: { signal?: AbortSigna
 }
 // Only use for idempotent seller writes: retries retain the original action identity.
 export async function nativeWrite<T>(path: string, body: object, signal?: AbortSignal): Promise<T> {
-  const owner = authSessionIdentity(useAuthStore.getState());
+  const sameSession = sessionLifecycle();
   for (let attempt = 0; ; attempt++) {
-    if (authSessionIdentity(useAuthStore.getState()) !== owner) throw new Error('SESSION_CHANGED');
+    if (!sameSession()) throw new Error('SESSION_CHANGED');
     signal?.throwIfAborted();
     const session = nativeSession();
     try {
       const { data } = await nativeClient.post<T>(path, { ...body, csrf: session.csrf }, {
         ...(signal ? { signal } : {}), headers: session.headers,
       });
-      if (authSessionIdentity(useAuthStore.getState()) !== owner) throw new Error('SESSION_CHANGED');
+      if (!sameSession()) throw new Error('SESSION_CHANGED');
       signal?.throwIfAborted();
       return data;
     } catch (error) {
-      if (authSessionIdentity(useAuthStore.getState()) !== owner) throw new Error('SESSION_CHANGED');
+      if (!sameSession()) throw new Error('SESSION_CHANGED');
       signal?.throwIfAborted();
       const retryable = attempt === 0 && axios.isAxiosError(error) && error.response?.status === 401;
       if (useAuthStore.getState().token !== session.token) {

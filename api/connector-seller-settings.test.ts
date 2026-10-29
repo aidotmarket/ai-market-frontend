@@ -3,6 +3,7 @@ import type {User} from '@/types';
 import { afterEach, beforeEach, expect, it, vi } from 'vitest';
 import { nativeClient, nativeSession, nativeWrite, nativeAuthError, newDecision, readAuthority, reviewAuthority, setAuthority, reviewStopAuthority, stopAuthority, readPreview, reviewRevokePreview, revokePreview, validLimits } from './connector-seller-settings';
 import { useAuthStore } from '@/store/auth';
+import { advanceAuthSessionOwner } from '@/lib/auth-session-owner';
 import { authority, limits, hash, id, preview } from '@/tests/fixtures/seller-authority';
 beforeEach(() => { useAuthStore.setState({ user: {id:id(99)} as User, token: 'retained-native-credential' }); });
 afterEach(() => vi.restoreAllMocks());
@@ -172,4 +173,25 @@ it('refreshes a preview read and still validates the listing binding', async () 
   });
   await expect(readPreview(id(10))).rejects.toThrow('INVALID_RESPONSE');
   expect(get).toHaveBeenCalledTimes(2);
+});
+
+it('does not replay a read across logout and same-account sign-in', async () => {
+  const get = vi.spyOn(nativeClient, 'get').mockImplementationOnce(async () => {
+    advanceAuthSessionOwner();
+    useAuthStore.setState({ token: null });
+    advanceAuthSessionOwner();
+    useAuthStore.setState({ token: 'replacement-login-same-account' });
+    throw { isAxiosError: true, response: { status: 401 } };
+  }).mockResolvedValue({ data: authority });
+  const refresh = vi.spyOn(client, 'refreshAccessToken');
+  await expect(readAuthority()).rejects.toThrow('SESSION_CHANGED');
+  expect(get).toHaveBeenCalledOnce();
+  expect(refresh).not.toHaveBeenCalled();
+});
+it('rejects a completed read when the session is replaced by a same-account sign-in', async () => {
+  vi.spyOn(nativeClient, 'get').mockImplementationOnce(async () => {
+    advanceAuthSessionOwner();
+    return { data: authority };
+  });
+  await expect(readAuthority()).rejects.toThrow('SESSION_CHANGED');
 });
