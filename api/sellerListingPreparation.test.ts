@@ -1,3 +1,4 @@
+import * as client from './client';
 import {afterEach,beforeEach,expect,it,vi} from 'vitest';
 import {lookupPreparation,prepareListing,preparationRequest,preparationError} from './sellerListingPreparation';
 import {nativeClient,nativeSession} from './connector-seller-settings';
@@ -36,4 +37,20 @@ it.each([
   [503,'APPROVAL_UNAVAILABLE','Approval or policy'],[409,'FUTURE_BACKEND_CODE','could not be confirmed'],
 ])('maps %s %s safely', (status,detail,copy)=>{
   expect(preparationError({isAxiosError:true,response:{status,data:{detail}}})).toContain(copy);
+});
+
+it('preserves lookup parameters and cancellation across one session refresh', async () => {
+  const signal = new AbortController().signal;
+  const get = vi.spyOn(nativeClient, 'get')
+    .mockRejectedValueOnce({ isAxiosError: true, response: { status: 401 } })
+    .mockResolvedValueOnce({ data: row });
+  const refresh = vi.spyOn(client, 'refreshAccessToken').mockImplementation(async () => {
+    useAuthStore.setState({ token: 'fresh-lookup-session' });
+    return 'fresh-lookup-session';
+  });
+  expect(await lookupPreparation(approval, signal)).toEqual(row);
+  expect(refresh).toHaveBeenCalledOnce();
+  expect(get).toHaveBeenLastCalledWith('/seller-workspace/listing-preparation', {
+    signal, headers: nativeSession().headers, params: { draft_id: approval.draft_id, draft_version: 3 },
+  });
 });

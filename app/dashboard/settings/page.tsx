@@ -97,6 +97,8 @@ function SettingsVisit({ accountId, retireVisit }: {
   const [setupReauthToken, setSetupReauthToken] = useState('');
   const [enrolledForContinuation, setEnrolledForContinuation] = useState(false);
   const [sellerStatus, setSellerStatus] = useState<CapabilityStatus | null>(null);
+  const [capabilitiesError, setCapabilitiesError] = useState(false);
+  const [capabilitiesAttempt, setCapabilitiesAttempt] = useState(0);
   const settingsHeadingRef = useRef<HTMLHeadingElement>(null);
 
   useEffect(() => {
@@ -128,6 +130,7 @@ function SettingsVisit({ accountId, retireVisit }: {
     const isCurrent = ownOperation();
     if (!isCurrent() || !user) return;
 
+    setCapabilitiesError(false);
     getCapabilities()
       .then((capabilities) => {
         if (!cancelled && isCurrent()) {
@@ -135,13 +138,16 @@ function SettingsVisit({ accountId, retireVisit }: {
         }
       })
       .catch((err) => {
-        if (!cancelled && isCurrent()) console.error('Failed to fetch settings capabilities', err);
+        if (!cancelled && isCurrent()) {
+          console.error('Failed to fetch settings capabilities', err);
+          setCapabilitiesError(true);
+        }
       });
 
     return () => {
       cancelled = true;
     };
-  }, [user, ownOperation]);
+  }, [user, ownOperation, capabilitiesAttempt]);
 
   const handleSave = async () => {
     const isCurrent = ownOperation();
@@ -383,6 +389,12 @@ function SettingsVisit({ accountId, retireVisit }: {
 
   if (!accountId || !user || user.id !== accountId) return null;
 
+  // Never assert Buyer until the capability snapshot has confirmed it.
+  const accountType = sellerStatus === 'active' ? 'Seller'
+    : sellerStatus === 'provisioning' ? 'Seller (setting up)'
+    : user.role === 'admin' ? 'Admin'
+    : sellerStatus !== null ? 'Buyer'
+    : capabilitiesError ? null : 'Checking…';
   const isSeller =
     sellerStatus === 'active' ||
     sellerStatus === 'provisioning' ||
@@ -481,7 +493,12 @@ function SettingsVisit({ accountId, retireVisit }: {
           </div>
           <div className="flex justify-between">
             <dt className="text-sm text-gray-500">Role</dt>
-            <dd className="text-sm font-medium text-gray-900 capitalize">{user.role}</dd>
+            <dd className="text-sm font-medium text-gray-900">{accountType ?? (
+              <span>
+                Couldn&apos;t load account type.{' '}
+                <button type="button" className="text-blue-600 underline" onClick={() => setCapabilitiesAttempt((n) => n + 1)}>Retry</button>
+              </span>
+            )}</dd>
           </div>
           <div className="flex justify-between">
             <dt className="text-sm text-gray-500">Member since</dt>

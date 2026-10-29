@@ -1,4 +1,4 @@
-import { nativeClient, nativeSession, nativeWrite, uuid, digest } from '@/api/connector-seller-settings';
+import { nativeRead, nativeWrite, sessionLifecycle, uuid, digest } from '@/api/connector-seller-settings';
 import { isCompleteLicenseSelection, type LicenseSelection } from '@/api/listingLicenses';
 export interface PreparationBinding {
   preparation_id: string; seller_id: string; organization_id: string | null; draft_id: string; draft_version: number;
@@ -25,15 +25,17 @@ export function validView(v: PreparationView) {
     && (b.legal_identity_version === null || Number.isSafeInteger(b.legal_identity_version))
     && [b.source_hash, b.render_hash, b.enrichment_hash, b.sample_set_hash, b.legal_selection_hash, b.legal_document_hash, b.legal_identity_hash].every(digest);
 }
+// Each read rejects data fetched under a superseded token, so a batch that straddles a
+// sibling's refresh fails closed with SESSION_CHANGED and the user reloads the batch.
 export async function readSigningInstruments(ids: string[]): Promise<SigningInstrument[]> {
   if (!ids.length || ids.length > 50 || new Set(ids).size !== ids.length || !ids.every(uuid)) throw new Error('INVALID_BATCH');
-  const session = nativeSession();
+  const sameSession = sessionLifecycle();
   const results = await Promise.all(ids.map(async id => {
-    const { data } = await nativeClient.get<SigningInstrument>(`${base}/listing-preparation/${id}`, { headers: session.headers });
+    const data = await nativeRead<SigningInstrument>(`${base}/listing-preparation/${id}`);
     if (!validView(data) || data.id !== id || !data.license_selection || !isCompleteLicenseSelection(data.license_selection)) throw new Error('INVALID_INSTRUMENT');
     return data;
   }));
-  if (nativeSession().token !== session.token) throw new Error('SESSION_CHANGED');
+  if (!sameSession()) throw new Error('SESSION_CHANGED');
   return results;
 }
 export async function signInstruments(body: SigningRequest, signal?: AbortSignal): Promise<PreparationView[]> {

@@ -70,6 +70,42 @@ describe('SettingsPage capability refresh', () => {
     await waitFor(() => expect(vi.mocked(getSellerPublicProfile)).toHaveBeenCalled());
   });
 
+  it.each([
+    ['active', 'buyer', 'Seller'],
+    ['provisioning', 'buyer', 'Seller (setting up)'],
+    ['not_requested', 'admin', 'Admin'],
+    ['not_requested', 'buyer', 'Buyer'],
+    ['active', 'admin', 'Seller'],
+  ] as const)('displays account type for seller status %s and legacy role %s', async (status, role, label) => {
+    capabilitiesApi.getCapabilities.mockResolvedValue({ seller: { effective_status: status } });
+    useAuthStore.setState({ user: { ...user, role } });
+    render(<SettingsPage />);
+    const account = screen.getByRole('heading', { name: 'Account' }).closest('section')!;
+    await waitFor(() => expect(within(account).getByText('Role').nextElementSibling?.textContent).toBe(label));
+  });
+
+  it('never shows Buyer while capabilities are loading', async () => {
+    capabilitiesApi.getCapabilities.mockReturnValue(new Promise(() => {}));
+    useAuthStore.setState({ user: { ...user, role: 'buyer' } });
+    render(<SettingsPage />);
+    const account = screen.getByRole('heading', { name: 'Account' }).closest('section')!;
+    await waitFor(() => expect(capabilitiesApi.getCapabilities).toHaveBeenCalled());
+    expect(within(account).getByText('Role').nextElementSibling?.textContent).toBe('Checking…');
+  });
+
+  it('offers a retry instead of Buyer when capabilities fail, then shows Seller', async () => {
+    capabilitiesApi.getCapabilities
+      .mockRejectedValueOnce(new Error('capabilities unavailable'))
+      .mockResolvedValueOnce({ seller: { effective_status: 'active' } });
+    useAuthStore.setState({ user: { ...user, role: 'buyer' } });
+    render(<SettingsPage />);
+    const account = screen.getByRole('heading', { name: 'Account' }).closest('section')!;
+    const retry = await within(account).findByRole('button', { name: 'Retry' });
+    expect(within(account).queryByText('Buyer')).toBeNull();
+    fireEvent.click(retry);
+    await waitFor(() => expect(within(account).getByText('Role').nextElementSibling?.textContent).toBe('Seller'));
+  });
+
   it('keeps public business name settings absent for buyers', async () => {
     capabilitiesApi.getCapabilities.mockResolvedValue({ seller: { effective_status: 'not_requested' } });
     useAuthStore.setState({ user: { ...user, role: 'buyer' } });
