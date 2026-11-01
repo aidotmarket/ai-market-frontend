@@ -71,7 +71,7 @@ vi.mock('rehype-sanitize', () => ({
   default: {},
 }));
 
-const { default: ListingDetailPage } = await import('./page');
+const { default: ListingDetailPage, generateMetadata } = await import('./page');
 
 function makeListing(overrides: Partial<ListingWithSamples> = {}): ListingWithSamples {
   return {
@@ -695,4 +695,18 @@ it('uses the same UTC Published date in the header and version card near midnigh
  const timestamp='2026-09-27T23:30:00Z';
  const html=await renderPage(makeListing({published_at:timestamp}),[{version_id:'v1',version_label:'v1',published_at:timestamp,object_count:1,total_size_bytes:1024,status:'active'}]);
  expect(html.match(/Published Sep 27, 2026/g)).toHaveLength(2);
+});
+
+
+it.each([null, 'https://ai.market/l/Code/card.png'])('uses share_card_url in both social metadata images when present: %s', async share_card_url => {
+  fetchPublicListing.mockResolvedValue(makeListing({ share_card_url }));
+  const metadata = await generateMetadata({ params: Promise.resolve({ slug: 'test-dataset' }) });
+  expect(metadata.openGraph).toHaveProperty('title');
+  if (share_card_url) {
+    expect(metadata.openGraph).toHaveProperty('images', [share_card_url]);
+    expect(metadata.twitter).toHaveProperty('images', [share_card_url]);
+  } else {
+    expect(metadata.openGraph).not.toHaveProperty('images');
+    expect(metadata.twitter).not.toHaveProperty('images');
+  }
 });

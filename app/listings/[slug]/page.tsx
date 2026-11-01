@@ -68,9 +68,11 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
       url: `https://ai.market/listings/${listing.slug}`,
       type: 'website',
       siteName: 'ai.market',
+      ...(listing.share_card_url ? { images: [listing.share_card_url] } : {}),
     },
     twitter: {
       card: 'summary_large_image',
+      ...(listing.share_card_url ? { images: [listing.share_card_url] } : {}),
       title,
       description,
     },

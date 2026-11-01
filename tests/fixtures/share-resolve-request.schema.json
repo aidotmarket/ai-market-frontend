@@ -1,0 +1,14 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "ShareResolveRequest",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["code", "net", "crawler", "visitor_ip", "cookie"],
+  "properties": {
+    "code": {"type": "string", "pattern": "^[A-Za-z0-9_-]{1,16}$"},
+    "net": {"type": "string", "enum": ["x", "li", "rd", "bs", "wa", "tg", "em", "other"]},
+    "crawler": {"type": "boolean"},
+    "visitor_ip": {"type": ["string", "null"]},
+    "cookie": {"type": ["string", "null"], "maxLength": 4096}
+  }
+}

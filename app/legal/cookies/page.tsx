@@ -3,7 +3,7 @@ import type { Metadata } from 'next';
 export const metadata: Metadata = {
   alternates: { canonical: '/legal/cookies' },
   title: 'Cookie Policy | ai.market',
-  description: 'ai.market cookie policy describing the functional cookies we use to provide and secure our services.',
+  description: 'ai.market cookie policy describing the functional cookies and attribution cookie we use to provide and secure our services.',
 };
 
 export default function CookiePolicyPage() {
@@ -24,8 +24,12 @@ export default function CookiePolicyPage() {
 
         <h2>What cookies we use</h2>
         <p>
-          We use only strictly necessary and functional cookies. They keep you signed in through a session or refresh cookie, help protect sign-in and prevent abuse, and remember basic preferences. We do not use advertising cookies, third-party advertising cookies, or cross-site tracking cookies.
+          We use strictly necessary and functional cookies, and a first-party attribution cookie. They keep you signed in through a session or refresh cookie, help protect sign-in and prevent abuse, and remember basic preferences. We do not use advertising cookies, third-party advertising cookies, or cross-site tracking cookies.
         </p>
+
+        <table><thead><tr><th>Cookie</th><th>Purpose</th><th>Duration</th><th>Provider</th></tr></thead>
+          <tbody><tr><td>aim_ref</td><td>Attributes listing inquiries to shared links; contains no identity.</td><td>7 days</td><td>First-party (ai.market)</td></tr></tbody>
+        </table>
 
         <h2>Managing cookies</h2>
         <p>
