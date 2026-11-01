@@ -57,15 +57,20 @@ export default function SellerShareControls({
   const [uiLocale, setUiLocale] = useState<ReturnType<typeof preferredAnonymousAllAILocale>>('en');
   const t = PROMOTE_STRINGS[uiLocale];
 
+  const fetchEnabled = !compact || open;
+
   useEffect(() => {
     const detected = preferredAnonymousAllAILocale(navigator.language);
     setUiLocale(detected);
+    setShare(null);
+    setKitOpen(false);
+    setError('');
+    if (!fetchEnabled) return;
     let active = true;
     let newestRequest = 0;
     let expiry: ReturnType<typeof setTimeout> | undefined;
     let deadline = 0;
     let captionInitialized = false;
-    setShare(null);
     async function refresh() {
       const sequence = ++newestRequest;
       const started = performance.now();
@@ -106,7 +111,7 @@ export default function SellerShareControls({
       clearInterval(interval);
       window.removeEventListener('focus', onFocus);
     };
-  }, [listingId, locale]);
+  }, [listingId, locale, fetchEnabled]);
 
   const effectiveLocale = locale ?? share?.locale;
   const captionStatus = share?.caption?.status;
@@ -195,7 +200,14 @@ export default function SellerShareControls({
     }
   }
 
-  if (!promote) return null;
+  if (!promote) return <div>
+    {compact && <button type="button" onClick={() => setOpen(value => !value)}
+      className="rounded-md border border-[#3F51B5] px-3 py-1.5 text-xs font-medium text-[#3F51B5] hover:bg-[#E8EAF6]">
+      {open ? t.hide : t.share}
+    </button>}
+    {open && loading && <p role="status" className="text-sm text-gray-500">{t.loading}</p>}
+    {open && error && <div role="alert" className="rounded-md border border-red-200 bg-red-50 p-3 text-sm text-red-700">{error}</div>}
+  </div>;
 
   return (
     <div aria-label={t.share} className={compact ? 'text-left' : 'rounded-lg border border-gray-200 bg-white p-4'}>

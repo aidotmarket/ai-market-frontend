@@ -19,7 +19,7 @@ export default function CookiePolicyPage() {
 
         <h2>The short version</h2>
         <p>
-          We use cookies only to make ai.market work. We do not use cookies for advertising, we do not sell or share cookie data, and we do not track you across other websites.
+          We use essential and functional cookies to make ai.market work, plus one first-party attribution cookie, aim_ref, which lasts 7 days and contains no identity. We do not use cookies for advertising, we do not sell or share cookie data, and we do not track you across other websites.
         </p>
 
         <h2>What cookies we use</h2>
@@ -33,7 +33,7 @@ export default function CookiePolicyPage() {
 
         <h2>Managing cookies</h2>
         <p>
-          Your browser lets you block or delete cookies. Because our cookies only make the product work, blocking them may prevent you from signing in or using parts of the service.
+          Your browser lets you block or delete cookies. Blocking essential and functional cookies may prevent you from signing in or using parts of the service. Blocking aim_ref prevents attribution of listing inquiries to shared links.
         </p>
 
         <h2>Changes</h2>

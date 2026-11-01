@@ -23,7 +23,7 @@ function makeShare(overrides: Partial<ListingShareResponse> = {}): ListingShareR
   return {
     promote: {
       enabled: true, can_share: true, ttl_seconds: 45,
-      links: Object.fromEntries(['x', 'li', 'rd', 'bs', 'wa', 'tg', 'em'].map(net => [net, { share_url: `https://ai.market/l/AbC123xYz987/${net}`, compose_url: `https://compose.example/${net}`, prefilled: net !== 'li' }])) as NonNullable<ListingShareResponse['promote']>['links'],
+      links: Object.fromEntries(['x', 'li', 'rd', 'bs', 'wa', 'tg', 'em'].map(net => [net, { share_url: `https://ai.market/l/AbC123xYz987/${net}`, compose_url: `https://compose.example/${net}`, prefilled: net !== 'li' && net !== 'rd' }])) as NonNullable<ListingShareResponse['promote']>['links'],
       copy_text: 'Server safe text', share_title: 'Server safe title',
       counts: [{ network: 'x', opens: { all: 10, d30: 3 }, inquiries: { all: { value: 2, masked: false }, d30: { value: null, masked: true } } }],
       rules: 'Attribution rules',
@@ -55,6 +55,16 @@ describe('SellerShareControls', () => {
       },
       share: undefined,
     });
+  });
+
+  it.each([false, true])('shows an initial owner failure without the promote panel (compact=%s)', async compact => {
+    fetchListingShare.mockRejectedValueOnce(new Error('offline'));
+    render(<SellerShareControls listingId="listing-1" compact={compact} />);
+    if (compact) fireEvent.click(screen.getByRole('button', { name: 'Share' }));
+    expect((await screen.findByRole('alert')).textContent).toBe('Share controls are unavailable right now.');
+    expect(screen.queryByRole('button', { name: 'Copy link' })).toBeNull();
+    expect(screen.queryByRole('table')).toBeNull();
+    expect(screen.queryByRole('button', { name: 'Share kit' })).toBeNull();
   });
 
   it('loads and renders copy link, card preview, and current caption fields', async () => {
@@ -277,6 +287,44 @@ describe('SellerShareControls', () => {
 });
 
 describe('ShareKitModal', () => {
+  beforeEach(() => {
+    Object.assign(navigator, { clipboard: { writeText: vi.fn().mockResolvedValue(undefined) } });
+  });
+  afterEach(() => { vi.restoreAllMocks(); });
+  it.each(['modal', 'inline'])('copies before opening and offers a fresh-click retry in %s controls', async mount => {
+    const share = makeShare();
+    const open = vi.spyOn(window, 'open').mockImplementation(() => null);
+    const write = vi.mocked(navigator.clipboard.writeText);
+    if (mount === 'modal') render(<ShareKitModal share={share} onClose={vi.fn()} />);
+    else {
+      fetchListingShare.mockResolvedValueOnce(share);
+      render(<SellerShareControls listingId="listing-1" />);
+      await screen.findByRole('button', { name: 'LinkedIn' });
+    }
+    for (const label of ['LinkedIn', 'Reddit']) {
+      const pending = deferred<void>();
+      write.mockReturnValueOnce(pending.promise);
+      fireEvent.click(screen.getByRole('button', { name: label }));
+      expect(write).toHaveBeenLastCalledWith(share.promote!.copy_text);
+      expect(write.mock.invocationCallOrder.at(-1)).toBeLessThan(open.mock.invocationCallOrder.at(-1)!);
+      expect(screen.queryByText('Text copied, paste it into your post')).toBeNull();
+      pending.resolve();
+      expect(await screen.findByText('Text copied, paste it into your post')).toBeTruthy();
+
+      write.mockRejectedValueOnce(new Error('focus lost'));
+      fireEvent.click(screen.getByRole('button', { name: label }));
+      const retry = await screen.findByRole('button', { name: 'Copy text' });
+      expect(screen.queryByText('Text copied, paste it into your post')).toBeNull();
+      write.mockClear();
+      open.mockClear();
+      fireEvent.click(retry);
+      expect(write).toHaveBeenCalledExactlyOnceWith(share.promote!.copy_text);
+      expect(open).not.toHaveBeenCalled();
+      expect(await screen.findByText('Text copied, paste it into your post')).toBeTruthy();
+      expect(screen.queryByRole('button', { name: 'Copy text' })).toBeNull();
+    }
+  });
+
   it('uses all seven server compose URLs and copies only server text when needed', async () => {
     const share = makeShare();
     const open = vi.spyOn(window, 'open').mockImplementation(() => null);

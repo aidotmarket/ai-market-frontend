@@ -57,6 +57,27 @@ for (const mount of ['edit', 'dashboard', 'publication'] as const) {
         fireEvent.click(screen.getByRole('button', { name: 'Share' })); await flush();
       }
     }
+    if (mount === 'dashboard') it('fetches only while expanded and stops polling and focus refresh when closed', async () => {
+      mocks.getMyListings.mockResolvedValue({ data: [{ ...publication, id: 'listing-1', category: 'Research', created_at: '2026-10-01', price: 10 }] });
+      render(<ListingsPage />); await flush();
+      expect(mocks.fetchListingShare).not.toHaveBeenCalled();
+      await advance(60000); fireEvent.focus(window); await flush();
+      expect(mocks.fetchListingShare).not.toHaveBeenCalled();
+      fireEvent.click(screen.getByRole('button', { name: 'Share' })); await flush();
+      expect(mocks.fetchListingShare).toHaveBeenCalledTimes(1);
+      await advance(30000);
+      expect(mocks.fetchListingShare).toHaveBeenCalledTimes(2);
+      fireEvent.focus(window); await flush();
+      expect(mocks.fetchListingShare).toHaveBeenCalledTimes(3);
+      fireEvent.click(screen.getByRole('button', { name: 'Share kit' }));
+      expect(screen.getByRole('dialog')).toBeTruthy();
+      fireEvent.click(screen.getByRole('button', { name: 'Hide share' })); await flush();
+      expect(screen.queryByRole('dialog')).toBeNull();
+      await advance(60000); fireEvent.focus(window); await flush();
+      expect(mocks.fetchListingShare).toHaveBeenCalledTimes(3);
+      fireEvent.click(screen.getByRole('button', { name: 'Share' })); await flush();
+      expect(mocks.fetchListingShare).toHaveBeenCalledTimes(4);
+    });
     it('never mounts controls or calls owner share for a draft', async () => {
       await renderMount('draft');
       expect(mocks.fetchListingShare).not.toHaveBeenCalled();

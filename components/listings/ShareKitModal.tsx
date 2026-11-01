@@ -7,24 +7,33 @@ import { PROMOTE_STRINGS, PROMOTE_NETWORKS } from '@/lib/i18n/promote';
 
 export function PromoteNetworkButtons({ promote, uiLocale = 'en' }: { promote: PromoteOut; uiLocale?: AnonymousAllAILocale }) {
   const [message, setMessage] = useState('');
+  const [copyFailed, setCopyFailed] = useState(false);
   const t = PROMOTE_STRINGS[uiLocale];
   if (!promote.can_share) return null;
-  async function compose(network: PromoteNetwork) {
-    const link = promote.links[network];
-    window.open(link.compose_url, '_blank', 'noopener,noreferrer');
-    if (!link.prefilled) {
-      try {
-        await navigator.clipboard.writeText(promote.copy_text);
+  function copyText() {
+    setMessage('');
+    setCopyFailed(false);
+    // Start within the click gesture, before the composer takes focus.
+    try {
+      return navigator.clipboard.writeText(promote.copy_text).then(() => {
         setMessage(t.paste);
-      } catch { setMessage(t.copyError); }
+      }, () => { setCopyFailed(true); });
+    } catch {
+      setCopyFailed(true);
     }
+  }
+  function compose(network: PromoteNetwork) {
+    const link = promote.links[network];
+    if (!link.prefilled) void copyText();
+    window.open(link.compose_url, '_blank', 'noopener,noreferrer');
   }
   return <><div className="flex flex-wrap gap-2">
     {(Object.keys(PROMOTE_NETWORKS) as PromoteNetwork[]).map(network => <button type="button" key={network}
       onClick={() => compose(network)} className="rounded-md bg-[#3F51B5] px-3 py-2 text-xs font-medium text-white hover:bg-[#303F9F]">
       {PROMOTE_NETWORKS[network]}
     </button>)}
-  </div>{message && <p role="status" className="text-sm text-gray-600">{message}</p>}</>;
+  </div>{copyFailed && <button type="button" onClick={() => { void copyText(); }}
+    className="rounded-md border border-gray-300 px-3 py-2 text-sm hover:bg-gray-50">{t.copyText}</button>}{message && <p role="status" className="text-sm text-gray-600">{message}</p>}</>;
 }
 
 export default function ShareKitModal({ share, onClose, uiLocale = 'en' }: {
