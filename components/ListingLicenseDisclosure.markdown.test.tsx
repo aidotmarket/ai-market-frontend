@@ -2,6 +2,8 @@
 import {cleanup,fireEvent,render,screen,waitFor} from '@testing-library/react';
 import {afterEach,expect,it,vi} from 'vitest';
 import {webcrypto} from 'node:crypto';
+import {AxiosError} from 'axios';
+import {primaryButtonClass} from './ui/button-styles';
 import ListingLicenseDisclosure from './ListingLicenseDisclosure';
 import {hashLicenseComponentBytes,sha256} from '@/lib/customLicenseVerification';
 import type {ListingLicenseDetails} from '@/types';
@@ -27,6 +29,7 @@ it.each([[false,false],[true,false],[false,true],[true,true]])('buyer renders ve
  render(<ListingLicenseDisclosure license={licence} onVerificationChange={verified}/>);
  await screen.findByRole('button',{name:'Read Marketplace Listing Covenant'});
  if(tampered){
+  expect(screen.getByText('Hash mismatch — do not accept')).toBeTruthy();
   expect(screen.queryByRole('button',{name:'Read full licence'})).toBeNull();
   expect(createObjectURL).not.toHaveBeenCalled();
   expect(verified).not.toHaveBeenCalledWith(true);
@@ -56,4 +59,55 @@ it.each([[false,false],[true,false],[false,true],[true,true]])('buyer renders ve
  expect(screen.getByRole('dialog').querySelector('strong')).toBeNull();
  expect(screen.getByText('Plain **stock** covenant')).toBeTruthy();
  expect(licence.sha256).toBe(hash);
+});
+
+
+it.each(['api', 'fetch'] as const)('handles custom licence refusals through %s without verifying or exposing bytes', async (transport) => {
+ vi.stubGlobal('crypto', webcrypto);
+ const covenant = new TextEncoder().encode('Public covenant\n');
+ const covenantHash = await hashLicenseComponentBytes(covenant, {kind: 'covenant', code: 'marketplace-listing', version: '1.0', params: {}});
+ const licence: ListingLicenseDetails = {
+  code: 'custom', version: '1', params: {ai_training: true, source_sha256: 'a'.repeat(64)},
+  sha256: 'b'.repeat(64), covenant_sha256: covenantHash, rider_sha256: null, summary: [],
+  full_text_url: '/licenses/custom/' + 'b'.repeat(64),
+  download_url: transport === 'api' ? '/api/v1/listings/id/license-document?download=1' : 'https://api.ai.market/api/v1/listings/id/license-document?download=1',
+ };
+ const originalPath = window.location.pathname + window.location.search + window.location.hash;
+ const listingPath = '/listings/seller-example?from=search#licence';
+ window.history.replaceState(null, '', listingPath);
+ try {
+  for (const failure of [401, 403, 500, 'network'] as const) {
+   const verified = vi.fn();
+   const error = failure === 'network' ? new TypeError('Failed to fetch') : new AxiosError('Document refused', undefined, undefined, undefined, {
+    status: failure, statusText: 'Refused', data: {}, headers: {}, config: {} as never,
+   });
+   get.mockRejectedValue(error);
+   const fetchMock = vi.fn(async (input: RequestInfo | URL) => {
+    if (String(input).includes('marketplace-listing')) return new Response(covenant, {headers: {'content-type': 'text/plain'}});
+    if (failure === 'network') throw error;
+    return new Response(null, {status: failure});
+   });
+   vi.stubGlobal('fetch', fetchMock);
+   const view = render(<ListingLicenseDisclosure license={licence} onVerificationChange={verified} />);
+   const signIn = failure === 401 || failure === 403;
+   const status = await screen.findByText(signIn ? "Sign in to read and verify the seller's licence" : 'Could not verify — do not accept');
+   expect(status.className.includes('text-red-800')).toBe(!signIn);
+   expect(verified).toHaveBeenLastCalledWith(false);
+   expect(verified).not.toHaveBeenCalledWith(true);
+   expect(screen.getByText('Fetched bytes match the server hash')).toBeTruthy();
+   expect(screen.queryByRole('button', {name: 'Read full licence'})).toBeNull();
+   expect(screen.queryByRole('link', {name: licence.full_text_url})).toBeNull();
+   if (signIn) {
+    const link = screen.getByRole('link', {name: 'Sign in'});
+    expect(link.getAttribute('href')).toBe(`/login?redirect=${encodeURIComponent(listingPath)}`);
+    expect(link.className).toBe(primaryButtonClass);
+   } else {
+    expect(screen.queryByRole('link', {name: 'Sign in'})).toBeNull();
+   }
+   expect(fetchMock.mock.calls.some(([url]) => String(url).startsWith('/licenses/custom/'))).toBe(false);
+   view.unmount();
+  }
+ } finally {
+  window.history.replaceState(null, '', originalPath);
+ }
 });

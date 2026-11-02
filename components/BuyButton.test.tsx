@@ -523,6 +523,29 @@ describe('BuyButton licence acceptance', () => {
     } };
   }
 
+  it.each([401, 403])('keeps custom licence acceptance disabled when document access returns %s', async (status) => {
+    const get = vi.spyOn(api, 'get').mockRejectedValue(new AxiosError('Authentication required', undefined, undefined, undefined, {
+      status, statusText: 'Refused', headers: {}, data: {}, config: {} as never,
+    }));
+    vi.stubGlobal('fetch', vi.fn(async (input: RequestInfo | URL) => documentResponse(
+      String(input).includes('marketplace-listing') ? covenantText : riderText,
+    )));
+    try {
+      await renderBuyer(<ToastProvider><BuyButton listingId="listing-1" slug="listing" price={20} pricingType="one_time" licenseDetails={await customLicense()} /></ToastProvider>);
+      await screen.findByText("Sign in to read and verify the seller's licence");
+      expect(screen.getAllByText('Fetched bytes match the server hash')).toHaveLength(2);
+      const authority = screen.getByRole('checkbox', { name: 'Confirm licence authority' }) as HTMLInputElement;
+      expect(authority.disabled).toBe(true);
+      completeAcceptanceForm();
+      const buy = screen.getByRole('button', { name: 'Accept and continue to payment' }) as HTMLButtonElement;
+      expect(buy.disabled).toBe(true);
+      fireEvent.click(buy);
+      expect(createCheckout).not.toHaveBeenCalled();
+    } finally {
+      get.mockRestore();
+    }
+  });
+
   it('activates both custom document links using the exact authenticated, verified bytes', async () => {
     const { calls, fetchMock, createdBlobs, createObjectURL, revokeObjectURL, license, unmount, restore } = await renderCustom();
     try {
