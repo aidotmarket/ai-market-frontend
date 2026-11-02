@@ -6,6 +6,21 @@ export const MAX_SELECTION_METADATA_BYTES = 64_000_000;
 export const identity = (object: WorkspaceObject) => JSON.stringify([object.key, object.version_id]);
 export class FolderSelectionError extends Error {}
 export type FolderProgress = { files: number; bytes: number };
+export class FolderRequestError extends FolderSelectionError {
+  constructor(error: import('axios').AxiosError, readonly progress: FolderProgress) {
+    const status = error.response?.status;
+    const detail: unknown = error.response?.data && (error.response.data as { detail?: unknown }).detail;
+    const reason = typeof detail === 'string' ? detail
+      : !error.response ? 'the connection to ai.market was interrupted'
+      : status === 400 ? 'the folder listing request was invalid'
+      : status === 401 || status === 403 ? 'your sign-in or access to this connection changed'
+      : status === 404 ? 'the connection or folder was not found'
+      : status === 429 ? 'too many requests to your storage; wait a minute and try again'
+      : status !== undefined && status >= 500 && status < 600 ? 'the storage provider did not respond'
+      : 'the storage request failed';
+    super(reason);
+  }
+}
 
 // Add each metadata record once instead of reserializing the entire selection
 // after every provider page. Repeated observations must agree exactly.
@@ -63,7 +78,8 @@ export async function resolveFolder(
       } catch (error) {
         // Only the pre-discovery rate rejection is safe to retry with this
         // single-use cursor. An unknown provider/network outcome is not.
-        if (!axios.isAxiosError(error) || error.response?.status !== 429 || attempt === 3) throw error;
+        if (!axios.isAxiosError(error)) throw error;
+        if (error.response?.status !== 429 || attempt === 3) throw new FolderRequestError(error, files.progress());
         options.onRateLimit?.(true);
         try {
           await (options.wait ?? (ms => new Promise(resolve => setTimeout(resolve, ms))))(60_000);

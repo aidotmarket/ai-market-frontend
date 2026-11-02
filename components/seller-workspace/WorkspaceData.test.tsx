@@ -102,6 +102,46 @@ describe('Seller data browser', () => {
     await screen.findByText(object.key);
   });
 
+  it.each([
+    [400, 'Folder listing cursor is invalid; start again', 'Folder listing cursor is invalid; start again'],
+    [400, 'Folder listing cursor has expired; start again', 'Folder listing cursor has expired; start again'],
+    [400, 'Folder listing cursor has already been used', 'Folder listing cursor has already been used'],
+    [400, 'Folder listing scope is invalid', 'Folder listing scope is invalid'],
+    [400, {provider:'private-provider-text'}, 'the folder listing request was invalid'],
+    [401, undefined, 'your sign-in or access to this connection changed'],
+    [403, undefined, 'your sign-in or access to this connection changed'],
+    [404, undefined, 'the connection or folder was not found'],
+    [429, undefined, 'too many requests to your storage; wait a minute and try again'],
+    [429, 'Too many requests', 'Too many requests'],
+    [503, 'File discovery is unavailable', 'File discovery is unavailable'],
+    [500, {provider:'private-provider-text'}, 'the storage provider did not respond'],
+    [undefined, undefined, 'the connection to ai.market was interrupted'],
+  ])('reports folder scan progress and preserves selection after status %s (%s)',async(status,detail,reason)=>{
+    const onSave=vi.fn();
+    const scanned=Array.from({length:1000},(_,index)=>({...object,key:`datasets/scanned-${index}.csv`,size:index===0?178361779:1}));
+    api.listWorkspaceObjects.mockResolvedValueOnce({objects:[object],next_cursor:null})
+      .mockResolvedValueOnce({objects:scanned,next_cursor:'scan-next'})
+      .mockRejectedValue({isAxiosError:true,message:'private-provider-text',response:status===undefined?undefined:{status,data:{detail,provider:'private-provider-text'}}});
+    render(<WorkspaceData enabled connections={[connection]} savedSource={savedSource} onSaveSelection={onSave}/>);
+    const checkbox=await screen.findByRole('checkbox',{name:`Select ${object.key}`});
+    try {
+      if(status===429)vi.useFakeTimers();
+      await act(async()=>{
+        fireEvent.click(screen.getByRole('button',{name:'Select entire connected folder'}));
+        if(status===429)await vi.advanceTimersByTimeAsync(180000);
+      });
+      const alert=screen.getByRole('alert');
+      expect(alert.textContent).toBe(`We couldn't read your storage after checking 1,000 files (170.1 MB): ${reason}. No partial folder has been added. Try again.`);
+      expect(alert.textContent).not.toContain('private-provider-text');
+      expect(screen.getByText('1 file selected · 1 KB')).toBeTruthy();
+      expect((checkbox as HTMLInputElement).checked).toBe(true);
+      expect(within(screen.getByRole('list',{name:'Selected files'})).getAllByRole('listitem').map(item=>item.textContent)).toEqual([object.key]);
+      expect(onSave).not.toHaveBeenCalled();
+      expect(api.listWorkspaceObjects).toHaveBeenCalledTimes(status===429?6:3);
+      for(const call of api.listWorkspaceObjects.mock.calls.slice(2))expect(call).toEqual([connection.id,'datasets/','scan-next',1000]);
+    } finally { vi.useRealTimers(); }
+  });
+
   it('ticks and uploads a saved sample object with the pinned limits and progress',async()=>{
     api.listWorkspaceObjects.mockResolvedValue({objects:[object],next_cursor:null});
     api.uploadWorkspaceSample.mockImplementation(async(_connection:string,_version:number,_index:number,_file:File,_key:string,progress:(loaded:number,total:number)=>void)=>{progress(512,1024);progress(1024,1024);return {index:0,size:1024,sha256:'a'.repeat(64),binding:'size_only'};});

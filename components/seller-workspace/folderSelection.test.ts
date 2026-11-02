@@ -1,5 +1,5 @@
 import {expect,it,vi} from 'vitest';
-import {mergeSelection,resolveFolder} from './folderSelection';
+import {FolderRequestError,mergeSelection,resolveFolder} from './folderSelection';
 import type {WorkspaceObject} from '@/api/sellerWorkspace';
 const file=(key:string,size=1)=>({key,size,etag:'e',version_id:null,last_modified:'',format_candidate:'csv'} as WorkspaceObject);
 it('includes all pages and nested files, excludes folder markers, and counts overlap once',async()=>{
@@ -50,4 +50,15 @@ it('waits and retries only a rate rejection with the same cursor',async()=>{
  expect(list.mock.calls.slice(1)).toEqual([['c','data/','next'],['c','data/','next']]);
  expect(wait).toHaveBeenCalledWith(60000);
  expect(onRateLimit.mock.calls).toEqual([[true],[false]]);
+});
+
+it('captures completed scan progress on an Axios page failure without returning partial files',async()=>{
+ const failure={isAxiosError:true,message:'private provider message',response:{status:503,data:{detail:'File discovery is unavailable'}}};
+ const list=vi.fn().mockResolvedValueOnce({objects:[file('data/a',178362778)],next_cursor:'next'}).mockRejectedValue(failure);
+ const resolved=vi.fn();
+ const scan=resolveFolder('c','data',list).then(resolved);
+ await expect(scan).rejects.toBeInstanceOf(FolderRequestError);
+ await expect(scan).rejects.toMatchObject({message:'File discovery is unavailable',progress:{files:1,bytes:178362778}});
+ expect(resolved).not.toHaveBeenCalled();
+ expect(list).toHaveBeenCalledTimes(2);
 });
