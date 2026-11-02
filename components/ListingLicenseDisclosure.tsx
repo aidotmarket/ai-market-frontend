@@ -1,6 +1,8 @@
 'use client';
 
 import { useEffect, useMemo, useState } from 'react';
+import { isAxiosError } from 'axios';
+import { primaryButtonClass } from './ui/button-styles';
 import LicenseReadingDialog from './LicenseReadingDialog';
 import type { ListingLicenseDetails } from '@/types';
 import { api } from '@/api/client';
@@ -24,7 +26,7 @@ interface DocumentReference {
 }
 
 interface LoadedDocument extends DocumentReference {
-  state: 'loading' | 'matched' | 'mismatch' | 'error';
+  state: 'loading' | 'matched' | 'mismatch' | 'sign_in' | 'error';
   text: string | null;
   objectUrl?: string;
   verifiedMediaType?: 'text/plain' | 'application/pdf';
@@ -166,6 +168,9 @@ export default function ListingLicenseDisclosure({
           contentType = String(responseHeaders['content-type'] ?? '');
         } else {
           const response = await fetch(location.href, { credentials: 'include', cache: 'no-store' });
+          if (response.status === 401 || response.status === 403) {
+            return { ...reference, state: 'sign_in', text: null };
+          }
           if (!response.ok) throw new Error('document fetch failed');
           bytes = new Uint8Array(await response.arrayBuffer());
           responseHeaders = Object.fromEntries(response.headers.entries());
@@ -188,8 +193,9 @@ export default function ListingLicenseDisclosure({
           objectUrl,
           verifiedMediaType,
         };
-      } catch {
-        return { ...reference, state: 'error', text: null };
+      } catch (error) {
+        const status = isAxiosError(error) ? error.response?.status : undefined;
+        return { ...reference, state: status === 401 || status === 403 ? 'sign_in' : 'error', text: null };
       }
     })).then((loaded) => {
       if (cancelled) return;
@@ -231,12 +237,16 @@ export default function ListingLicenseDisclosure({
                   ? <a href={canonicalHref} target="_blank" rel="noreferrer" className="break-all text-xs text-indigo-700 underline">{document.canonicalUrl}</a>
                   : <span className="break-all text-xs text-gray-600">{document.canonicalUrl}</span>}
               </div>
-              <span role="status" className={`text-xs font-medium ${document.state === 'matched' ? 'text-green-800' : document.state === 'loading' ? 'text-gray-500' : 'text-red-800'}`}>
-                {document.state === 'matched' ? 'Fetched bytes match the server hash' : document.state === 'loading' ? 'Verifying fetched bytes…' : document.state === 'mismatch' ? 'Hash mismatch — do not accept' : 'Could not verify — do not accept'}
+              <span role="status" className={`text-xs font-medium ${document.state === 'matched' ? 'text-green-800' : document.state === 'sign_in' ? 'text-gray-700' : document.state === 'loading' ? 'text-gray-500' : 'text-red-800'}`}>
+                {document.state === 'matched' ? 'Fetched bytes match the server hash' : document.state === 'sign_in' ? "Sign in to read and verify the seller's licence" : document.state === 'loading' ? 'Verifying fetched bytes…' : document.state === 'mismatch' ? 'Hash mismatch — do not accept' : 'Could not verify — do not accept'}
               </span>
             </div>
             <p className="mt-2 break-all font-mono text-[11px] text-gray-600">SHA-256: {document.sha256}</p>
             <div className="mt-3 flex flex-wrap gap-4 text-sm">
+              {document.state === 'sign_in' && <a
+                href={`/login?redirect=${encodeURIComponent(window.location.pathname + window.location.search + window.location.hash)}`}
+                className={primaryButtonClass}
+              >Sign in</a>}
               {document.text && <LicenseReadingDialog label={document.kind==='covenant'?'Read Marketplace Listing Covenant':document.kind==='rider'?'Read AI-Training Rider':'Read full licence'} href={canonicalHref??downloadHref??''} text={document.text} customMarkdown={customDocument} />}
               {document.verifiedMediaType==='application/pdf'&&canonicalHref&&<LicenseReadingDialog label="Read full licence" href={canonicalHref} pdf />}
               {downloadHref
