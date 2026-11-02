@@ -2,7 +2,7 @@
 import { act, cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { SAMPLE_REFUSALS, sampleUploadRefusal, WorkspaceActivity, WorkspaceData, objectFormatLabel } from './WorkspaceData';
-import type { SellerWorkspaceConnection, WorkspaceProfileJob } from '@/api/sellerWorkspace';
+import { SellerWorkspaceApiError, type SellerWorkspaceConnection, type WorkspaceProfileJob } from '@/api/sellerWorkspace';
 import {createStandardSelection} from '@/api/listingLicenses';
 
 const api = vi.hoisted(() => ({
@@ -11,7 +11,9 @@ const api = vi.hoisted(() => ({
   createIdempotencyKey: vi.fn(() => 'synthetic-cancel-key'),
   uploadWorkspaceSample:vi.fn(),SAMPLE_MAX_FILES:10,SAMPLE_MAX_FILE_BYTES:64*1024*1024,SAMPLE_MAX_TOTAL_BYTES:256*1024*1024,
 }));
-vi.mock('@/api/sellerWorkspace', () => api);
+vi.mock('@/api/sellerWorkspace', async importOriginal => ({
+  ...await importOriginal<typeof import('@/api/sellerWorkspace')>(), ...api,
+}));
 
 const connection = {
   id: 'connection-1', bucket: 'seller-data', prefix: 'datasets/', version: 1, status: 'verified',
@@ -93,7 +95,7 @@ describe('Seller data browser', () => {
   });
 
   it('recovers from a load failure without exposing raw server errors', async () => {
-    api.listWorkspaceObjects.mockRejectedValueOnce(new Error('secret-provider-response'));
+    api.listWorkspaceObjects.mockRejectedValueOnce(new SellerWorkspaceApiError('unknown'));
     api.listWorkspaceObjects.mockResolvedValueOnce({ objects: [object], next_cursor: null });
     render(<WorkspaceData enabled connections={[connection]} />);
     await screen.findByRole('alert');
@@ -121,7 +123,7 @@ describe('Seller data browser', () => {
     const scanned=Array.from({length:1000},(_,index)=>({...object,key:`datasets/scanned-${index}.csv`,size:index===0?178361779:1}));
     api.listWorkspaceObjects.mockResolvedValueOnce({objects:[object],next_cursor:null})
       .mockResolvedValueOnce({objects:scanned,next_cursor:'scan-next'})
-      .mockRejectedValue({isAxiosError:true,message:'private-provider-text',response:status===undefined?undefined:{status,data:{detail,provider:'private-provider-text'}}});
+      .mockRejectedValue(new SellerWorkspaceApiError('unknown',status,typeof detail==='string'?detail:undefined));
     render(<WorkspaceData enabled connections={[connection]} savedSource={savedSource} onSaveSelection={onSave}/>);
     const checkbox=await screen.findByRole('checkbox',{name:`Select ${object.key}`});
     try {

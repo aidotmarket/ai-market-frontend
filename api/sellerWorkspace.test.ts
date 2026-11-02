@@ -191,7 +191,15 @@ describe('Seller Workspace safe errors', () => {
   ])('reduces status %s to a safe code', async (status, detail, code) => {
     client.get.mockRejectedValueOnce(responseError(status, detail));
     const rejection = getSellerWorkspaceAuthorization('connection-1');
-    await expect(rejection).rejects.toEqual(new SellerWorkspaceApiError(code as never));
+    await expect(rejection).rejects.toMatchObject({code,status,detail:typeof detail==='string'?detail:undefined,message:code});
     await expect(rejection).rejects.not.toThrow(/secret|AccessDenied|ExternalId/i);
   });
+});
+
+it('keeps network errors safe with no HTTP status or backend detail',async()=>{
+ client.get.mockRejectedValueOnce(new AxiosError('private provider text','ERR_NETWORK'));
+ const rejection=listWorkspaceObjects('c','data/');
+ await expect(rejection).rejects.toBeInstanceOf(SellerWorkspaceApiError);
+ await expect(rejection).rejects.toMatchObject({code:'unknown',status:undefined,detail:undefined,message:'unknown'});
+ await expect(rejection).rejects.not.toThrow('private provider text');
 });
