@@ -345,3 +345,16 @@ describe('EditListingPage', () => {
     });
   });
 });
+
+it('loads and pastes over-limit descriptions intact while blocking Save Draft',async()=>{
+ listingsApi.getListing.mockResolvedValue({...baseListing,description:'x'.repeat(11000)});
+ listingsApi.updateListing.mockClear();
+ render(<EditListingPage/>);
+ const field=await screen.findByLabelText('Description') as HTMLTextAreaElement;
+ expect(field.value).toHaveLength(11000);expect(field.hasAttribute('maxlength')).toBe(false);
+ expect(screen.getByText('Shorten the description to 10,000 characters to save.')).toBeTruthy();
+ const save=screen.getByRole('button',{name:'Save Draft'}) as HTMLButtonElement;
+ expect(save.disabled).toBe(true);fireEvent.click(save);expect(listingsApi.updateListing).not.toHaveBeenCalled();
+ fireEvent.change(field,{target:{value:'😀'.repeat(11000)}});expect([...field.value]).toHaveLength(11000);expect(save.disabled).toBe(true);
+ fireEvent.change(field,{target:{value:'😀'.repeat(10000)}});expect(save.disabled).toBe(false);
+});

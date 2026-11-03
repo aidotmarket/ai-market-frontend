@@ -186,8 +186,10 @@ describe('public-source reference route', () => {
     expect(cta.getAttribute('rel')).toContain('noopener');
     expect(page.getByRole('link', { name: 'License' }).getAttribute('href')).toBe(reference.license_url);
     expect(page.getByRole('link', { name: 'Source metadata' }).getAttribute('href')).toBe(reference.metadata_url);
-    expect(document.querySelector('strong')?.textContent).toBe('aggregate');
-    expect(page.getByRole('link', { name: 'Source record' }).getAttribute('href')).toBe(reference.metadata_url);
+    expect(document.querySelector('strong')).toBeNull();
+    expect(document.body.textContent).toContain('Official **aggregate** data.');
+    expect(page.queryByRole('link', { name: 'Source record' })).toBeNull();
+    expect(document.body.textContent).toContain(`[Source record](${reference.metadata_url})`);
     expect(forbidden).not.toHaveBeenCalled();
     expect(api.fetchListingVersions).not.toHaveBeenCalled();
     expect(api.fetchListingAccessWindowDays).not.toHaveBeenCalled();
@@ -223,8 +225,8 @@ describe('public-source reference route', () => {
     expect(forbidden).not.toHaveBeenCalled();
   });
 
-  it('ignores stale seller-approved presentations on a reference', async () => {
-    await render(fixture({ approved_presentation: { presentation_version: 'seller-listing-review-v2', rendered_html: 'Old seller approved claims', render_hash: 'stale' } }));
+  it.each(['seller-listing-review-v2','seller-listing-review-v3','unknown-version'])('ignores stale %s seller-approved presentations on a reference', async presentation_version => {
+    await render(fixture({ approved_presentation: { presentation_version, rendered_html: 'Old seller approved claims', render_hash: 'stale' } }));
     expect(document.body.textContent).toContain('Indexed from public source');
     expect(document.body.textContent).not.toContain('Old seller approved claims');
     expect(forbidden).not.toHaveBeenCalled();

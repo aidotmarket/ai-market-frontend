@@ -1,3 +1,4 @@
+import ListingMarkdown from '@/components/ListingMarkdown';
 import type { ListingDraftContent } from '@/api/sellerListingDraft';
 
 type PublicFields = Pick<ListingDraftContent, 'title' | 'description' | 'category' | 'tags' | 'price' | 'license'>;
@@ -11,7 +12,7 @@ export default function ListingPreview({ draft, saved = false }: { draft: Public
     <article className="space-y-5 rounded-xl border border-gray-200 bg-white p-5">
       <p className="text-sm text-indigo-700">{draft.category.trim() || 'Add a category'}</p>
       <h4 className="break-words text-2xl font-semibold text-gray-900">{draft.title.trim() || 'Add a listing title'}</h4>
-      <p className="whitespace-pre-wrap break-words text-sm leading-7 text-gray-700">{draft.description.trim() || 'Add a description for buyers.'}</p>
+      <ListingMarkdown text={draft.description || 'Add a description for buyers.'}/>
       {tags.length > 0 ? <ul aria-label="Listing tags" className="flex flex-wrap gap-2">{tags.map(tag => <li key={tag} className="max-w-full break-words rounded-full bg-gray-100 px-3 py-1 text-xs text-gray-700">{tag}</li>)}</ul> : <p className="text-sm text-gray-500">Add tags to help buyers find your offering.</p>}
       <dl className="grid gap-4 border-t border-gray-100 pt-4 sm:grid-cols-2"><div><dt className="text-xs text-gray-500">Price</dt><dd className="mt-1 text-lg font-semibold text-gray-900">{price ?? 'Set a valid price'}</dd></div><div><dt className="text-xs text-gray-500">License</dt><dd className="mt-1 break-words text-sm text-gray-900">{draft.license.trim() || 'Choose your license'}</dd></div></dl>
     </article>
