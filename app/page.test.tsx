@@ -127,14 +127,14 @@ describe('homepage final CTA', () => {
   });
 });
 
-it('server-renders the 1.2 payout claim before client hydration', async () => {
+it('server-renders the 1.2 payout claim and international exception before client hydration', async () => {
   serverTerms.getPublicTermsVersion.mockResolvedValue('1.2');
   fetchPublicListings.mockResolvedValue({ items: [] });
   fetchFeaturedFeed.mockResolvedValue(null);
   fetchDataRequests.mockResolvedValue({ items: [] });
   const { default: LandingPage } = await import('./page');
   const html = renderToStaticMarkup(await LandingPage());
-  expect(html).toContain("Buyers find your listing wherever they search, on ai.market or through their AI assistant. You&#x27;re paid through Stripe 48 hours after the buyer confirms delivery.");
+  expect(html).toContain("Buyers find your listing wherever they search, on ai.market or through their AI assistant. You&#x27;re paid through Stripe 48 hours after the buyer confirms delivery. Sellers on international payout (to a bank account or in stablecoin) are paid at least 30 days after the buyer confirms delivery.");
   expect(html).not.toMatch(/90.day/);
   expect(html).not.toContain('Buyers find your listing wherever they search, on ai.market or through their AI assistant. Stripe handles the payout.');
 });
