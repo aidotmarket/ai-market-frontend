@@ -3,6 +3,7 @@ import {createHash} from 'node:crypto';
 import {readFileSync} from 'node:fs';
 import {renderToStaticMarkup} from 'react-dom/server';
 import {describe,it,expect} from 'vitest';
+import MarkdownIt from 'markdown-it';
 import ListingMarkdown,{PARITY_CORPUS_SHA256,EXTRA_PARITY_CORPUS_SHA256} from './ListingMarkdown';
 const bytes=readFileSync('tests/fixtures/listing-markdown-parity.json');
 type Case = {name:string;source:string;html:string};
@@ -31,7 +32,11 @@ describe('backend listing Markdown parity contract',()=>{
   it('pins the byte-identical corpus digest',()=>expect(createHash('sha256').update(bytes).digest('hex')).toBe(PARITY_CORPUS_SHA256));
   it('pins the byte-identical extra corpus digest',()=>expect(createHash('sha256').update(extraBytes).digest('hex')).toBe(EXTRA_PARITY_CORPUS_SHA256));
   for(const item of [...corpus,...extraCorpus])it(item.name,()=>{
-    const root=document.createElement('div');root.innerHTML=renderToStaticMarkup(<ListingMarkdown text={item.source}/>);
+    const html=renderToStaticMarkup(<ListingMarkdown text={item.source}/>);
+    // Inspect the raw inner HTML before the DOM parser can repair markup.
+    const raw=html.slice(html.indexOf('>')+1,-'</div>'.length);
+    expect(raw.replace(/<\/?(?:p|h[234]|ul|li|strong|em|br)>|<ol(?: start="(?:[2-9]\d*|1\d+)")?>|<\/ol>/g,'')).not.toMatch(/[<>]/);
+    const root=document.createElement('div');root.innerHTML=html;
     const content=root.firstElementChild!;
     for(const element of content.querySelectorAll('*')) {
       expect(['p','h2','h3','h4','ul','ol','li','strong','em','br']).toContain(element.localName);
@@ -40,6 +45,21 @@ describe('backend listing Markdown parity contract',()=>{
     expect(content.querySelector('a,img,script')).toBeNull();
     expect(tree(content.innerHTML)).toEqual(tree(item.html));
   });
+});
+
+it('keeps asterisks visible inside contact text beside an astral symbol',()=>{
+  const root=document.createElement('div');
+  root.innerHTML=renderToStaticMarkup(<ListingMarkdown text={'x*😀 sales@acme*.io'}/>);
+  expect(root.textContent).toBe('x*😀 sales@acme*.io');
+  expect(root.textContent).toContain('sales@acme*.io');
+  expect(root.textContent).not.toContain('sales@acme.io');
+  expect(root.querySelector('em,strong')).toBeNull();
+});
+
+it('leaves other markdown-it instances on their original delimiter scanner',()=>{
+  const other=new MarkdownIt('commonmark');
+  expect(other.render('a*😀*b')).toBe('<p>a<em>😀</em>b</p>\n');
+  expect(renderToStaticMarkup(<ListingMarkdown text={'a*😀*b'}/>)).toContain('<p>a*😀*b</p>');
 });
 
 it('keeps following blocks and siblings when an over-depth list becomes literal',()=>{

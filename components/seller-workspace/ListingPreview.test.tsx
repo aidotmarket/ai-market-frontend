@@ -18,3 +18,14 @@ it('does not present missing or invalid fields as a complete offer', () => {
   expect(screen.getByText('Set a valid price')).toBeTruthy();
   expect(screen.getByText('Choose your license')).toBeTruthy();
 });
+
+it.each([' \t\n', '\u0085', '\u001c\u001d\u001e\u001f'])('shows the description placeholder for Python whitespace %j', description => {
+  render(<ListingPreview draft={{ title: '', description, category: '', tags: '', price: '', license: '' }} />);
+  expect(screen.getByText('Add a description for buyers.')).toBeTruthy();
+});
+
+it('retains a BOM description as content, matching Python strip', () => {
+  const {container}=render(<ListingPreview draft={{ title: '', description: '\ufeff', category: '', tags: '', price: '', license: '' }} />);
+  expect(screen.queryByText('Add a description for buyers.')).toBeNull();
+  expect(container.querySelector('article div p')?.textContent).toBe('\ufeff');
+});

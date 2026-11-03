@@ -2,10 +2,13 @@ import MarkdownIt, {type Options} from 'markdown-it';
 import type Token from 'markdown-it/lib/token.mjs';
 import listBlock from 'markdown-it/lib/rules_block/list.mjs';
 import paragraph from 'markdown-it/lib/rules_block/paragraph.mjs';
+import heading from 'markdown-it/lib/rules_block/heading.mjs';
+import lheading from 'markdown-it/lib/rules_block/lheading.mjs';
 import reference from 'markdown-it/lib/rules_block/reference.mjs';
+import {pythonStrip} from '@/lib/pythonStrip';
 
 export const PARITY_CORPUS_SHA256 = 'b0da0779cf59ab28f09985844070657818985ca0cd9470d7d9d4c1d96e7b657a';
-export const EXTRA_PARITY_CORPUS_SHA256 = '2f286c9ae71b544f1aa3850f553cf8364d8d5d501e6124a413c9fa982fdfa86d';
+export const EXTRA_PARITY_CORPUS_SHA256 = '2b3ad4e465911ca13c4b67925216f3afea68089b3d6147abfa6148ad1dc18c7c';
 export const MAX_LIST_NESTING = 8;
 
 // Keep the parser rules and token walk in sync with backend acfbed2f's
@@ -13,6 +16,59 @@ export const MAX_LIST_NESTING = 8;
 // maxNesting is supported by markdown-it but omitted from its Options type.
 const parserOptions: Options & {maxNesting: number} = {maxNesting: 64};
 const parser = new MarkdownIt('commonmark', parserOptions).disable('entity').enable('table');
+
+// A subclass gives this parser its own State prototype; other markdown-it
+// instances retain upstream's scanner. Match markdown-it-py 4.0.0,
+// rules_inline/state_inline.py:133–144, classifying neighbours by code point.
+parser.inline.State = class extends parser.inline.State {
+  scanDelims(start: number, canSplitWord: boolean) {
+    const {src, posMax} = this;
+    const marker = src.charCodeAt(start);
+    let lastChar = start > 0 ? src.charCodeAt(start - 1) : 0x20;
+    if (lastChar >= 0xdc00 && lastChar <= 0xdfff && start > 1) {
+      const high = src.charCodeAt(start - 2);
+      if (high >= 0xd800 && high <= 0xdbff) lastChar = src.codePointAt(start - 2)!;
+    }
+    let pos = start;
+    while (pos < posMax && src.charCodeAt(pos) === marker) pos++;
+    const nextChar = pos < posMax ? src.codePointAt(pos)! : 0x20;
+    const {isMdAsciiPunct, isPunctChar, isWhiteSpace} = parser.utils;
+    const lastPunct = isMdAsciiPunct(lastChar) || isPunctChar(String.fromCodePoint(lastChar));
+    const nextPunct = isMdAsciiPunct(nextChar) || isPunctChar(String.fromCodePoint(nextChar));
+    const lastSpace = isWhiteSpace(lastChar);
+    const nextSpace = isWhiteSpace(nextChar);
+    const leftFlanking = !nextSpace && (!nextPunct || lastSpace || lastPunct);
+    const rightFlanking = !lastSpace && (!lastPunct || nextSpace || nextPunct);
+    return {
+      can_open: leftFlanking && (canSplitWord || !rightFlanking || lastPunct),
+      can_close: rightFlanking && (canSplitWord || !leftFlanking || nextPunct),
+      length: pos - start,
+    };
+  }
+};
+
+// Keep upstream block recognition, but recover content before JS trim() loses
+// BOMs. Use Python's strip set before the core inline rule parses this content.
+for (const [name, rule] of [['paragraph', paragraph], ['heading', heading], ['lheading', lheading]] as const) {
+  parser.block.ruler.at(name, (state, startLine, endLine, silent) => {
+    const firstToken = state.tokens.length;
+    if (!rule(state, startLine, endLine, silent)) return false;
+    if (silent) return true;
+    const inline = state.tokens.slice(firstToken).find(token => token.type === 'inline')!;
+    if (name === 'heading') {
+      const opening = state.tokens[firstToken];
+      const start = state.bMarks[startLine] + state.tShift[startLine] + opening.markup.length;
+      let end = state.skipSpacesBack(state.eMarks[startLine], start);
+      const hashes = state.skipCharsBack(end, 0x23, start);
+      if (hashes > start && parser.utils.isSpace(state.src.charCodeAt(hashes - 1))) end = hashes;
+      inline.content = pythonStrip(state.src.slice(start, end));
+    } else {
+      inline.content = pythonStrip(state.getLines(inline.map![0], inline.map![1], state.blkIndent, false));
+    }
+    return true;
+  }, {alt: name === 'heading' ? ['paragraph', 'reference', 'blockquote'] : []});
+}
+
 parser.block.ruler.at('reference', (state, startLine, endLine, silent) => {
   if (!reference(state, startLine, endLine, silent)) return false;
   if (!silent) {

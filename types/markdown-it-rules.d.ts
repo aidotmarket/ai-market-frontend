@@ -14,3 +14,13 @@ declare module 'markdown-it/lib/rules_block/reference.mjs' {
   const reference: RuleBlock;
   export default reference;
 }
+declare module 'markdown-it/lib/rules_block/heading.mjs' {
+  import type {RuleBlock} from 'markdown-it/lib/parser_block.mjs';
+  const heading: RuleBlock;
+  export default heading;
+}
+declare module 'markdown-it/lib/rules_block/lheading.mjs' {
+  import type {RuleBlock} from 'markdown-it/lib/parser_block.mjs';
+  const lheading: RuleBlock;
+  export default lheading;
+}
