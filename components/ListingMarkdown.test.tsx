@@ -3,9 +3,12 @@ import {createHash} from 'node:crypto';
 import {readFileSync} from 'node:fs';
 import {renderToStaticMarkup} from 'react-dom/server';
 import {describe,it,expect} from 'vitest';
-import ListingMarkdown,{PARITY_CORPUS_SHA256} from './ListingMarkdown';
+import ListingMarkdown,{PARITY_CORPUS_SHA256,EXTRA_PARITY_CORPUS_SHA256} from './ListingMarkdown';
 const bytes=readFileSync('tests/fixtures/listing-markdown-parity.json');
-const corpus=JSON.parse(bytes.toString()) as {name:string;source:string;html:string}[];
+type Case = {name:string;source:string;html:string};
+const corpus=JSON.parse(bytes.toString()) as Case[];
+const extraBytes=readFileSync('tests/fixtures/listing-markdown-parity-extra.json');
+const extraCorpus=JSON.parse(extraBytes.toString()) as Case[];
 function tree(html:string) {
   const root=document.createElement('div');root.innerHTML=html;
   const blocks=new Set(['P','H2','H3','H4','UL','OL','LI']);
@@ -26,7 +29,8 @@ function tree(html:string) {
 }
 describe('backend listing Markdown parity contract',()=>{
   it('pins the byte-identical corpus digest',()=>expect(createHash('sha256').update(bytes).digest('hex')).toBe(PARITY_CORPUS_SHA256));
-  for(const item of corpus)it(item.name,()=>{
+  it('pins the byte-identical extra corpus digest',()=>expect(createHash('sha256').update(extraBytes).digest('hex')).toBe(EXTRA_PARITY_CORPUS_SHA256));
+  for(const item of [...corpus,...extraCorpus])it(item.name,()=>{
     const root=document.createElement('div');root.innerHTML=renderToStaticMarkup(<ListingMarkdown text={item.source}/>);
     const content=root.firstElementChild!;
     for(const element of content.querySelectorAll('*')) {
@@ -42,7 +46,7 @@ it('keeps following blocks and siblings when an over-depth list becomes literal'
  const deep=corpus.find(item=>item.name==='list-depth-9-escaped-email')!;
  const root=document.createElement('div');
  root.innerHTML=renderToStaticMarkup(<ListingMarkdown text={deep.source+'\n- sibling\n\n# Following'}/>);
- expect(root.querySelector('p')?.textContent).toBe(deep.source+'\n- sibling');
+ expect(root.querySelector('p')?.textContent).toBe(deep.source+'\n- sibling\n');
  expect(root.querySelector('ul')).toBeNull();
  expect(root.querySelector('h2')?.textContent).toBe('Following');
 });
@@ -51,4 +55,36 @@ it('preserves unsupported block paragraphs inside a tight list',()=>{
  root.innerHTML=renderToStaticMarkup(<ListingMarkdown text={'- first\n  ```\n  code\n  ```'}/>);
  expect(root.querySelector('li')?.firstChild?.textContent).toBe('first');
  expect(root.querySelector('li > p')?.textContent).toBe('  ```\n  code\n  ```');
+});
+
+// Mirror listing_html_text.VisibleText: strong/em join their surrounding text;
+// every other element creates a newline boundary (br only opens).
+function visibleText(html:string):string {
+  const root=document.createElement('div');root.innerHTML=html;
+  const parts:string[]=[];
+  function walk(node:Node) {
+    if(node.nodeType===Node.TEXT_NODE) {parts.push(node.textContent ?? '');return;}
+    const boundary=!['STRONG','EM'].includes((node as Element).tagName);
+    if(boundary)parts.push('\n');
+    for(const child of node.childNodes)walk(child);
+    if(boundary && (node as Element).tagName!=='BR')parts.push('\n');
+  }
+  for(const child of root.childNodes)walk(child);
+  return parts.join('');
+}
+
+describe('filter-to-frontend visible-text invariant',()=>{
+  for(const item of [...corpus,...extraCorpus])it(item.name,()=>{
+    const root=document.createElement('div');
+    root.innerHTML=renderToStaticMarkup(<ListingMarkdown text={item.source}/>);
+    expect(visibleText(root.firstElementChild!.innerHTML)).toBe(visibleText(item.html));
+  });
+});
+
+describe('bounded parsing of valid-length adversarial input',()=>{
+  for(const item of extraCorpus.filter(item=>item.name.startsWith('r1-deep-')))it(item.name,()=>{
+    const start=performance.now();
+    expect(()=>renderToStaticMarkup(<ListingMarkdown text={item.source}/>)).not.toThrow();
+    expect(performance.now()-start).toBeLessThan(1000);
+  });
 });
