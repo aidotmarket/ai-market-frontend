@@ -3,7 +3,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import axios from 'axios';
 import {useListingFlow} from './GuidedListingFlow';
-import {MAX_SELECTION_FILES,FolderSelectionError,mergeSelection,resolveFolder} from './folderSelection';
+import {MAX_SELECTION_FILES,FolderRequestError,FolderSelectionError,mergeSelection,resolveFolder} from './folderSelection';
 import type { SourceRead } from '@/api/sellerListingSource';
 import {isCompleteLicenseSelection,type LicenseSelection} from '@/api/listingLicenses';
 import {sameLicenseSelection} from '@/api/sellerListingReview';
@@ -223,7 +223,7 @@ function ObjectBrowser({ connection, initialSelection, onSaveSelection,sourceVer
       if(!contents.length)throw new FolderSelectionError('No files were found in this folder.');
       const combined=mergeSelection(selected,contents);
       setSelected(combined);setSelectedFolders(current=>[...new Set([...current,prefix])]);
-    }catch(failure){if(mounted.current)setSelectionError(failure instanceof FolderSelectionError?failure.message:'The entire folder could not be checked. No partial folder has been added. Try again.');}
+    }catch(failure){if(mounted.current)setSelectionError(failure instanceof FolderRequestError?`We couldn't read your storage after checking ${failure.progress.files.toLocaleString('en')} files (${formatBytes(failure.progress.bytes)}): ${failure.message}. No partial folder has been added. Try again.`:failure instanceof FolderSelectionError?failure.message:'The entire folder could not be checked. No partial folder has been added. Try again.');}
     finally{resolvingRef.current=false;if(mounted.current)setResolving(false);}
   };
   const filtered = objects.filter((object) => object.key.toLowerCase().includes(query.toLowerCase()));

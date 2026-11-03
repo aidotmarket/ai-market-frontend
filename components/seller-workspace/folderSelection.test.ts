@@ -1,6 +1,13 @@
-import {expect,it,vi} from 'vitest';
-import {mergeSelection,resolveFolder} from './folderSelection';
-import type {WorkspaceObject} from '@/api/sellerWorkspace';
+import {beforeEach,expect,it,vi} from 'vitest';
+import {FolderRequestError,mergeSelection,resolveFolder} from './folderSelection';
+import {listWorkspaceObjects, type WorkspaceObject} from '@/api/sellerWorkspace';
+const transport=vi.hoisted(()=>({get:vi.fn()}));
+vi.mock('@/api/client',()=>({api:transport}));
+beforeEach(()=>vi.resetAllMocks());
+const transportError=(status?:number,detail?:unknown)=>({
+ isAxiosError:true,message:'private provider text',
+ response:status===undefined?undefined:{status,data:{detail,provider:'private provider text'}},
+});
 const file=(key:string,size=1)=>({key,size,etag:'e',version_id:null,last_modified:'',format_candidate:'csv'} as WorkspaceObject);
 it('includes all pages and nested files, excludes folder markers, and counts overlap once',async()=>{
  const list=vi.fn().mockResolvedValueOnce({objects:[file('data/a.csv'),file('data/sub/')],next_cursor:'page2'}).mockResolvedValueOnce({objects:[file('data/sub/b.csv',500000000)],next_cursor:null});
@@ -50,4 +57,66 @@ it('waits and retries only a rate rejection with the same cursor',async()=>{
  expect(list.mock.calls.slice(1)).toEqual([['c','data/','next'],['c','data/','next']]);
  expect(wait).toHaveBeenCalledWith(60000);
  expect(onRateLimit.mock.calls).toEqual([[true],[false]]);
+});
+
+it('captures completed scan progress on an Axios page failure without returning partial files',async()=>{
+ const failure={isAxiosError:true,message:'private provider message',response:{status:503,data:{detail:'File discovery is unavailable'}}};
+ const list=vi.fn().mockResolvedValueOnce({objects:[file('data/a',178362778)],next_cursor:'next'}).mockRejectedValue(failure);
+ const resolved=vi.fn();
+ const scan=resolveFolder('c','data',list).then(resolved);
+ await expect(scan).rejects.toBeInstanceOf(FolderRequestError);
+ await expect(scan).rejects.toMatchObject({message:'File discovery is unavailable',progress:{files:1,bytes:178362778}});
+ expect(resolved).not.toHaveBeenCalled();
+ expect(list).toHaveBeenCalledTimes(2);
+});
+
+// Exercise safely() as well as the folder scanner: only the transport is mocked.
+it.each([
+ [400,'Folder listing cursor has expired; start again','Folder listing cursor has expired; start again'],
+ [400,{provider:'private provider text'},'the folder listing request was invalid'],
+ [401,undefined,'your sign-in or access to this connection changed'],
+ [403,undefined,'your sign-in or access to this connection changed'],
+ [404,undefined,'the connection or folder was not found'],
+ [500,{provider:'private provider text'},'the storage provider did not respond'],
+ [503,undefined,'the storage provider did not respond'],
+ [503,'File discovery is unavailable','File discovery is unavailable'],
+ [undefined,undefined,'the connection to ai.market was interrupted'],
+])('reports cause and completed progress through the real wrapper for %s',async(status,detail,reason)=>{
+ transport.get.mockResolvedValueOnce({data:{objects:[file('data/a',178362778),file('data/sub/')],next_cursor:'next'}})
+  .mockRejectedValueOnce(transportError(status as number|undefined,detail));
+ const progress=vi.fn(), selected=[file('existing/a')], applied=vi.fn();
+ const scan=resolveFolder('c','data',listWorkspaceObjects,{onProgress:progress})
+  .then(contents=>{selected.push(...contents);applied();});
+ await expect(scan).rejects.toBeInstanceOf(FolderRequestError);
+ await expect(scan).rejects.toMatchObject({message:reason,progress:{files:1,bytes:178362778}});
+ await expect(scan).rejects.not.toThrow('private provider text');
+ expect(progress.mock.calls).toEqual([[{files:1,bytes:178362778}]]);
+ expect(selected).toEqual([file('existing/a')]);
+ expect(applied).not.toHaveBeenCalled();
+ expect(transport.get).toHaveBeenCalledTimes(2);
+});
+it('retries a wrapped 429 at the same cursor and completes',async()=>{
+ transport.get.mockResolvedValueOnce({data:{objects:[file('data/a')],next_cursor:'next'}})
+  .mockRejectedValueOnce(transportError(429))
+  .mockResolvedValueOnce({data:{objects:[file('data/b',2)],next_cursor:null}});
+ const wait=vi.fn(async()=>{}),onRateLimit=vi.fn(),onProgress=vi.fn();
+ await expect(resolveFolder('c','data',listWorkspaceObjects,{wait,onRateLimit,onProgress}))
+  .resolves.toEqual([file('data/a'),file('data/b',2)]);
+ expect(transport.get.mock.calls[1]).toEqual(transport.get.mock.calls[2]);
+ expect(transport.get.mock.calls[1][1].params.cursor).toBe('next');
+ expect(wait.mock.calls).toEqual([[60000]]);
+ expect(onRateLimit.mock.calls).toEqual([[true],[false]]);
+ expect(onProgress).toHaveBeenLastCalledWith({files:2,bytes:3});
+});
+it('stops after four wrapped 429s and reports the rate cause with completed progress',async()=>{
+ transport.get.mockResolvedValueOnce({data:{objects:[file('data/a',5)],next_cursor:'next'}})
+  .mockRejectedValue(transportError(429));
+ const wait=vi.fn(async()=>{}),onRateLimit=vi.fn();
+ await expect(resolveFolder('c','data',listWorkspaceObjects,{wait,onRateLimit})).rejects.toMatchObject({
+  message:'too many requests to your storage; wait a minute and try again',progress:{files:1,bytes:5},
+ });
+ expect(transport.get).toHaveBeenCalledTimes(5);
+ for(const call of transport.get.mock.calls.slice(1))expect(call).toEqual(transport.get.mock.calls[1]);
+ expect(wait.mock.calls).toEqual([[60000],[60000],[60000]]);
+ expect(onRateLimit.mock.calls).toEqual([[true],[false],[true],[false],[true],[false]]);
 });
