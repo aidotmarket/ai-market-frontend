@@ -1,3 +1,4 @@
+import { formatMarketplaceCategoryName } from '@/lib/marketplaceCategories';
 import GeneratedSampleCard from '@/components/listings/GeneratedSampleCard';
 import { generatedSampleState } from '@/lib/generatedSample';
 import Link from 'next/link';
@@ -40,7 +41,7 @@ export function MarketplaceListingCard({ listing }: { listing: CardListing }) {
 
       <div className="mt-4 flex flex-wrap gap-1.5">
         <span className="inline-flex items-center rounded-full bg-gray-100 px-2.5 py-1 text-xs font-medium text-gray-700">
-          {listing.category}
+          {formatMarketplaceCategoryName(listing.category)}
         </span>
         {'data_format' in listing && listing.data_format && (
           <span className="inline-flex items-center rounded-full bg-emerald-50 px-2.5 py-1 text-xs font-medium uppercase tracking-wide text-emerald-700">

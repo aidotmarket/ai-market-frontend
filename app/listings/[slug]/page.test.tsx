@@ -583,7 +583,7 @@ describe('S1717 member_files and verification scope', () => {
       const breakdown = within(document.body).getByRole('region', { name: 'File breakdown' });
       expect(breakdown.previousElementSibling?.textContent).toBe(listing.verification_scope);
       const rows = within(breakdown).getAllByRole('listitem').map(row => row.textContent);
-      expect(rows).toEqual(['CSV tables: 1 file · 1,200 bytes', 'TSV tables: 1 file · 34 bytes', 'JSONL tables: 1 file · 56 bytes', 'PARQUET tables: 1 file · 78 bytes', 'Other files: 2 files · 4,096 bytes']);
+      expect(rows).toEqual(['CSV tables: 1 file · 1.2 KB', 'TSV tables: 1 file · 34 B', 'JSONL tables: 1 file · 56 B', 'PARQUET tables: 1 file · 78 B', 'Other files: 2 files · 4.1 KB']);
       expect(within(document.body).getAllByRole('region', { name: 'File breakdown' })).toHaveLength(1);
     });
 
@@ -593,7 +593,7 @@ describe('S1717 member_files and verification scope', () => {
       listing.file_breakdown = [{ format: 'other', count: 1, size_bytes: 0 }];
       document.body.innerHTML = await renderPage(listing);
       const breakdown = within(document.body).getByRole('region', { name: 'File breakdown' });
-      expect(breakdown.textContent).toContain('Other files: 1 file · 0 bytes');
+      expect(breakdown.textContent).toContain('Other files: 1 file · 0 B');
       expect(breakdown.textContent).not.toMatch(/CSV|PARQUET|scanned/);
     });
 
@@ -612,8 +612,8 @@ describe('S1717 member_files and verification scope', () => {
       const sample = within(block);
       expect(sample.getAllByRole('listitem')).toHaveLength(3);
       expect(sample.getByText('Sample files are part of the purchased set and free to download.')).toBeTruthy();
-      expect(sample.getByText('1.5 KiB')).toBeTruthy();
-      expect(sample.getByText('1 MiB')).toBeTruthy();
+      expect(sample.getByText('1.54 KB')).toBeTruthy();
+      expect(sample.getByText('1.05 MB')).toBeTruthy();
       expect(sample.getByText('0 B')).toBeTruthy();
       // The visible filename is also the accessible link name, not a generic Download label.
       for (const [index, name] of ['sales.csv', 'regions.json'].entries()) {
@@ -695,4 +695,34 @@ it('uses the same UTC Published date in the header and version card near midnigh
  const timestamp='2026-09-27T23:30:00Z';
  const html=await renderPage(makeListing({published_at:timestamp}),[{version_id:'v1',version_label:'v1',published_at:timestamp,object_count:1,total_size_bytes:1024,status:'active'}]);
  expect(html.match(/Published Sep 27, 2026/g)).toHaveLength(2);
+});
+
+it('renders human category labels for primary, secondary and unknown categories', async () => {
+  fetchPublicListing.mockReset(); fetchListingVersions.mockReset();
+  document.body.innerHTML = await renderPage(makeListing({
+    category: 'technology-web',
+    secondary_categories: ['ai-machine-learning', 'consumer-retail', 'future-category'],
+  }));
+  const page = within(document.body);
+  for (const label of ['Technology & Web', 'AI & Machine Learning', 'Consumer & Retail', 'Future Category']) {
+    expect(page.getByText(label, {exact: true})).toBeTruthy();
+  }
+  expect(document.body.textContent).not.toMatch(/technology-web|ai-machine-learning|consumer-retail|future-category/);
+});
+
+it('renders 14,140,000,000 bytes identically in every public listing size display', async () => {
+  const {field, summary} = await import('@/tests/summaryFixture');
+  fetchPublicListing.mockReset(); fetchListingVersions.mockReset();
+  const bytes = 14_140_000_000;
+  document.body.innerHTML = await renderPage(makeListing({
+    at_a_glance: {...summary, size_bytes: field(bytes)},
+    sample_files: [{index: 0, key_basename: 'large.csv', size: bytes, binding: 'manifest', state: 'available', url: '/sample/0'}],
+    file_breakdown: [{format: 'csv', count: 1, size_bytes: bytes}],
+  }), [{version_id: 'v1', version_label: 'v1', published_at: '2026-06-01T00:00:00Z', object_count: 1, total_size_bytes: bytes, status: 'active'}]);
+  const page = within(document.body);
+  expect(within(page.getByRole('region', {name: 'At a glance'})).getByText('14.14 GB', {exact: true})).toBeTruthy();
+  expect(page.getByTestId('version-v1').textContent).toContain('14.14 GB');
+  expect(within(page.getByRole('region', {name: 'Free sample: 1 files'})).getByText('14.14 GB', {exact: true})).toBeTruthy();
+  expect(page.getByRole('region', {name: 'File breakdown'}).textContent).toContain('14.14 GB');
+  expect(document.body.textContent?.match(/14\.14 GB/g)).toHaveLength(4);
 });

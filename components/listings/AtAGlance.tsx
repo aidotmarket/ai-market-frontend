@@ -1,3 +1,4 @@
+import { formatBytes } from '@/lib/formatBytes';
 import SchemaTable from './SchemaTable';
 import type {AggregateStatistics, DerivationSource, ListingSummary, SummaryField} from '@/lib/api';
 
@@ -31,11 +32,6 @@ function Provenance({field}: {field: SummaryField<unknown>}) {
     {field.authority === 'seller_local_report' && ' (seller/local report)'}
     {field.authority === 'publication_bound' && ' (approved publication)'}
   </p>;
-}
-
-function humanSize(bytes: number): string {
-  const [scale, unit] = bytes >= 1e9 ? [1e9, 'GB'] : bytes >= 1e6 ? [1e6, 'MB'] : bytes >= 1e3 ? [1e3, 'KB'] : [1, 'bytes'];
-  return `${(bytes / Number(scale)).toLocaleString('en-US', {maximumFractionDigits: 2})} ${unit}`;
 }
 
 function derivation(source: DerivationSource, time: string) {
@@ -86,7 +82,7 @@ export default function AtAGlance({summary}: {summary?: ListingSummary | null}) 
             <li key={d.name}><span className="font-mono">{d.name}</span>{d.description && <>: {d.description}</>}{d.unit && <> — {d.unit}</>}</li>)}</ul>
           : key === 'aggregate_statistics' ? <AggregateStatisticsView statistics={value as AggregateStatistics} />
           : Array.isArray(value) ? <ul className="list-inside list-disc text-sm text-gray-700">{(value as string[]).map((item, i) => <li key={i}>{item}</li>)}</ul>
-          : key === 'size_bytes' && typeof value === 'number' ? <p className="text-sm text-gray-700" title={`${value.toLocaleString('en-US')} bytes`}>{humanSize(value)}</p>
+          : key === 'size_bytes' && typeof value === 'number' ? <p className="text-sm text-gray-700" title={`${value.toLocaleString('en-US')} bytes`}>{formatBytes(value)}</p>
           : <p className="text-sm text-gray-700">{typeof value === 'number' ? value.toLocaleString('en-US') : String(value)}{key === 'freshness' && ' (declared cadence)'}</p>}
         <Provenance field={field} />
       </div>;

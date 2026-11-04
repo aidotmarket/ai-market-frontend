@@ -1,3 +1,4 @@
+import { formatMarketplaceCategoryName } from '@/lib/marketplaceCategories';
 import GeneratedSamplePage from './GeneratedSamplePage';
 import { generatedSampleState, samplePresentation } from '@/lib/generatedSample';
 import PublicSourceReferencePage, { isPublicSourceReference } from './PublicSourceReferencePage';
@@ -186,14 +187,14 @@ export default async function ListingDetailPage({ params, searchParams }: Props)
           {/* Tags */}
           <div className="flex flex-wrap gap-2">
             <span className="inline-flex items-center rounded-full bg-gray-100 px-3 py-1 text-sm font-medium text-gray-700">
-              {listing.category}
+              {formatMarketplaceCategoryName(listing.category)}
             </span>
             {listing.secondary_categories?.map((cat) => (
               <span
                 key={cat}
                 className="inline-flex items-center rounded-full bg-gray-50 px-3 py-1 text-sm text-gray-600"
               >
-                {cat}
+                {formatMarketplaceCategoryName(cat)}
               </span>
             ))}
             {listing.tags.map((tag) => (
