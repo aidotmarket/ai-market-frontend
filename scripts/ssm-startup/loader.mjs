@@ -2,6 +2,7 @@
 import { spawn } from 'node:child_process';
 import { performance } from 'node:perf_hooks';
 import { lstatSync, realpathSync } from 'node:fs';
+import { dirname } from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 import { BOOT, NODE, NPM, DOTENV, LIMIT, need, Failure, validate, protectedRead,
   protectedPath, decode, exact, metadataValue, snapshot } from './contract.mjs';
@@ -14,6 +15,7 @@ export const FRONTEND_METADATA = Object.freeze(['KEYSTATIC_GITHUB_CLIENT_ID', 'P
   'FRONTEND_BUILD_REVISION', 'RAILWAY_GIT_COMMIT_SHA']);
 const signals = ['SIGTERM', 'SIGINT', 'SIGHUP'];
 export class Cancelled extends Error { constructor(signal) { super('c07'); this.signal = signal; } }
+export const sourceDirectory = (source = import.meta.url) => dirname(fileURLToPath(source));
 
 export function qualifyFrontend(d, env) {
   need(d.app === 'ai-market-frontend' && d.environment === 'production' &&
@@ -103,6 +105,8 @@ export async function supervise(d, input, { executable = NODE,
     }
     child?.stdin.destroy(); child?.stdio[3].destroy();
     for (const [s, fn] of listeners) signalSource.removeListener(s, fn);
+    // Cancellation may arrive while an exceptional path awaits worker reaping.
+    if (cancelled) throw new Cancelled(cancelled);
   }
 }
 export async function run(document, env, { runtime = qualifyRuntime, fetch = supervise,
@@ -125,7 +129,7 @@ export async function run(document, env, { runtime = qualifyRuntime, fetch = sup
 export async function main() {
   try {
     need(process.argv.length === 3);
-    protectedPath(fileURLToPath(new URL('.', import.meta.url)), { directory: true });
+    protectedPath(sourceDirectory(), { directory: true });
     for (const name of ['loader.mjs', 'contract.mjs', 'worker.mjs', 'transport.mjs', 'start']) protectedPath(fileURLToPath(new URL(name, import.meta.url)));
     await run(protectedRead(process.argv[2]), process.env);
   } catch (e) {

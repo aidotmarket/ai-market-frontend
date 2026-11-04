@@ -74,7 +74,8 @@ removes its timers and TERM/INT/HUP listeners, then replaces itself with
 PATH is exactly `/mise/installs/node/24.22.1/bin:/usr/bin:/bin`; npm's ordinary
 lifecycle `.bin` resolution and existing `next start` behavior remain in place.
 No persistent loader parent, custom server or standalone Next server is added.
-Cancellation kills/reaps the worker before re-raising the original signal.
+Cancellation kills/reaps the worker and releases pipes/timers/listeners before
+re-raising the original signal, including cancellation during exceptional cleanup.
 Other failures exit 78 with a fixed value-free diagnostic and no application
 launch. Npm's own existing signal relay is not redefined or measured here.
 

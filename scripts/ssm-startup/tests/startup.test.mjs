@@ -3,14 +3,15 @@ import assert from 'node:assert/strict';
 import { readFileSync, mkdtempSync, writeFileSync, rmSync, chmodSync, symlinkSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { resolve } from 'node:path';
+import { fileURLToPath, pathToFileURL } from 'node:url';
 import { EventEmitter } from 'node:events';
 import { spawn, spawnSync } from 'node:child_process';
 import { Readable } from 'node:stream';
 import { performance } from 'node:perf_hooks';
-import { validate, decode, BOOT, LIMIT, HOOKS, need, Failure, credentials, snapshot, rawParameters, protectedRead, appName, metadataName, NPM } from '../contract.mjs';
+import { validate, decode, BOOT, LIMIT, HOOKS, need, Failure, credentials, snapshot, rawParameters, protectedRead, protectedPath, appName, metadataName, NPM } from '../contract.mjs';
 import { send, Transient, guardedHandler, boundedBody } from '../transport.mjs';
 import { prepare } from '../worker.mjs';
-import { supervise, run, Cancelled, qualifyFrontend, assertNoDotenv } from '../loader.mjs';
+import { supervise, run, Cancelled, qualifyFrontend, assertNoDotenv, sourceDirectory } from '../loader.mjs';
 
 const base = JSON.parse(readFileSync(new URL('../assignment.prospective.json', import.meta.url)));
 const doc = () => structuredClone(base);
@@ -175,6 +176,19 @@ process.on('exit', () => rmSync(temp, { recursive: true, force: true }));
 const fixtureUrl = new URL('./fixture.mjs', import.meta.url).href;
 function workerFile(mode) { const path = resolve(temp, mode + '.mjs'); writeFileSync(path, `import {fixture} from ${JSON.stringify(fixtureUrl)}; await fixture(${JSON.stringify(mode)});`); return path; }
 function options(mode, extra = {}) { return { executable: process.execPath, worker: workerFile(mode), ...extra }; }
+test('main source directory is canonical and retains protected directory checks', () => {
+  assert.equal(sourceDirectory(), resolve(fileURLToPath(new URL('..', import.meta.url))));
+  assert.equal(sourceDirectory('file:///app/scripts/ssm-startup/loader.mjs'), '/app/scripts/ssm-startup');
+  // Existing public directory with protected ownership, modes and ancestors.
+  const safe = sourceDirectory('file:///usr/bin/loader.mjs');
+  assert.equal(safe, '/usr/bin');
+  assert.ok(protectedPath(safe, { directory: true }).isDirectory());
+  assert.throws(() => protectedPath(safe + '/', { directory: true }), failure('assignment'));
+  // Even a canonical source directory must refuse unsafe deployment ancestry.
+  const unsafe = sourceDirectory(pathToFileURL(resolve(temp, 'loader.mjs')));
+  assert.equal(unsafe, temp);
+  assert.throws(() => protectedPath(unsafe, { directory: true }), failure('assignment'));
+});
 test('protected manifest rejects writable/symlink paths; dotenv refuses names only', () => {
   const p = resolve(temp, 'assignment.json'); writeFileSync(p, JSON.stringify(doc()), { mode: 0o600 });
   // /tmp on macOS is a symlink and /var/tmp is writable: protected deployment
@@ -212,6 +226,28 @@ for (const signal of ['SIGTERM', 'SIGINT', 'SIGHUP']) test(`cancellation ${signa
   const d = validate(doc()), source = new EventEmitter(); let child, timer;
   await assert.rejects(supervise(d, input(d), options('stall', { signalSource: source, onSpawn(c) { child = c; c.stdio[3].once('data', () => { timer = setTimeout(() => source.emit(signal), 10); }); } })), e => e instanceof Cancelled && e.signal === signal);
   clearTimeout(timer); assert.throws(() => process.kill(child.pid, 0)); assert.equal(source.listenerCount(signal), 0);
+});
+for (const signal of [null, 'SIGTERM', 'SIGINT', 'SIGHUP']) test(`exceptional cleanup preserves ${signal ?? 'handoff failure'} after reap and listener cleanup`, async () => {
+  const d = validate(doc()), source = new EventEmitter(); let child, closed = false, delivered = false;
+  const oversized = { ...input(d), synthetic: 'x'.repeat(LIMIT.ipc) };
+  await assert.rejects(supervise(d, oversized, options('stall', { signalSource: source, onSpawn(c) {
+    child = c; c.once('close', () => { closed = true; });
+    if (signal) queueMicrotask(() => {
+      // The size check has thrown and finally has killed the real child and
+      // yielded for close/reap. No timing assumption or sleep is needed.
+      assert.equal(c.killed, true); assert.equal(closed, false);
+      assert.equal(source.listenerCount(signal), 1);
+      delivered = true; source.emit(signal);
+      source.emit(signal === 'SIGTERM' ? 'SIGINT' : 'SIGTERM');
+    });
+  } })), e => {
+    assert.equal(closed, true); assert.equal(child.signalCode, 'SIGKILL');
+    assert.throws(() => process.kill(child.pid, 0), { code: 'ESRCH' });
+    assert.equal(child.stdin.destroyed, true); assert.equal(child.stdio[3].destroyed, true);
+    for (const s of ['SIGTERM', 'SIGINT', 'SIGHUP']) assert.equal(source.listenerCount(s), 0);
+    assert.equal(delivered, signal !== null);
+    return signal ? e instanceof Cancelled && e.signal === signal : failure('handoff')(e);
+  });
 });
 for (const signal of ['SIGTERM', 'SIGINT', 'SIGHUP']) test(`OS ${signal} preserves outcome after worker reap`, async () => {
   const parent = spawn(process.execPath, [new URL('./signal-parent.mjs', import.meta.url).pathname, workerFile('stall')], {
