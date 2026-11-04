@@ -48,14 +48,14 @@ export function WorkspaceData({ connections, enabled, savedSource, onSaveSelecti
   const identityKnown=legalIdentityState.kind==='known';
   const selected = verified.find((connection) => connection.id === selectedId) ?? verified[0];
   if (!enabled) return <WorkspaceNotice title="File browsing is not available yet">Your storage connections are saved. File browsing still needs to be connected in this Workspace. You do not need to run a data analysis or request marketplace verification to prepare a listing.</WorkspaceNotice>;
-  if (!selected) return <WorkspaceNotice title="Connect storage to see your data">Add and verify an AWS connection in Connect your storage. Only files inside the folder you authorize will be available here.</WorkspaceNotice>;
+  if (!selected) return <WorkspaceNotice title="Connect storage to see your data">Add and verify an AWS connection in Connect your storage. Only files inside the folder or bucket you authorize will be available here.</WorkspaceNotice>;
   return (
     <section className="space-y-5" aria-label="Choose your files">
       <div className="flex flex-wrap items-end justify-between gap-4">
-        <div><h2 className="text-xl font-semibold text-gray-900">Choose your files</h2><p className="mt-1 text-sm text-gray-600">Browse file names, formats, and sizes in your connected folder. File contents stay in your cloud account.</p></div>
+        <div><h2 className="text-xl font-semibold text-gray-900">Choose your files</h2><p className="mt-1 text-sm text-gray-600">Browse file names, formats, and sizes in your connected folder or bucket. File contents stay in your cloud account.</p></div>
         <label className="text-sm font-medium text-gray-700">Storage connection
           <select disabled={saving} value={selected.id} onChange={(event) => setSelectedId(event.target.value)} className="mt-1 block w-full max-w-sm rounded-lg border border-gray-300 bg-white px-3 py-2 disabled:opacity-50">
-            {verified.map((connection) => <option key={connection.id} value={connection.id}>{connection.bucket} / {connection.prefix}</option>)}
+            {verified.map((connection) => <option key={connection.id} value={connection.id}>{connection.bucket} / {connection.scope === 'whole_bucket' ? 'Whole bucket' : connection.prefix}</option>)}
           </select>
         </label>
       </div>
@@ -210,7 +210,7 @@ function ObjectBrowser({ connection, initialSelection, onSaveSelection,sourceVer
     } finally { saving.current = false; if (mounted.current) setSavingSelection(false); }
   };
   const folderChoices=[...new Set(objects.flatMap(object=>{
-    const root=(connection.prefix??'').replace(/\/+$/,'')+'/';
+    const root=connection.scope === 'whole_bucket' ? '' : (connection.prefix??'').replace(/\/+$/,'')+'/';
     const relative=object.key.slice(root.length).split('/');
     return relative.slice(0,-1).map((_,index)=>root+relative.slice(0,index+1).join('/')+'/');
   }))].sort();
@@ -222,7 +222,7 @@ function ObjectBrowser({ connection, initialSelection, onSaveSelection,sourceVer
       if(!mounted.current)return;
       if(!contents.length)throw new FolderSelectionError('No files were found in this folder.');
       const combined=mergeSelection(selected,contents);
-      setSelected(combined);setSelectedFolders(current=>[...new Set([...current,prefix])]);
+      setSelected(combined);setSelectedFolders(current=>[...new Set([...current,prefix === '' ? 'Whole bucket' : prefix])]);
     }catch(failure){if(mounted.current)setSelectionError(failure instanceof FolderRequestError?`We couldn't read your storage after checking ${failure.progress.files.toLocaleString('en')} files (${formatBytes(failure.progress.bytes)}): ${failure.message}. No partial folder has been added. Try again.`:failure instanceof FolderSelectionError?failure.message:'The entire folder could not be checked. No partial folder has been added. Try again.');}
     finally{resolvingRef.current=false;if(mounted.current)setResolving(false);}
   };
@@ -276,12 +276,12 @@ function ObjectBrowser({ connection, initialSelection, onSaveSelection,sourceVer
   return (
     <div className="overflow-hidden rounded-xl border border-gray-200 bg-white">
       <div className="flex flex-wrap items-center justify-between gap-4 border-b border-gray-200 p-5">
-        <div className="min-w-0"><p className="break-all text-sm font-semibold text-gray-900">{connection.bucket} / {connection.prefix}</p><p className="mt-1 text-xs text-gray-500">{objects.length} files loaded · Files stay in your cloud account</p></div>
+        <div className="min-w-0"><p className="break-all text-sm font-semibold text-gray-900">{connection.bucket} / {connection.scope === 'whole_bucket' ? 'Whole bucket' : connection.prefix}</p><p className="mt-1 text-xs text-gray-500">{objects.length} files loaded · Files stay in your cloud account</p></div>
         <label className="text-sm text-gray-600"><span className="sr-only">Search loaded files</span><input type="search" value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Search loaded files" className="w-full rounded-lg border border-gray-300 px-3 py-2 sm:w-60" /></label>
       </div>
       <div className="border-b border-gray-200 p-5 space-y-3">
         <p className="text-sm text-gray-600">Choose individual files below, or include a whole folder and its subfolders.</p>
-        <button type="button" disabled={resolving || savingSelection} onClick={()=>void selectFolder(connection.prefix??'')} className={buttonClass}>Select entire connected folder</button>
+        <button type="button" disabled={resolving || savingSelection} onClick={()=>void selectFolder(connection.prefix??'')} className={buttonClass}>{connection.scope === 'whole_bucket' ? 'Select entire bucket' : 'Select entire connected folder'}</button>
         {folderChoices.length>0 && <details><summary className="cursor-pointer text-sm font-medium text-indigo-700">Choose a subfolder</summary><ul className="mt-3 space-y-2">{folderChoices.map(prefix=><li key={prefix}><button type="button" disabled={resolving || savingSelection} onClick={()=>void selectFolder(prefix)} className={buttonClass}>Select folder {prefix}</button></li>)}</ul></details>}
         {resolving && <p role="status" className="text-sm text-gray-600">Checking the entire folder… {scanProgress.files.toLocaleString('en')} files found · {formatBytes(scanProgress.bytes)} so far. {scanWaiting?'Pausing briefly for the storage request limit; counting will continue automatically.':'Please wait for the complete count.'}</p>}
       </div>
