@@ -1,18 +1,21 @@
-# Prospective frontend SSM startup package
+# Frontend SSM startup package
 
-This unmerged package implements the server-only Node port of the plural common
+This package implements the server-only Node port of the plural common
 loader at `7b3cdd0abd05845cebb417e41ae8f1335fb3d3f4`. It does not activate SSM
 startup. `npm start` remains `next start`, and Nixpacks still starts `npm start`.
 No app routes, lazy factories, feature flags or deployment settings change.
 
-`assignment.prospective.json` is **not published and not deploy ready**. Its
-generation `g-s1869-ai-market-frontend-01` and all three numeric version-1
-selectors are the requested prospective selection, not observations of provider
-objects or canonical folder bindings. No frontend parameters, reader keys or
-bootstrap placement exist as a result of this package. The valid-schema origin
-reference `prospective-unqualified-origin` explicitly denotes an unresolved
-effective-origin assignment; it supplies no CIDR or permission proof. Do not
-rename this example to `assignment.json` until actual publication facts match.
+`assignment.json` is the published generation-01 manifest: its bytes match the
+accepted publisher candidate and the three Standard SecureString/version-1
+metadata records from 4 November 2026. The qualified origin reference is
+`c07-ai-market-frontend-production-ssm-read`; it records policy provenance, while
+the actual region/source-address restrictions live in that reader policy.
+`assignment.prospective.json` remains the preparatory example with an unresolved
+origin marker; do not use it as an activation manifest. Adding the final file
+does not reference `start` from deployment settings or activate retrieval.
+Canonical custody, Max-only reader issuance, staging and rollout facts are kept
+in the current Infisical runbook. Effective access, actual startup/health/feature
+and rollback acceptance remain separate from this nonsecret source publication.
 
 The three assignments are `AI_CRAWL_BEACON_KEY`,
 `KEYSTATIC_GITHUB_CLIENT_SECRET` and `KEYSTATIC_SECRET`, each at
