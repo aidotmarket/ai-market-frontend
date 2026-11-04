@@ -1,0 +1,77 @@
+{
+  "account": "948749907373",
+  "app": "ai-market-frontend",
+  "argv": [
+    "/mise/installs/node/24.22.1/bin/npm",
+    "start"
+  ],
+  "assignments": {
+    "AI_CRAWL_BEACON_KEY": {
+      "name": "/c07/ai-market-frontend/production/g-s1869-ai-market-frontend-01/AI_CRAWL_BEACON_KEY",
+      "phase": "runtime",
+      "purpose": "application",
+      "tier": "Standard",
+      "version": 1
+    },
+    "KEYSTATIC_GITHUB_CLIENT_SECRET": {
+      "name": "/c07/ai-market-frontend/production/g-s1869-ai-market-frontend-01/KEYSTATIC_GITHUB_CLIENT_SECRET",
+      "phase": "runtime",
+      "purpose": "application",
+      "tier": "Standard",
+      "version": 1
+    },
+    "KEYSTATIC_SECRET": {
+      "name": "/c07/ai-market-frontend/production/g-s1869-ai-market-frontend-01/KEYSTATIC_SECRET",
+      "phase": "runtime",
+      "purpose": "application",
+      "tier": "Standard",
+      "version": 1
+    }
+  },
+  "budget_seconds": 10,
+  "connect_seconds": 1,
+  "credential_mode": "access-key",
+  "endpoint": "https://ssm.eu-north-1.amazonaws.com",
+  "environment": "production",
+  "generation": "g-s1869-ai-market-frontend-01",
+  "max_attempts": 1,
+  "metadata": [
+    "KEYSTATIC_GITHUB_CLIENT_ID",
+    "PORT",
+    "NODE_ENV",
+    "API_URL",
+    "NEXT_PUBLIC_API_URL",
+    "NEXT_PUBLIC_SITE_URL",
+    "NEXT_PUBLIC_KEYSTATIC_GITHUB_APP_SLUG",
+    "NEXT_PUBLIC_ORG_SSO_WEB_RETURN_ENABLED",
+    "NEXT_PUBLIC_AIM_DATA_OAUTH_ENABLED",
+    "NEXT_PUBLIC_CHECKOUT_DOMAIN_SERVICE_ENABLED",
+    "NEXT_PUBLIC_TERMS_GATE_ENFORCE",
+    "NEXT_PUBLIC_ENABLE_REQUEST_JSONLD",
+    "NEXT_PUBLIC_ENABLE_DATASET_JSONLD",
+    "FRONTEND_BUILD_REVISION",
+    "RAILWAY_GIT_COMMIT_SHA"
+  ],
+  "namespace": "/c07/ai-market-frontend/production/g-s1869-ai-market-frontend-01/",
+  "origins": [
+    "c07-ai-market-frontend-production-ssm-read"
+  ],
+  "partition": "aws",
+  "path": [
+    "/mise/installs/node/24.22.1/bin",
+    "/usr/bin",
+    "/bin"
+  ],
+  "phase": "runtime",
+  "principal_arn": "arn:aws:iam::948749907373:user/c07-ai-market-frontend-production",
+  "principal_mode": "iam-user",
+  "read_seconds": 2,
+  "region": "eu-north-1",
+  "required": [
+    "AI_CRAWL_BEACON_KEY",
+    "KEYSTATIC_GITHUB_CLIENT_SECRET",
+    "KEYSTATIC_SECRET"
+  ],
+  "role_arn": null,
+  "schema": "c07-standard-v2"
+}
