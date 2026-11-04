@@ -165,6 +165,21 @@ describe('seller presentation on the real listing route', () => {
     const absent = await renderPage(makeListing({ publisher: undefined }));
     expect(absent).not.toMatch(/>Publisher<|completed purchases|No ratings yet|Stripe connected/);
   });
+
+  it('titles the legacy license card License', async () => {
+    document.body.innerHTML = await renderPage(makeListing());
+    const page = within(document.body);
+    const heading = page.getByRole('heading', { name: 'License', level: 3 });
+    expect(within(heading.parentElement!).getByText('CC-BY-4.0')).toBeTruthy();
+    expect(page.queryByRole('heading', { name: 'Trust Metrics' })).toBeNull();
+  });
+
+  it.each([null, ''])('omits the legacy license card when license is %s', async (license) => {
+    document.body.innerHTML = await renderPage(makeListing({ license }));
+    const page = within(document.body);
+    expect(page.queryByRole('heading', { name: 'Trust Metrics' })).toBeNull();
+    expect(page.queryByRole('heading', { name: 'License' })).toBeNull();
+  });
 });
 
 describe('real public listing route sample composition', () => {
@@ -181,6 +196,67 @@ describe('real public listing route sample composition', () => {
     composition.enabled = false;
     document.body.innerHTML = '';
   });
+
+  it.each(['normal', 'approved Workspace'] as const)(
+    'shows published scan findings without the request hint on the %s listing',
+    async (route) => {
+      const listing = makeListing({ scan_findings: {
+        publication_state: 'PUBLISHED',
+        artifact_version: 'data-verification-public-artifact-v1',
+        verification_series_id: 'series-1',
+        epoch_id: 'epoch-1',
+        listing_id: 'listing-1',
+        title: 'Scan findings — 2026-08-23',
+        scan_date_utc: '2026-08-23T12:00:00Z',
+        scanned_at_utc: '2026-08-23T11:59:58Z',
+        completed_at_utc: '2026-08-23T12:00:00Z',
+        duration_ms: 2000,
+        published_at_utc: '2026-08-23T12:01:00Z',
+        spec: {
+          id: 'spec-1', version: '1', hash: 'a'.repeat(64),
+          depth_class: 'complete_standard_v1', canonicalization_version: 'python-json-sort-compact-v1',
+        },
+        execution: {
+          agent_version: '1.0.0', connector_type: 'eolymp', connector_version: 'eolymp-v1',
+          content_sha256_reference: 'b'.repeat(64),
+        },
+        methods: {
+          row_count_algorithm_version: 'exact-v1', distinct_algorithm_version: 'hll-sha256-v1',
+          histogram_version: 'fixed-buckets-v1', numeric_bucket_version: 'fixed-buckets-v1',
+        },
+        coverage: {
+          objects_discovered: 0, objects_scanned: 0,
+          objects_skipped_by_reason: { permission_denied: 0, unsupported_type: 0, timeout: 0 }, skipped: [],
+        },
+        deterministic_facts: [],
+        fingerprint_hash: 'c'.repeat(64),
+        narrative_state: 'grounded',
+        seller_context_provided: false,
+        preview_requested: false,
+        attestation: 'Published scan attestation.',
+        disclaimer: 'Point-in-time scan limitations.',
+      } });
+      if (route === 'approved Workspace') {
+        const { createHash } = await import('node:crypto');
+        const rendered_html = '<html><body><h1>Approved listing</h1></body></html>';
+        listing.approved_presentation = {
+          presentation_version: 'seller-listing-review-v2', rendered_html,
+          render_hash: createHash('sha256').update(rendered_html).digest('hex'),
+        };
+      }
+
+      document.body.innerHTML = await renderPage(listing);
+      const page = within(document.body);
+      const report = page.getByRole('region', { name: 'Scan findings — 2026-08-23' });
+      expect(within(report).getByRole('link', { name: 'View full report' }).getAttribute('href'))
+        .toBe('#scan-findings-full-report');
+      expect(within(report).getByText('Published scan attestation.')).toBeTruthy();
+      expect(page.queryByText('The seller can request a verified scan of this data.', { exact: true })).toBeNull();
+      if (route === 'approved Workspace') {
+        expect(page.getByTitle('Seller-approved listing')).toBeTruthy();
+      }
+    },
+  );
 
   it.each(['normal', 'approved Workspace'] as const)(
     'passes includeSample=false and mounts one standalone sample after the actual schema on the %s listing',

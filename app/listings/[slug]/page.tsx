@@ -285,18 +285,16 @@ export default async function ListingDetailPage({ params, searchParams }: Props)
             )}
           </div>
 
-          {/* Trust metrics */}
-          <div className="rounded-xl border border-gray-200 p-6 space-y-4">
-            <h3 className="font-semibold text-gray-900">Trust Metrics</h3>
+          {/* Legacy license */}
+          {legacyLicense && <div className="rounded-xl border border-gray-200 p-6 space-y-4">
+            <h3 className="font-semibold text-gray-900">License</h3>
             <div className="space-y-3">
-              {legacyLicense && (
-                <div className="flex justify-between items-center gap-4">
-                  <span className="text-sm text-gray-600">License</span>
-                  <span className="text-sm font-medium text-gray-900 text-right">{legacyLicense}</span>
-                </div>
-              )}
+              <div className="flex justify-between items-center gap-4">
+                <span className="text-sm text-gray-600">License</span>
+                <span className="text-sm font-medium text-gray-900 text-right">{legacyLicense}</span>
+              </div>
             </div>
-          </div>
+          </div>}
 
           {/* Publisher card */}
           <PublisherCard publisher={listing.publisher} />
