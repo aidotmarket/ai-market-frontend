@@ -7,13 +7,15 @@ import BackendListingHtml, {isBackendListingHtml} from './BackendListingHtml';
 const paired = ['p', 'h2', 'h3', 'h4', 'ul', 'ol', 'strong', 'em'];
 describe('backend listing HTML grammar', () => {
   it.each(paired)('accepts exact %s tags', tag => {
-    expect(isBackendListingHtml(`<${tag}>text</${tag}>`)).toBe(true);
+    const content = tag === 'ul' || tag === 'ol' ? '<li>text</li>' : 'text';
+    expect(isBackendListingHtml(`<${tag}>${content}</${tag}>`)).toBe(true);
   });
   it.each([
     '', 'plain text\n🫨', '&amp;&lt;&gt;&quot;&#x27;', '<br>',
     '<p>A<strong>B<em>C</em></strong><br>D</p><h2>Next</h2>',
     '<ul><li>tight</li><li><p>loose</p><ol start="2"><li>nested</li></ol></li></ul>',
-    ...['2', '9', '10', '100', '999999999999999999999999999999'].map(n => `<ol start="${n}"><li>x</li></ol>`),
+    '<ul></ul>', '<ol></ol>',
+    ...['2', '9', '10', '100', '123456789', '999999999'].map(n => `<ol start="${n}"><li>x</li></ol>`),
   ])('accepts %j', html => expect(isBackendListingHtml(html)).toBe(true));
 
   it.each([
@@ -22,6 +24,7 @@ describe('backend listing HTML grammar', () => {
     '<p><em>x</p></em>', '<p>x</p></p>', '<ul><li>x</li>',
     '<li>x</li>', '<p><li>x</li></p>', '<ul><p><li>x</li></p></ul>',
     '<ul><li><li>x</li></li></ul>', '<ol start="2"><em><li>x</li></em></ol>',
+    '<ul><p>x</p></ul>', '<ol>text<li>x</li></ol>',
     '<script>alert(1)</script>', '<a href="https://example.org">x</a>', '<img>',
     '<!-- comment -->', '<!DOCTYPE html>', '<![CDATA[x]]>', '<?xml?>',
     '<h1>x</h1>', '<h5>x</h5>', '<div>x</div>', '<P>x</P>', '<BR>',
@@ -29,6 +32,8 @@ describe('backend listing HTML grammar', () => {
     '<p\n>x</p>', '<p>x</p >', '<p class="x">x</p>', '<p onclick="x">x</p>',
     '<ol start="1"></ol>', '<ol start="0"></ol>', '<ol start="01"></ol>',
     '<ol start="02"></ol>', '<ol start="x"></ol>', '<ol start="-2"></ol>',
+    '<ol start="1234567890">', '<ol start="1234567890"><li>x</li></ol>',
+    '<ol start="999999999999999999999999999999"><li>x</li></ol>',
     '<ol start="+2"></ol>', '<ol start="2.0"></ol>', '<ol start="2e2"></ol>',
     '<ol start="２"></ol>', '<ol start=""></ol>', '<ol start="2\n"></ol>',
     "<ol start='2'></ol>", '<ol start=2></ol>', '<ol  start="2"></ol>',
@@ -39,6 +44,19 @@ describe('backend listing HTML grammar', () => {
     '&copy;', '&lt', '&amp; &bad;', '<p>&unknown;</p>', '<p><<br>></p>',
     '<p>safe</p><script>x</script>', '<p>safe</p>raw >',
   ])('rejects %j', html => expect(isBackendListingHtml(html)).toBe(false));
+
+  it.each(['ul', 'ol', 'ol start="2"'])('rejects every non-li child directly inside %s', opening => {
+    const tag = opening.split(' ')[0];
+    const children = [
+      'text', ' ', '\n', '\t', '&amp;', '<br>', '<ol start="2"></ol>',
+      ...paired.map(child => `<${child}></${child}>`),
+    ];
+    for (const child of children) {
+      for (const content of [child + '<li>x</li>', '<li>x</li>' + child]) {
+        expect(isBackendListingHtml(`<${opening}>${content}</${tag}>`), content).toBe(false);
+      }
+    }
+  });
 
   it.each(paired)('rejects attribute, case and whitespace variants for %s', tag => {
     for (const html of [`<${tag} id="x"></${tag}>`, `<${tag.toUpperCase()}></${tag.toUpperCase()}>`, `<${tag} ></${tag}>`, `<${tag}></${tag} >`]) {

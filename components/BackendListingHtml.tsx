@@ -7,6 +7,7 @@ export function isBackendListingHtml(html: unknown): html is string {
   let offset = 0;
   while (offset < html.length) {
     if (html[offset] !== '<') {
+      if (stack.at(-1) === 'ul' || stack.at(-1) === 'ol') return false;
       const next = html.indexOf('<', offset);
       const end = next === -1 ? html.length : next;
       if (/[<>]|&(?!amp;|lt;|gt;|quot;|#x27;)/.test(html.slice(offset, end))) return false;
@@ -17,8 +18,10 @@ export function isBackendListingHtml(html: unknown): html is string {
     if (end === -1) return false;
     const token = html.slice(offset, end + 1);
     offset = end + 1;
+    const parent = stack.at(-1);
+    if ((parent === 'ul' || parent === 'ol') && token !== '<li>' && token !== `</${parent}>`) return false;
     if (token === '<br>') continue;
-    if (/^<ol start="(?:[2-9]|[1-9][0-9]+)">$/.test(token)) {
+    if (/^<ol start="(?:[2-9]|[1-9][0-9]{1,8})">$/.test(token)) {
       stack.push('ol');
       continue;
     }
