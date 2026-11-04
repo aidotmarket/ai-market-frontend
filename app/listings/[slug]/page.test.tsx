@@ -155,8 +155,8 @@ describe('seller presentation on the real listing route', () => {
     expect(html).toContain('Stripe connected');
     expect(html).toContain('12 completed purchases');
     expect(html).toContain('4.7/5 from 9 ratings');
-    expect(html).toContain('Trust Level');
-    expect(html).toContain('L1');
+    expect(html).not.toContain('Privacy Score');
+    expect(html).not.toContain('Trust Level');
   });
   it('renders a name-only legacy publisher and tolerates an absent flag-off publisher', async () => {
     const legacy = await renderPage(makeListing());
@@ -209,6 +209,9 @@ describe('real public listing route sample composition', () => {
       });
 
       const page = within(document.body);
+      expect(page.queryByText('Privacy Score', {exact: true})).toBeNull();
+      expect(page.queryByText('Trust Level', {exact: true})).toBeNull();
+      expect(page.getAllByText('The seller can request a verified scan of this data.', {exact: true})).toHaveLength(1);
       const schemaHeading = page.getByRole('heading', { name: 'Schema Information', level: 2 });
       const schemaBlock = schemaHeading.parentElement!;
       expect(within(schemaBlock).getByRole('table')).toBeTruthy();
@@ -339,8 +342,14 @@ describe('ListingDetailPage Dataset JSON-LD', () => {
     const html = await renderPage(makeListing({
       pricing: { price: 25, pricing_type: 'one_time', subscription_price_monthly: null },
       scan_findings: null,
+      privacy_score: null,
+      trust_level: 'L0',
     }));
 
+    expect(html).not.toContain('Privacy Score');
+    expect(html).not.toContain('Trust Level');
+    expect(html).not.toContain('Not scored');
+    expect(html).toContain('The seller can request a verified scan of this data.');
     expect(html).toContain('Review before buying');
     expect(html).toContain('No active scan findings are published for this listing');
     expect(html.toLowerCase()).not.toContain('quality score');
@@ -358,6 +367,7 @@ describe('ListingDetailPage Dataset JSON-LD', () => {
     }));
 
     expect(html).toContain(marker);
+    expect(html).toContain('The seller can request a verified scan of this data.');
     expect(html).toContain('dateTime="2026-08-23T12:00:00Z"');
   });
 
@@ -375,7 +385,8 @@ describe('ListingDetailPage Dataset JSON-LD', () => {
     ]) {
       expect(html).not.toContain(forbidden);
     }
-    expect(html).not.toMatch(/\bverified\b/);
+    expect(html).toContain('the seller can request a verified scan of this data.');
+    expect(html.replace('the seller can request a verified scan of this data.', '')).not.toMatch(/\bverified\b/);
   });
 });
 
@@ -583,7 +594,7 @@ describe('S1717 member_files and verification scope', () => {
       const breakdown = within(document.body).getByRole('region', { name: 'File breakdown' });
       expect(breakdown.previousElementSibling?.textContent).toBe(listing.verification_scope);
       const rows = within(breakdown).getAllByRole('listitem').map(row => row.textContent);
-      expect(rows).toEqual(['CSV tables: 1 file · 1,200 bytes', 'TSV tables: 1 file · 34 bytes', 'JSONL tables: 1 file · 56 bytes', 'PARQUET tables: 1 file · 78 bytes', 'Other files: 2 files · 4,096 bytes']);
+      expect(rows).toEqual(['CSV tables: 1 file · 1.2 KB', 'TSV tables: 1 file · 34 B', 'JSONL tables: 1 file · 56 B', 'PARQUET tables: 1 file · 78 B', 'Other files: 2 files · 4.1 KB']);
       expect(within(document.body).getAllByRole('region', { name: 'File breakdown' })).toHaveLength(1);
     });
 
@@ -593,7 +604,7 @@ describe('S1717 member_files and verification scope', () => {
       listing.file_breakdown = [{ format: 'other', count: 1, size_bytes: 0 }];
       document.body.innerHTML = await renderPage(listing);
       const breakdown = within(document.body).getByRole('region', { name: 'File breakdown' });
-      expect(breakdown.textContent).toContain('Other files: 1 file · 0 bytes');
+      expect(breakdown.textContent).toContain('Other files: 1 file · 0 B');
       expect(breakdown.textContent).not.toMatch(/CSV|PARQUET|scanned/);
     });
 
@@ -612,8 +623,8 @@ describe('S1717 member_files and verification scope', () => {
       const sample = within(block);
       expect(sample.getAllByRole('listitem')).toHaveLength(3);
       expect(sample.getByText('Sample files are part of the purchased set and free to download.')).toBeTruthy();
-      expect(sample.getByText('1.5 KiB')).toBeTruthy();
-      expect(sample.getByText('1 MiB')).toBeTruthy();
+      expect(sample.getByText('1.54 KB')).toBeTruthy();
+      expect(sample.getByText('1.05 MB')).toBeTruthy();
       expect(sample.getByText('0 B')).toBeTruthy();
       // The visible filename is also the accessible link name, not a generic Download label.
       for (const [index, name] of ['sales.csv', 'regions.json'].entries()) {
@@ -659,8 +670,9 @@ describe('S1717 member_files and verification scope', () => {
       };
       document.body.innerHTML = await renderPage(listing);
       const sentence = within(document.body).getByText(scope, { exact: true });
-      expect(sentence.previousElementSibling?.tagName).toBe('ASIDE');
-      expect(sentence.previousElementSibling?.textContent).toBe(listing.scan_findings.marker);
+      expect(sentence.previousElementSibling?.textContent).toBe('The seller can request a verified scan of this data.');
+      expect(sentence.previousElementSibling?.previousElementSibling?.tagName).toBe('ASIDE');
+      expect(sentence.previousElementSibling?.previousElementSibling?.textContent).toBe(listing.scan_findings.marker);
     });
 
     it(`ignores extra private sample metadata on the ${route} carrier`, async () => {
@@ -695,4 +707,34 @@ it('uses the same UTC Published date in the header and version card near midnigh
  const timestamp='2026-09-27T23:30:00Z';
  const html=await renderPage(makeListing({published_at:timestamp}),[{version_id:'v1',version_label:'v1',published_at:timestamp,object_count:1,total_size_bytes:1024,status:'active'}]);
  expect(html.match(/Published Sep 27, 2026/g)).toHaveLength(2);
+});
+
+it('renders human category labels for primary, secondary and unknown categories', async () => {
+  fetchPublicListing.mockReset(); fetchListingVersions.mockReset();
+  document.body.innerHTML = await renderPage(makeListing({
+    category: 'technology-web',
+    secondary_categories: ['ai-machine-learning', 'consumer-retail', 'future-category'],
+  }));
+  const page = within(document.body);
+  for (const label of ['Technology & Web', 'AI & Machine Learning', 'Consumer & Retail', 'Future Category']) {
+    expect(page.getByText(label, {exact: true})).toBeTruthy();
+  }
+  expect(document.body.textContent).not.toMatch(/technology-web|ai-machine-learning|consumer-retail|future-category/);
+});
+
+it('renders 14,140,000,000 bytes identically in every public listing size display', async () => {
+  const {field, summary} = await import('@/tests/summaryFixture');
+  fetchPublicListing.mockReset(); fetchListingVersions.mockReset();
+  const bytes = 14_140_000_000;
+  document.body.innerHTML = await renderPage(makeListing({
+    at_a_glance: {...summary, size_bytes: field(bytes)},
+    sample_files: [{index: 0, key_basename: 'large.csv', size: bytes, binding: 'manifest', state: 'available', url: '/sample/0'}],
+    file_breakdown: [{format: 'csv', count: 1, size_bytes: bytes}],
+  }), [{version_id: 'v1', version_label: 'v1', published_at: '2026-06-01T00:00:00Z', object_count: 1, total_size_bytes: bytes, status: 'active'}]);
+  const page = within(document.body);
+  expect(within(page.getByRole('region', {name: 'At a glance'})).getByText('14.14 GB', {exact: true})).toBeTruthy();
+  expect(page.getByTestId('version-v1').textContent).toContain('14.14 GB');
+  expect(within(page.getByRole('region', {name: 'Free sample: 1 files'})).getByText('14.14 GB', {exact: true})).toBeTruthy();
+  expect(page.getByRole('region', {name: 'File breakdown'}).textContent).toContain('14.14 GB');
+  expect(document.body.textContent?.match(/14\.14 GB/g)).toHaveLength(4);
 });

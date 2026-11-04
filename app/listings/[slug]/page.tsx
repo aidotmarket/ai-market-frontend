@@ -1,3 +1,4 @@
+import { formatMarketplaceCategoryName } from '@/lib/marketplaceCategories';
 import GeneratedSamplePage from './GeneratedSamplePage';
 import { generatedSampleState, samplePresentation } from '@/lib/generatedSample';
 import PublicSourceReferencePage, { isPublicSourceReference } from './PublicSourceReferencePage';
@@ -11,7 +12,6 @@ import { fetchListingAccessWindowDays, fetchListingVersions, fetchPublicListing,
 import {
   formatPrice,
   formatPublishedDate,
-  privacyScoreColor,
 } from '@/lib/format';
 import type { ListingDetail } from '@/types';
 import BuyerAtAGlance, {BuyerSamplePreview} from '@/components/listings/BuyerAtAGlance';
@@ -107,6 +107,7 @@ export default async function ListingDetailPage({ params, searchParams }: Props)
     return <PublicSourceReferencePage listing={listing} emitJsonLd={DATASET_JSONLD_ENABLED} />;
   }
 
+  const hasActiveScanFindings = listing.scan_findings?.publication_state === 'PUBLISHED';
   const approved = listing.approved_presentation;
   if (approved && (approved.presentation_version !== 'seller-listing-review-v2' ||
       typeof approved.rendered_html !== 'string' || Buffer.byteLength(approved.rendered_html, 'utf8') > 100000 ||
@@ -180,20 +181,21 @@ export default async function ListingDetailPage({ params, searchParams }: Props)
 
 
           <ScanFindingsBadge scanFindings={listing.scan_findings ?? null} />
+          {!hasActiveScanFindings && <p className="text-sm text-gray-600">The seller can request a verified scan of this data.</p>}
           {listing.verification_scope != null && <p className="text-sm text-gray-600">{listing.verification_scope}</p>}
           <FileBreakdown groups={listing.file_breakdown} />
 
           {/* Tags */}
           <div className="flex flex-wrap gap-2">
             <span className="inline-flex items-center rounded-full bg-gray-100 px-3 py-1 text-sm font-medium text-gray-700">
-              {listing.category}
+              {formatMarketplaceCategoryName(listing.category)}
             </span>
             {listing.secondary_categories?.map((cat) => (
               <span
                 key={cat}
                 className="inline-flex items-center rounded-full bg-gray-50 px-3 py-1 text-sm text-gray-600"
               >
-                {cat}
+                {formatMarketplaceCategoryName(cat)}
               </span>
             ))}
             {listing.tags.map((tag) => (
@@ -209,6 +211,7 @@ export default async function ListingDetailPage({ params, searchParams }: Props)
           </>}
           {approved && <>
             <ScanFindingsBadge scanFindings={listing.scan_findings ?? null} />
+            {!hasActiveScanFindings && <p className="text-sm text-gray-600">The seller can request a verified scan of this data.</p>}
             {listing.verification_scope != null && <p className="text-sm text-gray-600">{listing.verification_scope}</p>}
             <FileBreakdown groups={listing.file_breakdown} />
           </>}
@@ -286,18 +289,6 @@ export default async function ListingDetailPage({ params, searchParams }: Props)
           <div className="rounded-xl border border-gray-200 p-6 space-y-4">
             <h3 className="font-semibold text-gray-900">Trust Metrics</h3>
             <div className="space-y-3">
-              <div className="flex justify-between items-center">
-                <span className="text-sm text-gray-600">Privacy Score</span>
-                <span className={`inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-medium ${listing.privacy_score != null ? privacyScoreColor(listing.privacy_score) : 'bg-gray-100 text-gray-500'}`}>
-                  {listing.privacy_score != null ? `${listing.privacy_score.toFixed(1)}/10` : 'Not scored'}
-                </span>
-              </div>
-              <div className="flex justify-between items-center">
-                <span className="text-sm text-gray-600">Trust Level</span>
-                <span className="text-sm font-medium text-gray-900">
-                  {listing.trust_level}
-                </span>
-              </div>
               {legacyLicense && (
                 <div className="flex justify-between items-center gap-4">
                   <span className="text-sm text-gray-600">License</span>

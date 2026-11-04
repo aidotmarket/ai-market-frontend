@@ -54,7 +54,7 @@ it('does not render unreviewed unknown fields', () => {
   expect(renderToStaticMarkup(<AtAGlance summary={unreviewed} />)).not.toContain('UNREVIEWED VALUE');
 });
 
-it.each([[0, '0 bytes'], [1000, '1 KB'], [2500000, '2.5 MB'], [3000000000, '3 GB']])('formats %s bytes without inventing dataset scope', (bytes, display) => {
+it.each([[0, '0 B'], [1000, '1 KB'], [2500000, '2.5 MB'], [3000000000, '3 GB']])('formats %s bytes without inventing dataset scope', (bytes, display) => {
   const html = renderToStaticMarkup(<AtAGlance summary={{profile: summary.profile, size_bytes: field(bytes)}} />);
   expect(html).toContain(`title="${Number(bytes).toLocaleString('en-US')} bytes">${display}</p>`);
   expect(html).not.toContain('dataset/file total');
