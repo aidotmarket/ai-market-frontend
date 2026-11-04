@@ -460,6 +460,18 @@ describe('SellerWorkspacePage safety boundaries', () => {
     expect(screen.queryByRole('button', { name: 'Add AWS connection' })).toBeNull();
   });
 
+  it('shows setup in progress for an expired connection with no prefix', async () => {
+    sellerWorkspaceApi.listSellerWorkspaceConnections.mockResolvedValue([
+      { ...pendingConnection, status: 'expired', prefix: null, expired_at: '2026-08-31T00:00:00Z' },
+    ]);
+
+    render(<SellerWorkspacePage />);
+
+    fireEvent.click(await screen.findByRole('button', { name: 'Previous connections (1)' }));
+    const history = screen.getByRole('list', { name: 'Previous connections' });
+    expect(within(history).getByText('AWS S3 · Setup in progress')).toBeTruthy();
+  });
+
   it('keeps an expired pending connection terminal with no verification path', async () => {
     sellerWorkspaceApi.listSellerWorkspaceConnections.mockResolvedValue([
       {

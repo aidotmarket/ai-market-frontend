@@ -125,6 +125,13 @@ function formatDate(value: string | null): string {
   }).format(date);
 }
 
+function connectionScopeLabel(connection: SellerWorkspaceConnection) {
+  if (connection.status !== 'verified' && !connection.prefix && connection.scope !== 'whole_bucket') {
+    return 'Setup in progress';
+  }
+  return connection.scope === 'whole_bucket' ? 'Whole bucket' : connection.prefix ?? '';
+}
+
 function CopyValue({
   label,
   value,
@@ -788,7 +795,7 @@ export default function SellerWorkspacePage() {
                         {status.label}
                       </span>
                     </div>
-                    <p className="mt-1 break-all text-xs text-gray-500">{connection.status === 'pending_authorization' ? `${providerLabel} · Setup in progress` : `${providerLabel} · ${connection.scope === 'whole_bucket' ? 'Whole bucket' : connection.prefix ?? ''}`}</p>
+                    <p className="mt-1 break-all text-xs text-gray-500">{providerLabel} · {connectionScopeLabel(connection)}</p>
                   </div>
                   <div className="flex flex-wrap gap-2">
                     {awaitingSetup && (
@@ -904,7 +911,7 @@ export default function SellerWorkspacePage() {
                   <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
                     <span className="break-all font-medium">{connectionName(newest)}</span>
                     {group.length > 1 && <span>x{group.length}</span>}
-                    <span>{newest.provider === 'aws' ? 'AWS S3' : 'Cloudflare R2'}{newest.scope === 'whole_bucket' ? ' · Whole bucket' : newest.prefix ? ` · ${newest.prefix}` : ''}</span>
+                    <span>{newest.provider === 'aws' ? 'AWS S3' : 'Cloudflare R2'}{connectionScopeLabel(newest) ? ` · ${connectionScopeLabel(newest)}` : ''}</span>
                     <span>{STATUS_PRESENTATION[newest.status].label}</span>
                   </div>
                   <details className="mt-2 text-xs">

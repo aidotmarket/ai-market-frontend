@@ -157,7 +157,7 @@ function safeError(error: unknown): SellerWorkspaceApiError {
     return mapped('authorization_expired');
   }
   if (status === 409) return mapped('conflict');
-  if (status === 422 && (detail === 'Connection scope is invalid' || detail === 'initial_scope_required')) {
+  if (status === 422 && detail === 'Connection scope is invalid') {
     return mapped('invalid_scope');
   }
   if (status === 422) return mapped('verification_failed');

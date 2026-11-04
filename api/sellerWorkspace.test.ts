@@ -185,7 +185,6 @@ describe('Seller Workspace safe errors', () => {
     [403, { reason: 'secret seller response' }, 'active_seller_required'],
     [409, 'Connection authorization is unavailable', 'authorization_expired'],
     [422, 'Connection scope is invalid', 'invalid_scope'],
-    [422, 'initial_scope_required', 'invalid_scope'],
     [422, 'unsafe AccessDenied secret', 'verification_failed'],
     [503, 'Connection verification outcome is unknown', 'verification_outcome_unknown'],
     [503, 'unsafe configuration secret', 'unavailable'],
