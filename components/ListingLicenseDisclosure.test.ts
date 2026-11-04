@@ -1,6 +1,8 @@
 import { webcrypto } from 'node:crypto';
 import { readFileSync } from 'node:fs';
 import { describe, expect, it, vi } from 'vitest';
+import record11 from '@/tests/fixtures/s1735_license_record_1_1.json';
+import {LICENSE_HASHES} from '@/api/listingLicenses';
 import record from '@/tests/fixtures/s1735_license_record.json';
 import { fetchedBytesMatch, hashLicenseComponentBytes } from './ListingLicenseDisclosure';
 import {sha256} from '@/lib/customLicenseVerification';
@@ -64,4 +66,18 @@ describe('custom plain text byte verification', () => {
       expect(await fetchedBytesMatch(bytes,'text/plain',{...reference,params:{...reference.params,source_sha256:'0'.repeat(64)}})).toBe(false);
     } finally {vi.unstubAllGlobals();}
   });
+});
+
+it('pins the exact 1.1 amendments and the current seller selection hashes',async()=>{
+  vi.stubGlobal('crypto',webcrypto);
+  try {
+    expect(record11.license.text).toBe(record.license.text.replace('v1.0','v1.1')
+      .replace("6. Licensor promises. The Licensor promises that it has the rights needed to offer and license the Data; that it sourced and provides the Data lawfully; that providing and using the Data as this licence permits does not knowingly infringe another person's rights; and that the Data contains no regulated personal data or special-category data. The Licensor also promises that the listing's express statements about the Data are materially accurate when delivered.","6. Licensor promises. The Licensor promises that it has the rights needed to offer and license the Data; that it sourced and provides the Data lawfully; and that providing and using the Data as this licence permits does not knowingly infringe another person's rights. If the Data contains personal data, the Licensor also promises that it has a lawful basis to sell the Data and to transfer it to the Licensee, including across borders; that it holds the consent, notice and provenance records the law requires for that sale and transfer and will make them available through ai.market on reasonable request; and that the listing clearly discloses any special-category or other sensitive personal data. The Licensor is responsible for meeting these obligations. The Licensor also promises that the listing's express statements about the Data are materially accurate when delivered.").replace("Applicable law always applies.","If the Data contains personal data, the Licensee will use it only as this licence permits and as data protection law allows, keep it secure, and honour the rights of the people it concerns. Applicable law always applies."));
+    expect(record11.covenant.text).toBe(record.covenant.text.replace('v1.0','v1.1').replace("(3) the dataset contains no regulated personal data or special-category data;","(3) if the dataset contains personal data, the seller has a lawful basis to sell it and to transfer it to buyers, including across borders, holds the consent, notice and provenance records the law requires, clearly discloses any special-category or other sensitive personal data in the listing, and remains responsible for meeting these obligations;"));
+    expect(await hashLicenseComponentBytes(new TextEncoder().encode(record11.license.text),{kind:'license',code:'standard',version:'1.1',params:{ai_training:true}})).toBe(LICENSE_HASHES.standard.true);
+    expect(record11.license.sha256).toBe(LICENSE_HASHES.standard.true);
+    expect(await hashLicenseComponentBytes(new TextEncoder().encode(record11.license.text.replace(trueClause,falseClause)),{kind:'license',code:'standard',version:'1.1',params:{ai_training:false}})).toBe(LICENSE_HASHES.standard.false);
+    expect(await hashLicenseComponentBytes(new TextEncoder().encode(record11.covenant.text),{kind:'covenant',code:'marketplace-listing',version:'1.1',params:{}})).toBe(LICENSE_HASHES.covenant);
+    expect(record11.covenant.sha256).toBe(LICENSE_HASHES.covenant);
+  } finally {vi.unstubAllGlobals();}
 });

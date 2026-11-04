@@ -3,7 +3,7 @@ import { useEffect, useRef, useState } from 'react';
 import { authSessionIdentity, useAuthStore } from '@/store/auth';
 import { useSellerSwitches, type SellerSwitchReport } from '@/hooks/useSellerSwitches';
 import { nativeClient, nativeSession } from '@/api/connector-seller-settings';
-import { LICENSE_HASHES, licenseDocumentPath } from '@/api/listingLicenses';
+import { licenseHashesFor, licenseDocumentPath } from '@/api/listingLicenses';
 import { readSigningInstruments, signInstruments, type SigningInstrument, type SigningRequest, type PreparationView } from '@/api/seller-batch-signing';
 import NativeSellerAuth from '@/components/NativeSellerAuth';
 
@@ -31,9 +31,9 @@ export function BatchSigningScreen({ switches, preparation, onSigned }: { switch
         const s = row.license_selection;
         // GET preparation returns selection/hash only, not saved custom text.
         // No undisplayed custom acceptance or fabricated text endpoint.
-        if (s.kind !== 'standard' || s.license_sha256 !== LICENSE_HASHES.standard[String(s.ai_training) as 'true' | 'false'] || s.covenant_sha256 !== LICENSE_HASHES.covenant)
+        if (s.kind !== 'standard' || s.license_sha256 !== licenseHashesFor(s.version).standard[String(s.ai_training) as 'true' | 'false'] || s.covenant_sha256 !== licenseHashesFor(s.covenant_version).covenant)
           throw new Error('FULL_INSTRUMENT_UNAVAILABLE');
-        paths.add(licenseDocumentPath('standard', s.ai_training)); paths.add(licenseDocumentPath('covenant'));
+        paths.add(licenseDocumentPath('standard', s.ai_training, s.version)); paths.add(licenseDocumentPath('covenant', undefined, s.covenant_version));
       }
       const session = nativeSession();
       const loaded = await Promise.all([...paths].map(async path => {
@@ -56,7 +56,7 @@ export function BatchSigningScreen({ switches, preparation, onSigned }: { switch
   }, [preparation, enabled]);
   const ready = switches.seller && switches.bulk && switches.effects && !error && consent && instruments.length > 0 && instruments.length <= 50
     && instruments.every(i => i.status === 'prepared' && i.signing_required && i.license_selection.kind === 'standard'
-      && !!texts[licenseDocumentPath('standard', i.license_selection.ai_training)] && !!texts[licenseDocumentPath('covenant')]);
+      && !!texts[licenseDocumentPath('standard', i.license_selection.ai_training, i.license_selection.version)] && !!texts[licenseDocumentPath('covenant', undefined, i.license_selection.covenant_version)]);
   const sign = async (reauth?: string) => {
     if ((!ready && !reauth) || busy || done || !switches.effects) return;
     // A factor retry is permitted only for the retained displayed request.
@@ -84,8 +84,8 @@ export function BatchSigningScreen({ switches, preparation, onSigned }: { switch
       <p>AI/ML training: {i.license_selection.ai_training ? 'Allowed' : 'Not allowed'}</p>
       <pre className="overflow-auto whitespace-pre-wrap">{JSON.stringify({ ...i.binding, status: i.status, coverage_hash: i.coverage_hash, selection: i.license_selection }, null, 2)}</pre>
       {i.license_selection.kind === 'custom' ? <p role="alert">The saved custom licence and rider cannot be fully displayed by this contract. Signing is disabled for the whole batch.</p> : <>
-        <h4>Full licence</h4><pre className="max-h-96 overflow-auto whitespace-pre-wrap font-sans">{texts[licenseDocumentPath('standard', i.license_selection.ai_training)] ?? 'Full licence unavailable'}</pre>
-        <h4>Marketplace Listing Covenant</h4><pre className="max-h-96 overflow-auto whitespace-pre-wrap font-sans">{texts[licenseDocumentPath('covenant')] ?? 'Covenant unavailable'}</pre>
+        <h4>Full licence</h4><pre className="max-h-96 overflow-auto whitespace-pre-wrap font-sans">{texts[licenseDocumentPath('standard', i.license_selection.ai_training, i.license_selection.version)] ?? 'Full licence unavailable'}</pre>
+        <h4>Marketplace Listing Covenant</h4><pre className="max-h-96 overflow-auto whitespace-pre-wrap font-sans">{texts[licenseDocumentPath('covenant', undefined, i.license_selection.covenant_version)] ?? 'Covenant unavailable'}</pre>
       </>}
     </section>)}
     <label><input type="checkbox" checked={consent} disabled={busy || done || !instruments.length} onChange={e => setConsent(e.target.checked)} />I have read all {instruments.length} displayed licences, covenants and applicable riders. I confirm the covenant facts and that I am authorised to accept them for the seller.</label>

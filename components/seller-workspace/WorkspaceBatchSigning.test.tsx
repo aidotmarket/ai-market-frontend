@@ -7,6 +7,7 @@ import { nativeClient } from '@/api/connector-seller-settings';
 import { useSellerSwitches } from '@/hooks/useSellerSwitches';
 import { useAuthStore } from '@/store/auth';
 import type { User } from '@/types';
+import {LICENSE_HASHES_1_0} from '@/api/listingLicenses';
 import { id, instrument, hash } from '@/tests/fixtures/seller-authority';
 vi.mock('@/hooks/useSellerSwitches', () => ({ useSellerSwitches: vi.fn() }));
 vi.mock('@/api/seller-batch-signing', async original => ({ ...await original<typeof import('@/api/seller-batch-signing')>(), readSigningInstruments: vi.fn(), signInstruments: vi.fn() }));
@@ -59,4 +60,12 @@ it('cannot sign after stale prepared coverage and offers fresh review', async ()
 it('keeps effect-off signing disabled', () => {
   vi.mocked(useSellerSwitches).mockReturnValue({ seller: true, effects: false, bulk: true }); render(<WorkspaceBatchSigning />);
   expect(screen.queryByRole('region')).toBeNull(); expect(signInstruments).not.toHaveBeenCalled();
+});
+
+it('loads mixed recorded versions from their own immutable paths',async()=>{
+ const old=instrument(1);old.license_selection={...old.license_selection,version:'1.0',covenant_version:'1.0',license_sha256:LICENSE_HASHES_1_0.standard.true,covenant_sha256:LICENSE_HASHES_1_0.covenant};
+ vi.mocked(readSigningInstruments).mockResolvedValue([old,instrument(2)]);
+ await load();
+ const paths=vi.mocked(nativeClient.get).mock.calls.map(([path])=>path);
+ expect(paths).toEqual(expect.arrayContaining(['/licenses/standard/1.0/ai-training?format=json','/licenses/marketplace-listing/1.0?format=json','/licenses/standard/1.1/ai-training?format=json','/licenses/marketplace-listing/1.1?format=json']));
 });

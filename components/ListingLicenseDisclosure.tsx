@@ -101,9 +101,11 @@ function documentLocation(url: string): { href: string; apiPath?: string } {
 
 function referencesFor(license: ListingLicenseDetails): DocumentReference[] {
   const aiTraining = license.params.ai_training;
+  // Older API responses omitted this field and carried covenant 1.0.
+  const covenantVersion = license.covenant_version ?? '1.0';
   const references: DocumentReference[] = [{
     kind: 'license',
-    label: license.code === 'standard' ? 'ai.market Standard Data Licence v1.0' : "Seller's own licence",
+    label: license.code === 'standard' ? `ai.market Standard Data Licence v${license.version}` : "Seller's own licence",
     canonicalUrl: license.full_text_url,
     downloadUrl: license.download_url,
     sha256: license.sha256,
@@ -112,12 +114,12 @@ function referencesFor(license: ListingLicenseDetails): DocumentReference[] {
     params: license.params,
   }, {
     kind: 'covenant',
-    label: 'ai.market Marketplace Listing Covenant v1.0',
-    canonicalUrl: '/licenses/marketplace-listing/1.0',
-    downloadUrl: '/licenses/marketplace-listing/1.0?download=1',
+    label: `ai.market Marketplace Listing Covenant v${covenantVersion}`,
+    canonicalUrl: `/licenses/marketplace-listing/${covenantVersion}`,
+    downloadUrl: `/licenses/marketplace-listing/${covenantVersion}?download=1`,
     sha256: license.covenant_sha256,
     code: 'marketplace-listing',
-    version: '1.0',
+    version: covenantVersion,
     params: {},
   }];
   if (license.rider_sha256) {

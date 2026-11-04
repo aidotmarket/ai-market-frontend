@@ -63,7 +63,7 @@ describe('actual public sample detail SSR and metadata', () => {
     assertNoCommercialMounts();
     const ld = JSON.parse(document.querySelector('script')!.textContent!);
     expect(ld).toEqual({'@context': 'https://schema.org', '@type': 'CreativeWork', name: `SAMPLE — ${listing.title}`, description: SAMPLE_COPY, url: `https://ai.market/listings/${listing.slug}`});
-    expect(page.getAllByRole('link', {name: /Standard 1.0/}).map(a => a.getAttribute('href'))).toEqual([...STANDARD_DOCUMENTS]);
+    expect(page.getAllByRole('link', {name: /Standard 1.1/}).map(a => a.getAttribute('href'))).toEqual([...STANDARD_DOCUMENTS]);
     expect(page.getByText(/No contractual variant is established/)).toBeTruthy();
   });
   it.each([null, false, {}, {version: 2, mode: 'display_only'}, {label: 'SAMPLE', display_only: true, extra: 'Offer'}])('closes malformed public marker %j', async generated_sample => {
@@ -84,10 +84,10 @@ describe('actual public sample detail SSR and metadata', () => {
   });
   it('keeps the sample hold ahead of retained seller-terms status and links the actual Standard variant only', async () => {
     const url = STANDARD_DOCUMENTS[1];
-    const page = await render(sampleFixture({license_status: 'pending_seller_terms', license: {code: 'standard', version: '1.0', params: {ai_training: false}, full_text_url: url, summary: ['RETAINED_UNSUPPORTED']}}));
+    const page = await render(sampleFixture({license_status: 'pending_seller_terms', license: {code: 'standard', version: '1.1', params: {ai_training: false}, full_text_url: url, summary: ['RETAINED_UNSUPPORTED']}}));
     expect(page.getByRole('status').textContent).toBe(SAMPLE_COPY);
-    expect(page.getAllByRole('link', {name: /Standard 1.0/})).toHaveLength(1);
-    expect(page.getByRole('link', {name: /Standard 1.0/}).getAttribute('href')).toBe(url);
+    expect(page.getAllByRole('link', {name: /Standard 1.1/})).toHaveLength(1);
+    expect(page.getByRole('link', {name: /Standard 1.1/}).getAttribute('href')).toBe(url);
     expect(JSON.parse(document.querySelector('script')!.textContent!).license).toBe(url);
     assertNoCommercialMounts();
   });

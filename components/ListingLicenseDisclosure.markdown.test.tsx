@@ -111,3 +111,20 @@ it.each(['api', 'fetch'] as const)('handles custom licence refusals through %s w
   window.history.replaceState(null, '', originalPath);
  }
 });
+
+it.each(['1.0','1.1'])('verifies and links the backend standard/covenant version %s',async version=>{
+ vi.stubGlobal('crypto',webcrypto);
+ const text='Full versioned standard text';
+ const covenant='Full versioned covenant text';
+ const params={ai_training:false};
+ const hash=await hashLicenseComponentBytes(new TextEncoder().encode(text),{kind:'license',code:'standard',version,params});
+ const covenantHash=await hashLicenseComponentBytes(new TextEncoder().encode(covenant),{kind:'covenant',code:'marketplace-listing',version,params:{}});
+ const fetched=vi.fn(async(input:RequestInfo|URL)=>new Response(String(input).includes('marketplace-listing')?covenant:text,{headers:{'content-type':'text/plain'}}));
+ vi.stubGlobal('fetch',fetched);
+ const verified=vi.fn();
+ render(<ListingLicenseDisclosure license={{code:'standard',version,params,sha256:hash,covenant_version:version,covenant_sha256:covenantHash,rider_sha256:null,summary:[],full_text_url:`/licenses/standard/${version}/no-ai-training`,download_url:`/licenses/standard/${version}/no-ai-training?download=1`}} onVerificationChange={verified}/>);
+ await waitFor(()=>expect(verified).toHaveBeenLastCalledWith(true));
+ expect(screen.getByText(`ai.market Standard Data Licence v${version}`)).toBeTruthy();
+ expect(screen.getByText(`ai.market Marketplace Listing Covenant v${version}`)).toBeTruthy();
+ expect(fetched).toHaveBeenCalledWith(`/licenses/marketplace-listing/${version}?download=1`,expect.anything());
+});

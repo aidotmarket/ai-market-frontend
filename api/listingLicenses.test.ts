@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
 import {webcrypto} from 'node:crypto';
 import {beforeEach,expect,it,vi} from 'vitest';
-import {createStandardSelection,LICENSE_HASHES,licenseDocumentPath,submitCustomLicenseText} from './listingLicenses';
+import {createStandardSelection,LICENSE_HASHES,LICENSE_HASHES_1_0,licenseDocumentPath,submitCustomLicenseText} from './listingLicenses';
 import {hashLicenseComponentBytes,sha256} from '@/lib/customLicenseVerification';
 import vectors from './fixtures/s1735-backend-hash-vectors.json';
 const client=vi.hoisted(()=>({post:vi.fn(),get:vi.fn()}));
@@ -10,16 +10,16 @@ beforeEach(()=>{vi.resetAllMocks();vi.stubGlobal('crypto',webcrypto);});
 
 it('pins the reviewed standard, rider and covenant vectors',()=>{
   expect(Object.keys(vectors).sort()).toEqual(['covenant_marketplace_listing','rider_not_permitted','rider_permitted','standard_ai_training','standard_no_ai_training']);
-  expect(createStandardSelection(true).license_sha256).toBe(vectors.standard_ai_training);
-  expect(createStandardSelection(false).license_sha256).toBe(vectors.standard_no_ai_training);
+  expect(LICENSE_HASHES_1_0.standard.true).toBe(vectors.standard_ai_training);
+  expect(LICENSE_HASHES_1_0.standard.false).toBe(vectors.standard_no_ai_training);
   expect(LICENSE_HASHES.rider).toEqual({true:vectors.rider_permitted,false:vectors.rider_not_permitted});
-  expect(LICENSE_HASHES.covenant).toBe(vectors.covenant_marketplace_listing);
+  expect(LICENSE_HASHES_1_0.covenant).toBe(vectors.covenant_marketplace_listing);
 });
 
 it('constructs the immutable public document paths',()=>{
-  expect(licenseDocumentPath('standard',true)).toBe('/licenses/standard/1.0/ai-training');
-  expect(licenseDocumentPath('standard',false)).toBe('/licenses/standard/1.0/no-ai-training');
-  expect(licenseDocumentPath('covenant')).toBe('/licenses/marketplace-listing/1.0');
+  expect(licenseDocumentPath('standard',true)).toBe('/licenses/standard/1.1/ai-training');
+  expect(licenseDocumentPath('standard',false)).toBe('/licenses/standard/1.1/no-ai-training');
+  expect(licenseDocumentPath('covenant')).toBe('/licenses/marketplace-listing/1.1');
   expect(licenseDocumentPath('rider',true)).toBe('/licenses/ai-training-rider/1.0/permitted');
   expect(licenseDocumentPath('rider',false)).toBe('/licenses/ai-training-rider/1.0/not-permitted');
 });
@@ -65,4 +65,10 @@ it('enforces the code-point counter boundary before sending',async()=>{
   expect(client.post).toHaveBeenCalledTimes(1);
   await expect(submitCustomLicenseText('Terms','😀'.repeat(65_536),true)).rejects.toThrow('LICENSE_SIZE_INVALID');
   expect(client.post).toHaveBeenCalledTimes(1);
+});
+
+it('keeps historical document URLs and gives new selections version 1.1',()=>{
+  expect(licenseDocumentPath('standard',false,'1.0')).toBe('/licenses/standard/1.0/no-ai-training');
+  expect(licenseDocumentPath('covenant',undefined,'1.0')).toBe('/licenses/marketplace-listing/1.0');
+  expect(createStandardSelection()).toMatchObject({version:'1.1',covenant_version:'1.1'});
 });

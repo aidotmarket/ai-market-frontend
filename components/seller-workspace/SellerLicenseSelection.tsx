@@ -2,7 +2,7 @@
 
 import {useEffect,useRef,useState} from 'react';
 import {
-  LICENSE_HASHES, createStandardSelection, submitCustomLicenseText, licenseDocumentPath,
+  LICENSE_HASHES, licenseHashesFor, CURRENT_COVENANT_VERSION, createStandardSelection, submitCustomLicenseText, licenseDocumentPath,
   type LicenseSelection,
 } from '@/api/listingLicenses';
 import {MAX_CUSTOM_LICENSE_CODEPOINTS,canonicalizeCustomText} from '@/lib/customLicenseVerification';
@@ -18,7 +18,7 @@ export const STANDARD_SELLER_SUMMARY = `Not the contract — read the full licen
 You remain the owner and licensor of the delivered dataset version.
 The buyer may use it internally and commercialise models, outputs and derived work that do not expose or reconstruct the raw data.
 The buyer may not redistribute or resell the dataset itself, and AI/ML training follows your displayed switch.
-You promise that you have the rights, sourced the data lawfully, stated the listing facts accurately and included no regulated personal or special-category data.
+You promise that you have the rights, sourced the data lawfully and stated the listing facts accurately. If the data includes personal data, you also promise that you have a lawful basis to sell and transfer it, hold the consent and provenance records the law requires, and disclose any sensitive personal data in the listing.
 A material mismatch reported within seven days is remedied by fix or refund; liability is capped as the full licence states.
 ai.market is not a party and gives no legal advice; New York law governs.`;
 
@@ -107,12 +107,12 @@ export default function SellerLicenseSelection({value, onChange, disabled = fals
     // Keep the verified legal identity version across licence-kind changes; only authority is re-confirmed.
     if (kind === 'standard') onChange({...createStandardSelection(value.ai_training), seller_acceptance: invalidatedIdentity,
       ...(value.identity_version === undefined ? {} : {identity_version: value.identity_version})});
-    else onChange({...value, kind: 'custom', version: '1.0', license_document_id: null, license_sha256: '',
+    else onChange({...value, kind: 'custom', version: '1.0', covenant_version: CURRENT_COVENANT_VERSION, covenant_sha256: LICENSE_HASHES.covenant, license_document_id: null, license_sha256: '',
       rider_sha256: LICENSE_HASHES.rider[String(value.ai_training) as 'true' | 'false'],seller_acceptance:invalidatedIdentity});
   };
   const setAiTraining = (aiTraining: boolean) => {
     if (value.kind === 'standard') onChange({...value, ai_training: aiTraining,
-      license_sha256: LICENSE_HASHES.standard[String(aiTraining) as 'true' | 'false'],seller_acceptance:{...identity,authority_confirmed:false}});
+      license_sha256: licenseHashesFor(value.version).standard[String(aiTraining) as 'true' | 'false'],seller_acceptance:{...identity,authority_confirmed:false}});
     else invalidateCustom({ai_training: aiTraining, rider_sha256: LICENSE_HASHES.rider[String(aiTraining) as 'true' | 'false']});
   };
   async function submit() {
@@ -128,7 +128,7 @@ export default function SellerLicenseSelection({value, onChange, disabled = fals
       verifiedTitles.current.set(JSON.stringify([result.text, submittedTraining]), result.title);
       onChange({...value, kind: 'custom', version: '1.0', license_document_id: result.id,
         license_sha256: result.license_sha256, rider_sha256: LICENSE_HASHES.rider[String(value.ai_training) as 'true' | 'false'],
-        covenant_sha256: LICENSE_HASHES.covenant, seller_acceptance: {...identity, authority_confirmed: false}});
+        covenant_version: CURRENT_COVENANT_VERSION, covenant_sha256: LICENSE_HASHES.covenant, seller_acceptance: {...identity, authority_confirmed: false}});
     } catch (error) {
       if (version !== submissionVersion.current) return;
       const code = (error as {response?: {data?: {detail?: {code?: string}}}})?.response?.data?.detail?.code ??
@@ -175,7 +175,7 @@ export default function SellerLicenseSelection({value, onChange, disabled = fals
     <legend className="px-1 text-lg font-semibold text-gray-900">How can buyers use this data?</legend>
     <div className="grid gap-4 sm:grid-cols-2">
       <label className={`rounded-xl border p-4 ${value.kind === 'standard' ? 'border-indigo-500 bg-indigo-50' : 'border-gray-200'}`}>
-        <span className="flex items-center gap-2 font-semibold"><input type="radio" name="listing-license-kind" checked={value.kind === 'standard'} onChange={() => chooseKind('standard')} />Standard <span className="text-xs font-medium text-indigo-700">Recommended</span><a className="text-sm font-medium text-indigo-700 underline" href={licenseDocumentPath('standard',value.ai_training)} target="_blank" rel="noopener noreferrer" onClick={event=>event.stopPropagation()}>Read licence</a></span>
+        <span className="flex items-center gap-2 font-semibold"><input type="radio" name="listing-license-kind" checked={value.kind === 'standard'} onChange={() => chooseKind('standard')} />Standard <span className="text-xs font-medium text-indigo-700">Recommended</span><a className="text-sm font-medium text-indigo-700 underline" href={licenseDocumentPath('standard',value.ai_training,value.kind==='standard'?value.version:undefined)} target="_blank" rel="noopener noreferrer" onClick={event=>event.stopPropagation()}>Read licence</a></span>
         <span className="mt-2 block text-sm text-gray-600">Balanced ai.market terms. Buyers may not redistribute or resell the dataset.</span>
       </label>
       <label className={`rounded-xl border p-4 ${value.kind === 'custom' ? 'border-indigo-500 bg-indigo-50' : 'border-gray-200'}`}>
@@ -205,9 +205,9 @@ export default function SellerLicenseSelection({value, onChange, disabled = fals
       <p className="mt-3 whitespace-pre-line text-sm leading-6 text-gray-700">{value.kind === 'standard' ? STANDARD_SELLER_SUMMARY : CUSTOM_NOTICE}</p>
       {value.kind==='custom'&&customPreview?.id===value.license_document_id&&<div className="mt-3 max-h-96 overflow-auto"><CustomLicenseMarkdown text={customPreview.text}/></div>}
     </details>
-    <div className="flex flex-wrap gap-4 text-sm">{value.kind==='standard'?<LicenseReadingDialog label="Read full licence" href={licenseDocumentPath('standard',value.ai_training)}/>:customPreview?.id===value.license_document_id?<LicenseReadingDialog label="Read full licence" href={customPreviewUrl} text={customPreview.text} customMarkdown/>:<span>Save your custom licence text first to read the verified full licence.</span>}
+    <div className="flex flex-wrap gap-4 text-sm">{value.kind==='standard'?<LicenseReadingDialog label="Read full licence" href={licenseDocumentPath('standard',value.ai_training,value.kind==='standard'?value.version:undefined)}/>:customPreview?.id===value.license_document_id?<LicenseReadingDialog label="Read full licence" href={customPreviewUrl} text={customPreview.text} customMarkdown/>:<span>Save your custom licence text first to read the verified full licence.</span>}
       {value.kind==='custom'&&<LicenseReadingDialog label="Read AI-Training Rider" href={licenseDocumentPath('rider',value.ai_training)} />}
-      <LicenseReadingDialog label="Read Marketplace Listing Covenant" href={licenseDocumentPath('covenant')} /></div>
+      <LicenseReadingDialog label="Read Marketplace Listing Covenant" href={licenseDocumentPath('covenant',undefined,value.covenant_version)} /></div>
     <div className="grid gap-4 sm:grid-cols-2">
       <label className="text-sm font-medium text-gray-900">Signer full name<input aria-label="Signer full name" value={identity.signer_name} onChange={event => updateIdentity('signer_name', event.target.value)} className="mt-2 block w-full rounded-lg border border-gray-300 px-3 py-2" /></label>
       <label className="text-sm font-medium text-gray-900">Signer title<input aria-label="Signer title" value={identity.signer_title} onChange={event => updateIdentity('signer_title', event.target.value)} className="mt-2 block w-full rounded-lg border border-gray-300 px-3 py-2" /></label>

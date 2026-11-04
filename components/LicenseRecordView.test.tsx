@@ -1,6 +1,11 @@
 // @vitest-environment jsdom
 import {cleanup,fireEvent,render,screen} from '@testing-library/react';
 import {afterEach,expect,it,vi} from 'vitest';
+import record11 from '@/tests/fixtures/s1735_license_record_1_1.json';
+import seller11 from '@/tests/fixtures/s1735_license_record_1_1_seller.json';
+import terminated11 from '@/tests/fixtures/s1735_license_record_1_1_terminated.json';
+import seller10 from '@/tests/fixtures/s1735_license_record_seller.json';
+import terminated10 from '@/tests/fixtures/s1735_license_record_terminated.json';
 import record from '@/tests/fixtures/s1735_license_record.json';
 import LicenseRecordView from './LicenseRecordView';
 
@@ -29,4 +34,17 @@ it.each(['buyer','seller'] as const)('renders frozen custom text literally for %
   expect(screen.getByText(party==='buyer'?'Buyer Ltd (GB)':'Seller Ltd (GB)')).toBeTruthy();
   fireEvent.click(screen.getByRole('button',{name:'Download PDF'}));
   expect(records.downloadLicenseRecordPdf).toHaveBeenCalledWith('order-1');
+});
+
+it.each([
+  ['buyer',record],['seller',seller10],['buyer',terminated10],
+  ['buyer',record11],['seller',seller11],['buyer',terminated11],
+] as const)('renders the exact frozen %s instrument without upgrading its version',async(party,fixture)=>{
+  records.getLicenseRecord.mockResolvedValue(fixture);
+  render(<LicenseRecordView party={party}/>);
+  await screen.findByText(`standard licence v${fixture.license.version}`);
+  expect(screen.getByText(`marketplace-listing covenant v${fixture.covenant.version}`)).toBeTruthy();
+  const texts=Array.from(document.querySelectorAll('details pre')).map(pre=>pre.textContent);
+  expect(texts).toContain(fixture.license.text);
+  expect(texts).toContain(fixture.covenant.text);
 });
