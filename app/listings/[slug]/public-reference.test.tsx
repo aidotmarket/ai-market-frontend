@@ -176,7 +176,7 @@ describe('public-source reference route', () => {
     expect(metadata.alternates?.canonical).toBe('https://ai.market/listings/arbitrary-slug');
   });
 
-  it('renders factual markdown, attribution and safe external access without purchase or inferred content', async () => {
+  it('renders factual source text, attribution and safe external access without purchase or inferred content', async () => {
     const page = await render();
     expect(page.getByText('Indexed from public source')).toBeTruthy();
     expect(page.getByText('Free', { exact: true })).toBeTruthy();
@@ -263,4 +263,18 @@ describe('public-source reference route', () => {
     expect(metadata.description).not.toContain('Old facility marketing');
     expect(metadata.alternates?.canonical).toBe('https://ai.market/listings/arbitrary-slug');
   });
+});
+
+it('renders valid backend HTML on the source-reference page', async () => {
+  await render(fixture({description:'Unused **Markdown**', description_html:'<p>Backend <em>reference</em></p>'}));
+  expect(document.querySelector('[dir="auto"]')?.innerHTML).toBe('<p>Backend <em>reference</em></p>');
+});
+
+it.each([undefined, null, '<img src="x" onerror="alert(1)">'])('falls back to escaped pre-wrap source-reference text for %s', async description_html => {
+  const description='🫨*! sales@acme*.io\n<script>literal</script> **literal**';
+  await render(fixture({description, description_html}));
+  const element=document.querySelector('[dir="auto"]');
+  expect(element?.textContent).toBe(description);
+  expect(element?.classList.contains('whitespace-pre-wrap')).toBe(true);
+  expect(element?.querySelector('script, strong, img')).toBeNull();
 });

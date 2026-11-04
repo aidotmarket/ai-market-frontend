@@ -1,5 +1,5 @@
 import Link from 'next/link';
-import ListingMarkdown from '@/components/ListingMarkdown';
+import BackendListingHtml from '@/components/BackendListingHtml';
 import { formatPublishedDate } from '@/lib/format';
 import type { ListingDetail, PublicSourceReference } from '@/types';
 
@@ -59,7 +59,7 @@ export default function PublicSourceReferencePage({ listing, emitJsonLd }: { lis
               <span>{listing.view_count} views</span>
             </div>
             <div className="prose prose-sm max-w-none">
-              <ListingMarkdown text={listing.description}/>
+              <BackendListingHtml description={listing.description} descriptionHtml={listing.description_html}/>
             </div>
           </> : <p role="status" className="rounded-lg bg-gray-50 p-4 text-sm text-gray-700">Public source reference unavailable. The source details could not be verified.</p>}
         </div>

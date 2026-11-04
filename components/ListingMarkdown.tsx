@@ -150,6 +150,8 @@ function renderSource(source: string): string {
   return walk(0, tokens.length);
 }
 
+// Seller previews only. Buyer pages must use backend HTML (spec Amendment 1):
+// JavaScript/Python Unicode differences can change contact-bearing text.
 // Display only: never write rendered text back to storage or hash verification.
 // HTML contains only our fixed tags, numeric ol[start], and escaped text.
 // Serializing inline tokens directly avoids React recursion on deep emphasis.

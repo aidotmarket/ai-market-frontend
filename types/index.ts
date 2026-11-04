@@ -414,6 +414,7 @@ export interface ListingDetail extends GeneratedSampleFields {
   slug: string;
   title: string;
   description: string;
+  description_html?: string | null;
   short_description: string | null;
   publisher?: PublisherPublicInfo | null;
   pricing: {

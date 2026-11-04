@@ -695,11 +695,18 @@ it('uses the same UTC Published date in the header and version card near midnigh
  expect(html.match(/Published Sep 27, 2026/g)).toHaveLength(2);
 });
 
-it('renders the seller preview and public description identically',async()=>{
-  const {default:ListingPreview}=await import('@/components/seller-workspace/ListingPreview');
-  const source='# Overview\n\n- **Data**\n- `literal`\n\n7. First  \n   continued';
-  const seller=document.createElement('div');seller.innerHTML=renderToStaticMarkup(<ListingPreview draft={{title:'Title',description:source,category:'Retail',tags:'',price:'25',license:'Research'}}/>);
-  const buyer=document.createElement('div');buyer.innerHTML=await renderPage(makeListing({description:source}));
-  expect(buyer.querySelector('[dir="auto"]')?.innerHTML).toBe(seller.querySelector('[dir="auto"]')?.innerHTML);
-  expect(buyer.querySelector('[dir="auto"] h2')?.textContent).toBe('Overview');
+it('renders the backend description instead of parsing buyer Markdown',async()=>{
+  const buyer=document.createElement('div');
+  buyer.innerHTML=await renderPage(makeListing({description:'🫨*! sales@acme*.io',description_html:'<p>Backend <strong>description</strong></p>'}));
+  expect(buyer.querySelector('[dir="auto"]')?.innerHTML).toBe('<p>Backend <strong>description</strong></p>');
+});
+
+it.each([undefined,null,'<script>bad</script>'])('renders escaped pre-wrap buyer text for unavailable or invalid backend HTML: %s',async description_html=>{
+  const source='🫨*! sales@acme*.io\n<script>literal</script> **literal**';
+  const buyer=document.createElement('div');
+  buyer.innerHTML=await renderPage(makeListing({description:source,description_html}));
+  const description=buyer.querySelector('[dir="auto"]');
+  expect(description?.textContent).toBe(source);
+  expect(description?.classList.contains('whitespace-pre-wrap')).toBe(true);
+  expect(description?.querySelector('script, strong')).toBeNull();
 });

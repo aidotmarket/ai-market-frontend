@@ -20,7 +20,7 @@ import ListingPurchaseAdvisory from '@/components/ListingPurchaseAdvisory';
 import ListingPurchasePanel from '@/components/ListingPurchasePanel';
 import InquiryWidget from '@/components/InquiryWidget';
 import ScanFindingsBadge from '@/components/listings/ScanFindingsBadge';
-import ListingMarkdown from '@/components/ListingMarkdown';
+import BackendListingHtml from '@/components/BackendListingHtml';
 import FileBreakdown from './FileBreakdown';
 import SampleFiles, { type ListingWithSamples } from './SampleFiles';
 import ListingLicenseDisclosure from '@/components/ListingLicenseDisclosure';
@@ -174,7 +174,7 @@ export default async function ListingDetailPage({ params, searchParams }: Props)
           {approved ? <ApprovedListingPreview title="Seller-approved listing" html={approved.rendered_html} /> : <>
           {/* Description - rendered as sanitized markdown */}
           <div className="prose prose-sm max-w-none">
-            <ListingMarkdown text={listing.description}/>
+            <BackendListingHtml description={listing.description} descriptionHtml={listing.description_html}/>
           </div>
 
 
