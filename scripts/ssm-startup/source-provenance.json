@@ -1,0 +1,66 @@
+{
+  "base": "ba060cba39b31847a07bad0e06535ddf2c55fe4e",
+  "authoritative_plural_source": [
+    {
+      "source": "/Users/max/worktrees/athena/s1869-watcher-ci-final-review/portable_ssm/loader.py",
+      "sha256": "10d1d643344e1cbbe898989990aded019bc1acb5d7a3138069ba1e42a6b0abfa"
+    },
+    {
+      "source": "/Users/max/worktrees/athena/s1869-watcher-ci-final-review/portable_ssm/README.md",
+      "sha256": "2fa2e23d5a8473dd1555a86a4731e0f43370fb8cf5622c2c7206830907a0495c"
+    },
+    {
+      "source": "/Users/max/worktrees/athena/s1869-watcher-ci-final-review/portable_ssm/policy.template.json",
+      "sha256": "90314f1d40d85ce260de2bde1bc764bf2cede7dba35c1519ca601d0dbe4ea85e"
+    }
+  ],
+  "dependency_registry": "https://registry.npmjs.org",
+  "dependencies": {
+    "@aws-sdk/client-ssm": "3.1161.0",
+    "@aws-sdk/client-sts": "3.1161.0",
+    "@smithy/node-http-handler": "4.14.1",
+    "@smithy/protocol-http": "5.5.1"
+  },
+  "authoritative_plural_commit": "7b3cdd0abd05845cebb417e41ae8f1335fb3d3f4",
+  "direct_package_locks": {
+    "@aws-sdk/client-ssm": {
+      "version": "3.1161.0",
+      "resolved": "https://registry.npmjs.org/@aws-sdk/client-ssm/-/client-ssm-3.1161.0.tgz",
+      "integrity": "sha512-UVO4TLYKtkEC3Rme+xiOZn8FzyvAUmufDtkzFtAccGTuGBBeG53Or09UaGwmDBAps/pN0sZ8pYn36Pa/ocJn3w=="
+    },
+    "@aws-sdk/client-sts": {
+      "version": "3.1161.0",
+      "resolved": "https://registry.npmjs.org/@aws-sdk/client-sts/-/client-sts-3.1161.0.tgz",
+      "integrity": "sha512-UTGvZMX/37aV/AF4I53lyaXt4oK7Emf01AKbgD+Yrx8DAqB1jJCn9EY8ov6/wh198uTcXnDmyg+tDHbSE+OxfQ=="
+    },
+    "@smithy/node-http-handler": {
+      "version": "4.14.1",
+      "resolved": "https://registry.npmjs.org/@smithy/node-http-handler/-/node-http-handler-4.14.1.tgz",
+      "integrity": "sha512-/T6E1jzCL0fErS9uq8JqES/5yYQQ4ppVmmYHwXw2nlov8KFzLb+3QqHR5iAun1BsuAB50IPxZliV8YMgghLwhA=="
+    },
+    "@smithy/protocol-http": {
+      "version": "5.5.1",
+      "resolved": "https://registry.npmjs.org/@smithy/protocol-http/-/protocol-http-5.5.1.tgz",
+      "integrity": "sha512-GRQofBqr/pPNjR04mU0JjdjsbV8F33KCxSHMFXBb2mWJXxyEalNe814Y4cFd4Efd5tNucaOc31L3/8wXlymjfg=="
+    }
+  },
+  "installed_primary_source": {
+    "node_modules/@aws-sdk/client-ssm/dist-cjs/index.js": "59fe54f812ace7eb21ac2b354fa529a3f63ca44ece289b0c0cdcab83625e1501",
+    "node_modules/@aws-sdk/client-sts/dist-cjs/index.js": "004d4b85aba59b59c9daaaf5d054a049cd0bdf9106339740293493e0e376babe",
+    "node_modules/@smithy/node-http-handler/dist-cjs/index.js": "4501bbd2ebbc1287e4f9200db264e7e1904d74c39b2af044f0a8bd26b1393a42",
+    "node_modules/@smithy/core/dist-cjs/submodules/config/index.js": "ee70904bf4f457a036a56d6cb4ecf403a2853f020aec35df10cc2f5fe536136a",
+    "node_modules/@smithy/core/dist-cjs/submodules/endpoints/index.js": "726da87a6b86fc27722da58843b9df8f9027c4734c37e6bd355714363951b7cc",
+    "node_modules/@aws-sdk/core/dist-cjs/submodules/httpAuthSchemes/index.js": "9f88f744397f40a561f3e297aa11a8436dfd92cdf434d227ca41071a2cddc693"
+  },
+  "node_test_runtime": {
+    "version": "24.22.1",
+    "platform": "darwin-arm64",
+    "source": "https://nodejs.org/download/release/v24.22.1/node-v24.22.1-darwin-arm64.tar.gz",
+    "sha256": "89c682593d76cd44233fa53b1563264e7de9cbb189cad169135c5b4fadfbc0a7",
+    "verified_against": "https://nodejs.org/download/release/v24.22.1/SHASUMS256.txt"
+  },
+  "node_cli_documentation": {
+    "url": "https://nodejs.org/download/release/v24.22.1/docs/api/cli.json",
+    "sha256": "bd5c1d35e963b0ffce84a9dd1e7c89322dad28721a0513c09e466fece774c5a7"
+  }
+}

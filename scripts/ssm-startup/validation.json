@@ -1,0 +1,77 @@
+{
+  "base": "ba060cba39b31847a07bad0e06535ddf2c55fe4e",
+  "branch": "build/athena-s1869-frontend-node-ssm-startup",
+  "node": "24.22.1",
+  "platform": "darwin-arm64",
+  "checks": {
+    "startup_offline": {
+      "passed": 92,
+      "failed": 0,
+      "log": "offline-node24-release-final.log"
+    },
+    "existing_frontend": {
+      "files_passed": 251,
+      "tests_passed": 4369,
+      "failed": 0,
+      "log": "frontend-tests-node24.log"
+    },
+    "lint": {
+      "exit": 0,
+      "existing_warnings": 6,
+      "log": "lint-node24.log"
+    },
+    "startup_final_lint": {
+      "exit": 0,
+      "log": "lint-startup-release.log"
+    },
+    "typecheck": {
+      "exit": 0,
+      "log": "typecheck-node24.log"
+    },
+    "shell_syntax": {
+      "exit": 0
+    }
+  },
+  "earlier_failures_retained": {
+    "node25_frontend": {
+      "files_failed": 11,
+      "tests_failed": 212,
+      "log": "frontend-tests.log",
+      "note": "Unsupported Node25 host run; localStorage API failures and resulting UI assertions. Supported Node24 run passes."
+    },
+    "port_development": [
+      "offline-initial.log",
+      "offline-second.log"
+    ],
+    "registry_config": "Initial npm metadata commands rejected reuse of /dev/null for both user and global config; corrected to distinct empty isolated files before registry install."
+  },
+  "private_evidence_directory": "/Users/max/koskadeux-state/evidence/ops13-s1869/frontend-node-startup-implementation",
+  "limits": [
+    "No live provider/auth/SSM calls or real credential values",
+    "No app build/start/deploy or customer/native-product journeys",
+    "Synthetic test fixtures only; actual Linux /app /mise npm handoff not executed",
+    "Exact Node24 tests run on Darwin; normal remote Linux CI remains outstanding",
+    "Manifest generation/selectors prospective, not published or deploy ready"
+  ],
+  "remaining": [
+    "Canonical ownership/folders/source versions and complete immutable generation publication",
+    "Explicit reader bootstrap custody/rotation and effective IAM/KMS/origin restrictions",
+    "Final image production dependency closure, protected paths, dotenv exclusions and readiness qualification",
+    "Normal remote frontend CI and controlled rollout acceptance before activating future override"
+  ],
+  "artifact_hashes": {
+    "scripts/ssm-startup/README.md": "2c13a4dd8a2d074e235b5e7dd3a6e8fff50d2231a8970a8506a8c3622ad2d5cd",
+    "scripts/ssm-startup/assignment.prospective.json": "e88ca90dd82fb05d241cd0f88042a334ac2c975dd83e6c279520aed4f34660e6",
+    "scripts/ssm-startup/contract.mjs": "5d27a52dd80bd5042e0101daeaa956d042e736f7935d5505adb28dd10da76954",
+    "scripts/ssm-startup/loader.mjs": "2800679117a14ea6e6251be8398ec2243967d6ad7c7bddcea05e4b4370d13fd0",
+    "scripts/ssm-startup/policy.template.json": "90314f1d40d85ce260de2bde1bc764bf2cede7dba35c1519ca601d0dbe4ea85e",
+    "scripts/ssm-startup/source-provenance.json": "37832d83c0bc01e00f7278dc1d39efb1d20ecbdea0312381f6c094739e6cddde",
+    "scripts/ssm-startup/start": "3f9c8f771889ea78aa21f3a144e6e316ff8a99ebafc4b0d158894ac158dc9e14",
+    "scripts/ssm-startup/tests/config-guard.mjs": "69c0fa4eef9ceffd17c37d684d9e05048fd98be399e75d80cc5f388f1fc7c3c2",
+    "scripts/ssm-startup/tests/fixture.mjs": "7471ee3ff937d34df9e6222c5edd223e506bbb765832400de09a0ebe9ca0ec78",
+    "scripts/ssm-startup/tests/signal-parent.mjs": "4a9281e905e4416d091d2ffb60ec06adb5ef7f0e965ca7901540cd09073b2e8a",
+    "scripts/ssm-startup/tests/startup.test.mjs": "014f34ac59f026b6ef2d684a11207021246d7e98f64869dcb5741443703e0ae7",
+    "scripts/ssm-startup/transport.mjs": "5d0016d856d29f713f1cf73ceeb610de45d20729587dd084c79ffdd537d0fe9d",
+    "scripts/ssm-startup/worker.mjs": "9c8ed8e1f49da11c64a2914a4286d86cbf9609731db9e76041b7b9509dae3311"
+  }
+}
