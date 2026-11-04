@@ -101,10 +101,20 @@ export async function submitCustomLicenseText(title: string, text: string, aiTra
   return result as unknown as CustomLicenseSubmission;
 }
 
+export function isCurrentLicenseSelection(value: LicenseSelection): boolean {
+  return value.covenant_code === 'marketplace-listing' && value.covenant_version === CURRENT_COVENANT_VERSION &&
+    (value.kind !== 'standard' || value.version === CURRENT_STANDARD_VERSION);
+}
+
 export function isCompleteLicenseSelection(value: LicenseSelection): boolean {
   return value.seller_acceptance.authority_confirmed && Boolean(value.seller_acceptance.signer_name.trim()) &&
     Boolean(value.seller_acceptance.signer_title.trim()) && /^[a-f0-9]{64}$/.test(value.license_sha256) &&
     /^[a-f0-9]{64}$/.test(value.covenant_sha256) &&
     (value.kind === 'standard' ? value.license_document_id === null && value.rider_sha256 === null :
       Boolean(value.license_document_id) && Boolean(value.rider_sha256 && /^[a-f0-9]{64}$/.test(value.rider_sha256)));
+}
+
+// New acceptances require current terms; historical read validation stays version-aware.
+export function isSignableLicenseSelection(value: LicenseSelection): boolean {
+  return isCurrentLicenseSelection(value) && isCompleteLicenseSelection(value);
 }

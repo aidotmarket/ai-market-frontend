@@ -355,6 +355,8 @@ export interface ListingLicenseDetails {
   full_text_url: string;
   download_url: string;
   sha256: string;
+  // Optional for historical API responses; disclosure verifies the pinned hash before inferring 1.0.
+  covenant_code?: string;
   covenant_version?: string;
   covenant_sha256: string;
   rider_sha256: string | null;

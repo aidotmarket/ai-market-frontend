@@ -6,6 +6,7 @@ import { primaryButtonClass } from './ui/button-styles';
 import LicenseReadingDialog from './LicenseReadingDialog';
 import type { ListingLicenseDetails } from '@/types';
 import { api } from '@/api/client';
+import { LICENSE_HASHES_1_0 } from '@/api/listingLicenses';
 import {hashLicenseComponentBytes, sha256, verifyCustomText} from '@/lib/customLicenseVerification';
 export {hashLicenseComponentBytes} from '@/lib/customLicenseVerification';
 
@@ -101,8 +102,10 @@ function documentLocation(url: string): { href: string; apiPath?: string } {
 
 function referencesFor(license: ListingLicenseDetails): DocumentReference[] {
   const aiTraining = license.params.ai_training;
-  // Older API responses omitted this field and carried covenant 1.0.
-  const covenantVersion = license.covenant_version ?? '1.0';
+  // Only the pinned historical hash identifies a covenant whose version was omitted.
+  const covenantVersion = license.covenant_version ??
+    (license.covenant_sha256 === LICENSE_HASHES_1_0.covenant ? '1.0' : '');
+  const covenantCode = license.covenant_code ?? 'marketplace-listing';
   const references: DocumentReference[] = [{
     kind: 'license',
     label: license.code === 'standard' ? `ai.market Standard Data Licence v${license.version}` : "Seller's own licence",
@@ -114,11 +117,11 @@ function referencesFor(license: ListingLicenseDetails): DocumentReference[] {
     params: license.params,
   }, {
     kind: 'covenant',
-    label: `ai.market Marketplace Listing Covenant v${covenantVersion}`,
-    canonicalUrl: `/licenses/marketplace-listing/${covenantVersion}`,
-    downloadUrl: `/licenses/marketplace-listing/${covenantVersion}?download=1`,
+    label: `ai.market Marketplace Listing Covenant${covenantVersion ? ` v${covenantVersion}` : ' (version unavailable)'}`,
+    canonicalUrl: covenantVersion ? `/licenses/${covenantCode}/${covenantVersion}` : '',
+    downloadUrl: covenantVersion ? `/licenses/${covenantCode}/${covenantVersion}?download=1` : '',
     sha256: license.covenant_sha256,
-    code: 'marketplace-listing',
+    code: covenantCode,
     version: covenantVersion,
     params: {},
   }];
@@ -159,6 +162,7 @@ export default function ListingLicenseDisclosure({
     onVerificationChange?.(false);
     void Promise.all(references.map(async (reference): Promise<LoadedDocument> => {
       try {
+        if (!reference.version) return { ...reference, state: 'error', text: null };
         const location = documentLocation(reference.downloadUrl);
         let bytes: Uint8Array;
         let contentType: string;

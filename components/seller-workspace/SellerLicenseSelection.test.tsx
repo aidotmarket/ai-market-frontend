@@ -437,4 +437,8 @@ it('reads a saved 1.0 selection using 1.0 paths and preserves its hashes when to
  fireEvent.click(screen.getByRole('checkbox',{name:/Allow AI\/ML training/}));
  const wire=JSON.parse(screen.getByTestId('wire').textContent!);
  expect(wire).toMatchObject({version:'1.0',covenant_version:'1.0',license_sha256:LICENSE_HASHES_1_0.standard.false,covenant_sha256:LICENSE_HASHES_1_0.covenant});
+ expect((screen.getByLabelText('Confirm covenant and authority') as HTMLInputElement).disabled).toBe(true);
+ fireEvent.click(screen.getByRole('button',{name:'Re-select at current version'}));
+ expect(JSON.parse(screen.getByTestId('wire').textContent!)).toMatchObject({version:'1.1',covenant_version:'1.1',ai_training:false,seller_acceptance:{authority_confirmed:false}});
+ expect((screen.getByLabelText('Confirm covenant and authority') as HTMLInputElement).disabled).toBe(false);
 });

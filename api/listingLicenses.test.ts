@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
 import {webcrypto} from 'node:crypto';
 import {beforeEach,expect,it,vi} from 'vitest';
-import {createStandardSelection,LICENSE_HASHES,LICENSE_HASHES_1_0,licenseDocumentPath,submitCustomLicenseText} from './listingLicenses';
+import {createStandardSelection,isCompleteLicenseSelection,isSignableLicenseSelection,LICENSE_HASHES,LICENSE_HASHES_1_0,licenseDocumentPath,submitCustomLicenseText} from './listingLicenses';
 import {hashLicenseComponentBytes,sha256} from '@/lib/customLicenseVerification';
 import vectors from './fixtures/s1735-backend-hash-vectors.json';
 const client=vi.hoisted(()=>({post:vi.fn(),get:vi.fn()}));
@@ -71,4 +71,19 @@ it('keeps historical document URLs and gives new selections version 1.1',()=>{
   expect(licenseDocumentPath('standard',false,'1.0')).toBe('/licenses/standard/1.0/no-ai-training');
   expect(licenseDocumentPath('covenant',undefined,'1.0')).toBe('/licenses/marketplace-listing/1.0');
   expect(createStandardSelection()).toMatchObject({version:'1.1',covenant_version:'1.1'});
+});
+
+it('keeps complete historical selections readable while requiring current versions for new acceptances', () => {
+  const current = {...createStandardSelection(), seller_acceptance: {signer_name:'Synthetic Seller', signer_title:'Owner', authority_confirmed:true}};
+  expect(isSignableLicenseSelection(current)).toBe(true);
+  for (const historical of [
+    {...current, version:'1.0' as const, license_sha256:LICENSE_HASHES_1_0.standard.true},
+    {...current, covenant_version:'1.0' as const, covenant_sha256:LICENSE_HASHES_1_0.covenant},
+  ]) {
+    expect(isCompleteLicenseSelection(historical)).toBe(true);
+    expect(isSignableLicenseSelection(historical)).toBe(false);
+  }
+  const custom = {...current, kind:'custom' as const, version:'1.0' as const, license_document_id:'synthetic-document', rider_sha256:LICENSE_HASHES.rider.true};
+  expect(isSignableLicenseSelection(custom)).toBe(true); // Custom wire version and riders remain 1.0.
+  expect(isSignableLicenseSelection({...custom, covenant_version:'1.0', covenant_sha256:LICENSE_HASHES_1_0.covenant})).toBe(false);
 });

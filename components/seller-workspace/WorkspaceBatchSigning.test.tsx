@@ -62,10 +62,33 @@ it('keeps effect-off signing disabled', () => {
   expect(screen.queryByRole('region')).toBeNull(); expect(signInstruments).not.toHaveBeenCalled();
 });
 
-it('loads mixed recorded versions from their own immutable paths',async()=>{
- const old=instrument(1);old.license_selection={...old.license_selection,version:'1.0',covenant_version:'1.0',license_sha256:LICENSE_HASHES_1_0.standard.true,covenant_sha256:LICENSE_HASHES_1_0.covenant};
+it.each(['standard', 'covenant', 'both'] as const)('blocks a whole batch containing a stale %s selection',async part=>{
+ const old=instrument(1);
+ if(part!=='covenant') Object.assign(old.license_selection,{version:'1.0',license_sha256:LICENSE_HASHES_1_0.standard.true});
+ if(part!=='standard') Object.assign(old.license_selection,{covenant_version:'1.0',covenant_sha256:LICENSE_HASHES_1_0.covenant});
  vi.mocked(readSigningInstruments).mockResolvedValue([old,instrument(2)]);
+ render(<WorkspaceBatchSigning />);
+ fireEvent.change(screen.getByLabelText(/Prepared instrument IDs/),{target:{value:id(1)}});
+ fireEvent.click(screen.getByRole('button',{name:'Load complete licence batch'}));
+ await screen.findByText(/Re-select the licence and covenant at the current version/);
+ expect((screen.getByRole('checkbox') as HTMLInputElement).disabled).toBe(true);
+ expect((screen.getByRole('button',{name:'Sign 2 licences'}) as HTMLButtonElement).disabled).toBe(true);
+ expect(nativeClient.get).not.toHaveBeenCalled();
+ expect(signInstruments).not.toHaveBeenCalled();
+});
+
+it('blocks a preloaded historical preparation and requests re-selection',async()=>{
+ const old=instrument(1);Object.assign(old.license_selection,{covenant_version:'1.0',covenant_sha256:LICENSE_HASHES_1_0.covenant});
+ render(<WorkspaceBatchSigning preparation={old}/>);
+ await screen.findByText(/Re-select the licence and covenant at the current version/);
+ expect((screen.getByRole('button',{name:'Sign 1 licences'}) as HTMLButtonElement).disabled).toBe(true);
+ expect(signInstruments).not.toHaveBeenCalled();
+});
+
+it.each(['LICENSE_ACCEPTANCE_STALE',{code:'LICENSE_ACCEPTANCE_STALE'}])('explains a backend stale acceptance response %j',async detail=>{
  await load();
- const paths=vi.mocked(nativeClient.get).mock.calls.map(([path])=>path);
- expect(paths).toEqual(expect.arrayContaining(['/licenses/standard/1.0/ai-training?format=json','/licenses/marketplace-listing/1.0?format=json','/licenses/standard/1.1/ai-training?format=json','/licenses/marketplace-listing/1.1?format=json']));
+ vi.mocked(signInstruments).mockRejectedValue({response:{status:409,data:{detail}}});
+ fireEvent.click(screen.getByRole('checkbox'));fireEvent.click(screen.getByRole('button',{name:'Sign 2 licences'}));
+ await screen.findByText(/Re-select the licence and covenant at the current version/);
+ expect((screen.getByRole('button',{name:'Sign 2 licences'}) as HTMLButtonElement).disabled).toBe(true);
 });

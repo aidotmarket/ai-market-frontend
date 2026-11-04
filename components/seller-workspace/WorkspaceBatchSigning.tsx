@@ -3,7 +3,7 @@ import { useEffect, useRef, useState } from 'react';
 import { authSessionIdentity, useAuthStore } from '@/store/auth';
 import { useSellerSwitches, type SellerSwitchReport } from '@/hooks/useSellerSwitches';
 import { nativeClient, nativeSession } from '@/api/connector-seller-settings';
-import { licenseHashesFor, licenseDocumentPath } from '@/api/listingLicenses';
+import { licenseHashesFor, licenseDocumentPath, isCurrentLicenseSelection } from '@/api/listingLicenses';
 import { readSigningInstruments, signInstruments, type SigningInstrument, type SigningRequest, type PreparationView } from '@/api/seller-batch-signing';
 import NativeSellerAuth from '@/components/NativeSellerAuth';
 
@@ -29,6 +29,7 @@ export function BatchSigningScreen({ switches, preparation, onSigned }: { switch
       const paths = new Set<string>();
       for (const row of rows) {
         const s = row.license_selection;
+        if (!isCurrentLicenseSelection(s)) throw new Error('LICENSE_ACCEPTANCE_STALE');
         // GET preparation returns selection/hash only, not saved custom text.
         // No undisplayed custom acceptance or fabricated text endpoint.
         if (s.kind !== 'standard' || s.license_sha256 !== licenseHashesFor(s.version).standard[String(s.ai_training) as 'true' | 'false'] || s.covenant_sha256 !== licenseHashesFor(s.covenant_version).covenant)
@@ -55,10 +56,14 @@ export function BatchSigningScreen({ switches, preparation, onSigned }: { switch
     }
   }, [preparation, enabled]);
   const ready = switches.seller && switches.bulk && switches.effects && !error && consent && instruments.length > 0 && instruments.length <= 50
-    && instruments.every(i => i.status === 'prepared' && i.signing_required && i.license_selection.kind === 'standard'
+    && instruments.every(i => isCurrentLicenseSelection(i.license_selection) && i.status === 'prepared' && i.signing_required && i.license_selection.kind === 'standard'
       && !!texts[licenseDocumentPath('standard', i.license_selection.ai_training, i.license_selection.version)] && !!texts[licenseDocumentPath('covenant', undefined, i.license_selection.covenant_version)]);
+  const detail = (error as {response?: {data?: {detail?: string | {code?: string}}}})?.response?.data?.detail;
+  const stale = instruments.some(i => !isCurrentLicenseSelection(i.license_selection)) ||
+    (error instanceof Error && error.message === 'LICENSE_ACCEPTANCE_STALE') ||
+    (typeof detail === 'string' ? detail : detail?.code) === 'LICENSE_ACCEPTANCE_STALE';
   const sign = async (reauth?: string) => {
-    if ((!ready && !reauth) || busy || done || !switches.effects) return;
+    if (stale || (!ready && !reauth) || busy || done || !switches.effects) return;
     // A factor retry is permitted only for the retained displayed request.
     if (reauth && !request.current) return;
     setBusy(true); setError(null);
@@ -78,6 +83,7 @@ export function BatchSigningScreen({ switches, preparation, onSigned }: { switch
     <p>50 instruments maximum. Requests are never automatically split.</p>
     {!preparation && <><label>Prepared instrument IDs (one per line)<textarea className="block w-full rounded border p-2" value={ids} disabled={busy} onChange={e => { setIds(e.target.value); setInstruments([]); setTexts({}); setConsent(false); setDone(false); setError(null); request.current = null; }} /></label>
     <button disabled={busy || !switches.effects} onClick={() => void load()}>Load complete licence batch</button></>}
+    {stale && <p role="alert">This saved licence selection is out of date. Re-select the licence and covenant at the current version, then prepare and sign again. Signing is disabled for the whole batch.</p>}
     {instruments.map(i => <section key={i.id} aria-label={`Instrument ${i.id}`} className="space-y-3 border-t pt-4">
       <h3>Listing {i.binding.listing_id} · Version {i.binding.version_id}</h3>
       <p>Signer: {i.license_selection.seller_acceptance.signer_name} · {i.license_selection.seller_acceptance.signer_title}</p>
@@ -88,10 +94,10 @@ export function BatchSigningScreen({ switches, preparation, onSigned }: { switch
         <h4>Marketplace Listing Covenant</h4><pre className="max-h-96 overflow-auto whitespace-pre-wrap font-sans">{texts[licenseDocumentPath('covenant', undefined, i.license_selection.covenant_version)] ?? 'Covenant unavailable'}</pre>
       </>}
     </section>)}
-    <label><input type="checkbox" checked={consent} disabled={busy || done || !instruments.length} onChange={e => setConsent(e.target.checked)} />I have read all {instruments.length} displayed licences, covenants and applicable riders. I confirm the covenant facts and that I am authorised to accept them for the seller.</label>
+    <label><input type="checkbox" checked={consent} disabled={busy || done || stale || !instruments.length} onChange={e => setConsent(e.target.checked)} />I have read all {instruments.length} displayed licences, covenants and applicable riders. I confirm the covenant facts and that I am authorised to accept them for the seller.</label>
     <button disabled={!ready || busy || done} onClick={() => void sign()}>Sign {instruments.length} licences</button>
     {done && <p role="status">Licences signed. Nothing was published. Request a fresh connector snapshot with a new key, then review and Confirm the action batch separately.</p>}
     {!switches.effects && <p>Seller effects are off. Signing is unavailable.</p>}
-    <NativeSellerAuth error={error} onRetry={() => { request.current = null; void load(preparation); }} onToken={sign} />
+    <NativeSellerAuth error={stale ? null : error} onRetry={() => { request.current = null; void load(preparation); }} onToken={sign} />
   </section>;
 }
