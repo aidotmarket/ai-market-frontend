@@ -155,8 +155,8 @@ describe('seller presentation on the real listing route', () => {
     expect(html).toContain('Stripe connected');
     expect(html).toContain('12 completed purchases');
     expect(html).toContain('4.7/5 from 9 ratings');
-    expect(html).toContain('Trust Level');
-    expect(html).toContain('L1');
+    expect(html).not.toContain('Privacy Score');
+    expect(html).not.toContain('Trust Level');
   });
   it('renders a name-only legacy publisher and tolerates an absent flag-off publisher', async () => {
     const legacy = await renderPage(makeListing());
@@ -209,6 +209,9 @@ describe('real public listing route sample composition', () => {
       });
 
       const page = within(document.body);
+      expect(page.queryByText('Privacy Score', {exact: true})).toBeNull();
+      expect(page.queryByText('Trust Level', {exact: true})).toBeNull();
+      expect(page.getAllByText('The seller can request a verified scan of this data.', {exact: true})).toHaveLength(1);
       const schemaHeading = page.getByRole('heading', { name: 'Schema Information', level: 2 });
       const schemaBlock = schemaHeading.parentElement!;
       expect(within(schemaBlock).getByRole('table')).toBeTruthy();
@@ -339,8 +342,14 @@ describe('ListingDetailPage Dataset JSON-LD', () => {
     const html = await renderPage(makeListing({
       pricing: { price: 25, pricing_type: 'one_time', subscription_price_monthly: null },
       scan_findings: null,
+      privacy_score: null,
+      trust_level: 'L0',
     }));
 
+    expect(html).not.toContain('Privacy Score');
+    expect(html).not.toContain('Trust Level');
+    expect(html).not.toContain('Not scored');
+    expect(html).toContain('The seller can request a verified scan of this data.');
     expect(html).toContain('Review before buying');
     expect(html).toContain('No active scan findings are published for this listing');
     expect(html.toLowerCase()).not.toContain('quality score');
@@ -358,6 +367,7 @@ describe('ListingDetailPage Dataset JSON-LD', () => {
     }));
 
     expect(html).toContain(marker);
+    expect(html).toContain('The seller can request a verified scan of this data.');
     expect(html).toContain('dateTime="2026-08-23T12:00:00Z"');
   });
 
@@ -375,7 +385,8 @@ describe('ListingDetailPage Dataset JSON-LD', () => {
     ]) {
       expect(html).not.toContain(forbidden);
     }
-    expect(html).not.toMatch(/\bverified\b/);
+    expect(html).toContain('the seller can request a verified scan of this data.');
+    expect(html.replace('the seller can request a verified scan of this data.', '')).not.toMatch(/\bverified\b/);
   });
 });
 
@@ -659,8 +670,9 @@ describe('S1717 member_files and verification scope', () => {
       };
       document.body.innerHTML = await renderPage(listing);
       const sentence = within(document.body).getByText(scope, { exact: true });
-      expect(sentence.previousElementSibling?.tagName).toBe('ASIDE');
-      expect(sentence.previousElementSibling?.textContent).toBe(listing.scan_findings.marker);
+      expect(sentence.previousElementSibling?.textContent).toBe('The seller can request a verified scan of this data.');
+      expect(sentence.previousElementSibling?.previousElementSibling?.tagName).toBe('ASIDE');
+      expect(sentence.previousElementSibling?.previousElementSibling?.textContent).toBe(listing.scan_findings.marker);
     });
 
     it(`ignores extra private sample metadata on the ${route} carrier`, async () => {
