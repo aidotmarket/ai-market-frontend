@@ -1,5 +1,7 @@
 'use client';
 
+import MarkdownTextField,{descriptionTooLong} from '@/components/listing/MarkdownTextField';
+
 import { useState, useEffect, useCallback } from 'react';
 import { useRouter, useParams } from 'next/navigation';
 import { getListing, updateListing, unpublishListing, publishListing } from '@/api/listings';
@@ -131,6 +133,7 @@ export default function EditListingPage() {
   };
 
   const handleSave = async () => {
+    if (descriptionTooLong(data.description)) return;
     setSaving(true);
     const submittedFormat = data.data_format;
     try {
@@ -251,13 +254,8 @@ export default function EditListingPage() {
           </div>
 
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">Description</label>
-            <textarea
-              rows={4}
-              value={data.description}
-              onChange={(e) => update({ description: e.target.value })}
-              className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-[#3F51B5]"
-            />
+            <label htmlFor="listing-description" className="block text-sm font-medium text-gray-700 mb-1">Description</label>
+            <MarkdownTextField id="listing-description" rows={4} value={data.description} onChange={description=>update({description})}/>
           </div>
 
           <div>
@@ -459,7 +457,7 @@ export default function EditListingPage() {
           )}
           <button
             onClick={handleSave}
-            disabled={saving}
+            disabled={saving || descriptionTooLong(data.description)}
             className="rounded-lg border border-gray-300 px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50 disabled:opacity-50"
           >
             {saving ? 'Saving...' : 'Save Draft'}

@@ -1,0 +1,2 @@
+tests/fixtures/listing-markdown-parity.json -text
+tests/fixtures/listing-markdown-parity-extra.json -text

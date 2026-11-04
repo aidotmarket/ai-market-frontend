@@ -8,7 +8,7 @@ import type {ListingDraftContent} from '@/api/sellerListingDraft';
 const categories=['financial-data','alternative-data','consumer-retail','healthcare-life-sciences','geospatial-location','environmental-climate','technology-web','government-public','energy-utilities','transportation-logistics','real-estate-property','ai-machine-learning'].map(slug=>({slug,name:slug.replaceAll('-',' ')}));
 const content:ListingDraftContent={brief:'Weekly sales',title:'Sales',description:'Sales in all regions',category:'financial-data',tags:'sales',price:'25',license:'Dead legacy input',description_source_version:7,license_selection:createStandardSelection(false)};
 afterEach(cleanup);
-const fieldSuggestion=(field:string)=>within(screen.getByLabelText(field).parentElement!).getByRole('button',{name:'Use suggestion'});
+const fieldSuggestion=(field:string)=>within(screen.getByText(field,{selector:'label'}).parentElement!).getByRole('button',{name:'Use suggestion'});
 const warning=()=>screen.queryByText('Your files changed after this description was written');
 const ask=()=>fireEvent.click(screen.getByRole('button',{name:'Ask Allai to draft my listing'}));
 describe('guided editor source binding and saving',()=>{

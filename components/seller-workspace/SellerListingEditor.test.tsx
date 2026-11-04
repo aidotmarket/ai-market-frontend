@@ -106,3 +106,27 @@ describe('Allai seller listing review', () => {
     await act(async () => {});
     expect(save.mock.calls[0][0].price).toBe('0');
   });
+
+it('keeps an over-limit description intact and blocks both save and Next',()=>{
+ const onSave=vi.fn(),onNext=vi.fn();
+ render(<SellerListingEditor initialContent={{brief:'',title:'Title',description:'x'.repeat(11000),category:'',tags:'',price:'25',license:''}} onSave={onSave} onNext={onNext}/>);
+ const field=screen.getByLabelText('Description') as HTMLTextAreaElement;
+ expect(field.value).toHaveLength(11000);expect(field.hasAttribute('maxlength')).toBe(false);
+ expect(screen.getByText('Shorten the description to 10,000 characters to save.')).toBeTruthy();
+ fireEvent.change(field,{target:{value:'😀'.repeat(11000)}});
+ const save=screen.getByRole('button',{name:'Save private draft'}) as HTMLButtonElement;
+ const next=screen.getByRole('button',{name:'Next: Review →'}) as HTMLButtonElement;
+ expect(save.disabled).toBe(true);expect(next.disabled).toBe(true);fireEvent.click(save);fireEvent.click(next);expect(onSave).not.toHaveBeenCalled();expect(onNext).not.toHaveBeenCalled();
+ fireEvent.change(field,{target:{value:'😀'.repeat(10000)}});expect(save.disabled).toBe(false);expect(next.disabled).toBe(false);
+});
+it('renders an Allai description proposal with the listing renderer before acceptance',async()=>{
+ const assistant=vi.fn().mockResolvedValue({message:'Suggested',proposals:[{field:'description',value:'# Suggested\n\n**Details** and [link](https://example.com)',reasoning:''}]});
+ render(<SellerListingEditor assistant={assistant}/>);
+ fireEvent.change(screen.getByLabelText('Give Allai a starting point'),{target:{value:'Data'}});
+ fireEvent.click(screen.getByRole('button',{name:'Ask Allai to draft my listing'}));
+ expect((await screen.findByRole('heading',{name:'Suggested'})).tagName).toBe('H2');
+ expect(screen.queryByRole('link',{name:'link'})).toBeNull();
+ expect((screen.getByLabelText('Description') as HTMLTextAreaElement).value).toBe('');
+ fireEvent.click(screen.getByRole('button',{name:'Use suggestion'}));
+ expect((screen.getByLabelText('Description') as HTMLTextAreaElement).value).toBe('# Suggested\n\n**Details** and [link](https://example.com)');
+});

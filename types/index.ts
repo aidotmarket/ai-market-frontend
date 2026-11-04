@@ -409,11 +409,12 @@ export interface ListingDetail extends GeneratedSampleFields {
   file_breakdown?: FileBreakdownGroup[] | null;
   public_reference?: PublicSourceReference | null;
   at_a_glance?: import('@/lib/api').ListingSummary | null;
-  approved_presentation?: {presentation_version: 'seller-listing-review-v2'; rendered_html: string; render_hash: string};
+  approved_presentation?: {presentation_version: 'seller-listing-review-v2' | 'seller-listing-review-v3'; rendered_html: string; render_hash: string};
   id: string;
   slug: string;
   title: string;
   description: string;
+  description_html?: string | null;
   short_description: string | null;
   publisher?: PublisherPublicInfo | null;
   pricing: {

@@ -13,12 +13,13 @@ function measurementDocument(html:string) {
   policy.content="default-src 'none'; style-src 'unsafe-inline'; base-uri 'none'; form-action 'none'";
   target.head.prepend(policy);
   source.querySelectorAll('style').forEach(style=>{const copy=target.createElement('style');copy.textContent=style.textContent;target.head.append(copy);});
-  const allowed=new Set(['ARTICLE','P','H1','H2','H3','UL','OL','LI','DL','DIV','DT','DD','SPAN','BR','STRONG','EM']);
+  const allowed=new Set(['ARTICLE','P','H1','H2','H3','H4','UL','OL','LI','DL','DIV','DT','DD','SPAN','BR','STRONG','EM']);
   const copy=(node:Node,parent:Node)=>{
     if(node.nodeType===Node.TEXT_NODE){parent.appendChild(target.createTextNode(node.textContent??''));return;}
     if(!(node instanceof Element)||!allowed.has(node.tagName))return;
     const element=target.createElement(node.tagName.toLowerCase());
-    if(node.hasAttribute('class'))element.className=node.getAttribute('class')!;
+    if(node.tagName !== 'OL' && node.hasAttribute('class'))element.className=node.getAttribute('class')!;
+    if(node.tagName === 'OL' && /^[1-9]\d*$/.test(node.getAttribute('start')??'') && Number(node.getAttribute('start'))>1)element.setAttribute('start',node.getAttribute('start')!);
     parent.appendChild(element);node.childNodes.forEach(child=>copy(child,element));
   };
   source.body.childNodes.forEach(node=>copy(node,target.body));

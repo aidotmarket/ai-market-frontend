@@ -11,10 +11,11 @@ const html = '<!doctype html><html><body>Regional retail — $25.00</body></html
 const review = {presentation_version:'seller-listing-review-v2', rendered_html:html, render_hash:createHash('sha256').update(html).digest('hex')};
 beforeEach(() => {vi.resetAllMocks();vi.stubGlobal('crypto',webcrypto);});
 afterEach(() => vi.unstubAllGlobals());
-it('returns only the exact render whose digest was prepared by the backend', async () => {
-  client.get.mockResolvedValue({data:review});
+it.each(['seller-listing-review-v2','seller-listing-review-v3'])('returns the exact verified %s render', async presentation_version => {
+  const value={...review,presentation_version};
+  client.get.mockResolvedValue({data:value});
   const signal = new AbortController().signal;
-  expect(await readListingReview(signal)).toBe(review);
+  expect(await readListingReview(signal)).toBe(value);
   expect(client.get).toHaveBeenCalledWith('/seller-workspace/listing-review',{signal});
 });
 it.each([
