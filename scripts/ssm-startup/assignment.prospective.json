@@ -1,0 +1,77 @@
+{
+  "schema": "c07-standard-v2",
+  "app": "ai-market-frontend",
+  "environment": "production",
+  "account": "948749907373",
+  "partition": "aws",
+  "region": "eu-north-1",
+  "endpoint": "https://ssm.eu-north-1.amazonaws.com",
+  "namespace": "/c07/ai-market-frontend/production/g-s1869-ai-market-frontend-01/",
+  "generation": "g-s1869-ai-market-frontend-01",
+  "principal_mode": "iam-user",
+  "credential_mode": "access-key",
+  "principal_arn": "arn:aws:iam::948749907373:user/c07-ai-market-frontend-production",
+  "role_arn": null,
+  "phase": "runtime",
+  "origins": [
+    "prospective-unqualified-origin"
+  ],
+  "required": [
+    "AI_CRAWL_BEACON_KEY",
+    "KEYSTATIC_GITHUB_CLIENT_SECRET",
+    "KEYSTATIC_SECRET"
+  ],
+  "assignments": {
+    "AI_CRAWL_BEACON_KEY": {
+      "name": "/c07/ai-market-frontend/production/g-s1869-ai-market-frontend-01/AI_CRAWL_BEACON_KEY",
+      "version": 1,
+      "tier": "Standard",
+      "purpose": "application",
+      "phase": "runtime"
+    },
+    "KEYSTATIC_GITHUB_CLIENT_SECRET": {
+      "name": "/c07/ai-market-frontend/production/g-s1869-ai-market-frontend-01/KEYSTATIC_GITHUB_CLIENT_SECRET",
+      "version": 1,
+      "tier": "Standard",
+      "purpose": "application",
+      "phase": "runtime"
+    },
+    "KEYSTATIC_SECRET": {
+      "name": "/c07/ai-market-frontend/production/g-s1869-ai-market-frontend-01/KEYSTATIC_SECRET",
+      "version": 1,
+      "tier": "Standard",
+      "purpose": "application",
+      "phase": "runtime"
+    }
+  },
+  "argv": [
+    "/mise/installs/node/24.22.1/bin/npm",
+    "start"
+  ],
+  "budget_seconds": 10,
+  "connect_seconds": 1,
+  "read_seconds": 2,
+  "max_attempts": 1,
+  "metadata": [
+    "KEYSTATIC_GITHUB_CLIENT_ID",
+    "PORT",
+    "NODE_ENV",
+    "API_URL",
+    "NEXT_PUBLIC_API_URL",
+    "NEXT_PUBLIC_SITE_URL",
+    "NEXT_PUBLIC_KEYSTATIC_GITHUB_APP_SLUG",
+    "NEXT_PUBLIC_ORG_SSO_WEB_RETURN_ENABLED",
+    "NEXT_PUBLIC_AIM_DATA_OAUTH_ENABLED",
+    "NEXT_PUBLIC_CHECKOUT_DOMAIN_SERVICE_ENABLED",
+    "NEXT_PUBLIC_TERMS_GATE_ENFORCE",
+    "NEXT_PUBLIC_ENABLE_REQUEST_JSONLD",
+    "NEXT_PUBLIC_ENABLE_DATASET_JSONLD",
+    "FRONTEND_BUILD_REVISION",
+    "RAILWAY_GIT_COMMIT_SHA"
+  ],
+  "path": [
+    "/mise/installs/node/24.22.1/bin",
+    "/usr/bin",
+    "/bin"
+  ]
+}

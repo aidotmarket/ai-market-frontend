@@ -1,0 +1,42 @@
+{
+  "Version": "2012-10-17",
+  "Statement": [
+    {
+      "Sid": "ExactOwnGenerationReadsAtReviewedOrigin",
+      "Effect": "Allow",
+      "Action": "ssm:GetParameters",
+      "Resource": [
+        "<EXACT_OWN_PARAMETER_ARN_ONE>",
+        "<EXACT_OWN_PARAMETER_ARN_TWO_IF_REQUIRED>"
+      ],
+      "Condition": {
+        "IpAddress": {
+          "aws:SourceIp": [
+            "<ACTUAL_APPROVED_ORIGIN_CIDR>"
+          ]
+        },
+        "ArnEquals": {
+          "aws:PrincipalArn": "<EXACT_OWN_IAM_USER_OR_ROLE_ARN>"
+        }
+      }
+    },
+    {
+      "Sid": "DecryptOwnParametersThroughRegionalSSM",
+      "Effect": "Allow",
+      "Action": "kms:Decrypt",
+      "Resource": "<EXACT_EXISTING_AWS_MANAGED_AWS_SSM_KEY_ARN>",
+      "Condition": {
+        "StringEquals": {
+          "kms:ViaService": "ssm.<ASSIGNED_REGION>.<PARTITION_DNS_SUFFIX>",
+          "kms:EncryptionContext:PARAMETER_ARN": [
+            "<EXACT_OWN_PARAMETER_ARN_ONE>",
+            "<EXACT_OWN_PARAMETER_ARN_TWO_IF_REQUIRED>"
+          ]
+        },
+        "ArnEquals": {
+          "aws:PrincipalArn": "<EXACT_OWN_IAM_USER_OR_ROLE_ARN>"
+        }
+      }
+    }
+  ]
+}
