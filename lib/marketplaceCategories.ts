@@ -50,11 +50,29 @@ export const FALLBACK_MARKETPLACE_CATEGORIES: readonly MarketplaceCategoryDefini
   },
 ];
 
+// Public listing payloads carry slugs; the category-name endpoint is seller-only.
+const listingCategoryNames: Readonly<Record<string, string>> = {
+  'financial-data': 'Financial Data',
+  'alternative-data': 'Alternative Data',
+  'consumer-retail': 'Consumer & Retail',
+  'healthcare-life-sciences': 'Healthcare & Life Sciences',
+  'geospatial-location': 'Geospatial & Location',
+  'environmental-climate': 'Environmental & Climate',
+  'technology-web': 'Technology & Web',
+  'government-public': 'Government & Public',
+  'energy-utilities': 'Energy & Utilities',
+  'transportation-logistics': 'Transportation & Logistics',
+  'real-estate-property': 'Real Estate & Property',
+  'ai-machine-learning': 'AI & Machine Learning',
+};
+
 function normalizeCategory(value: string) {
   return value.trim().toLowerCase().replace(/[\s_]+/g, '-');
 }
 
 export function formatMarketplaceCategoryName(value: string) {
+  const normalized = normalizeCategory(value);
+  if (Object.hasOwn(listingCategoryNames, normalized)) return listingCategoryNames[normalized];
   const fallbackMatch = FALLBACK_MARKETPLACE_CATEGORIES.find(
     (category) => normalizeCategory(category.value) === normalizeCategory(value),
   );

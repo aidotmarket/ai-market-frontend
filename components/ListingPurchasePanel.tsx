@@ -1,5 +1,7 @@
 'use client';
 
+import { formatBytes } from '@/lib/formatBytes';
+
 import { useMemo, useState } from 'react';
 import BuyButton from '@/components/BuyButton';
 import { formatPublishedDate } from '@/lib/format';
@@ -161,16 +163,4 @@ export function sortVersions(versions: ListingVersion[]) {
       if (timeDelta !== 0) return timeDelta;
       return b.version_id.localeCompare(a.version_id);
     });
-}
-
-export function formatBytes(bytes: number) {
-  if (!Number.isFinite(bytes) || bytes <= 0) return '0 B';
-  const units = ['B', 'KB', 'MB', 'GB', 'TB'];
-  let value = bytes;
-  let index = 0;
-  while (value >= 1024 && index < units.length - 1) {
-    value /= 1024;
-    index += 1;
-  }
-  return `${value >= 10 || index === 0 ? value.toFixed(0) : value.toFixed(1)} ${units[index]}`;
 }

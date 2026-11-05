@@ -1,3 +1,4 @@
+import { formatMarketplaceCategoryName } from './marketplaceCategories';
 import { describe, expect, it } from 'vitest';
 import {
   FALLBACK_MARKETPLACE_CATEGORIES,
@@ -35,4 +36,23 @@ describe('getMarketplaceCategories', () => {
   it('does not render categories whose available facet count is zero', () => {
     expect(getMarketplaceCategories({ finance: 0, retail: 0 })).toEqual([]);
   });
+});
+
+it.each([
+  ['financial-data', 'Financial Data'],
+  ['alternative-data', 'Alternative Data'],
+  ['consumer-retail', 'Consumer & Retail'],
+  ['healthcare-life-sciences', 'Healthcare & Life Sciences'],
+  ['geospatial-location', 'Geospatial & Location'],
+  ['environmental-climate', 'Environmental & Climate'],
+  ['technology-web', 'Technology & Web'],
+  ['government-public', 'Government & Public'],
+  ['energy-utilities', 'Energy & Utilities'],
+  ['transportation-logistics', 'Transportation & Logistics'],
+  ['real-estate-property', 'Real Estate & Property'],
+  ['ai-machine-learning', 'AI & Machine Learning'],
+  ['future-category', 'Future Category'],
+  ['finance', 'Finance'],
+])('labels category %s', (slug, label) => {
+  expect(formatMarketplaceCategoryName(slug)).toBe(label);
 });
