@@ -30,6 +30,42 @@ afterEach(cleanup);
 describe('Seller data browser', () => {
   const savedSource={version:3,connection_current:true,content:{connection_id:connection.id,connection_version:connection.version,version_mode:'current' as const,objects:[{key:object.key,version_id:object.version_id,etag:object.etag,size:object.size}]}};
 
+  it('browses, paginates and selects the bucket root and correctly named subfolders',async()=>{
+    const rootFile={...object,key:'root.csv'};
+    const nestedFile={...object,key:'nested/two.csv'};
+    const finalFile={...object,key:'last.csv'};
+    const whole={...connection,scope:'whole_bucket' as const,prefix:''};
+    const save=vi.fn();
+    api.listWorkspaceObjects.mockResolvedValueOnce({objects:[rootFile,nestedFile],next_cursor:'more'})
+      .mockResolvedValueOnce({objects:[finalFile],next_cursor:null})
+      .mockResolvedValueOnce({objects:[rootFile,nestedFile,finalFile],next_cursor:null});
+    render(<WorkspaceData enabled connections={[whole]} onSaveSelection={save}/>);
+    await screen.findByText('root.csv');
+    expect(api.listWorkspaceObjects).toHaveBeenCalledWith(whole.id,'');
+    expect(screen.getByRole('option').textContent).toBe('seller-data / Whole bucket');
+    expect(screen.getByRole('button',{name:'Select folder nested/'})).toBeTruthy();
+    expect(screen.queryByRole('button',{name:'Select folder ested/'})).toBeNull();
+    fireEvent.click(screen.getByRole('button',{name:'Load more files'}));
+    await screen.findByText('last.csv');
+    expect(api.listWorkspaceObjects).toHaveBeenLastCalledWith(whole.id,'','more');
+    fireEvent.click(screen.getByRole('button',{name:'Select entire bucket'}));
+    await screen.findByText('3 files selected · 3 KB');
+    expect(api.listWorkspaceObjects).toHaveBeenLastCalledWith(whole.id,'',undefined,1000);
+    fireEvent.click(screen.getByRole('button',{name:'Save selected files'}));
+    fireEvent.click(screen.getByRole('button',{name:'Confirm selection'}));
+    await waitFor(()=>expect(save).toHaveBeenCalledWith(whole,[rootFile,nestedFile,finalFile]));
+  });
+
+  it('resolves a subfolder from a whole-bucket connection',async()=>{
+    const nested={...object,key:'nested/two.csv'};
+    api.listWorkspaceObjects.mockResolvedValue({objects:[nested],next_cursor:null});
+    render(<WorkspaceData enabled connections={[{...connection,scope:'whole_bucket',prefix:''}]}/>);
+    await screen.findByText(nested.key);
+    fireEvent.click(screen.getByRole('button',{name:'Select folder nested/'}));
+    await screen.findByText('1 file selected · 1 KB');
+    expect(api.listWorkspaceObjects).toHaveBeenLastCalledWith(connection.id,'nested/',undefined,1000);
+  });
+
   it('labels unknown document extensions without changing backend format values',()=>{
     for(const extension of ['md','markdown','txt','pdf','rtf'])expect(objectFormatLabel({...object,key:`datasets/note.${extension}`,format_candidate:'unknown'})).toBe('Document');
     expect(objectFormatLabel({...object,key:'datasets/archive.zip',format_candidate:'unknown'})).toBe('Other file');

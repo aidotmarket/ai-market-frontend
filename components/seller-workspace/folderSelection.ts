@@ -65,7 +65,7 @@ export async function resolveFolder(
   list: (id: string, prefix: string, cursor?: string) => Promise<{ objects: WorkspaceObject[]; next_cursor: string | null }>,
   options: { onProgress?: (progress: FolderProgress) => void; cancelled?: () => boolean; onRateLimit?: (waiting: boolean) => void; wait?: (milliseconds: number) => Promise<void> } = {},
 ): Promise<WorkspaceObject[]> {
-  const root = prefix.replace(/\/+$/, '') + '/';
+  const root = prefix === '' ? '' : prefix.replace(/\/+$/, '') + '/';
   const files = accumulator();
   let cursor: string | undefined;
   const seen = new Set<string>();

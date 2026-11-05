@@ -120,3 +120,13 @@ it('stops after four wrapped 429s and reports the rate cause with completed prog
  expect(wait.mock.calls).toEqual([[60000],[60000],[60000]]);
  expect(onRateLimit.mock.calls).toEqual([[true],[false],[true],[false],[true],[false]]);
 });
+
+it('traverses 12,001 root files over 13 pages without converting the root to a slash',async()=>{
+ const files=Array.from({length:12001},(_,index)=>file(index%2?`nested/file-${index}`:`file-${index}`));
+ const list=vi.fn(async(_id:string,prefix:string,cursor?:string)=>{
+  expect(prefix).toBe('');const offset=Number(cursor??0);
+  return {objects:files.slice(offset,offset+1000),next_cursor:offset+1000<files.length?String(offset+1000):null};
+ });
+ expect(await resolveFolder('c','',list)).toEqual(files);
+ expect(list).toHaveBeenCalledTimes(13);
+});
