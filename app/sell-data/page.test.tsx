@@ -53,7 +53,7 @@ describe('SellDataPage', () => {
 it('server-renders the 1.2 payout claim and international exception in the payout card', async () => {
   serverTerms.getPublicTermsVersion.mockResolvedValue('1.2');
   render(await SellDataPage());
-  expect(screen.getByText('When a buyer purchases, the payment flows through ai.market. You keep the price less our 5% commission and the card fee, paid through Stripe 48 hours after the buyer confirms delivery. Sellers on international payout (currently USDC on Solana; bank transfer is planned) are paid at least 30 days after the buyer confirms delivery.')).toBeTruthy();
+  expect(screen.getByText('When a buyer purchases, the payment flows through ai.market. You keep the price less our 5% commission and the card fee, paid through Stripe 48 hours after the buyer confirms delivery. Sellers on international payout (USDC on Solana) are paid at least 30 days after the buyer confirms delivery.')).toBeTruthy();
   expect(screen.getByText("Sellers list free and pay nothing until a buyer pays. You're paid through Stripe once the buyer confirms delivery.")).toBeTruthy();
   expect(screen.queryByText(/90.day/)).toBeNull();
   expect(screen.queryByText('Sellers list free and pay nothing until a buyer pays. Stripe handles the payout.')).toBeNull();
