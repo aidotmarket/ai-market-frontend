@@ -16,6 +16,7 @@ const fetchListingVersions = vi.fn();
 const fetchListingAccessWindowDays = vi.fn();
 const resolveListingUUID = vi.fn();
 const buyButtonProps = vi.hoisted(() => vi.fn());
+const usdcRequestProps = vi.hoisted(() => vi.fn());
 const composition = vi.hoisted(() => ({
   enabled: false,
   atAGlanceProps: vi.fn(),
@@ -61,6 +62,13 @@ vi.mock('@/components/BuyButton', () => ({
 
 vi.mock('@/components/InquiryWidget', () => ({
   default: () => <div />,
+}));
+
+vi.mock('@/components/UsdcLargePurchaseRequest', () => ({
+  default: (props: Record<string, unknown>) => {
+    usdcRequestProps(props);
+    return null;
+  },
 }));
 
 vi.mock('react-markdown', () => ({
@@ -813,4 +821,53 @@ it('renders 14,140,000,000 bytes identically in every public listing size displa
   expect(within(page.getByRole('region', {name: 'Free sample: 1 files'})).getByText('14.14 GB', {exact: true})).toBeTruthy();
   expect(page.getByRole('region', {name: 'File breakdown'}).textContent).toContain('14.14 GB');
   expect(document.body.textContent?.match(/14\.14 GB/g)).toHaveLength(4);
+});
+
+
+describe('USDC request placement on the public listing', () => {
+  beforeEach(() => {
+    fetchPublicListing.mockReset();
+    fetchListingVersions.mockReset();
+    buyButtonProps.mockClear();
+    usdcRequestProps.mockClear();
+  });
+
+  it.each([false, true])('keeps existing Buy props unchanged with version panel=%s', async (versioned) => {
+    const listing = makeListing({ pricing: { price: 10000, pricing_type: 'one_time', subscription_price_monthly: null } });
+    const versions: ListingVersion[] = versioned ? [{ version_id: 'v1', version_label: 'v1', published_at: '2026-06-01T00:00:00Z', object_count: 1, total_size_bytes: 100, status: 'active' }] : [];
+    fetchListingAccessWindowDays.mockResolvedValue(30);
+    const html = await renderPage(listing, versions);
+    expect(html).toContain('>Buy</button>');
+    expect(html).toContain('$10,000.00');
+    expect(buyButtonProps).toHaveBeenCalledOnce();
+    expect(buyButtonProps.mock.calls[0][0]).toMatchObject({ listingId: listing.id, slug: listing.slug, price: 10000, pricingType: 'one_time', disabledReason: undefined });
+    if (versioned) expect(html).toContain('Download window: 30 days after purchase.');
+    expect(usdcRequestProps).toHaveBeenCalledWith({ listingId: listing.id, slug: listing.slug, title: listing.title, pricing: listing.pricing });
+  });
+
+  it.each(['listing_publication_unavailable', 'workspace_sales_paused'])('omits the request for hold %s', async (purchase_hold_reason) => {
+    await renderPage(makeListing({ purchase_hold_reason, pricing: { price: 10000, pricing_type: 'one_time', subscription_price_monthly: null } }));
+    expect(usdcRequestProps).not.toHaveBeenCalled();
+  });
+
+  it('omits the request while seller terms are pending', async () => {
+    await renderPage(makeListing({ license_status: 'pending_seller_terms', pricing: { price: 10000, pricing_type: 'one_time', subscription_price_monthly: null } }));
+    expect(usdcRequestProps).not.toHaveBeenCalled();
+    expect(buyButtonProps).not.toHaveBeenCalled();
+  });
+
+  it('omits the request when an approved offer hides the purchase panel', async () => {
+    const { createHash } = await import('node:crypto');
+    const rendered_html = '<html><body>Approved listing</body></html>';
+    await renderPage(makeListing({
+      purchasable: false,
+      pricing: { price: 10000, pricing_type: 'one_time', subscription_price_monthly: null },
+      approved_presentation: {
+        presentation_version: 'seller-listing-review-v2', rendered_html,
+        render_hash: createHash('sha256').update(rendered_html).digest('hex'),
+      },
+    }));
+    expect(usdcRequestProps).not.toHaveBeenCalled();
+    expect(buyButtonProps).not.toHaveBeenCalled();
+  });
 });
