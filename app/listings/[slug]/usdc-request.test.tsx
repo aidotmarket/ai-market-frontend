@@ -26,7 +26,10 @@ beforeEach(() => {
   mocks.getMyOrders.mockResolvedValue([]);
   mocks.post.mockResolvedValue({ status: 201, data: {} });
 });
-afterEach(cleanup);
+afterEach(() => {
+  cleanup();
+  vi.useRealTimers();
+});
 
 it.each([0, 25, 9999, 9999.99])('hides the request at $%s', (price) => {
   render(<UsdcLargePurchaseRequest {...props} pricing={{ price }} />);
@@ -111,4 +114,53 @@ it('hides the request during auth hydration', () => {
   mocks.auth.hydrated = false;
   render(<UsdcLargePurchaseRequest {...props} />);
   expect(screen.queryByRole('button', { name: label })).toBeNull();
+});
+
+it('hides the request and prevents a POST when the orders lookup rejects', async () => {
+  mocks.getMyOrders.mockRejectedValue(new Error('Orders unavailable'));
+  await act(async () => { render(<UsdcLargePurchaseRequest {...props} />); });
+  expect(mocks.getMyOrders).toHaveBeenCalledOnce();
+  expect(screen.queryByRole('button', { name: label })).toBeNull();
+  expect(mocks.post).not.toHaveBeenCalled();
+});
+
+it('hides the request and prevents a POST when the ownership lookup rejects', async () => {
+  mocks.getListingOwnership.mockRejectedValue(new Error('Ownership unavailable'));
+  await act(async () => { render(<UsdcLargePurchaseRequest {...props} />); });
+  expect(mocks.getListingOwnership).toHaveBeenCalledWith('listing-1');
+  expect(screen.queryByRole('button', { name: label })).toBeNull();
+  expect(mocks.getMyOrders).not.toHaveBeenCalled();
+  expect(mocks.post).not.toHaveBeenCalled();
+});
+
+it('stays hidden past the ownership hook deadline and after a late owner response', async () => {
+  vi.useFakeTimers();
+  let resolve!: (isOwner: boolean) => void;
+  mocks.getListingOwnership.mockReturnValue(new Promise<boolean>(done => { resolve = done; }));
+  render(<UsdcLargePurchaseRequest {...props} />);
+  expect(screen.queryByRole('button', { name: label })).toBeNull();
+  await act(async () => { await vi.advanceTimersByTimeAsync(3001); });
+  expect(screen.queryByRole('button', { name: label })).toBeNull();
+  expect(mocks.getMyOrders).not.toHaveBeenCalled();
+  expect(mocks.post).not.toHaveBeenCalled();
+  await act(async () => resolve(true));
+  expect(screen.queryByRole('button', { name: label })).toBeNull();
+  expect(mocks.getMyOrders).not.toHaveBeenCalled();
+  expect(mocks.post).not.toHaveBeenCalled();
+});
+
+it('shows the request only after ownership confirms not-owner and orders confirm no purchase', async () => {
+  let resolveOwnership!: (isOwner: boolean) => void;
+  let resolveOrders!: (orders: unknown[]) => void;
+  mocks.getListingOwnership.mockReturnValue(new Promise<boolean>(done => { resolveOwnership = done; }));
+  mocks.getMyOrders.mockReturnValue(new Promise(done => { resolveOrders = done; }));
+  render(<UsdcLargePurchaseRequest {...props} />);
+  expect(screen.queryByRole('button', { name: label })).toBeNull();
+  expect(mocks.getMyOrders).not.toHaveBeenCalled();
+  await act(async () => resolveOwnership(false));
+  expect(mocks.getMyOrders).toHaveBeenCalledOnce();
+  expect(screen.queryByRole('button', { name: label })).toBeNull();
+  await act(async () => resolveOrders([]));
+  expect(screen.getByRole('button', { name: label })).toBeTruthy();
+  expect(mocks.post).not.toHaveBeenCalled();
 });

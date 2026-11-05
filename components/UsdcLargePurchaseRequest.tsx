@@ -3,7 +3,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { useAuthStore } from '@/store/auth';
-import { useListingOwnership } from '@/hooks/useListingOwnership';
+import { getListingOwnership } from '@/api/listings';
 import { getMyOrders } from '@/api/orders';
 import { isExistingPurchaseStatus } from '@/lib/order-status';
 import { requestUsdcPayment } from '@/lib/api';
@@ -30,30 +30,43 @@ function RequestControl({ listingId, slug, title, pricing, userId, isAuthenticat
   isAuthenticated: boolean;
 }) {
   const router = useRouter();
-  const { isOwner, checkingOwnership } = useListingOwnership(listingId, userId, undefined, isAuthenticated, false);
-  const [purchase, setPurchase] = useState<'checking' | 'existing' | 'none'>(isAuthenticated ? 'checking' : 'none');
+  const [ownership, setOwnership] = useState<'checking' | 'owner' | 'not-owner' | 'error'>('checking');
+  const [purchase, setPurchase] = useState<'checking' | 'existing' | 'none' | 'error'>('checking');
   const [status, setStatus] = useState<'idle' | 'sending' | 'sent' | 'error'>('idle');
   const sending = useRef(false);
 
   useEffect(() => {
-    if (!isAuthenticated || !userId || isOwner || checkingOwnership) return;
+    if (!isAuthenticated || !userId) return;
+    let cancelled = false;
+    // Eligibility requires a successful lookup; a pending or failed check never grants access.
+    getListingOwnership(listingId).then(isOwner => {
+      if (!cancelled) setOwnership(isOwner === false ? 'not-owner' : 'owner');
+    }).catch(() => {
+      if (!cancelled) setOwnership('error');
+    });
+    return () => { cancelled = true; };
+  }, [listingId, userId, isAuthenticated]);
+
+  useEffect(() => {
+    if (!isAuthenticated || !userId || ownership !== 'not-owner') return;
     let cancelled = false;
     getMyOrders().then(orders => {
       if (!cancelled) setPurchase(orders.some(order => order.listing_id === listingId && isExistingPurchaseStatus(order.status)) ? 'existing' : 'none');
     }).catch(() => {
-      if (!cancelled) setPurchase('none');
+      if (!cancelled) setPurchase('error');
     });
     return () => { cancelled = true; };
-  }, [listingId, userId, isAuthenticated, isOwner, checkingOwnership]);
+  }, [listingId, userId, isAuthenticated, ownership]);
 
-  if (checkingOwnership || isOwner || purchase !== 'none') return null;
+  const eligible = !!userId && ownership === 'not-owner' && purchase === 'none';
+  if (isAuthenticated && !eligible) return null;
 
   const request = async () => {
     if (!isAuthenticated) {
       router.push(`/login?redirect=/listings/${encodeURIComponent(slug)}`);
       return;
     }
-    if (!userId || sending.current || status === 'sent') return;
+    if (!eligible || sending.current || status === 'sent') return;
     sending.current = true;
     setStatus('sending');
     try {
