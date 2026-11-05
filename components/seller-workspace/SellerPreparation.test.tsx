@@ -81,6 +81,50 @@ it('keeps a policy denial distinct from authentication failures',async()=>{
   expect(screen.queryByRole('link',{name:'Sign in again'})).toBeNull();
 });
 
+const signedNote='Licence signed. Your listing is not published yet. Select Publish this listing when you’re ready.';
+const signedRow={...row,status:'signed',signed_coverage_hash:row.coverage_hash,signing_required:false,acceptance_id:id(88)};
+function expectNoSigningDetails() {
+  expect(document.body.textContent).not.toMatch(/[a-f0-9]{64}/i);
+  for(const value of [row.id,signedRow.acceptance_id,...Object.values(row.binding)]) {
+    if(typeof value==='string') expect(document.body.textContent).not.toContain(value);
+  }
+}
+it.each(['success','failure'])('shows the parent signing confirmation only after a successful sign: %s',async outcome=>{
+  const reads=mockReads(true);
+  let finish!:(value:{data:unknown})=>void;
+  let fail!:(error:Error)=>void;
+  const post=vi.spyOn(nativeClient,'post').mockImplementation(()=>new Promise((resolve,reject)=>{finish=resolve;fail=reject;}));
+  const onChange=vi.fn();
+  const props={approval,active:true,onChange,onLoaded:vi.fn()};
+  const view=render(<SellerPreparation {...props}/>);
+  await waitFor(()=>expect(screen.getAllByText('Complete fixture legal terms')).toHaveLength(2));
+  expect(screen.queryByText(signedNote)).toBeNull();
+  expectNoSigningDetails();
+  fireEvent.click(screen.getByRole('checkbox'));
+  fireEvent.click(screen.getByRole('button',{name:'Sign licence'}));
+  await waitFor(()=>expect(post).toHaveBeenCalledOnce());
+  expect(screen.queryByText(signedNote)).toBeNull();
+  await act(async()=>outcome==='success'?finish({data:{instruments:[signedRow]}}):fail(new Error('network')));
+  if(outcome==='success') {
+    expect(await screen.findByText(signedNote)).toBeTruthy();
+    expect(screen.queryByRole('region',{name:'Workspace batch licence signing'})).toBeNull();
+    expect(onChange).toHaveBeenLastCalledWith({...row,...signedRow});
+    expectNoSigningDetails();
+    view.rerender(<SellerPreparation {...props} published/>);
+    expect(screen.queryByText(signedNote)).toBeNull();
+    view.unmount();
+    reads.mockResolvedValue({data:signedRow});
+    render(<SellerPreparation {...props}/>);
+    await screen.findByText('Ready to publish');
+    expect(screen.queryByText(signedNote)).toBeNull();
+  } else {
+    await screen.findByRole('alert');
+    expect(screen.queryByText(signedNote)).toBeNull();
+    expect(onChange).not.toHaveBeenCalledWith(expect.objectContaining({status:'signed'}));
+    expectNoSigningDetails();
+  }
+});
+
 function refreshedWrite(data: unknown) {
   const first = nativeSession();
   let finish!: (value: {data: unknown}) => void;
@@ -131,9 +175,13 @@ it.each(['success','failure'])('keeps mounted signing alive through refresh and 
   expect(write.post.mock.calls[0][2]?.signal?.aborted).toBe(false);
   await act(async()=>write.complete());
   if(outcome==='success') {
-    await screen.findByText('Ready to publish here or from Claude');
+    await screen.findByText('Ready to publish');
+    expect(screen.getByText(signedNote)).toBeTruthy();
     expect(onChange).toHaveBeenLastCalledWith(expect.objectContaining({status:'signed'}));
-  } else await screen.findByRole('alert');
+  } else {
+    await screen.findByRole('alert');
+    expect(screen.queryByText(signedNote)).toBeNull();
+  }
 });
 it.each(['identity','logout','unmount'])('cancels pending preparation on %s',async change=>{
   mockReads(false);
