@@ -41,8 +41,8 @@ it('renders the preloaded panel on the workspace with real B3 hook and all publi
   const get=mockReads(true);render(<SellerPreparation approval={approval} active onChange={vi.fn()} onLoaded={vi.fn()}/>);
   await screen.findByRole('region',{name:'Workspace batch licence signing'});
   await waitFor(()=>expect(screen.getAllByText('Complete fixture legal terms')).toHaveLength(2));
-  expect(screen.queryByLabelText(/Prepared instrument IDs/)).toBeNull();
-  expect((screen.getByRole('button',{name:'Sign 1 licences'}) as HTMLButtonElement).disabled).toBe(true);
+  expect(screen.queryByLabelText(/Listing preparation IDs/)).toBeNull();
+  expect((screen.getByRole('button',{name:'Sign licence'}) as HTMLButtonElement).disabled).toBe(true);
   expect(get).toHaveBeenCalledWith('/seller-workspace/connector-switches',{headers:nativeSession().headers});
 });
 it.each([401,403,404,503])('hides signing with a neutral message for B3 HTTP %i even with an enabled-looking body',async status=>{
@@ -125,7 +125,7 @@ it.each(['success','failure'])('keeps mounted signing alive through refresh and 
   // Capability revalidation stays pending while the write completes.
   reads.mockImplementation(()=>new Promise(()=>{}));
   fireEvent.click(screen.getByRole('checkbox'));
-  fireEvent.click(screen.getByRole('button',{name:'Sign 1 licences'}));
+  fireEvent.click(screen.getByRole('button',{name:'Sign licence'}));
   await waitFor(()=>expect(write.post).toHaveBeenCalledTimes(2));
   expectRefreshedPair(write.post,write.first);
   expect(write.post.mock.calls[0][2]?.signal?.aborted).toBe(false);
@@ -157,7 +157,7 @@ it.each(['identity','logout','unmount'])('cancels pending signing on %s',async c
   const view=render(<SellerPreparation approval={approval} active onChange={onChange} onLoaded={vi.fn()}/>);
   await waitFor(()=>expect(screen.getAllByText('Complete fixture legal terms')).toHaveLength(2));
   fireEvent.click(screen.getByRole('checkbox'));
-  fireEvent.click(screen.getByRole('button',{name:'Sign 1 licences'}));
+  fireEvent.click(screen.getByRole('button',{name:'Sign licence'}));
   await waitFor(()=>expect(write.post).toHaveBeenCalledTimes(2));
   const signal=write.post.mock.calls[0][2]?.signal;
   expect(signal?.aborted).toBe(false);
