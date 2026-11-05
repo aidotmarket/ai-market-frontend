@@ -125,7 +125,7 @@ it('waits for preparation recovery and forwards the signed preparation on the we
     render(<SellerPublication approval={named} active rendered/>);
     const button=await screen.findByRole('button',{name:'Publish this listing'});
     expect((button as HTMLButtonElement).disabled).toBe(true);
-    await act(async()=>finish({data:row}));await screen.findByText('Ready to publish here or from Claude');
+    await act(async()=>finish({data:row}));await screen.findByText('Ready to publish');
     api.publishListing.mockResolvedValue(publication);fireEvent.click(button);
     await screen.findByText('Published');
     expect(api.publishListing).toHaveBeenCalledWith(named,expect.any(String),expect.any(AbortSignal),row.id);
