@@ -18,6 +18,7 @@ import BuyerAtAGlance, {BuyerSamplePreview} from '@/components/listings/BuyerAtA
 import BuyButton from '@/components/BuyButton';
 import ListingPurchaseAdvisory from '@/components/ListingPurchaseAdvisory';
 import ListingPurchasePanel from '@/components/ListingPurchasePanel';
+import UsdcLargePurchaseRequest from '@/components/UsdcLargePurchaseRequest';
 import InquiryWidget from '@/components/InquiryWidget';
 import ScanFindingsBadge from '@/components/listings/ScanFindingsBadge';
 import ReactMarkdown from 'react-markdown';
@@ -281,6 +282,14 @@ export default async function ListingDetailPage({ params, searchParams }: Props)
                 dataFormat={listing.data_format}
                 fulfillmentType={listing.fulfillment_type}
                 disabledReason={purchaseDisabledReason}
+              />
+            )}
+            {!pendingSellerTerms && !(approved && !listing.purchasable) && !listing.purchase_hold_reason && (
+              <UsdcLargePurchaseRequest
+                listingId={listing.id}
+                slug={listing.slug}
+                title={listing.title}
+                pricing={listing.pricing}
               />
             )}
           </div>
