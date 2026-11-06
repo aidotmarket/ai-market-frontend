@@ -10,7 +10,7 @@ vi.mock('@/lib/company-sign-in', async original => ({ ...await original<typeof i
 vi.mock('qrcode', () => ({ default: { toDataURL: async () => 'data:image/png;base64,cG5n' } }));
 import CompanyAuthenticator, { companyEnrollmentOffered } from './CompanyAuthenticator';
 const user = { id: 'owner', sso_enforced: true, auth_methods: ['oidc'], totp_enabled: false,
-  two_factor_setup_eligible: true, seller_binding_factor_readiness: { code: 'SECOND_FACTOR_ENROLLMENT_REQUIRED', path: '/dashboard/settings' } } as User;
+  two_factor_setup_eligible: true,  } as User;
 beforeEach(() => {
   vi.resetAllMocks(); vi.stubEnv('NEXT_PUBLIC_ORG_SSO_WEB_RETURN_ENABLED', 'false'); window.history.replaceState(null, '', '/dashboard/settings');
   useAuthStore.setState({ user, token: 'session', refreshAuth: mocks.refresh });
@@ -25,7 +25,7 @@ it.each(['oidc', 'saml'])('offers fresh server-approved %s enrollment', method =
 });
 it.each([
   { two_factor_setup_eligible: false, two_factor_setup_reason: 'two_factor_managed_by_sso' },
-  { two_factor_setup_eligible: undefined }, { seller_binding_factor_readiness: null },
+  { two_factor_setup_eligible: undefined },
   { sso_enforced: false, auth_methods: ['google'] }, { two_factor_provider: 'github' },
   { auth_methods: ['password', 'oidc'] }, { totp_enabled: true },
 ] as Partial<User>[])('does not infer eligibility or enable the legacy flag-off flow from %j', patch => {
@@ -34,7 +34,7 @@ it.each([
 it('shows QR/secret, verifies once, shows one-time backup codes and returns only after saving', async () => {
   const path = '/confirm/11111111-1111-4111-8111-111111111111?t=' + 'a'.repeat(42) + 'A';
   window.history.replaceState(null, '', `/dashboard/settings?redirect=${encodeURIComponent(path)}`);
-  await start(); expect(screen.getByText(/company sign-in is still required/)).toBeTruthy();
+  await start(); expect(screen.queryByLabelText('Company sign-in ID')).toBeNull();
   verify(); await screen.findByText('backup-one');
   expect(mocks.verify).toHaveBeenCalledExactlyOnceWith('123456'); expect(screen.queryByText('SECRET')).toBeNull();
   expect(mocks.push).not.toHaveBeenCalled();
@@ -45,95 +45,48 @@ it('keeps setup after an invalid code and clears it after stale company proof', 
   mocks.verify.mockRejectedValueOnce({ response: { data: { detail: 'Invalid verification code' } } });
   await start(); verify(); await screen.findByRole('alert'); expect(screen.getByText('SECRET')).toBeTruthy();
   mocks.verify.mockRejectedValueOnce({ response: { data: { detail: 'RECENT_LOGIN_REQUIRED' } } });
-  verify(); await screen.findByText('Sign in again through your company, then restart setup.');
+  verify(); await screen.findByText('Please refresh the page and try again.');
   expect(screen.queryByText('SECRET')).toBeNull();
 });
 it('expires setup locally without submitting a code', async () => {
   mocks.setup.mockResolvedValue({ secret: 'SECRET', qr_uri: 'otpauth://fixture', expires_in: -1 });
   await start(); verify(); await screen.findByRole('alert'); expect(mocks.verify).not.toHaveBeenCalled();
 });
-it('recovers with a backup code, refreshes retired credentials and offers re-enrollment', async () => {
+it('recovers in one click, refreshes retired credentials and offers re-enrollment', async () => {
   render(<CompanyAuthenticator recovery />);
-  expect(screen.getByText(/Sign in through your company/)).toBeTruthy();
-  fireEvent.change(screen.getByLabelText('Backup code'), { target: { value: 'backup-one' } });
+  expect(screen.queryByLabelText('Backup code')).toBeNull();
   fireEvent.click(screen.getByRole('button', { name: 'Disable lost authenticator' }));
   await screen.findByText(/Authenticator disabled/);
-  expect(mocks.recover).toHaveBeenCalledExactlyOnceWith('backup-one');
+  expect(mocks.recover).toHaveBeenCalledExactlyOnceWith();
   expect(mocks.refresh).toHaveBeenCalledTimes(1);
   expect(screen.getByRole('link', { name: 'Set up a new authenticator' }).getAttribute('href')).toBe('/dashboard/settings#security');
   expect(mocks.verify).not.toHaveBeenCalled();
 });
-it('keeps recovery unavailable after an invalid backup code', async () => {
+it('keeps failed recovery visible without a challenge', async () => {
   mocks.recover.mockRejectedValue({ response: { data: { detail: 'Invalid verification code' } } });
   render(<CompanyAuthenticator recovery />);
-  fireEvent.change(screen.getByLabelText('Backup code'), { target: { value: 'bad-code' } });
   fireEvent.click(screen.getByRole('button', { name: 'Disable lost authenticator' }));
   await screen.findByRole('alert'); expect(mocks.refresh).not.toHaveBeenCalled();
   expect(screen.queryByRole('link', { name: 'Set up a new authenticator' })).toBeNull();
 });
 
-it('starts fresh enrollment at settings and resumes setup automatically', async () => {
-  vi.stubEnv('NEXT_PUBLIC_ORG_SSO_WEB_RETURN_ENABLED', 'true');
-  mocks.signIn.mockResolvedValue(undefined);
-  render(<CompanyAuthenticator />);
-  expect(screen.getByRole('button', { name: 'Check company sign-in' })).toBeTruthy();
-  expect(screen.queryByRole('button', { name: 'Set up company authenticator' })).toBeNull();
-  fireEvent.change(screen.getByLabelText('Company sign-in ID'), { target: { value: 'company-id' } });
-  fireEvent.click(screen.getByRole('button', { name: 'Sign in through your company' }));
-  await screen.findByText('SECRET');
-  expect(mocks.signIn).toHaveBeenCalledWith('company-id', '/dashboard/settings');
-  expect(mocks.setup).toHaveBeenCalledOnce();
-});
-it('resumes stale lost-authenticator recovery after backend freshness refusal without replaying the backup code', async () => {
-  vi.stubEnv('NEXT_PUBLIC_ORG_SSO_WEB_RETURN_ENABLED', 'true');
-  mocks.signIn.mockResolvedValue(undefined);
-  mocks.recover.mockRejectedValueOnce({ response: { status: 403, data: { detail: 'RECENT_LOGIN_REQUIRED' } } });
-  render(<CompanyAuthenticator recovery />);
-  fireEvent.change(screen.getByLabelText('Backup code'), { target: { value: 'backup-one' } });
-  fireEvent.click(screen.getByRole('button', { name: 'Disable lost authenticator' }));
-  await screen.findByLabelText('Company sign-in ID');
-  expect(screen.queryByLabelText('Backup code')).toBeNull();
-  fireEvent.change(screen.getByLabelText('Company sign-in ID'), { target: { value: 'company-id' } });
-  fireEvent.click(screen.getByRole('button', { name: 'Sign in through your company' }));
-  await screen.findByLabelText('Backup code');
-  expect(mocks.signIn).toHaveBeenCalledWith('company-id', '/dashboard/settings');
-  expect(mocks.recover).toHaveBeenCalledExactlyOnceWith('backup-one'); expect(mocks.setup).not.toHaveBeenCalled();
-});
-it('shows a refused sign-in and retries before setup', async () => {
-  vi.stubEnv('NEXT_PUBLIC_ORG_SSO_WEB_RETURN_ENABLED', 'true');
-  mocks.signIn.mockRejectedValueOnce(new Error('Company sign-in did not finish or expired. Try again.')).mockResolvedValueOnce(undefined);
-  render(<CompanyAuthenticator />);
-  fireEvent.change(screen.getByLabelText('Company sign-in ID'), { target: { value: 'company-id' } });
-  fireEvent.click(screen.getByRole('button', { name: 'Sign in through your company' }));
-  await screen.findByRole('alert'); expect(mocks.setup).not.toHaveBeenCalled();
-  fireEvent.click(screen.getByRole('button', { name: 'Retry company sign-in' }));
-  await screen.findByText('SECRET'); expect(mocks.signIn).toHaveBeenCalledTimes(2);
-});
-
-it('recovers a flag-on already-fresh session with exactly one remaining backup code', async () => {
-  vi.stubEnv('NEXT_PUBLIC_ORG_SSO_WEB_RETURN_ENABLED', 'true');
-  const remaining = new Set(['last-backup']);
-  mocks.recover.mockImplementation(async code => { expect(remaining.delete(code)).toBe(true); });
-  render(<CompanyAuthenticator recovery />);
-  fireEvent.change(screen.getByLabelText('Backup code'), { target: { value: 'last-backup' } });
-  fireEvent.click(screen.getByRole('button', { name: 'Disable lost authenticator' }));
-  await screen.findByText(/Authenticator disabled/);
-  expect(mocks.recover).toHaveBeenCalledExactlyOnceWith('last-backup');
-  expect(remaining.size).toBe(0); expect(mocks.signIn).not.toHaveBeenCalled();
-  expect(mocks.refresh).toHaveBeenCalledOnce();
-});
-it('keeps exactly one next action after a flag-on invalid backup code', async () => {
-  vi.stubEnv('NEXT_PUBLIC_ORG_SSO_WEB_RETURN_ENABLED', 'true');
-  mocks.recover.mockRejectedValueOnce({ response: { status: 400, data: { detail: 'Invalid verification code' } } }).mockResolvedValueOnce({});
-  render(<CompanyAuthenticator recovery />);
-  fireEvent.change(screen.getByLabelText('Backup code'), { target: { value: 'bad-code' } });
-  fireEvent.click(screen.getByRole('button', { name: 'Disable lost authenticator' }));
-  await screen.findByText('That code did not work. Try again.');
+it.each(['true', 'false'])('starts company enrollment without sign-in when the return flag is %s', async enabled => {
+  vi.stubEnv('NEXT_PUBLIC_ORG_SSO_WEB_RETURN_ENABLED', enabled);
+  await start();
+  expect(mocks.setup).toHaveBeenCalledExactlyOnceWith();
+  expect(mocks.signIn).not.toHaveBeenCalled();
   expect(screen.queryByLabelText('Company sign-in ID')).toBeNull();
-  expect(screen.queryByRole('button', { name: 'Check company sign-in' })).toBeNull();
-  expect(screen.getByRole('button', { name: 'Disable lost authenticator' })).toBeTruthy();
-  fireEvent.change(screen.getByLabelText('Backup code'), { target: { value: 'good-code' } });
+});
+it('shows a failed recovery and allows retry without requesting proof', async () => {
+  mocks.recover.mockRejectedValueOnce({ response: { status: 403, data: { detail: 'RECENT_LOGIN_REQUIRED' } } }).mockResolvedValueOnce({});
+  render(<CompanyAuthenticator recovery />);
+  fireEvent.click(screen.getByRole('button', { name: 'Disable lost authenticator' }));
+  await screen.findByText('Please refresh the page and try again.');
+  expect(screen.queryByLabelText('Backup code')).toBeNull();
+  expect(screen.queryByLabelText('Company sign-in ID')).toBeNull();
   fireEvent.click(screen.getByRole('button', { name: 'Disable lost authenticator' }));
   await screen.findByText(/Authenticator disabled/);
+  expect(mocks.recover).toHaveBeenNthCalledWith(1);
+  expect(mocks.recover).toHaveBeenNthCalledWith(2);
   expect(mocks.signIn).not.toHaveBeenCalled();
 });

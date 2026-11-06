@@ -121,11 +121,11 @@ export default function ConnectorConsentPage() {
   };
 
 
-  const needsSignIn = ['login', 'sso_required', 'insufficient_assurance', 'recent_login_required', 'RECENT_LOGIN_REQUIRED', 'SECOND_FACTOR_REQUIRED', 'SECOND_FACTOR_ENROLLMENT_REQUIRED'].includes(error);
+  const needsRefresh = ['login', 'sso_required', 'insufficient_assurance', 'recent_login_required', 'RECENT_LOGIN_REQUIRED', 'SECOND_FACTOR_REQUIRED', 'SECOND_FACTOR_ENROLLMENT_REQUIRED'].includes(error);
 
   return <main className="mx-auto max-w-lg space-y-6 px-6 py-16">
     {enabled === false ? <h1>Page not found</h1> : error ? <>
-      <p role="alert">{needsSignIn ? 'Please refresh the page and try again.' : error === 'expired' ? expiredMessage
+      <p role="alert">{needsRefresh ? 'Please refresh the page and try again.' : error === 'expired' ? expiredMessage
         : error === 'EARLY_ACCESS_ONLY' ? earlyAccessMessage
         : error === 'email_unverified' ? 'Verify your email before connecting this app.'
         : error === 'sso_required' ? 'Sign in with your organization’s SSO to continue.'

@@ -6,7 +6,7 @@ vi.mock('./client', () => ({
   api: { post: apiPost },
 }));
 
-const { register, requestMagicLink, submitReauth, verifyReauthMagicLink, setup2FA, verify2FASetup } = await import('./auth');
+const { register, requestMagicLink, submitReauth, verifyReauthMagicLink } = await import('./auth');
 
 describe('magic link purpose', () => {
   beforeEach(() => apiPost.mockReset());
@@ -40,26 +40,6 @@ describe('auth register API', () => {
       first_name: 'Buyer',
       last_name: 'User',
       role: 'buyer',
-    });
-  });
-});
-
-describe('auth 2FA setup API', () => {
-  beforeEach(() => apiPost.mockReset());
-
-  it('sends the reauthentication token to both setup endpoints', async () => {
-    apiPost.mockResolvedValueOnce({ data: { secret: 'secret', qr_uri: 'uri', expires_in: 600 } });
-    apiPost.mockResolvedValueOnce({ data: { backup_codes: ['backup-one'] } });
-
-    await setup2FA('reauth-token');
-    await verify2FASetup('123456', 'reauth-token');
-
-    expect(apiPost).toHaveBeenNthCalledWith(1, '/auth/2fa/setup', {
-      reauth_token: 'reauth-token',
-    });
-    expect(apiPost).toHaveBeenNthCalledWith(2, '/auth/2fa/verify-setup', {
-      code: '123456',
-      reauth_token: 'reauth-token',
     });
   });
 });

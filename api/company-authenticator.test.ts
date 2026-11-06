@@ -6,9 +6,9 @@ vi.mock('@/store/auth', () => ({ useAuthStore: { getState: () => ({ token: mocks
 import { setupCompanyAuthenticator, verifyCompanyAuthenticator, recoverCompanyAuthenticator } from './company-authenticator';
 beforeEach(() => { vi.resetAllMocks(); mocks.token = 'native-session'; mocks.post.mockResolvedValue({ data: {} }); });
 it.each([
-  ['setup', () => setupCompanyAuthenticator(), '/auth/2fa/setup', { reauth_token: '' }],
-  ['verify', () => verifyCompanyAuthenticator('123456'), '/auth/2fa/verify-setup', { reauth_token: '', code: '123456' }],
-  ['recover', () => recoverCompanyAuthenticator('backup-code'), '/auth/2fa/disable', { reauth_token: '', code: 'backup-code' }],
+  ['setup', () => setupCompanyAuthenticator(), '/auth/2fa/setup', {}],
+  ['verify', () => verifyCompanyAuthenticator('123456'), '/auth/2fa/verify-setup', { code: '123456' }],
+  ['recover', () => recoverCompanyAuthenticator(), '/auth/2fa/disable', {}],
 ] as const)('uses the approved company %s body and CSRF bound to the access credential', async (_, call, path, body) => {
   await call();
   expect(mocks.post).toHaveBeenCalledExactlyOnceWith(path, body, { headers: {

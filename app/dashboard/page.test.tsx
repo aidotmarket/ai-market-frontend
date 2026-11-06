@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 
-import { act, cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
+import { act, cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { AxiosError } from 'axios';
 import { StrictMode } from 'react';
@@ -98,22 +98,9 @@ const sellerStats = {
 describe('DashboardOverview seller setup 2FA state', () => {
   const realRefreshAuth = useAuthStore.getState().refreshAuth;
   const refreshAuth = vi.fn();
-  const completeReauth = async () => {
-    const dialog = await screen.findByRole('dialog', { name: 'Re-authenticate' });
-    fireEvent.change(within(dialog).getByLabelText('Password'), {
-      target: { value: '654321' },
-    });
-    await act(async () => {
-      fireEvent.click(within(dialog).getByRole('button', { name: 'Continue' }));
-    });
-  };
-  const expiredReauth = Object.assign(new AxiosError('expired'), {
-    response: { status: 400, data: { detail: 'Re-authentication required' } },
-  });
 
   beforeEach(() => {
     refreshAuth.mockResolvedValue(undefined);
-    authApi.submitReauth.mockResolvedValue({ token: 'dashboard-token' });
     capabilitiesApi.getCapabilities.mockResolvedValue({
       buyer: { persisted_status: 'active', effective_status: 'active', missing_steps: [], reason: null },
       seller: {
@@ -179,21 +166,19 @@ describe('DashboardOverview seller setup 2FA state', () => {
     expect(ordersApi.getMyOrders).toHaveBeenCalledOnce();
   });
 
-  it('reauthenticates before setup and uses the same token for verification', async () => {
+  it('starts setup in one click and verifies only the newly scanned secret', async () => {
     authApi.setup2FA.mockResolvedValue({ secret: 'setup-secret', qr_uri: 'otpauth://example', expires_in: 600 });
     authApi.verify2FASetup.mockResolvedValue({ backup_codes: ['backup-one'] });
     render(<DashboardOverview />);
     fireEvent.click(await screen.findByRole('button', { name: 'Enable 2FA' }));
-    expect(authApi.setup2FA).not.toHaveBeenCalled();
-    expect(screen.queryByText('setup-secret')).toBeNull();
-    await completeReauth();
-    expect(authApi.setup2FA).toHaveBeenCalledWith('dashboard-token');
+    await screen.findByRole('textbox', { name: '6-digit code' });
+    expect(authApi.setup2FA).toHaveBeenCalledWith();
     expect(await screen.findByText('setup-secret')).toBeTruthy();
     expect((await screen.findByRole('img', { name: 'QR code for two-factor authentication setup' })).getAttribute('src'))
       .toMatch(/^data:image\/png;base64,/);
     fireEvent.change(screen.getByRole('textbox', { name: '6-digit code' }), { target: { value: '123456' } });
     fireEvent.click(screen.getByRole('button', { name: 'Verify and enable' }));
-    await waitFor(() => expect(authApi.verify2FASetup).toHaveBeenCalledWith('123456', 'dashboard-token'));
+    await waitFor(() => expect(authApi.verify2FASetup).toHaveBeenCalledWith('123456'));
     expect(await screen.findByRole('heading', { name: 'Backup codes' })).toBeTruthy();
   });
 
@@ -211,7 +196,6 @@ describe('DashboardOverview seller setup 2FA state', () => {
     }));
     render(<DashboardOverview />);
     fireEvent.click(await screen.findByRole('button', { name: 'Enable 2FA' }));
-    await completeReauth();
     expect(await screen.findByText("Two-factor authentication for your account is managed by your organization's single sign-on.")).toBeTruthy();
     expect(screen.queryByRole('button', { name: 'Enable 2FA' })).toBeNull();
   });
@@ -227,7 +211,7 @@ describe('DashboardOverview seller setup 2FA state', () => {
     authApi.verify2FASetup.mockResolvedValue({ backup_codes: ['backup-one'] });
     render(<DashboardOverview />);
     fireEvent.click(await screen.findByRole('button', { name: 'Enable 2FA' }));
-    await completeReauth();
+    await screen.findByRole('textbox', { name: '6-digit code' });
     fireEvent.change(screen.getByRole('textbox', { name: '6-digit code' }), { target: { value: '123456' } });
     fireEvent.click(screen.getByRole('button', { name: 'Verify and enable' }));
     expect(await screen.findByText('backup-one')).toBeTruthy();
@@ -250,7 +234,7 @@ describe('DashboardOverview seller setup 2FA state', () => {
     authApi.verify2FASetup.mockResolvedValue({ backup_codes: ['backup-one'] });
     render(<DashboardOverview />);
     fireEvent.click(await screen.findByRole('button', { name: 'Enable 2FA' }));
-    await completeReauth();
+    await screen.findByRole('textbox', { name: '6-digit code' });
     fireEvent.change(screen.getByRole('textbox', { name: '6-digit code' }), { target: { value: '123456' } });
     fireEvent.click(screen.getByRole('button', { name: 'Verify and enable' }));
     expect(await screen.findByText('backup-one')).toBeTruthy();
@@ -267,69 +251,47 @@ describe('DashboardOverview seller setup 2FA state', () => {
     expect(refreshAuth).toHaveBeenCalledOnce();
   });
 
-  it('cancels before setup without enabling 2FA', async () => {
+  it('cancels enrollment without enabling 2FA', async () => {
+    authApi.setup2FA.mockResolvedValue({ secret: 'setup-secret', qr_uri: 'otpauth://example', expires_in: 600 });
     render(<DashboardOverview />);
     fireEvent.click(await screen.findByRole('button', { name: 'Enable 2FA' }));
-    const dialog = await screen.findByRole('dialog', { name: 'Re-authenticate' });
-    fireEvent.click(within(dialog).getByRole('button', { name: 'Cancel' }));
-    expect(authApi.setup2FA).not.toHaveBeenCalled();
+    await screen.findByRole('textbox', { name: '6-digit code' });
+    fireEvent.click(screen.getByRole('button', { name: 'Cancel' }));
+    expect(authApi.setup2FA).toHaveBeenCalledWith();
     expect(authApi.verify2FASetup).not.toHaveBeenCalled();
     expect(screen.getByText('Enable authenticator-app verification before connecting payouts.')).toBeTruthy();
   });
 
-  it('reauthenticates once after expiry and retries verification without restarting setup', async () => {
+  it('keeps enrollment visible after an invalid new-secret code without a reauthentication prompt', async () => {
     authApi.setup2FA.mockResolvedValue({ secret: 'setup-secret', qr_uri: 'otpauth://example', expires_in: 600 });
-    authApi.verify2FASetup.mockRejectedValueOnce(expiredReauth).mockResolvedValueOnce({ backup_codes: ['backup-one'] });
-    authApi.submitReauth.mockResolvedValueOnce({ token: 'first-token' }).mockResolvedValueOnce({ token: 'fresh-token' });
+    authApi.verify2FASetup.mockRejectedValueOnce(Object.assign(new AxiosError('invalid'), {
+      response: { status: 400, data: { detail: 'Invalid verification code' } },
+    }));
     render(<DashboardOverview />);
     fireEvent.click(await screen.findByRole('button', { name: 'Enable 2FA' }));
-    await completeReauth();
-    fireEvent.change(screen.getByRole('textbox', { name: '6-digit code' }), { target: { value: '123456' } });
+    fireEvent.change(await screen.findByRole('textbox', { name: '6-digit code' }), { target: { value: '123456' } });
     fireEvent.click(screen.getByRole('button', { name: 'Verify and enable' }));
-    await completeReauth();
-    expect(authApi.setup2FA).toHaveBeenCalledOnce();
-    expect(authApi.verify2FASetup).toHaveBeenNthCalledWith(1, '123456', 'first-token');
-    expect(authApi.verify2FASetup).toHaveBeenNthCalledWith(2, '123456', 'fresh-token');
-    expect(await screen.findByRole('heading', { name: 'Backup codes' })).toBeTruthy();
-  });
-
-  it('stops after a second expired token and leaves the setup visible', async () => {
-    authApi.setup2FA.mockResolvedValue({ secret: 'setup-secret', qr_uri: 'otpauth://example', expires_in: 600 });
-    authApi.verify2FASetup.mockRejectedValue(expiredReauth);
-    authApi.submitReauth.mockResolvedValueOnce({ token: 'first-token' }).mockResolvedValueOnce({ token: 'fresh-token' });
-    render(<DashboardOverview />);
-    fireEvent.click(await screen.findByRole('button', { name: 'Enable 2FA' }));
-    await completeReauth();
-    fireEvent.change(screen.getByRole('textbox', { name: '6-digit code' }), { target: { value: '123456' } });
-    fireEvent.click(screen.getByRole('button', { name: 'Verify and enable' }));
-    await completeReauth();
-    expect(authApi.verify2FASetup).toHaveBeenCalledTimes(2);
-    expect(authApi.setup2FA).toHaveBeenCalledOnce();
+    expect(await screen.findByText('Invalid verification code')).toBeTruthy();
+    expect(screen.getByText('setup-secret')).toBeTruthy();
+    expect(authApi.verify2FASetup).toHaveBeenCalledExactlyOnceWith('123456');
+    expect(authApi.submitReauth).not.toHaveBeenCalled();
     expect(screen.queryByRole('dialog', { name: 'Re-authenticate' })).toBeNull();
-    expect(await screen.findByText('setup-secret')).toBeTruthy();
-    expect(await screen.findByText('Re-authentication required')).toBeTruthy();
   });
 
-  it('enables 2FA for a passwordless account using the emailed link', async () => {
+  it('enables 2FA for a passwordless account without an email challenge', async () => {
     useAuthStore.setState({ user: { ...baseUser, auth_methods: ['magic_link'], primary_auth: 'magic_link' } });
-    authApi.submitReauth.mockResolvedValue({ token: null, method: 'magic_link' });
-    authApi.verifyReauthMagicLink.mockResolvedValue({ token: 'magic-reauth-token', method: 'magic_link' });
     authApi.setup2FA.mockResolvedValue({ secret: 'setup-secret', qr_uri: 'otpauth://example', expires_in: 600 });
     authApi.verify2FASetup.mockResolvedValue({ backup_codes: ['backup-one'] });
     render(<DashboardOverview />);
     fireEvent.click(await screen.findByRole('button', { name: 'Enable 2FA' }));
-    const dialog = await screen.findByRole('dialog', { name: 'Re-authenticate' });
-    expect(within(dialog).queryByLabelText('Password')).toBeNull();
-    fireEvent.click(within(dialog).getByRole('button', { name: 'Send link' }));
-    await waitFor(() => expect(authApi.submitReauth).toHaveBeenCalledWith('', 'magic_link'));
-    fireEvent.change(within(dialog).getByRole('textbox', { name: 'Email link' }), { target: { value: 'https://www.ai.market/auth/verify?token=email-token&purpose=reauth' } });
-    fireEvent.click(within(dialog).getByRole('button', { name: 'Continue' }));
-    await waitFor(() => expect(authApi.verifyReauthMagicLink).toHaveBeenCalledWith('email-token'));
+    expect(screen.queryByRole('dialog', { name: 'Re-authenticate' })).toBeNull();
+    expect(authApi.submitReauth).not.toHaveBeenCalled();
+    expect(authApi.verifyReauthMagicLink).not.toHaveBeenCalled();
     expect(await screen.findByText('setup-secret')).toBeTruthy();
-    expect(authApi.setup2FA).toHaveBeenCalledWith('magic-reauth-token');
+    expect(authApi.setup2FA).toHaveBeenCalledWith();
     fireEvent.change(screen.getByRole('textbox', { name: '6-digit code' }), { target: { value: '123456' } });
     fireEvent.click(screen.getByRole('button', { name: 'Verify and enable' }));
-    await waitFor(() => expect(authApi.verify2FASetup).toHaveBeenCalledWith('123456', 'magic-reauth-token'));
+    await waitFor(() => expect(authApi.verify2FASetup).toHaveBeenCalledWith('123456'));
     expect(await screen.findByRole('heading', { name: 'Backup codes' })).toBeTruthy();
   });
 

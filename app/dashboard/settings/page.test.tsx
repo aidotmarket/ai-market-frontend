@@ -7,7 +7,6 @@ import axios from 'axios';
 import SettingsPage from './page';
 import { useAuthStore } from '@/store/auth';
 import type { User } from '@/types';
-import { checkCompanySignIn } from '@/lib/company-sign-in';
 import { getConnectorGrants, getConnectorStatus } from '@/api/connector-oauth';
 import { getSellerPublicProfile } from '@/api/sellerProfile';
 
@@ -124,19 +123,6 @@ describe('SettingsPage capability refresh', () => {
     expect(screen.getByRole('link', { name: 'Marketplace wallet' })).toBeTruthy();
   });
 
-  const completeReauth = async (code = '654321') => {
-    const dialog = await screen.findByRole('dialog', { name: 'Re-authenticate' });
-    fireEvent.change(within(dialog).getByLabelText('Password'), {
-      target: { value: code },
-    });
-    await act(async () => {
-      fireEvent.click(within(dialog).getByRole('button', { name: 'Continue' }));
-    });
-  };
-
-  const expiredReauth = Object.assign(new AxiosError('expired'), {
-    response: { status: 400, data: { detail: 'Re-authentication required' } },
-  });
 
   beforeEach(() => {
     vi.mocked(getSellerPublicProfile).mockResolvedValue({ public_display_name: null, show_public_display_name: false });
@@ -145,7 +131,6 @@ describe('SettingsPage capability refresh', () => {
     vi.mocked(getConnectorGrants).mockResolvedValue([]);
     refreshAuth.mockResolvedValue(undefined);
     authApi.updateProfile.mockResolvedValue(undefined);
-    authApi.submitReauth.mockResolvedValue({ token: 'fresh-settings-token' });
     capabilitiesApi.getCapabilities.mockResolvedValue({
       seller: { effective_status: 'provisioning' },
     });
@@ -192,29 +177,19 @@ describe('SettingsPage capability refresh', () => {
     expect(authApi.setup2FA).not.toHaveBeenCalled();expect(authApi.submitReauth).not.toHaveBeenCalled();
   });
 
-  it('keeps enabled native recovery protected during provider sign-in', async()=>{
-    useAuthStore.setState({user:{...user,totp_enabled:true,two_factor_setup_eligible:false,
-      two_factor_setup_reason:'two_factor_already_enabled',two_factor_provider:'google',reauth_method:'totp'}});
-    render(<SettingsPage/>);
-    fireEvent.click(screen.getByRole('button',{name:'Disable 2FA'}));
-    expect(screen.getByText('Confirm 2FA disable')).toBeTruthy();
-    expect(authApi.disable2FA).not.toHaveBeenCalled();
-    expect(screen.queryByText('Sign-in security is managed by your Google account.')).toBeNull();
-  });
-
-  it('uses the returned magic-link method without automatically sending email',async()=>{
-    useAuthStore.setState({user:{...user,reauth_method:'magic_link'}});
-    authApi.submitReauth.mockResolvedValue({token:null,method:'magic_link'});
-    render(<SettingsPage/>);fireEvent.click(screen.getByRole('button',{name:'Enable two-factor authentication'}));
-    const dialog=await screen.findByRole('dialog');
-    expect(within(dialog).queryByLabelText('Password')).toBeNull();expect(authApi.submitReauth).not.toHaveBeenCalled();
-    fireEvent.click(within(dialog).getByRole('button',{name:'Send link'}));
-    await screen.findByLabelText('Email link');expect(authApi.submitReauth).toHaveBeenCalledWith('', 'magic_link');
+  it('disables an existing native authenticator during provider sign-in without a challenge', async () => {
+    useAuthStore.setState({ user: { ...user, totp_enabled: true, two_factor_provider: 'google' } });
+    authApi.disable2FA.mockResolvedValue({ message: '2FA disabled' });
+    render(<SettingsPage />);
+    fireEvent.click(screen.getByRole('button', { name: 'Disable 2FA' }));
+    await waitFor(() => expect(authApi.disable2FA).toHaveBeenCalledExactlyOnceWith());
+    expect(authApi.submitReauth).not.toHaveBeenCalled();
+    expect(screen.queryByRole('dialog')).toBeNull();
   });
 
   it('handles a provider 409 on an older server snapshot without leaving enrollment controls',async()=>{
     authApi.setup2FA.mockRejectedValueOnce(Object.assign(new AxiosError('policy'),{response:{status:409,data:{detail:'two_factor_managed_by_provider'}}}));
-    render(<SettingsPage/>);fireEvent.click(screen.getByRole('button',{name:'Enable two-factor authentication'}));await completeReauth();
+    render(<SettingsPage/>);fireEvent.click(screen.getByRole('button',{name:'Enable two-factor authentication'}));
     await screen.findByText('Sign-in security is managed by your identity provider account.');
     expect(screen.queryByRole('button',{name:'Enable two-factor authentication'})).toBeNull();
     expect(authApi.verify2FASetup).not.toHaveBeenCalled();
@@ -222,7 +197,7 @@ describe('SettingsPage capability refresh', () => {
 
   it('refuses verification and hides a pending native enrollment when current policy changes',async()=>{
     authApi.setup2FA.mockResolvedValueOnce({secret:'fixture-secret',qr_uri:'otpauth://totp/fixture',expires_in:300});
-    render(<SettingsPage/>);fireEvent.click(screen.getByRole('button',{name:'Enable two-factor authentication'}));await completeReauth();
+    render(<SettingsPage/>);fireEvent.click(screen.getByRole('button',{name:'Enable two-factor authentication'}));await screen.findByRole('textbox', { name: '6-digit code' });
     await screen.findByText('Set up your authenticator app');
     act(()=>useAuthStore.setState({user:{...user,two_factor_setup_eligible:false,two_factor_setup_reason:'two_factor_managed_by_provider',two_factor_provider:'github',reauth_method:'magic_link'}}));
     expect(screen.queryByText('Set up your authenticator app')).toBeNull();expect(screen.queryByText('fixture-secret')).toBeNull();
@@ -275,23 +250,21 @@ describe('SettingsPage capability refresh', () => {
     expect(screen.queryByRole('link', { name: 'Manage payment method' })).toBeNull();
   });
 
-  it('reauthenticates before setup and uses the same token for verification', async () => {
+  it('starts setup in one click and verifies only the newly scanned secret', async () => {
     authApi.setup2FA.mockResolvedValue({ secret: 'setup-secret', qr_uri: 'otpauth://example', expires_in: 600 });
     authApi.verify2FASetup.mockResolvedValue({ backup_codes: ['backup-one'] });
     render(<SettingsPage />);
 
     fireEvent.click(screen.getByRole('button', { name: 'Enable two-factor authentication' }));
-    expect(authApi.setup2FA).not.toHaveBeenCalled();
-    expect(screen.queryByText('setup-secret')).toBeNull();
-    await completeReauth();
-    expect(authApi.setup2FA).toHaveBeenCalledWith('fresh-settings-token');
+    await screen.findByRole('textbox', { name: '6-digit code' });
+    expect(authApi.setup2FA).toHaveBeenCalledWith();
     expect(await screen.findByText('setup-secret')).toBeTruthy();
     expect((await screen.findByRole('img', { name: 'QR code for two-factor authentication setup' })).getAttribute('src'))
       .toMatch(/^data:image\/png;base64,/);
 
     fireEvent.change(screen.getByRole('textbox', { name: '6-digit code' }), { target: { value: '123456' } });
     fireEvent.click(screen.getByRole('button', { name: 'Verify and enable' }));
-    await waitFor(() => expect(authApi.verify2FASetup).toHaveBeenCalledWith('123456', 'fresh-settings-token'));
+    await waitFor(() => expect(authApi.verify2FASetup).toHaveBeenCalledWith('123456'));
     expect(await screen.findByRole('heading', { name: 'Backup codes' })).toBeTruthy();
   });
   it.each([
@@ -304,7 +277,7 @@ describe('SettingsPage capability refresh', () => {
     authApi.verify2FASetup.mockResolvedValue({ backup_codes: ['backup-one'] });
     render(<SettingsPage />);
     fireEvent.click(screen.getByRole('button', { name: 'Enable two-factor authentication' }));
-    await completeReauth();
+    await screen.findByRole('textbox', { name: '6-digit code' });
     fireEvent.change(screen.getByRole('textbox', { name: '6-digit code' }), { target: { value: '123456' } });
     fireEvent.click(screen.getByRole('button', { name: 'Verify and enable' }));
     await screen.findByRole('heading', { name: 'Backup codes' });
@@ -329,7 +302,6 @@ describe('SettingsPage capability refresh', () => {
     }));
     render(<SettingsPage />);
     fireEvent.click(screen.getByRole('button', { name: 'Enable two-factor authentication' }));
-    await completeReauth();
     expect(await screen.findByText("Two-factor authentication for your account is managed by your organization's single sign-on.")).toBeTruthy();
     expect(screen.queryByRole('button', { name: 'Enable two-factor authentication' })).toBeNull();
   });
@@ -345,7 +317,7 @@ describe('SettingsPage capability refresh', () => {
     authApi.verify2FASetup.mockResolvedValue({ backup_codes: ['backup-one'] });
     render(<SettingsPage />);
     fireEvent.click(screen.getByRole('button', { name: 'Enable two-factor authentication' }));
-    await completeReauth();
+    await screen.findByRole('textbox', { name: '6-digit code' });
     fireEvent.change(screen.getByRole('textbox', { name: '6-digit code' }), { target: { value: '123456' } });
     fireEvent.click(screen.getByRole('button', { name: 'Verify and enable' }));
     expect(await screen.findByText('backup-one')).toBeTruthy();
@@ -359,128 +331,73 @@ describe('SettingsPage capability refresh', () => {
     refreshRequest.mockRestore();
   });
 
-  it('cancels before setup without enabling 2FA', async () => {
+  it('cancels enrollment without enabling 2FA', async () => {
+    authApi.setup2FA.mockResolvedValue({ secret: 'setup-secret', qr_uri: 'otpauth://example', expires_in: 600 });
     render(<SettingsPage />);
     fireEvent.click(screen.getByRole('button', { name: 'Enable two-factor authentication' }));
-    const dialog = await screen.findByRole('dialog', { name: 'Re-authenticate' });
-    fireEvent.click(within(dialog).getByRole('button', { name: 'Cancel' }));
-    expect(authApi.setup2FA).not.toHaveBeenCalled();
+    await screen.findByRole('textbox', { name: '6-digit code' });
+    fireEvent.click(screen.getByRole('button', { name: 'Cancel' }));
+    expect(authApi.setup2FA).toHaveBeenCalledWith();
     expect(authApi.verify2FASetup).not.toHaveBeenCalled();
     expect(screen.getByText('2FA Disabled')).toBeTruthy();
   });
 
-  it('reauthenticates once after expiry and retries verification without restarting setup', async () => {
+  it('keeps enrollment visible after an invalid new-secret code without a reauthentication prompt', async () => {
     authApi.setup2FA.mockResolvedValue({ secret: 'setup-secret', qr_uri: 'otpauth://example', expires_in: 600 });
-    authApi.verify2FASetup.mockRejectedValueOnce(expiredReauth).mockResolvedValueOnce({ backup_codes: ['backup-one'] });
-    authApi.submitReauth.mockResolvedValueOnce({ token: 'first-token' }).mockResolvedValueOnce({ token: 'fresh-token' });
+    authApi.verify2FASetup.mockRejectedValueOnce(Object.assign(new AxiosError('invalid'), {
+      response: { status: 400, data: { detail: 'Invalid verification code' } },
+    }));
     render(<SettingsPage />);
     fireEvent.click(screen.getByRole('button', { name: 'Enable two-factor authentication' }));
-    await completeReauth();
-    fireEvent.change(screen.getByRole('textbox', { name: '6-digit code' }), { target: { value: '123456' } });
+    fireEvent.change(await screen.findByRole('textbox', { name: '6-digit code' }), { target: { value: '123456' } });
     fireEvent.click(screen.getByRole('button', { name: 'Verify and enable' }));
-    await completeReauth();
-    expect(authApi.setup2FA).toHaveBeenCalledOnce();
-    expect(authApi.verify2FASetup).toHaveBeenNthCalledWith(1, '123456', 'first-token');
-    expect(authApi.verify2FASetup).toHaveBeenNthCalledWith(2, '123456', 'fresh-token');
-    expect(await screen.findByRole('heading', { name: 'Backup codes' })).toBeTruthy();
-  });
-
-  it('stops after a second expired token and leaves the setup visible', async () => {
-    authApi.setup2FA.mockResolvedValue({ secret: 'setup-secret', qr_uri: 'otpauth://example', expires_in: 600 });
-    authApi.verify2FASetup.mockRejectedValue(expiredReauth);
-    authApi.submitReauth.mockResolvedValueOnce({ token: 'first-token' }).mockResolvedValueOnce({ token: 'fresh-token' });
-    render(<SettingsPage />);
-    fireEvent.click(screen.getByRole('button', { name: 'Enable two-factor authentication' }));
-    await completeReauth();
-    fireEvent.change(screen.getByRole('textbox', { name: '6-digit code' }), { target: { value: '123456' } });
-    fireEvent.click(screen.getByRole('button', { name: 'Verify and enable' }));
-    await completeReauth();
-    expect(authApi.verify2FASetup).toHaveBeenCalledTimes(2);
-    expect(authApi.setup2FA).toHaveBeenCalledOnce();
+    expect(await screen.findByText('Invalid verification code')).toBeTruthy();
+    expect(screen.getByText('setup-secret')).toBeTruthy();
+    expect(authApi.verify2FASetup).toHaveBeenCalledExactlyOnceWith('123456');
+    expect(authApi.submitReauth).not.toHaveBeenCalled();
     expect(screen.queryByRole('dialog', { name: 'Re-authenticate' })).toBeNull();
-    expect(await screen.findByText('setup-secret')).toBeTruthy();
-    expect(await screen.findByText('Re-authentication required')).toBeTruthy();
   });
 
-  it('enables 2FA for a passwordless account using the emailed link', async () => {
+  it('enables 2FA for a passwordless account without an email challenge', async () => {
     useAuthStore.setState({ user: { ...user, auth_methods: ['oidc'], primary_auth: 'oidc' } });
-    authApi.submitReauth.mockResolvedValue({ token: null, method: 'magic_link' });
-    authApi.verifyReauthMagicLink.mockResolvedValue({ token: 'magic-reauth-token', method: 'magic_link' });
     authApi.setup2FA.mockResolvedValue({ secret: 'setup-secret', qr_uri: 'otpauth://example', expires_in: 600 });
     authApi.verify2FASetup.mockResolvedValue({ backup_codes: ['backup-one'] });
     render(<SettingsPage />);
     fireEvent.click(screen.getByRole('button', { name: 'Enable two-factor authentication' }));
-    const dialog = await screen.findByRole('dialog', { name: 'Re-authenticate' });
-    expect(within(dialog).queryByLabelText('Password')).toBeNull();
-    fireEvent.click(within(dialog).getByRole('button', { name: 'Send link' }));
-    await waitFor(() => expect(authApi.submitReauth).toHaveBeenCalledWith('', 'magic_link'));
-    fireEvent.change(within(dialog).getByRole('textbox', { name: 'Email link' }), { target: { value: 'https://www.ai.market/auth/verify?token=email-token&purpose=reauth' } });
-    fireEvent.click(within(dialog).getByRole('button', { name: 'Continue' }));
-    await waitFor(() => expect(authApi.verifyReauthMagicLink).toHaveBeenCalledWith('email-token'));
+    expect(screen.queryByRole('dialog', { name: 'Re-authenticate' })).toBeNull();
+    expect(authApi.submitReauth).not.toHaveBeenCalled();
+    expect(authApi.verifyReauthMagicLink).not.toHaveBeenCalled();
     expect(await screen.findByText('setup-secret')).toBeTruthy();
-    expect(authApi.setup2FA).toHaveBeenCalledWith('magic-reauth-token');
+    expect(authApi.setup2FA).toHaveBeenCalledWith();
     fireEvent.change(screen.getByRole('textbox', { name: '6-digit code' }), { target: { value: '123456' } });
     fireEvent.click(screen.getByRole('button', { name: 'Verify and enable' }));
-    await waitFor(() => expect(authApi.verify2FASetup).toHaveBeenCalledWith('123456', 'magic-reauth-token'));
+    await waitFor(() => expect(authApi.verify2FASetup).toHaveBeenCalledWith('123456'));
     expect(await screen.findByRole('heading', { name: 'Backup codes' })).toBeTruthy();
   });
 
   it.each([
-    ['disable', 'Disable 2FA', 'Confirm disable'],
-    ['regenerate', 'Regenerate backup codes', 'Generate new codes'],
-  ] as const)(
-    'focuses the stable Settings heading after successful %s removes the modal opener',
-    async (action, actionLabel, confirmLabel) => {
-      useAuthStore.setState({ user: { ...user, totp_enabled: true } });
-      authApi.disable2FA.mockResolvedValue({ message: '2FA disabled' });
-      authApi.regenerateBackupCodes.mockResolvedValue({
-        backup_codes: ['backup-one', 'backup-two'],
-      });
-      render(<SettingsPage />);
-
-      fireEvent.click(screen.getByRole('button', { name: actionLabel }));
-      fireEvent.change(screen.getByRole('textbox', { name: 'Current TOTP code' }), {
-        target: { value: '123456' },
-      });
-      const opener = screen.getByRole('button', { name: confirmLabel });
-      opener.focus();
-      fireEvent.click(opener);
-      const dialog = await screen.findByRole('dialog', { name: 'Re-authenticate' });
-      const reauthCode = screen.getByRole('textbox', { name: 'Verification code' });
-      fireEvent.change(reauthCode, { target: { value: '654321' } });
-      const continueButton = screen.getByRole('button', { name: 'Continue' });
-      await waitFor(() =>
-        expect((continueButton as HTMLButtonElement).disabled).toBe(false)
-      );
-
-      await act(async () => {
-        fireEvent.click(continueButton);
-      });
-
-      await waitFor(() => expect(screen.queryByRole('dialog')).toBeNull());
-      const fallback = screen.getByRole('heading', { name: 'Settings', level: 1 });
-      await waitFor(() => expect(document.activeElement).toBe(fallback));
-      expect(dialog.isConnected).toBe(false);
-      expect(opener.isConnected).toBe(false);
-      expect(fallback.isConnected).toBe(true);
-      expect(fallback).not.toBe(document.body);
-      expect(fallback.closest('[role="dialog"]')).toBeNull();
-      expect(fallback.hidden).toBe(false);
-      expect(fallback.closest('[hidden], [inert], [aria-hidden="true"]')).toBeNull();
-      expect(fallback.getAttribute('tabindex')).toBe('-1');
-      expect(authApi[action === 'disable' ? 'disable2FA' : 'regenerateBackupCodes'])
-        .toHaveBeenCalledWith('fresh-settings-token', '123456');
-    }
-  );
+    ['disable2FA', 'Disable 2FA'],
+    ['regenerateBackupCodes', 'Regenerate backup codes'],
+  ] as const)('completes %s in one click without a code or reauthentication', async (method, label) => {
+    useAuthStore.setState({ user: { ...user, totp_enabled: true } });
+    authApi.disable2FA.mockResolvedValue({ message: '2FA disabled' });
+    authApi.regenerateBackupCodes.mockResolvedValue({ backup_codes: ['backup-one', 'backup-two'] });
+    render(<SettingsPage />);
+    fireEvent.click(screen.getByRole('button', { name: label }));
+    await waitFor(() => expect(authApi[method]).toHaveBeenCalledExactlyOnceWith());
+    if (method === 'disable2FA') await waitFor(() => expect(refreshAuth).toHaveBeenCalledOnce());
+    else expect(await screen.findByText('backup-one')).toBeTruthy();
+    expect(screen.queryByRole('textbox', { name: 'Current TOTP code' })).toBeNull();
+    expect(screen.queryByRole('dialog', { name: 'Re-authenticate' })).toBeNull();
+    expect(authApi.submitReauth).not.toHaveBeenCalled();
+  });
 });
-
 
 describe('Company settings enrollment', () => {
   beforeEach(() => { vi.clearAllMocks(); useAuthStore.setState({ user, token: 'session', refreshAuth: vi.fn().mockResolvedValue(undefined) }); });
   afterEach(() => { cleanup(); vi.unstubAllEnvs(); window.history.replaceState(null, '', '/'); });
 it('shows only the new server-eligible passwordless company enrollment and preserves legacy APIs', async () => {
-  useAuthStore.setState({ user: { ...user, auth_methods: ['oidc'], sso_enforced: true, two_factor_setup_eligible: true,
-    seller_binding_factor_readiness: { code: 'SECOND_FACTOR_ENROLLMENT_REQUIRED', path: '/dashboard/settings' } } });
+  useAuthStore.setState({ user: { ...user, auth_methods: ['oidc'], sso_enforced: true, two_factor_setup_eligible: true } });
   authApi.companySetup.mockResolvedValue({ secret: 'COMPANYSECRET', qr_uri: 'otpauth://fixture', expires_in: 600 });
   render(<SettingsPage />);
   expect(screen.queryByRole('button', { name: 'Enable two-factor authentication' })).toBeNull();
@@ -488,110 +405,51 @@ it('shows only the new server-eligible passwordless company enrollment and prese
   await screen.findByText('COMPANYSECRET');
   expect(authApi.setup2FA).not.toHaveBeenCalled(); expect(authApi.submitReauth).not.toHaveBeenCalled();
 });
-it('does not offer company setup when readiness is present but the enrollment flag is off', async () => {
+it('does not offer company setup without server eligibility', async () => {
   useAuthStore.setState({ user: { ...user, auth_methods: ['oidc'], sso_enforced: true, two_factor_setup_eligible: false,
-    two_factor_setup_reason: 'two_factor_managed_by_sso', seller_binding_factor_readiness: { code: 'SECOND_FACTOR_ENROLLMENT_REQUIRED', path: '/dashboard/settings' } } });
+    two_factor_setup_reason: 'two_factor_managed_by_sso' } });
   render(<SettingsPage />);
   expect(screen.queryByRole('button', { name: 'Set up company authenticator' })).toBeNull();
   expect(screen.queryByRole('button', { name: 'Enable two-factor authentication' })).toBeNull();
   expect(authApi.companySetup).not.toHaveBeenCalled();
 });
 
-it('preserves password-bearing enforced-company flag-off setup request shapes', async () => {
-  useAuthStore.setState({ user: { ...user, sso_enforced: true, two_factor_setup_eligible: true,
-    seller_binding_factor_readiness: { code: 'SECOND_FACTOR_ENROLLMENT_REQUIRED', path: '/dashboard/settings' } } });
+it('starts password-bearing company setup without reauthentication', async () => {
+  useAuthStore.setState({ user: { ...user, sso_enforced: true, two_factor_setup_eligible: true } });
   authApi.setup2FA.mockResolvedValue({ secret: 'LEGACY', qr_uri: 'otpauth://fixture', expires_in: 600 });
-  authApi.submitReauth.mockResolvedValue({ token: 'legacy-proof' });
   render(<SettingsPage />);
   expect(screen.queryByRole('button', { name: 'Set up company authenticator' })).toBeNull();
   fireEvent.click(screen.getByRole('button', { name: 'Enable two-factor authentication' }));
-  const dialog = await screen.findByRole('dialog');
-  fireEvent.change(within(dialog).getByLabelText('Password'), { target: { value: 'password' } });
-  fireEvent.click(within(dialog).getByRole('button', { name: 'Continue' }));
-  await waitFor(() => expect(authApi.setup2FA).toHaveBeenCalledExactlyOnceWith('legacy-proof'));
+  await waitFor(() => expect(authApi.setup2FA).toHaveBeenCalledExactlyOnceWith());
   expect(authApi.companySetup).not.toHaveBeenCalled();
 });
-it('switches password-bearing users to strict company setup only on backend CSRF refusal', async () => {
-  useAuthStore.setState({ user: { ...user, sso_enforced: true, two_factor_setup_eligible: true } });
-  authApi.setup2FA.mockRejectedValueOnce(Object.assign(new AxiosError('csrf'), { response: { status: 403, data: { detail: 'CSRF_REQUIRED' } } }));
-  authApi.submitReauth.mockResolvedValue({ token: 'legacy-proof' });
-  render(<SettingsPage />);
-  fireEvent.click(screen.getByRole('button', { name: 'Enable two-factor authentication' }));
-  const dialog = await screen.findByRole('dialog');
-  fireEvent.change(within(dialog).getByLabelText('Password'), { target: { value: 'password' } });
-  fireEvent.click(within(dialog).getByRole('button', { name: 'Continue' }));
-  await screen.findByRole('button', { name: 'Set up company authenticator' });
-  expect(authApi.companySetup).not.toHaveBeenCalled();
-});
-
 it('recovers an enrolled company authenticator and re-enrolls with the retained company session', async () => {
   const company = { ...user, sso_enforced: true, auth_methods: ['oidc'], totp_enabled: true, two_factor_setup_eligible: false };
   useAuthStore.setState({ user: company, refreshAuth: vi.fn().mockImplementation(async () => {
-    useAuthStore.setState({ token: 'refreshed-after-disable', user: { ...company, totp_enabled: false, two_factor_setup_eligible: true,
-      seller_binding_factor_readiness: { code: 'SECOND_FACTOR_ENROLLMENT_REQUIRED', path: '/dashboard/settings' } } });
+    useAuthStore.setState({ token: 'refreshed-after-disable', user: { ...company, totp_enabled: false, two_factor_setup_eligible: true } });
   }) });
   authApi.companyRecover.mockResolvedValue({ message: '2FA disabled' });
   authApi.companySetup.mockResolvedValue({ secret: 'NEWSECRET', qr_uri: 'otpauth://fixture', expires_in: 600 });
   authApi.companyVerify.mockResolvedValue({ backup_codes: ['new-backup'] });
   render(<SettingsPage />);
-  fireEvent.change(screen.getByLabelText('Backup code'), { target: { value: 'old-backup' } });
   fireEvent.click(screen.getByRole('button', { name: 'Disable lost authenticator' }));
   fireEvent.click(await screen.findByRole('button', { name: 'Set up company authenticator' }));
   await screen.findByText('NEWSECRET');
   fireEvent.change(screen.getByLabelText('Authenticator code'), { target: { value: '654321' } });
   fireEvent.click(screen.getByRole('button', { name: 'Verify and enable' }));
   await screen.findByText('new-backup');
-  expect(authApi.companyRecover).toHaveBeenCalledExactlyOnceWith('old-backup');
+  expect(authApi.companyRecover).toHaveBeenCalledExactlyOnceWith();
   expect(authApi.companyVerify).toHaveBeenCalledExactlyOnceWith('654321');
   expect(authApi.disable2FA).not.toHaveBeenCalled(); expect(authApi.submitReauth).not.toHaveBeenCalled();
 });
 
-it.each([
-  { methods: ['password', 'oidc'], route: 'popup' }, { methods: ['oidc'], route: 'popup' },
-  { methods: ['password', 'oidc'], route: 'external check' }, { methods: ['oidc'], route: 'external check' },
-])('stale $route company Settings session $methods refreshes eligibility before reaching QR setup and readiness continuation', async ({ methods, route }) => {
+it('keeps server-ineligible company setup unavailable without asking for sign-in', () => {
   vi.stubEnv('NEXT_PUBLIC_ORG_SSO_WEB_RETURN_ENABLED', 'true');
-  const path = `/confirm/11111111-1111-4111-8111-111111111111?t=${'a'.repeat(42)}A`;
-  window.history.replaceState(null, '', `/dashboard/settings?redirect=${encodeURIComponent(path)}#security`);
-  const company: User = { ...user, auth_methods: methods, sso_enforced: true, two_factor_setup_eligible: false,
-    two_factor_setup_reason: 'two_factor_managed_by_sso',
-    seller_binding_factor_readiness: { code: 'SECOND_FACTOR_ENROLLMENT_REQUIRED', path: '/dashboard/settings' } };
-  useAuthStore.setState({ user: company });
-  const refresh = vi.fn().mockImplementation(async () => { useAuthStore.setState({ token: 'fresh-company' }); });
-  useAuthStore.setState({ refreshAuth: refresh });
-  authApi.getMe.mockResolvedValue({ ...company, two_factor_setup_eligible: true });
-  authApi.companySetup.mockImplementation(async () => {
-    expect(authApi.getMe).toHaveBeenCalledOnce();
-    expect(useAuthStore.getState().user?.two_factor_setup_eligible).toBe(true);
-    return { secret: 'FRESHSECRET', qr_uri: 'otpauth://fixture', expires_in: 600 };
-  });
-  authApi.companyVerify.mockResolvedValue({ backup_codes: ['new-backup'] });
+  useAuthStore.setState({ user: { ...user, sso_enforced: true, auth_methods: ['oidc'],
+    two_factor_setup_eligible: false, two_factor_setup_reason: 'two_factor_managed_by_sso' } });
   render(<SettingsPage />);
-  expect(screen.getByLabelText('Company sign-in ID')).toBeTruthy();
-  expect(authApi.companySetup).not.toHaveBeenCalled();
-  if (route === 'popup') {
-    companySignIn.start.mockImplementation(() => checkCompanySignIn());
-    fireEvent.change(screen.getByLabelText('Company sign-in ID'), { target: { value: 'company-id' } });
-    fireEvent.click(screen.getByRole('button', { name: 'Sign in through your company' }));
-  } else fireEvent.click(screen.getByRole('button', { name: 'Check company sign-in' }));
-  await screen.findByText('FRESHSECRET');
-  if (route === 'popup') expect(companySignIn.start).toHaveBeenCalledExactlyOnceWith('company-id', '/dashboard/settings');
-  expect(refresh).toHaveBeenCalledOnce();
-  fireEvent.change(screen.getByLabelText('Authenticator code'), { target: { value: '123456' } });
-  fireEvent.click(screen.getByRole('button', { name: 'Verify and enable' }));
-  await screen.findByText('new-backup');
-  expect(navigation.push).not.toHaveBeenCalled();
-  fireEvent.click(screen.getByRole('button', { name: 'I saved my backup codes' }));
-  await waitFor(() => expect(navigation.push).toHaveBeenCalledExactlyOnceWith(path));
-  expect(authApi.setup2FA).not.toHaveBeenCalled(); expect(authApi.submitReauth).not.toHaveBeenCalled();
-});
-it('flag-on company sign-in cannot enroll while refreshed server eligibility stays false', async () => {
-  vi.stubEnv('NEXT_PUBLIC_ORG_SSO_WEB_RETURN_ENABLED', 'true');
-  const company = { ...user, auth_methods: ['oidc'], sso_enforced: true, two_factor_setup_eligible: false };
-  useAuthStore.setState({ user: company }); authApi.getMe.mockResolvedValue(company);
-  render(<SettingsPage />);
-  fireEvent.click(screen.getByRole('button', { name: 'Check company sign-in' }));
-  await screen.findByText('Sign in again through your company, then restart setup.');
+  expect(screen.queryByLabelText('Company sign-in ID')).toBeNull();
+  expect(screen.queryByRole('button', { name: 'Set up company authenticator' })).toBeNull();
   expect(authApi.companySetup).not.toHaveBeenCalled();
 });
 
