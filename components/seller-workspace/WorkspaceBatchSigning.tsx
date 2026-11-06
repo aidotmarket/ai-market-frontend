@@ -89,7 +89,7 @@ export function BatchSigningScreen({ switches, preparation, onSigned }: { switch
     </section>)}
     <label className="flex items-start gap-3"><input className="mt-1 h-4 w-4 shrink-0" type="checkbox" checked={consent} disabled={busy || done || !instruments.length} onChange={e => setConsent(e.target.checked)} /><span>I have read {instruments.length > 1 ? `all ${instruments.length} licences and covenants` : 'the licence and covenant'} above, the covenant facts are true, and I am authorised to accept them for the seller.</span></label>
     <button type="button" className="block rounded-lg bg-indigo-700 px-4 py-2.5 text-sm font-semibold text-white hover:bg-indigo-800 disabled:cursor-not-allowed disabled:bg-gray-300 disabled:text-gray-600" disabled={!ready || busy || done} onClick={() => void sign()}>{instruments.length === 1 ? 'Sign licence' : `Sign ${instruments.length} licences`}</button>
-    {!ready && !done && instruments.length > 0 && <p className="text-sm text-gray-600">Tick the box above to sign.</p>}
+    {!consent && !done && instruments.length > 0 && <p className="text-sm text-gray-600">Tick the box above to sign.</p>}
     {done && <p role="status">Licence signed. Your listing is not published yet. Go back to the review step and publish when ready.</p>}
     {!switches.effects && <p>Seller effects are off. Signing is unavailable.</p>}
     <NativeSellerAuth error={error} onRetry={() => { request.current = null; void load(preparation); }} onToken={sign} />

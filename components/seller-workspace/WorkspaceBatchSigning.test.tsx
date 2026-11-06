@@ -80,6 +80,8 @@ it('cannot sign after stale prepared coverage and offers fresh review', async ()
   await load(); vi.mocked(signInstruments).mockRejectedValue({ response: { status: 409, data: { detail: 'DISPLAYED_INSTRUMENT_STALE' } } });
   fireEvent.click(screen.getByRole('checkbox')); fireEvent.click(screen.getByRole('button', { name: 'Sign 2 licences' })); await screen.findByRole('alert');
   expect((screen.getByRole('button', { name: 'Sign 2 licences' }) as HTMLButtonElement).disabled).toBe(true);
+  expect((screen.getByRole('checkbox') as HTMLInputElement).checked).toBe(true);
+  expect(screen.queryByText('Tick the box above to sign.')).toBeNull();
 });
 it('keeps effect-off signing disabled', () => {
   vi.mocked(useSellerSwitches).mockReturnValue({ seller: true, effects: false, bulk: true }); render(<WorkspaceBatchSigning />);
