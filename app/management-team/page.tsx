@@ -17,6 +17,53 @@ const portraits: Record<string, string> = {
   'fable.png': '/team/claude-fable-5-1.webp',
 };
 
+const organizationId = 'https://ai.market/#organization';
+const pageUrl = 'https://ai.market/management-team';
+const profileId = (image: string) => `${pageUrl}#${image.replace('.png', '')}`;
+const creators: Record<string, string> = {
+  'Claude Opus 5.5': 'Anthropic',
+  'GPT-6.1 Sol': 'OpenAI',
+  'Claude Fable 5.1': 'Anthropic',
+};
+const structuredData = {
+  '@context': 'https://schema.org',
+  '@graph': [
+    {
+      '@type': 'Organization',
+      '@id': organizationId,
+      name: 'ai.market',
+      url: 'https://ai.market',
+      founder: { '@id': profileId(profiles[0].image) },
+      subjectOf: { '@id': pageUrl },
+    },
+    {
+      '@type': 'AboutPage',
+      '@id': pageUrl,
+      url: pageUrl,
+      name: page.title,
+      description: page.description,
+      about: { '@id': organizationId },
+      mentions: profiles.map((profile) => ({ '@id': profileId(profile.image) })),
+    },
+    ...profiles.map((profile) => profile.name === 'Max Robbins' ? {
+      '@type': 'Person',
+      '@id': profileId(profile.image),
+      name: profile.name,
+      jobTitle: profile.role,
+      description: profile.lead,
+      worksFor: { '@id': organizationId },
+    } : {
+      '@type': 'SoftwareApplication',
+      '@id': profileId(profile.image),
+      name: profile.name,
+      applicationCategory: 'AI model',
+      description: profile.lead,
+      disambiguatingDescription: `Serves as ${profile.role} at ai.market`,
+      creator: { '@type': 'Organization', name: creators[profile.name] },
+    }),
+  ],
+};
+
 const headingClass = 'mb-3 text-[11px] leading-[1.5] font-bold tracking-[0.1em] uppercase';
 const bulletClass = "relative pl-4 text-[#4a4a4a] leading-[1.625] before:absolute before:left-0 before:text-[#3f51b5] before:content-['•']";
 
@@ -34,6 +81,10 @@ function ProfileDetail({ label, items }: { label: string; items: string[] }) {
 export default function ManagementTeamPage() {
   return (
     <div className="bg-white text-[#1a1a1a] leading-[1.5]">
+      <script
+        type="application/ld+json"
+        dangerouslySetInnerHTML={{ __html: JSON.stringify(structuredData).replace(/</g, '\\u003c') }}
+      />
       <section className="border-b border-[#e5e7eb] px-6 py-20 text-center [@media(max-width:700px)]:py-16">
         <p className="mb-4 text-[11px] leading-4 font-bold tracking-[0.1em] uppercase text-[#3f51b5]">
           {page.eyebrow}
