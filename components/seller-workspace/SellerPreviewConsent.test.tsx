@@ -14,6 +14,10 @@ vi.mock('@/api/connector-seller-settings', async original => ({ ...await origina
 vi.mock('@/api/auth', async original => ({ ...await original<typeof import('@/api/auth')>(), submitReauth: vi.fn() }));
 vi.mock('@/lib/company-sign-in', async original => ({ ...await original<typeof import('@/lib/company-sign-in')>(), checkCompanySignIn: vi.fn() }));
 beforeEach(() => { vi.resetAllMocks(); useAuthStore.setState({ user: { id: id(99) } as User, token: 'retained-session' }); vi.mocked(useSellerSwitches).mockReturnValue({ seller: true, effects: false, bulk: false }); vi.mocked(readPreview).mockResolvedValue(preview); vi.mocked(reviewRevokePreview).mockImplementation(async body => { const { csrf: _csrf, reauth_token: _token, review_hash: _hash, ...decision } = body; return { action: 'aim.listing.ai_preview_consent.revoke', decision, review_hash: hash }; }); vi.mocked(revokePreview).mockResolvedValue({ decision_id: id(90), version: 4, enabled: false }); });
+afterEach(() => {
+  expect(screen.queryByRole('dialog', { name: 'Re-authenticate' })).toBeNull();
+  expect(screen.queryByPlaceholderText('Enter code')).toBeNull();
+});
 afterEach(() => { cleanup(); vi.unstubAllEnvs(); });
 it('defaults both independent consent controls off and disabled with adapter absent', async () => {
   render(<SellerPreviewConsent listingId={id(10)} />); await screen.findByText(/Saved consent/);
@@ -34,41 +38,14 @@ it('keeps consent withdrawal reachable without seller reporting', async () => {
   vi.mocked(useSellerSwitches).mockReturnValue(null); render(<SellerPreviewConsent listingId={id(10)} />);
   await screen.findByRole('button', { name: 'Revoke AI preview consent' }); expect(readPreview).toHaveBeenCalled();
 });
-it.each(['review', 'submit'])('retains saved consent withdrawal through native TOTP before explicit confirmation (%s)', async stage => {
-  useAuthStore.setState({ user: { id: id(99), sso_enforced: true, totp_enabled: true } as User });
-  vi.mocked(submitReauth).mockResolvedValue({ token: 'native-totp-proof' } as never);
-  vi.mocked(stage === 'review' ? reviewRevokePreview : revokePreview).mockRejectedValueOnce({ response: { status: 403, data: { detail: 'SECOND_FACTOR_REQUIRED' } } });
-  render(<SellerPreviewConsent listingId={id(10)} />); await screen.findByText(/Saved consent/);
-  fireEvent.click(screen.getByRole('button', { name: 'Revoke AI preview consent' }));
-  if (stage === 'submit') fireEvent.click(await screen.findByRole('button', { name: 'Confirm revoke AI preview consent' }));
-  fireEvent.click(await screen.findByRole('button', { name: 'Verify authenticator code' }));
-  fireEvent.change(screen.getByPlaceholderText('Enter code'), { target: { value: '123456' } }); fireEvent.click(screen.getByRole('button', { name: 'Continue' }));
-  const confirm = await screen.findByRole('button', { name: 'Confirm revoke AI preview consent' });
-  const calls = vi.mocked(reviewRevokePreview).mock.calls;
-  expect(calls[1][0]).toEqual({ ...calls[0][0], reauth_token: 'native-totp-proof' }); expect(revokePreview).toHaveBeenCalledTimes(stage === 'submit' ? 1 : 0);
-  fireEvent.click(confirm); await waitFor(() => expect(revokePreview).toHaveBeenCalledWith({ ...calls[1][0], review_hash: hash }));
-});
 
-it.each(['oidc', 'saml'])('preserves withdrawal through %s SSO_REQUIRED and waits for explicit consent', async method => {
-  vi.stubEnv('NEXT_PUBLIC_ORG_SSO_WEB_RETURN_ENABLED', 'true');
-  useAuthStore.setState({ user: { id: id(99), sso_enforced: true, totp_enabled: true, auth_methods: [method] } as User });
-  vi.mocked(reviewRevokePreview).mockRejectedValueOnce({ response: { status: 403, data: { detail: 'SSO_REQUIRED' } } });
-  vi.mocked(checkCompanySignIn).mockImplementation(async () => { useAuthStore.setState({ token: 'fresh-company-session' }); });
-  vi.mocked(submitReauth).mockResolvedValue({ token: 'fresh-company-totp' } as never);
-  vi.mocked(reviewRevokePreview).mockRejectedValueOnce({ response: { status: 403, data: { detail: 'SECOND_FACTOR_REQUIRED' } } });
+
+
+
+it.each(['RECENT_LOGIN_REQUIRED', 'SECOND_FACTOR_REQUIRED', 'SECOND_FACTOR_ENROLLMENT_REQUIRED'])('shows refresh only for legacy %s', async detail => {
+  vi.mocked(reviewRevokePreview).mockRejectedValueOnce({ response: { status: 403, data: { detail } } });
   render(<SellerPreviewConsent listingId={id(10)} />); await screen.findByText(/Saved consent/);
   fireEvent.click(screen.getByRole('button', { name: 'Revoke AI preview consent' }));
-  fireEvent.click(await screen.findByRole('button', { name: 'Check company sign-in' }));
-  fireEvent.click(await screen.findByRole('button', { name: 'Verify authenticator code' }));
-  fireEvent.change(screen.getByPlaceholderText('Enter code'), { target: { value: '123456' } }); fireEvent.click(screen.getByRole('button', { name: 'Continue' }));
-  await screen.findByRole('button', { name: 'Confirm revoke AI preview consent' });
-  expect(checkCompanySignIn).toHaveBeenCalledTimes(1);
-  const calls = vi.mocked(reviewRevokePreview).mock.calls;
-  expect(calls[1][0].idempotency_key).toBe(calls[0][0].idempotency_key);
-  expect(calls[2][0].csrf).not.toBe(calls[0][0].csrf);
-  expect(calls[2][0].reauth_token).toBe('fresh-company-totp');
-  expect(calls[2][0].idempotency_key).toBe(calls[0][0].idempotency_key);
-  expect(revokePreview).not.toHaveBeenCalled();
-  fireEvent.click(screen.getByRole('button', { name: 'Confirm revoke AI preview consent' }));
-  await waitFor(() => expect(revokePreview).toHaveBeenCalledWith({ ...calls[2][0], review_hash: hash }));
+  await screen.findByText('Please refresh the page and try again.');
+  expect(screen.queryByRole('dialog')).toBeNull(); expect(submitReauth).not.toHaveBeenCalled(); expect(checkCompanySignIn).not.toHaveBeenCalled();
 });

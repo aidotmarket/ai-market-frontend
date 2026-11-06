@@ -141,13 +141,7 @@ it('expires an open review without a write', async () => {
   await waitFor(() => expect(screen.getByText(/expired or its terms changed/)).toBeTruthy(), { timeout: 2000 });
   noDecisions(); expect(mocks.decide).not.toHaveBeenCalled();
 });
-it.each(['UNAVAILABLE', 'Not Found'])('shows the same inert 404 for flag-off or wrong user/token: %s', async (detail) => {
-  mocks.auth.user = null; mocks.auth.token = null;
-  mocks.get.mockRejectedValue({ response: { status: 404, data: { detail } } }); render(<PendingActionPage />);
-  await screen.findByText('Confirmation not found'); noDecisions(); expect(mocks.push).not.toHaveBeenCalled();
-  expect(screen.queryByRole('button', { name: 'Sign in again' })).toBeNull(); expect(screen.queryByRole('region')).toBeNull();
-  expect(mocks.provider).not.toHaveBeenCalled();
-});
+
 it('removes previously actionable terms when a decision returns 404', async () => {
   mocks.decide.mockRejectedValue({ response: { status: 404 } }); await review(); fireEvent.click(screen.getByRole('button', { name: 'Confirm' }));
   await screen.findByText('Confirmation not found'); noDecisions(); expect(screen.queryByText('50001')).toBeNull();
@@ -156,76 +150,13 @@ it('rejects extra URL parameters before querying', async () => {
   mocks.query.set('next', 'https://evil.test'); render(<PendingActionPage />);
   expect(screen.getByText('Confirmation not found')).toBeTruthy(); noDecisions(); expect(mocks.get).not.toHaveBeenCalled();
 });
-it.each([401, 403])('requires login on %s and preserves the safe continuation without auto-confirm', async (status) => {
-  mocks.decide.mockRejectedValue({ response: { status, data: { detail: status === 403 ? 'RECENT_LOGIN_REQUIRED' : 'FIRST_PARTY_SESSION_REQUIRED' } } });
-  await review(); fireEvent.click(screen.getByRole('button', { name: 'Confirm' }));
-  await screen.findByRole('button', { name: 'Sign in again' });
-  expect((screen.getByRole('button', { name: 'Confirm' }) as HTMLButtonElement).disabled).toBe(true);
-  fireEvent.click(screen.getByRole('button', { name: 'Sign in again' }));
-  expect(mocks.push).toHaveBeenCalledExactlyOnceWith(`/login?reauth=pending-action&redirect=${encodeURIComponent(`/confirm/${action.id}?t=${token}`)}`);
-  expect(mocks.decide).toHaveBeenCalledTimes(1);
-});
-it('offers login for a sessionless read after API admission', async () => {
-  mocks.get.mockRejectedValue({ response: { status: 401 } }); render(<PendingActionPage />);
-  await screen.findByRole('button', { name: 'Sign in again' }); noDecisions();
-});
-it('requires a login and 2FA round trip, then reviews the new session without auto-confirm', async () => {
-  mocks.decide.mockRejectedValue({ response: { status: 403, data: { detail: 'SECOND_FACTOR_REQUIRED' } } });
-  await review(); fireEvent.click(screen.getByRole('button', { name: 'Confirm' }));
-  fireEvent.click(await screen.findByRole('button', { name: 'Sign in and verify second factor' }));
-  expect(mocks.push).toHaveBeenCalledExactlyOnceWith(`/login?reauth=pending-action&redirect=${encodeURIComponent(`/confirm/${action.id}?t=${token}`)}`);
-  cleanup(); mocks.auth = { ...mocks.auth, token: 'fresh-mfa-session' };
-  render(<PendingActionPage />); await screen.findByRole('button', { name: 'Confirm' });
-  expect((screen.getByRole('button', { name: 'Confirm' }) as HTMLButtonElement).disabled).toBe(false);
-  expect(mocks.get).toHaveBeenCalledTimes(2); expect(mocks.decide).toHaveBeenCalledTimes(1);
-  mocks.decide.mockResolvedValue({ ...action, status: 'confirmed' });
-  fireEvent.click(screen.getByRole('button', { name: 'Confirm' })); await screen.findByText(/Confirmed\./);
-  expect(mocks.decide).toHaveBeenCalledTimes(2);
-});
-it.each(['SECOND_FACTOR_ENROLLMENT_REQUIRED', 'SECOND_FACTOR_REQUIRED'])('routes an unenrolled password user to Settings for %s without a plain-login loop', async detail => {
-  mocks.auth.user = { id: 'owner', totp_enabled: false, auth_methods: ['password', 'google'], primary_auth: 'google', two_factor_provider: null };
-  mocks.decide.mockRejectedValue({ response: { status: 403, data: { detail } } });
-  await review(); fireEvent.click(screen.getByRole('button', { name: 'Confirm' }));
-  fireEvent.click(await screen.findByRole('button', { name: 'Set up two-factor authentication' }));
-  expect(mocks.push).toHaveBeenCalledExactlyOnceWith(`/dashboard/settings?redirect=${encodeURIComponent(`/confirm/${action.id}?t=${token}`)}#security`);
-  expect(mocks.provider).not.toHaveBeenCalled();
-  cleanup(); mocks.auth = { ...mocks.auth, token: 'enrolled-session', user: { id: 'owner', totp_enabled: true } };
-  render(<PendingActionPage />); await screen.findByRole('button', { name: 'Confirm' });
-  expect(mocks.decide).toHaveBeenCalledTimes(1);
-  mocks.decide.mockResolvedValue({ ...action, status: 'confirmed' });
-  fireEvent.click(screen.getByRole('button', { name: 'Confirm' })); await screen.findByText(/Confirmed\./);
-  expect(mocks.decide).toHaveBeenCalledTimes(2);
-});
-it.each(['google', 'github'] as const)('re-authenticates the current %s session with its provider, then requires a fresh explicit Confirm', async provider => {
-  mocks.auth.user = { id: 'owner', totp_enabled: false, two_factor_provider: provider, primary_auth: 'password', auth_methods: ['password', provider] };
-  mocks.decide.mockRejectedValue({ response: { status: 403, data: { detail: 'SECOND_FACTOR_REQUIRED' } } });
-  await review(); fireEvent.click(screen.getByRole('button', { name: 'Confirm' }));
-  const button = await screen.findByRole('button', { name: `Sign in again with ${provider === 'google' ? 'Google' : 'GitHub'}` });
-  expect((screen.getByRole('button', { name: 'Confirm' }) as HTMLButtonElement).disabled).toBe(true);
-  fireEvent.click(button);
-  expect(mocks.provider).toHaveBeenCalledExactlyOnceWith(provider, `/confirm/${action.id}?t=${token}`);
-  expect(mocks.push).not.toHaveBeenCalled();
-  cleanup(); mocks.auth = { ...mocks.auth, token: 'fresh-provider-session' };
-  render(<PendingActionPage />); await screen.findByRole('button', { name: 'Confirm' });
-  expect(mocks.decide).toHaveBeenCalledTimes(1);
-  mocks.decide.mockResolvedValue({ ...action, status: 'confirmed' });
-  fireEvent.click(screen.getByRole('button', { name: 'Confirm' })); await screen.findByText(/Confirmed\./);
-  expect(mocks.decide).toHaveBeenCalledTimes(2);
-});
-it('shows a retry message when provider sign-in fails without falling back to login', async () => {
-  mocks.auth.user = { id: 'owner', two_factor_provider: 'google' };
-  mocks.provider.mockRejectedValue(new Error('network'));
-  mocks.decide.mockRejectedValue({ response: { status: 403, data: { detail: 'SECOND_FACTOR_REQUIRED' } } });
-  await review(); fireEvent.click(screen.getByRole('button', { name: 'Confirm' }));
-  fireEvent.click(await screen.findByRole('button', { name: 'Sign in again with Google' }));
-  await screen.findByText('Could not start provider sign-in. Please try again.');
-  expect(mocks.push).not.toHaveBeenCalled(); expect(mocks.decide).toHaveBeenCalledTimes(1);
-});
-it('still permits declining when fresh login is required', async () => {
-  mocks.decide.mockRejectedValueOnce({ response: { status: 403, data: { detail: 'RECENT_LOGIN_REQUIRED' } } }).mockResolvedValueOnce({ ...action, status: 'denied' });
-  await review(); fireEvent.click(screen.getByRole('button', { name: 'Confirm' })); await screen.findByRole('button', { name: 'Sign in again' });
-  fireEvent.click(screen.getByRole('button', { name: 'Decline' })); await screen.findByText(/Declined/); noDecisions();
-});
+
+
+
+
+
+
+
 it('hides a previous session review immediately and ignores late responses after account change', async () => {
   const view = render(<PendingActionPage />); await screen.findByRole('button', { name: 'Confirm' });
   mocks.get.mockReturnValue(new Promise(() => {})); mocks.auth = { ...mocks.auth, user: { id: 'different-owner' }, token: 'different-session' };
@@ -242,34 +173,9 @@ it('renders backend text literally without executing markup or linking arbitrary
 });
 
 
-it('requires an authenticator code for enrolled company users and sends the native proof with the exact hash', async () => {
-  mocks.auth.user = { id: 'owner', totp_enabled: true, sso_enforced: true };
-  mocks.reauth.mockResolvedValue({ token: 'native-totp-proof' });
-  await review(); fireEvent.click(screen.getByRole('button', { name: 'Confirm' }));
-  expect(mocks.decide).not.toHaveBeenCalled();
-  const dialog = await screen.findByRole('dialog');
-  fireEvent.change(within(dialog).getByLabelText('Verification code'), { target: { value: '123456' } });
-  fireEvent.click(within(dialog).getByRole('button', { name: 'Continue' }));
-  await waitFor(() => expect(mocks.decide).toHaveBeenCalledExactlyOnceWith(mocks.id, token, 'confirm', action.summary_hash, 'native-totp-proof'));
-  expect(mocks.reauth).toHaveBeenCalledWith('123456');
-});
-it('does not confirm with an invalid company authenticator code', async () => {
-  mocks.auth.user = { id: 'owner', totp_enabled: true, sso_enforced: true };
-  mocks.reauth.mockRejectedValue(new Error('invalid'));
-  await review(); fireEvent.click(screen.getByRole('button', { name: 'Confirm' }));
-  const dialog = await screen.findByRole('dialog');
-  fireEvent.change(within(dialog).getByLabelText('Verification code'), { target: { value: '123456' } });
-  fireEvent.click(within(dialog).getByRole('button', { name: 'Continue' }));
-  await screen.findByRole('alert'); expect(mocks.decide).not.toHaveBeenCalled();
-});
-it('company enrollment-required errors use the fixed settings continuation', async () => {
-  mocks.auth.user = { id: 'owner', totp_enabled: false, sso_enforced: true };
-  mocks.get.mockRejectedValue({ response: { status: 403, data: { detail: 'SECOND_FACTOR_ENROLLMENT_REQUIRED' } } });
-  render(<PendingActionPage />);
-  fireEvent.click(await screen.findByRole('button', { name: 'Set up two-factor authentication' }));
-  expect(mocks.push).toHaveBeenCalledWith(`/dashboard/settings?redirect=${encodeURIComponent(`/confirm/${mocks.id}?t=${token}`)}#security`);
-  expect(mocks.reauth).not.toHaveBeenCalled(); expect(mocks.decide).not.toHaveBeenCalled();
-});
+
+
+
 const checkoutAction: PendingAction = { ...action, summary: { ...action.summary, action: 'aim.checkout.handoff.create' },
   result: { handoff_id: 'handoff', expires_at: '2099-01-01T00:00:00Z', checkout_url: `https://ai.market/checkout/h/${token}` } };
 it('continues straight from confirmed handoff to browser checkout without another chat call', async () => {
@@ -324,53 +230,26 @@ it('renders a readiness refusal returned by confirmation POST as a block', async
   await screen.findByRole('link', { name: 'Review listing' }); noDecisions(); expect(mocks.push).not.toHaveBeenCalled();
 });
 
-it.each(['oidc', 'saml'])('GET succeeds then TOTP freshness refusal starts %s company sign-in, reloads review and requires explicit Confirm with a new proof', async method => {
-  vi.stubEnv('NEXT_PUBLIC_ORG_SSO_WEB_RETURN_ENABLED', 'true');
-  mocks.auth.user = { id: 'owner', totp_enabled: true, sso_enforced: true, auth_methods: [method] };
-  mocks.reauth.mockRejectedValueOnce({ response: { status: 403, data: { detail: 'RECENT_LOGIN_REQUIRED' } } }).mockResolvedValueOnce({ token: 'new-totp-proof' });
-  mocks.signIn.mockImplementation(async () => { mocks.auth = { ...mocks.auth, token: 'new-company-session' }; });
-  mocks.checkSignIn.mockImplementation(async () => { mocks.auth = { ...mocks.auth, token: 'fresh-saml-session' }; });
-  const storage = vi.spyOn(Storage.prototype, 'setItem');
-  const url = window.location.href;
-  render(<PendingActionPage />);
-  fireEvent.click(await screen.findByRole('button', { name: 'Confirm' }));
-  const dialog = await screen.findByRole('dialog');
-  fireEvent.change(within(dialog).getByLabelText('Verification code'), { target: { value: '123456' } });
-  fireEvent.click(within(dialog).getByRole('button', { name: 'Continue' }));
-  await screen.findByRole('button', { name: 'Check company sign-in' });
-  expect(screen.queryByRole('dialog')).toBeNull(); expect(mocks.decide).not.toHaveBeenCalled();
-  if (method === 'saml') {
-    expect(screen.queryByLabelText('Company sign-in ID')).toBeNull();
-    expect(screen.getByText(/then return here and check this page/)).toBeTruthy();
-    fireEvent.click(screen.getByRole('button', { name: 'Check company sign-in' }));
-    await waitFor(() => expect(mocks.checkSignIn).toHaveBeenCalledOnce());
-    expect(mocks.signIn).not.toHaveBeenCalled();
-  } else {
-    fireEvent.change(screen.getByLabelText('Company sign-in ID'), { target: { value: 'company-id' } });
-    fireEvent.click(screen.getByRole('button', { name: 'Sign in through your company' }));
-    await waitFor(() => expect(mocks.signIn).toHaveBeenCalledWith('company-id', `/confirm/${mocks.id}`));
-  }
-  await waitFor(() => expect(mocks.get.mock.calls.length).toBeGreaterThanOrEqual(2));
-  await waitFor(() => expect((screen.getByRole('button', { name: 'Confirm' }) as HTMLButtonElement).disabled).toBe(false));
-  expect(mocks.get).toHaveBeenLastCalledWith(mocks.id, token);
-  expect(mocks.decide).not.toHaveBeenCalled(); expect(mocks.reauth).toHaveBeenCalledTimes(1);
-  fireEvent.click(screen.getByRole('button', { name: 'Confirm' }));
-  const freshDialog = await screen.findByRole('dialog');
-  expect((within(freshDialog).getByLabelText('Verification code') as HTMLInputElement).value).toBe('');
-  fireEvent.change(within(freshDialog).getByLabelText('Verification code'), { target: { value: '654321' } });
-  fireEvent.click(within(freshDialog).getByRole('button', { name: 'Continue' }));
-  await screen.findByText(/Confirmed\./);
-  expect(mocks.reauth).toHaveBeenNthCalledWith(2, '654321');
-  expect(mocks.decide).toHaveBeenCalledExactlyOnceWith(mocks.id, token, 'confirm', action.summary_hash, 'new-totp-proof');
-  expect(mocks.provider).not.toHaveBeenCalled(); expect(mocks.push).not.toHaveBeenCalled();
-  expect(storage).not.toHaveBeenCalled(); expect(window.location.href).toBe(url); storage.mockRestore();
+
+
+
+it.each(['RECENT_LOGIN_REQUIRED', 'SECOND_FACTOR_REQUIRED', 'SECOND_FACTOR_ENROLLMENT_REQUIRED'])('displays a plain refresh message for legacy %s', async detail => {
+  mocks.decide.mockRejectedValue({ response: { status: 403, data: { detail } } });
+  await review(); fireEvent.click(screen.getByRole('button', { name: 'Confirm' }));
+  await screen.findByText('Please refresh the page and try again.');
+  expect(screen.queryByRole('dialog')).toBeNull(); expect(mocks.push).not.toHaveBeenCalled(); expect(mocks.reauth).not.toHaveBeenCalled();
 });
-it('preserves the original company login route with the return flag off', async () => {
-  vi.stubEnv('NEXT_PUBLIC_ORG_SSO_WEB_RETURN_ENABLED', 'false');
-  mocks.auth.user = { id: 'owner', totp_enabled: true, sso_enforced: true };
-  mocks.get.mockRejectedValue({ response: { status: 403, data: { detail: 'RECENT_LOGIN_REQUIRED' } } });
-  render(<PendingActionPage />);
-  fireEvent.click(await screen.findByRole('button', { name: 'Sign in again' }));
-  expect(mocks.push).toHaveBeenCalledWith(`/login?reauth=pending-action&redirect=${encodeURIComponent(`/confirm/${mocks.id}?t=${token}`)}`);
-  expect(mocks.signIn).not.toHaveBeenCalled();
+it.each(['oidc', 'saml', 'password', 'google'])('confirms directly for signed-in %s users including enrolled company users', async method => {
+  mocks.auth.user = { id: 'owner', totp_enabled: true, sso_enforced: true, auth_methods: [method] };
+  await review(); fireEvent.click(screen.getByRole('button', { name: 'Confirm' }));
+  await waitFor(() => expect(mocks.decide).toHaveBeenCalledExactlyOnceWith(mocks.id, token, 'confirm', action.summary_hash));
+  expect(screen.queryByRole('dialog')).toBeNull(); expect(mocks.reauth).not.toHaveBeenCalled();
+});
+
+it.each(['UNAVAILABLE', 'Not Found'])('shows the same inert 404 for flag-off or wrong user/token: %s', async (detail) => {
+  mocks.auth.user = null; mocks.auth.token = null;
+  mocks.get.mockRejectedValue({ response: { status: 404, data: { detail } } }); render(<PendingActionPage />);
+  await screen.findByText('Confirmation not found'); noDecisions(); expect(mocks.push).not.toHaveBeenCalled();
+  expect(screen.queryByRole('button', { name: 'Sign in again' })).toBeNull(); expect(screen.queryByRole('region')).toBeNull();
+  expect(mocks.provider).not.toHaveBeenCalled();
 });

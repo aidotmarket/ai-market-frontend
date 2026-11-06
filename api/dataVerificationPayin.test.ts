@@ -233,3 +233,14 @@ describe('dataVerificationPayin API', () => {
     expect(source).not.toMatch(/(?:from|import\s*\()\s*['\"]@\/lib\/api/);
   });
 });
+
+it('creates and reconciles payment setup with the session and no reauth header', async () => {
+  client.api.post.mockResolvedValueOnce({ data: setupResponse });
+  await createDataVerificationPayInSetupSession();
+  expect(client.api.post).toHaveBeenLastCalledWith('/data-verification/payment-method/setup-sessions', { version: 'data_verification_payin_setup_v1' }, {});
+  client.api.post.mockResolvedValueOnce({ data: { version: 'data_verification_payin_reconcile_result_v1', state: 'ready', message: 'fixed' } });
+  await reconcileDataVerificationPayInSetupSession(attemptId, 'cs_test_value');
+  expect(client.api.post).toHaveBeenLastCalledWith('/data-verification/payment-method/setup-sessions/reconcile', {
+    version: 'data_verification_payin_reconcile_v1', setup_attempt_id: attemptId, checkout_session_id: 'cs_test_value',
+  }, {});
+});

@@ -21,11 +21,6 @@ vi.mock('@/store/auth', () => ({
   useAuthStore: (select: (state: unknown) => unknown) =>
     select({ user: { id: 'seller', reauth_method: 'totp' } }),
 }));
-// Exercise the actual component's handoff callback without loading auth modules.
-vi.mock('@/app/dashboard/settings/ReauthModal', () => ({
-  default: ({ isOpen, onSuccess }: { isOpen: boolean; onSuccess: (token: string) => Promise<void> }) =>
-    isOpen ? <button onClick={() => void onSuccess('test-reauth-token')}>Confirm test reauth</button> : null,
-}));
 vi.mock('@/api/dataVerificationPayin', () => ({
   getDataVerificationPayInReadiness: calls.readiness,
   createDataVerificationPayInSetupSession: calls.create,
@@ -57,8 +52,7 @@ afterEach(() => {
 
 async function startSetup() {
   fireEvent.click(await screen.findByRole('button', { name: 'Add payment method' }));
-  fireEvent.click(screen.getByRole('button', { name: 'Confirm test reauth' }));
-  await waitFor(() => expect(calls.create).toHaveBeenCalledExactlyOnceWith('test-reauth-token'));
+  await waitFor(() => expect(calls.create).toHaveBeenCalledExactlyOnceWith());
 }
 
 async function expectHandoff() {
@@ -69,7 +63,7 @@ async function expectHandoff() {
 describe('optional listing-return storage during hosted setup', () => {
   it.each(['setItem', 'removeItem'] as const)('continues when sessionStorage.%s throws', async method => {
     saveVerificationReturn(destination);
-    const blocked = vi.spyOn(Storage.prototype, method).mockImplementation(() => {
+    const blocked = vi.spyOn(Object.getPrototypeOf(window.sessionStorage), method).mockImplementation(() => {
       throw new DOMException('Storage disabled', 'SecurityError');
     });
     render(<DataVerificationPaymentMethod returnToListing={method === 'setItem' ? destination : undefined} />);
@@ -101,8 +95,8 @@ describe('optional listing-return storage during hosted setup', () => {
 
   it.each([destination, undefined])('does not navigate or change storage when setup rejects (%j)', async returnToListing => {
     saveVerificationReturn(destination);
-    const write = vi.spyOn(Storage.prototype, 'setItem');
-    const clear = vi.spyOn(Storage.prototype, 'removeItem');
+    const write = vi.spyOn(Object.getPrototypeOf(window.sessionStorage), 'setItem');
+    const clear = vi.spyOn(Object.getPrototypeOf(window.sessionStorage), 'removeItem');
     calls.create.mockRejectedValueOnce(new Error('Private setup failure'));
     render(<DataVerificationPaymentMethod returnToListing={returnToListing} />);
 

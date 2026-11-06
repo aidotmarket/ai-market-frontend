@@ -133,23 +133,8 @@ it('shows live native pending receipt counts after queued authorization', async 
   const receipt = screen.getByRole('region', { name: 'Live seller operation receipt' });
   expect(receipt.textContent).toContain('succeeded count20'); expect(receipt.textContent).toContain('failed count5');
 });
-it.each(['oidc', 'saml'])('routes enforced-org %s without TOTP to Chunk 0 settings continuation', async method => {
-  mocks.auth.user = { id: 'owner', sso_enforced: true, totp_enabled: false, auth_methods: [method] };
-  mocks.decide.mockRejectedValue({ response: { status: 403, data: { detail: 'SECOND_FACTOR_ENROLLMENT_REQUIRED' } } });
-  await review(); fireEvent.click(screen.getByRole('button', { name: 'Confirm' }));
-  fireEvent.click(await screen.findByRole('button', { name: 'Set up two-factor authentication' }));
-  expect(mocks.push).toHaveBeenCalledWith(`/dashboard/settings?redirect=${encodeURIComponent(`/confirm/${mocks.id}?t=${token}`)}#security`);
-});
-it('requires native code for company confirmation and binds its proof to the complete batch', async () => {
-  mocks.auth.user = { id: 'owner', sso_enforced: true, totp_enabled: true };
-  mocks.reauth.mockResolvedValue({ token: 'native-proof' });
-  await review(); fireEvent.click(screen.getByRole('button', { name: 'Confirm' }));
-  expect(mocks.decide).not.toHaveBeenCalled();
-  const input = await screen.findByPlaceholderText('Enter code');
-  fireEvent.change(input, { target: { value: '123456' } });
-  fireEvent.click(screen.getByRole('button', { name: 'Continue' }));
-  await waitFor(() => expect(mocks.decide).toHaveBeenCalledWith(mocks.id, token, 'confirm', pending().summary_hash, 'native-proof'));
-});
+
+
 it('keeps settings operation UI and reads absent for ordinary settings and security continuation', () => {
   render(<SellerOperationContinuation />); expect(mocks.get).not.toHaveBeenCalled();
   expect(screen.queryByRole('region', { name: 'Seller operation in settings' })).toBeNull();
@@ -233,33 +218,7 @@ it('retains completed receipts with all effect switches off', async () => {
   render(<PendingActionPage />); await screen.findByText('Execution: completed');
   expect(screen.queryByRole('button', { name: 'Confirm' })).toBeNull();
 });
-it.each(['oidc', 'saml'].flatMap(authMethod => ['GET', 'POST'].map(method => ({ authMethod, method }))))('recovers $method $authMethod SSO_REQUIRED through company sign-in then refetches without auto consent', async ({ method, authMethod }) => {
-  vi.stubEnv('NEXT_PUBLIC_ORG_SSO_WEB_RETURN_ENABLED', 'true');
-  mocks.auth.user = { id: 'owner', sso_enforced: true, totp_enabled: true, auth_methods: [authMethod] };
-  const refusal = { response: { status: 403, data: { detail: 'SSO_REQUIRED', continuation: { path: '/dashboard/settings', refetch_required: true, automatic_confirmation: false } } } };
-  if (method === 'GET') { mocks.get.mockRejectedValueOnce(refusal); render(<PendingActionPage />); }
-  else {
-    mocks.decide.mockRejectedValueOnce(refusal); mocks.reauth.mockResolvedValue({ token: 'first-proof' }); await review();
-    fireEvent.click(screen.getByRole('button', { name: 'Confirm' }));
-    fireEvent.change(await screen.findByPlaceholderText('Enter code'), { target: { value: '123456' } });
-    fireEvent.click(screen.getByRole('button', { name: 'Continue' }));
-  }
-  if (authMethod === 'oidc') {
-    fireEvent.change(await screen.findByRole('textbox', { name: 'Company sign-in ID' }), { target: { value: 'company' } });
-    fireEvent.click(screen.getByRole('button', { name: 'Sign in through your company' }));
-    await waitFor(() => expect(mocks.signIn).toHaveBeenCalledWith('company', '/dashboard/settings'));
-  } else {
-    fireEvent.click(await screen.findByRole('button', { name: 'Check company sign-in' }));
-    await waitFor(() => expect(mocks.checkSignIn).toHaveBeenCalledTimes(1));
-  }
-  await waitFor(() => expect(mocks.get).toHaveBeenCalledTimes(2));
-  expect(mocks.decide).toHaveBeenCalledTimes(method === 'POST' ? 1 : 0);
-  mocks.reauth.mockResolvedValue({ token: 'fresh-native-proof' });
-  fireEvent.click(await screen.findByRole('button', { name: 'Confirm' }));
-  fireEvent.change(await screen.findByPlaceholderText('Enter code'), { target: { value: '654321' } });
-  fireEvent.click(screen.getByRole('button', { name: 'Continue' }));
-  await waitFor(() => expect(mocks.decide).toHaveBeenLastCalledWith(mocks.id, token, 'confirm', pending().summary_hash, 'fresh-native-proof'));
-});
+
 it('clears settings receipts on hash navigation and retries after a transient read failure', async () => {
   window.history.replaceState({}, '', `/dashboard/settings?redirect=${encodeURIComponent(`/confirm/${mocks.id}?t=${token}`)}#seller-operation`);
   mocks.get.mockRejectedValueOnce(new Error('offline'));
@@ -279,4 +238,11 @@ it('disables pending review when live polling reports shutdown after load', asyn
   expect((screen.getByRole('button', { name: 'Decline' }) as HTMLButtonElement).disabled).toBe(false);
   expect(screen.getByText('Page 2 of 5')).toBeTruthy();
   expect(screen.getByRole('link', { name: 'Open Workspace for legal signing' })).toBeTruthy();
+});
+
+it.each(['oidc', 'saml'])('confirms the complete batch directly for an enrolled %s company user', async method => {
+  mocks.auth.user = { id: 'owner', sso_enforced: true, totp_enabled: true, auth_methods: [method] };
+  await review(); fireEvent.click(screen.getByRole('button', { name: 'Confirm' }));
+  await waitFor(() => expect(mocks.decide).toHaveBeenCalledWith(mocks.id, token, 'confirm', pending().summary_hash));
+  expect(mocks.reauth).not.toHaveBeenCalled(); expect(screen.queryByRole('dialog')).toBeNull();
 });

@@ -21,14 +21,14 @@ export function PreviewConsentScreen({ listingId }: { listingId: string }) {
     readPreview(listingId).then(s => { if (current) { setStatus(s); setError(null); } }).catch(e => { if (current) setError(e); });
     return () => { current = false; active.current = false; };
   }, [listingId, retry, token]);
-  const revoke = async (reauth?: string) => {
+  const revoke = async () => {
     if (!status || busy || !status.consent_publication_version_id || !status.consent_sample_set_hash) return;
     setBusy(true); setError(null); setReview(null);
     try {
       if (decision.current?.expected_version !== status.version) decision.current = null;
       const retained = decision.current ?? { ...newDecision(status.version), listing_id: listingId, publication_version_id: status.consent_publication_version_id, sample_set_hash: status.consent_sample_set_hash };
       const csrf = nativeSession().csrf;
-      const body = { ...retained, csrf, reauth_token: reauth ?? (retained.csrf === csrf ? retained.reauth_token : undefined) };
+      const body = { ...retained, csrf };
       decision.current = body;
       const result = await reviewRevokePreview(body); if (active.current) setReview({ body, result });
     } catch(e) { if (active.current) setError(e); } finally { if (active.current) setBusy(false); }
@@ -54,6 +54,6 @@ export function PreviewConsentScreen({ listingId }: { listingId: string }) {
       <button disabled={busy || !status.consent_publication_version_id || !status.consent_sample_set_hash} onClick={() => void revoke()}>Revoke AI preview consent</button></>}
     <button onClick={() => { decision.current = null; setRetry(n => n + 1); }}>Refresh consent status</button>
     {review && <section aria-label="Exact server preview withdrawal review"><pre>{JSON.stringify(review.result, null, 2)}</pre><button disabled={busy} onClick={() => void confirmRevoke()}>Confirm revoke AI preview consent</button></section>}
-    <NativeSellerAuth error={error} onRetry={() => { if (decision.current) void revoke(); else setRetry(n => n + 1); }} onToken={revoke} />
+    <NativeSellerAuth error={error} />
   </section>;
 }

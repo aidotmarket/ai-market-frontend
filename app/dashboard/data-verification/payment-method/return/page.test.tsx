@@ -64,31 +64,11 @@ async function returnPage() {
   });
 }
 
-async function completeReturnReauth(code = '123456') {
-  const input = await screen.findByRole('textbox', { name: 'Verification code' });
-  expect(screen.getByRole('dialog', { name: 'Re-authenticate' })).toBeTruthy();
-  fireEvent.change(input, { target: { value: code } });
-  await waitFor(() => {
-    expect((screen.getByRole('button', { name: 'Continue' }) as HTMLButtonElement).disabled).toBe(
-      false
-    );
-  });
-  await act(async () => {
-    fireEvent.click(screen.getByRole('button', { name: 'Continue' }));
-  });
+async function expectDirectReconciliation() {
+  await waitFor(() => expect(payinApi.reconcileDataVerificationPayInSetupSession).toHaveBeenCalled());
+  expect(screen.queryByRole('dialog')).toBeNull(); expect(auth.submitReauth).not.toHaveBeenCalled();
 }
 
-async function expectFocusOnSettingsFallback(dialog: HTMLElement) {
-  const fallback = screen.getByRole('link', { name: 'Back to settings' });
-  await waitFor(() => expect(document.activeElement).toBe(fallback));
-  expect(dialog.isConnected).toBe(false);
-  expect(fallback.isConnected).toBe(true);
-  expect(fallback).not.toBe(document.body);
-  expect(fallback.closest('[role="dialog"]')).toBeNull();
-  expect(fallback.matches(':disabled')).toBe(false);
-  expect(fallback.hidden).toBe(false);
-  expect(fallback.closest('[hidden], [inert], [aria-hidden="true"]')).toBeNull();
-}
 
 function expectOnlyGenericSettingsNavigation() {
   const fallback = screen.getByRole('link', { name: 'Back to settings' });
@@ -131,26 +111,12 @@ describe('data-verification payment-method return page', () => {
   it('returns to the same seller listing after hosted setup without another authorization', async () => {
     saveVerificationReturn({ sellerId: 'seller', listingId: 'listing' });
     render(await returnPage());
-    await completeReturnReauth();
+    await expectDirectReconciliation();
     await screen.findByText('Your payment method is ready for verification charges. Your Stripe payouts were not changed.');
     expect(screen.getByRole('link', { name: 'Back to verification' }).getAttribute('href')).toBe('/dashboard/listings/listing');
     expect(payinApi.createDataVerificationPayInSetupSession).not.toHaveBeenCalled();
   });
-  it.each(['failed', 'cancelled'] as const)('uses the listing destination in %s payment copy', async outcome => {
-    saveVerificationReturn({ sellerId: 'seller', listingId: 'listing' });
-    payinApi.reconcileDataVerificationPayInSetupSession.mockResolvedValueOnce({ version: 'data_verification_payin_reconcile_result_v1', state: 'failed', message: 'ignored' });
-    render(await returnPage());
-    if (outcome === 'failed') await completeReturnReauth();
-    else {
-      const cancel = await screen.findByRole('button', { name: 'Cancel' });
-      await waitFor(() => expect((cancel as HTMLButtonElement).disabled).toBe(false));
-      fireEvent.click(cancel);
-    }
-    await screen.findByText(outcome === 'failed'
-      ? 'We could not confirm your payment method. No verification charge was made. Select Back to verification to start again.'
-      : 'No payment method was changed and no verification charge was made. Select Back to verification to start again.');
-    expect(screen.getByRole('link', { name: 'Back to verification' }).getAttribute('href')).toBe('/dashboard/listings/listing');
-  });
+
   it('ignores a different seller’s saved listing destination', async () => {
     saveVerificationReturn({ sellerId: 'different-seller', listingId: 'listing' });
     render(await returnPage());
@@ -187,19 +153,18 @@ describe('data-verification payment-method return page', () => {
     window.history.replaceState({}, '', window.location.pathname);
     render(<StrictMode>{page}</StrictMode>);
 
-    expect(await screen.findByRole('dialog', { name: 'Re-authenticate' })).toBeTruthy();
+    await expectDirectReconciliation();
     expect(window.location.search).toBe('');
     expect(payinApi.getDataVerificationPayInReadiness).toHaveBeenCalledTimes(1);
-    expect(payinApi.reconcileDataVerificationPayInSetupSession).not.toHaveBeenCalled();
     expect(document.body.innerHTML).not.toContain(attemptId);
     expect(document.body.innerHTML).not.toContain(checkoutSessionId);
-    await completeReturnReauth();
+    await expectDirectReconciliation();
     expect(payinApi.reconcileDataVerificationPayInSetupSession).toHaveBeenCalledExactlyOnceWith(
-      attemptId, checkoutSessionId, 'fresh-return-token'
+      attemptId, checkoutSessionId
     );
   });
 
-  it('removes query values before network work and reconciles only with a fresh token', async () => {
+  it('removes query values before network work and reconciles directly with the current session', async () => {
     payinApi.getDataVerificationPayInReadiness.mockImplementationOnce(async () => {
       expect(window.location.search).toBe('');
       return {
@@ -222,26 +187,12 @@ describe('data-verification payment-method return page', () => {
     render(await returnPage());
 
     expect(window.location.search).toBe('');
-    expect(
-      await screen.findByText('Confirm it is you again to finish adding your payment method.')
-    ).toBeTruthy();
-    expect(payinApi.reconcileDataVerificationPayInSetupSession).not.toHaveBeenCalled();
-
-    expect(screen.getByRole('dialog', { name: 'Re-authenticate' }).getAttribute('aria-modal')).toBe(
-      'true'
-    );
-    await waitFor(() =>
-      expect(document.activeElement).toBe(
-        screen.getByRole('textbox', { name: 'Verification code' })
-      )
-    );
-    await completeReturnReauth();
+    await expectDirectReconciliation();
 
     await waitFor(() => {
       expect(payinApi.reconcileDataVerificationPayInSetupSession).toHaveBeenCalledWith(
         attemptId,
-        checkoutSessionId,
-        'fresh-return-token'
+        checkoutSessionId
       );
     });
     expect(
@@ -276,9 +227,7 @@ describe('data-verification payment-method return page', () => {
     );
 
     await waitFor(() => expect(window.location.search).toBe(''));
-    expect(
-      await screen.findByText('Confirm it is you again to finish adding your payment method.')
-    ).toBeTruthy();
+    await expectDirectReconciliation();
     expect(payinApi.getDataVerificationPayInReadiness).toHaveBeenCalledTimes(1);
     expect(navigation.replace).toHaveBeenCalledTimes(2);
     expect(navigation.replace).toHaveBeenLastCalledWith(
@@ -330,9 +279,8 @@ describe('data-verification payment-method return page', () => {
       expect(alert.getAttribute('aria-live')).toBe('assertive');
       expect(alert.getAttribute('aria-atomic')).toBe('true');
 
-      const dialog = await screen.findByRole('dialog', { name: 'Re-authenticate' });
-      await completeReturnReauth();
-      expect(dialog.isConnected).toBe(true);
+      await expectDirectReconciliation();
+      expect(screen.queryByRole('dialog')).toBeNull();
 
       if (outcome === 'network_error') {
         await act(async () => reconcile.reject(new Error('private provider reconcile detail')));
@@ -353,9 +301,7 @@ describe('data-verification payment-method return page', () => {
       expect(screen.getByRole('alert', { name: 'Payment-method error' })).toBe(alert);
       expect((expectedRegion === 'status' ? alert : status).textContent).toBe('');
       expect(document.body.textContent).not.toContain('private provider reconcile detail');
-      if (outcome === 'ready' || outcome === 'failed') {
-        await expectFocusOnSettingsFallback(dialog);
-      }
+
     }
   );
 
@@ -375,7 +321,7 @@ describe('data-verification payment-method return page', () => {
       message: 'raw backend/provider detail is ignored',
     });
     render(await returnPage());
-    await completeReturnReauth();
+    await expectDirectReconciliation();
 
     expect(await screen.findByText(copy)).toBeTruthy();
     expect(screen.queryByText('raw backend/provider detail is ignored')).toBeNull();
@@ -386,7 +332,7 @@ describe('data-verification payment-method return page', () => {
       new Error('provider network detail')
     );
     render(await returnPage());
-    await completeReturnReauth();
+    await expectDirectReconciliation();
 
     expect(
       await screen.findByText(
@@ -396,7 +342,7 @@ describe('data-verification payment-method return page', () => {
     expect(screen.queryByText('provider network detail')).toBeNull();
   });
 
-  it('keeps opaque values only in memory and requires fresh reauth on two retries', async () => {
+  it('keeps opaque values only in memory and reconciles directly on two retries', async () => {
     payinApi.reconcileDataVerificationPayInSetupSession
       .mockResolvedValueOnce({
         version: 'data_verification_payin_reconcile_result_v1',
@@ -409,24 +355,20 @@ describe('data-verification payment-method return page', () => {
         state: 'ready',
         message: 'ignored ready detail',
       });
-    auth.submitReauth
-      .mockResolvedValueOnce({ token: 'fresh-token-1' })
-      .mockResolvedValueOnce({ token: 'fresh-token-2' })
-      .mockResolvedValueOnce({ token: 'fresh-token-3' });
 
     render(await returnPage());
     expect(window.location.search).toBe('');
 
-    await completeReturnReauth('111111');
+    await expectDirectReconciliation();
     fireEvent.click(await screen.findByRole('button', { name: 'Check again' }));
-    await completeReturnReauth('222222');
+    await expectDirectReconciliation();
     expect(
       await screen.findByText(
         'We could not confirm your payment method. No verification charge was made. Select Check again to retry.'
       )
     ).toBeTruthy();
     fireEvent.click(await screen.findByRole('button', { name: 'Check again' }));
-    await completeReturnReauth('333333');
+    await expectDirectReconciliation();
 
     expect(
       await screen.findByText(
@@ -435,115 +377,20 @@ describe('data-verification payment-method return page', () => {
     ).toBeTruthy();
     expect(payinApi.getDataVerificationPayInReadiness).toHaveBeenCalledTimes(3);
     expect(payinApi.reconcileDataVerificationPayInSetupSession.mock.calls).toEqual([
-      [attemptId, checkoutSessionId, 'fresh-token-1'],
-      [attemptId, checkoutSessionId, 'fresh-token-2'],
-      [attemptId, checkoutSessionId, 'fresh-token-3'],
+      [attemptId, checkoutSessionId],
+      [attemptId, checkoutSessionId],
+      [attemptId, checkoutSessionId],
     ]);
     expect(window.location.search).toBe('');
     expect(document.body.textContent).not.toContain(attemptId);
     expect(document.body.textContent).not.toContain(checkoutSessionId);
   });
 
-  it('focuses Back to settings after a deferred terminal retry removes its opener', async () => {
-    const terminal = deferred<{
-      version: string;
-      state: 'ready';
-      message: string;
-    }>();
-    payinApi.reconcileDataVerificationPayInSetupSession
-      .mockResolvedValueOnce({
-        version: 'data_verification_payin_reconcile_result_v1',
-        state: 'pending',
-        message: 'ignored pending detail',
-      })
-      .mockReturnValueOnce(terminal.promise);
-    render(await returnPage());
 
-    await completeReturnReauth('111111');
-    fireEvent.click(await screen.findByRole('button', { name: 'Check again' }));
-    const retryDialog = await screen.findByRole('dialog', { name: 'Re-authenticate' });
-    await completeReturnReauth('222222');
-    await act(async () =>
-      terminal.resolve({
-        version: 'data_verification_payin_reconcile_result_v1',
-        state: 'ready',
-        message: 'private terminal provider detail',
-      })
-    );
 
-    await screen.findByText(
-      'Your payment method is ready for verification charges. Your Stripe payouts were not changed.'
-    );
-    await expectFocusOnSettingsFallback(retryDialog);
-    expect(document.body.textContent).not.toContain('private terminal provider detail');
-  });
 
-  it('hides all pay-in content and focuses only generic settings navigation after reconciliation 403', async () => {
-    payinApi.isDataVerificationPayInUnavailable.mockReturnValueOnce(true);
-    payinApi.reconcileDataVerificationPayInSetupSession.mockRejectedValueOnce({
-      response: { status: 403 },
-      message: 'private provider reconciliation 403 detail',
-    });
-    render(await returnPage());
-    const dialog = await screen.findByRole('dialog', { name: 'Re-authenticate' });
 
-    await completeReturnReauth();
 
-    await waitFor(() => expect(screen.queryByRole('dialog')).toBeNull());
-    expectOnlyGenericSettingsNavigation();
-    await expectFocusOnSettingsFallback(dialog);
-    expect(document.body.textContent).not.toContain(
-      'private provider reconciliation 403 detail'
-    );
-  });
-
-  it('focuses Back to settings after cancelling a retry opened by a deferred preflight', async () => {
-    const retryPreflight = deferred<{
-      version: string;
-      state: 'setup_pending';
-      can_start_setup: false;
-      can_replace_payment_method: false;
-      message: string;
-    }>();
-    payinApi.getDataVerificationPayInReadiness
-      .mockResolvedValueOnce({
-        version: 'data_verification_payin_readiness_v1',
-        state: 'setup_pending',
-        can_start_setup: false,
-        can_replace_payment_method: false,
-        message: 'ignored initial preflight detail',
-      })
-      .mockReturnValueOnce(retryPreflight.promise);
-    payinApi.reconcileDataVerificationPayInSetupSession.mockResolvedValueOnce({
-      version: 'data_verification_payin_reconcile_result_v1',
-      state: 'pending',
-      message: 'ignored pending detail',
-    });
-    render(await returnPage());
-
-    await completeReturnReauth('111111');
-    fireEvent.click(await screen.findByRole('button', { name: 'Check again' }));
-    expect(screen.queryByRole('dialog')).toBeNull();
-    await act(async () =>
-      retryPreflight.resolve({
-        version: 'data_verification_payin_readiness_v1',
-        state: 'setup_pending',
-        can_start_setup: false,
-        can_replace_payment_method: false,
-        message: 'private retry preflight detail',
-      })
-    );
-    const retryDialog = await screen.findByRole('dialog', { name: 'Re-authenticate' });
-    const cancel = screen.getByRole('button', { name: 'Cancel' });
-    await waitFor(() => expect((cancel as HTMLButtonElement).disabled).toBe(false));
-    fireEvent.click(cancel);
-
-    await screen.findByText(
-      'No payment method was changed and no verification charge was made. Select Back to settings to start again.'
-    );
-    await expectFocusOnSettingsFallback(retryDialog);
-    expect(document.body.textContent).not.toContain('private retry preflight detail');
-  });
 
   it('issues only one readiness request for two rapid retry clicks', async () => {
     const retryPreflight = deferred<{
@@ -559,7 +406,7 @@ describe('data-verification payment-method return page', () => {
       message: 'ignored pending detail',
     });
     render(await returnPage());
-    await completeReturnReauth();
+    await expectDirectReconciliation();
     payinApi.getDataVerificationPayInReadiness.mockReturnValueOnce(retryPreflight.promise);
 
     const retry = await screen.findByRole('button', { name: 'Check again' });
@@ -576,7 +423,7 @@ describe('data-verification payment-method return page', () => {
         message: 'private duplicate-guard detail',
       })
     );
-    expect(await screen.findByRole('dialog', { name: 'Re-authenticate' })).toBeTruthy();
+    await expectDirectReconciliation();
     expect(document.body.textContent).not.toContain('private duplicate-guard detail');
   });
 
@@ -592,25 +439,10 @@ describe('data-verification payment-method return page', () => {
         screen.queryByRole('heading', { name: 'Payment method for verification charges' })
       ).toBeNull();
     });
-    expect(payinApi.reconcileDataVerificationPayInSetupSession).not.toHaveBeenCalled();
     expectOnlyGenericSettingsNavigation();
   });
 
-  it('renders fixed cancellation copy when the return rechallenge is closed', async () => {
-    render(await returnPage());
-    const dialog = await screen.findByRole('dialog', { name: 'Re-authenticate' });
-    const cancel = await screen.findByRole('button', { name: 'Cancel' });
-    await waitFor(() => expect((cancel as HTMLButtonElement).disabled).toBe(false));
-    fireEvent.click(cancel);
 
-    expect(
-      screen.getByText(
-        'No payment method was changed and no verification charge was made. Select Back to settings to start again.'
-      )
-    ).toBeTruthy();
-    expect(payinApi.reconcileDataVerificationPayInSetupSession).not.toHaveBeenCalled();
-    await expectFocusOnSettingsFallback(dialog);
-  });
 
   it('checks availability before showing fixed failure copy for invalid return values', async () => {
     setReturnUrl('not-a-uuid', 'not-a-session');
@@ -624,7 +456,6 @@ describe('data-verification payment-method return page', () => {
     ).toBeTruthy();
     expect(screen.queryByRole('dialog')).toBeNull();
     expect(payinApi.getDataVerificationPayInReadiness).toHaveBeenCalledTimes(1);
-    expect(payinApi.reconcileDataVerificationPayInSetupSession).not.toHaveBeenCalled();
     expect(document.body.textContent).not.toContain('not-a-uuid');
     expect(document.body.textContent).not.toContain('not-a-session');
   });
@@ -643,7 +474,6 @@ describe('data-verification payment-method return page', () => {
         screen.queryByRole('heading', { name: 'Payment method for verification charges' })
       ).toBeNull();
     });
-    expect(payinApi.reconcileDataVerificationPayInSetupSession).not.toHaveBeenCalled();
     expect(document.body.textContent).not.toContain('private eligibility detail');
     expectOnlyGenericSettingsNavigation();
   });

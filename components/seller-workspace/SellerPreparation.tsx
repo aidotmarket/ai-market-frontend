@@ -54,8 +54,8 @@ export default function SellerPreparation({approval,active,onChange,onLoaded,pub
     <p role="status">{published?preparationStatus.published:value?preparationStatus[value.status]:loaded?'Ready to prepare your listing for publishing':'Checking listing status…'}</p>
     {!published&&justSigned&&<p role="status">Licence signed. Your listing is not published yet. Select Publish this listing when you’re ready.</p>}
     {!published&&loaded&&!value&&<button disabled={!active||busy||publicationBlocked} onClick={()=>void prepare()}>{busy?'Preparing…':'Prepare for publishing'}</button>}
-    {!!error&&<p role="alert">{preparationError(error)}</p>}
-    {!!authError&&<NativeSellerAuth error={authError} onRetry={()=>setRetry(n=>n+1)} onToken={async()=>{setRetry(n=>n+1);}}/>}
+    {!!error&&!authError&&<p role="alert">{preparationError(error)}</p>}
+    {!!authError&&<NativeSellerAuth error={authError} />}
     {!busy&&<button disabled={!active} onClick={()=>setRetry(n=>n+1)}>Refresh preparation status</button>}
     {!published&&active&&value?.status==='prepared'&&value.license_selection&&<WorkspaceBatchSigning preparation={value as SigningInstrument} onSigned={rows=>{const signed=rows.find(row=>row.id===value.id);if(signed){const next={...value,...signed};setValue(next);setJustSigned(true);changed.current(next);}}}/>}
   </section>;

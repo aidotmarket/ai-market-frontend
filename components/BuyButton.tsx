@@ -1,4 +1,5 @@
 'use client';
+import { ACTION_AUTH_REFRESH, isLegacyActionAuthError } from '@/lib/action-auth-error';
 
 import { useState, useEffect, useLayoutEffect, useRef, useCallback } from 'react';
 import Link from 'next/link';
@@ -404,10 +405,11 @@ export function checkoutOutcomeUnknown(error: unknown): boolean {
 export function parseCheckoutRefusal(error: AxiosError, domainEnabled = checkoutDomainEnabled(), currentPath?: string): CheckoutRefusal {
   const data = error.response?.data as { detail?: unknown } | undefined;
   const detail = data?.detail;
+  if (isLegacyActionAuthError(error)) return { code: checkoutErrorCode(error) || 'REAUTH_REQUIRED', message: ACTION_AUTH_REFRESH };
   if (domainEnabled) {
     const outcome = checkoutOutcome(error);
     if (outcome === 'auth') return { code: checkoutErrorCode(error) || 'FIRST_PARTY_SESSION_REQUIRED',
-      message: 'Sign in again, then retry the same purchase.' };
+      message: 'Please refresh the page and try again.' };
     if (outcome === 'operator') return { code: 'CHECKOUT_OPERATOR_RECONCILIATION_REQUIRED', blocked: true,
       message: 'This purchase requires operator reconciliation. Keep this checkout for recovery.' };
     if (checkoutOutcomeUnknown(error)) return { code: 'CHECKOUT_OUTCOME_UNKNOWN', blocked: false, message: 'Checkout outcome is unknown. Retry to check the same purchase.' };

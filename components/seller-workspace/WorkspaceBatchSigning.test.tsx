@@ -17,6 +17,10 @@ beforeEach(() => {
   vi.mocked(signInstruments).mockResolvedValue([]);
   vi.spyOn(nativeClient, 'get').mockResolvedValue({ data: { full_text: 'The complete fixture contract <script>safe text</script>' } });
 });
+afterEach(() => {
+  expect(screen.queryByRole('dialog', { name: 'Re-authenticate' })).toBeNull();
+  expect(screen.queryByPlaceholderText('Enter code')).toBeNull();
+});
 afterEach(() => { cleanup(); vi.restoreAllMocks(); });
 async function load() {
   render(<WorkspaceBatchSigning />);

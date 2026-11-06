@@ -1,4 +1,5 @@
 'use client';
+import { isLegacyActionAuthError } from '@/lib/action-auth-error';
 
 import { useEffect, useRef, useState } from 'react';
 import { useRouter } from 'next/navigation';
@@ -14,15 +15,16 @@ function providerSuffix(): string {
 }
 
 function errorKind(error: unknown): string {
+  if (isLegacyActionAuthError(error)) return 'insufficient_assurance';
   const response = (error as { response?: { status?: number; data?: { error?: string } } })?.response;
   return response?.data?.error || (response?.status === 401 ? 'login_required'
     : response?.status === 422 || (error instanceof Error && ['invalid_request', 'invalid_redirect'].includes(error.message)) ? 'invalid_request' : 'retry');
 }
 
 const messages: Record<string, string> = {
-  login_required: 'Please sign in again to continue to AIM Data.',
-  invalid_session: 'Please sign in again to continue to AIM Data.',
-  insufficient_assurance: 'Your account uses two-factor authentication. Before AIM Data can work with your ai.market account, sign in again and enter your code. This makes sure only you can connect apps to your account.',
+  login_required: 'Please refresh the page and try again.',
+  invalid_session: 'Please refresh the page and try again.',
+  insufficient_assurance: 'Please refresh the page and try again.',
   access_denied: 'This account cannot authorize AIM Data. Access was denied.',
   binding_failed: 'This request belongs to another browser. Restart sign-in from AIM Data in this browser.',
   transaction_expired: 'This request has expired. Restart sign-in from AIM Data.',
@@ -136,18 +138,12 @@ export default function AuthorizationPage() {
     }
   };
 
-  const signIn = () => {
-    const saved = readContinuation();
-    if (!saved) { setError('transaction_expired'); return; }
-    router.push(`/login?reauth=aim-data&redirect=${encodeURIComponent(`/oauth/authorize?request=${saved.request}`)}${providerSuffix()}`);
-  };
 
   return (
     <main className="mx-auto max-w-lg px-6 py-16 space-y-6">
       {!enabled ? <h1>AIM Data sign-in is currently unavailable.</h1> : error ? (
         <>
           <p role="alert">{messages[error] || messages.retry}</p>
-          {needsLogin && <button onClick={signIn} className="min-h-11 cursor-pointer rounded-lg bg-[#3F51B5] px-4 py-2 text-sm font-medium text-white transition-colors enabled:hover:bg-[#3545a0] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#3F51B5]">Sign in again</button>}
           {!needsLogin && (error === 'retry' || !messages[error]) &&
             <button disabled={busy} onClick={() => setRevision((value) => value + 1)}>Retry</button>}
         </>
