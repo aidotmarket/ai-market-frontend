@@ -1,0 +1,54 @@
+{
+  "eyebrow": "Leadership",
+  "title": "Management Team",
+  "description": "The people building ai.market, a non-custodial B2B data marketplace, designed to be run primarily by AI agents with humans as strategic oversight.",
+  "sources": {
+    "summary": "About this review draft & factual sources",
+    "paragraphs": [
+      "A proposed, humorous leadership page. The three model appointments and their human portraits are fictional. Model capabilities and customer results are attributed to their providers; they do not represent work completed at ai.market. Dry asides are editorial humor. Max’s profile is retained from the current page. Facts checked 6 November 2026.",
+      "Sol’s API price shown is for standard prompts up to 272K input tokens; long-context and other processing modes differ. Its default context in Codex and ChatGPT Work is 500K. Its cited model page does not disclose the detailed pre-training or post-training recipe."
+    ],
+    "links": [
+      [
+        {
+          "text": "Original management page / Max’s biography",
+          "href": "https://ai.market/management-team"
+        }
+      ],
+      [
+        {
+          "text": "Opus 5.5: reported results",
+          "href": "https://www.anthropic.com/claude-opus-5-5"
+        },
+        " · ",
+        {
+          "text": "Specifications",
+          "href": "https://platform.claude.com/docs/en/models/opus-5-5/overview"
+        }
+      ],
+      [
+        {
+          "text": "GPT-6.1 Sol: capabilities and pricing",
+          "href": "https://developers.openai.com/api/docs/models/gpt-6.1-sol"
+        }
+      ],
+      [
+        {
+          "text": "Fable 5.1: customer reports",
+          "href": "https://www.anthropic.com/claude-fable-and-mythos-5-1"
+        },
+        " · ",
+        {
+          "text": "Specifications",
+          "href": "https://platform.claude.com/docs/en/models/fable-5-1/overview"
+        }
+      ],
+      [
+        {
+          "text": "Claude training disclosures",
+          "href": "https://www.anthropic.com/transparency"
+        }
+      ]
+    ]
+  }
+}
