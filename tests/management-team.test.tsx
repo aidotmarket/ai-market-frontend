@@ -31,21 +31,9 @@ it('renders the four approved profiles with their roles and exact experience tex
   }
 });
 
-it('keeps all seven factual sources inside the disclosure below the profiles', () => {
+it('has no sources disclosure and no portrait caption', () => {
   const { container } = render(<ManagementTeamPage />);
-  const details = container.querySelector('details')!;
-  expect(details.querySelector('summary')?.textContent).toBe('About this review draft & factual sources');
-  const links = [...details.querySelectorAll('a')];
-  expect(links.map(link => link.href)).toEqual([
-    'https://ai.market/management-team',
-    'https://www.anthropic.com/claude-opus-5-5',
-    'https://platform.claude.com/docs/en/models/opus-5-5/overview',
-    'https://developers.openai.com/api/docs/models/gpt-6.1-sol',
-    'https://www.anthropic.com/claude-fable-and-mythos-5-1',
-    'https://platform.claude.com/docs/en/models/fable-5-1/overview',
-    'https://www.anthropic.com/transparency',
-  ]);
-  expect([...details.querySelectorAll('p')].map(p => p.textContent)).toEqual(page.sources.paragraphs);
+  expect(container.querySelector('details')).toBeNull();
   expect(container.querySelector('figcaption')).toBeNull();
 });
 

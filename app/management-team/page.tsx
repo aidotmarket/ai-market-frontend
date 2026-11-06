@@ -69,23 +69,6 @@ export default function ManagementTeamPage() {
           </article>
         ))}
       </section>
-
-      <div className="border-t border-[#e5e7eb] px-[max(32px,calc((100%-1216px)/2))] py-9 text-xs text-[#666]">
-        <details className="mt-5 max-w-[850px]">
-          <summary className="cursor-pointer">{page.sources.summary}</summary>
-          <p className="my-3 leading-[1.7]">{page.sources.paragraphs[0]}</p>
-          <ul className="space-y-2">
-            {page.sources.links.map((row, index) => (
-              <li key={index} className={`${bulletClass} text-xs`}>
-                {row.map((part, partIndex) => typeof part === 'string' ? part : (
-                  <a key={partIndex} href={part.href} className="text-[#3f51b5] hover:underline">{part.text}</a>
-                ))}
-              </li>
-            ))}
-          </ul>
-          <p className="my-3 leading-[1.7]">{page.sources.paragraphs[1]}</p>
-        </details>
-      </div>
     </div>
   );
 }
