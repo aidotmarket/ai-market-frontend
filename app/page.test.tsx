@@ -171,13 +171,32 @@ it.each(['1.1', '1.2'])('renders the cloud-first homepage copy under terms %s', 
     'Let allAI build your listing.',
     'Get paid.',
   ]);
-  expect(steps.getByText('Connect your AWS S3 or Cloudflare R2 bucket in a few clicks. If your data has to stay on your own servers, run our open-source AIM Data gateway instead.')).toBeTruthy();
-  expect(steps.getByText('allAI drafts the description from your files and your notes. You check it, set the price and license, and publish.')).toBeTruthy();
+  expect(steps.getByText('Connect your AWS S3 or Cloudflare R2 bucket with a read-only key. If your data has to stay on your own servers, run our open-source AIM Data gateway instead.')).toBeTruthy();
+  expect(steps.getByText('allAI drafts the description from your file names and your notes. You check it, set the price and license, and publish.')).toBeTruthy();
   expect(steps.getByText(version === '1.2'
     ? "Buyers find your listing wherever they search, on ai.market or through their AI assistant. You're paid through Stripe 48 hours after the buyer confirms delivery. Sellers on international payout (USDC on Solana) are paid at least 30 days after the buyer confirms delivery."
     : 'Buyers find your listing wherever they search, on ai.market or through their own AI assistant. Stripe pays you 48 hours after the buyer confirms delivery. Sellers paid internationally in USDC on Solana are paid at least 30 days after the buyer confirms delivery.')).toBeTruthy();
 
+  const connect = steps.getByRole('link', { name: 'Connect' });
+  expect(connect.getAttribute('href')).toBe('/docs/claude');
+  expect(connect.className).toBe('text-[#3F51B5] hover:underline');
+  expect(connect.parentElement?.textContent).toBe('Prefer your own AI? Connect Claude or ChatGPT and list from the chat.');
+  expect(connect.parentElement?.className).toBe('mt-2 text-sm leading-6 text-[#666666]');
+
   const sellData = within(screen.getByRole('heading', { name: 'Sell Data' }).parentElement!);
   expect(sellData.getByText('List from your own cloud storage or servers')).toBeTruthy();
+  for (const tag of ['S3 or R2', 'AIM Data gateway', 'Direct download']) {
+    expect(sellData.getByText(tag)).toBeTruthy();
+  }
+  expect(sellData.queryByText('Your infrastructure')).toBeNull();
+  expect(sellData.queryByText('You confirm each file')).toBeNull();
   expect(sellData.getByText('Connect your S3 or R2 bucket, or run the open-source AIM Data gateway. Buyers download directly from your storage.')).toBeTruthy();
+});
+
+it('uses the cloud-first description in homepage metadata', async () => {
+  const { metadata } = await import('./page');
+  const description = 'Non-custodial B2B data marketplace. List from your S3 or R2 bucket, or from your own servers with AIM Data. Find data with semantic search and data requests.';
+  expect(metadata.description).toBe(description);
+  expect(metadata.openGraph?.description).toBe(description);
+  expect(metadata.twitter?.description).toBe(description);
 });
