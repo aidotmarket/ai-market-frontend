@@ -27,6 +27,31 @@ async function load() {
 it.each([null, { seller: false, effects: true, bulk: true }, { seller: true, effects: true, bulk: false }])('hides the entire signing entry without seller and bulk reporting %j', report => {
   vi.mocked(useSellerSwitches).mockReturnValue(report); render(<WorkspaceBatchSigning />); expect(screen.queryByRole('region')).toBeNull(); expect(readSigningInstruments).not.toHaveBeenCalled();
 });
+it('presents primary action buttons and enables signing only after consent', async () => {
+  render(<WorkspaceBatchSigning preparation={instrument(1)} />);
+  await screen.findAllByText(/The complete fixture contract/);
+  const signButton = screen.getByRole<HTMLButtonElement>('button', { name: 'Sign licence' });
+  expect(signButton.tagName).toBe('BUTTON');
+  expect(signButton.type).toBe('button');
+  expect(signButton.classList.contains('bg-indigo-700')).toBe(true);
+  expect(signButton.disabled).toBe(true);
+  expect(screen.getByText('Tick the box above to sign.')).toBeTruthy();
+
+  fireEvent.click(screen.getByRole('checkbox'));
+  expect(signButton.disabled).toBe(false);
+  expect(screen.queryByText('Tick the box above to sign.')).toBeNull();
+
+  fireEvent.click(signButton);
+  await screen.findByText(/Licence signed. Your listing is not published yet/);
+  expect(screen.queryByText('Tick the box above to sign.')).toBeNull();
+});
+it('styles the load licences button as a primary action and waits for loaded instruments to show the hint', () => {
+  render(<WorkspaceBatchSigning />);
+  const loadButton = screen.getByRole<HTMLButtonElement>('button', { name: 'Load licences' });
+  expect(loadButton.type).toBe('button');
+  expect(loadButton.classList.contains('bg-indigo-700')).toBe(true);
+  expect(screen.queryByText('Tick the box above to sign.')).toBeNull();
+});
 it('displays all exact instruments, revisions, coverage and full terms before one separate signing submission', async () => {
   await load(); expect(screen.getAllByRole('region', { name: /^Licence \d/ })).toHaveLength(2); expect(document.querySelector('script')).toBeNull();
   const checkbox = screen.getByRole('checkbox'); expect((checkbox as HTMLInputElement).checked).toBe(false);
@@ -55,6 +80,8 @@ it('cannot sign after stale prepared coverage and offers fresh review', async ()
   await load(); vi.mocked(signInstruments).mockRejectedValue({ response: { status: 409, data: { detail: 'DISPLAYED_INSTRUMENT_STALE' } } });
   fireEvent.click(screen.getByRole('checkbox')); fireEvent.click(screen.getByRole('button', { name: 'Sign 2 licences' })); await screen.findByRole('alert');
   expect((screen.getByRole('button', { name: 'Sign 2 licences' }) as HTMLButtonElement).disabled).toBe(true);
+  expect((screen.getByRole('checkbox') as HTMLInputElement).checked).toBe(true);
+  expect(screen.queryByText('Tick the box above to sign.')).toBeNull();
 });
 it('keeps effect-off signing disabled', () => {
   vi.mocked(useSellerSwitches).mockReturnValue({ seller: true, effects: false, bulk: true }); render(<WorkspaceBatchSigning />);

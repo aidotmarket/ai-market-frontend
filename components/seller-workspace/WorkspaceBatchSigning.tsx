@@ -76,7 +76,7 @@ export function BatchSigningScreen({ switches, preparation, onSigned }: { switch
     <h2 className="text-xl font-semibold">Sign your licence</h2>
     <p>You’re signing the licence buyers will accept and the ai.market listing covenant for this listing. Read both below, tick the box, then sign. Nothing is published by signing.</p>
     {!preparation && <><label>Listing preparation IDs (one per line)<textarea className="block w-full rounded border p-2" value={ids} disabled={busy} onChange={e => { setIds(e.target.value); setInstruments([]); setTexts({}); setConsent(false); setDone(false); setError(null); request.current = null; }} /></label>
-    <button disabled={busy || !switches.effects} onClick={() => void load()}>Load licences</button></>}
+    <button type="button" className="rounded-lg bg-indigo-700 px-4 py-2.5 text-sm font-semibold text-white hover:bg-indigo-800 disabled:cursor-not-allowed disabled:bg-gray-300 disabled:text-gray-600" disabled={busy || !switches.effects} onClick={() => void load()}>Load licences</button></>}
     {(instruments.length > 50 || (!preparation && ids.split(/\s+/).filter(Boolean).length > 50)) && <p role="alert">You can sign up to 50 listings at once.</p>}
     {instruments.map((i, index) => <section key={i.id} aria-label={`Licence ${index + 1}`} className="space-y-3 border-t pt-4">
       <h3>{i.license_selection.kind === 'standard' ? 'Standard licence' : 'Custom licence'}</h3>
@@ -87,8 +87,9 @@ export function BatchSigningScreen({ switches, preparation, onSigned }: { switch
         <h4>Marketplace Listing Covenant</h4><pre className="max-h-96 overflow-auto whitespace-pre-wrap font-sans">{texts[licenseDocumentPath('covenant')] ?? 'Covenant unavailable'}</pre>
       </>}
     </section>)}
-    <label><input type="checkbox" checked={consent} disabled={busy || done || !instruments.length} onChange={e => setConsent(e.target.checked)} />I have read {instruments.length > 1 ? `all ${instruments.length} licences and covenants` : 'the licence and covenant'} above, the covenant facts are true, and I am authorised to accept them for the seller.</label>
-    <button disabled={!ready || busy || done} onClick={() => void sign()}>{instruments.length === 1 ? 'Sign licence' : `Sign ${instruments.length} licences`}</button>
+    <label className="flex items-start gap-3"><input className="mt-1 h-4 w-4 shrink-0" type="checkbox" checked={consent} disabled={busy || done || !instruments.length} onChange={e => setConsent(e.target.checked)} /><span>I have read {instruments.length > 1 ? `all ${instruments.length} licences and covenants` : 'the licence and covenant'} above, the covenant facts are true, and I am authorised to accept them for the seller.</span></label>
+    <button type="button" className="block rounded-lg bg-indigo-700 px-4 py-2.5 text-sm font-semibold text-white hover:bg-indigo-800 disabled:cursor-not-allowed disabled:bg-gray-300 disabled:text-gray-600" disabled={!ready || busy || done} onClick={() => void sign()}>{instruments.length === 1 ? 'Sign licence' : `Sign ${instruments.length} licences`}</button>
+    {!consent && !done && instruments.length > 0 && <p className="text-sm text-gray-600">Tick the box above to sign.</p>}
     {done && <p role="status">Licence signed. Your listing is not published yet. Go back to the review step and publish when ready.</p>}
     {!switches.effects && <p>Seller effects are off. Signing is unavailable.</p>}
     <NativeSellerAuth error={error} onRetry={() => { request.current = null; void load(preparation); }} onToken={sign} />
