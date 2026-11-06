@@ -26,7 +26,6 @@ it('renders both complete approved About paragraphs for each firm', () => {
     const about = within(article!).getByRole('heading', { name: 'About the Firm' }).parentElement!;
     const rendered = Array.from(about.querySelectorAll('p'), (paragraph) => paragraph.textContent);
     expect(rendered).toEqual(paragraphs);
-    console.log(`${name} — rendered About the Firm:\n${rendered.join('\n\n')}`);
   }
 
   expect(container.textContent).toContain('that makes you an exceptional individual.');
