@@ -2,6 +2,14 @@ import type { SellerPayoutsResponse } from '@/api/heldPayouts';
 
 const id = (n: number) => `00000000-0000-4000-8000-${String(n).padStart(12, '0')}`;
 
+export function recordingReversalFixture(): SellerPayoutsResponse['statement']['payments'][number] {
+  return {
+    id: id(23), correction_of_id: id(20), reason: 'recording_reversal',
+    completed_at: null, paid_currency: null, paid_amount_cents: null,
+    applied_to_payable_cents: -6000, uncertain: false,
+  };
+}
+
 // Matches held_statement at backend f8a3a51f: mixed original treatments,
 // a 100 payment applying only 60 to payable, and a separate uncertain import.
 export function statementFixture(): SellerPayoutsResponse {

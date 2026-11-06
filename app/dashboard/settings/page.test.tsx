@@ -11,7 +11,7 @@ import { checkCompanySignIn } from '@/lib/company-sign-in';
 import { getConnectorGrants, getConnectorStatus } from '@/api/connector-oauth';
 import { getSellerPublicProfile } from '@/api/sellerProfile';
 import { getHeldStatement } from '@/api/heldPayouts';
-import { statementFixture } from '@/components/HeldPayoutsPanel.fixture';
+import { statementFixture } from '@/tests/fixtures/HeldPayoutsPanel.fixture';
 
 vi.mock('@/api/heldPayouts', () => ({ getHeldStatement: vi.fn(), downloadHeldStatement: vi.fn() }));
 beforeEach(() => { vi.mocked(getHeldStatement).mockResolvedValue(statementFixture()); });
@@ -83,6 +83,36 @@ describe('SettingsPage capability refresh', () => {
     expect(await screen.findByText(/Your current payout method is Stripe/)).toBeTruthy();
     expect(screen.getByRole('heading', { name: 'International sale detail' })).toBeTruthy();
     expect(getHeldStatement).toHaveBeenCalledWith({}, expect.any(AbortSignal));
+  });
+
+  it('omits the international section for a pure Stripe Connect seller', async () => {
+    const fixture = statementFixture(); fixture.seller_payout_method = 'connect';
+    fixture.statement.orders = [];
+    fixture.statement.payments = fixture.statement.payments.filter(payment => payment.reason === 'connect_transfer');
+    fixture.statement.details = fixture.statement.details.filter(item => item.treatment === 'connect');
+    vi.mocked(getHeldStatement).mockResolvedValue(fixture);
+    render(<SettingsPage />);
+    await act(async () => {});
+    expect(getHeldStatement).toHaveBeenCalledWith({}, expect.any(AbortSignal));
+    expect(screen.queryByRole('heading', { name: 'International payout statement' })).toBeNull();
+  });
+
+  it('embeds the international section for a held seller with no history', async () => {
+    const fixture = statementFixture(); fixture.statement.orders = []; fixture.statement.payments = [];
+    vi.mocked(getHeldStatement).mockResolvedValue(fixture);
+    render(<SettingsPage />);
+    expect(await screen.findByRole('heading', { name: 'International payout statement' })).toBeTruthy();
+  });
+
+  it('omits the international section and its error for an admin without seller capability receiving 403', async () => {
+    useAuthStore.setState({ user: { ...user, role: 'admin' } });
+    capabilitiesApi.getCapabilities.mockResolvedValue({ seller: { effective_status: 'not_requested' } });
+    vi.mocked(getHeldStatement).mockRejectedValue({ response: { status: 403 } });
+    render(<SettingsPage />);
+    await act(async () => {});
+    expect(getHeldStatement).toHaveBeenCalledWith({}, expect.any(AbortSignal));
+    expect(screen.queryByRole('heading', { name: 'International payout statement' })).toBeNull();
+    expect(screen.queryByText('We couldn’t load your statement. Please try again.')).toBeNull();
   });
 
   it.each([

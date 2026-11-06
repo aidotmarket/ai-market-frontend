@@ -3,7 +3,7 @@ import { act, cleanup, fireEvent, render, screen, waitFor, within } from '@testi
 import { afterEach, beforeEach, expect, it, vi } from 'vitest';
 import { api } from '@/api/client';
 import HeldPayoutsPanel from './HeldPayoutsPanel';
-import { statementFixture } from './HeldPayoutsPanel.fixture';
+import { recordingReversalFixture, statementFixture } from '@/tests/fixtures/HeldPayoutsPanel.fixture';
 
 vi.mock('@/api/client', () => ({ api: { get: vi.fn() } }));
 const ownOperation = () => () => true;
@@ -44,12 +44,11 @@ it('renders backend totals, mixed treatments, itemised activity and restrictions
   expect(rowAmount(balances, 'Held')).toBe('USD 100.00');
   expect(rowAmount(balances, 'Active claims (included in held)')).toBe('USD 10.00');
   expect(rowAmount(balances, 'Projected debt offsets (not posted)')).toBe('USD 0.00');
-  expect(screen.getByText('Restriction reasons: active_claim, held_uncertain_payment')).toBeTruthy();
+  expect(screen.getByText('Restriction reasons: Part of your balance is reserved for a payment under review. An earlier payment record needs to be confirmed before payment eligibility can be assessed.')).toBeTruthy();
   expect(screen.getByRole('table', { name: 'Original payout treatments' }).textContent).toContain('Stripe');
-  const entries = screen.getAllByText(/^Entry ID:/);
-  expect(entries).toHaveLength(7);
-  expect(entries[0].textContent).toContain('000000000010');
-  expect(entries[2].textContent).toContain('000000000012');
+  expect(screen.queryByText(/^Entry ID:/)).toBeNull();
+  for (const entry of statementFixture().statement.details) expect(document.body.textContent).not.toContain(entry.id);
+  expect(screen.getAllByText('Your share of a sale was added to your balance.')).toHaveLength(2);
   expect(screen.getByText(/Available means eligible for an approved payment/)).toBeTruthy();
   expect(screen.getByText(/There is no fixed payment schedule or business minimum/)).toBeTruthy();
   expect(get).toHaveBeenCalledWith('/seller/payouts', expect.objectContaining({ params: { currency: 'USD', format: 'json' }, signal: expect.any(AbortSignal) }));
@@ -88,15 +87,100 @@ it('labels projected offsets separately from posted offsets and keeps claims wit
   expect(rowAmount(screen.getByLabelText('Statement totals'), 'Posted debt offsets')).toBe('USD 10.00');
 });
 
-it('labels corrections without describing them as a new payment', async () => {
+it('shows the backend correction amount for a reversal with no paid amount', async () => {
   const fixture = statementFixture();
-  fixture.statement.payments = [{ ...fixture.statement.payments[0], correction_of_id: 'original-payment-id', reason: 'recording_reversal' }];
+  fixture.statement.payments = [{ ...recordingReversalFixture(), amount_cents: 10000 }];
   get.mockResolvedValue({ data: fixture });
   render(<HeldPayoutsPanel ownOperation={ownOperation} />);
   const correction = (await screen.findByText('Payment correction')).closest('li')!;
   expect(within(correction).queryByText('Paid (actual total sent)')).toBeNull();
   expect(rowAmount(correction, 'Correction amount')).toBe('USD 100.00');
-  expect(within(correction).getByText('Original payment ID: original-payment-id')).toBeTruthy();
+  expect(within(correction).getByText(`Original payment ID: ${fixture.statement.payments[0].correction_of_id}`)).toBeTruthy();
+  expect(within(correction).queryByText('Not confirmed')).toBeNull();
+});
+
+it.each(['recording_reversal', 'allocation_correction'])('shows Not applicable for a %s without a correction amount', async reason => {
+  const fixture = statementFixture();
+  fixture.statement.payments = [{ ...recordingReversalFixture(), reason }];
+  get.mockResolvedValue({ data: fixture });
+  render(<HeldPayoutsPanel ownOperation={ownOperation} />);
+  const correction = (await screen.findByText('Payment correction')).closest('li')!;
+  expect(rowAmount(correction, 'Correction amount')).toBe('Not applicable');
+  expect(rowAmount(correction, 'Applied to what we owe you')).toBe('-USD 60.00');
+  expect(within(correction).queryByText('Not confirmed')).toBeNull();
+});
+
+it('retains the cash return amount when the backend has no amount_cents yet', async () => {
+  const fixture = statementFixture();
+  fixture.statement.payments = [{ ...recordingReversalFixture(), reason: 'cash_return', paid_currency: 'USD', paid_amount_cents: 5000 }];
+  get.mockResolvedValue({ data: fixture });
+  render(<HeldPayoutsPanel ownOperation={ownOperation} />);
+  const correction = (await screen.findByText('Payment correction')).closest('li')!;
+  expect(rowAmount(correction, 'Correction amount')).toBe('USD 50.00');
+});
+
+it.each([
+  ['held_fee_pending', 'The payment processing fee is still being confirmed.'],
+  ['seller_debt_reconciliation_required', 'Your outstanding debt needs to be checked before payment eligibility can be confirmed.'],
+  ['historical_eligibility_not_evaluated', 'Payment eligibility is not assessed for past periods.'],
+  ['capture_journal_unposted_or_conflicting', 'The sale’s accounting records need to be checked before payment eligibility can be confirmed.'],
+  ['held_manual_projection_mismatch', 'Recorded international payments need to be reconciled with your balance.'],
+  ['held_liability_projection_mismatch', 'Your international balance needs to be reconciled with the accounting records.'],
+  ['held_uncertain_payment', 'An earlier payment record needs to be confirmed before payment eligibility can be assessed.'],
+  ['unknown_internal_reason', 'Further checks are needed for this statement item.'],
+  ['toString', 'Further checks are needed for this statement item.'],
+])('uses plain language for %s across restrictions, activity and payments', async (code, sentence) => {
+  const fixture = statementFixture();
+  fixture.statement.reasons = [code];
+  fixture.statement.orders[0].reasons = [code];
+  fixture.statement.details[0].reason = code;
+  fixture.statement.payments[0].reason = code;
+  get.mockResolvedValue({ data: fixture });
+  const { container } = render(<HeldPayoutsPanel ownOperation={ownOperation} />);
+  await screen.findByLabelText('Statement totals');
+  expect(screen.getAllByText(`Restriction reasons: ${sentence}`)).toHaveLength(2);
+  expect(screen.getAllByText(sentence)).toHaveLength(2);
+  expect(container.textContent).not.toContain(code);
+});
+
+it('hides the section for a pure Stripe Connect seller while still fetching', async () => {
+  const fixture = statementFixture();
+  fixture.seller_payout_method = 'connect';
+  fixture.statement.orders = [];
+  fixture.statement.details = fixture.statement.details.filter(item => item.treatment === 'connect');
+  fixture.statement.payments = fixture.statement.payments.filter(payment => payment.reason === 'connect_transfer');
+  get.mockResolvedValue({ data: fixture });
+  const { container } = render(<HeldPayoutsPanel ownOperation={ownOperation} />);
+  await act(async () => {});
+  expect(get).toHaveBeenCalledTimes(1);
+  expect(container.textContent).toBe('');
+  expect(screen.queryByRole('heading', { name: 'International payout statement' })).toBeNull();
+});
+
+it('shows the section for a held seller with no orders or payments', async () => {
+  const fixture = statementFixture();
+  fixture.statement.orders = []; fixture.statement.payments = [];
+  get.mockResolvedValue({ data: fixture });
+  render(<HeldPayoutsPanel ownOperation={ownOperation} />);
+  expect(await screen.findByRole('heading', { name: 'International payout statement' })).toBeTruthy();
+});
+
+it('shows the section for a switched-back seller with only historic held payments', async () => {
+  const fixture = statementFixture();
+  fixture.seller_payout_method = 'connect';
+  fixture.statement.orders = [];
+  get.mockResolvedValue({ data: fixture });
+  render(<HeldPayoutsPanel ownOperation={ownOperation} />);
+  expect(await screen.findByRole('heading', { name: 'International payout statement' })).toBeTruthy();
+});
+
+it('shows no section or error for a non-seller admin receiving 403', async () => {
+  get.mockRejectedValueOnce({ response: { status: 403 } });
+  const { container } = render(<HeldPayoutsPanel ownOperation={ownOperation} />);
+  await act(async () => {});
+  expect(get).toHaveBeenCalledTimes(1);
+  expect(screen.queryByRole('alert')).toBeNull();
+  expect(container.textContent).toBe('');
 });
 
 it('loads historic international sales after switching to Stripe even with admission disabled', async () => {
@@ -165,8 +249,10 @@ it('pins the server-resolved dates for an all-history CSV download', async () =>
 });
 
 it('uses a friendly load error, hides backend evidence and retries', async () => {
-  get.mockRejectedValueOnce(new Error('private evidence ref and signature'));
   render(<HeldPayoutsPanel ownOperation={ownOperation} />);
+  await screen.findByLabelText('Statement totals');
+  get.mockRejectedValueOnce(new Error('private evidence ref and signature'));
+  fireEvent.click(screen.getByRole('button', { name: 'Show statement' }));
   expect(await screen.findByText('We couldn’t load your statement. Please try again.')).toBeTruthy();
   expect(screen.queryByText(/private evidence/)).toBeNull();
   expect(screen.queryByRole('button', { name: 'Download CSV' })).toBeNull();
@@ -184,10 +270,11 @@ it('uses a friendly CSV error and allows another attempt', async () => {
   expect((screen.getByRole('button', { name: 'Download CSV' }) as HTMLButtonElement).disabled).toBe(false);
 });
 
-it('shows a friendly unavailable state when the backend has no C4b statement yet', async () => {
+it('hides the section when the backend has no C4b statement to establish visibility', async () => {
   get.mockResolvedValue({ data: { seller_payout_method: 'held', requests: [] } });
-  render(<HeldPayoutsPanel ownOperation={ownOperation} />);
-  expect(await screen.findByText('We couldn’t load your statement. Please try again.')).toBeTruthy();
+  const { container } = render(<HeldPayoutsPanel ownOperation={ownOperation} />);
+  await act(async () => {});
+  expect(container.textContent).toBe('');
   expect(screen.queryByRole('button', { name: 'Download CSV' })).toBeNull();
 });
 
@@ -201,10 +288,12 @@ it('rejects an empty or reversed date range without making another request', asy
 });
 
 it('ignores stale statement responses when a new period is selected', async () => {
+  render(<HeldPayoutsPanel ownOperation={ownOperation} />);
+  await screen.findByLabelText('Statement totals');
   const pending = deferred<{ data: ReturnType<typeof statementFixture> }>();
   get.mockReturnValueOnce(pending.promise);
-  render(<HeldPayoutsPanel ownOperation={ownOperation} />);
-  const signal = get.mock.calls[0][1]?.signal;
+  fireEvent.click(screen.getByRole('button', { name: 'Show statement' }));
+  const signal = get.mock.calls[1][1]?.signal;
   fireEvent.click(screen.getByRole('button', { name: 'Show statement' }));
   await screen.findByRole('button', { name: 'Download CSV' });
   const stale = statementFixture(); stale.statement.totals.closing_cents = 99999;

@@ -21,12 +21,38 @@ function money(cents: number | null, currency: string | null): string {
   return new Intl.NumberFormat('en-GB', { style: 'currency', currency, currencyDisplay: 'code' }).format(cents / 100);
 }
 
-function Amount({ label, cents, currency }: { label: string; cents: number | null; currency: string | null }) {
-  return <div className="flex justify-between gap-4"><dt>{label}</dt><dd className="font-medium tabular-nums">{money(cents, currency)}</dd></div>;
+function Amount({ label, cents, currency, emptyText = 'Not confirmed' }: { label: string; cents: number | null; currency: string | null; emptyText?: string }) {
+  return <div className="flex justify-between gap-4"><dt>{label}</dt><dd className="font-medium tabular-nums">{cents === null || !currency ? emptyText : money(cents, currency)}</dd></div>;
+}
+
+const reasonSentences: Record<string, string> = {
+  held_fee_pending: 'The payment processing fee is still being confirmed.',
+  seller_debt_reconciliation_required: 'Your outstanding debt needs to be checked before payment eligibility can be confirmed.',
+  historical_eligibility_not_evaluated: 'Payment eligibility is not assessed for past periods.',
+  capture_journal_unposted_or_conflicting: 'The sale’s accounting records need to be checked before payment eligibility can be confirmed.',
+  held_manual_projection_mismatch: 'Recorded international payments need to be reconciled with your balance.',
+  held_liability_projection_mismatch: 'Your international balance needs to be reconciled with the accounting records.',
+  held_uncertain_payment: 'An earlier payment record needs to be confirmed before payment eligibility can be assessed.',
+  active_claim: 'Part of your balance is reserved for a payment under review.',
+  earned: 'Your share of a sale was added to your balance.',
+  restored: 'An amount was restored to your balance.',
+  refund: 'A refund reduced your balance.',
+  applied_payment: 'A payment was applied to the amount we owe you.',
+  posted_offset: 'Part of your balance was used to reduce your outstanding debt.',
+  completed_payment: 'An international payment was recorded as completed.',
+  connect_transfer: 'A Stripe payment was recorded.',
+  uncertain_payment: 'An earlier payment record has not been confirmed.',
+  recording_reversal: 'An earlier payment recording was reversed.',
+  allocation_correction: 'The amount applied to your balance was corrected.',
+  cash_return: 'A return of funds was recorded.',
+};
+
+function reasonSentence(reason: string): string {
+  return Object.hasOwn(reasonSentences, reason) ? reasonSentences[reason] : 'Further checks are needed for this statement item.';
 }
 
 function Reasons({ reasons }: { reasons: string[] }) {
-  return reasons.length > 0 ? <p className="mt-2 break-words">Restriction reasons: {reasons.join(', ')}</p> : null;
+  return reasons.length > 0 ? <p className="mt-2 break-words">Restriction reasons: {reasons.map(reasonSentence).join(' ')}</p> : null;
 }
 
 export default function HeldPayoutsPanel({ ownOperation }: { ownOperation: () => () => boolean }) {
@@ -34,6 +60,8 @@ export default function HeldPayoutsPanel({ ownOperation }: { ownOperation: () =>
   const [end, setEnd] = useState('');
   const [selection, setSelection] = useState<{ period: StatementPeriod }>({ period: {} });
   const [response, setResponse] = useState<SellerPayoutsResponse | null>(null);
+  // Keep established visibility while another period is loading or fails.
+  const [hasHeldPayouts, setHasHeldPayouts] = useState(false);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [periodError, setPeriodError] = useState('');
@@ -56,7 +84,10 @@ export default function HeldPayoutsPanel({ ownOperation }: { ownOperation: () =>
     setDownloading(false);
     setDownloadError('');
     getHeldStatement(selection.period, controller.signal).then(data => {
-      if (current()) setResponse(data);
+      if (current()) {
+        setResponse(data);
+        setHasHeldPayouts(data.seller_payout_method === 'held' || data.statement.orders.length > 0 || data.statement.payments.some(payment => payment.reason !== 'connect_transfer'));
+      }
     }).catch(() => {
       if (current()) setError('We couldn’t load your statement. Please try again.');
     }).finally(() => { if (current()) setLoading(false); });
@@ -115,6 +146,7 @@ export default function HeldPayoutsPanel({ ownOperation }: { ownOperation: () =>
   }
 
   const statement = response?.statement;
+  if (!hasHeldPayouts) return null;
   return <section aria-labelledby="held-statement-heading" className="my-6 rounded-xl border border-gray-200 bg-white p-6 text-sm shadow-sm">
     <h2 id="held-statement-heading" className="mb-3 text-lg font-semibold">International payout statement</h2>
     <p>International payouts use USDC on Solana, recorded as USD at 1:1. Historic international sales remain here after switching to Stripe.</p>
@@ -154,8 +186,8 @@ export default function HeldPayoutsPanel({ ownOperation }: { ownOperation: () =>
       <h3 className="mt-5 font-semibold">Itemised activity</h3>
       {!statement.details.length && <p>No statement activity in this period. Opening balances and restrictions may still apply.</p>}
       <ul className="divide-y">{statement.details.map(item => <li key={item.id} className="py-3 break-words">
-        <p>{item.date} · {treatmentNames[item.treatment]} · {item.kind}</p>
-        <p>Entry ID: {item.id}. Reason: {item.reason}</p>
+        <p>{item.date} · {treatmentNames[item.treatment]}</p>
+        <p>{reasonSentence(item.reason)}</p>
         <p>Order IDs: {item.order_ids.join(', ') || 'None'}</p>
         <dl><Amount label="Change to what we owe you" cents={item.payable_cents} currency={statement.currency} /><Amount label="Change to debt" cents={item.debt_cents} currency={statement.currency} /></dl>
       </li>)}</ul>
@@ -163,11 +195,14 @@ export default function HeldPayoutsPanel({ ownOperation }: { ownOperation: () =>
       {!statement.payments.length && <p>No payments or corrections recorded in this period.</p>}
       <ul className="divide-y">{statement.payments.map(payment => <li key={payment.id} className="py-3 break-words">
         <p className="font-medium">{payment.uncertain ? 'Uncertain import — not counted as paid or applied' : payment.correction_of_id ? 'Payment correction' : 'Recorded payment'}</p>
-        <p>Payment ID: {payment.id}. Reason: {payment.reason}</p>
+        <p>Payment ID: {payment.id}.</p>
+        <p>{reasonSentence(payment.reason)}</p>
         {payment.correction_of_id && <p>Original payment ID: {payment.correction_of_id}</p>}
         <p>Completion recorded: {payment.completed_at || 'None'}</p>
         <dl>
-          <Amount label={payment.uncertain ? 'Reported amount (unverified)' : payment.correction_of_id ? 'Correction amount' : 'Paid (actual total sent)'} cents={payment.paid_amount_cents} currency={payment.paid_currency} />
+          {payment.correction_of_id && !payment.uncertain
+            ? <Amount label="Correction amount" cents={payment.amount_cents ?? (payment.reason === 'cash_return' ? payment.paid_amount_cents : null)} currency={statement.currency} emptyText={payment.reason === 'cash_return' ? 'Not confirmed' : 'Not applicable'} />
+            : <Amount label={payment.uncertain ? 'Reported amount (unverified)' : 'Paid (actual total sent)'} cents={payment.paid_amount_cents} currency={payment.paid_currency} />}
           <Amount label="Applied to what we owe you" cents={payment.applied_to_payable_cents} currency={statement.currency} />
         </dl>
       </li>)}</ul>

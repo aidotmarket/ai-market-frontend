@@ -69,6 +69,7 @@ export interface HeldStatement {
     completed_at: string | null;
     paid_currency: string | null;
     paid_amount_cents: number | null;
+    amount_cents?: number | null;
     applied_to_payable_cents: number;
     uncertain: boolean;
   }[];
