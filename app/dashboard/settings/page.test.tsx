@@ -10,6 +10,11 @@ import type { User } from '@/types';
 import { checkCompanySignIn } from '@/lib/company-sign-in';
 import { getConnectorGrants, getConnectorStatus } from '@/api/connector-oauth';
 import { getSellerPublicProfile } from '@/api/sellerProfile';
+import { getHeldStatement } from '@/api/heldPayouts';
+import { statementFixture } from '@/components/HeldPayoutsPanel.fixture';
+
+vi.mock('@/api/heldPayouts', () => ({ getHeldStatement: vi.fn(), downloadHeldStatement: vi.fn() }));
+beforeEach(() => { vi.mocked(getHeldStatement).mockResolvedValue(statementFixture()); });
 
 vi.mock('@/api/sellerProfile', async (original) => ({ ...await original<typeof import('@/api/sellerProfile')>(),
   getSellerPublicProfile: vi.fn(), updateSellerPublicProfile: vi.fn(),
@@ -70,6 +75,16 @@ describe('SettingsPage capability refresh', () => {
     await waitFor(() => expect(vi.mocked(getSellerPublicProfile)).toHaveBeenCalled());
   });
 
+  it('embeds the statement for a seller with historic international sales and a current Stripe method', async () => {
+    const fixture = statementFixture(); fixture.seller_payout_method = 'connect';
+    fixture.request_enabled = fixture.approval_enabled = false;
+    vi.mocked(getHeldStatement).mockResolvedValue(fixture);
+    render(<SettingsPage />);
+    expect(await screen.findByText(/Your current payout method is Stripe/)).toBeTruthy();
+    expect(screen.getByRole('heading', { name: 'International sale detail' })).toBeTruthy();
+    expect(getHeldStatement).toHaveBeenCalledWith({}, expect.any(AbortSignal));
+  });
+
   it.each([
     ['active', 'buyer', 'Seller'],
     ['provisioning', 'buyer', 'Seller (setting up)'],
@@ -112,7 +127,9 @@ describe('SettingsPage capability refresh', () => {
     render(<SettingsPage />);
     await waitFor(() => expect(capabilitiesApi.getCapabilities).toHaveBeenCalled());
     expect(screen.queryByLabelText('Public business name')).toBeNull();
+    expect(screen.queryByRole('heading', { name: 'International payout statement' })).toBeNull();
     expect(getSellerPublicProfile).not.toHaveBeenCalled();
+    expect(getHeldStatement).not.toHaveBeenCalled();
   });
 
   it.each(['buyer', 'seller'] as const)('makes Marketplace wallet findable for a %s without seller activation', async role => {

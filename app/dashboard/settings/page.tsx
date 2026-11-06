@@ -20,6 +20,7 @@ import SellerOperationContinuation from './SellerOperationContinuation';
 import { companySignInEnabled } from '@/lib/company-sign-in';
 import CompanyAuthenticator, { companyEnrollmentOffered } from '@/components/CompanyAuthenticator';
 import TotpQrCode from '@/components/TotpQrCode';
+import HeldPayoutsPanel from '@/components/HeldPayoutsPanel';
 
 type TwoFactorFlow = 'idle' | 'showing_qr' | 'verifying' | 'showing_backup_codes';
 type SecurityAction = 'disable' | 'regenerate' | null;
@@ -731,6 +732,7 @@ function SettingsVisit({ accountId, retireVisit }: {
         </div>
       </section>
       <ConnectedApps />
+      {isSeller && <HeldPayoutsPanel ownOperation={ownOperation} />}
       <SellerAuthority />
       <SellerOperationContinuation />
     </div>
