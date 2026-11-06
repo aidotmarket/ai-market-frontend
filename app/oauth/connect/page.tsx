@@ -1,16 +1,18 @@
 'use client';
+import { isLegacyActionAuthError } from '@/lib/action-auth-error';
 
 import { useEffect, useRef, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { useAuthStore } from '@/store/auth';
 import { CONNECTOR_CONTINUATION } from '@/lib/redirect';
-import { clearConnectorContinuation, connectorRequestPath, readConnectorContinuation, saveConnectorContinuation } from '@/lib/aim-data-continuation';
+import { clearConnectorContinuation, readConnectorContinuation, saveConnectorContinuation } from '@/lib/aim-data-continuation';
 import { decideConnectorRequest, getConnectorRequest, getConnectorStatus, type ConnectorRequest } from '@/api/connector-oauth';
 
 const expiredMessage = 'This connection request expired. Go back to the app and connect again.';
 const earlyAccessMessage = <>Connector access is limited during early access. See <a href="/docs/claude">ai.market/docs/claude</a>.</>;
 
 function errorKind(error: unknown): string {
+  if (isLegacyActionAuthError(error)) return 'insufficient_assurance';
   const response = (error as { response?: { status?: number; data?: { code?: string } } })?.response;
   if (response?.status === 410) return 'expired';
   if (response?.status === 401) return 'login';
@@ -118,27 +120,18 @@ export default function ConnectorConsentPage() {
     } finally { submitting.current = false; setBusy(false); }
   };
 
-  const signInAgain = () => {
-    const saved = readConnectorContinuation();
-    if (!saved) { setError('expired'); return; }
-    router.push(`/login?reauth=connector&redirect=${encodeURIComponent(connectorRequestPath(saved.request))}`);
-  };
 
-  const needsSignIn = error === 'insufficient_assurance' || error === 'recent_login_required';
+  const needsRefresh = ['login', 'sso_required', 'insufficient_assurance', 'recent_login_required', 'RECENT_LOGIN_REQUIRED', 'SECOND_FACTOR_REQUIRED', 'SECOND_FACTOR_ENROLLMENT_REQUIRED'].includes(error);
 
   return <main className="mx-auto max-w-lg space-y-6 px-6 py-16">
     {enabled === false ? <h1>Page not found</h1> : error ? <>
-      {needsSignIn && <h1 className="text-2xl font-bold">{"Confirm it's you"}</h1>}
-      <p role={needsSignIn ? 'status' : 'alert'} className={needsSignIn ? 'rounded-lg border border-gray-200 bg-gray-50 p-4 text-sm text-gray-700' : undefined}>{error === 'expired' ? expiredMessage
+      <p role="alert">{needsRefresh ? 'Please refresh the page and try again.' : error === 'expired' ? expiredMessage
         : error === 'EARLY_ACCESS_ONLY' ? earlyAccessMessage
         : error === 'email_unverified' ? 'Verify your email before connecting this app.'
-        : error === 'insufficient_assurance' ? `Your account uses two-factor authentication. Before ${metadata?.client.name || 'this app'} can work with your ai.market account, sign in again and enter your code. This makes sure only you can connect apps to your account.`
-        : error === 'recent_login_required' ? 'For your security, connecting an app needs a recent sign-in. Sign in again to continue; it only takes a moment.'
         : error === 'sso_required' ? 'Sign in with your organization’s SSO to continue.'
         : error === 'invalid' ? 'This connection request is invalid.'
         : error === 'buyer_permissions_stale' ? 'Buyer permissions changed. Reload permissions, review them, and approve again.'
         : 'Unable to complete this connection request.'}</p>
-      {needsSignIn && <button onClick={signInAgain} className="min-h-11 cursor-pointer rounded-lg bg-[#3F51B5] px-4 py-2 text-sm font-medium text-white transition-colors enabled:hover:bg-[#3545a0] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#3F51B5]">Sign in to continue</button>}
       {error === 'error' && <button onClick={() => setRevision((value) => value + 1)}>Retry</button>}
       {error === 'buyer_permissions_stale' && <button onClick={() => setRevision((value) => value + 1)}>Reload permissions</button>}
     </> : metadata && isAuthenticated && user ? <>

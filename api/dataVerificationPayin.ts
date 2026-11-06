@@ -13,7 +13,6 @@ import type {
 const READINESS_PATH = '/data-verification/payment-method/readiness';
 const SETUP_PATH = '/data-verification/payment-method/setup-sessions';
 const RECONCILE_PATH = '/data-verification/payment-method/setup-sessions/reconcile';
-const REAUTH_HEADER = 'X-PayIn-Reauth';
 
 const UUID_PATTERN =
   /^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$/;
@@ -173,13 +172,13 @@ export async function getDataVerificationPayInReadiness(): Promise<DataVerificat
 }
 
 export async function createDataVerificationPayInSetupSession(
-  reauthToken: string
+  reauthToken?: string
 ): Promise<DataVerificationPayInSetupSessionV1> {
   const body: DataVerificationPayInSetupCreateV1 = {
     version: 'data_verification_payin_setup_v1',
   };
   const response = await api.post<unknown>(SETUP_PATH, body, {
-    headers: { [REAUTH_HEADER]: reauthToken },
+    ...(reauthToken ? { headers: { 'X-PayIn-Reauth': reauthToken } } : {}),
   });
   return parseSetupSession(response.data);
 }
@@ -187,7 +186,7 @@ export async function createDataVerificationPayInSetupSession(
 export async function reconcileDataVerificationPayInSetupSession(
   setupAttemptId: string,
   checkoutSessionId: string,
-  reauthToken: string
+  reauthToken?: string
 ): Promise<DataVerificationPayInReconcileResultV1> {
   const body: DataVerificationPayInSetupReconcileV1 = {
     version: 'data_verification_payin_reconcile_v1',
@@ -195,7 +194,7 @@ export async function reconcileDataVerificationPayInSetupSession(
     checkout_session_id: checkoutSessionId,
   };
   const response = await api.post<unknown>(RECONCILE_PATH, body, {
-    headers: { [REAUTH_HEADER]: reauthToken },
+    ...(reauthToken ? { headers: { 'X-PayIn-Reauth': reauthToken } } : {}),
   });
   return parseReconcileResult(response.data);
 }

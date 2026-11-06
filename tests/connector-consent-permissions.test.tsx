@@ -11,7 +11,6 @@ const navigation = vi.hoisted(() => ({ replace: vi.fn(), push: vi.fn() }));
 vi.mock('next/navigation', () => ({ useRouter: () => navigation }));
 vi.mock('@/api/client', () => ({ api: { get: vi.fn(), post: vi.fn() } }));
 const assign = vi.fn();
-const path = `/oauth/connect?request=${consentId}`;
 let metadata: ReturnType<typeof consentMetadata>;
 const postPath = `/connector-oauth/requests/${consentId}/decision`;
 
@@ -177,13 +176,17 @@ it.each(['seller_consent_required', 'request_expired'])('keeps existing refusal 
   expect(api.post).toHaveBeenCalledOnce();
 });
 
-it('requires explicit Seller selection and approval again after reauthentication', async () => {
+it('requires explicit Seller selection and approval again after refreshing a legacy auth refusal', async () => {
   vi.mocked(api.post).mockRejectedValueOnce({ response: { status: 403, data: { code: 'recent_login_required' } } });
   const first = render(<ConnectorConsentPage />);
   fireEvent.click(await screen.findByRole('radio', { name: 'Seller' }));
   fireEvent.click(screen.getByRole('button', { name: 'Approve' }));
-  fireEvent.click(await screen.findByRole('button', { name: 'Sign in to continue' }));
-  expect(navigation.push).toHaveBeenCalledWith(`/login?reauth=connector&redirect=${encodeURIComponent(path)}`);
+  expect((await screen.findByRole('alert')).textContent).toBe('Please refresh the page and try again.');
+  expect(screen.queryByRole('button', { name: 'Approve' })).toBeNull();
+  expect(screen.queryByRole('button', { name: 'Sign in to continue' })).toBeNull();
+  expect(navigation.push).not.toHaveBeenCalled();
+  expect(assign).not.toHaveBeenCalled();
+  expect(readConnectorContinuation()?.request).toBe(consentId);
   first.unmount();
   render(<ConnectorConsentPage />);
   expect((await screen.findByRole('radio', { name: 'Buyer' }) as HTMLInputElement).checked).toBe(true);
@@ -191,6 +194,11 @@ it('requires explicit Seller selection and approval again after reauthentication
   fireEvent.click(screen.getByRole('radio', { name: 'Seller' }));
   sellerPermissions.forEach(item => expect(screen.getByText(item.description)).toBeTruthy());
   expect(api.post).toHaveBeenCalledOnce();
+  fireEvent.click(screen.getByRole('button', { name: 'Approve' }));
+  await waitFor(() => expect(api.post).toHaveBeenCalledTimes(2));
+  expect(api.post).toHaveBeenLastCalledWith(postPath, {
+    decision: 'approve', organization_id: null, csrf_nonce: 'nonce', tool_set: 'seller', seller_permissions_version: 1,
+  });
 });
 
 it.each(invalidBuyerMetadata)('refuses malformed or missing Buyer metadata without offering Approve: %j', async patch => {
@@ -274,15 +282,24 @@ it.each(['invalid', 'expired', 'unavailable'] as const)('keeps Buyer approval un
   expect(assign).not.toHaveBeenCalled();
 });
 
-it('requires explicit Buyer approval after reauthentication', async () => {
+it('requires explicit Buyer approval after refreshing a legacy auth refusal', async () => {
   vi.mocked(api.post).mockRejectedValueOnce({ response: { status: 403, data: { code: 'recent_login_required' } } });
   const first = render(<ConnectorConsentPage />);
   fireEvent.click(await screen.findByRole('button', { name: 'Approve' }));
-  fireEvent.click(await screen.findByRole('button', { name: 'Sign in to continue' }));
-  expect(navigation.push).toHaveBeenCalledWith(`/login?reauth=connector&redirect=${encodeURIComponent(path)}`);
+  expect((await screen.findByRole('alert')).textContent).toBe('Please refresh the page and try again.');
+  expect(screen.queryByRole('button', { name: 'Approve' })).toBeNull();
+  expect(screen.queryByRole('button', { name: 'Sign in to continue' })).toBeNull();
+  expect(navigation.push).not.toHaveBeenCalled();
+  expect(assign).not.toHaveBeenCalled();
+  expect(readConnectorContinuation()?.request).toBe(consentId);
   first.unmount();
   render(<ConnectorConsentPage />);
   expect((await screen.findByRole('radio', { name: 'Buyer' }) as HTMLInputElement).checked).toBe(true);
   expect(screen.getAllByRole('listitem').map(item => item.textContent)).toEqual(buyerPermissions.map(item => item.description));
   expect(api.post).toHaveBeenCalledOnce();
+  fireEvent.click(screen.getByRole('button', { name: 'Approve' }));
+  await waitFor(() => expect(api.post).toHaveBeenCalledTimes(2));
+  expect(api.post).toHaveBeenLastCalledWith(postPath, {
+    decision: 'approve', organization_id: null, csrf_nonce: 'nonce', tool_set: 'buyer', buyer_permissions_version: 1,
+  });
 });

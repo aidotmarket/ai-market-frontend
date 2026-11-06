@@ -1,4 +1,5 @@
 'use client';
+import { ACTION_AUTH_REFRESH, isLegacyActionAuthError } from '@/lib/action-auth-error';
 
 import { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react';
 import Link from 'next/link';
@@ -119,7 +120,7 @@ function OrderDetailVisit({ orderId, txIdParam, userId, sessionGeneration }: {
         if (err instanceof AxiosError && err.response?.status === 404) {
           setError('Order not found.');
         } else {
-          setError('Failed to load order details.');
+          setError(isLegacyActionAuthError(err) ? ACTION_AUTH_REFRESH : 'Failed to load order details.');
         }
       })
       .finally(() => {
@@ -142,7 +143,7 @@ function OrderDetailVisit({ orderId, txIdParam, userId, sessionGeneration }: {
     setDownloadLoading(true);
     getOrderAccess(orderId)
       .then((data) => { if (!cancelled) setOrderAccess({ orderId, buyerId, status, data }); })
-      .catch(() => { if (!cancelled) setDownloadError('Download access is unavailable.'); })
+      .catch(error => { if (!cancelled) setDownloadError(isLegacyActionAuthError(error) ? ACTION_AUTH_REFRESH : 'Download access is unavailable.'); })
       .finally(() => { if (!cancelled) setDownloadLoading(false); });
     return () => { cancelled = true; };
   }, [isBuyerOfRecord, order?.buyer_id, order?.workspace_delivery, order?.access_expired, order?.status, orderId]);
@@ -353,8 +354,8 @@ function OrderTransaction({ orderId, txIdParam, isBuyerOfRecord, isSellerOfRecor
         if (updated.order_id !== orderId || updated.id !== tx.id) throw new Error('Transaction response mismatch');
         setTx(updated);
         toast('Receipt confirmed!', 'success');
-      } catch {
-        if (lifetime.current === owner) toast('Failed to confirm receipt.', 'error');
+      } catch (error) {
+        if (lifetime.current === owner) toast(isLegacyActionAuthError(error) ? ACTION_AUTH_REFRESH : 'Failed to confirm receipt.', 'error');
       } finally {
         if (lifetime.current === owner) {
           actionPending.current = false;
@@ -378,8 +379,8 @@ function OrderTransaction({ orderId, txIdParam, isBuyerOfRecord, isSellerOfRecor
         if (updated.order_id !== orderId || updated.id !== tx.id) throw new Error('Transaction response mismatch');
         setTx(updated);
         toast('Marked as delivered!', 'success');
-      } catch {
-        if (lifetime.current === owner) toast('Failed to mark as delivered.', 'error');
+      } catch (error) {
+        if (lifetime.current === owner) toast(isLegacyActionAuthError(error) ? ACTION_AUTH_REFRESH : 'Failed to mark as delivered.', 'error');
       } finally {
         if (lifetime.current === owner) {
           actionPending.current = false;

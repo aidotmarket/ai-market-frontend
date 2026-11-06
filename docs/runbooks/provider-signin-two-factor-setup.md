@@ -4,13 +4,13 @@ Implementation is tied to backend candidate `e4ba2c4e072d74409b868771fda138d32ef
 
 ## Account policy
 
-Authenticated `GET/PATCH /auth/me` supplies optional `two_factor_setup_eligible`, `two_factor_setup_reason`, `two_factor_provider`, `seller_two_factor_satisfied`, and `reauth_method`. Google/GitHub current sessions without native TOTP hide new enrollment and explain “Sign-in security is managed by your Google/GitHub account.” This describes provider responsibility, never observed provider MFA. `totp_enabled` remains the native account state. Enabled native controls and protected disable/backup-code recovery remain available.
+Authenticated `GET/PATCH /auth/me` supplies optional `two_factor_setup_eligible`, `two_factor_setup_reason`, `two_factor_provider`, `seller_two_factor_satisfied`. Google/GitHub current sessions without native TOTP hide new enrollment and explain “Sign-in security is managed by your Google/GitHub account.” This describes provider responsibility, never observed provider MFA. `totp_enabled` remains the native account state. Enabled native controls and protected disable/backup-code recovery remain available.
 
 Settings and dashboard enrollment also handle the backend's 409 `two_factor_managed_by_provider` or `two_factor_managed_by_sso` refusal at setup and verification. Pending enrollment UI disappears when current policy forbids setup. No linked provider, `primary_auth`, password absence or account `auth_methods` supplies current provider assurance.
 
-The returned `reauth_method` selects the existing password, TOTP or magic-link modal. Magic-link sending requires the existing explicit Send link click; rendering never sends email. Verification, action token use, audience, expiry, CSRF and all backend checks remain unchanged. The payment-method prompt passes the returned method too, while retaining its existing native-TOTP fallback for old servers.
+Signed-in authenticator setup, disable and backup-code regeneration use the retained native session and token-bound CSRF without a reauthentication prompt. Only verification of the newly scanned secret asks for a code. Mutations refresh expired or near-expiry access tokens before computing CSRF and send once. Disable installs the replacement access token before reloading account policy; the backend replaces the HttpOnly refresh cookie and revokes other sessions. Backup-code regeneration leaves credentials unchanged.
 
-For older `/me` responses, settings/dashboard retain their prior native/password/magic-link selection and passwordless enforced-SSO behavior. Missing provider-policy fields do not infer provider assurance, fabricate MFA, or create new restrictions on unrelated workflows. Explicit unavailable enrollment remains explained in settings.
+For older `/me` responses, settings/dashboard retain the passwordless enforced-SSO restriction. Missing provider-policy fields do not infer provider assurance, fabricate MFA, or create new restrictions on unrelated workflows. Explicit unavailable enrollment remains explained in settings.
 
 ## Seller setup
 

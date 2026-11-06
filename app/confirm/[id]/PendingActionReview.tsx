@@ -5,10 +5,6 @@ import { useParams, useRouter, useSearchParams } from 'next/navigation';
 import { useAuthStore } from '@/store/auth';
 import { PENDING_ACTION_CONTINUATION } from '@/lib/redirect';
 import { hasRequiredReviewContent, safeLicenseUrl } from '@/lib/pending-action-review';
-import CompanySignIn from '@/components/CompanySignIn';
-import { companySignInEnabled } from '@/lib/company-sign-in';
-import ReauthModal from '@/app/dashboard/settings/ReauthModal';
-import { startProviderOAuth } from '@/components/OAuthButtons';
 import { decidePendingAction, getPendingAction, getSellerCapability, sellerAdmissionEnabled, pendingActionError, type PendingAction } from '@/api/pending-actions';
 import { checkoutBlock, checkoutContinuation, checkoutDomainEnabled, checkoutErrorCode } from '@/lib/checkout-domain';
 import Link from 'next/link';
@@ -41,11 +37,8 @@ export default function PendingActionReview() {
   currentIdentity.current = identity;
   const [review, setReview] = useState<{ identity: string; data: PendingAction } | null>(null);
   const [error, setError] = useState<{ identity: string; kind: ErrorKind } | null>(null);
-  const [authenticatorOpen, setAuthenticatorOpen] = useState(false);
   const [busy, setBusy] = useState(false);
   const [checkoutFailure, setCheckoutFailure] = useState<{ identity: string; block: NonNullable<ReturnType<typeof checkoutBlock>> } | null>(null);
-  const [reload, setReload] = useState(0);
-  const [reauthError, setReauthError] = useState('');
   const submitting = useRef(false);
   const capabilityRequest = useRef(0);
   const data = review?.identity === identity ? review.data : null;
@@ -66,13 +59,12 @@ export default function PendingActionReview() {
     setReview(null);
     setError(null);
     setCheckoutFailure(null);
-    setReauthError('');
     // Probe the API even without a session: flag-off 404 must stay inert.
     getPendingAction(id, token).then((data) => {
       if (active) { setReview({ identity, data }); setCapability({ identity, admission: data.admission }); }
     }).catch((cause) => { if (active) setError({ identity, kind: pendingActionError(cause) }); });
     return () => { active = false; };
-  }, [hydrated, isLoading, valid, id, token, identity, reload]);
+  }, [hydrated, isLoading, valid, id, token, identity]);
 
   useEffect(() => {
     if (!data || data.status !== 'pending_review') return;
@@ -130,10 +122,9 @@ export default function PendingActionReview() {
   // Re-render at each freshness boundary even when a status request stalls.
   void capabilityTick;
 
-  const decide = async (decision: 'confirm' | 'decline', reauthToken?: string) => {
+  const decide = async (decision: 'confirm' | 'decline') => {
     if (!data || data.status !== 'pending_review' || submitting.current || Date.parse(data.expires_at) <= Date.now()) return;
-    if (decision === 'confirm' && (!admitted || (kind && !(kind === 'second_factor' && reauthToken)) || !hasRequiredReviewContent(data.summary))) return;
-    if (decision === 'confirm' && user?.sso_enforced && user.totp_enabled && !reauthToken) { setAuthenticatorOpen(true); return; }
+    if (decision === 'confirm' && (!admitted || kind || !hasRequiredReviewContent(data.summary))) return;
     submitting.current = true;
     setBusy(true);
     try {
@@ -152,7 +143,7 @@ export default function PendingActionReview() {
         setCapability({ identity, admission });
         if (!sellerAdmissionEnabled(admission)) return;
       }
-      const result = await decidePendingAction(id, token, decision, data.summary_hash, ...(reauthToken ? [reauthToken] : []));
+      const result = await decidePendingAction(id, token, decision, data.summary_hash);
       if (currentIdentity.current === identity) {
         setReview({ identity, data: result }); setError(null);
         const next = checkoutDomainEnabled() && decision === 'confirm' && result.status === 'confirmed' && !result.error_code
@@ -170,37 +161,12 @@ export default function PendingActionReview() {
     } finally { submitting.current = false; setBusy(false); }
   };
 
-  // /auth/me reports the actual provider session. Linked account methods and
-  // primary_auth are not evidence of how this session signed in.
-  const companyLogin = companySignInEnabled() && (kind === 'company_login' || (user?.sso_enforced && !user.two_factor_provider && kind === 'login'));
-  const provider = user?.two_factor_provider;
-  const enroll = kind === 'enrollment' || (kind === 'second_factor' && !provider && !user?.totp_enabled);
-  const login = async () => {
-    if (!valid) return;
-    if (kind === 'company_login') {
-      router.push(`/dashboard/settings?redirect=${encodeURIComponent(path)}#security`);
-    } else if (kind === 'second_factor' && user?.sso_enforced && user.totp_enabled) {
-      setAuthenticatorOpen(true);
-    } else if (enroll) {
-      router.push(`/dashboard/settings?redirect=${encodeURIComponent(path)}#security`);
-    } else if (provider === 'google' || provider === 'github') {
-      setReauthError('');
-      try { await startProviderOAuth(provider, path); }
-      catch { setReauthError('Could not start provider sign-in. Please try again.'); }
-    } else {
-      router.push(`/login?reauth=pending-action&redirect=${encodeURIComponent(path)}`);
-    }
-  };
   const notFound = !valid || kind === 'not_found';
   const expired = kind === 'changed' || data?.status === 'expired' || (data?.status === 'pending_review' && Date.parse(data.expires_at) <= Date.now());
   const contentUnavailable = kind === 'summary_unavailable' || data?.error_code === 'SUMMARY_CONTENT_UNAVAILABLE' || (!!data && !hasRequiredReviewContent(data.summary));
   const actionable = data?.status === 'pending_review' && !expired && !notFound && kind !== 'unavailable' && !checkoutRefusal;
 
   return <main className="mx-auto max-w-xl space-y-6 px-6 py-16">
-    <ReauthModal key={identity} isOpen={authenticatorOpen && !!data && data.status === 'pending_review'} method="totp" onRecentLoginRequired={companySignInEnabled() && user?.sso_enforced && !user.two_factor_provider ? () => {
-      if (currentIdentity.current !== identity) return;
-      setAuthenticatorOpen(false); setError({ identity, kind: 'login' });
-    } : undefined} onClose={() => setAuthenticatorOpen(false)} onSuccess={async proof => { if (currentIdentity.current !== identity) return; setAuthenticatorOpen(false); await decide('confirm', proof); }} />
     {notFound ? <><h1 className="text-2xl font-bold">Confirmation not found</h1><p>This confirmation is unavailable.</p></>
       : !hydrated || isLoading || (!data && !kind) ? <p role="status">Loading confirmation…</p>
       : <>
@@ -236,12 +202,7 @@ export default function PendingActionReview() {
         {kind === 'unavailable' && <p role="alert">This request is temporarily unavailable. Please reload to check its status.</p>}
         {contentUnavailable && <p role="alert">Required request details are missing. Confirmation is disabled. Ask your assistant for a new request with complete app, time, effect and terms.</p>}
         {seller && data?.status === 'pending_review' && !admitted && <p role="alert">Seller confirmation is disabled while current capability is off or unavailable.</p>}
-        {(kind === 'company_login' || kind === 'login' || kind === 'second_factor' || kind === 'enrollment') && <div className="space-y-3" role="alert">
-          <p>{enroll ? 'Set up two-factor authentication before confirming this binding action. After setup, return here to review and click Confirm.' : provider
-            ? 'Sign in again with your provider, then return here to review and click Confirm.' : (kind === 'login' || kind === 'company_login') ? 'Sign in again to confirm. Login must be within the last 15 minutes.' : 'Verify your second factor again before confirming this binding action.'}</p>
-          {companyLogin ? <CompanySignIn allowOidc={!user?.auth_methods?.includes('saml')} returnPath={kind === 'company_login' ? '/dashboard/settings' : `/confirm/${id.toLowerCase()}`} onSuccess={() => { if (!currentIdentity.current.startsWith(`${user?.id}:`) || !currentIdentity.current.endsWith(`:${path}`)) return; setReauthError(''); setReview(null); setError(null); setReload(value => value + 1); }} /> : <button type="button" onClick={login} className="text-[#3F51B5] font-medium underline">{enroll ? 'Set up two-factor authentication' : provider ? `Sign in again with ${provider === 'google' ? 'Google' : 'GitHub'}` : kind === 'login' ? 'Sign in again' : 'Sign in and verify second factor'}</button>}
-          {reauthError && <p>{reauthError}</p>}
-        </div>}
+        {['company_login', 'login', 'second_factor', 'enrollment'].includes(kind) && <p role="alert">Please refresh the page and try again.</p>}
         {actionable && <>
           <p className="font-medium">Only confirm if you asked for this.</p>
           <div className="flex gap-3">

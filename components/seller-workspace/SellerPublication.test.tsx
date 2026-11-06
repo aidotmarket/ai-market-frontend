@@ -11,6 +11,10 @@ const api=vi.hoisted(()=>({readPublication:vi.fn(),publishListing:vi.fn()}));
 vi.mock('@/api/sellerListingPublication',()=>api);
 const approval={id:'approval',review_hash:'a',render_hash:'b'} as ApprovalReceipt;
 const publication={title:'Retail',slug:'retail',status:'published',is_listed:true};
+afterEach(() => {
+  expect(screen.queryByRole('dialog', { name: 'Re-authenticate' })).toBeNull();
+  expect(screen.queryByPlaceholderText('Enter code')).toBeNull();
+});
 afterEach(()=>{cleanup();vi.restoreAllMocks();});
 beforeEach(()=>{vi.resetAllMocks();api.readPublication.mockResolvedValue({publication_available:true,publication:null});});
 it('requires a click and the approved render before publishing',async()=>{

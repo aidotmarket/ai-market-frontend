@@ -8,6 +8,10 @@ vi.mock('./SellerPublication', () => ({default:()=>null}));
 const api = vi.hoisted(() => ({approveListingReview:vi.fn()}));
 vi.mock('@/api/sellerListingReview', async original => ({...await original<typeof import('@/api/sellerListingReview')>(),...api}));
 const review = {approval_available:true,review_hash:'a'.repeat(64),render_hash:'b'.repeat(64),confirmation_version:'seller-listing-confirmation-v1',confirmation_statements:{ownership_confirmed:'I have rights.',privacy_confirmed:'I reviewed privacy.',price_license_confirmed:'I confirm price and license.',public_disclosure_confirmed:'I understand public discovery.'}} as ListingReview;
+afterEach(() => {
+  expect(screen.queryByRole('dialog', { name: 'Re-authenticate' })).toBeNull();
+  expect(screen.queryByPlaceholderText('Enter code')).toBeNull();
+});
 afterEach(cleanup);
 beforeEach(() => vi.resetAllMocks());
 function confirmAll() { for (const checkbox of screen.getAllByRole('checkbox')) fireEvent.click(checkbox); }
@@ -98,5 +102,6 @@ it('offers native sign-in when approval still returns 401 after refresh',async()
   api.approveListingReview.mockRejectedValue({isAxiosError:true,response:{status:401}});
   render(<SellerApproval review={review} active rendered/>);confirmAll();
   fireEvent.click(screen.getByRole('button',{name:'Approve this review'}));
-  expect(await screen.findByRole('link',{name:'Sign in again'})).toBeTruthy();
+  expect(await screen.findByText('Please refresh the page and try again.')).toBeTruthy();
+  expect(screen.queryByRole('link',{name:'Sign in again'})).toBeNull();
 });

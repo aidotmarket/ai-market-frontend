@@ -13,6 +13,10 @@ const row=instrument();
 const approval={id:row.binding.approval_id,draft_id:row.binding.draft_id,draft_version:3,review_hash:hash,render_hash:hash,license_selection:row.license_selection} as ApprovalReceipt;
 const switches={seller:true,bulk:true,floors:true,tools:{publish_listing:false,unpublish_listing:false,bulk_publish_listings:false,bulk_unpublish_listings:false,bulk_update_listings:false}};
 beforeEach(()=>{window.history.replaceState({},'', '/dashboard/seller-workspace');useAuthStore.setState({user:{id:id(99)} as User,token:'session'});});
+afterEach(() => {
+  expect(screen.queryByRole('dialog', { name: 'Re-authenticate' })).toBeNull();
+  expect(screen.queryByPlaceholderText('Enter code')).toBeNull();
+});
 afterEach(()=>{cleanup();vi.restoreAllMocks();});
 function mockReads(existing:boolean,status=200) {
   return vi.spyOn(nativeClient,'get').mockImplementation(async path=>{
@@ -54,8 +58,8 @@ it.each([401,403,404,503])('hides signing with a neutral message for B3 HTTP %i 
 it('uses NativeSellerAuth for a missing first-party session',async()=>{
   useAuthStore.setState({token:null});
   render(<SellerPreparation approval={approval} active onChange={vi.fn()} onLoaded={vi.fn()}/>);
-  await screen.findByText('Sign in again to prepare this listing.');
-  expect(screen.getByRole('link',{name:'Sign in again'})).toBeTruthy();
+  await screen.findByText('Please refresh the page and try again.');
+  expect(screen.queryByRole('link',{name:'Sign in again'})).toBeNull();
   expect(screen.queryByRole('button',{name:'Prepare for publishing'})).toBeNull();
 });
 
@@ -69,9 +73,9 @@ it('hides signing when B3 returns 200 with floors off',async()=>{
 it.each(['SSO_REQUIRED','BAD_ORIGIN','CSRF_REQUIRED','FIRST_PARTY_SESSION_REQUIRED','RECENT_LOGIN_REQUIRED'])('offers native authentication for session 403 %s',async detail=>{
   mockReads(false).mockRejectedValue({isAxiosError:true,response:{status:403,data:{detail:{code:detail}}}});
   render(<SellerPreparation approval={approval} active onChange={vi.fn()} onLoaded={vi.fn()}/>);
-  await screen.findByText('Sign in again to prepare this listing.');
-  if(detail==='SSO_REQUIRED') expect(screen.getByRole('button',{name:'Company sign-in'})).toBeTruthy();
-  else expect(screen.getByRole('link',{name:'Sign in again'})).toBeTruthy();
+  await screen.findByText('Please refresh the page and try again.');
+  expect(screen.queryByRole('button',{name:'Company sign-in'})).toBeNull();
+  expect(screen.queryByRole('link',{name:'Sign in again'})).toBeNull();
   expect(screen.queryByText(/not allowed by the current seller policy/)).toBeNull();
 });
 it('keeps a policy denial distinct from authentication failures',async()=>{

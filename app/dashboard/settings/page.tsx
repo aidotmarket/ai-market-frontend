@@ -1,6 +1,7 @@
 'use client';
 
-import { accountReauthMethod, setupRestriction, setupRefusal } from '@/lib/two-factor-policy';
+import { sessionMutationError } from '@/api/session-mutation';
+import { setupRestriction, setupRefusal } from '@/lib/two-factor-policy';
 
 import { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react';
 import { useRouter } from 'next/navigation';
@@ -12,7 +13,6 @@ import { getCapabilities, type CapabilityStatus } from '@/api/capabilities';
 import { notifyCapabilitiesChanged } from '@/components/onboarding/SellerSetupProgressBar';
 import { useToast } from '@/components/Toast';
 import { AxiosError } from 'axios';
-import ReauthModal from './ReauthModal';
 import ConnectedApps from './ConnectedApps';
 import SellerAuthority from './SellerAuthority';
 import SellerPublicName from './SellerPublicName';
@@ -22,13 +22,6 @@ import CompanyAuthenticator, { companyEnrollmentOffered } from '@/components/Com
 import TotpQrCode from '@/components/TotpQrCode';
 
 type TwoFactorFlow = 'idle' | 'showing_qr' | 'verifying' | 'showing_backup_codes';
-type SecurityAction = 'disable' | 'regenerate' | null;
-type ReauthAction = 'enable_setup' | 'enable_retry' | Exclude<SecurityAction, null>;
-
-function isExpiredReauth(error: unknown): boolean {
-  return error instanceof AxiosError && error.response?.status === 400 &&
-    error.response.data?.detail === 'Re-authentication required';
-}
 
 // A token refresh keeps the visit; even a transient identity loss retires it.
 const settingsIdentity = (state: ReturnType<typeof useAuthStore.getState>) =>
@@ -74,14 +67,12 @@ function SettingsVisit({ accountId, retireVisit }: {
       && settingsIdentity(useAuthStore.getState()) === accountId;
   }, [accountId]);
 
-  const [strictCompanySetup, setStrictCompanySetup] = useState('');
   const [firstName, setFirstName] = useState('');
   const [lastName, setLastName] = useState('');
   const [companyName, setCompanyName] = useState('');
   const [saving, setSaving] = useState(false);
   const [dirty, setDirty] = useState(false);
   const [twoFactorFlow, setTwoFactorFlow] = useState<TwoFactorFlow>('idle');
-  const [securityAction, setSecurityAction] = useState<SecurityAction>(null);
   const [securityLoading, setSecurityLoading] = useState(false);
   const [verifyingSetup, setVerifyingSetup] = useState(false);
   const [securityError, setSecurityError] = useState('');
@@ -92,9 +83,6 @@ function SettingsVisit({ accountId, retireVisit }: {
   const [backupCodes, setBackupCodes] = useState<string[]>([]);
   const [backupCodesLabel, setBackupCodesLabel] = useState('Save these backup codes before you continue.');
   const [copiedBackupCodes, setCopiedBackupCodes] = useState(false);
-  const [isReauthOpen, setIsReauthOpen] = useState(false);
-  const [pendingReauthAction, setPendingReauthAction] = useState<ReauthAction | null>(null);
-  const [setupReauthToken, setSetupReauthToken] = useState('');
   const [enrolledForContinuation, setEnrolledForContinuation] = useState(false);
   const [sellerStatus, setSellerStatus] = useState<CapabilityStatus | null>(null);
   const [capabilitiesError, setCapabilitiesError] = useState(false);
@@ -183,7 +171,6 @@ function SettingsVisit({ accountId, retireVisit }: {
     const isCurrent = ownOperation();
     if (!isCurrent()) return;
     setTwoFactorFlow('idle');
-    setSecurityAction(null);
     setSecurityError('');
     setVerifyingSetup(false);
     setTotpSecret('');
@@ -193,20 +180,10 @@ function SettingsVisit({ accountId, retireVisit }: {
     setBackupCodes([]);
     setBackupCodesLabel('Save these backup codes before you continue.');
     setCopiedBackupCodes(false);
-    setIsReauthOpen(false);
-    setPendingReauthAction(null);
-    setSetupReauthToken('');
     setEnrolledForContinuation(false);
   };
 
-  const closeReauthModal = () => {
-    const isCurrent = ownOperation();
-    if (!isCurrent()) return;
-    setIsReauthOpen(false);
-    setPendingReauthAction(null);
-  };
-
-  const handleSetup2FA = async (reauthToken: string) => {
+  const handleSetup2FA = async () => {
     const isCurrent = ownOperation();
     if (!isCurrent()) return;
     if (setupRestriction(user)) { setSecurityError(setupRestriction(user)!); return; }
@@ -215,9 +192,8 @@ function SettingsVisit({ accountId, retireVisit }: {
     setSecurityError('');
 
     try {
-      const res = await setup2FA(reauthToken);
+      const res = await setup2FA();
       if (!isCurrent()) return;
-      setSetupReauthToken(reauthToken);
       setTotpSecret(res.secret);
       setTotpQrUri(res.qr_uri);
       setSetupExpiresIn(res.expires_in);
@@ -227,9 +203,6 @@ function SettingsVisit({ accountId, retireVisit }: {
       setTwoFactorFlow('showing_qr');
     } catch (err) {
       if (!isCurrent()) return;
-      if (user?.sso_enforced && err instanceof AxiosError && err.response?.data?.detail === 'CSRF_REQUIRED') {
-        setStrictCompanySetup(`${user.id}:${useAuthStore.getState().token}`); setTwoFactorFlow('idle'); return;
-      }
       if (setupRefusal(err, user)) {
         setSecurityError(setupRefusal(err, user)!);
         setTwoFactorFlow('idle');
@@ -243,7 +216,7 @@ function SettingsVisit({ accountId, retireVisit }: {
     }
   };
 
-  const handleVerify2FASetup = async (reauthToken: string, allowReauthRetry = true) => {
+  const handleVerify2FASetup = async () => {
     const isCurrent = ownOperation();
     if (!isCurrent()) return;
     if (setupRestriction(user)) { setSecurityError(setupRestriction(user)!); setTwoFactorFlow('idle'); return; }
@@ -253,7 +226,7 @@ function SettingsVisit({ accountId, retireVisit }: {
     setTwoFactorFlow('verifying');
 
     try {
-      const res = await verify2FASetup(totpCode.trim(), reauthToken);
+      const res = await verify2FASetup(totpCode.trim());
       if (!isCurrent()) return;
       setEnrolledForContinuation(true);
       setBackupCodes(res.backup_codes);
@@ -265,10 +238,6 @@ function SettingsVisit({ accountId, retireVisit }: {
     } catch (err) {
       if (!isCurrent()) return;
       setTwoFactorFlow('showing_qr');
-      if (allowReauthRetry && isExpiredReauth(err)) {
-        openReauthForAction('enable_retry');
-        return;
-      }
       if (setupRefusal(err, user)) {
         setSecurityError(setupRefusal(err, user)!);
         setTwoFactorFlow('idle');
@@ -318,7 +287,7 @@ function SettingsVisit({ accountId, retireVisit }: {
     }
   };
 
-  const handleSecurityActionWithReauth = async (action: Exclude<SecurityAction, null>, reauthToken: string) => {
+  const handleSecurityAction = async (action: 'disable' | 'regenerate') => {
     const isCurrent = ownOperation();
     if (!isCurrent()) return;
     setSecurityLoading(true);
@@ -326,9 +295,9 @@ function SettingsVisit({ accountId, retireVisit }: {
 
     try {
       if (action === 'disable') {
-        const res = await disable2FA(reauthToken, totpCode.trim());
+        const res = await disable2FA();
         if (!isCurrent()) return;
-        await refreshAuth();
+        await useAuthStore.getState().rotateSession(res);
         if (!isCurrent()) return;
         notifyCapabilitiesChanged();
         if (!isCurrent()) return;
@@ -337,17 +306,18 @@ function SettingsVisit({ accountId, retireVisit }: {
         return;
       }
 
-      const res = await regenerateBackupCodes(reauthToken, totpCode.trim());
+      const res = await regenerateBackupCodes();
       if (!isCurrent()) return;
       setBackupCodes(res.backup_codes);
       setBackupCodesLabel('Your backup codes were regenerated. Store this new set securely; older codes are no longer valid.');
       setTwoFactorFlow('showing_backup_codes');
-      setSecurityAction(null);
       setTotpCode('');
       toast('Backup codes regenerated', 'success');
     } catch (err) {
       if (!isCurrent()) return;
-      if (err instanceof AxiosError) {
+      if (sessionMutationError(err)) {
+        setSecurityError(sessionMutationError(err)!);
+      } else if (err instanceof AxiosError) {
         setSecurityError(
           err.response?.data?.detail ||
             (action === 'disable' ? 'Failed to disable 2FA.' : 'Failed to regenerate backup codes.')
@@ -357,33 +327,6 @@ function SettingsVisit({ accountId, retireVisit }: {
       }
     } finally {
       if (isCurrent()) setSecurityLoading(false);
-    }
-  };
-
-  const openReauthForAction = (action: ReauthAction) => {
-    const isCurrent = ownOperation();
-    if (!isCurrent()) return;
-    setPendingReauthAction(action);
-    setIsReauthOpen(true);
-  };
-
-  const handleReauthSuccess = async (reauthToken: string) => {
-    const isCurrent = ownOperation();
-    if (!isCurrent()) return;
-    if (!pendingReauthAction) return;
-
-    const action = pendingReauthAction;
-    closeReauthModal();
-    if (action === 'enable_setup') {
-      await handleSetup2FA(reauthToken);
-      if (!isCurrent()) return;
-    } else if (action === 'enable_retry') {
-      setSetupReauthToken(reauthToken);
-      await handleVerify2FASetup(reauthToken, false);
-      if (!isCurrent()) return;
-    } else {
-      await handleSecurityActionWithReauth(action, reauthToken);
-      if (!isCurrent()) return;
     }
   };
 
@@ -400,20 +343,12 @@ function SettingsVisit({ accountId, retireVisit }: {
     sellerStatus === 'provisioning' ||
     user.role === 'seller' ||
     user.role === 'admin';
-  const companySetup = (companySignInEnabled() && user.sso_enforced && !user.totp_enabled && !user.two_factor_provider) || companyEnrollmentOffered(user) || (user.sso_enforced && user.two_factor_setup_eligible === true && strictCompanySetup === `${user.id}:${useAuthStore.getState().token}`);
+  const companySetup = companyEnrollmentOffered(user) || (companySignInEnabled() && user.sso_enforced && !user.totp_enabled && !user.two_factor_provider && user.two_factor_setup_eligible === true);
   const managedSetupMessage = user?.totp_enabled ? null : setupRestriction(user) ?? (securityError === SSO_MANAGED_2FA_MESSAGE || securityError.startsWith('Sign-in security is managed by your ') ? securityError : null);
   const ssoManaged2FA = !!managedSetupMessage;
 
   return (
     <div className="max-w-2xl">
-      <ReauthModal
-        isOpen={isReauthOpen}
-        onClose={closeReauthModal}
-        onSuccess={handleReauthSuccess}
-        fallbackFocusRef={settingsHeadingRef}
-        method={accountReauthMethod(user)}
-      />
-
       <h1
         ref={settingsHeadingRef}
         tabIndex={-1}
@@ -542,7 +477,7 @@ function SettingsVisit({ accountId, retireVisit }: {
             </div>
             {!user.totp_enabled && !ssoManaged2FA && !companySetup && (
               <button
-                onClick={() => openReauthForAction('enable_setup')}
+                onClick={() => void handleSetup2FA()}
                 disabled={securityLoading}
                 className="rounded-lg bg-[#3F51B5] px-4 py-2 text-sm font-medium text-white hover:bg-[#3545a0] disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
               >
@@ -598,7 +533,7 @@ function SettingsVisit({ accountId, retireVisit }: {
                 </div>
                 <div className="flex gap-3">
                   <button
-                    onClick={() => handleVerify2FASetup(setupReauthToken)}
+                    onClick={() => handleVerify2FASetup()}
                     disabled={securityLoading || totpCode.trim().length !== 6}
                     className="rounded-lg bg-[#3F51B5] px-4 py-2 text-sm font-medium text-white hover:bg-[#3545a0] disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
                   >
@@ -654,78 +589,19 @@ function SettingsVisit({ accountId, retireVisit }: {
           {user.totp_enabled && (
             <div className="flex flex-wrap gap-3">
               <button
-                onClick={() => {
-                  if (!ownOperation()()) return;
-                  setSecurityAction('disable');
-                  setSecurityError('');
-                  setTotpCode('');
-                }}
+                onClick={() => void handleSecurityAction('disable')}
                 disabled={securityLoading}
                 className="rounded-lg border border-red-300 px-4 py-2 text-sm font-medium text-red-700 hover:bg-red-50 disabled:opacity-50"
               >
                 Disable 2FA
               </button>
               <button
-                onClick={() => {
-                  if (!ownOperation()()) return;
-                  setSecurityAction('regenerate');
-                  setSecurityError('');
-                  setTotpCode('');
-                }}
+                onClick={() => void handleSecurityAction('regenerate')}
                 disabled={securityLoading}
                 className="rounded-lg border border-gray-300 px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50 disabled:opacity-50"
               >
                 Regenerate backup codes
               </button>
-            </div>
-          )}
-
-          {securityAction && user.totp_enabled && (
-            <div className="rounded-lg border border-gray-200 p-4">
-              <h3 className="text-sm font-semibold text-gray-900 mb-2">
-                {securityAction === 'disable' ? 'Confirm 2FA disable' : 'Confirm backup code regeneration'}
-              </h3>
-              <p className="text-sm text-gray-500 mb-4">
-                Enter your current authenticator code to continue.
-              </p>
-              <div className="flex flex-col gap-3 sm:flex-row sm:items-end">
-                <div className="flex-1">
-                  <label htmlFor="securityTotpCode" className="block text-sm font-medium text-gray-700 mb-1">
-                    Current TOTP code
-                  </label>
-                  <input
-                    id="securityTotpCode"
-                    type="text"
-                    inputMode="numeric"
-                    autoComplete="one-time-code"
-                    maxLength={6}
-                    value={totpCode}
-                    onChange={(e) => { if (ownOperation()()) setTotpCode(e.target.value.replace(/\D/g, '').slice(0, 6)); }}
-                    className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-[#3F51B5] focus:border-transparent"
-                    placeholder="123456"
-                  />
-                </div>
-                <div className="flex gap-3">
-                  <button
-                    onClick={() => openReauthForAction(securityAction)}
-                    disabled={securityLoading || totpCode.trim().length !== 6}
-                    className={`rounded-lg px-4 py-2 text-sm font-medium text-white disabled:opacity-50 disabled:cursor-not-allowed transition-colors ${securityAction === 'disable' ? 'bg-red-600 hover:bg-red-700' : 'bg-[#3F51B5] hover:bg-[#3545a0]'}`}
-                  >
-                    {securityLoading ? 'Working...' : securityAction === 'disable' ? 'Confirm disable' : 'Generate new codes'}
-                  </button>
-                  <button
-                    onClick={() => {
-                  if (!ownOperation()()) return;
-                      setSecurityAction(null);
-                      setTotpCode('');
-                    }}
-                    disabled={securityLoading}
-                    className="rounded-lg border border-gray-300 px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50 disabled:opacity-50"
-                  >
-                    Cancel
-                  </button>
-                </div>
-              </div>
             </div>
           )}
         </div>

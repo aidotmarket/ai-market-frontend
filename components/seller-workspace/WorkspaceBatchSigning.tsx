@@ -57,16 +57,13 @@ export function BatchSigningScreen({ switches, preparation, onSigned }: { switch
   const ready = switches.seller && switches.bulk && switches.effects && !error && consent && instruments.length > 0 && instruments.length <= 50
     && instruments.every(i => i.status === 'prepared' && i.signing_required && i.license_selection.kind === 'standard'
       && !!texts[licenseDocumentPath('standard', i.license_selection.ai_training)] && !!texts[licenseDocumentPath('covenant')]);
-  const sign = async (reauth?: string) => {
-    if ((!ready && !reauth) || busy || done || !switches.effects) return;
-    // A factor retry is permitted only for the retained displayed request.
-    if (reauth && !request.current) return;
+  const sign = async () => {
+    if (!ready || busy || done || !switches.effects) return;
     setBusy(true); setError(null);
     const controller = new AbortController(); action.current = controller;
     try {
       request.current ??= { request_id: crypto.randomUUID(), csrf: nativeSession().csrf,
         instruments: instruments.map(i => ({ preparation_id: i.id, coverage_hash: i.coverage_hash, selection: i.license_selection })) };
-      if (reauth) request.current.reauth_token = reauth;
       request.current.csrf = nativeSession().csrf;
       const rows = await signInstruments(request.current, controller.signal); if (active.current) {setDone(true);onSigned?.(rows);}
     } catch(e) { if (active.current) setError(e); } finally { if (active.current) setBusy(false); }
@@ -92,6 +89,6 @@ export function BatchSigningScreen({ switches, preparation, onSigned }: { switch
     {!consent && !done && instruments.length > 0 && <p className="text-sm text-gray-600">Tick the box above to sign.</p>}
     {done && <p role="status">Licence signed. Your listing is not published yet. Go back to the review step and publish when ready.</p>}
     {!switches.effects && <p>Seller effects are off. Signing is unavailable.</p>}
-    <NativeSellerAuth error={error} onRetry={() => { request.current = null; void load(preparation); }} onToken={sign} />
+    <NativeSellerAuth error={error} />
   </section>;
 }
