@@ -22,11 +22,11 @@ export const metadata: Metadata = {
   alternates: { canonical: '/' },
   title: { absolute: 'ai.market — Sell data without giving it away' },
   description:
-    'Non-custodial B2B data marketplace. List with AIM Data, find with semantic search and data requests.',
+    'Non-custodial B2B data marketplace. List from your S3 or R2 bucket, or from your own servers with AIM Data. Find data with semantic search and data requests.',
   openGraph: {
     title: 'ai.market — Sell data without giving it away',
     description:
-      'Non-custodial B2B data marketplace. List with AIM Data, find with semantic search and data requests.',
+      'Non-custodial B2B data marketplace. List from your S3 or R2 bucket, or from your own servers with AIM Data. Find data with semantic search and data requests.',
     url: 'https://ai.market',
     siteName: 'ai.market',
     images: ['/og/home.png'],
@@ -36,7 +36,7 @@ export const metadata: Metadata = {
     card: 'summary_large_image',
     title: 'ai.market — Sell data without giving it away',
     description:
-      'Non-custodial B2B data marketplace. List with AIM Data, find with semantic search and data requests.',
+      'Non-custodial B2B data marketplace. List from your S3 or R2 bucket, or from your own servers with AIM Data. Find data with semantic search and data requests.',
     images: ['/og/home.png'],
   },
 };
@@ -101,7 +101,7 @@ const offerings: Offering[] = [
     description: [
       'Connect your S3 or R2 bucket, or run the open-source AIM Data gateway. Buyers download directly from your storage.',
     ],
-    tags: ['AIM Data gateway', 'Your infrastructure', 'You confirm each file'],
+    tags: ['S3 or R2', 'AIM Data gateway', 'Direct download'],
     cta: 'Sell Data',
     href: '/sell-data',
     accent: 'teal',
@@ -254,12 +254,13 @@ const howItWorks = [
   {
     title: 'Connect your data.',
     description:
-      'Connect your AWS S3 or Cloudflare R2 bucket in a few clicks. If your data has to stay on your own servers, run our open-source AIM Data gateway instead.',
+      'Connect your AWS S3 or Cloudflare R2 bucket with a read-only key. If your data has to stay on your own servers, run our open-source AIM Data gateway instead.',
   },
   {
     title: 'Let allAI build your listing.',
     description:
-      'allAI drafts the description from your files and your notes. You check it, set the price and license, and publish.',
+      'allAI drafts the description from your file names and your notes. You check it, set the price and license, and publish.',
+    extra: <>Prefer your own AI? <Link href="/docs/claude" className="text-[#3F51B5] hover:underline">Connect</Link> Claude or ChatGPT and list from the chat.</>,
   },
   {
     title: 'Get paid.',
@@ -611,6 +612,7 @@ export default async function LandingPage() {
                   <div className="flex h-10 w-10 items-center justify-center rounded-full bg-[#3F51B5] text-white text-sm font-bold">{idx + 1}</div>
                   <h3 className="mt-4 text-lg font-bold text-[#1A1A1A]">{step.title}</h3>
                   <p className="mt-2 text-sm leading-6 text-[#666666]"><VersionedTermsCopy legacy={step.description} terms12={step.title === 'Get paid.' ? CARD_HOME_PAYOUT : step.description} /></p>
+                  {step.extra && <p className="mt-2 text-sm leading-6 text-[#666666]">{step.extra}</p>}
                 </div>
               ))}
             </div>
