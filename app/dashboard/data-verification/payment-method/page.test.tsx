@@ -29,7 +29,6 @@ const payinApi = vi.hoisted(() => ({
 }));
 
 const auth = vi.hoisted(() => ({
-  submitReauth: vi.fn(),
 }));
 
 const navigation = vi.hoisted(() => ({
@@ -54,7 +53,7 @@ function deferred<T>() {
 
 async function expectDirectSetup() {
   await waitFor(() => expect(payinApi.createDataVerificationPayInSetupSession).toHaveBeenCalled());
-  expect(screen.queryByRole('dialog')).toBeNull(); expect(auth.submitReauth).not.toHaveBeenCalled();
+  expect(screen.queryByRole('dialog')).toBeNull();
 }
 
 
@@ -84,7 +83,6 @@ describe('data-verification payment-method page', () => {
     window.sessionStorage.clear();
     window.history.replaceState({}, '', '/dashboard/data-verification/payment-method');
     payinApi.getDataVerificationPayInReadiness.mockResolvedValue(readiness('setup_required'));
-    auth.submitReauth.mockResolvedValue({ token: 'fresh-setup-token' });
   });
 
 

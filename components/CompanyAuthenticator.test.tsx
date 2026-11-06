@@ -2,6 +2,7 @@
 import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { afterEach, beforeEach, expect, it, vi } from 'vitest';
 import { useAuthStore } from '@/store/auth';
+import * as authApi from '@/api/auth';
 import type { User } from '@/types';
 const mocks = vi.hoisted(() => ({ setup: vi.fn(), verify: vi.fn(), recover: vi.fn(), push: vi.fn(), refresh: vi.fn(), signIn: vi.fn() }));
 vi.mock('next/navigation', () => ({ useRouter: () => ({ push: mocks.push }) }));
@@ -15,9 +16,11 @@ beforeEach(() => {
   vi.resetAllMocks(); vi.stubEnv('NEXT_PUBLIC_ORG_SSO_WEB_RETURN_ENABLED', 'false'); window.history.replaceState(null, '', '/dashboard/settings');
   useAuthStore.setState({ user, token: 'session', refreshAuth: mocks.refresh });
   mocks.setup.mockResolvedValue({ secret: 'SECRET', qr_uri: 'otpauth://totp/fixture?secret=SECRET', expires_in: 600 });
+  mocks.recover.mockResolvedValue({ access_token: 'replacement', token_type: 'bearer', message: 'disabled' });
+  vi.spyOn(authApi, 'getMe').mockResolvedValue(user);
   mocks.verify.mockResolvedValue({ backup_codes: ['backup-one', 'backup-two'] });
 });
-afterEach(() => { cleanup(); vi.useRealTimers(); vi.unstubAllEnvs(); });
+afterEach(() => { cleanup(); vi.restoreAllMocks(); vi.useRealTimers(); vi.unstubAllEnvs(); });
 const start = async () => { render(<CompanyAuthenticator />); fireEvent.click(screen.getByRole('button', { name: 'Set up company authenticator' })); await screen.findByText('SECRET'); };
 const verify = () => { fireEvent.change(screen.getByLabelText('Authenticator code'), { target: { value: '123456' } }); fireEvent.click(screen.getByRole('button', { name: 'Verify and enable' })); };
 it.each(['oidc', 'saml'])('offers fresh server-approved %s enrollment', method => {
@@ -52,13 +55,14 @@ it('expires setup locally without submitting a code', async () => {
   mocks.setup.mockResolvedValue({ secret: 'SECRET', qr_uri: 'otpauth://fixture', expires_in: -1 });
   await start(); verify(); await screen.findByRole('alert'); expect(mocks.verify).not.toHaveBeenCalled();
 });
-it('recovers in one click, refreshes retired credentials and offers re-enrollment', async () => {
+it('recovers in one click, installs replacement credentials and offers re-enrollment', async () => {
   render(<CompanyAuthenticator recovery />);
   expect(screen.queryByLabelText('Backup code')).toBeNull();
   fireEvent.click(screen.getByRole('button', { name: 'Disable lost authenticator' }));
   await screen.findByText(/Authenticator disabled/);
   expect(mocks.recover).toHaveBeenCalledExactlyOnceWith();
-  expect(mocks.refresh).toHaveBeenCalledTimes(1);
+  expect(mocks.refresh).not.toHaveBeenCalled();
+  expect(useAuthStore.getState().token).toBe('replacement');
   expect(screen.getByRole('link', { name: 'Set up a new authenticator' }).getAttribute('href')).toBe('/dashboard/settings#security');
   expect(mocks.verify).not.toHaveBeenCalled();
 });
@@ -78,7 +82,7 @@ it.each(['true', 'false'])('starts company enrollment without sign-in when the r
   expect(screen.queryByLabelText('Company sign-in ID')).toBeNull();
 });
 it('shows a failed recovery and allows retry without requesting proof', async () => {
-  mocks.recover.mockRejectedValueOnce({ response: { status: 403, data: { detail: 'RECENT_LOGIN_REQUIRED' } } }).mockResolvedValueOnce({});
+  mocks.recover.mockRejectedValueOnce({ response: { status: 403, data: { detail: 'RECENT_LOGIN_REQUIRED' } } }).mockResolvedValueOnce({ access_token: 'replacement', token_type: 'bearer' });
   render(<CompanyAuthenticator recovery />);
   fireEvent.click(screen.getByRole('button', { name: 'Disable lost authenticator' }));
   await screen.findByText('Please refresh the page and try again.');
@@ -89,4 +93,15 @@ it('shows a failed recovery and allows retry without requesting proof', async ()
   expect(mocks.recover).toHaveBeenNthCalledWith(1);
   expect(mocks.recover).toHaveBeenNthCalledWith(2);
   expect(mocks.signIn).not.toHaveBeenCalled();
+});
+
+it('keeps a successful setup after preflight rotates the access token', async () => {
+  mocks.setup.mockImplementation(async () => {
+    useAuthStore.setState({ token: 'fresh-session' });
+    return { secret: 'REFRESHED', qr_uri: 'otpauth://fixture', expires_in: 600 };
+  });
+  render(<CompanyAuthenticator />);
+  fireEvent.click(screen.getByRole('button', { name: 'Set up company authenticator' }));
+  await screen.findByText('REFRESHED');
+  expect(mocks.push).not.toHaveBeenCalled();
 });

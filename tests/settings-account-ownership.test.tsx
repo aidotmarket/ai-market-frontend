@@ -13,7 +13,7 @@ const mocks = vi.hoisted(() => ({
 const fixture = (id: string): User => ({ id, email: `${id}@example.invalid`, first_name: `Synthetic ${id}`,
   last_name: 'Fixture', company_name: '', role: 'buyer', created_at: '2026-01-01',
   totp_enabled: false, auth_methods: ['password'], two_factor_setup_eligible: true,
-  reauth_method: 'password' } as User);
+  status: 'active', email_verified_at: null, primary_auth: 'password' });
 let state = { user: fixture('A') as User | null, token: 'unusable-A' as string | null,
   isAuthenticated: true, isLoading: false, hydrated: true, refreshAuth: mocks.refresh };
 const listeners = new Set<(next: typeof state, previous: typeof state) => void>();

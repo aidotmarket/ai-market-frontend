@@ -23,7 +23,7 @@ vi.mock('@/api/connect', () => ({ getConnectStatus: ports.refused, getConnectOnb
 vi.mock('@/api/auth', () => ({ setup2FA: ports.refused, verify2FASetup: ports.refused, SSO_MANAGED_2FA_MESSAGE: 'Synthetic' }));
 vi.mock('@/api/seller', () => ({ getSellerStats: ports.refused }));
 vi.mock('@/api/listings', () => ({ getMyListings: ports.refused }));
-vi.mock('@/lib/two-factor-policy', () => ({ accountReauthMethod: () => 'password', setupRestriction: () => null, setupRefusal: ports.refused, sellerSecuritySatisfied: () => true }));
+vi.mock('@/lib/two-factor-policy', () => ({ setupRestriction: () => null, setupRefusal: ports.refused, sellerSecuritySatisfied: () => true }));
 vi.mock('@/components/CompanyAuthenticator', () => ({ companyEnrollmentOffered: () => false }));
 vi.mock('@/components/onboarding/SellerSetupProgressBar', () => ({ notifyCapabilitiesChanged: ports.refused }));
 vi.mock('@/app/dashboard/settings/ReauthModal', () => ({ default: () => null }));

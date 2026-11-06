@@ -18,7 +18,6 @@ const connectApi = vi.hoisted(() => ({
 
 const authApi = vi.hoisted(() => ({
   setup2FA: vi.fn(),
-  submitReauth: vi.fn(),
   verifyReauthMagicLink: vi.fn(),
   verify2FASetup: vi.fn(),
 }));
@@ -125,7 +124,7 @@ describe('DashboardOverview seller setup 2FA state', () => {
 
   it.each(['google','github'] as const)('unlocks Stripe from server current-policy missing steps for %s, without native MFA',async provider=>{
     useAuthStore.setState({user:{...baseUser,two_factor_setup_eligible:false,two_factor_setup_reason:'two_factor_managed_by_provider',
-      two_factor_provider:provider,seller_two_factor_satisfied:true,reauth_method:'magic_link'}});
+      two_factor_provider:provider,seller_two_factor_satisfied:true}});
     capabilitiesApi.getCapabilities.mockResolvedValue({seller:{effective_status:'provisioning',missing_steps:['stripe_payouts_live']},next_action:{capability:'seller',step:'stripe_payouts_live'}});
     connectApi.getConnectStatus.mockResolvedValue({data:{details_submitted:false}});sellerApi.getSellerStats.mockResolvedValue({data:sellerStats});listingsApi.getMyListings.mockResolvedValue({data:[]});
     connectApi.getConnectOnboarding.mockResolvedValue({data:{url:'https://connect.stripe.com/synthetic'}});
@@ -187,7 +186,7 @@ describe('DashboardOverview seller setup 2FA state', () => {
     render(<DashboardOverview />);
     expect(await screen.findByText("Two-factor authentication for your account is managed by your organization's single sign-on.")).toBeTruthy();
     expect(screen.queryByRole('button', { name: 'Enable 2FA' })).toBeNull();
-    expect(authApi.submitReauth).not.toHaveBeenCalled();
+
   });
 
   it('shows the SSO managed message returned by setup', async () => {
@@ -274,7 +273,7 @@ describe('DashboardOverview seller setup 2FA state', () => {
     expect(await screen.findByText('Invalid verification code')).toBeTruthy();
     expect(screen.getByText('setup-secret')).toBeTruthy();
     expect(authApi.verify2FASetup).toHaveBeenCalledExactlyOnceWith('123456');
-    expect(authApi.submitReauth).not.toHaveBeenCalled();
+
     expect(screen.queryByRole('dialog', { name: 'Re-authenticate' })).toBeNull();
   });
 
@@ -285,7 +284,7 @@ describe('DashboardOverview seller setup 2FA state', () => {
     render(<DashboardOverview />);
     fireEvent.click(await screen.findByRole('button', { name: 'Enable 2FA' }));
     expect(screen.queryByRole('dialog', { name: 'Re-authenticate' })).toBeNull();
-    expect(authApi.submitReauth).not.toHaveBeenCalled();
+
     expect(authApi.verifyReauthMagicLink).not.toHaveBeenCalled();
     expect(await screen.findByText('setup-secret')).toBeTruthy();
     expect(authApi.setup2FA).toHaveBeenCalledWith();

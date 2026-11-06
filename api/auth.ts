@@ -1,7 +1,7 @@
 'use client';
 
 import { api } from './client';
-import { deleteSessionMutation, postSessionMutation } from './session-mutation';
+import { postSessionMutation } from './session-mutation';
 import type {
   LoginResult,
   PreAuthRequiredResponse,
@@ -95,17 +95,7 @@ export const setup2FA = () => postSessionMutation<TOTPSetupResponse>('/auth/2fa/
 export const verify2FASetup = (code: string) =>
   postSessionMutation<TOTPVerifySetupResponse>('/auth/2fa/verify-setup', { code });
 
-export const oauthUnlink = (provider: string) =>
-  deleteSessionMutation<{ message: string }>(`/auth/oauth/${provider}/unlink`, {});
-
-export async function submitReauth(credential: string, method: 'password' | 'totp' | 'magic_link' = 'totp'): Promise<ReauthResponse> {
-  const res = await api.post<ReauthResponse>('/auth/reauth', method === 'password'
-    ? { method, password: credential }
-    : method === 'magic_link' ? { method } : { code: credential });
-  return res.data;
-}
-
-export const disable2FA = () => postSessionMutation<{ message: string }>('/auth/2fa/disable', {});
+export const disable2FA = () => postSessionMutation<TokenResponse & { message: string }>('/auth/2fa/disable', {});
 
 export const regenerateBackupCodes = () =>
   postSessionMutation<{ backup_codes: string[] }>('/auth/2fa/regenerate-backup-codes', {});

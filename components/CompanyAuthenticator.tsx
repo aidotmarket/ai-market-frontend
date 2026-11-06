@@ -3,7 +3,8 @@
 import { useRef, useState } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
-import { useAuthStore } from '@/store/auth';
+import { authSessionOwner } from '@/lib/auth-session-owner';
+import { authSessionIdentity, useAuthStore } from '@/store/auth';
 import { setupCompanyAuthenticator, verifyCompanyAuthenticator, recoverCompanyAuthenticator, companyAuthenticatorError } from '@/api/company-authenticator';
 import { PENDING_ACTION_CONTINUATION } from '@/lib/redirect';
 import TotpQrCode from './TotpQrCode';
@@ -24,7 +25,8 @@ export default function CompanyAuthenticator({ recovery = false }: { recovery?: 
   const [error, setError] = useState('');
   const [busy, setBusy] = useState(false);
   const locked = useRef(false);
-  const identity = `${useAuthStore.getState().user?.id}:${useAuthStore.getState().token}`;
+  const owner = authSessionOwner();
+  const identity = authSessionIdentity(useAuthStore.getState());
   const run = async (action: () => Promise<void>) => {
     if (locked.current) return;
     locked.current = true; setBusy(true); setError('');
@@ -37,12 +39,12 @@ export default function CompanyAuthenticator({ recovery = false }: { recovery?: 
       }
     } finally { locked.current = false; setBusy(false); }
   };
-  const sameSession = () => identity === `${useAuthStore.getState().user?.id}:${useAuthStore.getState().token}`;
+  const sameSession = () => owner === authSessionOwner() && identity !== null
+    && identity === authSessionIdentity(useAuthStore.getState());
   const start = () => run(async () => {
-    const session = identity;
     if (useAuthStore.getState().user?.two_factor_setup_eligible !== true) throw new Error('SETUP_INELIGIBLE');
     const result = await setupCompanyAuthenticator();
-    if (session !== `${useAuthStore.getState().user?.id}:${useAuthStore.getState().token}`) return;
+    if (!sameSession()) return;
     setSetup({ ...result, expires: Date.now() + result.expires_in * 1000 }); setStage('qr');
   });
   const verify = () => run(async () => {
@@ -53,10 +55,10 @@ export default function CompanyAuthenticator({ recovery = false }: { recovery?: 
     notifyCapabilitiesChanged();
   });
   const recover = () => run(async () => {
-    await recoverCompanyAuthenticator();
+    const result = await recoverCompanyAuthenticator();
+    if (!sameSession()) return;
+    await useAuthStore.getState().rotateSession(result);
     setCode(''); setStage('disabled'); notifyCapabilitiesChanged();
-    // Disable retires the access-token generation. Refresh before re-enrollment.
-    await useAuthStore.getState().refreshAuth();
   });
   const done = () => run(async () => {
     setCodes([]);

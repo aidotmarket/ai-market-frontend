@@ -11,7 +11,7 @@ async function fixture(page:Page,mode:Mode,firstPublish=false){
  let published=false;
  const provider=mode==='google'||mode==='github'?mode:null;
  const user={id:'00000000-0000-4000-8000-000000000001',email:'synthetic@example.test',first_name:'Sam',last_name:'Seller',company_name:'Fixture Co',role:'seller',status:'active',created_at:'2026-10-01T00:00:00Z',email_verified_at:'2026-10-01T00:00:00Z',totp_enabled:mode==='native',auth_methods:provider?[provider,'password']:mode==='sso'?['sso']:['password'],primary_auth:'password',sso_enforced:mode==='sso',
- two_factor_setup_eligible:mode==='password',two_factor_setup_reason:provider?'two_factor_managed_by_provider':mode==='native'?'two_factor_already_enabled':mode==='sso'?'two_factor_managed_by_sso':null,two_factor_provider:provider,seller_two_factor_satisfied:!!provider||mode==='native',reauth_method:provider?'magic_link':mode==='native'?'totp':mode==='sso'?'magic_link':'password'};
+ two_factor_setup_eligible:mode==='password',two_factor_setup_reason:provider?'two_factor_managed_by_provider':mode==='native'?'two_factor_already_enabled':mode==='sso'?'two_factor_managed_by_sso':null,two_factor_provider:provider,seller_two_factor_satisfied:!!provider||mode==='native'};
  const account=()=>({buyer:{persisted_status:'active',effective_status:'active',missing_steps:[],reason:null},seller:{persisted_status:firstPublish&&!published?'active':'provisioning',effective_status:firstPublish&&!published?'active':'provisioning',missing_steps:user.seller_two_factor_satisfied?['stripe_payouts_live']:['totp_enabled','stripe_payouts_live'],reason:null},next_action:{capability:'seller',step:user.seller_two_factor_satisfied?'stripe_payouts_live':'totp_enabled'}});
  page.on('pageerror',e=>errors.push(e.message));
  await page.route('**/*',async route=>{
@@ -35,7 +35,6 @@ async function fixture(page:Page,mode:Mode,firstPublish=false){
   if(path==='/seller-workspace/connections'&&method==='GET')return reply({connections:[]});
   if(path.startsWith('/seller-workspace/connections')&&method==='POST')return reply({detail:'Complete 2FA setup before connecting cloud storage'},403);
   if(path==='/data-verification/payment-method/readiness')return reply({version:'data_verification_payin_readiness_v1',state:'setup_required',can_start_setup:true,can_replace_payment_method:false,message:'fixture'});
-  if(path==='/auth/reauth')return reply({method:user.reauth_method,token:null,message:'Re-authentication link sent',token_type:null,expires_in:null});
   if(path==='/listings/fixture/publish'){published=true;return reply({status:'published'});}
   if(path==='/listings/fixture')return reply({id:'fixture',title:'Synthetic listing',status:'unlisted',price:25,description:'Isolated listing fixture'});
   if(path==='/legal/terms/current')return reply({terms_version:'1.2'});

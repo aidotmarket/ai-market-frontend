@@ -1,5 +1,6 @@
 'use client';
 
+import { sessionMutationError } from '@/api/session-mutation';
 import { setupRestriction, setupRefusal } from '@/lib/two-factor-policy';
 
 import { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react';
@@ -296,7 +297,7 @@ function SettingsVisit({ accountId, retireVisit }: {
       if (action === 'disable') {
         const res = await disable2FA();
         if (!isCurrent()) return;
-        await refreshAuth();
+        await useAuthStore.getState().rotateSession(res);
         if (!isCurrent()) return;
         notifyCapabilitiesChanged();
         if (!isCurrent()) return;
@@ -314,7 +315,9 @@ function SettingsVisit({ accountId, retireVisit }: {
       toast('Backup codes regenerated', 'success');
     } catch (err) {
       if (!isCurrent()) return;
-      if (err instanceof AxiosError) {
+      if (sessionMutationError(err)) {
+        setSecurityError(sessionMutationError(err)!);
+      } else if (err instanceof AxiosError) {
         setSecurityError(
           err.response?.data?.detail ||
             (action === 'disable' ? 'Failed to disable 2FA.' : 'Failed to regenerate backup codes.')

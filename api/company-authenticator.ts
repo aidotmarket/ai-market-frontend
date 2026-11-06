@@ -1,9 +1,9 @@
 import { postSessionMutation as post } from './session-mutation';
-import type { TOTPSetupResponse, TOTPVerifySetupResponse } from '@/types';
+import type { TokenResponse, TOTPSetupResponse, TOTPVerifySetupResponse } from '@/types';
 
 export const setupCompanyAuthenticator = () => post<TOTPSetupResponse>('/auth/2fa/setup', {});
 export const verifyCompanyAuthenticator = (code: string) => post<TOTPVerifySetupResponse>('/auth/2fa/verify-setup', { code });
-export const recoverCompanyAuthenticator = () => post<{ message: string }>('/auth/2fa/disable', {});
+export const recoverCompanyAuthenticator = () => post<TokenResponse & { message: string }>('/auth/2fa/disable', {});
 
 export function companyAuthenticatorError(error: unknown): string {
   const detail = (error as { response?: { data?: { detail?: string }; status?: number } })?.response?.data?.detail;

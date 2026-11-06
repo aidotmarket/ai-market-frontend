@@ -6,7 +6,7 @@ vi.mock('./client', () => ({
   api: { post: apiPost },
 }));
 
-const { register, requestMagicLink, submitReauth, verifyReauthMagicLink } = await import('./auth');
+const { register, requestMagicLink, verifyReauthMagicLink } = await import('./auth');
 
 describe('magic link purpose', () => {
   beforeEach(() => apiPost.mockReset());
@@ -44,46 +44,8 @@ describe('auth register API', () => {
   });
 });
 
-describe('auth reauthentication API', () => {
-  beforeEach(() => {
-    apiPost.mockReset();
-  });
-
-  it('uses the deployed /auth/reauth contract and preserves its token field', async () => {
-    apiPost.mockResolvedValue({
-      data: {
-        token: 'backend-reauth-token',
-        expires_in: 60,
-        token_type: 'reauth',
-        message: null,
-        method: 'totp',
-      },
-    });
-
-    await expect(submitReauth('123456')).resolves.toEqual({
-      token: 'backend-reauth-token',
-      expires_in: 60,
-      token_type: 'reauth',
-      message: null,
-      method: 'totp',
-    });
-    expect(apiPost).toHaveBeenCalledWith('/auth/reauth', { code: '123456' });
-  });
-
-  it('sends a password for an account that has not enabled 2FA', async () => {
-    apiPost.mockResolvedValue({ data: { token: 'password-reauth-token' } });
-    await submitReauth('password with spaces', 'password');
-    expect(apiPost).toHaveBeenCalledWith('/auth/reauth', {
-      method: 'password', password: 'password with spaces',
-    });
-  });
-
-  it('requests a magic link and exchanges its token for reauthentication', async () => {
-    apiPost.mockResolvedValueOnce({ data: { token: null, method: 'magic_link', message: 'Re-authentication link sent' } });
-    apiPost.mockResolvedValueOnce({ data: { token: 'magic-reauth-token', method: 'magic_link' } });
-    await expect(submitReauth('', 'magic_link')).resolves.toMatchObject({ token: null, method: 'magic_link' });
-    await expect(verifyReauthMagicLink('email-token')).resolves.toMatchObject({ token: 'magic-reauth-token' });
-    expect(apiPost).toHaveBeenNthCalledWith(1, '/auth/reauth', { method: 'magic_link' });
-    expect(apiPost).toHaveBeenNthCalledWith(2, '/auth/magic-link/verify', { token: 'email-token' });
-  });
+it('exchanges a legacy reauthentication magic link', async () => {
+  apiPost.mockResolvedValueOnce({ data: { token: 'magic-reauth-token', method: 'magic_link' } });
+  await expect(verifyReauthMagicLink('email-token')).resolves.toMatchObject({ token: 'magic-reauth-token' });
+  expect(apiPost).toHaveBeenCalledWith('/auth/magic-link/verify', { token: 'email-token' });
 });

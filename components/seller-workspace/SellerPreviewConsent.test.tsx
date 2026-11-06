@@ -5,13 +5,11 @@ import SellerPreviewConsent, { PREVIEW_CONSENT_WORDING } from './SellerPreviewCo
 import { readPreview, reviewRevokePreview, revokePreview } from '@/api/connector-seller-settings';
 import { useSellerSwitches } from '@/hooks/useSellerSwitches';
 import { useAuthStore } from '@/store/auth';
-import { submitReauth } from '@/api/auth';
 import { checkCompanySignIn } from '@/lib/company-sign-in';
 import type { User } from '@/types';
 import { id, preview, hash } from '@/tests/fixtures/seller-authority';
 vi.mock('@/hooks/useSellerSwitches', () => ({ useSellerSwitches: vi.fn() }));
 vi.mock('@/api/connector-seller-settings', async original => ({ ...await original<typeof import('@/api/connector-seller-settings')>(), readPreview: vi.fn(), reviewRevokePreview: vi.fn(), revokePreview: vi.fn() }));
-vi.mock('@/api/auth', async original => ({ ...await original<typeof import('@/api/auth')>(), submitReauth: vi.fn() }));
 vi.mock('@/lib/company-sign-in', async original => ({ ...await original<typeof import('@/lib/company-sign-in')>(), checkCompanySignIn: vi.fn() }));
 beforeEach(() => { vi.resetAllMocks(); useAuthStore.setState({ user: { id: id(99) } as User, token: 'retained-session' }); vi.mocked(useSellerSwitches).mockReturnValue({ seller: true, effects: false, bulk: false }); vi.mocked(readPreview).mockResolvedValue(preview); vi.mocked(reviewRevokePreview).mockImplementation(async body => { const { csrf: _csrf, reauth_token: _token, review_hash: _hash, ...decision } = body; return { action: 'aim.listing.ai_preview_consent.revoke', decision, review_hash: hash }; }); vi.mocked(revokePreview).mockResolvedValue({ decision_id: id(90), version: 4, enabled: false }); });
 afterEach(() => {
@@ -47,5 +45,5 @@ it.each(['RECENT_LOGIN_REQUIRED', 'SECOND_FACTOR_REQUIRED', 'SECOND_FACTOR_ENROL
   render(<SellerPreviewConsent listingId={id(10)} />); await screen.findByText(/Saved consent/);
   fireEvent.click(screen.getByRole('button', { name: 'Revoke AI preview consent' }));
   await screen.findByText('Please refresh the page and try again.');
-  expect(screen.queryByRole('dialog')).toBeNull(); expect(submitReauth).not.toHaveBeenCalled(); expect(checkCompanySignIn).not.toHaveBeenCalled();
+  expect(screen.queryByRole('dialog')).toBeNull(); expect(checkCompanySignIn).not.toHaveBeenCalled();
 });

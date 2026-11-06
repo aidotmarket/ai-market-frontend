@@ -24,7 +24,6 @@ export interface User {
   two_factor_setup_reason?: string | null;
   two_factor_provider?: 'google' | 'github' | null;
   seller_two_factor_satisfied?: boolean;
-  reauth_method?: 'password' | 'totp' | 'magic_link';
 }
 
 export interface TokenResponse {

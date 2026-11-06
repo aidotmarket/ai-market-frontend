@@ -19,7 +19,7 @@ vi.mock('next/link', () => ({
 }));
 vi.mock('@/store/auth', () => ({
   useAuthStore: (select: (state: unknown) => unknown) =>
-    select({ user: { id: 'seller', reauth_method: 'totp' } }),
+    select({ user: { id: 'seller' } }),
 }));
 vi.mock('@/api/dataVerificationPayin', () => ({
   getDataVerificationPayInReadiness: calls.readiness,

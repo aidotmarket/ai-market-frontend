@@ -5,12 +5,14 @@ import { afterEach, beforeEach, expect, it, vi } from 'vitest';
 import { useAuthStore } from '@/store/auth';
 import type { User } from '@/types';
 const mocks = vi.hoisted(() => ({ post: vi.fn(), me: vi.fn(), refresh: vi.fn(), push: vi.fn() }));
+vi.mock('@/api/client', () => ({ refreshAccessToken: vi.fn() }));
 vi.mock('axios', () => ({ default: { create: () => ({ post: mocks.post }) } }));
 vi.mock('@/api/auth', () => ({ getMe: mocks.me }));
 vi.mock('next/navigation', () => ({ useRouter: () => ({ push: mocks.push }) }));
 vi.mock('@/components/onboarding/SellerSetupProgressBar', () => ({ notifyCapabilitiesChanged: vi.fn() }));
 vi.mock('qrcode', () => ({ default: { toDataURL: async () => 'data:image/png;base64,cG5n' } }));
 import CompanyAuthenticator from './CompanyAuthenticator';
+const token = `e30.${btoa(JSON.stringify({ exp: 4_000_000_000 }))}.sig`;
 const user = { id: 'saml-owner', sso_enforced: true, auth_methods: ['saml'], totp_enabled: false,
   two_factor_setup_eligible: true } as User;
 let open: ReturnType<typeof vi.spyOn>;
@@ -19,14 +21,14 @@ let url: string;
 beforeEach(() => {
   vi.resetAllMocks(); vi.stubEnv('NEXT_PUBLIC_ORG_SSO_WEB_RETURN_ENABLED', 'true');
   window.history.replaceState(null, '', '/dashboard/settings'); url = window.location.href;
-  useAuthStore.setState({ user, token: 'saml-session', refreshAuth: mocks.refresh });
-  mocks.refresh.mockImplementation(async () => { useAuthStore.setState({ token: 'saml-session' }); });
+  useAuthStore.setState({ user, token, refreshAuth: mocks.refresh });
+  mocks.refresh.mockImplementation(async () => { useAuthStore.setState({ token }); });
   mocks.me.mockResolvedValue({ ...user, two_factor_setup_eligible: true });
   open = vi.spyOn(window, 'open'); storage = vi.spyOn(Storage.prototype, 'setItem');
 });
 afterEach(() => { cleanup(); vi.restoreAllMocks(); vi.unstubAllEnvs(); });
-const headers = { Authorization: 'Bearer saml-session',
-  'X-CSRF-Token': createHash('sha256').update('aim.pending.csrf.v1\0saml-session').digest('hex') };
+const headers = { Authorization: `Bearer ${token}`,
+  'X-CSRF-Token': createHash('sha256').update('aim.pending.csrf.v1\0' + token).digest('hex') };
 const privateFlow = () => {
   expect(open).not.toHaveBeenCalled(); expect(storage).not.toHaveBeenCalled();
   expect(window.location.href).toBe(url); expect(mocks.push).not.toHaveBeenCalled();
@@ -47,12 +49,14 @@ it('SAML enrollment uses the retained session and CSRF without company sign-in',
 });
 it('SAML recovery sends no backup code and never starts a company sign-in flow', async () => {
   useAuthStore.setState({ user: { ...user, totp_enabled: true } });
-  mocks.post.mockResolvedValueOnce({ data: {} });
+  mocks.post.mockResolvedValueOnce({ data: { access_token: 'saml-replacement', token_type: 'bearer' } });
   render(<CompanyAuthenticator recovery />);
   expect(screen.queryByLabelText('Backup code')).toBeNull();
   expect(screen.queryByRole('button', { name: 'Check company sign-in' })).toBeNull();
   fireEvent.click(screen.getByRole('button', { name: 'Disable lost authenticator' }));
   await screen.findByText(/Authenticator disabled/);
+  expect(useAuthStore.getState().token).toBe('saml-replacement');
+  expect(mocks.refresh).not.toHaveBeenCalled();
   expect(mocks.post).toHaveBeenCalledExactlyOnceWith('/auth/2fa/disable', {}, { headers });
   privateFlow();
 });

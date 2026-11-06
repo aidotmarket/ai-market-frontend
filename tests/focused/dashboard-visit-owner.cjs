@@ -47,7 +47,7 @@ async function mount(plan) {
     getConnectOnboarding: () => { calls.onboard = (calls.onboard || 0) + 1; return plan.connect?.promise || Promise.resolve({ data: 'FAKE_REDIRECT' }); }, isConnectOnboardingTwoFactorRequired: () => true, redirectToConnectOnboarding: value => { calls.redirect = (calls.redirect || 0) + 1; },
   };
   const overview = load('page.tsx', { ...shared,
-    '@/lib/two-factor-policy': { accountReauthMethod: () => 'password', setupRestriction: () => null, setupRefusal: err => err instanceof FakeAxiosError && err.response.status === 409 ? 'FAKE_REFUSAL' : null, sellerSecuritySatisfied: () => !plan.security },
+    '@/lib/two-factor-policy': { setupRestriction: () => null, setupRefusal: err => err instanceof FakeAxiosError && err.response.status === 409 ? 'FAKE_REFUSAL' : null, sellerSecuritySatisfied: () => !plan.security },
     '@/components/CompanyAuthenticator': { companyEnrollmentOffered: () => false },
     '@/api/connect': otherReads,
     '@/api/auth': { setup2FA: () => { calls.setup = (calls.setup || 0) + 1; return plan.setup?.promise || Promise.resolve({ secret: 'FAKE_SECRET_MARKER', qr_uri: 'FAKE_QR_MARKER', expires_in: 30 }); }, verify2FASetup: () => { calls.verify = (calls.verify || 0) + 1; return plan.verify?.promise || Promise.resolve({ backup_codes: ['FAKE_BACKUP_MARKER'] }); }, SSO_MANAGED_2FA_MESSAGE: 'Synthetic managed security' },

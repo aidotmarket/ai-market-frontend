@@ -6,12 +6,10 @@ import { useSellerSwitches } from '@/hooks/useSellerSwitches';
 import { useAuthStore } from '@/store/auth';
 import { readAuthority, reviewAuthority, setAuthority, reviewStopAuthority, stopAuthority } from '@/api/connector-seller-settings';
 import { authority, hash, id } from '@/tests/fixtures/seller-authority';
-import { submitReauth } from '@/api/auth';
 import { checkCompanySignIn } from '@/lib/company-sign-in';
 import type { User } from '@/types';
 vi.mock('@/hooks/useSellerSwitches', () => ({ useSellerSwitches: vi.fn() }));
 vi.mock('@/api/connector-seller-settings', async original => ({ ...await original<typeof import('@/api/connector-seller-settings')>(), readAuthority: vi.fn(), reviewAuthority: vi.fn(), setAuthority: vi.fn(), reviewStopAuthority: vi.fn(), stopAuthority: vi.fn() }));
-vi.mock('@/api/auth', async original => ({ ...await original<typeof import('@/api/auth')>(), submitReauth: vi.fn() }));
 vi.mock('@/lib/company-sign-in', async original => ({ ...await original<typeof import('@/lib/company-sign-in')>(), checkCompanySignIn: vi.fn() }));
 beforeEach(() => {
   vi.resetAllMocks(); useAuthStore.setState({ user: { id: id(99), totp_enabled: true } as User, token: 'retained-session' });
@@ -79,5 +77,5 @@ it.each(['RECENT_LOGIN_REQUIRED', 'SECOND_FACTOR_REQUIRED', 'SECOND_FACTOR_ENROL
   render(<SellerAuthority />); await screen.findByText(/Authority version 4/);
   fireEvent.click(screen.getByRole('button', { name: 'Review exact standing limits' }));
   await screen.findByText('Please refresh the page and try again.');
-  expect(screen.queryByRole('dialog')).toBeNull(); expect(submitReauth).not.toHaveBeenCalled(); expect(checkCompanySignIn).not.toHaveBeenCalled();
+  expect(screen.queryByRole('dialog')).toBeNull(); expect(checkCompanySignIn).not.toHaveBeenCalled();
 });

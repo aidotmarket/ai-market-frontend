@@ -25,7 +25,6 @@ const payinApi = vi.hoisted(() => ({
 }));
 
 const auth = vi.hoisted(() => ({
-  submitReauth: vi.fn(),
 }));
 
 const navigation = vi.hoisted(() => ({
@@ -66,7 +65,7 @@ async function returnPage() {
 
 async function expectDirectReconciliation() {
   await waitFor(() => expect(payinApi.reconcileDataVerificationPayInSetupSession).toHaveBeenCalled());
-  expect(screen.queryByRole('dialog')).toBeNull(); expect(auth.submitReauth).not.toHaveBeenCalled();
+  expect(screen.queryByRole('dialog')).toBeNull();
 }
 
 
@@ -100,7 +99,6 @@ describe('data-verification payment-method return page', () => {
       state: 'ready',
       message: 'server text is intentionally ignored',
     });
-    auth.submitReauth.mockResolvedValue({ token: 'fresh-return-token' });
   });
 
   afterEach(() => {
