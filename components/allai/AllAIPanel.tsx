@@ -2,6 +2,7 @@
 
 import { useRef, useEffect, useState, useCallback } from 'react';
 import { useAllAI } from './AllAIContext';
+import OrderIssueReport from './OrderIssueReport';
 import AllAIMessage from './AllAIMessage';
 import AllAIChatInput from './AllAIChatInput';
 import FieldProposalCard from './FieldProposalCard';
@@ -22,6 +23,8 @@ const MAX_HEIGHT = 600;
 
 export default function AllAIPanel() {
   const {
+    reportSession,
+    leaveReportIssue,
     isOpen,
     close,
     messages,
@@ -64,7 +67,7 @@ export default function AllAIPanel() {
 
       const focusable = Array.from(
         panelRef.current.querySelectorAll<HTMLElement>(
-          'button:not([disabled]), a[href], textarea:not([disabled]), select:not([disabled]), [tabindex]:not([tabindex="-1"])'
+          'button:not([disabled]), input:not([disabled]), a[href], textarea:not([disabled]), select:not([disabled]), [tabindex]:not([tabindex="-1"])'
         )
       );
       if (focusable.length === 0) return;
@@ -290,6 +293,7 @@ export default function AllAIPanel() {
         </div>
       </div>
 
+      {reportSession ? <OrderIssueReport key={reportSession.visitId} session={reportSession} onLeave={leaveReportIssue} /> : <>
       {/* Messages */}
       <div
         ref={scrollRef}
@@ -331,6 +335,7 @@ export default function AllAIPanel() {
         disabled={isStreaming || (anonymousSurfaceActive && !anonymousAvailable)}
       />
 
+      </>}
       {/* Resize handle (desktop only) */}
       {!isMobile && (
         <div

@@ -19,6 +19,7 @@ const mocks = vi.hoisted(() => ({
   routerPush: vi.fn(),
   toast: vi.fn(),
   getDataRequest: vi.fn(),
+  getRequestThreadSelector: vi.fn(),
   updateDataRequest: vi.fn(),
   publishDataRequest: vi.fn(),
   deleteDataRequest: vi.fn(),
@@ -29,7 +30,7 @@ const mocks = vi.hoisted(() => ({
 }));
 
 vi.mock('@/store/auth', () => ({
-  useAuthStore: () => mocks.auth,
+  useAuthStore: Object.assign(() => mocks.auth, { getState: () => mocks.auth }),
 }));
 
 vi.mock('next/navigation', () => ({
@@ -56,8 +57,10 @@ vi.mock('@/components/Toast', () => ({
   useToast: () => ({ toast: mocks.toast }),
 }));
 
-vi.mock('@/api/data-requests', () => ({
+vi.mock('@/api/data-requests', async () => ({
+  ...await vi.importActual<typeof import('@/api/data-requests')>('@/api/data-requests'),
   getDataRequest: mocks.getDataRequest,
+  getRequestThreadSelector: mocks.getRequestThreadSelector,
   updateDataRequest: mocks.updateDataRequest,
   publishDataRequest: mocks.publishDataRequest,
   deleteDataRequest: mocks.deleteDataRequest,
@@ -139,11 +142,13 @@ describe('DataRequestDetailClient authenticated fallback loading', () => {
     mocks.auth.user = owner;
     mocks.auth.isAuthenticated = true;
     mocks.getDataRequestResponses.mockResolvedValue([]);
+    mocks.getRequestThreadSelector.mockResolvedValue({ contract: 'request-thread-v1', request_id: 'request-1', side: 'buyer', availability: 'off', threads: [] });
   });
 
   afterEach(() => {
     cleanup();
     vi.resetAllMocks();
+    mocks.auth.token = null;
     vi.restoreAllMocks();
     vi.unstubAllGlobals();
   });
