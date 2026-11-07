@@ -78,6 +78,8 @@ function isRefreshErrorStatus(error: unknown, statuses: readonly number[]): bool
 
 function redirectToLogin(): void {
   if (typeof window !== 'undefined' && window.location.pathname !== '/login') {
+    // Private mailbox consumption never starts a second sign-in flow.
+    if (window.location.pathname.replace(/\/$/, '') === '/support/mailbox-account') return;
     // Confirmation owns API admission: a flag-off 404 must stay inert, and an
     // enabled request offers login with its validated continuation intact.
     const path = window.location.pathname + window.location.search + window.location.hash;

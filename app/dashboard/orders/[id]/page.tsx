@@ -1,4 +1,6 @@
 'use client';
+
+import { canonicalOrderId } from '@/lib/order-route';
 import { ACTION_AUTH_REFRESH, isLegacyActionAuthError } from '@/lib/action-auth-error';
 
 import { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react';
@@ -17,6 +19,7 @@ import OrderVersionAccessSummary from '@/components/orders/OrderVersionAccessSum
 import { useTermsGate } from '@/components/legal/TermsGate';
 import type { BuyerOrderDetail, OrderAccessResponse, OrderEvent, Transaction, TransactionStatus, TransactionEvent } from '@/types';
 import { AxiosError } from 'axios';
+import { useAllAI } from '@/components/allai/AllAIContext';
 import GatewayDeliverySection from '@/components/orders/GatewayDeliverySection';
 
 const ORDER_EVENT_LABELS: Record<string, string> = {
@@ -65,21 +68,26 @@ const TX_STATUS_LABEL: Record<TransactionStatus, string> = {
 export default function OrderDetailPage() {
   const params = useParams<{ id: string }>();
   const searchParams = useSearchParams();
-  const orderId = params.id.replace(/^([0-9a-f]{8})-?([0-9a-f]{4})-?([0-9a-f]{4})-?([0-9a-f]{4})-?([0-9a-f]{12})$/i, (_, a, b, c, d, e) => [a, b, c, d, e].join('-').toLowerCase());
+  const orderId = canonicalOrderId(params.id);
   const txIdParam = searchParams.get('tx');
+  const issueProposal = searchParams.get('issue_report');
   const userId = useAuthStore((s) => s.user?.id);
   const token = useAuthStore((s) => s.token);
   const sessionGeneration = useSessionGeneration(token);
 
   // Order/query/account changes retire the whole visit. Routine credential
   // rotation retires only transaction actions, preserving active downloads.
-  return <OrderDetailVisit key={JSON.stringify([orderId, txIdParam, userId])}
-    orderId={orderId} txIdParam={txIdParam} userId={userId} sessionGeneration={sessionGeneration} />;
+  return <OrderDetailVisit key={JSON.stringify([orderId, txIdParam, userId, issueProposal])}
+    issueProposal={issueProposal} orderId={orderId} txIdParam={txIdParam} userId={userId} sessionGeneration={sessionGeneration} />;
 }
 
-function OrderDetailVisit({ orderId, txIdParam, userId, sessionGeneration }: {
-  orderId: string; txIdParam: string | null; userId: string | undefined; sessionGeneration: number;
+function OrderDetailVisit({ orderId, txIdParam, userId, sessionGeneration, issueProposal }: {
+  orderId: string; issueProposal: string | null; txIdParam: string | null; userId: string | undefined; sessionGeneration: number;
 }) {
+  const { openReportIssue } = useAllAI();
+  useEffect(() => {
+    if (userId && issueProposal && issueProposal.length <= 128) openReportIssue(orderId, issueProposal);
+  }, [userId, issueProposal, orderId, openReportIssue]);
   const [order, setOrder] = useState<BuyerOrderDetail | null>(null);
   const isBuyerOfRecord = order !== null && order.id === orderId && userId === order.buyer_id;
   const isSellerOfRecord = order !== null && order.id === orderId && userId === order.seller_id;
@@ -219,7 +227,7 @@ function OrderDetailVisit({ orderId, txIdParam, userId, sessionGeneration }: {
             </div>
           </div>
 
-          <OrderTransaction key={`transaction:${sessionGeneration}`} orderId={orderId} txIdParam={txIdParam}
+          <OrderTransaction key={`transaction:${sessionGeneration}`} issueProposal={issueProposal} orderId={orderId} txIdParam={txIdParam}
             isBuyerOfRecord={isBuyerOfRecord} isSellerOfRecord={isSellerOfRecord} />
 
           {/* Access / Download section */}
@@ -284,12 +292,13 @@ function OrderDetailVisit({ orderId, txIdParam, userId, sessionGeneration }: {
         <div className="space-y-4">
           <div className="rounded-lg border border-gray-200 p-6">
             <h3 className="font-semibold text-gray-900 mb-3">Actions</h3>
-            <a
-              href={`mailto:support@ai.market?subject=Issue with Order ${order.id.slice(0, 8)}`}
+            <button
+              type="button"
+              onClick={() => openReportIssue(orderId)}
               className="block w-full rounded-lg border border-gray-300 px-4 py-2.5 text-sm font-medium text-gray-700 text-center hover:bg-gray-50"
             >
               Report Issue
-            </a>
+            </button>
           </div>
         </div>
       </div>
@@ -317,7 +326,7 @@ function WorkspaceDownloadActivation({ onReady }: { onReady: () => void }) {
 
 // Only transaction reads, Terms and action ownership restart on credential rotation.
 function OrderTransaction({ orderId, txIdParam, isBuyerOfRecord, isSellerOfRecord }: {
-  orderId: string; txIdParam: string | null; isBuyerOfRecord: boolean; isSellerOfRecord: boolean;
+  orderId: string; issueProposal: string | null; txIdParam: string | null; isBuyerOfRecord: boolean; isSellerOfRecord: boolean;
 }) {
   const { toast } = useToast();
   const lifetime = useRef<object | null>(null);
