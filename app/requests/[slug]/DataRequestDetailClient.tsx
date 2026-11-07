@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useLayoutEffect, useState, useCallback, useRef } from 'react';
+import { useEffect, useLayoutEffect, useState, useCallback, useRef, useSyncExternalStore } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { useAuthStore } from '@/store/auth';
@@ -15,6 +15,8 @@ import {
   confirmDataRequestPublication,
   withdrawDataRequestPublication,
 } from '@/api/data-requests';
+import { authSessionOwner, isAuthSessionOwner, subscribeAuthSessionOwner } from '@/lib/auth-session-owner';
+import RequestConversation from '@/components/RequestConversation';
 import { formatDate } from '@/lib/format';
 import { AxiosError } from 'axios';
 import type { DataRequestDetail, DataRequestResponse, DataRequestUrgency } from '@/types';
@@ -105,8 +107,9 @@ export default function DataRequestDetailClient({
   const router = useRouter();
   const { toast } = useToast();
 
+  const owner = useSyncExternalStore(subscribeAuthSessionOwner, authSessionOwner, authSessionOwner);
   const userId = user?.id;
-  const context = `${slug}\0${isAuthenticated}\0${userId ?? ''}`;
+  const context = `${slug}\0${isAuthenticated}\0${userId ?? ''}\0${owner}`;
   const [requestRecord, setRequestRecord] = useState({ context, value: initialRequest });
   const request = requestRecord.context === context ? requestRecord.value : null;
   const setRequest = (value: DataRequestDetail | null) => setRequestRecord({ context, value });
@@ -181,7 +184,7 @@ export default function DataRequestDetailClient({
   }
 
   function isCurrentMutation(epoch: number) {
-    return visitActive.current && epoch === contextEpoch.current && currentContext.current === context;
+    return isAuthSessionOwner(owner) && visitActive.current && epoch === contextEpoch.current && currentContext.current === context;
   }
 
   // Response form
@@ -254,7 +257,7 @@ export default function DataRequestDetailClient({
     const generation = ++loadGeneration.current;
     const epoch = contextEpoch.current;
     const startedDuringMutation = mutationPending.current;
-    const isCurrent = () => visitActive.current && !startedDuringMutation && epoch === contextEpoch.current && currentContext.current === context && generation === loadGeneration.current;
+    const isCurrent = () => isAuthSessionOwner(owner) && visitActive.current && !startedDuringMutation && epoch === contextEpoch.current && currentContext.current === context && generation === loadGeneration.current;
     try {
       const data = await getDataRequest(slug);
       if (!isCurrent()) return;
@@ -710,6 +713,8 @@ export default function DataRequestDetailClient({
         )}
       </div>
 
+      <RequestConversation requestId={request.id} requestStatus={request.status} quoteRevision={responses.length} />
+
       {/* Owner: Responses list */}
       {isOwner && responses.length > 0 && (
         <div className="mb-6">
@@ -724,6 +729,7 @@ export default function DataRequestDetailClient({
                   </span>
                 </div>
                 <p className="text-sm text-gray-800 whitespace-pre-wrap mb-2">{resp.proposal}</p>
+                <a href={`?response_id=${encodeURIComponent(resp.id)}`} className="text-sm text-[#3F51B5] underline focus:ring-2 focus:ring-[#3F51B5]">Open private conversation for this response</a>
                 <div className="flex gap-4 text-xs text-gray-500">
                   {resp.proposed_price != null && (
                     <span>Price: <span className="font-medium text-gray-700">${resp.proposed_price.toLocaleString()}</span></span>

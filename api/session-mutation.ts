@@ -40,10 +40,11 @@ export function sessionMutationError(error: unknown): string | null {
     ? 'Please refresh the page and try again.' : null;
 }
 
-export async function postSessionMutation<T>(path: string, body: object): Promise<T> {
+export async function postSessionMutation<T>(path: string, body: object, assertAdmission?: () => void): Promise<T> {
   const owner = authSessionOwner();
   const headers = await sessionHeaders();
   assertAuthSessionOwner(owner);
+  assertAdmission?.();
   const { data } = await client.post<T>(path, body, { headers });
   return data;
 }
