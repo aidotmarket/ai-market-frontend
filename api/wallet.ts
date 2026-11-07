@@ -36,14 +36,17 @@ const record = (value: unknown): value is Record<string, unknown> => !!value && 
 const nonempty = (value: unknown): value is string => typeof value === 'string' && value.trim().length > 0;
 const cents = (value: unknown): value is number => typeof value === 'number' && Number.isSafeInteger(value);
 
-export async function resolveWalletOwner(token: string, signal: AbortSignal): Promise<string> {
-  const { data } = await wallet.get<unknown>('/auth/me', { headers: headers(token), signal });
+export async function resolveWalletOwner(token: string, signal: AbortSignal, timeout?: number): Promise<string> {
+  const { data } = await wallet.get<unknown>('/auth/me', { headers: headers(token), signal, ...(timeout ? { timeout } : {}) });
   if (!record(data) || !nonempty(data.id) || data.status !== 'active') throw new Error('INVALID_OWNER');
   return data.id;
 }
 
 export async function getWalletBalance(token: string, owner: string, signal: AbortSignal): Promise<WalletBalance> {
   const { data } = await wallet.get<unknown>('/wallet/balance', { headers: headers(token), signal });
+  return parseWalletBalance(data, owner);
+}
+export function parseWalletBalance(data: unknown, owner: string): WalletBalance {
   if (!record(data) || data.user_id !== owner || data.currency !== 'USD' || !cents(data.balance_cents)) {
     throw new Error('INVALID_BALANCE');
   }
@@ -54,6 +57,9 @@ export async function getWalletHistory(token: string, offset: number, signal: Ab
   const { data } = await wallet.get<unknown>('/wallet/transactions', {
     headers: headers(token), signal, params: { limit: 20, offset },
   });
+  return parseWalletHistory(data);
+}
+export function parseWalletHistory(data: unknown): WalletHistory {
   if (!record(data) || !Array.isArray(data.transactions) || data.transactions.length > 20
     || !cents(data.total) || data.total < data.transactions.length || typeof data.has_more !== 'boolean') throw new Error('INVALID_HISTORY');
   const ids = new Set<string>();

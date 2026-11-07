@@ -70,3 +70,14 @@ export default function TicketStatusCard({ card }: { card: TicketStatusCardData 
     </div>
   );
 }
+
+// Customer projection only; this card itself never records a render receipt.
+export function CustomerTicketStatus({ publicRef, status, nextAction }: {
+  publicRef: string; status: string; nextAction: string;
+}) {
+  return <div className="my-2 rounded-lg border border-emerald-300/30 bg-emerald-950/25 p-3 text-white/90">
+    <p className="font-mono text-xs">Ticket {publicRef}</p>
+    <p className="capitalize">{formatValue(status)}</p>
+    <p className="whitespace-pre-wrap break-words">{nextAction}</p>
+  </div>;
+}
