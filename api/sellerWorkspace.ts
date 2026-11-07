@@ -20,7 +20,11 @@ export interface ProviderCapabilities {
   delivery: CapabilityStage;
 }
 
+export type ConnectionScope = 'prefix' | 'whole_bucket';
+export interface WholeBucketConfirmation { version: string; text: string }
+
 export interface SellerWorkspaceCapabilities {
+  whole_bucket_confirmation?: WholeBucketConfirmation | null;
   master: CapabilityStage;
   drafts?: CapabilityStage | null;
   listing_assistant?: CapabilityStage | null;
@@ -62,6 +66,7 @@ export interface SellerWorkspaceConnection {
   role_arn: string | null;
   bucket: string | null;
   prefix: string | null;
+  scope?: ConnectionScope;
   region: string | null;
   authorization_expires_at: string;
   rotation_deadline: string | null;
@@ -93,7 +98,13 @@ export interface ConnectionMutationResponse {
   replayed: boolean;
 }
 
-export interface ConnectionVerifyRequest {
+export interface ConnectionScopeInput {
+  scope?: ConnectionScope;
+  whole_bucket_confirmed?: boolean;
+  confirmation_version?: string;
+}
+
+export interface ConnectionVerifyRequest extends ConnectionScopeInput {
   role_arn: string;
   bucket: string;
   prefix: string;
@@ -208,7 +219,7 @@ export function isStorageDiscoveryAvailable(capabilities: SellerWorkspaceCapabil
     && discovery?.enabled === true && discovery.status === 'available');
 }
 
-export interface R2ConnectionInput {
+export interface R2ConnectionInput extends ConnectionScopeInput {
   account_id:string; jurisdiction:'default'|'eu'|'us'|'fedramp'; bucket:string; prefix:string;
   access_key_id:string; secret_access_key:string; dedicated_bucket_readonly:true; expected_version:number;
 }

@@ -1,6 +1,6 @@
 'use client';
 
-import { accountReauthMethod, setupRestriction, setupRefusal, sellerSecuritySatisfied } from '@/lib/two-factor-policy';
+import { setupRestriction, setupRefusal, sellerSecuritySatisfied } from '@/lib/two-factor-policy';
 import { companyEnrollmentOffered } from '@/components/CompanyAuthenticator';
 
 import { useEffect, useLayoutEffect, useState, useCallback, useRef } from 'react';
@@ -28,16 +28,9 @@ import { formatDate, formatPrice } from '@/lib/format';
 import type { BuyerOrder, SellerStats } from '@/types';
 import { orderStatusPresentation } from '@/lib/order-status';
 import { AxiosError } from 'axios';
-import ReauthModal from './settings/ReauthModal';
 import TotpQrCode from '@/components/TotpQrCode';
 
 type TwoFactorFlow = 'idle' | 'showing_qr' | 'verifying' | 'showing_backup_codes';
-type ReauthAction = 'setup' | 'retry' | null;
-
-function isExpiredReauth(error: unknown): boolean {
-  return error instanceof AxiosError && error.response?.status === 400 &&
-    error.response.data?.detail === 'Re-authentication required';
-}
 
 // Credentials never enter the key; ordinary token/details refresh keeps the visit.
 const overviewIdentity = (state: ReturnType<typeof useAuthStore.getState>) =>
@@ -96,8 +89,6 @@ function OverviewVisit({ identity, retireVisit }: { identity: string; retireVisi
   const [setupExpiresIn, setSetupExpiresIn] = useState<number | null>(null);
   const [totpCode, setTotpCode] = useState('');
   const [backupCodes, setBackupCodes] = useState<string[]>([]);
-  const [setupReauthToken, setSetupReauthToken] = useState('');
-  const [reauthAction, setReauthAction] = useState<ReauthAction>(null);
   const dashboardHeadingRef = useRef<HTMLHeadingElement>(null);
   const twoFactorDoneInFlight = useRef(false);
 
@@ -220,19 +211,16 @@ function OverviewVisit({ identity, retireVisit }: { identity: string; retireVisi
     setSetupExpiresIn(null);
     setTotpCode('');
     setBackupCodes([]);
-    setSetupReauthToken('');
-    setReauthAction(null);
   };
 
-  const handleSetup2FA = async (reauthToken: string) => {
+  const handleSetup2FA = async () => {
     if (!isOwner()) return;
     if (setupRestriction(user)) { setSecurityError(setupRestriction(user)!); return; }
     setSecurityLoading(true);
     setSecurityError('');
     try {
-      const res = await setup2FA(reauthToken);
+      const res = await setup2FA();
       if (!isOwner()) return;
-      setSetupReauthToken(reauthToken);
       setTotpSecret(res.secret);
       setTotpQrUri(res.qr_uri);
       setSetupExpiresIn(res.expires_in);
@@ -241,10 +229,6 @@ function OverviewVisit({ identity, retireVisit }: { identity: string; retireVisi
       setTwoFactorFlow('showing_qr');
     } catch (err) {
       if (!isOwner()) return;
-      if (user?.sso_enforced && err instanceof AxiosError && err.response?.data?.detail === 'CSRF_REQUIRED') {
-        window.location.assign('/dashboard/settings#security');
-        return;
-      }
       if (setupRefusal(err, user)) {
         setSecurityError(setupRefusal(err, user)!);
         setTwoFactorFlow('idle');
@@ -259,14 +243,14 @@ function OverviewVisit({ identity, retireVisit }: { identity: string; retireVisi
     }
   };
 
-  const handleVerify2FASetup = async (reauthToken: string, allowReauthRetry = true) => {
+  const handleVerify2FASetup = async () => {
     if (!isOwner()) return;
     if (setupRestriction(user)) { setSecurityError(setupRestriction(user)!); setTwoFactorFlow('idle'); return; }
     setSecurityLoading(true);
     setSecurityError('');
     setTwoFactorFlow('verifying');
     try {
-      const res = await verify2FASetup(totpCode.trim(), reauthToken);
+      const res = await verify2FASetup(totpCode.trim());
       if (!isOwner()) return;
       setBackupCodes(res.backup_codes);
       setTwoFactorFlow('showing_backup_codes');
@@ -274,10 +258,6 @@ function OverviewVisit({ identity, retireVisit }: { identity: string; retireVisi
     } catch (err) {
       if (!isOwner()) return;
       setTwoFactorFlow('showing_qr');
-      if (allowReauthRetry && isExpiredReauth(err)) {
-        setReauthAction('retry');
-        return;
-      }
       if (setupRefusal(err, user)) {
         setSecurityError(setupRefusal(err, user)!);
         setTwoFactorFlow('idle');
@@ -308,18 +288,6 @@ function OverviewVisit({ identity, retireVisit }: { identity: string; retireVisi
       if (!isOwner()) return;
       resetTwoFactorState();
       twoFactorDoneInFlight.current = false;
-    }
-  };
-
-  const handleReauthSuccess = async (reauthToken: string) => {
-    if (!isOwner()) return;
-    const action = reauthAction;
-    setReauthAction(null);
-    if (action === 'setup') {
-      await handleSetup2FA(reauthToken);
-    } else if (action === 'retry') {
-      setSetupReauthToken(reauthToken);
-      await handleVerify2FASetup(reauthToken, false);
     }
   };
 
@@ -366,13 +334,6 @@ function OverviewVisit({ identity, retireVisit }: { identity: string; retireVisi
 
   return (
     <div className="space-y-8">
-      <ReauthModal
-        isOpen={reauthAction !== null}
-        onClose={() => { if (isOwner()) setReauthAction(null); }}
-        onSuccess={handleReauthSuccess}
-        fallbackFocusRef={dashboardHeadingRef}
-        method={accountReauthMethod(user)}
-      />
       <div>
         <h1 ref={dashboardHeadingRef} tabIndex={-1} className="text-2xl font-bold text-gray-900">Welcome back, {user?.first_name || 'there'}</h1>
         <p className="mt-1 text-sm text-gray-500">
@@ -496,7 +457,7 @@ function OverviewVisit({ identity, retireVisit }: { identity: string; retireVisi
                   </p>
                   {!sellerSecurityReady && !ssoManaged2FA && twoFactorFlow === 'idle' && (
                     <button
-                      onClick={() => { if (isOwner()) { companyEnrollmentOffered(user) ? window.location.assign('/dashboard/settings#security') : setReauthAction('setup'); } }}
+                      onClick={() => { if (isOwner()) { companyEnrollmentOffered(user) ? window.location.assign('/dashboard/settings#security') : void handleSetup2FA(); } }}
                       disabled={securityLoading}
                       className="mt-3 rounded-lg bg-[#3F51B5] px-4 py-2 text-sm font-medium text-white hover:bg-[#3545a0] disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
                     >
@@ -553,7 +514,7 @@ function OverviewVisit({ identity, retireVisit }: { identity: string; retireVisi
                     </div>
                     <div className="flex gap-3">
                       <button
-                        onClick={() => handleVerify2FASetup(setupReauthToken)}
+                        onClick={() => handleVerify2FASetup()}
                         disabled={securityLoading || totpCode.trim().length !== 6}
                         className="rounded-lg bg-[#3F51B5] px-4 py-2 text-sm font-medium text-white hover:bg-[#3545a0] disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
                       >

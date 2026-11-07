@@ -6,12 +6,10 @@ import { useSellerSwitches } from '@/hooks/useSellerSwitches';
 import { useAuthStore } from '@/store/auth';
 import { readAuthority, reviewAuthority, setAuthority, reviewStopAuthority, stopAuthority } from '@/api/connector-seller-settings';
 import { authority, hash, id } from '@/tests/fixtures/seller-authority';
-import { submitReauth } from '@/api/auth';
 import { checkCompanySignIn } from '@/lib/company-sign-in';
 import type { User } from '@/types';
 vi.mock('@/hooks/useSellerSwitches', () => ({ useSellerSwitches: vi.fn() }));
 vi.mock('@/api/connector-seller-settings', async original => ({ ...await original<typeof import('@/api/connector-seller-settings')>(), readAuthority: vi.fn(), reviewAuthority: vi.fn(), setAuthority: vi.fn(), reviewStopAuthority: vi.fn(), stopAuthority: vi.fn() }));
-vi.mock('@/api/auth', async original => ({ ...await original<typeof import('@/api/auth')>(), submitReauth: vi.fn() }));
 vi.mock('@/lib/company-sign-in', async original => ({ ...await original<typeof import('@/lib/company-sign-in')>(), checkCompanySignIn: vi.fn() }));
 beforeEach(() => {
   vi.resetAllMocks(); useAuthStore.setState({ user: { id: id(99), totp_enabled: true } as User, token: 'retained-session' });
@@ -21,6 +19,10 @@ beforeEach(() => {
   vi.mocked(setAuthority).mockResolvedValue({ decision_id: id(90), version: 5, enabled: true });
   vi.mocked(reviewStopAuthority).mockImplementation(async body => { const { csrf: _csrf, reauth_token: _token, review_hash: _hash, ...decision } = body; return { action: 'aim.seller.connector_limits.revoke', decision, review_hash: hash }; });
   vi.mocked(stopAuthority).mockResolvedValue({ decision_id: id(90), version: 5, enabled: false });
+});
+afterEach(() => {
+  expect(screen.queryByRole('dialog', { name: 'Re-authenticate' })).toBeNull();
+  expect(screen.queryByPlaceholderText('Enter code')).toBeNull();
 });
 afterEach(() => { cleanup(); vi.unstubAllEnvs(); });
 it.each([null, { seller: false, effects: true, bulk: true }, { seller: true, effects: false, bulk: true }])('keeps authenticated status and reviewed Stop visible while edits are hidden: %j', async report => {
@@ -55,16 +57,7 @@ it('invalidates review on editing and refuses 51 without auto splitting', async 
   expect((screen.getByRole('button', { name: 'Review exact standing limits' }) as HTMLButtonElement).disabled).toBe(true);
   expect(setAuthority).not.toHaveBeenCalled();
 });
-it('offers Chunk 0 enrollment and company sign-in on exact native refusals', async () => {
-  vi.stubEnv('NEXT_PUBLIC_ORG_SSO_WEB_RETURN_ENABLED', 'true');
-  useAuthStore.setState({ user: { id: id(99), sso_enforced: true, totp_enabled: false, auth_methods: ['oidc'] } as User });
-  vi.mocked(reviewAuthority).mockRejectedValue({ response: { status: 403, data: { detail: 'SECOND_FACTOR_ENROLLMENT_REQUIRED' } } });
-  render(<SellerAuthority />); await screen.findByText(/Authority version 4/); fireEvent.click(screen.getByRole('button', { name: 'Review exact standing limits' }));
-  expect((await screen.findByRole('link', { name: 'Settings' })).getAttribute('href')).toBe('/dashboard/settings'); expect(setAuthority).not.toHaveBeenCalled();
-  vi.mocked(reviewAuthority).mockRejectedValue({ response: { status: 403, data: { detail: 'RECENT_LOGIN_REQUIRED' } } });
-  fireEvent.click(screen.getByRole('button', { name: 'Review exact standing limits' }));
-  await screen.findByRole('button', { name: 'Sign in through your company' }); expect(setAuthority).not.toHaveBeenCalled();
-});
+
 it('clears old-owner review and limits when the retained credential changes', async () => {
   const view = render(<SellerAuthority />); await screen.findByText(/Authority version 4/);
   fireEvent.click(screen.getByRole('button', { name: 'Review exact standing limits' })); await screen.findByRole('button', { name: 'Save reviewed standing authority' });
@@ -73,57 +66,16 @@ it('clears old-owner review and limits when the retained credential changes', as
   expect(screen.queryByRole('button', { name: 'Save reviewed standing authority' })).toBeNull();
 });
 
-it('retains the exact typed decision while retrying review with native TOTP proof', async () => {
-  useAuthStore.setState({ user: { id: id(99), sso_enforced: true, totp_enabled: true } as User });
-  vi.mocked(submitReauth).mockResolvedValue({ token: 'native-totp-proof' } as never);
-  vi.mocked(reviewAuthority).mockRejectedValueOnce({ response: { status: 403, data: { detail: 'SECOND_FACTOR_REQUIRED' } } });
-  render(<SellerAuthority />); await screen.findByText(/Authority version 4/); fireEvent.click(screen.getByRole('button', { name: 'Review exact standing limits' }));
-  fireEvent.click(await screen.findByRole('button', { name: 'Verify authenticator code' }));
-  fireEvent.change(screen.getByPlaceholderText('Enter code'), { target: { value: '123456' } }); fireEvent.click(screen.getByRole('button', { name: 'Continue' }));
-  await screen.findByRole('button', { name: 'Save reviewed standing authority' });
-  expect(reviewAuthority).toHaveBeenCalledTimes(2);
-  const calls = vi.mocked(reviewAuthority).mock.calls;
-  expect(calls[1][0].idempotency_key).toBe(calls[0][0].idempotency_key); expect(calls[1][0].reauth_token).toBe('native-totp-proof');
-  expect(setAuthority).not.toHaveBeenCalled();
-});
 
-it.each(['review', 'submit'])('retains Stop through TOTP and never retries as a set (%s)', async stage => {
-  vi.mocked(useSellerSwitches).mockReturnValue(null);
-  vi.mocked(submitReauth).mockResolvedValue({ token: 'native-totp-proof' } as never);
-  vi.mocked(stage === 'review' ? reviewStopAuthority : stopAuthority).mockRejectedValueOnce({ response: { status: 403, data: { detail: 'SECOND_FACTOR_REQUIRED' } } });
-  render(<SellerAuthority />); await screen.findByText(/Authority version 4/);
-  fireEvent.click(screen.getByRole('button', { name: 'Stop automatic seller actions' }));
-  if (stage === 'submit') fireEvent.click(await screen.findByRole('button', { name: 'Confirm Stop automatic seller actions' }));
-  fireEvent.click(await screen.findByRole('button', { name: 'Verify authenticator code' }));
-  fireEvent.change(screen.getByPlaceholderText('Enter code'), { target: { value: '123456' } }); fireEvent.click(screen.getByRole('button', { name: 'Continue' }));
-  const confirm = await screen.findByRole('button', { name: 'Confirm Stop automatic seller actions' });
-  expect(stopAuthority).toHaveBeenCalledTimes(stage === 'submit' ? 1 : 0);
-  const calls = vi.mocked(reviewStopAuthority).mock.calls;
-  expect(calls[1][0]).toEqual({ ...calls[0][0], reauth_token: 'native-totp-proof' });
-  fireEvent.click(confirm); await waitFor(() => expect(stopAuthority).toHaveBeenCalledWith({ ...calls[1][0], review_hash: hash }));
-  expect(reviewAuthority).not.toHaveBeenCalled(); expect(setAuthority).not.toHaveBeenCalled();
-});
 
-it.each(['oidc', 'saml'])('preserves withdrawal through %s SSO_REQUIRED and waits for explicit consent', async method => {
-  vi.stubEnv('NEXT_PUBLIC_ORG_SSO_WEB_RETURN_ENABLED', 'true');
-  useAuthStore.setState({ user: { id: id(99), sso_enforced: true, totp_enabled: true, auth_methods: [method] } as User });
-  vi.mocked(reviewStopAuthority).mockRejectedValueOnce({ response: { status: 403, data: { detail: 'SSO_REQUIRED' } } });
-  vi.mocked(checkCompanySignIn).mockImplementation(async () => { useAuthStore.setState({ token: 'fresh-company-session' }); });
-  vi.mocked(submitReauth).mockResolvedValue({ token: 'fresh-company-totp' } as never);
-  vi.mocked(reviewStopAuthority).mockRejectedValueOnce({ response: { status: 403, data: { detail: 'SECOND_FACTOR_REQUIRED' } } });
+
+
+
+
+it.each(['RECENT_LOGIN_REQUIRED', 'SECOND_FACTOR_REQUIRED', 'SECOND_FACTOR_ENROLLMENT_REQUIRED'])('shows refresh only for legacy %s', async detail => {
+  vi.mocked(reviewAuthority).mockRejectedValueOnce({ response: { status: 403, data: { detail } } });
   render(<SellerAuthority />); await screen.findByText(/Authority version 4/);
-  fireEvent.click(screen.getByRole('button', { name: 'Stop automatic seller actions' }));
-  fireEvent.click(await screen.findByRole('button', { name: 'Check company sign-in' }));
-  fireEvent.click(await screen.findByRole('button', { name: 'Verify authenticator code' }));
-  fireEvent.change(screen.getByPlaceholderText('Enter code'), { target: { value: '123456' } }); fireEvent.click(screen.getByRole('button', { name: 'Continue' }));
-  await screen.findByRole('button', { name: 'Confirm Stop automatic seller actions' });
-  expect(checkCompanySignIn).toHaveBeenCalledTimes(1);
-  const calls = vi.mocked(reviewStopAuthority).mock.calls;
-  expect(calls[1][0].idempotency_key).toBe(calls[0][0].idempotency_key);
-  expect(calls[2][0].csrf).not.toBe(calls[0][0].csrf);
-  expect(calls[2][0].reauth_token).toBe('fresh-company-totp');
-  expect(calls[2][0].idempotency_key).toBe(calls[0][0].idempotency_key);
-  expect(stopAuthority).not.toHaveBeenCalled();
-  fireEvent.click(screen.getByRole('button', { name: 'Confirm Stop automatic seller actions' }));
-  await waitFor(() => expect(stopAuthority).toHaveBeenCalledWith({ ...calls[2][0], review_hash: hash }));
+  fireEvent.click(screen.getByRole('button', { name: 'Review exact standing limits' }));
+  await screen.findByText('Please refresh the page and try again.');
+  expect(screen.queryByRole('dialog')).toBeNull(); expect(checkCompanySignIn).not.toHaveBeenCalled();
 });

@@ -56,4 +56,4 @@ export function preparationError(error:unknown):string {
     default:return 'Preparation could not be confirmed. Retry the same preparation or refresh its status before publishing.';
   }
 }
-export const preparationStatus = {prepared:'Needs signing',signed:'Ready to publish here or from Claude',published:'Published',superseded:'Superseded'};
+export const preparationStatus = {prepared:'Needs signing',signed:'Ready to publish',published:'Published',superseded:'Superseded'};

@@ -1,3 +1,4 @@
+import { sessionMutationError } from '@/api/session-mutation';
 import { AxiosError } from 'axios';
 import type { User } from '@/types';
 import type { CapabilityStep } from '@/api/capabilities';
@@ -21,17 +22,11 @@ export function setupRestriction(user: User | null | undefined): string | null {
 }
 
 export function setupRefusal(error: unknown, user: User | null | undefined): string | null {
+  if (sessionMutationError(error)) return sessionMutationError(error);
   if (!(error instanceof AxiosError) || error.response?.status !== 409) return null;
   if (error.response.data?.detail === 'two_factor_managed_by_provider') return providerSecurityMessage(user);
   if (error.response.data?.detail === 'two_factor_managed_by_sso') return SSO_MANAGED_2FA_MESSAGE;
   return null;
-}
-
-export function accountReauthMethod(user: User | null | undefined): 'password' | 'totp' | 'magic_link' {
-  if (user?.reauth_method === 'totp' || user?.reauth_method === 'password' || user?.reauth_method === 'magic_link') return user.reauth_method;
-  // Older-server fallback preserves the existing credential flow, with no
-  // assumption that linked Google/GitHub methods identify this session.
-  return user?.totp_enabled ? 'totp' : user?.auth_methods?.includes('password') ? 'password' : 'magic_link';
 }
 
 export function sellerSecuritySatisfied(user: User | null | undefined, missingSteps?: CapabilityStep[]): boolean {

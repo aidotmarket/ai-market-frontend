@@ -98,17 +98,7 @@ it('disabled_expired_error_ui', async () => {
   expect(document.querySelector('img')).toBeNull();
 });
 
-it.each(['login_required', 'invalid_session', 'insufficient_assurance'])('offers explicit reauthentication for %s', async (kind) => {
-  vi.mocked(decideAuthorization).mockRejectedValue(failure(kind));
-  render(<AuthorizationPage />); fireEvent.click(await screen.findByRole('button', { name: 'Continue' }));
-  fireEvent.click(await screen.findByRole('button', { name: 'Sign in again' }));
-  if (kind === 'insufficient_assurance') {
-    expect(screen.getByRole('alert').textContent).toBe('Your account uses two-factor authentication. Before AIM Data can work with your ai.market account, sign in again and enter your code. This makes sure only you can connect apps to your account.');
-  }
-  expect(navigation.push).toHaveBeenCalledWith(`/login?reauth=aim-data&redirect=${encodeURIComponent(path)}`);
-  cleanup(); navigation.query = new URLSearchParams({ reauth: 'aim-data', redirect: path });
-  render(<LoginForm />); expect(navigation.replace).not.toHaveBeenCalled();
-});
+
 
 describe('password_provider_magic_link_2fa_resume', () => {
   it.each(['password', 'provider', 'magic-link'])('resumes %s with and without 2FA', async (method) => {
@@ -187,11 +177,10 @@ it.each(['google', 'github', 'invalid'])('passes only a valid %s provider hint t
   expect(JSON.parse(sessionStorage.getItem(CONTINUATION_KEY)!)).toEqual({ request: id, deadline: expect.any(Number) });
 });
 
-it.each(['google', 'github', 'invalid'])('passes only a valid %s provider hint to reauthentication', async (provider) => {
-  window.history.replaceState({}, '', `${path}&provider=${provider}`);
-  vi.mocked(decideAuthorization).mockRejectedValue(failure('login_required'));
-  render(<AuthorizationPage />);
-  fireEvent.click(await screen.findByRole('button', { name: 'Continue' }));
-  fireEvent.click(await screen.findByRole('button', { name: 'Sign in again' }));
-  expect(navigation.push).toHaveBeenCalledWith(`/login?reauth=aim-data&redirect=${encodeURIComponent(path)}${provider === 'invalid' ? '' : `&provider=${provider}`}`);
+
+
+it.each(['login_required', 'invalid_session', 'insufficient_assurance'])('shows refresh only for signed-in legacy %s', async error => {
+  vi.mocked(getAuthorization).mockRejectedValue({ response: { status: 403, data: { error } } });
+  render(<AuthorizationPage />); await screen.findByText('Please refresh the page and try again.');
+  expect(screen.queryByRole('button', { name: /Sign in/ })).toBeNull(); expect(navigation.push).not.toHaveBeenCalled();
 });

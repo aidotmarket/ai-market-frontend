@@ -1,3 +1,4 @@
+import { formatMarketplaceCategoryName } from '@/lib/marketplaceCategories';
 import GeneratedSampleCard from '@/components/listings/GeneratedSampleCard';
 import { generatedSampleState } from '@/lib/generatedSample';
 import Link from 'next/link';
@@ -21,11 +22,11 @@ export const metadata: Metadata = {
   alternates: { canonical: '/' },
   title: { absolute: 'ai.market — Sell data without giving it away' },
   description:
-    'Non-custodial B2B data marketplace. List with AIM Data, find with semantic search and data requests.',
+    'Non-custodial B2B data marketplace. List from your S3 or R2 bucket, or from your own servers with AIM Data. Find data with semantic search and data requests.',
   openGraph: {
     title: 'ai.market — Sell data without giving it away',
     description:
-      'Non-custodial B2B data marketplace. List with AIM Data, find with semantic search and data requests.',
+      'Non-custodial B2B data marketplace. List from your S3 or R2 bucket, or from your own servers with AIM Data. Find data with semantic search and data requests.',
     url: 'https://ai.market',
     siteName: 'ai.market',
     images: ['/og/home.png'],
@@ -35,7 +36,7 @@ export const metadata: Metadata = {
     card: 'summary_large_image',
     title: 'ai.market — Sell data without giving it away',
     description:
-      'Non-custodial B2B data marketplace. List with AIM Data, find with semantic search and data requests.',
+      'Non-custodial B2B data marketplace. List from your S3 or R2 bucket, or from your own servers with AIM Data. Find data with semantic search and data requests.',
     images: ['/og/home.png'],
   },
 };
@@ -96,11 +97,11 @@ const offerings: Offering[] = [
   },
   {
     name: 'Sell Data',
-    subtitle: 'List from your own infrastructure',
+    subtitle: 'List from your own cloud storage or servers',
     description: [
-      'Run the open-source AIM Data gateway with Docker. It sends opaque inventory automatically; confirm each file before sharing its structure. Buyers download purchases directly from your gateway.',
+      'Connect your S3 or R2 bucket, or run the open-source AIM Data gateway. Buyers download directly from your storage.',
     ],
-    tags: ['AIM Data gateway', 'Your infrastructure', 'You confirm each file'],
+    tags: ['S3 or R2', 'AIM Data gateway', 'Direct download'],
     cta: 'Sell Data',
     href: '/sell-data',
     accent: 'teal',
@@ -251,19 +252,20 @@ function ActivityTicker({ items, locale }: { items: FeaturedItem[]; locale: stri
 
 const howItWorks = [
   {
-    title: 'Add a gateway.',
+    title: 'Connect your data.',
     description:
-      'In Sell Data, open Gateways for a one-time pairing code and Docker Compose file.',
+      'Connect your AWS S3 or Cloudflare R2 bucket with a read-only key. If your data has to stay on your own servers, run our open-source AIM Data gateway instead.',
   },
   {
-    title: 'Publish your listing.',
+    title: 'Let allAI build your listing.',
     description:
-      'Confirm each file before sharing its structure. Manage the listing, price, and licence on ai.market.',
+      'allAI drafts the description from your file names and your notes. You check it, set the price and license, and publish.',
+    extra: <>Prefer your own AI? <Link href="/docs/claude" className="text-[#3F51B5] hover:underline">Connect</Link> Claude or ChatGPT and list from the chat.</>,
   },
   {
     title: 'Get paid.',
     description:
-      'Buyers find your listing wherever they search, on ai.market or through their AI assistant. Stripe handles the payout.',
+      'Buyers find your listing wherever they search, on ai.market or through their own AI assistant. Stripe pays you 48 hours after the buyer confirms delivery. Sellers paid internationally in USDC on Solana are paid at least 30 days after the buyer confirms delivery.',
   },
 ];
 
@@ -384,25 +386,13 @@ export default async function LandingPage() {
               </h2>
             </div>
 
-            <div className="mt-14 grid grid-cols-1 gap-8 sm:grid-cols-3">
-              <div>
-                <div className="flex h-10 w-10 items-center justify-center rounded-full bg-[#3F51B5] text-sm font-bold text-white">1</div>
-                <p className="mt-4 text-sm leading-6 text-[#666666]">
-                  You list. Your files stay on your infrastructure. AIM Data sends opaque inventory automatically and file structure only after you confirm each file. Buyers download purchased bytes directly from your gateway.
-                </p>
-              </div>
-              <div>
-                <div className="flex h-10 w-10 items-center justify-center rounded-full bg-[#3F51B5] text-sm font-bold text-white">2</div>
-                <p className="mt-4 text-sm leading-6 text-[#666666]">
-                  allAI handles the middle. Questions, negotiation and checkout run through our AI. Buyers get answers fast. You never chase a lead or hand out your contact details.
-                </p>
-              </div>
-              <div>
-                <div className="flex h-10 w-10 items-center justify-center rounded-full bg-[#3F51B5] text-sm font-bold text-white">3</div>
-                <p className="mt-4 text-sm leading-6 text-[#666666]">
-                  After purchase, buyers download through your gateway&apos;s HTTPS door. Stripe moves the money. <VersionedTermsCopy legacy="We deduct 5% from the seller; the buyer pays any payment-provider costs and applicable tax shown at checkout." terms12={CARD_HOME_FEES} />
-                </p>
-              </div>
+            <div className="mt-14">
+              <p className="text-sm leading-6 text-[#666666]">
+                allAI does the work, your files never leave your storage, and you get paid.
+              </p>
+              <p className="mt-4 text-sm leading-6 text-[#666666]">
+                <VersionedTermsCopy legacy="We deduct 5% from the seller; the buyer pays any payment-provider costs and applicable tax shown at checkout." terms12={CARD_HOME_FEES} />
+              </p>
             </div>
           </div>
         </section>
@@ -583,13 +573,13 @@ export default async function LandingPage() {
                     className="card-texture rounded-2xl border border-[#E8E8E8] bg-white p-5 flex flex-col hover:border-[#3F51B5] hover:shadow-sm transition-all"
                   >
                     <span className={`inline-flex w-fit rounded-md px-2 py-0.5 text-[11px] font-bold uppercase tracking-wide ${categoryBadge[l.category] ?? defaultBadge}`}>
-                      {l.category}
+                      {formatMarketplaceCategoryName(l.category)}
                     </span>
                     <h3 className="mt-4 text-base font-bold leading-snug text-[#1A1A1A]">{l.title ?? 'Untitled'}</h3>
                     <p className="mt-2 text-sm leading-6 text-[#666666] line-clamp-2">{l.short_description ?? ''}</p>
                     <div className="flex-1" />
                     <div className="mt-5 pt-4 border-t border-[#F0F0F0] flex items-center justify-between text-xs">
-                      <span className="text-[#888888]">{l.category}</span>
+                      <span className="text-[#888888]">{formatMarketplaceCategoryName(l.category)}</span>
                       <span className="font-semibold text-[#1A1A1A]">{l.price === 0 ? 'Free' : `$${l.price}`}</span>
                     </div>
                   </Link>
@@ -622,6 +612,7 @@ export default async function LandingPage() {
                   <div className="flex h-10 w-10 items-center justify-center rounded-full bg-[#3F51B5] text-white text-sm font-bold">{idx + 1}</div>
                   <h3 className="mt-4 text-lg font-bold text-[#1A1A1A]">{step.title}</h3>
                   <p className="mt-2 text-sm leading-6 text-[#666666]"><VersionedTermsCopy legacy={step.description} terms12={step.title === 'Get paid.' ? CARD_HOME_PAYOUT : step.description} /></p>
+                  {step.extra && <p className="mt-2 text-sm leading-6 text-[#666666]">{step.extra}</p>}
                 </div>
               ))}
             </div>

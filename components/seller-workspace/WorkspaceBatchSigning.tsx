@@ -62,42 +62,39 @@ export function BatchSigningScreen({ switches, preparation, onSigned }: { switch
   const stale = instruments.some(i => !isCurrentLicenseSelection(i.license_selection)) ||
     (error instanceof Error && error.message === 'LICENSE_ACCEPTANCE_STALE') ||
     (typeof detail === 'string' ? detail : detail?.code) === 'LICENSE_ACCEPTANCE_STALE';
-  const sign = async (reauth?: string) => {
-    if (stale || (!ready && !reauth) || busy || done || !switches.effects) return;
-    // A factor retry is permitted only for the retained displayed request.
-    if (reauth && !request.current) return;
+  const sign = async () => {
+    if (stale || !ready || busy || done || !switches.effects) return;
     setBusy(true); setError(null);
     const controller = new AbortController(); action.current = controller;
     try {
       request.current ??= { request_id: crypto.randomUUID(), csrf: nativeSession().csrf,
         instruments: instruments.map(i => ({ preparation_id: i.id, coverage_hash: i.coverage_hash, selection: i.license_selection })) };
-      if (reauth) request.current.reauth_token = reauth;
       request.current.csrf = nativeSession().csrf;
       const rows = await signInstruments(request.current, controller.signal); if (active.current) {setDone(true);onSigned?.(rows);}
     } catch(e) { if (active.current) setError(e); } finally { if (active.current) setBusy(false); }
   };
   if (!enabled) return <><p role="status">Licence signing is currently unavailable.</p>{!!error&&<p role="alert">Licence signing could not be confirmed. Refresh and review again before signing.</p>}</>;
   return <section aria-label="Workspace batch licence signing" className="space-y-4 rounded-xl border bg-white p-6">
-    <h2 className="text-xl font-semibold">Workspace step: Sign licences</h2>
-    <p>Display and sign all selected instruments in one native session before a fresh action-batch review. Generic Confirm never signs licences.</p>
-    <p>50 instruments maximum. Requests are never automatically split.</p>
-    {!preparation && <><label>Prepared instrument IDs (one per line)<textarea className="block w-full rounded border p-2" value={ids} disabled={busy} onChange={e => { setIds(e.target.value); setInstruments([]); setTexts({}); setConsent(false); setDone(false); setError(null); request.current = null; }} /></label>
-    <button disabled={busy || !switches.effects} onClick={() => void load()}>Load complete licence batch</button></>}
-    {stale && <p role="alert">This saved licence selection is out of date. Re-select the licence and covenant at the current version, then prepare and sign again. Signing is disabled for the whole batch.</p>}
-    {instruments.map(i => <section key={i.id} aria-label={`Instrument ${i.id}`} className="space-y-3 border-t pt-4">
-      <h3>Listing {i.binding.listing_id} · Version {i.binding.version_id}</h3>
+    <h2 className="text-xl font-semibold">Sign your licence</h2>
+    <p>You’re signing the licence buyers will accept and the ai.market listing covenant for this listing. Read both below, tick the box, then sign. Nothing is published by signing.</p>
+    {!preparation && <><label>Listing preparation IDs (one per line)<textarea className="block w-full rounded border p-2" value={ids} disabled={busy} onChange={e => { setIds(e.target.value); setInstruments([]); setTexts({}); setConsent(false); setDone(false); setError(null); request.current = null; }} /></label>
+    <button type="button" className="rounded-lg bg-indigo-700 px-4 py-2.5 text-sm font-semibold text-white hover:bg-indigo-800 disabled:cursor-not-allowed disabled:bg-gray-300 disabled:text-gray-600" disabled={busy || !switches.effects} onClick={() => void load()}>Load licences</button></>}
+    {(instruments.length > 50 || (!preparation && ids.split(/\s+/).filter(Boolean).length > 50)) && <p role="alert">You can sign up to 50 listings at once.</p>}
+    {stale && <p role="alert">This saved licence choice is out of date. Go back to Choose a licence, choose the current licence and covenant, then prepare and sign again.</p>}
+    {instruments.map((i, index) => <section key={i.id} aria-label={`Licence ${index + 1}`} className="space-y-3 border-t pt-4">
+      <h3>{i.license_selection.kind === 'standard' ? 'Standard licence' : 'Custom licence'}</h3>
       <p>Signer: {i.license_selection.seller_acceptance.signer_name} · {i.license_selection.seller_acceptance.signer_title}</p>
       <p>AI/ML training: {i.license_selection.ai_training ? 'Allowed' : 'Not allowed'}</p>
-      <pre className="overflow-auto whitespace-pre-wrap">{JSON.stringify({ ...i.binding, status: i.status, coverage_hash: i.coverage_hash, selection: i.license_selection }, null, 2)}</pre>
       {i.license_selection.kind === 'custom' ? <p role="alert">The saved custom licence and rider cannot be fully displayed by this contract. Signing is disabled for the whole batch.</p> : <>
-        <h4>Full licence</h4><pre className="max-h-96 overflow-auto whitespace-pre-wrap font-sans">{texts[licenseDocumentPath('standard', i.license_selection.ai_training, i.license_selection.version)] ?? 'Full licence unavailable'}</pre>
-        <h4>Marketplace Listing Covenant</h4><pre className="max-h-96 overflow-auto whitespace-pre-wrap font-sans">{texts[licenseDocumentPath('covenant', undefined, i.license_selection.covenant_version)] ?? 'Covenant unavailable'}</pre>
+        <h4>Full licence (version {i.license_selection.version})</h4><pre className="max-h-96 overflow-auto whitespace-pre-wrap font-sans">{texts[licenseDocumentPath('standard', i.license_selection.ai_training, i.license_selection.version)] ?? 'Full licence unavailable'}</pre>
+        <h4>Marketplace Listing Covenant (version {i.license_selection.covenant_version})</h4><pre className="max-h-96 overflow-auto whitespace-pre-wrap font-sans">{texts[licenseDocumentPath('covenant', undefined, i.license_selection.covenant_version)] ?? 'Covenant unavailable'}</pre>
       </>}
     </section>)}
-    <label><input type="checkbox" checked={consent} disabled={busy || done || stale || !instruments.length} onChange={e => setConsent(e.target.checked)} />I have read all {instruments.length} displayed licences, covenants and applicable riders. I confirm the covenant facts and that I am authorised to accept them for the seller.</label>
-    <button disabled={!ready || busy || done} onClick={() => void sign()}>Sign {instruments.length} licences</button>
-    {done && <p role="status">Licences signed. Nothing was published. Request a fresh connector snapshot with a new key, then review and Confirm the action batch separately.</p>}
+    <label className="flex items-start gap-3"><input className="mt-1 h-4 w-4 shrink-0" type="checkbox" checked={consent} disabled={busy || done || stale || !instruments.length} onChange={e => setConsent(e.target.checked)} /><span>I have read {instruments.length > 1 ? `all ${instruments.length} licences and covenants` : 'the licence and covenant'} above, the covenant facts are true, and I am authorised to accept them for the seller.</span></label>
+    <button type="button" className="block rounded-lg bg-indigo-700 px-4 py-2.5 text-sm font-semibold text-white hover:bg-indigo-800 disabled:cursor-not-allowed disabled:bg-gray-300 disabled:text-gray-600" disabled={!ready || busy || done} onClick={() => void sign()}>{instruments.length === 1 ? 'Sign licence' : `Sign ${instruments.length} licences`}</button>
+    {!consent && !done && instruments.length > 0 && <p className="text-sm text-gray-600">Tick the box above to sign.</p>}
+    {done && <p role="status">Licence signed. Your listing is not published yet. Go back to the review step and publish when ready.</p>}
     {!switches.effects && <p>Seller effects are off. Signing is unavailable.</p>}
-    <NativeSellerAuth error={stale ? null : error} onRetry={() => { request.current = null; void load(preparation); }} onToken={sign} />
+    <NativeSellerAuth error={stale ? null : error} />
   </section>;
 }

@@ -11,6 +11,10 @@ const api=vi.hoisted(()=>({readPublication:vi.fn(),publishListing:vi.fn()}));
 vi.mock('@/api/sellerListingPublication',()=>api);
 const approval={id:'approval',review_hash:'a',render_hash:'b'} as ApprovalReceipt;
 const publication={title:'Retail',slug:'retail',status:'published',is_listed:true};
+afterEach(() => {
+  expect(screen.queryByRole('dialog', { name: 'Re-authenticate' })).toBeNull();
+  expect(screen.queryByPlaceholderText('Enter code')).toBeNull();
+});
 afterEach(()=>{cleanup();vi.restoreAllMocks();});
 beforeEach(()=>{vi.resetAllMocks();api.readPublication.mockResolvedValue({publication_available:true,publication:null});});
 it('requires a click and the approved render before publishing',async()=>{
@@ -125,7 +129,7 @@ it('waits for preparation recovery and forwards the signed preparation on the we
     render(<SellerPublication approval={named} active rendered/>);
     const button=await screen.findByRole('button',{name:'Publish this listing'});
     expect((button as HTMLButtonElement).disabled).toBe(true);
-    await act(async()=>finish({data:row}));await screen.findByText('Ready to publish here or from Claude');
+    await act(async()=>finish({data:row}));await screen.findByText('Ready to publish');
     api.publishListing.mockResolvedValue(publication);fireEvent.click(button);
     await screen.findByText('Published');
     expect(api.publishListing).toHaveBeenCalledWith(named,expect.any(String),expect.any(AbortSignal),row.id);

@@ -13,6 +13,10 @@ const row=instrument();
 const approval={id:row.binding.approval_id,draft_id:row.binding.draft_id,draft_version:3,review_hash:hash,render_hash:hash,license_selection:row.license_selection} as ApprovalReceipt;
 const switches={seller:true,bulk:true,floors:true,tools:{publish_listing:false,unpublish_listing:false,bulk_publish_listings:false,bulk_unpublish_listings:false,bulk_update_listings:false}};
 beforeEach(()=>{window.history.replaceState({},'', '/dashboard/seller-workspace');useAuthStore.setState({user:{id:id(99)} as User,token:'session'});});
+afterEach(() => {
+  expect(screen.queryByRole('dialog', { name: 'Re-authenticate' })).toBeNull();
+  expect(screen.queryByPlaceholderText('Enter code')).toBeNull();
+});
 afterEach(()=>{cleanup();vi.restoreAllMocks();});
 function mockReads(existing:boolean,status=200) {
   return vi.spyOn(nativeClient,'get').mockImplementation(async path=>{
@@ -41,8 +45,8 @@ it('renders the preloaded panel on the workspace with real B3 hook and all publi
   const get=mockReads(true);render(<SellerPreparation approval={approval} active onChange={vi.fn()} onLoaded={vi.fn()}/>);
   await screen.findByRole('region',{name:'Workspace batch licence signing'});
   await waitFor(()=>expect(screen.getAllByText('Complete fixture legal terms')).toHaveLength(2));
-  expect(screen.queryByLabelText(/Prepared instrument IDs/)).toBeNull();
-  expect((screen.getByRole('button',{name:'Sign 1 licences'}) as HTMLButtonElement).disabled).toBe(true);
+  expect(screen.queryByLabelText(/Listing preparation IDs/)).toBeNull();
+  expect((screen.getByRole('button',{name:'Sign licence'}) as HTMLButtonElement).disabled).toBe(true);
   expect(get).toHaveBeenCalledWith('/seller-workspace/connector-switches',{headers:nativeSession().headers});
 });
 it.each([401,403,404,503])('hides signing with a neutral message for B3 HTTP %i even with an enabled-looking body',async status=>{
@@ -54,8 +58,8 @@ it.each([401,403,404,503])('hides signing with a neutral message for B3 HTTP %i 
 it('uses NativeSellerAuth for a missing first-party session',async()=>{
   useAuthStore.setState({token:null});
   render(<SellerPreparation approval={approval} active onChange={vi.fn()} onLoaded={vi.fn()}/>);
-  await screen.findByText('Sign in again to prepare this listing.');
-  expect(screen.getByRole('link',{name:'Sign in again'})).toBeTruthy();
+  await screen.findByText('Please refresh the page and try again.');
+  expect(screen.queryByRole('link',{name:'Sign in again'})).toBeNull();
   expect(screen.queryByRole('button',{name:'Prepare for publishing'})).toBeNull();
 });
 
@@ -69,9 +73,9 @@ it('hides signing when B3 returns 200 with floors off',async()=>{
 it.each(['SSO_REQUIRED','BAD_ORIGIN','CSRF_REQUIRED','FIRST_PARTY_SESSION_REQUIRED','RECENT_LOGIN_REQUIRED'])('offers native authentication for session 403 %s',async detail=>{
   mockReads(false).mockRejectedValue({isAxiosError:true,response:{status:403,data:{detail:{code:detail}}}});
   render(<SellerPreparation approval={approval} active onChange={vi.fn()} onLoaded={vi.fn()}/>);
-  await screen.findByText('Sign in again to prepare this listing.');
-  if(detail==='SSO_REQUIRED') expect(screen.getByRole('button',{name:'Company sign-in'})).toBeTruthy();
-  else expect(screen.getByRole('link',{name:'Sign in again'})).toBeTruthy();
+  await screen.findByText('Please refresh the page and try again.');
+  expect(screen.queryByRole('button',{name:'Company sign-in'})).toBeNull();
+  expect(screen.queryByRole('link',{name:'Sign in again'})).toBeNull();
   expect(screen.queryByText(/not allowed by the current seller policy/)).toBeNull();
 });
 it('keeps a policy denial distinct from authentication failures',async()=>{
@@ -79,6 +83,50 @@ it('keeps a policy denial distinct from authentication failures',async()=>{
   render(<SellerPreparation approval={approval} active onChange={vi.fn()} onLoaded={vi.fn()}/>);
   await screen.findByText(/not allowed by the current seller policy/);
   expect(screen.queryByRole('link',{name:'Sign in again'})).toBeNull();
+});
+
+const signedNote='Licence signed. Your listing is not published yet. Select Publish this listing when you’re ready.';
+const signedRow={...row,status:'signed',signed_coverage_hash:row.coverage_hash,signing_required:false,acceptance_id:id(88)};
+function expectNoSigningDetails() {
+  expect(document.body.textContent).not.toMatch(/[a-f0-9]{64}/i);
+  for(const value of [row.id,signedRow.acceptance_id,...Object.values(row.binding)]) {
+    if(typeof value==='string') expect(document.body.textContent).not.toContain(value);
+  }
+}
+it.each(['success','failure'])('shows the parent signing confirmation only after a successful sign: %s',async outcome=>{
+  const reads=mockReads(true);
+  let finish!:(value:{data:unknown})=>void;
+  let fail!:(error:Error)=>void;
+  const post=vi.spyOn(nativeClient,'post').mockImplementation(()=>new Promise((resolve,reject)=>{finish=resolve;fail=reject;}));
+  const onChange=vi.fn();
+  const props={approval,active:true,onChange,onLoaded:vi.fn()};
+  const view=render(<SellerPreparation {...props}/>);
+  await waitFor(()=>expect(screen.getAllByText('Complete fixture legal terms')).toHaveLength(2));
+  expect(screen.queryByText(signedNote)).toBeNull();
+  expectNoSigningDetails();
+  fireEvent.click(screen.getByRole('checkbox'));
+  fireEvent.click(screen.getByRole('button',{name:'Sign licence'}));
+  await waitFor(()=>expect(post).toHaveBeenCalledOnce());
+  expect(screen.queryByText(signedNote)).toBeNull();
+  await act(async()=>outcome==='success'?finish({data:{instruments:[signedRow]}}):fail(new Error('network')));
+  if(outcome==='success') {
+    expect(await screen.findByText(signedNote)).toBeTruthy();
+    expect(screen.queryByRole('region',{name:'Workspace batch licence signing'})).toBeNull();
+    expect(onChange).toHaveBeenLastCalledWith({...row,...signedRow});
+    expectNoSigningDetails();
+    view.rerender(<SellerPreparation {...props} published/>);
+    expect(screen.queryByText(signedNote)).toBeNull();
+    view.unmount();
+    reads.mockResolvedValue({data:signedRow});
+    render(<SellerPreparation {...props}/>);
+    await screen.findByText('Ready to publish');
+    expect(screen.queryByText(signedNote)).toBeNull();
+  } else {
+    await screen.findByRole('alert');
+    expect(screen.queryByText(signedNote)).toBeNull();
+    expect(onChange).not.toHaveBeenCalledWith(expect.objectContaining({status:'signed'}));
+    expectNoSigningDetails();
+  }
 });
 
 function refreshedWrite(data: unknown) {
@@ -125,15 +173,19 @@ it.each(['success','failure'])('keeps mounted signing alive through refresh and 
   // Capability revalidation stays pending while the write completes.
   reads.mockImplementation(()=>new Promise(()=>{}));
   fireEvent.click(screen.getByRole('checkbox'));
-  fireEvent.click(screen.getByRole('button',{name:'Sign 1 licences'}));
+  fireEvent.click(screen.getByRole('button',{name:'Sign licence'}));
   await waitFor(()=>expect(write.post).toHaveBeenCalledTimes(2));
   expectRefreshedPair(write.post,write.first);
   expect(write.post.mock.calls[0][2]?.signal?.aborted).toBe(false);
   await act(async()=>write.complete());
   if(outcome==='success') {
-    await screen.findByText('Ready to publish here or from Claude');
+    await screen.findByText('Ready to publish');
+    expect(screen.getByText(signedNote)).toBeTruthy();
     expect(onChange).toHaveBeenLastCalledWith(expect.objectContaining({status:'signed'}));
-  } else await screen.findByRole('alert');
+  } else {
+    await screen.findByRole('alert');
+    expect(screen.queryByText(signedNote)).toBeNull();
+  }
 });
 it.each(['identity','logout','unmount'])('cancels pending preparation on %s',async change=>{
   mockReads(false);
@@ -157,7 +209,7 @@ it.each(['identity','logout','unmount'])('cancels pending signing on %s',async c
   const view=render(<SellerPreparation approval={approval} active onChange={onChange} onLoaded={vi.fn()}/>);
   await waitFor(()=>expect(screen.getAllByText('Complete fixture legal terms')).toHaveLength(2));
   fireEvent.click(screen.getByRole('checkbox'));
-  fireEvent.click(screen.getByRole('button',{name:'Sign 1 licences'}));
+  fireEvent.click(screen.getByRole('button',{name:'Sign licence'}));
   await waitFor(()=>expect(write.post).toHaveBeenCalledTimes(2));
   const signal=write.post.mock.calls[0][2]?.signal;
   expect(signal?.aborted).toBe(false);

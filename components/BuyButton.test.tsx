@@ -784,6 +784,20 @@ describe('connector checkout handoff and domain purchase', () => {
     result.response = { status, data: { detail }, statusText: 'refused', headers: {}, config: {} as never };
     return result;
   }
+
+  it.each([true, false])('submits a purchase directly for an enrolled company user (handoff %s)', async handoff => {
+    useAuthStore.setState({ user: { id: 'buyer-1', sso_enforced: true, totp_enabled: true } as never });
+    vi.mocked(createCheckout).mockRejectedValue(error(503, 'CHECKOUT_PROCESSING'));
+    await accept(handoff ? { handoffToken } : undefined);
+    await waitFor(() => expect(createCheckout).toHaveBeenCalledOnce());
+    expect(screen.queryByRole('dialog', { name: 'Re-authenticate' })).toBeNull();
+    expect(screen.queryByPlaceholderText('Enter code')).toBeNull();
+  });
+  it.each(['RECENT_LOGIN_REQUIRED', 'SECOND_FACTOR_REQUIRED', 'SECOND_FACTOR_ENROLLMENT_REQUIRED'])('uses refresh copy for legacy %s in either checkout mode', code => {
+    for (const enabled of [true, false]) {
+      expect(parseCheckoutRefusal(error(403, code), enabled).message).toBe('Please refresh the page and try again.');
+    }
+  });
   const backendTermsRefusal = {
     code: 'TERMS_ACCEPTANCE_REQUIRED',
     acceptance_url: '/api/v1/legal/terms/accept',
@@ -806,7 +820,7 @@ describe('connector checkout handoff and domain purchase', () => {
     [403, 'UNKNOWN_CODE'], [401, 'TERMS_ACCEPTANCE_REQUIRED'], [401, 'FIRST_PARTY_SESSION_REQUIRED'],
   ])('keeps the sign-in refusal for status %s and code %s', (status, code) => {
     expect(parseCheckoutRefusal(error(status, { code }), true)).toEqual({
-      code, message: 'Sign in again, then retry the same purchase.',
+      code, message: 'Please refresh the page and try again.',
     });
   });
   it.each([
@@ -821,7 +835,7 @@ describe('connector checkout handoff and domain purchase', () => {
     expect(screen.getAllByRole('alert').some(element => element.textContent?.includes(
       'Accept the current ai.market platform terms before purchasing.'
     ))).toBe(true);
-    expect(screen.queryByText('Sign in again, then retry the same purchase.')).toBeNull();
+    expect(screen.queryByText('Please refresh the page and try again.')).toBeNull();
     expect((screen.getByRole('button', { name: 'Accept and continue to payment' }) as HTMLButtonElement).disabled).toBe(true);
     expect(sessionStorage.getItem(checkoutReplayKey('buyer-1', props.listingId))).toBeNull();
     expect(createCheckout).toHaveBeenCalledOnce();
@@ -900,7 +914,7 @@ describe('connector checkout handoff and domain purchase', () => {
     const key = checkoutReplayKey('buyer-1', props.listingId);
     const frozen = sessionStorage.getItem(key);
     fireEvent.click(await screen.findByRole('button', { name: 'Retry checkout' }));
-    await screen.findAllByText('Sign in again, then retry the same purchase.');
+    await screen.findAllByText('Please refresh the page and try again.');
     expect(sessionStorage.getItem(key)).toBe(frozen);
     await act(async () => { useAuthStore.setState({ isAuthenticated: false }); });
     await act(async () => { useAuthStore.setState({ isAuthenticated: true, token: 'renewed-session' }); });
