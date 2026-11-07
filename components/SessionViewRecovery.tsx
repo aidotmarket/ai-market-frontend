@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useLayoutEffect, useRef, useState, useSyncExternalStore, type ReactNode } from 'react';
+import { Component, useEffect, useLayoutEffect, useRef, useState, useSyncExternalStore, type ReactNode } from 'react';
 import { selectedRecoveryTicket, subscribeRecoveryTicket, SessionViewRecovery, type RecoveryAdapter, type RecoveryDisplay, type RecoveryProgress } from '@/lib/session-view-recovery';
 
 // This lifecycle belongs to the mounted failing view. No service or global timer.
@@ -24,7 +24,7 @@ export function useViewRecovery(failed: boolean, adapter: RecoveryAdapter) {
       current: () => latest.current.current(), snapshot: () => latest.current.snapshot(), install: data => latest.current.install(data),
       prepareRefresh: () => latest.current.prepareRefresh?.(), acceptRefresh: async token => { await latest.current.acceptRefresh?.(token); },
       finish: () => latest.current.finish?.(),
-    });
+    }, a.failure);
     active.current = recovery; setAttempt(recovery);
   }, [binding, failed]);
   useEffect(() => {
@@ -56,6 +56,22 @@ export function visiblyRendered(element: HTMLElement): boolean {
       || style.display === 'none' || style.visibility === 'hidden' || style.visibility === 'collapse' || style.opacity === '0') return false;
   }
   return !element.querySelector('[role="alert"], [data-recovery-render-error]');
+}
+
+// Keep the owning controller mounted. Only its data display may be replaced by
+// this fallback; command objects, drafts and uncertainty stay in the controller.
+export class RecoveryRenderBoundary extends Component<{
+  resetKey: unknown; onFailure: () => void; children: ReactNode;
+}, { failed: boolean; key: unknown }> {
+  state = { failed: false, key: this.props.resetKey };
+  static getDerivedStateFromProps(props: { resetKey: unknown }, state: { key: unknown }) {
+    return props.resetKey !== state.key ? { failed: false, key: props.resetKey } : null;
+  }
+  static getDerivedStateFromError() { return { failed: true }; }
+  componentDidCatch() { this.props.onFailure(); }
+  render() {
+    return this.state.failed ? <p role="alert" data-recovery-render-error>This view could not be displayed. Your drafts and pending work are retained.</p> : this.props.children;
+  }
 }
 
 // Place around the actual rendered returned data, not a status/ACK/loading card.

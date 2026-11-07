@@ -6,10 +6,10 @@ import type { RecoveryPort } from '@/api/support-recovery';
 
 interface ReplyState {
   conversation: CustomerConversation | null; body: string; busy: boolean;
-  unknown: boolean; retryReady: boolean; validated: boolean; error: string | null; readFailed: boolean;
+  unknown: boolean; retryReady: boolean; validated: boolean; error: string | null; readFailed: boolean; renderFailed: boolean;
 }
 const emptyReply = (): ReplyState => ({ conversation: null, body: '', busy: false,
-  unknown: false, retryReady: false, validated: false, error: null, readFailed: false });
+  unknown: false, retryReady: false, validated: false, error: null, readFailed: false, renderFailed: false });
 interface ReplyCommand { publicRef: string; conversationId: string; nonce: string; body: string }
 export interface ReportState {
   reply: ReplyState;
@@ -64,7 +64,7 @@ export class OrderIssueSession {
     value.messages.forEach(m => versions.set(m.id + ':' + m.version, m));
     const conversation = { ...value, messages: [...versions.values()] };
     // Reading never reconciles an uncertain message or discards its command.
-    this.setReply({ conversation, error: null, readFailed: false, validated: !this.state.reply.unknown && !this.replyCommand });
+    this.setReply({ conversation, error: null, readFailed: false, renderFailed: false, validated: !this.state.reply.unknown && !this.replyCommand });
     return conversation;
   };
   constructor(public orderId: string, readonly port: SupportPort, private recoveryId: string | null = null) {
@@ -253,6 +253,7 @@ export class OrderIssueSession {
     if (!this.current() || !this.state.proposal?.confirmation || this.state.reply.busy || this.replyCommand) return;
     this.localGeneration++; this.setReply({ body });
   };
+  conversationRenderFailed = () => { if (this.state.reply.conversation) this.setReply({ renderFailed: true }); };
   // Mounting a view never reconciles an uncertain command or replays it.
   ensureConversation = () => {
     if (!this.state.reply.conversation && !this.state.reply.unknown && !this.state.reply.error)
@@ -276,7 +277,7 @@ export class OrderIssueSession {
         this.setReply({ conversation: { ...value, messages: [...versions.values()] } });
       } else this.setReply({ conversation: value });
       // A read establishes current access/projection, not proof of a lost reply's outcome.
-      this.setReply({ validated: true, retryReady: this.replyCommand !== null, readFailed: false });
+      this.setReply({ validated: true, retryReady: this.replyCommand !== null, readFailed: false, renderFailed: false });
     } catch {
       if (this.replyCurrent(epoch, confirmation, flight)) this.setReply({ readFailed: true, error: 'Conversation could not be loaded. Your ticket is retained.' });
     } finally {

@@ -5,7 +5,7 @@ import { ISSUE_CATEGORIES, type IssueDraft } from '@/api/support';
 import type { OrderIssueSession } from '@/lib/order-issue-report';
 import { CustomerTicketStatus } from './TicketStatusCard';
 import { CustomerSupportMessage } from './AllAIMessage';
-import { useViewRecovery, RecoveryDisplayBoundary } from '@/components/SessionViewRecovery';
+import { useViewRecovery, RecoveryDisplayBoundary, RecoveryRenderBoundary } from '@/components/SessionViewRecovery';
 
 const fieldClass = 'block w-full rounded-lg border border-white/20 bg-slate-950 px-3 py-2 text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-300';
 const buttonClass = 'rounded-lg border border-white/30 px-3 py-2 text-sm text-white hover:bg-white/10 disabled:opacity-40 focus-visible:ring-2 focus-visible:ring-blue-300';
@@ -28,8 +28,8 @@ function SupportConversation({ session }: { session: OrderIssueSession }) {
   const { conversation, body, busy, error, unknown, validated, retryReady } = reply;
   const alive = useRef(true);
   const current = () => alive.current && session.current();
-  const recovery = useViewRecovery(reply.readFailed && !busy, {
-    view: 'support_conversation', current, snapshot: session.recoverySnapshot,
+  const recovery = useViewRecovery((reply.readFailed || reply.renderFailed) && !busy, {
+    view: 'support_conversation', failure: reply.renderFailed ? 'render_failed' : 'normal_read_failed', current, snapshot: session.recoverySnapshot,
     install: session.installRecoveredConversation,
   });
   useEffect(() => {
@@ -44,6 +44,7 @@ function SupportConversation({ session }: { session: OrderIssueSession }) {
     {error && <p role="alert">{error}</p>}
     {recovery.message && <p role="status">{recovery.message}</p>}
     <button className={buttonClass} disabled={busy} onClick={() => void session.loadConversation()}>Refresh conversation</button>
+    <RecoveryRenderBoundary resetKey={conversation} onFailure={() => { session.conversationRenderFailed(); if (recovery.attempt) void recovery.attempt.stop('failed'); }}>
     <RecoveryDisplayBoundary attempt={recovery.attempt} display={recovery.progress?.display} installed={conversation}>
     <div role="log" aria-label="Private support messages" className="space-y-3">
       {(conversation?.messages ?? [confirmation.acknowledgement]).map(message =>
@@ -51,6 +52,7 @@ function SupportConversation({ session }: { session: OrderIssueSession }) {
           current={current} onRendered={() => session.recordReceipt(confirmation, message.id, message.version)} />)}
     </div>
     </RecoveryDisplayBoundary>
+    </RecoveryRenderBoundary>
     {conversation?.next_cursor && <button className={buttonClass} disabled={busy}
       onClick={() => void session.loadConversation(conversation.next_cursor!)}>Load more messages</button>}
     <label className="block">Reply or report that the fix still fails

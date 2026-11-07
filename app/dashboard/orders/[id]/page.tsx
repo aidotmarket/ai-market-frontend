@@ -9,7 +9,7 @@ import { orderStatusPresentation } from '@/lib/order-status';
 import { useSessionGeneration } from '@/hooks/useSessionGeneration';
 import { useParams, useSearchParams } from 'next/navigation';
 import { getOrder, getOrderAccess, getOrderEvents, parseOrderDetail } from '@/api/orders';
-import { RecoveryDisplayBoundary, useViewRecovery } from '@/components/SessionViewRecovery';
+import { RecoveryDisplayBoundary, RecoveryRenderBoundary, useViewRecovery } from '@/components/SessionViewRecovery';
 import { authSessionOwner, isAuthSessionOwner } from '@/lib/auth-session-owner';
 import { getTransaction, confirmTransaction, deliverTransaction } from '@/api/transactions';
 import { formatPrice, formatDate } from '@/lib/format';
@@ -109,9 +109,13 @@ function OrderDetailVisit({ orderId, txIdParam, userId, sessionGeneration, issue
   const recoveryOwner = useRef(authSessionOwner());
   const readGeneration = useRef(0);
   const mounted = useRef(false);
+  const [renderFailed, setRenderFailed] = useState(false);
   useLayoutEffect(() => { mounted.current = true; return () => { mounted.current = false; readGeneration.current++; }; }, []);
-  const recovery = useViewRecovery(!!error && !loading, {
-    view: 'order_detail',
+  // A mounted transaction owns its pending commands in a separate controller.
+  // Keep that controller mounted and unresolved instead of rotating its action
+  // generation for a display exception. Initial failed reads have no child yet.
+  const recovery = useViewRecovery((!!error || (renderFailed && !txIdParam)) && !loading, {
+    view: 'order_detail', failure: renderFailed ? 'render_failed' : 'normal_read_failed',
     current: () => mounted.current && isAuthSessionOwner(recoveryOwner.current) && useAuthStore.getState().user?.id === userId,
     snapshot: () => ({ saved_drafts: null, unsent_text: null, conversation_selection: { orderId, txIdParam, issueProposal },
       unknown_mutations: { downloadLoading, downloadError }, generation: readGeneration.current }),
@@ -122,7 +126,7 @@ function OrderDetailVisit({ orderId, txIdParam, userId, sessionGeneration, issue
         || typeof data.status !== 'string' || typeof data.created_at !== 'string') throw new Error('Order scope changed');
       const value = parseOrderDetail(data);
       if (!Number.isFinite(value.amount)) throw new Error('Invalid order amount');
-      setOrder(value); setError(''); setLoading(false); return value;
+      setOrder(value); setError(''); setLoading(false); setRenderFailed(false); return value;
     },
   });
 
@@ -219,6 +223,7 @@ function OrderDetailVisit({ orderId, txIdParam, userId, sessionGeneration, issue
         {/* Main info */}
         <div className="lg:col-span-2 space-y-6">
           {isBuyerOfRecord && <GatewayDeliverySection key={order.id} orderId={order.id} onPresenceChange={handleGatewayPresence} />}
+          <RecoveryRenderBoundary resetKey={order} onFailure={() => { setRenderFailed(true); if (recovery.attempt) void recovery.attempt.stop('failed'); }}>
           <div className="rounded-lg border border-gray-200 p-6">
             <div className="flex items-center justify-between mb-4">
               <h1 className="text-xl font-bold text-gray-900">Order #{order.id.slice(0, 8)}</h1>
@@ -249,6 +254,7 @@ function OrderDetailVisit({ orderId, txIdParam, userId, sessionGeneration, issue
               <OrderVersionAccessSummary order={order} />
             </div>
           </div>
+          </RecoveryRenderBoundary>
 
           <OrderTransaction key={`transaction:${sessionGeneration}`} issueProposal={issueProposal} orderId={orderId} txIdParam={txIdParam}
             isBuyerOfRecord={isBuyerOfRecord} isSellerOfRecord={isSellerOfRecord} />

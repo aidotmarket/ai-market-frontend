@@ -5,7 +5,7 @@ import { useAuthStore } from '@/store/auth';
 import { authSessionOwner, isAuthSessionOwner, subscribeAuthSessionOwner } from '@/lib/auth-session-owner';
 import { parseRequestCommandResult, getRequestThreadSelector, getRequestThreadMessages, sendRequestThreadMessage, reconcileRequestThreadMessage } from '@/api/data-requests';
 import { parseRequestThreadSelector, parseRequestThreadHistory } from '@/api/data-requests';
-import { useViewRecovery, RecoveryDisplayBoundary } from './SessionViewRecovery';
+import { useViewRecovery, RecoveryDisplayBoundary, RecoveryRenderBoundary } from './SessionViewRecovery';
 import type { RequestThreadSelector, RequestThreadHistory, RequestMessageCommand, RequestCommandResult } from '@/api/data-requests';
 
 const button = 'rounded-lg border border-gray-300 px-4 py-2 text-sm font-medium focus:ring-2 focus:ring-[#3F51B5] disabled:opacity-50';
@@ -42,6 +42,7 @@ function OwnedConversation({ requestId, requestStatus, quoteRevision, navigation
   const [history, setHistory] = useState<RequestThreadHistory | null>(null);
   const [reading, setReading] = useState(false);
   const [readError, setReadError] = useState(false);
+  const [renderFailed, setRenderFailed] = useState(false);
   const [draft, setDraft] = useState('');
   const [attempt, setAttempt] = useState<Attempt | null>(null);
   const [notice, setNotice] = useState('');
@@ -71,8 +72,8 @@ function OwnedConversation({ requestId, requestStatus, quoteRevision, navigation
   }, [attempt?.state, attempt?.busy, notice]);
   const alive = () => active.current && isAuthSessionOwner(owner) && useAuthStore.getState().user?.id === principal && !!useAuthStore.getState().token && useAuthStore.getState().isAuthenticated;
   const editGeneration = useRef(0);
-  const recovery = useViewRecovery(readError && !reading && !!selection, {
-    view: 'request_thread', current: alive,
+  const recovery = useViewRecovery((readError || renderFailed) && !reading && !!selection, {
+    view: 'request_thread', failure: renderFailed ? 'render_failed' : 'normal_read_failed', current: alive,
     snapshot: () => ({ saved_drafts: [...pending.current.entries()], unsent_text: draft,
       conversation_selection: { requestId, selection, quoteRevision, navigationRevision, locationRevision },
       unknown_mutations: { attempt, pending: [...pending.current.entries()] }, generation: `${epoch.current}:${editGeneration.current}:${recoveryGeneration.current}` }),
@@ -86,7 +87,7 @@ function OwnedConversation({ requestId, requestStatus, quoteRevision, navigation
         ...(history?.items.filter(m => !parsedHistory.items.some(n => n.id === m.id)) ?? [])] };
       // Keep the current selector object so its normal read effect cannot cause
       // a second history GET. Validate the returned exact selection above.
-      setHistory(merged); setReadError(false); return merged;
+      setHistory(merged); setReadError(false); setRenderFailed(false); return merged;
     },
   });
   useLayoutEffect(() => { active.current = true; return () => { active.current = false; epoch.current++; }; }, []);
@@ -220,7 +221,7 @@ function OwnedConversation({ requestId, requestStatus, quoteRevision, navigation
         {reading && <p role="status">Loading messages…</p>}
         {readError && <p role="alert">Messages could not be loaded. This does not confirm whether your last message was sent.</p>}
         <button type="button" className={button} onClick={refresh}>Refresh conversation</button>
-        {history && <RecoveryDisplayBoundary attempt={recovery.attempt} display={recovery.progress?.display} installed={history}><ol aria-label="Private messages" className="space-y-3">{history.items.map(m => <li key={m.id} className="rounded-lg bg-gray-50 p-3"><span className="text-xs font-medium text-gray-500">{m.role === 'system' ? 'Update' : m.role === selector.side ? 'You' : 'Other participant'}</span><p className="whitespace-pre-wrap text-sm text-gray-800">{m.content}</p></li>)}</ol>{!history.items.length && <p>No messages in this conversation.</p>}{history.next_cursor && <button className={button} disabled={reading} onClick={loadMore}>Load more messages</button>}</RecoveryDisplayBoundary>}
+        {history && <RecoveryRenderBoundary resetKey={history} onFailure={() => { setRenderFailed(true); if (recovery.attempt) void recovery.attempt.stop("failed"); }}><RecoveryDisplayBoundary attempt={recovery.attempt} display={recovery.progress?.display} installed={history}><ol aria-label="Private messages" className="space-y-3">{history.items.map(m => <li key={m.id} className="rounded-lg bg-gray-50 p-3"><span className="text-xs font-medium text-gray-500">{m.role === 'system' ? 'Update' : m.role === selector.side ? 'You' : 'Other participant'}</span><p className="whitespace-pre-wrap text-sm text-gray-800">{m.content}</p></li>)}</ol>{!history.items.length && <p>No messages in this conversation.</p>}{history.next_cursor && <button className={button} disabled={reading} onClick={loadMore}>Load more messages</button>}</RecoveryDisplayBoundary></RecoveryRenderBoundary>}
         {closed && <p>This request is {requestStatus}. New messages cannot be sent.</p>}
         {history && !closed && !history.can_send && <p>New messages are not available for this conversation.</p>}
         <form aria-label="Private message" onSubmit={e => { e.preventDefault(); void execute('send'); }} className="space-y-3">

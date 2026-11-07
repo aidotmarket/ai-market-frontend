@@ -8,7 +8,7 @@ import {
   parseWalletBalance, parseWalletHistory,
 } from '@/api/wallet';
 import { authSessionOwner, isAuthSessionOwner } from '@/lib/auth-session-owner';
-import { useViewRecovery, RecoveryDisplayBoundary } from '@/components/SessionViewRecovery';
+import { useViewRecovery, RecoveryDisplayBoundary, RecoveryRenderBoundary } from '@/components/SessionViewRecovery';
 import { selectedRecoveryTicket } from '@/lib/session-view-recovery';
 
 type Auth = ReturnType<typeof useAuthStore.getState>;
@@ -49,8 +49,9 @@ export default function WalletFunding() {
   const editGeneration = useRef(0);
   const [installedRead, setInstalledRead] = useState<object | null>(null);
   const requestedOffset = useRef(0);
-  const recovery = useViewRecovery(!!(view.balance.error || view.history.error), {
-    view: 'wallet', walletOffset: requestedOffset.current,
+  const [renderFailed, setRenderFailed] = useState(false);
+  const recovery = useViewRecovery(renderFailed || !!(view.balance.error || view.history.error), {
+    view: 'wallet', walletOffset: requestedOffset.current, failure: renderFailed ? 'render_failed' : 'normal_read_failed',
     current: () => !!actions.current && isAuthSessionOwner(recoveryOwner.current) && !!liveAssociation.current
       && liveAssociation.current.owner === useAuthStore.getState().user?.id,
     snapshot: () => ({ saved_drafts: { amount, formError }, unsent_text: amount,
@@ -197,7 +198,7 @@ export default function WalletFunding() {
         const read = { balance: balanceData, history: historyData };
         currentOffset = requestedOffset.current;
         setView(v => ({ ...v, offset: currentOffset, balance: { data: balanceData, loading: false, at: new Date().toISOString() }, history: { data: historyData, loading: false, at: new Date().toISOString() } }));
-        setInstalledRead(read); return read;
+        setInstalledRead(read); setRenderFailed(false); return read;
       },
       refresh: () => { const a = association; if (a && current(a)) { void balance(a); void history(a, 0, true); } },
       page: offset => {
@@ -271,7 +272,8 @@ export default function WalletFunding() {
     {attemptUI === 'unknown' && <p role="alert">{uncertain}</p>}
     {!ready && <div><p role="status">{view.status || 'Waiting to verify wallet sign-in.'}</p>
       <button type="button" disabled={recovering} onClick={() => actions.current?.recover()}>Recover sign-in</button></div>}
-    {ready && <RecoveryDisplayBoundary attempt={recovery.attempt} display={recovery.progress?.display} installed={installedRead}>
+    {ready && <RecoveryRenderBoundary resetKey={view.history.data ?? view.balance.data} onFailure={() => { setRenderFailed(true); if (recovery.attempt) void recovery.attempt.stop('failed'); }}>
+    <RecoveryDisplayBoundary attempt={recovery.attempt} display={recovery.progress?.display} installed={installedRead}>
       <button type="button" onClick={() => actions.current?.refresh()}>Refresh</button>
       <section aria-label="Balance"><h2>Balance</h2>
         {view.balance.loading && <p role="status">Loading balance…</p>}
@@ -302,6 +304,6 @@ export default function WalletFunding() {
           <button type="button" disabled={view.history.loading || !view.history.data.has_more} onClick={() => actions.current?.page(view.offset + 20)}>Next</button>
         </>}
       </section>
-    </RecoveryDisplayBoundary>}
+    </RecoveryDisplayBoundary></RecoveryRenderBoundary>}
   </div>;
 }

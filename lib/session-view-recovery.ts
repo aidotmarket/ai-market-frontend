@@ -16,6 +16,7 @@ export interface RecoveryBinding {
 }
 export interface RecoveryAdapter {
   view: RecoveryKind; walletOffset?: number;
+  failure?: RecoveryContext['failure'];
   current(): boolean; snapshot(): LocalRecoveryState;
   install(data: unknown): object;
   prepareRefresh?(): void;

@@ -97,7 +97,10 @@ beforeEach(() => {
     if (url.endsWith('/threads')) return response(c, selection);
     if (url.endsWith('/messages')) { if (failedRead) fail(c); return response(c, threadHistory); }
     if (url.endsWith('/events')) return response(c, []);
-    if (url.endsWith('/orders/' + nav.order)) { if (failedRead) fail(c); return response(c, dataForView()); }
+    if (url.endsWith('/orders/' + nav.order)) {
+      if (failedRead) fail(c);
+      return response(c, mode === 'renderOrder' ? { ...dataForView(), listing_title: { invalidReactChild: true } } : dataForView());
+    }
     if (url.endsWith('/conversation')) { if (failedRead) fail(c); return response(c, currentConversation()); }
     throw new Error('Unexpected synthetic network route: ' + url);
   });
@@ -131,6 +134,17 @@ it.each(['hidden', 'unmount', 'lostStart', 'refresh429', 'wrongWalletOwner'] as 
   else await waitFor(() => expect(replies).toContain(condition === 'hidden' ? 'reload' : condition === 'refresh429' ? 'failed' : 'unknown'));
   await act(async () => { await new Promise(resolve => setTimeout(resolve, 40)); });
   expect(replies).not.toContain('render'); expect(calls('/auth/refresh').length).toBeLessThanOrEqual(1);
+});
+it('the actual order display captures render_failed without unmounting its owning controller and visibly repairs that same data', async () => {
+  kind = 'order_detail'; mode = 'renderOrder'; failedRead = false;
+  vi.spyOn(console, 'error').mockImplementation(() => {});
+  await selectTicket(); session.editReply('Keep the original selected support draft');
+  render(<OrderDetailPage />);
+  await waitFor(() => expect(replies).toEqual(['start', 'reload', 'render']));
+  expect(context!.failure).toBe('render_failed'); expect(context!.view).toBe('order_detail');
+  expect(screen.getByText('Exact restored order')).toBeTruthy();
+  expect(session.getSnapshot().reply.body).toBe('Keep the original selected support draft');
+  expect(calls('/auth/refresh')).toHaveLength(1);
 });
 it('ordinary support remains usable while owner admission is pending; draft changes stop that context', async () => {
   mode = 'waiting'; await selectTicket(); render(<OrderIssueReport session={session} onLeave={() => {}} />);
