@@ -7,10 +7,16 @@ import {
   useCallback,
   useRef,
   useEffect,
+  useLayoutEffect,
   type ReactNode,
 } from 'react';
+import { AllAISupportBridge } from './AllAISupportBridge';
 import { usePathname } from 'next/navigation';
 import { useAuthStore } from '@/store/auth';
+import { subscribeAuthSessionOwner, installAuthSessionOwnerSignals } from '@/lib/auth-session-owner';
+import { OrderIssueSession } from '@/lib/order-issue-report';
+import { canonicalOrderId, isOrderDetailPath } from '@/lib/order-route';
+import { support, type OrderViewFailure } from '@/api/support';
 import {
   createAnonymousSession,
   getAnonymousChatStatus,
@@ -57,6 +63,15 @@ export interface FieldProposalEvent {
 }
 
 interface AllAIContextValue {
+  supportSession?: OrderIssueSession | null;
+  openSupportConversation?: (session: OrderIssueSession) => void;
+  leaveSupportConversation?: () => void;
+  reportSession?: OrderIssueSession | null;
+  openReportIssue: (orderId: string, proposalId?: string, failure?: OrderViewFailure) => void;
+  leaveReportIssue: () => void;
+  separateViewReport?: () => void;
+  previousReports?: OrderIssueSession[];
+  selectReport?: (session: OrderIssueSession) => void;
   isOpen: boolean;
   open: () => void;
   close: () => void;
@@ -179,9 +194,76 @@ export function useAllAI() {
 
 export function AllAIProvider({ children }: { children: ReactNode }) {
   const pathname = usePathname();
+  useEffect(installAuthSessionOwnerSignals, []);
   const contextPath = pathname.startsWith('/checkout/h/') ? '/checkout/h' : pathname;
   const { user, token } = useAuthStore();
   const [isOpen, setIsOpen] = useState(false);
+  const supportRef = useRef<OrderIssueSession | null>(null);
+  const [supportSession, setSupportSession] = useState<OrderIssueSession | null>(null);
+  const openSupportConversation = useCallback((session: OrderIssueSession) => {
+    if (!session.current()) return;
+    if (supportRef.current !== session) { supportRef.current?.suspendConversation(); reportRef.current?.suspendConversation(); }
+    supportRef.current = session; setSupportSession(session); setIsOpen(true);
+  }, []);
+  const leaveSupportConversation = useCallback(() => { supportRef.current?.suspendConversation(); supportRef.current = null; setSupportSession(null); }, []);
+  const [reportSession, setReportSession] = useState<OrderIssueSession | null>(null);
+  const [previousReports, setPreviousReports] = useState<OrderIssueSession[]>([]);
+  const previousRef = useRef<OrderIssueSession[]>([]);
+  const reportRef = useRef<OrderIssueSession | null>(null);
+  const reportPathRef = useRef(pathname);
+  reportPathRef.current = pathname;
+  const leaveReportIssue = useCallback(() => {
+    reportRef.current?.retire();
+    previousRef.current.forEach(s => s.retire()); previousRef.current = []; setPreviousReports([]);
+    reportRef.current = null;
+    setReportSession(null);
+  }, []);
+  useEffect(() => () => { reportRef.current?.retire(); previousRef.current.forEach(s => s.retire()); }, []);
+  useEffect(() => subscribeAuthSessionOwner(() => {
+    leaveReportIssue(); supportRef.current = null; setSupportSession(null);
+  }), [leaveReportIssue]);
+  useLayoutEffect(() => {
+    const visit = reportRef.current;
+    if (visit && !isOrderDetailPath(pathname, visit.orderId)) leaveReportIssue();
+  }, [pathname, leaveReportIssue]);
+  useEffect(() => {
+    if (reportRef.current && !reportRef.current.current()) leaveReportIssue();
+    setSupportSession(s => s?.current() ? s : null);
+  }, [user, token, leaveReportIssue]);
+  const openReportIssue = useCallback((orderId: string, proposalId?: string, failure?: OrderViewFailure) => {
+    orderId = canonicalOrderId(orderId);
+    if (!isOrderDetailPath(reportPathRef.current, orderId)) return;
+    returnFocusRef.current = document.activeElement instanceof HTMLElement ? document.activeElement : null;
+    abortRef.current?.abort();
+    if (reportRef.current?.orderId !== orderId || !reportRef.current.current() ||
+      (proposalId && reportRef.current.getSnapshot().proposal?.proposal_id !== proposalId)) {
+      reportRef.current?.retire();
+      const visit = new OrderIssueSession(orderId, support, proposalId ?? null, failure);
+      reportRef.current = visit;
+      void visit.open();
+    }
+    if (failure) reportRef.current?.observeFailure(failure);
+    supportRef.current?.suspendConversation(); supportRef.current = null; setSupportSession(null);
+    setReportSession(reportRef.current);
+    setIsOpen(true);
+  }, []);
+  const separateViewReport = useCallback(() => {
+    const original = reportRef.current;
+    if (!original?.current() || !original.observedFailure) return;
+    original.suspendRecovery(); original.suspendConversation();
+    previousRef.current = [...previousRef.current, original]; setPreviousReports(previousRef.current);
+    const session = new OrderIssueSession(original.orderId, support, null, original.observedFailure);
+    session.fresh(); reportRef.current = session; setReportSession(session); void session.open();
+  }, []);
+  const selectReport = useCallback((session: OrderIssueSession) => {
+    if (!session.current() || !isOrderDetailPath(reportPathRef.current, session.orderId)) return;
+    const current = reportRef.current;
+    current?.suspendRecovery(); current?.suspendConversation();
+    supportRef.current?.suspendConversation(); supportRef.current = null; setSupportSession(null);
+    previousRef.current = previousRef.current.filter(s => s !== session);
+    if (current && current !== session) previousRef.current.push(current);
+    setPreviousReports(previousRef.current); reportRef.current = session; setReportSession(session);
+  }, []);
   const [messages, setMessages] = useState<Message[]>([]);
   const greetingSentRef = useRef(false);
   const [isStreaming, setIsStreaming] = useState(false);
@@ -346,6 +428,15 @@ export function AllAIProvider({ children }: { children: ReactNode }) {
     async (text: string) => {
       const trimmed = text.trim();
       if (!trimmed || isStreaming) return;
+      supportRef.current?.suspendConversation(); supportRef.current = null; setSupportSession(null);
+      // This is the general lane, including notification and wizard callers.
+      // The report composer sends explicitly through its visit's guide command.
+      if (reportRef.current) {
+        if (reportRef.current.current() && isOrderDetailPath(reportPathRef.current, reportRef.current.orderId)) {
+          // Keep unresolved commands in visit memory, outside the general history.
+          setReportSession(null);
+        } else leaveReportIssue();
+      }
       const resources = anonymousAllAIResources(locale);
       if (anonymousSurfaceActive && !anonymousAvailable) {
         setMessages((prev) => [
@@ -581,7 +672,7 @@ export function AllAIProvider({ children }: { children: ReactNode }) {
         abortRef.current = null;
       }
     },
-    [anonymousAvailable, anonymousSurfaceActive, ensureSession, isStreaming, locale, pathname, contextPath, token]
+    [anonymousAvailable, anonymousSurfaceActive, ensureSession, isStreaming, locale, pathname, contextPath, token, leaveReportIssue]
   );
 
   const open = useCallback(() => {
@@ -607,6 +698,8 @@ export function AllAIProvider({ children }: { children: ReactNode }) {
   return (
     <AllAIContext.Provider
       value={{
+        supportSession, openSupportConversation, leaveSupportConversation,
+        reportSession, openReportIssue, leaveReportIssue, separateViewReport, previousReports, selectReport,
         isOpen, open, close, toggle, messages, isStreaming, sendMessage, page: contextPath,
         locale, setLocale, anonymousSurfaceActive, anonymousAvailable,
         onFieldProposal: onFieldProposalState, setOnFieldProposal,
@@ -614,7 +707,7 @@ export function AllAIProvider({ children }: { children: ReactNode }) {
         formSnapshotGetter: formSnapshotGetterState, setFormSnapshotGetter,
       }}
     >
-      {children}
+      <AllAISupportBridge.Provider value={{ openSupportConversation }}>{children}</AllAISupportBridge.Provider>
     </AllAIContext.Provider>
   );
 }
