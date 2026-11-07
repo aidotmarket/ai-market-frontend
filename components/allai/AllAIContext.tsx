@@ -11,6 +11,8 @@ import {
 } from 'react';
 import { usePathname } from 'next/navigation';
 import { useAuthStore } from '@/store/auth';
+import { OrderIssueSession } from '@/lib/order-issue-report';
+import { support } from '@/api/support';
 import {
   createAnonymousSession,
   getAnonymousChatStatus,
@@ -57,6 +59,9 @@ export interface FieldProposalEvent {
 }
 
 interface AllAIContextValue {
+  reportSession?: OrderIssueSession | null;
+  openReportIssue: (orderId: string, proposalId?: string) => void;
+  leaveReportIssue: () => void;
   isOpen: boolean;
   open: () => void;
   close: () => void;
@@ -182,6 +187,30 @@ export function AllAIProvider({ children }: { children: ReactNode }) {
   const contextPath = pathname.startsWith('/checkout/h/') ? '/checkout/h' : pathname;
   const { user, token } = useAuthStore();
   const [isOpen, setIsOpen] = useState(false);
+  const [reportSession, setReportSession] = useState<OrderIssueSession | null>(null);
+  const reportRef = useRef<OrderIssueSession | null>(null);
+  const leaveReportIssue = useCallback(() => {
+    reportRef.current?.retire();
+    reportRef.current = null;
+    setReportSession(null);
+  }, []);
+  useEffect(() => () => { reportRef.current?.retire(); }, []);
+  useEffect(() => {
+    if (reportRef.current && !reportRef.current.current()) leaveReportIssue();
+  }, [user, token, leaveReportIssue]);
+  const openReportIssue = useCallback((orderId: string, proposalId?: string) => {
+    returnFocusRef.current = document.activeElement instanceof HTMLElement ? document.activeElement : null;
+    abortRef.current?.abort();
+    if (reportRef.current?.orderId !== orderId || !reportRef.current.current() ||
+      (proposalId && reportRef.current.getSnapshot().proposal?.proposal_id !== proposalId)) {
+      reportRef.current?.retire();
+      const visit = new OrderIssueSession(orderId, support, proposalId ?? null);
+      reportRef.current = visit;
+      setReportSession(visit);
+      void visit.open();
+    }
+    setIsOpen(true);
+  }, []);
   const [messages, setMessages] = useState<Message[]>([]);
   const greetingSentRef = useRef(false);
   const [isStreaming, setIsStreaming] = useState(false);
@@ -344,6 +373,8 @@ export function AllAIProvider({ children }: { children: ReactNode }) {
 
   const sendMessage = useCallback(
     async (text: string) => {
+      // Report mode owns its private sends; never reach anonymous/generic chat.
+      if (reportRef.current) { await reportRef.current.guide(text); return; }
       const trimmed = text.trim();
       if (!trimmed || isStreaming) return;
       const resources = anonymousAllAIResources(locale);
@@ -607,6 +638,7 @@ export function AllAIProvider({ children }: { children: ReactNode }) {
   return (
     <AllAIContext.Provider
       value={{
+        reportSession, openReportIssue, leaveReportIssue,
         isOpen, open, close, toggle, messages, isStreaming, sendMessage, page: contextPath,
         locale, setLocale, anonymousSurfaceActive, anonymousAvailable,
         onFieldProposal: onFieldProposalState, setOnFieldProposal,

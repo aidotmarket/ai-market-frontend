@@ -47,3 +47,13 @@ export async function postSessionMutation<T>(path: string, body: object): Promis
   const { data } = await client.post<T>(path, body, { headers });
   return data;
 }
+
+// Same admission/refresh rules as POST; never retry a refused draft mutation.
+export async function patchSessionMutation<T>(path: string, body: object): Promise<T> {
+  const owner = authSessionOwner();
+  const headers = await sessionHeaders();
+  assertAuthSessionOwner(owner);
+  const { data } = await client.patch<T>(path, body, { headers });
+  assertAuthSessionOwner(owner);
+  return data;
+}
