@@ -3,6 +3,7 @@ import { afterEach, beforeEach, expect, it, vi } from 'vitest';
 import { readSigningInstruments, signInstruments } from './seller-batch-signing';
 import { nativeClient, nativeSession } from './connector-seller-settings';
 import { useAuthStore } from '@/store/auth';
+import { LICENSE_HASHES_1_0 } from './listingLicenses';
 import { instrument, id } from '@/tests/fixtures/seller-authority';
 beforeEach(() => useAuthStore.setState({ token: 'retained-session' }));
 afterEach(() => vi.restoreAllMocks());
@@ -53,4 +54,12 @@ it('fails closed when a sibling response settles after another instrument refres
   });
   // A batch never mixes responses from two tokens; the user can reload the batch.
   await expect(readSigningInstruments([id(1), id(2)])).rejects.toThrow('SESSION_CHANGED');
+});
+
+it('reads a historical 1.0 preparation without rewriting its stored selection', async () => {
+  const old = instrument(1);
+  Object.assign(old.license_selection, {version: '1.0', covenant_version: '1.0',
+    license_sha256: LICENSE_HASHES_1_0.standard.true, covenant_sha256: LICENSE_HASHES_1_0.covenant});
+  vi.spyOn(nativeClient, 'get').mockResolvedValue({data: old});
+  expect(await readSigningInstruments([old.id])).toEqual([old]);
 });

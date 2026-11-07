@@ -1,7 +1,7 @@
 'use client';
 import {useEffect,useRef,useState} from 'react';
 import axios from 'axios';
-import {createStandardSelection,isCompleteLicenseSelection,type LicenseSelection} from '@/api/listingLicenses';
+import {createStandardSelection,isSignableLicenseSelection,type LicenseSelection} from '@/api/listingLicenses';
 import {sameLicenseSelection} from '@/api/sellerListingReview';
 import {legalIdentityFailure} from '@/api/sellerLegalIdentity';
 import {useSellerListingDraft} from './SellerListingDraftStore';
@@ -17,7 +17,7 @@ export default function SavedLicenseStep(){
   const changed=!sameLicenseSelection(value,store.draft?.content.license_selection);
   const flowRef=useRef(flow);flowRef.current=flow;
   useEffect(()=>{flowRef.current?.setLicenceDirty(changed);},[changed]);
-  const ready=store.loaded&&store.available&&identity.kind==='known'&&!legalDirty&&isCompleteLicenseSelection(value);
+  const ready=store.loaded&&store.available&&identity.kind==='known'&&!legalDirty&&isSignableLicenseSelection(value);
   async function save(next=false){
     if(busy||!ready)return;
     setBusy(true);setError('');setConflict(false);

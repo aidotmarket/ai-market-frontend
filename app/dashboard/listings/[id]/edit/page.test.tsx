@@ -99,9 +99,9 @@ describe('EditListingPage', () => {
     fireEvent.click(screen.getByLabelText('Confirm covenant and authority'));
     expect(publish.disabled).toBe(false);fireEvent.click(publish);
     await waitFor(()=>expect(listingsApi.publishListing).toHaveBeenCalledWith('listing-1',{
-      kind:'standard',version:'1.0',ai_training:true,license_document_id:null,
-      license_sha256:'4b05dbcd0c186746d3deab6c68beaebba88610de8e85122efb4d527edb1263c6',rider_sha256:null,
-      covenant_code:'marketplace-listing',covenant_version:'1.0',covenant_sha256:'a91234b67bf7467a0c80f6e1caa47b563032e94751146901b796eaaf220431af',
+      kind:'standard',version:'1.1',ai_training:true,license_document_id:null,
+      license_sha256:'881266a455d100e6b263ec121523001e5e53f6e3bf3bd97047e29ae39f8959fb',rider_sha256:null,
+      covenant_code:'marketplace-listing',covenant_version:'1.1',covenant_sha256:'58eff1def7acb59db75920fe0da89a3f4f87bb12bd6765ec8eae231bbea118b5',
       seller_acceptance:{signer_name:'Sam Seller',signer_title:'Director',authority_confirmed:true},
       identity_version:4,
     }));

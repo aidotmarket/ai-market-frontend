@@ -37,7 +37,7 @@ vi.mock('@/api/legal', () => legalApi);
 vi.mock('@/api/checkout', () => ({ createCheckout: vi.fn() }));
 
 const structuredLicense = {
-  code: 'standard' as const, version: '1.0', params: { ai_training: true },
+  code: 'standard' as const, version: '1.0', covenant_version: '1.0', params: { ai_training: true },
   summary: ['Not the contract — read the full licence before accepting.'],
   full_text_url: '/licenses/standard/1.0/ai-training',
   download_url: '/licenses/standard/1.0/ai-training?download=1',
@@ -320,6 +320,20 @@ describe('BuyButton licence acceptance', () => {
     await waitFor(() => expect(createCheckout).toHaveBeenCalledWith('listing-1', undefined, undefined));
   });
 
+  it('keeps Buy acceptance disabled when the covenant version is missing and its hash is not pinned 1.0', async () => {
+    legalApi.getTermsAcceptanceStatus.mockResolvedValue({accepted:true});
+    vi.stubGlobal('fetch', vi.fn().mockImplementation(async (input: RequestInfo | URL) => documentResponse(
+      String(input).includes('marketplace-listing') ? 'Exact covenant text\n' : 'Exact licence text\n',
+    )));
+    const {covenant_version: omitted, ...unverifiable} = verifiedLicense;
+    void omitted;
+    await renderBuyer(<ToastProvider><BuyButton listingId="listing-1" slug="listing" price={20} pricingType="one_time" licenseDetails={unverifiable}/></ToastProvider>);
+    await screen.findByText('Could not verify — do not accept');
+    expect((screen.getByRole('checkbox', {name:'Confirm licence authority'}) as HTMLInputElement).disabled).toBe(true);
+    expect((screen.getByRole('button', {name:'Accept and continue to payment'}) as HTMLButtonElement).disabled).toBe(true);
+    expect(createCheckout).not.toHaveBeenCalled();
+  });
+
   it('starts authority unchecked and shows the exact acceptance fields under flag-on data', async () => {
     await renderBuyer(<ToastProvider><BuyButton listingId="listing-1" slug="listing" price={20} pricingType="one_time" licenseDetails={structuredLicense} /></ToastProvider>);
 
@@ -456,7 +470,7 @@ describe('BuyButton licence acceptance', () => {
       ? bytes(`${JSON.stringify({content_type: 'application/pdf', source_sha256})}\n`)
       : bytes(customText);
     return {
-      code: 'custom' as const, version: '1',
+      code: 'custom' as const, version: '1', covenant_version: '1.0',
       params: { ai_training: true, source_sha256 },
       summary: ['Seller terms — read the full licence.'],
       full_text_url: '/api/v1/listings/listing-1/license-document',

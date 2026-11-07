@@ -7,6 +7,7 @@ import { nativeClient } from '@/api/connector-seller-settings';
 import { useSellerSwitches } from '@/hooks/useSellerSwitches';
 import { useAuthStore } from '@/store/auth';
 import type { User } from '@/types';
+import {LICENSE_HASHES_1_0} from '@/api/listingLicenses';
 import { id, instrument, hash } from '@/tests/fixtures/seller-authority';
 vi.mock('@/hooks/useSellerSwitches', () => ({ useSellerSwitches: vi.fn() }));
 vi.mock('@/api/seller-batch-signing', async original => ({ ...await original<typeof import('@/api/seller-batch-signing')>(), readSigningInstruments: vi.fn(), signInstruments: vi.fn() }));
@@ -92,6 +93,36 @@ it('keeps effect-off signing disabled', () => {
   expect(screen.queryByRole('region')).toBeNull(); expect(signInstruments).not.toHaveBeenCalled();
 });
 
+it.each(['standard', 'covenant', 'both'] as const)('blocks a whole batch containing a stale %s selection',async part=>{
+ const old=instrument(1);
+ if(part!=='covenant') Object.assign(old.license_selection,{version:'1.0',license_sha256:LICENSE_HASHES_1_0.standard.true});
+ if(part!=='standard') Object.assign(old.license_selection,{covenant_version:'1.0',covenant_sha256:LICENSE_HASHES_1_0.covenant});
+ vi.mocked(readSigningInstruments).mockResolvedValue([old,instrument(2)]);
+ render(<WorkspaceBatchSigning />);
+ fireEvent.change(screen.getByLabelText(/Listing preparation IDs/),{target:{value:id(1)}});
+ fireEvent.click(screen.getByRole('button',{name:'Load licences'}));
+ await screen.findByText(/choose the current licence and covenant, then prepare and sign again/);
+ expect((screen.getByRole('checkbox') as HTMLInputElement).disabled).toBe(true);
+ expect((screen.getByRole('button',{name:'Sign 2 licences'}) as HTMLButtonElement).disabled).toBe(true);
+ expect(nativeClient.get).not.toHaveBeenCalled();
+ expect(signInstruments).not.toHaveBeenCalled();
+});
+
+it('blocks a preloaded historical preparation and requests re-selection',async()=>{
+ const old=instrument(1);Object.assign(old.license_selection,{covenant_version:'1.0',covenant_sha256:LICENSE_HASHES_1_0.covenant});
+ render(<WorkspaceBatchSigning preparation={old}/>);
+ await screen.findByText(/choose the current licence and covenant, then prepare and sign again/);
+ expect((screen.getByRole('button',{name:'Sign licence'}) as HTMLButtonElement).disabled).toBe(true);
+ expect(signInstruments).not.toHaveBeenCalled();
+});
+
+it.each(['LICENSE_ACCEPTANCE_STALE',{code:'LICENSE_ACCEPTANCE_STALE'}])('explains a backend stale acceptance response %j',async detail=>{
+ await load();
+ vi.mocked(signInstruments).mockRejectedValue({response:{status:409,data:{detail}}});
+ fireEvent.click(screen.getByRole('checkbox'));fireEvent.click(screen.getByRole('button',{name:'Sign 2 licences'}));
+ await screen.findByText(/choose the current licence and covenant, then prepare and sign again/);
+ expect((screen.getByRole('button',{name:'Sign 2 licences'}) as HTMLButtonElement).disabled).toBe(true);
+});
 it('shows seller terms and identity without internal IDs, hashes or jargon in the Workspace flow', async () => {
   const row=instrument(1);
   const view=render(<WorkspaceBatchSigning preparation={row}/>);
@@ -130,4 +161,42 @@ it('explains the cap in plain words and keeps signing disabled for more than 50 
   fireEvent.click(screen.getByRole('checkbox'));
   expect((screen.getByRole('button',{name:'Sign 51 licences'}) as HTMLButtonElement).disabled).toBe(true);
   expect(signInstruments).not.toHaveBeenCalled();
+});
+
+it('shows licence 1.1 and covenant 1.1 and loads their exact documents', async () => {
+  render(<WorkspaceBatchSigning preparation={instrument(1)} />);
+  await screen.findAllByText(/The complete fixture contract/);
+  expect(screen.getByRole('heading', { name: 'Full licence (version 1.1)' })).toBeTruthy();
+  expect(screen.getByRole('heading', { name: 'Marketplace Listing Covenant (version 1.1)' })).toBeTruthy();
+  expect(vi.mocked(nativeClient.get).mock.calls.map(([path]) => path)).toEqual([
+    '/licenses/standard/1.1/ai-training?format=json', '/licenses/marketplace-listing/1.1?format=json',
+  ]);
+});
+it('allows signing again after a stale acceptance is replaced by a current preparation', async () => {
+  const old = instrument(1);
+  Object.assign(old.license_selection, { version: '1.0', license_sha256: LICENSE_HASHES_1_0.standard.true });
+  const view = render(<WorkspaceBatchSigning preparation={old} />);
+  await screen.findByText(/choose the current licence and covenant, then prepare and sign again/);
+  expect((screen.getByRole('button', { name: 'Sign licence' }) as HTMLButtonElement).disabled).toBe(true);
+  const current = instrument(2);
+  view.rerender(<WorkspaceBatchSigning preparation={current} />);
+  await screen.findAllByText(/The complete fixture contract/);
+  expect(screen.queryByText(/This saved licence choice is out of date/)).toBeNull();
+  fireEvent.click(screen.getByRole('checkbox'));
+  fireEvent.click(screen.getByRole('button', { name: 'Sign licence' }));
+  await screen.findByText(/Licence signed. Your listing is not published yet/);
+  expect(signInstruments).toHaveBeenCalledTimes(1);
+  expect(vi.mocked(signInstruments).mock.calls[0][0].instruments).toEqual([
+    { preparation_id: current.id, coverage_hash: current.coverage_hash, selection: current.license_selection },
+  ]);
+  expect(vi.mocked(signInstruments).mock.calls[0][0]).not.toHaveProperty('reauth_token');
+});
+it.each(['LOGIN_REQUIRED', 'SECOND_FACTOR_REQUIRED', 'TOTP_REQUIRED'])('never starts re-authentication after a signing refusal: %s', async detail => {
+  await load();
+  vi.mocked(signInstruments).mockRejectedValue({ response: { status: 403, data: { detail } } });
+  fireEvent.click(screen.getByRole('checkbox'));
+  fireEvent.click(screen.getByRole('button', { name: 'Sign 2 licences' }));
+  await screen.findByRole('alert');
+  expect(screen.queryByRole('button', { name: /sign in|verify|authenticate|code/i })).toBeNull();
+  expect(signInstruments).toHaveBeenCalledTimes(1);
 });

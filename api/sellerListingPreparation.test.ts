@@ -31,6 +31,8 @@ it('looks up the exact named revision and treats only NOT_FOUND as an absent pre
   get.mockResolvedValue({data:{...row,binding:{...row.binding,draft_id:id(999)}}});await expect(lookupPreparation(approval,signal)).rejects.toThrow('INVALID_PREPARATION');
 });
 it.each([
+  [409,'LICENSE_ACCEPTANCE_STALE','re-select the licence and covenant at the current version'],
+  [409,{code:'LICENSE_ACCEPTANCE_STALE'},'re-select the licence and covenant at the current version'],
   [409,'PREPARATION_EXISTS','already exists'],[409,'IDEMPOTENCY_CONFLICT','no longer matches'],
   [409,'LICENSE_SIGNING_UNAVAILABLE','signing is currently unavailable'],[409,'PREPARATION_STALE','files changed'],
   [401,'FIRST_PARTY_SESSION_REQUIRED','Sign in again'],[403,'POLICY_DENIED','seller policy'],[404,'UNAVAILABLE','currently unavailable'],

@@ -10,13 +10,13 @@ export interface SellerAcceptance {
 export interface LicenseSelection {
   identity_version?: number;
   kind: 'standard' | 'custom';
-  version: '1.0';
+  version: '1.0' | '1.1';
   ai_training: boolean;
   license_document_id: string | null;
   license_sha256: string;
   rider_sha256: string | null;
   covenant_code: 'marketplace-listing';
-  covenant_version: '1.0';
+  covenant_version: '1.0' | '1.1';
   covenant_sha256: string;
   seller_acceptance: SellerAcceptance;
 }
@@ -32,14 +32,17 @@ export interface CustomLicenseSubmission {
   status: 'active';
 }
 
-export function licenseDocumentPath(kind: 'standard' | 'covenant' | 'rider', value?: boolean): string {
-  if (kind === 'standard') return `/licenses/standard/1.0/${value === false ? 'no-ai-training' : 'ai-training'}`;
-  if (kind === 'covenant') return '/licenses/marketplace-listing/1.0';
+export const CURRENT_STANDARD_VERSION = '1.1';
+export const CURRENT_COVENANT_VERSION = '1.1';
+
+export function licenseDocumentPath(kind: 'standard' | 'covenant' | 'rider', value?: boolean, version: string = kind === 'rider' ? '1.0' : '1.1'): string {
+  if (kind === 'standard') return `/licenses/standard/${version}/${value === false ? 'no-ai-training' : 'ai-training'}`;
+  if (kind === 'covenant') return `/licenses/marketplace-listing/${version}`;
   if (kind === 'rider') return `/licenses/ai-training-rider/1.0/${value === false ? 'not-permitted' : 'permitted'}`;
   throw new Error('Unknown licence document');
 }
 
-export const LICENSE_HASHES = {
+export const LICENSE_HASHES_1_0 = {
   standard: {
     true: '4b05dbcd0c186746d3deab6c68beaebba88610de8e85122efb4d527edb1263c6',
     false: 'e83e03bb731fee832d108ef77689f7ff49e3409f88124b483b2ef34ca7ba3821',
@@ -51,11 +54,27 @@ export const LICENSE_HASHES = {
   covenant: 'a91234b67bf7467a0c80f6e1caa47b563032e94751146901b796eaaf220431af',
 } as const;
 
+// Hashes of the exact 1.1 documents, domain-separated by instrument version.
+export const LICENSE_HASHES = {
+  standard: {
+    true: '881266a455d100e6b263ec121523001e5e53f6e3bf3bd97047e29ae39f8959fb',
+    false: '0bec503dac137e80fa405f47e9ecded8a424ca73f794f8eef54d01ff10d25317',
+  },
+  rider: LICENSE_HASHES_1_0.rider,
+  covenant: '58eff1def7acb59db75920fe0da89a3f4f87bb12bd6765ec8eae231bbea118b5',
+} as const;
+
+export function licenseHashesFor(version: string) {
+  if (version === '1.0') return LICENSE_HASHES_1_0;
+  if (version === '1.1') return LICENSE_HASHES;
+  throw new Error('Unsupported licence version');
+}
+
 export function createStandardSelection(aiTraining = true): LicenseSelection {
   return {
-    kind: 'standard', version: '1.0', ai_training: aiTraining, license_document_id: null,
+    kind: 'standard', version: CURRENT_STANDARD_VERSION, ai_training: aiTraining, license_document_id: null,
     license_sha256: LICENSE_HASHES.standard[String(aiTraining) as 'true' | 'false'], rider_sha256: null,
-    covenant_code: 'marketplace-listing', covenant_version: '1.0', covenant_sha256: LICENSE_HASHES.covenant,
+    covenant_code: 'marketplace-listing', covenant_version: CURRENT_COVENANT_VERSION, covenant_sha256: LICENSE_HASHES.covenant,
     seller_acceptance: {signer_name: '', signer_title: '', authority_confirmed: false},
   };
 }
@@ -82,10 +101,20 @@ export async function submitCustomLicenseText(title: string, text: string, aiTra
   return result as unknown as CustomLicenseSubmission;
 }
 
+export function isCurrentLicenseSelection(value: LicenseSelection): boolean {
+  return value.covenant_code === 'marketplace-listing' && value.covenant_version === CURRENT_COVENANT_VERSION &&
+    (value.kind !== 'standard' || value.version === CURRENT_STANDARD_VERSION);
+}
+
 export function isCompleteLicenseSelection(value: LicenseSelection): boolean {
   return value.seller_acceptance.authority_confirmed && Boolean(value.seller_acceptance.signer_name.trim()) &&
     Boolean(value.seller_acceptance.signer_title.trim()) && /^[a-f0-9]{64}$/.test(value.license_sha256) &&
     /^[a-f0-9]{64}$/.test(value.covenant_sha256) &&
     (value.kind === 'standard' ? value.license_document_id === null && value.rider_sha256 === null :
       Boolean(value.license_document_id) && Boolean(value.rider_sha256 && /^[a-f0-9]{64}$/.test(value.rider_sha256)));
+}
+
+// New acceptances require current terms; historical read validation stays version-aware.
+export function isSignableLicenseSelection(value: LicenseSelection): boolean {
+  return isCurrentLicenseSelection(value) && isCompleteLicenseSelection(value);
 }

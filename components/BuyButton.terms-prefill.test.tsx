@@ -32,7 +32,7 @@ vi.mock('@/api/client', () => ({ api: { get: mocks.request, post: mocks.request,
 // Same synthetic document bytes and hashes used by BuyButton.test.tsx;
 // the real disclosure must verify them before licence authority is enabled.
 const license: ListingLicenseDetails = {
-  code: 'standard', version: '1.0', params: { ai_training: true }, summary: [],
+  code: 'standard', version: '1.0', covenant_version: '1.0', params: { ai_training: true }, summary: [],
   full_text_url: '/licenses/standard/1.0/ai-training',
   download_url: '/licenses/standard/1.0/ai-training?download=1',
   sha256: 'f91f4e012a318e5e709e8fe0b830b903bf8fbc05f17beab7bba2bb329af104e8',

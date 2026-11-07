@@ -50,6 +50,7 @@ export function preparationError(error:unknown):string {
   switch(code) {
     case 'PREPARATION_EXISTS':return 'A preparation already exists. Refresh preparation status to recover it.';
     case 'IDEMPOTENCY_CONFLICT':return 'This request no longer matches the saved preparation. Refresh the saved review before preparing again.';
+    case 'LICENSE_ACCEPTANCE_STALE':return 'This saved licence selection is out of date. Return to Choose a licence, re-select the licence and covenant at the current version, then prepare and sign again.';
     case 'LICENSE_SIGNING_UNAVAILABLE':return 'Licence signing is currently unavailable for this listing.';
     case 'PREPARATION_STALE':return 'The listing or files changed. Refresh the saved review and approve it again.';
     default:return 'Preparation could not be confirmed. Retry the same preparation or refresh its status before publishing.';

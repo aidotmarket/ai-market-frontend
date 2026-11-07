@@ -61,3 +61,16 @@ it('escapes markup in the public amber notice and never exposes custom text',asy
   expect(html).not.toContain('<script>');
   expect(html).not.toContain('Read exact recorded text');
 });
+
+it.each([
+ ['standard','ai-training'],['standard','no-ai-training'],['marketplace-listing',null],
+])('serves the 1.1 %s %s canonical page',async(code,variant)=>{
+ process.env.API_URL='https://api.ai.market';
+ const parts=[code,'1.1',...(variant?[variant]:[])];
+ globalThis.fetch=vi.fn().mockResolvedValue({ok:true,json:async()=>({code,version:'1.1',variant,summary:[],full_text:'New full text',sha256:'a'.repeat(64)})});
+ const props={params:Promise.resolve({parts})};
+ const html=renderToStaticMarkup(await LicencePage(props));
+ expect(html).toContain('Version 1.1');
+ expect(html).toContain(`/api/v1/licenses/${parts.join('/')}?download=1`);
+ expect((await generateMetadata(props)).alternates?.canonical).toBe(`https://ai.market/licenses/${parts.join('/')}`);
+});

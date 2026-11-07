@@ -6,8 +6,8 @@ export const SAMPLE_MODEL_COPY = "Illustrative marketplace listing; no access to
 export const SAMPLE_UNAVAILABLE_COPY = 'This listing is unavailable. No dataset, model, download or live API service is supplied.';
 export const SAMPLE_STANDARD_COPY = 'Standard — illustrative listing content only (document reference; no purchase contract created)';
 export const STANDARD_DOCUMENTS = [
-  'https://ai.market/licenses/standard/1.0/ai-training',
-  'https://ai.market/licenses/standard/1.0/no-ai-training',
+  'https://ai.market/licenses/standard/1.1/ai-training',
+  'https://ai.market/licenses/standard/1.1/no-ai-training',
 ] as const;
 const HOLD = 'generated_sample_display_only';
 const record = (value: unknown): value is Record<string, unknown> =>
@@ -52,8 +52,8 @@ export function samplePresentation(value: { title?: string | null } & GeneratedS
  * a contractual variant from retained JSON-LD. Saved tuple reconciliation and
  * hash validation remain backend responsibilities. */
 export function sampleStandardDocument(license: unknown): string | null {
-  if (!record(license) || license.code !== 'standard' || license.version !== '1.0' ||
+  if (!record(license) || license.code !== 'standard' || !['1.0', '1.1'].includes(String(license.version)) ||
       !record(license.params) || Object.keys(license.params).length !== 1 || typeof license.params.ai_training !== 'boolean') return null;
-  const expected = STANDARD_DOCUMENTS[license.params.ai_training ? 0 : 1];
+  const expected = `https://ai.market/licenses/standard/${license.version}/${license.params.ai_training ? 'ai-training' : 'no-ai-training'}`;
   return license.full_text_url === expected || license.full_text_url === expected.replace('https://ai.market', '') ? expected : null;
 }
