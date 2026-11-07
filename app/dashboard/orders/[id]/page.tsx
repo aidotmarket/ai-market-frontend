@@ -8,7 +8,9 @@ import Link from 'next/link';
 import { orderStatusPresentation } from '@/lib/order-status';
 import { useSessionGeneration } from '@/hooks/useSessionGeneration';
 import { useParams, useSearchParams } from 'next/navigation';
-import { getOrder, getOrderAccess, getOrderEvents } from '@/api/orders';
+import { getOrder, getOrderAccess, getOrderEvents, parseOrderDetail } from '@/api/orders';
+import { RecoveryDisplayBoundary, useViewRecovery } from '@/components/SessionViewRecovery';
+import { authSessionOwner, isAuthSessionOwner } from '@/lib/auth-session-owner';
 import { getTransaction, confirmTransaction, deliverTransaction } from '@/api/transactions';
 import { formatPrice, formatDate } from '@/lib/format';
 import { useToast } from '@/components/Toast';
@@ -104,9 +106,29 @@ function OrderDetailVisit({ orderId, txIdParam, userId, sessionGeneration, issue
   const [downloadError, setDownloadError] = useState('');
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
+  const recoveryOwner = useRef(authSessionOwner());
+  const readGeneration = useRef(0);
+  const mounted = useRef(false);
+  useLayoutEffect(() => { mounted.current = true; return () => { mounted.current = false; readGeneration.current++; }; }, []);
+  const recovery = useViewRecovery(!!error && !loading, {
+    view: 'order_detail',
+    current: () => mounted.current && isAuthSessionOwner(recoveryOwner.current) && useAuthStore.getState().user?.id === userId,
+    snapshot: () => ({ saved_drafts: null, unsent_text: null, conversation_selection: { orderId, txIdParam, issueProposal },
+      unknown_mutations: { downloadLoading, downloadError }, generation: readGeneration.current }),
+    install: raw => {
+      if (!raw || typeof raw !== 'object' || Array.isArray(raw)) throw new Error('Invalid order');
+      const data = raw as BuyerOrderDetail;
+      if (data.id !== orderId || (data.buyer_id !== userId && data.seller_id !== userId)
+        || typeof data.status !== 'string' || typeof data.created_at !== 'string') throw new Error('Order scope changed');
+      const value = parseOrderDetail(data);
+      if (!Number.isFinite(value.amount)) throw new Error('Invalid order amount');
+      setOrder(value); setError(''); setLoading(false); return value;
+    },
+  });
 
   useEffect(() => {
     let cancelled = false;
+    readGeneration.current++;
     setOrder(null);
     setNonGatewayOrderId(null);
     setLoading(true);
@@ -168,6 +190,7 @@ function OrderDetailVisit({ orderId, txIdParam, userId, sessionGeneration, issue
     return (
       <div className="rounded-lg bg-red-50 border border-red-200 px-4 py-3 text-sm text-red-700">
         {error || 'Order not found.'}
+        {recovery.message && <p role="status">{recovery.message}</p>}
       </div>
     );
   }
@@ -187,7 +210,7 @@ function OrderDetailVisit({ orderId, txIdParam, userId, sessionGeneration, issue
   const { badge: statusCss, label: statusLabel } = orderStatusPresentation(order.status);
 
   return (
-    <div>
+    <RecoveryDisplayBoundary attempt={recovery.attempt} display={recovery.progress?.display} installed={order}><div>
       <Link href="/dashboard/orders" className="text-sm text-[#3F51B5] hover:underline mb-4 inline-block">
         &larr; Back to Purchases
       </Link>
@@ -302,7 +325,7 @@ function OrderDetailVisit({ orderId, txIdParam, userId, sessionGeneration, issue
           </div>
         </div>
       </div>
-    </div>
+    </div></RecoveryDisplayBoundary>
   );
 }
 

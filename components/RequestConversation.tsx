@@ -4,6 +4,8 @@ import { useEffect, useLayoutEffect, useRef, useState, useSyncExternalStore } fr
 import { useAuthStore } from '@/store/auth';
 import { authSessionOwner, isAuthSessionOwner, subscribeAuthSessionOwner } from '@/lib/auth-session-owner';
 import { parseRequestCommandResult, getRequestThreadSelector, getRequestThreadMessages, sendRequestThreadMessage, reconcileRequestThreadMessage } from '@/api/data-requests';
+import { parseRequestThreadSelector, parseRequestThreadHistory } from '@/api/data-requests';
+import { useViewRecovery, RecoveryDisplayBoundary } from './SessionViewRecovery';
 import type { RequestThreadSelector, RequestThreadHistory, RequestMessageCommand, RequestCommandResult } from '@/api/data-requests';
 
 const button = 'rounded-lg border border-gray-300 px-4 py-2 text-sm font-medium focus:ring-2 focus:ring-[#3F51B5] disabled:opacity-50';
@@ -47,6 +49,7 @@ function OwnedConversation({ requestId, requestStatus, quoteRevision, navigation
   const pending = useRef(new Map<string, Attempt>());
   const active = useRef(false);
   const epoch = useRef(0);
+  const recoveryGeneration = useRef(0);
   const current = useRef(selection);
   const currentStatus = useRef(requestStatus);
   currentStatus.current = requestStatus;
@@ -58,6 +61,7 @@ function OwnedConversation({ requestId, requestStatus, quoteRevision, navigation
     return () => window.removeEventListener('popstate', changed);
   }, []);
   function refresh() {
+    recoveryGeneration.current++;
     authority.current = { ...authority.current, history: null, selecting: true };
     setHistory(null); setSelecting(true); setReload(x => x + 1);
   }
@@ -66,6 +70,25 @@ function OwnedConversation({ requestId, requestStatus, quoteRevision, navigation
     if (attempt || notice) resultFocus.current?.focus();
   }, [attempt?.state, attempt?.busy, notice]);
   const alive = () => active.current && isAuthSessionOwner(owner) && useAuthStore.getState().user?.id === principal && !!useAuthStore.getState().token && useAuthStore.getState().isAuthenticated;
+  const editGeneration = useRef(0);
+  const recovery = useViewRecovery(readError && !reading && !!selection, {
+    view: 'request_thread', current: alive,
+    snapshot: () => ({ saved_drafts: [...pending.current.entries()], unsent_text: draft,
+      conversation_selection: { requestId, selection, quoteRevision, navigationRevision, locationRevision },
+      unknown_mutations: { attempt, pending: [...pending.current.entries()] }, generation: `${epoch.current}:${editGeneration.current}:${recoveryGeneration.current}` }),
+    install: raw => {
+      if (!raw || typeof raw !== 'object' || Array.isArray(raw)) throw new Error('Invalid thread read');
+      const data = raw as { selection: unknown; history: unknown };
+      const parsedSelector = parseRequestThreadSelector(data.selection, requestId, selection);
+      const parsedHistory = parseRequestThreadHistory(data.history, requestId, selection);
+      if (!parsedSelector.threads.some(t => t.response_id === selection)) throw new Error('Selection changed');
+      const merged = { ...parsedHistory, items: [...parsedHistory.items,
+        ...(history?.items.filter(m => !parsedHistory.items.some(n => n.id === m.id)) ?? [])] };
+      // Keep the current selector object so its normal read effect cannot cause
+      // a second history GET. Validate the returned exact selection above.
+      setHistory(merged); setReadError(false); return merged;
+    },
+  });
   useLayoutEffect(() => { active.current = true; return () => { active.current = false; epoch.current++; }; }, []);
   useLayoutEffect(() => {
     current.current = selection;
@@ -127,6 +150,7 @@ function OwnedConversation({ requestId, requestStatus, quoteRevision, navigation
   }
   async function execute(mode: 'send' | 'retry' | 'check') {
     if (!alive() || !selection || attempt?.busy || !history || (mode !== 'check' && !allowed)) return;
+    editGeneration.current++;
     const saved = pending.current.get(selection);
     if (saved?.busy || (mode === 'send' && saved)) return;
     const next: Attempt = saved ?? { command: { response_id: selection, client_message_nonce: crypto.randomUUID(), content: draft }, state: 'unknown', busy: false };
@@ -176,6 +200,7 @@ function OwnedConversation({ requestId, requestStatus, quoteRevision, navigation
   async function loadMore() {
     if (!history?.next_cursor || reading || !alive()) return;
     const admitted = epoch.current; setReading(true);
+    editGeneration.current++;
     try {
       const page = await getRequestThreadMessages(requestId, selection, history.next_cursor);
       if (alive() && admitted === epoch.current) setHistory(old => old ? { ...page, items: [...old.items, ...page.items.filter(m => !old.items.some(x => x.id === m.id))] } : page);
@@ -185,6 +210,7 @@ function OwnedConversation({ requestId, requestStatus, quoteRevision, navigation
   if (selectorAbsent) return null;
   return <section aria-labelledby="private-conversation-heading" className="mb-6 rounded-xl border border-gray-200 p-6 space-y-4">
     <h2 id="private-conversation-heading" className="text-lg font-semibold text-gray-900">Private conversation</h2>
+    {recovery.message && <p role="status">{recovery.message}</p>}
     <p className="text-sm text-gray-600">Messages are checked before sending. Only approved text appears in this conversation. Email availability does not affect in-app access.</p>
     {selectorError ? <><p role="alert">Private conversations are currently unavailable.</p><button className={button} onClick={refresh}>Reload conversations</button></> : !selector ? <p role="status">Loading conversations…</p> : <>
       {selector.side === 'buyer' ? <label className="block text-sm font-medium">Response for private conversation<select aria-label="Response for private conversation" className="block w-full rounded-lg border border-gray-300 p-2 mt-1" value={selection} onChange={e => changeThread(e.target.value)}><option value="">Choose a response</option>{selector.threads.map((t, i) => <option key={t.response_id} value={t.response_id}>Response {i + 1} · {t.response_id}</option>)}</select></label> : <p className="text-sm">Your response conversation</p>}
@@ -194,12 +220,12 @@ function OwnedConversation({ requestId, requestStatus, quoteRevision, navigation
         {reading && <p role="status">Loading messages…</p>}
         {readError && <p role="alert">Messages could not be loaded. This does not confirm whether your last message was sent.</p>}
         <button type="button" className={button} onClick={refresh}>Refresh conversation</button>
-        {history && <><ol aria-label="Private messages" className="space-y-3">{history.items.map(m => <li key={m.id} className="rounded-lg bg-gray-50 p-3"><span className="text-xs font-medium text-gray-500">{m.role === 'system' ? 'Update' : m.role === selector.side ? 'You' : 'Other participant'}</span><p className="whitespace-pre-wrap text-sm text-gray-800">{m.content}</p></li>)}</ol>{!history.items.length && <p>No messages in this conversation.</p>}{history.next_cursor && <button className={button} disabled={reading} onClick={loadMore}>Load more messages</button>}</>}
+        {history && <RecoveryDisplayBoundary attempt={recovery.attempt} display={recovery.progress?.display} installed={history}><ol aria-label="Private messages" className="space-y-3">{history.items.map(m => <li key={m.id} className="rounded-lg bg-gray-50 p-3"><span className="text-xs font-medium text-gray-500">{m.role === 'system' ? 'Update' : m.role === selector.side ? 'You' : 'Other participant'}</span><p className="whitespace-pre-wrap text-sm text-gray-800">{m.content}</p></li>)}</ol>{!history.items.length && <p>No messages in this conversation.</p>}{history.next_cursor && <button className={button} disabled={reading} onClick={loadMore}>Load more messages</button>}</RecoveryDisplayBoundary>}
         {closed && <p>This request is {requestStatus}. New messages cannot be sent.</p>}
         {history && !closed && !history.can_send && <p>New messages are not available for this conversation.</p>}
         <form aria-label="Private message" onSubmit={e => { e.preventDefault(); void execute('send'); }} className="space-y-3">
           <label htmlFor="private-request-message" className="block text-sm font-medium">Private message for selected response</label>
-          <textarea id="private-request-message" rows={4} maxLength={5000} value={draft} readOnly={!!attempt} onChange={e => setDraft(e.target.value)} className="w-full rounded-lg border border-gray-300 p-3 focus:ring-2 focus:ring-[#3F51B5]" />
+          <textarea id="private-request-message" rows={4} maxLength={5000} value={draft} readOnly={!!attempt} onChange={e => { editGeneration.current++; setDraft(e.target.value); }} className="w-full rounded-lg border border-gray-300 p-3 focus:ring-2 focus:ring-[#3F51B5]" />
           {!attempt && <button type="submit" className={`${button} bg-[#3F51B5] text-white`} disabled={!allowed || !draft.trim()}>Send private message</button>}
         </form>
         {attempt && <><p role="status" tabIndex={-1} ref={resultFocus}>{attempt.busy ? 'Checking message… Delivery is not confirmed.' : resultText[attempt.state]}</p><p className="text-sm text-gray-600">Leaving or reloading this page loses the saved attempt. Return to the conversation history to check delivery; messages are never resent automatically.</p>{attempt.state !== 'local_not_sent' && <button type="button" className={button} disabled={attempt.busy || !history || reading || selecting} onClick={() => void execute('check')}>Check message result</button>}{['unknown', 'processing_failed', 'local_not_sent'].includes(attempt.state) && <button type="button" className={button} disabled={attempt.busy || !allowed} onClick={() => void execute('retry')}>Retry same message</button>}</>}

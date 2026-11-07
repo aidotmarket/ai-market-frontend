@@ -20,11 +20,11 @@ function needsRefresh(token: string): boolean {
   }
 }
 
-async function sessionHeaders() {
+async function sessionHeaders(allowRefresh = true) {
   const owner = authSessionOwner();
   let token = useAuthStore.getState().token;
   if (!token) throw new Error('FIRST_PARTY_SESSION_REQUIRED');
-  if (needsRefresh(token)) {
+  if (allowRefresh && needsRefresh(token)) {
     await refreshAccessToken();
     assertAuthSessionOwner(owner);
     token = useAuthStore.getState().token;
@@ -42,10 +42,12 @@ export function sessionMutationError(error: unknown): string | null {
 
 export async function postSessionMutation<T>(path: string, body: object, assertAdmission?: (headers: Readonly<{ Authorization: string; 'X-CSRF-Token': string }>) => void): Promise<T> {
   const owner = authSessionOwner();
-  const headers = await sessionHeaders();
+  // Recovery admission and evidence must never rotate implicitly or replay.
+  const headers = await sessionHeaders(!path.includes('/recovery/'));
   assertAuthSessionOwner(owner);
   assertAdmission?.(headers);
-  const { data } = await client.post<T>(path, body, { headers });
+  const { data } = await client.post<T>(path, body, { headers, ...(path.includes('/recovery/') ? { timeout: 15000 } : {}) });
+  assertAuthSessionOwner(owner);
   return data;
 }
 

@@ -145,6 +145,9 @@ function safeMessage(value: unknown, request: string, response: string): SafeReq
 }
 export async function getRequestThreadSelector(request: string, response?: string): Promise<RequestThreadSelector> {
   const { data } = await api.get<unknown>(`/data-requests/${encodeURIComponent(request)}/threads`, { params: { response_id: response } });
+  return parseRequestThreadSelector(data, request, response);
+}
+export function parseRequestThreadSelector(data: unknown, request: string, response?: string): RequestThreadSelector {
   const v = envelope(data, request);
   if (typeof v.side !== 'string' || !['buyer', 'seller'].includes(v.side) || typeof v.availability !== 'string' || !['enabled', 'off', 'unavailable', 'unknown'].includes(v.availability) || !Array.isArray(v.threads) || v.threads.length > 1000) throw new Error('Thread unavailable');
   const threads = v.threads.map((item) => {
@@ -158,6 +161,9 @@ export async function getRequestThreadSelector(request: string, response?: strin
 export async function getRequestThreadMessages(request: string, response: string, cursor?: string): Promise<RequestThreadHistory> {
   textField(response);
   const { data } = await api.get<unknown>(`/data-requests/${encodeURIComponent(request)}/messages`, { params: { response_id: response, contract, cursor } });
+  return parseRequestThreadHistory(data, request, response);
+}
+export function parseRequestThreadHistory(data: unknown, request: string, response: string): RequestThreadHistory {
   const v = envelope(data, request, response);
   if (typeof v.can_send !== 'boolean' || !Array.isArray(v.items) || v.items.length > 100 || (v.next_cursor !== null && typeof v.next_cursor !== 'string')) throw new Error('Thread unavailable');
   return { contract, request_id: request, response_id: response, can_send: v.can_send, items: v.items.map(item => {

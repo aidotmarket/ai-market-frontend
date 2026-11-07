@@ -1,13 +1,15 @@
 import { useAuthStore } from '@/store/auth';
 import { authSessionOwner, isAuthSessionOwner } from './auth-session-owner';
-import { issueDraft, canonicalIssue, issueDigest, type IssueDraft, type ReportProposal, type ReportSurface, type SupportPort, type CustomerConversation, type ReportConfirmation } from '@/api/support';
+import { customerConversation, issueDraft, canonicalIssue, issueDigest, type IssueDraft, type ReportProposal, type ReportSurface, type SupportPort, type CustomerConversation, type ReportConfirmation } from '@/api/support';
+import { selectRecoveryTicket, selectedRecoveryTicket, retireRecoveryTicket, type RecoveryBinding } from './session-view-recovery';
+import type { RecoveryPort } from '@/api/support-recovery';
 
 interface ReplyState {
   conversation: CustomerConversation | null; body: string; busy: boolean;
-  unknown: boolean; retryReady: boolean; validated: boolean; error: string | null;
+  unknown: boolean; retryReady: boolean; validated: boolean; error: string | null; readFailed: boolean;
 }
 const emptyReply = (): ReplyState => ({ conversation: null, body: '', busy: false,
-  unknown: false, retryReady: false, validated: false, error: null });
+  unknown: false, retryReady: false, validated: false, error: null, readFailed: false });
 interface ReplyCommand { publicRef: string; conversationId: string; nonce: string; body: string }
 export interface ReportState {
   reply: ReplyState;
@@ -44,6 +46,27 @@ export class OrderIssueSession {
   private replyEpoch = 0;
   private copyDraft: IssueDraft | null = null;
   private unsubscribe: () => void;
+  private recoveryBinding: RecoveryBinding | null = null;
+  private localGeneration = 0;
+  recoverySnapshot = () => ({
+    saved_drafts: { draft: this.state.draft, proposal: this.state.proposal, copyDraft: this.copyDraft, surface: this.state.surface },
+    unsent_text: { reply: this.state.reply.body, pendingTurn: this.pendingTurn },
+    conversation_selection: { order: this.orderId, proposal: this.state.proposal?.proposal_id, confirmation: this.state.proposal?.confirmation },
+    unknown_mutations: { pendingTurn: this.pendingTurn, replyCommand: this.replyCommand, replyUnknown: this.state.reply.unknown, reconcile: this.state.reconcile, busy: this.state.busy, replyBusy: this.state.reply.busy },
+    generation: this.localGeneration,
+  });
+  installRecoveredConversation = (data: unknown): CustomerConversation => {
+    const confirmation = this.state.proposal?.confirmation;
+    if (!this.current() || !confirmation || this.replyFlight) throw new Error('Conversation changed');
+    const value = customerConversation(data);
+    this.validateConversation(value, confirmation);
+    const versions = new Map(this.state.reply.conversation?.messages.map(m => [m.id + ':' + m.version, m]) ?? []);
+    value.messages.forEach(m => versions.set(m.id + ':' + m.version, m));
+    const conversation = { ...value, messages: [...versions.values()] };
+    // Reading never reconciles an uncertain message or discards its command.
+    this.setReply({ conversation, error: null, readFailed: false, validated: !this.state.reply.unknown && !this.replyCommand });
+    return conversation;
+  };
   constructor(public orderId: string, readonly port: SupportPort, private recoveryId: string | null = null) {
     this.port = port.withAdmission?.(() => { if (!this.current()) throw new Error('Order report visit retired'); }) ?? port;
     this.unsubscribe = useAuthStore.subscribe(() => { if (!this.current()) this.retire(); });
@@ -58,6 +81,8 @@ export class OrderIssueSession {
     this.listeners.forEach(callback => callback());
   }
   retire = () => {
+    if (this.recoveryBinding) retireRecoveryTicket(this.recoveryBinding);
+    this.recoveryBinding = null;
     this.resetReply();
     this.localDraft = false; this.localSurface = false;
     this.copyDraft = null;
@@ -86,9 +111,20 @@ export class OrderIssueSession {
     this.localDraft = copied !== null;
     this.localSurface = false;
     this.set({ proposal, draft: copied ?? proposal.draft, surface: proposal.surface, saved: copied === null, reviewed: false, reconcile: false, guidanceRetry: this.pendingTurn !== null, error: null });
+    if (proposal.confirmation && this.recoveryBinding && !this.recoveryBinding.current()) {
+      retireRecoveryTicket(this.recoveryBinding); this.recoveryBinding = null;
+    }
+    if (proposal.confirmation && !this.recoveryBinding && this.port.recoveryCurrent && this.port.retainRecoveryContext && this.port.recoveryStep && this.port.recoveryStatus) {
+      const confirmation = proposal.confirmation;
+      this.recoveryBinding = { ref: confirmation.public_ref, conversation: confirmation.conversation_id,
+        current: () => this.current() && this.state.proposal?.confirmation === confirmation && selectedRecoveryTicket() === this.recoveryBinding,
+        snapshot: this.recoverySnapshot, port: this.port as RecoveryPort };
+      selectRecoveryTicket(this.recoveryBinding);
+    }
   }
   private async run(operation: () => Promise<ReportProposal>, completedTurn?: GuidanceTurn): Promise<void> {
     if (!this.current() || this.state.busy) return;
+    this.localGeneration++;
     this.set({ busy: true, error: null });
     try { const result = await operation(); if (this.current()) this.accept(result, completedTurn); }
     catch (error) {
@@ -116,7 +152,7 @@ export class OrderIssueSession {
   };
   edit = (draft: IssueDraft) => {
     if (!this.current() || this.state.busy || this.state.proposal?.confirmation || this.state.reconcile) return;
-    this.localDraft = true;
+    this.localGeneration++; this.localDraft = true;
     this.set({ draft: issueDraft(draft), saved: false, reviewed: false });
   };
   plain = () => {
@@ -196,6 +232,9 @@ export class OrderIssueSession {
     this.set(initial()); await this.open();
   };
   private resetReply() {
+    this.localGeneration++;
+    if (this.recoveryBinding) retireRecoveryTicket(this.recoveryBinding);
+    this.recoveryBinding = null;
     this.replyEpoch += 1;
     this.replyFlight = null;
     this.replyCommand = null;
@@ -212,7 +251,7 @@ export class OrderIssueSession {
   }
   editReply = (body: string) => {
     if (!this.current() || !this.state.proposal?.confirmation || this.state.reply.busy || this.replyCommand) return;
-    this.setReply({ body });
+    this.localGeneration++; this.setReply({ body });
   };
   // Mounting a view never reconciles an uncertain command or replays it.
   ensureConversation = () => {
@@ -222,6 +261,7 @@ export class OrderIssueSession {
   loadConversation = async (cursor?: string) => {
     const confirmation = this.state.proposal?.confirmation;
     if (!this.current() || !confirmation || this.replyFlight) return;
+    this.localGeneration++;
     const epoch = this.replyEpoch, flight = {};
     const previous = this.state.reply.conversation;
     this.replyFlight = flight;
@@ -236,9 +276,9 @@ export class OrderIssueSession {
         this.setReply({ conversation: { ...value, messages: [...versions.values()] } });
       } else this.setReply({ conversation: value });
       // A read establishes current access/projection, not proof of a lost reply's outcome.
-      this.setReply({ validated: true, retryReady: this.replyCommand !== null });
+      this.setReply({ validated: true, retryReady: this.replyCommand !== null, readFailed: false });
     } catch {
-      if (this.replyCurrent(epoch, confirmation, flight)) this.setReply({ error: 'Conversation could not be loaded. Your ticket is retained.' });
+      if (this.replyCurrent(epoch, confirmation, flight)) this.setReply({ readFailed: true, error: 'Conversation could not be loaded. Your ticket is retained.' });
     } finally {
       if (this.replyCurrent(epoch, confirmation, flight)) { this.replyFlight = null; this.setReply({ busy: false }); }
     }
@@ -258,6 +298,7 @@ export class OrderIssueSession {
     const confirmation = this.state.proposal?.confirmation, reply = this.state.reply;
     if (!this.current() || !confirmation || this.replyFlight || !reply.validated ||
       (reply.unknown && !reply.retryReady) || !reply.body.trim() || reply.body.length > 4000) return;
+    this.localGeneration++;
     this.replyCommand ??= { publicRef: confirmation.public_ref, conversationId: confirmation.conversation_id,
       body: reply.body, nonce: crypto.randomUUID() };
     const command = this.replyCommand;

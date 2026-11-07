@@ -2,6 +2,7 @@ import { api } from './client';
 import { patchSessionMutation, postSessionMutation } from './session-mutation';
 import { authSessionOwner, assertAuthSessionOwner } from '@/lib/auth-session-owner';
 import { useAuthStore } from '@/store/auth';
+import { recoveryCurrent, recoveryResult, recoveryRecord, type RecoveryPort } from './support-recovery';
 
 // Proposed C3 wire contract; backend C3 routes are not implemented here.
 export const ISSUE_CATEGORIES = ['payment_charge', 'download_delivery', 'not_as_described', 'access_account', 'refund_request', 'other'] as const;
@@ -112,7 +113,7 @@ export async function issueDigest(draft: IssueDraft): Promise<string> {
   const digest = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(canonicalIssue(draft)));
   return Array.from(new Uint8Array(digest), b => b.toString(16).padStart(2, '0')).join('');
 }
-export interface SupportPort {
+export interface SupportPort extends Partial<RecoveryPort> {
   withAdmission?: (assertAdmission: () => void) => SupportPort;
   open(order: string, nonce: string, surface: ReportSurface, resume: boolean): Promise<ReportProposal>;
   recover(order: string, proposal: string): Promise<ReportProposal>;
@@ -144,6 +145,18 @@ function supportPort(assertAdmission?: () => void): SupportPort {
     ? patchSessionMutation<T>(path, body, assertAdmission) : patchSessionMutation<T>(path, body);
   return {
   withAdmission: additional => supportPort(() => { assertAdmission?.(); additional(); }),
+  retainRecoveryContext: (ref, context) => owned(async () => {
+    const r = recoveryRecord(await post(ticket(ref) + '/recovery/context', context));
+    if (r.context_id !== context.context_id || r.state !== 'context_retained' || r.revision !== context.expected_revision) return fail();
+    return { context_id: context.context_id, state: 'context_retained', revision: context.expected_revision };
+  }),
+  recoveryCurrent: ref => owned(async () => recoveryCurrent((await api.get(ticket(ref) + '/recovery/current', { timeout: 15000 })).data)),
+  recoveryStatus: (ref, id) => owned(async () => recoveryResult((await api.get(ticket(ref) + '/recovery/' + segment(id), { timeout: 15000 })).data)),
+  recoveryStep: (ref, id, step) => owned(async () => {
+    const r = recoveryResult(await post(ticket(ref) + '/recovery/' + segment(id) + '/client', step));
+    if (r.operation_id !== id) return fail();
+    return r;
+  }),
   open: (o, nonce, surface, resume) => owned(async () => reportProposal(await post(proposals(o), { open_nonce: nonce, surface, resume_latest: resume }))),
   recover: (o, p) => owned(async () => reportProposal((await api.get(proposal(o, p))).data)),
   save: (o, p, revision, draft, surface) => owned(async () => reportProposal(await patch(proposal(o, p), { expected_revision: revision, draft: issueDraft(draft), surface }))),
