@@ -40,10 +40,22 @@ export function sessionMutationError(error: unknown): string | null {
     ? 'Please refresh the page and try again.' : null;
 }
 
-export async function postSessionMutation<T>(path: string, body: object): Promise<T> {
+export async function postSessionMutation<T>(path: string, body: object, assertAdmission?: () => void): Promise<T> {
   const owner = authSessionOwner();
   const headers = await sessionHeaders();
   assertAuthSessionOwner(owner);
+  assertAdmission?.();
   const { data } = await client.post<T>(path, body, { headers });
+  return data;
+}
+
+// Same admission/refresh rules as POST; never retry a refused draft mutation.
+export async function patchSessionMutation<T>(path: string, body: object, assertAdmission?: () => void): Promise<T> {
+  const owner = authSessionOwner();
+  const headers = await sessionHeaders();
+  assertAuthSessionOwner(owner);
+  assertAdmission?.();
+  const { data } = await client.patch<T>(path, body, { headers });
+  assertAuthSessionOwner(owner);
   return data;
 }
