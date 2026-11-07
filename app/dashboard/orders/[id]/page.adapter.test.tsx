@@ -3,6 +3,8 @@
 import { cleanup, render, screen, waitFor } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
+const privateSupport = vi.hoisted(() => ({ openReportIssue: vi.fn() }));
+vi.mock('@/components/allai/AllAIContext', () => ({ useAllAI: () => privateSupport }));
 const client = vi.hoisted(() => ({ get: vi.fn() }));
 const navigation = vi.hoisted(() => ({ id: 'synthetic-order' }));
 vi.mock('@/api/client', () => ({ api: client }));
