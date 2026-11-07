@@ -4,6 +4,8 @@ import { StrictMode, type ReactNode } from 'react';
 import type { Transaction } from '@/types';
 import { act, cleanup, fireEvent, render, screen } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+const privateSupport = vi.hoisted(() => ({ openReportIssue: vi.fn() }));
+vi.mock('@/components/allai/AllAIContext', () => ({ useAllAI: () => privateSupport }));
 const state = vi.hoisted(() => ({
   orderId: 'A', userId: 'buyer', txId: 'tx-A', seller: false,
   token: 'test-session-1', deferTerms: false,
