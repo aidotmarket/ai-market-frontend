@@ -23,13 +23,13 @@ export function PendingProfileChanges() {
     const unsubscribeOwner=subscribeAuthSessionOwner(retire);
     controller.activate();
     void controller.read();
-    const read=()=>{void controller.read();};
+    const read=()=>{controller.backgroundRead();};
     window.addEventListener('focus',read);
     return ()=>{unsubscribe();unsubscribeOwner();window.removeEventListener('focus',read);controller.retire();};
   },[controller,principal,owner]);
   if (!principal || owner!==authSessionOwner()) return null;
   const pending=view.rows.filter(r=>r.state==='pending');
-  if (!pending.length && !view.error) return null;
+  if (!pending.length && !view.error && !view.settled) return null;
   return <section aria-label="Pending account changes" className="border p-4" aria-busy={view.busy}>
     {pending.length>0 && <p>Email changes last read as pending are shown below. Confirm or cancel explicitly after a current read. Old mailbox proof is not restored by cancellation.</p>}
     {view.readAt && <p>Last read: {new Date(view.readAt).toLocaleString()}. Read again for current readiness.</p>}
@@ -37,6 +37,7 @@ export function PendingProfileChanges() {
     {view.nextPending && <button disabled={view.busy} onClick={()=>void controller.readMore()}>Read more pending changes</button>}
     {view.nextPending && <p>More pending changes may be available. Each click reads one page.</p>}
     {view.error && <p role="status">{view.error}</p>}
+    {view.settled && <p>Decided email intent: <strong>{view.settled.intent.email}</strong> · Revision {view.settled.revision}. Current decision: {view.settled.state}.</p>}
     {view.submitted && !pending.some(r=>r.id===view.submitted?.id && r.revision===view.submitted.revision && r.intent.email===view.submitted.intent.email) && <p>Submitted email intent: <strong>{view.submitted.intent.email}</strong> · Revision {view.submitted.revision}. Current owned result: {view.submittedState}.</p>}
     {pending.map(row=><div key={row.id}>
       <p>Change account email to <strong>{row.intent.email}</strong></p>

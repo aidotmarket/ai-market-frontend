@@ -172,7 +172,7 @@ it.each([
   ['ambiguous',[row({state:'applied'}),row({state:'applied'})]],
   ['email',[row({state:'applied',intent:{kind:'profile_email',email:'wrong@example.test'}})]],
   ['reversed revision',[row({state:'applied',revision:2})]],
-  ['superseded pending',[row({revision:4})]],['superseded applied',[row({state:'applied',revision:4})]],
+  ['pending supersession contradicted by terminal page',[row({revision:4})]],['superseded applied',[row({state:'applied',revision:4})]],
   ['cancel without revision advance',[row({state:'cancelled',revision:3})]],
   ['cancel beyond exact advance',[row({state:'cancelled',revision:5})]],
   ['changed creation',[row({state:'applied',created_at:'2026-11-05T12:00:00Z'})]],
@@ -286,15 +286,16 @@ it('retains uncertain work after real session preflight refresh failure and need
   refresh.mockResolvedValue({data:{access_token:token(7200)}});click('Confirm email change');await screen.findByText(/Decision acknowledged/);
   expect(writes()).toHaveLength(1);expect(refresh).toHaveBeenCalledTimes(2);
 });
-it('keeps a superseding current intent and the exact submitted intent visible without accepting it as the submitted outcome',async()=>{
+it('releases the superseded intent after network loss without replay and still fences later omission',async()=>{
   await mount();ports.adapter.mockRejectedValueOnce(rejection(503));click('Confirm email change');await screen.findByText(/Outcome unavailable/);
   const newer=row({revision:4,intent:{kind:'profile_email',email:'newer@example.test'}});
   ports.adapter.mockImplementation(async config=>ok(config.params?.request_id ? [newer] : [newer]));
-  await readAgain();expect(screen.getByText('newer@example.test')).toBeTruthy();expect(screen.getByText(row().intent.email)).toBeTruthy();
+  await readAgain();expect(screen.getByText('newer@example.test')).toBeTruthy();expect(screen.queryByText(row().intent.email)).toBeNull();
+  expect(screen.getByRole('button',{name:'Confirm email change'}).hasAttribute('disabled')).toBe(false);
   expect(screen.getAllByRole('button',{name:'Confirm email change'})).toHaveLength(1);
   expect(screen.queryByText(/^Submitted intent ·/)).toBeNull();
   ports.adapter.mockResolvedValue(ok([]));await readAgain();
-  expect(screen.getByText('newer@example.test')).toBeTruthy();expect(screen.getByText(row().intent.email)).toBeTruthy();
+  expect(screen.getByText('newer@example.test')).toBeTruthy();expect(screen.queryByText(row().intent.email)).toBeNull();
   expect(screen.getByRole('button',{name:'Confirm email change'}).hasAttribute('disabled')).toBe(true);expect(writes()).toHaveLength(1);
 });
 it('never reverses an observed terminal exact result back to pending',async()=>{
@@ -304,4 +305,89 @@ it('never reverses an observed terminal exact result back to pending',async()=>{
   ports.adapter.mockResolvedValue(ok([row()]));await readAgain();
   expect(screen.queryByRole('button',{name:'Confirm email change'})).toBeNull();
   expect(screen.getByText(row().intent.email)).toBeTruthy();expect(writes()).toHaveLength(1);
+});
+
+it.each(['reconfirm','cancel'] as const)('supersedes failed %s only after exact current read and requires a new click with the fresh revision/email',async action=>{
+  await mount();ports.adapter.mockRejectedValueOnce(rejection(409));
+  click(action==='reconfirm'?'Confirm email change':'Cancel change');await screen.findByText(/Outcome unavailable/);
+  const newer=row({revision:4,intent:{kind:'profile_email',email:'fresh@example.test'}});
+  ports.adapter.mockResolvedValue(ok([newer]));await readAgain();
+  expect(screen.getByRole('button',{name:'Confirm email change'}).hasAttribute('disabled')).toBe(false);
+  expect(screen.getByRole('button',{name:'Cancel change'}).hasAttribute('disabled')).toBe(false);
+  expect(writes()).toHaveLength(1);
+  ports.adapter.mockResolvedValueOnce(ok(action==='cancel'?{state:'cancelled',old_proof_restored:false}:{state:'applied',request_id:id,revision:4}));
+  click(action==='reconfirm'?'Confirm email change':'Cancel change');await screen.findByText(/Decision acknowledged/);
+  expect(writes()).toHaveLength(2);expect(JSON.parse(writes()[1][0].data)).toEqual(action==='cancel'?{revision:4}:{revision:4,email:'fresh@example.test'});
+});
+
+it.each(['reconfirm','cancel'] as const)('network-lost %s with unchanged email is superseded by exact pending revision 4',async action=>{
+  await mount();ports.adapter.mockRejectedValueOnce(Error('synthetic loss'));
+  click(action==='cancel'?'Cancel change':'Confirm email change');await screen.findByText(/Outcome unavailable/);
+  ports.adapter.mockResolvedValue(ok([row({revision:4})]));await readAgain();
+  expect(screen.getByRole('button',{name:'Confirm email change'}).hasAttribute('disabled')).toBe(false);
+  expect(screen.getByRole('button',{name:'Cancel change'}).hasAttribute('disabled')).toBe(false);expect(writes()).toHaveLength(1);
+});
+it.each(['missing','failed','wrongID','creation','lower','conflict'])('refuses higher pending page when exact lookup is %s',async kind=>{
+  await mount();ports.adapter.mockRejectedValueOnce(rejection(409));click('Cancel change');await screen.findByText(/Outcome unavailable/);
+  ports.adapter.mockImplementation(async config=>{
+    if(!config.params?.request_id)return ok([row({revision:4})]);
+    if(kind==='failed')throw rejection(503);
+    return ok(kind==='missing'?[]:[row({revision:kind==='lower'?2:kind==='conflict'?5:4,
+      ...(kind==='wrongID'?{id:other}:kind==='creation'?{created_at:'2020-01-01T00:00:00Z'}:{})})]);
+  });await readAgain();expect(screen.getByRole('button',{name:'Cancel change'}).hasAttribute('disabled')).toBe(true);expect(writes()).toHaveLength(1);
+});
+it('uses exact superseding pending intent even when the bounded page omits it, without crawling',async()=>{
+  await mount();ports.adapter.mockRejectedValueOnce(rejection(409));click('Confirm email change');await screen.findByText(/Outcome unavailable/);
+  const newer=row({revision:4,intent:{kind:'profile_email',email:'exact-new@example.test'}});
+  ports.adapter.mockImplementation(async config=>ok(config.params?.request_id?[newer]:Array.from({length:100},(_,i)=>pageRow(i+1))));
+  await readAgain();expect(screen.getByText('exact-new@example.test')).toBeTruthy();
+  expect(screen.getAllByRole('button',{name:'Confirm email change'})[0].hasAttribute('disabled')).toBe(false);
+  expect(reads()).toHaveLength(3);expect(writes()).toHaveLength(1);
+});
+it.each(['applied','cancelled'] as const)('retires exact tracking after displayed %s and never reverses the terminal observation through omission',async state=>{
+  const controller=new ProfileRecovery(profileRecovery,()=>true);controller.activate();await controller.read();await controller.decide(row(),'cancel');
+  ports.adapter.mockResolvedValue(ok([row({state,revision:state==='cancelled'?4:3,ready_to_reconfirm:false})]));await controller.read();
+  expect(controller.getSnapshot().submitted).toBeNull();expect(controller.getSnapshot().settled?.state).toBe(state);
+  ports.adapter.mockResolvedValue(ok([]));const before=reads().length;await controller.read();expect(reads()).toHaveLength(before+1);
+  ports.adapter.mockResolvedValue(ok([row({revision:5})]));await controller.read();
+  expect(controller.getSnapshot().rows.find(r=>r.id===id)?.state).toBe(state);expect(controller.canDecide(row({revision:5}))).toBe(false);expect(writes()).toHaveLength(1);controller.retire();
+});
+it('bounds burst focus reads while manual current read and postdecision reconciliation stay immediate',async()=>{
+  vi.useFakeTimers();
+  try {
+    render(<PendingProfileChanges/>);await act(async()=>{});expect(reads()).toHaveLength(1);
+    for(let i=0;i<20;i++)fireEvent.focus(window);
+    expect(reads()).toHaveLength(1);await act(async()=>vi.advanceTimersByTimeAsync(250));expect(reads()).toHaveLength(2);
+    for(let i=0;i<20;i++)fireEvent.focus(window);
+    click('Read current changes');await act(async()=>{});expect(reads()).toHaveLength(3);
+    click('Cancel change');await act(async()=>{});expect(writes()).toHaveLength(1);
+    click('Read current changes');await act(async()=>{});expect(reads()).toHaveLength(5);
+    await act(async()=>vi.advanceTimersByTimeAsync(1000));expect(reads()).toHaveLength(5);
+  } finally {vi.useRealTimers();}
+});
+it.each(['retire','ABA','manual'])('old background timer cannot read after %s',async kind=>{
+  vi.useFakeTimers();
+  try {
+    let current=true;const controller=new ProfileRecovery(profileRecovery,()=>current);controller.activate();await controller.read();
+    controller.backgroundRead();
+    if(kind==='manual')await controller.read();else {current=false;controller.retire();if(kind==='ABA'){current=true;controller.activate();}}
+    const before=reads().length;await vi.advanceTimersByTimeAsync(1000);expect(reads()).toHaveLength(before);expect(writes()).toHaveLength(0);controller.retire();
+  }finally{vi.useRealTimers();}
+});
+it.each([true,false])('orders submillisecond timestamps before UUIDs (ascending=%s)',async ascending=>{
+  const early=pageRow(2),late=pageRow(1);early.created_at='2026-01-01T00:00:00.000001Z';late.created_at='2026-01-01T00:00:00.000002Z';
+  ports.adapter.mockResolvedValueOnce(ok(ascending?[early,late]:[late,early]));
+  const controller=new ProfileRecovery(profileRecovery,()=>true);controller.activate();await controller.read();
+  expect(controller.getSnapshot().reconcile).toBe(!ascending);expect(controller.getSnapshot().rows).toHaveLength(ascending?2:0);expect(writes()).toHaveLength(0);controller.retire();
+});
+
+it.each(['owner','principal','ABA'])('ignores superseding exact result after %s changes while read is pending',async kind=>{
+  await mount();ports.adapter.mockRejectedValueOnce(rejection(409));click('Confirm email change');await screen.findByText(/Outcome unavailable/);
+  const exact=deferred<ReturnType<typeof ok>>();ports.adapter.mockImplementation(async config=>config.params?.request_id?exact.promise:ok([]));
+  click('Read current changes');await waitFor(()=>expect(reads()).toHaveLength(3));
+  ports.adapter.mockResolvedValue(ok([]));
+  act(()=>{if(kind==='principal')principal('seller','other');else advanceAuthSessionOwner();});
+  if(kind==='ABA')act(()=>advanceAuthSessionOwner());
+  await act(async()=>exact.resolve(ok([row({revision:4})])));
+  expect(screen.queryByText(row().intent.email)).toBeNull();expect(screen.queryByRole('button',{name:'Confirm email change'})).toBeNull();expect(writes()).toHaveLength(1);
 });

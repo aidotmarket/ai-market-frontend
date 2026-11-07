@@ -61,3 +61,9 @@ it('leaves original Origin and host-only cookies untouched for backend rewrites 
   const headers = await config.headers!();
   expect(headers.filter(r => r.source.startsWith('/api/v1/support')).flatMap(r => r.headers).some(h => /content-security-policy|set-cookie/i.test(h.key))).toBe(false);
 });
+
+it.each(['/support/mailbox-account',...SUPPORT_RECOVERY_PATHS.map(path=>path.replace(':ticket','11111111-1111-4111-8111-111111111111'))])('refuses actual HTTP protocol on private %s even with apex Host',path=>{
+  const response=middleware(new NextRequest('http://ai.market'+path,{headers:{host:'ai.market'}}),{} as NextFetchEvent);
+  expect(response.status).toBe(400);expect(response.headers.get('location')).toBeNull();
+  expect(response.headers.get('cache-control')).toBe('private, no-store');expect(response.headers.get('referrer-policy')).toBe('no-referrer');
+});

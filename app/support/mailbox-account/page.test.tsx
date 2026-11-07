@@ -142,12 +142,19 @@ it.each(['network', 'refusal', 'malformed'] as const)('keeps %s outcome unavaila
   history.replaceState(null, '', '/support/mailbox-account'); mounted.unmount(); render(<SupportMailboxAccount />);
   fireEvent.click(button()); expect(consumption()).toHaveLength(1);
 });
-it('does not redirect to login after a terminal retained-session refresh refusal', async () => {
+it('does not assign a login redirect after a terminal retained-session refresh refusal', async () => {
   useAuthStore.setState({ hydrated: false });
-  refresh.mockRejectedValue(new AxiosError('refused', 'ERR_BAD_RESPONSE', undefined, undefined, { data: {}, status: 401, statusText: '', headers: {}, config: {} as InternalAxiosRequestConfig }));
-  render(<SupportMailboxAccount />); fireEvent.click(button());
-  await waitFor(() => expect(screen.getByRole('status').textContent).toMatch(/session changed/));
-  expect(location.pathname).toBe('/support/mailbox-account'); expect(location.hash).toBe(''); expect(consumption()).toHaveLength(0);
+  const pending=deferred<{data:{access_token:string}}>();refresh.mockReturnValue(pending.promise);
+  render(<SupportMailboxAccount />);fireEvent.click(button());
+  await waitFor(()=>expect(refresh).toHaveBeenCalledOnce());
+  const assign=vi.fn();
+  // Observe the actual redirect function, including assignments jsdom otherwise ignores.
+  vi.stubGlobal('window',{location:{pathname:'/support/mailbox-account',search:'',hash:'',set href(value:string){assign(value);}}});
+  try {
+    await act(async()=>pending.reject(new AxiosError('refused','ERR_BAD_RESPONSE',undefined,undefined,{data:{},status:401,statusText:'',headers:{},config:{} as InternalAxiosRequestConfig})));
+    expect(screen.getByRole('status').textContent).toMatch(/session changed/);
+    expect(assign).not.toHaveBeenCalled();expect(location.hash).toBe('');expect(consumption()).toHaveLength(0);
+  }finally{vi.unstubAllGlobals();}
 });
 
 import { renderToString } from 'react-dom/server';
