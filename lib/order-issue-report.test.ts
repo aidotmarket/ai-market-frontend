@@ -196,3 +196,84 @@ it('server identity/revision mismatch is quarantined and never replaces the priv
   expect(session.getSnapshot().draft.description).toBe('Exact customer original');
   expect(session.getSnapshot().reconcile).toBe(true);
 });
+
+
+describe('guidance response validation and proposal boundaries', () => {
+  it.each([
+    ['proposal', { proposal_id: 'wrong-proposal', revision: 2 }],
+    ['conversation', { conversation_id: 'wrong-conversation', revision: 2 }],
+    ['revision', { revision: 0 }],
+  ] as const)('quarantines wrong %s without forgetting the exact uncertain command', async (_name, patch) => {
+    principal(); const { session, port } = visit(); await session.open();
+    vi.mocked(port.guide).mockResolvedValueOnce(proposal(patch));
+    await session.guide('Exact question\n日本語');
+    expect(session.getSnapshot().reconcile).toBe(true);
+    expect(session.getSnapshot().proposal).toEqual(proposal());
+    await session.retryGuidance(); expect(port.guide).toHaveBeenCalledTimes(1);
+    vi.mocked(port.recover).mockResolvedValue(proposal({ revision: 3 }));
+    await session.recover();
+    expect(port.guide).toHaveBeenCalledTimes(1);
+    await session.guide('A different question must not get a fresh nonce');
+    expect(port.guide).toHaveBeenCalledTimes(1);
+    expect(session.getSnapshot().guidanceRetry).toBe(true);
+    vi.mocked(port.guide).mockResolvedValueOnce(proposal({ revision: 4 }));
+    await session.retryGuidance();
+    expect(vi.mocked(port.guide).mock.calls[1]).toEqual(vi.mocked(port.guide).mock.calls[0]);
+    expect(session.getSnapshot().guidanceRetry).toBe(false);
+  });
+  it('accepts a valid direct guidance response without requiring a completed nonce echo', async () => {
+    principal(); const { session, port } = visit(); await session.open();
+    await session.guide('First successful question');
+    expect(session.getSnapshot().proposal?.revision).toBe(2);
+    expect(session.getSnapshot().guidanceRetry).toBe(false);
+    await session.retryGuidance(); expect(port.guide).toHaveBeenCalledTimes(1);
+    vi.mocked(port.guide).mockResolvedValueOnce(proposal({ revision: 3 }));
+    await session.guide('Next successful question');
+    const calls = vi.mocked(port.guide).mock.calls;
+    expect(calls[1][3]).not.toBe(calls[0][3]); expect(calls[1][2]).toBe(2);
+  });
+  it('explicit plain fallback retires uncertain guidance on the same proposal', async () => {
+    principal(); const { session, port } = visit(); await session.open();
+    vi.mocked(port.guide).mockRejectedValueOnce(new Error('lost'));
+    await session.guide('Original uncertain question'); await session.recover();
+    session.plain(); await session.retryGuidance();
+    expect(port.guide).toHaveBeenCalledTimes(1);
+    await session.save(); session.review(true); await session.confirm();
+    expect(session.getSnapshot().proposal?.confirmation?.original.description).toBe('Exact customer original');
+  });
+  it.each(['confirm', 'recover-confirmed', 'copy', 'copy-open-lost'] as const)('%s retires the old command before any distinct proposal can receive it', async boundary => {
+    principal(); const { session, port } = visit(); await session.open();
+    vi.mocked(port.guide).mockRejectedValueOnce(new Error('lost guidance response'));
+    await session.guide('Old private question');
+    const expired = boundary.startsWith('copy');
+    vi.mocked(port.recover).mockResolvedValue(proposal({ revision: 2,
+      expires_at: expired ? '2000-01-01T00:00:00Z' : '2099-11-08T00:00:00Z',
+      confirmation: boundary === 'recover-confirmed' ? confirmed() : null }));
+    await session.recover();
+    expect(port.guide).toHaveBeenCalledTimes(1);
+    if (!expired && boundary !== 'recover-confirmed') { session.review(true); await session.confirm(); }
+    const original = session.getSnapshot().proposal;
+    const fresh = proposal({ proposal_id: 'proposal-two', conversation_id: 'new-private-conversation' });
+    vi.mocked(port.open).mockResolvedValue(fresh);
+    if (boundary === 'copy-open-lost') vi.mocked(port.open).mockRejectedValueOnce(new Error('lost new open'));
+    if (expired) await session.copyExpired(); else await session.newReport();
+    if (boundary === 'copy-open-lost') await session.recover();
+    await session.retryGuidance();
+    expect(port.guide).toHaveBeenCalledTimes(1);
+    expect(session.getSnapshot().guidanceRetry).toBe(false);
+    expect(session.getSnapshot().proposal?.proposal_id).toBe('proposal-two');
+    expect(original?.proposal_id).toBe('proposal-one');
+    expect(original?.draft.description).toBe('Exact customer original');
+    if (!expired) expect(original?.confirmation?.public_ref).toBe('SUP-42');
+    if (expired) {
+      vi.mocked(port.save).mockImplementationOnce(async (_o, _p, revision, draft, surface) => ({ ...fresh, revision: revision + 1, draft, surface }));
+      await session.save();
+    }
+    vi.mocked(port.guide).mockResolvedValueOnce({ ...fresh, revision: 3 });
+    await session.guide('New proposal question');
+    const calls = vi.mocked(port.guide).mock.calls;
+    expect(calls[1][1]).toBe('proposal-two');
+    expect(calls[1][3]).not.toBe(calls[0][3]);
+    expect(calls[1][4]).toBe('New proposal question');
+  });
+});

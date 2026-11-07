@@ -176,3 +176,41 @@ describe('actual rendered version receipts', () => {
     expect(target).toBe(prior); expect(receipt).not.toHaveBeenCalled();
   });
 });
+
+
+describe('reachable guidance recovery boundaries', () => {
+  it.each(['new-report', 'expired-copy'] as const)('%s never exposes or resends the prior proposal turn', async boundary => {
+    const { session, port } = await mount();
+    vi.mocked(port.guide).mockRejectedValueOnce(new Error('lost guidance'));
+    fireEvent.change(screen.getByLabelText('Ask allAI about this report'), { target: { value: 'Old private question' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Send to private guidance' }));
+    await screen.findByText(/The result is unknown/);
+    vi.mocked(port.recover).mockResolvedValue(proposal({ revision: 2,
+      expires_at: boundary === 'expired-copy' ? '2000-01-01T00:00:00Z' : '2099-11-08T00:00:00Z' }));
+    fireEvent.click(screen.getByRole('button', { name: /Recover/ }));
+    await waitFor(() => expect((screen.getByRole('button', { name: 'Retry prior guidance turn' }) as HTMLButtonElement).disabled).toBe(false));
+    expect(port.guide).toHaveBeenCalledTimes(1);
+    vi.mocked(port.open).mockResolvedValue(proposal({ proposal_id: 'proposal-two', conversation_id: 'new-private-conversation' }));
+    if (boundary === 'new-report') {
+      fireEvent.click(screen.getByRole('checkbox', { name: /I have reviewed/ }));
+      fireEvent.click(screen.getByRole('button', { name: 'Confirm and file report' }));
+      await screen.findByText('Report confirmed');
+      fireEvent.click(screen.getByRole('button', { name: /new report/i }));
+    } else {
+      fireEvent.click(screen.getByRole('checkbox', { name: 'Copy this draft to a new proposal' }));
+      fireEvent.click(screen.getByRole('button', { name: 'Create authorized copy' }));
+    }
+    await waitFor(() => expect(session.getSnapshot().proposal?.proposal_id).toBe('proposal-two'));
+    const retry = screen.queryByRole('button', { name: 'Retry prior guidance turn' });
+    if (retry) { fireEvent.click(retry); await waitFor(() => expect(session.getSnapshot().busy).toBe(false)); }
+    expect(port.guide).toHaveBeenCalledTimes(1);
+    expect(retry).toBeNull();
+    if (boundary === 'expired-copy') {
+      vi.mocked(port.save).mockImplementationOnce(async (_o, _p, revision, draft, surface) => proposal({
+        proposal_id: 'proposal-two', conversation_id: 'new-private-conversation', revision: revision + 1, draft, surface }));
+      fireEvent.click(screen.getByRole('button', { name: 'Save draft' }));
+      await screen.findByText('Draft saved; not reported');
+      expect(port.save).toHaveBeenCalledWith('order-fixture', 'proposal-two', 1, expect.any(Object), 'allai');
+    }
+  });
+});
