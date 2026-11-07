@@ -5,7 +5,9 @@ import { act, cleanup, fireEvent, render, screen, waitFor } from '@testing-libra
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { BuyerOrderDetail, OrderEvent, Transaction } from '@/types';
 
-const navigation = vi.hoisted(() => ({ orderId: 'order-1', txId: 'tx-1' }));
+const privateSupport = vi.hoisted(() => ({ openReportIssue: vi.fn() }));
+vi.mock('@/components/allai/AllAIContext', () => ({ useAllAI: () => privateSupport }));
+const navigation = vi.hoisted(() => ({ orderId: 'order-1', txId: 'tx-1', issueProposal: '' }));
 const terms = vi.hoisted(() => ({ ensureTermsAccepted: vi.fn(), realGate: false }));
 const legalApi = vi.hoisted(() => ({ getTermsAcceptanceStatus: vi.fn() }));
 vi.mock('@/api/legal', () => legalApi);
@@ -32,7 +34,7 @@ const transactionsApi = vi.hoisted(() => ({
 
 vi.mock('next/navigation', () => ({
   useParams: () => ({ id: navigation.orderId }),
-  useSearchParams: () => new URLSearchParams({ tx: navigation.txId }),
+  useSearchParams: () => new URLSearchParams({ tx: navigation.txId, issue_report: navigation.issueProposal }),
 }));
 vi.mock('@/api/orders', () => ordersApi);
 vi.mock('@/api/transactions', () => transactionsApi);
@@ -108,6 +110,7 @@ describe('OrderDetailPage viewer relationship gating', () => {
     terms.realGate = false;
     navigation.orderId = 'order-1';
     navigation.txId = 'tx-1';
+    navigation.issueProposal = '';
     auth.userId = 'viewer-1';
     auth.role = 'seller';
     terms.ensureTermsAccepted.mockImplementation(async (action: () => unknown) => action());
@@ -123,6 +126,21 @@ describe('OrderDetailPage viewer relationship gating', () => {
     vi.clearAllMocks();
     vi.restoreAllMocks();
     vi.unstubAllEnvs();
+  });
+
+  it.each(['buyer', 'seller'] as const)('opens a private order report for the %s participant without a mail link', async role => {
+    ordersApi.getOrder.mockResolvedValue(order(role === 'buyer'
+      ? { buyer_id: auth.userId, seller_id: 'other' }
+      : { seller_id: auth.userId, buyer_id: 'other' }));
+    render(<OrderDetailPage />);
+    fireEvent.click(await screen.findByRole('button', { name: 'Report Issue' }));
+    expect(privateSupport.openReportIssue).toHaveBeenCalledWith('order-1');
+    expect(screen.queryByRole('link', { name: 'Report Issue' })).toBeNull();
+  });
+  it('recovers the original linked proposal under the current session without a new report create', async () => {
+    navigation.issueProposal = 'original-proposal';
+    render(<OrderDetailPage />);
+    await waitFor(() => expect(privateSupport.openReportIssue).toHaveBeenCalledWith('order-1', 'original-proposal'));
   });
 
   it('does not offer Mark Delivered to a buyer of record who also has global seller role', async () => {
@@ -366,7 +384,7 @@ describe('OrderDetailPage viewer relationship gating', () => {
     await waitFor(() => expect(screen.queryByText('Preparing download access...')).toBeNull());
     expect(screen.queryByRole('link', { name: /^Download/ })).toBeNull();
     expect(screen.queryByRole('button', { name: /Download|Refresh/ })).toBeNull();
-    expect(screen.getByRole('link', { name: 'Report Issue' })).toBeTruthy();
+    expect(screen.getByRole('button', { name: 'Report Issue' })).toBeTruthy();
   });
 
   it('keeps order details available when retained access is refused', async () => {
