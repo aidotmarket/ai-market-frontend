@@ -1,5 +1,6 @@
 'use client';
 
+import { useEffect, useRef } from 'react';
 import type { Message } from './AllAIContext';
 import Markdown from 'react-markdown';
 import TicketStatusCard from './TicketStatusCard';
@@ -95,4 +96,53 @@ export default function AllAIMessage({
       </div>
     </div>
   );
+}
+
+// Only a customer-safe server message/version rendered in a visible customer view
+// can create a receipt. Status cards, fetched records and general chat do not.
+export function CustomerSupportMessage({ message, current, onRendered }: {
+  message: import('@/api/support').CustomerMessage;
+  current: () => boolean;
+  onRendered: () => Promise<void>;
+}) {
+  const node = useRef<HTMLDivElement>(null);
+  const callbacks = useRef({ current, onRendered });
+  callbacks.current = { current, onRendered };
+  useEffect(() => {
+    const element = node.current;
+    if (!element || message.direction !== 'outbound' || typeof IntersectionObserver === 'undefined') return;
+    let visible = false;
+    let sent = false;
+    let alive = true;
+    const report = () => {
+      const style = getComputedStyle(element);
+      if (!alive || sent || !visible || !callbacks.current.current() ||
+        document.visibilityState !== 'visible' || !element.isConnected ||
+        element.closest('[hidden], [aria-hidden="true"]') || style.display === 'none' || style.visibility === 'hidden' ||
+        element.getBoundingClientRect().width <= 0 || element.getBoundingClientRect().height <= 0) return;
+      for (let ancestor: HTMLElement | null = element; ancestor; ancestor = ancestor.parentElement) {
+        const computed = getComputedStyle(ancestor);
+        if (computed.display === 'none' || computed.visibility === 'hidden' || computed.opacity === '0') return;
+      }
+      sent = true;
+      void callbacks.current.onRendered().catch((error: unknown) => {
+        const status = (error as { response?: { status?: number } })?.response?.status;
+        // A refused receipt is not receipt evidence. Do not repeat a permanent
+        // client refusal on every focus/transition; unknown transport can retry
+        // this same immutable message/version on a later visibility event.
+        if (status === undefined || status < 400 || status >= 500) sent = false;
+      });
+    };
+    const observer = new IntersectionObserver(entries => {
+      visible = entries.some(e => e.target === element && e.isIntersecting && e.intersectionRatio > 0);
+      report();
+    });
+    observer.observe(element);
+    document.addEventListener('visibilitychange', report);
+    document.addEventListener('transitionend', report, true);
+    return () => { alive = false; observer.disconnect(); document.removeEventListener('visibilitychange', report); document.removeEventListener('transitionend', report, true); };
+  }, [message.id, message.version, message.direction]);
+  return <div ref={node} className="rounded-lg border border-white/15 p-3 whitespace-pre-wrap break-words">
+    <span className="sr-only">{message.direction === 'outbound' ? 'Support' : 'You'}: </span>{message.body}
+  </div>;
 }
