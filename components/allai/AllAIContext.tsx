@@ -7,10 +7,13 @@ import {
   useCallback,
   useRef,
   useEffect,
+  useLayoutEffect,
   type ReactNode,
 } from 'react';
 import { usePathname } from 'next/navigation';
 import { useAuthStore } from '@/store/auth';
+import { OrderIssueSession } from '@/lib/order-issue-report';
+import { support } from '@/api/support';
 import {
   createAnonymousSession,
   getAnonymousChatStatus,
@@ -57,6 +60,9 @@ export interface FieldProposalEvent {
 }
 
 interface AllAIContextValue {
+  reportSession?: OrderIssueSession | null;
+  openReportIssue: (orderId: string, proposalId?: string) => void;
+  leaveReportIssue: () => void;
   isOpen: boolean;
   open: () => void;
   close: () => void;
@@ -182,6 +188,37 @@ export function AllAIProvider({ children }: { children: ReactNode }) {
   const contextPath = pathname.startsWith('/checkout/h/') ? '/checkout/h' : pathname;
   const { user, token } = useAuthStore();
   const [isOpen, setIsOpen] = useState(false);
+  const [reportSession, setReportSession] = useState<OrderIssueSession | null>(null);
+  const reportRef = useRef<OrderIssueSession | null>(null);
+  const reportPathRef = useRef(pathname);
+  reportPathRef.current = pathname;
+  const leaveReportIssue = useCallback(() => {
+    reportRef.current?.retire();
+    reportRef.current = null;
+    setReportSession(null);
+  }, []);
+  useEffect(() => () => { reportRef.current?.retire(); }, []);
+  useLayoutEffect(() => {
+    const visit = reportRef.current;
+    if (visit && pathname !== '/dashboard/orders/' + encodeURIComponent(visit.orderId)) leaveReportIssue();
+  }, [pathname, leaveReportIssue]);
+  useEffect(() => {
+    if (reportRef.current && !reportRef.current.current()) leaveReportIssue();
+  }, [user, token, leaveReportIssue]);
+  const openReportIssue = useCallback((orderId: string, proposalId?: string) => {
+    if (reportPathRef.current !== "/dashboard/orders/" + encodeURIComponent(orderId)) return;
+    returnFocusRef.current = document.activeElement instanceof HTMLElement ? document.activeElement : null;
+    abortRef.current?.abort();
+    if (reportRef.current?.orderId !== orderId || !reportRef.current.current() ||
+      (proposalId && reportRef.current.getSnapshot().proposal?.proposal_id !== proposalId)) {
+      reportRef.current?.retire();
+      const visit = new OrderIssueSession(orderId, support, proposalId ?? null);
+      reportRef.current = visit;
+      setReportSession(visit);
+      void visit.open();
+    }
+    setIsOpen(true);
+  }, []);
   const [messages, setMessages] = useState<Message[]>([]);
   const greetingSentRef = useRef(false);
   const [isStreaming, setIsStreaming] = useState(false);
@@ -346,6 +383,9 @@ export function AllAIProvider({ children }: { children: ReactNode }) {
     async (text: string) => {
       const trimmed = text.trim();
       if (!trimmed || isStreaming) return;
+      // This is the general lane, including notification and wizard callers.
+      // The report composer sends explicitly through its visit's guide command.
+      if (reportRef.current) leaveReportIssue();
       const resources = anonymousAllAIResources(locale);
       if (anonymousSurfaceActive && !anonymousAvailable) {
         setMessages((prev) => [
@@ -581,7 +621,7 @@ export function AllAIProvider({ children }: { children: ReactNode }) {
         abortRef.current = null;
       }
     },
-    [anonymousAvailable, anonymousSurfaceActive, ensureSession, isStreaming, locale, pathname, contextPath, token]
+    [anonymousAvailable, anonymousSurfaceActive, ensureSession, isStreaming, locale, pathname, contextPath, token, leaveReportIssue]
   );
 
   const open = useCallback(() => {
@@ -607,6 +647,7 @@ export function AllAIProvider({ children }: { children: ReactNode }) {
   return (
     <AllAIContext.Provider
       value={{
+        reportSession, openReportIssue, leaveReportIssue,
         isOpen, open, close, toggle, messages, isStreaming, sendMessage, page: contextPath,
         locale, setLocale, anonymousSurfaceActive, anonymousAvailable,
         onFieldProposal: onFieldProposalState, setOnFieldProposal,
