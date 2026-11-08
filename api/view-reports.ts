@@ -25,9 +25,21 @@ export function viewReportReceipt(value: unknown, report: ViewReport): ViewRepor
   // Keep the exact immutable receipt; do not substitute a later ticket projection.
   return r as unknown as ViewReportReceipt;
 }
-export async function reportView(report: ViewReport, assertCurrent: () => void, refresh?: SessionRefreshAdapter): Promise<ViewReportReceipt> {
-  assertCurrent();
-  const value = await postSessionMutation('/support/view-reports', report, assertCurrent, refresh);
-  assertCurrent();
-  return viewReportReceipt(value, report);
+// Only this transport interprets dispatch evidence; other mutation callers retain their errors.
+export class ViewReportError extends Error {
+  constructor(readonly dispatched: boolean, cause: unknown) {
+    super('View report attempt failed', { cause });
+  }
+}
+export async function reportView(report: ViewReport, assertCurrent: () => void, refresh?: SessionRefreshAdapter, onDispatch?: () => void): Promise<ViewReportReceipt> {
+  let dispatched = false;
+  try {
+    assertCurrent();
+    const value = await postSessionMutation('/support/view-reports', report, assertCurrent, refresh, () => {
+      dispatched = true;
+      onDispatch?.();
+    });
+    assertCurrent();
+    return viewReportReceipt(value, report);
+  } catch (cause) { throw new ViewReportError(dispatched, cause); }
 }

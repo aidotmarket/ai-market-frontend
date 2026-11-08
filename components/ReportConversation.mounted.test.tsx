@@ -791,3 +791,139 @@ it('a checkout still pending when report preflight rotates cannot install a late
   expect(calls('/wallet/topup')).toHaveLength(1);
   expect((screen.getByLabelText('Amount (USD)') as HTMLInputElement).value).toBe('25.00');
 });
+
+
+it.each(['refresh403', 'report403'].flatMap(fault => [false, true].map(replace => ({ fault, replace }))))('prior accepted report with lost response survives later $fault, controller replacement=$replace', async ({ fault, replace }) => {
+  const near = 'synthetic.' + btoa(JSON.stringify({ exp: Math.floor(Date.now() / 1000) + 30 })) + '.near';
+  useAuthStore.setState({ token: near });
+  const real = net.adapter.getMockImplementation()!;
+  let rejectRetry = false;
+  let accepted: ReturnType<typeof response> | undefined;
+  net.adapter.mockImplementation(async (c: InternalAxiosRequestConfig) => {
+    if (c.url?.endsWith('/wallet/transactions')) {
+      if (c.params.offset === 40) fail(c);
+      return response(c, { ...transactions, has_more: true, total: 61 });
+    }
+    // First successful refresh leaves a near-expiry token so explicit retry must preflight again.
+    if (c.url?.endsWith('/auth/refresh')) {
+      if (rejectRetry && fault === 'refresh403') fail(c, 403);
+      return response(c, { access_token: rejectRetry ? near + '-second' : near + '-first' });
+    }
+    if (c.url?.endsWith('/support/view-reports')) {
+      if (!accepted) { accepted = await real(c); throw new Error('accepted, response lost'); }
+      if (rejectRetry) fail(c, 403);
+      expect(c.data).toBe(calls('/support/view-reports')[0].data);
+      return response(c, accepted.data); // Authoritative existing receipt, not a new report.
+    }
+    return real(c);
+  });
+  kind = 'wallet'; mode = 'waiting'; const ui = render(<WalletFunding />);
+  await screen.findByText('USD 12.34');
+  fireEvent.change(screen.getByLabelText('Amount (USD)'), { target: { value: '25.00' } });
+  fireEvent.click(screen.getByRole('button', { name: 'Continue to checkout' }));
+  await screen.findByText(/We couldn't confirm whether checkout was created/);
+  fireEvent.click(screen.getByRole('button', { name: 'Next' }));
+  await screen.findByText(/Page 2/);
+  fireEvent.click(screen.getByRole('button', { name: 'Next' }));
+  fireEvent.click(await screen.findByRole('button', { name: 'Report Issue' }));
+  fireEvent.change(screen.getByLabelText('Description'), { target: { value: 'Original immutable report draft' } });
+  fireEvent.click(screen.getByLabelText('I have reviewed this report and want to send it.'));
+  fireEvent.click(screen.getByRole('button', { name: 'Confirm and send report' }));
+  await screen.findByText(/report result is unknown/i);
+  const exact = calls('/support/view-reports')[0].data;
+  expect(JSON.parse(exact)).toMatchObject({ wallet_offset: 40, description: 'Original immutable report draft' });
+  rejectRetry = true;
+  fireEvent.click(screen.getByRole('button', { name: 'Retry same report' }));
+  await waitFor(() => expect(calls('/auth/refresh')).toHaveLength(2));
+  await waitFor(() => expect((screen.getByRole('button', { name: 'Retry same report' }) as HTMLButtonElement).disabled).toBe(false));
+  expect(screen.getByText(/report result is unknown/i)).toBeTruthy();
+  expect(screen.queryByText(/report was not accepted/i)).toBeNull();
+  expect(calls('/support/view-reports')).toHaveLength(fault === 'refresh403' ? 1 : 2);
+  expect((screen.getByLabelText('Description') as HTMLTextAreaElement).value).toBe('Original immutable report draft');
+  expect((screen.getByLabelText('Amount (USD)') as HTMLInputElement).value).toBe('25.00');
+  expect(screen.getByText(/Page 2/)).toBeTruthy();
+  expect(screen.getByText(/We couldn't confirm whether checkout was created/)).toBeTruthy();
+  expect((screen.getByRole('button', { name: 'Continue to checkout' }) as HTMLButtonElement).disabled).toBe(true);
+  expect(calls('/wallet/topup')).toHaveLength(1);
+  if (replace) {
+    // Replace the real controller: the earlier unresolved command must remain reconcilable.
+    ui.unmount(); render(<WalletFunding />);
+    await screen.findByText('USD 12.34');
+    fireEvent.click(screen.getByRole('button', { name: 'Next' }));
+    await screen.findByText(/Page 2/);
+    fireEvent.click(screen.getByRole('button', { name: 'Next' }));
+    await screen.findByText('Transaction history could not be loaded.');
+    fireEvent.click(await screen.findByRole('button', { name: 'Reconcile this earlier report', hidden: true }));
+  }
+  expect(screen.queryByText(/report was not accepted/i)).toBeNull();
+  expect((screen.getByLabelText('Description') as HTMLTextAreaElement).value).toBe('Original immutable report draft');
+  rejectRetry = false;
+  const before = calls('/support/view-reports').length;
+  await act(async () => {});
+  expect(calls('/support/view-reports')).toHaveLength(before);
+  fireEvent.click(screen.getByRole('button', { name: 'Retry same report' }));
+  await screen.findByText('Your view report is saved with support.');
+  expect(calls('/support/view-reports').map(c => c.data)).toEqual(Array(before + 1).fill(exact));
+  expect(calls('/wallet/topup')).toHaveLength(1);
+  if (!replace) {
+    expect((screen.getByLabelText('Amount (USD)') as HTMLInputElement).value).toBe('25.00');
+    expect(screen.getByText(/Page 2/)).toBeTruthy();
+    expect(screen.getByText(/We couldn't confirm whether checkout was created/)).toBeTruthy();
+    expect((screen.getByRole('button', { name: 'Continue to checkout' }) as HTMLButtonElement).disabled).toBe(true);
+  }
+});
+
+it.each([400, 401, 403, 500])('first report preflight %s truthfully reports not sent and permits explicit same-command retry', async status => {
+  useAuthStore.setState({ token: 'synthetic.' + btoa(JSON.stringify({ exp: 1 })) + '.expired' });
+  const real = net.adapter.getMockImplementation()!;
+  let blocked = true;
+  net.adapter.mockImplementation(async (c: InternalAxiosRequestConfig) => {
+    if (blocked && c.url?.endsWith('/auth/refresh')) fail(c, status);
+    return real(c);
+  });
+  kind = 'wallet'; mode = 'waiting'; const ui = render(<WalletFunding />);
+  fireEvent.click(await screen.findByRole('button', { name: 'Report Issue' }));
+  fireEvent.change(screen.getByLabelText('Description'), { target: { value: 'Not yet dispatched draft' } });
+  fireEvent.click(screen.getByLabelText('I have reviewed this report and want to send it.'));
+  fireEvent.click(screen.getByRole('button', { name: 'Confirm and send report' }));
+  await screen.findByText(/report was not sent/i);
+  expect(calls('/support/view-reports')).toHaveLength(0);
+  expect(screen.queryByText(/report result is unknown/i)).toBeNull();
+  expect(screen.queryByText(/report was not accepted/i)).toBeNull();
+  ui.unmount(); render(<WalletFunding />);
+  await screen.findByText('Transaction history could not be loaded.');
+  fireEvent.click(await screen.findByRole('button', { name: 'Reconcile this earlier report', hidden: true }));
+  expect(screen.queryByRole('button', { name: 'Retry same report' })).toBeNull();
+  blocked = false;
+  expect(calls('/support/view-reports')).toHaveLength(0);
+  fireEvent.click(screen.getByRole('button', { name: 'Confirm and send report' }));
+  await screen.findByText('Your view report is saved with support.');
+  expect(calls('/support/view-reports')).toHaveLength(1);
+  expect(viewReport.description).toBe('Not yet dispatched draft');
+  expect(calls('/wallet/topup')).toHaveLength(0);
+});
+
+
+it.each(['parser', 'timeout'])('report %s failure after dispatch remains uncertain until explicit same-command reconciliation', async fault => {
+  const real = net.adapter.getMockImplementation()!;
+  net.adapter.mockImplementation(async (c: InternalAxiosRequestConfig) => {
+    if (c.url?.endsWith('/support/view-reports') && calls('/support/view-reports').length === 1) {
+      if (fault === 'timeout') throw new AxiosError('synthetic timeout', 'ECONNABORTED', c);
+      const accepted = await real(c);
+      return response(c, { ...accepted.data, original: { ...accepted.data.original, description: 'Mismatched receipt' } });
+    }
+    return real(c);
+  });
+  kind = 'wallet'; mode = 'waiting'; render(<WalletFunding />);
+  fireEvent.click(await screen.findByRole('button', { name: 'Report Issue' }));
+  fireEvent.click(screen.getByLabelText('I have reviewed this report and want to send it.'));
+  fireEvent.click(screen.getByRole('button', { name: 'Confirm and send report' }));
+  await screen.findByText(/report result is unknown/i);
+  const exact = calls('/support/view-reports')[0].data;
+  expect(calls('/support/view-reports')).toHaveLength(1);
+  expect(screen.queryByText(/report was not accepted/i)).toBeNull();
+  fireEvent.click(screen.getByRole('button', { name: 'Retry same report' }));
+  await screen.findByText('Your view report is saved with support.');
+  expect(calls('/support/view-reports').map(c => c.data)).toEqual([exact, exact]);
+  expect(calls('/wallet/topup')).toHaveLength(0);
+});

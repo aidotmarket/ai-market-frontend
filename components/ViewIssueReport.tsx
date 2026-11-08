@@ -1,7 +1,7 @@
 'use client';
 
 import { useEffect, useRef, useState, type ReactNode } from 'react';
-import { reportView, type ViewReport, type ViewReportReceipt, type ViewReportTarget } from '@/api/view-reports';
+import { reportView, ViewReportError, type ViewReport, type ViewReportReceipt, type ViewReportTarget } from '@/api/view-reports';
 import { support } from '@/api/support';
 import { OrderIssueSession } from '@/lib/order-issue-report';
 import { useOptionalAllAI } from '@/components/allai/AllAISupportBridge';
@@ -68,6 +68,8 @@ export function useReportedView(failed: boolean, adapter: RecoveryAdapter): { bi
   const [receipt, setReceipt] = useState<ViewReportReceipt | null>(null);
   const [binding, setBinding] = useState<RecoveryBinding | null>(null);
   const command = useRef<ViewReport | null>(null);
+  // Freezing a command is not dispatch. Keep dispatch uncertainty synchronously for unmount retention.
+  const unresolved = useRef(false);
   const flight = useRef(false);
   const live = useRef(true);
   const reportState = useRef({ description, reviewed, command: command.current, unknown, refused, receipt });
@@ -79,7 +81,7 @@ export function useReportedView(failed: boolean, adapter: RecoveryAdapter): { bi
     if (!v || v.identity !== memoryIdentity || v.principal !== useAuthStore.getState().user?.id || !isAuthSessionOwner(v.owner) || !(retention.current.open || command.current || reportState.current.receipt)) return;
     if (retained.current.some(r => r.owner === v.owner && r.id === v.id)) return;
     retained.current.push({ owner: v.owner, principal: v.principal, id: v.id,
-      report: { ...reportState.current, command: command.current, unknown: reportState.current.unknown || (!!command.current && !reportState.current.receipt && !reportState.current.refused) },
+      report: { ...reportState.current, command: command.current, unknown: unresolved.current },
       target: v.target, failure: v.failure, conversation: conversation.current });
   };
   useEffect(() => { live.current = true; return () => { retainVisit(); live.current = false; }; }, []);
@@ -100,7 +102,7 @@ export function useReportedView(failed: boolean, adapter: RecoveryAdapter): { bi
     const label = adapter.view === 'wallet' ? 'wallet' : adapter.view === 'request_thread' ? 'request conversation' : 'support conversation';
     setVisit({ identity: memoryIdentity, serial: ++serial.current, generation: generation.current.value, owner: authSessionOwner(), principal: useAuthStore.getState().user?.id,
       target: adapter.reportTarget, failure: adapter.failure ?? 'normal_read_failed', id: crypto.randomUUID(), selectionGeneration });
-    conversation.current = null;
+    conversation.current = null; unresolved.current = false;
     setDescription('My ' + label + ' could not be displayed.'); setOpen(false); setReviewed(false);
     setBusy(false); setUnknown(false); setRefused(false); setReceipt(null); setBinding(null); setError(null); command.current = null; flight.current = false;
   }, [failed, scope, selectionGeneration, adapter.failure, identityRevision]); // The owning controller supplies scope and failure.
@@ -122,6 +124,7 @@ export function useReportedView(failed: boolean, adapter: RecoveryAdapter): { bi
     flight.current = true;
     command.current ??= Object.freeze({ ...visit.target, report_id: visit.id, failure: visit.failure, description });
     const submitted = command.current;
+    const priorUnknown = unresolved.current;
     const assert = () => { if (!valid(visit) || command.current !== submitted) throw new Error('Report visit changed'); };
     setBusy(true); setError(null);
     try {
@@ -129,15 +132,18 @@ export function useReportedView(failed: boolean, adapter: RecoveryAdapter): { bi
         prepareRefresh: () => latest.current.prepareRefresh!(),
         acceptRefresh: token => latest.current.acceptRefresh!(token),
         finish: () => latest.current.finish!(),
-      } : undefined); assert();
-      setReceipt(result); setUnknown(false);
+      } : undefined, () => { unresolved.current = true; }); assert();
+      unresolved.current = false; setReceipt(result); setUnknown(false);
       conversation.current = OrderIssueSession.conversation(result, support);
     } catch (error) { if (valid(visit)) {
-      const status = (error as { response?: { status?: number } })?.response?.status;
-      const refused = status !== undefined && status >= 400 && status < 500 && status !== 408 && status !== 429;
-      setRefused(refused); setUnknown(!refused);
+      const status = (error instanceof ViewReportError ? error.cause as { response?: { status?: number } } : null)?.response?.status;
+      // A later rejection describes that attempt; it cannot reconcile an earlier lost response.
+      const refused = !priorUnknown && error instanceof ViewReportError && error.dispatched && status !== undefined && status >= 400 && status < 500 && status !== 408 && status !== 429;
+      if (refused) unresolved.current = false;
+      setRefused(refused); setUnknown(unresolved.current);
       setError(refused ? refusedMessage
-        : 'The report result is unknown. Your text and report identity are retained. You can retry this same report.');
+        : unresolved.current ? 'The report result is unknown. Your text and report identity are retained. You can retry this same report.'
+        : 'The report was not sent. Your text and report identity are retained. You can try sending it again.');
     } }
     finally { if (valid(visit)) { flight.current = false; setBusy(false); } }
   };
@@ -151,6 +157,7 @@ export function useReportedView(failed: boolean, adapter: RecoveryAdapter): { bi
       retained.current.push({ owner: visit.owner, principal: visit.principal, id: visit.id, report: { ...reportState.current }, target: visit.target, failure: visit.failure, conversation: conversation.current });
     setVisit({ ...visit, serial: ++serial.current, target: r.target, failure: r.failure, id: r.id });
     command.current = r.report.command;
+    unresolved.current = r.report.unknown;
     setDescription(r.report.description); setReviewed(r.report.reviewed); setUnknown(r.report.unknown); setRefused(r.report.refused);
     setReceipt(r.report.receipt); setBinding(null); setOpen(true); setError(r.report.refused ? refusedMessage : null);
     conversation.current = r.conversation;

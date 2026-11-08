@@ -68,12 +68,13 @@ export function sessionMutationError(error: unknown): string | null {
     ? 'Please refresh the page and try again.' : null;
 }
 
-export async function postSessionMutation<T>(path: string, body: object, assertAdmission?: (headers: SessionHeaders) => void, refresh?: SessionRefreshAdapter): Promise<T> {
+export async function postSessionMutation<T>(path: string, body: object, assertAdmission?: (headers: SessionHeaders) => void, refresh?: SessionRefreshAdapter, onDispatch?: () => void): Promise<T> {
   const owner = authSessionOwner();
   // Recovery admission and evidence must never rotate implicitly or replay.
   const headers = await sessionHeaders(!path.includes('/recovery/'), assertAdmission, refresh);
   assertAuthSessionOwner(owner);
   assertAdmission?.(headers);
+  onDispatch?.();
   const { data } = await client.post<T>(path, body, { headers, ...(path.includes('/recovery/') ? { timeout: 15000 } : {}) });
   assertAuthSessionOwner(owner);
   return data;
