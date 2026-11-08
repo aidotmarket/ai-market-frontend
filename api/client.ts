@@ -14,6 +14,38 @@ export const api = axios.create({
 });
 
 let refreshFlight: { owner: number; promise: Promise<string> } | null = null;
+let recoveryRefresh: object | null = null;
+
+// Acquire before start admission. An existing flight may already have retried;
+// neither joining it nor waiting for it can grant a single-attempt permission.
+export function reserveRecoveryRefresh(assertCurrent: () => void) {
+  assertCurrent();
+  if (refreshFlight || recoveryRefresh) throw new Error('Session refresh already in progress');
+  const lease = {}, owner = authSessionOwner(), principal = useAuthStore.getState().user?.id;
+  recoveryRefresh = lease;
+  let consumed = false;
+  let pending = false, releaseRequested = false;
+  return {
+    refresh: async () => {
+      assertCurrent(); assertAuthSessionOwner(owner);
+      if (recoveryRefresh !== lease || consumed || refreshFlight || !principal || useAuthStore.getState().user?.id !== principal)
+        throw new Error('Recovery refresh superseded');
+      consumed = true;
+      pending = true;
+      const promise = refreshAccessTokenRequest(owner, assertCurrent).finally(() => {
+        if (refreshFlight?.promise === promise) refreshFlight = null;
+        pending = false;
+        if (releaseRequested && recoveryRefresh === lease) recoveryRefresh = null;
+      });
+      refreshFlight = { owner, promise };
+      const token = await promise;
+      assertAuthSessionOwner(owner);
+      if (useAuthStore.getState().user?.id !== principal) throw new Error('Recovery owner changed');
+      return token;
+    },
+    release: () => { releaseRequested = true; if (!pending && recoveryRefresh === lease) recoveryRefresh = null; },
+  };
+}
 
 type OwnedRequest = InternalAxiosRequestConfig & { _authOwner?: number; _retry?: boolean };
 
@@ -78,6 +110,8 @@ function isRefreshErrorStatus(error: unknown, statuses: readonly number[]): bool
 
 function redirectToLogin(): void {
   if (typeof window !== 'undefined' && window.location.pathname !== '/login') {
+    // Private mailbox consumption never starts a second sign-in flow.
+    if (window.location.pathname.replace(/\/$/, '') === '/support/mailbox-account') return;
     // Confirmation owns API admission: a flag-off 404 must stay inert, and an
     // enabled request offers login with its validated continuation intact.
     const path = window.location.pathname + window.location.search + window.location.hash;
@@ -99,20 +133,24 @@ function clearAuthState(): number {
   return owner;
 }
 
-async function refreshAccessTokenRequest(owner: number): Promise<string> {
+async function refreshAccessTokenRequest(owner: number, admission?: () => void): Promise<string> {
   assertAuthSessionOwner(owner);
+  admission?.();
   const response = await axios.post<{ access_token: string }>(
     `${API_URL}/api/v1/auth/refresh`,
     {},
     {
       headers: { 'Content-Type': 'application/json' },
       withCredentials: true,
+      ...(admission ? { timeout: 15000 } : {}),
     }
   );
 
   const { access_token } = response.data;
 
   assertAuthSessionOwner(owner);
+  admission?.();
+  if (typeof access_token !== 'string' || !access_token) throw new Error('Invalid session refresh');
   useAuthStore.setState({
     token: access_token,
   });
@@ -135,6 +173,7 @@ async function refreshAccessTokenWithRetry(owner: number): Promise<string> {
 }
 
 export function refreshAccessToken(): Promise<string> {
+  if (recoveryRefresh) return Promise.reject(new Error('Scoped session recovery in progress'));
   const owner = authSessionOwner();
   if (refreshFlight?.owner === owner) return refreshFlight.promise;
 
@@ -180,6 +219,8 @@ api.interceptors.response.use(
     // a refusal must stay at the form rather than refresh auth or redirect.
     if (
       error.response.status === 401 &&
+      !recoveryRefresh &&
+      !originalRequest.url?.includes('/recovery/') &&
       !originalRequest._retry &&
       !originalRequest.url?.includes('/auth/refresh') &&
       originalRequest.url !== '/auth/logout' &&

@@ -1,0 +1,22 @@
+import { beforeEach, afterEach, expect, vi } from 'vitest';
+import http from 'node:http';
+import https from 'node:https';
+import net from 'node:net';
+import tls from 'node:tls';
+import dgram from 'node:dgram';
+let attempts: string[] = [];
+beforeEach(() => {
+  attempts = [];
+  const deny = (name: string) => (..._args: unknown[]): never => { attempts.push(name); throw new Error(`Forbidden network: ${name}`); };
+  vi.stubGlobal('fetch', deny('fetch'));
+  vi.spyOn(http, 'request').mockImplementation(deny('http.request'));
+  vi.spyOn(http, 'get').mockImplementation(deny('http.get'));
+  vi.spyOn(https, 'request').mockImplementation(deny('https.request'));
+  vi.spyOn(https, 'get').mockImplementation(deny('https.get'));
+  vi.spyOn(net.Socket.prototype, 'connect').mockImplementation(deny('TCP'));
+  vi.spyOn(net.Server.prototype, 'listen').mockImplementation(deny('server.listen'));
+  vi.spyOn(tls, 'connect').mockImplementation(deny('TLS'));
+  vi.spyOn(dgram, 'createSocket').mockImplementation(deny('UDP'));
+  if (typeof XMLHttpRequest !== 'undefined') vi.spyOn(XMLHttpRequest.prototype, 'send').mockImplementation(deny('XHR'));
+});
+afterEach(() => { expect(attempts, 'Zero actual network attempts').toEqual([]); vi.restoreAllMocks(); vi.unstubAllGlobals(); });

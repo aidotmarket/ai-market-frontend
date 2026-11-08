@@ -1,4 +1,5 @@
 import type { NextConfig } from 'next';
+import { supportRecoveryRewrites } from './lib/support-private-policy';
 
 const nextConfig: NextConfig = {
   // Next substitutes a build-time literal, independent of runtime metadata.
@@ -16,6 +17,11 @@ const nextConfig: NextConfig = {
       { key: 'Content-Security-Policy', value: "frame-ancestors 'none'" },
     ];
     return [
+      // Backend HTML retains its own nonce CSP and Set-Cookie headers.
+      ...['/support/mailbox-account', '/api/v1/support/mailbox-confirm/:path*', '/api/v1/support/email-visit/:path*'].map(source => ({ source, headers: [
+        { key: 'Cache-Control', value: 'private, no-store' },
+        { key: 'Referrer-Policy', value: 'no-referrer' },
+      ] })),
       ...['/confirm/:path*', '/checkout/h/:path*'].map(source => ({ source, headers: privateHeaders })),
       // Login and other auth pages can carry the private link in redirect.
       { source: '/:path*', has: [{ type: 'query' as const, key: 'redirect', value: '.*(?:/checkout/h/|/confirm/).*' }], headers: privateHeaders },
@@ -25,7 +31,7 @@ const nextConfig: NextConfig = {
     return [
       // Auth callbacks use apex; redirect before origin-scoped OAuth state is created.
       {
-        source: '/:path*',
+        source: '/:path((?!support/mailbox-account(?:/|$)|api/v1/support/(?:mailbox-confirm|email-visit)(?:/|$)).*)',
         has: [{ type: 'host', value: 'www\\.ai\\.market' }],
         destination: 'https://ai.market/:path*',
         permanent: true,
@@ -62,6 +68,7 @@ const nextConfig: NextConfig = {
       ];
     }
     return [
+      ...supportRecoveryRewrites(apiUrl),
       { source: '/licenses/:path*', has:[{type:'query' as const,key:'download',value:'1'}], destination: `${apiUrl}/api/v1/licenses/:path*` },
       { source: '/llms.txt', destination: `${apiUrl}/llms.txt` },
       { source: '/requests.txt', destination: `${apiUrl}/requests.txt` },

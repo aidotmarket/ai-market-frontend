@@ -200,6 +200,18 @@ describe('refreshAccessToken', () => {
     expect(window.location.href).toBe('/login');
   });
 
+
+  it.each(['/support/mailbox-account','/support/mailbox-account/','/dashboard'])('observes actual terminal-refresh redirect assignments on %s', async pathname => {
+    const terminalError=makeResponseError(401);
+    vi.spyOn(axios,'post').mockRejectedValueOnce(terminalError);
+    const assign=vi.fn();
+    vi.stubGlobal('window',{location:{pathname,search:'',hash:'',set href(value:string){assign(value);}}});
+    const {refreshAccessToken}=await import('./client');
+    await expect(refreshAccessToken()).rejects.toBe(terminalError);
+    expect(setAuthState).toHaveBeenCalledOnce();
+    if(pathname==='/dashboard')expect(assign).toHaveBeenCalledExactlyOnceWith('/login');
+    else expect(assign).not.toHaveBeenCalled();
+  });
   it('clears auth without redirecting an anonymous visitor after a terminal 401', async () => {
     isAuthenticated = false;
     const terminalError = makeResponseError(401);
