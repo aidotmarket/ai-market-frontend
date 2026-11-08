@@ -15,7 +15,7 @@ export const viewTargetKey = (target: ViewReportTarget) => target.view === 'wall
   : target.view === 'request_thread' ? target.request_id + ':' + target.response_id : target.support_ref;
 
 interface ReportMemory {
-  description: string; reviewed: boolean; command: ViewReport | null; unknown: boolean; receipt: ViewReportReceipt | null;
+  description: string; reviewed: boolean; command: ViewReport | null; unknown: boolean; refused: boolean; receipt: ViewReportReceipt | null;
 }
 interface RetainedReport {
   owner: number; principal: string | undefined; id: string; report: ReportMemory; target: ViewReportTarget;
@@ -23,6 +23,7 @@ interface RetainedReport {
 }
 // Same-owner memory also survives a mounted request/wallet controller replacement.
 // It contains no executable recovery packet and never enters browser storage.
+const refusedMessage = 'The report was not accepted. Your text is retained. Continue with support for this issue.';
 const retainedReports: RetainedReport[] = [];
 let memoryIdentity = 0;
 const memoryListeners = new Set<() => void>();
@@ -63,13 +64,14 @@ export function useReportedView(failed: boolean, adapter: RecoveryAdapter): { bi
   } | null>(null);
   const [open, setOpen] = useState(false), [description, setDescription] = useState(''), [reviewed, setReviewed] = useState(false);
   const [busy, setBusy] = useState(false), [unknown, setUnknown] = useState(false), [error, setError] = useState<string | null>(null);
+  const [refused, setRefused] = useState(false);
   const [receipt, setReceipt] = useState<ViewReportReceipt | null>(null);
   const [binding, setBinding] = useState<RecoveryBinding | null>(null);
   const command = useRef<ViewReport | null>(null);
   const flight = useRef(false);
   const live = useRef(true);
-  const reportState = useRef({ description, reviewed, command: command.current, unknown, receipt });
-  reportState.current = { description, reviewed, command: command.current, unknown, receipt };
+  const reportState = useRef({ description, reviewed, command: command.current, unknown, refused, receipt });
+  reportState.current = { description, reviewed, command: command.current, unknown, refused, receipt };
   const retained = useRef(retainedReports);
   const retention = useRef({ visit, open }); retention.current = { visit, open };
   const retainVisit = () => {
@@ -77,7 +79,7 @@ export function useReportedView(failed: boolean, adapter: RecoveryAdapter): { bi
     if (!v || v.identity !== memoryIdentity || v.principal !== useAuthStore.getState().user?.id || !isAuthSessionOwner(v.owner) || !(retention.current.open || command.current || reportState.current.receipt)) return;
     if (retained.current.some(r => r.owner === v.owner && r.id === v.id)) return;
     retained.current.push({ owner: v.owner, principal: v.principal, id: v.id,
-      report: { ...reportState.current, command: command.current, unknown: reportState.current.unknown || (!!command.current && !reportState.current.receipt) },
+      report: { ...reportState.current, command: command.current, unknown: reportState.current.unknown || (!!command.current && !reportState.current.receipt && !reportState.current.refused) },
       target: v.target, failure: v.failure, conversation: conversation.current });
   };
   useEffect(() => { live.current = true; return () => { retainVisit(); live.current = false; }; }, []);
@@ -100,7 +102,7 @@ export function useReportedView(failed: boolean, adapter: RecoveryAdapter): { bi
       target: adapter.reportTarget, failure: adapter.failure ?? 'normal_read_failed', id: crypto.randomUUID(), selectionGeneration });
     conversation.current = null;
     setDescription('My ' + label + ' could not be displayed.'); setOpen(false); setReviewed(false);
-    setBusy(false); setUnknown(false); setReceipt(null); setBinding(null); setError(null); command.current = null; flight.current = false;
+    setBusy(false); setUnknown(false); setRefused(false); setReceipt(null); setBinding(null); setError(null); command.current = null; flight.current = false;
   }, [failed, scope, selectionGeneration, adapter.failure, identityRevision]); // The owning controller supplies scope and failure.
   useEffect(() => {
     if (!visit || !receipt || !valid(visit)) return;
@@ -116,17 +118,27 @@ export function useReportedView(failed: boolean, adapter: RecoveryAdapter): { bi
   }, [visit, receipt]);
   if (!visit || !valid(visit)) return { binding: null, control: null };
   const send = async () => {
-    if (!valid(visit) || flight.current || receipt || !reviewed || !description.trim()) return;
+    if (!valid(visit) || flight.current || receipt || refused || !reviewed || !description.trim()) return;
     flight.current = true;
     command.current ??= Object.freeze({ ...visit.target, report_id: visit.id, failure: visit.failure, description });
     const submitted = command.current;
     const assert = () => { if (!valid(visit) || command.current !== submitted) throw new Error('Report visit changed'); };
     setBusy(true); setError(null);
     try {
-      const result = await reportView(submitted, assert); assert();
+      const result = await reportView(submitted, assert, latest.current.prepareRefresh && latest.current.acceptRefresh && latest.current.finish ? {
+        prepareRefresh: () => latest.current.prepareRefresh!(),
+        acceptRefresh: token => latest.current.acceptRefresh!(token),
+        finish: () => latest.current.finish!(),
+      } : undefined); assert();
       setReceipt(result); setUnknown(false);
       conversation.current = OrderIssueSession.conversation(result, support);
-    } catch { if (valid(visit)) { setUnknown(true); setError('The report result is unknown. Your text and report identity are retained. You can retry this same report.'); } }
+    } catch (error) { if (valid(visit)) {
+      const status = (error as { response?: { status?: number } })?.response?.status;
+      const refused = status !== undefined && status >= 400 && status < 500 && status !== 408 && status !== 429;
+      setRefused(refused); setUnknown(!refused);
+      setError(refused ? refusedMessage
+        : 'The report result is unknown. Your text and report identity are retained. You can retry this same report.');
+    } }
     finally { if (valid(visit)) { flight.current = false; setBusy(false); } }
   };
   const resumeReport = (r: typeof retained.current[number]) => {
@@ -139,13 +151,14 @@ export function useReportedView(failed: boolean, adapter: RecoveryAdapter): { bi
       retained.current.push({ owner: visit.owner, principal: visit.principal, id: visit.id, report: { ...reportState.current }, target: visit.target, failure: visit.failure, conversation: conversation.current });
     setVisit({ ...visit, serial: ++serial.current, target: r.target, failure: r.failure, id: r.id });
     command.current = r.report.command;
-    setDescription(r.report.description); setReviewed(r.report.reviewed); setUnknown(r.report.unknown);
-    setReceipt(r.report.receipt); setBinding(null); setOpen(true); setError(null);
+    setDescription(r.report.description); setReviewed(r.report.reviewed); setUnknown(r.report.unknown); setRefused(r.report.refused);
+    setReceipt(r.report.receipt); setBinding(null); setOpen(true); setError(r.report.refused ? refusedMessage : null);
     conversation.current = r.conversation;
   };
   const control = <section aria-label="Report this view issue">
     {retained.current.filter(r => isAuthSessionOwner(r.owner) && r.principal === useAuthStore.getState().user?.id).map((r, i) => <details key={i}><summary>Earlier report retained for its original selection</summary>
       <p>{r.report.description}</p>{r.report.receipt && <p>Report {r.report.receipt.public_ref}</p>}
+      {r.report.refused && <p>{refusedMessage}</p>}
       {r.report.unknown && <p>Its result remains unknown. No command has been replayed.</p>}
       {viewTargetKey(r.target) === scope && <button onClick={() => resumeReport(r)}>Reconcile this earlier report</button>}</details>)}
     {failed && !open && !receipt && <button type="button" onClick={() => setOpen(true)}>Report Issue</button>}
@@ -155,7 +168,7 @@ export function useReportedView(failed: boolean, adapter: RecoveryAdapter): { bi
         onChange={e => { setDescription(e.target.value); setReviewed(false); }} /></label>
       <label><input type="checkbox" checked={reviewed} disabled={busy || !!command.current}
         onChange={e => setReviewed(e.target.checked)} />I have reviewed this report and want to send it.</label>
-      <button type="button" disabled={busy || !reviewed || !description.trim()} onClick={() => void send()}>{unknown ? 'Retry same report' : 'Confirm and send report'}</button>
+      <button type="button" disabled={busy || refused || !reviewed || !description.trim()} onClick={() => void send()}>{unknown ? 'Retry same report' : 'Confirm and send report'}</button>
       {error && <p role="alert">{error}</p>}
     </>}
     {receipt && <div role="status"><p>{receipt.acknowledgement.body}</p><p>Report {receipt.public_ref}. Important email is pending.</p>

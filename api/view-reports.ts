@@ -1,4 +1,4 @@
-import { postSessionMutation } from './session-mutation';
+import { postSessionMutation, type SessionRefreshAdapter } from './session-mutation';
 import { customerConversation, type CustomerMessage } from './support';
 import { recoveryUUID, recoveryRecord, type RecoveryContext } from './support-recovery';
 
@@ -25,9 +25,9 @@ export function viewReportReceipt(value: unknown, report: ViewReport): ViewRepor
   // Keep the exact immutable receipt; do not substitute a later ticket projection.
   return r as unknown as ViewReportReceipt;
 }
-export async function reportView(report: ViewReport, assertCurrent: () => void): Promise<ViewReportReceipt> {
+export async function reportView(report: ViewReport, assertCurrent: () => void, refresh?: SessionRefreshAdapter): Promise<ViewReportReceipt> {
   assertCurrent();
-  const value = await postSessionMutation('/support/view-reports', report, assertCurrent);
+  const value = await postSessionMutation('/support/view-reports', report, assertCurrent, refresh);
   assertCurrent();
   return viewReportReceipt(value, report);
 }

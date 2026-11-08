@@ -586,3 +586,208 @@ it('principal A to B to A without a generation signal fences a delayed private r
   expect(calls('/recovery/context')).toHaveLength(0);
   expect(calls('/support/view-reports')).toHaveLength(1);
 });
+
+// Regression controls for ordinary report preflight, independently of recovery admission.
+it.each([3600, 30, -30].flatMap(seconds => [false, true].map(uncertain => ({ seconds, uncertain }))))('report preflight with $seconds seconds and uncertainty=$uncertain preserves selected wallet work', async ({ seconds, uncertain }) => {
+  const expiring = 'synthetic.' + btoa(JSON.stringify({ exp: Math.floor(Date.now() / 1000) + seconds })) + '.original';
+  useAuthStore.setState({ token: expiring });
+  const real = net.adapter.getMockImplementation()!;
+  net.adapter.mockImplementation(async (c: InternalAxiosRequestConfig) => {
+    if (c.url?.endsWith('/wallet/transactions')) {
+      if (c.params.offset === 40) fail(c);
+      return response(c, { ...transactions, has_more: true, total: 41 });
+    }
+    return real(c);
+  });
+  kind = 'wallet'; mode = 'waiting'; render(<WalletFunding />);
+  await screen.findByText('USD 12.34');
+  fireEvent.change(screen.getByLabelText('Amount (USD)'), { target: { value: '25.00' } });
+  if (uncertain) {
+    fireEvent.click(screen.getByRole('button', { name: 'Continue to checkout' }));
+    await screen.findByText(/We couldn't confirm whether checkout was created/);
+  }
+  const payments = calls('/wallet/topup').map(c => c.data);
+  fireEvent.click(screen.getByRole('button', { name: 'Next' }));
+  await screen.findByText(/Page 2/);
+  fireEvent.click(screen.getByRole('button', { name: 'Next' }));
+  await reportFailure();
+  expect((screen.getByLabelText('Amount (USD)') as HTMLInputElement).value).toBe('25.00');
+  expect(screen.getByText(/Page 2/)).toBeTruthy();
+  expect(viewReport.wallet_offset).toBe(40);
+  expect(calls('/auth/refresh')).toHaveLength(seconds === 3600 ? 0 : 1);
+  expect(calls('/auth/me').filter(c => c.headers.get('Authorization') === `Bearer ${rotated}`)).toHaveLength(seconds === 3600 ? 0 : 1);
+  expect(calls('/wallet/topup').map(c => c.data)).toEqual(payments);
+  if (uncertain) expect(screen.getByText(/We couldn't confirm whether checkout was created/)).toBeTruthy();
+  expect((screen.getByRole('button', { name: 'Continue to checkout' }) as HTMLButtonElement).disabled).toBe(uncertain);
+  expect(screen.queryByText('Earlier report retained for its original selection')).toBeNull();
+});
+it.each([403, 409, 422, 401, 400])('definitive report refusal %s has accurate copy and no unknown retry', async status => {
+  const real = net.adapter.getMockImplementation()!;
+  net.adapter.mockImplementation(async (c: InternalAxiosRequestConfig) => {
+    if (c.url?.endsWith('/support/view-reports')) fail(c, status);
+    return real(c);
+  });
+  kind = 'wallet'; mode = 'waiting'; render(<WalletFunding />);
+  fireEvent.click(await screen.findByRole('button', { name: 'Report Issue' }));
+  fireEvent.click(screen.getByLabelText('I have reviewed this report and want to send it.'));
+  fireEvent.click(screen.getByRole('button', { name: 'Confirm and send report' }));
+  await screen.findByText(/report was not accepted/i);
+  expect(screen.queryByRole('button', { name: 'Retry same report' })).toBeNull();
+  expect(screen.queryByText(/report result is unknown/i)).toBeNull();
+  expect(calls('/support/view-reports')).toHaveLength(1);
+});
+it.each([0, 408, 429, 500, 503])('uncertain report outcome %s retains exact command until explicit reconciliation', async status => {
+  const real = net.adapter.getMockImplementation()!;
+  net.adapter.mockImplementation(async (c: InternalAxiosRequestConfig) => {
+    if (c.url?.endsWith('/support/view-reports') && calls('/support/view-reports').length === 1) {
+      if (status) fail(c, status);
+      throw new Error('synthetic network loss');
+    }
+    return real(c);
+  });
+  kind = 'wallet'; mode = 'waiting'; render(<WalletFunding />);
+  fireEvent.click(await screen.findByRole('button', { name: 'Report Issue' }));
+  fireEvent.click(screen.getByLabelText('I have reviewed this report and want to send it.'));
+  fireEvent.click(screen.getByRole('button', { name: 'Confirm and send report' }));
+  await screen.findByText(/report result is unknown/i);
+  const exact = calls('/support/view-reports')[0].data;
+  expect(calls('/support/view-reports')).toHaveLength(1);
+  fireEvent.click(screen.getByRole('button', { name: 'Retry same report' }));
+  await screen.findByText('Your view report is saved with support.');
+  expect(calls('/support/view-reports').map(c => c.data)).toEqual([exact, exact]);
+  expect(calls('/wallet/topup')).toHaveLength(0);
+});
+
+it.each(['foreign', 'invalid', 'ownerABA', 'principalABA', 'verifyLoss'])('report preflight rejects %s refresh before dispatch and never replays payment', async fault => {
+  useAuthStore.setState({ token: 'synthetic.' + btoa(JSON.stringify({ exp: 1 })) + '.expired' });
+  const real = net.adapter.getMockImplementation()!;
+  let release!: () => void, reached = false;
+  const held = new Promise<void>(resolve => { release = resolve; });
+  net.adapter.mockImplementation(async (c: InternalAxiosRequestConfig) => {
+    if (c.url?.endsWith('/auth/refresh')) {
+      reached = true; await held;
+      if (fault === 'invalid') return response(c, { access_token: '' });
+    }
+    if (c.url?.endsWith('/auth/me') && c.headers.get('Authorization') === `Bearer ${rotated}`) {
+      if (fault === 'foreign') return response(c, { id: 'foreign', status: 'active' });
+      if (fault === 'verifyLoss') throw new Error('lost owner verification');
+    }
+    return real(c);
+  });
+  kind = 'wallet'; mode = 'waiting'; render(<WalletFunding />);
+  await screen.findByText('USD 12.34');
+  fireEvent.change(screen.getByLabelText('Amount (USD)'), { target: { value: '25.00' } });
+  fireEvent.click(screen.getByRole('button', { name: 'Continue to checkout' }));
+  await screen.findByText(/We couldn't confirm whether checkout was created/);
+  fireEvent.click(await screen.findByRole('button', { name: 'Report Issue' }));
+  fireEvent.click(screen.getByLabelText('I have reviewed this report and want to send it.'));
+  fireEvent.click(screen.getByRole('button', { name: 'Confirm and send report' }));
+  await waitFor(() => expect(reached).toBe(true));
+  await act(async () => {
+    if (fault === 'ownerABA') { advanceAuthSessionOwner(); advanceAuthSessionOwner(); }
+    if (fault === 'principalABA') {
+      useAuthStore.setState({ user: { id: 'foreign' } as User });
+      useAuthStore.setState({ user: { id: owner } as User });
+    }
+    release(); await held;
+  });
+  await waitFor(() => expect(calls('/auth/refresh')).toHaveLength(1));
+  // Flush the verifier and admission continuation, including synchronous store reconciliation.
+  await act(async () => {});
+  expect(calls('/support/view-reports')).toHaveLength(0);
+  expect(calls('/wallet/topup')).toHaveLength(1);
+  if (fault === 'foreign' || fault === 'verifyLoss') {
+    expect(screen.queryByLabelText('Amount (USD)')).toBeNull();
+    expect(screen.getByText(/Wallet blocked/)).toBeTruthy();
+  }
+  if (fault === 'principalABA') expect((screen.getByLabelText('Amount (USD)') as HTMLInputElement).value).toBe('');
+});
+it('an uncertain report and payment survive another same-owner preflight with byte-identical explicit report retry', async () => {
+  const near = 'synthetic.' + btoa(JSON.stringify({ exp: Math.floor(Date.now() / 1000) + 30 })) + '.near';
+  useAuthStore.setState({ token: near });
+  const real = net.adapter.getMockImplementation()!;
+  net.adapter.mockImplementation(async (c: InternalAxiosRequestConfig) => {
+    if (c.url?.endsWith('/wallet/transactions')) {
+      if (c.params.offset === 40) fail(c);
+      return response(c, { ...transactions, has_more: true, total: 61 });
+    }
+    if (c.url?.endsWith('/auth/refresh')) return response(c, { access_token: calls('/auth/refresh').length === 1 ? near + '-rotated' : rotated });
+    if (c.url?.endsWith('/support/view-reports') && calls('/support/view-reports').length === 1) throw new Error('lost report');
+    return real(c);
+  });
+  kind = 'wallet'; mode = 'waiting'; render(<WalletFunding />);
+  await screen.findByText('USD 12.34');
+  fireEvent.change(screen.getByLabelText('Amount (USD)'), { target: { value: '25.00' } });
+  fireEvent.click(screen.getByRole('button', { name: 'Continue to checkout' }));
+  await screen.findByText(/We couldn't confirm whether checkout was created/);
+  fireEvent.click(screen.getByRole('button', { name: 'Next' }));
+  await screen.findByText(/Page 2/);
+  fireEvent.click(screen.getByRole('button', { name: 'Next' }));
+  fireEvent.click(await screen.findByRole('button', { name: 'Report Issue' }));
+  fireEvent.click(screen.getByLabelText('I have reviewed this report and want to send it.'));
+  fireEvent.click(screen.getByRole('button', { name: 'Confirm and send report' }));
+  await screen.findByText(/report result is unknown/i);
+  const exact = calls('/support/view-reports')[0].data;
+  expect(calls('/support/view-reports')).toHaveLength(1);
+  fireEvent.click(screen.getByRole('button', { name: 'Refresh' }));
+  await screen.findByText(/Page 1/);
+  fireEvent.click(screen.getByRole('button', { name: 'Next' }));
+  await screen.findByText(/Page 2/);
+  fireEvent.click(screen.getByRole('button', { name: 'Next' }));
+  await waitFor(() => expect(calls('/wallet/transactions').filter(c => c.params.offset === 40)).toHaveLength(2));
+  fireEvent.click(await screen.findByRole('button', { name: 'Reconcile this earlier report', hidden: true }));
+  fireEvent.click(screen.getByRole('button', { name: 'Retry same report' }));
+  await screen.findByText('Your view report is saved with support.');
+  expect(calls('/auth/refresh')).toHaveLength(2);
+  expect(viewReport.wallet_offset).toBe(40);
+  expect(screen.getByText(/Page 2/)).toBeTruthy();
+  expect(calls('/support/view-reports').map(c => c.data)).toEqual([exact, exact]);
+  expect((screen.getByLabelText('Amount (USD)') as HTMLInputElement).value).toBe('25.00');
+  expect(calls('/wallet/topup')).toHaveLength(1);
+  expect(screen.getByText(/We couldn't confirm whether checkout was created/)).toBeTruthy();
+});
+
+it('a retained definitive refusal stays refused after wallet controller replacement', async () => {
+  const real = net.adapter.getMockImplementation()!;
+  net.adapter.mockImplementation(async (c: InternalAxiosRequestConfig) => {
+    if (c.url?.endsWith('/support/view-reports')) fail(c, 403);
+    return real(c);
+  });
+  kind = 'wallet'; mode = 'waiting'; const ui = render(<WalletFunding />);
+  fireEvent.click(await screen.findByRole('button', { name: 'Report Issue' }));
+  fireEvent.click(screen.getByLabelText('I have reviewed this report and want to send it.'));
+  fireEvent.click(screen.getByRole('button', { name: 'Confirm and send report' }));
+  await screen.findByText(/report was not accepted/i);
+  ui.unmount(); render(<WalletFunding />);
+  await screen.findByText('Transaction history could not be loaded.');
+  fireEvent.click(await screen.findByRole('button', { name: 'Reconcile this earlier report', hidden: true }));
+  expect(screen.getByText(/report was not accepted/i)).toBeTruthy();
+  expect(screen.queryByRole('button', { name: 'Retry same report' })).toBeNull();
+  expect((screen.getByRole('button', { name: 'Confirm and send report' }) as HTMLButtonElement).disabled).toBe(true);
+  expect(calls('/support/view-reports')).toHaveLength(1);
+});
+
+it('a checkout still pending when report preflight rotates cannot install a late handoff or replay payment', async () => {
+  useAuthStore.setState({ token: 'synthetic.' + btoa(JSON.stringify({ exp: 1 })) + '.expired' });
+  const real = net.adapter.getMockImplementation()!;
+  let release!: () => void;
+  const held = new Promise<void>(resolve => { release = resolve; });
+  net.adapter.mockImplementation(async (c: InternalAxiosRequestConfig) => {
+    if (c.url?.endsWith('/wallet/topup')) {
+      await held;
+      return response(c, { session_id: 'synthetic-checkout', amount_cents: 2500, checkout_url: 'https://checkout.stripe.com/synthetic-only' });
+    }
+    return real(c);
+  });
+  kind = 'wallet'; mode = 'waiting'; render(<WalletFunding />);
+  await screen.findByText('USD 12.34');
+  fireEvent.change(screen.getByLabelText('Amount (USD)'), { target: { value: '25.00' } });
+  fireEvent.click(screen.getByRole('button', { name: 'Continue to checkout' }));
+  await screen.findByText('Creating checkout…');
+  await reportFailure();
+  await act(async () => { release(); await held; });
+  expect(screen.getByText(/We couldn't confirm whether checkout was created/)).toBeTruthy();
+  expect(screen.queryByText('Continuing to checkout…')).toBeNull();
+  expect(calls('/wallet/topup')).toHaveLength(1);
+  expect((screen.getByLabelText('Amount (USD)') as HTMLInputElement).value).toBe('25.00');
+});

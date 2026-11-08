@@ -188,6 +188,10 @@ export default function WalletFunding() {
         if (!association || historyBusy || balanceBusy || scopedRefresh) throw new Error('Wallet read changed');
         scopedRefresh = association;
         if (!current(association)) { scopedRefresh = undefined; throw new Error('Wallet read changed'); }
+        if (attempt.current === 'pending' || attempt.current === 'handoff') {
+          mutationGeneration++;
+          attempt.current = 'unknown'; setAttemptUI('unknown');
+        }
       },
       acceptRefresh: async token => {
         const a = scopedRefresh;
@@ -198,7 +202,15 @@ export default function WalletFunding() {
         a.token = token; lastToken = token;
         setView(v => ({ ...v, association: a }));
       },
-      finish: () => { scopedRefresh = undefined; },
+      finish: () => {
+        const a = scopedRefresh;
+        scopedRefresh = undefined;
+        // A failed verifier must retire the temporary exception, never keep
+        // local work associated with an unverified rotated credential.
+        const s = useAuthStore.getState();
+        if (a && association === a && (s.token !== a.token || s.user?.id !== a.owner || !admitted(s)
+          || !isAuthSessionOwner(recoveryOwner.current))) revoke(blocked);
+      },
       install: raw => {
         const a = association;
         if (!a || !current(a) || historyBusy || balanceBusy || !raw || typeof raw !== 'object' || Array.isArray(raw)) throw new Error('Wallet read changed');
