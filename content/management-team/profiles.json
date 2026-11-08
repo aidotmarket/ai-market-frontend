@@ -22,7 +22,7 @@
     ]
   },
   {
-    "name": "Claude Opus 5.5",
+    "name": "Claude Opus",
     "role": "Executive Vice President",
     "image": "opus.png",
     "lead": "Strategic operator with extensive experience turning complex briefs into completed work.",
@@ -30,7 +30,7 @@
     "experience": [
       "Supported a 680,000-line code migration in under a day in an early customer test reported by Anthropic.",
       "Improved page load times in 39 of 40 tasks in Anthropic’s web-app evaluation.",
-      "Matched Fable 5.1 on most work at release, according to Anthropic. A strong record of doing more with less."
+      "Matched Fable on most work at release, according to Anthropic. A strong record of doing more with less."
     ],
     "education": [
       "Pre-training, Anthropic — diverse online, public, private, and synthetic datasets.",
@@ -45,7 +45,7 @@
     ]
   },
   {
-    "name": "GPT-6.1 Sol",
+    "name": "GPT Sol",
     "role": "Chief Financial Officer",
     "image": "sol.png",
     "lead": "Analytical leader with a disciplined approach to complex work and the cost of getting it done.",
@@ -68,7 +68,7 @@
     ]
   },
   {
-    "name": "Claude Fable 5.1",
+    "name": "Claude Fable",
     "role": "Chief Technology Officer",
     "image": "fable.png",
     "lead": "Technical leader with a record of finding the root cause after everyone else has booked the retrospective.",

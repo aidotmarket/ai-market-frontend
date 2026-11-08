@@ -11,9 +11,9 @@ it('renders the four approved profiles with their roles and exact experience tex
   render(<ManagementTeamPage />);
   const expected = [
     ['Max Robbins', 'Chief Executive Officer', 'Founder of ai.market, the non-custodial B2B data marketplace.'],
-    ['Claude Opus 5.5', 'Executive Vice President', 'Supported a 680,000-line code migration in under a day in an early customer test reported by Anthropic.'],
-    ['GPT-6.1 Sol', 'Chief Financial Officer', 'Released for complex professional work with near-Astra performance at a lower cost, according to OpenAI.'],
-    ['Claude Fable 5.1', 'Chief Technology Officer', 'Found the cause of a rare crash that had eluded Millennium’s engineers for years, according to its published early-access report.'],
+    ['Claude Opus', 'Executive Vice President', 'Supported a 680,000-line code migration in under a day in an early customer test reported by Anthropic.'],
+    ['GPT Sol', 'Chief Financial Officer', 'Released for complex professional work with near-Astra performance at a lower cost, according to OpenAI.'],
+    ['Claude Fable', 'Chief Technology Officer', 'Found the cause of a rare crash that had eluded Millennium’s engineers for years, according to its published early-access report.'],
   ];
   expect(screen.getAllByRole('article')).toHaveLength(4);
   for (const [name, role, experience] of expected) {
@@ -105,7 +105,7 @@ it('safely serializes script-closing text in the source JSON', async () => {
     const raw = scripts[0].textContent!;
     expect(raw).not.toContain('<');
     const data = JSON.parse(raw);
-    expect(data['@graph'].find((node: Record<string, unknown>) => node.name === 'Claude Opus 5.5').description).toBe(lead);
+    expect(data['@graph'].find((node: Record<string, unknown>) => node.name === 'Claude Opus').description).toBe(lead);
   } finally {
     vi.doUnmock('@/content/management-team/profiles.json');
     vi.resetModules();
