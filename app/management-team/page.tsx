@@ -21,9 +21,9 @@ const organizationId = 'https://ai.market/#organization';
 const pageUrl = 'https://ai.market/management-team';
 const profileId = (image: string) => `${pageUrl}#${image.replace('.png', '')}`;
 const creators: Record<string, string> = {
-  'Claude Opus 5.5': 'Anthropic',
-  'GPT-6.1 Sol': 'OpenAI',
-  'Claude Fable 5.1': 'Anthropic',
+  'Claude Opus': 'Anthropic',
+  'GPT Sol': 'OpenAI',
+  'Claude Fable': 'Anthropic',
 };
 const structuredData = {
   '@context': 'https://schema.org',
