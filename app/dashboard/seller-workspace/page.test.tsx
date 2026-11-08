@@ -105,6 +105,48 @@ describe('SellerWorkspacePage safety boundaries', () => {
     vi.restoreAllMocks();
   });
 
+  it('defaults AWS to folder scope and hides whole bucket when capabilities omit it', async () => {
+    sellerWorkspaceApi.listSellerWorkspaceConnections.mockResolvedValue([pendingConnection]);
+    sellerWorkspaceApi.getSellerWorkspaceAuthorization.mockResolvedValue(authorization);
+    render(<SellerWorkspacePage />);
+    await openAwsSetup();
+    expect(screen.queryByRole('radio', {name: 'The whole bucket'})).toBeNull();
+    expect((screen.getByLabelText('Non-root prefix') as HTMLInputElement).required).toBe(true);
+  });
+
+  it('uses server consent and version for AWS and refuses whole bucket without confirmation', async () => {
+    const confirmation = {version: 'v7', text: 'Server AWS confirmation <verbatim> & unchanged.'};
+    sellerWorkspaceApi.getSellerWorkspaceCapabilities.mockResolvedValue({...enabledCapabilities, whole_bucket_confirmation: confirmation});
+    sellerWorkspaceApi.listSellerWorkspaceConnections.mockResolvedValue([pendingConnection]);
+    sellerWorkspaceApi.getSellerWorkspaceAuthorization.mockResolvedValue(authorization);
+    sellerWorkspaceApi.verifySellerWorkspaceConnection.mockResolvedValue({connection: {...pendingConnection, status: 'verified', scope: 'whole_bucket', bucket: 'seller-bucket', prefix: ''}});
+    render(<SellerWorkspacePage />);
+    await openAwsSetup();
+    expect((screen.getByRole('radio', {name: 'A folder in the bucket'}) as HTMLInputElement).checked).toBe(true);
+    fireEvent.change(screen.getByLabelText('Role ARN'), {target: {value: 'arn:aws:iam::123456789012:role/seller-data'}});
+    fireEvent.change(screen.getByLabelText('Bucket'), {target: {value: 'seller-bucket'}});
+    fireEvent.change(screen.getByLabelText('AWS region'), {target: {value: 'eu-west-1'}});
+    fireEvent.change(screen.getByLabelText('Non-root prefix'), {target: {value: 'stale-folder'}});
+    fireEvent.click(screen.getByRole('radio', {name: 'The whole bucket'}));
+    expect(screen.queryByLabelText('Non-root prefix')).toBeNull();
+    const checkbox = screen.getByRole('checkbox', {name: confirmation.text}) as HTMLInputElement;
+    expect(checkbox.required).toBe(true);
+    expect(checkbox.parentElement?.querySelector('span')?.textContent).toBe(confirmation.text);
+    const submit = screen.getByRole('button', {name: 'Verify AWS connection'}) as HTMLButtonElement;
+    expect(submit.disabled).toBe(true);
+    fireEvent.submit(submit.closest('form')!);
+    expect(sellerWorkspaceApi.verifySellerWorkspaceConnection).not.toHaveBeenCalled();
+    fireEvent.click(checkbox);
+    await verifyAwsConnection();
+    expect(sellerWorkspaceApi.verifySellerWorkspaceConnection).toHaveBeenCalledWith('connection-1', {
+      role_arn: 'arn:aws:iam::123456789012:role/seller-data', bucket: 'seller-bucket', region: 'eu-west-1',
+      prefix: '', scope: 'whole_bucket', whole_bucket_confirmed: true, confirmation_version: 'v7',
+    }, expect.any(String));
+    await screen.findByText('AWS S3 · Whole bucket');
+    expect(screen.queryByText('AWS S3 · Setup in progress')).toBeNull();
+    expect(screen.getByText('Connected scope').nextElementSibling?.textContent).toBe('Whole bucket');
+  });
+
   it('shows usable storage and one pending setup, with duplicate history in compact rows', async () => {
     const duplicates = ['seller-a', 'seller-b'].flatMap(name => Array.from({ length: 10 }, (_, index) => ({
       ...pendingConnection, id: `${name}-${index}`, status: 'revoked' as const,
@@ -418,6 +460,18 @@ describe('SellerWorkspacePage safety boundaries', () => {
     expect(screen.queryByRole('button', { name: 'Add AWS connection' })).toBeNull();
   });
 
+  it('shows setup in progress for an expired connection with no prefix', async () => {
+    sellerWorkspaceApi.listSellerWorkspaceConnections.mockResolvedValue([
+      { ...pendingConnection, status: 'expired', prefix: null, expired_at: '2026-08-31T00:00:00Z' },
+    ]);
+
+    render(<SellerWorkspacePage />);
+
+    fireEvent.click(await screen.findByRole('button', { name: 'Previous connections (1)' }));
+    const history = screen.getByRole('list', { name: 'Previous connections' });
+    expect(within(history).getByText('AWS S3 · Setup in progress')).toBeTruthy();
+  });
+
   it('keeps an expired pending connection terminal with no verification path', async () => {
     sellerWorkspaceApi.listSellerWorkspaceConnections.mockResolvedValue([
       {
@@ -473,6 +527,7 @@ describe('SellerWorkspacePage safety boundaries', () => {
         role_arn: 'arn:aws:iam::123456789012:role/seller-data',
         bucket: 'seller-bucket',
         prefix: 'bounded/data',
+        scope: 'prefix',
         region: 'eu-west-1',
       },
       'sw.verify-connection-1.00000000-0000-4000-8000-000000000000'
@@ -511,7 +566,7 @@ describe('SellerWorkspacePage safety boundaries', () => {
       });
       await verifyAwsConnection();
 
-      expect(await screen.findByText('Prefix must identify a bounded, non-root S3 location.')).not.toBeNull();
+      expect(await screen.findByText('Choose a valid folder in the bucket, or choose and confirm the whole bucket.')).not.toBeNull();
       expect(sellerWorkspaceApi.verifySellerWorkspaceConnection).not.toHaveBeenCalled();
     }
   );

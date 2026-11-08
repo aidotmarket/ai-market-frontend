@@ -20,8 +20,14 @@ const assign = vi.fn();
 
 beforeEach(() => {
   vi.resetAllMocks(); sessionStorage.clear();
+  const values = new Map<string, string>();
+  vi.stubGlobal('localStorage', {
+    getItem: (key: string) => values.get(key) ?? null,
+    setItem: (key: string, value: string) => { values.set(key, value); },
+    removeItem: (key: string) => { values.delete(key); },
+  });
   setConnectorStatus(true);
-  vi.stubGlobal('window', { document, location: { pathname: '/oauth/connect', search: `?request=${id}`, hash: '', assign } });
+  vi.stubGlobal('window', { document, sessionStorage: window.sessionStorage, location: { pathname: '/oauth/connect', search: `?request=${id}`, hash: '', assign } });
   vi.mocked(getConnectorStatus).mockResolvedValue(true);
   vi.mocked(getConnectorRequest).mockResolvedValue(metadata);
   vi.mocked(decideConnectorRequest).mockResolvedValue(`https://auth.ai.market/oauth/authorize/complete?request=${id}`);
@@ -116,38 +122,11 @@ it('shows an expired state for 410', async () => {
   expect(screen.queryByRole('button', { name: 'Approve' })).toBeNull();
 });
 
-it('offers sign-in and 2FA for insufficient assurance', async () => {
-  vi.mocked(getConnectorRequest).mockRejectedValue({ response: { status: 403, data: { code: 'insufficient_assurance' } } });
-  render(<ConnectorConsentPage />);
-  fireEvent.click(await screen.findByRole('button', { name: 'Sign in to continue' }));
-  expect(screen.getByRole('heading', { name: "Confirm it's you" })).toBeTruthy();
-  expect(screen.getByRole('status').textContent).toBe('Your account uses two-factor authentication. Before this app can work with your ai.market account, sign in again and enter your code. This makes sure only you can connect apps to your account.');
-  expect(screen.queryByRole('alert')).toBeNull();
-  expect(getConnectorRequest).toHaveBeenCalledExactlyOnceWith(id);
-  expect(navigation.push).toHaveBeenCalledWith(`/login?reauth=connector&redirect=${encodeURIComponent(path)}`);
-});
 
-it('offers sign-in for a recent login requirement', async () => {
-  vi.mocked(getConnectorRequest).mockRejectedValue({ response: { status: 403, data: { code: 'recent_login_required' } } });
-  render(<ConnectorConsentPage />);
-  fireEvent.click(await screen.findByRole('button', { name: 'Sign in to continue' }));
-  expect(screen.getByRole('heading', { name: "Confirm it's you" })).toBeTruthy();
-  expect(screen.getByRole('status').textContent).toBe('For your security, connecting an app needs a recent sign-in. Sign in again to continue; it only takes a moment.');
-  expect(screen.queryByRole('alert')).toBeNull();
-  expect(navigation.push).toHaveBeenCalledWith(`/login?reauth=connector&redirect=${encodeURIComponent(path)}`);
-});
 
-it('uses the client name as text when insufficient assurance follows loaded metadata', async () => {
-  vi.mocked(decideConnectorRequest).mockRejectedValue({ response: { status: 403, data: { code: 'insufficient_assurance' } } });
-  render(<ConnectorConsentPage />);
-  fireEvent.click(await screen.findByRole('button', { name: 'Approve' }));
-  const button = await screen.findByRole('button', { name: 'Sign in to continue' });
-  expect(screen.getByRole('status').textContent).toBe('Your account uses two-factor authentication. Before <b>Claude</b> can work with your ai.market account, sign in again and enter your code. This makes sure only you can connect apps to your account.');
-  expect(document.querySelector('b')).toBeNull();
-  expect(getConnectorRequest).toHaveBeenCalledExactlyOnceWith(id);
-  fireEvent.click(button);
-  expect(navigation.push).toHaveBeenCalledWith(`/login?reauth=connector&redirect=${encodeURIComponent(path)}`);
-});
+
+
+
 
 it('withholds legacy seller offers without permission metadata', async () => {
   vi.mocked(getConnectorRequest).mockResolvedValue({ ...metadata, tool_sets: ['buyer', 'seller'] });
@@ -156,4 +135,11 @@ it('withholds legacy seller offers without permission metadata', async () => {
   expect(screen.queryByRole('radio', { name: 'Seller' })).toBeNull();
   fireEvent.click(screen.getByRole('button', { name: 'Approve' }));
   await waitFor(() => expect(decideConnectorRequest).toHaveBeenCalledWith(id, 'approve', null, 'nonce'));
+});
+
+it.each(['insufficient_assurance', 'recent_login_required', 'SECOND_FACTOR_REQUIRED'])('shows a refresh line for legacy %s', async code => {
+  vi.mocked(getConnectorRequest).mockRejectedValue({ response: { status: 403, data: { code } } });
+  render(<ConnectorConsentPage />);
+  await screen.findByText('Please refresh the page and try again.');
+  expect(screen.queryByRole('button', { name: /Sign in/ })).toBeNull();
 });

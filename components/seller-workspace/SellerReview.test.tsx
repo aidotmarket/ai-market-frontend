@@ -3,6 +3,7 @@ import {useState} from 'react';
 import { act, cleanup, fireEvent, render, screen,waitFor } from '@testing-library/react';
 import { afterEach, expect, it, vi } from 'vitest';
 import SellerReview from './SellerReview';
+import {instrument} from '@/tests/fixtures/seller-authority';
 import {resetSellerListingDraftOwnerForTests,SellerListingDraftProvider,useSellerListingDraft,useSellerListingDraftStatus} from './SellerListingDraftStore';
 import type {SavedListingDraft} from '@/api/sellerListingDraft';
 const api = vi.hoisted(() => ({readListingReview:vi.fn(),readReviewSourcePage:vi.fn()}));
@@ -129,4 +130,28 @@ it('reports a disabled draft store as unavailable and not loaded',()=>{
  render(<SellerListingDraftProvider enabled={false} sampleCapability={false}><DisabledDraftProbe/></SellerListingDraftProvider>);
  expect(screen.getByRole('status').textContent).toBe('{"available":false,"loaded":false}');
  expect(drafts.readListingDraft).not.toHaveBeenCalled();
+});
+
+it.each([
+  ['Weekly **totals** with [details](https://example.test)', 'Weekly totals with details'],
+  ['<p>Weekly <strong>totals</strong> &amp; details</p><script>hiddenScript()</script>', 'Weekly totals & details'],
+])('shows saved title, plain description and currency without licence hashes (%s)',async(description,expected)=>{
+  api.readListingReview.mockResolvedValue({rendered_html:'<p>Saved retail offer</p>',fields:{title:'Saved retail offer',description,price:'25.00',license:'Research'},license_selection:instrument().license_selection,source_page:{files:[{key:'private/retail.csv',size:42}],total_count:1,total_size_bytes:42},missing_fields:[],approval_available:false});
+  const view=render(<SellerReview active enabled/>);
+  await screen.findByText(expected);
+  expect(screen.getByRole('heading',{name:'Saved retail offer'})).toBeTruthy();
+  expect(screen.getByText('Price: $25.00')).toBeTruthy();
+  expect(screen.getByText('Standard (recommended) · AI/ML training allowed')).toBeTruthy();
+  const summary=screen.getByRole('region',{name:"What you're confirming"});
+  const files=screen.getByRole('region',{name:'Files included in this review'});
+  expect(summary.compareDocumentPosition(files)&Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+  expect(summary.querySelector('strong,a,script')).toBeNull();
+  expect(view.container.textContent).not.toContain('Licence hash');
+  expect(view.container.textContent).not.toMatch(/[a-f0-9]{64}/i);
+  expect(view.container.textContent).not.toContain('hiddenScript');
+});
+it.each(['',undefined,'invalid'])('makes a missing or invalid price visible (%s)',async price=>{
+  api.readListingReview.mockResolvedValue({rendered_html:'<p>Offer</p>',fields:{title:'Offer',description:'Description',price},missing_fields:['price'],approval_available:false});
+  render(<SellerReview active enabled/>);
+  expect(await screen.findByText('Price: No price set')).toBeTruthy();
 });

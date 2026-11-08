@@ -29,7 +29,7 @@ export default function GeneratedSamplePage({ listing, emitJsonLd }: { listing: 
           <h2 className="font-semibold">{SAMPLE_STANDARD_COPY}</h2>
           <p>Standard applies only to our generated illustrative listing content. It does not relicense third-party data, model weights, APIs or trademarks.</p>
           {!document && <p>No contractual variant is established by viewing this example. These are document references for comparison.</p>}
-          {(document ? [document] : STANDARD_DOCUMENTS).map(url => <p key={url}><Link href={url} className="text-indigo-700 underline">Standard 1.0 — {url.endsWith('/no-ai-training') ? 'no AI training' : 'AI training'}</Link></p>)}
+          {(document ? [document] : STANDARD_DOCUMENTS).map(url => <p key={url}><Link href={url} className="text-indigo-700 underline">Standard {url.split('/')[5]} — {url.endsWith('/no-ai-training') ? 'no AI training' : 'AI training'}</Link></p>)}
         </section>
       </>}
     </main>

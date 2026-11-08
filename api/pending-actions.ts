@@ -81,7 +81,7 @@ export function pendingActionError(error: unknown): 'not_found' | 'company_login
   if (reply?.status === 404) return 'not_found';
   if (reply?.data?.detail === 'SUMMARY_CONTENT_UNAVAILABLE') return 'summary_unavailable';
   if (reply?.data?.detail === 'SECOND_FACTOR_ENROLLMENT_REQUIRED') return 'enrollment';
-  if (reply?.data?.detail === 'SECOND_FACTOR_REQUIRED') return 'second_factor';
+  if (typeof reply?.data?.detail === 'string' && reply.data.detail.startsWith('SECOND_FACTOR_')) return 'second_factor';
   if (reply?.status === 401 || reply?.data?.detail === 'RECENT_LOGIN_REQUIRED' || reply?.data?.detail === 'REAUTH_REQUIRED') return 'login';
   if (reply?.status === 409 && reply.data?.detail === 'SUMMARY_CHANGED') return 'changed';
   return 'unavailable';

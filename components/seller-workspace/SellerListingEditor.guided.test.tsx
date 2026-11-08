@@ -23,7 +23,7 @@ describe('guided editor source binding and saving',()=>{
  it('hides the dead Review advance in an editor without draft saves',()=>{render(<SellerListingEditor initialContent={content} licensesEnabled onNext={vi.fn()}/>);expect(screen.queryByRole('button',{name:'Next: Review →'})).toBeNull();});
  it('removes the dead licence input only with licences on and previews the actual training choice',()=>{
   const view=render(<SellerListingEditor initialContent={content} licensesEnabled sourceVersion={7} categories={categories}/>);
-  expect(screen.queryByLabelText('Your license')).toBeNull();fireEvent.click(screen.getByRole('button',{name:'Preview my listing'}));expect(screen.getByText(/ai.market Standard Data Licence v1.0.*training not allowed/)).toBeTruthy();
+  expect(screen.queryByLabelText('Your license')).toBeNull();fireEvent.click(screen.getByRole('button',{name:'Preview my listing'}));expect(screen.getByText(/ai.market Standard Data Licence v1.1.*training not allowed/)).toBeTruthy();
   view.rerender(<SellerListingEditor initialContent={content} licensesEnabled={false} sourceVersion={7} categories={categories}/>);expect(screen.getByLabelText('Your license')).toBeTruthy();
  });
  it('clears chat and pending suggestions when files change, discards a late reply and sends no summary',async()=>{

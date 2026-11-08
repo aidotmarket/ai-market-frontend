@@ -8,14 +8,14 @@ import type { User } from '@/types';
 const mocks = vi.hoisted(() => ({
   setup: vi.fn(), verify: vi.fn(), disable: vi.fn(), regenerate: vi.fn(), profile: vi.fn(),
   capabilities: vi.fn(), refresh: vi.fn(), notify: vi.fn(), toast: vi.fn(), push: vi.fn(),
-  copy: vi.fn(), reauth: null as null | { onSuccess: (token: string) => Promise<void>; onClose: () => void },
+  copy: vi.fn(), rotate: vi.fn(),
 }));
 const fixture = (id: string): User => ({ id, email: `${id}@example.invalid`, first_name: `Synthetic ${id}`,
   last_name: 'Fixture', company_name: '', role: 'buyer', created_at: '2026-01-01',
   totp_enabled: false, auth_methods: ['password'], two_factor_setup_eligible: true,
-  reauth_method: 'password' } as User);
+  status: 'active', email_verified_at: null, primary_auth: 'password' });
 let state = { user: fixture('A') as User | null, token: 'unusable-A' as string | null,
-  isAuthenticated: true, isLoading: false, hydrated: true, refreshAuth: mocks.refresh };
+  isAuthenticated: true, isLoading: false, hydrated: true, refreshAuth: mocks.refresh, rotateSession: mocks.rotate };
 const listeners = new Set<(next: typeof state, previous: typeof state) => void>();
 function useAuthStore<T = typeof state>(selector: (s: typeof state) => T = (s) => s as T) {
   return useSyncExternalStore((fn) => { listeners.add(fn); return () => { listeners.delete(fn); }; }, () => selector(state));
@@ -35,11 +35,6 @@ vi.mock('@/components/onboarding/SellerSetupProgressBar', () => ({ default: () =
 vi.mock('@/lib/company-sign-in', () => ({ companySignInEnabled: () => false }));
 vi.mock('@/components/CompanyAuthenticator', () => ({ default: () => null, companyEnrollmentOffered: () => false }));
 vi.mock('@/components/TotpQrCode', () => ({ default: () => <span>Synthetic QR placeholder</span> }));
-vi.mock('@/app/dashboard/settings/ReauthModal', () => ({ default: (props: { isOpen: boolean; onSuccess: (token: string) => Promise<void>; onClose: () => void }) => {
-  if (!props.isOpen) return null;
-  mocks.reauth = props;
-  return <button onClick={() => void props.onSuccess('UNUSABLE_REAUTH')}>Complete synthetic reauth</button>;
-} }));
 vi.mock('@/app/dashboard/settings/ConnectedApps', () => ({ default: () => null }));
 vi.mock('@/app/dashboard/settings/SellerAuthority', () => ({ default: () => null }));
 vi.mock('@/app/dashboard/settings/SellerOperationContinuation', () => ({ default: () => null }));
@@ -60,17 +55,17 @@ const settle = () => act(async () => { await Promise.resolve(); });
 async function mount(strict = false) { const child = <Layout><Page /></Layout>;
   const view = render(strict ? <StrictMode>{child}</StrictMode> : child); await settle(); return view; }
 async function click(name: string) { fireEvent.click(screen.getByRole('button', { name })); await settle(); }
-async function setup() { await click('Enable two-factor authentication'); await click('Complete synthetic reauth'); }
+async function setup() { await click('Enable two-factor authentication'); expect(mocks.setup).toHaveBeenLastCalledWith(); }
 async function verify() { fireEvent.change(screen.getByLabelText('6-digit code'), { target: { value: '123456' } }); await click('Verify and enable'); }
 async function save() { fireEvent.change(screen.getByLabelText('First name'), { target: { value: 'Synthetic changed' } }); await click('Save changes'); }
-function noGlobalEffects() { expect(mocks.refresh).not.toHaveBeenCalled(); expect(mocks.notify).not.toHaveBeenCalled(); expect(mocks.toast).not.toHaveBeenCalled(); }
+function noGlobalEffects() { expect(mocks.refresh).not.toHaveBeenCalled(); expect(mocks.rotate).not.toHaveBeenCalled(); expect(mocks.notify).not.toHaveBeenCalled(); expect(mocks.toast).not.toHaveBeenCalled(); }
 beforeEach(() => {
-  vi.resetAllMocks(); mocks.reauth = null;
-  state = { user: fixture('A'), token: 'unusable-A', isAuthenticated: true, isLoading: false, hydrated: true, refreshAuth: mocks.refresh };
+  vi.resetAllMocks();
+  state = { user: fixture('A'), token: 'unusable-A', isAuthenticated: true, isLoading: false, hydrated: true, refreshAuth: mocks.refresh, rotateSession: mocks.rotate };
   mocks.capabilities.mockResolvedValue({ seller: { effective_status: 'not_requested' } });
   mocks.setup.mockResolvedValue(setupMaterial); mocks.verify.mockResolvedValue(recovery);
   mocks.regenerate.mockResolvedValue(recovery); mocks.disable.mockResolvedValue({ message: 'Synthetic disabled' });
-  mocks.refresh.mockResolvedValue(undefined); mocks.profile.mockResolvedValue({}); mocks.copy.mockResolvedValue(undefined);
+  mocks.rotate.mockResolvedValue(undefined); mocks.refresh.mockResolvedValue(undefined); mocks.profile.mockResolvedValue({}); mocks.copy.mockResolvedValue(undefined);
   Object.defineProperty(navigator, 'clipboard', { configurable: true, value: { writeText: mocks.copy } });
 });
 afterEach(() => { cleanup(); });
@@ -112,10 +107,8 @@ describe('actual SettingsPage account and visit ownership', () => {
   it.each(['disable', 'regenerate'] as const)('keeps ordinary %s usable', async (action) => {
     state = { ...state, user: { ...fixture('A'), totp_enabled: true } };
     await mount(); await click(action === 'disable' ? 'Disable 2FA' : 'Regenerate backup codes');
-    fireEvent.change(screen.getByLabelText('Current TOTP code'), { target: { value: '123456' } });
-    await click(action === 'disable' ? 'Confirm disable' : 'Generate new codes'); await click('Complete synthetic reauth');
-    expect(mocks[action]).toHaveBeenCalledWith('UNUSABLE_REAUTH', '123456');
-    if (action === 'disable') { expect(mocks.refresh).toHaveBeenCalledTimes(1); expect(mocks.notify).toHaveBeenCalledTimes(1); }
+    expect(mocks[action]).toHaveBeenCalledExactlyOnceWith();
+    if (action === 'disable') { expect(mocks.rotate).toHaveBeenCalledExactlyOnceWith({ message: 'Synthetic disabled' }); expect(mocks.refresh).not.toHaveBeenCalled(); expect(mocks.notify).toHaveBeenCalledTimes(1); }
     else expect(screen.getByText(recovery.backup_codes[0])).toBeTruthy();
     expect(mocks.toast).toHaveBeenCalledTimes(1);
   });
@@ -128,10 +121,19 @@ describe('actual SettingsPage account and visit ownership', () => {
     expect((screen.getByRole('button', { name: 'Starting...' }) as HTMLButtonElement).disabled).toBe(true);
     await act(async () => current.resolve({ ...setupMaterial, secret: 'UNUSABLE_B_SETUP' })); expect(screen.getByText('UNUSABLE_B_SETUP')).toBeTruthy();
   });
-  it('rejects a retained old reauth completion before it can dispatch a new API call', async () => {
-    await mount(); await click('Enable two-factor authentication'); const old = mocks.reauth!;
-    act(() => { auth('B'); auth('A'); void old.onSuccess('UNUSABLE_OLD_REAUTH'); old.onClose(); }); await settle();
-    expect(mocks.setup).not.toHaveBeenCalled(); expect(screen.queryByRole('button', { name: 'Complete synthetic reauth' })).toBeNull();
+  it('drops a late setup rejection after A-B-A without changing the new setup', async () => {
+    const old = deferred<typeof setupMaterial>(); mocks.setup.mockReturnValueOnce(old.promise);
+    await mount(); await setup();
+    act(() => { auth('B'); auth('A'); }); await settle(); await setup();
+    await act(async () => old.reject(new Error('obsolete setup')));
+    expect(screen.getByText(setupMaterial.secret)).toBeTruthy();
+    expect(screen.queryByText('Failed to start 2FA setup.')).toBeNull(); noGlobalEffects();
+  });
+  it('clears rendered recovery codes when B replaces A', async () => {
+    await mount(); await setup(); await verify();
+    act(() => auth('B')); await settle();
+    expect(screen.queryByText(recovery.backup_codes[0])).toBeNull();
+    expect(screen.queryByRole('button', { name: 'Copy all' })).toBeNull();
   });
   it.each(['resolve', 'reject'] as const)('has no global effects after profile departure: %s', async (outcome) => {
     const pending = deferred<object>(); mocks.profile.mockReturnValueOnce(pending.promise);
@@ -151,8 +153,6 @@ describe('actual SettingsPage account and visit ownership', () => {
     state = { ...state, user: { ...fixture('A'), totp_enabled: true } };
     const pending = deferred<typeof recovery & { message: string }>(); mocks[action].mockReturnValueOnce(pending.promise);
     await mount(); await click(action === 'disable' ? 'Disable 2FA' : 'Regenerate backup codes');
-    fireEvent.change(screen.getByLabelText('Current TOTP code'), { target: { value: '123456' } });
-    await click(action === 'disable' ? 'Confirm disable' : 'Generate new codes'); await click('Complete synthetic reauth');
     act(() => auth('B')); await act(async () => pending.resolve({ ...recovery, message: 'obsolete' }));
     expect(screen.queryByText(recovery.backup_codes[0])).toBeNull(); noGlobalEffects();
   });

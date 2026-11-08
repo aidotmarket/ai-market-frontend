@@ -1,3 +1,4 @@
+import { formatBytes } from '@/lib/formatBytes';
 import type { ListingDetail } from '@/types';
 
 type SampleFile<Binding extends string> = {
@@ -40,17 +41,11 @@ export default function SampleFiles({ files }: {
             ) : (
               <><span className="break-all">{file.key_basename}</span> <span className="text-gray-600">(sample unavailable)</span></>
             )}
-            <span className="ml-2 text-gray-600">{formatSampleSize(file.size)}</span>
+            <span className="ml-2 text-gray-600">{formatBytes(file.size)}</span>
             <p className="mt-1 text-gray-600">{bindingLabels[file.binding]}</p>
           </li>
         ))}
       </ul>
     </section>
   );
-}
-
-function formatSampleSize(bytes: number): string {
-  const units = ['B', 'KiB', 'MiB', 'GiB', 'TiB'];
-  const unit = bytes > 0 ? Math.min(Math.floor(Math.log(bytes) / Math.log(1024)), units.length - 1) : 0;
-  return `${Number((bytes / 1024 ** unit).toFixed(1))} ${units[unit]}`;
 }

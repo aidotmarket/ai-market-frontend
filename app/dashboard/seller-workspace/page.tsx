@@ -8,6 +8,7 @@ import { WorkspaceData } from '@/components/seller-workspace/WorkspaceData';
 import SavedWorkspaceData from '@/components/seller-workspace/SavedWorkspaceData';
 import SellerReview from '@/components/seller-workspace/SellerReview';
 import SellerPublications from '@/components/seller-workspace/SellerPublications';
+import ConnectionScopeChoice from '@/components/seller-workspace/ConnectionScopeChoice';
 import R2ConnectionForm from '@/components/seller-workspace/R2ConnectionForm';
 import { StorageProviders } from '@/components/seller-workspace/StorageProviders';
 import SellerListingEditor from '@/components/seller-workspace/SellerListingEditor';
@@ -98,7 +99,7 @@ function safeActionMessage(error: unknown): string {
     case 'authorization_expired':
       return 'This setup has expired and cannot be verified. Create a new connection.';
     case 'invalid_scope':
-      return 'Enter a valid role ARN, bucket, bounded non-root prefix, and AWS region.';
+      return 'Enter a valid role ARN, bucket and AWS region, then choose a folder or confirm access to the whole bucket.';
     case 'verification_failed':
       return 'AWS could not verify this connection. Check the trust policy and scope, then try again.';
     case 'verification_outcome_unknown':
@@ -122,6 +123,13 @@ function formatDate(value: string | null): string {
     dateStyle: 'medium',
     timeStyle: 'short',
   }).format(date);
+}
+
+function connectionScopeLabel(connection: SellerWorkspaceConnection) {
+  if (connection.status !== 'verified' && !connection.prefix && connection.scope !== 'whole_bucket') {
+    return 'Setup in progress';
+  }
+  return connection.scope === 'whole_bucket' ? 'Whole bucket' : connection.prefix ?? '';
 }
 
 function CopyValue({
@@ -187,6 +195,8 @@ export default function SellerWorkspacePage() {
   const mountedRef = useRef(true);
   const mutationKeysRef = useRef(new Map<string, { fingerprint: string; key: string }>());
   const [scope, setScope] = useState<ConnectionVerifyRequest>(EMPTY_SCOPE);
+  const [wholeBucketConfirmed, setWholeBucketConfirmed] = useState(false);
+  const wholeBucket = scope.scope === 'whole_bucket' && !!capabilities?.whole_bucket_confirmation;
   const [busyAction, setBusyAction] = useState<string | null>(null);
   const [actionError, setActionError] = useState<string | null>(null);
   const [copiedField, setCopiedField] = useState<string | null>(null);
@@ -198,6 +208,7 @@ export default function SellerWorkspacePage() {
     setAuthorizationSession(null);
     setCopiedField(null);
     setScope(EMPTY_SCOPE);
+    setWholeBucketConfirmed(false);
   }, []);
 
   const showAuthorization = useCallback((session: AuthorizationSession | null) => {
@@ -388,23 +399,29 @@ export default function SellerWorkspacePage() {
   const handleVerify = async (event: FormEvent) => {
     event.preventDefault();
     if (!authorizationSession) return;
+    if (wholeBucket && !wholeBucketConfirmed) {
+      setActionError('Confirm access to the whole bucket before connecting.');
+      return;
+    }
     const normalizedPrefix = scope.prefix.trim().replace(/^\/+|\/+$/g, '');
-    if (
+    if (!wholeBucket && (
       !normalizedPrefix
       || normalizedPrefix.split('/').includes('..')
       || /[\u0000-\u001F\u007F-\u009F]/.test(normalizedPrefix)
       || /[*?]/.test(normalizedPrefix)
       || normalizedPrefix.includes('${')
-    ) {
-      setActionError('Prefix must identify a bounded, non-root S3 location.');
+    )) {
+      setActionError('Choose a valid folder in the bucket, or choose and confirm the whole bucket.');
       return;
     }
     const connectionId = authorizationSession.connectionId;
     const operation = `verify-${connectionId}`;
-    const submittedScope = {
+    const submittedScope: ConnectionVerifyRequest = {
       role_arn: scope.role_arn.trim(),
       bucket: scope.bucket.trim(),
-      prefix: normalizedPrefix,
+      prefix: wholeBucket ? '' : normalizedPrefix,
+      scope: wholeBucket ? 'whole_bucket' : 'prefix',
+      ...(wholeBucket ? {whole_bucket_confirmed: true, confirmation_version: capabilities!.whole_bucket_confirmation!.version} : {}),
       region: scope.region.trim(),
     };
     setBusyAction(operation);
@@ -604,6 +621,7 @@ export default function SellerWorkspacePage() {
       <StorageProviders capabilities={capabilities} busy={busyAction} onConnectAWS={handleCreate} onConnectR2={() => {clearSensitive();setR2Target(partitionConnections(connections).current.find(connection => connection.provider === 'r2' && connection.status === 'pending_authorization') ?? null);}} />
       {view === 'storage' && r2Form && <R2ConnectionForm
         key={r2Form.visit}
+        wholeBucketConfirmation={capabilities?.whole_bucket_confirmation}
         connection={connections.find(connection => connection.id === r2Form.connection?.id) ?? r2Form.connection}
         onClose={() => setR2Form(current => current?.visit === r2Form.visit ? undefined : current)}
         onSaved={saved => {
@@ -674,11 +692,12 @@ export default function SellerWorkspacePage() {
           {authorizationSession.authorization.purpose === 'aws_external_id' ? (
             <form className="mt-6 space-y-4 border-t border-gray-200 pt-6" onSubmit={handleVerify} autoComplete="off">
               <div>
-                <h3 className="font-medium text-gray-900">Choose the folder to connect</h3>
+                <h3 className="font-medium text-gray-900">Choose the folder or bucket to connect</h3>
                 <p className="mt-1 text-sm text-gray-600">
-                  Enter the role you configured and the S3 folder containing your data. Access is limited to this folder.
+                  Enter the role you configured, then choose a folder or the whole S3 bucket containing your data.
                 </p>
               </div>
+              <ConnectionScopeChoice value={wholeBucket?'whole_bucket':'prefix'} confirmation={capabilities?.whole_bucket_confirmation} confirmed={wholeBucketConfirmed} onConfirm={setWholeBucketConfirmed} onChange={value=>{setScope(current=>({...current,scope:value}));setWholeBucketConfirmed(false);}} />
               <div className="grid gap-4 md:grid-cols-2">
                 <label className="text-sm font-medium text-gray-700">
                   Role ARN
@@ -696,13 +715,13 @@ export default function SellerWorkspacePage() {
                   <input
                     required
                     value={scope.bucket}
-                    onChange={(event) => setScope((current) => ({ ...current, bucket: event.target.value }))}
+                    onChange={(event) => {setScope((current) => ({ ...current, bucket: event.target.value }));setWholeBucketConfirmed(false);}}
                     placeholder="seller-data-bucket"
                     spellCheck={false}
                     className="mt-1 block w-full rounded-lg border border-gray-300 px-3 py-2 font-mono text-sm focus:border-[#3F51B5] focus:outline-none focus:ring-1 focus:ring-[#3F51B5]"
                   />
                 </label>
-                <label className="text-sm font-medium text-gray-700">
+                {!wholeBucket && <label className="text-sm font-medium text-gray-700">
                   Non-root prefix
                   <input
                     required
@@ -712,7 +731,7 @@ export default function SellerWorkspacePage() {
                     spellCheck={false}
                     className="mt-1 block w-full rounded-lg border border-gray-300 px-3 py-2 font-mono text-sm focus:border-[#3F51B5] focus:outline-none focus:ring-1 focus:ring-[#3F51B5]"
                   />
-                </label>
+                </label>}
                 <label className="text-sm font-medium text-gray-700">
                   AWS region
                   <input
@@ -727,7 +746,7 @@ export default function SellerWorkspacePage() {
               </div>
               <button
                 type="submit"
-                disabled={busyAction !== null}
+                disabled={busyAction !== null || (wholeBucket && !wholeBucketConfirmed)}
                 className="rounded-lg bg-[#3F51B5] px-4 py-2 text-sm font-medium text-white hover:bg-[#303F9F] disabled:cursor-not-allowed disabled:opacity-50"
               >
                 {busyAction?.startsWith('verify-') ? 'Verifying...' : 'Verify AWS connection'}
@@ -776,7 +795,7 @@ export default function SellerWorkspacePage() {
                         {status.label}
                       </span>
                     </div>
-                    <p className="mt-1 break-all text-xs text-gray-500">{connection.prefix ? `${providerLabel} · ${connection.prefix}` : `${providerLabel} · Setup in progress`}</p>
+                    <p className="mt-1 break-all text-xs text-gray-500">{providerLabel} · {connectionScopeLabel(connection)}</p>
                   </div>
                   <div className="flex flex-wrap gap-2">
                     {awaitingSetup && (
@@ -830,7 +849,7 @@ export default function SellerWorkspacePage() {
 
                 {connection.status === 'verified' && (
                   <dl className="mt-5 grid gap-4 text-sm sm:grid-cols-3">
-                    <div><dt className="text-gray-500">Connected folder</dt><dd className="mt-1 break-all text-gray-900">{connection.prefix}</dd></div>
+                    <div><dt className="text-gray-500">{connection.scope === 'whole_bucket' ? 'Connected scope' : 'Connected folder'}</dt><dd className="mt-1 break-all text-gray-900">{connection.scope === 'whole_bucket' ? 'Whole bucket' : connection.prefix}</dd></div>
                     <div><dt className="text-gray-500">Region</dt><dd className="mt-1 font-mono text-gray-900">{connection.region}</dd></div>
                     <div><dt className="text-gray-500">Verified</dt><dd className="mt-1 text-gray-900">{formatDate(connection.verified_at)}</dd></div>
                   </dl>
@@ -892,7 +911,7 @@ export default function SellerWorkspacePage() {
                   <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
                     <span className="break-all font-medium">{connectionName(newest)}</span>
                     {group.length > 1 && <span>x{group.length}</span>}
-                    <span>{newest.provider === 'aws' ? 'AWS S3' : 'Cloudflare R2'}{newest.prefix ? ` · ${newest.prefix}` : ''}</span>
+                    <span>{newest.provider === 'aws' ? 'AWS S3' : 'Cloudflare R2'}{connectionScopeLabel(newest) ? ` · ${connectionScopeLabel(newest)}` : ''}</span>
                     <span>{STATUS_PRESENTATION[newest.status].label}</span>
                   </div>
                   <details className="mt-2 text-xs">

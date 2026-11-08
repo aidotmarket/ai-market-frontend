@@ -4,7 +4,7 @@ import {afterEach,beforeEach,describe,it,expect,vi} from 'vitest';
 import {AxiosError} from 'axios';
 import SavedLicenseStep from './SavedLicenseStep';
 import {SellerListingDraftProvider,resetSellerListingDraftOwnerForTests} from './SellerListingDraftStore';
-import {createStandardSelection} from '@/api/listingLicenses';
+import {createStandardSelection,LICENSE_HASHES_1_0} from '@/api/listingLicenses';
 import {emptyGuidedDraft} from '@/tests/guidedListingFixture';
 const mocks=vi.hoisted(()=>({read:vi.fn(),save:vi.fn(),navigate:vi.fn(),dirty:vi.fn(),enabled:true}));
 vi.mock('@/api/sellerListingDraft',()=>({readListingDraft:mocks.read,saveListingDraft:mocks.save}));
@@ -33,4 +33,22 @@ describe('separate saved licence task',()=>{
  it('skips selection when the existing licence capability is off',async()=>{
   mocks.enabled=false;renderStep();expect(screen.queryByText('How can buyers use this data?')).toBeNull();fireEvent.click(screen.getByRole('button',{name:'Next: Describe and price →'}));expect(mocks.navigate).toHaveBeenCalledWith('listing');await waitFor(()=>expect(mocks.read).toHaveBeenCalled());
  });
+});
+
+it('loads a stored 1.0 choice but requires explicit re-selection and authority before saving a new acceptance', async () => {
+ const old = {...selected, version:'1.0', covenant_version:'1.0',
+   license_sha256:LICENSE_HASHES_1_0.standard.true, covenant_sha256:LICENSE_HASHES_1_0.covenant};
+ mocks.read.mockResolvedValue({...saved,content:{...saved.content,license_selection:old}});
+ renderStep();
+ await screen.findByText('Legal name on the licence: Synthetic Seller (ES)');
+ expect((screen.getByLabelText('Confirm covenant and authority') as HTMLInputElement).disabled).toBe(true);
+ expect((screen.getByRole('button',{name:'Next: Describe and price →'}) as HTMLButtonElement).disabled).toBe(true);
+ expect(mocks.save).not.toHaveBeenCalled();
+ fireEvent.click(screen.getByRole('button',{name:'Re-select at current version'}));
+ expect((screen.getByRole('button',{name:'Save licence choice'}) as HTMLButtonElement).disabled).toBe(true);
+ fireEvent.click(screen.getByLabelText('Confirm covenant and authority'));
+ fireEvent.click(screen.getByRole('button',{name:'Save licence choice'}));
+ await waitFor(()=>expect(mocks.save).toHaveBeenCalledOnce());
+ expect(mocks.save.mock.calls[0][0].license_selection).toMatchObject({version:'1.1',covenant_version:'1.1',seller_acceptance:{authority_confirmed:true}});
+ expect(old).toMatchObject({version:'1.0',covenant_version:'1.0'});
 });

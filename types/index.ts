@@ -24,8 +24,6 @@ export interface User {
   two_factor_setup_reason?: string | null;
   two_factor_provider?: 'google' | 'github' | null;
   seller_two_factor_satisfied?: boolean;
-  seller_binding_factor_readiness?: { code: 'SECOND_FACTOR_ENROLLMENT_REQUIRED'; path: '/dashboard/settings' } | null;
-  reauth_method?: 'password' | 'totp' | 'magic_link';
 }
 
 export interface TokenResponse {
@@ -355,6 +353,9 @@ export interface ListingLicenseDetails {
   full_text_url: string;
   download_url: string;
   sha256: string;
+  // Optional for historical API responses; disclosure verifies the pinned hash before inferring 1.0.
+  covenant_code?: string;
+  covenant_version?: string;
   covenant_sha256: string;
   rider_sha256: string | null;
 }

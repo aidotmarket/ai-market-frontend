@@ -1,6 +1,7 @@
 'use client';
 
 import { api } from './client';
+import { postSessionMutation } from './session-mutation';
 import type {
   LoginResult,
   PreAuthRequiredResponse,
@@ -89,35 +90,15 @@ export async function verify2FALogin(pre_auth_token: string, code: string): Prom
   return res.data;
 }
 
-export async function setup2FA(reauthToken: string): Promise<TOTPSetupResponse> {
-  const res = await api.post<TOTPSetupResponse>('/auth/2fa/setup', { reauth_token: reauthToken });
-  return res.data;
-}
+export const setup2FA = () => postSessionMutation<TOTPSetupResponse>('/auth/2fa/setup', {});
 
-export async function verify2FASetup(code: string, reauthToken: string): Promise<TOTPVerifySetupResponse> {
-  const res = await api.post<TOTPVerifySetupResponse>('/auth/2fa/verify-setup', {
-    code,
-    reauth_token: reauthToken,
-  });
-  return res.data;
-}
+export const verify2FASetup = (code: string) =>
+  postSessionMutation<TOTPVerifySetupResponse>('/auth/2fa/verify-setup', { code });
 
-export async function submitReauth(credential: string, method: 'password' | 'totp' | 'magic_link' = 'totp'): Promise<ReauthResponse> {
-  const res = await api.post<ReauthResponse>('/auth/reauth', method === 'password'
-    ? { method, password: credential }
-    : method === 'magic_link' ? { method } : { code: credential });
-  return res.data;
-}
+export const disable2FA = () => postSessionMutation<TokenResponse & { message: string }>('/auth/2fa/disable', {});
 
-export async function disable2FA(reauth_token: string, code: string): Promise<{ message: string }> {
-  const res = await api.post<{ message: string }>('/auth/2fa/disable', { reauth_token, code });
-  return res.data;
-}
-
-export async function regenerateBackupCodes(reauth_token: string, code: string): Promise<{ backup_codes: string[] }> {
-  const res = await api.post<{ backup_codes: string[] }>('/auth/2fa/regenerate-backup-codes', { reauth_token, code });
-  return res.data;
-}
+export const regenerateBackupCodes = () =>
+  postSessionMutation<{ backup_codes: string[] }>('/auth/2fa/regenerate-backup-codes', {});
 
 export async function verifyEmail(token: string): Promise<{ message: string }> {
   const res = await api.post<{ message: string }>(`/auth/verify-email?token=${encodeURIComponent(token)}`);

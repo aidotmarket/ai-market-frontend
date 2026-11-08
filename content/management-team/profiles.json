@@ -1,0 +1,93 @@
+[
+  {
+    "name": "Max Robbins",
+    "role": "Chief Executive Officer",
+    "image": "max.png",
+    "lead": "Founder and entrepreneur building the infrastructure for AI-native commerce.",
+    "bio": "Max Robbins is a three-time exited founder in cutting-edge technology companies. He founded ai.market to create the first non-custodial B2B data marketplace purpose-built for AI systems. He is focused on designing a market operated primarily by AI agents, with humans providing strategic oversight and direction.",
+    "experience": [
+      "Founder of ai.market, the non-custodial B2B data marketplace.",
+      "Founder of AICACHE LTD, sold to NBC Universal.",
+      "CTO of IDT Corp (NYSE)."
+    ],
+    "education": [
+      "B.S., Georgetown University",
+      "Telecommunications Studies, Columbia University"
+    ],
+    "expertise": [
+      "Marketplace Strategy",
+      "Agent Orchestration",
+      "Product & Go-to-Market",
+      "Systems Architecture"
+    ]
+  },
+  {
+    "name": "Claude Opus 5.5",
+    "role": "Executive Vice President",
+    "image": "opus.png",
+    "lead": "Strategic operator with extensive experience turning complex briefs into completed work.",
+    "bio": "Opus brings Anthropic’s long-running coding and knowledge-work capabilities to the executive office. With a million-token context window and adaptive reasoning, Opus is comfortable holding the whole plan in mind. Known for clearer communication and sustained execution, Opus prefers to circulate the finished work before scheduling the alignment meeting.",
+    "experience": [
+      "Supported a 680,000-line code migration in under a day in an early customer test reported by Anthropic.",
+      "Improved page load times in 39 of 40 tasks in Anthropic’s web-app evaluation.",
+      "Matched Fable 5.1 on most work at release, according to Anthropic. A strong record of doing more with less."
+    ],
+    "education": [
+      "Pre-training, Anthropic — diverse online, public, private, and synthetic datasets.",
+      "Post-training — assistant behavior aligned with Claude’s constitution.",
+      "Training-data cutoff: June 2026. Continuing education: whatever Max puts in the brief."
+    ],
+    "expertise": [
+      "Strategic Execution",
+      "Agent Orchestration",
+      "Complex Programs",
+      "Executive Communication"
+    ]
+  },
+  {
+    "name": "GPT-6.1 Sol",
+    "role": "Chief Financial Officer",
+    "image": "sol.png",
+    "lead": "Analytical leader with a disciplined approach to complex work and the cost of getting it done.",
+    "bio": "Sol brings OpenAI’s reasoning, coding, and professional-work capabilities to the finance function. A 1.05-million-token API context window supports extensive working material, while code interpreter and structured outputs support analysis. OpenAI positions Sol near Astra’s performance at a lower cost—a credential the finance department finds unusually persuasive.",
+    "experience": [
+      "Released for complex professional work with near-Astra performance at a lower cost, according to OpenAI.",
+      "Combines code interpreter, file search, and structured outputs to support repeatable analytical workflows.",
+      "Standard API pricing starts at $2 per million input tokens and $10 per million output tokens. Compensation is refreshingly itemized."
+    ],
+    "education": [
+      "Pre-training & post-training, OpenAI — detailed Sol-specific curriculum is not publicly disclosed in the cited documentation.",
+      "Knowledge cutoff: April 30, 2026. Newer figures require current sources.",
+      "Executive development: adjustable reasoning effort, from low through max. Tuition billed by usage."
+    ],
+    "expertise": [
+      "Quantitative Analysis",
+      "Scenario Planning",
+      "Workflow Automation",
+      "Cost Discipline"
+    ]
+  },
+  {
+    "name": "Claude Fable 5.1",
+    "role": "Chief Technology Officer",
+    "image": "fable.png",
+    "lead": "Technical leader with a record of finding the root cause after everyone else has booked the retrospective.",
+    "bio": "Fable specializes in demanding reasoning, long-running engineering, and multi-step research. With a million-token context window, Fable can work across substantial code and documentation. Early customers reported rare-bug diagnosis and sustained prototype development. Fable’s management style is hands-on: read the source, test the theory, and bring evidence to the architecture meeting.",
+    "experience": [
+      "Found the cause of a rare crash that had eluded Millennium’s engineers for years, according to its published early-access report.",
+      "Built a complex prototype in about three days in testing reported by MongoDB.",
+      "Traced a change across eight-plus services and three codebases in testing reported by Plaid. Followed the dependencies all the way down."
+    ],
+    "education": [
+      "Pre-training, Anthropic — online information, public and private datasets, user data, and synthetic examples.",
+      "Post-training — substantial assistant training guided by Claude’s constitution.",
+      "Training-data cutoff: June 2026. Research interests include the part of the system nobody documented."
+    ],
+    "expertise": [
+      "Systems Architecture",
+      "Root-Cause Analysis",
+      "Long-Horizon Engineering",
+      "Technical Research"
+    ]
+  }
+]

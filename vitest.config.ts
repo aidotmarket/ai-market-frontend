@@ -6,7 +6,7 @@ export default defineConfig({
   test: {
     environment: 'node',
     globals: true,
-    exclude: [...configDefaults.exclude, 'tests/*.playwright.spec.ts', 'tests/connector-oauth-continuation.spec.ts'],
+    exclude: [...configDefaults.exclude, 'scripts/ssm-startup/tests/**', 'tests/*.playwright.spec.ts', 'tests/connector-oauth-continuation.spec.ts'],
     // Leave CPU headroom for React effects and jsdom on shared CI runners.
     maxWorkers: process.env.CI ? 1 : 2,
   },

@@ -30,6 +30,25 @@ export type ShareMetadataFetchResult =
 
 export type PaginatedListings = ListingPublicListResponse;
 
+export async function requestUsdcPayment(listingId: string, slug: string, title: string, amount: number): Promise<void> {
+  const { api } = await import('@/api/client');
+  const response = await api.post('/support/tickets', {
+    subject: `USDC payment request: ${title}`,
+    issue_class: 'customer',
+    channel: 'web',
+    priority: 'medium',
+    links: { listing_id: listingId, listing_slug: slug },
+    payload: {
+      kind: 'usdc_large_purchase_request',
+      listing_id: listingId,
+      listing_slug: slug,
+      amount,
+      currency: 'USD',
+    },
+  });
+  if (response.status !== 201) throw new Error('Ticket was not created');
+}
+
 export type FeaturedItemSource = 'just_listed' | 'recently_sold' | 'trending' | 'cold_start' | 'curated';
 
 export interface FeaturedPriceDisplay {

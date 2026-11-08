@@ -40,12 +40,11 @@ export function AuthorityScreen({ switches }: { switches: SellerSwitchReport | n
   // Cleanup invalidates reads even if a later effect sets mounted back to true.
   useEffect(() => { mounted.current = true; setStatus(null); setLimits(empty); void refresh(); return () => { mounted.current = false; ++readGeneration.current; }; }, [token]);
   const edit = (next: StandingLimits) => { stopping.current = null; setStopReview(null); setLimits(next); setReview(null); pending.current = null; setMessage(''); };
-  const prepare = async (reauth?: string) => {
+  const prepare = async () => {
     if (!status || busy || !effects || !validLimits(limits) || Date.parse(limits.expires_at) <= Date.now()) return;
-    if (!reauth) { stopping.current = null; setStopReview(null); }
+    stopping.current = null; setStopReview(null);
     setBusy(true); setError(null);
     try { const body = pending.current ?? { ...newDecision(status.version), limits: structuredClone(limits) }; pending.current = body;
-      if (reauth) body.reauth_token = reauth;
       const result = await reviewAuthority(body); if (mounted.current) setReview({ body, result });
     } catch(e) { if (mounted.current) setError(e); } finally { if (mounted.current) setBusy(false); }
   };
@@ -55,14 +54,14 @@ export function AuthorityScreen({ switches }: { switches: SellerSwitchReport | n
     try { await setAuthority({ ...review.body, review_hash: review.result.review_hash }); if (mounted.current) { setMessage('Standing authority saved.'); await refresh(); } }
     catch(e) { if (mounted.current) { setError(e); setReview(null); } } finally { if (mounted.current) setBusy(false); }
   };
-  const stop = async (reauth?: string) => {
+  const stop = async () => {
     if (!status || busy) return;
     setBusy(true); setError(null); setReview(null); pending.current = null; setStopReview(null);
     try {
       if (stopping.current?.expected_version !== status.version) stopping.current = null;
       stopping.current ??= newDecision(status.version);
       const csrf = nativeSession().csrf;
-      const body = { ...stopping.current, csrf, reauth_token: reauth ?? (stopping.current.csrf === csrf ? stopping.current.reauth_token : undefined) };
+      const body = { ...stopping.current, csrf };
       stopping.current = body;
       const result = await reviewStopAuthority(body);
       if (mounted.current) setStopReview({ body, result });
@@ -109,6 +108,6 @@ export function AuthorityScreen({ switches }: { switches: SellerSwitchReport | n
       {review && <section aria-label="Exact server authority review"><h3>Exact native decision</h3><pre className="overflow-auto whitespace-pre-wrap">{JSON.stringify(review.result, null, 2)}</pre><button disabled={busy || !effects} onClick={() => void save()}>Save reviewed standing authority</button></section>}
       </>}
     </>}
-    <NativeSellerAuth error={error} onRetry={() => { if (stopping.current) void stop(); else void refresh(); }} onToken={async proof => { if (stopping.current) await stop(proof); else await prepare(proof); }} />
+    <NativeSellerAuth error={error} />
   </section>;
 }

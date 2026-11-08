@@ -12,7 +12,7 @@ describe('MarketplaceListingCard', () => {
       title: 'Legacy dataset',
       description: 'A legacy search result.',
       short_description: 'A legacy search result.',
-      category: 'Business',
+      category: 'technology-web',
       price: 12,
       privacy_score: 8,
       compliance_status: null,
@@ -24,6 +24,8 @@ describe('MarketplaceListingCard', () => {
     const html = renderToStaticMarkup(<MarketplaceListingCard listing={listing} />);
 
     expect(html).toContain('Legacy dataset');
+    expect(html).toContain('Technology &amp; Web');
+    expect(html).not.toContain('technology-web');
     expect(html).not.toMatch(/\bverified\b/i);
   });
 });

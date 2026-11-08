@@ -42,7 +42,7 @@ describe('generated sample public response contract', () => {
   });
   it.each([true, false])('reuses only a matching existing Standard tuple/link (%s)', ai_training => {
     const url = STANDARD_DOCUMENTS[ai_training ? 0 : 1];
-    const license = {code: 'standard', version: '1.0', params: {ai_training}, full_text_url: url};
+    const license = {code: 'standard', version: '1.1', params: {ai_training}, full_text_url: url};
     expect(sampleStandardDocument(license)).toBe(url);
     expect(sampleStandardDocument({...license, full_text_url: url.replace('https://ai.market', '')})).toBe(url);
     expect(sampleStandardDocument({...license, params: {ai_training, source_sha256: 'unexpected'}})).toBeNull();
@@ -51,4 +51,9 @@ describe('generated sample public response contract', () => {
     expect(sampleStandardDocument({...license, params: {ai_training: 'true'}})).toBeNull();
     expect(sampleStandardDocument({...license, code: 'custom'})).toBeNull();
   });
+});
+
+it.each(['1.0','1.1'])('preserves a validated sample document version %s',version=>{
+ const full_text_url=`/licenses/standard/${version}/no-ai-training`;
+ expect(sampleStandardDocument({code:'standard',version,params:{ai_training:false},full_text_url})).toBe(`https://ai.market${full_text_url}`);
 });
