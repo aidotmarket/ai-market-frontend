@@ -21,8 +21,7 @@ import ListingPurchasePanel from '@/components/ListingPurchasePanel';
 import UsdcLargePurchaseRequest from '@/components/UsdcLargePurchaseRequest';
 import InquiryWidget from '@/components/InquiryWidget';
 import ScanFindingsBadge from '@/components/listings/ScanFindingsBadge';
-import ReactMarkdown from 'react-markdown';
-import rehypeSanitize from 'rehype-sanitize';
+import BackendListingHtml from '@/components/BackendListingHtml';
 import FileBreakdown from './FileBreakdown';
 import SampleFiles, { type ListingWithSamples } from './SampleFiles';
 import ListingLicenseDisclosure from '@/components/ListingLicenseDisclosure';
@@ -110,7 +109,7 @@ export default async function ListingDetailPage({ params, searchParams }: Props)
 
   const hasActiveScanFindings = listing.scan_findings?.publication_state === 'PUBLISHED';
   const approved = listing.approved_presentation;
-  if (approved && (approved.presentation_version !== 'seller-listing-review-v2' ||
+  if (approved && ((approved.presentation_version !== 'seller-listing-review-v2' && approved.presentation_version !== 'seller-listing-review-v3') ||
       typeof approved.rendered_html !== 'string' || Buffer.byteLength(approved.rendered_html, 'utf8') > 100000 ||
       createHash('sha256').update(approved.rendered_html, 'utf8').digest('hex') !== approved.render_hash)) {
     throw new Error('The approved listing presentation could not be verified');
@@ -177,7 +176,7 @@ export default async function ListingDetailPage({ params, searchParams }: Props)
           {approved ? <ApprovedListingPreview title="Seller-approved listing" html={approved.rendered_html} /> : <>
           {/* Description - rendered as sanitized markdown */}
           <div className="prose prose-sm max-w-none">
-            <ReactMarkdown rehypePlugins={[rehypeSanitize]}>{listing.description}</ReactMarkdown>
+            <BackendListingHtml description={listing.description} descriptionHtml={listing.description_html}/>
           </div>
 
 

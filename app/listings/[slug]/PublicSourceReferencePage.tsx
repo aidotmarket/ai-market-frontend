@@ -1,6 +1,5 @@
 import Link from 'next/link';
-import ReactMarkdown from 'react-markdown';
-import rehypeSanitize from 'rehype-sanitize';
+import BackendListingHtml from '@/components/BackendListingHtml';
 import { formatPublishedDate } from '@/lib/format';
 import type { ListingDetail, PublicSourceReference } from '@/types';
 
@@ -60,13 +59,7 @@ export default function PublicSourceReferencePage({ listing, emitJsonLd }: { lis
               <span>{listing.view_count} views</span>
             </div>
             <div className="prose prose-sm max-w-none">
-              <ReactMarkdown rehypePlugins={[rehypeSanitize]}
-                urlTransform={url => safeExternalHttps(url) ? url : ''}
-                components={{
-                  a: ({ children, href }) => <a href={href} target="_blank" rel="noopener noreferrer">{children}</a>,
-                  img: () => null,
-                }}
-              >{listing.description}</ReactMarkdown>
+              <BackendListingHtml description={listing.description} descriptionHtml={listing.description_html}/>
             </div>
           </> : <p role="status" className="rounded-lg bg-gray-50 p-4 text-sm text-gray-700">Public source reference unavailable. The source details could not be verified.</p>}
         </div>

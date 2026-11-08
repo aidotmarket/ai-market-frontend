@@ -18,3 +18,15 @@ it('preserves exact approved HTML in the opaque sandbox and measures only resour
  expect(onLoad).not.toHaveBeenCalled();fireEvent.load(visible);expect(onLoad).toHaveBeenCalledOnce();
  view.unmount();expect(measure.isConnected).toBe(false);
 });
+
+it('measures v3 headings, breaks and ordered starts while stripping unsafe attributes',()=>{
+ const html='<h4 onclick="bad()">Details</h4><p>First<br>Second</p><ol start="7" class="discard" onclick="bad()"><li>Seven</li></ol><ol start="-2"><li>Invalid</li></ol><ol start="1"><li>Default</li></ol>';
+ render(<ApprovedListingPreview html={html} title="v3 listing"/>);
+ const measure=screen.getByTitle('Preview layout measurement') as HTMLIFrameElement;
+ const copy=new DOMParser().parseFromString(measure.srcdoc,'text/html');
+ expect(copy.querySelector('h4')?.outerHTML).toBe('<h4>Details</h4>');
+ expect(copy.querySelector('p')?.innerHTML).toBe('First<br>Second');
+ expect(copy.querySelector('ol')?.outerHTML).toBe('<ol start="7"><li>Seven</li></ol>');
+ expect([...copy.querySelectorAll('ol')].slice(1).every(el=>el.attributes.length===0)).toBe(true);
+ expect((screen.getByTitle('v3 listing') as HTMLIFrameElement).srcdoc).toBe(html);
+});

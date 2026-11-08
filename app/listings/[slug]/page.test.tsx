@@ -71,14 +71,6 @@ vi.mock('@/components/UsdcLargePurchaseRequest', () => ({
   },
 }));
 
-vi.mock('react-markdown', () => ({
-  default: ({ children }: { children: React.ReactNode }) => <>{children}</>,
-}));
-
-vi.mock('rehype-sanitize', () => ({
-  default: {},
-}));
-
 const { default: ListingDetailPage } = await import('./page');
 
 function makeListing(overrides: Partial<ListingWithSamples> = {}): ListingWithSamples {
@@ -476,15 +468,21 @@ describe('ListingDetailPage Dataset JSON-LD', () => {
 
 describe('approved Workspace presentation',()=>{
   beforeEach(()=>{fetchPublicListing.mockReset();fetchListingVersions.mockReset();buyButtonProps.mockClear();});
-  it('uses the exact approved document in an inert frame',async()=>{
+  it.each(['seller-listing-review-v2','seller-listing-review-v3'] as const)('uses the exact %s approved document in an inert frame',async(presentation_version)=>{
     const {createHash}=await import('node:crypto');
     const rendered_html='<!doctype html><html><body><h1>Approved title</h1><p>**literal text**</p></body></html>';
-    const listing=makeListing({approved_presentation:{presentation_version:'seller-listing-review-v2',rendered_html,
+    const listing=makeListing({approved_presentation:{presentation_version,rendered_html,
       render_hash:createHash('sha256').update(rendered_html).digest('hex')}});
     const html=await renderPage(listing);
     expect(html).toContain('title="Seller-approved listing"');
     expect(html).toContain('sandbox=""');expect(html).toContain('referrerPolicy="no-referrer"');
     expect(html).toContain('**literal text**');expect(html).not.toContain('class="prose prose-sm');
+  });
+  it('rejects an unknown presentation version even with a valid digest',async()=>{
+    const {createHash}=await import('node:crypto');
+    const rendered_html='<p>Unknown version</p>';
+    await expect(renderPage(makeListing({approved_presentation:{presentation_version:'seller-listing-review-v4' as never,rendered_html,render_hash:createHash('sha256').update(rendered_html).digest('hex')}}))).rejects.toThrow(/could not be verified/);
+    expect(buyButtonProps).not.toHaveBeenCalled();
   });
   it('does not render a purchasable page from a mismatched approved document',async()=>{
     await expect(renderPage(makeListing({approved_presentation:{presentation_version:'seller-listing-review-v2',
@@ -791,6 +789,22 @@ it('uses the same UTC Published date in the header and version card near midnigh
  const timestamp='2026-09-27T23:30:00Z';
  const html=await renderPage(makeListing({published_at:timestamp}),[{version_id:'v1',version_label:'v1',published_at:timestamp,object_count:1,total_size_bytes:1024,status:'active'}]);
  expect(html.match(/Published Sep 27, 2026/g)).toHaveLength(2);
+});
+
+it('renders the backend description instead of parsing buyer Markdown',async()=>{
+  const buyer=document.createElement('div');
+  buyer.innerHTML=await renderPage(makeListing({description:'🫨*! sales@acme*.io',description_html:'<p>Backend <strong>description</strong></p>'}));
+  expect(buyer.querySelector('[dir="auto"]')?.innerHTML).toBe('<p>Backend <strong>description</strong></p>');
+});
+
+it.each([undefined,null,'<script>bad</script>'])('renders escaped pre-wrap buyer text for unavailable or invalid backend HTML: %s',async description_html=>{
+  const source='🫨*! sales@acme*.io\n<script>literal</script> **literal**';
+  const buyer=document.createElement('div');
+  buyer.innerHTML=await renderPage(makeListing({description:source,description_html}));
+  const description=buyer.querySelector('[dir="auto"]');
+  expect(description?.textContent).toBe(source);
+  expect(description?.classList.contains('whitespace-pre-wrap')).toBe(true);
+  expect(description?.querySelector('script, strong')).toBeNull();
 });
 
 it('renders human category labels for primary, secondary and unknown categories', async () => {
