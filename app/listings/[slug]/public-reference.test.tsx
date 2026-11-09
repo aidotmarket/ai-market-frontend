@@ -124,6 +124,8 @@ describe('public-source reference route', () => {
     const jsonld = JSON.parse(document.querySelector('script[type="application/ld+json"]')!.textContent!);
     expect(jsonld.license).toBe(instructionsReference.license_url);
     expect(jsonld.publisher.name).toBe(instructionsReference.publisher);
+    expect(jsonld.creator).toEqual({ '@type': 'Organization', name: instructionsReference.publisher });
+    expect(jsonld.creator).toEqual(jsonld.publisher);
     expect(jsonld.sameAs).toBe(instructionsReference.metadata_url);
     expect(jsonld.isAccessibleForFree).toBe(true);
     expect(jsonld.url).toBe('https://ai.market/listings/arbitrary-slug');
@@ -200,6 +202,8 @@ describe('public-source reference route', () => {
     const jsonld = JSON.parse(document.querySelector('script[type="application/ld+json"]')!.textContent!);
     expect(jsonld.license).toBe(reference.license_url);
     expect(jsonld.publisher.name).toBe(reference.publisher);
+    expect(jsonld.creator).toEqual({ '@type': 'Organization', name: reference.publisher });
+    expect(jsonld.creator).toEqual(jsonld.publisher);
     expect(jsonld.offers).toBeUndefined();
     expect(jsonld.sameAs).toBe(reference.metadata_url);
     expect(jsonld.distribution).toBeUndefined();
