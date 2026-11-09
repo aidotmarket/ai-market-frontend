@@ -169,6 +169,25 @@ describe('DataRequestDetailClient authenticated fallback loading', () => {
     expect(screen.getByRole('link', { name: /Back to requests/ }).getAttribute('href')).toBe('/requests');
   });
 
+  it.each([
+    ['**Title: Licensed retail data**', '**Title: Licensed retail data**. Buyer description.', 'Licensed retail data'],
+    ['**Title: Licensed retail transaction data for regional demand forecasting...', '**Title: Licensed retail transaction data for regional demand forecasting and inventory planning**. Buyer description.', 'Licensed retail transaction data for regional demand forecasting...'],
+    ['**Title: Explicit title**', '**Title: Different title**. Buyer description.', '**Title: Explicit title**'],
+    ['Ordinary explicit title', '**Title: Different title**. Buyer description.', 'Ordinary explicit title'],
+  ])('displays the guarded detail title without changing owner values: %s', async (title, description, display) => {
+    const request = makeOwnerRequest({ title, description });
+    mocks.getDataRequest.mockResolvedValue(request);
+    render(<DataRequestDetailClient slug={request.slug} initialRequest={request} />);
+    expect(await screen.findByRole('heading', { name: display })).toBeTruthy();
+    expect(screen.getByText(description)).toBeTruthy();
+    fireEvent.click(await screen.findByRole('button', { name: 'Edit request' }));
+    expect(screen.getByRole('textbox', { name: 'Title' })).toHaveProperty('value', title);
+    expect(screen.getByRole('textbox', { name: 'Description' })).toHaveProperty('value', description);
+    expect(request.title).toBe(title);
+    expect(request.slug).toBe('buyer-request');
+    expect(mocks.updateDataRequest).not.toHaveBeenCalled();
+  });
+
   const savedQuote = {
     id: 'response-1', request_id: 'request-1', proposal: 'Available dataset',
     proposed_price: 125, proposed_timeline: '2 weeks', status: 'submitted',

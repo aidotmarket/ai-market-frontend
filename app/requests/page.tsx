@@ -2,6 +2,7 @@ import Link from 'next/link';
 import type { Metadata } from 'next';
 import { fetchDataRequests } from '@/lib/api';
 import { formatDate } from '@/lib/format';
+import { requestDisplayTitle } from '@/lib/request-display-title';
 import type { DataRequestListItem, DataRequestUrgency } from '@/types';
 
 export const metadata: Metadata = {
@@ -187,7 +188,7 @@ function RequestCard({ request }: { request: DataRequestListItem }) {
       className="block rounded-xl border border-gray-200 p-6 hover:border-[#C5CAE9] hover:shadow-md transition-all"
     >
       <div className="flex flex-wrap items-start justify-between gap-y-2 mb-3">
-        <h3 className="font-semibold text-gray-900 line-clamp-2 flex-1 mr-2">{request.title}</h3>
+        <h3 className="font-semibold text-gray-900 line-clamp-2 flex-1 mr-2">{requestDisplayTitle(request.title, request.description)}</h3>
         {request.is_sample === true && (
           <span className="inline-flex items-center rounded-full bg-amber-100 px-2.5 py-0.5 text-xs font-medium text-amber-800 shrink-0">
             (SAMPLE)
