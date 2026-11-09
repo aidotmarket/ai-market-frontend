@@ -39,6 +39,7 @@ export default function PublicSourceReferencePage({ listing, emitJsonLd }: { lis
     name: listing.title, description: listing.description,
     url: `https://ai.market/listings/${listing.slug}`,
     publisher: { '@type': 'Organization', name: reference.publisher },
+    creator: { '@type': 'Organization', name: reference.publisher },
     license: reference.license_url, isAccessibleForFree: true,
     sameAs: reference.metadata_url,
   } : null;
