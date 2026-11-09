@@ -18,6 +18,7 @@ import {
 import { authSessionOwner, isAuthSessionOwner, subscribeAuthSessionOwner } from '@/lib/auth-session-owner';
 import RequestConversation from '@/components/RequestConversation';
 import { formatDate } from '@/lib/format';
+import { requestDisplayTitle } from '@/lib/request-display-title';
 import { AxiosError } from 'axios';
 import type { DataRequestDetail, DataRequestResponse, DataRequestUrgency } from '@/types';
 
@@ -510,7 +511,7 @@ export default function DataRequestDetailClient({
       {/* Header */}
       <div className="mb-6">
         <div className="flex flex-wrap items-start gap-3 mb-3">
-          <h1 className="text-2xl font-bold text-gray-900 flex-1">{request.title}</h1>
+          <h1 className="text-2xl font-bold text-gray-900 flex-1">{requestDisplayTitle(request.title, request.description)}</h1>
           {request.is_sample === true && (
             <span className="inline-flex items-center rounded-full bg-amber-100 px-2.5 py-0.5 text-xs font-medium text-amber-800 shrink-0">
               (SAMPLE)

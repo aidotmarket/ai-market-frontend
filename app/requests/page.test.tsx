@@ -25,6 +25,23 @@ beforeEach(() => fetchDataRequests.mockReset());
 afterEach(cleanup);
 
 describe('public request browsing', () => {
+  it.each([
+    ['**Title: Licensed retail data**', '**Title: Licensed retail data**. Buyer description.', 'Licensed retail data'],
+    ['**Title: Licensed retail transaction data for regional demand forecasting...', '**Title: Licensed retail transaction data for regional demand forecasting and inventory planning**. Buyer description.', 'Licensed retail transaction data for regional demand forecasting...'],
+    ['**Title: Explicit title**', '**Title: Different title**. Buyer description.', '**Title: Explicit title**'],
+    ['Ordinary explicit title', '**Title: Different title**. Buyer description.', 'Ordinary explicit title'],
+  ])('displays the guarded title on the card: %s', async (title, description, display) => {
+    const item = request('display', { title, description });
+    fetchDataRequests.mockResolvedValue({ items: [item] });
+    await renderPage();
+    const heading = screen.getByRole('heading', { name: display });
+    const card = heading.closest('a')!;
+    expect(card.getAttribute('href')).toBe('/requests/request-display');
+    expect(within(card).getByText(description)).toBeTruthy();
+    expect(item.title).toBe(title);
+    expect(item.description).toBe(description);
+  });
+
   it.each([true, false, undefined, 'true', 1, null])('tags only an explicit sample flag (%s) beside the card title', async is_sample => {
     const extra = is_sample === undefined ? {} : { is_sample };
     fetchDataRequests.mockResolvedValue({ items: [request('sample', extra), request('ordinary', { title: 'Synthetic data request' })] });
