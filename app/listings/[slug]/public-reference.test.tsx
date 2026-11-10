@@ -7,6 +7,7 @@ import type { ListingDetail, PublicSourceReference } from '@/types';
 import PublicSourceReferencePage from './PublicSourceReferencePage';
 
 const api = vi.hoisted(() => ({
+  fetchPublicListingDocuments: vi.fn(async () => []),
   fetchPublicListing: vi.fn(), fetchListingVersions: vi.fn(),
   fetchListingAccessWindowDays: vi.fn(), resolveListingUUID: vi.fn(),
 }));

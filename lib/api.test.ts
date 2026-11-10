@@ -1,5 +1,25 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { fetchDataRequest, fetchDataRequests, fetchPublicListing, fetchPublicListings, fetchFeaturedFeed, fetchListingVersions, fetchShareMetadata } from './api';
+import { fetchDataRequest, fetchDataRequests, fetchPublicListing, fetchPublicListingDocuments, fetchPublicListings, fetchFeaturedFeed, fetchListingVersions, fetchShareMetadata } from './api';
+import {documentFixture} from '@/tests/listingDocumentsFixture';
+
+describe('public listing document freshness', () => {
+  afterEach(() => vi.unstubAllGlobals());
+  it('reads published documents uncached and drops withdrawn or identity-hidden documents on the next read', async () => {
+    const documents = [documentFixture(), documentFixture('data_sheet_pdf')];
+    const fetch = vi.fn().mockResolvedValueOnce({ok: true, json: async () => documents}).mockResolvedValueOnce({ok: true, json: async () => []});
+    vi.stubGlobal('fetch', fetch);
+    expect(await fetchPublicListingDocuments('listing id')).toEqual(documents);
+    expect(await fetchPublicListingDocuments('listing id')).toEqual([]);
+    for (const [url, options] of fetch.mock.calls) {
+      expect(url).toContain('/api/v1/public/listings/listing%20id/documents');
+      expect(options).toEqual({cache: 'no-store'});
+    }
+  });
+  it.each([404, 410, 503])('omits documents on an unavailable %i response', async status => {
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue({ok: false, status}));
+    expect(await fetchPublicListingDocuments('listing')).toEqual([]);
+  });
+});
 
 describe('fetchPublicListing', () => {
   afterEach(() => {

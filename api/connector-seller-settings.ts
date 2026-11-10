@@ -94,14 +94,14 @@ export async function nativeRead<T>(path: string, options: { signal?: AbortSigna
   }
 }
 // Only use for idempotent seller writes: retries retain the original action identity.
-export async function nativeWrite<T>(path: string, body: object, signal?: AbortSignal): Promise<T> {
+export async function nativeWrite<T>(path: string, body: object, signal?: AbortSignal, method: 'post' | 'put' = 'post'): Promise<T> {
   const sameSession = sessionLifecycle();
   for (let attempt = 0; ; attempt++) {
     if (!sameSession()) throw new Error('SESSION_CHANGED');
     signal?.throwIfAborted();
     const session = nativeSession();
     try {
-      const { data } = await nativeClient.post<T>(path, { ...body, csrf: session.csrf }, {
+      const { data } = await nativeClient[method]<T>(path, { ...body, csrf: session.csrf }, {
         ...(signal ? { signal } : {}), headers: session.headers,
       });
       if (!sameSession()) throw new Error('SESSION_CHANGED');

@@ -8,7 +8,7 @@ import { createHash } from 'node:crypto';
 import { notFound, redirect } from 'next/navigation';
 import Link from 'next/link';
 import type { Metadata } from 'next';
-import { fetchListingAccessWindowDays, fetchListingVersions, fetchPublicListing, resolveListingUUID } from '@/lib/api';
+import { fetchListingAccessWindowDays, fetchListingVersions, fetchPublicListingDocuments, fetchPublicListing, resolveListingUUID } from '@/lib/api';
 import {
   formatPrice,
   formatPublishedDate,
@@ -22,6 +22,7 @@ import UsdcLargePurchaseRequest from '@/components/UsdcLargePurchaseRequest';
 import InquiryWidget from '@/components/InquiryWidget';
 import ScanFindingsBadge from '@/components/listings/ScanFindingsBadge';
 import BackendListingHtml from '@/components/BackendListingHtml';
+import ListingDocumentation from '@/components/listing/ListingDocumentation';
 import FileBreakdown from './FileBreakdown';
 import SampleFiles, { type ListingWithSamples } from './SampleFiles';
 import ListingLicenseDisclosure from '@/components/ListingLicenseDisclosure';
@@ -103,8 +104,10 @@ export default async function ListingDetailPage({ params, searchParams }: Props)
     return <GeneratedSamplePage listing={listing} emitJsonLd={DATASET_JSONLD_ENABLED} />;
   }
 
+  const documentsPromise = fetchPublicListingDocuments(listing.id);
+
   if (isPublicSourceReference(listing)) {
-    return <PublicSourceReferencePage listing={listing} emitJsonLd={DATASET_JSONLD_ENABLED} />;
+    return <PublicSourceReferencePage listing={listing} documents={await documentsPromise} emitJsonLd={DATASET_JSONLD_ENABLED} />;
   }
 
   const hasActiveScanFindings = listing.scan_findings?.publication_state === 'PUBLISHED';
@@ -131,7 +134,7 @@ export default async function ListingDetailPage({ params, searchParams }: Props)
   const atAGlanceSummary = pendingSellerTerms && listing.at_a_glance
     ? {...listing.at_a_glance, sample_availability: undefined}
     : listing.at_a_glance;
-  const versions = await fetchListingVersions(listing.id);
+  const [documents, versions] = await Promise.all([documentsPromise, fetchListingVersions(listing.id)]);
   const hasVersionRows = versions.length > 0;
   // S1097: legacy listings intentionally keep byte-identical rendering and omit
   // the pre-purchase download-window line pending Max's R5.1h-vs-parity adjudication.
@@ -174,12 +177,15 @@ export default async function ListingDetailPage({ params, searchParams }: Props)
           <BuyerAtAGlance slug={listing.slug} listingId={listing.id} initialSummary={atAGlanceSummary} includeSample={false} hideSampleAvailability={pendingSellerTerms} />
 
           {approved ? <ApprovedListingPreview title="Seller-approved listing" html={approved.rendered_html} /> : <>
-          {/* Description - rendered as sanitized markdown */}
+          {/* Description uses the validated backend render. */}
           <div className="prose prose-sm max-w-none">
             <BackendListingHtml description={listing.description} descriptionHtml={listing.description_html}/>
           </div>
 
 
+          </>}
+          <ListingDocumentation documents={documents}/>
+          {!approved && <>
           <ScanFindingsBadge scanFindings={listing.scan_findings ?? null} />
           {!hasActiveScanFindings && <p className="text-sm text-gray-600">The seller can request a verified scan of this data.</p>}
           {listing.verification_scope != null && <p className="text-sm text-gray-600">{listing.verification_scope}</p>}

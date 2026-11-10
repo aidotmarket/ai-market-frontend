@@ -14,6 +14,7 @@ const listingsApi = vi.hoisted(() => ({
   publishListing: vi.fn(),
 }));
 const capabilitiesApi = vi.hoisted(() => ({getSellerWorkspaceCapabilities:vi.fn()}));
+vi.mock('@/components/listing/ListingDocumentsEditor', () => ({default: () => null}));
 vi.mock('@/api/sellerWorkspace',()=>capabilitiesApi);
 const identityApi = vi.hoisted(() => ({getSellerLegalIdentity:vi.fn(),refreshSellerLegalIdentity:vi.fn(),saveSellerLegalIdentity:vi.fn()}));
 vi.mock('@/api/sellerLegalIdentity',async(importOriginal)=>({...(await importOriginal<typeof import('@/api/sellerLegalIdentity')>()),...identityApi}));

@@ -1,5 +1,7 @@
 'use client';
 
+import ListingDocumentsEditor from '@/components/listing/ListingDocumentsEditor';
+
 import { useEffect, useRef, useState } from 'react';
 import axios from 'axios';
 import type { ListingDraftContent } from '@/api/sellerListingDraft';
@@ -159,6 +161,7 @@ export default function SellerListingEditor({ assistant, active = true, initialC
   const label = fields.find(([field]) => field === activeField)![1];
 
   return (
+    <>
     <section className="space-y-5" aria-labelledby="listing-editor-title">
       <div><h2 id="listing-editor-title" className="text-xl font-semibold text-gray-900">Describe and price</h2><p className="mt-2 max-w-3xl text-sm leading-6 text-gray-600">Allai, our assistant, can draft this for you from your files. Review her suggestions, ask for changes, and decide what buyers will see.</p></div>
       {assistant && <p className="text-sm text-gray-600">Allai requests use your existing starter credits. Editing and saving your draft do not use credits.</p>}
@@ -189,5 +192,7 @@ export default function SellerListingEditor({ assistant, active = true, initialC
       <button type="button" aria-expanded={previewOpen} aria-controls="seller-listing-preview" onClick={() => setPreviewOpen(current => !current)} className={buttonClass}>{previewOpen ? 'Hide listing preview' : 'Preview my listing'}</button>
       {previewOpen && <div id="seller-listing-preview"><ListingPreview draft={{ ...draft, price, license:licensesEnabled?(licenseSelection?`${licenseSelection.kind==='standard'?`ai.market Standard Data Licence v${licenseSelection.version}`:"Seller's own licence"} · AI/ML training ${licenseSelection.ai_training?'allowed':'not allowed'}`:'Choose a licence'):license }} /></div>}
     </section>
+    <ListingDocumentsEditor listingId={flow?.publication?.publication?.listing_id}/>
+    </>
   );
 }

@@ -1,5 +1,7 @@
 'use client';
 
+import ListingDocumentsEditor from '@/components/listing/ListingDocumentsEditor';
+
 import MarkdownTextField,{descriptionTooLong} from '@/components/listing/MarkdownTextField';
 
 import { useState, useEffect, useCallback } from 'react';
@@ -422,6 +424,8 @@ export default function EditListingPage() {
           </div>
         </div>
       </div>
+
+      <ListingDocumentsEditor listingId={id}/>
 
       {listingLicensesEnabled && <SellerLicenseSelection value={licenseSelection} onChange={setLicenseSelection} disabled={saving} />}
 
