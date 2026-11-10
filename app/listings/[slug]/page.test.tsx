@@ -5,6 +5,8 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { within } from '@testing-library/react';
 
 import type { ListingDetail, ListingVersion } from '@/types';
+import type {ListingDocument} from '@/types/listingDocuments';
+import {documentFixture} from '@/tests/listingDocumentsFixture';
 import type { ListingWithSamples } from './SampleFiles';
 
 const notFound = vi.fn(() => {
@@ -12,6 +14,7 @@ const notFound = vi.fn(() => {
 });
 
 const fetchPublicListing = vi.fn();
+const fetchPublicListingDocuments = vi.fn<() => Promise<ListingDocument[]>>().mockResolvedValue([]);
 const fetchListingVersions = vi.fn();
 const fetchListingAccessWindowDays = vi.fn();
 const resolveListingUUID = vi.fn();
@@ -48,6 +51,7 @@ vi.mock('next/navigation', () => ({
 
 vi.mock('@/lib/api', () => ({
   fetchPublicListing,
+  fetchPublicListingDocuments,
   fetchListingVersions,
   fetchListingAccessWindowDays,
   resolveListingUUID,
@@ -883,5 +887,35 @@ describe('USDC request placement on the public listing', () => {
     }));
     expect(usdcRequestProps).not.toHaveBeenCalled();
     expect(buyButtonProps).not.toHaveBeenCalled();
+  });
+});
+
+
+describe('C4 Documentation page integration', () => {
+  afterEach(() => fetchPublicListingDocuments.mockReset().mockResolvedValue([]));
+  it('places documentation directly after the legacy description and reads it by listing ID', async () => {
+    fetchPublicListingDocuments.mockResolvedValue([documentFixture()]);
+    document.body.innerHTML = await renderPage(makeListing());
+    const docs = within(document.body).getByRole('region', {name: 'Documentation'});
+    expect(docs.previousElementSibling?.textContent).toBe('Visible dataset description.');
+    expect(docs.querySelector('strong')?.textContent).toBe('RENDER');
+    expect(fetchPublicListingDocuments).toHaveBeenLastCalledWith('listing-1');
+  });
+  it.each(['seller-listing-review-v2', 'seller-listing-review-v3'] as const)('keeps documents outside approved %s HTML', async presentation_version => {
+    const {createHash} = await import('node:crypto');
+    const rendered_html = '<html><body><h1>Approved presentation</h1></body></html>';
+    fetchPublicListingDocuments.mockResolvedValue([documentFixture()]);
+    document.body.innerHTML = await renderPage(makeListing({approved_presentation: {
+      presentation_version, rendered_html, render_hash: createHash('sha256').update(rendered_html).digest('hex'),
+    }}));
+    const docs = within(document.body).getByRole('region', {name: 'Documentation'});
+    const iframe = document.querySelector('iframe')!;
+    expect(iframe.getAttribute('srcdoc')).not.toContain('Technical guide');
+    expect(iframe.compareDocumentPosition(docs) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    expect(docs.querySelector('iframe')).toBeNull();
+  });
+  it('keeps the legacy no-documents page unchanged', async () => {
+    document.body.innerHTML = await renderPage(makeListing());
+    expect(within(document.body).queryByRole('region', {name: 'Documentation'})).toBeNull();
   });
 });

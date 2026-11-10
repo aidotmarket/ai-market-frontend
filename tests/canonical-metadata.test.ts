@@ -3,6 +3,7 @@ import { describe, expect, it, vi } from 'vitest';
 
 vi.mock('next/font/google', () => ({ Plus_Jakarta_Sans: () => ({ className: 'font' }) }));
 vi.mock('@/lib/api', () => ({
+  fetchPublicListingDocuments: vi.fn(async () => []),
   fetchPublicListing: vi.fn(async () => ({ slug: 'resolved-listing', title: 'Listing' })),
   fetchDataRequest: vi.fn(async () => ({ slug: 'resolved-request', title: 'Request' })),
 }));
