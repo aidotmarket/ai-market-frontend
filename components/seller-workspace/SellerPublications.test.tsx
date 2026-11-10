@@ -50,7 +50,7 @@ it('fetches a summary only after its details opens',async()=>{
 });
 
 
-it('fetches documents only while their details is open', async()=>{
+it('fetches documents on first open and preserves unsaved edits across collapse and reopen', async()=>{
   api.readPublicationPage.mockResolvedValue({page:0,has_more:false,items:[{id:'one',listing_id:'listing',title:'Retail',slug:'retail',status:'published',is_listed:true,published_at:'2026-09-08T00:00:00Z'}]});
   vi.mocked(readListingDocuments).mockResolvedValue(documentsFixture());
   render(<SellerPublications active enabled/>);
@@ -60,6 +60,17 @@ it('fetches documents only while their details is open', async()=>{
   details.open=true; fireEvent(details,new Event('toggle'));
   await screen.findByRole('region',{name:'Technical documentation'});
   expect(readListingDocuments).toHaveBeenCalledTimes(1);
+  const body=screen.getByRole('textbox',{name:'Technical document'}) as HTMLTextAreaElement;
+  const pdfTitle=screen.getByRole('textbox',{name:'Data sheet title'}) as HTMLInputElement;
+  fireEvent.change(body,{target:{value:'Unsaved technical documentation'}});
+  fireEvent.change(pdfTitle,{target:{value:'Unsaved PDF title'}});
   details.open=false; fireEvent(details,new Event('toggle'));
-  expect(screen.queryByRole('region',{name:'Documents'})).toBeNull();
+  expect(body.isConnected).toBe(true);
+  expect(pdfTitle.isConnected).toBe(true);
+  details.open=true; fireEvent(details,new Event('toggle'));
+  expect(screen.getByRole('textbox',{name:'Technical document'})).toBe(body);
+  expect(body.value).toBe('Unsaved technical documentation');
+  expect(screen.getByRole('textbox',{name:'Data sheet title'})).toBe(pdfTitle);
+  expect(pdfTitle.value).toBe('Unsaved PDF title');
+  expect(readListingDocuments).toHaveBeenCalledTimes(1);
 });

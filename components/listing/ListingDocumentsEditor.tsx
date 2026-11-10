@@ -71,6 +71,7 @@ function DocumentsSession({listingId}: {listingId: string}) {
       const current = await readListingDocuments(listingId, signal);
       signal.throwIfAborted();
       setState(current);
+      setInvalidated({});
       if (showPreview && current.documents[result.kind].draft?.revision === result.revision &&
           current.documents[result.kind].draft?.render_hash === result.render_hash) {
         setPreview({[result.kind]: result.revision});

@@ -107,7 +107,7 @@ it('hydrates PDF sizes when the browser default locale differs from the server',
   } finally {await act(async () => root.unmount());}
 });
 
-it.each([[1024, '1.0 KB'], [40 * 1024, '40.0 KB'], [2 * 1024 * 1024, '2.0 MB']])('shows readable PDF sizes for %i bytes', (size, label) => {
+it.each([[1024, '1.0 KB'], [40 * 1024, '40.0 KB'], [1_048_524, '1023.9 KB'], [1_048_525, '1.0 MB'], [1_048_575, '1.0 MB'], [1_048_576, '1.0 MB'], [2 * 1024 * 1024, '2.0 MB']])('shows readable PDF sizes for %i bytes', (size, label) => {
   render(<ListingDocumentation documents={[documentFixture('data_sheet_pdf', {pdf_size_bytes: size as number})]}/>);
   expect(screen.getByText(`Data sheet (PDF, ${label}) — hosted by the seller, not ai.market`)).toBeTruthy();
 });

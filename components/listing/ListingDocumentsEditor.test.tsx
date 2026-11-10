@@ -279,3 +279,31 @@ it.each(['technical_markdown', 'data_sheet_pdf'] as const)('preserves the other 
   await waitFor(() => expect((region(other).getByRole('button', {name: 'Save document draft'}) as HTMLButtonElement).disabled).toBe(false));
   expect(field.isConnected).toBe(true); expect(field.value).toBe(value);
 });
+
+
+it.each(['technical_markdown', 'data_sheet_pdf'] as const)('restores both editors after a %s conflict, failed reload and successful other-kind action', async kind => {
+  for (const documentKind of ['technical_markdown', 'data_sheet_pdf'] as const) {
+    server.documents[documentKind] = {max_revision: 1, draft: documentFixture(documentKind), published: null, withdrawn: null};
+  }
+  await mount();
+  const other = kind === 'technical_markdown' ? 'data_sheet_pdf' : 'technical_markdown';
+  const otherEditor = screen.getByRole('region', {name: other === 'technical_markdown' ? 'Technical documentation' : 'Data sheet'});
+  const documents = screen.getByRole('region', {name: 'Documents'});
+  vi.mocked(api.saveDocumentDraft).mockRejectedValueOnce({isAxiosError: true, response: {status: 409}});
+  vi.mocked(api.readListingDocuments).mockRejectedValueOnce(new Error('Offline'));
+  fireEvent.click(region(kind).getByRole('button', {name: 'Save document draft'}));
+  await screen.findByText(/Reload the current documents before continuing/);
+  expect(screen.queryByRole('region', {name: kind === 'technical_markdown' ? 'Technical documentation' : 'Data sheet'})).toBeNull();
+  expect(otherEditor.isConnected).toBe(true);
+  fireEvent.click(region(other).getByRole('button', {name: 'Discard draft'}));
+  await waitFor(() => {
+    for (const documentKind of ['technical_markdown', 'data_sheet_pdf'] as const) {
+      const title = region(documentKind).getByRole('textbox', {name: documentKind === 'technical_markdown' ? 'Technical documentation title' : 'Data sheet title'});
+      expect(title.closest('fieldset')!.disabled).toBe(false);
+    }
+  });
+  expect(screen.getByRole('region', {name: 'Documents'})).toBe(documents);
+  expect(screen.queryByRole('alert')).toBeNull();
+  expect(api.readListingDocuments).toHaveBeenCalledTimes(3);
+  expect(api.discardDocumentDraft).toHaveBeenCalledWith('synthetic-listing', other, 1, expect.any(AbortSignal));
+});
