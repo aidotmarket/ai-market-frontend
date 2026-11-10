@@ -109,7 +109,7 @@ export default async function ListingDetailPage({ params, searchParams }: Props)
 
   const hasActiveScanFindings = listing.scan_findings?.publication_state === 'PUBLISHED';
   const approved = listing.approved_presentation;
-  if (approved && ((approved.presentation_version !== 'seller-listing-review-v2' && approved.presentation_version !== 'seller-listing-review-v3') ||
+  if (approved && ((approved.presentation_version !== 'seller-listing-review-v2' && approved.presentation_version !== 'seller-listing-review-v3' && approved.presentation_version !== 'seller-listing-review-v4') ||
       typeof approved.rendered_html !== 'string' || Buffer.byteLength(approved.rendered_html, 'utf8') > 100000 ||
       createHash('sha256').update(approved.rendered_html, 'utf8').digest('hex') !== approved.render_hash)) {
     throw new Error('The approved listing presentation could not be verified');

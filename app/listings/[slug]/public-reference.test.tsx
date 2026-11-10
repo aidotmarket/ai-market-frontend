@@ -229,7 +229,7 @@ describe('public-source reference route', () => {
     expect(forbidden).not.toHaveBeenCalled();
   });
 
-  it.each(['seller-listing-review-v2','seller-listing-review-v3','unknown-version'])('ignores stale %s seller-approved presentations on a reference', async presentation_version => {
+  it.each(['seller-listing-review-v2','seller-listing-review-v3','seller-listing-review-v4','unknown-version'])('ignores stale %s seller-approved presentations on a reference', async presentation_version => {
     await render(fixture({ approved_presentation: { presentation_version, rendered_html: 'Old seller approved claims', render_hash: 'stale' } }));
     expect(document.body.textContent).toContain('Indexed from public source');
     expect(document.body.textContent).not.toContain('Old seller approved claims');
