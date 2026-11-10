@@ -54,6 +54,12 @@ describe('seller gateway API', () => {
     vi.mocked(api.get).mockResolvedValueOnce({ data: { source } }).mockResolvedValueOnce({ data: { source: null } });
     expect(await getGatewayListingSource('listing/1')).toEqual(source);
     expect(await getGatewayListingSource('listing/1')).toBeNull();
-    expect(api.get).toHaveBeenCalledWith('/listings/listing%2F1/gateway-source');
+    expect(api.get).toHaveBeenCalledWith('/listings/listing%2F1/gateway-source', undefined);
+  });
+  it('forwards a caller-scoped timeout and cancellation signal for the optional source read', async () => {
+    vi.mocked(api.get).mockResolvedValueOnce({ data: { source: null } });
+    const options = { timeout: 10_000, signal: new AbortController().signal };
+    expect(await getGatewayListingSource('listing/1', options)).toBeNull();
+    expect(api.get).toHaveBeenLastCalledWith('/listings/listing%2F1/gateway-source', options);
   });
 });

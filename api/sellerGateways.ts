@@ -1,5 +1,5 @@
 import { api } from './client';
-import type { AxiosResponse } from 'axios';
+import type { AxiosRequestConfig, AxiosResponse } from 'axios';
 import type { DoorCheck, FilesPage, GatewayFile, GatewayMessageType, PairingCode, ReceivedPage, SellerGateway, WithRetry } from '@/types/sellerGateway';
 
 const gatewayPath = (id: string) => `/gateways/${encodeURIComponent(id)}`;
@@ -36,8 +36,8 @@ export async function listGatewayFiles(id: string, cursor?: string, limit = 100)
   return (await api.get<FilesPage>(`${gatewayPath(id)}/files`, { params: { cursor, limit } })).data;
 }
 export interface GatewayListingSource { type: 'gateway'; gateway_id: string; file_ids: string[] }
-export async function getGatewayListingSource(listingId: string): Promise<GatewayListingSource | null> {
-  return (await api.get<{ source: GatewayListingSource | null }>(`/listings/${encodeURIComponent(listingId)}/gateway-source`)).data.source;
+export async function getGatewayListingSource(listingId: string, options?: Pick<AxiosRequestConfig, 'timeout' | 'signal'>): Promise<GatewayListingSource | null> {
+  return (await api.get<{ source: GatewayListingSource | null }>(`/listings/${encodeURIComponent(listingId)}/gateway-source`, options)).data.source;
 }
 export async function saveGatewayListingSource(listingId: string, source: GatewayListingSource): Promise<GatewayListingSource> {
   return (await api.put<{ source: GatewayListingSource }>(`/listings/${encodeURIComponent(listingId)}/gateway-source`, { source })).data.source;
