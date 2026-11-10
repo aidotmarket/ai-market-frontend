@@ -12,7 +12,7 @@ const api = vi.hoisted(() => ({
 }));
 const forbidden = vi.hoisted(() => vi.fn(() => <div data-forbidden-purchase-or-inference />));
 vi.mock('@/lib/api', () => api);
-vi.mock('next/navigation', () => ({ notFound: () => { throw new Error('not found'); }, redirect: vi.fn() }));
+vi.mock('next/navigation', () => ({useRouter:()=>({refresh:vi.fn()}), notFound: () => { throw new Error('not found'); }, redirect: vi.fn() }));
 vi.mock('@/components/BuyButton', () => ({ default: forbidden }));
 vi.mock('@/components/ListingPurchasePanel', () => ({ default: forbidden }));
 vi.mock('@/components/ListingPurchaseAdvisory', () => ({ default: forbidden }));

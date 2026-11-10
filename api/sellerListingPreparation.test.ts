@@ -56,3 +56,15 @@ it('preserves lookup parameters and cancellation across one session refresh', as
     signal, headers: nativeSession().headers, params: { draft_id: approval.draft_id, draft_version: 3 },
   });
 });
+
+it('refuses correction inputs before constructing a signing preparation or writing it',async()=>{
+ const {default:wire}=await import('@/tests/fixtures/s1922-backend-wire.json');
+ const c=wire.public[2].corrected;
+ const post=vi.spyOn(nativeClient,'post');
+ for(const key of ['presentation_kind','original_render_hash','original_admitted_render_hash','correction_id','correction_digest','provenance','license_label'] as const){
+  const invalid={...approval,[key]:c[key]};
+  expect(()=>preparationRequest(invalid)).toThrow('Original signing evidence');
+  await expect(prepareListing({request_id:id(9),draft_id:approval.draft_id!,expected_draft_version:3,approval_id:approval.id,review_hash:hash,render_hash:hash},invalid,new AbortController().signal)).rejects.toThrow();
+ }
+ expect(post).not.toHaveBeenCalled();
+});

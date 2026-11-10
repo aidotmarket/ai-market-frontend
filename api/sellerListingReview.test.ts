@@ -129,3 +129,31 @@ it('keeps named draft identity through review, pagination, restored approval and
     expect(post).toHaveBeenCalledWith('/seller-workspace/listing-approval',expect.objectContaining({draft_id:id(101),review_hash:saved.review_hash,csrf:nativeSession().csrf}),{signal,headers:nativeSession().headers});
   } finally {post.mockRestore();}
 });
+
+it('refuses actual correction envelopes and each additive correction field before reading or signing',async()=>{
+ const {default:wire}=await import('@/tests/fixtures/s1922-backend-wire.json');
+ const {correctionFields}=await import('@/lib/publicPresentation');
+ for(const fixture of wire.public){
+  const original={...fixture.frozen,presentation_version:fixture.original.presentation_version,fields:fixture.fields,review_hash:'e'.repeat(64),draft_version:1,source_version:1,
+   approval_available:false,missing_fields:[],confirmation_statements:{},source_hash:'f'.repeat(64),confirmation_version:'seller-listing-confirmation-v1'} as ListingReview;
+  client.get.mockResolvedValue({data:original});
+  const before=JSON.stringify(original);
+  expect(await readListingReview(new AbortController().signal)).toEqual(original);
+  const receipt={id:'original',review_hash:original.review_hash,render_hash:original.render_hash,draft_version:1,source_version:1,sample_decision:'none'};
+  client.post.mockResolvedValue({data:receipt});
+  await approveListingReview(original,'request',new AbortController().signal);
+  expect(client.post.mock.lastCall?.[1]).toMatchObject({review_hash:original.review_hash,render_hash:fixture.frozen.render_hash});
+  expect(JSON.stringify(original)).toBe(before);
+  for(const key of correctionFields){
+   const invalid={...original,[key]:fixture.corrected[key as keyof typeof fixture.corrected]};
+   client.get.mockResolvedValue({data:invalid});
+   await expect(readListingReview(new AbortController().signal)).rejects.toThrow('original seller evidence');
+   client.post.mockClear();
+   await expect(approveListingReview(invalid,'request',new AbortController().signal)).rejects.toThrow('original seller evidence');
+   expect(client.post).not.toHaveBeenCalled();
+  }
+  const invalid={...original,...fixture.corrected};client.get.mockResolvedValue({data:invalid});
+  await expect(readListingReview(new AbortController().signal)).rejects.toThrow();
+  await expect(approveListingReview(invalid,'request',new AbortController().signal)).rejects.toThrow();
+ }
+});

@@ -73,7 +73,7 @@ export default function SellerPublication({approval,active,rendered,sampleCount=
     {!state && !error && <p role="status" className="text-sm text-gray-600">Checking publication status…</p>}
     {publication ? <><p role="status" className="text-sm text-green-900">{publication.status==='published' && publication.is_listed?'Your listing is published and available in the marketplace.':'This review has been published. The listing is currently not available in marketplace discovery.'}</p>
       {approval.sample_decision==='member_files'&&<p className="text-sm text-gray-700">{sampleCount===0?'No free sample files':`${sampleCount} free sample ${sampleCount===1?'file is':'files are'} part of the purchased set.`}</p>}
-      <a href={`/listings/${encodeURIComponent(publication.slug)}`} className="inline-block text-sm font-medium text-indigo-700 underline">View {publication.title}</a>
+      <a href={`/listings/${encodeURIComponent(publication.slug)}`} className="inline-block text-sm font-medium text-indigo-700 underline">View separately attributed current public display: {publication.title}</a>
       {approval.license_selection?.kind==='custom'&&<a href={`/listings/${encodeURIComponent(publication.slug)}`} className="text-sm text-indigo-700 underline">Open verified custom licence on listing</a>}
       {publication.listing_id && <SellerAtAGlance listingId={publication.listing_id} slug={publication.slug} active={active} />}</> : state && <>
       <p className="text-sm leading-6 text-gray-700">Your approved listing is private. Publishing makes the approved description, tags, price and licence public. The files stay in your storage.</p>

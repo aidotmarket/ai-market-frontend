@@ -1,4 +1,6 @@
 // @vitest-environment jsdom
+// Purchased evidence is exercised through its real component/transport suite.
+vi.mock('@/components/orders/PurchasedLicenseDisplay', () => ({default: () => <div data-purchased-evidence /> }));
 
 import { AxiosError } from 'axios';
 import { act, cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';

@@ -1,3 +1,4 @@
+import {refusePlatformCorrection} from '@/lib/publicPresentation';
 import { nativeRead, nativeWrite, sessionLifecycle, uuid, digest } from '@/api/connector-seller-settings';
 import { isCompleteLicenseSelection, type LicenseSelection } from '@/api/listingLicenses';
 export interface PreparationBinding {
@@ -15,6 +16,7 @@ export interface SigningRequest { request_id: string; csrf: string; reauth_token
 const base = '/seller-workspace';
 export function validView(v: PreparationView) {
   const b = v?.binding;
+  try { refusePlatformCorrection(v); refusePlatformCorrection(b); if ('license_selection' in v) refusePlatformCorrection(v.license_selection); } catch { return false; }
   return v && uuid(v.id) && b && b.preparation_id === v.id && digest(v.coverage_hash)
     && (['signed','published'].includes(v.status) ? digest(v.signed_coverage_hash) : v.signed_coverage_hash === null)
     && ['prepared', 'signed', 'published', 'superseded'].includes(v.status) && typeof v.signing_required === 'boolean'
@@ -32,6 +34,8 @@ export async function readSigningInstruments(ids: string[]): Promise<SigningInst
   const sameSession = sessionLifecycle();
   const results = await Promise.all(ids.map(async id => {
     const data = await nativeRead<SigningInstrument>(`${base}/listing-preparation/${id}`);
+    refusePlatformCorrection(data);
+    refusePlatformCorrection(data.license_selection);
     if (!validView(data) || data.id !== id || !data.license_selection || !isCompleteLicenseSelection(data.license_selection)) throw new Error('INVALID_INSTRUMENT');
     return data;
   }));
@@ -39,6 +43,8 @@ export async function readSigningInstruments(ids: string[]): Promise<SigningInst
   return results;
 }
 export async function signInstruments(body: SigningRequest, signal?: AbortSignal): Promise<PreparationView[]> {
+  refusePlatformCorrection(body);
+  for (const instrument of body.instruments ?? []) { refusePlatformCorrection(instrument); refusePlatformCorrection(instrument.selection); }
   if (!uuid(body.request_id) || !body.instruments.length || body.instruments.length > 50
     || new Set(body.instruments.map(i => i.preparation_id)).size !== body.instruments.length) throw new Error('INVALID_BATCH');
   const data = await nativeWrite<{ instruments: PreparationView[] }>(`${base}/listing-licences/sign`, body, signal);

@@ -42,6 +42,7 @@ vi.mock('@/components/listings/BuyerAtAGlance', async (importOriginal) => {
 });
 
 vi.mock('next/navigation', () => ({
+  useRouter: () => ({refresh: vi.fn()}),
   notFound,
   redirect: vi.fn(),
 }));
@@ -884,4 +885,41 @@ describe('USDC request placement on the public listing', () => {
     expect(usdcRequestProps).not.toHaveBeenCalled();
     expect(buyButtonProps).not.toHaveBeenCalled();
   });
+});
+
+describe('S1922 actual current public rendering',()=>{
+  it.each([0,1,2])('renders backend correction template %s with platform title, original evidence and current label',async index=>{
+    const {default:wire}=await import('@/tests/fixtures/s1922-backend-wire.json');
+    const c=wire.public[index].corrected;
+    const html=await renderPage(makeListing({id:c.listing_id,approved_presentation:c as ListingDetail['approved_presentation'],license:c.license_label,
+      license_display:{license_label:c.license_label,provenance:c.provenance,correction_id:c.correction_id,correction_digest:c.correction_digest}} as Partial<ListingWithSamples>));
+    const container=document.createElement('div');container.innerHTML=html;
+    const frame=container.querySelector('iframe[title="Listing with platform-corrected licence display"]');
+    expect(frame?.getAttribute('srcdoc')).toBe(c.rendered_html);
+    expect(frame?.getAttribute('sandbox')).toBe('');
+    expect(container.textContent).toContain('Platform-corrected licence display; original seller approval retained');
+    expect(container.textContent).toContain('Original seller evidence');
+    expect(container.querySelector('iframe[title="Seller-approved listing"]')).toBeNull();
+  });
+  it('refuses partial or foreign correction HTML before producing an iframe',async()=>{
+    const {default:wire}=await import('@/tests/fixtures/s1922-backend-wire.json');
+    const c=wire.public[2].corrected;
+    for(const approved of [{...c,correction_digest:undefined},{...c,listing_id:'ffffffff-ffff-ffff-ffff-ffffffffffff'},{...c,rendered_html:'unsafe'}]){
+      await expect(renderPage(makeListing({id:c.listing_id,approved_presentation:approved as ListingDetail['approved_presentation']}))).rejects.toThrow();
+    }
+  });
+});
+
+it('emits actual backend current JSON-LD alongside unchanged original summary evidence',async()=>{
+ const {default:wire}=await import('@/tests/fixtures/s1922-backend-wire.json');
+ const fixture=wire.public[2],c=fixture.corrected;
+ const before=JSON.stringify(fixture.at_a_glance);
+ const html=await renderPage(makeListing({id:c.listing_id,approved_presentation:c as ListingDetail['approved_presentation'],license:c.license_label,
+   license_display:fixture.license_display,jsonld:fixture.jsonld,at_a_glance:fixture.at_a_glance} as Partial<ListingWithSamples>));
+ const jsonld=JSON.parse(extractJsonLdScripts(html)[0]);
+ expect(jsonld.license.name).toBe('ai.market Standard Data Licence v1.1');
+ expect(jsonld.additionalProperty).toContainEqual(expect.objectContaining({name:'Licence display provenance',value:'Platform-corrected licence display; original seller approval retained',propertyID:c.correction_digest}));
+ expect(fixture.at_a_glance.license.value).toBe('ai.market Standard Data Licence v1.0');
+ expect(JSON.stringify(fixture.at_a_glance)).toBe(before);
+ expect(html).toContain('Original approved summary evidence');
 });

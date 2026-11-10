@@ -1,5 +1,6 @@
 'use client';
 
+import {useEffect,useState} from 'react';
 import { useInfiniteQuery } from '@tanstack/react-query';
 import { listListings, searchListings } from '@/api/listings';
 import type { FulfillmentType, ListingListItem, SearchResultItem, SearchResponse } from '@/types';
@@ -46,11 +47,15 @@ export function useSearchListings({
     queryKey: ['marketplace-results', semanticMode ? 'semantic' : 'browse', q, category, listingCategory, minPrice, maxPrice],
     enabled: semanticMode ? q.length > 0 && enabled : enabled,
     initialPageParam: 0,
+    staleTime: 0,
+    refetchInterval: 5 * 60_000,
+    refetchOnWindowFocus: true,
+    refetchOnReconnect: true,
     queryFn: async ({ pageParam }) => {
       const offset = typeof pageParam === 'number' ? pageParam : 0;
 
       if (semanticMode) {
-        return searchListings(q, {
+        const result = await searchListings(q, {
           category: category || undefined,
           min_price: minPrice,
           max_price: maxPrice,
@@ -58,9 +63,10 @@ export function useSearchListings({
           limit: PAGE_SIZE,
           offset,
         });
+        return {result, observedAt:Date.now()};
       }
 
-      return listListings({
+      const result = await listListings({
         skip: offset,
         limit: PAGE_SIZE,
         category: category || undefined,
@@ -68,17 +74,19 @@ export function useSearchListings({
         max_price: maxPrice,
         fulfillment_type: fulfillmentType,
       });
+      return {result, observedAt:Date.now()};
     },
     getNextPageParam: (lastPage, allPages) => {
-      const pageItems = Array.isArray(lastPage) ? lastPage : lastPage.results;
+      const result=lastPage.result;
+      const pageItems = Array.isArray(result) ? result : result.results;
       if (pageItems.length < PAGE_SIZE) return undefined;
 
       const loadedCount = allPages.reduce((sum, page) => {
-        return sum + (Array.isArray(page) ? page.length : page.results.length);
+        return sum + (Array.isArray(page.result) ? page.result.length : page.result.results.length);
       }, 0);
 
       // Use backend total when available to avoid fetching an empty final page
-      if (!Array.isArray(lastPage) && lastPage.total > 0 && loadedCount >= lastPage.total) {
+      if (!Array.isArray(result) && result.total > 0 && loadedCount >= result.total) {
         return undefined;
       }
 
@@ -86,11 +94,15 @@ export function useSearchListings({
     },
   });
 
-  const rawItems: ResultItem[] = filterDiscoverableItems(query.data?.pages.flatMap((page): ResultItem[] =>
-    Array.isArray(page) ? page : page.results
+  const [clock,setClock] = useState(0);
+  useEffect(()=>{const timer=setInterval(()=>setClock(Date.now()),60_000);return()=>clearInterval(timer);},[]);
+  // Appending a fresh page must never extend the life of older pages.
+  const expired = query.data?.pages.some(page => Math.max(clock, Date.now()) - page.observedAt >= 10 * 60_000) ?? false;
+  const rawItems: ResultItem[] = expired ? [] : filterDiscoverableItems(query.data?.pages.flatMap((page): ResultItem[] =>
+    Array.isArray(page.result) ? page.result : page.result.results
   ) || []);
 
-  const firstPage = query.data?.pages[0];
+  const firstPage = query.data?.pages[0]?.result;
   const facets = Array.isArray(firstPage) ? null : (firstPage as SearchResponse | undefined)?.facets;
   const total = semanticMode
     ? (Array.isArray(firstPage) ? rawItems.length : (firstPage as SearchResponse | undefined)?.total || rawItems.length)
@@ -99,6 +111,8 @@ export function useSearchListings({
   return {
     ...query,
     items: rawItems,
+    isError: query.isError || expired,
+    error: expired ? new Error('Refresh to load current marketplace results.') : query.error,
     facets,
     total,
     semanticMode,

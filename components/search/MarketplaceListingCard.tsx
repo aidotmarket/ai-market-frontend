@@ -1,3 +1,4 @@
+import {readLicenseDisplay, CORRECTION_NOTICE} from '@/lib/publicPresentation';
 import { formatMarketplaceCategoryName } from '@/lib/marketplaceCategories';
 import GeneratedSampleCard from '@/components/listings/GeneratedSampleCard';
 import { generatedSampleState } from '@/lib/generatedSample';
@@ -9,6 +10,7 @@ type CardListing = ListingListItem | SearchResultItem;
 
 export function MarketplaceListingCard({ listing }: { listing: CardListing }) {
   if (generatedSampleState(listing) !== 'ordinary') return <GeneratedSampleCard listing={listing} />;
+  const display = readLicenseDisplay('license_display' in listing ? listing.license_display : null);
   const tags = Array.isArray(listing.tags) ? listing.tags.slice(0, 3) : [];
   const views = 'view_count' in listing ? listing.view_count : undefined;
   const description = listing.short_description || ('description' in listing ? listing.description : null);
@@ -39,6 +41,7 @@ export function MarketplaceListingCard({ listing }: { listing: CardListing }) {
         </p>
       )}
 
+      {display && <p className="mt-3 text-xs text-gray-600">{display.license_label}. {CORRECTION_NOTICE}</p>}
       <div className="mt-4 flex flex-wrap gap-1.5">
         <span className="inline-flex items-center rounded-full bg-gray-100 px-2.5 py-1 text-xs font-medium text-gray-700">
           {formatMarketplaceCategoryName(listing.category)}

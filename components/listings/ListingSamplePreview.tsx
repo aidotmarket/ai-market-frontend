@@ -96,6 +96,6 @@ export default function ListingSamplePreview({slug, listingId, onManifest}: {
     {state.kind === 'ready' && <button type="button" onClick={() => startRef.current(true)} className="rounded border border-indigo-700 px-3 py-2 text-indigo-700 focus-visible:outline-2 focus-visible:outline-indigo-700">View sample</button>}
     {state.kind === 'loading' && <p role="status" aria-live="polite">Verifying sample…</p>}
     {state.kind === 'unavailable' && <p role="status" aria-live="polite">Sample unavailable</p>}
-    {state.kind === 'verified' && <state.Table sample={state.sample} columns={state.columns} />}
+    {state.kind === 'verified' && <><p className="text-sm text-gray-600">Original signed sample evidence; current public licence display is separate.</p><state.Table sample={state.sample} columns={state.columns} /></>}
   </section>;
 }

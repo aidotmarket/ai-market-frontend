@@ -1,3 +1,4 @@
+import {refuseCorrectionFields, refusePlatformCorrection} from '@/lib/publicPresentation';
 import axios from 'axios';
 import {nativeWrite} from './connector-seller-settings';
 import { api } from './client';
@@ -75,6 +76,10 @@ export async function readReviewSourcePage(review: ListingReview, cursor: string
 }
 export async function readListingReview(signal: AbortSignal, draft_id?: string | null): Promise<ListingReview> {
   const review: ListingReview = (await api.get('/seller-workspace/listing-review', {signal,...(draft_id ? {params:{draft_id}} : {})})).data;
+  refuseCorrectionFields(review);
+  if (review.fields !== undefined) refuseCorrectionFields(review.fields);
+  if (review.approval) refuseCorrectionFields(review.approval);
+  if (review.license_selection) refusePlatformCorrection(review.license_selection);
   if (draft_id && review.draft_id !== draft_id) throw new Error('Saved review could not be verified');
   if ((review.presentation_version !== 'seller-listing-review-v2' && review.presentation_version !== 'seller-listing-review-v3' && review.presentation_version !== 'seller-listing-review-v4') || typeof review.rendered_html !== 'string' ||
       !/^[a-f0-9]{64}$/.test(review.render_hash)) throw new Error('Saved review could not be verified');
@@ -117,6 +122,10 @@ export async function readListingReview(signal: AbortSignal, draft_id?: string |
 }
 
 export async function approveListingReview(review: ListingReview, request_id: string, signal: AbortSignal): Promise<ApprovalReceipt> {
+  refuseCorrectionFields(review);
+  if (review.fields !== undefined) refuseCorrectionFields(review.fields);
+  if (review.approval) refuseCorrectionFields(review.approval);
+  if (review.license_selection) refusePlatformCorrection(review.license_selection);
   const sampleDecision=review.sample_decision??'none';
   const licenseConfirmations=review.license_selection ? {price_confirmed:true,license_confirmed:true,covenant_authority_confirmed:true,license_selection:review.license_selection} : {price_license_confirmed:true};
   const body = {request_id,...(review.draft_id ? {draft_id:review.draft_id} : {}),review_hash:review.review_hash,render_hash:review.render_hash,
@@ -124,6 +133,7 @@ export async function approveListingReview(review: ListingReview, request_id: st
     ownership_confirmed:true,privacy_confirmed:true,...licenseConfirmations,public_disclosure_confirmed:true,
     ...(sampleDecision === 'member_files' ? {sample_files_confirmed:true} : {})};
   const receipt: ApprovalReceipt = review.draft_id ? await nativeWrite<ApprovalReceipt>('/seller-workspace/listing-approval',body,signal) : (await api.post('/seller-workspace/listing-approval',body,{signal})).data;
+  refuseCorrectionFields(receipt);
   if (receipt.review_hash !== review.review_hash || receipt.render_hash !== review.render_hash ||
       receipt.draft_version !== review.draft_version || receipt.source_version !== review.source_version ||
       receipt.sample_decision !== sampleDecision || signal.aborted ||

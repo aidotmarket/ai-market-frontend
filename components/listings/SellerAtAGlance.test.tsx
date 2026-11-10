@@ -77,12 +77,12 @@ it('removes the approved claim as soon as a changed enrichment PUT commits even 
   }).mockRejectedValueOnce(new Error('enrichment offline'));
   vi.mocked(api.saveListingEnrichment).mockResolvedValue({profile: 'aim-listing-enrichment-profile-v2', request_id: crypto.randomUUID(), summary_id: preview.summary_id, source_revision: 'd'.repeat(64), changed: true});
   render(<SellerAtAGlance listingId="listing" />);
-  expect(await screen.findByText('Approved. This summary is shown to buyers.')).toBeTruthy();
+  expect(await screen.findByText('Approved original summary evidence. Current public licence display is separate.')).toBeTruthy();
   fireEvent.click(screen.getByText('Optional listing details'));
   fireEvent.change(await screen.findByLabelText(/^Dataset origin statement/), {target: {value: 'Changed.'}});
   fireEvent.click(screen.getByRole('button', {name: 'Save optional details'}));
   await screen.findByText('Optional details were saved, but the current values could not be reloaded. Reload the page before making more changes.');
-  await waitFor(() => expect(screen.queryByText('Approved. This summary is shown to buyers.')).toBeNull());
+  await waitFor(() => expect(screen.queryByText('Approved original summary evidence. Current public licence display is separate.')).toBeNull());
   expect(api.fetchSummaryPreview).toHaveBeenCalledTimes(2);
   expect(screen.getByRole('button', {name: 'Reload summary'})).toBeTruthy();
 });

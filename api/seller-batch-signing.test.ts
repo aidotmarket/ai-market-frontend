@@ -63,3 +63,21 @@ it('reads a historical 1.0 preparation without rewriting its stored selection', 
   vi.spyOn(nativeClient, 'get').mockResolvedValue({data: old});
   expect(await readSigningInstruments([old.id])).toEqual([old]);
 });
+
+it('refuses platform correction markers in actual preparation/signing readers without changing original coverage',async()=>{
+ const {default:wire}=await import('@/tests/fixtures/s1922-backend-wire.json');
+ const c=wire.public[2].corrected,i=instrument(1);
+ const get=vi.spyOn(nativeClient,'get'),post=vi.spyOn(nativeClient,'post');
+ for(const key of ['presentation_kind','original_render_hash','original_admitted_render_hash','correction_id','correction_digest','provenance','license_label'] as const){
+  const marker={[key]:c[key]};
+  get.mockResolvedValue({data:{...i,...marker}});
+  await expect(readSigningInstruments([i.id])).rejects.toThrow();
+  get.mockResolvedValue({data:{...i,binding:{...i.binding,...marker}}});
+  await expect(readSigningInstruments([i.id])).rejects.toThrow();
+  const body={request_id:id(9),csrf:nativeSession().csrf,instruments:[{preparation_id:i.id,coverage_hash:i.coverage_hash,selection:{...i.license_selection,...marker}}]};
+  await expect(signInstruments(body)).rejects.toThrow('Original signing evidence');
+  expect(post).not.toHaveBeenCalled();
+ }
+ expect(i.binding.render_hash).toBe(instrument(1).binding.render_hash);
+ expect(i.coverage_hash).toBe(instrument(1).coverage_hash);
+});

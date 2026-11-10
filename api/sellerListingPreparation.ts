@@ -1,3 +1,4 @@
+import {refusePlatformCorrection} from '@/lib/publicPresentation';
 import axios from 'axios';
 import {nativeRead,nativeWrite,nativeAuthError} from './connector-seller-settings';
 import {validView,type PreparationView,type SigningInstrument} from './seller-batch-signing';
@@ -7,11 +8,15 @@ import {isCompleteLicenseSelection} from './listingLicenses';
 export type PreparedListing = PreparationView & Pick<Partial<SigningInstrument>, 'license_selection'>;
 export type PreparationRequest = {request_id:string;draft_id:string;expected_draft_version:number;approval_id:string;review_hash:string;render_hash:string};
 export function preparationRequest(approval:ApprovalReceipt):PreparationRequest {
+  refusePlatformCorrection(approval);
   if (!approval.draft_id) throw new Error('PREPARATION_STALE');
   return {request_id:crypto.randomUUID(),draft_id:approval.draft_id,expected_draft_version:approval.draft_version,
     approval_id:approval.id,review_hash:approval.review_hash,render_hash:approval.render_hash};
 }
 function verified(value:PreparedListing, approval:ApprovalReceipt):PreparedListing {
+  refusePlatformCorrection(approval);
+  refusePlatformCorrection(value);
+  if (value.license_selection) refusePlatformCorrection(value.license_selection);
   if (!validView(value) || (value.license_selection && (!isCompleteLicenseSelection(value.license_selection) ||
       (approval.license_selection && !sameLicenseSelection(value.license_selection,approval.license_selection)))) || value.binding.draft_id!==approval.draft_id || value.binding.draft_version!==approval.draft_version ||
       value.binding.approval_id!==approval.id || value.binding.render_hash!==approval.render_hash ||
@@ -20,6 +25,7 @@ function verified(value:PreparedListing, approval:ApprovalReceipt):PreparedListi
   return value;
 }
 export async function lookupPreparation(approval:ApprovalReceipt,signal:AbortSignal):Promise<PreparedListing|null> {
+  refusePlatformCorrection(approval);
   try {
     const data=await nativeRead<PreparedListing>('/seller-workspace/listing-preparation', {signal,
       params:{draft_id:approval.draft_id,draft_version:approval.draft_version}});
@@ -30,6 +36,8 @@ export async function lookupPreparation(approval:ApprovalReceipt,signal:AbortSig
   }
 }
 export async function prepareListing(request:PreparationRequest,approval:ApprovalReceipt,signal:AbortSignal):Promise<PreparedListing> {
+  refusePlatformCorrection(request);
+  refusePlatformCorrection(approval);
   const data=await nativeWrite<PreparedListing>('/seller-workspace/listing-preparation',request,signal);
   return {...verified(data,approval),license_selection:approval.license_selection};
 }
