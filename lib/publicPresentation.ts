@@ -31,13 +31,16 @@ export function supportedVersion(value: unknown): value is PresentationVersion {
 const baseFields = ['presentation_version', 'rendered_html', 'render_hash'];
 export const correctionFields = ['presentation_kind', 'listing_id', 'publication_id', 'listing_version_id', 'approval_id',
   'original_render_hash', 'original_admitted_render_hash', 'correction_id', 'correction_digest', 'provenance', 'license_label'];
+// Public envelopes require binding IDs, but those IDs also occur in ordinary
+// saved reviews and signing bindings. Only correction-specific data is refused
+// at the original-evidence boundary; the public schema stays closed above.
+const correctionMarkers = ['presentation_kind', 'provenance', 'license_label', 'original_render_hash', 'original_admitted_render_hash',
+  'correction_id', 'correction_digest', 'license_display', 'public_presentation', 'approved_presentation'];
 export function refusePlatformCorrection(value: unknown): void {
-  const markers = ['presentation_kind', 'provenance', 'license_label', 'original_render_hash', 'original_admitted_render_hash',
-    'correction_id', 'correction_digest', 'license_display', 'public_presentation', 'approved_presentation'];
-  if (!record(value) || markers.some(key => key in value)) throw new Error('Original signing evidence required');
+  if (!record(value) || correctionMarkers.some(key => key in value)) throw new Error('Original signing evidence required');
 }
 export function refuseCorrectionFields(value: unknown): void {
-  if (!record(value) || [...correctionFields, 'license_display', 'public_presentation', 'approved_presentation'].some(key => key in value))
+  if (!record(value) || correctionMarkers.some(key => key in value))
     throw new Error('Saved review must contain original seller evidence only');
 }
 export function readLicenseDisplay(value: unknown): LicenseDisplay | null {

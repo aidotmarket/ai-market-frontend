@@ -17,6 +17,8 @@ export interface ApprovalReceipt {
 }
 export interface ListingReview {
   draft_id?: string;
+  listing_id?: string | null;
+  base_listing_version_id?: string | null;
   fields: Pick<ListingDraftContent, 'title' | 'description' | 'category' | 'tags' | 'price' | 'license'>;
   draft_version: number; source_version: number; presentation_version: string; review_hash: string;
   missing_fields: string[]; approval_available: boolean; sample_status?: SampleStatus;
