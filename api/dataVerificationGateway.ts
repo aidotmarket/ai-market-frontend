@@ -1,7 +1,7 @@
 'use client';
 
 import { api } from './client';
-import type { AxiosResponse } from 'axios';
+import type { AxiosRequestConfig, AxiosResponse } from 'axios';
 import type {
   GatewayVerificationEpoch, GatewayVerificationLifecycleCommand,
   GatewayVerificationProbe, GatewayVerificationProbeCommand, GatewayVerificationStartCommand,
@@ -70,15 +70,15 @@ export async function getCloudflareInstall(intent: string): Promise<CloudflareIn
 export async function controlCloudflareInstall(intent: string, action: 'cancel' | 'cleanup-attestation'): Promise<CloudflareInstallStatus> {
   return (await api.post(`${installRoot}/${encodeURIComponent(intent)}/${action}`, action === 'cleanup-attestation' ? { confirm: true } : {})).data;
 }
-export async function getCloudflareVerifierStatus(listingId: string): Promise<CloudflareVerifierStatus> {
-  return (await api.get<CloudflareVerifierStatus>('/verification-runners/cloudflare/status', { params: { listing_id: listingId } })).data;
+export async function getCloudflareVerifierStatus(listingId: string, options?: Pick<AxiosRequestConfig, 'timeout' | 'signal'>): Promise<CloudflareVerifierStatus> {
+  return (await api.get<CloudflareVerifierStatus>('/verification-runners/cloudflare/status', { ...options, params: { listing_id: listingId } })).data;
 }
 export async function setupAwsVerifier(command: AWSSetupCommand): Promise<AWSSetupResponse> {
   // The caller sends this directly to the console tab, never to saved attempts.
   return (await api.post<AWSSetupResponse>('/verification-runners/setup', command)).data;
 }
-export async function getAwsVerifierStatus(listingId: string): Promise<AWSVerifierStatus> {
-  return (await api.get<AWSVerifierStatus>('/verification-runners/aws/status', { params: { listing_id: listingId } })).data;
+export async function getAwsVerifierStatus(listingId: string, options?: Pick<AxiosRequestConfig, 'timeout' | 'signal'>): Promise<AWSVerifierStatus> {
+  return (await api.get<AWSVerifierStatus>('/verification-runners/aws/status', { ...options, params: { listing_id: listingId } })).data;
 }
 export async function removeVerificationRunner(runnerId: string): Promise<void> {
   await api.delete(`/verification-runners/${encodeURIComponent(runnerId)}`, { data: { confirm: true } });
