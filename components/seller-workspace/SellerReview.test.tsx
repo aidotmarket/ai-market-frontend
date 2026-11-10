@@ -11,7 +11,7 @@ const drafts=vi.hoisted(()=>({readListingDraft:vi.fn(),saveListingDraft:vi.fn()}
 vi.mock('@/api/sellerListingReview', () => api);
 vi.mock('@/api/sellerListingDraft',()=>drafts);
 afterEach(() => {cleanup();resetSellerListingDraftOwnerForTests();vi.resetAllMocks();});
-it.each(['seller-listing-review-v2','seller-listing-review-v3'])('displays saved %s fields without an approval or publication action', async presentation_version => {
+it.each(['seller-listing-review-v2','seller-listing-review-v3','seller-listing-review-v4'])('displays saved %s fields without an approval or publication action', async presentation_version => {
   const html = '<!doctype html><html><body><h1>Saved retail offer</h1><p>$25.00</p></body></html>';
   api.readListingReview.mockResolvedValue({presentation_version,rendered_html:html,fields:{title:'Saved retail offer', description:'Weekly totals', category:'Retail',tags:'retail',price:'25.00',license:'Research'},source_page:{files:[{key:'private/retail.csv',size:42,etag:'synthetic',version_id:null}],total_count:1,total_size_bytes:42,offset:0,next_cursor:null},missing_fields:[],approval_available:false});
   render(<SellerReview active enabled />);

@@ -468,7 +468,7 @@ describe('ListingDetailPage Dataset JSON-LD', () => {
 
 describe('approved Workspace presentation',()=>{
   beforeEach(()=>{fetchPublicListing.mockReset();fetchListingVersions.mockReset();buyButtonProps.mockClear();});
-  it.each(['seller-listing-review-v2','seller-listing-review-v3'] as const)('uses the exact %s approved document in an inert frame',async(presentation_version)=>{
+  it.each(['seller-listing-review-v2','seller-listing-review-v3','seller-listing-review-v4'] as const)('uses the exact %s approved document in an inert frame',async(presentation_version)=>{
     const {createHash}=await import('node:crypto');
     const rendered_html='<!doctype html><html><body><h1>Approved title</h1><p>**literal text**</p></body></html>';
     const listing=makeListing({approved_presentation:{presentation_version,rendered_html,
@@ -481,11 +481,11 @@ describe('approved Workspace presentation',()=>{
   it('rejects an unknown presentation version even with a valid digest',async()=>{
     const {createHash}=await import('node:crypto');
     const rendered_html='<p>Unknown version</p>';
-    await expect(renderPage(makeListing({approved_presentation:{presentation_version:'seller-listing-review-v4' as never,rendered_html,render_hash:createHash('sha256').update(rendered_html).digest('hex')}}))).rejects.toThrow(/could not be verified/);
+    await expect(renderPage(makeListing({approved_presentation:{presentation_version:'seller-listing-review-v5' as never,rendered_html,render_hash:createHash('sha256').update(rendered_html).digest('hex')}}))).rejects.toThrow(/could not be verified/);
     expect(buyButtonProps).not.toHaveBeenCalled();
   });
-  it('does not render a purchasable page from a mismatched approved document',async()=>{
-    await expect(renderPage(makeListing({approved_presentation:{presentation_version:'seller-listing-review-v2',
+  it.each(['seller-listing-review-v2','seller-listing-review-v3','seller-listing-review-v4'] as const)('does not render a purchasable page from a mismatched %s approved document',async(presentation_version)=>{
+    await expect(renderPage(makeListing({approved_presentation:{presentation_version,
       rendered_html:'changed document',render_hash:'0'.repeat(64)}}))).rejects.toThrow(/could not be verified/);
     expect(buyButtonProps).not.toHaveBeenCalled();
   });

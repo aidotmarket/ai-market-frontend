@@ -76,7 +76,7 @@ export async function readReviewSourcePage(review: ListingReview, cursor: string
 export async function readListingReview(signal: AbortSignal, draft_id?: string | null): Promise<ListingReview> {
   const review: ListingReview = (await api.get('/seller-workspace/listing-review', {signal,...(draft_id ? {params:{draft_id}} : {})})).data;
   if (draft_id && review.draft_id !== draft_id) throw new Error('Saved review could not be verified');
-  if ((review.presentation_version !== 'seller-listing-review-v2' && review.presentation_version !== 'seller-listing-review-v3') || typeof review.rendered_html !== 'string' ||
+  if ((review.presentation_version !== 'seller-listing-review-v2' && review.presentation_version !== 'seller-listing-review-v3' && review.presentation_version !== 'seller-listing-review-v4') || typeof review.rendered_html !== 'string' ||
       !/^[a-f0-9]{64}$/.test(review.render_hash)) throw new Error('Saved review could not be verified');
   const bytes = new TextEncoder().encode(review.rendered_html);
   if (bytes.length > 100000) throw new Error('Saved review could not be verified');

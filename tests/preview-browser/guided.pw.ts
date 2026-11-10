@@ -7,7 +7,7 @@ import type {ApprovalReceipt,ListingReview} from '../../api/sellerListingReview'
 import type {PublicationReceipt} from '../../api/sellerListingPublication';
 const hash=(text:string)=>createHash('sha256').update(text).digest('hex');
 
-for(const presentation_version of ['seller-listing-review-v2','seller-listing-review-v3'])
+for(const presentation_version of ['seller-listing-review-v2','seller-listing-review-v3','seller-listing-review-v4'])
 for(const width of [1280,390])test(`${width}px ${presentation_version} synthetic seller publishes using checklist and Next`,async({page})=>{
  let draft:SavedListingDraft|null=null,source:SourceRead|null=null,approval:ApprovalReceipt|null=null,publication:PublicationReceipt|null=null;
  const calls:{path:string;method:string;body:unknown}[]=[];const errors:string[]=[];page.on('pageerror',e=>errors.push(e.message));page.on('console',m=>{if(m.type()==='error'&&m.text().includes('same key'))errors.push(m.text());});

@@ -11,7 +11,7 @@ const html = '<!doctype html><html><body>Regional retail — $25.00</body></html
 const review = {presentation_version:'seller-listing-review-v2', rendered_html:html, render_hash:createHash('sha256').update(html).digest('hex')};
 beforeEach(() => {vi.resetAllMocks();vi.stubGlobal('crypto',webcrypto);});
 afterEach(() => vi.unstubAllGlobals());
-it.each(['seller-listing-review-v2','seller-listing-review-v3'])('returns the exact verified %s render', async presentation_version => {
+it.each(['seller-listing-review-v2','seller-listing-review-v3','seller-listing-review-v4'])('returns the exact verified %s render', async presentation_version => {
   const value={...review,presentation_version};
   client.get.mockResolvedValue({data:value});
   const signal = new AbortController().signal;
@@ -20,9 +20,12 @@ it.each(['seller-listing-review-v2','seller-listing-review-v3'])('returns the ex
 });
 it.each([
   {...review,rendered_html:html.replace('25.00','99.00')},
+  {...review,presentation_version:'seller-listing-review-v4',rendered_html:html.replace('25.00','99.00')},
   {...review,presentation_version:'unknown-version'},
+  {...review,presentation_version:'seller-listing-review-v5'},
   {...review,render_hash:''},
   {...review,rendered_html:'x'.repeat(100001)},
+  {...review,presentation_version:'seller-listing-review-v4',rendered_html:'x'.repeat(100001)},
 ])('rejects changed, unsupported or unbounded rendered reviews', async value => {
   client.get.mockResolvedValue({data:value});
   await expect(readListingReview(new AbortController().signal)).rejects.toThrow('Saved review could not be verified');
