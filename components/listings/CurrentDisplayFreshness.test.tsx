@@ -1,5 +1,6 @@
 // @vitest-environment jsdom
-import {render,screen,cleanup,act} from '@testing-library/react';
+import {useEffect,useState} from 'react';
+import {render,screen,cleanup,act,fireEvent} from '@testing-library/react';
 import {it,expect,vi,afterEach} from 'vitest';
 import CurrentDisplayFreshness from './CurrentDisplayFreshness';
 const refresh=vi.hoisted(()=>vi.fn());
@@ -30,11 +31,12 @@ it.each([-120,120])('wall clock adjustment %s minutes cannot change elapsed rete
  expect(screen.getByTitle('current')).toBeTruthy();
  act(()=>vi.advanceTimersByTime(5*60_000));expect(screen.queryByTitle('current')).toBeNull();
 });
-it.each(['visibilitychange','pageshow','resume'])('invalidates a suspended/restored projection on %s even if monotonic clock paused',event=>{
+it.each(['visibilitychange','pageshow','resume'])('withholds a suspended/restored projection on %s when wall time advances during paused monotonic time',event=>{
  vi.useFakeTimers({toFake:['setInterval','clearInterval','performance','Date']});
  const id=projection();
  const view=render(page(id));
- // OS sleep may advance neither timers nor performance.now on some platforms.
+ // OS sleep may pause timers/performance.now; wall time still records sleep.
+ vi.setSystemTime(Date.now()+60*60_000);
  act(()=>event==='pageshow'?window.dispatchEvent(new PageTransitionEvent('pageshow',{persisted:true})):document.dispatchEvent(new Event(event)));
  expect(refresh).toHaveBeenCalledTimes(1);expect(screen.queryByTitle('current')).toBeNull();
  view.rerender(page(id));expect(screen.queryByTitle('current')).toBeNull();
@@ -65,4 +67,64 @@ it.each([-60,60])('invalidates on a wall discontinuity of %s minutes, including 
  expect(screen.queryByTitle('current')).toBeNull();expect(refresh).toHaveBeenCalledTimes(1);
  view.rerender(page(id));expect(screen.queryByTitle('current')).toBeNull();
  view.rerender(page(projection()));expect(screen.getByTitle('current')).toBeTruthy();
+});
+
+const returnEvents=['visibilitychange','pageshow','resume'] as const;
+function returnToPage(event:typeof returnEvents[number]) {
+ if(event==='pageshow')window.dispatchEvent(new PageTransitionEvent('pageshow',{persisted:true}));
+ else document.dispatchEvent(new Event(event));
+}
+function TypedPurchaseState({onMount,onUnmount}:{onMount:()=>void;onUnmount:()=>void}) {
+ const [name,setName]=useState('');
+ useEffect(()=>{onMount();return onUnmount;},[onMount,onUnmount]);
+ return <label>Signer name<input value={name} onChange={event=>setName(event.target.value)}/></label>;
+}
+it.each(returnEvents)('retains typed client state on fresh %s and failed refresh without renewing the lease',event=>{
+ vi.useFakeTimers({toFake:['setInterval','clearInterval','performance','Date']});
+ const id=projection();
+ const onMount=vi.fn(),onUnmount=vi.fn();
+ const statefulPage=(observedAt:number)=><CurrentDisplayFreshness observedAt={observedAt}><TypedPurchaseState onMount={onMount} onUnmount={onUnmount}/></CurrentDisplayFreshness>;
+ const view=render(statefulPage(id));
+ const input=screen.getByRole('textbox',{name:'Signer name'});
+ fireEvent.change(input,{target:{value:'Synthetic buyer'}});
+ act(()=>vi.advanceTimersByTime(1000));
+ act(()=>returnToPage(event));
+ expect(refresh).toHaveBeenCalledTimes(1);
+ expect(screen.getByRole('textbox')).toBe(input);
+ expect(input).toHaveProperty('value','Synthetic buyer');
+ expect(onMount).toHaveBeenCalledTimes(1);expect(onUnmount).not.toHaveBeenCalled();
+ // A failed refresh delivers no new props. An unchanged RSC result likewise
+ // cannot renew the lease or discard typed state while this page is fresh.
+ view.rerender(statefulPage(id));
+ act(()=>vi.advanceTimersByTime(5*60_000));
+ expect(refresh).toHaveBeenCalledTimes(2);
+ expect(screen.getByRole('textbox')).toBe(input);
+ expect(input).toHaveProperty('value','Synthetic buyer');
+ expect(onUnmount).not.toHaveBeenCalled();
+ // Return events and failed/unchanged refreshes never extend ten-minute age.
+ act(()=>vi.advanceTimersByTime(5*60_000-1000));
+ expect(screen.queryByRole('textbox')).toBeNull();expect(screen.getByRole('status')).toBeTruthy();
+ expect(onUnmount).toHaveBeenCalledTimes(1);
+ view.rerender(statefulPage(id));expect(screen.queryByRole('textbox')).toBeNull();
+ view.rerender(statefulPage(projection()));expect(screen.getByRole('textbox')).toHaveProperty('value','');
+});
+it.each(returnEvents)('checks genuine elapsed expiry immediately on %s before the next interval',event=>{
+ vi.useFakeTimers({toFake:['setInterval','clearInterval','performance','Date']});
+ const id=projection();
+ const view=render(page(id));
+ // Simulate timers suspended while monotonic and wall clocks keep advancing.
+ vi.spyOn(performance,'now').mockReturnValue(10*60_000);
+ vi.setSystemTime(Date.now()+10*60_000);
+ act(()=>returnToPage(event));
+ expect(refresh).toHaveBeenCalledTimes(1);expect(screen.queryByTitle('current')).toBeNull();
+ view.rerender(page(id));expect(screen.queryByTitle('current')).toBeNull();
+ view.rerender(page(projection()));expect(screen.getByTitle('current')).toBeTruthy();
+});
+it('does not renew a still-fresh projection on router-cache remount',()=>{
+ vi.useFakeTimers({toFake:['setInterval','clearInterval','performance','Date']});
+ const id=projection();
+ const view=render(page(id));
+ act(()=>vi.advanceTimersByTime(6*60_000));view.unmount();
+ render(page(id));expect(screen.getByTitle('current')).toBeTruthy();
+ act(()=>vi.advanceTimersByTime(5*60_000));expect(screen.queryByTitle('current')).toBeNull();
 });

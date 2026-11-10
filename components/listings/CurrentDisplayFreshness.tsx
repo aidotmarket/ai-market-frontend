@@ -40,13 +40,13 @@ export default function CurrentDisplayFreshness({observedAt,children}:{observedA
       return stale;
     };
     const refresh=()=>{check();router.refresh();};
-    const invalidate=()=>{lease.current!.invalid=true;refresh();};
     const tick=setInterval(refresh,5*60_000);
-    // Monotonic clocks can pause during OS sleep. A resumed hidden/bfcached
-    // projection therefore needs a fresh response; it cannot earn a new lease.
-    const visibility=()=>{if(document.visibilityState==='visible')invalidate();};
-    const restore=(event:PageTransitionEvent)=>{if(event.persisted)invalidate();};
-    const resume=()=>invalidate();
+    // Returning requests a fresh response, but retains fresh client state.
+    // The elapsed/discontinuity check withholds expired or slept-through views;
+    // only a newly delivered projection can earn a new lease.
+    const visibility=()=>{if(document.visibilityState==='visible')refresh();};
+    const restore=(event:PageTransitionEvent)=>{if(event.persisted)refresh();};
+    const resume=()=>refresh();
     document.addEventListener('visibilitychange',visibility);window.addEventListener('pageshow',restore);
     document.addEventListener('resume',resume);
     if(check())router.refresh();
