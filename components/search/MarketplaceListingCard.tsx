@@ -10,7 +10,13 @@ type CardListing = ListingListItem | SearchResultItem;
 
 export function MarketplaceListingCard({ listing }: { listing: CardListing }) {
   if (generatedSampleState(listing) !== 'ordinary') return <GeneratedSampleCard listing={listing} />;
-  const display = readLicenseDisplay('license_display' in listing ? listing.license_display : null);
+  let display;
+  try {
+    display = readLicenseDisplay('license_display' in listing ? listing.license_display : null);
+  } catch {
+    // Contain invalid evidence to this card without emitting its licence line.
+    display = null;
+  }
   const tags = Array.isArray(listing.tags) ? listing.tags.slice(0, 3) : [];
   const views = 'view_count' in listing ? listing.view_count : undefined;
   const description = listing.short_description || ('description' in listing ? listing.description : null);

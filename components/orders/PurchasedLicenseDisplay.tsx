@@ -12,13 +12,15 @@ export default function PurchasedLicenseDisplay({orderId,listingId}:{orderId:str
 function PurchasedDisplayVisit({orderId,listingId}:{orderId:string;listingId:string}) {
   const [display,setDisplay]=useState<Display|null>(null);
   const [error,setError]=useState(false);
+  const [missing,setMissing]=useState(false);
   useEffect(()=>{
     const request=new AbortController();
-    getPurchasedLicenseDisplay(orderId,listingId,request.signal).then(value=>{if(!request.signal.aborted)setDisplay(value);})
+    getPurchasedLicenseDisplay(orderId,listingId,request.signal).then(value=>{if(!request.signal.aborted){setDisplay(value);setMissing(value===null);}})
       .catch(()=>{if(!request.signal.aborted)setError(true);});
     return ()=>request.abort();
   },[orderId,listingId]);
   if(error)return <p role="status">Purchased licence display is unavailable. Your original licence record and purchase access remain available separately.</p>;
+  if(missing)return null;
   if(!display)return <p role="status">Loading purchased licence evidence…</p>;
   const original=display.original_license;
   const originalLabel=typeof original==='string'?original:original&&typeof original==='object'&&'code' in original&&'version' in original

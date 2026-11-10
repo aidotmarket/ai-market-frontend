@@ -1,9 +1,22 @@
 import {it,expect,vi,beforeEach} from 'vitest';
 import wire from '@/tests/fixtures/s1922-backend-wire.json';
 import {parsePurchasedLicenseDisplay,getPurchasedLicenseDisplay} from './purchasedLicenseDisplay';
+import {AxiosError} from 'axios';
 const client=vi.hoisted(()=>({get:vi.fn()}));
 vi.mock('./client',()=>({api:client}));
 beforeEach(()=>vi.resetAllMocks());
+it('only treats an actual HTTP 404 as missing; cancellation and other errors still reject',async()=>{
+ const f=wire.purchased[0],controller=new AbortController();
+ const missing=new AxiosError('missing',undefined,undefined,undefined,{status:404} as never);
+ client.get.mockRejectedValue(missing);
+ await expect(getPurchasedLicenseDisplay(f.order_id,f.listing_id,controller.signal)).resolves.toBeNull();
+ controller.abort();
+ await expect(getPurchasedLicenseDisplay(f.order_id,f.listing_id,controller.signal)).rejects.toThrow();
+ for(const error of [new Error('transport'),{response:{status:404}},new AxiosError('forbidden',undefined,undefined,undefined,{status:403} as never)]){
+  client.get.mockRejectedValue(error);
+  await expect(getPurchasedLicenseDisplay(f.order_id,f.listing_id,new AbortController().signal)).rejects.toBe(error);
+ }
+});
 it.each(wire.purchased)('consumes actual purchased $instrument_display.license_version / $retained_presentation.presentation.presentation_version independently of current display',async fixture=>{
  const before=JSON.stringify(fixture);
  const value=await parsePurchasedLicenseDisplay(fixture,fixture.order_id,fixture.listing_id);

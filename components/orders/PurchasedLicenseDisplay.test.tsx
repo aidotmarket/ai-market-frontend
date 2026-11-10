@@ -3,9 +3,31 @@ import {render,screen,cleanup,waitFor} from '@testing-library/react';
 import {it,expect,vi,afterEach} from 'vitest';
 import wire from '@/tests/fixtures/s1922-backend-wire.json';
 import PurchasedLicenseDisplay from './PurchasedLicenseDisplay';
+import {AxiosError} from 'axios';
 const client=vi.hoisted(()=>({get:vi.fn()}));
 vi.mock('@/api/client',()=>({api:client}));
 afterEach(()=>{cleanup();vi.resetAllMocks();});
+it('silently omits a missing deployment endpoint through the real API reader',async()=>{
+ const f=wire.purchased[0];
+ client.get.mockRejectedValue(new AxiosError('missing',undefined,undefined,undefined,{status:404} as never));
+ const view=render(<PurchasedLicenseDisplay orderId={f.order_id} listingId={f.listing_id}/>);
+ await waitFor(()=>expect(view.container.innerHTML).toBe(''));
+ expect(client.get).toHaveBeenCalledTimes(1);
+});
+it.each([401,403,500])('retains the unavailable notice for HTTP %s',async status=>{
+ const f=wire.purchased[0];
+ client.get.mockRejectedValue(new AxiosError('error',undefined,undefined,undefined,{status} as never));
+ render(<PurchasedLicenseDisplay orderId={f.order_id} listingId={f.listing_id}/>);
+ await screen.findByText(/Purchased licence display is unavailable/);
+ expect(screen.queryByTitle('Original seller evidence for purchased version')).toBeNull();
+});
+it.each(['private, max-age=900','public, no-store'])('keeps malformed/cacheable evidence visible as an error: %s',async policy=>{
+ const f=wire.purchased[0];
+ client.get.mockResolvedValue({data:f,headers:{'cache-control':policy}});
+ render(<PurchasedLicenseDisplay orderId={f.order_id} listingId={f.listing_id}/>);
+ await screen.findByText(/Purchased licence display is unavailable/);
+ expect(screen.queryByTitle('Original seller evidence for purchased version')).toBeNull();
+});
 it.each(wire.purchased)('shows purchased $instrument_display.license_version separately from original seller evidence and current public display',async f=>{
  client.get.mockResolvedValue({data:f,headers:{'cache-control':'private, no-store'}});
  const before=JSON.stringify(f);

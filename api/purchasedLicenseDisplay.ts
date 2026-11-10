@@ -1,4 +1,5 @@
 import {api} from './client';
+import {isAxiosError} from 'axios';
 import {HASH, UUID, record, verifyPresentation, type OriginalPresentation} from '@/lib/publicPresentation';
 export interface PurchasedLicenseDisplay {
   presentation_kind: 'purchased-license-display-v1'; order_id:string; listing_id:string; listing_version_id:string|null;
@@ -42,10 +43,15 @@ export async function parsePurchasedLicenseDisplay(value:unknown, orderId:string
   }
   return value as unknown as PurchasedLicenseDisplay;
 }
-export async function getPurchasedLicenseDisplay(orderId:string, listingId:string, signal:AbortSignal):Promise<PurchasedLicenseDisplay> {
+export async function getPurchasedLicenseDisplay(orderId:string, listingId:string, signal:AbortSignal):Promise<PurchasedLicenseDisplay|null> {
   const response=await api.get(`/orders/${encodeURIComponent(orderId)}/license-display`, {
     signal, adapter:'fetch', fetchOptions:{cache:'no-store'},
+  }).catch(error=>{
+    signal.throwIfAborted();
+    if(isAxiosError(error)&&error.response?.status===404)return null;
+    throw error;
   });
+  if(response===null)return null;
   const policy=String(response.headers['cache-control']??'').toLowerCase().split(',').map(v=>v.trim());
   if (!policy.includes('private')||!policy.includes('no-store')) throw new Error('Purchased licence display must not be cached');
   const result=await parsePurchasedLicenseDisplay(response.data,orderId,listingId);

@@ -8,6 +8,8 @@ import type { ListingDetail, ListingVersion } from '@/types';
 import type {ListingDocument} from '@/types/listingDocuments';
 import {documentFixture} from '@/tests/listingDocumentsFixture';
 import type { ListingWithSamples } from './SampleFiles';
+import composed from '@/tests/fixtures/s1922-composed-detail.json';
+import {verifyCurrentListing} from '@/lib/publicPresentation';
 
 const notFound = vi.fn(() => {
   throw new Error('NEXT_NOT_FOUND');
@@ -77,6 +79,48 @@ vi.mock('@/components/UsdcLargePurchaseRequest', () => ({
 }));
 
 const { default: ListingDetailPage } = await import('./page');
+const {generateMetadata} = await import('./page');
+
+describe('corrected backend 1ad9300 real composed detail wire',()=>{
+  afterEach(()=>{vi.unstubAllGlobals();fetchPublicListing.mockReset();fetchListingVersions.mockReset();fetchPublicListingDocuments.mockReset().mockResolvedValue([]);});
+  it.each(composed.detail)('accepts actual builder/serializer $slug through strict fetch, page and metadata, preserving documents',async wire=>{
+    const before=JSON.stringify(wire);
+    const actual=await vi.importActual<typeof import('@/lib/api')>('@/lib/api');
+    fetchPublicListing.mockImplementation(actual.fetchPublicListing);
+    fetchListingVersions.mockResolvedValue([]);
+    fetchPublicListingDocuments.mockResolvedValue([documentFixture()]);
+    const fetch=vi.fn().mockResolvedValue({ok:true,json:async()=>wire});
+    vi.stubGlobal('fetch',fetch);
+    await expect(verifyCurrentListing(wire)).resolves.toBeUndefined();
+    const params=Promise.resolve({slug:wire.slug});
+    document.body.innerHTML=renderToStaticMarkup(await ListingDetailPage({params}));
+    const frame=within(document.body).getByTitle('Listing with platform-corrected licence display');
+    expect(frame.getAttribute('srcdoc')).toBe(wire.approved_presentation.rendered_html);
+    expect(frame.getAttribute('sandbox')).toBe('');
+    const docs=within(document.body).getByRole('region',{name:'Documentation'});
+    expect(frame.compareDocumentPosition(docs)&Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    expect(frame.getAttribute('srcdoc')).not.toContain('Technical guide');
+    expect(document.body.textContent).toContain('Platform-corrected licence display; original seller approval retained');
+    expect(await generateMetadata({params})).toMatchObject({title:wire.title,description:wire.description.slice(0,200)});
+    for(const [,options] of fetch.mock.calls)expect(options).toEqual({cache:'no-store'});
+    expect(JSON.stringify(wire)).toBe(before);
+  });
+  it.each(['stale','foreign','tampered','missing-adjacent'] as const)('refuses %s composition in strict fetch, page and metadata',async fault=>{
+    const wire=structuredClone(composed.detail[2]);
+    const bad:Record<string,unknown>=wire;
+    if(fault==='stale')bad.publication_id='ffffffff-ffff-ffff-ffff-ffffffffffff';
+    if(fault==='foreign')wire.approved_presentation.listing_id='ffffffff-ffff-ffff-ffff-ffffffffffff';
+    if(fault==='tampered')wire.approved_presentation.rendered_html+='tampered';
+    if(fault==='missing-adjacent')delete bad.license_display;
+    const actual=await vi.importActual<typeof import('@/lib/api')>('@/lib/api');
+    fetchPublicListing.mockImplementation(actual.fetchPublicListing);
+    vi.stubGlobal('fetch',vi.fn().mockResolvedValue({ok:true,json:async()=>wire}));
+    const params=Promise.resolve({slug:wire.slug});
+    await expect(verifyCurrentListing(wire)).rejects.toThrow();
+    await expect(ListingDetailPage({params})).rejects.toThrow();
+    await expect(generateMetadata({params})).rejects.toThrow();
+  });
+});
 
 function makeListing(overrides: Partial<ListingWithSamples> = {}): ListingWithSamples {
   return {
