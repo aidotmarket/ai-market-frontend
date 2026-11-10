@@ -124,9 +124,15 @@ test('seller sees conflict reload, first-party refusal and server render-budget 
   await page.goto('/tests/preview-browser/index.html?documents=legacy');
   const technical = page.getByRole('region', {name: 'Technical documentation', exact: true});
   await technical.getByRole('textbox', {name: 'Technical documentation title'}).fill('Title');
+  await technical.getByRole('textbox', {name: 'Technical document', exact: true}).fill('Technical body');
+  const pdfTitle = page.getByRole('textbox', {name: 'Data sheet title'});
+  await pdfTitle.fill('Unsaved PDF title');
   fixture.conflict(); await technical.getByRole('button', {name: 'Save document draft'}).click();
   await expect(page.getByRole('region', {name: 'Documents', exact: true}).getByRole('alert')).toContainText('changed in another window');
   await expect(technical.getByRole('textbox', {name: 'Technical documentation title'})).toHaveValue('Changed in other window');
+  await expect(pdfTitle).toHaveValue('Unsaved PDF title');
+  await page.getByRole('button', {name: 'Reload documents'}).click();
+  await expect(pdfTitle).toHaveValue('Unsaved PDF title');
   fixture.refuse(); await technical.getByRole('button', {name: 'Save document draft'}).click();
   await expect(page.getByRole('region', {name: 'Documents', exact: true}).getByRole('alert')).toContainText('Sign in on the ai.market website');
   fixture.budget(); await technical.getByRole('button', {name: 'Save document draft'}).click();

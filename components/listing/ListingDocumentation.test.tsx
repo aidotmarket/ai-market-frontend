@@ -1,6 +1,8 @@
 // @vitest-environment jsdom
 import {readFileSync} from 'node:fs';
-import {cleanup, fireEvent, render, screen} from '@testing-library/react';
+import {renderToString} from 'react-dom/server';
+import {hydrateRoot} from 'react-dom/client';
+import {act, cleanup, fireEvent, render, screen} from '@testing-library/react';
 import {afterEach, beforeEach, expect, it, vi} from 'vitest';
 import ListingDocumentation from './ListingDocumentation';
 import {documentFixture} from '@/tests/listingDocumentsFixture';
@@ -78,4 +80,34 @@ it.each(['javascript:alert(1)', 'data:text/html,unsafe', 'http://example.com/a.p
 it.each(['app/listings/[slug]/page.tsx', 'app/listings/[slug]/PublicSourceReferencePage.tsx', 'components/listing/ListingDocumentation.tsx'])('%s never imports or renders client ListingMarkdown', path => {
   expect(readFileSync(path, 'utf8')).not.toMatch(/ListingMarkdown|react-markdown|markdown-it/);
   expect(readFileSync('components/listing/ListingDocumentation.tsx', 'utf8')).toContain('descriptionHtml={document.body_html}');
+});
+
+
+it('hydrates PDF sizes when the browser default locale differs from the server', async () => {
+  const format = Number.prototype.toLocaleString;
+  let defaultLocale = 'en-US';
+  vi.spyOn(Number.prototype, 'toLocaleString').mockImplementation(function (this: number, locales, options) {
+    return format.call(this, locales ?? defaultLocale, options);
+  });
+  const view = <ListingDocumentation documents={[documentFixture('data_sheet_pdf', {pdf_size_bytes: 2_400_000})]}/>;
+  const container = document.createElement('div');
+  container.innerHTML = renderToString(view);
+  const serverHtml = container.innerHTML;
+  defaultLocale = 'de-DE';
+  expect((2_400_000).toLocaleString()).toBe('2.400.000');
+  const onRecoverableError = vi.fn();
+  const consoleError = vi.spyOn(console, 'error');
+  let root: ReturnType<typeof hydrateRoot>;
+  await act(async () => {root = hydrateRoot(container, view, {onRecoverableError});});
+  try {
+    expect(container.innerHTML).toBe(serverHtml);
+    expect(container.textContent).toContain('2,400,000 bytes');
+    expect(onRecoverableError).not.toHaveBeenCalled();
+    expect(consoleError).not.toHaveBeenCalled();
+  } finally {await act(async () => root.unmount());}
+});
+
+it.each([[1024, '1.0 KB'], [40 * 1024, '40.0 KB'], [2 * 1024 * 1024, '2.0 MB']])('shows readable PDF sizes for %i bytes', (size, label) => {
+  render(<ListingDocumentation documents={[documentFixture('data_sheet_pdf', {pdf_size_bytes: size as number})]}/>);
+  expect(screen.getByText(`Data sheet (PDF, ${label}) — hosted by the seller, not ai.market`)).toBeTruthy();
 });

@@ -12,6 +12,7 @@ import {authSessionOwner, subscribeAuthSessionOwner} from '@/lib/auth-session-ow
 const DOCUMENT_LIMIT = 50_000;
 const buttonClass = 'rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm font-medium disabled:opacity-50';
 const fieldClass = 'mt-1 block w-full rounded-lg border border-gray-300 px-3 py-2 text-sm';
+const genericError = 'Documents could not be updated. Reload their current state and try again.';
 const unavailable = 'Data sheets become available when public business names are switched on. Your listing must show a valid public business name.';
 
 function errorMessage(error: unknown): string {
@@ -19,10 +20,12 @@ function errorMessage(error: unknown): string {
   const code = typeof detail === 'string' ? detail : typeof detail?.code === 'string' ? detail.code : error instanceof Error ? error.message : '';
   if (code === 'FIRST_PARTY_SESSION_REQUIRED') return 'Sign in on the ai.market website to change documents. API keys and connector sessions cannot change them.';
   if (code === 'DATA_SHEET_REQUIRES_PUBLIC_NAME') return unavailable;
-  if (typeof detail === 'string') return detail;
+  if (code === 'DATA_SHEET_INVALID_URL') return 'Use a stable, public, non-expiring https address for the PDF, without contact details or a fragment.';
+  if (code === 'DATA_SHEET_INVALID_FILENAME') return 'Choose a PDF with a simple filename without contact details.';
+  if (typeof detail === 'string') return /^[A-Z][A-Z0-9_]*$/.test(detail) ? genericError : detail;
   if (typeof detail?.message === 'string') return detail.message;
   if (Array.isArray(detail)) return detail.map(item => item.msg).join(' ');
-  return 'Documents could not be updated. Reload their current state and try again.';
+  return genericError;
 }
 
 export default function ListingDocumentsEditor({listingId}: {listingId?: string | null}) {
@@ -43,21 +46,23 @@ function DocumentsSession({listingId}: {listingId: string}) {
   const [error, setError] = useState('');
   const [busy, setBusy] = useState(false);
   const [retry, setRetry] = useState(0);
+  const [invalidated, setInvalidated] = useState<Partial<Record<DocumentKind, boolean>>>({});
   const [preview, setPreview] = useState<Partial<Record<DocumentKind, number>>>({});
   const controller = useRef<AbortController | null>(null);
   const locked = useRef(false);
   useEffect(() => {
     const request = new AbortController();
     controller.current = request;
+    setBusy(true);
     readListingDocuments(listingId, request.signal).then(value => {
-      if (!request.signal.aborted) setState(value);
+      if (!request.signal.aborted) {setState(value); setInvalidated({});}
     }).catch(error => {
       if (!request.signal.aborted) setError(errorMessage(error));
-    });
+    }).finally(() => {if (!request.signal.aborted) setBusy(false);});
     return () => request.abort();
   }, [listingId, retry]);
 
-  const run: Run = async (action, showPreview = false) => {
+  const run = async (kind: DocumentKind, action: Action, showPreview = false) => {
     const signal = controller.current?.signal;
     if (!signal || signal.aborted || locked.current) return;
     locked.current = true; setBusy(true); setError(''); setPreview({});
@@ -73,10 +78,13 @@ function DocumentsSession({listingId}: {listingId: string}) {
     } catch (error) {
       if (signal.aborted) return;
       if (axios.isAxiosError(error) && error.response?.status === 409) {
-        // Invalidate the stale form even if reloading fails; never replay a conflict.
-        setState(null);
+        // Drop only the conflicting form, preserving unsaved edits in the other kind.
+        setInvalidated(current => ({...current, [kind]: true}));
         try {
-          setState(await readListingDocuments(listingId, signal));
+          const current = await readListingDocuments(listingId, signal);
+          signal.throwIfAborted();
+          setState(current);
+          setInvalidated({});
           setError('This document changed in another window. The latest state has been loaded. Check it before continuing.');
         } catch {
           if (!signal.aborted) setError('This document changed in another window. Reload the current documents before continuing.');
@@ -89,10 +97,10 @@ function DocumentsSession({listingId}: {listingId: string}) {
   };
 
   return <>
-    {error && <p role="alert" className="text-sm text-red-800">{error} <button type="button" disabled={busy} onClick={() => {setError(''); setState(null); setPreview({}); setRetry(value => value + 1);}} className="underline">Reload documents</button></p>}
-    {!state ? !error && <p role="status">Loading documents…</p> : (['technical_markdown', 'data_sheet_pdf'] as const).map(kind =>
+    {error && <p role="alert" className="text-sm text-red-800">{error} <button type="button" disabled={busy} onClick={() => {setError(''); setPreview({}); setRetry(value => value + 1);}} className="underline">Reload documents</button></p>}
+    {!state ? !error && <p role="status">Loading documents…</p> : (['technical_markdown', 'data_sheet_pdf'] as const).filter(kind => !invalidated[kind]).map(kind =>
       <DocumentEditor key={`${kind}:${state.documents[kind].max_revision}:${state.documents[kind].draft?.revision}:${state.documents[kind].published?.revision}:${state.data_sheet_available}`} kind={kind} state={state.documents[kind]} listingId={listingId}
-        available={kind === 'technical_markdown' || state.data_sheet_available} busy={busy} run={run}
+        available={kind === 'technical_markdown' || state.data_sheet_available} busy={busy} run={(action, preview) => run(kind, action, preview)}
         previewed={preview[kind] === state.documents[kind].draft?.revision}
         invalidatePreview={() => setPreview(current => ({...current, [kind]: undefined}))}/>
     )}
@@ -120,7 +128,7 @@ function DocumentEditor({kind, state, listingId, available, busy, run, previewed
   useEffect(() => () => {fileGeneration.current++;}, []);
   const disabled = busy || hashing;
   const valid = title.trim().length > 0 && [...title].length <= 120 &&
-    (technical ? [...body].length <= DOCUMENT_LIMIT : !!pdf && url.startsWith('https://') && [...url].length <= 2048);
+    (technical ? body.trim().length > 0 && [...body].length <= DOCUMENT_LIMIT : !!pdf && url.startsWith('https://') && [...url].length <= 2048);
   const save = (preview: boolean) => {
     if (!valid || !available || disabled) return;
     const content: DocumentDraft = {expected_revision: state.max_revision, title,
@@ -166,7 +174,7 @@ function DocumentEditor({kind, state, listingId, available, busy, run, previewed
         <label htmlFor={`${uid}-url`} className="block text-sm font-medium">Public PDF address
           <input id={`${uid}-url`} type="url" className={fieldClass} aria-describedby={`${uid}-url-help`} value={url} onChange={event => {setUrl(event.target.value); invalidatePreview();}}/>
         </label>
-        <p id={`${uid}-url-help`} className="text-xs text-gray-500">Use a plain public https address for the same file. Signed or expiring links are refused.</p>
+        <p id={`${uid}-url-help`} className="text-xs text-gray-500">Use a stable, public, non-expiring https address for the same file.</p>
       </>}
       <div className="flex flex-wrap gap-2">
         <button type="button" disabled={!valid} onClick={() => save(false)} className={buttonClass}>Save document draft</button>
@@ -177,7 +185,7 @@ function DocumentEditor({kind, state, listingId, available, busy, run, previewed
       <h4 className="font-semibold">{state.draft.title}</h4>
       {technical ? <BackendListingHtml description={state.draft.body_markdown ?? ''} descriptionHtml={state.draft.body_html}/> :
         <div className="break-words text-sm"><p>{state.draft.pdf_filename} · {state.draft.pdf_size_bytes?.toLocaleString()} bytes</p><p>SHA-256: {state.draft.pdf_sha256}</p><p>{state.draft.pdf_url}</p><p>Hosted by the seller, not ai.market.</p></div>}
-      <button type="button" disabled={disabled} className={buttonClass} onClick={() => void run(signal => publishDocument(listingId, kind, state.draft!.revision, state.draft!.render_hash, signal))}>Publish {technical ? 'technical document' : 'data sheet'}</button>
+      <button type="button" disabled={disabled || (technical && !state.draft.body_markdown?.trim())} className={buttonClass} onClick={() => void run(signal => publishDocument(listingId, kind, state.draft!.revision, state.draft!.render_hash, signal))}>Publish {technical ? 'technical document' : 'data sheet'}</button>
     </div>}
     <div className="flex flex-wrap gap-2">
       {!editing && available && <button type="button" disabled={disabled} className={buttonClass} onClick={() => {setEditing(true); invalidatePreview();}}>Replace</button>}

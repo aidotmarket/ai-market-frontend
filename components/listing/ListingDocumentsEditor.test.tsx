@@ -124,6 +124,9 @@ it.each(['draft', 'publish', 'withdraw', 'discard-draft'] as const)('reloads a 4
 });
 
 it.each([
+  [422, 'DATA_SHEET_INVALID_URL', 'Use a stable, public, non-expiring https address'],
+  [422, 'DATA_SHEET_INVALID_FILENAME', 'Choose a PDF with a simple filename'],
+  ...['DOCUMENT_KIND_CONTENT_MISMATCH', 'BAD_ORIGIN', 'CSRF_REQUIRED', 'UNKNOWN_CODE_123'].map(code => [422, code, 'Documents could not be updated'] as const),
   [403, 'FIRST_PARTY_SESSION_REQUIRED', 'Sign in on the ai.market website'],
   [422, 'Rendering budget exceeded. Simplify this document.', 'Rendering budget exceeded. Simplify this document.'],
   [422, 'Remove contact details from this document.', 'Remove contact details from this document.'],
@@ -199,7 +202,8 @@ it('fails closed when the conflict reload fails and permits an explicit retry', 
   vi.mocked(api.readListingDocuments).mockRejectedValueOnce(new Error('Offline'));
   fireEvent.click(region().getByRole('button', {name: 'Save document draft'}));
   await screen.findByText(/Reload the current documents before continuing/);
-  expect(screen.queryByRole('button', {name: 'Save document draft'})).toBeNull();
+  expect(screen.queryByRole('region', {name: 'Technical documentation'})).toBeNull();
+  expect(region('data_sheet_pdf').getByRole('button', {name: 'Save document draft'})).toBeTruthy();
   fireEvent.click(screen.getByRole('button', {name: 'Reload documents'}));
   await screen.findByRole('region', {name: 'Technical documentation'});
 });
@@ -220,4 +224,58 @@ it('clears private editor state when the signed-in session lifecycle changes', a
   act(() => {advanceAuthSessionOwner(false);});
   await waitFor(() => expect((region().getByRole('textbox', {name: 'Technical documentation title'}) as HTMLInputElement).value).toBe(''));
   expect(screen.queryByDisplayValue('Private old session guide')).toBeNull();
+});
+
+
+it.each(['', '   \n\t'])('prevents saving or previewing an empty technical body %j', async body => {
+  await mount(); fillTechnical();
+  fireEvent.change(region().getByRole('textbox', {name: 'Technical document'}), {target: {value: body}});
+  for (const name of ['Save document draft', 'Preview exactly what buyers see']) {
+    const button = region().getByRole('button', {name}) as HTMLButtonElement;
+    expect(button.disabled).toBe(true); fireEvent.click(button);
+  }
+  expect(api.saveDocumentDraft).not.toHaveBeenCalled();
+  expect(api.publishDocument).not.toHaveBeenCalled();
+});
+
+it('prevents publishing a server-returned empty technical draft', async () => {
+  await mount(); fillTechnical();
+  vi.mocked(api.saveDocumentDraft).mockImplementationOnce(async () => {
+    const draft = documentFixture('technical_markdown', {body_markdown: '   ', revision: 1});
+    server.documents.technical_markdown = {max_revision: 1, draft, published: null, withdrawn: null};
+    return draft;
+  });
+  fireEvent.click(region().getByRole('button', {name: 'Preview exactly what buyers see'}));
+  const publish = await screen.findByRole('button', {name: 'Publish technical document'}) as HTMLButtonElement;
+  expect(publish.disabled).toBe(true); fireEvent.click(publish);
+  expect(api.publishDocument).not.toHaveBeenCalled();
+});
+
+it.each(['technical_markdown', 'data_sheet_pdf'] as const)('preserves the other mounted editor through a %s conflict and explicit reload', async kind => {
+  server.documents.data_sheet_pdf = {max_revision: 1, draft: documentFixture('data_sheet_pdf'), published: null, withdrawn: null};
+  await mount(); fillTechnical();
+  fireEvent.change(region('data_sheet_pdf').getByRole('textbox', {name: 'Data sheet title'}), {target: {value: 'Unsaved PDF title'}});
+  const other = kind === 'technical_markdown' ? 'data_sheet_pdf' : 'technical_markdown';
+  const field = region(other).getByRole('textbox', {name: other === 'technical_markdown' ? 'Technical document' : 'Data sheet title'}) as HTMLInputElement;
+  const value = field.value;
+  let finishRead!: (value: SellerDocuments) => void;
+  const delayRead = () => vi.mocked(api.readListingDocuments).mockImplementationOnce(() => new Promise(resolve => {finishRead = resolve;}));
+  delayRead();
+  vi.mocked(api.saveDocumentDraft).mockImplementationOnce(async () => {
+    server.documents[kind] = {max_revision: 9, draft: documentFixture(kind, {title: 'Other window', revision: 9}), published: null, withdrawn: null};
+    throw {isAxiosError: true, response: {status: 409}};
+  });
+  fireEvent.click(region(kind).getByRole('button', {name: 'Save document draft'}));
+  await waitFor(() => expect(api.readListingDocuments).toHaveBeenCalledTimes(2));
+  expect(field.isConnected).toBe(true); expect(field.value).toBe(value);
+  await act(async () => {finishRead(structuredClone(server));});
+  await screen.findByText(/changed in another window/);
+  expect(field.isConnected).toBe(true); expect(field.value).toBe(value);
+  delayRead();
+  fireEvent.click(screen.getByRole('button', {name: 'Reload documents'}));
+  await waitFor(() => expect(api.readListingDocuments).toHaveBeenCalledTimes(3));
+  expect(field.isConnected).toBe(true); expect(field.value).toBe(value);
+  await act(async () => {finishRead(structuredClone(server));});
+  await waitFor(() => expect((region(other).getByRole('button', {name: 'Save document draft'}) as HTMLButtonElement).disabled).toBe(false));
+  expect(field.isConnected).toBe(true); expect(field.value).toBe(value);
 });

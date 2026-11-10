@@ -104,10 +104,10 @@ export default async function ListingDetailPage({ params, searchParams }: Props)
     return <GeneratedSamplePage listing={listing} emitJsonLd={DATASET_JSONLD_ENABLED} />;
   }
 
-  const documents = await fetchPublicListingDocuments(listing.id);
+  const documentsPromise = fetchPublicListingDocuments(listing.id);
 
   if (isPublicSourceReference(listing)) {
-    return <PublicSourceReferencePage listing={listing} documents={documents} emitJsonLd={DATASET_JSONLD_ENABLED} />;
+    return <PublicSourceReferencePage listing={listing} documents={await documentsPromise} emitJsonLd={DATASET_JSONLD_ENABLED} />;
   }
 
   const hasActiveScanFindings = listing.scan_findings?.publication_state === 'PUBLISHED';
@@ -134,7 +134,7 @@ export default async function ListingDetailPage({ params, searchParams }: Props)
   const atAGlanceSummary = pendingSellerTerms && listing.at_a_glance
     ? {...listing.at_a_glance, sample_availability: undefined}
     : listing.at_a_glance;
-  const versions = await fetchListingVersions(listing.id);
+  const [documents, versions] = await Promise.all([documentsPromise, fetchListingVersions(listing.id)]);
   const hasVersionRows = versions.length > 0;
   // S1097: legacy listings intentionally keep byte-identical rendering and omit
   // the pre-purchase download-window line pending Max's R5.1h-vs-parity adjudication.

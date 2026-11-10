@@ -3,6 +3,9 @@ import {cleanup,fireEvent,render,screen} from '@testing-library/react';
 import {afterEach,beforeEach,expect,it,vi} from 'vitest';
 import SellerPublications from './SellerPublications';
 import {fetchSummaryPreview} from '@/lib/api';
+import {readListingDocuments} from '@/api/listingDocuments';
+import {documentsFixture} from '@/tests/listingDocumentsFixture';
+vi.mock('@/api/listingDocuments',()=>({readListingDocuments:vi.fn()}));
 import {preview} from '@/tests/summaryFixture';
 vi.mock('@/lib/api',()=>({fetchSummaryPreview:vi.fn()}));
 const api=vi.hoisted(()=>({readPublicationPage:vi.fn()}));vi.mock('@/api/sellerListingPublication',()=>api);
@@ -44,4 +47,19 @@ it('fetches a summary only after its details opens',async()=>{
   expect(fetchSummaryPreview).toHaveBeenCalledTimes(1);
   details.open=false; fireEvent(details,new Event('toggle'));
   expect(screen.queryByRole('region',{name:'Review At a glance'})).toBeNull();
+});
+
+
+it('fetches documents only while their details is open', async()=>{
+  api.readPublicationPage.mockResolvedValue({page:0,has_more:false,items:[{id:'one',listing_id:'listing',title:'Retail',slug:'retail',status:'published',is_listed:true,published_at:'2026-09-08T00:00:00Z'}]});
+  vi.mocked(readListingDocuments).mockResolvedValue(documentsFixture());
+  render(<SellerPublications active enabled/>);
+  const label=await screen.findByText('Manage documents');
+  expect(readListingDocuments).not.toHaveBeenCalled();
+  const details=label.closest('details')!;
+  details.open=true; fireEvent(details,new Event('toggle'));
+  await screen.findByRole('region',{name:'Technical documentation'});
+  expect(readListingDocuments).toHaveBeenCalledTimes(1);
+  details.open=false; fireEvent(details,new Event('toggle'));
+  expect(screen.queryByRole('region',{name:'Documents'})).toBeNull();
 });
