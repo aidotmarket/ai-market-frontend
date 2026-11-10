@@ -1,5 +1,6 @@
 import {verifyCurrentListing} from './publicPresentation';
 import type { ListingPublicListResponse } from '@/types';
+import type {ListingDocument} from '@/types/listingDocuments';
 
 const API_URL = process.env.API_URL || process.env.NEXT_PUBLIC_API_URL;
 
@@ -129,6 +130,15 @@ export async function fetchPublicListing(slug: string) {
   const listing = await res.json();
   await verifyCurrentListing(listing);
   return listing;
+}
+
+export async function fetchPublicListingDocuments(listingId: string): Promise<ListingDocument[]> {
+  try {
+    const res = await fetch(`${API_URL}/api/v1/public/listings/${encodeURIComponent(listingId)}/documents`, {cache: 'no-store'});
+    if (!res.ok) return [];
+    const documents: unknown = await res.json();
+    return Array.isArray(documents) ? documents : [];
+  } catch { return []; }
 }
 
 export async function fetchShareMetadata(code: string): Promise<ShareMetadataFetchResult> {

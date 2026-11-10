@@ -8,6 +8,7 @@ const listingApi = vi.hoisted(() => ({ getListing: vi.fn(), updateListing: vi.fn
 const gatewayApi = vi.hoisted(() => ({ listSellerGateways: vi.fn(), listGatewayFiles: vi.fn(), getGatewayListingSource: vi.fn(), saveGatewayListingSource: vi.fn() }));
 const toast = vi.hoisted(() => vi.fn());
 const router = vi.hoisted(() => ({ push: vi.fn() }));
+vi.mock('@/components/listing/ListingDocumentsEditor', () => ({default: () => null}));
 vi.mock('next/navigation', () => ({ useParams: () => ({ id: 'listing-1' }), useRouter: () => router }));
 vi.mock('next/link', () => ({ default: ({ href, children }: { href: string; children: React.ReactNode }) => <a href={href}>{children}</a> }));
 vi.mock('@/api/listings', () => listingApi);

@@ -1,3 +1,4 @@
+import DocumentsHarness from './DocumentsHarness';
 import SellerWorkspacePage from '@/app/dashboard/seller-workspace/page';
 import {useAuthStore} from '@/store/auth';
 import {createRoot} from 'react-dom/client';
@@ -13,8 +14,9 @@ const descriptionMode = new URLSearchParams(window.location.search).get('descrip
 const parity = new URLSearchParams(window.location.search).has('parity');
 const gateway = new URLSearchParams(window.location.search).has('gateway');
 const guided=new URLSearchParams(window.location.search).has('guided');
-if(guided)useAuthStore.setState({isAuthenticated:true,isLoading:false,hydrated:true,token:'synthetic-seller-token'});
-createRoot(document.getElementById('root')!).render(descriptionMode ? <BackendListingHtml description={'🫨*! sales@acme*.io\n<script>literal</script> **literal**'} descriptionHtml={descriptionMode === 'valid' ? '<h2>Backend description</h2><p>Safe <strong>formatting</strong> &amp; entities</p><ol start="2"><li>Second</li></ol>' : descriptionMode === 'invalid' ? '<img src="x" onerror="alert(1)">' : undefined}/> : guided ? <main className="mx-auto max-w-7xl px-4 py-8"><SellerWorkspacePage/></main> : gateway ? <GatewayDeliverySection orderId="order-1" /> : parity ? <main className="mx-auto max-w-7xl space-y-8 px-4 py-8">
+const documentsMode = new URLSearchParams(window.location.search).get('documents');
+if(guided || documentsMode)useAuthStore.setState({isAuthenticated:true,isLoading:false,hydrated:true,token:'synthetic-seller-token'});
+createRoot(document.getElementById('root')!).render(documentsMode ? <DocumentsHarness mode={documentsMode}/> : descriptionMode ? <BackendListingHtml description={'🫨*! sales@acme*.io\n<script>literal</script> **literal**'} descriptionHtml={descriptionMode === 'valid' ? '<h2>Backend description</h2><p>Safe <strong>formatting</strong> &amp; entities</p><ol start="2"><li>Second</li></ol>' : descriptionMode === 'invalid' ? '<img src="x" onerror="alert(1)">' : undefined}/> : guided ? <main className="mx-auto max-w-7xl px-4 py-8"><SellerWorkspacePage/></main> : gateway ? <GatewayDeliverySection orderId="order-1" /> : parity ? <main className="mx-auto max-w-7xl space-y-8 px-4 py-8">
   <section aria-label="Seller preview"><SellerAtAGlance listingId={listingId} slug="synthetic-current" /></section>
   <section aria-label="Buyer output">
     <BuyerAtAGlance slug="synthetic-current" listingId={listingId} initialSummary={preview.at_a_glance} includeSample={false} />
