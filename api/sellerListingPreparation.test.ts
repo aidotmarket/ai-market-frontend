@@ -68,3 +68,48 @@ it('refuses correction inputs before constructing a signing preparation or writi
  }
  expect(post).not.toHaveBeenCalled();
 });
+
+// Backend20bc449 seller_listing_publication.preparation_view omits selection;
+// read_preparation adds approval.public_fields.get(), hence JSON null or object.
+// These status reads do not grant signing authority (covered in batch tests).
+const {license_selection: savedSelection,...baseView}=row;
+const {license_selection: _selection,...unlicensedApproval}=approval;
+it.each([
+  {name:'omitted POST selection',data:baseView,owner:unlicensedApproval},
+  {name:'null GET selection',data:{...baseView,license_selection:null},owner:unlicensedApproval},
+  {name:'selected GET instrument',data:{...baseView,license_selection:savedSelection},owner:approval},
+])('recovers $name with its original binding and signed coverage',async({data,owner})=>{
+  const signed={...data,status:'signed',signing_required:false,acceptance_id:id(20),signed_coverage_hash:'b'.repeat(64)};
+  vi.spyOn(nativeClient,'get').mockResolvedValue({data:signed});
+  expect(await lookupPreparation(owner,new AbortController().signal)).toEqual(signed);
+});
+it('keeps an omitted POST selection omitted locally unless the approval supplies it',async()=>{
+  vi.spyOn(nativeClient,'post').mockResolvedValue({data:baseView});
+  const signal=new AbortController().signal;
+  const plain=await prepareListing(preparationRequest(unlicensedApproval),unlicensedApproval,signal);
+  expect(plain).toEqual(baseView);
+  expect(Object.hasOwn(plain,'license_selection')).toBe(false);
+  expect(await prepareListing(preparationRequest(approval),approval,signal)).toEqual({...baseView,license_selection:savedSelection});
+});
+it.each([
+  {name:'explicit undefined',selection:undefined},
+  {name:'unknown discriminator',selection:{...savedSelection,presentation_kind:'future-correction'}},
+  {name:'null discriminator',selection:{...savedSelection,presentation_kind:null}},
+  {name:'correction digest',selection:{...savedSelection,correction_digest:hash}},
+])('refuses $name in preparation selection',async({selection})=>{
+  vi.spyOn(nativeClient,'get').mockResolvedValue({data:{...baseView,license_selection:selection}});
+  await expect(lookupPreparation(approval,new AbortController().signal)).rejects.toThrow();
+});
+it.each([
+  {name:'foreign approval',binding:{...baseView.binding,approval_id:id(999)}},
+  {name:'foreign draft',binding:{...baseView.binding,draft_id:id(999)}},
+  {name:'stale draft revision',binding:{...baseView.binding,draft_version:4}},
+  {name:'changed original render',binding:{...baseView.binding,render_hash:'c'.repeat(64)}},
+  {name:'corrected binding',binding:{...baseView.binding,correction_digest:hash}},
+  {name:'invalid signed coverage',signed_coverage_hash:null},
+  {name:'unknown presentation',presentation_kind:'future-correction'},
+])('still refuses $name when recovery has a null selection',async({name:_name,...change})=>{
+  const signed={...baseView,license_selection:null,status:'signed',signing_required:false,acceptance_id:id(20),signed_coverage_hash:'b'.repeat(64),...change};
+  vi.spyOn(nativeClient,'get').mockResolvedValue({data:signed});
+  await expect(lookupPreparation(unlicensedApproval,new AbortController().signal)).rejects.toThrow();
+});

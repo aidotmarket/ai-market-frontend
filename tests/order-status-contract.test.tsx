@@ -46,6 +46,9 @@ vi.mock('@/components/ListingLicenseDisclosure', () => ({ default: () => null })
 vi.mock('@/lib/checkout-domain', () => ({ checkoutDomainEnabled: () => ports.domainEnabled, checkoutBlock: ports.refused, checkoutDestination: ports.refused, checkoutErrorCode: ports.refused, checkoutOutcome: ports.refused, checkoutWebPath: ports.refused }));
 vi.mock('@/lib/checkout-replay', () => ({ checkoutReplayKey: (...args: unknown[]) => JSON.stringify(args), readCheckoutReplay: ports.readReplay, saveCheckoutReplay: ports.saveReplay, clearCheckoutReplay: ports.refused }));
 vi.mock('@/components/orders/OrderVersionAccessSummary', () => ({ default: () => null }));
+// Purchased evidence has its own component/API contract tests. Status cases
+// isolate that child just like delivery children and forbid unrelated transport.
+vi.mock('@/components/orders/PurchasedLicenseDisplay', () => ({ default: () => null }));
 vi.mock('@/components/orders/GatewayDeliverySection', () => ({ default: () => null }));
 vi.mock('@/components/orders/WorkspaceDownload', () => ({ default: ports.refused }));
 vi.mock('@/components/orders/WorkspacePurchaseRecovery', () => ({ default: ports.refused }));

@@ -81,3 +81,17 @@ it('refuses platform correction markers in actual preparation/signing readers wi
  expect(i.binding.render_hash).toBe(instrument(1).binding.render_hash);
  expect(i.coverage_hash).toBe(instrument(1).coverage_hash);
 });
+
+it.each(['omitted','null','undefined','incomplete'] as const)('requires a complete selection for signing: %s',async kind=>{
+  const {license_selection,...view}=instrument();
+  const data=kind==='omitted'?view:{...view,license_selection:kind==='null'?null:kind==='undefined'?undefined:{...license_selection,seller_acceptance:{...license_selection.seller_acceptance,authority_confirmed:false}}};
+  vi.spyOn(nativeClient,'get').mockResolvedValue({data});
+  await expect(readSigningInstruments([view.id])).rejects.toThrow();
+});
+it('accepts the backend signing receipt without a licence selection and preserves both coverage hashes',async()=>{
+  const {license_selection,...view}=instrument();
+  const signed={...view,status:'signed',signing_required:false,acceptance_id:id(20),signed_coverage_hash:'b'.repeat(64)};
+  const body={request_id:id(9),csrf:nativeSession().csrf,instruments:[{preparation_id:view.id,coverage_hash:view.coverage_hash,selection:license_selection}]};
+  vi.spyOn(nativeClient,'post').mockResolvedValue({data:{instruments:[signed]}});
+  expect(await signInstruments(body)).toEqual([signed]);
+});

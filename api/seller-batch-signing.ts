@@ -16,7 +16,9 @@ export interface SigningRequest { request_id: string; csrf: string; reauth_token
 const base = '/seller-workspace';
 export function validView(v: PreparationView) {
   const b = v?.binding;
-  try { refusePlatformCorrection(v); refusePlatformCorrection(b); if ('license_selection' in v) refusePlatformCorrection(v.license_selection); } catch { return false; }
+  // Preparation POST/signing receipts omit selection; GET adds JSON null for
+  // an unlicensed approval. Signing readers still require a complete selection.
+  try { refusePlatformCorrection(v); refusePlatformCorrection(b); if ('license_selection' in v && v.license_selection !== null) refusePlatformCorrection(v.license_selection); } catch { return false; }
   return v && uuid(v.id) && b && b.preparation_id === v.id && digest(v.coverage_hash)
     && (['signed','published'].includes(v.status) ? digest(v.signed_coverage_hash) : v.signed_coverage_hash === null)
     && ['prepared', 'signed', 'published', 'superseded'].includes(v.status) && typeof v.signing_required === 'boolean'

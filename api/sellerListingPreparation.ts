@@ -5,7 +5,7 @@ import {validView,type PreparationView,type SigningInstrument} from './seller-ba
 import {sameLicenseSelection,type ApprovalReceipt} from './sellerListingReview';
 import {isCompleteLicenseSelection} from './listingLicenses';
 
-export type PreparedListing = PreparationView & Pick<Partial<SigningInstrument>, 'license_selection'>;
+export type PreparedListing = PreparationView & {license_selection?: SigningInstrument['license_selection'] | null};
 export type PreparationRequest = {request_id:string;draft_id:string;expected_draft_version:number;approval_id:string;review_hash:string;render_hash:string};
 export function preparationRequest(approval:ApprovalReceipt):PreparationRequest {
   refusePlatformCorrection(approval);
@@ -39,7 +39,8 @@ export async function prepareListing(request:PreparationRequest,approval:Approva
   refusePlatformCorrection(request);
   refusePlatformCorrection(approval);
   const data=await nativeWrite<PreparedListing>('/seller-workspace/listing-preparation',request,signal);
-  return {...verified(data,approval),license_selection:approval.license_selection};
+  const value=verified(data,approval);
+  return approval.license_selection ? {...value,license_selection:approval.license_selection} : value;
 }
 export function preparationErrorCode(error:unknown):string|undefined {
   const detail=axios.isAxiosError(error)?error.response?.data?.detail:undefined;
