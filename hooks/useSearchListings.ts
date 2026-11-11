@@ -35,6 +35,31 @@ function getFulfillmentTypesForCategory(listingCategory: ListingCategory): Fulfi
 // Restoration invalidation must outlive route observers, just like the cache.
 const restorationClocks = new WeakMap<QueryClient, ReturnType<typeof createRestorationClock>>();
 
+// One browser listener pair serves clocks even while their hooks are unmounted.
+// Weak references let discarded QueryClients release their restoration state.
+const browserClocks = new Set<WeakRef<ReturnType<typeof createRestorationClock>>>();
+let restorationListenersInstalled = false;
+
+function registerRestorationClock(clock: ReturnType<typeof createRestorationClock>) {
+  if (typeof window === 'undefined') return;
+  browserClocks.add(new WeakRef(clock));
+  if (restorationListenersInstalled) return;
+  restorationListenersInstalled = true;
+  const restore = () => {
+    for (const reference of browserClocks) {
+      const clock = reference.deref();
+      if (clock) clock.recheck(true);
+      else browserClocks.delete(reference);
+    }
+  };
+  window.addEventListener('pageshow', event => {
+    if (event.persisted) restore();
+  });
+  document.addEventListener('visibilitychange', () => {
+    if (document.visibilityState === 'visible') restore();
+  });
+}
+
 function createRestorationClock() {
   let epoch: symbol | undefined;
   let wall = Date.now();
@@ -74,6 +99,7 @@ export function useSearchListings({
   if (!restorationClock) {
     restorationClock = createRestorationClock();
     restorationClocks.set(client, restorationClock);
+    registerRestorationClock(restorationClock);
   }
   const restorationEpoch = useSyncExternalStore(
     restorationClock.subscribe, restorationClock.getSnapshot, restorationClock.getSnapshot,
@@ -91,6 +117,8 @@ export function useSearchListings({
     refetchOnReconnect: true,
     queryFn: async ({ pageParam }) => {
       const offset = typeof pageParam === 'number' ? pageParam : 0;
+      // A response started before restoration cannot certify the restored view.
+      const observationEpoch = restorationClock.getSnapshot();
 
       if (semanticMode) {
         const result = await searchListings(q, {
@@ -101,7 +129,7 @@ export function useSearchListings({
           limit: PAGE_SIZE,
           offset,
         });
-        return {result, observedAt:Date.now(), observedAtMonotonic:performance.now(), observationEpoch:restorationClock.getSnapshot()};
+        return {result, observedAt:Date.now(), observedAtMonotonic:performance.now(), observationEpoch};
       }
 
       const result = await listListings({
@@ -112,7 +140,7 @@ export function useSearchListings({
         max_price: maxPrice,
         fulfillment_type: fulfillmentType,
       });
-      return {result, observedAt:Date.now(), observedAtMonotonic:performance.now(), observationEpoch:restorationClock.getSnapshot()};
+      return {result, observedAt:Date.now(), observedAtMonotonic:performance.now(), observationEpoch};
     },
     getNextPageParam: (lastPage, allPages) => {
       const result=lastPage.result;
@@ -138,20 +166,8 @@ export function useSearchListings({
       restorationClock.recheck();
       setClock(tick => tick + 1);
     };
-    const onPageShow = (event: PageTransitionEvent) => {
-      if (event.persisted) restorationClock.recheck(true);
-    };
-    const onVisibilityChange = () => {
-      if (document.visibilityState === 'visible') recheck();
-    };
     const timer = setInterval(recheck, 60_000);
-    window.addEventListener('pageshow', onPageShow);
-    document.addEventListener('visibilitychange', onVisibilityChange);
-    return () => {
-      clearInterval(timer);
-      window.removeEventListener('pageshow', onPageShow);
-      document.removeEventListener('visibilitychange', onVisibilityChange);
-    };
+    return () => { clearInterval(timer); };
   }, [restorationClock]);
   // Appending a fresh page must never extend the life of older pages.
   // Monotonic elapsed time prevents clock rollback from extending visibility.
