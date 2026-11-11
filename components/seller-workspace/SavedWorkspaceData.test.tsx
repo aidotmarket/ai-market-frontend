@@ -46,6 +46,30 @@ it('releases pending sample state when the first save assigns the empty draft an
  expect(store.draft?.draft_id).toBe('first-draft');expect(store.sampleIndices).toEqual([0]);
  expect(store.selectionSavePending).toBe(false);expect(store.selectionSaveFailed).toBe(false);
 });
+it('persists a queued untick after the first save assigns a draft ID without retry',async()=>{
+ let store!:ReturnType<typeof useSellerListingDraft>;
+ function Capture(){store=useSellerListingDraft();return null;}
+ let finishFirst!:(value:unknown)=>void;
+ api.saveListingDraft.mockImplementationOnce(()=>new Promise(resolve=>{finishFirst=resolve;}))
+   .mockImplementationOnce(async content=>({draft_id:'first-draft',version:2,updated_at:'now',content}));
+ render(<SellerListingDraftProvider enabled sampleCapability><Capture/></SellerListingDraftProvider>);
+ await waitFor(()=>expect(store.loaded).toBe(true));
+ expect(store.draft).toBeNull();
+ let queued!:Promise<PromiseSettledResult<void>[]>;
+ await act(async()=>{
+   queued=Promise.allSettled([store.saveSamples([0]),store.saveSamples([])]);
+   await waitFor(()=>expect(api.saveListingDraft).toHaveBeenCalledOnce());
+ });
+ expect(api.saveListingDraft.mock.calls[0][1]).toBe(0);
+ expect(store.selectionSavePending).toBe(true);
+ await act(async()=>{finishFirst({draft_id:'first-draft',version:1,updated_at:'now',content:api.saveListingDraft.mock.calls[0][0]});await queued;});
+ expect((await queued).map(result=>result.status)).toEqual(['fulfilled','fulfilled']);
+ expect(api.saveListingDraft).toHaveBeenCalledTimes(2);
+ expect(api.saveListingDraft.mock.calls[1][1]).toBe(1);
+ expect(api.saveListingDraft.mock.calls[1][0]).toEqual({...api.saveListingDraft.mock.calls[0][0],sample_decision:'none',sample_object_indices:[]});
+ expect(store.draft?.draft_id).toBe('first-draft');expect(store.draft?.version).toBe(2);expect(store.sampleIndices).toEqual([]);
+ expect(store.selectionSavePending).toBe(false);expect(store.selectionSaveFailed).toBe(false);
+});
 it('merges a queued licence save over the latest same-draft listing write without retry',async()=>{
  const selection=createStandardSelection();
  const draft={draft_id:'same-draft',version:4,content:{brief:'brief',title:'Offer',description:'Description',category:'Retail',tags:'retail',price:'25',license:'Research',sample_decision:'member_files' as const,sample_object_indices:[0]},updated_at:'2026-09-18T12:00:00Z'};

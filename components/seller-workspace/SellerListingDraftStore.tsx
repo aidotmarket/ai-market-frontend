@@ -28,15 +28,15 @@ const snapshot=(owner:Owner):OwnerSnapshot=>({draft:owner.draft,selectionSaveCou
 const publish=(owner:Owner)=>{if(!isAuthSessionOwner(owner.session))return;const value=snapshot(owner);owner.listeners.forEach(listener=>listener(value));};
 const beginOwnerSelectionSave=(owner:Owner)=>{if(!isAuthSessionOwner(owner.session))return;if(owner.selectionSaveCount===0)owner.selectionSaveFailed=false;owner.selectionSaveCount+=1;publish(owner);};
 const finishOwnerSelectionSave=(owner:Owner,succeeded:boolean)=>{if(!isAuthSessionOwner(owner.session))return;owner.selectionSaveCount=Math.max(0,owner.selectionSaveCount-1);if(!succeeded)owner.selectionSaveFailed=true;else if(owner.selectionSaveCount===0)owner.selectionSaveFailed=false;publish(owner);};
-type DraftBinding={draftId:string|null;baselineVersion?:number};
+type DraftBinding={draftGeneration:number;baselineVersion?:number};
 const matchesDraft=(owner:Owner,draftId:string|null)=>(owner.draft?.draft_id??null)===draftId;
 const persist=(owner:Owner,binding:DraftBinding,build:(base:ListingDraftContent)=>ListingDraftContent)=>{
   const operation=owner.queue.catch(()=>undefined).then(async()=>{
     assertAuthSessionOwner(owner.session);
     if(!owner.loaded)throw new DraftNotLoadedError();
-    // Bind before enqueueing: a panel from an earlier draft must never write
-    // into the current pointer, even if the new draft has the same version.
-    if(!matchesDraft(owner,binding.draftId))throw new DraftChangedError();
+    // Bind before enqueueing: a real draft transition retires old callbacks,
+    // while this store's first save assigning an ID keeps the same generation.
+    if(owner.draftGeneration!==binding.draftGeneration)throw new DraftChangedError();
     const content=build(owner.draft?.content??EMPTY_DRAFT);
     const serialized=JSON.stringify(content);
     // Same-draft saves merge over the preceding commit. Explicit editor
@@ -48,7 +48,7 @@ const persist=(owner:Owner,binding:DraftBinding,build:(base:ListingDraftContent)
     owner.saveAttempt+=1;
     const result=await saveListingDraft(content,owner.pending.version,owner.pending.id);
     assertAuthSessionOwner(owner.session);
-    if(!matchesDraft(owner,binding.draftId))throw new DraftChangedError();
+    if(owner.draftGeneration!==binding.draftGeneration)throw new DraftChangedError();
     owner.pending=null;owner.draft=result;owner.version=result.version;owner.saveRevision+=1;publish(owner);
     return result;
   });
@@ -121,7 +121,6 @@ function OwnedSellerListingDraftProvider({owner,enabled,sampleCapability,childre
     onLoaded?.();publish(owner);setLoaded(true);setError(false);
     return value;
   },[owner]);
-  const draftId=draft?.draft_id??null;
   const draftGeneration=owner.draftGeneration;
   // The first save may assign an ID to an empty draft. Only an actual pointer
   // transition retires its selection callbacks.
@@ -143,16 +142,16 @@ function OwnedSellerListingDraftProvider({owner,enabled,sampleCapability,childre
       owner.queue=operation;return operation;
     },
     beginSelectionSave,finishSelectionSave,setVisibleSampleIndices,
-    saveListingFields:async(fields,baselineVersion)=>{if(!loaded)throw new DraftNotLoadedError();const result=await persist(owner,{draftId,baselineVersion},base=>({
+    saveListingFields:async(fields,baselineVersion)=>{if(!loaded)throw new DraftNotLoadedError();const result=await persist(owner,{draftGeneration,baselineVersion},base=>({
       ...base,brief:fields.brief,title:fields.title,description:fields.description,category:fields.category,
       tags:fields.tags,price:fields.price,license:fields.license,description_source_version:fields.description_source_version??null,
     }));return result.version;},
-    saveLicenseSelection:async(selection)=>{if(!loaded)throw new DraftNotLoadedError();await persist(owner,{draftId},base=>({...base,license_selection:selection}));},
-    saveSamples:async(indices)=>{if(!loaded)throw new DraftNotLoadedError();beginSelectionSave();try{await persist(owner,{draftId},base=>sampleCapability
+    saveLicenseSelection:async(selection)=>{if(!loaded)throw new DraftNotLoadedError();await persist(owner,{draftGeneration},base=>({...base,license_selection:selection}));},
+    saveSamples:async(indices)=>{if(!loaded)throw new DraftNotLoadedError();beginSelectionSave();try{await persist(owner,{draftGeneration},base=>sampleCapability
       ?{...base,sample_decision:indices.length?'member_files':'none',sample_object_indices:[...indices]}
       :base);finishSelectionSave(true);}
       catch(failure){finishSelectionSave(false);throw failure;}},
-  }),[owner,draft,draftId,enabled,loaded,error,sampleCapability,sampleIndices,selectionSaveCount,selectionSaveFailed,selectionMismatch,reload,beginSelectionSave,finishSelectionSave]);
+  }),[owner,draft,draftGeneration,enabled,loaded,error,sampleCapability,sampleIndices,selectionSaveCount,selectionSaveFailed,selectionMismatch,reload,beginSelectionSave,finishSelectionSave]);
   return <DraftContext.Provider value={value}>{children}</DraftContext.Provider>;
 }
 
