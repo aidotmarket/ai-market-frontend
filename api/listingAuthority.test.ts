@@ -109,6 +109,12 @@ describe('T1 covered_contract_variants at the type/helper boundary', () => {
     expectTypeOf<ListingApprovalV1>().not.toExtend<CoveredApprovalV1>();
     expectTypeOf<ListingApprovalV3>().not.toExtend<CoveredApprovalV3>();
   });
+  it('requires the authority binding hash and statement variant on both covered approvals', () => {
+    expectTypeOf<{}>().not.toExtend<Pick<CoveredApprovalV1, 'authority_binding_hash'>>();
+    expectTypeOf<{}>().not.toExtend<Pick<CoveredApprovalV1, 'authority_statement_variant'>>();
+    expectTypeOf<{}>().not.toExtend<Pick<CoveredApprovalV3, 'authority_binding_hash'>>();
+    expectTypeOf<{}>().not.toExtend<Pick<CoveredApprovalV3, 'authority_statement_variant'>>();
+  });
   it('allows both no-org variants and only authorised for a bound organisation', () => {
     for (const variant of ['own_data', 'organisation_authorised'] as const) {
       const context: AuthorityStatementContext = { organisation_id: null, organisation: NO_ORGANISATION, authority_statement_variant: variant };

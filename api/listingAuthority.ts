@@ -90,6 +90,7 @@ export function isCoveredConfirmationVersion(value: unknown): value is CoveredCo
     value === 'seller-listing-confirmation-v3-authority-v1';
 }
 
+/** Intentionally excludes legacy seller-listing-confirmation-v2; must not gate the legacy v2 reader path. */
 export function isUncoveredConfirmationVersion(value: unknown): value is ListingApprovalV1['confirmation_version'] | ListingApprovalV3['confirmation_version'] {
   return value === 'seller-listing-confirmation-v1' || value === 'seller-listing-confirmation-v3';
 }
@@ -121,6 +122,7 @@ export type NoOrganisationAuthority = {
   organisation: typeof NO_ORGANISATION;
   authority_statement_variant: AuthorityStatementVariant;
 };
+/** Client-side helper combining binding organisation_id and snapshot organisation, not a backend wire shape. */
 export type AuthorityStatementContext = BoundOrganisationAuthority | NoOrganisationAuthority;
 
 /** covered_confirmation_contract output; sentences always come from the server. */
