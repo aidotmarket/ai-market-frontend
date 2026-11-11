@@ -10,7 +10,9 @@ const ATTESTATION = "On 2026-08-23 12:00:00 UTC, at the data owner's authorizati
 const DISCLAIMER = 'This is a seller-published, point-in-time scan of what the seller-designated source exposed through AIM Data on 2026-08-23; the source may change at any time, and this is not a continuing audit, warranty, compliance certification, or guarantee that data delivered later will match or remain available, accurate, complete, or unchanged. Verification does not assess data accuracy, legality, or fitness for any purpose.';
 const OBJECT_ID = 'a'.repeat(64) as VerificationObjectId;
 
-function makePublishedFindings(overrides: Partial<PublishedScanFindings> = {}): PublishedScanFindings {
+type V1Findings = Extract<PublishedScanFindings, { artifact_version: 'data-verification-public-artifact-v1' }>;
+
+function makePublishedFindings(overrides: Partial<V1Findings> = {}): V1Findings {
   return {
     publication_state: 'PUBLISHED',
     artifact_version: 'data-verification-public-artifact-v1',
@@ -146,31 +148,43 @@ describe('ScanFindingsBadge', () => {
     expect(document.body.querySelector('script')).toBeNull();
   });
 
-  it('preserves the content SHA-256 reference row for v1 artifacts', () => {
+  it('preserves both hash rows for v1 artifacts', () => {
     renderText(makePublishedFindings());
-    const label = Array.from(document.body.querySelectorAll('dt'))
-      .find(dt => dt.textContent === 'Content SHA-256 reference');
+    const fields = Object.fromEntries(Array.from(document.body.querySelectorAll('dt'), dt => [
+      dt.textContent, dt.nextElementSibling?.textContent,
+    ]));
 
-    expect(label?.nextElementSibling?.textContent).toBe('c'.repeat(12));
+    expect(fields['Spec hash']).toBe('b'.repeat(64));
+    expect(fields['Content SHA-256 reference']).toBe('c'.repeat(12));
   });
 
-  it('omits the content SHA-256 reference row for v2 artifacts without it', () => {
-    const findings = makePublishedFindings({ artifact_version: 'data-verification-public-artifact-v2' });
-    delete findings.execution.content_sha256_reference;
+  it('omits both hash rows for v2 artifacts without them', () => {
+    const { spec, execution, ...base } = makePublishedFindings();
+    const { hash: _hash, ...v2Spec } = spec;
+    const { content_sha256_reference: _reference, ...v2Execution } = execution;
+    const findings: PublishedScanFindings = {
+      ...base,
+      artifact_version: 'data-verification-public-artifact-v2',
+      spec: v2Spec,
+      execution: v2Execution,
+    };
     const text = renderText(findings);
 
     expect(text).toContain('data-verification-public-artifact-v2');
     expect(text).toContain('Report provenance');
+    expect(text).not.toContain('Spec hash');
     expect(text).not.toContain('Content SHA-256 reference');
     expect(text).not.toMatch(/\b(?:undefined|null)\b/);
   });
 
-  it.each(['', undefined, null, 0, false])('omits an empty or non-string content SHA-256 reference (%s)', value => {
+  it.each(['', undefined, null, 0, false])('omits empty or non-string hashes (%s)', value => {
     const findings = makePublishedFindings();
-    // Exercise malformed wire values without widening the supported string type.
+    // Exercise malformed wire values without widening the supported string types.
+    Object.assign(findings.spec, { hash: value });
     Object.assign(findings.execution, { content_sha256_reference: value });
     const text = renderText(findings);
 
+    expect(text).not.toContain('Spec hash');
     expect(text).not.toContain('Content SHA-256 reference');
     expect(text).not.toMatch(/\b(?:undefined|null)\b/);
   });
@@ -274,7 +288,7 @@ describe('S1791 immutable server-supplied provenance', () => {
 describe.each(['PUBLISHED', 'NOT_PUBLISHED'] as const)('optional scan text in %s findings', publicationState => {
   const notice = 'allAI interpretation withheld because grounding validation failed';
 
-  function findings(overrides: Partial<PublishedScanFindings> = {}): SellerScanFindings {
+  function findings(overrides: Partial<V1Findings> = {}): SellerScanFindings {
     return {
       ...makePublishedFindings(overrides),
       publication_state: publicationState,

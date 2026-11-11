@@ -71,7 +71,9 @@ function ArtifactProvenance({ artifact }: { artifact: SellerScanFindings }) {
         <ReportField label="Listing ID">{artifact.listing_id}</ReportField>
         <ReportField label="Spec ID">{artifact.spec.id}</ReportField>
         <ReportField label="Spec version">{artifact.spec.version}</ReportField>
-        <ReportField label="Spec hash">{artifact.spec.hash}</ReportField>
+        {typeof artifact.spec.hash === 'string' && artifact.spec.hash.length > 0 && (
+          <ReportField label="Spec hash">{artifact.spec.hash}</ReportField>
+        )}
         <ReportField label="Depth class">{artifact.spec.depth_class}</ReportField>
         <ReportField label="Canonicalization version">{artifact.spec.canonicalization_version}</ReportField>
         {artifact.spec.listing_version_id && <ReportField label="Covered listing version">{artifact.spec.listing_version_id}</ReportField>}
