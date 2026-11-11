@@ -63,7 +63,7 @@ export function useSearchListings({
           limit: PAGE_SIZE,
           offset,
         });
-        return {result, observedAt:Date.now()};
+        return {result, observedAt:Date.now(), observedAtMonotonic:performance.now()};
       }
 
       const result = await listListings({
@@ -74,7 +74,7 @@ export function useSearchListings({
         max_price: maxPrice,
         fulfillment_type: fulfillmentType,
       });
-      return {result, observedAt:Date.now()};
+      return {result, observedAt:Date.now(), observedAtMonotonic:performance.now()};
     },
     getNextPageParam: (lastPage, allPages) => {
       const result=lastPage.result;
@@ -94,10 +94,31 @@ export function useSearchListings({
     },
   });
 
-  const [clock,setClock] = useState(0);
-  useEffect(()=>{const timer=setInterval(()=>setClock(Date.now()),60_000);return()=>clearInterval(timer);},[]);
+  const [,setClock] = useState(0);
+  useEffect(() => {
+    const recheck = () => setClock(tick => tick + 1);
+    const onPageShow = (event: PageTransitionEvent) => {
+      if (event.persisted) recheck();
+    };
+    const onVisibilityChange = () => {
+      if (document.visibilityState === 'visible') recheck();
+    };
+    const timer = setInterval(recheck, 60_000);
+    window.addEventListener('pageshow', onPageShow);
+    document.addEventListener('visibilitychange', onVisibilityChange);
+    return () => {
+      clearInterval(timer);
+      window.removeEventListener('pageshow', onPageShow);
+      document.removeEventListener('visibilitychange', onVisibilityChange);
+    };
+  }, []);
   // Appending a fresh page must never extend the life of older pages.
-  const expired = query.data?.pages.some(page => Math.max(clock, Date.now()) - page.observedAt >= 10 * 60_000) ?? false;
+  // Monotonic elapsed time prevents clock rollback from extending visibility.
+  // Wall time also expires suspended pages on platforms whose performance clock pauses.
+  const expired = query.data?.pages.some(page => Math.max(
+    performance.now() - page.observedAtMonotonic,
+    Date.now() - page.observedAt
+  ) >= 10 * 60_000) ?? false;
   const rawItems: ResultItem[] = expired ? [] : filterDiscoverableItems(query.data?.pages.flatMap((page): ResultItem[] =>
     Array.isArray(page.result) ? page.result : page.result.results
   ) || []);

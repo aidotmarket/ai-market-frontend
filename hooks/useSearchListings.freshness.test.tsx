@@ -6,8 +6,8 @@ const query=vi.hoisted(()=>({useInfiniteQuery:vi.fn()}));
 vi.mock('@tanstack/react-query',()=>query);
 afterEach(()=>{cleanup();vi.useRealTimers();vi.resetAllMocks();});
 it('bounds retained current search results when refresh repeatedly fails',()=>{
- vi.useFakeTimers();vi.setSystemTime(1000000);
- const state={data:{pages:[{result:[{id:'synthetic',slug:'synthetic',status:'published'}],observedAt:Date.now()}]},dataUpdatedAt:Date.now(),isError:false,error:null};
+ vi.useFakeTimers({toFake:['Date','setInterval','clearInterval','performance']});vi.setSystemTime(1000000);
+ const state={data:{pages:[{result:[{id:'synthetic',slug:'synthetic',status:'published'}],observedAt:Date.now(),observedAtMonotonic:performance.now()}]},dataUpdatedAt:Date.now(),isError:false,error:null};
  query.useInfiniteQuery.mockReturnValue(state);
  const hook=renderHook(()=>useSearchListings({}));
  expect(hook.result.current.items).toHaveLength(1);
@@ -15,13 +15,13 @@ it('bounds retained current search results when refresh repeatedly fails',()=>{
  act(()=>vi.advanceTimersByTime(10*60_000));
  expect(hook.result.current.items).toEqual([]);
  expect(hook.result.current.isError).toBe(true);
- state.data.pages[0].observedAt=Date.now();hook.rerender();
+ state.data.pages[0].observedAt=Date.now();state.data.pages[0].observedAtMonotonic=performance.now();hook.rerender();
  expect(hook.result.current.items).toHaveLength(1);
 });
 
 it('adding a fresh page cannot renew older cached cards',()=>{
- vi.useFakeTimers();vi.setSystemTime(1000000);
- const state={data:{pages:[{result:[{id:'old'}],observedAt:Date.now()-11*60_000},{result:[{id:'new'}],observedAt:Date.now()}]},dataUpdatedAt:Date.now(),isError:false,error:null};
+ vi.useFakeTimers({toFake:['Date','setInterval','clearInterval','performance']});vi.setSystemTime(1000000);
+ const state={data:{pages:[{result:[{id:'old'}],observedAt:Date.now()-11*60_000,observedAtMonotonic:performance.now()-11*60_000},{result:[{id:'new'}],observedAt:Date.now(),observedAtMonotonic:performance.now()}]},dataUpdatedAt:Date.now(),isError:false,error:null};
  query.useInfiniteQuery.mockReturnValue(state);
  const hook=renderHook(()=>useSearchListings({}));
  expect(hook.result.current.items).toEqual([]);expect(hook.result.current.isError).toBe(true);
