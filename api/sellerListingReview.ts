@@ -3,18 +3,19 @@ import {nativeWrite} from './connector-seller-settings';
 import { api } from './client';
 import type { ListingDraftContent } from './sellerListingDraft';
 import type {LicenseSelection} from './listingLicenses';
+import type { ListingAuthorityReferences } from './listingAuthority';
 export const CONFIRMATION_KEYS = ['ownership_confirmed', 'privacy_confirmed', 'price_license_confirmed', 'public_disclosure_confirmed'] as const;
 export const LICENSE_CONFIRMATION_KEYS = ['ownership_confirmed', 'privacy_confirmed', 'price_confirmed', 'license_confirmed', 'covenant_authority_confirmed', 'public_disclosure_confirmed'] as const;
 export type ConfirmationKey = typeof CONFIRMATION_KEYS[number] | typeof LICENSE_CONFIRMATION_KEYS[number] | 'sample_files_confirmed';
 export interface ReviewSampleFile { index: number; sha256: string; key_basename: string; size: number }
 export type SampleStatus = 'not_selected' | {state:'selected';files:ReviewSampleFile[]};
-export interface ApprovalReceipt {
+export interface ApprovalReceipt extends ListingAuthorityReferences {
   draft_id?: string;
   id: string; review_hash: string; render_hash: string; draft_version: number; source_version: number;
   approved_at: string; sample_decision: 'none' | 'member_files';
   license_selection?: LicenseSelection;
 }
-export interface ListingReview {
+export interface ListingReview extends ListingAuthorityReferences {
   draft_id?: string;
   fields: Pick<ListingDraftContent, 'title' | 'description' | 'category' | 'tags' | 'price' | 'license'>;
   draft_version: number; source_version: number; presentation_version: string; review_hash: string;
@@ -28,6 +29,36 @@ export interface ListingReview {
   source_hash: string;
   source_page?: ReviewSourcePage | null;
 }
+/** Existing uncovered wire contracts; every required tick stays literal true. */
+export interface ListingApprovalBase {
+  draft_id?: string | null;
+  csrf?: string | null;
+  request_id: string;
+  review_hash: string;
+  render_hash: string;
+  ownership_confirmed: true;
+  privacy_confirmed: true;
+  public_disclosure_confirmed: true;
+}
+
+export type ListingApprovalV1 = ListingApprovalBase & {
+  confirmation_version: 'seller-listing-confirmation-v1';
+  sample_decision: 'none';
+  price_license_confirmed: true;
+};
+
+export type ListingApprovalSampleChoice =
+  | { sample_decision: 'none'; sample_files_confirmed?: null }
+  | { sample_decision: 'member_files'; sample_files_confirmed: true };
+
+export type ListingApprovalV3 = ListingApprovalBase & ListingApprovalSampleChoice & {
+  confirmation_version: 'seller-listing-confirmation-v3';
+  license_selection: LicenseSelection;
+  price_confirmed: true;
+  license_confirmed: true;
+  covenant_authority_confirmed: true;
+};
+
 export interface ReviewSourcePage {
   review_hash: string; source_version: number; source_hash: string;
   offset: number; page_size: number; total_count: number; total_size_bytes: number;

@@ -2,8 +2,13 @@
 
 import { api } from './client';
 import type {LicenseSelection} from './listingLicenses';
+import type { ListingAuthorityReferences } from './listingAuthority';
+
 import type { FulfillmentType, ListingListItem, ListingDetail, ListingVersion, SearchResponse, SellerListingItem } from '@/types';
 import type { TableFormat } from '@/components/gateways/fileMetadata';
+
+export type SellerListingSummary = Pick<SellerListingItem, 'id' | 'title' | 'status'> & ListingAuthorityReferences;
+export type ListingWithAuthority = ListingDetail & ListingAuthorityReferences;
 
 type FulfillmentTypeParam = FulfillmentType | FulfillmentType[];
 
@@ -30,15 +35,15 @@ export async function listListings(params: ListListingsParams = {}): Promise<Lis
   return res.data;
 }
 
-export async function getListing(id: string): Promise<ListingDetail> {
-  const res = await api.get<ListingDetail>(`/listings/${id}`);
+export async function getListing(id: string): Promise<ListingWithAuthority> {
+  const res = await api.get<ListingWithAuthority>(`/listings/${id}`);
   return res.data;
 }
 
 // Owner-facing fields from the existing single-listing endpoint. Call only
 // after establishing ownership; the public detail type omits listing status.
-export async function getSellerListing(id: string): Promise<Pick<SellerListingItem, 'id' | 'title' | 'status'>> {
-  const res = await api.get<Pick<SellerListingItem, 'id' | 'title' | 'status'>>(`/listings/${id}`);
+export async function getSellerListing(id: string): Promise<SellerListingSummary> {
+  const res = await api.get<SellerListingSummary>(`/listings/${id}`);
   return res.data;
 }
 
@@ -112,7 +117,7 @@ export const getMyListings = (paging?: MyListingsPaging) => paging === undefined
   ? api.get('/listings/mine')
   : api.get('/listings/mine', { params: paging });
 
-export interface PendingSellerTermsListing {
+export interface PendingSellerTermsListing extends ListingAuthorityReferences {
   id: string;
   slug: string;
   title: string;

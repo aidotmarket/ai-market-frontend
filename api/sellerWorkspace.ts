@@ -1,5 +1,6 @@
 import axios from 'axios';
 import { api } from './client';
+import type { ListingAuthorityReferences } from './listingAuthority';
 
 const BASE_PATH = '/seller-workspace';
 const SAFE_IDEMPOTENCY_KEY = /^[a-z0-9][a-z0-9_.:-]{0,127}$/;
@@ -56,7 +57,7 @@ export type RotationSubstate =
   | 'complete'
   | 'failed';
 
-export interface SellerWorkspaceConnection {
+export interface SellerWorkspaceConnection extends ListingAuthorityReferences {
   id: string;
   provider: 'aws' | 'r2';
   status: ConnectionStatus;
