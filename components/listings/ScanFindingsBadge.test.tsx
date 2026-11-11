@@ -116,7 +116,8 @@ describe('ScanFindingsBadge', () => {
       findings.execution.agent_version,
       findings.execution.connector_type,
       findings.execution.connector_version,
-      findings.execution.content_sha256_reference,
+      'Content SHA-256 reference',
+      'c'.repeat(12),
       findings.fingerprint_hash,
       findings.methods.row_count_algorithm_version,
       findings.methods.distinct_algorithm_version,
@@ -143,6 +144,35 @@ describe('ScanFindingsBadge', () => {
     expect(text).toContain('The listing says "A & B"; one object was scanned and one was skipped.');
     expect(text).toContain('<script>alert(1)</script>');
     expect(document.body.querySelector('script')).toBeNull();
+  });
+
+  it('preserves the content SHA-256 reference row for v1 artifacts', () => {
+    renderText(makePublishedFindings());
+    const label = Array.from(document.body.querySelectorAll('dt'))
+      .find(dt => dt.textContent === 'Content SHA-256 reference');
+
+    expect(label?.nextElementSibling?.textContent).toBe('c'.repeat(12));
+  });
+
+  it('omits the content SHA-256 reference row for v2 artifacts without it', () => {
+    const findings = makePublishedFindings({ artifact_version: 'data-verification-public-artifact-v2' });
+    delete findings.execution.content_sha256_reference;
+    const text = renderText(findings);
+
+    expect(text).toContain('data-verification-public-artifact-v2');
+    expect(text).toContain('Report provenance');
+    expect(text).not.toContain('Content SHA-256 reference');
+    expect(text).not.toMatch(/\b(?:undefined|null)\b/);
+  });
+
+  it.each(['', undefined, null, 0, false])('omits an empty or non-string content SHA-256 reference (%s)', value => {
+    const findings = makePublishedFindings();
+    // Exercise malformed wire values without widening the supported string type.
+    Object.assign(findings.execution, { content_sha256_reference: value });
+    const text = renderText(findings);
+
+    expect(text).not.toContain('Content SHA-256 reference');
+    expect(text).not.toMatch(/\b(?:undefined|null)\b/);
   });
 
   it('decodes only the five entities emitted by Python html.escape', () => {

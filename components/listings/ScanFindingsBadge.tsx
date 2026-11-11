@@ -79,7 +79,9 @@ function ArtifactProvenance({ artifact }: { artifact: SellerScanFindings }) {
         <ReportField label="Agent version">{artifact.execution.agent_version}</ReportField>
         <ReportField label="Connector type">{artifact.execution.connector_type}</ReportField>
         <ReportField label="Connector version">{artifact.execution.connector_version}</ReportField>
-        <ReportField label="Content SHA-256 reference">{artifact.execution.content_sha256_reference}</ReportField>
+        {typeof artifact.execution.content_sha256_reference === 'string' && artifact.execution.content_sha256_reference.length > 0 && (
+          <ReportField label="Content SHA-256 reference">{artifact.execution.content_sha256_reference}</ReportField>
+        )}
         <ReportField label="Fingerprint hash">{artifact.fingerprint_hash}</ReportField>
         <ReportField label="Row-count algorithm">{artifact.methods.row_count_algorithm_version}</ReportField>
         <ReportField label="Distinct-count algorithm">{artifact.methods.distinct_algorithm_version}</ReportField>

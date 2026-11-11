@@ -192,7 +192,7 @@ export interface VerificationFactObject {
 
 export interface PublishedScanFindings {
   publication_state: 'PUBLISHED';
-  artifact_version: 'data-verification-public-artifact-v1';
+  artifact_version: 'data-verification-public-artifact-v1' | 'data-verification-public-artifact-v2';
   verification_series_id: string;
   epoch_id: string;
   listing_id: string;
@@ -216,7 +216,7 @@ export interface PublishedScanFindings {
     scanner_version?: string;
     connector_type: 'eolymp' | 'aim_gateway' | 'aws_s3_verifier' | 'r2_verifier';
     connector_version: 'eolymp-v1' | 'aim_gateway-v1' | 'aws_s3_verifier-v1' | 'r2_verifier-v1';
-    content_sha256_reference: string;
+    content_sha256_reference?: string;
   };
   methods: {
     row_count_algorithm_version: 'exact-v1';
