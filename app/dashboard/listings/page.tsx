@@ -11,6 +11,7 @@ import SellerShareControls from '@/components/listings/SellerShareControls';
 import { useTermsGate } from '@/components/legal/TermsGate';
 import { useServedTermsVersion } from '@/components/legal/VersionedTermsCopy';
 import { formatPrice, formatDate } from '@/lib/format';
+import { formatListingActionError } from '@/lib/listing-action-error';
 
 const STATUS_STYLES: Record<string, string> = {
   draft: 'bg-gray-100 text-gray-800',
@@ -57,6 +58,7 @@ function OwnerListings({ userId }: { userId: string }) {
   const [error, setError] = useState('');
   const [actionLoading, setActionLoading] = useState<string | null>(null);
   const [deleteConfirm, setDeleteConfirm] = useState<string | null>(null);
+  const [workspaceHref, setWorkspaceHref] = useState<string | undefined>();
   const [payoutsStatus, setPayoutsStatus] = useState<'unknown' | 'enabled' | 'disabled'>('unknown');
   const router = useRouter();
   const { toast } = useToast();
@@ -125,6 +127,7 @@ function OwnerListings({ userId }: { userId: string }) {
     if (!isCurrent(request) || busy.current || mutating.current ||
         !listings.some(listing => listing.id === id)) return;
     mutating.current = true;
+    setWorkspaceHref(undefined);
     setActionLoading(id);
     try {
       await (kind === 'delete' ? deleteListing(id) : unpublishListing(id));
@@ -132,8 +135,12 @@ function OwnerListings({ userId }: { userId: string }) {
       toast(kind === 'delete' ? 'Listing deleted' : 'Listing unpublished', 'success');
       setDeleteConfirm(null);
       await fetchListings(pageOffset.current);
-    } catch (err: any) {
-      if (isCurrent(request)) toast(err.response?.data?.detail || `Failed to ${kind}`, 'error');
+    } catch (err: unknown) {
+      if (isCurrent(request)) {
+        const failure = formatListingActionError(err);
+        toast(failure.message, 'error');
+        setWorkspaceHref(failure.workspaceHref);
+      }
     } finally {
       // Refresh increments the request sequence; only this mounted principal may
       // release the mutation lock. Paging stays disabled through acknowledgement.
@@ -157,6 +164,9 @@ function OwnerListings({ userId }: { userId: string }) {
   return (
     <div className="space-y-6">
       <TermsGatePrompt />
+      {workspaceHref && <p role="status" className="text-sm text-gray-700">
+        <Link href={workspaceHref} className="font-semibold text-indigo-700 underline">Manage this listing in Seller Workspace.</Link>
+      </p>}
       {pendingTermsCount > 0 && <div role="status" className="rounded-lg border border-amber-300 bg-amber-50 p-4 text-sm text-amber-950">
         <p className="font-semibold">{pendingTermsCount} inherited {pendingTermsCount === 1 ? 'listing is' : 'listings are'} not yet available to buy.</p>
         <p className="mt-1">Review and accept Terms {termsVersion || '1.1'} to make eligible listings available for purchase.</p>
