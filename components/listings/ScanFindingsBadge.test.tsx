@@ -259,6 +259,31 @@ describe.each(['PUBLISHED', 'NOT_PUBLISHED'] as const)('optional scan text in %s
     ]));
   }
 
+  it.each(['length_histogram', 'numeric_range_buckets'] as const)('omits absent %s and renders supplied aggregates', aggregate => {
+    const label = aggregate === 'length_histogram' ? 'Length histogram' : 'Numeric range buckets';
+    for (const value of [undefined, null, 'suppressed_low_occupancy', [], [1, 2, 3]] as (undefined | null | 'suppressed_low_occupancy' | number[])[]) {
+      const artifact = findings();
+      const column = artifact.deterministic_facts[0].columns[0];
+      if (value === undefined) {
+        // The wire payload can omit inapplicable aggregates despite the declared type.
+        Reflect.deleteProperty(column, aggregate);
+      } else {
+        column[aggregate] = Array.isArray(value) ? [...value] : value;
+      }
+      const input = JSON.stringify(artifact);
+      const rendered = fields(artifact);
+      if (value == null) {
+        expect(rendered).not.toHaveProperty(label);
+      } else {
+        expect(rendered[label]).toBe(value === 'suppressed_low_occupancy'
+          ? 'Hidden for privacy (fewer than 10)'
+          : JSON.stringify(value));
+      }
+      expect(document.body.textContent).not.toMatch(/\b(?:null|undefined)\b/);
+      expect(JSON.stringify(artifact)).toBe(input);
+    }
+  });
+
   it.each([
     ['both omitted', undefined, undefined],
     ['narrative omitted', undefined, null],
@@ -278,9 +303,10 @@ describe.each(['PUBLISHED', 'NOT_PUBLISHED'] as const)('optional scan text in %s
     const rendered = fields(artifact);
 
     expect(rendered['Narrative state']).toBe('withheld_grounding_failed');
-    expect(rendered.Narrative).toBe('null');
-    expect(rendered['Listing claim comparison']).toBe('null');
+    expect(rendered).not.toHaveProperty('Narrative');
+    expect(rendered).not.toHaveProperty('Listing claim comparison');
     expect(rendered['Narrative notice']).toBe(notice);
+    expect(document.body.textContent).not.toMatch(/\b(?:null|undefined)\b/);
     expect(rendered['Publication state']).toBe(publicationState === 'PUBLISHED' ? 'PUBLISHED' : 'Private — not published');
     expect(rendered['Published timestamp (UTC)']).toBe(publicationState === 'PUBLISHED' ? artifact.published_at_utc : 'Not published');
     expect(rendered['Fingerprint hash']).toBe(artifact.fingerprint_hash);
@@ -306,8 +332,8 @@ describe.each(['PUBLISHED', 'NOT_PUBLISHED'] as const)('optional scan text in %s
     const artifact = findings();
     delete artifact[omitted];
     const rendered = fields(artifact);
-    expect(rendered.Narrative).toBe(omitted === 'narrative' ? 'null' : "The dataset's A & B source contains one readable object.");
-    expect(rendered['Listing claim comparison']).toBe(omitted === 'listing_claim_comparison' ? 'null' : 'The listing says "A & B"; one object was scanned and one was skipped.');
+    expect(rendered.Narrative).toBe(omitted === 'narrative' ? undefined : "The dataset's A & B source contains one readable object.");
+    expect(rendered['Listing claim comparison']).toBe(omitted === 'listing_claim_comparison' ? undefined : 'The listing says "A & B"; one object was scanned and one was skipped.');
     expect(rendered['Narrative state']).toBe('grounded');
   });
 
@@ -318,7 +344,7 @@ describe.each(['PUBLISHED', 'NOT_PUBLISHED'] as const)('optional scan text in %s
     const rendered = fields(artifact);
     expect(rendered.Narrative).toBe('<img src=x onerror="alert(1)"> & \' &lt;');
     expect(rendered['Listing claim comparison']).toBe(rendered.Narrative);
-    expect(rendered['Narrative notice']).toBe('null');
+    expect(rendered).not.toHaveProperty('Narrative notice');
     expect(document.body.querySelector('img, script')).toBeNull();
     expect(fields(findings({ narrative: '', listing_claim_comparison: '' })).Narrative).toBe('');
   });
