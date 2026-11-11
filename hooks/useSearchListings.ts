@@ -1,7 +1,7 @@
 'use client';
 
-import {useEffect,useRef,useState} from 'react';
-import { useInfiniteQuery } from '@tanstack/react-query';
+import {useEffect,useState,useSyncExternalStore} from 'react';
+import { useInfiniteQuery, useQueryClient, type QueryClient } from '@tanstack/react-query';
 import { listListings, searchListings } from '@/api/listings';
 import type { FulfillmentType, ListingListItem, SearchResultItem, SearchResponse } from '@/types';
 
@@ -32,6 +32,35 @@ function getFulfillmentTypesForCategory(listingCategory: ListingCategory): Fulfi
   return undefined;
 }
 
+// Restoration invalidation must outlive route observers, just like the cache.
+const restorationClocks = new WeakMap<QueryClient, ReturnType<typeof createRestorationClock>>();
+
+function createRestorationClock() {
+  let epoch: symbol | undefined;
+  let wall = Date.now();
+  let monotonic = performance.now();
+  const listeners = new Set<() => void>();
+  return {
+    getSnapshot: () => epoch,
+    subscribe: (listener: () => void) => {
+      listeners.add(listener);
+      return () => { listeners.delete(listener); };
+    },
+    recheck: (restored = false) => {
+      const nextWall = Date.now();
+      const nextMonotonic = performance.now();
+      // A paused performance clock or wall-clock correction makes age uncertain.
+      const clockGap = Math.abs((nextWall - wall) - (nextMonotonic - monotonic));
+      wall = nextWall;
+      monotonic = nextMonotonic;
+      if (restored || clockGap >= 60_000) {
+        epoch = Symbol('restoration');
+        listeners.forEach(listener => listener());
+      }
+    },
+  };
+}
+
 export function useSearchListings({
   q = '',
   category,
@@ -40,8 +69,15 @@ export function useSearchListings({
   maxPrice,
   enabled = true,
 }: UseSearchListingsParams) {
-  const observationEpoch = useRef<symbol | undefined>(undefined);
-  const [restorationEpoch, setRestorationEpoch] = useState<symbol>();
+  const client = useQueryClient();
+  let restorationClock = restorationClocks.get(client);
+  if (!restorationClock) {
+    restorationClock = createRestorationClock();
+    restorationClocks.set(client, restorationClock);
+  }
+  const restorationEpoch = useSyncExternalStore(
+    restorationClock.subscribe, restorationClock.getSnapshot, restorationClock.getSnapshot,
+  );
   const semanticMode = q.length > 0;
   const fulfillmentType = getFulfillmentTypesForCategory(listingCategory);
 
@@ -65,7 +101,7 @@ export function useSearchListings({
           limit: PAGE_SIZE,
           offset,
         });
-        return {result, observedAt:Date.now(), observedAtMonotonic:performance.now(), observationEpoch:observationEpoch.current};
+        return {result, observedAt:Date.now(), observedAtMonotonic:performance.now(), observationEpoch:restorationClock.getSnapshot()};
       }
 
       const result = await listListings({
@@ -76,7 +112,7 @@ export function useSearchListings({
         max_price: maxPrice,
         fulfillment_type: fulfillmentType,
       });
-      return {result, observedAt:Date.now(), observedAtMonotonic:performance.now(), observationEpoch:observationEpoch.current};
+      return {result, observedAt:Date.now(), observedAtMonotonic:performance.now(), observationEpoch:restorationClock.getSnapshot()};
     },
     getNextPageParam: (lastPage, allPages) => {
       const result=lastPage.result;
@@ -98,15 +134,12 @@ export function useSearchListings({
 
   const [,setClock] = useState(0);
   useEffect(() => {
-    const recheck = () => setClock(tick => tick + 1);
+    const recheck = () => {
+      restorationClock.recheck();
+      setClock(tick => tick + 1);
+    };
     const onPageShow = (event: PageTransitionEvent) => {
-      if (event.persisted) {
-        // Neither clock can establish retained data's age after a BFCache restore.
-        // Only successful requests observed in this restoration may show cards.
-        const epoch = Symbol('restoration');
-        observationEpoch.current = epoch;
-        setRestorationEpoch(epoch);
-      }
+      if (event.persisted) restorationClock.recheck(true);
     };
     const onVisibilityChange = () => {
       if (document.visibilityState === 'visible') recheck();
@@ -119,7 +152,7 @@ export function useSearchListings({
       window.removeEventListener('pageshow', onPageShow);
       document.removeEventListener('visibilitychange', onVisibilityChange);
     };
-  }, []);
+  }, [restorationClock]);
   // Appending a fresh page must never extend the life of older pages.
   // Monotonic elapsed time prevents clock rollback from extending visibility.
   // Wall time also expires suspended pages on platforms whose performance clock pauses.

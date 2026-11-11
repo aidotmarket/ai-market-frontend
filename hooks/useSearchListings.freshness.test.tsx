@@ -1,9 +1,10 @@
 // @vitest-environment jsdom
 import {renderHook,act,cleanup} from '@testing-library/react';
-import {it,expect,vi,afterEach} from 'vitest';
+import {it,expect,vi,beforeEach,afterEach} from 'vitest';
 import {useSearchListings} from './useSearchListings';
-const query=vi.hoisted(()=>({useInfiniteQuery:vi.fn()}));
+const query=vi.hoisted(()=>({useInfiniteQuery:vi.fn(),useQueryClient:vi.fn()}));
 vi.mock('@tanstack/react-query',()=>query);
+beforeEach(() => { query.useQueryClient.mockReturnValue({}); });
 afterEach(()=>{cleanup();vi.useRealTimers();vi.resetAllMocks();});
 it('bounds retained current search results when refresh repeatedly fails',()=>{
  vi.useFakeTimers({toFake:['Date','setInterval','clearInterval','performance']});vi.setSystemTime(1000000);

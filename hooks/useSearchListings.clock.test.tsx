@@ -1,16 +1,17 @@
 // @vitest-environment jsdom
 import { act, cleanup, renderHook } from '@testing-library/react';
 import { renderToStaticMarkup } from 'react-dom/server';
-import { afterEach, expect, it, vi } from 'vitest';
+import { beforeEach, afterEach, expect, it, vi } from 'vitest';
 import { MarketplaceListingCard } from '@/components/search/MarketplaceListingCard';
 import wire from '@/tests/fixtures/s1922-backend-wire.json';
 import { useSearchListings } from './useSearchListings';
 
-const query = vi.hoisted(() => ({ useInfiniteQuery: vi.fn() }));
+const query = vi.hoisted(() => ({ useInfiniteQuery: vi.fn(), useQueryClient: vi.fn() }));
 const api = vi.hoisted(() => ({ listListings: vi.fn(), searchListings: vi.fn() }));
 vi.mock('@tanstack/react-query', () => query);
 vi.mock('@/api/listings', () => api);
 
+beforeEach(() => { query.useQueryClient.mockReturnValue({}); });
 afterEach(() => {
   cleanup();
   vi.restoreAllMocks();
