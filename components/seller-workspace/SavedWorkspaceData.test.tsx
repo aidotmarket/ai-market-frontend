@@ -5,7 +5,7 @@ import type { SellerWorkspaceConnection } from '@/api/sellerWorkspace';
 import SavedWorkspaceData from './SavedWorkspaceData';
 import SavedListingEditor from './SavedListingEditor';
 import {createStandardSelection} from '@/api/listingLicenses';
-import {DraftChangedError,DraftNotLoadedError,resetSellerListingDraftOwnerForTests,SellerListingDraftProvider,useSellerListingDraft,useSellerListingDraftStatus} from './SellerListingDraftStore';
+import {DraftNotLoadedError,resetSellerListingDraftOwnerForTests,SellerListingDraftProvider,useSellerListingDraft,useSellerListingDraftStatus} from './SellerListingDraftStore';
 const api = vi.hoisted(() => ({readListingSource:vi.fn(), saveListingSource:vi.fn(), listWorkspaceObjects:vi.fn(),readListingDraft:vi.fn(),saveListingDraft:vi.fn(),
   createIdempotencyKey:vi.fn(()=> 'sample-key'),uploadWorkspaceSample:vi.fn(),SAMPLE_MAX_FILES:10,SAMPLE_MAX_FILE_BYTES:64*1024*1024,SAMPLE_MAX_TOTAL_BYTES:256*1024*1024}));
 vi.mock('@/api/sellerListingSource', () => api);
@@ -46,13 +46,13 @@ it('releases pending sample state when the first save assigns the empty draft an
  expect(store.draft?.draft_id).toBe('first-draft');expect(store.sampleIndices).toEqual([0]);
  expect(store.selectionSavePending).toBe(false);expect(store.selectionSaveFailed).toBe(false);
 });
-it('rejects a queued save issued for an older version, then merges an explicit retry over the latest listing write',async()=>{
+it('merges a queued licence save over the latest same-draft listing write without retry',async()=>{
  const selection=createStandardSelection();
- const draft={version:4,content:{brief:'brief',title:'Offer',description:'Description',category:'Retail',tags:'retail',price:'25',license:'Research',sample_decision:'member_files' as const,sample_object_indices:[0]},updated_at:'2026-09-18T12:00:00Z'};
+ const draft={draft_id:'same-draft',version:4,content:{brief:'brief',title:'Offer',description:'Description',category:'Retail',tags:'retail',price:'25',license:'Research',sample_decision:'member_files' as const,sample_object_indices:[0]},updated_at:'2026-09-18T12:00:00Z'};
  api.readListingDraft.mockResolvedValue(draft);
  let finishFirst!:(value:unknown)=>void;
  api.saveListingDraft.mockImplementationOnce(()=>new Promise(resolve=>{finishFirst=resolve;}))
-   .mockImplementationOnce(async saved=>({version:6,content:saved,updated_at:draft.updated_at}));
+   .mockImplementationOnce(async saved=>({...draft,version:6,content:saved}));
  let store!:ReturnType<typeof useSellerListingDraft>;
  function Capture(){store=useSellerListingDraft();return null;}
  render(<SellerListingDraftProvider enabled sampleCapability><Capture/></SellerListingDraftProvider>);
@@ -60,12 +60,32 @@ it('rejects a queued save issued for an older version, then merges an explicit r
  let first!:Promise<number>;let second!:Promise<void>;
  let queued!:Promise<PromiseSettledResult<unknown>[]>;
  await act(async()=>{first=store.saveListingFields({...draft.content,title:'Updated title',description_source_version:null});second=store.saveLicenseSelection(selection);queued=Promise.allSettled([first,second]);await waitFor(()=>expect(api.saveListingDraft).toHaveBeenCalledOnce());});
- await act(async()=>{finishFirst({version:5,content:{...draft.content,title:'Updated title',description_source_version:null},updated_at:draft.updated_at});await queued;});
- const result=(await queued)[1];expect(result.status).toBe('rejected');if(result.status==='rejected')expect(result.reason).toBeInstanceOf(DraftChangedError);
- expect(api.saveListingDraft).toHaveBeenCalledOnce();
- await act(async()=>{await store.saveLicenseSelection(selection);});
+ await act(async()=>{finishFirst({...draft,version:5,content:{...draft.content,title:'Updated title',description_source_version:null}});await queued;});
+ expect((await queued).map(result=>result.status)).toEqual(['fulfilled','fulfilled']);
+ expect(api.saveListingDraft).toHaveBeenCalledTimes(2);
  expect(api.saveListingDraft.mock.calls[1][0]).toEqual({...draft.content,title:'Updated title',description_source_version:null,license_selection:selection});
  expect(api.saveListingDraft.mock.calls[1][1]).toBe(5);
+});
+it.each([undefined,4])('uses the latest queued listing version unless an editor baseline is explicit (%s)',async baselineVersion=>{
+ const draft={draft_id:'same-draft',version:4,content:{brief:'',title:'Offer',description:'',category:'',tags:'',price:'',license:''},updated_at:'now'};
+ api.readListingDraft.mockResolvedValue(draft);
+ let finishFirst!:(value:unknown)=>void;
+ api.saveListingDraft.mockImplementationOnce(()=>new Promise(resolve=>{finishFirst=resolve;}))
+   .mockImplementationOnce(async(content,version)=>({...draft,content,version:version+1}));
+ let store!:ReturnType<typeof useSellerListingDraft>;
+ function Capture(){store=useSellerListingDraft();return null;}
+ render(<SellerListingDraftProvider enabled sampleCapability><Capture/></SellerListingDraftProvider>);
+ await waitFor(()=>expect(store.loaded).toBe(true));
+ let queued!:Promise<unknown[]>;
+ await act(async()=>{
+   queued=Promise.all([store.saveSamples([0]),store.saveListingFields({...draft.content,title:'Updated title'},baselineVersion)]);
+   await waitFor(()=>expect(api.saveListingDraft).toHaveBeenCalledOnce());
+ });
+ await act(async()=>{finishFirst({...draft,version:5,content:{...draft.content,sample_decision:'member_files',sample_object_indices:[0]}});await queued;});
+ expect(api.saveListingDraft).toHaveBeenCalledTimes(2);
+ expect(api.saveListingDraft.mock.calls[1][0]).toMatchObject({title:'Updated title',sample_decision:'member_files',sample_object_indices:[0]});
+ expect(api.saveListingDraft.mock.calls[1][1]).toBe(baselineVersion??5);
+ expect(store.selectionSavePending).toBe(false);expect(store.selectionSaveFailed).toBe(false);
 });
 it('restores the selected files from the account', async () => {
   api.readListingSource.mockResolvedValue({version:2, content, connection_current:true});
@@ -227,15 +247,15 @@ it('does not write the draft after a source save when no persisted sample select
   await screen.findByText(/File selection saved to your account/);
   expect(api.saveListingDraft).not.toHaveBeenCalled();
 });
-it('rejects sample ticks queued for an older version and saves an explicit retry with the latest version',async()=>{
-  const draft={version:4,content:{brief:'brief',title:'Offer',description:'Description',category:'Retail',tags:'retail',price:'25',license:'Research'},updated_at:'2026-09-18T12:00:00Z'};
+it('persists a rapid sample select then untick with the latest version and no retry or failure',async()=>{
+  const draft={draft_id:'same-draft',version:4,content:{brief:'brief',title:'Offer',description:'Description',category:'Retail',tags:'retail',price:'25',license:'Research'},updated_at:'2026-09-18T12:00:00Z'};
   api.readListingSource.mockResolvedValue({version:2,content,connection_current:true});api.readListingDraft.mockResolvedValue(draft);
   api.uploadWorkspaceSample.mockResolvedValue({index:0,size:42,sha256:'a'.repeat(64),binding:'size_only'});
   let finishFirst!:(value:unknown)=>void;
   api.saveListingDraft.mockImplementationOnce(()=>new Promise(resolve=>{finishFirst=resolve;}))
-    .mockImplementationOnce(async(saved)=>({version:6,content:saved,updated_at:draft.updated_at}))
-    .mockImplementationOnce(async(saved)=>({version:7,content:saved,updated_at:draft.updated_at}));
-  renderData([connection],true);
+    .mockImplementationOnce(async(saved)=>({...draft,version:6,content:saved}))
+    .mockImplementationOnce(async(saved)=>({...draft,version:7,content:saved}));
+  render(<SellerListingDraftProvider enabled sampleCapability><SavedWorkspaceData enabled connections={[connection]}/><DraftStatus/></SellerListingDraftProvider>);
   const tick=await screen.findByRole('checkbox',{name:/Offer example.csv.*free sample/});
   fireEvent.click(tick);
   fireEvent.change(screen.getByLabelText(/Upload sample example.csv/),{target:{files:[new File([new Uint8Array(42)],'example.csv')]}});
@@ -243,14 +263,14 @@ it('rejects sample ticks queued for an older version and saves an explicit retry
   fireEvent.click(tick);
   expect((tick as HTMLInputElement).checked).toBe(false);
   expect(api.saveListingDraft).toHaveBeenCalledTimes(1);
-  await act(async()=>finishFirst({version:5,content:{...draft.content,sample_decision:'member_files',sample_object_indices:[0]},updated_at:draft.updated_at}));
-  await screen.findByText(/sample_selection_save_failed/);
-  expect(api.saveListingDraft).toHaveBeenCalledOnce();
-  await waitFor(()=>expect((tick as HTMLInputElement).checked).toBe(true));
-  fireEvent.click(tick);
+  expect(screen.getByTestId('draft-status').textContent).toMatch(/^pending/);
+  await act(async()=>finishFirst({...draft,version:5,content:{...draft.content,sample_decision:'member_files',sample_object_indices:[0]}}));
   await waitFor(()=>expect(api.saveListingDraft).toHaveBeenCalledTimes(2));
   expect(api.saveListingDraft.mock.calls[1][0]).toEqual({...draft.content,sample_decision:'none',sample_object_indices:[]});
   expect(api.saveListingDraft.mock.calls[1][1]).toBe(5);
+  await waitFor(()=>expect(screen.getByTestId('draft-status').textContent).toBe('ready'));
+  expect((tick as HTMLInputElement).checked).toBe(false);
+  expect(screen.queryByRole('alert')).toBeNull();
   fireEvent.click(tick);
   fireEvent.change(screen.getByLabelText(/Upload sample example.csv/),{target:{files:[new File([new Uint8Array(42)],'example.csv')]}});
   await waitFor(()=>expect(api.saveListingDraft).toHaveBeenCalledTimes(3));

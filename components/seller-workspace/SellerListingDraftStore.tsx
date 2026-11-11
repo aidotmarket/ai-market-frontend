@@ -28,19 +28,20 @@ const snapshot=(owner:Owner):OwnerSnapshot=>({draft:owner.draft,selectionSaveCou
 const publish=(owner:Owner)=>{if(!isAuthSessionOwner(owner.session))return;const value=snapshot(owner);owner.listeners.forEach(listener=>listener(value));};
 const beginOwnerSelectionSave=(owner:Owner)=>{if(!isAuthSessionOwner(owner.session))return;if(owner.selectionSaveCount===0)owner.selectionSaveFailed=false;owner.selectionSaveCount+=1;publish(owner);};
 const finishOwnerSelectionSave=(owner:Owner,succeeded:boolean)=>{if(!isAuthSessionOwner(owner.session))return;owner.selectionSaveCount=Math.max(0,owner.selectionSaveCount-1);if(!succeeded)owner.selectionSaveFailed=true;else if(owner.selectionSaveCount===0)owner.selectionSaveFailed=false;publish(owner);};
-type DraftBinding={draftId:string|null;version:number};
+type DraftBinding={draftId:string|null;baselineVersion?:number};
 const matchesDraft=(owner:Owner,draftId:string|null)=>(owner.draft?.draft_id??null)===draftId;
 const persist=(owner:Owner,binding:DraftBinding,build:(base:ListingDraftContent)=>ListingDraftContent)=>{
-  const issuedVersion=owner.version;
   const operation=owner.queue.catch(()=>undefined).then(async()=>{
     assertAuthSessionOwner(owner.session);
     if(!owner.loaded)throw new DraftNotLoadedError();
     // Bind before enqueueing: a panel from an earlier draft must never write
     // into the current pointer, even if the new draft has the same version.
-    if(!matchesDraft(owner,binding.draftId)||owner.version!==issuedVersion)throw new DraftChangedError();
+    if(!matchesDraft(owner,binding.draftId))throw new DraftChangedError();
     const content=build(owner.draft?.content??EMPTY_DRAFT);
     const serialized=JSON.stringify(content);
-    const version=binding.version;
+    // Same-draft saves merge over the preceding commit. Explicit editor
+    // baselines still reach the backend unchanged for conflict handling.
+    const version=binding.baselineVersion??owner.version;
     if(!owner.pending||owner.pending.serialized!==serialized||owner.pending.version!==version)
       owner.pending={serialized,version,id:crypto.randomUUID()};
     // Count every attempt, including identical retries that reuse pending.
@@ -142,12 +143,12 @@ function OwnedSellerListingDraftProvider({owner,enabled,sampleCapability,childre
       owner.queue=operation;return operation;
     },
     beginSelectionSave,finishSelectionSave,setVisibleSampleIndices,
-    saveListingFields:async(fields,baselineVersion)=>{if(!loaded)throw new DraftNotLoadedError();const result=await persist(owner,{draftId,version:baselineVersion??owner.version},base=>({
+    saveListingFields:async(fields,baselineVersion)=>{if(!loaded)throw new DraftNotLoadedError();const result=await persist(owner,{draftId,baselineVersion},base=>({
       ...base,brief:fields.brief,title:fields.title,description:fields.description,category:fields.category,
       tags:fields.tags,price:fields.price,license:fields.license,description_source_version:fields.description_source_version??null,
     }));return result.version;},
-    saveLicenseSelection:async(selection)=>{if(!loaded)throw new DraftNotLoadedError();await persist(owner,{draftId,version:owner.version},base=>({...base,license_selection:selection}));},
-    saveSamples:async(indices)=>{if(!loaded)throw new DraftNotLoadedError();beginSelectionSave();try{await persist(owner,{draftId,version:owner.version},base=>sampleCapability
+    saveLicenseSelection:async(selection)=>{if(!loaded)throw new DraftNotLoadedError();await persist(owner,{draftId},base=>({...base,license_selection:selection}));},
+    saveSamples:async(indices)=>{if(!loaded)throw new DraftNotLoadedError();beginSelectionSave();try{await persist(owner,{draftId},base=>sampleCapability
       ?{...base,sample_decision:indices.length?'member_files':'none',sample_object_indices:[...indices]}
       :base);finishSelectionSave(true);}
       catch(failure){finishSelectionSave(false);throw failure;}},
