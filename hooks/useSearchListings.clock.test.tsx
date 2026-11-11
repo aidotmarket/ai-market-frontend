@@ -19,7 +19,7 @@ afterEach(() => {
 });
 
 // Adapted from Athena's s1929 diagnostic: retain a corrected licence after a failed refresh.
-function retainedSearch() {
+function retainedSearch(q = '') {
   vi.useFakeTimers({ toFake: ['Date', 'setInterval', 'clearInterval', 'performance'] });
   vi.setSystemTime(10_000_000);
   const correction = wire.public[2].corrected;
@@ -45,7 +45,7 @@ function retainedSearch() {
     isError: true,
     error: new Error('Controlled refresh failure'),
   });
-  return renderHook(() => useSearchListings({}));
+  return renderHook(() => useSearchListings({ q }));
 }
 
 function cards(search: ReturnType<typeof retainedSearch>) {
@@ -114,4 +114,57 @@ it.each(['', 'licence'])('timestamps successful %j queries with both clocks', as
   const page = await options.queryFn({ pageParam: 0 });
   expect(page).toMatchObject({ observedAt: Date.now(), observedAtMonotonic: 42_000 });
   expect(q ? api.searchListings : api.listListings).toHaveBeenCalledOnce();
+});
+
+it('suppresses retained licence cards after wall-clock setback, paused suspension, and failed refresh', async () => {
+  const search = retainedSearch();
+  const minute = 60_000;
+  expect(cards(search)).toContain('ai.market Standard Data Licence v1.1');
+  act(() => vi.advanceTimersByTime(minute));
+  vi.setSystemTime(Date.now() - 60 * minute);
+  // Sixteen minutes suspended, with performance.now paused and no interval ticks.
+  vi.setSystemTime(Date.now() + 16 * minute);
+  act(() => window.dispatchEvent(new PageTransitionEvent('pageshow', { persisted: true })));
+  expect(performance.now()).toBe(minute);
+  expectExpired(search);
+
+  api.listListings.mockRejectedValue(new Error('Controlled refresh failure'));
+  const options = query.useInfiniteQuery.mock.calls.at(-1)![0];
+  await expect(options.queryFn({ pageParam: 0 })).rejects.toThrow('Controlled refresh failure');
+  search.rerender();
+  expectExpired(search);
+});
+
+it.each(['', 'licence'])('shows freshly observed %j results after a successful restore refresh', async q => {
+  const restored = retainedSearch(q);
+  const state = query.useInfiniteQuery.mock.results.at(-1)!.value;
+  const oldPage = state.data.pages[0];
+  const minute = 60_000;
+  act(() => vi.advanceTimersByTime(minute));
+  vi.setSystemTime(Date.now() - 60 * minute + 16 * minute);
+  act(() => window.dispatchEvent(new PageTransitionEvent('pageshow', { persisted: true })));
+  expectExpired(restored);
+
+  api.listListings.mockResolvedValue(oldPage.result);
+  api.searchListings.mockResolvedValue({ results: oldPage.result, total: 1 });
+  const options = query.useInfiniteQuery.mock.calls.at(-1)![0];
+  const freshPage = await options.queryFn({ pageParam: 0 });
+  expect(freshPage).toMatchObject({ observedAt: Date.now(), observedAtMonotonic: minute });
+  state.data = { pages: [freshPage] };
+  state.isError = false;
+  state.error = null;
+  restored.rerender();
+  expect(restored.result.current.isError).toBe(false);
+  expect(restored.result.current.error).toBeNull();
+  expect(cards(restored)).toContain('ai.market Standard Data Licence v1.1');
+
+  // A second restoration also invalidates results observed after the first one.
+  act(() => window.dispatchEvent(new PageTransitionEvent('pageshow', { persisted: true })));
+  expectExpired(restored);
+});
+
+it('keeps ordinary non-persisted pageshow timing unchanged', () => {
+  const search = retainedSearch();
+  act(() => window.dispatchEvent(new PageTransitionEvent('pageshow', { persisted: false })));
+  expect(cards(search)).toContain('ai.market Standard Data Licence v1.1');
 });

@@ -1,6 +1,6 @@
 'use client';
 
-import {useEffect,useState} from 'react';
+import {useEffect,useRef,useState} from 'react';
 import { useInfiniteQuery } from '@tanstack/react-query';
 import { listListings, searchListings } from '@/api/listings';
 import type { FulfillmentType, ListingListItem, SearchResultItem, SearchResponse } from '@/types';
@@ -40,6 +40,8 @@ export function useSearchListings({
   maxPrice,
   enabled = true,
 }: UseSearchListingsParams) {
+  const observationEpoch = useRef<symbol | undefined>(undefined);
+  const [restorationEpoch, setRestorationEpoch] = useState<symbol>();
   const semanticMode = q.length > 0;
   const fulfillmentType = getFulfillmentTypesForCategory(listingCategory);
 
@@ -63,7 +65,7 @@ export function useSearchListings({
           limit: PAGE_SIZE,
           offset,
         });
-        return {result, observedAt:Date.now(), observedAtMonotonic:performance.now()};
+        return {result, observedAt:Date.now(), observedAtMonotonic:performance.now(), observationEpoch:observationEpoch.current};
       }
 
       const result = await listListings({
@@ -74,7 +76,7 @@ export function useSearchListings({
         max_price: maxPrice,
         fulfillment_type: fulfillmentType,
       });
-      return {result, observedAt:Date.now(), observedAtMonotonic:performance.now()};
+      return {result, observedAt:Date.now(), observedAtMonotonic:performance.now(), observationEpoch:observationEpoch.current};
     },
     getNextPageParam: (lastPage, allPages) => {
       const result=lastPage.result;
@@ -98,7 +100,13 @@ export function useSearchListings({
   useEffect(() => {
     const recheck = () => setClock(tick => tick + 1);
     const onPageShow = (event: PageTransitionEvent) => {
-      if (event.persisted) recheck();
+      if (event.persisted) {
+        // Neither clock can establish retained data's age after a BFCache restore.
+        // Only successful requests observed in this restoration may show cards.
+        const epoch = Symbol('restoration');
+        observationEpoch.current = epoch;
+        setRestorationEpoch(epoch);
+      }
     };
     const onVisibilityChange = () => {
       if (document.visibilityState === 'visible') recheck();
@@ -115,7 +123,9 @@ export function useSearchListings({
   // Appending a fresh page must never extend the life of older pages.
   // Monotonic elapsed time prevents clock rollback from extending visibility.
   // Wall time also expires suspended pages on platforms whose performance clock pauses.
-  const expired = query.data?.pages.some(page => Math.max(
+  const expired = query.data?.pages.some(page => (
+    restorationEpoch !== undefined && page.observationEpoch !== restorationEpoch
+  ) || Math.max(
     performance.now() - page.observedAtMonotonic,
     Date.now() - page.observedAt
   ) >= 10 * 60_000) ?? false;
