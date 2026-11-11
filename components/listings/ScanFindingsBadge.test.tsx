@@ -259,6 +259,19 @@ describe.each(['PUBLISHED', 'NOT_PUBLISHED'] as const)('optional scan text in %s
     ]));
   }
 
+  it.each([
+    ['approx_distinct_count', 'Approximate distinct count'],
+    ['null_rate', 'Null rate'],
+  ] as const)('renders readable suppression for %s', (aggregate, label) => {
+    const artifact = findings();
+    artifact.deterministic_facts[0].columns[0][aggregate] = 'suppressed_low_occupancy';
+    const rendered = fields(artifact);
+
+    expect(rendered[label]).toBe('Hidden for privacy (fewer than 10)');
+    expect(document.body.textContent).not.toContain('suppressed_low_occupancy');
+    expect(document.body.textContent).not.toMatch(/\b(?:null|undefined)\b/);
+  });
+
   it.each(['length_histogram', 'numeric_range_buckets'] as const)('omits absent %s and renders supplied aggregates', aggregate => {
     const label = aggregate === 'length_histogram' ? 'Length histogram' : 'Numeric range buckets';
     for (const value of [undefined, null, 'suppressed_low_occupancy', [], [1, 2, 3]] as (undefined | null | 'suppressed_low_occupancy' | number[])[]) {
@@ -280,6 +293,7 @@ describe.each(['PUBLISHED', 'NOT_PUBLISHED'] as const)('optional scan text in %s
           : JSON.stringify(value));
       }
       expect(document.body.textContent).not.toMatch(/\b(?:null|undefined)\b/);
+      expect(document.body.textContent).not.toContain('suppressed_low_occupancy');
       expect(JSON.stringify(artifact)).toBe(input);
     }
   });

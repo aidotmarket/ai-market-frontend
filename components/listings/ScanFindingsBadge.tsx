@@ -147,9 +147,9 @@ function FactColumn({ column }: { column: VerificationFactColumn }) {
   return (
     <dl className="grid gap-x-6 gap-y-2 sm:grid-cols-2">
       <ReportField label="Column position">{column.position}</ReportField>
-      <ReportField label="Null rate">{column.null_rate}</ReportField>
+      <ReportField label="Null rate">{displayAggregate(column.null_rate)}</ReportField>
       {distinct === 'suppressed_low_occupancy' ? (
-        <ReportField label="Approximate distinct count">{distinct}</ReportField>
+        <ReportField label="Approximate distinct count">{displayAggregate(distinct)}</ReportField>
       ) : (
         <>
           <ReportField label="Approximate distinct algorithm">{distinct.algorithm}</ReportField>
@@ -227,8 +227,9 @@ function ReportField({ label, children }: { label: string; children: React.React
   );
 }
 
-function displayAggregate(value: number[] | 'suppressed_low_occupancy'): string {
-  return Array.isArray(value) ? JSON.stringify(value) : 'Hidden for privacy (fewer than 10)';
+function displayAggregate(value: number[] | string): string {
+  if (value === 'suppressed_low_occupancy') return 'Hidden for privacy (fewer than 10)';
+  return Array.isArray(value) ? JSON.stringify(value) : value;
 }
 
 const HTML_ESCAPE_ENTITIES: Record<string, string> = {
