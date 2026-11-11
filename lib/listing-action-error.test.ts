@@ -1,6 +1,6 @@
 import { expect, it } from 'vitest';
 import { ACTION_AUTH_REFRESH } from './action-auth-error';
-import { formatListingActionError, LISTING_ACTION_FALLBACK, LISTING_ACTION_WORKSPACE } from './listing-action-error';
+import { listingDraftError, formatListingActionError, LISTING_ACTION_FALLBACK, LISTING_ACTION_WORKSPACE } from './listing-action-error';
 
 it.each([
   { detail: { code: 'capability_required', message: '<b>unsafe</b>' } },
@@ -45,4 +45,11 @@ it('never stringifies arbitrary response data', () => {
   const toJSON = () => { throw new Error('Must not stringify'); };
   expect(formatListingActionError({ response: { data: { detail: { toString, toJSON } } } }))
     .toEqual({ message: LISTING_ACTION_FALLBACK });
+});
+
+it.each(['DRAFT_IN_PROGRESS','DRAFT_ALREADY_PUBLISHED'])('uses the plain backend sentence for %s',code=>{
+ expect(listingDraftError({response:{data:{detail:{code,message:'A plain sentence.'}}}})).toEqual({message:'A plain sentence.',alreadyPublished:code==='DRAFT_ALREADY_PUBLISHED'});
+});
+it.each([{},[],null,42,'{"code":"oops"}','[object Object]','bad\u0000text','<b>text</b>'])('rejects malformed draft messages: %j',message=>{
+ expect(listingDraftError({response:{data:{detail:{code:'DRAFT_ALREADY_PUBLISHED',message}}}})).toBeNull();
 });

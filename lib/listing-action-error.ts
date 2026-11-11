@@ -23,10 +23,20 @@ export function formatListingActionError(error: unknown): ListingActionError {
   }
 
   // Only plain text detail is eligible for display. Never coerce response data.
-  if (typeof detail === 'string' && detail.trim() &&
-      !/[<>\u0000-\u001f\u007f]/.test(detail) &&
-      !/^[\s]*[\[{]/.test(detail) && !detail.includes('[object Object]')) {
+  if (isPlainListingMessage(detail)) {
     return { message: detail };
   }
   return { message: LISTING_ACTION_FALLBACK };
+}
+
+export function isPlainListingMessage(message:unknown):message is string {
+  return typeof message==='string'&&!!message.trim()&&!/[<>\u0000-\u001f\u007f]/.test(message)&&!/^\s*[\[{]/.test(message)&&!message.includes('[object Object]');
+}
+
+export function listingDraftError(error:unknown):{message:string;alreadyPublished:boolean}|null {
+  const detail=record(record(record(record(error)?.response)?.data)?.detail);
+  if(!detail||!['DRAFT_IN_PROGRESS','DRAFT_ALREADY_PUBLISHED'].includes(typeof detail.code==='string'?detail.code:''))return null;
+  const message=detail.message;
+  if(!isPlainListingMessage(message))return null;
+  return {message,alreadyPublished:detail.code==='DRAFT_ALREADY_PUBLISHED'};
 }

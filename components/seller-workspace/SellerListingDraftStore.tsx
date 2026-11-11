@@ -1,7 +1,7 @@
 'use client';
 
 import {createContext,useCallback,useContext,useEffect,useMemo,useState,useSyncExternalStore} from 'react';
-import {readListingDraft,saveListingDraft,type ListingDraftContent,type SavedListingDraft} from '@/api/sellerListingDraft';
+import {readListingDraft,saveListingDraft,createListingDraft,type ListingDraftContent,type SavedListingDraft} from '@/api/sellerListingDraft';
 import {authSessionOwner,assertAuthSessionOwner,isAuthSessionOwner} from '@/lib/auth-session-owner';
 import {useAuthStore} from '@/store/auth';
 import type {LicenseSelection} from '@/api/listingLicenses';
@@ -9,7 +9,7 @@ import type {LicenseSelection} from '@/api/listingLicenses';
 const EMPTY_DRAFT:ListingDraftContent={brief:'',title:'',description:'',category:'',tags:'',price:'',license:''};
 export class DraftNotLoadedError extends Error { constructor(){super('Load your saved draft before saving.');this.name='DraftNotLoadedError';} }
 type DraftStore={draft:SavedListingDraft|null;available:boolean;loaded:boolean;error:boolean;sampleCapability:boolean;sampleIndices:number[];
-  selectionSavePending:boolean;selectionSaveFailed:boolean;requestLoad:()=>void;reload:(signal?:AbortSignal,onLoaded?:()=>void)=>Promise<SavedListingDraft|null>;retry:()=>void;
+  selectionSavePending:boolean;selectionSaveFailed:boolean;requestLoad:()=>void;reload:(signal?:AbortSignal,onLoaded?:()=>void)=>Promise<SavedListingDraft|null>;retry:()=>void;startNewDraft:(requestId:string)=>Promise<SavedListingDraft>;
   beginSelectionSave:()=>void;finishSelectionSave:(succeeded:boolean)=>void;setVisibleSampleIndices:(indices:number[]|null)=>void;
   saveListingFields:(fields:ListingDraftContent,baselineVersion?:number)=>Promise<number>;saveLicenseSelection:(selection:LicenseSelection)=>Promise<void>;saveSamples:(indices:number[])=>Promise<void>};
 const DraftContext=createContext<DraftStore|null>(null);
@@ -51,9 +51,9 @@ const reconcileRead=(owner:Owner,value:SavedListingDraft|null,checkpoint:ReturnT
   // An intervening uncertain/in-flight attempt retains its content, expected
   // version and request identity even if this GET reports equal/newer data.
   if(owner.saveAttempt!==checkpoint.saveAttempt&&owner.pending)return false;
-  // A committed save only invalidates older overlapping reads. Without such
+  // A committed save or rollover invalidates overlapping reads of an older draft. Without such
   // activity, an intentional reset (including null/lower versions) is valid.
-  if(owner.saveRevision!==checkpoint.saveRevision&&(!value||value.version<owner.version))return false;
+  if(owner.saveRevision!==checkpoint.saveRevision&&(!value||value.draft_id!==owner.draft?.draft_id||value.version<owner.version))return false;
   owner.draft=value;owner.version=value?.version??0;owner.loaded=true;owner.pending=null;
   return true;
 };
@@ -115,6 +115,17 @@ function OwnedSellerListingDraftProvider({owner,enabled,sampleCapability,childre
   const selectionMismatch=visibleSampleIndices!==null&&JSON.stringify(visibleSampleIndices)!==JSON.stringify(sampleIndices);
   const value=useMemo<DraftStore>(()=>({draft,available:enabled,loaded,error,sampleCapability,sampleIndices,
     selectionSavePending:selectionSaveCount>0||selectionMismatch,selectionSaveFailed,reload,requestLoad:()=>setRequested(true),retry:()=>{setRequested(true);setRetryKey(value=>value+1);},
+    startNewDraft:async(requestId)=>{
+      const operation=owner.queue.catch(()=>undefined).then(async()=>{
+        assertAuthSessionOwner(owner.session);
+        const result=await createListingDraft(requestId);
+        assertAuthSessionOwner(owner.session);
+        owner.draft=result;owner.version=result.version;owner.loaded=true;owner.pending=null;owner.saveRevision+=1;
+        owner.selectionSaveCount=0;owner.selectionSaveFailed=false;setVisibleSampleIndices(null);
+        publish(owner);setLoaded(true);setError(false);return result;
+      });
+      owner.queue=operation;return operation;
+    },
     beginSelectionSave,finishSelectionSave,setVisibleSampleIndices,
     saveListingFields:async(fields,baselineVersion)=>{if(!loaded)throw new DraftNotLoadedError();const result=await persist(owner,base=>({
       ...base,brief:fields.brief,title:fields.title,description:fields.description,category:fields.category,
