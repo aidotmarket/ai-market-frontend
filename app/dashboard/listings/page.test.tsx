@@ -4,6 +4,8 @@ import { StrictMode } from 'react';
 import { act, cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { afterEach, beforeEach, expect, it, vi } from 'vitest';
 import ListingsPage from './page';
+import { ACTION_AUTH_REFRESH } from '@/lib/action-auth-error';
+import { LISTING_ACTION_FALLBACK, LISTING_ACTION_WORKSPACE } from '@/lib/listing-action-error';
 
 const auth = vi.hoisted(() => ({ user: { id: 'seller-a' }, hydrated: true, isAuthenticated: true, isLoading: false }));
 vi.mock('@/store/auth', () => ({ useAuthStore: Object.assign(() => auth, { getState: () => auth }) }));
@@ -411,8 +413,75 @@ it.each(['delete', 'unpublish'])('keeps rows and releases controls after a rejec
   if (kind === 'delete') {
     fireEvent.click(within(row).getByRole('button', { name: 'Delete' })); fireEvent.click(button('Confirm'));
   } else fireEvent.click(within(row).getByRole('button', { name: 'Unpublish' }));
-  await waitFor(() => expect(navigation.toast).toHaveBeenCalledWith(`Failed to ${kind}`, 'error'));
+  await waitFor(() => expect(navigation.toast).toHaveBeenCalledWith(LISTING_ACTION_FALLBACK, 'error'));
   expect(screen.getByText('Owner row 1')).toBeTruthy();
   expect(button('Next').disabled).toBe(false);
   expect(api.getMyListings).toHaveBeenCalledTimes(1);
+});
+
+async function rejectListingAction(data: unknown, kind: 'unpublish' | 'delete' = 'unpublish') {
+  const action = kind === 'delete' ? api.deleteListing : api.unpublishListing;
+  action.mockRejectedValue({ response: { status: 409, data } });
+  render(<ListingsPage />);
+  await screen.findByText('Seller dataset');
+  if (kind === 'delete') {
+    fireEvent.click(button('Delete'));
+    fireEvent.click(button('Confirm'));
+  } else fireEvent.click(button('Unpublish'));
+  await waitFor(() => expect(navigation.toast).toHaveBeenCalledTimes(1));
+  // A refusal must retain the listing without a success toast or refresh.
+  expect(screen.getByText('Seller dataset')).toBeTruthy();
+  expect(api.getMyListings).toHaveBeenCalledTimes(1);
+  expect(navigation.toast.mock.calls[0][1]).toBe('error');
+  const message = navigation.toast.mock.calls[0][0];
+  expect(typeof message).toBe('string');
+  expect(message).not.toMatch(/[{}<>]|\[object Object\]|capability_required/);
+  return message;
+}
+
+it.each(['unpublish', 'delete'] as const)('dashboard_unpublish_capability_object_is_sentence (%s)', async kind => {
+  const message = await rejectListingAction({ detail: { code: 'capability_required', message: '<b>unsafe</b>' } }, kind);
+  expect(message).toBe(LISTING_ACTION_WORKSPACE);
+  expect(screen.getByRole('link', { name: LISTING_ACTION_WORKSPACE }).getAttribute('href'))
+    .toBe('/dashboard/seller-workspace');
+  expect(screen.queryByText(/Hide|Withdraw/)).toBeNull();
+});
+
+it('dashboard_unpublish_top_level_capability_is_sentence', async () => {
+  expect(await rejectListingAction({ code: 'capability_required' })).toBe(LISTING_ACTION_WORKSPACE);
+  expect(screen.getByRole('link', { name: LISTING_ACTION_WORKSPACE }).getAttribute('href'))
+    .toBe('/dashboard/seller-workspace');
+});
+
+it('dashboard_unpublish_string_detail', async () => {
+  expect(await rejectListingAction({ detail: 'This listing has active orders.' }))
+    .toBe('This listing has active orders.');
+  expect(screen.queryByRole('link', { name: LISTING_ACTION_WORKSPACE })).toBeNull();
+});
+
+it.each([{}, [], null, '', '  ', 42, '<img src=x onerror=alert(1)>', '{"code":"unknown"}', '[object Object]'])
+('dashboard_unpublish_malformed_detail_uses_fallback: %j', async detail => {
+  expect(await rejectListingAction({ detail })).toBe(LISTING_ACTION_FALLBACK);
+  expect(screen.queryByRole('link', { name: LISTING_ACTION_WORKSPACE })).toBeNull();
+});
+
+it('dashboard_unpublish_auth_refresh', async () => {
+  expect(await rejectListingAction({ detail: { code: 'RECENT_LOGIN_REQUIRED' } })).toBe(ACTION_AUTH_REFRESH);
+});
+
+it.each(['unpublish', 'delete'] as const)('dashboard_unpublish_account_switch_discards_toast (%s)', async kind => {
+  const mutation = deferred<unknown>();
+  (kind === 'delete' ? api.deleteListing : api.unpublishListing).mockReturnValue(mutation.promise);
+  api.getMyListings.mockResolvedValueOnce({ data: rows(1, 1) }).mockResolvedValueOnce({ data: rows(101, 1) });
+  const view = render(<ListingsPage />);
+  await screen.findByText('Owner row 1');
+  if (kind === 'delete') {
+    fireEvent.click(button('Delete')); fireEvent.click(button('Confirm'));
+  } else fireEvent.click(button('Unpublish'));
+  auth.user = { id: 'seller-b' }; view.rerender(<ListingsPage />);
+  await screen.findByText('Owner row 101');
+  await act(async () => mutation.reject({ response: { status: 409, data: { detail: { code: 'capability_required' } } } }));
+  expect(navigation.toast).not.toHaveBeenCalled();
+  expect(screen.queryByRole('link', { name: LISTING_ACTION_WORKSPACE })).toBeNull();
+  expect(api.getMyListings).toHaveBeenCalledTimes(2);
 });
