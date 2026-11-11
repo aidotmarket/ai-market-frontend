@@ -49,7 +49,9 @@ it('never stringifies arbitrary response data', () => {
 
 it.each(['DRAFT_IN_PROGRESS','DRAFT_ALREADY_PUBLISHED'])('uses the plain backend sentence for %s',code=>{
  expect(listingDraftError({response:{data:{detail:{code,message:'A plain sentence.'}}}})).toEqual({message:'A plain sentence.',alreadyPublished:code==='DRAFT_ALREADY_PUBLISHED'});
+ expect(formatListingActionError({response:{status:409,data:{detail:{code,message:'A plain sentence.'}}}})).toEqual({message:'A plain sentence.'});
 });
 it.each([{},[],null,42,'{"code":"oops"}','[object Object]','bad\u0000text','<b>text</b>'])('rejects malformed draft messages: %j',message=>{
  expect(listingDraftError({response:{data:{detail:{code:'DRAFT_ALREADY_PUBLISHED',message}}}})).toBeNull();
+ expect(formatListingActionError({response:{status:409,data:{detail:{code:'DRAFT_IN_PROGRESS',message}}}})).toEqual({message:LISTING_ACTION_FALLBACK});
 });

@@ -8,6 +8,7 @@ import type {LicenseSelection} from '@/api/listingLicenses';
 
 const EMPTY_DRAFT:ListingDraftContent={brief:'',title:'',description:'',category:'',tags:'',price:'',license:''};
 export class DraftNotLoadedError extends Error { constructor(){super('Load your saved draft before saving.');this.name='DraftNotLoadedError';} }
+export class DraftChangedError extends Error { constructor(){super('Your saved draft changed. Reload it before saving.');this.name='DraftChangedError';} }
 type DraftStore={draft:SavedListingDraft|null;available:boolean;loaded:boolean;error:boolean;sampleCapability:boolean;sampleIndices:number[];
   selectionSavePending:boolean;selectionSaveFailed:boolean;requestLoad:()=>void;reload:(signal?:AbortSignal,onLoaded?:()=>void)=>Promise<SavedListingDraft|null>;retry:()=>void;startNewDraft:(requestId:string)=>Promise<SavedListingDraft>;
   beginSelectionSave:()=>void;finishSelectionSave:(succeeded:boolean)=>void;setVisibleSampleIndices:(indices:number[]|null)=>void;
@@ -17,7 +18,7 @@ const DraftContext=createContext<DraftStore|null>(null);
 type OwnerSnapshot={draft:SavedListingDraft|null;selectionSaveCount:number;selectionSaveFailed:boolean};
 const createOwner=(session:number)=>({
   session,
-  draft:null as SavedListingDraft|null,version:0,saveRevision:0,saveAttempt:0,loaded:false,queue:Promise.resolve() as Promise<unknown>,
+  draft:null as SavedListingDraft|null,draftGeneration:0,version:0,saveRevision:0,saveAttempt:0,loaded:false,queue:Promise.resolve() as Promise<unknown>,
   pending:null as {serialized:string;version:number;id:string}|null,
   selectionSaveCount:0,selectionSaveFailed:false,listeners:new Set<(snapshot:OwnerSnapshot)=>void>(),
 });
@@ -27,19 +28,26 @@ const snapshot=(owner:Owner):OwnerSnapshot=>({draft:owner.draft,selectionSaveCou
 const publish=(owner:Owner)=>{if(!isAuthSessionOwner(owner.session))return;const value=snapshot(owner);owner.listeners.forEach(listener=>listener(value));};
 const beginOwnerSelectionSave=(owner:Owner)=>{if(!isAuthSessionOwner(owner.session))return;if(owner.selectionSaveCount===0)owner.selectionSaveFailed=false;owner.selectionSaveCount+=1;publish(owner);};
 const finishOwnerSelectionSave=(owner:Owner,succeeded:boolean)=>{if(!isAuthSessionOwner(owner.session))return;owner.selectionSaveCount=Math.max(0,owner.selectionSaveCount-1);if(!succeeded)owner.selectionSaveFailed=true;else if(owner.selectionSaveCount===0)owner.selectionSaveFailed=false;publish(owner);};
-const persist=(owner:Owner,build:(base:ListingDraftContent)=>ListingDraftContent,baselineVersion?:number)=>{
+type DraftBinding={draftId:string|null;version:number};
+const matchesDraft=(owner:Owner,draftId:string|null)=>(owner.draft?.draft_id??null)===draftId;
+const persist=(owner:Owner,binding:DraftBinding,build:(base:ListingDraftContent)=>ListingDraftContent)=>{
+  const issuedVersion=owner.version;
   const operation=owner.queue.catch(()=>undefined).then(async()=>{
     assertAuthSessionOwner(owner.session);
     if(!owner.loaded)throw new DraftNotLoadedError();
+    // Bind before enqueueing: a panel from an earlier draft must never write
+    // into the current pointer, even if the new draft has the same version.
+    if(!matchesDraft(owner,binding.draftId)||owner.version!==issuedVersion)throw new DraftChangedError();
     const content=build(owner.draft?.content??EMPTY_DRAFT);
     const serialized=JSON.stringify(content);
-    const version=baselineVersion??owner.version;
+    const version=binding.version;
     if(!owner.pending||owner.pending.serialized!==serialized||owner.pending.version!==version)
       owner.pending={serialized,version,id:crypto.randomUUID()};
     // Count every attempt, including identical retries that reuse pending.
     owner.saveAttempt+=1;
     const result=await saveListingDraft(content,owner.pending.version,owner.pending.id);
     assertAuthSessionOwner(owner.session);
+    if(!matchesDraft(owner,binding.draftId))throw new DraftChangedError();
     owner.pending=null;owner.draft=result;owner.version=result.version;owner.saveRevision+=1;publish(owner);
     return result;
   });
@@ -54,6 +62,9 @@ const reconcileRead=(owner:Owner,value:SavedListingDraft|null,checkpoint:ReturnT
   // A committed save or rollover invalidates overlapping reads of an older draft. Without such
   // activity, an intentional reset (including null/lower versions) is valid.
   if(owner.saveRevision!==checkpoint.saveRevision&&(!value||value.draft_id!==owner.draft?.draft_id||value.version<owner.version))return false;
+  if(!matchesDraft(owner,value?.draft_id??null)){
+    owner.draftGeneration+=1;owner.selectionSaveCount=0;owner.selectionSaveFailed=false;
+  }
   owner.draft=value;owner.version=value?.version??0;owner.loaded=true;owner.pending=null;
   return true;
 };
@@ -109,8 +120,12 @@ function OwnedSellerListingDraftProvider({owner,enabled,sampleCapability,childre
     onLoaded?.();publish(owner);setLoaded(true);setError(false);
     return value;
   },[owner]);
-  const beginSelectionSave=useCallback(()=>beginOwnerSelectionSave(owner),[owner]);
-  const finishSelectionSave=useCallback((succeeded:boolean)=>finishOwnerSelectionSave(owner,succeeded),[owner]);
+  const draftId=draft?.draft_id??null;
+  const draftGeneration=owner.draftGeneration;
+  // The first save may assign an ID to an empty draft. Only an actual pointer
+  // transition retires its selection callbacks.
+  const beginSelectionSave=useCallback(()=>{if(owner.draftGeneration===draftGeneration)beginOwnerSelectionSave(owner);},[owner,draftGeneration]);
+  const finishSelectionSave=useCallback((succeeded:boolean)=>{if(owner.draftGeneration===draftGeneration)finishOwnerSelectionSave(owner,succeeded);},[owner,draftGeneration]);
   const sampleIndices=sampleCapability&&draft?.content.sample_decision==='member_files'?(draft.content.sample_object_indices??[]):[];
   const selectionMismatch=visibleSampleIndices!==null&&JSON.stringify(visibleSampleIndices)!==JSON.stringify(sampleIndices);
   const value=useMemo<DraftStore>(()=>({draft,available:enabled,loaded,error,sampleCapability,sampleIndices,
@@ -120,23 +135,23 @@ function OwnedSellerListingDraftProvider({owner,enabled,sampleCapability,childre
         assertAuthSessionOwner(owner.session);
         const result=await createListingDraft(requestId);
         assertAuthSessionOwner(owner.session);
-        owner.draft=result;owner.version=result.version;owner.loaded=true;owner.pending=null;owner.saveRevision+=1;
+        owner.draft=result;owner.draftGeneration+=1;owner.version=result.version;owner.loaded=true;owner.pending=null;owner.saveRevision+=1;
         owner.selectionSaveCount=0;owner.selectionSaveFailed=false;setVisibleSampleIndices(null);
         publish(owner);setLoaded(true);setError(false);return result;
       });
       owner.queue=operation;return operation;
     },
     beginSelectionSave,finishSelectionSave,setVisibleSampleIndices,
-    saveListingFields:async(fields,baselineVersion)=>{if(!loaded)throw new DraftNotLoadedError();const result=await persist(owner,base=>({
+    saveListingFields:async(fields,baselineVersion)=>{if(!loaded)throw new DraftNotLoadedError();const result=await persist(owner,{draftId,version:baselineVersion??owner.version},base=>({
       ...base,brief:fields.brief,title:fields.title,description:fields.description,category:fields.category,
       tags:fields.tags,price:fields.price,license:fields.license,description_source_version:fields.description_source_version??null,
-    }),baselineVersion);return result.version;},
-    saveLicenseSelection:async(selection)=>{if(!loaded)throw new DraftNotLoadedError();await persist(owner,base=>({...base,license_selection:selection}));},
-    saveSamples:async(indices)=>{if(!loaded)throw new DraftNotLoadedError();beginSelectionSave();try{await persist(owner,base=>sampleCapability
+    }));return result.version;},
+    saveLicenseSelection:async(selection)=>{if(!loaded)throw new DraftNotLoadedError();await persist(owner,{draftId,version:owner.version},base=>({...base,license_selection:selection}));},
+    saveSamples:async(indices)=>{if(!loaded)throw new DraftNotLoadedError();beginSelectionSave();try{await persist(owner,{draftId,version:owner.version},base=>sampleCapability
       ?{...base,sample_decision:indices.length?'member_files':'none',sample_object_indices:[...indices]}
       :base);finishSelectionSave(true);}
       catch(failure){finishSelectionSave(false);throw failure;}},
-  }),[owner,draft,enabled,loaded,error,sampleCapability,sampleIndices,selectionSaveCount,selectionSaveFailed,selectionMismatch,reload,beginSelectionSave,finishSelectionSave]);
+  }),[owner,draft,draftId,enabled,loaded,error,sampleCapability,sampleIndices,selectionSaveCount,selectionSaveFailed,selectionMismatch,reload,beginSelectionSave,finishSelectionSave]);
   return <DraftContext.Provider value={value}>{children}</DraftContext.Provider>;
 }
 

@@ -22,6 +22,9 @@ export function formatListingActionError(error: unknown): ListingActionError {
     return { message: LISTING_ACTION_WORKSPACE, workspaceHref: '/dashboard/seller-workspace' };
   }
 
+  const draftFailure = listingDraftError(error);
+  if (draftFailure) return { message: draftFailure.message };
+
   // Only plain text detail is eligible for display. Never coerce response data.
   if (isPlainListingMessage(detail)) {
     return { message: detail };

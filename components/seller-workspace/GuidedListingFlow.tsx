@@ -1,5 +1,6 @@
 'use client';
 import {Fragment, createContext, useContext, useEffect, useState, useRef, type ReactNode} from 'react';
+import axios from 'axios';
 import {listingDraftError} from '@/lib/listing-action-error';
 import type {ListingDraftContent} from '@/api/sellerListingDraft';
 import {readListingSource, readSellerCategories, type SourceRead, type SellerCategory} from '@/api/sellerListingSource';
@@ -37,7 +38,13 @@ export function GuidedListingFlow({connections, capabilities, view, navigate, ch
       setFileRevision(n=>n+1);setReview(null);setReviewError('');setReviewLoading(false);
       setPublication(null);setPublicationError('');reconciled.current='';
       navigate('data');
-    } catch(error){setStartError(listingDraftError(error)?.message??"We couldn't start a new listing. Refresh and try again.");}
+    } catch(error){
+      const detail=axios.isAxiosError(error)?error.response?.data?.detail:undefined;
+      if(axios.isAxiosError(error)&&error.response?.status===404&&(detail==='UNAVAILABLE'||detail?.code==='UNAVAILABLE')){
+        startAttempt.current=null;
+        navigate('data');
+      }else setStartError(listingDraftError(error)?.message??"We couldn't start a new listing. Refresh and try again.");
+    }
     finally{startPending.current=false;setStartingListing(false);}
   };
   const [filesDirty,setFilesDirty]=useState(false);
@@ -125,7 +132,7 @@ export function GuidedListingFlow({connections, capabilities, view, navigate, ch
         {startError&&<p role="alert" className="text-sm text-red-800">{startError} <button disabled={startingListing} onClick={()=>void startAnotherListing()} className="underline">Retry</button></p>}
         {readError&&<p role="alert" className="text-sm text-red-800">{readError} <button onClick={()=>setReadRetry(n=>n+1)} className="underline">Retry</button></p>}
       </div>
-    </aside><div className="min-w-0 space-y-6 xl:col-start-1 xl:row-start-1">{/* A new draft also discards unsaved file, editor and licence panel state. */}<Fragment key={draft?.draft_id??'legacy'}>{children}</Fragment></div>
+    </aside><fieldset disabled={startingListing} aria-busy={startingListing} className="min-w-0 space-y-6 border-0 p-0 xl:col-start-1 xl:row-start-1">{/* A new draft also discards unsaved file, editor and licence panel state. */}<Fragment key={draft?.draft_id??'legacy'}>{children}</Fragment></fieldset>
   </div></Context.Provider>;
 }
 export function StepNext({from}:{from:WorkspaceView}) {
