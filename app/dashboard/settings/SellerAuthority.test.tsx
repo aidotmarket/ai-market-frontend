@@ -8,7 +8,7 @@ import { readAuthority, reviewAuthority, setAuthority, reviewStopAuthority, stop
 import { authority, hash, id } from '@/tests/fixtures/seller-authority';
 import { checkCompanySignIn } from '@/lib/company-sign-in';
 import type { User } from '@/types';
-vi.mock('@/hooks/useSellerSwitches', () => ({ useSellerSwitches: vi.fn() }));
+vi.mock('@/hooks/useSellerSwitches', async original => ({ ...await original<typeof import('@/hooks/useSellerSwitches')>(), useSellerSwitches: vi.fn() }));
 vi.mock('@/api/connector-seller-settings', async original => ({ ...await original<typeof import('@/api/connector-seller-settings')>(), readAuthority: vi.fn(), reviewAuthority: vi.fn(), setAuthority: vi.fn(), reviewStopAuthority: vi.fn(), stopAuthority: vi.fn() }));
 vi.mock('@/lib/company-sign-in', async original => ({ ...await original<typeof import('@/lib/company-sign-in')>(), checkCompanySignIn: vi.fn() }));
 beforeEach(() => {
@@ -38,6 +38,13 @@ it('shows selected identities, expiry and shared budget after reservations and s
   render(<SellerAuthority />); await screen.findByText(/Authority version 4/);
   expect(screen.getByText('30')).toBeTruthy(); expect(screen.getByText(/Single and bulk actions share/)).toBeTruthy();
   expect(screen.getByDisplayValue('https://verified.test')).toBeTruthy(); expect(screen.getByDisplayValue('2099-01-01T00:00:00Z')).toBeTruthy();
+});
+it.each(['full', 'fallback', 'off'] as const)('uses ChatGPT-only %s mode for authority edits while retaining Stop', async seller_mode => {
+  vi.mocked(useSellerSwitches).mockReturnValue({ seller: true, bulk: true, effects: seller_mode !== 'full', profiles: { openai: { floors: true, seller_mode } } });
+  render(<SellerAuthority />); await screen.findByText(/Authority version 4/);
+  expect(!!screen.queryByRole('button', { name: 'Review exact standing limits' })).toBe(seller_mode === 'full');
+  expect(screen.getByRole<HTMLButtonElement>('button', { name: 'Stop automatic seller actions' }).disabled).toBe(false);
+  expect(setAuthority).not.toHaveBeenCalled();
 });
 it('reviews a typed native action before submitting the retained exact hash', async () => {
   render(<SellerAuthority />); await screen.findByText(/Authority version 4/);

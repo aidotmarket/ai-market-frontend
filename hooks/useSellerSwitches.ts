@@ -5,7 +5,28 @@ import { PENDING_ACTION_CONTINUATION } from '@/lib/redirect';
 import {nativeClient,nativeSession} from '@/api/connector-seller-settings';
 import { useAuthStore } from '@/store/auth';
 
-export interface SellerSwitchReport { seller: boolean; effects: boolean; bulk: boolean }
+export interface SellerProfileSwitches { floors: boolean; seller_mode: 'full' | 'fallback' | 'off' }
+export interface SellerSwitchReport { seller: boolean; effects: boolean; bulk: boolean; profiles?: Record<string, SellerProfileSwitches> }
+export function workspaceSellerSwitchReport(value: unknown): SellerSwitchReport | null {
+  if (!value || typeof value !== 'object') return null;
+  const v = value as Record<string, unknown>;
+  if (typeof v.seller !== 'boolean' || typeof v.bulk !== 'boolean' || typeof v.floors !== 'boolean') return null;
+  let profiles: Record<string, SellerProfileSwitches> = {};
+  if (v.profiles && typeof v.profiles === 'object' && !Array.isArray(v.profiles)) {
+    const entries = Object.entries(v.profiles);
+    if (entries.every(([, profile]) => profile && typeof profile === 'object' && !Array.isArray(profile)
+      && typeof profile.floors === 'boolean' && ['full', 'fallback', 'off'].includes(profile.seller_mode)))
+      profiles = Object.fromEntries(entries);
+  }
+  return { seller: v.seller, bulk: v.bulk, effects: v.floors, profiles };
+}
+export function sellerEffectsEnabled(report: SellerSwitchReport | null): boolean {
+  if (!report?.seller) return false;
+  const openai = report.profiles?.openai;
+  // Website actions keep the Claude path when both grants are present.
+  // Pending-link reports already reflect the originating grant's admission.
+  return openai && !report.profiles?.claude ? openai.seller_mode === 'full' && openai.floors : report.effects;
+}
 // Chunk 3 status is owner/org/link scoped, never a global rollout flag.
 export function sellerSwitchReport(value: unknown): SellerSwitchReport | null {
   if (!sellerAdmissionEnabled(value)) return null;
@@ -41,9 +62,7 @@ export function useSellerSwitches(): SellerSwitchReport | null {
         let report: SellerSwitchReport | null = null;
         if (workspace) {
           const response = await nativeClient.get('/seller-workspace/connector-switches', {headers:nativeSession().headers});
-          const value = response.data;
-          if (response.status === 200 && value && ['seller','bulk','floors'].every(key => typeof value[key] === 'boolean'))
-            report = {seller:value.seller,bulk:value.bulk,effects:value.floors};
+          if (response.status === 200) report = workspaceSellerSwitchReport(response.data);
         } else report = sellerSwitchReport(admission);
         if (active && request === generation && report) {
           clearTimeout(expiry);

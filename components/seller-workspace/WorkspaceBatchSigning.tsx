@@ -1,7 +1,7 @@
 'use client';
 import { useEffect, useRef, useState } from 'react';
 import { authSessionIdentity, useAuthStore } from '@/store/auth';
-import { useSellerSwitches, type SellerSwitchReport } from '@/hooks/useSellerSwitches';
+import { useSellerSwitches, sellerEffectsEnabled, type SellerSwitchReport } from '@/hooks/useSellerSwitches';
 import { nativeClient, nativeSession } from '@/api/connector-seller-settings';
 import { licenseHashesFor, licenseDocumentPath, isCurrentLicenseSelection } from '@/api/listingLicenses';
 import { readSigningInstruments, signInstruments, type SigningInstrument, type SigningRequest, type PreparationView } from '@/api/seller-batch-signing';
@@ -10,7 +10,11 @@ import NativeSellerAuth from '@/components/NativeSellerAuth';
 export default function WorkspaceBatchSigning({preparation,onSigned}:{preparation?: SigningInstrument;onSigned?:(rows:PreparationView[])=>void}) {
   const switches = useSellerSwitches(); const sessionIdentity = useAuthStore(authSessionIdentity);
   if (!sessionIdentity) return <p role="status">Licence signing is currently unavailable.</p>;
-  return <BatchSigningScreen key={sessionIdentity} switches={switches ?? {seller:false,bulk:false,effects:false}} preparation={preparation} onSigned={onSigned} />;
+  const mode = switches?.profiles?.openai?.seller_mode;
+  return <>
+    {mode && <p>ChatGPT seller mode: {mode === 'full' ? 'Full' : mode === 'fallback' ? 'Limited mode' : 'Off'}.</p>}
+    <BatchSigningScreen key={sessionIdentity} switches={switches ?? {seller:false,bulk:false,effects:false}} preparation={preparation} onSigned={onSigned} />
+  </>;
 }
 export function BatchSigningScreen({ switches, preparation, onSigned }: { switches: SellerSwitchReport; preparation?: SigningInstrument; onSigned?:(rows:PreparationView[])=>void }) {
   const [ids, setIds] = useState(''); const [instruments, setInstruments] = useState<SigningInstrument[]>([]);
@@ -47,7 +51,7 @@ export function BatchSigningScreen({ switches, preparation, onSigned }: { switch
     } catch(e) { if (active.current) setError(e); } finally { if (active.current) setBusy(false); }
   };
   const loadedPreparation = useRef<SigningInstrument | null>(null);
-  const enabled = switches.seller && switches.bulk && switches.effects;
+  const enabled = sellerEffectsEnabled(switches) && switches.bulk;
   // Revalidation may temporarily hide the screen, but must retain the displayed action.
   useEffect(() => {
     if (preparation && enabled && loadedPreparation.current !== preparation && !busy) {
@@ -55,7 +59,7 @@ export function BatchSigningScreen({ switches, preparation, onSigned }: { switch
       void load(preparation);
     }
   }, [preparation, enabled]);
-  const ready = switches.seller && switches.bulk && switches.effects && !error && consent && instruments.length > 0 && instruments.length <= 50
+  const ready = enabled && !error && consent && instruments.length > 0 && instruments.length <= 50
     && instruments.every(i => isCurrentLicenseSelection(i.license_selection) && i.status === 'prepared' && i.signing_required && i.license_selection.kind === 'standard'
       && !!texts[licenseDocumentPath('standard', i.license_selection.ai_training, i.license_selection.version)] && !!texts[licenseDocumentPath('covenant', undefined, i.license_selection.covenant_version)]);
   const detail = (error as {response?: {data?: {detail?: string | {code?: string}}}})?.response?.data?.detail;
@@ -63,7 +67,7 @@ export function BatchSigningScreen({ switches, preparation, onSigned }: { switch
     (error instanceof Error && error.message === 'LICENSE_ACCEPTANCE_STALE') ||
     (typeof detail === 'string' ? detail : detail?.code) === 'LICENSE_ACCEPTANCE_STALE';
   const sign = async () => {
-    if (stale || !ready || busy || done || !switches.effects) return;
+    if (stale || !ready || busy || done) return;
     setBusy(true); setError(null);
     const controller = new AbortController(); action.current = controller;
     try {
@@ -73,12 +77,14 @@ export function BatchSigningScreen({ switches, preparation, onSigned }: { switch
       const rows = await signInstruments(request.current, controller.signal); if (active.current) {setDone(true);onSigned?.(rows);}
     } catch(e) { if (active.current) setError(e); } finally { if (active.current) setBusy(false); }
   };
-  if (!enabled) return <><p role="status">Licence signing is currently unavailable.</p>{!!error&&<p role="alert">Licence signing could not be confirmed. Refresh and review again before signing.</p>}</>;
+  const openai = switches.profiles?.openai;
+  const openaiOnly = openai && !switches.profiles?.claude;
+  if (!enabled) return <><p role="status">{openaiOnly && (openai.seller_mode === 'fallback' ? 'ChatGPT seller tools are in limited mode. ' : 'ChatGPT seller tools are paused. ')}Licence signing is currently unavailable.</p>{!!error&&<p role="alert">Licence signing could not be confirmed. Refresh and review again before signing.</p>}</>;
   return <section aria-label="Workspace batch licence signing" className="space-y-4 rounded-xl border bg-white p-6">
     <h2 className="text-xl font-semibold">Sign your licence</h2>
     <p>You’re signing the licence buyers will accept and the ai.market listing covenant for this listing. Read both below, tick the box, then sign. Nothing is published by signing.</p>
     {!preparation && <><label>Listing preparation IDs (one per line)<textarea className="block w-full rounded border p-2" value={ids} disabled={busy} onChange={e => { setIds(e.target.value); setInstruments([]); setTexts({}); setConsent(false); setDone(false); setError(null); request.current = null; }} /></label>
-    <button type="button" className="rounded-lg bg-indigo-700 px-4 py-2.5 text-sm font-semibold text-white hover:bg-indigo-800 disabled:cursor-not-allowed disabled:bg-gray-300 disabled:text-gray-600" disabled={busy || !switches.effects} onClick={() => void load()}>Load licences</button></>}
+    <button type="button" className="rounded-lg bg-indigo-700 px-4 py-2.5 text-sm font-semibold text-white hover:bg-indigo-800 disabled:cursor-not-allowed disabled:bg-gray-300 disabled:text-gray-600" disabled={busy || !enabled} onClick={() => void load()}>Load licences</button></>}
     {(instruments.length > 50 || (!preparation && ids.split(/\s+/).filter(Boolean).length > 50)) && <p role="alert">You can sign up to 50 listings at once.</p>}
     {stale && <p role="alert">This saved licence choice is out of date. Go back to Choose a licence, choose the current licence and covenant, then prepare and sign again.</p>}
     {instruments.map((i, index) => <section key={i.id} aria-label={`Licence ${index + 1}`} className="space-y-3 border-t pt-4">
@@ -94,7 +100,6 @@ export function BatchSigningScreen({ switches, preparation, onSigned }: { switch
     <button type="button" className="block rounded-lg bg-indigo-700 px-4 py-2.5 text-sm font-semibold text-white hover:bg-indigo-800 disabled:cursor-not-allowed disabled:bg-gray-300 disabled:text-gray-600" disabled={!ready || busy || done} onClick={() => void sign()}>{instruments.length === 1 ? 'Sign licence' : `Sign ${instruments.length} licences`}</button>
     {!consent && !done && instruments.length > 0 && <p className="text-sm text-gray-600">Tick the box above to sign.</p>}
     {done && <p role="status">Licence signed. Your listing is not published yet. Go back to the review step and publish when ready.</p>}
-    {!switches.effects && <p>Seller effects are off. Signing is unavailable.</p>}
     <NativeSellerAuth error={stale ? null : error} />
   </section>;
 }
