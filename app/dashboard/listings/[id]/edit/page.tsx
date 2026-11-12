@@ -239,8 +239,8 @@ export default function EditListingPage() {
         </button>
       </div>
 
-      {data.status === 'published' && (
-        <SellerShareControls listingId={id} />
+      {(data.status === 'published' || data.status === 'unlisted') && (
+        <SellerShareControls key={data.status} listingId={id} />
       )}
 
       <div className="bg-white rounded-xl border border-gray-200 shadow-sm p-6 space-y-6">

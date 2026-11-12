@@ -363,7 +363,7 @@ it('preserves all owner statuses, sharing eligibility, TermsGate editing and del
     const row = screen.getByText(`Owner row ${i + 1}`).closest('tr')!;
     expect(within(row).queryByRole('button', { name: 'Unpublish' }) !== null)
       .toBe(status === 'published' || status === 'unlisted');
-    expect(within(row).queryByTestId(`share-id-${i + 1}`) !== null).toBe(status === 'published');
+    expect(within(row).queryByTestId(`share-id-${i + 1}`) !== null).toBe(status === 'published' || status === 'unlisted');
     expect(within(row).getByRole('button', { name: 'Edit' })).toBeTruthy();
     expect(within(row).getByRole('button', { name: 'Delete' })).toBeTruthy();
   });

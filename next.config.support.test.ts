@@ -31,13 +31,13 @@ it.each(['/support/mailbox-account', '/api/v1/support/mailbox-confirm', '/api/v1
   expect(response.headers.get('location')).toBeNull();
   expect(response.headers.get('cache-control')).toBe('private, no-store');
   expect(response.headers.get('referrer-policy')).toBe('no-referrer');
-  const rejected = middleware(new NextRequest('https://www.ai.market' + path, { headers: { host: 'www.ai.market' } }), {} as NextFetchEvent);
+  const rejected = await middleware(new NextRequest('https://www.ai.market' + path, { headers: { host: 'www.ai.market' } }), {} as NextFetchEvent);
   expect(rejected.status).toBe(400); expect(rejected.headers.get('location')).toBeNull();
 });
-it('generates per-request CSP understood by actual Next15 bootstrap nonce extraction, without unsafe-inline/eval', () => {
+it('generates per-request CSP understood by actual Next15 bootstrap nonce extraction, without unsafe-inline/eval', async () => {
   vi.stubEnv('NEXT_PUBLIC_API_URL', 'https://api.example.invalid');
   const request = () => new NextRequest('https://ai.market/support/mailbox-account', { headers: { host: 'ai.market', origin: 'https://ai.market' } });
-  const response = middleware(request(), {} as NextFetchEvent);
+  const response = await middleware(request(), {} as NextFetchEvent);
   const policy = response.headers.get('content-security-policy')!;
   const nonce = getScriptNonceFromHeader(policy);
   expect(nonce).toMatch(/^[A-Za-z0-9+/]{32}$/);
@@ -47,14 +47,14 @@ it('generates per-request CSP understood by actual Next15 bootstrap nonce extrac
   expect(response.headers.get('x-middleware-request-origin')).toBe('https://ai.market');
   expect(response.headers.get('cache-control')).toBe('private, no-store');
   expect(response.headers.get('referrer-policy')).toBe('no-referrer');
-  expect(middleware(request(), {} as NextFetchEvent).headers.get('content-security-policy')).not.toBe(policy);
+  expect((await middleware(request(), {} as NextFetchEvent)).headers.get('content-security-policy')).not.toBe(policy);
 });
 it('leaves original Origin and host-only cookies untouched for backend rewrites and does not install a conflicting static CSP', async () => {
   vi.stubEnv('NEXT_PUBLIC_API_URL', 'https://api.example.invalid');
   const origin = 'https://ai.market';
   const cookie = '__Host-support-confirm=synthetic-csrf; __Host-support-visit=synthetic-visit';
   const request = new NextRequest(origin + '/api/v1/support/email-visit/11111111-1111-4111-8111-111111111111/messages', { headers: { host: 'ai.market', origin, cookie } });
-  const response = middleware(request, {} as NextFetchEvent);
+  const response = await middleware(request, {} as NextFetchEvent);
   expect(response.headers.get('x-middleware-override-headers')).toBeNull();
   expect(response.headers.get('content-security-policy')).toBeNull();
   expect(request.headers.get('origin')).toBe(origin); expect(request.headers.get('cookie')).toBe(cookie);
@@ -62,8 +62,8 @@ it('leaves original Origin and host-only cookies untouched for backend rewrites 
   expect(headers.filter(r => r.source.startsWith('/api/v1/support')).flatMap(r => r.headers).some(h => /content-security-policy|set-cookie/i.test(h.key))).toBe(false);
 });
 
-it.each(['/support/mailbox-account',...SUPPORT_RECOVERY_PATHS.map(path=>path.replace(':ticket','11111111-1111-4111-8111-111111111111'))])('refuses actual HTTP protocol on private %s even with apex Host',path=>{
-  const response=middleware(new NextRequest('http://ai.market'+path,{headers:{host:'ai.market'}}),{} as NextFetchEvent);
+it.each(['/support/mailbox-account',...SUPPORT_RECOVERY_PATHS.map(path=>path.replace(':ticket','11111111-1111-4111-8111-111111111111'))])('refuses actual HTTP protocol on private %s even with apex Host',async path=>{
+  const response=await middleware(new NextRequest('http://ai.market'+path,{headers:{host:'ai.market'}}),{} as NextFetchEvent);
   expect(response.status).toBe(400);expect(response.headers.get('location')).toBeNull();
   expect(response.headers.get('cache-control')).toBe('private, no-store');expect(response.headers.get('referrer-policy')).toBe('no-referrer');
 });

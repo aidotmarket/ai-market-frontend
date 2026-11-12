@@ -419,6 +419,7 @@ export interface SourcePublisher {
 export type PublisherPublicInfo = LegacyPublisher | MarketplacePublisher | SourcePublisher;
 
 export interface ListingDetail extends GeneratedSampleFields {
+  share_card_url?: string | null;
   verification_scope?: string | null;
   file_breakdown?: FileBreakdownGroup[] | null;
   public_reference?: PublicSourceReference | null;

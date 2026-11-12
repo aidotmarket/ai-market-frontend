@@ -50,13 +50,6 @@ async function renderSharePage(result: Awaited<ReturnType<typeof fetchShareMetad
   return renderToStaticMarkup(element);
 }
 
-function extractJsonLdScripts(html: string): string[] {
-  return Array.from(
-    html.matchAll(/<script type="application\/ld\+json">([\s\S]*?)<\/script>/g),
-    (match) => match[1],
-  );
-}
-
 describe('SharePage', () => {
   beforeEach(() => {
     fetchShareMetadata.mockReset();
@@ -108,25 +101,17 @@ describe('SharePage', () => {
     expect(metadata).toMatchSnapshot();
   });
 
-  it('renders the JSON-LD script, card preview, and View listing CTA for published shares', async () => {
-    const share = makeShareMetadata({
-      canonical: 'https://example.com/listings/shared-dataset',
-      card_url: 'https://ai.market/l/AbC123xYz987/card.png?v=fresh-card',
-    });
-
-    const html = await renderSharePage({ status: 'published', data: share });
-    const scripts = extractJsonLdScripts(html);
-
-    expect(scripts).toHaveLength(1);
-    expect(JSON.parse(scripts[0])).toEqual(share.jsonld);
-    expect(scripts[0]).not.toContain('</script>');
-    expect(html).toContain('Shared Dataset');
-    expect(html).toContain('A marketplace-ready dataset for testing share previews.');
-    expect(html).toContain('href="/listings"');
-    expect(html).not.toContain('href="https://example.com/listings/shared-dataset"');
-    expect(html).toContain('View listing');
-    expect(html).toContain('src="https://ai.market/l/AbC123xYz987/card.png?v=fresh-card"');
-    expect(html).toMatchSnapshot();
+  it.each([
+    ['https://ai.market/listings/shared-dataset', '/listings/shared-dataset'],
+    ['https://example.com/listings/shared-dataset', '/listings'],
+    ['invalid', '/listings'],
+  ])('redirects published canonical %s safely', async (canonical, path) => {
+    fetchShareMetadata.mockResolvedValueOnce({ status: 'published', data: makeShareMetadata({ canonical }) });
+    await expect(SharePage({ params: Promise.resolve({ code: 'Code' }) })).rejects.toThrow('NEXT_REDIRECT');
+    // The real Next redirect encodes its destination in the digest.
+    fetchShareMetadata.mockResolvedValueOnce({ status: 'published', data: makeShareMetadata({ canonical }) });
+    try { await SharePage({ params: Promise.resolve({ code: 'Code' }) }); }
+    catch (error) { expect((error as { digest: string }).digest).toContain(`;${path};`); }
   });
 
   it('returns generic noindex metadata and renders the friendly unavailable page for 410 shares', async () => {

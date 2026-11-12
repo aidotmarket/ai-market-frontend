@@ -268,8 +268,8 @@ function OwnerListings({ userId }: { userId: string }) {
                           Unpublish
                         </button>
                       )}
-                      {listing.status === 'published' && (
-                        <SellerShareControls listingId={listing.id} compact />
+                      {(listing.status === 'published' || listing.status === 'unlisted') && (
+                        <SellerShareControls key={listing.status} listingId={listing.id} compact />
                       )}
                       {deleteConfirm === listing.id ? (
                         <span className="flex items-center gap-1">
