@@ -28,3 +28,38 @@ const privateAsPublic: PublishedScanFindings = {} as SellerScanFindings;
 void [omitted, explicitNulls, grounded, sellerOmitted, sellerNulls,
   numericNarrative, objectComparison, booleanNotice, missingState,
   missingFacts, invalidState, privateAsPublic];
+
+// Version discrimination keeps legacy hashes required, including seller findings.
+type V1Public = Extract<PublishedScanFindings, { artifact_version: 'data-verification-public-artifact-v1' }>;
+type V2Public = Extract<PublishedScanFindings, { artifact_version: 'data-verification-public-artifact-v2' }>;
+type V1Seller = Extract<SellerScanFindings, { artifact_version: 'data-verification-public-artifact-v1' }>;
+type V2Seller = Extract<SellerScanFindings, { artifact_version: 'data-verification-public-artifact-v2' }>;
+
+const v1Public = {} as V1Public;
+const v1Seller = {} as V1Seller;
+const v2Public: V2Public = {
+  ...v1Public,
+  artifact_version: 'data-verification-public-artifact-v2',
+  spec: {} as Omit<V1Public['spec'], 'hash'>,
+  execution: {} as Omit<V1Public['execution'], 'content_sha256_reference'>,
+};
+const v2Seller: V2Seller = { ...v2Public, publication_state: 'NOT_PUBLISHED', published_at_utc: null };
+
+// @ts-expect-error v1 public artifacts require spec.hash.
+const missingPublicHash: V1Public = { ...v1Public, spec: {} as Omit<V1Public['spec'], 'hash'> };
+// @ts-expect-error v1 public artifacts require content_sha256_reference.
+const missingPublicReference: V1Public = { ...v1Public, execution: {} as Omit<V1Public['execution'], 'content_sha256_reference'> };
+// @ts-expect-error v1 seller artifacts require spec.hash.
+const missingSellerHash: V1Seller = { ...v1Seller, spec: {} as Omit<V1Seller['spec'], 'hash'> };
+// @ts-expect-error v1 seller artifacts require content_sha256_reference.
+const missingSellerReference: V1Seller = { ...v1Seller, execution: {} as Omit<V1Seller['execution'], 'content_sha256_reference'> };
+
+function legacyHashes(artifact: PublishedScanFindings | SellerScanFindings): string[] {
+  if (artifact.artifact_version === 'data-verification-public-artifact-v1') {
+    return [artifact.spec.hash, artifact.execution.content_sha256_reference];
+  }
+  return [];
+}
+
+void [v2Public, v2Seller, missingPublicHash, missingPublicReference,
+  missingSellerHash, missingSellerReference, legacyHashes];

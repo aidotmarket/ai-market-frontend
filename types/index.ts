@@ -190,9 +190,8 @@ export interface VerificationFactObject {
   columns: VerificationFactColumn[];
 }
 
-export interface PublishedScanFindings {
+interface ScanFindingsArtifactBase {
   publication_state: 'PUBLISHED';
-  artifact_version: 'data-verification-public-artifact-v1';
   verification_series_id: string;
   epoch_id: string;
   listing_id: string;
@@ -206,7 +205,6 @@ export interface PublishedScanFindings {
     listing_version_id?: string;
     id: string;
     version: '1';
-    hash: string;
     depth_class: 'complete_standard_v1';
     canonicalization_version: 'python-json-sort-compact-v1';
   };
@@ -216,7 +214,6 @@ export interface PublishedScanFindings {
     scanner_version?: string;
     connector_type: 'eolymp' | 'aim_gateway' | 'aws_s3_verifier' | 'r2_verifier';
     connector_version: 'eolymp-v1' | 'aim_gateway-v1' | 'aws_s3_verifier-v1' | 'r2_verifier-v1';
-    content_sha256_reference: string;
   };
   methods: {
     row_count_algorithm_version: 'exact-v1';
@@ -241,7 +238,21 @@ export interface PublishedScanFindings {
   disclaimer: string;
 }
 
-export type SellerScanFindings = Omit<PublishedScanFindings, 'publication_state' | 'published_at_utc'> & {
+type ScanFindingsArtifactVersion =
+  | {
+    artifact_version: 'data-verification-public-artifact-v1';
+    spec: ScanFindingsArtifactBase['spec'] & { hash: string };
+    execution: ScanFindingsArtifactBase['execution'] & { content_sha256_reference: string };
+  }
+  | {
+    artifact_version: 'data-verification-public-artifact-v2';
+    spec: ScanFindingsArtifactBase['spec'] & { hash?: string };
+    execution: ScanFindingsArtifactBase['execution'] & { content_sha256_reference?: string };
+  };
+
+export type PublishedScanFindings = ScanFindingsArtifactBase & ScanFindingsArtifactVersion;
+
+export type SellerScanFindings = Omit<ScanFindingsArtifactBase, 'publication_state' | 'published_at_utc'> & ScanFindingsArtifactVersion & {
   publication_state: 'PUBLISHED' | 'NOT_PUBLISHED';
   published_at_utc: string | null;
 };

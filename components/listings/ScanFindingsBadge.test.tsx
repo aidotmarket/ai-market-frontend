@@ -10,7 +10,9 @@ const ATTESTATION = "On 2026-08-23 12:00:00 UTC, at the data owner's authorizati
 const DISCLAIMER = 'This is a seller-published, point-in-time scan of what the seller-designated source exposed through AIM Data on 2026-08-23; the source may change at any time, and this is not a continuing audit, warranty, compliance certification, or guarantee that data delivered later will match or remain available, accurate, complete, or unchanged. Verification does not assess data accuracy, legality, or fitness for any purpose.';
 const OBJECT_ID = 'a'.repeat(64) as VerificationObjectId;
 
-function makePublishedFindings(overrides: Partial<PublishedScanFindings> = {}): PublishedScanFindings {
+type V1Findings = Extract<PublishedScanFindings, { artifact_version: 'data-verification-public-artifact-v1' }>;
+
+function makePublishedFindings(overrides: Partial<V1Findings> = {}): V1Findings {
   return {
     publication_state: 'PUBLISHED',
     artifact_version: 'data-verification-public-artifact-v1',
@@ -116,7 +118,8 @@ describe('ScanFindingsBadge', () => {
       findings.execution.agent_version,
       findings.execution.connector_type,
       findings.execution.connector_version,
-      findings.execution.content_sha256_reference,
+      'Content SHA-256 reference',
+      'c'.repeat(12),
       findings.fingerprint_hash,
       findings.methods.row_count_algorithm_version,
       findings.methods.distinct_algorithm_version,
@@ -143,6 +146,47 @@ describe('ScanFindingsBadge', () => {
     expect(text).toContain('The listing says "A & B"; one object was scanned and one was skipped.');
     expect(text).toContain('<script>alert(1)</script>');
     expect(document.body.querySelector('script')).toBeNull();
+  });
+
+  it('preserves both hash rows for v1 artifacts', () => {
+    renderText(makePublishedFindings());
+    const fields = Object.fromEntries(Array.from(document.body.querySelectorAll('dt'), dt => [
+      dt.textContent, dt.nextElementSibling?.textContent,
+    ]));
+
+    expect(fields['Spec hash']).toBe('b'.repeat(64));
+    expect(fields['Content SHA-256 reference']).toBe('c'.repeat(12));
+  });
+
+  it('omits both hash rows for v2 artifacts without them', () => {
+    const { spec, execution, ...base } = makePublishedFindings();
+    const { hash: _hash, ...v2Spec } = spec;
+    const { content_sha256_reference: _reference, ...v2Execution } = execution;
+    const findings: PublishedScanFindings = {
+      ...base,
+      artifact_version: 'data-verification-public-artifact-v2',
+      spec: v2Spec,
+      execution: v2Execution,
+    };
+    const text = renderText(findings);
+
+    expect(text).toContain('data-verification-public-artifact-v2');
+    expect(text).toContain('Report provenance');
+    expect(text).not.toContain('Spec hash');
+    expect(text).not.toContain('Content SHA-256 reference');
+    expect(text).not.toMatch(/\b(?:undefined|null)\b/);
+  });
+
+  it.each(['', undefined, null, 0, false])('omits empty or non-string hashes (%s)', value => {
+    const findings = makePublishedFindings();
+    // Exercise malformed wire values without widening the supported string types.
+    Object.assign(findings.spec, { hash: value });
+    Object.assign(findings.execution, { content_sha256_reference: value });
+    const text = renderText(findings);
+
+    expect(text).not.toContain('Spec hash');
+    expect(text).not.toContain('Content SHA-256 reference');
+    expect(text).not.toMatch(/\b(?:undefined|null)\b/);
   });
 
   it('decodes only the five entities emitted by Python html.escape', () => {
@@ -244,7 +288,7 @@ describe('S1791 immutable server-supplied provenance', () => {
 describe.each(['PUBLISHED', 'NOT_PUBLISHED'] as const)('optional scan text in %s findings', publicationState => {
   const notice = 'allAI interpretation withheld because grounding validation failed';
 
-  function findings(overrides: Partial<PublishedScanFindings> = {}): SellerScanFindings {
+  function findings(overrides: Partial<V1Findings> = {}): SellerScanFindings {
     return {
       ...makePublishedFindings(overrides),
       publication_state: publicationState,
