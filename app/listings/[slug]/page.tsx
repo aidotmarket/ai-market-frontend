@@ -1,10 +1,11 @@
+import CurrentDisplayFreshness from '@/components/listings/CurrentDisplayFreshness';
 import { formatMarketplaceCategoryName } from '@/lib/marketplaceCategories';
 import GeneratedSamplePage from './GeneratedSamplePage';
 import { generatedSampleState, samplePresentation } from '@/lib/generatedSample';
 import PublicSourceReferencePage, { isPublicSourceReference } from './PublicSourceReferencePage';
 import SchemaTable from '@/components/listings/SchemaTable';
 import PublisherCard from '@/components/listings/PublisherCard';
-import { createHash } from 'node:crypto';
+import {verifyCurrentListing, readLicenseDisplay, CORRECTION_KIND, CORRECTION_NOTICE, CORRECTION_TITLE} from '@/lib/publicPresentation';
 import { notFound, redirect } from 'next/navigation';
 import Link from 'next/link';
 import type { Metadata } from 'next';
@@ -112,11 +113,9 @@ export default async function ListingDetailPage({ params, searchParams }: Props)
 
   const hasActiveScanFindings = listing.scan_findings?.publication_state === 'PUBLISHED';
   const approved = listing.approved_presentation;
-  if (approved && ((approved.presentation_version !== 'seller-listing-review-v2' && approved.presentation_version !== 'seller-listing-review-v3' && approved.presentation_version !== 'seller-listing-review-v4') ||
-      typeof approved.rendered_html !== 'string' || Buffer.byteLength(approved.rendered_html, 'utf8') > 100000 ||
-      createHash('sha256').update(approved.rendered_html, 'utf8').digest('hex') !== approved.render_hash)) {
-    throw new Error('The approved listing presentation could not be verified');
-  }
+  await verifyCurrentListing(listing as unknown as Record<string, unknown>);
+  const corrected = approved?.presentation_kind === CORRECTION_KIND;
+  const currentDisplay = readLicenseDisplay(listing.license_display);
   const schemaSummary = listing.schema_summary;
   const schemaColumns = Array.isArray(schemaSummary?.columns) ? schemaSummary.columns : [];
   const rowCount = listing.row_count;
@@ -143,7 +142,7 @@ export default async function ListingDetailPage({ params, searchParams }: Props)
     : null;
 
   return (
-    <>
+    <CurrentDisplayFreshness observedAt={Date.now()}>
       {shouldEmitJsonLd && (
         <script
           type="application/ld+json"
@@ -174,9 +173,10 @@ export default async function ListingDetailPage({ params, searchParams }: Props)
             </div>
           </div>
 
+          {currentDisplay && <p className="text-sm text-gray-700">Original seller evidence below; current public licence display: {currentDisplay.license_label}. {CORRECTION_NOTICE}</p>}
           <BuyerAtAGlance slug={listing.slug} listingId={listing.id} initialSummary={atAGlanceSummary} includeSample={false} hideSampleAvailability={pendingSellerTerms} />
 
-          {approved ? <ApprovedListingPreview title="Seller-approved listing" html={approved.rendered_html} /> : <>
+          {approved ? <><p className="text-sm text-gray-700">{corrected ? CORRECTION_NOTICE : 'Original seller-approved listing evidence'}</p><ApprovedListingPreview title={corrected ? CORRECTION_TITLE : 'Seller-approved listing'} html={approved.rendered_html} /></> : <>
           {/* Description uses the validated backend render. */}
           <div className="prose prose-sm max-w-none">
             <BackendListingHtml description={listing.description} descriptionHtml={listing.description_html}/>
@@ -337,7 +337,7 @@ export default async function ListingDetailPage({ params, searchParams }: Props)
         </div>
       </div>
     </div>
-    </>
+    </CurrentDisplayFreshness>
   );
 }
 

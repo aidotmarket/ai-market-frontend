@@ -1,3 +1,4 @@
+import {verifyCurrentListing} from './publicPresentation';
 import type { ListingPublicListResponse } from '@/types';
 import type {ListingDocument} from '@/types/listingDocuments';
 
@@ -126,7 +127,9 @@ export async function fetchPublicListing(slug: string) {
     cache: 'no-store',
   });
   if (!res.ok) return null;
-  return res.json();
+  const listing = await res.json();
+  await verifyCurrentListing(listing);
+  return listing;
 }
 
 export async function fetchPublicListingDocuments(listingId: string): Promise<ListingDocument[]> {

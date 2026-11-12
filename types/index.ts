@@ -267,6 +267,7 @@ export interface GeneratedSampleFields {
 }
 
 export interface ListingListItem extends GeneratedSampleFields {
+  license_display?: import('@/lib/publicPresentation').LicenseDisplay | null;
   purchasable?: boolean;
   purchase_hold_reason?: string | null;
   id: string;
@@ -316,6 +317,7 @@ export interface ListingPublicListItem extends GeneratedSampleFields {
   purchase_hold_reason: string | null;
   license_status?: 'bound' | 'pending_seller_terms';
   license_provenance?: string | null;
+  license_display?: import('@/lib/publicPresentation').LicenseDisplay | null;
 }
 
 export interface ListingPublicListResponse {
@@ -410,7 +412,7 @@ export interface ListingDetail extends GeneratedSampleFields {
   file_breakdown?: FileBreakdownGroup[] | null;
   public_reference?: PublicSourceReference | null;
   at_a_glance?: import('@/lib/api').ListingSummary | null;
-  approved_presentation?: {presentation_version: 'seller-listing-review-v2' | 'seller-listing-review-v3' | 'seller-listing-review-v4'; rendered_html: string; render_hash: string};
+  approved_presentation?: import('@/lib/publicPresentation').PublicPresentation;
   id: string;
   slug: string;
   title: string;
@@ -426,6 +428,7 @@ export interface ListingDetail extends GeneratedSampleFields {
   license: string | ListingLicenseDetails | null;
   license_status?: 'bound' | 'pending_seller_terms';
   license_provenance?: string | null;
+  license_display?: import('@/lib/publicPresentation').LicenseDisplay | null;
   category: string;
   secondary_categories: string[] | null;
   tags: string[];
@@ -478,6 +481,7 @@ export interface SearchRequest {
 }
 
 export interface SearchResultItem extends GeneratedSampleFields {
+  license_display?: import('@/lib/publicPresentation').LicenseDisplay | null;
   purchasable?: boolean;
   purchase_hold_reason?: string | null;
   id: string;

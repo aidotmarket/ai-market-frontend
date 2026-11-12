@@ -29,6 +29,7 @@ export async function listListings(params: ListListingsParams = {}): Promise<Lis
     ? { ...params, fulfillment_type: undefined }
     : params;
   const res = await api.get<ListingListItem[]>('/listings/', {
+    adapter:'fetch', fetchOptions:{cache:'no-store'},
     params: requestParams,
     paramsSerializer: { indexes: null },
   });
@@ -88,6 +89,7 @@ export async function searchListings(
     ? { ...params, fulfillment_type: undefined }
     : params;
   const res = await api.get<SearchResponse>('/search/listings', {
+    adapter:'fetch', fetchOptions:{cache:'no-store'},
     params: { q, ...requestParams },
     paramsSerializer: { indexes: null },
   });

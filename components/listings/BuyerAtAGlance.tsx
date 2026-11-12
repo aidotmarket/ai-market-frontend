@@ -2,13 +2,13 @@
 import {useEffect, useState} from 'react';
 import {fetchBuyerSummary, type ListingSummary} from '@/lib/api';
 import type {Manifest} from '@/lib/listing-preview/types';
-import AtAGlance from './AtAGlance';
+import AtAGlance, {hasSupportedSummaryFields} from './AtAGlance';
 import ListingSamplePreview from './ListingSamplePreview';
 
 export function BuyerPreviewContent({summary, slug, listingId, onManifest}: {
   summary?: ListingSummary | null; slug?: string; listingId?: string; onManifest?: (manifest: Manifest | null) => void;
 }) {
-  return <><AtAGlance summary={summary} />{listingId && <ListingSamplePreview slug={slug} listingId={listingId} onManifest={onManifest} />}</>;
+  return <>{hasSupportedSummaryFields(summary) && <p className="text-sm text-gray-600">Original approved summary evidence; current public licence display is shown separately.</p>}<AtAGlance summary={summary} />{listingId && <ListingSamplePreview slug={slug} listingId={listingId} onManifest={onManifest} />}</>;
 }
 
 export function BuyerSamplePreview({slug, listingId}: {slug: string; listingId: string}) {

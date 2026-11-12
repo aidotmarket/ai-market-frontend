@@ -1,0 +1,439 @@
+{
+  "backend_head": "19ff184444425979a861f4f75152fac1f959f9c2",
+  "public": [
+    {
+      "original": {
+        "presentation_version": "seller-listing-review-v2",
+        "rendered_html": "<!doctype html><html lang=\"en\"><head><meta charset=\"utf-8\"><meta name=\"viewport\" content=\"width=device-width,initial-scale=1\"><meta http-equiv=\"Content-Security-Policy\" content=\"default-src 'none'; style-src 'unsafe-inline'; base-uri 'none'; form-action 'none'\"><title>Saved listing preview</title><style>html{color-scheme:light}body{margin:0;padding:24px;font:14px/1.7 system-ui,sans-serif;color:#374151;background:#fff}article{max-width:900px;margin:auto}h1{font-size:26px;line-height:1.3;color:#111827;margin:12px 0 20px}.category{color:#4338ca}.description{white-space:pre-wrap;overflow-wrap:anywhere}h1,dd,li{overflow-wrap:anywhere}ul{display:flex;flex-wrap:wrap;gap:8px;list-style:none;padding:0}li{max-width:100%;border-radius:20px;padding:4px 12px;background:#f3f4f6;font-size:12px}dl{border-top:1px solid #e5e7eb;padding-top:20px;display:grid;grid-template-columns:1fr 1fr;gap:20px}dt{font-size:12px;color:#6b7280}dd{margin:4px 0 0;color:#111827}.price{font-size:20px;font-weight:600}@media(max-width:420px){body{padding:16px}dl{grid-template-columns:1fr}}</style></head><body><article><p class=\"category\">consumer-retail</p><h1>Synthetic title</h1><p class=\"description\">Licence prose ai.market Standard Data Licence v1.0 [contact removed]</p><ul aria-label=\"Listing tags\"><li>one</li><li>two</li></ul><dl><div><dt>Price</dt><dd class=\"price\">$12.00</dd></div><div><dt>License</dt><dd>ai.market Standard Data Licence v1.0</dd></div></dl></article></body></html>",
+        "render_hash": "6b39a48e6b921a2f7f88ddfb3496cd6ddbe8097e165bb880dbc83f0f6a139ca4"
+      },
+      "corrected": {
+        "presentation_version": "seller-listing-review-v2",
+        "rendered_html": "<!doctype html><html lang=\"en\"><head><meta charset=\"utf-8\"><meta name=\"viewport\" content=\"width=device-width,initial-scale=1\"><meta http-equiv=\"Content-Security-Policy\" content=\"default-src 'none'; style-src 'unsafe-inline'; base-uri 'none'; form-action 'none'\"><title>Saved listing preview</title><style>html{color-scheme:light}body{margin:0;padding:24px;font:14px/1.7 system-ui,sans-serif;color:#374151;background:#fff}article{max-width:900px;margin:auto}h1{font-size:26px;line-height:1.3;color:#111827;margin:12px 0 20px}.category{color:#4338ca}.description{white-space:pre-wrap;overflow-wrap:anywhere}h1,dd,li{overflow-wrap:anywhere}ul{display:flex;flex-wrap:wrap;gap:8px;list-style:none;padding:0}li{max-width:100%;border-radius:20px;padding:4px 12px;background:#f3f4f6;font-size:12px}dl{border-top:1px solid #e5e7eb;padding-top:20px;display:grid;grid-template-columns:1fr 1fr;gap:20px}dt{font-size:12px;color:#6b7280}dd{margin:4px 0 0;color:#111827}.price{font-size:20px;font-weight:600}@media(max-width:420px){body{padding:16px}dl{grid-template-columns:1fr}}</style></head><body><article><p class=\"category\">consumer-retail</p><h1>Synthetic title</h1><p class=\"description\">Licence prose ai.market Standard Data Licence v1.0 [contact removed]</p><ul aria-label=\"Listing tags\"><li>one</li><li>two</li></ul><dl><div><dt>Price</dt><dd class=\"price\">$12.00</dd></div><div><dt>License</dt><dd>ai.market Standard Data Licence v1.1</dd></div></dl></article></body></html>",
+        "render_hash": "e53063924ca3923712aa14b52ddf2ad4bb7e1706ef93cec9bb44daac88a68a91",
+        "presentation_kind": "platform-license-correction-v1",
+        "listing_id": "00000000-0000-0000-0000-000000000003",
+        "publication_id": "00000000-0000-0000-0000-000000000004",
+        "listing_version_id": "00000000-0000-0000-0000-000000000005",
+        "approval_id": "00000000-0000-0000-0000-000000000006",
+        "original_render_hash": "c0eb113fc272d76cd0629a4fafa4236520de49279c441ed2610dc960cc9c1836",
+        "original_admitted_render_hash": "6b39a48e6b921a2f7f88ddfb3496cd6ddbe8097e165bb880dbc83f0f6a139ca4",
+        "correction_id": "00000000-0000-0000-0000-000000000008",
+        "correction_digest": "28ddba011742b64c2111ba151a109329b4ca1454e13b84b868090c6c62ec27ec",
+        "provenance": "platform_license_correction",
+        "license_label": "ai.market Standard Data Licence v1.1"
+      },
+      "frozen": {
+        "rendered_html": "<!doctype html><html lang=\"en\"><head><meta charset=\"utf-8\"><meta name=\"viewport\" content=\"width=device-width,initial-scale=1\"><meta http-equiv=\"Content-Security-Policy\" content=\"default-src 'none'; style-src 'unsafe-inline'; base-uri 'none'; form-action 'none'\"><title>Saved listing preview</title><style>html{color-scheme:light}body{margin:0;padding:24px;font:14px/1.7 system-ui,sans-serif;color:#374151;background:#fff}article{max-width:900px;margin:auto}h1{font-size:26px;line-height:1.3;color:#111827;margin:12px 0 20px}.category{color:#4338ca}.description{white-space:pre-wrap;overflow-wrap:anywhere}h1,dd,li{overflow-wrap:anywhere}ul{display:flex;flex-wrap:wrap;gap:8px;list-style:none;padding:0}li{max-width:100%;border-radius:20px;padding:4px 12px;background:#f3f4f6;font-size:12px}dl{border-top:1px solid #e5e7eb;padding-top:20px;display:grid;grid-template-columns:1fr 1fr;gap:20px}dt{font-size:12px;color:#6b7280}dd{margin:4px 0 0;color:#111827}.price{font-size:20px;font-weight:600}@media(max-width:420px){body{padding:16px}dl{grid-template-columns:1fr}}</style></head><body><article><p class=\"category\">consumer-retail</p><h1>Synthetic title</h1><p class=\"description\">Licence prose ai.market Standard Data Licence v1.0 contact@example.invalid</p><ul aria-label=\"Listing tags\"><li>one</li><li>two</li></ul><dl><div><dt>Price</dt><dd class=\"price\">$12.00</dd></div><div><dt>License</dt><dd>ai.market Standard Data Licence v1.0</dd></div></dl></article></body></html>",
+        "render_hash": "c0eb113fc272d76cd0629a4fafa4236520de49279c441ed2610dc960cc9c1836"
+      },
+      "fields": {
+        "title": "Synthetic title",
+        "description": "Licence prose ai.market Standard Data Licence v1.0 contact@example.invalid",
+        "category": "consumer-retail",
+        "license": "ai.market Standard Data Licence v1.0",
+        "tags": "one,two",
+        "price": "12.00"
+      },
+      "license_display": {
+        "license_label": "ai.market Standard Data Licence v1.1",
+        "provenance": "platform_license_correction",
+        "correction_id": "00000000-0000-0000-0000-000000000008",
+        "correction_digest": "28ddba011742b64c2111ba151a109329b4ca1454e13b84b868090c6c62ec27ec"
+      },
+      "at_a_glance": {
+        "profile": "aim-listing-enrichment-profile-v2",
+        "license": {
+          "value": "ai.market Standard Data Licence v1.0",
+          "provenance": "seller_entered",
+          "authority": "publication_bound",
+          "source_reference": "Listing.license",
+          "source_revision": "98b519cf1abcbdf769f7fe1ae25e02329d83496d8b8261be4388b0d8819f76b8"
+        }
+      },
+      "jsonld": {
+        "@context": "https://schema.org",
+        "@type": "Dataset",
+        "publisher": {
+          "@type": "Organization",
+          "name": "ai.market",
+          "url": "https://ai.market"
+        },
+        "name": "Synthetic title",
+        "description": "Original seller prose",
+        "url": "https://ai.market/listings/synthetic",
+        "identifier": "00000000-0000-0000-0000-000000000003",
+        "license": {
+          "@type": "CreativeWork",
+          "name": "ai.market Standard Data Licence v1.1"
+        },
+        "isAccessibleForFree": false,
+        "creator": {
+          "@type": "Organization",
+          "name": "Anonymous seller",
+          "url": "https://ai.market"
+        },
+        "offers": {
+          "@type": "Offer",
+          "price": "12.00",
+          "priceCurrency": "USD",
+          "availability": "https://schema.org/InStock"
+        },
+        "additionalProperty": [
+          {
+            "@type": "PropertyValue",
+            "name": "license",
+            "value": "ai.market Standard Data Licence v1.1",
+            "description": "Platform-corrected licence display; original seller approval retained",
+            "propertyID": "28ddba011742b64c2111ba151a109329b4ca1454e13b84b868090c6c62ec27ec"
+          },
+          {
+            "@type": "PropertyValue",
+            "name": "Licence display provenance",
+            "value": "Platform-corrected licence display; original seller approval retained",
+            "propertyID": "28ddba011742b64c2111ba151a109329b4ca1454e13b84b868090c6c62ec27ec"
+          }
+        ],
+        "includedInDataCatalog": {
+          "@type": "DataCatalog",
+          "name": "ai.market",
+          "url": "https://ai.market"
+        },
+        "version": "historical",
+        "isBasedOn": "https://api.ai.market/api/v1/public/listings/synthetic/disclosure-snapshot",
+        "usageInfo": "AI-training crawlers allowed; seller notified at listing time."
+      }
+    },
+    {
+      "original": {
+        "presentation_version": "seller-listing-review-v3",
+        "rendered_html": "<!doctype html><html lang=\"en\"><head><meta charset=\"utf-8\"><meta name=\"viewport\" content=\"width=device-width,initial-scale=1\"><meta http-equiv=\"Content-Security-Policy\" content=\"default-src 'none'; style-src 'unsafe-inline'; base-uri 'none'; form-action 'none'\"><title>Saved listing preview</title><style>html{color-scheme:light}body{margin:0;padding:24px;font:14px/1.7 system-ui,sans-serif;color:#374151;background:#fff}article{max-width:900px;margin:auto}h1{font-size:26px;line-height:1.3;color:#111827;margin:12px 0 20px}.category{color:#4338ca}.description{white-space:pre-wrap;overflow-wrap:anywhere}h1,dd,li{overflow-wrap:anywhere}ul{display:flex;flex-wrap:wrap;gap:8px;list-style:none;padding:0}li{max-width:100%;border-radius:20px;padding:4px 12px;background:#f3f4f6;font-size:12px}dl{border-top:1px solid #e5e7eb;padding-top:20px;display:grid;grid-template-columns:1fr 1fr;gap:20px}dt{font-size:12px;color:#6b7280}dd{margin:4px 0 0;color:#111827}.price{font-size:20px;font-weight:600}@media(max-width:420px){body{padding:16px}dl{grid-template-columns:1fr}}.description{white-space:normal}.description ul,.description ol{display:block;list-style:revert;padding-left:2em;margin:1em 0}.description li{display:list-item;max-width:none;border-radius:0;padding:0;background:transparent;font-size:inherit}.description h2,.description h3,.description h4{line-height:1.3;color:#111827;margin:1em 0 .5em}.description h2{font-size:22px}.description h3{font-size:19px}.description h4{font-size:16px}.description p{margin:0 0 1em}.description br{display:revert}</style></head><body><article><p class=\"category\">consumer-retail</p><h1>Synthetic title</h1><div class=\"description\"><p>Licence prose ai.market Standard Data Licence v1.0 [contact removed]</p></div><ul aria-label=\"Listing tags\"><li>one</li><li>two</li></ul><dl><div><dt>Price</dt><dd class=\"price\">$12.00</dd></div><div><dt>License</dt><dd>ai.market Standard Data Licence v1.0</dd></div></dl></article></body></html>",
+        "render_hash": "d120e90835b085bdf72075b4d66c35aebb47e31aa8182f0d5b6f8973225a3e86"
+      },
+      "corrected": {
+        "presentation_version": "seller-listing-review-v3",
+        "rendered_html": "<!doctype html><html lang=\"en\"><head><meta charset=\"utf-8\"><meta name=\"viewport\" content=\"width=device-width,initial-scale=1\"><meta http-equiv=\"Content-Security-Policy\" content=\"default-src 'none'; style-src 'unsafe-inline'; base-uri 'none'; form-action 'none'\"><title>Saved listing preview</title><style>html{color-scheme:light}body{margin:0;padding:24px;font:14px/1.7 system-ui,sans-serif;color:#374151;background:#fff}article{max-width:900px;margin:auto}h1{font-size:26px;line-height:1.3;color:#111827;margin:12px 0 20px}.category{color:#4338ca}.description{white-space:pre-wrap;overflow-wrap:anywhere}h1,dd,li{overflow-wrap:anywhere}ul{display:flex;flex-wrap:wrap;gap:8px;list-style:none;padding:0}li{max-width:100%;border-radius:20px;padding:4px 12px;background:#f3f4f6;font-size:12px}dl{border-top:1px solid #e5e7eb;padding-top:20px;display:grid;grid-template-columns:1fr 1fr;gap:20px}dt{font-size:12px;color:#6b7280}dd{margin:4px 0 0;color:#111827}.price{font-size:20px;font-weight:600}@media(max-width:420px){body{padding:16px}dl{grid-template-columns:1fr}}.description{white-space:normal}.description ul,.description ol{display:block;list-style:revert;padding-left:2em;margin:1em 0}.description li{display:list-item;max-width:none;border-radius:0;padding:0;background:transparent;font-size:inherit}.description h2,.description h3,.description h4{line-height:1.3;color:#111827;margin:1em 0 .5em}.description h2{font-size:22px}.description h3{font-size:19px}.description h4{font-size:16px}.description p{margin:0 0 1em}.description br{display:revert}</style></head><body><article><p class=\"category\">consumer-retail</p><h1>Synthetic title</h1><div class=\"description\"><p>Licence prose ai.market Standard Data Licence v1.0 [contact removed]</p></div><ul aria-label=\"Listing tags\"><li>one</li><li>two</li></ul><dl><div><dt>Price</dt><dd class=\"price\">$12.00</dd></div><div><dt>License</dt><dd>ai.market Standard Data Licence v1.1</dd></div></dl></article></body></html>",
+        "render_hash": "e16e379a949cda00ad5ae537f4d44f6aa443430694ad910960d8865666bcdf8d",
+        "presentation_kind": "platform-license-correction-v1",
+        "listing_id": "00000000-0000-0000-0000-00000000000b",
+        "publication_id": "00000000-0000-0000-0000-00000000000c",
+        "listing_version_id": "00000000-0000-0000-0000-00000000000d",
+        "approval_id": "00000000-0000-0000-0000-00000000000e",
+        "original_render_hash": "0a21d42b87046e854db89734483fea263acea9b0af39d6867e50e42cd0f73034",
+        "original_admitted_render_hash": "d120e90835b085bdf72075b4d66c35aebb47e31aa8182f0d5b6f8973225a3e86",
+        "correction_id": "00000000-0000-0000-0000-000000000010",
+        "correction_digest": "ffa736a48eee8c1e37ffc53637f5592361abae974bcb50083ca7cdaada95551e",
+        "provenance": "platform_license_correction",
+        "license_label": "ai.market Standard Data Licence v1.1"
+      },
+      "frozen": {
+        "rendered_html": "<!doctype html><html lang=\"en\"><head><meta charset=\"utf-8\"><meta name=\"viewport\" content=\"width=device-width,initial-scale=1\"><meta http-equiv=\"Content-Security-Policy\" content=\"default-src 'none'; style-src 'unsafe-inline'; base-uri 'none'; form-action 'none'\"><title>Saved listing preview</title><style>html{color-scheme:light}body{margin:0;padding:24px;font:14px/1.7 system-ui,sans-serif;color:#374151;background:#fff}article{max-width:900px;margin:auto}h1{font-size:26px;line-height:1.3;color:#111827;margin:12px 0 20px}.category{color:#4338ca}.description{white-space:pre-wrap;overflow-wrap:anywhere}h1,dd,li{overflow-wrap:anywhere}ul{display:flex;flex-wrap:wrap;gap:8px;list-style:none;padding:0}li{max-width:100%;border-radius:20px;padding:4px 12px;background:#f3f4f6;font-size:12px}dl{border-top:1px solid #e5e7eb;padding-top:20px;display:grid;grid-template-columns:1fr 1fr;gap:20px}dt{font-size:12px;color:#6b7280}dd{margin:4px 0 0;color:#111827}.price{font-size:20px;font-weight:600}@media(max-width:420px){body{padding:16px}dl{grid-template-columns:1fr}}.description{white-space:normal}.description ul,.description ol{display:block;list-style:revert;padding-left:2em;margin:1em 0}.description li{display:list-item;max-width:none;border-radius:0;padding:0;background:transparent;font-size:inherit}.description h2,.description h3,.description h4{line-height:1.3;color:#111827;margin:1em 0 .5em}.description h2{font-size:22px}.description h3{font-size:19px}.description h4{font-size:16px}.description p{margin:0 0 1em}.description br{display:revert}</style></head><body><article><p class=\"category\">consumer-retail</p><h1>Synthetic title</h1><div class=\"description\"><p>Licence prose ai.market Standard Data Licence v1.0 contact@example.invalid</p></div><ul aria-label=\"Listing tags\"><li>one</li><li>two</li></ul><dl><div><dt>Price</dt><dd class=\"price\">$12.00</dd></div><div><dt>License</dt><dd>ai.market Standard Data Licence v1.0</dd></div></dl></article></body></html>",
+        "render_hash": "0a21d42b87046e854db89734483fea263acea9b0af39d6867e50e42cd0f73034"
+      },
+      "fields": {
+        "title": "Synthetic title",
+        "description": "Licence prose ai.market Standard Data Licence v1.0 contact@example.invalid",
+        "category": "consumer-retail",
+        "license": "ai.market Standard Data Licence v1.0",
+        "tags": "one,two",
+        "price": "12.00"
+      },
+      "license_display": {
+        "license_label": "ai.market Standard Data Licence v1.1",
+        "provenance": "platform_license_correction",
+        "correction_id": "00000000-0000-0000-0000-000000000010",
+        "correction_digest": "ffa736a48eee8c1e37ffc53637f5592361abae974bcb50083ca7cdaada95551e"
+      },
+      "at_a_glance": {
+        "profile": "aim-listing-enrichment-profile-v2",
+        "license": {
+          "value": "ai.market Standard Data Licence v1.0",
+          "provenance": "seller_entered",
+          "authority": "publication_bound",
+          "source_reference": "Listing.license",
+          "source_revision": "98b519cf1abcbdf769f7fe1ae25e02329d83496d8b8261be4388b0d8819f76b8"
+        }
+      },
+      "jsonld": {
+        "@context": "https://schema.org",
+        "@type": "Dataset",
+        "publisher": {
+          "@type": "Organization",
+          "name": "ai.market",
+          "url": "https://ai.market"
+        },
+        "name": "Synthetic title",
+        "description": "Original seller prose",
+        "url": "https://ai.market/listings/synthetic",
+        "identifier": "00000000-0000-0000-0000-00000000000b",
+        "license": {
+          "@type": "CreativeWork",
+          "name": "ai.market Standard Data Licence v1.1"
+        },
+        "isAccessibleForFree": false,
+        "creator": {
+          "@type": "Organization",
+          "name": "Anonymous seller",
+          "url": "https://ai.market"
+        },
+        "offers": {
+          "@type": "Offer",
+          "price": "12.00",
+          "priceCurrency": "USD",
+          "availability": "https://schema.org/InStock"
+        },
+        "additionalProperty": [
+          {
+            "@type": "PropertyValue",
+            "name": "license",
+            "value": "ai.market Standard Data Licence v1.1",
+            "description": "Platform-corrected licence display; original seller approval retained",
+            "propertyID": "ffa736a48eee8c1e37ffc53637f5592361abae974bcb50083ca7cdaada95551e"
+          },
+          {
+            "@type": "PropertyValue",
+            "name": "Licence display provenance",
+            "value": "Platform-corrected licence display; original seller approval retained",
+            "propertyID": "ffa736a48eee8c1e37ffc53637f5592361abae974bcb50083ca7cdaada95551e"
+          }
+        ],
+        "includedInDataCatalog": {
+          "@type": "DataCatalog",
+          "name": "ai.market",
+          "url": "https://ai.market"
+        },
+        "version": "historical",
+        "isBasedOn": "https://api.ai.market/api/v1/public/listings/synthetic/disclosure-snapshot",
+        "usageInfo": "AI-training crawlers allowed; seller notified at listing time."
+      }
+    },
+    {
+      "original": {
+        "presentation_version": "seller-listing-review-v4",
+        "rendered_html": "<!doctype html><html lang=\"en\"><head><meta charset=\"utf-8\"><meta name=\"viewport\" content=\"width=device-width,initial-scale=1\"><meta http-equiv=\"Content-Security-Policy\" content=\"default-src 'none'; style-src 'unsafe-inline'; base-uri 'none'; form-action 'none'\"><title>Saved listing preview</title><style>html{color-scheme:light}body{margin:0;padding:24px;font:14px/1.7 system-ui,sans-serif;color:#374151;background:#fff}article{max-width:900px;margin:auto}h1{font-size:26px;line-height:1.3;color:#111827;margin:12px 0 20px}.category{color:#4338ca}.description{white-space:pre-wrap;overflow-wrap:anywhere}h1,dd,li{overflow-wrap:anywhere}ul{display:flex;flex-wrap:wrap;gap:8px;list-style:none;padding:0}li{max-width:100%;border-radius:20px;padding:4px 12px;background:#f3f4f6;font-size:12px}dl{border-top:1px solid #e5e7eb;padding-top:20px;display:grid;grid-template-columns:1fr 1fr;gap:20px}dt{font-size:12px;color:#6b7280}dd{margin:4px 0 0;color:#111827}.price{font-size:20px;font-weight:600}@media(max-width:420px){body{padding:16px}dl{grid-template-columns:1fr}}.description{white-space:normal}.description ul,.description ol{display:block;list-style:revert;padding-left:2em;margin:1em 0}.description li{display:list-item;max-width:none;border-radius:0;padding:0;background:transparent;font-size:inherit}.description h2,.description h3,.description h4{line-height:1.3;color:#111827;margin:1em 0 .5em}.description h2{font-size:22px}.description h3{font-size:19px}.description h4{font-size:16px}.description p{margin:0 0 1em}.description br{display:revert}</style></head><body><article><p class=\"category\">Retail</p><h1>Synthetic title</h1><div class=\"description\"><p>Licence prose ai.market Standard Data Licence v1.0 [contact removed]</p></div><ul aria-label=\"Listing tags\"><li>one</li><li>two</li></ul><dl><div><dt>Price</dt><dd class=\"price\">$12.00</dd></div><div><dt>License</dt><dd>ai.market Standard Data Licence v1.0</dd></div></dl></article></body></html>",
+        "render_hash": "46806fcef0f1e4007380f6366dfbf4b4ecb0b25adcc8b36e7a59cb4c75de4053"
+      },
+      "corrected": {
+        "presentation_version": "seller-listing-review-v4",
+        "rendered_html": "<!doctype html><html lang=\"en\"><head><meta charset=\"utf-8\"><meta name=\"viewport\" content=\"width=device-width,initial-scale=1\"><meta http-equiv=\"Content-Security-Policy\" content=\"default-src 'none'; style-src 'unsafe-inline'; base-uri 'none'; form-action 'none'\"><title>Saved listing preview</title><style>html{color-scheme:light}body{margin:0;padding:24px;font:14px/1.7 system-ui,sans-serif;color:#374151;background:#fff}article{max-width:900px;margin:auto}h1{font-size:26px;line-height:1.3;color:#111827;margin:12px 0 20px}.category{color:#4338ca}.description{white-space:pre-wrap;overflow-wrap:anywhere}h1,dd,li{overflow-wrap:anywhere}ul{display:flex;flex-wrap:wrap;gap:8px;list-style:none;padding:0}li{max-width:100%;border-radius:20px;padding:4px 12px;background:#f3f4f6;font-size:12px}dl{border-top:1px solid #e5e7eb;padding-top:20px;display:grid;grid-template-columns:1fr 1fr;gap:20px}dt{font-size:12px;color:#6b7280}dd{margin:4px 0 0;color:#111827}.price{font-size:20px;font-weight:600}@media(max-width:420px){body{padding:16px}dl{grid-template-columns:1fr}}.description{white-space:normal}.description ul,.description ol{display:block;list-style:revert;padding-left:2em;margin:1em 0}.description li{display:list-item;max-width:none;border-radius:0;padding:0;background:transparent;font-size:inherit}.description h2,.description h3,.description h4{line-height:1.3;color:#111827;margin:1em 0 .5em}.description h2{font-size:22px}.description h3{font-size:19px}.description h4{font-size:16px}.description p{margin:0 0 1em}.description br{display:revert}</style></head><body><article><p class=\"category\">Retail</p><h1>Synthetic title</h1><div class=\"description\"><p>Licence prose ai.market Standard Data Licence v1.0 [contact removed]</p></div><ul aria-label=\"Listing tags\"><li>one</li><li>two</li></ul><dl><div><dt>Price</dt><dd class=\"price\">$12.00</dd></div><div><dt>License</dt><dd>ai.market Standard Data Licence v1.1</dd></div></dl></article></body></html>",
+        "render_hash": "00946481fde3c239ebd3c0d3097679cb2f1de16c7574a45bf6ac0046032efbde",
+        "presentation_kind": "platform-license-correction-v1",
+        "listing_id": "00000000-0000-0000-0000-000000000013",
+        "publication_id": "00000000-0000-0000-0000-000000000014",
+        "listing_version_id": "00000000-0000-0000-0000-000000000015",
+        "approval_id": "00000000-0000-0000-0000-000000000016",
+        "original_render_hash": "98270430efd7cf9419706418e2ca05a7d1ed9d956d8c8db8b08fbb36b5392f02",
+        "original_admitted_render_hash": "46806fcef0f1e4007380f6366dfbf4b4ecb0b25adcc8b36e7a59cb4c75de4053",
+        "correction_id": "00000000-0000-0000-0000-000000000018",
+        "correction_digest": "4ffe842accdfa91c5d736d670bf443a1b0aaa0946c8b876a9c4786ccd72a4a3f",
+        "provenance": "platform_license_correction",
+        "license_label": "ai.market Standard Data Licence v1.1"
+      },
+      "frozen": {
+        "rendered_html": "<!doctype html><html lang=\"en\"><head><meta charset=\"utf-8\"><meta name=\"viewport\" content=\"width=device-width,initial-scale=1\"><meta http-equiv=\"Content-Security-Policy\" content=\"default-src 'none'; style-src 'unsafe-inline'; base-uri 'none'; form-action 'none'\"><title>Saved listing preview</title><style>html{color-scheme:light}body{margin:0;padding:24px;font:14px/1.7 system-ui,sans-serif;color:#374151;background:#fff}article{max-width:900px;margin:auto}h1{font-size:26px;line-height:1.3;color:#111827;margin:12px 0 20px}.category{color:#4338ca}.description{white-space:pre-wrap;overflow-wrap:anywhere}h1,dd,li{overflow-wrap:anywhere}ul{display:flex;flex-wrap:wrap;gap:8px;list-style:none;padding:0}li{max-width:100%;border-radius:20px;padding:4px 12px;background:#f3f4f6;font-size:12px}dl{border-top:1px solid #e5e7eb;padding-top:20px;display:grid;grid-template-columns:1fr 1fr;gap:20px}dt{font-size:12px;color:#6b7280}dd{margin:4px 0 0;color:#111827}.price{font-size:20px;font-weight:600}@media(max-width:420px){body{padding:16px}dl{grid-template-columns:1fr}}.description{white-space:normal}.description ul,.description ol{display:block;list-style:revert;padding-left:2em;margin:1em 0}.description li{display:list-item;max-width:none;border-radius:0;padding:0;background:transparent;font-size:inherit}.description h2,.description h3,.description h4{line-height:1.3;color:#111827;margin:1em 0 .5em}.description h2{font-size:22px}.description h3{font-size:19px}.description h4{font-size:16px}.description p{margin:0 0 1em}.description br{display:revert}</style></head><body><article><p class=\"category\">Retail</p><h1>Synthetic title</h1><div class=\"description\"><p>Licence prose ai.market Standard Data Licence v1.0 contact@example.invalid</p></div><ul aria-label=\"Listing tags\"><li>one</li><li>two</li></ul><dl><div><dt>Price</dt><dd class=\"price\">$12.00</dd></div><div><dt>License</dt><dd>ai.market Standard Data Licence v1.0</dd></div></dl></article></body></html>",
+        "render_hash": "98270430efd7cf9419706418e2ca05a7d1ed9d956d8c8db8b08fbb36b5392f02"
+      },
+      "fields": {
+        "title": "Synthetic title",
+        "description": "Licence prose ai.market Standard Data Licence v1.0 contact@example.invalid",
+        "category": "consumer-retail",
+        "license": "ai.market Standard Data Licence v1.0",
+        "tags": "one,two",
+        "price": "12.00"
+      },
+      "license_display": {
+        "license_label": "ai.market Standard Data Licence v1.1",
+        "provenance": "platform_license_correction",
+        "correction_id": "00000000-0000-0000-0000-000000000018",
+        "correction_digest": "4ffe842accdfa91c5d736d670bf443a1b0aaa0946c8b876a9c4786ccd72a4a3f"
+      },
+      "at_a_glance": {
+        "profile": "aim-listing-enrichment-profile-v2",
+        "license": {
+          "value": "ai.market Standard Data Licence v1.0",
+          "provenance": "seller_entered",
+          "authority": "publication_bound",
+          "source_reference": "Listing.license",
+          "source_revision": "98b519cf1abcbdf769f7fe1ae25e02329d83496d8b8261be4388b0d8819f76b8"
+        }
+      },
+      "jsonld": {
+        "@context": "https://schema.org",
+        "@type": "Dataset",
+        "publisher": {
+          "@type": "Organization",
+          "name": "ai.market",
+          "url": "https://ai.market"
+        },
+        "name": "Synthetic title",
+        "description": "Original seller prose",
+        "url": "https://ai.market/listings/synthetic",
+        "identifier": "00000000-0000-0000-0000-000000000013",
+        "license": {
+          "@type": "CreativeWork",
+          "name": "ai.market Standard Data Licence v1.1"
+        },
+        "isAccessibleForFree": false,
+        "creator": {
+          "@type": "Organization",
+          "name": "Anonymous seller",
+          "url": "https://ai.market"
+        },
+        "offers": {
+          "@type": "Offer",
+          "price": "12.00",
+          "priceCurrency": "USD",
+          "availability": "https://schema.org/InStock"
+        },
+        "additionalProperty": [
+          {
+            "@type": "PropertyValue",
+            "name": "license",
+            "value": "ai.market Standard Data Licence v1.1",
+            "description": "Platform-corrected licence display; original seller approval retained",
+            "propertyID": "4ffe842accdfa91c5d736d670bf443a1b0aaa0946c8b876a9c4786ccd72a4a3f"
+          },
+          {
+            "@type": "PropertyValue",
+            "name": "Licence display provenance",
+            "value": "Platform-corrected licence display; original seller approval retained",
+            "propertyID": "4ffe842accdfa91c5d736d670bf443a1b0aaa0946c8b876a9c4786ccd72a4a3f"
+          }
+        ],
+        "includedInDataCatalog": {
+          "@type": "DataCatalog",
+          "name": "ai.market",
+          "url": "https://ai.market"
+        },
+        "version": "historical",
+        "isBasedOn": "https://api.ai.market/api/v1/public/listings/synthetic/disclosure-snapshot",
+        "usageInfo": "AI-training crawlers allowed; seller notified at listing time."
+      }
+    }
+  ],
+  "purchased": [
+    {
+      "presentation_kind": "purchased-license-display-v1",
+      "order_id": "00000000-0000-0000-0000-000000000024",
+      "listing_id": "00000000-0000-0000-0000-000000000022",
+      "listing_version_id": "00000000-0000-0000-0000-000000000023",
+      "original_snapshot_hash": "aa45a975718b8840729c75655de5d5015c55c2ca4d76784c1968f6138ebb244d",
+      "original_license": {
+        "code": "standard",
+        "version": "1.0",
+        "params": {
+          "ai_training": false
+        },
+        "sha256": "e83e03bb731fee832d108ef77689f7ff49e3409f88124b483b2ef34ca7ba3821",
+        "covenant_sha256": "a91234b67bf7467a0c80f6e1caa47b563032e94751146901b796eaaf220431af",
+        "rider_sha256": null
+      },
+      "license_record_url": "/api/v1/orders/00000000-0000-0000-0000-000000000024/license-record",
+      "instrument_display": {
+        "acceptance_id": "00000000-0000-0000-0000-000000000025",
+        "license_code": "standard",
+        "license_version": "1.0",
+        "license_label": "ai.market Standard Data Licence v1.0",
+        "license_sha256": "e83e03bb731fee832d108ef77689f7ff49e3409f88124b483b2ef34ca7ba3821",
+        "covenant_sha256": "a91234b67bf7467a0c80f6e1caa47b563032e94751146901b796eaaf220431af",
+        "rider_sha256": null,
+        "provenance": "purchased_instrument",
+        "notice": "Purchased instrument display; original accepted evidence retained."
+      },
+      "retained_presentation": {
+        "publication_id": "00000000-0000-0000-0000-000000000026",
+        "approval_id": "00000000-0000-0000-0000-000000000027",
+        "provenance": "original_seller_evidence",
+        "presentation": {
+          "presentation_version": "seller-listing-review-v2",
+          "rendered_html": "<!doctype html><html lang=\"en\"><head><meta charset=\"utf-8\"><meta name=\"viewport\" content=\"width=device-width,initial-scale=1\"><meta http-equiv=\"Content-Security-Policy\" content=\"default-src 'none'; style-src 'unsafe-inline'; base-uri 'none'; form-action 'none'\"><title>Saved listing preview</title><style>html{color-scheme:light}body{margin:0;padding:24px;font:14px/1.7 system-ui,sans-serif;color:#374151;background:#fff}article{max-width:900px;margin:auto}h1{font-size:26px;line-height:1.3;color:#111827;margin:12px 0 20px}.category{color:#4338ca}.description{white-space:pre-wrap;overflow-wrap:anywhere}h1,dd,li{overflow-wrap:anywhere}ul{display:flex;flex-wrap:wrap;gap:8px;list-style:none;padding:0}li{max-width:100%;border-radius:20px;padding:4px 12px;background:#f3f4f6;font-size:12px}dl{border-top:1px solid #e5e7eb;padding-top:20px;display:grid;grid-template-columns:1fr 1fr;gap:20px}dt{font-size:12px;color:#6b7280}dd{margin:4px 0 0;color:#111827}.price{font-size:20px;font-weight:600}@media(max-width:420px){body{padding:16px}dl{grid-template-columns:1fr}}</style></head><body><article><p class=\"category\">consumer-retail</p><h1>Synthetic title</h1><p class=\"description\">Licence prose ai.market Standard Data Licence v1.0</p><ul aria-label=\"Listing tags\"><li>one</li><li>two</li></ul><dl><div><dt>Price</dt><dd class=\"price\">$12.00</dd></div><div><dt>License</dt><dd>ai.market Standard Data Licence v1.0</dd></div></dl></article></body></html>",
+          "render_hash": "03b5cd45212605965531c3c80b0354fdaebab939c80eb6c3bd66ca459d418afb"
+        },
+        "original_render_hash": "03b5cd45212605965531c3c80b0354fdaebab939c80eb6c3bd66ca459d418afb",
+        "notice": "Original seller evidence for the purchased version; not a checkout receipt."
+      }
+    },
+    {
+      "presentation_kind": "purchased-license-display-v1",
+      "order_id": "00000000-0000-0000-0000-00000000003a",
+      "listing_id": "00000000-0000-0000-0000-000000000038",
+      "listing_version_id": "00000000-0000-0000-0000-000000000039",
+      "original_snapshot_hash": "8e960ad0bc8c6e008de2a0a617cad1e18c9237611e946a76225729b00f3b4cc9",
+      "original_license": {
+        "code": "standard",
+        "version": "1.1",
+        "params": {
+          "ai_training": false
+        },
+        "sha256": "0bec503dac137e80fa405f47e9ecded8a424ca73f794f8eef54d01ff10d25317",
+        "covenant_sha256": "58eff1def7acb59db75920fe0da89a3f4f87bb12bd6765ec8eae231bbea118b5",
+        "rider_sha256": null
+      },
+      "license_record_url": "/api/v1/orders/00000000-0000-0000-0000-00000000003a/license-record",
+      "instrument_display": {
+        "acceptance_id": "00000000-0000-0000-0000-00000000003b",
+        "license_code": "standard",
+        "license_version": "1.1",
+        "license_label": "ai.market Standard Data Licence v1.1",
+        "license_sha256": "0bec503dac137e80fa405f47e9ecded8a424ca73f794f8eef54d01ff10d25317",
+        "covenant_sha256": "58eff1def7acb59db75920fe0da89a3f4f87bb12bd6765ec8eae231bbea118b5",
+        "rider_sha256": null,
+        "provenance": "purchased_instrument",
+        "notice": "Purchased instrument display; original accepted evidence retained."
+      },
+      "retained_presentation": {
+        "publication_id": "00000000-0000-0000-0000-00000000003c",
+        "approval_id": "00000000-0000-0000-0000-00000000003d",
+        "provenance": "original_seller_evidence",
+        "presentation": {
+          "presentation_version": "seller-listing-review-v3",
+          "rendered_html": "<!doctype html><html lang=\"en\"><head><meta charset=\"utf-8\"><meta name=\"viewport\" content=\"width=device-width,initial-scale=1\"><meta http-equiv=\"Content-Security-Policy\" content=\"default-src 'none'; style-src 'unsafe-inline'; base-uri 'none'; form-action 'none'\"><title>Saved listing preview</title><style>html{color-scheme:light}body{margin:0;padding:24px;font:14px/1.7 system-ui,sans-serif;color:#374151;background:#fff}article{max-width:900px;margin:auto}h1{font-size:26px;line-height:1.3;color:#111827;margin:12px 0 20px}.category{color:#4338ca}.description{white-space:pre-wrap;overflow-wrap:anywhere}h1,dd,li{overflow-wrap:anywhere}ul{display:flex;flex-wrap:wrap;gap:8px;list-style:none;padding:0}li{max-width:100%;border-radius:20px;padding:4px 12px;background:#f3f4f6;font-size:12px}dl{border-top:1px solid #e5e7eb;padding-top:20px;display:grid;grid-template-columns:1fr 1fr;gap:20px}dt{font-size:12px;color:#6b7280}dd{margin:4px 0 0;color:#111827}.price{font-size:20px;font-weight:600}@media(max-width:420px){body{padding:16px}dl{grid-template-columns:1fr}}.description{white-space:normal}.description ul,.description ol{display:block;list-style:revert;padding-left:2em;margin:1em 0}.description li{display:list-item;max-width:none;border-radius:0;padding:0;background:transparent;font-size:inherit}.description h2,.description h3,.description h4{line-height:1.3;color:#111827;margin:1em 0 .5em}.description h2{font-size:22px}.description h3{font-size:19px}.description h4{font-size:16px}.description p{margin:0 0 1em}.description br{display:revert}</style></head><body><article><p class=\"category\">consumer-retail</p><h1>Synthetic title</h1><div class=\"description\"><p>Licence prose ai.market Standard Data Licence v1.0</p></div><ul aria-label=\"Listing tags\"><li>one</li><li>two</li></ul><dl><div><dt>Price</dt><dd class=\"price\">$12.00</dd></div><div><dt>License</dt><dd>ai.market Standard Data Licence v1.0</dd></div></dl></article></body></html>",
+          "render_hash": "f6bc5eb8ea15562407e7fa8afb3dbdf3223ac70df19d35939f180248bda3e99b"
+        },
+        "original_render_hash": "f6bc5eb8ea15562407e7fa8afb3dbdf3223ac70df19d35939f180248bda3e99b",
+        "notice": "Original seller evidence for the purchased version; not a checkout receipt."
+      }
+    },
+    {
+      "presentation_kind": "purchased-license-display-v1",
+      "order_id": "00000000-0000-0000-0000-000000000050",
+      "listing_id": "00000000-0000-0000-0000-00000000004e",
+      "listing_version_id": "00000000-0000-0000-0000-00000000004f",
+      "original_snapshot_hash": "8e960ad0bc8c6e008de2a0a617cad1e18c9237611e946a76225729b00f3b4cc9",
+      "original_license": {
+        "code": "standard",
+        "version": "1.1",
+        "params": {
+          "ai_training": false
+        },
+        "sha256": "0bec503dac137e80fa405f47e9ecded8a424ca73f794f8eef54d01ff10d25317",
+        "covenant_sha256": "58eff1def7acb59db75920fe0da89a3f4f87bb12bd6765ec8eae231bbea118b5",
+        "rider_sha256": null
+      },
+      "license_record_url": "/api/v1/orders/00000000-0000-0000-0000-000000000050/license-record",
+      "instrument_display": {
+        "acceptance_id": "00000000-0000-0000-0000-000000000051",
+        "license_code": "standard",
+        "license_version": "1.1",
+        "license_label": "ai.market Standard Data Licence v1.1",
+        "license_sha256": "0bec503dac137e80fa405f47e9ecded8a424ca73f794f8eef54d01ff10d25317",
+        "covenant_sha256": "58eff1def7acb59db75920fe0da89a3f4f87bb12bd6765ec8eae231bbea118b5",
+        "rider_sha256": null,
+        "provenance": "purchased_instrument",
+        "notice": "Purchased instrument display; original accepted evidence retained."
+      },
+      "retained_presentation": {
+        "publication_id": "00000000-0000-0000-0000-000000000052",
+        "approval_id": "00000000-0000-0000-0000-000000000053",
+        "provenance": "original_seller_evidence",
+        "presentation": {
+          "presentation_version": "seller-listing-review-v4",
+          "rendered_html": "<!doctype html><html lang=\"en\"><head><meta charset=\"utf-8\"><meta name=\"viewport\" content=\"width=device-width,initial-scale=1\"><meta http-equiv=\"Content-Security-Policy\" content=\"default-src 'none'; style-src 'unsafe-inline'; base-uri 'none'; form-action 'none'\"><title>Saved listing preview</title><style>html{color-scheme:light}body{margin:0;padding:24px;font:14px/1.7 system-ui,sans-serif;color:#374151;background:#fff}article{max-width:900px;margin:auto}h1{font-size:26px;line-height:1.3;color:#111827;margin:12px 0 20px}.category{color:#4338ca}.description{white-space:pre-wrap;overflow-wrap:anywhere}h1,dd,li{overflow-wrap:anywhere}ul{display:flex;flex-wrap:wrap;gap:8px;list-style:none;padding:0}li{max-width:100%;border-radius:20px;padding:4px 12px;background:#f3f4f6;font-size:12px}dl{border-top:1px solid #e5e7eb;padding-top:20px;display:grid;grid-template-columns:1fr 1fr;gap:20px}dt{font-size:12px;color:#6b7280}dd{margin:4px 0 0;color:#111827}.price{font-size:20px;font-weight:600}@media(max-width:420px){body{padding:16px}dl{grid-template-columns:1fr}}.description{white-space:normal}.description ul,.description ol{display:block;list-style:revert;padding-left:2em;margin:1em 0}.description li{display:list-item;max-width:none;border-radius:0;padding:0;background:transparent;font-size:inherit}.description h2,.description h3,.description h4{line-height:1.3;color:#111827;margin:1em 0 .5em}.description h2{font-size:22px}.description h3{font-size:19px}.description h4{font-size:16px}.description p{margin:0 0 1em}.description br{display:revert}</style></head><body><article><p class=\"category\">Retail</p><h1>Synthetic title</h1><div class=\"description\"><p>Licence prose ai.market Standard Data Licence v1.0</p></div><ul aria-label=\"Listing tags\"><li>one</li><li>two</li></ul><dl><div><dt>Price</dt><dd class=\"price\">$12.00</dd></div><div><dt>License</dt><dd>ai.market Standard Data Licence v1.0</dd></div></dl></article></body></html>",
+          "render_hash": "ecf73581ba2508c4dc99fedd9a8496bbb17955c215d1c67735f33a81538cf95a"
+        },
+        "original_render_hash": "ecf73581ba2508c4dc99fedd9a8496bbb17955c215d1c67735f33a81538cf95a",
+        "notice": "Original seller evidence for the purchased version; not a checkout receipt."
+      }
+    }
+  ]
+}

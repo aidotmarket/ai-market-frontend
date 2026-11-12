@@ -1,4 +1,6 @@
 // @vitest-environment jsdom
+// Purchased evidence is exercised through its real component/transport suite.
+vi.mock('@/components/orders/PurchasedLicenseDisplay', () => ({default: () => <div data-purchased-evidence /> }));
 
 import { StrictMode, type ReactNode } from 'react';
 import type { Transaction } from '@/types';

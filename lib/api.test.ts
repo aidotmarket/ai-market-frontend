@@ -115,3 +115,15 @@ describe('narrow homepage mutable projection reads', () => {
     expect(fetchMock).toHaveBeenNthCalledWith(4, expect.stringContaining('/public/share/ordinary'), {cache: 'no-store'});
   });
 });
+
+it('validates actual correction bytes and adjacent identity before detail and metadata consumers receive them',async()=>{
+ const {default:wire}=await import('@/tests/fixtures/s1922-backend-wire.json');
+ const c=wire.public[2].corrected;
+ const listing={id:c.listing_id,approved_presentation:c,license:c.license_label,license_display:{license_label:c.license_label,provenance:c.provenance,correction_id:c.correction_id,correction_digest:c.correction_digest}};
+ const fetchMock=vi.fn().mockResolvedValue({ok:true,json:async()=>listing});vi.stubGlobal('fetch',fetchMock);
+ expect(await fetchPublicListing('synthetic')).toEqual(listing);
+ expect(fetchMock).toHaveBeenLastCalledWith(expect.stringContaining('/public/listings/synthetic'),{cache:'no-store'});
+ fetchMock.mockResolvedValue({ok:true,json:async()=>({...listing,approved_presentation:{...c,rendered_html:'tampered'}})});
+ await expect(fetchPublicListing('synthetic')).rejects.toThrow();
+ vi.unstubAllGlobals();
+});

@@ -1,0 +1,2020 @@
+{
+  "backend_head": "19ff184444425979a861f4f75152fac1f959f9c2",
+  "source_sha256": {
+    "app/services/seller_listing_review.py": "99328e147fe2fd69eb94ad1bd280545977bfa349558a6a166e5dbb1cb4b94fa7",
+    "app/api/v1/endpoints/seller_listing_review.py": "26bd8c1076aed2456a96f2ee1f769a6a893b6e1a44144e308c575b5b162600a7",
+    "app/services/seller_listing_review_pages.py": "716618dd14d5c95e2f086a6386377f0eda6ce7d4cd17afbd3bc94c92d1fb59c5",
+    "app/schemas/seller_listing_approval.py": "a8eae0ad45b23acf1a89483f33b8695a60005f67390b1a2825c99e1929ca9964",
+    "app/services/seller_listing_confirmations.py": "290fddbdff50f8f74aa3b7250cc798cbd5396cafe778d02aa9b2b70582a7d73c",
+    "app/services/seller_listing_render.py": "7f2bb5da40208e3c6999e66257ad2bbbc81e015e49647b964c76a0105cecf784"
+  },
+  "fixtures": [
+    {
+      "name": "v2-fresh-licenses-False",
+      "legacy_binding": false,
+      "review": {
+        "fields": {
+          "title": "Synthetic saved offer",
+          "description": "Original seller description",
+          "category": "consumer-retail",
+          "tags": "synthetic,retail",
+          "price": "25.00",
+          "license": "Research"
+        },
+        "draft_id": "00000000-0000-0000-0000-000000000386",
+        "listing_id": null,
+        "base_listing_version_id": null,
+        "draft_version": 3,
+        "source_version": 2,
+        "source_hash": "eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee",
+        "presentation_version": "seller-listing-review-v2",
+        "review_hash": "b0096634721bd9118e9db98335361a3d65e3a688cf3a5242d4dff50a33bdcc4e",
+        "missing_fields": [],
+        "approval_available": true,
+        "sample_status": "not_selected",
+        "confirmation_version": "seller-listing-confirmation-v1",
+        "confirmation_statements": {
+          "ownership_confirmed": "I have the rights needed to sell the selected data.",
+          "privacy_confirmed": "I have reviewed the selected data and am authorized to make it available under this listing.",
+          "public_disclosure_confirmed": "When I publish, the listing fields and my sample choice become public on ai.market. They may be shared with search engines, AI assistants, HuggingFace and other AI discovery systems, and may be used by AI-training crawlers.",
+          "price_license_confirmed": "I confirm the price and license shown in this review."
+        },
+        "rendered_html": "<!doctype html><html lang=\"en\"><head><meta charset=\"utf-8\"><meta name=\"viewport\" content=\"width=device-width,initial-scale=1\"><meta http-equiv=\"Content-Security-Policy\" content=\"default-src 'none'; style-src 'unsafe-inline'; base-uri 'none'; form-action 'none'\"><title>Saved listing preview</title><style>html{color-scheme:light}body{margin:0;padding:24px;font:14px/1.7 system-ui,sans-serif;color:#374151;background:#fff}article{max-width:900px;margin:auto}h1{font-size:26px;line-height:1.3;color:#111827;margin:12px 0 20px}.category{color:#4338ca}.description{white-space:pre-wrap;overflow-wrap:anywhere}h1,dd,li{overflow-wrap:anywhere}ul{display:flex;flex-wrap:wrap;gap:8px;list-style:none;padding:0}li{max-width:100%;border-radius:20px;padding:4px 12px;background:#f3f4f6;font-size:12px}dl{border-top:1px solid #e5e7eb;padding-top:20px;display:grid;grid-template-columns:1fr 1fr;gap:20px}dt{font-size:12px;color:#6b7280}dd{margin:4px 0 0;color:#111827}.price{font-size:20px;font-weight:600}@media(max-width:420px){body{padding:16px}dl{grid-template-columns:1fr}}</style></head><body><article><p class=\"category\">consumer-retail</p><h1>Synthetic saved offer</h1><p class=\"description\">Original seller description</p><ul aria-label=\"Listing tags\"><li>synthetic</li><li>retail</li></ul><dl><div><dt>Price</dt><dd class=\"price\">$25.00</dd></div><div><dt>License</dt><dd>Research</dd></div></dl></article></body></html>",
+        "render_hash": "291c62d01a55ea8a4affe4339de3c59001e2a70e8874755f3134d22e98f2a09f",
+        "approval": {
+          "id": "00000000-0000-0000-0000-00000000038a",
+          "review_hash": "b0096634721bd9118e9db98335361a3d65e3a688cf3a5242d4dff50a33bdcc4e",
+          "render_hash": "291c62d01a55ea8a4affe4339de3c59001e2a70e8874755f3134d22e98f2a09f",
+          "draft_version": 3,
+          "source_version": 2,
+          "approved_at": "2026-11-10T00:00:00Z",
+          "sample_decision": "none"
+        },
+        "source_page": {
+          "review_hash": "b0096634721bd9118e9db98335361a3d65e3a688cf3a5242d4dff50a33bdcc4e",
+          "source_version": 2,
+          "source_hash": "eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee",
+          "offset": 0,
+          "page_size": 2,
+          "total_count": 3,
+          "total_size_bytes": 126,
+          "files": [
+            {
+              "key": "synthetic/source-0.csv",
+              "size": 42,
+              "etag": "synthetic-0",
+              "version_id": null
+            },
+            {
+              "key": "synthetic/source-1.csv",
+              "size": 42,
+              "etag": "synthetic-1",
+              "version_id": null
+            }
+          ],
+          "next_cursor": "WyJiMDA5NjYzNDcyMWJkOTExOGU5ZGI5ODMzNTM2MWEzZDY1ZTNhNjg4Y2YzYTUyNDJkNGRmZjUwYTMzYmRjYzRlIiwyLCJlZWVlZWVlZWVlZWVlZWVlZWVlZWVlZWVlZWVlZWVlZWVlZWVlZWVlZWVlZWVlZWVlZWVlZWVlZWVlZWVlZWVlIiwyLDJd"
+        }
+      },
+      "next_page": {
+        "review_hash": "b0096634721bd9118e9db98335361a3d65e3a688cf3a5242d4dff50a33bdcc4e",
+        "source_version": 2,
+        "source_hash": "eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee",
+        "offset": 2,
+        "page_size": 2,
+        "total_count": 3,
+        "total_size_bytes": 126,
+        "files": [
+          {
+            "key": "synthetic/source-2.csv",
+            "size": 42,
+            "etag": "synthetic-2",
+            "version_id": null
+          }
+        ],
+        "next_cursor": null
+      }
+    },
+    {
+      "name": "v2-bound-licenses-False",
+      "legacy_binding": false,
+      "review": {
+        "fields": {
+          "title": "Synthetic saved offer",
+          "description": "Original seller description",
+          "category": "consumer-retail",
+          "tags": "synthetic,retail",
+          "price": "25.00",
+          "license": "ai.market Standard Data Licence v1.0"
+        },
+        "draft_id": "00000000-0000-0000-0000-000000000386",
+        "listing_id": "00000000-0000-0000-0000-000000000388",
+        "base_listing_version_id": "00000000-0000-0000-0000-000000000389",
+        "draft_version": 3,
+        "source_version": 2,
+        "source_hash": "eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee",
+        "presentation_version": "seller-listing-review-v2",
+        "review_hash": "432095b4d3466301df6286b7613dcae90496925cb7d1704471010650c3de2f97",
+        "missing_fields": [],
+        "approval_available": true,
+        "sample_status": "not_selected",
+        "confirmation_version": "seller-listing-confirmation-v1",
+        "confirmation_statements": {
+          "ownership_confirmed": "I have the rights needed to sell the selected data.",
+          "privacy_confirmed": "I have reviewed the selected data and am authorized to make it available under this listing.",
+          "public_disclosure_confirmed": "When I publish, the listing fields and my sample choice become public on ai.market. They may be shared with search engines, AI assistants, HuggingFace and other AI discovery systems, and may be used by AI-training crawlers.",
+          "price_license_confirmed": "I confirm the price and license shown in this review."
+        },
+        "rendered_html": "<!doctype html><html lang=\"en\"><head><meta charset=\"utf-8\"><meta name=\"viewport\" content=\"width=device-width,initial-scale=1\"><meta http-equiv=\"Content-Security-Policy\" content=\"default-src 'none'; style-src 'unsafe-inline'; base-uri 'none'; form-action 'none'\"><title>Saved listing preview</title><style>html{color-scheme:light}body{margin:0;padding:24px;font:14px/1.7 system-ui,sans-serif;color:#374151;background:#fff}article{max-width:900px;margin:auto}h1{font-size:26px;line-height:1.3;color:#111827;margin:12px 0 20px}.category{color:#4338ca}.description{white-space:pre-wrap;overflow-wrap:anywhere}h1,dd,li{overflow-wrap:anywhere}ul{display:flex;flex-wrap:wrap;gap:8px;list-style:none;padding:0}li{max-width:100%;border-radius:20px;padding:4px 12px;background:#f3f4f6;font-size:12px}dl{border-top:1px solid #e5e7eb;padding-top:20px;display:grid;grid-template-columns:1fr 1fr;gap:20px}dt{font-size:12px;color:#6b7280}dd{margin:4px 0 0;color:#111827}.price{font-size:20px;font-weight:600}@media(max-width:420px){body{padding:16px}dl{grid-template-columns:1fr}}</style></head><body><article><p class=\"category\">consumer-retail</p><h1>Synthetic saved offer</h1><p class=\"description\">Original seller description</p><ul aria-label=\"Listing tags\"><li>synthetic</li><li>retail</li></ul><dl><div><dt>Price</dt><dd class=\"price\">$25.00</dd></div><div><dt>License</dt><dd>ai.market Standard Data Licence v1.0</dd></div></dl></article></body></html>",
+        "render_hash": "4edc882dc7b74d3e0fbf94024f4e7da46785aaad47b493b7db545a1bd0bdfe44",
+        "approval": {
+          "id": "00000000-0000-0000-0000-00000000038a",
+          "review_hash": "432095b4d3466301df6286b7613dcae90496925cb7d1704471010650c3de2f97",
+          "render_hash": "4edc882dc7b74d3e0fbf94024f4e7da46785aaad47b493b7db545a1bd0bdfe44",
+          "draft_version": 3,
+          "source_version": 2,
+          "approved_at": "2026-11-10T00:00:00Z",
+          "sample_decision": "none"
+        },
+        "source_page": {
+          "review_hash": "432095b4d3466301df6286b7613dcae90496925cb7d1704471010650c3de2f97",
+          "source_version": 2,
+          "source_hash": "eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee",
+          "offset": 0,
+          "page_size": 2,
+          "total_count": 3,
+          "total_size_bytes": 126,
+          "files": [
+            {
+              "key": "synthetic/source-0.csv",
+              "size": 42,
+              "etag": "synthetic-0",
+              "version_id": null
+            },
+            {
+              "key": "synthetic/source-1.csv",
+              "size": 42,
+              "etag": "synthetic-1",
+              "version_id": null
+            }
+          ],
+          "next_cursor": "WyI0MzIwOTViNGQzNDY2MzAxZGY2Mjg2Yjc2MTNkY2FlOTA0OTY5MjVjYjdkMTcwNDQ3MTAxMDY1MGMzZGUyZjk3IiwyLCJlZWVlZWVlZWVlZWVlZWVlZWVlZWVlZWVlZWVlZWVlZWVlZWVlZWVlZWVlZWVlZWVlZWVlZWVlZWVlZWVlZWVlIiwyLDJd"
+        }
+      },
+      "next_page": {
+        "review_hash": "432095b4d3466301df6286b7613dcae90496925cb7d1704471010650c3de2f97",
+        "source_version": 2,
+        "source_hash": "eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee",
+        "offset": 2,
+        "page_size": 2,
+        "total_count": 3,
+        "total_size_bytes": 126,
+        "files": [
+          {
+            "key": "synthetic/source-2.csv",
+            "size": 42,
+            "etag": "synthetic-2",
+            "version_id": null
+          }
+        ],
+        "next_cursor": null
+      }
+    },
+    {
+      "name": "v2-legacy-licenses-False",
+      "legacy_binding": true,
+      "review": {
+        "fields": {
+          "title": "Synthetic saved offer",
+          "description": "Original seller description",
+          "category": "consumer-retail",
+          "tags": "synthetic,retail",
+          "price": "25.00",
+          "license": "Research"
+        },
+        "draft_id": "00000000-0000-0000-0000-000000000386",
+        "listing_id": null,
+        "base_listing_version_id": null,
+        "draft_version": 3,
+        "source_version": 2,
+        "source_hash": "eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee",
+        "presentation_version": "seller-listing-review-v2",
+        "review_hash": "15adce712d805f6b86a0c54012973bb7d18c1f518dd3cc428beca018d3931d8c",
+        "missing_fields": [],
+        "approval_available": true,
+        "sample_status": "not_selected",
+        "confirmation_version": "seller-listing-confirmation-v1",
+        "confirmation_statements": {
+          "ownership_confirmed": "I have the rights needed to sell the selected data.",
+          "privacy_confirmed": "I have reviewed the selected data and am authorized to make it available under this listing.",
+          "public_disclosure_confirmed": "When I publish, the listing fields and my sample choice become public on ai.market. They may be shared with search engines, AI assistants, HuggingFace and other AI discovery systems, and may be used by AI-training crawlers.",
+          "price_license_confirmed": "I confirm the price and license shown in this review."
+        },
+        "rendered_html": "<!doctype html><html lang=\"en\"><head><meta charset=\"utf-8\"><meta name=\"viewport\" content=\"width=device-width,initial-scale=1\"><meta http-equiv=\"Content-Security-Policy\" content=\"default-src 'none'; style-src 'unsafe-inline'; base-uri 'none'; form-action 'none'\"><title>Saved listing preview</title><style>html{color-scheme:light}body{margin:0;padding:24px;font:14px/1.7 system-ui,sans-serif;color:#374151;background:#fff}article{max-width:900px;margin:auto}h1{font-size:26px;line-height:1.3;color:#111827;margin:12px 0 20px}.category{color:#4338ca}.description{white-space:pre-wrap;overflow-wrap:anywhere}h1,dd,li{overflow-wrap:anywhere}ul{display:flex;flex-wrap:wrap;gap:8px;list-style:none;padding:0}li{max-width:100%;border-radius:20px;padding:4px 12px;background:#f3f4f6;font-size:12px}dl{border-top:1px solid #e5e7eb;padding-top:20px;display:grid;grid-template-columns:1fr 1fr;gap:20px}dt{font-size:12px;color:#6b7280}dd{margin:4px 0 0;color:#111827}.price{font-size:20px;font-weight:600}@media(max-width:420px){body{padding:16px}dl{grid-template-columns:1fr}}</style></head><body><article><p class=\"category\">consumer-retail</p><h1>Synthetic saved offer</h1><p class=\"description\">Original seller description</p><ul aria-label=\"Listing tags\"><li>synthetic</li><li>retail</li></ul><dl><div><dt>Price</dt><dd class=\"price\">$25.00</dd></div><div><dt>License</dt><dd>Research</dd></div></dl></article></body></html>",
+        "render_hash": "291c62d01a55ea8a4affe4339de3c59001e2a70e8874755f3134d22e98f2a09f",
+        "approval": {
+          "id": "00000000-0000-0000-0000-00000000038a",
+          "review_hash": "15adce712d805f6b86a0c54012973bb7d18c1f518dd3cc428beca018d3931d8c",
+          "render_hash": "291c62d01a55ea8a4affe4339de3c59001e2a70e8874755f3134d22e98f2a09f",
+          "draft_version": 3,
+          "source_version": 2,
+          "approved_at": "2026-11-10T00:00:00Z",
+          "sample_decision": "none"
+        },
+        "source_page": {
+          "review_hash": "15adce712d805f6b86a0c54012973bb7d18c1f518dd3cc428beca018d3931d8c",
+          "source_version": 2,
+          "source_hash": "eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee",
+          "offset": 0,
+          "page_size": 2,
+          "total_count": 3,
+          "total_size_bytes": 126,
+          "files": [
+            {
+              "key": "synthetic/source-0.csv",
+              "size": 42,
+              "etag": "synthetic-0",
+              "version_id": null
+            },
+            {
+              "key": "synthetic/source-1.csv",
+              "size": 42,
+              "etag": "synthetic-1",
+              "version_id": null
+            }
+          ],
+          "next_cursor": "WyIxNWFkY2U3MTJkODA1ZjZiODZhMGM1NDAxMjk3M2JiN2QxOGMxZjUxOGRkM2NjNDI4YmVjYTAxOGQzOTMxZDhjIiwyLCJlZWVlZWVlZWVlZWVlZWVlZWVlZWVlZWVlZWVlZWVlZWVlZWVlZWVlZWVlZWVlZWVlZWVlZWVlZWVlZWVlZWVlIiwyLDJd"
+        }
+      },
+      "next_page": {
+        "review_hash": "15adce712d805f6b86a0c54012973bb7d18c1f518dd3cc428beca018d3931d8c",
+        "source_version": 2,
+        "source_hash": "eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee",
+        "offset": 2,
+        "page_size": 2,
+        "total_count": 3,
+        "total_size_bytes": 126,
+        "files": [
+          {
+            "key": "synthetic/source-2.csv",
+            "size": 42,
+            "etag": "synthetic-2",
+            "version_id": null
+          }
+        ],
+        "next_cursor": null
+      }
+    },
+    {
+      "name": "v3-fresh-licenses-False",
+      "legacy_binding": false,
+      "review": {
+        "fields": {
+          "title": "Synthetic saved offer",
+          "description": "Original seller description",
+          "category": "consumer-retail",
+          "tags": "synthetic,retail",
+          "price": "25.00",
+          "license": "Research"
+        },
+        "draft_id": "00000000-0000-0000-0000-000000000386",
+        "listing_id": null,
+        "base_listing_version_id": null,
+        "draft_version": 3,
+        "source_version": 2,
+        "source_hash": "eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee",
+        "presentation_version": "seller-listing-review-v3",
+        "review_hash": "e193042e11ce756ff0030d3ccd9ea5eeb0bbd67f461fe7908dc51395f2844787",
+        "missing_fields": [],
+        "approval_available": true,
+        "sample_status": "not_selected",
+        "confirmation_version": "seller-listing-confirmation-v1",
+        "confirmation_statements": {
+          "ownership_confirmed": "I have the rights needed to sell the selected data.",
+          "privacy_confirmed": "I have reviewed the selected data and am authorized to make it available under this listing.",
+          "public_disclosure_confirmed": "When I publish, the listing fields and my sample choice become public on ai.market. They may be shared with search engines, AI assistants, HuggingFace and other AI discovery systems, and may be used by AI-training crawlers.",
+          "price_license_confirmed": "I confirm the price and license shown in this review."
+        },
+        "rendered_html": "<!doctype html><html lang=\"en\"><head><meta charset=\"utf-8\"><meta name=\"viewport\" content=\"width=device-width,initial-scale=1\"><meta http-equiv=\"Content-Security-Policy\" content=\"default-src 'none'; style-src 'unsafe-inline'; base-uri 'none'; form-action 'none'\"><title>Saved listing preview</title><style>html{color-scheme:light}body{margin:0;padding:24px;font:14px/1.7 system-ui,sans-serif;color:#374151;background:#fff}article{max-width:900px;margin:auto}h1{font-size:26px;line-height:1.3;color:#111827;margin:12px 0 20px}.category{color:#4338ca}.description{white-space:pre-wrap;overflow-wrap:anywhere}h1,dd,li{overflow-wrap:anywhere}ul{display:flex;flex-wrap:wrap;gap:8px;list-style:none;padding:0}li{max-width:100%;border-radius:20px;padding:4px 12px;background:#f3f4f6;font-size:12px}dl{border-top:1px solid #e5e7eb;padding-top:20px;display:grid;grid-template-columns:1fr 1fr;gap:20px}dt{font-size:12px;color:#6b7280}dd{margin:4px 0 0;color:#111827}.price{font-size:20px;font-weight:600}@media(max-width:420px){body{padding:16px}dl{grid-template-columns:1fr}}.description{white-space:normal}.description ul,.description ol{display:block;list-style:revert;padding-left:2em;margin:1em 0}.description li{display:list-item;max-width:none;border-radius:0;padding:0;background:transparent;font-size:inherit}.description h2,.description h3,.description h4{line-height:1.3;color:#111827;margin:1em 0 .5em}.description h2{font-size:22px}.description h3{font-size:19px}.description h4{font-size:16px}.description p{margin:0 0 1em}.description br{display:revert}</style></head><body><article><p class=\"category\">consumer-retail</p><h1>Synthetic saved offer</h1><div class=\"description\"><p>Original seller description</p></div><ul aria-label=\"Listing tags\"><li>synthetic</li><li>retail</li></ul><dl><div><dt>Price</dt><dd class=\"price\">$25.00</dd></div><div><dt>License</dt><dd>Research</dd></div></dl></article></body></html>",
+        "render_hash": "324a584946b430edae34ba377f4ac10432cba8baa1a9d8b8a18e40a642fbb96f",
+        "approval": {
+          "id": "00000000-0000-0000-0000-00000000038a",
+          "review_hash": "e193042e11ce756ff0030d3ccd9ea5eeb0bbd67f461fe7908dc51395f2844787",
+          "render_hash": "324a584946b430edae34ba377f4ac10432cba8baa1a9d8b8a18e40a642fbb96f",
+          "draft_version": 3,
+          "source_version": 2,
+          "approved_at": "2026-11-10T00:00:00Z",
+          "sample_decision": "none"
+        },
+        "source_page": {
+          "review_hash": "e193042e11ce756ff0030d3ccd9ea5eeb0bbd67f461fe7908dc51395f2844787",
+          "source_version": 2,
+          "source_hash": "eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee",
+          "offset": 0,
+          "page_size": 2,
+          "total_count": 3,
+          "total_size_bytes": 126,
+          "files": [
+            {
+              "key": "synthetic/source-0.csv",
+              "size": 42,
+              "etag": "synthetic-0",
+              "version_id": null
+            },
+            {
+              "key": "synthetic/source-1.csv",
+              "size": 42,
+              "etag": "synthetic-1",
+              "version_id": null
+            }
+          ],
+          "next_cursor": "WyJlMTkzMDQyZTExY2U3NTZmZjAwMzBkM2NjZDllYTVlZWIwYmJkNjdmNDYxZmU3OTA4ZGM1MTM5NWYyODQ0Nzg3IiwyLCJlZWVlZWVlZWVlZWVlZWVlZWVlZWVlZWVlZWVlZWVlZWVlZWVlZWVlZWVlZWVlZWVlZWVlZWVlZWVlZWVlZWVlIiwyLDJd"
+        }
+      },
+      "next_page": {
+        "review_hash": "e193042e11ce756ff0030d3ccd9ea5eeb0bbd67f461fe7908dc51395f2844787",
+        "source_version": 2,
+        "source_hash": "eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee",
+        "offset": 2,
+        "page_size": 2,
+        "total_count": 3,
+        "total_size_bytes": 126,
+        "files": [
+          {
+            "key": "synthetic/source-2.csv",
+            "size": 42,
+            "etag": "synthetic-2",
+            "version_id": null
+          }
+        ],
+        "next_cursor": null
+      }
+    },
+    {
+      "name": "v3-bound-licenses-False",
+      "legacy_binding": false,
+      "review": {
+        "fields": {
+          "title": "Synthetic saved offer",
+          "description": "Original seller description",
+          "category": "consumer-retail",
+          "tags": "synthetic,retail",
+          "price": "25.00",
+          "license": "ai.market Standard Data Licence v1.0"
+        },
+        "draft_id": "00000000-0000-0000-0000-000000000386",
+        "listing_id": "00000000-0000-0000-0000-000000000388",
+        "base_listing_version_id": "00000000-0000-0000-0000-000000000389",
+        "draft_version": 3,
+        "source_version": 2,
+        "source_hash": "eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee",
+        "presentation_version": "seller-listing-review-v3",
+        "review_hash": "b6f62365dbe48b2864171ff1c823c7fb9ce57885fa055f4419534a9152705d50",
+        "missing_fields": [],
+        "approval_available": true,
+        "sample_status": "not_selected",
+        "confirmation_version": "seller-listing-confirmation-v1",
+        "confirmation_statements": {
+          "ownership_confirmed": "I have the rights needed to sell the selected data.",
+          "privacy_confirmed": "I have reviewed the selected data and am authorized to make it available under this listing.",
+          "public_disclosure_confirmed": "When I publish, the listing fields and my sample choice become public on ai.market. They may be shared with search engines, AI assistants, HuggingFace and other AI discovery systems, and may be used by AI-training crawlers.",
+          "price_license_confirmed": "I confirm the price and license shown in this review."
+        },
+        "rendered_html": "<!doctype html><html lang=\"en\"><head><meta charset=\"utf-8\"><meta name=\"viewport\" content=\"width=device-width,initial-scale=1\"><meta http-equiv=\"Content-Security-Policy\" content=\"default-src 'none'; style-src 'unsafe-inline'; base-uri 'none'; form-action 'none'\"><title>Saved listing preview</title><style>html{color-scheme:light}body{margin:0;padding:24px;font:14px/1.7 system-ui,sans-serif;color:#374151;background:#fff}article{max-width:900px;margin:auto}h1{font-size:26px;line-height:1.3;color:#111827;margin:12px 0 20px}.category{color:#4338ca}.description{white-space:pre-wrap;overflow-wrap:anywhere}h1,dd,li{overflow-wrap:anywhere}ul{display:flex;flex-wrap:wrap;gap:8px;list-style:none;padding:0}li{max-width:100%;border-radius:20px;padding:4px 12px;background:#f3f4f6;font-size:12px}dl{border-top:1px solid #e5e7eb;padding-top:20px;display:grid;grid-template-columns:1fr 1fr;gap:20px}dt{font-size:12px;color:#6b7280}dd{margin:4px 0 0;color:#111827}.price{font-size:20px;font-weight:600}@media(max-width:420px){body{padding:16px}dl{grid-template-columns:1fr}}.description{white-space:normal}.description ul,.description ol{display:block;list-style:revert;padding-left:2em;margin:1em 0}.description li{display:list-item;max-width:none;border-radius:0;padding:0;background:transparent;font-size:inherit}.description h2,.description h3,.description h4{line-height:1.3;color:#111827;margin:1em 0 .5em}.description h2{font-size:22px}.description h3{font-size:19px}.description h4{font-size:16px}.description p{margin:0 0 1em}.description br{display:revert}</style></head><body><article><p class=\"category\">consumer-retail</p><h1>Synthetic saved offer</h1><div class=\"description\"><p>Original seller description</p></div><ul aria-label=\"Listing tags\"><li>synthetic</li><li>retail</li></ul><dl><div><dt>Price</dt><dd class=\"price\">$25.00</dd></div><div><dt>License</dt><dd>ai.market Standard Data Licence v1.0</dd></div></dl></article></body></html>",
+        "render_hash": "9f5b6b123c4705669b5a4bebc36a2a6bb6ccc144ed42fa1252477a9b64aa0516",
+        "approval": {
+          "id": "00000000-0000-0000-0000-00000000038a",
+          "review_hash": "b6f62365dbe48b2864171ff1c823c7fb9ce57885fa055f4419534a9152705d50",
+          "render_hash": "9f5b6b123c4705669b5a4bebc36a2a6bb6ccc144ed42fa1252477a9b64aa0516",
+          "draft_version": 3,
+          "source_version": 2,
+          "approved_at": "2026-11-10T00:00:00Z",
+          "sample_decision": "none"
+        },
+        "source_page": {
+          "review_hash": "b6f62365dbe48b2864171ff1c823c7fb9ce57885fa055f4419534a9152705d50",
+          "source_version": 2,
+          "source_hash": "eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee",
+          "offset": 0,
+          "page_size": 2,
+          "total_count": 3,
+          "total_size_bytes": 126,
+          "files": [
+            {
+              "key": "synthetic/source-0.csv",
+              "size": 42,
+              "etag": "synthetic-0",
+              "version_id": null
+            },
+            {
+              "key": "synthetic/source-1.csv",
+              "size": 42,
+              "etag": "synthetic-1",
+              "version_id": null
+            }
+          ],
+          "next_cursor": "WyJiNmY2MjM2NWRiZTQ4YjI4NjQxNzFmZjFjODIzYzdmYjljZTU3ODg1ZmEwNTVmNDQxOTUzNGE5MTUyNzA1ZDUwIiwyLCJlZWVlZWVlZWVlZWVlZWVlZWVlZWVlZWVlZWVlZWVlZWVlZWVlZWVlZWVlZWVlZWVlZWVlZWVlZWVlZWVlZWVlIiwyLDJd"
+        }
+      },
+      "next_page": {
+        "review_hash": "b6f62365dbe48b2864171ff1c823c7fb9ce57885fa055f4419534a9152705d50",
+        "source_version": 2,
+        "source_hash": "eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee",
+        "offset": 2,
+        "page_size": 2,
+        "total_count": 3,
+        "total_size_bytes": 126,
+        "files": [
+          {
+            "key": "synthetic/source-2.csv",
+            "size": 42,
+            "etag": "synthetic-2",
+            "version_id": null
+          }
+        ],
+        "next_cursor": null
+      }
+    },
+    {
+      "name": "v3-legacy-licenses-False",
+      "legacy_binding": true,
+      "review": {
+        "fields": {
+          "title": "Synthetic saved offer",
+          "description": "Original seller description",
+          "category": "consumer-retail",
+          "tags": "synthetic,retail",
+          "price": "25.00",
+          "license": "Research"
+        },
+        "draft_id": "00000000-0000-0000-0000-000000000386",
+        "listing_id": null,
+        "base_listing_version_id": null,
+        "draft_version": 3,
+        "source_version": 2,
+        "source_hash": "eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee",
+        "presentation_version": "seller-listing-review-v3",
+        "review_hash": "0901d2388392b5d17cf689d47b5d9415e7f875fb19964e9c12a753ddde19cf9c",
+        "missing_fields": [],
+        "approval_available": true,
+        "sample_status": "not_selected",
+        "confirmation_version": "seller-listing-confirmation-v1",
+        "confirmation_statements": {
+          "ownership_confirmed": "I have the rights needed to sell the selected data.",
+          "privacy_confirmed": "I have reviewed the selected data and am authorized to make it available under this listing.",
+          "public_disclosure_confirmed": "When I publish, the listing fields and my sample choice become public on ai.market. They may be shared with search engines, AI assistants, HuggingFace and other AI discovery systems, and may be used by AI-training crawlers.",
+          "price_license_confirmed": "I confirm the price and license shown in this review."
+        },
+        "rendered_html": "<!doctype html><html lang=\"en\"><head><meta charset=\"utf-8\"><meta name=\"viewport\" content=\"width=device-width,initial-scale=1\"><meta http-equiv=\"Content-Security-Policy\" content=\"default-src 'none'; style-src 'unsafe-inline'; base-uri 'none'; form-action 'none'\"><title>Saved listing preview</title><style>html{color-scheme:light}body{margin:0;padding:24px;font:14px/1.7 system-ui,sans-serif;color:#374151;background:#fff}article{max-width:900px;margin:auto}h1{font-size:26px;line-height:1.3;color:#111827;margin:12px 0 20px}.category{color:#4338ca}.description{white-space:pre-wrap;overflow-wrap:anywhere}h1,dd,li{overflow-wrap:anywhere}ul{display:flex;flex-wrap:wrap;gap:8px;list-style:none;padding:0}li{max-width:100%;border-radius:20px;padding:4px 12px;background:#f3f4f6;font-size:12px}dl{border-top:1px solid #e5e7eb;padding-top:20px;display:grid;grid-template-columns:1fr 1fr;gap:20px}dt{font-size:12px;color:#6b7280}dd{margin:4px 0 0;color:#111827}.price{font-size:20px;font-weight:600}@media(max-width:420px){body{padding:16px}dl{grid-template-columns:1fr}}.description{white-space:normal}.description ul,.description ol{display:block;list-style:revert;padding-left:2em;margin:1em 0}.description li{display:list-item;max-width:none;border-radius:0;padding:0;background:transparent;font-size:inherit}.description h2,.description h3,.description h4{line-height:1.3;color:#111827;margin:1em 0 .5em}.description h2{font-size:22px}.description h3{font-size:19px}.description h4{font-size:16px}.description p{margin:0 0 1em}.description br{display:revert}</style></head><body><article><p class=\"category\">consumer-retail</p><h1>Synthetic saved offer</h1><div class=\"description\"><p>Original seller description</p></div><ul aria-label=\"Listing tags\"><li>synthetic</li><li>retail</li></ul><dl><div><dt>Price</dt><dd class=\"price\">$25.00</dd></div><div><dt>License</dt><dd>Research</dd></div></dl></article></body></html>",
+        "render_hash": "324a584946b430edae34ba377f4ac10432cba8baa1a9d8b8a18e40a642fbb96f",
+        "approval": {
+          "id": "00000000-0000-0000-0000-00000000038a",
+          "review_hash": "0901d2388392b5d17cf689d47b5d9415e7f875fb19964e9c12a753ddde19cf9c",
+          "render_hash": "324a584946b430edae34ba377f4ac10432cba8baa1a9d8b8a18e40a642fbb96f",
+          "draft_version": 3,
+          "source_version": 2,
+          "approved_at": "2026-11-10T00:00:00Z",
+          "sample_decision": "none"
+        },
+        "source_page": {
+          "review_hash": "0901d2388392b5d17cf689d47b5d9415e7f875fb19964e9c12a753ddde19cf9c",
+          "source_version": 2,
+          "source_hash": "eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee",
+          "offset": 0,
+          "page_size": 2,
+          "total_count": 3,
+          "total_size_bytes": 126,
+          "files": [
+            {
+              "key": "synthetic/source-0.csv",
+              "size": 42,
+              "etag": "synthetic-0",
+              "version_id": null
+            },
+            {
+              "key": "synthetic/source-1.csv",
+              "size": 42,
+              "etag": "synthetic-1",
+              "version_id": null
+            }
+          ],
+          "next_cursor": "WyIwOTAxZDIzODgzOTJiNWQxN2NmNjg5ZDQ3YjVkOTQxNWU3Zjg3NWZiMTk5NjRlOWMxMmE3NTNkZGRlMTljZjljIiwyLCJlZWVlZWVlZWVlZWVlZWVlZWVlZWVlZWVlZWVlZWVlZWVlZWVlZWVlZWVlZWVlZWVlZWVlZWVlZWVlZWVlZWVlIiwyLDJd"
+        }
+      },
+      "next_page": {
+        "review_hash": "0901d2388392b5d17cf689d47b5d9415e7f875fb19964e9c12a753ddde19cf9c",
+        "source_version": 2,
+        "source_hash": "eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee",
+        "offset": 2,
+        "page_size": 2,
+        "total_count": 3,
+        "total_size_bytes": 126,
+        "files": [
+          {
+            "key": "synthetic/source-2.csv",
+            "size": 42,
+            "etag": "synthetic-2",
+            "version_id": null
+          }
+        ],
+        "next_cursor": null
+      }
+    },
+    {
+      "name": "v4-fresh-licenses-False",
+      "legacy_binding": false,
+      "review": {
+        "fields": {
+          "title": "Synthetic saved offer",
+          "description": "Original seller description",
+          "category": "consumer-retail",
+          "tags": "synthetic,retail",
+          "price": "25.00",
+          "license": "Research"
+        },
+        "draft_id": "00000000-0000-0000-0000-000000000386",
+        "listing_id": null,
+        "base_listing_version_id": null,
+        "draft_version": 3,
+        "source_version": 2,
+        "source_hash": "eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee",
+        "presentation_version": "seller-listing-review-v4",
+        "review_hash": "39c1a3631ebe1623b1fae0559a5ec30984949474c9a2c9486e50a238a10b018b",
+        "missing_fields": [],
+        "approval_available": true,
+        "sample_status": "not_selected",
+        "confirmation_version": "seller-listing-confirmation-v1",
+        "confirmation_statements": {
+          "ownership_confirmed": "I have the rights needed to sell the selected data.",
+          "privacy_confirmed": "I have reviewed the selected data and am authorized to make it available under this listing.",
+          "public_disclosure_confirmed": "When I publish, the listing fields and my sample choice become public on ai.market. They may be shared with search engines, AI assistants, HuggingFace and other AI discovery systems, and may be used by AI-training crawlers.",
+          "price_license_confirmed": "I confirm the price and license shown in this review."
+        },
+        "rendered_html": "<!doctype html><html lang=\"en\"><head><meta charset=\"utf-8\"><meta name=\"viewport\" content=\"width=device-width,initial-scale=1\"><meta http-equiv=\"Content-Security-Policy\" content=\"default-src 'none'; style-src 'unsafe-inline'; base-uri 'none'; form-action 'none'\"><title>Saved listing preview</title><style>html{color-scheme:light}body{margin:0;padding:24px;font:14px/1.7 system-ui,sans-serif;color:#374151;background:#fff}article{max-width:900px;margin:auto}h1{font-size:26px;line-height:1.3;color:#111827;margin:12px 0 20px}.category{color:#4338ca}.description{white-space:pre-wrap;overflow-wrap:anywhere}h1,dd,li{overflow-wrap:anywhere}ul{display:flex;flex-wrap:wrap;gap:8px;list-style:none;padding:0}li{max-width:100%;border-radius:20px;padding:4px 12px;background:#f3f4f6;font-size:12px}dl{border-top:1px solid #e5e7eb;padding-top:20px;display:grid;grid-template-columns:1fr 1fr;gap:20px}dt{font-size:12px;color:#6b7280}dd{margin:4px 0 0;color:#111827}.price{font-size:20px;font-weight:600}@media(max-width:420px){body{padding:16px}dl{grid-template-columns:1fr}}.description{white-space:normal}.description ul,.description ol{display:block;list-style:revert;padding-left:2em;margin:1em 0}.description li{display:list-item;max-width:none;border-radius:0;padding:0;background:transparent;font-size:inherit}.description h2,.description h3,.description h4{line-height:1.3;color:#111827;margin:1em 0 .5em}.description h2{font-size:22px}.description h3{font-size:19px}.description h4{font-size:16px}.description p{margin:0 0 1em}.description br{display:revert}</style></head><body><article><p class=\"category\">Consumer &amp; Retail</p><h1>Synthetic saved offer</h1><div class=\"description\"><p>Original seller description</p></div><ul aria-label=\"Listing tags\"><li>synthetic</li><li>retail</li></ul><dl><div><dt>Price</dt><dd class=\"price\">$25.00</dd></div><div><dt>License</dt><dd>Research</dd></div></dl></article></body></html>",
+        "render_hash": "528443e8ece09523df35a30588be15c64d1beeaac4f297255a7979dd2ad58d3d",
+        "approval": {
+          "id": "00000000-0000-0000-0000-00000000038a",
+          "review_hash": "39c1a3631ebe1623b1fae0559a5ec30984949474c9a2c9486e50a238a10b018b",
+          "render_hash": "528443e8ece09523df35a30588be15c64d1beeaac4f297255a7979dd2ad58d3d",
+          "draft_version": 3,
+          "source_version": 2,
+          "approved_at": "2026-11-10T00:00:00Z",
+          "sample_decision": "none"
+        },
+        "source_page": {
+          "review_hash": "39c1a3631ebe1623b1fae0559a5ec30984949474c9a2c9486e50a238a10b018b",
+          "source_version": 2,
+          "source_hash": "eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee",
+          "offset": 0,
+          "page_size": 2,
+          "total_count": 3,
+          "total_size_bytes": 126,
+          "files": [
+            {
+              "key": "synthetic/source-0.csv",
+              "size": 42,
+              "etag": "synthetic-0",
+              "version_id": null
+            },
+            {
+              "key": "synthetic/source-1.csv",
+              "size": 42,
+              "etag": "synthetic-1",
+              "version_id": null
+            }
+          ],
+          "next_cursor": "WyIzOWMxYTM2MzFlYmUxNjIzYjFmYWUwNTU5YTVlYzMwOTg0OTQ5NDc0YzlhMmM5NDg2ZTUwYTIzOGExMGIwMThiIiwyLCJlZWVlZWVlZWVlZWVlZWVlZWVlZWVlZWVlZWVlZWVlZWVlZWVlZWVlZWVlZWVlZWVlZWVlZWVlZWVlZWVlZWVlIiwyLDJd"
+        }
+      },
+      "next_page": {
+        "review_hash": "39c1a3631ebe1623b1fae0559a5ec30984949474c9a2c9486e50a238a10b018b",
+        "source_version": 2,
+        "source_hash": "eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee",
+        "offset": 2,
+        "page_size": 2,
+        "total_count": 3,
+        "total_size_bytes": 126,
+        "files": [
+          {
+            "key": "synthetic/source-2.csv",
+            "size": 42,
+            "etag": "synthetic-2",
+            "version_id": null
+          }
+        ],
+        "next_cursor": null
+      }
+    },
+    {
+      "name": "v4-bound-licenses-False",
+      "legacy_binding": false,
+      "review": {
+        "fields": {
+          "title": "Synthetic saved offer",
+          "description": "Original seller description",
+          "category": "consumer-retail",
+          "tags": "synthetic,retail",
+          "price": "25.00",
+          "license": "ai.market Standard Data Licence v1.0"
+        },
+        "draft_id": "00000000-0000-0000-0000-000000000386",
+        "listing_id": "00000000-0000-0000-0000-000000000388",
+        "base_listing_version_id": "00000000-0000-0000-0000-000000000389",
+        "draft_version": 3,
+        "source_version": 2,
+        "source_hash": "eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee",
+        "presentation_version": "seller-listing-review-v4",
+        "review_hash": "449f1161e7ef1eeaafcb35f9dc11e22c525da563ff35c658a617720620c97168",
+        "missing_fields": [],
+        "approval_available": true,
+        "sample_status": "not_selected",
+        "confirmation_version": "seller-listing-confirmation-v1",
+        "confirmation_statements": {
+          "ownership_confirmed": "I have the rights needed to sell the selected data.",
+          "privacy_confirmed": "I have reviewed the selected data and am authorized to make it available under this listing.",
+          "public_disclosure_confirmed": "When I publish, the listing fields and my sample choice become public on ai.market. They may be shared with search engines, AI assistants, HuggingFace and other AI discovery systems, and may be used by AI-training crawlers.",
+          "price_license_confirmed": "I confirm the price and license shown in this review."
+        },
+        "rendered_html": "<!doctype html><html lang=\"en\"><head><meta charset=\"utf-8\"><meta name=\"viewport\" content=\"width=device-width,initial-scale=1\"><meta http-equiv=\"Content-Security-Policy\" content=\"default-src 'none'; style-src 'unsafe-inline'; base-uri 'none'; form-action 'none'\"><title>Saved listing preview</title><style>html{color-scheme:light}body{margin:0;padding:24px;font:14px/1.7 system-ui,sans-serif;color:#374151;background:#fff}article{max-width:900px;margin:auto}h1{font-size:26px;line-height:1.3;color:#111827;margin:12px 0 20px}.category{color:#4338ca}.description{white-space:pre-wrap;overflow-wrap:anywhere}h1,dd,li{overflow-wrap:anywhere}ul{display:flex;flex-wrap:wrap;gap:8px;list-style:none;padding:0}li{max-width:100%;border-radius:20px;padding:4px 12px;background:#f3f4f6;font-size:12px}dl{border-top:1px solid #e5e7eb;padding-top:20px;display:grid;grid-template-columns:1fr 1fr;gap:20px}dt{font-size:12px;color:#6b7280}dd{margin:4px 0 0;color:#111827}.price{font-size:20px;font-weight:600}@media(max-width:420px){body{padding:16px}dl{grid-template-columns:1fr}}.description{white-space:normal}.description ul,.description ol{display:block;list-style:revert;padding-left:2em;margin:1em 0}.description li{display:list-item;max-width:none;border-radius:0;padding:0;background:transparent;font-size:inherit}.description h2,.description h3,.description h4{line-height:1.3;color:#111827;margin:1em 0 .5em}.description h2{font-size:22px}.description h3{font-size:19px}.description h4{font-size:16px}.description p{margin:0 0 1em}.description br{display:revert}</style></head><body><article><p class=\"category\">Consumer &amp; Retail</p><h1>Synthetic saved offer</h1><div class=\"description\"><p>Original seller description</p></div><ul aria-label=\"Listing tags\"><li>synthetic</li><li>retail</li></ul><dl><div><dt>Price</dt><dd class=\"price\">$25.00</dd></div><div><dt>License</dt><dd>ai.market Standard Data Licence v1.0</dd></div></dl></article></body></html>",
+        "render_hash": "58cf0728a08b01a63fa2eafc4426cd16353549299c21049ec281eb650849d054",
+        "approval": {
+          "id": "00000000-0000-0000-0000-00000000038a",
+          "review_hash": "449f1161e7ef1eeaafcb35f9dc11e22c525da563ff35c658a617720620c97168",
+          "render_hash": "58cf0728a08b01a63fa2eafc4426cd16353549299c21049ec281eb650849d054",
+          "draft_version": 3,
+          "source_version": 2,
+          "approved_at": "2026-11-10T00:00:00Z",
+          "sample_decision": "none"
+        },
+        "source_page": {
+          "review_hash": "449f1161e7ef1eeaafcb35f9dc11e22c525da563ff35c658a617720620c97168",
+          "source_version": 2,
+          "source_hash": "eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee",
+          "offset": 0,
+          "page_size": 2,
+          "total_count": 3,
+          "total_size_bytes": 126,
+          "files": [
+            {
+              "key": "synthetic/source-0.csv",
+              "size": 42,
+              "etag": "synthetic-0",
+              "version_id": null
+            },
+            {
+              "key": "synthetic/source-1.csv",
+              "size": 42,
+              "etag": "synthetic-1",
+              "version_id": null
+            }
+          ],
+          "next_cursor": "WyI0NDlmMTE2MWU3ZWYxZWVhYWZjYjM1ZjlkYzExZTIyYzUyNWRhNTYzZmYzNWM2NThhNjE3NzIwNjIwYzk3MTY4IiwyLCJlZWVlZWVlZWVlZWVlZWVlZWVlZWVlZWVlZWVlZWVlZWVlZWVlZWVlZWVlZWVlZWVlZWVlZWVlZWVlZWVlZWVlIiwyLDJd"
+        }
+      },
+      "next_page": {
+        "review_hash": "449f1161e7ef1eeaafcb35f9dc11e22c525da563ff35c658a617720620c97168",
+        "source_version": 2,
+        "source_hash": "eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee",
+        "offset": 2,
+        "page_size": 2,
+        "total_count": 3,
+        "total_size_bytes": 126,
+        "files": [
+          {
+            "key": "synthetic/source-2.csv",
+            "size": 42,
+            "etag": "synthetic-2",
+            "version_id": null
+          }
+        ],
+        "next_cursor": null
+      }
+    },
+    {
+      "name": "v4-legacy-licenses-False",
+      "legacy_binding": true,
+      "review": {
+        "fields": {
+          "title": "Synthetic saved offer",
+          "description": "Original seller description",
+          "category": "consumer-retail",
+          "tags": "synthetic,retail",
+          "price": "25.00",
+          "license": "Research"
+        },
+        "draft_id": "00000000-0000-0000-0000-000000000386",
+        "listing_id": null,
+        "base_listing_version_id": null,
+        "draft_version": 3,
+        "source_version": 2,
+        "source_hash": "eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee",
+        "presentation_version": "seller-listing-review-v4",
+        "review_hash": "62baf69ddc86e46f855b08c7d15005c6ea25ad3d93a8fedde6faf8acd6cfdc19",
+        "missing_fields": [],
+        "approval_available": true,
+        "sample_status": "not_selected",
+        "confirmation_version": "seller-listing-confirmation-v1",
+        "confirmation_statements": {
+          "ownership_confirmed": "I have the rights needed to sell the selected data.",
+          "privacy_confirmed": "I have reviewed the selected data and am authorized to make it available under this listing.",
+          "public_disclosure_confirmed": "When I publish, the listing fields and my sample choice become public on ai.market. They may be shared with search engines, AI assistants, HuggingFace and other AI discovery systems, and may be used by AI-training crawlers.",
+          "price_license_confirmed": "I confirm the price and license shown in this review."
+        },
+        "rendered_html": "<!doctype html><html lang=\"en\"><head><meta charset=\"utf-8\"><meta name=\"viewport\" content=\"width=device-width,initial-scale=1\"><meta http-equiv=\"Content-Security-Policy\" content=\"default-src 'none'; style-src 'unsafe-inline'; base-uri 'none'; form-action 'none'\"><title>Saved listing preview</title><style>html{color-scheme:light}body{margin:0;padding:24px;font:14px/1.7 system-ui,sans-serif;color:#374151;background:#fff}article{max-width:900px;margin:auto}h1{font-size:26px;line-height:1.3;color:#111827;margin:12px 0 20px}.category{color:#4338ca}.description{white-space:pre-wrap;overflow-wrap:anywhere}h1,dd,li{overflow-wrap:anywhere}ul{display:flex;flex-wrap:wrap;gap:8px;list-style:none;padding:0}li{max-width:100%;border-radius:20px;padding:4px 12px;background:#f3f4f6;font-size:12px}dl{border-top:1px solid #e5e7eb;padding-top:20px;display:grid;grid-template-columns:1fr 1fr;gap:20px}dt{font-size:12px;color:#6b7280}dd{margin:4px 0 0;color:#111827}.price{font-size:20px;font-weight:600}@media(max-width:420px){body{padding:16px}dl{grid-template-columns:1fr}}.description{white-space:normal}.description ul,.description ol{display:block;list-style:revert;padding-left:2em;margin:1em 0}.description li{display:list-item;max-width:none;border-radius:0;padding:0;background:transparent;font-size:inherit}.description h2,.description h3,.description h4{line-height:1.3;color:#111827;margin:1em 0 .5em}.description h2{font-size:22px}.description h3{font-size:19px}.description h4{font-size:16px}.description p{margin:0 0 1em}.description br{display:revert}</style></head><body><article><p class=\"category\">Consumer &amp; Retail</p><h1>Synthetic saved offer</h1><div class=\"description\"><p>Original seller description</p></div><ul aria-label=\"Listing tags\"><li>synthetic</li><li>retail</li></ul><dl><div><dt>Price</dt><dd class=\"price\">$25.00</dd></div><div><dt>License</dt><dd>Research</dd></div></dl></article></body></html>",
+        "render_hash": "528443e8ece09523df35a30588be15c64d1beeaac4f297255a7979dd2ad58d3d",
+        "approval": {
+          "id": "00000000-0000-0000-0000-00000000038a",
+          "review_hash": "62baf69ddc86e46f855b08c7d15005c6ea25ad3d93a8fedde6faf8acd6cfdc19",
+          "render_hash": "528443e8ece09523df35a30588be15c64d1beeaac4f297255a7979dd2ad58d3d",
+          "draft_version": 3,
+          "source_version": 2,
+          "approved_at": "2026-11-10T00:00:00Z",
+          "sample_decision": "none"
+        },
+        "source_page": {
+          "review_hash": "62baf69ddc86e46f855b08c7d15005c6ea25ad3d93a8fedde6faf8acd6cfdc19",
+          "source_version": 2,
+          "source_hash": "eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee",
+          "offset": 0,
+          "page_size": 2,
+          "total_count": 3,
+          "total_size_bytes": 126,
+          "files": [
+            {
+              "key": "synthetic/source-0.csv",
+              "size": 42,
+              "etag": "synthetic-0",
+              "version_id": null
+            },
+            {
+              "key": "synthetic/source-1.csv",
+              "size": 42,
+              "etag": "synthetic-1",
+              "version_id": null
+            }
+          ],
+          "next_cursor": "WyI2MmJhZjY5ZGRjODZlNDZmODU1YjA4YzdkMTUwMDVjNmVhMjVhZDNkOTNhOGZlZGRlNmZhZjhhY2Q2Y2ZkYzE5IiwyLCJlZWVlZWVlZWVlZWVlZWVlZWVlZWVlZWVlZWVlZWVlZWVlZWVlZWVlZWVlZWVlZWVlZWVlZWVlZWVlZWVlZWVlIiwyLDJd"
+        }
+      },
+      "next_page": {
+        "review_hash": "62baf69ddc86e46f855b08c7d15005c6ea25ad3d93a8fedde6faf8acd6cfdc19",
+        "source_version": 2,
+        "source_hash": "eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee",
+        "offset": 2,
+        "page_size": 2,
+        "total_count": 3,
+        "total_size_bytes": 126,
+        "files": [
+          {
+            "key": "synthetic/source-2.csv",
+            "size": 42,
+            "etag": "synthetic-2",
+            "version_id": null
+          }
+        ],
+        "next_cursor": null
+      }
+    },
+    {
+      "name": "v2-fresh-licenses-True",
+      "legacy_binding": false,
+      "review": {
+        "fields": {
+          "title": "Synthetic saved offer",
+          "description": "Original seller description",
+          "category": "consumer-retail",
+          "tags": "synthetic,retail",
+          "price": "25.00",
+          "license": "ai.market Standard Data Licence v1.0",
+          "license_selection": {
+            "kind": "standard",
+            "version": "1.1",
+            "ai_training": true,
+            "license_document_id": null,
+            "license_sha256": "881266a455d100e6b263ec121523001e5e53f6e3bf3bd97047e29ae39f8959fb",
+            "rider_sha256": null,
+            "covenant_code": "marketplace-listing",
+            "covenant_version": "1.1",
+            "covenant_sha256": "58eff1def7acb59db75920fe0da89a3f4f87bb12bd6765ec8eae231bbea118b5",
+            "seller_acceptance": {
+              "signer_name": "Synthetic Seller",
+              "signer_title": "Owner",
+              "authority_confirmed": true
+            },
+            "identity_version": null
+          }
+        },
+        "license_selection": {
+          "kind": "standard",
+          "version": "1.1",
+          "ai_training": true,
+          "license_document_id": null,
+          "license_sha256": "881266a455d100e6b263ec121523001e5e53f6e3bf3bd97047e29ae39f8959fb",
+          "rider_sha256": null,
+          "covenant_code": "marketplace-listing",
+          "covenant_version": "1.1",
+          "covenant_sha256": "58eff1def7acb59db75920fe0da89a3f4f87bb12bd6765ec8eae231bbea118b5",
+          "seller_acceptance": {
+            "signer_name": "Synthetic Seller",
+            "signer_title": "Owner",
+            "authority_confirmed": true
+          },
+          "identity_version": null
+        },
+        "draft_id": "00000000-0000-0000-0000-000000000386",
+        "listing_id": null,
+        "base_listing_version_id": null,
+        "draft_version": 3,
+        "source_version": 2,
+        "source_hash": "eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee",
+        "presentation_version": "seller-listing-review-v2",
+        "review_hash": "8f81b9c101d4a66342b51478d6554ff43a6cda65ad618c832c2f49ea26126999",
+        "missing_fields": [],
+        "approval_available": true,
+        "sample_status": "not_selected",
+        "confirmation_version": "seller-listing-confirmation-v3",
+        "confirmation_statements": {
+          "ownership_confirmed": "I have the rights needed to sell the selected data.",
+          "privacy_confirmed": "I have reviewed the selected data and am authorized to make it available under this listing.",
+          "public_disclosure_confirmed": "When I publish, the listing fields and my sample choice become public on ai.market. They may be shared with search engines, AI assistants, HuggingFace and other AI discovery systems, and may be used by AI-training crawlers.",
+          "price_confirmed": "I confirm the price shown in this review.",
+          "license_confirmed": "I confirm the selected licence and AI-training setting shown in this review.",
+          "covenant_authority_confirmed": "I accept the ai.market Marketplace Listing Covenant shown in this review and confirm my authority to do so."
+        },
+        "rendered_html": "<!doctype html><html lang=\"en\"><head><meta charset=\"utf-8\"><meta name=\"viewport\" content=\"width=device-width,initial-scale=1\"><meta http-equiv=\"Content-Security-Policy\" content=\"default-src 'none'; style-src 'unsafe-inline'; base-uri 'none'; form-action 'none'\"><title>Saved listing preview</title><style>html{color-scheme:light}body{margin:0;padding:24px;font:14px/1.7 system-ui,sans-serif;color:#374151;background:#fff}article{max-width:900px;margin:auto}h1{font-size:26px;line-height:1.3;color:#111827;margin:12px 0 20px}.category{color:#4338ca}.description{white-space:pre-wrap;overflow-wrap:anywhere}h1,dd,li{overflow-wrap:anywhere}ul{display:flex;flex-wrap:wrap;gap:8px;list-style:none;padding:0}li{max-width:100%;border-radius:20px;padding:4px 12px;background:#f3f4f6;font-size:12px}dl{border-top:1px solid #e5e7eb;padding-top:20px;display:grid;grid-template-columns:1fr 1fr;gap:20px}dt{font-size:12px;color:#6b7280}dd{margin:4px 0 0;color:#111827}.price{font-size:20px;font-weight:600}@media(max-width:420px){body{padding:16px}dl{grid-template-columns:1fr}}</style></head><body><article><p class=\"category\">consumer-retail</p><h1>Synthetic saved offer</h1><p class=\"description\">Original seller description</p><ul aria-label=\"Listing tags\"><li>synthetic</li><li>retail</li></ul><dl><div><dt>Price</dt><dd class=\"price\">$25.00</dd></div><div><dt>License</dt><dd>ai.market Standard Data Licence v1.0</dd></div></dl></article></body></html>",
+        "render_hash": "4edc882dc7b74d3e0fbf94024f4e7da46785aaad47b493b7db545a1bd0bdfe44",
+        "approval": {
+          "id": "00000000-0000-0000-0000-00000000038a",
+          "review_hash": "8f81b9c101d4a66342b51478d6554ff43a6cda65ad618c832c2f49ea26126999",
+          "render_hash": "4edc882dc7b74d3e0fbf94024f4e7da46785aaad47b493b7db545a1bd0bdfe44",
+          "draft_version": 3,
+          "source_version": 2,
+          "approved_at": "2026-11-10T00:00:00Z",
+          "sample_decision": "none",
+          "license_selection": {
+            "kind": "standard",
+            "version": "1.1",
+            "ai_training": true,
+            "license_document_id": null,
+            "license_sha256": "881266a455d100e6b263ec121523001e5e53f6e3bf3bd97047e29ae39f8959fb",
+            "rider_sha256": null,
+            "covenant_code": "marketplace-listing",
+            "covenant_version": "1.1",
+            "covenant_sha256": "58eff1def7acb59db75920fe0da89a3f4f87bb12bd6765ec8eae231bbea118b5",
+            "seller_acceptance": {
+              "signer_name": "Synthetic Seller",
+              "signer_title": "Owner",
+              "authority_confirmed": true
+            },
+            "identity_version": null
+          }
+        },
+        "source_page": {
+          "review_hash": "8f81b9c101d4a66342b51478d6554ff43a6cda65ad618c832c2f49ea26126999",
+          "source_version": 2,
+          "source_hash": "eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee",
+          "offset": 0,
+          "page_size": 2,
+          "total_count": 3,
+          "total_size_bytes": 126,
+          "files": [
+            {
+              "key": "synthetic/source-0.csv",
+              "size": 42,
+              "etag": "synthetic-0",
+              "version_id": null
+            },
+            {
+              "key": "synthetic/source-1.csv",
+              "size": 42,
+              "etag": "synthetic-1",
+              "version_id": null
+            }
+          ],
+          "next_cursor": "WyI4ZjgxYjljMTAxZDRhNjYzNDJiNTE0NzhkNjU1NGZmNDNhNmNkYTY1YWQ2MThjODMyYzJmNDllYTI2MTI2OTk5IiwyLCJlZWVlZWVlZWVlZWVlZWVlZWVlZWVlZWVlZWVlZWVlZWVlZWVlZWVlZWVlZWVlZWVlZWVlZWVlZWVlZWVlZWVlIiwyLDJd"
+        }
+      },
+      "next_page": {
+        "review_hash": "8f81b9c101d4a66342b51478d6554ff43a6cda65ad618c832c2f49ea26126999",
+        "source_version": 2,
+        "source_hash": "eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee",
+        "offset": 2,
+        "page_size": 2,
+        "total_count": 3,
+        "total_size_bytes": 126,
+        "files": [
+          {
+            "key": "synthetic/source-2.csv",
+            "size": 42,
+            "etag": "synthetic-2",
+            "version_id": null
+          }
+        ],
+        "next_cursor": null
+      }
+    },
+    {
+      "name": "v2-bound-licenses-True",
+      "legacy_binding": false,
+      "review": {
+        "fields": {
+          "title": "Synthetic saved offer",
+          "description": "Original seller description",
+          "category": "consumer-retail",
+          "tags": "synthetic,retail",
+          "price": "25.00",
+          "license": "ai.market Standard Data Licence v1.0",
+          "license_selection": {
+            "kind": "standard",
+            "version": "1.1",
+            "ai_training": true,
+            "license_document_id": null,
+            "license_sha256": "881266a455d100e6b263ec121523001e5e53f6e3bf3bd97047e29ae39f8959fb",
+            "rider_sha256": null,
+            "covenant_code": "marketplace-listing",
+            "covenant_version": "1.1",
+            "covenant_sha256": "58eff1def7acb59db75920fe0da89a3f4f87bb12bd6765ec8eae231bbea118b5",
+            "seller_acceptance": {
+              "signer_name": "Synthetic Seller",
+              "signer_title": "Owner",
+              "authority_confirmed": true
+            },
+            "identity_version": null
+          }
+        },
+        "license_selection": {
+          "kind": "standard",
+          "version": "1.1",
+          "ai_training": true,
+          "license_document_id": null,
+          "license_sha256": "881266a455d100e6b263ec121523001e5e53f6e3bf3bd97047e29ae39f8959fb",
+          "rider_sha256": null,
+          "covenant_code": "marketplace-listing",
+          "covenant_version": "1.1",
+          "covenant_sha256": "58eff1def7acb59db75920fe0da89a3f4f87bb12bd6765ec8eae231bbea118b5",
+          "seller_acceptance": {
+            "signer_name": "Synthetic Seller",
+            "signer_title": "Owner",
+            "authority_confirmed": true
+          },
+          "identity_version": null
+        },
+        "draft_id": "00000000-0000-0000-0000-000000000386",
+        "listing_id": "00000000-0000-0000-0000-000000000388",
+        "base_listing_version_id": "00000000-0000-0000-0000-000000000389",
+        "draft_version": 3,
+        "source_version": 2,
+        "source_hash": "eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee",
+        "presentation_version": "seller-listing-review-v2",
+        "review_hash": "d80c9932ddeffa8a5cb90f9904d21857052117799754d8edb67ebd78d27e4606",
+        "missing_fields": [],
+        "approval_available": true,
+        "sample_status": "not_selected",
+        "confirmation_version": "seller-listing-confirmation-v3",
+        "confirmation_statements": {
+          "ownership_confirmed": "I have the rights needed to sell the selected data.",
+          "privacy_confirmed": "I have reviewed the selected data and am authorized to make it available under this listing.",
+          "public_disclosure_confirmed": "When I publish, the listing fields and my sample choice become public on ai.market. They may be shared with search engines, AI assistants, HuggingFace and other AI discovery systems, and may be used by AI-training crawlers.",
+          "price_confirmed": "I confirm the price shown in this review.",
+          "license_confirmed": "I confirm the selected licence and AI-training setting shown in this review.",
+          "covenant_authority_confirmed": "I accept the ai.market Marketplace Listing Covenant shown in this review and confirm my authority to do so."
+        },
+        "rendered_html": "<!doctype html><html lang=\"en\"><head><meta charset=\"utf-8\"><meta name=\"viewport\" content=\"width=device-width,initial-scale=1\"><meta http-equiv=\"Content-Security-Policy\" content=\"default-src 'none'; style-src 'unsafe-inline'; base-uri 'none'; form-action 'none'\"><title>Saved listing preview</title><style>html{color-scheme:light}body{margin:0;padding:24px;font:14px/1.7 system-ui,sans-serif;color:#374151;background:#fff}article{max-width:900px;margin:auto}h1{font-size:26px;line-height:1.3;color:#111827;margin:12px 0 20px}.category{color:#4338ca}.description{white-space:pre-wrap;overflow-wrap:anywhere}h1,dd,li{overflow-wrap:anywhere}ul{display:flex;flex-wrap:wrap;gap:8px;list-style:none;padding:0}li{max-width:100%;border-radius:20px;padding:4px 12px;background:#f3f4f6;font-size:12px}dl{border-top:1px solid #e5e7eb;padding-top:20px;display:grid;grid-template-columns:1fr 1fr;gap:20px}dt{font-size:12px;color:#6b7280}dd{margin:4px 0 0;color:#111827}.price{font-size:20px;font-weight:600}@media(max-width:420px){body{padding:16px}dl{grid-template-columns:1fr}}</style></head><body><article><p class=\"category\">consumer-retail</p><h1>Synthetic saved offer</h1><p class=\"description\">Original seller description</p><ul aria-label=\"Listing tags\"><li>synthetic</li><li>retail</li></ul><dl><div><dt>Price</dt><dd class=\"price\">$25.00</dd></div><div><dt>License</dt><dd>ai.market Standard Data Licence v1.0</dd></div></dl></article></body></html>",
+        "render_hash": "4edc882dc7b74d3e0fbf94024f4e7da46785aaad47b493b7db545a1bd0bdfe44",
+        "approval": {
+          "id": "00000000-0000-0000-0000-00000000038a",
+          "review_hash": "d80c9932ddeffa8a5cb90f9904d21857052117799754d8edb67ebd78d27e4606",
+          "render_hash": "4edc882dc7b74d3e0fbf94024f4e7da46785aaad47b493b7db545a1bd0bdfe44",
+          "draft_version": 3,
+          "source_version": 2,
+          "approved_at": "2026-11-10T00:00:00Z",
+          "sample_decision": "none",
+          "license_selection": {
+            "kind": "standard",
+            "version": "1.1",
+            "ai_training": true,
+            "license_document_id": null,
+            "license_sha256": "881266a455d100e6b263ec121523001e5e53f6e3bf3bd97047e29ae39f8959fb",
+            "rider_sha256": null,
+            "covenant_code": "marketplace-listing",
+            "covenant_version": "1.1",
+            "covenant_sha256": "58eff1def7acb59db75920fe0da89a3f4f87bb12bd6765ec8eae231bbea118b5",
+            "seller_acceptance": {
+              "signer_name": "Synthetic Seller",
+              "signer_title": "Owner",
+              "authority_confirmed": true
+            },
+            "identity_version": null
+          }
+        },
+        "source_page": {
+          "review_hash": "d80c9932ddeffa8a5cb90f9904d21857052117799754d8edb67ebd78d27e4606",
+          "source_version": 2,
+          "source_hash": "eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee",
+          "offset": 0,
+          "page_size": 2,
+          "total_count": 3,
+          "total_size_bytes": 126,
+          "files": [
+            {
+              "key": "synthetic/source-0.csv",
+              "size": 42,
+              "etag": "synthetic-0",
+              "version_id": null
+            },
+            {
+              "key": "synthetic/source-1.csv",
+              "size": 42,
+              "etag": "synthetic-1",
+              "version_id": null
+            }
+          ],
+          "next_cursor": "WyJkODBjOTkzMmRkZWZmYThhNWNiOTBmOTkwNGQyMTg1NzA1MjExNzc5OTc1NGQ4ZWRiNjdlYmQ3OGQyN2U0NjA2IiwyLCJlZWVlZWVlZWVlZWVlZWVlZWVlZWVlZWVlZWVlZWVlZWVlZWVlZWVlZWVlZWVlZWVlZWVlZWVlZWVlZWVlZWVlIiwyLDJd"
+        }
+      },
+      "next_page": {
+        "review_hash": "d80c9932ddeffa8a5cb90f9904d21857052117799754d8edb67ebd78d27e4606",
+        "source_version": 2,
+        "source_hash": "eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee",
+        "offset": 2,
+        "page_size": 2,
+        "total_count": 3,
+        "total_size_bytes": 126,
+        "files": [
+          {
+            "key": "synthetic/source-2.csv",
+            "size": 42,
+            "etag": "synthetic-2",
+            "version_id": null
+          }
+        ],
+        "next_cursor": null
+      }
+    },
+    {
+      "name": "v2-legacy-licenses-True",
+      "legacy_binding": true,
+      "review": {
+        "fields": {
+          "title": "Synthetic saved offer",
+          "description": "Original seller description",
+          "category": "consumer-retail",
+          "tags": "synthetic,retail",
+          "price": "25.00",
+          "license": "ai.market Standard Data Licence v1.0",
+          "license_selection": {
+            "kind": "standard",
+            "version": "1.1",
+            "ai_training": true,
+            "license_document_id": null,
+            "license_sha256": "881266a455d100e6b263ec121523001e5e53f6e3bf3bd97047e29ae39f8959fb",
+            "rider_sha256": null,
+            "covenant_code": "marketplace-listing",
+            "covenant_version": "1.1",
+            "covenant_sha256": "58eff1def7acb59db75920fe0da89a3f4f87bb12bd6765ec8eae231bbea118b5",
+            "seller_acceptance": {
+              "signer_name": "Synthetic Seller",
+              "signer_title": "Owner",
+              "authority_confirmed": true
+            },
+            "identity_version": null
+          }
+        },
+        "license_selection": {
+          "kind": "standard",
+          "version": "1.1",
+          "ai_training": true,
+          "license_document_id": null,
+          "license_sha256": "881266a455d100e6b263ec121523001e5e53f6e3bf3bd97047e29ae39f8959fb",
+          "rider_sha256": null,
+          "covenant_code": "marketplace-listing",
+          "covenant_version": "1.1",
+          "covenant_sha256": "58eff1def7acb59db75920fe0da89a3f4f87bb12bd6765ec8eae231bbea118b5",
+          "seller_acceptance": {
+            "signer_name": "Synthetic Seller",
+            "signer_title": "Owner",
+            "authority_confirmed": true
+          },
+          "identity_version": null
+        },
+        "draft_id": "00000000-0000-0000-0000-000000000386",
+        "listing_id": null,
+        "base_listing_version_id": null,
+        "draft_version": 3,
+        "source_version": 2,
+        "source_hash": "eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee",
+        "presentation_version": "seller-listing-review-v2",
+        "review_hash": "6eeb458a2ce0fdc123496e7e2589fb37d7a56d301cc21e45a934eb843cab21b5",
+        "missing_fields": [],
+        "approval_available": true,
+        "sample_status": "not_selected",
+        "confirmation_version": "seller-listing-confirmation-v3",
+        "confirmation_statements": {
+          "ownership_confirmed": "I have the rights needed to sell the selected data.",
+          "privacy_confirmed": "I have reviewed the selected data and am authorized to make it available under this listing.",
+          "public_disclosure_confirmed": "When I publish, the listing fields and my sample choice become public on ai.market. They may be shared with search engines, AI assistants, HuggingFace and other AI discovery systems, and may be used by AI-training crawlers.",
+          "price_confirmed": "I confirm the price shown in this review.",
+          "license_confirmed": "I confirm the selected licence and AI-training setting shown in this review.",
+          "covenant_authority_confirmed": "I accept the ai.market Marketplace Listing Covenant shown in this review and confirm my authority to do so."
+        },
+        "rendered_html": "<!doctype html><html lang=\"en\"><head><meta charset=\"utf-8\"><meta name=\"viewport\" content=\"width=device-width,initial-scale=1\"><meta http-equiv=\"Content-Security-Policy\" content=\"default-src 'none'; style-src 'unsafe-inline'; base-uri 'none'; form-action 'none'\"><title>Saved listing preview</title><style>html{color-scheme:light}body{margin:0;padding:24px;font:14px/1.7 system-ui,sans-serif;color:#374151;background:#fff}article{max-width:900px;margin:auto}h1{font-size:26px;line-height:1.3;color:#111827;margin:12px 0 20px}.category{color:#4338ca}.description{white-space:pre-wrap;overflow-wrap:anywhere}h1,dd,li{overflow-wrap:anywhere}ul{display:flex;flex-wrap:wrap;gap:8px;list-style:none;padding:0}li{max-width:100%;border-radius:20px;padding:4px 12px;background:#f3f4f6;font-size:12px}dl{border-top:1px solid #e5e7eb;padding-top:20px;display:grid;grid-template-columns:1fr 1fr;gap:20px}dt{font-size:12px;color:#6b7280}dd{margin:4px 0 0;color:#111827}.price{font-size:20px;font-weight:600}@media(max-width:420px){body{padding:16px}dl{grid-template-columns:1fr}}</style></head><body><article><p class=\"category\">consumer-retail</p><h1>Synthetic saved offer</h1><p class=\"description\">Original seller description</p><ul aria-label=\"Listing tags\"><li>synthetic</li><li>retail</li></ul><dl><div><dt>Price</dt><dd class=\"price\">$25.00</dd></div><div><dt>License</dt><dd>ai.market Standard Data Licence v1.0</dd></div></dl></article></body></html>",
+        "render_hash": "4edc882dc7b74d3e0fbf94024f4e7da46785aaad47b493b7db545a1bd0bdfe44",
+        "approval": {
+          "id": "00000000-0000-0000-0000-00000000038a",
+          "review_hash": "6eeb458a2ce0fdc123496e7e2589fb37d7a56d301cc21e45a934eb843cab21b5",
+          "render_hash": "4edc882dc7b74d3e0fbf94024f4e7da46785aaad47b493b7db545a1bd0bdfe44",
+          "draft_version": 3,
+          "source_version": 2,
+          "approved_at": "2026-11-10T00:00:00Z",
+          "sample_decision": "none",
+          "license_selection": {
+            "kind": "standard",
+            "version": "1.1",
+            "ai_training": true,
+            "license_document_id": null,
+            "license_sha256": "881266a455d100e6b263ec121523001e5e53f6e3bf3bd97047e29ae39f8959fb",
+            "rider_sha256": null,
+            "covenant_code": "marketplace-listing",
+            "covenant_version": "1.1",
+            "covenant_sha256": "58eff1def7acb59db75920fe0da89a3f4f87bb12bd6765ec8eae231bbea118b5",
+            "seller_acceptance": {
+              "signer_name": "Synthetic Seller",
+              "signer_title": "Owner",
+              "authority_confirmed": true
+            },
+            "identity_version": null
+          }
+        },
+        "source_page": {
+          "review_hash": "6eeb458a2ce0fdc123496e7e2589fb37d7a56d301cc21e45a934eb843cab21b5",
+          "source_version": 2,
+          "source_hash": "eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee",
+          "offset": 0,
+          "page_size": 2,
+          "total_count": 3,
+          "total_size_bytes": 126,
+          "files": [
+            {
+              "key": "synthetic/source-0.csv",
+              "size": 42,
+              "etag": "synthetic-0",
+              "version_id": null
+            },
+            {
+              "key": "synthetic/source-1.csv",
+              "size": 42,
+              "etag": "synthetic-1",
+              "version_id": null
+            }
+          ],
+          "next_cursor": "WyI2ZWViNDU4YTJjZTBmZGMxMjM0OTZlN2UyNTg5ZmIzN2Q3YTU2ZDMwMWNjMjFlNDVhOTM0ZWI4NDNjYWIyMWI1IiwyLCJlZWVlZWVlZWVlZWVlZWVlZWVlZWVlZWVlZWVlZWVlZWVlZWVlZWVlZWVlZWVlZWVlZWVlZWVlZWVlZWVlZWVlIiwyLDJd"
+        }
+      },
+      "next_page": {
+        "review_hash": "6eeb458a2ce0fdc123496e7e2589fb37d7a56d301cc21e45a934eb843cab21b5",
+        "source_version": 2,
+        "source_hash": "eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee",
+        "offset": 2,
+        "page_size": 2,
+        "total_count": 3,
+        "total_size_bytes": 126,
+        "files": [
+          {
+            "key": "synthetic/source-2.csv",
+            "size": 42,
+            "etag": "synthetic-2",
+            "version_id": null
+          }
+        ],
+        "next_cursor": null
+      }
+    },
+    {
+      "name": "v3-fresh-licenses-True",
+      "legacy_binding": false,
+      "review": {
+        "fields": {
+          "title": "Synthetic saved offer",
+          "description": "Original seller description",
+          "category": "consumer-retail",
+          "tags": "synthetic,retail",
+          "price": "25.00",
+          "license": "ai.market Standard Data Licence v1.0",
+          "license_selection": {
+            "kind": "standard",
+            "version": "1.1",
+            "ai_training": true,
+            "license_document_id": null,
+            "license_sha256": "881266a455d100e6b263ec121523001e5e53f6e3bf3bd97047e29ae39f8959fb",
+            "rider_sha256": null,
+            "covenant_code": "marketplace-listing",
+            "covenant_version": "1.1",
+            "covenant_sha256": "58eff1def7acb59db75920fe0da89a3f4f87bb12bd6765ec8eae231bbea118b5",
+            "seller_acceptance": {
+              "signer_name": "Synthetic Seller",
+              "signer_title": "Owner",
+              "authority_confirmed": true
+            },
+            "identity_version": null
+          }
+        },
+        "license_selection": {
+          "kind": "standard",
+          "version": "1.1",
+          "ai_training": true,
+          "license_document_id": null,
+          "license_sha256": "881266a455d100e6b263ec121523001e5e53f6e3bf3bd97047e29ae39f8959fb",
+          "rider_sha256": null,
+          "covenant_code": "marketplace-listing",
+          "covenant_version": "1.1",
+          "covenant_sha256": "58eff1def7acb59db75920fe0da89a3f4f87bb12bd6765ec8eae231bbea118b5",
+          "seller_acceptance": {
+            "signer_name": "Synthetic Seller",
+            "signer_title": "Owner",
+            "authority_confirmed": true
+          },
+          "identity_version": null
+        },
+        "draft_id": "00000000-0000-0000-0000-000000000386",
+        "listing_id": null,
+        "base_listing_version_id": null,
+        "draft_version": 3,
+        "source_version": 2,
+        "source_hash": "eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee",
+        "presentation_version": "seller-listing-review-v3",
+        "review_hash": "38cde690988492d92d4d5197e9e2cfc4ec955b475c61a38f8e57122d7d9c5971",
+        "missing_fields": [],
+        "approval_available": true,
+        "sample_status": "not_selected",
+        "confirmation_version": "seller-listing-confirmation-v3",
+        "confirmation_statements": {
+          "ownership_confirmed": "I have the rights needed to sell the selected data.",
+          "privacy_confirmed": "I have reviewed the selected data and am authorized to make it available under this listing.",
+          "public_disclosure_confirmed": "When I publish, the listing fields and my sample choice become public on ai.market. They may be shared with search engines, AI assistants, HuggingFace and other AI discovery systems, and may be used by AI-training crawlers.",
+          "price_confirmed": "I confirm the price shown in this review.",
+          "license_confirmed": "I confirm the selected licence and AI-training setting shown in this review.",
+          "covenant_authority_confirmed": "I accept the ai.market Marketplace Listing Covenant shown in this review and confirm my authority to do so."
+        },
+        "rendered_html": "<!doctype html><html lang=\"en\"><head><meta charset=\"utf-8\"><meta name=\"viewport\" content=\"width=device-width,initial-scale=1\"><meta http-equiv=\"Content-Security-Policy\" content=\"default-src 'none'; style-src 'unsafe-inline'; base-uri 'none'; form-action 'none'\"><title>Saved listing preview</title><style>html{color-scheme:light}body{margin:0;padding:24px;font:14px/1.7 system-ui,sans-serif;color:#374151;background:#fff}article{max-width:900px;margin:auto}h1{font-size:26px;line-height:1.3;color:#111827;margin:12px 0 20px}.category{color:#4338ca}.description{white-space:pre-wrap;overflow-wrap:anywhere}h1,dd,li{overflow-wrap:anywhere}ul{display:flex;flex-wrap:wrap;gap:8px;list-style:none;padding:0}li{max-width:100%;border-radius:20px;padding:4px 12px;background:#f3f4f6;font-size:12px}dl{border-top:1px solid #e5e7eb;padding-top:20px;display:grid;grid-template-columns:1fr 1fr;gap:20px}dt{font-size:12px;color:#6b7280}dd{margin:4px 0 0;color:#111827}.price{font-size:20px;font-weight:600}@media(max-width:420px){body{padding:16px}dl{grid-template-columns:1fr}}.description{white-space:normal}.description ul,.description ol{display:block;list-style:revert;padding-left:2em;margin:1em 0}.description li{display:list-item;max-width:none;border-radius:0;padding:0;background:transparent;font-size:inherit}.description h2,.description h3,.description h4{line-height:1.3;color:#111827;margin:1em 0 .5em}.description h2{font-size:22px}.description h3{font-size:19px}.description h4{font-size:16px}.description p{margin:0 0 1em}.description br{display:revert}</style></head><body><article><p class=\"category\">consumer-retail</p><h1>Synthetic saved offer</h1><div class=\"description\"><p>Original seller description</p></div><ul aria-label=\"Listing tags\"><li>synthetic</li><li>retail</li></ul><dl><div><dt>Price</dt><dd class=\"price\">$25.00</dd></div><div><dt>License</dt><dd>ai.market Standard Data Licence v1.0</dd></div></dl></article></body></html>",
+        "render_hash": "9f5b6b123c4705669b5a4bebc36a2a6bb6ccc144ed42fa1252477a9b64aa0516",
+        "approval": {
+          "id": "00000000-0000-0000-0000-00000000038a",
+          "review_hash": "38cde690988492d92d4d5197e9e2cfc4ec955b475c61a38f8e57122d7d9c5971",
+          "render_hash": "9f5b6b123c4705669b5a4bebc36a2a6bb6ccc144ed42fa1252477a9b64aa0516",
+          "draft_version": 3,
+          "source_version": 2,
+          "approved_at": "2026-11-10T00:00:00Z",
+          "sample_decision": "none",
+          "license_selection": {
+            "kind": "standard",
+            "version": "1.1",
+            "ai_training": true,
+            "license_document_id": null,
+            "license_sha256": "881266a455d100e6b263ec121523001e5e53f6e3bf3bd97047e29ae39f8959fb",
+            "rider_sha256": null,
+            "covenant_code": "marketplace-listing",
+            "covenant_version": "1.1",
+            "covenant_sha256": "58eff1def7acb59db75920fe0da89a3f4f87bb12bd6765ec8eae231bbea118b5",
+            "seller_acceptance": {
+              "signer_name": "Synthetic Seller",
+              "signer_title": "Owner",
+              "authority_confirmed": true
+            },
+            "identity_version": null
+          }
+        },
+        "source_page": {
+          "review_hash": "38cde690988492d92d4d5197e9e2cfc4ec955b475c61a38f8e57122d7d9c5971",
+          "source_version": 2,
+          "source_hash": "eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee",
+          "offset": 0,
+          "page_size": 2,
+          "total_count": 3,
+          "total_size_bytes": 126,
+          "files": [
+            {
+              "key": "synthetic/source-0.csv",
+              "size": 42,
+              "etag": "synthetic-0",
+              "version_id": null
+            },
+            {
+              "key": "synthetic/source-1.csv",
+              "size": 42,
+              "etag": "synthetic-1",
+              "version_id": null
+            }
+          ],
+          "next_cursor": "WyIzOGNkZTY5MDk4ODQ5MmQ5MmQ0ZDUxOTdlOWUyY2ZjNGVjOTU1YjQ3NWM2MWEzOGY4ZTU3MTIyZDdkOWM1OTcxIiwyLCJlZWVlZWVlZWVlZWVlZWVlZWVlZWVlZWVlZWVlZWVlZWVlZWVlZWVlZWVlZWVlZWVlZWVlZWVlZWVlZWVlZWVlIiwyLDJd"
+        }
+      },
+      "next_page": {
+        "review_hash": "38cde690988492d92d4d5197e9e2cfc4ec955b475c61a38f8e57122d7d9c5971",
+        "source_version": 2,
+        "source_hash": "eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee",
+        "offset": 2,
+        "page_size": 2,
+        "total_count": 3,
+        "total_size_bytes": 126,
+        "files": [
+          {
+            "key": "synthetic/source-2.csv",
+            "size": 42,
+            "etag": "synthetic-2",
+            "version_id": null
+          }
+        ],
+        "next_cursor": null
+      }
+    },
+    {
+      "name": "v3-bound-licenses-True",
+      "legacy_binding": false,
+      "review": {
+        "fields": {
+          "title": "Synthetic saved offer",
+          "description": "Original seller description",
+          "category": "consumer-retail",
+          "tags": "synthetic,retail",
+          "price": "25.00",
+          "license": "ai.market Standard Data Licence v1.0",
+          "license_selection": {
+            "kind": "standard",
+            "version": "1.1",
+            "ai_training": true,
+            "license_document_id": null,
+            "license_sha256": "881266a455d100e6b263ec121523001e5e53f6e3bf3bd97047e29ae39f8959fb",
+            "rider_sha256": null,
+            "covenant_code": "marketplace-listing",
+            "covenant_version": "1.1",
+            "covenant_sha256": "58eff1def7acb59db75920fe0da89a3f4f87bb12bd6765ec8eae231bbea118b5",
+            "seller_acceptance": {
+              "signer_name": "Synthetic Seller",
+              "signer_title": "Owner",
+              "authority_confirmed": true
+            },
+            "identity_version": null
+          }
+        },
+        "license_selection": {
+          "kind": "standard",
+          "version": "1.1",
+          "ai_training": true,
+          "license_document_id": null,
+          "license_sha256": "881266a455d100e6b263ec121523001e5e53f6e3bf3bd97047e29ae39f8959fb",
+          "rider_sha256": null,
+          "covenant_code": "marketplace-listing",
+          "covenant_version": "1.1",
+          "covenant_sha256": "58eff1def7acb59db75920fe0da89a3f4f87bb12bd6765ec8eae231bbea118b5",
+          "seller_acceptance": {
+            "signer_name": "Synthetic Seller",
+            "signer_title": "Owner",
+            "authority_confirmed": true
+          },
+          "identity_version": null
+        },
+        "draft_id": "00000000-0000-0000-0000-000000000386",
+        "listing_id": "00000000-0000-0000-0000-000000000388",
+        "base_listing_version_id": "00000000-0000-0000-0000-000000000389",
+        "draft_version": 3,
+        "source_version": 2,
+        "source_hash": "eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee",
+        "presentation_version": "seller-listing-review-v3",
+        "review_hash": "5eb0e1dad6d7d1e3d967c345352f83b328e2ff233d81f0ef67a52b1aadc52c72",
+        "missing_fields": [],
+        "approval_available": true,
+        "sample_status": "not_selected",
+        "confirmation_version": "seller-listing-confirmation-v3",
+        "confirmation_statements": {
+          "ownership_confirmed": "I have the rights needed to sell the selected data.",
+          "privacy_confirmed": "I have reviewed the selected data and am authorized to make it available under this listing.",
+          "public_disclosure_confirmed": "When I publish, the listing fields and my sample choice become public on ai.market. They may be shared with search engines, AI assistants, HuggingFace and other AI discovery systems, and may be used by AI-training crawlers.",
+          "price_confirmed": "I confirm the price shown in this review.",
+          "license_confirmed": "I confirm the selected licence and AI-training setting shown in this review.",
+          "covenant_authority_confirmed": "I accept the ai.market Marketplace Listing Covenant shown in this review and confirm my authority to do so."
+        },
+        "rendered_html": "<!doctype html><html lang=\"en\"><head><meta charset=\"utf-8\"><meta name=\"viewport\" content=\"width=device-width,initial-scale=1\"><meta http-equiv=\"Content-Security-Policy\" content=\"default-src 'none'; style-src 'unsafe-inline'; base-uri 'none'; form-action 'none'\"><title>Saved listing preview</title><style>html{color-scheme:light}body{margin:0;padding:24px;font:14px/1.7 system-ui,sans-serif;color:#374151;background:#fff}article{max-width:900px;margin:auto}h1{font-size:26px;line-height:1.3;color:#111827;margin:12px 0 20px}.category{color:#4338ca}.description{white-space:pre-wrap;overflow-wrap:anywhere}h1,dd,li{overflow-wrap:anywhere}ul{display:flex;flex-wrap:wrap;gap:8px;list-style:none;padding:0}li{max-width:100%;border-radius:20px;padding:4px 12px;background:#f3f4f6;font-size:12px}dl{border-top:1px solid #e5e7eb;padding-top:20px;display:grid;grid-template-columns:1fr 1fr;gap:20px}dt{font-size:12px;color:#6b7280}dd{margin:4px 0 0;color:#111827}.price{font-size:20px;font-weight:600}@media(max-width:420px){body{padding:16px}dl{grid-template-columns:1fr}}.description{white-space:normal}.description ul,.description ol{display:block;list-style:revert;padding-left:2em;margin:1em 0}.description li{display:list-item;max-width:none;border-radius:0;padding:0;background:transparent;font-size:inherit}.description h2,.description h3,.description h4{line-height:1.3;color:#111827;margin:1em 0 .5em}.description h2{font-size:22px}.description h3{font-size:19px}.description h4{font-size:16px}.description p{margin:0 0 1em}.description br{display:revert}</style></head><body><article><p class=\"category\">consumer-retail</p><h1>Synthetic saved offer</h1><div class=\"description\"><p>Original seller description</p></div><ul aria-label=\"Listing tags\"><li>synthetic</li><li>retail</li></ul><dl><div><dt>Price</dt><dd class=\"price\">$25.00</dd></div><div><dt>License</dt><dd>ai.market Standard Data Licence v1.0</dd></div></dl></article></body></html>",
+        "render_hash": "9f5b6b123c4705669b5a4bebc36a2a6bb6ccc144ed42fa1252477a9b64aa0516",
+        "approval": {
+          "id": "00000000-0000-0000-0000-00000000038a",
+          "review_hash": "5eb0e1dad6d7d1e3d967c345352f83b328e2ff233d81f0ef67a52b1aadc52c72",
+          "render_hash": "9f5b6b123c4705669b5a4bebc36a2a6bb6ccc144ed42fa1252477a9b64aa0516",
+          "draft_version": 3,
+          "source_version": 2,
+          "approved_at": "2026-11-10T00:00:00Z",
+          "sample_decision": "none",
+          "license_selection": {
+            "kind": "standard",
+            "version": "1.1",
+            "ai_training": true,
+            "license_document_id": null,
+            "license_sha256": "881266a455d100e6b263ec121523001e5e53f6e3bf3bd97047e29ae39f8959fb",
+            "rider_sha256": null,
+            "covenant_code": "marketplace-listing",
+            "covenant_version": "1.1",
+            "covenant_sha256": "58eff1def7acb59db75920fe0da89a3f4f87bb12bd6765ec8eae231bbea118b5",
+            "seller_acceptance": {
+              "signer_name": "Synthetic Seller",
+              "signer_title": "Owner",
+              "authority_confirmed": true
+            },
+            "identity_version": null
+          }
+        },
+        "source_page": {
+          "review_hash": "5eb0e1dad6d7d1e3d967c345352f83b328e2ff233d81f0ef67a52b1aadc52c72",
+          "source_version": 2,
+          "source_hash": "eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee",
+          "offset": 0,
+          "page_size": 2,
+          "total_count": 3,
+          "total_size_bytes": 126,
+          "files": [
+            {
+              "key": "synthetic/source-0.csv",
+              "size": 42,
+              "etag": "synthetic-0",
+              "version_id": null
+            },
+            {
+              "key": "synthetic/source-1.csv",
+              "size": 42,
+              "etag": "synthetic-1",
+              "version_id": null
+            }
+          ],
+          "next_cursor": "WyI1ZWIwZTFkYWQ2ZDdkMWUzZDk2N2MzNDUzNTJmODNiMzI4ZTJmZjIzM2Q4MWYwZWY2N2E1MmIxYWFkYzUyYzcyIiwyLCJlZWVlZWVlZWVlZWVlZWVlZWVlZWVlZWVlZWVlZWVlZWVlZWVlZWVlZWVlZWVlZWVlZWVlZWVlZWVlZWVlZWVlIiwyLDJd"
+        }
+      },
+      "next_page": {
+        "review_hash": "5eb0e1dad6d7d1e3d967c345352f83b328e2ff233d81f0ef67a52b1aadc52c72",
+        "source_version": 2,
+        "source_hash": "eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee",
+        "offset": 2,
+        "page_size": 2,
+        "total_count": 3,
+        "total_size_bytes": 126,
+        "files": [
+          {
+            "key": "synthetic/source-2.csv",
+            "size": 42,
+            "etag": "synthetic-2",
+            "version_id": null
+          }
+        ],
+        "next_cursor": null
+      }
+    },
+    {
+      "name": "v3-legacy-licenses-True",
+      "legacy_binding": true,
+      "review": {
+        "fields": {
+          "title": "Synthetic saved offer",
+          "description": "Original seller description",
+          "category": "consumer-retail",
+          "tags": "synthetic,retail",
+          "price": "25.00",
+          "license": "ai.market Standard Data Licence v1.0",
+          "license_selection": {
+            "kind": "standard",
+            "version": "1.1",
+            "ai_training": true,
+            "license_document_id": null,
+            "license_sha256": "881266a455d100e6b263ec121523001e5e53f6e3bf3bd97047e29ae39f8959fb",
+            "rider_sha256": null,
+            "covenant_code": "marketplace-listing",
+            "covenant_version": "1.1",
+            "covenant_sha256": "58eff1def7acb59db75920fe0da89a3f4f87bb12bd6765ec8eae231bbea118b5",
+            "seller_acceptance": {
+              "signer_name": "Synthetic Seller",
+              "signer_title": "Owner",
+              "authority_confirmed": true
+            },
+            "identity_version": null
+          }
+        },
+        "license_selection": {
+          "kind": "standard",
+          "version": "1.1",
+          "ai_training": true,
+          "license_document_id": null,
+          "license_sha256": "881266a455d100e6b263ec121523001e5e53f6e3bf3bd97047e29ae39f8959fb",
+          "rider_sha256": null,
+          "covenant_code": "marketplace-listing",
+          "covenant_version": "1.1",
+          "covenant_sha256": "58eff1def7acb59db75920fe0da89a3f4f87bb12bd6765ec8eae231bbea118b5",
+          "seller_acceptance": {
+            "signer_name": "Synthetic Seller",
+            "signer_title": "Owner",
+            "authority_confirmed": true
+          },
+          "identity_version": null
+        },
+        "draft_id": "00000000-0000-0000-0000-000000000386",
+        "listing_id": null,
+        "base_listing_version_id": null,
+        "draft_version": 3,
+        "source_version": 2,
+        "source_hash": "eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee",
+        "presentation_version": "seller-listing-review-v3",
+        "review_hash": "7765eb88033ffdc793a15068fc127fcd67a38d1f10fc83075555c5ac6abe355f",
+        "missing_fields": [],
+        "approval_available": true,
+        "sample_status": "not_selected",
+        "confirmation_version": "seller-listing-confirmation-v3",
+        "confirmation_statements": {
+          "ownership_confirmed": "I have the rights needed to sell the selected data.",
+          "privacy_confirmed": "I have reviewed the selected data and am authorized to make it available under this listing.",
+          "public_disclosure_confirmed": "When I publish, the listing fields and my sample choice become public on ai.market. They may be shared with search engines, AI assistants, HuggingFace and other AI discovery systems, and may be used by AI-training crawlers.",
+          "price_confirmed": "I confirm the price shown in this review.",
+          "license_confirmed": "I confirm the selected licence and AI-training setting shown in this review.",
+          "covenant_authority_confirmed": "I accept the ai.market Marketplace Listing Covenant shown in this review and confirm my authority to do so."
+        },
+        "rendered_html": "<!doctype html><html lang=\"en\"><head><meta charset=\"utf-8\"><meta name=\"viewport\" content=\"width=device-width,initial-scale=1\"><meta http-equiv=\"Content-Security-Policy\" content=\"default-src 'none'; style-src 'unsafe-inline'; base-uri 'none'; form-action 'none'\"><title>Saved listing preview</title><style>html{color-scheme:light}body{margin:0;padding:24px;font:14px/1.7 system-ui,sans-serif;color:#374151;background:#fff}article{max-width:900px;margin:auto}h1{font-size:26px;line-height:1.3;color:#111827;margin:12px 0 20px}.category{color:#4338ca}.description{white-space:pre-wrap;overflow-wrap:anywhere}h1,dd,li{overflow-wrap:anywhere}ul{display:flex;flex-wrap:wrap;gap:8px;list-style:none;padding:0}li{max-width:100%;border-radius:20px;padding:4px 12px;background:#f3f4f6;font-size:12px}dl{border-top:1px solid #e5e7eb;padding-top:20px;display:grid;grid-template-columns:1fr 1fr;gap:20px}dt{font-size:12px;color:#6b7280}dd{margin:4px 0 0;color:#111827}.price{font-size:20px;font-weight:600}@media(max-width:420px){body{padding:16px}dl{grid-template-columns:1fr}}.description{white-space:normal}.description ul,.description ol{display:block;list-style:revert;padding-left:2em;margin:1em 0}.description li{display:list-item;max-width:none;border-radius:0;padding:0;background:transparent;font-size:inherit}.description h2,.description h3,.description h4{line-height:1.3;color:#111827;margin:1em 0 .5em}.description h2{font-size:22px}.description h3{font-size:19px}.description h4{font-size:16px}.description p{margin:0 0 1em}.description br{display:revert}</style></head><body><article><p class=\"category\">consumer-retail</p><h1>Synthetic saved offer</h1><div class=\"description\"><p>Original seller description</p></div><ul aria-label=\"Listing tags\"><li>synthetic</li><li>retail</li></ul><dl><div><dt>Price</dt><dd class=\"price\">$25.00</dd></div><div><dt>License</dt><dd>ai.market Standard Data Licence v1.0</dd></div></dl></article></body></html>",
+        "render_hash": "9f5b6b123c4705669b5a4bebc36a2a6bb6ccc144ed42fa1252477a9b64aa0516",
+        "approval": {
+          "id": "00000000-0000-0000-0000-00000000038a",
+          "review_hash": "7765eb88033ffdc793a15068fc127fcd67a38d1f10fc83075555c5ac6abe355f",
+          "render_hash": "9f5b6b123c4705669b5a4bebc36a2a6bb6ccc144ed42fa1252477a9b64aa0516",
+          "draft_version": 3,
+          "source_version": 2,
+          "approved_at": "2026-11-10T00:00:00Z",
+          "sample_decision": "none",
+          "license_selection": {
+            "kind": "standard",
+            "version": "1.1",
+            "ai_training": true,
+            "license_document_id": null,
+            "license_sha256": "881266a455d100e6b263ec121523001e5e53f6e3bf3bd97047e29ae39f8959fb",
+            "rider_sha256": null,
+            "covenant_code": "marketplace-listing",
+            "covenant_version": "1.1",
+            "covenant_sha256": "58eff1def7acb59db75920fe0da89a3f4f87bb12bd6765ec8eae231bbea118b5",
+            "seller_acceptance": {
+              "signer_name": "Synthetic Seller",
+              "signer_title": "Owner",
+              "authority_confirmed": true
+            },
+            "identity_version": null
+          }
+        },
+        "source_page": {
+          "review_hash": "7765eb88033ffdc793a15068fc127fcd67a38d1f10fc83075555c5ac6abe355f",
+          "source_version": 2,
+          "source_hash": "eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee",
+          "offset": 0,
+          "page_size": 2,
+          "total_count": 3,
+          "total_size_bytes": 126,
+          "files": [
+            {
+              "key": "synthetic/source-0.csv",
+              "size": 42,
+              "etag": "synthetic-0",
+              "version_id": null
+            },
+            {
+              "key": "synthetic/source-1.csv",
+              "size": 42,
+              "etag": "synthetic-1",
+              "version_id": null
+            }
+          ],
+          "next_cursor": "WyI3NzY1ZWI4ODAzM2ZmZGM3OTNhMTUwNjhmYzEyN2ZjZDY3YTM4ZDFmMTBmYzgzMDc1NTU1YzVhYzZhYmUzNTVmIiwyLCJlZWVlZWVlZWVlZWVlZWVlZWVlZWVlZWVlZWVlZWVlZWVlZWVlZWVlZWVlZWVlZWVlZWVlZWVlZWVlZWVlZWVlIiwyLDJd"
+        }
+      },
+      "next_page": {
+        "review_hash": "7765eb88033ffdc793a15068fc127fcd67a38d1f10fc83075555c5ac6abe355f",
+        "source_version": 2,
+        "source_hash": "eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee",
+        "offset": 2,
+        "page_size": 2,
+        "total_count": 3,
+        "total_size_bytes": 126,
+        "files": [
+          {
+            "key": "synthetic/source-2.csv",
+            "size": 42,
+            "etag": "synthetic-2",
+            "version_id": null
+          }
+        ],
+        "next_cursor": null
+      }
+    },
+    {
+      "name": "v4-fresh-licenses-True",
+      "legacy_binding": false,
+      "review": {
+        "fields": {
+          "title": "Synthetic saved offer",
+          "description": "Original seller description",
+          "category": "consumer-retail",
+          "tags": "synthetic,retail",
+          "price": "25.00",
+          "license": "ai.market Standard Data Licence v1.1",
+          "license_selection": {
+            "kind": "standard",
+            "version": "1.1",
+            "ai_training": true,
+            "license_document_id": null,
+            "license_sha256": "881266a455d100e6b263ec121523001e5e53f6e3bf3bd97047e29ae39f8959fb",
+            "rider_sha256": null,
+            "covenant_code": "marketplace-listing",
+            "covenant_version": "1.1",
+            "covenant_sha256": "58eff1def7acb59db75920fe0da89a3f4f87bb12bd6765ec8eae231bbea118b5",
+            "seller_acceptance": {
+              "signer_name": "Synthetic Seller",
+              "signer_title": "Owner",
+              "authority_confirmed": true
+            },
+            "identity_version": null
+          }
+        },
+        "license_selection": {
+          "kind": "standard",
+          "version": "1.1",
+          "ai_training": true,
+          "license_document_id": null,
+          "license_sha256": "881266a455d100e6b263ec121523001e5e53f6e3bf3bd97047e29ae39f8959fb",
+          "rider_sha256": null,
+          "covenant_code": "marketplace-listing",
+          "covenant_version": "1.1",
+          "covenant_sha256": "58eff1def7acb59db75920fe0da89a3f4f87bb12bd6765ec8eae231bbea118b5",
+          "seller_acceptance": {
+            "signer_name": "Synthetic Seller",
+            "signer_title": "Owner",
+            "authority_confirmed": true
+          },
+          "identity_version": null
+        },
+        "draft_id": "00000000-0000-0000-0000-000000000386",
+        "listing_id": null,
+        "base_listing_version_id": null,
+        "draft_version": 3,
+        "source_version": 2,
+        "source_hash": "eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee",
+        "presentation_version": "seller-listing-review-v4",
+        "review_hash": "684cf9395db7fb6525d09e5bd6c6411da85aae7ef656ea4559f75911095835ee",
+        "missing_fields": [],
+        "approval_available": true,
+        "sample_status": "not_selected",
+        "confirmation_version": "seller-listing-confirmation-v3",
+        "confirmation_statements": {
+          "ownership_confirmed": "I have the rights needed to sell the selected data.",
+          "privacy_confirmed": "I have reviewed the selected data and am authorized to make it available under this listing.",
+          "public_disclosure_confirmed": "When I publish, the listing fields and my sample choice become public on ai.market. They may be shared with search engines, AI assistants, HuggingFace and other AI discovery systems, and may be used by AI-training crawlers.",
+          "price_confirmed": "I confirm the price shown in this review.",
+          "license_confirmed": "I confirm the selected licence and AI-training setting shown in this review.",
+          "covenant_authority_confirmed": "I accept the ai.market Marketplace Listing Covenant shown in this review and confirm my authority to do so."
+        },
+        "rendered_html": "<!doctype html><html lang=\"en\"><head><meta charset=\"utf-8\"><meta name=\"viewport\" content=\"width=device-width,initial-scale=1\"><meta http-equiv=\"Content-Security-Policy\" content=\"default-src 'none'; style-src 'unsafe-inline'; base-uri 'none'; form-action 'none'\"><title>Saved listing preview</title><style>html{color-scheme:light}body{margin:0;padding:24px;font:14px/1.7 system-ui,sans-serif;color:#374151;background:#fff}article{max-width:900px;margin:auto}h1{font-size:26px;line-height:1.3;color:#111827;margin:12px 0 20px}.category{color:#4338ca}.description{white-space:pre-wrap;overflow-wrap:anywhere}h1,dd,li{overflow-wrap:anywhere}ul{display:flex;flex-wrap:wrap;gap:8px;list-style:none;padding:0}li{max-width:100%;border-radius:20px;padding:4px 12px;background:#f3f4f6;font-size:12px}dl{border-top:1px solid #e5e7eb;padding-top:20px;display:grid;grid-template-columns:1fr 1fr;gap:20px}dt{font-size:12px;color:#6b7280}dd{margin:4px 0 0;color:#111827}.price{font-size:20px;font-weight:600}@media(max-width:420px){body{padding:16px}dl{grid-template-columns:1fr}}.description{white-space:normal}.description ul,.description ol{display:block;list-style:revert;padding-left:2em;margin:1em 0}.description li{display:list-item;max-width:none;border-radius:0;padding:0;background:transparent;font-size:inherit}.description h2,.description h3,.description h4{line-height:1.3;color:#111827;margin:1em 0 .5em}.description h2{font-size:22px}.description h3{font-size:19px}.description h4{font-size:16px}.description p{margin:0 0 1em}.description br{display:revert}</style></head><body><article><p class=\"category\">Consumer &amp; Retail</p><h1>Synthetic saved offer</h1><div class=\"description\"><p>Original seller description</p></div><ul aria-label=\"Listing tags\"><li>synthetic</li><li>retail</li></ul><dl><div><dt>Price</dt><dd class=\"price\">$25.00</dd></div><div><dt>License</dt><dd>ai.market Standard Data Licence v1.1</dd></div></dl></article></body></html>",
+        "render_hash": "699e4b7c67005c000f53694fde023404f78739357dc986d92d6811738619f383",
+        "approval": {
+          "id": "00000000-0000-0000-0000-00000000038a",
+          "review_hash": "684cf9395db7fb6525d09e5bd6c6411da85aae7ef656ea4559f75911095835ee",
+          "render_hash": "699e4b7c67005c000f53694fde023404f78739357dc986d92d6811738619f383",
+          "draft_version": 3,
+          "source_version": 2,
+          "approved_at": "2026-11-10T00:00:00Z",
+          "sample_decision": "none",
+          "license_selection": {
+            "kind": "standard",
+            "version": "1.1",
+            "ai_training": true,
+            "license_document_id": null,
+            "license_sha256": "881266a455d100e6b263ec121523001e5e53f6e3bf3bd97047e29ae39f8959fb",
+            "rider_sha256": null,
+            "covenant_code": "marketplace-listing",
+            "covenant_version": "1.1",
+            "covenant_sha256": "58eff1def7acb59db75920fe0da89a3f4f87bb12bd6765ec8eae231bbea118b5",
+            "seller_acceptance": {
+              "signer_name": "Synthetic Seller",
+              "signer_title": "Owner",
+              "authority_confirmed": true
+            },
+            "identity_version": null
+          }
+        },
+        "source_page": {
+          "review_hash": "684cf9395db7fb6525d09e5bd6c6411da85aae7ef656ea4559f75911095835ee",
+          "source_version": 2,
+          "source_hash": "eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee",
+          "offset": 0,
+          "page_size": 2,
+          "total_count": 3,
+          "total_size_bytes": 126,
+          "files": [
+            {
+              "key": "synthetic/source-0.csv",
+              "size": 42,
+              "etag": "synthetic-0",
+              "version_id": null
+            },
+            {
+              "key": "synthetic/source-1.csv",
+              "size": 42,
+              "etag": "synthetic-1",
+              "version_id": null
+            }
+          ],
+          "next_cursor": "WyI2ODRjZjkzOTVkYjdmYjY1MjVkMDllNWJkNmM2NDExZGE4NWFhZTdlZjY1NmVhNDU1OWY3NTkxMTA5NTgzNWVlIiwyLCJlZWVlZWVlZWVlZWVlZWVlZWVlZWVlZWVlZWVlZWVlZWVlZWVlZWVlZWVlZWVlZWVlZWVlZWVlZWVlZWVlZWVlIiwyLDJd"
+        }
+      },
+      "next_page": {
+        "review_hash": "684cf9395db7fb6525d09e5bd6c6411da85aae7ef656ea4559f75911095835ee",
+        "source_version": 2,
+        "source_hash": "eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee",
+        "offset": 2,
+        "page_size": 2,
+        "total_count": 3,
+        "total_size_bytes": 126,
+        "files": [
+          {
+            "key": "synthetic/source-2.csv",
+            "size": 42,
+            "etag": "synthetic-2",
+            "version_id": null
+          }
+        ],
+        "next_cursor": null
+      }
+    },
+    {
+      "name": "v4-bound-licenses-True",
+      "legacy_binding": false,
+      "review": {
+        "fields": {
+          "title": "Synthetic saved offer",
+          "description": "Original seller description",
+          "category": "consumer-retail",
+          "tags": "synthetic,retail",
+          "price": "25.00",
+          "license": "ai.market Standard Data Licence v1.0",
+          "license_selection": {
+            "kind": "standard",
+            "version": "1.1",
+            "ai_training": true,
+            "license_document_id": null,
+            "license_sha256": "881266a455d100e6b263ec121523001e5e53f6e3bf3bd97047e29ae39f8959fb",
+            "rider_sha256": null,
+            "covenant_code": "marketplace-listing",
+            "covenant_version": "1.1",
+            "covenant_sha256": "58eff1def7acb59db75920fe0da89a3f4f87bb12bd6765ec8eae231bbea118b5",
+            "seller_acceptance": {
+              "signer_name": "Synthetic Seller",
+              "signer_title": "Owner",
+              "authority_confirmed": true
+            },
+            "identity_version": null
+          }
+        },
+        "license_selection": {
+          "kind": "standard",
+          "version": "1.1",
+          "ai_training": true,
+          "license_document_id": null,
+          "license_sha256": "881266a455d100e6b263ec121523001e5e53f6e3bf3bd97047e29ae39f8959fb",
+          "rider_sha256": null,
+          "covenant_code": "marketplace-listing",
+          "covenant_version": "1.1",
+          "covenant_sha256": "58eff1def7acb59db75920fe0da89a3f4f87bb12bd6765ec8eae231bbea118b5",
+          "seller_acceptance": {
+            "signer_name": "Synthetic Seller",
+            "signer_title": "Owner",
+            "authority_confirmed": true
+          },
+          "identity_version": null
+        },
+        "draft_id": "00000000-0000-0000-0000-000000000386",
+        "listing_id": "00000000-0000-0000-0000-000000000388",
+        "base_listing_version_id": "00000000-0000-0000-0000-000000000389",
+        "draft_version": 3,
+        "source_version": 2,
+        "source_hash": "eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee",
+        "presentation_version": "seller-listing-review-v4",
+        "review_hash": "97f3cb2619e0693e4bfd63d06d429df5cc06d9f9b493cd9e32acddfed1ae5fa9",
+        "missing_fields": [],
+        "approval_available": true,
+        "sample_status": "not_selected",
+        "confirmation_version": "seller-listing-confirmation-v3",
+        "confirmation_statements": {
+          "ownership_confirmed": "I have the rights needed to sell the selected data.",
+          "privacy_confirmed": "I have reviewed the selected data and am authorized to make it available under this listing.",
+          "public_disclosure_confirmed": "When I publish, the listing fields and my sample choice become public on ai.market. They may be shared with search engines, AI assistants, HuggingFace and other AI discovery systems, and may be used by AI-training crawlers.",
+          "price_confirmed": "I confirm the price shown in this review.",
+          "license_confirmed": "I confirm the selected licence and AI-training setting shown in this review.",
+          "covenant_authority_confirmed": "I accept the ai.market Marketplace Listing Covenant shown in this review and confirm my authority to do so."
+        },
+        "rendered_html": "<!doctype html><html lang=\"en\"><head><meta charset=\"utf-8\"><meta name=\"viewport\" content=\"width=device-width,initial-scale=1\"><meta http-equiv=\"Content-Security-Policy\" content=\"default-src 'none'; style-src 'unsafe-inline'; base-uri 'none'; form-action 'none'\"><title>Saved listing preview</title><style>html{color-scheme:light}body{margin:0;padding:24px;font:14px/1.7 system-ui,sans-serif;color:#374151;background:#fff}article{max-width:900px;margin:auto}h1{font-size:26px;line-height:1.3;color:#111827;margin:12px 0 20px}.category{color:#4338ca}.description{white-space:pre-wrap;overflow-wrap:anywhere}h1,dd,li{overflow-wrap:anywhere}ul{display:flex;flex-wrap:wrap;gap:8px;list-style:none;padding:0}li{max-width:100%;border-radius:20px;padding:4px 12px;background:#f3f4f6;font-size:12px}dl{border-top:1px solid #e5e7eb;padding-top:20px;display:grid;grid-template-columns:1fr 1fr;gap:20px}dt{font-size:12px;color:#6b7280}dd{margin:4px 0 0;color:#111827}.price{font-size:20px;font-weight:600}@media(max-width:420px){body{padding:16px}dl{grid-template-columns:1fr}}.description{white-space:normal}.description ul,.description ol{display:block;list-style:revert;padding-left:2em;margin:1em 0}.description li{display:list-item;max-width:none;border-radius:0;padding:0;background:transparent;font-size:inherit}.description h2,.description h3,.description h4{line-height:1.3;color:#111827;margin:1em 0 .5em}.description h2{font-size:22px}.description h3{font-size:19px}.description h4{font-size:16px}.description p{margin:0 0 1em}.description br{display:revert}</style></head><body><article><p class=\"category\">Consumer &amp; Retail</p><h1>Synthetic saved offer</h1><div class=\"description\"><p>Original seller description</p></div><ul aria-label=\"Listing tags\"><li>synthetic</li><li>retail</li></ul><dl><div><dt>Price</dt><dd class=\"price\">$25.00</dd></div><div><dt>License</dt><dd>ai.market Standard Data Licence v1.0</dd></div></dl></article></body></html>",
+        "render_hash": "58cf0728a08b01a63fa2eafc4426cd16353549299c21049ec281eb650849d054",
+        "approval": {
+          "id": "00000000-0000-0000-0000-00000000038a",
+          "review_hash": "97f3cb2619e0693e4bfd63d06d429df5cc06d9f9b493cd9e32acddfed1ae5fa9",
+          "render_hash": "58cf0728a08b01a63fa2eafc4426cd16353549299c21049ec281eb650849d054",
+          "draft_version": 3,
+          "source_version": 2,
+          "approved_at": "2026-11-10T00:00:00Z",
+          "sample_decision": "none",
+          "license_selection": {
+            "kind": "standard",
+            "version": "1.1",
+            "ai_training": true,
+            "license_document_id": null,
+            "license_sha256": "881266a455d100e6b263ec121523001e5e53f6e3bf3bd97047e29ae39f8959fb",
+            "rider_sha256": null,
+            "covenant_code": "marketplace-listing",
+            "covenant_version": "1.1",
+            "covenant_sha256": "58eff1def7acb59db75920fe0da89a3f4f87bb12bd6765ec8eae231bbea118b5",
+            "seller_acceptance": {
+              "signer_name": "Synthetic Seller",
+              "signer_title": "Owner",
+              "authority_confirmed": true
+            },
+            "identity_version": null
+          }
+        },
+        "source_page": {
+          "review_hash": "97f3cb2619e0693e4bfd63d06d429df5cc06d9f9b493cd9e32acddfed1ae5fa9",
+          "source_version": 2,
+          "source_hash": "eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee",
+          "offset": 0,
+          "page_size": 2,
+          "total_count": 3,
+          "total_size_bytes": 126,
+          "files": [
+            {
+              "key": "synthetic/source-0.csv",
+              "size": 42,
+              "etag": "synthetic-0",
+              "version_id": null
+            },
+            {
+              "key": "synthetic/source-1.csv",
+              "size": 42,
+              "etag": "synthetic-1",
+              "version_id": null
+            }
+          ],
+          "next_cursor": "WyI5N2YzY2IyNjE5ZTA2OTNlNGJmZDYzZDA2ZDQyOWRmNWNjMDZkOWY5YjQ5M2NkOWUzMmFjZGRmZWQxYWU1ZmE5IiwyLCJlZWVlZWVlZWVlZWVlZWVlZWVlZWVlZWVlZWVlZWVlZWVlZWVlZWVlZWVlZWVlZWVlZWVlZWVlZWVlZWVlZWVlIiwyLDJd"
+        }
+      },
+      "next_page": {
+        "review_hash": "97f3cb2619e0693e4bfd63d06d429df5cc06d9f9b493cd9e32acddfed1ae5fa9",
+        "source_version": 2,
+        "source_hash": "eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee",
+        "offset": 2,
+        "page_size": 2,
+        "total_count": 3,
+        "total_size_bytes": 126,
+        "files": [
+          {
+            "key": "synthetic/source-2.csv",
+            "size": 42,
+            "etag": "synthetic-2",
+            "version_id": null
+          }
+        ],
+        "next_cursor": null
+      }
+    },
+    {
+      "name": "v4-legacy-licenses-True",
+      "legacy_binding": true,
+      "review": {
+        "fields": {
+          "title": "Synthetic saved offer",
+          "description": "Original seller description",
+          "category": "consumer-retail",
+          "tags": "synthetic,retail",
+          "price": "25.00",
+          "license": "ai.market Standard Data Licence v1.1",
+          "license_selection": {
+            "kind": "standard",
+            "version": "1.1",
+            "ai_training": true,
+            "license_document_id": null,
+            "license_sha256": "881266a455d100e6b263ec121523001e5e53f6e3bf3bd97047e29ae39f8959fb",
+            "rider_sha256": null,
+            "covenant_code": "marketplace-listing",
+            "covenant_version": "1.1",
+            "covenant_sha256": "58eff1def7acb59db75920fe0da89a3f4f87bb12bd6765ec8eae231bbea118b5",
+            "seller_acceptance": {
+              "signer_name": "Synthetic Seller",
+              "signer_title": "Owner",
+              "authority_confirmed": true
+            },
+            "identity_version": null
+          }
+        },
+        "license_selection": {
+          "kind": "standard",
+          "version": "1.1",
+          "ai_training": true,
+          "license_document_id": null,
+          "license_sha256": "881266a455d100e6b263ec121523001e5e53f6e3bf3bd97047e29ae39f8959fb",
+          "rider_sha256": null,
+          "covenant_code": "marketplace-listing",
+          "covenant_version": "1.1",
+          "covenant_sha256": "58eff1def7acb59db75920fe0da89a3f4f87bb12bd6765ec8eae231bbea118b5",
+          "seller_acceptance": {
+            "signer_name": "Synthetic Seller",
+            "signer_title": "Owner",
+            "authority_confirmed": true
+          },
+          "identity_version": null
+        },
+        "draft_id": "00000000-0000-0000-0000-000000000386",
+        "listing_id": null,
+        "base_listing_version_id": null,
+        "draft_version": 3,
+        "source_version": 2,
+        "source_hash": "eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee",
+        "presentation_version": "seller-listing-review-v4",
+        "review_hash": "1f9b5b230338bce92460714505dbc86309dfe72c4d7c19261da15294704ab6c3",
+        "missing_fields": [],
+        "approval_available": true,
+        "sample_status": "not_selected",
+        "confirmation_version": "seller-listing-confirmation-v3",
+        "confirmation_statements": {
+          "ownership_confirmed": "I have the rights needed to sell the selected data.",
+          "privacy_confirmed": "I have reviewed the selected data and am authorized to make it available under this listing.",
+          "public_disclosure_confirmed": "When I publish, the listing fields and my sample choice become public on ai.market. They may be shared with search engines, AI assistants, HuggingFace and other AI discovery systems, and may be used by AI-training crawlers.",
+          "price_confirmed": "I confirm the price shown in this review.",
+          "license_confirmed": "I confirm the selected licence and AI-training setting shown in this review.",
+          "covenant_authority_confirmed": "I accept the ai.market Marketplace Listing Covenant shown in this review and confirm my authority to do so."
+        },
+        "rendered_html": "<!doctype html><html lang=\"en\"><head><meta charset=\"utf-8\"><meta name=\"viewport\" content=\"width=device-width,initial-scale=1\"><meta http-equiv=\"Content-Security-Policy\" content=\"default-src 'none'; style-src 'unsafe-inline'; base-uri 'none'; form-action 'none'\"><title>Saved listing preview</title><style>html{color-scheme:light}body{margin:0;padding:24px;font:14px/1.7 system-ui,sans-serif;color:#374151;background:#fff}article{max-width:900px;margin:auto}h1{font-size:26px;line-height:1.3;color:#111827;margin:12px 0 20px}.category{color:#4338ca}.description{white-space:pre-wrap;overflow-wrap:anywhere}h1,dd,li{overflow-wrap:anywhere}ul{display:flex;flex-wrap:wrap;gap:8px;list-style:none;padding:0}li{max-width:100%;border-radius:20px;padding:4px 12px;background:#f3f4f6;font-size:12px}dl{border-top:1px solid #e5e7eb;padding-top:20px;display:grid;grid-template-columns:1fr 1fr;gap:20px}dt{font-size:12px;color:#6b7280}dd{margin:4px 0 0;color:#111827}.price{font-size:20px;font-weight:600}@media(max-width:420px){body{padding:16px}dl{grid-template-columns:1fr}}.description{white-space:normal}.description ul,.description ol{display:block;list-style:revert;padding-left:2em;margin:1em 0}.description li{display:list-item;max-width:none;border-radius:0;padding:0;background:transparent;font-size:inherit}.description h2,.description h3,.description h4{line-height:1.3;color:#111827;margin:1em 0 .5em}.description h2{font-size:22px}.description h3{font-size:19px}.description h4{font-size:16px}.description p{margin:0 0 1em}.description br{display:revert}</style></head><body><article><p class=\"category\">Consumer &amp; Retail</p><h1>Synthetic saved offer</h1><div class=\"description\"><p>Original seller description</p></div><ul aria-label=\"Listing tags\"><li>synthetic</li><li>retail</li></ul><dl><div><dt>Price</dt><dd class=\"price\">$25.00</dd></div><div><dt>License</dt><dd>ai.market Standard Data Licence v1.1</dd></div></dl></article></body></html>",
+        "render_hash": "699e4b7c67005c000f53694fde023404f78739357dc986d92d6811738619f383",
+        "approval": {
+          "id": "00000000-0000-0000-0000-00000000038a",
+          "review_hash": "1f9b5b230338bce92460714505dbc86309dfe72c4d7c19261da15294704ab6c3",
+          "render_hash": "699e4b7c67005c000f53694fde023404f78739357dc986d92d6811738619f383",
+          "draft_version": 3,
+          "source_version": 2,
+          "approved_at": "2026-11-10T00:00:00Z",
+          "sample_decision": "none",
+          "license_selection": {
+            "kind": "standard",
+            "version": "1.1",
+            "ai_training": true,
+            "license_document_id": null,
+            "license_sha256": "881266a455d100e6b263ec121523001e5e53f6e3bf3bd97047e29ae39f8959fb",
+            "rider_sha256": null,
+            "covenant_code": "marketplace-listing",
+            "covenant_version": "1.1",
+            "covenant_sha256": "58eff1def7acb59db75920fe0da89a3f4f87bb12bd6765ec8eae231bbea118b5",
+            "seller_acceptance": {
+              "signer_name": "Synthetic Seller",
+              "signer_title": "Owner",
+              "authority_confirmed": true
+            },
+            "identity_version": null
+          }
+        },
+        "source_page": {
+          "review_hash": "1f9b5b230338bce92460714505dbc86309dfe72c4d7c19261da15294704ab6c3",
+          "source_version": 2,
+          "source_hash": "eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee",
+          "offset": 0,
+          "page_size": 2,
+          "total_count": 3,
+          "total_size_bytes": 126,
+          "files": [
+            {
+              "key": "synthetic/source-0.csv",
+              "size": 42,
+              "etag": "synthetic-0",
+              "version_id": null
+            },
+            {
+              "key": "synthetic/source-1.csv",
+              "size": 42,
+              "etag": "synthetic-1",
+              "version_id": null
+            }
+          ],
+          "next_cursor": "WyIxZjliNWIyMzAzMzhiY2U5MjQ2MDcxNDUwNWRiYzg2MzA5ZGZlNzJjNGQ3YzE5MjYxZGExNTI5NDcwNGFiNmMzIiwyLCJlZWVlZWVlZWVlZWVlZWVlZWVlZWVlZWVlZWVlZWVlZWVlZWVlZWVlZWVlZWVlZWVlZWVlZWVlZWVlZWVlZWVlIiwyLDJd"
+        }
+      },
+      "next_page": {
+        "review_hash": "1f9b5b230338bce92460714505dbc86309dfe72c4d7c19261da15294704ab6c3",
+        "source_version": 2,
+        "source_hash": "eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee",
+        "offset": 2,
+        "page_size": 2,
+        "total_count": 3,
+        "total_size_bytes": 126,
+        "files": [
+          {
+            "key": "synthetic/source-2.csv",
+            "size": 42,
+            "etag": "synthetic-2",
+            "version_id": null
+          }
+        ],
+        "next_cursor": null
+      }
+    }
+  ]
+}

@@ -1,4 +1,5 @@
 'use client';
+import PurchasedLicenseDisplay from '@/components/orders/PurchasedLicenseDisplay';
 
 import { canonicalOrderId } from '@/lib/order-route';
 import { ACTION_AUTH_REFRESH, isLegacyActionAuthError } from '@/lib/action-auth-error';
@@ -223,6 +224,7 @@ function OrderDetailVisit({ orderId, txIdParam, userId, sessionGeneration, issue
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
         {/* Main info */}
         <div className="lg:col-span-2 space-y-6">
+          {isBuyerOfRecord && <PurchasedLicenseDisplay orderId={order.id} listingId={order.listing_id} />}
           {isBuyerOfRecord && <GatewayDeliverySection key={order.id} orderId={order.id} onPresenceChange={handleGatewayPresence} />}
           <RecoveryRenderBoundary resetKey={order} onFailure={() => { setRenderFailed(true); if (recovery.attempt) void recovery.attempt.stop('failed'); }}>
           <div className="rounded-lg border border-gray-200 p-6">
