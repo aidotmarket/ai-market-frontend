@@ -120,6 +120,7 @@ it('shares restoration invalidation with another observer and a cached query key
   await waitFor(() => expect(browse.result.current.items).toHaveLength(1));
   await waitFor(() => expect(semantic.result.current.items).toHaveLength(1));
   semantic.unmount();
+  api.listListings.mockRejectedValue(new Error('Refresh failed'));
   restore();
   expect(browse.result.current.items).toEqual([]);
   api.searchListings.mockRejectedValue(new Error('Refresh failed'));

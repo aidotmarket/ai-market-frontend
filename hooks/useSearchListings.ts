@@ -60,7 +60,26 @@ function registerRestorationClock(clock: ReturnType<typeof createRestorationCloc
   });
 }
 
-function createRestorationClock() {
+function createRestorationClock(client: QueryClient) {
+  let refreshScheduled = false;
+  const refresh = () => {
+    if (refreshScheduled) return;
+    refreshScheduled = true;
+    // Let adjacent restoration events publish their latest epoch first. Explicit
+    // cancellation also supersedes initial requests, where cancelRefetch alone
+    // does not cancel a fetch without cached data. Infinite refetch reloads every
+    // retained page, rather than just the page that happened to be in flight.
+    queueMicrotask(() => {
+      // Cancellation updates query state synchronously; start the replacement
+      // in the same turn so the focus handler cannot start a competing fetch.
+      void client.cancelQueries({ queryKey: ['marketplace-results'] });
+      refreshScheduled = false;
+      void client.refetchQueries(
+        { queryKey: ['marketplace-results'], type: 'active' },
+        { cancelRefetch: true },
+      );
+    });
+  };
   let epoch: symbol | undefined;
   let wall = Date.now();
   let monotonic = performance.now();
@@ -80,6 +99,7 @@ function createRestorationClock() {
       monotonic = nextMonotonic;
       if (restored || clockGap >= 60_000) {
         epoch = Symbol('restoration');
+        refresh();
         listeners.forEach(listener => listener());
       }
     },
@@ -97,7 +117,7 @@ export function useSearchListings({
   const client = useQueryClient();
   let restorationClock = restorationClocks.get(client);
   if (!restorationClock) {
-    restorationClock = createRestorationClock();
+    restorationClock = createRestorationClock(client);
     restorationClocks.set(client, restorationClock);
     registerRestorationClock(restorationClock);
   }
@@ -188,11 +208,13 @@ export function useSearchListings({
     ? (Array.isArray(firstPage) ? rawItems.length : (firstPage as SearchResponse | undefined)?.total || rawItems.length)
     : rawItems.length;
 
+  const refreshingExpired = expired && query.isFetching;
   return {
     ...query,
     items: rawItems,
-    isError: query.isError || expired,
-    error: expired ? new Error('Refresh to load current marketplace results.') : query.error,
+    isLoading: query.isLoading || refreshingExpired,
+    isError: !refreshingExpired && (query.isError || expired),
+    error: refreshingExpired ? null : expired ? new Error('Refresh to load current marketplace results.') : query.error,
     facets,
     total,
     semanticMode,

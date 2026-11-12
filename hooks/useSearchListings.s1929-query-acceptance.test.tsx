@@ -51,13 +51,16 @@ it.each(['', 'licence'])('keeps a pre-restore response hidden after restoring %j
 
   let finish!: (value: typeof response) => void;
   route.mockReturnValueOnce(new Promise(resolve => { finish = resolve; }));
+  route.mockRejectedValue(new Error('Controlled post-restore refresh failure'));
   const request = search.result.current.refetch();
   await waitFor(() => expect(route).toHaveBeenCalledTimes(2));
 
   vi.setSystemTime(Date.now() - 60 * 60_000 + 16 * 60_000);
   act(() => window.dispatchEvent(new PageTransitionEvent('pageshow', { persisted: true })));
   expect(search.result.current.items).toHaveLength(0);
-  expect(search.result.current.error?.message).toBe('Refresh to load current marketplace results.');
+  expect(search.result.current.isLoading).toBe(true);
+  expect(search.result.current.isError).toBe(false);
+  expect(search.result.current.error).toBeNull();
 
   await act(async () => {
     finish(response);

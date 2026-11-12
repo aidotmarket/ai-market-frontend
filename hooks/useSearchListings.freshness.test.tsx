@@ -4,7 +4,7 @@ import {it,expect,vi,beforeEach,afterEach} from 'vitest';
 import {useSearchListings} from './useSearchListings';
 const query=vi.hoisted(()=>({useInfiniteQuery:vi.fn(),useQueryClient:vi.fn()}));
 vi.mock('@tanstack/react-query',()=>query);
-beforeEach(() => { query.useQueryClient.mockReturnValue({}); });
+beforeEach(() => { query.useQueryClient.mockReturnValue({ cancelQueries: vi.fn().mockResolvedValue(undefined), refetchQueries: vi.fn().mockResolvedValue(undefined) }); });
 afterEach(()=>{cleanup();vi.useRealTimers();vi.resetAllMocks();});
 it('bounds retained current search results when refresh repeatedly fails',()=>{
  vi.useFakeTimers({toFake:['Date','setInterval','clearInterval','performance']});vi.setSystemTime(1000000);

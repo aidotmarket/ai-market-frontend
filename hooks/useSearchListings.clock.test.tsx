@@ -11,7 +11,7 @@ const api = vi.hoisted(() => ({ listListings: vi.fn(), searchListings: vi.fn() }
 vi.mock('@tanstack/react-query', () => query);
 vi.mock('@/api/listings', () => api);
 
-beforeEach(() => { query.useQueryClient.mockReturnValue({}); });
+beforeEach(() => { query.useQueryClient.mockReturnValue({ cancelQueries: vi.fn().mockResolvedValue(undefined), refetchQueries: vi.fn().mockResolvedValue(undefined) }); });
 afterEach(() => {
   cleanup();
   vi.restoreAllMocks();
