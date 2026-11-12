@@ -8,7 +8,7 @@ import { useAuthStore } from '@/store/auth';
 import { authority, id, limits } from '@/tests/fixtures/seller-authority';
 
 // Keep the real read adapter, validation and native session guard. Only GET transport is supplied.
-vi.mock('@/hooks/useSellerSwitches', async original => ({ ...await original<typeof import('@/hooks/useSellerSwitches')>(), useSellerSwitches: () => ({ seller: true, effects: true, bulk: true }) }));
+vi.mock('@/hooks/useSellerSwitches', () => ({ useSellerSwitches: () => ({ seller: true, effects: true, bulk: true }) }));
 function deferred() {
   let resolve!: (value: { data: AuthorityStatus }) => void;
   let reject!: (reason: unknown) => void;

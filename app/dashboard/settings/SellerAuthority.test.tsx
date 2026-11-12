@@ -39,12 +39,13 @@ it('shows selected identities, expiry and shared budget after reservations and s
   expect(screen.getByText('30')).toBeTruthy(); expect(screen.getByText(/Single and bulk actions share/)).toBeTruthy();
   expect(screen.getByDisplayValue('https://verified.test')).toBeTruthy(); expect(screen.getByDisplayValue('2099-01-01T00:00:00Z')).toBeTruthy();
 });
-it.each(['full', 'fallback', 'off'] as const)('uses ChatGPT-only %s mode for authority edits while retaining Stop', async seller_mode => {
-  vi.mocked(useSellerSwitches).mockReturnValue({ seller: true, bulk: true, effects: seller_mode !== 'full', profiles: { openai: { floors: true, seller_mode } } });
+it.each(['full', 'fallback', 'off'] as const)('keeps standing-limit edits and Stop independent of ChatGPT %s mode', async seller_mode => {
+  vi.mocked(useSellerSwitches).mockReturnValue({ seller: true, bulk: true, effects: true, profiles: { openai: { floors: false, seller_mode } } });
   render(<SellerAuthority />); await screen.findByText(/Authority version 4/);
-  expect(!!screen.queryByRole('button', { name: 'Review exact standing limits' })).toBe(seller_mode === 'full');
+  fireEvent.click(screen.getByRole('button', { name: 'Review exact standing limits' }));
+  fireEvent.click(await screen.findByRole('button', { name: 'Save reviewed standing authority' }));
+  await waitFor(() => expect(setAuthority).toHaveBeenCalledTimes(1));
   expect(screen.getByRole<HTMLButtonElement>('button', { name: 'Stop automatic seller actions' }).disabled).toBe(false);
-  expect(setAuthority).not.toHaveBeenCalled();
 });
 it('reviews a typed native action before submitting the retained exact hash', async () => {
   render(<SellerAuthority />); await screen.findByText(/Authority version 4/);

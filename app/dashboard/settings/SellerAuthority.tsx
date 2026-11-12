@@ -1,7 +1,7 @@
 'use client';
 import { useEffect, useRef, useState } from 'react';
 import { useAuthStore } from '@/store/auth';
-import { useSellerSwitches, sellerEffectsEnabled, type SellerSwitchReport } from '@/hooks/useSellerSwitches';
+import { useSellerSwitches, type SellerSwitchReport } from '@/hooks/useSellerSwitches';
 import { fields, verbs, newDecision, nativeSession, readAuthority, reviewAuthority, setAuthority, reviewStopAuthority, stopAuthority, validLimits, type AuthoritySet, type AuthorityStatus, type DecisionReview, type StandingLimits, type WebDecision } from '@/api/connector-seller-settings';
 import NativeSellerAuth from '@/components/NativeSellerAuth';
 
@@ -17,7 +17,7 @@ export default function SellerAuthority() {
 }
 export function AuthorityScreen({ switches }: { switches: SellerSwitchReport | null }) {
   const token = useAuthStore(s => s.token);
-  const effects = sellerEffectsEnabled(switches);
+  const effects = switches?.seller === true && switches.effects === true;
   const [stopReview, setStopReview] = useState<{ body: WebDecision; result: DecisionReview<WebDecision> } | null>(null);
   const [status, setStatus] = useState<AuthorityStatus | null>(null);
   const [limits, setLimits] = useState<StandingLimits>(empty);

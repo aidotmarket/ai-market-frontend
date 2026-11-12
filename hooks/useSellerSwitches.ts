@@ -11,6 +11,7 @@ export function workspaceSellerSwitchReport(value: unknown): SellerSwitchReport 
   if (!value || typeof value !== 'object') return null;
   const v = value as Record<string, unknown>;
   if (typeof v.seller !== 'boolean' || typeof v.bulk !== 'boolean' || typeof v.floors !== 'boolean') return null;
+  // Profiles are advisory display data; website availability uses only the top-level flags.
   let profiles: Record<string, SellerProfileSwitches> = {};
   if (v.profiles && typeof v.profiles === 'object' && !Array.isArray(v.profiles)) {
     const entries = Object.entries(v.profiles);
@@ -19,13 +20,6 @@ export function workspaceSellerSwitchReport(value: unknown): SellerSwitchReport 
       profiles = Object.fromEntries(entries);
   }
   return { seller: v.seller, bulk: v.bulk, effects: v.floors, profiles };
-}
-export function sellerEffectsEnabled(report: SellerSwitchReport | null): boolean {
-  if (!report?.seller) return false;
-  const openai = report.profiles?.openai;
-  // Website actions keep the Claude path when both grants are present.
-  // Pending-link reports already reflect the originating grant's admission.
-  return openai && !report.profiles?.claude ? openai.seller_mode === 'full' && openai.floors : report.effects;
 }
 // Chunk 3 status is owner/org/link scoped, never a global rollout flag.
 export function sellerSwitchReport(value: unknown): SellerSwitchReport | null {

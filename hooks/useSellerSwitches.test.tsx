@@ -56,14 +56,15 @@ const profiles = { claude: { floors: false, seller_mode: 'full' }, openai: { flo
 it.each([
   ['absent', undefined], ['empty', {}], ['null', null], ['array', []], ['string', 'full'], ['boolean', true],
   ['null entry', { openai: null }], ['array entry', { openai: [] }], ['missing mode', { openai: { floors: true } }],
-  ['invalid mode', { openai: { floors: true, seller_mode: 'enabled' } }],
+  ['invalid mode', { openai: { floors: false, seller_mode: 'paused' } }],
+  ['valid off with bad sibling', { openai: { floors: false, seller_mode: 'off' }, claude: null }],
   ['nonboolean floors', { openai: { floors: 'true', seller_mode: 'full' } }],
   ['partly malformed', { ...profiles, claude: { floors: false, seller_mode: false } }],
 ])('reads workspace booleans with an empty profile map when profiles are %s', async (_name, value) => {
   window.history.replaceState({}, '', '/dashboard/seller-workspace');
-  const get = vi.spyOn(nativeClient, 'get').mockResolvedValue({ status: 200, data: { ...workspaceSwitches, profiles: value } });
+  const get = vi.spyOn(nativeClient, 'get').mockResolvedValue({ status: 200, data: { ...workspaceSwitches, floors: true, profiles: value } });
   const { result } = renderHook(useSellerSwitches);
-  await waitFor(() => expect(result.current).toEqual({ seller: true, bulk: true, effects: false, profiles: {} }));
+  await waitFor(() => expect(result.current).toEqual({ seller: true, bulk: true, effects: true, profiles: {} }));
   expect(get).toHaveBeenCalledWith('/seller-workspace/connector-switches', { headers: nativeSession().headers });
   expect(getSellerCapability).not.toHaveBeenCalled();
 });
@@ -96,4 +97,16 @@ it('replaces profile state on polling and clears it on a failed read', async () 
   get.mockRejectedValue(new Error('offline'));
   await act(async () => { await vi.advanceTimersByTimeAsync(5000); });
   expect(result.current).toBeNull();
+});
+
+it.each([true, false])('keeps availability from top-level floors (%s) through valid-to-malformed profile polling', async floors => {
+  window.history.replaceState({}, '', '/dashboard/seller-workspace');
+  vi.useFakeTimers();
+  const data = { seller: true, bulk: true, floors, profiles: { openai: { floors: false, seller_mode: 'off' } } };
+  const get = vi.spyOn(nativeClient, 'get').mockResolvedValue({ status: 200, data });
+  const { result } = renderHook(useSellerSwitches); await act(async () => {});
+  expect(result.current).toEqual({ seller: true, bulk: true, effects: floors, profiles: data.profiles });
+  get.mockResolvedValue({ status: 200, data: { ...data, profiles: { ...data.profiles, claude: null } } });
+  await act(async () => { await vi.advanceTimersByTimeAsync(5000); });
+  expect(result.current).toEqual({ seller: true, bulk: true, effects: floors, profiles: {} });
 });
