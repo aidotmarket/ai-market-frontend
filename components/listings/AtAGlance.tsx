@@ -1,5 +1,6 @@
 import { formatBytes } from '@/lib/formatBytes';
 import SchemaTable from './SchemaTable';
+import {CORRECTION_NOTICE, readLicenseDisplay, record, type LicenseDisplay} from '@/lib/publicPresentation';
 import type {AggregateStatistics, DerivationSource, ListingSummary, SummaryField} from '@/lib/api';
 
 export const provenanceLabels = {
@@ -59,10 +60,16 @@ function AggregateStatisticsView({statistics}: {statistics: AggregateStatistics}
   </div>;
 }
 
-// One inert renderer for the seller preview and the public approved projection.
-// It intentionally has no audience input: identical data must produce identical markup.
-export default function AtAGlance({summary}: {summary?: ListingSummary | null}) {
+export function summaryLicenseDisplay(value: unknown): LicenseDisplay | null {
+  if (!record(value) || value.provenance !== 'platform_license_correction') return null;
+  try {return readLicenseDisplay(value);} catch {return null;}
+}
+
+// A public display overlay never changes the original seller-approved evidence.
+// Seller previews omit licenseDisplay and retain the original summary.
+export default function AtAGlance({summary, licenseDisplay}: {summary?: ListingSummary | null; licenseDisplay?: LicenseDisplay | null}) {
   if (!summary || !hasSupportedSummaryFields(summary)) return null;
+  const currentDisplay = summaryLicenseDisplay(licenseDisplay);
   const rawDescriptions = summary.field_descriptions?.provenance === 'absent' ? [] : summary.field_descriptions?.value;
   const descriptions = (Array.isArray(rawDescriptions) ? rawDescriptions : []).map(detail => ({
     name: typeof detail?.name === 'string' || typeof detail?.name === 'number' ? String(detail.name) : '',
@@ -74,7 +81,8 @@ export default function AtAGlance({summary}: {summary?: ListingSummary | null}) 
     {summaryFields.map(([key, label]) => {
       const field = summary[key] as SummaryField<unknown> | null | undefined;
       if (!field || field.provenance === 'absent') return null;
-      const value = field.value;
+      const correction = key === 'license' ? currentDisplay : null;
+      const value = correction ? correction.license_label : field.value;
       return <div key={key} className="min-w-0">
         <h3 className="text-sm font-medium text-gray-900">{label}</h3>
         {key === 'key_fields' ? <SchemaTable variant="summary" columns={summary.key_fields?.value ?? []} descriptions={descriptions} />
@@ -84,7 +92,7 @@ export default function AtAGlance({summary}: {summary?: ListingSummary | null}) 
           : Array.isArray(value) ? <ul className="list-inside list-disc text-sm text-gray-700">{(value as string[]).map((item, i) => <li key={i}>{item}</li>)}</ul>
           : key === 'size_bytes' && typeof value === 'number' ? <p className="text-sm text-gray-700" title={`${value.toLocaleString('en-US')} bytes`}>{formatBytes(value)}</p>
           : <p className="text-sm text-gray-700">{typeof value === 'number' ? value.toLocaleString('en-US') : String(value)}{key === 'freshness' && ' (declared cadence)'}</p>}
-        <Provenance field={field} />
+        {correction ? <p className="mt-1 text-xs text-gray-600">{CORRECTION_NOTICE}</p> : <Provenance field={field} />}
       </div>;
     })}
   </section>;

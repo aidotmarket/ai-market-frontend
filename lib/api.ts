@@ -302,13 +302,16 @@ export async function withdrawSummary(id: string, request: SummaryApprovalReques
   return (await api.post<SummaryDecision>(`${summaryPath(id)}/withdraw`, request, {signal})).data;
 }
 
-export async function fetchBuyerSummary(slug: string, signal: AbortSignal): Promise<ListingSummary | null> {
+export async function fetchBuyerSummary(slug: string, signal: AbortSignal): Promise<{
+  at_a_glance: ListingSummary | null;
+  license_display: import('@/lib/publicPresentation').LicenseDisplay | null;
+}> {
   const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000'}/api/v1/public/listings/${encodeURIComponent(slug)}`, {
     cache: 'no-store', credentials: 'omit', signal,
   });
   if (!response.ok) throw new Error('Summary could not be refreshed');
-  const listing: {at_a_glance?: ListingSummary} = await response.json();
-  return listing.at_a_glance ?? null;
+  const listing: {at_a_glance?: ListingSummary; license_display?: import('@/lib/publicPresentation').LicenseDisplay} = await response.json();
+  return {at_a_glance: listing.at_a_glance ?? null, license_display: listing.license_display ?? null};
 }
 
 export interface LogicalTypeParameters {

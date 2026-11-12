@@ -2,6 +2,9 @@
 import {expect, it} from 'vitest';
 import {renderToStaticMarkup} from 'react-dom/server';
 import AtAGlance, {provenanceLabels, summaryFields} from './AtAGlance';
+import fixture from '@/tests/fixtures/s1931-listing-license-display.json';
+import type {LicenseDisplay} from '@/lib/publicPresentation';
+import type {ListingSummary} from '@/lib/api';
 import sectionC from '@/tests/summarySectionC.json';
 import {summary, field, emptySummaries} from '@/tests/summaryFixture';
 
@@ -92,4 +95,31 @@ it('attributes VZ publish metadata neutrally while retaining its value and selle
   expect(html).toContain('>Row count</h3><p class="text-sm text-gray-700">123</p>');
   expect(html).toContain('Source: from listing metadata (seller/local report)</p>');
   expect(html).not.toContain('from AIM Data');
+});
+
+it('shows the exact platform correction with existing attribution without mutating evidence', () => {
+  const original = structuredClone(fixture.at_a_glance) as ListingSummary;
+  const before = JSON.stringify(original);
+  const html = renderToStaticMarkup(<AtAGlance summary={original} licenseDisplay={fixture.license_display as LicenseDisplay} />);
+  expect(html).toContain('ai.market Standard Data Licence v1.1');
+  expect(html).toContain('Platform-corrected licence display; original seller approval retained');
+  expect(html).not.toContain('provided by the seller');
+  expect(html).not.toContain('v1.0');
+  expect(JSON.stringify(original)).toBe(before);
+});
+
+it.each([
+  undefined, null,
+  {...fixture.license_display, provenance: 'seller_entered'},
+  {...fixture.license_display, license_label: 'arbitrary licence'},
+  {...fixture.license_display, license_label: 'ai.market Standard Data Licence v1.0'},
+  {...fixture.license_display, correction_digest: 'invalid'},
+  {...fixture.license_display, correction_id: 'invalid'},
+  {...fixture.license_display, unexpected: 'unreviewed'},
+])('retains original licence and attribution for absent or unsupported display %#', licenseDisplay => {
+  const original = fixture.at_a_glance as ListingSummary;
+  const html = renderToStaticMarkup(<AtAGlance summary={original} licenseDisplay={licenseDisplay as LicenseDisplay} />);
+  expect(html).toBe(renderToStaticMarkup(<AtAGlance summary={original} />));
+  expect(html).toContain('ai.market Standard Data Licence v1.0');
+  expect(html).toContain('Source: provided by the seller');
 });

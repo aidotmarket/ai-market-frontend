@@ -1,0 +1,21 @@
+{
+  "license": "ai.market Standard Data Licence v1.1",
+  "license_display": {
+    "license_label": "ai.market Standard Data Licence v1.1",
+    "provenance": "platform_license_correction",
+    "correction_id": "00000000-0000-0000-0000-00000000272f",
+    "correction_digest": "990eda01418e82dcebcf12cd5b890d4e67ece00b2081450842b5a27cd9c1b088"
+  },
+  "id": "801f3189-ba34-4397-be11-c02c9952c731",
+  "slug": "seller-801f3189-ba34-4397-be11-c02c9952c731",
+  "at_a_glance": {
+    "profile": "aim-listing-enrichment-profile-v2",
+    "license": {
+      "value": "ai.market Standard Data Licence v1.0",
+      "provenance": "seller_entered",
+      "authority": "seller_entered",
+      "source_reference": "Listing.license",
+      "source_revision": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+    }
+  }
+}
