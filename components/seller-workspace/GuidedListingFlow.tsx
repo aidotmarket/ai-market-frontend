@@ -1,5 +1,7 @@
 'use client';
-import {createContext, useContext, useEffect, useState, useRef, type ReactNode} from 'react';
+import {Fragment, createContext, useContext, useEffect, useState, useRef, type ReactNode} from 'react';
+import axios from 'axios';
+import {listingDraftError} from '@/lib/listing-action-error';
 import type {ListingDraftContent} from '@/api/sellerListingDraft';
 import {readListingSource, readSellerCategories, type SourceRead, type SellerCategory} from '@/api/sellerListingSource';
 import {listingReviewErrorReason,readListingReview, type ListingReview, type ApprovalReceipt} from '@/api/sellerListingReview';
@@ -15,12 +17,36 @@ type Flow = {samplesBlocked:boolean; stepsForContent:(content:ListingDraftConten
   reviewError: string; reviewLoading: boolean; publication: PublicationState|null; publicationError: string;
   refreshReview: ()=>void; refreshPublication: ()=>void; sourceSaved: (source:SourceRead)=>void;
   approved: (approval:ApprovalReceipt)=>void; published: (state:PublicationState)=>void;
-  navigate: (view:WorkspaceView)=>void; licensesEnabled: boolean};
+  startAnotherListing:()=>void; startingListing:boolean; navigate: (view:WorkspaceView)=>void; licensesEnabled: boolean};
 const Context = createContext<Flow|null>(null);
 export function useListingFlow(){return useContext(Context);}
 
 export function GuidedListingFlow({connections, capabilities, view, navigate, children}: {connections:SellerWorkspaceConnection[]; capabilities:SellerWorkspaceCapabilities|null; view:WorkspaceView; navigate:(view:WorkspaceView)=>void; children:ReactNode}) {
-  const {draft, requestLoad, reload, selectionSavePending, selectionSaveFailed} = useSellerListingDraft();
+  const {draft, requestLoad, reload, selectionSavePending, selectionSaveFailed, startNewDraft} = useSellerListingDraft();
+  const [startingListing,setStartingListing]=useState(false);
+  const [startError,setStartError]=useState('');
+  const startAttempt=useRef<string|null>(null);
+  const startPending=useRef(false);
+  const startAnotherListing=async()=>{
+    if(startPending.current)return;
+    startPending.current=true;setStartingListing(true);setStartError('');
+    startAttempt.current??=crypto.randomUUID();
+    try {
+      await startNewDraft(startAttempt.current);
+      startAttempt.current=null;
+      setSource(null);setSourceLoaded(false);setFilesDirty(false);setListingDirty(false);setLicenceDirty(false);
+      setFileRevision(n=>n+1);setReview(null);setReviewError('');setReviewLoading(false);
+      setPublication(null);setPublicationError('');reconciled.current='';
+      navigate('data');
+    } catch(error){
+      const detail=axios.isAxiosError(error)?error.response?.data?.detail:undefined;
+      if(axios.isAxiosError(error)&&error.response?.status===404&&(detail==='UNAVAILABLE'||detail?.code==='UNAVAILABLE')){
+        startAttempt.current=null;
+        navigate('data');
+      }else setStartError(listingDraftError(error)?.message??"We couldn't start a new listing. Refresh and try again.");
+    }
+    finally{startPending.current=false;setStartingListing(false);}
+  };
   const [filesDirty,setFilesDirty]=useState(false);
   const [listingDirty,setListingDirty]=useState(false);
   const [licenceDirty,setLicenceDirty]=useState(false);
@@ -91,7 +117,7 @@ export function GuidedListingFlow({connections, capabilities, view, navigate, ch
   },[approval,publicationRetry]);
   const steps=listingSteps({connections,source,draft,categories,licensesEnabled,review,publication:publication?.publication??null,pending,licenceDirty,reviewReason:listingDirty?'Save your changes in Describe and price before continuing.':reviewError});
   const next=steps.find(s=>s.next);
-  const flow:Flow={samplesBlocked:selectionSavePending||selectionSaveFailed,stepsForContent:content=>listingSteps({connections,source,draft:{version:draft?.version??0,updated_at:draft?.updated_at??'',content:{...draft?.content,...content}},categories,licensesEnabled,review:null,publication:null,pending,licenceDirty}),sourceLoaded,sourceError:readError,fileRevision,setFilesDirty:dirty=>{setFilesDirty(dirty);if(dirty)setFileRevision(n=>n+1);},setListingDirty,setLicenceDirty,source,categories,steps,review,reviewError,reviewLoading,publication,publicationError,licensesEnabled,navigate,
+  const flow:Flow={startAnotherListing:()=>void startAnotherListing(),startingListing,samplesBlocked:selectionSavePending||selectionSaveFailed,stepsForContent:content=>listingSteps({connections,source,draft:{version:draft?.version??0,updated_at:draft?.updated_at??'',content:{...draft?.content,...content}},categories,licensesEnabled,review:null,publication:null,pending,licenceDirty}),sourceLoaded,sourceError:readError,fileRevision,setFilesDirty:dirty=>{setFilesDirty(dirty);if(dirty)setFileRevision(n=>n+1);},setListingDirty,setLicenceDirty,source,categories,steps,review,reviewError,reviewLoading,publication,publicationError,licensesEnabled,navigate,
     refreshReview:()=>setReviewRetry(n=>n+1),refreshPublication:()=>setPublicationRetry(n=>n+1),sourceSaved:value=>{setSource(value);setFilesDirty(false);},
     approved:a=>setReview(r=>r?{...r,approval:a}:r),published:setPublication};
   const published=steps[5].state==='done' ? publication?.publication : null;
@@ -102,10 +128,11 @@ export function GuidedListingFlow({connections, capabilities, view, navigate, ch
       <div id="listing-checklist-steps" className={`${expanded?'block':'hidden'} mt-4 space-y-4 xl:block`}>
         {accountNext&&<a href="#seller-setup-next" onClick={()=>window.dispatchEvent(new Event('seller-setup:next'))} className="block text-sm text-indigo-700 underline">Finish account setup: {SELLER_SETUP_STEPS.find(s=>s.id===accountNext)?.label??'Next account step'}</a>}
         <ol className="space-y-4">{steps.map((s,i)=><li key={s.view}><button type="button" aria-current={view===s.view?'step':undefined} onClick={()=>navigate(s.view)} className="text-left text-sm font-medium"><span aria-hidden="true">{s.state==='done'?'✓':s.state==='blocked'?'🔒':'○'}</span> {i+1}. {s.name} <span className="text-xs">· {s.state}{s.next?' · Next':''}</span></button>{s.reason&&<p className="mt-1 text-xs leading-5 text-gray-600">{s.reason}</p>}</li>)}</ol>
-        {published?<><a href={`/listings/${encodeURIComponent(published.slug)}`} className="block text-sm text-indigo-700 underline">Published: view your listing</a><button type="button" onClick={()=>navigate('data')} className="text-sm text-indigo-700 underline">Start another listing</button><p className="text-xs text-gray-600">Choose new files and update your draft. Your published listing stays saved.</p></>:next&&<button type="button" onClick={()=>navigate(next.view)} className="w-full rounded-lg bg-indigo-700 px-4 py-2 text-sm font-semibold text-white">Next: {next.name} →</button>}
+        {published?<><a href={`/listings/${encodeURIComponent(published.slug)}`} className="block text-sm text-indigo-700 underline">Published: view your listing</a><button type="button" disabled={startingListing} onClick={()=>void startAnotherListing()} className="text-sm text-indigo-700 underline">Start another listing</button><p className="text-xs text-gray-600">Choose new files and update your draft. Your published listing stays saved.</p></>:next&&<button type="button" onClick={()=>navigate(next.view)} className="w-full rounded-lg bg-indigo-700 px-4 py-2 text-sm font-semibold text-white">Next: {next.name} →</button>}
+        {startError&&<p role="alert" className="text-sm text-red-800">{startError} <button disabled={startingListing} onClick={()=>void startAnotherListing()} className="underline">Retry</button></p>}
         {readError&&<p role="alert" className="text-sm text-red-800">{readError} <button onClick={()=>setReadRetry(n=>n+1)} className="underline">Retry</button></p>}
       </div>
-    </aside><div className="min-w-0 space-y-6 xl:col-start-1 xl:row-start-1">{children}</div>
+    </aside><fieldset disabled={startingListing} aria-busy={startingListing} className="min-w-0 space-y-6 border-0 p-0 xl:col-start-1 xl:row-start-1">{/* A new draft also discards unsaved file, editor and licence panel state. */}<Fragment key={draft?.draft_id??'legacy'}>{children}</Fragment></fieldset>
   </div></Context.Provider>;
 }
 export function StepNext({from}:{from:WorkspaceView}) {
@@ -113,4 +140,9 @@ export function StepNext({from}:{from:WorkspaceView}) {
   const index=flow.steps.findIndex(s=>s.view===from);
   const next=flow.steps.slice(index+1).find(s=>s.view!=='license'||flow.licensesEnabled);
   return next&&flow.steps[index]?.state==='done'?<button type="button" onClick={()=>flow.navigate(next.view)} className="rounded-lg bg-indigo-700 px-4 py-2.5 text-sm font-semibold text-white">Next: {next.name} →</button>:null;
+}
+
+export function StartAnotherListingAction(){
+  const flow=useListingFlow();
+  return flow?<button type="button" disabled={flow.startingListing} onClick={flow.startAnotherListing} className="underline">Start another listing</button>:null;
 }

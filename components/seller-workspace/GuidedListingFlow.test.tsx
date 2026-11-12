@@ -9,18 +9,19 @@ import {instrument,hash} from '@/tests/fixtures/seller-authority';
 import {WorkspaceOverview} from './WorkspaceOverview';
 import {categoryRows,guidedCapabilities,guidedConnection,emptyGuidedDraft} from '@/tests/guidedListingFixture';
 import {createStandardSelection} from '@/api/listingLicenses';
-const mocks=vi.hoisted(()=>({source:vi.fn(),categories:vi.fn(),review:vi.fn(),publication:vi.fn(),publish:vi.fn(),account:vi.fn(),load:vi.fn(),draft:null as unknown}));
+const mocks=vi.hoisted(()=>({source:vi.fn(),categories:vi.fn(),review:vi.fn(),publication:vi.fn(),publish:vi.fn(),account:vi.fn(),load:vi.fn(),start:vi.fn(),draft:null as unknown}));
 vi.mock('@/api/sellerListingSource',()=>({readListingSource:mocks.source,readSellerCategories:mocks.categories}));
 vi.mock('@/api/sellerListingReview',()=>({readListingReview:mocks.review}));
 vi.mock('@/api/sellerListingPublication',()=>({readPublication:mocks.publication,publishListing:mocks.publish}));
 vi.mock('@/api/capabilities',()=>({getCapabilities:mocks.account}));
-vi.mock('./SellerListingDraftStore',()=>({useSellerListingDraft:()=>({draft:mocks.draft,requestLoad:mocks.load,selectionSavePending:false,selectionSaveFailed:false})}));
+vi.mock('./SellerListingDraftStore',()=>({useSellerListingDraft:()=>({draft:mocks.draft,requestLoad:mocks.load,selectionSavePending:false,selectionSaveFailed:false,startNewDraft:mocks.start})}));
 const source={version:1,connection_current:true,content:{connection_id:guidedConnection.id,connection_version:1,objects:[],version_mode:'current' as const}};
 const navigate=vi.fn();
 function Harness(){return <GuidedListingFlow capabilities={guidedCapabilities} connections={[guidedConnection]} view="manage" navigate={navigate}><WorkspaceOverview connections={[guidedConnection]} view="manage" onViewChange={navigate}/><Probe/></GuidedListingFlow>;}
 function Probe(){const flow=useListingFlow();return <button onClick={()=>flow?.sourceSaved({...source,version:2})}>Save new files</button>;}
 afterEach(()=>{cleanup();vi.clearAllMocks();});
 beforeEach(()=>{
+ mocks.start.mockResolvedValue({draft_id:"new",version:1,content:emptyGuidedDraft});
  mocks.source.mockResolvedValue(source);mocks.categories.mockResolvedValue(categoryRows);mocks.account.mockResolvedValue({seller:{effective_status:'active'},next_action:null});
  mocks.draft={version:2,updated_at:'2026-10-01T00:00:00Z',content:{...emptyGuidedDraft,title:'Sales',description:'Sales description',description_source_version:1,category:'financial-data',tags:'sales',price:'25',license_selection:{...createStandardSelection(),seller_acceptance:{signer_name:'Sam',signer_title:'Owner',authority_confirmed:true}}}};
  mocks.review.mockResolvedValue({draft_version:2,source_version:1,missing_fields:[],approval:null});mocks.publication.mockResolvedValue({publication_available:true,publication:null});
@@ -44,7 +45,7 @@ describe('checklist reads owned at the workspace page',()=>{
  it('shows publication and start another from the lifted publication read',async()=>{
   mocks.review.mockResolvedValue({draft_version:2,source_version:1,missing_fields:[],approval:{id:'a'}});mocks.publication.mockResolvedValue({publication_available:true,publication:{approval_id:'a',slug:'synthetic-sales'}});render(<Harness/>);
   expect((await screen.findByRole('link',{name:'Published: view your listing'})).getAttribute('href')).toBe('/listings/synthetic-sales');const checklist=screen.getByRole('complementary',{name:'Listing checklist'});expect(within(checklist).queryByRole('button',{name:/^Next:/})).toBeNull();
-  fireEvent.click(screen.getByRole('button',{name:'Start another listing'}));expect(navigate).toHaveBeenCalledWith('data');expect(mocks.publication).toHaveBeenCalledOnce();
+  fireEvent.click(screen.getByRole('button',{name:'Start another listing'}));await waitFor(()=>expect(navigate).toHaveBeenCalledWith('data'));expect(mocks.start).toHaveBeenCalledOnce();expect(mocks.start.mock.calls[0][0]).toMatch(/^[a-f0-9-]{36}$/);expect(mocks.publication).toHaveBeenCalledOnce();
  });
  it('adds account setup above storage and delegates to the unchanged setup bar next action',async()=>{
   mocks.account.mockResolvedValue({seller:{effective_status:'provisioning'},next_action:{capability:'seller',step:'totp_enabled'}});const listener=vi.fn();window.addEventListener('seller-setup:next',listener);render(<Harness/>);
@@ -87,4 +88,32 @@ it('unblocks preparation only after guided publication recovery succeeds for the
   finish({publication_available:true,publication:null});
   await waitFor(()=>expect(prepare.disabled).toBe(false));
  } finally {get.mockRestore();}
+});
+
+it('retains the published link while starting and retries the same request identity',async()=>{
+ mocks.review.mockResolvedValue({draft_version:2,source_version:1,missing_fields:[],approval:{id:'a'}});
+ mocks.publication.mockResolvedValue({publication_available:true,publication:{approval_id:'a',slug:'first'}});
+ let reject!:(value:unknown)=>void;
+ mocks.start.mockReturnValueOnce(new Promise((_,fail)=>{reject=fail;}));
+ render(<Harness/>);
+ await screen.findByRole('link',{name:'Published: view your listing'});
+ const button=screen.getByRole('button',{name:'Start another listing'}) as HTMLButtonElement;
+ fireEvent.click(button);fireEvent.click(button);
+ expect(button.disabled).toBe(true);expect(mocks.start).toHaveBeenCalledOnce();
+ expect(screen.getByRole('link',{name:'Published: view your listing'})).toBeTruthy();
+ await act(async()=>reject({response:{data:{detail:{unexpected:'object'}}}}));
+ expect(screen.getByRole('alert').textContent).toContain("We couldn't start a new listing. Refresh and try again.");
+ expect(screen.getByRole('alert').textContent).not.toMatch(/\{|\[object Object\]/);
+ fireEvent.click(screen.getByRole('button',{name:'Retry'}));
+ await waitFor(()=>expect(navigate).toHaveBeenCalledWith('data'));
+ expect(mocks.start.mock.calls[1][0]).toBe(mocks.start.mock.calls[0][0]);
+});
+it('shows the DRAFT_IN_PROGRESS backend sentence',async()=>{
+ const message='You already have a listing in progress. Finish or discard it first.';
+ mocks.review.mockResolvedValue({draft_version:2,source_version:1,missing_fields:[],approval:{id:'a'}});
+ mocks.publication.mockResolvedValue({publication_available:true,publication:{approval_id:'a',slug:'first'}});
+ mocks.start.mockRejectedValueOnce({response:{data:{detail:{code:'DRAFT_IN_PROGRESS',message}}}});
+ render(<Harness/>);await screen.findByRole('link',{name:'Published: view your listing'});
+ fireEvent.click(screen.getByRole('button',{name:'Start another listing'}));
+ expect((await screen.findByRole('alert')).textContent).toBe(message+' Retry');expect(navigate).not.toHaveBeenCalled();
 });

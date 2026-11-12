@@ -1,5 +1,9 @@
 import { api } from './client';
+import {nativeWrite} from './connector-seller-settings';
+
 import type {LicenseSelection} from './listingLicenses';
+
+export const EMPTY_LISTING_DRAFT:ListingDraftContent={brief:'',title:'',description:'',category:'',tags:'',price:'',license:''};
 
 export interface ListingDraftContent {
   brief: string;
@@ -28,4 +32,8 @@ export async function saveListingDraft(content: ListingDraftContent, version: nu
   return (await api.put<{ draft: SavedListingDraft }>(path, {
     content, expected_version: version, request_id: requestId,
   })).data.draft;
+}
+
+export async function createListingDraft(requestId:string):Promise<SavedListingDraft> {
+  return (await nativeWrite<{draft:SavedListingDraft}>('/seller-workspace/listing-drafts', {request_id:requestId,content:EMPTY_LISTING_DRAFT})).draft;
 }

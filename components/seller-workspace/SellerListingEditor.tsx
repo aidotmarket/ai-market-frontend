@@ -1,11 +1,12 @@
 'use client';
+import {isPlainListingMessage,listingDraftError} from '@/lib/listing-action-error';
 
 import ListingDocumentsEditor from '@/components/listing/ListingDocumentsEditor';
 
 import { useEffect, useRef, useState } from 'react';
 import axios from 'axios';
 import type { ListingDraftContent } from '@/api/sellerListingDraft';
-import {useListingFlow} from './GuidedListingFlow';
+import {StartAnotherListingAction,useListingFlow} from './GuidedListingFlow';
 import {admissiblePrice,PRICE_REASON} from './listingSteps';
 import type {SellerCategory} from '@/api/sellerListingSource';
 import GrowingTextarea from './GrowingTextarea';
@@ -58,6 +59,7 @@ export default function SellerListingEditor({ assistant, active = true, initialC
   const [baselineVersion,setBaselineVersion]=useState(savedVersion);
   const [saving, setSaving] = useState(false);
   const savingRef = useRef(false);
+  const [alreadyPublished,setAlreadyPublished]=useState(false);
   const [saveError, setSaveError] = useState<string | null>(null);
   const save = async () => {
     if (!onSave || savingRef.current || priceInvalid || descriptionInvalid) return false;
@@ -69,10 +71,11 @@ export default function SellerListingEditor({ assistant, active = true, initialC
       if (mounted.current) {setSavedSnapshot(submitted);if(typeof version==='number')setBaselineVersion(version);}
       return true;
     } catch (error) {
+      const draftFailure=listingDraftError(error);setAlreadyPublished(draftFailure?.alreadyPublished??false);
       const detail=axios.isAxiosError(error)?error.response?.data?.detail:null;
-      if (mounted.current) setSaveError(typeof detail==='string'?detail:typeof detail?.message==='string'?detail.message:axios.isAxiosError(error) && error.response?.status === 409
+      if (mounted.current) setSaveError(draftFailure?.message??(isPlainListingMessage(detail)?detail:isPlainListingMessage(detail?.message)?detail.message:axios.isAxiosError(error) && error.response?.status === 409
         ? 'This draft was saved elsewhere. Your edits are still here. Copy any changes you want to keep, then reload the Workspace to open the saved version.'
-        : 'Saving could not be confirmed. Your edits are still here. Try saving again.');
+        : 'Saving could not be confirmed. Your edits are still here. Try saving again.'));
     } finally { savingRef.current = false; if (mounted.current) setSaving(false); }
   };
   // Adopt content only while pristine; dirty edits can follow non-editor version changes.
@@ -179,7 +182,7 @@ export default function SellerListingEditor({ assistant, active = true, initialC
           </div>)}
           <div className="grid gap-4 sm:grid-cols-2"><label className="text-sm font-semibold text-gray-900">Your price (USD)<input type="number" min="0" max="999999.99" step="0.01" aria-invalid={priceInvalid} aria-describedby={priceInvalid ? "seller-price-error" : undefined} value={price} onChange={(event) => setPrice(event.target.value)} className={fieldClass} /></label>{!licensesEnabled&&<label className="text-sm font-semibold text-gray-900">Your license<input value={license} onChange={(event) => setLicense(event.target.value)} maxLength={500} className={fieldClass} /></label>}</div>
           {priceInvalid && <p id="seller-price-error" role="alert" className="text-sm text-red-800">Enter $0 for a free listing or $25 to $999,999.99 for a paid listing, with no more than two decimal places.</p>}
-          {onSave ? <div className="space-y-3">{snapshot!==savedSnapshot&&<button type="button" disabled={saving || priceInvalid || descriptionInvalid || snapshot === savedSnapshot} onClick={()=>void save()} className={buttonClass}>{saving ? 'Saving draft…' : 'Save private draft'}</button>}<p role="status" className="text-sm text-gray-600">{snapshot === savedSnapshot ? 'Draft saved to your account.' : 'You have unsaved changes.'} Saving does not publish your listing.</p>{saveError && <p role="alert" className="text-sm text-red-800">{saveError}</p>}<p className="text-xs text-gray-500">Saves your listing fields, brief, price and license. Chat and unaccepted suggestions stay in this Workspace only. Save your file choices separately in Choose your files.</p></div> : <p className="text-xs leading-5 text-gray-500">Your edits stay here when you switch Workspace sections. They are not saved to your account yet and will be lost if you reload or leave the Workspace. Save your draft and file choices before reviewing and publishing.</p>}
+          {onSave ? <div className="space-y-3">{snapshot!==savedSnapshot&&<button type="button" disabled={saving || priceInvalid || descriptionInvalid || snapshot === savedSnapshot} onClick={()=>void save()} className={buttonClass}>{saving ? 'Saving draft…' : 'Save private draft'}</button>}<p role="status" className="text-sm text-gray-600">{snapshot === savedSnapshot ? 'Draft saved to your account.' : 'You have unsaved changes.'} Saving does not publish your listing.</p>{saveError && <p role="alert" className="text-sm text-red-800">{saveError}{alreadyPublished&&<> <StartAnotherListingAction/></>}</p>}<p className="text-xs text-gray-500">Saves your listing fields, brief, price and license. Chat and unaccepted suggestions stay in this Workspace only. Save your file choices separately in Choose your files.</p></div> : <p className="text-xs leading-5 text-gray-500">Your edits stay here when you switch Workspace sections. They are not saved to your account yet and will be lost if you reload or leave the Workspace. Save your draft and file choices before reviewing and publishing.</p>}
         </div>
         <aside className="space-y-4 lg:sticky lg:top-5" aria-label="Allai listing assistant">
           <div className="rounded-xl border border-indigo-200 bg-indigo-50 p-4"><p className="font-semibold text-indigo-950">Review {label.toLowerCase()} with Allai</p><p className="mt-2 text-sm text-indigo-900">Ask her to change the wording, refine the tags, or explain a suggestion.</p><div className="mt-3 flex flex-wrap gap-2"><button type="button" disabled={!draft[activeField].trim()} onClick={() => { setReviewed((current) => [...new Set([...current, activeField])]); const index = fields.findIndex(([field]) => field === activeField); setActiveField(fields[Math.min(index + 1, fields.length - 1)][0]); }} className={buttonClass}>Looks good</button><button type="button" disabled={!assistant || isStreaming || !brief.trim()} onClick={() => ask(`Help me improve the ${label.toLowerCase()}. Ask what I would like changed if needed.`)} className={buttonClass}>Change it with Allai</button></div>{!draft[activeField].trim()&&<p className="mt-2 text-xs text-indigo-900">Add or accept {label.toLowerCase()} text before marking it reviewed.</p>}</div>

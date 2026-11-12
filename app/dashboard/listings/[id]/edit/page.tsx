@@ -9,6 +9,7 @@ import { useRouter, useParams } from 'next/navigation';
 import { getListing, updateListing, unpublishListing, publishListing } from '@/api/listings';
 import { notifyCapabilitiesChanged } from '@/components/onboarding/SellerSetupProgressBar';
 import { useToast } from '@/components/Toast';
+import { formatListingActionError } from '@/lib/listing-action-error';
 import SellerAtAGlance from '@/components/listings/SellerAtAGlance';
 import SellerShareControls from '@/components/listings/SellerShareControls';
 import SellerLicenseSelection from '@/components/seller-workspace/SellerLicenseSelection';
@@ -155,8 +156,8 @@ export default function EditListingPage() {
       setHasStoredFormat(previous => submittedFormat ? true : previous);
       setSummaryRevision(value => value + 1);
       toast('Listing saved', 'success');
-    } catch (err: any) {
-      toast(err.response?.data?.detail || 'Failed to save', 'error');
+    } catch (err: unknown) {
+      toast(formatListingActionError(err).message, 'error');
     } finally {
       setSaving(false);
     }

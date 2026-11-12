@@ -2,11 +2,12 @@
 import { useEffect, useRef, useState } from 'react';
 import { readListingSource, saveListingSource, type SourceRead, type SourceContent } from '@/api/sellerListingSource';
 import type {SampleLimits,SellerWorkspaceConnection,WorkspaceObject} from '@/api/sellerWorkspace';
-import {useListingFlow} from './GuidedListingFlow';
+import {StartAnotherListingAction,useListingFlow} from './GuidedListingFlow';
 import { WorkspaceData } from './WorkspaceData';
 import {DraftNotLoadedError,useSellerListingDraft} from './SellerListingDraftStore';
 import {createStandardSelection,type LicenseSelection} from '@/api/listingLicenses';
 import axios from 'axios';
+import {listingDraftError} from '@/lib/listing-action-error';
 import {legalIdentityFailure} from '@/api/sellerLegalIdentity';
 
 export default function SavedWorkspaceData({connections, enabled,sampleLimits,listingLicensesEnabled=false}: {connections: SellerWorkspaceConnection[]; enabled: boolean;sampleLimits?:SampleLimits;listingLicensesEnabled?:boolean}) {
@@ -20,6 +21,7 @@ export default function SavedWorkspaceData({connections, enabled,sampleLimits,li
   const [licenseSelection,setLicenseSelection]=useState<LicenseSelection>(()=>draft?.content.license_selection??createStandardSelection());
   const [licenseReady,setLicenseReady]=useState(false);
   const [licenseSaving,setLicenseSaving]=useState(false);
+  const [alreadyPublished,setAlreadyPublished]=useState(false);
   const [licenseSaveMessage,setLicenseSaveMessage]=useState('');
   const licenseChanged=useRef(false);
   useEffect(()=>{if(listingLicensesEnabled)requestLoad();},[listingLicensesEnabled,requestLoad]);
@@ -71,7 +73,7 @@ export default function SavedWorkspaceData({connections, enabled,sampleLimits,li
   if(flow&&!flow.sourceLoaded)return <p role="status">{flow.sourceError||'Loading your saved file selection…'}</p>;
   if (loading&&!flow) return <p role="status" className="p-5 text-sm text-gray-600">Loading your saved file selection…</p>;
   if (failed) return <div role="alert" className="rounded-xl border border-red-200 p-5 text-sm text-red-800">Your saved file selection could not be loaded.<button className="ml-3 underline" onClick={() => setRetry(value => value + 1)}>Try loading again</button></div>;
-  return <WorkspaceData connections={connections} enabled={enabled} savedSource={flow?flow.source:source} onSaveSelection={save} saving={saving}
+  return <><WorkspaceData connections={connections} enabled={enabled} savedSource={flow?flow.source:source} onSaveSelection={save} saving={saving}
     sampleFilesAvailable={sampleCapability&&loaded} initialSampleIndices={sampleIndices} onSaveSampleSelection={saveSamples} onVisibleSampleSelectionChange={setVisibleSampleIndices} sampleLimits={sampleLimits}
     licenseSelection={listingLicensesEnabled?licenseSelection:undefined} onLicenseSelectionChange={listingLicensesEnabled?value=>{licenseChanged.current=true;setLicenseSelection(value);setLicenseSaveMessage('');}:undefined} licenseSaving={licenseSaving} licenseSaveMessage={licenseSaveMessage}
     licenseDraftAvailable={available} licenseDraftLoaded={loaded&&licenseReady} licenseDraftError={draftError} onRetryLicenseDraft={retryDraft} licenseSelectionSaved={draft?.content.license_selection}
@@ -80,11 +82,12 @@ export default function SavedWorkspaceData({connections, enabled,sampleLimits,li
       await saveLicenseSelection(licenseSelection);
       licenseChanged.current=false;
       setLicenseSaveMessage('Licence choice saved.');
-    }catch(failure){const identityFailure=legalIdentityFailure(failure);
-      if(identityFailure==='required')setLicenseSaveMessage('Your legal name and country are not saved. Return to the legal details above before saving the licence choice.');
+    }catch(failure){const draftFailure=listingDraftError(failure);setAlreadyPublished(draftFailure?.alreadyPublished??false);const identityFailure=legalIdentityFailure(failure);
+      if(draftFailure)setLicenseSaveMessage(draftFailure.message);
+      else if(identityFailure==='required')setLicenseSaveMessage('Your legal name and country are not saved. Return to the legal details above before saving the licence choice.');
       else if(identityFailure==='conflict')setLicenseSaveMessage('Your legal details need a quick check by our support team before you can save the licence choice.');
       else if(identityFailure==='unavailable')setLicenseSaveMessage('We could not check your legal details right now. Retry before saving the licence choice.');
       else if(axios.isAxiosError(failure)&&failure.response?.status===409){retryDraft();setLicenseSaveMessage('Your draft was changed elsewhere; we reloaded it. Check your licence choice and save again.');}
       else setLicenseSaveMessage(failure instanceof DraftNotLoadedError?failure.message:'Licence choice could not be saved. Try again.');
-    }finally{setLicenseSaving(false);}}:undefined} />;
+    }finally{setLicenseSaving(false);}}:undefined} />{alreadyPublished&&<StartAnotherListingAction/>}</>;
 }

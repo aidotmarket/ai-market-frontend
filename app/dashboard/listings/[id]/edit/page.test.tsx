@@ -63,6 +63,18 @@ describe('EditListingPage', () => {
     vi.clearAllMocks();
   });
 
+  it('shows the unchanged DRAFT_IN_PROGRESS sentence when updating a published description is refused',async()=>{
+    const message='You already have a listing in progress. Finish or discard it first.';
+    listingsApi.getListing.mockResolvedValue(baseListing);
+    listingsApi.updateListing.mockRejectedValueOnce({response:{status:409,data:{detail:{code:'DRAFT_IN_PROGRESS',message}}}});
+    render(<EditListingPage/>);
+    fireEvent.change(await screen.findByLabelText('Description'),{target:{value:'Amended description'}});
+    fireEvent.click(screen.getByRole('button',{name:'Save Draft'}));
+    await waitFor(()=>expect(toast).toHaveBeenCalledWith(message,'error'));
+    expect(listingsApi.updateListing).toHaveBeenCalledOnce();
+    expect((screen.getByLabelText('Description') as HTMLTextAreaElement).value).toBe('Amended description');
+  });
+
   it('shows Publish and not Unpublish for unlisted listings, then marks publish success locally', async () => {
     listingsApi.getListing.mockResolvedValue({
       ...baseListing,
