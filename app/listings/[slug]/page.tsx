@@ -174,7 +174,7 @@ export default async function ListingDetailPage({ params, searchParams }: Props)
           </div>
 
           {currentDisplay && <p className="text-sm text-gray-700">Original seller evidence below; current public licence display: {currentDisplay.license_label}. {CORRECTION_NOTICE}</p>}
-          <BuyerAtAGlance slug={listing.slug} listingId={listing.id} initialSummary={atAGlanceSummary} includeSample={false} hideSampleAvailability={pendingSellerTerms} />
+          <BuyerAtAGlance licenseDisplay={currentDisplay} slug={listing.slug} listingId={listing.id} initialSummary={atAGlanceSummary} includeSample={false} hideSampleAvailability={pendingSellerTerms} />
 
           {approved ? <><p className="text-sm text-gray-700">{corrected ? CORRECTION_NOTICE : 'Original seller-approved listing evidence'}</p><ApprovedListingPreview title={corrected ? CORRECTION_TITLE : 'Seller-approved listing'} html={approved.rendered_html} /></> : <>
           {/* Description uses the validated backend render. */}

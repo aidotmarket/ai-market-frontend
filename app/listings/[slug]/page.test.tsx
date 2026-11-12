@@ -969,7 +969,12 @@ it('emits actual backend current JSON-LD alongside unchanged original summary ev
  expect(jsonld.additionalProperty).toContainEqual(expect.objectContaining({name:'Licence display provenance',value:'Platform-corrected licence display; original seller approval retained',propertyID:c.correction_digest}));
  expect(fixture.at_a_glance.license.value).toBe('ai.market Standard Data Licence v1.0');
  expect(JSON.stringify(fixture.at_a_glance)).toBe(before);
- expect(html).toContain('Original approved summary evidence');
+ const container=document.createElement('div');container.innerHTML=html;
+ const glance=within(container).getByRole('region',{name:'At a glance'});
+ expect(glance.textContent).toContain('ai.market Standard Data Licence v1.1');
+ expect(glance.textContent).toContain('Platform-corrected licence display; original seller approval retained');
+ expect(glance.textContent).not.toContain('v1.0');
+ expect(glance.textContent).not.toContain('provided by the seller');
 });
 
 describe('C4 Documentation page integration', () => {
@@ -999,4 +1004,18 @@ describe('C4 Documentation page integration', () => {
     document.body.innerHTML = await renderPage(makeListing());
     expect(within(document.body).queryByRole('region', {name: 'Documentation'})).toBeNull();
   });
+});
+
+it('shows the corrected licence in At a glance for an 801f3189-shaped public payload', async () => {
+  // Synthetic correction identifiers; the wire shape mirrors the reported listing.
+  const {default: fixture} = await import('@/tests/fixtures/s1931-listing-license-display.json');
+  const before = JSON.stringify(fixture);
+  const html = await renderPage(makeListing(fixture as Partial<ListingWithSamples>));
+  const container = document.createElement('div'); container.innerHTML = html;
+  const glance = within(container).getByRole('region', {name: 'At a glance'});
+  expect(glance.textContent).toContain('ai.market Standard Data Licence v1.1');
+  expect(glance.textContent).toContain('Platform-corrected licence display; original seller approval retained');
+  expect(glance.textContent).not.toContain('v1.0');
+  expect(glance.textContent).not.toContain('provided by the seller');
+  expect(JSON.stringify(fixture)).toBe(before);
 });

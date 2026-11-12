@@ -3,6 +3,7 @@ import {act, cleanup, fireEvent, render, screen, waitFor, within} from '@testing
 import {afterEach, beforeEach, expect, it, vi} from 'vitest';
 import {AxiosError} from 'axios';
 import * as api from '@/lib/api';
+import fixture from '@/tests/fixtures/s1931-listing-license-display.json';
 import {preview, emptySummaries, field} from '@/tests/summaryFixture';
 import BuyerAtAGlance from './BuyerAtAGlance';
 import SellerAtAGlance from './SellerAtAGlance';
@@ -206,4 +207,16 @@ it('enables approval for a supported measured-zero field', async () => {
   render(<SellerAtAGlance listingId="listing" />);
   expect((await screen.findByRole('button', {name: 'Approve At a glance'})).hasAttribute('disabled')).toBe(false);
   expect(screen.queryByText('Nothing to show buyers yet. Add more listing details or regenerate.')).toBeNull();
+});
+
+it('retains the original approved licence in seller preview with the current-display notice', async () => {
+  const original = {...preview.at_a_glance, license: field(fixture.at_a_glance.license.value)};
+  vi.mocked(api.fetchSummaryPreview).mockResolvedValue({...preview, state: 'approved', at_a_glance: original});
+  render(<SellerAtAGlance listingId={fixture.id} slug={fixture.slug} />);
+  const region = await screen.findByRole('region', {name: 'At a glance'});
+  expect(region.textContent).toContain('ai.market Standard Data Licence v1.0');
+  expect(region.textContent).toContain('Source: provided by the seller');
+  expect(region.textContent).not.toContain('v1.1');
+  expect(screen.getByText(/The block below retains the original summary and signed sample evidence/)).toBeTruthy();
+  expect(screen.getByRole('link', {name: 'View current public licence display'}).getAttribute('href')).toBe(`/listings/${fixture.slug}`);
 });

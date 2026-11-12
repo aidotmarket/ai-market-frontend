@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { fetchDataRequest, fetchDataRequests, fetchPublicListing, fetchPublicListingDocuments, fetchPublicListings, fetchFeaturedFeed, fetchListingVersions, fetchShareMetadata } from './api';
+import { fetchBuyerSummary, fetchDataRequest, fetchDataRequests, fetchPublicListing, fetchPublicListingDocuments, fetchPublicListings, fetchFeaturedFeed, fetchListingVersions, fetchShareMetadata } from './api';
 import {documentFixture} from '@/tests/listingDocumentsFixture';
 
 describe('public listing document freshness', () => {
@@ -126,4 +126,26 @@ it('validates actual correction bytes and adjacent identity before detail and me
  fetchMock.mockResolvedValue({ok:true,json:async()=>({...listing,approved_presentation:{...c,rendered_html:'tampered'}})});
  await expect(fetchPublicListing('synthetic')).rejects.toThrow();
  vi.unstubAllGlobals();
+});
+
+describe('buyer summary display refresh', () => {
+  afterEach(() => vi.unstubAllGlobals());
+  it('retains the current correction beside the unchanged original summary', async () => {
+    const {default: fixture} = await import('@/tests/fixtures/s1931-listing-license-display.json');
+    const before = JSON.stringify(fixture);
+    const fetch = vi.fn().mockResolvedValue({ok: true, json: async () => fixture});
+    vi.stubGlobal('fetch', fetch);
+    const controller = new AbortController();
+    const display = await fetchBuyerSummary(fixture.slug, controller.signal);
+    expect(display).toEqual({at_a_glance: fixture.at_a_glance, license_display: fixture.license_display});
+    expect(display.at_a_glance?.license?.value).toBe('ai.market Standard Data Licence v1.0');
+    expect(fetch).toHaveBeenCalledWith(expect.stringContaining(`/api/v1/public/listings/${fixture.slug}`), {
+      cache: 'no-store', credentials: 'omit', signal: controller.signal,
+    });
+    expect(JSON.stringify(fixture)).toBe(before);
+  });
+  it('returns no correction when the public payload has none', async () => {
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue({ok: true, json: async () => ({})}));
+    expect(await fetchBuyerSummary('listing', new AbortController().signal)).toEqual({at_a_glance: null, license_display: null});
+  });
 });
