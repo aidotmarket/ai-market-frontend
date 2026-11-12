@@ -8,7 +8,7 @@ import { readAuthority, reviewAuthority, setAuthority, reviewStopAuthority, stop
 import { authority, hash, id } from '@/tests/fixtures/seller-authority';
 import { checkCompanySignIn } from '@/lib/company-sign-in';
 import type { User } from '@/types';
-vi.mock('@/hooks/useSellerSwitches', () => ({ useSellerSwitches: vi.fn() }));
+vi.mock('@/hooks/useSellerSwitches', async original => ({ ...await original<typeof import('@/hooks/useSellerSwitches')>(), useSellerSwitches: vi.fn() }));
 vi.mock('@/api/connector-seller-settings', async original => ({ ...await original<typeof import('@/api/connector-seller-settings')>(), readAuthority: vi.fn(), reviewAuthority: vi.fn(), setAuthority: vi.fn(), reviewStopAuthority: vi.fn(), stopAuthority: vi.fn() }));
 vi.mock('@/lib/company-sign-in', async original => ({ ...await original<typeof import('@/lib/company-sign-in')>(), checkCompanySignIn: vi.fn() }));
 beforeEach(() => {
@@ -38,6 +38,14 @@ it('shows selected identities, expiry and shared budget after reservations and s
   render(<SellerAuthority />); await screen.findByText(/Authority version 4/);
   expect(screen.getByText('30')).toBeTruthy(); expect(screen.getByText(/Single and bulk actions share/)).toBeTruthy();
   expect(screen.getByDisplayValue('https://verified.test')).toBeTruthy(); expect(screen.getByDisplayValue('2099-01-01T00:00:00Z')).toBeTruthy();
+});
+it.each(['full', 'fallback', 'off'] as const)('keeps standing-limit edits and Stop independent of ChatGPT %s mode', async seller_mode => {
+  vi.mocked(useSellerSwitches).mockReturnValue({ seller: true, bulk: true, effects: true, profiles: { openai: { floors: false, seller_mode } } });
+  render(<SellerAuthority />); await screen.findByText(/Authority version 4/);
+  fireEvent.click(screen.getByRole('button', { name: 'Review exact standing limits' }));
+  fireEvent.click(await screen.findByRole('button', { name: 'Save reviewed standing authority' }));
+  await waitFor(() => expect(setAuthority).toHaveBeenCalledTimes(1));
+  expect(screen.getByRole<HTMLButtonElement>('button', { name: 'Stop automatic seller actions' }).disabled).toBe(false);
 });
 it('reviews a typed native action before submitting the retained exact hash', async () => {
   render(<SellerAuthority />); await screen.findByText(/Authority version 4/);

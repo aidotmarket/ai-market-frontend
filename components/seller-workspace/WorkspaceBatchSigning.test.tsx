@@ -4,12 +4,12 @@ import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/re
 import WorkspaceBatchSigning from './WorkspaceBatchSigning';
 import { readSigningInstruments, signInstruments } from '@/api/seller-batch-signing';
 import { nativeClient } from '@/api/connector-seller-settings';
-import { useSellerSwitches } from '@/hooks/useSellerSwitches';
+import { useSellerSwitches, workspaceSellerSwitchReport } from '@/hooks/useSellerSwitches';
 import { useAuthStore } from '@/store/auth';
 import type { User } from '@/types';
 import {LICENSE_HASHES_1_0} from '@/api/listingLicenses';
 import { id, instrument, hash } from '@/tests/fixtures/seller-authority';
-vi.mock('@/hooks/useSellerSwitches', () => ({ useSellerSwitches: vi.fn() }));
+vi.mock('@/hooks/useSellerSwitches', async original => ({ ...await original<typeof import('@/hooks/useSellerSwitches')>(), useSellerSwitches: vi.fn() }));
 vi.mock('@/api/seller-batch-signing', async original => ({ ...await original<typeof import('@/api/seller-batch-signing')>(), readSigningInstruments: vi.fn(), signInstruments: vi.fn() }));
 beforeEach(() => {
   vi.resetAllMocks(); useAuthStore.setState({ user: { id: id(99), totp_enabled: true } as User, token: 'retained-session' });
@@ -91,6 +91,93 @@ it('cannot sign after stale prepared coverage and offers fresh review', async ()
 it('keeps effect-off signing disabled', () => {
   vi.mocked(useSellerSwitches).mockReturnValue({ seller: true, effects: false, bulk: true }); render(<WorkspaceBatchSigning />);
   expect(screen.queryByRole('region')).toBeNull(); expect(signInstruments).not.toHaveBeenCalled();
+});
+
+it.each([true, false])('keeps Claude-only signing markup unchanged (effects: %s)', effects => {
+  vi.mocked(useSellerSwitches).mockReturnValue({ seller: true, bulk: true, effects });
+  const legacy = render(<WorkspaceBatchSigning />);
+  const markup = legacy.container.innerHTML; legacy.unmount();
+  vi.mocked(useSellerSwitches).mockReturnValue({ seller: true, bulk: true, effects, profiles: { claude: { floors: effects, seller_mode: 'full' } } });
+  const current = render(<WorkspaceBatchSigning />);
+  expect(current.container.innerHTML).toBe(markup);
+});
+
+it.each(['full', 'fallback', 'off'] as const)('keeps ChatGPT %s mode and floors read-only for website signing', seller_mode => {
+  for (const floors of [true, false]) for (const effects of [true, false]) {
+    vi.mocked(useSellerSwitches).mockReturnValue({ seller: true, bulk: true, effects, profiles: { openai: { floors, seller_mode } } });
+    const view = render(<WorkspaceBatchSigning />);
+    expect(!!screen.queryByRole('region', { name: 'Workspace batch licence signing' })).toBe(effects);
+    expect(screen.getByText(`ChatGPT seller tools: ${seller_mode === 'full' ? 'Full.' : `${seller_mode === 'fallback' ? 'Limited mode' : 'Paused'} (publishing and signing stay available here on ai.market).`}`)).toBeTruthy();
+    expect(screen.queryByRole('switch')).toBeNull();
+    expect(view.container.textContent).not.toMatch(/seller_mode|openai:commercial|floors/);
+    view.unmount();
+  }
+});
+
+it.each(['seller', 'bulk', 'effects'] as const)('still requires the top-level %s flag for ChatGPT-only full mode', flag => {
+  vi.mocked(useSellerSwitches).mockReturnValue({ seller: true, bulk: true, effects: true, [flag]: false, profiles: { openai: { floors: true, seller_mode: 'full' } } });
+  render(<WorkspaceBatchSigning preparation={instrument(1)} />);
+  expect(screen.queryByRole('region')).toBeNull();
+  expect(nativeClient.get).not.toHaveBeenCalled();
+});
+
+it.each(['fallback', 'off'] as const)('lets a ChatGPT-only %s seller load and sign with profile floors off', async seller_mode => {
+  vi.mocked(useSellerSwitches).mockReturnValue({ seller: true, bulk: true, effects: true, profiles: { openai: { floors: false, seller_mode } } });
+  await load();
+  fireEvent.click(screen.getByRole('checkbox'));
+  expect((screen.getByRole('button', { name: 'Sign 2 licences' }) as HTMLButtonElement).disabled).toBe(false);
+  fireEvent.click(screen.getByRole('button', { name: 'Sign 2 licences' }));
+  await screen.findByText(/Licence signed. Your listing is not published yet/);
+  expect(readSigningInstruments).toHaveBeenCalledTimes(1);
+  expect(signInstruments).toHaveBeenCalledTimes(1);
+});
+
+it.each([
+  ['missing', undefined], ['empty', {}], ['malformed', 'invalid'],
+  ['invalid mode', { openai: { floors: false, seller_mode: 'paused' } }],
+  ['bad sibling', { openai: { floors: false, seller_mode: 'off' }, claude: null }],
+])('keeps website signing availability when profiles are %s', async (_name, profiles) => {
+  for (const floors of [false, true]) {
+    vi.mocked(useSellerSwitches).mockReturnValue(workspaceSellerSwitchReport({ seller: true, bulk: true, floors, profiles }));
+    const view = render(<WorkspaceBatchSigning />);
+    expect(!!screen.queryByRole('region', { name: 'Workspace batch licence signing' })).toBe(floors);
+    view.unmount();
+  }
+  await load();
+  fireEvent.click(screen.getByRole('checkbox'));
+  fireEvent.click(screen.getByRole('button', { name: 'Sign 2 licences' }));
+  await screen.findByText(/Licence signed. Your listing is not published yet/);
+  expect(signInstruments).toHaveBeenCalledTimes(1);
+});
+
+it.each(['full', 'fallback', 'off'] as const)('keeps website signing available with both grants when ChatGPT is %s', seller_mode => {
+  const profiles = { claude: { floors: true, seller_mode: 'full' as const }, openai: { floors: false, seller_mode } };
+  vi.mocked(useSellerSwitches).mockReturnValue({ seller: true, bulk: true, effects: true, profiles });
+  const view = render(<WorkspaceBatchSigning />);
+  expect(screen.getByRole('button', { name: 'Load licences' })).toBeTruthy();
+  expect(screen.getByText(/ChatGPT seller tools:/)).toBeTruthy();
+  vi.mocked(useSellerSwitches).mockReturnValue({ seller: true, bulk: true, effects: false, profiles: { ...profiles, openai: { floors: true, seller_mode } } });
+  view.rerender(<WorkspaceBatchSigning />);
+  expect(screen.queryByRole('region')).toBeNull();
+  expect(screen.getByRole('status').textContent).toBe('Licence signing is currently unavailable.');
+});
+
+it.each(['fallback', 'off', 'floors', 'malformed'] as const)('preserves a loaded signing action when profile polling reports %s', async change => {
+  const report = { seller: true, bulk: true, floors: true, profiles: { openai: { floors: true, seller_mode: 'full' } } };
+  vi.mocked(useSellerSwitches).mockReturnValue(workspaceSellerSwitchReport(report));
+  const preparation = instrument(1);
+  const view = render(<WorkspaceBatchSigning preparation={preparation} />);
+  await screen.findAllByText(/The complete fixture contract/);
+  fireEvent.click(screen.getByRole('checkbox'));
+  const profiles = change === 'malformed' ? { ...report.profiles, claude: null }
+    : { openai: { floors: change !== 'floors', seller_mode: change === 'floors' ? 'full' : change } };
+  vi.mocked(useSellerSwitches).mockReturnValue(workspaceSellerSwitchReport({ ...report, profiles }));
+  view.rerender(<WorkspaceBatchSigning preparation={preparation} />);
+  const sign = screen.getByRole<HTMLButtonElement>('button', { name: 'Sign licence' });
+  expect(sign.disabled).toBe(false);
+  fireEvent.click(sign);
+  await screen.findByText(/Licence signed. Your listing is not published yet/);
+  expect(signInstruments).toHaveBeenCalledTimes(1);
 });
 
 it.each(['standard', 'covenant', 'both'] as const)('blocks a whole batch containing a stale %s selection',async part=>{

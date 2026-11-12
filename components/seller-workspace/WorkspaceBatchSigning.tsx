@@ -10,7 +10,11 @@ import NativeSellerAuth from '@/components/NativeSellerAuth';
 export default function WorkspaceBatchSigning({preparation,onSigned}:{preparation?: SigningInstrument;onSigned?:(rows:PreparationView[])=>void}) {
   const switches = useSellerSwitches(); const sessionIdentity = useAuthStore(authSessionIdentity);
   if (!sessionIdentity) return <p role="status">Licence signing is currently unavailable.</p>;
-  return <BatchSigningScreen key={sessionIdentity} switches={switches ?? {seller:false,bulk:false,effects:false}} preparation={preparation} onSigned={onSigned} />;
+  const mode = switches?.profiles?.openai?.seller_mode;
+  return <>
+    {mode && <p>ChatGPT seller tools: {mode === 'full' ? 'Full.' : `${mode === 'fallback' ? 'Limited mode' : 'Paused'} (publishing and signing stay available here on ai.market).`}</p>}
+    <BatchSigningScreen key={sessionIdentity} switches={switches ?? {seller:false,bulk:false,effects:false}} preparation={preparation} onSigned={onSigned} />
+  </>;
 }
 export function BatchSigningScreen({ switches, preparation, onSigned }: { switches: SellerSwitchReport; preparation?: SigningInstrument; onSigned?:(rows:PreparationView[])=>void }) {
   const [ids, setIds] = useState(''); const [instruments, setInstruments] = useState<SigningInstrument[]>([]);
