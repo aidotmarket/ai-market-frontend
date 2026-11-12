@@ -30,6 +30,7 @@ type SearchResultItemFields = Expect<Equal<
   | 'fulfillment_method'
   | 'purchasable'
   | 'purchase_hold_reason'
+  | 'license_display'
 >>;
 
 type FeaturedItemFields = Expect<Equal<
@@ -54,6 +55,7 @@ type SearchResultItemOptionalFields = Expect<Equal<
   | 'fulfillment_method'
   | 'purchasable'
   | 'purchase_hold_reason'
+  | 'license_display'
 >>;
 
 type FeaturedItemOptionalFields = Expect<Equal<

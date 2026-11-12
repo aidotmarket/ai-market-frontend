@@ -1,4 +1,5 @@
 'use client';
+import { ACTION_AUTH_REFRESH, isLegacyActionAuthError } from '@/lib/action-auth-error';
 
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
@@ -14,7 +15,6 @@ import {
 } from '@/api/dataVerificationPayin';
 import { getVerificationReturn, saveVerificationReturn } from '@/lib/dataVerificationReturn';
 import { useAuthStore } from '@/store/auth';
-import ReauthModal from '@/app/dashboard/settings/ReauthModal';
 import type {
   DataVerificationPayInReadinessState,
   DataVerificationPayInReconcileState,
@@ -25,9 +25,6 @@ const EXPLANATION =
   'Add a debit or credit card only when you choose paid data verification. No card is required for unpaid ai.market use. This is separate from Stripe payouts.';
 const HOSTED_HANDOFF =
   'You will continue securely on Stripe. ai.market does not collect or store your card details, and no verification charge is made during setup.';
-const SETUP_REAUTH =
-  'Confirm it is you to continue. This confirmation is valid for 60 seconds.';
-const RETURN_REAUTH = 'Confirm it is you again to finish adding your payment method.';
 const SETUP_REQUIRED = 'Choose Add payment method to continue.';
 const READY =
   'A payment method is ready for verification charges. Your Stripe payouts are separate and were not changed.';
@@ -50,6 +47,7 @@ const STATUS_REGION_LABEL = 'Payment-method status';
 const ALERT_REGION_LABEL = 'Payment-method error';
 
 type DisplayState =
+  | 'legacy_auth_error'
   | 'checking'
   | 'hidden'
   | 'cancelled'
@@ -70,6 +68,7 @@ interface DataVerificationPaymentMethodProps {
 }
 
 function fixedCopy(state: DisplayState, mode: 'setup' | 'return', returnLabel: string): string | null {
+  if (state === 'legacy_auth_error') return ACTION_AUTH_REFRESH;
   if (state === 'cancelled') return cancelledCopy(returnLabel);
   if (state === 'setup_required') return SETUP_REQUIRED;
   if (state === 'setup_pending') return SETUP_PENDING;
@@ -89,12 +88,10 @@ export default function DataVerificationPaymentMethod({
 }: DataVerificationPaymentMethodProps) {
   const router = useRouter();
   const sellerId = useAuthStore(state => state.user?.id);
-  const reauthMethod = useAuthStore(state => state.user?.reauth_method);
   const [listingReturn, setListingReturn] = useState<string | null>(null);
   useEffect(() => { setListingReturn(getVerificationReturn(sellerId)); }, [sellerId]);
   const [displayState, setDisplayState] = useState<DisplayState>('checking');
   const [queryRemoved, setQueryRemoved] = useState(false);
-  const [isReauthOpen, setIsReauthOpen] = useState(false);
   const [isWorking, setIsWorking] = useState(false);
   // Capture the server's query snapshot once, before client history updates.
   // Later clean-URL props must not restore values cleared by a terminal result.
@@ -108,6 +105,7 @@ export default function DataVerificationPaymentMethod({
   const returnPreflightRequest = useRef<
     ReturnType<typeof getDataVerificationPayInReadiness> | null
   >(null);
+  const reconciling = useRef(false);
   const backToSettingsRef = useRef<HTMLAnchorElement>(null);
 
   useLayoutEffect(() => {
@@ -156,6 +154,39 @@ export default function DataVerificationPaymentMethod({
     };
   }, [mode, router]);
 
+  const reconcileReturn = useCallback(async () => {
+    if (reconciling.current) return;
+    reconciling.current = true;
+    const values = returnValues.current;
+    if (!values) {
+      reconciling.current = false;
+      setDisplayState('failed');
+      return;
+    }
+
+    setIsWorking(true);
+    try {
+      const result = await reconcileDataVerificationPayInSetupSession(
+        values.setupAttemptId,
+        values.checkoutSessionId
+      );
+      if (result.state !== 'pending') returnValues.current = null;
+      setDisplayState(result.state);
+    } catch (error: unknown) {
+      if (isLegacyActionAuthError(error)) {
+        setDisplayState('legacy_auth_error');
+      } else if (isDataVerificationPayInUnavailable(error)) {
+        returnValues.current = null;
+        setDisplayState('hidden');
+      } else {
+        setDisplayState('network_error');
+      }
+    } finally {
+      reconciling.current = false;
+      setIsWorking(false);
+    }
+  }, []);
+
   const runReturnPreflight = useCallback(async (isCancelled: () => boolean = () => false) => {
     setDisplayState('checking');
     let readinessRequest = returnPreflightRequest.current;
@@ -168,14 +199,16 @@ export default function DataVerificationPaymentMethod({
       await readinessRequest;
       if (!isCancelled()) {
         if (returnValues.current) {
-          setIsReauthOpen(true);
+          await reconcileReturn();
         } else {
           setDisplayState('failed');
         }
       }
     } catch (error: unknown) {
       if (isCancelled()) return;
-      if (isDataVerificationPayInUnavailable(error)) {
+      if (isLegacyActionAuthError(error)) {
+        setDisplayState('legacy_auth_error');
+      } else if (isDataVerificationPayInUnavailable(error)) {
         returnValues.current = null;
         setDisplayState('hidden');
       } else {
@@ -186,7 +219,7 @@ export default function DataVerificationPaymentMethod({
         returnPreflightRequest.current = null;
       }
     }
-  }, []);
+  }, [reconcileReturn]);
 
   useEffect(() => {
     if (!queryRemoved) return;
@@ -210,7 +243,7 @@ export default function DataVerificationPaymentMethod({
       .catch((error: unknown) => {
         if (!cancelled) {
           setDisplayState(
-            isDataVerificationPayInUnavailable(error) ? 'hidden' : 'network_error'
+            isLegacyActionAuthError(error) ? 'legacy_auth_error' : isDataVerificationPayInUnavailable(error) ? 'hidden' : 'network_error'
           );
         }
       });
@@ -220,59 +253,14 @@ export default function DataVerificationPaymentMethod({
     };
   }, [mode, queryRemoved, runReturnPreflight]);
 
-  const openSetupReauth = () => {
-    setIsReauthOpen(true);
-  };
-
-  const closeReauth = () => {
-    if (isWorking) return;
-    setIsReauthOpen(false);
-    if (mode === 'return') {
-      returnValues.current = null;
-      setDisplayState('cancelled');
-    }
-  };
-
-  const handleSetupReauth = async (reauthToken: string) => {
+  const handleSetup = async () => {
     setIsWorking(true);
     try {
-      const setupSession = await createDataVerificationPayInSetupSession(reauthToken);
+      const setupSession = await createDataVerificationPayInSetupSession();
       saveVerificationReturn(returnToListing);
       navigateToDataVerificationPayInSetup(setupSession.checkout_url);
     } catch (error: unknown) {
-      setIsReauthOpen(false);
-      setDisplayState(isDataVerificationPayInUnavailable(error) ? 'hidden' : 'failed');
-    } finally {
-      setIsWorking(false);
-    }
-  };
-
-  const handleReturnReauth = async (reauthToken: string) => {
-    const values = returnValues.current;
-    if (!values) {
-      setIsReauthOpen(false);
-      setDisplayState('failed');
-      return;
-    }
-
-    setIsWorking(true);
-    try {
-      const result = await reconcileDataVerificationPayInSetupSession(
-        values.setupAttemptId,
-        values.checkoutSessionId,
-        reauthToken
-      );
-      if (result.state !== 'pending') returnValues.current = null;
-      setDisplayState(result.state);
-      setIsReauthOpen(false);
-    } catch (error: unknown) {
-      if (isDataVerificationPayInUnavailable(error)) {
-        returnValues.current = null;
-        setDisplayState('hidden');
-      } else {
-        setDisplayState('network_error');
-      }
-      setIsReauthOpen(false);
+      setDisplayState(isLegacyActionAuthError(error) ? 'legacy_auth_error' : isDataVerificationPayInUnavailable(error) ? 'hidden' : 'failed');
     } finally {
       setIsWorking(false);
     }
@@ -283,7 +271,6 @@ export default function DataVerificationPaymentMethod({
   const canReplace = mode === 'setup' && displayState === 'ready';
   const canRecheck =
     mode === 'return' &&
-    !isReauthOpen &&
     returnValues.current !== null &&
     (displayState === 'pending' || displayState === 'network_error');
 
@@ -301,13 +288,6 @@ export default function DataVerificationPaymentMethod({
 
   return (
     <section className="max-w-2xl" aria-labelledby={HEADING_ID}>
-      <ReauthModal
-        method={reauthMethod ?? 'totp'}
-        isOpen={isReauthOpen}
-        onClose={closeReauth}
-        onSuccess={mode === 'return' ? handleReturnReauth : handleSetupReauth}
-        fallbackFocusRef={backToSettingsRef}
-      />
 
       <h1 id={HEADING_ID} className="text-2xl font-bold text-gray-900">
         {HEADING}
@@ -318,11 +298,6 @@ export default function DataVerificationPaymentMethod({
         <p className="mt-3 text-sm text-gray-600">{HOSTED_HANDOFF}</p>
       )}
 
-      {isReauthOpen && (
-        <p className="mt-4 text-sm font-medium text-gray-700" role="status">
-          {mode === 'return' ? RETURN_REAUTH : SETUP_REAUTH}
-        </p>
-      )}
 
       <section className="mt-6 rounded-xl border border-gray-200 bg-white p-6 shadow-sm">
         <div
@@ -351,8 +326,8 @@ export default function DataVerificationPaymentMethod({
         {(canStart || canReplace) && (
           <button
             type="button"
-            onClick={openSetupReauth}
-            disabled={isWorking || isReauthOpen}
+            onClick={() => void handleSetup()}
+            disabled={isWorking}
             className="mt-5 rounded-lg bg-[#3F51B5] px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-[#3545a0] disabled:cursor-not-allowed disabled:opacity-50"
           >
             {isWorking

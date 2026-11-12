@@ -92,6 +92,15 @@ describe('AWS seller-session setup/status and shared removal', () => {
     expect(await getAwsVerifierStatus('listing')).toEqual(data);
     expect(api.get).toHaveBeenCalledWith('/verification-runners/aws/status', { params: { listing_id: 'listing' } });
   });
+  it.each([
+    ['aws', getAwsVerifierStatus],
+    ['cloudflare', getCloudflareVerifierStatus],
+  ] as const)('forwards a caller-scoped timeout and cancellation signal for %s status', async (provider, status) => {
+    vi.mocked(api.get).mockResolvedValue({ data: { eligible: false } });
+    const signal = new AbortController().signal;
+    await status('listing', { timeout: 10_000, signal });
+    expect(api.get).toHaveBeenLastCalledWith(`/verification-runners/${provider}/status`, { params: { listing_id: 'listing' }, timeout: 10_000, signal });
+  });
   it.each(['aws-runner', 'gateway-runner'])('accepts DELETE 204 and sends confirm for %s', async runner => {
     vi.mocked(api.delete).mockResolvedValue({ status: 204, data: '' });
     expect(await removeVerificationRunner(runner)).toBeUndefined();

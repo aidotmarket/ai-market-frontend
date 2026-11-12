@@ -11,6 +11,10 @@ const api=vi.hoisted(()=>({readPublication:vi.fn(),publishListing:vi.fn()}));
 vi.mock('@/api/sellerListingPublication',()=>api);
 const approval={id:'approval',review_hash:'a',render_hash:'b'} as ApprovalReceipt;
 const publication={title:'Retail',slug:'retail',status:'published',is_listed:true};
+afterEach(() => {
+  expect(screen.queryByRole('dialog', { name: 'Re-authenticate' })).toBeNull();
+  expect(screen.queryByPlaceholderText('Enter code')).toBeNull();
+});
 afterEach(()=>{cleanup();vi.restoreAllMocks();});
 beforeEach(()=>{vi.resetAllMocks();api.readPublication.mockResolvedValue({publication_available:true,publication:null});});
 it('requires a click and the approved render before publishing',async()=>{
@@ -23,7 +27,7 @@ it('requires a click and the approved render before publishing',async()=>{
   api.publishListing.mockResolvedValue(publication);fireEvent.click(button);
   await screen.findByText(/published and available/);
   expect(changed).toHaveBeenCalledOnce();window.removeEventListener('capabilities:changed',changed);
-  expect(api.publishListing).toHaveBeenCalledOnce();expect(screen.getByRole('link',{name:'View Retail'}).getAttribute('href')).toBe('/listings/retail');
+  expect(api.publishListing).toHaveBeenCalledOnce();expect(screen.getByRole('link',{name:'View separately attributed current public display: Retail'}).getAttribute('href')).toBe('/listings/retail');
 });
 it('restores publication status without publishing again',async()=>{
   api.readPublication.mockResolvedValue({publication_available:false,publication});
@@ -125,14 +129,16 @@ it('waits for preparation recovery and forwards the signed preparation on the we
     render(<SellerPublication approval={named} active rendered/>);
     const button=await screen.findByRole('button',{name:'Publish this listing'});
     expect((button as HTMLButtonElement).disabled).toBe(true);
-    await act(async()=>finish({data:row}));await screen.findByText('Ready to publish here or from Claude');
+    await act(async()=>finish({data:row}));await screen.findByText('Ready to publish');
     api.publishListing.mockResolvedValue(publication);fireEvent.click(button);
     await screen.findByText('Published');
     expect(api.publishListing).toHaveBeenCalledWith(named,expect.any(String),expect.any(AbortSignal),row.id);
   } finally {get.mockRestore();}
 });
 
-const prepared={...instrument(),license_selection:undefined};
+// POST preparation omits the selection; GET recovery adds JSON null when
+// the saved approval has no selection. Neither wire contains JS undefined.
+const {license_selection: _selection,...prepared}=instrument();
 const namedApproval={...approval,id:prepared.binding.approval_id,draft_id:prepared.binding.draft_id,draft_version:3,render_hash:hash};
 const notFound={isAxiosError:true,response:{status:404,data:{detail:'NOT_FOUND'}}};
 function namedReads() {
@@ -158,7 +164,7 @@ it('blocks publish while prepare is pending and after a lost response until B2 r
   const recovery=deferred<unknown>();get.mockReturnValue(recovery.promise);
   fireEvent.click(screen.getByRole('button',{name:'Refresh preparation status'}));
   expect(publish.disabled).toBe(true);
-  const signed={...prepared,status:'signed',signing_required:false,acceptance_id:id(20),signed_coverage_hash:hash};
+  const signed={...prepared,license_selection:null,status:'signed',signing_required:false,acceptance_id:id(20),signed_coverage_hash:hash};
   await act(async()=>recovery.resolve({data:signed}));
   await waitFor(()=>expect(publish.disabled).toBe(false));
   api.publishListing.mockResolvedValue(publication);fireEvent.click(publish);

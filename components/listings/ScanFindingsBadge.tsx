@@ -71,7 +71,9 @@ function ArtifactProvenance({ artifact }: { artifact: SellerScanFindings }) {
         <ReportField label="Listing ID">{artifact.listing_id}</ReportField>
         <ReportField label="Spec ID">{artifact.spec.id}</ReportField>
         <ReportField label="Spec version">{artifact.spec.version}</ReportField>
-        <ReportField label="Spec hash">{artifact.spec.hash}</ReportField>
+        {typeof artifact.spec.hash === 'string' && artifact.spec.hash.length > 0 && (
+          <ReportField label="Spec hash">{artifact.spec.hash}</ReportField>
+        )}
         <ReportField label="Depth class">{artifact.spec.depth_class}</ReportField>
         <ReportField label="Canonicalization version">{artifact.spec.canonicalization_version}</ReportField>
         {artifact.spec.listing_version_id && <ReportField label="Covered listing version">{artifact.spec.listing_version_id}</ReportField>}
@@ -79,7 +81,9 @@ function ArtifactProvenance({ artifact }: { artifact: SellerScanFindings }) {
         <ReportField label="Agent version">{artifact.execution.agent_version}</ReportField>
         <ReportField label="Connector type">{artifact.execution.connector_type}</ReportField>
         <ReportField label="Connector version">{artifact.execution.connector_version}</ReportField>
-        <ReportField label="Content SHA-256 reference">{artifact.execution.content_sha256_reference}</ReportField>
+        {typeof artifact.execution.content_sha256_reference === 'string' && artifact.execution.content_sha256_reference.length > 0 && (
+          <ReportField label="Content SHA-256 reference">{artifact.execution.content_sha256_reference}</ReportField>
+        )}
         <ReportField label="Fingerprint hash">{artifact.fingerprint_hash}</ReportField>
         <ReportField label="Row-count algorithm">{artifact.methods.row_count_algorithm_version}</ReportField>
         <ReportField label="Distinct-count algorithm">{artifact.methods.distinct_algorithm_version}</ReportField>
@@ -147,9 +151,9 @@ function FactColumn({ column }: { column: VerificationFactColumn }) {
   return (
     <dl className="grid gap-x-6 gap-y-2 sm:grid-cols-2">
       <ReportField label="Column position">{column.position}</ReportField>
-      <ReportField label="Null rate">{column.null_rate}</ReportField>
+      <ReportField label="Null rate">{displayAggregate(column.null_rate)}</ReportField>
       {distinct === 'suppressed_low_occupancy' ? (
-        <ReportField label="Approximate distinct count">{distinct}</ReportField>
+        <ReportField label="Approximate distinct count">{displayAggregate(distinct)}</ReportField>
       ) : (
         <>
           <ReportField label="Approximate distinct algorithm">{distinct.algorithm}</ReportField>
@@ -157,8 +161,8 @@ function FactColumn({ column }: { column: VerificationFactColumn }) {
           <ReportField label="Approximate distinct relative error (ppm)">{distinct.relative_error_ppm}</ReportField>
         </>
       )}
-      <ReportField label="Length histogram">{displayAggregate(column.length_histogram)}</ReportField>
-      <ReportField label="Numeric range buckets">{displayAggregate(column.numeric_range_buckets)}</ReportField>
+      {column.length_histogram != null && <ReportField label="Length histogram">{displayAggregate(column.length_histogram)}</ReportField>}
+      {column.numeric_range_buckets != null && <ReportField label="Numeric range buckets">{displayAggregate(column.numeric_range_buckets)}</ReportField>}
     </dl>
   );
 }
@@ -169,9 +173,9 @@ function Interpretation({ artifact }: { artifact: SellerScanFindings }) {
       <h3 id="scan-interpretation-heading" className="font-semibold text-gray-900">allAI interpretation</h3>
       <dl className="mt-2 space-y-3">
         <ReportField label="Narrative state">{artifact.narrative_state}</ReportField>
-        <ReportField label="Narrative">{displaySafeNullable(artifact.narrative)}</ReportField>
-        <ReportField label="Listing claim comparison">{displaySafeNullable(artifact.listing_claim_comparison)}</ReportField>
-        <ReportField label="Narrative notice">{displayNullable(artifact.narrative_notice)}</ReportField>
+        {artifact.narrative != null && <ReportField label="Narrative">{decodeHtmlEscapeEntities(artifact.narrative)}</ReportField>}
+        {artifact.listing_claim_comparison != null && <ReportField label="Listing claim comparison">{decodeHtmlEscapeEntities(artifact.listing_claim_comparison)}</ReportField>}
+        {artifact.narrative_notice != null && <ReportField label="Narrative notice">{artifact.narrative_notice}</ReportField>}
       </dl>
     </section>
   );
@@ -227,18 +231,9 @@ function ReportField({ label, children }: { label: string; children: React.React
   );
 }
 
-function displayAggregate(value: number[] | 'suppressed_low_occupancy' | null | undefined): string {
-  if (value === undefined) return 'undefined';
-  if (value === null) return 'null';
+function displayAggregate(value: number[] | string): string {
+  if (value === 'suppressed_low_occupancy') return 'Hidden for privacy (fewer than 10)';
   return Array.isArray(value) ? JSON.stringify(value) : value;
-}
-
-function displayNullable(value: string | null | undefined): string {
-  return value ?? 'null';
-}
-
-function displaySafeNullable(value: string | null | undefined): string {
-  return value === null || value === undefined ? 'null' : decodeHtmlEscapeEntities(value);
 }
 
 const HTML_ESCAPE_ENTITIES: Record<string, string> = {

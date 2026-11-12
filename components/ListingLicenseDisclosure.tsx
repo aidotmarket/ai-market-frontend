@@ -1,9 +1,12 @@
 'use client';
 
 import { useEffect, useMemo, useState } from 'react';
+import { isAxiosError } from 'axios';
+import { primaryButtonClass } from './ui/button-styles';
 import LicenseReadingDialog from './LicenseReadingDialog';
 import type { ListingLicenseDetails } from '@/types';
 import { api } from '@/api/client';
+import { LICENSE_HASHES_1_0 } from '@/api/listingLicenses';
 import {hashLicenseComponentBytes, sha256, verifyCustomText} from '@/lib/customLicenseVerification';
 export {hashLicenseComponentBytes} from '@/lib/customLicenseVerification';
 
@@ -24,7 +27,7 @@ interface DocumentReference {
 }
 
 interface LoadedDocument extends DocumentReference {
-  state: 'loading' | 'matched' | 'mismatch' | 'error';
+  state: 'loading' | 'matched' | 'mismatch' | 'sign_in' | 'error';
   text: string | null;
   objectUrl?: string;
   verifiedMediaType?: 'text/plain' | 'application/pdf';
@@ -99,9 +102,13 @@ function documentLocation(url: string): { href: string; apiPath?: string } {
 
 function referencesFor(license: ListingLicenseDetails): DocumentReference[] {
   const aiTraining = license.params.ai_training;
+  // Only the pinned historical hash identifies a covenant whose version was omitted.
+  const covenantVersion = license.covenant_version ??
+    (license.covenant_sha256 === LICENSE_HASHES_1_0.covenant ? '1.0' : '');
+  const covenantCode = license.covenant_code ?? 'marketplace-listing';
   const references: DocumentReference[] = [{
     kind: 'license',
-    label: license.code === 'standard' ? 'ai.market Standard Data Licence v1.0' : "Seller's own licence",
+    label: license.code === 'standard' ? `ai.market Standard Data Licence v${license.version}` : "Seller's own licence",
     canonicalUrl: license.full_text_url,
     downloadUrl: license.download_url,
     sha256: license.sha256,
@@ -110,12 +117,12 @@ function referencesFor(license: ListingLicenseDetails): DocumentReference[] {
     params: license.params,
   }, {
     kind: 'covenant',
-    label: 'ai.market Marketplace Listing Covenant v1.0',
-    canonicalUrl: '/licenses/marketplace-listing/1.0',
-    downloadUrl: '/licenses/marketplace-listing/1.0?download=1',
+    label: `ai.market Marketplace Listing Covenant${covenantVersion ? ` v${covenantVersion}` : ' (version unavailable)'}`,
+    canonicalUrl: covenantVersion ? `/licenses/${covenantCode}/${covenantVersion}` : '',
+    downloadUrl: covenantVersion ? `/licenses/${covenantCode}/${covenantVersion}?download=1` : '',
     sha256: license.covenant_sha256,
-    code: 'marketplace-listing',
-    version: '1.0',
+    code: covenantCode,
+    version: covenantVersion,
     params: {},
   }];
   if (license.rider_sha256) {
@@ -155,6 +162,7 @@ export default function ListingLicenseDisclosure({
     onVerificationChange?.(false);
     void Promise.all(references.map(async (reference): Promise<LoadedDocument> => {
       try {
+        if (!reference.version) return { ...reference, state: 'error', text: null };
         const location = documentLocation(reference.downloadUrl);
         let bytes: Uint8Array;
         let contentType: string;
@@ -166,6 +174,9 @@ export default function ListingLicenseDisclosure({
           contentType = String(responseHeaders['content-type'] ?? '');
         } else {
           const response = await fetch(location.href, { credentials: 'include', cache: 'no-store' });
+          if (response.status === 401 || response.status === 403) {
+            return { ...reference, state: 'sign_in', text: null };
+          }
           if (!response.ok) throw new Error('document fetch failed');
           bytes = new Uint8Array(await response.arrayBuffer());
           responseHeaders = Object.fromEntries(response.headers.entries());
@@ -188,8 +199,9 @@ export default function ListingLicenseDisclosure({
           objectUrl,
           verifiedMediaType,
         };
-      } catch {
-        return { ...reference, state: 'error', text: null };
+      } catch (error) {
+        const status = isAxiosError(error) ? error.response?.status : undefined;
+        return { ...reference, state: status === 401 || status === 403 ? 'sign_in' : 'error', text: null };
       }
     })).then((loaded) => {
       if (cancelled) return;
@@ -231,12 +243,16 @@ export default function ListingLicenseDisclosure({
                   ? <a href={canonicalHref} target="_blank" rel="noreferrer" className="break-all text-xs text-indigo-700 underline">{document.canonicalUrl}</a>
                   : <span className="break-all text-xs text-gray-600">{document.canonicalUrl}</span>}
               </div>
-              <span role="status" className={`text-xs font-medium ${document.state === 'matched' ? 'text-green-800' : document.state === 'loading' ? 'text-gray-500' : 'text-red-800'}`}>
-                {document.state === 'matched' ? 'Fetched bytes match the server hash' : document.state === 'loading' ? 'Verifying fetched bytes…' : document.state === 'mismatch' ? 'Hash mismatch — do not accept' : 'Could not verify — do not accept'}
+              <span role="status" className={`text-xs font-medium ${document.state === 'matched' ? 'text-green-800' : document.state === 'sign_in' ? 'text-gray-700' : document.state === 'loading' ? 'text-gray-500' : 'text-red-800'}`}>
+                {document.state === 'matched' ? 'Fetched bytes match the server hash' : document.state === 'sign_in' ? "Sign in to read and verify the seller's licence" : document.state === 'loading' ? 'Verifying fetched bytes…' : document.state === 'mismatch' ? 'Hash mismatch — do not accept' : 'Could not verify — do not accept'}
               </span>
             </div>
             <p className="mt-2 break-all font-mono text-[11px] text-gray-600">SHA-256: {document.sha256}</p>
             <div className="mt-3 flex flex-wrap gap-4 text-sm">
+              {document.state === 'sign_in' && <a
+                href={`/login?redirect=${encodeURIComponent(window.location.pathname + window.location.search + window.location.hash)}`}
+                className={primaryButtonClass}
+              >Sign in</a>}
               {document.text && <LicenseReadingDialog label={document.kind==='covenant'?'Read Marketplace Listing Covenant':document.kind==='rider'?'Read AI-Training Rider':'Read full licence'} href={canonicalHref??downloadHref??''} text={document.text} customMarkdown={customDocument} />}
               {document.verifiedMediaType==='application/pdf'&&canonicalHref&&<LicenseReadingDialog label="Read full licence" href={canonicalHref} pdf />}
               {downloadHref

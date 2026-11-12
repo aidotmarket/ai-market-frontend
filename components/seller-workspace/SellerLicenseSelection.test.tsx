@@ -3,8 +3,8 @@ import {act,cleanup,fireEvent,render,screen,waitFor} from '@testing-library/reac
 import {afterEach,beforeEach,describe,expect,it,vi} from 'vitest';
 import {useState} from 'react';
 import {webcrypto} from 'node:crypto';
-import SellerLicenseSelection,{CUSTOM_NOTICE} from './SellerLicenseSelection';
-import {createStandardSelection,type LicenseSelection} from '@/api/listingLicenses';
+import SellerLicenseSelection,{CUSTOM_NOTICE,STANDARD_SELLER_SUMMARY} from './SellerLicenseSelection';
+import {createStandardSelection,LICENSE_HASHES_1_0,type LicenseSelection} from '@/api/listingLicenses';
 import {hashLicenseComponentBytes,sha256} from '@/lib/customLicenseVerification';
 
 const transport = vi.hoisted(()=>({post:vi.fn(),get:vi.fn().mockResolvedValue({data:{full_text:'The full terms'}})}));
@@ -140,9 +140,9 @@ describe('Seller licence selection',()=>{
     expect(screen.getByText('Allow')).toBeTruthy();
     const wire=JSON.parse(screen.getByTestId('wire').textContent!);
     expect(wire).toEqual({
-      kind:'standard',version:'1.0',ai_training:true,license_document_id:null,
-      license_sha256:'4b05dbcd0c186746d3deab6c68beaebba88610de8e85122efb4d527edb1263c6',rider_sha256:null,
-      covenant_code:'marketplace-listing',covenant_version:'1.0',covenant_sha256:'a91234b67bf7467a0c80f6e1caa47b563032e94751146901b796eaaf220431af',
+      kind:'standard',version:'1.1',ai_training:true,license_document_id:null,
+      license_sha256:'881266a455d100e6b263ec121523001e5e53f6e3bf3bd97047e29ae39f8959fb',rider_sha256:null,
+      covenant_code:'marketplace-listing',covenant_version:'1.1',covenant_sha256:'58eff1def7acb59db75920fe0da89a3f4f87bb12bd6765ec8eae231bbea118b5',
       seller_acceptance:{signer_name:'',signer_title:'',authority_confirmed:false},
     });
   });
@@ -167,13 +167,13 @@ describe('Seller licence selection',()=>{
     render(<Harness/>);
     await screen.findByText('Legal name on the licence: Seller Ltd (GB)');
     const link=screen.getByRole('link',{name:'Read licence'});
-    expect(link.getAttribute('href')).toBe('/licenses/standard/1.0/ai-training');
+    expect(link.getAttribute('href')).toBe('/licenses/standard/1.1/ai-training');
     fireEvent.click(link);
     expect(screen.queryByRole('dialog')).toBeNull();
     expect((screen.getByLabelText('Confirm covenant and authority') as HTMLInputElement).disabled).toBe(false);
     readTerms('Read Marketplace Listing Covenant');
     fireEvent.click(screen.getByLabelText('Allow AI/ML training'));
-    expect(link.getAttribute('href')).toBe('/licenses/standard/1.0/no-ai-training');
+    expect(link.getAttribute('href')).toBe('/licenses/standard/1.1/no-ai-training');
     fireEvent.click(link);
     expect((screen.getByLabelText('Confirm covenant and authority') as HTMLInputElement).disabled).toBe(false);
     expect(JSON.parse(screen.getByTestId('wire').textContent!).seller_acceptance.authority_confirmed).toBe(false);
@@ -194,7 +194,7 @@ describe('Seller licence selection',()=>{
     expect(fieldset.disabled).toBe(true);
     expect(link.matches(':disabled')).toBe(false);
     expect(link.hasAttribute('aria-disabled')).toBe(false);
-    expect(link.getAttribute('href')).toBe(`/licenses/standard/1.0/${training?'ai-training':'no-ai-training'}`);
+    expect(link.getAttribute('href')).toBe(`/licenses/standard/1.1/${training?'ai-training':'no-ai-training'}`);
     expect(link.search).toBe('');
     expect(link.hasAttribute('download')).toBe(false);
     expect(link.target).toBe('_blank');
@@ -219,7 +219,7 @@ describe('Seller licence selection',()=>{
     render(<SellerLicenseSelection value={value} onChange={onChange} disabled={disabled}/>);
     const link=screen.getByRole('link',{name:'Read licence'}) as HTMLAnchorElement;
     act(()=>link.click());
-    expect(link.getAttribute('href')).toBe('/licenses/standard/1.0/no-ai-training');
+    expect(link.getAttribute('href')).toBe('/licenses/standard/1.1/no-ai-training');
     expect((screen.getByRole('radio',{name:/My own licence/}) as HTMLInputElement).checked).toBe(true);
     expect((screen.getByRole('radio',{name:/Standard/}) as HTMLInputElement).checked).toBe(false);
     expect(screen.getByText('Save your custom licence text before confirming.')).toBeTruthy();
@@ -268,7 +268,7 @@ describe('Seller licence selection',()=>{
     expect(confirmation.disabled).toBe(false);
     fireEvent.click(screen.getByRole('button',{name:'Read full licence'}));
     expect(screen.getByRole('dialog',{name:'Read full licence'})).toBeTruthy();
-    expect(screen.getByRole('link',{name:'Open in new tab'}).getAttribute('href')).toBe('/licenses/standard/1.0/ai-training');
+    expect(screen.getByRole('link',{name:'Open in new tab'}).getAttribute('href')).toBe('/licenses/standard/1.1/ai-training');
   });
 
   it.each([
@@ -423,4 +423,22 @@ describe('custom Markdown editing',()=>{
   expect(JSON.parse(screen.getByTestId('wire').textContent!).license_sha256).toBe('');
   expect((screen.getByLabelText('Confirm covenant and authority') as HTMLInputElement).disabled).toBe(true);
  });
+});
+
+it("uses the approved personal-data promise verbatim",()=>{
+ expect(STANDARD_SELLER_SUMMARY.split("\n")).toContain("You promise that you have the rights, sourced the data lawfully and stated the listing facts accurately. If the data includes personal data, you also promise that you have a lawful basis to sell and transfer it, hold the consent and provenance records the law requires, and disclose any sensitive personal data in the listing.");
+});
+
+it('reads a saved 1.0 selection using 1.0 paths and preserves its hashes when toggling training',async()=>{
+ const initial:LicenseSelection={...createStandardSelection(),version:'1.0',covenant_version:'1.0',license_sha256:LICENSE_HASHES_1_0.standard.true,covenant_sha256:LICENSE_HASHES_1_0.covenant};
+ render(<Harness initial={initial}/>);
+ await screen.findByText('Legal name on the licence: Seller Ltd (GB)');
+ expect(screen.getByRole('link',{name:'Read licence'}).getAttribute('href')).toBe('/licenses/standard/1.0/ai-training');
+ fireEvent.click(screen.getByRole('checkbox',{name:/Allow AI\/ML training/}));
+ const wire=JSON.parse(screen.getByTestId('wire').textContent!);
+ expect(wire).toMatchObject({version:'1.0',covenant_version:'1.0',license_sha256:LICENSE_HASHES_1_0.standard.false,covenant_sha256:LICENSE_HASHES_1_0.covenant});
+ expect((screen.getByLabelText('Confirm covenant and authority') as HTMLInputElement).disabled).toBe(true);
+ fireEvent.click(screen.getByRole('button',{name:'Re-select at current version'}));
+ expect(JSON.parse(screen.getByTestId('wire').textContent!)).toMatchObject({version:'1.1',covenant_version:'1.1',ai_training:false,seller_acceptance:{authority_confirmed:false}});
+ expect((screen.getByLabelText('Confirm covenant and authority') as HTMLInputElement).disabled).toBe(false);
 });

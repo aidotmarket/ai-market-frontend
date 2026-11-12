@@ -3,6 +3,7 @@ import {useState} from 'react';
 import { act, cleanup, fireEvent, render, screen,waitFor } from '@testing-library/react';
 import { afterEach, expect, it, vi } from 'vitest';
 import SellerReview from './SellerReview';
+import {instrument} from '@/tests/fixtures/seller-authority';
 import {resetSellerListingDraftOwnerForTests,SellerListingDraftProvider,useSellerListingDraft,useSellerListingDraftStatus} from './SellerListingDraftStore';
 import type {SavedListingDraft} from '@/api/sellerListingDraft';
 const api = vi.hoisted(() => ({readListingReview:vi.fn(),readReviewSourcePage:vi.fn()}));
@@ -10,11 +11,11 @@ const drafts=vi.hoisted(()=>({readListingDraft:vi.fn(),saveListingDraft:vi.fn()}
 vi.mock('@/api/sellerListingReview', () => api);
 vi.mock('@/api/sellerListingDraft',()=>drafts);
 afterEach(() => {cleanup();resetSellerListingDraftOwnerForTests();vi.resetAllMocks();});
-it('displays saved fields without exposing an approval or publication action', async () => {
+it.each(['seller-listing-review-v2','seller-listing-review-v3','seller-listing-review-v4'])('displays saved %s fields without an approval or publication action', async presentation_version => {
   const html = '<!doctype html><html><body><h1>Saved retail offer</h1><p>$25.00</p></body></html>';
-  api.readListingReview.mockResolvedValue({rendered_html:html,fields:{title:'Saved retail offer', description:'Weekly totals', category:'Retail',tags:'retail',price:'25.00',license:'Research'},source_page:{files:[{key:'private/retail.csv',size:42,etag:'synthetic',version_id:null}],total_count:1,total_size_bytes:42,offset:0,next_cursor:null},missing_fields:[],approval_available:false});
+  api.readListingReview.mockResolvedValue({presentation_version,rendered_html:html,fields:{title:'Saved retail offer', description:'Weekly totals', category:'Retail',tags:'retail',price:'25.00',license:'Research'},source_page:{files:[{key:'private/retail.csv',size:42,etag:'synthetic',version_id:null}],total_count:1,total_size_bytes:42,offset:0,next_cursor:null},missing_fields:[],approval_available:false});
   render(<SellerReview active enabled />);
-  const frame = await screen.findByTitle('Saved listing buyers would see');
+  const frame = await screen.findByTitle('Saved original seller review');
   expect(frame.getAttribute('srcdoc')).toBe(html);
   expect(screen.getByText('private/retail.csv')).toBeTruthy();
   expect(frame.getAttribute('srcdoc')).not.toContain('private/retail.csv');
@@ -74,9 +75,9 @@ it('shows the v2 sample statement with basename, size and index',async()=>{
 it('keeps v1 review markup unchanged when explicit none fields arrive',async()=>{
  const value={rendered_html:'<p>Legacy</p>',fields:{},source_page:null,missing_fields:[],approval_available:false};
  api.readListingReview.mockResolvedValue(value);const first=render(<SellerReview active enabled/>);
- await screen.findByTitle('Saved listing buyers would see');await screen.findByTitle('Preview layout measurement');const legacy=first.container.innerHTML;first.unmount();
+ await screen.findByTitle('Saved original seller review');await screen.findByTitle('Preview layout measurement');const legacy=first.container.innerHTML;first.unmount();
  api.readListingReview.mockResolvedValue({...value,sample_decision:'none',sample_object_indices:[],sample_status:'not_selected'});
- const second=render(<SellerReview active enabled/>);await screen.findByTitle('Saved listing buyers would see');await screen.findByTitle('Preview layout measurement');
+ const second=render(<SellerReview active enabled/>);await screen.findByTitle('Saved original seller review');await screen.findByTitle('Preview layout measurement');
  expect(second.container.innerHTML).toBe(legacy);
 });
 
@@ -129,4 +130,28 @@ it('reports a disabled draft store as unavailable and not loaded',()=>{
  render(<SellerListingDraftProvider enabled={false} sampleCapability={false}><DisabledDraftProbe/></SellerListingDraftProvider>);
  expect(screen.getByRole('status').textContent).toBe('{"available":false,"loaded":false}');
  expect(drafts.readListingDraft).not.toHaveBeenCalled();
+});
+
+it.each([
+  ['Weekly **totals** with [details](https://example.test)', 'Weekly totals with details'],
+  ['<p>Weekly <strong>totals</strong> &amp; details</p><script>hiddenScript()</script>', 'Weekly totals & details'],
+])('shows saved title, plain description and currency without licence hashes (%s)',async(description,expected)=>{
+  api.readListingReview.mockResolvedValue({rendered_html:'<p>Saved retail offer</p>',fields:{title:'Saved retail offer',description,price:'25.00',license:'Research'},license_selection:instrument().license_selection,source_page:{files:[{key:'private/retail.csv',size:42}],total_count:1,total_size_bytes:42},missing_fields:[],approval_available:false});
+  const view=render(<SellerReview active enabled/>);
+  await screen.findByText(expected);
+  expect(screen.getByRole('heading',{name:'Saved retail offer'})).toBeTruthy();
+  expect(screen.getByText('Price: $25.00')).toBeTruthy();
+  expect(screen.getByText('Standard (recommended) · AI/ML training allowed')).toBeTruthy();
+  const summary=screen.getByRole('region',{name:"What you're confirming"});
+  const files=screen.getByRole('region',{name:'Files included in this review'});
+  expect(summary.compareDocumentPosition(files)&Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+  expect(summary.querySelector('strong,a,script')).toBeNull();
+  expect(view.container.textContent).not.toContain('Licence hash');
+  expect(view.container.textContent).not.toMatch(/[a-f0-9]{64}/i);
+  expect(view.container.textContent).not.toContain('hiddenScript');
+});
+it.each(['',undefined,'invalid'])('makes a missing or invalid price visible (%s)',async price=>{
+  api.readListingReview.mockResolvedValue({rendered_html:'<p>Offer</p>',fields:{title:'Offer',description:'Description',price},missing_fields:['price'],approval_available:false});
+  render(<SellerReview active enabled/>);
+  expect(await screen.findByText('Price: No price set')).toBeTruthy();
 });

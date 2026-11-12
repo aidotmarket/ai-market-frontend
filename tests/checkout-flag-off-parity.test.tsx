@@ -24,7 +24,7 @@ it.each([false, true])('matches origin/main 8074c2ca checkout markup with flag o
   const props = { listingId: 'listing', slug: 'data', price: 20, pricingType: 'one_time' };
   const licenseDetails = { code: 'standard' as const, version: '1.0', params: { ai_training: false }, summary: ['Terms'],
     full_text_url: '/licenses/standard/1.0', download_url: '/licenses/standard/1.0?download=1',
-    sha256: 'a'.repeat(64), covenant_sha256: 'b'.repeat(64), rider_sha256: null };
+    sha256: 'a'.repeat(64), covenant_version: '1.0', covenant_sha256: 'b'.repeat(64), rider_sha256: null };
   const variants = [{}, { licenseDetails }, { disabledReason: 'Unavailable' }, { versionLabel: 'v2', accessWindowDays: 30 }];
   const expectedMarkup = reference.markup[authenticated ? 'true' : 'false'];
   expect(expectedMarkup).toHaveLength(variants.length);

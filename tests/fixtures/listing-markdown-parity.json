@@ -1,0 +1,227 @@
+[
+  {
+    "name": "plain",
+    "source": "Plain text.",
+    "html": "<p>Plain text.</p>"
+  },
+  {
+    "name": "paragraphs",
+    "source": "First\n\nSecond",
+    "html": "<p>First</p><p>Second</p>"
+  },
+  {
+    "name": "headings",
+    "source": "# One\n## Two\n### Three\n#### Four\n##### Five\n###### Six",
+    "html": "<h2>One</h2><h3>Two</h3><h4>Three</h4><h4>Four</h4><h4>Five</h4><h4>Six</h4>"
+  },
+  {
+    "name": "setext",
+    "source": "One\n===\n\nTwo\n---",
+    "html": "<h2>One</h2><h3>Two</h3>"
+  },
+  {
+    "name": "formatting",
+    "source": "**bold** *italic* ***both***",
+    "html": "<p><strong>bold</strong> <em>italic</em> <em><strong>both</strong></em></p>"
+  },
+  {
+    "name": "breaks",
+    "source": "soft\nline  \nhard\\\nlast",
+    "html": "<p>soft\nline<br>hard<br>last</p>"
+  },
+  {
+    "name": "tight-list",
+    "source": "- first\n- second",
+    "html": "<ul><li>first</li><li>second</li></ul>"
+  },
+  {
+    "name": "ordered",
+    "source": "1. first\n2. second",
+    "html": "<ol><li>first</li><li>second</li></ol>"
+  },
+  {
+    "name": "ordered-start",
+    "source": "7. first\n8. second",
+    "html": "<ol start=\"7\"><li>first</li><li>second</li></ol>"
+  },
+  {
+    "name": "nested",
+    "source": "- outer\n  - inner",
+    "html": "<ul><li>outer<ul><li>inner</li></ul></li></ul>"
+  },
+  {
+    "name": "loose-list",
+    "source": "- first\n\n- second",
+    "html": "<ul><li><p>first</p></li><li><p>second</p></li></ul>"
+  },
+  {
+    "name": "tight-literal",
+    "source": "- **bold** `code`\n- plain",
+    "html": "<ul><li>- **bold** `code`</li><li>plain</li></ul>"
+  },
+  {
+    "name": "loose-literal",
+    "source": "- plain\n\n- **bold** `code`",
+    "html": "<ul><li><p>plain</p></li><li><p>- **bold** `code`</p></li></ul>"
+  },
+  {
+    "name": "continuation-literal",
+    "source": "- first\n  continuation `code`",
+    "html": "<ul><li>- first\n  continuation `code`</li></ul>"
+  },
+  {
+    "name": "indent-literal",
+    "source": "   **bold** `code`",
+    "html": "<p>   **bold** `code`</p>"
+  },
+  {
+    "name": "mixed-inline",
+    "source": "**bold** then `code`",
+    "html": "<p>**bold** then `code`</p>"
+  },
+  {
+    "name": "link",
+    "source": "[**bold**](https://example.com)",
+    "html": "<p>[**bold**](https://example.com)</p>"
+  },
+  {
+    "name": "autolink",
+    "source": "<https://example.com>",
+    "html": "<p>&lt;https://example.com&gt;</p>"
+  },
+  {
+    "name": "image",
+    "source": "![*alt*](picture.png)",
+    "html": "<p>![*alt*](picture.png)</p>"
+  },
+  {
+    "name": "inline-code",
+    "source": "`**bold**`",
+    "html": "<p>`**bold**`</p>"
+  },
+  {
+    "name": "fenced-code",
+    "source": "```html\n**bold**\n```",
+    "html": "<p>```html\n**bold**\n```</p>"
+  },
+  {
+    "name": "indented-code",
+    "source": "    **bold**",
+    "html": "<p>    **bold**</p>"
+  },
+  {
+    "name": "quote",
+    "source": "> **bold**\n> next",
+    "html": "<p>&gt; **bold**\n&gt; next</p>"
+  },
+  {
+    "name": "reference",
+    "source": "[ref]: https://example.com\n\n[**bold**][ref]",
+    "html": "<p>[ref]: https://example.com</p><p>[<strong>bold</strong>][ref]</p>"
+  },
+  {
+    "name": "table",
+    "source": "| a | b |\n| --- | --- |\n| c | d |",
+    "html": "<p>| a | b |\n| --- | --- |\n| c | d |</p>"
+  },
+  {
+    "name": "html-block",
+    "source": "<div>\n**bold**\n</div>",
+    "html": "<p>&lt;div&gt;\n**bold**\n&lt;/div&gt;</p>"
+  },
+  {
+    "name": "html-inline",
+    "source": "**bold** <span>text</span>",
+    "html": "<p>**bold** &lt;span&gt;text&lt;/span&gt;</p>"
+  },
+  {
+    "name": "entities",
+    "source": "&amp; &#65; &#x1f600; &copy;",
+    "html": "<p>&amp;amp; &amp;#65; &amp;#x1f600; &amp;copy;</p>"
+  },
+  {
+    "name": "escapes",
+    "source": "\\*x\\* and sales@acme\\.io",
+    "html": "<p>*x* and sales@acme.io</p>"
+  },
+  {
+    "name": "javascript",
+    "source": "javascript:alert(1)",
+    "html": "<p>javascript:alert(1)</p>"
+  },
+  {
+    "name": "script",
+    "source": "<script>alert(1)</script>",
+    "html": "<p>&lt;script&gt;alert(1)&lt;/script&gt;</p>"
+  },
+  {
+    "name": "img-onerror",
+    "source": "<img src=x onerror=alert(1)>",
+    "html": "<p>&lt;img src=x onerror=alert(1)&gt;</p>"
+  },
+  {
+    "name": "rule",
+    "source": "---",
+    "html": "<p>---</p>"
+  },
+  {
+    "name": "rtl",
+    "source": "# بيانات\n\nשלום **עולם**",
+    "html": "<h2>بيانات</h2><p>שלום <strong>עולם</strong></p>"
+  },
+  {
+    "name": "astral",
+    "source": "😀 **𐐀🌍**",
+    "html": "<p>😀 <strong>𐐀🌍</strong></p>"
+  },
+  {
+    "name": "windows",
+    "source": "# One\r\n\r\nfirst\rsecond  \r\nthird",
+    "html": "<h2>One</h2><p>first\nsecond<br>third</p>"
+  },
+  {
+    "name": "10000-characters",
+    "source": "word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word ",
+    "html": "<p>word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word</p>"
+  },
+  {
+    "name": "list-depth-8-escaped-email",
+    "source": "- Level 1\n  - Level 2\n    - Level 3\n      - Level 4\n        - Level 5\n          - Level 6\n            - Level 7\n              - sales@acme\\.io",
+    "html": "<ul><li>Level 1<ul><li>Level 2<ul><li>Level 3<ul><li>Level 4<ul><li>Level 5<ul><li>Level 6<ul><li>Level 7<ul><li>sales@acme.io</li></ul></li></ul></li></ul></li></ul></li></ul></li></ul></li></ul></li></ul>"
+  },
+  {
+    "name": "list-depth-9-escaped-email",
+    "source": "- Level 1\n  - Level 2\n    - Level 3\n      - Level 4\n        - Level 5\n          - Level 6\n            - Level 7\n              - Level 8\n                - sales@acme\\.io",
+    "html": "<p>- Level 1\n  - Level 2\n    - Level 3\n      - Level 4\n        - Level 5\n          - Level 6\n            - Level 7\n              - Level 8\n                - sales@acme\\.io</p>"
+  },
+  {
+    "name": "list-depth-10-escaped-email",
+    "source": "- Level 1\n  - Level 2\n    - Level 3\n      - Level 4\n        - Level 5\n          - Level 6\n            - Level 7\n              - Level 8\n                - Level 9\n                  - sales@acme\\.io",
+    "html": "<p>- Level 1\n  - Level 2\n    - Level 3\n      - Level 4\n        - Level 5\n          - Level 6\n            - Level 7\n              - Level 8\n                - Level 9\n                  - sales@acme\\.io</p>"
+  },
+  {
+    "name": "list-depth-11-escaped-email",
+    "source": "- Level 1\n  - Level 2\n    - Level 3\n      - Level 4\n        - Level 5\n          - Level 6\n            - Level 7\n              - Level 8\n                - Level 9\n                  - Level 10\n                    - sales@acme\\.io",
+    "html": "<p>- Level 1\n  - Level 2\n    - Level 3\n      - Level 4\n        - Level 5\n          - Level 6\n            - Level 7\n              - Level 8\n                - Level 9\n                  - Level 10\n                    - sales@acme\\.io</p>"
+  },
+  {
+    "name": "list-depth-50-escaped-email",
+    "source": "- Level 1\n  - Level 2\n    - Level 3\n      - Level 4\n        - Level 5\n          - Level 6\n            - Level 7\n              - Level 8\n                - Level 9\n                  - Level 10\n                    - Level 11\n                      - Level 12\n                        - Level 13\n                          - Level 14\n                            - Level 15\n                              - Level 16\n                                - Level 17\n                                  - Level 18\n                                    - Level 19\n                                      - Level 20\n                                        - Level 21\n                                          - Level 22\n                                            - Level 23\n                                              - Level 24\n                                                - Level 25\n                                                  - Level 26\n                                                    - Level 27\n                                                      - Level 28\n                                                        - Level 29\n                                                          - Level 30\n                                                            - Level 31\n                                                              - Level 32\n                                                                - Level 33\n                                                                  - Level 34\n                                                                    - Level 35\n                                                                      - Level 36\n                                                                        - Level 37\n                                                                          - Level 38\n                                                                            - Level 39\n                                                                              - Level 40\n                                                                                - Level 41\n                                                                                  - Level 42\n                                                                                    - Level 43\n                                                                                      - Level 44\n                                                                                        - Level 45\n                                                                                          - Level 46\n                                                                                            - Level 47\n                                                                                              - Level 48\n                                                                                                - Level 49\n                                                                                                  - sales@acme\\.io",
+    "html": "<p>- Level 1\n  - Level 2\n    - Level 3\n      - Level 4\n        - Level 5\n          - Level 6\n            - Level 7\n              - Level 8\n                - Level 9\n                  - Level 10\n                    - Level 11\n                      - Level 12\n                        - Level 13\n                          - Level 14\n                            - Level 15\n                              - Level 16\n                                - Level 17\n                                  - Level 18\n                                    - Level 19\n                                      - Level 20\n                                        - Level 21\n                                          - Level 22\n                                            - Level 23\n                                              - Level 24\n                                                - Level 25\n                                                  - Level 26\n                                                    - Level 27\n                                                      - Level 28\n                                                        - Level 29\n                                                          - Level 30\n                                                            - Level 31\n                                                              - Level 32\n                                                                - Level 33\n                                                                  - Level 34\n                                                                    - Level 35\n                                                                      - Level 36\n                                                                        - Level 37\n                                                                          - Level 38\n                                                                            - Level 39\n                                                                              - Level 40\n                                                                                - Level 41\n                                                                                  - Level 42\n                                                                                    - Level 43\n                                                                                      - Level 44\n                                                                                        - Level 45\n                                                                                          - Level 46\n                                                                                            - Level 47\n                                                                                              - Level 48\n                                                                                                - Level 49\n                                                                                                  - sales@acme\\.io</p>"
+  },
+  {
+    "name": "reference-formatted-title",
+    "source": "[ref]: /some/path \"**title**\"",
+    "html": "<p>[ref]: /some/path &quot;**title**&quot;</p>"
+  },
+  {
+    "name": "pipe-table-formatted",
+    "source": "| Header | Other |\n| --- | --- |\n| **bold** | value |",
+    "html": "<p>| Header | Other |\n| --- | --- |\n| **bold** | value |</p>"
+  },
+  {
+    "name": "reference-multiline",
+    "source": "[ref]: /some/path\n  \"**title**\"",
+    "html": "<p>[ref]: /some/path\n  &quot;**title**&quot;</p>"
+  }
+]

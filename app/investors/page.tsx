@@ -12,7 +12,7 @@ type Firm = {
   monogram: string;
   tagline: string;
   focusAreas: string[];
-  description: string;
+  description: string[];
   philosophy: string;
 };
 
@@ -29,8 +29,10 @@ const firms: Firm[] = [
       'Clean Energy',
       'Applied Robotics',
     ],
-    description:
-      'Apex Meridian Partners is a private equity firm focused on investing in high-growth STEM businesses across biotechnology, advanced manufacturing, software infrastructure, clean energy, and applied robotics. The firm specializes in identifying companies with strong technical foundations and helping them scale through strategic capital investment, operational improvement, and market expansion. Apex Meridian Partners is known for combining deep scientific and engineering insight with disciplined financial analysis, allowing it to support founder-led and emerging companies as they transition into larger, more competitive enterprises.',
+    description: [
+      "Apex Meridian Partners did not invest in ai.market and, in fact, does not exist.",
+      "Its absence has spared us the familiar venture-capital exercise of turning a perfectly sensible business into an urgent attempt to return somebody else’s fund. Customers may want a reliable product at a fair price; investors may need a billion-dollar exit before their fund’s clock runs out. These are different business plans, however many times the board deck calls them “aligned.” Founders can end up hiring before there is work, expanding before there is demand, and subsidizing revenue to prove that people enjoy discounts. A sustainable company becomes a disappointing outcome because it failed to become an implausibly large one. Apex Meridian brings none of these pressures to ai.market. With no partners, no fund, and no capital, it has achieved an exceptional level of non-interference. Thank you for actually reading this far. In a world where most due diligence ends at the logo, that makes you an exceptional individual."
+    ],
     philosophy:
       'Its investment philosophy centers on backing innovation that solves complex real-world problems while generating long-term value for investors and stakeholders.',
   },
@@ -45,8 +47,10 @@ const firms: Firm[] = [
       'Semiconductor Systems',
       'Industrial Automation',
     ],
-    description:
-      'Northstar Vector Capital specializes in STEM-driven private equity opportunities, with a particular emphasis on data science, medical technology, semiconductor systems, and industrial automation. The firm works closely with management teams to strengthen governance, improve efficiency, and accelerate commercialization of breakthrough technologies. Northstar Vector Capital stands out for its ability to evaluate both technical potential and financial performance, making it a strong partner for companies operating at the intersection of innovation and scalable business growth.',
+    description: [
+      "Northstar Vector Capital did not invest in ai.market and, in fact, does not exist.",
+      "Every dollar invested in ai.market came from its hardworking founder, Max Robbins. There was no funding round, no congratulatory photograph, and no partner offering strategic guidance between ski trips. There was an entrepreneur putting his own money behind a business, with one priority: the satisfaction of its customers. That makes the investment thesis unusually easy to explain. Build something useful. Charge fairly. Listen when it falls short. Make it better. Decisions do not have to flatter a valuation, fit a fund’s exit timetable, or turn a customer problem into a slide about total addressable market. The person paying the bills wants the same thing as the people using the product: a business that earns their trust by doing its job. Northstar’s contribution to this arrangement has been to remain entirely imaginary. We appreciate you taking the time to read the small print. Looking past an impressive name to see what is really behind it puts you in rather exceptional company."
+    ],
     philosophy:
       'By supporting businesses with strong research, intellectual property, and market potential, the firm aims to build a portfolio of companies that drive technological progress and sustainable returns.',
   },
@@ -115,9 +119,13 @@ export default function InvestorsPage() {
                 <h3 className="text-[11px] font-bold tracking-[0.1em] uppercase text-[#1A1A1A] mb-3">
                   About the Firm
                 </h3>
-                <p className="text-sm text-[#4a4a4a] leading-relaxed">
-                  {firm.description}
-                </p>
+                <div className="space-y-3">
+                  {firm.description.map((paragraph) => (
+                    <p key={paragraph} className="text-sm text-[#4a4a4a] leading-relaxed">
+                      {paragraph}
+                    </p>
+                  ))}
+                </div>
               </div>
 
               {/* Investment philosophy */}

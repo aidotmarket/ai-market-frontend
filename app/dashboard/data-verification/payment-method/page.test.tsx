@@ -29,7 +29,6 @@ const payinApi = vi.hoisted(() => ({
 }));
 
 const auth = vi.hoisted(() => ({
-  submitReauth: vi.fn(),
 }));
 
 const navigation = vi.hoisted(() => ({
@@ -52,27 +51,11 @@ function deferred<T>() {
   return { promise, resolve, reject };
 }
 
-async function completeSetupReauth() {
-  const input = await screen.findByRole('textbox', { name: 'Verification code' });
-  fireEvent.change(input, { target: { value: '123456' } });
-  const continueButton = screen.getByRole('button', { name: 'Continue' });
-  await waitFor(() => expect((continueButton as HTMLButtonElement).disabled).toBe(false));
-  await act(async () => {
-    fireEvent.click(continueButton);
-  });
+async function expectDirectSetup() {
+  await waitFor(() => expect(payinApi.createDataVerificationPayInSetupSession).toHaveBeenCalled());
+  expect(screen.queryByRole('dialog')).toBeNull();
 }
 
-async function expectFocusOnSettingsFallback(dialog: HTMLElement) {
-  const fallback = screen.getByRole('link', { name: 'Back to settings' });
-  await waitFor(() => expect(document.activeElement).toBe(fallback));
-  expect(dialog.isConnected).toBe(false);
-  expect(fallback.isConnected).toBe(true);
-  expect(fallback).not.toBe(document.body);
-  expect(fallback.closest('[role="dialog"]')).toBeNull();
-  expect(fallback.matches(':disabled')).toBe(false);
-  expect(fallback.hidden).toBe(false);
-  expect(fallback.closest('[hidden], [inert], [aria-hidden="true"]')).toBeNull();
-}
 
 function expectOnlyGenericSettingsNavigation() {
   const fallback = screen.getByRole('link', { name: 'Back to settings' });
@@ -100,22 +83,9 @@ describe('data-verification payment-method page', () => {
     window.sessionStorage.clear();
     window.history.replaceState({}, '', '/dashboard/data-verification/payment-method');
     payinApi.getDataVerificationPayInReadiness.mockResolvedValue(readiness('setup_required'));
-    auth.submitReauth.mockResolvedValue({ token: 'fresh-setup-token' });
   });
 
-  it('uses current-session magic-link reauth for provider sign-in without changing payment readiness',async()=>{
-    const previous=useAuthStore.getState().user;
-    useAuthStore.setState({user:{id:'seller',totp_enabled:false,auth_methods:['google','password'],reauth_method:'magic_link'} as User});
-    try {
-      auth.submitReauth.mockResolvedValue({method:'magic_link',token:null});
-      render(<DataVerificationPaymentMethodPage/>);
-      fireEvent.click(await screen.findByRole('button',{name:'Add payment method'}));
-      expect(screen.queryByLabelText('Password')).toBeNull();expect(screen.queryByLabelText('Verification code')).toBeNull();
-      expect(auth.submitReauth).not.toHaveBeenCalled();expect(payinApi.createDataVerificationPayInSetupSession).not.toHaveBeenCalled();
-      fireEvent.click(screen.getByRole('button',{name:'Send link'}));await screen.findByLabelText('Email link');
-      expect(auth.submitReauth).toHaveBeenCalledWith('', 'magic_link');expect(payinApi.createDataVerificationPayInSetupSession).not.toHaveBeenCalled();
-    } finally { useAuthStore.setState({user:previous}); }
-  });
+
 
   afterEach(() => {
     cleanup();
@@ -126,7 +96,7 @@ describe('data-verification payment-method page', () => {
     payinApi.createDataVerificationPayInSetupSession.mockResolvedValue({ checkout_url: 'https://checkout.stripe.com/setup', setup_attempt_id: '123e4567-e89b-12d3-a456-426614174000' });
     render(<DataVerificationPaymentMethod returnToListing={{ sellerId: 'seller', listingId: 'listing' }} />);
     fireEvent.click(await screen.findByRole('button', { name: 'Add payment method' }));
-    await completeSetupReauth();
+    await expectDirectSetup();
     expect(getVerificationReturn('seller')).toBe('/dashboard/listings/listing');
     expect(window.sessionStorage.getItem('data-verification:listing-return')).toBe(JSON.stringify({ sellerId: 'seller', listingId: 'listing' }));
     expect(payinApi.navigateToDataVerificationPayInSetup).toHaveBeenCalledWith('https://checkout.stripe.com/setup');
@@ -136,10 +106,10 @@ describe('data-verification payment-method page', () => {
     payinApi.createDataVerificationPayInSetupSession.mockResolvedValue({ checkout_url: 'https://checkout.stripe.com/setup' });
     render(<DataVerificationPaymentMethodPage />);
     fireEvent.click(await screen.findByRole('button', { name: 'Add payment method' }));
-    await completeSetupReauth();
+    await expectDirectSetup();
     expect(getVerificationReturn('seller')).toBeNull();
   });
-  it('renders fixed setup copy, reauthenticates, and uses direct top-level navigation', async () => {
+  it('renders fixed setup copy, submits directly, and uses direct top-level navigation', async () => {
     const hostedCheckoutUrl =
       'https://checkout.stripe.com/c/pay/cs_test_exact_navigation_sentinel';
     payinApi.createDataVerificationPayInSetupSession.mockResolvedValueOnce({
@@ -165,15 +135,11 @@ describe('data-verification payment-method page', () => {
     ).toBeTruthy();
 
     fireEvent.click(screen.getByRole('button', { name: 'Add payment method' }));
-    expect(
-      screen.getByText('Confirm it is you to continue. This confirmation is valid for 60 seconds.')
-    ).toBeTruthy();
-    await completeSetupReauth();
+    expect(screen.queryByRole('dialog')).toBeNull();
+    await expectDirectSetup();
 
     await waitFor(() => {
-      expect(payinApi.createDataVerificationPayInSetupSession).toHaveBeenCalledWith(
-        'fresh-setup-token'
-      );
+      expect(payinApi.createDataVerificationPayInSetupSession).toHaveBeenCalledWith();
       expect(payinApi.navigateToDataVerificationPayInSetup).toHaveBeenCalledTimes(1);
     });
     expect(payinApi.navigateToDataVerificationPayInSetup).toHaveBeenCalledWith(
@@ -181,56 +147,11 @@ describe('data-verification payment-method page', () => {
     );
   });
 
-  it('restores normal cancel focus to the connected setup opener', async () => {
-    render(<DataVerificationPaymentMethodPage />);
-    const opener = await screen.findByRole('button', { name: 'Add payment method' });
-    opener.focus();
-    fireEvent.click(opener);
 
-    const cancel = await screen.findByRole('button', { name: 'Cancel' });
-    await waitFor(() => expect((cancel as HTMLButtonElement).disabled).toBe(false));
-    fireEvent.click(cancel);
 
-    await waitFor(() => expect(screen.queryByRole('dialog')).toBeNull());
-    expect(document.activeElement).toBe(opener);
-  });
 
-  it('focuses Back to settings after a deferred setup creation failure removes the opener', async () => {
-    const setup = deferred<never>();
-    payinApi.createDataVerificationPayInSetupSession.mockReturnValueOnce(setup.promise);
-    render(<DataVerificationPaymentMethodPage />);
-    fireEvent.click(await screen.findByRole('button', { name: 'Add payment method' }));
-    const dialog = await screen.findByRole('dialog', { name: 'Re-authenticate' });
-    await completeSetupReauth();
 
-    await act(async () => {
-      setup.reject(new Error('private provider setup detail'));
-      await setup.promise.catch(() => undefined);
-    });
 
-    await screen.findByText(
-      'We could not confirm your payment method. No verification charge was made. Select Back to settings to start again.'
-    );
-    await expectFocusOnSettingsFallback(dialog);
-    expect(document.body.textContent).not.toContain('private provider setup detail');
-  });
-
-  it('hides all pay-in content and focuses only generic settings navigation after setup creation 403', async () => {
-    payinApi.createDataVerificationPayInSetupSession.mockRejectedValueOnce({
-      response: { status: 403 },
-      message: 'private provider setup 403 detail',
-    });
-    render(<DataVerificationPaymentMethodPage />);
-    fireEvent.click(await screen.findByRole('button', { name: 'Add payment method' }));
-    const dialog = await screen.findByRole('dialog', { name: 'Re-authenticate' });
-
-    await completeSetupReauth();
-
-    await waitFor(() => expect(screen.queryByRole('dialog')).toBeNull());
-    expectOnlyGenericSettingsNavigation();
-    await expectFocusOnSettingsFallback(dialog);
-    expect(document.body.textContent).not.toContain('private provider setup 403 detail');
-  });
 
   it('renders the route inside exactly one outer dashboard main landmark', async () => {
     render(

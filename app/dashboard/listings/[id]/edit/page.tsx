@@ -1,10 +1,15 @@
 'use client';
 
+import ListingDocumentsEditor from '@/components/listing/ListingDocumentsEditor';
+
+import MarkdownTextField,{descriptionTooLong} from '@/components/listing/MarkdownTextField';
+
 import { useState, useEffect, useCallback } from 'react';
 import { useRouter, useParams } from 'next/navigation';
 import { getListing, updateListing, unpublishListing, publishListing } from '@/api/listings';
 import { notifyCapabilitiesChanged } from '@/components/onboarding/SellerSetupProgressBar';
 import { useToast } from '@/components/Toast';
+import { formatListingActionError } from '@/lib/listing-action-error';
 import SellerAtAGlance from '@/components/listings/SellerAtAGlance';
 import SellerShareControls from '@/components/listings/SellerShareControls';
 import SellerLicenseSelection from '@/components/seller-workspace/SellerLicenseSelection';
@@ -131,6 +136,7 @@ export default function EditListingPage() {
   };
 
   const handleSave = async () => {
+    if (descriptionTooLong(data.description)) return;
     setSaving(true);
     const submittedFormat = data.data_format;
     try {
@@ -150,8 +156,8 @@ export default function EditListingPage() {
       setHasStoredFormat(previous => submittedFormat ? true : previous);
       setSummaryRevision(value => value + 1);
       toast('Listing saved', 'success');
-    } catch (err: any) {
-      toast(err.response?.data?.detail || 'Failed to save', 'error');
+    } catch (err: unknown) {
+      toast(formatListingActionError(err).message, 'error');
     } finally {
       setSaving(false);
     }
@@ -251,13 +257,8 @@ export default function EditListingPage() {
           </div>
 
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">Description</label>
-            <textarea
-              rows={4}
-              value={data.description}
-              onChange={(e) => update({ description: e.target.value })}
-              className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-[#3F51B5]"
-            />
+            <label htmlFor="listing-description" className="block text-sm font-medium text-gray-700 mb-1">Description</label>
+            <MarkdownTextField id="listing-description" rows={4} value={data.description} onChange={description=>update({description})}/>
           </div>
 
           <div>
@@ -425,6 +426,8 @@ export default function EditListingPage() {
         </div>
       </div>
 
+      <ListingDocumentsEditor listingId={id}/>
+
       {listingLicensesEnabled && <SellerLicenseSelection value={licenseSelection} onChange={setLicenseSelection} disabled={saving} />}
 
       {data.status === 'draft' && <ListingGatewaySource listingId={id} onSourceDirty={onSourceDirty} onSourceSaved={onSourceSaved} />}
@@ -459,7 +462,7 @@ export default function EditListingPage() {
           )}
           <button
             onClick={handleSave}
-            disabled={saving}
+            disabled={saving || descriptionTooLong(data.description)}
             className="rounded-lg border border-gray-300 px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50 disabled:opacity-50"
           >
             {saving ? 'Saving...' : 'Save Draft'}

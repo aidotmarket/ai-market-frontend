@@ -14,6 +14,9 @@ type CustomNotice = { code: 'custom'; sha256: string; notice: string };
 
 const hashPattern = /^[a-f0-9]{64}$/;
 const stockPaths = new Set([
+  'standard/1.1/ai-training',
+  'standard/1.1/no-ai-training',
+  'marketplace-listing/1.1',
   'standard/1.0/ai-training',
   'standard/1.0/no-ai-training',
   'marketplace-listing/1.0',

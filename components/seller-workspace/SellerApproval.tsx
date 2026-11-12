@@ -62,7 +62,7 @@ export default function SellerApproval({review, active, rendered,disabled=false}
     <button type="submit" disabled={!ready || busy} className="rounded-lg bg-indigo-700 px-4 py-2.5 text-sm font-semibold text-white hover:bg-indigo-800 disabled:cursor-not-allowed disabled:opacity-50">{busy ? 'Saving approval…' : 'Approve this review'}</button>
     {!ready&&!busy&&<p role="status" className="text-sm text-amber-900">{stale?'Refresh the saved review before approving.':disabled?'Finish saving your file or sample choice in Choose your files, then refresh this review.':!rendered?'Wait for the saved listing and file preview to finish loading.':'Tick the confirmation box to continue.'}</p>}
     <p className="text-sm text-gray-600">Approval saves this exact review. It does not publish your listing.</p>
-    {!!authError&&<NativeSellerAuth error={authError} onRetry={()=>setAuthError(null)} onToken={async()=>{setAuthError(null);}}/>}
-    {error && <p role="alert" className="text-sm text-red-800">{error}</p>}
+    {!!authError&&<NativeSellerAuth error={authError} />}
+    {error && !authError && <p role="alert" className="text-sm text-red-800">{error}</p>}
   </form>;
 }

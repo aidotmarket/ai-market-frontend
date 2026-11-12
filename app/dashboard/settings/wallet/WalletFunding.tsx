@@ -5,7 +5,10 @@ import { useAuthStore } from '@/store/auth';
 import {
   createWalletTopup, getWalletBalance, getWalletHistory, parseWalletAmount,
   resolveWalletOwner, walletStatus, type WalletBalance, type WalletHistory,
+  parseWalletBalance, parseWalletHistory,
 } from '@/api/wallet';
+import { authSessionOwner, isAuthSessionOwner } from '@/lib/auth-session-owner';
+import { useViewRecovery, RecoveryDisplayBoundary, RecoveryRenderBoundary } from '@/components/SessionViewRecovery';
 
 type Auth = ReturnType<typeof useAuthStore.getState>;
 type Association = { token: string; owner: string; generation: object; abort: AbortController; verified: boolean };
@@ -17,7 +20,9 @@ type View = {
   history: Read<WalletHistory>;
   offset: number;
 };
-type Actions = { submit: (text: string) => void; refresh: () => void; page: (offset: number) => void; recover: () => void };
+type Actions = { submit: (text: string) => void; refresh: () => void; page: (offset: number) => void; recover: () => void;
+  prepareRefresh: () => void; acceptRefresh: (token: string) => Promise<void>; finish: () => void;
+  install: (data: unknown) => object; snapshot: () => string };
 const admitted = (s: Auth) => !!(s.hydrated && !s.isLoading && s.isAuthenticated && s.token && s.user?.id);
 const blank = (status: string): View => ({ status, balance: { loading: false }, history: { loading: false }, offset: 0 });
 const blocked = 'Wallet blocked. Your sign-in could not be verified for this wallet. Recover sign-in to try again.';
@@ -39,6 +44,24 @@ export default function WalletFunding() {
   const actions = useRef<Actions | null>(null);
   const [recovering, setRecovering] = useState(false);
   const [returnHint, setReturnHint] = useState<string | null>(null);
+  const recoveryOwner = useRef(authSessionOwner());
+  const editGeneration = useRef(0);
+  const [installedRead, setInstalledRead] = useState<object | null>(null);
+  const requestedOffset = useRef(0);
+  const [renderFailed, setRenderFailed] = useState(false);
+  const [readBlocked, setReadBlocked] = useState(false);
+  const recovery = useViewRecovery(renderFailed || !!(view.balance.error || view.history.error), {
+    selectionGeneration: () => actions.current?.snapshot(), view: 'wallet', target: 'wallet:' + requestedOffset.current, reportTarget: { view: 'wallet', wallet_offset: requestedOffset.current }, walletOffset: requestedOffset.current, failure: renderFailed ? 'render_failed' : 'normal_read_failed',
+    current: () => !!actions.current && isAuthSessionOwner(recoveryOwner.current) && !!liveAssociation.current
+      && liveAssociation.current.owner === useAuthStore.getState().user?.id,
+    snapshot: () => ({ saved_drafts: { amount, formError }, unsent_text: amount,
+      conversation_selection: { offset: requestedOffset.current, owner: liveAssociation.current?.owner },
+      unknown_mutations: attempt.current, generation: `${editGeneration.current}:${actions.current?.snapshot()}` }),
+    prepareRefresh: () => { if (!actions.current) throw new Error('Wallet retired'); actions.current.prepareRefresh(); },
+    acceptRefresh: async token => { if (!actions.current) throw new Error('Wallet retired'); await actions.current.acceptRefresh(token); },
+    finish: () => actions.current?.finish(),
+    install: raw => { if (!actions.current) throw new Error('Wallet retired'); return actions.current.install(raw); },
+  });
 
   useEffect(() => {
     setReturnHint(new URLSearchParams(window.location.search).get('topup'));
@@ -53,13 +76,18 @@ export default function WalletFunding() {
     let historyBusy = false;
     let balanceBusy = false;
     let currentOffset = 0;
+    let scopedRefresh: Association | undefined;
+    let readAuthBlocked = false;
+    let mutationGeneration = 0;
 
     const current = (a: Association, verified = true) => {
       const s = useAuthStore.getState();
       return alive && !recovery && association === a && association.generation === a.generation
+        && (!readAuthBlocked || scopedRefresh === a)
         && (!verified || a.verified) && admitted(s) && s.token === a.token && s.user?.id === a.owner;
     };
     const revoke = (status: string) => {
+      mutationGeneration++; readAuthBlocked = false; setReadBlocked(false);
       association?.abort.abort();
       association = undefined; // object/generation cannot be revived by A -> B -> A
       liveAssociation.current = undefined;
@@ -78,7 +106,15 @@ export default function WalletFunding() {
     };
     const readFailure = (a: Association, error: unknown) => {
       if (!current(a)) return true;
-      if (walletStatus(error) === 401) { revoke(blocked); return true; }
+      // A failed read retains local work independently of any selected ticket.
+      // Normal report/recovery routes independently check the native session.
+      if (walletStatus(error) === 401) {
+        readAuthBlocked = true; setReadBlocked(true); mutationGeneration++;
+        historySequence++; balanceSequence++; historyBusy = false; balanceBusy = false;
+        if (attempt.current === 'pending' || attempt.current === 'handoff') { attempt.current = 'unknown'; setAttemptUI('unknown'); }
+        setView(v => ({ ...v, status: blocked, history: { ...v.history, loading: false, error: 'Transaction history could not be loaded.' }, balance: { ...v.balance, loading: false } }));
+        return true;
+      }
       return false;
     };
     const balance = async (a: Association) => {
@@ -99,6 +135,7 @@ export default function WalletFunding() {
     const history = async (a: Association, offset: number, refresh = false) => {
       if (!current(a) || (historyBusy && !refresh) || !Number.isSafeInteger(offset) || offset < 0) return;
       historyBusy = true;
+      requestedOffset.current = offset;
       const seq = ++historySequence;
       setView(v => ({ ...v, history: { ...v.history, loading: true, error: undefined } }));
       try {
@@ -136,6 +173,7 @@ export default function WalletFunding() {
       const s = useAuthStore.getState();
       const ready = admitted(s);
       if (s.token === lastToken && s.user?.id === lastOwner && ready === lastAdmission) return;
+      if (scopedRefresh && association === scopedRefresh && ready && s.user?.id === scopedRefresh.owner && isAuthSessionOwner(recoveryOwner.current)) return;
       lastToken = s.token; lastOwner = s.user?.id; lastAdmission = ready;
       revoke('Waiting to verify wallet sign-in.');
       if (ready && !recovery) void resolve();
@@ -145,6 +183,45 @@ export default function WalletFunding() {
     reconcile();
 
     actions.current = {
+      snapshot: () => `${historySequence}:${balanceSequence}`,
+      prepareRefresh: () => {
+        if (!association || historyBusy || balanceBusy || scopedRefresh) throw new Error('Wallet read changed');
+        scopedRefresh = association;
+        if (!current(association)) { scopedRefresh = undefined; throw new Error('Wallet read changed'); }
+        if (attempt.current === 'pending' || attempt.current === 'handoff') {
+          mutationGeneration++;
+          attempt.current = 'unknown'; setAttemptUI('unknown');
+        }
+      },
+      acceptRefresh: async token => {
+        const a = scopedRefresh;
+        if (!a || association !== a || !alive || !isAuthSessionOwner(recoveryOwner.current)) throw new Error('Wallet association changed');
+        const owner = await resolveWalletOwner(token, a.abort.signal, 15000);
+        const s = useAuthStore.getState();
+        if (!alive || association !== a || owner !== a.owner || s.user?.id !== owner || s.token !== token || !isAuthSessionOwner(recoveryOwner.current)) throw new Error('Wallet owner changed');
+        a.token = token; lastToken = token;
+        setView(v => ({ ...v, association: a }));
+      },
+      finish: () => {
+        const a = scopedRefresh;
+        scopedRefresh = undefined;
+        // A failed verifier must retire the temporary exception, never keep
+        // local work associated with an unverified rotated credential.
+        const s = useAuthStore.getState();
+        if (a && association === a && (s.token !== a.token || s.user?.id !== a.owner || !admitted(s)
+          || !isAuthSessionOwner(recoveryOwner.current))) revoke(blocked);
+      },
+      install: raw => {
+        const a = association;
+        if (!a || !current(a) || historyBusy || balanceBusy || !raw || typeof raw !== 'object' || Array.isArray(raw)) throw new Error('Wallet read changed');
+        const data = raw as { balance: unknown; transactions: unknown };
+        const balanceData = parseWalletBalance(data.balance, a.owner), historyData = parseWalletHistory(data.transactions);
+        const read = { balance: balanceData, history: historyData };
+        readAuthBlocked = false; setReadBlocked(false);
+        currentOffset = requestedOffset.current;
+        setView(v => ({ ...v, offset: currentOffset, balance: { data: balanceData, loading: false, at: new Date().toISOString() }, history: { data: historyData, loading: false, at: new Date().toISOString() } }));
+        setInstalledRead(read); setRenderFailed(false); return read;
+      },
       refresh: () => { const a = association; if (a && current(a)) { void balance(a); void history(a, 0, true); } },
       page: offset => {
         const a = association;
@@ -171,16 +248,17 @@ export default function WalletFunding() {
         setFormError('');
         // Acquire before dispatch/await. No auth or read operation releases this guard.
         attempt.current = 'pending';
+        const submittedGeneration = mutationGeneration;
         setAttemptUI('pending');
         try {
           if (!current(a)) { attempt.current = 'unknown'; setAttemptUI('unknown'); return; }
           const url = await createWalletTopup(a.token, value, window.location.origin, a.abort.signal);
-          if (!current(a)) return;
+          if (!current(a) || submittedGeneration !== mutationGeneration) return;
           attempt.current = 'handoff';
           setAttemptUI('handoff');
           if (current(a)) window.location.assign(url);
         } catch (error) {
-          if (!current(a)) return;
+          if (!current(a) || submittedGeneration !== mutationGeneration) return;
           const status = walletStatus(error);
           if (status !== undefined && [400, 401, 403, 422].includes(status)) {
             attempt.current = 'idle';
@@ -205,18 +283,21 @@ export default function WalletFunding() {
     };
   }, []);
 
-  const ready = admitted(auth) && view.association === liveAssociation.current && !!view.association?.verified
+  const ready = !readBlocked && admitted(auth) && view.association === liveAssociation.current && !!view.association?.verified
     && view.association.token === auth.token && view.association.owner === auth.user?.id;
   const locked = !ready || attemptUI !== 'idle';
   return <div className="max-w-3xl space-y-6">
     <h1 className="text-2xl font-bold">Marketplace wallet</h1>
+    {recovery.message && <p role="status">{recovery.message}</p>}
+    {recovery.reportControl}
     <p>Fund your existing marketplace wallet for purchases. This is separate from AI/API credits and seller payouts.</p>
     {returnHint === 'return' && <p>Returned from checkout. Check your wallet history for updates.</p>}
     {returnHint === 'cancelled' && <p>Checkout was closed. Payment and wallet credit are not confirmed here.</p>}
     {attemptUI === 'unknown' && <p role="alert">{uncertain}</p>}
     {!ready && <div><p role="status">{view.status || 'Waiting to verify wallet sign-in.'}</p>
       <button type="button" disabled={recovering} onClick={() => actions.current?.recover()}>Recover sign-in</button></div>}
-    {ready && <>
+    {ready && <RecoveryRenderBoundary resetKey={view.history.data ?? view.balance.data} onFailure={() => { setRenderFailed(true); if (recovery.attempt) void recovery.attempt.stop('failed'); }}>
+    <RecoveryDisplayBoundary attempt={recovery.attempt} display={recovery.progress?.display} installed={installedRead}>
       <button type="button" onClick={() => actions.current?.refresh()}>Refresh</button>
       <section aria-label="Balance"><h2>Balance</h2>
         {view.balance.loading && <p role="status">Loading balance…</p>}
@@ -225,7 +306,7 @@ export default function WalletFunding() {
       </section>
       <form aria-label="Fund wallet" onSubmit={e => { e.preventDefault(); actions.current?.submit(amount); }}>
         <label htmlFor="wallet-amount">Amount (USD)</label>
-        <input id="wallet-amount" type="text" inputMode="decimal" value={amount} disabled={locked} onChange={e => setAmount(e.target.value)} className="border rounded px-3 py-2" />
+        <input id="wallet-amount" type="text" inputMode="decimal" value={amount} disabled={locked} onChange={e => { editGeneration.current++; setAmount(e.target.value); }} className="border rounded px-3 py-2" />
         <button type="submit" disabled={locked}>Continue to checkout</button>
         {attemptUI === 'pending' && <p role="status">Creating checkout…</p>}
         {attemptUI === 'handoff' && <p role="status">Continuing to checkout…</p>}
@@ -247,6 +328,6 @@ export default function WalletFunding() {
           <button type="button" disabled={view.history.loading || !view.history.data.has_more} onClick={() => actions.current?.page(view.offset + 20)}>Next</button>
         </>}
       </section>
-    </>}
+    </RecoveryDisplayBoundary></RecoveryRenderBoundary>}
   </div>;
 }

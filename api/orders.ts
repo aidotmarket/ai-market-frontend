@@ -22,6 +22,10 @@ export async function getMyOrders(paging?: MyOrdersPaging): Promise<BuyerOrder[]
 export async function getOrder(orderId: string): Promise<BuyerOrderDetail> {
   const res = await api.get<BuyerOrderDetail & {amount_cents?: number; listing_snapshot?: {title?: string}}>(`/orders/${encodeURIComponent(orderId)}`);
   const data = res.data;
+  return parseOrderDetail(data);
+}
+
+export function parseOrderDetail(data: BuyerOrderDetail & {amount_cents?: number; listing_snapshot?: {title?: string}}): BuyerOrderDetail {
   return {...data,
     amount: typeof data.amount_cents === 'number' ? data.amount_cents / 100 : data.amount,
     listing_title: data.listing_snapshot?.title ?? data.listing_title ?? 'Purchased data',

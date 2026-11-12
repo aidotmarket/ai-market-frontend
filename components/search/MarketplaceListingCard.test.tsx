@@ -12,7 +12,7 @@ describe('MarketplaceListingCard', () => {
       title: 'Legacy dataset',
       description: 'A legacy search result.',
       short_description: 'A legacy search result.',
-      category: 'Business',
+      category: 'technology-web',
       price: 12,
       privacy_score: 8,
       compliance_status: null,
@@ -24,6 +24,8 @@ describe('MarketplaceListingCard', () => {
     const html = renderToStaticMarkup(<MarketplaceListingCard listing={listing} />);
 
     expect(html).toContain('Legacy dataset');
+    expect(html).toContain('Technology &amp; Web');
+    expect(html).not.toContain('technology-web');
     expect(html).not.toMatch(/\bverified\b/i);
   });
 });
@@ -62,4 +64,19 @@ describe('public sample browse and search cards', () => {
       expect(html).not.toContain('Not for sale');
     }
   });
+});
+
+it('attributes actual backend current correction metadata and contains partial provenance locally',async()=>{
+ const {default:wire}=await import('@/tests/fixtures/s1922-backend-wire.json');
+ const c=wire.public[2].corrected;
+ const listing={id:c.listing_id,slug:'synthetic',title:'Synthetic',short_description:'Original seller prose',price:1,category:'Business',tags:[],privacy_score:null,
+ license_display:{license_label:c.license_label,provenance:c.provenance,correction_id:c.correction_id,correction_digest:c.correction_digest}};
+ const html=renderToStaticMarkup(<MarketplaceListingCard listing={listing as never}/>);
+ expect(html).toContain('Platform-corrected licence display; original seller approval retained');
+ expect(html).toContain('ai.market Standard Data Licence v1.1');
+ expect(html).toContain('Original seller prose');
+ const results=renderToStaticMarkup(<><MarketplaceListingCard listing={{...listing,license_display:{...listing.license_display,license_label:'UNVERIFIED',correction_digest:'bad'}} as never}/><MarketplaceListingCard listing={listing as never}/></>);
+ expect(results).not.toContain('UNVERIFIED');
+ expect(results.match(/href="\/listings\/synthetic"/g)).toHaveLength(2);
+ expect(results.match(/Platform-corrected licence display/g)).toHaveLength(1);
 });

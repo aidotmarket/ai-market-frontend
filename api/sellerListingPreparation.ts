@@ -1,17 +1,22 @@
+import {refusePlatformCorrection} from '@/lib/publicPresentation';
 import axios from 'axios';
 import {nativeRead,nativeWrite,nativeAuthError} from './connector-seller-settings';
 import {validView,type PreparationView,type SigningInstrument} from './seller-batch-signing';
 import {sameLicenseSelection,type ApprovalReceipt} from './sellerListingReview';
 import {isCompleteLicenseSelection} from './listingLicenses';
 
-export type PreparedListing = PreparationView & Pick<Partial<SigningInstrument>, 'license_selection'>;
+export type PreparedListing = PreparationView & {license_selection?: SigningInstrument['license_selection'] | null};
 export type PreparationRequest = {request_id:string;draft_id:string;expected_draft_version:number;approval_id:string;review_hash:string;render_hash:string};
 export function preparationRequest(approval:ApprovalReceipt):PreparationRequest {
+  refusePlatformCorrection(approval);
   if (!approval.draft_id) throw new Error('PREPARATION_STALE');
   return {request_id:crypto.randomUUID(),draft_id:approval.draft_id,expected_draft_version:approval.draft_version,
     approval_id:approval.id,review_hash:approval.review_hash,render_hash:approval.render_hash};
 }
 function verified(value:PreparedListing, approval:ApprovalReceipt):PreparedListing {
+  refusePlatformCorrection(approval);
+  refusePlatformCorrection(value);
+  if (value.license_selection) refusePlatformCorrection(value.license_selection);
   if (!validView(value) || (value.license_selection && (!isCompleteLicenseSelection(value.license_selection) ||
       (approval.license_selection && !sameLicenseSelection(value.license_selection,approval.license_selection)))) || value.binding.draft_id!==approval.draft_id || value.binding.draft_version!==approval.draft_version ||
       value.binding.approval_id!==approval.id || value.binding.render_hash!==approval.render_hash ||
@@ -20,6 +25,7 @@ function verified(value:PreparedListing, approval:ApprovalReceipt):PreparedListi
   return value;
 }
 export async function lookupPreparation(approval:ApprovalReceipt,signal:AbortSignal):Promise<PreparedListing|null> {
+  refusePlatformCorrection(approval);
   try {
     const data=await nativeRead<PreparedListing>('/seller-workspace/listing-preparation', {signal,
       params:{draft_id:approval.draft_id,draft_version:approval.draft_version}});
@@ -30,8 +36,11 @@ export async function lookupPreparation(approval:ApprovalReceipt,signal:AbortSig
   }
 }
 export async function prepareListing(request:PreparationRequest,approval:ApprovalReceipt,signal:AbortSignal):Promise<PreparedListing> {
+  refusePlatformCorrection(request);
+  refusePlatformCorrection(approval);
   const data=await nativeWrite<PreparedListing>('/seller-workspace/listing-preparation',request,signal);
-  return {...verified(data,approval),license_selection:approval.license_selection};
+  const value=verified(data,approval);
+  return approval.license_selection ? {...value,license_selection:approval.license_selection} : value;
 }
 export function preparationErrorCode(error:unknown):string|undefined {
   const detail=axios.isAxiosError(error)?error.response?.data?.detail:undefined;
@@ -50,9 +59,10 @@ export function preparationError(error:unknown):string {
   switch(code) {
     case 'PREPARATION_EXISTS':return 'A preparation already exists. Refresh preparation status to recover it.';
     case 'IDEMPOTENCY_CONFLICT':return 'This request no longer matches the saved preparation. Refresh the saved review before preparing again.';
+    case 'LICENSE_ACCEPTANCE_STALE':return 'This saved licence selection is out of date. Return to Choose a licence, re-select the licence and covenant at the current version, then prepare and sign again.';
     case 'LICENSE_SIGNING_UNAVAILABLE':return 'Licence signing is currently unavailable for this listing.';
     case 'PREPARATION_STALE':return 'The listing or files changed. Refresh the saved review and approve it again.';
     default:return 'Preparation could not be confirmed. Retry the same preparation or refresh its status before publishing.';
   }
 }
-export const preparationStatus = {prepared:'Needs signing',signed:'Ready to publish here or from Claude',published:'Published',superseded:'Superseded'};
+export const preparationStatus = {prepared:'Needs signing',signed:'Ready to publish',published:'Published',superseded:'Superseded'};

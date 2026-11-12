@@ -25,20 +25,20 @@ it.each([false,true])('shows an accepted and saved title in Review; repeated sta
  let release!:(value:typeof saved)=>void;
  mocks.review.mockResolvedValue(old);
  render(<SellerListingDraftProvider enabled sampleCapability={false}><GuidedListingFlow capabilities={{...guidedCapabilities,listing_licenses:false}} connections={[guidedConnection]} view="listing" navigate={vi.fn()}><SavedListingEditor active assistant={async()=>({source_version:1,message:'New suggestion',proposals:[{field:'title',value:'Accepted title',reasoning:''}]})}/><SellerReview active enabled/></GuidedListingFlow></SellerListingDraftProvider>);
- await screen.findByTitle('Saved listing buyers would see');
+ await screen.findByTitle('Saved original seller review');
  fireEvent.click(screen.getByRole('button',{name:'Ask Allai to draft my listing'}));await screen.findByText('New suggestion');fireEvent.click(screen.getByRole('button',{name:'Use suggestion'}));
  mocks.read.mockImplementationOnce(()=>new Promise(resolve=>{release=resolve;}));
  fireEvent.click(screen.getByRole('button',{name:'Save private draft'}));
  await waitFor(()=>expect(saved.content.title).toBe('Accepted title'));
  await waitFor(()=>expect(mocks.read).toHaveBeenCalledTimes(2));
- expect(screen.queryByTitle('Saved listing buyers would see')).toBeNull();
+ expect(screen.queryByTitle('Saved original seller review')).toBeNull();
  if(!repeated)mocks.review.mockResolvedValue(review('Accepted title',2));
  await act(async()=>release({...saved}));
  if(repeated){
   expect(await screen.findByRole('alert')).toHaveProperty('textContent', 'The saved review is still out of date. Refresh Review to load your saved changes.');
-  expect(screen.queryByTitle('Saved listing buyers would see')).toBeNull();
+  expect(screen.queryByTitle('Saved original seller review')).toBeNull();
   mocks.review.mockResolvedValue(review('Accepted title',2));fireEvent.click(screen.getByRole('button',{name:'Refresh saved review'}));
  }
- await waitFor(()=>expect(screen.getByTitle('Saved listing buyers would see').getAttribute('srcdoc')).toBe('<h1>Accepted title</h1>'));
+ await waitFor(()=>expect(screen.getByTitle('Saved original seller review').getAttribute('srcdoc')).toBe('<h1>Accepted title</h1>'));
  expect(mocks.save.mock.calls[0][0].title).toBe('Accepted title');
 });

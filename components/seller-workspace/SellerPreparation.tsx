@@ -12,6 +12,7 @@ export default function SellerPreparation({approval,active,onChange,onLoaded,pub
   const sessionIdentity=useAuthStore(authSessionIdentity);
   const [value,setValue]=useState<PreparedListing|null>(null);
   const [loaded,setLoaded]=useState(false);
+  const [justSigned,setJustSigned]=useState(false);
   const [unavailable,setUnavailable]=useState(false);
   const [busy,setBusy]=useState(false);
   const [error,setError]=useState<unknown>(null);
@@ -21,7 +22,7 @@ export default function SellerPreparation({approval,active,onChange,onLoaded,pub
   const changed=useRef(onChange);changed.current=onChange;
   const loadedChanged=useRef(onLoaded);loadedChanged.current=onLoaded;
   useEffect(()=>{
-    setValue(null);changed.current(null);setLoaded(false);loadedChanged.current(false);setError(null);setUnavailable(false);
+    setValue(null);setJustSigned(false);changed.current(null);setLoaded(false);loadedChanged.current(false);setError(null);setUnavailable(false);
     if(!active)return;
     const controller=new AbortController();
     lookupPreparation(approval,controller.signal).then(p=>{if(!controller.signal.aborted){setValue(p);changed.current(p);setLoaded(true);loadedChanged.current(true);}})
@@ -50,11 +51,12 @@ export default function SellerPreparation({approval,active,onChange,onLoaded,pub
   const authError=nativeAuthError(error);
   if(unavailable)return null;
   return <section aria-label="Listing preparation" className="space-y-4">
-    <p role="status">{published?preparationStatus.published:value?preparationStatus[value.status]:loaded?'Ready to prepare the approved review':'Checking preparation status…'}</p>
+    <p role="status">{published?preparationStatus.published:value?preparationStatus[value.status]:loaded?'Ready to prepare your listing for publishing':'Checking listing status…'}</p>
+    {!published&&justSigned&&<p role="status">Licence signed. Your listing is not published yet. Select Publish this listing when you’re ready.</p>}
     {!published&&loaded&&!value&&<button disabled={!active||busy||publicationBlocked} onClick={()=>void prepare()}>{busy?'Preparing…':'Prepare for publishing'}</button>}
-    {!!error&&<p role="alert">{preparationError(error)}</p>}
-    {!!authError&&<NativeSellerAuth error={authError} onRetry={()=>setRetry(n=>n+1)} onToken={async()=>{setRetry(n=>n+1);}}/>}
+    {!!error&&!authError&&<p role="alert">{preparationError(error)}</p>}
+    {!!authError&&<NativeSellerAuth error={authError} />}
     {!busy&&<button disabled={!active} onClick={()=>setRetry(n=>n+1)}>Refresh preparation status</button>}
-    {!published&&active&&value?.status==='prepared'&&value.license_selection&&<WorkspaceBatchSigning preparation={value as SigningInstrument} onSigned={rows=>{const signed=rows.find(row=>row.id===value.id);if(signed){const next={...value,...signed};setValue(next);changed.current(next);}}}/>}
+    {!published&&active&&value?.status==='prepared'&&value.license_selection&&<WorkspaceBatchSigning preparation={value as SigningInstrument} onSigned={rows=>{const signed=rows.find(row=>row.id===value.id);if(signed){const next={...value,...signed};setValue(next);setJustSigned(true);changed.current(next);}}}/>}
   </section>;
 }

@@ -1,21 +1,25 @@
+import {refuseCorrectionFields, refusePlatformCorrection} from '@/lib/publicPresentation';
 import axios from 'axios';
 import {nativeWrite} from './connector-seller-settings';
 import { api } from './client';
 import type { ListingDraftContent } from './sellerListingDraft';
 import type {LicenseSelection} from './listingLicenses';
+import type { ListingAuthorityReferences } from './listingAuthority';
 export const CONFIRMATION_KEYS = ['ownership_confirmed', 'privacy_confirmed', 'price_license_confirmed', 'public_disclosure_confirmed'] as const;
 export const LICENSE_CONFIRMATION_KEYS = ['ownership_confirmed', 'privacy_confirmed', 'price_confirmed', 'license_confirmed', 'covenant_authority_confirmed', 'public_disclosure_confirmed'] as const;
 export type ConfirmationKey = typeof CONFIRMATION_KEYS[number] | typeof LICENSE_CONFIRMATION_KEYS[number] | 'sample_files_confirmed';
 export interface ReviewSampleFile { index: number; sha256: string; key_basename: string; size: number }
 export type SampleStatus = 'not_selected' | {state:'selected';files:ReviewSampleFile[]};
-export interface ApprovalReceipt {
+export interface ApprovalReceipt extends ListingAuthorityReferences {
   draft_id?: string;
   id: string; review_hash: string; render_hash: string; draft_version: number; source_version: number;
   approved_at: string; sample_decision: 'none' | 'member_files';
   license_selection?: LicenseSelection;
 }
-export interface ListingReview {
+export interface ListingReview extends ListingAuthorityReferences {
   draft_id?: string;
+  listing_id?: string | null;
+  base_listing_version_id?: string | null;
   fields: Pick<ListingDraftContent, 'title' | 'description' | 'category' | 'tags' | 'price' | 'license'>;
   draft_version: number; source_version: number; presentation_version: string; review_hash: string;
   missing_fields: string[]; approval_available: boolean; sample_status?: SampleStatus;
@@ -28,6 +32,36 @@ export interface ListingReview {
   source_hash: string;
   source_page?: ReviewSourcePage | null;
 }
+/** Existing uncovered wire contracts; every required tick stays literal true. */
+export interface ListingApprovalBase {
+  draft_id?: string | null;
+  csrf?: string | null;
+  request_id: string;
+  review_hash: string;
+  render_hash: string;
+  ownership_confirmed: true;
+  privacy_confirmed: true;
+  public_disclosure_confirmed: true;
+}
+
+export type ListingApprovalV1 = ListingApprovalBase & {
+  confirmation_version: 'seller-listing-confirmation-v1';
+  sample_decision: 'none';
+  price_license_confirmed: true;
+};
+
+export type ListingApprovalSampleChoice =
+  | { sample_decision: 'none'; sample_files_confirmed?: null }
+  | { sample_decision: 'member_files'; sample_files_confirmed: true };
+
+export type ListingApprovalV3 = ListingApprovalBase & ListingApprovalSampleChoice & {
+  confirmation_version: 'seller-listing-confirmation-v3';
+  license_selection: LicenseSelection;
+  price_confirmed: true;
+  license_confirmed: true;
+  covenant_authority_confirmed: true;
+};
+
 export interface ReviewSourcePage {
   review_hash: string; source_version: number; source_hash: string;
   offset: number; page_size: number; total_count: number; total_size_bytes: number;
@@ -75,8 +109,12 @@ export async function readReviewSourcePage(review: ListingReview, cursor: string
 }
 export async function readListingReview(signal: AbortSignal, draft_id?: string | null): Promise<ListingReview> {
   const review: ListingReview = (await api.get('/seller-workspace/listing-review', {signal,...(draft_id ? {params:{draft_id}} : {})})).data;
+  refuseCorrectionFields(review);
+  if (review.fields !== undefined) refuseCorrectionFields(review.fields);
+  if (review.approval) refuseCorrectionFields(review.approval);
+  if (review.license_selection) refusePlatformCorrection(review.license_selection);
   if (draft_id && review.draft_id !== draft_id) throw new Error('Saved review could not be verified');
-  if (review.presentation_version !== 'seller-listing-review-v2' || typeof review.rendered_html !== 'string' ||
+  if ((review.presentation_version !== 'seller-listing-review-v2' && review.presentation_version !== 'seller-listing-review-v3' && review.presentation_version !== 'seller-listing-review-v4') || typeof review.rendered_html !== 'string' ||
       !/^[a-f0-9]{64}$/.test(review.render_hash)) throw new Error('Saved review could not be verified');
   const bytes = new TextEncoder().encode(review.rendered_html);
   if (bytes.length > 100000) throw new Error('Saved review could not be verified');
@@ -117,6 +155,10 @@ export async function readListingReview(signal: AbortSignal, draft_id?: string |
 }
 
 export async function approveListingReview(review: ListingReview, request_id: string, signal: AbortSignal): Promise<ApprovalReceipt> {
+  refuseCorrectionFields(review);
+  if (review.fields !== undefined) refuseCorrectionFields(review.fields);
+  if (review.approval) refuseCorrectionFields(review.approval);
+  if (review.license_selection) refusePlatformCorrection(review.license_selection);
   const sampleDecision=review.sample_decision??'none';
   const licenseConfirmations=review.license_selection ? {price_confirmed:true,license_confirmed:true,covenant_authority_confirmed:true,license_selection:review.license_selection} : {price_license_confirmed:true};
   const body = {request_id,...(review.draft_id ? {draft_id:review.draft_id} : {}),review_hash:review.review_hash,render_hash:review.render_hash,
@@ -124,6 +166,7 @@ export async function approveListingReview(review: ListingReview, request_id: st
     ownership_confirmed:true,privacy_confirmed:true,...licenseConfirmations,public_disclosure_confirmed:true,
     ...(sampleDecision === 'member_files' ? {sample_files_confirmed:true} : {})};
   const receipt: ApprovalReceipt = review.draft_id ? await nativeWrite<ApprovalReceipt>('/seller-workspace/listing-approval',body,signal) : (await api.post('/seller-workspace/listing-approval',body,{signal})).data;
+  refuseCorrectionFields(receipt);
   if (receipt.review_hash !== review.review_hash || receipt.render_hash !== review.render_hash ||
       receipt.draft_version !== review.draft_version || receipt.source_version !== review.source_version ||
       receipt.sample_decision !== sampleDecision || signal.aborted ||

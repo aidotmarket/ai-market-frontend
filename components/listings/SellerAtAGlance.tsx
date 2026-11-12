@@ -128,11 +128,12 @@ export default function SellerAtAGlance({listingId, slug, active = true, revisio
     {message && <p role="status" className="text-sm text-gray-700">{message}</p>}
     {error && <p role="alert" className="text-sm text-red-800">{error}</p>}
     {preview && <>
-      <p role="status" className="text-sm text-gray-700">{preview.state === 'approved' ? 'Approved. This summary is shown to buyers.' : 'Review the summary and approve it to show it to buyers'}</p>
+      <p role="status" className="text-sm text-gray-700">{preview.state === 'approved' ? 'Approved original summary evidence. Current public licence display is separate.' : 'Review the summary and approve it to show it to buyers'}</p>
       {preview.state !== 'approved' && !hasBuyerFields && <p className="text-sm text-gray-700">Nothing to show buyers yet. Add more listing details or regenerate.</p>}
       <SellerPreviewChrome summary={preview.at_a_glance} selectedFields={selectedFields} manifestReceived={manifestReceived} />
       <SellerEnrichmentControls listingId={listingId} active={active} onSaved={() => setRetry(value => value + 1)} />
-      <p className="text-sm text-gray-700">The block below shows exactly what buyers see; on the listing page, the sample appears after the schema.</p>
+      <p className="text-sm text-gray-700">The block below retains the original summary and signed sample evidence. The current public licence display is separately attributed on the listing page.</p>
+      <a className="text-sm text-indigo-700 underline" href={`/listings/${encodeURIComponent(slug ?? listingId)}`}>View current public licence display</a>
       <div data-testid="buyer-preview" className="space-y-4">
         <BuyerPreviewContent summary={preview.at_a_glance} slug={slug}
           listingId={active && preview.state === 'approved' ? listingId : undefined} onManifest={receiveManifest} />

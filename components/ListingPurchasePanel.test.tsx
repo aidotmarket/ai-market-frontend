@@ -40,7 +40,7 @@ describe('VersionSelector', () => {
 
     expect(html).toContain('v2');
     expect(html).toContain('Jun 2, 2026');
-    expect(html).toContain('2.0 KB');
+    expect(html).toContain('2.05 KB');
     expect(html).toContain('20 objects');
   });
 

@@ -13,6 +13,8 @@ const staticPages = [
   ['/partner', 'weekly', 0.8],
   ['/docs/claude', 'monthly', 0.7],
   ['/verified', 'monthly', 0.7],
+  ['/management-team', 'monthly', 0.7],
+  ['/investors', 'monthly', 0.7],
 ].map(([path, changeFrequency, priority]) => ({
   url: `https://ai.market${path}`,
   lastModified: now,
@@ -168,6 +170,8 @@ describe('sitemap', () => {
     expect(urls).toContain('https://ai.market/requests');
     expect(urls).toContain('https://ai.market/requests/need-claims-data');
     expect(urls).toContain('https://ai.market/verified');
+    expect(urls).toContain('https://ai.market/management-team');
+    expect(urls).toContain('https://ai.market/investors');
     expect(urls).toContain('https://ai.market/docs/claude');
     for (const retiredRoute of retiredRoutes) {
       expect(urls).not.toContain(retiredRoute);

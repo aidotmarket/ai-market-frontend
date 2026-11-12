@@ -22,7 +22,7 @@ const draft={version:1,updated_at:'now',content:{...emptyGuidedDraft,title:'Sale
 function Probe(){const flow=useListingFlow()!;return <><SellerReview active enabled/><output data-testid="completion">{flow.steps[3].state}</output></>;}
 function start(){render(<SellerListingDraftProvider enabled sampleCapability={false}><GuidedListingFlow capabilities={guidedCapabilities} connections={[guidedConnection]} view="review" navigate={()=>{}}><Probe/></GuidedListingFlow></SellerListingDraftProvider>);}
 async function readyApproval(){
- await screen.findByRole('button',{name:'Approve this review'});fireEvent.load(screen.getByTitle('Saved listing buyers would see'));screen.getAllByRole('checkbox').forEach(box=>fireEvent.click(box));
+ await screen.findByRole('button',{name:'Approve this review'});fireEvent.load(screen.getByTitle('Saved original seller review'));screen.getAllByRole('checkbox').forEach(box=>fireEvent.click(box));
  await waitFor(()=>expect((screen.getByRole('button',{name:'Approve this review'}) as HTMLButtonElement).disabled).toBe(false));
 }
 beforeEach(()=>{let id=0;vi.spyOn(globalThis.crypto,'randomUUID').mockImplementation(()=>`00000000-0000-4000-8000-${String(++id).padStart(12,'0')}`);vi.stubGlobal('fetch',vi.fn(()=>{throw new Error('Unexpected network request');}));resetSellerListingDraftOwnerForTests();mocks.get.mockImplementation(async url=>({data:url.endsWith('categories')?categoryRows:{source}}));mocks.draft.mockResolvedValue(draft);mocks.review.mockResolvedValue({approval_available:true,review_hash:'r',render_hash:'r',rendered_html:'<p>Saved listing</p>',confirmation_statements:{},draft_version:1,source_version:1,missing_fields:[],approval:null});});

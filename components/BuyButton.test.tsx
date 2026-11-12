@@ -37,7 +37,7 @@ vi.mock('@/api/legal', () => legalApi);
 vi.mock('@/api/checkout', () => ({ createCheckout: vi.fn() }));
 
 const structuredLicense = {
-  code: 'standard' as const, version: '1.0', params: { ai_training: true },
+  code: 'standard' as const, version: '1.0', covenant_version: '1.0', params: { ai_training: true },
   summary: ['Not the contract — read the full licence before accepting.'],
   full_text_url: '/licenses/standard/1.0/ai-training',
   download_url: '/licenses/standard/1.0/ai-training?download=1',
@@ -320,6 +320,20 @@ describe('BuyButton licence acceptance', () => {
     await waitFor(() => expect(createCheckout).toHaveBeenCalledWith('listing-1', undefined, undefined));
   });
 
+  it('keeps Buy acceptance disabled when the covenant version is missing and its hash is not pinned 1.0', async () => {
+    legalApi.getTermsAcceptanceStatus.mockResolvedValue({accepted:true});
+    vi.stubGlobal('fetch', vi.fn().mockImplementation(async (input: RequestInfo | URL) => documentResponse(
+      String(input).includes('marketplace-listing') ? 'Exact covenant text\n' : 'Exact licence text\n',
+    )));
+    const {covenant_version: omitted, ...unverifiable} = verifiedLicense;
+    void omitted;
+    await renderBuyer(<ToastProvider><BuyButton listingId="listing-1" slug="listing" price={20} pricingType="one_time" licenseDetails={unverifiable}/></ToastProvider>);
+    await screen.findByText('Could not verify — do not accept');
+    expect((screen.getByRole('checkbox', {name:'Confirm licence authority'}) as HTMLInputElement).disabled).toBe(true);
+    expect((screen.getByRole('button', {name:'Accept and continue to payment'}) as HTMLButtonElement).disabled).toBe(true);
+    expect(createCheckout).not.toHaveBeenCalled();
+  });
+
   it('starts authority unchecked and shows the exact acceptance fields under flag-on data', async () => {
     await renderBuyer(<ToastProvider><BuyButton listingId="listing-1" slug="listing" price={20} pricingType="one_time" licenseDetails={structuredLicense} /></ToastProvider>);
 
@@ -456,7 +470,7 @@ describe('BuyButton licence acceptance', () => {
       ? bytes(`${JSON.stringify({content_type: 'application/pdf', source_sha256})}\n`)
       : bytes(customText);
     return {
-      code: 'custom' as const, version: '1',
+      code: 'custom' as const, version: '1', covenant_version: '1.0',
       params: { ai_training: true, source_sha256 },
       summary: ['Seller terms — read the full licence.'],
       full_text_url: '/api/v1/listings/listing-1/license-document',
@@ -522,6 +536,29 @@ describe('BuyButton licence acceptance', () => {
       else process.env.NEXT_PUBLIC_API_URL = priorApiUrl;
     } };
   }
+
+  it.each([401, 403])('keeps custom licence acceptance disabled when document access returns %s', async (status) => {
+    const get = vi.spyOn(api, 'get').mockRejectedValue(new AxiosError('Authentication required', undefined, undefined, undefined, {
+      status, statusText: 'Refused', headers: {}, data: {}, config: {} as never,
+    }));
+    vi.stubGlobal('fetch', vi.fn(async (input: RequestInfo | URL) => documentResponse(
+      String(input).includes('marketplace-listing') ? covenantText : riderText,
+    )));
+    try {
+      await renderBuyer(<ToastProvider><BuyButton listingId="listing-1" slug="listing" price={20} pricingType="one_time" licenseDetails={await customLicense()} /></ToastProvider>);
+      await screen.findByText("Sign in to read and verify the seller's licence");
+      expect(screen.getAllByText('Fetched bytes match the server hash')).toHaveLength(2);
+      const authority = screen.getByRole('checkbox', { name: 'Confirm licence authority' }) as HTMLInputElement;
+      expect(authority.disabled).toBe(true);
+      completeAcceptanceForm();
+      const buy = screen.getByRole('button', { name: 'Accept and continue to payment' }) as HTMLButtonElement;
+      expect(buy.disabled).toBe(true);
+      fireEvent.click(buy);
+      expect(createCheckout).not.toHaveBeenCalled();
+    } finally {
+      get.mockRestore();
+    }
+  });
 
   it('activates both custom document links using the exact authenticated, verified bytes', async () => {
     const { calls, fetchMock, createdBlobs, createObjectURL, revokeObjectURL, license, unmount, restore } = await renderCustom();
@@ -747,6 +784,20 @@ describe('connector checkout handoff and domain purchase', () => {
     result.response = { status, data: { detail }, statusText: 'refused', headers: {}, config: {} as never };
     return result;
   }
+
+  it.each([true, false])('submits a purchase directly for an enrolled company user (handoff %s)', async handoff => {
+    useAuthStore.setState({ user: { id: 'buyer-1', sso_enforced: true, totp_enabled: true } as never });
+    vi.mocked(createCheckout).mockRejectedValue(error(503, 'CHECKOUT_PROCESSING'));
+    await accept(handoff ? { handoffToken } : undefined);
+    await waitFor(() => expect(createCheckout).toHaveBeenCalledOnce());
+    expect(screen.queryByRole('dialog', { name: 'Re-authenticate' })).toBeNull();
+    expect(screen.queryByPlaceholderText('Enter code')).toBeNull();
+  });
+  it.each(['RECENT_LOGIN_REQUIRED', 'SECOND_FACTOR_REQUIRED', 'SECOND_FACTOR_ENROLLMENT_REQUIRED'])('uses refresh copy for legacy %s in either checkout mode', code => {
+    for (const enabled of [true, false]) {
+      expect(parseCheckoutRefusal(error(403, code), enabled).message).toBe('Please refresh the page and try again.');
+    }
+  });
   const backendTermsRefusal = {
     code: 'TERMS_ACCEPTANCE_REQUIRED',
     acceptance_url: '/api/v1/legal/terms/accept',
@@ -769,7 +820,7 @@ describe('connector checkout handoff and domain purchase', () => {
     [403, 'UNKNOWN_CODE'], [401, 'TERMS_ACCEPTANCE_REQUIRED'], [401, 'FIRST_PARTY_SESSION_REQUIRED'],
   ])('keeps the sign-in refusal for status %s and code %s', (status, code) => {
     expect(parseCheckoutRefusal(error(status, { code }), true)).toEqual({
-      code, message: 'Sign in again, then retry the same purchase.',
+      code, message: 'Please refresh the page and try again.',
     });
   });
   it.each([
@@ -784,7 +835,7 @@ describe('connector checkout handoff and domain purchase', () => {
     expect(screen.getAllByRole('alert').some(element => element.textContent?.includes(
       'Accept the current ai.market platform terms before purchasing.'
     ))).toBe(true);
-    expect(screen.queryByText('Sign in again, then retry the same purchase.')).toBeNull();
+    expect(screen.queryByText('Please refresh the page and try again.')).toBeNull();
     expect((screen.getByRole('button', { name: 'Accept and continue to payment' }) as HTMLButtonElement).disabled).toBe(true);
     expect(sessionStorage.getItem(checkoutReplayKey('buyer-1', props.listingId))).toBeNull();
     expect(createCheckout).toHaveBeenCalledOnce();
@@ -863,7 +914,7 @@ describe('connector checkout handoff and domain purchase', () => {
     const key = checkoutReplayKey('buyer-1', props.listingId);
     const frozen = sessionStorage.getItem(key);
     fireEvent.click(await screen.findByRole('button', { name: 'Retry checkout' }));
-    await screen.findAllByText('Sign in again, then retry the same purchase.');
+    await screen.findAllByText('Please refresh the page and try again.');
     expect(sessionStorage.getItem(key)).toBe(frozen);
     await act(async () => { useAuthStore.setState({ isAuthenticated: false }); });
     await act(async () => { useAuthStore.setState({ isAuthenticated: true, token: 'renewed-session' }); });

@@ -1,33 +1,43 @@
 'use client';
+import ConnectionScopeChoice from './ConnectionScopeChoice';
+import type {ConnectionScope, WholeBucketConfirmation} from '@/api/sellerWorkspace';
 import {useRef,useState,type FormEvent} from 'react';
 import {createIdempotencyKey,saveR2Connection,SellerWorkspaceApiError,type R2ConnectionInput,type SellerWorkspaceConnection} from '@/api/sellerWorkspace';
 
-export default function R2ConnectionForm({connection,onSaved,onClose}: {
+export default function R2ConnectionForm({connection,onSaved,onClose,wholeBucketConfirmation}: {
+  wholeBucketConfirmation?:WholeBucketConfirmation|null;
   connection?:SellerWorkspaceConnection|null; onSaved:(connection:SellerWorkspaceConnection)=>void; onClose:()=>void;
 }) {
   const [busy,setBusy]=useState(false);
   const [error,setError]=useState('');
   const [confirmed,setConfirmed]=useState(false);
+  const [scope,setScope]=useState<ConnectionScope>(connection?.scope ?? 'prefix');
+  const [wholeBucketConfirmed,setWholeBucketConfirmed]=useState(false);
+  const wholeBucket = scope === 'whole_bucket' && (!!connection || !!wholeBucketConfirmation);
   const requestId=useRef<string|null>(null);
   const submitting=useRef(false);
   const [values,setValues]=useState({account_id:connection?.provider_account_id ?? '',
     jurisdiction:(connection?.region ?? 'default') as R2ConnectionInput['jurisdiction'],
     bucket:connection?.bucket ?? '',prefix:connection?.prefix ?? '',access_key_id:'',secret_access_key:''});
   const change=(name:keyof typeof values,value:string) => {
-    requestId.current=null;setValues(current=>({...current,[name]:value}));setError('');
+    requestId.current=null;if(['account_id','jurisdiction','bucket'].includes(name))setWholeBucketConfirmed(false);setValues(current=>({...current,[name]:value}));setError('');
   };
   const submit=async (event:FormEvent) => {
-    event.preventDefault();if(submitting.current || !confirmed)return;
+    event.preventDefault();if(submitting.current || !confirmed || (wholeBucket && !connection && !wholeBucketConfirmed))return;
     submitting.current=true;setBusy(true);setError('');
     try {
       requestId.current ??= createIdempotencyKey(connection?'r2-replace':'r2-create');
-      const result=await saveR2Connection({...values,dedicated_bucket_readonly:true,expected_version:connection?.version ?? 0},requestId.current,connection?.id);
+      const result=await saveR2Connection({...values,prefix:wholeBucket?'':values.prefix,scope:wholeBucket?'whole_bucket':'prefix',
+        ...(!connection && wholeBucket ? {whole_bucket_confirmed:true,confirmation_version:wholeBucketConfirmation!.version} : {}),
+        dedicated_bucket_readonly:true,expected_version:connection?.version ?? 0},requestId.current,connection?.id);
       setValues(current=>({...current,access_key_id:'',secret_access_key:''}));
       onSaved(result.connection);
     } catch (failure) {
       if (failure instanceof SellerWorkspaceApiError && failure.code === 'two_factor_required') {
         setError('Complete the sign-in security step in seller setup before connecting cloud storage. Refresh seller setup if you already completed it.');
-      } else setError('Connection could not be confirmed. Check the account, bucket, folder and read-only keys. The folder must contain at least one file. You can retry with the same values.');
+      } else if (failure instanceof SellerWorkspaceApiError && failure.code === 'invalid_scope') {
+        setError('Choose a valid folder or confirm access to the whole bucket.');
+      } else setError('Connection could not be confirmed. Check the account, bucket, scope and read-only keys. The selected folder or bucket must contain at least one file. You can retry with the same values.');
     } finally {submitting.current=false;setBusy(false);}
   };
   const inputClass='mt-1 block w-full rounded-lg border border-gray-300 px-3 py-2 text-sm disabled:bg-gray-100';
@@ -36,21 +46,23 @@ export default function R2ConnectionForm({connection,onSaved,onClose}: {
     <div className="my-4 rounded-lg border border-amber-300 bg-amber-50 p-4 text-sm text-amber-950">
       <strong>Use a dedicated bucket containing only files intended for sale.</strong>
       <p className="mt-2">In Cloudflare R2, open Manage API Tokens. Create a token with <strong>Object Read only</strong> permission and restrict it to this one bucket.</p>
-      <p className="mt-2">The key can read every file in that bucket. ai.market limits file selection to the folder you enter below and stores your keys encrypted.</p>
+      <p className="mt-2">The key can read every file in that bucket. ai.market limits file selection to your connected folder or whole bucket and stores your keys encrypted.</p>
     </div>
     <form onSubmit={submit} autoComplete="off" className="space-y-4">
       <fieldset disabled={busy} className="grid gap-4 sm:grid-cols-2">
         <label className="text-sm font-medium">Cloudflare account ID<input className={inputClass} required pattern="[0-9a-f]{32}" value={values.account_id} disabled={!!connection} onChange={event=>change('account_id',event.target.value)} spellCheck={false}/></label>
         <label className="text-sm font-medium">Bucket location<select className={inputClass} value={values.jurisdiction} disabled={!!connection} onChange={event=>change('jurisdiction',event.target.value)}><option value="default">Default (no jurisdiction)</option><option value="eu">European Union</option><option value="us">United States</option><option value="fedramp">FedRAMP</option></select></label>
         <label className="text-sm font-medium">Bucket name<input className={inputClass} required value={values.bucket} disabled={!!connection} onChange={event=>change('bucket',event.target.value)} spellCheck={false}/></label>
-        <label className="text-sm font-medium">Folder inside the bucket<input className={inputClass} required value={values.prefix} disabled={!!connection} onChange={event=>change('prefix',event.target.value)} placeholder="files-for-sale" spellCheck={false}/></label>
+        {!connection && <div className="sm:col-span-2"><ConnectionScopeChoice value={wholeBucket?'whole_bucket':'prefix'} confirmation={wholeBucketConfirmation} confirmed={wholeBucketConfirmed} onConfirm={checked=>{requestId.current=null;setWholeBucketConfirmed(checked);}} onChange={value=>{requestId.current=null;setScope(value);setWholeBucketConfirmed(false);}} /></div>}
+        {wholeBucket && connection && <p className="text-sm font-medium">Whole bucket</p>}
+        {!wholeBucket && <label className="text-sm font-medium">Folder inside the bucket<input className={inputClass} required value={values.prefix} disabled={!!connection} onChange={event=>change('prefix',event.target.value)} placeholder="files-for-sale" spellCheck={false}/></label>}
         <label className="text-sm font-medium">Access Key ID<input className={inputClass} required type="password" autoComplete="new-password" pattern="[0-9a-f]{32}" value={values.access_key_id} onChange={event=>change('access_key_id',event.target.value)} spellCheck={false}/></label>
         <label className="text-sm font-medium">Secret Access Key<input className={inputClass} required type="password" autoComplete="new-password" pattern="[0-9a-f]{64}" value={values.secret_access_key} onChange={event=>change('secret_access_key',event.target.value)} spellCheck={false}/></label>
         <label className="flex items-start gap-2 text-sm sm:col-span-2"><input required type="checkbox" checked={confirmed} onChange={event=>setConfirmed(event.target.checked)} className="mt-1"/><span>These keys have Object Read only permission for this dedicated bucket.</span></label>
       </fieldset>
       <p className="text-sm text-gray-600">Disconnecting stops new downloads. Links already issued can remain usable for up to five minutes. Revoke old keys in Cloudflare after a successful replacement.</p>
       {error && <p role="alert" className="text-sm text-red-800">{error}</p>}
-      <div className="flex gap-3"><button disabled={busy || !confirmed} className="rounded-lg bg-indigo-700 px-4 py-2 font-medium text-white disabled:opacity-50">{busy?'Checking connection…':connection?'Verify and replace keys':'Verify and connect R2'}</button><button type="button" disabled={busy} onClick={onClose} className="rounded-lg border px-4 py-2">Cancel</button></div>
+      <div className="flex gap-3"><button disabled={busy || !confirmed || (wholeBucket && !connection && !wholeBucketConfirmed)} className="rounded-lg bg-indigo-700 px-4 py-2 font-medium text-white disabled:opacity-50">{busy?'Checking connection…':connection?'Verify and replace keys':'Verify and connect R2'}</button><button type="button" disabled={busy} onClick={onClose} className="rounded-lg border px-4 py-2">Cancel</button></div>
     </form>
   </section>;
 }

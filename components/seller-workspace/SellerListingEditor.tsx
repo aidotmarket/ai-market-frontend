@@ -1,13 +1,18 @@
 'use client';
+import {isPlainListingMessage,listingDraftError} from '@/lib/listing-action-error';
+
+import ListingDocumentsEditor from '@/components/listing/ListingDocumentsEditor';
 
 import { useEffect, useRef, useState } from 'react';
 import axios from 'axios';
 import type { ListingDraftContent } from '@/api/sellerListingDraft';
-import {useListingFlow} from './GuidedListingFlow';
+import {StartAnotherListingAction,useListingFlow} from './GuidedListingFlow';
 import {admissiblePrice,PRICE_REASON} from './listingSteps';
 import type {SellerCategory} from '@/api/sellerListingSource';
 import GrowingTextarea from './GrowingTextarea';
 import ListingPreview from './ListingPreview';
+import ListingMarkdown from '@/components/ListingMarkdown';
+import MarkdownTextField,{descriptionTooLong} from '@/components/listing/MarkdownTextField';
 
 const fields = [
   ['title', 'Title'], ['description', 'Description'], ['category', 'Category'], ['tags', 'Tags'],
@@ -45,6 +50,7 @@ export default function SellerListingEditor({ assistant, active = true, initialC
   const [proposals, setProposals] = useState<Partial<Record<DraftField, FieldProposalEvent>>>({});
   const [reviewed, setReviewed] = useState<DraftField[]>([]);
   const [price, setPrice] = useState(initialContent?.price ?? '');
+  const descriptionInvalid = descriptionTooLong(draft.description);
   const priceInvalid = price !== '' && !admissiblePrice(price);
   const [license, setLicense] = useState(initialContent?.license ?? '');
   const [previewOpen, setPreviewOpen] = useState(false);
@@ -53,9 +59,10 @@ export default function SellerListingEditor({ assistant, active = true, initialC
   const [baselineVersion,setBaselineVersion]=useState(savedVersion);
   const [saving, setSaving] = useState(false);
   const savingRef = useRef(false);
+  const [alreadyPublished,setAlreadyPublished]=useState(false);
   const [saveError, setSaveError] = useState<string | null>(null);
   const save = async () => {
-    if (!onSave || savingRef.current || priceInvalid) return false;
+    if (!onSave || savingRef.current || priceInvalid || descriptionInvalid) return false;
     if(snapshot===savedSnapshot)return true;
     savingRef.current = true; setSaving(true); setSaveError(null);
     const submitted = snapshot;
@@ -64,10 +71,11 @@ export default function SellerListingEditor({ assistant, active = true, initialC
       if (mounted.current) {setSavedSnapshot(submitted);if(typeof version==='number')setBaselineVersion(version);}
       return true;
     } catch (error) {
+      const draftFailure=listingDraftError(error);setAlreadyPublished(draftFailure?.alreadyPublished??false);
       const detail=axios.isAxiosError(error)?error.response?.data?.detail:null;
-      if (mounted.current) setSaveError(typeof detail==='string'?detail:typeof detail?.message==='string'?detail.message:axios.isAxiosError(error) && error.response?.status === 409
+      if (mounted.current) setSaveError(draftFailure?.message??(isPlainListingMessage(detail)?detail:isPlainListingMessage(detail?.message)?detail.message:axios.isAxiosError(error) && error.response?.status === 409
         ? 'This draft was saved elsewhere. Your edits are still here. Copy any changes you want to keep, then reload the Workspace to open the saved version.'
-        : 'Saving could not be confirmed. Your edits are still here. Try saving again.');
+        : 'Saving could not be confirmed. Your edits are still here. Try saving again.'));
     } finally { savingRef.current = false; if (mounted.current) setSaving(false); }
   };
   // Adopt content only while pristine; dirty edits can follow non-editor version changes.
@@ -156,6 +164,7 @@ export default function SellerListingEditor({ assistant, active = true, initialC
   const label = fields.find(([field]) => field === activeField)![1];
 
   return (
+    <>
     <section className="space-y-5" aria-labelledby="listing-editor-title">
       <div><h2 id="listing-editor-title" className="text-xl font-semibold text-gray-900">Describe and price</h2><p className="mt-2 max-w-3xl text-sm leading-6 text-gray-600">Allai, our assistant, can draft this for you from your files. Review her suggestions, ask for changes, and decide what buyers will see.</p></div>
       {assistant && <p className="text-sm text-gray-600">Allai requests use your existing starter credits. Editing and saving your draft do not use credits.</p>}
@@ -166,14 +175,14 @@ export default function SellerListingEditor({ assistant, active = true, initialC
           {Object.keys(proposals).length > 0 && <button type="button" onClick={() => fields.forEach(([field]) => accept(field))} className={buttonClass}>Use all Allai suggestions</button>}
           {fields.map(([field, fieldLabel]) => <div key={field} className={`rounded-lg border p-4 ${activeField === field ? 'border-indigo-200 bg-indigo-50/30' : 'border-gray-100'}`}>
             <label htmlFor={`seller-listing-${field}`} className="text-sm font-semibold text-gray-900">{fieldLabel}</label>
-            {field === 'category' ? <div className="relative mt-2 rounded-lg border border-gray-300 bg-white focus-within:ring-1 focus-within:ring-indigo-500"><span aria-hidden="true" className="pointer-events-none flex items-start justify-between gap-3 px-3 py-2 text-sm text-gray-900"><span className="min-w-0 whitespace-normal break-words">{categories.find(c=>c.slug===draft.category)?.name??'Choose a category from the list'}</span><span>⌄</span></span><select id={`seller-listing-${field}`} value={categories.some(c=>c.slug===draft.category)?draft.category:''} onFocus={()=>setActiveField(field)} onChange={event=>update(field,event.target.value)} className="absolute inset-0 h-full w-full opacity-0"><option value="">Choose a category from the list</option>{categories.map(c=><option key={c.slug} value={c.slug}>{c.name}</option>)}</select></div> : field === 'description' ? <textarea id={`seller-listing-${field}`} rows={6} maxLength={limits[field]} value={draft[field]} onFocus={() => setActiveField(field)} onChange={(event) => update(field, event.target.value)} className={fieldClass} /> : <GrowingTextarea id={`seller-listing-${field}`} maxLength={limits[field]} value={draft[field]} onFocus={() => setActiveField(field)} onChange={(event) => update(field, event.target.value)} className={fieldClass} />}
+            {field === 'category' ? <div className="relative mt-2 rounded-lg border border-gray-300 bg-white focus-within:ring-1 focus-within:ring-indigo-500"><span aria-hidden="true" className="pointer-events-none flex items-start justify-between gap-3 px-3 py-2 text-sm text-gray-900"><span className="min-w-0 whitespace-normal break-words">{categories.find(c=>c.slug===draft.category)?.name??'Choose a category from the list'}</span><span>⌄</span></span><select id={`seller-listing-${field}`} value={categories.some(c=>c.slug===draft.category)?draft.category:''} onFocus={()=>setActiveField(field)} onChange={event=>update(field,event.target.value)} className="absolute inset-0 h-full w-full opacity-0"><option value="">Choose a category from the list</option>{categories.map(c=><option key={c.slug} value={c.slug}>{c.name}</option>)}</select></div> : field === 'description' ? <MarkdownTextField id={`seller-listing-${field}`} value={draft[field]} onFocus={() => setActiveField(field)} onChange={value => update(field, value)} /> : <GrowingTextarea id={`seller-listing-${field}`} maxLength={limits[field]} value={draft[field]} onFocus={() => setActiveField(field)} onChange={(event) => update(field, event.target.value)} className={fieldClass} />}
             {field === 'description' && <p className="mt-2 text-xs text-gray-500">Anything you keep here, including file names, will be public.</p>}
             {field === 'tags' && <p className="mt-2 text-xs text-gray-500">Separate tags with commas.</p>}
-            {proposals[field] && <div className="mt-3 rounded-lg border border-indigo-200 bg-white p-3"><p className="text-xs font-semibold text-indigo-800">Allai suggests</p><p className="mt-2 whitespace-pre-wrap break-words text-sm text-gray-800">{proposals[field]!.value}</p>{proposals[field]!.reasoning && <p className="mt-2 text-xs text-gray-500">{proposals[field]!.reasoning}</p>}<div className="mt-3 flex gap-2"><button type="button" onClick={() => accept(field)} className={buttonClass}>Use suggestion</button><button type="button" onClick={() => setProposals((current) => { const next = { ...current }; delete next[field]; return next; })} className={buttonClass}>Keep mine</button></div></div>}
+            {proposals[field] && <div className="mt-3 rounded-lg border border-indigo-200 bg-white p-3"><p className="text-xs font-semibold text-indigo-800">Allai suggests</p>{field==='description'?<ListingMarkdown text={proposals[field]!.value}/>:<p className="mt-2 whitespace-pre-wrap break-words text-sm text-gray-800">{proposals[field]!.value}</p>}{proposals[field]!.reasoning && <p className="mt-2 text-xs text-gray-500">{proposals[field]!.reasoning}</p>}<div className="mt-3 flex gap-2"><button type="button" onClick={() => accept(field)} className={buttonClass}>Use suggestion</button><button type="button" onClick={() => setProposals((current) => { const next = { ...current }; delete next[field]; return next; })} className={buttonClass}>Keep mine</button></div></div>}
           </div>)}
           <div className="grid gap-4 sm:grid-cols-2"><label className="text-sm font-semibold text-gray-900">Your price (USD)<input type="number" min="0" max="999999.99" step="0.01" aria-invalid={priceInvalid} aria-describedby={priceInvalid ? "seller-price-error" : undefined} value={price} onChange={(event) => setPrice(event.target.value)} className={fieldClass} /></label>{!licensesEnabled&&<label className="text-sm font-semibold text-gray-900">Your license<input value={license} onChange={(event) => setLicense(event.target.value)} maxLength={500} className={fieldClass} /></label>}</div>
           {priceInvalid && <p id="seller-price-error" role="alert" className="text-sm text-red-800">Enter $0 for a free listing or $25 to $999,999.99 for a paid listing, with no more than two decimal places.</p>}
-          {onSave ? <div className="space-y-3">{snapshot!==savedSnapshot&&<button type="button" disabled={saving || priceInvalid || snapshot === savedSnapshot} onClick={()=>void save()} className={buttonClass}>{saving ? 'Saving draft…' : 'Save private draft'}</button>}<p role="status" className="text-sm text-gray-600">{snapshot === savedSnapshot ? 'Draft saved to your account.' : 'You have unsaved changes.'} Saving does not publish your listing.</p>{saveError && <p role="alert" className="text-sm text-red-800">{saveError}</p>}<p className="text-xs text-gray-500">Saves your listing fields, brief, price and license. Chat and unaccepted suggestions stay in this Workspace only. Save your file choices separately in Choose your files.</p></div> : <p className="text-xs leading-5 text-gray-500">Your edits stay here when you switch Workspace sections. They are not saved to your account yet and will be lost if you reload or leave the Workspace. Save your draft and file choices before reviewing and publishing.</p>}
+          {onSave ? <div className="space-y-3">{snapshot!==savedSnapshot&&<button type="button" disabled={saving || priceInvalid || descriptionInvalid || snapshot === savedSnapshot} onClick={()=>void save()} className={buttonClass}>{saving ? 'Saving draft…' : 'Save private draft'}</button>}<p role="status" className="text-sm text-gray-600">{snapshot === savedSnapshot ? 'Draft saved to your account.' : 'You have unsaved changes.'} Saving does not publish your listing.</p>{saveError && <p role="alert" className="text-sm text-red-800">{saveError}{alreadyPublished&&<> <StartAnotherListingAction/></>}</p>}<p className="text-xs text-gray-500">Saves your listing fields, brief, price and license. Chat and unaccepted suggestions stay in this Workspace only. Save your file choices separately in Choose your files.</p></div> : <p className="text-xs leading-5 text-gray-500">Your edits stay here when you switch Workspace sections. They are not saved to your account yet and will be lost if you reload or leave the Workspace. Save your draft and file choices before reviewing and publishing.</p>}
         </div>
         <aside className="space-y-4 lg:sticky lg:top-5" aria-label="Allai listing assistant">
           <div className="rounded-xl border border-indigo-200 bg-indigo-50 p-4"><p className="font-semibold text-indigo-950">Review {label.toLowerCase()} with Allai</p><p className="mt-2 text-sm text-indigo-900">Ask her to change the wording, refine the tags, or explain a suggestion.</p><div className="mt-3 flex flex-wrap gap-2"><button type="button" disabled={!draft[activeField].trim()} onClick={() => { setReviewed((current) => [...new Set([...current, activeField])]); const index = fields.findIndex(([field]) => field === activeField); setActiveField(fields[Math.min(index + 1, fields.length - 1)][0]); }} className={buttonClass}>Looks good</button><button type="button" disabled={!assistant || isStreaming || !brief.trim()} onClick={() => ask(`Help me improve the ${label.toLowerCase()}. Ask what I would like changed if needed.`)} className={buttonClass}>Change it with Allai</button></div>{!draft[activeField].trim()&&<p className="mt-2 text-xs text-indigo-900">Add or accept {label.toLowerCase()} text before marking it reviewed.</p>}</div>
@@ -182,9 +191,11 @@ export default function SellerListingEditor({ assistant, active = true, initialC
         </aside>
       </div>
       {sourceVersion!==undefined && (sourceVersion===null || descriptionSourceVersion!==sourceVersion) && <div role="status" className="space-y-3 rounded-lg bg-amber-50 p-4 text-sm text-amber-900"><p>Your files changed after this description was written</p><div className="flex flex-wrap gap-3"><button type="button" disabled={!assistant||isStreaming||!brief.trim()||sourceVersion===null} onClick={()=>void ask('Update my description to match my current saved files.')} className={buttonClass}>Ask Allai to update it</button><button type="button" disabled={sourceVersion===null||!draft.description.trim()} onClick={()=>setDescriptionSourceVersion(sourceVersion??null)} className={buttonClass}>This description matches my files</button></div>{sourceVersion===null?<p>Choose and save your files before confirming this description.</p>:!draft.description.trim()?<p>Add a description before confirming it.</p>:!assistant?<p>Allai is unavailable. Edit the description and confirm it matches your files.</p>:!brief.trim()?<p>Add a brief above before asking Allai to update it.</p>:null}</div>}
-      {onSave&&(flow||onNext)&&<><button type="button" disabled={saving||priceInvalid} onClick={async()=>{if(!await save())return; if(flow){const missing=flow.stepsForContent(JSON.parse(snapshot)).slice(0,4).find(s=>s.state!=='done'&&s.state!=='skipped');if(missing){setSaveError(missing.reason);return;} flow.navigate('review');}else onNext?.();}} className="rounded-lg bg-indigo-700 px-4 py-2 text-sm font-semibold text-white">Next: Review →</button>{priceInvalid&&<p className="text-sm text-amber-900">{PRICE_REASON}</p>}</>}
+      {onSave&&(flow||onNext)&&<><button type="button" disabled={saving||priceInvalid||descriptionInvalid} onClick={async()=>{if(!await save())return; if(flow){const missing=flow.stepsForContent(JSON.parse(snapshot)).slice(0,4).find(s=>s.state!=='done'&&s.state!=='skipped');if(missing){setSaveError(missing.reason);return;} flow.navigate('review');}else onNext?.();}} className="rounded-lg bg-indigo-700 px-4 py-2 text-sm font-semibold text-white">Next: Review →</button>{priceInvalid&&<p className="text-sm text-amber-900">{PRICE_REASON}</p>}</>}
       <button type="button" aria-expanded={previewOpen} aria-controls="seller-listing-preview" onClick={() => setPreviewOpen(current => !current)} className={buttonClass}>{previewOpen ? 'Hide listing preview' : 'Preview my listing'}</button>
-      {previewOpen && <div id="seller-listing-preview"><ListingPreview draft={{ ...draft, price, license:licensesEnabled?(licenseSelection?`${licenseSelection.kind==='standard'?'ai.market Standard Data Licence v1.0':"Seller's own licence"} · AI/ML training ${licenseSelection.ai_training?'allowed':'not allowed'}`:'Choose a licence'):license }} /></div>}
+      {previewOpen && <div id="seller-listing-preview"><ListingPreview draft={{ ...draft, price, license:licensesEnabled?(licenseSelection?`${licenseSelection.kind==='standard'?`ai.market Standard Data Licence v${licenseSelection.version}`:"Seller's own licence"} · AI/ML training ${licenseSelection.ai_training?'allowed':'not allowed'}`:'Choose a licence'):license }} /></div>}
     </section>
+    <ListingDocumentsEditor listingId={flow?.publication?.publication?.listing_id}/>
+    </>
   );
 }

@@ -14,6 +14,7 @@ const listingsApi = vi.hoisted(() => ({
   publishListing: vi.fn(),
 }));
 const capabilitiesApi = vi.hoisted(() => ({getSellerWorkspaceCapabilities:vi.fn()}));
+vi.mock('@/components/listing/ListingDocumentsEditor', () => ({default: () => null}));
 vi.mock('@/api/sellerWorkspace',()=>capabilitiesApi);
 const identityApi = vi.hoisted(() => ({getSellerLegalIdentity:vi.fn(),refreshSellerLegalIdentity:vi.fn(),saveSellerLegalIdentity:vi.fn()}));
 vi.mock('@/api/sellerLegalIdentity',async(importOriginal)=>({...(await importOriginal<typeof import('@/api/sellerLegalIdentity')>()),...identityApi}));
@@ -62,6 +63,18 @@ describe('EditListingPage', () => {
     vi.clearAllMocks();
   });
 
+  it('shows the unchanged DRAFT_IN_PROGRESS sentence when updating a published description is refused',async()=>{
+    const message='You already have a listing in progress. Finish or discard it first.';
+    listingsApi.getListing.mockResolvedValue(baseListing);
+    listingsApi.updateListing.mockRejectedValueOnce({response:{status:409,data:{detail:{code:'DRAFT_IN_PROGRESS',message}}}});
+    render(<EditListingPage/>);
+    fireEvent.change(await screen.findByLabelText('Description'),{target:{value:'Amended description'}});
+    fireEvent.click(screen.getByRole('button',{name:'Save Draft'}));
+    await waitFor(()=>expect(toast).toHaveBeenCalledWith(message,'error'));
+    expect(listingsApi.updateListing).toHaveBeenCalledOnce();
+    expect((screen.getByLabelText('Description') as HTMLTextAreaElement).value).toBe('Amended description');
+  });
+
   it('shows Publish and not Unpublish for unlisted listings, then marks publish success locally', async () => {
     listingsApi.getListing.mockResolvedValue({
       ...baseListing,
@@ -99,9 +112,9 @@ describe('EditListingPage', () => {
     fireEvent.click(screen.getByLabelText('Confirm covenant and authority'));
     expect(publish.disabled).toBe(false);fireEvent.click(publish);
     await waitFor(()=>expect(listingsApi.publishListing).toHaveBeenCalledWith('listing-1',{
-      kind:'standard',version:'1.0',ai_training:true,license_document_id:null,
-      license_sha256:'4b05dbcd0c186746d3deab6c68beaebba88610de8e85122efb4d527edb1263c6',rider_sha256:null,
-      covenant_code:'marketplace-listing',covenant_version:'1.0',covenant_sha256:'a91234b67bf7467a0c80f6e1caa47b563032e94751146901b796eaaf220431af',
+      kind:'standard',version:'1.1',ai_training:true,license_document_id:null,
+      license_sha256:'881266a455d100e6b263ec121523001e5e53f6e3bf3bd97047e29ae39f8959fb',rider_sha256:null,
+      covenant_code:'marketplace-listing',covenant_version:'1.1',covenant_sha256:'58eff1def7acb59db75920fe0da89a3f4f87bb12bd6765ec8eae231bbea118b5',
       seller_acceptance:{signer_name:'Sam Seller',signer_title:'Director',authority_confirmed:true},
       identity_version:4,
     }));
@@ -344,4 +357,17 @@ describe('EditListingPage', () => {
       );
     });
   });
+});
+
+it('loads and pastes over-limit descriptions intact while blocking Save Draft',async()=>{
+ listingsApi.getListing.mockResolvedValue({...baseListing,description:'x'.repeat(11000)});
+ listingsApi.updateListing.mockClear();
+ render(<EditListingPage/>);
+ const field=await screen.findByLabelText('Description') as HTMLTextAreaElement;
+ expect(field.value).toHaveLength(11000);expect(field.hasAttribute('maxlength')).toBe(false);
+ expect(screen.getByText('Shorten the description to 10,000 characters to save.')).toBeTruthy();
+ const save=screen.getByRole('button',{name:'Save Draft'}) as HTMLButtonElement;
+ expect(save.disabled).toBe(true);fireEvent.click(save);expect(listingsApi.updateListing).not.toHaveBeenCalled();
+ fireEvent.change(field,{target:{value:'😀'.repeat(11000)}});expect([...field.value]).toHaveLength(11000);expect(save.disabled).toBe(true);
+ fireEvent.change(field,{target:{value:'😀'.repeat(10000)}});expect(save.disabled).toBe(false);
 });

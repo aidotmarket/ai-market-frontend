@@ -3,6 +3,7 @@ import { afterEach, beforeEach, expect, it, vi } from 'vitest';
 import { readSigningInstruments, signInstruments } from './seller-batch-signing';
 import { nativeClient, nativeSession } from './connector-seller-settings';
 import { useAuthStore } from '@/store/auth';
+import { LICENSE_HASHES_1_0 } from './listingLicenses';
 import { instrument, id } from '@/tests/fixtures/seller-authority';
 beforeEach(() => useAuthStore.setState({ token: 'retained-session' }));
 afterEach(() => vi.restoreAllMocks());
@@ -53,4 +54,44 @@ it('fails closed when a sibling response settles after another instrument refres
   });
   // A batch never mixes responses from two tokens; the user can reload the batch.
   await expect(readSigningInstruments([id(1), id(2)])).rejects.toThrow('SESSION_CHANGED');
+});
+
+it('reads a historical 1.0 preparation without rewriting its stored selection', async () => {
+  const old = instrument(1);
+  Object.assign(old.license_selection, {version: '1.0', covenant_version: '1.0',
+    license_sha256: LICENSE_HASHES_1_0.standard.true, covenant_sha256: LICENSE_HASHES_1_0.covenant});
+  vi.spyOn(nativeClient, 'get').mockResolvedValue({data: old});
+  expect(await readSigningInstruments([old.id])).toEqual([old]);
+});
+
+it('refuses platform correction markers in actual preparation/signing readers without changing original coverage',async()=>{
+ const {default:wire}=await import('@/tests/fixtures/s1922-backend-wire.json');
+ const c=wire.public[2].corrected,i=instrument(1);
+ const get=vi.spyOn(nativeClient,'get'),post=vi.spyOn(nativeClient,'post');
+ for(const key of ['presentation_kind','original_render_hash','original_admitted_render_hash','correction_id','correction_digest','provenance','license_label'] as const){
+  const marker={[key]:c[key]};
+  get.mockResolvedValue({data:{...i,...marker}});
+  await expect(readSigningInstruments([i.id])).rejects.toThrow();
+  get.mockResolvedValue({data:{...i,binding:{...i.binding,...marker}}});
+  await expect(readSigningInstruments([i.id])).rejects.toThrow();
+  const body={request_id:id(9),csrf:nativeSession().csrf,instruments:[{preparation_id:i.id,coverage_hash:i.coverage_hash,selection:{...i.license_selection,...marker}}]};
+  await expect(signInstruments(body)).rejects.toThrow('Original signing evidence');
+  expect(post).not.toHaveBeenCalled();
+ }
+ expect(i.binding.render_hash).toBe(instrument(1).binding.render_hash);
+ expect(i.coverage_hash).toBe(instrument(1).coverage_hash);
+});
+
+it.each(['omitted','null','undefined','incomplete'] as const)('requires a complete selection for signing: %s',async kind=>{
+  const {license_selection,...view}=instrument();
+  const data=kind==='omitted'?view:{...view,license_selection:kind==='null'?null:kind==='undefined'?undefined:{...license_selection,seller_acceptance:{...license_selection.seller_acceptance,authority_confirmed:false}}};
+  vi.spyOn(nativeClient,'get').mockResolvedValue({data});
+  await expect(readSigningInstruments([view.id])).rejects.toThrow();
+});
+it('accepts the backend signing receipt without a licence selection and preserves both coverage hashes',async()=>{
+  const {license_selection,...view}=instrument();
+  const signed={...view,status:'signed',signing_required:false,acceptance_id:id(20),signed_coverage_hash:'b'.repeat(64)};
+  const body={request_id:id(9),csrf:nativeSession().csrf,instruments:[{preparation_id:view.id,coverage_hash:view.coverage_hash,selection:license_selection}]};
+  vi.spyOn(nativeClient,'post').mockResolvedValue({data:{instruments:[signed]}});
+  expect(await signInstruments(body)).toEqual([signed]);
 });

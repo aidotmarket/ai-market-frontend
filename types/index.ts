@@ -24,8 +24,6 @@ export interface User {
   two_factor_setup_reason?: string | null;
   two_factor_provider?: 'google' | 'github' | null;
   seller_two_factor_satisfied?: boolean;
-  seller_binding_factor_readiness?: { code: 'SECOND_FACTOR_ENROLLMENT_REQUIRED'; path: '/dashboard/settings' } | null;
-  reauth_method?: 'password' | 'totp' | 'magic_link';
 }
 
 export interface TokenResponse {
@@ -192,9 +190,8 @@ export interface VerificationFactObject {
   columns: VerificationFactColumn[];
 }
 
-export interface PublishedScanFindings {
+interface ScanFindingsArtifactBase {
   publication_state: 'PUBLISHED';
-  artifact_version: 'data-verification-public-artifact-v1';
   verification_series_id: string;
   epoch_id: string;
   listing_id: string;
@@ -208,7 +205,6 @@ export interface PublishedScanFindings {
     listing_version_id?: string;
     id: string;
     version: '1';
-    hash: string;
     depth_class: 'complete_standard_v1';
     canonicalization_version: 'python-json-sort-compact-v1';
   };
@@ -218,7 +214,6 @@ export interface PublishedScanFindings {
     scanner_version?: string;
     connector_type: 'eolymp' | 'aim_gateway' | 'aws_s3_verifier' | 'r2_verifier';
     connector_version: 'eolymp-v1' | 'aim_gateway-v1' | 'aws_s3_verifier-v1' | 'r2_verifier-v1';
-    content_sha256_reference: string;
   };
   methods: {
     row_count_algorithm_version: 'exact-v1';
@@ -243,7 +238,21 @@ export interface PublishedScanFindings {
   disclaimer: string;
 }
 
-export type SellerScanFindings = Omit<PublishedScanFindings, 'publication_state' | 'published_at_utc'> & {
+type ScanFindingsArtifactVersion =
+  | {
+    artifact_version: 'data-verification-public-artifact-v1';
+    spec: ScanFindingsArtifactBase['spec'] & { hash: string };
+    execution: ScanFindingsArtifactBase['execution'] & { content_sha256_reference: string };
+  }
+  | {
+    artifact_version: 'data-verification-public-artifact-v2';
+    spec: ScanFindingsArtifactBase['spec'] & { hash?: string };
+    execution: ScanFindingsArtifactBase['execution'] & { content_sha256_reference?: string };
+  };
+
+export type PublishedScanFindings = ScanFindingsArtifactBase & ScanFindingsArtifactVersion;
+
+export type SellerScanFindings = Omit<ScanFindingsArtifactBase, 'publication_state' | 'published_at_utc'> & ScanFindingsArtifactVersion & {
   publication_state: 'PUBLISHED' | 'NOT_PUBLISHED';
   published_at_utc: string | null;
 };
@@ -269,6 +278,7 @@ export interface GeneratedSampleFields {
 }
 
 export interface ListingListItem extends GeneratedSampleFields {
+  license_display?: import('@/lib/publicPresentation').LicenseDisplay | null;
   purchasable?: boolean;
   purchase_hold_reason?: string | null;
   id: string;
@@ -318,6 +328,7 @@ export interface ListingPublicListItem extends GeneratedSampleFields {
   purchase_hold_reason: string | null;
   license_status?: 'bound' | 'pending_seller_terms';
   license_provenance?: string | null;
+  license_display?: import('@/lib/publicPresentation').LicenseDisplay | null;
 }
 
 export interface ListingPublicListResponse {
@@ -355,6 +366,9 @@ export interface ListingLicenseDetails {
   full_text_url: string;
   download_url: string;
   sha256: string;
+  // Optional for historical API responses; disclosure verifies the pinned hash before inferring 1.0.
+  covenant_code?: string;
+  covenant_version?: string;
   covenant_sha256: string;
   rider_sha256: string | null;
 }
@@ -410,11 +424,12 @@ export interface ListingDetail extends GeneratedSampleFields {
   file_breakdown?: FileBreakdownGroup[] | null;
   public_reference?: PublicSourceReference | null;
   at_a_glance?: import('@/lib/api').ListingSummary | null;
-  approved_presentation?: {presentation_version: 'seller-listing-review-v2'; rendered_html: string; render_hash: string};
+  approved_presentation?: import('@/lib/publicPresentation').PublicPresentation;
   id: string;
   slug: string;
   title: string;
   description: string;
+  description_html?: string | null;
   short_description: string | null;
   publisher?: PublisherPublicInfo | null;
   pricing: {
@@ -425,6 +440,7 @@ export interface ListingDetail extends GeneratedSampleFields {
   license: string | ListingLicenseDetails | null;
   license_status?: 'bound' | 'pending_seller_terms';
   license_provenance?: string | null;
+  license_display?: import('@/lib/publicPresentation').LicenseDisplay | null;
   category: string;
   secondary_categories: string[] | null;
   tags: string[];
@@ -477,6 +493,7 @@ export interface SearchRequest {
 }
 
 export interface SearchResultItem extends GeneratedSampleFields {
+  license_display?: import('@/lib/publicPresentation').LicenseDisplay | null;
   purchasable?: boolean;
   purchase_hold_reason?: string | null;
   id: string;

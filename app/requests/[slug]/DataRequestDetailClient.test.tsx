@@ -19,6 +19,7 @@ const mocks = vi.hoisted(() => ({
   routerPush: vi.fn(),
   toast: vi.fn(),
   getDataRequest: vi.fn(),
+  getRequestThreadSelector: vi.fn(),
   updateDataRequest: vi.fn(),
   publishDataRequest: vi.fn(),
   deleteDataRequest: vi.fn(),
@@ -29,7 +30,7 @@ const mocks = vi.hoisted(() => ({
 }));
 
 vi.mock('@/store/auth', () => ({
-  useAuthStore: () => mocks.auth,
+  useAuthStore: Object.assign(() => mocks.auth, { getState: () => mocks.auth }),
 }));
 
 vi.mock('next/navigation', () => ({
@@ -56,8 +57,10 @@ vi.mock('@/components/Toast', () => ({
   useToast: () => ({ toast: mocks.toast }),
 }));
 
-vi.mock('@/api/data-requests', () => ({
+vi.mock('@/api/data-requests', async () => ({
+  ...await vi.importActual<typeof import('@/api/data-requests')>('@/api/data-requests'),
   getDataRequest: mocks.getDataRequest,
+  getRequestThreadSelector: mocks.getRequestThreadSelector,
   updateDataRequest: mocks.updateDataRequest,
   publishDataRequest: mocks.publishDataRequest,
   deleteDataRequest: mocks.deleteDataRequest,
@@ -139,11 +142,13 @@ describe('DataRequestDetailClient authenticated fallback loading', () => {
     mocks.auth.user = owner;
     mocks.auth.isAuthenticated = true;
     mocks.getDataRequestResponses.mockResolvedValue([]);
+    mocks.getRequestThreadSelector.mockResolvedValue({ contract: 'request-thread-v1', request_id: 'request-1', side: 'buyer', availability: 'off', threads: [] });
   });
 
   afterEach(() => {
     cleanup();
     vi.resetAllMocks();
+    mocks.auth.token = null;
     vi.restoreAllMocks();
     vi.unstubAllGlobals();
   });
@@ -162,6 +167,25 @@ describe('DataRequestDetailClient authenticated fallback loading', () => {
     expect(header.getByText('open')).toBeTruthy();
     expect(screen.queryAllByText('(SAMPLE)')).toHaveLength(is_sample === true ? 1 : 0);
     expect(screen.getByRole('link', { name: /Back to requests/ }).getAttribute('href')).toBe('/requests');
+  });
+
+  it.each([
+    ['**Title: Licensed retail data**', '**Title: Licensed retail data**. Buyer description.', 'Licensed retail data'],
+    ['**Title: Licensed retail transaction data for regional demand forecasting...', '**Title: Licensed retail transaction data for regional demand forecasting and inventory planning**. Buyer description.', 'Licensed retail transaction data for regional demand forecasting...'],
+    ['**Title: Explicit title**', '**Title: Different title**. Buyer description.', '**Title: Explicit title**'],
+    ['Ordinary explicit title', '**Title: Different title**. Buyer description.', 'Ordinary explicit title'],
+  ])('displays the guarded detail title without changing owner values: %s', async (title, description, display) => {
+    const request = makeOwnerRequest({ title, description });
+    mocks.getDataRequest.mockResolvedValue(request);
+    render(<DataRequestDetailClient slug={request.slug} initialRequest={request} />);
+    expect(await screen.findByRole('heading', { name: display })).toBeTruthy();
+    expect(screen.getByText(description)).toBeTruthy();
+    fireEvent.click(await screen.findByRole('button', { name: 'Edit request' }));
+    expect(screen.getByRole('textbox', { name: 'Title' })).toHaveProperty('value', title);
+    expect(screen.getByRole('textbox', { name: 'Description' })).toHaveProperty('value', description);
+    expect(request.title).toBe(title);
+    expect(request.slug).toBe('buyer-request');
+    expect(mocks.updateDataRequest).not.toHaveBeenCalled();
   });
 
   const savedQuote = {

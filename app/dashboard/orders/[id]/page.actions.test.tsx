@@ -1,9 +1,13 @@
 // @vitest-environment jsdom
+// Purchased evidence is exercised through its real component/transport suite.
+vi.mock('@/components/orders/PurchasedLicenseDisplay', () => ({default: () => <div data-purchased-evidence /> }));
 
 import { StrictMode, type ReactNode } from 'react';
 import type { Transaction } from '@/types';
 import { act, cleanup, fireEvent, render, screen } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+const privateSupport = vi.hoisted(() => ({ openReportIssue: vi.fn() }));
+vi.mock('@/components/allai/AllAIContext', () => ({ useAllAI: () => privateSupport }));
 const state = vi.hoisted(() => ({
   orderId: 'A', userId: 'buyer', txId: 'tx-A', seller: false,
   token: 'test-session-1', deferTerms: false,
@@ -210,3 +214,16 @@ for (const mode of ['confirm', 'deliver'] as const) {
     });
   });
 }
+
+it.each(['confirm', 'deliver'])('submits %s directly and shows only refresh copy for a legacy refusal', async mode => {
+  state.seller = mode === 'deliver';
+  const method = mode === 'confirm' ? calls.confirmTransaction : calls.deliverTransaction;
+  method.mockRejectedValue({ response: { status: 403, data: { detail: 'SECOND_FACTOR_REQUIRED' } } });
+  render(<OrderDetailPage />);
+  fireEvent.click(await screen.findByRole('button', { name: mode === 'confirm' ? 'Confirm Receipt' : 'Mark Delivered' }));
+  await act(async () => {});
+  expect(method).toHaveBeenCalledOnce();
+  expect(calls.toast).toHaveBeenCalledExactlyOnceWith('Please refresh the page and try again.', 'error');
+  expect(screen.queryByRole('dialog', { name: 'Re-authenticate' })).toBeNull();
+  expect(screen.queryByPlaceholderText('Enter code')).toBeNull();
+});

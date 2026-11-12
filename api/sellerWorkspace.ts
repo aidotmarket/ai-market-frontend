@@ -1,5 +1,6 @@
 import axios from 'axios';
 import { api } from './client';
+import type { ListingAuthorityReferences } from './listingAuthority';
 
 const BASE_PATH = '/seller-workspace';
 const SAFE_IDEMPOTENCY_KEY = /^[a-z0-9][a-z0-9_.:-]{0,127}$/;
@@ -20,7 +21,11 @@ export interface ProviderCapabilities {
   delivery: CapabilityStage;
 }
 
+export type ConnectionScope = 'prefix' | 'whole_bucket';
+export interface WholeBucketConfirmation { version: string; text: string }
+
 export interface SellerWorkspaceCapabilities {
+  whole_bucket_confirmation?: WholeBucketConfirmation | null;
   master: CapabilityStage;
   drafts?: CapabilityStage | null;
   listing_assistant?: CapabilityStage | null;
@@ -52,7 +57,7 @@ export type RotationSubstate =
   | 'complete'
   | 'failed';
 
-export interface SellerWorkspaceConnection {
+export interface SellerWorkspaceConnection extends ListingAuthorityReferences {
   id: string;
   provider: 'aws' | 'r2';
   status: ConnectionStatus;
@@ -62,6 +67,7 @@ export interface SellerWorkspaceConnection {
   role_arn: string | null;
   bucket: string | null;
   prefix: string | null;
+  scope?: ConnectionScope;
   region: string | null;
   authorization_expires_at: string;
   rotation_deadline: string | null;
@@ -93,7 +99,13 @@ export interface ConnectionMutationResponse {
   replayed: boolean;
 }
 
-export interface ConnectionVerifyRequest {
+export interface ConnectionScopeInput {
+  scope?: ConnectionScope;
+  whole_bucket_confirmed?: boolean;
+  confirmation_version?: string;
+}
+
+export interface ConnectionVerifyRequest extends ConnectionScopeInput {
   role_arn: string;
   bucket: string;
   prefix: string;
@@ -115,7 +127,11 @@ export type SellerWorkspaceErrorCode =
   | 'unknown';
 
 export class SellerWorkspaceApiError extends Error {
-  constructor(public readonly code: SellerWorkspaceErrorCode) {
+  constructor(
+    public readonly code: SellerWorkspaceErrorCode,
+    public readonly status?: number,
+    public readonly detail?: string,
+  ) {
     super(code);
     this.name = 'SellerWorkspaceApiError';
   }
@@ -126,25 +142,27 @@ function safeError(error: unknown): SellerWorkspaceApiError {
   if (!axios.isAxiosError(error)) return new SellerWorkspaceApiError('unknown');
 
   const status = error.response?.status;
-  const detail = error.response?.data?.detail;
-  if (status === 401) return new SellerWorkspaceApiError('authentication_required');
-  if (status === 403 && detail === 'Complete 2FA setup before connecting cloud storage') return new SellerWorkspaceApiError('two_factor_required');
-  if (status === 403) return new SellerWorkspaceApiError('active_seller_required');
-  if (status === 404) return new SellerWorkspaceApiError('not_found');
-  if (status === 429) return new SellerWorkspaceApiError('rate_limited');
+  const backendDetail: unknown = error.response?.data?.detail;
+  const detail = typeof backendDetail === 'string' ? backendDetail : undefined;
+  const mapped = (code: SellerWorkspaceErrorCode) => new SellerWorkspaceApiError(code, status, detail);
+  if (status === 401) return mapped('authentication_required');
+  if (status === 403 && detail === 'Complete 2FA setup before connecting cloud storage') return mapped('two_factor_required');
+  if (status === 403) return mapped('active_seller_required');
+  if (status === 404) return mapped('not_found');
+  if (status === 429) return mapped('rate_limited');
   if (status === 503 && detail === 'Connection verification outcome is unknown') {
-    return new SellerWorkspaceApiError('verification_outcome_unknown');
+    return mapped('verification_outcome_unknown');
   }
-  if (status === 503) return new SellerWorkspaceApiError('unavailable');
+  if (status === 503) return mapped('unavailable');
   if (status === 409 && detail === 'Connection authorization is unavailable') {
-    return new SellerWorkspaceApiError('authorization_expired');
+    return mapped('authorization_expired');
   }
-  if (status === 409) return new SellerWorkspaceApiError('conflict');
+  if (status === 409) return mapped('conflict');
   if (status === 422 && detail === 'Connection scope is invalid') {
-    return new SellerWorkspaceApiError('invalid_scope');
+    return mapped('invalid_scope');
   }
-  if (status === 422) return new SellerWorkspaceApiError('verification_failed');
-  return new SellerWorkspaceApiError('unknown');
+  if (status === 422) return mapped('verification_failed');
+  return mapped('unknown');
 }
 
 async function safely<T>(request: Promise<{ data: T }>): Promise<T> {
@@ -202,7 +220,7 @@ export function isStorageDiscoveryAvailable(capabilities: SellerWorkspaceCapabil
     && discovery?.enabled === true && discovery.status === 'available');
 }
 
-export interface R2ConnectionInput {
+export interface R2ConnectionInput extends ConnectionScopeInput {
   account_id:string; jurisdiction:'default'|'eu'|'us'|'fedramp'; bucket:string; prefix:string;
   access_key_id:string; secret_access_key:string; dedicated_bucket_readonly:true; expected_version:number;
 }

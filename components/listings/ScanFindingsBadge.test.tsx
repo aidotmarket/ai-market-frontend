@@ -10,7 +10,9 @@ const ATTESTATION = "On 2026-08-23 12:00:00 UTC, at the data owner's authorizati
 const DISCLAIMER = 'This is a seller-published, point-in-time scan of what the seller-designated source exposed through AIM Data on 2026-08-23; the source may change at any time, and this is not a continuing audit, warranty, compliance certification, or guarantee that data delivered later will match or remain available, accurate, complete, or unchanged. Verification does not assess data accuracy, legality, or fitness for any purpose.';
 const OBJECT_ID = 'a'.repeat(64) as VerificationObjectId;
 
-function makePublishedFindings(overrides: Partial<PublishedScanFindings> = {}): PublishedScanFindings {
+type V1Findings = Extract<PublishedScanFindings, { artifact_version: 'data-verification-public-artifact-v1' }>;
+
+function makePublishedFindings(overrides: Partial<V1Findings> = {}): V1Findings {
   return {
     publication_state: 'PUBLISHED',
     artifact_version: 'data-verification-public-artifact-v1',
@@ -116,7 +118,8 @@ describe('ScanFindingsBadge', () => {
       findings.execution.agent_version,
       findings.execution.connector_type,
       findings.execution.connector_version,
-      findings.execution.content_sha256_reference,
+      'Content SHA-256 reference',
+      'c'.repeat(12),
       findings.fingerprint_hash,
       findings.methods.row_count_algorithm_version,
       findings.methods.distinct_algorithm_version,
@@ -143,6 +146,47 @@ describe('ScanFindingsBadge', () => {
     expect(text).toContain('The listing says "A & B"; one object was scanned and one was skipped.');
     expect(text).toContain('<script>alert(1)</script>');
     expect(document.body.querySelector('script')).toBeNull();
+  });
+
+  it('preserves both hash rows for v1 artifacts', () => {
+    renderText(makePublishedFindings());
+    const fields = Object.fromEntries(Array.from(document.body.querySelectorAll('dt'), dt => [
+      dt.textContent, dt.nextElementSibling?.textContent,
+    ]));
+
+    expect(fields['Spec hash']).toBe('b'.repeat(64));
+    expect(fields['Content SHA-256 reference']).toBe('c'.repeat(12));
+  });
+
+  it('omits both hash rows for v2 artifacts without them', () => {
+    const { spec, execution, ...base } = makePublishedFindings();
+    const { hash: _hash, ...v2Spec } = spec;
+    const { content_sha256_reference: _reference, ...v2Execution } = execution;
+    const findings: PublishedScanFindings = {
+      ...base,
+      artifact_version: 'data-verification-public-artifact-v2',
+      spec: v2Spec,
+      execution: v2Execution,
+    };
+    const text = renderText(findings);
+
+    expect(text).toContain('data-verification-public-artifact-v2');
+    expect(text).toContain('Report provenance');
+    expect(text).not.toContain('Spec hash');
+    expect(text).not.toContain('Content SHA-256 reference');
+    expect(text).not.toMatch(/\b(?:undefined|null)\b/);
+  });
+
+  it.each(['', undefined, null, 0, false])('omits empty or non-string hashes (%s)', value => {
+    const findings = makePublishedFindings();
+    // Exercise malformed wire values without widening the supported string types.
+    Object.assign(findings.spec, { hash: value });
+    Object.assign(findings.execution, { content_sha256_reference: value });
+    const text = renderText(findings);
+
+    expect(text).not.toContain('Spec hash');
+    expect(text).not.toContain('Content SHA-256 reference');
+    expect(text).not.toMatch(/\b(?:undefined|null)\b/);
   });
 
   it('decodes only the five entities emitted by Python html.escape', () => {
@@ -244,7 +288,7 @@ describe('S1791 immutable server-supplied provenance', () => {
 describe.each(['PUBLISHED', 'NOT_PUBLISHED'] as const)('optional scan text in %s findings', publicationState => {
   const notice = 'allAI interpretation withheld because grounding validation failed';
 
-  function findings(overrides: Partial<PublishedScanFindings> = {}): SellerScanFindings {
+  function findings(overrides: Partial<V1Findings> = {}): SellerScanFindings {
     return {
       ...makePublishedFindings(overrides),
       publication_state: publicationState,
@@ -258,6 +302,45 @@ describe.each(['PUBLISHED', 'NOT_PUBLISHED'] as const)('optional scan text in %s
       dt.textContent, dt.nextElementSibling?.textContent ?? null,
     ]));
   }
+
+  it.each([
+    ['approx_distinct_count', 'Approximate distinct count'],
+    ['null_rate', 'Null rate'],
+  ] as const)('renders readable suppression for %s', (aggregate, label) => {
+    const artifact = findings();
+    artifact.deterministic_facts[0].columns[0][aggregate] = 'suppressed_low_occupancy';
+    const rendered = fields(artifact);
+
+    expect(rendered[label]).toBe('Hidden for privacy (fewer than 10)');
+    expect(document.body.textContent).not.toContain('suppressed_low_occupancy');
+    expect(document.body.textContent).not.toMatch(/\b(?:null|undefined)\b/);
+  });
+
+  it.each(['length_histogram', 'numeric_range_buckets'] as const)('omits absent %s and renders supplied aggregates', aggregate => {
+    const label = aggregate === 'length_histogram' ? 'Length histogram' : 'Numeric range buckets';
+    for (const value of [undefined, null, 'suppressed_low_occupancy', [], [1, 2, 3]] as (undefined | null | 'suppressed_low_occupancy' | number[])[]) {
+      const artifact = findings();
+      const column = artifact.deterministic_facts[0].columns[0];
+      if (value === undefined) {
+        // The wire payload can omit inapplicable aggregates despite the declared type.
+        Reflect.deleteProperty(column, aggregate);
+      } else {
+        column[aggregate] = Array.isArray(value) ? [...value] : value;
+      }
+      const input = JSON.stringify(artifact);
+      const rendered = fields(artifact);
+      if (value == null) {
+        expect(rendered).not.toHaveProperty(label);
+      } else {
+        expect(rendered[label]).toBe(value === 'suppressed_low_occupancy'
+          ? 'Hidden for privacy (fewer than 10)'
+          : JSON.stringify(value));
+      }
+      expect(document.body.textContent).not.toMatch(/\b(?:null|undefined)\b/);
+      expect(document.body.textContent).not.toContain('suppressed_low_occupancy');
+      expect(JSON.stringify(artifact)).toBe(input);
+    }
+  });
 
   it.each([
     ['both omitted', undefined, undefined],
@@ -278,9 +361,10 @@ describe.each(['PUBLISHED', 'NOT_PUBLISHED'] as const)('optional scan text in %s
     const rendered = fields(artifact);
 
     expect(rendered['Narrative state']).toBe('withheld_grounding_failed');
-    expect(rendered.Narrative).toBe('null');
-    expect(rendered['Listing claim comparison']).toBe('null');
+    expect(rendered).not.toHaveProperty('Narrative');
+    expect(rendered).not.toHaveProperty('Listing claim comparison');
     expect(rendered['Narrative notice']).toBe(notice);
+    expect(document.body.textContent).not.toMatch(/\b(?:null|undefined)\b/);
     expect(rendered['Publication state']).toBe(publicationState === 'PUBLISHED' ? 'PUBLISHED' : 'Private — not published');
     expect(rendered['Published timestamp (UTC)']).toBe(publicationState === 'PUBLISHED' ? artifact.published_at_utc : 'Not published');
     expect(rendered['Fingerprint hash']).toBe(artifact.fingerprint_hash);
@@ -306,8 +390,8 @@ describe.each(['PUBLISHED', 'NOT_PUBLISHED'] as const)('optional scan text in %s
     const artifact = findings();
     delete artifact[omitted];
     const rendered = fields(artifact);
-    expect(rendered.Narrative).toBe(omitted === 'narrative' ? 'null' : "The dataset's A & B source contains one readable object.");
-    expect(rendered['Listing claim comparison']).toBe(omitted === 'listing_claim_comparison' ? 'null' : 'The listing says "A & B"; one object was scanned and one was skipped.');
+    expect(rendered.Narrative).toBe(omitted === 'narrative' ? undefined : "The dataset's A & B source contains one readable object.");
+    expect(rendered['Listing claim comparison']).toBe(omitted === 'listing_claim_comparison' ? undefined : 'The listing says "A & B"; one object was scanned and one was skipped.');
     expect(rendered['Narrative state']).toBe('grounded');
   });
 
@@ -318,7 +402,7 @@ describe.each(['PUBLISHED', 'NOT_PUBLISHED'] as const)('optional scan text in %s
     const rendered = fields(artifact);
     expect(rendered.Narrative).toBe('<img src=x onerror="alert(1)"> & \' &lt;');
     expect(rendered['Listing claim comparison']).toBe(rendered.Narrative);
-    expect(rendered['Narrative notice']).toBe('null');
+    expect(rendered).not.toHaveProperty('Narrative notice');
     expect(document.body.querySelector('img, script')).toBeNull();
     expect(fields(findings({ narrative: '', listing_claim_comparison: '' })).Narrative).toBe('');
   });

@@ -36,22 +36,80 @@ it('refuses any store save before the draft has been read',async()=>{
  await expect(save({brief:'',title:'',description:'',category:'',tags:'',price:'',license:''})).rejects.toBeInstanceOf(DraftNotLoadedError);
  expect(api.saveListingDraft).not.toHaveBeenCalled();
 });
-it('merges a queued licence save over the latest listing write',async()=>{
+it('releases pending sample state when the first save assigns the empty draft an ID',async()=>{
+ let store!:ReturnType<typeof useSellerListingDraft>;
+ function Capture(){store=useSellerListingDraft();return null;}
+ api.saveListingDraft.mockImplementation(async content=>({draft_id:'first-draft',version:1,updated_at:'now',content}));
+ render(<SellerListingDraftProvider enabled sampleCapability><Capture/></SellerListingDraftProvider>);
+ await waitFor(()=>expect(store.loaded).toBe(true));
+ await act(async()=>{await store.saveSamples([0]);});
+ expect(store.draft?.draft_id).toBe('first-draft');expect(store.sampleIndices).toEqual([0]);
+ expect(store.selectionSavePending).toBe(false);expect(store.selectionSaveFailed).toBe(false);
+});
+it('persists a queued untick after the first save assigns a draft ID without retry',async()=>{
+ let store!:ReturnType<typeof useSellerListingDraft>;
+ function Capture(){store=useSellerListingDraft();return null;}
+ let finishFirst!:(value:unknown)=>void;
+ api.saveListingDraft.mockImplementationOnce(()=>new Promise(resolve=>{finishFirst=resolve;}))
+   .mockImplementationOnce(async content=>({draft_id:'first-draft',version:2,updated_at:'now',content}));
+ render(<SellerListingDraftProvider enabled sampleCapability><Capture/></SellerListingDraftProvider>);
+ await waitFor(()=>expect(store.loaded).toBe(true));
+ expect(store.draft).toBeNull();
+ let queued!:Promise<PromiseSettledResult<void>[]>;
+ await act(async()=>{
+   queued=Promise.allSettled([store.saveSamples([0]),store.saveSamples([])]);
+   await waitFor(()=>expect(api.saveListingDraft).toHaveBeenCalledOnce());
+ });
+ expect(api.saveListingDraft.mock.calls[0][1]).toBe(0);
+ expect(store.selectionSavePending).toBe(true);
+ await act(async()=>{finishFirst({draft_id:'first-draft',version:1,updated_at:'now',content:api.saveListingDraft.mock.calls[0][0]});await queued;});
+ expect((await queued).map(result=>result.status)).toEqual(['fulfilled','fulfilled']);
+ expect(api.saveListingDraft).toHaveBeenCalledTimes(2);
+ expect(api.saveListingDraft.mock.calls[1][1]).toBe(1);
+ expect(api.saveListingDraft.mock.calls[1][0]).toEqual({...api.saveListingDraft.mock.calls[0][0],sample_decision:'none',sample_object_indices:[]});
+ expect(store.draft?.draft_id).toBe('first-draft');expect(store.draft?.version).toBe(2);expect(store.sampleIndices).toEqual([]);
+ expect(store.selectionSavePending).toBe(false);expect(store.selectionSaveFailed).toBe(false);
+});
+it('merges a queued licence save over the latest same-draft listing write without retry',async()=>{
  const selection=createStandardSelection();
- const draft={version:4,content:{brief:'brief',title:'Offer',description:'Description',category:'Retail',tags:'retail',price:'25',license:'Research',sample_decision:'member_files' as const,sample_object_indices:[0]},updated_at:'2026-09-18T12:00:00Z'};
+ const draft={draft_id:'same-draft',version:4,content:{brief:'brief',title:'Offer',description:'Description',category:'Retail',tags:'retail',price:'25',license:'Research',sample_decision:'member_files' as const,sample_object_indices:[0]},updated_at:'2026-09-18T12:00:00Z'};
  api.readListingDraft.mockResolvedValue(draft);
  let finishFirst!:(value:unknown)=>void;
  api.saveListingDraft.mockImplementationOnce(()=>new Promise(resolve=>{finishFirst=resolve;}))
-   .mockImplementationOnce(async saved=>({version:6,content:saved,updated_at:draft.updated_at}));
+   .mockImplementationOnce(async saved=>({...draft,version:6,content:saved}));
  let store!:ReturnType<typeof useSellerListingDraft>;
  function Capture(){store=useSellerListingDraft();return null;}
  render(<SellerListingDraftProvider enabled sampleCapability><Capture/></SellerListingDraftProvider>);
  await waitFor(()=>expect(store.loaded).toBe(true));
  let first!:Promise<number>;let second!:Promise<void>;
- await act(async()=>{first=store.saveListingFields({...draft.content,title:'Updated title',description_source_version:null});second=store.saveLicenseSelection(selection);await waitFor(()=>expect(api.saveListingDraft).toHaveBeenCalledOnce());});
- await act(async()=>{finishFirst({version:5,content:{...draft.content,title:'Updated title',description_source_version:null},updated_at:draft.updated_at});await Promise.all([first,second]);});
+ let queued!:Promise<PromiseSettledResult<unknown>[]>;
+ await act(async()=>{first=store.saveListingFields({...draft.content,title:'Updated title',description_source_version:null});second=store.saveLicenseSelection(selection);queued=Promise.allSettled([first,second]);await waitFor(()=>expect(api.saveListingDraft).toHaveBeenCalledOnce());});
+ await act(async()=>{finishFirst({...draft,version:5,content:{...draft.content,title:'Updated title',description_source_version:null}});await queued;});
+ expect((await queued).map(result=>result.status)).toEqual(['fulfilled','fulfilled']);
+ expect(api.saveListingDraft).toHaveBeenCalledTimes(2);
  expect(api.saveListingDraft.mock.calls[1][0]).toEqual({...draft.content,title:'Updated title',description_source_version:null,license_selection:selection});
  expect(api.saveListingDraft.mock.calls[1][1]).toBe(5);
+});
+it.each([undefined,4])('uses the latest queued listing version unless an editor baseline is explicit (%s)',async baselineVersion=>{
+ const draft={draft_id:'same-draft',version:4,content:{brief:'',title:'Offer',description:'',category:'',tags:'',price:'',license:''},updated_at:'now'};
+ api.readListingDraft.mockResolvedValue(draft);
+ let finishFirst!:(value:unknown)=>void;
+ api.saveListingDraft.mockImplementationOnce(()=>new Promise(resolve=>{finishFirst=resolve;}))
+   .mockImplementationOnce(async(content,version)=>({...draft,content,version:version+1}));
+ let store!:ReturnType<typeof useSellerListingDraft>;
+ function Capture(){store=useSellerListingDraft();return null;}
+ render(<SellerListingDraftProvider enabled sampleCapability><Capture/></SellerListingDraftProvider>);
+ await waitFor(()=>expect(store.loaded).toBe(true));
+ let queued!:Promise<unknown[]>;
+ await act(async()=>{
+   queued=Promise.all([store.saveSamples([0]),store.saveListingFields({...draft.content,title:'Updated title'},baselineVersion)]);
+   await waitFor(()=>expect(api.saveListingDraft).toHaveBeenCalledOnce());
+ });
+ await act(async()=>{finishFirst({...draft,version:5,content:{...draft.content,sample_decision:'member_files',sample_object_indices:[0]}});await queued;});
+ expect(api.saveListingDraft).toHaveBeenCalledTimes(2);
+ expect(api.saveListingDraft.mock.calls[1][0]).toMatchObject({title:'Updated title',sample_decision:'member_files',sample_object_indices:[0]});
+ expect(api.saveListingDraft.mock.calls[1][1]).toBe(baselineVersion??5);
+ expect(store.selectionSavePending).toBe(false);expect(store.selectionSaveFailed).toBe(false);
 });
 it('restores the selected files from the account', async () => {
   api.readListingSource.mockResolvedValue({version:2, content, connection_current:true});
@@ -213,15 +271,15 @@ it('does not write the draft after a source save when no persisted sample select
   await screen.findByText(/File selection saved to your account/);
   expect(api.saveListingDraft).not.toHaveBeenCalled();
 });
-it('serializes an in-flight sample save and persists the latest visible ticks',async()=>{
-  const draft={version:4,content:{brief:'brief',title:'Offer',description:'Description',category:'Retail',tags:'retail',price:'25',license:'Research'},updated_at:'2026-09-18T12:00:00Z'};
+it('persists a rapid sample select then untick with the latest version and no retry or failure',async()=>{
+  const draft={draft_id:'same-draft',version:4,content:{brief:'brief',title:'Offer',description:'Description',category:'Retail',tags:'retail',price:'25',license:'Research'},updated_at:'2026-09-18T12:00:00Z'};
   api.readListingSource.mockResolvedValue({version:2,content,connection_current:true});api.readListingDraft.mockResolvedValue(draft);
   api.uploadWorkspaceSample.mockResolvedValue({index:0,size:42,sha256:'a'.repeat(64),binding:'size_only'});
   let finishFirst!:(value:unknown)=>void;
   api.saveListingDraft.mockImplementationOnce(()=>new Promise(resolve=>{finishFirst=resolve;}))
-    .mockImplementationOnce(async(saved)=>({version:6,content:saved,updated_at:draft.updated_at}))
-    .mockImplementationOnce(async(saved)=>({version:7,content:saved,updated_at:draft.updated_at}));
-  renderData([connection],true);
+    .mockImplementationOnce(async(saved)=>({...draft,version:6,content:saved}))
+    .mockImplementationOnce(async(saved)=>({...draft,version:7,content:saved}));
+  render(<SellerListingDraftProvider enabled sampleCapability><SavedWorkspaceData enabled connections={[connection]}/><DraftStatus/></SellerListingDraftProvider>);
   const tick=await screen.findByRole('checkbox',{name:/Offer example.csv.*free sample/});
   fireEvent.click(tick);
   fireEvent.change(screen.getByLabelText(/Upload sample example.csv/),{target:{files:[new File([new Uint8Array(42)],'example.csv')]}});
@@ -229,10 +287,14 @@ it('serializes an in-flight sample save and persists the latest visible ticks',a
   fireEvent.click(tick);
   expect((tick as HTMLInputElement).checked).toBe(false);
   expect(api.saveListingDraft).toHaveBeenCalledTimes(1);
-  await act(async()=>finishFirst({version:5,content:{...draft.content,sample_decision:'member_files',sample_object_indices:[0]},updated_at:draft.updated_at}));
+  expect(screen.getByTestId('draft-status').textContent).toMatch(/^pending/);
+  await act(async()=>finishFirst({...draft,version:5,content:{...draft.content,sample_decision:'member_files',sample_object_indices:[0]}}));
   await waitFor(()=>expect(api.saveListingDraft).toHaveBeenCalledTimes(2));
   expect(api.saveListingDraft.mock.calls[1][0]).toEqual({...draft.content,sample_decision:'none',sample_object_indices:[]});
   expect(api.saveListingDraft.mock.calls[1][1]).toBe(5);
+  await waitFor(()=>expect(screen.getByTestId('draft-status').textContent).toBe('ready'));
+  expect((tick as HTMLInputElement).checked).toBe(false);
+  expect(screen.queryByRole('alert')).toBeNull();
   fireEvent.click(tick);
   fireEvent.change(screen.getByLabelText(/Upload sample example.csv/),{target:{files:[new File([new Uint8Array(42)],'example.csv')]}});
   await waitFor(()=>expect(api.saveListingDraft).toHaveBeenCalledTimes(3));

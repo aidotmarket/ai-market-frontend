@@ -2,6 +2,7 @@
 
 import { useRef, useEffect, useState, useCallback } from 'react';
 import { useAllAI } from './AllAIContext';
+import OrderIssueReport, { SupportConversation } from './OrderIssueReport';
 import AllAIMessage from './AllAIMessage';
 import AllAIChatInput from './AllAIChatInput';
 import FieldProposalCard from './FieldProposalCard';
@@ -22,6 +23,9 @@ const MAX_HEIGHT = 600;
 
 export default function AllAIPanel() {
   const {
+    supportSession, leaveSupportConversation,
+    reportSession, separateViewReport, previousReports, selectReport,
+    leaveReportIssue,
     isOpen,
     close,
     messages,
@@ -64,7 +68,7 @@ export default function AllAIPanel() {
 
       const focusable = Array.from(
         panelRef.current.querySelectorAll<HTMLElement>(
-          'button:not([disabled]), a[href], textarea:not([disabled]), select:not([disabled]), [tabindex]:not([tabindex="-1"])'
+          'button:not([disabled]), input:not([disabled]), a[href], textarea:not([disabled]), select:not([disabled]), [tabindex]:not([tabindex="-1"])'
         )
       );
       if (focusable.length === 0) return;
@@ -290,6 +294,15 @@ export default function AllAIPanel() {
         </div>
       </div>
 
+      {previousReports?.filter(s => s.current()).map(s => <div key={s.visitId} className="px-5 text-sm text-white">
+        <p className="truncate">{s.getSnapshot().draft.description}</p>
+        <button onClick={() => selectReport?.(s)}>Return to retained order report</button>
+      </div>)}
+      {supportSession && supportSession.current() ? <div className="flex-1 overflow-y-auto p-5 text-white">
+        <button onClick={leaveSupportConversation}>Return to previous allAI conversation</button>
+        <SupportConversation session={supportSession} />
+      </div> : reportSession ? <OrderIssueReport key={reportSession.visitId} session={reportSession}
+        onLeave={leaveReportIssue} onSeparate={separateViewReport} /> : <>
       {/* Messages */}
       <div
         ref={scrollRef}
@@ -331,6 +344,7 @@ export default function AllAIPanel() {
         disabled={isStreaming || (anonymousSurfaceActive && !anonymousAvailable)}
       />
 
+      </>}
       {/* Resize handle (desktop only) */}
       {!isMobile && (
         <div

@@ -1,5 +1,25 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { fetchDataRequest, fetchDataRequests, fetchPublicListing, fetchPublicListings, fetchFeaturedFeed, fetchListingVersions, fetchShareMetadata } from './api';
+import { fetchDataRequest, fetchDataRequests, fetchPublicListing, fetchPublicListingDocuments, fetchPublicListings, fetchFeaturedFeed, fetchListingVersions, fetchShareMetadata } from './api';
+import {documentFixture} from '@/tests/listingDocumentsFixture';
+
+describe('public listing document freshness', () => {
+  afterEach(() => vi.unstubAllGlobals());
+  it('reads published documents uncached and drops withdrawn or identity-hidden documents on the next read', async () => {
+    const documents = [documentFixture(), documentFixture('data_sheet_pdf')];
+    const fetch = vi.fn().mockResolvedValueOnce({ok: true, json: async () => documents}).mockResolvedValueOnce({ok: true, json: async () => []});
+    vi.stubGlobal('fetch', fetch);
+    expect(await fetchPublicListingDocuments('listing id')).toEqual(documents);
+    expect(await fetchPublicListingDocuments('listing id')).toEqual([]);
+    for (const [url, options] of fetch.mock.calls) {
+      expect(url).toContain('/api/v1/public/listings/listing%20id/documents');
+      expect(options).toEqual({cache: 'no-store'});
+    }
+  });
+  it.each([404, 410, 503])('omits documents on an unavailable %i response', async status => {
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue({ok: false, status}));
+    expect(await fetchPublicListingDocuments('listing')).toEqual([]);
+  });
+});
 
 describe('fetchPublicListing', () => {
   afterEach(() => {
@@ -94,4 +114,16 @@ describe('narrow homepage mutable projection reads', () => {
     expect(fetchMock).toHaveBeenNthCalledWith(3, expect.stringContaining('/listings/ordinary/versions'), {next: {revalidate: 10}});
     expect(fetchMock).toHaveBeenNthCalledWith(4, expect.stringContaining('/public/share/ordinary'), {cache: 'no-store'});
   });
+});
+
+it('validates actual correction bytes and adjacent identity before detail and metadata consumers receive them',async()=>{
+ const {default:wire}=await import('@/tests/fixtures/s1922-backend-wire.json');
+ const c=wire.public[2].corrected;
+ const listing={id:c.listing_id,approved_presentation:c,license:c.license_label,license_display:{license_label:c.license_label,provenance:c.provenance,correction_id:c.correction_id,correction_digest:c.correction_digest}};
+ const fetchMock=vi.fn().mockResolvedValue({ok:true,json:async()=>listing});vi.stubGlobal('fetch',fetchMock);
+ expect(await fetchPublicListing('synthetic')).toEqual(listing);
+ expect(fetchMock).toHaveBeenLastCalledWith(expect.stringContaining('/public/listings/synthetic'),{cache:'no-store'});
+ fetchMock.mockResolvedValue({ok:true,json:async()=>({...listing,approved_presentation:{...c,rendered_html:'tampered'}})});
+ await expect(fetchPublicListing('synthetic')).rejects.toThrow();
+ vi.unstubAllGlobals();
 });

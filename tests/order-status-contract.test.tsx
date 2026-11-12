@@ -17,13 +17,14 @@ const ports = vi.hoisted(() => ({
   orders: vi.fn(), order: vi.fn(), access: vi.fn(), transactions: vi.fn(),
   refused: vi.fn(() => { throw new Error('Unexpected operation'); }),
 }));
+vi.mock('@/components/allai/AllAIContext', () => ({ useAllAI: () => ({ openReportIssue: vi.fn() }) }));
 vi.mock('@/store/auth', () => ({ useAuthStore: Object.assign((select?: (s: typeof ports.state) => unknown) => select ? select(ports.state) : ports.state, { getState: () => ports.state, subscribe: (_listener: (state: typeof ports.state) => void) => () => {} }) }));
 vi.mock('@/api/capabilities', () => ({ getCapabilities: async () => ({ seller: { effective_status: 'not_requested', missing_steps: [] } }), requestSellerCapability: ports.refused }));
 vi.mock('@/api/connect', () => ({ getConnectStatus: ports.refused, getConnectOnboarding: ports.refused, isConnectOnboardingTwoFactorRequired: ports.refused, redirectToConnectOnboarding: ports.refused }));
 vi.mock('@/api/auth', () => ({ setup2FA: ports.refused, verify2FASetup: ports.refused, SSO_MANAGED_2FA_MESSAGE: 'Synthetic' }));
 vi.mock('@/api/seller', () => ({ getSellerStats: ports.refused }));
 vi.mock('@/api/listings', () => ({ getMyListings: ports.refused }));
-vi.mock('@/lib/two-factor-policy', () => ({ accountReauthMethod: () => 'password', setupRestriction: () => null, setupRefusal: ports.refused, sellerSecuritySatisfied: () => true }));
+vi.mock('@/lib/two-factor-policy', () => ({ setupRestriction: () => null, setupRefusal: ports.refused, sellerSecuritySatisfied: () => true }));
 vi.mock('@/components/CompanyAuthenticator', () => ({ companyEnrollmentOffered: () => false }));
 vi.mock('@/components/onboarding/SellerSetupProgressBar', () => ({ notifyCapabilitiesChanged: ports.refused }));
 vi.mock('@/app/dashboard/settings/ReauthModal', () => ({ default: () => null }));
@@ -45,6 +46,9 @@ vi.mock('@/components/ListingLicenseDisclosure', () => ({ default: () => null })
 vi.mock('@/lib/checkout-domain', () => ({ checkoutDomainEnabled: () => ports.domainEnabled, checkoutBlock: ports.refused, checkoutDestination: ports.refused, checkoutErrorCode: ports.refused, checkoutOutcome: ports.refused, checkoutWebPath: ports.refused }));
 vi.mock('@/lib/checkout-replay', () => ({ checkoutReplayKey: (...args: unknown[]) => JSON.stringify(args), readCheckoutReplay: ports.readReplay, saveCheckoutReplay: ports.saveReplay, clearCheckoutReplay: ports.refused }));
 vi.mock('@/components/orders/OrderVersionAccessSummary', () => ({ default: () => null }));
+// Purchased evidence has its own component/API contract tests. Status cases
+// isolate that child just like delivery children and forbid unrelated transport.
+vi.mock('@/components/orders/PurchasedLicenseDisplay', () => ({ default: () => null }));
 vi.mock('@/components/orders/GatewayDeliverySection', () => ({ default: () => null }));
 vi.mock('@/components/orders/WorkspaceDownload', () => ({ default: ports.refused }));
 vi.mock('@/components/orders/WorkspacePurchaseRecovery', () => ({ default: ports.refused }));

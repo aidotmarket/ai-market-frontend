@@ -21,6 +21,7 @@ interface AuthState {
   isLoading: boolean;
   hydrated: boolean;
   pendingTwoFactor: PendingTwoFactor | null;
+  rotateSession: (tokenRes: TokenResponse) => Promise<void>;
   completeSession: (tokenRes: TokenResponse) => Promise<void>;
   login: (email: string, password: string) => Promise<AuthFlowResult>;
   register: (email: string, password: string, firstName?: string, lastName?: string, role?: "buyer" | "seller" | "model_provider" | "admin", companyName?: string) => Promise<void>;
@@ -119,6 +120,15 @@ export const useAuthStore = create<AuthState>((set, get) => {
     isLoading: false,
     hydrated: false,
     pendingTwoFactor: null,
+
+    rotateSession: async (tokenRes) => {
+      const owner = authSessionOwner();
+      // Keep the initiating session and install its new generation before /me.
+      set({ token: tokenRes.access_token });
+      const user = await authApi.getMe();
+      assertAuthSessionOwner(owner);
+      set({ user });
+    },
 
     completeSession: async (tokenRes) => {
       await completeOwnedSession(tokenRes, authSessionOwner());

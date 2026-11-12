@@ -1,6 +1,7 @@
 'use client';
 import { useEffect, useRef, useState } from 'react';
 import axios from 'axios';
+import ReactMarkdown from 'react-markdown';
 import {useListingFlow,StepNext} from './GuidedListingFlow';
 import {reviewRefusal} from './listingSteps';
 import ApprovedListingPreview from '@/components/ApprovedListingPreview';
@@ -41,15 +42,41 @@ export default function SellerReview({active, enabled}: {active: boolean; enable
     {selectionBlocked&&<p role="alert" className="rounded-lg bg-amber-50 p-4 text-sm text-amber-900">{draftStatus.selectionSavePending?'Review is disabled while your file choice is being saved.':'Review is disabled because your last file choice was not saved. Retry that choice before reviewing.'}</p>}
     {loading && <p role="status" className="text-sm text-gray-600">Loading your saved listing and file selection…</p>}
     {error && <p role="alert" className="rounded-lg bg-amber-50 p-4 text-sm text-amber-900">{error}</p>}
-    {review && <>{review.source_page && <ReviewFiles key={`files:${review.review_hash}`} review={review} active={active} onReady={setFilesReady} />}{review.sample_decision==='member_files'&&<SampleReview review={review}/>}<LicenseReview review={review}/><section aria-label="Saved listing preview" className="space-y-4 rounded-xl border border-indigo-200 bg-indigo-50/40 p-4 sm:p-6"><p className="text-sm text-gray-600">This review uses your saved listing fields. Your brief, conversation and unaccepted suggestions are private.</p><ApprovedListingPreview key={review.render_hash} onLoad={() => setLoadedRender(review.render_hash)} title="Saved listing buyers would see" html={review.rendered_html} /></section>{review.missing_fields.length > 0 && <p role="status" className="rounded-lg bg-amber-50 p-4 text-sm text-amber-900">{reviewRefusal(review)}</p>}<p className="text-sm text-gray-600">Publishing uses the exact saved review shown above.</p>{review.approval_available && review.missing_fields.length === 0 && <SellerApproval key={`approval:${review.review_hash}`} review={review} active={active} rendered={filesReady && loadedRender === review.render_hash} disabled={descriptionBlocked||selectionBlocked||(draftStatus.available&&JSON.stringify(review.sample_object_indices??[])!==JSON.stringify(draftStatus.sampleIndices))} />}</>}
+    {review && <><ReviewFields review={review}/>{review.source_page && <ReviewFiles key={`files:${review.review_hash}`} review={review} active={active} onReady={setFilesReady} />}{review.sample_decision==='member_files'&&<SampleReview review={review}/>}<section aria-label="Saved listing preview" className="space-y-4 rounded-xl border border-indigo-200 bg-indigo-50/40 p-4 sm:p-6"><p className="text-sm text-gray-600">This review uses your saved listing fields. Your brief, conversation and unaccepted suggestions are private.</p><ApprovedListingPreview key={review.render_hash} onLoad={() => setLoadedRender(review.render_hash)} title="Saved original seller review" html={review.rendered_html} /></section>{review.missing_fields.length > 0 && <p role="status" className="rounded-lg bg-amber-50 p-4 text-sm text-amber-900">{reviewRefusal(review)}</p>}<p className="text-sm text-gray-600">Approval retains this original review and its signing hashes. The current public display is separate and may carry a platform licence correction.</p>{review.approval_available && review.missing_fields.length === 0 && <SellerApproval key={`approval:${review.review_hash}`} review={review} active={active} rendered={filesReady && loadedRender === review.render_hash} disabled={descriptionBlocked||selectionBlocked||(draftStatus.available&&JSON.stringify(review.sample_object_indices??[])!==JSON.stringify(draftStatus.sampleIndices))} />}</>}
+    {flow?.publication?.publication && <a className="block text-sm text-indigo-700 underline" href={`/listings/${encodeURIComponent(flow.publication.publication.slug)}`}>View separately attributed current public display</a>}
     <StepNext from="review" />
+  </section>;
+}
+
+// Parse HTML in an inert document, then unwrap Markdown into text only.
+function PlainDescription({description}:{description:string}) {
+  const [text,setText]=useState('');
+  useEffect(()=>{
+    const document=new DOMParser().parseFromString(description,'text/html');
+    document.querySelectorAll('script,style,template').forEach(node=>node.remove());
+    document.querySelectorAll('p,div,li,h1,h2,h3,h4,h5,h6,br').forEach(node=>node.append('\n'));
+    setText(document.body.textContent??'');
+  },[description]);
+  return <div className="whitespace-pre-wrap break-words text-sm text-gray-700"><ReactMarkdown allowedElements={[]} unwrapDisallowed>{text}</ReactMarkdown></div>;
+}
+
+function ReviewFields({review}:{review:ListingReview}) {
+  const fields=review.fields;
+  const price=fields?.price && /^\d+(\.\d{1,2})?$/.test(fields.price) && Number.isFinite(Number(fields.price))
+    ? new Intl.NumberFormat('en-US',{style:'currency',currency:'USD'}).format(Number(fields.price)) : null;
+  return <section aria-label="What you're confirming" className="space-y-4 rounded-xl border border-gray-200 bg-white p-5">
+    <h3 className="font-semibold text-gray-900">What you're confirming</h3>
+    <h4 className="break-words text-lg font-semibold text-gray-900">{fields?.title || 'No title set'}</h4>
+    {fields?.description ? <PlainDescription description={fields.description}/> : <p>No description set</p>}
+    <p>Price: {price ?? 'No price set'}</p>
+    {review.license_selection ? <LicenseReview review={review}/> : <p>Licence: {fields?.license || 'No licence set'}</p>}
   </section>;
 }
 
 function LicenseReview({review}:{review:ListingReview}) {
   const selection=review.license_selection;
   if(!selection)return null;
-  return <section aria-label="Licence selection in this review" className="rounded-xl border border-gray-200 bg-white p-5"><h3 className="font-semibold text-gray-900">Licence choice</h3><p className="mt-2 text-sm text-gray-700">{selection.kind==='standard'?'Standard (recommended)':'My own licence'} · AI/ML training {selection.ai_training?'allowed':'not allowed'}</p>{selection.kind==='custom'&&<p className="mt-3 rounded-lg bg-amber-50 p-3 text-sm text-amber-900">{CUSTOM_NOTICE}</p>}<details className="mt-3"><summary className="cursor-pointer text-sm text-indigo-700">Review licence summary</summary><p className="mt-2 whitespace-pre-line text-sm text-gray-700">{selection.kind==='standard'?STANDARD_SELLER_SUMMARY:CUSTOM_NOTICE}</p></details><p className="mt-3 break-all text-xs text-gray-500">Licence hash: {selection.license_sha256}</p></section>;
+  return <section aria-label="Licence selection in this review" className="rounded-xl border border-gray-200 bg-white p-5"><h3 className="font-semibold text-gray-900">Licence choice</h3><p className="mt-2 text-sm text-gray-700">{selection.kind==='standard'?'Standard (recommended)':'My own licence'} · AI/ML training {selection.ai_training?'allowed':'not allowed'}</p>{selection.kind==='custom'&&<p className="mt-3 rounded-lg bg-amber-50 p-3 text-sm text-amber-900">{CUSTOM_NOTICE}</p>}<details className="mt-3"><summary className="cursor-pointer text-sm text-indigo-700">Review licence summary</summary><p className="mt-2 whitespace-pre-line text-sm text-gray-700">{selection.kind==='standard'?STANDARD_SELLER_SUMMARY:CUSTOM_NOTICE}</p></details></section>;
 }
 
 function SampleReview({review}:{review:ListingReview}) {

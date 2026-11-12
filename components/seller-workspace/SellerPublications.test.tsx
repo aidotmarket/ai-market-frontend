@@ -3,6 +3,9 @@ import {cleanup,fireEvent,render,screen} from '@testing-library/react';
 import {afterEach,beforeEach,expect,it,vi} from 'vitest';
 import SellerPublications from './SellerPublications';
 import {fetchSummaryPreview} from '@/lib/api';
+import {readListingDocuments} from '@/api/listingDocuments';
+import {documentsFixture} from '@/tests/listingDocumentsFixture';
+vi.mock('@/api/listingDocuments',()=>({readListingDocuments:vi.fn()}));
 import {preview} from '@/tests/summaryFixture';
 vi.mock('@/lib/api',()=>({fetchSummaryPreview:vi.fn()}));
 const api=vi.hoisted(()=>({readPublicationPage:vi.fn()}));vi.mock('@/api/sellerListingPublication',()=>api);
@@ -44,4 +47,30 @@ it('fetches a summary only after its details opens',async()=>{
   expect(fetchSummaryPreview).toHaveBeenCalledTimes(1);
   details.open=false; fireEvent(details,new Event('toggle'));
   expect(screen.queryByRole('region',{name:'Review At a glance'})).toBeNull();
+});
+
+
+it('fetches documents on first open and preserves unsaved edits across collapse and reopen', async()=>{
+  api.readPublicationPage.mockResolvedValue({page:0,has_more:false,items:[{id:'one',listing_id:'listing',title:'Retail',slug:'retail',status:'published',is_listed:true,published_at:'2026-09-08T00:00:00Z'}]});
+  vi.mocked(readListingDocuments).mockResolvedValue(documentsFixture());
+  render(<SellerPublications active enabled/>);
+  const label=await screen.findByText('Manage documents');
+  expect(readListingDocuments).not.toHaveBeenCalled();
+  const details=label.closest('details')!;
+  details.open=true; fireEvent(details,new Event('toggle'));
+  await screen.findByRole('region',{name:'Technical documentation'});
+  expect(readListingDocuments).toHaveBeenCalledTimes(1);
+  const body=screen.getByRole('textbox',{name:'Technical document'}) as HTMLTextAreaElement;
+  const pdfTitle=screen.getByRole('textbox',{name:'Data sheet title'}) as HTMLInputElement;
+  fireEvent.change(body,{target:{value:'Unsaved technical documentation'}});
+  fireEvent.change(pdfTitle,{target:{value:'Unsaved PDF title'}});
+  details.open=false; fireEvent(details,new Event('toggle'));
+  expect(body.isConnected).toBe(true);
+  expect(pdfTitle.isConnected).toBe(true);
+  details.open=true; fireEvent(details,new Event('toggle'));
+  expect(screen.getByRole('textbox',{name:'Technical document'})).toBe(body);
+  expect(body.value).toBe('Unsaved technical documentation');
+  expect(screen.getByRole('textbox',{name:'Data sheet title'})).toBe(pdfTitle);
+  expect(pdfTitle.value).toBe('Unsaved PDF title');
+  expect(readListingDocuments).toHaveBeenCalledTimes(1);
 });

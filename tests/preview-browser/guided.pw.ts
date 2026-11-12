@@ -7,7 +7,8 @@ import type {ApprovalReceipt,ListingReview} from '../../api/sellerListingReview'
 import type {PublicationReceipt} from '../../api/sellerListingPublication';
 const hash=(text:string)=>createHash('sha256').update(text).digest('hex');
 
-for(const width of [1280,390])test(`${width}px synthetic seller publishes using checklist and Next`,async({page})=>{
+for(const presentation_version of ['seller-listing-review-v2','seller-listing-review-v3','seller-listing-review-v4'])
+for(const width of [1280,390])test(`${width}px ${presentation_version} synthetic seller publishes using checklist and Next`,async({page})=>{
  let draft:SavedListingDraft|null=null,source:SourceRead|null=null,approval:ApprovalReceipt|null=null,publication:PublicationReceipt|null=null;
  const calls:{path:string;method:string;body:unknown}[]=[];const errors:string[]=[];page.on('pageerror',e=>errors.push(e.message));page.on('console',m=>{if(m.type()==='error'&&m.text().includes('same key'))errors.push(m.text());});
  await page.setViewportSize({width,height:1000});
@@ -18,7 +19,7 @@ for(const width of [1280,390])test(`${width}px synthetic seller publishes using 
   const render_hash=hash(rendered_html),review_hash=hash(JSON.stringify([draft!.version,source!.version,fields]));
   const missing_fields=['title','description','category','tags','price'].filter(k=>!fields[k as keyof typeof fields]);
   const source_hash='a'.repeat(64);
-  return {fields,draft_version:draft!.version,source_version:source!.version,presentation_version:'seller-listing-review-v2',review_hash,missing_fields,approval_available:!missing_fields.length,
+  return {fields,draft_version:draft!.version,source_version:source!.version,presentation_version,review_hash,missing_fields,approval_available:!missing_fields.length,
    rendered_html,render_hash,confirmation_version:'seller-listing-confirmation-v3',confirmation_statements:{ownership_confirmed:'I own the rights.',privacy_confirmed:'The files respect privacy.',price_confirmed:'I confirm the price.',license_confirmed:'I confirm this licence.',covenant_authority_confirmed:'I confirm covenant and authority.',public_disclosure_confirmed:'I confirm the public text.'},license_selection:fields.license_selection,approval,sample_decision:'none',sample_object_indices:[],sample_status:'not_selected',source_hash,
    source_page:{review_hash,source_version:source!.version,source_hash,offset:0,page_size:100,total_count:source!.content.objects.length,total_size_bytes:2048,files:source!.content.objects,next_cursor:null}};
  }

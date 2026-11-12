@@ -1,0 +1,5 @@
+# Runtime dotenv fallback must not enter the delivered context.
+.env.production.local
+.env.local
+.env.production
+.env

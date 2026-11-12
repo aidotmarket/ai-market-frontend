@@ -1,6 +1,7 @@
 import Link from 'next/link';
-import ReactMarkdown from 'react-markdown';
-import rehypeSanitize from 'rehype-sanitize';
+import BackendListingHtml from '@/components/BackendListingHtml';
+import ListingDocumentation from '@/components/listing/ListingDocumentation';
+import type {ListingDocument} from '@/types/listingDocuments';
 import { formatPublishedDate } from '@/lib/format';
 import type { ListingDetail, PublicSourceReference } from '@/types';
 
@@ -33,13 +34,14 @@ function validReference(listing: ListingDetail): PublicSourceReference | null {
   return reference;
 }
 
-export default function PublicSourceReferencePage({ listing, emitJsonLd }: { listing: ListingDetail; emitJsonLd: boolean }) {
+export default function PublicSourceReferencePage({ listing, emitJsonLd, documents = [] }: { listing: ListingDetail; emitJsonLd: boolean; documents?: ListingDocument[] }) {
   const reference = validReference(listing);
   const jsonld = reference && emitJsonLd && !listing.noindex ? {
     '@context': 'https://schema.org', '@type': 'Dataset',
     name: listing.title, description: listing.description,
     url: `https://ai.market/listings/${listing.slug}`,
     publisher: { '@type': 'Organization', name: reference.publisher },
+    creator: { '@type': 'Organization', name: reference.publisher },
     license: reference.license_url, isAccessibleForFree: true,
     sameAs: reference.metadata_url,
   } : null;
@@ -60,14 +62,9 @@ export default function PublicSourceReferencePage({ listing, emitJsonLd }: { lis
               <span>{listing.view_count} views</span>
             </div>
             <div className="prose prose-sm max-w-none">
-              <ReactMarkdown rehypePlugins={[rehypeSanitize]}
-                urlTransform={url => safeExternalHttps(url) ? url : ''}
-                components={{
-                  a: ({ children, href }) => <a href={href} target="_blank" rel="noopener noreferrer">{children}</a>,
-                  img: () => null,
-                }}
-              >{listing.description}</ReactMarkdown>
+              <BackendListingHtml description={listing.description} descriptionHtml={listing.description_html}/>
             </div>
+            <ListingDocumentation documents={documents}/>
           </> : <p role="status" className="rounded-lg bg-gray-50 p-4 text-sm text-gray-700">Public source reference unavailable. The source details could not be verified.</p>}
         </div>
         {reference && <aside className="rounded-xl border border-gray-200 p-6 space-y-4 self-start">
