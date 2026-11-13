@@ -59,6 +59,7 @@ function OwnerListings({ userId }: { userId: string }) {
   const [actionLoading, setActionLoading] = useState<string | null>(null);
   const [deleteConfirm, setDeleteConfirm] = useState<string | null>(null);
   const [workspaceHref, setWorkspaceHref] = useState<string | undefined>();
+  const [setupHref, setSetupHref] = useState<string | undefined>();
   const [payoutsStatus, setPayoutsStatus] = useState<'unknown' | 'enabled' | 'disabled'>('unknown');
   const router = useRouter();
   const { toast } = useToast();
@@ -128,6 +129,7 @@ function OwnerListings({ userId }: { userId: string }) {
         !listings.some(listing => listing.id === id)) return;
     mutating.current = true;
     setWorkspaceHref(undefined);
+    setSetupHref(undefined);
     setActionLoading(id);
     try {
       await (kind === 'delete' ? deleteListing(id) : unpublishListing(id));
@@ -140,6 +142,7 @@ function OwnerListings({ userId }: { userId: string }) {
         const failure = formatListingActionError(err);
         toast(failure.message, 'error');
         setWorkspaceHref(failure.workspaceHref);
+        setSetupHref(failure.setupHref);
       }
     } finally {
       // Refresh increments the request sequence; only this mounted principal may
@@ -164,6 +167,9 @@ function OwnerListings({ userId }: { userId: string }) {
   return (
     <div className="space-y-6">
       <TermsGatePrompt />
+      {setupHref && <p role="status" className="text-sm text-gray-700">
+        <Link href={setupHref} className="font-semibold text-indigo-700 underline">Finish seller setup</Link>
+      </p>}
       {workspaceHref && <p role="status" className="text-sm text-gray-700">
         <Link href={workspaceHref} className="font-semibold text-indigo-700 underline">Manage this listing in Seller Workspace.</Link>
       </p>}
