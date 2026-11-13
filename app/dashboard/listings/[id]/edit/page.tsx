@@ -71,6 +71,12 @@ export default function EditListingPage() {
   const [savedGateway, setSavedGateway] = useState<SellerGateway | null>(null);
   const [sourceFiles, setSourceFiles] = useState<GatewayFile[]>([]);
   const [publishError, setPublishError] = useState<string | null>(null);
+  const [actionError, setActionError] = useState<ReturnType<typeof formatListingActionError> | null>(null);
+  const showActionError = (error: unknown) => {
+    const failure = formatListingActionError(error);
+    setActionError(failure);
+    toast(failure.message, 'error');
+  };
   const [publishBlockers, setPublishBlockers] = useState<GatewayBlocker[]>([]);
   const onSourceDirty = useCallback(() => setSavedGatewaySourceListingId(null), []);
   const onSourceSaved = useCallback((gateway: SellerGateway, files: GatewayFile[]) => {
@@ -137,6 +143,7 @@ export default function EditListingPage() {
 
   const handleSave = async () => {
     if (descriptionTooLong(data.description)) return;
+    setActionError(null);
     setSaving(true);
     const submittedFormat = data.data_format;
     try {
@@ -157,20 +164,21 @@ export default function EditListingPage() {
       setSummaryRevision(value => value + 1);
       toast('Listing saved', 'success');
     } catch (err: unknown) {
-      toast(formatListingActionError(err).message, 'error');
+      showActionError(err);
     } finally {
       setSaving(false);
     }
   };
 
   const handleUnpublish = async () => {
+    setActionError(null);
     setSaving(true);
     try {
       await unpublishListing(id);
       toast('Listing unpublished', 'success');
       setData((prev) => ({ ...prev, status: 'unlisted' }));
-    } catch (err: any) {
-      toast(err.response?.data?.detail || 'Failed to unpublish', 'error');
+    } catch (err: unknown) {
+      showActionError(err);
     } finally {
       setSaving(false);
     }
@@ -191,6 +199,7 @@ export default function EditListingPage() {
   };
 
   const handlePublish = async () => {
+    setActionError(null);
     setSaving(true);
     setPublishError(null); setPublishBlockers([]);
     try {
@@ -210,7 +219,7 @@ export default function EditListingPage() {
         setPublishBlockers(Array.isArray(blockers) ? blockers : []);
       } else if (code === 'gateway_offline') setPublishError('The gateway is offline. Reconnect it before publishing.');
       else if (code === 'listing_not_draft') setPublishError('Only a draft listing can be published. Refresh this listing.');
-      else toast(err.response?.data?.detail || 'Failed to publish', 'error');
+      else showActionError(err);
     } finally {
       setSaving(false);
     }
@@ -226,6 +235,13 @@ export default function EditListingPage() {
 
   return (
     <div className="max-w-3xl mx-auto space-y-6">
+      {(actionError?.setupHref || actionError?.workspaceHref) && (
+        <p role="status" className="text-sm text-gray-700">
+          <Link href={actionError.setupHref ?? actionError.workspaceHref!} className="font-semibold text-indigo-700 underline">
+            {actionError.setupHref ? 'Finish seller setup' : 'Manage this listing in Seller Workspace.'}
+          </Link>
+        </p>
+      )}
       <div className="flex items-center justify-between">
         <div>
           <h1 className="text-2xl font-bold text-gray-900">Edit Listing</h1>

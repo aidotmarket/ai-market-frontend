@@ -453,6 +453,14 @@ it('dashboard_unpublish_top_level_capability_is_sentence', async () => {
     .toBe('/dashboard/seller-workspace');
 });
 
+it('shows readable unpublish readiness guidance with a seller setup link', async () => {
+  expect(await rejectListingAction({ detail: {
+    error: 'capability_required', capability: 'seller', persisted_status: 'active',
+    missing_steps: ['stripe_payouts_live'], reason: 'readiness_gap',
+  } })).toBe('Finish seller setup first: Stripe payouts, then try again.');
+  expect(screen.getByRole('link', { name: 'Finish seller setup' }).getAttribute('href')).toBe('/dashboard');
+});
+
 it('dashboard_unpublish_string_detail', async () => {
   expect(await rejectListingAction({ detail: 'This listing has active orders.' }))
     .toBe('This listing has active orders.');

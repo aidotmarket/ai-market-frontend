@@ -3,6 +3,7 @@
 import { act, cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import EditListingPage from './page';
+import { LISTING_ACTION_FALLBACK } from '@/lib/listing-action-error';
 
 const routerPush = vi.hoisted(() => vi.fn());
 const router = vi.hoisted(() => ({ push: routerPush }));
@@ -73,6 +74,39 @@ describe('EditListingPage', () => {
     await waitFor(()=>expect(toast).toHaveBeenCalledWith(message,'error'));
     expect(listingsApi.updateListing).toHaveBeenCalledOnce();
     expect((screen.getByLabelText('Description') as HTMLTextAreaElement).value).toBe('Amended description');
+  });
+
+  it.each(['Unpublish', 'Publish', 'Save Draft'])('maps %s readiness failures to a readable toast and setup link', async action => {
+    const error = { response: { data: { detail: {
+      error: 'capability_required', capability: 'seller', persisted_status: 'active',
+      missing_steps: ['stripe_payouts_live'], reason: 'readiness_gap',
+    } } } };
+    listingsApi.getListing.mockResolvedValue({ ...baseListing, status: action === 'Publish' ? 'unlisted' : 'published' });
+    const mutation = action === 'Unpublish' ? listingsApi.unpublishListing
+      : action === 'Publish' ? listingsApi.publishListing : listingsApi.updateListing;
+    mutation.mockRejectedValueOnce(error);
+    render(<EditListingPage />);
+    fireEvent.click(await screen.findByRole('button', { name: action }));
+    await waitFor(() => expect(toast).toHaveBeenCalledExactlyOnceWith(
+      'Finish seller setup first: Stripe payouts, then try again.', 'error',
+    ));
+    expect(screen.getByRole('link', { name: 'Finish seller setup' }).getAttribute('href')).toBe('/dashboard');
+    expect(screen.getByText(action === 'Publish' ? 'unlisted' : 'published')).toBeTruthy();
+    expect(screen.getByRole('button', { name: action }).hasAttribute('disabled')).toBe(false);
+    expect(mutation).toHaveBeenCalledOnce();
+  });
+
+  it.each(['Unpublish', 'Publish'])('keeps unknown %s response objects out of toast text', async action => {
+    const error = { response: { data: { detail: { error: 'unknown_backend_code', diagnostic: 'private details' } } } };
+    const log = vi.spyOn(console, 'error').mockImplementation(() => {});
+    try {
+      listingsApi.getListing.mockResolvedValue({ ...baseListing, status: action === 'Publish' ? 'unlisted' : 'published' });
+      (action === 'Unpublish' ? listingsApi.unpublishListing : listingsApi.publishListing).mockRejectedValueOnce(error);
+      render(<EditListingPage />);
+      fireEvent.click(await screen.findByRole('button', { name: action }));
+      await waitFor(() => expect(toast).toHaveBeenCalledExactlyOnceWith(LISTING_ACTION_FALLBACK, 'error'));
+      expect(log).toHaveBeenCalledExactlyOnceWith('Listing action failed', error);
+    } finally { log.mockRestore(); }
   });
 
   it('shows Publish and not Unpublish for unlisted listings, then marks publish success locally', async () => {
