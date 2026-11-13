@@ -37,6 +37,7 @@ export function PendingProfileChanges() {
     {pending.length>0 && <p>Email changes last read as pending are shown below. Confirm or cancel explicitly after a current read. Old mailbox proof is not restored by cancellation.</p>}
     {view.readAt && <p>Last read: {new Date(view.readAt).toLocaleString()}. Read again for current readiness.</p>}
     <button disabled={view.busy} onClick={()=>void controller.read()}>Read current changes</button>
+    {view.error && <button disabled={view.busy} onClick={()=>void controller.read()}>Try again</button>}
     {view.nextPending && <button disabled={view.busy} onClick={()=>void controller.readMore()}>Read more pending changes</button>}
     {view.nextPending && <p>More pending changes may be available. Each click reads one page.</p>}
     {view.error && <p role="status">{view.error}</p>}

@@ -56,15 +56,16 @@ it('suppresses an obsolete same-session failure after a later successful refresh
   expectLatest(); expect(screen.queryByRole('alert')).toBeNull();
 });
 
-it('does not display an obsolete SESSION_CHANGED error after the new session read succeeds', async () => {
+it('waits for the rotated-session read to settle before its one recovery read', async () => {
   const old = deferred(), current = deferred();
   const get = vi.spyOn(nativeClient, 'get').mockReturnValueOnce(old.promise).mockReturnValueOnce(current.promise);
   render(<SellerAuthority />);
   await act(async () => useAuthStore.setState({ token: 'owned-fixture-session-2' }));
+  expect(get).toHaveBeenCalledTimes(1);
+  // The native helper converts this old-session response into SESSION_CHANGED.
+  await act(async () => old.resolve({ data: authority }));
   expect(get).toHaveBeenCalledTimes(2);
   await act(async () => current.resolve({ data: latest })); expectLatest();
-  // The unchanged native helper converts this old-session response into SESSION_CHANGED.
-  await act(async () => old.resolve({ data: authority }));
   expectLatest(); expect(screen.queryByRole('alert')).toBeNull();
 });
 

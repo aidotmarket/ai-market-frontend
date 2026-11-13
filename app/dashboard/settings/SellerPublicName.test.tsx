@@ -92,7 +92,7 @@ describe('public business name settings', () => {
     render(<SellerPublicName ownOperation={ownOperation} />);
     await screen.findByRole('alert');
     expect((screen.getByRole('switch') as HTMLInputElement).disabled).toBe(true);
-    fireEvent.click(screen.getByRole('button', { name: 'Retry public business name settings' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Try again: public business name settings' }));
     await waitFor(() => expect((screen.getByRole('switch') as HTMLInputElement).disabled).toBe(false));
     expect(updateProfile).not.toHaveBeenCalled();
   });
@@ -145,7 +145,7 @@ describe('public business name settings', () => {
 
 it('recovers a failed public name read when the same session rotates, without a manual reload', async () => {
   useAuthStore.setState({ token: 'before-recovery' });
-  getProfile.mockRejectedValueOnce(new SellerProfileError('Expired', 401));
+  getProfile.mockRejectedValueOnce(new SellerProfileError('Temporarily unavailable', 503));
   render(<SellerPublicName ownOperation={ownOperation} />);
   await screen.findByRole('alert');
   act(() => useAuthStore.setState({ token: 'valid-after-recovery' }));

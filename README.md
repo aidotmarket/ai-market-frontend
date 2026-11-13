@@ -4,7 +4,7 @@ The customer marketplace web app uses Next.js App Router, React, TypeScript and 
 
 ## Local development
 
-Local checks and frontend CI use Node.js 22; the committed Railway/Nixpacks build selects Node.js 20. Both use the npm lockfile. From this repository:
+Use Node.js 24.22.1 or later in the 24.x line (see `.node-version` and `package.json`) and the npm lockfile. From this repository:
 
 ```sh
 npm ci
@@ -26,6 +26,31 @@ npm run lint
 npm run build
 npm start
 ```
+
+### Tests from a pinned detached worktree
+
+Install dependencies in that checkout; do not link `node_modules` from another
+worktree. With Node 24 selected, run from the checkout root (a detached HEAD is fine):
+
+```sh
+rtk npm ci
+rtk npm test
+rtk npm run typecheck
+rtk npm run lint
+```
+
+For just Settings recovery and the original 16:14:32–33 double-refresh regression:
+
+```sh
+rtk npm test -- api/client.refresh-race.test.ts app/dashboard/settings/session-recovery.integration.test.tsx app/dashboard/settings/SellerAuthority.read-order.test.tsx app/dashboard/settings/SellerAuthority.test.tsx app/dashboard/settings/SellerPublicName.test.tsx app/dashboard/settings/page.test.tsx components/PendingProfileChanges.test.tsx
+```
+
+The integrated tests keep the real auth coordinator, interceptors, API wrappers
+and section controllers; only HTTP transport and unrelated UI dependencies are
+substituted. No backend or credentials are required. They cover all four Settings
+readers with persistent 401s and successful refreshes, a successful refresh/replay,
+one automatic re-read after external session rotation, manual retry, and the
+absence of further reads after focus or subsequent rotations.
 
 `npm start` serves the built application. `nixpacks.toml` runs `npm ci` and `npm run build`, then starts it with `npm start`. Railway deploys the main branch; deployment and browser acceptance guidance lives in the existing runbooks below.
 

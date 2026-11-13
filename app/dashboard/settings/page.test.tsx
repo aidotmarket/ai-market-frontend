@@ -98,7 +98,7 @@ describe('SettingsPage capability refresh', () => {
     useAuthStore.setState({ user: { ...user, role: 'buyer' } });
     render(<SettingsPage />);
     const account = screen.getByRole('heading', { name: 'Account' }).closest('section')!;
-    const retry = await within(account).findByRole('button', { name: 'Retry' });
+    const retry = await within(account).findByRole('button', { name: 'Try again' });
     expect(within(account).queryByText('Buyer')).toBeNull();
     fireEvent.click(retry);
     await waitFor(() => expect(within(account).getByText('Role').nextElementSibling?.textContent).toBe('Seller'));
@@ -109,7 +109,7 @@ describe('SettingsPage capability refresh', () => {
     useAuthStore.setState({ user: { ...user, role: 'buyer' } });
     render(<SettingsPage />);
     await waitFor(() => expect(capabilitiesApi.getCapabilities).toHaveBeenCalled());
-    expect(screen.queryByLabelText('Public business name')).toBeNull();
+    await waitFor(() => expect(screen.queryByLabelText('Public business name')).toBeNull());
     expect(getSellerPublicProfile).not.toHaveBeenCalled();
   });
 

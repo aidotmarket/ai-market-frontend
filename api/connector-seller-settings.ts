@@ -87,6 +87,8 @@ export async function nativeRead<T>(path: string, options: { signal?: AbortSigna
     } catch (error) {
       if (!sameSession()) throw new Error('SESSION_CHANGED');
       options.signal?.throwIfAborted();
+      // Preserve the terminal replay refusal for the section recovery budget.
+      if (axios.isAxiosError(error) && (error.config as OwnedRequest | undefined)?._retry) throw error;
       const retryable = attempt === 0 && axios.isAxiosError(error) && !(error.config as OwnedRequest | undefined)?._retry && error.response?.status === 401;
       if (useAuthStore.getState().token !== session.token) {
         if (retryable && useAuthStore.getState().token) continue;
