@@ -34,7 +34,7 @@ beforeEach(() => {
   getProfile.mockResolvedValue(anonymous);
   updateProfile.mockImplementation(async (profile) => profile);
 });
-afterEach(cleanup);
+afterEach(() => { cleanup(); vi.useRealTimers(); });
 
 describe('public business name settings', () => {
   it('starts private with one bounded input, one switch and truthful copy', async () => {
@@ -86,27 +86,58 @@ describe('public business name settings', () => {
     const alert = await screen.findByRole('alert');
     expect(screen.getByRole('switch').getAttribute('aria-describedby')).toContain(alert.id);
   });
-  it('allows a retry after load failure and never overwrites an unread profile', async () => {
-    getProfile.mockRejectedValueOnce(new SellerProfileError('Unavailable', 503));
-    render(<SellerPublicName ownOperation={ownOperation} />);
-    await screen.findByRole('alert');
-    expect((screen.getByRole('switch') as HTMLInputElement).disabled).toBe(true);
-    fireEvent.click(screen.getByRole('button', { name: 'Retry public business name settings' }));
-    await waitFor(() => expect((screen.getByRole('switch') as HTMLInputElement).disabled).toBe(false));
-    expect(updateProfile).not.toHaveBeenCalled();
-  });
-  it('renders nothing when the account has no seller profile yet (HTTP 404)', async () => {
-    getProfile.mockRejectedValueOnce(new SellerProfileError('Not found', 404));
+  it.each([401, 403, 404, 400])('hides the optional panel without an alert on load HTTP %s', async (status) => {
+    getProfile.mockRejectedValueOnce(new SellerProfileError('Unavailable', status));
     const { container } = render(<SellerPublicName ownOperation={ownOperation} />);
-    await waitFor(() => expect(getProfile).toHaveBeenCalledTimes(1));
     await waitFor(() => expect(container.innerHTML).toBe(''));
+    expect(getProfile).toHaveBeenCalledTimes(1);
     expect(screen.queryByRole('alert')).toBeNull();
-    expect(screen.queryByText('Could not load public business name settings. Please try again.')).toBeNull();
     expect(updateProfile).not.toHaveBeenCalled();
   });
-  it('shows general save failures and keeps the draft retryable', async () => {
-    updateProfile.mockRejectedValue(new SellerProfileError('Please try again.', undefined));
-    await mount(); edit(); save(); await screen.findByText('Please try again.');
+  it.each([500, 503, undefined])('quietly retries load status %s once and shows a recovered profile', async (status) => {
+    vi.useFakeTimers();
+    getProfile.mockRejectedValueOnce(new SellerProfileError('Unavailable', status));
+    render(<SellerPublicName ownOperation={ownOperation} />);
+    await act(async () => {});
+    expect(getProfile).toHaveBeenCalledTimes(1);
+    expect(screen.queryByRole('alert')).toBeNull();
+    expect((screen.getByRole('switch') as HTMLInputElement).disabled).toBe(true);
+    await act(async () => { await vi.advanceTimersByTimeAsync(300); });
+    expect(getProfile).toHaveBeenCalledTimes(2);
+    expect((screen.getByRole('switch') as HTMLInputElement).disabled).toBe(false);
+    expect(screen.queryByRole('alert')).toBeNull();
+    expect(updateProfile).not.toHaveBeenCalled();
+  });
+  it.each([500, undefined])('hides the panel after load status %s fails twice', async (status) => {
+    vi.useFakeTimers();
+    getProfile.mockRejectedValue(new SellerProfileError('Unavailable', status));
+    const { container } = render(<SellerPublicName ownOperation={ownOperation} />);
+    await act(async () => {});
+    expect(screen.queryByRole('alert')).toBeNull();
+    await act(async () => { await vi.advanceTimersByTimeAsync(300); });
+    expect(container.innerHTML).toBe('');
+    expect(screen.queryByRole('alert')).toBeNull();
+    await act(async () => { await vi.advanceTimersByTimeAsync(1000); });
+    expect(getProfile).toHaveBeenCalledTimes(2);
+    expect(updateProfile).not.toHaveBeenCalled();
+  });
+  it.each(['unmount', 'retire'] as const)('cancels a pending load retry on %s', async (action) => {
+    vi.useFakeTimers();
+    getProfile.mockRejectedValueOnce(new SellerProfileError('Unavailable', 500));
+    const view = render(<SellerPublicName ownOperation={ownOperation} />);
+    await act(async () => {});
+    if (action === 'unmount') view.unmount();
+    else current = false;
+    await act(async () => { await vi.advanceTimersByTimeAsync(300); });
+    expect(getProfile).toHaveBeenCalledTimes(1);
+    expect(screen.queryByRole('alert')).toBeNull();
+  });
+  it.each([
+    [undefined, 'Please try again.'],
+    [503, 'Business name validation is unavailable. Please try again.'],
+  ] as const)('shows general save failures on status %s and keeps the draft retryable', async (status, message) => {
+    updateProfile.mockRejectedValue(new SellerProfileError(message, status));
+    await mount(); edit(); save(); await screen.findByText(message);
     expect((screen.getByLabelText('Public business name') as HTMLInputElement).value).toBe('Synthetic Co');
     expect((screen.getByRole('button', { name: 'Save public business name' }) as HTMLButtonElement).disabled).toBe(false);
   });

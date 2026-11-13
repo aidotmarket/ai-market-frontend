@@ -11,8 +11,7 @@ export default function SellerPublicName({ ownOperation }: { ownOperation: () =>
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<SellerProfileError | null>(null);
   const [success, setSuccess] = useState(false);
-  const [attempt, setAttempt] = useState(0);
-  // No seller profile yet (404): there is nothing to name, so the panel stays hidden.
+  // This optional panel stays hidden when its profile cannot be loaded.
   const [noProfile, setNoProfile] = useState(false);
   const saveRequest = useRef<AbortController | null>(null);
 
@@ -22,23 +21,35 @@ export default function SellerPublicName({ ownOperation }: { ownOperation: () =>
     if (!isCurrent()) return;
     setLoading(true);
     setError(null);
-    getSellerPublicProfile(controller.signal).then((profile) => {
-      if (controller.signal.aborted || !isCurrent()) return;
-      setSaved(profile);
-      setName(profile.public_display_name ?? '');
-      setVisible(profile.show_public_display_name);
-    }).catch((failure: SellerProfileError) => {
-      if (controller.signal.aborted || !isCurrent()) return;
-      if (failure.status === 404) setNoProfile(true);
-      else setError(failure);
-    }).finally(() => {
-      if (!controller.signal.aborted && isCurrent()) setLoading(false);
-    });
+    let retryTimer: ReturnType<typeof setTimeout> | undefined;
+    const load = async (retried = false) => {
+      try {
+        const profile = await getSellerPublicProfile(controller.signal);
+        if (controller.signal.aborted || !isCurrent()) return;
+        setSaved(profile);
+        setName(profile.public_display_name ?? '');
+        setVisible(profile.show_public_display_name);
+        setLoading(false);
+      } catch (failure) {
+        if (controller.signal.aborted || !isCurrent()) return;
+        const { status } = failure as SellerProfileError;
+        if (!retried && (status === undefined || (status >= 500 && status < 600))) {
+          retryTimer = setTimeout(() => {
+            if (!controller.signal.aborted && isCurrent()) void load(true);
+          }, 300);
+          return;
+        }
+        setNoProfile(true);
+        setLoading(false);
+      }
+    };
+    void load();
     return () => {
+      clearTimeout(retryTimer);
       controller.abort();
       saveRequest.current?.abort();
     };
-  }, [ownOperation, attempt]);
+  }, [ownOperation]);
 
   const save = async (event: FormEvent) => {
     event.preventDefault();
@@ -91,8 +102,7 @@ export default function SellerPublicName({ ownOperation }: { ownOperation: () =>
       {fieldErrors.show_public_display_name && <p id="publicVisibilityError" role="alert" className="text-sm text-red-700">{fieldErrors.show_public_display_name}</p>}
       <p id="publicNameOptOut" className="text-sm text-gray-600">Saving with visibility off stops ai.market showing your business name from now on. It cannot recall copies others already saved.</p>
       {loading && <p role="status" className="text-sm text-gray-600">Loading public business name settings...</p>}
-      {error && Object.keys(fieldErrors).length === 0 && <p role="alert" className="text-sm text-red-700">{saved ? error.message : 'Could not load public business name settings. Please try again.'}</p>}
-      {!loading && !saved && <button type="button" onClick={() => { if (ownOperation()()) setAttempt((value) => value + 1); }} className="text-sm underline">Retry public business name settings</button>}
+      {error && Object.keys(fieldErrors).length === 0 && <p role="alert" className="text-sm text-red-700">{error.message}</p>}
       <button type="submit" disabled={disabled || !dirty} className="rounded-lg bg-[#3F51B5] px-4 py-2 text-sm font-medium text-white disabled:opacity-50 disabled:cursor-not-allowed">
         {saving ? 'Saving public business name...' : 'Save public business name'}
       </button>
