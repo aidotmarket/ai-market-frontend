@@ -52,9 +52,11 @@ it.each(['off', 'thread', 'history'])('real deferred session refresh refuses POS
   if (denial === 'thread') threadSend = false;
   if (denial === 'history') historySend = false;
   fireEvent.click(screen.getByRole('button', { name: 'Refresh conversation' }));
+  // Read transport now waits behind the shared rotation. The local read phase
+  // still retires this send before any mutation is admitted.
+  await act(async () => { release({ data: { access_token: token() } }); });
   await waitFor(() => expect(mocks.adapter.mock.calls.filter(([c]) => c.url.endsWith('/threads'))).toHaveLength(2));
   await screen.findByText('No messages in this conversation.');
-  await act(async () => { release({ data: { access_token: token() } }); });
   await screen.findByText(/Message not sent.*conversation is not ready/);
   expect(screen.queryByRole('button', { name: 'Check message result' })).toBeNull();
   expect(mocks.adapter.mock.calls.filter(([c]) => c.method === 'post')).toHaveLength(0);
@@ -77,9 +79,9 @@ it.each(['selecting', 'reading', 'readError'])('exact local %s admission refusal
     return original(config);
   });
   fireEvent.click(screen.getByRole('button', { name: 'Refresh conversation' }));
+  await act(async () => release({ data: { access_token: token() } }));
   if (phase === 'readError') await screen.findByRole('alert');
   else await waitFor(() => expect(finishRead).toBeTypeOf('function'));
-  await act(async () => release({ data: { access_token: token() } }));
   await screen.findByText(/Message not sent.*conversation is not ready/);
   expect(screen.queryByText(/We could not confirm|PRIVATE READ ERROR/)).toBeNull();
   expect(screen.queryByRole('button', { name: 'Check message result' })).toBeNull();
@@ -105,8 +107,8 @@ it('keeps an earlier dispatched loss unknown when a later retry is locally refus
   await act(async () => { useAuthStore.setState({ token: token(-60) }); });
   fireEvent.click(screen.getByRole('button', { name: 'Retry same message' }));
   historySend = false; fireEvent.click(screen.getByRole('button', { name: 'Refresh conversation' }));
-  await screen.findByText('New messages are not available for this conversation.');
   await act(async () => release({ data: { access_token: token() } }));
+  await screen.findByText('New messages are not available for this conversation.');
   await screen.findByText(/We could not confirm/); expect(screen.queryByText(/Message not sent/)).toBeNull();
   expect(mocks.adapter.mock.calls.filter(([c]) => c.method === 'post')).toHaveLength(1);
   expect(mocks.adapter.mock.calls.find(([c]) => c.method === 'post')![0].data).toBe(body);

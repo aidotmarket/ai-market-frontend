@@ -66,11 +66,14 @@ it('invalidates review on editing and refuses 51 without auto splitting', async 
   expect(setAuthority).not.toHaveBeenCalled();
 });
 
-it('clears old-owner review and limits when the retained credential changes', async () => {
+it('clears the old credential review and reads current limits on explicit refresh', async () => {
   const view = render(<SellerAuthority />); await screen.findByText(/Authority version 4/);
   fireEvent.click(screen.getByRole('button', { name: 'Review exact standing limits' })); await screen.findByRole('button', { name: 'Save reviewed standing authority' });
   vi.mocked(readAuthority).mockResolvedValue({ version: 0, enabled: false, limits: null, utc_day: '2026-10-10', usage: [] });
-  useAuthStore.setState({ token: 'different-session' }); view.rerender(<SellerAuthority />); await screen.findByText(/Authority version 0/);
+  useAuthStore.setState({ token: 'different-session' }); view.rerender(<SellerAuthority />);
+  expect(screen.queryByRole('button', { name: 'Save reviewed standing authority' })).toBeNull();
+  fireEvent.click(screen.getByRole('button', { name: 'Refresh authority and budget' }));
+  await screen.findByText(/Authority version 0/);
   expect(screen.queryByRole('button', { name: 'Save reviewed standing authority' })).toBeNull();
 });
 

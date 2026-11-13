@@ -1,8 +1,9 @@
 'use client';
 
-import axios, { type AxiosError, type InternalAxiosRequestConfig } from 'axios';
+import axios, { type AxiosError, type AxiosInstance, type InternalAxiosRequestConfig } from 'axios';
 import { useAuthStore } from '@/store/auth';
 import { authSessionOwner, advanceAuthSessionOwner, assertAuthSessionOwner, isAuthSessionOwner } from '@/lib/auth-session-owner';
+import { sessionCsrf } from '@/lib/session-csrf';
 import { PENDING_ACTION_CONTINUATION } from '@/lib/redirect';
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000';
@@ -14,40 +15,55 @@ export const api = axios.create({
 });
 
 let refreshFlight: { owner: number; promise: Promise<string> } | null = null;
-let recoveryRefresh: object | null = null;
+let recoveryRefresh: { lease: object; owner: number } | null = null;
+const hasRecoveryRefresh = () => recoveryRefresh?.owner === authSessionOwner();
+
+// All refresh transports, including the one-use support lease, register here.
+function startRefreshFlight(owner: number, run: () => Promise<string>): Promise<string> {
+  if (refreshFlight?.owner === owner) return refreshFlight.promise;
+  const promise = run().finally(() => {
+    if (refreshFlight?.promise === promise) refreshFlight = null;
+  });
+  refreshFlight = { owner, promise };
+  return promise;
+}
+
+// Admission can wait on an existing rotation without requesting another one.
+export function currentSessionRefresh(owner = authSessionOwner()): Promise<string> | null {
+  assertAuthSessionOwner(owner);
+  return refreshFlight?.owner === owner ? refreshFlight.promise : null;
+}
 
 // Acquire before start admission. An existing flight may already have retried;
 // neither joining it nor waiting for it can grant a single-attempt permission.
 export function reserveRecoveryRefresh(assertCurrent: () => void) {
   assertCurrent();
-  if (refreshFlight || recoveryRefresh) throw new Error('Session refresh already in progress');
+  if (currentSessionRefresh() || hasRecoveryRefresh()) throw new Error('Session refresh already in progress');
   const lease = {}, owner = authSessionOwner(), principal = useAuthStore.getState().user?.id;
-  recoveryRefresh = lease;
+  recoveryRefresh = { lease, owner };
   let consumed = false;
   let pending = false, releaseRequested = false;
   return {
     refresh: async () => {
       assertCurrent(); assertAuthSessionOwner(owner);
-      if (recoveryRefresh !== lease || consumed || refreshFlight || !principal || useAuthStore.getState().user?.id !== principal)
+      if (recoveryRefresh?.lease !== lease || consumed || currentSessionRefresh(owner) || !principal || useAuthStore.getState().user?.id !== principal)
         throw new Error('Recovery refresh superseded');
       consumed = true;
       pending = true;
-      const promise = refreshAccessTokenRequest(owner, assertCurrent).finally(() => {
-        if (refreshFlight?.promise === promise) refreshFlight = null;
+      const promise = startRefreshFlight(owner, () => refreshAccessTokenRequest(owner, assertCurrent)).finally(() => {
         pending = false;
-        if (releaseRequested && recoveryRefresh === lease) recoveryRefresh = null;
+        if (releaseRequested && recoveryRefresh?.lease === lease) recoveryRefresh = null;
       });
-      refreshFlight = { owner, promise };
       const token = await promise;
       assertAuthSessionOwner(owner);
       if (useAuthStore.getState().user?.id !== principal) throw new Error('Recovery owner changed');
       return token;
     },
-    release: () => { releaseRequested = true; if (!pending && recoveryRefresh === lease) recoveryRefresh = null; },
+    release: () => { releaseRequested = true; if (!pending && recoveryRefresh?.lease === lease) recoveryRefresh = null; },
   };
 }
 
-type OwnedRequest = InternalAxiosRequestConfig & { _authOwner?: number; _retry?: boolean };
+export type OwnedRequest = InternalAxiosRequestConfig & { _authOwner?: number; _authToken?: string | null; _retry?: boolean };
 
 const DEFAULT_REFRESH_RETRY_SECONDS = 60;
 const MAX_REFRESH_RETRY_SECONDS = 60;
@@ -172,12 +188,14 @@ async function refreshAccessTokenWithRetry(owner: number): Promise<string> {
   }
 }
 
-export function refreshAccessToken(): Promise<string> {
-  if (recoveryRefresh) return Promise.reject(new Error('Scoped session recovery in progress'));
+export function refreshAccessToken(previousToken?: string | null): Promise<string> {
+  if (hasRecoveryRefresh()) return Promise.reject(new Error('Scoped session recovery in progress'));
   const owner = authSessionOwner();
   if (refreshFlight?.owner === owner) return refreshFlight.promise;
+  const currentToken = useAuthStore.getState().token;
+  if (previousToken !== undefined && currentToken && previousToken !== currentToken) return Promise.resolve(currentToken);
 
-  const promise = refreshAccessTokenWithRetry(owner)
+  return startRefreshFlight(owner, () => refreshAccessTokenWithRetry(owner)
     .catch((error) => {
       if (isAuthSessionOwner(owner) && isRefreshErrorStatus(error, [401, 403])) {
         const hadSession = useAuthStore.getState().isAuthenticated;
@@ -185,26 +203,65 @@ export function refreshAccessToken(): Promise<string> {
         if (hadSession && isAuthSessionOwner(clearedOwner)) redirectToLogin();
       }
       throw error;
-    })
-    .finally(() => {
-      // A superseded flight must not erase a newer owner's single-flight.
-      if (refreshFlight?.promise === promise) refreshFlight = null;
-    });
-  refreshFlight = { owner, promise };
-  return promise;
+    }));
 }
 
 // Synchronous admission captures ownership before Axios can yield to a login.
 // Replays retain their original owner and are checked again before dispatch.
-api.interceptors.request.use((config: OwnedRequest) => {
+function bindToken(config: OwnedRequest, native: boolean) {
+  const token = useAuthStore.getState().token;
+  config._authToken = token;
+  if (token) {
+    config.headers.Authorization = `Bearer ${token}`;
+    if (native) config.headers['X-CSRF-Token'] = sessionCsrf(token);
+  }
+}
+
+// Capture ownership synchronously. Only the transport waits, so a same-tick
+// logout/login cannot reassign queued requests to the replacement account.
+export function admitSessionRequest(config: OwnedRequest, native = false, retainCredentials = false): OwnedRequest {
   config._authOwner ??= authSessionOwner();
   assertAuthSessionOwner(config._authOwner);
-  const token = useAuthStore.getState().token;
-  if (token && config.headers) {
-    config.headers.Authorization = `Bearer ${token}`;
+  if (!retainCredentials) bindToken(config, native);
+  const flight = currentSessionRefresh(config._authOwner);
+  if (flight && config.headers.Authorization && config.url !== '/auth/logout' && !config.url?.includes('/recovery/')) {
+    const adapter = config.adapter;
+    config.adapter = async (request: OwnedRequest) => {
+      let pending: Promise<string> | null = flight;
+      while (pending) {
+        await pending;
+        assertAuthSessionOwner(request._authOwner!);
+        pending = currentSessionRefresh(request._authOwner);
+      }
+      if (request.signal?.aborted) throw new axios.CanceledError();
+      if (retainCredentials) {
+        if (request.headers.Authorization !== `Bearer ${useAuthStore.getState().token}`) throw new Error('SESSION_CHANGED');
+      } else bindToken(request, native);
+      request.adapter = adapter;
+      return axios.getAdapter(adapter)(request);
+    };
   }
   return config;
-}, (error: unknown) => { throw error; }, { synchronous: true });
+}
+api.interceptors.request.use(config => admitSessionRequest(config),
+  (error: unknown) => { throw error; }, { synchronous: true });
+
+// Raw native GET callers need the same bounded replay as nativeRead. Native
+// decisions deliberately keep their explicit review/CSRF contract and no replay.
+export function installNativeReadAuth(client: AxiosInstance) {
+  client.interceptors.request.use(config => {
+    return admitSessionRequest(config, true, config.method !== 'get');
+  }, (error: unknown) => { throw error; }, { synchronous: true });
+  client.interceptors.response.use(response => response, async (error: AxiosError) => {
+    const request = error.config as OwnedRequest | undefined;
+    if (error.response?.status !== 401 || !request || request.method !== 'get' || request._retry
+      || hasRecoveryRefresh() || request._authOwner === undefined || !isAuthSessionOwner(request._authOwner)) throw error;
+    request._retry = true;
+    if (!useAuthStore.getState().token || request._authToken === useAuthStore.getState().token) await refreshAccessToken();
+    assertAuthSessionOwner(request._authOwner);
+    return client(request);
+  });
+}
 
 // Response interceptor: handle 401 with single-flight refresh
 api.interceptors.response.use(
@@ -219,7 +276,7 @@ api.interceptors.response.use(
     // a refusal must stay at the form rather than refresh auth or redirect.
     if (
       error.response.status === 401 &&
-      !recoveryRefresh &&
+      !hasRecoveryRefresh() &&
       !originalRequest.url?.includes('/recovery/') &&
       !originalRequest._retry &&
       !originalRequest.url?.includes('/auth/refresh') &&
@@ -234,7 +291,11 @@ api.interceptors.response.use(
       originalRequest._retry = true;
 
       try {
-        const newToken = await refreshAccessToken();
+        // A delayed 401 can arrive after its sibling's flight has settled.
+        // Reuse that token; refreshing again would invalidate the sibling's reads.
+        const currentToken = useAuthStore.getState().token;
+        const newToken = currentToken && currentToken !== originalRequest._authToken
+          ? currentToken : await refreshAccessToken();
         assertAuthSessionOwner(originalRequest._authOwner);
 
         if (originalRequest.headers) {

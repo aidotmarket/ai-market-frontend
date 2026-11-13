@@ -45,7 +45,9 @@ function profileError(error: unknown): SellerProfileError {
     : detail && typeof detail === 'object' && 'message' in detail && typeof detail.message === 'string' ? detail.message
     : response?.status === 503 ? 'Business name validation is unavailable. Please try again.'
     : 'Could not update public business name settings. Please try again.';
-  return new SellerProfileError(message, response?.status, fields);
+  const failure = new SellerProfileError(message, response?.status, fields);
+  failure.cause = error;
+  return failure;
 }
 
 function publicSettings(data: SellerPublicProfile): SellerPublicProfile {

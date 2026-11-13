@@ -1,9 +1,10 @@
 'use client';
 
+import { useSectionRecoveryRead } from '@/hooks/useSectionRecoveryRead';
 import { sessionMutationError } from '@/api/session-mutation';
 import { setupRestriction, setupRefusal } from '@/lib/two-factor-policy';
 
-import { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useLayoutEffect, useRef, useState, useSyncExternalStore } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { PENDING_ACTION_CONTINUATION } from '@/lib/redirect';
@@ -21,6 +22,8 @@ import { companySignInEnabled } from '@/lib/company-sign-in';
 import CompanyAuthenticator, { companyEnrollmentOffered } from '@/components/CompanyAuthenticator';
 import TotpQrCode from '@/components/TotpQrCode';
 
+import { authSessionOwner, subscribeAuthSessionOwner } from '@/lib/auth-session-owner';
+
 type TwoFactorFlow = 'idle' | 'showing_qr' | 'verifying' | 'showing_backup_codes';
 
 // A token refresh keeps the visit; even a transient identity loss retires it.
@@ -29,9 +32,10 @@ const settingsIdentity = (state: ReturnType<typeof useAuthStore.getState>) =>
 
 export default function SettingsPage() {
   const accountId = useAuthStore(settingsIdentity);
+  const owner = useSyncExternalStore(subscribeAuthSessionOwner, authSessionOwner, authSessionOwner);
   const [visit, setVisit] = useState(0);
   const retireVisit = useCallback(() => setVisit((value) => value + 1), []);
-  return <SettingsVisit key={JSON.stringify([accountId, visit])}
+  return <SettingsVisit key={JSON.stringify([accountId, visit, owner])}
     accountId={accountId} retireVisit={retireVisit} />;
 }
 
@@ -86,7 +90,6 @@ function SettingsVisit({ accountId, retireVisit }: {
   const [enrolledForContinuation, setEnrolledForContinuation] = useState(false);
   const [sellerStatus, setSellerStatus] = useState<CapabilityStatus | null>(null);
   const [capabilitiesError, setCapabilitiesError] = useState(false);
-  const [capabilitiesAttempt, setCapabilitiesAttempt] = useState(0);
   const settingsHeadingRef = useRef<HTMLHeadingElement>(null);
 
   useEffect(() => {
@@ -113,29 +116,21 @@ function SettingsVisit({ accountId, retireVisit }: {
     return () => window.clearTimeout(timer);
   }, [copiedBackupCodes, ownOperation]);
 
-  useEffect(() => {
-    let cancelled = false;
+  const retryCapabilities = useSectionRecoveryRead(useCallback(async (current: () => boolean) => {
     const isCurrent = ownOperation();
-    if (!isCurrent() || !user) return;
-
+    if (!isCurrent() || !useAuthStore.getState().user) return;
     setCapabilitiesError(false);
-    getCapabilities()
-      .then((capabilities) => {
-        if (!cancelled && isCurrent()) {
-          setSellerStatus(capabilities.seller.effective_status);
-        }
-      })
-      .catch((err) => {
-        if (!cancelled && isCurrent()) {
-          console.error('Failed to fetch settings capabilities', err);
-          setCapabilitiesError(true);
-        }
-      });
-
-    return () => {
-      cancelled = true;
-    };
-  }, [user, ownOperation, capabilitiesAttempt]);
+    try {
+      const capabilities = await getCapabilities();
+      if (current() && isCurrent()) setSellerStatus(capabilities.seller.effective_status);
+    } catch (error) {
+      if (current() && isCurrent()) {
+        setSellerStatus(null);
+        setCapabilitiesError(true);
+        throw error;
+      }
+    }
+  }, [ownOperation]));
 
   const handleSave = async () => {
     const isCurrent = ownOperation();
@@ -335,7 +330,7 @@ function SettingsVisit({ accountId, retireVisit }: {
   // Never assert Buyer until the capability snapshot has confirmed it.
   const accountType = sellerStatus === 'active' ? 'Seller'
     : sellerStatus === 'provisioning' ? 'Seller (setting up)'
-    : user.role === 'admin' ? 'Admin'
+    : user.role === 'admin' && sellerStatus !== null ? 'Admin'
     : sellerStatus !== null ? 'Buyer'
     : capabilitiesError ? null : 'Checking…';
   const isSeller =
@@ -431,7 +426,7 @@ function SettingsVisit({ accountId, retireVisit }: {
             <dd className="text-sm font-medium text-gray-900">{accountType ?? (
               <span>
                 Couldn&apos;t load account type.{' '}
-                <button type="button" className="text-blue-600 underline" onClick={() => setCapabilitiesAttempt((n) => n + 1)}>Retry</button>
+                <button type="button" className="text-blue-600 underline" onClick={retryCapabilities}>Try again</button>
               </span>
             )}</dd>
           </div>

@@ -5,7 +5,7 @@ import { afterEach, beforeEach, expect, it, vi } from 'vitest';
 import { useAuthStore } from '@/store/auth';
 import type { User } from '@/types';
 const mocks = vi.hoisted(() => ({ post: vi.fn(), me: vi.fn(), refresh: vi.fn(), push: vi.fn() }));
-vi.mock('@/api/client', () => ({ refreshAccessToken: vi.fn() }));
+vi.mock('@/api/client', () => ({ refreshAccessToken: vi.fn(), currentSessionRefresh: () => null }));
 vi.mock('axios', () => ({ default: { create: () => ({ post: mocks.post }) } }));
 vi.mock('@/api/auth', () => ({ getMe: mocks.me }));
 vi.mock('next/navigation', () => ({ useRouter: () => ({ push: mocks.push }) }));

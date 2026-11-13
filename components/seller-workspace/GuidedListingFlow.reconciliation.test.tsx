@@ -12,7 +12,7 @@ import {SellerListingDraftProvider,resetSellerListingDraftOwnerForTests} from '.
 import {categoryRows,guidedCapabilities,guidedConnection,emptyGuidedDraft} from '@/tests/guidedListingFixture';
 import {createStandardSelection} from '@/api/listingLicenses';
 const mocks=vi.hoisted(()=>({get:vi.fn(),draft:vi.fn(),save:vi.fn(),review:vi.fn()}));
-vi.mock('@/api/client',()=>({api:{get:mocks.get}}));
+vi.mock('@/api/client', async original => ({ ...await original<typeof import('@/api/client')>(), api: { get: mocks.get } }));
 vi.mock('@/api/sellerListingDraft',()=>({readListingDraft:mocks.draft,saveListingDraft:mocks.save}));
 vi.mock('@/api/sellerListingReview',async original=>({...await original<typeof import('@/api/sellerListingReview')>(),readListingReview:mocks.review}));
 vi.mock('@/api/capabilities',()=>({getCapabilities:vi.fn().mockResolvedValue({})}));

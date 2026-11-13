@@ -56,15 +56,16 @@ it('suppresses an obsolete same-session failure after a later successful refresh
   expectLatest(); expect(screen.queryByRole('alert')).toBeNull();
 });
 
-it('does not display an obsolete SESSION_CHANGED error after the new session read succeeds', async () => {
+it('waits for the rotated-session read to settle before its one recovery read', async () => {
   const old = deferred(), current = deferred();
   const get = vi.spyOn(nativeClient, 'get').mockReturnValueOnce(old.promise).mockReturnValueOnce(current.promise);
   render(<SellerAuthority />);
   await act(async () => useAuthStore.setState({ token: 'owned-fixture-session-2' }));
+  expect(get).toHaveBeenCalledTimes(1);
+  // The native helper converts this old-session response into SESSION_CHANGED.
+  await act(async () => old.resolve({ data: authority }));
   expect(get).toHaveBeenCalledTimes(2);
   await act(async () => current.resolve({ data: latest })); expectLatest();
-  // The unchanged native helper converts this old-session response into SESSION_CHANGED.
-  await act(async () => old.resolve({ data: authority }));
   expectLatest(); expect(screen.queryByRole('alert')).toBeNull();
 });
 
@@ -125,4 +126,19 @@ it.each(['success', 'failure'])('settles an outstanding read safely after unmoun
   });
   expect(screen.queryByRole('region', { name: 'Seller standing authority' })).toBeNull();
   expect(screen.queryByRole('alert')).toBeNull();
+});
+
+it('automatically recovers failed authority and budget after same-owner session recovery', async () => {
+  const get = vi.spyOn(nativeClient, 'get').mockRejectedValueOnce(new Error('initial session read failed')).mockResolvedValueOnce({ data: latest });
+  render(<SellerAuthority />); await screen.findByRole('alert');
+  act(() => useAuthStore.setState({ token: 'valid-recovered-session' }));
+  await screen.findByText(/Authority version 9/); expectLatest();
+  expect(screen.queryByRole('alert')).toBeNull(); expect(get).toHaveBeenCalledTimes(2);
+  const button = screen.getByRole('button', { name: 'Refresh authority and budget' });
+  expect(button.className).toContain('border'); expect(button.className).toContain('px-4');
+  const table = screen.getByRole('table', { name: 'Shared UTC daily budget' });
+  expect(table.querySelector('caption')?.className).toContain('text-left');
+  for (const header of within(table).getAllByRole('columnheader')) {
+    expect(header.className).toContain('px-4'); expect(header.getAttribute('scope')).toBe('col');
+  }
 });

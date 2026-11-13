@@ -6,7 +6,7 @@ import reviewFixture from '@/api/fixtures/s1735-v3-review.json';
 import type {ListingReview} from '@/api/sellerListingReview';
 
 const transport=vi.hoisted(()=>({get:vi.fn(),post:vi.fn()}));
-vi.mock('@/api/client',()=>({api:transport}));
+vi.mock('@/api/client', async original => ({ ...await original<typeof import('@/api/client')>(), api: transport }));
 afterEach(()=>{cleanup();vi.resetAllMocks();});
 
 it('renders v3 statements and posts their exact keys with the saved licence',async()=>{

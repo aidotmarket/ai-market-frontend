@@ -4,7 +4,7 @@ import type {ApprovalReceipt} from './sellerListingReview';
 import {nativeClient,nativeSession} from './connector-seller-settings';
 import {useAuthStore} from '@/store/auth';
 import {createStandardSelection} from './listingLicenses';
-const api=vi.hoisted(()=>({get:vi.fn(),post:vi.fn()}));vi.mock('./client',()=>({api}));
+const api=vi.hoisted(()=>({get:vi.fn(),post:vi.fn()}));vi.mock('./client', async original => ({ ...await original<typeof import('./client')>(), api }));
 const id='00000000-0000-4000-8000-000000000001';
 const approval={id,review_hash:'a'.repeat(64),render_hash:'b'.repeat(64)} as ApprovalReceipt;
 const receipt={id,approval_id:id,listing_id:id,listing_version_id:id,title:'Retail',slug:'retail',status:'published',is_listed:true,published_at:'2026-09-08T00:00:00Z',review_hash:approval.review_hash,render_hash:approval.render_hash};

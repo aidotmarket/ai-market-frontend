@@ -1,7 +1,7 @@
 import { createHash } from 'node:crypto';
 import { beforeEach, expect, it, vi } from 'vitest';
 const mocks = vi.hoisted(() => ({ post: vi.fn(), token: 'native-session' as string | null }));
-vi.mock('./client', () => ({ refreshAccessToken: vi.fn() }));
+vi.mock('./client', () => ({ refreshAccessToken: vi.fn(), currentSessionRefresh: () => null }));
 vi.mock('axios', () => ({ default: { create: () => ({ post: mocks.post }) } }));
 vi.mock('@/store/auth', () => ({ useAuthStore: { getState: () => ({ token: mocks.token }) } }));
 import { setupCompanyAuthenticator, verifyCompanyAuthenticator, recoverCompanyAuthenticator } from './company-authenticator';

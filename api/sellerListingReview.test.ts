@@ -10,7 +10,7 @@ import {preparationRequest, prepareListing} from './sellerListingPreparation';
 import {readSigningInstruments, signInstruments} from './seller-batch-signing';
 import {createStandardSelection} from './listingLicenses';
 const client = vi.hoisted(() => ({get:vi.fn(),post:vi.fn()}));
-vi.mock('./client', () => ({api:client}));
+vi.mock('./client', async original => ({ ...await original<typeof import('./client')>(), api: client }));
 const html = '<!doctype html><html><body>Regional retail — $25.00</body></html>';
 const review = {presentation_version:'seller-listing-review-v2', rendered_html:html, render_hash:createHash('sha256').update(html).digest('hex')};
 beforeEach(() => {vi.resetAllMocks();vi.stubGlobal('crypto',webcrypto);});

@@ -1,9 +1,11 @@
 'use client';
 
-import { useEffect, useRef, useState, type FormEvent } from 'react';
+import { useCallback, useEffect, useRef, useState, type FormEvent } from 'react';
+import { useSectionRecoveryRead } from '@/hooks/useSectionRecoveryRead';
 import { getSellerPublicProfile, updateSellerPublicProfile, SellerProfileError, type SellerPublicProfile } from '@/api/sellerProfile';
 
 export default function SellerPublicName({ ownOperation }: { ownOperation: () => () => boolean }) {
+  const loaded = useRef(false);
   const [saved, setSaved] = useState<SellerPublicProfile | null>(null);
   const [name, setName] = useState('');
   const [visible, setVisible] = useState(false);
@@ -11,34 +13,37 @@ export default function SellerPublicName({ ownOperation }: { ownOperation: () =>
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<SellerProfileError | null>(null);
   const [success, setSuccess] = useState(false);
-  const [attempt, setAttempt] = useState(0);
   // No seller profile yet (404): there is nothing to name, so the panel stays hidden.
   const [noProfile, setNoProfile] = useState(false);
   const saveRequest = useRef<AbortController | null>(null);
 
-  useEffect(() => {
-    const controller = new AbortController();
+  const retry = useSectionRecoveryRead(useCallback(async (current: () => boolean, signal: AbortSignal) => {
+    // Preserve an already loaded draft through healthy token rotation.
+    if (loaded.current) return;
     const isCurrent = ownOperation();
     if (!isCurrent()) return;
     setLoading(true);
     setError(null);
-    getSellerPublicProfile(controller.signal).then((profile) => {
-      if (controller.signal.aborted || !isCurrent()) return;
+    try {
+      const profile = await getSellerPublicProfile(signal);
+      if (!current() || !isCurrent()) return;
+      loaded.current = true;
+      setNoProfile(false);
       setSaved(profile);
       setName(profile.public_display_name ?? '');
       setVisible(profile.show_public_display_name);
-    }).catch((failure: SellerProfileError) => {
-      if (controller.signal.aborted || !isCurrent()) return;
+    } catch (error) {
+      if (!current() || !isCurrent()) return;
+      const failure = error as SellerProfileError;
       if (failure.status === 404) setNoProfile(true);
       else setError(failure);
-    }).finally(() => {
-      if (!controller.signal.aborted && isCurrent()) setLoading(false);
-    });
-    return () => {
-      controller.abort();
-      saveRequest.current?.abort();
-    };
-  }, [ownOperation, attempt]);
+      throw error;
+    } finally {
+      if (current() && isCurrent()) setLoading(false);
+    }
+  }, [ownOperation]));
+
+  useEffect(() => () => { saveRequest.current?.abort(); }, [ownOperation]);
 
   const save = async (event: FormEvent) => {
     event.preventDefault();
@@ -61,7 +66,10 @@ export default function SellerPublicName({ ownOperation }: { ownOperation: () =>
       setVisible(profile.show_public_display_name);
       setSuccess(true);
     } catch (failure) {
-      if (!controller.signal.aborted && isCurrent()) setError(failure as SellerProfileError);
+      if (!controller.signal.aborted && isCurrent()) {
+        if ((failure as SellerProfileError).status === 404) setNoProfile(true);
+        else setError(failure as SellerProfileError);
+      }
     } finally {
       if (!controller.signal.aborted && isCurrent()) setSaving(false);
     }
@@ -92,7 +100,7 @@ export default function SellerPublicName({ ownOperation }: { ownOperation: () =>
       <p id="publicNameOptOut" className="text-sm text-gray-600">Saving with visibility off stops ai.market showing your business name from now on. It cannot recall copies others already saved.</p>
       {loading && <p role="status" className="text-sm text-gray-600">Loading public business name settings...</p>}
       {error && Object.keys(fieldErrors).length === 0 && <p role="alert" className="text-sm text-red-700">{saved ? error.message : 'Could not load public business name settings. Please try again.'}</p>}
-      {!loading && !saved && <button type="button" onClick={() => { if (ownOperation()()) setAttempt((value) => value + 1); }} className="text-sm underline">Retry public business name settings</button>}
+      {!loading && !saved && <button type="button" onClick={() => { if (ownOperation()()) retry(); }} className="text-sm underline">Try again: public business name settings</button>}
       <button type="submit" disabled={disabled || !dirty} className="rounded-lg bg-[#3F51B5] px-4 py-2 text-sm font-medium text-white disabled:opacity-50 disabled:cursor-not-allowed">
         {saving ? 'Saving public business name...' : 'Save public business name'}
       </button>

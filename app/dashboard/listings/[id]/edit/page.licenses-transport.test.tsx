@@ -6,7 +6,7 @@ import enabled from '@/api/fixtures/s1735-capability-on.json';
 import disabled from '@/api/fixtures/s1735-capability-off.json';
 
 const transport=vi.hoisted(()=>({get:vi.fn(),post:vi.fn(),patch:vi.fn()}));
-vi.mock('@/api/client',()=>({api:transport}));
+vi.mock('@/api/client', async original => ({ ...await original<typeof import('@/api/client')>(), api: transport }));
 vi.mock('next/navigation',()=>({useParams:()=>({id:'listing-1'}),useRouter:()=>({push:vi.fn()})}));
 vi.mock('@/components/Toast',()=>({useToast:()=>({toast:vi.fn()})}));
 vi.mock('@/components/listings/SellerAtAGlance',()=>({default:()=>null}));

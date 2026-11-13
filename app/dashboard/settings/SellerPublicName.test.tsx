@@ -4,6 +4,7 @@ import { act, cleanup, fireEvent, render, screen, waitFor } from '@testing-libra
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { getSellerPublicProfile, updateSellerPublicProfile, SellerProfileError, type SellerPublicProfile } from '@/api/sellerProfile';
 import SellerPublicName from './SellerPublicName';
+import { useAuthStore } from '@/store/auth';
 
 vi.mock('@/api/sellerProfile', async (original) => ({
   ...await original<typeof import('@/api/sellerProfile')>(), getSellerPublicProfile: vi.fn(), updateSellerPublicProfile: vi.fn(),
@@ -91,7 +92,7 @@ describe('public business name settings', () => {
     render(<SellerPublicName ownOperation={ownOperation} />);
     await screen.findByRole('alert');
     expect((screen.getByRole('switch') as HTMLInputElement).disabled).toBe(true);
-    fireEvent.click(screen.getByRole('button', { name: 'Retry public business name settings' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Try again: public business name settings' }));
     await waitFor(() => expect((screen.getByRole('switch') as HTMLInputElement).disabled).toBe(false));
     expect(updateProfile).not.toHaveBeenCalled();
   });
@@ -140,4 +141,27 @@ describe('public business name settings', () => {
     expect(signal.aborted).toBe(true);
     await act(async () => request.resolve(anonymous));
   });
+});
+
+it('recovers a failed public name read when the same session rotates, without a manual reload', async () => {
+  useAuthStore.setState({ token: 'before-recovery' });
+  getProfile.mockRejectedValueOnce(new SellerProfileError('Temporarily unavailable', 503));
+  render(<SellerPublicName ownOperation={ownOperation} />);
+  await screen.findByRole('alert');
+  act(() => useAuthStore.setState({ token: 'valid-after-recovery' }));
+  await waitFor(() => expect((screen.getByLabelText('Public business name') as HTMLInputElement).disabled).toBe(false));
+  expect(screen.queryByRole('alert')).toBeNull(); expect(getProfile).toHaveBeenCalledTimes(2);
+  expect(updateProfile).not.toHaveBeenCalled();
+});
+it('keeps a loaded public name draft through healthy token rotation', async () => {
+  await mount(); edit('Retained unsaved name');
+  act(() => useAuthStore.setState({ token: 'another-valid-token' }));
+  expect((screen.getByLabelText('Public business name') as HTMLInputElement).value).toBe('Retained unsaved name');
+  expect(getProfile).toHaveBeenCalledOnce(); expect(updateProfile).not.toHaveBeenCalled();
+});
+it('hides the field when the trust flag turns off during save (404)', async () => {
+  updateProfile.mockRejectedValueOnce(new SellerProfileError('Not found', 404));
+  const { container } = await mount(); edit(); save();
+  await waitFor(() => expect(container.innerHTML).toBe(''));
+  expect(screen.queryByRole('alert')).toBeNull();
 });
