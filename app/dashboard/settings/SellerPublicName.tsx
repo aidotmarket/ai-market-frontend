@@ -1,9 +1,12 @@
 'use client';
 
 import { useEffect, useRef, useState, type FormEvent } from 'react';
+import { useAuthStore } from '@/store/auth';
 import { getSellerPublicProfile, updateSellerPublicProfile, SellerProfileError, type SellerPublicProfile } from '@/api/sellerProfile';
 
 export default function SellerPublicName({ ownOperation }: { ownOperation: () => () => boolean }) {
+  const token = useAuthStore(s => s.token);
+  const loaded = useRef(false);
   const [saved, setSaved] = useState<SellerPublicProfile | null>(null);
   const [name, setName] = useState('');
   const [visible, setVisible] = useState(false);
@@ -17,6 +20,8 @@ export default function SellerPublicName({ ownOperation }: { ownOperation: () =>
   const saveRequest = useRef<AbortController | null>(null);
 
   useEffect(() => {
+    // Session recovery reloads failed reads, preserving an already loaded draft.
+    if (loaded.current) return;
     const controller = new AbortController();
     const isCurrent = ownOperation();
     if (!isCurrent()) return;
@@ -24,6 +29,8 @@ export default function SellerPublicName({ ownOperation }: { ownOperation: () =>
     setError(null);
     getSellerPublicProfile(controller.signal).then((profile) => {
       if (controller.signal.aborted || !isCurrent()) return;
+      loaded.current = true;
+      setNoProfile(false);
       setSaved(profile);
       setName(profile.public_display_name ?? '');
       setVisible(profile.show_public_display_name);
@@ -36,9 +43,10 @@ export default function SellerPublicName({ ownOperation }: { ownOperation: () =>
     });
     return () => {
       controller.abort();
-      saveRequest.current?.abort();
     };
-  }, [ownOperation, attempt]);
+  }, [ownOperation, attempt, token]);
+
+  useEffect(() => () => { saveRequest.current?.abort(); }, [ownOperation]);
 
   const save = async (event: FormEvent) => {
     event.preventDefault();
@@ -61,7 +69,10 @@ export default function SellerPublicName({ ownOperation }: { ownOperation: () =>
       setVisible(profile.show_public_display_name);
       setSuccess(true);
     } catch (failure) {
-      if (!controller.signal.aborted && isCurrent()) setError(failure as SellerProfileError);
+      if (!controller.signal.aborted && isCurrent()) {
+        if ((failure as SellerProfileError).status === 404) setNoProfile(true);
+        else setError(failure as SellerProfileError);
+      }
     } finally {
       if (!controller.signal.aborted && isCurrent()) setSaving(false);
     }

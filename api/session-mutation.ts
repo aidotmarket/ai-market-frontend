@@ -1,7 +1,7 @@
 import axios from 'axios';
 import { useAuthStore } from '@/store/auth';
 import { pendingActionCsrf } from './pending-actions';
-import { refreshAccessToken, reserveRecoveryRefresh } from './client';
+import { currentSessionRefresh, refreshAccessToken, reserveRecoveryRefresh } from './client';
 import { authSessionOwner, assertAuthSessionOwner } from '@/lib/auth-session-owner';
 
 // Refresh before admission; never replay a mutation after a refusal.
@@ -31,6 +31,9 @@ const headersFor = (token: string): SessionHeaders => ({ Authorization: `Bearer 
 
 async function sessionHeaders(allowRefresh = true, assertAdmission?: (headers: SessionHeaders) => void, refresh?: SessionRefreshAdapter) {
   const owner = authSessionOwner();
+  const flight = currentSessionRefresh(owner);
+  if (flight && allowRefresh) await flight;
+  assertAuthSessionOwner(owner);
   let token = useAuthStore.getState().token;
   if (!token) throw new Error('FIRST_PARTY_SESSION_REQUIRED');
   if (allowRefresh && needsRefresh(token)) {
@@ -71,7 +74,15 @@ export function sessionMutationError(error: unknown): string | null {
 export async function postSessionMutation<T>(path: string, body: object, assertAdmission?: (headers: SessionHeaders) => void, refresh?: SessionRefreshAdapter, onDispatch?: () => void): Promise<T> {
   const owner = authSessionOwner();
   // Recovery admission and evidence must never rotate implicitly or replay.
-  const headers = await sessionHeaders(!path.includes('/recovery/'), assertAdmission, refresh);
+  let headers = await sessionHeaders(!path.includes('/recovery/'), assertAdmission, refresh);
+  if (!path.includes('/recovery/')) {
+    const flight = currentSessionRefresh(owner);
+    if (flight) await flight;
+    assertAuthSessionOwner(owner);
+    const token = useAuthStore.getState().token;
+    if (!token) throw new Error('FIRST_PARTY_SESSION_REQUIRED');
+    headers = headersFor(token);
+  }
   assertAuthSessionOwner(owner);
   assertAdmission?.(headers);
   onDispatch?.();
@@ -83,7 +94,13 @@ export async function postSessionMutation<T>(path: string, body: object, assertA
 // Same admission/refresh rules as POST; never retry a refused draft mutation.
 export async function patchSessionMutation<T>(path: string, body: object, assertAdmission?: () => void): Promise<T> {
   const owner = authSessionOwner();
-  const headers = await sessionHeaders();
+  await sessionHeaders();
+  const flight = currentSessionRefresh(owner);
+  if (flight) await flight;
+  assertAuthSessionOwner(owner);
+  const token = useAuthStore.getState().token;
+  if (!token) throw new Error('FIRST_PARTY_SESSION_REQUIRED');
+  const headers = headersFor(token);
   assertAuthSessionOwner(owner);
   assertAdmission?.();
   const { data } = await client.patch<T>(path, body, { headers });

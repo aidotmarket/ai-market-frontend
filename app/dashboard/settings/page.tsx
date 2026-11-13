@@ -40,7 +40,7 @@ function SettingsVisit({ accountId, retireVisit }: {
   retireVisit: () => void;
 }) {
   const router = useRouter();
-  const { user, refreshAuth } = useAuthStore();
+  const { user, token, refreshAuth } = useAuthStore();
   const { toast } = useToast();
 
   const lifetime = useRef<{ active: boolean } | null>(null);
@@ -135,7 +135,7 @@ function SettingsVisit({ accountId, retireVisit }: {
     return () => {
       cancelled = true;
     };
-  }, [user, ownOperation, capabilitiesAttempt]);
+  }, [user, token, ownOperation, capabilitiesAttempt]);
 
   const handleSave = async () => {
     const isCurrent = ownOperation();

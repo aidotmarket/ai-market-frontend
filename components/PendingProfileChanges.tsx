@@ -15,9 +15,12 @@ export function PendingProfileChanges() {
   const view=useSyncExternalStore(controller.subscribe,controller.getSnapshot,controller.getSnapshot);
   useEffect(()=>{
     if (!principal) return;
+    let previousToken=useAuthStore.getState().token;
     const retire=()=>{
       const state=useAuthStore.getState();
       if (authSessionOwner()!==owner || !state.token || state.user?.id!==principal || !state.isAuthenticated || !state.hydrated || state.isLoading) controller.retire();
+      else if (state.token!==previousToken) controller.sessionRecovered();
+      previousToken=state.token;
     };
     const unsubscribe=useAuthStore.subscribe(retire);
     const unsubscribeOwner=subscribeAuthSessionOwner(retire);

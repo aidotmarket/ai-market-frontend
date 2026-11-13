@@ -1,5 +1,5 @@
 import axios from 'axios';
-import { refreshAccessToken } from './client';
+import { currentSessionRefresh, installNativeReadAuth, refreshAccessToken, type OwnedRequest } from './client';
 import { authSessionIdentity, useAuthStore } from '@/store/auth';
 import { authSessionOwner, isAuthSessionOwner } from '@/lib/auth-session-owner';
 import { sessionCsrf } from '@/lib/session-csrf';
@@ -54,6 +54,7 @@ export function validLimits(value: unknown): value is StandingLimits {
 
 // Native requests bind headers and body to one credential pair per attempt.
 export const nativeClient = axios.create({ baseURL: `${process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000'}/api/v1`, withCredentials: true, headers: { 'Content-Type': 'application/json' } });
+installNativeReadAuth(nativeClient);
 export function nativeSession() {
   const token = useAuthStore.getState().token;
   if (!token) throw new Error('FIRST_PARTY_SESSION_REQUIRED');
@@ -73,17 +74,20 @@ export async function nativeRead<T>(path: string, options: { signal?: AbortSigna
   for (let attempt = 0; ; attempt++) {
     if (!sameSession()) throw new Error('SESSION_CHANGED');
     options.signal?.throwIfAborted();
+    const flight = currentSessionRefresh();
+    if (flight) await flight;
+    if (!sameSession()) throw new Error('SESSION_CHANGED');
     const session = nativeSession();
     try {
-      const { data } = await nativeClient.get<T>(path, { ...options, headers: session.headers });
+      const { data, config } = await nativeClient.get<T>(path, { ...options, headers: session.headers });
       if (!sameSession()) throw new Error('SESSION_CHANGED');
-      if (useAuthStore.getState().token !== session.token) throw new Error('SESSION_CHANGED');
+      if (useAuthStore.getState().token !== ((config as OwnedRequest | undefined)?._authToken ?? session.token)) throw new Error('SESSION_CHANGED');
       options.signal?.throwIfAborted();
       return data;
     } catch (error) {
       if (!sameSession()) throw new Error('SESSION_CHANGED');
       options.signal?.throwIfAborted();
-      const retryable = attempt === 0 && axios.isAxiosError(error) && error.response?.status === 401;
+      const retryable = attempt === 0 && axios.isAxiosError(error) && !(error.config as OwnedRequest | undefined)?._retry && error.response?.status === 401;
       if (useAuthStore.getState().token !== session.token) {
         if (retryable && useAuthStore.getState().token) continue;
         throw new Error('SESSION_CHANGED');
@@ -99,6 +103,9 @@ export async function nativeWrite<T>(path: string, body: object, signal?: AbortS
   for (let attempt = 0; ; attempt++) {
     if (!sameSession()) throw new Error('SESSION_CHANGED');
     signal?.throwIfAborted();
+    const flight = currentSessionRefresh();
+    if (flight) await flight;
+    if (!sameSession()) throw new Error('SESSION_CHANGED');
     const session = nativeSession();
     try {
       const { data } = await nativeClient[method]<T>(path, { ...body, csrf: session.csrf }, {
@@ -110,7 +117,7 @@ export async function nativeWrite<T>(path: string, body: object, signal?: AbortS
     } catch (error) {
       if (!sameSession()) throw new Error('SESSION_CHANGED');
       signal?.throwIfAborted();
-      const retryable = attempt === 0 && axios.isAxiosError(error) && error.response?.status === 401;
+      const retryable = attempt === 0 && axios.isAxiosError(error) && !(error.config as OwnedRequest | undefined)?._retry && error.response?.status === 401;
       if (useAuthStore.getState().token !== session.token) {
         if (retryable && useAuthStore.getState().token) continue;
         throw new Error('SESSION_CHANGED');

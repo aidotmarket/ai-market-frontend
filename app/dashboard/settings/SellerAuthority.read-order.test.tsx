@@ -126,3 +126,18 @@ it.each(['success', 'failure'])('settles an outstanding read safely after unmoun
   expect(screen.queryByRole('region', { name: 'Seller standing authority' })).toBeNull();
   expect(screen.queryByRole('alert')).toBeNull();
 });
+
+it('automatically recovers failed authority and budget after same-owner session recovery', async () => {
+  const get = vi.spyOn(nativeClient, 'get').mockRejectedValueOnce(new Error('initial session read failed')).mockResolvedValueOnce({ data: latest });
+  render(<SellerAuthority />); await screen.findByRole('alert');
+  act(() => useAuthStore.setState({ token: 'valid-recovered-session' }));
+  await screen.findByText(/Authority version 9/); expectLatest();
+  expect(screen.queryByRole('alert')).toBeNull(); expect(get).toHaveBeenCalledTimes(2);
+  const button = screen.getByRole('button', { name: 'Refresh authority and budget' });
+  expect(button.className).toContain('border'); expect(button.className).toContain('px-4');
+  const table = screen.getByRole('table', { name: 'Shared UTC daily budget' });
+  expect(table.querySelector('caption')?.className).toContain('text-left');
+  for (const header of within(table).getAllByRole('columnheader')) {
+    expect(header.className).toContain('px-4'); expect(header.getAttribute('scope')).toBe('col');
+  }
+});

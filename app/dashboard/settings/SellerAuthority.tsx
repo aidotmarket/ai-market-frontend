@@ -80,15 +80,19 @@ export function AuthorityScreen({ switches }: { switches: SellerSwitchReport | n
     <h2 className="text-lg font-semibold">Seller standing authority</h2>
     <button type="button" disabled={!status || busy} onClick={() => void stop()} className="rounded border border-red-700 px-4 py-2 text-red-800">Stop automatic seller actions</button>
     <p>After authenticated review and confirmation, Stop revokes standing authority immediately for unexecuted items. Successful items remain completed.</p>
-    <button type="button" onClick={() => { stopping.current = null; void refresh(); }}>Refresh authority and budget</button>
+    <button type="button" onClick={() => { stopping.current = null; void refresh(); }} className="inline-flex items-center rounded-lg border border-gray-300 bg-white px-4 py-2 text-sm font-medium text-gray-900 shadow-sm hover:bg-gray-50 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-indigo-600">Refresh authority and budget</button>
     {stopReview && <section aria-label="Exact server Stop review"><h3>Review withdrawal of standing authority</h3><pre className="overflow-auto whitespace-pre-wrap">{JSON.stringify(stopReview.result, null, 2)}</pre><button disabled={busy} onClick={() => void confirmStop()}>Confirm Stop automatic seller actions</button></section>}
     {message && <p role="status">{message}</p>}
     {status && <><p>Authority version {status.version} · {status.enabled ? 'Active' : 'Off or expired'} · UTC day {status.utc_day}</p>
       <p>Single and bulk actions share this budget across all grants and clients. Absolute request ceiling: 50 items. Requests are never automatically split.</p>
-      <table><caption>Shared UTC daily budget</caption><thead><tr><th>Operation</th><th>Limit</th><th>Reserved</th><th>Succeeded</th><th>Remaining</th></tr></thead><tbody>{verbs.map(v => {
+      <div className="overflow-x-auto"><table className="w-full border-collapse text-sm text-left">
+        <caption className="caption-top pb-3 text-left font-medium text-gray-700">Shared UTC daily budget</caption>
+        <thead className="border-b border-gray-200 bg-gray-50"><tr>{['Operation', 'Limit', 'Reserved', 'Succeeded', 'Remaining'].map(label =>
+          <th key={label} scope="col" className="whitespace-nowrap px-4 py-3 font-semibold">{label}</th>)}</tr></thead><tbody>{verbs.map(v => {
         const used = status.usage.find(u => u.action === `aim.listing.${v}`); const limit = status.limits?.daily_items?.[v] ?? 0;
-        return <tr key={v}><th>{v}</th><td>{limit}</td><td>{used?.reserved ?? 0}</td><td>{used?.success ?? 0}</td><td>{Math.max(0, limit - (used?.reserved ?? 0) - (used?.success ?? 0))}</td></tr>;
-      })}</tbody></table>
+        return <tr key={v} className="border-b border-gray-100"><th scope="row" className="px-4 py-3 font-medium">{v}</th>{[limit, used?.reserved ?? 0, used?.success ?? 0,
+          Math.max(0, limit - (used?.reserved ?? 0) - (used?.success ?? 0))].map((value, index) => <td key={index} className="px-4 py-3 tabular-nums">{value}</td>)}</tr>;
+      })}</tbody></table></div>
       {!effects && <p>Seller effects are off. Status and Stop remain available.</p>}
       {effects && <><form onSubmit={e => { e.preventDefault(); void prepare(); }} className="space-y-4">
         <fieldset disabled={busy || !effects} className="grid gap-4 sm:grid-cols-2"><legend>Edit standing limits</legend>

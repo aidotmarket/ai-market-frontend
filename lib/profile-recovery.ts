@@ -24,13 +24,21 @@ export class ProfileRecovery {
     const generation=this.generation;
     this.focusTimer=setTimeout(()=>{this.focusTimer=null;if (generation===this.generation && this.alive()) void this.read();},250);
   };
+  private readAfterSession=false;
+  // Token rotation can finish before the failed read. Queue one recovery read
+  // behind it; never retry decisions or keep retrying an unchanged session.
+  sessionRecovered=() => {
+    if (!this.alive() || this.view.submitted) return;
+    if (this.view.busy) this.readAfterSession=true;
+    else if (this.view.error) void this.read();
+  };
   private listeners=new Set<() => void>();
   constructor(private port: ProfileRecoveryPort, private current: () => boolean) {}
   subscribe=(fn:()=>void) => {this.listeners.add(fn);return ()=>{this.listeners.delete(fn);};};
   getSnapshot=() => this.view;
   private emit(next:Partial<RecoveryView>) {this.view={...this.view,...next};this.listeners.forEach(fn=>fn());}
-  activate=() => {if (this.current()) {this.clearFocus();this.retired=false;this.generation++;this.fresh.clear();this.emit(empty());}};
-  retire=() => {this.clearFocus();this.retired=true;this.generation++;this.fresh.clear();this.view=empty();this.listeners.forEach(fn=>fn());};
+  activate=() => {if (this.current()) {this.clearFocus();this.retired=false;this.readAfterSession=false;this.generation++;this.fresh.clear();this.emit(empty());}};
+  retire=() => {this.clearFocus();this.retired=true;this.readAfterSession=false;this.generation++;this.fresh.clear();this.view=empty();this.listeners.forEach(fn=>fn());};
   private alive() {return !this.retired && this.current();}
   isFresh=(row:PendingProfileChange) => this.fresh.has(key(row));
   canDecide=(row:PendingProfileChange) => this.alive() && !this.view.busy && !this.view.reconcile
@@ -114,7 +122,13 @@ export class ProfileRecovery {
           : known ? 'Current status could not be read. The last known change is shown; read again before deciding.'
           : 'Account changes could not be checked. You can read again later.'});
       }
-    } finally {if (this.alive() && g===this.generation) this.emit({busy:false});}
+    } finally {
+      if (this.alive() && g===this.generation) {
+        this.emit({busy:false});
+        const recover=this.readAfterSession; this.readAfterSession=false;
+        if (recover && this.view.error) void this.read();
+      }
+    }
   }
   async decide(row:PendingProfileChange, action:'reconfirm'|'cancel') {
     if (!this.canDecide(row)) return;

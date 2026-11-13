@@ -6,7 +6,7 @@ import SellerReview from './SellerReview';
 import savedWire from '@/tests/fixtures/s1922-saved-review-wire.json';
 import publicWire from '@/tests/fixtures/s1922-backend-wire.json';
 const transport=vi.hoisted(()=>({get:vi.fn(),post:vi.fn()}));
-vi.mock('@/api/client',()=>({api:transport}));
+vi.mock('@/api/client', async original => ({ ...await original<typeof import('@/api/client')>(), api: transport }));
 vi.mock('./GuidedListingFlow',()=>({useListingFlow:()=>null,StepNext:()=>null}));
 // Publication is a separate operation: inspect the real restored approval at
 // that boundary without starting preparation/status requests from its child.
