@@ -1,6 +1,7 @@
 'use client';
 
 import { api } from './client';
+import { privateReadOptions } from './privateReads';
 import type {LicenseSelection} from './listingLicenses';
 import type { ListingAuthorityReferences } from './listingAuthority';
 
@@ -44,12 +45,12 @@ export async function getListing(id: string): Promise<ListingWithAuthority> {
 // Owner-facing fields from the existing single-listing endpoint. Call only
 // after establishing ownership; the public detail type omits listing status.
 export async function getSellerListing(id: string): Promise<SellerListingSummary> {
-  const res = await api.get<SellerListingSummary>(`/listings/${id}`);
+  const res = await api.get<SellerListingSummary>(`/listings/${encodeURIComponent(id)}`, privateReadOptions);
   return res.data;
 }
 
 export async function getListingOwnership(id: string): Promise<boolean> {
-  const res = await api.get<{ is_owner?: unknown }>(`/listings/${id}/ownership`);
+  const res = await api.get<{ is_owner?: unknown }>(`/listings/${encodeURIComponent(id)}/ownership`, privateReadOptions);
   return res.data?.is_owner === true;
 }
 

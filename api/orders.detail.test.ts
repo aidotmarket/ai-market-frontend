@@ -1,4 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { privateReadOptions } from './privateReads';
 
 const client = vi.hoisted(() => ({ get: vi.fn() }));
 vi.mock('./client', () => ({ api: client }));
@@ -14,6 +15,15 @@ const retained = {
 describe('order detail display adapter', () => {
   beforeEach(() => client.get.mockReset());
 
+  it('preserves the exact private evidence, notice and delivery field names', async () => {
+    const data = { ...retained, amount_cents: 2500, listing_snapshot: { title: 'Purchased v1' },
+      purchased_presentation: { state: 'redacted', approval_id: 'approval-v1', listing_version_id: 'version-v1',
+        rendered_html: null, render_hash: 'hash-v1', notice: 'The listing description was removed by ai.market.' },
+      listing_notice: 'Withdrawn by the seller. Your purchase is unaffected.', delivery_access_state: 'destroyed' };
+    client.get.mockResolvedValueOnce({ data });
+    expect(await getOrder(data.id)).toMatchObject(data);
+  });
+
   it.each([false, true, undefined])('normalizes canonical fields with workspace_delivery=%s and preserves all other fields', async (workspace_delivery) => {
     const data = Object.freeze({ ...retained, workspace_delivery, amount_cents: 12345,
       listing_snapshot: { title: 'Purchased snapshot', version: '1' } });
@@ -21,7 +31,7 @@ describe('order detail display adapter', () => {
     expect(await getOrder(data.id)).toEqual({ ...data, amount: 123.45, listing_title: 'Purchased snapshot' });
     expect(data).not.toHaveProperty('amount');
     expect(data).not.toHaveProperty('listing_title');
-    expect(client.get).toHaveBeenCalledExactlyOnceWith('/orders/synthetic-order');
+    expect(client.get).toHaveBeenCalledExactlyOnceWith('/orders/synthetic-order', privateReadOptions);
   });
 
   it.each([false, true])('prefers canonical zero and snapshot over stale legacy fields with workspace_delivery=%s', async (workspace_delivery) => {
@@ -47,6 +57,6 @@ describe('order detail display adapter', () => {
   it('encodes an order id as one path segment', async () => {
     client.get.mockResolvedValueOnce({ data: { ...retained, amount: 1, listing_title: 'Legacy' } });
     await getOrder('order/with ?#%');
-    expect(client.get).toHaveBeenCalledExactlyOnceWith('/orders/order%2Fwith%20%3F%23%25');
+    expect(client.get).toHaveBeenCalledExactlyOnceWith('/orders/order%2Fwith%20%3F%23%25', privateReadOptions);
   });
 });

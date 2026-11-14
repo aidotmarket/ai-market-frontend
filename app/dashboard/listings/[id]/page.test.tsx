@@ -34,6 +34,16 @@ function deferred<T>() {
 }
 const optionalOptions = { timeout: 10_000, signal: expect.any(AbortSignal) };
 describe('seller listing verification entry', () => {
+  it.each(['unlisted', 'hidden', 'withdrawn', 'held', 'suspended'])('retains the authenticated owner view for %s listings', async status => {
+    vi.mocked(getSellerListing).mockResolvedValue({ id: 'listing', title: 'My retained listing', status } as Awaited<ReturnType<typeof getSellerListing>>);
+    await page();
+    expect(await screen.findByRole('heading', { name: 'My retained listing' })).toBeTruthy();
+    expect(screen.getByRole('link', { name: 'Edit listing' }).getAttribute('href')).toBe('/dashboard/listings/listing/edit');
+    expect(screen.getByText('Your private owner view remains available when this listing is not public.')).toBeTruthy();
+    expect(getListingOwnership).toHaveBeenCalledWith('listing');
+    expect(getSellerListing).toHaveBeenCalledWith('listing');
+    expect(screen.queryByRole('heading', { name: 'Check verification availability' })).toBeNull();
+  });
   beforeEach(() => {
     vi.resetAllMocks(); auth.user = { id: 'seller' }; auth.isAuthenticated = true; auth.hydrated = true;
     Object.defineProperty(window, 'localStorage', { configurable: true, value: { getItem: () => null } });

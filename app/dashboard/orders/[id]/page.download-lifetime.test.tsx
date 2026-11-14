@@ -4,7 +4,7 @@ vi.mock('@/components/orders/PurchasedLicenseDisplay', () => ({default: () => <d
 
 import { StrictMode, type ReactNode } from 'react';
 import type { Transaction } from '@/types';
-import { act, cleanup, fireEvent, render, screen } from '@testing-library/react';
+import { act, cleanup, fireEvent, render, screen, within } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 const privateSupport = vi.hoisted(() => ({ openReportIssue: vi.fn() }));
 vi.mock('@/components/allai/AllAIContext', () => ({ useAllAI: () => privateSupport }));
@@ -187,7 +187,7 @@ for (const phase of ['transfer', 'file authorization'] as const) {
       vi.useFakeTimers();
       await act(async () => { fireEvent.click(screen.getByRole('button', { name: 'Download files' })); });
       expect(downloads.file).toHaveBeenCalledTimes(2);
-      const progress = screen.getByRole('status').textContent;
+      const progress = within(screen.getByRole('region', { name: 'Download purchased files' })).getByRole('status').textContent;
       expect(progress).toContain(phase === 'transfer' ? 'file-1.csv: 1 of 3 bytes' : 'file-0.csv: 3 of 3 bytes');
       expect(create).toHaveBeenCalledTimes(1);
       expect(click).toHaveBeenCalledTimes(1);
@@ -201,7 +201,7 @@ for (const phase of ['transfer', 'file authorization'] as const) {
       state.token = 'test-session-2'; view.rerender(page());
       expect(screen.queryByText('TX-A')).toBeNull(); // synchronous old transaction hiding
       expect(signal.aborted).toBe(false);
-      expect(screen.getByRole('status').textContent).toBe(progress);
+      expect(within(screen.getByRole('region', { name: 'Download purchased files' })).getByRole('status').textContent).toBe(progress);
       expect(screen.getByRole('button', { name: 'Cancel download' })).toBeTruthy();
       expect(screen.queryByRole('button', { name: 'Continue to download' })).toBeNull();
       expect(downloads.allocate).toHaveBeenCalledTimes(1);
@@ -223,13 +223,13 @@ for (const phase of ['transfer', 'file authorization'] as const) {
       expect((screen.getByRole('button', { name: 'Confirming…' }) as HTMLButtonElement).disabled).toBe(true);
       expect(calls.confirmTransaction).toHaveBeenCalledTimes(outcome === 'deferred Terms' ? 1 : 2);
       expect(signal.aborted).toBe(false);
-      expect(screen.getByRole('status').textContent).toBe(progress);
+      expect(within(screen.getByRole('region', { name: 'Download purchased files' })).getByRole('status').textContent).toBe(progress);
       expect(revoke).not.toHaveBeenCalled();
       await act(async () => {
         if (phase === 'file authorization') authorization.resolve(grant(1));
       });
       await act(async () => { transfer.enqueue(new Uint8Array([2, 3])); transfer.close(); });
-      expect(screen.getByRole('status').textContent).toContain('Saved 2 files');
+      expect(within(screen.getByRole('region', { name: 'Download purchased files' })).getByRole('status').textContent).toContain('Saved 2 files');
       expect(screen.queryByRole('button', { name: 'Cancel download' })).toBeNull();
       expect(downloads.allocate).toHaveBeenCalledTimes(1);
       expect(downloads.file).toHaveBeenCalledTimes(2);
@@ -242,7 +242,7 @@ for (const phase of ['transfer', 'file authorization'] as const) {
       expect(revoke).toHaveBeenCalledTimes(2);
       state.token = 'test-session-3';
       await act(async () => { view.rerender(page()); });
-      expect(screen.getByRole('status').textContent).toContain('Saved 2 files');
+      expect(within(screen.getByRole('region', { name: 'Download purchased files' })).getByRole('status').textContent).toContain('Saved 2 files');
       expect(downloads.allocate).toHaveBeenCalledTimes(1);
       expect(click).toHaveBeenCalledTimes(2);
       expect(revoke).toHaveBeenCalledTimes(2);

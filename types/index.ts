@@ -861,7 +861,19 @@ export interface LicenseDeletionConfirmation {
   occurred_at: string;
 }
 
+export interface PurchasedPresentation {
+  state: 'approved' | 'redacted' | 'unavailable';
+  approval_id?: string | null;
+  listing_version_id?: string | null;
+  render_hash?: string | null;
+  rendered_html?: string | null;
+  notice?: string | null;
+}
+
 export interface BuyerOrderDetail extends BuyerOrder {
+  purchased_presentation?: PurchasedPresentation | null;
+  listing_notice?: string | null;
+  delivery_access_state?: string | null;
   workspace_delivery?: boolean;
   buyer_id: string;
   seller_id: string;

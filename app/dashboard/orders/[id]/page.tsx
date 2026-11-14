@@ -1,5 +1,8 @@
 'use client';
 import PurchasedLicenseDisplay from '@/components/orders/PurchasedLicenseDisplay';
+import PurchaseEvidence from '@/components/orders/PurchaseEvidence';
+import AcceptedLicenseDocument from '@/components/orders/AcceptedLicenseDocument';
+import { deliveryPermitted } from '@/lib/order-purchase-evidence';
 
 import { canonicalOrderId } from '@/lib/order-route';
 import { ACTION_AUTH_REFRESH, isLegacyActionAuthError } from '@/lib/action-auth-error';
@@ -169,7 +172,7 @@ function OrderDetailVisit({ orderId, txIdParam, userId, sessionGeneration, issue
     setOrderAccess(null);
     setDownloadError('');
     setDownloadLoading(false);
-    if (!isBuyerOfRecord || !order || order.access_expired) return;
+    if (!isBuyerOfRecord || !order || order.access_expired || !deliveryPermitted(order.delivery_access_state)) return;
     const status = String(order.status);
     if (status !== 'partially_refunded' && (order.workspace_delivery || !['fulfilled', 'delivered', 'completed'].includes(status))) return;
     const buyerId = order.buyer_id;
@@ -181,7 +184,7 @@ function OrderDetailVisit({ orderId, txIdParam, userId, sessionGeneration, issue
       .catch(error => { if (!cancelled) setDownloadError(isLegacyActionAuthError(error) ? ACTION_AUTH_REFRESH : 'Download access is unavailable.'); })
       .finally(() => { if (!cancelled) setDownloadLoading(false); });
     return () => { cancelled = true; };
-  }, [isBuyerOfRecord, order?.buyer_id, order?.workspace_delivery, order?.access_expired, order?.status, orderId]);
+  }, [isBuyerOfRecord, order?.buyer_id, order?.workspace_delivery, order?.access_expired, order?.status, order?.delivery_access_state, orderId]);
 
   if (loading || (order && order.id !== orderId)) {
     return (
@@ -211,7 +214,8 @@ function OrderDetailVisit({ orderId, txIdParam, userId, sessionGeneration, issue
       ? Number.isFinite(access.downloads_remaining) && (access.downloads_remaining ?? 0) > 0
       : access.delivery_type === 'reference' && access.can_download === true &&
         access.download_urls?.some((file) => /^https?:\/\//i.test(file.url)) === true);
-  const downloadEligible = ['fulfilled', 'delivered', 'completed'].includes(String(order.status)) || retainedPartialAccess;
+  const deliveryAllowed = deliveryPermitted(order.delivery_access_state);
+  const downloadEligible = deliveryAllowed && (['fulfilled', 'delivered', 'completed'].includes(String(order.status)) || retainedPartialAccess);
 
   const { badge: statusCss, label: statusLabel } = orderStatusPresentation(order.status);
 
@@ -224,8 +228,10 @@ function OrderDetailVisit({ orderId, txIdParam, userId, sessionGeneration, issue
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
         {/* Main info */}
         <div className="lg:col-span-2 space-y-6">
-          {isBuyerOfRecord && <PurchasedLicenseDisplay orderId={order.id} listingId={order.listing_id} />}
-          {isBuyerOfRecord && <GatewayDeliverySection key={order.id} orderId={order.id} onPresenceChange={handleGatewayPresence} />}
+          {(isBuyerOfRecord || isSellerOfRecord) && <PurchaseEvidence order={order} />}
+          {(isBuyerOfRecord || isSellerOfRecord) && order.purchased_presentation !== undefined && <AcceptedLicenseDocument key={`accepted:${order.id}`} orderId={order.id} />}
+          {isBuyerOfRecord && order.purchased_presentation === undefined && <PurchasedLicenseDisplay orderId={order.id} listingId={order.listing_id} />}
+          {isBuyerOfRecord && deliveryAllowed && <GatewayDeliverySection key={`gateway:${order.id}`} orderId={order.id} onPresenceChange={handleGatewayPresence} />}
           <RecoveryRenderBoundary resetKey={order} onFailure={() => { setRenderFailed(true); if (recovery.attempt) void recovery.attempt.stop('failed'); }}>
           <div className="rounded-lg border border-gray-200 p-6">
             <div className="flex items-center justify-between mb-4">
@@ -276,8 +282,8 @@ function OrderDetailVisit({ orderId, txIdParam, userId, sessionGeneration, issue
             </div>
           )}
 
-          {order.workspace_delivery && isBuyerOfRecord && !order.access_expired && String(order.status)==='pending_delivery' && <WorkspacePurchaseRecovery key={order.id} orderId={order.id} onReady={setOrder} />}
-          {order.workspace_delivery && isBuyerOfRecord && !order.access_expired && downloadEligible && (workspaceDownloadReady === `${orderId}:${userId}` ? <WorkspaceDownload key={order.id} orderId={order.id} /> : <WorkspaceDownloadActivation key={`activation:${sessionGeneration}`} onReady={() => setWorkspaceDownloadReady(`${orderId}:${userId}`)} />)}
+          {order.workspace_delivery && deliveryAllowed && isBuyerOfRecord && !order.access_expired && String(order.status)==='pending_delivery' && <WorkspacePurchaseRecovery key={`recovery:${order.id}`} orderId={order.id} onReady={setOrder} />}
+          {order.workspace_delivery && isBuyerOfRecord && !order.access_expired && downloadEligible && (workspaceDownloadReady === `${orderId}:${userId}` ? <WorkspaceDownload key={`download:${order.id}`} orderId={order.id} deliveryAccessState={order.delivery_access_state} /> : <WorkspaceDownloadActivation key={`activation:${sessionGeneration}`} onReady={() => setWorkspaceDownloadReady(`${orderId}:${userId}`)} />)}
 
           {downloadEligible && !order.workspace_delivery && nonGatewayOrderId === order.id && isBuyerOfRecord && !order.access_expired && (
             <div className="rounded-lg border border-gray-200 p-6">
@@ -324,6 +330,7 @@ function OrderDetailVisit({ orderId, txIdParam, userId, sessionGeneration, issue
         <div className="space-y-4">
           <div className="rounded-lg border border-gray-200 p-6">
             <h3 className="font-semibold text-gray-900 mb-3">Actions</h3>
+            {(isBuyerOfRecord || isSellerOfRecord) && <Link href={`/dashboard/${isBuyerOfRecord ? 'orders' : 'sales'}/${encodeURIComponent(order.id)}/license-record`} className="mb-3 block text-sm text-indigo-700 underline">Original licence record</Link>}
             <button
               type="button"
               onClick={() => renderFailed ? openReportIssue(orderId, undefined, 'order_detail:render_failed') : openReportIssue(orderId)}

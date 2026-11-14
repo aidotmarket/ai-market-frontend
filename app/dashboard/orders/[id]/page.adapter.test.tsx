@@ -4,6 +4,7 @@ vi.mock('@/components/orders/PurchasedLicenseDisplay', () => ({default: () => <d
 
 import { cleanup, render, screen, waitFor } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { privateReadOptions } from '@/api/privateReads';
 
 const privateSupport = vi.hoisted(() => ({ openReportIssue: vi.fn() }));
 vi.mock('@/components/allai/AllAIContext', () => ({ useAllAI: () => privateSupport }));
@@ -64,12 +65,12 @@ describe('mounted order detail through the real order adapter', () => {
     expect.soft(screen.getByText('Amount Paid').nextElementSibling?.textContent).toBe(price);
     expect.soft(screen.queryByText('$NaN')).toBeNull();
     expect(client.get.mock.calls.filter(([url]) => url === path)).toHaveLength(1);
-    expect(client.get).toHaveBeenCalledWith(`${path}/events`);
+    expect(client.get).toHaveBeenCalledWith(`${path}/events`, privateReadOptions);
     if (fields.workspace_delivery) {
       expect(screen.getByRole('button', { name: 'Continue to download' })).toBeTruthy();
-      expect(client.get).not.toHaveBeenCalledWith(`${path}/access`);
+      expect(client.get).not.toHaveBeenCalledWith(`${path}/access`, privateReadOptions);
     } else {
-      await waitFor(() => expect(client.get).toHaveBeenCalledWith(`${path}/access`));
+      await waitFor(() => expect(client.get).toHaveBeenCalledWith(`${path}/access`, privateReadOptions));
       expect(screen.queryByRole('button', { name: 'Continue to download' })).toBeNull();
     }
     expect(data).toEqual({ ...retained, ...fields, id: navigation.id });
