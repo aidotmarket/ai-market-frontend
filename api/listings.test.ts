@@ -13,7 +13,7 @@ describe('getListingOwnership', () => {
   it.each([true, false, 'true', 1, null, undefined])('accepts only literal true from is_owner: %s', async (is_owner) => {
     apiGet.mockResolvedValue({ data: { is_owner } });
     await expect(getListingOwnership('listing-1')).resolves.toBe(is_owner === true);
-    expect(apiGet).toHaveBeenCalledWith('/listings/listing-1/ownership');
+    expect(apiGet).toHaveBeenCalledWith('/listings/listing-1/ownership', { adapter: 'fetch', fetchOptions: { cache: 'no-store' } });
   });
 
   it('treats a missing payload as nonownership', async () => {

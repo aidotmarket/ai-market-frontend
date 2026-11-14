@@ -7,7 +7,13 @@ import { Component, useSyncExternalStore, type ReactNode } from 'react';
 const net = vi.hoisted(() => ({ adapter: vi.fn() }));
 vi.mock('axios', async original => {
   const actual = await original<typeof import('axios')>();
-  return { ...actual, default: { ...actual.default, create: (config: object) => actual.default.create({ ...config, adapter: net.adapter }) } };
+  return { ...actual, default: { ...actual.default, create: (config: object) => {
+    const client = actual.default.create({ ...config, adapter: net.adapter });
+    // Private reads explicitly choose the fetch adapter. Keep all transports in
+    // this integration harness synthetic while exercising the real auth client.
+    client.interceptors.request.use(request => { request.adapter = net.adapter; return request; });
+    return client;
+  } } };
 });
 const nav = vi.hoisted(() => ({ order: '00000000-0000-4000-8000-000000000010' }));
 vi.mock('next/navigation', () => ({ useParams: () => ({ id: nav.order }), useSearchParams: () => new URLSearchParams() }));

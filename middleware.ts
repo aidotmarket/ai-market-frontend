@@ -3,6 +3,11 @@ import { detectAiBot } from './lib/aiBot';
 import { isSupportPrivatePath, supportAccountCsp, SUPPORT_ACCOUNT_PATH } from './lib/support-private-policy';
 
 export function middleware(request: NextRequest, event: NextFetchEvent) {
+  if (/^\/dashboard(?:\/|$)/.test(request.nextUrl.pathname)) {
+    const response = NextResponse.next();
+    response.headers.set('Cache-Control', 'private, no-store');
+    return response;
+  }
   if (isSupportPrivatePath(request.nextUrl.pathname)) {
     // Never canonicalize a bearer-bearing private URL through a redirect.
     if (request.headers.get('host') !== 'ai.market' || request.nextUrl.protocol !== 'https:') {
@@ -73,6 +78,7 @@ export function middleware(request: NextRequest, event: NextFetchEvent) {
 
 export const config = {
   matcher: [
+    '/dashboard/:path*',
     '/support/mailbox-account',
     '/api/v1/support/mailbox-confirm/:path*',
     '/api/v1/support/email-visit/:path*',
