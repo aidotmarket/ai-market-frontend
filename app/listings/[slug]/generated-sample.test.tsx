@@ -4,6 +4,8 @@ import { renderToStaticMarkup } from 'react-dom/server';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { within } from '@testing-library/react';
 
+vi.mock('next/headers', () => ({ headers: vi.fn(async () => new Headers()) }));
+
 const api = vi.hoisted(() => ({
   fetchPublicListing: vi.fn(), fetchListingVersions: vi.fn(),
   fetchListingAccessWindowDays: vi.fn(), resolveListingUUID: vi.fn(),
@@ -117,7 +119,7 @@ it.each(originalSampleIdentities)('preserves original public identity $id at $sl
   const metadata = await generateMetadata({params: Promise.resolve({slug: identity.slug})});
   expect(metadata.alternates?.canonical).toBe(`https://ai.market/listings/${identity.slug}`);
   expect(JSON.parse(document.querySelector('script')!.textContent!).url).toBe(`https://ai.market/listings/${identity.slug}`);
-  expect(api.fetchPublicListing).toHaveBeenCalledWith(identity.slug);
+  expect(api.fetchPublicListing).toHaveBeenCalledWith(identity.slug, null);
   assertNoCommercialMounts();
 });
 

@@ -10,6 +10,9 @@ import {documentFixture} from '@/tests/listingDocumentsFixture';
 import type { ListingWithSamples } from './SampleFiles';
 import composed from '@/tests/fixtures/s1922-composed-detail.json';
 import {verifyCurrentListing} from '@/lib/publicPresentation';
+import { headers } from 'next/headers';
+
+vi.mock('next/headers', () => ({ headers: vi.fn(async () => new Headers()) }));
 
 const notFound = vi.fn(() => {
   throw new Error('NEXT_NOT_FOUND');
@@ -175,6 +178,63 @@ function makeListing(overrides: Partial<ListingWithSamples> = {}): ListingWithSa
     ...overrides,
   };
 }
+
+describe('SSR listing harness User-Agent forwarding', () => {
+  afterEach(() => {
+    vi.unstubAllGlobals();
+    vi.mocked(headers).mockResolvedValue(new Headers());
+    fetchPublicListing.mockReset();
+    fetchListingAccessWindowDays.mockReset();
+    fetchListingVersions.mockReset();
+    fetchPublicListingDocuments.mockReset().mockResolvedValue([]);
+  });
+
+  it.each([
+    ['harness UA', 'Mozilla/5.0 ai-market-e2e-harness/0.1 private-browser-detail', true],
+    ['mixed-case harness UA (backend parity)', 'Mozilla/5.0 AI-MARKET-E2E-HARNESS/0.1', true],
+    ['normal UA', 'Mozilla/5.0 ordinary-browser', false],
+    ['missing UA', null, false],
+    ['partial token', 'ai-market-e2e', false],
+    ['similar token', 'ai-market-e2e-harnes/0.1', false],
+  ] as const)('forwards only the fixed token for %s across detail, metadata and access-window reads', async (_label, userAgent, harness) => {
+    const incoming = new Headers({
+      cookie: 'session=private-cookie',
+      authorization: 'Bearer private-auth',
+      'x-private-header': 'private-value',
+      'x-harness': 'ai-market-e2e-harness',
+    });
+    if (userAgent) incoming.set('user-agent', userAgent);
+    vi.mocked(headers).mockResolvedValue(incoming);
+
+    // Exercise the real API helpers through both server-component entry points.
+    const actual = await vi.importActual<typeof import('@/lib/api')>('@/lib/api');
+    fetchPublicListing.mockImplementation(actual.fetchPublicListing);
+    fetchListingAccessWindowDays.mockImplementation(actual.fetchListingAccessWindowDays);
+    fetchListingVersions.mockResolvedValue([{ id: 'version-1' }]);
+    const listing = makeListing();
+    const backendFetch = vi.fn().mockResolvedValue({
+      ok: true, json: async () => ({ ...listing, access_window_days: 30 }),
+    });
+    vi.stubGlobal('fetch', backendFetch);
+    const params = Promise.resolve({ slug: listing.slug });
+
+    expect((await generateMetadata({ params })).title).toBe(listing.title);
+    await ListingDetailPage({ params });
+
+    expect(backendFetch).toHaveBeenCalledTimes(3);
+    const publicOptions = harness
+      ? { cache: 'no-store', headers: { 'User-Agent': 'ai-market-e2e-harness' } }
+      : { cache: 'no-store' };
+    expect(backendFetch).toHaveBeenNthCalledWith(1, expect.stringContaining(`/public/listings/${listing.slug}`), publicOptions);
+    expect(backendFetch).toHaveBeenNthCalledWith(2, expect.stringContaining(`/public/listings/${listing.slug}`), publicOptions);
+    expect(backendFetch).toHaveBeenNthCalledWith(3, expect.stringContaining(`/api/v1/listings/${listing.id}`),
+      harness ? publicOptions : { next: { revalidate: 10 } });
+    // Exact outgoing header equality also excludes cookies, auth and custom headers.
+    for (const [, options] of backendFetch.mock.calls) {
+      expect(options.headers).toEqual(harness ? { 'User-Agent': 'ai-market-e2e-harness' } : undefined);
+    }
+  });
+});
 
 async function renderPage(listing: ListingDetail | null, versions: ListingVersion[] = []): Promise<string> {
   fetchPublicListing.mockResolvedValueOnce(listing);
@@ -612,7 +672,7 @@ describe('fresh public payload transitions', () => {
     expect(page.queryByText('One current inventory record', {exact: true})).toBeNull();
     expect(fetchPublicListing).toHaveBeenCalledTimes(3);
     expect(fetchPublicListing.mock.calls).toEqual([
-      ['test-dataset'], ['test-dataset'], ['test-dataset'],
+      ['test-dataset', null], ['test-dataset', null], ['test-dataset', null],
     ]);
   });
 
@@ -627,7 +687,7 @@ describe('fresh public payload transitions', () => {
     expect(page.getByRole('region', {name: 'At a glance'})).toBeTruthy();
     expect(page.getByText('One recorded sale', {exact: true})).toBeTruthy();
     expect(fetchPublicListing).toHaveBeenCalledTimes(2);
-    expect(fetchPublicListing.mock.calls).toEqual([['test-dataset'], ['test-dataset']]);
+    expect(fetchPublicListing.mock.calls).toEqual([['test-dataset', null], ['test-dataset', null]]);
   });
 
   it('replaces scan findings on a later render of the same slug', async () => {
@@ -646,7 +706,7 @@ describe('fresh public payload transitions', () => {
     expect(page.getByText(second, {exact: true})).toBeTruthy();
     expect(page.queryByText(first, {exact: true})).toBeNull();
     expect(fetchPublicListing).toHaveBeenCalledTimes(2);
-    expect(fetchPublicListing.mock.calls).toEqual([['test-dataset'], ['test-dataset']]);
+    expect(fetchPublicListing.mock.calls).toEqual([['test-dataset', null], ['test-dataset', null]]);
   });
 });
 

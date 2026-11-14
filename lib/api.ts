@@ -122,9 +122,21 @@ export async function fetchFeaturedFeed(params?: {
   return res.json();
 }
 
-export async function fetchPublicListing(slug: string) {
+const SYNTHETIC_HARNESS_USER_AGENT_TOKEN = 'ai-market-e2e-harness';
+
+function syntheticListingFetchOptions(userAgent?: string | null) {
+  // Match the backend's should_count_view; never forward the full incoming UA.
+  if (!userAgent?.toLowerCase().includes(SYNTHETIC_HARNESS_USER_AGENT_TOKEN)) return undefined;
+  return {
+    headers: { 'User-Agent': SYNTHETIC_HARNESS_USER_AGENT_TOKEN },
+    cache: 'no-store' as const,
+  };
+}
+
+export async function fetchPublicListing(slug: string, userAgent?: string | null) {
   const res = await fetch(`${API_URL}/api/v1/public/listings/${encodeURIComponent(slug)}`, {
     cache: 'no-store',
+    ...syntheticListingFetchOptions(userAgent),
   });
   if (!res.ok) return null;
   const listing = await res.json();
@@ -166,10 +178,10 @@ export async function fetchListingVersions(listingId: string) {
   return res.json();
 }
 
-export async function fetchListingAccessWindowDays(listingId: string): Promise<number | null> {
-  const res = await fetch(`${API_URL}/api/v1/listings/${encodeURIComponent(listingId)}`, {
-    next: { revalidate: 10 },
-  });
+export async function fetchListingAccessWindowDays(listingId: string, userAgent?: string | null): Promise<number | null> {
+  // Harness reads must neither consume nor populate ordinary visitors' Data Cache.
+  const options = syntheticListingFetchOptions(userAgent) ?? { next: { revalidate: 10 } };
+  const res = await fetch(`${API_URL}/api/v1/listings/${encodeURIComponent(listingId)}`, options);
   if (!res.ok) return null;
   const listing = await res.json();
   return typeof listing.access_window_days === 'number' ? listing.access_window_days : null;
