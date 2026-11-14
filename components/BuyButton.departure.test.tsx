@@ -169,13 +169,31 @@ describe.each([false, true])('purchase visit lifetime, domain=%s', domain => {
     }
   });
 
-  it('preserves ordinary current-visit success and releases its accepted recovery claim', async () => {
-    mocks.checkout.mockResolvedValue({ checkout_url: 'https://checkout.stripe.com/c/pay/synthetic' });
+  it.each(['https://checkout.stripe.com/c/pay/synthetic', 'https://pay.ai.market/c/pay/synthetic'])('accepts current-visit success at %s and releases its recovery claim', async checkout_url => {
+    mocks.checkout.mockResolvedValue({ checkout_url });
     await mount(domain);
     await buy(domain);
     expect(mocks.checkout).toHaveBeenCalledOnce();
     expect(mocks.toast).not.toHaveBeenCalled();
     expect(sessionStorage.length).toBe(0);
+  });
+
+  it.each([
+    'http://pay.ai.market/c/pay/test',
+    'https://evil.pay.ai.market/c/pay/test',
+    'https://pay.ai.market.evil.com/c/pay/test',
+    'https://user@pay.ai.market/c/pay/test',
+    'https://pay.ai.market:8443/c/pay/test',
+    'https://checkout.stripe.com.evil.com/c/pay/test',
+    'https://checkout.stripe.com/\\evil.test',
+  ])('blocks an unsafe Checkout response at %s', async checkout_url => {
+    mocks.checkout.mockResolvedValue({ checkout_url });
+    await mount(domain);
+    await buy(domain);
+    expect(mocks.checkout).toHaveBeenCalledOnce();
+    expect(mocks.toast).toHaveBeenCalledWith(domain
+      ? 'Invalid checkout URL received. Retry to check the same purchase.'
+      : 'Invalid checkout URL received. Please try again.', 'error');
   });
 
   it('does not let old finally unlock a new checkout after an in-place context change', async () => {

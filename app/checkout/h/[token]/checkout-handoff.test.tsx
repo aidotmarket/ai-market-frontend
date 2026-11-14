@@ -174,11 +174,17 @@ it.each(['finalised', 'failed', 'payment_conflict', 'refunded'] as const)('never
   expect(mocks.buy).not.toHaveBeenCalled();
   await waitFor(() => expect(sessionStorage.getItem(key)).toBeNull());
 });
-it.each(['https://checkout.stripe.com/c/pay/test', 'https://evil.test/c/pay/test', null])('allows only a finalised safe provider URL: %s', async checkout_url => {
+it.each([
+  ['https://checkout.stripe.com/c/pay/test', true],
+  ['https://pay.ai.market/c/pay/test', true],
+  ['https://evil.test/c/pay/test', false],
+  ['https://pay.ai.market.evil.com/c/pay/test', false],
+  [null, false],
+] as const)('allows only a finalised safe provider URL: %s', async (checkout_url, allowed) => {
   mocks.get.mockResolvedValue({ ...handoff, status: 'consumed', checkout_status: 'finalised', checkout_url, order_id: 'order' });
   render(<CheckoutHandoffReview />); await screen.findByRole('link', { name: 'View order' });
   const payment = screen.queryByRole('link', { name: 'Continue to payment' });
-  expect(!!payment).toBe(checkout_url?.startsWith('https://checkout.stripe.com/') === true);
+  expect(!!payment).toBe(allowed);
   if (payment) expect(payment.getAttribute('referrerpolicy')).toBe('no-referrer');
 });
 it('requires sign-in and preserves only the handoff route without automatic purchase', async () => {

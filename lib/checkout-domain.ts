@@ -16,11 +16,13 @@ export function checkoutWebPath(value: unknown): string | undefined {
     ? value : undefined;
 }
 
+const CHECKOUT_ORIGINS = ['https://checkout.stripe.com', 'https://pay.ai.market'] as const;
+
 export function paymentUrl(value: unknown): value is string {
-  if (typeof value !== 'string' || !value.startsWith('https://checkout.stripe.com/') || /[\s\\]/.test(value)) return false;
+  if (typeof value !== 'string' || !CHECKOUT_ORIGINS.some(origin => value.startsWith(`${origin}/`)) || /[\s\\]/.test(value)) return false;
   try {
     const url = new URL(value);
-    return url.origin === 'https://checkout.stripe.com' && !url.username && !url.password;
+    return CHECKOUT_ORIGINS.some(origin => url.origin === origin) && !url.username && !url.password;
   } catch { return false; }
 }
 

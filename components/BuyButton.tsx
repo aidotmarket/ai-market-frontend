@@ -6,7 +6,7 @@ import Link from 'next/link';
 import { useAuthStore } from '@/store/auth';
 import { useToast } from '@/components/Toast';
 import { createCheckout, type DomainCheckoutOptions } from '@/api/checkout';
-import { checkoutBlock, checkoutDestination, checkoutDomainEnabled, checkoutErrorCode, checkoutOutcome, checkoutWebPath } from '@/lib/checkout-domain';
+import { checkoutBlock, checkoutDestination, checkoutDomainEnabled, checkoutErrorCode, checkoutOutcome, checkoutWebPath, paymentUrl } from '@/lib/checkout-domain';
 import { getMyOrders } from '@/api/orders';
 import { formatPrice } from '@/lib/format';
 import { validateRedirect } from '@/lib/redirect';
@@ -232,7 +232,7 @@ export default function BuyButton({
       if (!isCurrent()) return;
 
       // Validate Stripe URL before redirect (AG-G2-M4)
-      if (!checkout_url || !checkout_url.startsWith('https://checkout.stripe.com/')) {
+      if (!paymentUrl(checkout_url)) {
         toast('Invalid checkout URL received. Please try again.', 'error');
         return;
       }
