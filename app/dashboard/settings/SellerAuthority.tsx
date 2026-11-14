@@ -5,6 +5,7 @@ import { useAuthStore } from '@/store/auth';
 import { useSellerSwitches, type SellerSwitchReport } from '@/hooks/useSellerSwitches';
 import { fields, verbs, newDecision, nativeSession, readAuthority, reviewAuthority, setAuthority, reviewStopAuthority, stopAuthority, validLimits, type AuthoritySet, type AuthorityStatus, type DecisionReview, type StandingLimits, type WebDecision } from '@/api/connector-seller-settings';
 import NativeSellerAuth from '@/components/NativeSellerAuth';
+import { dangerButtonClass, primaryButtonClass, secondaryButtonClass } from '@/components/ui/button-styles';
 
 import { authSessionOwner, subscribeAuthSessionOwner } from '@/lib/auth-session-owner';
 
@@ -87,10 +88,10 @@ export function AuthorityScreen({ switches }: { switches: SellerSwitchReport | n
   };
   return <section id="seller-authority" aria-label="Seller standing authority" className="mt-6 space-y-4 rounded-xl border bg-white p-6">
     <h2 className="text-lg font-semibold">Seller standing authority</h2>
-    <button type="button" disabled={!status || busy} onClick={() => void stop()} className="rounded border border-red-700 px-4 py-2 text-red-800">Stop automatic seller actions</button>
+    <button type="button" disabled={!status || busy} onClick={() => void stop()} className={dangerButtonClass}>Stop automatic seller actions</button>
     <p>After authenticated review and confirmation, Stop revokes standing authority immediately for unexecuted items. Successful items remain completed.</p>
-    <button type="button" onClick={() => { stopping.current = null; retry(); }} className="inline-flex items-center rounded-lg border border-gray-300 bg-white px-4 py-2 text-sm font-medium text-gray-900 shadow-sm hover:bg-gray-50 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-indigo-600">Refresh authority and budget</button>
-    {stopReview && <section aria-label="Exact server Stop review"><h3>Review withdrawal of standing authority</h3><pre className="overflow-auto whitespace-pre-wrap">{JSON.stringify(stopReview.result, null, 2)}</pre><button disabled={busy} onClick={() => void confirmStop()}>Confirm Stop automatic seller actions</button></section>}
+    <button type="button" onClick={() => { stopping.current = null; retry(); }} className={secondaryButtonClass}>Refresh authority and budget</button>
+    {stopReview && <section aria-label="Exact server Stop review"><h3>Review withdrawal of standing authority</h3><pre className="overflow-auto whitespace-pre-wrap">{JSON.stringify(stopReview.result, null, 2)}</pre><button disabled={busy} onClick={() => void confirmStop()} className={dangerButtonClass}>Confirm Stop automatic seller actions</button></section>}
     {message && <p role="status">{message}</p>}
     {status && <><p>Authority version {status.version} · {status.enabled ? 'Active' : 'Off or expired'} · UTC day {status.utc_day}</p>
       <p>Single and bulk actions share this budget across all grants and clients. Absolute request ceiling: 50 items. Requests are never automatically split.</p>
@@ -116,12 +117,12 @@ export function AuthorityScreen({ switches }: { switches: SellerSwitchReport | n
           <label>Expiry (ISO timestamp with UTC offset)<input className="block rounded border p-2" value={limits.expires_at} onChange={e => edit({ ...limits, expires_at: e.target.value })} /></label>
           <p>Currency USD. Samples must be absent or unchanged and already approved. New presentation or sample content still requires web review. Limits never sign licences.</p>
         </fieldset>
-        <button type="submit" disabled={busy || !effects || !validLimits(limits) || Date.parse(limits.expires_at) <= Date.now()}>Review exact standing limits</button>
+        <button type="submit" disabled={busy || !effects || !validLimits(limits) || Date.parse(limits.expires_at) <= Date.now()} className={primaryButtonClass}>Review exact standing limits</button>
       </form>
-      {review && <section aria-label="Exact server authority review"><h3>Exact native decision</h3><pre className="overflow-auto whitespace-pre-wrap">{JSON.stringify(review.result, null, 2)}</pre><button disabled={busy || !effects} onClick={() => void save()}>Save reviewed standing authority</button></section>}
+      {review && <section aria-label="Exact server authority review"><h3>Exact native decision</h3><pre className="overflow-auto whitespace-pre-wrap">{JSON.stringify(review.result, null, 2)}</pre><button disabled={busy || !effects} onClick={() => void save()} className={primaryButtonClass}>Save reviewed standing authority</button></section>}
       </>}
     </>}
     <NativeSellerAuth error={error} />
-    {!!error && <button type="button" onClick={retry}>Try again</button>}
+    {!!error && <button type="button" onClick={retry} className={secondaryButtonClass}>Try again</button>}
   </section>;
 }

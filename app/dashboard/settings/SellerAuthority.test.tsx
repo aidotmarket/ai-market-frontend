@@ -34,6 +34,11 @@ it.each([null, { seller: false, effects: true, bulk: true }, { seller: true, eff
   await waitFor(() => expect(stopAuthority).toHaveBeenCalledWith({ ...vi.mocked(reviewStopAuthority).mock.calls[0][0], review_hash: hash }));
   expect(setAuthority).not.toHaveBeenCalled();
 });
+it('uses filled shared styles for Stop and Refresh buttons', async () => {
+  render(<SellerAuthority />); await screen.findByText(/Authority version 4/);
+  expect(screen.getByRole('button', { name: 'Stop automatic seller actions' }).classList.contains('bg-red-700')).toBe(true);
+  expect(screen.getByRole('button', { name: 'Refresh authority and budget' }).classList.contains('bg-white')).toBe(true);
+});
 it('shows selected identities, expiry and shared budget after reservations and successes', async () => {
   render(<SellerAuthority />); await screen.findByText(/Authority version 4/);
   expect(screen.getByText('30')).toBeTruthy(); expect(screen.getByText(/Single and bulk actions share/)).toBeTruthy();
