@@ -7,6 +7,7 @@ import SchemaTable from '@/components/listings/SchemaTable';
 import PublisherCard from '@/components/listings/PublisherCard';
 import {verifyCurrentListing, readLicenseDisplay, CORRECTION_KIND, CORRECTION_NOTICE, CORRECTION_TITLE} from '@/lib/publicPresentation';
 import { notFound, redirect } from 'next/navigation';
+import { headers } from 'next/headers';
 import Link from 'next/link';
 import type { Metadata } from 'next';
 import { fetchListingAccessWindowDays, fetchListingVersions, fetchPublicListingDocuments, fetchPublicListing, resolveListingUUID } from '@/lib/api';
@@ -49,7 +50,8 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
   }
 
 
-  const listing: ListingDetail | null = await fetchPublicListing(slug);
+  const userAgent = (await headers()).get('user-agent');
+  const listing: ListingDetail | null = await fetchPublicListing(slug, userAgent);
   if (!listing) {
     return { title: 'Not Found' };
   }
@@ -96,7 +98,8 @@ export default async function ListingDetailPage({ params, searchParams }: Props)
     notFound();
   }
 
-  const listing: ListingWithSamples | null = await fetchPublicListing(slug);
+  const userAgent = (await headers()).get('user-agent');
+  const listing: ListingWithSamples | null = await fetchPublicListing(slug, userAgent);
   if (!listing) {
     notFound();
   }
@@ -138,7 +141,7 @@ export default async function ListingDetailPage({ params, searchParams }: Props)
   // S1097: legacy listings intentionally keep byte-identical rendering and omit
   // the pre-purchase download-window line pending Max's R5.1h-vs-parity adjudication.
   const accessWindowDays = hasVersionRows
-    ? await fetchListingAccessWindowDays(listing.id)
+    ? await fetchListingAccessWindowDays(listing.id, userAgent)
     : null;
 
   return (

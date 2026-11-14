@@ -6,6 +6,8 @@ import { within } from '@testing-library/react';
 import type { ListingDetail, PublicSourceReference } from '@/types';
 import PublicSourceReferencePage from './PublicSourceReferencePage';
 
+vi.mock('next/headers', () => ({ headers: vi.fn(async () => new Headers()) }));
+
 const api = vi.hoisted(() => ({
   fetchPublicListingDocuments: vi.fn(async () => []),
   fetchPublicListing: vi.fn(), fetchListingVersions: vi.fn(),
