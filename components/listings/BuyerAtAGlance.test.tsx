@@ -1,4 +1,5 @@
 // @vitest-environment jsdom
+import {CORRECTION_NOTICE_BUYER} from '@/lib/publicPresentation';
 import {act, cleanup, render, screen} from '@testing-library/react';
 import {afterEach, beforeEach, expect, it, vi} from 'vitest';
 import {fetchBuyerSummary} from '@/lib/api';
@@ -74,7 +75,7 @@ it('overlays only the public licence row and preserves the supplied summary', as
   render(<BuyerAtAGlance slug={fixture.slug} initialSummary={original} licenseDisplay={fixture.license_display as LicenseDisplay} />);
   const region = screen.getByRole('region', {name: 'At a glance'});
   expect(region.textContent).toContain('ai.market Standard Data Licence v1.1');
-  expect(region.textContent).toContain('Platform-corrected licence display; original seller approval retained');
+  expect(document.body.textContent?.split(CORRECTION_NOTICE_BUYER)).toHaveLength(2);
   expect(region.textContent).not.toContain('provided by the seller');
   expect(region.textContent).not.toContain('v1.0');
   expect(JSON.stringify(original)).toBe(before);

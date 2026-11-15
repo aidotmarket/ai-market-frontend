@@ -5,7 +5,7 @@ import { generatedSampleState, samplePresentation } from '@/lib/generatedSample'
 import PublicSourceReferencePage, { isPublicSourceReference } from './PublicSourceReferencePage';
 import SchemaTable from '@/components/listings/SchemaTable';
 import PublisherCard from '@/components/listings/PublisherCard';
-import {verifyCurrentListing, readLicenseDisplay, CORRECTION_KIND, CORRECTION_NOTICE, CORRECTION_TITLE} from '@/lib/publicPresentation';
+import {verifyCurrentListing, readLicenseDisplay, CORRECTION_KIND, CORRECTION_TITLE, CORRECTION_NOTICE} from '@/lib/publicPresentation';
 import { notFound, redirect } from 'next/navigation';
 import { headers } from 'next/headers';
 import Link from 'next/link';
@@ -146,6 +146,7 @@ export default async function ListingDetailPage({ params, searchParams }: Props)
 
   return (
     <CurrentDisplayFreshness observedAt={Date.now()}>
+      {currentDisplay && <meta name="ai-market:licence-display-provenance" content={CORRECTION_NOTICE} data-correction-digest={currentDisplay.correction_digest} />}
       {shouldEmitJsonLd && (
         <script
           type="application/ld+json"
@@ -166,7 +167,7 @@ export default async function ListingDetailPage({ params, searchParams }: Props)
         {/* Main Content */}
         <div className="lg:col-span-2 space-y-8">
           <div>
-            {!approved && <h1 className="text-3xl font-bold text-gray-900 mb-2">{listing.title}</h1>}
+            {(!approved || approved.approved_display_html != null) && <h1 className="text-3xl font-bold text-gray-900 mb-2">{listing.title}</h1>}
             <div className="flex flex-wrap items-center gap-3 text-sm text-gray-500">
               <span>Published {listing.published_at ? formatPublishedDate(listing.published_at) : 'N/A'}</span>
               <span>&middot;</span>
@@ -176,10 +177,22 @@ export default async function ListingDetailPage({ params, searchParams }: Props)
             </div>
           </div>
 
-          {currentDisplay && <p className="text-sm text-gray-700">Original seller evidence below; current public licence display: {currentDisplay.license_label}. {CORRECTION_NOTICE}</p>}
           <BuyerAtAGlance licenseDisplay={currentDisplay} slug={listing.slug} listingId={listing.id} initialSummary={atAGlanceSummary} includeSample={false} hideSampleAvailability={pendingSellerTerms} />
 
-          {approved ? <><p className="text-sm text-gray-700">{corrected ? CORRECTION_NOTICE : 'Original seller-approved listing evidence'}</p><ApprovedListingPreview title={corrected ? CORRECTION_TITLE : 'Seller-approved listing'} html={approved.rendered_html} /></> : <>
+          {approved ? <>
+            {approved.approved_display_html != null ? <>
+              <div className="prose prose-sm max-w-none">
+                <BackendListingHtml description={listing.description} descriptionHtml={approved.approved_display_html} />
+              </div>
+              <details>
+                <summary className="cursor-pointer text-sm text-gray-700">Original seller-approved version</summary>
+                <ApprovedListingPreview title={corrected ? CORRECTION_TITLE : 'Seller-approved listing'} html={approved.rendered_html} />
+              </details>
+            </> : <>
+              {!corrected && <p className="text-sm text-gray-700">Original seller-approved listing evidence</p>}
+              <ApprovedListingPreview title={corrected ? CORRECTION_TITLE : 'Seller-approved listing'} html={approved.rendered_html} />
+            </>}
+          </> : <>
           {/* Description uses the validated backend render. */}
           <div className="prose prose-sm max-w-none">
             <BackendListingHtml description={listing.description} descriptionHtml={listing.description_html}/>
@@ -194,6 +207,8 @@ export default async function ListingDetailPage({ params, searchParams }: Props)
           {listing.verification_scope != null && <p className="text-sm text-gray-600">{listing.verification_scope}</p>}
           <FileBreakdown groups={listing.file_breakdown} />
 
+          </>}
+          {(!approved || approved.approved_display_html != null) && <>
           {/* Tags */}
           <div className="flex flex-wrap gap-2">
             <span className="inline-flex items-center rounded-full bg-gray-100 px-3 py-1 text-sm font-medium text-gray-700">

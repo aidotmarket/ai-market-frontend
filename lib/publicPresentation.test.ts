@@ -57,3 +57,19 @@ describe('actual backend19ff184 original and corrected presentation readers',()=
     expect(c.presentation_kind).toBe(CORRECTION_KIND);
   });
 });
+
+
+it.each(wire.public)('accepts optional approved display fields without changing immutable evidence $original.presentation_version', async fixture => {
+  for (const original of [fixture.original, fixture.corrected]) {
+    const display = {...original, approved_display_html: '<h2>Coverage</h2><ul><li>Region</li></ul>', presentation_display_version: 'approved-display-v1'};
+    expect(await verifyPresentation(display)).toEqual(display);
+    expect(await verifyPresentation({...original, approved_display_html: null, presentation_display_version: null})).toMatchObject(original);
+    await expect(verifyPresentation({...display, rendered_html: original.rendered_html + 'tampered'})).rejects.toThrow();
+    await expect(verifyPresentation({...display, approved_display_html: 42})).rejects.toThrow();
+    await expect(verifyPresentation({...display, presentation_display_version: 'unknown'})).rejects.toThrow();
+    const missingVersion: Record<string, unknown> = {...display};
+    delete missingVersion.presentation_display_version;
+    await expect(verifyPresentation(missingVersion)).rejects.toThrow();
+    await expect(verifyPresentation({...display, presentation_display_version: null})).rejects.toThrow();
+  }
+});

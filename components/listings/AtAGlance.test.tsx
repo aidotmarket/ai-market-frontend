@@ -1,4 +1,5 @@
 // @vitest-environment jsdom
+import {CORRECTION_NOTICE_BUYER} from '@/lib/publicPresentation';
 import {expect, it} from 'vitest';
 import {renderToStaticMarkup} from 'react-dom/server';
 import AtAGlance, {provenanceLabels, summaryFields} from './AtAGlance';
@@ -102,7 +103,7 @@ it('shows the exact platform correction with existing attribution without mutati
   const before = JSON.stringify(original);
   const html = renderToStaticMarkup(<AtAGlance summary={original} licenseDisplay={fixture.license_display as LicenseDisplay} />);
   expect(html).toContain('ai.market Standard Data Licence v1.1');
-  expect(html).toContain('Platform-corrected licence display; original seller approval retained');
+  expect(html.split(CORRECTION_NOTICE_BUYER)).toHaveLength(2);
   expect(html).not.toContain('provided by the seller');
   expect(html).not.toContain('v1.0');
   expect(JSON.stringify(original)).toBe(before);
@@ -122,4 +123,11 @@ it.each([
   expect(html).toBe(renderToStaticMarkup(<AtAGlance summary={original} />));
   expect(html).toContain('ai.market Standard Data Licence v1.0');
   expect(html).toContain('Source: provided by the seller');
+});
+
+
+it.each([undefined, null, {...summary, license: undefined}, {...summary, license: field('withheld', 'absent')}])('shows the licence and one buyer notice even without an approved licence summary %#', summary => {
+  const html = renderToStaticMarkup(<AtAGlance summary={summary} licenseDisplay={fixture.license_display as LicenseDisplay} />);
+  expect(html).toContain('ai.market Standard Data Licence v1.1');
+  expect(html.split(CORRECTION_NOTICE_BUYER)).toHaveLength(2);
 });

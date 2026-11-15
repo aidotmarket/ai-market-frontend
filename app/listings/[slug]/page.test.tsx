@@ -1,4 +1,5 @@
 // @vitest-environment jsdom
+import {CORRECTION_NOTICE, CORRECTION_NOTICE_BUYER} from '@/lib/publicPresentation';
 import React from 'react';
 import { renderToStaticMarkup } from 'react-dom/server';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
@@ -86,7 +87,7 @@ const {generateMetadata} = await import('./page');
 
 describe('corrected backend 1ad9300 real composed detail wire',()=>{
   afterEach(()=>{vi.unstubAllGlobals();fetchPublicListing.mockReset();fetchListingVersions.mockReset();fetchPublicListingDocuments.mockReset().mockResolvedValue([]);});
-  it.each(composed.detail)('accepts actual builder/serializer $slug through strict fetch, page and metadata, preserving documents',async wire=>{
+  it.each(composed.detail.flatMap(wire => [wire, {...wire, approved_presentation: {...wire.approved_presentation, approved_display_html: '<h2>Approved coverage</h2><ul><li>Region</li></ul>', presentation_display_version: 'approved-display-v1'}}]))('accepts actual builder/serializer $slug through strict fetch, page and metadata, preserving documents',async wire=>{
     const before=JSON.stringify(wire);
     const actual=await vi.importActual<typeof import('@/lib/api')>('@/lib/api');
     fetchPublicListing.mockImplementation(actual.fetchPublicListing);
@@ -103,7 +104,7 @@ describe('corrected backend 1ad9300 real composed detail wire',()=>{
     const docs=within(document.body).getByRole('region',{name:'Documentation'});
     expect(frame.compareDocumentPosition(docs)&Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
     expect(frame.getAttribute('srcdoc')).not.toContain('Technical guide');
-    expect(document.body.textContent).toContain('Platform-corrected licence display; original seller approval retained');
+    expect(document.body.textContent).toContain(CORRECTION_NOTICE_BUYER);
     expect(await generateMetadata({params})).toMatchObject({title:wire.title,description:wire.description.slice(0,200)});
     for(const [,options] of fetch.mock.calls)expect(options).toEqual({cache:'no-store'});
     expect(JSON.stringify(wire)).toBe(before);
@@ -1005,8 +1006,9 @@ describe('S1922 actual current public rendering',()=>{
     const frame=container.querySelector('iframe[title="Listing with platform-corrected licence display"]');
     expect(frame?.getAttribute('srcdoc')).toBe(c.rendered_html);
     expect(frame?.getAttribute('sandbox')).toBe('');
-    expect(container.textContent).toContain('Platform-corrected licence display; original seller approval retained');
-    expect(container.textContent).toContain('Original seller evidence');
+    expect(container.textContent).toContain(CORRECTION_NOTICE_BUYER);
+    expect(container.querySelector('details')).toBeNull();
+    expect(container.textContent?.split(CORRECTION_NOTICE_BUYER)).toHaveLength(2);
     expect(container.querySelector('iframe[title="Seller-approved listing"]')).toBeNull();
   });
   it('refuses partial or foreign correction HTML before producing an iframe',async()=>{
@@ -1032,7 +1034,7 @@ it('emits actual backend current JSON-LD alongside unchanged original summary ev
  const container=document.createElement('div');container.innerHTML=html;
  const glance=within(container).getByRole('region',{name:'At a glance'});
  expect(glance.textContent).toContain('ai.market Standard Data Licence v1.1');
- expect(glance.textContent).toContain('Platform-corrected licence display; original seller approval retained');
+ expect(glance.textContent).toContain(CORRECTION_NOTICE_BUYER);
  expect(glance.textContent).not.toContain('v1.0');
  expect(glance.textContent).not.toContain('provided by the seller');
 });
@@ -1072,10 +1074,95 @@ it('shows the corrected licence in At a glance for an 801f3189-shaped public pay
   const before = JSON.stringify(fixture);
   const html = await renderPage(makeListing(fixture as Partial<ListingWithSamples>));
   const container = document.createElement('div'); container.innerHTML = html;
+  expect(container.querySelector('meta[name="ai-market:licence-display-provenance"]')?.getAttribute('content')).toBe(CORRECTION_NOTICE);
   const glance = within(container).getByRole('region', {name: 'At a glance'});
   expect(glance.textContent).toContain('ai.market Standard Data Licence v1.1');
-  expect(glance.textContent).toContain('Platform-corrected licence display; original seller approval retained');
+  expect(glance.textContent).toContain(CORRECTION_NOTICE_BUYER);
   expect(glance.textContent).not.toContain('v1.0');
   expect(glance.textContent).not.toContain('provided by the seller');
   expect(JSON.stringify(fixture)).toBe(before);
+});
+
+
+describe('S1950 approved description display', () => {
+  afterEach(() => vi.unstubAllEnvs());
+  it.each([false, true].flatMap(noindex =>
+    [false, true].flatMap(displayHtml =>
+      [false, true].flatMap(jsonLdEnabled =>
+        [false, true].map(jsonLdPresent => ({noindex, displayHtml, jsonLdEnabled, jsonLdPresent}))))))(
+    'carries observer provenance outside buyer text: %j', async ({noindex, displayHtml, jsonLdEnabled, jsonLdPresent}) => {
+      vi.stubEnv('NEXT_PUBLIC_ENABLE_DATASET_JSONLD', String(jsonLdEnabled));
+      vi.resetModules();
+      const {default: Page} = await import('./page');
+      const {default: wire} = await import('@/tests/fixtures/s1922-backend-wire.json');
+      const fixture = wire.public[2];
+      for (const corrected of [true, false]) {
+        const listing = makeListing({
+          id: fixture.corrected.listing_id, noindex,
+          jsonld: jsonLdPresent ? (corrected ? fixture.jsonld : makeListing().jsonld) : null,
+          approved_presentation: {
+            ...(corrected ? fixture.corrected : fixture.original),
+            ...(displayHtml ? {approved_display_html: '<p>Approved description</p>', presentation_display_version: 'approved-display-v1'} : {}),
+          } as ListingDetail['approved_presentation'],
+          ...(corrected ? {license: fixture.corrected.license_label, license_display: fixture.license_display as ListingDetail['license_display']} : {}),
+        });
+        fetchPublicListing.mockResolvedValueOnce(listing);
+        fetchListingVersions.mockResolvedValueOnce([]);
+        const html = renderToStaticMarkup(await Page({params: Promise.resolve({slug: listing.slug})}));
+        const container = document.createElement('div'); container.innerHTML = html;
+        const marker = container.querySelector('meta[name="ai-market:licence-display-provenance"]');
+        if (corrected) {
+          expect(html).toContain(CORRECTION_NOTICE);
+          expect(marker?.getAttribute('content')).toBe(CORRECTION_NOTICE);
+          expect(marker?.getAttribute('data-correction-digest')).toBe(fixture.license_display.correction_digest);
+        } else {
+          expect(html).not.toContain(CORRECTION_NOTICE);
+          expect(marker).toBeNull();
+        }
+        expect(extractJsonLdScripts(html)).toHaveLength(jsonLdEnabled && jsonLdPresent && !noindex ? 1 : 0);
+        container.querySelectorAll('script').forEach(script => script.remove());
+        expect(container.textContent).not.toContain(CORRECTION_NOTICE);
+        expect(container.querySelector('h1') == null).toBe(!displayHtml);
+      }
+    });
+
+  it.each([false, true])('renders formatted description through the normal path with collapsed immutable evidence (corrected: %s)', async corrected => {
+    const {default: wire} = await import('@/tests/fixtures/s1922-backend-wire.json');
+    const fixture = wire.public[2];
+    const presentation = corrected ? fixture.corrected : fixture.original;
+    const approved_display_html = '<h2>Coverage</h2><p>Approved <strong>description</strong>.</p><ul><li>First region</li><li>Second region</li></ul><ol><li>First step</li></ol>';
+    const listing = makeListing({
+      id: fixture.corrected.listing_id,
+      approved_presentation: {...presentation, approved_display_html, presentation_display_version: 'approved-display-v1'} as ListingDetail['approved_presentation'],
+      ...(corrected ? {license: fixture.corrected.license_label, license_display: fixture.license_display as ListingDetail['license_display']} : {}),
+    });
+    const container = document.createElement('div');
+    container.innerHTML = await renderPage(listing);
+    const description = container.querySelector('.prose.prose-sm');
+    expect(description?.querySelector('h2')?.textContent).toBe('Coverage');
+    expect(description?.querySelectorAll('ul li')).toHaveLength(2);
+    expect(description?.querySelector('ol li')?.textContent).toBe('First step');
+    expect(description?.firstElementChild?.className).not.toContain('whitespace-pre-wrap');
+    const details = container.querySelector('details');
+    const heading = within(container).getByRole('heading', {level: 1, name: listing.title});
+    expect(container.querySelectorAll('h1')).toHaveLength(1);
+    expect(heading.closest('details')).toBeNull();
+    expect(within(container).getByText('Business').closest('details')).toBeNull();
+    expect(within(container).getByText('test').closest('details')).toBeNull();
+    expect(details?.querySelector('summary')?.textContent).toBe('Original seller-approved version');
+    expect(details?.hasAttribute('open')).toBe(false);
+    expect(details?.querySelector('iframe')?.getAttribute('srcdoc')).toBe(presentation.rendered_html);
+    expect(details?.querySelector('iframe')?.getAttribute('sandbox')).toBe('');
+    expect(container.textContent?.split(CORRECTION_NOTICE_BUYER)).toHaveLength(corrected ? 2 : 1);
+  });
+
+  it('keeps invalid display markup out of the DOM using the existing validated fallback', async () => {
+    const {default: wire} = await import('@/tests/fixtures/s1922-backend-wire.json');
+    const container = document.createElement('div');
+    container.innerHTML = await renderPage(makeListing({approved_presentation: {
+      ...wire.public[2].original, approved_display_html: '<img src=x onerror=alert(1)>', presentation_display_version: 'approved-display-v1',
+    } as ListingDetail['approved_presentation']}));
+    expect(container.querySelector('img')).toBeNull();
+    expect(container.querySelector('.prose')?.textContent).toBe('Visible dataset description.');
+  });
 });

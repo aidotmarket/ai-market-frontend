@@ -1,3 +1,4 @@
+import {CORRECTION_NOTICE_BUYER} from '@/lib/publicPresentation';
 import React from 'react';
 import { renderToStaticMarkup } from 'react-dom/server';
 import { describe, expect, it } from 'vitest';
@@ -72,11 +73,12 @@ it('attributes actual backend current correction metadata and contains partial p
  const listing={id:c.listing_id,slug:'synthetic',title:'Synthetic',short_description:'Original seller prose',price:1,category:'Business',tags:[],privacy_score:null,
  license_display:{license_label:c.license_label,provenance:c.provenance,correction_id:c.correction_id,correction_digest:c.correction_digest}};
  const html=renderToStaticMarkup(<MarketplaceListingCard listing={listing as never}/>);
- expect(html).toContain('Platform-corrected licence display; original seller approval retained');
+ expect(html.split(CORRECTION_NOTICE_BUYER)).toHaveLength(2);
  expect(html).toContain('ai.market Standard Data Licence v1.1');
  expect(html).toContain('Original seller prose');
  const results=renderToStaticMarkup(<><MarketplaceListingCard listing={{...listing,license_display:{...listing.license_display,license_label:'UNVERIFIED',correction_digest:'bad'}} as never}/><MarketplaceListingCard listing={listing as never}/></>);
  expect(results).not.toContain('UNVERIFIED');
  expect(results.match(/href="\/listings\/synthetic"/g)).toHaveLength(2);
- expect(results.match(/Platform-corrected licence display/g)).toHaveLength(1);
+ expect(results.split(CORRECTION_NOTICE_BUYER)).toHaveLength(2);
+ expect(html.split(CORRECTION_NOTICE_BUYER)).toHaveLength(2);
 });
