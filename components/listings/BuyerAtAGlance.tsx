@@ -10,7 +10,7 @@ export function BuyerPreviewContent({summary, licenseDisplay, slug, listingId, o
   summary?: ListingSummary | null; licenseDisplay?: LicenseDisplay | null; slug?: string; listingId?: string; onManifest?: (manifest: Manifest | null) => void;
 }) {
   const currentDisplay = summaryLicenseDisplay(licenseDisplay);
-  return <>{!currentDisplay && hasSupportedSummaryFields(summary) && <p className="text-sm text-gray-600">Original approved summary evidence; current public licence display is shown separately.</p>}<AtAGlance summary={summary} licenseDisplay={currentDisplay} />{listingId && <ListingSamplePreview slug={slug} listingId={listingId} onManifest={onManifest} />}</>;
+  return <>{!currentDisplay && hasSupportedSummaryFields(summary) && <p className="text-sm text-gray-600">Seller-approved summary.</p>}<AtAGlance summary={summary} licenseDisplay={currentDisplay} />{listingId && <ListingSamplePreview slug={slug} listingId={listingId} onManifest={onManifest} />}</>;
 }
 
 export function BuyerSamplePreview({slug, listingId}: {slug: string; listingId: string}) {

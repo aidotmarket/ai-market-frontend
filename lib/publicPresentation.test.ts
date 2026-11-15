@@ -61,5 +61,9 @@ it.each(wire.public)('accepts optional approved display fields without changing 
     await expect(verifyPresentation({...display, rendered_html: original.rendered_html + 'tampered'})).rejects.toThrow();
     await expect(verifyPresentation({...display, approved_display_html: 42})).rejects.toThrow();
     await expect(verifyPresentation({...display, presentation_display_version: 'unknown'})).rejects.toThrow();
+    const missingVersion: Record<string, unknown> = {...display};
+    delete missingVersion.presentation_display_version;
+    await expect(verifyPresentation(missingVersion)).rejects.toThrow();
+    await expect(verifyPresentation({...display, presentation_display_version: null})).rejects.toThrow();
   }
 });
