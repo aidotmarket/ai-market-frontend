@@ -6,6 +6,29 @@ const fileGrant=vi.hoisted(() => vi.fn());
 vi.mock('@/api/sellerWorkspaceDownload',async importOriginal => ({...await importOriginal<object>(),requestWorkspaceFile:fileGrant}));
 vi.mock('./workspaceDownloadStream',async importOriginal => ({...await importOriginal<object>(),streamWorkspaceDownload:stream}));
 import WorkspaceDownload from './WorkspaceDownload';
+import {DELIVERY_NOTICES} from '@/lib/order-purchase-evidence';
+
+it.each(['restricted','destroyed','unavailable'] as const)('refuses %s before opening a picker or requesting a grant',async state => {
+  const picker=vi.fn();Object.defineProperty(window,'showDirectoryPicker',{value:picker,configurable:true});
+  const grant=vi.fn();
+  render(<WorkspaceDownload orderId="order-1" deliveryAccessState={state} requestGrant={grant}/>);
+  expect(screen.getByRole('alert').textContent).toBe(DELIVERY_NOTICES[state]);
+  expect(screen.queryByRole('button',{name:/download/i})).toBeNull();
+  expect(picker).not.toHaveBeenCalled();expect(grant).not.toHaveBeenCalled();expect(fileGrant).not.toHaveBeenCalled();
+});
+
+it('aborts an in-progress download when delivery becomes restricted',async () => {
+  Object.defineProperty(window,'showDirectoryPicker',{value:undefined,configurable:true});
+  let signal:AbortSignal|undefined;
+  const grant=vi.fn((_order:string,operation:AbortSignal) => {signal=operation;return new Promise<never>(() => {});});
+  const view=render(<WorkspaceDownload orderId="order-1" deliveryAccessState="within_order_terms" requestGrant={grant}/>);
+  fireEvent.click(await screen.findByRole('button',{name:'Download files'}));
+  expect(signal?.aborted).toBe(false);
+  view.rerender(<WorkspaceDownload orderId="order-1" deliveryAccessState="restricted" requestGrant={grant}/>);
+  expect(signal?.aborted).toBe(true);
+  expect(screen.getByRole('alert').textContent).toBe(DELIVERY_NOTICES.restricted);
+  expect(screen.queryByRole('button',{name:/download/i})).toBeNull();
+});
 const bundle=()=>({delivery_type:'workspace_direct' as const,session_id:'00000000-0000-4000-8000-000000000001',download_number:1,downloads_remaining:2,files:[{index:0,filename:'retail.csv',size:3,
   url:'https://synthetic.s3.eu-west-1.amazonaws.com/file?X-Amz-SignedHeaders=host%3Bif-match',headers:{'If-Match':'"e"'},expires_at:new Date(Date.now()+60000).toISOString()}]});
 afterEach(() => {cleanup();vi.useRealTimers();Reflect.deleteProperty(window,'showDirectoryPicker');vi.unstubAllGlobals();vi.restoreAllMocks();vi.resetAllMocks();});

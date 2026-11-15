@@ -4,6 +4,12 @@ import wire from '@/tests/fixtures/s1922-backend-wire.json';
 import {verifyPresentation, verifyCurrentListing, correctionFields, CORRECTION_KIND} from './publicPresentation';
 const digest=(html:string)=>createHash('sha256').update(html,'utf8').digest('hex');
 describe('actual backend19ff184 original and corrected presentation readers',()=>{
+  it.each(wire.public)('rejects null HTML on public $original.presentation_version presentations',async fixture=>{
+    for(const presentation of [fixture.original,fixture.corrected]) {
+      await expect(verifyPresentation({...presentation,rendered_html:null})).rejects.toThrow();
+      await expect(verifyCurrentListing({id:fixture.corrected.listing_id,approved_presentation:{...presentation,rendered_html:null}})).rejects.toThrow();
+    }
+  });
   it.each(wire.public)('admits supported original and correction $original.presentation_version',async fixture=>{
     const before=JSON.stringify(fixture);
     expect(await verifyPresentation(fixture.original)).toEqual(fixture.original);

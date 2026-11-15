@@ -25,6 +25,29 @@ it.each(wire.purchased)('consumes actual purchased $instrument_display.license_v
  expect(value.original_license).toEqual(fixture.original_license);
  expect(JSON.stringify(fixture)).toBe(before);
 });
+it.each(wire.purchased)('accepts entitlement-gated HTML for $retained_presentation.presentation.presentation_version without dropping evidence',async f=>{
+ const gated={...f,retained_presentation:{...f.retained_presentation!,presentation:{...f.retained_presentation!.presentation,rendered_html:null}}};
+ await expect(parsePurchasedLicenseDisplay(gated,f.order_id,f.listing_id)).resolves.toEqual(gated);
+});
+it('still validates all other gated evidence fields',async()=>{
+ const f=wire.purchased[0];
+ const presentation={...f.retained_presentation!.presentation,rendered_html:null};
+ const retained={...f.retained_presentation!,presentation};
+ const gated={...f,retained_presentation:retained};
+ const missing:Record<string,unknown>={...presentation};delete missing.render_hash;
+ for(const bad of [
+  {...gated,original_snapshot_hash:'BAD'},
+  {...gated,instrument_display:{...f.instrument_display,notice:'changed'}},
+  {...gated,retained_presentation:{...retained,publication_id:'BAD'}},
+  {...gated,retained_presentation:{...retained,approval_id:'BAD'}},
+  {...gated,retained_presentation:{...retained,provenance:'changed'}},
+  {...gated,retained_presentation:{...retained,original_render_hash:'BAD'}},
+  {...gated,retained_presentation:{...retained,notice:'changed'}},
+  ...[missing,{...presentation,presentation_version:'unknown'},{...presentation,render_hash:'BAD'},
+   {...presentation,extra:true},{...presentation,presentation_kind:undefined},
+   {...wire.public[0].corrected,rendered_html:null}].map(presentation=>({...gated,retained_presentation:{...retained,presentation}})),
+ ]) await expect(parsePurchasedLicenseDisplay(bad,f.order_id,f.listing_id)).rejects.toThrow();
+});
 it('refuses foreign, unknown, tampered or correction evidence in the purchased contract',async()=>{
  const f=wire.purchased[2];
  for(const bad of [{...f,order_id:wire.purchased[0].order_id},{...f,listing_id:wire.purchased[0].listing_id},

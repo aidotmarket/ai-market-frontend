@@ -93,6 +93,7 @@ export default function ListingPage({ params }: { params: Promise<{ id: string }
   return <div className="space-y-6">
     <Link href="/dashboard/listings" className="text-indigo-700 underline">Back to listings</Link>
     <h1 className="text-2xl font-semibold">{listing?.title}</h1>
+    <p className="text-sm text-gray-600">Your private owner view remains available when this listing is not public.</p>
     <Link href={`/dashboard/listings/${encodeURIComponent(id)}/edit`} className="text-indigo-700 underline">Edit listing</Link>
     {listing?.status === 'published' && <>
       {sourceState === 'loading' && <p role="status">Loading verification availability…</p>}

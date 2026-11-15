@@ -1,4 +1,5 @@
 import { api } from './client';
+import { privateReadOptions } from './privateReads';
 import type { BuyerOrder, BuyerOrderDetail, OrderEvent, OrderAccessResponse } from '@/types';
 
 export interface MyOrdersPaging {
@@ -20,7 +21,7 @@ export async function getMyOrders(paging?: MyOrdersPaging): Promise<BuyerOrder[]
 }
 
 export async function getOrder(orderId: string): Promise<BuyerOrderDetail> {
-  const res = await api.get<BuyerOrderDetail & {amount_cents?: number; listing_snapshot?: {title?: string}}>(`/orders/${encodeURIComponent(orderId)}`);
+  const res = await api.get<BuyerOrderDetail & {amount_cents?: number; listing_snapshot?: {title?: string}}>(`/orders/${encodeURIComponent(orderId)}`, privateReadOptions);
   const data = res.data;
   return parseOrderDetail(data);
 }
@@ -33,11 +34,11 @@ export function parseOrderDetail(data: BuyerOrderDetail & {amount_cents?: number
 }
 
 export async function getOrderEvents(orderId: string): Promise<OrderEvent[]> {
-  const res = await api.get<OrderEvent[]>(`/orders/${encodeURIComponent(orderId)}/events`);
+  const res = await api.get<OrderEvent[]>(`/orders/${encodeURIComponent(orderId)}/events`, privateReadOptions);
   return res.data;
 }
 
 export async function getOrderAccess(orderId: string): Promise<OrderAccessResponse> {
-  const res = await api.get<OrderAccessResponse>(`/orders/${encodeURIComponent(orderId)}/access`);
+  const res = await api.get<OrderAccessResponse>(`/orders/${encodeURIComponent(orderId)}/access`, privateReadOptions);
   return res.data;
 }

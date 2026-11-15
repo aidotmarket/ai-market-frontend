@@ -53,9 +53,15 @@ describe('AI crawler middleware', () => {
     expect(waitUntil).not.toHaveBeenCalled();
   });
 
-  it.each(['/dashboard', '/dashboard/settings', '/dashboard/settings/connected-apps', '/listings-private', '/requests-private'])('excludes %s even for GPTBot', (path) => {
+  it.each(['/listings-private', '/requests-private'])('excludes %s even for GPTBot', (path) => {
     expect(unstable_doesMiddlewareMatch({ config, nextConfig: {}, url: path })).toBe(false);
     expectNext(middleware(request(path), event));
+    expect(fetchMock).not.toHaveBeenCalled();
+  });
+
+  it.each(['/dashboard', '/dashboard/orders/purchase', '/dashboard/orders/purchase/license-record', '/dashboard/listings/owned', '/dashboard/sales/purchase/license-record', '/dashboard/settings'])('keeps %s private and outside crawler reporting', path => {
+    expect(unstable_doesMiddlewareMatch({ config, nextConfig: {}, url: path })).toBe(true);
+    expect(middleware(request(path), event).headers.get('cache-control')).toBe('private, no-store');
     expect(fetchMock).not.toHaveBeenCalled();
   });
 
