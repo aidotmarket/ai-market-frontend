@@ -42,6 +42,18 @@ it.each(wire.purchased)('shows purchased $instrument_display.license_version sep
  expect(screen.queryByRole('button')).toBeNull();
  expect(JSON.stringify(f)).toBe(before);
 });
+it.each(wire.purchased)('renders gated $retained_presentation.presentation.presentation_version metadata without a preview',async f=>{
+ const gated={...f,retained_presentation:{...f.retained_presentation!,presentation:{...f.retained_presentation!.presentation,rendered_html:null}}};
+ client.get.mockResolvedValue({data:gated,headers:{'cache-control':'private, no-store'}});
+ const view=render(<PurchasedLicenseDisplay orderId={f.order_id} listingId={f.listing_id}/>);
+ await screen.findByRole('region',{name:'Purchased licence display'});
+ expect(screen.getByText(f.instrument_display!.license_label!)).toBeTruthy();
+ expect(screen.getByText(f.instrument_display!.notice)).toBeTruthy();
+ expect(screen.getByText(f.retained_presentation!.notice)).toBeTruthy();
+ expect(screen.getByText(`Original snapshot digest: ${f.original_snapshot_hash}`)).toBeTruthy();
+ expect(view.container.querySelector('iframe')).toBeNull();
+ expect(screen.queryByText('Purchased licence display is unavailable. Your original licence record and purchase access remain available separately.')).toBeNull();
+});
 it('never renders unverified retained HTML and aborts the prior order read',async()=>{
  const f=wire.purchased[0];
  client.get.mockResolvedValue({data:{...f,retained_presentation:{...f.retained_presentation,presentation:wire.public[2].corrected}},headers:{'cache-control':'private, no-store'}});

@@ -105,6 +105,29 @@ describe('purchase notices and frozen evidence', () => {
     expect(screen.queryByTitle('Original seller evidence for purchased version')).toBeNull();
   });
 
+  it.each([
+    ['unpaid', 'created'], ['cancelled', 'cancelled'], ['revoked', 'completed'], ['fully refunded', 'refunded'],
+  ] as const)('keeps gated licence metadata on a %s order without any description preview', async (_entitlement, status) => {
+    const f = wire.purchased[0];
+    const display = { ...f, retained_presentation: { ...f.retained_presentation!,
+      presentation: { ...f.retained_presentation!.presentation, rendered_html: null } } };
+    const order = { ...base, id: f.order_id, listing_id: f.listing_id, status,
+      purchased_presentation: { state: 'unavailable' as const, notice: 'Listing description is unavailable for this order.' },
+      listing_notice: 'Removed by ai.market.', delivery_access_state: 'restricted' };
+    ports.orderId = order.id;
+    install(order, async () => { throw noDocument(undefined, 404, 'STANDARD_LICENSE_NO_DOCUMENT'); });
+    const get = ports.get.getMockImplementation()!;
+    ports.get.mockImplementation((path: string, ...args: unknown[]) => path === `/orders/${order.id}/license-display`
+      ? Promise.resolve({ data: display, headers: { 'cache-control': 'private, no-store' } }) : get(path, ...args));
+    const view = render(<OrderDetailPage />);
+    expect(await screen.findByText(f.instrument_display!.license_label!)).toBeTruthy();
+    expect(screen.getByText(f.instrument_display!.notice)).toBeTruthy();
+    expect(screen.getByText(f.retained_presentation!.notice)).toBeTruthy();
+    expect(screen.getByText(`Original snapshot digest: ${f.original_snapshot_hash}`)).toBeTruthy();
+    expect(view.container.querySelector('iframe')).toBeNull();
+    expect(screen.queryByText('Purchased licence display is unavailable. Your original licence record and purchase access remain available separately.')).toBeNull();
+  });
+
   it.each([undefined, null])('shows the unavailable sentence for a pre-C3 order with absent evidence fields: %s', missing => {
     render(<PurchaseEvidence order={{ ...base, purchased_presentation: missing, listing_notice: missing }} />);
     expect(screen.getByText(UNAVAILABLE_NOTICE)).toBeTruthy();

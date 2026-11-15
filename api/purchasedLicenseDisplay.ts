@@ -1,13 +1,14 @@
 import {api} from './client';
 import {isAxiosError} from 'axios';
-import {HASH, UUID, record, verifyPresentation, type OriginalPresentation} from '@/lib/publicPresentation';
+import {HASH, UUID, record, supportedVersion, verifyPresentation, type OriginalPresentation} from '@/lib/publicPresentation';
+type PurchasedPresentation = Omit<OriginalPresentation, 'rendered_html'> & {rendered_html:string|null};
 export interface PurchasedLicenseDisplay {
   presentation_kind: 'purchased-license-display-v1'; order_id:string; listing_id:string; listing_version_id:string|null;
   original_snapshot_hash:string; original_license:unknown; license_record_url:string|null;
   instrument_display: null | {acceptance_id:string;license_code:string;license_version:string;license_label:string|null;
     license_sha256:string;covenant_sha256:string;rider_sha256:string|null;provenance:'purchased_instrument';notice:string};
   retained_presentation: null | {publication_id:string;approval_id:string;provenance:'original_seller_evidence';
-    presentation:OriginalPresentation;original_render_hash:string;notice:string};
+    presentation:PurchasedPresentation;original_render_hash:string;notice:string};
   retained_presentation_status?: 'unavailable'|'ambiguous';
 }
 const NOTICE = 'Purchased instrument display; original accepted evidence retained.';
@@ -38,8 +39,16 @@ export async function parsePurchasedLicenseDisplay(value:unknown, orderId:string
   if (retained!==null) {
     if (!record(retained) || !exactFields(retained,['publication_id','approval_id','provenance','presentation','original_render_hash','notice']) || !uuid(retained.publication_id) || !uuid(retained.approval_id) ||
         retained.provenance!=='original_seller_evidence' || !hash(retained.original_render_hash) || retained.notice!==EVIDENCE_NOTICE) return fail();
-    const presentation=await verifyPresentation(retained.presentation);
-    if (presentation.presentation_kind!==undefined) return fail();
+    const presentation=retained.presentation;
+    if (record(presentation) && presentation.rendered_html===null) {
+      // Entitlement gating withholds HTML, retaining its digest and metadata.
+      // Match the original presentation schema without verifying absent bytes.
+      if (!exactFields(presentation,['presentation_version','rendered_html','render_hash'],['sample_files']) ||
+          !supportedVersion(presentation.presentation_version) || !hash(presentation.render_hash)) return fail();
+    } else {
+      const verified=await verifyPresentation(presentation);
+      if (verified.presentation_kind!==undefined) return fail();
+    }
   }
   return value as unknown as PurchasedLicenseDisplay;
 }
