@@ -1,15 +1,16 @@
 'use client';
 
 import ApprovedListingPreview from '@/components/ApprovedListingPreview';
-import { deliveryNotice, deliveryPermitted, REDACTED_NOTICE, UNAVAILABLE_NOTICE, verifiedPurchasedHtml } from '@/lib/order-purchase-evidence';
+import { deliveryNotice, deliveryPermitted, REDACTED_NOTICE, UNAVAILABLE_NOTICE, verifiedPurchasedHtml, WITHDRAWN_NOTICE } from '@/lib/order-purchase-evidence';
 import type { BuyerOrderDetail } from '@/types';
 
-export default function PurchaseEvidence({ order }: { order: BuyerOrderDetail }) {
+export default function PurchaseEvidence({ order, isBuyerOfRecord = false }: { order: BuyerOrderDetail; isBuyerOfRecord?: boolean }) {
   const presentation = order.purchased_presentation;
   const html = verifiedPurchasedHtml(presentation);
+  const notice = !isBuyerOfRecord && order.listing_notice === WITHDRAWN_NOTICE ? 'Withdrawn' : order.listing_notice;
   const blocked = !deliveryPermitted(order.delivery_access_state);
   return <section aria-label="Purchased listing evidence" className="space-y-3 rounded-lg border border-gray-200 p-6">
-    {order.listing_notice && <p role="status">{order.listing_notice}</p>}
+    {notice && <p role="status">{notice}</p>}
     {blocked && <div role="alert">
       <h2 className="font-semibold">Delivery unavailable</h2>
       {order.listing_notice !== deliveryNotice(order.delivery_access_state) && <p>{deliveryNotice(order.delivery_access_state)}</p>}

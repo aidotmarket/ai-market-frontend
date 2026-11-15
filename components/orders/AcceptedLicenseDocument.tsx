@@ -1,12 +1,12 @@
 'use client';
 
 import { useEffect, useRef, useState } from 'react';
-import { getAcceptedLicenseDocument, NO_RECORDED_LICENSE_DOCUMENT, type AcceptedLicenseDocument as Document } from '@/api/licenseRecords';
+import { getAcceptedLicenseDocument, NO_RECORDED_LICENSE_DOCUMENT, STANDARD_LICENSE_NO_DOCUMENT, type AcceptedLicenseDocument as Document } from '@/api/licenseRecords';
 import LicenseReadingDialog from '@/components/LicenseReadingDialog';
 
 export default function AcceptedLicenseDocument({ orderId }: { orderId: string }) {
   const [document, setDocument] = useState<Document | null>(null);
-  const [state, setState] = useState<'loading' | 'ready' | 'missing' | 'error'>('loading');
+  const [state, setState] = useState<'loading' | 'ready' | 'missing' | 'standard' | 'error'>('loading');
   const [pdfUrl, setPdfUrl] = useState<string | null>(null);
   const [downloading, setDownloading] = useState(false);
   const [downloadError, setDownloadError] = useState(false);
@@ -15,7 +15,10 @@ export default function AcceptedLicenseDocument({ orderId }: { orderId: string }
     const request = new AbortController();
     lifetime.current = request;
     getAcceptedLicenseDocument(orderId, false, request.signal).then(value => {
-      if (!request.signal.aborted) { setDocument(value); setState(value === null ? 'missing' : 'ready'); }
+      if (!request.signal.aborted) {
+        setDocument(value === STANDARD_LICENSE_NO_DOCUMENT ? null : value);
+        setState(value === STANDARD_LICENSE_NO_DOCUMENT ? 'standard' : value === null ? 'missing' : 'ready');
+      }
     }).catch(() => { if (!request.signal.aborted) setState('error'); });
     return () => { request.abort(); lifetime.current = null; };
   }, [orderId]);
@@ -33,6 +36,7 @@ export default function AcceptedLicenseDocument({ orderId }: { orderId: string }
     try {
       const value = await getAcceptedLicenseDocument(orderId, true, request.signal);
       request.signal.throwIfAborted();
+      if (value === STANDARD_LICENSE_NO_DOCUMENT) { setState('standard'); return; }
       if (!value) { setState('missing'); return; }
       const url = URL.createObjectURL(value.blob);
       const anchor = window.document.createElement('a');
@@ -42,6 +46,8 @@ export default function AcceptedLicenseDocument({ orderId }: { orderId: string }
     } catch { if (!request.signal.aborted) setDownloadError(true); }
     finally { if (!request.signal.aborted) setDownloading(false); }
   }
+
+  if (state === 'standard') return null;
 
   return <section aria-label="Accepted licence document" className="space-y-3 rounded-lg border border-gray-200 p-6">
     <h2 className="font-semibold">Accepted licence document</h2>

@@ -20,6 +20,7 @@ export async function downloadLicenseRecordPdf(orderId: string): Promise<Blob> {
 }
 
 export const NO_RECORDED_LICENSE_DOCUMENT = 'No recorded licence document is available';
+export const STANDARD_LICENSE_NO_DOCUMENT = 'STANDARD_LICENSE_NO_DOCUMENT';
 export interface AcceptedLicenseDocument {
   blob: Blob;
   text: string | null;
@@ -27,7 +28,7 @@ export interface AcceptedLicenseDocument {
 }
 
 // The order selects the accepted document, including retired documents. Never supply a listing/document ID.
-export async function getAcceptedLicenseDocument(orderId: string, download: boolean, signal: AbortSignal): Promise<AcceptedLicenseDocument | null> {
+export async function getAcceptedLicenseDocument(orderId: string, download: boolean, signal: AbortSignal): Promise<AcceptedLicenseDocument | typeof STANDARD_LICENSE_NO_DOCUMENT | null> {
   try {
     const response = await api.get<ArrayBuffer>(`/orders/${encodeURIComponent(orderId)}/license-document`, {
       ...privateReadOptions, signal, params: { download: download ? 1 : 0 }, responseType: 'arraybuffer',
@@ -45,9 +46,13 @@ export async function getAcceptedLicenseDocument(orderId: string, download: bool
     signal.throwIfAborted();
     if (isAxiosError(error) && error.response?.status === 404) {
       const data = error.response.data;
-      let detail: unknown;
-      try { detail = JSON.parse(new TextDecoder().decode(data)).detail; } catch { /* Other 404s remain unavailable. */ }
-      if (detail === NO_RECORDED_LICENSE_DOCUMENT) return null;
+      let code: unknown;
+      try {
+        const body = JSON.parse(new TextDecoder().decode(data));
+        code = body?.code;
+      } catch { /* A code-less 404 is the legacy pre-snapshot response. */ }
+      if (code === STANDARD_LICENSE_NO_DOCUMENT) return STANDARD_LICENSE_NO_DOCUMENT;
+      if (code == null || code === 'NO_RECORDED_DOCUMENT') return null;
     }
     throw error;
   }

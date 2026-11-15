@@ -5,6 +5,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { sha256 } from '@noble/hashes/sha2.js';
 import { bytesToHex } from '@noble/hashes/utils.js';
 import { AxiosError } from 'axios';
+import wire from '@/tests/fixtures/s1922-backend-wire.json';
 import OrderDetailPage from '@/app/dashboard/orders/[id]/page';
 import PurchaseEvidence from '@/components/orders/PurchaseEvidence';
 import { DELIVERY_NOTICES, REDACTED_NOTICE, UNAVAILABLE_NOTICE, WITHDRAWN_NOTICE } from '@/lib/order-purchase-evidence';
@@ -13,7 +14,7 @@ import type { BuyerOrderDetail } from '@/types';
 const ports = vi.hoisted(() => ({ get: vi.fn(), report: vi.fn(), gateway: vi.fn(), userId: 'buyer-1', orderId: 'order-1' }));
 vi.mock('@/api/client', () => ({ api: { get: ports.get } }));
 vi.mock('next/navigation', () => ({ useParams: () => ({ id: ports.orderId }), useSearchParams: () => new URLSearchParams() }));
-vi.mock('@/store/auth', () => ({ useAuthStore: (select: (value: unknown) => unknown) => select({ user: { id: ports.userId } }) }));
+vi.mock('@/store/auth', () => ({ authSessionIdentity: () => ports.userId, useAuthStore: (select: (value: unknown) => unknown) => select({ user: { id: ports.userId } }) }));
 vi.mock('@/components/allai/AllAIContext', () => ({ useAllAI: () => ({ openReportIssue: ports.report }) }));
 vi.mock('@/components/Toast', () => ({ useToast: () => ({ toast: vi.fn() }) }));
 vi.mock('@/components/legal/TermsGate', () => ({ useTermsGate: () => ({
@@ -38,14 +39,15 @@ function documentResponse(text = 'Accepted document A (retired)', contentType = 
   return { data: bytes.buffer, headers: { 'content-type': contentType, 'cache-control': 'private, no-store',
     'x-license-source-sha256': bytesToHex(sha256(bytes)) } };
 }
-function noDocument(detail = 'No recorded licence document is available', status = 404) {
+function noDocument(detail = 'No recorded licence document is available', status = 404, code?: string) {
   return Object.assign(new AxiosError('Document refused'), { response: { status,
-    data: new TextEncoder().encode(JSON.stringify({ detail })).buffer } });
+    data: new TextEncoder().encode(JSON.stringify({ detail, code })).buffer } });
 }
 function install(order: BuyerOrderDetail = base, doc: () => Promise<unknown> = async () => documentResponse()) {
   ports.get.mockImplementation((path: string) => {
     if (path === `/orders/${order.id}`) return Promise.resolve({ data: order });
     if (path === `/orders/${order.id}/events`) return Promise.resolve({ data: [{ id: 'paid', event_type: 'paid', created_at: base.created_at }] });
+    if (path === `/orders/${order.id}/license-display`) return Promise.reject(noDocument());
     if (path === `/orders/${order.id}/license-document`) return doc();
     if (path === `/orders/${order.id}/access`) return Promise.resolve({ data: { can_download: true, delivery_type: 'reference', download_urls: [{ url: 'https://storage.example/file', filename: 'v1.csv' }] } });
     throw new Error(`Unexpected API request ${path}`);
@@ -98,8 +100,26 @@ describe('purchase notices and frozen evidence', () => {
     expect(screen.queryByTitle('Listing description for the purchased version')).toBeNull();
   });
 
-  it('shows the explicit pre-snapshot state without creating document content', async () => {
-    install({ ...base, purchased_presentation: { state: 'unavailable', notice: UNAVAILABLE_NOTICE } }, async () => { throw noDocument(); });
+  it('keeps the purchased standard instrument alongside the C3 evidence without a missing-document sentence', async () => {
+    const display = { ...wire.purchased[0], license_record_url: null };
+    const order = { ...base, id: display.order_id, listing_id: display.listing_id };
+    ports.orderId = order.id;
+    install(order, async () => { throw noDocument(undefined, 404, 'STANDARD_LICENSE_NO_DOCUMENT'); });
+    const get = ports.get.getMockImplementation()!;
+    ports.get.mockImplementation((path: string, ...args: unknown[]) => path === `/orders/${order.id}/license-display`
+      ? Promise.resolve({ data: display, headers: { 'cache-control': 'private, no-store' } }) : get(path, ...args));
+    render(<OrderDetailPage />);
+    expect(await screen.findByText(display.instrument_display!.license_label!)).toBeTruthy();
+    expect(screen.getByText(display.instrument_display!.notice)).toBeTruthy();
+    expect(screen.getByText(`Original snapshot digest: ${display.original_snapshot_hash}`)).toBeTruthy();
+    expect(screen.getByTitle('Listing description for the purchased version')).toBeTruthy();
+    await waitFor(() => expect(screen.queryByText('Loading accepted licence document…')).toBeNull());
+    expect(screen.queryByText('No recorded licence document is available')).toBeNull();
+    expect(screen.queryByRole('region', { name: 'Accepted licence document' })).toBeNull();
+  });
+
+  it.each(['NO_RECORDED_DOCUMENT', undefined])('shows the pre-snapshot state for code %s without creating document content', async code => {
+    install({ ...base, purchased_presentation: { state: 'unavailable', notice: UNAVAILABLE_NOTICE } }, async () => { throw noDocument(undefined, 404, code); });
     render(<OrderDetailPage />);
     expect(await screen.findByText('No recorded licence document is available')).toBeTruthy();
     expect(screen.queryByRole('button', { name: 'Download accepted licence' })).toBeNull();
@@ -114,6 +134,8 @@ describe('purchase notices and frozen evidence', () => {
     expect(screen.getByRole('link', { name: 'Original licence record' }).getAttribute('href')).toBe('/dashboard/sales/order-1/license-record');
     expect(screen.queryByRole('button', { name: 'Continue to download' })).toBeNull();
     expect(ports.gateway).not.toHaveBeenCalled();
+    expect(screen.queryByText(WITHDRAWN_NOTICE)).toBeNull();
+    expect(screen.getByText('Withdrawn')).toBeTruthy();
   });
 });
 
@@ -179,7 +201,7 @@ describe('accepted document through the order', () => {
     install(base, async () => {
       if (reason === 'missing bytes') throw noDocument('Licence document unavailable', 503);
       if (reason === 'forbidden') throw noDocument('Access denied', 403);
-      if (reason === 'other missing document') throw noDocument('Licence document not found');
+      if (reason === 'other missing document') throw noDocument('Licence document not found', 404, 'UNKNOWN_DOCUMENT');
       const value = documentResponse();
       if (reason === 'hash mismatch') value.headers['x-license-source-sha256'] = '0'.repeat(64);
       else value.headers['cache-control'] = 'public, max-age=600';
