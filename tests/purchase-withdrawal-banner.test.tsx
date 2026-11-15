@@ -88,19 +88,27 @@ describe('purchase notices and frozen evidence', () => {
     expect(await screen.findByText('Accepted document A (retired)')).toBeTruthy();
   });
 
-  it.each([null, { state: 'unavailable' as const, notice: 'This listing has been taken down by ai.market.' }])('shows the takedown notice without a description for an order with no licence entitlement: %o', async presentation => {
-    const notice = 'This listing has been taken down by ai.market.';
+  it('shows both backend notices without a description for an order with no licence entitlement', async () => {
+    const notice = 'Removed by ai.market.';
+    const presentation = { state: 'unavailable' as const, notice: 'Listing description is unavailable for this order.' };
     install({ ...base, status: 'cancelled', listing_title: 'Taken-down purchased listing',
       purchased_presentation: presentation, listing_notice: notice, delivery_access_state: 'restricted' },
     async () => { throw noDocument(undefined, 404, 'STANDARD_LICENSE_NO_DOCUMENT'); });
     render(<OrderDetailPage />);
     expect(await screen.findByText('Taken-down purchased listing')).toBeTruthy();
-    expect(screen.getAllByText(notice).length).toBeGreaterThan(0);
+    expect(screen.getByText(notice)).toBeTruthy();
+    expect(screen.getByText(presentation.notice)).toBeTruthy();
     expect(screen.getByText('Cancelled')).toBeTruthy();
     expect(screen.getByRole('heading', { name: 'Delivery unavailable' })).toBeTruthy();
     expect(screen.queryByRole('heading', { name: 'Listing description at purchase' })).toBeNull();
     expect(screen.queryByTitle('Listing description for the purchased version')).toBeNull();
     expect(screen.queryByTitle('Original seller evidence for purchased version')).toBeNull();
+  });
+
+  it.each([undefined, null])('shows the unavailable sentence for a pre-C3 order with absent evidence fields: %s', missing => {
+    render(<PurchaseEvidence order={{ ...base, purchased_presentation: missing, listing_notice: missing }} />);
+    expect(screen.getByText(UNAVAILABLE_NOTICE)).toBeTruthy();
+    expect(screen.queryByTitle('Listing description for the purchased version')).toBeNull();
   });
 
   it.each([

@@ -8,6 +8,7 @@ export default function PurchaseEvidence({ order, isBuyerOfRecord = false }: { o
   const presentation = order.purchased_presentation;
   const html = verifiedPurchasedHtml(presentation);
   const notice = !isBuyerOfRecord && order.listing_notice === WITHDRAWN_NOTICE ? 'Withdrawn' : order.listing_notice;
+  const presentationNotice = presentation?.notice ?? UNAVAILABLE_NOTICE;
   const blocked = !deliveryPermitted(order.delivery_access_state);
   return <section aria-label="Purchased listing evidence" className="space-y-3 rounded-lg border border-gray-200 p-6">
     {notice && <p role="status">{notice}</p>}
@@ -21,6 +22,6 @@ export default function PurchaseEvidence({ order, isBuyerOfRecord = false }: { o
         <ApprovedListingPreview title="Listing description for the purchased version" html={html} />
         <p className="break-all text-xs">Purchased version: {presentation?.listing_version_id}</p>
         <p className="break-all text-xs">Render hash: {presentation?.render_hash}</p>
-      </> : presentation?.notice !== notice && <p role="status">{presentation?.notice ?? UNAVAILABLE_NOTICE}</p>}
+      </> : presentationNotice !== notice && <p role="status">{presentationNotice}</p>}
   </section>;
 }
