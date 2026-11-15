@@ -88,6 +88,21 @@ describe('purchase notices and frozen evidence', () => {
     expect(await screen.findByText('Accepted document A (retired)')).toBeTruthy();
   });
 
+  it.each([null, { state: 'unavailable' as const, notice: 'This listing has been taken down by ai.market.' }])('shows the takedown notice without a description for an order with no licence entitlement: %o', async presentation => {
+    const notice = 'This listing has been taken down by ai.market.';
+    install({ ...base, status: 'cancelled', listing_title: 'Taken-down purchased listing',
+      purchased_presentation: presentation, listing_notice: notice, delivery_access_state: 'restricted' },
+    async () => { throw noDocument(undefined, 404, 'STANDARD_LICENSE_NO_DOCUMENT'); });
+    render(<OrderDetailPage />);
+    expect(await screen.findByText('Taken-down purchased listing')).toBeTruthy();
+    expect(screen.getAllByText(notice).length).toBeGreaterThan(0);
+    expect(screen.getByText('Cancelled')).toBeTruthy();
+    expect(screen.getByRole('heading', { name: 'Delivery unavailable' })).toBeTruthy();
+    expect(screen.queryByRole('heading', { name: 'Listing description at purchase' })).toBeNull();
+    expect(screen.queryByTitle('Listing description for the purchased version')).toBeNull();
+    expect(screen.queryByTitle('Original seller evidence for purchased version')).toBeNull();
+  });
+
   it.each([
     null,
     { state: 'unavailable' as const, notice: UNAVAILABLE_NOTICE },
@@ -101,7 +116,7 @@ describe('purchase notices and frozen evidence', () => {
   });
 
   it('keeps the purchased standard instrument alongside the C3 evidence without a missing-document sentence', async () => {
-    const display = { ...wire.purchased[0], license_record_url: null };
+    const display = wire.purchased[0];
     const order = { ...base, id: display.order_id, listing_id: display.listing_id };
     ports.orderId = order.id;
     install(order, async () => { throw noDocument(undefined, 404, 'STANDARD_LICENSE_NO_DOCUMENT'); });
@@ -112,7 +127,9 @@ describe('purchase notices and frozen evidence', () => {
     expect(await screen.findByText(display.instrument_display!.license_label!)).toBeTruthy();
     expect(screen.getByText(display.instrument_display!.notice)).toBeTruthy();
     expect(screen.getByText(`Original snapshot digest: ${display.original_snapshot_hash}`)).toBeTruthy();
-    expect(screen.getByTitle('Listing description for the purchased version')).toBeTruthy();
+    expect(screen.getAllByTitle('Listing description for the purchased version')).toHaveLength(1);
+    expect(screen.queryByTitle('Original seller evidence for purchased version')).toBeNull();
+    expect(screen.getAllByRole('link', { name: 'Original licence record' })).toHaveLength(1);
     await waitFor(() => expect(screen.queryByText('Loading accepted licence document…')).toBeNull());
     expect(screen.queryByText('No recorded licence document is available')).toBeNull();
     expect(screen.queryByRole('region', { name: 'Accepted licence document' })).toBeNull();
@@ -197,18 +214,21 @@ describe('accepted document through the order', () => {
     expect(URL.revokeObjectURL).toHaveBeenCalledWith('blob:accepted');
   });
 
-  it.each(['missing bytes', 'forbidden', 'other missing document', 'hash mismatch', 'public cache'])('renders %s as unavailable without inventing a pre-snapshot state', async reason => {
+  it.each(['missing bytes', 'forbidden', 'other missing document', 'document unavailable', 'unknown code', 'non-JSON body', 'hash mismatch', 'public cache'])('renders %s as unavailable without inventing a pre-snapshot state', async reason => {
     install(base, async () => {
       if (reason === 'missing bytes') throw noDocument('Licence document unavailable', 503);
       if (reason === 'forbidden') throw noDocument('Access denied', 403);
-      if (reason === 'other missing document') throw noDocument('Licence document not found', 404, 'UNKNOWN_DOCUMENT');
+      if (reason === 'other missing document') throw noDocument('Licence document not found');
+      if (reason === 'document unavailable') throw noDocument(undefined, 404, 'DOCUMENT_UNAVAILABLE');
+      if (reason === 'unknown code') throw noDocument(undefined, 404, 'UNKNOWN_DOCUMENT');
+      if (reason === 'non-JSON body') throw Object.assign(new AxiosError('Proxy error'), { response: { status: 404, data: new TextEncoder().encode('<html>Not found</html>').buffer } });
       const value = documentResponse();
       if (reason === 'hash mismatch') value.headers['x-license-source-sha256'] = '0'.repeat(64);
       else value.headers['cache-control'] = 'public, max-age=600';
       return value;
     });
     render(<OrderDetailPage />);
-    expect(await screen.findByText('Licence document unavailable. Contact support through your order.')).toBeTruthy();
+    expect(await screen.findByText('The licence document is temporarily unavailable. Contact support.')).toBeTruthy();
     expect(screen.queryByText('No recorded licence document is available')).toBeNull();
     expect(screen.queryByText('Accepted document A (retired)')).toBeNull();
     expect(screen.queryByRole('button', { name: 'Download accepted licence' })).toBeNull();
@@ -218,7 +238,9 @@ describe('accepted document through the order', () => {
     let finish!: (value: unknown) => void;
     install(base, () => new Promise(resolve => { finish = resolve; }));
     const view = render(<OrderDetailPage />);
-    await screen.findByText('Loading accepted licence document…');
+    await waitFor(() => expect(ports.get.mock.calls.some(([path]) => path.endsWith('/license-document'))).toBe(true));
+    expect(screen.getByText('Loading accepted licence document…')).toBeTruthy();
+    expect(screen.queryByRole('heading', { name: 'Accepted licence document' })).toBeNull();
     const signal = ports.get.mock.calls.find(([path]) => path.endsWith('/license-document'))![1].signal as AbortSignal;
     ports.userId = 'other-user';
     view.rerender(<OrderDetailPage />);

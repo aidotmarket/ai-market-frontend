@@ -50,15 +50,15 @@ export default function AcceptedLicenseDocument({ orderId }: { orderId: string }
   if (state === 'standard') return null;
 
   return <section aria-label="Accepted licence document" className="space-y-3 rounded-lg border border-gray-200 p-6">
-    <h2 className="font-semibold">Accepted licence document</h2>
+    {state !== 'loading' && <h2 className="font-semibold">Accepted licence document</h2>}
     {state === 'loading' && <p role="status">Loading accepted licence document…</p>}
     {state === 'missing' && <p role="status">{NO_RECORDED_LICENSE_DOCUMENT}</p>}
-    {state === 'error' && <p role="status">Licence document unavailable. Contact support through your order.</p>}
+    {state === 'error' && <p role="status">The licence document is temporarily unavailable. Contact support.</p>}
     {state === 'ready' && <>
       {document?.text !== null && <pre className="whitespace-pre-wrap break-words text-sm">{document?.text}</pre>}
       {pdfUrl && <LicenseReadingDialog label="Read accepted licence PDF" href={pdfUrl} pdf />}
       <button type="button" disabled={downloading} onClick={download} className="text-indigo-700 underline disabled:opacity-50">{downloading ? 'Downloading licence…' : 'Download accepted licence'}</button>
     </>}
-    {downloadError && <p role="alert">Licence document unavailable. Contact support through your order.</p>}
+    {downloadError && <p role="alert">The licence document is temporarily unavailable. Contact support.</p>}
   </section>;
 }

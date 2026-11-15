@@ -47,12 +47,14 @@ export async function getAcceptedLicenseDocument(orderId: string, download: bool
     if (isAxiosError(error) && error.response?.status === 404) {
       const data = error.response.data;
       let code: unknown;
+      let detail: unknown;
       try {
         const body = JSON.parse(new TextDecoder().decode(data));
         code = body?.code;
-      } catch { /* A code-less 404 is the legacy pre-snapshot response. */ }
+        detail = body?.detail;
+      } catch { /* Non-JSON failures are unavailable, not pre-snapshot records. */ }
       if (code === STANDARD_LICENSE_NO_DOCUMENT) return STANDARD_LICENSE_NO_DOCUMENT;
-      if (code == null || code === 'NO_RECORDED_DOCUMENT') return null;
+      if (code === 'NO_RECORDED_DOCUMENT' || (code == null && detail === NO_RECORDED_LICENSE_DOCUMENT)) return null;
     }
     throw error;
   }

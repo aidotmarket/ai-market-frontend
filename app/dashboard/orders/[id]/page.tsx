@@ -230,7 +230,7 @@ function OrderDetailVisit({ orderId, txIdParam, userId, sessionGeneration, issue
         <div className="lg:col-span-2 space-y-6">
           {(isBuyerOfRecord || isSellerOfRecord) && <PurchaseEvidence order={order} isBuyerOfRecord={isBuyerOfRecord} />}
           {(isBuyerOfRecord || isSellerOfRecord) && order.purchased_presentation !== undefined && <AcceptedLicenseDocument key={`accepted:${order.id}`} orderId={order.id} />}
-          {isBuyerOfRecord && <PurchasedLicenseDisplay orderId={order.id} listingId={order.listing_id} />}
+          {isBuyerOfRecord && <PurchasedLicenseDisplay orderId={order.id} listingId={order.listing_id} omitOriginalEvidence />}
           {isBuyerOfRecord && deliveryAllowed && <GatewayDeliverySection key={`gateway:${order.id}`} orderId={order.id} onPresenceChange={handleGatewayPresence} />}
           <RecoveryRenderBoundary resetKey={order} onFailure={() => { setRenderFailed(true); if (recovery.attempt) void recovery.attempt.stop('failed'); }}>
           <div className="rounded-lg border border-gray-200 p-6">

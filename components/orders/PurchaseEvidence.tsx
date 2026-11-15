@@ -15,12 +15,12 @@ export default function PurchaseEvidence({ order, isBuyerOfRecord = false }: { o
       <h2 className="font-semibold">Delivery unavailable</h2>
       {order.listing_notice !== deliveryNotice(order.delivery_access_state) && <p>{deliveryNotice(order.delivery_access_state)}</p>}
     </div>}
-    <h2 className="font-semibold">Listing description at purchase</h2>
+    {(presentation?.state === 'approved' || presentation?.state === 'redacted') && <h2 className="font-semibold">Listing description at purchase</h2>}
     {presentation?.state === 'redacted' ? <p>{presentation.notice ?? REDACTED_NOTICE}</p>
       : html !== null ? <>
         <ApprovedListingPreview title="Listing description for the purchased version" html={html} />
         <p className="break-all text-xs">Purchased version: {presentation?.listing_version_id}</p>
         <p className="break-all text-xs">Render hash: {presentation?.render_hash}</p>
-      </> : <p role="status">{presentation?.state === 'unavailable' ? presentation.notice ?? UNAVAILABLE_NOTICE : UNAVAILABLE_NOTICE}</p>}
+      </> : presentation?.notice !== notice && <p role="status">{presentation?.notice ?? UNAVAILABLE_NOTICE}</p>}
   </section>;
 }
