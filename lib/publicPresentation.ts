@@ -1,14 +1,15 @@
 import {sha256} from '@noble/hashes/sha2.js';
 import {bytesToHex} from '@noble/hashes/utils.js';
-/** Closed backend19ff184 wire. Integrity is not seller consent. */
+/** Public presentation wire. Integrity is not seller consent. */
 export const CORRECTION_KIND = 'platform-license-correction-v1' as const;
 export const CORRECTION_NOTICE = 'Platform-corrected licence display; original seller approval retained';
+export const CORRECTION_NOTICE_BUYER = 'ai.market updated the licence shown here. The seller approved the original listing.';
 export const CORRECTION_TITLE = 'Listing with platform-corrected licence display';
 export const CURRENT_LICENSE_LABEL = 'ai.market Standard Data Licence v1.1' as const;
 export const HASH = /^[0-9a-f]{64}$/;
 export const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/;
 export type PresentationVersion = 'seller-listing-review-v2' | 'seller-listing-review-v3' | 'seller-listing-review-v4';
-interface PresentationBytes { presentation_version: PresentationVersion; rendered_html: string; render_hash: string; sample_files?: Array<{index:number;key_basename:string;size:number;binding:'etag_md5'|'size_only';state:'available'|'unavailable';url:string}> | null }
+interface PresentationBytes { approved_display_html?: string | null; presentation_display_version?: 'approved-display-v1' | null; presentation_version: PresentationVersion; rendered_html: string; render_hash: string; sample_files?: Array<{index:number;key_basename:string;size:number;binding:'etag_md5'|'size_only';state:'available'|'unavailable';url:string}> | null }
 export interface OriginalPresentation extends PresentationBytes { presentation_kind?: never }
 export interface CorrectedPresentation extends PresentationBytes {
   presentation_kind: typeof CORRECTION_KIND;
@@ -58,9 +59,12 @@ export async function verifyPresentation(value: unknown, identity?: {
   if (!record(value)) return fail();
   const corrected = value.presentation_kind === CORRECTION_KIND;
   const required = corrected ? [...baseFields, ...correctionFields] : baseFields;
-  if (required.some(key => !(key in value)) || Object.keys(value).some(key => ![...required, 'sample_files'].includes(key)) ||
+  if (required.some(key => !(key in value)) || Object.keys(value).some(key => ![...required, 'sample_files', 'approved_display_html', 'presentation_display_version'].includes(key)) ||
       !supportedVersion(value.presentation_version) || typeof value.rendered_html !== 'string' ||
       typeof value.render_hash !== 'string' || !HASH.test(value.render_hash)) return fail();
+  // Display HTML is a separate description fragment; rendered_html remains the hashed evidence.
+  if ((value.presentation_display_version != null && value.presentation_display_version !== 'approved-display-v1') ||
+      (value.approved_display_html != null && (typeof value.approved_display_html !== 'string' || value.presentation_display_version !== 'approved-display-v1'))) return fail();
   if (corrected) {
     if (value.provenance !== 'platform_license_correction' || value.license_label !== CURRENT_LICENSE_LABEL ||
         ['listing_id', 'publication_id', 'listing_version_id', 'approval_id', 'correction_id'].some(key => typeof value[key] !== 'string' || !UUID.test(value[key] as string)) ||

@@ -5,7 +5,7 @@ import { generatedSampleState, samplePresentation } from '@/lib/generatedSample'
 import PublicSourceReferencePage, { isPublicSourceReference } from './PublicSourceReferencePage';
 import SchemaTable from '@/components/listings/SchemaTable';
 import PublisherCard from '@/components/listings/PublisherCard';
-import {verifyCurrentListing, readLicenseDisplay, CORRECTION_KIND, CORRECTION_NOTICE, CORRECTION_TITLE} from '@/lib/publicPresentation';
+import {verifyCurrentListing, readLicenseDisplay, CORRECTION_KIND, CORRECTION_TITLE} from '@/lib/publicPresentation';
 import { notFound, redirect } from 'next/navigation';
 import { headers } from 'next/headers';
 import Link from 'next/link';
@@ -176,10 +176,22 @@ export default async function ListingDetailPage({ params, searchParams }: Props)
             </div>
           </div>
 
-          {currentDisplay && <p className="text-sm text-gray-700">Original seller evidence below; current public licence display: {currentDisplay.license_label}. {CORRECTION_NOTICE}</p>}
           <BuyerAtAGlance licenseDisplay={currentDisplay} slug={listing.slug} listingId={listing.id} initialSummary={atAGlanceSummary} includeSample={false} hideSampleAvailability={pendingSellerTerms} />
 
-          {approved ? <><p className="text-sm text-gray-700">{corrected ? CORRECTION_NOTICE : 'Original seller-approved listing evidence'}</p><ApprovedListingPreview title={corrected ? CORRECTION_TITLE : 'Seller-approved listing'} html={approved.rendered_html} /></> : <>
+          {approved ? <>
+            {approved.approved_display_html != null ? <>
+              <div className="prose prose-sm max-w-none">
+                <BackendListingHtml description={listing.description} descriptionHtml={approved.approved_display_html} />
+              </div>
+              <details>
+                <summary className="cursor-pointer text-sm text-gray-700">Original seller-approved version</summary>
+                <ApprovedListingPreview title={corrected ? CORRECTION_TITLE : 'Seller-approved listing'} html={approved.rendered_html} />
+              </details>
+            </> : <>
+              {!corrected && <p className="text-sm text-gray-700">Original seller-approved listing evidence</p>}
+              <ApprovedListingPreview title={corrected ? CORRECTION_TITLE : 'Seller-approved listing'} html={approved.rendered_html} />
+            </>}
+          </> : <>
           {/* Description uses the validated backend render. */}
           <div className="prose prose-sm max-w-none">
             <BackendListingHtml description={listing.description} descriptionHtml={listing.description_html}/>

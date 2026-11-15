@@ -1,4 +1,4 @@
-import {readLicenseDisplay, CORRECTION_NOTICE} from '@/lib/publicPresentation';
+import {readLicenseDisplay, CORRECTION_NOTICE_BUYER} from '@/lib/publicPresentation';
 import { formatMarketplaceCategoryName } from '@/lib/marketplaceCategories';
 import GeneratedSampleCard from '@/components/listings/GeneratedSampleCard';
 import { generatedSampleState } from '@/lib/generatedSample';
@@ -47,7 +47,7 @@ export function MarketplaceListingCard({ listing }: { listing: CardListing }) {
         </p>
       )}
 
-      {display && <p className="mt-3 text-xs text-gray-600">{display.license_label}. {CORRECTION_NOTICE}</p>}
+      {display && <p className="mt-3 text-xs text-gray-600">{display.license_label}. {CORRECTION_NOTICE_BUYER}</p>}
       <div className="mt-4 flex flex-wrap gap-1.5">
         <span className="inline-flex items-center rounded-full bg-gray-100 px-2.5 py-1 text-xs font-medium text-gray-700">
           {formatMarketplaceCategoryName(listing.category)}
