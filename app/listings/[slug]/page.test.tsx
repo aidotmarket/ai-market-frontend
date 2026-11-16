@@ -18,6 +18,10 @@ vi.mock('next/headers', () => ({ headers: vi.fn(async () => new Headers()) }));
 const notFound = vi.fn(() => {
   throw new Error('NEXT_NOT_FOUND');
 });
+const permanentRedirect = vi.fn(() => {
+  throw new Error('NEXT_PERMANENT_REDIRECT');
+});
+const redirect = vi.fn();
 
 const fetchPublicListing = vi.fn();
 const fetchPublicListingDocuments = vi.fn<() => Promise<ListingDocument[]>>().mockResolvedValue([]);
@@ -53,7 +57,8 @@ vi.mock('@/components/listings/BuyerAtAGlance', async (importOriginal) => {
 vi.mock('next/navigation', () => ({
   useRouter: () => ({refresh: vi.fn()}),
   notFound,
-  redirect: vi.fn(),
+  permanentRedirect,
+  redirect,
 }));
 
 vi.mock('@/lib/api', () => ({
@@ -246,6 +251,40 @@ async function renderPage(listing: ListingDetail | null, versions: ListingVersio
   });
   return renderToStaticMarkup(element);
 }
+
+describe('listing UUID canonical redirect', () => {
+  beforeEach(() => {
+    permanentRedirect.mockClear();
+    redirect.mockClear();
+    notFound.mockClear();
+    resolveListingUUID.mockReset();
+    fetchPublicListing.mockReset();
+    fetchListingVersions.mockReset();
+  });
+
+  it('permanently redirects an id-form request to the resolved slug', async () => {
+    const id = '123e4567-e89b-42d3-a456-426614174000';
+    const resolved = { slug: 'resolved-dataset' };
+    resolveListingUUID.mockResolvedValueOnce(resolved);
+
+    await expect(ListingDetailPage({ params: Promise.resolve({ slug: id }) }))
+      .rejects.toThrow('NEXT_PERMANENT_REDIRECT');
+
+    expect(resolveListingUUID).toHaveBeenCalledExactlyOnceWith(id);
+    expect(permanentRedirect).toHaveBeenCalledExactlyOnceWith(`/listings/${resolved.slug}`);
+    expect(fetchPublicListing).not.toHaveBeenCalled();
+    expect(notFound).not.toHaveBeenCalled();
+  });
+
+  it('renders a slug-form request without redirecting', async () => {
+    const html = await renderPage(makeListing());
+
+    expect(html).toContain('Test Dataset');
+    expect(resolveListingUUID).not.toHaveBeenCalled();
+    expect(permanentRedirect).not.toHaveBeenCalled();
+    expect(redirect).not.toHaveBeenCalled();
+  });
+});
 
 function extractJsonLdScripts(html: string): string[] {
   return Array.from(
