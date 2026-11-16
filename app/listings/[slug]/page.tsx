@@ -6,7 +6,7 @@ import PublicSourceReferencePage, { isPublicSourceReference } from './PublicSour
 import SchemaTable from '@/components/listings/SchemaTable';
 import PublisherCard from '@/components/listings/PublisherCard';
 import {verifyCurrentListing, readLicenseDisplay, CORRECTION_KIND, CORRECTION_TITLE, CORRECTION_NOTICE} from '@/lib/publicPresentation';
-import { notFound, redirect } from 'next/navigation';
+import { notFound, permanentRedirect } from 'next/navigation';
 import { headers } from 'next/headers';
 import Link from 'next/link';
 import type { Metadata } from 'next';
@@ -89,11 +89,11 @@ export default async function ListingDetailPage({ params, searchParams }: Props)
   const { slug } = await params;
   const requestedVersionId = (await searchParams)?.version ?? null;
 
-  // UUID redirect: resolve UUID → slug, 301 redirect
+  // UUID redirect: resolve UUID → slug, 308 redirect
   if (UUID_RE.test(slug)) {
     const resolved = await resolveListingUUID(slug);
     if (resolved?.slug) {
-      redirect(`/listings/${resolved.slug}`);
+      permanentRedirect(`/listings/${resolved.slug}`);
     }
     notFound();
   }
