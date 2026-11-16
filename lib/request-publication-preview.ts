@@ -18,14 +18,26 @@ export interface RequestPublicationPreview {
   public_content_hash: string;
   source_content_hash: string;
 }
+export interface UnavailableRequestPublicationPreview {
+  preview: null;
+  next_action: string;
+}
+export type RequestPublicationPreviewResult = RequestPublicationPreview | UnavailableRequestPublicationPreview;
+export const UNAVAILABLE_PREVIEW_GUIDANCE = 'No public preview is available. Your saved request is unchanged.';
 const keys = ['categories', 'currency', 'description', 'format_preferences', 'price_range_max', 'price_range_min', 'provenance_requirements', 'regulatory_requirements', 'title', 'urgency'] as const;
 const hash = (value: unknown): value is string => typeof value === 'string' && /^[a-f0-9]{64}$/.test(value);
-export function parsePublicationPreview(value: unknown): RequestPublicationPreview | null {
-  const unavailable = () => new Error('Public preview unavailable. Review your request and try again.');
+export function parsePublicationPreview(value: unknown): RequestPublicationPreviewResult {
+  const unavailable = () => new Error('Public preview unavailable. Your saved request is unchanged. Try again.');
   if (!value || typeof value !== 'object') throw unavailable();
   const envelope = value as Record<string, unknown>;
   if (envelope.acceptance_required !== true || !('preview' in envelope)) throw unavailable();
-  if (envelope.preview === null) return null;
+  if (envelope.preview === null) {
+    const guidance = envelope.next_action;
+    // Optional legacy guidance is display-only; never treat it as public content or consent.
+    const safe = typeof guidance === 'string' && guidance.trim().length > 0 && guidance.length <= 2000
+      && !/[\u0000-\u0008\u000b\u000c\u000e-\u001f\u007f]/.test(guidance);
+    return { preview: null, next_action: safe ? guidance : UNAVAILABLE_PREVIEW_GUIDANCE };
+  }
   if (!envelope.preview || typeof envelope.preview !== 'object') throw unavailable();
   const proposal = envelope.preview as Record<string, unknown>;
   if (!hash(proposal.source_content_hash) || !hash(proposal.public_content_hash)) throw unavailable();

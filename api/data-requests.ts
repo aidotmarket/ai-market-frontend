@@ -1,7 +1,7 @@
 import { api } from './client';
 import { useAuthStore } from '@/store/auth';
 import { authSessionOwner, assertAuthSessionOwner } from '@/lib/auth-session-owner';
-import { parsePublicationPreview } from '@/lib/request-publication-preview';
+import { parsePublicationPreview, type RequestPublicationPreviewResult } from '@/lib/request-publication-preview';
 import type {
   DataRequestListItem,
   DataRequestDetail,
@@ -38,7 +38,7 @@ export async function publishDataRequest(requestId: string): Promise<DataRequest
 }
 
 // Owner-only and non-mutating. No body, payment, or consent is sent.
-export async function previewDataRequestPublication(requestId: string) {
+export async function previewDataRequestPublication(requestId: string): Promise<RequestPublicationPreviewResult> {
   const { data } = await api.post<unknown>(`/data-requests/${encodeURIComponent(requestId)}/publication-preview`);
   return parsePublicationPreview(data);
 }

@@ -60,11 +60,26 @@ describe('private publication preview contract', () => {
     expect(await previewDataRequestPublication('request/id')).toEqual(preview);
     expect(mocks.post).toHaveBeenCalledExactlyOnceWith('/data-requests/request%2Fid/publication-preview');
   });
-  it('handles an uncertain review without treating it as acceptance', async () => {
-    mocks.post.mockResolvedValue({ data: { preview: null, acceptance_required: true, next_action: 'Correct text' } });
-    expect(await previewDataRequestPublication('id')).toBeNull();
+  it('preserves null-preview guidance without treating it as acceptance', async () => {
+    const next_action = 'Keep your original text and ask support for independent review.';
+    mocks.post.mockResolvedValue({ data: { preview: null, acceptance_required: true, next_action } });
+    expect(await previewDataRequestPublication('id')).toEqual({ preview: null, next_action });
+    expect(mocks.post).toHaveBeenCalledExactlyOnceWith('/data-requests/id/publication-preview');
+  });
+  it.each([undefined, null, '', '  ', 42, {}, ['edit'], 'a'.repeat(2001), 'Bad\u0000guidance'])(
+    'uses neutral guidance for missing or malformed next_action (%j)', async next_action => {
+      mocks.post.mockResolvedValue({ data: { preview: null, acceptance_required: true, next_action } });
+      expect(await previewDataRequestPublication('id')).toEqual({ preview: null,
+        next_action: 'No public preview is available. Your saved request is unchanged.' });
+    }
+  );
+  it('preserves markup as display-only plain text', async () => {
+    const next_action = '<a href="/support">Ask support</a>\nKeep the original text.';
+    mocks.post.mockResolvedValue({ data: { preview: null, acceptance_required: true, next_action } });
+    expect(await previewDataRequestPublication('id')).toEqual({ preview: null, next_action });
   });
   it.each([
+    { preview: null, acceptance_required: false, next_action: 'Keep text' },
     { preview, acceptance_required: false }, { preview: { ...preview, source_content_hash: 'old' }, acceptance_required: true },
     { preview: { ...preview, public_content: { ...content, buyer_id: 'private' } }, acceptance_required: true },
     { preview: { ...preview, public_content: { ...content, price_range_max: 100 } }, acceptance_required: true },

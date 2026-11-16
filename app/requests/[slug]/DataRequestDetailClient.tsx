@@ -134,7 +134,7 @@ export default function DataRequestDetailClient({
   const [editRegulatory, setEditRegulatory] = useState('');
   const [editProvenance, setEditProvenance] = useState('');
   const [publicPreview, setPublicPreview] = useState<{ source: DataRequestDetail; proposal: RequestPublicationPreview } | null>(null);
-  const [previewFeedback, setPreviewFeedback] = useState('');
+  const [previewFeedback, setPreviewFeedback] = useState<{ text: string; role: 'status' | 'alert' } | null>(null);
   const [proposalEditSource, setProposalEditSource] = useState<DataRequestDetail | null>(null);
   const loadGeneration = useRef(0);
   const contextEpoch = useRef(0);
@@ -178,7 +178,7 @@ export default function DataRequestDetailClient({
     setEditRegulatory('');
     setEditProvenance('');
     setPublicPreview(null);
-    setPreviewFeedback('');
+    setPreviewFeedback(null);
     setProposalEditSource(null);
     setProposal('');
     setProposedPrice('');
@@ -223,7 +223,7 @@ export default function DataRequestDetailClient({
     setEditing(true);
     setProposalEditSource(null);
     setPublicPreview(null);
-    setPreviewFeedback('');
+    setPreviewFeedback(null);
   }
 
   async function reviewPublicPreview() {
@@ -231,29 +231,29 @@ export default function DataRequestDetailClient({
     const epoch = beginMutation();
     setUpdatingPublication(true);
     setPublicPreview(null);
-    setPreviewFeedback('');
+    setPreviewFeedback(null);
     try {
       const source = request;
       const proposal = await previewDataRequestPublication(request.id);
       if (!isCurrentMutation(epoch)) return;
-      if (!proposal) {
-        setPreviewFeedback('A safe proposal could not be prepared. Correct identifying text, URLs or unclear requirements using Edit request, then try again.');
+      if ('preview' in proposal) {
+        setPreviewFeedback({ text: proposal.next_action, role: 'status' });
         return;
       }
       if (proposal.source_content_hash !== source.public_content_hash) {
-        setPreviewFeedback('The draft changed during review. Refresh the request and try again.');
+        setPreviewFeedback({ text: 'The draft changed during review. Refresh the request and try again.', role: 'alert' });
         return;
       }
       // The backend may only propose edits to these three text fields.
       const original = currentPublicContent(source);
       const content = proposal.public_content;
       if (!samePublicContent({ ...content, title: original.title, description: original.description, provenance_requirements: original.provenance_requirements }, original)) {
-        setPreviewFeedback('The preview changed request requirements. Use Edit request to review your requirements.');
+        setPreviewFeedback({ text: 'The preview changed request requirements. Use Edit request to review your requirements.', role: 'alert' });
         return;
       }
       setPublicPreview({ source, proposal });
     } catch {
-      if (isCurrentMutation(epoch)) setPreviewFeedback('Public preview unavailable or its version is unsupported. Your saved request is unchanged. Try again.');
+      if (isCurrentMutation(epoch)) setPreviewFeedback({ text: 'Public preview unavailable or its version is unsupported. Your saved request is unchanged. Try again.', role: 'alert' });
     } finally {
       if (isCurrentMutation(epoch)) { mutationPending.current = false; setUpdatingPublication(false); }
     }
@@ -441,7 +441,7 @@ export default function DataRequestDetailClient({
       if (!isCurrentMutation(epoch)) return;
       setRequest(current);
       if (!samePublicationSource(accepted.source, current)) {
-        setPreviewFeedback('The request or publication version changed. Review a fresh public preview before confirming.');
+        setPreviewFeedback({ text: 'The request or publication version changed. Review a fresh public preview before confirming.', role: 'status' });
         return;
       }
       const updated = await confirmDataRequestPublication(
@@ -459,7 +459,7 @@ export default function DataRequestDetailClient({
       );
     } catch {
       if (!isCurrentMutation(epoch)) return;
-      setPreviewFeedback('Public visibility could not be confirmed. Refresh to check its status, then review a fresh preview before trying again.');
+      setPreviewFeedback({ text: 'Public visibility could not be confirmed. Refresh to check its status, then review a fresh preview before trying again.', role: 'status' });
     } finally {
       if (isCurrentMutation(epoch)) {
         mutationPending.current = false;
@@ -721,7 +721,7 @@ export default function DataRequestDetailClient({
                 className="rounded-lg border border-gray-300 bg-white px-4 py-2 text-sm font-medium text-gray-700 disabled:opacity-50">
                 {updatingPublication ? 'Updating...' : 'Review public preview'}
               </button>
-              {previewFeedback && <p role="status" className="mt-3 text-sm text-gray-700">{previewFeedback}</p>}
+              {previewFeedback && <p role={previewFeedback.role} className={`mt-3 whitespace-pre-wrap break-words text-sm ${previewFeedback.role === 'alert' ? 'text-red-700' : 'text-gray-700'}`}>{previewFeedback.text}</p>}
               {publicPreview && samePublicationSource(publicPreview.source, request) && <div className="mt-4 rounded-xl border border-gray-200 bg-white p-5" aria-label="Proposed public content">
                 <h3 className="font-semibold">Proposed public content</h3>
                 <dl className="mt-3 space-y-3 text-sm">

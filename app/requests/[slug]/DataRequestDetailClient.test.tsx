@@ -9,7 +9,7 @@ import https from 'node:https';
 import type { DataRequestDetail, User } from '@/types';
 import { AxiosError, AxiosHeaders } from 'axios';
 import DataRequestDetailClient from './DataRequestDetailClient';
-import { currentPublicContent } from '@/lib/request-publication-preview';
+import { currentPublicContent, parsePublicationPreview } from '@/lib/request-publication-preview';
 
 const mocks = vi.hoisted(() => ({
   auth: {
@@ -637,9 +637,9 @@ describe('DataRequestDetailClient authenticated fallback loading', () => {
     expect(mocks.updateDataRequest).not.toHaveBeenCalled();
   });
 
-  it('coalesces repeated preview and consent clicks and ignores a departed preview', async () => {
+  it.each(['proposal', 'null guidance'])('coalesces repeated preview clicks and ignores a departed %s preview', async kind => {
     const request = makeOwnerRequest();
-    const pending = deferred<Record<string, unknown>>();
+    const pending = deferred<ReturnType<typeof parsePublicationPreview>>();
     mocks.getDataRequest.mockResolvedValue(request);
     mocks.previewDataRequestPublication.mockReturnValue(pending.promise);
     const view = render(<DataRequestDetailClient slug={request.slug} initialRequest={request} />);
@@ -647,7 +647,9 @@ describe('DataRequestDetailClient authenticated fallback loading', () => {
     act(() => { review.click(); review.click(); });
     expect(mocks.previewDataRequestPublication).toHaveBeenCalledTimes(1);
     view.unmount();
-    await act(async () => pending.resolve({ public_content: currentPublicContent(request), public_content_hash: request.public_content_hash, source_content_hash: request.public_content_hash }));
+    await act(async () => pending.resolve(kind === 'null guidance'
+      ? parsePublicationPreview({ preview: null, acceptance_required: true, next_action: 'Retain your original text and ask support for independent review.' })
+      : { public_content: currentPublicContent(request), public_content_hash: request.public_content_hash!, source_content_hash: request.public_content_hash! }));
     expect(mocks.confirmDataRequestPublication).not.toHaveBeenCalled();
     expect(mocks.toast).not.toHaveBeenCalled();
   });
@@ -655,18 +657,71 @@ describe('DataRequestDetailClient authenticated fallback loading', () => {
   it.each(['uncertain', 'unavailable', 'changed source', 'changed budget'])('leaves the saved request alone for a %s preview', async kind => {
     const request = makeOwnerRequest();
     mocks.getDataRequest.mockResolvedValue(request);
-    if (kind === 'uncertain') mocks.previewDataRequestPublication.mockResolvedValue(null);
+    if (kind === 'uncertain') mocks.previewDataRequestPublication.mockResolvedValue(parsePublicationPreview({ preview: null, acceptance_required: true }));
     else if (kind === 'unavailable') mocks.previewDataRequestPublication.mockRejectedValue(new Error('private provider detail'));
     else mocks.previewDataRequestPublication.mockResolvedValue({ source_content_hash: kind === 'changed source' ? 'b'.repeat(64) : request.public_content_hash,
       public_content_hash: 'c'.repeat(64), public_content: { ...currentPublicContent(request), ...(kind === 'changed budget' ? { price_range_max: '9000.00' } : {}) } });
     render(<DataRequestDetailClient slug={request.slug} initialRequest={request} />);
     fireEvent.click(await screen.findByRole('button', { name: 'Review public preview' }));
-    await screen.findByRole('status');
+    await screen.findByRole(kind === 'uncertain' ? 'status' : 'alert');
     expect(screen.queryByText('private provider detail')).toBeNull();
     expect(screen.queryByRole('button', { name: 'Make this request public' })).toBeNull();
     expect(mocks.confirmDataRequestPublication).not.toHaveBeenCalled();
     expect(mocks.updateDataRequest).not.toHaveBeenCalled();
     expect(mocks.withdrawDataRequestPublication).not.toHaveBeenCalled();
+  });
+
+  it.each([
+    ['Keep your original text and ask support for independent review.', 'Keep your original text and ask support for independent review.'],
+    ['<a href="/support">Ask support</a> and retain your original text.', '<a href="/support">Ask support</a> and retain your original text.'],
+    ...[undefined, null, '', '  ', 42, {}, ['edit'], 'a'.repeat(2001), 'Bad\u0000guidance'].map(value =>
+      [value, 'No public preview is available. Your saved request is unchanged.']),
+  ])('shows safe null-preview guidance or a neutral fallback (%j)', async (next_action, expected) => {
+    const request = makeOwnerRequest();
+    const result = parsePublicationPreview({ preview: null, acceptance_required: true, next_action });
+    mocks.getDataRequest.mockResolvedValue(request);
+    mocks.previewDataRequestPublication.mockResolvedValue(result);
+    render(<DataRequestDetailClient slug={request.slug} initialRequest={request} />);
+    // A previous valid preview must not leave consent available after a null result.
+    await preparePublicPreview(request);
+    mocks.previewDataRequestPublication.mockResolvedValue(result);
+    fireEvent.click(screen.getByRole('button', { name: 'Review public preview' }));
+    const status = await screen.findByRole('status');
+    expect(status.textContent).toBe(expected);
+    expect(status.querySelector('a')).toBeNull();
+    expect(screen.queryByRole('alert')).toBeNull();
+    expect(screen.getByText(request.description)).not.toBeNull();
+    expect(screen.queryByRole('button', { name: 'Make this request public' })).toBeNull();
+    expect(screen.queryByRole('button', { name: 'Use proposed text in editor' })).toBeNull();
+    expect(screen.queryByRole('textbox', { name: 'Description' })).toBeNull();
+    expect(mocks.confirmDataRequestPublication).not.toHaveBeenCalled();
+    expect(mocks.publishDataRequest).not.toHaveBeenCalled();
+    expect(mocks.updateDataRequest).not.toHaveBeenCalled();
+    expect(mocks.withdrawDataRequestPublication).not.toHaveBeenCalled();
+  });
+
+  it.each(['slug', 'auth'] as const)('ignores stale null guidance after a %s change', async change => {
+    const old = makeOwnerRequest();
+    const next = makeOwnerRequest({ id: 'request-2', title: 'Next owner request',
+      slug: change === 'slug' ? 'next-request' : old.slug,
+      buyer_id: change === 'auth' ? 'buyer-2' : owner.id, public_content_hash: 'c'.repeat(64) });
+    const pending = deferred<ReturnType<typeof parsePublicationPreview>>();
+    mocks.getDataRequest.mockResolvedValueOnce(old).mockResolvedValueOnce(next);
+    mocks.previewDataRequestPublication.mockReturnValueOnce(pending.promise);
+    const view = render(<DataRequestDetailClient slug={old.slug} initialRequest={old} />);
+    fireEvent.click(await screen.findByRole('button', { name: 'Review public preview' }));
+    if (change === 'auth') mocks.auth.user = { ...owner, id: 'buyer-2' };
+    view.rerender(<DataRequestDetailClient slug={next.slug} initialRequest={next} />);
+    await screen.findByRole('heading', { name: next.title });
+    await preparePublicPreview(next);
+    await act(async () => pending.resolve(parsePublicationPreview({ preview: null, acceptance_required: true,
+      next_action: 'Stale owner guidance: keep your original text and ask support.' })));
+    expect(screen.queryByText(/Stale owner guidance/)).toBeNull();
+    expect(screen.queryByRole('status')).toBeNull();
+    expect(screen.getByRole('button', { name: 'Make this request public' })).not.toBeNull();
+    expect(mocks.confirmDataRequestPublication).not.toHaveBeenCalled();
+    expect(mocks.publishDataRequest).not.toHaveBeenCalled();
+    expect(mocks.updateDataRequest).not.toHaveBeenCalled();
   });
 
   it('shows the authoritative reason and confirms the exact current request text', async () => {
