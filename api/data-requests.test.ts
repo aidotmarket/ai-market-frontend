@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-import { getDataRequestResponses, getMyDataRequests, getMyDataRequestsPage, submitDataRequestResponse } from './data-requests';
+import { previewDataRequestPublication, getDataRequestResponses, getMyDataRequests, getMyDataRequestsPage, submitDataRequestResponse } from './data-requests';
 
 const mocks = vi.hoisted(() => ({ get: vi.fn(), post: vi.fn() }));
 vi.mock('./client', () => ({ api: mocks }));
@@ -45,5 +45,34 @@ describe('owned request API contracts', () => {
       params: { mine: true, page: 3, per_page: 20 },
     });
     expect(mocks.post).not.toHaveBeenCalled();
+  });
+});
+
+
+describe('private publication preview contract', () => {
+  beforeEach(() => vi.clearAllMocks());
+  const content = { title: 'Dataset request', description: 'Need 500 records for research.', provenance_requirements: null,
+    categories: ['healthcare'], format_preferences: ['csv'], regulatory_requirements: [],
+    price_range_min: null, price_range_max: '100.00', currency: 'USD', urgency: 'normal' };
+  const preview = { public_content: content, public_content_hash: 'b'.repeat(64), source_content_hash: 'a'.repeat(64) };
+  it('posts no body to the exact encoded owner route and parses the public projection', async () => {
+    mocks.post.mockResolvedValue({ data: { preview, acceptance_required: true, next_action: 'Apply using normal edit' } });
+    expect(await previewDataRequestPublication('request/id')).toEqual(preview);
+    expect(mocks.post).toHaveBeenCalledExactlyOnceWith('/data-requests/request%2Fid/publication-preview');
+  });
+  it('handles an uncertain review without treating it as acceptance', async () => {
+    mocks.post.mockResolvedValue({ data: { preview: null, acceptance_required: true, next_action: 'Correct text' } });
+    expect(await previewDataRequestPublication('id')).toBeNull();
+  });
+  it.each([
+    { preview, acceptance_required: false }, { preview: { ...preview, source_content_hash: 'old' }, acceptance_required: true },
+    { preview: { ...preview, public_content: { ...content, buyer_id: 'private' } }, acceptance_required: true },
+    { preview: { ...preview, public_content: { ...content, price_range_max: 100 } }, acceptance_required: true },
+    { preview: { ...preview, public_content: { ...content, categories: ['safe', {}] } }, acceptance_required: true },
+    { preview: { ...preview, public_content: { ...content, description: null } }, acceptance_required: true },
+    { public_content: content }, null,
+  ])('refuses incompatible or malformed preview envelopes', async data => {
+    mocks.post.mockResolvedValue({ data });
+    await expect(previewDataRequestPublication('id')).rejects.toThrow('Public preview unavailable');
   });
 });
