@@ -2,6 +2,8 @@
 import { createHash } from 'node:crypto';
 import { readFileSync } from 'node:fs';
 import { renderToStaticMarkup } from 'react-dom/server';
+import ReactMarkdown from 'react-markdown';
+import rehypeSanitize from 'rehype-sanitize';
 import { afterEach, expect, it, vi } from 'vitest';
 import StaticTerms from './StaticTerms';
 import TermsAndConditionsPage from './page';
@@ -48,7 +50,7 @@ it('renders the verified backend marketplace 1.1 document once', async () => {
   const html = renderToStaticMarkup(await TermsAndConditionsPage());
   expect(html.match(/ai.market — Terms and Conditions/g)).toHaveLength(1);
   expect(html.match(/Effective date: 2026-10-01T00:00:00Z · Version 1.1/g)).toHaveLength(1);
-  expect(html).toContain('Listings without a chosen licence are offered under the ai.market Standard Data Licence with AI training permitted, and the seller accepts the ai.market Marketplace Listing Covenant for them.');
+  expect(normalizedLegalText(html)).toContain('Listings without a chosen licence are offered under the ai.market Standard Data Licence with AI training permitted, and the seller accepts the ai.market Marketplace Listing Covenant for them.');
   expect(html).toContain('Privacy Policy: https://ai.market/legal/privacy');
   expect(html).toContain('<h2 id="fees" class="scroll-mt-24">5. Commission, transaction costs, payment, and tax</h2>');
   expect(html.match(/id="fees"/g)).toHaveLength(1);
@@ -68,6 +70,34 @@ it('refuses a mismatched 1.1 document and does not treat other failures as flag-
 
 const backendDocument12 = readFileSync('app/legal/terms/terms_v1_2.test.md', 'utf8')
   .replace('{{TERMS_1_2_EFFECTIVE_AT}}', effectiveAt);
+
+it.each([
+  ['1.1', backendDocument, 'app/legal/terms/terms_v1_1.test.md', '1f2c9c8c9f22bc510623d5c91c86c01e5f48ed2afbd8d96701e1417d4d1b69eb'],
+  ['1.2', backendDocument12, 'app/legal/terms/terms_v1_2.test.md', '44e09f69faeee3611f47f72b16c97ded8414d2fec1dea52f13eac23a00135cdd'],
+])('links the licence names in Terms %s without changing the accepted document or rendered text', async (version, markdown, fixture, fixtureHash) => {
+  // Pin the original document bytes independently of the rendering change.
+  expect(hash(readFileSync(fixture, 'utf8'))).toBe(fixtureHash);
+  const config = { terms_version: version, terms_hash_sha256: hash(markdown), effective_at: effectiveAt, text_url: '/api/v1/legal/terms/document' };
+  const originalConfig = { ...config };
+  process.env.API_URL = 'https://api.example';
+  vi.stubGlobal('fetch', vi.fn()
+    .mockResolvedValueOnce({ ok: true, json: async () => config })
+    .mockResolvedValueOnce({ ok: true, text: async () => markdown }));
+
+  const html = renderToStaticMarkup(await TermsAndConditionsPage());
+  const container = document.createElement('div');
+  container.innerHTML = html;
+  const links = [...container.querySelectorAll('a')];
+  expect(links.map(link => [link.textContent, link.getAttribute('href')])).toEqual([
+    ['Standard Data Licence', '/licenses/standard/1.1/ai-training'],
+    ['Marketplace Listing Covenant', '/licenses/marketplace-listing/1.1'],
+  ]);
+  const originalHtml = renderToStaticMarkup(<ReactMarkdown rehypePlugins={[rehypeSanitize]}>{markdown}</ReactMarkdown>);
+  expect(normalizedLegalText(html)).toBe(normalizedLegalText(originalHtml));
+  expect(config).toEqual(originalConfig);
+  expect(hash(markdown)).toBe(originalConfig.terms_hash_sha256);
+  expect(normalizedLegalText(html)).toContain(`Version ${originalConfig.terms_version}`);
+});
 
 it('renders the hash-verified 1.2 document without old fee or hold wording', async () => {
   process.env.API_URL = 'https://api.example';

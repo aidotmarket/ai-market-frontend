@@ -31,6 +31,10 @@ export default async function TermsAndConditionsPage() {
   return <main className="mx-auto max-w-3xl px-6 py-16 lg:py-24">
     <article className="prose max-w-none text-gray-700">
       <ReactMarkdown rehypePlugins={[rehypeSanitize]} components={{
+        // Presentation only: keep the verified markdown and its acceptance hash intact.
+        p: ({ children }) => <p>{children === 'Listings without a chosen licence are offered under the ai.market Standard Data Licence with AI training permitted, and the seller accepts the ai.market Marketplace Listing Covenant for them.'
+          ? <>Listings without a chosen licence are offered under the ai.market <a href="/licenses/standard/1.1/ai-training">Standard Data Licence</a> with AI training permitted, and the seller accepts the ai.market <a href="/licenses/marketplace-listing/1.1">Marketplace Listing Covenant</a> for them.</>
+          : children}</p>,
         h2: ({ children }) => children === '5. Commission, transaction costs, payment, and tax'
           ? <h2 id="fees" className="scroll-mt-24">{children}</h2>
           : <h2>{children}</h2>,
