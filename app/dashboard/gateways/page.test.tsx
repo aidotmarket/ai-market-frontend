@@ -60,5 +60,63 @@ it('hides gateway content on flag and other errors', async () => {
   view.unmount();
   mocks.list.mockRejectedValue(new Error('network'));
   render(<GatewaysPage />);
-  await waitFor(() => expect(screen.getByText('Gateways are not available.')).toBeTruthy());
+  await screen.findByRole('alert');
+  expect(screen.queryByText('Gateways are not available.')).toBeNull();
+});
+
+it.each([
+  [['totp_enabled', 'stripe_payouts_live']],
+  [['stripe_payouts_live']],
+  [['future_step']],
+])('guides seller setup for %j', async (missing_steps) => {
+  mocks.capabilities.mockResolvedValue({ seller: { persisted_status: 'active', effective_status: 'provisioning', missing_steps } });
+  mocks.list.mockRejectedValue({ response: { status: 403, data: { detail: {
+    error: 'capability_required', capability: 'seller', persisted_status: 'active',
+    effective_status: 'provisioning', missing_steps, reason: 'readiness_gap',
+  } } } });
+  render(<GatewaysPage />);
+  await screen.findByText('Before you can connect a gateway, finish these steps:');
+  expect(screen.getAllByRole('listitem')).toHaveLength(missing_steps.length);
+  if (missing_steps.includes('totp_enabled')) expect(screen.getByRole('link', { name: 'Turn on two-step sign-in' }).getAttribute('href')).toBe('/dashboard/settings#security');
+  if (missing_steps.includes('stripe_payouts_live')) expect(screen.getByRole('link', { name: 'Finish Stripe payouts setup' }).getAttribute('href')).toBe('/dashboard');
+  if (missing_steps.includes('future_step')) {
+    expect(screen.getByText('Complete the remaining seller setup step on your dashboard.')).toBeTruthy();
+    expect(screen.queryByRole('link')).toBeNull();
+  }
+  expect(screen.queryByText('Gateways are not available.')).toBeNull();
+});
+
+it('gives the platform switch precedence over missing seller steps', async () => {
+  mocks.capabilities.mockResolvedValue({ seller: { persisted_status: 'provisioning', effective_status: 'provisioning', missing_steps: ['totp_enabled'] } });
+  mocks.list.mockRejectedValue({ response: { status: 404, data: { error: { code: 'gateway_disabled' } } } });
+  render(<GatewaysPage />);
+  await screen.findByText('Gateways are not available.');
+  expect(screen.queryByRole('region', { name: 'Seller setup' })).toBeNull();
+});
+
+it.each([
+  ['network failure', new Error('network')],
+  ['HTTP 500', { response: { status: 500, data: {} } }],
+  ['HTTP 500 with capability detail', { response: { status: 500, data: { detail: {
+    error: 'capability_required', capability: 'seller', effective_status: 'provisioning', missing_steps: ['totp_enabled'],
+  } } } }],
+  ['HTTP 403 without capability detail', { response: { status: 403, data: {} } }],
+])('shows a load error for a provisioning seller after %s', async (_label, error) => {
+  mocks.capabilities.mockResolvedValue({ seller: { effective_status: 'provisioning', missing_steps: ['totp_enabled'] } });
+  mocks.list.mockRejectedValue(error);
+  render(<GatewaysPage />);
+  await screen.findByRole('alert');
+  expect(screen.queryByRole('region', { name: 'Seller setup' })).toBeNull();
+  expect(screen.queryByText('Gateways are not available.')).toBeNull();
+});
+
+it('uses fresh readiness from a capability-required response', async () => {
+  mocks.capabilities.mockResolvedValue({ seller: { persisted_status: 'active', effective_status: 'active', missing_steps: [] } });
+  mocks.list.mockRejectedValue({ response: { status: 403, data: { detail: {
+    error: 'capability_required', capability: 'seller', persisted_status: 'active',
+    effective_status: 'provisioning', missing_steps: ['stripe_payouts_live'], reason: 'readiness_gap',
+  } } } });
+  render(<GatewaysPage />);
+  await screen.findByRole('link', { name: 'Finish Stripe payouts setup' });
+  expect(screen.queryByRole('link', { name: 'Turn on two-step sign-in' })).toBeNull();
 });

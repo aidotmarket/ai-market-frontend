@@ -4,10 +4,11 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import Link from 'next/link';
 import { useParams, useRouter } from 'next/navigation';
 import { useAuthStore } from '@/store/auth';
-import { getCapabilities } from '@/api/capabilities';
+import { loadGatewayAccess, sellerSetupSteps } from '@/lib/gateway-access';
+import SellerSetupPanel from '@/components/gateways/SellerSetupPanel';
 import { gatewayErrorCode } from '@/api/gatewayDelivery';
 import { createDraftListing } from '@/api/listings';
-import { acknowledgeGatewayIdentity, describeGatewayFile, gatewayErrorDetails, getGatewayFile, getSellerGateway, listGatewayFiles, listReceivedMessages, listSellerGateways, patchSellerGateway, revokeSellerGateway, saveGatewayListingSource, startDoorCheck } from '@/api/sellerGateways';
+import { acknowledgeGatewayIdentity, describeGatewayFile, gatewayErrorDetails, getGatewayFile, getSellerGateway, listGatewayFiles, listReceivedMessages, patchSellerGateway, revokeSellerGateway, saveGatewayListingSource, startDoorCheck } from '@/api/sellerGateways';
 import { blockerMessage, dateLabel, DESCRIPTION_CONFIRMATION, descriptionFailure, doorFailure, gatewaySummary } from '@/components/gateways/presentation';
 import { gatewayListingMetadata, isTableMember } from '@/components/gateways/fileMetadata';
 import type { GatewayFile, GatewayMessageType, ReceivedMessage, SellerGateway } from '@/types/sellerGateway';
@@ -39,7 +40,8 @@ export default function GatewayPage() {
   const { id } = useParams<{ id: string }>();
   const router = useRouter();
   const { hydrated, isAuthenticated } = useAuthStore();
-  const [state, setState] = useState<'loading' | 'ready' | 'unavailable'>('loading');
+  const [state, setState] = useState<'loading' | 'ready' | 'setup' | 'unavailable' | 'error'>('loading');
+  const [missingSteps, setMissingSteps] = useState<string[]>([]);
   const [gateway, setGateway] = useState<SellerGateway | null>(null);
   const [files, setFiles] = useState<GatewayFile[]>([]);
   const [fileCursor, setFileCursor] = useState<string | null>(null);
@@ -156,17 +158,25 @@ export default function GatewayPage() {
     if (!hydrated || !isAuthenticated) return;
     async function load() {
       try {
-        const capabilities = await getCapabilities();
-        if (capabilities.seller.effective_status !== 'active') throw new Error('seller inactive');
-        // A list failure, including gateway_disabled, hides this page's gateway content.
-        await listSellerGateways();
+        const access = await loadGatewayAccess();
+        if (cancelled || !isCurrent(id)) return;
+        if (access.state !== 'ready') {
+          if (access.state === 'setup') setMissingSteps(access.missingSteps);
+          setState(access.state);
+          return;
+        }
         const [item, filePage] = await Promise.all([getSellerGateway(id), listGatewayFiles(id)]);
         if (cancelled || !isCurrent(id)) return;
         setGateway(item); setName(item.name); setDoorUrl(item.door_url ?? '');
         setFiles(filePage.files); setFileCursor(filePage.next_cursor); setState('ready');
         if (item.door_check.state === 'pending') pollDoor();
         await loadMessages();
-      } catch { if (!cancelled && isCurrent(id)) setState('unavailable'); }
+      } catch (cause) {
+        if (cancelled || !isCurrent(id)) return;
+        const steps = sellerSetupSteps(cause);
+        if (steps !== null) { setMissingSteps(steps); setState('setup'); }
+        else setState(gatewayErrorCode(cause) === 'gateway_disabled' ? 'unavailable' : 'error');
+      }
     }
     void load();
     return () => { cancelled = true; messageRead.current = null; alive.current = false; doorRun.current++; if (doorWaitTimer.current) clearTimeout(doorWaitTimer.current); doorWaitTimer.current = null; fileRuns.current.clear(); };
@@ -315,7 +325,9 @@ export default function GatewayPage() {
   }
 
   if (state === 'loading') return <p>Loading…</p>;
-  if (state === 'unavailable' || !gateway) return <p>Gateways are not available.</p>;
+  if (state === 'setup') return <SellerSetupPanel missingSteps={missingSteps} />;
+  if (state === 'unavailable') return <p>Gateways are not available.</p>;
+  if (state === 'error' || !gateway) return <p role="alert">We could not load this gateway. Please refresh and try again.</p>;
   const sortedMessages = [...messages].sort((a, b) => a.seq - b.seq);
   return <div className="space-y-8">
     <Link href="/dashboard/gateways" className="text-indigo-700 underline">Back to gateways</Link>
@@ -362,7 +374,7 @@ export default function GatewayPage() {
         <label className="block">Description <textarea className="block w-full rounded border p-2" required minLength={10} disabled={!!draftListingId} value={listingDescription} onChange={event => setListingDescription(event.target.value)} /></label>
         <label className="block">Price <input className="block w-full rounded border p-2" type="number" required min="0" step="any" disabled={!!draftListingId} value={listingPrice} onChange={event => setListingPrice(event.target.value)} /></label>
         <p>Price: 0 for free, or at least 25.</p>
-        {listingError && <p role="alert" className="text-red-700">{listingError.message}{listingError.terms && <> <Link href="/legal/terms" className="underline">Review terms</Link></>}</p>}
+        {listingError && <p role="alert" className="text-red-700">{listingError.message}{listingError.terms && <> <Link href={`/legal/terms/accept?context=seller&redirect=${encodeURIComponent(`/dashboard/gateways/${encodeURIComponent(id)}`)}`} className="underline">Review terms</Link></>}</p>}
         {draftListingId && <p>Draft created. <Link href={`/dashboard/listings/${encodeURIComponent(draftListingId)}/edit`} className="text-indigo-700 underline">Open draft</Link> to change its details or source.</p>}
         <button type="submit" disabled={creatingListing} className="rounded bg-indigo-700 px-3 py-2 text-white disabled:opacity-50">{creatingListing ? 'Creating…' : 'Create draft'}</button>
       </form>}

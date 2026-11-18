@@ -166,7 +166,7 @@ it('shows backend errors and stays on the gateway page', async () => {
   expect(api.push).not.toHaveBeenCalled();
   api.createDraft.mockRejectedValueOnce({ response: { data: { detail: { code: 'TERMS_ACCEPTANCE_REQUIRED', terms_url: '/legal/terms', acceptance_url: '/legal/terms' } } } });
   fireEvent.click(screen.getByRole('button', { name: 'Create draft' }));
-  expect((await screen.findByRole('link', { name: 'Review terms' })).getAttribute('href')).toBe('/legal/terms');
+  expect((await screen.findByRole('link', { name: 'Review terms' })).getAttribute('href')).toBe('/legal/terms/accept?context=seller&redirect=%2Fdashboard%2Fgateways%2Fgateway-1');
   expect(api.push).not.toHaveBeenCalled();
 });
 
@@ -545,4 +545,57 @@ it('makes no more door requests after unmount', async () => {
   expect(vi.getTimerCount()).toBe(0);
   await act(async () => { await vi.advanceTimersByTimeAsync(30_000); });
   expect(api.get).toHaveBeenCalledTimes(1);
+});
+
+it.each([
+  [['totp_enabled', 'stripe_payouts_live']],
+  [['stripe_payouts_live']],
+  [['future_step']],
+])('guides seller setup for %j', async (missing_steps) => {
+  api.capabilities.mockResolvedValue({ seller: { persisted_status: 'active', effective_status: 'provisioning', missing_steps } });
+  api.list.mockRejectedValue({ response: { status: 403, data: { detail: {
+    error: 'capability_required', capability: 'seller', persisted_status: 'active',
+    effective_status: 'provisioning', missing_steps, reason: 'readiness_gap',
+  } } } });
+  render(<GatewayPage />);
+  await screen.findByText('Before you can connect a gateway, finish these steps:');
+  expect(screen.getAllByRole('listitem')).toHaveLength(missing_steps.length);
+  if (missing_steps.includes('totp_enabled')) expect(screen.getByRole('link', { name: 'Turn on two-step sign-in' }).getAttribute('href')).toBe('/dashboard/settings#security');
+  if (missing_steps.includes('stripe_payouts_live')) expect(screen.getByRole('link', { name: 'Finish Stripe payouts setup' }).getAttribute('href')).toBe('/dashboard');
+  if (missing_steps.includes('future_step')) {
+    expect(screen.getByText('Complete the remaining seller setup step on your dashboard.')).toBeTruthy();
+    expect(screen.queryByRole('link')).toBeNull();
+  }
+  expect(screen.queryByText('Gateways are not available.')).toBeNull();
+});
+
+it('gives the platform switch precedence over missing seller steps', async () => {
+  api.capabilities.mockResolvedValue({ seller: { persisted_status: 'provisioning', effective_status: 'provisioning', missing_steps: ['totp_enabled'] } });
+  api.list.mockRejectedValue({ response: { status: 404, data: { error: { code: 'gateway_disabled' } } } });
+  render(<GatewayPage />);
+  await screen.findByText('Gateways are not available.');
+  expect(screen.queryByRole('region', { name: 'Seller setup' })).toBeNull();
+});
+
+it.each([
+  ['network failure', new Error('network')],
+  ['HTTP 500', { response: { status: 500, data: {} } }],
+])('shows a load error for a provisioning seller after %s', async (_label, error) => {
+  api.capabilities.mockResolvedValue({ seller: { effective_status: 'provisioning', missing_steps: ['totp_enabled'] } });
+  api.list.mockRejectedValue(error);
+  render(<GatewayPage />);
+  await screen.findByRole('alert');
+  expect(screen.queryByRole('region', { name: 'Seller setup' })).toBeNull();
+  expect(screen.queryByText('Gateways are not available.')).toBeNull();
+});
+
+it('uses fresh readiness from a capability-required response', async () => {
+  api.capabilities.mockResolvedValue({ seller: { persisted_status: 'active', effective_status: 'active', missing_steps: [] } });
+  api.list.mockRejectedValue({ response: { status: 403, data: { detail: {
+    error: 'capability_required', capability: 'seller', persisted_status: 'active',
+    effective_status: 'provisioning', missing_steps: ['stripe_payouts_live'], reason: 'readiness_gap',
+  } } } });
+  render(<GatewayPage />);
+  await screen.findByRole('link', { name: 'Finish Stripe payouts setup' });
+  expect(screen.queryByRole('link', { name: 'Turn on two-step sign-in' })).toBeNull();
 });
