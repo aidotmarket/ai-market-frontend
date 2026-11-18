@@ -1,6 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { AxiosError } from 'axios';
-import { COMPANY_NAME_NEEDS_VERIFIED_EMAIL, COMPANY_NAME_SAVE_FAILED } from '@/components/listings/publisherStrings';
+import { COMPANY_NAME_SAVE_FAILED } from '@/components/listings/publisherStrings';
 import { getSellerPublicProfile, updateSellerPublicProfile, updateSellerCompanyName, SellerProfileError } from './sellerProfile';
 
 const transport = vi.hoisted(() => ({ get: vi.fn(), patch: vi.fn() }));
@@ -68,7 +68,8 @@ describe('company name API', () => {
   });
   it.each([
     [422, { field: 'show_company_name', message: 'Verify your company email.' }, 'Verify your company email.', { show_company_name: 'Verify your company email.' }],
-    [422, { field: 'show_company_name' }, COMPANY_NAME_NEEDS_VERIFIED_EMAIL, { show_company_name: COMPANY_NAME_NEEDS_VERIFIED_EMAIL }],
+    [422, { field: 'show_company_name' }, COMPANY_NAME_SAVE_FAILED, {}],
+    [422, { field: 'show_company_name', message: null }, COMPANY_NAME_SAVE_FAILED, {}],
     [422, [{ loc: ['body', 'show_company_name'], msg: 'Extra input' }], COMPANY_NAME_SAVE_FAILED, {}],
     [422, { field: 'other', message: 'Other error' }, COMPANY_NAME_SAVE_FAILED, {}],
     [422, 'Invalid', COMPANY_NAME_SAVE_FAILED, {}],

@@ -10,7 +10,6 @@ export const sellerRatingText = (average: number, count: number) => `${average}/
 export const COMPANY_NAME_FORM_LABEL = 'Company name setting';
 export const COMPANY_NAME_TOGGLE_LABEL = "Show my company's name and company rating on my listings";
 export const COMPANY_NAME_TOGGLE_NOTE = "Your company's administrator must also choose to show the name.";
-export const COMPANY_NAME_NEEDS_VERIFIED_EMAIL = 'Your account needs a verified company email first.';
 export const COMPANY_NAME_SAVE = 'Save company name setting';
 export const COMPANY_NAME_SAVING = 'Saving company name setting...';
 export const COMPANY_NAME_SAVED = 'Company name setting saved.';

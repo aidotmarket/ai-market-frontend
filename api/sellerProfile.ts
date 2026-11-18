@@ -2,7 +2,7 @@
 
 import { isAxiosError } from 'axios';
 import { api } from './client';
-import { COMPANY_NAME_NEEDS_VERIFIED_EMAIL, COMPANY_NAME_SAVE_FAILED } from '@/components/listings/publisherStrings';
+import { COMPANY_NAME_SAVE_FAILED } from '@/components/listings/publisherStrings';
 
 // This owner-only view deliberately excludes legal identity and payment fields.
 export interface SellerPublicProfile {
@@ -89,9 +89,8 @@ export async function updateSellerCompanyName(show: boolean, signal?: AbortSigna
     const detail: unknown = response?.data?.detail;
     const issue = detail && typeof detail === 'object' && !Array.isArray(detail)
       ? detail as { field?: unknown; message?: unknown } : null;
-    const fieldMessage = response?.status === 422 && issue?.field === 'show_company_name'
-      ? typeof issue.message === 'string' ? issue.message
-        : issue.message == null ? COMPANY_NAME_NEEDS_VERIFIED_EMAIL : undefined
+    const fieldMessage = response?.status === 422 && issue?.field === 'show_company_name' && typeof issue.message === 'string'
+      ? issue.message
       : undefined;
     const failure = new SellerProfileError(fieldMessage ?? COMPANY_NAME_SAVE_FAILED, response?.status,
       fieldMessage === undefined ? {} : { show_company_name: fieldMessage });
