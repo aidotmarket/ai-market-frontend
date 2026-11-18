@@ -374,7 +374,7 @@ export default function GatewayPage() {
         <label className="block">Description <textarea className="block w-full rounded border p-2" required minLength={10} disabled={!!draftListingId} value={listingDescription} onChange={event => setListingDescription(event.target.value)} /></label>
         <label className="block">Price <input className="block w-full rounded border p-2" type="number" required min="0" step="any" disabled={!!draftListingId} value={listingPrice} onChange={event => setListingPrice(event.target.value)} /></label>
         <p>Price: 0 for free, or at least 25.</p>
-        {listingError && <p role="alert" className="text-red-700">{listingError.message}{listingError.terms && <> <Link href="/legal/terms" className="underline">Review terms</Link></>}</p>}
+        {listingError && <p role="alert" className="text-red-700">{listingError.message}{listingError.terms && <> <Link href={`/legal/terms/accept?context=seller&redirect=${encodeURIComponent(`/dashboard/gateways/${encodeURIComponent(id)}`)}`} className="underline">Review terms</Link></>}</p>}
         {draftListingId && <p>Draft created. <Link href={`/dashboard/listings/${encodeURIComponent(draftListingId)}/edit`} className="text-indigo-700 underline">Open draft</Link> to change its details or source.</p>}
         <button type="submit" disabled={creatingListing} className="rounded bg-indigo-700 px-3 py-2 text-white disabled:opacity-50">{creatingListing ? 'Creating…' : 'Create draft'}</button>
       </form>}

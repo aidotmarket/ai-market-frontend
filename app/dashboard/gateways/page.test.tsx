@@ -94,6 +94,22 @@ it('gives the platform switch precedence over missing seller steps', async () =>
   expect(screen.queryByRole('region', { name: 'Seller setup' })).toBeNull();
 });
 
+it.each([
+  ['network failure', new Error('network')],
+  ['HTTP 500', { response: { status: 500, data: {} } }],
+  ['HTTP 500 with capability detail', { response: { status: 500, data: { detail: {
+    error: 'capability_required', capability: 'seller', effective_status: 'provisioning', missing_steps: ['totp_enabled'],
+  } } } }],
+  ['HTTP 403 without capability detail', { response: { status: 403, data: {} } }],
+])('shows a load error for a provisioning seller after %s', async (_label, error) => {
+  mocks.capabilities.mockResolvedValue({ seller: { effective_status: 'provisioning', missing_steps: ['totp_enabled'] } });
+  mocks.list.mockRejectedValue(error);
+  render(<GatewaysPage />);
+  await screen.findByRole('alert');
+  expect(screen.queryByRole('region', { name: 'Seller setup' })).toBeNull();
+  expect(screen.queryByText('Gateways are not available.')).toBeNull();
+});
+
 it('uses fresh readiness from a capability-required response', async () => {
   mocks.capabilities.mockResolvedValue({ seller: { persisted_status: 'active', effective_status: 'active', missing_steps: [] } });
   mocks.list.mockRejectedValue({ response: { status: 403, data: { detail: {

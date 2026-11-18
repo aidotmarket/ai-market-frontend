@@ -166,7 +166,7 @@ it('shows backend errors and stays on the gateway page', async () => {
   expect(api.push).not.toHaveBeenCalled();
   api.createDraft.mockRejectedValueOnce({ response: { data: { detail: { code: 'TERMS_ACCEPTANCE_REQUIRED', terms_url: '/legal/terms', acceptance_url: '/legal/terms' } } } });
   fireEvent.click(screen.getByRole('button', { name: 'Create draft' }));
-  expect((await screen.findByRole('link', { name: 'Review terms' })).getAttribute('href')).toBe('/legal/terms');
+  expect((await screen.findByRole('link', { name: 'Review terms' })).getAttribute('href')).toBe('/legal/terms/accept?context=seller&redirect=%2Fdashboard%2Fgateways%2Fgateway-1');
   expect(api.push).not.toHaveBeenCalled();
 });
 
@@ -575,6 +575,18 @@ it('gives the platform switch precedence over missing seller steps', async () =>
   render(<GatewayPage />);
   await screen.findByText('Gateways are not available.');
   expect(screen.queryByRole('region', { name: 'Seller setup' })).toBeNull();
+});
+
+it.each([
+  ['network failure', new Error('network')],
+  ['HTTP 500', { response: { status: 500, data: {} } }],
+])('shows a load error for a provisioning seller after %s', async (_label, error) => {
+  api.capabilities.mockResolvedValue({ seller: { effective_status: 'provisioning', missing_steps: ['totp_enabled'] } });
+  api.list.mockRejectedValue(error);
+  render(<GatewayPage />);
+  await screen.findByRole('alert');
+  expect(screen.queryByRole('region', { name: 'Seller setup' })).toBeNull();
+  expect(screen.queryByText('Gateways are not available.')).toBeNull();
 });
 
 it('uses fresh readiness from a capability-required response', async () => {

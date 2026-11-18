@@ -9,8 +9,9 @@ export type GatewayAccess =
   | { state: 'unavailable' | 'error' };
 
 export function sellerSetupSteps(error: unknown): string[] | null {
-  const detail = (error as { response?: { data?: { detail?: Record<string, unknown> } } })?.response?.data?.detail;
-  if (detail?.error !== 'capability_required' || detail.capability !== 'seller' ||
+  const response = (error as { response?: { status?: number; data?: { detail?: Record<string, unknown> } } })?.response;
+  const detail = response?.data?.detail;
+  if (response?.status !== 403 || detail?.error !== 'capability_required' || detail.capability !== 'seller' ||
       detail.effective_status === 'active' || !Array.isArray(detail.missing_steps)) return null;
   return detail.missing_steps.filter((step): step is string => typeof step === 'string');
 }
@@ -28,7 +29,6 @@ export async function loadGatewayAccess(): Promise<GatewayAccess> {
       if (gatewayErrorCode(error) === 'gateway_disabled') return { state: 'unavailable' };
       const missingSteps = sellerSetupSteps(error);
       if (missingSteps !== null) return { state: 'setup', missingSteps };
-      if (seller.effective_status !== 'active') return { state: 'setup', missingSteps: seller.missing_steps ?? [] };
       return { state: 'error' };
     }
   } catch (error) {
