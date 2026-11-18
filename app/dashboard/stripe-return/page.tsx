@@ -82,10 +82,8 @@ export default function StripeReturnPage() {
           redirectTimer = setTimeout(() => router.push('/dashboard'), 3000);
           return;
         }
-        if (lastStatus?.details_submitted === false && !requirements?.pending_verification?.length) {
-          finish('action');
-          return;
-        }
+        // Unsubmitted details alone are inconclusive while Stripe processes updates.
+        // Keep polling unless Stripe reports actionable requirements above.
       } catch (err) {
         if (cancelled) return;
         console.error('Failed to check Stripe status', err);

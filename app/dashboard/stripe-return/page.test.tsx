@@ -27,6 +27,8 @@ vi.mock('@/components/Toast', () => ({ useToast: () => ({ toast }) }));
 const onboardingData = { onboarding_url: 'https://connect.stripe.com/setup/test' };
 
 const ready = { details_submitted: true, charges_enabled: true, payouts_enabled: true };
+const inconclusive = { details_submitted: false, requirements: { currently_due: [], pending_verification: [] } };
+const actionable = { details_submitted: false, requirements: { currently_due: ['external_account'] } };
 const pending = { details_submitted: false, requirements: { currently_due: [], pending_verification: ['document'] } };
 const confirmationMessage = "We couldn't confirm with Stripe yet. Your details are saved; check again in a few minutes.";
 
@@ -58,16 +60,19 @@ describe('Stripe return', () => {
   describe.each(['', 'abandoned=1', 'abandoned=true'])('return URL ?%s', (query) => {
     beforeEach(() => { navigation.searchParams = new URLSearchParams(query); });
 
-    it('shows progress while pending, then succeeds and returns to the dashboard', async () => {
-      connectApi.getConnectStatus.mockResolvedValueOnce({ data: pending }).mockResolvedValue({ data: ready });
+    it.each([pending, inconclusive, { details_submitted: false }])('shows progress for %j, then succeeds and returns to the dashboard', async (data) => {
+      connectApi.getConnectStatus.mockResolvedValueOnce({ data }).mockResolvedValue({ data: ready });
       render(<StrictMode><StripeReturnPage /></StrictMode>);
       expect(screen.getByRole('progressbar')).not.toBeNull();
       expect(screen.getByText('Confirming your details with Stripe…')).not.toBeNull();
       await advance();
       expect(screen.getByRole('progressbar')).not.toBeNull();
+      expect(screen.queryByRole('button', { name: 'Continue Stripe setup' })).toBeNull();
+      expect(navigation.router.push).not.toHaveBeenCalled();
       expectNoStripeRedirect();
       await advance(2000);
       expect(screen.getByText('Successfully Connected!')).not.toBeNull();
+      expect(screen.queryByRole('button', { name: 'Continue Stripe setup' })).toBeNull();
       expect(navigation.router.push).not.toHaveBeenCalled();
       await advance(3000);
       expect(navigation.router.push).toHaveBeenCalledExactlyOnceWith('/dashboard');
@@ -89,12 +94,17 @@ describe('Stripe return', () => {
       expectNoStripeRedirect();
     });
 
-    it.each([null, {}])('bounds inconclusive status %j to 15 polls', async (data) => {
+    it.each([null, {}, inconclusive, { details_submitted: false }])('bounds inconclusive status %j to 15 polls', async (data) => {
       connectApi.getConnectStatus.mockResolvedValue({ data });
       render(<StripeReturnPage />);
+      await advance();
+      expect(screen.getByRole('progressbar')).not.toBeNull();
+      expect(screen.queryByRole('button', { name: 'Continue Stripe setup' })).toBeNull();
       await advance(30000);
       expect(connectApi.getConnectStatus).toHaveBeenCalledTimes(15);
       expect(screen.getByText(confirmationMessage)).not.toBeNull();
+      expect(screen.getByRole('button', { name: 'Check again' })).not.toBeNull();
+      expect(navigation.router.push).not.toHaveBeenCalled();
       expect(screen.queryByRole('button', { name: 'Continue Stripe setup' })).toBeNull();
       expectNoStripeRedirect();
       await advance(30000);
@@ -102,7 +112,7 @@ describe('Stripe return', () => {
     });
 
     it.each([
-      { details_submitted: false },
+      actionable,
       { details_submitted: true, requirements: { currently_due: ['external_account'] } },
       { requirements: { currently_due: ['external_account'], pending_verification: ['document'] } },
     ])('offers setup only on click for confirmed missing details %j', async (data) => {
@@ -166,7 +176,7 @@ describe('Stripe return', () => {
   });
 
   it('preserves 2FA guidance on a setup click and allows retry', async () => {
-    connectApi.getConnectStatus.mockResolvedValue({ data: { details_submitted: false } });
+    connectApi.getConnectStatus.mockResolvedValue({ data: actionable });
     const error = new Error('2FA required');
     connectApi.getConnectOnboarding.mockRejectedValueOnce(error);
     connectApi.isConnectOnboardingTwoFactorRequired.mockReturnValue(true);
@@ -181,7 +191,7 @@ describe('Stripe return', () => {
   });
 
   it('handles invalid onboarding URLs on click', async () => {
-    connectApi.getConnectStatus.mockResolvedValue({ data: { details_submitted: false } });
+    connectApi.getConnectStatus.mockResolvedValue({ data: actionable });
     connectApi.redirectToConnectOnboarding.mockImplementation(() => { throw new Error('Invalid Stripe onboarding URL'); });
     render(<StripeReturnPage />);
     await advance();
