@@ -10,6 +10,7 @@ import {
   isAWSConnectionAvailable,
 } from '@/api/sellerWorkspace';
 import SellerSetupProgressBar from '@/components/onboarding/SellerSetupProgressBar';
+import { gatewayErrorCode } from '@/api/gatewayDelivery';
 import { listSellerGateways } from '@/api/sellerGateways';
 
 const isBuyerActivityRoute = (pathname: string) =>
@@ -21,6 +22,7 @@ type CapabilitySnapshot = {
   token: string | null;
   phase: 'loading' | 'ready' | 'error';
   sellerStatus: CapabilityStatus | null;
+  sellerPersistedStatus: CapabilityStatus | null;
   workspace: boolean;
   gateways: boolean;
 };
@@ -52,7 +54,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
     };
     if (!isCurrent()) return;
     const pending: CapabilitySnapshot = {
-      owner, token, phase: 'loading', sellerStatus: null, workspace: false, gateways: false,
+      owner, token, phase: 'loading', sellerStatus: null, sellerPersistedStatus: null, workspace: false, gateways: false,
     };
     // Credentials own requests; a ready view belongs to the stable action owner.
     // Revalidation must not remount the seller page and discard unsaved state.
@@ -63,18 +65,18 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
       const capabilities = await getCapabilities();
       if (!isCurrent()) return;
       const status = capabilities.seller.effective_status;
-      const ready: CapabilitySnapshot = { ...pending, phase: 'ready', sellerStatus: status };
+      const ready: CapabilitySnapshot = { ...pending, phase: 'ready', sellerStatus: status, sellerPersistedStatus: capabilities.seller.persisted_status };
       setSnapshot(ready);
-      if (status !== 'active') return;
+      if (!['active', 'provisioning'].includes(capabilities.seller.persisted_status)) return;
 
       const [workspace, gateways] = await Promise.allSettled([
-        getSellerWorkspaceCapabilities(), listSellerGateways(),
+        status === 'active' ? getSellerWorkspaceCapabilities() : Promise.resolve(null), listSellerGateways(),
       ]);
       if (!isCurrent()) return;
       setSnapshot({
         ...ready,
-        workspace: workspace.status === 'fulfilled' && isAWSConnectionAvailable(workspace.value),
-        gateways: gateways.status === 'fulfilled',
+        workspace: workspace.status === 'fulfilled' && workspace.value !== null && isAWSConnectionAvailable(workspace.value),
+        gateways: gateways.status === 'fulfilled' || gatewayErrorCode(gateways.reason) !== 'gateway_disabled',
       });
     } catch (err) {
       if (!isCurrent()) return;
@@ -99,7 +101,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
     snapshot?.owner === owner ? snapshot : null;
   const capabilitiesResolved = current?.phase === 'ready';
   const isSeller = capabilitiesResolved &&
-    (current.sellerStatus === 'active' || current.sellerStatus === 'provisioning');
+    (current.sellerPersistedStatus === 'active' || current.sellerPersistedStatus === 'provisioning');
   const isSellerActive = capabilitiesResolved && current.sellerStatus === 'active';
   const sellerWorkspaceAvailable = current?.workspace === true;
   const gatewaysAvailable = current?.gateways === true;
@@ -149,7 +151,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
         ...(isSellerActive && sellerWorkspaceAvailable
           ? [{ name: 'Seller Workspace', href: '/dashboard/seller-workspace' }]
           : []),
-        ...(isSellerActive && gatewaysAvailable
+        ...(isSeller && gatewaysAvailable
           ? [{ name: 'Gateways', href: '/dashboard/gateways' }]
           : []),
         ...(isSellerActive ? [{ name: 'Sales', href: '/dashboard/sales' }] : []),

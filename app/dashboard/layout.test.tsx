@@ -89,7 +89,7 @@ describe('DashboardLayout hydration guard', () => {
     window.history.replaceState(null, '', '/');
     navigation.pathname = '/dashboard/stripe-return';
     capabilitiesApi.getCapabilities.mockResolvedValue({
-      seller: { effective_status: 'inactive' },
+      seller: { persisted_status: 'inactive', effective_status: 'inactive' },
     });
     sellerWorkspaceApi.getSellerWorkspaceCapabilities.mockResolvedValue(
       enabledWorkspaceCapabilities
@@ -201,7 +201,7 @@ describe('DashboardLayout hydration guard', () => {
   it('uses buyer purchase context for a provisioning seller-capable user without a display name', async () => {
     navigation.pathname = '/dashboard/orders';
     capabilitiesApi.getCapabilities.mockResolvedValue({
-      seller: { effective_status: 'provisioning' },
+      seller: { persisted_status: 'provisioning', effective_status: 'provisioning' },
     });
     useAuthStore.setState({
       user: { ...user, first_name: null, company_name: null, role: 'seller' },
@@ -230,7 +230,7 @@ describe('DashboardLayout hydration guard', () => {
     'shows an owned request in buyer context for a %s seller-capable user',
     async (status) => {
       navigation.pathname = '/dashboard/requests';
-      capabilitiesApi.getCapabilities.mockResolvedValue({ seller: { effective_status: status } });
+      capabilitiesApi.getCapabilities.mockResolvedValue({ seller: { persisted_status: status, effective_status: status } });
       useAuthStore.setState({
         user: { ...user, first_name: null, company_name: null },
         token: 'access-token',
@@ -254,7 +254,7 @@ describe('DashboardLayout hydration guard', () => {
   it('keeps seller context on a seller route for a provisioning seller-capable user', async () => {
     navigation.pathname = '/dashboard/listings';
     capabilitiesApi.getCapabilities.mockResolvedValue({
-      seller: { effective_status: 'provisioning' },
+      seller: { persisted_status: 'provisioning', effective_status: 'provisioning' },
     });
     useAuthStore.setState({
       user: { ...user, first_name: null, company_name: null, role: 'seller' },
@@ -281,7 +281,7 @@ describe('DashboardLayout hydration guard', () => {
   it('renders exact active seller navigation', async () => {
     navigation.pathname = '/dashboard';
     capabilitiesApi.getCapabilities.mockResolvedValue({
-      seller: { effective_status: 'active' },
+      seller: { persisted_status: 'active', effective_status: 'active' },
     });
     useAuthStore.setState({
       user,
@@ -312,7 +312,7 @@ describe('DashboardLayout hydration guard', () => {
   it('omits Sales for provisioning sellers but keeps Purchases and My Requests', async () => {
     navigation.pathname = '/dashboard/listings';
     capabilitiesApi.getCapabilities.mockResolvedValue({
-      seller: { effective_status: 'provisioning' },
+      seller: { persisted_status: 'provisioning', effective_status: 'provisioning' },
     });
     useAuthStore.setState({
       user,
@@ -329,6 +329,7 @@ describe('DashboardLayout hydration guard', () => {
       expect(screen.getAllByRole('link').map((link) => [link.textContent, link.getAttribute('href')])).toEqual([
         ['Overview', '/dashboard'],
         ['Listings', '/dashboard/listings'],
+        ['Gateways', '/dashboard/gateways'],
         ['Purchases', '/dashboard/orders'],
         ['My Requests', '/dashboard/requests'],
         ['Inquiries', '/dashboard/seller/inquiries'],
@@ -363,7 +364,7 @@ describe('DashboardLayout hydration guard', () => {
   ])('omits Seller Workspace when %s', async (_scenario, workspaceCapabilities) => {
     navigation.pathname = '/dashboard';
     capabilitiesApi.getCapabilities.mockResolvedValue({
-      seller: { effective_status: 'active' },
+      seller: { persisted_status: 'active', effective_status: 'active' },
     });
     sellerWorkspaceApi.getSellerWorkspaceCapabilities.mockResolvedValue(workspaceCapabilities);
     useAuthStore.setState({
@@ -386,7 +387,7 @@ describe('DashboardLayout hydration guard', () => {
   it('removes a stale Seller Workspace link when the capability request fails', async () => {
     navigation.pathname = '/dashboard';
     capabilitiesApi.getCapabilities.mockResolvedValue({
-      seller: { effective_status: 'active' },
+      seller: { persisted_status: 'active', effective_status: 'active' },
     });
     sellerWorkspaceApi.getSellerWorkspaceCapabilities
       .mockResolvedValueOnce(enabledWorkspaceCapabilities)
@@ -415,7 +416,7 @@ describe('DashboardLayout hydration guard', () => {
   it('renders exact buyer navigation', async () => {
     navigation.pathname = '/dashboard/requests';
     capabilitiesApi.getCapabilities.mockResolvedValue({
-      seller: { effective_status: 'not_requested' },
+      seller: { persisted_status: 'not_requested', effective_status: 'not_requested' },
     });
     useAuthStore.setState({
       user,
@@ -444,7 +445,7 @@ describe('DashboardLayout hydration guard', () => {
   it.each(['/dashboard/settings', '/dashboard/settings/connected-apps'])(
     'allows a buyer direct visit to %s before and after capabilities resolve', async (pathname) => {
       navigation.pathname = pathname;
-      let resolveCapabilities!: (value: { seller: { effective_status: string } }) => void;
+      let resolveCapabilities!: (value: { seller: { persisted_status: string; effective_status: string } }) => void;
       capabilitiesApi.getCapabilities.mockReturnValue(new Promise((resolve) => {
         resolveCapabilities = resolve;
       }));
@@ -457,7 +458,7 @@ describe('DashboardLayout hydration guard', () => {
       expect(navigation.push).not.toHaveBeenCalled();
 
       await act(async () => {
-        resolveCapabilities({ seller: { effective_status: 'not_requested' } });
+        resolveCapabilities({ seller: { persisted_status: 'not_requested', effective_status: 'not_requested' } });
       });
       expect(screen.getByText('buyer settings child')).toBeTruthy();
       expect(navigation.push).not.toHaveBeenCalled();
@@ -493,7 +494,7 @@ describe('DashboardLayout hydration guard', () => {
       expect(screen.getByText('requests during capability load')).toBeTruthy();
       expect(screen.queryByRole('link', { name: 'Listings' })).toBeNull();
       expect(capabilitiesApi.getCapabilities).toHaveBeenCalledTimes(1);
-      capabilitiesApi.getCapabilities.mockResolvedValue({ seller: { effective_status: 'active' } });
+      capabilitiesApi.getCapabilities.mockResolvedValue({ seller: { persisted_status: 'active', effective_status: 'active' } });
       fireEvent.click(within(nav).getByRole('button', { name: 'Retry seller access' }));
       await screen.findByRole('link', { name: 'Listings' });
       expect(screen.queryByRole('alert')).toBeNull();
@@ -506,10 +507,10 @@ describe('DashboardLayout hydration guard', () => {
 
   it('drops a stale seller capability result after an account change', async () => {
     navigation.pathname = '/dashboard/requests';
-    let resolveOldCapabilities!: (value: { seller: { effective_status: string } }) => void;
+    let resolveOldCapabilities!: (value: { seller: { persisted_status: string; effective_status: string } }) => void;
     capabilitiesApi.getCapabilities
       .mockReturnValueOnce(new Promise((resolve) => { resolveOldCapabilities = resolve; }))
-      .mockResolvedValueOnce({ seller: { effective_status: 'not_requested' } });
+      .mockResolvedValueOnce({ seller: { persisted_status: 'not_requested', effective_status: 'not_requested' } });
     useAuthStore.setState({
       user: { ...user, role: 'seller' },
       token: 'access-token',
@@ -527,7 +528,7 @@ describe('DashboardLayout hydration guard', () => {
       useAuthStore.setState({ user: { ...user, id: 'user-2' } });
     });
     await screen.findByRole('link', { name: 'My Inquiries' });
-    await act(async () => resolveOldCapabilities({ seller: { effective_status: 'active' } }));
+    await act(async () => resolveOldCapabilities({ seller: { persisted_status: 'active', effective_status: 'active' } }));
 
     expect(screen.queryByRole('link', { name: 'Listings' })).toBeNull();
     expect(screen.getByRole('link', { name: 'My Requests' })).not.toBeNull();
@@ -548,9 +549,30 @@ describe('DashboardLayout hydration guard', () => {
     expect(screen.queryByRole('link', { name: 'My Requests' })).toBeNull();
   });
 
-  it.each(['gateway_disabled', 'other_error'])('hides Gateways after %s', async (code) => {
+  it.each([
+    ['active', 'provisioning', 'capability_required', true],
+    ['provisioning', 'provisioning', 'capability_required', true],
+    ['active', 'active', 'network_error', true],
+    ['active', 'provisioning', 'gateway_disabled', false],
+    ['not_requested', 'not_requested', 'capability_required', false],
+    ['suspended', 'suspended', 'capability_required', false],
+  ])('Gateways navigation for persisted %s, effective %s and %s', async (persisted_status, effective_status, code, visible) => {
     navigation.pathname = '/dashboard';
-    capabilitiesApi.getCapabilities.mockResolvedValue({ seller: { effective_status: 'active' } });
+    capabilitiesApi.getCapabilities.mockResolvedValue({ seller: { persisted_status, effective_status, missing_steps: ['totp_enabled', 'stripe_payouts_live'] } });
+    gatewaysApi.listSellerGateways.mockRejectedValue({ response: { data: { error: { code } } } });
+    useAuthStore.setState({ user, token: 'token', isAuthenticated: true, isLoading: false, hydrated: true });
+    render(<DashboardLayout>Seller dashboard</DashboardLayout>);
+    await screen.findByText('Seller dashboard');
+    if (visible) await screen.findByRole('link', { name: 'Gateways' });
+    else {
+      await waitFor(() => expect(capabilitiesApi.getCapabilities).toHaveBeenCalled());
+      expect(screen.queryByRole('link', { name: 'Gateways' })).toBeNull();
+    }
+  });
+
+  it.each(['gateway_disabled'])('hides Gateways after %s', async (code) => {
+    navigation.pathname = '/dashboard';
+    capabilitiesApi.getCapabilities.mockResolvedValue({ seller: { persisted_status: 'active', effective_status: 'active' } });
     gatewaysApi.listSellerGateways.mockRejectedValue({ response: { data: { error: { code } } } });
     useAuthStore.setState({ user: { ...user, role: 'seller' }, token: 'token', isAuthenticated: true, isLoading: false, hydrated: true });
     render(<DashboardLayout>Seller dashboard</DashboardLayout>);
@@ -566,7 +588,7 @@ describe('DashboardLayout hydration guard', () => {
   ])('redirects a buyer direct visit to %s', async (pathname, childLabel) => {
     navigation.pathname = pathname;
     capabilitiesApi.getCapabilities.mockResolvedValue({
-      seller: { effective_status: 'not_requested' },
+      seller: { persisted_status: 'not_requested', effective_status: 'not_requested' },
     });
     useAuthStore.setState({
       user,
@@ -592,7 +614,7 @@ function deferred<T>() {
   const promise = new Promise<T>((yes, no) => { resolve = yes; reject = no; });
   return { promise, resolve, reject };
 }
-const capability = (effective_status: string) => ({ seller: { effective_status } });
+const capability = (effective_status: string) => ({ seller: { persisted_status: effective_status, effective_status } });
 const signIn = (overrides: Partial<User> = {}) => useAuthStore.setState({
   user: { ...user, ...overrides }, token: 'access-token',
   isAuthenticated: true, isLoading: false, hydrated: true,
@@ -651,7 +673,8 @@ describe('DashboardLayout canonical capability ownership', () => {
     expect(navigation.push).not.toHaveBeenCalled();
     expect(capabilitiesApi.getCapabilities).toHaveBeenCalledTimes(2);
     expect(sellerWorkspaceApi.getSellerWorkspaceCapabilities).not.toHaveBeenCalled();
-    expect(gatewaysApi.listSellerGateways).not.toHaveBeenCalled();
+    expect(gatewaysApi.listSellerGateways).toHaveBeenCalledTimes(1);
+    expect(screen.getByRole('link', { name: 'Gateways' })).toBeTruthy();
   });
 
   it('offers one explicit retry per click after a failed read without redirecting or mounting seller content', async () => {
@@ -720,7 +743,7 @@ describe('DashboardLayout canonical capability ownership', () => {
 
   it.each(['unknown', undefined, null, { status: 'not_requested' }])(
     'fails closed for malformed or unknown canonical status %s', async (status) => {
-      capabilitiesApi.getCapabilities.mockResolvedValueOnce({ seller: { effective_status: status } });
+      capabilitiesApi.getCapabilities.mockResolvedValueOnce({ seller: { persisted_status: status, effective_status: status } });
       render(<DashboardLayout><div>unknown status child</div></DashboardLayout>);
       await act(async () => {});
       expect(navigation.push.mock.calls).toEqual([['/dashboard/inquiries']]);
@@ -817,7 +840,7 @@ describe('DashboardLayout canonical capability ownership', () => {
       const next = deferred<ReturnType<typeof capability>>();
       capabilitiesApi.getCapabilities.mockResolvedValueOnce(capability('active')).mockReturnValueOnce(next.promise);
       sellerWorkspaceApi.getSellerWorkspaceCapabilities.mockReturnValueOnce(workspace.promise);
-      gatewaysApi.listSellerGateways.mockReturnValueOnce(gateways.promise);
+      gatewaysApi.listSellerGateways.mockReturnValueOnce(gateways.promise).mockRejectedValueOnce({ response: { status: 404, data: { error: { code: 'gateway_disabled' } } } });
       render(<DashboardLayout><div>subread child</div></DashboardLayout>);
       await act(async () => {});
       expect(screen.getByText('subread child')).toBeTruthy();
