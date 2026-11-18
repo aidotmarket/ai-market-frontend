@@ -12,6 +12,7 @@ import {
 import { useToast } from '@/components/Toast';
 
 type ConnectStatus = {
+  status?: string;
   details_submitted?: boolean;
   charges_enabled?: boolean;
   payouts_enabled?: boolean;
@@ -27,7 +28,7 @@ export default function StripeReturnPage() {
   const router = useRouter();
   const { toast } = useToast();
 
-  const [status, setStatus] = useState<'loading' | 'success' | 'action' | 'reviewing' | 'timeout'>('loading');
+  const [status, setStatus] = useState<'loading' | 'success' | 'action' | 'reviewing' | 'timeout' | 'not_connected'>('loading');
   const [connecting, setConnecting] = useState(false);
   const [reviewingSuccess, setReviewingSuccess] = useState(false);
   const [retryCount, setRetryCount] = useState(0);
@@ -43,7 +44,7 @@ export default function StripeReturnPage() {
     let redirectTimer: ReturnType<typeof setTimeout> | undefined;
     let deadlineTimer: ReturnType<typeof setTimeout> | undefined;
 
-    const finish = (nextStatus: 'success' | 'action' | 'reviewing' | 'timeout') => {
+    const finish = (nextStatus: 'success' | 'action' | 'reviewing' | 'timeout' | 'not_connected') => {
       cancelled = true;
       statusRequestRef.current = null;
       clearTimeout(pollTimer);
@@ -71,6 +72,10 @@ export default function StripeReturnPage() {
 
         consecutiveErrors = 0;
         lastStatus = res.data as ConnectStatus | null;
+        if (lastStatus?.status === 'not_connected') {
+          finish('not_connected');
+          return;
+        }
         const requirements = lastStatus?.requirements;
         if (requirements?.currently_due?.length) {
           finish('action');
@@ -133,7 +138,7 @@ export default function StripeReturnPage() {
 
   return (
     <div className="flex min-h-[60vh] items-center justify-center">
-      <div className="max-w-md w-full bg-white rounded-xl shadow-sm border border-gray-200 p-8 text-center">
+      <div role="status" aria-live="polite" className="max-w-md w-full bg-white rounded-xl shadow-sm border border-gray-200 p-8 text-center">
         {status === 'loading' && (
           <>
             <div role="progressbar" aria-label="Confirming Stripe details" className="h-2 w-full overflow-hidden rounded-full bg-gray-200 mb-4">
@@ -178,6 +183,15 @@ export default function StripeReturnPage() {
           </>
         )}
 
+        {status === 'not_connected' && (
+          <>
+            <h2 className="text-xl font-semibold text-gray-900 mb-6">You haven't set up payouts yet</h2>
+            <Link href="/dashboard" className="block text-sm font-medium text-gray-500 hover:text-gray-700">
+              Return to Dashboard
+            </Link>
+          </>
+        )}
+
         {status === 'action' && (
           <>
             <h2 className="text-xl font-semibold text-gray-900 mb-2">Stripe needs more information</h2>
@@ -189,6 +203,16 @@ export default function StripeReturnPage() {
             >
               {connecting ? 'Loading...' : 'Continue Stripe setup'}
             </button>
+            <button
+              onClick={() => { setStatus('loading'); setRetryCount((count) => count + 1); }}
+              disabled={connecting}
+              className="mt-3 w-full rounded-lg px-4 py-2 text-sm font-medium text-gray-500 hover:text-gray-700 disabled:opacity-50"
+            >
+              Check again
+            </button>
+            <Link href="/dashboard" className="mt-3 block text-sm font-medium text-gray-500 hover:text-gray-700">
+              Return to Dashboard
+            </Link>
           </>
         )}
 

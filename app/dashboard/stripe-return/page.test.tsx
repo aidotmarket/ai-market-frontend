@@ -60,6 +60,38 @@ describe('Stripe return', () => {
   describe.each(['', 'abandoned=1', 'abandoned=true'])('return URL ?%s', (query) => {
     beforeEach(() => { navigation.searchParams = new URLSearchParams(query); });
 
+    it('stops immediately when payouts have not been set up', async () => {
+      connectApi.getConnectStatus.mockResolvedValue({ data: { status: 'not_connected' } });
+      render(<StrictMode><StripeReturnPage /></StrictMode>);
+      await advance();
+      expect(screen.getByText("You haven't set up payouts yet")).not.toBeNull();
+      expect(screen.getByRole('status').getAttribute('aria-live')).toBe('polite');
+      expect(screen.getByRole('link', { name: 'Return to Dashboard' }).getAttribute('href')).toBe('/dashboard');
+      expect(screen.queryByRole('progressbar')).toBeNull();
+      expect(screen.queryByRole('button', { name: 'Continue Stripe setup' })).toBeNull();
+      await advance(30000);
+      expect(connectApi.getConnectStatus).toHaveBeenCalledOnce();
+      expect(navigation.router.push).not.toHaveBeenCalled();
+      expectNoStripeRedirect();
+    });
+
+    it('can check again from actionable requirements and reach success', async () => {
+      connectApi.getConnectStatus.mockResolvedValueOnce({ data: actionable }).mockResolvedValue({ data: ready });
+      render(<StrictMode><StripeReturnPage /></StrictMode>);
+      await advance();
+      expect(screen.getByText('Stripe needs more information')).not.toBeNull();
+      expect(screen.getByRole('button', { name: 'Continue Stripe setup' })).not.toBeNull();
+      expect(screen.getByRole('link', { name: 'Return to Dashboard' }).getAttribute('href')).toBe('/dashboard');
+      expect(connectApi.getConnectStatus).toHaveBeenCalledOnce();
+      await act(async () => { fireEvent.click(screen.getByRole('button', { name: 'Check again' })); });
+      expect(connectApi.getConnectStatus).toHaveBeenCalledTimes(2);
+      expect(screen.getByText('Successfully Connected!')).not.toBeNull();
+      expect(navigation.router.push).not.toHaveBeenCalled();
+      await advance(3000);
+      expect(navigation.router.push).toHaveBeenCalledExactlyOnceWith('/dashboard');
+      expectNoStripeRedirect();
+    });
+
     it.each([pending, inconclusive, { details_submitted: false }])('shows progress for %j, then succeeds and returns to the dashboard', async (data) => {
       connectApi.getConnectStatus.mockResolvedValueOnce({ data }).mockResolvedValue({ data: ready });
       render(<StrictMode><StripeReturnPage /></StrictMode>);
@@ -209,7 +241,55 @@ describe('Stripe return', () => {
     expectNoStripeRedirect();
   });
 
-  it('cleans up polling and ignores results after unmount', async () => {
+  it('resets consecutive errors after a successful status read', async () => {
+    const error = new Error('unavailable');
+    connectApi.getConnectStatus
+      .mockRejectedValueOnce(error)
+      .mockRejectedValueOnce(error)
+      .mockResolvedValueOnce({ data: inconclusive })
+      .mockRejectedValueOnce(error)
+      .mockRejectedValueOnce(error)
+      .mockResolvedValue({ data: ready });
+    render(<StrictMode><StripeReturnPage /></StrictMode>);
+    await advance(8000);
+    expect(connectApi.getConnectStatus).toHaveBeenCalledTimes(5);
+    expect(screen.getByRole('progressbar')).not.toBeNull();
+    expect(screen.queryByText(confirmationMessage)).toBeNull();
+    await advance(2000);
+    expect(connectApi.getConnectStatus).toHaveBeenCalledTimes(6);
+    expect(screen.getByText('Successfully Connected!')).not.toBeNull();
+    expectNoStripeRedirect();
+  });
+
+  it('cancels dashboard navigation when unmounted during the success window', async () => {
+    connectApi.getConnectStatus.mockResolvedValue({ data: ready });
+    const view = render(<StrictMode><StripeReturnPage /></StrictMode>);
+    await advance(1000);
+    expect(screen.getByText('Successfully Connected!')).not.toBeNull();
+    expect(vi.getTimerCount()).toBe(1);
+    view.unmount();
+    expect(vi.getTimerCount()).toBe(0);
+    await advance(3000);
+    expect(navigation.router.push).not.toHaveBeenCalled();
+    expect(vi.getTimerCount()).toBe(0);
+    expectNoStripeRedirect();
+  });
+
+  it('ignores a deferred status response resolving after unmount', async () => {
+    let resolveStatus!: (value: { data: typeof ready }) => void;
+    connectApi.getConnectStatus.mockReturnValue(new Promise((resolve) => { resolveStatus = resolve; }));
+    const view = render(<StrictMode><StripeReturnPage /></StrictMode>);
+    view.unmount();
+    expect(vi.getTimerCount()).toBe(0);
+    await act(async () => { resolveStatus({ data: ready }); });
+    expect(vi.getTimerCount()).toBe(0);
+    await advance(30000);
+    expect(connectApi.getConnectStatus).toHaveBeenCalledOnce();
+    expect(navigation.router.push).not.toHaveBeenCalled();
+    expectNoStripeRedirect();
+  });
+
+  it('cleans up polling after unmount', async () => {
     const view = render(<StripeReturnPage />);
     await advance();
     view.unmount();
