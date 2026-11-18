@@ -65,7 +65,7 @@ describe('SettingsPage capability refresh', () => {
     render(<SettingsPage />);
     expect(await screen.findByLabelText('Public business name')).toBeTruthy();
     expect(screen.getByLabelText('Company name')).toBeTruthy();
-    await waitFor(() => expect(vi.mocked(getSellerPublicProfile)).toHaveBeenCalled());
+    await waitFor(() => expect(vi.mocked(getSellerPublicProfile)).toHaveBeenCalledOnce());
   });
 
   it.each([

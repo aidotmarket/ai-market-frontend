@@ -2,11 +2,13 @@
 
 import { isAxiosError } from 'axios';
 import { api } from './client';
+import { COMPANY_NAME_NEEDS_VERIFIED_EMAIL, COMPANY_NAME_SAVE_FAILED } from '@/components/listings/publisherStrings';
 
 // This owner-only view deliberately excludes legal identity and payment fields.
 export interface SellerPublicProfile {
   public_display_name: string | null;
   show_public_display_name: boolean;
+  show_company_name?: boolean;
 }
 
 export type SellerProfileField = keyof SellerPublicProfile;
@@ -54,6 +56,7 @@ function publicSettings(data: SellerPublicProfile): SellerPublicProfile {
   return {
     public_display_name: data.public_display_name ?? null,
     show_public_display_name: data.show_public_display_name ?? false,
+    ...(typeof data.show_company_name === 'boolean' ? { show_company_name: data.show_company_name } : {}),
   };
 }
 
@@ -73,5 +76,26 @@ export async function updateSellerPublicProfile(settings: SellerPublicProfile, s
     }, { signal })).data);
   } catch (error) {
     throw profileError(error);
+  }
+}
+
+export async function updateSellerCompanyName(show: boolean, signal?: AbortSignal): Promise<SellerPublicProfile> {
+  try {
+    return publicSettings((await api.patch<SellerPublicProfile>('/profiles/seller/me', {
+      show_company_name: show,
+    }, { signal })).data);
+  } catch (error) {
+    const response = isAxiosError(error) ? error.response : undefined;
+    const detail: unknown = response?.data?.detail;
+    const issue = detail && typeof detail === 'object' && !Array.isArray(detail)
+      ? detail as { field?: unknown; message?: unknown } : null;
+    const fieldMessage = response?.status === 422 && issue?.field === 'show_company_name'
+      ? typeof issue.message === 'string' ? issue.message
+        : issue.message == null ? COMPANY_NAME_NEEDS_VERIFIED_EMAIL : undefined
+      : undefined;
+    const failure = new SellerProfileError(fieldMessage ?? COMPANY_NAME_SAVE_FAILED, response?.status,
+      fieldMessage === undefined ? {} : { show_company_name: fieldMessage });
+    failure.cause = error;
+    throw failure;
   }
 }

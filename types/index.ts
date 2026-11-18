@@ -405,6 +405,7 @@ export interface MarketplacePublisher {
   stripe_connected?: boolean | null;
   provider_observed_at?: string | null;
   completed_order_count?: number | null;
+  seller_domain_verified?: boolean | null;
   // Seller-wide reputation is independent of listing.rating_avg/rating_count.
   seller_rating_count?: number | null;
   seller_rating_average?: number | null;

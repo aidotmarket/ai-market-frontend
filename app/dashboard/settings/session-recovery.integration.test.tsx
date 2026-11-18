@@ -12,6 +12,7 @@ import { useAuthStore } from '@/store/auth';
 import { advanceAuthSessionOwner } from '@/lib/auth-session-owner';
 import { authority, id } from '@/tests/fixtures/seller-authority';
 import type { User } from '@/types';
+import { COMPANY_NAME_TOGGLE_LABEL } from '@/components/listings/publisherStrings';
 
 // Only unrelated UI dependencies are replaced. All section reads, controllers,
 // auth store, coordinator, interceptors, and API error mapping are real.
@@ -121,6 +122,21 @@ it.each(cases)('$name recovers its first 401 through the real refresh/replay wit
   const network = transport(section.path, section.data, read => read === 1 ? 401 : 200);
   render(section.view());
   await waitFor(section.success);
+  await settle();
+  expect(network.reads()).toBe(2);
+  expect(network.refresh).toHaveBeenCalledTimes(1);
+  expect(screen.queryByRole('button', { name: /Try again/ })).toBeNull();
+});
+
+it('reveals company consent from the same recovered profile read', async () => {
+  const network = transport('/profiles/seller/me', {
+    public_display_name: 'Recovered name', show_public_display_name: true, show_company_name: false,
+  }, read => read === 1 ? 503 : 200);
+  render(<SellerPublicName ownOperation={ownOperation} />);
+  await retryButton();
+  expect(screen.queryByRole('switch', { name: COMPANY_NAME_TOGGLE_LABEL })).toBeNull();
+  await act(async () => { await refreshAccessToken(); });
+  await screen.findByRole('switch', { name: COMPANY_NAME_TOGGLE_LABEL });
   await settle();
   expect(network.reads()).toBe(2);
   expect(network.refresh).toHaveBeenCalledTimes(1);

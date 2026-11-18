@@ -4,6 +4,7 @@ import { renderToStaticMarkup } from 'react-dom/server';
 import { afterEach, describe, expect, it } from 'vitest';
 import type { MarketplacePublisher, PublisherPublicInfo } from '@/types';
 import PublisherCard from './PublisherCard';
+import { VERIFIED_DOMAIN_CHIP, VERIFIED_DOMAIN_EXPLANATION, verifiedDomainAriaLabel, SELLER_RATINGS_LABEL } from './publisherStrings';
 
 afterEach(cleanup);
 const anonymous: MarketplacePublisher = {
@@ -59,5 +60,55 @@ describe('publisher presentation', () => {
   });
   it('omits generated sample publishers entirely', () => {
     expect(renderToStaticMarkup(<PublisherCard publisher={{ ...anonymous, kind: 'generated_sample' }} />)).toBe('');
+  });
+});
+
+describe('verified domain and rating presentation', () => {
+  it('shows the approved focusable chip with its full explanation', () => {
+    render(<PublisherCard publisher={{ ...anonymous, seller_domain_verified: true }} />);
+    const chip = screen.getByText(VERIFIED_DOMAIN_CHIP);
+    expect(chip.title).toBe(VERIFIED_DOMAIN_EXPLANATION);
+    expect(chip.getAttribute('aria-label')).toBe(verifiedDomainAriaLabel());
+    expect(chip.tabIndex).toBe(0);
+    expect(chip.parentElement?.classList.contains('flex')).toBe(true);
+    expect(chip.parentElement?.classList.contains('gap-2')).toBe(true);
+    expect(chip.parentElement?.children.length).toBe(1);
+  });
+  it.each([false, null, undefined, 'true', 1])('requires strictly true domain evidence (%s)', (value) => {
+    render(<PublisherCard publisher={{ ...anonymous, seller_domain_verified: value } as MarketplacePublisher} />);
+    expect(screen.queryByText(VERIFIED_DOMAIN_CHIP)).toBeNull();
+  });
+  it.each([
+    { ...anonymous, kind: 'reference' },
+    { ...anonymous, kind: 'generated_sample' },
+    { display_name: 'Legacy seller' },
+  ])('never shows domain evidence on other publisher kinds: %j', publisher => {
+    render(<PublisherCard publisher={{ ...publisher, seller_domain_verified: true } as PublisherPublicInfo} />);
+    expect(screen.queryByText(VERIFIED_DOMAIN_CHIP)).toBeNull();
+  });
+  it('spaces both chips in one row, with Stripe first', () => {
+    render(<PublisherCard publisher={{ ...anonymous, stripe_connected: true, seller_domain_verified: true }} />);
+    const stripe = screen.getByText('Stripe connected');
+    const domain = screen.getByText(VERIFIED_DOMAIN_CHIP);
+    expect(stripe.parentElement).toBe(domain.parentElement);
+    expect(domain.parentElement?.classList.contains('flex')).toBe(true);
+    expect(domain.parentElement?.classList.contains('gap-2')).toBe(true);
+    expect(Array.from(domain.parentElement!.children)).toEqual([stripe, domain]);
+  });
+  it('preserves the bd368d0e Stripe-only markup exactly', () => {
+    expect(renderToStaticMarkup(<PublisherCard publisher={{ ...anonymous, stripe_connected: true }} />)).toBe(
+      '<div class="rounded-xl border border-gray-200 p-6"><h3 class="font-semibold text-gray-900 mb-3">Publisher</h3><p class="text-sm text-gray-600 break-words">ai.market Seller</p><div class="mt-3 space-y-2 border-t border-gray-100 pt-3"><span tabindex="0" title="Seller connected a Stripe payout account. This does not certify company affiliation or data quality." aria-label="Stripe connected. Seller connected a Stripe payout account. This does not certify company affiliation or data quality." class="inline-flex rounded-full bg-gray-100 px-2.5 py-1 text-xs font-medium text-gray-700">Stripe connected</span><p class="text-sm text-gray-600">No completed purchases yet</p><p class="text-sm text-gray-600" aria-label="Seller ratings">No ratings yet</p></div></div>');
+  });
+  it.each([
+    [0, null, 'No ratings yet'], [1, 5, '5/5 from 1 rating'],
+    [2, 4.5, '4.5/5 from 2 ratings'], [3, 4, '4/5 from 3 ratings'],
+    [1, null, 'Seller ratings unavailable'],
+  ])('renders count %s and average %s', (seller_rating_count, seller_rating_average, text) => {
+    render(<PublisherCard publisher={{ ...anonymous, seller_rating_count, seller_rating_average }} />);
+    expect(screen.getByLabelText(SELLER_RATINGS_LABEL).textContent).toBe(text);
+  });
+  it.each([null, undefined])('omits ratings for unknown count %s', seller_rating_count => {
+    render(<PublisherCard publisher={{ ...anonymous, seller_rating_count }} />);
+    expect(screen.queryByLabelText(SELLER_RATINGS_LABEL)).toBeNull();
   });
 });

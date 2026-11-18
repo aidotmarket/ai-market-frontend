@@ -1,6 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { AxiosError } from 'axios';
-import { getSellerPublicProfile, updateSellerPublicProfile, SellerProfileError } from './sellerProfile';
+import { COMPANY_NAME_NEEDS_VERIFIED_EMAIL, COMPANY_NAME_SAVE_FAILED } from '@/components/listings/publisherStrings';
+import { getSellerPublicProfile, updateSellerPublicProfile, updateSellerCompanyName, SellerProfileError } from './sellerProfile';
 
 const transport = vi.hoisted(() => ({ get: vi.fn(), patch: vi.fn() }));
 vi.mock('./client', () => ({ api: transport }));
@@ -49,5 +50,39 @@ describe('owner public business name API', () => {
   it('handles network failures without inventing a validation field', async () => {
     transport.patch.mockRejectedValue(new Error('Network unavailable'));
     await expect(updateSellerPublicProfile(profile)).rejects.toMatchObject({ status: undefined, fieldErrors: {} });
+  });
+});
+
+describe('company name API', () => {
+  it.each([true, false, null, undefined, 'true', 1])('projects only boolean company settings (%s)', async value => {
+    transport.get.mockResolvedValue({ data: { ...profile, show_company_name: value, company_name: 'Private', business_name: 'Legal', user_id: 'Owner' } });
+    const result = await getSellerPublicProfile();
+    expect(result).toEqual({ ...profile, ...(typeof value === 'boolean' ? { show_company_name: value } : {}) });
+    expect(Object.hasOwn(result, 'show_company_name')).toBe(typeof value === 'boolean');
+  });
+  it.each([true, false])('patches only show_company_name=%s with cancellation', async show => {
+    transport.patch.mockResolvedValue({ data: { ...profile, show_company_name: show, company_name: 'Private' } });
+    const { signal } = new AbortController();
+    expect(await updateSellerCompanyName(show, signal)).toEqual({ ...profile, show_company_name: show });
+    expect(transport.patch).toHaveBeenCalledExactlyOnceWith('/profiles/seller/me', { show_company_name: show }, { signal });
+  });
+  it.each([
+    [422, { field: 'show_company_name', message: 'Verify your company email.' }, 'Verify your company email.', { show_company_name: 'Verify your company email.' }],
+    [422, { field: 'show_company_name' }, COMPANY_NAME_NEEDS_VERIFIED_EMAIL, { show_company_name: COMPANY_NAME_NEEDS_VERIFIED_EMAIL }],
+    [422, [{ loc: ['body', 'show_company_name'], msg: 'Extra input' }], COMPANY_NAME_SAVE_FAILED, {}],
+    [422, { field: 'other', message: 'Other error' }, COMPANY_NAME_SAVE_FAILED, {}],
+    [422, 'Invalid', COMPANY_NAME_SAVE_FAILED, {}],
+    [422, { field: 'show_company_name', message: 42 }, COMPANY_NAME_SAVE_FAILED, {}],
+    [404, 'Not found', COMPANY_NAME_SAVE_FAILED, {}],
+    [403, 'Forbidden', COMPANY_NAME_SAVE_FAILED, {}],
+    [500, 'Internal', COMPANY_NAME_SAVE_FAILED, {}],
+    [503, 'Unavailable', COMPANY_NAME_SAVE_FAILED, {}],
+  ])('maps company failure %s %j', async (status, detail, message, fieldErrors) => {
+    transport.patch.mockRejectedValue(failure(status as number, detail));
+    await expect(updateSellerCompanyName(true)).rejects.toMatchObject({ status, message, fieldErrors });
+  });
+  it('maps network failure to retry copy', async () => {
+    transport.patch.mockRejectedValue(new Error('Network unavailable'));
+    await expect(updateSellerCompanyName(true)).rejects.toMatchObject({ status: undefined, message: COMPANY_NAME_SAVE_FAILED, fieldErrors: {} });
   });
 });
