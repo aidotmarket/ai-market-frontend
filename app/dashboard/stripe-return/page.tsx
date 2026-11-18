@@ -195,7 +195,7 @@ export default function StripeReturnPage() {
         {status === 'timeout' && (
           <>
             <h2 className="text-xl font-semibold text-gray-900 mb-2">Confirmation pending</h2>
-            <p className="text-gray-500 mb-6">We couldn't confirm with Stripe yet. Your details are saved; check again in a few minutes.</p>
+            <p className="text-gray-500 mb-6">We couldn't confirm with Stripe yet. Check again in a few minutes.</p>
             <div className="space-y-3">
               <button
                 onClick={() => { setStatus('loading'); setRetryCount((count) => count + 1); }}

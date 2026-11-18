@@ -30,7 +30,7 @@ const ready = { details_submitted: true, charges_enabled: true, payouts_enabled:
 const inconclusive = { details_submitted: false, requirements: { currently_due: [], pending_verification: [] } };
 const actionable = { details_submitted: false, requirements: { currently_due: ['external_account'] } };
 const pending = { details_submitted: false, requirements: { currently_due: [], pending_verification: ['document'] } };
-const confirmationMessage = "We couldn't confirm with Stripe yet. Your details are saved; check again in a few minutes.";
+const confirmationMessage = "We couldn't confirm with Stripe yet. Check again in a few minutes.";
 
 async function advance(ms = 0) {
   await act(async () => { await vi.advanceTimersByTimeAsync(ms); });
