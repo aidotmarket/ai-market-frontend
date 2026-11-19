@@ -8,9 +8,11 @@ export interface SourceRead { version: number; content: SourceContent; connectio
 export async function readListingSource(draft_id?: string | null): Promise<SourceRead | null> {
   return (await api.get('/seller-workspace/listing-source', draft_id ? {params:{draft_id}} : undefined)).data.source;
 }
-export async function saveListingSource(content: SourceContent, expected_version: number, request_id: string, draft_id?: string | null): Promise<SourceRead> {
-  if(draft_id)return (await nativeWrite<{source:SourceRead}>('/seller-workspace/listing-source',{content,expected_version,request_id,draft_id},undefined,'put')).source;
-  return (await api.put('/seller-workspace/listing-source', {content, expected_version, request_id})).data.source;
+export async function saveListingSource(content: SourceContent, expected_version: number, request_id: string, expected_current_draft_id: string | null, draft_id?: string | null): Promise<SourceRead> {
+  // Null asserts the empty draft observed by this editor; never omit the precondition.
+  const body={content,expected_version,request_id,expected_current_draft_id};
+  if(draft_id)return (await nativeWrite<{source:SourceRead}>('/seller-workspace/listing-source',{...body,draft_id},undefined,'put')).source;
+  return (await api.put('/seller-workspace/listing-source', body)).data.source;
 }
 
 export interface SellerCategory {slug: string; name: string}

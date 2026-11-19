@@ -57,6 +57,7 @@ export const DRAFT_SUPERSEDED_MESSAGE='This import was replaced by a newer impor
 
 export function listingDraftError(error:unknown):{message:string;alreadyPublished:boolean}|null {
   const detail=record(record(record(record(error)?.response)?.data)?.detail);
+  if(detail?.code==='CURRENT_DRAFT_CHANGED')return {message:'Your listing draft changed. Reload the current draft before saving your files again.',alreadyPublished:false};
   if(detail?.code==='DRAFT_SUPERSEDED')return {message:DRAFT_SUPERSEDED_MESSAGE,alreadyPublished:false};
   if(!detail||!['DRAFT_IN_PROGRESS','DRAFT_ALREADY_PUBLISHED'].includes(typeof detail.code==='string'?detail.code:''))return null;
   const message=detail.message;

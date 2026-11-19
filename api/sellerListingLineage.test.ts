@@ -12,9 +12,16 @@ it('carries the draft ID into source reads and current-draft saves on the refres
   await readListingSource(id(101));
   expect(get).toHaveBeenCalledWith('/seller-workspace/listing-source',{params:{draft_id:id(101)}});
   const put=vi.spyOn(api,'put').mockResolvedValue({data:{source:{version:1,content},draft:{draft_id:id(101),version:4}}});
-  await saveListingSource(content,1,id(8));
-  expect(put).toHaveBeenCalledWith('/seller-workspace/listing-source',{content,expected_version:1,request_id:id(8)});
+  await saveListingSource(content,1,id(8),id(101));
+  expect(put).toHaveBeenCalledWith('/seller-workspace/listing-source',{content,expected_version:1,request_id:id(8),expected_current_draft_id:id(101)});
   const draft={brief:'',title:'Sales',description:'Sales data',category:'finance',tags:'sales',price:'25',license:''};
   expect((await saveListingDraft(draft,3,id(9))).draft_id).toBe(id(101));
   expect(put).toHaveBeenLastCalledWith('/seller-workspace/listing-draft',{content:draft,expected_version:3,request_id:id(9)});
+});
+
+it('serializes null for an observed empty draft rather than dropping the precondition',async()=>{
+  const content={connection_id:id(2),connection_version:1,version_mode:'current' as const,objects:[]};
+  const put=vi.spyOn(api,'put').mockResolvedValue({data:{source:{version:1,content}}});
+  await saveListingSource(content,0,id(8),null);
+  expect(put).toHaveBeenCalledWith('/seller-workspace/listing-source',{content,expected_version:0,request_id:id(8),expected_current_draft_id:null});
 });

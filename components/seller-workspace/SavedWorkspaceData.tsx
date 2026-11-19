@@ -31,7 +31,7 @@ export default function SavedWorkspaceData({connections, enabled,sampleLimits,li
   const version = useRef(0);
   const observedVersion=useRef<number|null>(null);
   const draftState=useRef({draft,loaded,sampleIndices,selectionSavePending,saveSamples});
-  const pending = useRef<{serialized: string; id: string; version: number} | null>(null);
+  const pending = useRef<{serialized: string; id: string; version: number; draftId: string | null} | null>(null);
   useEffect(()=>{draftState.current={draft,loaded,sampleIndices,selectionSavePending,saveSamples};},[draft,loaded,sampleIndices,selectionSavePending,saveSamples]);
   useEffect(() => {
     if(flow){version.current=flow.source?.version??0;observedVersion.current=version.current;setLoading(false);return;}
@@ -61,10 +61,12 @@ export default function SavedWorkspaceData({connections, enabled,sampleLimits,li
       const content: SourceContent = {connection_id:connection.id, connection_version:connection.version, version_mode:'current',
         objects: objects.map(({key, version_id, etag, size}) => ({key, version_id, etag, size}))};
       const serialized = JSON.stringify(content);
-      if (!pending.current || pending.current.serialized !== serialized || pending.current.version !== version.current)
-        pending.current = {serialized, id:crypto.randomUUID(), version:version.current};
-      // Bind imported selections to the editor draft, even after another tab replaces it.
-      const result = await saveListingSource(content, pending.current.version, pending.current.id, ...(draft?.draft_id?[draft.draft_id]:[]));
+      const observedDraftId=draft?.draft_id??null;
+      if (!pending.current || pending.current.serialized !== serialized || pending.current.version !== version.current || pending.current.draftId !== observedDraftId)
+        pending.current = {serialized, id:crypto.randomUUID(), version:version.current, draftId:observedDraftId};
+      // Bind every save, including an observed empty draft. Only imported drafts
+      // need the explicit native target and its lineage authorization.
+      const result = await saveListingSource(content, pending.current.version, pending.current.id, pending.current.draftId, ...(draft?.authority_version_id&&draft.draft_id?[draft.draft_id]:[]));
       version.current = result.version;observedVersion.current=result.version; pending.current = null; setSource(result);flow?.sourceSaved(result);
       succeeded=true;
       if (sampleCapability&&sampleState.loaded&&(sampleState.selectionSavePending||sampleState.sampleIndices.length>0||sampleState.draft?.content.sample_decision==='member_files')) {

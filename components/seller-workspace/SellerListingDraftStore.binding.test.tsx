@@ -49,6 +49,7 @@ it.each(['content','source'] as const)('binds stale imported %s writes at the se
    await expect(saving).rejects.toMatchObject({response:{status:409,data:{detail:{code:'DRAFT_SUPERSEDED'}}}});
  });
  expect(writes).toHaveLength(1);expect(writes[0]).toMatchObject({draft_id:a,expected_version:kind==='content'?1:0,request_id:expect.any(String)});
+ if(kind==='source')expect(writes[0]).toMatchObject({expected_current_draft_id:a,draft_id:a});
  expect(rows.get(b)).toEqual(draftB);expect(store.draft).toEqual(draftB);
  await expect(oldSave(draftA.content,1)).rejects.toThrow('changed');
 });
