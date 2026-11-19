@@ -29,6 +29,7 @@ it('explains draft review and confirms a saved draft with the existing detail de
   useAuthStore.setState({ user: { id: 'buyer-1' } as User, isAuthenticated: true });
   mocks.createDataRequest.mockResolvedValue({ slug: 'retail-data' });
   render(<NewDataRequestPage />);
+  expect(screen.getByRole('heading', { name: 'Post a data request' })).toBeTruthy();
   expect(screen.getByText('Describe the data you need. We save it as a draft so you can review it before it goes live.')).toBeTruthy();
   expect(screen.getByLabelText('Where the data must come from (optional)')).toBeTruthy();
   fireEvent.change(screen.getByLabelText('Description'), { target: { value: 'Licensed retail sales data' } });

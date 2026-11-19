@@ -33,8 +33,8 @@ async function load(data: CheckoutVerifyResponse) {
 }
 function orderHref() { return screen.getByRole('link', { name: 'View Order' }).getAttribute('href'); }
 function navigation() {
-  expect(screen.getByRole('link', { name: /^(Check My Purchases|My purchases)$/ }).getAttribute('href')).toBe('/dashboard/orders');
-  expect(screen.getByRole('link', { name: /support|help/i }).getAttribute('href')).toBe('mailto:support@ai.market');
+  expect(screen.getByRole('link', { name: 'My purchases' }).getAttribute('href')).toBe('/dashboard/orders');
+  expect(screen.getByRole('link', { name: 'Contact support' }).getAttribute('href')).toBe('mailto:support@ai.market');
 }
 beforeEach(() => {
   vi.useFakeTimers(); fake.verify.mockReset(); fake.session = 'session-a';
@@ -144,7 +144,7 @@ it('a hidden or unresolved read cannot extend the budget or supply late success'
 });
 it('missing session stays bounded with navigation and no verification', async () => {
   fake.session = null; render(<Content />); await flush(); navigation();
-  expect(screen.getByText('If you paid, your purchase will appear in My purchases within a minute.')).toBeTruthy();
+  expect(screen.getByText("If you paid, your purchase will appear in My purchases shortly. If it doesn't, contact support.")).toBeTruthy();
   await advance(31001); await visibility('visible'); expect(fake.verify).not.toHaveBeenCalled();
 });
 it('cancel uses neutral copy, preserves navigation, and never verifies', () => {

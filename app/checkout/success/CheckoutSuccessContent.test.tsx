@@ -17,7 +17,7 @@ function expectRecoveryLinks() {
 it('explains a missing checkout and offers purchase and support links without a verification call', async () => {
   render(<CheckoutSuccessContent />);
   expect(await screen.findByRole('heading', { name: "We couldn't find this checkout" })).toBeTruthy();
-  expect(screen.getByText('If you paid, your purchase will appear in My purchases within a minute.')).toBeTruthy();
+  expect(screen.getByText("If you paid, your purchase will appear in My purchases shortly. If it doesn't, contact support.")).toBeTruthy();
   expectRecoveryLinks();
   expect(mocks.verifyCheckout).not.toHaveBeenCalled();
 });

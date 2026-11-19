@@ -709,7 +709,7 @@ export default function DataRequestDetailClient({
         )}
         {request.provenance_requirements && (
           <div className="rounded-xl border border-gray-200 p-4 sm:col-span-2">
-            <h3 className="text-xs font-semibold text-gray-500 uppercase mb-2">Where the data must come from (optional)</h3>
+            <h3 className="text-xs font-semibold text-gray-500 uppercase mb-2">Where the data must come from</h3>
             <p className="text-sm text-gray-800 whitespace-pre-wrap">{request.provenance_requirements}</p>
           </div>
         )}

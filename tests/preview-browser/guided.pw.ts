@@ -89,7 +89,7 @@ for(const width of [1280,390])test(`${width}px ${presentation_version} synthetic
  await page.getByLabel('Signer full name',{exact:true}).fill('Sam Seller');await page.getByLabel('Signer title',{exact:true}).fill('Owner');await page.getByRole('checkbox',{name:'Confirm covenant and authority'}).check();
  await page.getByRole('button',{name:'Next: Describe and price →',exact:true}).click();await oneNext('Describe and price');
  expect(draft!.content.category).toBe('');
- await page.getByLabel('Give Allai a starting point').fill('Draft the current weekly sales file.');await page.getByRole('button',{name:'Ask Allai to draft my listing',exact:true}).click();await page.getByRole('button',{name:'Use all Allai suggestions'}).click();
+ await page.getByLabel('Give allAI a starting point').fill('Draft the current weekly sales file.');await page.getByRole('button',{name:'Ask allAI to draft my listing',exact:true}).click();await page.getByRole('button',{name:'Use all allAI suggestions'}).click();
  await page.getByLabel('Your price (USD)').fill('25');await page.getByRole('button',{name:'Next: Review →',exact:true}).click();await oneNext('Review');
  expect(draft!.content.description_source_version).toBe(source!.version);expect(calls.find(c=>c.path.endsWith('listing-assistant'))!.body).not.toHaveProperty('source_summary');
  await expect(page.getByRole('button',{name:'Approve this review'})).toBeVisible();

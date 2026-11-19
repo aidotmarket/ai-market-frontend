@@ -241,7 +241,7 @@ describe('DataRequestDetailClient authenticated fallback loading', () => {
   it('uses the data source heading while preserving the request body', () => {
     const request = makeOwnerRequest({ provenance_requirements: 'Documented sources', description: '**Keep detail Markdown**' });
     render(<DataRequestDetailClient slug={request.slug} initialRequest={request} />);
-    expect(screen.getByRole('heading', { name: 'Where the data must come from (optional)' })).toBeTruthy();
+    expect(screen.getByRole('heading', { name: 'Where the data must come from' })).toBeTruthy();
     expect(screen.getByText('**Keep detail Markdown**')).toBeTruthy();
   });
 

@@ -30,6 +30,7 @@ describe('public request browsing', () => {
     ['**Title: Licensed retail data**', '**Title: Licensed retail data**. Buyer description.', 'Licensed retail data'],
     ['**Title: Licensed retail transaction data for regional demand forecasting...', '**Title: Licensed retail transaction data for regional demand forecasting and inventory planning**. Buyer description.', 'Licensed retail transaction data for regional demand forecasting...'],
     ['**Title: Explicit title**', '**Title: Different title**. Buyer description.', 'Explicit title'],
+    ['**', 'Buyer description.', 'Buyer data request'],
     ['Ordinary explicit title', '**Title: Different title**. Buyer description.', 'Ordinary explicit title'],
   ])('displays a plain-text title on the card: %s', async (title, description, display) => {
     const item = request('display', { title, description });

@@ -94,7 +94,7 @@ function SessionOutcome({ sessionId }: { sessionId: string | null }) {
     };
 
     if (!sessionId) {
-      setErrorMessage('If you paid, your purchase will appear in My purchases within a minute.');
+      setErrorMessage("If you paid, your purchase will appear in My purchases shortly. If it doesn't, contact support.");
       finish('error');
     } else {
       deadlineTimer = setTimeout(timeout, MAX_POLL_DURATION);
@@ -188,10 +188,10 @@ function SessionOutcome({ sessionId }: { sessionId: string | null }) {
             href="/dashboard/orders"
             className="rounded-lg bg-[#3F51B5] px-6 py-2.5 text-sm font-medium text-white hover:bg-[#3545a0]"
           >
-            Check My Purchases
+            My purchases
           </Link>
           <a href="mailto:support@ai.market" className="block mt-4 text-sm text-gray-700 underline">
-            Contact Support
+            Contact support
           </a>
         </div>
       </div>
