@@ -76,9 +76,7 @@ export default function SellerLicenseSelection({value, onChange, disabled = fals
       else if(kind==='unavailable')setIdentityState({kind:'unavailable'});
       else if(kind==='invalid')setLegalError('Check the legal name and country');
       else {
-        const detail=(error as {response?:{data?:{detail?:{message?:unknown}}}})?.response?.data?.detail;
-        const reason=typeof detail?.message==='string'&&detail.message.length<=200?detail.message:null;
-        setLegalError(reason??(kind==='required'?'Your legal name and country are not saved. Check them and try again.':'Your legal details could not be changed. They may already be used in a licence acceptance. Contact support if they need correction.'));
+        setLegalError((kind==='required'?'Your legal name and country are not saved. Check them and try again.':'Your legal details could not be changed. They may already be used in a licence acceptance. Contact support if they need correction.'));
       }
     } finally {setSavingLegal(false);}
   }

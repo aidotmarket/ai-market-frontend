@@ -108,12 +108,12 @@ it('retains the published link while starting and retries the same request ident
  await waitFor(()=>expect(navigate).toHaveBeenCalledWith('data'));
  expect(mocks.start.mock.calls[1][0]).toBe(mocks.start.mock.calls[0][0]);
 });
-it('shows the DRAFT_IN_PROGRESS backend sentence',async()=>{
+it('shows customer guidance for a draft already in progress',async()=>{
  const message='You already have a listing in progress. Finish or discard it first.';
  mocks.review.mockResolvedValue({draft_version:2,source_version:1,missing_fields:[],approval:{id:'a'}});
  mocks.publication.mockResolvedValue({publication_available:true,publication:{approval_id:'a',slug:'first'}});
  mocks.start.mockRejectedValueOnce({response:{data:{detail:{code:'DRAFT_IN_PROGRESS',message}}}});
  render(<Harness/>);await screen.findByRole('link',{name:'Published: view your listing'});
  fireEvent.click(screen.getByRole('button',{name:'Start another listing'}));
- expect((await screen.findByRole('alert')).textContent).toBe(message+' Retry');expect(navigate).not.toHaveBeenCalled();
+ expect((await screen.findByRole('alert')).textContent).toBe('You already have a listing draft in progress. Open Seller Workspace to finish it before starting another. Retry');expect(navigate).not.toHaveBeenCalled();
 });

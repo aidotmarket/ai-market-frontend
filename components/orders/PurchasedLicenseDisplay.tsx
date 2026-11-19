@@ -19,7 +19,7 @@ function PurchasedDisplayVisit({orderId,listingId,omitOriginalEvidence}:{orderId
       .catch(()=>{if(!request.signal.aborted)setError(true);});
     return ()=>request.abort();
   },[orderId,listingId]);
-  if(error)return <p role="status">Purchased licence display is unavailable. Your original licence record and purchase access remain available separately.</p>;
+  if(error)return <p role="status">We could not load your purchased licence summary just now. Open the original licence record on this order for your terms.</p>;
   if(missing)return null;
   if(!display)return <p role="status">Loading purchased licence evidence…</p>;
   const original=display.original_license;

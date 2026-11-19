@@ -443,7 +443,7 @@ describe('BuyButton licence acceptance', () => {
 
     expect(parseCheckoutRefusal(error)).toEqual({
       code: 'LEGAL_IDENTITY_CONFLICT',
-      message: 'Your legal identity records conflict — billing_entity: Buyer Holdings Ltd (GB) versus typed: Buyer Data Ltd (IE). Reconcile them before purchasing.',
+      message: 'The legal name you entered (Buyer Data Ltd, IE) differs from your billing details (Buyer Holdings Ltd, GB). Use the same name, or update your legal details.',
       reconciliationUrl: '/settings/organization/legal-identity?org=org-1',
     });
   });
@@ -454,7 +454,7 @@ describe('BuyButton licence acceptance', () => {
       data: { detail: { code: 'SELLER_TERMS_ACCEPTANCE_PENDING' } },
       status: 409, statusText: 'Conflict', headers: {}, config: {} as never,
     };
-    expect(parseCheckoutRefusal(error).message).toBe('This listing cannot be purchased until the seller accepts the current terms.');
+    expect(parseCheckoutRefusal(error).message).toBe('This listing cannot be purchased until the seller accepts the current terms. Choose another listing, or ask the seller when it will be ready.');
   });
 
   const customText = '<script>alert(1)</script> **bold**\n\tCafé\n';
@@ -973,4 +973,34 @@ describe('connector checkout handoff and domain purchase', () => {
       expect(view.container.innerHTML).toBe(baseline);
     }
   });
+});
+
+it.each([
+ ['You already have an active order for this listing (#12345)', 'You already have an order for this listing (#12345). View it in My Purchases.', '/dashboard/orders'],
+ ['Cannot purchase your own listing', 'You cannot purchase your own listing.', undefined],
+ [{code:'listing_not_available',message:'private diagnostic'}, 'This listing is no longer for sale.', '/find-data'],
+ ['Listing not found', 'This listing is no longer for sale.', '/find-data'],
+ ['Payment processing error. Please try again later.', "We couldn't start your purchase just now. Try again, or contact support if it keeps happening.", undefined],
+ [{code:'UNKNOWN',message:'private diagnostic'}, "We couldn't start your purchase just now. Try again, or contact support if it keeps happening.", undefined],
+])('maps actionable checkout refusal %j', (detail, message, webPath) => {
+ const error=new AxiosError('refused',undefined,undefined,undefined,{status:409,data:{detail},headers:{},statusText:'Conflict',config:{} as never});
+ expect(parseCheckoutRefusal(error,false)).toMatchObject({message});
+ expect(parseCheckoutRefusal(error,false).webPath).toBe(webPath);
+});
+it.each(['PRICE_INVALID', 'CURRENCY_UNSUPPORTED', 'LISTING_VERSION_UNAVAILABLE', 'WORKSPACE_DELIVERY_UNREADY', 'DELIVERY_READINESS_UNKNOWN'])('uses fixed blocked copy for domain refusal %s with a web path', code => {
+ const error=new AxiosError('refused',undefined,undefined,undefined,{status:409,data:{detail:{code,message:'private diagnostic',web_path:'/listings/example'}},headers:{},statusText:'Conflict',config:{} as never});
+ const result=parseCheckoutRefusal(error,true);
+ expect(result.message).toBe('Checkout is blocked for this listing. Review the listing for details.');
+ expect(result.webPath).toBe('/listings/example');
+ expect(result.blocked).toBe(true);
+});
+
+it.each([
+ ['ACTIVE_ORDER', 'You already have an order for this listing. View it in My Purchases.', '/dashboard/orders'],
+ ['OWN_LISTING', 'You cannot purchase your own listing.', undefined],
+ ['LISTING_UNAVAILABLE', 'This listing is no longer for sale.', '/find-data'],
+])('keeps domain refusal %s blocked with its recovery link', (code, message, webPath) => {
+ const error = new AxiosError('refused', undefined, undefined, undefined, {status:409, data:{detail:{code}}, headers:{}, statusText:'Conflict', config:{} as never});
+ expect(parseCheckoutRefusal(error, true)).toMatchObject({code, message, blocked:true});
+ expect(parseCheckoutRefusal(error, true).webPath).toBe(webPath);
 });

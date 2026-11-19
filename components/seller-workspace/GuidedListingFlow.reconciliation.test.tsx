@@ -20,7 +20,8 @@ vi.mock('@/api/sellerLegalIdentity',async original=>({...await original<typeof i
 const source={version:1,connection_current:true,content:{connection_id:guidedConnection.id,connection_version:1,objects:[],version_mode:'current' as const}};
 const draft={version:1,updated_at:'now',content:{...emptyGuidedDraft,title:'Sales',description:'Sales description',description_source_version:1,category:'financial-data',tags:'sales',price:'25',license_selection:{...createStandardSelection(),seller_acceptance:{signer_name:'Sam',signer_title:'Owner',authority_confirmed:true}}}};
 function Probe(){const flow=useListingFlow()!;return <><SellerReview active enabled/><output data-testid="completion">{flow.steps[3].state}</output></>;}
-function start(){render(<SellerListingDraftProvider enabled sampleCapability={false}><GuidedListingFlow capabilities={guidedCapabilities} connections={[guidedConnection]} view="review" navigate={()=>{}}><Probe/></GuidedListingFlow></SellerListingDraftProvider>);}
+const navigate = vi.fn();
+function start(){render(<SellerListingDraftProvider enabled sampleCapability={false}><GuidedListingFlow capabilities={guidedCapabilities} connections={[guidedConnection]} view="review" navigate={navigate}><Probe/></GuidedListingFlow></SellerListingDraftProvider>);}
 async function readyApproval(){
  await screen.findByRole('button',{name:'Approve this review'});fireEvent.load(screen.getByTitle('Saved original seller review'));screen.getAllByRole('checkbox').forEach(box=>fireEvent.click(box));
  await waitFor(()=>expect((screen.getByRole('button',{name:'Approve this review'}) as HTMLButtonElement).disabled).toBe(false));
@@ -34,6 +35,12 @@ it('reloads an externally changed source and draft on Review refresh and blocks 
  mocks.draft.mockResolvedValue({...draft,version:2});mocks.review.mockResolvedValue({approval_available:true,review_hash:'r',render_hash:'r',rendered_html:'<p>Saved listing</p>',confirmation_statements:{},draft_version:2,source_version:2,missing_fields:[],approval:null});
  fireEvent.click(screen.getByRole('button',{name:'Refresh saved review'}));
  await waitFor(()=>expect(screen.getAllByText(/The saved review changed elsewhere/).length).toBeGreaterThan(0));expect(screen.queryByRole('button',{name:'Approve this review'})).toBeNull();
+ const status = screen.getByText('The saved review changed elsewhere. Reloading your saved files and draft…');
+ expect(status.getAttribute('role')).toBe('status');
+ expect(status.textContent).toBe('The saved review changed elsewhere. Reloading your saved files and draft…');
+ expect(status.querySelector('button')).toBeNull();
+ expect(screen.queryByRole('alert')).toBeNull();
+ expect(screen.queryByRole('button',{name:'Retry review'})).toBeNull();
  await waitFor(()=>expect(finishSource).toBeTruthy());finishSource({data:{source:{...source,version:2}}});
  await waitFor(()=>expect(screen.getAllByText(/Your files changed after this description/).length).toBeGreaterThan(0));expect(screen.getByTestId('completion').textContent).not.toBe('done');expect(mocks.draft).toHaveBeenCalledTimes(2);expect(mocks.save).not.toHaveBeenCalled();
 });
@@ -54,7 +61,9 @@ it('keeps a pre-stamp existing approval visible without saving while step 4 asks
 it('keeps approval blocked with a recovery reason when authoritative reload fails',async()=>{
  start();await readyApproval();expect(screen.getByTestId('completion').textContent).toBe('done');
  mocks.review.mockResolvedValue({approval_available:true,review_hash:'r2',render_hash:'r2',rendered_html:'<p>Saved listing</p>',confirmation_statements:{},draft_version:2,source_version:2,missing_fields:[],approval:null});mocks.get.mockRejectedValue(new Error('offline'));
- fireEvent.click(screen.getByRole('button',{name:'Refresh saved review'}));await waitFor(()=>expect(screen.getAllByText(/Your saved review could not be reconciled/).length).toBeGreaterThan(0));expect(screen.getByTestId('completion').textContent).not.toBe('done');expect(screen.queryByRole('button',{name:'Approve this review'})).toBeNull();expect(mocks.save).not.toHaveBeenCalled();
+ fireEvent.click(screen.getByRole('button',{name:'Refresh saved review'}));await waitFor(()=>expect(screen.getAllByText(/We couldn't load your saved review/).length).toBeGreaterThan(0));expect(screen.getByTestId('completion').textContent).not.toBe('done');expect(screen.queryByRole('button',{name:'Approve this review'})).toBeNull();expect(mocks.save).not.toHaveBeenCalled();
+ expect(screen.queryByRole('button',{name:'Choose files'})).toBeNull();
+ expect(screen.getByRole('button',{name:'Retry review'})).toBeTruthy();
 });
 
 function MountedEditorFlow({withLicense=false}:{withLicense?:boolean}){
@@ -152,4 +161,21 @@ it('keeps dirty mounted edits on their original baseline and conflicts instead o
  expect(saved.content.title).toBe('New external title');expect(saved.version).toBe(2);
  expect((screen.getByLabelText('Your price (USD)') as HTMLInputElement).value).toBe('30');
  expect(screen.getByRole('button',{name:'Save private draft'})).toBeTruthy();
+});
+
+it.each([
+ ['draft_required', 'Save your listing in Describe and price before reviewing it.', false],
+ ['source_required', 'Choose and save your files before reviewing the listing.', true],
+ ['source_connection_changed', 'Your storage changed since you last saved. Choose your files again, then review.', true],
+ ['unknown_private_error', "We couldn't load your saved review. Try again.", false],
+])('shows one mapped review failure and the appropriate recovery for %s', async (code, message, files) => {
+ mocks.review.mockRejectedValue(new AxiosError('refused',undefined,undefined,undefined,{status:409,data:{detail:{code,message:'private diagnostic'}},headers:{},statusText:'Conflict',config:{} as never}));
+ start();
+ expect(await screen.findByText(message)).toBeTruthy();
+ expect(screen.getAllByText(message)).toHaveLength(1);
+ expect(screen.queryByRole('button',{name:'Choose files'})!==null).toBe(files);
+ expect(screen.queryByText('private diagnostic')).toBeNull();
+ expect(screen.queryByRole('button',{name:'Approve this review'})).toBeNull();
+ if(files){expect(screen.queryByRole('button',{name:'Retry review'})).toBeNull();fireEvent.click(screen.getByRole('button',{name:'Choose files'}));expect(navigate).toHaveBeenCalledWith('data');}
+ else expect(screen.getByRole('button',{name:'Retry review'})).toBeTruthy();
 });

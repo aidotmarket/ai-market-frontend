@@ -68,7 +68,7 @@ describe('seller listing verification entry', () => {
   });
   it('does not query a gateway or show verification for another seller’s listing', async () => {
     vi.mocked(getListingOwnership).mockResolvedValue(false);
-    await page('someone-else'); await screen.findByText('This listing is not available.');
+    await page('someone-else'); await screen.findByText("We could not find a listing you can manage here. Open Your listings to choose another listing.");
     expect(getGatewayListingSource).not.toHaveBeenCalled();
     expect(getSellerListing).not.toHaveBeenCalled();
     expect(getAwsVerifierStatus).not.toHaveBeenCalled();
@@ -76,7 +76,7 @@ describe('seller listing verification entry', () => {
   });
   it('handles a core listing 404 without exposing cross-seller details', async () => {
     vi.mocked(getSellerListing).mockRejectedValue({ response: { status: 404, data: { detail: 'unowned' } } });
-    await page(); await screen.findByText('This listing is not available.');
+    await page(); await screen.findByText("We could not find a listing you can manage here. Open Your listings to choose another listing.");
     expect(screen.queryByText(/Verify this data/)).toBeNull();
     expect(getAwsVerifierStatus).not.toHaveBeenCalled();
   });
@@ -181,7 +181,7 @@ describe('seller listing verification entry', () => {
     expect(screen.queryByRole('button', { name: 'Verify this data' })).toBeNull();
     await act(async () => { await vi.advanceTimersByTimeAsync(10_000); });
     for (const provider of kind === 'both' ? ['AWS', 'Cloudflare'] : [kind]) {
-      expect(screen.getByText(`${provider} verification status is unavailable.`)).toBeTruthy();
+      expect(screen.getByText(`We could not check your ${provider} data verification status. Try again, or contact support if it keeps happening.`)).toBeTruthy();
     }
     if (kind !== 'Cloudflare') expect(vi.mocked(getAwsVerifierStatus).mock.calls[0][1]?.signal?.aborted).toBe(true);
     if (kind !== 'AWS') expect(vi.mocked(getCloudflareVerifierStatus).mock.calls[0][1]?.signal?.aborted).toBe(true);
@@ -213,7 +213,7 @@ describe('seller listing verification entry', () => {
     await page();
     expect(screen.queryByRole('button', { name: 'Verify this data' })).toBeNull();
     await act(async () => { await vi.advanceTimersByTimeAsync(10_000); });
-    expect(screen.getByText('Cloudflare verification status is unavailable.')).toBeTruthy();
+    expect(screen.getByText("We could not check your Cloudflare data verification status. Try again, or contact support if it keeps happening.")).toBeTruthy();
     expect(screen.queryByRole('button', { name: 'Verify this data' })).toBeNull();
   });
 
@@ -223,7 +223,7 @@ describe('seller listing verification entry', () => {
     vi.mocked(provider === 'AWS' ? getAwsVerifierStatus : getCloudflareVerifierStatus).mockRejectedValue(new Error('private details'));
     await page();
     expect(screen.getByRole('heading', { name: 'My data' })).toBeTruthy();
-    expect(screen.getByText(`${provider} verification status is unavailable.`)).toBeTruthy();
+    expect(screen.getByText(`We could not check your ${provider} data verification status. Try again, or contact support if it keeps happening.`)).toBeTruthy();
     expect(screen.queryByText(/private details|could not load your listing/)).toBeNull();
     expect(screen.queryByRole('button', { name: 'Verify this data' })).toBeNull();
   });
@@ -235,11 +235,11 @@ describe('seller listing verification entry', () => {
     expect(screen.getByRole('heading', { name: 'My data' })).toBeTruthy();
     if (failure === 'timeout') expect(screen.getByText('Loading verification availability…')).toBeTruthy();
     await act(async () => { await vi.advanceTimersByTimeAsync(10_000); });
-    expect(screen.getByText('Verification availability is unavailable.')).toBeTruthy();
+    expect(screen.getByText("We could not check whether this listing can be verified. Try again, or contact support if it keeps happening.")).toBeTruthy();
     expect(screen.queryByText(/unowned|could not load your listing/)).toBeNull();
     expect(getAwsVerifierStatus).not.toHaveBeenCalled();
     expect(getCloudflareVerifierStatus).not.toHaveBeenCalled();
-    expect(screen.queryByRole('button')).toBeNull();
+    expect(screen.getByRole('button', { name: 'Retry' })).toBeTruthy();
   });
 
   it.each(['id', 'user'])('ignores late optional responses after a change of %s', async change => {
@@ -327,7 +327,7 @@ describe('seller listing verification entry', () => {
     expect(getAwsVerifierStatus).not.toHaveBeenCalled();
     expect(getCloudflareVerifierStatus).not.toHaveBeenCalled();
     await act(async () => { ownership.resolve(false); });
-    expect(screen.getByText('This listing is not available.')).toBeTruthy();
+    expect(screen.getByText("We could not find a listing you can manage here. Open Your listings to choose another listing.")).toBeTruthy();
     expect(getSellerListing).not.toHaveBeenCalled();
   });
 });

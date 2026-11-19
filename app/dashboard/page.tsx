@@ -1,5 +1,6 @@
 'use client';
 
+import { customerRefusal, TWO_FACTOR_REFUSALS, customerActionError, customerLoadError } from '@/lib/customerMessages';
 import { setupRestriction, setupRefusal, sellerSecuritySatisfied } from '@/lib/two-factor-policy';
 import { companyEnrollmentOffered } from '@/components/CompanyAuthenticator';
 
@@ -69,6 +70,9 @@ function OverviewVisit({ identity, retireVisit }: { identity: string; retireVisi
 
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(false);
+  const [stripeError, setStripeError] = useState(false);
+  const [statsError, setStatsError] = useState(false);
+  const [listingsError, setListingsError] = useState(false);
   const [connecting, setConnecting] = useState(false);
   const [stripeStatus, setStripeStatus] = useState<{ details_submitted?: boolean; payouts_enabled?: boolean } | null>(null);
   const [capabilities, setCapabilities] = useState<CapabilitySetResponse | null>(null);
@@ -121,6 +125,7 @@ function OverviewVisit({ identity, retireVisit }: { identity: string; retireVisi
     const isCurrent = () => isOwner() && request === dataRequest.current;
     setLoading(true);
     setError(false);
+    setStripeError(false); setStatsError(false); setListingsError(false);
     try {
       void loadPurchases();
       const capabilityRes = await getCapabilities();
@@ -134,17 +139,20 @@ function OverviewVisit({ identity, retireVisit }: { identity: string; retireVisi
       setHeldPublishedCount(0);
 
       if (sellerIsActive) {
-        const [statusRes, statsRes, listingsRes] = await Promise.all([
+        const [statusRes, statsRes, listingsRes] = await Promise.allSettled([
           getConnectStatus(),
           getSellerStats(),
           getMyListings(),
         ]);
         if (!isCurrent()) return;
-        const listings = Array.isArray(listingsRes.data) ? listingsRes.data : [];
-
-        setStripeStatus(statusRes.data);
-        setStats(statsRes.data);
-        setHeldPublishedCount(listings.filter((listing: any) => listing.status === 'published').length);
+        if (statusRes.status === 'fulfilled') setStripeStatus(statusRes.value.data);
+        else { console.error('Payout status failed', statusRes.reason); setStripeError(true); }
+        if (statsRes.status === 'fulfilled') setStats(statsRes.value.data);
+        else { console.error('Seller stats failed', statsRes.reason); setStatsError(true); }
+        if (listingsRes.status === 'fulfilled') {
+          const listings = Array.isArray(listingsRes.value.data) ? listingsRes.value.data : [];
+          setHeldPublishedCount(listings.filter((listing: any) => listing.status === 'published').length);
+        } else { console.error('Seller listings failed', listingsRes.reason); setListingsError(true); }
       }
     } catch (err) {
       if (!isCurrent()) return;
@@ -176,7 +184,7 @@ function OverviewVisit({ identity, retireVisit }: { identity: string; retireVisi
         toast('Complete the sign-in security step before connecting payouts. Refresh seller setup if you already completed it.', 'info');
         notifyCapabilitiesChanged();
       } else {
-        toast('Failed to start Stripe connection', 'error');
+        toast(customerActionError("connect your payout account"), 'error');
       }
       setConnecting(false);
     }
@@ -194,7 +202,7 @@ function OverviewVisit({ identity, retireVisit }: { identity: string; retireVisi
       await fetchData();
     } catch (err) {
       if (!isOwner()) return;
-      toast('Failed to start seller setup', 'error');
+      toast(customerActionError("start seller setup"), 'error');
     } finally {
       if (!isOwner()) return;
       setRequestingSeller(false);
@@ -233,9 +241,9 @@ function OverviewVisit({ identity, retireVisit }: { identity: string; retireVisi
         setSecurityError(setupRefusal(err, user)!);
         setTwoFactorFlow('idle');
       } else if (err instanceof AxiosError) {
-        setSecurityError(err.response?.data?.detail || 'Failed to start 2FA setup.');
+        setSecurityError(customerActionError("set up two-factor authentication"));
       } else {
-        setSecurityError('Failed to start 2FA setup.');
+        setSecurityError(customerActionError("set up two-factor authentication"));
       }
     } finally {
       if (!isOwner()) return;
@@ -262,9 +270,9 @@ function OverviewVisit({ identity, retireVisit }: { identity: string; retireVisi
         setSecurityError(setupRefusal(err, user)!);
         setTwoFactorFlow('idle');
       } else if (err instanceof AxiosError) {
-        setSecurityError(err.response?.data?.detail || 'Failed to verify the code.');
+        setSecurityError(customerRefusal(err, TWO_FACTOR_REFUSALS, customerActionError("verify the code")));
       } else {
-        setSecurityError('Failed to verify the code.');
+        setSecurityError(customerRefusal(err, TWO_FACTOR_REFUSALS, customerActionError("verify the code")));
       }
     } finally {
       if (!isOwner()) return;
@@ -283,7 +291,7 @@ function OverviewVisit({ identity, retireVisit }: { identity: string; retireVisi
       await fetchData();
     } catch {
       if (!isOwner()) return;
-      toast('Failed to refresh your account state', 'error');
+      toast(customerActionError("refresh your account"), 'error');
     } finally {
       if (!isOwner()) return;
       resetTwoFactorState();
@@ -302,7 +310,7 @@ function OverviewVisit({ identity, retireVisit }: { identity: string; retireVisi
   if (error) {
     return (
       <div className="rounded-lg bg-red-50 border border-red-200 p-6 text-center">
-        <p className="text-sm text-red-700 mb-4">Failed to load dashboard data.</p>
+        <p className="text-sm text-red-700 mb-4">{customerLoadError("dashboard")}</p>
         <button
           onClick={fetchData}
           className="inline-flex items-center rounded-lg bg-red-600 px-4 py-2 text-sm font-medium text-white hover:bg-red-700"
@@ -328,7 +336,7 @@ function OverviewVisit({ identity, retireVisit }: { identity: string; retireVisi
   const showSetupFlow =
     isSellerProvisioning &&
     !(sellerSecurityReady && payoutsEnabled);
-  const showHeldPublishedNotice = isSellerActive && heldPublishedCount > 0 && !payoutsEnabled;
+  const showHeldPublishedNotice = isSellerActive && !stripeError && heldPublishedCount > 0 && !payoutsEnabled;
   const managedSetupMessage = user?.totp_enabled ? null : setupRestriction(user) ?? (securityError === SSO_MANAGED_2FA_MESSAGE || securityError.startsWith('Sign-in security is managed by your ') ? securityError : null);
   const ssoManaged2FA = !!managedSetupMessage;
 
@@ -554,7 +562,7 @@ function OverviewVisit({ identity, retireVisit }: { identity: string; retireVisi
                         toast('Backup codes copied', 'success');
                       } catch {
                         if (!isOwner()) return;
-                        toast('Failed to copy backup codes', 'error');
+                        toast(customerActionError("copy backup codes"), 'error');
                       }
                     }}
                     className="mt-4 rounded-lg border border-amber-300 bg-white px-3 py-2 text-sm font-medium text-amber-900 hover:bg-amber-100"
@@ -608,13 +616,35 @@ function OverviewVisit({ identity, retireVisit }: { identity: string; retireVisi
         </div>
       )}
 
+      {isSellerActive && !listingsError && (
+        <section aria-label="Your listings" className="rounded-xl border border-gray-200 bg-white p-5">
+          <p>Your published listings</p>
+          <Link href="/dashboard/listings" className="inline-flex min-h-11 items-center text-indigo-700 underline">View listings</Link>
+        </section>
+      )}
+      {isSellerActive && stripeError && (
+        <section aria-label="Payout account" className="rounded-xl border border-red-200 bg-red-50 p-5">
+          <p role="alert">We couldn't check your payout account just now.</p>
+          <p>Try again, or <Link href="/support" className="underline">contact support</Link> if it keeps happening.</p>
+          <button type="button" onClick={fetchData} className="mt-3 min-h-11 rounded-lg border px-4">Retry</button>
+        </section>
+      )}
+      {isSellerActive && (statsError || listingsError) && (
+        <section aria-label="Sales summary and listings" className="rounded-xl border border-red-200 bg-red-50 p-5">
+          {statsError && <p role="alert">{customerLoadError('sales summary')}</p>}
+          {listingsError && <p role="alert">{customerLoadError('listings')}</p>}
+          <Link href="/support" className="underline">Contact support</Link>
+          <button type="button" onClick={fetchData} className="mt-3 min-h-11 rounded-lg border px-4">Retry</button>
+        </section>
+      )}
+
       {showHeldPublishedNotice && (
         <div className="rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900">
           Published listings are not yet purchasable. Finish payout setup to enable sales.
         </div>
       )}
 
-      {isSellerActive && (
+      {isSellerActive && !statsError && (
         <div className="grid grid-cols-1 gap-5 sm:grid-cols-2 lg:grid-cols-4">
           <div className="bg-white overflow-hidden shadow-sm rounded-xl border border-gray-200">
             <div className="p-5">

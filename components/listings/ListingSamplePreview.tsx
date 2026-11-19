@@ -95,7 +95,7 @@ export default function ListingSamplePreview({slug, listingId, onManifest}: {
   return <section data-listing-sample="" aria-label="Seller-selected sample" className="min-w-0 max-w-full space-y-3 rounded-xl border border-gray-200 bg-white p-4">
     {state.kind === 'ready' && <button type="button" onClick={() => startRef.current(true)} className="rounded border border-indigo-700 px-3 py-2 text-indigo-700 focus-visible:outline-2 focus-visible:outline-indigo-700">View sample</button>}
     {state.kind === 'loading' && <p role="status" aria-live="polite">Verifying sample…</p>}
-    {state.kind === 'unavailable' && <p role="status" aria-live="polite">Sample unavailable</p>}
+    {state.kind === 'unavailable' && <p role="status" aria-live="polite">We could not load this sample just now. Ask the seller for a sample using the question form on this listing.</p>}
     {state.kind === 'verified' && <><p className="text-sm text-gray-600">Original signed sample evidence; current public licence display is separate.</p><state.Table sample={state.sample} columns={state.columns} /></>}
   </section>;
 }

@@ -298,7 +298,7 @@ describe('MarketplaceSearchExperience', () => {
       expect(state.fetchNextPage).not.toHaveBeenCalled();
       if (status === 'loading') expect(screen.getByText('Loading results...')).toBeTruthy();
       else {
-        expect(screen.getByText('Synthetic failure')).toBeTruthy();
+        expect(screen.getByText("We couldn't load your search results just now. Try again, or contact support if it keeps happening.")).toBeTruthy();
         fireEvent.click(screen.getByRole('button', { name: 'Retry' }));
         expect(state.refetch).toHaveBeenCalledTimes(1);
       }

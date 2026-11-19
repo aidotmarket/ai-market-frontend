@@ -963,7 +963,7 @@ it('renders human category labels for primary, secondary and unknown categories'
     secondary_categories: ['ai-machine-learning', 'consumer-retail', 'future-category'],
   }));
   const page = within(document.body);
-  for (const label of ['Technology & Web', 'AI & Machine Learning', 'Consumer & Retail', 'Future Category']) {
+  for (const label of ['Technology & web', 'AI & machine learning', 'Consumer & retail', 'Future category']) {
     expect(page.getByText(label, {exact: true})).toBeTruthy();
   }
   expect(document.body.textContent).not.toMatch(/technology-web|ai-machine-learning|consumer-retail|future-category/);

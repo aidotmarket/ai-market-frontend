@@ -382,7 +382,7 @@ describe('OrderDetailPage viewer relationship gating', () => {
     ordersApi.getOrder.mockResolvedValue(order({ status: 'fulfilled' }));
     ordersApi.getOrderAccess.mockResolvedValue(access);
     render(<OrderDetailPage />);
-    expect(await screen.findByText('Download access is unavailable.')).toBeTruthy();
+    expect(await screen.findByText('We could not prepare your download access just now. Reload this order, or contact support if it keeps happening.')).toBeTruthy();
     await waitFor(() => expect(screen.queryByText('Preparing download access...')).toBeNull());
     expect(screen.queryByRole('link', { name: /^Download/ })).toBeNull();
     expect(screen.queryByRole('button', { name: /Download|Refresh/ })).toBeNull();
@@ -393,7 +393,7 @@ describe('OrderDetailPage viewer relationship gating', () => {
     ordersApi.getOrder.mockResolvedValue(order({ status: 'fulfilled' }));
     ordersApi.getOrderAccess.mockRejectedValue({ response: { status: 403 } });
     render(<OrderDetailPage />);
-    await screen.findByText('Download access is unavailable.');
+    await screen.findByText('We could not prepare your download access just now. Reload this order, or contact support if it keeps happening.');
     expect(screen.getByText('Order dataset')).toBeTruthy();
     expect(screen.getByRole('heading', { name: 'Transaction' })).toBeTruthy();
     expect(screen.queryByRole('button', { name: /Download|Refresh/ })).toBeNull();
@@ -413,7 +413,7 @@ describe('OrderDetailPage viewer relationship gating', () => {
       order_id: 'order-1', listing_title: 'Order dataset', status,
       is_delivered: true, is_revoked: false, delivered_at: '2026-08-21T10:30:00Z',
       delivery_method: 'gateway', downloads_remaining: 3,
-      access_url: null, can_download: false, message: 'Download access is unavailable.',
+      access_url: null, can_download: false, message: 'We could not prepare your download access just now. Reload this order, or contact support if it keeps happening.',
     });
     let finishGateway!: (value: unknown) => void;
     gatewayApi.getGatewayDelivery.mockReturnValue(new Promise((resolve) => { finishGateway = resolve; }));
@@ -431,14 +431,14 @@ describe('OrderDetailPage viewer relationship gating', () => {
     await act(async () => {});
     expect(ordersApi.getOrderAccess).toHaveBeenCalledExactlyOnceWith('order-1');
     expect(screen.queryByRole('heading', { name: 'Downloads' })).toBeNull();
-    expect(screen.queryByText('Download access is unavailable.')).toBeNull();
+    expect(screen.queryByText('We could not prepare your download access just now. Reload this order, or contact support if it keeps happening.')).toBeNull();
     await act(async () => finishGateway(gatewayResponse));
     const link = await screen.findByRole('link', { name: 'Download file' });
     expect(link.getAttribute('href')).toBe('https://gateway.example.test/file');
     expect(screen.getByRole('region', { name: 'Gateway delivery' })).toBeTruthy();
     await waitFor(() => expect(ordersApi.getOrderAccess).toHaveBeenCalledExactlyOnceWith('order-1'));
     expect(screen.queryByRole('heading', { name: 'Downloads' })).toBeNull();
-    expect(screen.queryByText('Download access is unavailable.')).toBeNull();
+    expect(screen.queryByText('We could not prepare your download access just now. Reload this order, or contact support if it keeps happening.')).toBeNull();
   });
 
   it('keeps reference downloads available when the initial gateway check fails transiently', async () => {
@@ -449,7 +449,7 @@ describe('OrderDetailPage viewer relationship gating', () => {
     render(<OrderDetailPage />);
     expect(await screen.findByRole('button', { name: 'Download' })).toBeTruthy();
     expect(screen.getByRole('heading', { name: 'Downloads' })).toBeTruthy();
-    expect(screen.queryByText('Download access is unavailable.')).toBeNull();
+    expect(screen.queryByText('We could not prepare your download access just now. Reload this order, or contact support if it keeps happening.')).toBeNull();
   });
 
   describe('retained partial-refund download presentation', () => {
@@ -460,7 +460,7 @@ describe('OrderDetailPage viewer relationship gating', () => {
     function metadata(workspace: boolean, overrides = {}) {
       return { order_id: 'order-1', is_delivered: true, is_revoked: false, access_open: true,
         downloads_remaining: workspace ? 2 : null,
-        message: workspace ? 'Download access is unavailable.' : 'Ready to download.',
+        message: workspace ? 'We could not prepare your download access just now. Reload this order, or contact support if it keeps happening.' : 'Ready to download.',
         can_download: !workspace,
         ...(workspace ? {} : { delivery_type: 'reference', download_urls: [{ url: 'https://public.example.test/data.csv', filename: 'data.csv' }] }),
         ...overrides };
@@ -627,7 +627,7 @@ describe('OrderDetailPage viewer relationship gating', () => {
         ordersApi.getOrder.mockRejectedValue(requestError);
         view.rerender(<OrderDetailPage />);
         expectNoControls();
-        await screen.findByText(failure === '404' ? 'Order not found.' : 'Failed to load order details.');
+        await screen.findByText(failure === '404' ? 'Order not found.' : "We couldn't load your order details just now. Try again, or contact support if it keeps happening.");
         expect(screen.queryByText('Order dataset')).toBeNull();
         expectNoControls();
         navigation.orderId = 'order-3';
@@ -637,7 +637,7 @@ describe('OrderDetailPage viewer relationship gating', () => {
         await screen.findByText('Recovered dataset');
         await screen.findByRole('button', { name: workspace ? 'Continue to download' : 'Download data.csv' });
         expect(screen.queryByText('Order not found.')).toBeNull();
-        expect(screen.queryByText('Failed to load order details.')).toBeNull();
+        expect(screen.queryByText("We couldn't load your order details just now. Try again, or contact support if it keeps happening.")).toBeNull();
         expect(workspaceApi.requestWorkspaceDownload).not.toHaveBeenCalled();
       });
 

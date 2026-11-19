@@ -1,5 +1,6 @@
 'use client';
-import {isPlainListingMessage,listingDraftError} from '@/lib/listing-action-error';
+import {DescribeListingAction} from './GuidedListingFlow';
+import {listingDraftError} from '@/lib/listing-action-error';
 
 import { useEffect, useMemo, useRef, useState } from 'react';
 import axios from 'axios';
@@ -42,13 +43,15 @@ export function WorkspaceData({ connections, enabled, savedSource, onSaveSelecti
   licenseSelection,onLicenseSelectionChange,onSaveLicenseSelection,licenseSaving=false,licenseSaveMessage='',licenseDraftAvailable=true,licenseDraftLoaded=true,licenseDraftError=false,onRetryLicenseDraft,licenseSelectionSaved }: { connections: SellerWorkspaceConnection[]; enabled: boolean; savedSource?: SourceRead | null; onSaveSelection?: SaveSelection; saving?: boolean;
   sampleFilesAvailable?:boolean;initialSampleIndices?:number[];onSaveSampleSelection?:SaveSampleSelection;onVisibleSampleSelectionChange?:(indices:number[]|null)=>void;sampleLimits?:SampleLimits;
   licenseSelection?:LicenseSelection;onLicenseSelectionChange?:(value:LicenseSelection)=>void;onSaveLicenseSelection?:()=>Promise<void>;licenseSaving?:boolean;licenseSaveMessage?:string;licenseDraftAvailable?:boolean;licenseDraftLoaded?:boolean;licenseDraftError?:boolean;onRetryLicenseDraft?:()=>void;licenseSelectionSaved?:LicenseSelection }) {
+  const flow = useListingFlow();
+  const describeAction = flow ? <button type="button" className={buttonClass} onClick={()=>flow.navigate('listing')}>Describe and price</button> : <DescribeListingAction/>;
   const verified = connections.filter((connection) => connection.status === 'verified');
   const [selectedId, setSelectedId] = useState(savedSource?.content.connection_id ?? '');
   const [legalIdentityState,setLegalIdentityState]=useState<IdentityState>({kind:'checking'});
   const [legalIdentityDirty,setLegalIdentityDirty]=useState(false);
   const identityKnown=legalIdentityState.kind==='known';
   const selected = verified.find((connection) => connection.id === selectedId) ?? verified[0];
-  if (!enabled) return <WorkspaceNotice title="File browsing is not available yet">Your storage connections are saved. File browsing still needs to be connected in this Workspace. You do not need to run a data analysis or request marketplace verification to prepare a listing.</WorkspaceNotice>;
+  if (!enabled) return <WorkspaceNotice title="Choose another way to prepare your listing">Your storage connections are saved, but browsing is not enabled for this account yet. Use Describe and price to prepare your listing. {describeAction}</WorkspaceNotice>;
   if (!selected) return <WorkspaceNotice title="Connect storage to see your data">Add and verify an AWS connection in Connect your storage. Only files inside the folder or bucket you authorize will be available here.</WorkspaceNotice>;
   return (
     <section className="space-y-5" aria-label="Choose your files">
@@ -64,7 +67,7 @@ export function WorkspaceData({ connections, enabled, savedSource, onSaveSelecti
       <ObjectBrowser key={`${selected.id}:${selected.version}`} connection={selected} onSaveSelection={onSaveSelection} initialSelection={savedSource?.connection_current && savedSource.content.connection_id === selected.id && savedSource.content.connection_version === selected.version ? savedSource.content.objects.map(item => ({...item, last_modified: '', format_candidate: 'unknown'})) : undefined}
         sourceVersion={savedSource?.version} sampleFilesAvailable={sampleFilesAvailable} initialSampleIndices={initialSampleIndices}
         onSaveSampleSelection={onSaveSampleSelection} onVisibleSampleSelectionChange={onVisibleSampleSelectionChange} sampleLimits={sampleLimits} />
-      {licenseSelection && onLicenseSelectionChange && <div className="space-y-3">{!licenseDraftAvailable?<p role="status" className="text-sm text-amber-900">Licence choice is unavailable because listing drafts are not available right now.</p>:<>{licenseDraftLoaded&&<SellerLicenseSelection value={licenseSelection} onChange={onLicenseSelectionChange} disabled={licenseSaving} onIdentityStateChange={setLegalIdentityState} onLegalDirtyChange={setLegalIdentityDirty} legalIdentityEnabled />}
+      {licenseSelection && onLicenseSelectionChange && <div className="space-y-3">{!licenseDraftAvailable?<p role="status" className="text-sm text-amber-900">Licence choices need a saved listing draft. Open Describe and price to save your draft, then return here. {describeAction}</p>:<>{licenseDraftLoaded&&<SellerLicenseSelection value={licenseSelection} onChange={onLicenseSelectionChange} disabled={licenseSaving} onIdentityStateChange={setLegalIdentityState} onLegalDirtyChange={setLegalIdentityDirty} legalIdentityEnabled />}
         {licenseDraftLoaded&&!identityKnown&&<p role="status" className="text-sm text-amber-900">Licence choice is not saved because your legal identity is not confirmed. Save your legal name and country or retry the check before saving or publishing.</p>}
         {licenseDraftLoaded&&identityKnown&&legalIdentityDirty&&<p role="status" className="text-sm text-amber-900">Save your legal name and country first</p>}
         {!isSignableLicenseSelection(licenseSelection)&&<p role="status" className="text-sm text-amber-900">Licence choice incomplete. Add the signer and tick the confirmation box before saving the choice.</p>}
@@ -80,22 +83,22 @@ type SampleRow={progress:number;uploaded:boolean;error:string|null};
 // Pinned to backend app/services/seller_sample_upload.py and seller_workspace.py at ba3889064106cd2c4c815a69a25ba7b9bbb3b3d4.
 export const SAMPLE_REFUSALS:Record<string,string>={
   'Sample source not found':'The saved file selection could not be found. Save the current selection and try again.',
-  'invalid sample basename':'This file name cannot be used for a public sample.',
-  'out of range':'This file is no longer in the saved selection.',
-  'sample size mismatch':'The uploaded file must have exactly the saved file size.',
-  SAMPLE_MAX_FILE_BYTES:'This file is larger than the per-file sample limit.',
-  'sample is immutable':'This sample is already approved or published and cannot be replaced.',
-  'upload already in progress':'An upload for this sample is already in progress.',
-  'sample upload already in progress':'An upload with this request identity is already in progress.',
-  SAMPLE_MAX_FILES:'The listing already has the maximum number of sample files.',
-  SAMPLE_MAX_TOTAL_BYTES:'The selected samples exceed the total sample size limit.',
-  SAMPLE_SELLER_QUOTA_BYTES:'Your seller sample-storage quota has been reached.',
-  'sample upload generation expired':'This upload was replaced or expired before it completed.',
-  SAMPLE_UPLOAD_TIMEOUT_S:'The sample upload took too long.',
-  sample_store_unavailable:'Sample storage is temporarily unavailable.',
+  'invalid sample basename':'This file name cannot be used for a public sample. Choose a file with a simple name and upload it again.',
+  'out of range':'This file is no longer in the saved selection. Choose and save your current files, then upload the sample again.',
+  'sample size mismatch':'The uploaded file must have exactly the saved file size. Choose the same file you saved in your selection.',
+  SAMPLE_MAX_FILE_BYTES:'This file is larger than the per-file sample limit. Choose a smaller file, or continue without a sample.',
+  'sample is immutable':'This sample is already approved or published and cannot be replaced. Start another listing to offer different files.',
+  'upload already in progress':'An upload for this sample is already in progress. Wait for it to finish before uploading again.',
+  'sample upload already in progress':'An upload for this sample is already in progress. Wait for it to finish before uploading again.',
+  SAMPLE_MAX_FILES:'The listing already has the maximum number of sample files. Remove a sample choice before adding another.',
+  SAMPLE_MAX_TOTAL_BYTES:'The selected samples exceed the total sample size limit. Choose fewer or smaller sample files.',
+  SAMPLE_SELLER_QUOTA_BYTES:'Your sample storage limit has been reached. Continue without a sample, or contact support for help.',
+  'sample upload generation expired':'This upload was replaced or expired before it completed. Choose the file again to restart the upload.',
+  SAMPLE_UPLOAD_TIMEOUT_S:'The sample upload took too long. Check your connection and upload the file again.',
+  sample_store_unavailable:'We could not save your sample right now. Upload it again, or continue without a sample.',
   sample_upload_refused:'This repeated upload was previously refused. Start the upload again.',
-  sample_index_out_of_range:'This file is no longer in the saved selection.',
-  sample_size_out_of_range:'This file is larger than the per-file sample limit.',
+  sample_index_out_of_range:'This file is no longer in the saved selection. Choose and save your current files, then upload the sample again.',
+  sample_size_out_of_range:'This file is larger than the per-file sample limit. Choose a smaller file, or continue without a sample.',
   SAMPLE_UPLOAD_RATE:'Too many sample uploads were started. Please wait and try again.',
 };
 export function sampleUploadRefusal(detail:unknown) {
@@ -207,8 +210,7 @@ function ObjectBrowser({ connection, initialSelection, onSaveSelection,sourceVer
       return true;
     } catch (error) {
       const draftFailure=listingDraftError(error);setAlreadyPublished(draftFailure?.alreadyPublished??false);
-      const detail=axios.isAxiosError(error)?error.response?.data?.detail:null;
-      if (mounted.current) setSelectionError(draftFailure?.message??(isPlainListingMessage(detail)?detail:axios.isAxiosError(error)&&isPlainListingMessage(detail?.message)?detail.message:axios.isAxiosError(error) && error.response?.status === 409
+      if (mounted.current) setSelectionError(draftFailure?.message??(axios.isAxiosError(error) && error.response?.status === 409
         ? 'The files, connection or saved selection changed. Your choices are still here. Reload the Workspace and choose the current files before saving again.'
         : 'Saving could not be confirmed. Your choices are still here. Try saving again.'));
     } finally { saving.current = false; if (mounted.current) setSavingSelection(false); }
@@ -242,7 +244,7 @@ function ObjectBrowser({ connection, initialSelection, onSaveSelection,sourceVer
     const save=saveSampleSelectionRef.current;if(!save)return;
     setSampleError(null);
     try{await save(indices);}
-    catch(failure){if(mounted.current){const draftFailure=listingDraftError(failure);setSampleAlreadyPublished(draftFailure?.alreadyPublished??false);rollbackSampleIndices();setSampleError(draftFailure?.message??'Your sample choice could not be saved. The tick was restored to the last saved choice and the uploaded copy remains private. (sample_selection_save_failed)');}throw new Error('sample_selection_save_failed');}
+    catch(failure){if(mounted.current){const draftFailure=listingDraftError(failure);setSampleAlreadyPublished(draftFailure?.alreadyPublished??false);rollbackSampleIndices();setSampleError(draftFailure?.message??'Your sample choice could not be saved. Your last saved choice was restored and the uploaded copy remains private. Choose the sample again to retry.');}throw new Error('sample_selection_save_failed');}
   };
   const toggleSample=(index:number)=>{
     const active=sampleIndicesRef.current.includes(index);
@@ -252,7 +254,7 @@ function ObjectBrowser({ connection, initialSelection, onSaveSelection,sourceVer
     if(sampleIndicesRef.current.length>=sampleLimits.max_files)refusal='SAMPLE_MAX_FILES';
     else if(item.size>sampleLimits.max_file_bytes)refusal='SAMPLE_MAX_FILE_BYTES';
     else if(sampleIndicesRef.current.reduce((sum,value)=>sum+initialSelection![value].size,0)+item.size>sampleLimits.max_total_bytes)refusal='SAMPLE_MAX_TOTAL_BYTES';
-    if(refusal){const message=sampleUploadRefusal(refusal);setSampleError(`${message.copy} (${message.code})`);return;}
+    if(refusal){const message=sampleUploadRefusal(refusal);setSampleError(message.copy);return;}
     const next=[...sampleIndicesRef.current,index].sort((a,b)=>a-b);sampleIndicesRef.current=next;
     setSampleError(null);setSampleIndices(next);setSampleRows(rows=>({...rows,[index]:{progress:0,uploaded:false,error:null}}));
   };
@@ -271,10 +273,11 @@ function ObjectBrowser({ connection, initialSelection, onSaveSelection,sourceVer
       if(!mounted.current||sourceVersionRef.current!==uploadEpoch)return;
       const detail=axios.isAxiosError(failure)?failure.response?.data?.detail:undefined;
       if(axios.isAxiosError(failure)&&failure.response?.status===404&&detail!=='Sample source not found'){
-        setSampleError('Free sample upload is not available on this server. Your selection is still visible and has not been published. (sample_route_unavailable)');return;
+        setSampleError('Sample uploads are not enabled here yet. Your selected files are saved privately. Continue preparing your listing without a sample.');return;
       }
+      console.error('Sample upload failed', failure);
       const message=sampleUploadRefusal(detail);
-      setSampleRows(rows=>({...rows,[index]:{progress:0,uploaded:false,error:`${message.copy} (${message.code})`}}));
+      setSampleRows(rows=>({...rows,[index]:{progress:0,uploaded:false,error:message.copy}}));
     }
   };
   return (
@@ -304,7 +307,7 @@ function ObjectBrowser({ connection, initialSelection, onSaveSelection,sourceVer
       </section>}
       <div className="border-t border-gray-200 bg-gray-50 px-5 py-4">
         <div className="flex flex-wrap items-center justify-between gap-3"><p role="status" className="text-sm font-medium text-gray-900">{selected.length} {selected.length === 1 ? 'file' : 'files'} selected · {formatBytes(selectionBytes)}</p>{selected.length > 0 && <button type="button" disabled={resolving} onClick={() => {setSelected([]);setSelectedFolders([]);setConfirmation(null);}} className={buttonClass}>Clear selection</button>}</div>
-        {onSaveSelection ? <div className="mt-3 space-y-3">{selectionSnapshot !== savedSelection && <button type="button" disabled={resolving || savingSelection || selected.length === 0 || selectionSnapshot === savedSelection} onClick={() => setConfirmation(selectionSnapshot)} className={buttonClass}>{savingSelection ? 'Saving selection…' : 'Save selected files'}</button>}<p role="status" className="text-sm text-gray-600">{selectionSnapshot === savedSelection && selected.length > 0 ? 'File selection saved to your account.' : selected.length===0 ? savedSelection!=='[]' ? 'Your saved file selection remains in your account. Choose files to replace it.' : 'Choose at least one file before saving a selection.' : 'Your file choices have not been saved.'} Saving does not publish or analyze your data.</p>{selected.length > 0 && <ul aria-label="Selected files" className="space-y-1 text-xs text-gray-600">{selected.slice(selectionPage*50,(selectionPage+1)*50).map(item => <li key={objectIdentity(item)} className="break-all">{item.key}</li>)}</ul>}{selected.length>50 && <div className="flex items-center gap-3 text-xs text-gray-600" aria-label="Selected file preview pages"><button type="button" className={buttonClass} disabled={selectionPage===0} onClick={()=>setSelectionPage(page=>page-1)}>Previous selected files</button><span>Showing {selectionPage*50+1}–{Math.min((selectionPage+1)*50,selected.length)} of {selected.length.toLocaleString('en')}</span><button type="button" className={buttonClass} disabled={(selectionPage+1)*50>=selected.length} onClick={()=>setSelectionPage(page=>page+1)}>Next selected files</button></div>}{selectionError && <p role="alert" className="text-sm text-red-800">{selectionError}{alreadyPublished&&<> <StartAnotherListingAction/></>}</p>}<p className="text-xs text-gray-600">Choose files, folders, or both, up to 50,000 files per selection. Folder choices include subfolders. Files added later require a new selection and confirmation. Your file choices are saved privately; the files stay in your cloud account.</p></div> : <p className="mt-2 text-xs leading-5 text-gray-600">Choosing files does not read or analyze their contents. Your selection stays when you switch Workspace sections. Changing the storage connection, reloading, or leaving the Workspace clears it. Saving it to a listing is not available yet.</p>}
+        {onSaveSelection ? <div className="mt-3 space-y-3">{selectionSnapshot !== savedSelection && <button type="button" disabled={resolving || savingSelection || selected.length === 0 || selectionSnapshot === savedSelection} onClick={() => setConfirmation(selectionSnapshot)} className={buttonClass}>{savingSelection ? 'Saving selection…' : 'Save selected files'}</button>}<p role="status" className="text-sm text-gray-600">{selectionSnapshot === savedSelection && selected.length > 0 ? 'File selection saved to your account.' : selected.length===0 ? savedSelection!=='[]' ? 'Your saved file selection remains in your account. Choose files to replace it.' : 'Choose at least one file before saving a selection.' : 'Your file choices have not been saved.'} Saving does not publish or analyze your data.</p>{selected.length > 0 && <ul aria-label="Selected files" className="space-y-1 text-xs text-gray-600">{selected.slice(selectionPage*50,(selectionPage+1)*50).map(item => <li key={objectIdentity(item)} className="break-all">{item.key}</li>)}</ul>}{selected.length>50 && <div className="flex items-center gap-3 text-xs text-gray-600" aria-label="Selected file preview pages"><button type="button" className={buttonClass} disabled={selectionPage===0} onClick={()=>setSelectionPage(page=>page-1)}>Previous selected files</button><span>Showing {selectionPage*50+1}–{Math.min((selectionPage+1)*50,selected.length)} of {selected.length.toLocaleString('en')}</span><button type="button" className={buttonClass} disabled={(selectionPage+1)*50>=selected.length} onClick={()=>setSelectionPage(page=>page+1)}>Next selected files</button></div>}{selectionError && <p role="alert" className="text-sm text-red-800">{selectionError}{alreadyPublished&&<> <StartAnotherListingAction/></>}</p>}<p className="text-xs text-gray-600">Choose files, folders, or both, up to 50,000 files per selection. Folder choices include subfolders. Files added later require a new selection and confirmation. Your file choices are saved privately; the files stay in your cloud account.</p></div> : <p className="mt-2 text-xs leading-5 text-gray-600">Choosing files does not read or analyze their contents. Your selection stays when you switch Workspace sections. Changing the storage connection, reloading, or leaving the Workspace clears it. To save files to a listing, open Describe and price.</p>}
       </div>
       {flow&&onSaveSelection&&<div className="p-5"><button type="button" disabled={resolving||savingSelection||selected.length===0||(selectionSnapshot===savedSelection&&flow.samplesBlocked)} onClick={async()=>{
         if(selectionSnapshot!==savedSelection){if(!await saveSelection(true))return;}
@@ -322,7 +325,7 @@ const JOB_LABELS: Record<WorkspaceProfileJob['state'], string> = {
 const CANCELLABLE = new Set(['queued', 'starting', 'running', 'validating_result']);
 
 export function WorkspaceActivity({ enabled, connections }: { enabled: boolean; connections: SellerWorkspaceConnection[] }) {
-  if (!enabled) return <WorkspaceNotice title="Profiling activity is not available yet">When profiling becomes available, this screen will show progress, results, and any actions needed. Connecting storage does not start a profile.</WorkspaceNotice>;
+  if (!enabled) return <WorkspaceNotice title="Data analysis is not enabled yet">You can prepare your listing without a data analysis. Open Describe and price to continue. <DescribeListingAction/></WorkspaceNotice>;
   return <ProfileActivity connections={connections} />;
 }
 

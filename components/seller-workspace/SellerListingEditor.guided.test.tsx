@@ -55,7 +55,7 @@ describe('guided editor source binding and saving',()=>{
   const failure=new AxiosError('refused',undefined,undefined,undefined,{status:409,data:{detail:'Your draft version changed. Reload before saving.'}} as never);
   const save=vi.fn().mockRejectedValueOnce(failure).mockResolvedValue(undefined);const next=vi.fn();render(<SellerListingEditor initialContent={content} sourceVersion={7} categories={categories} onSave={save} onNext={next}/>);
   fireEvent.click(screen.getByRole('button',{name:'Next: Review →'}));expect(save).not.toHaveBeenCalled();await waitFor(()=>expect(next).toHaveBeenCalledOnce());next.mockClear();
-  fireEvent.change(screen.getByLabelText('Title'),{target:{value:'Changed'}});fireEvent.click(screen.getByRole('button',{name:'Next: Review →'}));expect(await screen.findByText('Your draft version changed. Reload before saving.')).toBeTruthy();expect(next).not.toHaveBeenCalled();
+  fireEvent.change(screen.getByLabelText('Title'),{target:{value:'Changed'}});fireEvent.click(screen.getByRole('button',{name:'Next: Review →'}));expect(await screen.findByText('This draft was saved elsewhere. Your edits are still here. Copy any changes you want to keep, then reload the Workspace to open the saved version.')).toBeTruthy();expect(next).not.toHaveBeenCalled();
   fireEvent.click(screen.getByRole('button',{name:'Next: Review →'}));await waitFor(()=>expect(next).toHaveBeenCalledOnce());expect(save).toHaveBeenCalledTimes(2);expect(screen.queryByRole('button',{name:'Save private draft'})).toBeNull();
  });
  it('rejects a response for another source without accepting any fields',async()=>{

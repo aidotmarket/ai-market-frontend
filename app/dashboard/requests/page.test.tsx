@@ -108,7 +108,7 @@ describe('My Data Requests server paging through the actual API helper', () => {
       fireEvent.click(next());
       expect(mocks.get).toHaveBeenCalledTimes(2);
       await act(async () => pending.reject(Object.assign(new AxiosError('failed'), { response: { data: { detail } } })));
-      expect(screen.getByRole('alert').textContent).toBe(`Could not load page 2. ${typeof detail === 'string' && detail ? detail : 'Failed to load your data requests.'}`);
+      expect(screen.getByRole('alert').textContent).toBe(`Could not load page 2. ${"We couldn't load your data requests just now. Try again, or contact support if it keeps happening."}`);
       expect(screen.queryByText(/Page 2 of/)).toBeNull();
       expect(screen.queryByText('Owned request 1')).toBeNull();
       fireEvent.click(screen.getByRole('button', { name: 'Retry' }));

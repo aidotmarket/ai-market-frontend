@@ -25,7 +25,7 @@ describe('MarketplaceListingCard', () => {
     const html = renderToStaticMarkup(<MarketplaceListingCard listing={listing} />);
 
     expect(html).toContain('Legacy dataset');
-    expect(html).toContain('Technology &amp; Web');
+    expect(html).toContain('Technology &amp; web');
     expect(html).not.toContain('technology-web');
     expect(html).not.toMatch(/\bverified\b/i);
   });

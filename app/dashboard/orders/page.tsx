@@ -1,5 +1,6 @@
 'use client';
 
+import { customerLoadError } from '@/lib/customerMessages';
 import { useEffect, useRef, useState } from 'react';
 import Link from 'next/link';
 import { hasDeliveredOrderNavigation, orderStatusPresentation } from '@/lib/order-status';
@@ -95,7 +96,7 @@ export default function OrdersListPage() {
         setTxMap(map);
       })
       .catch(() => {
-        if (current()) setError('Failed to load orders.');
+        if (current()) setError(customerLoadError("orders"));
       })
       .finally(() => {
         if (current()) setLoading(false);

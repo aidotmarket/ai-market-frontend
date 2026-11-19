@@ -1,5 +1,6 @@
 'use client';
 
+import Link from 'next/link';
 import { useEffect, useRef, useState } from 'react';
 import { getAcceptedLicenseDocument, NO_RECORDED_LICENSE_DOCUMENT, STANDARD_LICENSE_NO_DOCUMENT, type AcceptedLicenseDocument as Document } from '@/api/licenseRecords';
 import LicenseReadingDialog from '@/components/LicenseReadingDialog';
@@ -53,12 +54,12 @@ export default function AcceptedLicenseDocument({ orderId }: { orderId: string }
     {state !== 'loading' && <h2 className="font-semibold">Accepted licence document</h2>}
     {state === 'loading' && <p role="status">Loading accepted licence document…</p>}
     {state === 'missing' && <p role="status">{NO_RECORDED_LICENSE_DOCUMENT}</p>}
-    {state === 'error' && <p role="status">The licence document is temporarily unavailable. Contact support.</p>}
+    {state === 'error' && <p role="status">We could not load your licence document just now. Contact support for a copy. <Link href="/support" className="underline">Contact support</Link></p>}
     {state === 'ready' && <>
       {document?.text !== null && <pre className="whitespace-pre-wrap break-words text-sm">{document?.text}</pre>}
       {pdfUrl && <LicenseReadingDialog label="Read accepted licence PDF" href={pdfUrl} pdf />}
       <button type="button" disabled={downloading} onClick={download} className="text-indigo-700 underline disabled:opacity-50">{downloading ? 'Downloading licence…' : 'Download accepted licence'}</button>
     </>}
-    {downloadError && <p role="alert">The licence document is temporarily unavailable. Contact support.</p>}
+    {downloadError && <p role="alert">We could not load your licence document just now. Contact support for a copy. <Link href="/support" className="underline">Contact support</Link></p>}
   </section>;
 }

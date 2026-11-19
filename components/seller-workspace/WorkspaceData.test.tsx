@@ -84,7 +84,7 @@ describe('Seller data browser', () => {
     render(<><WorkspaceData enabled={false} connections={[connection]} /><WorkspaceActivity enabled={false} connections={[connection]} /></>);
     expect(api.listWorkspaceObjects).not.toHaveBeenCalled();
     expect(api.listWorkspaceProfileJobs).not.toHaveBeenCalled();
-    expect(screen.getByText('File browsing is not available yet')).toBeTruthy();
+    expect(screen.getByText("Choose another way to prepare your listing")).toBeTruthy();
   });
 
   it('requires a verified connection before browsing', () => {
@@ -141,17 +141,17 @@ describe('Seller data browser', () => {
   });
 
   it.each([
-    [400, 'Folder listing cursor is invalid; start again', 'Folder listing cursor is invalid; start again'],
-    [400, 'Folder listing cursor has expired; start again', 'Folder listing cursor has expired; start again'],
-    [400, 'Folder listing cursor has already been used', 'Folder listing cursor has already been used'],
-    [400, 'Folder listing scope is invalid', 'Folder listing scope is invalid'],
-    [400, {provider:'private-provider-text'}, 'the folder listing request was invalid'],
+    [400, 'Folder listing cursor is invalid; start again','the folder check is no longer valid; choose the folder again'],
+    [400, 'Folder listing cursor has expired; start again','the folder check expired; choose the folder again'],
+    [400, 'Folder listing cursor has already been used','the folder check has already been used; choose the folder again'],
+    [400, 'Folder listing scope is invalid','the folder is outside the connected storage scope; choose a folder within it'],
+    [400, {provider:'private-provider-text'}, 'the folder could not be opened; choose the folder again'],
     [401, undefined, 'your sign-in or access to this connection changed'],
     [403, undefined, 'your sign-in or access to this connection changed'],
     [404, undefined, 'the connection or folder was not found'],
     [429, undefined, 'too many requests to your storage; wait a minute and try again'],
-    [429, 'Too many requests', 'Too many requests'],
-    [503, 'File discovery is unavailable', 'File discovery is unavailable'],
+    [429, 'Too many requests', 'too many requests to your storage; wait a minute and try again'],
+    [503, 'File discovery is unavailable','your storage files could not be checked; try again later'],
     [500, {provider:'private-provider-text'}, 'the storage provider did not respond'],
     [undefined, undefined, 'the connection to ai.market was interrupted'],
   ])('reports folder scan progress and preserves selection after status %s (%s)',async(status,detail,reason)=>{
@@ -202,10 +202,10 @@ describe('Seller data browser', () => {
       ['index 3: out of range','no longer in the saved selection'],['index 3: sample size mismatch','exactly the saved file size'],
       ['SAMPLE_MAX_FILE_BYTES: 67108864','per-file sample limit'],['index 3: sample is immutable','already approved or published'],
       ['index 3: upload already in progress','already in progress'],['SAMPLE_MAX_FILES: 10','maximum number'],
-      ['SAMPLE_MAX_TOTAL_BYTES: 268435456','total sample size'],['SAMPLE_SELLER_QUOTA_BYTES: 2147483648','storage quota'],
+      ['SAMPLE_MAX_TOTAL_BYTES: 268435456','total sample size'],['SAMPLE_SELLER_QUOTA_BYTES: 2147483648','storage limit'],
       ['sample upload generation expired','replaced or expired'],['SAMPLE_UPLOAD_TIMEOUT_S: 900','took too long'],
-      ['sample_store_unavailable','temporarily unavailable'],['sample_upload_refused','previously refused'],
-      ['sample upload already in progress','request identity'],['sample_index_out_of_range','no longer in the saved selection'],
+      ['sample_store_unavailable','Upload it again'],['sample_upload_refused','previously refused'],
+      ['sample upload already in progress','already in progress'],['sample_index_out_of_range','no longer in the saved selection'],
       ['sample_size_out_of_range','per-file sample limit'],['SAMPLE_UPLOAD_RATE: 30','Too many sample uploads'],
       ['sample size mismatch','exactly the saved file size'],
     ];
@@ -219,7 +219,7 @@ describe('Seller data browser', () => {
     render(<WorkspaceData enabled connections={[connection]} savedSource={savedSource} sampleFilesAvailable onSaveSampleSelection={vi.fn()}/>);
     fireEvent.click(await screen.findByRole('checkbox',{name:/Offer one.csv.*free sample/}));
     fireEvent.change(screen.getByLabelText(/Upload sample one.csv/),{target:{files:[new File([new Uint8Array(1024)],'one.csv')]}});
-    const alert=await screen.findByRole('alert');expect(alert.textContent).toContain('per-file sample limit');expect(alert.textContent).toContain('(SAMPLE_MAX_FILE_BYTES)');
+    const alert=await screen.findByRole('alert');expect(alert.textContent).toContain('per-file sample limit');expect(alert.textContent).not.toContain('SAMPLE_MAX_FILE_BYTES');
   });
 
   it('keeps dark markup byte-identical and shows an explicit alert for a deployed-signal 404',async()=>{
@@ -234,7 +234,8 @@ describe('Seller data browser', () => {
     expect(legacyMarkup).not.toContain('Free sample');
     fireEvent.click(await screen.findByRole('checkbox',{name:/Offer one.csv.*free sample/}));
     fireEvent.change(screen.getByLabelText(/Upload sample one.csv/),{target:{files:[new File([new Uint8Array(1024)],'one.csv')]}});
-    expect((await screen.findByRole('alert')).textContent).toContain('sample_route_unavailable');
+    expect((await screen.findByRole('alert')).textContent).toContain('Sample uploads are not enabled here yet.');
+    expect(screen.getByRole('alert').textContent).not.toContain('sample_route_unavailable');
     expect(feature.container.querySelector('[aria-label="Workspace sample files"]')).toBeTruthy();
   });
 

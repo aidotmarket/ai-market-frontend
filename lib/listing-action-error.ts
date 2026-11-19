@@ -1,7 +1,8 @@
+import { customerRefusal } from './customerMessages';
 import { ACTION_AUTH_REFRESH, isLegacyActionAuthError } from './action-auth-error';
 import { SELLER_SETUP_STEPS } from './seller-setup-steps';
 
-export const LISTING_ACTION_FALLBACK = "That didn't work. Please try again or contact support.";
+export const LISTING_ACTION_FALLBACK = "We couldn't update your listing just now. Try again, or contact support if it keeps happening.";
 export const LISTING_ACTION_WORKSPACE = 'Manage this listing in Seller Workspace.';
 
 interface ListingActionError {
@@ -15,7 +16,7 @@ function record(value: unknown): Record<string, unknown> | undefined {
     ? value as Record<string, unknown> : undefined;
 }
 
-export function formatListingActionError(error: unknown): ListingActionError {
+export function formatListingActionError(error: unknown, action: 'update' | 'delete' = 'update'): ListingActionError {
   if (isLegacyActionAuthError(error)) return { message: ACTION_AUTH_REFRESH };
 
   const responseData = record(record(error)?.response)?.data;
@@ -39,14 +40,13 @@ export function formatListingActionError(error: unknown): ListingActionError {
   const draftFailure = listingDraftError(error);
   if (draftFailure) return { message: draftFailure.message };
 
-  // Only plain text detail is eligible for display. Never coerce response data.
-  if (isPlainListingMessage(detail)) {
-    return { message: detail };
-  }
-  if (isPlainListingMessage(responseData)) return { message: responseData };
-  if (isPlainListingMessage(error)) return { message: error };
+  const workspaceMessage = customerRefusal(error, {
+    'This listing is managed in Seller Workspace. To stop new sales, open Seller Workspace, choose Manage listings, then Pause new sales.': 'To stop new sales, open Seller Workspace, choose Manage listings, then Pause new sales.',
+    'This listing is managed in Seller Workspace. To sell it again, open Seller Workspace, choose Manage listings, then Resume sales.': 'To sell this listing again, open Seller Workspace, choose Manage listings, then Resume sales.',
+  }, '');
+  if (workspaceMessage) return { message: workspaceMessage, workspaceHref: '/dashboard/seller-workspace' };
   console.error('Listing action failed', error);
-  return { message: LISTING_ACTION_FALLBACK };
+  return { message: action === 'delete' ? "We couldn't delete your listing just now. Try again, or contact support if it keeps happening." : LISTING_ACTION_FALLBACK };
 }
 
 export function isPlainListingMessage(message:unknown):message is string {
@@ -58,5 +58,5 @@ export function listingDraftError(error:unknown):{message:string;alreadyPublishe
   if(!detail||!['DRAFT_IN_PROGRESS','DRAFT_ALREADY_PUBLISHED'].includes(typeof detail.code==='string'?detail.code:''))return null;
   const message=detail.message;
   if(!isPlainListingMessage(message))return null;
-  return {message,alreadyPublished:detail.code==='DRAFT_ALREADY_PUBLISHED'};
+  return {message:detail.code==='DRAFT_ALREADY_PUBLISHED'?'This draft has already been published. Start another listing to choose new files.':'You already have a listing draft in progress. Open Seller Workspace to finish it before starting another.',alreadyPublished:detail.code==='DRAFT_ALREADY_PUBLISHED'};
 }

@@ -71,7 +71,7 @@ describe('EditListingPage', () => {
     render(<EditListingPage/>);
     fireEvent.change(await screen.findByLabelText('Description'),{target:{value:'Amended description'}});
     fireEvent.click(screen.getByRole('button',{name:'Save Draft'}));
-    await waitFor(()=>expect(toast).toHaveBeenCalledWith(message,'error'));
+    await waitFor(()=>expect(toast).toHaveBeenCalledWith('You already have a listing draft in progress. Open Seller Workspace to finish it before starting another.','error'));
     expect(listingsApi.updateListing).toHaveBeenCalledOnce();
     expect((screen.getByLabelText('Description') as HTMLTextAreaElement).value).toBe('Amended description');
   });

@@ -1,5 +1,6 @@
 'use client';
 
+import { customerRefusal, INQUIRY_REFUSALS, customerActionError } from '@/lib/customerMessages';
 import { useState, useEffect, useRef, useCallback } from 'react';
 import Link from 'next/link';
 import InquiryListPager from '@/components/InquiryListPager';
@@ -199,7 +200,7 @@ function SellerInquiryThread({ id, onReplied, isCurrent }: { id: string; onRepli
       setError('');
       setAccepted((pending) => pending && !(data.messages ?? []).some((msg) => msg.id === pending) ? pending : null);
     } catch {
-      if (active.current && isCurrent() && version === readVersion.current) setError('Failed to refresh conversation.');
+      if (active.current && isCurrent() && version === readVersion.current) setError(customerActionError("refresh your conversation"));
     } finally {
       if (active.current && isCurrent() && version === readVersion.current) {
         setRefreshing(false);
@@ -232,8 +233,8 @@ function SellerInquiryThread({ id, onReplied, isCurrent }: { id: string; onRepli
       if (!ack.success) throw new Error('Reply not accepted');
     } catch (err) {
       if (active.current && isCurrent()) {
-        const detail = err instanceof AxiosError ? err.response?.data?.detail : null;
-        setReplyError(typeof detail === 'string' ? detail : 'Failed to send reply. Please revise and try again.');
+
+        setReplyError(customerRefusal(err, INQUIRY_REFUSALS, customerActionError("send your reply")));
         sending.current = false;
         setReplying(false);
       }

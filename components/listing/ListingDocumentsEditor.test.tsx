@@ -124,13 +124,16 @@ it.each(['draft', 'publish', 'withdraw', 'discard-draft'] as const)('reloads a 4
 });
 
 it.each([
+  [422, {field:'/title',message:'Remove contact details and off-platform payment instructions.'}, 'Remove contact details and payment instructions from your document'],
+  [422, [{msg:'private validation text'}], 'Documents could not be updated'],
   [422, 'DATA_SHEET_INVALID_URL', 'Use a stable, public, non-expiring https address'],
   [422, 'DATA_SHEET_INVALID_FILENAME', 'Choose a PDF with a simple filename'],
-  ...['DOCUMENT_KIND_CONTENT_MISMATCH', 'BAD_ORIGIN', 'CSRF_REQUIRED', 'UNKNOWN_CODE_123'].map(code => [422, code, 'Documents could not be updated'] as const),
+  [422, 'DOCUMENT_KIND_CONTENT_MISMATCH', 'Use text for technical documentation'],
+  ...['BAD_ORIGIN', 'CSRF_REQUIRED', 'UNKNOWN_CODE_123'].map(code => [422, code, 'Documents could not be updated'] as const),
   [403, 'FIRST_PARTY_SESSION_REQUIRED', 'Sign in on the ai.market website'],
-  [422, 'Rendering budget exceeded. Simplify this document.', 'Rendering budget exceeded. Simplify this document.'],
-  [422, 'Remove contact details from this document.', 'Remove contact details from this document.'],
-] as const)('shows actionable server errors for %i %s', async (status, detail, text) => {
+  [422, 'Rendering budget exceeded. Simplify this document.', 'Documents could not be updated'],
+  [422, 'Remove contact details from this document.', 'Documents could not be updated'],
+] as const)('shows actionable server errors for %i %j', async (status, detail, text) => {
   await mount(); fillTechnical();
   vi.mocked(api.saveDocumentDraft).mockRejectedValueOnce({isAxiosError: true, response: {status, data: {detail}}});
   fireEvent.click(region().getByRole('button', {name: 'Save document draft'}));
@@ -172,7 +175,7 @@ it('hashes a selected PDF locally and saves only metadata and its public address
 it('refuses an invalid local file without saving a draft', async () => {
   await mount();
   fireEvent.change(region('data_sheet_pdf').getByLabelText('Choose PDF (local check only)'), {target: {files: [new NodeFile(['not PDF'], 'fake.pdf')]}});
-  await screen.findByText(/must start with %PDF-/);
+  await screen.findByText(/The PDF could not be read. Choose it again./);
   expect(api.saveDocumentDraft).not.toHaveBeenCalled();
 });
 
@@ -208,11 +211,11 @@ it('fails closed when the conflict reload fails and permits an explicit retry', 
   await screen.findByRole('region', {name: 'Technical documentation'});
 });
 
-it('shows a structured server render-budget refusal verbatim', async () => {
+it('maps a render-budget refusal to customer guidance', async () => {
   await mount(); fillTechnical();
   vi.mocked(api.saveDocumentDraft).mockRejectedValueOnce({isAxiosError: true, response: {status: 422, data: {detail: {code: 'DOCUMENT_RENDER_BUDGET', message: 'Simplify this document to preview it.'}}}});
   fireEvent.click(region().getByRole('button', {name: 'Preview exactly what buyers see'}));
-  await screen.findByText(/Simplify this document to preview it/);
+  await screen.findByText(/This document is too complex to preview/);
   expect(api.publishDocument).not.toHaveBeenCalled();
 });
 

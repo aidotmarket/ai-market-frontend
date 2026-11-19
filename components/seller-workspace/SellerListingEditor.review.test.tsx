@@ -35,8 +35,9 @@ it.each([false,true])('shows an accepted and saved title in Review; repeated sta
  if(!repeated)mocks.review.mockResolvedValue(review('Accepted title',2));
  await act(async()=>release({...saved}));
  if(repeated){
-  expect(await screen.findByRole('alert')).toHaveProperty('textContent', 'The saved review is still out of date. Refresh Review to load your saved changes.');
+  expect(await screen.findByRole('alert')).toHaveProperty('textContent', 'Your saved draft changed. Save your listing in Describe and price, then try again. Retry review');
   expect(screen.queryByTitle('Saved original seller review')).toBeNull();
+  expect(screen.queryByRole('button',{name:'Choose files'})).toBeNull();
   mocks.review.mockResolvedValue(review('Accepted title',2));fireEvent.click(screen.getByRole('button',{name:'Refresh saved review'}));
  }
  await waitFor(()=>expect(screen.getByTitle('Saved original seller review').getAttribute('srcdoc')).toBe('<h1>Accepted title</h1>'));

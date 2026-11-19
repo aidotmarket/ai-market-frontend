@@ -1,5 +1,6 @@
 'use client';
 
+import { customerRefusal, INQUIRY_REFUSALS, INQUIRY_UNAVAILABLE, customerActionError } from '@/lib/customerMessages';
 import { useState, useCallback, useEffect, useRef } from 'react';
 import Link from 'next/link';
 import { authSessionIdentity, useAuthStore } from '@/store/auth';
@@ -359,18 +360,17 @@ function ListingInquiryWidget({ listingId, listingSlug, listingTitle }: Props) {
     } catch (err) {
       if (!current()) return;
       if (err instanceof AxiosError) {
-        const detail = err.response?.data?.detail;
         if (err.response?.status === 409) {
           const message = 'You already have an inquiry for this listing. Check your dashboard.';
           setSubmissionError(message);
           toast(message, 'info');
         } else {
-          const message = typeof detail === 'string' ? detail : 'Failed to submit question.';
+          const message = customerRefusal(err, INQUIRY_REFUSALS, customerActionError("send your question"));
           setSubmissionError(message);
           toast(message, 'error');
         }
       } else {
-        const message = 'An unexpected error occurred.';
+        const message = customerRefusal(err, INQUIRY_REFUSALS, customerActionError("send your question"));
         setSubmissionError(message);
         toast(message, 'error');
       }
@@ -398,7 +398,7 @@ function ListingInquiryWidget({ listingId, listingSlug, listingTitle }: Props) {
       setRefreshError('');
       setShowTyping(false);
     } catch {
-      if (current() && version === readVersion.current) setRefreshError('Failed to refresh conversation.');
+      if (current() && version === readVersion.current) setRefreshError(customerActionError("refresh your conversation"));
     } finally {
       if (current() && version === readVersion.current) setRefreshing(false);
     }
@@ -422,8 +422,8 @@ function ListingInquiryWidget({ listingId, listingSlug, listingTitle }: Props) {
       if (!ack.success) throw new Error('Reply not accepted');
     } catch (err) {
       if (current()) {
-        const detail = err instanceof AxiosError ? err.response?.data?.detail : null;
-        setReplyError(typeof detail === 'string' ? detail : 'Failed to send reply. Please revise and try again.');
+
+        setReplyError(customerRefusal(err, INQUIRY_REFUSALS, customerActionError("send your reply")));
         sending.current = false;
         setReplying(false);
       }
@@ -568,7 +568,7 @@ function ListingInquiryWidget({ listingId, listingSlug, listingTitle }: Props) {
       )}
       {isAuthenticated && submissionError && (
         <p className="text-xs text-red-600 mt-2" role="alert">
-          {submissionError}
+          {submissionError === INQUIRY_UNAVAILABLE ? <>This listing isn&apos;t available for questions right now. <Link href="/find-data" className="underline">Browse similar data.</Link></> : submissionError}
         </p>
       )}
       {anonymousTimedOut && anonymousError && (

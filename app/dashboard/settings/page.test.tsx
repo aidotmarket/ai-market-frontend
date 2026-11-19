@@ -351,7 +351,7 @@ describe('SettingsPage capability refresh', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Enable two-factor authentication' }));
     fireEvent.change(await screen.findByRole('textbox', { name: '6-digit code' }), { target: { value: '123456' } });
     fireEvent.click(screen.getByRole('button', { name: 'Verify and enable' }));
-    expect(await screen.findByText('Invalid verification code')).toBeTruthy();
+    expect(await screen.findByText("That code didn't match. Enter the newest code from your authenticator app.")).toBeTruthy();
     expect(screen.getByText('setup-secret')).toBeTruthy();
     expect(authApi.verify2FASetup).toHaveBeenCalledExactlyOnceWith('123456');
 

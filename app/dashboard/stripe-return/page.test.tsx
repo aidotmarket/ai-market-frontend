@@ -228,7 +228,7 @@ describe('Stripe return', () => {
     render(<StripeReturnPage />);
     await advance();
     await act(async () => { fireEvent.click(screen.getByRole('button', { name: 'Continue Stripe setup' })); });
-    expect(toast).toHaveBeenCalledWith('Failed to resume Stripe connection', 'error');
+    expect(toast).toHaveBeenCalledWith("We couldn't resume payout setup just now. Try again, or contact support if it keeps happening.", 'error');
     expect(screen.getByRole('button', { name: 'Continue Stripe setup' }).hasAttribute('disabled')).toBe(false);
   });
 

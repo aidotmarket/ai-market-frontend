@@ -1,5 +1,6 @@
 'use client';
 
+import { customerRefusal, TWO_FACTOR_REFUSALS, customerActionError } from '@/lib/customerMessages';
 import { useSectionRecoveryRead } from '@/hooks/useSectionRecoveryRead';
 import { sessionMutationError } from '@/api/session-mutation';
 import { setupRestriction, setupRefusal } from '@/lib/two-factor-policy';
@@ -153,9 +154,9 @@ function SettingsVisit({ accountId, retireVisit }: {
     } catch (err) {
       if (!isCurrent()) return;
       if (err instanceof AxiosError) {
-        toast(err.response?.data?.detail || 'Failed to update profile', 'error');
+        toast(customerActionError("update your profile"), 'error');
       } else {
-        toast('An unexpected error occurred', 'error');
+        toast(customerActionError("update your profile"), 'error');
       }
     } finally {
       if (isCurrent()) setSaving(false);
@@ -202,9 +203,9 @@ function SettingsVisit({ accountId, retireVisit }: {
         setSecurityError(setupRefusal(err, user)!);
         setTwoFactorFlow('idle');
       } else if (err instanceof AxiosError) {
-        setSecurityError(err.response?.data?.detail || 'Failed to start 2FA setup.');
+        setSecurityError(customerActionError("set up two-factor authentication"));
       } else {
-        setSecurityError('Failed to start 2FA setup.');
+        setSecurityError(customerActionError("set up two-factor authentication"));
       }
     } finally {
       if (isCurrent()) setSecurityLoading(false);
@@ -237,9 +238,9 @@ function SettingsVisit({ accountId, retireVisit }: {
         setSecurityError(setupRefusal(err, user)!);
         setTwoFactorFlow('idle');
       } else if (err instanceof AxiosError) {
-        setSecurityError(err.response?.data?.detail || 'Failed to verify the code.');
+        setSecurityError(customerRefusal(err, TWO_FACTOR_REFUSALS, customerActionError("verify the code")));
       } else {
-        setSecurityError('Failed to verify the code.');
+        setSecurityError(customerRefusal(err, TWO_FACTOR_REFUSALS, customerActionError("verify the code")));
       }
     } finally {
       if (isCurrent()) {
@@ -259,7 +260,7 @@ function SettingsVisit({ accountId, retireVisit }: {
       toast('Backup codes copied', 'success');
     } catch {
       if (!isCurrent()) return;
-      toast('Failed to copy backup codes', 'error');
+      toast(customerActionError("copy backup codes"), 'error');
     }
   };
 
@@ -276,7 +277,7 @@ function SettingsVisit({ accountId, retireVisit }: {
       if (returnToReview) router.push(redirect);
     } catch {
       if (!isCurrent()) return;
-      toast('Failed to refresh your account state', 'error');
+      toast(customerActionError("refresh your account"), 'error');
     } finally {
       if (isCurrent()) setSecurityLoading(false);
     }
@@ -314,11 +315,10 @@ function SettingsVisit({ accountId, retireVisit }: {
         setSecurityError(sessionMutationError(err)!);
       } else if (err instanceof AxiosError) {
         setSecurityError(
-          err.response?.data?.detail ||
-            (action === 'disable' ? 'Failed to disable 2FA.' : 'Failed to regenerate backup codes.')
+          customerRefusal(err, TWO_FACTOR_REFUSALS, action === 'disable' ? customerActionError("turn off two-factor authentication") : customerActionError("regenerate backup codes"))
         );
       } else {
-        setSecurityError(action === 'disable' ? 'Failed to disable 2FA.' : 'Failed to regenerate backup codes.');
+        setSecurityError(customerRefusal(err, TWO_FACTOR_REFUSALS, action === 'disable' ? customerActionError("turn off two-factor authentication") : customerActionError("regenerate backup codes")));
       }
     } finally {
       if (isCurrent()) setSecurityLoading(false);

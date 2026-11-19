@@ -4,7 +4,7 @@ import axios from 'axios';
 import {listingDraftError} from '@/lib/listing-action-error';
 import type {ListingDraftContent} from '@/api/sellerListingDraft';
 import {readListingSource, readSellerCategories, type SourceRead, type SellerCategory} from '@/api/sellerListingSource';
-import {listingReviewErrorReason,readListingReview, type ListingReview, type ApprovalReceipt} from '@/api/sellerListingReview';
+import {readListingReview, listingReviewErrorReason, type ListingReview, type ApprovalReceipt} from '@/api/sellerListingReview';
 import {readPublication, type PublicationState} from '@/api/sellerListingPublication';
 import {SELLER_SETUP_STEPS} from '@/components/onboarding/SellerSetupProgressBar';
 import {getCapabilities} from '@/api/capabilities';
@@ -58,6 +58,8 @@ export function GuidedListingFlow({connections, capabilities, view, navigate, ch
   const [readRetry,setReadRetry] = useState(0);
   const [review,setReview] = useState<ListingReview|null>(null);
   const [reviewError,setReviewError] = useState('');
+  const [reviewStatus,setReviewStatus] = useState('');
+  const [reviewNeedsFiles,setReviewNeedsFiles] = useState(false);
   const [reviewLoading,setReviewLoading] = useState(false);
   const [reviewRetry,setReviewRetry] = useState(0);
   const [publication,setPublication] = useState<PublicationState|null>(null);
@@ -85,16 +87,16 @@ export function GuidedListingFlow({connections, capabilities, view, navigate, ch
   const reconciled=useRef('');
   const pending=selectionSavePending||selectionSaveFailed||filesDirty;
   useEffect(()=>{
-    setReview(null);setReviewError('');setReviewLoading(false);setPublication(null);
+    setReview(null);setReviewError('');setReviewStatus('');setReviewNeedsFiles(false);setReviewLoading(false);setPublication(null);
     if(!reviewEnabled||!source||!draft||pending)return;
     const controller=new AbortController();setReviewLoading(true);
     readListingReview(controller.signal,draft.draft_id).then(async r=>{
       if(controller.signal.aborted)return;
       if(r.source_version!==source.version||r.draft_version!==draft.version){
         const key=`${reviewRetry}:${r.source_version}:${r.draft_version}`;
-        if(reconciled.current===key){setReviewError('The saved review is still out of date. Refresh Review to load your saved changes.');return;}
+        if(reconciled.current===key){setReviewNeedsFiles(r.source_version!==source.version);setReviewError(r.source_version!==source.version?'Your storage changed since you last saved. Choose your files again, then review.':'Your saved draft changed. Save your listing in Describe and price, then try again.');return;}
         reconciled.current=key;
-        setReviewError('The saved review changed elsewhere. Reloading your saved files and draft…');
+        setReviewStatus('The saved review changed elsewhere. Reloading your saved files and draft…');
         const savedSource=await readListingSource(draft?.draft_id);
         if(controller.signal.aborted)return;
         await reload(controller.signal,()=>setSource(savedSource));
@@ -103,8 +105,11 @@ export function GuidedListingFlow({connections, capabilities, view, navigate, ch
       setReview(r);
     }).catch(error=>{
       if(controller.signal.aborted)return;
-      setReviewError('Your saved review could not be reconciled. Refresh Review to reload your saved files and draft. '+listingReviewErrorReason(error));
-    }).finally(()=>{if(!controller.signal.aborted)setReviewLoading(false);});
+      const detail=axios.isAxiosError(error)?error.response?.data?.detail:undefined;
+      const code=typeof detail==='string'?detail:detail?.code;
+      setReviewNeedsFiles(code==='source_connection_changed'||code==='source_required');
+      setReviewError(code==='source_connection_changed'?'Your storage changed since you last saved. Choose your files again, then review.':['draft_required','source_required'].includes(code)?listingReviewErrorReason(error):"We couldn't load your saved review. Try again.");
+    }).finally(()=>{if(!controller.signal.aborted){setReviewLoading(false);setReviewStatus('');}});
     return()=>controller.abort();
   },[reviewEnabled,source,draft,pending,reviewRetry]);
   const approval=review?.approval;
@@ -127,11 +132,13 @@ export function GuidedListingFlow({connections, capabilities, view, navigate, ch
       <h2 className="hidden font-semibold xl:block">Listing checklist</h2>
       <div id="listing-checklist-steps" className={`${expanded?'block':'hidden'} mt-4 space-y-4 xl:block`}>
         {accountNext&&<a href="#seller-setup-next" onClick={()=>window.dispatchEvent(new Event('seller-setup:next'))} className="block text-sm text-indigo-700 underline">Finish account setup: {SELLER_SETUP_STEPS.find(s=>s.id===accountNext)?.label??'Next account step'}</a>}
-        <ol className="space-y-4">{steps.map((s,i)=><li key={s.view}><button type="button" aria-current={view===s.view?'step':undefined} onClick={()=>navigate(s.view)} className="text-left text-sm font-medium"><span aria-hidden="true">{s.state==='done'?'✓':s.state==='blocked'?'🔒':'○'}</span> {i+1}. {s.name} <span className="text-xs">· {s.state}{s.next?' · Next':''}</span></button>{s.reason&&<p className="mt-1 text-xs leading-5 text-gray-600">{s.reason}</p>}</li>)}</ol>
+        <ol className="space-y-4">{steps.map((s,i)=><li key={s.view}><button type="button" aria-current={view===s.view?'step':undefined} onClick={()=>navigate(s.view)} className="text-left text-sm font-medium"><span aria-hidden="true">{s.state==='done'?'✓':s.state==='blocked'?'🔒':'○'}</span> {i+1}. {s.name} <span className="text-xs">· {s.state==='current'?'Up to date':s.state==='blocked'?'Needs attention':s.state==='done'?'Complete':'To do'}{s.next?' · Next':''}</span></button>{s.reason&&s.reason!==reviewError&&<p className="mt-1 text-xs leading-5 text-gray-600">{s.reason}</p>}</li>)}</ol>
         {published?<><a href={`/listings/${encodeURIComponent(published.slug)}`} className="block text-sm text-indigo-700 underline">Published: view your listing</a><button type="button" disabled={startingListing} onClick={()=>void startAnotherListing()} className="text-sm text-indigo-700 underline">Start another listing</button><p className="text-xs text-gray-600">Choose new files and update your draft. Your published listing stays saved.</p></>:next&&<button type="button" onClick={()=>navigate(next.view)} className="w-full rounded-lg bg-indigo-700 px-4 py-2 text-sm font-semibold text-white">Next: {next.name} →</button>}
         {startError&&<p role="alert" className="text-sm text-red-800">{startError} <button disabled={startingListing} onClick={()=>void startAnotherListing()} className="underline">Retry</button></p>}
         {readError&&<p role="alert" className="text-sm text-red-800">{readError} <button onClick={()=>setReadRetry(n=>n+1)} className="underline">Retry</button></p>}
       </div>
+        {reviewStatus&&<p role="status" className="text-sm text-gray-600">{reviewStatus}</p>}
+        {reviewError&&<p role="alert" className="text-sm text-red-800">{reviewError} {reviewNeedsFiles?<button onClick={()=>navigate('data')} className="min-h-11 underline">Choose files</button>:<button onClick={()=>setReviewRetry(n=>n+1)} className="min-h-11 underline">Retry review</button>}</p>}
     </aside><fieldset disabled={startingListing} aria-busy={startingListing} className="min-w-0 space-y-6 border-0 p-0 xl:col-start-1 xl:row-start-1">{/* A new draft also discards unsaved file, editor and licence panel state. */}<Fragment key={draft?.draft_id??'legacy'}>{children}</Fragment></fieldset>
   </div></Context.Provider>;
 }
@@ -145,4 +152,9 @@ export function StepNext({from}:{from:WorkspaceView}) {
 export function StartAnotherListingAction(){
   const flow=useListingFlow();
   return flow?<button type="button" disabled={flow.startingListing} onClick={flow.startAnotherListing} className="underline">Start another listing</button>:null;
+}
+
+export function DescribeListingAction(){
+  const flow=useListingFlow();
+  return flow?<button type="button" onClick={()=>flow.navigate('listing')} className="underline">Describe and price</button>:<span>Use the Describe and price tab.</span>;
 }

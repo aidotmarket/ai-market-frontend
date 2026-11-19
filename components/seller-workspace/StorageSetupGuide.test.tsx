@@ -19,7 +19,7 @@ describe('storage setup guidance', () => {
     for (let index = 0; index < 3; index++) fireEvent.click(screen.getByText('Continue guide'));
     fireEvent.click(screen.getByText('Continue to AWS connection'));
     expect(connect).not.toHaveBeenCalled();
-    expect(screen.getByText(/AWS connection setup is currently unavailable/)).toBeTruthy();
+    expect(screen.getByText(/AWS setup is not enabled here yet/)).toBeTruthy();
   });
   it('keeps R2 setup separate from account verification and opens provider help in another tab', () => {
     render(<StorageSetupGuide provider="r2" canConnectAWS onConnectAWS={vi.fn()} onClose={() => {}} />);

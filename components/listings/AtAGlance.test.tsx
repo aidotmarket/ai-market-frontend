@@ -50,7 +50,7 @@ it('always uses buyer-visible attribution wording and has no audience input', ()
   const html = renderToStaticMarkup(<AtAGlance summary={summary} />);
   expect(html).toContain('provided by the seller');
   expect(html).not.toMatch(/entered by you/i);
-  expect(provenanceLabels).toEqual({aim_metadata: 'from listing metadata', seller_entered: 'provided by the seller', allai_generated: 'generated and checked', absent: 'not available'});
+  expect(provenanceLabels).toEqual({aim_metadata: 'from listing metadata', seller_entered: 'provided by the seller', allai_generated: 'generated and checked', absent: 'Not provided'});
 });
 
 it('does not render unreviewed unknown fields', () => {

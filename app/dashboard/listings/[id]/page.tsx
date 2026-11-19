@@ -88,8 +88,8 @@ export default function ListingPage({ params }: { params: Promise<{ id: string }
   if (!hydrated) return <p>Loading your listing…</p>;
   if (!isAuthenticated || !user) return <p><Link href="/login" className="underline">Sign in</Link> to manage your listing.</p>;
   if (state === 'loading' || loadOwner?.id !== id || loadOwner.userId !== userId) return <p>Loading your listing…</p>;
-  if (state === 'unavailable') return <p>This listing is not available.</p>;
-  if (state === 'error') return <><p>We could not load your listing.</p><button onClick={() => setRetry(value => value + 1)}>Try again</button></>;
+  if (state === 'unavailable') return <p>We could not find a listing you can manage here. Open Your listings to choose another listing. <Link href="/dashboard/listings" className="underline">Your listings</Link></p>;
+  if (state === 'error') return <><p>We could not load your listing just now. Try again, or contact support if it keeps happening.</p><button onClick={() => setRetry(value => value + 1)}>Try again</button></>;
   return <div className="space-y-6">
     <Link href="/dashboard/listings" className="text-indigo-700 underline">Back to listings</Link>
     <h1 className="text-2xl font-semibold">{listing?.title}</h1>
@@ -97,13 +97,13 @@ export default function ListingPage({ params }: { params: Promise<{ id: string }
     <Link href={`/dashboard/listings/${encodeURIComponent(id)}/edit`} className="text-indigo-700 underline">Edit listing</Link>
     {listing?.status === 'published' && <>
       {sourceState === 'loading' && <p role="status">Loading verification availability…</p>}
-      {sourceState === 'unavailable' && <p role="status">Verification availability is unavailable.</p>}
+      {sourceState === 'unavailable' && <div><p role="status">We could not check whether this listing can be verified. Try again, or contact support if it keeps happening.</p><button className="min-h-11 underline" onClick={() => setRetry(value => value + 1)}>Retry</button></div>}
       {sourceState === 'gateway' && <GatewayVerificationFlow key={`${user.id}:${id}`} listingId={id} sellerId={user.id} />}
       {sourceState === 'other' && <>
         {awsStatus.state === 'loading' && <p role="status">Loading AWS verification status…</p>}
-        {awsStatus.state === 'unavailable' && <p role="status">AWS verification status is unavailable.</p>}
+        {awsStatus.state === 'unavailable' && <div><p role="status">We could not check your AWS data verification status. Try again, or contact support if it keeps happening.</p><button className="min-h-11 underline" onClick={() => setRetry(value => value + 1)}>Retry</button></div>}
         {cloudflareStatus.state === 'loading' && <p role="status">Loading Cloudflare verification status…</p>}
-        {cloudflareStatus.state === 'unavailable' && <p role="status">Cloudflare verification status is unavailable.</p>}
+        {cloudflareStatus.state === 'unavailable' && <div><p role="status">We could not check your Cloudflare data verification status. Try again, or contact support if it keeps happening.</p><button className="min-h-11 underline" onClick={() => setRetry(value => value + 1)}>Retry</button></div>}
         {/* Cloudflare takes precedence; unknown Cloudflare status must not select AWS. */}
         {cloudflareStatus.state === 'ready' && !cloudflareStatus.connectionId && awsStatus.connectionId && <GatewayVerificationFlow key={`${user.id}:${id}:${awsStatus.connectionId}`} listingId={id} sellerId={user.id} verifier={{ kind: 'aws', connectionId: awsStatus.connectionId }} />}
         {cloudflareStatus.connectionId && <GatewayVerificationFlow key={`${user.id}:${id}:${cloudflareStatus.connectionId}`} listingId={id} sellerId={user.id} verifier={{ kind: 'cloudflare', connectionId: cloudflareStatus.connectionId }} />}

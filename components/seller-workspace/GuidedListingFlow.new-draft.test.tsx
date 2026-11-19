@@ -74,7 +74,7 @@ it('offers Start another listing on a published-draft save and clears dirty file
  fireEvent.change(screen.getByLabelText('Local file choice'),{target:{value:'old file'}});
  fireEvent.change(screen.getByLabelText('Title'),{target:{value:'Changed'}});
  fireEvent.click(screen.getByRole('button',{name:'Save private draft'}));
- const alert=await screen.findByRole('alert');expect(alert.textContent).toBe(message+' Start another listing');
+ const alert=await screen.findByRole('alert');expect(alert.textContent).toBe('This draft has already been published. Start another listing to choose new files. Start another listing');
  expect(alert.textContent).not.toContain('[object Object]');expect(alert.textContent).not.toContain('{');
  expect(screen.queryByRole('button',{name:/refresh/i})).toBeNull();
  fireEvent.click(screen.getByRole('button',{name:'Start another listing'}));

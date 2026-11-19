@@ -1,5 +1,6 @@
 'use client';
 
+import { customerLoadError } from '@/lib/customerMessages';
 import { useEffect, useState, useCallback, useRef } from 'react';
 import { useAuthStore } from '@/store/auth';
 import { useRouter } from 'next/navigation';
@@ -10,6 +11,7 @@ import { useToast } from '@/components/Toast';
 import SellerShareControls from '@/components/listings/SellerShareControls';
 import { useTermsGate } from '@/components/legal/TermsGate';
 import { useServedTermsVersion } from '@/components/legal/VersionedTermsCopy';
+import { formatMarketplaceCategoryName } from '@/lib/marketplaceCategories';
 import { formatPrice, formatDate } from '@/lib/format';
 import { formatListingActionError } from '@/lib/listing-action-error';
 
@@ -28,7 +30,7 @@ const STATUS_LABELS: Record<string, string> = {
   enhanced: 'Enhanced',
   published: 'Published',
   unlisted: 'Unlisted',
-  pending_review: 'Pending Review',
+  pending_review: 'Pending review',
   suspended: 'Suspended',
   archived: 'Archived',
 };
@@ -97,7 +99,7 @@ function OwnerListings({ userId }: { userId: string }) {
       setListings(rows.slice(0, PAGE_SIZE));
       setHasNext(rows.length > PAGE_SIZE);
     } else {
-      setError('Failed to load listings.');
+      setError(customerLoadError("listings"));
     }
     setPayoutsStatus(
       connectRes.status === 'fulfilled'
@@ -139,7 +141,7 @@ function OwnerListings({ userId }: { userId: string }) {
       await fetchListings(pageOffset.current);
     } catch (err: unknown) {
       if (isCurrent(request)) {
-        const failure = formatListingActionError(err);
+        const failure = formatListingActionError(err, kind === 'delete' ? 'delete' : 'update');
         toast(failure.message, 'error');
         setWorkspaceHref(failure.workspaceHref);
         setSetupHref(failure.setupHref);
@@ -179,7 +181,7 @@ function OwnerListings({ userId }: { userId: string }) {
         <Link href="/legal/terms/accept?context=seller&redirect=%2Fdashboard%2Flistings" className="mt-2 inline-block font-semibold underline">Review and accept Terms {termsVersion || '1.1'}</Link>
       </div>}
       <div className="flex items-center justify-between">
-        <h1 className="text-2xl font-bold text-gray-900">Your Listings</h1>
+        <h1 className="text-2xl font-bold text-gray-900">Your listings</h1>
       </div>
 
       <nav aria-label="Listing pages" className="flex items-center justify-between gap-4">
@@ -200,10 +202,10 @@ function OwnerListings({ userId }: { userId: string }) {
           </svg>
           <h3 className="mt-4 text-lg font-medium text-gray-900">{offset > 0 ? 'No listings on this page' : 'No listings yet'}</h3>
           <p className="mt-2 text-sm text-gray-500">{offset > 0 ? 'Use Previous to return to earlier listings.' : 'Listings you publish will appear here.'}</p>
-          <p className="mt-2 text-sm text-gray-500">Gateway sellers: go to <Link href="/dashboard/gateways" className="text-indigo-700 underline">Dashboard → Gateways</Link> to create a listing.</p>
+          <p className="mt-2 text-sm text-gray-500"><Link href="/dashboard/seller-workspace" className="inline-flex min-h-11 items-center px-3 text-indigo-700 underline">Connect cloud storage</Link> <Link href="/dashboard/gateways" className="inline-flex min-h-11 items-center px-3 text-indigo-700 underline">Use your own server (gateway)</Link></p>
         </div>
       ) : (
-        <div className="overflow-hidden rounded-xl border border-gray-200 bg-white shadow-sm">
+        <div className="overflow-x-auto rounded-xl border border-gray-200 bg-white shadow-sm">
           <table className="min-w-full divide-y divide-gray-200">
             <thead className="bg-gray-50">
               <tr>
@@ -248,7 +250,7 @@ function OwnerListings({ userId }: { userId: string }) {
                     ))}
                   </td>
                   <td className="whitespace-nowrap px-6 py-4 text-sm text-gray-500">
-                    {listing.category}
+                    {formatMarketplaceCategoryName(listing.category || 'other')}
                   </td>
                   <td className="whitespace-nowrap px-6 py-4 text-sm text-gray-500">
                     {formatPrice(listing.price)}
@@ -261,15 +263,16 @@ function OwnerListings({ userId }: { userId: string }) {
                       <button
                         onClick={() => handleEdit(listing.id)}
                         disabled={checkingTerms || !!actionLoading}
-                        className="text-xs font-medium text-gray-600 hover:text-gray-800 disabled:opacity-50"
+                        className="min-h-11 px-2 text-xs font-medium text-gray-600 hover:text-gray-800 disabled:opacity-50"
                       >
                         Edit
                       </button>
-                      {(listing.status === 'published' || listing.status === 'unlisted') && (
+                      {listing.status === 'unlisted' && <Link href={`/dashboard/listings/${encodeURIComponent(listing.id)}/edit`} className="min-h-11 inline-flex items-center px-2 text-xs font-medium text-yellow-700 underline">Publish</Link>}
+                      {listing.status === 'published' && (
                         <button
                           onClick={() => handleMutation(listing.id, 'unpublish')}
                           disabled={!!actionLoading}
-                          className="text-xs font-medium text-yellow-600 hover:text-yellow-800 disabled:opacity-50"
+                          className="min-h-11 px-2 text-xs font-medium text-yellow-600 hover:text-yellow-800 disabled:opacity-50"
                         >
                           Unpublish
                         </button>
@@ -278,17 +281,18 @@ function OwnerListings({ userId }: { userId: string }) {
                         <SellerShareControls listingId={listing.id} compact />
                       )}
                       {deleteConfirm === listing.id ? (
-                        <span className="flex items-center gap-1">
+                        <span role="group" aria-label="Delete this listing? This cannot be undone." className="flex items-center gap-1">
+                          <span className="text-xs text-red-700">This can't be undone.</span>
                           <button
                             onClick={() => handleMutation(listing.id, 'delete')}
                             disabled={!!actionLoading}
-                            className="text-xs font-medium text-red-600 hover:text-red-800 disabled:opacity-50"
+                            className="min-h-11 px-2 text-xs font-medium text-red-600 hover:text-red-800 disabled:opacity-50"
                           >
-                            Confirm
+                            Delete listing
                           </button>
                           <button
                             onClick={() => setDeleteConfirm(null)}
-                            className="text-xs font-medium text-gray-500 hover:text-gray-700"
+                            className="min-h-11 px-2 text-xs font-medium text-gray-500 hover:text-gray-700"
                           >
                             Cancel
                           </button>
@@ -297,7 +301,7 @@ function OwnerListings({ userId }: { userId: string }) {
                         <button
                           disabled={!!actionLoading}
                           onClick={() => setDeleteConfirm(listing.id)}
-                          className="text-xs font-medium text-red-600 hover:text-red-800"
+                          className="min-h-11 px-2 text-xs font-medium text-red-600 hover:text-red-800"
                         >
                           Delete
                         </button>

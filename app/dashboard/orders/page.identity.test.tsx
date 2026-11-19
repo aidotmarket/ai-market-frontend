@@ -105,7 +105,7 @@ describe('purchase transaction identity in the mounted desktop and mobile page',
       order('purchase-two', { access_expired: true })]);
     transactionsApi.getMyTransactions.mockRejectedValue(new Error('Synthetic unavailable API'));
     const { desktop, mobile } = await purchases();
-    expect(screen.queryByText('Failed to load orders.')).toBeNull();
+    expect(screen.queryByText("We couldn't load your orders just now. Try again, or contact support if it keeps happening.")).toBeNull();
     expect(document.querySelector('a[href*="?tx="]')).toBeNull();
     const licenceLinks = screen.getAllByRole('link', { name: 'Licence record' });
     expect(licenceLinks).toHaveLength(2);
@@ -134,7 +134,7 @@ describe('purchase transaction identity in the mounted desktop and mobile page',
   it('retains the order API error state', async () => {
     ordersApi.getMyOrders.mockRejectedValue(new Error('Synthetic order failure'));
     render(<OrdersListPage />);
-    expect(await screen.findByText('Failed to load orders.')).not.toBeNull();
+    expect(await screen.findByText("We couldn't load your orders just now. Try again, or contact support if it keeps happening.")).not.toBeNull();
     expect(screen.queryByRole('heading', { name: 'Purchases' })).toBeNull();
     expect(screen.queryByRole('table')).toBeNull();
   });
