@@ -10,7 +10,7 @@ const content:ListingDraftContent={brief:'Weekly sales',title:'Sales',descriptio
 afterEach(cleanup);
 const fieldSuggestion=(field:string)=>within(screen.getByText(field,{selector:'label'}).parentElement!).getByRole('button',{name:'Use suggestion'});
 const warning=()=>screen.queryByText('Your files changed after this description was written');
-const ask=()=>fireEvent.click(screen.getByRole('button',{name:'Ask Allai to draft my listing'}));
+const ask=()=>fireEvent.click(screen.getByRole('button',{name:'Ask allAI to draft my listing'}));
 describe('guided editor source binding and saving',()=>{
  it('shows server categories and retains a legacy category through unrelated saves',async()=>{
   const save=vi.fn().mockResolvedValue(undefined);render(<SellerListingEditor initialContent={{...content,category:'Old free text'}} categories={categories} sourceVersion={7} onSave={save}/>);
@@ -33,9 +33,9 @@ describe('guided editor source binding and saving',()=>{
   ask();view.rerender(<SellerListingEditor initialContent={content} assistant={assistant} sourceVersion={8} categories={categories}/>);
   expect(screen.queryByText('First chat')).toBeNull();expect(screen.queryByText('Pending title')).toBeNull();expect(warning()).toBeTruthy();
   await act(async()=>resolve({source_version:7,message:'Wrong files',proposals:[{field:'description',value:'Wrong description',reasoning:''}]}));
-  expect(await screen.findByText('Your files changed while Allai was drafting. Ask again.')).toBeTruthy();expect(screen.queryByText('Wrong files')).toBeNull();expect(screen.queryByText('Wrong description')).toBeNull();
+  expect(await screen.findByText('Your files changed while allAI was drafting. Ask again.')).toBeTruthy();expect(screen.queryByText('Wrong files')).toBeNull();expect(screen.queryByText('Wrong description')).toBeNull();
   expect(Object.keys(assistant.mock.calls[0][0]).sort()).toEqual(['brief','draft','history','instruction','reviewing']);
-  expect(screen.getByText('Allai reads your file names and sizes to write the draft. It never opens your files.')).toBeTruthy();expect(screen.getByText('Anything you keep here, including file names, will be public.')).toBeTruthy();
+  expect(screen.getByText('allAI reads your file names and sizes to write the draft. It never opens your files.')).toBeTruthy();expect(screen.getByText('Anything you keep here, including file names, will be public.')).toBeTruthy();
  });
  it('only accepting the current description stamps the source and the stamp survives save and reload',async()=>{
   const save=vi.fn().mockResolvedValue(undefined);const assistant=vi.fn().mockResolvedValue({source_version:8,message:'Suggestions',proposals:[{field:'title',value:'New title',reasoning:''},{field:'description',value:'New files description',reasoning:''}]});
@@ -59,7 +59,7 @@ describe('guided editor source binding and saving',()=>{
   fireEvent.click(screen.getByRole('button',{name:'Next: Review →'}));await waitFor(()=>expect(next).toHaveBeenCalledOnce());expect(save).toHaveBeenCalledTimes(2);expect(screen.queryByRole('button',{name:'Save private draft'})).toBeNull();
  });
  it('rejects a response for another source without accepting any fields',async()=>{
-  const assistant=vi.fn().mockResolvedValue({source_version:6,message:'Old text',proposals:[{field:'title',value:'Wrong title',reasoning:''}]});render(<SellerListingEditor initialContent={content} sourceVersion={7} categories={categories} assistant={assistant}/>);ask();await screen.findByText('Your files changed while Allai was drafting. Ask again.');expect((screen.getByLabelText('Title') as HTMLInputElement).value).toBe('Sales');expect(screen.queryByText('Wrong title')).toBeNull();
+  const assistant=vi.fn().mockResolvedValue({source_version:6,message:'Old text',proposals:[{field:'title',value:'Wrong title',reasoning:''}]});render(<SellerListingEditor initialContent={content} sourceVersion={7} categories={categories} assistant={assistant}/>);ask();await screen.findByText('Your files changed while allAI was drafting. Ask again.');expect((screen.getByLabelText('Title') as HTMLInputElement).value).toBe('Sales');expect(screen.queryByText('Wrong title')).toBeNull();
  });
 });
 

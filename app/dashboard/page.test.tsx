@@ -122,6 +122,13 @@ describe('DashboardOverview seller setup 2FA state', () => {
     });
   });
 
+  it.each([null, '', 'Seller'])('greets the buyer with first name %j', async (first_name) => {
+    useAuthStore.setState({ user: { ...baseUser, first_name } });
+    render(<DashboardOverview />);
+    expect(await screen.findByRole('heading', { name: first_name ? `Welcome back, ${first_name}` : 'Welcome back' })).toBeTruthy();
+    expect(screen.queryByText('Welcome back, there')).toBeNull();
+  });
+
   it.each(['google','github'] as const)('unlocks Stripe from server current-policy missing steps for %s, without native MFA',async provider=>{
     useAuthStore.setState({user:{...baseUser,two_factor_setup_eligible:false,two_factor_setup_reason:'two_factor_managed_by_provider',
       two_factor_provider:provider,seller_two_factor_satisfied:true}});

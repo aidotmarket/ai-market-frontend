@@ -1,3 +1,4 @@
+import { plainTextExcerpt } from '@/lib/plainTextExcerpt';
 import Link from 'next/link';
 import type { Metadata } from 'next';
 import { fetchDataRequests } from '@/lib/api';
@@ -188,7 +189,7 @@ function RequestCard({ request }: { request: DataRequestListItem }) {
       className="block rounded-xl border border-gray-200 p-6 hover:border-[#C5CAE9] hover:shadow-md transition-all"
     >
       <div className="flex flex-wrap items-start justify-between gap-y-2 mb-3">
-        <h3 className="font-semibold text-gray-900 line-clamp-2 flex-1 mr-2">{requestDisplayTitle(request.title, request.description)}</h3>
+        <h3 className="font-semibold text-gray-900 line-clamp-2 flex-1 mr-2">{plainTextExcerpt(requestDisplayTitle(request.title, request.description))}</h3>
         {request.is_sample === true && (
           <span className="inline-flex items-center rounded-full bg-amber-100 px-2.5 py-0.5 text-xs font-medium text-amber-800 shrink-0">
             (SAMPLE)
@@ -199,7 +200,7 @@ function RequestCard({ request }: { request: DataRequestListItem }) {
         </span>
       </div>
 
-      <p className="text-sm text-gray-500 line-clamp-2 mb-4">{request.description}</p>
+      <p className="text-sm text-gray-500 line-clamp-2 mb-4">{plainTextExcerpt(request.description)}</p>
 
       <div className="flex flex-wrap gap-1.5 mb-4">
         {request.categories.slice(0, 4).map((cat) => (

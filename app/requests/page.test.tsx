@@ -2,6 +2,7 @@
 import React from 'react';
 import { cleanup, fireEvent, render, screen, within } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { plainTextExcerpt } from '@/lib/plainTextExcerpt';
 import BrowseRequestsPage from './page';
 
 const { fetchDataRequests } = vi.hoisted(() => ({ fetchDataRequests: vi.fn() }));
@@ -28,16 +29,16 @@ describe('public request browsing', () => {
   it.each([
     ['**Title: Licensed retail data**', '**Title: Licensed retail data**. Buyer description.', 'Licensed retail data'],
     ['**Title: Licensed retail transaction data for regional demand forecasting...', '**Title: Licensed retail transaction data for regional demand forecasting and inventory planning**. Buyer description.', 'Licensed retail transaction data for regional demand forecasting...'],
-    ['**Title: Explicit title**', '**Title: Different title**. Buyer description.', '**Title: Explicit title**'],
+    ['**Title: Explicit title**', '**Title: Different title**. Buyer description.', 'Explicit title'],
     ['Ordinary explicit title', '**Title: Different title**. Buyer description.', 'Ordinary explicit title'],
-  ])('displays the guarded title on the card: %s', async (title, description, display) => {
+  ])('displays a plain-text title on the card: %s', async (title, description, display) => {
     const item = request('display', { title, description });
     fetchDataRequests.mockResolvedValue({ items: [item] });
     await renderPage();
     const heading = screen.getByRole('heading', { name: display });
     const card = heading.closest('a')!;
     expect(card.getAttribute('href')).toBe('/requests/request-display');
-    expect(within(card).getByText(description)).toBeTruthy();
+    expect(within(card).getByText(plainTextExcerpt(description))).toBeTruthy();
     expect(item.title).toBe(title);
     expect(item.description).toBe(description);
   });

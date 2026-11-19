@@ -24,7 +24,7 @@ export function WorkspaceOverview({ connections, view, onViewChange }: {
         <div className="relative mt-3 flex flex-wrap items-end justify-between gap-6">
           <div className="max-w-xl">
             <h1 className="text-3xl font-semibold tracking-tight sm:text-4xl">Seller Workspace</h1>
-            <p className="mt-3 text-sm leading-6 text-indigo-100">Choose what to sell. Allai helps describe it and add the right tags. Your data stays in your cloud account; you approve what becomes public.</p>
+            <p className="mt-3 text-sm leading-6 text-indigo-100">Choose what to sell. allAI helps describe it and add the right tags. Your data stays in your cloud account. You approve what becomes public.</p>
           </div>
           <button type="button" onClick={() => onViewChange('manage')} className="rounded-lg border border-white/30 px-4 py-2.5 text-sm font-medium hover:bg-white/10 focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-white">Manage listings</button>
         </div>

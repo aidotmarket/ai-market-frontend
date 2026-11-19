@@ -40,13 +40,14 @@ const payload = {
   format_preferences: ['CSV', 'JSON'], price_range_min: 12.5, price_range_max: 400.75,
   currency: 'USD', urgency: 'urgent', provenance_requirements: fields.provenance.trim(),
 };
-const success = ['Data request created as a draft. Open it from the detail page.', 'success'];
+const success = ["Saved as a draft. Review it and publish when you're ready.", 'success'];
 
 async function mounted(strict = false, state = initialAuth()) {
   // Actual Zustand bound hook, including getState/subscribe/setState signatures.
   const useAuthStore = create(() => state);
   const calls = [], pushes = [], toasts = [], pending = [];
   const dependencies = {
+    'next/link': { default: ({ href, children, ...props }) => React.createElement('a', { href, ...props }, children) },
     react: React, 'react/jsx-runtime': require('react/jsx-runtime'),
     'next/navigation': { useRouter: () => ({ push: (path) => pushes.push(path) }) },
     '@/store/auth': { useAuthStore },
@@ -147,7 +148,7 @@ const test = (name, run) => cases.push([name, run]);
 for (const strict of [false, true]) test(`valid payload and ordinary success (StrictMode=${strict})`, async () => {
   const h = await mounted(strict);
   try {
-    assert.match(h.el.textContent, /We create it as a draft/);
+    assert.match(h.el.textContent, /We save it as a draft so you can review it before it goes live/);
     await h.fill(); await h.submit();
     assert.deepEqual(h.calls, [payload]);
     assert.equal(h.button().textContent, 'Creating...');
