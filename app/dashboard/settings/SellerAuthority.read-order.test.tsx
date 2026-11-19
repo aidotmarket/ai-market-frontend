@@ -20,7 +20,7 @@ const latest: AuthorityStatus = { ...authority, version: 9, utc_day: '2026-10-16
   usage: [{ action: 'aim.listing.publish', reserved: 3, success: 4 }] };
 const refresh = () => fireEvent.click(screen.getByRole('button', { name: 'Refresh permissions' }));
 function expectLatest() {
-  const summary = screen.getByText('Details', { selector: 'summary' });
+  const summary = screen.getByText('Limits and usage details', { selector: 'summary' });
   if (!summary.parentElement?.hasAttribute('open')) fireEvent.click(summary);
   expect(screen.getByText(/Authority version 9.*UTC day 2026-10-16/)).toBeTruthy();
   const row = within(screen.getByRole('table')).getByText('Publish', { selector: 'th' }).closest('tr')!;

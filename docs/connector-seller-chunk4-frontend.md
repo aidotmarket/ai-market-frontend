@@ -33,10 +33,11 @@ introduced. Native requests retain Authorization, cookies, browser Origin and
 credential-derived CSRF together, without automatic credential-refresh replay.
 The backend enforces policy, ownership, recent login and binding factor.
 
-`Stop automatic seller actions` first POSTs `/authority/stop/review` with
+`Review stopping assistant changes` first POSTs `/authority/stop/review` with
 expected version, retained session/CSRF and idempotency key. It validates the
 exact `aim.seller.connector_limits.revoke` material, displays the server review,
-then submits `/authority/stop` with that matching hash on explicit confirmation.
+then submits `/authority/stop` with that matching hash when the owner confirms
+`Stop all automatic assistant changes`.
 Both withdrawals require fresh login and binding authentication, including fresh
 company SSO and native TOTP. Reauthentication retains the withdrawal operation
 and key, obtains a new review for the current session, and waits for confirmation.
