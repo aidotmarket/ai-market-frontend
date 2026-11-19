@@ -1,11 +1,11 @@
 // @vitest-environment jsdom
 import { afterEach, beforeEach, expect, it, vi } from 'vitest';
-import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import SellerAuthority from './SellerAuthority';
 import { useSellerSwitches } from '@/hooks/useSellerSwitches';
 import { useAuthStore } from '@/store/auth';
 import { readAuthority, reviewAuthority, setAuthority, reviewStopAuthority, stopAuthority } from '@/api/connector-seller-settings';
-import { authority, hash, id } from '@/tests/fixtures/seller-authority';
+import { authority, hash, id, limits } from '@/tests/fixtures/seller-authority';
 import { checkCompanySignIn } from '@/lib/company-sign-in';
 import type { User } from '@/types';
 vi.mock('@/hooks/useSellerSwitches', async original => ({ ...await original<typeof import('@/hooks/useSellerSwitches')>(), useSellerSwitches: vi.fn() }));
@@ -28,34 +28,34 @@ afterEach(() => { cleanup(); vi.unstubAllEnvs(); });
 it.each([null, { seller: false, effects: true, bulk: true }, { seller: true, effects: false, bulk: true }])('keeps authenticated status and reviewed Stop visible while edits are hidden: %j', async report => {
   vi.mocked(useSellerSwitches).mockReturnValue(report); render(<SellerAuthority />);
   await screen.findByText(/Authority version 4/);
-  expect(screen.queryByRole('button', { name: 'Review exact standing limits' })).toBeNull();
-  fireEvent.click(screen.getByRole('button', { name: 'Stop automatic seller actions' }));
-  fireEvent.click(await screen.findByRole('button', { name: 'Confirm Stop automatic seller actions' }));
+  expect(screen.queryByRole('button', { name: 'Review changes' })).toBeNull();
+  fireEvent.click(screen.getByRole('button', { name: 'Review stopping assistant changes' }));
+  fireEvent.click(await screen.findByRole('button', { name: 'Stop all assistant changes' }));
   await waitFor(() => expect(stopAuthority).toHaveBeenCalledWith({ ...vi.mocked(reviewStopAuthority).mock.calls[0][0], review_hash: hash }));
   expect(setAuthority).not.toHaveBeenCalled();
 });
 it('uses filled shared styles for Stop and Refresh buttons', async () => {
   render(<SellerAuthority />); await screen.findByText(/Authority version 4/);
-  expect(screen.getByRole('button', { name: 'Stop automatic seller actions' }).classList.contains('bg-red-700')).toBe(true);
-  expect(screen.getByRole('button', { name: 'Refresh authority and budget' }).classList.contains('bg-white')).toBe(true);
+  expect(screen.getByRole('button', { name: 'Review stopping assistant changes' }).classList.contains('bg-red-700')).toBe(true);
+  expect(screen.getByRole('button', { name: 'Refresh permissions' }).classList.contains('bg-white')).toBe(true);
 });
 it('shows selected identities, expiry and shared budget after reservations and successes', async () => {
   render(<SellerAuthority />); await screen.findByText(/Authority version 4/);
-  expect(screen.getByText('30')).toBeTruthy(); expect(screen.getByText(/Single and bulk actions share/)).toBeTruthy();
+  expect(screen.getByText('30')).toBeTruthy(); expect(screen.getByText(/Each request can change up to 50 listings/)).toBeTruthy();
   expect(screen.getByDisplayValue('https://verified.test')).toBeTruthy(); expect(screen.getByDisplayValue('2099-01-01T00:00:00Z')).toBeTruthy();
 });
 it.each(['full', 'fallback', 'off'] as const)('keeps standing-limit edits and Stop independent of ChatGPT %s mode', async seller_mode => {
   vi.mocked(useSellerSwitches).mockReturnValue({ seller: true, bulk: true, effects: true, profiles: { openai: { floors: false, seller_mode } } });
   render(<SellerAuthority />); await screen.findByText(/Authority version 4/);
-  fireEvent.click(screen.getByRole('button', { name: 'Review exact standing limits' }));
-  fireEvent.click(await screen.findByRole('button', { name: 'Save reviewed standing authority' }));
+  fireEvent.click(screen.getByRole('button', { name: 'Review changes' }));
+  fireEvent.click(await screen.findByRole('button', { name: 'Allow changes' }));
   await waitFor(() => expect(setAuthority).toHaveBeenCalledTimes(1));
-  expect(screen.getByRole<HTMLButtonElement>('button', { name: 'Stop automatic seller actions' }).disabled).toBe(false);
+  expect(screen.getByRole<HTMLButtonElement>('button', { name: 'Review stopping assistant changes' }).disabled).toBe(false);
 });
 it('reviews a typed native action before submitting the retained exact hash', async () => {
   render(<SellerAuthority />); await screen.findByText(/Authority version 4/);
-  fireEvent.click(screen.getByRole('button', { name: 'Review exact standing limits' }));
-  const save = await screen.findByRole('button', { name: 'Save reviewed standing authority' });
+  fireEvent.click(screen.getByRole('button', { name: 'Review changes' }));
+  const save = await screen.findByRole('button', { name: 'Allow changes' });
   expect(setAuthority).not.toHaveBeenCalled(); expect(screen.getByRole('region', { name: 'Exact server authority review' }).textContent).toContain(hash);
   fireEvent.click(save); await waitFor(() => expect(setAuthority).toHaveBeenCalledTimes(1));
   const body = vi.mocked(reviewAuthority).mock.calls[0][0];
@@ -64,22 +64,22 @@ it('reviews a typed native action before submitting the retained exact hash', as
 });
 it('invalidates review on editing and refuses 51 without auto splitting', async () => {
   render(<SellerAuthority />); await screen.findByText(/Authority version 4/);
-  fireEvent.click(screen.getByRole('button', { name: 'Review exact standing limits' })); await screen.findByRole('button', { name: 'Save reviewed standing authority' });
+  fireEvent.click(screen.getByRole('button', { name: 'Review changes' })); await screen.findByRole('button', { name: 'Allow changes' });
   fireEvent.change(screen.getByLabelText('max batch'), { target: { value: '51' } });
-  expect(screen.queryByRole('button', { name: 'Save reviewed standing authority' })).toBeNull();
-  expect((screen.getByRole('button', { name: 'Review exact standing limits' }) as HTMLButtonElement).disabled).toBe(true);
+  expect(screen.queryByRole('button', { name: 'Allow changes' })).toBeNull();
+  expect((screen.getByRole('button', { name: 'Review changes' }) as HTMLButtonElement).disabled).toBe(true);
   expect(setAuthority).not.toHaveBeenCalled();
 });
 
 it('clears the old credential review and reads current limits on explicit refresh', async () => {
   const view = render(<SellerAuthority />); await screen.findByText(/Authority version 4/);
-  fireEvent.click(screen.getByRole('button', { name: 'Review exact standing limits' })); await screen.findByRole('button', { name: 'Save reviewed standing authority' });
+  fireEvent.click(screen.getByRole('button', { name: 'Review changes' })); await screen.findByRole('button', { name: 'Allow changes' });
   vi.mocked(readAuthority).mockResolvedValue({ version: 0, enabled: false, limits: null, utc_day: '2026-10-10', usage: [] });
   useAuthStore.setState({ token: 'different-session' }); view.rerender(<SellerAuthority />);
-  expect(screen.queryByRole('button', { name: 'Save reviewed standing authority' })).toBeNull();
-  fireEvent.click(screen.getByRole('button', { name: 'Refresh authority and budget' }));
+  expect(screen.queryByRole('button', { name: 'Allow changes' })).toBeNull();
+  fireEvent.click(screen.getByRole('button', { name: 'Refresh permissions' }));
   await screen.findByText(/Authority version 0/);
-  expect(screen.queryByRole('button', { name: 'Save reviewed standing authority' })).toBeNull();
+  expect(screen.queryByRole('button', { name: 'Allow changes' })).toBeNull();
 });
 
 
@@ -91,7 +91,55 @@ it('clears the old credential review and reads current limits on explicit refres
 it.each(['RECENT_LOGIN_REQUIRED', 'SECOND_FACTOR_REQUIRED', 'SECOND_FACTOR_ENROLLMENT_REQUIRED'])('shows refresh only for legacy %s', async detail => {
   vi.mocked(reviewAuthority).mockRejectedValueOnce({ response: { status: 403, data: { detail } } });
   render(<SellerAuthority />); await screen.findByText(/Authority version 4/);
-  fireEvent.click(screen.getByRole('button', { name: 'Review exact standing limits' }));
+  fireEvent.click(screen.getByRole('button', { name: 'Review changes' }));
   await screen.findByText('Please refresh the page and try again.');
   expect(screen.queryByRole('dialog')).toBeNull(); expect(checkCompanySignIn).not.toHaveBeenCalled();
+});
+
+it('keeps every budget row and value inside a closed native Details disclosure', async () => {
+  render(<SellerAuthority />);
+  await screen.findByText(/Authority version 4/);
+  const summary = screen.getByText('Details', { selector: 'summary' });
+  const details = summary.closest('details')!;
+  expect(details.hasAttribute('open')).toBe(false);
+  expect(summary.parentElement).toBe(details);
+  fireEvent.click(summary);
+  expect(details.hasAttribute('open')).toBe(true);
+  const table = within(details).getByRole('table', { name: 'Shared daily limits (UTC)' });
+  expect(within(table).getAllByRole('columnheader').map(cell => cell.textContent)).toEqual(['Operation', 'Limit', 'Reserved', 'Succeeded', 'Remaining']);
+  expect(within(table).getAllByRole('row').slice(1).map(row => row.textContent)).toEqual(['Edit0000', 'Publish5081230', 'Unpublish0000']);
+  fireEvent.click(summary);
+  expect(details.hasAttribute('open')).toBe(false);
+});
+
+it('keeps review, allow and stop buttons connected to their original requests', async () => {
+  render(<SellerAuthority />);
+  await screen.findByText(/Authority version 4/);
+  fireEvent.click(screen.getByRole('button', { name: 'Review changes' }));
+  const allow = await screen.findByRole('button', { name: 'Allow changes' });
+  expect(reviewAuthority).toHaveBeenCalledTimes(1);
+  expect(setAuthority).not.toHaveBeenCalled();
+  expect(reviewStopAuthority).not.toHaveBeenCalled();
+  fireEvent.click(allow);
+  await waitFor(() => expect(setAuthority).toHaveBeenCalledWith({ ...vi.mocked(reviewAuthority).mock.calls[0][0], review_hash: hash }));
+  await waitFor(() => expect(screen.getByRole<HTMLButtonElement>('button', { name: 'Review stopping assistant changes' }).disabled).toBe(false));
+  fireEvent.click(screen.getByRole('button', { name: 'Review stopping assistant changes' }));
+  const stop = await screen.findByRole('button', { name: 'Stop all assistant changes' });
+  expect(reviewStopAuthority).toHaveBeenCalledTimes(1);
+  expect(stopAuthority).not.toHaveBeenCalled();
+  fireEvent.click(stop);
+  await waitFor(() => expect(stopAuthority).toHaveBeenCalledWith({ ...vi.mocked(reviewStopAuthority).mock.calls[0][0], review_hash: hash }));
+  expect(setAuthority).toHaveBeenCalledTimes(1);
+});
+
+it('describes only currently allowed operations with a local expiry date', async () => {
+  render(<SellerAuthority />);
+  const expiry = new Date(limits.expires_at).toLocaleString(undefined, { dateStyle: 'medium', timeStyle: 'short' });
+  await screen.findByText(`Your AI assistant can publish your listings until ${expiry}.`);
+});
+
+it.each([false, true])('shows the off status for disabled or expired permissions (expired: %s)', async expired => {
+  vi.mocked(readAuthority).mockResolvedValue({ ...authority, enabled: expired, limits: { ...limits, expires_at: '2020-01-01T00:00:00Z' } });
+  render(<SellerAuthority />);
+  await screen.findByText("Your AI assistant can't change your listings right now.");
 });

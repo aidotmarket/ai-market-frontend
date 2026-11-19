@@ -86,40 +86,43 @@ export function AuthorityScreen({ switches }: { switches: SellerSwitchReport | n
     } catch(e) { if (mounted.current) { setError(e); setStopReview(null); } }
     finally { if (mounted.current) setBusy(false); }
   };
-  return <section id="seller-authority" aria-label="Seller standing authority" className="mt-6 space-y-4 rounded-xl border bg-white p-6">
-    <h2 className="text-lg font-semibold">Seller standing authority</h2>
-    <button type="button" disabled={!status || busy} onClick={() => void stop()} className={dangerButtonClass}>Stop automatic seller actions</button>
-    <p>After authenticated review and confirmation, Stop revokes standing authority immediately for unexecuted items. Successful items remain completed.</p>
-    <button type="button" onClick={() => { stopping.current = null; retry(); }} className={secondaryButtonClass}>Refresh authority and budget</button>
-    {stopReview && <section aria-label="Exact server Stop review"><h3>Review withdrawal of standing authority</h3><pre className="overflow-auto whitespace-pre-wrap">{JSON.stringify(stopReview.result, null, 2)}</pre><button disabled={busy} onClick={() => void confirmStop()} className={dangerButtonClass}>Confirm Stop automatic seller actions</button></section>}
+  return <section id="seller-authority" aria-label="AI assistant permissions" className="mt-6 space-y-4 rounded-xl border bg-white p-6">
+    <h2 className="text-lg font-semibold">AI assistant permissions</h2>
+    <button type="button" disabled={!status || busy} onClick={() => void stop()} className={dangerButtonClass}>Review stopping assistant changes</button>
+    <p>Review and confirm to stop all future assistant changes. Changes already completed will stay in place.</p>
+    <button type="button" onClick={() => { stopping.current = null; retry(); }} className={secondaryButtonClass}>Refresh permissions</button>
+    {stopReview && <section aria-label="Exact server Stop review"><h3>Review stopping assistant changes</h3><pre className="overflow-auto whitespace-pre-wrap">{JSON.stringify(stopReview.result, null, 2)}</pre><button disabled={busy} onClick={() => void confirmStop()} className={dangerButtonClass}>Stop all assistant changes</button></section>}
     {message && <p role="status">{message}</p>}
-    {status && <><p>Authority version {status.version} · {status.enabled ? 'Active' : 'Off or expired'} · UTC day {status.utc_day}</p>
-      <p>Single and bulk actions share this budget across all grants and clients. Absolute request ceiling: 50 items. Requests are never automatically split.</p>
+    {status && <><p role="status">{effects && status.enabled && status.limits?.expires_at && Date.parse(status.limits.expires_at) > Date.now()
+      ? <>Your AI assistant can {status.limits.operations?.map(v => ({ update: 'edit', publish: 'publish', unpublish: 'unpublish' })[v]).join(', ')} your listings until {new Date(status.limits.expires_at).toLocaleString(undefined, { dateStyle: 'medium', timeStyle: 'short' })}.</>
+      : "Your AI assistant can't change your listings right now."}</p>
+      <details className="rounded-lg border p-4"><summary className="min-h-11 cursor-pointer font-medium">Details</summary>
+      <p>Authority version {status.version} · {status.enabled ? 'Active' : 'Off or expired'} · UTC day {status.utc_day}</p>
+      <p>Each request can change up to 50 listings. Single and bulk changes share these daily limits across all connected assistants.</p>
       <div className="overflow-x-auto"><table className="w-full border-collapse text-sm text-left">
-        <caption className="caption-top pb-3 text-left font-medium text-gray-700">Shared UTC daily budget</caption>
+        <caption className="caption-top pb-3 text-left font-medium text-gray-700">Shared daily limits (UTC)</caption>
         <thead className="border-b border-gray-200 bg-gray-50"><tr>{['Operation', 'Limit', 'Reserved', 'Succeeded', 'Remaining'].map(label =>
           <th key={label} scope="col" className="whitespace-nowrap px-4 py-3 font-semibold">{label}</th>)}</tr></thead><tbody>{verbs.map(v => {
         const used = status.usage.find(u => u.action === `aim.listing.${v}`); const limit = status.limits?.daily_items?.[v] ?? 0;
-        return <tr key={v} className="border-b border-gray-100"><th scope="row" className="px-4 py-3 font-medium">{v}</th>{[limit, used?.reserved ?? 0, used?.success ?? 0,
+        return <tr key={v} className="border-b border-gray-100"><th scope="row" className="px-4 py-3 font-medium">{({ update: 'Edit', publish: 'Publish', unpublish: 'Unpublish' })[v]}</th>{[limit, used?.reserved ?? 0, used?.success ?? 0,
           Math.max(0, limit - (used?.reserved ?? 0) - (used?.success ?? 0))].map((value, index) => <td key={index} className="px-4 py-3 tabular-nums">{value}</td>)}</tr>;
-      })}</tbody></table></div>
-      {!effects && <p>Seller effects are off. Status and Stop remain available.</p>}
+      })}</tbody></table></div></details>
       {effects && <><form onSubmit={e => { e.preventDefault(); void prepare(); }} className="space-y-4">
-        <fieldset disabled={busy || !effects} className="grid gap-4 sm:grid-cols-2"><legend>Edit standing limits</legend>
+        <fieldset disabled={busy || !effects} className="grid gap-4 sm:grid-cols-2"><legend>Choose allowed changes</legend>
           {lists.map(k => <label key={k}>{names[k]} (one per line)<textarea className="block w-full rounded border p-2" value={limits[k].join('\n')} onChange={e => edit({ ...limits, [k]: e.target.value.split('\n').filter(Boolean) })} /></label>)}
           {verbs.map(v => <div key={v}><label><input type="checkbox" checked={limits.operations.includes(v)} onChange={e => {
             const daily = { ...limits.daily_items }; if (e.target.checked) daily[v] = 1; else delete daily[v];
             edit({ ...limits, operations: e.target.checked ? [...limits.operations, v] : limits.operations.filter(x => x !== v), daily_items: daily });
-          }} />{v}</label>{limits.operations.includes(v) && <label>Daily {v} items<input className="block rounded border p-2" type="number" min="1" max="1000000" value={limits.daily_items[v] ?? 1} onChange={e => edit({ ...limits, daily_items: { ...limits.daily_items, [v]: Number(e.target.value) } })} /></label>}</div>)}
+          }} />{({ update: 'Edit', publish: 'Publish', unpublish: 'Unpublish' })[v]}</label>{limits.operations.includes(v) && <label>Daily {({ update: 'edit', publish: 'publish', unpublish: 'unpublish' })[v]} limit<input className="block rounded border p-2" type="number" min="1" max="1000000" value={limits.daily_items[v] ?? 1} onChange={e => edit({ ...limits, daily_items: { ...limits.daily_items, [v]: Number(e.target.value) } })} /></label>}</div>)}
           {(['aws', 'r2', 'gateway', 'none'] as const).map(v => <label key={v}><input type="checkbox" checked={limits.source_kinds.includes(v)} onChange={e => edit({ ...limits, source_kinds: e.target.checked ? [...limits.source_kinds, v] : limits.source_kinds.filter(x => x !== v) })} />Source: {v}</label>)}
           {fields.map(v => <label key={v}><input type="checkbox" checked={limits.mutable_fields.includes(v)} onChange={e => edit({ ...limits, mutable_fields: e.target.checked ? [...limits.mutable_fields, v] : limits.mutable_fields.filter(x => x !== v) })} />Mutable field: {v}</label>)}
           {(['max_batch', 'concurrent_operations', 'price_min_cents', 'price_max_cents', 'max_price_delta_cents'] as const).map(k => <label key={k}>{k.replaceAll('_', ' ')}<input className="block rounded border p-2" type="number" min={k === 'max_batch' || k === 'concurrent_operations' ? 1 : 0} max={k === 'max_batch' || k === 'concurrent_operations' ? 50 : undefined} value={limits[k] ?? ''} onChange={e => edit({ ...limits, [k]: e.target.value === '' ? null : Number(e.target.value) })} /></label>)}
           <label>Expiry (ISO timestamp with UTC offset)<input className="block rounded border p-2" value={limits.expires_at} onChange={e => edit({ ...limits, expires_at: e.target.value })} /></label>
           <p>Currency USD. Samples must be absent or unchanged and already approved. New presentation or sample content still requires web review. Limits never sign licences.</p>
         </fieldset>
-        <button type="submit" disabled={busy || !effects || !validLimits(limits) || Date.parse(limits.expires_at) <= Date.now()} className={primaryButtonClass}>Review exact standing limits</button>
+        <button type="submit" disabled={busy || !effects || !validLimits(limits) || Date.parse(limits.expires_at) <= Date.now()} className={primaryButtonClass}>Review changes</button>
       </form>
-      {review && <section aria-label="Exact server authority review"><h3>Exact native decision</h3><pre className="overflow-auto whitespace-pre-wrap">{JSON.stringify(review.result, null, 2)}</pre><button disabled={busy || !effects} onClick={() => void save()} className={primaryButtonClass}>Save reviewed standing authority</button></section>}
+      {review && <section aria-label="Exact server authority review"><h3>Review assistant permissions</h3><pre className="overflow-auto whitespace-pre-wrap">{JSON.stringify(review.result, null, 2)}</pre><button disabled={busy || !effects} onClick={() => void save()} className={primaryButtonClass}>Allow changes</button></section>}
       </>}
     </>}
     <NativeSellerAuth error={error} />

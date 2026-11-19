@@ -18,13 +18,15 @@ function deferred() {
 const latest: AuthorityStatus = { ...authority, version: 9, utc_day: '2026-10-16',
   limits: { ...limits, max_batch: 7, daily_items: { publish: 70 } },
   usage: [{ action: 'aim.listing.publish', reserved: 3, success: 4 }] };
-const refresh = () => fireEvent.click(screen.getByRole('button', { name: 'Refresh authority and budget' }));
+const refresh = () => fireEvent.click(screen.getByRole('button', { name: 'Refresh permissions' }));
 function expectLatest() {
+  const summary = screen.getByText('Details', { selector: 'summary' });
+  if (!summary.parentElement?.hasAttribute('open')) fireEvent.click(summary);
   expect(screen.getByText(/Authority version 9.*UTC day 2026-10-16/)).toBeTruthy();
-  const row = within(screen.getByRole('table')).getByText('publish', { selector: 'th' }).closest('tr')!;
+  const row = within(screen.getByRole('table')).getByText('Publish', { selector: 'th' }).closest('tr')!;
   expect(within(row).getAllByRole('cell').map(cell => cell.textContent)).toEqual(['70', '3', '4', '63']);
   expect((screen.getByLabelText('max batch') as HTMLInputElement).value).toBe('7');
-  expect((screen.getByLabelText('Daily publish items') as HTMLInputElement).value).toBe('70');
+  expect((screen.getByLabelText('Daily publish limit') as HTMLInputElement).value).toBe('70');
 }
 beforeEach(() => {
   useAuthStore.setState({ user: { id: id(99) } as never, token: 'owned-fixture-session-1' });
@@ -124,7 +126,7 @@ it.each(['success', 'failure'])('settles an outstanding read safely after unmoun
   await act(async () => {
     if (outcome === 'success') old.resolve({ data: authority }); else old.reject(new Error('unmounted GET'));
   });
-  expect(screen.queryByRole('region', { name: 'Seller standing authority' })).toBeNull();
+  expect(screen.queryByRole('region', { name: 'AI assistant permissions' })).toBeNull();
   expect(screen.queryByRole('alert')).toBeNull();
 });
 
@@ -134,9 +136,9 @@ it('automatically recovers failed authority and budget after same-owner session 
   act(() => useAuthStore.setState({ token: 'valid-recovered-session' }));
   await screen.findByText(/Authority version 9/); expectLatest();
   expect(screen.queryByRole('alert')).toBeNull(); expect(get).toHaveBeenCalledTimes(2);
-  const button = screen.getByRole('button', { name: 'Refresh authority and budget' });
+  const button = screen.getByRole('button', { name: 'Refresh permissions' });
   expect(button.className).toContain('border'); expect(button.className).toContain('px-4');
-  const table = screen.getByRole('table', { name: 'Shared UTC daily budget' });
+  const table = screen.getByRole('table', { name: 'Shared daily limits (UTC)' });
   expect(table.querySelector('caption')?.className).toContain('text-left');
   for (const header of within(table).getAllByRole('columnheader')) {
     expect(header.className).toContain('px-4'); expect(header.getAttribute('scope')).toBe('col');
