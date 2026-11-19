@@ -64,7 +64,7 @@ export default function PurchaserReview({versionId,identityTerms=[]}:{versionId?
   const view=review?.purchaser_view;
   const publicStrings=Object.values(review?.public_review.public_fields??{}).filter((v):v is string=>typeof v==='string');
   const blocked=identityMatches(localTerms,[...publicStrings,...(view?[view.door_host??'',...view.files.map(f=>f.delivery_name)]:[])]);
-  const warnings=view?.files.flatMap(f=>f.columns.map(c=>c.name)).filter(name=>identityMatches(localTerms,[name]).length||/confidential|client|project/i.test(name))??[];
+  const warnings=view?.files.flatMap(f=>f.columns.map(c=>c.name)).filter((name):name is string=>typeof name==='string').filter(name=>identityMatches(localTerms,[name]).length||/confidential|client|project/i.test(name))??[];
   return <section aria-label="vectorAIz review" className="space-y-3 rounded border bg-white p-4">
     <h2 className="text-lg font-semibold">Review your vectorAIz listing</h2>
     <p>{VECTOR_ATTESTATION}</p>

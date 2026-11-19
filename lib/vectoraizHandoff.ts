@@ -11,7 +11,7 @@ export const MAX_ENCODED = 48 * 1024;
 export const MAX_EXPANDED = 64 * 1024;
 export const HANDOFF_TTL = 30 * 60 * 1000;
 export const VECTOR_ATTESTATION = 'The seller attests: chunks, embeddings and metadata; no source files are delivered.';
-export const DRAFT_IN_PROGRESS = 'You already have a listing in progress. Finish or discard it first.';
+export const DRAFT_IN_PROGRESS = 'You already have a listing in progress. Open Seller Workspace and finish it before importing again.';
 const STASH = 'aim.vectoraiz.handoff.v1';
 const RECEIPT = 'aim.vectoraiz.receipt.v1';
 const UUID = /^[0-9a-f]{8}-(?:[0-9a-f]{4}-){3}[0-9a-f]{12}$/;
@@ -39,14 +39,14 @@ export function validateHandoff(value:unknown):Handoff {
   if('provider' in v){
     exact(v,[...base,'provider','bucket','connection_folder','pack_prefix','file_count','selection_sha256'],['region','account_id']);
     if(!['aws','r2'].includes(String(v.provider)) || !text(v.bucket,255,1) || v.connection_folder!=='vz' || v.pack_prefix!=='vz/'+v.pack_id+'/' ||
-       !integer(v.file_count) || v.file_count<1 || !SHA.test(String(v.selection_sha256)))fail();
+       !integer(v.file_count) || v.file_count<1 || (typeof v.selection_sha256!=="string"||!SHA.test(v.selection_sha256)))fail();
     if(v.provider==='aws' ? !text(v.region,80,1)||v.account_id!=null : !text(v.account_id,128,1)||v.region!=null)fail();
   }else{
     exact(v,[...base,'files']);
     if(!Array.isArray(v.files)||v.files.length<1||v.files.length>64)fail();
     const files=v.files as unknown[];
-    for(const item of files){const f=record(item);exact(f,['size','sha256']);if(!integer(f.size)||!SHA.test(String(f.sha256)))fail();}
-    if(new Set(files.map(f=>JSON.stringify(f))).size!==files.length)fail();
+    for(const item of files){const f=record(item);exact(f,['size','sha256']);if(!integer(f.size)||(typeof f.sha256!=="string"||!SHA.test(f.sha256)))fail();}
+    if(new Set(files.map(item=>{const f=record(item);return `${f.size}:${f.sha256}`;})).size!==files.length)fail();
   }
   return v as Handoff;
 }
@@ -85,22 +85,27 @@ export async function decodeHandoff(encoded:string):Promise<Handoff>{
 export type PendingHandoff={handoff:Handoff;encoded:string;expires:number;account:string|null;route:string;key:string};
 let capturing:Promise<void>=Promise.resolve();
 let captureGeneration=0;
+export const HANDOFF_CAPTURED='vectoraiz-handoff-captured';
+declare global { interface Window { __vectoraizEntry?: {fragment:string;route:string}; } }
 export function clearHandoff(){++captureGeneration;try{sessionStorage.removeItem(STASH);}catch{/* Storage may be unavailable. */}}
 export function captureHandoff():Promise<void>{
-  if(typeof window==='undefined'||!/(?:^#|&)vz(?:=|&|$)/.test(window.location.hash))return capturing;
-  const fragment=window.location.hash;
+  if(typeof window==='undefined')return capturing;
+  const entry=window.__vectoraizEntry;delete window.__vectoraizEntry;
+  const fragment=entry?.fragment??window.location.hash;
+  if(!/(?:^#|&)vz(?:=|&|$)/.test(fragment))return capturing;
   // Clear before parsing, storage, asynchronous decoding or any auth redirect.
   window.history.replaceState(window.history.state,'',window.location.pathname+window.location.search);
   clearHandoff();const generation=captureGeneration;
   const account=useAuthStore.getState().user?.id??null;
-  const route=window.location.pathname;
+  const route=entry?.route??window.location.pathname;
   capturing=(async()=>{try{
     if(!['/dashboard/seller-workspace','/dashboard/gateways'].includes(route))return;
     if(fragment.length>MAX_ENCODED+4||!fragment.startsWith('#vz='))return;
     const encoded=fragment.slice(4), handoff=await decodeHandoff(encoded);
     if((isBucket(handoff)?'/dashboard/seller-workspace':'/dashboard/gateways')!==route||generation!==captureGeneration)return;
-    sessionStorage.setItem(STASH,JSON.stringify({handoff,encoded,expires:Date.now()+HANDOFF_TTL,account,route,key:crypto.randomUUID()}));
+    sessionStorage.setItem(STASH,JSON.stringify({encoded,expires:Date.now()+HANDOFF_TTL,account,route,key:crypto.randomUUID()}));
   }catch{/* Never retain or report an invalid payload. */}})();
+  window.dispatchEvent(new Event(HANDOFF_CAPTURED));
   return capturing;
 }
 export async function consumeHandoff(account:string,route:string):Promise<PendingHandoff|null>{
@@ -134,7 +139,14 @@ export function useHandoffBoundary(){
   if(typeof window!=='undefined')void captureHandoff();
   useEffect(()=>{
     void captureHandoff();
-    const change=()=>{void captureHandoff();};window.addEventListener('hashchange',change);
+    const syncRouter=()=>{
+      // Next ignores its own __NA history entries. Omit that marker when
+      // invoking its patched API so canonicalUrl also forgets the fragment.
+      const state={...window.history.state};delete state.__NA;delete state._N;
+      window.history.replaceState(state,'',window.location.pathname+window.location.search+window.location.hash);
+    };
+    syncRouter();
+    const change=()=>{void captureHandoff();syncRouter();};window.addEventListener('hashchange',change);
     // An unauthenticated stash survives first login. Later identity changes
     // clear the stash and fence in-flight decoding.
     let owner=useAuthStore.getState().user?.id??null;
@@ -182,8 +194,12 @@ export function authorityMessage(error:unknown):string{
   for(const code of ['CSRF_REQUIRED','SESSION_CHANGED','FIRST_PARTY_SESSION_REQUIRED'])table[code]=signin;
   for(const code of ['SOURCE_MISMATCH','SOURCE_AMBIGUOUS','VECTOR_SELECTION_REQUIRED','HANDOFF_MALFORMED','HANDOFF_PACK_ID_UNSUPPORTED'])table['AUTHORITY_'+code]=again;
   for(const code of ['PURCHASER_STALE','SOURCE_STALE','BINDING_STALE','NATIVE_REVIEW_REQUIRED','REVIEW_REQUIRED','CONFIRMATION_MALFORMED'])table['AUTHORITY_'+code]=refresh;
-  for(const code of ['IMPORT_DISABLED','LISTING_DISABLED','VERSION_NOT_FOUND'])table['AUTHORITY_'+code]=unavailable;
+  for(const code of ['IMPORT_DISABLED','VERSION_NOT_FOUND'])table['AUTHORITY_'+code]=unavailable;
   for(const code of ['IMPORT_KEY_CONFLICT','CONFIRMATION_KEY_CONFLICT'])table['AUTHORITY_'+code]='Start the import again from vectorAIz.';
+  table.AUTHORITY_LISTING_DISABLED='Your company has turned listing off. Ask your company administrator to enable listing, then retry.';
+  table.SELLER_DISABLED='Listing is disabled for your account. Ask your company administrator to enable selling, then retry.';
+  const detail=(error as {response?:{data?:{detail?:{field?:unknown;message?:unknown;code?:unknown}}}})?.response?.data?.detail;
+  if(detail&&typeof detail==='object'&&!detail.code&&typeof detail.field==='string'&&typeof detail.message==='string')return 'Remove contact details from the draft text in vectorAIz, then export again and open the new link.';
   table.AUTHORITY_REQUEST_TOO_LARGE='Export again from vectorAIz with a smaller draft.';
   return customerRefusal(error,table,error instanceof HandoffError?again:'We could not complete the import or review. Try again, or contact support.');
 }

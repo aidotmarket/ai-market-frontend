@@ -107,7 +107,7 @@ function OwnedSellerListingDraftProvider({owner,enabled,sampleCapability,childre
       if(controller.signal.aborted||!isAuthSessionOwner(owner.session))return;
       const accepted=reconcileRead(owner,value,checkpoint);
       if(accepted&&owner.selectionSaveCount===0)owner.selectionSaveFailed=false;
-      publish(owner);setLoaded(true);
+      publish(owner);setLoaded(owner.loaded);
     }).catch(()=>{if(!controller.signal.aborted&&isAuthSessionOwner(owner.session)){setError(true);setLoaded(false);}});
     return()=>controller.abort();
   },[owner,enabled,retryKey,requested]);
@@ -139,8 +139,10 @@ function OwnedSellerListingDraftProvider({owner,enabled,sampleCapability,childre
         // The backend atomically adopts only a new import. Exact replay never
         // moves its pointer: read current rather than adopting the receipt ID.
         owner.draftGeneration+=1;owner.saveRevision+=1;owner.pending=null;
+        owner.loaded=false;owner.draft=null;owner.version=0;publish(owner);setLoaded(false);setError(false);
         owner.selectionSaveCount=0;owner.selectionSaveFailed=false;setVisibleSampleIndices(null);
-        const current=await readListingDraft();
+        let current:SavedListingDraft|null;
+        try{current=await readListingDraft();}catch(failure){setError(true);throw failure;}
         assertAuthSessionOwner(owner.session);
         owner.draft=current;owner.version=current?.version??0;owner.loaded=true;
         publish(owner);setLoaded(true);setError(false);return receipt;

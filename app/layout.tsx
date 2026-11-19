@@ -38,6 +38,7 @@ export default function RootLayout({
 }) {
   return (
     <html lang="en">
+      <head><script dangerouslySetInnerHTML={{__html: `(function(){if(/(?:^#|&)vz(?:=|&|$)/.test(location.hash)){window.__vectoraizEntry={fragment:location.hash,route:location.pathname};history.replaceState(history.state,"",location.pathname+location.search)}})()`}} /></head>
       <body className={`${plusJakarta.className} min-h-screen bg-white text-gray-900 antialiased`}>
         <SupportPrivateBoundary>{children}</SupportPrivateBoundary>
       </body>

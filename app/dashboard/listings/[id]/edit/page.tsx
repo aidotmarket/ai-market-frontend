@@ -97,7 +97,10 @@ export default function EditListingPage() {
       if (licensesEnabled && l.license_selection) setLicenseSelection(l.license_selection);
       setListingSlug(typeof l.slug === 'string' ? l.slug : undefined);
       setHasStoredFormat(Boolean(l.data_format));
-      setAuthorityVersion(l.authority_version_id??null);
+      // GET /listings/{id} has no authority reference. Keep this mount dark
+      // until an owner-only listing -> authority-version read is supplied;
+      // wire that read here, bound to id, rather than trusting public listing data.
+      setAuthorityVersion(null);
       setData({
         title: l.title || '',
         description: l.description || '',

@@ -110,3 +110,11 @@ it.each([false,true])('preserves saved licence and sample metadata when sample c
   await screen.findByText(/Draft saved to your account/);
   expect(api.saveListingDraft.mock.results[0].value).toBeTruthy();
 });
+
+it('#1172 omitted-draft_id save racing an import uses existing 409 conflict guidance to reload current draft',async()=>{
+ api.saveListingDraft.mockRejectedValue(new AxiosError('conflict',undefined,undefined,undefined,{status:409,data:{detail:'Draft changed. Reload the saved draft before saving again.'}} as never));
+ renderEditor();fireEvent.change(await screen.findByLabelText('Title'),{target:{value:'Raced edit'}});
+ fireEvent.click(screen.getByText('Save private draft'));
+ await screen.findByText(/reload the Workspace to open the saved version/);
+ expect(api.saveListingDraft).toHaveBeenCalledOnce();
+});

@@ -77,3 +77,9 @@ it('does not show a previous account review after an account change',async()=>{
  await act(async()=>{useAuthStore.setState({user:{id:'other'} as never});});
  await waitFor(()=>expect(screen.queryByText('Names your buyer will see')).toBeNull());
 });
+
+it('CC NIT renders a column without name without crashing local identity checks',async()=>{
+ await mount({...review,purchaser_view:{...review.purchaser_view!,files:[{...review.purchaser_view!.files[0],columns:[{type:'string'} as never]}]}});
+ fireEvent.change(screen.getByLabelText('Names to keep private (one per line)'),{target:{value:'private'}});
+ expect(screen.getByText('Names your buyer will see')).toBeTruthy();
+});

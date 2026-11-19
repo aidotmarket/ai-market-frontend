@@ -9,7 +9,7 @@ import {describeGatewayFile,getGatewayFile,listSellerGateways,readAuthorityGatew
 import {resolveFolder} from './folderSelection';
 import {useOptionalSellerListingDraft} from './SellerListingDraftStore';
 import PurchaserReview from '@/components/gateways/PurchaserReview';
-import {authorityCode,authorityMessage,bucketTarget,clearHandoff,consumeHandoff,HandoffError,identityMatches,isBucket,matchGateway,matchingConnections,saveAuthorityReceipt,readAuthorityReceipt,VECTOR_ATTESTATION,type PendingHandoff} from '@/lib/vectoraizHandoff';
+import {HANDOFF_CAPTURED,authorityCode,authorityMessage,bucketTarget,clearHandoff,consumeHandoff,HandoffError,identityMatches,isBucket,matchGateway,matchingConnections,saveAuthorityReceipt,readAuthorityReceipt,VECTOR_ATTESTATION,type PendingHandoff} from '@/lib/vectoraizHandoff';
 import type {GatewayFile} from '@/types/sellerGateway';
 
 const routeFor=(mode:'bucket'|'gateway')=>mode==='bucket'?'/dashboard/seller-workspace':'/dashboard/gateways';
@@ -17,6 +17,8 @@ export default function VectoraizImport({mode='bucket',gatewayId}:{mode?:'bucket
   const account=useAuthStore(state=>state.user?.id);
   const email=useAuthStore(state=>state.user?.email);
   const store=useOptionalSellerListingDraft();
+  const [intake,setIntake]=useState(0);
+  const [expired,setExpired]=useState(false);
   const [canRestore,setCanRestore]=useState(false);
   const [pending,setPending]=useState<PendingHandoff|null>(null);
   const [connections,setConnections]=useState<SellerWorkspaceConnection[]>([]);
@@ -36,8 +38,20 @@ export default function VectoraizImport({mode='bucket',gatewayId}:{mode?:'bucket
   const run=useRef(0);
   const abort=useRef<AbortController|null>(null);
   useEffect(()=>{
+    const captured=()=>{++run.current;abort.current?.abort();bootstrap.current=null;request.current=null;setPending(null);setReceipt(null);setTarget(null);setFiles([]);setCandidates([]);setConnections([]);setGateways([]);setChoice('');setTerms('');setAccountConfirmed(false);setTargetConfirmed(false);setBusy(false);setProgress([]);setIntake(v=>v+1);};
+    window.addEventListener(HANDOFF_CAPTURED,captured);
+    return()=>window.removeEventListener(HANDOFF_CAPTURED,captured);
+  },[]);
+  useEffect(()=>{
+    setExpired(false);
+    if(!pending)return;
+    const expire=()=>{++run.current;abort.current?.abort();setBusy(false);setExpired(true);request.current=null;setTarget(null);setAccountConfirmed(false);setTargetConfirmed(false);setError('This import link expired. Export the listing again from vectorAIz, then open the new link.');};
+    if(pending.expires<=Date.now()){expire();return;}
+    const timer=setTimeout(expire,pending.expires-Date.now());return()=>clearTimeout(timer);
+  },[pending]);
+  useEffect(()=>{
     const generation=++run.current;const same=sessionLifecycle();
-    setCanRestore(false);setPending(null);setReceipt(null);setTarget(null);setError(null);setTerms('');request.current=null;
+    restoreAllowed.current=false;setCanRestore(false);setPending(null);setReceipt(null);setTarget(null);setError(null);setTerms('');request.current=null;
     if(!account)return;
     // One consumption per mounted entry, including React Strict Mode's replay.
     if(bootstrap.current?.account!==account)bootstrap.current={account,promise:(async()=>{
@@ -50,27 +64,29 @@ export default function VectoraizImport({mode='bucket',gatewayId}:{mode?:'bucket
     void bootstrap.current.promise.then(async item=>{
       if(!same()||generation!==run.current)return;
       if(!item){setCanRestore(true);return;}
+      setPending(item);
       if(isBucket(item.handoff)){
-        setPending(item);
         const list=matchingConnections(item.handoff,await listSellerWorkspaceConnections());
         if(!same()||generation!==run.current)return;
         setConnections(list);setChoice(list.length===1?list[0].id:'');
       }else{
         const list=(await listSellerGateways()).filter(g=>g.gateway_metadata_revision!==undefined&&(!gatewayId||g.gateway_id===gatewayId));
         if(!same()||generation!==run.current)return;
-        if(list.length===0)return;
-        setPending(item);setGateways(list);setChoice(list.length===1?list[0].gateway_id:'');
+        setGateways(list);setChoice(list.length===1?list[0].gateway_id:'');
       }
-    }).catch(cause=>{if(same()&&generation===run.current)setError(authorityMessage(cause));});
+    }).catch(cause=>{if(same()&&generation===run.current)setError(authorityMessage(cause)+' Open the link from vectorAIz again to retry.');});
     return()=>{++run.current;abort.current?.abort();};
-  },[account,mode,gatewayId]);
+  },[account,mode,gatewayId,intake]);
   useEffect(()=>{
     if(!account||!canRestore||!restoreAllowed.current||pending||receipt)return;
     const saved=readAuthorityReceipt(account);
     if(!saved)return;
     if(mode==='bucket'&&store?.loaded&&store.draft?.draft_id===saved.draft_id&&saved.listing_id===null)setReceipt(saved);
   },[account,canRestore,pending,receipt,mode,store?.loaded,store?.draft?.draft_id]);
-  const current=()=>!!pending&&pending.account===useAuthStore.getState().user?.id&&pending.expires>Date.now();
+  const current=()=>{
+    if(pending&&pending.expires<=Date.now()){setExpired(true);setError('This import link expired. Export the listing again from vectorAIz, then open the new link.');return false;}
+    return !!pending&&pending.account===useAuthStore.getState().user?.id;
+  };
   async function checkFiles(){
     if(!pending||!choice||!current())return;
     const generation=run.current,same=sessionLifecycle();
@@ -84,7 +100,7 @@ export default function VectoraizImport({mode='bucket',gatewayId}:{mode?:'bucket
         next={type:'bucket',selection:await bucketTarget(pending.handoff,connection,objects)};
       }else{
         const selection=await readAuthorityGatewayFiles(choice);
-        if(!selection){if(same()&&generation===run.current)setPending(null);return;}
+        if(!selection)throw new HandoffError();
         const candidates=selection.files.filter(f=>f.present&&pending.handoff&&!isBucket(pending.handoff)&&pending.handoff.files.some(p=>p.size===f.size_bytes)&&
           (f.description.state!=='described'||!f.description.described_at||Date.parse(f.changed_at)>Date.parse(f.description.described_at)));
         if(candidates.length){
@@ -100,6 +116,7 @@ export default function VectoraizImport({mode='bucket',gatewayId}:{mode?:'bucket
     finally{if(same()&&generation===run.current)setBusy(false);}
   }
   async function describe(){
+    if(!current())return;
     const generation=run.current,same=sessionLifecycle();const controller=new AbortController();abort.current=controller;
     setBusy(true);setProgress([]);setError(null);
     try{
@@ -151,10 +168,14 @@ export default function VectoraizImport({mode='bucket',gatewayId}:{mode?:'bucket
     }finally{if(same()&&generation===run.current)setBusy(false);}
   }
   if(!account||bootstrap.current?.account!==account)return null;
-  if(receipt)return <section className="space-y-3 rounded border bg-white p-4"><h2>Imported from vectorAIz</h2>
+  // A durable draft reference takes precedence once the backend supplies it.
+  const draftVersion=mode==='bucket'&&store?.loaded?store.draft?.authority_version_id:undefined;
+  const matchingReceipt=receipt&&(mode!=='bucket'||store?.loaded&&store.draft?.draft_id===receipt.draft_id)?receipt:null;
+  const reviewVersion=restoreAllowed.current?(draftVersion!==undefined?draftVersion:matchingReceipt?.authority_version_id):null;
+  if(reviewVersion&&!pending)return <section className="space-y-3 rounded border bg-white p-4"><h2>Imported from vectorAIz</h2>
     <p>Your private draft is saved. Review it before publishing.</p>
-    {receipt.listing_id&&<Link className="underline" href={'/dashboard/listings/'+encodeURIComponent(receipt.listing_id)+'/edit'}>Continue editing the listing</Link>}
-    <PurchaserReview versionId={receipt.authority_version_id} identityTerms={terms.split('\n').filter(Boolean)}/>
+    {matchingReceipt?.listing_id&&<Link className="underline" href={'/dashboard/listings/'+encodeURIComponent(matchingReceipt.listing_id)+'/edit'}>Continue editing the listing</Link>}
+    <PurchaserReview versionId={reviewVersion} identityTerms={terms.split('\n').filter(Boolean)}/>
   </section>;
   if(!pending||pending.account!==account)return null;
   const h=pending.handoff,bucket=isBucket(h);
@@ -166,7 +187,7 @@ export default function VectoraizImport({mode='bucket',gatewayId}:{mode?:'bucket
     <p>{VECTOR_ATTESTATION}</p><p>This link is a draft to review. It does not prove who created the pack.</p>
     <dl>{Object.entries(h.draft).map(([key,value])=><div key={key}><dt>{key}</dt><dd className="whitespace-pre-wrap break-words">{value||'Empty'}</dd></div>)}</dl>
     {store?.draft&&<details><summary>Your existing draft</summary><dl>{Object.entries(store.draft.content).filter(([,v])=>typeof v==='string').map(([key,v])=><div key={key}><dt>{key}</dt><dd>{String(v)}</dd></div>)}</dl></details>}
-    <p>A new private draft will be created. Finish or discard any listing already in progress first.</p>
+    <p>A new private draft will be created. An unpublished vectorAIz import can be replaced. Finish any ordinary website listing in progress in Seller Workspace before importing.</p>
     <label className="block">Choose {bucket?'a storage connection':'a gateway'}
       <select value={choice} disabled={busy} onChange={e=>{setChoice(e.target.value);setPending({...pending,key:crypto.randomUUID()});setTarget(null);setFiles([]);setCandidates([]);setTargetConfirmed(false);request.current=null;}} className="ml-2 rounded border">
         <option value="">Choose…</option>
@@ -174,18 +195,18 @@ export default function VectoraizImport({mode='bucket',gatewayId}:{mode?:'bucket
       </select>
     </label>
     {bucket&&connections.length===0&&<p>No matching storage connection. <Link href="/dashboard/seller-workspace?view=storage" className="underline">Connect your storage</Link>, then open the link from vectorAIz again.</p>}
-    {!bucket&&gateways.length===0&&<p>No compatible gateway is available. Set up a gateway, then open the link from vectorAIz again.</p>}
+    {!bucket&&gateways.length===0&&<p>No compatible gateway is available. <Link className="underline" href="/dashboard/gateways">Set up a gateway</Link>, then open the link from vectorAIz again.</p>}
     <label className="block">Names to keep private (one per line)<textarea className="block w-full rounded border" value={terms} maxLength={16384} onChange={e=>{setTerms(e.target.value);setTargetConfirmed(false);}}/></label>
     <p>These names stay in this browser.</p>
-    <button type="button" disabled={busy||!choice} onClick={()=>void checkFiles()} className="rounded border px-3 py-2">Check uploaded files</button>
+    <button type="button" disabled={busy||expired||!choice} onClick={()=>void checkFiles()} className="rounded border px-3 py-2">Check uploaded files</button>
     {candidates.length>0&&<div><p>These files need a fresh description before they can be checked:</p><ul>{candidates.map(f=><li key={f.file_id}>{f.display_name}: {f.description.state}</li>)}</ul>
-      <button type="button" disabled={busy} onClick={()=>void describe()} className="rounded border px-3 py-2">Describe these files</button></div>}
+      <button type="button" disabled={busy||expired} onClick={()=>void describe()} className="rounded border px-3 py-2">Describe these files</button></div>}
     {progress.map((message,index)=><p role="status" key={index}>{message}</p>)}
     {files.length>0&&<ul>{files.map(f=><li key={f.file_id}>{f.display_name} · {f.size_bytes} bytes</li>)}</ul>}
     {blocked.length>0&&<p role="alert">A private name appears in public text, a delivery name or the gateway address: {blocked.join(', ')}. Change it and export again before importing.</p>}
     {target&&<><label className="block"><input type="checkbox" checked={accountConfirmed} onChange={e=>setAccountConfirmed(e.target.checked)}/> Import for my signed-in account: {email??account}</label>
       <label className="block"><input type="checkbox" checked={targetConfirmed} onChange={e=>setTargetConfirmed(e.target.checked)}/> I reviewed this draft and the selected {bucket?'storage connection':'gateway'} and files.</label>
-      <button type="button" disabled={busy||!accountConfirmed||!targetConfirmed||blocked.length>0} onClick={()=>void save()} className="rounded bg-indigo-700 px-3 py-2 text-white">Import private draft</button></>}
+      <button type="button" disabled={busy||expired||!accountConfirmed||!targetConfirmed||blocked.length>0} onClick={()=>void save()} className="rounded bg-indigo-700 px-3 py-2 text-white">Import private draft</button></>}
     {error&&<p role="alert">{error}</p>}
     <button type="button" disabled={busy} onClick={()=>{setPending(null);clearHandoff();}} className="rounded border px-3 py-2">Discard import</button>
   </section>;

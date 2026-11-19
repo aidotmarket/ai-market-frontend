@@ -3,8 +3,8 @@ import {act,cleanup,fireEvent,render,screen,waitFor} from '@testing-library/reac
 import {afterEach,beforeEach,expect,it,vi} from 'vitest';
 import {SellerListingDraftProvider,useSellerListingDraft,resetSellerListingDraftOwnerForTests} from './SellerListingDraftStore';
 import type {AuthorityImportRequest} from '@/api/sellerWorkspace';
-const api=vi.hoisted(()=>({read:vi.fn(),save:vi.fn(),import:vi.fn()}));
-vi.mock('@/api/sellerListingDraft',()=>({readListingDraft:api.read,saveListingDraft:api.save,createListingDraft:vi.fn()}));
+const api=vi.hoisted(()=>({read:vi.fn(),save:vi.fn(),import:vi.fn(),create:vi.fn()}));
+vi.mock('@/api/sellerListingDraft',()=>({readListingDraft:api.read,saveListingDraft:api.save,createListingDraft:api.create}));
 vi.mock('@/api/sellerWorkspace',()=>({importAuthorityDraft:api.import}));
 const fields={brief:'',title:'Existing',description:'Description',category:'Technology',tags:'',price:'',license:''};
 const initial={draft_id:'original',version:1,content:fields,updated_at:''};
@@ -37,3 +37,27 @@ it('waits for already admitted saves before importing',async()=>{
  await act(async()=>{done({...initial,version:2});await saving;await result;});
  expect(api.import).toHaveBeenCalledOnce();expect(store.draft).toEqual(imported);
 });
+
+it('HIGH 2 fences equal-version old editor saves after POST commits and GET fails until current-draft recovery',async()=>{
+ await mount();const saveOld=store.saveListingFields;
+ api.read.mockRejectedValueOnce(new Error('GET failed'));
+ fireEvent.click(screen.getByRole('button',{name:'Import'}));
+ await act(async()=>{await expect(result).rejects.toThrow('GET failed');});
+ expect(store.loaded).toBe(false);expect(store.error).toBe(true);expect(store.draft).toBeNull();
+ await expect(saveOld(fields)).rejects.toThrow();
+ await expect(store.saveListingFields(fields)).rejects.toThrow();
+ expect(api.save).not.toHaveBeenCalled();
+ api.read.mockResolvedValueOnce(imported);await act(async()=>{await store.reload();});
+ expect(store.loaded).toBe(true);expect(store.draft).toEqual(imported);
+ await expect(saveOld(fields)).rejects.toThrow();
+});
+
+it('#1172 unpublished imported current draft allows a later import and Start another listing',async()=>{
+ api.read.mockResolvedValue(imported);await mountImported();
+ fireEvent.click(screen.getByRole('button',{name:'Import'}));await act(async()=>{await result;});
+ expect(api.import).toHaveBeenCalledOnce();
+ api.create.mockResolvedValue({...initial,draft_id:'new'});
+ await act(async()=>{await store.startNewDraft('fresh-request');});
+ expect(api.create).toHaveBeenCalledWith('fresh-request');expect(store.draft?.draft_id).toBe('new');
+});
+async function mountImported(){render(<SellerListingDraftProvider enabled sampleCapability={false}><Consumer/></SellerListingDraftProvider>);await screen.findByText('Imported');}
