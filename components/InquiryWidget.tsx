@@ -1,6 +1,6 @@
 'use client';
 
-import { customerRefusal, INQUIRY_REFUSALS, customerActionError } from '@/lib/customerMessages';
+import { customerRefusal, INQUIRY_REFUSALS, INQUIRY_UNAVAILABLE, customerActionError } from '@/lib/customerMessages';
 import { useState, useCallback, useEffect, useRef } from 'react';
 import Link from 'next/link';
 import { authSessionIdentity, useAuthStore } from '@/store/auth';
@@ -568,7 +568,7 @@ function ListingInquiryWidget({ listingId, listingSlug, listingTitle }: Props) {
       )}
       {isAuthenticated && submissionError && (
         <p className="text-xs text-red-600 mt-2" role="alert">
-          {submissionError}
+          {submissionError === INQUIRY_UNAVAILABLE ? <>This listing isn&apos;t available for questions right now. <Link href="/find-data" className="underline">Browse similar data.</Link></> : submissionError}
         </p>
       )}
       {anonymousTimedOut && anonymousError && (

@@ -35,6 +35,12 @@ it('reloads an externally changed source and draft on Review refresh and blocks 
  mocks.draft.mockResolvedValue({...draft,version:2});mocks.review.mockResolvedValue({approval_available:true,review_hash:'r',render_hash:'r',rendered_html:'<p>Saved listing</p>',confirmation_statements:{},draft_version:2,source_version:2,missing_fields:[],approval:null});
  fireEvent.click(screen.getByRole('button',{name:'Refresh saved review'}));
  await waitFor(()=>expect(screen.getAllByText(/The saved review changed elsewhere/).length).toBeGreaterThan(0));expect(screen.queryByRole('button',{name:'Approve this review'})).toBeNull();
+ const status = screen.getByText('The saved review changed elsewhere. Reloading your saved files and draft…');
+ expect(status.getAttribute('role')).toBe('status');
+ expect(status.textContent).toBe('The saved review changed elsewhere. Reloading your saved files and draft…');
+ expect(status.querySelector('button')).toBeNull();
+ expect(screen.queryByRole('alert')).toBeNull();
+ expect(screen.queryByRole('button',{name:'Retry review'})).toBeNull();
  await waitFor(()=>expect(finishSource).toBeTruthy());finishSource({data:{source:{...source,version:2}}});
  await waitFor(()=>expect(screen.getAllByText(/Your files changed after this description/).length).toBeGreaterThan(0));expect(screen.getByTestId('completion').textContent).not.toBe('done');expect(mocks.draft).toHaveBeenCalledTimes(2);expect(mocks.save).not.toHaveBeenCalled();
 });
@@ -159,7 +165,7 @@ it('keeps dirty mounted edits on their original baseline and conflicts instead o
 
 it.each([
  ['draft_required', 'Save your listing in Describe and price before reviewing it.', false],
- ['source_required', 'Choose and save your files before reviewing the listing.', false],
+ ['source_required', 'Choose and save your files before reviewing the listing.', true],
  ['source_connection_changed', 'Your storage changed since you last saved. Choose your files again, then review.', true],
  ['unknown_private_error', "We couldn't load your saved review. Try again.", false],
 ])('shows one mapped review failure and the appropriate recovery for %s', async (code, message, files) => {
@@ -170,6 +176,6 @@ it.each([
  expect(screen.queryByRole('button',{name:'Choose files'})!==null).toBe(files);
  expect(screen.queryByText('private diagnostic')).toBeNull();
  expect(screen.queryByRole('button',{name:'Approve this review'})).toBeNull();
- if(files){fireEvent.click(screen.getByRole('button',{name:'Choose files'}));expect(navigate).toHaveBeenCalledWith('data');}
+ if(files){expect(screen.queryByRole('button',{name:'Retry review'})).toBeNull();fireEvent.click(screen.getByRole('button',{name:'Choose files'}));expect(navigate).toHaveBeenCalledWith('data');}
  else expect(screen.getByRole('button',{name:'Retry review'})).toBeTruthy();
 });

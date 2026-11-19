@@ -58,6 +58,7 @@ export function GuidedListingFlow({connections, capabilities, view, navigate, ch
   const [readRetry,setReadRetry] = useState(0);
   const [review,setReview] = useState<ListingReview|null>(null);
   const [reviewError,setReviewError] = useState('');
+  const [reviewStatus,setReviewStatus] = useState('');
   const [reviewNeedsFiles,setReviewNeedsFiles] = useState(false);
   const [reviewLoading,setReviewLoading] = useState(false);
   const [reviewRetry,setReviewRetry] = useState(0);
@@ -86,7 +87,7 @@ export function GuidedListingFlow({connections, capabilities, view, navigate, ch
   const reconciled=useRef('');
   const pending=selectionSavePending||selectionSaveFailed||filesDirty;
   useEffect(()=>{
-    setReview(null);setReviewError('');setReviewNeedsFiles(false);setReviewLoading(false);setPublication(null);
+    setReview(null);setReviewError('');setReviewStatus('');setReviewNeedsFiles(false);setReviewLoading(false);setPublication(null);
     if(!reviewEnabled||!source||!draft||pending)return;
     const controller=new AbortController();setReviewLoading(true);
     readListingReview(controller.signal,draft.draft_id).then(async r=>{
@@ -95,7 +96,7 @@ export function GuidedListingFlow({connections, capabilities, view, navigate, ch
         const key=`${reviewRetry}:${r.source_version}:${r.draft_version}`;
         if(reconciled.current===key){setReviewNeedsFiles(r.source_version!==source.version);setReviewError(r.source_version!==source.version?'Your storage changed since you last saved. Choose your files again, then review.':'Your saved draft changed. Save your listing in Describe and price, then try again.');return;}
         reconciled.current=key;
-        setReviewError('The saved review changed elsewhere. Reloading your saved files and draft…');
+        setReviewStatus('The saved review changed elsewhere. Reloading your saved files and draft…');
         const savedSource=await readListingSource(draft?.draft_id);
         if(controller.signal.aborted)return;
         await reload(controller.signal,()=>setSource(savedSource));
@@ -106,9 +107,9 @@ export function GuidedListingFlow({connections, capabilities, view, navigate, ch
       if(controller.signal.aborted)return;
       const detail=axios.isAxiosError(error)?error.response?.data?.detail:undefined;
       const code=typeof detail==='string'?detail:detail?.code;
-      setReviewNeedsFiles(code==='source_connection_changed');
+      setReviewNeedsFiles(code==='source_connection_changed'||code==='source_required');
       setReviewError(code==='source_connection_changed'?'Your storage changed since you last saved. Choose your files again, then review.':['draft_required','source_required'].includes(code)?listingReviewErrorReason(error):"We couldn't load your saved review. Try again.");
-    }).finally(()=>{if(!controller.signal.aborted)setReviewLoading(false);});
+    }).finally(()=>{if(!controller.signal.aborted){setReviewLoading(false);setReviewStatus('');}});
     return()=>controller.abort();
   },[reviewEnabled,source,draft,pending,reviewRetry]);
   const approval=review?.approval;
@@ -136,6 +137,7 @@ export function GuidedListingFlow({connections, capabilities, view, navigate, ch
         {startError&&<p role="alert" className="text-sm text-red-800">{startError} <button disabled={startingListing} onClick={()=>void startAnotherListing()} className="underline">Retry</button></p>}
         {readError&&<p role="alert" className="text-sm text-red-800">{readError} <button onClick={()=>setReadRetry(n=>n+1)} className="underline">Retry</button></p>}
       </div>
+        {reviewStatus&&<p role="status" className="text-sm text-gray-600">{reviewStatus}</p>}
         {reviewError&&<p role="alert" className="text-sm text-red-800">{reviewError} {reviewNeedsFiles?<button onClick={()=>navigate('data')} className="min-h-11 underline">Choose files</button>:<button onClick={()=>setReviewRetry(n=>n+1)} className="min-h-11 underline">Retry review</button>}</p>}
     </aside><fieldset disabled={startingListing} aria-busy={startingListing} className="min-w-0 space-y-6 border-0 p-0 xl:col-start-1 xl:row-start-1">{/* A new draft also discards unsaved file, editor and licence panel state. */}<Fragment key={draft?.draft_id??'legacy'}>{children}</Fragment></fieldset>
   </div></Context.Provider>;

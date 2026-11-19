@@ -789,7 +789,7 @@ describe('InquiryWidget', () => {
     typeQuestion('Please contact me at 555-0100.');
 
     expect((await screen.findByRole('alert')).textContent).toContain(
-      "We couldn't send your question just now. Try again, or contact support if it keeps happening."
+      "Please revise your message before sending it again."
     );
     expect(screen.getByRole('button', { name: 'Submit Question' })).toBeTruthy();
     expect((screen.getByRole('textbox') as HTMLTextAreaElement).value).toBe(
@@ -836,4 +836,19 @@ describe('InquiryWidget', () => {
     expect(screen.queryByText('Want to contact the seller?')).toBeNull();
     expect(mocks.createInquiry).not.toHaveBeenCalled();
   });
+});
+
+it.each([
+ ['Listing is not published', "This listing isn't available for questions right now. Browse similar data.", true],
+ ['Cannot inquire about your own listing', "This is your own listing, so you can't send it a question.", false],
+])('guides an authenticated question refused with %s', async (detail, message, browse) => {
+ mocks.auth.isAuthenticated = true;
+ const error = new AxiosError('refused');
+ error.response = {status:400, data:{detail}} as typeof error.response;
+ mocks.createInquiry.mockRejectedValue(error);
+ renderWidget();
+ typeQuestion('Is this listing current?');
+ expect((await screen.findByRole('alert')).textContent).toBe(message);
+ const link = screen.queryByRole('link', {name:'Browse similar data.'});
+ expect(link?.getAttribute('href')).toBe(browse ? '/find-data' : undefined);
 });

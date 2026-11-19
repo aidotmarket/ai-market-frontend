@@ -22,8 +22,6 @@ function errorMessage(error: unknown): string {
     'Remove contact details and off-platform payment instructions.': 'Remove contact details and payment instructions from your document, then save it again.',
     'Text validation is temporarily unavailable. Please retry.': 'We could not check your document just now. Try saving it again.',
     DOCUMENT_RENDER_BUDGET: 'This document is too complex to preview. Simplify its formatting and try again.',
-    'Rendering budget exceeded. Simplify this document.': 'This document is too complex to preview. Simplify its formatting and try again.',
-    'Remove contact details from this document.': 'Remove contact details from your document, then save it again.',
     'Remove contact details from the data sheet address path or query; rename the file.': 'Remove contact details from the PDF address or rename the file, then save it again.',
     FIRST_PARTY_SESSION_REQUIRED: 'Sign in on the ai.market website to change documents. API keys and connector sessions cannot change them.',
     DATA_SHEET_REQUIRES_PUBLIC_NAME: unavailable,

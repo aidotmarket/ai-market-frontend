@@ -408,9 +408,9 @@ export function checkoutOutcomeUnknown(error: unknown): boolean {
 const PURCHASE_REFUSALS = {
   activeOrder: (detail: string) => {
     const match = /^You already have an active order for this listing \(#([A-Za-z0-9-]+)\)$/.exec(detail);
-    return match ? `You already own an active order for this listing (#${match[1]}). View it in My Purchases.` : undefined;
+    return match ? `You already have an order for this listing (#${match[1]}). View it in My Purchases.` : undefined;
   },
-  ACTIVE_ORDER: 'You already own an active order for this listing. View it in My Purchases.',
+  ACTIVE_ORDER: 'You already have an order for this listing. View it in My Purchases.',
   'Cannot purchase your own listing': 'You cannot purchase your own listing.',
   OWN_LISTING: 'You cannot purchase your own listing.',
   listing_not_available: 'This listing is no longer for sale.',
@@ -464,8 +464,9 @@ export function parseCheckoutRefusal(error: AxiosError, domainEnabled = checkout
   const purchaseMessage = customerRefusal(error, PURCHASE_REFUSALS, '');
   if (purchaseMessage) {
     const unavailable = /no longer for sale/.test(purchaseMessage);
-    const active = /active order/.test(purchaseMessage);
+    const active = /already have an order/.test(purchaseMessage);
     return { code: checkoutErrorCode(error) || 'CHECKOUT_FAILED', message: purchaseMessage,
+      ...(domainEnabled ? { blocked: true } : {}),
       ...(unavailable ? { webPath: '/find-data', linkLabel: 'Browse similar data' } : active ? { webPath: '/dashboard/orders', linkLabel: 'My Purchases' } : {}) };
   }
   if (typeof detail === 'string') return { code: 'CHECKOUT_FAILED', message: customerActionError('start your purchase') };
@@ -491,7 +492,9 @@ export function parseCheckoutRefusal(error: AxiosError, domainEnabled = checkout
   }
   return {
     code,
-    message: messages[code] ?? customerActionError("start your purchase"),
+    message: messages[code] ?? (domainEnabled && checkoutWebPath(value.web_path)
+      ? "Checkout is blocked for this listing. Review the listing for details."
+      : customerActionError("start your purchase")),
     ...(domainEnabled && checkoutWebPath(value.web_path) ? { blocked: true, webPath: checkoutWebPath(value.web_path) } : {}),
   };
 }

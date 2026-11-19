@@ -29,3 +29,11 @@ it.each(['private diagnostic', [{msg:'private validation text'}], {message:'priv
 it('matches a code without trusting its message', () => {
   expect(customerRefusal({response:{data:{detail:{code:'known',message:'private diagnostic'}}}}, {known:'Customer guidance'}, 'generic')).toBe('Customer guidance');
 });
+
+it.each([
+ ['Message held for review. Please revise.', 'Please revise your message before sending it again.'],
+ ['Listing is not published', "This listing isn't available for questions right now. Browse similar data."],
+ ['Cannot inquire about your own listing', "This is your own listing, so you can't send it a question."],
+])('maps the exact POST /conversations/ refusal %s', (detail, expected) => {
+ expect(customerRefusal({response:{data:{detail}}}, INQUIRY_REFUSALS, 'generic')).toBe(expected);
+});

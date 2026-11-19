@@ -131,8 +131,8 @@ it.each([
   [422, 'DOCUMENT_KIND_CONTENT_MISMATCH', 'Use text for technical documentation'],
   ...['BAD_ORIGIN', 'CSRF_REQUIRED', 'UNKNOWN_CODE_123'].map(code => [422, code, 'Documents could not be updated'] as const),
   [403, 'FIRST_PARTY_SESSION_REQUIRED', 'Sign in on the ai.market website'],
-  [422, 'Rendering budget exceeded. Simplify this document.', 'This document is too complex to preview'],
-  [422, 'Remove contact details from this document.', 'Remove contact details from your document'],
+  [422, 'Rendering budget exceeded. Simplify this document.', 'Documents could not be updated'],
+  [422, 'Remove contact details from this document.', 'Documents could not be updated'],
 ] as const)('shows actionable server errors for %i %j', async (status, detail, text) => {
   await mount(); fillTechnical();
   vi.mocked(api.saveDocumentDraft).mockRejectedValueOnce({isAxiosError: true, response: {status, data: {detail}}});

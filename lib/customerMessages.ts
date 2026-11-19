@@ -36,7 +36,12 @@ export const TWO_FACTOR_REFUSALS: CustomerRefusalTable = {
   '2FA setup session expired': 'Your setup session expired. Restart two-factor authentication setup.',
 };
 
+export const INQUIRY_UNAVAILABLE = "This listing isn't available for questions right now. Browse similar data.";
+
 export const INQUIRY_REFUSALS: CustomerRefusalTable = {
+  'Message held for review. Please revise.': 'Please revise your message before sending it again.',
+  'Listing is not published': INQUIRY_UNAVAILABLE,
+  'Cannot inquire about your own listing': "This is your own listing, so you can't send it a question.",
   'Message held for review. Please revise and try again.': 'Please revise your message before sending it again.',
   'Message could not be safely mediated. Please revise and try again.': 'Please revise your message before sending it again.',
   'Inquiry is closed': 'This conversation is closed. New messages cannot be sent.',
