@@ -226,3 +226,24 @@ it.each(['bucket','gateway'] as const)('explicit null version suppresses receipt
  const view=render(<VectoraizImport mode={mode}/>);await act(async()=>{});
  expect(view.container.textContent).toBe('');expect(screen.queryByText('Review old')).toBeNull();
 });
+
+it('keeps successful POST visible when GET fails and retries only GET after expiry, reviewing the verified current draft',async()=>{
+ vi.useFakeTimers({toFake:['setTimeout','clearTimeout','Date']});
+ api.consume.mockResolvedValue({...pending,expires:Date.now()+60000});
+ api.draft.mockRejectedValueOnce(new Error('GET failed')).mockResolvedValueOnce({draft_id:'current-b',authority_version_id:'current-authority',version:1,content:handoff.draft,updated_at:''});
+ render(<VectoraizImport mode="gateway"/>);await act(async()=>{});
+ fireEvent.click(screen.getByRole('button',{name:'Check uploaded files'}));await act(async()=>{});
+ fireEvent.click(screen.getByLabelText(/Import for my signed-in account/));fireEvent.click(screen.getByLabelText(/I reviewed this draft/));
+ fireEvent.click(screen.getByRole('button',{name:'Import private draft'}));await act(async()=>{});
+ expect(screen.getByText(/Your import succeeded. Load/)).toBeTruthy();
+ expect(screen.getByRole('alert').textContent).toContain('could not be loaded');
+ expect(screen.queryByRole('button',{name:'Import private draft'})).toBeNull();
+ expect(screen.queryByText('Review authority')).toBeNull();
+ await act(async()=>{vi.advanceTimersByTime(61000);});
+ expect(screen.getByRole('alert').textContent).not.toContain('expired');
+ fireEvent.click(screen.getByRole('button',{name:'Try loading draft again'}));await act(async()=>{});
+ expect(screen.getByText('Review current-authority')).toBeTruthy();
+ expect(screen.queryByText('Review authority')).toBeNull();
+ expect(screen.queryByRole('link',{name:'Continue editing the listing'})).toBeNull();
+ expect(api.import).toHaveBeenCalledOnce();expect(api.draft).toHaveBeenCalledTimes(2);
+});

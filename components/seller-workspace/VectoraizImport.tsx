@@ -157,6 +157,15 @@ export default function VectoraizImport({mode='bucket',gatewayId}:{mode?:'bucket
     }catch(cause){if(same()&&generation===run.current)setError(authorityMessage(cause));}
     finally{if(same()&&generation===run.current)setBusy(false);}
   }
+  async function loadImportedDraft(){
+    const generation=run.current,same=sessionLifecycle();
+    setBusy(true);setError(null);
+    try{
+      const draft=await readListingDraft();
+      if(same()&&generation===run.current)setGatewayDraft(draft);
+    }catch{if(same()&&generation===run.current)setError('Your import succeeded, but your saved draft could not be loaded. Try loading it again.');}
+    finally{if(same()&&generation===run.current)setBusy(false);}
+  }
   async function save(){
     if(!pending||!target||!accountConfirmed||!targetConfirmed||!current()||blocked.length>0)return;
     const generation=run.current,same=sessionLifecycle();
@@ -169,11 +178,11 @@ export default function VectoraizImport({mode='bucket',gatewayId}:{mode?:'bucket
     try{
       const result=await (store?store.importDraft(request.current):importAuthorityDraft(request.current));
       if(!same()||generation!==run.current)return;
-      if(!store){
-        // The current draft read, rather than a replayed receipt, owns recovery.
-        const draft=await readListingDraft();if(!same()||generation!==run.current)return;setGatewayDraft(draft);
-      }
       completed=true;saveAuthorityReceipt(account!,result);setReceipt(result);setPending(null);request.current=null;
+      if(!store){
+        // POST completion survives a failed read. Only verified current state owns review.
+        setGatewayDraft(undefined);await loadImportedDraft();
+      }
     }catch(cause){
       if(same()&&generation===run.current){
         if(authorityCode(cause)==='AUTHORITY_PURCHASER_STALE'){
@@ -196,8 +205,13 @@ export default function VectoraizImport({mode='bucket',gatewayId}:{mode?:'bucket
   // A durable draft reference takes precedence once the backend supplies it.
   const draftVersion=store?.loaded?store.draft?.authority_version_id:gatewayDraft===null?null:gatewayDraft?.authority_version_id;
   const currentDraft=store?.loaded?store.draft:gatewayDraft;
-  const matchingReceipt=receipt&&(currentDraft===undefined?mode!=='bucket':currentDraft?.draft_id===receipt.draft_id)?receipt:null;
+  const matchingReceipt=receipt&&(currentDraft?.draft_id===receipt.draft_id)?receipt:null;
   const reviewVersion=restoreAllowed.current?(draftVersion!==undefined?draftVersion:matchingReceipt?.authority_version_id):null;
+  if(receipt&&!pending&&!store&&gatewayDraft===undefined)return <section className="space-y-3 rounded border bg-white p-4"><h2>Imported from vectorAIz</h2>
+    <p>Your import succeeded. Load your saved draft to review it before publishing.</p>
+    {error&&<p role="alert">{error}</p>}
+    <button type="button" disabled={busy} onClick={()=>void loadImportedDraft()} className="rounded border px-3 py-2">{busy?'Loading saved draft…':'Try loading draft again'}</button>
+  </section>;
   if(reviewVersion&&!pending)return <section className="space-y-3 rounded border bg-white p-4"><h2>Imported from vectorAIz</h2>
     <p>Your private draft is saved. Review it before publishing.</p>
     {matchingReceipt?.listing_id&&<Link className="underline" href={'/dashboard/listings/'+encodeURIComponent(matchingReceipt.listing_id)+'/edit'}>Continue editing the listing</Link>}

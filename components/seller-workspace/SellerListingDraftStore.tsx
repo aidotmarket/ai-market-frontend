@@ -48,8 +48,9 @@ const persist=(owner:Owner,binding:DraftBinding,build:(base:ListingDraftContent)
       owner.pending={serialized,version,id:crypto.randomUUID()};
     // Count every attempt, including identical retries that reuse pending.
     owner.saveAttempt+=1;
+    // Imported drafts must use the explicit target; equal versions do not identify a draft.
     let result:SavedListingDraft;
-    try{result=await saveListingDraft(content,owner.pending.version,owner.pending.id);}
+    try{result=await saveListingDraft(content,owner.pending.version,owner.pending.id,...(owner.draft?.authority_version_id&&owner.draft.draft_id?[owner.draft.draft_id]:[]));}
     catch(failure){
       if(authorityCode(failure)==='DRAFT_SUPERSEDED'){
         assertAuthSessionOwner(owner.session);

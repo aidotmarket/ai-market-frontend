@@ -7,6 +7,7 @@ import { WorkspaceData } from './WorkspaceData';
 import {DraftNotLoadedError,useSellerListingDraft} from './SellerListingDraftStore';
 import {createStandardSelection,type LicenseSelection} from '@/api/listingLicenses';
 import axios from 'axios';
+import {authorityCode} from '@/lib/vectoraizHandoff';
 import {listingDraftError} from '@/lib/listing-action-error';
 import {legalIdentityFailure} from '@/api/sellerLegalIdentity';
 
@@ -17,7 +18,7 @@ export default function SavedWorkspaceData({connections, enabled,sampleLimits,li
   const [failed, setFailed] = useState(false);
   const [retry, setRetry] = useState(0);
   const [saving, setSaving] = useState(false);
-  const {draft,available,loaded,error:draftError,retry:retryDraft,requestLoad,sampleCapability,sampleIndices,selectionSavePending,saveLicenseSelection,saveSamples,beginSelectionSave,finishSelectionSave,setVisibleSampleIndices}=useSellerListingDraft();
+  const {draft,available,loaded,error:draftError,reload:reloadDraft,retry:retryDraft,requestLoad,sampleCapability,sampleIndices,selectionSavePending,saveLicenseSelection,saveSamples,beginSelectionSave,finishSelectionSave,setVisibleSampleIndices}=useSellerListingDraft();
   const [licenseSelection,setLicenseSelection]=useState<LicenseSelection>(()=>draft?.content.license_selection??createStandardSelection());
   const [licenseReady,setLicenseReady]=useState(false);
   const [licenseSaving,setLicenseSaving]=useState(false);
@@ -61,12 +62,16 @@ export default function SavedWorkspaceData({connections, enabled,sampleLimits,li
       const serialized = JSON.stringify(content);
       if (!pending.current || pending.current.serialized !== serialized || pending.current.version !== version.current)
         pending.current = {serialized, id:crypto.randomUUID(), version:version.current};
-      const result = await saveListingSource(content, pending.current.version, pending.current.id);
+      // Bind imported selections to the editor draft, even after another tab replaces it.
+      const result = await saveListingSource(content, pending.current.version, pending.current.id, ...(draft?.authority_version_id&&draft.draft_id?[draft.draft_id]:[]));
       version.current = result.version;observedVersion.current=result.version; pending.current = null; setSource(result);flow?.sourceSaved(result);
       succeeded=true;
       if (sampleCapability&&sampleState.loaded&&(sampleState.selectionSavePending||sampleState.sampleIndices.length>0||sampleState.draft?.content.sample_decision==='member_files')) {
         try { await sampleState.saveSamples([]); } catch { succeeded=false; /* Source commit remains successful; retry from the sample selector. */ }
       }
+    } catch(failure) {
+      if(authorityCode(failure)==='DRAFT_SUPERSEDED'){pending.current=null;try{await reloadDraft();}catch{retryDraft();}}
+      throw failure;
     } finally { finishSelectionSave(succeeded);inFlight.current = false; setSaving(false); }
     return succeeded;
   }

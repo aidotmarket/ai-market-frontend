@@ -30,7 +30,8 @@ const path = '/seller-workspace/listing-draft';
 export async function readListingDraft(signal?: AbortSignal): Promise<SavedListingDraft | null> {
   return (await api.get<{ draft: SavedListingDraft | null }>(path, { signal })).data.draft;
 }
-export async function saveListingDraft(content: ListingDraftContent, version: number, requestId: string): Promise<SavedListingDraft> {
+export async function saveListingDraft(content: ListingDraftContent, version: number, requestId: string, draft_id?: string | null): Promise<SavedListingDraft> {
+  if(draft_id)return (await nativeWrite<{draft:SavedListingDraft}>(path,{content,expected_version:version,request_id:requestId,draft_id},undefined,'put')).draft;
   return (await api.put<{ draft: SavedListingDraft }>(path, {
     content, expected_version: version, request_id: requestId,
   })).data.draft;

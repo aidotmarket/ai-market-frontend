@@ -1,4 +1,5 @@
 import { api } from './client';
+import {nativeWrite} from './connector-seller-settings';
 export interface SourceContent {
   connection_id: string; connection_version: number; version_mode: 'current' | 'versions';
   objects: Array<{key: string; version_id: string | null; etag: string; size: number}>;
@@ -7,7 +8,8 @@ export interface SourceRead { version: number; content: SourceContent; connectio
 export async function readListingSource(draft_id?: string | null): Promise<SourceRead | null> {
   return (await api.get('/seller-workspace/listing-source', draft_id ? {params:{draft_id}} : undefined)).data.source;
 }
-export async function saveListingSource(content: SourceContent, expected_version: number, request_id: string): Promise<SourceRead> {
+export async function saveListingSource(content: SourceContent, expected_version: number, request_id: string, draft_id?: string | null): Promise<SourceRead> {
+  if(draft_id)return (await nativeWrite<{source:SourceRead}>('/seller-workspace/listing-source',{content,expected_version,request_id,draft_id},undefined,'put')).source;
   return (await api.put('/seller-workspace/listing-source', {content, expected_version, request_id})).data.source;
 }
 
