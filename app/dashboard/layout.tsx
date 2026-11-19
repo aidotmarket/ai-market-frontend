@@ -1,5 +1,7 @@
 'use client';
 
+import {useHandoffBoundary} from '@/lib/vectoraizHandoff';
+
 import { useCallback, useEffect, useRef, useState } from 'react';
 import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
@@ -30,6 +32,7 @@ type CapabilitySnapshot = {
 const buyerAllowedRoutes = ['/dashboard', '/dashboard/inquiries', '/dashboard/orders', '/dashboard/requests', '/dashboard/settings'];
 
 export default function DashboardLayout({ children }: { children: React.ReactNode }) {
+  useHandoffBoundary();
   const { user, token, isAuthenticated, isLoading, hydrated } = useAuthStore();
   const router = useRouter();
   const pathname = usePathname();

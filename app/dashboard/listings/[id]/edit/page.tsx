@@ -1,5 +1,6 @@
 'use client';
 
+import PurchaserReview from '@/components/gateways/PurchaserReview';
 import { customerLoadError } from '@/lib/customerMessages';
 import ListingDocumentsEditor from '@/components/listing/ListingDocumentsEditor';
 
@@ -47,6 +48,7 @@ export default function EditListingPage() {
   const id = params.id as string;
   const { toast } = useToast();
 
+  const [authorityVersion,setAuthorityVersion]=useState<string|null>(null);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [summaryRevision, setSummaryRevision] = useState(0);
@@ -95,6 +97,7 @@ export default function EditListingPage() {
       if (licensesEnabled && l.license_selection) setLicenseSelection(l.license_selection);
       setListingSlug(typeof l.slug === 'string' ? l.slug : undefined);
       setHasStoredFormat(Boolean(l.data_format));
+      setAuthorityVersion(l.authority_version_id??null);
       setData({
         title: l.title || '',
         description: l.description || '',
@@ -452,6 +455,7 @@ export default function EditListingPage() {
       <SellerAtAGlance listingId={id} slug={listingSlug} active={!saving} revision={summaryRevision} />
 
       {/* Actions */}
+      <PurchaserReview versionId={authorityVersion} />
       {publishError && <div role="alert" className="rounded border border-red-300 p-3 text-red-700"><p>{publishError}</p>{publishBlockers.length > 0 && <ul className="list-disc pl-6">{publishBlockers.map((blocker, index) => <li key={`${blocker.code}-${blocker.file_id ?? index}`}>{blockerMessage(blocker, sourceFiles)}</li>)}</ul>}</div>}
       {canPublish && savedGateway && !savedGateway.identity_ack_at && <p className="rounded border border-amber-300 p-3 text-sm">Before this listing goes live: after purchase, buyers learn your door hostname and certificate. Use a neutral hostname. <Link href={`/dashboard/gateways/${encodeURIComponent(savedGateway.gateway_id)}`} className="text-indigo-700 underline">Review and acknowledge the gateway identity notice</Link>.</p>}
       <div className="flex items-center justify-between bg-white rounded-xl border border-gray-200 shadow-sm px-6 py-4">

@@ -4,12 +4,13 @@ import {createContext,useCallback,useContext,useEffect,useMemo,useState,useSyncE
 import {readListingDraft,saveListingDraft,createListingDraft,type ListingDraftContent,type SavedListingDraft} from '@/api/sellerListingDraft';
 import {authSessionOwner,assertAuthSessionOwner,isAuthSessionOwner} from '@/lib/auth-session-owner';
 import {useAuthStore} from '@/store/auth';
+import {importAuthorityDraft,type AuthorityImportRequest,type AuthorityImportReceipt} from '@/api/sellerWorkspace';
 import type {LicenseSelection} from '@/api/listingLicenses';
 
 const EMPTY_DRAFT:ListingDraftContent={brief:'',title:'',description:'',category:'',tags:'',price:'',license:''};
 export class DraftNotLoadedError extends Error { constructor(){super('Load your saved draft before saving.');this.name='DraftNotLoadedError';} }
 export class DraftChangedError extends Error { constructor(){super('Your saved draft changed. Reload it before saving.');this.name='DraftChangedError';} }
-type DraftStore={draft:SavedListingDraft|null;available:boolean;loaded:boolean;error:boolean;sampleCapability:boolean;sampleIndices:number[];
+type DraftStore={importDraft:(request:AuthorityImportRequest)=>Promise<AuthorityImportReceipt>;draft:SavedListingDraft|null;available:boolean;loaded:boolean;error:boolean;sampleCapability:boolean;sampleIndices:number[];
   selectionSavePending:boolean;selectionSaveFailed:boolean;requestLoad:()=>void;reload:(signal?:AbortSignal,onLoaded?:()=>void)=>Promise<SavedListingDraft|null>;retry:()=>void;startNewDraft:(requestId:string)=>Promise<SavedListingDraft>;
   beginSelectionSave:()=>void;finishSelectionSave:(succeeded:boolean)=>void;setVisibleSampleIndices:(indices:number[]|null)=>void;
   saveListingFields:(fields:ListingDraftContent,baselineVersion?:number)=>Promise<number>;saveLicenseSelection:(selection:LicenseSelection)=>Promise<void>;saveSamples:(indices:number[])=>Promise<void>};
@@ -130,6 +131,22 @@ function OwnedSellerListingDraftProvider({owner,enabled,sampleCapability,childre
   const selectionMismatch=visibleSampleIndices!==null&&JSON.stringify(visibleSampleIndices)!==JSON.stringify(sampleIndices);
   const value=useMemo<DraftStore>(()=>({draft,available:enabled,loaded,error,sampleCapability,sampleIndices,
     selectionSavePending:selectionSaveCount>0||selectionMismatch,selectionSaveFailed,reload,requestLoad:()=>setRequested(true),retry:()=>{setRequested(true);setRetryKey(value=>value+1);},
+    importDraft:async(request)=>{
+      const operation=owner.queue.catch(()=>undefined).then(async()=>{
+        assertAuthSessionOwner(owner.session);
+        const receipt=await importAuthorityDraft(request);
+        assertAuthSessionOwner(owner.session);
+        // The backend atomically adopts only a new import. Exact replay never
+        // moves its pointer: read current rather than adopting the receipt ID.
+        owner.draftGeneration+=1;owner.saveRevision+=1;owner.pending=null;
+        owner.selectionSaveCount=0;owner.selectionSaveFailed=false;setVisibleSampleIndices(null);
+        const current=await readListingDraft();
+        assertAuthSessionOwner(owner.session);
+        owner.draft=current;owner.version=current?.version??0;owner.loaded=true;
+        publish(owner);setLoaded(true);setError(false);return receipt;
+      });
+      owner.queue=operation;return operation;
+    },
     startNewDraft:async(requestId)=>{
       const operation=owner.queue.catch(()=>undefined).then(async()=>{
         assertAuthSessionOwner(owner.session);
@@ -166,3 +183,7 @@ export function useSellerListingDraftStatus() {
   return value ? {draft_id:value.draft?.draft_id,available:value.available,selectionSavePending:value.selectionSavePending,selectionSaveFailed:value.selectionSaveFailed,sampleIndices:value.sampleIndices} :
     {draft_id:undefined,available:false,selectionSavePending:false,selectionSaveFailed:false,sampleIndices:[] as number[]};
 }
+
+/** The gateway importer has no Workspace provider; bucket imports use the
+ * provider queue so old editor callbacks cannot write into the imported draft. */
+export function useOptionalSellerListingDraft(){return useContext(DraftContext);}

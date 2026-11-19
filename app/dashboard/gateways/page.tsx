@@ -1,5 +1,7 @@
 'use client';
 
+import VectoraizImport from '@/components/seller-workspace/VectoraizImport';
+
 import { useEffect, useState } from 'react';
 import Link from 'next/link';
 import { useAuthStore } from '@/store/auth';
@@ -48,6 +50,7 @@ export default function GatewaysPage() {
   if (state === 'error') return <p role="alert">We could not load gateways. Please refresh and try again.</p>;
   if (state === 'unavailable') return <p>Gateways are not available.</p>;
   return <section className="space-y-6">
+    <VectoraizImport mode="gateway" />
     <div className="flex items-center justify-between gap-4">
       <h1 className="text-2xl font-semibold">Gateways</h1>
       <button type="button" onClick={addGateway} className="rounded bg-indigo-700 px-4 py-2 text-white">Add a gateway</button>

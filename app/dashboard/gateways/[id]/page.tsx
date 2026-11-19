@@ -1,5 +1,7 @@
 'use client';
 
+import VectoraizImport from '@/components/seller-workspace/VectoraizImport';
+
 import { useCallback, useEffect, useRef, useState } from 'react';
 import Link from 'next/link';
 import { useParams, useRouter } from 'next/navigation';
@@ -330,6 +332,7 @@ export default function GatewayPage() {
   if (state === 'error' || !gateway) return <p role="alert">We could not load this gateway. Please refresh and try again.</p>;
   const sortedMessages = [...messages].sort((a, b) => a.seq - b.seq);
   return <div className="space-y-8">
+    <VectoraizImport mode="gateway" gatewayId={id} />
     <Link href="/dashboard/gateways" className="text-indigo-700 underline">Back to gateways</Link>
     <header><h1 className="text-2xl font-semibold">{gateway.name}</h1><p>Status: {gatewaySummary(gateway)}</p><p>Version: {gateway.version ?? 'Unknown'} / minimum {gateway.minimum_version}</p><p>Last seen: {dateLabel(gateway.last_seen_at)}</p><p>Listings: {gateway.listing_count} · Open orders: {gateway.open_order_count} · Can publish: {gateway.can_publish ? 'Yes' : 'No'}</p></header>
     {error && <p role="alert" className="text-red-700">{error}</p>}
