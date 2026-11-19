@@ -42,14 +42,16 @@ export const ANONYMOUS_ALLAI_RESOURCES: Record<
     accountRequired: 'An account is required for this step.',
     genericError: 'Sorry, something went wrong. Please try again.',
     safeOutcomes: {
-      no_matches: 'No matches were found for this query at this time. Try refining the query or browse the public Request Board.',
-      retrieval_unavailable: "I couldn't verify the marketplace results right now. Please try again.",
-      answer_unverified: "I couldn't verify that answer against current public information, so I won't show it.",
+      no_matches: 'No listings match yet. Try different words, or post a request so sellers can find you.',
+      retrieval_unavailable: "I couldn't check the marketplace results right now, so I won't guess. You can search listings directly, or post a request and sellers will come to you.",
+      answer_unverified: "I couldn't check that answer against current listings, so I won't guess. You can search listings directly, or post a request and sellers will come to you.",
       surface_disabled: 'The AI assistant is temporarily unavailable.',
-      rate_limited: 'The anonymous usage limit has been reached. Please try again later.',
+      rate_limited: "You've reached the free limit for guests. Sign up free to keep chatting.",
       unsupported_language: "That language isn't supported yet. Please choose English, Spanish, or Simplified Chinese.",
     },
   },
+  // TODO(i18n): Translate the updated English no_matches, retrieval_unavailable,
+  // answer_unverified and rate_limited copy into Spanish.
   es: {
     assistantLabel: 'allAI · Asistente de IA',
     openAssistant: 'Abrir allAI · Asistente de IA',
@@ -71,6 +73,7 @@ export const ANONYMOUS_ALLAI_RESOURCES: Record<
       unsupported_language: 'Ese idioma aún no es compatible. Elige inglés, español o chino simplificado.',
     },
   },
+  // TODO(i18n): Translate the same four updated safe outcomes into Simplified Chinese.
   'zh-Hans': {
     assistantLabel: 'allAI · AI 助手',
     openAssistant: '打开 allAI · AI 助手',

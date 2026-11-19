@@ -1,6 +1,7 @@
 'use client';
 
 import { useEffect, useRef } from 'react';
+import Link from 'next/link';
 import type { Message } from './AllAIContext';
 import Markdown from 'react-markdown';
 import TicketStatusCard from './TicketStatusCard';
@@ -46,7 +47,14 @@ export default function AllAIMessage({
   }
 
   // assistant
-  const showDots = isStreaming && !message.content;
+  const hasRecoveryLinks = message.safeOutcome === 'answer_unverified' ||
+    message.safeOutcome === 'retrieval_unavailable' ||
+    message.safeOutcome === 'no_matches' || message.safeOutcome === 'rate_limited';
+  // Use the maintained customer copy even when a safe-failure event supplies older wording.
+  const content = hasRecoveryLinks && message.safeOutcome
+    ? resources.safeOutcomes[message.safeOutcome]
+    : message.content;
+  const showDots = isStreaming && !content;
   const ticketStatusCards = message.ticketStatusCards ?? [];
   return (
     <div className="flex justify-start">
@@ -79,8 +87,27 @@ export default function AllAIMessage({
               ),
             }}
           >
-            {message.content}
+            {content}
           </Markdown>
+        )}
+        {hasRecoveryLinks && (
+          // TODO(i18n): Translate recovery link labels into Spanish and Simplified Chinese.
+          <div className="mt-2 flex flex-col items-start gap-1">
+            {(message.safeOutcome === 'answer_unverified' || message.safeOutcome === 'retrieval_unavailable') && (
+              <Link href="/find-data" className="inline-flex min-h-11 items-center text-blue-400 underline hover:text-blue-300">
+                Search listings directly
+              </Link>
+            )}
+            {message.safeOutcome === 'rate_limited' ? (
+              <Link href="/register" className="inline-flex min-h-11 items-center text-blue-400 underline hover:text-blue-300">
+                Sign up
+              </Link>
+            ) : (
+              <Link href="/requests/new" className="inline-flex min-h-11 items-center text-blue-400 underline hover:text-blue-300">
+                {message.safeOutcome === 'no_matches' ? 'Post a request' : 'Post a request and sellers will come to you'}
+              </Link>
+            )}
+          </div>
         )}
         {message.failureNotice && (
           <p role="alert" className="mt-2 text-amber-200">
