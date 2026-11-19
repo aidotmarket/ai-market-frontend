@@ -86,6 +86,7 @@ describe('AllAIChatInput composition and send controls', () => {
 
   it('sends one trimmed message and clears the input on ordinary Enter', () => {
     const { box } = prepare();
+    expect(box.maxLength).toBe(4000);
     expect(enter(box).defaultPrevented).toBe(true);
     expect(send).toHaveBeenCalledExactlyOnceWith('candidate text');
     expect(box.value).toBe('');

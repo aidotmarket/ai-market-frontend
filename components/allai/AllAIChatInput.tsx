@@ -99,6 +99,7 @@ export default function AllAIChatInput({
           onKeyDown={handleKeyDown}
           placeholder={resources.inputPlaceholder}
           disabled={disabled}
+          maxLength={4000}
           rows={1}
           className="flex-1 resize-none rounded-sm bg-transparent text-sm text-white/90 placeholder:text-white/30 outline-none leading-snug focus-visible:ring-2 focus-visible:ring-blue-300"
         />

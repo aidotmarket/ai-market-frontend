@@ -53,9 +53,9 @@ export default function AllAIMessage({
     message.safeOutcome === 'retrieval_unavailable' ||
     message.safeOutcome === 'no_matches' || message.safeOutcome === 'rate_limited';
   // Use the maintained customer copy even when a safe-failure event supplies older wording.
-  // These four outcomes intentionally override server text so copy and recovery links
-  // stay consistent. Rate-limit copy is account-neutral: signing in does not lift limits.
-  const content = hasRecoveryLinks && message.safeOutcome
+  // Re-localise length errors too, without adding recovery links.
+  // Rate-limit copy is account-neutral: signing in does not lift limits.
+  const content = (hasRecoveryLinks || message.safeOutcome === 'message_too_long') && message.safeOutcome
     ? resources.safeOutcomes[message.safeOutcome]
     : message.content;
   const showDots = isStreaming && !content;

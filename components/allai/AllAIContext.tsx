@@ -428,6 +428,17 @@ export function AllAIProvider({ children }: { children: ReactNode }) {
     async (text: string) => {
       const trimmed = text.trim();
       if (!trimmed || isStreaming) return;
+      const resources = anonymousAllAIResources(locale);
+      if (trimmed.length > 4000) {
+        setMessages((prev) => [...prev, {
+          id: `assistant-${Date.now()}`,
+          role: 'assistant',
+          content: resources.safeOutcomes.message_too_long,
+          safeOutcome: 'message_too_long',
+          timestamp: Date.now(),
+        }]);
+        return;
+      }
       supportRef.current?.suspendConversation(); supportRef.current = null; setSupportSession(null);
       // This is the general lane, including notification and wizard callers.
       // The report composer sends explicitly through its visit's guide command.
@@ -437,7 +448,6 @@ export function AllAIProvider({ children }: { children: ReactNode }) {
           setReportSession(null);
         } else leaveReportIssue();
       }
-      const resources = anonymousAllAIResources(locale);
       if (anonymousSurfaceActive && !anonymousAvailable) {
         setMessages((prev) => [
           ...prev,
@@ -511,15 +521,34 @@ export function AllAIProvider({ children }: { children: ReactNode }) {
           });
         }
 
+        if (res.status === 422) {
+          const validationBody = await res.json().catch(() => null);
+          const messageTooLong = Array.isArray(validationBody?.detail) &&
+            validationBody.detail.some((issue: unknown) => {
+              if (!issue || typeof issue !== 'object') return false;
+              const { loc, type } = issue as { loc?: unknown; type?: unknown };
+              return Array.isArray(loc) && loc.at(-1) === 'message' && type === 'string_too_long';
+            });
+          if (messageTooLong) {
+            setMessages((prev) => prev.map((m) => m.id === assistantId
+              ? { ...m, content: resources.safeOutcomes.message_too_long, safeOutcome: 'message_too_long' }
+              : m));
+            return;
+          }
+        }
+
         if (res.status === 429) {
-          const limitContent = resources.safeOutcomes.rate_limited;
+          const limitBody = await res.json().catch(() => null);
+          const limitOutcome = limitBody?.detail?.dimension === 'turn_input'
+            ? 'message_too_long' : 'rate_limited';
+          const limitContent = resources.safeOutcomes[limitOutcome];
           setMessages((prev) =>
             prev.map((m) =>
               m.id === assistantId
                 ? {
                     ...m,
                     content: limitContent,
-                    safeOutcome: 'rate_limited',
+                    safeOutcome: limitOutcome,
                   }
                 : m
             )
