@@ -1,6 +1,6 @@
 'use client';
 
-import { customerActionError } from '@/lib/customerMessages';
+import { customerRefusal, INQUIRY_REFUSALS, customerActionError } from '@/lib/customerMessages';
 import { useState, useEffect, useRef, useCallback } from 'react';
 import Link from 'next/link';
 import InquiryListPager from '@/components/InquiryListPager';
@@ -234,7 +234,7 @@ function SellerInquiryThread({ id, onReplied, isCurrent }: { id: string; onRepli
     } catch (err) {
       if (active.current && isCurrent()) {
 
-        setReplyError(customerActionError("send your reply"));
+        setReplyError(customerRefusal(err, INQUIRY_REFUSALS, customerActionError("send your reply")));
         sending.current = false;
         setReplying(false);
       }

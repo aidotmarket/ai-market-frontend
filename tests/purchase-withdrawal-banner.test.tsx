@@ -259,7 +259,7 @@ describe('accepted document through the order', () => {
       return value;
     });
     render(<OrderDetailPage />);
-    expect(await screen.findByText('The licence document is temporarily unavailable. Contact support.')).toBeTruthy();
+    expect(await screen.findByText('We could not load your licence document just now. Contact support for a copy.')).toBeTruthy();
     expect(screen.queryByText('No recorded licence document is available')).toBeNull();
     expect(screen.queryByText('Accepted document A (retired)')).toBeNull();
     expect(screen.queryByRole('button', { name: 'Download accepted licence' })).toBeNull();

@@ -277,7 +277,7 @@ describe('DashboardOverview seller setup 2FA state', () => {
     fireEvent.click(await screen.findByRole('button', { name: 'Enable 2FA' }));
     fireEvent.change(await screen.findByRole('textbox', { name: '6-digit code' }), { target: { value: '123456' } });
     fireEvent.click(screen.getByRole('button', { name: 'Verify and enable' }));
-    expect(await screen.findByText("We couldn't verify the code just now. Try again, or contact support if it keeps happening.")).toBeTruthy();
+    expect(await screen.findByText("That code didn't match. Enter the newest code from your authenticator app.")).toBeTruthy();
     expect(screen.getByText('setup-secret')).toBeTruthy();
     expect(authApi.verify2FASetup).toHaveBeenCalledExactlyOnceWith('123456');
 

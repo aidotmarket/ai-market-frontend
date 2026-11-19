@@ -5,7 +5,7 @@ import { useEffect, useState, useCallback, useRef } from 'react';
 import { useAuthStore } from '@/store/auth';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
-import { getMyListings, getPendingSellerTermsListings, unpublishListing, publishListing, deleteListing } from '@/api/listings';
+import { getMyListings, getPendingSellerTermsListings, unpublishListing, deleteListing } from '@/api/listings';
 import { getConnectStatus } from '@/api/connect';
 import { useToast } from '@/components/Toast';
 import SellerShareControls from '@/components/listings/SellerShareControls';
@@ -125,7 +125,7 @@ function OwnerListings({ userId }: { userId: string }) {
     void fetchListings(target);
   };
 
-  const handleMutation = async (id: string, kind: 'delete' | 'unpublish' | 'publish') => {
+  const handleMutation = async (id: string, kind: 'delete' | 'unpublish') => {
     const request = sequence.current;
     if (!isCurrent(request) || busy.current || mutating.current ||
         !listings.some(listing => listing.id === id)) return;
@@ -134,14 +134,14 @@ function OwnerListings({ userId }: { userId: string }) {
     setSetupHref(undefined);
     setActionLoading(id);
     try {
-      await (kind === 'delete' ? deleteListing(id) : kind === 'publish' ? publishListing(id) : unpublishListing(id));
+      await (kind === 'delete' ? deleteListing(id) : unpublishListing(id));
       if (!isCurrent(request)) return;
-      toast(kind === 'delete' ? 'Listing deleted' : kind === 'publish' ? 'Listing published' : 'Listing unpublished', 'success');
+      toast(kind === 'delete' ? 'Listing deleted' : 'Listing unpublished', 'success');
       setDeleteConfirm(null);
       await fetchListings(pageOffset.current);
     } catch (err: unknown) {
       if (isCurrent(request)) {
-        const failure = formatListingActionError(err);
+        const failure = formatListingActionError(err, kind === 'delete' ? 'delete' : 'update');
         toast(failure.message, 'error');
         setWorkspaceHref(failure.workspaceHref);
         setSetupHref(failure.setupHref);
@@ -267,13 +267,14 @@ function OwnerListings({ userId }: { userId: string }) {
                       >
                         Edit
                       </button>
-                      {(listing.status === 'published' || listing.status === 'unlisted') && (
+                      {listing.status === 'unlisted' && <Link href={`/dashboard/listings/${encodeURIComponent(listing.id)}/edit`} className="min-h-11 inline-flex items-center px-2 text-xs font-medium text-yellow-700 underline">Publish</Link>}
+                      {listing.status === 'published' && (
                         <button
-                          onClick={() => handleMutation(listing.id, listing.status === 'unlisted' ? 'publish' : 'unpublish')}
+                          onClick={() => handleMutation(listing.id, 'unpublish')}
                           disabled={!!actionLoading}
                           className="min-h-11 px-2 text-xs font-medium text-yellow-600 hover:text-yellow-800 disabled:opacity-50"
                         >
-                          {listing.status === 'unlisted' ? 'Publish' : 'Unpublish'}
+                          Unpublish
                         </button>
                       )}
                       {listing.status === 'published' && (
@@ -281,6 +282,7 @@ function OwnerListings({ userId }: { userId: string }) {
                       )}
                       {deleteConfirm === listing.id ? (
                         <span role="group" aria-label="Delete this listing? This cannot be undone." className="flex items-center gap-1">
+                          <span className="text-xs text-red-700">This can't be undone.</span>
                           <button
                             onClick={() => handleMutation(listing.id, 'delete')}
                             disabled={!!actionLoading}

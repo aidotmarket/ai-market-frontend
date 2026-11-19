@@ -5,7 +5,7 @@ import type {AggregateStatistics, DerivationSource, ListingSummary, SummaryField
 
 export const provenanceLabels = {
   aim_metadata: 'from listing metadata', seller_entered: 'provided by the seller',
-  allai_generated: 'generated and checked', absent: 'No description provided',
+  allai_generated: 'generated and checked', absent: 'Not provided',
 } as const;
 
 // §C includes Price between Licence and Delivery. The summary contract has no

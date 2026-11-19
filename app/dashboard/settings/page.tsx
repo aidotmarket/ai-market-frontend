@@ -1,6 +1,6 @@
 'use client';
 
-import { customerActionError } from '@/lib/customerMessages';
+import { customerRefusal, TWO_FACTOR_REFUSALS, customerActionError } from '@/lib/customerMessages';
 import { useSectionRecoveryRead } from '@/hooks/useSectionRecoveryRead';
 import { sessionMutationError } from '@/api/session-mutation';
 import { setupRestriction, setupRefusal } from '@/lib/two-factor-policy';
@@ -238,9 +238,9 @@ function SettingsVisit({ accountId, retireVisit }: {
         setSecurityError(setupRefusal(err, user)!);
         setTwoFactorFlow('idle');
       } else if (err instanceof AxiosError) {
-        setSecurityError(customerActionError("verify the code"));
+        setSecurityError(customerRefusal(err, TWO_FACTOR_REFUSALS, customerActionError("verify the code")));
       } else {
-        setSecurityError(customerActionError("verify the code"));
+        setSecurityError(customerRefusal(err, TWO_FACTOR_REFUSALS, customerActionError("verify the code")));
       }
     } finally {
       if (isCurrent()) {
@@ -315,10 +315,10 @@ function SettingsVisit({ accountId, retireVisit }: {
         setSecurityError(sessionMutationError(err)!);
       } else if (err instanceof AxiosError) {
         setSecurityError(
-          (action === 'disable' ? customerActionError("turn off two-factor authentication") : customerActionError("regenerate backup codes"))
+          customerRefusal(err, TWO_FACTOR_REFUSALS, action === 'disable' ? customerActionError("turn off two-factor authentication") : customerActionError("regenerate backup codes"))
         );
       } else {
-        setSecurityError(action === 'disable' ? customerActionError("turn off two-factor authentication") : customerActionError("regenerate backup codes"));
+        setSecurityError(customerRefusal(err, TWO_FACTOR_REFUSALS, action === 'disable' ? customerActionError("turn off two-factor authentication") : customerActionError("regenerate backup codes")));
       }
     } finally {
       if (isCurrent()) setSecurityLoading(false);

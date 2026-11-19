@@ -1,6 +1,6 @@
 'use client';
 
-import { customerActionError, customerLoadError } from '@/lib/customerMessages';
+import { customerRefusal, TWO_FACTOR_REFUSALS, customerActionError, customerLoadError } from '@/lib/customerMessages';
 import { setupRestriction, setupRefusal, sellerSecuritySatisfied } from '@/lib/two-factor-policy';
 import { companyEnrollmentOffered } from '@/components/CompanyAuthenticator';
 
@@ -270,9 +270,9 @@ function OverviewVisit({ identity, retireVisit }: { identity: string; retireVisi
         setSecurityError(setupRefusal(err, user)!);
         setTwoFactorFlow('idle');
       } else if (err instanceof AxiosError) {
-        setSecurityError(customerActionError("verify the code"));
+        setSecurityError(customerRefusal(err, TWO_FACTOR_REFUSALS, customerActionError("verify the code")));
       } else {
-        setSecurityError(customerActionError("verify the code"));
+        setSecurityError(customerRefusal(err, TWO_FACTOR_REFUSALS, customerActionError("verify the code")));
       }
     } finally {
       if (!isOwner()) return;
@@ -618,7 +618,7 @@ function OverviewVisit({ identity, retireVisit }: { identity: string; retireVisi
 
       {isSellerActive && !listingsError && (
         <section aria-label="Your listings" className="rounded-xl border border-gray-200 bg-white p-5">
-          <p>{heldPublishedCount.toLocaleString()} published {heldPublishedCount === 1 ? 'listing' : 'listings'}</p>
+          <p>Your published listings</p>
           <Link href="/dashboard/listings" className="inline-flex min-h-11 items-center text-indigo-700 underline">View listings</Link>
         </section>
       )}
@@ -630,9 +630,10 @@ function OverviewVisit({ identity, retireVisit }: { identity: string; retireVisi
         </section>
       )}
       {isSellerActive && (statsError || listingsError) && (
-        <section className="rounded-xl border border-red-200 bg-red-50 p-5">
+        <section aria-label="Sales summary and listings" className="rounded-xl border border-red-200 bg-red-50 p-5">
           {statsError && <p role="alert">{customerLoadError('sales summary')}</p>}
           {listingsError && <p role="alert">{customerLoadError('listings')}</p>}
+          <Link href="/support" className="underline">Contact support</Link>
           <button type="button" onClick={fetchData} className="mt-3 min-h-11 rounded-lg border px-4">Retry</button>
         </section>
       )}

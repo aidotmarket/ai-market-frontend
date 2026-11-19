@@ -1,6 +1,6 @@
 'use client';
 
-import { customerActionError } from '@/lib/customerMessages';
+import { customerRefusal, INQUIRY_REFUSALS, customerActionError } from '@/lib/customerMessages';
 import { useEffect, useState, useCallback, useRef, use } from 'react';
 import Link from 'next/link';
 import { getConversation, replyToConversation } from '@/api/conversations';
@@ -116,7 +116,7 @@ function ConversationView({ id, isCurrent }: { id: string; isCurrent: () => bool
     } catch (err) {
       if (active.current && isCurrent()) {
 
-        setReplyError(customerActionError("send your reply"));
+        setReplyError(customerRefusal(err, INQUIRY_REFUSALS, customerActionError("send your reply")));
         sending.current = false;
         setReplying(false);
       }

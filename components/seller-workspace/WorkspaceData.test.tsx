@@ -141,17 +141,17 @@ describe('Seller data browser', () => {
   });
 
   it.each([
-    [400, 'Folder listing cursor is invalid; start again', 'the folder could not be opened; choose the folder again'],
-    [400, 'Folder listing cursor has expired; start again', 'the folder could not be opened; choose the folder again'],
-    [400, 'Folder listing cursor has already been used', 'the folder could not be opened; choose the folder again'],
-    [400, 'Folder listing scope is invalid', 'the folder could not be opened; choose the folder again'],
+    [400, 'Folder listing cursor is invalid; start again','the folder check is no longer valid; choose the folder again'],
+    [400, 'Folder listing cursor has expired; start again','the folder check expired; choose the folder again'],
+    [400, 'Folder listing cursor has already been used','the folder check has already been used; choose the folder again'],
+    [400, 'Folder listing scope is invalid','the folder is outside the connected storage scope; choose a folder within it'],
     [400, {provider:'private-provider-text'}, 'the folder could not be opened; choose the folder again'],
     [401, undefined, 'your sign-in or access to this connection changed'],
     [403, undefined, 'your sign-in or access to this connection changed'],
     [404, undefined, 'the connection or folder was not found'],
     [429, undefined, 'too many requests to your storage; wait a minute and try again'],
     [429, 'Too many requests', 'too many requests to your storage; wait a minute and try again'],
-    [503, 'File discovery is unavailable', 'the storage provider did not respond'],
+    [503, 'File discovery is unavailable','your storage files could not be checked; try again later'],
     [500, {provider:'private-provider-text'}, 'the storage provider did not respond'],
     [undefined, undefined, 'the connection to ai.market was interrupted'],
   ])('reports folder scan progress and preserves selection after status %s (%s)',async(status,detail,reason)=>{

@@ -1,3 +1,4 @@
+import { customerRefusal } from './customerMessages';
 import { ACTION_AUTH_REFRESH, isLegacyActionAuthError } from './action-auth-error';
 import { SELLER_SETUP_STEPS } from './seller-setup-steps';
 
@@ -15,7 +16,7 @@ function record(value: unknown): Record<string, unknown> | undefined {
     ? value as Record<string, unknown> : undefined;
 }
 
-export function formatListingActionError(error: unknown): ListingActionError {
+export function formatListingActionError(error: unknown, action: 'update' | 'delete' = 'update'): ListingActionError {
   if (isLegacyActionAuthError(error)) return { message: ACTION_AUTH_REFRESH };
 
   const responseData = record(record(error)?.response)?.data;
@@ -39,11 +40,13 @@ export function formatListingActionError(error: unknown): ListingActionError {
   const draftFailure = listingDraftError(error);
   if (draftFailure) return { message: draftFailure.message };
 
-  if (typeof detail === 'string' && detail.trim() === 'This listing has active orders.') {
-    return { message: 'This listing has active orders. Complete those orders before changing its availability.' };
-  }
+  const workspaceMessage = customerRefusal(error, {
+    'This listing is managed in Seller Workspace. To stop new sales, open Seller Workspace, choose Manage listings, then Pause new sales.': 'To stop new sales, open Seller Workspace, choose Manage listings, then Pause new sales.',
+    'This listing is managed in Seller Workspace. To sell it again, open Seller Workspace, choose Manage listings, then Resume sales.': 'To sell this listing again, open Seller Workspace, choose Manage listings, then Resume sales.',
+  }, '');
+  if (workspaceMessage) return { message: workspaceMessage, workspaceHref: '/dashboard/seller-workspace' };
   console.error('Listing action failed', error);
-  return { message: LISTING_ACTION_FALLBACK };
+  return { message: action === 'delete' ? "We couldn't delete your listing just now. Try again, or contact support if it keeps happening." : LISTING_ACTION_FALLBACK };
 }
 
 export function isPlainListingMessage(message:unknown):message is string {

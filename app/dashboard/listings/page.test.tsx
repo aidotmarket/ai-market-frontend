@@ -364,7 +364,7 @@ it('preserves all owner statuses, sharing eligibility, TermsGate editing and del
     const row = screen.getByText(`Owner row ${i + 1}`).closest('tr')!;
     expect(within(row).queryByRole('button', { name: 'Unpublish' }) !== null)
       .toBe(status === 'published');
-    expect(within(row).queryByRole('button', { name: 'Publish' }) !== null).toBe(status === 'unlisted');
+    expect(within(row).queryByRole('link', { name: 'Publish' }) !== null).toBe(status === 'unlisted');
     expect(within(row).queryByTestId(`share-id-${i + 1}`) !== null).toBe(status === 'published');
     expect(within(row).getByRole('button', { name: 'Edit' })).toBeTruthy();
     expect(within(row).getByRole('button', { name: 'Delete' })).toBeTruthy();
@@ -415,7 +415,7 @@ it.each(['delete', 'unpublish'])('keeps rows and releases controls after a rejec
   if (kind === 'delete') {
     fireEvent.click(within(row).getByRole('button', { name: 'Delete' })); fireEvent.click(button('Delete listing'));
   } else fireEvent.click(within(row).getByRole('button', { name: 'Unpublish' }));
-  await waitFor(() => expect(navigation.toast).toHaveBeenCalledWith(LISTING_ACTION_FALLBACK, 'error'));
+  await waitFor(() => expect(navigation.toast).toHaveBeenCalledWith(kind === 'delete' ? "We couldn't delete your listing just now. Try again, or contact support if it keeps happening." : LISTING_ACTION_FALLBACK, 'error'));
   expect(screen.getByText('Owner row 1')).toBeTruthy();
   expect(button('Next').disabled).toBe(false);
   expect(api.getMyListings).toHaveBeenCalledTimes(1);
@@ -465,7 +465,7 @@ it('shows readable unpublish readiness guidance with a seller setup link', async
 
 it('dashboard_unpublish_string_detail', async () => {
   expect(await rejectListingAction({ detail: 'This listing has active orders.' }))
-    .toBe('This listing has active orders. Complete those orders before changing its availability.');
+    .toBe(LISTING_ACTION_FALLBACK);
   expect(screen.queryByRole('link', { name: LISTING_ACTION_WORKSPACE })).toBeNull();
 });
 
@@ -496,17 +496,13 @@ it.each(['unpublish', 'delete'] as const)('dashboard_unpublish_account_switch_di
   expect(api.getMyListings).toHaveBeenCalledTimes(2);
 });
 
-it('labels categories and publishes an unlisted listing with the existing action', async () => {
-  api.getMyListings.mockResolvedValueOnce({ data: [{
+it('links Publish to the edit flow where licence selection is handled', async () => {
+  api.getMyListings.mockResolvedValue({ data: [{
     ...rows(1, 1)[0], status: 'unlisted', category: 'ai-machine-learning',
-  }] }).mockResolvedValue({ data: [{ ...rows(1, 1)[0], category: 'ai-machine-learning' }] });
-  api.publishListing.mockResolvedValue({});
+  }] });
   render(<ListingsPage />);
   await screen.findByText('AI & machine learning');
-  expect(screen.queryByRole('button', { name: 'Unpublish' })).toBeNull();
-  fireEvent.click(button('Publish'));
-  await waitFor(() => expect(api.publishListing).toHaveBeenCalledExactlyOnceWith('id-1'));
+  expect(screen.getByRole('link', { name: 'Publish' }).getAttribute('href')).toBe('/dashboard/listings/id-1/edit');
+  expect(api.publishListing).not.toHaveBeenCalled();
   expect(api.unpublishListing).not.toHaveBeenCalled();
-  await screen.findByRole('button', { name: 'Unpublish' });
-  expect(navigation.toast).toHaveBeenCalledWith('Listing published', 'success');
 });

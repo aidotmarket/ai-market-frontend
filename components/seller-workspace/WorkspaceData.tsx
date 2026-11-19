@@ -1,5 +1,5 @@
 'use client';
-import Link from 'next/link';
+import {DescribeListingAction} from './GuidedListingFlow';
 import {listingDraftError} from '@/lib/listing-action-error';
 
 import { useEffect, useMemo, useRef, useState } from 'react';
@@ -44,7 +44,7 @@ export function WorkspaceData({ connections, enabled, savedSource, onSaveSelecti
   sampleFilesAvailable?:boolean;initialSampleIndices?:number[];onSaveSampleSelection?:SaveSampleSelection;onVisibleSampleSelectionChange?:(indices:number[]|null)=>void;sampleLimits?:SampleLimits;
   licenseSelection?:LicenseSelection;onLicenseSelectionChange?:(value:LicenseSelection)=>void;onSaveLicenseSelection?:()=>Promise<void>;licenseSaving?:boolean;licenseSaveMessage?:string;licenseDraftAvailable?:boolean;licenseDraftLoaded?:boolean;licenseDraftError?:boolean;onRetryLicenseDraft?:()=>void;licenseSelectionSaved?:LicenseSelection }) {
   const flow = useListingFlow();
-  const describeAction = flow ? <button type="button" className={buttonClass} onClick={()=>flow.navigate('listing')}>Describe and price</button> : <Link href="/dashboard/seller-workspace" className={buttonClass}>Open Seller Workspace</Link>;
+  const describeAction = flow ? <button type="button" className={buttonClass} onClick={()=>flow.navigate('listing')}>Describe and price</button> : <DescribeListingAction/>;
   const verified = connections.filter((connection) => connection.status === 'verified');
   const [selectedId, setSelectedId] = useState(savedSource?.content.connection_id ?? '');
   const [legalIdentityState,setLegalIdentityState]=useState<IdentityState>({kind:'checking'});
@@ -325,7 +325,7 @@ const JOB_LABELS: Record<WorkspaceProfileJob['state'], string> = {
 const CANCELLABLE = new Set(['queued', 'starting', 'running', 'validating_result']);
 
 export function WorkspaceActivity({ enabled, connections }: { enabled: boolean; connections: SellerWorkspaceConnection[] }) {
-  if (!enabled) return <WorkspaceNotice title="Data analysis is not enabled yet">You can prepare your listing without a data analysis. Open Describe and price to continue. <Link href="/dashboard/seller-workspace" className="underline">Open Seller Workspace</Link></WorkspaceNotice>;
+  if (!enabled) return <WorkspaceNotice title="Data analysis is not enabled yet">You can prepare your listing without a data analysis. Open Describe and price to continue. <DescribeListingAction/></WorkspaceNotice>;
   return <ProfileActivity connections={connections} />;
 }
 

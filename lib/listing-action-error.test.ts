@@ -55,7 +55,7 @@ it.each([
 
 it('dashboard_unpublish_string_detail', () => {
   expect(formatListingActionError({ response: { data: { detail: '  This listing has active orders.  ' } } }))
-    .toEqual({ message: 'This listing has active orders. Complete those orders before changing its availability.' });
+    .toEqual({ message: LISTING_ACTION_FALLBACK });
 });
 
 it.each([
@@ -88,11 +88,21 @@ it('never stringifies arbitrary response data', () => {
     .toEqual({ message: LISTING_ACTION_FALLBACK });
 });
 
-it.each(['DRAFT_IN_PROGRESS','DRAFT_ALREADY_PUBLISHED'])('uses customer copy for for %s',code=>{
+it.each(['DRAFT_IN_PROGRESS','DRAFT_ALREADY_PUBLISHED'])('uses customer copy for %s',code=>{
  expect(listingDraftError({response:{data:{detail:{code,message:'A plain sentence.'}}}})).toEqual({message:code==='DRAFT_ALREADY_PUBLISHED'?'This draft has already been published. Start another listing to choose new files.':'You already have a listing draft in progress. Open Seller Workspace to finish it before starting another.',alreadyPublished:code==='DRAFT_ALREADY_PUBLISHED'});
  expect(formatListingActionError({response:{status:409,data:{detail:{code,message:'A plain sentence.'}}}})).toEqual({message:code==='DRAFT_ALREADY_PUBLISHED'?'This draft has already been published. Start another listing to choose new files.':'You already have a listing draft in progress. Open Seller Workspace to finish it before starting another.'});
 });
 it.each([{},[],null,42,'{"code":"oops"}','[object Object]','bad\u0000text','<b>text</b>'])('rejects malformed draft messages: %j',message=>{
  expect(listingDraftError({response:{data:{detail:{code:'DRAFT_ALREADY_PUBLISHED',message}}}})).toBeNull();
  expect(formatListingActionError({response:{status:409,data:{detail:{code:'DRAFT_IN_PROGRESS',message}}}})).toEqual({message:LISTING_ACTION_FALLBACK});
+});
+
+it.each([
+ ['This listing is managed in Seller Workspace. To stop new sales, open Seller Workspace, choose Manage listings, then Pause new sales.', 'Pause new sales'],
+ ['This listing is managed in Seller Workspace. To sell it again, open Seller Workspace, choose Manage listings, then Resume sales.', 'Resume sales'],
+])('maps real Workspace refusal: %s', (detail, action) => {
+ const result = formatListingActionError({response:{status:409,data:{detail}}});
+ expect(result.workspaceHref).toBe('/dashboard/seller-workspace');
+ expect(result.message).toContain(action);
+ expect(result.message).not.toContain('Try again');
 });

@@ -1,6 +1,6 @@
 'use client';
 
-import { customerActionError } from '@/lib/customerMessages';
+import { customerRefusal, INQUIRY_REFUSALS, customerActionError } from '@/lib/customerMessages';
 import { useState, useCallback, useEffect, useRef } from 'react';
 import Link from 'next/link';
 import { authSessionIdentity, useAuthStore } from '@/store/auth';
@@ -365,12 +365,12 @@ function ListingInquiryWidget({ listingId, listingSlug, listingTitle }: Props) {
           setSubmissionError(message);
           toast(message, 'info');
         } else {
-          const message = customerActionError("send your question");
+          const message = customerRefusal(err, INQUIRY_REFUSALS, customerActionError("send your question"));
           setSubmissionError(message);
           toast(message, 'error');
         }
       } else {
-        const message = customerActionError("send your question");
+        const message = customerRefusal(err, INQUIRY_REFUSALS, customerActionError("send your question"));
         setSubmissionError(message);
         toast(message, 'error');
       }
@@ -423,7 +423,7 @@ function ListingInquiryWidget({ listingId, listingSlug, listingTitle }: Props) {
     } catch (err) {
       if (current()) {
 
-        setReplyError(customerActionError("send your reply"));
+        setReplyError(customerRefusal(err, INQUIRY_REFUSALS, customerActionError("send your reply")));
         sending.current = false;
         setReplying(false);
       }

@@ -443,7 +443,7 @@ describe('BuyButton licence acceptance', () => {
 
     expect(parseCheckoutRefusal(error)).toEqual({
       code: 'LEGAL_IDENTITY_CONFLICT',
-      message: 'Your legal name or country differs between your account records. Review your legal details before purchasing.',
+      message: 'The legal name you entered (Buyer Data Ltd, IE) differs from your billing details (Buyer Holdings Ltd, GB). Use the same name, or update your legal details.',
       reconciliationUrl: '/settings/organization/legal-identity?org=org-1',
     });
   });
@@ -973,4 +973,24 @@ describe('connector checkout handoff and domain purchase', () => {
       expect(view.container.innerHTML).toBe(baseline);
     }
   });
+});
+
+it.each([
+ ['You already have an active order for this listing (#12345)', 'You already own an active order for this listing (#12345). View it in My Purchases.', '/dashboard/orders'],
+ ['Cannot purchase your own listing', 'You cannot purchase your own listing.', undefined],
+ [{code:'listing_not_available',message:'private diagnostic'}, 'This listing is no longer for sale.', '/find-data'],
+ ['Listing not found', 'This listing is no longer for sale.', '/find-data'],
+ ['Payment processing error. Please try again later.', "We couldn't start your purchase just now. Try again, or contact support if it keeps happening.", undefined],
+ [{code:'UNKNOWN',message:'private diagnostic'}, "We couldn't start your purchase just now. Try again, or contact support if it keeps happening.", undefined],
+])('maps actionable checkout refusal %j', (detail, message, webPath) => {
+ const error=new AxiosError('refused',undefined,undefined,undefined,{status:409,data:{detail},headers:{},statusText:'Conflict',config:{} as never});
+ expect(parseCheckoutRefusal(error,false)).toMatchObject({message});
+ expect(parseCheckoutRefusal(error,false).webPath).toBe(webPath);
+});
+it('uses safe mapped copy for domain refusals with a web path', () => {
+ const error=new AxiosError('refused',undefined,undefined,undefined,{status:409,data:{detail:{code:'DELIVERY_READINESS_UNKNOWN',message:'private diagnostic',web_path:'/listings/example'}},headers:{},statusText:'Conflict',config:{} as never});
+ const result=parseCheckoutRefusal(error,true);
+ expect(result.message).not.toContain('private diagnostic');
+ expect(result.webPath).toBe('/listings/example');
+ expect(result.blocked).toBe(true);
 });

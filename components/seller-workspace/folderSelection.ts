@@ -1,3 +1,4 @@
+import {customerRefusal} from '@/lib/customerMessages';
 import axios from 'axios';
 import { SellerWorkspaceApiError, type WorkspaceObject } from '@/api/sellerWorkspace';
 
@@ -16,7 +17,20 @@ export class FolderRequestError extends FolderSelectionError {
       : status === 429 ? 'too many requests to your storage; wait a minute and try again'
       : status !== undefined && status >= 500 && status < 600 ? 'the storage provider did not respond'
       : 'the storage request failed';
-    super(reason);
+    super(customerRefusal(error, {
+      'Connection scope is invalid': 'the storage folder scope changed; check the connection and choose the folder again',
+      'Connection authorization is unavailable': 'storage access has expired; reconnect your storage before choosing the folder',
+      authorization_expired: 'storage access has expired; reconnect your storage before choosing the folder',
+      invalid_scope: 'the storage folder scope changed; check the connection and choose the folder again',
+      'Folder listing cursor is invalid; start again': 'the folder check is no longer valid; choose the folder again',
+      'Folder listing cursor has expired; start again': 'the folder check expired; choose the folder again',
+      'Folder listing cursor has already been used': 'the folder check has already been used; choose the folder again',
+      'Folder listing scan has exceeded its maximum lifetime; start again': 'the folder check took too long; choose the folder again',
+      'Folder listing scan has exceeded its page limit; start again': 'this folder has too many pages to check; choose a smaller folder',
+      'Folder listing scope is invalid': 'the folder is outside the connected storage scope; choose a folder within it',
+      'File discovery is unavailable': 'your storage files could not be checked; try again later',
+
+    }, reason));
   }
 }
 

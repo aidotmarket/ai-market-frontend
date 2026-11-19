@@ -134,7 +134,7 @@ describe.each<Surface>(['detail', 'seller', 'widget'])('%s actual reply composit
     api.getConversation.mockRejectedValueOnce(new Error('Synthetic refresh failure'));
     await act(async () => { resolve({ success: true, message_id: 'reply' }); });
     expect(screen.getByText('Reply accepted. Waiting to refresh the server thread.')).toBeTruthy();
-    expect(screen.getByRole('alert').textContent).toBe('Failed to refresh conversation.');
+    expect(screen.getByRole('alert').textContent).toBe("We couldn't refresh your conversation just now. Try again, or contact support if it keeps happening.");
     expect(box.disabled).toBe(true);
     expect(box.value).toBe('');
     const reply = screen.getByRole<HTMLButtonElement>('button', { name: 'Reply' });
