@@ -77,7 +77,7 @@ function SessionOutcome({ sessionId }: { sessionId: string | null }) {
       } catch (err: unknown) {
         if (retired || terminal) return;
         if (err instanceof DOMException && err.name === 'AbortError') return;
-        setErrorMessage("We couldn't verify this payment session.");
+        setErrorMessage("If you paid, your purchase will appear in My purchases shortly. If it doesn't, contact support.");
         finish('error');
       } finally {
         inFlight = false;
@@ -94,7 +94,7 @@ function SessionOutcome({ sessionId }: { sessionId: string | null }) {
     };
 
     if (!sessionId) {
-      setErrorMessage('No session ID provided.');
+      setErrorMessage("If you paid, your purchase will appear in My purchases shortly. If it doesn't, contact support.");
       finish('error');
     } else {
       deadlineTimer = setTimeout(timeout, MAX_POLL_DURATION);
@@ -188,10 +188,10 @@ function SessionOutcome({ sessionId }: { sessionId: string | null }) {
             href="/dashboard/orders"
             className="rounded-lg bg-[#3F51B5] px-6 py-2.5 text-sm font-medium text-white hover:bg-[#3545a0]"
           >
-            Check My Purchases
+            My purchases
           </Link>
           <a href="mailto:support@ai.market" className="block mt-4 text-sm text-gray-700 underline">
-            Contact Support
+            Contact support
           </a>
         </div>
       </div>
@@ -207,20 +207,20 @@ function SessionOutcome({ sessionId }: { sessionId: string | null }) {
             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
           </svg>
         </div>
-        <h1 className="text-2xl font-bold text-gray-900 mb-2">Verification failed</h1>
+        <h1 className="text-2xl font-bold text-gray-900 mb-2">{sessionId ? "We couldn't confirm this payment yet" : "We couldn't find this checkout"}</h1>
         <p className="text-gray-600 mb-6">{errorMessage}</p>
         <div className="flex flex-col sm:flex-row gap-3 justify-center">
           <Link
             href="/dashboard/orders"
             className="rounded-lg bg-[#3F51B5] px-6 py-2.5 text-sm font-medium text-white hover:bg-[#3545a0]"
           >
-            Check My Purchases
+            My purchases
           </Link>
           <a
             href="mailto:support@ai.market"
             className="rounded-lg border border-gray-300 px-6 py-2.5 text-sm font-medium text-gray-700 hover:bg-gray-50"
           >
-            Contact Support
+            Contact support
           </a>
         </div>
       </div>

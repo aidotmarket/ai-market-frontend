@@ -1,3 +1,4 @@
+import { plainTextExcerpt } from '@/lib/plainTextExcerpt';
 import { formatMarketplaceCategoryName } from '@/lib/marketplaceCategories';
 import GeneratedSampleCard from '@/components/listings/GeneratedSampleCard';
 import { generatedSampleState } from '@/lib/generatedSample';
@@ -506,7 +507,7 @@ export default async function LandingPage() {
                         ))}
                       </div>
                       <h3 className="mt-4 text-lg font-bold leading-snug text-[#1A1A1A]">
-                        {request.title || 'Buyer data request'}
+                        {plainTextExcerpt(request.title) || 'Buyer data request'}
                       </h3>
                       {request.is_sample === true && (
                         <span className="inline-flex items-center rounded-full bg-amber-100 px-2.5 py-0.5 text-xs font-medium text-amber-800 shrink-0">
@@ -514,7 +515,7 @@ export default async function LandingPage() {
                         </span>
                       )}
                       <p className="mt-2 line-clamp-3 text-sm leading-6 text-[#666666]">
-                        {request.description}
+                        {plainTextExcerpt(request.description)}
                       </p>
                       <p className="mt-5 text-sm font-semibold text-[#3F51B5]">Review request →</p>
                     </Link>

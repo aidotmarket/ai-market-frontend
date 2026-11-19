@@ -26,7 +26,7 @@ it.each([false,true])('shows an accepted and saved title in Review; repeated sta
  mocks.review.mockResolvedValue(old);
  render(<SellerListingDraftProvider enabled sampleCapability={false}><GuidedListingFlow capabilities={{...guidedCapabilities,listing_licenses:false}} connections={[guidedConnection]} view="listing" navigate={vi.fn()}><SavedListingEditor active assistant={async()=>({source_version:1,message:'New suggestion',proposals:[{field:'title',value:'Accepted title',reasoning:''}]})}/><SellerReview active enabled/></GuidedListingFlow></SellerListingDraftProvider>);
  await screen.findByTitle('Saved original seller review');
- fireEvent.click(screen.getByRole('button',{name:'Ask Allai to draft my listing'}));await screen.findByText('New suggestion');fireEvent.click(screen.getByRole('button',{name:'Use suggestion'}));
+ fireEvent.click(screen.getByRole('button',{name:'Ask allAI to draft my listing'}));await screen.findByText('New suggestion');fireEvent.click(screen.getByRole('button',{name:'Use suggestion'}));
  mocks.read.mockImplementationOnce(()=>new Promise(resolve=>{release=resolve;}));
  fireEvent.click(screen.getByRole('button',{name:'Save private draft'}));
  await waitFor(()=>expect(saved.content.title).toBe('Accepted title'));

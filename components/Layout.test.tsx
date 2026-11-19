@@ -54,6 +54,7 @@ describe('Layout registration links', () => {
 
   it('renders one on-site newsletter form in the signed-out footer with existing legal links', () => {
     render(<Layout><div>Page content</div></Layout>);
+    expect(screen.getByRole('link', { name: 'How we verify data' }).getAttribute('href')).toBe('/verified');
     const form = screen.getByRole('form', { name: 'Newsletter subscription' });
     expect(form.closest('footer')).not.toBeNull();
     expect(screen.getAllByRole('textbox', { name: 'Newsletter email' })).toHaveLength(1);

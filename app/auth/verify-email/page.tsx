@@ -17,7 +17,7 @@ function VerifyEmailInner() {
   useEffect(() => {
     if (!token) {
       setState('error');
-      setMessage('This verification link is missing its token.');
+      setMessage('This link is incomplete. Open the latest email from us, or request a new one from the sign-in page.');
       return;
     }
     verifyEmail(token)

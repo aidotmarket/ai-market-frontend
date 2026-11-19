@@ -335,7 +335,7 @@ function OverviewVisit({ identity, retireVisit }: { identity: string; retireVisi
   return (
     <div className="space-y-8">
       <div>
-        <h1 ref={dashboardHeadingRef} tabIndex={-1} className="text-2xl font-bold text-gray-900">Welcome back, {user?.first_name || 'there'}</h1>
+        <h1 ref={dashboardHeadingRef} tabIndex={-1} className="text-2xl font-bold text-gray-900">Welcome back{user?.first_name ? `, ${user.first_name}` : ''}</h1>
         <p className="mt-1 text-sm text-gray-500">
           {isSellerActive
             ? "Here's what's happening with your store today."

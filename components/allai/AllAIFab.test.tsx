@@ -29,11 +29,11 @@ describe('AllAIFab anonymous visitor entry point', () => {
 
   afterEach(cleanup);
 
-  it('keeps Allai visibly named throughout the seller workspace', () => {
+  it('keeps allAI visibly named throughout the seller workspace', () => {
     mocks.context.anonymousSurfaceActive = false;
     mocks.context.page = '/dashboard/seller-workspace';
     render(<AllAIFab />);
-    expect(screen.getByRole('button', { name: 'Open Allai — here to help' }).textContent).toContain('Allai · Here to help');
+    expect(screen.getByRole('button', { name: 'Open allAI, here to help' }).textContent).toContain('allAI · Here to help');
   });
 
   it('shows a visible AI label when the approved anonymous mode is active', () => {

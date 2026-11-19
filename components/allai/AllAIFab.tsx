@@ -24,7 +24,7 @@ export default function AllAIFab() {
         backdropFilter: 'blur(16px)',
         WebkitBackdropFilter: 'blur(16px)',
       }}
-      aria-label={anonymousSurfaceActive ? resources.openAssistant : sellerWorkspace ? 'Open Allai — here to help' : 'Open allAI assistant'}
+      aria-label={anonymousSurfaceActive ? resources.openAssistant : sellerWorkspace ? 'Open allAI, here to help' : 'Open allAI assistant'}
       aria-expanded={isOpen}
       aria-controls="allai-assistant-dialog"
       data-testid="allai-launcher"
@@ -44,7 +44,7 @@ export default function AllAIFab() {
       </svg>
       {(anonymousSurfaceActive || sellerWorkspace) && (
         <span className="whitespace-nowrap text-sm font-semibold text-white/90">
-          {anonymousSurfaceActive ? resources.assistantLabel : 'Allai · Here to help'}
+          {anonymousSurfaceActive ? resources.assistantLabel : 'allAI · Here to help'}
         </span>
       )}
     </button>

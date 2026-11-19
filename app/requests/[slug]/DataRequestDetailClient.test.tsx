@@ -238,6 +238,13 @@ describe('DataRequestDetailClient authenticated fallback loading', () => {
     });
   });
 
+  it('uses the data source heading while preserving the request body', () => {
+    const request = makeOwnerRequest({ provenance_requirements: 'Documented sources', description: '**Keep detail Markdown**' });
+    render(<DataRequestDetailClient slug={request.slug} initialRequest={request} />);
+    expect(screen.getByRole('heading', { name: 'Where the data must come from' })).toBeTruthy();
+    expect(screen.getByText('**Keep detail Markdown**')).toBeTruthy();
+  });
+
   it('shows the refusal and disables the anonymous respond entry button', async () => {
     mocks.auth.user = null;
     mocks.auth.isAuthenticated = false;
@@ -608,7 +615,7 @@ describe('DataRequestDetailClient authenticated fallback loading', () => {
     fireEvent.change(screen.getByRole('textbox', { name: 'Categories' }), { target: { value: 'healthcare' } });
     fireEvent.change(screen.getByRole('textbox', { name: 'Preferred Formats' }), { target: { value: 'csv' } });
     fireEvent.change(screen.getByRole('textbox', { name: 'Regulatory Requirements' }), { target: { value: 'GDPR' } });
-    fireEvent.change(screen.getByRole('textbox', { name: 'Provenance Requirements' }), { target: { value: 'Documented sources' } });
+    fireEvent.change(screen.getByRole('textbox', { name: 'Where the data must come from (optional)' }), { target: { value: 'Documented sources' } });
     fireEvent.click(screen.getByRole('button', { name: 'Save changes' }));
 
     await waitFor(() => {

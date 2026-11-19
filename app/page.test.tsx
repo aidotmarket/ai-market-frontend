@@ -49,6 +49,18 @@ function request(id: string) {
 }
 
 describe('homepage buyer requests', () => {
+  it('renders request Markdown as plain card text without changing its source', async () => {
+    const item = { ...request('markdown'), title: '**Title: Request for _retail_ data**', description: '## Needs\n- **Sales** and [regions](https://example.com)' };
+    fetchDataRequests.mockResolvedValue({ items: [item, request('2'), request('3')] });
+    const { default: LandingPage } = await import('./page');
+    render(await LandingPage());
+    const card = screen.getByRole('heading', { name: 'Request for retail data' }).closest('a')!;
+    expect(card.getAttribute('href')).toBe('/requests/request-markdown');
+    expect(within(card).getByText('Needs Sales and regions')).toBeTruthy();
+    expect(within(card).queryByRole('link', { name: 'regions' })).toBeNull();
+    expect(item.title).toBe('**Title: Request for _retail_ data**');
+  });
+
   it.each([true, false, undefined, 'true', 1, null])('tags only an explicit sample flag (%s) next to its buyer demand title', async is_sample => {
     const extra = is_sample === undefined ? {} : { is_sample };
     fetchDataRequests.mockResolvedValue({ items: [{ ...request('1'), ...extra }, { ...request('2'), title: 'Synthetic data request' }, request('3')] });
