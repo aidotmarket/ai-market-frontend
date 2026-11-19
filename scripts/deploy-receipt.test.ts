@@ -201,7 +201,7 @@ describe('workflow receipt decisions', () => {
 
   it('never treats unknown expected metadata as a matching revision', async () => {
     const h = harness({ revisions: [null] });
-    expect((await observeDeployment({ ...h, fetch: h.fetch as unknown as typeof globalThis.fetch, expected: '' })).state).toBe('pending');
+    expect((await observeDeployment({ ...h, fetch: h.fetch as unknown as typeof globalThis.fetch, expected: '', repository: context.repository })).state).toBe('pending');
   });
 
   it('bounds the window and does not verify a revision arriving after the deadline', async () => {
