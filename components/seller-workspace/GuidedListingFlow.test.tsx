@@ -38,7 +38,7 @@ describe('checklist reads owned at the workspace page',()=>{
   fireEvent.click(within(checklist).getByRole('button',{name:'Next: Review →'}));expect(navigate).toHaveBeenCalledWith('review');expect(mocks.review).toHaveBeenCalledOnce();
   const collapse=within(checklist).getByRole('button',{name:/Listing checklist/});expect(collapse.getAttribute('aria-expanded')).toBe('false');fireEvent.click(collapse);expect(collapse.getAttribute('aria-expanded')).toBe('true');
  });
- it('keeps verified storage complete and labels only the first unfinished step Next',async()=>{
+ it('labels the first unfinished step To do · Next and done steps Complete',async()=>{
   mocks.source.mockResolvedValue(null);mocks.draft=null;render(<Harness/>);
   const checklist=screen.getByRole('complementary',{name:'Listing checklist'});
   await waitFor(()=>expect(within(checklist).getByRole('button',{name:'Next: Choose your files →'})).toBeTruthy());

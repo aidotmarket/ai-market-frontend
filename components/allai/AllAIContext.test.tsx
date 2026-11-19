@@ -1257,6 +1257,91 @@ describe('customer reply copy and recovery links', () => {
     }
   });
 
+  it.each(
+    [false, true].flatMap(signedIn =>
+      ANONYMOUS_ALLAI_LOCALES.flatMap(locale =>
+        ['client', 'http422'].map(source => ({ signedIn, locale, source }))
+      )
+    )
+  )('renders message_too_long from $source and re-localises (signed in: $signedIn, $locale)', async ({ signedIn, locale, source }) => {
+    mocks.pathname = '/';
+    if (signedIn) {
+      mocks.auth.user = { role: 'buyer' };
+      mocks.auth.token = 'signed-in-token';
+    }
+    fetchMock.mockImplementation(async (input) => {
+      const url = String(input);
+      if (url === STATUS_URL) return response(200, {
+        available: true, supported_locales: [...ANONYMOUS_ALLAI_LOCALES], cache_seconds: 5,
+      });
+      if (url === `${SESSION_URL}/stale-session`) return response(200, { messages: [] });
+      if (url === MESSAGE_URL) return response(422, {
+        detail: [{
+          type: 'string_too_long', loc: ['body', 'message'],
+          msg: 'String should have at most 4000 characters',
+          input: 'a'.repeat(4001), ctx: { max_length: 4000 },
+        }],
+      });
+      throw new Error(`Unexpected request: ${url}`);
+    });
+    renderProvider('stale-session', true);
+    if (context().anonymousSurfaceActive) await waitFor(() => expect(context().anonymousAvailable).toBe(true));
+    act(() => context().setLocale(locale));
+    // Whitespace is trimmed before checking the cap; the 422 uses a short send
+    // so the server-validation fallback is exercised independently of the guard.
+    await send(source === 'client' ? `  ${'a'.repeat(4001)}  ` : 'hello');
+    expect(context().messages.at(-1)?.safeOutcome).toBe('message_too_long');
+    expect(context().isStreaming).toBe(false);
+    expect(messageCalls()).toHaveLength(source === 'client' ? 0 : 1);
+    if (source === 'client') expect(creationCalls()).toHaveLength(0);
+    expect(screen.getByText(anonymousAllAIResources(locale).safeOutcomes.message_too_long)).not.toBeNull();
+    expect(screen.queryAllByRole('link')).toHaveLength(0);
+    for (const nextLocale of ANONYMOUS_ALLAI_LOCALES) {
+      act(() => context().setLocale(nextLocale));
+      expect(screen.getByText(anonymousAllAIResources(nextLocale).safeOutcomes.message_too_long)).not.toBeNull();
+      expect(screen.queryAllByRole('link')).toHaveLength(0);
+    }
+  });
+
+  it.each([
+    { detail: [{ type: 'string_too_long', loc: ['body', 'context'] }] },
+    { detail: [{ type: 'string_too_short', loc: ['body', 'message'] }] },
+    { detail: [{ type: 'string_too_long', loc: ['message', 'other'] }] },
+    { detail: [{ type: 'string_too_long', loc: 'message' }] },
+    { detail: [null, 'message', {}] },
+    { detail: { type: 'string_too_long', loc: ['body', 'message'] } },
+    {},
+    null,
+    'invalid_json',
+  ])('keeps unrelated or malformed 422 errors generic (%j)', async body => {
+    mocks.auth.user = { role: 'buyer' };
+    mocks.auth.token = 'signed-in-token';
+    fetchMock.mockImplementation(async (input) => {
+      if (String(input) === `${SESSION_URL}/stale-session`) return response(200, { messages: [] });
+      const result = response(422, body);
+      if (body === 'invalid_json') vi.mocked(result.json).mockRejectedValue(new SyntaxError('Invalid JSON'));
+      return result;
+    });
+    renderProvider('stale-session', true);
+    act(() => context().setLocale('en'));
+    await send();
+    expect(screen.getByText(GENERIC_ERROR)).not.toBeNull();
+    expect(context().messages.at(-1)?.safeOutcome).toBeUndefined();
+    expect(context().isStreaming).toBe(false);
+  });
+
+  it('sends a trimmed message at the 4000-character boundary', async () => {
+    mocks.auth.user = { role: 'buyer' };
+    mocks.auth.token = 'signed-in-token';
+    fetchMock.mockImplementation(async (input) => String(input) === MESSAGE_URL
+      ? sseResponse('Accepted.') : response(200, { messages: [] }));
+    renderProvider('stale-session', true);
+    await send(`  ${'a'.repeat(4000)}  `);
+    expect(messageCalls()).toHaveLength(1);
+    expect(messagePayload(messageCalls()[0]).message).toBe('a'.repeat(4000));
+    expect(screen.getByText('Accepted.')).not.toBeNull();
+  });
+
   it.each(['Alex', ''])('greets the signed-in seller warmly in one sentence (name: %s)', async first_name => {
     mocks.auth.user = { role: 'seller', first_name };
     fetchMock.mockResolvedValue(response(200, { messages: [] }));
