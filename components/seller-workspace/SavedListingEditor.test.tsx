@@ -17,7 +17,7 @@ afterEach(()=>{cleanup();resetSellerListingDraftOwnerForTests();});
 const renderEditor=(sampleCapability=false)=>render(<SellerListingDraftProvider enabled sampleCapability={sampleCapability}><SavedListingEditor active /></SellerListingDraftProvider>);
 
 it('loads an account draft before editing and preserves newer edits during a save', async () => {
-  let finish!: (result: { version: number }) => void;
+  let finish!: (result: { version: number; draft_id?:string; content?:typeof content }) => void;
   api.saveListingDraft.mockImplementation(() => new Promise((resolve) => { finish = resolve; }));
   renderEditor();
   expect(screen.queryByLabelText('Title')).toBeNull();
@@ -28,7 +28,7 @@ it('loads an account draft before editing and preserves newer edits during a sav
   await waitFor(()=>expect(api.saveListingDraft).toHaveBeenCalledOnce());
   expect(api.saveListingDraft.mock.calls[0][1]).toBe(3);
   fireEvent.change(title, { target: { value: 'Newer edit' } });
-  await act(async () => finish({ version: 4 }));
+  await act(async () => finish({ version: 4, draft_id:'first-assigned-id', content:{...content,title:'First edit'} }));
   expect((title as HTMLInputElement).value).toBe('Newer edit');
   expect(screen.getByText(/You have unsaved changes/)).toBeTruthy();
 });
@@ -117,4 +117,15 @@ it('#1172 omitted-draft_id save racing an import uses existing 409 conflict guid
  fireEvent.click(screen.getByText('Save private draft'));
  await screen.findByText(/reload the Workspace to open the saved version/);
  expect(api.saveListingDraft).toHaveBeenCalledOnce();
+});
+
+it('DRAFT_SUPERSEDED save shows replacement guidance and reloads the current draft',async()=>{
+ api.readListingDraft.mockResolvedValueOnce({draft_id:'original',version:3,authority_version_id:'original-version',content,updated_at:'2026-11-19T00:00:00Z'});
+ renderEditor();fireEvent.change(await screen.findByLabelText('Title'),{target:{value:'Replaced edit'}});
+ api.saveListingDraft.mockRejectedValueOnce(new AxiosError('replaced',undefined,undefined,undefined,{status:409,data:{detail:{code:'DRAFT_SUPERSEDED',message:'This draft was replaced by a newer listing draft'}}} as never));
+ api.readListingDraft.mockResolvedValueOnce({draft_id:'new',version:4,authority_version_id:null,content:{...content,title:'Current draft'},updated_at:'2026-11-19T00:00:00Z'});
+ fireEvent.click(screen.getByText('Save private draft'));
+ expect(await screen.findByText(/This import was replaced by a newer import or a new listing/)).toBeTruthy();
+ expect(api.readListingDraft).toHaveBeenCalledTimes(2);
+ expect((screen.getByLabelText('Title') as HTMLInputElement).value).toBe('Current draft');
 });

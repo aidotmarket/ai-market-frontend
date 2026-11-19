@@ -176,3 +176,9 @@ it('does not consume a replacement captured while a stale consumer waits for dec
  await work;expect(await stale).toBeNull();
  expect((await consumeHandoff(id,'/dashboard/gateways'))?.handoff).toEqual(gateway);
 });
+
+it('CC R1 preserves contact refusal and appends the vectorAIz editing step only on contact 422',()=>{
+ const message='Remove contact details and off-platform payment instructions.';
+ expect(authorityMessage({response:{status:422,data:{detail:{field:'/description',message}}}})).toBe(message+' Edit it in vectorAIz and export again.');
+ expect(authorityMessage({response:{status:503,data:{detail:{field:'/description',message}}}})).toBe(message);
+});

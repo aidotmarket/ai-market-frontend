@@ -1,4 +1,6 @@
 // @vitest-environment jsdom
+// This regression harness depends on private Next router APIs and module resolution.
+// Recheck this setup on Next upgrades; an internal API change can break it without a product regression.
 // Adapted from CC round-2 probes: real Next AppRouter, including history effects.
 import React from 'react';
 import {createRequire} from 'node:module';

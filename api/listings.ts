@@ -115,6 +115,8 @@ export interface MyListingsPaging {
   limit?: number;
 }
 
+export type OwnerListingItem = SellerListingItem & {authority_version_id?: string | null};
+
 // Preserve the overview's no-argument request and the existing array response.
 export const getMyListings = (paging?: MyListingsPaging) => paging === undefined
   ? api.get('/listings/mine')

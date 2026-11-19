@@ -20,7 +20,7 @@ export interface ListingDraftContent {
 }
 export interface SavedListingDraft {
   draft_id?: string | null;
-  /** Owner-scoped recovery reference; absent until the backend dependency deploys. */
+  /** Owner-only authority reference; null for ordinary drafts. Optional during backend rollout. */
   authority_version_id?: string | null;
   version: number;
   content: ListingDraftContent;

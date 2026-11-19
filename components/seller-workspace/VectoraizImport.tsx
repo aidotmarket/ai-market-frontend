@@ -10,6 +10,7 @@ import {resolveFolder} from './folderSelection';
 import {useOptionalSellerListingDraft} from './SellerListingDraftStore';
 import PurchaserReview from '@/components/gateways/PurchaserReview';
 import {HANDOFF_CAPTURED,authorityCode,authorityMessage,bucketTarget,clearHandoff,consumeHandoff,HandoffError,identityMatches,isBucket,matchGateway,matchingConnections,saveAuthorityReceipt,readAuthorityReceipt,VECTOR_ATTESTATION,type PendingHandoff} from '@/lib/vectoraizHandoff';
+import {readListingDraft,type SavedListingDraft} from '@/api/sellerListingDraft';
 import type {GatewayFile} from '@/types/sellerGateway';
 
 const routeFor=(mode:'bucket'|'gateway')=>mode==='bucket'?'/dashboard/seller-workspace':'/dashboard/gateways';
@@ -17,6 +18,7 @@ export default function VectoraizImport({mode='bucket',gatewayId}:{mode?:'bucket
   const account=useAuthStore(state=>state.user?.id);
   const email=useAuthStore(state=>state.user?.email);
   const store=useOptionalSellerListingDraft();
+  const [gatewayDraft,setGatewayDraft]=useState<SavedListingDraft|null|undefined>(undefined);
   const [intake,setIntake]=useState(0);
   const [expired,setExpired]=useState(false);
   const [canRestore,setCanRestore]=useState(false);
@@ -52,7 +54,7 @@ export default function VectoraizImport({mode='bucket',gatewayId}:{mode?:'bucket
   },[pending]);
   useEffect(()=>{
     const generation=++run.current;const same=sessionLifecycle();
-    restoreAllowed.current=false;setCanRestore(false);setPending(null);setReceipt(null);setTarget(null);setError(null);setTerms('');request.current=null;
+    restoreAllowed.current=false;setCanRestore(false);setPending(null);setReceipt(null);setGatewayDraft(undefined);setTarget(null);setError(null);setTerms('');request.current=null;
     if(!account)return;
     // One consumption per mounted entry, including React Strict Mode's replay.
     if(bootstrap.current?.account!==account){
@@ -70,7 +72,10 @@ export default function VectoraizImport({mode='bucket',gatewayId}:{mode?:'bucket
     bootstrap.current.generation=generation;
     void bootstrap.current.promise.then(async item=>{
       if(!same()||generation!==run.current)return;
-      if(!item){setCanRestore(true);return;}
+      if(!item){
+        if(mode==='gateway'&&restoreAllowed.current){const draft=await readListingDraft();if(!same()||generation!==run.current)return;setGatewayDraft(draft);}
+        setCanRestore(true);return;
+      }
       setPending(item);
       if(isBucket(item.handoff)){
         const list=matchingConnections(item.handoff,await listSellerWorkspaceConnections());
@@ -164,6 +169,10 @@ export default function VectoraizImport({mode='bucket',gatewayId}:{mode?:'bucket
     try{
       const result=await (store?store.importDraft(request.current):importAuthorityDraft(request.current));
       if(!same()||generation!==run.current)return;
+      if(!store){
+        // The current draft read, rather than a replayed receipt, owns recovery.
+        const draft=await readListingDraft();if(!same()||generation!==run.current)return;setGatewayDraft(draft);
+      }
       completed=true;saveAuthorityReceipt(account!,result);setReceipt(result);setPending(null);request.current=null;
     }catch(cause){
       if(same()&&generation===run.current){
@@ -185,8 +194,9 @@ export default function VectoraizImport({mode='bucket',gatewayId}:{mode?:'bucket
   }
   if(!account||bootstrap.current?.account!==account)return null;
   // A durable draft reference takes precedence once the backend supplies it.
-  const draftVersion=mode==='bucket'&&store?.loaded?store.draft?.authority_version_id:undefined;
-  const matchingReceipt=receipt&&(mode!=='bucket'||store?.loaded&&store.draft?.draft_id===receipt.draft_id)?receipt:null;
+  const draftVersion=store?.loaded?store.draft?.authority_version_id:gatewayDraft===null?null:gatewayDraft?.authority_version_id;
+  const currentDraft=store?.loaded?store.draft:gatewayDraft;
+  const matchingReceipt=receipt&&(currentDraft===undefined?mode!=='bucket':currentDraft?.draft_id===receipt.draft_id)?receipt:null;
   const reviewVersion=restoreAllowed.current?(draftVersion!==undefined?draftVersion:matchingReceipt?.authority_version_id):null;
   if(reviewVersion&&!pending)return <section className="space-y-3 rounded border bg-white p-4"><h2>Imported from vectorAIz</h2>
     <p>Your private draft is saved. Review it before publishing.</p>

@@ -10,7 +10,8 @@ import VectoraizImport from './VectoraizImport';
 import {HANDOFF_CAPTURED,VECTOR_NAMES,type PendingHandoff} from '@/lib/vectoraizHandoff';
 const draftState=vi.hoisted(()=>({value:null as unknown}));
 vi.mock('./SellerListingDraftStore',()=>({useOptionalSellerListingDraft:()=>draftState.value}));
-const api=vi.hoisted(()=>({caps:vi.fn(),consume:vi.fn(),clear:vi.fn(),gateways:vi.fn(),files:vi.fn(),import:vi.fn(),connections:vi.fn(),bucket:vi.fn()}));
+const api=vi.hoisted(()=>({draft:vi.fn(),caps:vi.fn(),consume:vi.fn(),clear:vi.fn(),gateways:vi.fn(),files:vi.fn(),import:vi.fn(),connections:vi.fn(),bucket:vi.fn()}));
+vi.mock('@/api/sellerListingDraft',()=>({readListingDraft:api.draft}));
 vi.mock('@/api/sellerWorkspace',async original=>({...await original<typeof import('@/api/sellerWorkspace')>(),getAuthorityCapabilities:api.caps,importAuthorityDraft:api.import,listSellerWorkspaceConnections:api.connections}));
 vi.mock('@/api/sellerGateways',async original=>({...await original<typeof import('@/api/sellerGateways')>(),listSellerGateways:api.gateways,readAuthorityGatewayFiles:api.files}));
 vi.mock('@/lib/vectoraizHandoff',async original=>({...await original<typeof import('@/lib/vectoraizHandoff')>(),consumeHandoff:api.consume,clearHandoff:api.clear,bucketTarget:api.bucket}));
@@ -22,6 +23,7 @@ const pending:PendingHandoff={handoff,encoded:'native-compressed',expires:Date.n
 beforeEach(()=>{
  draftState.value=null;sessionStorage.clear();
  for(const f of Object.values(api))f.mockReset();
+ api.draft.mockResolvedValue({draft_id:id,authority_version_id:'authority',version:1,content:handoff.draft,updated_at:'2026-11-19T00:00:00Z'});
  useAuthStore.setState({user:{id,email:'seller@example.test'} as never,token:'token'});
  api.caps.mockResolvedValue({import_enabled:true,contract_version:'listing-authority-v1',handoff_versions:[1]});api.consume.mockResolvedValue(pending);
  api.gateways.mockResolvedValue([{gateway_id:'gateway',name:'My gateway',door_url:'https://neutral.example',gateway_metadata_revision:99}]);
@@ -180,9 +182,12 @@ it.each([true,false])('MEDIUM 5 deferred A capability (enabled=%s) cannot consum
 it.each([true,false])('expiry during POST preserves completion (success=%s) and blocks retries after failure',async success=>{
  let resolve!:(v:unknown)=>void,reject!:(v:unknown)=>void;
  api.import.mockImplementation(()=>new Promise((done,fail)=>{resolve=done;reject=fail;}));
+ vi.useFakeTimers({toFake:['setTimeout','clearTimeout','Date']});
  const expires=Date.now()+60000;api.consume.mockResolvedValue({...pending,expires});
- await ready();
- vi.useFakeTimers();vi.setSystemTime(expires-1000);
+ // Flush mount and file reads explicitly: RTL polling also uses the fake clock.
+ render(<VectoraizImport mode="gateway"/>);await act(async()=>{});
+ fireEvent.click(screen.getByRole('button',{name:'Check uploaded files'}));await act(async()=>{});
+ fireEvent.click(screen.getByLabelText(/Import for my signed-in account/));fireEvent.click(screen.getByLabelText(/I reviewed this draft/));
  fireEvent.click(screen.getByRole('button',{name:'Import private draft'}));
  await act(async()=>{vi.advanceTimersByTime(61000);});
  expect(screen.queryByRole('alert')).toBeNull();
@@ -204,4 +209,20 @@ it('unmounted capability continuation cannot clear or consume a later entry',asy
  await waitFor(()=>expect(api.caps).toHaveBeenCalledOnce());view.unmount();
  await act(async()=>{resolve({import_enabled:false});});
  expect(api.clear).not.toHaveBeenCalled();expect(api.consume).not.toHaveBeenCalled();
+});
+
+it.each(['bucket','gateway'] as const)('prefers durable current draft over a receipt for %s after refresh',async mode=>{
+ api.consume.mockResolvedValue(null);
+ const draft={draft_id:id,authority_version_id:'durable',version:1,content:{...handoff.draft},updated_at:'2026-11-19T00:00:00Z'};
+ if(mode==='bucket')draftState.value={loaded:true,draft};else api.draft.mockResolvedValue(draft);
+ const view=render(<VectoraizImport mode={mode}/>);await screen.findByText('Review durable');
+ view.unmount();sessionStorage.clear();render(<VectoraizImport mode={mode}/>);await screen.findByText('Review durable');
+});
+it.each(['bucket','gateway'] as const)('explicit null version suppresses receipt recovery for %s',async mode=>{
+ const {saveAuthorityReceipt}=await import('@/lib/vectoraizHandoff');
+ saveAuthorityReceipt(id,{import_id:id,draft_id:id,listing_id:null,authority_version_id:'old'});api.consume.mockResolvedValue(null);
+ const draft={draft_id:id,authority_version_id:null,version:1,content:handoff.draft,updated_at:'2026-11-19T00:00:00Z'};
+ if(mode==='bucket')draftState.value={loaded:true,draft};else api.draft.mockResolvedValue(draft);
+ const view=render(<VectoraizImport mode={mode}/>);await act(async()=>{});
+ expect(view.container.textContent).toBe('');expect(screen.queryByText('Review old')).toBeNull();
 });

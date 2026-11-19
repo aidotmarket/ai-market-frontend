@@ -1,5 +1,6 @@
 'use client';
 
+import {authorityCode} from '@/lib/vectoraizHandoff';
 import {createContext,useCallback,useContext,useEffect,useMemo,useState,useSyncExternalStore} from 'react';
 import {readListingDraft,saveListingDraft,createListingDraft,type ListingDraftContent,type SavedListingDraft} from '@/api/sellerListingDraft';
 import {authSessionOwner,assertAuthSessionOwner,isAuthSessionOwner} from '@/lib/auth-session-owner';
@@ -16,16 +17,16 @@ type DraftStore={importDraft:(request:AuthorityImportRequest)=>Promise<Authority
   saveListingFields:(fields:ListingDraftContent,baselineVersion?:number)=>Promise<number>;saveLicenseSelection:(selection:LicenseSelection)=>Promise<void>;saveSamples:(indices:number[])=>Promise<void>};
 const DraftContext=createContext<DraftStore|null>(null);
 
-type OwnerSnapshot={draft:SavedListingDraft|null;selectionSaveCount:number;selectionSaveFailed:boolean};
+type OwnerSnapshot={recoveryRevision:number;loaded:boolean;draft:SavedListingDraft|null;selectionSaveCount:number;selectionSaveFailed:boolean};
 const createOwner=(session:number)=>({
-  session,
+  session,recoveryRevision:0,
   draft:null as SavedListingDraft|null,draftGeneration:0,version:0,saveRevision:0,saveAttempt:0,loaded:false,queue:Promise.resolve() as Promise<unknown>,
   pending:null as {serialized:string;version:number;id:string}|null,
   selectionSaveCount:0,selectionSaveFailed:false,listeners:new Set<(snapshot:OwnerSnapshot)=>void>(),
 });
 let currentOwner=createOwner(authSessionOwner());
 type Owner=ReturnType<typeof createOwner>;
-const snapshot=(owner:Owner):OwnerSnapshot=>({draft:owner.draft,selectionSaveCount:owner.selectionSaveCount,selectionSaveFailed:owner.selectionSaveFailed});
+const snapshot=(owner:Owner):OwnerSnapshot=>({recoveryRevision:owner.recoveryRevision,loaded:owner.loaded,draft:owner.draft,selectionSaveCount:owner.selectionSaveCount,selectionSaveFailed:owner.selectionSaveFailed});
 const publish=(owner:Owner)=>{if(!isAuthSessionOwner(owner.session))return;const value=snapshot(owner);owner.listeners.forEach(listener=>listener(value));};
 const beginOwnerSelectionSave=(owner:Owner)=>{if(!isAuthSessionOwner(owner.session))return;if(owner.selectionSaveCount===0)owner.selectionSaveFailed=false;owner.selectionSaveCount+=1;publish(owner);};
 const finishOwnerSelectionSave=(owner:Owner,succeeded:boolean)=>{if(!isAuthSessionOwner(owner.session))return;owner.selectionSaveCount=Math.max(0,owner.selectionSaveCount-1);if(!succeeded)owner.selectionSaveFailed=true;else if(owner.selectionSaveCount===0)owner.selectionSaveFailed=false;publish(owner);};
@@ -47,7 +48,19 @@ const persist=(owner:Owner,binding:DraftBinding,build:(base:ListingDraftContent)
       owner.pending={serialized,version,id:crypto.randomUUID()};
     // Count every attempt, including identical retries that reuse pending.
     owner.saveAttempt+=1;
-    const result=await saveListingDraft(content,owner.pending.version,owner.pending.id);
+    let result:SavedListingDraft;
+    try{result=await saveListingDraft(content,owner.pending.version,owner.pending.id);}
+    catch(failure){
+      if(authorityCode(failure)==='DRAFT_SUPERSEDED'){
+        assertAuthSessionOwner(owner.session);
+        owner.draftGeneration+=1;owner.saveRevision+=1;owner.pending=null;owner.loaded=false;owner.draft=null;owner.version=0;
+        owner.selectionSaveCount=0;owner.selectionSaveFailed=false;
+        try{const current=await readListingDraft();assertAuthSessionOwner(owner.session);owner.draft=current;owner.version=current?.version??0;owner.loaded=true;}
+        catch{/* Keep editing fenced; the load retry will recover the current pointer. */}
+        finally{owner.recoveryRevision+=1;publish(owner);}
+      }
+      throw failure;
+    }
     assertAuthSessionOwner(owner.session);
     if(owner.draftGeneration!==binding.draftGeneration)throw new DraftChangedError();
     owner.pending=null;owner.draft=result;owner.version=result.version;owner.saveRevision+=1;publish(owner);
@@ -94,7 +107,7 @@ function OwnedSellerListingDraftProvider({owner,enabled,sampleCapability,childre
   const [selectionSaveFailed,setSelectionSaveFailed]=useState(initial.selectionSaveFailed);
   const [visibleSampleIndices,setVisibleSampleIndices]=useState<number[]|null>(null);
   const [retryKey,setRetryKey]=useState(0);
-  useEffect(()=>{const listener=(value:OwnerSnapshot)=>{setDraft(value.draft);setSelectionSaveCount(value.selectionSaveCount);setSelectionSaveFailed(value.selectionSaveFailed);};owner.listeners.add(listener);listener(snapshot(owner));return()=>{owner.listeners.delete(listener);};},[owner]);
+  useEffect(()=>{let recoveryRevision=owner.recoveryRevision;const listener=(value:OwnerSnapshot)=>{setDraft(value.draft);if(value.recoveryRevision!==recoveryRevision){recoveryRevision=value.recoveryRevision;setLoaded(value.loaded);setError(!value.loaded);setVisibleSampleIndices(null);}setSelectionSaveCount(value.selectionSaveCount);setSelectionSaveFailed(value.selectionSaveFailed);};owner.listeners.add(listener);listener(snapshot(owner));return()=>{owner.listeners.delete(listener);};},[owner]);
   useEffect(()=>{if(sampleCapability)setRequested(true);},[sampleCapability]);
   useEffect(()=>{
     if(!enabled){owner.loaded=false;setDraft(null);setVisibleSampleIndices(null);setLoaded(false);setError(false);return;}

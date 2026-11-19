@@ -1,5 +1,7 @@
 'use client';
 
+import {DRAFT_SUPERSEDED_MESSAGE} from './listing-action-error';
+
 import {useEffect} from 'react';
 import {useAuthStore} from '@/store/auth';
 import {customerRefusal} from '@/lib/customerMessages';
@@ -183,7 +185,7 @@ export function authorityMessage(error:unknown):string{
   const refresh='The files or names changed. Refresh the review and check them again.';
   const unavailable='Listing imports are not available on this account yet. Contact support.';
   const signin='Your sign-in changed. Sign in again, then retry.';
-  const table:Record<string,string>={AUTHORITY_DRAFT_IN_PROGRESS:DRAFT_IN_PROGRESS};
+  const table:Record<string,string>={AUTHORITY_DRAFT_IN_PROGRESS:DRAFT_IN_PROGRESS,DRAFT_SUPERSEDED:DRAFT_SUPERSEDED_MESSAGE};
   for(const code of ['ACCOUNT_CHANGED','ENTRY_REQUIRED'])table['AUTHORITY_'+code]=signin;
   for(const code of ['CSRF_REQUIRED','SESSION_CHANGED','FIRST_PARTY_SESSION_REQUIRED'])table[code]=signin;
   for(const code of ['SOURCE_MISMATCH','SOURCE_AMBIGUOUS','VECTOR_SELECTION_REQUIRED','HANDOFF_MALFORMED','HANDOFF_PACK_ID_UNSUPPORTED'])table['AUTHORITY_'+code]=again;
@@ -193,7 +195,7 @@ export function authorityMessage(error:unknown):string{
   table.AUTHORITY_LISTING_DISABLED='Your company has turned listing off. Ask your company administrator to enable listing, then retry.';
   table.SELLER_DISABLED='Selling from vectorAIz is not available yet. Contact support.';
   const detail=(error as {response?:{data?:{detail?:{field?:unknown;message?:unknown;code?:unknown}}}})?.response?.data?.detail;
-  if(detail&&typeof detail==='object'&&!detail.code&&typeof detail.field==='string'&&typeof detail.message==='string')return detail.message;
+  if(detail&&typeof detail==='object'&&!detail.code&&typeof detail.field==='string'&&typeof detail.message==='string')return detail.message+((error as {response?:{status?:number}}).response?.status===422&&/contact details/i.test(detail.message)?' Edit it in vectorAIz and export again.':'');
   table.AUTHORITY_REQUEST_TOO_LARGE='Export again from vectorAIz with a smaller draft.';
   return customerRefusal(error,table,error instanceof HandoffError?again:'We could not complete the import or review. Try again, or contact support.');
 }

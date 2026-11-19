@@ -8,7 +8,7 @@ import MarkdownTextField,{descriptionTooLong} from '@/components/listing/Markdow
 
 import { useState, useEffect, useCallback } from 'react';
 import { useRouter, useParams } from 'next/navigation';
-import { getListing, updateListing, unpublishListing, publishListing } from '@/api/listings';
+import { getMyListings, getListing, updateListing, unpublishListing, publishListing, type OwnerListingItem } from '@/api/listings';
 import { notifyCapabilitiesChanged } from '@/components/onboarding/SellerSetupProgressBar';
 import { useToast } from '@/components/Toast';
 import { formatListingActionError } from '@/lib/listing-action-error';
@@ -16,13 +16,15 @@ import SellerAtAGlance from '@/components/listings/SellerAtAGlance';
 import SellerShareControls from '@/components/listings/SellerShareControls';
 import SellerLicenseSelection from '@/components/seller-workspace/SellerLicenseSelection';
 import {createStandardSelection,isCompleteLicenseSelection,type LicenseSelection} from '@/api/listingLicenses';
-import {getSellerWorkspaceCapabilities} from '@/api/sellerWorkspace';
+import {authorityAvailable,getAuthorityCapabilities,getSellerWorkspaceCapabilities} from '@/api/sellerWorkspace';
 import {getSellerLegalIdentity,refreshSellerLegalIdentity,legalIdentityFailure,LEGAL_IDENTITY_SUPPORT_PATH} from '@/api/sellerLegalIdentity';
 import { gatewayErrorCode } from '@/api/gatewayDelivery';
 import { blockerMessage } from '@/components/gateways/presentation';
 import ListingGatewaySource from '@/components/gateways/ListingGatewaySource';
 import type { GatewayBlocker, GatewayFile, SellerGateway } from '@/types/sellerGateway';
 import Link from 'next/link';
+import {sessionLifecycle} from '@/api/connector-seller-settings';
+import {useAuthStore} from '@/store/auth';
 
 const CATEGORIES = ['Finance', 'Healthcare', 'Technology', 'Real Estate', 'Government', 'Marketing'];
 const FORMATS = ['csv', 'tsv', 'jsonl', 'parquet', 'json', 'xlsx', 'other'];
@@ -48,7 +50,27 @@ export default function EditListingPage() {
   const id = params.id as string;
   const { toast } = useToast();
 
-  const [authorityVersion,setAuthorityVersion]=useState<string|null>(null);
+  const account=useAuthStore(state=>state.user?.id);
+  const [authorityReference,setAuthorityReference]=useState<{id:string;account:string|undefined;version:string|null}|null>(null);
+  const authorityVersion=authorityReference?.id===id&&authorityReference.account===account?authorityReference.version:null;
+  useEffect(()=>{
+    let active=true;const same=sessionLifecycle();setAuthorityReference(null);
+    void (async()=>{
+      try{
+        if(!account||!authorityAvailable(await getAuthorityCapabilities()))return;
+        // Reuse the owner-only mine helper. Its response is a paginated array,
+        // and the public listing detail deliberately has no recovery reference.
+        for(let skip=0;active&&same();skip+=100){
+          const {data:rows}=await getMyListings({skip,limit:100});
+          if(!active||!same())return;
+          const row=(rows as OwnerListingItem[]).find(row=>row.id===id);
+          if(row){setAuthorityReference({id,account,version:row.authority_version_id??null});return;}
+          if(rows.length<100)return;
+        }
+      }catch{/* Owner recovery stays dark when unavailable. */}
+    })();
+    return()=>{active=false;};
+  },[id,account]);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [summaryRevision, setSummaryRevision] = useState(0);
@@ -97,10 +119,6 @@ export default function EditListingPage() {
       if (licensesEnabled && l.license_selection) setLicenseSelection(l.license_selection);
       setListingSlug(typeof l.slug === 'string' ? l.slug : undefined);
       setHasStoredFormat(Boolean(l.data_format));
-      // GET /listings/{id} has no authority reference. Keep this mount dark
-      // until an owner-only listing -> authority-version read is supplied;
-      // wire that read here, bound to id, rather than trusting public listing data.
-      setAuthorityVersion(null);
       setData({
         title: l.title || '',
         description: l.description || '',

@@ -5,7 +5,8 @@ import {useAuthStore} from '@/store/auth';
 import PurchaserReview from './PurchaserReview';
 import {VECTOR_ATTESTATION} from '@/lib/vectoraizHandoff';
 import type {AuthorityReview} from '@/api/sellerWorkspace';
-const api=vi.hoisted(()=>({caps:vi.fn(),read:vi.fn(),confirm:vi.fn()}));
+const api=vi.hoisted(()=>({draft:vi.fn(),caps:vi.fn(),read:vi.fn(),confirm:vi.fn()}));
+vi.mock('@/api/sellerListingDraft',()=>({readListingDraft:api.draft}));
 vi.mock('@/api/sellerWorkspace',()=>({getAuthorityCapabilities:api.caps,authorityAvailable:(c:{import_enabled:boolean;handoff_versions:number[]})=>c.import_enabled&&c.handoff_versions.includes(1),readAuthorityReview:api.read,confirmAuthorityReview:api.confirm}));
 const review:AuthorityReview={authority_version_id:'version',binding_hash:'binding',public_review:{public_fields:{title:'Vector pack',seller_attestation:VECTOR_ATTESTATION},rendered_html:'',render_hash:'render',presentation_version:'seller-listing-review-v3-authority-vector-v1',inventory_version:'public-surface-inventory-v2'},native_confirmed:true,purchaser_confirmed:false,purchaser_view:{door_host:'neutral.example',seller_attestation:VECTOR_ATTESTATION,files:[{file_id:'a',delivery_name:'chunks.parquet',size_bytes:10,columns:[{name:'project code',type:'string'},{name:'value',type:'string'}]}]},purchaser_view_hash:'view',gateway_metadata_revision:7};
 beforeEach(()=>{
@@ -82,4 +83,25 @@ it('CC NIT renders a column without name without crashing local identity checks'
  await mount({...review,purchaser_view:{...review.purchaser_view!,files:[{...review.purchaser_view!.files[0],columns:[{type:'string'} as never]}]}});
  fireEvent.change(screen.getByLabelText('Names to keep private (one per line)'),{target:{value:'private'}});
  expect(screen.getByText('Names your buyer will see')).toBeTruthy();
+});
+
+it.each(['read','refresh','native','purchaser'])('DRAFT_SUPERSEDED on %s removes replaced review and reloads current draft',async operation=>{
+ const failure={response:{status:409,data:{detail:{code:'DRAFT_SUPERSEDED'}}}};
+ api.draft.mockReset().mockResolvedValue({draft_id:'current',authority_version_id:null,version:1,content:{},updated_at:'2026-11-19T00:00:00Z'});
+ if(operation==='read'){
+   api.read.mockRejectedValueOnce(failure);render(<PurchaserReview versionId="version"/>);
+ }else{
+   await mount({...review,native_confirmed:operation!=='native',purchaser_view:{...review.purchaser_view!,files:[]}});
+   if(operation==='refresh'){api.read.mockRejectedValueOnce(failure);fireEvent.click(screen.getByRole('button',{name:'Refresh review'}));}
+   else{
+     api.confirm.mockRejectedValueOnce(failure);
+     fireEvent.click(screen.getByLabelText(operation==='native'?'I reviewed this exact pack in vectorAIz.':'I reviewed the names my buyer will see.'));
+     fireEvent.click(screen.getByRole('button',{name:operation==='native'?'Confirm pack review':'Confirm buyer names'}));
+   }
+ }
+ expect((await screen.findByRole('alert')).textContent).toContain('replaced by a newer import or a new listing');
+ await waitFor(()=>expect(api.draft).toHaveBeenCalledOnce());
+ expect(screen.queryByText('Names your buyer will see')).toBeNull();
+ expect(screen.getByRole('link',{name:'Open current draft'}).getAttribute('href')).toBe('/dashboard/seller-workspace');
+ expect((screen.getByRole('button',{name:'Refresh review'}) as HTMLButtonElement).disabled).toBe(true);
 });

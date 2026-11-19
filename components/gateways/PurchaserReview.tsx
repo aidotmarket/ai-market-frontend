@@ -1,15 +1,20 @@
 'use client';
 
 import {useEffect,useRef,useState} from 'react';
+import Link from 'next/link';
+import {readListingDraft} from '@/api/sellerListingDraft';
+import {useOptionalSellerListingDraft} from '@/components/seller-workspace/SellerListingDraftStore';
 import {useAuthStore} from '@/store/auth';
 import {sessionLifecycle} from '@/api/connector-seller-settings';
 import {authorityAvailable,getAuthorityCapabilities,readAuthorityReview,confirmAuthorityReview,type AuthorityReview} from '@/api/sellerWorkspace';
-import {VECTOR_ATTESTATION,authorityMessage,identityMatches} from '@/lib/vectoraizHandoff';
+import {VECTOR_ATTESTATION,authorityCode,authorityMessage,identityMatches} from '@/lib/vectoraizHandoff';
 
 /** Owner-only review. Nothing from this component is passed to company approval. */
 const publicLabels:Record<string,string>={title:'Title',description:'Description',category:'Category',tags:'Tags',price:'Price (USD)',license:'Licence',buyer_approval_required:'Buyer approval required',seller_attestation:'Seller attestation',object_count:'Files',file_size_bytes:'Download size (bytes)',formats_available:'Formats'};
 const publicValue=(value:unknown):string=>typeof value==='boolean'?(value?'Yes':'No'):Array.isArray(value)?value.map(publicValue).join(', '):value===null?'Unknown':typeof value==='object'?JSON.stringify(value):String(value);
 export default function PurchaserReview({versionId,identityTerms=[]}:{versionId?:string|null;identityTerms?:string[]}){
+  const store=useOptionalSellerListingDraft();
+  const [superseded,setSuperseded]=useState(false);
   const account=useAuthStore(state=>state.user?.id);
   const [reviewOwner,setReviewOwner]=useState<string|undefined>(undefined);
   const [review,setReview]=useState<AuthorityReview|null>(null);
@@ -25,21 +30,29 @@ export default function PurchaserReview({versionId,identityTerms=[]}:{versionId?
   useEffect(()=>{setNative(false);setPurchaser(false);setWarningsAccepted(false);},[binding,terms]);
   useEffect(()=>{
     const run=++generation.current;const same=sessionLifecycle();
-    setReview(null);setError(null);setEnabled(false);setReviewOwner(account);setTerms(identityTerms.join('\n'));pending.current=null;
+    setReview(null);setSuperseded(false);setError(null);setEnabled(false);setReviewOwner(account);setTerms(identityTerms.join('\n'));pending.current=null;
     if(!versionId)return;
     void (async()=>{try{
       const caps=await getAuthorityCapabilities();if(run!==generation.current||!same()||!authorityAvailable(caps))return;
       setEnabled(true);
       const value=await readAuthorityReview(versionId);if(run===generation.current&&same())setReview(value);
-    }catch(cause){if(run===generation.current&&same())setError(authorityMessage(cause));}})();
+    }catch(cause){if(run===generation.current&&same())void refusal(cause);}})();
     return()=>{++generation.current;};
     // Terms are deliberately local; a caller's array identity is not a new review.
   },[versionId,account]);
+  async function refusal(cause:unknown){
+    setReview(null);setError(authorityMessage(cause));
+    if(authorityCode(cause)==='DRAFT_SUPERSEDED'){
+      setSuperseded(true);pending.current=null;
+      // Adopt the current pointer, never retry confirmation against the replaced draft.
+      try{if(store)await store.reload();else await readListingDraft();}catch{/* The Workspace link also offers load retry. */}
+    }
+  }
   async function refresh(){
     if(!versionId)return;const run=++generation.current,same=sessionLifecycle();
     setBusy(true);setReview(null);setError(null);
     try{const value=await readAuthorityReview(versionId);if(run===generation.current&&same())setReview(value);}
-    catch(cause){if(run===generation.current&&same())setError(authorityMessage(cause));}
+    catch(cause){if(run===generation.current&&same())await refusal(cause);}
     finally{if(run===generation.current&&same())setBusy(false);}
   }
   async function confirm(kind:'native'|'purchaser'){
@@ -56,7 +69,7 @@ export default function PurchaserReview({versionId,identityTerms=[]}:{versionId?
       const next=await readAuthorityReview(current.authority_version_id);
       if(run===generation.current&&same()){setReview(next);setNative(false);setPurchaser(false);}
     }catch(cause){
-      if(run===generation.current&&same()){setReview(null);setNative(false);setPurchaser(false);setWarningsAccepted(false);setError(authorityMessage(cause));}
+      if(run===generation.current&&same()){setReview(null);setNative(false);setPurchaser(false);setWarningsAccepted(false);await refusal(cause);}
     }finally{if(run===generation.current&&same())setBusy(false);}
   }
   if(!enabled||reviewOwner!==account)return null;
@@ -69,7 +82,8 @@ export default function PurchaserReview({versionId,identityTerms=[]}:{versionId?
     <h2 className="text-lg font-semibold">Review your vectorAIz listing</h2>
     <p>{VECTOR_ATTESTATION}</p>
     {error&&<p role="alert">{error}</p>}
-    <button type="button" disabled={busy} onClick={()=>void refresh()} className="rounded border px-3 py-2">Refresh review</button>
+    {superseded&&<Link href="/dashboard/seller-workspace" className="underline">Open current draft</Link>}
+    <button type="button" disabled={busy||superseded} onClick={()=>void refresh()} className="rounded border px-3 py-2">Refresh review</button>
     {review&&<>
       <h3 className="font-semibold">What everyone can see</h3>
       <dl>{Object.entries(review.public_review.public_fields).map(([key,value])=><div key={key}><dt>{publicLabels[key]??key.replaceAll('_',' ')}</dt><dd className="whitespace-pre-wrap break-words">{publicValue(value)}</dd></div>)}</dl>

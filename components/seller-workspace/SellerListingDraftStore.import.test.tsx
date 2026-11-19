@@ -61,3 +61,29 @@ it('#1172 unpublished imported current draft allows a later import and Start ano
  expect(api.create).toHaveBeenCalledWith('fresh-request');expect(store.draft?.draft_id).toBe('new');
 });
 async function mountImported(){render(<SellerListingDraftProvider enabled sampleCapability={false}><Consumer/></SellerListingDraftProvider>);await screen.findByText('Imported');}
+
+it('DRAFT_SUPERSEDED on save adopts current draft and retires old callbacks',async()=>{
+ await mount();const oldSave=store.saveListingFields;
+ const failure={response:{status:409,data:{detail:{code:'DRAFT_SUPERSEDED',message:'This draft was replaced by a newer listing draft'}}}};
+ api.save.mockRejectedValueOnce(failure);api.read.mockResolvedValueOnce({...imported,authority_version_id:'durable'});
+ await act(async()=>{await expect(oldSave({...fields,title:'Old edit'})).rejects.toEqual(failure);});
+ expect(store.draft?.draft_id).toBe('imported');expect(store.draft?.authority_version_id).toBe('durable');
+ await expect(oldSave(fields)).rejects.toThrow('changed');expect(api.save).toHaveBeenCalledOnce();
+});
+
+it('failed current-draft recovery after DRAFT_SUPERSEDED fences saves until load retry',async()=>{
+ await mount();const failure={response:{status:409,data:{detail:{code:'DRAFT_SUPERSEDED'}}}};
+ api.save.mockRejectedValueOnce(failure);api.read.mockRejectedValueOnce(new Error('offline'));
+ await act(async()=>{await expect(store.saveListingFields({...fields,title:'Old edit'})).rejects.toEqual(failure);});
+ expect(store.loaded).toBe(false);expect(store.error).toBe(true);
+ await expect(store.saveListingFields(fields)).rejects.toThrow('Load');
+ api.read.mockResolvedValueOnce(imported);await act(async()=>{await store.reload();});
+ expect(store.loaded).toBe(true);expect(store.error).toBe(false);expect(store.draft?.draft_id).toBe('imported');
+});
+
+it('superseded sample save clears old selection bookkeeping after current-draft reload',async()=>{
+ await mount();const failure={response:{status:409,data:{detail:{code:'DRAFT_SUPERSEDED'}}}};
+ api.save.mockRejectedValueOnce(failure);api.read.mockResolvedValueOnce(imported);
+ await act(async()=>{store.setVisibleSampleIndices([1]);await expect(store.saveSamples([1])).rejects.toEqual(failure);});
+ expect(store.draft?.draft_id).toBe('imported');expect(store.selectionSavePending).toBe(false);expect(store.selectionSaveFailed).toBe(false);
+});
