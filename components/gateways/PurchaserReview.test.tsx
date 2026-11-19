@@ -85,7 +85,7 @@ it('CC NIT renders a column without name without crashing local identity checks'
  expect(screen.getByText('Names your buyer will see')).toBeTruthy();
 });
 
-it.each(['read','refresh','native','purchaser'])('DRAFT_SUPERSEDED on %s removes replaced review and reloads current draft',async operation=>{
+it.each(['read','refresh','native','purchaser'])('DRAFT_SUPERSEDED on %s removes replaced review and links to the current Workspace draft',async operation=>{
  const failure={response:{status:409,data:{detail:{code:'DRAFT_SUPERSEDED'}}}};
  api.draft.mockReset().mockResolvedValue({draft_id:'current',authority_version_id:null,version:1,content:{},updated_at:'2026-11-19T00:00:00Z'});
  if(operation==='read'){
@@ -100,7 +100,7 @@ it.each(['read','refresh','native','purchaser'])('DRAFT_SUPERSEDED on %s removes
    }
  }
  expect((await screen.findByRole('alert')).textContent).toContain('replaced by a newer import or a new listing');
- await waitFor(()=>expect(api.draft).toHaveBeenCalledOnce());
+ expect(api.draft).not.toHaveBeenCalled();
  expect(screen.queryByText('Names your buyer will see')).toBeNull();
  expect(screen.getByRole('link',{name:'Open current draft'}).getAttribute('href')).toBe('/dashboard/seller-workspace');
  expect((screen.getByRole('button',{name:'Refresh review'}) as HTMLButtonElement).disabled).toBe(true);

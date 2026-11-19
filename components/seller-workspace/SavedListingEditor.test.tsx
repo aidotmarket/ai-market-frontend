@@ -128,4 +128,9 @@ it('DRAFT_SUPERSEDED save shows replacement guidance and reloads the current dra
  expect(await screen.findByText(/This import was replaced by a newer import or a new listing/)).toBeTruthy();
  expect(api.readListingDraft).toHaveBeenCalledTimes(2);
  expect((screen.getByLabelText('Title') as HTMLInputElement).value).toBe('Current draft');
+ api.saveListingDraft.mockImplementationOnce(async content=>({draft_id:'new',version:5,authority_version_id:null,content,updated_at:''}));
+ fireEvent.change(screen.getByLabelText('Title'),{target:{value:'Current edit'}});
+ fireEvent.click(screen.getByText('Save private draft'));
+ await screen.findByText(/Draft saved to your account/);
+ expect(screen.queryByText(/This import was replaced by a newer import or a new listing/)).toBeNull();
 });

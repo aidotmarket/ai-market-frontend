@@ -8,7 +8,7 @@ import MarkdownTextField,{descriptionTooLong} from '@/components/listing/Markdow
 
 import { useState, useEffect, useCallback } from 'react';
 import { useRouter, useParams } from 'next/navigation';
-import { getMyListings, getListing, updateListing, unpublishListing, publishListing, type OwnerListingItem } from '@/api/listings';
+import { getListingAccessWindow, getListing, updateListing, unpublishListing, publishListing } from '@/api/listings';
 import { notifyCapabilitiesChanged } from '@/components/onboarding/SellerSetupProgressBar';
 import { useToast } from '@/components/Toast';
 import { formatListingActionError } from '@/lib/listing-action-error';
@@ -58,15 +58,9 @@ export default function EditListingPage() {
     void (async()=>{
       try{
         if(!account||!authorityAvailable(await getAuthorityCapabilities()))return;
-        // Reuse the owner-only mine helper. Its response is a paginated array,
-        // and the public listing detail deliberately has no recovery reference.
-        for(let skip=0;active&&same();skip+=100){
-          const {data:rows}=await getMyListings({skip,limit:100});
-          if(!active||!same())return;
-          const row=(rows as OwnerListingItem[]).find(row=>row.id===id);
-          if(row){setAuthorityReference({id,account,version:row.authority_version_id??null});return;}
-          if(rows.length<100)return;
-        }
+        if(!active||!same())return;
+        const owner=await getListingAccessWindow(id);
+        if(active&&same())setAuthorityReference({id,account,version:owner.authority_version_id??null});
       }catch{/* Owner recovery stays dark when unavailable. */}
     })();
     return()=>{active=false;};

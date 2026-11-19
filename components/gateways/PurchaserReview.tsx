@@ -2,7 +2,6 @@
 
 import {useEffect,useRef,useState} from 'react';
 import Link from 'next/link';
-import {readListingDraft} from '@/api/sellerListingDraft';
 import {useOptionalSellerListingDraft} from '@/components/seller-workspace/SellerListingDraftStore';
 import {useAuthStore} from '@/store/auth';
 import {sessionLifecycle} from '@/api/connector-seller-settings';
@@ -45,7 +44,7 @@ export default function PurchaserReview({versionId,identityTerms=[]}:{versionId?
     if(authorityCode(cause)==='DRAFT_SUPERSEDED'){
       setSuperseded(true);pending.current=null;
       // Adopt the current pointer, never retry confirmation against the replaced draft.
-      try{if(store)await store.reload();else await readListingDraft();}catch{/* The Workspace link also offers load retry. */}
+      try{if(store)await store.reload();}catch{/* The Workspace link also offers load retry. */}
     }
   }
   async function refresh(){

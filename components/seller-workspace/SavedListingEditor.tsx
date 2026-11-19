@@ -19,7 +19,7 @@ export default function SavedListingEditor({ active, assistant }: { active: bool
   </div>;
   return <>{replacementNotice&&<p role="alert">{DRAFT_SUPERSEDED_MESSAGE}</p>}
     <SellerListingEditor key={editorIdentity.current.generation} active={active} assistant={assistant} initialContent={draft?.content} savedVersion={draft?.version??0} onSave={async(fields,baseline)=>{
-      try{return await saveListingFields(fields,baseline);}
+      try{const version=await saveListingFields(fields,baseline);setReplacementNotice(false);return version;}
       catch(failure){if(authorityCode(failure)==='DRAFT_SUPERSEDED')setReplacementNotice(true);throw failure;}
     }} /></>;
 }

@@ -22,6 +22,34 @@ beforeEach(() => {vi.resetAllMocks(); api.listWorkspaceObjects.mockResolvedValue
   legal.refreshSellerLegalIdentity.mockResolvedValue(known);legal.getSellerLegalIdentity.mockResolvedValue(known);
 });
 const renderData=(connections=[connection],sampleCapability=false)=>render(<SellerListingDraftProvider enabled sampleCapability={sampleCapability}><SavedWorkspaceData enabled connections={connections} /></SellerListingDraftProvider>);
+
+it.each(['exact','changed'] as const)('source save %s retry on a superseded draft shows plain guidance and reloads the current draft',async kind=>{
+ const original={draft_id:'original',authority_version_id:'authority',version:1,content:{brief:'',title:'Old',description:'',category:'',tags:'',price:'',license:''},updated_at:''};
+ api.readListingDraft.mockResolvedValueOnce(original);
+ api.readListingSource.mockResolvedValue(null);
+ api.listWorkspaceObjects.mockResolvedValue({objects:[object,{...object,key:'data/other.csv'}],next_cursor:null});
+ api.saveListingSource.mockRejectedValueOnce(new Error('lost response')).mockRejectedValueOnce({isAxiosError:true,response:{status:409,data:{detail:{code:'DRAFT_SUPERSEDED'}}}});
+ let store!:ReturnType<typeof useSellerListingDraft>;
+ function Capture(){store=useSellerListingDraft();return null;}
+ render(<SellerListingDraftProvider enabled sampleCapability={false}><Capture/><SavedWorkspaceData enabled connections={[connection]}/></SellerListingDraftProvider>);
+ await waitFor(()=>expect(store.draft?.draft_id).toBe('original'));
+ fireEvent.click(await screen.findByRole('checkbox',{name:'Select data/example.csv'}));
+ fireEvent.click(screen.getByRole('button',{name:'Save selected files'}));
+ fireEvent.click(screen.getByRole('button',{name:'Confirm selection'}));
+ await screen.findByText(/Saving could not be confirmed/);
+ if(kind==='changed')fireEvent.click(screen.getByRole('checkbox',{name:'Select data/other.csv'}));
+ api.readListingDraft.mockResolvedValueOnce({...original,draft_id:'current',authority_version_id:null,content:{...original.content,title:'Current'}});
+ fireEvent.click(screen.getByRole('button',{name:'Save selected files'}));
+ fireEvent.click(screen.getByRole('button',{name:'Confirm selection'}));
+ await screen.findByText(/This import was replaced by a newer import or a new listing/);
+ await waitFor(()=>expect(store.draft?.draft_id).toBe('current'));
+ expect(api.readListingDraft).toHaveBeenCalledTimes(2);
+ expect(api.saveListingSource).toHaveBeenCalledTimes(2);
+ const [first,second]=api.saveListingSource.mock.calls;
+ expect(first[3]).toBe('original');expect(second[3]).toBe('original');
+ if(kind==='exact')expect(second).toEqual(first);
+ else{expect(second[2]).not.toBe(first[2]);expect(second[0].objects).toHaveLength(2);}
+});
 const renderLicensedData=(sampleCapability=false)=>render(<SellerListingDraftProvider enabled sampleCapability={sampleCapability}><SavedWorkspaceData enabled connections={[connection]} listingLicensesEnabled /></SellerListingDraftProvider>);
 const DraftStatus=()=>{const status=useSellerListingDraftStatus();return <p data-testid="draft-status">{status.selectionSavePending?`pending:${status.sampleIndices.join(',')}`:status.selectionSaveFailed?'failed':'ready'}</p>;};
 function openTerms(){
