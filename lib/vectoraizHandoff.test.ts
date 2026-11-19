@@ -148,15 +148,31 @@ it.each([
  {...gateway,files:[{size:10,sha256:['a'.repeat(64)]}]},
  {...gateway,files:[{size:10,sha256:'a'.repeat(64)},{sha256:'a'.repeat(64),size:10}]},
  {...bucket,selection_sha256:['a'.repeat(64)]},
+ {...bucket,provider:['r2'],region:null,account_id:'account'},
 ])('MEDIUM 4 rejects non-string digests and value-duplicate pairs before storage (%#)',async value=>{
  window.history.replaceState(null,'','/dashboard/'+('provider' in value?'seller-workspace':'gateways')+'#vz='+encode(value));
  await captureHandoff();expect(sessionStorage.length).toBe(0);
 });
 it.each([
- [{field:'description',message:'Contact details are not allowed'},'Remove contact details'],
+ [{field:'description',message:'Contact details are not allowed'},'Contact details are not allowed'],
  ['AUTHORITY_LISTING_DISABLED','company administrator'],
  ['AUTHORITY_DRAFT_IN_PROGRESS','Open Seller Workspace and finish'],
- ['SELLER_DISABLED','enable selling'],
+ ['SELLER_DISABLED','Selling from vectorAIz is not available yet. Contact support.'],
 ])('CC F5 and #1172 give an actionable refusal for %j',(detail,copy)=>{
  expect(authorityMessage({response:{data:{detail}}})).toContain(copy);
+});
+
+it.each([
+ [503,'Text validation is temporarily unavailable. Please retry.'],
+ [422,'Text exceeds the token limit.'],
+ [422,'Text exceeds the render budget.'],
+])('CC L3 preserves the plain server refusal for status %s', (status,message)=>{
+ expect(authorityMessage({response:{status,data:{detail:{field:'description',message}}}})).toBe(message);
+});
+it('does not consume a replacement captured while a stale consumer waits for decoding',async()=>{
+ window.history.replaceState(null,'','/dashboard/gateways#vz='+encode(gateway));
+ const work=captureHandoff();
+ const stale=consumeHandoff(id,'/dashboard/gateways',()=>false);
+ await work;expect(await stale).toBeNull();
+ expect((await consumeHandoff(id,'/dashboard/gateways'))?.handoff).toEqual(gateway);
 });

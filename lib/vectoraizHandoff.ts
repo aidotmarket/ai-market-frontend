@@ -38,7 +38,7 @@ export function validateHandoff(value:unknown):Handoff {
   const base=['version','pack_id','draft'];
   if('provider' in v){
     exact(v,[...base,'provider','bucket','connection_folder','pack_prefix','file_count','selection_sha256'],['region','account_id']);
-    if(!['aws','r2'].includes(String(v.provider)) || !text(v.bucket,255,1) || v.connection_folder!=='vz' || v.pack_prefix!=='vz/'+v.pack_id+'/' ||
+    if((v.provider!=='aws'&&v.provider!=='r2') || !text(v.bucket,255,1) || v.connection_folder!=='vz' || v.pack_prefix!=='vz/'+v.pack_id+'/' ||
        !integer(v.file_count) || v.file_count<1 || (typeof v.selection_sha256!=="string"||!SHA.test(v.selection_sha256)))fail();
     if(v.provider==='aws' ? !text(v.region,80,1)||v.account_id!=null : !text(v.account_id,128,1)||v.region!=null)fail();
   }else{
@@ -108,8 +108,9 @@ export function captureHandoff():Promise<void>{
   window.dispatchEvent(new Event(HANDOFF_CAPTURED));
   return capturing;
 }
-export async function consumeHandoff(account:string,route:string):Promise<PendingHandoff|null>{
+export async function consumeHandoff(account:string,route:string,isCurrent:()=>boolean=()=>true):Promise<PendingHandoff|null>{
   await capturing;
+  if(!isCurrent())return null;
   try{
     const raw=sessionStorage.getItem(STASH);sessionStorage.removeItem(STASH);if(!raw||raw.length>MAX_EXPANDED*2)return null;
     const item=JSON.parse(raw) as PendingHandoff;
@@ -139,14 +140,7 @@ export function useHandoffBoundary(){
   if(typeof window!=='undefined')void captureHandoff();
   useEffect(()=>{
     void captureHandoff();
-    const syncRouter=()=>{
-      // Next ignores its own __NA history entries. Omit that marker when
-      // invoking its patched API so canonicalUrl also forgets the fragment.
-      const state={...window.history.state};delete state.__NA;delete state._N;
-      window.history.replaceState(state,'',window.location.pathname+window.location.search+window.location.hash);
-    };
-    syncRouter();
-    const change=()=>{void captureHandoff();syncRouter();};window.addEventListener('hashchange',change);
+    const change=()=>{void captureHandoff();};window.addEventListener('hashchange',change);
     // An unauthenticated stash survives first login. Later identity changes
     // clear the stash and fence in-flight decoding.
     let owner=useAuthStore.getState().user?.id??null;
@@ -197,9 +191,9 @@ export function authorityMessage(error:unknown):string{
   for(const code of ['IMPORT_DISABLED','VERSION_NOT_FOUND'])table['AUTHORITY_'+code]=unavailable;
   for(const code of ['IMPORT_KEY_CONFLICT','CONFIRMATION_KEY_CONFLICT'])table['AUTHORITY_'+code]='Start the import again from vectorAIz.';
   table.AUTHORITY_LISTING_DISABLED='Your company has turned listing off. Ask your company administrator to enable listing, then retry.';
-  table.SELLER_DISABLED='Listing is disabled for your account. Ask your company administrator to enable selling, then retry.';
+  table.SELLER_DISABLED='Selling from vectorAIz is not available yet. Contact support.';
   const detail=(error as {response?:{data?:{detail?:{field?:unknown;message?:unknown;code?:unknown}}}})?.response?.data?.detail;
-  if(detail&&typeof detail==='object'&&!detail.code&&typeof detail.field==='string'&&typeof detail.message==='string')return 'Remove contact details from the draft text in vectorAIz, then export again and open the new link.';
+  if(detail&&typeof detail==='object'&&!detail.code&&typeof detail.field==='string'&&typeof detail.message==='string')return detail.message;
   table.AUTHORITY_REQUEST_TOO_LARGE='Export again from vectorAIz with a smaller draft.';
   return customerRefusal(error,table,error instanceof HandoffError?again:'We could not complete the import or review. Try again, or contact support.');
 }

@@ -1,4 +1,8 @@
 // @vitest-environment jsdom
+import {StrictMode} from 'react';
+import {Blob as NodeBlob} from 'node:buffer';
+import {DecompressionStream as NodeDecompressionStream} from 'node:stream/web';
+import {deflateRawSync} from 'node:zlib';
 import {act,cleanup,fireEvent,render,screen,waitFor} from '@testing-library/react';
 import {afterEach,beforeEach,expect,it,vi} from 'vitest';
 import {useAuthStore} from '@/store/auth';
@@ -24,7 +28,7 @@ beforeEach(()=>{
  api.files.mockResolvedValue({revision:7,files:handoff.files.map((f,i)=>({file_id:String(i),display_name:VECTOR_NAMES[i].replace('examples/',''),size_bytes:f.size,present:true,changed_at:'2026-01-01',description:{state:'described',described_at:'2026-01-02',sha256:f.sha256}}))});
  api.import.mockResolvedValue({import_id:id,draft_id:id,listing_id:'listing',authority_version_id:'authority'});
 });
-afterEach(()=>{vi.useRealTimers();cleanup();vi.restoreAllMocks();});
+afterEach(()=>{vi.useRealTimers();cleanup();vi.restoreAllMocks();vi.unstubAllGlobals();});
 async function ready(){
  render(<VectoraizImport mode="gateway"/>);await screen.findByRole('option',{name:'My gateway'});
  fireEvent.click(screen.getByRole('button',{name:'Check uploaded files'}));
@@ -98,7 +102,7 @@ it('MEDIUM 5 second same-tab handoff retires pack A selections and requires fres
 });
 it('MEDIUM 7 / CC F4 enabled zero gateways gives setup and re-export guidance',async()=>{
  api.gateways.mockResolvedValue([]);render(<VectoraizImport mode="gateway"/>);
- await screen.findByText(/No compatible gateway/);expect(screen.getByRole('link',{name:'Set up a gateway'})).toBeTruthy();
+ await screen.findByText(/No compatible gateway/);expect(screen.getByText(/Use “Add a gateway” below/)).toBeTruthy();expect(screen.queryByRole('link',{name:'Set up a gateway'})).toBeNull();
 });
 it('MEDIUM 7 enabled gateway-list error gives a visible retry next step',async()=>{
  api.gateways.mockRejectedValue(new Error('network'));render(<VectoraizImport mode="gateway"/>);
@@ -146,4 +150,58 @@ it('MEDIUM 7 stays dark when disabled even with a future durable draft authority
  api.caps.mockResolvedValue({import_enabled:false,contract_version:'listing-authority-v1',handoff_versions:[1]});
  const {container}=render(<VectoraizImport mode="bucket"/>);
  await waitFor(()=>expect(api.clear).toHaveBeenCalledOnce());expect(container.textContent).toBe('');
+});
+
+it.each([true,false])('MEDIUM 5 deferred A capability (enabled=%s) cannot consume or clear the real replacement B stash',async enabled=>{
+ vi.stubGlobal('Blob',NodeBlob);vi.stubGlobal('DecompressionStream',NodeDecompressionStream);
+ const real=await vi.importActual<typeof import('@/lib/vectoraizHandoff')>('@/lib/vectoraizHandoff');
+ api.consume.mockImplementation(real.consumeHandoff);api.clear.mockImplementation(real.clearHandoff);
+ const caps={import_enabled:true,contract_version:'listing-authority-v1',handoff_versions:[1]};
+ let resolveA!:(v:unknown)=>void,resolveB!:(v:unknown)=>void;
+ api.caps.mockImplementationOnce(()=>new Promise(done=>{resolveA=done;})).mockImplementationOnce(()=>new Promise(done=>{resolveB=done;}));
+ async function capture(title:string){
+   window.history.replaceState(null,'','/dashboard/gateways#vz='+deflateRawSync(JSON.stringify({...handoff,draft:{...handoff.draft,title}})).toString('base64url'));
+   await act(async()=>{await real.captureHandoff();});
+ }
+ await capture('Pack A');render(<StrictMode><VectoraizImport mode="gateway"/></StrictMode>);
+ await waitFor(()=>expect(api.caps).toHaveBeenCalledTimes(1));
+ await capture('Pack B');await waitFor(()=>expect(api.caps).toHaveBeenCalledTimes(2));
+ await act(async()=>{resolveA({...caps,import_enabled:enabled});});
+ expect(api.consume).not.toHaveBeenCalled();expect(api.clear).not.toHaveBeenCalled();
+ expect(sessionStorage.getItem('aim.vectoraiz.handoff.v1')).not.toBeNull();
+ await act(async()=>{resolveB(caps);});
+ await screen.findByText('Pack B');await screen.findByRole('option',{name:'My gateway'});
+ fireEvent.click(screen.getByRole('button',{name:'Check uploaded files'}));
+ await screen.findByLabelText(/Import for my signed-in account/);
+ expect((screen.getByLabelText(/Import for my signed-in account/) as HTMLInputElement).checked).toBe(false);
+ expect((screen.getByLabelText(/I reviewed this draft/) as HTMLInputElement).checked).toBe(false);
+ expect((screen.getByRole('button',{name:'Import private draft'}) as HTMLButtonElement).disabled).toBe(true);
+});
+it.each([true,false])('expiry during POST preserves completion (success=%s) and blocks retries after failure',async success=>{
+ let resolve!:(v:unknown)=>void,reject!:(v:unknown)=>void;
+ api.import.mockImplementation(()=>new Promise((done,fail)=>{resolve=done;reject=fail;}));
+ const expires=Date.now()+60000;api.consume.mockResolvedValue({...pending,expires});
+ await ready();
+ vi.useFakeTimers();vi.setSystemTime(expires-1000);
+ fireEvent.click(screen.getByRole('button',{name:'Import private draft'}));
+ await act(async()=>{vi.advanceTimersByTime(61000);});
+ expect(screen.queryByRole('alert')).toBeNull();
+ await act(async()=>{if(success)resolve({import_id:id,draft_id:id,listing_id:'listing',authority_version_id:'authority'});else reject(new Error('network'));});
+ vi.useRealTimers();
+ if(success){expect(screen.getByText('Review authority')).toBeTruthy();expect(screen.queryByRole('alert')).toBeNull();}
+ else{await waitFor(()=>expect(screen.getByRole('alert').textContent).toContain('expired'));expect(screen.queryByRole('button',{name:'Import private draft'})).toBeNull();}
+ expect(api.import).toHaveBeenCalledOnce();
+});
+
+it('gateway detail setup guidance links to the gateway list, where Add a gateway is available',async()=>{
+ api.gateways.mockResolvedValue([]);render(<VectoraizImport mode="gateway" gatewayId="missing"/>);
+ expect((await screen.findByRole('link',{name:'Open the gateway list'})).getAttribute('href')).toBe('/dashboard/gateways');
+});
+it('unmounted capability continuation cannot clear or consume a later entry',async()=>{
+ let resolve!:(v:unknown)=>void;
+ api.caps.mockImplementation(()=>new Promise(done=>{resolve=done;}));
+ const view=render(<VectoraizImport mode="gateway"/>);
+ await waitFor(()=>expect(api.caps).toHaveBeenCalledOnce());view.unmount();
+ await act(async()=>{resolve({import_enabled:false});});
+ expect(api.clear).not.toHaveBeenCalled();expect(api.consume).not.toHaveBeenCalled();
 });

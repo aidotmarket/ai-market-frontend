@@ -34,8 +34,9 @@ export default function VectoraizImport({mode='bucket',gatewayId}:{mode?:'bucket
   const [receipt,setReceipt]=useState<AuthorityImportReceipt|null>(null);
   const request=useRef<AuthorityImportRequest|null>(null);
   const restoreAllowed=useRef(false);
-  const bootstrap=useRef<{account:string;promise:Promise<PendingHandoff|null>}|null>(null);
+  const bootstrap=useRef<{account:string;generation:number;promise:Promise<PendingHandoff|null>}|null>(null);
   const run=useRef(0);
+  const importing=useRef<number|null>(null);
   const abort=useRef<AbortController|null>(null);
   useEffect(()=>{
     const captured=()=>{++run.current;abort.current?.abort();bootstrap.current=null;request.current=null;setPending(null);setReceipt(null);setTarget(null);setFiles([]);setCandidates([]);setConnections([]);setGateways([]);setChoice('');setTerms('');setAccountConfirmed(false);setTargetConfirmed(false);setBusy(false);setProgress([]);setIntake(v=>v+1);};
@@ -45,7 +46,7 @@ export default function VectoraizImport({mode='bucket',gatewayId}:{mode?:'bucket
   useEffect(()=>{
     setExpired(false);
     if(!pending)return;
-    const expire=()=>{++run.current;abort.current?.abort();setBusy(false);setExpired(true);request.current=null;setTarget(null);setAccountConfirmed(false);setTargetConfirmed(false);setError('This import link expired. Export the listing again from vectorAIz, then open the new link.');};
+    const expire=()=>{if(importing.current===run.current)return;++run.current;abort.current?.abort();setBusy(false);setExpired(true);request.current=null;setTarget(null);setAccountConfirmed(false);setTargetConfirmed(false);setError('This import link expired. Export the listing again from vectorAIz, then open the new link.');};
     if(pending.expires<=Date.now()){expire();return;}
     const timer=setTimeout(expire,pending.expires-Date.now());return()=>clearTimeout(timer);
   },[pending]);
@@ -54,13 +55,19 @@ export default function VectoraizImport({mode='bucket',gatewayId}:{mode?:'bucket
     restoreAllowed.current=false;setCanRestore(false);setPending(null);setReceipt(null);setTarget(null);setError(null);setTerms('');request.current=null;
     if(!account)return;
     // One consumption per mounted entry, including React Strict Mode's replay.
-    if(bootstrap.current?.account!==account)bootstrap.current={account,promise:(async()=>{
-      const caps=await getAuthorityCapabilities();
-      if(!same())return null;
-      restoreAllowed.current=authorityAvailable(caps);
-      if(!restoreAllowed.current){clearHandoff();return null;}
-      return consumeHandoff(account,routeFor(mode));
-    })()};
+    if(bootstrap.current?.account!==account){
+      const entry={account,generation,promise:Promise.resolve<PendingHandoff|null>(null)};
+      bootstrap.current=entry;
+      const ownsEntry=()=>same()&&bootstrap.current===entry&&entry.generation===run.current;
+      entry.promise=(async()=>{
+        const caps=await getAuthorityCapabilities();
+        if(!ownsEntry())return null;
+        restoreAllowed.current=authorityAvailable(caps);
+        if(!restoreAllowed.current){clearHandoff();return null;}
+        return consumeHandoff(account,routeFor(mode),ownsEntry);
+      })();
+    }
+    bootstrap.current.generation=generation;
     void bootstrap.current.promise.then(async item=>{
       if(!same()||generation!==run.current)return;
       if(!item){setCanRestore(true);return;}
@@ -149,13 +156,15 @@ export default function VectoraizImport({mode='bucket',gatewayId}:{mode?:'bucket
     if(!pending||!target||!accountConfirmed||!targetConfirmed||!current()||blocked.length>0)return;
     const generation=run.current,same=sessionLifecycle();
     setBusy(true);setError(null);
+    importing.current=generation;
+    let completed=false;
     // A network-uncertain retry reuses this exact request and idempotency key.
     request.current??={contract_version:'listing-authority-v1',handoff:pending.encoded,idempotency_key:pending.key,
       account_id:account!,account_confirmed:true,target_confirmed:true,target};
     try{
       const result=await (store?store.importDraft(request.current):importAuthorityDraft(request.current));
       if(!same()||generation!==run.current)return;
-      saveAuthorityReceipt(account!,result);setReceipt(result);setPending(null);request.current=null;
+      completed=true;saveAuthorityReceipt(account!,result);setReceipt(result);setPending(null);request.current=null;
     }catch(cause){
       if(same()&&generation===run.current){
         if(authorityCode(cause)==='AUTHORITY_PURCHASER_STALE'){
@@ -165,7 +174,14 @@ export default function VectoraizImport({mode='bucket',gatewayId}:{mode?:'bucket
         }
         if(same()&&generation===run.current)setError(authorityMessage(cause));
       }
-    }finally{if(same()&&generation===run.current)setBusy(false);}
+    }finally{
+      if(importing.current===generation)importing.current=null;
+      if(same()&&generation===run.current){
+        setBusy(false);
+        // Once sent, the server owns completion. Expiry only blocks a new POST.
+        if(!completed&&pending.expires<=Date.now())setPending({...pending});
+      }
+    }
   }
   if(!account||bootstrap.current?.account!==account)return null;
   // A durable draft reference takes precedence once the backend supplies it.
@@ -195,7 +211,7 @@ export default function VectoraizImport({mode='bucket',gatewayId}:{mode?:'bucket
       </select>
     </label>
     {bucket&&connections.length===0&&<p>No matching storage connection. <Link href="/dashboard/seller-workspace?view=storage" className="underline">Connect your storage</Link>, then open the link from vectorAIz again.</p>}
-    {!bucket&&gateways.length===0&&<p>No compatible gateway is available. <Link className="underline" href="/dashboard/gateways">Set up a gateway</Link>, then open the link from vectorAIz again.</p>}
+    {!bucket&&gateways.length===0&&<p>No compatible gateway is available. {gatewayId?<><Link className="underline" href="/dashboard/gateways">Open the gateway list</Link> and use “Add a gateway”</>:<>Use “Add a gateway” below to set up a gateway</>}, then open the link from vectorAIz again.</p>}
     <label className="block">Names to keep private (one per line)<textarea className="block w-full rounded border" value={terms} maxLength={16384} onChange={e=>{setTerms(e.target.value);setTargetConfirmed(false);}}/></label>
     <p>These names stay in this browser.</p>
     <button type="button" disabled={busy||expired||!choice} onClick={()=>void checkFiles()} className="rounded border px-3 py-2">Check uploaded files</button>
