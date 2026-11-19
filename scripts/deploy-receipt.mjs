@@ -61,9 +61,11 @@ export async function observeDeployment({
   let attempts = 0;
   let provider = { state: 'unknown' };
   while (now() < deadline && attempts++ < 12) {
-    // Only the latest health and revision pair can authorize a receipt.
+    // Only health, revision and trusted provider evidence from this poll can
+    // authorize a receipt, even when a response arrives exactly at the deadline.
     healthy = false;
     revision = null;
+    provider = { state: 'unknown' };
     try {
       healthy = await request(fetch, `${appUrl}/`, { cache: 'no-store' },
         Math.max(1, Math.min(10_000, deadline - now())), response => response.status === 200);

@@ -19,7 +19,7 @@ const appUrl = 'https://app.example.test';
 const eventsUrl = 'https://events.example.test/';
 
 function harness({ revisions = [sha] as unknown[], health = [200] as (number | Error)[], post = 201, transport = false,
-  revisionDelay = 0, deployments = [deployment], statuses = [status], providerHttp = 200, deploymentId = deployment.id } = {}) {
+  revisionDelay = 0 as number | number[], deployments = [deployment], statuses = [status], providerHttp = 200, deploymentId = deployment.id } = {}) {
   let clock = 0;
   let healthIndex = 0;
   let revisionIndex = 0;
@@ -49,7 +49,7 @@ function harness({ revisions = [sha] as unknown[], health = [200] as (number | E
       return { status };
     }
     expect(url).toBe(`${appUrl}/api/build-revision`);
-    clock += revisionDelay;
+    clock += Array.isArray(revisionDelay) ? last(revisionDelay, revisionIndex) as number : revisionDelay;
     const revision = last(revisions, revisionIndex++);
     if (revision instanceof Error) throw revision;
     return { status: revision === 'unavailable' ? 404 : 200, json: async () => {
@@ -118,8 +118,8 @@ describe('workflow receipt decisions', () => {
     expect(result.submission).toEqual({ state: 'accepted', status: 201 });
   });
 
-  it('fails the reported provider regression despite an older healthy serving build', async () => {
-    const h = harness({ revisions: [old], statuses: [{ ...status, state: 'failure' }] });
+  it.each(['failure', 'error'])('maps Railway status %s to failure despite an older healthy serving build', async state => {
+    const h = harness({ revisions: [old], statuses: [{ ...status, state }] });
     const result = await reportDeployment(h);
     expect(result.observation).toMatchObject({ state: 'provider-failed', healthy: true, revision: old,
       provider: { state: 'failure', deploymentId: 7907199016, statusId: 22607220487 } });
@@ -212,6 +212,19 @@ describe('workflow receipt decisions', () => {
     expect(h.fetch).toHaveBeenCalledTimes(2);
   });
 
+  it.each([165_000, 165_001])('discards prior provider success when the next revision exhausts the budget (%s ms)', async delay => {
+    const h = harness({ revisions: [old, sha], revisionDelay: [0, delay] });
+    const result = await reportDeployment(h);
+    expect(result.observation).toEqual({ state: 'pending', healthy: true, revision: sha,
+      provider: { state: 'unknown' } });
+    expect(result.submission).toBeNull();
+    // First poll: old served revision plus trusted success. Second poll: exact
+    // revision at/after the deadline, so no fresh provider sample is possible.
+    expect(h.fetch.mock.calls.filter(([url]) => url.startsWith('https://api.github.com/'))).toHaveLength(2);
+    expect(h.fetch.mock.calls.filter(([url]) => url === `${appUrl}/api/build-revision`)).toHaveLength(2);
+    expect(h.fetch.mock.calls.filter(([, options]) => options.method === 'POST')).toHaveLength(0);
+  });
+
   it('aborts slow revision bodies within the remaining budget and remains pending', async () => {
     vi.useFakeTimers();
     const deadlines: number[] = [];
@@ -256,6 +269,7 @@ describe('workflow receipt decisions', () => {
 
   it.each([...healthCases.map(scenario => ({ ...scenario, post: 201, transport: false })),
     { name: 'provider failure', state: 'provider-failed', health: [200], revisions: [old], healthy: true, post: 201, transport: false, statuses: [{ ...status, state: 'failure' }] },
+    { name: 'provider error', state: 'provider-failed', health: [200], revisions: [old], healthy: true, post: 201, transport: false, statuses: [{ ...status, state: 'error' }] },
     { name: 'provider pending', state: 'pending', health: [200], revisions: [sha], healthy: true, post: 201, transport: false, statuses: [{ ...status, state: 'pending' }] },
     { name: 'HTTP refusal', state: 'refused', health: [200], revisions: [sha], healthy: true, post: 409, transport: false },
     { name: 'transport ambiguity', state: 'unknown', health: [200], revisions: [sha], healthy: true, post: 201, transport: true }])
