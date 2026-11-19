@@ -4,8 +4,14 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { observeDeployment, reportDeployment, runFromEnvironment, summary } from './deploy-receipt.mjs';
 
-const sha = 'a'.repeat(40);
-const old = 'b'.repeat(40);
+const sha = '2d6377b347a464851e63afd35bb23cecae30ebba';
+const old = '051acabf428fbf97143979602bed59c4116656ff';
+const creator = { id: 68434857, login: 'railway-app[bot]' };
+const environment = 'ai-market / production';
+const deployment = { id: 7907199016, sha, creator, environment,
+  url: 'https://attacker.test/deployment', statuses_url: 'https://attacker.test/statuses' };
+const status = { id: 22607220487, state: 'success', creator, environment,
+  url: 'https://attacker.test/status', target_url: 'https://attacker.test/app' };
 const context = { sha, repository: 'aidotmarket/ai-market-frontend', actor: 'author', branch: 'main',
   runId: '42', serviceKey: 'svc:ai-market-frontend',
   commitMessage: 'quotes \' " ` $(touch /never)\nJSON_EOF\nJS\nUnicode: ☃' };
@@ -13,7 +19,7 @@ const appUrl = 'https://app.example.test';
 const eventsUrl = 'https://events.example.test/';
 
 function harness({ revisions = [sha] as unknown[], health = [200] as (number | Error)[], post = 201, transport = false,
-  revisionDelay = 0 } = {}) {
+  revisionDelay = 0, deployments = [deployment], statuses = [status], providerHttp = 200, deploymentId = deployment.id } = {}) {
   let clock = 0;
   let healthIndex = 0;
   let revisionIndex = 0;
@@ -22,10 +28,21 @@ function harness({ revisions = [sha] as unknown[], health = [200] as (number | E
     expect(options.redirect).toBe('manual');
     expect(options.signal).toBeInstanceOf(AbortSignal);
     if (options.method === 'POST') {
+      expect(options.headers).not.toHaveProperty('Authorization');
       if (transport) throw new Error('private transport details');
       return { status: post };
     }
     expect(options.cache).toBe('no-store');
+    if (url.startsWith('https://api.github.com/')) {
+      expect(options.headers).toMatchObject({ Authorization: 'Bearer fake-job-token' });
+      const root = `https://api.github.com/repos/${context.repository}/deployments`;
+      if (url === `${root}?sha=${sha}&environment=ai-market%20%2F%20production&per_page=100`) {
+        return { status: providerHttp, json: async () => deployments };
+      }
+      expect(url).toBe(`${root}/${deploymentId}/statuses?per_page=100`);
+      return { status: providerHttp, json: async () => statuses };
+    }
+    expect(options.headers).toBeUndefined();
     if (url === `${appUrl}/`) {
       const status = last(health, healthIndex++);
       if (status instanceof Error) throw status;
@@ -41,7 +58,7 @@ function harness({ revisions = [sha] as unknown[], health = [200] as (number | E
     } };
   });
   return { fetch, now: () => clock, sleep: async (ms: number) => { clock += ms; },
-    initialWaitMs: 0, budgetMs: 180_000, appUrl, eventsUrl, key: 'fake-key', context };
+    initialWaitMs: 0, budgetMs: 180_000, appUrl, eventsUrl, key: 'fake-key', githubToken: 'fake-job-token', context };
 }
 
 const healthCases = [
@@ -62,7 +79,7 @@ afterEach(() => { vi.unstubAllGlobals(); vi.restoreAllMocks(); vi.useRealTimers(
 
 describe('workflow receipt decisions', () => {
   it.each([old, null, 'absent', 'bad-json', 'unavailable', 'bad-revision', `${sha}\n`, new Error('timeout')])
-    ('keeps healthy unverified metadata nonblocking with no event: %s', async revision => {
+    ('keeps healthy unverified metadata pending with no event: %s', async revision => {
       const h = harness({ revisions: [revision] });
       const result = await reportDeployment(h);
       expect(result.observation.state).toBe('pending');
@@ -88,6 +105,67 @@ describe('workflow receipt decisions', () => {
     });
     expect(summary(result)).not.toContain(context.commitMessage);
     expect(summary(result)).not.toContain('fake-key');
+  });
+
+  it('accepts the positive-control Railway success shape with independent exact serving evidence', async () => {
+    const h = harness({ deploymentId: 7887992277,
+      deployments: [{ ...deployment, id: 7887992277 }],
+      statuses: [{ ...status, id: 22537285867 }],
+    });
+    const result = await reportDeployment(h);
+    expect(result.observation).toMatchObject({ state: 'verified',
+      provider: { state: 'success', deploymentId: 7887992277, statusId: 22537285867 } });
+    expect(result.submission).toEqual({ state: 'accepted', status: 201 });
+  });
+
+  it('fails the reported provider regression despite an older healthy serving build', async () => {
+    const h = harness({ revisions: [old], statuses: [{ ...status, state: 'failure' }] });
+    const result = await reportDeployment(h);
+    expect(result.observation).toMatchObject({ state: 'provider-failed', healthy: true, revision: old,
+      provider: { state: 'failure', deploymentId: 7907199016, statusId: 22607220487 } });
+    const posts = h.fetch.mock.calls.filter(([, options]) => options.method === 'POST');
+    expect(posts).toHaveLength(1);
+    expect(JSON.parse(posts[0][1].body as string)).toEqual({
+      actor: 'system', event_type: 'alert', title: `DEPLOY FAILED: ${context.repository} @ ${sha}`,
+      entity_key: context.serviceKey, source_ref: sha, dedupe_key: `deploy-fail-${sha}`,
+      payload: { commit_sha: sha, pushed_by: context.actor, repository: context.repository,
+        run_url: `https://github.com/${context.repository}/actions/runs/42`, health_verified: false },
+    });
+  });
+
+  it.each([
+    { statuses: [{ ...status, state: 'pending' }] },
+    { statuses: [{ ...status, state: 'queued' }] },
+    { statuses: [{ ...status, state: 'inactive' }] },
+    { statuses: [{ ...status, state: 'unknown' }] },
+    { statuses: [] },
+    { providerHttp: 302 }, { providerHttp: 403 }, { providerHttp: 500 },
+    { deployments: [{ ...deployment, sha: old }] },
+    { deployments: [{ ...deployment, environment: 'staging' }] },
+    { deployments: [{ ...deployment, creator: { ...creator, id: 1 } }] },
+    { deployments: [{ ...deployment, creator: { ...creator, login: 'other' } }] },
+    { statuses: [{ ...status, creator: { ...creator, id: 1 } }] },
+    { statuses: [{ ...status, creator: { ...creator, login: 'other' } }] },
+    { statuses: [{ ...status, environment: 'staging' }] },
+    { statuses: [status, { ...status, id: status.id + 1, creator: { ...creator, id: 1 } }] },
+    { deployments: Array(100).fill(deployment) },
+    { statuses: Array(100).fill(status) },
+  ])('never verifies stale, incomplete, pending or untrusted provider evidence: %j', async options => {
+    const h = harness(options);
+    const result = await reportDeployment(h);
+    expect(result.observation.state).toBe('pending');
+    expect(result.submission).toBeNull();
+  });
+
+  it('uses the latest attempt and status, ignoring returned URLs and older success', async () => {
+    const h = harness({ deployments: [
+      { ...deployment, id: 7887992277, url: 'https://attacker.test/' }, deployment,
+    ], statuses: [
+      { ...status, id: 22537285867, state: 'success' },
+      { ...status, state: 'failure', url: 'https://attacker.test/' },
+    ] });
+    expect((await reportDeployment(h)).observation.state).toBe('provider-failed');
+    expect(h.fetch.mock.calls.some(([url]) => url.includes('attacker'))).toBe(false);
   });
 
   it('retains unhealthy alert semantics without a deploy event', async () => {
@@ -177,11 +255,13 @@ describe('workflow receipt decisions', () => {
   });
 
   it.each([...healthCases.map(scenario => ({ ...scenario, post: 201, transport: false })),
+    { name: 'provider failure', state: 'provider-failed', health: [200], revisions: [old], healthy: true, post: 201, transport: false, statuses: [{ ...status, state: 'failure' }] },
+    { name: 'provider pending', state: 'pending', health: [200], revisions: [sha], healthy: true, post: 201, transport: false, statuses: [{ ...status, state: 'pending' }] },
     { name: 'HTTP refusal', state: 'refused', health: [200], revisions: [sha], healthy: true, post: 409, transport: false },
     { name: 'transport ambiguity', state: 'unknown', health: [200], revisions: [sha], healthy: true, post: 201, transport: true }])
     ('executes the actual workflow entry with fake transports and filesystem event data: $name', async scenario => {
       const { state } = scenario;
-      const dir = await mkdtemp(join(tmpdir(), 'r539-'));
+      const dir = await mkdtemp(join(process.env.KD_BRIDGE_JOB_SCRATCH ?? tmpdir(), 'r539-'));
       const eventPath = join(dir, 'event.json');
       const summaryPath = join(dir, 'summary.txt');
       await writeFile(eventPath, JSON.stringify({ head_commit: { message: context.commitMessage } }));
@@ -193,20 +273,21 @@ describe('workflow receipt decisions', () => {
         const run = runFromEnvironment({ NODE_ENV: 'test', GITHUB_EVENT_PATH: eventPath, GITHUB_STEP_SUMMARY: summaryPath,
           GITHUB_SHA: sha, GITHUB_REPOSITORY: context.repository, GITHUB_ACTOR: context.actor,
           GITHUB_REF_NAME: 'main', GITHUB_RUN_ID: '42', APP_URL: appUrl, EVENTS_URL: eventsUrl,
-          SERVICE_KEY: context.serviceKey, RECEIPT_KEY: 'fake-key' });
+          SERVICE_KEY: context.serviceKey, RECEIPT_KEY: 'fake-key', GITHUB_TOKEN: 'fake-job-token' });
         // readFile resolves on the real event loop, then timers drive all polling.
         await vi.waitFor(() => expect(vi.getTimerCount()).toBeGreaterThan(0));
         await vi.runAllTimersAsync();
         await run;
-        expect(process.exitCode ?? 0).toBe(state === 'unhealthy' ? 1 : 0);
+        expect(process.exitCode ?? 0).toBe(['unhealthy', 'pending', 'provider-failed'].includes(state) ? 1 : 0);
         const text = await readFile(summaryPath, 'utf8');
         expect(text).not.toContain('fake-key');
+        expect(text).not.toContain('fake-job-token');
         expect(text).not.toContain(context.commitMessage);
-        expect(text).toContain(state === 'refused' ? 'refused (HTTP 409)' : state === 'unknown' ? 'unknown (transport uncertainty)' : state === 'pending' ? 'No deploy receipt submitted' : state === 'verified' ? 'accepted (HTTP 201)' : 'did not become healthy');
+        expect(text).toContain(state === 'refused' ? 'refused (HTTP 409)' : state === 'unknown' ? 'unknown (transport uncertainty)' : state === 'pending' ? 'No deploy receipt submitted' : state === 'verified' ? 'accepted (HTTP 201)' : state === 'provider-failed' ? 'Railway production deployment failed' : 'did not become healthy');
         const posts = h.fetch.mock.calls.filter(([, options]) => options.method === 'POST');
         expect(posts).toHaveLength(state === 'pending' ? 0 : 1);
         if (posts.length) expect(JSON.parse(posts[0][1].body as string).event_type)
-          .toBe(state === 'unhealthy' ? 'alert' : 'deploy');
+          .toBe(['unhealthy', 'provider-failed'].includes(state) ? 'alert' : 'deploy');
         if (state === 'pending' && !scenario.healthy) {
           expect(text).toContain('Latest health: unhealthy/unavailable');
           expect(text).toContain('earlier HTTP 200 observed');

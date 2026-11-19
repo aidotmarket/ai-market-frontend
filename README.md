@@ -54,6 +54,25 @@ absence of further reads after focus or subsequent rotations.
 
 `npm start` serves the built application. `nixpacks.toml` runs `npm ci` and `npm run build`, then starts it with `npm start`. Railway deploys the main branch; deployment and browser acceptance guidance lives in the existing runbooks below.
 
+The root layout self-hosts Plus Jakarta Sans upright variable WOFF2 in `app/fonts/`,
+using weights 400–800 and `display: swap` while retaining the body font class.
+The font and adjacent `OFL.txt` are unmodified from
+[tokotype/PlusJakartaSans at 18d1cd2f7ea10481919d2f05c1f7064b7307fc26](https://github.com/tokotype/PlusJakartaSans/tree/18d1cd2f7ea10481919d2f05c1f7064b7307fc26):
+`fonts/webfonts/PlusJakartaSans[wght].woff2` (Git blob `eebac44580986b89ed54b1dfc23209ce82ebc073`, 60,612 bytes)
+and `OFL.txt` (Git blob `ea69b0ca12a02556c436680ea0a159efb7a748fa`, 4,402 bytes).
+The SIL Open Font License 1.1 accompanies the font; builds need no Google font request.
+
+The deploy receipt workflow reads GitHub deployment records with its job token
+(`contents: read`, `deployments: read`). It requires the latest Railway App
+production attempt/status, current HTTP 200, and the exact independently served
+`/api/build-revision` before submitting a deploy receipt. Provider failure emits
+the existing alert; provider or revision uncertainty finishes non-success.
+Observation retains the initial 120-second wait and bounded 180-second window
+(up to 12 samples). Truncated API lists remain unverified. Receipt acceptance,
+refusal, or transport uncertainty is reported separately from verification;
+an ambiguous POST is never retried automatically. Live provider and release
+verification remain owner work.
+
 ## Operating guides
 
 - [Marketplace frontend](https://github.com/aidotmarket/runbooks/blob/main/ai-market-frontend.md): deployment, routes and customer issue diagnosis.

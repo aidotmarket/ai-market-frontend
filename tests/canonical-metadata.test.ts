@@ -3,7 +3,7 @@ import { describe, expect, it, vi } from 'vitest';
 
 vi.mock('next/headers', () => ({ headers: vi.fn(async () => new Headers()) }));
 
-vi.mock('next/font/google', () => ({ Plus_Jakarta_Sans: () => ({ className: 'font' }) }));
+vi.mock('next/font/local', () => ({ default: () => ({ className: 'font' }) }));
 vi.mock('@/lib/api', () => ({
   fetchPublicListingDocuments: vi.fn(async () => []),
   fetchPublicListing: vi.fn(async () => ({ slug: 'resolved-listing', title: 'Listing' })),
