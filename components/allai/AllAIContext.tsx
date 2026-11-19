@@ -394,13 +394,13 @@ export function AllAIProvider({ children }: { children: ReactNode }) {
     if (isOpen && !greetingSentRef.current && messages.length === 0 && user) {
       greetingSentRef.current = true;
       const name = user.first_name || user.email?.split('@')[0] || '';
-      const roleGreeting = user.role === 'seller'
-        ? "I can help you manage your listings, understand marketplace trends, or answer questions about ai.market."
-        : "I can help you find data, submit requests, or answer questions about ai.market.";
+      const greeting = user.role === 'seller'
+        ? `Hey${name ? ' ' + name : ''}, would you like help with your listings, marketplace trends, or questions about ai.market?`
+        : `Hey${name ? ' ' + name : ''}! I can help you find data, submit requests, or answer questions about ai.market. What can I help with?`;
       setMessages([{
         id: 'greeting-0',
         role: 'assistant',
-        content: `Hey${name ? ' ' + name : ''}! ${roleGreeting} What can I help with?`,
+        content: greeting,
         timestamp: Date.now(),
       }]);
     } else if (isOpen && !greetingSentRef.current && messages.length === 0 && !user) {
@@ -512,16 +512,14 @@ export function AllAIProvider({ children }: { children: ReactNode }) {
         }
 
         if (res.status === 429) {
-          const limitContent = anonymousSurfaceActive
-            ? resources.safeOutcomes.rate_limited
-            : "You've reached the message limit for this session. Please try again later.";
+          const limitContent = resources.safeOutcomes.rate_limited;
           setMessages((prev) =>
             prev.map((m) =>
               m.id === assistantId
                 ? {
                     ...m,
                     content: limitContent,
-                    safeOutcome: anonymousSurfaceActive ? 'rate_limited' : undefined,
+                    safeOutcome: 'rate_limited',
                   }
                 : m
             )

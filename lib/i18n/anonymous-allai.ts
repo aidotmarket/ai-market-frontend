@@ -22,6 +22,11 @@ interface AnonymousAllAIResources {
   historicalAnswer: string;
   accountRequired: string;
   genericError: string;
+  recoveryLinks: {
+    searchListings: string;
+    postRequest: string;
+    postRequestWithSellers: string;
+  };
   safeOutcomes: Record<AnonymousSafeOutcome, string>;
 }
 
@@ -41,12 +46,17 @@ export const ANONYMOUS_ALLAI_RESOURCES: Record<
     historicalAnswer: 'Earlier session — facts will be checked again when you ask a new question.',
     accountRequired: 'An account is required for this step.',
     genericError: 'Sorry, something went wrong. Please try again.',
+    recoveryLinks: {
+      searchListings: 'Search listings directly',
+      postRequest: 'Post a request',
+      postRequestWithSellers: 'Post a request and sellers will come to you',
+    },
     safeOutcomes: {
-      no_matches: 'No matches were found for this query at this time. Try refining the query or browse the public Request Board.',
-      retrieval_unavailable: "I couldn't verify the marketplace results right now. Please try again.",
-      answer_unverified: "I couldn't verify that answer against current public information, so I won't show it.",
+      no_matches: 'No listings match yet. Try different words, or post a request so sellers can find you.',
+      retrieval_unavailable: "I couldn't check the marketplace results right now, so I won't guess. You can search listings directly, or post a request and sellers will come to you.",
+      answer_unverified: "I couldn't check that answer against current listings, so I won't guess. You can search listings directly, or post a request and sellers will come to you.",
       surface_disabled: 'The AI assistant is temporarily unavailable.',
-      rate_limited: 'The anonymous usage limit has been reached. Please try again later.',
+      rate_limited: "You've reached the chat limit for now. Please try again later. Meanwhile you can search listings directly, or post a request and sellers will come to you.",
       unsupported_language: "That language isn't supported yet. Please choose English, Spanish, or Simplified Chinese.",
     },
   },
@@ -62,12 +72,17 @@ export const ANONYMOUS_ALLAI_RESOURCES: Record<
     historicalAnswer: 'Sesión anterior: los datos se comprobarán de nuevo cuando hagas una pregunta nueva.',
     accountRequired: 'Necesitas una cuenta para realizar este paso.',
     genericError: 'Ha ocurrido un error. Inténtalo de nuevo.',
+    recoveryLinks: {
+      searchListings: 'Buscar anuncios directamente',
+      postRequest: 'Publicar una solicitud',
+      postRequestWithSellers: 'Publicar una solicitud para que los vendedores contacten contigo',
+    },
     safeOutcomes: {
-      no_matches: 'No se encontraron resultados para esta consulta en este momento. Prueba a concretar la búsqueda o consulta el tablón público de solicitudes.',
-      retrieval_unavailable: 'No pude verificar los resultados del mercado ahora mismo. Inténtalo de nuevo.',
-      answer_unverified: 'No pude verificar esa respuesta con la información pública actual, por lo que no la mostraré.',
+      no_matches: 'Todavía no hay anuncios que coincidan. Prueba con otras palabras o publica una solicitud para que los vendedores te encuentren.',
+      retrieval_unavailable: 'No pude comprobar los resultados del mercado ahora mismo, así que no voy a adivinar. Puedes buscar anuncios directamente o publicar una solicitud para que los vendedores contacten contigo.',
+      answer_unverified: 'No pude contrastar esa respuesta con los anuncios actuales, así que no voy a adivinar. Puedes buscar anuncios directamente o publicar una solicitud para que los vendedores contacten contigo.',
       surface_disabled: 'El asistente de IA no está disponible temporalmente.',
-      rate_limited: 'Se alcanzó el límite de uso anónimo. Inténtalo de nuevo más tarde.',
+      rate_limited: 'Has alcanzado el límite del chat por ahora. Inténtalo de nuevo más tarde. Mientras tanto, puedes buscar anuncios directamente o publicar una solicitud para que los vendedores contacten contigo.',
       unsupported_language: 'Ese idioma aún no es compatible. Elige inglés, español o chino simplificado.',
     },
   },
@@ -83,12 +98,17 @@ export const ANONYMOUS_ALLAI_RESOURCES: Record<
     historicalAnswer: '较早的会话——提出新问题时会重新核对事实。',
     accountRequired: '此步骤需要账户。',
     genericError: '抱歉，出现了问题。请重试。',
+    recoveryLinks: {
+      searchListings: '直接搜索商品',
+      postRequest: '发布需求',
+      postRequestWithSellers: '发布需求，让卖家联系你',
+    },
     safeOutcomes: {
-      no_matches: '目前未找到与此查询匹配的结果。请尝试细化查询，或浏览公开的数据请求板。',
-      retrieval_unavailable: '目前无法验证市场检索结果，请稍后重试。',
-      answer_unverified: '无法根据当前公开信息验证该回答，因此不会显示该回答。',
+      no_matches: '暂时没有匹配的商品。请尝试其他关键词，或发布需求，让卖家找到你。',
+      retrieval_unavailable: '目前无法核实市场搜索结果，所以我不会猜测。你可以直接搜索商品，或发布需求，让卖家联系你。',
+      answer_unverified: '无法根据当前商品核实该回答，所以我不会猜测。你可以直接搜索商品，或发布需求，让卖家联系你。',
       surface_disabled: 'AI 助手暂时不可用。',
-      rate_limited: '匿名使用额度已达到上限，请稍后重试。',
+      rate_limited: '你目前已达到聊天使用上限，请稍后重试。在此期间，你可以直接搜索商品，或发布需求，让卖家联系你。',
       unsupported_language: '暂不支持该语言。请选择英语、西班牙语或简体中文。',
     },
   },

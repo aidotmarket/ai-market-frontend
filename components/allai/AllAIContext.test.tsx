@@ -34,7 +34,7 @@ const SESSION_URL = 'http://localhost:8000/api/allai/support/anonymous/session';
 const MESSAGE_URL = 'http://localhost:8000/api/allai/support/anonymous/message';
 const STATUS_URL = 'http://localhost:8000/api/allai/support/anonymous/status';
 const GENERIC_ERROR = 'Sorry, something went wrong. Please try again.';
-const LIMIT_ERROR = "You've reached the message limit for this session. Please try again later.";
+const LIMIT_ERROR = "You've reached the chat limit for now. Please try again later. Meanwhile you can search listings directly, or post a request and sellers will come to you.";
 
 type ContextValue = ReturnType<typeof useAllAI>;
 type FetchMock = ReturnType<typeof vi.fn<typeof fetch>>;
@@ -1115,9 +1115,106 @@ describe('mounted anonymous next-step navigation', () => {
   it.each(publicNextSteps.slice(4))('hides $action after a safe failure even with a supplied next step', async (step) => {
     await mountAnswer(step, true);
     await send();
-    expect(screen.getByText('Unable to verify this answer.')).not.toBeNull();
+    expect(screen.getByText(anonymousAllAIResources(context().locale).safeOutcomes.answer_unverified)).not.toBeNull();
+    expect(screen.queryByText('Unable to verify this answer.')).toBeNull();
     expect(context().messages.at(-1)?.safeOutcome).toBe('answer_unverified');
     expect(screen.queryByTestId('allai-next-step')).toBeNull();
-    expect(screen.queryByRole('link')).toBeNull();
+    expect(screen.queryByRole('link', { name: step.label })).toBeNull();
+    expect(screen.getByRole('link', { name: 'Search listings directly' }).getAttribute('href')).toBe('/find-data');
+    expect(screen.getByRole('link', { name: 'Post a request and sellers will come to you' }).getAttribute('href')).toBe('/register?redirect=%2Frequests%2Fnew');
+  });
+});
+
+
+describe('customer reply copy and recovery links', () => {
+  const replies = [
+    ['answer_unverified', "I couldn't check that answer against current listings, so I won't guess. You can search listings directly, or post a request and sellers will come to you."],
+    ['retrieval_unavailable', "I couldn't check the marketplace results right now, so I won't guess. You can search listings directly, or post a request and sellers will come to you."],
+    ['no_matches', 'No listings match yet. Try different words, or post a request so sellers can find you.'],
+    ['rate_limited', LIMIT_ERROR],
+  ] as const;
+
+  it.each(replies.flatMap(([outcome, copy]) => [true, false].map(serverText => ({ outcome, copy, serverText }))))(
+    'renders $outcome copy and navigation (server text: $serverText)', async ({ outcome, copy, serverText }) => {
+      mocks.pathname = '/';
+      fetchMock.mockImplementation(async (input) => {
+        const url = String(input);
+        if (url === STATUS_URL) return response(200, {
+          available: true, supported_locales: [...ANONYMOUS_ALLAI_LOCALES], cache_seconds: 5,
+        });
+        if (url === `${SESSION_URL}/stale-session`) return response(200, { messages: [] });
+        if (url === MESSAGE_URL) return sseEvents({
+          type: 'safe_failure', outcome, ...(serverText ? { text: 'Older server copy.' } : {}),
+        });
+        throw new Error(`Unexpected request: ${url}`);
+      });
+      renderProvider('stale-session', true);
+      await waitFor(() => expect(context().anonymousAvailable).toBe(true));
+      act(() => context().setLocale('en'));
+      await send();
+      expect(screen.getByText(copy)).not.toBeNull();
+      expect(screen.queryByText('Older server copy.')).toBeNull();
+      const label = outcome === 'no_matches' ? 'Post a request' : 'Post a request and sellers will come to you';
+      expect(screen.getByRole('link', { name: label }).getAttribute('href')).toBe('/register?redirect=%2Frequests%2Fnew');
+      expect(screen.getByText(anonymousAllAIResources('en').accountRequired)).not.toBeNull();
+      expect(screen.queryByRole('link', { name: 'Sign up' })).toBeNull();
+      if (outcome !== 'no_matches') {
+        expect(screen.getByRole('link', { name: 'Search listings directly' }).getAttribute('href')).toBe('/find-data');
+      }
+    }
+  );
+
+  it.each(
+    ['/', '/find-data', '/search', '/pricing'].flatMap(page =>
+      [false, true].flatMap(signedIn =>
+        ['http', 'safe_failure'].flatMap(transport =>
+          ANONYMOUS_ALLAI_LOCALES.map(locale => ({ page, signedIn, transport, locale }))
+        )
+      )
+    )
+  )('renders rate-limit recovery on $page (signed in: $signedIn, $transport, $locale)', async ({ page, signedIn, transport, locale }) => {
+    mocks.pathname = page;
+    if (signedIn) {
+      mocks.auth.user = { role: 'buyer' };
+      mocks.auth.token = 'signed-in-token';
+    }
+    fetchMock.mockImplementation(async (input) => {
+      const url = String(input);
+      if (url === STATUS_URL) return response(200, {
+        available: true, supported_locales: [...ANONYMOUS_ALLAI_LOCALES], cache_seconds: 5,
+      });
+      if (url === `${SESSION_URL}/stale-session`) return response(200, { messages: [] });
+      if (url === MESSAGE_URL) return transport === 'http'
+        ? response(429)
+        : sseEvents({ type: 'safe_failure', outcome: 'rate_limited', text: 'Sign up free to keep chatting.' });
+      throw new Error(`Unexpected request: ${url}`);
+    });
+    renderProvider('stale-session', true);
+    if (context().anonymousSurfaceActive) {
+      await waitFor(() => expect(context().anonymousAvailable).toBe(true));
+    }
+    act(() => context().setLocale(locale));
+    await send();
+    const resources = anonymousAllAIResources(locale);
+    expect(context().messages.at(-1)?.safeOutcome).toBe('rate_limited');
+    expect(screen.getByText(resources.safeOutcomes.rate_limited)).not.toBeNull();
+    expect(screen.queryByText('Sign up free to keep chatting.')).toBeNull();
+    expect(screen.queryByRole('link', { name: 'Sign up' })).toBeNull();
+    const search = screen.queryByRole('link', { name: resources.recoveryLinks.searchListings });
+    if (page === '/find-data') expect(search).toBeNull();
+    else expect(search?.getAttribute('href')).toBe('/find-data');
+    expect(screen.getByRole('link', { name: resources.recoveryLinks.postRequestWithSellers }).getAttribute('href')).toBe(
+      signedIn ? '/requests/new' : '/register?redirect=%2Frequests%2Fnew'
+    );
+    if (signedIn) expect(screen.queryByText(resources.accountRequired)).toBeNull();
+    else expect(screen.getByText(resources.accountRequired)).not.toBeNull();
+  });
+
+  it.each(['Alex', ''])('greets the signed-in seller warmly in one sentence (name: %s)', async first_name => {
+    mocks.auth.user = { role: 'seller', first_name };
+    fetchMock.mockResolvedValue(response(200, { messages: [] }));
+    renderProvider('stale-session', true);
+    act(() => context().open());
+    expect(screen.getByText(`Hey${first_name ? ' ' + first_name : ''}, would you like help with your listings, marketplace trends, or questions about ai.market?`)).not.toBeNull();
   });
 });

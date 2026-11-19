@@ -1,12 +1,14 @@
 'use client';
 
 import { useEffect, useRef } from 'react';
+import Link from 'next/link';
 import type { Message } from './AllAIContext';
 import Markdown from 'react-markdown';
 import TicketStatusCard from './TicketStatusCard';
 import AllAINextStep from './AllAINextStep';
 import { useAllAI } from './AllAIContext';
 import { anonymousAllAIResources } from '@/lib/i18n/anonymous-allai';
+import { useAuthStore } from '@/store/auth';
 
 function StreamingDots() {
   return (
@@ -25,7 +27,8 @@ export default function AllAIMessage({
   message: Message;
   isStreaming: boolean;
 }) {
-  const { locale, anonymousSurfaceActive } = useAllAI();
+  const { locale, anonymousSurfaceActive, page } = useAllAI();
+  const { user } = useAuthStore();
   const resources = anonymousAllAIResources(locale);
   if (message.role === 'system') {
     return (
@@ -46,7 +49,16 @@ export default function AllAIMessage({
   }
 
   // assistant
-  const showDots = isStreaming && !message.content;
+  const hasRecoveryLinks = message.safeOutcome === 'answer_unverified' ||
+    message.safeOutcome === 'retrieval_unavailable' ||
+    message.safeOutcome === 'no_matches' || message.safeOutcome === 'rate_limited';
+  // Use the maintained customer copy even when a safe-failure event supplies older wording.
+  // These four outcomes intentionally override server text so copy and recovery links
+  // stay consistent. Rate-limit copy is account-neutral: signing in does not lift limits.
+  const content = hasRecoveryLinks && message.safeOutcome
+    ? resources.safeOutcomes[message.safeOutcome]
+    : message.content;
+  const showDots = isStreaming && !content;
   const ticketStatusCards = message.ticketStatusCards ?? [];
   return (
     <div className="flex justify-start">
@@ -79,8 +91,23 @@ export default function AllAIMessage({
               ),
             }}
           >
-            {message.content}
+            {content}
           </Markdown>
+        )}
+        {hasRecoveryLinks && (
+          <div className="mt-2 flex flex-col items-start gap-1">
+            {message.safeOutcome !== 'no_matches' && page !== '/find-data' && (
+              <Link href="/find-data" className="inline-flex min-h-11 items-center text-blue-400 underline hover:text-blue-300">
+                {resources.recoveryLinks.searchListings}
+              </Link>
+            )}
+            {!user && (
+              <p className="text-xs text-white/50">{resources.accountRequired}</p>
+            )}
+            <Link href={user ? '/requests/new' : `/register?redirect=${encodeURIComponent('/requests/new')}`} className="inline-flex min-h-11 items-center text-blue-400 underline hover:text-blue-300">
+              {message.safeOutcome === 'no_matches' ? resources.recoveryLinks.postRequest : resources.recoveryLinks.postRequestWithSellers}
+            </Link>
+          </div>
         )}
         {message.failureNotice && (
           <p role="alert" className="mt-2 text-amber-200">
