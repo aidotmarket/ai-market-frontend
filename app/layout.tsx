@@ -1,5 +1,4 @@
 import type { Metadata } from 'next';
-import { headers } from 'next/headers';
 import localFont from 'next/font/local';
 import { SupportPrivateBoundary } from '@/components/SupportPrivateBoundary';
 
@@ -32,17 +31,16 @@ export const metadata: Metadata = {
   },
 };
 
-export default async function RootLayout({
+export default function RootLayout({
   children,
 }: {
   children: React.ReactNode;
 }) {
-  // The support recovery route's CSP requires this nonce on inline scripts.
-  const csp = (await headers()).get('content-security-policy');
-  const nonce = csp?.match(/'nonce-([^']+)'/)?.[1];
+  // CC L1 accepted: /support/mailbox-account blocks this script; its fragment is a
+  // support bearer, not a vz payload. Avoid request nonce reads to keep the root static.
   return (
     <html lang="en">
-      <head><script nonce={nonce} dangerouslySetInnerHTML={{__html: `(function(){if(/(?:^#|&)vz(?:=|&|$)/.test(location.hash)){window.__vectoraizEntry={fragment:location.hash,route:location.pathname};history.replaceState(history.state,"",location.pathname+location.search)}})()`}} /></head>
+      <head><script dangerouslySetInnerHTML={{__html: `(function(){if(/(?:^#|&)vz(?:=|&|$)/.test(location.hash)){window.__vectoraizEntry={fragment:location.hash,route:location.pathname};history.replaceState(history.state,"",location.pathname+location.search)}})()`}} /></head>
       <body className={`${plusJakarta.className} min-h-screen bg-white text-gray-900 antialiased`}>
         <SupportPrivateBoundary>{children}</SupportPrivateBoundary>
       </body>
