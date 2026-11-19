@@ -1,5 +1,6 @@
 'use client';
 
+import { customerActionError } from '@/lib/customerMessages';
 import { useEffect, useState, useRef } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
@@ -129,7 +130,7 @@ export default function StripeReturnPage() {
       if (isConnectOnboardingTwoFactorRequired(err)) {
         toast('Complete the sign-in security step before connecting payouts. Refresh seller setup if you already completed it.', 'info');
       } else {
-        toast('Failed to resume Stripe connection', 'error');
+        toast(customerActionError("resume payout setup"), 'error');
       }
       connectingRef.current = false;
       setConnecting(false);

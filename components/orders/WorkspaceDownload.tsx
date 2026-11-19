@@ -100,7 +100,7 @@ export default function WorkspaceDownload({orderId,deliveryAccessState,requestGr
         if (operation.signal.aborted || (choosingFolder && failure instanceof DOMException && failure.name === 'AbortError')) setMessage(`Download cancelled. Any completed files remain in ${picker ? 'your selected folder' : 'your Downloads location'}.`);
         else if (failure instanceof WorkspaceDownloadError && failure.code === 'file_changed') setError('The seller’s file has changed since approval. Contact the seller before downloading it again.');
         else if (failure instanceof WorkspaceDownloadError && failure.code === 'memory') setError('This file is too large for your browser to hold in memory. Use Chrome, Edge, or another browser that can save to a folder to download large files.');
-        else if (axios.isAxiosError(failure) && [403,404].includes(failure.response?.status ?? 0)) setError('Download access is not available for this purchase. Check the order or contact support.');
+        else if (axios.isAxiosError(failure) && [403,404].includes(failure.response?.status ?? 0)) setError('This purchase does not currently include download access. Check your order details, or contact support for help.');
         else setError(`The download could not be completed. Any completed files remain in ${picker ? 'your selected folder' : 'your Downloads location'}. Check your purchase before trying again.`);
       }
     } finally { working.current=false;if (mounted.current) setBusy(false); }

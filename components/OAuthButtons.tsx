@@ -1,5 +1,6 @@
 'use client';
 
+import { customerActionError } from '@/lib/customerMessages';
 import { useState, useSyncExternalStore } from 'react';
 import * as authApi from '@/api/auth';
 import { saveRequestAuthReturn } from '@/lib/request-auth-return';
@@ -49,7 +50,7 @@ export default function OAuthButtons({ mode, redirect }: OAuthButtonsProps) {
     try {
       await startProviderOAuth(provider, redirect);
     } catch {
-      setError(`Failed to connect to ${provider === 'google' ? 'Google' : 'GitHub'}. Please try again.`);
+      setError(customerActionError(`sign in with ${provider === 'google' ? 'Google' : 'GitHub'}`));
     }
   };
 

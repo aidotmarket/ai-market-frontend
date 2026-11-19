@@ -4,7 +4,7 @@ import axios from 'axios';
 import {listingDraftError} from '@/lib/listing-action-error';
 import type {ListingDraftContent} from '@/api/sellerListingDraft';
 import {readListingSource, readSellerCategories, type SourceRead, type SellerCategory} from '@/api/sellerListingSource';
-import {listingReviewErrorReason,readListingReview, type ListingReview, type ApprovalReceipt} from '@/api/sellerListingReview';
+import {readListingReview, type ListingReview, type ApprovalReceipt} from '@/api/sellerListingReview';
 import {readPublication, type PublicationState} from '@/api/sellerListingPublication';
 import {SELLER_SETUP_STEPS} from '@/components/onboarding/SellerSetupProgressBar';
 import {getCapabilities} from '@/api/capabilities';
@@ -92,7 +92,7 @@ export function GuidedListingFlow({connections, capabilities, view, navigate, ch
       if(controller.signal.aborted)return;
       if(r.source_version!==source.version||r.draft_version!==draft.version){
         const key=`${reviewRetry}:${r.source_version}:${r.draft_version}`;
-        if(reconciled.current===key){setReviewError('The saved review is still out of date. Refresh Review to load your saved changes.');return;}
+        if(reconciled.current===key){setReviewError('Your storage changed since you last saved. Choose your files again, then review.');return;}
         reconciled.current=key;
         setReviewError('The saved review changed elsewhere. Reloading your saved files and draft…');
         const savedSource=await readListingSource(draft?.draft_id);
@@ -103,7 +103,7 @@ export function GuidedListingFlow({connections, capabilities, view, navigate, ch
       setReview(r);
     }).catch(error=>{
       if(controller.signal.aborted)return;
-      setReviewError('Your saved review could not be reconciled. Refresh Review to reload your saved files and draft. '+listingReviewErrorReason(error));
+      setReviewError('Your storage changed since you last saved. Choose your files again, then review.');
     }).finally(()=>{if(!controller.signal.aborted)setReviewLoading(false);});
     return()=>controller.abort();
   },[reviewEnabled,source,draft,pending,reviewRetry]);
@@ -127,8 +127,9 @@ export function GuidedListingFlow({connections, capabilities, view, navigate, ch
       <h2 className="hidden font-semibold xl:block">Listing checklist</h2>
       <div id="listing-checklist-steps" className={`${expanded?'block':'hidden'} mt-4 space-y-4 xl:block`}>
         {accountNext&&<a href="#seller-setup-next" onClick={()=>window.dispatchEvent(new Event('seller-setup:next'))} className="block text-sm text-indigo-700 underline">Finish account setup: {SELLER_SETUP_STEPS.find(s=>s.id===accountNext)?.label??'Next account step'}</a>}
-        <ol className="space-y-4">{steps.map((s,i)=><li key={s.view}><button type="button" aria-current={view===s.view?'step':undefined} onClick={()=>navigate(s.view)} className="text-left text-sm font-medium"><span aria-hidden="true">{s.state==='done'?'✓':s.state==='blocked'?'🔒':'○'}</span> {i+1}. {s.name} <span className="text-xs">· {s.state}{s.next?' · Next':''}</span></button>{s.reason&&<p className="mt-1 text-xs leading-5 text-gray-600">{s.reason}</p>}</li>)}</ol>
+        <ol className="space-y-4">{steps.map((s,i)=><li key={s.view}><button type="button" aria-current={view===s.view?'step':undefined} onClick={()=>navigate(s.view)} className="text-left text-sm font-medium"><span aria-hidden="true">{s.state==='done'?'✓':s.state==='blocked'?'🔒':'○'}</span> {i+1}. {s.name} <span className="text-xs">· {s.state==='current'?'Up to date':s.state==='blocked'?'Needs attention':s.state==='done'?'Complete':'To do'}{s.next?' · Next':''}</span></button>{s.reason&&<p className="mt-1 text-xs leading-5 text-gray-600">{s.reason}</p>}</li>)}</ol>
         {published?<><a href={`/listings/${encodeURIComponent(published.slug)}`} className="block text-sm text-indigo-700 underline">Published: view your listing</a><button type="button" disabled={startingListing} onClick={()=>void startAnotherListing()} className="text-sm text-indigo-700 underline">Start another listing</button><p className="text-xs text-gray-600">Choose new files and update your draft. Your published listing stays saved.</p></>:next&&<button type="button" onClick={()=>navigate(next.view)} className="w-full rounded-lg bg-indigo-700 px-4 py-2 text-sm font-semibold text-white">Next: {next.name} →</button>}
+        {reviewError&&<p className="text-sm text-red-800">{reviewError} <button onClick={()=>navigate('data')} className="min-h-11 underline">Choose files</button></p>}
         {startError&&<p role="alert" className="text-sm text-red-800">{startError} <button disabled={startingListing} onClick={()=>void startAnotherListing()} className="underline">Retry</button></p>}
         {readError&&<p role="alert" className="text-sm text-red-800">{readError} <button onClick={()=>setReadRetry(n=>n+1)} className="underline">Retry</button></p>}
       </div>

@@ -19,7 +19,7 @@ function refusal(error: unknown): string | null {
   if (!axios.isAxiosError(error)) return null;
   const detail = typeof error.response?.data?.detail === 'string' ? error.response.data.detail : undefined;
   if (detail === 'verified_sample_unavailable_above_25_column_cap') {
-    return 'A verified sample is not available for a dataset above the approved 25-column cap. This is a product limit, not an error in your dataset.';
+    return 'Verified samples support up to 25 columns. Choose a file with fewer columns, or continue preparing your listing without a verified sample.';
   }
   if (detail === 'dictionary_must_match_committed_dataset_schema_republish_through_aim_data') {
     return 'The dictionary must match the committed dataset schema. Update the source file and publish a new listing version to restore agreement.';

@@ -66,7 +66,7 @@ export default function SellerShareControls({
       })
       .catch(() => {
         if (!active) return;
-        setError('Share controls are unavailable right now.');
+        setError('We could not load your sharing options just now. Try again, or contact support if it keeps happening.');
       })
       .finally(() => {
         if (active) setLoading(false);

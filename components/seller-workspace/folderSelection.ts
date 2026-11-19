@@ -9,11 +9,8 @@ export type FolderProgress = { files: number; bytes: number };
 export class FolderRequestError extends FolderSelectionError {
   constructor(error: SellerWorkspaceApiError | import('axios').AxiosError, readonly progress: FolderProgress) {
     const status = error instanceof SellerWorkspaceApiError ? error.status : error.response?.status;
-    const detail: unknown = error instanceof SellerWorkspaceApiError ? error.detail
-      : error.response?.data && (error.response.data as { detail?: unknown }).detail;
-    const reason = typeof detail === 'string' ? detail
-      : status === undefined ? 'the connection to ai.market was interrupted'
-      : status === 400 ? 'the folder listing request was invalid'
+    const reason = status === undefined ? 'the connection to ai.market was interrupted'
+      : status === 400 ? 'the folder could not be opened; choose the folder again'
       : status === 401 || status === 403 ? 'your sign-in or access to this connection changed'
       : status === 404 ? 'the connection or folder was not found'
       : status === 429 ? 'too many requests to your storage; wait a minute and try again'

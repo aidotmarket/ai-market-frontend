@@ -1,5 +1,6 @@
 'use client';
 
+import Link from 'next/link';
 import { useRef, useState } from 'react';
 import { StorageSetupGuide, type StorageProvider } from './StorageSetupGuide';
 import type { SellerWorkspaceCapabilities } from '@/api/sellerWorkspace';
@@ -29,8 +30,9 @@ export function StorageProviders({ capabilities, busy, onConnectAWS, onConnectR2
           <p className="mt-4 flex-1 text-sm leading-6 text-gray-600">Connect a bucket and a specific folder in your Amazon Web Services account.</p>
           <button type="button" onClick={onConnectAWS} disabled={!awsAvailable || busy !== null}
             className="mt-5 self-start rounded-lg bg-[#3F51B5] px-4 py-2 text-sm font-medium text-white hover:bg-[#303F9F] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#3F51B5] disabled:cursor-not-allowed disabled:opacity-50">
-            {!awsAvailable ? 'AWS setup unavailable' : busy === 'create-connection' ? 'Creating...' : 'Add AWS connection'}
+            {!awsAvailable ? 'AWS setup paused' : busy === 'create-connection' ? 'Creating...' : 'Add AWS connection'}
           </button>
+          {!awsAvailable && <p className="mt-3 text-sm">AWS setup is not enabled here yet. <Link href="/dashboard/listings" className="underline">Manage your listings</Link> while setup is paused.</p>}
           <button ref={(node) => { guideButtons.current.aws = node; }} type="button" onClick={() => setGuide('aws')} aria-expanded={guide === 'aws'} className="mt-3 self-start text-sm font-medium text-indigo-700 underline">Help me set up AWS storage</button>
         </article>
         <article className="flex flex-col rounded-xl border border-gray-200 bg-white p-6">
@@ -40,12 +42,13 @@ export function StorageProviders({ capabilities, busy, onConnectAWS, onConnectR2
           </div>
           <p className="mt-4 flex-1 text-sm leading-6 text-gray-600">Connect data stored in your Cloudflare R2 account.</p>
           <p id="r2-setup-status" className="mt-3 text-xs leading-5 text-gray-500">
-            {r2Available ? 'Use read-only keys restricted to a dedicated bucket.' : 'Cloudflare connection setup is currently unavailable in this Workspace.'}
+            {r2Available ? 'Use read-only keys restricted to a dedicated bucket.' : 'Cloudflare setup is not enabled here yet. Use another storage provider, or manage your existing listings.'}
           </p>
           <button type="button" onClick={onConnectR2} disabled={!r2Available || busy !== null || !onConnectR2} aria-describedby="r2-setup-status"
             className="mt-5 self-start rounded-lg bg-indigo-700 px-4 py-2 text-sm font-medium text-white disabled:cursor-not-allowed disabled:opacity-50">
-            {r2Available ? 'Add Cloudflare R2 connection' : 'Cloudflare setup unavailable'}
+            {r2Available ? 'Add Cloudflare R2 connection' : 'Cloudflare setup paused'}
           </button>
+          {!r2Available && <Link href="/dashboard/listings" className="min-h-11 underline">Manage your listings</Link>}
           <button ref={(node) => { guideButtons.current.r2 = node; }} type="button" onClick={() => setGuide('r2')} aria-expanded={guide === 'r2'} className="mt-3 self-start text-sm font-medium text-indigo-700 underline">Help me set up Cloudflare storage</button>
         </article>
       </div>

@@ -204,7 +204,7 @@ it('blocks licence saving while legal edits are unsaved and clears the block aft
 it('explains when listing drafts are unavailable and hides licence save',async()=>{
  api.readListingSource.mockResolvedValue({version:2,content,connection_current:true});
  render(<SellerListingDraftProvider enabled={false} sampleCapability={false}><SavedWorkspaceData enabled connections={[connection]} listingLicensesEnabled/></SellerListingDraftProvider>);
- expect(await screen.findByText('Licence choice is unavailable because listing drafts are not available right now.')).toBeTruthy();
+ expect(await screen.findByText("Licence choices need a saved listing draft. Open Describe and price to save your draft, then return here.")).toBeTruthy();
  expect(screen.queryByRole('button',{name:'Save licence choice'})).toBeNull();
  expect(api.readListingDraft).not.toHaveBeenCalled();
 });
@@ -261,7 +261,7 @@ it('rolls a tick back with the named alert when the draft PUT fails',async()=>{
   renderData([connection],true);
   const tick=await screen.findByRole('checkbox',{name:/Offer example.csv.*free sample/});fireEvent.click(tick);
   fireEvent.change(screen.getByLabelText(/Upload sample example.csv/),{target:{files:[new File([new Uint8Array(42)],'example.csv')]}});
-  expect((await screen.findByRole('alert')).textContent).toContain('sample_selection_save_failed');
+  expect((await screen.findByRole('alert')).textContent).toContain('Choose the sample again to retry.');
   expect((tick as HTMLInputElement).checked).toBe(false);
 });
 it('does not write the draft after a source save when no persisted sample selection exists',async()=>{

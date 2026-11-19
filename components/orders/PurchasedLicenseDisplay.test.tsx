@@ -18,14 +18,14 @@ it.each([401,403,500])('retains the unavailable notice for HTTP %s',async status
  const f=wire.purchased[0];
  client.get.mockRejectedValue(new AxiosError('error',undefined,undefined,undefined,{status} as never));
  render(<PurchasedLicenseDisplay orderId={f.order_id} listingId={f.listing_id}/>);
- await screen.findByText(/Purchased licence display is unavailable/);
+ await screen.findByText(/We could not load your purchased licence summary/);
  expect(screen.queryByTitle('Original seller evidence for purchased version')).toBeNull();
 });
 it.each(['private, max-age=900','public, no-store'])('keeps malformed/cacheable evidence visible as an error: %s',async policy=>{
  const f=wire.purchased[0];
  client.get.mockResolvedValue({data:f,headers:{'cache-control':policy}});
  render(<PurchasedLicenseDisplay orderId={f.order_id} listingId={f.listing_id}/>);
- await screen.findByText(/Purchased licence display is unavailable/);
+ await screen.findByText(/We could not load your purchased licence summary/);
  expect(screen.queryByTitle('Original seller evidence for purchased version')).toBeNull();
 });
 it.each(wire.purchased)('shows purchased $instrument_display.license_version separately from original seller evidence and current public display',async f=>{
@@ -52,13 +52,13 @@ it.each(wire.purchased)('renders gated $retained_presentation.presentation.prese
  expect(screen.getByText(f.retained_presentation!.notice)).toBeTruthy();
  expect(screen.getByText(`Original snapshot digest: ${f.original_snapshot_hash}`)).toBeTruthy();
  expect(view.container.querySelector('iframe')).toBeNull();
- expect(screen.queryByText('Purchased licence display is unavailable. Your original licence record and purchase access remain available separately.')).toBeNull();
+ expect(screen.queryByText('We could not load your purchased licence summary just now. Open the original licence record on this order for your terms.')).toBeNull();
 });
 it('never renders unverified retained HTML and aborts the prior order read',async()=>{
  const f=wire.purchased[0];
  client.get.mockResolvedValue({data:{...f,retained_presentation:{...f.retained_presentation,presentation:wire.public[2].corrected}},headers:{'cache-control':'private, no-store'}});
  const view=render(<PurchasedLicenseDisplay orderId={f.order_id} listingId={f.listing_id}/>);
- await screen.findByText(/Purchased licence display is unavailable/);
+ await screen.findByText(/We could not load your purchased licence summary/);
  expect(screen.queryByTitle('Original seller evidence for purchased version')).toBeNull();
  const signal=client.get.mock.calls[0][1].signal;
  view.unmount();expect(signal.aborted).toBe(true);

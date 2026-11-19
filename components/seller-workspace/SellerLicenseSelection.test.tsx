@@ -100,7 +100,7 @@ describe('Seller licence selection',()=>{
     fireEvent.click(screen.getByRole('button',{name:'Edit legal details'}));
     fireEvent.change(screen.getByLabelText('Legal name'),{target:{value:'New Name'}});
     fireEvent.click(screen.getByRole('button',{name:'Save legal details'}));
-    expect(await screen.findByText('This legal identity is already used in an accepted licence.')).toBeTruthy();
+    expect(await screen.findByText('Your legal details could not be changed. They may already be used in a licence acceptance. Contact support if they need correction.')).toBeTruthy();
   });
   it.each([undefined,false])('hides legal edit when seller_editable is %s',async seller_editable=>{
     legal.getSellerLegalIdentity.mockResolvedValue({status:'known',source:'seller_typed',legal_name:'Reviewed Name',jurisdiction:'GB',version:3,seller_editable});

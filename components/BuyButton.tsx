@@ -1,4 +1,5 @@
 'use client';
+import { customerActionError } from '@/lib/customerMessages';
 import { ACTION_AUTH_REFRESH, isLegacyActionAuthError } from '@/lib/action-auth-error';
 
 import { useState, useEffect, useLayoutEffect, useRef, useCallback } from 'react';
@@ -435,7 +436,7 @@ export function parseCheckoutRefusal(error: AxiosError, domainEnabled = checkout
       ...(checkoutWebPath(value.web_path) ? { webPath: checkoutWebPath(value.web_path) } : {}),
     };
   }
-  if (typeof detail === 'string') return { code: 'CHECKOUT_FAILED', message: detail };
+  if (typeof detail === 'string') return { code: 'CHECKOUT_FAILED', message: customerActionError('start your purchase') };
   const value = detail && typeof detail === 'object' ? detail as Record<string, unknown> : {};
   const code = typeof value.code === 'string' ? value.code : 'CHECKOUT_FAILED';
   const messages: Record<string, string> = {
@@ -445,21 +446,12 @@ export function parseCheckoutRefusal(error: AxiosError, domainEnabled = checkout
     LICENSE_ACCEPTANCE_INVALID: 'The licence acceptance details are invalid. Review every field and try again.',
     LICENSE_AUTHORITY_REQUIRED: 'Confirm that you are authorised to accept for the named legal business.',
     BUYER_LEGAL_IDENTITY_REQUIRED: 'A verified business legal name and jurisdiction are required before purchase.',
-    SELLER_TERMS_ACCEPTANCE_PENDING: 'This listing cannot be purchased until the seller accepts the current terms.',
+    SELLER_TERMS_ACCEPTANCE_PENDING: 'This listing cannot be purchased until the seller accepts the current terms. Choose another listing, or ask the seller when it will be ready.',
   };
   if (code === 'LEGAL_IDENTITY_CONFLICT') {
-    const sources = Array.isArray(value.sources) ? value.sources : [];
-    const candidates = sources
-      .filter((candidate): candidate is Record<string, unknown> => Boolean(candidate && typeof candidate === 'object'));
-    const described = candidates.map((candidate) => {
-      const source = typeof candidate.source === 'string' ? candidate.source : 'identity';
-      const name = typeof candidate.legal_name === 'string' ? candidate.legal_name : 'missing name';
-      const country = typeof candidate.jurisdiction === 'string' ? candidate.jurisdiction : 'missing jurisdiction';
-      return `${source}: ${name} (${country})`;
-    });
     return {
       code,
-      message: `Your legal identity records conflict${described.length ? ` — ${described.join(' versus ')}` : ''}. Reconcile them before purchasing.`,
+      message: 'Your legal name or country differs between your account records. Review your legal details before purchasing.',
       reconciliationUrl: typeof value.reconciliation_url === 'string'
         ? value.reconciliation_url
         : '/settings/organization/legal-identity',
@@ -467,7 +459,7 @@ export function parseCheckoutRefusal(error: AxiosError, domainEnabled = checkout
   }
   return {
     code,
-    message: messages[code] ?? (typeof value.message === 'string' ? value.message : 'Failed to start checkout. Please try again.'),
+    message: messages[code] ?? customerActionError("start your purchase"),
   };
 }
 

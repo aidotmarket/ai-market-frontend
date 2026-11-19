@@ -1,5 +1,6 @@
 'use client';
 
+import { customerActionError } from '@/lib/customerMessages';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import {
@@ -89,7 +90,7 @@ export default function SellerSetupProgressBar() {
           toast('Complete the sign-in security step before connecting payouts. Refresh seller setup if you already completed it.', 'info');
           void fetchCapabilities();
         } else {
-          toast('Failed to start Stripe connection', 'error');
+          toast(customerActionError("connect your payout account"), 'error');
         }
         setStripeLoading(false);
       }

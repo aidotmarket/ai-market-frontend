@@ -20,7 +20,8 @@ vi.mock('@/api/sellerLegalIdentity',async original=>({...await original<typeof i
 const source={version:1,connection_current:true,content:{connection_id:guidedConnection.id,connection_version:1,objects:[],version_mode:'current' as const}};
 const draft={version:1,updated_at:'now',content:{...emptyGuidedDraft,title:'Sales',description:'Sales description',description_source_version:1,category:'financial-data',tags:'sales',price:'25',license_selection:{...createStandardSelection(),seller_acceptance:{signer_name:'Sam',signer_title:'Owner',authority_confirmed:true}}}};
 function Probe(){const flow=useListingFlow()!;return <><SellerReview active enabled/><output data-testid="completion">{flow.steps[3].state}</output></>;}
-function start(){render(<SellerListingDraftProvider enabled sampleCapability={false}><GuidedListingFlow capabilities={guidedCapabilities} connections={[guidedConnection]} view="review" navigate={()=>{}}><Probe/></GuidedListingFlow></SellerListingDraftProvider>);}
+const navigate = vi.fn();
+function start(){render(<SellerListingDraftProvider enabled sampleCapability={false}><GuidedListingFlow capabilities={guidedCapabilities} connections={[guidedConnection]} view="review" navigate={navigate}><Probe/></GuidedListingFlow></SellerListingDraftProvider>);}
 async function readyApproval(){
  await screen.findByRole('button',{name:'Approve this review'});fireEvent.load(screen.getByTitle('Saved original seller review'));screen.getAllByRole('checkbox').forEach(box=>fireEvent.click(box));
  await waitFor(()=>expect((screen.getByRole('button',{name:'Approve this review'}) as HTMLButtonElement).disabled).toBe(false));
@@ -54,7 +55,8 @@ it('keeps a pre-stamp existing approval visible without saving while step 4 asks
 it('keeps approval blocked with a recovery reason when authoritative reload fails',async()=>{
  start();await readyApproval();expect(screen.getByTestId('completion').textContent).toBe('done');
  mocks.review.mockResolvedValue({approval_available:true,review_hash:'r2',render_hash:'r2',rendered_html:'<p>Saved listing</p>',confirmation_statements:{},draft_version:2,source_version:2,missing_fields:[],approval:null});mocks.get.mockRejectedValue(new Error('offline'));
- fireEvent.click(screen.getByRole('button',{name:'Refresh saved review'}));await waitFor(()=>expect(screen.getAllByText(/Your saved review could not be reconciled/).length).toBeGreaterThan(0));expect(screen.getByTestId('completion').textContent).not.toBe('done');expect(screen.queryByRole('button',{name:'Approve this review'})).toBeNull();expect(mocks.save).not.toHaveBeenCalled();
+ fireEvent.click(screen.getByRole('button',{name:'Refresh saved review'}));await waitFor(()=>expect(screen.getAllByText(/Your storage changed since you last saved/).length).toBeGreaterThan(0));expect(screen.getByTestId('completion').textContent).not.toBe('done');expect(screen.queryByRole('button',{name:'Approve this review'})).toBeNull();expect(mocks.save).not.toHaveBeenCalled();
+ fireEvent.click(screen.getByRole('button',{name:'Choose files'}));expect(navigate).toHaveBeenCalledWith('data');
 });
 
 function MountedEditorFlow({withLicense=false}:{withLicense?:boolean}){

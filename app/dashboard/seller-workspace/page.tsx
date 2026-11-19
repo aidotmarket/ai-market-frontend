@@ -116,9 +116,9 @@ function safeActionMessage(error: unknown): string {
 }
 
 function formatDate(value: string | null): string {
-  if (!value) return 'Not available';
+  if (!value) return 'No date recorded';
   const date = new Date(value);
-  if (Number.isNaN(date.getTime())) return 'Not available';
+  if (Number.isNaN(date.getTime())) return 'No date recorded';
   return new Intl.DateTimeFormat('en', {
     dateStyle: 'medium',
     timeStyle: 'short',
@@ -558,9 +558,9 @@ export default function SellerWorkspacePage() {
         <h1 className="text-2xl font-bold text-gray-900">Seller Workspace</h1>
         <StorageProviders capabilities={null} busy={null} onConnectAWS={handleCreate} />
         <div className="rounded-xl border border-gray-200 bg-white p-8 shadow-sm">
-          <h2 className="text-lg font-semibold text-gray-900">AWS connections are unavailable</h2>
+          <h2 className="text-lg font-semibold text-gray-900">Cloud storage setup is paused</h2>
           <p className="mt-2 text-sm text-gray-600">
-            Cloud storage setup is not currently available. You can still manage your existing listings.
+            Cloud storage setup is not enabled here yet. Manage your existing listings while setup is paused.
           </p>
           <Link href="/dashboard/listings" className="mt-5 inline-flex rounded-lg bg-[#3F51B5] px-4 py-2 text-sm font-medium text-white">Manage listings</Link>
         </div>

@@ -18,12 +18,11 @@ const unavailable = 'Data sheets become available when public business names are
 function errorMessage(error: unknown): string {
   const detail = axios.isAxiosError(error) ? error.response?.data?.detail : undefined;
   const code = typeof detail === 'string' ? detail : typeof detail?.code === 'string' ? detail.code : error instanceof Error ? error.message : '';
+  if (code === 'DOCUMENT_RENDER_BUDGET') return 'This document is too complex to preview. Simplify its formatting and try again.';
   if (code === 'FIRST_PARTY_SESSION_REQUIRED') return 'Sign in on the ai.market website to change documents. API keys and connector sessions cannot change them.';
   if (code === 'DATA_SHEET_REQUIRES_PUBLIC_NAME') return unavailable;
   if (code === 'DATA_SHEET_INVALID_URL') return 'Use a stable, public, non-expiring https address for the PDF, without contact details or a fragment.';
   if (code === 'DATA_SHEET_INVALID_FILENAME') return 'Choose a PDF with a simple filename without contact details.';
-  if (typeof detail === 'string') return /^[A-Z][A-Z0-9_]*$/.test(detail) ? genericError : detail;
-  if (typeof detail?.message === 'string') return detail.message;
   if (Array.isArray(detail)) return detail.map(item => item.msg).join(' ');
   return genericError;
 }
@@ -162,7 +161,7 @@ function DocumentEditor({kind, state, listingId, available, busy, run, previewed
               const metadata = await hashDataSheet(file);
               if (selection === fileGeneration.current) setPdf(metadata);
             } catch (error) {
-              if (selection === fileGeneration.current) setFileError(error instanceof Error ? error.message : 'The PDF could not be read. Choose it again.');
+              if (selection === fileGeneration.current) setFileError('The PDF could not be read. Choose it again.');
             } finally {
               if (selection === fileGeneration.current) setHashing(false);
             }

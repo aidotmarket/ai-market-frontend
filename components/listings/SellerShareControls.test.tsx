@@ -272,7 +272,7 @@ describe('SellerShareControls', () => {
     render(<SellerShareControls listingId="listing-1" />);
     fireEvent.click(screen.getByRole('button', { name: 'Share' }));
 
-    expect((await screen.findByRole('alert')).textContent).toContain('Share controls are unavailable right now.');
+    expect((await screen.findByRole('alert')).textContent).toContain('We could not load your sharing options just now. Try again, or contact support if it keeps happening.');
     expect(screen.queryByRole('button', { name: 'Copy link' })).toBeNull();
   });
 });

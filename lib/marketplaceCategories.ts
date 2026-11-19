@@ -63,7 +63,7 @@ const listingCategoryNames: Readonly<Record<string, string>> = {
   'energy-utilities': 'Energy & Utilities',
   'transportation-logistics': 'Transportation & Logistics',
   'real-estate-property': 'Real Estate & Property',
-  'ai-machine-learning': 'AI & Machine Learning',
+  'ai-machine-learning': 'AI & machine learning',
 };
 
 function normalizeCategory(value: string) {

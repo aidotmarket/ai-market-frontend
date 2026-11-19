@@ -1,7 +1,7 @@
 import { ACTION_AUTH_REFRESH, isLegacyActionAuthError } from './action-auth-error';
 import { SELLER_SETUP_STEPS } from './seller-setup-steps';
 
-export const LISTING_ACTION_FALLBACK = "That didn't work. Please try again or contact support.";
+export const LISTING_ACTION_FALLBACK = "We couldn't update your listing just now. Try again, or contact support if it keeps happening.";
 export const LISTING_ACTION_WORKSPACE = 'Manage this listing in Seller Workspace.';
 
 interface ListingActionError {
@@ -39,12 +39,9 @@ export function formatListingActionError(error: unknown): ListingActionError {
   const draftFailure = listingDraftError(error);
   if (draftFailure) return { message: draftFailure.message };
 
-  // Only plain text detail is eligible for display. Never coerce response data.
-  if (isPlainListingMessage(detail)) {
-    return { message: detail };
+  if (typeof detail === 'string' && detail.trim() === 'This listing has active orders.') {
+    return { message: 'This listing has active orders. Complete those orders before changing its availability.' };
   }
-  if (isPlainListingMessage(responseData)) return { message: responseData };
-  if (isPlainListingMessage(error)) return { message: error };
   console.error('Listing action failed', error);
   return { message: LISTING_ACTION_FALLBACK };
 }
@@ -58,5 +55,5 @@ export function listingDraftError(error:unknown):{message:string;alreadyPublishe
   if(!detail||!['DRAFT_IN_PROGRESS','DRAFT_ALREADY_PUBLISHED'].includes(typeof detail.code==='string'?detail.code:''))return null;
   const message=detail.message;
   if(!isPlainListingMessage(message))return null;
-  return {message,alreadyPublished:detail.code==='DRAFT_ALREADY_PUBLISHED'};
+  return {message:detail.code==='DRAFT_ALREADY_PUBLISHED'?'This draft has already been published. Start another listing to choose new files.':'You already have a listing draft in progress. Open Seller Workspace to finish it before starting another.',alreadyPublished:detail.code==='DRAFT_ALREADY_PUBLISHED'};
 }

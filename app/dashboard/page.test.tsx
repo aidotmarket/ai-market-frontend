@@ -277,7 +277,7 @@ describe('DashboardOverview seller setup 2FA state', () => {
     fireEvent.click(await screen.findByRole('button', { name: 'Enable 2FA' }));
     fireEvent.change(await screen.findByRole('textbox', { name: '6-digit code' }), { target: { value: '123456' } });
     fireEvent.click(screen.getByRole('button', { name: 'Verify and enable' }));
-    expect(await screen.findByText('Invalid verification code')).toBeTruthy();
+    expect(await screen.findByText("We couldn't verify the code just now. Try again, or contact support if it keeps happening.")).toBeTruthy();
     expect(screen.getByText('setup-secret')).toBeTruthy();
     expect(authApi.verify2FASetup).toHaveBeenCalledExactlyOnceWith('123456');
 
@@ -299,6 +299,26 @@ describe('DashboardOverview seller setup 2FA state', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Verify and enable' }));
     await waitFor(() => expect(authApi.verify2FASetup).toHaveBeenCalledWith('123456'));
     expect(await screen.findByRole('heading', { name: 'Backup codes' })).toBeTruthy();
+  });
+
+  it('keeps stats and listing navigation visible when payout status fails, and retries', async () => {
+    capabilitiesApi.getCapabilities.mockResolvedValue({
+      seller: { effective_status: 'active', missing_steps: [] }, next_action: null,
+    });
+    connectApi.getConnectStatus.mockRejectedValueOnce(new Error('private_stripe_error'))
+      .mockResolvedValue({ data: { details_submitted: true, payouts_enabled: false } });
+    sellerApi.getSellerStats.mockResolvedValue({ data: sellerStats });
+    listingsApi.getMyListings.mockResolvedValue({ data: [{ status: 'published' }] });
+    render(<DashboardOverview />);
+    await screen.findByText("We couldn't check your payout account just now.");
+    expect(screen.getByText('$45.50')).toBeTruthy();
+    expect(screen.getByRole('link', { name: 'View listings' }).getAttribute('href')).toBe('/dashboard/listings');
+    expect(screen.queryByText(/private_stripe_error/)).toBeNull();
+    fireEvent.click(screen.getByRole('button', { name: 'Retry' }));
+    // The successful listings read still supplies the held-listing notice after recovery.
+    await screen.findByText('Published listings are not yet purchasable. Finish payout setup to enable sales.');
+    expect(screen.getByText('$45.50')).toBeTruthy();
+    expect(connectApi.getConnectStatus).toHaveBeenCalledTimes(2);
   });
 
   it('renders active seller stats from the real contract shape', async () => {

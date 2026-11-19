@@ -443,7 +443,7 @@ describe('BuyButton licence acceptance', () => {
 
     expect(parseCheckoutRefusal(error)).toEqual({
       code: 'LEGAL_IDENTITY_CONFLICT',
-      message: 'Your legal identity records conflict — billing_entity: Buyer Holdings Ltd (GB) versus typed: Buyer Data Ltd (IE). Reconcile them before purchasing.',
+      message: 'Your legal name or country differs between your account records. Review your legal details before purchasing.',
       reconciliationUrl: '/settings/organization/legal-identity?org=org-1',
     });
   });
@@ -454,7 +454,7 @@ describe('BuyButton licence acceptance', () => {
       data: { detail: { code: 'SELLER_TERMS_ACCEPTANCE_PENDING' } },
       status: 409, statusText: 'Conflict', headers: {}, config: {} as never,
     };
-    expect(parseCheckoutRefusal(error).message).toBe('This listing cannot be purchased until the seller accepts the current terms.');
+    expect(parseCheckoutRefusal(error).message).toBe('This listing cannot be purchased until the seller accepts the current terms. Choose another listing, or ask the seller when it will be ready.');
   });
 
   const customText = '<script>alert(1)</script> **bold**\n\tCafé\n';

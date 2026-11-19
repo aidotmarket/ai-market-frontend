@@ -276,7 +276,7 @@ describe('SellerWorkspacePage safety boundaries', () => {
       fireEvent.click(screen.getByRole('button', { name: 'Choose your files' }));
     });
     expect(screen.queryByText('server-external-id')).toBeNull();
-    expect(screen.getByText('File browsing is not available yet')).toBeTruthy();
+    expect(screen.getByText("Choose another way to prepare your listing")).toBeTruthy();
     act(() => {
       fireEvent.click(screen.getByRole('button', { name: 'Connect your storage' }));
     });
@@ -455,7 +455,7 @@ describe('SellerWorkspacePage safety boundaries', () => {
 
     render(<SellerWorkspacePage />);
 
-    await screen.findByRole('heading', { name: 'AWS connections are unavailable' });
+    await screen.findByRole('heading', { name: 'Cloud storage setup is paused' });
     expect(sellerWorkspaceApi.listSellerWorkspaceConnections).not.toHaveBeenCalled();
     expect(screen.queryByRole('button', { name: 'Add AWS connection' })).toBeNull();
   });

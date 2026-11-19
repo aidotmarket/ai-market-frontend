@@ -16,7 +16,7 @@ describe('file Next saves and confirms',()=>{
  it('saves changed files first, remains on failed save with its reason, and can retry Next',async()=>{
   const failure=new AxiosError('refused',undefined,undefined,undefined,{status:409,data:{detail:'The selected file version changed. Choose current files.'}} as never);const save=vi.fn().mockRejectedValueOnce(failure).mockResolvedValue(undefined);
   render(<WorkspaceData connections={[guidedConnection]} enabled onSaveSelection={save}/>);fireEvent.click(await screen.findByRole('checkbox',{name:'Select weekly/sales.csv'}));
-  fireEvent.click(screen.getByRole('button',{name:'Next: Choose a licence →'}));expect(await screen.findByText('The selected file version changed. Choose current files.')).toBeTruthy();expect(mocks.navigate).not.toHaveBeenCalled();
+  fireEvent.click(screen.getByRole('button',{name:'Next: Choose a licence →'}));expect(await screen.findByText('The files, connection or saved selection changed. Your choices are still here. Reload the Workspace and choose the current files before saving again.')).toBeTruthy();expect(mocks.navigate).not.toHaveBeenCalled();
   fireEvent.click(screen.getByRole('button',{name:'Next: Choose a licence →'}));await waitFor(()=>expect(mocks.navigate).toHaveBeenCalledWith('license'));expect(save).toHaveBeenCalledTimes(2);expect(screen.queryByRole('button',{name:'Save selected files'})).toBeNull();
  });
  it('stays on the file step when files commit but sample reconciliation fails',async()=>{

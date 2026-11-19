@@ -65,21 +65,21 @@ it('captures completed scan progress on an Axios page failure without returning 
  const resolved=vi.fn();
  const scan=resolveFolder('c','data',list).then(resolved);
  await expect(scan).rejects.toBeInstanceOf(FolderRequestError);
- await expect(scan).rejects.toMatchObject({message:'File discovery is unavailable',progress:{files:1,bytes:178362778}});
+ await expect(scan).rejects.toMatchObject({message:'the storage provider did not respond',progress:{files:1,bytes:178362778}});
  expect(resolved).not.toHaveBeenCalled();
  expect(list).toHaveBeenCalledTimes(2);
 });
 
 // Exercise safely() as well as the folder scanner: only the transport is mocked.
 it.each([
- [400,'Folder listing cursor has expired; start again','Folder listing cursor has expired; start again'],
- [400,{provider:'private provider text'},'the folder listing request was invalid'],
+ [400,'Folder listing cursor has expired; start again','the folder could not be opened; choose the folder again'],
+ [400,{provider:'private provider text'},'the folder could not be opened; choose the folder again'],
  [401,undefined,'your sign-in or access to this connection changed'],
  [403,undefined,'your sign-in or access to this connection changed'],
  [404,undefined,'the connection or folder was not found'],
  [500,{provider:'private provider text'},'the storage provider did not respond'],
  [503,undefined,'the storage provider did not respond'],
- [503,'File discovery is unavailable','File discovery is unavailable'],
+ [503,'File discovery is unavailable','the storage provider did not respond'],
  [undefined,undefined,'the connection to ai.market was interrupted'],
 ])('reports cause and completed progress through the real wrapper for %s',async(status,detail,reason)=>{
  transport.get.mockResolvedValueOnce({data:{objects:[file('data/a',178362778),file('data/sub/')],next_cursor:'next'}})

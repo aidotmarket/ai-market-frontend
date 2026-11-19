@@ -50,7 +50,7 @@ describe('order reporting customer UI', () => {
     expect(container.textContent).not.toMatch(/EXCLUDED/);
     expect(screen.getByText('<script>plain title</script>')).toBeTruthy();
     expect(container.querySelector('script')).toBeNull();
-    expect(screen.getAllByText('Not available').length).toBeGreaterThan(0);
+    expect(screen.getAllByText('No details recorded').length).toBeGreaterThan(0);
   });
   it.each(['unavailable', 'unknown'] as const)('enrollment %s never promises available filing', async enrollment => {
     await mount(proposal({ enrollment }));

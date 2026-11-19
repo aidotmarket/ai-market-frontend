@@ -1,5 +1,6 @@
 'use client';
 
+import { customerLoadError } from '@/lib/customerMessages';
 import ListingDocumentsEditor from '@/components/listing/ListingDocumentsEditor';
 
 import MarkdownTextField,{descriptionTooLong} from '@/components/listing/MarkdownTextField';
@@ -108,7 +109,7 @@ export default function EditListingPage() {
         status: l.status || 'draft',
       });
     } catch {
-      toast('Failed to load listing', 'error');
+      toast(customerLoadError("listing"), 'error');
       router.push('/dashboard/listings');
     } finally {
       setLoading(false);

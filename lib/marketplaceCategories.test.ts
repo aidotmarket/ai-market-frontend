@@ -50,9 +50,15 @@ it.each([
   ['energy-utilities', 'Energy & Utilities'],
   ['transportation-logistics', 'Transportation & Logistics'],
   ['real-estate-property', 'Real Estate & Property'],
-  ['ai-machine-learning', 'AI & Machine Learning'],
+  ['ai-machine-learning', 'AI & machine learning'],
   ['future-category', 'Future Category'],
   ['finance', 'Finance'],
 ])('labels category %s', (slug, label) => {
   expect(formatMarketplaceCategoryName(slug)).toBe(label);
+});
+
+it('formats listing category codes and unknown categories for customers', () => {
+  expect(formatMarketplaceCategoryName('ai-machine-learning')).toBe('AI & machine learning');
+  expect(formatMarketplaceCategoryName('other')).toBe('Other');
+  expect(formatMarketplaceCategoryName('climate-research')).toBe('Climate Research');
 });

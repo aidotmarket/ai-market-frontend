@@ -1,5 +1,6 @@
 'use client';
 
+import Link from 'next/link';
 import { useEffect, useRef, useState } from 'react';
 
 export type StorageProvider = 'aws' | 'r2';
@@ -70,7 +71,7 @@ export function StorageSetupGuide({ provider, canConnectAWS, onConnectAWS, onClo
         <a href={step === 0 ? guide.start : guide.console} target="_blank" rel="noopener noreferrer" className="text-sm font-medium text-indigo-700 underline">Open {guide.name === 'AWS S3' ? 'AWS' : 'Cloudflare'} (new tab)</a>
         <a href={provider === 'r2' && step === 2 ? 'https://developers.cloudflare.com/r2/objects/upload-objects/' : provider === 'r2' && step === 1 ? 'https://developers.cloudflare.com/r2/buckets/create-buckets/' : guide.docs} target="_blank" rel="noopener noreferrer" className="text-sm text-indigo-700 underline">Provider’s step-by-step instructions (new tab)</a>
       </div>}
-      {step === 3 && provider === 'aws' && <><button type="button" disabled={!canConnectAWS} onClick={onConnectAWS} className={`mt-4 ${button}`}>Continue to AWS connection</button>{!canConnectAWS && <p className="mt-2 text-sm text-gray-600">AWS connection setup is currently unavailable in this Workspace. Your storage remains in your AWS account.</p>}</>}
+      {step === 3 && provider === 'aws' && <><button type="button" disabled={!canConnectAWS} onClick={onConnectAWS} className={`mt-4 ${button}`}>Continue to AWS connection</button>{!canConnectAWS && <p className="mt-2 text-sm text-gray-600">AWS setup is not enabled here yet. Your files remain in your AWS account. Manage your existing listings while setup is paused. <Link href="/dashboard/listings" className="underline">Manage listings</Link></p>}</>}
       <div className="mt-6 flex flex-wrap gap-3"><button type="button" disabled={step === 0} onClick={() => setStep(step - 1)} className={button}>Back</button>{step < 3 && <button type="button" onClick={() => setStep(step + 1)} className={button}>Continue guide</button>}</div>
       <p className="mt-4 text-xs text-gray-500">These steps are guidance, not a check of your cloud account. Enter access keys only in the connection form, never in this guide or a message. Guide progress lasts while this page is open.</p>
     </section>

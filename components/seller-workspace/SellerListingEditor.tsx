@@ -1,5 +1,5 @@
 'use client';
-import {isPlainListingMessage,listingDraftError} from '@/lib/listing-action-error';
+import {listingDraftError} from '@/lib/listing-action-error';
 
 import ListingDocumentsEditor from '@/components/listing/ListingDocumentsEditor';
 
@@ -72,8 +72,7 @@ export default function SellerListingEditor({ assistant, active = true, initialC
       return true;
     } catch (error) {
       const draftFailure=listingDraftError(error);setAlreadyPublished(draftFailure?.alreadyPublished??false);
-      const detail=axios.isAxiosError(error)?error.response?.data?.detail:null;
-      if (mounted.current) setSaveError(draftFailure?.message??(isPlainListingMessage(detail)?detail:isPlainListingMessage(detail?.message)?detail.message:axios.isAxiosError(error) && error.response?.status === 409
+      if (mounted.current) setSaveError(draftFailure?.message??(axios.isAxiosError(error) && error.response?.status === 409
         ? 'This draft was saved elsewhere. Your edits are still here. Copy any changes you want to keep, then reload the Workspace to open the saved version.'
         : 'Saving could not be confirmed. Your edits are still here. Try saving again.'));
     } finally { savingRef.current = false; if (mounted.current) setSaving(false); }
@@ -148,7 +147,7 @@ export default function SellerListingEditor({ assistant, active = true, initialC
       }
     } catch (error) { if (mounted.current && !requestController.signal.aborted) {
       const status = axios.isAxiosError(error) ? error.response?.status : undefined;
-      setError(status === 402 && axios.isAxiosError(error) && error.response?.data?.detail === 'starter_credits_unavailable' ? 'Starter credits are not available for this account. Your draft is still here and you can continue editing.' : status === 402 ? 'There are not enough starter credits for this request. Your draft is still here and you can continue editing.' : status === 409 || status === 429 ? 'allAI is already working or receiving too many requests. Your draft is still here. Try again shortly.' : 'allAI could not respond. Your draft is still here. Try again.');
+      setError(status === 402 && axios.isAxiosError(error) && error.response?.data?.detail === 'starter_credits_unavailable' ? 'This account has no starter credits for allAI. Your draft is saved. Edit your description and price below to continue.' : status === 402 ? 'There are not enough starter credits for this request. Your draft is still here and you can continue editing.' : status === 409 || status === 429 ? 'allAI is already working or receiving too many requests. Your draft is still here. Try again shortly.' : 'allAI could not respond. Your draft is still here. Try again.');
     } }
     finally { if (controller.current === requestController) { requesting.current = false; if (mounted.current) setIsStreaming(false); } }
   };

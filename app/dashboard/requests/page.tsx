@@ -1,5 +1,6 @@
 'use client';
 
+import { customerLoadError } from '@/lib/customerMessages';
 import { useEffect, useState } from 'react';
 import Link from 'next/link';
 import { useAuthStore } from '@/store/auth';
@@ -56,8 +57,8 @@ function OwnedRequests() {
       })
       .catch((err) => {
         if (obsolete) return;
-        const detail = err instanceof AxiosError ? err.response?.data?.detail : undefined;
-        setError(typeof detail === 'string' && detail.trim() ? detail : 'Failed to load your data requests.');
+
+        setError(customerLoadError("data requests"));
       })
       .finally(() => {
         if (!obsolete) setLoading(false);

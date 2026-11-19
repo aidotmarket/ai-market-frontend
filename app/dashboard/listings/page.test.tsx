@@ -15,6 +15,7 @@ const api = vi.hoisted(() => ({
   getPendingSellerTermsListings: vi.fn(),
   getConnectStatus: vi.fn(),
   unpublishListing: vi.fn(),
+  publishListing: vi.fn(),
   deleteListing: vi.fn(),
 }));
 const legal = vi.hoisted(() => ({ getCurrentTerms: vi.fn() }));
@@ -112,14 +113,14 @@ it.each([403, 500])('renders listings with unknown payouts after Connect returns
   api.getConnectStatus.mockRejectedValue({ response: { status } });
   render(<ListingsPage />);
   expect(await screen.findByText('Seller dataset')).toBeTruthy();
-  expect(screen.queryByText('Failed to load listings.')).toBeNull();
+  expect(screen.queryByText("We couldn't load your listings just now. Try again, or contact support if it keeps happening.")).toBeNull();
   expect(screen.queryByText(/Finish payout setup/)).toBeNull();
 });
 
 it('shows the listings error when listings fail', async () => {
   api.getMyListings.mockRejectedValue(new Error('Listings unavailable'));
   render(<ListingsPage />);
-  expect(await screen.findByText('Failed to load listings.')).toBeTruthy();
+  expect(await screen.findByText("We couldn't load your listings just now. Try again, or contact support if it keeps happening.")).toBeTruthy();
   expect(screen.queryByText('Seller dataset')).toBeNull();
 });
 
@@ -154,7 +155,7 @@ it.each(['loading', 'failure'])('keeps the base Terms 1.1 prompt during metadata
 // These component mocks do not prove database ordering or old-server compatibility.
 function rows(start: number, count: number) {
   return Array.from({ length: count }, (_, i) => ({
-    id: `id-${start + i}`, title: `Owner row ${start + i}`, status: 'unlisted',
+    id: `id-${start + i}`, title: `Owner row ${start + i}`, status: 'published',
     category: 'Research', price: 1, created_at: '2026-09-01T12:00:00Z',
   }));
 }
@@ -279,9 +280,9 @@ it('clears confirmation on page change and retires a delayed TermsGate edit call
   const first = screen.getByText('Owner row 1').closest('tr')!;
   fireEvent.click(within(first).getByRole('button', { name: 'Edit' }));
   fireEvent.click(within(first).getByRole('button', { name: 'Delete' }));
-  expect(button('Confirm')).toBeTruthy();
+  expect(button('Delete listing')).toBeTruthy();
   fireEvent.click(button('Next')); await screen.findByText('Owner row 21');
-  expect(screen.queryByRole('button', { name: 'Confirm' })).toBeNull();
+  expect(screen.queryByRole('button', { name: 'Delete listing' })).toBeNull();
   accepted(); expect(navigation.push).not.toHaveBeenCalled();
   expect(api.deleteListing).not.toHaveBeenCalled();
 });
@@ -297,7 +298,7 @@ it.each(['delete', 'unpublish'])('holds paging through %s acknowledgement and re
   const row = screen.getByText('Owner row 21').closest('tr')!;
   if (kind === 'delete') {
     fireEvent.click(within(row).getByRole('button', { name: 'Delete' }));
-    fireEvent.click(button('Confirm')); fireEvent.click(button('Confirm'));
+    fireEvent.click(button('Delete listing')); fireEvent.click(button('Delete listing'));
   } else fireEvent.click(within(row).getByRole('button', { name: 'Unpublish' }));
   expect(button('Next').disabled).toBe(true); expect(button('Previous').disabled).toBe(true);
   expect(kind === 'delete' ? api.deleteListing : api.unpublishListing).toHaveBeenCalledExactlyOnceWith('id-21');
@@ -313,7 +314,7 @@ it('ignores an old mutation acknowledgement after a principal switch', async () 
   const mutation = deferred<unknown>(); api.deleteListing.mockReturnValue(mutation.promise);
   api.getMyListings.mockResolvedValueOnce({ data: rows(1, 1) }).mockResolvedValueOnce({ data: rows(101, 1) });
   const view = render(<ListingsPage />); await screen.findByText('Owner row 1');
-  fireEvent.click(button('Delete')); fireEvent.click(button('Confirm'));
+  fireEvent.click(button('Delete')); fireEvent.click(button('Delete listing'));
   auth.user = { id: 'seller-b' }; view.rerender(<ListingsPage />); await screen.findByText('Owner row 101');
   await act(async () => mutation.resolve({}));
   expect(api.getMyListings).toHaveBeenCalledTimes(2);
@@ -346,12 +347,12 @@ it('keeps a failed mutation refresh truthful and manually retryable without rest
     .mockRejectedValueOnce(new Error('refresh offline')).mockResolvedValueOnce({ data: rows(2, 20) });
   render(<ListingsPage />); await screen.findByText('Owner row 1');
   const row = screen.getByText('Owner row 1').closest('tr')!;
-  fireEvent.click(within(row).getByRole('button', { name: 'Delete' })); fireEvent.click(button('Confirm'));
+  fireEvent.click(within(row).getByRole('button', { name: 'Delete' })); fireEvent.click(button('Delete listing'));
   await screen.findByRole('alert');
   expect(screen.queryByText('Owner row 1')).toBeNull();
   expect(screen.queryByText('No listings yet')).toBeNull();
   fireEvent.click(button('Retry')); await screen.findByText('Owner row 2');
-  expect(screen.queryByRole('button', { name: 'Confirm' })).toBeNull();
+  expect(screen.queryByRole('button', { name: 'Delete listing' })).toBeNull();
 });
 
 it('preserves all owner statuses, sharing eligibility, TermsGate editing and delete cancellation', async () => {
@@ -362,7 +363,8 @@ it('preserves all owner statuses, sharing eligibility, TermsGate editing and del
   statuses.forEach((status, i) => {
     const row = screen.getByText(`Owner row ${i + 1}`).closest('tr')!;
     expect(within(row).queryByRole('button', { name: 'Unpublish' }) !== null)
-      .toBe(status === 'published' || status === 'unlisted');
+      .toBe(status === 'published');
+    expect(within(row).queryByRole('button', { name: 'Publish' }) !== null).toBe(status === 'unlisted');
     expect(within(row).queryByTestId(`share-id-${i + 1}`) !== null).toBe(status === 'published');
     expect(within(row).getByRole('button', { name: 'Edit' })).toBeTruthy();
     expect(within(row).getByRole('button', { name: 'Delete' })).toBeTruthy();
@@ -373,7 +375,7 @@ it('preserves all owner statuses, sharing eligibility, TermsGate editing and del
   expect(navigation.push).toHaveBeenCalledExactlyOnceWith('/dashboard/listings/id-1/edit');
   fireEvent.click(within(draft).getByRole('button', { name: 'Delete' })); fireEvent.click(button('Cancel'));
   expect(api.deleteListing).not.toHaveBeenCalled();
-  expect(screen.queryByRole('button', { name: 'Confirm' })).toBeNull();
+  expect(screen.queryByRole('button', { name: 'Delete listing' })).toBeNull();
 });
 
 
@@ -411,7 +413,7 @@ it.each(['delete', 'unpublish'])('keeps rows and releases controls after a rejec
   render(<ListingsPage />); await screen.findByText('Owner row 1');
   const row = screen.getByText('Owner row 1').closest('tr')!;
   if (kind === 'delete') {
-    fireEvent.click(within(row).getByRole('button', { name: 'Delete' })); fireEvent.click(button('Confirm'));
+    fireEvent.click(within(row).getByRole('button', { name: 'Delete' })); fireEvent.click(button('Delete listing'));
   } else fireEvent.click(within(row).getByRole('button', { name: 'Unpublish' }));
   await waitFor(() => expect(navigation.toast).toHaveBeenCalledWith(LISTING_ACTION_FALLBACK, 'error'));
   expect(screen.getByText('Owner row 1')).toBeTruthy();
@@ -426,7 +428,7 @@ async function rejectListingAction(data: unknown, kind: 'unpublish' | 'delete' =
   await screen.findByText('Seller dataset');
   if (kind === 'delete') {
     fireEvent.click(button('Delete'));
-    fireEvent.click(button('Confirm'));
+    fireEvent.click(button('Delete listing'));
   } else fireEvent.click(button('Unpublish'));
   await waitFor(() => expect(navigation.toast).toHaveBeenCalledTimes(1));
   // A refusal must retain the listing without a success toast or refresh.
@@ -463,7 +465,7 @@ it('shows readable unpublish readiness guidance with a seller setup link', async
 
 it('dashboard_unpublish_string_detail', async () => {
   expect(await rejectListingAction({ detail: 'This listing has active orders.' }))
-    .toBe('This listing has active orders.');
+    .toBe('This listing has active orders. Complete those orders before changing its availability.');
   expect(screen.queryByRole('link', { name: LISTING_ACTION_WORKSPACE })).toBeNull();
 });
 
@@ -484,7 +486,7 @@ it.each(['unpublish', 'delete'] as const)('dashboard_unpublish_account_switch_di
   const view = render(<ListingsPage />);
   await screen.findByText('Owner row 1');
   if (kind === 'delete') {
-    fireEvent.click(button('Delete')); fireEvent.click(button('Confirm'));
+    fireEvent.click(button('Delete')); fireEvent.click(button('Delete listing'));
   } else fireEvent.click(button('Unpublish'));
   auth.user = { id: 'seller-b' }; view.rerender(<ListingsPage />);
   await screen.findByText('Owner row 101');
@@ -492,4 +494,19 @@ it.each(['unpublish', 'delete'] as const)('dashboard_unpublish_account_switch_di
   expect(navigation.toast).not.toHaveBeenCalled();
   expect(screen.queryByRole('link', { name: LISTING_ACTION_WORKSPACE })).toBeNull();
   expect(api.getMyListings).toHaveBeenCalledTimes(2);
+});
+
+it('labels categories and publishes an unlisted listing with the existing action', async () => {
+  api.getMyListings.mockResolvedValueOnce({ data: [{
+    ...rows(1, 1)[0], status: 'unlisted', category: 'ai-machine-learning',
+  }] }).mockResolvedValue({ data: [{ ...rows(1, 1)[0], category: 'ai-machine-learning' }] });
+  api.publishListing.mockResolvedValue({});
+  render(<ListingsPage />);
+  await screen.findByText('AI & machine learning');
+  expect(screen.queryByRole('button', { name: 'Unpublish' })).toBeNull();
+  fireEvent.click(button('Publish'));
+  await waitFor(() => expect(api.publishListing).toHaveBeenCalledExactlyOnceWith('id-1'));
+  expect(api.unpublishListing).not.toHaveBeenCalled();
+  await screen.findByRole('button', { name: 'Unpublish' });
+  expect(navigation.toast).toHaveBeenCalledWith('Listing published', 'success');
 });

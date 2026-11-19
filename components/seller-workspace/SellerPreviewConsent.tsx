@@ -1,4 +1,5 @@
 'use client';
+import Link from 'next/link';
 import { useEffect, useRef, useState } from 'react';
 import { useAuthStore } from '@/store/auth';
 import { newDecision, nativeSession, readPreview, reviewRevokePreview, revokePreview, type PreviewStatus, type PreviewRevoke, type DecisionReview } from '@/api/connector-seller-settings';
@@ -46,11 +47,11 @@ export function PreviewConsentScreen({ listingId }: { listingId: string }) {
     <h3 className="text-xl font-semibold text-gray-900">Public sample and AI preview consent</h3>
     <div className="space-y-3 border-t border-gray-200 pt-4">
       <label className="flex items-start gap-3 font-semibold text-gray-900"><input className="mt-1 h-4 w-4 shrink-0" type="checkbox" checked={false} disabled /><span>Approve a new or replaced public sample</span></label>
-      <p className="text-sm text-gray-600">Native sample upload and review selection are unavailable. Public sample approval, AI preview consent and licence acceptance are independent decisions.</p>
+      <p className="text-sm text-gray-600">Sample approval is not enabled here yet. Continue preparing your listing in Describe and price. Approving a sample, allowing AI previews and accepting a licence are separate choices.</p>
     </div>
     <div className="space-y-3 border-t border-gray-200 pt-4">
       <label className="flex items-start gap-3 font-semibold text-gray-900"><input className="mt-1 h-4 w-4 shrink-0" type="checkbox" checked={false} disabled /><span>{PREVIEW_CONSENT_WORDING}</span></label>
-      <p className="text-sm text-gray-600">Preview values withheld: the verified native sample adapter is unavailable. Schema, statistics and descriptors only. Consent defaults off; a saved consent alone cannot enable values.</p>
+      <p className="text-sm text-gray-600">AI previews of sample values are not enabled here yet. Buyers can still see column descriptions and summary statistics. Continue preparing your listing without enabling previews. <Link href="/dashboard/seller-workspace" className="underline">Open Seller Workspace</Link></p>
     </div>
     {status && <><p className="text-sm text-gray-600">Saved consent: {status.enabled ? 'On for the current sample' : 'Off, revoked or stale'} · Version {status.version}</p>
       <dl className="grid grid-cols-[minmax(0,1fr)_minmax(0,2fr)] gap-x-4 gap-y-2 text-sm">

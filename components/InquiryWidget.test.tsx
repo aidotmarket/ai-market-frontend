@@ -789,7 +789,7 @@ describe('InquiryWidget', () => {
     typeQuestion('Please contact me at 555-0100.');
 
     expect((await screen.findByRole('alert')).textContent).toContain(
-      'Message held for review. Please revise.'
+      "We couldn't send your question just now. Try again, or contact support if it keeps happening."
     );
     expect(screen.getByRole('button', { name: 'Submit Question' })).toBeTruthy();
     expect((screen.getByRole('textbox') as HTMLTextAreaElement).value).toBe(
@@ -816,7 +816,7 @@ describe('InquiryWidget', () => {
     typeQuestion('short');
 
     expect((await screen.findByRole('alert')).textContent).toContain(
-      'Failed to submit question.'
+      "We couldn't send your question just now. Try again, or contact support if it keeps happening."
     );
     expect(screen.getByRole('button', { name: 'Submit Question' })).toBeTruthy();
   });

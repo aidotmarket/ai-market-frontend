@@ -1,4 +1,5 @@
 'use client';
+import { customerLoadError, customerActionError } from '@/lib/customerMessages';
 import PurchasedLicenseDisplay from '@/components/orders/PurchasedLicenseDisplay';
 import PurchaseEvidence from '@/components/orders/PurchaseEvidence';
 import AcceptedLicenseDocument from '@/components/orders/AcceptedLicenseDocument';
@@ -158,7 +159,7 @@ function OrderDetailVisit({ orderId, txIdParam, userId, sessionGeneration, issue
         if (err instanceof AxiosError && err.response?.status === 404) {
           setError('Order not found.');
         } else {
-          setError(isLegacyActionAuthError(err) ? ACTION_AUTH_REFRESH : 'Failed to load order details.');
+          setError(isLegacyActionAuthError(err) ? ACTION_AUTH_REFRESH : customerLoadError("order details"));
         }
       })
       .finally(() => {
@@ -181,7 +182,7 @@ function OrderDetailVisit({ orderId, txIdParam, userId, sessionGeneration, issue
     setDownloadLoading(true);
     getOrderAccess(orderId)
       .then((data) => { if (!cancelled) setOrderAccess({ orderId, buyerId, status, data }); })
-      .catch(error => { if (!cancelled) setDownloadError(isLegacyActionAuthError(error) ? ACTION_AUTH_REFRESH : 'Download access is unavailable.'); })
+      .catch(error => { if (!cancelled) setDownloadError(isLegacyActionAuthError(error) ? ACTION_AUTH_REFRESH : 'We could not prepare your download access just now. Reload this order, or contact support if it keeps happening.'); })
       .finally(() => { if (!cancelled) setDownloadLoading(false); });
     return () => { cancelled = true; };
   }, [isBuyerOfRecord, order?.buyer_id, order?.workspace_delivery, order?.access_expired, order?.status, order?.delivery_access_state, orderId]);
@@ -299,7 +300,7 @@ function OrderDetailVisit({ orderId, txIdParam, userId, sessionGeneration, issue
                   ))}
                 </ul>
               ) : (
-                <p className="mt-2 text-sm text-gray-600">{downloadError || 'Download access is unavailable.'}</p>
+                <div><p className="mt-2 text-sm text-gray-600">{downloadError || 'We could not prepare your download access just now. Reload this order, or contact support if it keeps happening.'}</p><button type="button" onClick={() => window.location.reload()} className="min-h-11 underline">Reload order</button> <Link href="/support" className="underline">Contact support</Link></div>
               )}
             </div>
           )}
@@ -403,7 +404,7 @@ function OrderTransaction({ orderId, txIdParam, isBuyerOfRecord, isSellerOfRecor
         setTx(updated);
         toast('Receipt confirmed!', 'success');
       } catch (error) {
-        if (lifetime.current === owner) toast(isLegacyActionAuthError(error) ? ACTION_AUTH_REFRESH : 'Failed to confirm receipt.', 'error');
+        if (lifetime.current === owner) toast(isLegacyActionAuthError(error) ? ACTION_AUTH_REFRESH : customerActionError("confirm receipt"), 'error');
       } finally {
         if (lifetime.current === owner) {
           actionPending.current = false;
@@ -428,7 +429,7 @@ function OrderTransaction({ orderId, txIdParam, isBuyerOfRecord, isSellerOfRecor
         setTx(updated);
         toast('Marked as delivered!', 'success');
       } catch (error) {
-        if (lifetime.current === owner) toast(isLegacyActionAuthError(error) ? ACTION_AUTH_REFRESH : 'Failed to mark as delivered.', 'error');
+        if (lifetime.current === owner) toast(isLegacyActionAuthError(error) ? ACTION_AUTH_REFRESH : customerActionError("mark as delivered"), 'error');
       } finally {
         if (lifetime.current === owner) {
           actionPending.current = false;
