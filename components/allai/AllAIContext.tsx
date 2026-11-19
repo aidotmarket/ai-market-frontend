@@ -512,16 +512,14 @@ export function AllAIProvider({ children }: { children: ReactNode }) {
         }
 
         if (res.status === 429) {
-          const limitContent = anonymousSurfaceActive
-            ? resources.safeOutcomes.rate_limited
-            : "You've reached the message limit for this session. Please try again later.";
+          const limitContent = resources.safeOutcomes.rate_limited;
           setMessages((prev) =>
             prev.map((m) =>
               m.id === assistantId
                 ? {
                     ...m,
                     content: limitContent,
-                    safeOutcome: anonymousSurfaceActive ? 'rate_limited' : undefined,
+                    safeOutcome: 'rate_limited',
                   }
                 : m
             )

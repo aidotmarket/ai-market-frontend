@@ -8,6 +8,7 @@ import TicketStatusCard from './TicketStatusCard';
 import AllAINextStep from './AllAINextStep';
 import { useAllAI } from './AllAIContext';
 import { anonymousAllAIResources } from '@/lib/i18n/anonymous-allai';
+import { useAuthStore } from '@/store/auth';
 
 function StreamingDots() {
   return (
@@ -26,7 +27,8 @@ export default function AllAIMessage({
   message: Message;
   isStreaming: boolean;
 }) {
-  const { locale, anonymousSurfaceActive } = useAllAI();
+  const { locale, anonymousSurfaceActive, page } = useAllAI();
+  const { user } = useAuthStore();
   const resources = anonymousAllAIResources(locale);
   if (message.role === 'system') {
     return (
@@ -51,6 +53,8 @@ export default function AllAIMessage({
     message.safeOutcome === 'retrieval_unavailable' ||
     message.safeOutcome === 'no_matches' || message.safeOutcome === 'rate_limited';
   // Use the maintained customer copy even when a safe-failure event supplies older wording.
+  // These four outcomes intentionally override server text so copy and recovery links
+  // stay consistent. Rate-limit copy is account-neutral: signing in does not lift limits.
   const content = hasRecoveryLinks && message.safeOutcome
     ? resources.safeOutcomes[message.safeOutcome]
     : message.content;
@@ -91,22 +95,18 @@ export default function AllAIMessage({
           </Markdown>
         )}
         {hasRecoveryLinks && (
-          // TODO(i18n): Translate recovery link labels into Spanish and Simplified Chinese.
           <div className="mt-2 flex flex-col items-start gap-1">
-            {(message.safeOutcome === 'answer_unverified' || message.safeOutcome === 'retrieval_unavailable') && (
+            {message.safeOutcome !== 'no_matches' && page !== '/find-data' && (
               <Link href="/find-data" className="inline-flex min-h-11 items-center text-blue-400 underline hover:text-blue-300">
-                Search listings directly
+                {resources.recoveryLinks.searchListings}
               </Link>
             )}
-            {message.safeOutcome === 'rate_limited' ? (
-              <Link href="/register" className="inline-flex min-h-11 items-center text-blue-400 underline hover:text-blue-300">
-                Sign up
-              </Link>
-            ) : (
-              <Link href="/requests/new" className="inline-flex min-h-11 items-center text-blue-400 underline hover:text-blue-300">
-                {message.safeOutcome === 'no_matches' ? 'Post a request' : 'Post a request and sellers will come to you'}
-              </Link>
+            {!user && (
+              <p className="text-xs text-white/50">{resources.accountRequired}</p>
             )}
+            <Link href={user ? '/requests/new' : `/register?redirect=${encodeURIComponent('/requests/new')}`} className="inline-flex min-h-11 items-center text-blue-400 underline hover:text-blue-300">
+              {message.safeOutcome === 'no_matches' ? resources.recoveryLinks.postRequest : resources.recoveryLinks.postRequestWithSellers}
+            </Link>
           </div>
         )}
         {message.failureNotice && (
