@@ -25,7 +25,7 @@ export default function SavedWorkspaceData({connections, enabled,sampleLimits,li
   const [alreadyPublished,setAlreadyPublished]=useState(false);
   const [licenseSaveMessage,setLicenseSaveMessage]=useState('');
   const licenseChanged=useRef(false);
-  useEffect(()=>{if(listingLicensesEnabled)requestLoad();},[listingLicensesEnabled,requestLoad]);
+  useEffect(()=>{if(available||listingLicensesEnabled)requestLoad();},[available,listingLicensesEnabled,requestLoad]);
   useEffect(()=>{if(loaded){if(!licenseChanged.current)setLicenseSelection(draft?.content.license_selection??createStandardSelection());setLicenseReady(true);}},[draft?.content.license_selection,loaded]);
   const inFlight = useRef(false);
   const version = useRef(0);
@@ -53,6 +53,7 @@ export default function SavedWorkspaceData({connections, enabled,sampleLimits,li
   }, [retry,flow?.source,draft?.draft_id]);
   async function save(connection: SellerWorkspaceConnection, objects: WorkspaceObject[]) {
     if (inFlight.current) throw new Error('A file selection save is already pending');
+    if(available&&!loaded)throw new DraftNotLoadedError();
     const sampleState=draftState.current;
     if(flow)version.current=flow.source?.version??0;
     inFlight.current = true; setSaving(true);beginSelectionSave();let succeeded=false;
@@ -63,22 +64,24 @@ export default function SavedWorkspaceData({connections, enabled,sampleLimits,li
       if (!pending.current || pending.current.serialized !== serialized || pending.current.version !== version.current)
         pending.current = {serialized, id:crypto.randomUUID(), version:version.current};
       // Bind imported selections to the editor draft, even after another tab replaces it.
-      const result = await saveListingSource(content, pending.current.version, pending.current.id, ...(draft?.authority_version_id&&draft.draft_id?[draft.draft_id]:[]));
+      const result = await saveListingSource(content, pending.current.version, pending.current.id, ...(draft?.draft_id?[draft.draft_id]:[]));
       version.current = result.version;observedVersion.current=result.version; pending.current = null; setSource(result);flow?.sourceSaved(result);
       succeeded=true;
       if (sampleCapability&&sampleState.loaded&&(sampleState.selectionSavePending||sampleState.sampleIndices.length>0||sampleState.draft?.content.sample_decision==='member_files')) {
         try { await sampleState.saveSamples([]); } catch { succeeded=false; /* Source commit remains successful; retry from the sample selector. */ }
       }
     } catch(failure) {
-      if(authorityCode(failure)==='DRAFT_SUPERSEDED'){pending.current=null;try{await reloadDraft();}catch{retryDraft();}}
+      if(authorityCode(failure)==='DRAFT_SUPERSEDED'){flow?.sourceSaveRefused?.(listingDraftError(failure)?.message??'Your draft was replaced. Check the current draft before choosing files again.');pending.current=null;try{await reloadDraft();}catch{retryDraft();}}
       throw failure;
     } finally { finishSelectionSave(succeeded);inFlight.current = false; setSaving(false); }
     return succeeded;
   }
+
   if(flow&&!flow.sourceLoaded)return <p role="status">{flow.sourceError||'Loading your saved file selection…'}</p>;
   if (loading&&!flow) return <p role="status" className="p-5 text-sm text-gray-600">Loading your saved file selection…</p>;
   if (failed) return <div role="alert" className="rounded-xl border border-red-200 p-5 text-sm text-red-800">Your saved file selection could not be loaded.<button className="ml-3 underline" onClick={() => setRetry(value => value + 1)}>Try loading again</button></div>;
-  return <><WorkspaceData connections={connections} enabled={enabled} savedSource={flow?flow.source:source} onSaveSelection={save} saving={saving}
+  const draftBlocked=available&&!loaded;
+  return <>{draftBlocked&&(<div role={draftError?'alert':'status'}>{draftError?'Your saved draft could not be loaded. Retry before saving files.':'Loading your saved draft…'}{draftError&&<button type="button" onClick={retryDraft}>Try loading draft again</button>}</div>)}{(licenseReady||!draftBlocked)&&<fieldset hidden={draftBlocked} disabled={draftBlocked} className="min-w-0 border-0 p-0"><WorkspaceData connections={connections} enabled={enabled} savedSource={flow?flow.source:source} onSaveSelection={save} saving={saving}
     sampleFilesAvailable={sampleCapability&&loaded} initialSampleIndices={sampleIndices} onSaveSampleSelection={saveSamples} onVisibleSampleSelectionChange={setVisibleSampleIndices} sampleLimits={sampleLimits}
     licenseSelection={listingLicensesEnabled?licenseSelection:undefined} onLicenseSelectionChange={listingLicensesEnabled?value=>{licenseChanged.current=true;setLicenseSelection(value);setLicenseSaveMessage('');}:undefined} licenseSaving={licenseSaving} licenseSaveMessage={licenseSaveMessage}
     licenseDraftAvailable={available} licenseDraftLoaded={loaded&&licenseReady} licenseDraftError={draftError} onRetryLicenseDraft={retryDraft} licenseSelectionSaved={draft?.content.license_selection}
@@ -94,5 +97,5 @@ export default function SavedWorkspaceData({connections, enabled,sampleLimits,li
       else if(identityFailure==='unavailable')setLicenseSaveMessage('We could not check your legal details right now. Retry before saving the licence choice.');
       else if(axios.isAxiosError(failure)&&failure.response?.status===409){retryDraft();setLicenseSaveMessage('Your draft was changed elsewhere; we reloaded it. Check your licence choice and save again.');}
       else setLicenseSaveMessage(failure instanceof DraftNotLoadedError?failure.message:'Licence choice could not be saved. Try again.');
-    }finally{setLicenseSaving(false);}}:undefined} />{alreadyPublished&&<StartAnotherListingAction/>}</>;
+    }finally{setLicenseSaving(false);}}:undefined} /></fieldset>}{alreadyPublished&&<StartAnotherListingAction/>}</>;
 }

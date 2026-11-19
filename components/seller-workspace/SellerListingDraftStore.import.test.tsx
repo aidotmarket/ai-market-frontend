@@ -11,7 +11,7 @@ const initial={draft_id:'original',version:1,content:fields,updated_at:''};
 const imported={draft_id:'imported',version:1,content:{...fields,title:'Imported'},updated_at:''};
 const receipt={import_id:'marker',draft_id:'imported',authority_version_id:'version',listing_id:null};
 let store:ReturnType<typeof useSellerListingDraft>,result:Promise<unknown>;
-function Consumer(){store=useSellerListingDraft();return <><p>{store.draft?.content.title}</p><button onClick={()=>{result=store.importDraft({} as AuthorityImportRequest);}}>Import</button></>;}
+function Consumer(){store=useSellerListingDraft();return <><p>{store.draft?.content.title}</p><button onClick={()=>{result=store.importDraft({} as AuthorityImportRequest).then(async receipt=>{try{await store.reload();}catch{/* Receipt survives failed follow-up reads. */}return receipt;});}}>Import</button></>;}
 beforeEach(()=>{resetSellerListingDraftOwnerForTests();api.read.mockReset().mockResolvedValue(initial);api.import.mockReset().mockResolvedValue(receipt);api.save.mockReset();});
 afterEach(()=>cleanup());
 async function mount(){render(<SellerListingDraftProvider enabled sampleCapability={false}><Consumer/></SellerListingDraftProvider>);await screen.findByText('Existing');}
@@ -42,7 +42,7 @@ it('HIGH 2 fences equal-version old editor saves after POST commits and GET fail
  await mount();const saveOld=store.saveListingFields;
  api.read.mockRejectedValueOnce(new Error('GET failed'));
  fireEvent.click(screen.getByRole('button',{name:'Import'}));
- await act(async()=>{await expect(result).rejects.toThrow('GET failed');});
+ await act(async()=>{expect(await result).toEqual(receipt);});
  expect(store.loaded).toBe(false);expect(store.error).toBe(true);expect(store.draft).toBeNull();
  await expect(saveOld(fields)).rejects.toThrow();
  await expect(store.saveListingFields(fields)).rejects.toThrow();

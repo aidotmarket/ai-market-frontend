@@ -121,7 +121,7 @@ it('MEDIUM 7 / CC F3 expiry on an open confirmation screen gives re-export guida
 });
 
 it('MEDIUM 6 exact replay of an older receipt cannot review a later current bucket draft',async()=>{
- draftState.value={loaded:true,draft:{draft_id:'later',content:{}},importDraft:api.import};
+ draftState.value={loaded:true,draft:{draft_id:'later',content:{}},importDraft:api.import,reload:api.draft};
  api.import.mockResolvedValue({import_id:id,draft_id:'older',listing_id:null,authority_version_id:'old-version'});
  api.consume.mockResolvedValue({...pending,route:'/dashboard/seller-workspace',handoff:{version:1,pack_id:id,draft:handoff.draft,provider:'aws',region:'eu-west-1',bucket:'neutral',connection_folder:'vz',pack_prefix:'vz/'+id+'/',file_count:6,selection_sha256:'a'.repeat(64)}});
  api.connections.mockResolvedValue([{id:'connection',bucket:'neutral',provider:'aws',region:'eu-west-1',status:'verified',scope:'whole_bucket'}]);

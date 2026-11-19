@@ -129,7 +129,9 @@ function OwnedSellerListingDraftProvider({owner,enabled,sampleCapability,childre
     await owner.queue.catch(()=>undefined);
     assertAuthSessionOwner(owner.session);
     const checkpoint=readCheckpoint(owner);
-    const value=await readListingDraft(signal);
+    let value:SavedListingDraft|null;
+    try{value=await readListingDraft(signal);}
+    catch(failure){if(!signal?.aborted&&isAuthSessionOwner(owner.session))setError(true);throw failure;}
     assertAuthSessionOwner(owner.session);
     if(signal?.aborted)return value;
     if(!reconcileRead(owner,value,checkpoint))return owner.draft;
@@ -155,11 +157,9 @@ function OwnedSellerListingDraftProvider({owner,enabled,sampleCapability,childre
         owner.draftGeneration+=1;owner.saveRevision+=1;owner.pending=null;
         owner.loaded=false;owner.draft=null;owner.version=0;publish(owner);setLoaded(false);setError(false);
         owner.selectionSaveCount=0;owner.selectionSaveFailed=false;setVisibleSampleIndices(null);
-        let current:SavedListingDraft|null;
-        try{current=await readListingDraft();}catch(failure){setError(true);throw failure;}
-        assertAuthSessionOwner(owner.session);
-        owner.draft=current;owner.version=current?.version??0;owner.loaded=true;
-        publish(owner);setLoaded(true);setError(false);return receipt;
+        // The receipt belongs to the committed POST. The caller can retain it
+        // before attempting a separate, retryable current-draft read.
+        return receipt;
       });
       owner.queue=operation;return operation;
     },

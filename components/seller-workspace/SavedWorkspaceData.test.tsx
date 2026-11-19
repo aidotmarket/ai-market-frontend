@@ -241,13 +241,12 @@ it('blocks licence save until the draft read finishes and offers retry after a r
  api.readListingSource.mockResolvedValue({version:2,content,connection_current:true});
  api.readListingDraft.mockImplementationOnce(()=>new Promise((_resolve,reject)=>{rejectRead=reject;})).mockResolvedValueOnce(null);
  renderLicensedData();
- const button=await screen.findByRole('button',{name:'Save licence choice'});
- expect((button as HTMLButtonElement).disabled).toBe(true);
- expect(screen.getByText('Loading your saved draft…')).toBeTruthy();
+ expect(await screen.findByText('Loading your saved draft…')).toBeTruthy();
+ expect(screen.queryByRole('button',{name:'Save licence choice'})).toBeNull();
  expect(api.saveListingDraft).not.toHaveBeenCalled();
  await act(async()=>rejectRead(new Error('offline')));
  await screen.findByText(/Your saved draft could not be loaded/);
- expect((button as HTMLButtonElement).disabled).toBe(true);
+ expect(screen.queryByRole('button',{name:'Save licence choice'})).toBeNull();
  fireEvent.click(screen.getByRole('button',{name:'Try loading draft again'}));
  await waitFor(()=>expect(api.readListingDraft).toHaveBeenCalledTimes(2));
 });
