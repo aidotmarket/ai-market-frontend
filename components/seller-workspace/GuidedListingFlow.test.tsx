@@ -38,6 +38,15 @@ describe('checklist reads owned at the workspace page',()=>{
   fireEvent.click(within(checklist).getByRole('button',{name:'Next: Review →'}));expect(navigate).toHaveBeenCalledWith('review');expect(mocks.review).toHaveBeenCalledOnce();
   const collapse=within(checklist).getByRole('button',{name:/Listing checklist/});expect(collapse.getAttribute('aria-expanded')).toBe('false');fireEvent.click(collapse);expect(collapse.getAttribute('aria-expanded')).toBe('true');
  });
+ it('keeps verified storage complete and labels only the first unfinished step Next',async()=>{
+  mocks.source.mockResolvedValue(null);mocks.draft=null;render(<Harness/>);
+  const checklist=screen.getByRole('complementary',{name:'Listing checklist'});
+  await waitFor(()=>expect(within(checklist).getByRole('button',{name:'Next: Choose your files →'})).toBeTruthy());
+  const storage=within(checklist).getByRole('button',{name:/1\. Connect your storage/});
+  expect(storage.textContent).toContain('Complete');expect(storage.textContent).not.toContain('Next');
+  expect(within(checklist).getByRole('button',{name:/2\. Choose your files/}).textContent).toContain('To do · Next');
+  expect(within(checklist).queryByText(/Up to date/)).toBeNull();
+ });
  it('shows server refusal and marks Describe and price as Next',async()=>{
   mocks.review.mockResolvedValue({draft_version:2,source_version:1,missing_fields:['tags'],approval:null});render(<Harness/>);
   const checklist=screen.getByRole('complementary',{name:'Listing checklist'});await waitFor(()=>expect(within(checklist).getByRole('button',{name:'Next: Describe and price →'})).toBeTruthy());expect(screen.getByText('Add at least one tag in Describe and price, then save.')).toBeTruthy();

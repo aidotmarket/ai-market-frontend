@@ -512,14 +512,17 @@ export function AllAIProvider({ children }: { children: ReactNode }) {
         }
 
         if (res.status === 429) {
-          const limitContent = resources.safeOutcomes.rate_limited;
+          const limitBody = await res.json().catch(() => null);
+          const limitOutcome = limitBody?.detail?.dimension === 'turn_input'
+            ? 'message_too_long' : 'rate_limited';
+          const limitContent = resources.safeOutcomes[limitOutcome];
           setMessages((prev) =>
             prev.map((m) =>
               m.id === assistantId
                 ? {
                     ...m,
                     content: limitContent,
-                    safeOutcome: 'rate_limited',
+                    safeOutcome: limitOutcome,
                   }
                 : m
             )

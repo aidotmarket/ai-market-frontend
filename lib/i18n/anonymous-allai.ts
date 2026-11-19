@@ -8,6 +8,7 @@ export type AnonymousSafeOutcome =
   | 'answer_unverified'
   | 'surface_disabled'
   | 'rate_limited'
+  | 'message_too_long'
   | 'unsupported_language';
 
 interface AnonymousAllAIResources {
@@ -57,6 +58,7 @@ export const ANONYMOUS_ALLAI_RESOURCES: Record<
       answer_unverified: "I couldn't check that answer against current listings, so I won't guess. You can search listings directly, or post a request and sellers will come to you.",
       surface_disabled: 'The AI assistant is temporarily unavailable.',
       rate_limited: "You've reached the chat limit for now. Please try again later. Meanwhile you can search listings directly, or post a request and sellers will come to you.",
+      message_too_long: 'That message is too long. Please shorten it and send it again.',
       unsupported_language: "That language isn't supported yet. Please choose English, Spanish, or Simplified Chinese.",
     },
   },
@@ -83,6 +85,7 @@ export const ANONYMOUS_ALLAI_RESOURCES: Record<
       answer_unverified: 'No pude contrastar esa respuesta con los anuncios actuales, así que no voy a adivinar. Puedes buscar anuncios directamente o publicar una solicitud para que los vendedores contacten contigo.',
       surface_disabled: 'El asistente de IA no está disponible temporalmente.',
       rate_limited: 'Has alcanzado el límite del chat por ahora. Inténtalo de nuevo más tarde. Mientras tanto, puedes buscar anuncios directamente o publicar una solicitud para que los vendedores contacten contigo.',
+      message_too_long: 'Ese mensaje es demasiado largo. Acórtalo y envíalo de nuevo.',
       unsupported_language: 'Ese idioma aún no es compatible. Elige inglés, español o chino simplificado.',
     },
   },
@@ -109,6 +112,7 @@ export const ANONYMOUS_ALLAI_RESOURCES: Record<
       answer_unverified: '无法根据当前商品核实该回答，所以我不会猜测。你可以直接搜索商品，或发布需求，让卖家联系你。',
       surface_disabled: 'AI 助手暂时不可用。',
       rate_limited: '你目前已达到聊天使用上限，请稍后重试。在此期间，你可以直接搜索商品，或发布需求，让卖家联系你。',
+      message_too_long: '这条消息太长了。请缩短后重新发送。',
       unsupported_language: '暂不支持该语言。请选择英语、西班牙语或简体中文。',
     },
   },

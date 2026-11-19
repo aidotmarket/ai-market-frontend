@@ -14,7 +14,7 @@ describe('guided listing saved progress',()=>{
   const boundaries=[{...base,source:null,draft:null,connections:[]},{...base,source:null,draft:null},{...base,draft:null},base,{...base,review},{...base,review,publication:{approval_id:'a'} as PublicationReceipt}];
   expect(boundaries.map(b=>listingSteps(b).filter(s=>s.next).length)).toEqual([1,1,1,1,1,0]);
   expect(boundaries.map(b=>listingSteps(b).find(s=>s.next)?.view)).toEqual(['storage','data','license','review','publish',undefined]);
-  boundaries.forEach(b=>listingSteps(b).forEach(s=>{if(s.state!=='done')expect(s.reason.trim()).not.toBe('');}));
+  boundaries.forEach(b=>listingSteps(b).forEach(s=>{if(s.state==='done'||s.state==='skipped')expect(s.next).toBe(false);if(s.state!=='done')expect(s.reason.trim()).not.toBe('');}));
  });
  it('distinguishes work available to do from blocked dependencies',()=>{const steps=listingSteps({...base,connections:[],source:null,draft:null});expect(steps[2].state).toBe('to do');expect(steps[1].state).toBe('blocked');});
  it('skips licence choice when off',()=>{expect(listingSteps({...base,licensesEnabled:false,draft:null})[2].state).toBe('skipped');});

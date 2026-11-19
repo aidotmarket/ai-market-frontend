@@ -13,6 +13,7 @@ describe('anonymous allAI locale registry', () => {
       'answer_unverified',
       'surface_disabled',
       'rate_limited',
+      'message_too_long',
       'unsupported_language',
     ];
 
