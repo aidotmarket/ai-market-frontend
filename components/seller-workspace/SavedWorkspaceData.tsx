@@ -114,11 +114,11 @@ export default function SavedWorkspaceData({connections, enabled,sampleLimits,li
     return succeeded;
   }
 
+  const draftBlocked=available&&!loaded;
   if(sourceDraftChanged||draftChanged)return <div role="alert" className="text-sm text-red-800">Your listing draft changed. Reload the current draft before saving your files again. <button type="button" disabled={reloading} className="underline" onClick={()=>void reloadCurrentSource()}>Reload current draft</button></div>;
-  if(flow&&!flow.sourceLoaded)return <p role="status">{flow.sourceError||'Loading your saved file selection…'}</p>;
+  if(flow&&!flow.sourceLoaded&&!(draftBlocked&&draftError))return <p role="status">{flow.sourceError||'Loading your saved file selection…'}</p>;
   if (failed) return <div role="alert" className="rounded-xl border border-red-200 p-5 text-sm text-red-800">Your saved file selection could not be loaded.<button className="ml-3 underline" onClick={() => setRetry(value => value + 1)}>Try loading again</button></div>;
   if (!sourceReady&&!flow) return <>{saveNotice&&<p role="alert">{saveNotice}</p>}<p role="status" className="p-5 text-sm text-gray-600">Loading your saved file selection…</p></>;
-  const draftBlocked=available&&!loaded;
   return <>{saveNotice&&<p role="alert" className="text-sm text-red-800">{saveNotice}</p>}{draftBlocked&&(<div role={draftError?'alert':'status'}>{draftError?'Your saved draft could not be loaded. Retry before saving files.':'Loading your saved draft…'}{draftError&&<button type="button" onClick={retryDraft}>Try loading draft again</button>}</div>)}{(licenseReady||!draftBlocked)&&<fieldset hidden={draftBlocked} disabled={draftBlocked} className="min-w-0 border-0 p-0"><WorkspaceData key={draft?.draft_id??'empty'} connections={connections} enabled={enabled} savedSource={flow?flow.source:source} onSaveSelection={save} saving={saving}
     sampleFilesAvailable={sampleCapability&&loaded} initialSampleIndices={sampleIndices} onSaveSampleSelection={saveSamples} onVisibleSampleSelectionChange={setVisibleSampleIndices} sampleLimits={sampleLimits}
     licenseSelection={listingLicensesEnabled?licenseSelection:undefined} onLicenseSelectionChange={listingLicensesEnabled?value=>{licenseChanged.current=true;setLicenseSelection(value);setLicenseSaveMessage('');}:undefined} licenseSaving={licenseSaving} licenseSaveMessage={licenseSaveMessage}
