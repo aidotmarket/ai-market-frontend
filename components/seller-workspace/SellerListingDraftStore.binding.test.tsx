@@ -26,7 +26,7 @@ it.each(['content','source'] as const)('binds stale imported %s writes at the se
  let current=a;const superseded=new Set<string>();const writes:Array<Record<string,unknown>>=[];
  const adapter:AxiosAdapter=async config=>{
    let data:unknown;
-   if(config.method==='get')data=config.url?.endsWith('listing-source')?{source:null}:{draft:rows.get(current)};
+   if(config.method==='get')data=config.url?.endsWith('listing-source')?{source:null,current_draft_id:current}:{draft:rows.get(current)};
    else{
      const body=JSON.parse(config.data);writes.push(body);
      if(body.draft_id){expect(body.csrf).toBe(nativeSession().csrf);expect(config.headers.get('X-CSRF-Token')).toBe(nativeSession().csrf);}
@@ -34,7 +34,7 @@ it.each(['content','source'] as const)('binds stale imported %s writes at the se
      if(superseded.has(target))throw new AxiosError('superseded','ERR_BAD_REQUEST',config,undefined,{status:409,statusText:'Conflict',headers:{},config,data:{detail:{code:'DRAFT_SUPERSEDED'}}});
      const row=rows.get(target)!;
      if(body.expected_version!==row.version)throw new Error('version conflict');
-     row.content=body.content;row.version+=1;data={draft:row,source:{version:row.version,content:body.content,connection_current:true}};
+     row.content=body.content;row.version+=1;data={draft:row,current_draft_id:current,source:{version:row.version,content:body.content,connection_current:true}};
    }
    return {data,status:200,statusText:'OK',headers:{},config};
  };

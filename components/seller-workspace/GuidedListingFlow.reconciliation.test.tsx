@@ -26,7 +26,7 @@ async function readyApproval(){
  await screen.findByRole('button',{name:'Approve this review'});fireEvent.load(screen.getByTitle('Saved original seller review'));screen.getAllByRole('checkbox').forEach(box=>fireEvent.click(box));
  await waitFor(()=>expect((screen.getByRole('button',{name:'Approve this review'}) as HTMLButtonElement).disabled).toBe(false));
 }
-beforeEach(()=>{let id=0;vi.spyOn(globalThis.crypto,'randomUUID').mockImplementation(()=>`00000000-0000-4000-8000-${String(++id).padStart(12,'0')}`);vi.stubGlobal('fetch',vi.fn(()=>{throw new Error('Unexpected network request');}));resetSellerListingDraftOwnerForTests();mocks.get.mockImplementation(async url=>({data:url.endsWith('categories')?categoryRows:{source}}));mocks.draft.mockResolvedValue(draft);mocks.review.mockResolvedValue({approval_available:true,review_hash:'r',render_hash:'r',rendered_html:'<p>Saved listing</p>',confirmation_statements:{},draft_version:1,source_version:1,missing_fields:[],approval:null});});
+beforeEach(()=>{let id=0;vi.spyOn(globalThis.crypto,'randomUUID').mockImplementation(()=>`00000000-0000-4000-8000-${String(++id).padStart(12,'0')}`);vi.stubGlobal('fetch',vi.fn(()=>{throw new Error('Unexpected network request');}));resetSellerListingDraftOwnerForTests();mocks.get.mockImplementation(async url=>({data:url.endsWith('categories')?categoryRows:{source,current_draft_id:null}}));mocks.draft.mockResolvedValue(draft);mocks.review.mockResolvedValue({approval_available:true,review_hash:'r',render_hash:'r',rendered_html:'<p>Saved listing</p>',confirmation_statements:{},draft_version:1,source_version:1,missing_fields:[],approval:null});});
 afterEach(()=>{cleanup();vi.clearAllMocks();vi.restoreAllMocks();vi.unstubAllGlobals();});
 it('reloads an externally changed source and draft on Review refresh and blocks a stale description',async()=>{
  start();await readyApproval();expect(screen.getByTestId('completion').textContent).toBe('done');
@@ -41,7 +41,7 @@ it('reloads an externally changed source and draft on Review refresh and blocks 
  expect(status.querySelector('button')).toBeNull();
  expect(screen.queryByRole('alert')).toBeNull();
  expect(screen.queryByRole('button',{name:'Retry review'})).toBeNull();
- await waitFor(()=>expect(finishSource).toBeTruthy());finishSource({data:{source:{...source,version:2}}});
+ await waitFor(()=>expect(finishSource).toBeTruthy());finishSource({data:{source:{...source,version:2},current_draft_id:null}});
  await waitFor(()=>expect(screen.getAllByText(/Your files changed after this description/).length).toBeGreaterThan(0));expect(screen.getByTestId('completion').textContent).not.toBe('done');expect(mocks.draft).toHaveBeenCalledTimes(2);expect(mocks.save).not.toHaveBeenCalled();
 });
 it('withdraws step 4 for a refreshed missing-fields refusal after an external draft change',async()=>{
@@ -51,7 +51,7 @@ it('withdraws step 4 for a refreshed missing-fields refusal after an external dr
  await waitFor(()=>expect(screen.getAllByText('Add at least one tag in Describe and price, then save.').length).toBeGreaterThan(0));expect(screen.getByTestId('completion').textContent).not.toBe('done');expect(screen.queryByRole('button',{name:'Approve this review'})).toBeNull();expect(mocks.draft).toHaveBeenCalledTimes(2);
 });
 it.each([{},[{slug:'x'}],[{slug:1,name:'Invalid'}]])('routes invalid category response %j through read recovery',async data=>{
- mocks.get.mockImplementation(async url=>({data:url.endsWith('categories')?data:{source}}));start();await screen.findByText(/Your saved files and category list could not be loaded/);expect(screen.getByTestId('completion').textContent).not.toBe('done');expect(mocks.save).not.toHaveBeenCalled();
+ mocks.get.mockImplementation(async url=>({data:url.endsWith('categories')?data:{source,current_draft_id:null}}));start();await screen.findByText(/Your saved files and category list could not be loaded/);expect(screen.getByTestId('completion').textContent).not.toBe('done');expect(mocks.save).not.toHaveBeenCalled();
 });
 it('keeps a pre-stamp existing approval visible without saving while step 4 asks for confirmation',async()=>{
  mocks.draft.mockResolvedValue({...draft,content:{...draft.content,description_source_version:null}});

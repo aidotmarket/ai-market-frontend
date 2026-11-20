@@ -33,6 +33,7 @@ export default function VectoraizImport({mode='bucket',gatewayId}:{mode?:'bucket
   const [accountConfirmed,setAccountConfirmed]=useState(false),[targetConfirmed,setTargetConfirmed]=useState(false);
   const [busy,setBusy]=useState(false),[error,setError]=useState<string|null>(null);
   const [progress,setProgress]=useState<string[]>([]);
+  const [importReadPending,setImportReadPending]=useState(false);
   const [receipt,setReceipt]=useState<AuthorityImportReceipt|null>(null);
   const request=useRef<AuthorityImportRequest|null>(null);
   const restoreAllowed=useRef(false);
@@ -41,7 +42,7 @@ export default function VectoraizImport({mode='bucket',gatewayId}:{mode?:'bucket
   const importing=useRef<number|null>(null);
   const abort=useRef<AbortController|null>(null);
   useEffect(()=>{
-    const captured=()=>{++run.current;abort.current?.abort();bootstrap.current=null;request.current=null;setPending(null);setReceipt(null);setTarget(null);setFiles([]);setCandidates([]);setConnections([]);setGateways([]);setChoice('');setTerms('');setAccountConfirmed(false);setTargetConfirmed(false);setBusy(false);setProgress([]);setIntake(v=>v+1);};
+    const captured=()=>{++run.current;abort.current?.abort();bootstrap.current=null;request.current=null;setPending(null);setReceipt(null);setImportReadPending(false);setTarget(null);setFiles([]);setCandidates([]);setConnections([]);setGateways([]);setChoice('');setTerms('');setAccountConfirmed(false);setTargetConfirmed(false);setBusy(false);setProgress([]);setIntake(v=>v+1);};
     window.addEventListener(HANDOFF_CAPTURED,captured);
     return()=>window.removeEventListener(HANDOFF_CAPTURED,captured);
   },[]);
@@ -54,7 +55,7 @@ export default function VectoraizImport({mode='bucket',gatewayId}:{mode?:'bucket
   },[pending]);
   useEffect(()=>{
     const generation=++run.current;const same=sessionLifecycle();
-    restoreAllowed.current=false;setCanRestore(false);setPending(null);setReceipt(null);setGatewayDraft(undefined);setTarget(null);setError(null);setTerms('');request.current=null;
+    restoreAllowed.current=false;setCanRestore(false);setPending(null);setReceipt(null);setImportReadPending(false);setGatewayDraft(undefined);setTarget(null);setError(null);setTerms('');request.current=null;
     if(!account)return;
     // One consumption per mounted entry, including React Strict Mode's replay.
     if(bootstrap.current?.account!==account){
@@ -162,7 +163,7 @@ export default function VectoraizImport({mode='bucket',gatewayId}:{mode?:'bucket
     setBusy(true);setError(null);
     try{
       const draft=await (store?store.reload():readListingDraft());
-      if(same()&&generation===run.current&&!store)setGatewayDraft(draft);
+      if(same()&&generation===run.current){if(!store)setGatewayDraft(draft);setImportReadPending(false);}
     }catch{if(same()&&generation===run.current)setError('Your import succeeded, but your saved draft could not be loaded. Try loading it again.');}
     finally{if(same()&&generation===run.current)setBusy(false);}
   }
@@ -180,7 +181,7 @@ export default function VectoraizImport({mode='bucket',gatewayId}:{mode?:'bucket
       if(!same()||generation!==run.current)return;
       completed=true;saveAuthorityReceipt(account!,result);setReceipt(result);setPending(null);request.current=null;
       // Retain POST completion before either provider or gateway reads current.
-      setGatewayDraft(undefined);await loadImportedDraft();
+      setImportReadPending(true);setGatewayDraft(undefined);await loadImportedDraft();
     }catch(cause){
       if(same()&&generation===run.current){
         if(authorityCode(cause)==='AUTHORITY_PURCHASER_STALE'){
@@ -205,7 +206,7 @@ export default function VectoraizImport({mode='bucket',gatewayId}:{mode?:'bucket
   const currentDraft=store?.loaded?store.draft:gatewayDraft;
   const matchingReceipt=receipt&&(currentDraft?.draft_id===receipt.draft_id)?receipt:null;
   const reviewVersion=restoreAllowed.current?(draftVersion!==undefined?draftVersion:matchingReceipt?.authority_version_id):null;
-  if(receipt&&!pending&&(store?!store.loaded:gatewayDraft===undefined))return <section className="space-y-3 rounded border bg-white p-4"><h2>Imported from vectorAIz</h2>
+  if(receipt&&!pending&&importReadPending)return <section className="space-y-3 rounded border bg-white p-4"><h2>Imported from vectorAIz</h2>
     <p>Your import succeeded. Load your saved draft to review it before publishing.</p>
     {error&&<p role="alert">{error}</p>}
     <button type="button" disabled={busy} onClick={()=>void loadImportedDraft()} className="rounded border px-3 py-2">{busy?'Loading saved draft…':'Try loading draft again'}</button>

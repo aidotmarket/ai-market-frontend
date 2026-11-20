@@ -29,18 +29,20 @@ export default function SavedWorkspaceData({connections, enabled,sampleLimits,li
   useEffect(()=>{if(loaded){if(!licenseChanged.current)setLicenseSelection(draft?.content.license_selection??createStandardSelection());setLicenseReady(true);}},[draft?.content.license_selection,loaded]);
   const inFlight = useRef(false);
   const version = useRef(0);
+  const currentDraftId=useRef<string|null>(null);
   const observedVersion=useRef<number|null>(null);
   const draftState=useRef({draft,loaded,sampleIndices,selectionSavePending,saveSamples});
-  const pending = useRef<{serialized: string; id: string; version: number; draftId: string | null} | null>(null);
+  const pending = useRef<{serialized: string; id: string; version: number; draftId: string | null; targetId?: string} | null>(null);
   useEffect(()=>{draftState.current={draft,loaded,sampleIndices,selectionSavePending,saveSamples};},[draft,loaded,sampleIndices,selectionSavePending,saveSamples]);
   useEffect(() => {
-    if(flow){version.current=flow.source?.version??0;observedVersion.current=version.current;setLoading(false);return;}
+    if(flow){currentDraftId.current=flow.sourceCurrentDraftId;version.current=flow.source?.version??0;observedVersion.current=version.current;setLoading(false);return;}
     let current = true;
     setLoading(true); setFailed(false);
     readListingSource(draft?.draft_id)
       .then(async result => { if (current) {
-        const nextVersion=result?.version??0;const changed=observedVersion.current!==null&&observedVersion.current!==nextVersion;
-        observedVersion.current=nextVersion;setSource(result);version.current=nextVersion;
+        currentDraftId.current=result.current_draft_id;
+        const nextVersion=result.source?.version??0;const changed=observedVersion.current!==null&&observedVersion.current!==nextVersion;
+        observedVersion.current=nextVersion;setSource(result.source);version.current=nextVersion;
         if(changed&&sampleCapability){
           const state=draftState.current;beginSelectionSave();let cleared=false;
           try{if(state.loaded&&(state.selectionSavePending||state.sampleIndices.length>0||state.draft?.content.sample_decision==='member_files'))await state.saveSamples([]);cleared=true;}
@@ -50,7 +52,7 @@ export default function SavedWorkspaceData({connections, enabled,sampleLimits,li
       } })
       .catch(() => { if (current) setFailed(true); }).finally(() => { if (current) setLoading(false); });
     return () => { current = false; };
-  }, [retry,flow?.source,draft?.draft_id]);
+  }, [retry,flow?.source,flow?.sourceCurrentDraftId,draft?.draft_id]);
   async function save(connection: SellerWorkspaceConnection, objects: WorkspaceObject[]) {
     if (inFlight.current) throw new Error('A file selection save is already pending');
     if(available&&!loaded)throw new DraftNotLoadedError();
@@ -61,17 +63,20 @@ export default function SavedWorkspaceData({connections, enabled,sampleLimits,li
       const content: SourceContent = {connection_id:connection.id, connection_version:connection.version, version_mode:'current',
         objects: objects.map(({key, version_id, etag, size}) => ({key, version_id, etag, size}))};
       const serialized = JSON.stringify(content);
-      const observedDraftId=draft?.draft_id??null;
-      if (!pending.current || pending.current.serialized !== serialized || pending.current.version !== version.current || pending.current.draftId !== observedDraftId)
-        pending.current = {serialized, id:crypto.randomUUID(), version:version.current, draftId:observedDraftId};
+      const observedDraftId=currentDraftId.current;
+      // An uncertain retry must retain its entire request, even if a read has
+      // since learned the draft created by the original null save.
+      if (!pending.current || pending.current.serialized !== serialized)
+        pending.current = {serialized, id:crypto.randomUUID(), version:version.current, draftId:observedDraftId, targetId:draft?.authority_version_id?draft.draft_id??undefined:undefined};
       // Bind every save, including an observed empty draft. Only imported drafts
       // need the explicit native target and its lineage authorization.
-      const result = await saveListingSource(content, pending.current.version, pending.current.id, pending.current.draftId, ...(draft?.authority_version_id&&draft.draft_id?[draft.draft_id]:[]));
-      version.current = result.version;observedVersion.current=result.version; pending.current = null; setSource(result);flow?.sourceSaved(result);
+      const result = await saveListingSource(content, pending.current.version, pending.current.id, pending.current.draftId, pending.current.targetId);
+      currentDraftId.current=result.current_draft_id;version.current = result.source.version;observedVersion.current=result.source.version; pending.current = null; setSource(result.source);flow?.sourceSaved(result);
       succeeded=true;
       if (sampleCapability&&sampleState.loaded&&(sampleState.selectionSavePending||sampleState.sampleIndices.length>0||sampleState.draft?.content.sample_decision==='member_files')) {
         try { await sampleState.saveSamples([]); } catch { succeeded=false; /* Source commit remains successful; retry from the sample selector. */ }
       }
+      if(available&&loaded){try{await reloadDraft();}catch{retryDraft();}}
     } catch(failure) {
       if(authorityCode(failure)==='DRAFT_SUPERSEDED'){flow?.sourceSaveRefused?.(listingDraftError(failure)?.message??'Your draft was replaced. Check the current draft before choosing files again.');pending.current=null;try{await reloadDraft();}catch{retryDraft();}}
       throw failure;

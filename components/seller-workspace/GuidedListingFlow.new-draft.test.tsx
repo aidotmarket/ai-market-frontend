@@ -18,7 +18,7 @@ const mocks=vi.hoisted(()=>({source:vi.fn(),review:vi.fn(),publication:vi.fn(),c
 const sampleObject=vi.hoisted(()=>({key:'data/example.csv',version_id:null,etag:'example',size:42,last_modified:null,format_candidate:'csv'}));
 vi.mock('@/api/sellerWorkspace',async original=>({...await original<object>(),listWorkspaceObjects:vi.fn(async()=>({objects:[sampleObject],next_cursor:null}))}));
 vi.mock('@/api/sellerLegalIdentity',async original=>({...await original<object>(),getSellerLegalIdentity:vi.fn(async()=>({status:'known',source:'stripe_connect',legal_name:'Sam Seller Ltd',jurisdiction:'US',version:4,seller_editable:false}))}));
-vi.mock('@/api/sellerListingSource',()=>({readListingSource:mocks.source,readSellerCategories:mocks.categories}));
+vi.mock('@/api/sellerListingSource',()=>({readListingSource:async(id?:string)=>({source:await mocks.source(id),current_draft_id:id??null}),readSellerCategories:mocks.categories}));
 vi.mock('@/api/sellerListingReview',async original=>({...await original<object>(),readListingReview:mocks.review}));
 vi.mock('@/api/sellerListingPublication',()=>({readPublication:mocks.publication}));
 vi.mock('@/api/capabilities',()=>({getCapabilities:mocks.account}));

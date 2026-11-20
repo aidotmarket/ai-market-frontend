@@ -7,7 +7,7 @@ import {SellerListingDraftProvider,resetSellerListingDraftOwnerForTests} from ".
 import {categoryRows,emptyGuidedDraft,guidedCapabilities,guidedConnection,guidedObjects} from "@/tests/guidedListingFixture";
 const api=vi.hoisted(()=>({draft:vi.fn(),source:vi.fn(),save:vi.fn(),objects:vi.fn()}));
 vi.mock("@/api/sellerListingDraft",()=>({readListingDraft:api.draft}));
-vi.mock("@/api/sellerListingSource",()=>({readListingSource:api.source,saveListingSource:api.save,readSellerCategories:vi.fn(async()=>categoryRows)}));
+vi.mock("@/api/sellerListingSource",()=>({readListingSource:async(id?:string)=>({source:await api.source(id),current_draft_id:id??null}),saveListingSource:async(...args:unknown[])=>({source:await api.save(...args),current_draft_id:args[3]??"created"}),readSellerCategories:vi.fn(async()=>categoryRows)}));
 vi.mock("@/api/sellerWorkspace",async original=>({...await original<typeof import("@/api/sellerWorkspace")>(),listWorkspaceObjects:api.objects}));
 vi.mock("@/api/capabilities",()=>({getCapabilities:vi.fn().mockResolvedValue({})}));
 const a={draft_id:"A",authority_version_id:"authority-a",version:1,content:emptyGuidedDraft,updated_at:""};

@@ -4,7 +4,7 @@ import {afterEach,beforeEach,expect,it,vi} from 'vitest';
 import {useAuthStore} from '@/store/auth';
 import {readAuthorityReceipt,type PendingHandoff} from '@/lib/vectoraizHandoff';
 import VectoraizImport from './VectoraizImport';
-import {SellerListingDraftProvider,resetSellerListingDraftOwnerForTests} from './SellerListingDraftStore';
+import {SellerListingDraftProvider,resetSellerListingDraftOwnerForTests,useSellerListingDraft} from './SellerListingDraftStore';
 const api=vi.hoisted(()=>({read:vi.fn(),post:vi.fn(),consume:vi.fn(),connections:vi.fn()}));
 vi.mock('@/api/sellerListingDraft',()=>({readListingDraft:api.read}));
 vi.mock('@/api/sellerWorkspace',async original=>({...await original<typeof import('@/api/sellerWorkspace')>(),getAuthorityCapabilities:vi.fn().mockResolvedValue({import_enabled:true,contract_version:'listing-authority-v1',handoff_versions:[1]}),importAuthorityDraft:api.post,listSellerWorkspaceConnections:api.connections}));
@@ -14,6 +14,7 @@ vi.mock('@/components/gateways/PurchaserReview',()=>({default:({versionId}:{vers
 const id='00000000-0000-4000-8000-000000000001';
 const draft={brief:'',title:'Pack',description:'Description',category:'Technology',tags:'vectors',price:'',license:''};
 const receipt={import_id:id,draft_id:'00000000-0000-4000-8000-000000000002',listing_id:null,authority_version_id:'00000000-0000-4000-8000-000000000003'};
+function ReloadDraft(){const store=useSellerListingDraft();return <button onClick={store.retry}>Reload unrelated draft</button>;}
 let expiry:number;
 beforeEach(()=>{
  sessionStorage.clear();useAuthStore.setState({user:{id,email:'seller@example.test'} as never,token:'token'});resetSellerListingDraftOwnerForTests();
@@ -27,7 +28,7 @@ afterEach(()=>{cleanup();vi.restoreAllMocks();});
 it('retains bucket POST receipt through the mounted provider and retries only GET after expiry to recover current B',async()=>{
  let failRead!:(reason:Error)=>void;
  api.read.mockImplementationOnce(async()=>null).mockImplementationOnce(()=>new Promise((_,reject)=>{failRead=reject;}));
- render(<SellerListingDraftProvider enabled sampleCapability={false}><VectoraizImport mode="bucket"/></SellerListingDraftProvider>);
+ render(<SellerListingDraftProvider enabled sampleCapability={false}><VectoraizImport mode="bucket"/><ReloadDraft/></SellerListingDraftProvider>);
  await screen.findByRole('option',{name:/neutral/});await waitFor(()=>expect(api.read).toHaveBeenCalledOnce());
  fireEvent.click(screen.getByRole('button',{name:'Check uploaded files'}));
  await screen.findByLabelText(/Import for my signed-in account/);
@@ -48,5 +49,12 @@ it('retains bucket POST receipt through the mounted provider and retries only GE
  await screen.findByText('Review authority-b');
  expect(screen.queryByText(`Review ${receipt.authority_version_id}`)).toBeNull();
  expect(api.post).toHaveBeenCalledOnce();expect(api.read).toHaveBeenCalledTimes(3);
+ let finish!:(value:unknown)=>void;
+ api.read.mockImplementationOnce(()=>new Promise(resolve=>{finish=resolve;}));
+ fireEvent.click(screen.getByRole('button',{name:'Reload unrelated draft'}));
+ await waitFor(()=>expect(api.read).toHaveBeenCalledTimes(4));
+ expect(screen.queryByText(/Your import succeeded. Load/)).toBeNull();
+ expect(screen.queryByRole('button',{name:'Try loading draft again'})).toBeNull();
+ await act(async()=>finish({draft_id:'current-B',authority_version_id:'authority-b',version:1,content:draft,updated_at:''}));
  expect(readAuthorityReceipt(id)).toEqual(receipt);
 });

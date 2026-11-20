@@ -8,7 +8,7 @@ import {createStandardSelection} from '@/api/listingLicenses';
 import {DraftNotLoadedError,resetSellerListingDraftOwnerForTests,SellerListingDraftProvider,useSellerListingDraft,useSellerListingDraftStatus} from './SellerListingDraftStore';
 const api = vi.hoisted(() => ({readListingSource:vi.fn(), saveListingSource:vi.fn(), listWorkspaceObjects:vi.fn(),readListingDraft:vi.fn(),saveListingDraft:vi.fn(),
   createIdempotencyKey:vi.fn(()=> 'sample-key'),uploadWorkspaceSample:vi.fn(),SAMPLE_MAX_FILES:10,SAMPLE_MAX_FILE_BYTES:64*1024*1024,SAMPLE_MAX_TOTAL_BYTES:256*1024*1024}));
-vi.mock('@/api/sellerListingSource', () => api);
+vi.mock('@/api/sellerListingSource', () => ({readListingSource:async(id?:string)=>({source:await api.readListingSource(id),current_draft_id:id??null}),saveListingSource:async(...args:unknown[])=>({source:await api.saveListingSource(...args),current_draft_id:args[3]??'created'})}));
 vi.mock('@/api/sellerListingDraft',()=>api);
 vi.mock('@/api/sellerWorkspace', () => api);
 const legal=vi.hoisted(()=>({getSellerLegalIdentity:vi.fn(),refreshSellerLegalIdentity:vi.fn()}));

@@ -5,14 +5,16 @@ export interface SourceContent {
   objects: Array<{key: string; version_id: string | null; etag: string; size: number}>;
 }
 export interface SourceRead { version: number; content: SourceContent; connection_current: boolean }
-export async function readListingSource(draft_id?: string | null): Promise<SourceRead | null> {
-  return (await api.get('/seller-workspace/listing-source', draft_id ? {params:{draft_id}} : undefined)).data.source;
+export interface SourceResponse { source: SourceRead | null; current_draft_id: string | null }
+export interface SourceSaveResponse extends SourceResponse { source: SourceRead }
+export async function readListingSource(draft_id?: string | null): Promise<SourceResponse> {
+  return (await api.get('/seller-workspace/listing-source', draft_id ? {params:{draft_id}} : undefined)).data;
 }
-export async function saveListingSource(content: SourceContent, expected_version: number, request_id: string, expected_current_draft_id: string | null, draft_id?: string | null): Promise<SourceRead> {
+export async function saveListingSource(content: SourceContent, expected_version: number, request_id: string, expected_current_draft_id: string | null, draft_id?: string | null): Promise<SourceSaveResponse> {
   // Null asserts the empty draft observed by this editor; never omit the precondition.
   const body={content,expected_version,request_id,expected_current_draft_id};
-  if(draft_id)return (await nativeWrite<{source:SourceRead}>('/seller-workspace/listing-source',{...body,draft_id},undefined,'put')).source;
-  return (await api.put('/seller-workspace/listing-source', body)).data.source;
+  if(draft_id)return nativeWrite<SourceSaveResponse>('/seller-workspace/listing-source',{...body,draft_id},undefined,'put');
+  return (await api.put('/seller-workspace/listing-source', body)).data;
 }
 
 export interface SellerCategory {slug: string; name: string}
