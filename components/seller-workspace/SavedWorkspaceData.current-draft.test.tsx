@@ -46,7 +46,6 @@ function backend(){
     if(config.method==='get'){
       if(config.url?.endsWith('/listing-draft')){draftReads++;data={draft:readDraft?await readDraft():current?drafts.get(current):null};}
       else if(config.url?.endsWith('/categories'))data=categoryRows;
-      else if(config.url?.endsWith('/legal-identity'))data={status:'known',source:'stripe_connect',legal_name:'Synthetic Seller',jurisdiction:'ES',version:1};
       else if(config.url?.endsWith('/listing-source')){
         const requested=config.params?.draft_id??null;sourceReads.push(requested);beforeSourceRead?.(requested);
         const target=requested??current;
@@ -54,7 +53,7 @@ function backend(){
       }
       else throw new Error(`Unexpected GET ${config.url}`);
     }else{
-      const body=config.data?JSON.parse(config.data):{};writes.push(body);
+      const body=JSON.parse(config.data);writes.push(body);
       if(config.url?.endsWith('/listing-draft')){
         expect(body.draft_id).toBeUndefined();
         const row=current?drafts.get(current)!:createOrdinary(a);row.content=body.content;data={draft:row};
@@ -85,8 +84,8 @@ function backend(){
   return {drafts,sources,writes,sourceReads,createOrdinary,onSourceSave:(callback:()=>void)=>{afterSourceSave=callback;},onDraftRead:(callback:()=>Promise<SavedListingDraft|null>)=>{readDraft=callback;},onSourceRead:(callback:(id:string|null)=>void)=>{beforeSourceRead=callback;},get draftReads(){return draftReads;},loseNextResponse:()=>{loseResponse=true;}};
 }
 function DraftStatus(){const {draft,sampleIndices,selectionSavePending,selectionSaveFailed}=useSellerListingDraft();return <output data-testid="draft-id" data-sample-decision={draft?.content.sample_decision} data-sample-indices={JSON.stringify(sampleIndices)} data-samples-blocked={selectionSavePending||selectionSaveFailed}>{draft?.draft_id??"empty"}</output>;}
-function mount(enabled=true,guided=false,sampleCapability=false,listingLicensesEnabled=false){
-  const editor=<><DraftStatus/><SavedWorkspaceData enabled connections={[guidedConnection]} listingLicensesEnabled={listingLicensesEnabled}/></>;
+function mount(enabled=true,guided=false,sampleCapability=false){
+  const editor=<><DraftStatus/><SavedWorkspaceData enabled connections={[guidedConnection]}/></>;
   return render(<SellerListingDraftProvider enabled={enabled} sampleCapability={sampleCapability}>{guided?<GuidedListingFlow capabilities={{...guidedCapabilities,review:{enabled:false,status:'unavailable',reason:'disabled'},listing_licenses:false}} connections={[guidedConnection]} view="data" navigate={vi.fn()}>{editor}</GuidedListingFlow>:editor}</SellerListingDraftProvider>);
 }
 async function select(){fireEvent.click(await screen.findByRole('checkbox',{name:'Select weekly/sales.csv'}));}
@@ -214,7 +213,7 @@ it.each([false,true])('fences A while the successful PUT reports B and the draft
 });
 
 
-it.each([{guided:false,licenses:false},{guided:true,licenses:false},{guided:false,licenses:true},{guided:true,licenses:true}])('preserves B samples with zero writes through disagreement and reload: %j',async({guided,licenses})=>{
+it.each([false,true])('preserves B samples with zero writes through disagreement and reload: guided=%s',async guided=>{
   const model=backend();const original=model.createOrdinary(a);
   original.content={...original.content,sample_decision:'member_files',sample_object_indices:[0]};
   const bSource:SourceRead={version:7,connection_current:true,content:{connection_id:guidedConnection.id,connection_version:1,version_mode:'current',objects:[{...guidedObjects[0],key:'weekly/extra.csv'},...guidedObjects]}};
@@ -228,7 +227,7 @@ it.each([{guided:false,licenses:false},{guided:true,licenses:false},{guided:fals
       model.sources.set(b,bSource);
     }
   });
-  mount(true,guided,true,licenses);
+  mount(true,guided,true);
   await screen.findByRole('button',{name:'Reload current draft'});
   expect(model.writes).toHaveLength(0);expect(model.drafts.get(b)).toEqual(replacement);expect(model.sources.get(b)).toEqual(bSource);
   fireEvent.click(screen.getByRole('button',{name:'Reload current draft'}));
@@ -240,7 +239,6 @@ it.each([{guided:false,licenses:false},{guided:true,licenses:false},{guided:fals
     expect(screen.getByTestId('draft-id').getAttribute('data-samples-blocked')).toBe('false');
   });
   expect((sample as HTMLInputElement).checked).toBe(true);
-  if(licenses)await screen.findByText('Legal name on the licence: Synthetic Seller (ES)');
   expect(model.sourceReads).toContain(b);expect(model.writes).toHaveLength(0);
   expect(model.drafts.get(b)).toEqual(replacement);expect(model.sources.get(b)).toEqual(bSource);
   expect(model.drafts.get(a)).toEqual(original);

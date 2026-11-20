@@ -46,16 +46,13 @@ export default function SellerLicenseSelection({value, onChange, disabled = fals
     if(selection.identity_version!==version)
       current.current.onChange({...selection,identity_version:version,seller_acceptance:{...selection.seller_acceptance,authority_confirmed:false}});
   };
-  async function checkIdentity(refresh=false){
+  async function checkIdentity(){
     setIdentityState({kind:'checking'});setLegalError('');
     try {
       let refreshFailed:unknown;
-      // Mount/reload only reads. Refreshing Stripe can write the account's
-      // identity, so it requires an explicit seller action.
-      if(refresh)try {await refreshSellerLegalIdentity();} catch(error){refreshFailed=error;}
+      try {await refreshSellerLegalIdentity();} catch(error){refreshFailed=error;}
       // GET is authoritative even when refresh failed: a stored row remains usable during a Stripe outage.
       const result=await getSellerLegalIdentity();
-      if(!mounted.current)return;
       if(refreshFailed && result.status!=='known') throw refreshFailed;
       applyIdentity(result);
       if(refreshFailed) setLegalError('We could not refresh your Stripe details right now. Your saved legal details are still available.');
@@ -169,9 +166,8 @@ export default function SellerLicenseSelection({value, onChange, disabled = fals
         {legalChanged&&<div className="sm:col-span-2"><button type="button" disabled={savingLegal||disabled||!legalName.trim()||!country} onClick={()=>void saveLegal()} className="rounded-lg bg-indigo-700 px-4 py-2 text-sm text-white disabled:opacity-50">{savingLegal?'Saving legal details…':'Save legal details'}</button></div>}
       </div>}
       {legalState.kind==='required'&&<p role="status" className="text-sm text-amber-900">Your legal name and country are not saved. Save them before saving the licence choice or publishing.</p>}
-      {(legalState.kind==='known'||legalState.kind==='required')&&<button type="button" disabled={savingLegal||disabled} className="text-sm text-indigo-700 underline" onClick={()=>void checkIdentity(true)}>Refresh legal details from Stripe</button>}
       {legalState.kind==='conflict'&&<p role="alert">Your legal details need a quick check by our support team before you can publish. <a className="underline" href={LEGAL_IDENTITY_SUPPORT_PATH}>Contact support</a></p>}
-      {legalState.kind==='unavailable'&&<p role="alert">We could not check your legal details right now. <button type="button" className="underline" onClick={()=>void checkIdentity(true)}>Retry</button></p>}
+      {legalState.kind==='unavailable'&&<p role="alert">We could not check your legal details right now. <button type="button" className="underline" onClick={()=>void checkIdentity()}>Retry</button></p>}
       {legalError&&<p role="alert" className="text-sm text-red-800">{legalError}</p>}
     </section>}
   <fieldset disabled={disabled || submitting || !known} className="space-y-5 rounded-xl border border-gray-200 bg-white p-5">

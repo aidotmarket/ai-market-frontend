@@ -32,21 +32,17 @@ function readTerms(label='Read licence'){
 function openBoth(){readTerms();readTerms('Read Marketplace Listing Covenant');}
 
 describe('Seller licence selection',()=>{
-  it('only reads on load and refreshes Stripe before GET when the seller requests it',async()=>{
+  it('checks refresh before GET and shows a Stripe legal name without a save button',async()=>{
     const order:string[]=[];
     legal.refreshSellerLegalIdentity.mockImplementation(async()=>{order.push('refresh');});
     legal.getSellerLegalIdentity.mockImplementation(async()=>{order.push('get');return {status:'known',source:'stripe_connect',legal_name:'Seller Ltd',jurisdiction:'GB',version:4};});
     render(<Harness/>);
     expect(screen.getByText('Checking your legal details…')).toBeTruthy();
     await screen.findByText('Legal name on the licence: Seller Ltd (GB)');
-    expect(order).toEqual(['get']);
-    expect(legal.refreshSellerLegalIdentity).not.toHaveBeenCalled();
+    expect(order).toEqual(['refresh','get']);
     expect(screen.getByText('from your Stripe account')).toBeTruthy();
     expect(screen.queryByRole('button',{name:'Save legal details'})).toBeNull();
     expect(JSON.parse(screen.getByTestId('wire').textContent!).identity_version).toBe(4);
-    fireEvent.click(screen.getByRole('button',{name:'Refresh legal details from Stripe'}));
-    await screen.findByText('Legal name on the licence: Seller Ltd (GB)');
-    expect(order).toEqual(['get','refresh','get']);
   });
   it('keeps the verified identity version when switching Standard to custom and back',async()=>{
     legal.getSellerLegalIdentity.mockResolvedValue({status:'known',source:'stripe_connect',legal_name:'Seller Ltd',jurisdiction:'GB',version:4});
@@ -133,9 +129,6 @@ describe('Seller licence selection',()=>{
   it('uses a saved identity if Stripe refresh is unavailable',async()=>{
     legal.refreshSellerLegalIdentity.mockRejectedValueOnce({response:{status:503,data:{detail:{code:'IDENTITY_SERVICE_UNAVAILABLE'}}}});
     render(<Harness/>);
-    await screen.findByText('Legal name on the licence: Seller Ltd (GB)');
-    expect(legal.refreshSellerLegalIdentity).not.toHaveBeenCalled();
-    fireEvent.click(screen.getByRole('button',{name:'Refresh legal details from Stripe'}));
     await screen.findByText('Legal name on the licence: Seller Ltd (GB)');
     expect(screen.getByText(/Your saved legal details are still available/)).toBeTruthy();
   });
