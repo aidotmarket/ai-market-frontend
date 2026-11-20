@@ -106,12 +106,12 @@ function OwnedSellerListingDraftProvider({owner,enabled,sampleCapability,childre
   const [requested,setRequested]=useState(enabled);
   const [selectionSaveCount,setSelectionSaveCount]=useState(initial.selectionSaveCount);
   const [selectionSaveFailed,setSelectionSaveFailed]=useState(initial.selectionSaveFailed);
-  const [visibleSampleIndices,setVisibleSampleIndices]=useState<number[]|null>(null);
+  const [visibleSamples,setVisibleSamples]=useState<{draftGeneration:number;indices:number[]}|null>(null);
   const [retryKey,setRetryKey]=useState(0);
-  useEffect(()=>{let recoveryRevision=owner.recoveryRevision;const listener=(value:OwnerSnapshot)=>{setDraft(value.draft);if(value.recoveryRevision!==recoveryRevision){recoveryRevision=value.recoveryRevision;setLoaded(value.loaded);setError(!value.loaded);setVisibleSampleIndices(null);}setSelectionSaveCount(value.selectionSaveCount);setSelectionSaveFailed(value.selectionSaveFailed);};owner.listeners.add(listener);listener(snapshot(owner));return()=>{owner.listeners.delete(listener);};},[owner]);
+  useEffect(()=>{let recoveryRevision=owner.recoveryRevision;const listener=(value:OwnerSnapshot)=>{setDraft(value.draft);if(value.recoveryRevision!==recoveryRevision){recoveryRevision=value.recoveryRevision;setLoaded(value.loaded);setError(!value.loaded);setVisibleSamples(null);}setSelectionSaveCount(value.selectionSaveCount);setSelectionSaveFailed(value.selectionSaveFailed);};owner.listeners.add(listener);listener(snapshot(owner));return()=>{owner.listeners.delete(listener);};},[owner]);
   useEffect(()=>{if(sampleCapability)setRequested(true);},[sampleCapability]);
   useEffect(()=>{
-    if(!enabled){owner.loaded=false;setDraft(null);setVisibleSampleIndices(null);setLoaded(false);setError(false);return;}
+    if(!enabled){owner.loaded=false;setDraft(null);setVisibleSamples(null);setLoaded(false);setError(false);return;}
     if(!requested)return;
     // A remount must not revoke saves already admitted by this lifecycle.
     // The local loaded flag still gates new edits until this visit has loaded.
@@ -143,7 +143,12 @@ function OwnedSellerListingDraftProvider({owner,enabled,sampleCapability,childre
   // transition retires its selection callbacks.
   const beginSelectionSave=useCallback(()=>{if(owner.draftGeneration===draftGeneration)beginOwnerSelectionSave(owner);},[owner,draftGeneration]);
   const finishSelectionSave=useCallback((succeeded:boolean)=>{if(owner.draftGeneration===draftGeneration)finishOwnerSelectionSave(owner,succeeded);},[owner,draftGeneration]);
+  const setVisibleSampleIndices=useCallback((indices:number[]|null)=>{
+    if(owner.draftGeneration!==draftGeneration)return;
+    setVisibleSamples(indices===null?null:{draftGeneration,indices});
+  },[owner,draftGeneration]);
   const sampleIndices=sampleCapability&&draft?.content.sample_decision==='member_files'?(draft.content.sample_object_indices??[]):[];
+  const visibleSampleIndices=visibleSamples?.draftGeneration===draftGeneration?visibleSamples.indices:null;
   const selectionMismatch=visibleSampleIndices!==null&&JSON.stringify(visibleSampleIndices)!==JSON.stringify(sampleIndices);
   const value=useMemo<DraftStore>(()=>({draft,available:enabled,loaded,error,sampleCapability,sampleIndices,
     selectionSavePending:selectionSaveCount>0||selectionMismatch,selectionSaveFailed,reload,requestLoad:()=>setRequested(true),retry:()=>{setRequested(true);setRetryKey(value=>value+1);},
@@ -156,7 +161,7 @@ function OwnedSellerListingDraftProvider({owner,enabled,sampleCapability,childre
         // moves its pointer: read current rather than adopting the receipt ID.
         owner.draftGeneration+=1;owner.saveRevision+=1;owner.pending=null;
         owner.loaded=false;owner.draft=null;owner.version=0;publish(owner);setLoaded(false);setError(false);
-        owner.selectionSaveCount=0;owner.selectionSaveFailed=false;setVisibleSampleIndices(null);
+        owner.selectionSaveCount=0;owner.selectionSaveFailed=false;setVisibleSamples(null);
         // The receipt belongs to the committed POST. The caller can retain it
         // before attempting a separate, retryable current-draft read.
         return receipt;
@@ -169,7 +174,7 @@ function OwnedSellerListingDraftProvider({owner,enabled,sampleCapability,childre
         const result=await createListingDraft(requestId);
         assertAuthSessionOwner(owner.session);
         owner.draft=result;owner.draftGeneration+=1;owner.version=result.version;owner.loaded=true;owner.pending=null;owner.saveRevision+=1;
-        owner.selectionSaveCount=0;owner.selectionSaveFailed=false;setVisibleSampleIndices(null);
+        owner.selectionSaveCount=0;owner.selectionSaveFailed=false;setVisibleSamples(null);
         publish(owner);setLoaded(true);setError(false);return result;
       });
       owner.queue=operation;return operation;
@@ -184,7 +189,7 @@ function OwnedSellerListingDraftProvider({owner,enabled,sampleCapability,childre
       ?{...base,sample_decision:indices.length?'member_files':'none',sample_object_indices:[...indices]}
       :base);finishSelectionSave(true);}
       catch(failure){finishSelectionSave(false);throw failure;}},
-  }),[owner,draft,draftGeneration,enabled,loaded,error,sampleCapability,sampleIndices,selectionSaveCount,selectionSaveFailed,selectionMismatch,reload,beginSelectionSave,finishSelectionSave]);
+  }),[owner,draft,draftGeneration,enabled,loaded,error,sampleCapability,sampleIndices,selectionSaveCount,selectionSaveFailed,selectionMismatch,reload,beginSelectionSave,finishSelectionSave,setVisibleSampleIndices]);
   return <DraftContext.Provider value={value}>{children}</DraftContext.Provider>;
 }
 

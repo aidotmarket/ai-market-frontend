@@ -56,7 +56,7 @@ function backend(){
       const body=JSON.parse(config.data);writes.push(body);
       if(config.url?.endsWith('/listing-draft')){
         expect(body.draft_id).toBeUndefined();
-        const row=createOrdinary(a);row.content=body.content;data={draft:row};
+        const row=current?drafts.get(current)!:createOrdinary(a);row.content=body.content;data={draft:row};
       }else if(config.url?.endsWith('/listing-source')){
         const conflict=(code:string,message:string):never=>{throw new AxiosError('conflict','ERR_BAD_REQUEST',config,undefined,
           {status:409,statusText:'Conflict',headers:{},config,data:{detail:{code,message}}});};
@@ -83,7 +83,7 @@ function backend(){
   api.defaults.adapter=adapter;nativeClient.defaults.adapter=adapter;
   return {drafts,sources,writes,sourceReads,createOrdinary,onSourceSave:(callback:()=>void)=>{afterSourceSave=callback;},onDraftRead:(callback:()=>Promise<SavedListingDraft|null>)=>{readDraft=callback;},onSourceRead:(callback:(id:string|null)=>void)=>{beforeSourceRead=callback;},get draftReads(){return draftReads;},loseNextResponse:()=>{loseResponse=true;}};
 }
-function DraftStatus(){const {draft}=useSellerListingDraft();return <output data-testid="draft-id">{draft?.draft_id??"empty"}</output>;}
+function DraftStatus(){const {draft,sampleIndices,selectionSavePending,selectionSaveFailed}=useSellerListingDraft();return <output data-testid="draft-id" data-sample-decision={draft?.content.sample_decision} data-sample-indices={JSON.stringify(sampleIndices)} data-samples-blocked={selectionSavePending||selectionSaveFailed}>{draft?.draft_id??"empty"}</output>;}
 function mount(enabled=true,guided=false,sampleCapability=false){
   const editor=<><DraftStatus/><SavedWorkspaceData enabled connections={[guidedConnection]}/></>;
   return render(<SellerListingDraftProvider enabled={enabled} sampleCapability={sampleCapability}>{guided?<GuidedListingFlow capabilities={{...guidedCapabilities,review:{enabled:false,status:'unavailable',reason:'disabled'},listing_licenses:false}} connections={[guidedConnection]} view="data" navigate={vi.fn()}>{editor}</GuidedListingFlow>:editor}</SellerListingDraftProvider>);
@@ -213,17 +213,33 @@ it.each([false,true])('fences A while the successful PUT reports B and the draft
 });
 
 
-it('does not reconcile samples with a draft PUT when the source identity disagrees',async()=>{
+it.each([false,true])('preserves B samples with zero writes through disagreement and reload: guided=%s',async guided=>{
   const model=backend();const original=model.createOrdinary(a);
   original.content={...original.content,sample_decision:'member_files',sample_object_indices:[0]};
+  const bSource:SourceRead={version:7,connection_current:true,content:{connection_id:guidedConnection.id,connection_version:1,version_mode:'current',objects:[{...guidedObjects[0],key:'weekly/extra.csv'},...guidedObjects]}};
   let replacement!:SavedListingDraft;
   model.onSourceRead(id=>{
     if(id===a){
-      replacement=structuredClone(model.createOrdinary(b));
+      const next=model.createOrdinary(b);
+      next.content={...next.content,sample_decision:'member_files',sample_object_indices:[1]};
+      replacement=structuredClone(next);
       model.sources.set(a,{version:1,connection_current:true,content:{connection_id:guidedConnection.id,connection_version:1,version_mode:'current',objects:guidedObjects}});
+      model.sources.set(b,bSource);
     }
   });
-  mount(true,false,true);
+  mount(true,guided,true);
   await screen.findByRole('button',{name:'Reload current draft'});
-  expect(model.writes).toHaveLength(0);expect(model.drafts.get(b)).toEqual(replacement);expect(model.sources.has(b)).toBe(false);
+  expect(model.writes).toHaveLength(0);expect(model.drafts.get(b)).toEqual(replacement);expect(model.sources.get(b)).toEqual(bSource);
+  fireEvent.click(screen.getByRole('button',{name:'Reload current draft'}));
+  const sample=await screen.findByRole('checkbox',{name:'Offer sales.csv (file 2) as free sample'});
+  await waitFor(()=>{
+    expect(screen.getByTestId('draft-id').textContent).toBe(b);
+    expect(screen.getByTestId('draft-id').getAttribute('data-sample-decision')).toBe('member_files');
+    expect(screen.getByTestId('draft-id').getAttribute('data-sample-indices')).toBe('[1]');
+    expect(screen.getByTestId('draft-id').getAttribute('data-samples-blocked')).toBe('false');
+  });
+  expect((sample as HTMLInputElement).checked).toBe(true);
+  expect(model.sourceReads).toContain(b);expect(model.writes).toHaveLength(0);
+  expect(model.drafts.get(b)).toEqual(replacement);expect(model.sources.get(b)).toEqual(bSource);
+  expect(model.drafts.get(a)).toEqual(original);
 });
