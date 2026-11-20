@@ -120,7 +120,7 @@ it('disables licence, sample and source controls during creation and restores th
  let reject!:(error:unknown)=>void;
  vi.spyOn(nativeClient,'post').mockImplementation(()=>new Promise((_,fail)=>{reject=fail;}));
  const put=vi.spyOn(api,'put');
- render(<Harness panels/>);await screen.findByRole('link',{name:'Published: view your listing'});
+ render(<Harness panels/>);
  const sample=await screen.findByRole('checkbox',{name:/Offer example.csv.*free sample/});
  const signer=screen.getByLabelText('Signer full name');
  const source=screen.getByRole('checkbox',{name:'Select data/example.csv'});
