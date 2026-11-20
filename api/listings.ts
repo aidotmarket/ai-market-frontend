@@ -11,6 +11,16 @@ import type { TableFormat } from '@/components/gateways/fileMetadata';
 export type SellerListingSummary = Pick<SellerListingItem, 'id' | 'title' | 'status'> & ListingAuthorityReferences;
 export type ListingWithAuthority = ListingDetail & ListingAuthorityReferences;
 
+export interface ListingAccessWindowResponse { listing_id: string; access_window_days: number }
+export interface ListingAccessWindowReadResponse extends ListingAccessWindowResponse { authority_version_id: string | null }
+export async function getListingAccessWindow(id: string): Promise<ListingAccessWindowReadResponse> {
+  return (await api.get<ListingAccessWindowReadResponse>(`/listings/${encodeURIComponent(id)}/access-window`, privateReadOptions)).data;
+}
+// PATCH has the original response shape. It must never replace owner GET state.
+export async function updateListingAccessWindow(id: string, access_window_days: number): Promise<ListingAccessWindowResponse> {
+  return (await api.patch<ListingAccessWindowResponse>(`/listings/${encodeURIComponent(id)}/access-window`, {access_window_days})).data;
+}
+
 type FulfillmentTypeParam = FulfillmentType | FulfillmentType[];
 
 export interface ListListingsParams {
@@ -114,6 +124,8 @@ export interface MyListingsPaging {
   skip?: number;
   limit?: number;
 }
+
+export type OwnerListingItem = SellerListingItem & {authority_version_id?: string | null};
 
 // Preserve the overview's no-argument request and the existing array response.
 export const getMyListings = (paging?: MyListingsPaging) => paging === undefined

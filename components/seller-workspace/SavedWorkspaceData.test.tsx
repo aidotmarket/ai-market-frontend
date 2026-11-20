@@ -8,7 +8,7 @@ import {createStandardSelection} from '@/api/listingLicenses';
 import {DraftNotLoadedError,resetSellerListingDraftOwnerForTests,SellerListingDraftProvider,useSellerListingDraft,useSellerListingDraftStatus} from './SellerListingDraftStore';
 const api = vi.hoisted(() => ({readListingSource:vi.fn(), saveListingSource:vi.fn(), listWorkspaceObjects:vi.fn(),readListingDraft:vi.fn(),saveListingDraft:vi.fn(),
   createIdempotencyKey:vi.fn(()=> 'sample-key'),uploadWorkspaceSample:vi.fn(),SAMPLE_MAX_FILES:10,SAMPLE_MAX_FILE_BYTES:64*1024*1024,SAMPLE_MAX_TOTAL_BYTES:256*1024*1024}));
-vi.mock('@/api/sellerListingSource', () => api);
+vi.mock('@/api/sellerListingSource', () => ({readListingSource:async(id?:string)=>({source:await api.readListingSource(id),current_draft_id:id??null}),saveListingSource:async(...args:unknown[])=>({source:await api.saveListingSource(...args),current_draft_id:args[3]??null})}));
 vi.mock('@/api/sellerListingDraft',()=>api);
 vi.mock('@/api/sellerWorkspace', () => api);
 const legal=vi.hoisted(()=>({getSellerLegalIdentity:vi.fn(),refreshSellerLegalIdentity:vi.fn()}));
@@ -22,6 +22,34 @@ beforeEach(() => {vi.resetAllMocks(); api.listWorkspaceObjects.mockResolvedValue
   legal.refreshSellerLegalIdentity.mockResolvedValue(known);legal.getSellerLegalIdentity.mockResolvedValue(known);
 });
 const renderData=(connections=[connection],sampleCapability=false)=>render(<SellerListingDraftProvider enabled sampleCapability={sampleCapability}><SavedWorkspaceData enabled connections={connections} /></SellerListingDraftProvider>);
+
+it.each(['exact','changed'] as const)('source save %s retry on a superseded draft shows plain guidance and reloads the current draft',async kind=>{
+ const original={draft_id:'original',authority_version_id:'authority',version:1,content:{brief:'',title:'Old',description:'',category:'',tags:'',price:'',license:''},updated_at:''};
+ api.readListingDraft.mockResolvedValueOnce(original);
+ api.readListingSource.mockResolvedValue(null);
+ api.listWorkspaceObjects.mockResolvedValue({objects:[object,{...object,key:'data/other.csv'}],next_cursor:null});
+ api.saveListingSource.mockRejectedValueOnce(new Error('lost response')).mockRejectedValueOnce({isAxiosError:true,response:{status:409,data:{detail:{code:'DRAFT_SUPERSEDED'}}}});
+ let store!:ReturnType<typeof useSellerListingDraft>;
+ function Capture(){store=useSellerListingDraft();return null;}
+ render(<SellerListingDraftProvider enabled sampleCapability={false}><Capture/><SavedWorkspaceData enabled connections={[connection]}/></SellerListingDraftProvider>);
+ await waitFor(()=>expect(store.draft?.draft_id).toBe('original'));
+ fireEvent.click(await screen.findByRole('checkbox',{name:'Select data/example.csv'}));
+ fireEvent.click(screen.getByRole('button',{name:'Save selected files'}));
+ fireEvent.click(screen.getByRole('button',{name:'Confirm selection'}));
+ await screen.findByText(/Saving could not be confirmed/);
+ if(kind==='changed')fireEvent.click(screen.getByRole('checkbox',{name:'Select data/other.csv'}));
+ api.readListingDraft.mockResolvedValueOnce({...original,draft_id:'current',authority_version_id:null,content:{...original.content,title:'Current'}});
+ fireEvent.click(screen.getByRole('button',{name:'Save selected files'}));
+ fireEvent.click(screen.getByRole('button',{name:'Confirm selection'}));
+ await screen.findByText(/This import was replaced by a newer import or a new listing/);
+ await waitFor(()=>expect(store.draft?.draft_id).toBe('current'));
+ expect(api.readListingDraft).toHaveBeenCalledTimes(2);
+ expect(api.saveListingSource).toHaveBeenCalledTimes(2);
+ const [first,second]=api.saveListingSource.mock.calls;
+ expect(first[3]).toBe('original');expect(second[3]).toBe('original');
+ if(kind==='exact')expect(second).toEqual(first);
+ else{expect(second[2]).not.toBe(first[2]);expect(second[0].objects).toHaveLength(2);}
+});
 const renderLicensedData=(sampleCapability=false)=>render(<SellerListingDraftProvider enabled sampleCapability={sampleCapability}><SavedWorkspaceData enabled connections={[connection]} listingLicensesEnabled /></SellerListingDraftProvider>);
 const DraftStatus=()=>{const status=useSellerListingDraftStatus();return <p data-testid="draft-status">{status.selectionSavePending?`pending:${status.sampleIndices.join(',')}`:status.selectionSaveFailed?'failed':'ready'}</p>;};
 function openTerms(){
@@ -213,13 +241,12 @@ it('blocks licence save until the draft read finishes and offers retry after a r
  api.readListingSource.mockResolvedValue({version:2,content,connection_current:true});
  api.readListingDraft.mockImplementationOnce(()=>new Promise((_resolve,reject)=>{rejectRead=reject;})).mockResolvedValueOnce(null);
  renderLicensedData();
- const button=await screen.findByRole('button',{name:'Save licence choice'});
- expect((button as HTMLButtonElement).disabled).toBe(true);
- expect(screen.getByText('Loading your saved draft…')).toBeTruthy();
+ expect(await screen.findByText('Loading your saved draft…')).toBeTruthy();
+ expect(screen.queryByRole('button',{name:'Save licence choice'})).toBeNull();
  expect(api.saveListingDraft).not.toHaveBeenCalled();
  await act(async()=>rejectRead(new Error('offline')));
  await screen.findByText(/Your saved draft could not be loaded/);
- expect((button as HTMLButtonElement).disabled).toBe(true);
+ expect(screen.queryByRole('button',{name:'Save licence choice'})).toBeNull();
  fireEvent.click(screen.getByRole('button',{name:'Try loading draft again'}));
  await waitFor(()=>expect(api.readListingDraft).toHaveBeenCalledTimes(2));
 });

@@ -13,6 +13,7 @@ import R2ConnectionForm from '@/components/seller-workspace/R2ConnectionForm';
 import { StorageProviders } from '@/components/seller-workspace/StorageProviders';
 import SellerListingEditor from '@/components/seller-workspace/SellerListingEditor';
 import SavedListingEditor from '@/components/seller-workspace/SavedListingEditor';
+import VectoraizImport from '@/components/seller-workspace/VectoraizImport';
 import {SellerListingDraftProvider} from '@/components/seller-workspace/SellerListingDraftStore';
 import { GuidedListingFlow, StepNext } from '@/components/seller-workspace/GuidedListingFlow';
 import SavedLicenseStep from '@/components/seller-workspace/SavedLicenseStep';
@@ -606,6 +607,7 @@ export default function SellerWorkspacePage() {
     <SellerListingDraftProvider
       enabled={capabilities?.master.enabled===true&&capabilities?.drafts?.enabled===true&&capabilities.drafts.status==='available'}
       sampleCapability={capabilities?.master.enabled===true&&capabilities?.drafts?.enabled===true&&capabilities.drafts.status==='available'&&capabilities?.samples?.enabled===true&&capabilities.samples.status==='available'}>
+    <VectoraizImport />
     <GuidedListingFlow connections={currentConnections} capabilities={capabilities} view={view} navigate={navigate}>
     <div className="space-y-6">
       <WorkspaceOverview connections={currentConnections} view={view} onViewChange={navigate} />

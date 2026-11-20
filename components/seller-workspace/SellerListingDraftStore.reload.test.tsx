@@ -91,6 +91,33 @@ it("reconciles an external draft when no save overlaps",async()=>{
   await finishRead(read,external);expect(screen.getByTestId("version").textContent).toBe("4");
   expect((screen.getByLabelText("Your price (USD)") as HTMLInputElement).value).toBe("30");expect(onLoaded).toHaveBeenCalledOnce();expect(api.save).not.toHaveBeenCalled();
 });
+it("scopes visible samples and reconciliation callbacks to the draft adopted by reload",async()=>{
+  const draftA:SavedListingDraft={...initial,draft_id:"A",content:{...content,sample_decision:"member_files",sample_object_indices:[0]}};
+  const draftB:SavedListingDraft={...initial,draft_id:"B",content:{...content,sample_decision:"member_files",sample_object_indices:[1]}};
+  api.read.mockResolvedValue(draftA);
+  let store!:ReturnType<typeof useSellerListingDraft>;
+  function Capture(){store=useSellerListingDraft();return null;}
+  render(<SellerListingDraftProvider enabled sampleCapability><Capture/></SellerListingDraftProvider>);
+  await waitFor(()=>expect(store.loaded).toBe(true));
+  const old=store;
+  act(()=>{old.setVisibleSampleIndices([2]);old.beginSelectionSave();});
+  expect(store.selectionSavePending).toBe(true);
+  api.read.mockResolvedValueOnce(draftB);
+  await act(async()=>{await store.reload();});
+  expect(store.draft).toEqual(draftB);expect(store.sampleIndices).toEqual([1]);
+  expect(store.selectionSavePending).toBe(false);expect(store.selectionSaveFailed).toBe(false);
+  act(()=>{old.setVisibleSampleIndices([0]);old.beginSelectionSave();old.finishSelectionSave(false);});
+  expect(store.selectionSavePending).toBe(false);expect(store.selectionSaveFailed).toBe(false);
+  act(()=>{store.setVisibleSampleIndices([0]);});
+  expect(store.selectionSavePending).toBe(true);
+  act(()=>{old.setVisibleSampleIndices(null);});
+  expect(store.selectionSavePending).toBe(true);
+  act(()=>{store.setVisibleSampleIndices([1]);});
+  expect(store.selectionSavePending).toBe(false);
+  await act(async()=>{await expect(old.saveSamples([])).rejects.toThrow("changed");});
+  expect(store.draft).toEqual(draftB);expect(store.selectionSaveFailed).toBe(false);
+  expect(api.save).not.toHaveBeenCalled();
+});
 it("ignores an aborted read even when it returns a newer draft",async()=>{
   await mount();const controller=new AbortController();signal=controller.signal;const read=await startRead();
   await savePrice();controller.abort();await finishRead(read,{...saved,version:4});

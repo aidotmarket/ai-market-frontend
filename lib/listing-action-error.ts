@@ -53,8 +53,12 @@ export function isPlainListingMessage(message:unknown):message is string {
   return typeof message==='string'&&!!message.trim()&&!/[<>\u0000-\u001f\u007f]/.test(message)&&!/^\s*[\[{]/.test(message)&&!message.includes('[object Object]');
 }
 
+export const DRAFT_SUPERSEDED_MESSAGE='This import was replaced by a newer import or a new listing. Reload the current draft in Seller Workspace.';
+
 export function listingDraftError(error:unknown):{message:string;alreadyPublished:boolean}|null {
   const detail=record(record(record(record(error)?.response)?.data)?.detail);
+  if(detail?.code==='CURRENT_DRAFT_CHANGED')return {message:'Your listing draft changed. Reload the current draft before saving your files again.',alreadyPublished:false};
+  if(detail?.code==='DRAFT_SUPERSEDED')return {message:DRAFT_SUPERSEDED_MESSAGE,alreadyPublished:false};
   if(!detail||!['DRAFT_IN_PROGRESS','DRAFT_ALREADY_PUBLISHED'].includes(typeof detail.code==='string'?detail.code:''))return null;
   const message=detail.message;
   if(!isPlainListingMessage(message))return null;

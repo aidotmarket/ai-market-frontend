@@ -3,7 +3,7 @@ import {Fragment, createContext, useContext, useEffect, useState, useRef, type R
 import axios from 'axios';
 import {listingDraftError} from '@/lib/listing-action-error';
 import type {ListingDraftContent} from '@/api/sellerListingDraft';
-import {readListingSource, readSellerCategories, type SourceRead, type SellerCategory} from '@/api/sellerListingSource';
+import {readListingSource, readSellerCategories, type SourceRead, type SourceSaveResponse, type SellerCategory} from '@/api/sellerListingSource';
 import {readListingReview, listingReviewErrorReason, type ListingReview, type ApprovalReceipt} from '@/api/sellerListingReview';
 import {readPublication, type PublicationState} from '@/api/sellerListingPublication';
 import {SELLER_SETUP_STEPS} from '@/components/onboarding/SellerSetupProgressBar';
@@ -13,18 +13,19 @@ import {useSellerListingDraft} from './SellerListingDraftStore';
 import {listingSteps, type ListingStep} from './listingSteps';
 import type {WorkspaceView} from './WorkspaceOverview';
 
-type Flow = {samplesBlocked:boolean; stepsForContent:(content:ListingDraftContent)=>ListingStep[]; sourceLoaded:boolean; sourceError:string; fileRevision:number; setFilesDirty:(dirty:boolean)=>void; setListingDirty:(dirty:boolean)=>void; setLicenceDirty:(dirty:boolean)=>void; source: SourceRead|null; categories: SellerCategory[]; steps: ListingStep[]; review: ListingReview|null;
+type Flow = {samplesBlocked:boolean; stepsForContent:(content:ListingDraftContent)=>ListingStep[]; sourceCurrentDraftId:string|null; sourceLoaded:boolean; sourceDraftChanged:boolean; reloadSource:()=>Promise<void>; sourceError:string; fileRevision:number; setFilesDirty:(dirty:boolean)=>void; setListingDirty:(dirty:boolean)=>void; setLicenceDirty:(dirty:boolean)=>void; source: SourceRead|null; categories: SellerCategory[]; steps: ListingStep[]; review: ListingReview|null;
   reviewError: string; reviewLoading: boolean; publication: PublicationState|null; publicationError: string;
-  refreshReview: ()=>void; refreshPublication: ()=>void; sourceSaved: (source:SourceRead)=>void;
+  refreshReview: ()=>void; refreshPublication: ()=>void; sourceSaved: (response:SourceSaveResponse)=>void; sourceSaveRefused:(message:string)=>void;
   approved: (approval:ApprovalReceipt)=>void; published: (state:PublicationState)=>void;
   startAnotherListing:()=>void; startingListing:boolean; navigate: (view:WorkspaceView)=>void; licensesEnabled: boolean};
 const Context = createContext<Flow|null>(null);
 export function useListingFlow(){return useContext(Context);}
 
 export function GuidedListingFlow({connections, capabilities, view, navigate, children}: {connections:SellerWorkspaceConnection[]; capabilities:SellerWorkspaceCapabilities|null; view:WorkspaceView; navigate:(view:WorkspaceView)=>void; children:ReactNode}) {
-  const {draft, requestLoad, reload, selectionSavePending, selectionSaveFailed, startNewDraft} = useSellerListingDraft();
+  const {draft, available, loaded, requestLoad, reload, selectionSavePending, selectionSaveFailed, startNewDraft} = useSellerListingDraft();
   const [startingListing,setStartingListing]=useState(false);
   const [startError,setStartError]=useState('');
+  const [sourceSaveNotice,setSourceSaveNotice]=useState('');
   const startAttempt=useRef<string|null>(null);
   const startPending=useRef(false);
   const startAnotherListing=async()=>{
@@ -52,6 +53,8 @@ export function GuidedListingFlow({connections, capabilities, view, navigate, ch
   const [licenceDirty,setLicenceDirty]=useState(false);
   const [fileRevision,setFileRevision]=useState(0);
   const [sourceLoaded,setSourceLoaded]=useState(false);
+  const [sourceCurrentDraftId,setSourceCurrentDraftId]=useState<string|null>(null);
+  const [sourceDraftId,setSourceDraftId]=useState<string|null>(null);
   const [source,setSource] = useState<SourceRead|null>(null);
   const [categories,setCategories] = useState<SellerCategory[]>([]);
   const [readError,setReadError] = useState('');
@@ -81,7 +84,7 @@ export function GuidedListingFlow({connections, capabilities, view, navigate, ch
   useEffect(()=>{
     if(!sourcesEnabled)return;
     let alive=true;setReadError('');setSourceLoaded(false);
-    Promise.all([readListingSource(draft?.draft_id),readSellerCategories()]).then(([s,c])=>{if(alive){setSource(s);setCategories(c);setSourceLoaded(true);}}).catch(()=>{if(alive)setReadError('Your saved files and category list could not be loaded. Retry before continuing.');});
+    Promise.all([readListingSource(draft?.draft_id),readSellerCategories()]).then(([s,c])=>{if(alive){setSource(s.source);setSourceCurrentDraftId(s.current_draft_id);setCategories(c);setSourceDraftId(draft?.draft_id??null);setSourceLoaded(true);}}).catch(()=>{if(alive)setReadError('Your saved files and category list could not be loaded. Retry before continuing.');});
     return()=>{alive=false;};
   },[sourcesEnabled,readRetry,draft?.draft_id]);
   const reconciled=useRef('');
@@ -99,7 +102,7 @@ export function GuidedListingFlow({connections, capabilities, view, navigate, ch
         setReviewStatus('The saved review changed elsewhere. Reloading your saved files and draft…');
         const savedSource=await readListingSource(draft?.draft_id);
         if(controller.signal.aborted)return;
-        await reload(controller.signal,()=>setSource(savedSource));
+        await reload(controller.signal,()=>{setSource(savedSource.source);setSourceCurrentDraftId(savedSource.current_draft_id);});
         return;
       }
       setReview(r);
@@ -122,8 +125,15 @@ export function GuidedListingFlow({connections, capabilities, view, navigate, ch
   },[approval,publicationRetry]);
   const steps=listingSteps({connections,source,draft,categories,licensesEnabled,review,publication:publication?.publication??null,pending,licenceDirty,reviewReason:listingDirty?'Save your changes in Describe and price before continuing.':reviewError});
   const next=steps.find(s=>s.next);
-  const flow:Flow={startAnotherListing:()=>void startAnotherListing(),startingListing,samplesBlocked:selectionSavePending||selectionSaveFailed,stepsForContent:content=>listingSteps({connections,source,draft:{version:draft?.version??0,updated_at:draft?.updated_at??'',content:{...draft?.content,...content}},categories,licensesEnabled,review:null,publication:null,pending,licenceDirty}),sourceLoaded,sourceError:readError,fileRevision,setFilesDirty:dirty=>{setFilesDirty(dirty);if(dirty)setFileRevision(n=>n+1);},setListingDirty,setLicenceDirty,source,categories,steps,review,reviewError,reviewLoading,publication,publicationError,licensesEnabled,navigate,
-    refreshReview:()=>setReviewRetry(n=>n+1),refreshPublication:()=>setPublicationRetry(n=>n+1),sourceSaved:value=>{setSource(value);setFilesDirty(false);},
+  const sourceMatchesDraft=sourceDraftId===(draft?.draft_id??null);
+  const pointerMatchesDraft=!available||sourceCurrentDraftId===(draft?.draft_id??null);
+  const sourceDraftChanged=sourceLoaded&&available&&loaded&&sourceMatchesDraft&&!pointerMatchesDraft;
+  const reloadSource=async()=>{
+    setSourceLoaded(false);
+    try{await reload();}finally{setReadRetry(n=>n+1);}
+  };
+  const flow:Flow={startAnotherListing:()=>void startAnotherListing(),startingListing,samplesBlocked:selectionSavePending||selectionSaveFailed,stepsForContent:content=>listingSteps({connections,source,draft:{version:draft?.version??0,updated_at:draft?.updated_at??'',content:{...draft?.content,...content}},categories,licensesEnabled,review:null,publication:null,pending,licenceDirty}),sourceCurrentDraftId,sourceLoaded:sourceLoaded&&sourceMatchesDraft&&pointerMatchesDraft,sourceDraftChanged,reloadSource,sourceError:readError,fileRevision,setFilesDirty:dirty=>{setFilesDirty(dirty);if(dirty)setFileRevision(n=>n+1);},setListingDirty,setLicenceDirty,source,categories,steps,review,reviewError,reviewLoading,publication,publicationError,licensesEnabled,navigate,
+    refreshReview:()=>setReviewRetry(n=>n+1),refreshPublication:()=>setPublicationRetry(n=>n+1),sourceSaveRefused:setSourceSaveNotice,sourceSaved:value=>{setSourceSaveNotice('');setSource(value.source);setSourceCurrentDraftId(value.current_draft_id);setFilesDirty(false);},
     approved:a=>setReview(r=>r?{...r,approval:a}:r),published:setPublication};
   const published=steps[5].state==='done' ? publication?.publication : null;
   return <Context.Provider value={flow}><div className="grid items-start gap-6 xl:grid-cols-[minmax(0,1fr)_290px]">
@@ -139,7 +149,7 @@ export function GuidedListingFlow({connections, capabilities, view, navigate, ch
       </div>
         {reviewStatus&&<p role="status" className="text-sm text-gray-600">{reviewStatus}</p>}
         {reviewError&&<p role="alert" className="text-sm text-red-800">{reviewError} {reviewNeedsFiles?<button onClick={()=>navigate('data')} className="min-h-11 underline">Choose files</button>:<button onClick={()=>setReviewRetry(n=>n+1)} className="min-h-11 underline">Retry review</button>}</p>}
-    </aside><fieldset disabled={startingListing} aria-busy={startingListing} className="min-w-0 space-y-6 border-0 p-0 xl:col-start-1 xl:row-start-1">{/* A new draft also discards unsaved file, editor and licence panel state. */}<Fragment key={draft?.draft_id??'legacy'}>{children}</Fragment></fieldset>
+    </aside><fieldset disabled={startingListing} aria-busy={startingListing} className="min-w-0 space-y-6 border-0 p-0 xl:col-start-1 xl:row-start-1">{sourceSaveNotice&&<p role="alert" className="text-sm text-red-800">{sourceSaveNotice}</p>}{/* A new draft also discards unsaved file, editor and licence panel state. */}<Fragment key={draft?.draft_id??'legacy'}>{children}</Fragment></fieldset>
   </div></Context.Provider>;
 }
 export function StepNext({from}:{from:WorkspaceView}) {

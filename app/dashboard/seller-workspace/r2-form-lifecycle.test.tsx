@@ -2,6 +2,7 @@
 import type { ReactNode } from 'react';
 import { act, cleanup, fireEvent, render, screen } from '@testing-library/react';
 import { afterEach, beforeEach, expect, it, vi } from 'vitest';
+vi.mock('@/components/seller-workspace/VectoraizImport',()=>({default:()=>null}));
 import type { ConnectionMutationResponse, SellerWorkspaceConnection } from '@/api/sellerWorkspace';
 
 const api = vi.hoisted(() => ({

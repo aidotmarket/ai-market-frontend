@@ -1,5 +1,6 @@
 'use client';
 
+import PurchaserReview from '@/components/gateways/PurchaserReview';
 import { customerLoadError } from '@/lib/customerMessages';
 import ListingDocumentsEditor from '@/components/listing/ListingDocumentsEditor';
 
@@ -7,7 +8,7 @@ import MarkdownTextField,{descriptionTooLong} from '@/components/listing/Markdow
 
 import { useState, useEffect, useCallback } from 'react';
 import { useRouter, useParams } from 'next/navigation';
-import { getListing, updateListing, unpublishListing, publishListing } from '@/api/listings';
+import { getListingAccessWindow, getListing, updateListing, unpublishListing, publishListing } from '@/api/listings';
 import { notifyCapabilitiesChanged } from '@/components/onboarding/SellerSetupProgressBar';
 import { useToast } from '@/components/Toast';
 import { formatListingActionError } from '@/lib/listing-action-error';
@@ -15,13 +16,15 @@ import SellerAtAGlance from '@/components/listings/SellerAtAGlance';
 import SellerShareControls from '@/components/listings/SellerShareControls';
 import SellerLicenseSelection from '@/components/seller-workspace/SellerLicenseSelection';
 import {createStandardSelection,isCompleteLicenseSelection,type LicenseSelection} from '@/api/listingLicenses';
-import {getSellerWorkspaceCapabilities} from '@/api/sellerWorkspace';
+import {authorityAvailable,getAuthorityCapabilities,getSellerWorkspaceCapabilities} from '@/api/sellerWorkspace';
 import {getSellerLegalIdentity,refreshSellerLegalIdentity,legalIdentityFailure,LEGAL_IDENTITY_SUPPORT_PATH} from '@/api/sellerLegalIdentity';
 import { gatewayErrorCode } from '@/api/gatewayDelivery';
 import { blockerMessage } from '@/components/gateways/presentation';
 import ListingGatewaySource from '@/components/gateways/ListingGatewaySource';
 import type { GatewayBlocker, GatewayFile, SellerGateway } from '@/types/sellerGateway';
 import Link from 'next/link';
+import {sessionLifecycle} from '@/api/connector-seller-settings';
+import {useAuthStore} from '@/store/auth';
 
 const CATEGORIES = ['Finance', 'Healthcare', 'Technology', 'Real Estate', 'Government', 'Marketing'];
 const FORMATS = ['csv', 'tsv', 'jsonl', 'parquet', 'json', 'xlsx', 'other'];
@@ -47,6 +50,21 @@ export default function EditListingPage() {
   const id = params.id as string;
   const { toast } = useToast();
 
+  const account=useAuthStore(state=>state.user?.id);
+  const [authorityReference,setAuthorityReference]=useState<{id:string;account:string|undefined;version:string|null}|null>(null);
+  const authorityVersion=authorityReference?.id===id&&authorityReference.account===account?authorityReference.version:null;
+  useEffect(()=>{
+    let active=true;const same=sessionLifecycle();setAuthorityReference(null);
+    void (async()=>{
+      try{
+        if(!account||!authorityAvailable(await getAuthorityCapabilities()))return;
+        if(!active||!same())return;
+        const owner=await getListingAccessWindow(id);
+        if(active&&same())setAuthorityReference({id,account,version:owner.authority_version_id??null});
+      }catch{/* Owner recovery stays dark when unavailable. */}
+    })();
+    return()=>{active=false;};
+  },[id,account]);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [summaryRevision, setSummaryRevision] = useState(0);
@@ -452,6 +470,7 @@ export default function EditListingPage() {
       <SellerAtAGlance listingId={id} slug={listingSlug} active={!saving} revision={summaryRevision} />
 
       {/* Actions */}
+      <PurchaserReview versionId={authorityVersion} />
       {publishError && <div role="alert" className="rounded border border-red-300 p-3 text-red-700"><p>{publishError}</p>{publishBlockers.length > 0 && <ul className="list-disc pl-6">{publishBlockers.map((blocker, index) => <li key={`${blocker.code}-${blocker.file_id ?? index}`}>{blockerMessage(blocker, sourceFiles)}</li>)}</ul>}</div>}
       {canPublish && savedGateway && !savedGateway.identity_ack_at && <p className="rounded border border-amber-300 p-3 text-sm">Before this listing goes live: after purchase, buyers learn your door hostname and certificate. Use a neutral hostname. <Link href={`/dashboard/gateways/${encodeURIComponent(savedGateway.gateway_id)}`} className="text-indigo-700 underline">Review and acknowledge the gateway identity notice</Link>.</p>}
       <div className="flex items-center justify-between bg-white rounded-xl border border-gray-200 shadow-sm px-6 py-4">

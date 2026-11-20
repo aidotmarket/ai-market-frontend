@@ -8,7 +8,7 @@ import {SellerListingDraftProvider,resetSellerListingDraftOwnerForTests} from '.
 import {categoryRows,guidedCapabilities,guidedConnection,emptyGuidedDraft} from '@/tests/guidedListingFixture';
 import type {SavedListingDraft} from '@/api/sellerListingDraft';
 const mocks=vi.hoisted(()=>({source:vi.fn(),categories:vi.fn(),review:vi.fn(),publication:vi.fn(),account:vi.fn(),read:vi.fn(),save:vi.fn()}));
-vi.mock('@/api/sellerListingSource',()=>({readListingSource:mocks.source,readSellerCategories:mocks.categories}));
+vi.mock('@/api/sellerListingSource',()=>({readListingSource:async(id?:string)=>({source:await mocks.source(id),current_draft_id:id??null}),readSellerCategories:mocks.categories}));
 vi.mock('@/api/sellerListingDraft',()=>({readListingDraft:mocks.read,saveListingDraft:mocks.save}));
 vi.mock('@/api/sellerListingReview',async original=>({...await original<object>(),readListingReview:mocks.review}));
 vi.mock('@/api/sellerListingPublication',()=>({readPublication:mocks.publication}));
