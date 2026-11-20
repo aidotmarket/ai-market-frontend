@@ -13,7 +13,7 @@ import {useSellerListingDraft} from './SellerListingDraftStore';
 import {listingSteps, type ListingStep} from './listingSteps';
 import type {WorkspaceView} from './WorkspaceOverview';
 
-type Flow = {samplesBlocked:boolean; stepsForContent:(content:ListingDraftContent)=>ListingStep[]; sourceCurrentDraftId:string|null; sourceLoaded:boolean; sourceError:string; fileRevision:number; setFilesDirty:(dirty:boolean)=>void; setListingDirty:(dirty:boolean)=>void; setLicenceDirty:(dirty:boolean)=>void; source: SourceRead|null; categories: SellerCategory[]; steps: ListingStep[]; review: ListingReview|null;
+type Flow = {samplesBlocked:boolean; stepsForContent:(content:ListingDraftContent)=>ListingStep[]; sourceCurrentDraftId:string|null; sourceLoaded:boolean; sourceDraftChanged:boolean; reloadSource:()=>Promise<void>; sourceError:string; fileRevision:number; setFilesDirty:(dirty:boolean)=>void; setListingDirty:(dirty:boolean)=>void; setLicenceDirty:(dirty:boolean)=>void; source: SourceRead|null; categories: SellerCategory[]; steps: ListingStep[]; review: ListingReview|null;
   reviewError: string; reviewLoading: boolean; publication: PublicationState|null; publicationError: string;
   refreshReview: ()=>void; refreshPublication: ()=>void; sourceSaved: (response:SourceSaveResponse)=>void; sourceSaveRefused:(message:string)=>void;
   approved: (approval:ApprovalReceipt)=>void; published: (state:PublicationState)=>void;
@@ -22,7 +22,7 @@ const Context = createContext<Flow|null>(null);
 export function useListingFlow(){return useContext(Context);}
 
 export function GuidedListingFlow({connections, capabilities, view, navigate, children}: {connections:SellerWorkspaceConnection[]; capabilities:SellerWorkspaceCapabilities|null; view:WorkspaceView; navigate:(view:WorkspaceView)=>void; children:ReactNode}) {
-  const {draft, requestLoad, reload, selectionSavePending, selectionSaveFailed, startNewDraft} = useSellerListingDraft();
+  const {draft, available, loaded, requestLoad, reload, selectionSavePending, selectionSaveFailed, startNewDraft} = useSellerListingDraft();
   const [startingListing,setStartingListing]=useState(false);
   const [startError,setStartError]=useState('');
   const [sourceSaveNotice,setSourceSaveNotice]=useState('');
@@ -125,7 +125,14 @@ export function GuidedListingFlow({connections, capabilities, view, navigate, ch
   },[approval,publicationRetry]);
   const steps=listingSteps({connections,source,draft,categories,licensesEnabled,review,publication:publication?.publication??null,pending,licenceDirty,reviewReason:listingDirty?'Save your changes in Describe and price before continuing.':reviewError});
   const next=steps.find(s=>s.next);
-  const flow:Flow={startAnotherListing:()=>void startAnotherListing(),startingListing,samplesBlocked:selectionSavePending||selectionSaveFailed,stepsForContent:content=>listingSteps({connections,source,draft:{version:draft?.version??0,updated_at:draft?.updated_at??'',content:{...draft?.content,...content}},categories,licensesEnabled,review:null,publication:null,pending,licenceDirty}),sourceCurrentDraftId,sourceLoaded:sourceLoaded&&sourceDraftId===(draft?.draft_id??null),sourceError:readError,fileRevision,setFilesDirty:dirty=>{setFilesDirty(dirty);if(dirty)setFileRevision(n=>n+1);},setListingDirty,setLicenceDirty,source,categories,steps,review,reviewError,reviewLoading,publication,publicationError,licensesEnabled,navigate,
+  const sourceMatchesDraft=sourceDraftId===(draft?.draft_id??null);
+  const pointerMatchesDraft=!available||sourceCurrentDraftId===(draft?.draft_id??null);
+  const sourceDraftChanged=sourceLoaded&&available&&loaded&&sourceMatchesDraft&&!pointerMatchesDraft;
+  const reloadSource=async()=>{
+    setSourceLoaded(false);
+    try{await reload();}finally{setReadRetry(n=>n+1);}
+  };
+  const flow:Flow={startAnotherListing:()=>void startAnotherListing(),startingListing,samplesBlocked:selectionSavePending||selectionSaveFailed,stepsForContent:content=>listingSteps({connections,source,draft:{version:draft?.version??0,updated_at:draft?.updated_at??'',content:{...draft?.content,...content}},categories,licensesEnabled,review:null,publication:null,pending,licenceDirty}),sourceCurrentDraftId,sourceLoaded:sourceLoaded&&sourceMatchesDraft&&pointerMatchesDraft,sourceDraftChanged,reloadSource,sourceError:readError,fileRevision,setFilesDirty:dirty=>{setFilesDirty(dirty);if(dirty)setFileRevision(n=>n+1);},setListingDirty,setLicenceDirty,source,categories,steps,review,reviewError,reviewLoading,publication,publicationError,licensesEnabled,navigate,
     refreshReview:()=>setReviewRetry(n=>n+1),refreshPublication:()=>setPublicationRetry(n=>n+1),sourceSaveRefused:setSourceSaveNotice,sourceSaved:value=>{setSourceSaveNotice('');setSource(value.source);setSourceCurrentDraftId(value.current_draft_id);setFilesDirty(false);},
     approved:a=>setReview(r=>r?{...r,approval:a}:r),published:setPublication};
   const published=steps[5].state==='done' ? publication?.publication : null;

@@ -16,6 +16,10 @@ export default function SavedWorkspaceData({connections, enabled,sampleLimits,li
   const [source, setSource] = useState<SourceRead | null>(null);
   const [loading, setLoading] = useState(true);
   const [failed, setFailed] = useState(false);
+  const [sourceDraftId,setSourceDraftId]=useState<string|null>(null);
+  const [draftChanged,setDraftChanged]=useState(false);
+  const [saveNotice,setSaveNotice]=useState('');
+  const [reloading,setReloading]=useState(false);
   const [retry, setRetry] = useState(0);
   const [saving, setSaving] = useState(false);
   const {draft,available,loaded,error:draftError,reload:reloadDraft,retry:retryDraft,requestLoad,sampleCapability,sampleIndices,selectionSavePending,saveLicenseSelection,saveSamples,beginSelectionSave,finishSelectionSave,setVisibleSampleIndices}=useSellerListingDraft();
@@ -40,10 +44,10 @@ export default function SavedWorkspaceData({connections, enabled,sampleLimits,li
     setLoading(true); setFailed(false);
     readListingSource(draft?.draft_id)
       .then(async result => { if (current) {
-        currentDraftId.current=result.current_draft_id;
+        currentDraftId.current=result.current_draft_id;setSourceDraftId(draft?.draft_id??null);
         const nextVersion=result.source?.version??0;const changed=observedVersion.current!==null&&observedVersion.current!==nextVersion;
         observedVersion.current=nextVersion;setSource(result.source);version.current=nextVersion;
-        if(changed&&sampleCapability){
+        if(changed&&sampleCapability&&(!available||result.current_draft_id===(draft?.draft_id??null))){
           const state=draftState.current;beginSelectionSave();let cleared=false;
           try{if(state.loaded&&(state.selectionSavePending||state.sampleIndices.length>0||state.draft?.content.sample_decision==='member_files'))await state.saveSamples([]);cleared=true;}
           catch{/* The source read is valid; the durable draft owner keeps Review blocked until reconciliation. */}
@@ -53,9 +57,22 @@ export default function SavedWorkspaceData({connections, enabled,sampleLimits,li
       .catch(() => { if (current) setFailed(true); }).finally(() => { if (current) setLoading(false); });
     return () => { current = false; };
   }, [retry,flow?.source,flow?.sourceCurrentDraftId,draft?.draft_id]);
+  const sourceDraftChanged=flow?flow.sourceDraftChanged:!loading&&available&&loaded&&sourceDraftId===(draft?.draft_id??null)&&currentDraftId.current!==(draft?.draft_id??null);
+  const sourceReady=flow?flow.sourceLoaded:!loading&&sourceDraftId===(draft?.draft_id??null);
+  async function reloadCurrentSource(){
+    setReloading(true);setDraftChanged(true);pending.current=null;
+    try{if(flow)await flow.reloadSource();else{setLoading(true);await reloadDraft();setRetry(n=>n+1);}setDraftChanged(false);}
+    catch{setDraftChanged(true);}
+    finally{setReloading(false);}
+  }
   async function save(connection: SellerWorkspaceConnection, objects: WorkspaceObject[]) {
     if (inFlight.current) throw new Error('A file selection save is already pending');
     if(available&&!loaded)throw new DraftNotLoadedError();
+    // A source GET may describe A while reporting that B is now current.
+    // Never use B's pointer to admit a selection made in A's editor.
+    if(available&&(!sourceReady||currentDraftId.current!==(draft?.draft_id??null))){
+      setDraftChanged(true);pending.current=null;return false;
+    }
     const sampleState=draftState.current;
     if(flow)version.current=flow.source?.version??0;
     inFlight.current = true; setSaving(true);beginSelectionSave();let succeeded=false;
@@ -71,24 +88,25 @@ export default function SavedWorkspaceData({connections, enabled,sampleLimits,li
       // Bind every save, including an observed empty draft. Only imported drafts
       // need the explicit native target and its lineage authorization.
       const result = await saveListingSource(content, pending.current.version, pending.current.id, pending.current.draftId, pending.current.targetId);
-      currentDraftId.current=result.current_draft_id;version.current = result.source.version;observedVersion.current=result.source.version; pending.current = null; setSource(result.source);flow?.sourceSaved(result);
+      currentDraftId.current=result.current_draft_id;version.current = result.source.version;observedVersion.current=result.source.version; pending.current = null; setSaveNotice('');setSource(result.source);flow?.sourceSaved(result);
       succeeded=true;
-      if (sampleCapability&&sampleState.loaded&&(sampleState.selectionSavePending||sampleState.sampleIndices.length>0||sampleState.draft?.content.sample_decision==='member_files')) {
+      if (sampleCapability&&sampleState.loaded&&(!available||result.current_draft_id===(sampleState.draft?.draft_id??null))&&(sampleState.selectionSavePending||sampleState.sampleIndices.length>0||sampleState.draft?.content.sample_decision==='member_files')) {
         try { await sampleState.saveSamples([]); } catch { succeeded=false; /* Source commit remains successful; retry from the sample selector. */ }
       }
       if(available&&loaded){try{await reloadDraft();}catch{retryDraft();}}
     } catch(failure) {
-      if(authorityCode(failure)==='DRAFT_SUPERSEDED'){flow?.sourceSaveRefused?.(listingDraftError(failure)?.message??'Your draft was replaced. Check the current draft before choosing files again.');pending.current=null;try{await reloadDraft();}catch{retryDraft();}}
+      if(authorityCode(failure)==='DRAFT_SUPERSEDED'){const message=listingDraftError(failure)?.message??'Your draft was replaced. Check the current draft before choosing files again.';if(flow)flow.sourceSaveRefused?.(message);else setSaveNotice(message);pending.current=null;try{await reloadDraft();}catch{retryDraft();}}
       throw failure;
     } finally { finishSelectionSave(succeeded);inFlight.current = false; setSaving(false); }
     return succeeded;
   }
 
+  if(sourceDraftChanged||draftChanged)return <div role="alert" className="text-sm text-red-800">Your listing draft changed. Reload the current draft before saving your files again. <button type="button" disabled={reloading} className="underline" onClick={()=>void reloadCurrentSource()}>Reload current draft</button></div>;
   if(flow&&!flow.sourceLoaded)return <p role="status">{flow.sourceError||'Loading your saved file selection…'}</p>;
-  if (loading&&!flow) return <p role="status" className="p-5 text-sm text-gray-600">Loading your saved file selection…</p>;
   if (failed) return <div role="alert" className="rounded-xl border border-red-200 p-5 text-sm text-red-800">Your saved file selection could not be loaded.<button className="ml-3 underline" onClick={() => setRetry(value => value + 1)}>Try loading again</button></div>;
+  if (!sourceReady&&!flow) return <>{saveNotice&&<p role="alert">{saveNotice}</p>}<p role="status" className="p-5 text-sm text-gray-600">Loading your saved file selection…</p></>;
   const draftBlocked=available&&!loaded;
-  return <>{draftBlocked&&(<div role={draftError?'alert':'status'}>{draftError?'Your saved draft could not be loaded. Retry before saving files.':'Loading your saved draft…'}{draftError&&<button type="button" onClick={retryDraft}>Try loading draft again</button>}</div>)}{(licenseReady||!draftBlocked)&&<fieldset hidden={draftBlocked} disabled={draftBlocked} className="min-w-0 border-0 p-0"><WorkspaceData connections={connections} enabled={enabled} savedSource={flow?flow.source:source} onSaveSelection={save} saving={saving}
+  return <>{saveNotice&&<p role="alert" className="text-sm text-red-800">{saveNotice}</p>}{draftBlocked&&(<div role={draftError?'alert':'status'}>{draftError?'Your saved draft could not be loaded. Retry before saving files.':'Loading your saved draft…'}{draftError&&<button type="button" onClick={retryDraft}>Try loading draft again</button>}</div>)}{(licenseReady||!draftBlocked)&&<fieldset hidden={draftBlocked} disabled={draftBlocked} className="min-w-0 border-0 p-0"><WorkspaceData connections={connections} enabled={enabled} savedSource={flow?flow.source:source} onSaveSelection={save} saving={saving}
     sampleFilesAvailable={sampleCapability&&loaded} initialSampleIndices={sampleIndices} onSaveSampleSelection={saveSamples} onVisibleSampleSelectionChange={setVisibleSampleIndices} sampleLimits={sampleLimits}
     licenseSelection={listingLicensesEnabled?licenseSelection:undefined} onLicenseSelectionChange={listingLicensesEnabled?value=>{licenseChanged.current=true;setLicenseSelection(value);setLicenseSaveMessage('');}:undefined} licenseSaving={licenseSaving} licenseSaveMessage={licenseSaveMessage}
     licenseDraftAvailable={available} licenseDraftLoaded={loaded&&licenseReady} licenseDraftError={draftError} onRetryLicenseDraft={retryDraft} licenseSelectionSaved={draft?.content.license_selection}

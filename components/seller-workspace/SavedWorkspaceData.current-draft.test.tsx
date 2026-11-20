@@ -8,7 +8,7 @@ import {EMPTY_LISTING_DRAFT,saveListingDraft,type SavedListingDraft} from '@/api
 import type {SourceRead} from '@/api/sellerListingSource';
 import {useAuthStore} from '@/store/auth';
 import {categoryRows,guidedCapabilities,guidedConnection,guidedObjects} from '@/tests/guidedListingFixture';
-import {SellerListingDraftProvider,resetSellerListingDraftOwnerForTests} from './SellerListingDraftStore';
+import {SellerListingDraftProvider,resetSellerListingDraftOwnerForTests,useSellerListingDraft} from './SellerListingDraftStore';
 import SavedWorkspaceData from './SavedWorkspaceData';
 import {GuidedListingFlow} from './GuidedListingFlow';
 vi.mock('@/api/capabilities',()=>({getCapabilities:vi.fn(async()=>({}))}));
@@ -30,6 +30,10 @@ function backend(){
   const sources=new Map<string,SourceRead>();
   const receipts=new Map<string,{source:SourceRead;current_draft_id:string}>();
   let loseResponse=false;let draftReads=0;
+  let beforeSourceRead:((id:string|null)=>void)|undefined;
+  let afterSourceSave:(()=>void)|undefined;
+  let readDraft:(()=>Promise<SavedListingDraft|null>)|undefined;
+  const sourceReads:Array<string|null>=[];
   const writes:Array<Record<string,unknown>>=[];
   let current:string|null=null;
   const createOrdinary=(id:string)=>{
@@ -40,9 +44,13 @@ function backend(){
     expect(config.headers.get('Authorization')).toBe(`Bearer ${token}`);
     let data:unknown;
     if(config.method==='get'){
-      if(config.url?.endsWith('/listing-draft')){draftReads++;data={draft:current?drafts.get(current):null};}
+      if(config.url?.endsWith('/listing-draft')){draftReads++;data={draft:readDraft?await readDraft():current?drafts.get(current):null};}
       else if(config.url?.endsWith('/categories'))data=categoryRows;
-      else if(config.url?.endsWith('/listing-source'))data={source:current?sources.get(current)??null:null,current_draft_id:current};
+      else if(config.url?.endsWith('/listing-source')){
+        const requested=config.params?.draft_id??null;sourceReads.push(requested);beforeSourceRead?.(requested);
+        const target=requested??current;
+        data={source:target?sources.get(target)??null:null,current_draft_id:current};
+      }
       else throw new Error(`Unexpected GET ${config.url}`);
     }else{
       const body=JSON.parse(config.data);writes.push(body);
@@ -64,19 +72,21 @@ function backend(){
         expect(body.expected_version).toBe(existing?.version??0);
         if(!current)createOrdinary(a);
         const source={version:(existing?.version??0)+1,content:body.content,connection_current:true};
-        sources.set(current!,source);data={source,current_draft_id:current};
+        sources.set(current!,source);
         receipts.set(body.request_id,{source,current_draft_id:current!});
+        afterSourceSave?.();data={source,current_draft_id:current};
         if(loseResponse){loseResponse=false;throw new Error("lost response");}
       }else throw new Error(`Unexpected write ${config.url}`);
     }
     return {data,status:200,statusText:'OK',headers:{},config};
   };
   api.defaults.adapter=adapter;nativeClient.defaults.adapter=adapter;
-  return {drafts,sources,writes,createOrdinary,get draftReads(){return draftReads;},loseNextResponse:()=>{loseResponse=true;}};
+  return {drafts,sources,writes,sourceReads,createOrdinary,onSourceSave:(callback:()=>void)=>{afterSourceSave=callback;},onDraftRead:(callback:()=>Promise<SavedListingDraft|null>)=>{readDraft=callback;},onSourceRead:(callback:(id:string|null)=>void)=>{beforeSourceRead=callback;},get draftReads(){return draftReads;},loseNextResponse:()=>{loseResponse=true;}};
 }
-function mount(enabled=true,guided=false){
-  const editor=<SavedWorkspaceData enabled connections={[guidedConnection]}/>;
-  return render(<SellerListingDraftProvider enabled={enabled} sampleCapability={false}>{guided?<GuidedListingFlow capabilities={{...guidedCapabilities,review:{enabled:false,status:'unavailable',reason:'disabled'},listing_licenses:false}} connections={[guidedConnection]} view="data" navigate={vi.fn()}>{editor}</GuidedListingFlow>:editor}</SellerListingDraftProvider>);
+function DraftStatus(){const {draft}=useSellerListingDraft();return <output data-testid="draft-id">{draft?.draft_id??"empty"}</output>;}
+function mount(enabled=true,guided=false,sampleCapability=false){
+  const editor=<><DraftStatus/><SavedWorkspaceData enabled connections={[guidedConnection]}/></>;
+  return render(<SellerListingDraftProvider enabled={enabled} sampleCapability={sampleCapability}>{guided?<GuidedListingFlow capabilities={{...guidedCapabilities,review:{enabled:false,status:'unavailable',reason:'disabled'},listing_licenses:false}} connections={[guidedConnection]} view="data" navigate={vi.fn()}>{editor}</GuidedListingFlow>:editor}</SellerListingDraftProvider>);
 }
 async function select(){fireEvent.click(await screen.findByRole('checkbox',{name:'Select weekly/sales.csv'}));}
 function save(){fireEvent.click(screen.getByRole('button',{name:'Save selected files'}));fireEvent.click(screen.getByRole('button',{name:'Confirm selection'}));}
@@ -147,4 +157,73 @@ it('retries a committed first save after a lost response with exactly the same b
   await screen.findByText(/File selection saved to your account/);
   expect(model.writes).toHaveLength(2);expect(model.writes[1]).toEqual(model.writes[0]);
   expect(model.sources.get(a)?.version).toBe(1);
+});
+
+
+it.each([{guided:false,hasSource:false},{guided:true,hasSource:false},{guided:false,hasSource:true},{guided:true,hasSource:true}])('blocks A source with B current until the seller reloads and reviews B: %j',async({guided,hasSource})=>{
+  const model=backend();model.createOrdinary(a);
+  const bSource:SourceRead={version:1,connection_current:true,content:{connection_id:guidedConnection.id,connection_version:1,version_mode:'current',objects:[{...guidedObjects[0],key:'weekly/extra.csv'}]}};
+  let before:SavedListingDraft|undefined;
+  model.onSourceRead(id=>{if(id===a){before=structuredClone(model.createOrdinary(b));if(hasSource)model.sources.set(b,bSource);}});
+  mount(true,guided);
+  await screen.findByRole('button',{name:'Reload current draft'});
+  expect(screen.getByRole('alert').textContent).toContain('Your listing draft changed.');
+  expect(screen.queryByRole('button',{name:'Confirm selection'})).toBeNull();
+  expect(screen.queryByRole('button',{name:'Save selected files'})).toBeNull();
+  expect(model.sourceReads).toContain(a);expect(model.writes).toHaveLength(0);
+  expect(model.sources.has(a)).toBe(false);expect(model.sources.get(b)).toEqual(hasSource?bSource:undefined);expect(model.drafts.get(b)).toEqual(before);
+  fireEvent.click(screen.getByRole('button',{name:'Reload current draft'}));
+  await waitFor(()=>expect(screen.getByTestId('draft-id').textContent).toBe(b));
+  const extra=await screen.findByRole('checkbox',{name:'Select weekly/extra.csv'});
+  expect((extra as HTMLInputElement).checked).toBe(hasSource);
+  expect((screen.getByRole('checkbox',{name:'Select weekly/sales.csv'}) as HTMLInputElement).checked).toBe(false);
+  expect(model.sourceReads).toContain(b);expect(model.writes).toHaveLength(0);expect(model.sources.get(b)).toEqual(hasSource?bSource:undefined);
+  await select();save();
+  await waitFor(()=>expect(model.sources.get(b)?.version).toBe(hasSource?2:1));
+  expect(model.writes).toHaveLength(1);expect(model.writes[0]).toMatchObject({expected_current_draft_id:b,expected_version:hasSource?1:0});
+  expect(model.writes[0]).not.toHaveProperty('draft_id');
+});
+
+it.each([false,true])('saves normally when the loaded draft and source pointer agree: guided=%s',async guided=>{
+  const model=backend();model.createOrdinary(a);mount(true,guided);await select();save();
+  await waitFor(()=>expect(model.sources.get(a)?.version).toBe(1));
+  expect(model.writes).toHaveLength(1);expect(model.writes[0]).toMatchObject({expected_current_draft_id:a,expected_version:0});
+});
+
+
+it.each([false,true])('fences A while the successful PUT reports B and the draft reload is pending: guided=%s',async guided=>{
+  const model=backend();model.createOrdinary(a);mount(true,guided);await select();
+  let finishReload!:(draft:SavedListingDraft)=>void;
+  let replacement!:SavedListingDraft;
+  model.onSourceSave(()=>{
+    replacement=model.createOrdinary(b);
+    model.onDraftRead(()=>new Promise(resolve=>{finishReload=resolve;}));
+  });
+  save();
+  await screen.findByRole('button',{name:'Reload current draft'});
+  expect(screen.queryByRole('checkbox',{name:'Select weekly/sales.csv'})).toBeNull();
+  expect(screen.queryByRole('button',{name:'Confirm selection'})).toBeNull();
+  expect(model.writes).toHaveLength(1);expect(model.sources.has(b)).toBe(false);
+  model.onDraftRead(async()=>replacement);
+  finishReload(replacement);
+  const sales=await screen.findByRole('checkbox',{name:'Select weekly/sales.csv'});
+  expect((sales as HTMLInputElement).checked).toBe(false);
+  expect(screen.getByTestId('draft-id').textContent).toBe(b);
+  expect(model.sourceReads).toContain(b);expect(model.sources.has(b)).toBe(false);expect(model.writes).toHaveLength(1);
+});
+
+
+it('does not reconcile samples with a draft PUT when the source identity disagrees',async()=>{
+  const model=backend();const original=model.createOrdinary(a);
+  original.content={...original.content,sample_decision:'member_files',sample_object_indices:[0]};
+  let replacement!:SavedListingDraft;
+  model.onSourceRead(id=>{
+    if(id===a){
+      replacement=structuredClone(model.createOrdinary(b));
+      model.sources.set(a,{version:1,connection_current:true,content:{connection_id:guidedConnection.id,connection_version:1,version_mode:'current',objects:guidedObjects}});
+    }
+  });
+  mount(true,false,true);
+  await screen.findByRole('button',{name:'Reload current draft'});
+  expect(model.writes).toHaveLength(0);expect(model.drafts.get(b)).toEqual(replacement);expect(model.sources.has(b)).toBe(false);
 });
