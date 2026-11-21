@@ -1,6 +1,7 @@
 import type { Metadata } from 'next';
 import { fetchDataRequest } from '@/lib/api';
 import type { DataRequestDetail } from '@/types';
+import { hasPrivatePublication } from '@/lib/buyer-request-publication';
 import DataRequestDetailClient from './DataRequestDetailClient';
 
 export const dynamic = 'force-dynamic';
@@ -15,7 +16,7 @@ interface Props {
 export async function generateMetadata({ params }: Props): Promise<Metadata> {
   const { slug } = await params;
   const request: DataRequestDetail | null = await fetchDataRequest(slug);
-  if (!request) {
+  if (!request || hasPrivatePublication(request)) {
     return {
       title: 'Data Request',
       robots: { index: false, follow: false },
@@ -49,7 +50,7 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
 export default async function DataRequestDetailPage({ params }: Props) {
   const { slug } = await params;
   const request: DataRequestDetail | null = await fetchDataRequest(slug);
-  if (!request) {
+  if (!request || hasPrivatePublication(request)) {
     return <DataRequestDetailClient slug={slug} initialRequest={null} />;
   }
 

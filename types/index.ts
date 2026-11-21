@@ -1043,7 +1043,7 @@ export type RequestPublicationReason =
 export interface DataRequestListItem {
   is_sample?: boolean;
   id: string;
-  slug: string;
+  slug: string | null;
   title?: string;
   description: string;
   categories: string[];
@@ -1058,7 +1058,28 @@ export interface DataRequestListItem {
   updated_at: string | null;
 }
 
+export interface RequestPublicationBinding {
+  revision: string;
+  render_digest: string;
+  screening_policy_version: string;
+}
+
+export type RequestPublicationPreparation =
+  | { status: 'unprepared' | 'preparing' | 'correction_required' }
+  | {
+      status: 'preview_ready';
+      binding: RequestPublicationBinding;
+      public_content_hash: string;
+      policy_version: string;
+      presentation: {
+        language: string;
+        slug: string;
+        fields: { label: string; value: string }[];
+      };
+    };
+
 export interface DataRequestDetail extends DataRequestListItem {
+  publication_preparation?: RequestPublicationPreparation | null;
   response_refusal?: string | null;
   format_preferences: string[];
   regulatory_requirements?: string[];

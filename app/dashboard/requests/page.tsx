@@ -6,6 +6,7 @@ import Link from 'next/link';
 import { useAuthStore } from '@/store/auth';
 import { getMyDataRequestsPage, type MyDataRequestsPage as RequestsPage } from '@/api/data-requests';
 import { formatDate } from '@/lib/format';
+import { ownerRequestHref } from '@/lib/buyer-request-publication';
 import { AxiosError } from 'axios';
 import type { DataRequestStatus, DataRequestUrgency } from '@/types';
 
@@ -141,7 +142,7 @@ function OwnedRequests() {
             {requests.map((req) => (
               <tr key={req.id} className="hover:bg-gray-50">
                 <td className="px-4 py-3">
-                  <Link href={`/requests/${req.slug}`} className="text-[#3F51B5] hover:underline font-medium">
+                  <Link href={ownerRequestHref(req)} className="text-[#3F51B5] hover:underline font-medium">
                     {req.title}
                   </Link>
                 </td>
@@ -164,7 +165,7 @@ function OwnedRequests() {
         {requests.map((req) => (
           <Link
             key={req.id}
-            href={`/requests/${req.slug}`}
+            href={ownerRequestHref(req)}
             className="block rounded-lg border border-gray-200 p-4 hover:bg-gray-50"
           >
             <div className="flex items-center justify-between mb-2">

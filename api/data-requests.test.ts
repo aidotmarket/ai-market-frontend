@@ -1,7 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-import { getDataRequestResponses, getMyDataRequests, getMyDataRequestsPage, submitDataRequestResponse } from './data-requests';
+import { confirmDataRequestPublication, getDataRequestResponses, getMyDataRequests, getMyDataRequestsPage, submitDataRequestResponse } from './data-requests';
 
-const mocks = vi.hoisted(() => ({ get: vi.fn(), post: vi.fn() }));
+const mocks = vi.hoisted(() => ({ get: vi.fn(), post: vi.fn(), put: vi.fn() }));
 vi.mock('./client', () => ({ api: mocks }));
 
 describe('supplier quote API', () => {
@@ -25,6 +25,17 @@ describe('supplier quote API', () => {
 
 describe('owned request API contracts', () => {
   beforeEach(() => vi.clearAllMocks());
+
+  it('preserves the consent endpoint and sends the exact displayed binding only for a prepared revision', async () => {
+    mocks.put.mockResolvedValue({ data: {} });
+    const binding = { revision: 'rev-1', render_digest: 'a'.repeat(64), screening_policy_version: 'screen-1' };
+    await confirmDataRequestPublication('request-1', 'hash', 'consent-1');
+    await confirmDataRequestPublication('request-1', 'hash', 'consent-1', binding);
+    expect(mocks.put.mock.calls).toEqual([
+      ['/data-requests/request-1/publication-consent', { public_content_hash: 'hash', policy_version: 'consent-1' }],
+      ['/data-requests/request-1/publication-consent', { public_content_hash: 'hash', policy_version: 'consent-1', ...binding }],
+    ]);
+  });
 
   it('keeps the existing array-only helper compatible with array and envelope responses', async () => {
     const items = [{ id: 'private-draft', status: 'draft' }];

@@ -37,3 +37,13 @@ it('explains draft review and confirms a saved draft with the existing detail de
   await waitFor(() => expect(mocks.toast).toHaveBeenCalledWith("Saved as a draft. Review it and publish when you're ready.", 'success'));
   expect(mocks.push).toHaveBeenCalledWith('/requests/retail-data');
 });
+
+it('continues a synthetic gated Web draft by ID without requiring a public slug', async () => {
+  useAuthStore.setState({ user: { id: 'buyer-1' } as User, isAuthenticated: true });
+  const id = '00000000-0000-4000-8000-000000000001';
+  mocks.createDataRequest.mockResolvedValue({ id, slug: null });
+  render(<NewDataRequestPage />);
+  fireEvent.change(screen.getByLabelText('Description'), { target: { value: 'Licensed synthetic retail sales data' } });
+  fireEvent.click(screen.getByRole('button', { name: 'Create Data Request' }));
+  await waitFor(() => expect(mocks.push).toHaveBeenCalledExactlyOnceWith(`/requests/${id}`));
+});

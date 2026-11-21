@@ -6,6 +6,7 @@ import { useRouter } from 'next/navigation';
 import { useAuthStore } from '@/store/auth';
 import { useToast } from '@/components/Toast';
 import { createDataRequest } from '@/api/data-requests';
+import { buyerRequestAnonymizationEnabled, ownerRequestHref } from '@/lib/buyer-request-publication';
 import { AxiosError } from 'axios';
 import type { DataRequestUrgency } from '@/types';
 
@@ -115,10 +116,12 @@ function RequestForm({ accountId, retireVisit }: {
 
       if (!isCurrent()) return;
       toast('Saved as a draft. Review it and publish when you\'re ready.', 'success');
-      router.push(`/requests/${result.slug}`);
+      router.push(ownerRequestHref(result));
     } catch (err) {
       if (!isCurrent()) return;
-      if (err instanceof AxiosError) {
+      if (buyerRequestAnonymizationEnabled()) {
+        toast('Could not save your draft. Try again.', 'error');
+      } else if (err instanceof AxiosError) {
         const detail = err.response?.data?.detail;
         let message = 'Failed to create data request.';
         if (typeof detail === 'string') {

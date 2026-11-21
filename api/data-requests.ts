@@ -6,6 +6,7 @@ import type {
   DataRequestDetail,
   CreateDataRequestPayload,
   DataRequestResponse,
+  RequestPublicationBinding,
 } from '@/types';
 
 export async function getDataRequests(): Promise<DataRequestListItem[]> {
@@ -39,11 +40,20 @@ export async function publishDataRequest(requestId: string): Promise<DataRequest
 export async function confirmDataRequestPublication(
   requestId: string,
   publicContentHash: string,
-  policyVersion: string
+  policyVersion: string,
+  binding?: RequestPublicationBinding,
 ): Promise<DataRequestDetail> {
   const res = await api.put<DataRequestDetail>(
     `/data-requests/${encodeURIComponent(requestId)}/publication-consent`,
-    { public_content_hash: publicContentHash, policy_version: policyVersion }
+    {
+      public_content_hash: publicContentHash,
+      policy_version: policyVersion,
+      ...(binding && {
+        revision: binding.revision,
+        render_digest: binding.render_digest,
+        screening_policy_version: binding.screening_policy_version,
+      }),
+    }
   );
   return res.data;
 }

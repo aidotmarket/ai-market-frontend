@@ -16,6 +16,7 @@ import {
   withdrawDataRequestPublication,
 } from '@/api/data-requests';
 import { authSessionOwner, isAuthSessionOwner, subscribeAuthSessionOwner } from '@/lib/auth-session-owner';
+import { buyerRequestAnonymizationEnabled, exactPublicationPreview, hasPrivatePublication, isRequestId, ownerRequestHref } from '@/lib/buyer-request-publication';
 import RequestConversation from '@/components/RequestConversation';
 import { formatDate } from '@/lib/format';
 import { requestDisplayTitle } from '@/lib/request-display-title';
@@ -112,7 +113,9 @@ export default function DataRequestDetailClient({
   const userId = user?.id;
   const context = `${slug}\0${isAuthenticated}\0${userId ?? ''}\0${owner}`;
   const [requestRecord, setRequestRecord] = useState({ context, value: initialRequest });
-  const request = requestRecord.context === context ? requestRecord.value : null;
+  const currentRecord = requestRecord.context === context ? requestRecord.value : null;
+  const request = currentRecord && hasPrivatePublication(currentRecord) && (!isAuthenticated || userId !== currentRecord.buyer_id)
+    ? null : currentRecord;
   const setRequest = (value: DataRequestDetail | null) => setRequestRecord({ context, value });
   const [conversationNavigation, setConversationNavigation] = useState(0);
   const [responses, setResponses] = useState<DataRequestResponse[]>([]);
@@ -122,6 +125,8 @@ export default function DataRequestDetailClient({
   const [publishing, setPublishing] = useState(false);
   const [deleting, setDeleting] = useState(false);
   const [updatingPublication, setUpdatingPublication] = useState(false);
+  const [previewInvalidated, setPreviewInvalidated] = useState(false);
+  const [preparationError, setPreparationError] = useState('');
   const [editing, setEditing] = useState(false);
   const [savingEdit, setSavingEdit] = useState(false);
   const [editError, setEditError] = useState('');
@@ -163,6 +168,8 @@ export default function DataRequestDetailClient({
     setPublishing(false);
     setDeleting(false);
     setUpdatingPublication(false);
+    setPreviewInvalidated(false);
+    setPreparationError('');
     setEditing(false);
     setSavingEdit(false);
     setEditError('');
@@ -198,6 +205,10 @@ export default function DataRequestDetailClient({
   const responsePending = useRef(false);
 
   const isOwner = isAuthenticated && user && request && user.id === request.buyer_id;
+  const privatePublication = Boolean(request && hasPrivatePublication(request));
+  const gatedPublication = isOwner && privatePublication && buyerRequestAnonymizationEnabled();
+  const preparation = gatedPublication && !previewInvalidated ? request?.publication_preparation : null;
+  const preview = exactPublicationPreview(preparation);
   const ownResponses = isOwner ? [] : responses;
   const responseRefusal = request?.response_refusal || null;
   const lastCheckTime = checkedTime(request?.publication_checked_at);
@@ -221,6 +232,10 @@ export default function DataRequestDetailClient({
     const splitList = (value: string) => value.split(',').map((item) => item.trim()).filter(Boolean);
     setSavingEdit(true);
     setEditError('');
+    if (privatePublication) {
+      setPreviewInvalidated(true);
+      setPreparationError('');
+    }
     const epoch = beginMutation();
     try {
       const updated = await updateDataRequest(request.id, {
@@ -234,10 +249,12 @@ export default function DataRequestDetailClient({
       if (!isCurrentMutation(epoch)) return;
       setRequest(updated);
       setEditing(false);
-      toast('Request changes saved. Review the public visibility status before confirming.', 'success');
+      toast(privatePublication
+        ? 'Draft changes saved. Prepare a new preview when you’re ready.'
+        : 'Request changes saved. Review the public visibility status before confirming.', 'success');
     } catch (err) {
       if (!isCurrentMutation(epoch)) return;
-      const detail = err instanceof AxiosError ? err.response?.data?.detail : null;
+      const detail = !privatePublication && err instanceof AxiosError ? err.response?.data?.detail : null;
       const message = typeof detail === 'string'
         ? detail
         : Array.isArray(detail)
@@ -261,10 +278,13 @@ export default function DataRequestDetailClient({
     const startedDuringMutation = mutationPending.current;
     const isCurrent = () => isAuthSessionOwner(owner) && visitActive.current && !startedDuringMutation && epoch === contextEpoch.current && currentContext.current === context && generation === loadGeneration.current;
     try {
-      const data = await getDataRequest(slug);
+      const result = await getDataRequest(slug);
       if (!isCurrent()) return;
+      const data = result && hasPrivatePublication(result) && (!isAuthenticated || userId !== result.buyer_id) ? null : result;
       setRequest(data);
       setReadError(null);
+      setPreviewInvalidated(false);
+      setPreparationError('');
 
       // The API restricts nonowners to their own supplier responses.
       if (data && isAuthenticated && userId) {
@@ -310,12 +330,23 @@ export default function DataRequestDetailClient({
   }
 
   async function handlePublish() {
-    if (!request || editing || savingEdit || publishing || deleting || updatingPublication) return;
+    if (!isOwner || !request || (privatePublication && (!gatedPublication || !request.publication_preparation)) || mutationPending.current || editing || savingEdit || publishing || deleting || updatingPublication) return;
     const epoch = beginMutation();
     setPublishing(true);
+    setPreparationError('');
     try {
       const updated = await publishDataRequest(request.id);
       if (!isCurrentMutation(epoch)) return;
+      if (gatedPublication) {
+        if (updated.id !== request.id || updated.buyer_id !== userId || updated.slug
+          || !updated.publication_preparation || updated.publication_decision === 'eligible') {
+          setPreparationError('Could not load the private preview. Refresh the request and try again.');
+          return;
+        }
+        setRequest(updated);
+        setPreviewInvalidated(false);
+        return;
+      }
       setRequest(updated);
       toast(
         updated.publication_decision === 'eligible'
@@ -325,7 +356,9 @@ export default function DataRequestDetailClient({
       );
     } catch (err) {
       if (!isCurrentMutation(epoch)) return;
-      if (err instanceof AxiosError) {
+      if (gatedPublication) {
+        setPreparationError('Could not prepare the request. Refresh the request to check its status.');
+      } else if (err instanceof AxiosError) {
         toast(err.response?.data?.detail || 'Failed to publish.', 'error');
       } else {
         toast('An unexpected error occurred.', 'error');
@@ -349,7 +382,9 @@ export default function DataRequestDetailClient({
       router.push('/dashboard/requests');
     } catch (err) {
       if (!isCurrentMutation(epoch)) return;
-      if (err instanceof AxiosError) {
+      if (privatePublication) {
+        toast('Could not delete the request. Refresh to check its status.', 'error');
+      } else if (err instanceof AxiosError) {
         toast(err.response?.data?.detail || 'Failed to delete.', 'error');
       } else {
         toast('An unexpected error occurred.', 'error');
@@ -363,17 +398,28 @@ export default function DataRequestDetailClient({
   }
 
   async function handleConfirmPublication() {
-    if (!request?.public_content_hash || !request.required_public_consent_policy_version || editing || savingEdit || publishing || deleting || updatingPublication) return;
+    const hash = preview?.public_content_hash ?? request?.public_content_hash;
+    const policy = preview?.policy_version ?? request?.required_public_consent_policy_version;
+    if (!isOwner || !request || !hash || !policy || (privatePublication && !preview) || mutationPending.current || editing || savingEdit || publishing || deleting || updatingPublication) return;
     const epoch = beginMutation();
     setUpdatingPublication(true);
+    setPreparationError('');
     try {
       const updated = await confirmDataRequestPublication(
         request.id,
-        request.public_content_hash,
-        request.required_public_consent_policy_version
+        hash,
+        policy,
+        ...(preview ? [preview.binding] as const : [])
       );
       if (!isCurrentMutation(epoch)) return;
+      if (preview && (updated.id !== request.id || updated.buyer_id !== userId
+        || updated.publication_decision !== 'eligible' || updated.slug !== preview.presentation.slug)) {
+        setPreviewInvalidated(true);
+        setPreparationError('Could not confirm publication. Refresh the request to check its status.');
+        return;
+      }
       setRequest(updated);
+      if (preview) setPreviewInvalidated(true);
       toast(
         updated.publication_decision === 'eligible'
           ? 'Your request is now available to the market.'
@@ -382,7 +428,12 @@ export default function DataRequestDetailClient({
       );
     } catch (err) {
       if (!isCurrentMutation(epoch)) return;
-      if (err instanceof AxiosError) {
+      if (preview) {
+        setPreviewInvalidated(true);
+        setPreparationError(err instanceof AxiosError && err.response?.status === 409
+          ? 'This preview is no longer current. Refresh the request and review the latest version.'
+          : 'Could not confirm publication. Refresh the request to check its status.');
+      } else if (err instanceof AxiosError) {
         toast(err.response?.data?.detail || 'Failed to update public visibility.', 'error');
       } else {
         toast('An unexpected error occurred.', 'error');
@@ -403,10 +454,14 @@ export default function DataRequestDetailClient({
       const updated = await withdrawDataRequestPublication(request.id);
       if (!isCurrentMutation(epoch)) return;
       setRequest(updated);
+      if (privatePublication) setPreviewInvalidated(true);
       toast('Your request is now private.', 'success');
     } catch (err) {
       if (!isCurrentMutation(epoch)) return;
-      if (err instanceof AxiosError) {
+      if (privatePublication) {
+        setPreviewInvalidated(true);
+        setPreparationError('Could not make the request private. Refresh the request to check its status.');
+      } else if (err instanceof AxiosError) {
         toast(err.response?.data?.detail || 'Failed to update public visibility.', 'error');
       } else {
         toast('An unexpected error occurred.', 'error');
@@ -476,6 +531,11 @@ export default function DataRequestDetailClient({
             Retry
           </button>
         )}
+        {!readError && !isAuthenticated && buyerRequestAnonymizationEnabled() && isRequestId(slug) && (
+          <Link href={`/login?redirect=${encodeURIComponent(ownerRequestHref({ id: slug, slug: null }))}`} className="mr-3 text-sm text-[#3F51B5] underline">
+            Sign in to continue
+          </Link>
+        )}
         <Link
           href="/requests"
           className="rounded-lg bg-[#3F51B5] px-6 py-2.5 text-sm font-medium text-white hover:bg-[#3545a0]"
@@ -489,7 +549,7 @@ export default function DataRequestDetailClient({
   const urgencyCss = URGENCY_BADGE[request.urgency] || URGENCY_BADGE.low;
   const statusCss = STATUS_BADGE[request.status] || STATUS_BADGE.draft;
   const canConfirmPublication =
-    Boolean(request.public_content_hash) &&
+    !privatePublication && Boolean(request.public_content_hash) &&
     Boolean(request.required_public_consent_policy_version) &&
     ['public_consent_required', 'public_content_changed', 'consent_withdrawn'].includes(
       request.publication_reason || ''
@@ -545,7 +605,7 @@ export default function DataRequestDetailClient({
               Edit request
             </button>
           )}
-          {request.status === 'draft' && !editing && (
+          {request.status === 'draft' && !privatePublication && !editing && (
             <button
               onClick={handlePublish}
               disabled={publishing}
@@ -554,12 +614,16 @@ export default function DataRequestDetailClient({
               {publishing ? 'Opening...' : 'Open request'}
             </button>
           )}
-          <Link
-            href={`/requests/${request.slug}`}
-            className="rounded-lg border border-gray-300 px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50"
-          >
-            Refresh
-          </Link>
+          {privatePublication ? (
+            <button type="button" onClick={retryRead} disabled={publishing || updatingPublication || savingEdit || editing || deleting}
+              className="rounded-lg border border-gray-300 px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50">
+              Refresh
+            </button>
+          ) : (
+            <Link href={ownerRequestHref(request)} className="rounded-lg border border-gray-300 px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50">
+              Refresh
+            </Link>
+          )}
           {!editing && (
             <button
               onClick={handleDelete}
@@ -607,7 +671,52 @@ export default function DataRequestDetailClient({
         </form>
       )}
 
-      {isOwner && request.publication_decision && (
+      {gatedPublication && (
+        <section className="rounded-xl border border-[#D8DDF4] bg-[#F7F8FE] p-5 mb-6 space-y-3" aria-labelledby="preparation-heading">
+          <h2 id="preparation-heading" className="font-semibold text-gray-900">Prepare for publication</h2>
+          {preparationError && <p role="alert" className="text-sm text-red-700">{preparationError}</p>}
+          {preparation?.status === 'preparing' && (
+            <p role="status" className="text-sm text-gray-700">Your request is being checked. Refresh to see the result.</p>
+          )}
+          {preparation?.status === 'correction_required' && (
+            <p role="status" className="text-sm text-gray-700">This version is private. Edit the request to clarify its wording or remove identifying details, then prepare it again.</p>
+          )}
+          {(!request.publication_preparation || (preparation?.status === 'preview_ready' && !preview)) && (
+            <p role="status" className="text-sm text-gray-700">The preview is unavailable. Refresh to check the request status.</p>
+          )}
+          {!editing && preview && (
+            <div lang={preview.presentation.language} className="space-y-3">
+              <h3 className="font-medium text-gray-900">Preview for publication</h3>
+              <dl className="space-y-2 text-sm text-gray-700">
+                {preview.presentation.fields.map(({ label, value }, index) => (
+                  <div key={index}>
+                    <dt className="font-medium">{label}</dt>
+                    <dd className="whitespace-pre-wrap">{value}</dd>
+                  </div>
+                ))}
+                <div>
+                  <dt className="font-medium">Public address after approval</dt>
+                  <dd className="break-all">https://ai.market/requests/{preview.presentation.slug}</dd>
+                </div>
+              </dl>
+              <p className="text-sm text-gray-700">By approving this exact version, you agree that it may appear on ai.market, in search engines, to AI agents, and in relevant seller alerts.</p>
+              <button type="button" onClick={handleConfirmPublication} disabled={updatingPublication || publishing || deleting}
+                className="rounded-lg bg-[#3F51B5] px-4 py-2 text-sm font-medium text-white disabled:opacity-50">
+                {updatingPublication ? 'Confirming…' : 'Approve this version'}
+              </button>
+            </div>
+          )}
+          {!editing && !preparationError && request.publication_preparation && !preview && (!preparation || preparation.status === 'unprepared')
+            && (request.status === 'draft' || request.status === 'open') && !request.published_at && (
+              <button type="button" onClick={handlePublish} disabled={publishing || updatingPublication || deleting}
+                className="rounded-lg bg-[#3F51B5] px-4 py-2 text-sm font-medium text-white disabled:opacity-50">
+                {publishing ? 'Preparing…' : 'Prepare preview'}
+              </button>
+            )}
+        </section>
+      )}
+
+      {isOwner && request.publication_decision && (!privatePublication || canWithdrawPublication) && (
         <section className="rounded-xl border border-[#D8DDF4] bg-[#F7F8FE] p-5 mb-6" aria-labelledby="publication-status-heading">
           <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
             <div>
@@ -615,9 +724,9 @@ export default function DataRequestDetailClient({
                 Public visibility: {request.publication_decision === 'eligible' ? 'Public' : 'Private'}
               </h2>
               <p className="mt-1 text-sm text-gray-700">
-                {request.publication_next_action || 'No public action is available.'}
+                {!privatePublication && (request.publication_next_action || 'No public action is available.')}
               </p>
-              {request.publication_reason && request.publication_reason !== 'eligible' && (
+              {!privatePublication && request.publication_reason && request.publication_reason !== 'eligible' && (
                 <p className="mt-1 text-xs text-gray-500">
                   Reason: {request.publication_reason.replaceAll('_', ' ')}
                 </p>
@@ -677,7 +786,7 @@ export default function DataRequestDetailClient({
 
       {/* Description */}
       <div className="rounded-xl border border-gray-200 p-6 mb-6">
-        <h2 className="text-sm font-semibold text-gray-700 uppercase tracking-wide mb-3">Request</h2>
+        <h2 className="text-sm font-semibold text-gray-700 uppercase tracking-wide mb-3">{privatePublication ? 'Your request' : 'Request'}</h2>
         <p className="text-gray-800 whitespace-pre-wrap">{request.description}</p>
       </div>
 
@@ -836,7 +945,7 @@ export default function DataRequestDetailClient({
       )}
 
       {/* Not logged in CTA */}
-      {!isAuthenticated && (request.status === 'open' || request.status === 'responses_received') && (
+      {!isAuthenticated && request.slug && (request.status === 'open' || request.status === 'responses_received') && (
         <div className="rounded-xl border border-gray-200 p-6 text-center">
           <p className="text-gray-600 mb-4">Have the data this buyer needs?</p>
           {responseRefusal ? (
