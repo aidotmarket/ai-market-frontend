@@ -285,6 +285,7 @@ export interface ListingListItem extends GeneratedSampleFields {
   slug: string;
   title: string;
   short_description: string | null;
+  summary?: string | null;
   data_format?: string | null;
   price: number;
   pricing_type: PricingType;
@@ -308,6 +309,7 @@ export interface ListingPublicListItem extends GeneratedSampleFields {
   slug: string;
   title: string;
   short_description: string | null;
+  summary?: string | null;
   category: string;
   tags: string[];
   fulfillment_type: string;
@@ -431,6 +433,7 @@ export interface ListingDetail extends GeneratedSampleFields {
   description: string;
   description_html?: string | null;
   short_description: string | null;
+  summary?: string | null;
   publisher?: PublisherPublicInfo | null;
   pricing: {
     price: number;
@@ -501,6 +504,7 @@ export interface SearchResultItem extends GeneratedSampleFields {
   slug: string;
   description: string | null;
   short_description: string | null;
+  summary?: string | null;
   category: string;
   price: number;
   privacy_score: number | null;

@@ -19,7 +19,9 @@ export function MarketplaceListingCard({ listing }: { listing: CardListing }) {
   }
   const tags = Array.isArray(listing.tags) ? listing.tags.slice(0, 3) : [];
   const views = 'view_count' in listing ? listing.view_count : undefined;
-  const description = listing.short_description || ('description' in listing ? listing.description : null);
+  const description = 'summary' in listing
+    ? listing.summary ?? ''
+    : listing.short_description || ('description' in listing ? listing.description : null);
   const fulfillmentType = 'fulfillment_type' in listing ? listing.fulfillment_type : null;
   const fulfillmentBadge = fulfillmentType === 'model_access'
     ? 'Model'

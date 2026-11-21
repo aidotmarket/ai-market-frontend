@@ -58,17 +58,19 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
 
   const sample = generatedSampleState(listing) !== 'ordinary' ? samplePresentation(listing) : null;
   const title = sample?.title ?? listing.title;
-  const description = sample ? sample.description : isPublicSourceReference(listing)
-    ? listing.description?.slice(0, 200) || ''
+  const description = sample ? sample.description
+    : 'summary' in listing ? listing.summary ?? undefined
+    : isPublicSourceReference(listing) ? listing.description?.slice(0, 200) || ''
     : listing.short_description || listing.description?.slice(0, 200) || '';
+  const descriptionMetadata = description === undefined ? {} : { description };
 
   return {
     title,
-    description,
+    ...descriptionMetadata,
     alternates: { canonical: `https://ai.market/listings/${listing.slug}` },
     openGraph: {
       title,
-      description,
+      ...descriptionMetadata,
       url: `https://ai.market/listings/${listing.slug}`,
       type: 'website',
       siteName: 'ai.market',
@@ -76,7 +78,7 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
     twitter: {
       card: 'summary_large_image',
       title,
-      description,
+      ...descriptionMetadata,
     },
     robots:
       listing.noindex

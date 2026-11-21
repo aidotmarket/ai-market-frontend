@@ -18,6 +18,7 @@ type SearchResultItemFields = Expect<Equal<
   | 'slug'
   | 'description'
   | 'short_description'
+  | 'summary'
   | 'category'
   | 'price'
   | 'privacy_score'
@@ -50,6 +51,7 @@ type FeaturedItemFields = Expect<Equal<
 
 type SearchResultItemOptionalFields = Expect<Equal<
   OptionalKeys<SearchResultItem>,
+  | 'summary'
   | 'generated_sample'
   | 'availability'
   | 'fulfillment_method'

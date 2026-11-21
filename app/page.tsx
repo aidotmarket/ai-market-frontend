@@ -577,7 +577,9 @@ export default async function LandingPage() {
                       {formatMarketplaceCategoryName(l.category)}
                     </span>
                     <h3 className="mt-4 text-base font-bold leading-snug text-[#1A1A1A]">{l.title ?? 'Untitled'}</h3>
-                    <p className="mt-2 text-sm leading-6 text-[#666666] line-clamp-2">{l.short_description ?? ''}</p>
+                    <p className="mt-2 text-sm leading-6 text-[#666666] line-clamp-2">
+                      {'summary' in l ? l.summary ?? '' : l.short_description ?? ''}
+                    </p>
                     <div className="flex-1" />
                     <div className="mt-5 pt-4 border-t border-[#F0F0F0] flex items-center justify-between text-xs">
                       <span className="text-[#888888]">{formatMarketplaceCategoryName(l.category)}</span>
