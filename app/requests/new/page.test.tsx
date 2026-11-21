@@ -2,6 +2,7 @@
 import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { afterEach, beforeEach, expect, it, vi } from 'vitest';
 import { useAuthStore } from '@/store/auth';
+import fixture from '@/tests/fixtures/buyer-request-anonymization-chunk1.json';
 import NewDataRequestPage from './page';
 import type { User } from '@/types';
 
@@ -38,12 +39,12 @@ it('explains draft review and confirms a saved draft with the existing detail de
   expect(mocks.push).toHaveBeenCalledWith('/requests/retail-data');
 });
 
-it('continues a synthetic gated Web draft by ID without requiring a public slug', async () => {
+it('continues the shared gated draft by ID while its serving slug is null', async () => {
   useAuthStore.setState({ user: { id: 'buyer-1' } as User, isAuthenticated: true });
   const id = '00000000-0000-4000-8000-000000000001';
-  mocks.createDataRequest.mockResolvedValue({ id, slug: null });
+  mocks.createDataRequest.mockResolvedValue({ id, ...fixture.draft });
   render(<NewDataRequestPage />);
-  fireEvent.change(screen.getByLabelText('Description'), { target: { value: 'Licensed synthetic retail sales data' } });
+  fireEvent.change(screen.getByLabelText('Description'), { target: { value: fixture.create.description } });
   fireEvent.click(screen.getByRole('button', { name: 'Create Data Request' }));
   await waitFor(() => expect(mocks.push).toHaveBeenCalledExactlyOnceWith(`/requests/${id}`));
 });

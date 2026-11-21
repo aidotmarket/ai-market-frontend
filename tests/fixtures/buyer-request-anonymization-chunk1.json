@@ -1,0 +1,269 @@
+{
+  "revisions": {
+    "created": "f6d71278-db3b-43a1-95f0-0ea34cbb60c8",
+    "edited": "d7e404fd-2928-41bd-8c99-35f28a5e25fe"
+  },
+  "create": {
+    "title": "Weather observations for climate research",
+    "description": "We need an estimate at scale. App events should cover usage.",
+    "categories": [
+      "weather",
+      "climate"
+    ],
+    "format_preferences": [
+      "CSV",
+      "JSON"
+    ],
+    "regulatory_requirements": [
+      "Public domain"
+    ],
+    "provenance_requirements": "Document the source of the weather observations.",
+    "price_range_min": 120.25,
+    "price_range_max": 300.5,
+    "currency": "EUR",
+    "urgency": "high"
+  },
+  "draft": {
+    "title": "Weather observations for climate research",
+    "description": "We need an estimate at scale. App events should cover usage.",
+    "categories": [
+      "weather",
+      "climate"
+    ],
+    "format_preferences": [
+      "CSV",
+      "JSON"
+    ],
+    "regulatory_requirements": [
+      "Public domain"
+    ],
+    "provenance_requirements": "Document the source of the weather observations.",
+    "price_range_min": 120.25,
+    "price_range_max": 300.5,
+    "currency": "EUR",
+    "urgency": "high",
+    "status": "draft",
+    "slug": null,
+    "publication_preparation": {
+      "status": "unprepared"
+    }
+  },
+  "edit": {
+    "categories": [
+      "climate",
+      "weather"
+    ]
+  },
+  "edited": {
+    "title": "Weather observations for climate research",
+    "description": "We need an estimate at scale. App events should cover usage.",
+    "categories": [
+      "climate",
+      "weather"
+    ],
+    "format_preferences": [
+      "CSV",
+      "JSON"
+    ],
+    "regulatory_requirements": [
+      "Public domain"
+    ],
+    "provenance_requirements": "Document the source of the weather observations.",
+    "price_range_min": 120.25,
+    "price_range_max": 300.5,
+    "currency": "EUR",
+    "urgency": "high",
+    "status": "draft",
+    "slug": null,
+    "publication_preparation": {
+      "status": "unprepared"
+    }
+  },
+  "correction_required": {
+    "title": "Weather observations for climate research",
+    "description": "We need an estimate at scale. App events should cover usage.",
+    "categories": [
+      "climate",
+      "weather"
+    ],
+    "format_preferences": [
+      "CSV",
+      "JSON"
+    ],
+    "regulatory_requirements": [
+      "Public domain"
+    ],
+    "provenance_requirements": "Document the source of the weather observations.",
+    "price_range_min": 120.25,
+    "price_range_max": 300.5,
+    "currency": "EUR",
+    "urgency": "high",
+    "status": "draft",
+    "slug": null,
+    "publication_preparation": {
+      "status": "correction_required",
+      "reason": "privacy_or_meaning_uncertain",
+      "next_action": "Revise the ambiguous or identifying wording, then submit a new preview."
+    }
+  },
+  "correct": {
+    "description": "We need 240 hours of ERA5 weather observations for a study of seasonal climate. Deliver the observations in a CSV file with a documented time zone."
+  },
+  "corrected": {
+    "title": "Weather observations for climate research",
+    "description": "We need 240 hours of ERA5 weather observations for a study of seasonal climate. Deliver the observations in a CSV file with a documented time zone.",
+    "categories": [
+      "climate",
+      "weather"
+    ],
+    "format_preferences": [
+      "CSV",
+      "JSON"
+    ],
+    "regulatory_requirements": [
+      "Public domain"
+    ],
+    "provenance_requirements": "Document the source of the weather observations.",
+    "price_range_min": 120.25,
+    "price_range_max": 300.5,
+    "currency": "EUR",
+    "urgency": "high",
+    "status": "draft",
+    "slug": null,
+    "publication_preparation": {
+      "status": "unprepared"
+    }
+  },
+  "preview": {
+    "title": "Weather observations for climate research",
+    "description": "We need 240 hours of ERA5 weather observations for a study of seasonal climate. Deliver the observations in a CSV file with a documented time zone.",
+    "categories": [
+      "climate",
+      "weather"
+    ],
+    "format_preferences": [
+      "CSV",
+      "JSON"
+    ],
+    "regulatory_requirements": [
+      "Public domain"
+    ],
+    "provenance_requirements": "Document the source of the weather observations.",
+    "price_range_min": 120.25,
+    "price_range_max": 300.5,
+    "currency": "EUR",
+    "urgency": "high",
+    "status": "draft",
+    "slug": null,
+    "publication_preparation": {
+      "status": "preview_ready",
+      "binding": {
+        "revision": "8f16ff66-40e5-4122-bf4a-c4ed1afd44a3",
+        "render_digest": "def67e32ab13a368e081676f12154dbebe4c96a60b3d23e83f03540e5715f902",
+        "screening_policy_version": "buyer-request-anonymization-v1"
+      },
+      "presentation": {
+        "language": "en",
+        "slug": "weather-observations-for-climate-research-1a2b3c4d",
+        "fields": [
+          {
+            "label": "Title",
+            "value": "Weather observations for climate research"
+          },
+          {
+            "label": "Description",
+            "value": "We need 240 hours of ERA5 weather observations for a study of seasonal climate. Deliver the observations in a CSV file with a documented time zone."
+          },
+          {
+            "label": "Categories",
+            "value": "climate, weather"
+          },
+          {
+            "label": "Format preferences",
+            "value": "CSV, JSON"
+          },
+          {
+            "label": "Regulatory requirements",
+            "value": "Public domain"
+          },
+          {
+            "label": "Provenance requirements",
+            "value": "Document the source of the weather observations."
+          },
+          {
+            "label": "Minimum price",
+            "value": "120.25"
+          },
+          {
+            "label": "Maximum price",
+            "value": "300.50"
+          },
+          {
+            "label": "Currency",
+            "value": "EUR"
+          },
+          {
+            "label": "Urgency",
+            "value": "high"
+          }
+        ]
+      },
+      "public_content_hash": "fe5b86585bba55c5c59cfaebc3040a5ad67c556dcde21e9b5a95fddd8ebd2002",
+      "policy_version": "request-publication-v1"
+    }
+  },
+  "confirmation": {
+    "revision": "8f16ff66-40e5-4122-bf4a-c4ed1afd44a3",
+    "render_digest": "def67e32ab13a368e081676f12154dbebe4c96a60b3d23e83f03540e5715f902",
+    "screening_policy_version": "buyer-request-anonymization-v1",
+    "public_content_hash": "fe5b86585bba55c5c59cfaebc3040a5ad67c556dcde21e9b5a95fddd8ebd2002",
+    "policy_version": "request-publication-v1"
+  },
+  "approved": {
+    "title": "Weather observations for climate research",
+    "description": "We need 240 hours of ERA5 weather observations for a study of seasonal climate. Deliver the observations in a CSV file with a documented time zone.",
+    "categories": [
+      "climate",
+      "weather"
+    ],
+    "format_preferences": [
+      "CSV",
+      "JSON"
+    ],
+    "regulatory_requirements": [
+      "Public domain"
+    ],
+    "provenance_requirements": "Document the source of the weather observations.",
+    "price_range_min": 120.25,
+    "price_range_max": 300.5,
+    "currency": "EUR",
+    "urgency": "high",
+    "status": "open",
+    "slug": "weather-observations-for-climate-research-1a2b3c4d",
+    "publication_preparation": null,
+    "publication_decision": "eligible",
+    "public_consent_status": "consented"
+  },
+  "serving": {
+    "title": "Weather observations for climate research",
+    "description": "We need 240 hours of ERA5 weather observations for a study of seasonal climate. Deliver the observations in a CSV file with a documented time zone.",
+    "categories": [
+      "climate",
+      "weather"
+    ],
+    "format_preferences": [
+      "CSV",
+      "JSON"
+    ],
+    "regulatory_requirements": [
+      "Public domain"
+    ],
+    "provenance_requirements": "Document the source of the weather observations.",
+    "price_range_min": 120.25,
+    "price_range_max": 300.5,
+    "currency": "EUR",
+    "urgency": "high",
+    "status": "open",
+    "slug": "weather-observations-for-climate-research-1a2b3c4d"
+  }
+}

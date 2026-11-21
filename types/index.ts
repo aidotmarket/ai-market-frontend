@@ -1065,7 +1065,7 @@ export interface RequestPublicationBinding {
 }
 
 export type RequestPublicationPreparation =
-  | { status: 'unprepared' | 'preparing' | 'correction_required' }
+  | { status: 'unprepared' | 'preparing' | 'correction_required' | 'approved' }
   | {
       status: 'preview_ready';
       binding: RequestPublicationBinding;
@@ -1080,6 +1080,9 @@ export type RequestPublicationPreparation =
 
 export interface DataRequestDetail extends DataRequestListItem {
   publication_preparation?: RequestPublicationPreparation | null;
+  draft_fields?: Pick<DataRequestDetail,
+    'title' | 'description' | 'categories' | 'format_preferences' | 'regulatory_requirements' | 'provenance_requirements'
+  > | null;
   response_refusal?: string | null;
   format_preferences: string[];
   regulatory_requirements?: string[];

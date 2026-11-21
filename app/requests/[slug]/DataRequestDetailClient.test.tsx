@@ -6,6 +6,7 @@ import { StrictMode } from 'react';
 import type React from 'react';
 import http from 'node:http';
 import https from 'node:https';
+import fixture from '@/tests/fixtures/buyer-request-anonymization-chunk1.json';
 import type { DataRequestDetail, RequestPublicationPreparation, User } from '@/types';
 import { AxiosError, AxiosHeaders } from 'axios';
 import DataRequestDetailClient from './DataRequestDetailClient';
@@ -169,6 +170,102 @@ describe('DataRequestDetailClient authenticated fallback loading', () => {
     vi.restoreAllMocks();
     vi.unstubAllGlobals();
     vi.unstubAllEnvs();
+  });
+
+  it.each([
+    { ownerDraftFields: false, approvalState: null },
+    { ownerDraftFields: true, approvalState: { status: 'approved' } },
+  ])('follows the shared publication journey (owner draft fields: $ownerDraftFields)', async ({ ownerDraftFields, approvalState }) => {
+    vi.stubEnv('NEXT_PUBLIC_BUYER_REQUEST_ANONYMIZATION_ENABLED', 'true');
+    const base = { ...makeDraft(), id: connectorDraftId };
+    const ownerResponse = ({ slug, status, publication_preparation, ...fields }: typeof fixture.draft) => ({
+      ...base,
+      ...fields,
+      slug,
+      status,
+      publication_preparation,
+      ...(ownerDraftFields ? {
+        title: '', description: '', categories: [], format_preferences: [], regulatory_requirements: [],
+        provenance_requirements: null, draft_fields: fields,
+      } : {}),
+    });
+    const preview = fixture.preview.publication_preparation;
+    mocks.getDataRequest.mockResolvedValueOnce(ownerResponse(fixture.draft));
+    mocks.updateDataRequest
+      .mockResolvedValueOnce(ownerResponse(fixture.edited))
+      .mockResolvedValueOnce(ownerResponse(fixture.corrected));
+    mocks.publishDataRequest
+      .mockResolvedValueOnce(ownerResponse(fixture.correction_required))
+      .mockResolvedValueOnce(ownerResponse(fixture.preview));
+    mocks.confirmDataRequestPublication.mockResolvedValueOnce({
+      ...base, ...fixture.approved, publication_preparation: approvalState,
+    });
+    const draftView = render(<DataRequestDetailClient slug={base.id} initialRequest={null} />);
+
+    const editRequest = async () => {
+      fireEvent.click(await screen.findByRole('button', { name: 'Edit request' }));
+      return within(screen.getByRole('form', { name: 'Edit request' }));
+    };
+    const edit = await editRequest();
+    expect(edit.getByDisplayValue(fixture.create.title)).toBeTruthy();
+    expect(edit.getByDisplayValue(fixture.create.description)).toBeTruthy();
+    expect(edit.getByDisplayValue(fixture.create.categories.join(', '))).toBeTruthy();
+    fireEvent.change(edit.getByLabelText('Categories'), { target: { value: fixture.edit.categories.join(', ') } });
+    fireEvent.click(edit.getByRole('button', { name: 'Save changes' }));
+    const editedFields = {
+      title: fixture.create.title,
+      description: fixture.create.description,
+      categories: fixture.edit.categories,
+      format_preferences: fixture.create.format_preferences,
+      regulatory_requirements: fixture.create.regulatory_requirements,
+      provenance_requirements: fixture.create.provenance_requirements,
+    };
+    expect(mocks.updateDataRequest).toHaveBeenNthCalledWith(1, base.id, editedFields);
+
+    const prepare = async () => fireEvent.click(await screen.findByRole('button', { name: 'Prepare preview' }));
+    await prepare();
+    expect(await screen.findByText(/This version is private. Edit the request/)).toBeTruthy();
+    expect(screen.queryByRole('button', { name: 'Approve this version' })).toBeNull();
+
+    const correction = await editRequest();
+    expect(correction.getByDisplayValue(fixture.edited.categories.join(', '))).toBeTruthy();
+    fireEvent.change(correction.getByLabelText('Description'), { target: { value: fixture.correct.description } });
+    fireEvent.click(correction.getByRole('button', { name: 'Save changes' }));
+    expect(mocks.updateDataRequest).toHaveBeenNthCalledWith(2, base.id, {
+      ...editedFields,
+      description: fixture.correct.description,
+    });
+    await prepare();
+
+    const approval = await screen.findByRole('button', { name: 'Approve this version' });
+    const presentation = screen.getByRole('region', { name: 'Prepare for publication' });
+    expect(presentation.querySelector('[lang]')?.getAttribute('lang')).toBe(preview.presentation.language);
+    expect(Array.from(presentation.querySelectorAll('dt, dd'), node => node.textContent)).toEqual([
+      ...preview.presentation.fields.flatMap(({ label, value }) => [label, value]),
+      'Public address after approval', `https://ai.market/requests/${preview.presentation.slug}`,
+    ]);
+    const servingHref = `/requests/${fixture.serving.slug}`;
+    expect(screen.getByRole('button', { name: 'Refresh' })).toBeTruthy();
+    expect(screen.queryByRole('link', { name: 'Refresh' })).toBeNull();
+    expect(fixture.preview.slug).toBeNull();
+    expect(mocks.publishDataRequest.mock.calls).toEqual([[base.id], [base.id]]);
+
+    fireEvent.click(approval);
+    expect(mocks.confirmDataRequestPublication).toHaveBeenCalledExactlyOnceWith(
+      base.id, fixture.confirmation.public_content_hash, fixture.confirmation.policy_version, preview.binding,
+    );
+    expect((await screen.findByRole('link', { name: 'Refresh' })).getAttribute('href')).toBe(servingHref);
+    expect(screen.queryByRole('region', { name: 'Prepare for publication' })).toBeNull();
+    draftView.unmount();
+
+    mocks.auth.user = null;
+    mocks.auth.isAuthenticated = false;
+    mocks.getDataRequest.mockResolvedValueOnce({ ...base, ...fixture.serving, buyer_display_name: null });
+    render(<DataRequestDetailClient slug={fixture.serving.slug} initialRequest={null} />);
+    expect(await screen.findByRole('heading', { name: fixture.serving.title })).toBeTruthy();
+    expect(screen.getByText(fixture.serving.description)).toBeTruthy();
+    expect(screen.queryByRole('button', { name: 'Edit request' })).toBeNull();
+    expect(mocks.getDataRequest.mock.calls).toEqual([[base.id], [fixture.serving.slug]]);
   });
 
   it('prepares a private connector draft by ID once and displays only its screened presentation for approval', async () => {

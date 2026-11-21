@@ -12,7 +12,8 @@ export function isRequestId(value: string): boolean {
 }
 
 export function hasPrivatePublication(request: DataRequestDetail): boolean {
-  return !request.slug || request.publication_preparation != null;
+  const status = request.publication_preparation?.status;
+  return !request.slug || (request.publication_preparation != null && status !== 'approved');
 }
 
 export function exactPublicationPreview(preparation: RequestPublicationPreparation | null | undefined) {

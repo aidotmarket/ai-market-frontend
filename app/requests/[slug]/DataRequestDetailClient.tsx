@@ -216,12 +216,13 @@ export default function DataRequestDetailClient({
 
   function startEditing() {
     if (!isOwner || !request || !['draft', 'open'].includes(request.status) || publishing || deleting || updatingPublication) return;
-    setEditTitle(request.title || '');
-    setEditDescription(request.description);
-    setEditCategories(request.categories.join(', '));
-    setEditFormats(request.format_preferences.join(', '));
-    setEditRegulatory(request.regulatory_requirements?.join(', ') || '');
-    setEditProvenance(request.provenance_requirements || '');
+    const fields = request.draft_fields ?? request;
+    setEditTitle(fields.title || '');
+    setEditDescription(fields.description);
+    setEditCategories(fields.categories.join(', '));
+    setEditFormats(fields.format_preferences.join(', '));
+    setEditRegulatory(fields.regulatory_requirements?.join(', ') || '');
+    setEditProvenance(fields.provenance_requirements || '');
     setEditError('');
     setEditing(true);
   }

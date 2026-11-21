@@ -1,5 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-import { confirmDataRequestPublication, getDataRequestResponses, getMyDataRequests, getMyDataRequestsPage, submitDataRequestResponse } from './data-requests';
+import fixture from '@/tests/fixtures/buyer-request-anonymization-chunk1.json';
+import type { DataRequestUrgency } from '@/types';
+import { confirmDataRequestPublication, createDataRequest, getDataRequestResponses, getMyDataRequests, getMyDataRequestsPage, submitDataRequestResponse } from './data-requests';
 
 const mocks = vi.hoisted(() => ({ get: vi.fn(), post: vi.fn(), put: vi.fn() }));
 vi.mock('./client', () => ({ api: mocks }));
@@ -26,14 +28,22 @@ describe('supplier quote API', () => {
 describe('owned request API contracts', () => {
   beforeEach(() => vi.clearAllMocks());
 
+  it('creates the shared private draft with no serving slug', async () => {
+    const draft = { id: '00000000-0000-4000-8000-000000000001', ...fixture.draft };
+    mocks.post.mockResolvedValueOnce({ data: draft });
+    expect(await createDataRequest({ ...fixture.create, urgency: fixture.create.urgency as DataRequestUrgency })).toEqual(draft);
+    expect(mocks.post).toHaveBeenCalledExactlyOnceWith('/data-requests', fixture.create);
+    expect(draft.slug).toBeNull();
+  });
+
   it('preserves the consent endpoint and sends the exact displayed binding only for a prepared revision', async () => {
-    mocks.put.mockResolvedValue({ data: {} });
-    const binding = { revision: 'rev-1', render_digest: 'a'.repeat(64), screening_policy_version: 'screen-1' };
+    mocks.put.mockResolvedValueOnce({ data: {} }).mockResolvedValueOnce({ data: fixture.approved });
+    const { binding, public_content_hash, policy_version } = fixture.preview.publication_preparation;
     await confirmDataRequestPublication('request-1', 'hash', 'consent-1');
-    await confirmDataRequestPublication('request-1', 'hash', 'consent-1', binding);
+    expect(await confirmDataRequestPublication('request-1', public_content_hash, policy_version, binding)).toEqual(fixture.approved);
     expect(mocks.put.mock.calls).toEqual([
       ['/data-requests/request-1/publication-consent', { public_content_hash: 'hash', policy_version: 'consent-1' }],
-      ['/data-requests/request-1/publication-consent', { public_content_hash: 'hash', policy_version: 'consent-1', ...binding }],
+      ['/data-requests/request-1/publication-consent', fixture.confirmation],
     ]);
   });
 
