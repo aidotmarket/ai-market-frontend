@@ -6,15 +6,17 @@ import Link from 'next/link';
 import type { Metadata } from 'next';
 import SellDataCta from '@/components/SellDataCta';
 
+const hostingOptions =
+  'Keep your files in your own AWS S3 bucket, your own Cloudflare R2 bucket, or on your own infrastructure with the self-hosted AIM Data Gateway.';
+const sellDataDescription = `allAI guides you through listing data and helps handle buyer questions, negotiation, and checkout. ${hostingOptions}`;
+
 export const metadata: Metadata = {
   alternates: { canonical: '/sell-data' },
   title: { absolute: 'Sell data on ai.market' },
-  description:
-    'Sell data from your own AWS S3 or Cloudflare R2 bucket, or through the AIM Data gateway on your infrastructure. Manage your listing on ai.market.',
+  description: sellDataDescription,
   openGraph: {
     title: 'Sell data on ai.market',
-    description:
-      'Sell data from your own AWS S3 or Cloudflare R2 bucket, or through the AIM Data gateway on your infrastructure. Manage your listing on ai.market.',
+    description: sellDataDescription,
     url: 'https://ai.market/sell-data',
     siteName: 'ai.market',
     images: ['/og/sell-data.png'],
@@ -23,8 +25,7 @@ export const metadata: Metadata = {
   twitter: {
     card: 'summary_large_image',
     title: 'Sell data on ai.market',
-    description:
-      'Sell data from your own AWS S3 or Cloudflare R2 bucket, or through the AIM Data gateway on your infrastructure. Manage your listing on ai.market.',
+    description: sellDataDescription,
     images: ['/og/sell-data.png'],
   },
 };
@@ -34,8 +35,7 @@ const SELL_DATA_JSONLD = {
   '@type': 'Service',
   name: 'Sell data on ai.market',
   url: 'https://ai.market/sell-data',
-  description:
-    'Sell data from your own AWS S3 or Cloudflare R2 bucket, or through the AIM Data gateway on your infrastructure. Manage your listing on ai.market.',
+  description: sellDataDescription,
   provider: {
     '@type': 'Organization',
     name: 'ai.market',
@@ -45,37 +45,37 @@ const SELL_DATA_JSONLD = {
 
 const steps = [
   {
-    title: 'THE MARKETING IS INCLUDED',
+    title: 'Help buyers find your data',
     description:
-      'Getting a data product in front of buyers normally costs a marketing budget. Here it is part of the listing. allAI writes your metadata in the formats AI search reads, publishes it everywhere agents look, and answers buyer questions for you around the clock. You pay nothing until a sale clears, and then it is 5%.',
+      'allAI prepares your listing for AI search so buyers can find it when they ask an AI assistant for data.',
   },
   {
-    title: 'YOUR DATA STAYS UNDER YOUR CONTROL',
+    title: 'Review before you publish',
     description:
-      'Keep your files in your own cloud bucket or on your own infrastructure. The gateway sends opaque inventory automatically; you confirm each file before it sends structure. Buyers download purchases directly from your bucket or gateway.',
+      'You choose which files to list and review the listing before it goes live.',
   },
   {
-    title: "YOU DON'T CHASE LEADS",
+    title: 'Let allAI handle buyer questions',
     description:
-      "allAI sits between you and every buyer. It answers questions about your data, handles the negotiation and runs checkout. You see the sale, not the busywork.",
+      'allAI answers questions about your data around the clock, handles negotiation, and runs checkout.',
   },
 ];
 
 const features = [
   {
-    title: 'Your choice of hosting.',
+    title: 'Manage your listings.',
     description:
-      'Connect your AWS S3 or Cloudflare R2 bucket read-only in Seller Workspace, or run the open-source AIM Data gateway with Docker on your own infrastructure.',
+      'Use Seller Workspace to manage your listings and set prices and licenses.',
   },
   {
     title: 'AI-assisted listings.',
     description:
-      'allAI writes the metadata, generates the listing description, and tags the data for discovery by buyers and AI agents.',
+      'allAI drafts your listing description and adds tags to help buyers and AI assistants find it.',
   },
   {
-    title: 'Control what you share.',
+    title: 'Share an optional sample.',
     description:
-      'The gateway sends opaque inventory automatically. After you confirm a file, it sends structure and SHA-256, with no data values. You can separately publish a public sample.',
+      'If you use the AIM Data Gateway, you can choose to publish a public sample alongside your listing.',
   },
   {
     title: 'Stripe payouts.',
@@ -136,10 +136,10 @@ export default async function SellDataPage() {
               Sell Data
             </p>
             <h1 className="mt-3 text-4xl font-extrabold tracking-tight text-gray-900 sm:text-5xl">
-              List once. Get found everywhere.
+              Sell your data with help from allAI
             </h1>
             <p className="mt-5 max-w-3xl text-lg leading-8 text-gray-600">
-              Your files stay in your own cloud bucket or on your own infrastructure. Manage the listing on ai.market so buyers can find it.
+              allAI walks you through creating a listing and helps handle buyer questions, negotiation, and checkout.
             </p>
             <SellDataCta variant="hero" />
           </div>
@@ -149,21 +149,20 @@ export default async function SellDataPage() {
       <section className="bg-gray-50 py-16 sm:py-20" aria-labelledby="hosting-heading">
         <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
           <h2 id="hosting-heading" className="text-3xl font-extrabold tracking-tight text-gray-900">
-            Where is your data?
+            Choose where to keep your data
           </h2>
           <p className="mt-4 max-w-3xl text-lg leading-8 text-gray-600">
-            Is your data hosted in the cloud on AWS or Cloudflare, or will you host it on your own servers?
+            {hostingOptions}
           </p>
           <div className="mt-10 grid gap-6 md:grid-cols-2">
             <article className="flex flex-col rounded-2xl border border-gray-200 bg-white p-6 shadow-sm sm:p-8" aria-labelledby="cloud-heading">
               <h3 id="cloud-heading" className="text-xl font-bold tracking-tight text-gray-900">
-                My data is in the cloud, or I want to put it in the cloud.
+                Connect your cloud storage
               </h3>
               <p className="mt-4 text-base leading-7 text-gray-600">
-                Your data stays in your own AWS S3 or Cloudflare R2 bucket. There is nothing to install.
-                Connect the bucket read-only in Seller Workspace and choose the files to list.
-                allAI helps draft the listing from your description and the selected file names and sizes.
-                You review, approve and publish.
+                Connect your AWS S3 or Cloudflare R2 bucket in Seller Workspace with read-only access.
+                There is nothing to install. Choose the files to list, and allAI drafts a listing from
+                your description and the selected file names and sizes. You review, approve, and publish it.
               </p>
               <p className="mt-4 mb-6 text-base leading-7 text-gray-600">
                 Buyers purchase on ai.market and download directly from your bucket through
@@ -173,22 +172,19 @@ export default async function SellDataPage() {
             </article>
             <article className="flex flex-col rounded-2xl border border-gray-200 bg-white p-6 shadow-sm sm:p-8" aria-labelledby="self-hosted-heading">
               <h3 id="self-hosted-heading" className="text-xl font-bold tracking-tight text-gray-900">
-                I will host it on my own infrastructure.
+                Set up AIM Data for self-hosting
               </h3>
               <p className="mt-4 text-base leading-7 text-gray-600">
-                Run the small open-source AIM Data gateway with Docker on your own infrastructure.
-                It sends opaque file IDs and keyed commitments automatically, with your alias if set.
-                Confirm each file before it sends column names, types, row count, bucketed null rates
-                and distinct counts, and raw SHA-256. No data values go to ai.market in these
-                messages. You can separately publish a public sample on your listing. The gateway
-                sends delivery receipts and signed audit entries for every outbound message.
+                Install the open-source AIM Data Gateway using Docker. It automatically sends limited
+                information to identify your files. You confirm each file before it shares a description
+                of what the file contains. These messages contain no data values. You can also choose to
+                publish a public sample.
               </p>
               <p className="mt-4 mb-6 text-base leading-7 text-gray-600">
-                The gateway refuses to start as root or the wrong user, with a writable root filesystem,
-                any capability, no-new-privileges off, or a mounted socket. You must restrict outbound
-                access to api.ai.market:443 with a restricted proxy or firewall and DNS. Its egress
-                canary reports open access, which blocks publishing and new permissions. Buyers
-                download purchases directly from your gateway.
+                After purchase, buyers download the files directly through your gateway.{' '}
+                <Link href="/aim-data" className="font-semibold text-[#3F51B5] underline hover:text-[#303F9F]">
+                  Technical details for your IT team
+                </Link>
               </p>
               <SellDataCta variant="self-hosted" className="mt-auto self-start" />
             </article>
@@ -227,7 +223,7 @@ export default async function SellDataPage() {
               What you get
             </p>
             <h2 id="features-heading" className="mt-3 text-3xl font-extrabold tracking-tight text-gray-900">
-              Your data, your hosting.
+              Tools to run your data sales
             </h2>
           </div>
 
@@ -279,7 +275,15 @@ export default async function SellDataPage() {
 
       <section className="bg-gray-50 py-16 sm:py-20" aria-labelledby="final-cta-heading">
         <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
-          <SellDataCta variant="final" />
+          <div className="rounded-2xl border border-[#D8EEE6] bg-white p-6 shadow-sm sm:p-8">
+            <h2 id="final-cta-heading" className="text-2xl font-bold tracking-tight text-gray-900">
+              List your data
+            </h2>
+            <p className="mt-4 max-w-3xl text-base leading-7 text-gray-600">
+              allAI helps you get your first listing ready. List free and pay nothing until a sale clears.
+            </p>
+            <SellDataCta variant="inline" />
+          </div>
         </div>
       </section>
 
