@@ -96,7 +96,10 @@ function OwnedRequests() {
     );
   }
 
-  const requests = result?.items ?? [];
+  const requests = (result?.items ?? []).map((request) => ({
+    ...request,
+    title: request.draft_fields?.title?.trim() || request.title?.trim() || 'Untitled request',
+  }));
   if (requests.length === 0 && page === 1) {
     return (
       <div className="flex min-h-[40vh] items-center justify-center">

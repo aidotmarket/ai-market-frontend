@@ -209,6 +209,8 @@ export default function DataRequestDetailClient({
   const gatedPublication = isOwner && privatePublication && buyerRequestAnonymizationEnabled();
   const preparation = gatedPublication && !previewInvalidated ? request?.publication_preparation : null;
   const preview = exactPublicationPreview(preparation);
+  const canPreparePreview = gatedPublication && request?.publication_preparation?.status === 'unprepared';
+  const currentVersionIsPublic = Boolean(request?.published_at && request.slug && request.publication_decision === 'eligible');
   const ownResponses = isOwner ? [] : responses;
   const responseRefusal = request?.response_refusal || null;
   const lastCheckTime = checkedTime(request?.publication_checked_at);
@@ -249,8 +251,9 @@ export default function DataRequestDetailClient({
       });
       if (!isCurrentMutation(epoch)) return;
       setRequest(updated);
+      setPreviewInvalidated(false);
       setEditing(false);
-      toast(privatePublication
+      toast(hasPrivatePublication(updated)
         ? 'Draft changes saved. Prepare a new preview when you’re ready.'
         : 'Request changes saved. Review the public visibility status before confirming.', 'success');
     } catch (err) {
@@ -331,7 +334,7 @@ export default function DataRequestDetailClient({
   }
 
   async function handlePublish() {
-    if (!isOwner || !request || (privatePublication && (!gatedPublication || !request.publication_preparation)) || mutationPending.current || editing || savingEdit || publishing || deleting || updatingPublication) return;
+    if (!isOwner || !request || (privatePublication && (!canPreparePreview || preparationError)) || mutationPending.current || editing || savingEdit || publishing || deleting || updatingPublication) return;
     const epoch = beginMutation();
     setPublishing(true);
     setPreparationError('');
@@ -339,8 +342,10 @@ export default function DataRequestDetailClient({
       const updated = await publishDataRequest(request.id);
       if (!isCurrentMutation(epoch)) return;
       if (gatedPublication) {
-        if (updated.id !== request.id || updated.buyer_id !== userId || updated.slug
-          || !updated.publication_preparation || updated.publication_decision === 'eligible') {
+        const servingSlug = request.published_at ? request.slug : null;
+        if (updated.id !== request.id || updated.buyer_id !== userId || updated.slug !== servingSlug
+          || !updated.publication_preparation || updated.publication_preparation.status === 'approved'
+          || (updated.publication_decision === 'eligible' && !currentVersionIsPublic)) {
           setPreparationError('Could not load the private preview. Refresh the request and try again.');
           return;
         }
@@ -675,6 +680,9 @@ export default function DataRequestDetailClient({
       {gatedPublication && (
         <section className="rounded-xl border border-[#D8DDF4] bg-[#F7F8FE] p-5 mb-6 space-y-3" aria-labelledby="preparation-heading">
           <h2 id="preparation-heading" className="font-semibold text-gray-900">Prepare for publication</h2>
+          {currentVersionIsPublic && (
+            <p className="text-sm text-gray-700">The current version stays public while these changes are pending.</p>
+          )}
           {preparationError && <p role="alert" className="text-sm text-red-700">{preparationError}</p>}
           {preparation?.status === 'preparing' && (
             <p role="status" className="text-sm text-gray-700">Your request is being checked. Refresh to see the result.</p>
@@ -707,13 +715,12 @@ export default function DataRequestDetailClient({
               </button>
             </div>
           )}
-          {!editing && !preparationError && request.publication_preparation && !preview && (!preparation || preparation.status === 'unprepared')
-            && (request.status === 'draft' || request.status === 'open') && !request.published_at && (
-              <button type="button" onClick={handlePublish} disabled={publishing || updatingPublication || deleting}
-                className="rounded-lg bg-[#3F51B5] px-4 py-2 text-sm font-medium text-white disabled:opacity-50">
-                {publishing ? 'Preparing…' : 'Prepare preview'}
-              </button>
-            )}
+          {!editing && !preparationError && canPreparePreview && (
+            <button type="button" onClick={handlePublish} disabled={publishing || updatingPublication || deleting}
+              className="rounded-lg bg-[#3F51B5] px-4 py-2 text-sm font-medium text-white disabled:opacity-50">
+              {publishing ? 'Preparing…' : 'Prepare preview'}
+            </button>
+          )}
         </section>
       )}
 

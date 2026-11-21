@@ -264,8 +264,119 @@ describe('DataRequestDetailClient authenticated fallback loading', () => {
     render(<DataRequestDetailClient slug={fixture.serving.slug} initialRequest={null} />);
     expect(await screen.findByRole('heading', { name: fixture.serving.title })).toBeTruthy();
     expect(screen.getByText(fixture.serving.description)).toBeTruthy();
+    expect(screen.queryByText(fixture.correct.description)).toBeNull();
     expect(screen.queryByRole('button', { name: 'Edit request' })).toBeNull();
     expect(mocks.getDataRequest.mock.calls).toEqual([[base.id], [fixture.serving.slug]]);
+  });
+
+  it('keeps the approved public version on its slug until the owner approves the replacement', async () => {
+    vi.stubEnv('NEXT_PUBLIC_BUYER_REQUEST_ANONYMIZATION_ENABLED', 'true');
+    const published: DataRequestDetail = {
+      ...makeDraft(), ...fixture.approved, id: connectorDraftId, published_at: '2026-07-31T00:00:00Z',
+      status: 'open', urgency: 'high', publication_decision: 'eligible', public_consent_status: 'consented',
+    };
+    const slug = fixture.serving.slug;
+    const revisedTitle = 'Regional weather observations for research';
+    const privateDescription = fixture.correct.description + ' We need an estimate at scale. App events should cover usage. synthetic-private-marker@example.invalid';
+    const replacement: DataRequestDetail = { ...published, title: revisedTitle };
+    const unprepared = { status: 'unprepared' } as const;
+    const preview = {
+      ...fixture.preview.publication_preparation,
+      status: 'preview_ready',
+      binding: {
+        ...fixture.preview.publication_preparation.binding,
+        revision: '00000000-0000-4000-8000-000000000002',
+        render_digest: 'a'.repeat(64),
+      },
+      public_content_hash: 'b'.repeat(64),
+      presentation: {
+        ...fixture.preview.publication_preparation.presentation,
+        fields: fixture.preview.publication_preparation.presentation.fields.map(field =>
+          field.label === 'Title' ? { ...field, value: revisedTitle } : field),
+      },
+    } satisfies RequestPublicationPreparation;
+    let ownerResponse = published;
+    let serving = { ...makeDraft(), ...fixture.serving, buyer_display_name: null };
+    mocks.getDataRequest.mockImplementation(async () => mocks.auth.isAuthenticated ? ownerResponse : serving);
+    mocks.updateDataRequest
+      .mockImplementationOnce(async () => ownerResponse = {
+        ...published, description: privateDescription, publication_preparation: unprepared,
+      })
+      .mockImplementationOnce(async () => ownerResponse = {
+        ...published, title: revisedTitle, description: fixture.correct.description, publication_preparation: unprepared,
+      });
+    mocks.publishDataRequest
+      .mockImplementationOnce(async () => ownerResponse = {
+        ...ownerResponse, publication_preparation: { status: 'correction_required' },
+      })
+      .mockImplementationOnce(async () => ownerResponse = { ...ownerResponse, publication_preparation: preview });
+    mocks.confirmDataRequestPublication.mockImplementation(async () => {
+      serving = { ...serving, title: revisedTitle };
+      return ownerResponse = replacement;
+    });
+
+    const openRequest = () => render(<DataRequestDetailClient slug={slug} initialRequest={null} />);
+    const expectPublicVersion = async (title: string) => {
+      mocks.auth.user = null;
+      mocks.auth.isAuthenticated = false;
+      const view = openRequest();
+      expect(await screen.findByRole('heading', { name: title })).toBeTruthy();
+      expect(screen.getByText(fixture.serving.description)).toBeTruthy();
+      expect(screen.queryByText(/synthetic-private-marker/)).toBeNull();
+      expect(screen.queryByText(fixture.correct.description)).toBeNull();
+      expect(screen.queryByRole('region', { name: 'Prepare for publication' })).toBeNull();
+      view.unmount();
+      mocks.auth.user = owner;
+      mocks.auth.isAuthenticated = true;
+    };
+    const editRequest = async (title: string, description: string) => {
+      fireEvent.click(await screen.findByRole('button', { name: 'Edit request' }));
+      fireEvent.change(screen.getByLabelText('Title'), { target: { value: title } });
+      fireEvent.change(screen.getByLabelText('Description'), { target: { value: description } });
+      fireEvent.click(screen.getByRole('button', { name: 'Save changes' }));
+    };
+    const prepare = async () => fireEvent.click(await screen.findByRole('button', { name: 'Prepare preview' }));
+
+    let view = openRequest();
+    expect(await screen.findByRole('heading', { name: fixture.serving.title })).toBeTruthy();
+    expect(screen.queryByRole('button', { name: 'Prepare preview' })).toBeNull();
+    await editRequest(fixture.serving.title, privateDescription);
+    expect(await screen.findByRole('button', { name: 'Prepare preview' })).toBeTruthy();
+    expect(mocks.updateDataRequest).toHaveBeenNthCalledWith(1, published.id, expect.objectContaining({
+      description: privateDescription,
+    }));
+    view.unmount();
+    await expectPublicVersion(fixture.serving.title);
+
+    view = openRequest();
+    await prepare();
+    expect(await screen.findByText(/This version is private/)).toBeTruthy();
+    expect(screen.queryByRole('button', { name: 'Approve this version' })).toBeNull();
+    await editRequest(revisedTitle, fixture.correct.description);
+    await prepare();
+    expect(mocks.updateDataRequest).toHaveBeenNthCalledWith(2, published.id, expect.objectContaining({
+      title: revisedTitle, description: fixture.correct.description,
+    }));
+    const region = within(await screen.findByRole('region', { name: 'Prepare for publication' }));
+    expect(await region.findByRole('button', { name: 'Approve this version' })).toBeTruthy();
+    expect(region.getByText('The current version stays public while these changes are pending.')).toBeTruthy();
+    expect(region.getByText(revisedTitle)).toBeTruthy();
+    expect(region.getByText(fixture.serving.description)).toBeTruthy();
+    expect(region.getByText(`https://ai.market/requests/${slug}`)).toBeTruthy();
+    expect(mocks.publishDataRequest.mock.calls).toEqual([[published.id], [published.id]]);
+    expect(mocks.confirmDataRequestPublication).not.toHaveBeenCalled();
+    view.unmount();
+    await expectPublicVersion(fixture.serving.title);
+
+    view = openRequest();
+    fireEvent.click(await screen.findByRole('button', { name: 'Approve this version' }));
+    expect(mocks.confirmDataRequestPublication).toHaveBeenCalledExactlyOnceWith(
+      published.id, preview.public_content_hash, preview.policy_version, preview.binding,
+    );
+    expect((await screen.findByRole('link', { name: 'Refresh' })).getAttribute('href')).toBe(`/requests/${slug}`);
+    expect(screen.queryByRole('region', { name: 'Prepare for publication' })).toBeNull();
+    view.unmount();
+    await expectPublicVersion(revisedTitle);
   });
 
   it('prepares a private connector draft by ID once and displays only its screened presentation for approval', async () => {

@@ -87,15 +87,19 @@ export async function getDataRequestResponses(requestId: string): Promise<DataRe
   return Array.isArray(res.data) ? res.data : res.data.items;
 }
 
-export async function getMyDataRequests(): Promise<DataRequestListItem[]> {
-  const res = await api.get<{ items: DataRequestListItem[] } | DataRequestListItem[]>('/data-requests', {
+interface MyDataRequestListItem extends DataRequestListItem {
+  draft_fields?: Pick<DataRequestListItem, 'title'> | null;
+}
+
+export async function getMyDataRequests(): Promise<MyDataRequestListItem[]> {
+  const res = await api.get<{ items: MyDataRequestListItem[] } | MyDataRequestListItem[]>('/data-requests', {
     params: { mine: true },
   });
   return Array.isArray(res.data) ? res.data : res.data.items;
 }
 
 export interface MyDataRequestsPage {
-  items: DataRequestListItem[];
+  items: MyDataRequestListItem[];
   total: number;
   page: number;
   per_page: number;

@@ -159,8 +159,8 @@
       "status": "preview_ready",
       "binding": {
         "revision": "8f16ff66-40e5-4122-bf4a-c4ed1afd44a3",
-        "render_digest": "def67e32ab13a368e081676f12154dbebe4c96a60b3d23e83f03540e5715f902",
-        "screening_policy_version": "buyer-request-anonymization-v1"
+        "render_digest": "80ab2c5cb72cea034c26f433c49fb7b414a2b9c1dede8e11f1c8fb588f6cdeb4",
+        "screening_policy_version": "buyer-request-anonymization-v2"
       },
       "presentation": {
         "language": "en",
@@ -172,7 +172,7 @@
           },
           {
             "label": "Description",
-            "value": "We need 240 hours of ERA5 weather observations for a study of seasonal climate. Deliver the observations in a CSV file with a documented time zone."
+            "value": "Requested data: ERA5 weather observations for a study of seasonal climate (240 hours). Deliver the observations in a CSV file with a documented time zone."
           },
           {
             "label": "Categories",
@@ -208,20 +208,20 @@
           }
         ]
       },
-      "public_content_hash": "fe5b86585bba55c5c59cfaebc3040a5ad67c556dcde21e9b5a95fddd8ebd2002",
+      "public_content_hash": "0d96303ab1a3bb450cd24c9e96629ad603dbb80dcf26a9f571cffb3dad16d83f",
       "policy_version": "request-publication-v1"
     }
   },
   "confirmation": {
     "revision": "8f16ff66-40e5-4122-bf4a-c4ed1afd44a3",
-    "render_digest": "def67e32ab13a368e081676f12154dbebe4c96a60b3d23e83f03540e5715f902",
-    "screening_policy_version": "buyer-request-anonymization-v1",
-    "public_content_hash": "fe5b86585bba55c5c59cfaebc3040a5ad67c556dcde21e9b5a95fddd8ebd2002",
+    "render_digest": "80ab2c5cb72cea034c26f433c49fb7b414a2b9c1dede8e11f1c8fb588f6cdeb4",
+    "screening_policy_version": "buyer-request-anonymization-v2",
+    "public_content_hash": "0d96303ab1a3bb450cd24c9e96629ad603dbb80dcf26a9f571cffb3dad16d83f",
     "policy_version": "request-publication-v1"
   },
   "approved": {
     "title": "Weather observations for climate research",
-    "description": "We need 240 hours of ERA5 weather observations for a study of seasonal climate. Deliver the observations in a CSV file with a documented time zone.",
+    "description": "Requested data: ERA5 weather observations for a study of seasonal climate (240 hours). Deliver the observations in a CSV file with a documented time zone.",
     "categories": [
       "climate",
       "weather"
@@ -246,7 +246,7 @@
   },
   "serving": {
     "title": "Weather observations for climate research",
-    "description": "We need 240 hours of ERA5 weather observations for a study of seasonal climate. Deliver the observations in a CSV file with a documented time zone.",
+    "description": "Requested data: ERA5 weather observations for a study of seasonal climate (240 hours). Deliver the observations in a CSV file with a documented time zone.",
     "categories": [
       "climate",
       "weather"
