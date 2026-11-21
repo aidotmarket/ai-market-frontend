@@ -2,7 +2,7 @@
 
 import React from 'react';
 import { renderToStaticMarkup } from 'react-dom/server';
-import { cleanup, render, screen, within } from '@testing-library/react';
+import { cleanup, fireEvent, render, screen, within } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { browseResponse, conflictingShortDescription, listingSummaryCases, markdownDescription } from '@/tests/listingSummaryFixture';
 
@@ -26,8 +26,9 @@ vi.mock('@/components/HomepageActivityTickerBeacons', () => ({
   HomepageActivityTickerBeacons: () => null,
 }));
 
-vi.mock('@/components/HeroSearch', () => ({
-  HeroSearch: () => <div>Search</div>,
+const push = vi.hoisted(() => vi.fn());
+vi.mock('next/navigation', () => ({
+  useRouter: () => ({ push }),
 }));
 
 function request(id: string) {
@@ -229,10 +230,71 @@ it.each(['1.1', '1.2'])('renders the cloud-first homepage copy under terms %s', 
   expect(sellData.getByText('Connect your S3 or R2 bucket, or run the open-source AIM Data gateway. Buyers download directly from your storage.')).toBeTruthy();
 });
 
-it('uses the cloud-first description in homepage metadata', async () => {
-  const { metadata } = await import('./page');
-  const description = 'Non-custodial B2B data marketplace. List from your S3 or R2 bucket, or from your own servers with AIM Data. Find data with semantic search and data requests.';
-  expect(metadata.description).toBe(description);
-  expect(metadata.openGraph?.description).toBe(description);
-  expect(metadata.twitter?.description).toBe(description);
+describe('homepage hero and descriptions', () => {
+  const summary = 'Businesses buy and sell data on ai.market. Sellers keep their data in storage they control. Buyers download purchased files directly from the seller.';
+
+  beforeEach(() => {
+    fetchPublicListings.mockResolvedValue({ items: [] });
+    fetchFeaturedFeed.mockResolvedValue(null);
+    fetchDataRequests.mockResolvedValue({ items: [] });
+  });
+
+  it('explains how businesses buy and sell data in the hero and structured data', async () => {
+    const { default: LandingPage } = await import('./page');
+    const { container } = render(await LandingPage());
+    const hero = within(screen.getByRole('heading', { level: 1 }).closest('section')!);
+
+    expect(hero.getByText('Data marketplace for businesses')).toBeTruthy();
+    expect(hero.getByText(`${summary} Buyers and AI agents can search for data or post a request.`)).toBeTruthy();
+
+    const structuredData = container.querySelector('script[type="application/ld+json"]')!;
+    expect(JSON.parse(structuredData.textContent!)).toEqual([
+      {
+        '@context': 'https://schema.org',
+        '@type': 'Organization',
+        name: 'ai.market',
+        url: 'https://ai.market',
+        description: summary,
+        sameAs: ['https://github.com/maxrobbins'],
+      },
+      {
+        '@context': 'https://schema.org',
+        '@type': 'WebSite',
+        name: 'ai.market',
+        url: 'https://ai.market',
+        description: summary,
+        potentialAction: {
+          '@type': 'SearchAction',
+          target: 'https://ai.market/find-data?q={search_term_string}',
+          'query-input': 'required name=search_term_string',
+        },
+      },
+    ]);
+    expect(container.textContent).not.toMatch(/non-custodial B2B (?:data )?marketplace/i);
+  });
+
+  it('uses a consistent, cloud-first description for search and social', async () => {
+    const { metadata } = await import('./page');
+    const description = `${summary} Sellers can list from their own AWS S3 or Cloudflare R2 bucket, or host files on their own servers with the AIM Data Gateway. Buyers can search for data or post a request.`;
+
+    expect(metadata.description).toBe(description);
+    expect(metadata.openGraph?.description).toBe(description);
+    expect(metadata.twitter?.description).toBe(description);
+    expect(metadata.title).toEqual({ absolute: 'ai.market — Sell data without giving it away' });
+    expect(metadata.alternates?.canonical).toBe('/');
+  });
+
+  it('keeps search, buyer requests, and seller information at their existing destinations', async () => {
+    const { default: LandingPage } = await import('./page');
+    render(await LandingPage());
+    const hero = within(screen.getByRole('heading', { level: 1 }).closest('section')!);
+
+    fireEvent.change(hero.getByRole('searchbox'), { target: { value: '  US retail sales  ' } });
+    fireEvent.click(hero.getByRole('button', { name: 'Search' }));
+    expect(push).toHaveBeenLastCalledWith('/find-data?q=US%20retail%20sales');
+    expect(hero.getByRole('link', { name: 'Browse Data' }).getAttribute('href')).toBe('/listings');
+    expect(hero.getByRole('link', { name: 'Post a Request' }).getAttribute('href')).toBe('/requests');
+    expect(screen.getByRole('link', { name: 'Post a Buyer Request' }).getAttribute('href')).toBe('/requests/new');
+    expect(screen.getByRole('link', { name: 'Sell Data' }).getAttribute('href')).toBe('/sell-data');
+  });
 });
