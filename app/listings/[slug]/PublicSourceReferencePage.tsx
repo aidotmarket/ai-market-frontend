@@ -36,9 +36,10 @@ function validReference(listing: ListingDetail): PublicSourceReference | null {
 
 export default function PublicSourceReferencePage({ listing, emitJsonLd, documents = [] }: { listing: ListingDetail; emitJsonLd: boolean; documents?: ListingDocument[] }) {
   const reference = validReference(listing);
+  const description = 'summary' in listing ? listing.summary ?? undefined : listing.description;
   const jsonld = reference && emitJsonLd && !listing.noindex ? {
     '@context': 'https://schema.org', '@type': 'Dataset',
-    name: listing.title, description: listing.description,
+    name: listing.title, description,
     url: `https://ai.market/listings/${listing.slug}`,
     publisher: { '@type': 'Organization', name: reference.publisher },
     creator: { '@type': 'Organization', name: reference.publisher },

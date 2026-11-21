@@ -8,12 +8,15 @@ import { within } from '@testing-library/react';
 import type { ListingDetail, ListingVersion } from '@/types';
 import type {ListingDocument} from '@/types/listingDocuments';
 import {documentFixture} from '@/tests/listingDocumentsFixture';
+import { renderListingMetadataHead } from '@/tests/listingMetadataHead';
+import { conflictingShortDescription, listingSummaryCases, markdownDescription, projectedSummary } from '@/tests/listingSummaryFixture';
 import type { ListingWithSamples } from './SampleFiles';
 import composed from '@/tests/fixtures/s1922-composed-detail.json';
 import {verifyCurrentListing} from '@/lib/publicPresentation';
 import { headers } from 'next/headers';
 
 vi.mock('next/headers', () => ({ headers: vi.fn(async () => new Headers()) }));
+vi.mock('next/font/local', () => ({ default: () => ({ className: 'font' }) }));
 
 const notFound = vi.fn(() => {
   throw new Error('NEXT_NOT_FOUND');
@@ -98,7 +101,7 @@ describe('corrected backend 1ad9300 real composed detail wire',()=>{
     fetchPublicListing.mockImplementation(actual.fetchPublicListing);
     fetchListingVersions.mockResolvedValue([]);
     fetchPublicListingDocuments.mockResolvedValue([documentFixture()]);
-    const fetch=vi.fn().mockResolvedValue({ok:true,json:async()=>wire});
+    const fetch=vi.fn().mockImplementation(async()=>Response.json({...wire,summary:projectedSummary}));
     vi.stubGlobal('fetch',fetch);
     await expect(verifyCurrentListing(wire)).resolves.toBeUndefined();
     const params=Promise.resolve({slug:wire.slug});
@@ -110,7 +113,7 @@ describe('corrected backend 1ad9300 real composed detail wire',()=>{
     expect(frame.compareDocumentPosition(docs)&Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
     expect(frame.getAttribute('srcdoc')).not.toContain('Technical guide');
     expect(document.body.textContent).toContain(CORRECTION_NOTICE_BUYER);
-    expect(await generateMetadata({params})).toMatchObject({title:wire.title,description:wire.description.slice(0,200)});
+    expect(await generateMetadata({params})).toMatchObject({title:wire.title,description:projectedSummary});
     for(const [,options] of fetch.mock.calls)expect(options).toEqual({cache:'no-store'});
     expect(JSON.stringify(wire)).toBe(before);
   });
@@ -184,6 +187,33 @@ function makeListing(overrides: Partial<ListingWithSamples> = {}): ListingWithSa
     ...overrides,
   };
 }
+
+describe('listing description metadata', () => {
+  afterEach(() => fetchPublicListing.mockReset());
+
+  it.each(listingSummaryCases())('resolves the page head for $state', async ({ summary }) => {
+    const listing = makeListing({ description: markdownDescription, short_description: conflictingShortDescription, summary });
+    fetchPublicListing.mockResolvedValue(await Response.json(listing).json());
+    const metadata = await generateMetadata({ params: Promise.resolve({ slug: listing.slug }) });
+    const { metadata: root } = await import('../../layout');
+    const expected = summary === undefined ? conflictingShortDescription : summary;
+
+    for (const fields of [metadata, metadata.openGraph, metadata.twitter]) {
+      if (expected === null) expect(fields).not.toHaveProperty('description');
+      else expect(fields).toHaveProperty('description', expected);
+    }
+    const headDescription = expected === null ? root.description : expected || null;
+    expect(await renderListingMetadataHead(root, metadata, listing.slug)).toEqual(Array(3).fill(headDescription));
+  });
+
+  it('keeps the Markdown fallback for an old backend with empty short copy', async () => {
+    const description = `${markdownDescription} ${'More details. '.repeat(20)}`;
+    const listing = makeListing({ description, short_description: '' });
+    fetchPublicListing.mockResolvedValue(await Response.json(listing).json());
+    expect(await generateMetadata({ params: Promise.resolve({ slug: listing.slug }) }))
+      .toHaveProperty('description', description.slice(0, 200));
+  });
+});
 
 describe('SSR listing harness User-Agent forwarding', () => {
   afterEach(() => {

@@ -4,6 +4,7 @@ import React from 'react';
 import { renderToStaticMarkup } from 'react-dom/server';
 import { cleanup, render, screen, within } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { browseResponse, conflictingShortDescription, listingSummaryCases, markdownDescription } from '@/tests/listingSummaryFixture';
 
 const auth = vi.hoisted(() => ({ isAuthenticated: false }));
 vi.mock('@/store/auth', () => ({ useAuthStore: () => auth }));
@@ -47,6 +48,29 @@ function request(id: string) {
     updated_at: null,
   };
 }
+
+describe('homepage listing grid', () => {
+  it.each(listingSummaryCases())('renders the browse excerpt for $state', async ({ summary }) => {
+    const listing = { ...browseResponse.items[0], summary };
+    const withMarkdown = {
+      ...listing, id: '26ab5022-cfcb-41a6-b1ee-2260ac308980', slug: 'dataset-with-markdown',
+      title: 'Dataset with extra Markdown', description: markdownDescription,
+    };
+    const response = { ...browseResponse, items: [listing, withMarkdown], pagination: { ...browseResponse.pagination, total: 2 } };
+    fetchPublicListings.mockResolvedValue(await Response.json(response).json());
+    fetchFeaturedFeed.mockResolvedValue(null);
+    fetchDataRequests.mockResolvedValue({ items: [] });
+    const { default: LandingPage } = await import('./page');
+
+    render(await LandingPage());
+    for (const item of [listing, withMarkdown]) {
+      const card = screen.getByRole('heading', { name: item.title }).closest('a')!;
+      expect(card.getAttribute('href')).toBe(`/listings/${item.slug}`);
+      expect(within(card).getByRole('paragraph').textContent)
+        .toBe(summary === undefined ? conflictingShortDescription : summary ?? '');
+    }
+  });
+});
 
 describe('homepage buyer requests', () => {
   it('renders request Markdown as plain card text without changing its source', async () => {

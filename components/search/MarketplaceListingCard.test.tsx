@@ -2,10 +2,40 @@ import {CORRECTION_NOTICE_BUYER} from '@/lib/publicPresentation';
 import React from 'react';
 import { renderToStaticMarkup } from 'react-dom/server';
 import { describe, expect, it } from 'vitest';
-import type { SearchResultItem } from '@/types';
+import type { ListingListItem, SearchResultItem } from '@/types';
+import { browseResponse, conflictingShortDescription, listingSummaryCases, markdownDescription } from '@/tests/listingSummaryFixture';
 import { MarketplaceListingCard } from './MarketplaceListingCard';
 
 describe('MarketplaceListingCard', () => {
+  const browseItem = browseResponse.items[0];
+  const searchItem = {
+    id: browseItem.id, slug: browseItem.slug, title: browseItem.title,
+    description: markdownDescription, short_description: conflictingShortDescription,
+    category: browseItem.category, price: browseItem.price, privacy_score: null,
+    data_format: 'csv', source_row_count: 10, tags: [],
+  };
+
+  describe.each([
+    { endpoint: 'public browse', item: browseItem },
+    { endpoint: 'public browse with extra Markdown', item: { ...browseItem, description: markdownDescription } },
+    { endpoint: 'web search', item: searchItem },
+  ])('$endpoint', ({ item }) => {
+    it.each(listingSummaryCases())('renders the expected excerpt for $state', async ({ summary }) => {
+      const listing: ListingListItem | SearchResultItem = await Response.json({ ...item, summary }).json();
+      const html = renderToStaticMarkup(<MarketplaceListingCard listing={listing} />);
+      const expected = summary === undefined ? conflictingShortDescription : summary;
+      if (expected) expect(html).toContain(`>${expected}</p>`);
+      else expect(html).not.toContain('line-clamp-3');
+      if (summary !== undefined) expect(html).not.toContain(conflictingShortDescription);
+      expect(html).not.toContain('**Approved coverage**');
+    });
+  });
+
+  it('keeps the search description fallback for an old backend with empty short copy', async () => {
+    const listing = await Response.json({ ...searchItem, short_description: '' }).json();
+    expect(renderToStaticMarkup(<MarketplaceListingCard listing={listing} />)).toContain('**Approved coverage**');
+  });
+
   it('does not render a truth-status badge', () => {
     const listing: SearchResultItem = {
       id: 'listing-1',

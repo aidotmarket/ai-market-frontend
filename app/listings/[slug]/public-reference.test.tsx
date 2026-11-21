@@ -4,9 +4,12 @@ import { renderToStaticMarkup } from 'react-dom/server';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { within } from '@testing-library/react';
 import type { ListingDetail, PublicSourceReference } from '@/types';
+import { renderListingMetadataHead } from '@/tests/listingMetadataHead';
+import { listingSummaryCases } from '@/tests/listingSummaryFixture';
 import PublicSourceReferencePage from './PublicSourceReferencePage';
 
 vi.mock('next/headers', () => ({ headers: vi.fn(async () => new Headers()) }));
+vi.mock('next/font/local', () => ({ default: () => ({ className: 'font' }) }));
 
 const api = vi.hoisted(() => ({
   fetchPublicListingDocuments: vi.fn(async () => []),
@@ -263,12 +266,34 @@ describe('public-source reference route', () => {
     expect(document.body.textContent).not.toContain('Indexed from public source');
   });
 
-  it('uses factual description for reference discovery metadata', async () => {
-    api.fetchPublicListing.mockResolvedValue(fixture());
-    const metadata = await generateMetadata({ params: Promise.resolve({ slug: 'arbitrary-slug' }) });
-    expect(metadata.description).toContain('Official');
-    expect(metadata.description).not.toContain('Old facility marketing');
+  it.each(listingSummaryCases('Official aggregate data. Source record'))('uses the reference description contract for $state in discovery metadata and JSON-LD', async ({ summary }) => {
+    const listing = fixture({ summary });
+    await render(await Response.json(listing).json());
+    const metadata = await generateMetadata({ params: Promise.resolve({ slug: listing.slug }) });
+    const { metadata: root } = await import('../../layout');
+    const jsonld = JSON.parse(document.querySelector('script[type="application/ld+json"]')!.textContent!);
+    const expected = summary === undefined ? listing.description.slice(0, 200) : summary;
+
+    for (const fields of [metadata, metadata.openGraph, metadata.twitter]) {
+      if (expected === null) expect(fields).not.toHaveProperty('description');
+      else expect(fields).toHaveProperty('description', expected);
+    }
+    const headDescription = expected === null ? root.description : expected || null;
+    expect(await renderListingMetadataHead(root, metadata, listing.slug)).toEqual(Array(3).fill(headDescription));
+    if (summary === null) expect(jsonld).not.toHaveProperty('description');
+    else expect(jsonld).toHaveProperty('description', summary ?? listing.description);
+    expect(JSON.stringify(jsonld)).not.toContain('Old facility marketing');
+    expect(jsonld).not.toHaveProperty('offers');
     expect(metadata.alternates?.canonical).toBe('https://ai.market/listings/arbitrary-slug');
+  });
+
+  it('keeps a malformed reference marker on the reference path with a failed summary', async () => {
+    const listing = fixture({ public_reference: null, summary: null });
+    const page = await render(await Response.json(listing).json());
+    expect(page.getByRole('status').textContent).toContain('Public source reference unavailable');
+    const metadata = await generateMetadata({ params: Promise.resolve({ slug: listing.slug }) });
+    expect(metadata).not.toHaveProperty('description');
+    expect(document.querySelector('script[type="application/ld+json"]')).toBeNull();
   });
 });
 
