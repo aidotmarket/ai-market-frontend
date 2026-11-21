@@ -19,15 +19,17 @@ import { HomepageActivityTickerBeacons } from '@/components/HomepageActivityTick
 import { HeroSearch } from '@/components/HeroSearch';
 import type { DataRequestListItem } from '@/types';
 
+const marketplaceSummary =
+  'Businesses buy and sell data on ai.market. Sellers keep their data in storage they control. Buyers download purchased files directly from the seller.';
+const homepageDescription = `${marketplaceSummary} Sellers can list from their own AWS S3 or Cloudflare R2 bucket, or host files on their own servers with the AIM Data Gateway. Buyers can search for data or post a request.`;
+
 export const metadata: Metadata = {
   alternates: { canonical: '/' },
   title: { absolute: 'ai.market — Sell data without giving it away' },
-  description:
-    'Non-custodial B2B data marketplace. List from your S3 or R2 bucket, or from your own servers with AIM Data. Find data with semantic search and data requests.',
+  description: homepageDescription,
   openGraph: {
     title: 'ai.market — Sell data without giving it away',
-    description:
-      'Non-custodial B2B data marketplace. List from your S3 or R2 bucket, or from your own servers with AIM Data. Find data with semantic search and data requests.',
+    description: homepageDescription,
     url: 'https://ai.market',
     siteName: 'ai.market',
     images: ['/og/home.png'],
@@ -36,8 +38,7 @@ export const metadata: Metadata = {
   twitter: {
     card: 'summary_large_image',
     title: 'ai.market — Sell data without giving it away',
-    description:
-      'Non-custodial B2B data marketplace. List from your S3 or R2 bucket, or from your own servers with AIM Data. Find data with semantic search and data requests.',
+    description: homepageDescription,
     images: ['/og/home.png'],
   },
 };
@@ -48,7 +49,7 @@ const LANDING_JSONLD = [
     '@type': 'Organization',
     name: 'ai.market',
     url: 'https://ai.market',
-    description: 'Non-custodial B2B data marketplace.',
+    description: marketplaceSummary,
     sameAs: ['https://github.com/maxrobbins'],
   },
   {
@@ -56,8 +57,7 @@ const LANDING_JSONLD = [
     '@type': 'WebSite',
     name: 'ai.market',
     url: 'https://ai.market',
-    description:
-      'The non-custodial B2B data marketplace.',
+    description: marketplaceSummary,
     potentialAction: {
       '@type': 'SearchAction',
       target: 'https://ai.market/find-data?q={search_term_string}',
@@ -309,16 +309,15 @@ export default async function LandingPage() {
               {/* Left */}
               <div>
                 <span className="inline-flex items-center rounded-full bg-[#E1F5EE] px-3 py-1 text-xs font-semibold text-[#0F6E56]">
-                  Non-Custodial Protocol
+                  Data marketplace for businesses
                 </span>
                 <h1 className="mt-5 text-4xl font-extrabold tracking-tight text-[#1A1A1A] sm:text-5xl lg:text-6xl">
                   Sell data without{' '}
                   <span className="text-[#3F51B5]">giving it away.</span>
                 </h1>
                 <p className="mt-6 text-lg leading-8 text-[#4A4A4A] max-w-xl">
-                  ai.market is a non-custodial B2B marketplace. Your data stays on your
-                  infrastructure. Buyers and AI agents find it through search or post a request,
-                  and buyers download purchased files directly from the seller.
+                  {marketplaceSummary}{' '}
+                  Buyers can search for data or post a request. AI agents can help search and draft requests.
                 </p>
                 <HeroSearch />
                 <div className="mt-5 rounded-xl border border-[#E8E8E8] bg-[#FAFAFA] p-4">
