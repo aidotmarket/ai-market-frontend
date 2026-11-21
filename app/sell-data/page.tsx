@@ -275,15 +275,13 @@ export default async function SellDataPage() {
 
       <section className="bg-gray-50 py-16 sm:py-20" aria-labelledby="final-cta-heading">
         <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
-          <div className="rounded-2xl border border-[#D8EEE6] bg-white p-6 shadow-sm sm:p-8">
-            <h2 id="final-cta-heading" className="text-2xl font-bold tracking-tight text-gray-900">
-              List your data
-            </h2>
-            <p className="mt-4 max-w-3xl text-base leading-7 text-gray-600">
-              allAI helps you get your first listing ready. List free and pay nothing until a sale clears.
-            </p>
-            <SellDataCta variant="inline" />
-          </div>
+          <SellDataCta
+            variant="final"
+            finalCopy={{
+              heading: 'List your data',
+              description: 'allAI helps you get your first listing ready. List free and pay nothing until a sale clears.',
+            }}
+          />
         </div>
       </section>
 

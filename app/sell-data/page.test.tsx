@@ -55,17 +55,28 @@ describe('SellDataPage', () => {
     expect(within(cards[1]).getByText(/After purchase, buyers download the files directly through your gateway/)).toBeTruthy();
     expect(within(cards[1]).getByRole('link', { name: 'Technical details for your IT team' }).getAttribute('href')).toBe('/aim-data');
 
-    const finalCta = screen.getByRole('region', { name: 'List your data' });
-    expect(within(finalCta).getAllByRole('link').map((link) => link.getAttribute('href'))).toEqual(
-      isAuthenticated ? ['/dashboard/seller-workspace', '/dashboard/gateways', '/dashboard/listings'] : ['/register'],
-    );
-
     const structuredData = JSON.parse(container.querySelector('script[type="application/ld+json"]')!.textContent!);
     expect(structuredData['@type']).toBe('Service');
     expect(structuredData.name).toBe('Sell data on ai.market');
     expect(structuredData.description).toBe(metadata.description);
     expect(metadata.title).toEqual({ absolute: 'Sell data on ai.market' });
     expect(metadata.description).toMatch(hostingOptions);
+  });
+
+  it.each([false, true])('shows exactly one primary final action when authenticated=%s', async (isAuthenticated) => {
+    mocks.auth.isAuthenticated = isAuthenticated;
+    render(await SellDataPage());
+    const finalCta = within(screen.getByRole('region', { name: 'List your data' }));
+    const links = finalCta.getAllByRole('link');
+    const primaryAction = finalCta.getByRole('link', {
+      name: isAuthenticated ? 'Open Seller Workspace' : 'Create Your Account',
+    });
+
+    expect(finalCta.getByText('allAI helps you get your first listing ready. List free and pay nothing until a sale clears.')).toBeTruthy();
+    expect(links.map((link) => link.getAttribute('href'))).toEqual(
+      isAuthenticated ? ['/dashboard/seller-workspace', '/dashboard/gateways', '/dashboard/listings'] : ['/register'],
+    );
+    expect(links.filter((link) => link.classList.contains('bg-[#0F6E56]'))).toEqual([primaryAction]);
   });
 });
 
