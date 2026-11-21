@@ -1,6 +1,7 @@
 import { api } from './client';
 import { useAuthStore } from '@/store/auth';
 import { authSessionOwner, assertAuthSessionOwner } from '@/lib/auth-session-owner';
+import { parsePublicationPreview, type RequestPublicationPreviewResult } from '@/lib/request-publication-preview';
 import type {
   DataRequestListItem,
   DataRequestDetail,
@@ -34,6 +35,12 @@ export async function updateDataRequest(
 export async function publishDataRequest(requestId: string): Promise<DataRequestDetail> {
   const res = await api.post<DataRequestDetail>(`/data-requests/${encodeURIComponent(requestId)}/publish`);
   return res.data;
+}
+
+// Owner-only and non-mutating. No body, payment, or consent is sent.
+export async function previewDataRequestPublication(requestId: string): Promise<RequestPublicationPreviewResult> {
+  const { data } = await api.post<unknown>(`/data-requests/${encodeURIComponent(requestId)}/publication-preview`);
+  return parsePublicationPreview(data);
 }
 
 export async function confirmDataRequestPublication(

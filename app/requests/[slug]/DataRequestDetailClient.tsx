@@ -14,7 +14,9 @@ import {
   getDataRequestResponses,
   confirmDataRequestPublication,
   withdrawDataRequestPublication,
+  previewDataRequestPublication,
 } from '@/api/data-requests';
+import { currentPublicContent, samePublicContent, samePublicationSource, type RequestPublicationPreview } from '@/lib/request-publication-preview';
 import { authSessionOwner, isAuthSessionOwner, subscribeAuthSessionOwner } from '@/lib/auth-session-owner';
 import RequestConversation from '@/components/RequestConversation';
 import { formatDate } from '@/lib/format';
@@ -131,6 +133,9 @@ export default function DataRequestDetailClient({
   const [editFormats, setEditFormats] = useState('');
   const [editRegulatory, setEditRegulatory] = useState('');
   const [editProvenance, setEditProvenance] = useState('');
+  const [publicPreview, setPublicPreview] = useState<{ source: DataRequestDetail; proposal: RequestPublicationPreview } | null>(null);
+  const [previewFeedback, setPreviewFeedback] = useState<{ text: string; role: 'status' | 'alert' } | null>(null);
+  const [proposalEditSource, setProposalEditSource] = useState<DataRequestDetail | null>(null);
   const loadGeneration = useRef(0);
   const contextEpoch = useRef(0);
   const visitActive = useRef(false);
@@ -172,6 +177,9 @@ export default function DataRequestDetailClient({
     setEditFormats('');
     setEditRegulatory('');
     setEditProvenance('');
+    setPublicPreview(null);
+    setPreviewFeedback(null);
+    setProposalEditSource(null);
     setProposal('');
     setProposedPrice('');
     setTimeline('');
@@ -213,16 +221,73 @@ export default function DataRequestDetailClient({
     setEditProvenance(request.provenance_requirements || '');
     setEditError('');
     setEditing(true);
+    setProposalEditSource(null);
+    setPublicPreview(null);
+    setPreviewFeedback(null);
+  }
+
+  async function reviewPublicPreview() {
+    if (!isOwner || !request || editing || mutationPending.current || !['draft', 'open', 'responses_received'].includes(request.status) || request.publication_decision === 'eligible') return;
+    const epoch = beginMutation();
+    setUpdatingPublication(true);
+    setPublicPreview(null);
+    setPreviewFeedback(null);
+    try {
+      const source = request;
+      const proposal = await previewDataRequestPublication(request.id);
+      if (!isCurrentMutation(epoch)) return;
+      if ('preview' in proposal) {
+        setPreviewFeedback({ text: proposal.next_action, role: 'status' });
+        return;
+      }
+      if (proposal.source_content_hash !== source.public_content_hash) {
+        setPreviewFeedback({ text: 'The draft changed during review. Refresh the request and try again.', role: 'alert' });
+        return;
+      }
+      // The backend may only propose edits to these three text fields.
+      const original = currentPublicContent(source);
+      const content = proposal.public_content;
+      if (!samePublicContent({ ...content, title: original.title, description: original.description, provenance_requirements: original.provenance_requirements }, original)) {
+        setPreviewFeedback({ text: 'The preview changed request requirements. Use Edit request to review your requirements.', role: 'alert' });
+        return;
+      }
+      setPublicPreview({ source, proposal });
+    } catch {
+      if (isCurrentMutation(epoch)) setPreviewFeedback({ text: 'Public preview unavailable or its version is unsupported. Your saved request is unchanged. Try again.', role: 'alert' });
+    } finally {
+      if (isCurrentMutation(epoch)) { mutationPending.current = false; setUpdatingPublication(false); }
+    }
+  }
+
+  function useProposedText() {
+    if (!publicPreview || !request || mutationPending.current || !samePublicationSource(publicPreview.source, request)) return;
+    const content = publicPreview.proposal.public_content;
+    // This backend has no conditional PATCH. Copy into the normal editor only;
+    // never turn preview acceptance into an automatic save/consent chain.
+    startEditing();
+    setProposalEditSource(publicPreview.source);
+    setEditTitle(content.title || '');
+    setEditDescription(content.description);
+    setEditProvenance(content.provenance_requirements || '');
   }
 
   async function handleSaveEdit(e: React.FormEvent) {
     e.preventDefault();
-    if (!isOwner || !request || !['draft', 'open'].includes(request.status) || !editing || savingEdit || publishing || deleting || updatingPublication) return;
+    if (!isOwner || !request || mutationPending.current || !['draft', 'open'].includes(request.status) || !editing || savingEdit || publishing || deleting || updatingPublication) return;
     const splitList = (value: string) => value.split(',').map((item) => item.trim()).filter(Boolean);
     setSavingEdit(true);
     setEditError('');
     const epoch = beginMutation();
     try {
+      if (proposalEditSource) {
+        const current = await getDataRequest(request.id);
+        if (!isCurrentMutation(epoch)) return;
+        if (!samePublicationSource(proposalEditSource, current)) {
+          setRequest(current);
+          setEditError('The saved request changed while you were editing the proposal. Cancel this edit, review the current details and prepare a fresh preview.');
+          return;
+        }
+      }
       const updated = await updateDataRequest(request.id, {
         title: editTitle.trim(),
         description: editDescription.trim(),
@@ -234,6 +299,8 @@ export default function DataRequestDetailClient({
       if (!isCurrentMutation(epoch)) return;
       setRequest(updated);
       setEditing(false);
+      setPublicPreview(null);
+      setProposalEditSource(null);
       toast('Request changes saved. Review the public visibility status before confirming.', 'success');
     } catch (err) {
       if (!isCurrentMutation(epoch)) return;
@@ -310,7 +377,7 @@ export default function DataRequestDetailClient({
   }
 
   async function handlePublish() {
-    if (!request || editing || savingEdit || publishing || deleting || updatingPublication) return;
+    if (!request || mutationPending.current || editing || savingEdit || publishing || deleting || updatingPublication) return;
     const epoch = beginMutation();
     setPublishing(true);
     try {
@@ -339,7 +406,7 @@ export default function DataRequestDetailClient({
   }
 
   async function handleDelete() {
-    if (!request || editing || savingEdit || publishing || deleting || updatingPublication) return;
+    if (!request || mutationPending.current || editing || savingEdit || publishing || deleting || updatingPublication) return;
     const epoch = beginMutation();
     setDeleting(true);
     try {
@@ -363,14 +430,24 @@ export default function DataRequestDetailClient({
   }
 
   async function handleConfirmPublication() {
-    if (!request?.public_content_hash || !request.required_public_consent_policy_version || editing || savingEdit || publishing || deleting || updatingPublication) return;
+    if (!isOwner || !publicPreview || !request?.public_content_hash || !request.required_public_consent_policy_version || mutationPending.current || editing || savingEdit || publishing || deleting || updatingPublication) return;
+    const accepted = publicPreview;
+    if (!samePublicationSource(accepted.source, request) || accepted.proposal.public_content_hash !== request.public_content_hash || !samePublicContent(accepted.proposal.public_content, currentPublicContent(request))) return;
     const epoch = beginMutation();
     setUpdatingPublication(true);
+    setPublicPreview(null);
     try {
+      const current = await getDataRequest(request.id);
+      if (!isCurrentMutation(epoch)) return;
+      setRequest(current);
+      if (!samePublicationSource(accepted.source, current)) {
+        setPreviewFeedback({ text: 'The request or publication version changed. Review a fresh public preview before confirming.', role: 'status' });
+        return;
+      }
       const updated = await confirmDataRequestPublication(
-        request.id,
-        request.public_content_hash,
-        request.required_public_consent_policy_version
+        current.id,
+        current.public_content_hash!,
+        current.required_public_consent_policy_version!
       );
       if (!isCurrentMutation(epoch)) return;
       setRequest(updated);
@@ -380,13 +457,9 @@ export default function DataRequestDetailClient({
           : 'Your publication choice was saved. The status below explains what happens next.',
         'success'
       );
-    } catch (err) {
+    } catch {
       if (!isCurrentMutation(epoch)) return;
-      if (err instanceof AxiosError) {
-        toast(err.response?.data?.detail || 'Failed to update public visibility.', 'error');
-      } else {
-        toast('An unexpected error occurred.', 'error');
-      }
+      setPreviewFeedback({ text: 'Public visibility could not be confirmed. Refresh to check its status, then review a fresh preview before trying again.', role: 'status' });
     } finally {
       if (isCurrentMutation(epoch)) {
         mutationPending.current = false;
@@ -396,7 +469,7 @@ export default function DataRequestDetailClient({
   }
 
   async function handleWithdrawPublication() {
-    if (!request || editing || savingEdit || publishing || deleting || updatingPublication) return;
+    if (!request || mutationPending.current || editing || savingEdit || publishing || deleting || updatingPublication) return;
     const epoch = beginMutation();
     setUpdatingPublication(true);
     try {
@@ -641,7 +714,34 @@ export default function DataRequestDetailClient({
             )}
           </div>
 
-          {canConfirmPublication && !editing && (
+          {['draft', 'open', 'responses_received'].includes(request.status) && request.publication_decision !== 'eligible' && request.publication_reason !== 'automated_check_unavailable' && request.public_content_hash && !editing && (
+            <div className="mt-4 border-t border-[#D8DDF4] pt-4">
+              <p className="mb-3 text-sm text-gray-700">Review a private proposal for public text. Your saved request stays unchanged until you choose to edit and save it.</p>
+              <button type="button" onClick={reviewPublicPreview} disabled={updatingPublication || publishing || deleting}
+                className="rounded-lg border border-gray-300 bg-white px-4 py-2 text-sm font-medium text-gray-700 disabled:opacity-50">
+                {updatingPublication ? 'Updating...' : 'Review public preview'}
+              </button>
+              {previewFeedback && <p role={previewFeedback.role} className={`mt-3 whitespace-pre-wrap break-words text-sm ${previewFeedback.role === 'alert' ? 'text-red-700' : 'text-gray-700'}`}>{previewFeedback.text}</p>}
+              {publicPreview && samePublicationSource(publicPreview.source, request) && <div className="mt-4 rounded-xl border border-gray-200 bg-white p-5" aria-label="Proposed public content">
+                <h3 className="font-semibold">Proposed public content</h3>
+                <dl className="mt-3 space-y-3 text-sm">
+                  {Object.entries(publicPreview.proposal.public_content).map(([key, value]) => <div key={key}>
+                    <dt className="font-medium capitalize">{key.replaceAll('_', ' ')}</dt>
+                    <dd className="whitespace-pre-wrap break-words">{value === null ? 'Not specified' : Array.isArray(value) ? value.length ? value.join(', ') : 'None' : value}</dd>
+                  </div>)}
+                </dl>
+                {!samePublicContent(publicPreview.proposal.public_content, currentPublicContent(request)) && <>
+                  <p className="mt-4 text-sm">Use this proposal in the existing editor, review it and save changes. Then review a fresh public preview before consenting. Opening the editor does not change visibility.</p>
+                  {['draft', 'open'].includes(request.status) ? <button type="button" disabled={updatingPublication} onClick={useProposedText} className="mt-3 rounded-lg bg-[#3F51B5] px-4 py-2 text-sm font-medium text-white disabled:opacity-50">Use proposed text in editor</button>
+                    : <p className="mt-3 text-sm">This request no longer supports editing. The proposed changes have not been saved or published.</p>}
+                </>}
+              </div>}
+            </div>
+          )}
+
+          {canConfirmPublication && !editing && publicPreview && samePublicationSource(publicPreview.source, request)
+            && publicPreview.proposal.public_content_hash === request.public_content_hash
+            && samePublicContent(publicPreview.proposal.public_content, currentPublicContent(request)) && (
             <div className="mt-4 border-t border-[#D8DDF4] pt-4">
               <p className="mb-3 text-sm text-gray-700">
                 By making this request public, you agree that the request details shown on this page may appear on ai.market, in search engines, to AI agents, and in relevant seller alerts. Your full account profile is not included; your existing public buyer name may appear. Do not put contact details in the request text.

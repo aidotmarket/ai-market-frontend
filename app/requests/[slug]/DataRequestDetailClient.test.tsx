@@ -9,6 +9,7 @@ import https from 'node:https';
 import type { DataRequestDetail, User } from '@/types';
 import { AxiosError, AxiosHeaders } from 'axios';
 import DataRequestDetailClient from './DataRequestDetailClient';
+import { currentPublicContent, parsePublicationPreview } from '@/lib/request-publication-preview';
 
 const mocks = vi.hoisted(() => ({
   auth: {
@@ -25,6 +26,7 @@ const mocks = vi.hoisted(() => ({
   deleteDataRequest: vi.fn(),
   submitDataRequestResponse: vi.fn(),
   getDataRequestResponses: vi.fn(),
+  previewDataRequestPublication: vi.fn(),
   confirmDataRequestPublication: vi.fn(),
   withdrawDataRequestPublication: vi.fn(),
 }));
@@ -66,6 +68,7 @@ vi.mock('@/api/data-requests', async () => ({
   deleteDataRequest: mocks.deleteDataRequest,
   submitDataRequestResponse: mocks.submitDataRequestResponse,
   getDataRequestResponses: mocks.getDataRequestResponses,
+  previewDataRequestPublication: mocks.previewDataRequestPublication,
   confirmDataRequestPublication: mocks.confirmDataRequestPublication,
   withdrawDataRequestPublication: mocks.withdrawDataRequestPublication,
 }));
@@ -130,6 +133,14 @@ function deferred<T>() {
   let reject!: (error: Error) => void;
   const promise = new Promise<T>((res, rej) => { resolve = res; reject = rej; });
   return { promise, resolve, reject };
+}
+
+async function preparePublicPreview(request: DataRequestDetail) {
+  mocks.previewDataRequestPublication.mockResolvedValue({ source_content_hash: request.public_content_hash,
+    public_content_hash: request.public_content_hash, public_content: currentPublicContent(request) });
+  mocks.getDataRequest.mockResolvedValue(request);
+  fireEvent.click(await screen.findByRole('button', { name: 'Review public preview' }));
+  await screen.findByRole('button', { name: 'Make this request public' });
 }
 
 describe('DataRequestDetailClient authenticated fallback loading', () => {
@@ -540,6 +551,186 @@ describe('DataRequestDetailClient authenticated fallback loading', () => {
     expectNoWrites();
   });
 
+  it('keeps the raw draft until the buyer copies the proposal into the editor, saves, and accepts a fresh preview', async () => {
+    const request = makeOwnerRequest({ title: 'Raw private buyer title', description: 'Contact buyer@example.com for 500 healthcare records.' });
+    const saved = makeOwnerRequest({ title: 'Healthcare records request', description: 'Seeking 500 healthcare records.', public_content_hash: 'b'.repeat(64) });
+    mocks.getDataRequest.mockResolvedValue(request);
+    mocks.previewDataRequestPublication.mockResolvedValue({ source_content_hash: request.public_content_hash,
+      public_content_hash: saved.public_content_hash, public_content: currentPublicContent(saved) });
+    mocks.updateDataRequest.mockResolvedValue(saved);
+    mocks.confirmDataRequestPublication.mockResolvedValue({ ...saved, publication_decision: 'eligible' });
+    render(<DataRequestDetailClient slug={request.slug} initialRequest={request} />);
+    fireEvent.click(await screen.findByRole('button', { name: 'Review public preview' }));
+    await screen.findByText('Proposed public content');
+    expect(screen.getByText(request.description)).toBeTruthy();
+    expect(screen.getByText(saved.description)).toBeTruthy();
+    expect(mocks.updateDataRequest).not.toHaveBeenCalled();
+    expect(mocks.confirmDataRequestPublication).not.toHaveBeenCalled();
+    fireEvent.click(screen.getByRole('button', { name: 'Use proposed text in editor' }));
+    expect(screen.getByRole('textbox', { name: 'Description' })).toHaveProperty('value', saved.description);
+    expect(mocks.updateDataRequest).not.toHaveBeenCalled();
+    fireEvent.click(screen.getByRole('button', { name: 'Save changes' }));
+    await screen.findByRole('heading', { name: saved.title });
+    expect(screen.queryByRole('button', { name: 'Make this request public' })).toBeNull();
+    await preparePublicPreview(saved);
+    fireEvent.click(screen.getByRole('button', { name: 'Make this request public' }));
+    await waitFor(() => expect(mocks.confirmDataRequestPublication).toHaveBeenCalledExactlyOnceWith(saved.id, saved.public_content_hash, saved.required_public_consent_policy_version));
+    expect(mocks.publishDataRequest).not.toHaveBeenCalled();
+    expect(mocks.withdrawDataRequestPublication).not.toHaveBeenCalled();
+  });
+
+  it('retains the raw saved draft when proposed editing is cancelled', async () => {
+    const request = makeOwnerRequest();
+    mocks.getDataRequest.mockResolvedValue(request);
+    mocks.previewDataRequestPublication.mockResolvedValue({ source_content_hash: request.public_content_hash,
+      public_content_hash: 'b'.repeat(64), public_content: { ...currentPublicContent(request), description: 'A sanitized proposed request description.' } });
+    render(<DataRequestDetailClient slug={request.slug} initialRequest={request} />);
+    fireEvent.click(await screen.findByRole('button', { name: 'Review public preview' }));
+    fireEvent.click(await screen.findByRole('button', { name: 'Use proposed text in editor' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Cancel' }));
+    expect(screen.getByText(request.description)).toBeTruthy();
+    expect(screen.queryByText('Proposed public content')).toBeNull();
+    fireEvent.click(screen.getByRole('button', { name: 'Edit request' }));
+    expect(screen.getByRole('textbox', { name: 'Description' })).toHaveProperty('value', request.description);
+    expect(mocks.updateDataRequest).not.toHaveBeenCalled();
+    expect(mocks.confirmDataRequestPublication).not.toHaveBeenCalled();
+  });
+
+  it('preserves proposed editor text and refuses Save when a newer saved draft is found', async () => {
+    const request = makeOwnerRequest();
+    mocks.getDataRequest.mockResolvedValue(request);
+    mocks.previewDataRequestPublication.mockResolvedValue({ source_content_hash: request.public_content_hash,
+      public_content_hash: 'b'.repeat(64), public_content: { ...currentPublicContent(request), description: 'A sanitized proposed request description.' } });
+    render(<DataRequestDetailClient slug={request.slug} initialRequest={request} />);
+    fireEvent.click(await screen.findByRole('button', { name: 'Review public preview' }));
+    fireEvent.click(await screen.findByRole('button', { name: 'Use proposed text in editor' }));
+    mocks.getDataRequest.mockResolvedValue({ ...request, public_content_hash: 'c'.repeat(64), description: 'The newer saved description for this request.' });
+    fireEvent.click(screen.getByRole('button', { name: 'Save changes' }));
+    expect((await screen.findByRole('alert')).textContent).toContain('The saved request changed');
+    expect(screen.getByRole('textbox', { name: 'Description' })).toHaveProperty('value', 'A sanitized proposed request description.');
+    expect(mocks.updateDataRequest).not.toHaveBeenCalled();
+    expect(mocks.confirmDataRequestPublication).not.toHaveBeenCalled();
+  });
+
+  it('admits only one consent callback while the fresh persisted read is pending', async () => {
+    const request = makeOwnerRequest();
+    mocks.getDataRequest.mockResolvedValue(request);
+    mocks.confirmDataRequestPublication.mockResolvedValue(request);
+    render(<DataRequestDetailClient slug={request.slug} initialRequest={request} />);
+    await preparePublicPreview(request);
+    const current = deferred<DataRequestDetail>();
+    mocks.getDataRequest.mockReturnValue(current.promise);
+    const accept = screen.getByRole('button', { name: 'Make this request public' });
+    act(() => { accept.click(); accept.click(); });
+    expect(mocks.confirmDataRequestPublication).not.toHaveBeenCalled();
+    await act(async () => current.resolve(request));
+    expect(mocks.confirmDataRequestPublication).toHaveBeenCalledExactlyOnceWith(request.id, request.public_content_hash, request.required_public_consent_policy_version);
+    expect(screen.queryByRole('button', { name: 'Make this request public' })).toBeNull();
+  });
+
+  it.each(['hash', 'policy', 'version', 'text'] as const)('requires another preview when the persisted %s changes before consent', async change => {
+    const request = makeOwnerRequest();
+    mocks.getDataRequest.mockResolvedValue(request);
+    render(<DataRequestDetailClient slug={request.slug} initialRequest={request} />);
+    await preparePublicPreview(request);
+    const changed = { ...request, ...(change === 'hash' ? { public_content_hash: 'c'.repeat(64) }
+      : change === 'policy' ? { required_public_consent_policy_version: 'request-publication-v2' }
+      : change === 'version' ? { publication_decision_version: 9 }
+      : { description: 'A changed persisted request description.' }) };
+    mocks.getDataRequest.mockResolvedValue(changed);
+    fireEvent.click(screen.getByRole('button', { name: 'Make this request public' }));
+    await screen.findByText('The request or publication version changed. Review a fresh public preview before confirming.');
+    expect(mocks.confirmDataRequestPublication).not.toHaveBeenCalled();
+    expect(mocks.updateDataRequest).not.toHaveBeenCalled();
+  });
+
+  it.each(['proposal', 'null guidance'])('coalesces repeated preview clicks and ignores a departed %s preview', async kind => {
+    const request = makeOwnerRequest();
+    const pending = deferred<ReturnType<typeof parsePublicationPreview>>();
+    mocks.getDataRequest.mockResolvedValue(request);
+    mocks.previewDataRequestPublication.mockReturnValue(pending.promise);
+    const view = render(<DataRequestDetailClient slug={request.slug} initialRequest={request} />);
+    const review = await screen.findByRole('button', { name: 'Review public preview' });
+    act(() => { review.click(); review.click(); });
+    expect(mocks.previewDataRequestPublication).toHaveBeenCalledTimes(1);
+    view.unmount();
+    await act(async () => pending.resolve(kind === 'null guidance'
+      ? parsePublicationPreview({ preview: null, acceptance_required: true, next_action: 'Retain your original text and ask support for independent review.' })
+      : { public_content: currentPublicContent(request), public_content_hash: request.public_content_hash!, source_content_hash: request.public_content_hash! }));
+    expect(mocks.confirmDataRequestPublication).not.toHaveBeenCalled();
+    expect(mocks.toast).not.toHaveBeenCalled();
+  });
+
+  it.each(['uncertain', 'unavailable', 'changed source', 'changed budget'])('leaves the saved request alone for a %s preview', async kind => {
+    const request = makeOwnerRequest();
+    mocks.getDataRequest.mockResolvedValue(request);
+    if (kind === 'uncertain') mocks.previewDataRequestPublication.mockResolvedValue(parsePublicationPreview({ preview: null, acceptance_required: true }));
+    else if (kind === 'unavailable') mocks.previewDataRequestPublication.mockRejectedValue(new Error('private provider detail'));
+    else mocks.previewDataRequestPublication.mockResolvedValue({ source_content_hash: kind === 'changed source' ? 'b'.repeat(64) : request.public_content_hash,
+      public_content_hash: 'c'.repeat(64), public_content: { ...currentPublicContent(request), ...(kind === 'changed budget' ? { price_range_max: '9000.00' } : {}) } });
+    render(<DataRequestDetailClient slug={request.slug} initialRequest={request} />);
+    fireEvent.click(await screen.findByRole('button', { name: 'Review public preview' }));
+    await screen.findByRole(kind === 'uncertain' ? 'status' : 'alert');
+    expect(screen.queryByText('private provider detail')).toBeNull();
+    expect(screen.queryByRole('button', { name: 'Make this request public' })).toBeNull();
+    expect(mocks.confirmDataRequestPublication).not.toHaveBeenCalled();
+    expect(mocks.updateDataRequest).not.toHaveBeenCalled();
+    expect(mocks.withdrawDataRequestPublication).not.toHaveBeenCalled();
+  });
+
+  it.each([
+    ['Keep your original text and ask support for independent review.', 'Keep your original text and ask support for independent review.'],
+    ['<a href="/support">Ask support</a> and retain your original text.', '<a href="/support">Ask support</a> and retain your original text.'],
+    ...[undefined, null, '', '  ', 42, {}, ['edit'], 'a'.repeat(2001), 'Bad\u0000guidance'].map(value =>
+      [value, 'No public preview is available. Your saved request is unchanged.']),
+  ])('shows safe null-preview guidance or a neutral fallback (%j)', async (next_action, expected) => {
+    const request = makeOwnerRequest();
+    const result = parsePublicationPreview({ preview: null, acceptance_required: true, next_action });
+    mocks.getDataRequest.mockResolvedValue(request);
+    mocks.previewDataRequestPublication.mockResolvedValue(result);
+    render(<DataRequestDetailClient slug={request.slug} initialRequest={request} />);
+    // A previous valid preview must not leave consent available after a null result.
+    await preparePublicPreview(request);
+    mocks.previewDataRequestPublication.mockResolvedValue(result);
+    fireEvent.click(screen.getByRole('button', { name: 'Review public preview' }));
+    const status = await screen.findByRole('status');
+    expect(status.textContent).toBe(expected);
+    expect(status.querySelector('a')).toBeNull();
+    expect(screen.queryByRole('alert')).toBeNull();
+    expect(screen.getByText(request.description)).not.toBeNull();
+    expect(screen.queryByRole('button', { name: 'Make this request public' })).toBeNull();
+    expect(screen.queryByRole('button', { name: 'Use proposed text in editor' })).toBeNull();
+    expect(screen.queryByRole('textbox', { name: 'Description' })).toBeNull();
+    expect(mocks.confirmDataRequestPublication).not.toHaveBeenCalled();
+    expect(mocks.publishDataRequest).not.toHaveBeenCalled();
+    expect(mocks.updateDataRequest).not.toHaveBeenCalled();
+    expect(mocks.withdrawDataRequestPublication).not.toHaveBeenCalled();
+  });
+
+  it.each(['slug', 'auth'] as const)('ignores stale null guidance after a %s change', async change => {
+    const old = makeOwnerRequest();
+    const next = makeOwnerRequest({ id: 'request-2', title: 'Next owner request',
+      slug: change === 'slug' ? 'next-request' : old.slug,
+      buyer_id: change === 'auth' ? 'buyer-2' : owner.id, public_content_hash: 'c'.repeat(64) });
+    const pending = deferred<ReturnType<typeof parsePublicationPreview>>();
+    mocks.getDataRequest.mockResolvedValueOnce(old).mockResolvedValueOnce(next);
+    mocks.previewDataRequestPublication.mockReturnValueOnce(pending.promise);
+    const view = render(<DataRequestDetailClient slug={old.slug} initialRequest={old} />);
+    fireEvent.click(await screen.findByRole('button', { name: 'Review public preview' }));
+    if (change === 'auth') mocks.auth.user = { ...owner, id: 'buyer-2' };
+    view.rerender(<DataRequestDetailClient slug={next.slug} initialRequest={next} />);
+    await screen.findByRole('heading', { name: next.title });
+    await preparePublicPreview(next);
+    await act(async () => pending.resolve(parsePublicationPreview({ preview: null, acceptance_required: true,
+      next_action: 'Stale owner guidance: keep your original text and ask support.' })));
+    expect(screen.queryByText(/Stale owner guidance/)).toBeNull();
+    expect(screen.queryByRole('status')).toBeNull();
+    expect(screen.getByRole('button', { name: 'Make this request public' })).not.toBeNull();
+    expect(mocks.confirmDataRequestPublication).not.toHaveBeenCalled();
+    expect(mocks.publishDataRequest).not.toHaveBeenCalled();
+    expect(mocks.updateDataRequest).not.toHaveBeenCalled();
+  });
+
   it('shows the authoritative reason and confirms the exact current request text', async () => {
     const request = makeOwnerRequest({
       currency: 'EUR',
@@ -564,6 +755,7 @@ describe('DataRequestDetailClient authenticated fallback loading', () => {
     expect(screen.getByText('Currency: EUR')).not.toBeNull();
     expect(screen.getByText('Confirm the current public text for publication.')).not.toBeNull();
     expect(screen.getByText('Reason: public consent required')).not.toBeNull();
+    await preparePublicPreview(request);
     fireEvent.click(screen.getByRole('button', { name: 'Make this request public' }));
 
     await waitFor(() => {
@@ -633,6 +825,7 @@ describe('DataRequestDetailClient authenticated fallback loading', () => {
     expect(screen.getByText('Reason: public content changed')).not.toBeNull();
     expect(mocks.confirmDataRequestPublication).not.toHaveBeenCalled();
     expect(mocks.publishDataRequest).not.toHaveBeenCalled();
+    await preparePublicPreview(corrected);
     fireEvent.click(screen.getByRole('button', { name: 'Make this request public' }));
     await waitFor(() => {
       expect(mocks.confirmDataRequestPublication).toHaveBeenCalledWith(
@@ -681,6 +874,7 @@ describe('DataRequestDetailClient authenticated fallback loading', () => {
     expect(screen.getByText('Public visibility: Private')).not.toBeNull();
     expect(screen.getByText('Reason: public content changed')).not.toBeNull();
     expect(screen.queryByText('Public visibility: Public')).toBeNull();
+    await preparePublicPreview(saved);
     fireEvent.click(screen.getByRole('button', { name: 'Make this request public' }));
     await waitFor(() => {
       expect(mocks.confirmDataRequestPublication).toHaveBeenCalledWith(
@@ -728,7 +922,8 @@ describe('DataRequestDetailClient authenticated fallback loading', () => {
         expect(screen.getByRole('heading', { name: next.title })).not.toBeNull();
         expect(screen.queryByRole('heading', { name: savedOld.title })).toBeNull();
         expect(mocks.toast).not.toHaveBeenCalled();
-        fireEvent.click(screen.getByRole('button', { name: 'Make this request public' }));
+        await preparePublicPreview(next);
+    fireEvent.click(screen.getByRole('button', { name: 'Make this request public' }));
         await waitFor(() => expect(mocks.confirmDataRequestPublication).toHaveBeenCalledWith(
           next.id, 'c'.repeat(64), 'request-publication-v1'
         ));
@@ -746,15 +941,20 @@ describe('DataRequestDetailClient authenticated fallback loading', () => {
       const next = makeOwnerRequest({ id: 'request-2', slug: 'next-request', title: 'Next request', public_content_hash: 'c'.repeat(64) });
       const mutation = deferred<DataRequestDetail>();
       const nextGet = deferred<DataRequestDetail>();
-      mocks.getDataRequest.mockResolvedValueOnce(old).mockReturnValueOnce(nextGet.promise);
+      mocks.getDataRequest.mockResolvedValue(old);
       if (action === 'Open request') mocks.publishDataRequest.mockReturnValue(mutation.promise);
       if (action === 'Make this request public') mocks.confirmDataRequestPublication.mockReturnValue(mutation.promise);
       if (action === 'Make this request private') mocks.withdrawDataRequestPublication.mockReturnValue(mutation.promise);
       if (action === 'Delete') mocks.deleteDataRequest.mockReturnValue(mutation.promise);
       const view = render(<DataRequestDetailClient slug={old.slug} initialRequest={old} />);
+      if (action === 'Make this request public') {
+        await preparePublicPreview(old);
+      }
       fireEvent.click(screen.getByRole('button', { name: action }));
+      if (action === 'Make this request public') await waitFor(() => expect(mocks.confirmDataRequestPublication).toHaveBeenCalledTimes(1));
+      mocks.getDataRequest.mockReturnValueOnce(nextGet.promise);
       view.rerender(<DataRequestDetailClient slug={next.slug} initialRequest={next} />);
-      await waitFor(() => expect(mocks.getDataRequest).toHaveBeenCalledTimes(2));
+      await waitFor(() => expect(mocks.getDataRequest).toHaveBeenCalledTimes(action === 'Make this request public' ? 3 : 2));
       await act(async () => { nextGet.resolve(next); });
       await act(async () => { mutation.resolve(old); });
       expect(screen.getByRole('heading', { name: next.title })).not.toBeNull();
@@ -825,13 +1025,18 @@ describe('DataRequestDetailClient authenticated fallback loading', () => {
     });
   }
 
-  function startOwnerAction(action: string) {
+  async function startOwnerAction(action: string) {
+    if (action === 'confirm') {
+      const request = await mocks.getDataRequest.mock.results.at(-1)!.value;
+      await preparePublicPreview(request);
+    }
     const labels: Record<string, string> = {
       open: 'Open request', delete: 'Delete', confirm: 'Make this request public',
       withdraw: 'Make this request private', save: 'Save changes',
     };
     if (action === 'save') fireEvent.click(screen.getByRole('button', { name: 'Edit request' }));
     fireEvent.click(screen.getByRole('button', { name: labels[action] }));
+    if (action === 'confirm') await act(async () => {});
   }
 
   for (const [action, api] of ownerActions) {
@@ -844,7 +1049,7 @@ describe('DataRequestDetailClient authenticated fallback loading', () => {
           api.mockReturnValue(pending.promise);
           const view = render(<DataRequestDetailClient slug={request.slug} initialRequest={request} />);
           await act(async () => {});
-          startOwnerAction(action);
+          await startOwnerAction(action);
           expect(api).toHaveBeenCalledTimes(1);
           const settle = () => outcome === 'success' ? pending.resolve(request) : pending.reject(new Error('Retired failure'));
           if (timing === 'delayed') view.unmount();
@@ -866,7 +1071,7 @@ describe('DataRequestDetailClient authenticated fallback loading', () => {
         api.mockReturnValue(pending.promise);
         render(<StrictMode><DataRequestDetailClient slug={request.slug} initialRequest={request} /></StrictMode>);
         await act(async () => {});
-        startOwnerAction(action);
+        await startOwnerAction(action);
         await act(async () => {
           if (outcome === 'success') pending.resolve({ ...request, title: 'Saved current visit' });
           else pending.reject(new Error('Current failure'));
@@ -876,6 +1081,8 @@ describe('DataRequestDetailClient authenticated fallback loading', () => {
           expect(screen.getByRole('alert').textContent).toContain('Could not save request.');
           expect(screen.getByRole('textbox', { name: 'Title' })).toHaveProperty('value', request.title);
           expect(screen.getByRole('button', { name: 'Save changes' })).toHaveProperty('disabled', false);
+        } else if (action === 'confirm' && outcome === 'error') {
+          expect(screen.getByRole('status').textContent).toContain('Public visibility could not be confirmed');
         } else {
           expect(mocks.toast).toHaveBeenCalledTimes(1);
           expect(mocks.toast.mock.calls[0][1]).toBe(outcome);
@@ -911,11 +1118,13 @@ describe('DataRequestDetailClient authenticated fallback loading', () => {
     mocks.confirmDataRequestPublication.mockReturnValueOnce(first.promise).mockReturnValueOnce(second.promise);
     const view = render(<DataRequestDetailClient slug={old.slug} initialRequest={old} />);
     await act(async () => {});
-    startOwnerAction('confirm');
+    await startOwnerAction('confirm');
+    mocks.getDataRequest.mockResolvedValue(next);
     if (change === 'user') mocks.auth.user = { ...owner, id: 'buyer-2' };
     view.rerender(<DataRequestDetailClient slug={next.slug} initialRequest={next} />);
-    await screen.findByRole('button', { name: 'Make this request public' });
-    startOwnerAction('confirm');
+    await screen.findByRole('button', { name: 'Review public preview' });
+    await act(async () => {});
+    await startOwnerAction('confirm');
     await act(async () => { first.reject(new Error('Retired failure')); });
     expect(screen.getByRole('button', { name: 'Updating...' })).toHaveProperty('disabled', true);
     expect(mocks.toast).not.toHaveBeenCalled();
@@ -934,7 +1143,7 @@ describe('DataRequestDetailClient authenticated fallback loading', () => {
     mocks.publishDataRequest.mockReturnValue(pending.promise);
     const view = render(<DataRequestDetailClient slug={request.slug} initialRequest={request} />);
     await act(async () => {});
-    startOwnerAction('open');
+    await startOwnerAction('open');
     mocks.auth.token = 'synthetic-refreshed-token';
     mocks.auth.user = { ...owner, first_name: 'Refreshed name' };
     view.rerender(<DataRequestDetailClient slug={request.slug} initialRequest={request} />);
@@ -1068,6 +1277,7 @@ describe('DataRequestDetailClient authenticated fallback loading', () => {
     mocks.confirmDataRequestPublication.mockResolvedValue(updated);
 
     render(<DataRequestDetailClient slug={request.slug} initialRequest={request} />);
+    await preparePublicPreview(request);
     fireEvent.click(await screen.findByRole('button', { name: 'Make this request public' }));
 
     await waitFor(() => {
@@ -1115,6 +1325,7 @@ describe('DataRequestDetailClient authenticated fallback loading', () => {
     });
     expect(mocks.deleteDataRequest).not.toHaveBeenCalled();
     expect(await screen.findByText('Consent again if you want to republish this request.')).not.toBeNull();
+    await preparePublicPreview(updated);
     fireEvent.click(screen.getByRole('button', { name: 'Make this request public' }));
     await waitFor(() => {
       expect(mocks.confirmDataRequestPublication).toHaveBeenCalledWith(

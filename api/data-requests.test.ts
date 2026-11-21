@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-import { getDataRequestResponses, getMyDataRequests, getMyDataRequestsPage, submitDataRequestResponse } from './data-requests';
+import { previewDataRequestPublication, getDataRequestResponses, getMyDataRequests, getMyDataRequestsPage, submitDataRequestResponse } from './data-requests';
 
 const mocks = vi.hoisted(() => ({ get: vi.fn(), post: vi.fn() }));
 vi.mock('./client', () => ({ api: mocks }));
@@ -45,5 +45,49 @@ describe('owned request API contracts', () => {
       params: { mine: true, page: 3, per_page: 20 },
     });
     expect(mocks.post).not.toHaveBeenCalled();
+  });
+});
+
+
+describe('private publication preview contract', () => {
+  beforeEach(() => vi.clearAllMocks());
+  const content = { title: 'Dataset request', description: 'Need 500 records for research.', provenance_requirements: null,
+    categories: ['healthcare'], format_preferences: ['csv'], regulatory_requirements: [],
+    price_range_min: null, price_range_max: '100.00', currency: 'USD', urgency: 'normal' };
+  const preview = { public_content: content, public_content_hash: 'b'.repeat(64), source_content_hash: 'a'.repeat(64) };
+  it('posts no body to the exact encoded owner route and parses the public projection', async () => {
+    mocks.post.mockResolvedValue({ data: { preview, acceptance_required: true, next_action: 'Apply using normal edit' } });
+    expect(await previewDataRequestPublication('request/id')).toEqual(preview);
+    expect(mocks.post).toHaveBeenCalledExactlyOnceWith('/data-requests/request%2Fid/publication-preview');
+  });
+  it('preserves null-preview guidance without treating it as acceptance', async () => {
+    const next_action = 'Keep your original text and ask support for independent review.';
+    mocks.post.mockResolvedValue({ data: { preview: null, acceptance_required: true, next_action } });
+    expect(await previewDataRequestPublication('id')).toEqual({ preview: null, next_action });
+    expect(mocks.post).toHaveBeenCalledExactlyOnceWith('/data-requests/id/publication-preview');
+  });
+  it.each([undefined, null, '', '  ', 42, {}, ['edit'], 'a'.repeat(2001), 'Bad\u0000guidance'])(
+    'uses neutral guidance for missing or malformed next_action (%j)', async next_action => {
+      mocks.post.mockResolvedValue({ data: { preview: null, acceptance_required: true, next_action } });
+      expect(await previewDataRequestPublication('id')).toEqual({ preview: null,
+        next_action: 'No public preview is available. Your saved request is unchanged.' });
+    }
+  );
+  it('preserves markup as display-only plain text', async () => {
+    const next_action = '<a href="/support">Ask support</a>\nKeep the original text.';
+    mocks.post.mockResolvedValue({ data: { preview: null, acceptance_required: true, next_action } });
+    expect(await previewDataRequestPublication('id')).toEqual({ preview: null, next_action });
+  });
+  it.each([
+    { preview: null, acceptance_required: false, next_action: 'Keep text' },
+    { preview, acceptance_required: false }, { preview: { ...preview, source_content_hash: 'old' }, acceptance_required: true },
+    { preview: { ...preview, public_content: { ...content, buyer_id: 'private' } }, acceptance_required: true },
+    { preview: { ...preview, public_content: { ...content, price_range_max: 100 } }, acceptance_required: true },
+    { preview: { ...preview, public_content: { ...content, categories: ['safe', {}] } }, acceptance_required: true },
+    { preview: { ...preview, public_content: { ...content, description: null } }, acceptance_required: true },
+    { public_content: content }, null,
+  ])('refuses incompatible or malformed preview envelopes', async data => {
+    mocks.post.mockResolvedValue({ data });
+    await expect(previewDataRequestPublication('id')).rejects.toThrow('Public preview unavailable');
   });
 });
