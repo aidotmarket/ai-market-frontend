@@ -6,6 +6,10 @@ import { useAuthStore } from '@/store/auth';
 type SellDataCtaProps = {
   variant: 'hero' | 'inline' | 'final' | 'cloud' | 'self-hosted' | 'homepage';
   className?: string;
+  finalCopy?: {
+    heading: string;
+    description: string;
+  };
 };
 
 const greenPrimaryClassName =
@@ -42,7 +46,7 @@ function AuthenticatedCtas({
   );
 }
 
-export default function SellDataCta({ variant, className }: SellDataCtaProps) {
+export default function SellDataCta({ variant, className, finalCopy }: SellDataCtaProps) {
   const { isAuthenticated } = useAuthStore();
 
   if (variant === 'homepage') {
@@ -93,19 +97,19 @@ export default function SellDataCta({ variant, className }: SellDataCtaProps) {
     return (
       <div className={withClassName('rounded-2xl border border-[#D8EEE6] bg-white p-6 shadow-sm sm:p-8', className)}>
         <h2 id="final-cta-heading" className="text-2xl font-bold tracking-tight text-gray-900">
-          {isAuthenticated ? 'List your data' : 'Create Your Account'}
+          {finalCopy?.heading ?? (isAuthenticated ? 'List your data' : 'Create Your Account')}
         </h2>
         <p className="mt-4 max-w-3xl text-base leading-7 text-gray-600">
-          {isAuthenticated
+          {finalCopy?.description ?? (isAuthenticated
             ? 'Connect your cloud bucket or set up an AIM Data gateway. Manage your listing, prices, licences, and payouts here.'
-            : 'Start as a seller. List free and pay nothing until a sale clears.'}
+            : 'Start as a seller. List free and pay nothing until a sale clears.')}
         </p>
         {isAuthenticated ? (
           <div className="mt-6 flex flex-wrap gap-3">
             <AuthenticatedCtas primaryClassName={greenPrimaryClassName} />
           </div>
         ) : (
-          <Link href="/register" className="mt-6 inline-flex items-center justify-center rounded-lg bg-[#0F6E56] px-5 py-3 text-sm font-semibold text-white transition-colors hover:bg-[#0c5a47] focus:outline-none focus:ring-2 focus:ring-[#0F6E56] focus:ring-offset-2">
+          <Link href="/register" className={`mt-6 ${greenPrimaryClassName}`}>
             Create Your Account
           </Link>
         )}
