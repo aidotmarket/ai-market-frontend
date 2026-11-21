@@ -245,7 +245,7 @@ describe('homepage hero and descriptions', () => {
     const hero = within(screen.getByRole('heading', { level: 1 }).closest('section')!);
 
     expect(hero.getByText('Data marketplace for businesses')).toBeTruthy();
-    expect(hero.getByText(`${summary} Buyers and AI agents can search for data or post a request.`)).toBeTruthy();
+    expect(hero.getByText(`${summary} Buyers can search for data or post a request. AI agents can help search and draft requests.`)).toBeTruthy();
 
     const structuredData = container.querySelector('script[type="application/ld+json"]')!;
     expect(JSON.parse(structuredData.textContent!)).toEqual([

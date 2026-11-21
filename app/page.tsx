@@ -317,7 +317,7 @@ export default async function LandingPage() {
                 </h1>
                 <p className="mt-6 text-lg leading-8 text-[#4A4A4A] max-w-xl">
                   {marketplaceSummary}{' '}
-                  Buyers and AI agents can search for data or post a request.
+                  Buyers can search for data or post a request. AI agents can help search and draft requests.
                 </p>
                 <HeroSearch />
                 <div className="mt-5 rounded-xl border border-[#E8E8E8] bg-[#FAFAFA] p-4">
