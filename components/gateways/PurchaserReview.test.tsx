@@ -15,8 +15,10 @@ beforeEach(()=>{
 });
 afterEach(()=>{cleanup();vi.restoreAllMocks();});
 async function mount(value=review){
- api.read.mockResolvedValue(value);render(<PurchaserReview versionId="version"/>);
- await screen.findByText('Names your buyer will see');
+ api.read.mockResolvedValue(value);
+ // Let the initial binding's consent reset finish before tests interact with the review.
+ await act(async()=>{render(<PurchaserReview versionId="version"/>);});
+ screen.getByText('Names your buyer will see');
 }
 it('stays dark when the capability or handoff version is disabled',async()=>{
  api.caps.mockResolvedValue({import_enabled:false,handoff_versions:[1]});const {container}=render(<PurchaserReview versionId="version"/>);
@@ -69,7 +71,8 @@ it('reuses a confirmation key after an uncertain response and refresh of the sam
  api.confirm.mockRejectedValueOnce(new Error('network'));
  fireEvent.click(screen.getByLabelText('I reviewed the names my buyer will see.'));fireEvent.click(screen.getByRole('button',{name:'Confirm buyer names'}));
  await screen.findByRole('alert');const key=api.confirm.mock.calls[0][2];
- fireEvent.click(screen.getByRole('button',{name:'Refresh review'}));await screen.findByText('Names your buyer will see');
+ await act(async()=>{fireEvent.click(screen.getByRole('button',{name:'Refresh review'}));});
+ screen.getByText('Names your buyer will see');
  fireEvent.click(screen.getByLabelText('I reviewed the names my buyer will see.'));fireEvent.click(screen.getByRole('button',{name:'Confirm buyer names'}));
  await waitFor(()=>expect(api.confirm).toHaveBeenCalledTimes(2));expect(api.confirm.mock.calls[1][2]).toBe(key);
 });
@@ -91,12 +94,21 @@ it.each(['read','refresh','native','purchaser'])('DRAFT_SUPERSEDED on %s removes
  if(operation==='read'){
    api.read.mockRejectedValueOnce(failure);render(<PurchaserReview versionId="version"/>);
  }else{
-   await mount({...review,native_confirmed:operation!=='native',purchaser_view:{...review.purchaser_view!,files:[]}});
+   const currentReview={...review,native_confirmed:operation!=='native',purchaser_view:{...review.purchaser_view!,files:[]}};
+   await mount(currentReview);
    if(operation==='refresh'){api.read.mockRejectedValueOnce(failure);fireEvent.click(screen.getByRole('button',{name:'Refresh review'}));}
    else{
      api.confirm.mockRejectedValueOnce(failure);
-     fireEvent.click(screen.getByLabelText(operation==='native'?'I reviewed this exact pack in vectorAIz.':'I reviewed the names my buyer will see.'));
-     fireEvent.click(screen.getByRole('button',{name:operation==='native'?'Confirm pack review':'Confirm buyer names'}));
+     const attestation=screen.getByLabelText<HTMLInputElement>(operation==='native'?'I reviewed this exact pack in vectorAIz.':'I reviewed the names my buyer will see.');
+     fireEvent.click(attestation);
+     const confirmButton=await waitFor(()=>{
+       const button=screen.getByRole<HTMLButtonElement>('button',{name:operation==='native'?'Confirm pack review':'Confirm buyer names'});
+       expect(attestation.checked).toBe(true);
+       expect(button.disabled).toBe(false);
+       return button;
+     });
+     fireEvent.click(confirmButton);
+     expect(api.confirm).toHaveBeenCalledExactlyOnceWith(currentReview,operation,expect.any(String));
    }
  }
  expect((await screen.findByRole('alert')).textContent).toContain('replaced by a newer import or a new listing');
