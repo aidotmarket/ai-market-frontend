@@ -153,7 +153,7 @@ function LicenseRecordVisit({ id, party }: { id: string; party: 'buyer' | 'selle
         <div><dt className="text-gray-500">Buyer</dt><dd className="mt-1 text-gray-900">{partyLabel(record.buyer, party === 'buyer')}</dd></div>
         <div><dt className="text-gray-500">Seller</dt><dd className="mt-1 text-gray-900">{partyLabel(record.seller, party === 'seller')}</dd></div>
         <div><dt className="text-gray-500">Signature</dt><dd className="mt-1 text-gray-900">{party === 'buyer' && 'typed_name' in record.signature ? (record.signature.typed_name ?? record.signature.principal_ref ?? record.signature.channel) : record.signature.channel}{party === 'buyer' && 'signer_title' in record.signature && record.signature.signer_title ? `, ${record.signature.signer_title}` : ''}</dd></div>
-        <div><dt className="text-gray-500">Status</dt><dd className={`mt-1 font-semibold ${record.status === 'active' ? 'text-green-800' : 'text-red-800'}`}>{record.status === 'active' ? 'Active' : 'Terminated'}</dd></div>
+        <div><dt className="text-gray-500">Licence status</dt><dd className={`mt-1 font-semibold ${record.status === 'active' ? 'text-green-800' : 'text-red-800'}`}>{record.status === 'active' ? 'Active' : 'Terminated'}</dd></div>
       </dl>
       <p className="text-sm text-gray-700">{record.identity_notice}</p>
       {record.status === 'terminated' && (

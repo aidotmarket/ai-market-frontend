@@ -336,6 +336,7 @@ describe('SalesPage', () => {
     const { container } = render(<SalesPage />);
 
     expect(await screen.findAllByText('SALE-001')).toHaveLength(2);
+    expect(screen.getByText(/gross amount less ai.market’s 5% commission.*card processing fee is deducted from your payout/)).toBeTruthy();
     for (const label of ['Sale', 'Listing', 'Gross (USD)', 'You receive (USD)', 'Status', 'Paid']) {
       expect(screen.getAllByText(label)).toHaveLength(2);
     }

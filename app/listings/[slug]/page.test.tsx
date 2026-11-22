@@ -410,6 +410,24 @@ describe('real public listing route sample composition', () => {
     document.body.innerHTML = '';
   });
 
+  it.each<[string, Partial<ListingWithSamples>, string | undefined]>([
+    ['paid file download', {fulfillment_type: 'file_download'}, 'No public sample for this listing. Purchase is required to access the full files.'],
+    ['queryable listing', {fulfillment_type: 'ai_queryable'}, 'No public sample for this listing.'],
+    ['free file download', {fulfillment_type: 'file_download', is_accessible_for_free: true}, 'No public sample for this listing.'],
+    ['published documentation', {}, undefined],
+    ['public sample files', {sample_files: [{index: 0, key_basename: 'sample.csv', size: 12, binding: 'manifest', state: 'available', url: 'https://sample.example/sample.csv'}]}, undefined],
+  ])('supplies the appropriate empty notice for a %s', async (kind, overrides, emptyNotice) => {
+    fetchPublicListingDocuments.mockResolvedValueOnce(kind === 'published documentation' ? [documentFixture()] : []);
+    const listing = makeListing({
+      schema_summary: null,
+      is_accessible_for_free: false,
+      pricing: {price: 10, pricing_type: 'one_time', subscription_price_monthly: null},
+      ...overrides,
+    });
+    await renderPage(listing);
+    expect(composition.sampleProps).toHaveBeenCalledWith(expect.objectContaining({emptyNotice}));
+  });
+
   it.each(['normal', 'approved Workspace'] as const)(
     'shows published scan findings without the request hint on the %s listing',
     async (route) => {

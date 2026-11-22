@@ -21,6 +21,7 @@ describe('SellerLicenseRecordPage', () => {
     render(<SellerLicenseRecordPage />);
 
     expect(await screen.findByRole('heading', { name: 'Licence record' })).not.toBeNull();
+    expect(screen.getByText('Licence status').nextElementSibling?.textContent).toBe('Active');
     expect(screen.getByRole('link', { name: '← Back to sales' }).getAttribute('href')).toBe('/dashboard/sales');
     expect(screen.getByText('identified to ai.market under order ORDER-1')).not.toBeNull();
     expect(screen.getByText(backendRecord.identity_notice)).not.toBeNull();

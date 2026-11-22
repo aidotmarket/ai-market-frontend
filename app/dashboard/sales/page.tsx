@@ -293,6 +293,9 @@ function SalesPageContent() {
 
       {pageState === 'active' && rows.length > 0 && (
         <>
+          <p className="text-sm text-gray-600">
+            “You receive” shows the gross amount less ai.market’s 5% commission. Any applicable card processing fee is deducted from your payout.
+          </p>
           <div className="hidden md:block overflow-x-auto rounded-lg border border-gray-200">
             <table className="min-w-full text-sm">
               <thead className="bg-gray-50">

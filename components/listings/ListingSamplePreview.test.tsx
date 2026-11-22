@@ -6,11 +6,11 @@ import {webcrypto} from 'node:crypto';
 import {act, cleanup, fireEvent, render, screen, waitFor} from '@testing-library/react';
 import {afterEach, beforeEach, expect, it, vi} from 'vitest';
 import {makeCurrentPreview, makeFreshnessTransitionPreview, makePreview} from '@/tests/previewFixture';
-import {fetchPreviewKeys, fetchPreviewManifest, fetchSignedSummaryPayload} from '@/lib/api';
+import {fetchPreviewKeys, fetchPreviewManifest, fetchSignedSummaryPayload, readPreviewManifest} from '@/lib/api';
 import {fetchPackage} from '@/lib/listing-preview/transport';
 import ListingSamplePreview from './ListingSamplePreview';
 
-vi.mock('@/lib/api', () => ({fetchPreviewManifest: vi.fn(), fetchPreviewKeys: vi.fn(), fetchSignedSummaryPayload: vi.fn()}));
+vi.mock('@/lib/api', () => ({fetchPreviewManifest: vi.fn(), readPreviewManifest: vi.fn(), fetchPreviewKeys: vi.fn(), fetchSignedSummaryPayload: vi.fn()}));
 vi.mock('@/lib/listing-preview/transport', () => ({fetchPackage: vi.fn()}));
 let f: Awaited<ReturnType<typeof makePreview>>;
 beforeEach(async () => {
@@ -28,6 +28,20 @@ async function visibility(state: string) {await act(async () => {Object.definePr
 it('has byte-empty markup without a manifest and no seller fetch', async () => {
   vi.mocked(fetchPreviewManifest).mockResolvedValue(null); const v = render(<ListingSamplePreview slug="none" listingId={f.manifest.listing_id} />);
   await waitFor(() => expect(fetchPreviewManifest).toHaveBeenCalledOnce()); expect(v.container.innerHTML).toBe(''); expect(fetchPackage).not.toHaveBeenCalled();
+});
+it('shows the listing notice only when the preview endpoint reports a missing manifest', async () => {
+  const emptyNotice = 'No public sample for this listing.';
+  const readManifest = vi.mocked(readPreviewManifest);
+  readManifest.mockResolvedValueOnce(null).mockResolvedValueOnce('missing').mockResolvedValueOnce(f.manifest);
+  render(<ListingSamplePreview slug="sample" listingId={f.manifest.listing_id} emptyNotice={emptyNotice} />);
+  await waitFor(() => expect(readManifest).toHaveBeenCalledTimes(1));
+  expect(screen.queryByText(emptyNotice)).toBeNull();
+  await visibility('visible');
+  expect(await screen.findByText(emptyNotice)).toBeTruthy();
+  await visibility('visible');
+  expect(await screen.findByRole('button', {name: 'View sample'})).toBeTruthy();
+  expect(screen.queryByText(emptyNotice)).toBeNull();
+  expect(fetchPackage).not.toHaveBeenCalled();
 });
 it('does not fetch the seller before an explicit request or when keys are 503/absent', async () => {
   await mount(); expect(fetchPackage).not.toHaveBeenCalled();

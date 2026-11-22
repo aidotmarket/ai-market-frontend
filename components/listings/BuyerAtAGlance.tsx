@@ -13,8 +13,8 @@ export function BuyerPreviewContent({summary, licenseDisplay, slug, listingId, o
   return <>{!currentDisplay && hasSupportedSummaryFields(summary) && <p className="text-sm text-gray-600">Seller-approved summary.</p>}<AtAGlance summary={summary} licenseDisplay={currentDisplay} />{listingId && <ListingSamplePreview slug={slug} listingId={listingId} onManifest={onManifest} />}</>;
 }
 
-export function BuyerSamplePreview({slug, listingId}: {slug: string; listingId: string}) {
-  return <ListingSamplePreview slug={slug} listingId={listingId} />;
+export function BuyerSamplePreview({slug, listingId, emptyNotice}: {slug: string; listingId: string; emptyNotice?: string}) {
+  return <ListingSamplePreview slug={slug} listingId={listingId} emptyNotice={emptyNotice} />;
 }
 
 // Fresh loads use force-dynamic/no-store. An untouched tab retains its summary
