@@ -21,7 +21,7 @@ const MIN_HEIGHT = 300;
 const MAX_WIDTH = 700;
 const MAX_HEIGHT = 600;
 
-export default function AllAIPanel() {
+export default function AllAIPanel({ dockOnDesktop = false }: { dockOnDesktop?: boolean }) {
   const {
     supportSession, leaveSupportConversation,
     reportSession, separateViewReport, previousReports, selectReport,
@@ -42,6 +42,7 @@ export default function AllAIPanel() {
   const scrollRef = useRef<HTMLDivElement>(null);
   const [visible, setVisible] = useState(false);
   const [isMobile, setIsMobile] = useState(false);
+  const isFloating = !isMobile && !dockOnDesktop;
 
   // Position & size state (desktop only)
   const [pos, setPos] = useState<{ x: number; y: number } | null>(null);
@@ -222,7 +223,7 @@ export default function AllAIPanel() {
 
   // Attach global mouse/touch listeners for drag & resize
   useEffect(() => {
-    if (isMobile) return;
+    if (!isFloating) return;
 
     const handleMove = (e: MouseEvent | TouchEvent) => {
       onDragMove(e);
@@ -243,7 +244,7 @@ export default function AllAIPanel() {
       window.removeEventListener('touchmove', handleMove);
       window.removeEventListener('touchend', handleUp);
     };
-  }, [isMobile, onDragMove, onDragEnd, onResizeMove, onResizeEnd]);
+  }, [isFloating, onDragMove, onDragEnd, onResizeMove, onResizeEnd]);
 
   if (!isOpen) return null;
 
@@ -264,13 +265,13 @@ export default function AllAIPanel() {
 
       {/* Header - drag handle (desktop only) */}
       <div
-        className={`px-5 pt-4 pb-2 select-none ${!isMobile ? 'cursor-grab active:cursor-grabbing' : ''}`}
-        onMouseDown={!isMobile ? onDragStart : undefined}
-        onTouchStart={!isMobile ? onDragStart : undefined}
+        className={`px-5 pt-4 pb-2 select-none ${isFloating ? 'cursor-grab active:cursor-grabbing' : ''}`}
+        onMouseDown={isFloating ? onDragStart : undefined}
+        onTouchStart={isFloating ? onDragStart : undefined}
         style={!isMobile ? { borderBottom: '1px solid rgba(255,255,255,0.06)', background: 'rgba(255,255,255,0.03)' } : undefined}
       >
         <div className="flex items-center gap-2">
-          {!isMobile && (
+          {isFloating && (
             <span className="text-white/20 text-[10px] leading-none tracking-[2px]" aria-hidden>⠿</span>
           )}
           <h2 id="allai-assistant-title" className="text-sm font-semibold text-white/80">
@@ -346,7 +347,7 @@ export default function AllAIPanel() {
 
       </>}
       {/* Resize handle (desktop only) */}
-      {!isMobile && (
+      {isFloating && (
         <div
           onMouseDown={onResizeStart}
           onTouchStart={onResizeStart}
@@ -402,12 +403,10 @@ export default function AllAIPanel() {
       aria-labelledby="allai-assistant-title"
       data-testid="allai-dialog"
       onKeyDown={onDialogKeyDown}
-      className="fixed z-50 flex flex-col rounded-2xl overflow-hidden shadow-[0_8px_40px_rgba(0,0,0,0.5)] motion-reduce:transition-none"
+      className={`fixed z-50 flex flex-col rounded-2xl overflow-hidden shadow-[0_8px_40px_rgba(0,0,0,0.5)] motion-reduce:transition-none ${dockOnDesktop ? 'allai-support-dock' : ''}`}
       style={{
-        width: size.w,
-        height: size.h,
-        left: computedPos.x,
-        top: computedPos.y,
+        height: dockOnDesktop ? DEFAULT_HEIGHT : size.h,
+        ...(isFloating && { width: size.w, left: computedPos.x, top: computedPos.y }),
         background: 'rgba(12, 17, 30, 0.88)',
         backdropFilter: 'blur(28px) saturate(150%)',
         WebkitBackdropFilter: 'blur(28px) saturate(150%)',
