@@ -19,6 +19,7 @@ import { readFileSync } from 'node:fs';
 
 const listingsApi = vi.hoisted(() => ({ getListingOwnership: vi.fn() }));
 vi.mock('@/api/listings', () => listingsApi);
+vi.mock('next/link', () => import('@/tests/listingLinkPrefetchMock'));
 beforeEach(() => {
   listingsApi.getListingOwnership.mockResolvedValue(false);
   useAuthStore.setState({ hydrated: true, isLoading: false });
@@ -844,8 +845,9 @@ describe('connector checkout handoff and domain purchase', () => {
   it.each(['SELLER_PAYOUT_READINESS_UNKNOWN', 'SELLER_PAYOUT_NOT_READY', 'REFERENCE_DELIVERY_UNREADY'])('renders %s as a block with its web path and never redirects', async code => {
     vi.mocked(createCheckout).mockRejectedValue(error(409, { code, web_path: '/listings/listing-1' }));
     await accept({ handoffToken });
-    await screen.findByRole('link', { name: 'Review listing' });
-    expect(screen.getByRole('link', { name: 'Review listing' }).getAttribute('href')).toBe('/listings/listing-1');
+    const listingLink = await screen.findByRole('link', { name: 'Review listing' });
+    expect(listingLink.getAttribute('href')).toBe('/listings/listing-1');
+    expect(listingLink.getAttribute('data-prefetch')).toBe('false');
     expect(screen.getAllByRole('alert').some(element => element.textContent?.includes('Checkout is blocked'))).toBe(true);
     expect((screen.getByRole('button', { name: 'Accept and continue to payment' }) as HTMLButtonElement).disabled).toBe(true);
     expect(createCheckout).toHaveBeenCalledOnce();

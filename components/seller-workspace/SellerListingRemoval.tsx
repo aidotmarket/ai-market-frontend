@@ -258,7 +258,7 @@ function OwnerListings({active: enabled, onChange, onOpenConfirmation, onRecover
 
   const showReadError = readError && !compact;
   const hasOperation = !!confirmation || !!notice || outcomes.length > 0;
-  if ((!enabled || (!rows && !showReadError)) && !hasOperation) return null;
+  if (!active || ((!rows && !showReadError) && !hasOperation)) return null;
   const eligible = rows?.filter(row => row.allowed_actions.includes('withdraw')) ?? [];
   const retryIds = new Set(outcomes.filter(item => item.code).map(item => item.listing.listing_id));
   const remaining = eligible.filter(row => retryIds.has(row.listing_id));
@@ -323,6 +323,7 @@ function OwnerListings({active: enabled, onChange, onOpenConfirmation, onRecover
     </div>;
   }
 
+  if (!enabled) return renderConfirmation();
   if (compact && rows?.length === 0 && !hasOperation) return null;
   return <section aria-label="Listing visibility" className="space-y-4">
     <h2 className="text-lg font-semibold text-gray-900">{compact ? 'Your Workspace listings' : 'Listing visibility'}</h2>

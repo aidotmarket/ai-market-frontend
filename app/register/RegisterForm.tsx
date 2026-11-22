@@ -91,7 +91,7 @@ export default function RegisterForm() {
               Creating an account or signing in does not charge you. After you sign in, you will return to this listing. <VersionedTermsCopy legacy="Checkout shows the final total, including payment-provider costs and applicable tax, before you choose whether to confirm." terms12={CARD_REGISTER_CHECKOUT} />
             </p>
             <p className="mt-2 flex flex-wrap gap-x-3 gap-y-1">
-              <Link href={listingRedirect} className="underline font-medium">Back to listing</Link>
+              <Link href={listingRedirect} prefetch={false} className="underline font-medium">Back to listing</Link>
               <Link href="/pricing" className="underline font-medium">Pricing</Link>
               <Link href={`/legal/terms?redirect=${encodeURIComponent(listingRedirect)}#fees`} className="underline font-medium">Fees and terms</Link>
             </p>

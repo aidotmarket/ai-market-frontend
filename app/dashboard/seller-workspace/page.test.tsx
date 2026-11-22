@@ -146,6 +146,37 @@ describe('Workspace owner listings', () => {
     }
   });
 
+  it('hides routine listing controls on Storage after a completed hide', async () => {
+    sellerWorkspaceApi.getSellerWorkspaceCapabilities.mockResolvedValue(enabledCapabilities);
+    const published = {...listing, allowed_actions: ['hide']};
+    const hidden = {...listing, status: 'hidden', seller_status: 'hidden', allowed_actions: ['unhide']};
+    const read = vi.spyOn(nativeClient, 'get').mockResolvedValue({data: {items: [published], cursor: null}});
+    const write = vi.spyOn(nativeClient, 'post').mockImplementation(async () => {
+      read.mockResolvedValue({data: {items: [hidden], cursor: null}});
+      return {data: {...hidden, action_id: 'stored-hide'}};
+    });
+    render(<SellerWorkspacePage />);
+    const navigation = within(await screen.findByRole('navigation', {name: 'Workspace sections'}));
+    fireEvent.click(navigation.getByRole('button', {name: 'Your listings'}));
+    const hide = await screen.findByRole<HTMLButtonElement>('button', {name: 'Hide listing'});
+    await waitFor(() => expect(hide.disabled).toBe(false));
+    fireEvent.click(hide);
+    fireEvent.click(screen.getByRole('button', {name: 'Confirm hide'}));
+    await screen.findByText('Listing hidden.');
+    await screen.findByRole('button', {name: 'Unhide listing'});
+    expect(write).toHaveBeenCalledOnce();
+
+    const readsBeforeSwitch = read.mock.calls.length;
+    fireEvent.click(navigation.getByRole('button', {name: 'Connect your storage'}));
+    expect(screen.queryByRole('region', {name: 'Listing visibility'})).toBeNull();
+    expect(screen.queryByRole('button', {name: 'Refresh listing visibility'})).toBeNull();
+    expect(screen.queryByText('Checking your listings…')).toBeNull();
+    expect(read).toHaveBeenCalledTimes(readsBeforeSwitch);
+
+    fireEvent.click(navigation.getByRole('button', {name: 'Your listings'}));
+    expect(await screen.findByText('Listing hidden.')).toBeTruthy();
+  });
+
   it.each(['loading', 'unavailable', 'error'])('keeps an unverified owner read out of the %s fallback', async state => {
     if (state === 'loading') sellerWorkspaceApi.getSellerWorkspaceCapabilities.mockReturnValueOnce(new Promise(() => {}));
     if (state === 'unavailable') sellerWorkspaceApi.getSellerWorkspaceCapabilities.mockRejectedValueOnce(new SellerWorkspaceApiError('unavailable'));

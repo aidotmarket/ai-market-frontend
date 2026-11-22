@@ -1,10 +1,12 @@
 import {CORRECTION_NOTICE_BUYER} from '@/lib/publicPresentation';
 import React from 'react';
 import { renderToStaticMarkup } from 'react-dom/server';
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 import type { ListingListItem, SearchResultItem } from '@/types';
 import { browseResponse, conflictingShortDescription, listingSummaryCases, markdownDescription } from '@/tests/listingSummaryFixture';
 import { MarketplaceListingCard } from './MarketplaceListingCard';
+
+vi.mock('next/link', () => import('@/tests/listingLinkPrefetchMock'));
 
 describe('MarketplaceListingCard', () => {
   const browseItem = browseResponse.items[0];
@@ -23,6 +25,7 @@ describe('MarketplaceListingCard', () => {
     it.each(listingSummaryCases())('renders the expected excerpt for $state', async ({ summary }) => {
       const listing: ListingListItem | SearchResultItem = await Response.json({ ...item, summary }).json();
       const html = renderToStaticMarkup(<MarketplaceListingCard listing={listing} />);
+      expect(html).toContain('data-prefetch="false"');
       const expected = summary === undefined ? conflictingShortDescription : summary;
       if (expected) expect(html).toContain(`>${expected}</p>`);
       else expect(html).not.toContain('line-clamp-3');
@@ -76,6 +79,7 @@ describe('public sample browse and search cards', () => {
     expect(html).toContain('generated marketplace example');
     expect(html).toContain('Not for sale');
     expect(html).toContain('href="/listings/generated-example"');
+    expect(html).toContain('data-prefetch="false"');
     expect(html).not.toMatch(/RETAINED_UNSUPPORTED|2500|8400|Privacy:|\bFree\b|Offer|Download|Buy/);
   });
   it.each([null, false, {}, {version: 2, mode: 'display_only'}])('closes malformed marker %j instead of rendering an ordinary price', generated_sample => {

@@ -32,6 +32,7 @@ export function MarketplaceListingCard({ listing }: { listing: CardListing }) {
   return (
     <Link
       href={`/listings/${listing.slug}`}
+      prefetch={false}
       className="flex h-full flex-col rounded-2xl border border-gray-200 bg-white p-6 transition-all hover:-translate-y-0.5 hover:border-[#C5CAE9] hover:shadow-md"
     >
       <div className="flex items-start justify-between gap-3">

@@ -56,10 +56,16 @@ export async function middleware(request: NextRequest, event: NextFetchEvent) {
   let listingStatus = 204;
   let listingData: string | undefined;
   if (listingRef) {
+    let decodedRef: string;
+    try {
+      decodedRef = decodeURIComponent(listingRef);
+    } catch {
+      return NextResponse.rewrite(new URL('/_listing-not-found', request.url));
+    }
     if (!apiBase) return listingUnavailableResponse(503);
     try {
-      if (process.env.LISTING_DISPOSITION_MIDDLEWARE_ENABLED !== 'false') {
-        const version = request.nextUrl.searchParams.get('version');
+      const version = request.nextUrl.searchParams.get('version');
+      if (version !== null || process.env.LISTING_DISPOSITION_MIDDLEWARE_ENABLED !== 'false') {
         const query = version === null ? '' : `?${new URLSearchParams({version})}`;
         const response = await fetch(`${apiBase}/api/v1/public/listing-disposition/${listingRef}${query}`, {
           cache: 'no-store', redirect: 'error', signal: AbortSignal.timeout(5000),
@@ -72,7 +78,7 @@ export async function middleware(request: NextRequest, event: NextFetchEvent) {
       if (listingStatus === 204) {
         // Resolve the page's full read before App Router can commit response headers.
         // Pass only a successful snapshot to the renderer so metadata uses the same read.
-        const response = await requestPublicListing(apiBase, decodeURIComponent(listingRef), userAgent, AbortSignal.timeout(5000));
+        const response = await requestPublicListing(apiBase, decodedRef, userAgent, AbortSignal.timeout(5000));
         if (response.status === 200) {
           const payload: unknown = await response.json();
           if (!payload || typeof payload !== 'object' || Array.isArray(payload)) return listingUnavailableResponse(503);
@@ -118,6 +124,8 @@ export async function middleware(request: NextRequest, event: NextFetchEvent) {
     if (listingStatus === 404) return NextResponse.rewrite(new URL('/_listing-not-found', request.url));
     const headers = new Headers(request.headers);
     headers.delete(LISTING_DATA_HEADER);
+    // next start applies this override in-process. A network hop to the renderer
+    // would subject the full listing snapshot to HTTP header size limits.
     if (listingData !== undefined) headers.set(LISTING_DATA_HEADER, listingData);
     return NextResponse.next({request: {headers}});
   }
