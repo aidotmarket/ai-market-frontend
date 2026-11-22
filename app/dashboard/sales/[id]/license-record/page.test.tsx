@@ -3,6 +3,7 @@
 import { cleanup, render, screen } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { api } from '@/api/client';
+import { privateReadOptions } from '@/api/privateReads';
 import backendRecord from '@/tests/fixtures/s1735_license_record_seller.json';
 import type { LicenseRecord } from '@/types';
 
@@ -13,6 +14,7 @@ vi.mock('@/api/licenseRecords', () => records);
 vi.mock('next/navigation', () => ({ useParams: () => ({ id: 'order-1' }) }));
 
 const { default: SellerLicenseRecordPage } = await import('./page');
+const orderPath = `/orders/${backendRecord.order.id}`;
 
 describe('SellerLicenseRecordPage', () => {
   beforeEach(() => records.getLicenseRecord.mockResolvedValue(backendRecord as LicenseRecord));
@@ -21,15 +23,18 @@ describe('SellerLicenseRecordPage', () => {
   it.each([
     ['pending_delivery', 'Awaiting delivery'],
     ['delivered', 'Delivered'],
-  ])('shows %s alongside the active licence with seller navigation', async (status, label) => {
-    const getSales = vi.spyOn(api, 'get').mockResolvedValue({ data: [{ id: 'order-1', status }] });
+  ])('shows %s alongside the active licence when the seller lacks Sales access', async (status, label) => {
+    const get = vi.spyOn(api, 'get').mockImplementation(async (url) => {
+      if (url === orderPath) return { data: { id: backendRecord.order.id, status } };
+      throw new Error('Seller capability is inactive');
+    });
     render(<SellerLicenseRecordPage />);
 
     expect(await screen.findByRole('heading', { name: 'Licence record' })).not.toBeNull();
     expect(await screen.findByText(label)).toBe(screen.getByText('Delivery status').nextElementSibling);
     expect(screen.getByText('Licence status').nextElementSibling?.textContent).toBe('Active');
-    expect(getSales).toHaveBeenCalledWith('/seller/orders', {
-      params: { limit: 100, offset: 0 }, signal: expect.any(AbortSignal),
+    expect(get).toHaveBeenCalledExactlyOnceWith(orderPath, {
+      ...privateReadOptions, signal: expect.any(AbortSignal),
     });
     expect(screen.getByRole('link', { name: '← Back to sales' }).getAttribute('href')).toBe('/dashboard/sales');
     expect(screen.getByText('identified to ai.market under order ORDER-1')).not.toBeNull();
@@ -38,21 +43,8 @@ describe('SellerLicenseRecordPage', () => {
     expect(screen.queryByRole('button', { name: 'Confirm deletion' })).toBeNull();
   });
 
-  it('finds older orders on later unfiltered Sales pages', async () => {
-    const getSales = vi.spyOn(api, 'get')
-      .mockResolvedValueOnce({ data: Array.from({ length: 100 }, (_, index) => ({ id: `other-${index}`, status: 'pending_delivery' })) })
-      .mockResolvedValueOnce({ data: [{ id: 'order-1', status: 'delivered' }] });
-    render(<SellerLicenseRecordPage />);
-
-    expect(await screen.findByText('Delivered')).toBe(screen.getByText('Delivery status').nextElementSibling);
-    expect(getSales).toHaveBeenCalledTimes(2);
-    expect(getSales).toHaveBeenLastCalledWith('/seller/orders', {
-      params: { limit: 100, offset: 100 }, signal: expect.any(AbortSignal),
-    });
-  });
-
-  it('keeps the licence visible if the Sales request fails', async () => {
-    vi.spyOn(api, 'get').mockRejectedValue(new Error('Sales unavailable'));
+  it('keeps the licence visible if the order request fails', async () => {
+    vi.spyOn(api, 'get').mockRejectedValue(new Error('Order unavailable'));
     render(<SellerLicenseRecordPage />);
 
     expect(await screen.findByText('Status unavailable')).toBe(screen.getByText('Delivery status').nextElementSibling);
@@ -60,7 +52,7 @@ describe('SellerLicenseRecordPage', () => {
   });
 
   it('does not display counterparty details even if a response unexpectedly includes them', async () => {
-    vi.spyOn(api, 'get').mockResolvedValue({ data: [] });
+    vi.spyOn(api, 'get').mockResolvedValue({ data: { id: backendRecord.order.id, status: 'delivered' } });
     records.getLicenseRecord.mockResolvedValue({
       ...backendRecord,
       buyer: { legal_name: 'Private Buyer Ltd', jurisdiction: 'GB', user_id: 'private-user' },

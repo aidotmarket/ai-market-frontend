@@ -5,7 +5,7 @@ import { authSessionIdentity, useAuthStore } from '@/store/auth';
 import Link from 'next/link';
 import { useParams } from 'next/navigation';
 import { confirmLicenseRecordDeletion, downloadLicenseRecordPdf, getLicenseRecord } from '@/api/licenseRecords';
-import { getSellerOrderStatus } from '@/api/seller';
+import { getOrder } from '@/api/orders';
 import { formatDate } from '@/lib/format';
 import { getSellerStatusPresentation } from '@/lib/sellerOrderStatus';
 import type { LicenseRecord, LicenseRecordCovenantDocument, LicenseRecordIdentifiedParty, LicenseRecordLicenseDocument, LicenseRecordReferencedParty, LicenseRecordRiderDocument } from '@/types';
@@ -69,8 +69,9 @@ function LicenseRecordVisit({ id, party }: { id: string; party: 'buyer' | 'selle
     setRecord(null);
     setDeliveryStatus('Loading…');
     async function read() {
+      let value: LicenseRecord;
       try {
-        const value = await getLicenseRecord(id);
+        value = await getLicenseRecord(id);
         if (!isCurrent()) return;
         setRecord(value);
         setState('ready');
@@ -81,8 +82,8 @@ function LicenseRecordVisit({ id, party }: { id: string; party: 'buyer' | 'selle
 
       if (party === 'seller') {
         try {
-          const status = await getSellerOrderStatus(id, controller.signal);
-          if (isCurrent()) setDeliveryStatus(getSellerStatusPresentation(status ?? '').label);
+          const { status } = await getOrder(value.order.id, { signal: controller.signal });
+          if (isCurrent()) setDeliveryStatus(getSellerStatusPresentation(status).label);
         } catch {
           if (isCurrent()) setDeliveryStatus('Status unavailable');
         }
