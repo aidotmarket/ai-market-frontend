@@ -158,7 +158,7 @@ export function useListingPolish(options: ListingPolishOptions | undefined, acti
       ...revision, request_id: crypto.randomUUID(), change_ids,
       fact_confirmations: [...new Set(facts.map(fact => fact.fact_id))],
     };
-    queuePolishAccept(runId, body);
+    queuePolishAccept(runId, body, options.publishedTitle);
   };
 
   const executeAccept = useEffectEvent((entry: NonNullable<typeof pending>) => {
@@ -170,7 +170,7 @@ export function useListingPolish(options: ListingPolishOptions | undefined, acti
       setNotice("");
       try {
         const { result, draft: saved } = await action.mutate(
-          () => acceptPolish(runId, body, signal), signal, options.reload, result => result, { replaying },
+          () => acceptPolish(runId, body, signal), signal, options.reload, result => result, { accept: true, replaying },
         );
         if (!entry.sameSession()) return;
         const matching = saved?.draft_id === result.draft_id;
@@ -186,8 +186,10 @@ export function useListingPolish(options: ListingPolishOptions | undefined, acti
         } else setNotice(copy.applied);
       } catch (failure) {
         if (signal.aborted || !entry.sameSession()) return;
+        const report = (message: string) => setError(entry.publicationTitle && entry.publicationTitle !== options.publishedTitle
+          ? `${entry.publicationTitle}. ${message}` : message);
         if (reviewStatus(failure) === 404) {
-          setAvailable(false); setRun(null); setError(copy.unavailable);
+          setAvailable(false); setRun(null); report(copy.unavailable);
           return;
         }
         const { code, change_ids, additional_change_ids } = reviewError(failure);
@@ -197,7 +199,7 @@ export function useListingPolish(options: ListingPolishOptions | undefined, acti
           setSelected(current => expandReviewSelection(completed, [...current, ...named]));
         }
         if (code === "REVIEW_STALE" || code === "REVIEW_SUPERSEDED" || code === "REVIEW_DISCARDED") setEnded(true);
-        setError(polishFailure(failure));
+        report(polishFailure(failure));
       } finally {
         if (!signal.aborted) setSettledAccept(entry);
       }

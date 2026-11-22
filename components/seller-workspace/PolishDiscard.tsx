@@ -72,8 +72,8 @@ export function PolishDiscard({ runId, version, disabled, reload, onRemoved, loc
           </div> : <>
             <p>{copy.unavailableComparison}</p>
             <p className="whitespace-pre-wrap break-words"><strong>{copy.current}</strong> {text || copy.empty}</p>
-            <p className="whitespace-pre-wrap break-words"><strong>{copy.restored}</strong> {typeof restored === "string" && restored ? restored : copy.empty}</p>
           </>}
+          <p className="whitespace-pre-wrap break-words"><strong>{copy.restored}</strong> {typeof restored === "string" && restored ? restored : copy.empty}</p>
         </li>;
       })}</ul>
       <div className="flex flex-wrap gap-2">

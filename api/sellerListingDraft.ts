@@ -22,6 +22,7 @@ export interface SavedListingDraft {
   draft_id?: string | null;
   /** Owner-only authority reference; null for ordinary drafts. Optional during backend rollout. */
   authority_version_id?: string | null;
+  base_listing_version_id?: string | null;
   review_run_id?: string | null;
   version: number;
   content: ListingDraftContent;

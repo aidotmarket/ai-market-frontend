@@ -6,7 +6,8 @@ import { reviewError, reviewStatus, retryReviewRequest, uncertainReviewMutation 
 import type { SavedListingDraft } from "@/api/sellerListingDraft";
 import { listingPolish as copy } from "@/lib/i18n/listing-polish";
 
-export type ReloadDraft = (signal: AbortSignal) => Promise<SavedListingDraft | null>;
+export type ReloadDraft = (signal: AbortSignal, onLoaded?: () => void,
+  verify?: (draft: SavedListingDraft | null) => void) => Promise<SavedListingDraft | null>;
 
 export function usePolishAction(editorLock?: RefObject<boolean>, onBusy?: (busy: boolean) => void) {
   const controller = useRef<AbortController | null>(null);
@@ -22,13 +23,16 @@ export function usePolishAction(editorLock?: RefObject<boolean>, onBusy?: (busy:
   const reloadDraft = useCallback(async (reload: ReloadDraft, signal: AbortSignal,
     receipt?: { draft_id: string; draft_version: number; draft_moved: boolean }) => {
     const sameSession = sessionLifecycle();
+    const verify = (draft: SavedListingDraft | null) => {
+      if (receipt && !receipt.draft_moved && (!draft || draft.draft_id === receipt.draft_id &&
+          draft.version < receipt.draft_version)) throw new Error("Draft read predates the mutation");
+    };
     for (let delay = 1000; !signal.aborted && sameSession(); delay = Math.min(delay * 2, 10_000)) {
       try {
-        const draft = await reload(signal);
+        const draft = await reload(signal, undefined, verify);
         signal.throwIfAborted();
         if (!sameSession()) throw new Error("SESSION_CHANGED");
-        if (receipt && !receipt.draft_moved && (!draft || draft.draft_id === receipt.draft_id &&
-            draft.version < receipt.draft_version)) throw new Error("Draft read predates the mutation");
+        verify(draft);
         return draft;
       } catch (error) {
         if (signal.aborted || !sameSession()) break;
@@ -44,14 +48,31 @@ export function usePolishAction(editorLock?: RefObject<boolean>, onBusy?: (busy:
   const mutate = useCallback(async <T extends { draft_moved: boolean }>(
     send: () => Promise<T>, signal: AbortSignal, reload: ReloadDraft,
     receipt: (result: T) => { draft_id: string; draft_version: number; draft_moved: boolean } | undefined,
-    { replaying = false, confirmDraftId }: {
-      replaying?: boolean; confirmDraftId?: string | null;
+    { accept = false, replaying = false, confirmDraftId }: {
+      accept?: boolean; replaying?: boolean; confirmDraftId?: string | null;
     } = {},
   ) => {
     let unknown = replaying;
+    let retries = 0;
     let result: T;
     try {
-      result = await retryReviewRequest(send, signal, uncertainReviewMutation, () => { unknown = true; });
+      result = await retryReviewRequest(send, signal, error => {
+        if (accept && unknown) {
+          // Only a recorded refusal proves that the same request reached the
+          // replay lookup. Admission can fail before that lookup.
+          const { code, draft_moved } = reviewError(error);
+          if (reviewStatus(error) === 409 && (code === "REQUEST_REUSED" ||
+            typeof code === "string" && typeof draft_moved === "boolean")) return false;
+          return true;
+        }
+        return uncertainReviewMutation(error);
+      }, () => {
+        unknown = true;
+        if (accept) {
+          retries += 1;
+          setStatus(retries >= 4 ? copy.acceptRetryLong : copy.acceptRetry);
+        }
+      });
     } catch (error) {
       const refusal = reviewError(error);
       const staleConfirmation = !!confirmDraftId && refusal.code === "REVIEW_STALE";

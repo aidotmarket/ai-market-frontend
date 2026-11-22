@@ -8,6 +8,7 @@ import { subscribeAuthSessionOwner } from "@/lib/auth-session-owner";
 type PendingAccept = {
   runId: string;
   body: AcceptPolishBody;
+  publicationTitle?: string;
   sent: boolean;
   sameSession: () => boolean;
 };
@@ -39,9 +40,9 @@ export function usePendingPolishAccept(enabled: boolean) {
   return useSyncExternalStore(enabled ? subscribe : noSubscription, enabled ? pendingPolishAccept : empty, empty);
 }
 
-export function queuePolishAccept(runId: string, body: AcceptPolishBody) {
+export function queuePolishAccept(runId: string, body: AcceptPolishBody, publicationTitle?: string) {
   if (pendingPolishAccept()) return;
-  pending = { runId, body, sent: false, sameSession: sessionLifecycle() };
+  pending = { runId, body, publicationTitle, sent: false, sameSession: sessionLifecycle() };
   notify();
 }
 
