@@ -183,6 +183,12 @@ export default function LoginForm() {
           </div>
         )}
 
+        {/^\/dashboard(?:[/?#]|$)/.test(searchParams.get('redirect') ?? '') && (
+          <div className="rounded-lg bg-[#E8EAF6] border border-[#C5CAE9] px-4 py-3 text-sm text-[#3F51B5] mb-4">
+            Please sign in to continue to your dashboard.
+          </div>
+        )}
+
         {awaitingProviderHydration ? <p role="status">Preparing sign-in…</p> : <OAuthButtons mode="login" redirect={searchParams.get('redirect')} />}
 
         <form onSubmit={handleSubmit} className="space-y-4">
