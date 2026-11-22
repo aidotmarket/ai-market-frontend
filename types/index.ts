@@ -1052,7 +1052,7 @@ export interface DataRequestListItem {
   price_range_max: number | null;
   currency: string;
   status: DataRequestStatus;
-  response_count: number;
+  response_count?: number;
   buyer_display_name: string | null;
   created_at: string;
   updated_at: string | null;

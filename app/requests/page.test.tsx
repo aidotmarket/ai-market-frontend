@@ -8,7 +8,6 @@ import BrowseRequestsPage from './page';
 const { fetchDataRequests } = vi.hoisted(() => ({ fetchDataRequests: vi.fn() }));
 vi.mock('@/lib/api', () => ({ fetchDataRequests }));
 
-// Public browse payloads can omit response_count despite the shared type.
 function request(id: string, extra: Record<string, unknown> = {}) {
   return {
     id, slug: `request-${id}`, title: `Request ${id}`, description: `Data needed for ${id}`,

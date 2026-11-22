@@ -173,6 +173,21 @@ describe('DataRequestDetailClient authenticated fallback loading', () => {
   });
 
   it.each([
+    [undefined, null],
+    [0, '0 responses'],
+    [1, '1 response'],
+    [2, '2 responses'],
+  ])('displays the public detail response count when supplied (%s)', (response_count, expected) => {
+    mocks.auth.user = null;
+    mocks.auth.isAuthenticated = false;
+    const request = makeOwnerRequest({ response_count });
+
+    render(<DataRequestDetailClient slug={request.slug} initialRequest={request} />);
+
+    expect(screen.queryByText(/^\d*\s*responses?$/)?.textContent ?? null).toBe(expected);
+  });
+
+  it.each([
     { ownerDraftFields: false, approvalState: null },
     { ownerDraftFields: true, approvalState: { status: 'approved' } },
   ])('follows the shared publication journey (owner draft fields: $ownerDraftFields)', async ({ ownerDraftFields, approvalState }) => {
