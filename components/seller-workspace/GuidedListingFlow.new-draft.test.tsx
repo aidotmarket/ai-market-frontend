@@ -25,6 +25,9 @@ vi.mock('@/api/sellerListingPublication',()=>({readPublication:mocks.publication
 vi.mock('@/api/capabilities',()=>({getCapabilities:mocks.account}));
 const oldDraft={draft_id:'00000000-0000-4000-8000-000000000002',version:4,updated_at:'2026-10-01T00:00:00Z',content:{...EMPTY_LISTING_DRAFT,title:'Old listing',description_source_version:1,description:'Description',category:'financial-data',tags:'sales',price:'25',license_selection:{...createStandardSelection(),seller_acceptance:{signer_name:'Sam',signer_title:'Owner',authority_confirmed:true}}}};
 const newDraft={draft_id:'00000000-0000-4000-8000-000000000003',version:1,updated_at:'2026-11-01T00:00:00Z',content:EMPTY_LISTING_DRAFT};
+const publishedRefusal={isAxiosError:true,response:{status:409,data:{detail:{
+ code:'DRAFT_ALREADY_PUBLISHED',message:'This listing is already published. Use Start another listing to begin a new one.',
+}}}};
 const navigate=vi.fn();
 let store:ReturnType<typeof useSellerListingDraft>;
 function Probe(){
@@ -70,8 +73,7 @@ it('posts one native new-draft request, adopts its content and resets panels bef
 });
 it.each([false,true])('recovers from a published-draft save refusal with Polish enabled=%s',async enabled=>{
  vi.stubEnv('NEXT_PUBLIC_LISTING_REVIEW_ENABLED',enabled?'true':'');
- const message='This listing is already published. Use Start another listing to begin a new one.';
- vi.spyOn(api,'put').mockRejectedValue({isAxiosError:true,response:{status:409,data:{detail:{code:'DRAFT_ALREADY_PUBLISHED',message}}}});
+ vi.spyOn(api,'put').mockRejectedValue(publishedRefusal);
  const post=vi.spyOn(nativeClient,'post').mockResolvedValue({data:{draft:newDraft}});
  const confirm=vi.spyOn(window,'confirm').mockReturnValueOnce(false).mockReturnValueOnce(true);
  render(<Harness/>);await screen.findByRole('link',{name:'Published: view your listing'});
@@ -98,6 +100,31 @@ it.each([false,true])('recovers from a published-draft save refusal with Polish 
  expect((screen.getByLabelText('Local file choice') as HTMLInputElement).value).toBe('');
  expect(screen.getByLabelText('Description')).toHaveProperty('value','');
  expect((screen.getByLabelText('Title') as HTMLInputElement).value).toBe('');
+});
+
+it('retries a failed start after a published-draft refusal with the same request ID',async()=>{
+ vi.stubEnv('NEXT_PUBLIC_LISTING_REVIEW_ENABLED','true');
+ const save=vi.spyOn(api,'put').mockRejectedValue(publishedRefusal);
+ const post=vi.spyOn(nativeClient,'post').mockRejectedValueOnce(new Error('offline')).mockResolvedValueOnce({data:{draft:newDraft}});
+ const confirm=vi.spyOn(window,'confirm').mockReturnValue(true);
+ render(<Harness/>);await screen.findByRole('link',{name:'Published: view your listing'});
+ fireEvent.change(screen.getByLabelText('Description'),{target:{value:'Keep these edits until creation succeeds'}});
+ fireEvent.click(screen.getByRole('button',{name:'Save private draft'}));
+ const refusal=await screen.findByRole('alert');
+ fireEvent.click(within(refusal).getByRole('button',{name:'Start another listing'}));
+ const retry=await screen.findByRole('button',{name:'Retry'});
+ expect(post).toHaveBeenCalledOnce();
+ expect(navigate).not.toHaveBeenCalled();
+ expect(screen.getByLabelText('Description')).toHaveProperty('value','Keep these edits until creation succeeds');
+ fireEvent.click(retry);
+ await waitFor(()=>expect(navigate).toHaveBeenCalledWith('data'));
+ expect(post).toHaveBeenCalledTimes(2);
+ expect(post.mock.calls[1][1]).toEqual(post.mock.calls[0][1]);
+ expect(confirm.mock.calls).toEqual([[polishCopy.discardPublishedEdits],[polishCopy.discardPublishedEdits]]);
+ expect(save).toHaveBeenCalledOnce();
+ expect(screen.queryByText(polishCopy.dirtyStartAnother)).toBeNull();
+ expect(screen.getByLabelText('Draft identity').textContent).toBe(newDraft.draft_id);
+ expect(screen.getByLabelText('Description')).toHaveProperty('value','');
 });
 
 it.each([1,oldDraft.version])('discards queued old licence, signer, samples and fields after delayed creation (new version %s)',async version=>{

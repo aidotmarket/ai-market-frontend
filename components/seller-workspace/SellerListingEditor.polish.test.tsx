@@ -471,7 +471,7 @@ it.each(["success", "recorded refusal"] as const)("fences a delayed mount read a
   })));
 });
 
-it("applies both in-order ordinary reloads with Polish off and saves from the newer version", async () => {
+it.each(["request order", "reverse order"] as const)("saves from the newer ordinary reload with Polish off when reads finish in %s", async order => {
   vi.stubEnv("NEXT_PUBLIC_LISTING_REVIEW_ENABLED", "");
   let store!: ReturnType<typeof useSellerListingDraft>;
   function ObserveDraft() { store = useSellerListingDraft(); return null; }
@@ -481,11 +481,19 @@ it("applies both in-order ordinary reloads with Polish off and saves from the ne
   const earlier = pending<SavedListingDraft>(), later = pending<SavedListingDraft>();
   const next = { ...reviewed, content: { ...reviewed.content, description: "Newer ordinary reload." } };
   mocks.readDraft.mockReturnValueOnce(earlier.promise).mockReturnValueOnce(later.promise);
-  const first = store.reload(), second = store.reload();
+  const onEarlierLoaded = vi.fn();
+  const first = store.reload(undefined, onEarlierLoaded), second = store.reload();
   await waitFor(() => expect(mocks.readDraft).toHaveBeenCalledTimes(3));
-  await act(async () => { earlier.resolve(draft); expect(await first).toEqual(draft); });
-  expect(store.draft).toEqual(draft);
-  await act(async () => { later.resolve(next); expect(await second).toEqual(next); });
+  if (order === "request order") {
+    await act(async () => { earlier.resolve(draft); expect(await first).toEqual(draft); });
+    expect(store.draft).toEqual(draft);
+    expect(onEarlierLoaded).toHaveBeenCalledOnce();
+    await act(async () => { later.resolve(next); expect(await second).toEqual(next); });
+  } else {
+    await act(async () => { later.resolve(next); expect(await second).toEqual(next); });
+    await act(async () => { earlier.resolve(draft); expect(await first).toEqual(next); });
+    expect(onEarlierLoaded).not.toHaveBeenCalled();
+  }
   expect(store.draft).toEqual(next);
   expect(description().value).toBe(next.content.description);
   const put = vi.spyOn(api, "put").mockResolvedValue({ data: { draft: { ...next, version: 9 } } });
@@ -494,6 +502,11 @@ it("applies both in-order ordinary reloads with Polish off and saves from the ne
   await waitFor(() => expect(put).toHaveBeenCalledWith("/seller-workspace/listing-draft", expect.objectContaining({
     content: expect.objectContaining({ description: "Edit after both reloads." }), expected_version: 8,
   })));
+  await waitFor(() => expect(store.draft?.version).toBe(9));
+  mocks.readDraft.mockResolvedValueOnce(draft);
+  await act(async () => { expect(await store.reload()).toEqual(draft); });
+  expect(store.draft).toEqual(draft);
+  expect(description().value).toBe(draft.content.description);
   expect(mocks.read).not.toHaveBeenCalled();
   expect(mocks.post).not.toHaveBeenCalled();
 });
@@ -865,6 +878,7 @@ it("keeps a successor's description across sections and saves only that field", 
   };
   expect(put).toHaveBeenCalledTimes(1);
   assertPut(0, 1, edited);
+  await waitFor(() => expect(screen.queryByText(copy.dirtyReturn)).toBeNull());
   fireEvent.click(button(copy.returnToDraft));
   expect(screen.queryByRole("button", { name: copy.returnToDraft })).toBeNull();
   expect(description().value).toBe(edited);

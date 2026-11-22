@@ -21,12 +21,13 @@ type PublicationPolish = {
   workspaceDraftId?: string | null;
   successorId?: string;
 };
+type StartListingRecovery = 'published-refusal';
 
 type Flow = {samplesBlocked:boolean; stepsForContent:(content:ListingDraftContent)=>ListingStep[]; sourceCurrentDraftId:string|null; sourceLoaded:boolean; sourceDraftChanged:boolean; reloadSource:()=>Promise<void>; sourceError:string; fileRevision:number; setFilesDirty:(dirty:boolean)=>void; setListingDirty:(dirty:boolean)=>void; setLicenceDirty:(dirty:boolean)=>void; source: SourceRead|null; categories: SellerCategory[]; steps: ListingStep[]; review: ListingReview|null;
   reviewError: string; reviewLoading: boolean; publication: PublicationState|null; publicationError: string;
   refreshReview: ()=>void; refreshPublication: ()=>void; sourceSaved: (response:SourceSaveResponse)=>void; sourceSaveRefused:(message:string)=>void;
   approved: (approval:ApprovalReceipt)=>void; published: (state:PublicationState)=>void;
-  startAnotherListing:(recovery?:'published-refusal')=>void; startingListing:boolean; navigate: (view:WorkspaceView)=>void; licensesEnabled: boolean;
+  startAnotherListing:(recovery?:StartListingRecovery)=>void; startingListing:boolean; navigate: (view:WorkspaceView)=>void; licensesEnabled: boolean;
   polishLock: React.RefObject<boolean>; polishBusy: boolean; setPolishBusy:(busy:boolean)=>void;
   polishNotice: string; setPolishNotice:(notice:string)=>void; listingDirty:boolean;
   polishPublication: PublicationPolish | null; openPublicationPolish:(publication:PublicationReceipt)=>void;
@@ -37,7 +38,7 @@ export function useListingFlow(){return useContext(Context);}
 export function GuidedListingFlow({connections, capabilities, view, navigate, children}: {connections:SellerWorkspaceConnection[]; capabilities:SellerWorkspaceCapabilities|null; view:WorkspaceView; navigate:(view:WorkspaceView)=>void; children:ReactNode}) {
   const {draft, available, loaded, requestLoad, reload, selectionSavePending, selectionSaveFailed, startNewDraft} = useSellerListingDraft();
   const [startingListing,setStartingListing]=useState(false);
-  const [startError,setStartError]=useState('');
+  const [startError,setStartError]=useState<{message:string;draftId:string|null;recovery?:StartListingRecovery}|null>(null);
   const [sourceSaveNotice,setSourceSaveNotice]=useState('');
   const polishLock = useRef(false);
   const [polishActionBusy, setPolishBusy] = useState(false);
@@ -49,13 +50,13 @@ export function GuidedListingFlow({connections, capabilities, view, navigate, ch
   const [draftEditNotice, setDraftEditNotice] = useState('');
   const startAttempt=useRef<string|null>(null);
   const startPending=useRef(false);
-  const startAnotherListing=async(recovery?:'published-refusal')=>{
+  const startAnotherListing=async(recovery?:StartListingRecovery)=>{
     if(startPending.current||polishLock.current||polishEnabled&&pendingPolishAccept())return;
     if(polishEnabled&&listingDirty){
       if(recovery!=='published-refusal'){setDraftEditNotice(polishCopy.dirtyStartAnother);return;}
       if(!window.confirm(polishCopy.discardPublishedEdits))return;
     }
-    startPending.current=true;setStartingListing(true);setStartError('');
+    startPending.current=true;setStartingListing(true);setStartError(null);
     startAttempt.current??=crypto.randomUUID();
     try {
       await startNewDraft(startAttempt.current);
@@ -71,7 +72,7 @@ export function GuidedListingFlow({connections, capabilities, view, navigate, ch
       if(axios.isAxiosError(error)&&error.response?.status===404&&(detail==='UNAVAILABLE'||detail?.code==='UNAVAILABLE')){
         startAttempt.current=null;
         navigate('data');
-      }else setStartError(listingDraftError(error)?.message??"We couldn't start a new listing. Refresh and try again.");
+      }else setStartError({message:listingDraftError(error)?.message??"We couldn't start a new listing. Refresh and try again.",draftId:draft?.draft_id??null,recovery});
     }
     finally{startPending.current=false;setStartingListing(false);}
   };
@@ -197,7 +198,7 @@ export function GuidedListingFlow({connections, capabilities, view, navigate, ch
         {accountNext&&<a href="#seller-setup-next" onClick={()=>window.dispatchEvent(new Event('seller-setup:next'))} className="block text-sm text-indigo-700 underline">Finish account setup: {SELLER_SETUP_STEPS.find(s=>s.id===accountNext)?.label??'Next account step'}</a>}
         <ol className="space-y-4">{steps.map((s,i)=><li key={s.view}><button type="button" aria-current={view===s.view?'step':undefined} onClick={()=>navigate(s.view)} className="text-left text-sm font-medium"><span aria-hidden="true">{s.state==='done'?'✓':s.state==='blocked'?'🔒':'○'}</span> {i+1}. {s.name} <span className="text-xs">· {s.state==='blocked'?'Needs attention':s.state==='done'?'Complete':'To do'}{s.next?' · Next':''}</span></button>{s.reason&&s.reason!==reviewError&&<p className="mt-1 text-xs leading-5 text-gray-600">{s.reason}</p>}</li>)}</ol>
         {published?<><a href={`/listings/${encodeURIComponent(published.slug)}`} className="block text-sm text-indigo-700 underline">Published: view your listing</a><button type="button" disabled={startingListing} onClick={()=>void startAnotherListing()} className="text-sm text-indigo-700 underline">Start another listing</button><p className="text-xs text-gray-600">Choose new files and update your draft. Your published listing stays saved.</p></>:next&&<button type="button" onClick={()=>navigate(next.view)} className="w-full rounded-lg bg-indigo-700 px-4 py-2 text-sm font-semibold text-white">Next: {next.name} →</button>}
-        {startError&&<p role="alert" className="text-sm text-red-800">{startError} <button disabled={startingListing} onClick={()=>void startAnotherListing()} className="underline">Retry</button></p>}
+        {startError&&<p role="alert" className="text-sm text-red-800">{startError.message} <button disabled={startingListing} onClick={()=>void startAnotherListing(startError.draftId===(draft?.draft_id??null)?startError.recovery:undefined)} className="underline">Retry</button></p>}
         {readError&&<p role="alert" className="text-sm text-red-800">{readError} <button onClick={()=>setReadRetry(n=>n+1)} className="underline">Retry</button></p>}
       </div>
         {reviewStatus&&<p role="status" className="text-sm text-gray-600">{reviewStatus}</p>}
