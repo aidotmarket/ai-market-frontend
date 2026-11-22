@@ -1137,33 +1137,78 @@ describe('mounted anonymous next-step navigation', () => {
 
 
 describe('customer reply copy and recovery links', () => {
-  it('renders the homepage backend suggestions with encoded search terms and escaped text', async () => {
+  it.each(['before', 'after'])('keeps the homepage destinations when switching to Spanish %s the response', async (order) => {
     mocks.pathname = '/';
+    const pendingMessage = deferred<Response>();
     fetchMock.mockImplementation(async (input) => {
       const url = String(input);
       if (url === STATUS_URL) return response(200, {
         available: true, supported_locales: [...ANONYMOUS_ALLAI_LOCALES], cache_seconds: 5,
       });
       if (url === `${SESSION_URL}/stale-session`) return response(200, { messages: [] });
-      if (url === MESSAGE_URL) return sseEvents({
-        type: 'safe_failure', outcome: 'answer_unverified', locale: 'es',
-        text: 'No pude verificar una respuesta. [Busca en el catálogo](/listings?q=clima%20%26%20energ%C3%ADa), ' +
-          '[publica una solicitud de datos](/requests/new) o pregunta por un sector concreto. ' +
-          '<img src=x onerror=alert(1)> [Externo](https://example.test/requests/new)',
-      });
+      if (url === MESSAGE_URL) return pendingMessage.promise;
       throw new Error(`Unexpected request: ${url}`);
     });
     const view = renderProvider('stale-session', true);
     await waitFor(() => expect(context().anonymousAvailable).toBe(true));
-    act(() => context().setLocale('es'));
-    await send();
+    let sending!: Promise<void>;
+    act(() => { sending = context().sendMessage('What data do you have about climate and energy?'); });
+    await waitFor(() => expect(messageCalls()).toHaveLength(1));
+    expect(messagePayload(messageCalls()[0]).locale).toBe('en');
+    if (order === 'before') act(() => context().setLocale('es'));
+    await act(async () => {
+      pendingMessage.resolve(sseEvents({
+        type: 'safe_failure', outcome: 'answer_unverified', locale: 'en',
+        text: 'Could not verify an answer. [Search the catalogue](/listings?q=clima%20%26%20energ%C3%ADa), ' +
+          '[post a data request](/requests/new) or ask about a specific sector. ' +
+          '<img src=x onerror=alert(1)> [External](https://example.test/requests/new)',
+      }));
+      await sending;
+    });
 
-    expect(screen.getByRole('link', { name: 'Busca en el catálogo' }).getAttribute('href')).toBe('/search?q=clima%20%26%20energ%C3%ADa');
-    expect(screen.getByRole('link', { name: 'publica una solicitud de datos' }).getAttribute('href')).toBe('/requests/new');
-    expect(screen.getByText(/<img src=x onerror=alert/)).toBeTruthy();
+    if (order === 'after') {
+      expect(screen.getByRole('link', { name: 'Search listings directly' }).getAttribute('href')).toBe('/search?q=clima%20%26%20energ%C3%ADa');
+      expect(screen.getByRole('link', { name: 'Post a request' }).getAttribute('href')).toBe('/requests/new');
+      act(() => context().setLocale('es'));
+    }
+    expect(screen.getByText(/Prueba a preguntar por un sector concreto/)).toBeTruthy();
+    expect(screen.getByRole('link', { name: 'Buscar anuncios directamente' }).getAttribute('href')).toBe('/search?q=clima%20%26%20energ%C3%ADa');
+    expect(screen.getByRole('link', { name: 'Publicar una solicitud' }).getAttribute('href')).toBe('/requests/new');
+    expect(screen.queryByText(/Could not verify an answer|<img src=x/)).toBeNull();
     expect(view.container.querySelector('img')).toBeNull();
-    expect(screen.queryByRole('link', { name: 'Externo' })).toBeNull();
-    expect(screen.queryByRole('link', { name: 'Buscar anuncios directamente' })).toBeNull();
+    expect(screen.getAllByRole('link')).toHaveLength(2);
+  });
+
+  it.each(['before', 'after'])('keeps the listing panel support destination when switching to Spanish %s the response', async (order) => {
+    const pendingMessage = deferred<Response>();
+    fetchMock.mockImplementation(async (input) => {
+      const url = String(input);
+      if (url === `${SESSION_URL}/stale-session`) return response(200, { messages: [] });
+      if (url === MESSAGE_URL) return pendingMessage.promise;
+      throw new Error(`Unexpected request: ${url}`);
+    });
+    renderProvider('stale-session', true);
+    let sending!: Promise<void>;
+    act(() => { sending = context().sendMessage('What is the license?'); });
+    await waitFor(() => expect(messageCalls()).toHaveLength(1));
+    expect(messagePayload(messageCalls()[0]).locale).toBe('en');
+    if (order === 'before') act(() => context().setLocale('es'));
+    await act(async () => {
+      pendingMessage.resolve(sseEvents({
+        type: 'safe_failure', outcome: 'answer_unverified', locale: 'en',
+        text: 'Could not verify an answer. [Contact support](/support)',
+      }));
+      await sending;
+    });
+
+    if (order === 'after') {
+      expect(screen.getByRole('link', { name: 'Contact support' }).getAttribute('href')).toBe('/support');
+      act(() => context().setLocale('es'));
+    }
+    expect(screen.getByText(/Prueba con una pregunta más concreta/)).toBeTruthy();
+    expect(screen.getByRole('link', { name: 'Contactar con soporte' }).getAttribute('href')).toBe('/support');
+    expect(screen.queryByRole('link', { name: 'Contact support' })).toBeNull();
+    expect(screen.queryByText(/Could not verify an answer/)).toBeNull();
   });
 
   it.each([

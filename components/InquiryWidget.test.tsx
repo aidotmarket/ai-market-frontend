@@ -231,12 +231,13 @@ describe('InquiryWidget', () => {
     renderSpanishWidget();
     typeQuestion('¿Qué significan las valoraciones?');
 
-    expect((await screen.findByRole('link', { name: 'Contacta con soporte' })).getAttribute('href')).toBe('/support');
+    expect((await screen.findByRole('link', { name: 'Contactar con soporte' })).getAttribute('href')).toBe('/support');
+    expect(screen.queryByText(/No pude verificar una respuesta/)).toBeNull();
     expect(screen.queryByRole('link', { name: 'Externo' })).toBeNull();
     expect(screen.queryByRole('alert')).toBeNull();
   });
 
-  it('keeps a pending English safe failure in Spanish after the language changes', async () => {
+  it.each(['before', 'after'])('keeps the support destination when switching to Spanish %s the response', async (order) => {
     const pendingMessage = deferred<Response>();
     fetchMock.mockResolvedValueOnce(response(200, { session_id: 'anon-session' }))
       .mockReturnValueOnce(pendingMessage.promise);
@@ -244,13 +245,20 @@ describe('InquiryWidget', () => {
     typeQuestion('What do the ratings mean?');
     await waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(2));
     expect(JSON.parse(String(fetchMock.mock.calls[1][1]?.body)).locale).toBe('en');
-    fireEvent.click(screen.getByRole('button', { name: 'Español' }));
+    const switchToSpanish = () => fireEvent.click(screen.getByRole('button', { name: 'Español' }));
+    if (order === 'before') switchToSpanish();
     pendingMessage.resolve(completedSseResponse(
       'Could not verify an answer. [Contact support](/support)',
       { type: 'safe_failure', outcome: 'answer_unverified', locale: 'en' },
     ));
 
-    expect(await screen.findByText(/No pude contrastar esa respuesta/)).toBeTruthy();
+    if (order === 'after') {
+      expect((await screen.findByRole('link', { name: 'Contact support' })).getAttribute('href')).toBe('/support');
+      switchToSpanish();
+    }
+    expect((await screen.findByRole('link', { name: 'Contactar con soporte' })).getAttribute('href')).toBe('/support');
+    expect(screen.getByText(/Prueba con una pregunta más concreta/)).toBeTruthy();
+    expect(screen.queryByRole('link', { name: 'Contact support' })).toBeNull();
     expect(screen.queryByText(/Could not verify an answer/)).toBeNull();
   });
 

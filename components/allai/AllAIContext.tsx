@@ -25,7 +25,7 @@ import {
   type AnonymousMessagePayload,
 } from '@/api/anonymousChat';
 import type { TicketStatusCardData } from './TicketStatusCard';
-import { anonymousFallbackParts, type FallbackPart } from '@/lib/anonymous-allai-fallback';
+import { anonymousFallbackDestinations, type FallbackDestinations } from '@/lib/anonymous-allai-fallback';
 import {
   ANONYMOUS_ALLAI_LOCALES,
   anonymousAllAIResources,
@@ -44,7 +44,7 @@ export interface Message {
   content: string;
   failureNotice?: string;
   listingFailure?: 'error' | 'timeout';
-  fallbackParts?: FallbackPart[];
+  fallbackDestinations?: FallbackDestinations;
   timestamp: number;
   ticketStatusCards?: TicketStatusCardData[];
   historical?: boolean;
@@ -600,15 +600,15 @@ export function AllAIProvider({ children }: { children: ReactNode }) {
               const outcome = evt.outcome;
               const fallback = resources.safeOutcomes[outcome];
               const surface = listingMatch ? 'listing' : contextPath === '/' ? 'homepage' : undefined;
-              const fallbackParts = surface && anonymousFallbackParts(evt, surface, locale);
+              const fallbackDestinations = surface && anonymousFallbackDestinations(evt, surface);
               setMessages((prev) =>
                 prev.map((m) =>
                   m.id === assistantId
                     ? {
                         ...m,
-                        content: typeof evt.text === 'string' && evt.text ? evt.text : fallback,
+                        content: !fallbackDestinations && typeof evt.text === 'string' && evt.text ? evt.text : fallback,
                         safeOutcome: outcome,
-                        fallbackParts,
+                        fallbackDestinations,
                         listingFailure: undefined,
                       }
                     : m

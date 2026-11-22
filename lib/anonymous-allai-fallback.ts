@@ -1,9 +1,12 @@
 import type { AnonymousChatEvent } from '@/api/anonymousChat';
-import type { AnonymousAllAILocale } from '@/lib/i18n/anonymous-allai';
 
-export type FallbackPart = { text: string; href?: string };
+export interface FallbackDestinations {
+  support?: '/support';
+  search?: string;
+  request?: '/requests/new';
+}
 
-function fallbackHref(raw: string, surface: 'listing' | 'homepage') {
+function marketplaceUrl(raw: string) {
   if (!/^\/(?!\/)|^https:\/\//i.test(raw) || /[\\\s]/.test(raw)) return;
   let url: URL;
   try {
@@ -12,35 +15,33 @@ function fallbackHref(raw: string, surface: 'listing' | 'homepage') {
     return;
   }
   if (url.origin !== 'https://ai.market' || url.username || url.password) return;
-
-  if (surface === 'listing') return url.pathname === '/support' ? '/support' : undefined;
-  if (url.pathname === '/requests/new') return '/requests/new';
-  if (url.pathname === '/listings' || url.pathname === '/search') {
-    const query = url.searchParams.get('q')?.trim();
-    return query ? `/search?q=${encodeURIComponent(query)}` : '/search';
-  }
+  return url;
 }
 
-export function anonymousFallbackParts(
+export function anonymousFallbackDestinations(
   event: AnonymousChatEvent,
-  surface: 'listing' | 'homepage',
-  locale: AnonymousAllAILocale
-): FallbackPart[] | undefined {
-  if (event.type !== 'safe_failure' || (event.locale !== undefined && event.locale !== locale)) return;
+  surface: 'listing' | 'homepage'
+): FallbackDestinations | undefined {
+  if (event.type !== 'safe_failure') return;
   if (event.outcome !== 'answer_unverified' && (surface !== 'listing' ||
     (event.outcome !== 'retrieval_unavailable' && event.outcome !== 'no_matches'))) return;
   const copy = typeof event.text === 'string' && event.text.trim() ? event.text : event.message;
   if (typeof copy !== 'string') return;
 
-  // The backend emits plain copy with inline links. Keep the copy and labels as text.
-  const parts: FallbackPart[] = [];
-  let offset = 0;
-  for (const match of copy.matchAll(/\[([^\]\n]+)\]\(([^)\n]+)\)/g)) {
-    if (match.index > offset) parts.push({ text: copy.slice(offset, match.index) });
-    parts.push({ text: match[1], href: fallbackHref(match[2], surface) });
-    offset = match.index + match[0].length;
+  const destinations: FallbackDestinations = {};
+  for (const [, href] of copy.matchAll(/\[[^\]\n]+\]\(([^)\n]+)\)/g)) {
+    const url = marketplaceUrl(href);
+    if (!url) continue;
+
+    if (surface === 'listing') {
+      if (url.pathname === '/support') return { support: '/support' };
+      continue;
+    }
+    if (url.pathname === '/requests/new') destinations.request = '/requests/new';
+    if (!destinations.search && (url.pathname === '/listings' || url.pathname === '/search')) {
+      const query = url.searchParams.get('q')?.trim();
+      destinations.search = query ? `/search?q=${encodeURIComponent(query)}` : '/search';
+    }
   }
-  if (!parts.some((part) => part.href)) return;
-  if (offset < copy.length) parts.push({ text: copy.slice(offset) });
-  return parts;
+  if (destinations.search || destinations.request) return destinations;
 }

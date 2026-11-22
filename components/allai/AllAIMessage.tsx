@@ -50,7 +50,7 @@ export default function AllAIMessage({
   }
 
   // assistant
-  const hasRecoveryLinks = !message.fallbackParts && (message.safeOutcome === 'answer_unverified' ||
+  const hasRecoveryLinks = !message.fallbackDestinations && (message.safeOutcome === 'answer_unverified' ||
     message.safeOutcome === 'retrieval_unavailable' ||
     message.safeOutcome === 'no_matches' || message.safeOutcome === 'rate_limited');
   // Use the maintained customer copy even when a safe-failure event supplies older wording.
@@ -73,8 +73,8 @@ export default function AllAIMessage({
         )}
         {showDots ? (
           <StreamingDots />
-        ) : message.fallbackParts ? (
-          <p><AllAIFallback parts={message.fallbackParts} /></p>
+        ) : message.fallbackDestinations ? (
+          <p><AllAIFallback destinations={message.fallbackDestinations} locale={locale} /></p>
         ) : content.trim() && (
           <Markdown
             components={{

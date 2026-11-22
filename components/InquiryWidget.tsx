@@ -18,11 +18,10 @@ import { AxiosError } from 'axios';
 import { mergeConversationMessages } from '@/lib/conversationMessages';
 import { useAllAILocale } from '@/components/allai/AllAIContext';
 import { AllAIFallback, ListingRecoveryLinks } from '@/components/allai/AllAIFallback';
-import { anonymousFallbackParts, type FallbackPart } from '@/lib/anonymous-allai-fallback';
+import { anonymousFallbackDestinations, type FallbackDestinations } from '@/lib/anonymous-allai-fallback';
 import {
   anonymousAllAIResources,
   isAnonymousSafeOutcome,
-  type AnonymousAllAILocale,
   type AnonymousSafeOutcome,
 } from '@/lib/i18n/anonymous-allai';
 
@@ -43,7 +42,7 @@ interface AnonymousAttemptResource<T> {
 
 interface AnonymousInquiryMessage extends ConversationMessage {
   safeOutcome?: AnonymousSafeOutcome;
-  fallback?: { parts: FallbackPart[]; locale: AnonymousAllAILocale };
+  fallbackDestinations?: FallbackDestinations;
 }
 
 // A listing is a separate public attempt/session as well as a private visit.
@@ -298,8 +297,7 @@ function ListingInquiryWidget({ listingId, listingSlug, listingTitle }: Props) {
 
           const safeOutcome = event.type === 'safe_failure' && isAnonymousSafeOutcome(event.outcome)
             ? event.outcome : undefined;
-          const fallbackParts = anonymousFallbackParts(event, 'listing', locale);
-          const fallback = fallbackParts ? { parts: fallbackParts, locale } : undefined;
+          const fallbackDestinations = anonymousFallbackDestinations(event, 'listing');
 
           const streamError = event.error ?? (event.type === 'error' ? event.message : undefined);
           if (typeof streamError === 'string' && streamError) {
@@ -324,7 +322,7 @@ function ListingInquiryWidget({ listingId, listingSlug, listingTitle }: Props) {
                   role: 'allai',
                   content: delta,
                   safeOutcome,
-                  fallback,
+                  fallbackDestinations,
                   created_at: new Date().toISOString(),
                 },
               ];
@@ -332,7 +330,7 @@ function ListingInquiryWidget({ listingId, listingSlug, listingTitle }: Props) {
 
             return prev.map((message) => (
               message.id === answerMessageId
-                ? { ...message, content: safeOutcome ? delta : message.content + delta, safeOutcome, fallback }
+                ? { ...message, content: safeOutcome ? delta : message.content + delta, safeOutcome, fallbackDestinations }
                 : message
             ));
           });
@@ -549,8 +547,8 @@ function ListingInquiryWidget({ listingId, listingSlug, listingTitle }: Props) {
             messages={anonymousMessages}
             viewerRole="buyer"
             showTypingIndicator={submitting && !anonymousAnswerStarted}
-            renderContent={(message) => message.fallback?.locale === locale
-              ? <AllAIFallback parts={message.fallback.parts} />
+            renderContent={(message) => message.fallbackDestinations
+              ? <AllAIFallback destinations={message.fallbackDestinations} locale={locale} />
               : message.safeOutcome ? resources.safeOutcomes[message.safeOutcome] : message.content}
           />
         </div>
