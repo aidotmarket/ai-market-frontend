@@ -19,7 +19,7 @@ const storageGuidance = 'Check your storage connection and make sure the approve
 type Single = {listing: OwnerListing; body: RemovalRequest; pauseOnly?: boolean};
 type Bulk = {listings: OwnerListing[]; body: BulkWithdrawalRequest};
 type Confirmation = Single | Bulk;
-type Failure = {message: string; retry: boolean; checkout?: boolean; recovery?: boolean};
+type Failure = {message: string; retry: boolean; uncertain?: boolean; checkout?: boolean; recovery?: boolean};
 type Outcome = {listing: OwnerListing; code?: string};
 
 function explainFailure(status?: number, code?: string, message?: string): Failure {
@@ -67,7 +67,7 @@ function explainFailure(status?: number, code?: string, message?: string): Failu
     case 429:
       return {message: 'Too many requests. Wait a moment, then try again.', retry: true};
     default:
-      return {message: 'We could not confirm this change. Try the same request again.', retry: true};
+      return {message: 'We could not confirm this change. Try again or refresh your listings.', retry: true, uncertain: true};
   }
 }
 
@@ -107,7 +107,9 @@ function Effects({action, listings}: {action: RemovalAction; listings: OwnerList
 interface Props {
   active: boolean;
   onChange?: () => void;
+  onOpenConfirmation?: () => void;
   onRecovery?: (section: 'listing' | 'storage') => void;
+  recoveryPrerequisite?: string;
   compact?: boolean;
   refresh?: number;
 }
@@ -118,13 +120,14 @@ export default function SellerListingRemoval(props: Props) {
   return principal ? <OwnerListings key={JSON.stringify([principal, generation])} {...props} /> : null;
 }
 
-function OwnerListings({active, onChange, onRecovery, compact, refresh = 0}: Props) {
+function OwnerListings({active: enabled, onChange, onOpenConfirmation, onRecovery, recoveryPrerequisite, compact, refresh = 0}: Props) {
   const [sameSession] = useState(sessionLifecycle);
   const [rows, setRows] = useState<OwnerListing[] | null>(null);
   const [readError, setReadError] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
   const [revision, setRevision] = useState(0);
   const [confirmation, setConfirmation] = useState<Confirmation | null>(null);
+  const active = enabled || confirmation !== null;
   const [failure, setFailure] = useState<Failure | null>(null);
   const [outcomes, setOutcomes] = useState<Outcome[]>([]);
   const [bulkGateClosed, setBulkGateClosed] = useState(false);
@@ -185,6 +188,7 @@ function OwnerListings({active, onChange, onRecovery, compact, refresh = 0}: Pro
     setFailure(null);
     trigger.current = button;
     setConfirmation(value);
+    onOpenConfirmation?.();
   }
 
   async function submit(pause: boolean) {
@@ -244,9 +248,7 @@ function OwnerListings({active, onChange, onRecovery, compact, refresh = 0}: Pro
       } else if (pause) {
         setNotice('We could not confirm that new sales paused. Try pausing again or contact support.');
       } else {
-        const detail = explainFailure(status, code, message);
-        if ('listing' in confirmation && confirmation.body.action === 'unhide') detail.recovery = true;
-        setFailure(detail);
+        setFailure(explainFailure(status, code, message));
       }
     } finally {
       if (mutation.current === request) mutation.current = null;
@@ -254,7 +256,9 @@ function OwnerListings({active, onChange, onRecovery, compact, refresh = 0}: Pro
     }
   }
 
-  if (!rows && !readError && !confirmation && !notice && !outcomes.length) return null;
+  const showReadError = readError && !compact;
+  const hasOperation = !!confirmation || !!notice || outcomes.length > 0;
+  if ((!enabled || (!rows && !showReadError)) && !hasOperation) return null;
   const eligible = rows?.filter(row => row.allowed_actions.includes('withdraw')) ?? [];
   const retryIds = new Set(outcomes.filter(item => item.code).map(item => item.listing.listing_id));
   const remaining = eligible.filter(row => retryIds.has(row.listing_id));
@@ -280,7 +284,7 @@ function OwnerListings({active, onChange, onRecovery, compact, refresh = 0}: Pro
       <p className="text-sm text-gray-700">{confirmationListings.length === 1 && confirmation && 'listing' in confirmation
         ? confirmation.listing.title : `${confirmationListings.length} listings`}</p>
       {confirmation && 'listings' in confirmation && <ul className="max-h-48 list-disc space-y-1 overflow-y-auto pl-5 text-sm">
-        {confirmationListings.map(row => <li key={row.listing_id}>{row.title} ({row.protected_buyer_count} buyers with protected access)</li>)}
+        {confirmationListings.map(row => <li key={row.listing_id}>{row.title} ({row.protected_buyer_count} {row.protected_buyer_count === 1 ? 'buyer' : 'buyers'} with protected access)</li>)}
       </ul>}
       {!pauseOnly && <Effects action={action} listings={confirmationListings} />}
       {failure && <p role="alert" className="text-sm text-red-800">{failure.message}</p>}
@@ -289,6 +293,7 @@ function OwnerListings({active, onChange, onRecovery, compact, refresh = 0}: Pro
         <div className="space-y-2">
           <button type="button" className={secondaryButtonClass} disabled={busy || refreshing} onClick={() => void submit(true)}>Pause new sales</button>
           <p className="text-sm text-gray-700">Stop new sales. Page stays viewable by link.</p>
+          <p className="text-sm text-gray-700">Existing buyers keep their purchased access.</p>
         </div>}
       {notice && <p role="status" className="text-sm text-gray-700">{notice}</p>}
       <div className="flex flex-wrap gap-2">
@@ -296,12 +301,12 @@ function OwnerListings({active, onChange, onRecovery, compact, refresh = 0}: Pro
           className={action === 'withdraw' ? dangerButtonClass : primaryButtonClass}>
           {busy ? 'Saving…' : failure ? 'Try again' : action === 'withdraw' ? 'Confirm permanent withdrawal' : `Confirm ${action}`}
         </button>}
-        {failure && !failure.retry && <button type="button" className={secondaryButtonClass} onClick={() => {
+        {failure && (!failure.retry || failure.uncertain) && <button type="button" className={secondaryButtonClass} disabled={busy || refreshing} onClick={() => {
           closeConfirmation();
           refreshListings();
           onChange?.();
         }}>Refresh listings</button>}
-        <button ref={cancel} type="button" className={secondaryButtonClass} disabled={busy || (!!failure?.retry && !failure.checkout)}
+        <button ref={cancel} type="button" className={secondaryButtonClass} disabled={busy || failure?.uncertain}
           onClick={closeConfirmation}>Cancel</button>
       </div>
     </WorkspaceConfirmation>;
@@ -310,6 +315,7 @@ function OwnerListings({active, onChange, onRecovery, compact, refresh = 0}: Pro
   function recovery(includeStorage: boolean) {
     return <div className="space-y-2 text-sm text-gray-700">
       <p>{approvalGuidance}{includeStorage && ` ${storageGuidance}`}</p>
+      {recoveryPrerequisite && <p>{recoveryPrerequisite}</p>}
       {onRecovery && <div className="flex flex-wrap gap-2">
         <button type="button" className={secondaryButtonClass} onClick={() => onRecovery('listing')}>Prepare listing</button>
         {includeStorage && <button type="button" className={secondaryButtonClass} onClick={() => onRecovery('storage')}>Check storage</button>}
@@ -317,11 +323,11 @@ function OwnerListings({active, onChange, onRecovery, compact, refresh = 0}: Pro
     </div>;
   }
 
-  if (compact && rows?.length === 0 && !outcomes.length) return null;
+  if (compact && rows?.length === 0 && !hasOperation) return null;
   return <section aria-label="Listing visibility" className="space-y-4">
     <h2 className="text-lg font-semibold text-gray-900">{compact ? 'Your Workspace listings' : 'Listing visibility'}</h2>
     {!confirmation && notice && <p role="status" className="text-sm text-gray-700">{notice}</p>}
-    {readError && <p role="alert" className="text-sm text-red-800">We could not check listing visibility. Try refreshing.</p>}
+    {showReadError && <p role="alert" className="text-sm text-red-800">We could not check listing visibility. Try refreshing.</p>}
     {refreshing && <p role="status" className="text-sm text-gray-600">Checking your listings…</p>}
     {outcomes.length > 0 && <div className="space-y-2 rounded-lg border border-gray-200 bg-white p-4">
       <h3 className="font-semibold">Withdrawal results</h3>
@@ -342,9 +348,9 @@ function OwnerListings({active, onChange, onRecovery, compact, refresh = 0}: Pro
       {!bulkGateClosed && <button type="button" className={secondaryButtonClass} disabled={busy || !!confirmation}
         onClick={() => {setOutcomes([]); refreshListings();}}>Close results</button>}
     </div>}
-    {(readError || !outcomes.length && rows) && <button type="button" className={secondaryButtonClass}
+    {(showReadError || !outcomes.length && rows) && <button type="button" className={secondaryButtonClass}
       disabled={refreshing || !!confirmation} onClick={refreshListings}>Refresh listing visibility</button>}
-    {bulkTargets.length > 0 && bulkTargets.length <= 500 && (!retryIds.size || reconfirmed) &&
+    {bulkTargets.length >= (retryIds.size ? 1 : 2) && bulkTargets.length <= 500 && (!retryIds.size || reconfirmed) &&
       <button type="button" className={dangerSecondaryButtonClass} disabled={refreshing || !!confirmation}
         onClick={event => showBulk(event.currentTarget)}>{retryIds.size ? 'Withdraw remaining listings' : 'Withdraw all listings'}</button>}
     {bulkTargets.length > 500 && <p className="text-sm text-gray-700">You can withdraw up to 500 listings at once. Withdraw listings individually to reduce the total.</p>}

@@ -136,7 +136,9 @@ async function readOwnerListingPage(signal: AbortSignal, limit: number, cursor?:
 
 export async function hasOwnerListings(signal: AbortSignal) {
   const page = await readOwnerListingPage(signal, 1);
-  return !!page?.items?.length;
+  if (!page) return false;
+  if (!Array.isArray(page.items)) throw new Error('Listings could not be confirmed');
+  return page.items.length > 0;
 }
 
 export async function readOwnerListings(signal: AbortSignal): Promise<OwnerListing[] | null> {

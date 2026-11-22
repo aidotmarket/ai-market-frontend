@@ -4,29 +4,27 @@ import ListingDocumentsEditor from '@/components/listing/ListingDocumentsEditor'
 import {useEffect,useState} from 'react';
 import {readPublicationPage,type PublicationPage} from '@/api/sellerListingPublication';
 import SellerAtAGlance from '@/components/listings/SellerAtAGlance';
-import SellerListingRemoval from './SellerListingRemoval';
 import SellerListingVisibility from './SellerListingVisibility';
 import SellerPreviewConsent from './SellerPreviewConsent';
 import {formatPublishedDate} from '@/lib/format';
-export default function SellerPublications({active,enabled,onRecovery}:{active:boolean;enabled:boolean;onRecovery?: (section: 'listing' | 'storage') => void}) {
+export default function SellerPublications({active,enabled,refresh=0,onRefreshOwnerListings}:{active:boolean;enabled:boolean;refresh?:number;onRefreshOwnerListings?:()=>void}) {
   const [page,setPage]=useState(0);
   const [openDocuments,setOpenDocuments]=useState<Record<string,boolean>>({});
   const [openSummaries,setOpenSummaries]=useState<Record<string,boolean>>({});
   const [result,setResult]=useState<PublicationPage|null>(null);
   const [error,setError]=useState('');
   const [retry,setRetry]=useState(0);
-  const [ownerRefresh,setOwnerRefresh]=useState(0);
   useEffect(()=>{
     if (!active || !enabled) return;
     const request=new AbortController();setResult(null);setError('');
     readPublicationPage(page,request.signal).then(value=>{if (!request.signal.aborted) setResult(value);}).catch(()=>{
       if (!request.signal.aborted) setError('Your listings could not be loaded. Try refreshing.');
     });return ()=>request.abort();
-  },[active,enabled,page,retry]);
+  },[active,enabled,page,retry,refresh]);
   return <section aria-label="Your Workspace listings" className="space-y-5">
     <div className="flex flex-wrap items-center justify-between gap-3"><div><h2 className="text-xl font-semibold text-gray-900">Your Workspace listings</h2>
       <p className="mt-2 text-sm text-gray-600">See what you have published from your storage. Each listing keeps its approved description and file selection.</p></div>
-      <button type="button" onClick={()=>{setRetry(value=>value+1);setOwnerRefresh(value=>value+1);}} disabled={!active || !enabled} className="rounded-lg border border-gray-300 bg-white px-4 py-2 text-sm disabled:opacity-50">Refresh listings</button></div>
+      <button type="button" onClick={()=>{setRetry(value=>value+1);onRefreshOwnerListings?.();}} disabled={!active || !enabled} className="rounded-lg border border-gray-300 bg-white px-4 py-2 text-sm disabled:opacity-50">Refresh listings</button></div>
     {!enabled ? <p className="text-sm text-gray-600">Saved listings are not enabled in this workspace yet. Open Your listings to manage your listings. <Link href="/dashboard/listings" className="underline">Your listings</Link></p>:error ? <p role="alert" className="text-sm text-red-800">{error}</p>:!result ? <p role="status" className="text-sm text-gray-600">Loading your listings…</p>:<>
       {result.items.length===0 && <p className="rounded-xl border border-gray-200 bg-white p-6 text-sm text-gray-600">No Workspace listings on this page. Your saved draft stays in Describe and price until you approve and publish it.</p>}
       <ul className="space-y-4">{result.items.map(item=><li key={item.id} className="rounded-xl border border-gray-200 bg-white p-5">
@@ -36,10 +34,9 @@ export default function SellerPublications({active,enabled,onRecovery}:{active:b
         {item.listing_id && <details className="mt-4" onToggle={event=>{const open=event.currentTarget.open;setOpenSummaries(current=>({...current,[item.id]:open}));}}><summary className="cursor-pointer text-sm font-medium text-indigo-700">Review At a glance</summary>{openSummaries[item.id] && <SellerAtAGlance listingId={item.listing_id} slug={item.slug} active={active} revision={retry} />}</details>}
         <details className="mt-4" onToggle={event=>{const open=event.currentTarget.open;setOpenDocuments(current=>({...current,[item.id]:current[item.id] || open}));}}><summary className="cursor-pointer text-sm font-medium text-indigo-700">Manage documents</summary>{openDocuments[item.id] && <ListingDocumentsEditor listingId={item.listing_id}/>}</details>
         <SellerPreviewConsent listingId={item.listing_id} />
-        <SellerListingVisibility publication={item} active={active} onChange={updated=>{setResult(current=>current?{...current,items:current.items.map(value=>value.id===updated.id?updated:value)}:current);setOwnerRefresh(value=>value+1);}} />
+        <SellerListingVisibility publication={item} active={active} onChange={updated=>{setResult(current=>current?{...current,items:current.items.map(value=>value.id===updated.id?updated:value)}:current);onRefreshOwnerListings?.();}} />
       </li>)}</ul>
       <div className="flex gap-4"><button type="button" disabled={page===0} onClick={()=>setPage(value=>value-1)} className="text-sm text-indigo-700 disabled:opacity-50">Previous page</button><button type="button" disabled={!result.has_more || page>=500} onClick={()=>setPage(value=>value+1)} className="text-sm text-indigo-700 disabled:opacity-50">Next page</button></div>
     </>}
-    <SellerListingRemoval active={active} refresh={ownerRefresh} onRecovery={onRecovery} onChange={() => setRetry(value => value + 1)} />
   </section>;
 }

@@ -270,6 +270,18 @@ describe('SSR listing harness User-Agent forwarding', () => {
       expect(options.headers).toEqual(harness ? { 'User-Agent': 'ai-market-e2e-harness' } : undefined);
     }
   });
+
+  it('uses the same successful full read for the page and metadata without reading the listing again', async () => {
+    const listing = makeListing({title: 'Forwarded listing title'});
+    vi.mocked(headers).mockResolvedValue(new Headers({
+      'x-aim-listing-data': encodeURIComponent(JSON.stringify(listing)),
+    }));
+    fetchListingVersions.mockResolvedValue([]);
+    const params = Promise.resolve({slug: listing.slug});
+    expect((await generateMetadata({params})).title).toBe(listing.title);
+    expect(renderToStaticMarkup(await ListingDetailPage({params}))).toContain(listing.title);
+    expect(fetchPublicListing).not.toHaveBeenCalled();
+  });
 });
 
 async function renderPage(listing: ListingDetail | null, versions: ListingVersion[] = []): Promise<string> {

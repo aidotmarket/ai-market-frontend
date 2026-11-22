@@ -204,6 +204,8 @@ export default function SellerWorkspacePage() {
   const [copiedField, setCopiedField] = useState<string | null>(null);
   const [disconnectConfirmation, setDisconnectConfirmation] = useState<string | null>(null);
   const [retryKey, setRetryKey] = useState(0);
+  const [ownerListingsRefresh, setOwnerListingsRefresh] = useState(0);
+  const [publicationsRefresh, setPublicationsRefresh] = useState(0);
 
   const clearSensitive = useCallback(() => {
     authorizationRef.current = null;
@@ -542,26 +544,29 @@ export default function SellerWorkspacePage() {
     setView(nextView);
   };
 
-  const independentListings = <SellerListingRemoval active compact onRecovery={section => {
-    navigate(section);
-    setRetryKey(value => value + 1);
-  }} />;
+  const workspaceReady = pageState === 'ready';
+  const showOwnerListings = !workspaceReady || view === 'manage';
+  const recoveryPrerequisite = {
+    loading: 'Wait for Workspace to finish loading to prepare a listing or check storage.',
+    gated: 'Complete seller setup in Settings to prepare a listing or check storage.',
+    unavailable: 'Preparing listings and checking storage here requires Workspace setup to be available.',
+    error: 'Retry loading Workspace before preparing a listing or checking storage.',
+    ready: undefined,
+  }[pageState];
 
+  let workspaceFallback: React.ReactNode;
   if (pageState === 'loading') {
-    return (
+    workspaceFallback = (
       <div className="space-y-6">
         <h1 className="text-2xl font-bold text-gray-900">Seller Workspace</h1>
         <div className="flex items-center gap-3 py-12 text-sm text-gray-600" role="status">
           <div className="h-8 w-8 animate-spin rounded-full border-4 border-[#3F51B5] border-t-transparent" />
           <span>Checking AWS connection availability...</span>
         </div>
-        {independentListings}
       </div>
     );
-  }
-
-  if (pageState === 'unavailable') {
-    return (
+  } else if (pageState === 'unavailable') {
+    workspaceFallback = (
       <div className="space-y-6">
         <h1 className="text-2xl font-bold text-gray-900">Seller Workspace</h1>
         <StorageProviders capabilities={null} busy={null} onConnectAWS={handleCreate} />
@@ -572,13 +577,10 @@ export default function SellerWorkspacePage() {
           </p>
           <Link href="/dashboard/listings" className="mt-5 inline-flex rounded-lg bg-[#3F51B5] px-4 py-2 text-sm font-medium text-white">Manage listings</Link>
         </div>
-        {independentListings}
       </div>
     );
-  }
-
-  if (pageState === 'gated') {
-    return (
+  } else if (pageState === 'gated') {
+    workspaceFallback = (
       <div className="space-y-6">
         <h1 className="text-2xl font-bold text-gray-900">Seller Workspace</h1>
         <div className="rounded-xl border border-gray-200 bg-white p-8 shadow-sm">
@@ -588,13 +590,10 @@ export default function SellerWorkspacePage() {
           </p>
           <Link href="/dashboard/settings" className="mt-5 inline-flex rounded-lg bg-[#3F51B5] px-4 py-2 text-sm font-medium text-white">Go to seller settings</Link>
         </div>
-        {independentListings}
       </div>
     );
-  }
-
-  if (pageState === 'error') {
-    return (
+  } else if (pageState === 'error') {
+    workspaceFallback = (
       <div className="space-y-6">
         <h1 className="text-2xl font-bold text-gray-900">Seller Workspace</h1>
         <div className="rounded-xl border border-red-200 bg-red-50 p-8">
@@ -608,12 +607,13 @@ export default function SellerWorkspacePage() {
             Try again
           </button>
         </div>
-        {independentListings}
       </div>
     );
   }
 
   return (
+    <div className="space-y-6">
+    {workspaceFallback ?? (
     <SellerListingDraftProvider
       enabled={capabilities?.master.enabled===true&&capabilities?.drafts?.enabled===true&&capabilities.drafts.status==='available'}
       sampleCapability={capabilities?.master.enabled===true&&capabilities?.drafts?.enabled===true&&capabilities.drafts.status==='available'&&capabilities?.samples?.enabled===true&&capabilities.samples.status==='available'}>
@@ -625,7 +625,9 @@ export default function SellerWorkspacePage() {
       <WorkspacePanel active={view === 'license'}><SavedLicenseStep /></WorkspacePanel>
       <WorkspacePanel active={view === 'publish'}><GuidedPublishStep active={view === 'publish'} /></WorkspacePanel>
       <WorkspacePanel active={view === 'listing'}>{capabilities?.master.enabled && capabilities?.drafts?.enabled && capabilities.drafts.status === 'available' ? <SavedListingEditor active={view === 'listing'} assistant={capabilities.listing_assistant?.enabled && capabilities.listing_assistant.status === 'available' ? listingAssistant : undefined} /> : <SellerListingEditor active={view === 'listing'} assistant={capabilities?.master.enabled && capabilities.listing_assistant?.enabled && capabilities.listing_assistant.status === 'available' ? listingAssistant : undefined} />}</WorkspacePanel>
-      <WorkspacePanel active={view === 'manage'}><SellerPublications active={view === 'manage'} onRecovery={navigate} enabled={capabilities?.master.enabled === true && capabilities.review?.enabled === true && capabilities.review.status === 'available'} /></WorkspacePanel>
+      <WorkspacePanel active={view === 'manage'}><SellerPublications active={view === 'manage'} refresh={publicationsRefresh}
+        onRefreshOwnerListings={() => setOwnerListingsRefresh(value => value + 1)}
+        enabled={capabilities?.master.enabled === true && capabilities.review?.enabled === true && capabilities.review.status === 'available'} /></WorkspacePanel>
       <WorkspacePanel active={view === 'review'}><SellerReview active={view === 'review'} enabled={capabilities?.master.enabled === true && capabilities.review?.enabled === true && capabilities.review.status === 'available'} /></WorkspacePanel>
       <WorkspacePanel active={view === 'storage'}>
       {busyAction!==null&&<p role="status" className="text-sm text-gray-600">A storage connection action is in progress. Other connection actions will be available when it finishes.</p>}
@@ -947,5 +949,11 @@ export default function SellerWorkspacePage() {
     </div>
     </GuidedListingFlow>
     </SellerListingDraftProvider>
+    )}
+      <SellerListingRemoval active={showOwnerListings} compact={!workspaceReady}
+        refresh={ownerListingsRefresh} onChange={() => setPublicationsRefresh(value => value + 1)}
+        onOpenConfirmation={() => setView('manage')}
+        onRecovery={workspaceReady ? navigate : undefined} recoveryPrerequisite={recoveryPrerequisite} />
+    </div>
   );
 }

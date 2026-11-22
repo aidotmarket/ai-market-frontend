@@ -3,6 +3,9 @@
 import { act, cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { SellerWorkspaceApiError } from '@/api/sellerWorkspace';
+import { nativeClient } from '@/api/connector-seller-settings';
+import { useAuthStore } from '@/store/auth';
+import type { User } from '@/types';
 import SellerWorkspacePage from './page';
 
 const sellerWorkspaceApi = vi.hoisted(() => ({
@@ -87,6 +90,86 @@ const authorization = {
   expires_in_seconds: 60,
   purpose: 'aws_external_id' as const,
 };
+
+describe('Workspace owner listings', () => {
+  const listing = {
+    listing_id: 'listing-one', title: 'First owner listing', slug: 'first-owner-listing',
+    status: 'published', seller_status: 'published', staff_restriction: 'none', is_listed: true,
+    allowed_actions: ['withdraw'], protected_buyer_count: 1,
+  };
+
+  beforeEach(() => {
+    sellerWorkspaceApi.getSellerWorkspaceCapabilities.mockReset();
+    sellerWorkspaceApi.listSellerWorkspaceConnections.mockReset().mockResolvedValue([]);
+    useAuthStore.setState({user: {id: 'first-owner'} as User, token: 'first-token'});
+  });
+
+  afterEach(() => {
+    cleanup();
+    vi.restoreAllMocks();
+    useAuthStore.setState({user: null, token: null});
+  });
+
+  it.each(['same owner', 'account switch'])('preserves a lost withdraw response only for the %s', async scenario => {
+    let ready!: (caps: typeof enabledCapabilities) => void;
+    let loseResponse!: (error: Error) => void;
+    sellerWorkspaceApi.getSellerWorkspaceCapabilities.mockReturnValueOnce(new Promise(resolve => { ready = resolve; }));
+    vi.spyOn(nativeClient, 'get').mockResolvedValueOnce({data: {items: [listing], cursor: null}})
+      .mockResolvedValue({data: {items: [], cursor: null}});
+    const write = vi.spyOn(nativeClient, 'post')
+      .mockReturnValueOnce(new Promise((_resolve, reject) => { loseResponse = reject; }))
+      .mockResolvedValueOnce({data: {...listing, seller_status: 'withdrawn', action_id: 'stored-withdrawal'}});
+    render(<SellerWorkspacePage />);
+    fireEvent.click(await screen.findByRole('button', {name: 'Withdraw listing permanently'}));
+    fireEvent.click(screen.getByRole('button', {name: 'Confirm permanent withdrawal'}));
+    expect(write).toHaveBeenCalledOnce();
+    await act(async () => ready(enabledCapabilities));
+    expect(screen.queryByText('Checking AWS connection availability...')).toBeNull();
+    expect(screen.getAllByRole('alertdialog')).toHaveLength(1);
+    const signal = write.mock.calls[0][2]?.signal;
+    expect(signal?.aborted).toBe(false);
+    if (scenario === 'account switch') {
+      await act(async () => useAuthStore.setState({user: {id: 'second-owner'} as User, token: 'second-token'}));
+      await act(async () => loseResponse(new Error('Response lost')));
+      expect(signal?.aborted).toBe(true);
+      expect(screen.queryByRole('alertdialog')).toBeNull();
+      expect(screen.queryByText(listing.title)).toBeNull();
+      expect(write).toHaveBeenCalledOnce();
+    } else {
+      await act(async () => loseResponse(new Error('Response lost')));
+      const dialog = within(screen.getByRole('alertdialog'));
+      expect(dialog.getByRole('button', {name: 'Refresh listings'})).toBeTruthy();
+      fireEvent.click(dialog.getByRole('button', {name: 'Try again'}));
+      await screen.findByText('Listing permanently withdrawn.');
+      expect(write.mock.calls[1].slice(0, 2)).toEqual(write.mock.calls[0].slice(0, 2));
+      expect(write.mock.calls[1][1]).toMatchObject({request_id: expect.any(String), confirm_permanent: true});
+    }
+  });
+
+  it.each(['loading', 'unavailable', 'error'])('keeps an unverified owner read out of the %s fallback', async state => {
+    if (state === 'loading') sellerWorkspaceApi.getSellerWorkspaceCapabilities.mockReturnValueOnce(new Promise(() => {}));
+    if (state === 'unavailable') sellerWorkspaceApi.getSellerWorkspaceCapabilities.mockRejectedValueOnce(new SellerWorkspaceApiError('unavailable'));
+    if (state === 'error') sellerWorkspaceApi.getSellerWorkspaceCapabilities.mockRejectedValueOnce(new Error('offline'));
+    const read = vi.spyOn(nativeClient, 'get').mockRejectedValueOnce(new Error('Network error'));
+    render(<SellerWorkspacePage />);
+    await act(async () => {});
+    expect(read).toHaveBeenCalledOnce();
+    expect(screen.queryByRole('region', {name: 'Listing visibility'})).toBeNull();
+    expect(screen.queryByText('Your Workspace listings')).toBeNull();
+  });
+
+  it.each([
+    ['active_seller_required', /Complete seller setup in Settings/],
+    ['unavailable', /requires Workspace setup to be available/],
+  ] as const)('explains the recovery prerequisite when Workspace reports %s', async (code, prerequisite) => {
+    sellerWorkspaceApi.getSellerWorkspaceCapabilities.mockRejectedValueOnce(new SellerWorkspaceApiError(code));
+    vi.spyOn(nativeClient, 'get').mockResolvedValueOnce({data: {items: [{...listing, seller_status: 'hidden'}], cursor: null}});
+    render(<SellerWorkspacePage />);
+    expect(await screen.findByText(prerequisite)).toBeTruthy();
+    expect(screen.queryByRole('button', {name: 'Prepare listing'})).toBeNull();
+    expect(screen.queryByRole('button', {name: 'Check storage'})).toBeNull();
+  });
+});
 
 describe('SellerWorkspacePage safety boundaries', () => {
   beforeEach(() => {

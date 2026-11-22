@@ -1,4 +1,5 @@
 import {ListingUnavailable, listingHttpStatus} from './listing-http-status';
+import {requestPublicListing, syntheticListingFetchOptions} from './public-listing-read';
 import {verifyCurrentListing} from './publicPresentation';
 import type { ListingPublicListResponse } from '@/types';
 import type {ListingDocument} from '@/types/listingDocuments';
@@ -123,26 +124,11 @@ export async function fetchFeaturedFeed(params?: {
   return res.json();
 }
 
-const SYNTHETIC_HARNESS_USER_AGENT_TOKEN = 'ai-market-e2e-harness';
-
-function syntheticListingFetchOptions(userAgent?: string | null) {
-  // Match the backend's should_count_view; never forward the full incoming UA.
-  if (!userAgent?.toLowerCase().includes(SYNTHETIC_HARNESS_USER_AGENT_TOKEN)) return undefined;
-  return {
-    headers: { 'User-Agent': SYNTHETIC_HARNESS_USER_AGENT_TOKEN },
-    cache: 'no-store' as const,
-  };
-}
-
 export async function fetchPublicListing(slug: string, userAgent?: string | null) {
-  const res = await fetch(`${API_URL}/api/v1/public/listings/${encodeURIComponent(slug)}`, {
-    cache: 'no-store',
-    ...syntheticListingFetchOptions(userAgent),
-  });
+  const res = await requestPublicListing(API_URL, slug, userAgent);
   if (!res.ok) {
     const status = listingHttpStatus(res.status);
-    if (status === 404 || status === 410 || status === 451) throw new ListingUnavailable(status);
-    return null;
+    throw new ListingUnavailable(status === 204 ? 503 : status);
   }
   const listing = await res.json();
   await verifyCurrentListing(listing);

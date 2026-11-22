@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse, type NextFetchEvent } from 'next/server';
-import { listingHttpStatus } from './lib/listing-http-status';
+import { LISTING_DATA_HEADER, listingHttpStatus, listingIsWithdrawn, listingUnavailableResponse } from './lib/listing-http-status';
+import { requestPublicListing } from './lib/public-listing-read';
 import { detectAiBot } from './lib/aiBot';
 import { isSupportPrivatePath, supportAccountCsp, SUPPORT_ACCOUNT_PATH } from './lib/support-private-policy';
 
@@ -53,28 +54,39 @@ export async function middleware(request: NextRequest, event: NextFetchEvent) {
   const apiBase = process.env.API_URL || process.env.NEXT_PUBLIC_API_URL;
   const listingRef = /^\/listings\/([^/]+)\/?$/.exec(path)?.[1];
   let listingStatus = 204;
-  let withdrawn = false;
-  if (listingRef && apiBase) {
-    const version = request.nextUrl.searchParams.get('version');
-    const query = version === null ? '' : `?${new URLSearchParams({version})}`;
+  let listingData: string | undefined;
+  if (listingRef) {
+    if (!apiBase) return listingUnavailableResponse(503);
     try {
-      const response = await fetch(`${apiBase}/api/v1/public/listing-disposition/${listingRef}${query}`, {
-        cache: 'no-store', redirect: 'error', signal: AbortSignal.timeout(5000),
-      });
-      listingStatus = listingHttpStatus(response.status);
-      if (listingStatus === 410) {
-        const body = await response.json().catch(() => null);
-        withdrawn = body?.detail === 'Listing has been withdrawn';
+      if (process.env.LISTING_DISPOSITION_MIDDLEWARE_ENABLED !== 'false') {
+        const version = request.nextUrl.searchParams.get('version');
+        const query = version === null ? '' : `?${new URLSearchParams({version})}`;
+        const response = await fetch(`${apiBase}/api/v1/public/listing-disposition/${listingRef}${query}`, {
+          cache: 'no-store', redirect: 'error', signal: AbortSignal.timeout(5000),
+        });
+        listingStatus = listingHttpStatus(response.status);
+        if (listingStatus === 410 || listingStatus === 451 || listingStatus === 503) {
+          return listingUnavailableResponse(listingStatus, listingStatus === 410 && await listingIsWithdrawn(response));
+        }
+      }
+      if (listingStatus === 204) {
+        // Resolve the page's full read before App Router can commit response headers.
+        // Pass only a successful snapshot to the renderer so metadata uses the same read.
+        const response = await requestPublicListing(apiBase, decodeURIComponent(listingRef), userAgent, AbortSignal.timeout(5000));
+        if (response.status === 200) {
+          const payload: unknown = await response.json();
+          if (!payload || typeof payload !== 'object' || Array.isArray(payload)) return listingUnavailableResponse(503);
+          listingData = encodeURIComponent(JSON.stringify(payload));
+        } else {
+          const status = listingHttpStatus(response.status);
+          if (status !== 404) {
+            return listingUnavailableResponse(status === 204 ? 503 : status, status === 410 && await listingIsWithdrawn(response));
+          }
+          listingStatus = 404;
+        }
       }
     } catch {
-      listingStatus = 503;
-    }
-    if (listingStatus === 410 || listingStatus === 451 || listingStatus === 503) {
-      const message = listingStatus === 410 ? (withdrawn ? 'This listing was withdrawn.' : 'This listing was removed.') :
-        listingStatus === 451 ? 'This listing is unavailable for legal reasons.' : 'This listing is temporarily unavailable.';
-      return new NextResponse(`<!doctype html><html lang="en"><meta charset="utf-8"><title>Listing unavailable</title><h1>${message}</h1></html>`, {
-        status: listingStatus, headers: {'Cache-Control': 'no-store', 'Content-Type': 'text/html; charset=utf-8'},
-      });
+      return listingUnavailableResponse(503);
     }
   }
   const aiCrawlBeaconKey = process.env.AI_CRAWL_BEACON_KEY;
@@ -100,10 +112,13 @@ export async function middleware(request: NextRequest, event: NextFetchEvent) {
     }
   }
 
-  if (listingRef && (listingStatus === 404 || request.headers.has('x-aim-listing-missing'))) {
+  if (listingRef) {
+    // The framework's unmatched-route response sets 404 before rendering,
+    // including for Flight requests whose page-level notFound() can stream a 200.
+    if (listingStatus === 404) return NextResponse.rewrite(new URL('/_listing-not-found', request.url));
     const headers = new Headers(request.headers);
-    if (listingStatus === 404) headers.set('x-aim-listing-missing', '1');
-    else headers.delete('x-aim-listing-missing');
+    headers.delete(LISTING_DATA_HEADER);
+    if (listingData !== undefined) headers.set(LISTING_DATA_HEADER, listingData);
     return NextResponse.next({request: {headers}});
   }
   return NextResponse.next();

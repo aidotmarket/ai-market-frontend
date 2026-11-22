@@ -754,6 +754,33 @@ describe('DashboardLayout canonical capability ownership', () => {
     expect(screen.queryByRole('link', {name: 'Listings'})).toBeNull();
   });
 
+  it.each([
+    {response: {status: 503, data: {detail: {code: 'READ_UNCERTAIN'}}}},
+    new Error('Network error'),
+  ])('retries an uncertain owner read and admits in place', async error => {
+    navigation.pathname = '/dashboard/seller-workspace';
+    capabilitiesApi.getCapabilities.mockResolvedValueOnce(capability('not_requested'));
+    ownerListings.hasOwnerListings.mockRejectedValueOnce(error).mockResolvedValueOnce(true);
+    render(<DashboardLayout><div>owner listing controls</div></DashboardLayout>);
+    expect((await screen.findByRole('alert')).textContent).toContain('Unable to check your Workspace listings');
+    expect(screen.queryByText('owner listing controls')).toBeNull();
+    expect(navigation.push).not.toHaveBeenCalled();
+    fireEvent.click(screen.getByRole('button', {name: 'Retry'}));
+    await screen.findByText('owner listing controls');
+    expect(ownerListings.hasOwnerListings).toHaveBeenCalledTimes(2);
+    expect(navigation.push).not.toHaveBeenCalled();
+  });
+
+  it('denies Workspace after a confirmed empty owner admission result', async () => {
+    navigation.pathname = '/dashboard/seller-workspace';
+    capabilitiesApi.getCapabilities.mockResolvedValueOnce(capability('not_requested'));
+    ownerListings.hasOwnerListings.mockResolvedValueOnce(false);
+    render(<DashboardLayout><div>owner listing controls</div></DashboardLayout>);
+    await waitFor(() => expect(navigation.push).toHaveBeenCalledWith('/dashboard'));
+    expect(screen.queryByRole('alert')).toBeNull();
+    expect(screen.queryByText('owner listing controls')).toBeNull();
+  });
+
   it.each(['unknown', undefined, null, { status: 'not_requested' }])(
     'fails closed for malformed or unknown canonical status %s', async (status) => {
       capabilitiesApi.getCapabilities.mockResolvedValueOnce({ seller: { persisted_status: status, effective_status: status } });

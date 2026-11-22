@@ -21,7 +21,7 @@ const listing: OwnerListing = {
 };
 const hidden: OwnerListing = {...listing, status: 'hidden', seller_status: 'hidden', is_listed: false, allowed_actions: ['unhide', 'withdraw']};
 const withdrawn: OwnerListing = {...listing, status: 'withdrawn', seller_status: 'withdrawn', is_listed: false, allowed_actions: []};
-const second = {...listing, listing_id: '7a1de954-b727-43c0-8597-974e278a9494', title: 'Weather data'};
+const second = {...listing, listing_id: '7a1de954-b727-43c0-8597-974e278a9494', title: 'Weather data', protected_buyer_count: 1};
 const receipt = (row: OwnerListing) => ({
   listing_id: row.listing_id, status: row.status, seller_status: row.seller_status,
   staff_restriction: row.staff_restriction, is_listed: row.is_listed, action_id: 'a58fb6ee-f6bf-4e9d-9982-eec855400856',
@@ -64,7 +64,7 @@ it('keeps Pause and Resume available through the legacy publication when removal
   vi.spyOn(nativeClient, 'get').mockRejectedValue(httpError(404, {code: 'NOT_FOUND', message: 'Not found.'}));
   vi.spyOn(api, 'get').mockResolvedValue({data: {items: [legacy], page: 0, has_more: false}});
   const post = vi.spyOn(api, 'post').mockResolvedValue({data: {...legacy, status: 'unlisted', is_listed: false}});
-  render(<SellerPublications active enabled />);
+  render(<><SellerPublications active enabled /><SellerListingRemoval active /></>);
   await screen.findByRole('button', {name: 'Pause new sales'});
   expect(screen.queryByRole('region', {name: 'Listing visibility'})).toBeNull();
   click('Pause new sales');
@@ -76,7 +76,7 @@ it('keeps Pause and Resume available through the legacy publication when removal
 it('reads and offers owner actions with publication unavailable', async () => {
   vi.spyOn(nativeClient, 'get').mockResolvedValue(page(listing));
   const get = vi.spyOn(api, 'get');
-  render(<SellerPublications active enabled={false} />);
+  render(<><SellerPublications active enabled={false} /><SellerListingRemoval active /></>);
   await screen.findByRole('button', {name: 'Hide listing'});
   expect(get).not.toHaveBeenCalled();
 });
@@ -122,14 +122,15 @@ it('shows the exact checkout refusal and offers the legacy Pause action', async 
 });
 
 it.each([
-  [409, {code: 'STATE_STALE'}, 'This listing changed.', false],
-  [409, {code: 'WITHDRAWN_TERMINAL'}, 'This listing was permanently withdrawn.', false],
-  [409, {code: 'DELIVERY_MATERIAL_DESTROYED'}, 'This listing needs a new approval', true],
-  [409, {code: 'APPROVAL_REQUIRED'}, 'This listing needs a new approval', true],
-  [409, {code: 'STAFF_RESTRICTED'}, 'The marketplace has restricted this listing.', true],
-  [409, {code: 'DELIVERY_UNAVAILABLE'}, 'We could not restore this listing.', true],
-  [422, [{msg: 'internal validation detail'}], 'We could not accept this confirmation.', false],
-] as const)('gives plain recovery for HTTP %i %j', async (status, detail, message, restoring) => {
+  [409, {code: 'STATE_STALE'}, 'This listing changed.', false, false],
+  [409, {code: 'WITHDRAWN_TERMINAL'}, 'This listing was permanently withdrawn.', false, false],
+  [409, {code: 'DELIVERY_MATERIAL_DESTROYED'}, 'This listing needs a new approval', true, true],
+  [409, {code: 'APPROVAL_REQUIRED'}, 'This listing needs a new approval', true, true],
+  [409, {code: 'STAFF_RESTRICTED'}, 'The marketplace has restricted this listing.', true, false],
+  [409, {code: 'FEE_COLLECTION_REQUIRED'}, 'Pay your outstanding seller balance', true, false],
+  [409, {code: 'DELIVERY_UNAVAILABLE'}, 'We could not restore this listing.', true, true],
+  [422, [{msg: 'internal validation detail'}], 'We could not accept this confirmation.', false, false],
+] as const)('gives plain recovery for HTTP %i %j', async (status, detail, message, restoring, recovery) => {
   vi.spyOn(nativeClient, 'get').mockResolvedValue(page(restoring ? hidden : listing));
   vi.spyOn(nativeClient, 'post').mockRejectedValue(httpError(status, detail));
   const onRecovery = vi.fn();
@@ -139,10 +140,13 @@ it.each([
   expect((await screen.findByRole('alert')).textContent).toContain(message);
   expect(screen.queryByText('internal validation detail')).toBeNull();
   expect(screen.getByRole('button', {name: 'Refresh listings'})).toBeTruthy();
-  if (restoring) {
+  if (recovery) {
     click('Prepare listing');
     click('Check storage');
     expect(onRecovery.mock.calls).toEqual([['listing'], ['storage']]);
+  } else {
+    expect(screen.queryByRole('button', {name: 'Prepare listing'})).toBeNull();
+    expect(screen.queryByRole('button', {name: 'Check storage'})).toBeNull();
   }
 });
 
@@ -171,9 +175,23 @@ it('retries an uncertain write with the exact same action and request ID', async
   await open('Hide listing');
   click('Confirm hide');
   await screen.findByRole('alert');
+  expect((screen.getByRole('button', {name: 'Cancel'}) as HTMLButtonElement).disabled).toBe(true);
+  expect(screen.getByRole('button', {name: 'Refresh listings'})).toBeTruthy();
   click('Try again');
   await screen.findByText('Listing hidden.');
   expect(post.mock.calls[1].slice(0, 2)).toEqual(post.mock.calls[0].slice(0, 2));
+});
+
+it('can cancel after a definite 429 unhide refusal without showing relisting guidance', async () => {
+  vi.spyOn(nativeClient, 'get').mockResolvedValue(page(hidden));
+  vi.spyOn(nativeClient, 'post').mockRejectedValueOnce(httpError(429, {}));
+  render(<SellerListingRemoval active onRecovery={vi.fn()} />);
+  await open('Unhide listing');
+  click('Confirm unhide');
+  await screen.findByText(/Too many requests/);
+  expect(screen.queryByRole('button', {name: 'Prepare listing'})).toBeNull();
+  click('Cancel');
+  expect(screen.queryByRole('alertdialog')).toBeNull();
 });
 
 it('discards a pending write and all first-owner UI after the principal changes', async () => {
@@ -203,7 +221,7 @@ it('names partial bulk results and reconfirms only the previous failures after r
   render(<SellerListingRemoval active />);
   const dialog = await open('Withdraw all listings');
   expect(dialog.getByText('Retail data (2 buyers with protected access)')).toBeTruthy();
-  expect(dialog.getByText('Weather data (2 buyers with protected access)')).toBeTruthy();
+  expect(dialog.getByText('Weather data (1 buyer with protected access)')).toBeTruthy();
   expect(get).toHaveBeenNthCalledWith(2, '/seller-workspace/listings', expect.objectContaining({params: {limit: 50, cursor: listing.listing_id}}));
   click('Confirm permanent withdrawal');
   await screen.findByText('Permanently withdrawn.');
