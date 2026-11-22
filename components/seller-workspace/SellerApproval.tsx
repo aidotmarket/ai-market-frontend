@@ -7,9 +7,17 @@ import {nativeAuthError} from '@/api/connector-seller-settings';
 import {useListingFlow} from './GuidedListingFlow';
 import SellerPublication from './SellerPublication';
 import { approveListingReview, CONFIRMATION_KEYS, LICENSE_CONFIRMATION_KEYS, type ConfirmationKey, type ListingReview } from '@/api/sellerListingReview';
+import { listingPolishEnabled, reviewError, reviewNetworkFailure, type ReviewError } from '@/api/listingPolish';
+import { listingPolish as polishCopy } from '@/lib/i18n/listing-polish';
+import { useOptionalSellerListingDraft } from './SellerListingDraftStore';
+import { PolishApprovalRecovery } from './PolishApprovalRecovery';
+import { pendingPolishAccept, usePendingPolishAccept } from './pendingPolishAccept';
 
 export default function SellerApproval({review, active, rendered,disabled=false}: {review: ListingReview; active: boolean; rendered: boolean;disabled?:boolean}) {
   const flow=useListingFlow();
+  const draftStore = useOptionalSellerListingDraft();
+  const polishEnabled = listingPolishEnabled();
+  const pendingAccept = usePendingPolishAccept(polishEnabled);
   const sessionIdentity=useAuthStore(authSessionIdentity);
   const [confirmed, setConfirmed] = useState(false);
   const [receipt, setReceipt] = useState(review.approval ?? null);
@@ -17,6 +25,8 @@ export default function SellerApproval({review, active, rendered,disabled=false}
   const [error, setError] = useState<string | null>(null);
   const [authError,setAuthError] = useState<unknown>(null);
   const [stale, setStale] = useState(false);
+  const [polishRefusal, setPolishRefusal] = useState<ReviewError | null>(null);
+  const [polishNotice, setPolishNotice] = useState('');
   const identity = useRef<string | null>(null);
   const controller = useRef<AbortController | null>(null);
   useEffect(() => {
@@ -27,21 +37,27 @@ export default function SellerApproval({review, active, rendered,disabled=false}
   }, [active]);
   const sampleDecision=review.sample_decision??'none';
   const confirmationKeys:ConfirmationKey[]=[...(review.license_selection?LICENSE_CONFIRMATION_KEYS:CONFIRMATION_KEYS),...(sampleDecision==='member_files'?['sample_files_confirmed' as const]:[])];
-  const ready = active && rendered && !disabled && confirmed && !stale && !receipt;
+  const ready = active && rendered && !disabled && confirmed && !stale && !receipt && !polishRefusal && !flow?.polishBusy && !pendingAccept;
   async function approve(event: React.FormEvent) {
     event.preventDefault();
-    if (!ready || controller.current) return;
+    if (!ready || controller.current || flow?.polishLock?.current || polishEnabled && pendingPolishAccept()) return;
     const request = new AbortController();controller.current = request;
     identity.current ??= crypto.randomUUID();
-    setBusy(true);setError(null);setAuthError(null);
+    setBusy(true);setError(null);setAuthError(null);setPolishNotice('');
+    if (polishEnabled) flow?.setPolishNotice?.('');
     try {
       const saved = await approveListingReview(review, identity.current, request.signal);
       if (!request.signal.aborted) {setReceipt(saved);flow?.approved(saved);}
     } catch (failure) {
       if (request.signal.aborted) return;
+      if (polishEnabled && !reviewNetworkFailure(failure)) identity.current = null;
       setAuthError(nativeAuthError(failure));
       if (axios.isAxiosError(failure) && failure.response?.status === 409) {
-        setStale(true);setError('The listing or files changed. Refresh the saved review and confirm it again.');
+        const refusal = reviewError(failure);
+        if (polishEnabled && (refusal.code === 'REVIEW_CONFLICT' || refusal.stale_removals?.length || refusal.removals_required ||
+            refusal.message?.startsWith(polishCopy.evidenceChanged) || refusal.code === 'FACT_CONFIRMATION_REQUIRED')) {
+          setPolishRefusal(refusal);
+        } else { setStale(true);setError('The listing or files changed. Refresh the saved review and confirm it again.'); }
       } else setError('Approval saving could not be confirmed. Your choices are still here. Try approving again.');
     } finally {
       if (controller.current === request) {controller.current = null;setBusy(false);}
@@ -49,8 +65,8 @@ export default function SellerApproval({review, active, rendered,disabled=false}
   }
   const sampleFiles=typeof review.sample_status==='object'?review.sample_status.files:[];
   if (receipt) return <><p role="status" className="rounded-xl border border-green-200 bg-green-50 p-5 text-sm text-green-900">Review approved and saved.</p>{!flow&&<SellerPublication key={receipt.id} approval={receipt} active={active} rendered={rendered} sampleCount={sampleFiles.length} />}</>;
-  return <form onSubmit={approve} className="space-y-5 rounded-xl border border-gray-200 bg-white p-5 sm:p-6">
-    <fieldset disabled={busy || !active || stale || disabled} className="space-y-4"><legend className="text-lg font-semibold text-gray-900">Confirm this review</legend>
+  return <><form onSubmit={approve} className="space-y-5 rounded-xl border border-gray-200 bg-white p-5 sm:p-6">
+    <fieldset disabled={busy || !active || stale || disabled || !!polishRefusal} className="space-y-4"><legend className="text-lg font-semibold text-gray-900">Confirm this review</legend>
       {review.source_page&&<p className="text-sm font-medium text-gray-900">Files included ({review.source_page.total_count.toLocaleString('en')})</p>}
       <p className="text-sm leading-6 text-gray-600">By ticking the box below you confirm that:</p>
       <ul aria-label="Review confirmations" className="ml-5 list-disc space-y-1 text-sm leading-6 text-gray-700">
@@ -60,9 +76,23 @@ export default function SellerApproval({review, active, rendered,disabled=false}
       <label className="flex items-start gap-3 text-sm font-medium leading-6 text-gray-900"><input type="checkbox" checked={confirmed} onChange={event => setConfirmed(event.target.checked)} className="mt-1 h-4 w-4 shrink-0 accent-indigo-700" /><span>I confirm all of the above.</span></label>
     </fieldset>
     <button type="submit" disabled={!ready || busy} className="rounded-lg bg-indigo-700 px-4 py-2.5 text-sm font-semibold text-white hover:bg-indigo-800 disabled:cursor-not-allowed disabled:opacity-50">{busy ? 'Saving approval…' : 'Approve this review'}</button>
-    {!ready&&!busy&&<p role="status" className="text-sm text-amber-900">{stale?'Refresh the saved review before approving.':disabled?'Finish saving your file or sample choice in Choose your files, then refresh this review.':!rendered?'Wait for the saved listing and file preview to finish loading.':'Tick the confirmation box to continue.'}</p>}
+    {!ready&&!busy&&!polishRefusal&&<p role="status" className="text-sm text-amber-900">{stale?'Refresh the saved review before approving.':disabled?'Finish saving your file or sample choice in Choose your files, then refresh this review.':!rendered?'Wait for the saved listing and file preview to finish loading.':'Tick the confirmation box to continue.'}</p>}
     <p className="text-sm text-gray-600">Approval saves this exact review. It does not publish your listing.</p>
     {!!authError&&<NativeSellerAuth error={authError} />}
     {error && !authError && <p role="alert" className="text-sm text-red-800">{error}</p>}
-  </form>;
+    {polishNotice && <p role="status" className="text-sm text-green-900">{polishNotice}</p>}
+  </form>
+    {polishRefusal && <PolishApprovalRecovery refusal={polishRefusal} active={active && !pendingAccept}
+      dirty={flow?.listingDirty} displayedVersion={review.draft_version}
+      draft={draftStore?.draft?.draft_id === review.draft_id ? draftStore?.draft ?? null : null}
+      reload={draftStore?.reload} lock={flow?.polishLock} onBusy={flow?.setPolishBusy}
+      onEdit={flow ? () => flow.navigate('listing') : undefined}
+      onResolved={() => { setPolishRefusal(null); setPolishNotice(polishCopy.confirmed); }}
+      onDiscarded={saved => {
+        const notice = saved?.draft_id === review.draft_id && saved?.review_run_id ? polishCopy.removedWithEarlierReview : polishCopy.removed;
+        setPolishRefusal(null);setStale(true);
+        if (flow) { flow.setPolishNotice(notice); flow.refreshReview(); }
+        else setPolishNotice(notice);
+      }} />}
+  </>;
 }
