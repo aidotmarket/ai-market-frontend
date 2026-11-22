@@ -26,7 +26,7 @@ type Flow = {samplesBlocked:boolean; stepsForContent:(content:ListingDraftConten
   reviewError: string; reviewLoading: boolean; publication: PublicationState|null; publicationError: string;
   refreshReview: ()=>void; refreshPublication: ()=>void; sourceSaved: (response:SourceSaveResponse)=>void; sourceSaveRefused:(message:string)=>void;
   approved: (approval:ApprovalReceipt)=>void; published: (state:PublicationState)=>void;
-  startAnotherListing:()=>void; startingListing:boolean; navigate: (view:WorkspaceView)=>void; licensesEnabled: boolean;
+  startAnotherListing:(recovery?:'published-refusal')=>void; startingListing:boolean; navigate: (view:WorkspaceView)=>void; licensesEnabled: boolean;
   polishLock: React.RefObject<boolean>; polishBusy: boolean; setPolishBusy:(busy:boolean)=>void;
   polishNotice: string; setPolishNotice:(notice:string)=>void; listingDirty:boolean;
   polishPublication: PublicationPolish | null; openPublicationPolish:(publication:PublicationReceipt)=>void;
@@ -49,9 +49,12 @@ export function GuidedListingFlow({connections, capabilities, view, navigate, ch
   const [draftEditNotice, setDraftEditNotice] = useState('');
   const startAttempt=useRef<string|null>(null);
   const startPending=useRef(false);
-  const startAnotherListing=async()=>{
+  const startAnotherListing=async(recovery?:'published-refusal')=>{
     if(startPending.current||polishLock.current||polishEnabled&&pendingPolishAccept())return;
-    if(polishEnabled&&listingDirty){setDraftEditNotice(polishCopy.dirtyStartAnother);return;}
+    if(polishEnabled&&listingDirty){
+      if(recovery!=='published-refusal'){setDraftEditNotice(polishCopy.dirtyStartAnother);return;}
+      if(!window.confirm(polishCopy.discardPublishedEdits))return;
+    }
     startPending.current=true;setStartingListing(true);setStartError('');
     startAttempt.current??=crypto.randomUUID();
     try {
@@ -169,7 +172,7 @@ export function GuidedListingFlow({connections, capabilities, view, navigate, ch
     setSourceLoaded(false);
     try{await reload();}finally{setReadRetry(n=>n+1);}
   };
-  const flow:Flow={startAnotherListing:()=>void startAnotherListing(),startingListing,samplesBlocked:selectionSavePending||selectionSaveFailed,stepsForContent:content=>listingSteps({connections,source,draft:{version:draft?.version??0,updated_at:draft?.updated_at??'',content:{...draft?.content,...content}},categories,licensesEnabled,review:null,publication:null,pending,licenceDirty}),sourceCurrentDraftId,sourceLoaded:sourceLoaded&&sourceMatchesDraft&&pointerMatchesDraft,sourceDraftChanged,reloadSource,sourceError:readError,fileRevision,setFilesDirty:dirty=>{setFilesDirty(dirty);if(dirty)setFileRevision(n=>n+1);},setListingDirty,setLicenceDirty,source,categories,steps,review,reviewError,reviewLoading,publication,publicationError,licensesEnabled,navigate,
+  const flow:Flow={startAnotherListing:recovery=>void startAnotherListing(recovery),startingListing,samplesBlocked:selectionSavePending||selectionSaveFailed,stepsForContent:content=>listingSteps({connections,source,draft:{version:draft?.version??0,updated_at:draft?.updated_at??'',content:{...draft?.content,...content}},categories,licensesEnabled,review:null,publication:null,pending,licenceDirty}),sourceCurrentDraftId,sourceLoaded:sourceLoaded&&sourceMatchesDraft&&pointerMatchesDraft,sourceDraftChanged,reloadSource,sourceError:readError,fileRevision,setFilesDirty:dirty=>{setFilesDirty(dirty);if(dirty)setFileRevision(n=>n+1);},setListingDirty,setLicenceDirty,source,categories,steps,review,reviewError,reviewLoading,publication,publicationError,licensesEnabled,navigate,
     refreshReview:()=>setReviewRetry(n=>n+1),refreshPublication:()=>setPublicationRetry(n=>n+1),sourceSaveRefused:setSourceSaveNotice,sourceSaved:value=>{setSourceSaveNotice('');setSource(value.source);setSourceCurrentDraftId(value.current_draft_id);setFilesDirty(false);},
     approved:a=>setReview(r=>r?{...r,approval:a}:r),published:setPublication,
     polishLock,polishBusy,setPolishBusy,polishPublication,polishNotice,setPolishNotice,listingDirty,
@@ -217,7 +220,7 @@ export function StepNext({from}:{from:WorkspaceView}) {
 
 export function StartAnotherListingAction(){
   const flow=useListingFlow();
-  return flow?<button type="button" disabled={flow.startingListing} onClick={flow.startAnotherListing} className="underline">Start another listing</button>:null;
+  return flow?<button type="button" disabled={flow.startingListing} onClick={()=>flow.startAnotherListing('published-refusal')} className="underline">Start another listing</button>:null;
 }
 
 export function DescribeListingAction(){

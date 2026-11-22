@@ -23,7 +23,7 @@ export type ReloadListingDraft = (
 type OwnerSnapshot={recoveryRevision:number;loaded:boolean;draft:SavedListingDraft|null;selectionSaveCount:number;selectionSaveFailed:boolean};
 const createOwner=(session:number)=>({
   session,recoveryRevision:0,
-  draft:null as SavedListingDraft|null,draftGeneration:0,version:0,saveRevision:0,saveAttempt:0,reloadGeneration:0,loaded:false,queue:Promise.resolve() as Promise<unknown>,
+  draft:null as SavedListingDraft|null,draftGeneration:0,version:0,saveRevision:0,saveAttempt:0,reconciliationRevision:0,loaded:false,queue:Promise.resolve() as Promise<unknown>,
   pending:null as {serialized:string;version:number;id:string}|null,
   selectionSaveCount:0,selectionSaveFailed:false,listeners:new Set<(snapshot:OwnerSnapshot)=>void>(),
 });
@@ -51,9 +51,11 @@ const persist=(owner:Owner,binding:DraftBinding,build:(base:ListingDraftContent)
       owner.pending={serialized,version,id:crypto.randomUUID()};
     // Count every attempt, including identical retries that reuse pending.
     owner.saveAttempt+=1;
-    // Imported drafts must use the explicit target; equal versions do not identify a draft.
+    // Imports and publication successors require an explicit target and native session proof.
+    const draft=owner.draft;
+    const targetId=draft?.authority_version_id||draft?.base_listing_version_id?draft.draft_id:null;
     let result:SavedListingDraft;
-    try{result=await saveListingDraft(content,owner.pending.version,owner.pending.id,...(owner.draft?.authority_version_id&&owner.draft.draft_id?[owner.draft.draft_id]:[]));}
+    try{result=await saveListingDraft(content,owner.pending.version,owner.pending.id,...(targetId?[targetId]:[]));}
     catch(failure){
       if(authorityCode(failure)==='DRAFT_SUPERSEDED'){
         assertAuthSessionOwner(owner.session);
@@ -73,10 +75,10 @@ const persist=(owner:Owner,binding:DraftBinding,build:(base:ListingDraftContent)
   owner.queue=operation;
   return operation;
 };
-const readCheckpoint=(owner:Owner)=>({saveAttempt:owner.saveAttempt,saveRevision:owner.saveRevision,reloadGeneration:owner.reloadGeneration});
+const readCheckpoint=(owner:Owner)=>({saveAttempt:owner.saveAttempt,saveRevision:owner.saveRevision,reconciliationRevision:owner.reconciliationRevision});
 const reconcileRead=(owner:Owner,value:SavedListingDraft|null,checkpoint:ReturnType<typeof readCheckpoint>)=>{
-  // An explicit reload can publish an Accept result without a normal Save.
-  if(owner.reloadGeneration!==checkpoint.reloadGeneration)return false;
+  // Polish reconciliation can publish an Accept result without a normal Save.
+  if(owner.reconciliationRevision!==checkpoint.reconciliationRevision)return false;
   // An intervening uncertain/in-flight attempt retains its content, expected
   // version and request identity even if this GET reports equal/newer data.
   if(owner.saveAttempt!==checkpoint.saveAttempt&&owner.pending)return false;
@@ -127,7 +129,7 @@ function OwnedSellerListingDraftProvider({owner,enabled,sampleCapability,childre
       const accepted=reconcileRead(owner,value,checkpoint);
       if(accepted&&owner.selectionSaveCount===0)owner.selectionSaveFailed=false;
       publish(owner);setLoaded(owner.loaded);
-    }).catch(()=>{if(!controller.signal.aborted&&isAuthSessionOwner(owner.session)&&owner.reloadGeneration===checkpoint.reloadGeneration){setError(true);setLoaded(false);}});
+    }).catch(()=>{if(!controller.signal.aborted&&isAuthSessionOwner(owner.session)&&owner.reconciliationRevision===checkpoint.reconciliationRevision){setError(true);setLoaded(false);}});
     return()=>controller.abort();
   },[owner,enabled,retryKey,requested]);
   const reload=useCallback<ReloadListingDraft>(async(signal,onLoaded,verify)=>{
@@ -136,12 +138,12 @@ function OwnedSellerListingDraftProvider({owner,enabled,sampleCapability,childre
     const checkpoint=readCheckpoint(owner);
     let value:SavedListingDraft|null;
     try{value=await readListingDraft(signal);}
-    catch(failure){if(!signal?.aborted&&isAuthSessionOwner(owner.session)&&owner.reloadGeneration===checkpoint.reloadGeneration)setError(true);throw failure;}
+    catch(failure){if(!signal?.aborted&&isAuthSessionOwner(owner.session)&&owner.reconciliationRevision===checkpoint.reconciliationRevision)setError(true);throw failure;}
     assertAuthSessionOwner(owner.session);
     if(signal?.aborted)return value;
     verify?.(value);
     if(!reconcileRead(owner,value,checkpoint))return owner.draft;
-    owner.reloadGeneration+=1;
+    if(verify)owner.reconciliationRevision+=1;
     onLoaded?.();publish(owner);setLoaded(true);setError(false);
     return value;
   },[owner]);

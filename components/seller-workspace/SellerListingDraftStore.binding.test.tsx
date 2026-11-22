@@ -53,3 +53,18 @@ it.each(['content','source'] as const)('binds stale imported %s writes at the se
  expect(rows.get(b)).toEqual(draftB);expect(store.draft).toEqual(draftB);
  await expect(oldSave(draftA.content,1)).rejects.toThrow('changed');
 });
+
+it('merges only the description from the editor snapshot when saving a successor',async()=>{
+ const successor={...draftB,base_listing_version_id:a,content:{...draftB.content,description_source_version:5,price:'25'}};
+ const content={...successor.content,description:'Edited description'};
+ const put=vi.spyOn(nativeClient,'put').mockResolvedValue({data:{draft:{...successor,version:2,content}}});
+ vi.spyOn(api,'get').mockResolvedValue({data:{draft:successor}});
+ render(<SellerListingDraftProvider enabled sampleCapability={false}><Capture/></SellerListingDraftProvider>);
+ await waitFor(()=>expect(store.loaded).toBe(true));
+ // The editor snapshot need not contain the latest values for read-only fields.
+ const {description}=content;
+ await act(async()=>{await store.saveListingFields({...EMPTY_LISTING_DRAFT,title:'Stale title',description},1,true);});
+ expect(put).toHaveBeenCalledExactlyOnceWith('/seller-workspace/listing-draft',{
+   draft_id:successor.draft_id,content,expected_version:1,request_id:expect.any(String),csrf:nativeSession().csrf,
+ },expect.any(Object));
+});

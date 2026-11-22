@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 import {useState} from 'react';
-import {act,cleanup,fireEvent,render,screen,waitFor} from '@testing-library/react';
+import {act,cleanup,fireEvent,render,screen,waitFor,within} from '@testing-library/react';
 import {afterEach,beforeEach,expect,it,vi} from 'vitest';
 import {GuidedListingFlow,useListingFlow} from './GuidedListingFlow';
 import {DraftChangedError,SellerListingDraftProvider,resetSellerListingDraftOwnerForTests,useSellerListingDraft} from './SellerListingDraftStore';
@@ -11,6 +11,7 @@ import {api} from '@/api/client';
 import {nativeClient} from '@/api/connector-seller-settings';
 import {useAuthStore} from '@/store/auth';
 import {sessionCsrf} from '@/lib/session-csrf';
+import {listingPolish as polishCopy} from '@/lib/i18n/listing-polish';
 import {EMPTY_LISTING_DRAFT} from '@/api/sellerListingDraft';
 import {createStandardSelection} from '@/api/listingLicenses';
 import {categoryRows,guidedCapabilities,guidedConnection} from '@/tests/guidedListingFixture';
@@ -29,12 +30,13 @@ let store:ReturnType<typeof useSellerListingDraft>;
 function Probe(){
  store=useSellerListingDraft();const flow=useListingFlow();const [local,setLocal]=useState('');
  return <><input aria-label="Local file choice" value={local} onChange={e=>{setLocal(e.target.value);flow?.setFilesDirty(true);flow?.setLicenceDirty(true);}}/>
- <button onClick={flow?.startAnotherListing}>Start from panel</button>
+ <button onClick={()=>flow?.startAnotherListing()}>Start from panel</button>
  <output aria-label="Draft identity">{store.draft?.draft_id}</output><output aria-label="Licence saved">{store.draft?.content.license_selection?'yes':'no'}</output>
  <output aria-label="Source saved">{flow?.source?'yes':'no'}</output><output aria-label="Review saved">{flow?.review?'yes':'no'}</output></>;
 }
 function Harness({panels=false}:{panels?:boolean}){return <SellerListingDraftProvider enabled sampleCapability><GuidedListingFlow capabilities={guidedCapabilities} connections={[guidedConnection]} view="listing" navigate={navigate}><Probe/><SavedListingEditor active/>{panels&&<><SavedLicenseStep/><SavedWorkspaceData enabled connections={[guidedConnection]}/></>}</GuidedListingFlow></SellerListingDraftProvider>;}
 beforeEach(()=>{
+ vi.stubEnv('NEXT_PUBLIC_LISTING_REVIEW_ENABLED','');
  resetSellerListingDraftOwnerForTests();useAuthStore.setState({token:'native-test-session'});
  vi.spyOn(api,'get').mockResolvedValue({data:{draft:oldDraft}});
  mocks.source.mockImplementation(async(id?:string)=>id===newDraft.draft_id?null:{version:1,connection_current:true,content:{connection_id:guidedConnection.id,connection_version:1,objects:[sampleObject],version_mode:'current'}});
@@ -42,7 +44,7 @@ beforeEach(()=>{
  mocks.review.mockResolvedValue({draft_version:4,source_version:1,missing_fields:[],approval:{id:'approval'}});
  mocks.publication.mockResolvedValue({publication_available:true,publication:{slug:'old-listing',approval_id:'approval'}});
 });
-afterEach(()=>{cleanup();vi.restoreAllMocks();vi.clearAllMocks();resetSellerListingDraftOwnerForTests();});
+afterEach(()=>{cleanup();vi.restoreAllMocks();vi.clearAllMocks();vi.unstubAllEnvs();resetSellerListingDraftOwnerForTests();});
 it('posts one native new-draft request, adopts its content and resets panels before navigating to data',async()=>{
  let finish!:(value:unknown)=>void;
  const post=vi.spyOn(nativeClient,'post').mockImplementation(()=>new Promise(resolve=>{finish=resolve;}));
@@ -66,20 +68,35 @@ it('posts one native new-draft request, adopts its content and resets panels bef
  expect(post).toHaveBeenCalledOnce();
  expect(screen.getByLabelText('Title').matches(':disabled')).toBe(false);
 });
-it('offers Start another listing on a published-draft save and clears dirty file and licence state',async()=>{
+it.each([false,true])('recovers from a published-draft save refusal with Polish enabled=%s',async enabled=>{
+ vi.stubEnv('NEXT_PUBLIC_LISTING_REVIEW_ENABLED',enabled?'true':'');
  const message='This listing is already published. Use Start another listing to begin a new one.';
  vi.spyOn(api,'put').mockRejectedValue({isAxiosError:true,response:{status:409,data:{detail:{code:'DRAFT_ALREADY_PUBLISHED',message}}}});
- vi.spyOn(nativeClient,'post').mockResolvedValue({data:{draft:newDraft}});
+ const post=vi.spyOn(nativeClient,'post').mockResolvedValue({data:{draft:newDraft}});
+ const confirm=vi.spyOn(window,'confirm').mockReturnValueOnce(false).mockReturnValueOnce(true);
  render(<Harness/>);await screen.findByRole('link',{name:'Published: view your listing'});
  fireEvent.change(screen.getByLabelText('Local file choice'),{target:{value:'old file'}});
- fireEvent.change(screen.getByLabelText('Title'),{target:{value:'Changed'}});
+ fireEvent.change(screen.getByLabelText('Description'),{target:{value:'Keep my description unless I confirm'}});
  fireEvent.click(screen.getByRole('button',{name:'Save private draft'}));
  const alert=await screen.findByRole('alert');expect(alert.textContent).toBe('This draft has already been published. Start another listing to choose new files. Start another listing');
  expect(alert.textContent).not.toContain('[object Object]');expect(alert.textContent).not.toContain('{');
  expect(screen.queryByRole('button',{name:/refresh/i})).toBeNull();
- fireEvent.click(screen.getByRole('button',{name:'Start another listing'}));
+ const start=within(alert).getByRole('button',{name:'Start another listing'});
+ if(enabled){
+   fireEvent.click(start);
+   expect(confirm).toHaveBeenCalledExactlyOnceWith(polishCopy.discardPublishedEdits);
+   expect(post).not.toHaveBeenCalled();
+   expect(navigate).not.toHaveBeenCalled();
+   expect(screen.getByLabelText('Description')).toHaveProperty('value','Keep my description unless I confirm');
+   expect(screen.getByLabelText('Local file choice')).toHaveProperty('value','old file');
+ }
+ fireEvent.click(start);
  await waitFor(()=>expect(navigate).toHaveBeenCalledWith('data'));
+ expect(confirm).toHaveBeenCalledTimes(enabled?2:0);
+ expect(post).toHaveBeenCalledOnce();
+ expect(screen.getByLabelText('Draft identity').textContent).toBe(newDraft.draft_id);
  expect((screen.getByLabelText('Local file choice') as HTMLInputElement).value).toBe('');
+ expect(screen.getByLabelText('Description')).toHaveProperty('value','');
  expect((screen.getByLabelText('Title') as HTMLInputElement).value).toBe('');
 });
 

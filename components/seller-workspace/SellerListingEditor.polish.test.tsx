@@ -2,7 +2,7 @@
 import { act, cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { afterEach, beforeEach, expect, it, vi } from "vitest";
 import { useRef, useState } from "react";
-import { AxiosError } from "axios";
+import { AxiosError, type AxiosAdapter } from "axios";
 import SellerListingEditor from "./SellerListingEditor";
 import SellerApproval from "./SellerApproval";
 import SavedListingEditor from "./SavedListingEditor";
@@ -11,7 +11,11 @@ import { GuidedListingFlow } from "./GuidedListingFlow";
 import { resetSellerListingDraftOwnerForTests, SellerListingDraftProvider, useSellerListingDraft } from "./SellerListingDraftStore";
 import { WorkspacePanel } from "./WorkspacePanel";
 import { advanceAuthSessionOwner } from "@/lib/auth-session-owner";
+import { sessionCsrf } from "@/lib/session-csrf";
+import { useAuthStore } from "@/store/auth";
 import type { WorkspaceView } from "./WorkspaceOverview";
+import { api } from "@/api/client";
+import { nativeClient } from "@/api/connector-seller-settings";
 import { EMPTY_LISTING_DRAFT, type SavedListingDraft } from "@/api/sellerListingDraft";
 import type { ListingReview } from "@/api/sellerListingReview";
 import { listingPolishEnabled, type CompletedReview } from "@/api/listingPolish";
@@ -19,7 +23,7 @@ import { listingPolish as copy } from "@/lib/i18n/listing-polish";
 
 const mocks = vi.hoisted(() => ({
   post: vi.fn(), read: vi.fn(), reload: vi.fn(), save: vi.fn(), approve: vi.fn(), approvalDraft: null as SavedListingDraft | null,
-  readDraft: vi.fn(), saveDraft: vi.fn(), readPublications: vi.fn(),
+  readDraft: vi.fn(), readPublications: vi.fn(),
 }));
 vi.mock("@/api/session-mutation", async importOriginal => ({
   ...await importOriginal<typeof import("@/api/session-mutation")>(), postSessionMutation: mocks.post,
@@ -33,7 +37,7 @@ vi.mock("@/api/sellerListingReview", async importOriginal => ({
 }));
 vi.mock("@/api/sellerListingDraft", async importOriginal => ({
   ...await importOriginal<typeof import("@/api/sellerListingDraft")>(),
-  readListingDraft: mocks.readDraft, saveListingDraft: mocks.saveDraft,
+  readListingDraft: mocks.readDraft,
 }));
 vi.mock("@/api/sellerListingPublication", async importOriginal => ({
   ...await importOriginal<typeof import("@/api/sellerListingPublication")>(), readPublicationPage: mocks.readPublications,
@@ -59,6 +63,8 @@ const accepted = {
 const reviewed: SavedListingDraft = {
   ...draft, version: 8, review_run_id: "run", content: { ...draft.content, description: applied },
 };
+const apiAdapter = api.defaults.adapter;
+const nativeAdapter = nativeClient.defaults.adapter;
 const completed: CompletedReview = {
   run_id: "run", status: "completed", basis: "unpublished_draft",
   revision_ref: { draft_id: "draft", draft_version: 7 },
@@ -127,7 +133,11 @@ beforeEach(() => {
 });
 afterEach(() => {
   cleanup();
+  api.defaults.adapter = apiAdapter;
+  nativeClient.defaults.adapter = nativeAdapter;
+  useAuthStore.setState({ token: null });
   advanceAuthSessionOwner(false);
+  vi.restoreAllMocks();
   vi.useRealTimers();
   vi.unstubAllEnvs();
 });
@@ -416,7 +426,7 @@ it.each([401, 403])("keeps the editor locked and explains HTTP %s after a succes
 
 it.each(["success", "recorded refusal"] as const)("fences a delayed mount read after a remounted Accept reaches %s", async outcome => {
   mocks.readDraft.mockResolvedValue(draft);
-  mocks.saveDraft.mockResolvedValue({ ...reviewed, version: 9 });
+  const put = vi.spyOn(api, "put").mockResolvedValue({ data: { draft: { ...reviewed, version: 9 } } });
   const commit = pending<typeof accepted>();
   const lateMountRead = pending<SavedListingDraft>();
   mocks.post.mockResolvedValueOnce(sse("review_completed", completed))
@@ -456,9 +466,60 @@ it.each(["success", "recorded refusal"] as const)("fences a delayed mount read a
   expect(description()).toMatchObject({ readOnly: false, value: applied });
   fireEvent.change(description(), { target: { value: "Save from the verified version." } });
   fireEvent.click(button("Save private draft"));
-  await waitFor(() => expect(mocks.saveDraft).toHaveBeenCalledWith(expect.objectContaining({
-    description: "Save from the verified version.",
-  }), 8, expect.any(String)));
+  await waitFor(() => expect(put).toHaveBeenCalledWith("/seller-workspace/listing-draft", expect.objectContaining({
+    content: expect.objectContaining({ description: "Save from the verified version." }), expected_version: 8,
+  })));
+});
+
+it("applies both in-order ordinary reloads with Polish off and saves from the newer version", async () => {
+  vi.stubEnv("NEXT_PUBLIC_LISTING_REVIEW_ENABLED", "");
+  let store!: ReturnType<typeof useSellerListingDraft>;
+  function ObserveDraft() { store = useSellerListingDraft(); return null; }
+  mocks.readDraft.mockResolvedValueOnce({ ...draft, version: 6 });
+  render(<SellerListingDraftProvider enabled sampleCapability={false}><ObserveDraft /><SavedListingEditor active /></SellerListingDraftProvider>);
+  await screen.findByRole("textbox", { name: "Description" });
+  const earlier = pending<SavedListingDraft>(), later = pending<SavedListingDraft>();
+  const next = { ...reviewed, content: { ...reviewed.content, description: "Newer ordinary reload." } };
+  mocks.readDraft.mockReturnValueOnce(earlier.promise).mockReturnValueOnce(later.promise);
+  const first = store.reload(), second = store.reload();
+  await waitFor(() => expect(mocks.readDraft).toHaveBeenCalledTimes(3));
+  await act(async () => { earlier.resolve(draft); expect(await first).toEqual(draft); });
+  expect(store.draft).toEqual(draft);
+  await act(async () => { later.resolve(next); expect(await second).toEqual(next); });
+  expect(store.draft).toEqual(next);
+  expect(description().value).toBe(next.content.description);
+  const put = vi.spyOn(api, "put").mockResolvedValue({ data: { draft: { ...next, version: 9 } } });
+  fireEvent.change(description(), { target: { value: "Edit after both reloads." } });
+  fireEvent.click(button("Save private draft"));
+  await waitFor(() => expect(put).toHaveBeenCalledWith("/seller-workspace/listing-draft", expect.objectContaining({
+    content: expect.objectContaining({ description: "Edit after both reloads." }), expected_version: 8,
+  })));
+  expect(mocks.read).not.toHaveBeenCalled();
+  expect(mocks.post).not.toHaveBeenCalled();
+});
+
+it("keeps a draft read that predates the Accept receipt out of the shared store", async () => {
+  function ObserveDraft() {
+    const { draft } = useSellerListingDraft();
+    return <output aria-label="Stored draft version">{draft?.version}</output>;
+  }
+  const verified = pending<SavedListingDraft>();
+  mocks.readDraft.mockResolvedValueOnce(draft).mockResolvedValueOnce({ ...draft, version: 6 }).mockReturnValueOnce(verified.promise);
+  mocks.post.mockResolvedValueOnce(sse("review_completed", completed)).mockResolvedValueOnce(accepted);
+  render(<SellerListingDraftProvider enabled sampleCapability={false}><ObserveDraft /><SavedListingEditor active /></SellerListingDraftProvider>);
+  fireEvent.click(await screen.findByRole("button", { name: copy.start }));
+  await screen.findByText("Clear sentence.");
+  choose();
+  vi.useFakeTimers();
+  fireEvent.click(button(copy.accept));
+  await settle();
+  expect(screen.getByText(copy.reloading)).toBeTruthy();
+  expect(screen.getByLabelText("Stored draft version").textContent).toBe("7");
+  expect(description().readOnly).toBe(true);
+  await act(async () => vi.advanceTimersByTimeAsync(1000));
+  await act(async () => verified.resolve(reviewed));
+  expect(screen.getByLabelText("Stored draft version").textContent).toBe("8");
+  expect(description()).toMatchObject({ readOnly: false, value: applied });
 });
 
 function ReadCurrentDraft() {
@@ -522,6 +583,21 @@ it.each([http(429, "Try later"), http(400, undefined), http(403, undefined), htt
     expect(mocks.reload).not.toHaveBeenCalled();
   },
 );
+
+it.each([404, 401, 422, 409])("offers a reload while unrecorded Accept replays keep returning HTTP %s", async status => {
+  await start(); choose();
+  vi.useFakeTimers();
+  mocks.post.mockRejectedValueOnce(new AxiosError("Timed out", "ECONNABORTED"))
+    .mockRejectedValue(http(status, { code: "UNAVAILABLE" }));
+  fireEvent.click(button(copy.accept));
+  await act(async () => vi.advanceTimersByTimeAsync(3500));
+  expect(screen.getByText(/You can reload this page to check your saved draft/)).toBeTruthy();
+  const [, first, ...retries] = mocks.post.mock.calls;
+  expect(retries).toHaveLength(3);
+  expect(retries.map(call => call.slice(0, 2))).toEqual(retries.map(() => first.slice(0, 2)));
+  expect(description()).toMatchObject({ readOnly: true, value: original });
+  expect(mocks.reload).not.toHaveBeenCalled();
+});
 
 it("retires a pending Accept when the auth lifecycle changes", async () => {
   await start(); choose();
@@ -593,13 +669,19 @@ it("shows the full saved and restored fields with the pinned discard response", 
   mocks.post.mockResolvedValueOnce({
     draft_version: 10, preview_receipt: "receipt", draft_moved: false,
     lost_edits: [{ field: "description", current, restored: original }],
-  });
+  }).mockResolvedValueOnce({ draft_id: "draft", draft_version: 11, discarded: true, draft_moved: false });
+  mocks.reload.mockResolvedValueOnce({ ...draft, version: 11 });
   fireEvent.click(button(copy.remove));
   const preview = await screen.findByRole("alertdialog");
   expect(within(preview).getByText(copy.unavailableComparison)).toBeTruthy();
   expect(preview.querySelectorAll("ins, del")).toHaveLength(0);
   expect(preview.textContent).toContain(current);
   expect(preview.textContent).toContain(original);
+  fireEvent.click(within(preview).getByRole("button", { name: copy.confirmRemove }));
+  await screen.findByText(copy.removed);
+  expect(mocks.post.mock.calls[1][1]).toEqual({
+    request_id: expect.any(String), expected_draft_version: 10, preview_receipt: "receipt",
+  });
 });
 
 it("explains when discarding restores the earlier review binding", async () => {
@@ -729,13 +811,20 @@ it("opens publication B without exposing the text or discard action for bound dr
 });
 
 it("keeps a successor's description across sections and saves only that field", async () => {
-  const successor = { ...reviewed, draft_id: "successor-b", base_listing_version_id: "revision-b", review_run_id: "run-b", version: 1,
+  const successor = { ...reviewed, draft_id: "00000000-0000-4000-8000-000000000002", base_listing_version_id: "revision-b", review_run_id: "run-b", version: 1,
     content: { ...reviewed.content, title: "Publication B", brief: "Original brief", price: "50.00", tags: "saved tags",
       category: "saved-category", license: "Saved license", description_source_version: 5 } };
   const edited = "A distinctive sentence to save on successor B.";
+  const token = "first-party-seller-session";
+  useAuthStore.setState({ token });
+  const put = vi.fn<AxiosAdapter>(async config => {
+    const { content, expected_version } = JSON.parse(config.data);
+    return { data: { draft: { ...successor, version: expected_version + 1, content } },
+      status: 200, statusText: "OK", headers: {}, config };
+  });
+  api.defaults.adapter = nativeClient.defaults.adapter = put;
   mocks.readPublications.mockResolvedValue({ items: [published], page: 0, has_more: false });
   mocks.readDraft.mockResolvedValue(null);
-  mocks.saveDraft.mockResolvedValue({ ...successor, version: 2, content: { ...successor.content, description: edited } });
   mocks.post.mockResolvedValueOnce(sse("review_completed", publishedRun)).mockImplementationOnce(async () => {
     mocks.readDraft.mockResolvedValue(successor);
     return { ...accepted, draft_id: successor.draft_id, draft_version: successor.version };
@@ -763,14 +852,29 @@ it("keeps a successor's description across sections and saves only that field", 
   expect(description()).toMatchObject({ readOnly: false, value: edited });
   fireEvent.click(button("Save private draft"));
   fireEvent.click(within(screen.getByRole("alertdialog")).getByRole("button", { name: copy.save }));
-  await waitFor(() => expect(mocks.saveDraft).toHaveBeenCalledWith({ ...successor.content, description: edited },
-    1, expect.any(String)));
-  expect(mocks.saveDraft).toHaveBeenCalledTimes(1);
-  await waitFor(() => expect(screen.queryByRole("button", { name: "Save private draft" })).toBeNull());
+  await within(screen.getByRole("region", { name: "Describe and price" })).findByText(/Draft saved to your account/);
+  const assertPut = (index: number, version: number, description: string) => {
+    const [config] = put.mock.calls[index];
+    expect(config).toMatchObject({ method: "put", url: "/seller-workspace/listing-draft", withCredentials: true });
+    expect(config.headers.get("Authorization")).toBe(`Bearer ${token}`);
+    expect(config.headers.get("X-CSRF-Token")).toBe(sessionCsrf(token));
+    expect(JSON.parse(config.data)).toEqual({ draft_id: successor.draft_id, expected_version: version,
+      request_id: expect.stringMatching(/^[\da-f-]{36}$/i), csrf: sessionCsrf(token),
+      content: { ...successor.content, description },
+    });
+  };
+  expect(put).toHaveBeenCalledTimes(1);
+  assertPut(0, 1, edited);
   fireEvent.click(button(copy.returnToDraft));
   expect(screen.queryByRole("button", { name: copy.returnToDraft })).toBeNull();
   expect(description().value).toBe(edited);
   expect(screen.getByRole("textbox", { name: "Title" })).toMatchObject({ readOnly: true, value: "Publication B" });
+  const secondEdit = "The next edit in the current draft editor.";
+  fireEvent.change(description(), { target: { value: secondEdit } });
+  fireEvent.click(button("Save private draft"));
+  await within(screen.getByRole("region", { name: "Describe and price" })).findByText(/Draft saved to your account/);
+  expect(put).toHaveBeenCalledTimes(2);
+  assertPut(1, 2, secondEdit);
 });
 
 it("points to the editor after a remount outside it and names the publication on a replay refusal", async () => {
