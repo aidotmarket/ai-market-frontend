@@ -35,7 +35,7 @@ beforeEach(async () => {
 });
 afterEach(() => { cleanup(); vi.unstubAllGlobals(); vi.unstubAllEnvs(); });
 
-const dashboardPrompt = "Please sign in to continue to your dashboard. You'll go straight back to the page you were on.";
+const dashboardPrompt = 'Please sign in to continue to your dashboard.';
 
 it.each(['/dashboard', '/dashboard?tab=overview', '/dashboard/orders?status=open'])(
   'explains why sign-in is needed for %s',
@@ -44,6 +44,7 @@ it.each(['/dashboard', '/dashboard?tab=overview', '/dashboard/orders?status=open
     await act(async () => { render(<LoginForm />); });
 
     expect(screen.getByText(dashboardPrompt)).toBeTruthy();
+    expect(screen.queryByText(/go straight back to the page you were on/i)).toBeNull();
   },
 );
 
