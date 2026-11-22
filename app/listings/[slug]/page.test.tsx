@@ -328,6 +328,28 @@ describe('listing UUID canonical redirect', () => {
   });
 });
 
+it('disables purchase when the first of repeated version values is superseded', async () => {
+  const listing = makeListing();
+  const version = { published_at: '2026-06-01T00:00:00Z', object_count: 1, total_size_bytes: 100 };
+  buyButtonProps.mockClear();
+  fetchPublicListing.mockResolvedValueOnce(listing);
+  fetchListingVersions.mockResolvedValueOnce([
+    { ...version, version_id: 'active', version_label: 'v2', status: 'active' },
+    { ...version, version_id: 'superseded', version_label: 'v1', status: 'superseded' },
+  ]);
+
+  const html = renderToStaticMarkup(await ListingDetailPage({
+    params: Promise.resolve({ slug: listing.slug }),
+    searchParams: Promise.resolve({ version: ['superseded', 'active'] }),
+  }));
+
+  expect(html).toContain('value="superseded" selected=""');
+  expect(buyButtonProps).toHaveBeenCalledExactlyOnceWith(expect.objectContaining({
+    disabledReason: 'This version has been superseded and is shown for provenance only.',
+    versionId: undefined,
+  }));
+});
+
 function extractJsonLdScripts(html: string): string[] {
   return Array.from(
     html.matchAll(/<script type="application\/ld\+json">([\s\S]*?)<\/script>/g),
