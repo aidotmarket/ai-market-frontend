@@ -7,6 +7,7 @@ import { WorkspaceOverview, type WorkspaceView } from '@/components/seller-works
 import { WorkspaceData } from '@/components/seller-workspace/WorkspaceData';
 import SavedWorkspaceData from '@/components/seller-workspace/SavedWorkspaceData';
 import SellerReview from '@/components/seller-workspace/SellerReview';
+import SellerListingRemoval from '@/components/seller-workspace/SellerListingRemoval';
 import SellerPublications from '@/components/seller-workspace/SellerPublications';
 import ConnectionScopeChoice from '@/components/seller-workspace/ConnectionScopeChoice';
 import R2ConnectionForm from '@/components/seller-workspace/R2ConnectionForm';
@@ -18,7 +19,7 @@ import {SellerListingDraftProvider} from '@/components/seller-workspace/SellerLi
 import { GuidedListingFlow, StepNext } from '@/components/seller-workspace/GuidedListingFlow';
 import SavedLicenseStep from '@/components/seller-workspace/SavedLicenseStep';
 import GuidedPublishStep from '@/components/seller-workspace/GuidedPublishStep';
-import { WorkspacePanel } from '@/components/seller-workspace/WorkspacePanel';
+import { WorkspaceConfirmation, WorkspacePanel } from '@/components/seller-workspace/WorkspacePanel';
 import { createListingAssistant } from '@/api/sellerListingAssistant';
 import {
   type AWSAuthorization,
@@ -541,6 +542,11 @@ export default function SellerWorkspacePage() {
     setView(nextView);
   };
 
+  const independentListings = <SellerListingRemoval active compact onRecovery={section => {
+    navigate(section);
+    setRetryKey(value => value + 1);
+  }} />;
+
   if (pageState === 'loading') {
     return (
       <div className="space-y-6">
@@ -549,6 +555,7 @@ export default function SellerWorkspacePage() {
           <div className="h-8 w-8 animate-spin rounded-full border-4 border-[#3F51B5] border-t-transparent" />
           <span>Checking AWS connection availability...</span>
         </div>
+        {independentListings}
       </div>
     );
   }
@@ -565,6 +572,7 @@ export default function SellerWorkspacePage() {
           </p>
           <Link href="/dashboard/listings" className="mt-5 inline-flex rounded-lg bg-[#3F51B5] px-4 py-2 text-sm font-medium text-white">Manage listings</Link>
         </div>
+        {independentListings}
       </div>
     );
   }
@@ -580,6 +588,7 @@ export default function SellerWorkspacePage() {
           </p>
           <Link href="/dashboard/settings" className="mt-5 inline-flex rounded-lg bg-[#3F51B5] px-4 py-2 text-sm font-medium text-white">Go to seller settings</Link>
         </div>
+        {independentListings}
       </div>
     );
   }
@@ -599,6 +608,7 @@ export default function SellerWorkspacePage() {
             Try again
           </button>
         </div>
+        {independentListings}
       </div>
     );
   }
@@ -615,7 +625,7 @@ export default function SellerWorkspacePage() {
       <WorkspacePanel active={view === 'license'}><SavedLicenseStep /></WorkspacePanel>
       <WorkspacePanel active={view === 'publish'}><GuidedPublishStep active={view === 'publish'} /></WorkspacePanel>
       <WorkspacePanel active={view === 'listing'}>{capabilities?.master.enabled && capabilities?.drafts?.enabled && capabilities.drafts.status === 'available' ? <SavedListingEditor active={view === 'listing'} assistant={capabilities.listing_assistant?.enabled && capabilities.listing_assistant.status === 'available' ? listingAssistant : undefined} /> : <SellerListingEditor active={view === 'listing'} assistant={capabilities?.master.enabled && capabilities.listing_assistant?.enabled && capabilities.listing_assistant.status === 'available' ? listingAssistant : undefined} />}</WorkspacePanel>
-      <WorkspacePanel active={view === 'manage'}><SellerPublications active={view === 'manage'} enabled={capabilities?.master.enabled === true && capabilities.review?.enabled === true && capabilities.review.status === 'available'} /></WorkspacePanel>
+      <WorkspacePanel active={view === 'manage'}><SellerPublications active={view === 'manage'} onRecovery={navigate} enabled={capabilities?.master.enabled === true && capabilities.review?.enabled === true && capabilities.review.status === 'available'} /></WorkspacePanel>
       <WorkspacePanel active={view === 'review'}><SellerReview active={view === 'review'} enabled={capabilities?.master.enabled === true && capabilities.review?.enabled === true && capabilities.review.status === 'available'} /></WorkspacePanel>
       <WorkspacePanel active={view === 'storage'}>
       {busyAction!==null&&<p role="status" className="text-sm text-gray-600">A storage connection action is in progress. Other connection actions will be available when it finishes.</p>}
@@ -871,7 +881,7 @@ export default function SellerWorkspacePage() {
                 )}
 
                 {disconnectConfirmation === connection.id && (
-                  <div className="mt-5 rounded-lg border border-red-200 bg-red-50 p-4" role="alertdialog" aria-label="Confirm disconnect">
+                  <WorkspaceConfirmation label="Confirm disconnect" className="mt-5 rounded-lg border border-red-200 bg-red-50 p-4">
                     <p className="text-sm font-medium text-red-900">
                       Disconnect this storage connection? ai.market will no longer use this connection.
                     </p>
@@ -893,7 +903,7 @@ export default function SellerWorkspacePage() {
                         Cancel
                       </button>
                     </div>
-                  </div>
+                  </WorkspaceConfirmation>
                 )}
               </article>
             );

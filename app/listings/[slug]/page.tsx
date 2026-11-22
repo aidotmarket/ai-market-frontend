@@ -1,3 +1,4 @@
+import {ListingUnavailable} from '@/lib/listing-http-status';
 import CurrentDisplayFreshness from '@/components/listings/CurrentDisplayFreshness';
 import { formatMarketplaceCategoryName } from '@/lib/marketplaceCategories';
 import GeneratedSamplePage from './GeneratedSamplePage';
@@ -45,13 +46,18 @@ interface Props {
 export async function generateMetadata({ params }: Props): Promise<Metadata> {
   const { slug } = await params;
 
+  const requestHeaders = await headers();
+  if (requestHeaders.get('x-aim-listing-missing')) return { title: 'Not Found' };
   if (UUID_RE.test(slug)) {
     return { title: 'Redirecting...' };
   }
 
 
-  const userAgent = (await headers()).get('user-agent');
-  const listing: ListingDetail | null = await fetchPublicListing(slug, userAgent);
+  const userAgent = requestHeaders.get('user-agent');
+  const listing: ListingDetail | null = await fetchPublicListing(slug, userAgent).catch(error => {
+    if (error instanceof ListingUnavailable) return null;
+    throw error;
+  });
   if (!listing) {
     return { title: 'Not Found' };
   }
@@ -87,21 +93,30 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
   };
 }
 
+function failClosed(error: unknown): never {
+  if (error instanceof ListingUnavailable) notFound();
+  throw error;
+}
+
 export default async function ListingDetailPage({ params, searchParams }: Props) {
   const { slug } = await params;
   const requestedVersionId = (await searchParams)?.version ?? null;
 
+  const requestHeaders = await headers();
+  if (requestHeaders.get('x-aim-listing-missing')) notFound();
+
   // UUID redirect: resolve UUID → slug, 308 redirect
   if (UUID_RE.test(slug)) {
-    const resolved = await resolveListingUUID(slug);
+    const resolved = await resolveListingUUID(slug).catch(failClosed);
     if (resolved?.slug) {
-      permanentRedirect(`/listings/${resolved.slug}`);
+      const query = requestedVersionId === null ? '' : `?${new URLSearchParams({version: requestedVersionId})}`;
+      permanentRedirect(`/listings/${resolved.slug}${query}`);
     }
     notFound();
   }
 
-  const userAgent = (await headers()).get('user-agent');
-  const listing: ListingWithSamples | null = await fetchPublicListing(slug, userAgent);
+  const userAgent = requestHeaders.get('user-agent');
+  const listing: ListingWithSamples | null = await fetchPublicListing(slug, userAgent).catch(failClosed);
   if (!listing) {
     notFound();
   }

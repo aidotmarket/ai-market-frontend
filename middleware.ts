@@ -1,8 +1,9 @@
 import { NextRequest, NextResponse, type NextFetchEvent } from 'next/server';
+import { listingHttpStatus } from './lib/listing-http-status';
 import { detectAiBot } from './lib/aiBot';
 import { isSupportPrivatePath, supportAccountCsp, SUPPORT_ACCOUNT_PATH } from './lib/support-private-policy';
 
-export function middleware(request: NextRequest, event: NextFetchEvent) {
+export async function middleware(request: NextRequest, event: NextFetchEvent) {
   if (/^\/dashboard(?:\/|$)/.test(request.nextUrl.pathname)) {
     const response = NextResponse.next();
     response.headers.set('Cache-Control', 'private, no-store');
@@ -50,6 +51,32 @@ export function middleware(request: NextRequest, event: NextFetchEvent) {
     path.startsWith('/sitemap-');
   const userAgent = request.headers.get('user-agent');
   const apiBase = process.env.API_URL || process.env.NEXT_PUBLIC_API_URL;
+  const listingRef = /^\/listings\/([^/]+)\/?$/.exec(path)?.[1];
+  let listingStatus = 204;
+  let withdrawn = false;
+  if (listingRef && apiBase) {
+    const version = request.nextUrl.searchParams.get('version');
+    const query = version === null ? '' : `?${new URLSearchParams({version})}`;
+    try {
+      const response = await fetch(`${apiBase}/api/v1/public/listing-disposition/${listingRef}${query}`, {
+        cache: 'no-store', redirect: 'error', signal: AbortSignal.timeout(5000),
+      });
+      listingStatus = listingHttpStatus(response.status);
+      if (listingStatus === 410) {
+        const body = await response.json().catch(() => null);
+        withdrawn = body?.detail === 'Listing has been withdrawn';
+      }
+    } catch {
+      listingStatus = 503;
+    }
+    if (listingStatus === 410 || listingStatus === 451 || listingStatus === 503) {
+      const message = listingStatus === 410 ? (withdrawn ? 'This listing was withdrawn.' : 'This listing was removed.') :
+        listingStatus === 451 ? 'This listing is unavailable for legal reasons.' : 'This listing is temporarily unavailable.';
+      return new NextResponse(`<!doctype html><html lang="en"><meta charset="utf-8"><title>Listing unavailable</title><h1>${message}</h1></html>`, {
+        status: listingStatus, headers: {'Cache-Control': 'no-store', 'Content-Type': 'text/html; charset=utf-8'},
+      });
+    }
+  }
   const aiCrawlBeaconKey = process.env.AI_CRAWL_BEACON_KEY;
 
   if (isPublicRoute && detectAiBot(userAgent) && apiBase && aiCrawlBeaconKey) {
@@ -64,7 +91,7 @@ export function middleware(request: NextRequest, event: NextFetchEvent) {
           user_agent: userAgent,
           path,
           ip: request.headers.get('x-forwarded-for')?.split(',')[0].trim() || null,
-          status_code: 200,
+          status_code: listingStatus === 404 ? 404 : 200,
         }),
         keepalive: true,
       }).catch(() => {}));
@@ -73,6 +100,12 @@ export function middleware(request: NextRequest, event: NextFetchEvent) {
     }
   }
 
+  if (listingRef && (listingStatus === 404 || request.headers.has('x-aim-listing-missing'))) {
+    const headers = new Headers(request.headers);
+    if (listingStatus === 404) headers.set('x-aim-listing-missing', '1');
+    else headers.delete('x-aim-listing-missing');
+    return NextResponse.next({request: {headers}});
+  }
   return NextResponse.next();
 }
 

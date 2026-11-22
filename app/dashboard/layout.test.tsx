@@ -36,6 +36,9 @@ vi.mock('next/link', () => ({
   ),
 }));
 
+const ownerListings = vi.hoisted(() => ({hasOwnerListings: vi.fn(async () => false)}));
+vi.mock('@/api/sellerListingPublication', () => ownerListings);
+
 vi.mock('@/api/capabilities', () => ({
   getCapabilities: capabilitiesApi.getCapabilities,
 }));
@@ -739,6 +742,16 @@ describe('DashboardLayout canonical capability ownership', () => {
     expect(sellerWorkspaceApi.getSellerWorkspaceCapabilities).not.toHaveBeenCalled();
     expect(gatewaysApi.listSellerGateways).not.toHaveBeenCalled();
     expect(useAuthStore.getState().user).toEqual(user);
+  });
+
+  it('allows only the Workspace route through the owner listing read when seller setup is unavailable', async () => {
+    navigation.pathname = '/dashboard/seller-workspace';
+    capabilitiesApi.getCapabilities.mockResolvedValueOnce(capability('not_requested'));
+    ownerListings.hasOwnerListings.mockResolvedValueOnce(true);
+    render(<DashboardLayout><div>owner listing controls</div></DashboardLayout>);
+    await screen.findByText('owner listing controls');
+    expect(navigation.push).not.toHaveBeenCalled();
+    expect(screen.queryByRole('link', {name: 'Listings'})).toBeNull();
   });
 
   it.each(['unknown', undefined, null, { status: 'not_requested' }])(

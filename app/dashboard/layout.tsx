@@ -1,9 +1,10 @@
 'use client';
 
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useRef, useState, useSyncExternalStore } from 'react';
 import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
 import { useAuthStore } from '@/store/auth';
+import { authSessionOwner, subscribeAuthSessionOwner } from '@/lib/auth-session-owner';
 import { getCapabilities, type CapabilityStatus } from '@/api/capabilities';
 import {
   getSellerWorkspaceCapabilities,
@@ -108,18 +109,40 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
   const buyerRoute = buyerAllowedRoutes.some((p) =>
     pathname === p || (p !== '/dashboard' && pathname.startsWith(`${p}/`)));
   const authenticated = !isLoading && hydrated && isAuthenticated && !!owner && !!token;
-  const routeReady = authenticated && (buyerRoute || isSeller);
+  const checkOwnerListings = authenticated && pathname === '/dashboard/seller-workspace' &&
+    !isSeller && (capabilitiesResolved || current?.phase === 'error');
+  const ownerGeneration = useSyncExternalStore(subscribeAuthSessionOwner, authSessionOwner, authSessionOwner);
+  const [ownerAdmission, setOwnerAdmission] = useState<{owner: string; generation: number; allowed: boolean} | null>(null);
+  useEffect(() => {
+    if (!checkOwnerListings || !owner) return;
+    const request = new AbortController();
+    const apply = (allowed: boolean) => {
+      if (!request.signal.aborted && authSessionOwner() === ownerGeneration && useAuthStore.getState().user?.id === owner) {
+        setOwnerAdmission({owner, generation: ownerGeneration, allowed});
+      }
+    };
+    void import('@/api/sellerListingPublication').then(({hasOwnerListings}) => {
+      if (!request.signal.aborted && authSessionOwner() === ownerGeneration && useAuthStore.getState().user?.id === owner) {
+        return hasOwnerListings(request.signal).then(apply);
+      }
+    }).catch(() => apply(false));
+    return () => request.abort();
+  }, [checkOwnerListings, owner, ownerGeneration, current]);
+  const ownerAccess = checkOwnerListings && ownerAdmission?.owner === owner &&
+    ownerAdmission?.generation === ownerGeneration ? ownerAdmission.allowed : undefined;
+  const checkingOwnerAccess = checkOwnerListings && ownerAccess === undefined;
+  const routeReady = authenticated && (buyerRoute || isSeller || ownerAccess === true);
 
   useEffect(() => {
     if (isLoading || !hydrated) return;
     if (!isAuthenticated) {
       router.push(`/login?redirect=${encodeURIComponent(pathname + (typeof window !== 'undefined' ? window.location.search : ''))}`);
-    } else if (owner && !buyerRoute && capabilitiesResolved && !isSeller) {
+    } else if (owner && !buyerRoute && capabilitiesResolved && !isSeller && !checkingOwnerAccess && !ownerAccess) {
       router.push(current?.sellerStatus === 'not_requested' ? '/dashboard' : '/dashboard/inquiries');
     }
-  }, [buyerRoute, capabilitiesResolved, current?.sellerStatus, hydrated, isAuthenticated, isLoading, isSeller, owner, pathname, router]);
+  }, [buyerRoute, capabilitiesResolved, checkingOwnerAccess, ownerAccess, current?.sellerStatus, hydrated, isAuthenticated, isLoading, isSeller, owner, pathname, router]);
 
-  if (authenticated && !buyerRoute && current?.phase === 'error') {
+  if (authenticated && !buyerRoute && current?.phase === 'error' && !checkingOwnerAccess && !ownerAccess) {
     return (
       <div className="flex min-h-screen flex-col items-center justify-center gap-4">
         <p role="alert">Unable to check seller access. Please try again.</p>

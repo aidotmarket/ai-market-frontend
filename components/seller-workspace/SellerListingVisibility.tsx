@@ -28,7 +28,7 @@ export default function SellerListingVisibility({publication,active,onChange}:{p
   if (!['published','unlisted'].includes(publication.status)) return null;
   return <div className="mt-4 space-y-2">
     <button type="button" onClick={change} disabled={!active || busy || stale} className="rounded-lg border border-indigo-300 px-3 py-2 text-sm font-medium text-indigo-800 disabled:opacity-50">{busy?'Saving…':listed?'Pause new sales':'Resume sales'}</button>
-    <p className="text-xs leading-5 text-gray-500">Pausing stops new purchases. Existing buyers keep their purchased access.</p>
+    <p className="text-xs leading-5 text-gray-500">Stop new sales. Page stays viewable by link.</p>
     {error && <p role="alert" className="text-sm text-red-800">{error}</p>}
   </div>;
 }

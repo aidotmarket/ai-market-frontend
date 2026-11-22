@@ -22,6 +22,15 @@ describe('public listing document freshness', () => {
 });
 
 describe('fetchPublicListing', () => {
+  it.each([404, 410, 451])('keeps a public listing HTTP %i distinct', async status => {
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue(new Response(null, {status})));
+    try {
+      await expect(fetchPublicListing('listing')).rejects.toMatchObject({status});
+    } finally {
+      vi.unstubAllGlobals();
+    }
+  });
+
   afterEach(() => {
     vi.unstubAllGlobals();
   });

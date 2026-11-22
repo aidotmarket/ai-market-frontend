@@ -1,3 +1,4 @@
+import {ListingUnavailable, listingHttpStatus} from './listing-http-status';
 import {verifyCurrentListing} from './publicPresentation';
 import type { ListingPublicListResponse } from '@/types';
 import type {ListingDocument} from '@/types/listingDocuments';
@@ -138,7 +139,11 @@ export async function fetchPublicListing(slug: string, userAgent?: string | null
     cache: 'no-store',
     ...syntheticListingFetchOptions(userAgent),
   });
-  if (!res.ok) return null;
+  if (!res.ok) {
+    const status = listingHttpStatus(res.status);
+    if (status === 404 || status === 410 || status === 451) throw new ListingUnavailable(status);
+    return null;
+  }
   const listing = await res.json();
   await verifyCurrentListing(listing);
   return listing;
@@ -189,7 +194,11 @@ export async function fetchListingAccessWindowDays(listingId: string, userAgent?
 
 export async function resolveListingUUID(uuid: string) {
   const res = await fetch(`${API_URL}/api/v1/public/listings/resolve/${encodeURIComponent(uuid)}`);
-  if (!res.ok) return null;
+  if (!res.ok) {
+    const status = listingHttpStatus(res.status);
+    if (status === 404 || status === 410 || status === 451) throw new ListingUnavailable(status);
+    return null;
+  }
   return res.json();
 }
 
