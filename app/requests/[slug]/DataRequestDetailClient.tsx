@@ -116,6 +116,8 @@ export default function DataRequestDetailClient({
   const currentRecord = requestRecord.context === context ? requestRecord.value : null;
   const request = currentRecord && hasPrivatePublication(currentRecord) && (!isAuthenticated || userId !== currentRecord.buyer_id)
     ? null : currentRecord;
+  const responseCount = request?.response_count;
+  const hasResponseCount = typeof responseCount === 'number' && Number.isFinite(responseCount) && responseCount >= 0;
   const setRequest = (value: DataRequestDetail | null) => setRequestRecord({ context, value });
   const [conversationNavigation, setConversationNavigation] = useState(0);
   const [responses, setResponses] = useState<DataRequestResponse[]>([]);
@@ -496,7 +498,9 @@ export default function DataRequestDetailClient({
       });
       if (!isCurrentMutation(epoch)) return;
       setResponses((existing) => [...existing.filter((item) => item.id !== response.id), response]);
-      setRequest({ ...request, response_count: request.response_count + 1 });
+      if (hasResponseCount) {
+        setRequest({ ...request, response_count: responseCount + 1 });
+      }
     } catch (err) {
       if (!isCurrentMutation(epoch)) return;
       setResponseError(quoteErrorMessage(err));
@@ -595,7 +599,7 @@ export default function DataRequestDetailClient({
           {!priceRange && <span>Currency: {request.currency || 'USD'}</span>}
           <span>Posted {formatDate(request.created_at)}</span>
           {request.buyer_display_name && <span>by {request.buyer_display_name}</span>}
-          <span>{request.response_count} response{request.response_count !== 1 ? 's' : ''}</span>
+          {hasResponseCount && <span>{responseCount} response{responseCount !== 1 ? 's' : ''}</span>}
         </div>
       </div>
 

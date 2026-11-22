@@ -14,5 +14,5 @@ export function SupportPrivateBoundary({ children }: { children: React.ReactNode
   useHandoffBoundary();
   const path = usePathname();
   if (path === null || path.replace(/\/$/, '') === '/support/mailbox-account') return <>{children}</>;
-  return <Providers><AllAIProvider><Layout><PendingProfileChanges />{children}</Layout><AllAIFab /><AllAIPanel /></AllAIProvider></Providers>;
+  return <Providers><AllAIProvider><Layout><PendingProfileChanges />{children}</Layout><AllAIFab /><AllAIPanel dockOnDesktop={path === '/support'} /></AllAIProvider></Providers>;
 }

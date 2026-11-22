@@ -84,6 +84,7 @@ export default async function BrowseRequestsPage({ searchParams }: Props) {
         <form action="/requests" method="get" className="flex flex-wrap items-center gap-3">
           <label htmlFor="request-category" className="text-sm font-medium text-gray-700">Category</label>
           <select
+            key={category}
             id="request-category"
             name="category"
             defaultValue={category}
@@ -124,6 +125,14 @@ export default async function BrowseRequestsPage({ searchParams }: Props) {
           <p className="text-gray-400 text-sm mb-6">
             {page > 1 ? 'Return to the first page or try the previous page.' : category ? 'Try another category.' : 'Be the first to tell the market what you need.'}
           </p>
+          {category && (
+            <Link
+              href="/requests"
+              className="rounded-lg bg-[#3F51B5] px-6 py-2.5 text-sm font-medium text-white hover:bg-[#3545a0]"
+            >
+              View all requests
+            </Link>
+          )}
           {page === 1 && !category && (
             <div>
               <Link
