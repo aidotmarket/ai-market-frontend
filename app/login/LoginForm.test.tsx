@@ -35,6 +35,40 @@ beforeEach(async () => {
 });
 afterEach(() => { cleanup(); vi.unstubAllGlobals(); vi.unstubAllEnvs(); });
 
+const dashboardPrompt = "Please sign in to continue to your dashboard. You'll go straight back to the page you were on.";
+
+it.each(['/dashboard', '/dashboard?tab=overview', '/dashboard/orders?status=open'])(
+  'explains why sign-in is needed for %s',
+  async (redirect) => {
+    navigation.query = new URLSearchParams({ redirect });
+    await act(async () => { render(<LoginForm />); });
+
+    expect(screen.getByText(dashboardPrompt)).toBeTruthy();
+  },
+);
+
+it.each(['/listings?next=/dashboard', '/dashboard-help', null])(
+  'omits the dashboard prompt for return path %s',
+  async (redirect) => {
+    if (redirect !== null) navigation.query = new URLSearchParams({ redirect });
+    await act(async () => { render(<LoginForm />); });
+
+    expect(screen.queryByText(dashboardPrompt)).toBeNull();
+  },
+);
+
+it.each([
+  ['redirect=/requests/new', 'We need an account so we can reach out to you with offers that match your requirements. After sign-up, allAI will walk you through submitting a data request to the marketplace.'],
+  ['error=oauth_failed', 'OAuth sign-in failed. Please try again or use email and password.'],
+  ['error=two_factor_expired', 'Your two-factor session expired. Please sign in again.'],
+])('preserves the existing explanation for %s', async (query, message) => {
+  navigation.query = new URLSearchParams(query);
+  await act(async () => { render(<LoginForm />); });
+
+  expect(screen.getByText(message)).toBeTruthy();
+  expect(screen.queryByText(dashboardPrompt)).toBeNull();
+});
+
 it('offers email sign-in/sign-up without promising delivery on a generic 200', async () => {
   const request = '/requests/i-need-an-entirely-synthetic-retail-sales-dataset-to-test-a-sales-292929f3?source=retail%20sales';
   navigation.query = new URLSearchParams({ redirect: request });
