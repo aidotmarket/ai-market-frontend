@@ -1,20 +1,5 @@
 import type { CompletedReview, ReviewField } from "@/api/listingPolish";
 
-const acceptanceKey = (runId: string) => `listing-polish-accepted:${runId}`;
-export function rememberReviewAcceptance(runId: string, ids: Set<string>) {
-  try { sessionStorage.setItem(acceptanceKey(runId), JSON.stringify([...ids])); }
-  catch { /* The current editor still has the receipt if storage is unavailable. */ }
-}
-export function rememberedReviewAcceptance(runId: string): Set<string> | undefined {
-  try {
-    const ids: unknown = JSON.parse(sessionStorage.getItem(acceptanceKey(runId)) ?? "null");
-    if (Array.isArray(ids) && ids.length && ids.every(id => typeof id === "string")) return new Set(ids);
-  } catch { /* A review from another tab may have no local receipt. */ }
-}
-export function forgetReviewAcceptance(runId: string) {
-  try { sessionStorage.removeItem(acceptanceKey(runId)); } catch { /* Storage is optional. */ }
-}
-
 export function expandReviewSelection(run: CompletedReview, ids: Iterable<string>) {
   const selected = new Set(ids);
   let size = -1;

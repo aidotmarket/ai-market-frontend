@@ -1,18 +1,20 @@
 "use client";
 
-import { useEffect, useRef, useState, type RefObject } from "react";
+import { useEffect, useEffectEvent, useLayoutEffect, useRef, useState, type RefObject } from "react";
 import { acceptPolish, reviewAvailable, reviewError, reviewFields, reviewStatus, streamPolishReview,
-  type CompletedReview, type Provenance, type ReviewLanguage, type ReviewRun, type ReviewTarget } from "@/api/listingPolish";
+  type AcceptPolishBody, type CompletedReview, type Provenance, type ReviewLanguage, type ReviewRun, type ReviewTarget } from "@/api/listingPolish";
 import type { SavedListingDraft } from "@/api/sellerListingDraft";
 import { listingPolish as copy } from "@/lib/i18n/listing-polish";
-import { PolishDiscard, polishButton, type AcceptedBaseline } from "./PolishDiscard";
-import { expandReviewSelection, rememberReviewAcceptance, reviewBaseline, sentenceDiff } from "./listingPolishText";
+import { PolishDiscard, polishButton } from "./PolishDiscard";
+import { expandReviewSelection, reviewBaseline, sentenceDiff } from "./listingPolishText";
+import { finishPolishAccept, pendingPolishAccept, queuePolishAccept, usePendingPolishAccept } from "./pendingPolishAccept";
 import { polishFailure, usePolishAction, type ReloadDraft } from "./usePolishAction";
 
 export type ListingPolishOptions = {
   draft: SavedListingDraft | null;
   published?: { listing_id: string; expected_base_version_id: string };
   publishedTitle?: string;
+  onPublishedDraft?: (draftId: string) => void;
   reload: ReloadDraft;
   lock: RefObject<boolean>;
   sharedBusy?: boolean;
@@ -20,7 +22,8 @@ export type ListingPolishOptions = {
 };
 
 export function useListingPolish(options: ListingPolishOptions | undefined, active: boolean, dirty: boolean,
-  saving: boolean, adoptDraft: (draft: SavedListingDraft | null, publishedDescription?: string) => void) {
+  saving: boolean, displayed: { id: string | null | undefined; version: number | undefined },
+  adoptDraft: (draft: SavedListingDraft | null, publishedDescription?: string) => void) {
   const [available, setAvailable] = useState(false);
   const [streaming, setStreaming] = useState(false);
   const [run, setRun] = useState<ReviewRun | null>(null);
@@ -30,13 +33,17 @@ export function useListingPolish(options: ListingPolishOptions | undefined, acti
   const [accepted, setAccepted] = useState(new Set<string>());
   const [provenance, setProvenance] = useState<Provenance>({});
   const [ended, setEnded] = useState(false);
-  const [discarding, setDiscarding] = useState(false);
+  const [discarding, setDiscarding] = useState<{ draftId: string; runId: string; version: number } | null>(null);
   const [error, setError] = useState("");
   const [notice, setNotice] = useState("");
   const stream = useRef<AbortController | null>(null);
   const runTarget = useRef<string | undefined>(undefined);
-  const baselines = useRef(new Map<string, AcceptedBaseline>());
   const action = usePolishAction(options?.lock, options?.onBusy);
+  const pending = usePendingPolishAccept(!!options);
+  const [settledAccept, setSettledAccept] = useState<typeof pending>(null);
+  useLayoutEffect(() => {
+    if (settledAccept) finishPolishAccept(settledAccept);
+  }, [settledAccept]);
   const enabled = !!options;
   const draftId = options?.draft?.draft_id;
   const target: ReviewTarget | undefined = options?.published ?? (draftId ? { draft_id: draftId } : undefined);
@@ -63,13 +70,12 @@ export function useListingPolish(options: ListingPolishOptions | undefined, acti
   const currentRun = runTarget.current === targetKey ? run : null;
   const completed = currentRun?.status === "completed" ? currentRun : null;
   const remaining = completed?.proposal.changes.filter(change => !accepted.has(change.change_id)) ?? [];
-  const ownBusy = !!action.status || discarding;
+  const ownBusy = !!pending || !!action.status || !!discarding;
   const busy = ownBusy || !!options?.sharedBusy;
-  const discardTarget = useRef<{ id: string; version: number } | null>(null);
-  if (!discarding) discardTarget.current = binding && options?.draft ? { id: binding, version: options.draft.version } : null;
+  const showingDraft = !!draftId && displayed.id === draftId && displayed.version === options?.draft?.version;
 
   async function requestReview(input: ReviewTarget | { runId: string; language: ReviewLanguage }) {
-    if (stream.current || options?.lock.current || saving) return;
+    if (!active || stream.current || options?.lock.current || pendingPolishAccept() || saving || dirty || draftId && !showingDraft) return;
     const request = new AbortController();
     stream.current = request;
     runTarget.current = targetKey;
@@ -133,9 +139,12 @@ export function useListingPolish(options: ListingPolishOptions | undefined, acti
   }
 
   const accept = () => {
-    if (!options || !completed || ended || dirty || saving || streaming || selected.size === 0) return;
+    if (!active || !options || options.lock.current || !completed || ended || dirty || saving || streaming ||
+      !selected.size || (draftId ? !showingDraft : !options.published)) return;
     const draft = options.draft;
     const base = completed.revision_ref.base_listing_version_id;
+    if (completed.basis === "published" ? !options.published || base !== options.published.expected_base_version_id :
+      completed.revision_ref.draft_id !== draftId) return;
     const first = binding !== completed.run_id;
     const version = first ? completed.revision_ref.draft_version : draft?.version;
     const revision = first && completed.basis === "published" && base
@@ -143,58 +152,76 @@ export function useListingPolish(options: ListingPolishOptions | undefined, acti
     if (!revision) return;
     const runId = completed.run_id;
     const change_ids = [...selected];
-    const body = {
+    const facts = remaining.filter(change => selected.has(change.change_id)).flatMap(change => change.fact_units);
+    if (facts.some(fact => !confirmed.has(fact.fact_id))) return;
+    const body: AcceptPolishBody = {
       ...revision, request_id: crypto.randomUUID(), change_ids,
-      fact_confirmations: [...new Set(remaining.filter(change => selected.has(change.change_id))
-        .flatMap(change => change.fact_units.map(fact => fact.fact_id)).filter(id => confirmed.has(id)))],
+      fact_confirmations: [...new Set(facts.map(fact => fact.fact_id))],
     };
+    queuePolishAccept(runId, body);
+  };
+
+  const executeAccept = useEffectEvent((entry: NonNullable<typeof pending>) => {
+    if (!options || !entry.sameSession()) return;
     void action.run(copy.applying, async signal => {
+      const { runId, body, sent: replaying } = entry;
+      entry.sent = true;
       setError("");
       setNotice("");
-      const reload: ReloadDraft = async signal => {
-        const saved = await options.reload(signal);
-        signal.throwIfAborted();
-        adoptDraft(saved);
-        return saved;
-      };
       try {
         const { result, draft: saved } = await action.mutate(
-          () => acceptPolish(runId, body, signal), signal, reload, result => result,
+          () => acceptPolish(runId, body, signal), signal, options.reload, result => result, { replaying },
         );
-        const ids = new Set([...accepted, ...result.accepted_change_ids]);
-        baselines.current.set(runId, { run: completed, ids });
-        rememberReviewAcceptance(runId, ids);
-        setAccepted(ids);
+        if (!entry.sameSession()) return;
+        const matching = saved?.draft_id === result.draft_id;
+        if (!options.published || matching) adoptDraft(saved ?? null);
+        if (matching && options.published) options.onPublishedDraft?.(result.draft_id);
+        setAccepted(current => new Set([...current, ...result.accepted_change_ids]));
         setSelected(new Set());
-        setProvenance(saved?.draft_id === result.draft_id && saved.version === result.draft_version
+        setProvenance(matching && saved?.version === result.draft_version
           ? result.provenance_summary : {});
-        if (result.draft_moved) {
+        if (result.draft_moved || !matching) {
           setEnded(true);
           setError(copy.stale);
         } else setNotice(copy.applied);
       } catch (failure) {
-        if (signal.aborted) return;
-        if (reviewStatus(failure) === 404) { setAvailable(false); setRun(null); return; }
+        if (signal.aborted || !entry.sameSession()) return;
+        if (reviewStatus(failure) === 404) {
+          setAvailable(false); setRun(null); setError(copy.unavailable);
+          return;
+        }
         const { code, change_ids, additional_change_ids } = reviewError(failure);
-        if (code === "REVIEW_SELECTION_INCOMPLETE") {
+        if (code === "REVIEW_SELECTION_INCOMPLETE" && completed?.run_id === runId) {
           const named = [...(change_ids ?? []), ...(additional_change_ids ?? [])]
             .filter(id => remaining.some(change => change.change_id === id));
           setSelected(current => expandReviewSelection(completed, [...current, ...named]));
         }
         if (code === "REVIEW_STALE" || code === "REVIEW_SUPERSEDED" || code === "REVIEW_DISCARDED") setEnded(true);
         setError(polishFailure(failure));
+      } finally {
+        if (!signal.aborted) setSettledAccept(entry);
       }
     });
-  };
+  });
+  useEffect(() => {
+    if (pending && active) executeAccept(pending);
+  }, [active, pending]);
 
-  const discard = discardTarget.current;
-  const baseline = discard ? baselines.current.get(discard.id) : undefined;
-  const panel = enabled && (available && target || discard || notice || action.status) ? <section aria-label={copy.title}
+  function end() {
+    stream.current?.abort();
+    stream.current = null;
+    setStreaming(false);
+    setEnded(true);
+  }
+
+  const discard = discarding ?? (draftId && binding && options?.draft
+    ? { draftId, runId: binding, version: options.draft.version } : null);
+  const panel = enabled && (available && target || discard || notice || error || ownBusy) ? <section aria-label={copy.title}
     className="space-y-4 rounded-xl border border-indigo-200 bg-indigo-50/40 p-4 sm:p-5">
     <h3 className="text-lg font-semibold text-indigo-950">{copy.title}</h3>
     {available && target && <>
       {binding && <p className="text-sm text-gray-700">{copy.supersession}</p>}
-      <button type="button" className={polishButton} disabled={busy || saving || streaming || dirty}
+      <button type="button" className={polishButton} disabled={busy || saving || streaming || dirty || !!draftId && !showingDraft}
         onClick={() => void requestReview(target)}>{currentRun || ended ? copy.restart : copy.start}</button>
       {streaming && <div role="status" className="space-y-2 text-sm text-indigo-900">
         <p>{copy.reviewing}</p>{explanations.map(line => <p key={line}>{line}</p>)}
@@ -250,7 +277,7 @@ export function useListingPolish(options: ListingPolishOptions | undefined, acti
         })}
         {remaining.length > 0 && <>
           {dirty && <p className="text-sm text-gray-700">{copy.dirty}</p>}
-          <button type="button" className={polishButton} disabled={dirty || !selected.size ||
+          <button type="button" className={polishButton} disabled={dirty || !!draftId && !showingDraft || !selected.size ||
             remaining.some(change => selected.has(change.change_id) && change.fact_units.some(fact => !confirmed.has(fact.fact_id)))}
             onClick={accept}>{copy.accept}</button>
         </>}
@@ -259,27 +286,23 @@ export function useListingPolish(options: ListingPolishOptions | undefined, acti
           .map(question => <p key={question} className="text-sm">{question}</p>)}
       </fieldset>}
     </>}
-    {action.status && <p role="status" className="text-sm font-semibold text-indigo-900">{action.status}</p>}
+    {(action.status || pending) && <p role="status" className="text-sm font-semibold text-indigo-900">{action.status || copy.applying}</p>}
     {error && <p role="alert" className="text-sm text-red-800">{error}</p>}
     {notice && <p role="status" className="text-sm text-green-900">{notice}</p>}
-    {discard && options && <PolishDiscard key={discard.id} runId={discard.id} version={discard.version}
-      disabled={dirty || saving || streaming || !!action.status} baseline={baseline} lock={options.lock} onBusy={setDiscarding}
-      onSharedBusy={options.onBusy}
-      reload={async signal => {
-        const saved = await options.reload(signal);
-        signal.throwIfAborted();
-        adoptDraft(saved, baseline?.run.basis === "published" ? baseline.run.original.description?.text : undefined);
-        return saved;
-      }} onRemoved={(saved, publishedDescription) => {
-        if (!saved && publishedDescription !== undefined) adoptDraft(null, publishedDescription);
-        baselines.current.delete(discard.id);
+    {discard && options && <PolishDiscard key={`${discard.draftId}:${discard.runId}`} runId={discard.runId} version={discard.version}
+      disabled={!active || !showingDraft || dirty || saving || streaming || !!pending || !!action.status}
+      lock={options.lock} onBusy={busy => setDiscarding(busy ? discard : null)} onSharedBusy={options.onBusy}
+      reload={options.reload} onRemoved={saved => {
+        const publicationText = completed?.basis === "published" ? completed.original.description?.text : undefined;
+        if (options.published && saved?.draft_id !== discard.draftId) adoptDraft(null, publicationText);
+        else adoptDraft(saved);
         setRun(null);
         setError("");
-        setNotice(copy.removed);
+        setNotice(saved?.draft_id === discard.draftId && saved?.review_run_id ? copy.removedWithEarlierReview : copy.removed);
       }} />}
   </section> : null;
 
-  return { panel, busy, ownBusy, hasRemaining: !!completed && !ended && remaining.length > 0, end: () => setEnded(true) };
+  return { panel, busy, ownBusy, hasRemaining: streaming || !!completed && !ended && remaining.length > 0, end };
 }
 
 function renderGrouping(run: CompletedReview, field: typeof reviewFields[number], id: string) {

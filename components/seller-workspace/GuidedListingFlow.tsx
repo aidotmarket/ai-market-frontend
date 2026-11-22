@@ -12,6 +12,14 @@ import type {SellerWorkspaceCapabilities, SellerWorkspaceConnection} from '@/api
 import {useSellerListingDraft} from './SellerListingDraftStore';
 import {listingSteps, type ListingStep} from './listingSteps';
 import type {WorkspaceView} from './WorkspaceOverview';
+import {listingPolishEnabled} from '@/api/listingPolish';
+import {pendingPolishAccept, usePendingPolishAccept} from './pendingPolishAccept';
+
+type PublicationPolish = {
+  item: PublicationReceipt;
+  workspaceDraftId?: string | null;
+  successorId?: string;
+};
 
 type Flow = {samplesBlocked:boolean; stepsForContent:(content:ListingDraftContent)=>ListingStep[]; sourceCurrentDraftId:string|null; sourceLoaded:boolean; sourceDraftChanged:boolean; reloadSource:()=>Promise<void>; sourceError:string; fileRevision:number; setFilesDirty:(dirty:boolean)=>void; setListingDirty:(dirty:boolean)=>void; setLicenceDirty:(dirty:boolean)=>void; source: SourceRead|null; categories: SellerCategory[]; steps: ListingStep[]; review: ListingReview|null;
   reviewError: string; reviewLoading: boolean; publication: PublicationState|null; publicationError: string;
@@ -20,7 +28,8 @@ type Flow = {samplesBlocked:boolean; stepsForContent:(content:ListingDraftConten
   startAnotherListing:()=>void; startingListing:boolean; navigate: (view:WorkspaceView)=>void; licensesEnabled: boolean;
   polishLock: React.RefObject<boolean>; polishBusy: boolean; setPolishBusy:(busy:boolean)=>void;
   polishNotice: string; setPolishNotice:(notice:string)=>void; listingDirty:boolean;
-  polishPublication: PublicationReceipt | null; openPublicationPolish:(publication:PublicationReceipt)=>void};
+  polishPublication: PublicationPolish | null; openPublicationPolish:(publication:PublicationReceipt)=>void;
+  setPolishSuccessor:(draftId:string)=>void; closePublicationPolish:()=>void};
 const Context = createContext<Flow|null>(null);
 export function useListingFlow(){return useContext(Context);}
 
@@ -30,13 +39,17 @@ export function GuidedListingFlow({connections, capabilities, view, navigate, ch
   const [startError,setStartError]=useState('');
   const [sourceSaveNotice,setSourceSaveNotice]=useState('');
   const polishLock = useRef(false);
-  const [polishBusy, setPolishBusy] = useState(false);
+  const [polishActionBusy, setPolishBusy] = useState(false);
+  const polishEnabled = listingPolishEnabled();
+  const pendingAccept = usePendingPolishAccept(polishEnabled);
+  const polishBusy = polishActionBusy || !!pendingAccept;
   const [polishNotice, setPolishNotice] = useState('');
-  const [polishPublication, setPolishPublication] = useState<PublicationReceipt | null>(null);
+  const [polishPublication, setPolishPublication] = useState<PublicationPolish | null>(null);
+  useEffect(() => { if (view !== 'listing') setPolishPublication(null); }, [view]);
   const startAttempt=useRef<string|null>(null);
   const startPending=useRef(false);
   const startAnotherListing=async()=>{
-    if(startPending.current||polishLock.current)return;
+    if(startPending.current||polishLock.current||polishEnabled&&pendingPolishAccept())return;
     startPending.current=true;setStartingListing(true);setStartError('');
     startAttempt.current??=crypto.randomUUID();
     try {
@@ -145,7 +158,13 @@ export function GuidedListingFlow({connections, capabilities, view, navigate, ch
     refreshReview:()=>setReviewRetry(n=>n+1),refreshPublication:()=>setPublicationRetry(n=>n+1),sourceSaveRefused:setSourceSaveNotice,sourceSaved:value=>{setSourceSaveNotice('');setSource(value.source);setSourceCurrentDraftId(value.current_draft_id);setFilesDirty(false);},
     approved:a=>setReview(r=>r?{...r,approval:a}:r),published:setPublication,
     polishLock,polishBusy,setPolishBusy,polishPublication,polishNotice,setPolishNotice,listingDirty,
-    openPublicationPolish:item=>{setPolishPublication(item);navigate('listing');}};
+    openPublicationPolish:item=>{
+      if (!polishEnabled || polishLock.current || pendingPolishAccept()) return;
+      setPolishPublication({item,workspaceDraftId:draft?.draft_id});
+      navigate('listing');
+    },
+    setPolishSuccessor:draftId=>setPolishPublication(current=>current?{...current,successorId:draftId}:null),
+    closePublicationPolish:()=>setPolishPublication(null)};
   const published=steps[5].state==='done' ? publication?.publication : null;
   return <Context.Provider value={flow}><div className="grid items-start gap-6 xl:grid-cols-[minmax(0,1fr)_290px]">
     <aside aria-label="Listing checklist" className="rounded-xl border border-gray-200 bg-white p-4 xl:sticky xl:top-5 xl:col-start-2 xl:row-start-1">
@@ -160,7 +179,7 @@ export function GuidedListingFlow({connections, capabilities, view, navigate, ch
       </div>
         {reviewStatus&&<p role="status" className="text-sm text-gray-600">{reviewStatus}</p>}
         {reviewError&&<p role="alert" className="text-sm text-red-800">{reviewError} {reviewNeedsFiles?<button onClick={()=>navigate('data')} className="min-h-11 underline">Choose files</button>:<button onClick={()=>setReviewRetry(n=>n+1)} className="min-h-11 underline">Retry review</button>}</p>}
-    </aside><fieldset disabled={startingListing} aria-busy={startingListing} className="min-w-0 space-y-6 border-0 p-0 xl:col-start-1 xl:row-start-1">{sourceSaveNotice&&<p role="alert" className="text-sm text-red-800">{sourceSaveNotice}</p>}{/* A new draft also discards unsaved file, editor and licence panel state. */}<Fragment key={draft?.draft_id??'legacy'}>{children}</Fragment></fieldset>
+    </aside><fieldset disabled={startingListing} aria-busy={startingListing} className="min-w-0 space-y-6 border-0 p-0 xl:col-start-1 xl:row-start-1">{sourceSaveNotice&&<p role="alert" className="text-sm text-red-800">{sourceSaveNotice}</p>}{/* Keep the publication review mounted while its own successor is staged. */}<Fragment key={(polishPublication ? polishPublication.workspaceDraftId : draft?.draft_id)??'legacy'}>{children}</Fragment></fieldset>
   </div></Context.Provider>;
 }
 export function StepNext({from}:{from:WorkspaceView}) {

@@ -59,7 +59,7 @@ export type AcceptResult = {
 type FieldValue = string | { $absent: true };
 export type DiscardPreview = {
   draft_version: number; preview_receipt: string; draft_moved: boolean;
-  lost_edits: { field: ReviewField; current: FieldValue; restored: FieldValue }[];
+  lost_edits: { field: ReviewField; current: FieldValue; restored: FieldValue; expected?: string }[];
 };
 export type DiscardResult = DiscardPreview | {
   draft_id: string; draft_version: number; draft_moved: boolean; discarded: true; message: string;
@@ -67,7 +67,7 @@ export type DiscardResult = DiscardPreview | {
 export type ReviewError = {
   code?: string; message?: string; change_ids?: string[]; fact_ids?: string[];
   additional_change_ids?: string[];
-  draft_moved?: boolean; removals_required?: number;
+  draft_moved?: boolean; draft_version?: number; removals_required?: number;
   stale_removals?: { review_run_id: string; change_ids: string[] }[];
   facts?: { review_run_id: string; fact_id: string }[];
 };
@@ -83,18 +83,31 @@ export const reviewNetworkFailure = (error: unknown) => axios.isAxiosError(error
   (!error.response && ["ERR_NETWORK", "ECONNABORTED", "ETIMEDOUT"].includes(error.code ?? "") ||
     [408, 504].includes(error.response?.status ?? 0));
 
+export function uncertainReviewMutation(error: unknown) {
+  if (!axios.isAxiosError(error)) return false;
+  const status = error.response?.status;
+  if (!status || status >= 500 || status === 408 || status === 429) return true;
+  const detail = error.response?.data?.detail;
+  const { message, code } = reviewError(error);
+  const hasRefusal = message || code || status === 422 && Array.isArray(detail);
+  return !(status >= 400 && status < 500 && hasRefusal);
+}
+
 export async function retryReviewRequest<T>(
-  send: () => Promise<T>, signal: AbortSignal, onRetry?: () => void,
+  send: () => Promise<T>, signal: AbortSignal, shouldRetry = reviewNetworkFailure, onRetry?: () => void,
 ): Promise<T> {
   const sameSession = sessionLifecycle();
   for (let delay = 500; ; delay = Math.min(delay * 2, 5000)) {
     signal.throwIfAborted();
     if (!sameSession()) throw new Error("SESSION_CHANGED");
     try {
-      return await send();
+      const result = await send();
+      signal.throwIfAborted();
+      if (!sameSession()) throw new Error("SESSION_CHANGED");
+      return result;
     } catch (error) {
       signal.throwIfAborted();
-      if (!reviewNetworkFailure(error)) throw error;
+      if (!shouldRetry(error)) throw error;
       onRetry?.();
       await new Promise(resolve => setTimeout(resolve, delay));
     }
@@ -109,7 +122,7 @@ export async function reviewAvailable(signal: AbortSignal): Promise<boolean> {
     await nativeRead(`${path}/availability`, { signal });
     return false;
   } catch (error) {
-    return reviewStatus(error) === 422 && reviewError(error).message === "Request validation failed";
+    return reviewStatus(error) === 422 && !!reviewError(error).message;
   }
 }
 
@@ -176,9 +189,17 @@ function post<T>(runId: string, action: string, body: object, signal: AbortSigna
   return postSessionMutation<T>(`${path}/${encodeURIComponent(runId)}/${action}`, body,
     undefined, undefined, undefined, { signal, timeout: 15_000 });
 }
-export const acceptPolish = (runId: string, body: Revision & {
+export type AcceptPolishBody = Revision & {
   request_id: string; change_ids: string[]; fact_confirmations: string[];
-}, signal: AbortSignal) => post<AcceptResult>(runId, "accept", body, signal);
+};
+export async function acceptPolish(runId: string, body: AcceptPolishBody, signal: AbortSignal) {
+  const result = await post<AcceptResult>(runId, "accept", body, signal);
+  if (!result || typeof result.draft_id !== "string" || !Number.isSafeInteger(result.draft_version) ||
+    typeof result.draft_moved !== "boolean" || !Array.isArray(result.accepted_change_ids)) {
+    throw new axios.AxiosError("Accept response could not be verified", "ERR_BAD_RESPONSE");
+  }
+  return result;
+}
 export const discardPolish = (runId: string, body: {
   request_id: string; expected_draft_version: number; preview_receipt?: string;
 }, signal: AbortSignal) => post<DiscardResult>(runId, "discard", body, signal);

@@ -5,6 +5,13 @@ import { useRef, useState } from "react";
 import { AxiosError } from "axios";
 import SellerListingEditor from "./SellerListingEditor";
 import SellerApproval from "./SellerApproval";
+import SavedListingEditor from "./SavedListingEditor";
+import SellerPublications from "./SellerPublications";
+import { GuidedListingFlow } from "./GuidedListingFlow";
+import { resetSellerListingDraftOwnerForTests, SellerListingDraftProvider } from "./SellerListingDraftStore";
+import { WorkspacePanel } from "./WorkspacePanel";
+import { advanceAuthSessionOwner } from "@/lib/auth-session-owner";
+import type { WorkspaceView } from "./WorkspaceOverview";
 import { EMPTY_LISTING_DRAFT, type SavedListingDraft } from "@/api/sellerListingDraft";
 import type { ListingReview } from "@/api/sellerListingReview";
 import { listingPolishEnabled, type CompletedReview } from "@/api/listingPolish";
@@ -12,16 +19,26 @@ import { listingPolish as copy } from "@/lib/i18n/listing-polish";
 
 const mocks = vi.hoisted(() => ({
   post: vi.fn(), read: vi.fn(), reload: vi.fn(), save: vi.fn(), approve: vi.fn(), approvalDraft: null as SavedListingDraft | null,
+  readDraft: vi.fn(), readPublications: vi.fn(),
 }));
 vi.mock("@/api/session-mutation", async importOriginal => ({
   ...await importOriginal<typeof import("@/api/session-mutation")>(), postSessionMutation: mocks.post,
 }));
 vi.mock("@/api/connector-seller-settings", async importOriginal => ({
   ...await importOriginal<typeof import("@/api/connector-seller-settings")>(),
-  nativeRead: mocks.read, sessionLifecycle: () => () => true,
+  nativeRead: mocks.read,
 }));
 vi.mock("@/api/sellerListingReview", async importOriginal => ({
   ...await importOriginal<typeof import("@/api/sellerListingReview")>(), approveListingReview: mocks.approve,
+}));
+vi.mock("@/api/sellerListingDraft", async importOriginal => ({
+  ...await importOriginal<typeof import("@/api/sellerListingDraft")>(), readListingDraft: mocks.readDraft,
+}));
+vi.mock("@/api/sellerListingPublication", async importOriginal => ({
+  ...await importOriginal<typeof import("@/api/sellerListingPublication")>(), readPublicationPage: mocks.readPublications,
+}));
+vi.mock("@/api/capabilities", async importOriginal => ({
+  ...await importOriginal<typeof import("@/api/capabilities")>(), getCapabilities: async () => ({}),
 }));
 vi.mock("./SellerListingDraftStore", async importOriginal => ({
   ...await importOriginal<typeof import("./SellerListingDraftStore")>(),
@@ -70,12 +87,15 @@ function pending<T>() {
   let resolve!: (value: T) => void;
   return { promise: new Promise<T>(done => { resolve = done; }), resolve };
 }
-function Editor({ initial = draft }: { initial?: SavedListingDraft }) {
+function Editor({ initial = draft, refetch = { ...initial, version: initial.version + 1,
+  content: { ...initial.content, description: "Another tab saved this." } } }: {
+  initial?: SavedListingDraft; refetch?: SavedListingDraft;
+}) {
   const [current, setCurrent] = useState(initial);
   const lock = useRef(false);
-  return <><button onClick={() => setCurrent({ ...initial, version: initial.version + 1 })}>Independent draft refetch</button>
-    <SellerListingEditor initialContent={current.content} savedVersion={current.version} onNext={() => {}} onSave={async (fields) => {
-      const version = await mocks.save(fields, current.version);
+  return <><button onClick={() => setCurrent(refetch)}>Independent draft refetch</button>
+    <SellerListingEditor initialContent={current.content} savedVersion={current.version} onNext={() => {}} onSave={async (fields, baseline) => {
+      const version = await mocks.save(fields, baseline);
       setCurrent({ ...current, content: fields, version });
       return version;
     }} listingPolish={listingPolishEnabled() ? { draft: current, lock, reload: async signal => {
@@ -96,6 +116,7 @@ async function start(run = completed) {
 }
 beforeEach(() => {
   vi.resetAllMocks();
+  resetSellerListingDraftOwnerForTests();
   vi.stubEnv("NEXT_PUBLIC_LISTING_REVIEW_ENABLED", "true");
   sessionStorage.clear();
   mocks.read.mockImplementation(path => path.endsWith("/availability")
@@ -103,14 +124,26 @@ beforeEach(() => {
   mocks.reload.mockResolvedValue(reviewed);
   mocks.save.mockImplementation((_: unknown, version: number) => Promise.resolve(version + 1));
 });
-afterEach(() => { cleanup(); vi.unstubAllEnvs(); });
+afterEach(() => {
+  cleanup();
+  advanceAuthSessionOwner(false);
+  vi.useRealTimers();
+  vi.unstubAllEnvs();
+});
 
 it("makes no review requests with the frontend flag off", async () => {
   vi.stubEnv("NEXT_PUBLIC_LISTING_REVIEW_ENABLED", "");
-  render(<Editor />); await settle();
+  render(<Editor initial={reviewed} />); await settle();
   expect(screen.queryByRole("button", { name: copy.start })).toBeNull();
+  expect(screen.queryByRole("button", { name: copy.remove })).toBeNull();
+  expect(description().readOnly).toBe(false);
   expect(mocks.read).not.toHaveBeenCalled();
   expect(mocks.post).not.toHaveBeenCalled();
+});
+it("uses path validation status without depending on the backend message", async () => {
+  mocks.read.mockRejectedValue(http(422, "Invalid review identifier."));
+  render(<Editor />);
+  expect(await screen.findByRole("button", { name: copy.start })).toBeTruthy();
 });
 it("hides the entry when the backend responds with 404 before start", async () => {
   mocks.read.mockRejectedValue(http(404, "Listing review not found."));
@@ -176,6 +209,23 @@ it("never autosaves, disables accept while dirty, and warns before explicit Save
   expect(mocks.save).toHaveBeenCalledWith(expect.objectContaining({ description: "Seller edit" }), 7);
 });
 
+it("warns before saving during a stream and ignores its later suggestions", async () => {
+  const stream = pending<ReadableStream<Uint8Array>>();
+  mocks.post.mockReturnValueOnce(stream.promise);
+  render(<Editor />);
+  fireEvent.click(await screen.findByRole("button", { name: copy.start }));
+  fireEvent.change(description(), { target: { value: "Save during the review." } });
+  fireEvent.click(button("Save private draft"));
+  const warning = screen.getByRole("alertdialog", { name: copy.confirmSave });
+  expect(mocks.save).not.toHaveBeenCalled();
+  fireEvent.click(within(warning).getByRole("button", { name: copy.save }));
+  await waitFor(() => expect(screen.queryByText(copy.reviewing)).toBeNull());
+  await act(async () => stream.resolve(sse("review_completed", completed)));
+  expect(description().value).toBe("Save during the review.");
+  expect(screen.queryByRole("button", { name: copy.accept })).toBeNull();
+  expect(button(copy.restart).disabled).toBe(false);
+});
+
 it("groups suggestions before sending and requires all selected fact units", async () => {
   await start({ ...completed, proposal: { ...completed.proposal, atomic_groups: [{ change_ids: ["a", "b"] }],
     changes: completed.proposal.changes.map(change => change.change_id === "b"
@@ -234,6 +284,30 @@ it("keeps the editor locked until the accept and its owner draft read both finis
   expect(mocks.save).not.toHaveBeenCalled();
 });
 
+it("adopts the newer text observed during Accept after a definite stale refusal", async () => {
+  await start(); choose();
+  const refusal = pending<typeof accepted>();
+  mocks.post.mockReturnValueOnce(refusal.promise.then(() => { throw http(409, { code: "REVIEW_STALE" }); }));
+  fireEvent.click(button(copy.accept));
+  fireEvent.click(button("Independent draft refetch"));
+  expect(description()).toMatchObject({ readOnly: true, value: original });
+  await act(async () => refusal.resolve(accepted));
+  expect(screen.getByText(copy.stale)).toBeTruthy();
+  expect(description()).toMatchObject({ readOnly: false, value: "Another tab saved this." });
+  fireEvent.change(description(), { target: { value: "My next edit." } });
+  fireEvent.click(button("Save private draft"));
+  expect(mocks.save).toHaveBeenCalledWith(expect.objectContaining({ description: "My next edit." }), 8);
+});
+
+it("shows a visible explanation when Accept returns 404", async () => {
+  await start(); choose();
+  mocks.post.mockRejectedValueOnce(http(404, "Listing review not found."));
+  fireEvent.click(button(copy.accept));
+  expect(await screen.findByText(copy.unavailable)).toBeTruthy();
+  expect(description()).toMatchObject({ readOnly: false, value: original });
+  expect(screen.queryByRole("button", { name: copy.accept })).toBeNull();
+});
+
 it("retries a dropped accept using the identical body and ignores a refetch until the outcome is known", async () => {
   await start(); choose();
   const replay = pending<typeof accepted>();
@@ -254,6 +328,118 @@ it("retries a dropped accept using the identical body and ignores a refetch unti
   expect(mocks.reload).toHaveBeenCalledTimes(2);
 });
 
+it("keeps a version-N editor locked through a timeout and a 503 on replay", async () => {
+  mocks.post.mockResolvedValueOnce(sse("review_completed", completed));
+  render(<Editor refetch={{ ...draft }} />);
+  fireEvent.click(await screen.findByRole("button", { name: copy.start }));
+  await screen.findByText("Clear sentence.");
+  choose();
+  vi.useFakeTimers();
+  const originalWrite = pending<typeof accepted>();
+  mocks.post.mockRejectedValueOnce(new AxiosError("timeout before commit", "ECONNABORTED"))
+    .mockRejectedValueOnce(http(503, "Gateway unavailable")).mockReturnValueOnce(originalWrite.promise);
+  fireEvent.click(button(copy.accept));
+  await act(async () => vi.advanceTimersByTimeAsync(500));
+  expect(mocks.post).toHaveBeenCalledTimes(3);
+  fireEvent.click(button("Independent draft refetch"));
+  fireEvent.change(description(), { target: { value: "Typed before commit" } });
+  expect(description()).toMatchObject({ readOnly: true, value: original });
+  expect(mocks.reload).not.toHaveBeenCalled();
+  await act(async () => vi.advanceTimersByTimeAsync(1000));
+  const attempts = mocks.post.mock.calls.slice(1).map(call => call.slice(0, 2));
+  expect(attempts).toEqual(Array(3).fill(attempts[0]));
+  expect(description().readOnly).toBe(true);
+  await act(async () => originalWrite.resolve(accepted));
+  expect(description()).toMatchObject({ readOnly: false, value: applied });
+});
+
+it.each([500, 502, 503, 429])("retries HTTP %s with the same Accept body", async status => {
+  await start(); choose();
+  vi.useFakeTimers();
+  const reload = pending<SavedListingDraft>();
+  mocks.post.mockRejectedValueOnce(http(status, "Try again")).mockResolvedValueOnce(accepted);
+  mocks.reload.mockReturnValueOnce(reload.promise);
+  fireEvent.click(button(copy.accept));
+  expect(description()).toMatchObject({ readOnly: true, value: original });
+  await act(async () => vi.advanceTimersByTimeAsync(500));
+  expect(mocks.post.mock.calls[2].slice(0, 2)).toEqual(mocks.post.mock.calls[1].slice(0, 2));
+  expect(description()).toMatchObject({ readOnly: true, value: original });
+  await act(async () => reload.resolve(reviewed));
+  expect(description()).toMatchObject({ readOnly: false, value: applied });
+});
+
+it("reloads after an unknown Accept resolves to a definite refusal", async () => {
+  await start(); choose();
+  vi.useFakeTimers();
+  const reload = pending<SavedListingDraft>();
+  mocks.post.mockRejectedValueOnce(http(502, "Gateway unavailable"))
+    .mockRejectedValueOnce(http(409, { code: "REVIEW_STALE" }));
+  mocks.reload.mockReturnValueOnce(reload.promise);
+  fireEvent.click(button(copy.accept));
+  await act(async () => vi.advanceTimersByTimeAsync(500));
+  expect(mocks.reload).toHaveBeenCalledTimes(1);
+  expect(description()).toMatchObject({ readOnly: true, value: original });
+  await act(async () => reload.resolve(reviewed));
+  expect(screen.getByText(copy.stale)).toBeTruthy();
+  expect(description()).toMatchObject({ readOnly: false, value: applied });
+});
+
+it.each([401, 403])("keeps the editor locked and explains HTTP %s after a successful Accept", async status => {
+  await start(); choose();
+  vi.useFakeTimers();
+  mocks.post.mockResolvedValueOnce(accepted);
+  mocks.reload.mockRejectedValueOnce(http(status, "Access could not be verified."));
+  fireEvent.click(button(copy.accept));
+  await settle();
+  expect(screen.getByText(copy.reloadSession)).toBeTruthy();
+  expect(description()).toMatchObject({ readOnly: true, value: original });
+  await act(async () => vi.advanceTimersByTimeAsync(1000));
+  expect(mocks.post).toHaveBeenCalledTimes(2);
+  expect(description()).toMatchObject({ readOnly: false, value: applied });
+});
+
+it("replays a pending Accept when the saved Workspace remounts on version N", async () => {
+  mocks.readDraft.mockResolvedValue(draft);
+  const commit = pending<typeof accepted>();
+  mocks.post.mockResolvedValueOnce(sse("review_completed", completed)).mockReturnValue(commit.promise);
+  const workspace = () => <SellerListingDraftProvider enabled sampleCapability={false}>
+    <GuidedListingFlow connections={[]} capabilities={null} view="listing" navigate={() => {}}>
+      <SavedListingEditor active />
+    </GuidedListingFlow>
+  </SellerListingDraftProvider>;
+  const first = render(workspace());
+  fireEvent.click(await screen.findByRole("button", { name: copy.start }));
+  await screen.findByText("Clear sentence.");
+  choose();
+  fireEvent.click(button(copy.accept));
+  const firstAttempt = mocks.post.mock.calls[1];
+  first.unmount();
+  expect(firstAttempt[5].signal.aborted).toBe(true);
+  render(workspace());
+  expect(description().readOnly).toBe(true);
+  await waitFor(() => expect(mocks.post).toHaveBeenCalledTimes(3));
+  expect(mocks.post.mock.calls[2].slice(0, 2)).toEqual(firstAttempt.slice(0, 2));
+  expect(description()).toMatchObject({ readOnly: true, value: original });
+  fireEvent.change(description(), { target: { value: "Too early" } });
+  expect(description().value).toBe(original);
+  mocks.readDraft.mockResolvedValue(reviewed);
+  await act(async () => commit.resolve(accepted));
+  expect(description()).toMatchObject({ readOnly: false, value: applied });
+});
+
+it("retires a pending Accept when the auth lifecycle changes", async () => {
+  await start(); choose();
+  const write = pending<typeof accepted>();
+  mocks.post.mockReturnValueOnce(write.promise);
+  fireEvent.click(button(copy.accept));
+  cleanup();
+  advanceAuthSessionOwner(false);
+  render(<Editor />);
+  await settle();
+  expect(description()).toMatchObject({ readOnly: false, value: original });
+  expect(mocks.post).toHaveBeenCalledTimes(2);
+});
+
 it("diffs later seller edits from original plus accepted and confirms the preview with a fresh id", async () => {
   await start(); choose();
   mocks.post.mockResolvedValueOnce(accepted);
@@ -264,10 +450,10 @@ it("diffs later seller edits from original plus accepted and confirms the previe
   await waitFor(() => expect(button(copy.remove).disabled).toBe(false));
   mocks.post.mockResolvedValueOnce({
     draft_version: 9, preview_receipt: "signed receipt", draft_moved: false,
-    lost_edits: [{ field: "description", current: applied + " My later note.", restored: original }],
+    lost_edits: [{ field: "description", current: applied + " My later note.", restored: original, expected: applied }],
   }).mockResolvedValueOnce({
     draft_version: 10, preview_receipt: "replacement receipt", draft_moved: false,
-    lost_edits: [{ field: "description", current: applied + " Newer note.", restored: original }],
+    lost_edits: [{ field: "description", current: applied + " Newer note.", restored: original, expected: applied }],
   }).mockResolvedValueOnce({ draft_id: "draft", draft_version: 11, discarded: true, draft_moved: false });
   mocks.reload.mockResolvedValueOnce({ ...draft, version: 11 });
   fireEvent.click(button(copy.remove));
@@ -284,6 +470,60 @@ it("diffs later seller edits from original plus accepted and confirms the previe
   expect(confirmation.request_id).not.toBe(first.request_id);
   expect(mocks.post.mock.calls[4][1]).toMatchObject({ expected_draft_version: 10, preview_receipt: "replacement receipt" });
   expect(description().value).toBe(original);
+});
+
+it("uses the owner baseline for changes accepted in two tabs and explains restored deletions", async () => {
+  sessionStorage.setItem("listing-polish-accepted:run", JSON.stringify(["a"]));
+  const baseline = "Clear sentence. Changed in another tab. Text the seller deleted.";
+  const current = "Clear sentence. Changed in another tab. My later note.";
+  render(<Editor initial={{ ...reviewed, version: 10, content: { ...draft.content, description: current } }} />);
+  mocks.post.mockResolvedValueOnce({
+    draft_version: 10, preview_receipt: "receipt", draft_moved: false,
+    lost_edits: [{ field: "description", current, restored: original, expected: baseline }],
+  });
+  fireEvent.click(button(copy.remove));
+  const preview = await screen.findByRole("alertdialog");
+  expect(within(preview).getByText(copy.withoutEdits)).toBeTruthy();
+  expect(preview.querySelector("ins")?.textContent).toBe(" My later note.");
+  expect(preview.querySelector("del")?.textContent).toBe(" Text the seller deleted.");
+  expect(preview.querySelector("ins, del")?.textContent).not.toContain("Changed in another tab.");
+});
+
+it("shows the full saved and restored fields with the pinned discard response", async () => {
+  sessionStorage.setItem("listing-polish-accepted:run", JSON.stringify(["a"]));
+  render(<Editor initial={reviewed} />);
+  mocks.post.mockResolvedValueOnce({
+    draft_version: 9, preview_receipt: "receipt", draft_moved: false,
+    lost_edits: [{ field: "description", current: applied + " Another tab's change.", restored: original }],
+  });
+  fireEvent.click(button(copy.remove));
+  const preview = await screen.findByRole("alertdialog");
+  expect(within(preview).getByText(copy.unavailableComparison)).toBeTruthy();
+  expect(preview.querySelectorAll("ins, del")).toHaveLength(0);
+  expect(preview.textContent).toContain(applied + " Another tab's change.");
+  expect(preview.textContent).toContain(original);
+});
+
+it("explains when discarding restores the earlier review binding", async () => {
+  render(<Editor initial={reviewed} />);
+  mocks.post.mockResolvedValueOnce({ draft_id: "draft", draft_version: 9, draft_moved: false, discarded: true });
+  mocks.reload.mockResolvedValueOnce({ ...draft, version: 9, review_run_id: "earlier" });
+  fireEvent.click(button(copy.remove));
+  expect(await screen.findByText(copy.removedWithEarlierReview)).toBeTruthy();
+  expect(button(copy.remove).disabled).toBe(false);
+});
+
+it("replays discard after a gateway failure using its original request", async () => {
+  render(<Editor initial={reviewed} />);
+  vi.useFakeTimers();
+  mocks.post.mockRejectedValueOnce(http(503, "Gateway unavailable"))
+    .mockResolvedValueOnce({ draft_id: "draft", draft_version: 9, draft_moved: false, discarded: true });
+  mocks.reload.mockResolvedValueOnce({ ...draft, version: 9 });
+  fireEvent.click(button(copy.remove));
+  expect(description().readOnly).toBe(true);
+  await act(async () => vi.advanceTimersByTimeAsync(500));
+  expect(mocks.post.mock.calls[1].slice(0, 2)).toEqual(mocks.post.mock.calls[0].slice(0, 2));
+  expect(description()).toMatchObject({ readOnly: false, value: original });
 });
 
 it("uses the published revision on first accept and shows the published text again after discard", async () => {
@@ -323,6 +563,94 @@ it("uses the published revision on first accept and shows the published text aga
   expect(description().value).toBe(original);
 });
 
+const published = { id: "pub-b", listing_id: "listing-b", listing_version_id: "revision-b",
+  title: "Publication B", slug: "publication-b", status: "published", is_listed: true,
+  published_at: "2026-10-22T09:00:00Z" };
+const publishedRun = { ...completed, run_id: "run-b", basis: "published",
+  revision_ref: { base_listing_version_id: "revision-b" },
+  original: { description: { text: "Publication B's description.", sentences: [] } } };
+
+function PublicationsWorkspace({ initialView = "manage" }: { initialView?: WorkspaceView }) {
+  const [view, setView] = useState<WorkspaceView>(initialView);
+  return <SellerListingDraftProvider enabled sampleCapability={false}>
+    <GuidedListingFlow connections={[]} capabilities={null} view={view} navigate={setView}>
+      <button onClick={() => setView("manage")}>Open publications</button>
+      <WorkspacePanel active={view === "manage"}><SellerPublications active={view === "manage"} enabled /></WorkspacePanel>
+      <WorkspacePanel active={view === "listing"}><SavedListingEditor active={view === "listing"} /></WorkspacePanel>
+    </GuidedListingFlow>
+  </SellerListingDraftProvider>;
+}
+
+it("opens publication B without exposing the text or discard action for bound draft A", async () => {
+  mocks.readPublications.mockResolvedValue({ items: [published], page: 0, has_more: false });
+  mocks.readDraft.mockResolvedValue({ ...reviewed, review_run_id: "run-a",
+    content: { ...reviewed.content, title: "Draft A", description: "Draft A's accepted description." } });
+  mocks.post.mockResolvedValueOnce(sse("review_completed", publishedRun))
+    .mockRejectedValueOnce(http(409, { code: "REVIEW_DRAFT_IN_PROGRESS" }))
+    .mockResolvedValueOnce({ draft_id: "draft", draft_version: 9, draft_moved: false, discarded: true });
+  render(<PublicationsWorkspace initialView="listing" />);
+  await screen.findByRole("button", { name: copy.remove });
+  fireEvent.change(description(), { target: { value: "Unsaved edit to draft A." } });
+  fireEvent.click(button("Open publications"));
+  fireEvent.click(await screen.findByRole("button", { name: copy.title }));
+  expect(screen.getByRole("textbox", { name: "Title" })).toHaveProperty("value", "Publication B");
+  expect(description().readOnly).toBe(true);
+  expect(screen.queryByRole("button", { name: copy.remove })).toBeNull();
+  fireEvent.click(await screen.findByRole("button", { name: copy.start }));
+  await screen.findByText("Clear sentence.");
+  expect(description().value).toBe("Publication B's description.");
+  choose();
+  fireEvent.click(button(copy.accept));
+  expect(await screen.findByText(copy.inProgress)).toBeTruthy();
+  expect(screen.queryByRole("button", { name: copy.remove })).toBeNull();
+  expect(mocks.post.mock.calls[0][1]).toMatchObject({ listing_id: "listing-b", expected_base_version_id: "revision-b" });
+  expect(mocks.post.mock.calls[1].slice(0, 2)).toEqual([path + "/run-b/accept",
+    expect.objectContaining({ expected_base_version: "revision-b" })]);
+  fireEvent.click(button(copy.returnToDraft));
+  expect(description().value).toBe("Unsaved edit to draft A.");
+  fireEvent.change(description(), { target: { value: "Draft A's accepted description." } });
+  mocks.readDraft.mockResolvedValue({ ...draft, version: 9 });
+  fireEvent.click(button(copy.remove));
+  expect(await screen.findByText(copy.removed)).toBeTruthy();
+  expect(mocks.post.mock.calls[2].slice(0, 2)).toEqual([path + "/run-a/discard",
+    expect.objectContaining({ expected_draft_version: 8 })]);
+});
+
+it("keeps the publication review on its own successor and its current version", async () => {
+  const successor = { ...reviewed, draft_id: "successor-b", review_run_id: "run-b", version: 1 };
+  mocks.readPublications.mockResolvedValue({ items: [published], page: 0, has_more: false });
+  mocks.readDraft.mockResolvedValue(null);
+  mocks.post.mockResolvedValueOnce(sse("review_completed", publishedRun))
+    .mockImplementationOnce(async () => {
+      mocks.readDraft.mockResolvedValue(successor);
+      return { ...accepted, draft_id: successor.draft_id, draft_version: 1 };
+    }).mockImplementationOnce(async () => {
+      mocks.readDraft.mockResolvedValue({ ...successor, version: 2 });
+      return { ...accepted, draft_id: successor.draft_id, draft_version: 2, accepted_change_ids: ["b"] };
+    }).mockImplementationOnce(async () => {
+      mocks.readDraft.mockResolvedValue(null);
+      return { draft_id: successor.draft_id, draft_version: 3, draft_moved: false, discarded: true };
+    });
+  render(<PublicationsWorkspace />);
+  fireEvent.click(await screen.findByRole("button", { name: copy.title }));
+  fireEvent.click(await screen.findByRole("button", { name: copy.start }));
+  await screen.findByText("Clear sentence.");
+  choose();
+  fireEvent.click(button(copy.accept));
+  await screen.findByText(copy.applied);
+  expect(description()).toMatchObject({ readOnly: false, value: applied });
+  fireEvent.click(screen.getByRole("checkbox", { name: "Use suggestion Keep this." }));
+  fireEvent.click(button(copy.accept));
+  await screen.findByText(copy.allApplied);
+  expect(mocks.post.mock.calls[2].slice(0, 2)).toEqual([path + "/run-b/accept",
+    expect.objectContaining({ expected_draft_version: 1, change_ids: ["b"] })]);
+  fireEvent.click(button(copy.remove));
+  await screen.findByText(copy.removed);
+  expect(mocks.post.mock.calls[3].slice(0, 2)).toEqual([path + "/run-b/discard",
+    expect.objectContaining({ expected_draft_version: 2 })]);
+  expect(description()).toMatchObject({ readOnly: true, value: "Publication B's description." });
+});
+
 const review = { draft_id: "draft", draft_version: 8, confirmation_statements: {
   ownership_confirmed: "Ownership", privacy_confirmed: "Privacy", price_license_confirmed: "Price",
   public_disclosure_confirmed: "Disclosure",
@@ -344,6 +672,18 @@ it("lets the seller reconfirm stale removals on the current draft version", asyn
   }]);
   expect(button("Approve this review").disabled).toBe(false);
 });
+it("replays confirm-removals after rate limiting", async () => {
+  approve({ code: "REVIEW_CONFLICT", stale_removals: [{ review_run_id: "run", change_ids: ["b"] }] });
+  mocks.post.mockRejectedValueOnce(http(429, "Too many requests"))
+    .mockResolvedValueOnce({ draft_moved: false, confirmed_change_ids: ["b"], confirmed_fact_ids: [] });
+  const confirm = await screen.findByRole("button", { name: copy.confirmRemoval });
+  vi.useFakeTimers();
+  fireEvent.click(confirm);
+  expect(button(copy.confirmRemoval).disabled).toBe(true);
+  await act(async () => vi.advanceTimersByTimeAsync(500));
+  expect(mocks.post.mock.calls[1].slice(0, 2)).toEqual(mocks.post.mock.calls[0].slice(0, 2));
+  expect(screen.getByText(copy.confirmed)).toBeTruthy();
+});
 it("lets the seller confirm facts from the approval refusal", async () => {
   mocks.read.mockResolvedValue({ ...completed, proposal: { ...completed.proposal, changes: [
     { ...completed.proposal.changes[0], fact_units: [{ fact_id: "fact", value: "Published in 2024" }] },
@@ -355,6 +695,76 @@ it("lets the seller confirm facts from the approval refusal", async () => {
   expect(await screen.findByText(copy.confirmed)).toBeTruthy();
   expect(mocks.post.mock.calls[0][1]).toMatchObject({ draft_version: 8, change_ids: [], fact_confirmations: ["fact"] });
 });
+it("confirms every fact in the sentence even when approval only names one", async () => {
+  const f1 = { fact_id: "f1", value: "40 countries" };
+  const f2 = { fact_id: "f2", value: "Published in 2024" };
+  const sentence = "Published in 2024 with data from 40 countries.";
+  mocks.read.mockResolvedValue({ ...completed, proposal: { ...completed.proposal, changes: [
+    { ...completed.proposal.changes[0], text: sentence, fact_units: [f1, f2] },
+  ] } });
+  approve({ code: "FACT_CONFIRMATION_REQUIRED", facts: [{ review_run_id: "run", fact_id: "f2" }] });
+  const group = await screen.findByRole("group", { name: sentence });
+  fireEvent.click(within(group).getByRole("checkbox", { name: "Confirm fact Published in 2024" }));
+  expect(button(copy.confirmFacts).disabled).toBe(true);
+  expect(mocks.post).not.toHaveBeenCalled();
+  fireEvent.click(within(group).getByRole("checkbox", { name: "Confirm fact 40 countries" }));
+  mocks.post.mockImplementationOnce((_url, body) => {
+    if (body.fact_confirmations.length !== 2) return Promise.reject(http(409, {
+      code: "FACT_CONFIRMATION_REQUIRED", message: "Confirm every fact in each suggestion together.", fact_ids: ["f1"],
+    }));
+    return Promise.resolve({ draft_moved: false, confirmed_change_ids: [], confirmed_fact_ids: ["f1", "f2"] });
+  });
+  fireEvent.click(button(copy.confirmFacts));
+  expect(await screen.findByText(copy.confirmed)).toBeTruthy();
+  expect(mocks.post.mock.calls[0][1]).toMatchObject({ fact_confirmations: ["f1", "f2"] });
+  expect(button("Approve this review").disabled).toBe(false);
+});
+
+it("reloads a stale confirmation and sends the refreshed version with a new request id", async () => {
+  approve({ code: "REVIEW_CONFLICT", stale_removals: [{ review_run_id: "run", change_ids: ["b"] }] });
+  mocks.post.mockRejectedValueOnce(http(409, { code: "REVIEW_STALE", message: copy.confirmationStale, draft_version: 9 }))
+    .mockResolvedValueOnce({ draft_moved: false, confirmed_change_ids: ["b"], confirmed_fact_ids: [] });
+  mocks.reload.mockImplementationOnce(async () => (mocks.approvalDraft = { ...reviewed, version: 9 }));
+  fireEvent.click(await screen.findByRole("button", { name: copy.confirmRemoval }));
+  expect(await screen.findByText(copy.confirmationRefreshed)).toBeTruthy();
+  fireEvent.click(button(copy.confirmRemoval));
+  expect(await screen.findByText(copy.confirmed)).toBeTruthy();
+  expect(mocks.post.mock.calls[0][1]).toMatchObject({ draft_version: 8 });
+  expect(mocks.post.mock.calls[1][1]).toMatchObject({ draft_version: 9 });
+  expect(mocks.post.mock.calls[1][1].request_id).not.toBe(mocks.post.mock.calls[0][1].request_id);
+});
+
+it.each([
+  "Some suggestions are unknown.",
+  "Only accepted removals can be confirmed again.",
+  "These suggestions belong to another review.",
+])("preserves the distinct confirm-removals refusal %s", async message => {
+  approve({ code: "REVIEW_CONFLICT", stale_removals: [{ review_run_id: "run", change_ids: ["b"] }] });
+  mocks.post.mockRejectedValueOnce(http(409, { code: "REVIEW_CONFLICT", message, change_ids: ["b"] }));
+  fireEvent.click(await screen.findByRole("button", { name: copy.confirmRemoval }));
+  expect(await screen.findByText(message)).toBeTruthy();
+  expect(screen.queryByText(copy.confirmed)).toBeNull();
+});
+
+it.each([
+  "The published listing changed. Start a new review.",
+  "These suggestions could not be verified. Start a new review.",
+])("keeps the approval refusal and provides removal for %s", async message => {
+  approve({ code: "REVIEW_CONFLICT", message });
+  expect(await screen.findByText(message)).toBeTruthy();
+  expect(button(copy.remove).disabled).toBe(false);
+  expect(mocks.post).not.toHaveBeenCalled();
+});
+
+it("offers discard when an approval recovery run cannot be read", async () => {
+  mocks.read.mockRejectedValue(http(404, "Listing review not found."));
+  approve({ code: "REVIEW_CONFLICT", stale_removals: [{ review_run_id: "run", change_ids: ["b"] }] });
+  expect(await screen.findByText(copy.recoveryUnavailable)).toBeTruthy();
+  expect(button(copy.remove).disabled).toBe(false);
+  expect(screen.queryByRole("button", { name: copy.confirmRemoval })).toBeNull();
+  expect(mocks.post).not.toHaveBeenCalled();
+});
+
 it("shows the server evidence refusal and an explicit discard action without discarding automatically", async () => {
   const message = "Your files changed since this review. Remove the review changes, then start a new review.";
   approve({ code: "REVIEW_CONFLICT", message, removals_required: 1 });

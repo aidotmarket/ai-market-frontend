@@ -11,11 +11,13 @@ import { listingPolishEnabled, reviewError, reviewNetworkFailure, type ReviewErr
 import { listingPolish as polishCopy } from '@/lib/i18n/listing-polish';
 import { useOptionalSellerListingDraft } from './SellerListingDraftStore';
 import { PolishApprovalRecovery } from './PolishApprovalRecovery';
+import { pendingPolishAccept, usePendingPolishAccept } from './pendingPolishAccept';
 
 export default function SellerApproval({review, active, rendered,disabled=false}: {review: ListingReview; active: boolean; rendered: boolean;disabled?:boolean}) {
   const flow=useListingFlow();
   const draftStore = useOptionalSellerListingDraft();
   const polishEnabled = listingPolishEnabled();
+  const pendingAccept = usePendingPolishAccept(polishEnabled);
   const sessionIdentity=useAuthStore(authSessionIdentity);
   const [confirmed, setConfirmed] = useState(false);
   const [receipt, setReceipt] = useState(review.approval ?? null);
@@ -35,10 +37,10 @@ export default function SellerApproval({review, active, rendered,disabled=false}
   }, [active]);
   const sampleDecision=review.sample_decision??'none';
   const confirmationKeys:ConfirmationKey[]=[...(review.license_selection?LICENSE_CONFIRMATION_KEYS:CONFIRMATION_KEYS),...(sampleDecision==='member_files'?['sample_files_confirmed' as const]:[])];
-  const ready = active && rendered && !disabled && confirmed && !stale && !receipt && !polishRefusal && !flow?.polishBusy;
+  const ready = active && rendered && !disabled && confirmed && !stale && !receipt && !polishRefusal && !flow?.polishBusy && !pendingAccept;
   async function approve(event: React.FormEvent) {
     event.preventDefault();
-    if (!ready || controller.current || flow?.polishLock?.current) return;
+    if (!ready || controller.current || flow?.polishLock?.current || polishEnabled && pendingPolishAccept()) return;
     const request = new AbortController();controller.current = request;
     identity.current ??= crypto.randomUUID();
     setBusy(true);setError(null);setAuthError(null);setPolishNotice('');
@@ -52,7 +54,7 @@ export default function SellerApproval({review, active, rendered,disabled=false}
       setAuthError(nativeAuthError(failure));
       if (axios.isAxiosError(failure) && failure.response?.status === 409) {
         const refusal = reviewError(failure);
-        if (polishEnabled && (refusal.stale_removals?.length || refusal.removals_required ||
+        if (polishEnabled && (refusal.code === 'REVIEW_CONFLICT' || refusal.stale_removals?.length || refusal.removals_required ||
             refusal.message?.startsWith(polishCopy.evidenceChanged) || refusal.code === 'FACT_CONFIRMATION_REQUIRED')) {
           setPolishRefusal(refusal);
         } else { setStale(true);setError('The listing or files changed. Refresh the saved review and confirm it again.'); }
@@ -80,15 +82,17 @@ export default function SellerApproval({review, active, rendered,disabled=false}
     {error && !authError && <p role="alert" className="text-sm text-red-800">{error}</p>}
     {polishNotice && <p role="status" className="text-sm text-green-900">{polishNotice}</p>}
   </form>
-    {polishRefusal && <PolishApprovalRecovery refusal={polishRefusal} active={active} dirty={flow?.listingDirty}
+    {polishRefusal && <PolishApprovalRecovery refusal={polishRefusal} active={active && !pendingAccept}
+      dirty={flow?.listingDirty} displayedVersion={review.draft_version}
       draft={draftStore?.draft?.draft_id === review.draft_id ? draftStore?.draft ?? null : null}
       reload={draftStore?.reload} lock={flow?.polishLock} onBusy={flow?.setPolishBusy}
       onEdit={flow ? () => flow.navigate('listing') : undefined}
       onResolved={() => { setPolishRefusal(null); setPolishNotice(polishCopy.confirmed); }}
-      onDiscarded={() => {
+      onDiscarded={saved => {
+        const notice = saved?.draft_id === review.draft_id && saved?.review_run_id ? polishCopy.removedWithEarlierReview : polishCopy.removed;
         setPolishRefusal(null);setStale(true);
-        if (flow) { flow.setPolishNotice(polishCopy.removed); flow.refreshReview(); }
-        else setPolishNotice(polishCopy.removed);
+        if (flow) { flow.setPolishNotice(notice); flow.refreshReview(); }
+        else setPolishNotice(notice);
       }} />}
   </>;
 }
