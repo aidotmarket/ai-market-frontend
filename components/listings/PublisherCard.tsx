@@ -35,6 +35,9 @@ export default function PublisherCard({ publisher }: { publisher?: PublisherPubl
             ? sellerRatingText(seller.seller_rating_average, seller.seller_rating_count)
             : seller.seller_rating_count === 0 ? NO_RATINGS_YET : SELLER_RATINGS_UNAVAILABLE}
         </p>}
+        {(seller.completed_order_count === 0 || seller.seller_rating_count === 0) && <p className="text-sm text-gray-600">
+          These counts cover this publisher’s public listings. Buyers can only rate purchases they’ve completed.
+        </p>}
       </div>}
     </div>
   );

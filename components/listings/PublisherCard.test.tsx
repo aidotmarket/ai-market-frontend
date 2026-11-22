@@ -16,6 +16,7 @@ describe('publisher presentation', () => {
     render(<PublisherCard publisher={anonymous} />);
     expect(screen.getByText('ai.market Seller')).toBeTruthy();
     expect(screen.getByText('No completed purchases yet')).toBeTruthy();
+    expect(screen.getByText('These counts cover this publisher’s public listings. Buyers can only rate purchases they’ve completed.')).toBeTruthy();
     expect(screen.getByText('No ratings yet')).toBeTruthy();
     expect(screen.queryByText(/Stripe connected|0\/5/)).toBeNull();
   });
@@ -95,9 +96,9 @@ describe('verified domain and rating presentation', () => {
     expect(domain.parentElement?.classList.contains('gap-2')).toBe(true);
     expect(Array.from(domain.parentElement!.children)).toEqual([stripe, domain]);
   });
-  it('preserves the bd368d0e Stripe-only markup exactly', () => {
+  it('preserves the Stripe-only chip and shows the publisher counts with their scope', () => {
     expect(renderToStaticMarkup(<PublisherCard publisher={{ ...anonymous, stripe_connected: true }} />)).toBe(
-      '<div class="rounded-xl border border-gray-200 p-6"><h3 class="font-semibold text-gray-900 mb-3">Publisher</h3><p class="text-sm text-gray-600 break-words">ai.market Seller</p><div class="mt-3 space-y-2 border-t border-gray-100 pt-3"><span tabindex="0" title="Seller connected a Stripe payout account. This does not certify company affiliation or data quality." aria-label="Stripe connected. Seller connected a Stripe payout account. This does not certify company affiliation or data quality." class="inline-flex rounded-full bg-gray-100 px-2.5 py-1 text-xs font-medium text-gray-700">Stripe connected</span><p class="text-sm text-gray-600">No completed purchases yet</p><p class="text-sm text-gray-600" aria-label="Seller ratings">No ratings yet</p></div></div>');
+      '<div class="rounded-xl border border-gray-200 p-6"><h3 class="font-semibold text-gray-900 mb-3">Publisher</h3><p class="text-sm text-gray-600 break-words">ai.market Seller</p><div class="mt-3 space-y-2 border-t border-gray-100 pt-3"><span tabindex="0" title="Seller connected a Stripe payout account. This does not certify company affiliation or data quality." aria-label="Stripe connected. Seller connected a Stripe payout account. This does not certify company affiliation or data quality." class="inline-flex rounded-full bg-gray-100 px-2.5 py-1 text-xs font-medium text-gray-700">Stripe connected</span><p class="text-sm text-gray-600">No completed purchases yet</p><p class="text-sm text-gray-600" aria-label="Seller ratings">No ratings yet</p><p class="text-sm text-gray-600">These counts cover this publisher’s public listings. Buyers can only rate purchases they’ve completed.</p></div></div>');
   });
   it.each([
     [0, null, 'No ratings yet'], [1, 5, '5/5 from 1 rating'],
