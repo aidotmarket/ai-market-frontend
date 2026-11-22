@@ -5,7 +5,9 @@ import { authSessionIdentity, useAuthStore } from '@/store/auth';
 import Link from 'next/link';
 import { useParams } from 'next/navigation';
 import { confirmLicenseRecordDeletion, downloadLicenseRecordPdf, getLicenseRecord } from '@/api/licenseRecords';
+import { getSellerOrderStatus } from '@/api/seller';
 import { formatDate } from '@/lib/format';
+import { getSellerStatusPresentation } from '@/lib/sellerOrderStatus';
 import type { LicenseRecord, LicenseRecordCovenantDocument, LicenseRecordIdentifiedParty, LicenseRecordLicenseDocument, LicenseRecordReferencedParty, LicenseRecordRiderDocument } from '@/types';
 
 type RecordDocument = LicenseRecordLicenseDocument | LicenseRecordCovenantDocument | LicenseRecordRiderDocument;
@@ -43,6 +45,7 @@ function LicenseRecordVisit({ id, party }: { id: string; party: 'buyer' | 'selle
   const [record, setRecord] = useState<LicenseRecord | null>(null);
   const [state, setState] = useState<'loading' | 'ready' | 'error'>('loading');
   const [readAttempt, setReadAttempt] = useState(0);
+  const [deliveryStatus, setDeliveryStatus] = useState('Loading…');
   const [actionPending, setActionPending] = useState(false);
   const [actionError, setActionError] = useState<'pdf' | 'confirmation' | null>(null);
   const live = useRef(false);
@@ -60,23 +63,34 @@ function LicenseRecordVisit({ id, party }: { id: string; party: 'buyer' | 'selle
   }, []);
 
   useEffect(() => {
-    let cancelled = false;
+    const controller = new AbortController();
+    const isCurrent = () => !controller.signal.aborted && live.current;
     setState('loading');
     setRecord(null);
+    setDeliveryStatus('Loading…');
     async function read() {
       try {
         const value = await getLicenseRecord(id);
-        if (!cancelled && live.current) {
-          setRecord(value);
-          setState('ready');
-        }
+        if (!isCurrent()) return;
+        setRecord(value);
+        setState('ready');
       } catch {
-        if (!cancelled && live.current) setState('error');
+        if (isCurrent()) setState('error');
+        return;
+      }
+
+      if (party === 'seller') {
+        try {
+          const status = await getSellerOrderStatus(id, controller.signal);
+          if (isCurrent()) setDeliveryStatus(getSellerStatusPresentation(status ?? '').label);
+        } catch {
+          if (isCurrent()) setDeliveryStatus('Status unavailable');
+        }
       }
     }
     void read();
-    return () => { cancelled = true; };
-  }, [id, readAttempt]);
+    return () => controller.abort();
+  }, [id, party, readAttempt]);
 
   async function downloadPdf() {
     if (!live.current || state !== 'ready' || !record || pending.current) return;
@@ -152,8 +166,9 @@ function LicenseRecordVisit({ id, party }: { id: string; party: 'buyer' | 'selle
         <div><dt className="text-gray-500">Accepted</dt><dd className="mt-1 text-gray-900">{formatDate(record.signature.accepted_at)}</dd></div>
         <div><dt className="text-gray-500">Buyer</dt><dd className="mt-1 text-gray-900">{partyLabel(record.buyer, party === 'buyer')}</dd></div>
         <div><dt className="text-gray-500">Seller</dt><dd className="mt-1 text-gray-900">{partyLabel(record.seller, party === 'seller')}</dd></div>
-        <div><dt className="text-gray-500">Signature</dt><dd className="mt-1 text-gray-900">{party === 'buyer' && 'typed_name' in record.signature ? (record.signature.typed_name ?? record.signature.principal_ref ?? record.signature.channel) : record.signature.channel}{party === 'buyer' && 'signer_title' in record.signature && record.signature.signer_title ? `, ${record.signature.signer_title}` : ''}</dd></div>
+        <div className={party === 'seller' ? 'sm:col-span-2' : undefined}><dt className="text-gray-500">Signature</dt><dd className="mt-1 text-gray-900">{party === 'buyer' && 'typed_name' in record.signature ? (record.signature.typed_name ?? record.signature.principal_ref ?? record.signature.channel) : record.signature.channel}{party === 'buyer' && 'signer_title' in record.signature && record.signature.signer_title ? `, ${record.signature.signer_title}` : ''}</dd></div>
         <div><dt className="text-gray-500">Licence status</dt><dd className={`mt-1 font-semibold ${record.status === 'active' ? 'text-green-800' : 'text-red-800'}`}>{record.status === 'active' ? 'Active' : 'Terminated'}</dd></div>
+        {party === 'seller' && <div><dt className="text-gray-500">Delivery status</dt><dd className="mt-1 font-semibold text-gray-900" aria-live="polite">{deliveryStatus}</dd></div>}
       </dl>
       <p className="text-sm text-gray-700">{record.identity_notice}</p>
       {record.status === 'terminated' && (

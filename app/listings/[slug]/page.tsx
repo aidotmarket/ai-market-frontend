@@ -161,12 +161,11 @@ export default async function ListingDetailPage({ params, searchParams }: Props)
     : listing.at_a_glance;
   const [documents, versions] = await Promise.all([documentsPromise, fetchListingVersions(listing.id)]);
   const sampleFiles = listing.sample_files ?? approved?.sample_files;
-  const hasPublicMaterials = sampleFiles?.some(file => file.state === 'available')
-    || documents.length > 0 || schemaColumns.length > 0
+  const hasOtherPublicMaterials = documents.length > 0 || schemaColumns.length > 0
     || atAGlanceSummary?.key_fields?.value?.length || atAGlanceSummary?.field_descriptions?.value?.length;
   const requiresFilePurchase = listing.fulfillment_type === 'file_download' && listing.purchasable
     && !purchaseDisabledReason && !listing.is_accessible_for_free && listing.pricing.price > 0;
-  const emptyNotice = hasPublicMaterials ? undefined
+  const emptyNotice = sampleFiles?.length || hasOtherPublicMaterials ? undefined
     : requiresFilePurchase
       ? 'No public sample for this listing. Purchase is required to access the full files.'
       : 'No public sample for this listing.';

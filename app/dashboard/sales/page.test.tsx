@@ -14,7 +14,10 @@ vi.mock('next/navigation', () => ({
   useSearchParams: () => new URLSearchParams(navigation.search),
 }));
 vi.mock('@/api/capabilities', () => capabilitiesApi);
-vi.mock('@/api/seller', () => sellerApi);
+vi.mock('@/api/seller', async (importOriginal) => ({
+  ...await importOriginal<typeof import('@/api/seller')>(),
+  ...sellerApi,
+}));
 vi.mock('@/api/orders', () => ordersApi);
 vi.mock('@/api/transactions', () => transactionsApi);
 vi.mock('@/components/orders/OrderVersionAccessSummary', () => ({

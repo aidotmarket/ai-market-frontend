@@ -29,6 +29,14 @@ export default function SampleFiles({ files }: {
 }) {
   if (!files?.length) return null;
 
+  if (!files.some((file) => file.state === 'available')) {
+    return (
+      <p className="rounded-xl border border-gray-200 p-6 text-sm text-gray-600">
+        The seller’s sample is currently unavailable.
+      </p>
+    );
+  }
+
   return (
     <section aria-labelledby="free-sample-heading" className="rounded-xl border border-gray-200 p-6">
       <h2 id="free-sample-heading" className="text-lg font-semibold">Free sample: {files.length} files</h2>
