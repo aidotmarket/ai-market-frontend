@@ -67,12 +67,16 @@ export default async function BrowseRequestsPage({ searchParams }: Props) {
             Browse open data requests, or post your own. Sellers respond with matching datasets. The whole conversation happens here.
           </p>
         </div>
-        <Link
-          href="/requests/new"
-          className="inline-flex items-center justify-center rounded-lg bg-[#3F51B5] px-5 py-2.5 text-sm font-medium text-white hover:bg-[#3545a0] transition-colors"
-        >
-          Post a Data Request
-        </Link>
+        <div className="shrink-0 sm:text-center">
+          <Link
+            href="/requests/new"
+            aria-describedby="post-request-account"
+            className="inline-flex items-center justify-center rounded-lg bg-[#3F51B5] px-5 py-2.5 text-sm font-medium text-white hover:bg-[#3545a0] transition-colors"
+          >
+            Post a Data Request
+          </Link>
+          <p id="post-request-account" className="mt-1 text-sm text-gray-600">Free account needed</p>
+        </div>
       </div>
 
       {/* Category filter */}
@@ -121,13 +125,25 @@ export default async function BrowseRequestsPage({ searchParams }: Props) {
           <p className="text-gray-400 text-sm mb-6">
             {page > 1 ? 'Return to the first page or try the previous page.' : category ? 'Try another category.' : 'Be the first to tell the market what you need.'}
           </p>
-          {(category || page === 1) && (
+          {category && (
             <Link
-              href={category ? '/requests' : '/requests/new'}
+              href="/requests"
               className="rounded-lg bg-[#3F51B5] px-6 py-2.5 text-sm font-medium text-white hover:bg-[#3545a0]"
             >
-              {category ? 'View all requests' : 'Post a Data Request'}
+              View all requests
             </Link>
+          )}
+          {page === 1 && !category && (
+            <div>
+              <Link
+                href="/requests/new"
+                aria-describedby="empty-post-request-account"
+                className="inline-flex rounded-lg bg-[#3F51B5] px-6 py-2.5 text-sm font-medium text-white hover:bg-[#3545a0]"
+              >
+                Post a Data Request
+              </Link>
+              <p id="empty-post-request-account" className="mt-1 text-sm text-gray-600">Free account needed</p>
+            </div>
           )}
         </div>
       )}

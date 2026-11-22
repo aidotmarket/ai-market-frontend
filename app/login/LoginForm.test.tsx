@@ -59,10 +59,10 @@ it.each(['/listings?next=/dashboard', '/dashboard-help', null])(
 );
 
 it.each([
-  ['redirect=/requests/new', 'We need an account so we can reach out to you with offers that match your requirements. After sign-up, allAI will walk you through submitting a data request to the marketplace.'],
+  ['redirect=/requests/new', 'Sign in or create an account to continue to your data request.'],
   ['error=oauth_failed', 'OAuth sign-in failed. Please try again or use email and password.'],
   ['error=two_factor_expired', 'Your two-factor session expired. Please sign in again.'],
-])('preserves the existing explanation for %s', async (query, message) => {
+])('shows the relevant explanation for %s', async (query, message) => {
   navigation.query = new URLSearchParams(query);
   await act(async () => { render(<LoginForm />); });
 
@@ -77,7 +77,10 @@ it('offers email sign-in/sign-up without promising delivery on a generic 200', a
   render(<LoginForm />);
   // The existing password path remains available by default.
   expect(screen.getByLabelText('Password')).toBeTruthy();
-  fireEvent.click(screen.getByRole('button', { name: 'Sign in or sign up with email' }));
+  expect(screen.getByRole('link', { name: 'Sign up' }).getAttribute('href')).toBe(
+    `/register?redirect=${encodeURIComponent(request)}`
+  );
+  fireEvent.click(screen.getByRole('button', { name: 'Use an email link' }));
   expect(screen.queryByLabelText('Password')).toBeNull();
   expect(screen.getByText(/New accounts are created only after you verify the link/)).toBeTruthy();
   fireEvent.change(screen.getByLabelText('Email'), { target: { value: 'new-customer@example.test' } });
@@ -104,7 +107,7 @@ it('saves the customer request alongside the origin-local Google nonce', async (
 it('shows an email request failure without a delivery confirmation', async () => {
   vi.mocked(requestMagicLink).mockRejectedValue(new Error('network'));
   render(<LoginForm />);
-  fireEvent.click(screen.getByRole('button', { name: 'Sign in or sign up with email' }));
+  fireEvent.click(screen.getByRole('button', { name: 'Use an email link' }));
   fireEvent.change(screen.getByLabelText('Email'), { target: { value: 'new-customer@example.test' } });
   fireEvent.click(screen.getByRole('button', { name: 'Send email link' }));
   expect(await screen.findByText('Could not request an email link. Please try again.')).toBeTruthy();

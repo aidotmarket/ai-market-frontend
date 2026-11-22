@@ -257,7 +257,12 @@ export default function PartnerPage() {
               Run an AIM Data gateway on your infrastructure.
             </h2>
             <p className="mt-5 text-lg leading-8 text-gray-600">
-              The open-source gateway sends opaque file IDs and keyed commitments automatically, with your alias if set. After you confirm a file, it sends column names, types, row count, bucketed null rates and distinct counts, and raw SHA-256. No data values go to ai.market in these messages. You can separately publish a public sample on your listing.
+              The open-source gateway automatically sends generated file references and fingerprints made with a secret key.
+              It includes a display name if you set one. After you confirm a file, the gateway sends a checksum of
+              the file. For file formats it can summarize, it also sends the row count and the names and types of
+              the columns you include. For each included column, it reports roughly how much is missing and a range
+              for the number of different values. No data values go to ai.market in these messages.
+              You can separately publish a public sample on your listing.
             </p>
             <blockquote className="mt-8 rounded-2xl border border-[#D8EEE6] bg-white p-6 text-base font-semibold leading-7 text-gray-900 shadow-sm">
               The gateway refuses to start as root or the wrong user, with a writable root filesystem, any capability, no-new-privileges off, or a mounted socket. You must restrict outbound access to api.ai.market:443 with a restricted proxy or firewall and DNS. Its egress canary reports open access, which blocks publishing and new permissions. Buyers download purchases directly through your HTTPS door.

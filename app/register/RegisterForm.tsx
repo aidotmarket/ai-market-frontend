@@ -207,18 +207,14 @@ export default function RegisterForm() {
           </button>
 
           <p className="text-center text-sm text-gray-500">
-            Want to sell data? You can enable selling from your{' '}
-            <Link href="/dashboard" className="text-[#3F51B5] hover:underline">
-              dashboard
-            </Link>{' '}
-            after you sign up.
+            Want to sell data? You can enable selling from your dashboard after you sign up.
           </p>
         </form>
 
         <p className="mt-6 text-center text-sm text-gray-500">
           Already have an account?{' '}
           <Link href={loginHref} className="text-[#3F51B5] hover:underline">
-            Log in
+            Sign in
           </Link>
         </p>
       </div>

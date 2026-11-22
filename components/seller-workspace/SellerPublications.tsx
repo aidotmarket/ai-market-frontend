@@ -7,6 +7,9 @@ import SellerAtAGlance from '@/components/listings/SellerAtAGlance';
 import SellerListingVisibility from './SellerListingVisibility';
 import SellerPreviewConsent from './SellerPreviewConsent';
 import {formatPublishedDate} from '@/lib/format';
+import {listingPolishEnabled, reviewAvailable} from '@/api/listingPolish';
+import {listingPolish as polishCopy} from '@/lib/i18n/listing-polish';
+import {useListingFlow} from './GuidedListingFlow';
 export default function SellerPublications({active,enabled,refresh=0,onRefreshOwnerListings}:{active:boolean;enabled:boolean;refresh?:number;onRefreshOwnerListings?:()=>void}) {
   const [page,setPage]=useState(0);
   const [openDocuments,setOpenDocuments]=useState<Record<string,boolean>>({});
@@ -14,6 +17,17 @@ export default function SellerPublications({active,enabled,refresh=0,onRefreshOw
   const [result,setResult]=useState<PublicationPage|null>(null);
   const [error,setError]=useState('');
   const [retry,setRetry]=useState(0);
+  const flow = useListingFlow();
+  const [polishAvailable, setPolishAvailable] = useState(false);
+  const canPolish = listingPolishEnabled() && !!flow;
+  useEffect(() => {
+    if (!active || !enabled || !canPolish) return;
+    const request = new AbortController();
+    void reviewAvailable(request.signal).then(value => {
+      if (!request.signal.aborted) setPolishAvailable(value);
+    });
+    return () => request.abort();
+  }, [active, enabled, canPolish]);
   useEffect(()=>{
     if (!active || !enabled) return;
     const request=new AbortController();setResult(null);setError('');
@@ -31,6 +45,8 @@ export default function SellerPublications({active,enabled,refresh=0,onRefreshOw
         <div className="flex flex-wrap items-center justify-between gap-3"><h3 className="font-semibold text-gray-900">{item.title}</h3><span className="rounded-full bg-gray-100 px-3 py-1 text-xs text-gray-700">{item.status==='published' && item.is_listed?'Published':'Not listed'}</span></div>
         <p className="mt-2 text-xs text-gray-500">Published {formatPublishedDate(item.published_at)}</p>
         <a href={`/listings/${encodeURIComponent(item.slug)}`} className="mt-4 inline-block text-sm font-medium text-indigo-700 underline">View listing</a>
+        {polishAvailable && flow && <button type="button" className="ml-4 text-sm font-medium text-indigo-700 underline disabled:opacity-50"
+          disabled={flow.polishBusy} onClick={() => flow.openPublicationPolish(item)}>{polishCopy.title}</button>}
         {item.listing_id && <details className="mt-4" onToggle={event=>{const open=event.currentTarget.open;setOpenSummaries(current=>({...current,[item.id]:open}));}}><summary className="cursor-pointer text-sm font-medium text-indigo-700">Review At a glance</summary>{openSummaries[item.id] && <SellerAtAGlance listingId={item.listing_id} slug={item.slug} active={active} revision={retry} />}</details>}
         <details className="mt-4" onToggle={event=>{const open=event.currentTarget.open;setOpenDocuments(current=>({...current,[item.id]:current[item.id] || open}));}}><summary className="cursor-pointer text-sm font-medium text-indigo-700">Manage documents</summary>{openDocuments[item.id] && <ListingDocumentsEditor listingId={item.listing_id}/>}</details>
         <SellerPreviewConsent listingId={item.listing_id} />

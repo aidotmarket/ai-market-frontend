@@ -64,13 +64,13 @@ export default function AimDataPage() {
           <section className="rounded-2xl border border-gray-200 p-6">
             <h2 className="text-xl font-semibold text-gray-900">You choose what to describe</h2>
             <p className="mt-3 leading-7 text-gray-600">
-              The gateway automatically sends opaque file IDs, keyed content commitments, file size,
-              media type, and timestamps. It sends your display alias only if you set one; otherwise
-              it uses a neutral name. Confirm each file before it sends
-              column names, types, row count, bucketed null rates and distinct counts, and its
-              raw SHA-256. No data values go to ai.market in these messages. You can separately
-              publish a public sample on your listing. The gateway sends delivery receipts and
-              signed audit entries for every outbound message.
+              The gateway automatically sends generated file references, fingerprints made with a secret key,
+              file sizes, formats, and timestamps. It uses a neutral name unless you choose a display name.
+              After you confirm a file, the gateway sends a checksum of the file. For file formats it can summarize,
+              it also sends the row count and the names and types of the columns you include. For each included column,
+              it reports roughly how much is missing and a range for the number of different values.
+              No data values go to ai.market in these messages. You can separately publish a public sample on your
+              listing. The gateway sends delivery receipts and signed audit entries for every outbound message.
             </p>
           </section>
           <section className="rounded-2xl border border-gray-200 p-6">

@@ -68,7 +68,7 @@ describe('public request browsing', () => {
     expect(within(cards[0]).getByText('finance')).toBeTruthy();
     expect(within(cards[0]).getByText('Custom category')).toBeTruthy();
     expect(within(cards[1]).getByText('healthcare')).toBeTruthy();
-    expect(screen.getByRole('link', { name: 'Post a Data Request' }).getAttribute('href')).toBe('/requests/new');
+    expect(screen.getByRole('link', { name: 'Post a Data Request', description: 'Free account needed' }).getAttribute('href')).toBe('/requests/new');
     expect(screen.queryByText(/No data requests|Requests are unavailable/)).toBeNull();
   });
 
@@ -88,7 +88,7 @@ describe('public request browsing', () => {
     await renderPage();
     expect(screen.getByText('No data requests yet')).toBeTruthy();
     expect(screen.getByText('Be the first to tell the market what you need.')).toBeTruthy();
-    expect(screen.getAllByRole('link', { name: 'Post a Data Request' })).toHaveLength(2);
+    expect(screen.getAllByRole('link', { name: 'Post a Data Request', description: 'Free account needed' })).toHaveLength(2);
     expect(screen.queryByText('Requests are unavailable')).toBeNull();
   });
 

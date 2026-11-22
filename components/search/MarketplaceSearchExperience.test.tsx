@@ -476,6 +476,7 @@ describe('MarketplaceSearchExperience', () => {
 
     render(<MarketplaceSearchExperience mode="search" />);
 
+    expect(screen.getByText('Describe what you need in your own words, then narrow the results with filters.')).toBeTruthy();
     expect(screen.getByText('No listings found')).toBeTruthy();
     const recoveryLink = screen.getByRole('link', {
       name: 'Browse all marketplace listings',

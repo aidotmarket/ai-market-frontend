@@ -9,14 +9,14 @@ export const descriptionTooLong = (value:string) => [...value].length > DESCRIPT
 type Action = 'Heading' | 'Bold' | 'Italic' | 'Bulleted list' | 'Numbered list';
 const actions:Action[] = ['Heading','Bold','Italic','Bulleted list','Numbered list'];
 
-export default function MarkdownTextField({id,value,onChange,onFocus,rows=6,limit=DESCRIPTION_LIMIT,label='Description'}:{id:string;value:string;onChange:(value:string)=>void;onFocus?:()=>void;rows?:number;limit?:number;label?:string}) {
+export default function MarkdownTextField({id,value,onChange,onFocus,rows=6,limit=DESCRIPTION_LIMIT,label='Description',readOnly=false}:{id:string;value:string;onChange:(value:string)=>void;onFocus?:()=>void;rows?:number;limit?:number;label?:string;readOnly?:boolean}) {
   const textarea=useRef<HTMLTextAreaElement>(null);
   const uid=useId();
   const [preview,setPreview]=useState(false);
   const count=[...value].length;
   const over=count>limit;
   const format=(action:Action)=>{
-    const field=textarea.current;if(!field)return;
+    const field=textarea.current;if(!field||readOnly)return;
     const start=field.selectionStart,end=field.selectionEnd;
     const selected=value.slice(start,end);
     let replacement:string, selectionStart:number, selectionEnd:number;
@@ -37,8 +37,8 @@ export default function MarkdownTextField({id,value,onChange,onFocus,rows=6,limi
     <div role="tablist" aria-label={`${label} mode`} className="flex gap-2">{['Write','Preview'].map((label,index)=><button key={label} id={`${uid}-tab-${index}`} type="button" role="tab" aria-selected={preview===(index===1)} aria-controls={`${uid}-panel`} onClick={()=>setPreview(index===1)} className="rounded border px-3 py-1 text-sm">{label}</button>)}</div>
     <div role="tabpanel" id={`${uid}-panel`} aria-labelledby={`${uid}-tab-${preview?1:0}`}>
       {preview?<ListingMarkdown text={value}/>:<>
-        <div role="toolbar" aria-label={`${label} formatting`} className="flex flex-wrap gap-2">{actions.map(action=><button key={action} type="button" aria-label={action} onMouseDown={event=>event.preventDefault()} onClick={()=>format(action)} className="rounded border px-2 py-1 text-sm">{action}</button>)}</div>
-        <textarea ref={textarea} id={id} aria-label={label} aria-describedby={`${uid}-help ${uid}-count${over?` ${uid}-error`:''}`} aria-invalid={over} rows={rows} value={value} onFocus={onFocus} onChange={event=>onChange(event.target.value)} onKeyDown={event=>{if((event.ctrlKey||event.metaKey)&&!event.altKey&&(event.key.toLowerCase()==='b'||event.key.toLowerCase()==='i')){event.preventDefault();format(event.key.toLowerCase()==='b'?'Bold':'Italic');}}} className="mt-2 block w-full rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm text-gray-900 focus:border-indigo-500 focus:outline-none focus:ring-1 focus:ring-indigo-500"/>
+        <div role="toolbar" aria-label={`${label} formatting`} className="flex flex-wrap gap-2">{actions.map(action=><button key={action} type="button" aria-label={action} disabled={readOnly} onMouseDown={event=>event.preventDefault()} onClick={()=>format(action)} className="rounded border px-2 py-1 text-sm">{action}</button>)}</div>
+        <textarea ref={textarea} id={id} aria-label={label} aria-describedby={`${uid}-help ${uid}-count${over?` ${uid}-error`:''}`} aria-invalid={over} rows={rows} value={value} readOnly={readOnly} onFocus={onFocus} onChange={event=>{if(!readOnly)onChange(event.target.value);}} onKeyDown={event=>{if((event.ctrlKey||event.metaKey)&&!event.altKey&&(event.key.toLowerCase()==='b'||event.key.toLowerCase()==='i')){event.preventDefault();format(event.key.toLowerCase()==='b'?'Bold':'Italic');}}} className="mt-2 block w-full rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm text-gray-900 focus:border-indigo-500 focus:outline-none focus:ring-1 focus:ring-indigo-500"/>
       </>}
     </div>
     <p id={`${uid}-count`} className={`text-xs ${over?'text-red-700':'text-gray-500'}`}>{count.toLocaleString('en-US')} / {limit.toLocaleString('en-US')}</p>
