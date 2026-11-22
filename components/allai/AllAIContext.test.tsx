@@ -33,7 +33,6 @@ const SESSION_KEY = 'allai-session-id';
 const SESSION_URL = 'http://localhost:8000/api/allai/support/anonymous/session';
 const MESSAGE_URL = 'http://localhost:8000/api/allai/support/anonymous/message';
 const STATUS_URL = 'http://localhost:8000/api/allai/support/anonymous/status';
-const LISTING_ERROR = anonymousAllAIResources('en').listingRecovery.error;
 const GENERIC_ERROR = 'Sorry, something went wrong. Please try again.';
 const LIMIT_ERROR = "You've reached the chat limit for now. Please try again later. Meanwhile you can search listings directly, or post a request and sellers will come to you.";
 
@@ -119,12 +118,18 @@ function sseEvents(...events: Record<string, unknown>[]) {
   } as unknown as Response;
 }
 
-function streamReadFailure(error = new Error('stream read failed')) {
+function streamReadFailure(error = new Error('stream read failed'), partial?: string) {
   const reader = {
     read: vi.fn().mockRejectedValue(error),
     releaseLock: vi.fn(),
     cancel: vi.fn(),
   };
+  if (partial) {
+    reader.read.mockResolvedValueOnce({
+      done: false,
+      value: new TextEncoder().encode(`data: ${JSON.stringify({ text: partial })}\n\n`),
+    });
+  }
   return {
     status: 200,
     ok: true,
@@ -587,7 +592,8 @@ describe('anonymous initial-message stale-session recovery', () => {
     expect(messageCalls()).toHaveLength(2);
     expect(creationCalls()).toHaveLength(1);
     expect(routing404.json).not.toHaveBeenCalled();
-    expectSinglePair(LISTING_ERROR);
+    expectSinglePair('');
+    expect(context().messages.at(-1)?.listingFailure).toBe('error');
   });
 
   it('does not retry the message when replacement-session creation fails', async () => {
@@ -604,7 +610,8 @@ describe('anonymous initial-message stale-session recovery', () => {
 
     expect(messageCalls()).toHaveLength(1);
     expect(creationCalls()).toHaveLength(1);
-    expectSinglePair(LISTING_ERROR);
+    expectSinglePair('');
+    expect(context().messages.at(-1)?.listingFailure).toBe('error');
   });
 
   it.each([
@@ -630,7 +637,8 @@ describe('anonymous initial-message stale-session recovery', () => {
 
     expect(messageCalls()).toHaveLength(2);
     expect(creationCalls()).toHaveLength(1);
-    expectSinglePair(LISTING_ERROR);
+    expectSinglePair('');
+    expect(context().messages.at(-1)?.listingFailure).toBe('error');
   });
 
   it('keeps the original controller while aborted during replacement creation and does not add an error', async () => {
@@ -672,12 +680,12 @@ describe('anonymous initial-message stale-session recovery', () => {
   });
 
   it.each([
-    ['HTTP 500', () => response(500), LISTING_ERROR],
+    ['HTTP 500', () => response(500), '', 'error'],
     ['HTTP 429', () => response(429), LIMIT_ERROR],
-    ['a network rejection', () => Promise.reject(new Error('network failure')), LISTING_ERROR],
+    ['a network rejection', () => Promise.reject(new Error('network failure')), '', 'error'],
     ['an abort', () => Promise.reject(abortError()), ''],
-    ['a stream-read failure', () => streamReadFailure(), LISTING_ERROR],
-  ])('does not recover or replay after initial %s', async (_label, initialResult, expectedContent) => {
+    ['a stream-read failure', () => streamReadFailure(), '', 'error'],
+  ])('does not recover or replay after initial %s', async (_label, initialResult, expectedContent, expectedFailure) => {
     fetchMock.mockImplementation(async (input) => {
       const url = String(input);
       if (url === `${SESSION_URL}/stale-session`) return response(200, { messages: [] });
@@ -691,6 +699,7 @@ describe('anonymous initial-message stale-session recovery', () => {
     expect(messageCalls()).toHaveLength(1);
     expect(creationCalls()).toHaveLength(0);
     expectSinglePair(expectedContent);
+    expect(context().messages.at(-1)?.listingFailure).toBe(expectedFailure);
   });
 });
 
@@ -1161,6 +1170,7 @@ describe('customer reply copy and recovery links', () => {
     ['network failure', () => Promise.reject(new Error('English network error'))],
     ['empty stream', () => sseEvents({ type: 'progress' }, { type: 'done' })],
     ['stream timeout', () => streamReadFailure(new Error('Stream read timeout'))],
+    ['partial stream timeout', () => streamReadFailure(new Error('Stream read timeout'), 'Respuesta parcial.')],
   ])('renders actionable Spanish listing-panel recovery after %s', async (mode, result) => {
     fetchMock.mockImplementation(async (input) => {
       const url = String(input);
@@ -1173,12 +1183,13 @@ describe('customer reply copy and recovery links', () => {
     await send();
 
     const alert = screen.getByRole('alert');
-    expect(alert.textContent).toContain(mode === 'stream timeout'
+    expect(alert.textContent).toContain(mode.endsWith('timeout')
       ? 'La respuesta está tardando más de lo esperado.' : 'No pudimos obtener una respuesta.');
     expect(alert.textContent).toContain('Prueba con una pregunta más concreta');
     expect(screen.getByRole('link', { name: 'Buscar en el catálogo' }).getAttribute('href')).toBe('/search');
     expect(screen.getByRole('link', { name: 'Contactar con soporte' }).getAttribute('href')).toBe('/support');
     expect(screen.queryByText(/English network error|Please try again/)).toBeNull();
+    if (mode === 'partial stream timeout') expect(screen.getByText('Respuesta parcial.')).toBeTruthy();
   });
 
   const replies = [

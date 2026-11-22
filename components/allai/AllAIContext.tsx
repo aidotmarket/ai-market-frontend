@@ -479,9 +479,6 @@ export function AllAIProvider({ children }: { children: ReactNode }) {
       setIsStreaming(true);
 
       const listingMatch = pathname.match(/^\/listings\/([^/]+)/);
-      const listingFailure = (kind: 'error' | 'timeout') => listingMatch
-        ? { content: resources.listingRecovery[kind], listingFailure: kind }
-        : { content: resources.genericError };
 
       try {
         const sessionId = await ensureSession();
@@ -634,13 +631,10 @@ export function AllAIProvider({ children }: { children: ReactNode }) {
             const error = evt.error ?? (evt.type === 'error' ? evt.message : undefined);
             if (typeof error === 'string' && error) {
               setMessages((prev) =>
-                prev.map((m) =>
-                  m.id === assistantId
-                    ? listingMatch && !m.content.trim()
-                      ? { ...m, ...listingFailure('error') }
-                      : { ...m, content: error }
-                    : m
-                )
+                prev.map((m) => {
+                  if (m.id !== assistantId || (listingMatch && m.safeOutcome)) return m;
+                  return listingMatch ? { ...m, listingFailure: 'error' } : { ...m, content: error };
+                })
               );
             }
 
@@ -688,7 +682,7 @@ export function AllAIProvider({ children }: { children: ReactNode }) {
           if (listingMatch && !controller.signal.aborted) {
             setMessages((prev) => prev.map((m) =>
               m.id === assistantId && !m.content.trim() && !m.ticketStatusCards?.length
-                ? { ...m, ...listingFailure('error') }
+                ? { ...m, listingFailure: 'error' }
                 : m
             ));
           }
@@ -701,14 +695,15 @@ export function AllAIProvider({ children }: { children: ReactNode }) {
         }
       } catch (err: any) {
         if (err?.name !== 'AbortError') {
+          const failure = err?.message === 'Stream read timeout' ? 'timeout' : 'error';
           setMessages((prev) =>
-            prev.map((m) =>
-              m.id === assistantId && !m.safeOutcome
-                ? m.content.trim()
-                  ? { ...m, failureNotice: resources.genericError }
-                  : { ...m, ...listingFailure(err?.message === 'Stream read timeout' ? 'timeout' : 'error') }
-                : m
-            )
+            prev.map((m) => {
+              if (m.id !== assistantId || m.safeOutcome) return m;
+              if (listingMatch) return { ...m, listingFailure: failure };
+              return m.content.trim()
+                ? { ...m, failureNotice: resources.genericError }
+                : { ...m, content: resources.genericError };
+            })
           );
         }
       } finally {

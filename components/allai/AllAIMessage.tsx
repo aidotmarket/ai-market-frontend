@@ -59,7 +59,7 @@ export default function AllAIMessage({
   const content = (hasRecoveryLinks || message.safeOutcome === 'message_too_long') && message.safeOutcome
     ? resources.safeOutcomes[message.safeOutcome]
     : message.content;
-  const showDots = isStreaming && !content;
+  const showDots = isStreaming && !content && !message.listingFailure;
   const ticketStatusCards = message.ticketStatusCards ?? [];
   return (
     <div className="flex justify-start">
@@ -75,12 +75,7 @@ export default function AllAIMessage({
           <StreamingDots />
         ) : message.fallbackParts ? (
           <p><AllAIFallback parts={message.fallbackParts} /></p>
-        ) : message.listingFailure ? (
-          <div role="alert">
-            <p>{resources.listingRecovery[message.listingFailure]} {resources.listingRecovery.guidance}</p>
-            <ListingRecoveryLinks search={resources.listingRecovery.search} support={resources.listingRecovery.support} />
-          </div>
-        ) : (
+        ) : content.trim() && (
           <Markdown
             components={{
               p: ({ children }) => <p className="mb-2 last:mb-0">{children}</p>,
@@ -101,6 +96,12 @@ export default function AllAIMessage({
           >
             {content}
           </Markdown>
+        )}
+        {message.listingFailure && (
+          <div role="alert" className={content.trim() ? 'mt-2 text-amber-200' : undefined}>
+            <p>{resources.listingRecovery[message.listingFailure]} {resources.listingRecovery.guidance}</p>
+            <ListingRecoveryLinks search={resources.listingRecovery.search} support={resources.listingRecovery.support} />
+          </div>
         )}
         {hasRecoveryLinks && (
           <div className="mt-2 flex flex-col items-start gap-1">
