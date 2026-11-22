@@ -179,7 +179,7 @@ export default function LoginForm() {
 
         {searchParams.get('redirect')?.includes('/requests/new') && (
           <div className="rounded-lg bg-[#E8EAF6] border border-[#C5CAE9] px-4 py-3 text-sm text-[#3F51B5] mb-4">
-            We need an account so we can reach out to you with offers that match your requirements. After sign-up, allAI will walk you through submitting a data request to the marketplace.
+            Sign in or create an account to continue to your data request.
           </div>
         )}
 
@@ -252,7 +252,7 @@ export default function LoginForm() {
                   onClick={switchToMagicLink}
                   className="text-sm text-[#3F51B5] hover:underline"
                 >
-                  Sign in or sign up with email
+                  Use an email link
                 </button>
                 <Link href="/forgot-password" className="text-sm text-[#3F51B5] hover:underline">
                   Forgot your password?

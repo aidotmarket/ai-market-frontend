@@ -224,7 +224,7 @@ export function MarketplaceSearchExperience({
                 </h1>
                 <p className="mt-3 text-sm leading-6 text-slate-600 sm:text-base">
                   {mode === 'search'
-                    ? 'Search across marketplace listings with semantic ranking and refine the result set with filters.'
+                    ? 'Describe what you need in your own words, then narrow the results with filters.'
                     : browseDescription}
                 </p>
               </div>

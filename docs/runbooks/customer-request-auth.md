@@ -10,8 +10,9 @@ The Railway middleware's internal `nextUrl` hostname is not the matching input.
 Root must verify that the production proxy preserves raw public `Host`; an
 internal raw host with only forwarded www will not match this rule.
 
-On the login form, **Sign in or sign up with email** requests
-`{email, purpose: 'register'}` from `/auth/magic-link/request`. The existing
+On the login page, select **Use an email link** to open the email-link form.
+Enter the email address and select **Send email link**. This submits
+`{email, purpose: 'register'}` to `/auth/magic-link/request`. The existing
 backend uses login for active existing users, skips blocked users, and creates
 new passwordless users only after verified redemption. `requestMagicLink`
 retains a default and explicit `login` purpose for callers needing existing
