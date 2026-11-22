@@ -1,5 +1,5 @@
 // @vitest-environment jsdom
-import {act,cleanup,fireEvent,render,screen,waitFor,within} from '@testing-library/react';
+import {act,cleanup,fireEvent,render,screen,within} from '@testing-library/react';
 import {afterEach,beforeEach,expect,it,vi} from 'vitest';
 import EditListingPage from './page';
 import VectoraizImport from '@/components/seller-workspace/VectoraizImport';
@@ -30,9 +30,10 @@ const review:AuthorityReview={authority_version_id:version,binding_hash:'binding
  public_review:{public_fields:{title:'Vector pack'},rendered_html:'',render_hash:'render',presentation_version:'seller-listing-review-v3-authority-vector-v1',inventory_version:'public-surface-inventory-v2'},
  purchaser_view:{door_host:'neutral.example',seller_attestation:VECTOR_ATTESTATION,files:[{file_id:'0',delivery_name:'chunks.parquet',size_bytes:10,columns:[{name:'value',type:'number'}]}]},purchaser_view_hash:'view',gateway_metadata_revision:7};
 let ownerVersion:string|null,enabled:boolean,currentReview:AuthorityReview;
+const initialAuth=useAuthStore.getInitialState();
 beforeEach(()=>{
- vi.clearAllMocks();sessionStorage.clear();ownerVersion=version;enabled=true;currentReview=review;
- useAuthStore.setState({user:{id:'seller'} as never,token:'token'});
+ vi.resetAllMocks();sessionStorage.clear();ownerVersion=version;enabled=true;currentReview=review;
+ useAuthStore.setState({...initialAuth,user:{id:'seller'} as never,token:'token',isAuthenticated:true,hydrated:true},true);
  // Owner access-window GET and current draft use their actual HTTP envelopes.
  wire.get.mockImplementation(async(path:string)=>({data:path==='/listings/listing-1/access-window'?{listing_id:listing.id,access_window_days:7,authority_version_id:ownerVersion}:path==='/seller-workspace/listing-draft'?{draft:{draft_id:draftId,version:1,authority_version_id:ownerVersion,content:{brief:'',title:'Vector pack',description:'Useful vectors',category:'Technology',tags:'',price:'10',license:''},updated_at:'2026-11-19T00:00:00Z'}}:path==='/seller-workspace/capabilities'?{}:listing}));
  wire.read.mockImplementation(async(path:string)=>path==='/listing-authority/capabilities'?{import_enabled:enabled,contract_version:'listing-authority-v1',handoff_versions:[1]}:currentReview);
@@ -42,42 +43,72 @@ beforeEach(()=>{
  });
  wire.consume.mockResolvedValue(null);
 });
-afterEach(cleanup);
+afterEach(()=>{
+ cleanup();
+ sessionStorage.clear();
+ useAuthStore.setState(initialAuth,true);
+});
+
+// These fixtures resolve immediately once the authority API's lazy imports load.
+// Settle the effects and their React commits before reading the DOM.
+async function settleAuthorityEffects(){
+ await act(vi.dynamicImportSettled);
+}
+
+async function renderEditor(){
+ const editor=render(<EditListingPage/>);
+ await settleAuthorityEffects();
+ return editor;
+}
+
 it('import → Continue editing → refresh without receipt → metadata change → reconfirm buyer names',async()=>{
  wire.consume.mockResolvedValueOnce({handoff:{version:1,pack_id:draftId,draft:{title:'Vector pack',description:'Useful vectors',brief:'',category:'Technology',tags:''},files:gatewayFiles.map(f=>({size:f.size_bytes,sha256:f.description.sha256}))},encoded:'compressed',expires:Date.now()+60000,account:'seller',route:'/dashboard/gateways',key:draftId});
  const importer=render(<VectoraizImport mode="gateway"/>);
- await screen.findByRole('option',{name:'My gateway'});
+ await settleAuthorityEffects();
+ screen.getByRole('option',{name:'My gateway'});
  fireEvent.click(screen.getByRole('button',{name:'Check uploaded files'}));
- await screen.findByLabelText(/Import for my signed-in account/);
+ await settleAuthorityEffects();
  fireEvent.click(screen.getByLabelText(/Import for my signed-in account/));fireEvent.click(screen.getByLabelText(/I reviewed this draft/));
  fireEvent.click(screen.getByRole('button',{name:'Import private draft'}));
- const link=await screen.findByRole('link',{name:'Continue editing the listing'});
+ await settleAuthorityEffects();
+ const link=screen.getByRole('link',{name:'Continue editing the listing'});
  expect(link.getAttribute('href')).toBe('/dashboard/listings/listing-1/edit');
  importer.unmount();
- const editor=render(<EditListingPage/>);await screen.findByText('Buyer names confirmed.');
+ const editor=await renderEditor();
+ within(editor.container).getByText('Buyer names confirmed.');
  expect(wire.get).toHaveBeenCalledWith('/listings/listing-1/access-window',{adapter:'fetch',fetchOptions:{cache:'no-store'}});
- editor.unmount();sessionStorage.clear();render(<EditListingPage/>);await screen.findByText('Buyer names confirmed.');
+ editor.unmount();
+ sessionStorage.clear();
+ await renderEditor();
+ screen.getByText('Buyer names confirmed.');
  // A gateway-only change yields a new review version but retains native consent.
  currentReview={...review,authority_version_id:'00000000-0000-4000-8000-000000000003',binding_hash:'next-binding',purchaser_confirmed:false,purchaser_view_hash:'next-view',gateway_metadata_revision:8,
  purchaser_view:{...review.purchaser_view!,files:[{...review.purchaser_view!.files[0],delivery_name:'renamed.parquet'}]}};
- fireEvent.click(screen.getByRole('button',{name:'Refresh review'}));await screen.findByText('renamed.parquet');
+ fireEvent.click(screen.getByRole('button',{name:'Refresh review'}));
+ await settleAuthorityEffects();
+ screen.getByText('renamed.parquet');
  expect(screen.getByText('Pack review confirmed.')).toBeTruthy();
  const panel=within(screen.getByRole('region',{name:'vectorAIz review'}));
  const confirm=panel.getByRole('button',{name:'Confirm buyer names'}) as HTMLButtonElement;expect(confirm.disabled).toBe(true);
- fireEvent.click(panel.getByLabelText('I reviewed the names my buyer will see.'));fireEvent.click(confirm);
- await screen.findByText('Buyer names confirmed.');
+ fireEvent.click(panel.getByLabelText('I reviewed the names my buyer will see.'));
+ expect(confirm.disabled).toBe(false);
+ fireEvent.click(confirm);
+ await settleAuthorityEffects();
+ panel.getByText('Buyer names confirmed.');
  expect(wire.write).toHaveBeenLastCalledWith('/listing-authority/versions/'+currentReview.authority_version_id+'/confirm-purchaser',expect.objectContaining({authority_version_id:currentReview.authority_version_id,expected_binding_hash:'next-binding',gateway_metadata_revision:8,view_hash:'next-view',confirmed:true}));
  expect(wire.write.mock.calls.filter(([path])=>path.includes('confirm-native'))).toHaveLength(0);
 });
 it.each(['null','disabled','foreign'] as const)('shows no new review for %s owner recovery',async kind=>{
  if(kind==='null')ownerVersion=null;if(kind==='disabled')enabled=false;
  if(kind==='foreign')wire.get.mockImplementation(async(path:string)=>{if(path==='/listings/listing-1/access-window')throw {response:{status:404}};return {data:path==='/seller-workspace/capabilities'?{}:{...listing,authority_version_id:version}};});
- render(<EditListingPage/>);await screen.findByRole('button',{name:'Save Draft'});await act(async()=>{});
+ await renderEditor();
+ screen.getByRole('button',{name:'Save Draft'});
  expect(screen.queryByRole('region',{name:'vectorAIz review'})).toBeNull();
  expect(wire.read.mock.calls.some(([path])=>path.includes('/review'))).toBe(false);
 });
 it('an access-window PATCH without an authority field leaves the recovered GET review intact',async()=>{
- render(<EditListingPage/>);await screen.findByText('Buyer names confirmed.');
+ await renderEditor();
+ screen.getByText('Buyer names confirmed.');
  wire.patch.mockResolvedValueOnce({data:{listing_id:'listing-1',access_window_days:30}});
  const {updateListingAccessWindow}=await import('@/api/listings');
  await act(async()=>{await updateListingAccessWindow('listing-1',30);});
@@ -89,9 +120,9 @@ it('a superseded import has a null owner version even with an older session rece
  ownerVersion=null;
  const {saveAuthorityReceipt}=await import('@/lib/vectoraizHandoff');
  saveAuthorityReceipt('seller',{import_id:draftId,draft_id:draftId,listing_id:'listing-1',authority_version_id:version});
- render(<EditListingPage/>);await screen.findByRole('button',{name:'Save Draft'});
- await waitFor(()=>expect(wire.get).toHaveBeenCalledWith('/listings/listing-1/access-window',expect.anything()));
- await act(async()=>{});
+ await renderEditor();
+ screen.getByRole('button',{name:'Save Draft'});
+ expect(wire.get).toHaveBeenCalledWith('/listings/listing-1/access-window',expect.anything());
  expect(screen.queryByRole('region',{name:'vectorAIz review'})).toBeNull();
  expect(wire.read.mock.calls.some(([path])=>path.includes('/review'))).toBe(false);
 });
