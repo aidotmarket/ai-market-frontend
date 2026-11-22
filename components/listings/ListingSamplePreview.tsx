@@ -1,17 +1,17 @@
 "use client";
 
 import {useEffect, useRef, useState, type ComponentType} from 'react';
-import {fetchPreviewConsistency, fetchPreviewKeys, fetchPreviewManifest, fetchSignedSummaryPayload} from '@/lib/api';
+import {fetchPreviewConsistency, fetchPreviewKeys, fetchPreviewManifest, fetchSignedSummaryPayload, readPreviewManifest} from '@/lib/api';
 import type {ApprovedColumn} from '@/lib/listing-preview/columns';
 import type {Manifest, TrustedCheckpoint, TrustedKeys, VerifiedSample} from '@/lib/listing-preview/types';
 
 type TableProps = {sample: VerifiedSample; columns: readonly ApprovedColumn[]};
 type Ready = {manifest: Manifest; keys: TrustedKeys};
-type State = {kind: 'absent'} | {kind: 'ready'; value: Ready} | {kind: 'loading'} | {kind: 'unavailable'} |
+type State = {kind: 'absent'} | {kind: 'missing'} | {kind: 'ready'; value: Ready} | {kind: 'loading'} | {kind: 'unavailable'} |
   {kind: 'verified'; sample: VerifiedSample; columns: ApprovedColumn[]; Table: ComponentType<TableProps>};
 
-export default function ListingSamplePreview({slug, listingId, onManifest}: {
-  slug?: string; listingId: string; onManifest?: (manifest: Manifest | null) => void;
+export default function ListingSamplePreview({slug, listingId, onManifest, emptyNotice}: {
+  slug?: string; listingId: string; onManifest?: (manifest: Manifest | null) => void; emptyNotice?: string;
 }) {
   const [state, setState] = useState<State>({kind: 'absent'});
   const generation = useRef(0), request = useRef<AbortController | null>(null), requested = useRef(false);
@@ -36,8 +36,9 @@ export default function ListingSamplePreview({slug, listingId, onManifest}: {
       // expiry timer on an untouched tab. Abort and generation guard late replies.
       timer = setTimeout(() => {controller.abort(); if (!disposed && token === generation.current) {generation.current++; setState(requested.current ? {kind: 'unavailable'} : {kind: 'absent'});}}, 5000);
       try {
-        const manifest = await fetchPreviewManifest(slug, controller.signal);
+        const manifest = await (emptyNotice && !view ? readPreviewManifest : fetchPreviewManifest)(slug, controller.signal);
         if (!valid()) return;
+        if (manifest === 'missing') {setState({kind: 'missing'}); return;}
         if (!manifest || manifest.listing_id !== listingId) {onManifest?.(null); setState(requested.current ? {kind: 'unavailable'} : {kind: 'absent'}); return;}
         onManifest?.(manifest);
         const keys = await fetchPreviewKeys(controller.signal);
@@ -90,8 +91,9 @@ export default function ListingSamplePreview({slug, listingId, onManifest}: {
     return () => {disposed = true; clear(); startRef.current = () => undefined;
       document.removeEventListener('visibilitychange', visibility); window.removeEventListener('pageshow', restore);
       window.removeEventListener('pagehide', hide); window.removeEventListener('focus', focus);};
-  }, [slug, listingId, onManifest]);
+  }, [slug, listingId, onManifest, emptyNotice]);
   if (state.kind === 'absent') return null;
+  if (state.kind === 'missing') return <p className="text-sm text-gray-600">{emptyNotice}</p>;
   return <section data-listing-sample="" aria-label="Seller-selected sample" className="min-w-0 max-w-full space-y-3 rounded-xl border border-gray-200 bg-white p-4">
     {state.kind === 'ready' && <button type="button" onClick={() => startRef.current(true)} className="rounded border border-indigo-700 px-3 py-2 text-indigo-700 focus-visible:outline-2 focus-visible:outline-indigo-700">View sample</button>}
     {state.kind === 'loading' && <p role="status" aria-live="polite">Verifying sample…</p>}

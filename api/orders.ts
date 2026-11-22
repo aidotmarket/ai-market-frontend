@@ -20,8 +20,10 @@ export async function getMyOrders(paging?: MyOrdersPaging): Promise<BuyerOrder[]
   }));
 }
 
-export async function getOrder(orderId: string): Promise<BuyerOrderDetail> {
-  const res = await api.get<BuyerOrderDetail & {amount_cents?: number; listing_snapshot?: {title?: string}}>(`/orders/${encodeURIComponent(orderId)}`, privateReadOptions);
+export async function getOrder(orderId: string, options?: { signal: AbortSignal }): Promise<BuyerOrderDetail> {
+  const res = await api.get<BuyerOrderDetail & {amount_cents?: number; listing_snapshot?: {title?: string}}>(
+    `/orders/${encodeURIComponent(orderId)}`, { ...privateReadOptions, ...options },
+  );
   const data = res.data;
   return parseOrderDetail(data);
 }

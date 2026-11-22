@@ -410,6 +410,41 @@ describe('real public listing route sample composition', () => {
     document.body.innerHTML = '';
   });
 
+  it.each<[string, Partial<ListingWithSamples>, string | undefined]>([
+    ['paid file download', {fulfillment_type: 'file_download'}, 'No public sample for this listing. Purchase is required to access the full files.'],
+    ['queryable listing', {fulfillment_type: 'ai_queryable'}, 'No public sample for this listing.'],
+    ['free file download', {fulfillment_type: 'file_download', is_accessible_for_free: true}, 'No public sample for this listing.'],
+    ['published documentation', {}, undefined],
+    ['public sample files', {sample_files: [{index: 0, key_basename: 'sample.csv', size: 12, binding: 'manifest', state: 'available', url: 'https://sample.example/sample.csv'}]}, undefined],
+  ])('supplies the appropriate empty notice for a %s', async (kind, overrides, emptyNotice) => {
+    fetchPublicListingDocuments.mockResolvedValueOnce(kind === 'published documentation' ? [documentFixture()] : []);
+    const listing = makeListing({
+      schema_summary: null,
+      is_accessible_for_free: false,
+      pricing: {price: 10, pricing_type: 'one_time', subscription_price_monthly: null},
+      ...overrides,
+    });
+    await renderPage(listing);
+    expect(composition.sampleProps).toHaveBeenCalledWith(expect.objectContaining({emptyNotice}));
+  });
+
+  it('shows one availability notice when every sample file is unavailable', async () => {
+    const listing = makeListing({
+      schema_summary: null,
+      fulfillment_type: 'file_download',
+      sample_files: [
+        { index: 0, key_basename: 'sample.csv', size: 12, binding: 'manifest', state: 'unavailable', url: '/sample/0' },
+        { index: 1, key_basename: 'sample.json', size: 48, binding: 'manifest', state: 'unavailable', url: '/sample/1' },
+      ],
+    });
+    document.body.innerHTML = await renderPage(listing);
+
+    expect(within(document.body).getAllByText('The seller’s sample is currently unavailable.')).toHaveLength(1);
+    expect(within(document.body).queryByRole('heading', { name: /free sample/i })).toBeNull();
+    expect(within(document.body).queryByText(/free to download/i)).toBeNull();
+    expect(composition.sampleProps).toHaveBeenCalledWith(expect.objectContaining({emptyNotice: undefined}));
+  });
+
   it.each(['normal', 'approved Workspace'] as const)(
     'shows published scan findings without the request hint on the %s listing',
     async (route) => {

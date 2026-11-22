@@ -76,14 +76,30 @@ export default function AimDataPage() {
           <section className="rounded-2xl border border-gray-200 p-6">
             <h2 className="text-xl font-semibold text-gray-900">Locked down by design</h2>
             <p className="mt-3 leading-7 text-gray-600">
-              The gateway refuses to start as root or the wrong user, with a writable root filesystem,
-              any capability, no-new-privileges off, or a mounted socket. You must allow outbound
-              access only to api.ai.market:443 using a restricted proxy or firewall and DNS. Its egress
-              canary reports open access, which blocks publishing and new permissions. Images are
-              signed and reproducible.
+              The gateway container refuses to start as root or the wrong user, with a writable root
+              filesystem, any capability, no-new-privileges off, a mounted socket, or access to the
+              host network or process namespace. Images are signed and reproducible.
             </p>
           </section>
         </div>
+
+        <section className="mt-10 rounded-2xl border border-gray-200 p-6">
+          <h2 className="text-xl font-semibold text-gray-900">Network requirements</h2>
+          <p className="mt-3 leading-7 text-gray-600">
+            Buyers download files through one seller-controlled HTTPS delivery endpoint. ai.market
+            also uses it for a signed reachability probe. For your own HTTPS setup, give the
+            endpoint a stable, publicly reachable hostname and a valid TLS certificate for that
+            hostname. Allow inbound TCP 443 through your firewall to your reverse proxy.
+            The proxy terminates TLS and forwards requests to the gateway over private HTTP on
+            port 8080. Keep 8080 private. Delivery requires no other public inbound ports.
+          </p>
+          <p className="mt-3 leading-7 text-gray-600">
+            Restrict outbound gateway access to api.ai.market:443 using an allowlisting proxy
+            or firewall and restricted DNS. The gateway’s egress canary deliberately tests
+            connections that must fail. If the canary reports open access, ai.market blocks
+            publishing and new permissions.
+          </p>
+        </section>
 
         <section className="mt-10 rounded-2xl bg-[#F7FCFA] p-6">
           <h2 className="text-xl font-semibold text-gray-900">Set up your gateway</h2>

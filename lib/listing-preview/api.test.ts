@@ -1,5 +1,5 @@
 import {afterEach, expect, it, vi} from 'vitest';
-import {fetchPreviewConsistency, fetchPreviewKeys, fetchPreviewManifest, fetchSignedSummaryPayload} from '@/lib/api';
+import {fetchPreviewConsistency, fetchPreviewKeys, fetchPreviewManifest, fetchSignedSummaryPayload, readPreviewManifest} from '@/lib/api';
 import {makePreview} from '@/tests/previewFixture';
 import {renderToString} from 'react-dom/server';
 import {createElement} from 'react';
@@ -17,7 +17,14 @@ it('does not fetch during SSR and preserves empty output byte-for-byte', () => {
 it.each([404, 422, 503])('treats %i as no manifest/keys without exposing server detail', async status => {
   vi.stubGlobal('fetch', vi.fn(async () => response({detail: 'PRIVATE_ERROR_MARKER'}, status)));
   expect(await fetchPreviewManifest('slug', new AbortController().signal)).toBeNull();
+  expect(await readPreviewManifest('slug', new AbortController().signal)).toBeNull();
   expect(await fetchPreviewKeys(new AbortController().signal)).toBeNull();
+});
+it('recognizes the preview endpoint response for an absent public manifest', async () => {
+  vi.stubGlobal('fetch', vi.fn(async () => response({detail: 'Preview unavailable'}, 404)));
+  const signal = new AbortController().signal;
+  expect(await readPreviewManifest('slug', signal)).toBe('missing');
+  expect(await fetchPreviewManifest('slug', signal)).toBeNull();
 });
 it('admits metadata only and never sends rows or filters to our API', async () => {
   const f = await makePreview(), requests: unknown[] = [];

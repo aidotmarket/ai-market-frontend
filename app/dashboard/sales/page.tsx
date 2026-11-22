@@ -3,14 +3,14 @@
 import { Suspense, useEffect, useRef, useState } from 'react';
 import { useSearchParams } from 'next/navigation';
 import { getCapabilities } from '@/api/capabilities';
-import { getSellerOrders, type SellerOrderListParams } from '@/api/seller';
+import { getSellerOrders, SELLER_ORDERS_PAGE_SIZE, type SellerOrderListParams } from '@/api/seller';
 import { formatDate, formatPrice } from '@/lib/format';
-import type { SellerOrder, SellerOrderStatus } from '@/types';
+import type { SellerOrder } from '@/types';
 import Link from 'next/link';
 import { sellerLicenseRecordPath } from '@/lib/licenseRecordRoutes';
+import { getSellerStatusPresentation, isSellerOrderStatus } from '@/lib/sellerOrderStatus';
 
 type SalesFilter = 'pending_delivery' | 'all' | 'delivered' | 'completed';
-const PAGE_SIZE = 100;
 type SalesRequest = { filter: SalesFilter; offset: number; retryKey: number };
 
 const FILTERS: { value: SalesFilter; label: string }[] = [
@@ -19,35 +19,6 @@ const FILTERS: { value: SalesFilter; label: string }[] = [
   { value: 'delivered', label: 'Delivered' },
   { value: 'completed', label: 'Completed' },
 ];
-
-type SellerStatusPresentation = { label: string; css: string };
-
-const SELLER_STATUS: Record<SellerOrderStatus, SellerStatusPresentation> = {
-  created: { label: 'Order created', css: 'bg-gray-100 text-gray-600' },
-  paid: { label: 'Paid', css: 'bg-[#E8EAF6] text-[#303F9F]' },
-  in_escrow: { label: 'Payment held', css: 'bg-[#E8EAF6] text-[#303F9F]' },
-  pending_delivery: { label: 'Awaiting delivery', css: 'bg-gray-100 text-gray-700' },
-  delivered: { label: 'Delivered', css: 'bg-indigo-100 text-indigo-800' },
-  completed: { label: 'Completed', css: 'bg-green-100 text-green-800' },
-  disputed: { label: 'Disputed', css: 'bg-red-100 text-red-800' },
-  resolved: { label: 'Dispute resolved', css: 'bg-gray-100 text-gray-600' },
-  delivery_failed: { label: 'Delivery failed', css: 'bg-red-100 text-red-800' },
-  refunded: { label: 'Refunded', css: 'bg-gray-100 text-gray-600' },
-  cancelled: { label: 'Cancelled', css: 'bg-gray-100 text-gray-600' },
-};
-
-const UNKNOWN_STATUS: SellerStatusPresentation = {
-  label: 'Status unavailable',
-  css: 'bg-gray-100 text-gray-600',
-};
-
-function isSellerOrderStatus(status: string): status is SellerOrderStatus {
-  return Object.prototype.hasOwnProperty.call(SELLER_STATUS, status);
-}
-
-function getSellerStatusPresentation(status: string): SellerStatusPresentation {
-  return isSellerOrderStatus(status) ? SELLER_STATUS[status] : UNKNOWN_STATUS;
-}
 
 function compareNullableDates(
   first: string | null,
@@ -147,8 +118,8 @@ function SalesPageContent() {
 
         const params: SellerOrderListParams =
           request.filter === 'all'
-            ? { limit: PAGE_SIZE, offset: request.offset }
-            : { status_filter: request.filter, limit: PAGE_SIZE, offset: request.offset };
+            ? { limit: SELLER_ORDERS_PAGE_SIZE, offset: request.offset }
+            : { status_filter: request.filter, limit: SELLER_ORDERS_PAGE_SIZE, offset: request.offset };
         const response = await getSellerOrders(params);
         if (!isCurrent()) return;
 
@@ -293,6 +264,9 @@ function SalesPageContent() {
 
       {pageState === 'active' && rows.length > 0 && (
         <>
+          <p className="text-sm text-gray-600">
+            “You receive” shows the gross amount less ai.market’s 5% commission. Any applicable card processing fee is deducted from your payout.
+          </p>
           <div className="hidden md:block overflow-x-auto rounded-lg border border-gray-200">
             <table className="min-w-full text-sm">
               <thead className="bg-gray-50">
@@ -342,16 +316,16 @@ function SalesPageContent() {
           <button
             type="button"
             disabled={offset === 0 || pageState === 'loading'}
-            onClick={() => changeRequest({ ...request, offset: Math.max(0, offset - PAGE_SIZE) })}
+            onClick={() => changeRequest({ ...request, offset: Math.max(0, offset - SELLER_ORDERS_PAGE_SIZE) })}
             className="rounded-lg border border-gray-300 px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50 disabled:cursor-not-allowed disabled:opacity-50"
           >
             Previous
           </button>
-          <span aria-live="polite" className="text-sm text-gray-600">Page {offset / PAGE_SIZE + 1}</span>
+          <span aria-live="polite" className="text-sm text-gray-600">Page {offset / SELLER_ORDERS_PAGE_SIZE + 1}</span>
           <button
             type="button"
-            disabled={pageState !== 'active' || rows.length < PAGE_SIZE}
-            onClick={() => changeRequest({ ...request, offset: offset + PAGE_SIZE })}
+            disabled={pageState !== 'active' || rows.length < SELLER_ORDERS_PAGE_SIZE}
+            onClick={() => changeRequest({ ...request, offset: offset + SELLER_ORDERS_PAGE_SIZE })}
             className="rounded-lg border border-gray-300 px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50 disabled:cursor-not-allowed disabled:opacity-50"
           >
             Next

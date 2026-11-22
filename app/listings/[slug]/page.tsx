@@ -160,6 +160,15 @@ export default async function ListingDetailPage({ params, searchParams }: Props)
     ? {...listing.at_a_glance, sample_availability: undefined}
     : listing.at_a_glance;
   const [documents, versions] = await Promise.all([documentsPromise, fetchListingVersions(listing.id)]);
+  const sampleFiles = listing.sample_files ?? approved?.sample_files;
+  const hasOtherPublicMaterials = documents.length > 0 || schemaColumns.length > 0
+    || atAGlanceSummary?.key_fields?.value?.length || atAGlanceSummary?.field_descriptions?.value?.length;
+  const requiresFilePurchase = listing.fulfillment_type === 'file_download' && listing.purchasable
+    && !purchaseDisabledReason && !listing.is_accessible_for_free && listing.pricing.price > 0;
+  const emptyNotice = sampleFiles?.length || hasOtherPublicMaterials ? undefined
+    : requiresFilePurchase
+      ? 'No public sample for this listing. Purchase is required to access the full files.'
+      : 'No public sample for this listing.';
   const hasVersionRows = versions.length > 0;
   // S1097: legacy listings intentionally keep byte-identical rendering and omit
   // the pre-purchase download-window line pending Max's R5.1h-vs-parity adjudication.
@@ -272,7 +281,7 @@ export default async function ListingDetailPage({ params, searchParams }: Props)
           </div>}
           {listing.license_provenance && <p className="text-sm text-gray-600">seller previously indicated: {listing.license_provenance}</p>}
 
-          {!pendingSellerTerms && <SampleFiles files={listing.sample_files ?? approved?.sample_files} />}
+          {!pendingSellerTerms && <SampleFiles files={sampleFiles} />}
 
           {/* Schema Info */}
           {(rowCount != null || schemaColumns.length > 0) && (
@@ -287,7 +296,7 @@ export default async function ListingDetailPage({ params, searchParams }: Props)
             </div>
           )}
 
-          {!pendingSellerTerms && <BuyerSamplePreview slug={listing.slug} listingId={listing.id} />}
+          {!pendingSellerTerms && <BuyerSamplePreview slug={listing.slug} listingId={listing.id} emptyNotice={emptyNotice} />}
         </div>
 
         {/* Sidebar */}

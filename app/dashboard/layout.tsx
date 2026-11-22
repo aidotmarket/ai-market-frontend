@@ -106,8 +106,9 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
   const isSellerActive = capabilitiesResolved && current.sellerStatus === 'active';
   const sellerWorkspaceAvailable = current?.workspace === true;
   const gatewaysAvailable = current?.gateways === true;
-  const buyerRoute = buyerAllowedRoutes.some((p) =>
-    pathname === p || (p !== '/dashboard' && pathname.startsWith(`${p}/`)));
+  // The licence-record endpoint authorizes the recorded buyer and seller.
+  const allowsSignedInUsers = /^\/dashboard\/sales\/[^/]+\/license-record\/?$/.test(pathname) ||
+    buyerAllowedRoutes.some((p) => pathname === p || (p !== '/dashboard' && pathname.startsWith(`${p}/`)));
   const authenticated = !isLoading && hydrated && isAuthenticated && !!owner && !!token;
   const checkOwnerListings = authenticated && pathname === '/dashboard/seller-workspace' &&
     !isSeller && (capabilitiesResolved || current?.phase === 'error');
@@ -132,16 +133,16 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
   const ownerAccess = checkOwnerListings && ownerAdmission?.owner === owner &&
     ownerAdmission?.generation === ownerGeneration ? ownerAdmission.result : undefined;
   const checkingOwnerAccess = checkOwnerListings && ownerAccess === undefined;
-  const routeReady = authenticated && (buyerRoute || isSeller || ownerAccess === 'allowed');
+  const routeReady = authenticated && (allowsSignedInUsers || isSeller || ownerAccess === 'allowed');
 
   useEffect(() => {
     if (isLoading || !hydrated) return;
     if (!isAuthenticated) {
       router.push(`/login?redirect=${encodeURIComponent(pathname + (typeof window !== 'undefined' ? window.location.search : ''))}`);
-    } else if (owner && !buyerRoute && capabilitiesResolved && !isSeller && (!checkOwnerListings || ownerAccess === 'denied')) {
+    } else if (owner && !allowsSignedInUsers && capabilitiesResolved && !isSeller && (!checkOwnerListings || ownerAccess === 'denied')) {
       router.push(current?.sellerStatus === 'not_requested' ? '/dashboard' : '/dashboard/inquiries');
     }
-  }, [buyerRoute, capabilitiesResolved, checkOwnerListings, ownerAccess, current?.sellerStatus, hydrated, isAuthenticated, isLoading, isSeller, owner, pathname, router]);
+  }, [allowsSignedInUsers, capabilitiesResolved, checkOwnerListings, ownerAccess, current?.sellerStatus, hydrated, isAuthenticated, isLoading, isSeller, owner, pathname, router]);
 
   if (ownerAccess === 'error') {
     return (
@@ -156,7 +157,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
     );
   }
 
-  if (authenticated && !buyerRoute && current?.phase === 'error' && !checkingOwnerAccess && ownerAccess !== 'allowed') {
+  if (authenticated && !allowsSignedInUsers && current?.phase === 'error' && !checkingOwnerAccess && ownerAccess !== 'allowed') {
     return (
       <div className="flex min-h-screen flex-col items-center justify-center gap-4">
         <p role="alert">Unable to check seller access. Please try again.</p>

@@ -4,6 +4,7 @@ import { act, cleanup, fireEvent, render, screen, waitFor, within } from '@testi
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { useEffect, useState, type ReactNode } from 'react';
 import type { User } from '@/types';
+import { sellerLicenseRecordPath } from '@/lib/licenseRecordRoutes';
 import DashboardLayout from './layout';
 import { useAuthStore } from '@/store/auth';
 
@@ -128,6 +129,7 @@ describe('DashboardLayout hydration guard', () => {
 
   it.each([
     ['/dashboard/stripe-return', ''],
+    [sellerLicenseRecordPath('order-1'), ''],
     [
       '/dashboard/data-verification/payment-method/return',
       '?attempt=9bd1c6b2-1472-4a6c-9d6c-e61d14023163&session_id=cs_test_a1AbCdEf',
@@ -714,6 +716,20 @@ describe('DashboardLayout canonical capability ownership', () => {
     expect(gatewaysApi.listSellerGateways).not.toHaveBeenCalled();
   });
 
+  it.each(['not_requested', 'suspended'])('admits a seller licence record for %s capability', async (status) => {
+    navigation.pathname = sellerLicenseRecordPath('order-1');
+    signIn({ role: 'seller' });
+    capabilitiesApi.getCapabilities.mockResolvedValueOnce(capability(status));
+
+    await act(async () => {
+      render(<DashboardLayout><div>seller licence record</div></DashboardLayout>);
+    });
+
+    expect(screen.getByText('seller licence record')).toBeTruthy();
+    expect(screen.queryByRole('link', { name: 'Sales' })).toBeNull();
+    expect(navigation.push).not.toHaveBeenCalled();
+  });
+
   it.each([
     ['/dashboard/seller-workspace', 'not_requested', '/dashboard'],
     ['/dashboard/gateways', 'not_requested', '/dashboard'],
@@ -721,6 +737,7 @@ describe('DashboardLayout canonical capability ownership', () => {
     ['/dashboard/seller-workspace', 'suspended', '/dashboard/inquiries'],
     ['/dashboard/gateways', 'suspended', '/dashboard/inquiries'],
     ['/dashboard/listings', 'suspended', '/dashboard/inquiries'],
+    ['/dashboard/sales', 'suspended', '/dashboard/inquiries'],
   ])('routes normal %s entry for %s to %s without guarded children', async (pathname, status, destination) => {
     navigation.pathname = pathname;
     const read = deferred<ReturnType<typeof capability>>();

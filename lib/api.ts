@@ -386,12 +386,22 @@ export async function saveListingEnrichment(id: string, request: EnrichmentWrite
 // Preview calls use only identifiers. Never route a package body, row, filter,
 // arbitrary exception, or detector output through this API client.
 export async function fetchPreviewManifest(slug: string, signal: AbortSignal): Promise<import('./listing-preview/types').Manifest | null> {
+  const manifest = await readPreviewManifest(slug, signal);
+  return manifest === 'missing' ? null : manifest;
+}
+
+export async function readPreviewManifest(slug: string, signal: AbortSignal): Promise<import('./listing-preview/types').Manifest | 'missing' | null> {
   try {
     const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000'}/api/v1/public/listings/${encodeURIComponent(slug)}/preview-manifest`, {
       cache: 'no-store', credentials: 'omit', redirect: 'error', referrerPolicy: 'no-referrer', signal,
     });
-    if (response.status !== 200 || signal.aborted) return null;
-    const {metadataResponse} = await import('./listing-preview/transport');
+    if (signal.aborted || (response.status !== 200 && response.status !== 404)) return null;
+    const {boundedBody, metadataResponse} = await import('./listing-preview/transport');
+    if (response.status === 404) {
+      const bytes = await boundedBody(response, 1024, signal, 404);
+      const error = JSON.parse(new TextDecoder().decode(bytes)) as {detail?: unknown} | null;
+      return error?.detail === 'Preview unavailable' ? 'missing' : null;
+    }
     const value = await metadataResponse(response, signal, true) as import('./listing-preview/types').Manifest;
     return value?.profile === 'aim-listing-preview-v1' && value.package_profile === 'aim-preview-package-v2' && value.preview_type === 'table' && value.content_type === 'tabular' ? value : null;
   } catch {return null;}
