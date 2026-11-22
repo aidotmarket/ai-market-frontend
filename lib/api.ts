@@ -396,9 +396,10 @@ export async function readPreviewManifest(slug: string, signal: AbortSignal): Pr
       cache: 'no-store', credentials: 'omit', redirect: 'error', referrerPolicy: 'no-referrer', signal,
     });
     if (signal.aborted || (response.status !== 200 && response.status !== 404)) return null;
-    const {metadataResponse} = await import('./listing-preview/transport');
+    const {boundedBody, metadataResponse} = await import('./listing-preview/transport');
     if (response.status === 404) {
-      const error = await metadataResponse(response, signal) as {detail?: unknown} | null;
+      const bytes = await boundedBody(response, 1024, signal, 404);
+      const error = JSON.parse(new TextDecoder().decode(bytes)) as {detail?: unknown} | null;
       return error?.detail === 'Preview unavailable' ? 'missing' : null;
     }
     const value = await metadataResponse(response, signal, true) as import('./listing-preview/types').Manifest;
