@@ -1,4 +1,4 @@
-import axios from 'axios';
+import axios, { type AxiosRequestConfig } from 'axios';
 import { useAuthStore } from '@/store/auth';
 import { pendingActionCsrf } from './pending-actions';
 import { currentSessionRefresh, refreshAccessToken, reserveRecoveryRefresh } from './client';
@@ -71,7 +71,8 @@ export function sessionMutationError(error: unknown): string | null {
     ? 'Please refresh the page and try again.' : null;
 }
 
-export async function postSessionMutation<T>(path: string, body: object, assertAdmission?: (headers: SessionHeaders) => void, refresh?: SessionRefreshAdapter, onDispatch?: () => void): Promise<T> {
+type SessionPostOptions = Pick<AxiosRequestConfig, 'timeout' | 'adapter' | 'responseType'> & { signal?: AbortSignal };
+export async function postSessionMutation<T>(path: string, body: object, assertAdmission?: (headers: SessionHeaders) => void, refresh?: SessionRefreshAdapter, onDispatch?: () => void, options?: SessionPostOptions): Promise<T> {
   const owner = authSessionOwner();
   // Recovery admission and evidence must never rotate implicitly or replay.
   let headers = await sessionHeaders(!path.includes('/recovery/'), assertAdmission, refresh);
@@ -85,8 +86,9 @@ export async function postSessionMutation<T>(path: string, body: object, assertA
   }
   assertAuthSessionOwner(owner);
   assertAdmission?.(headers);
+  options?.signal?.throwIfAborted();
   onDispatch?.();
-  const { data } = await client.post<T>(path, body, { headers, ...(path.includes('/recovery/') ? { timeout: 15000 } : {}) });
+  const { data } = await client.post<T>(path, body, { ...options, headers, ...(path.includes('/recovery/') ? { timeout: 15000 } : {}) });
   assertAuthSessionOwner(owner);
   return data;
 }

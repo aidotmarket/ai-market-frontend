@@ -5,7 +5,7 @@ import {listingDraftError} from '@/lib/listing-action-error';
 import type {ListingDraftContent} from '@/api/sellerListingDraft';
 import {readListingSource, readSellerCategories, type SourceRead, type SourceSaveResponse, type SellerCategory} from '@/api/sellerListingSource';
 import {readListingReview, listingReviewErrorReason, type ListingReview, type ApprovalReceipt} from '@/api/sellerListingReview';
-import {readPublication, type PublicationState} from '@/api/sellerListingPublication';
+import {readPublication, type PublicationState, type PublicationReceipt} from '@/api/sellerListingPublication';
 import {SELLER_SETUP_STEPS} from '@/components/onboarding/SellerSetupProgressBar';
 import {getCapabilities} from '@/api/capabilities';
 import type {SellerWorkspaceCapabilities, SellerWorkspaceConnection} from '@/api/sellerWorkspace';
@@ -17,7 +17,10 @@ type Flow = {samplesBlocked:boolean; stepsForContent:(content:ListingDraftConten
   reviewError: string; reviewLoading: boolean; publication: PublicationState|null; publicationError: string;
   refreshReview: ()=>void; refreshPublication: ()=>void; sourceSaved: (response:SourceSaveResponse)=>void; sourceSaveRefused:(message:string)=>void;
   approved: (approval:ApprovalReceipt)=>void; published: (state:PublicationState)=>void;
-  startAnotherListing:()=>void; startingListing:boolean; navigate: (view:WorkspaceView)=>void; licensesEnabled: boolean};
+  startAnotherListing:()=>void; startingListing:boolean; navigate: (view:WorkspaceView)=>void; licensesEnabled: boolean;
+  polishLock: React.RefObject<boolean>; polishBusy: boolean; setPolishBusy:(busy:boolean)=>void;
+  polishNotice: string; setPolishNotice:(notice:string)=>void; listingDirty:boolean;
+  polishPublication: PublicationReceipt | null; openPublicationPolish:(publication:PublicationReceipt)=>void};
 const Context = createContext<Flow|null>(null);
 export function useListingFlow(){return useContext(Context);}
 
@@ -26,10 +29,14 @@ export function GuidedListingFlow({connections, capabilities, view, navigate, ch
   const [startingListing,setStartingListing]=useState(false);
   const [startError,setStartError]=useState('');
   const [sourceSaveNotice,setSourceSaveNotice]=useState('');
+  const polishLock = useRef(false);
+  const [polishBusy, setPolishBusy] = useState(false);
+  const [polishNotice, setPolishNotice] = useState('');
+  const [polishPublication, setPolishPublication] = useState<PublicationReceipt | null>(null);
   const startAttempt=useRef<string|null>(null);
   const startPending=useRef(false);
   const startAnotherListing=async()=>{
-    if(startPending.current)return;
+    if(startPending.current||polishLock.current)return;
     startPending.current=true;setStartingListing(true);setStartError('');
     startAttempt.current??=crypto.randomUUID();
     try {
@@ -38,6 +45,8 @@ export function GuidedListingFlow({connections, capabilities, view, navigate, ch
       setSource(null);setSourceLoaded(false);setFilesDirty(false);setListingDirty(false);setLicenceDirty(false);
       setFileRevision(n=>n+1);setReview(null);setReviewError('');setReviewLoading(false);
       setPublication(null);setPublicationError('');reconciled.current='';
+      setPolishPublication(null);
+      setPolishNotice('');
       navigate('data');
     } catch(error){
       const detail=axios.isAxiosError(error)?error.response?.data?.detail:undefined;
@@ -134,7 +143,9 @@ export function GuidedListingFlow({connections, capabilities, view, navigate, ch
   };
   const flow:Flow={startAnotherListing:()=>void startAnotherListing(),startingListing,samplesBlocked:selectionSavePending||selectionSaveFailed,stepsForContent:content=>listingSteps({connections,source,draft:{version:draft?.version??0,updated_at:draft?.updated_at??'',content:{...draft?.content,...content}},categories,licensesEnabled,review:null,publication:null,pending,licenceDirty}),sourceCurrentDraftId,sourceLoaded:sourceLoaded&&sourceMatchesDraft&&pointerMatchesDraft,sourceDraftChanged,reloadSource,sourceError:readError,fileRevision,setFilesDirty:dirty=>{setFilesDirty(dirty);if(dirty)setFileRevision(n=>n+1);},setListingDirty,setLicenceDirty,source,categories,steps,review,reviewError,reviewLoading,publication,publicationError,licensesEnabled,navigate,
     refreshReview:()=>setReviewRetry(n=>n+1),refreshPublication:()=>setPublicationRetry(n=>n+1),sourceSaveRefused:setSourceSaveNotice,sourceSaved:value=>{setSourceSaveNotice('');setSource(value.source);setSourceCurrentDraftId(value.current_draft_id);setFilesDirty(false);},
-    approved:a=>setReview(r=>r?{...r,approval:a}:r),published:setPublication};
+    approved:a=>setReview(r=>r?{...r,approval:a}:r),published:setPublication,
+    polishLock,polishBusy,setPolishBusy,polishPublication,polishNotice,setPolishNotice,listingDirty,
+    openPublicationPolish:item=>{setPolishPublication(item);navigate('listing');}};
   const published=steps[5].state==='done' ? publication?.publication : null;
   return <Context.Provider value={flow}><div className="grid items-start gap-6 xl:grid-cols-[minmax(0,1fr)_290px]">
     <aside aria-label="Listing checklist" className="rounded-xl border border-gray-200 bg-white p-4 xl:sticky xl:top-5 xl:col-start-2 xl:row-start-1">
