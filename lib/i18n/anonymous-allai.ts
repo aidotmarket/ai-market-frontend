@@ -23,6 +23,14 @@ interface AnonymousAllAIResources {
   historicalAnswer: string;
   accountRequired: string;
   genericError: string;
+  listingRecovery: {
+    error: string;
+    timeout: string;
+    guidance: string;
+    search: string;
+    support: string;
+    signIn: string;
+  };
   recoveryLinks: {
     searchListings: string;
     postRequest: string;
@@ -47,6 +55,14 @@ export const ANONYMOUS_ALLAI_RESOURCES: Record<
     historicalAnswer: 'Earlier session — facts will be checked again when you ask a new question.',
     accountRequired: 'An account is required for this step.',
     genericError: 'Sorry, something went wrong. Please try again.',
+    listingRecovery: {
+      error: "We couldn't get an answer.",
+      timeout: 'This is taking longer than expected.',
+      guidance: 'Try a narrower question about the listing description, data format, or license.',
+      search: 'Search the catalogue',
+      support: 'Contact support',
+      signIn: 'Sign in to ask the seller.',
+    },
     recoveryLinks: {
       searchListings: 'Search listings directly',
       postRequest: 'Post a request',
@@ -74,6 +90,14 @@ export const ANONYMOUS_ALLAI_RESOURCES: Record<
     historicalAnswer: 'Sesión anterior: los datos se comprobarán de nuevo cuando hagas una pregunta nueva.',
     accountRequired: 'Necesitas una cuenta para realizar este paso.',
     genericError: 'Ha ocurrido un error. Inténtalo de nuevo.',
+    listingRecovery: {
+      error: 'No pudimos obtener una respuesta.',
+      timeout: 'La respuesta está tardando más de lo esperado.',
+      guidance: 'Prueba con una pregunta más concreta sobre la descripción del anuncio, el formato de los datos o la licencia.',
+      search: 'Buscar en el catálogo',
+      support: 'Contactar con soporte',
+      signIn: 'Inicia sesión para preguntar al vendedor.',
+    },
     recoveryLinks: {
       searchListings: 'Buscar anuncios directamente',
       postRequest: 'Publicar una solicitud',
@@ -101,6 +125,14 @@ export const ANONYMOUS_ALLAI_RESOURCES: Record<
     historicalAnswer: '较早的会话——提出新问题时会重新核对事实。',
     accountRequired: '此步骤需要账户。',
     genericError: '抱歉，出现了问题。请重试。',
+    listingRecovery: {
+      error: '暂时无法获取答案。',
+      timeout: '回答所需的时间比预期更长。',
+      guidance: '请尝试就商品描述、数据格式或许可提出更具体的问题。',
+      search: '搜索目录',
+      support: '联系支持',
+      signIn: '登录后向卖家提问。',
+    },
     recoveryLinks: {
       searchListings: '直接搜索商品',
       postRequest: '发布需求',
@@ -120,6 +152,10 @@ export const ANONYMOUS_ALLAI_RESOURCES: Record<
 
 export function anonymousAllAIResources(locale: AnonymousAllAILocale) {
   return ANONYMOUS_ALLAI_RESOURCES[locale];
+}
+
+export function isAnonymousSafeOutcome(value: unknown): value is AnonymousSafeOutcome {
+  return typeof value === 'string' && Object.hasOwn(ANONYMOUS_ALLAI_RESOURCES.en.safeOutcomes, value);
 }
 
 export function preferredAnonymousAllAILocale(language?: string): AnonymousAllAILocale {

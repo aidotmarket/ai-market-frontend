@@ -33,6 +33,7 @@ const SESSION_KEY = 'allai-session-id';
 const SESSION_URL = 'http://localhost:8000/api/allai/support/anonymous/session';
 const MESSAGE_URL = 'http://localhost:8000/api/allai/support/anonymous/message';
 const STATUS_URL = 'http://localhost:8000/api/allai/support/anonymous/status';
+const LISTING_ERROR = anonymousAllAIResources('en').listingRecovery.error;
 const GENERIC_ERROR = 'Sorry, something went wrong. Please try again.';
 const LIMIT_ERROR = "You've reached the chat limit for now. Please try again later. Meanwhile you can search listings directly, or post a request and sellers will come to you.";
 
@@ -61,7 +62,7 @@ function RenderedMessages() {
 
 function renderProvider(storedSessionId = 'stale-session', showMessages = false) {
   sessionStorage.setItem(SESSION_KEY, storedSessionId);
-  render(
+  return render(
     <AllAIProvider>
       <Probe />
       {showMessages && <RenderedMessages />}
@@ -586,7 +587,7 @@ describe('anonymous initial-message stale-session recovery', () => {
     expect(messageCalls()).toHaveLength(2);
     expect(creationCalls()).toHaveLength(1);
     expect(routing404.json).not.toHaveBeenCalled();
-    expectSinglePair(GENERIC_ERROR);
+    expectSinglePair(LISTING_ERROR);
   });
 
   it('does not retry the message when replacement-session creation fails', async () => {
@@ -603,7 +604,7 @@ describe('anonymous initial-message stale-session recovery', () => {
 
     expect(messageCalls()).toHaveLength(1);
     expect(creationCalls()).toHaveLength(1);
-    expectSinglePair(GENERIC_ERROR);
+    expectSinglePair(LISTING_ERROR);
   });
 
   it.each([
@@ -629,7 +630,7 @@ describe('anonymous initial-message stale-session recovery', () => {
 
     expect(messageCalls()).toHaveLength(2);
     expect(creationCalls()).toHaveLength(1);
-    expectSinglePair(GENERIC_ERROR);
+    expectSinglePair(LISTING_ERROR);
   });
 
   it('keeps the original controller while aborted during replacement creation and does not add an error', async () => {
@@ -671,11 +672,11 @@ describe('anonymous initial-message stale-session recovery', () => {
   });
 
   it.each([
-    ['HTTP 500', () => response(500), GENERIC_ERROR],
+    ['HTTP 500', () => response(500), LISTING_ERROR],
     ['HTTP 429', () => response(429), LIMIT_ERROR],
-    ['a network rejection', () => Promise.reject(new Error('network failure')), GENERIC_ERROR],
+    ['a network rejection', () => Promise.reject(new Error('network failure')), LISTING_ERROR],
     ['an abort', () => Promise.reject(abortError()), ''],
-    ['a stream-read failure', () => streamReadFailure(), GENERIC_ERROR],
+    ['a stream-read failure', () => streamReadFailure(), LISTING_ERROR],
   ])('does not recover or replay after initial %s', async (_label, initialResult, expectedContent) => {
     fetchMock.mockImplementation(async (input) => {
       const url = String(input);
@@ -1127,6 +1128,59 @@ describe('mounted anonymous next-step navigation', () => {
 
 
 describe('customer reply copy and recovery links', () => {
+  it('renders the homepage backend suggestions with encoded search terms and escaped text', async () => {
+    mocks.pathname = '/';
+    fetchMock.mockImplementation(async (input) => {
+      const url = String(input);
+      if (url === STATUS_URL) return response(200, {
+        available: true, supported_locales: [...ANONYMOUS_ALLAI_LOCALES], cache_seconds: 5,
+      });
+      if (url === `${SESSION_URL}/stale-session`) return response(200, { messages: [] });
+      if (url === MESSAGE_URL) return sseEvents({
+        type: 'safe_failure', outcome: 'answer_unverified', locale: 'es',
+        text: 'No pude verificar una respuesta. [Busca en el catálogo](/listings?q=clima%20%26%20energ%C3%ADa), ' +
+          '[publica una solicitud de datos](/requests/new) o pregunta por un sector concreto. ' +
+          '<img src=x onerror=alert(1)> [Externo](https://example.test/requests/new)',
+      });
+      throw new Error(`Unexpected request: ${url}`);
+    });
+    const view = renderProvider('stale-session', true);
+    await waitFor(() => expect(context().anonymousAvailable).toBe(true));
+    act(() => context().setLocale('es'));
+    await send();
+
+    expect(screen.getByRole('link', { name: 'Busca en el catálogo' }).getAttribute('href')).toBe('/search?q=clima%20%26%20energ%C3%ADa');
+    expect(screen.getByRole('link', { name: 'publica una solicitud de datos' }).getAttribute('href')).toBe('/requests/new');
+    expect(screen.getByText(/<img src=x onerror=alert/)).toBeTruthy();
+    expect(view.container.querySelector('img')).toBeNull();
+    expect(screen.queryByRole('link', { name: 'Externo' })).toBeNull();
+    expect(screen.queryByRole('link', { name: 'Buscar anuncios directamente' })).toBeNull();
+  });
+
+  it.each([
+    ['network failure', () => Promise.reject(new Error('English network error'))],
+    ['empty stream', () => sseEvents({ type: 'progress' }, { type: 'done' })],
+    ['stream timeout', () => streamReadFailure(new Error('Stream read timeout'))],
+  ])('renders actionable Spanish listing-panel recovery after %s', async (mode, result) => {
+    fetchMock.mockImplementation(async (input) => {
+      const url = String(input);
+      if (url === `${SESSION_URL}/stale-session`) return response(200, { messages: [] });
+      if (url === MESSAGE_URL) return result();
+      throw new Error(`Unexpected request: ${url}`);
+    });
+    renderProvider('stale-session', true);
+    act(() => context().setLocale('es'));
+    await send();
+
+    const alert = screen.getByRole('alert');
+    expect(alert.textContent).toContain(mode === 'stream timeout'
+      ? 'La respuesta está tardando más de lo esperado.' : 'No pudimos obtener una respuesta.');
+    expect(alert.textContent).toContain('Prueba con una pregunta más concreta');
+    expect(screen.getByRole('link', { name: 'Buscar en el catálogo' }).getAttribute('href')).toBe('/search');
+    expect(screen.getByRole('link', { name: 'Contactar con soporte' }).getAttribute('href')).toBe('/support');
+    expect(screen.queryByText(/English network error|Please try again/)).toBeNull();
+  });
+
   const replies = [
     ['answer_unverified', "I couldn't check that answer against current listings, so I won't guess. You can search listings directly, or post a request and sellers will come to you."],
     ['retrieval_unavailable', "I couldn't check the marketplace results right now, so I won't guess. You can search listings directly, or post a request and sellers will come to you."],
@@ -1314,6 +1368,7 @@ describe('customer reply copy and recovery links', () => {
     null,
     'invalid_json',
   ])('keeps unrelated or malformed 422 errors generic (%j)', async body => {
+    mocks.pathname = '/support';
     mocks.auth.user = { role: 'buyer' };
     mocks.auth.token = 'signed-in-token';
     fetchMock.mockImplementation(async (input) => {

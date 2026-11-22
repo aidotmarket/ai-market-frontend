@@ -6,6 +6,7 @@ import type { Message } from './AllAIContext';
 import Markdown from 'react-markdown';
 import TicketStatusCard from './TicketStatusCard';
 import AllAINextStep from './AllAINextStep';
+import { AllAIFallback, ListingRecoveryLinks } from './AllAIFallback';
 import { useAllAI } from './AllAIContext';
 import { anonymousAllAIResources } from '@/lib/i18n/anonymous-allai';
 import { useAuthStore } from '@/store/auth';
@@ -49,9 +50,9 @@ export default function AllAIMessage({
   }
 
   // assistant
-  const hasRecoveryLinks = message.safeOutcome === 'answer_unverified' ||
+  const hasRecoveryLinks = !message.fallbackParts && (message.safeOutcome === 'answer_unverified' ||
     message.safeOutcome === 'retrieval_unavailable' ||
-    message.safeOutcome === 'no_matches' || message.safeOutcome === 'rate_limited';
+    message.safeOutcome === 'no_matches' || message.safeOutcome === 'rate_limited');
   // Use the maintained customer copy even when a safe-failure event supplies older wording.
   // Re-localise length errors too, without adding recovery links.
   // Rate-limit copy is account-neutral: signing in does not lift limits.
@@ -72,6 +73,13 @@ export default function AllAIMessage({
         )}
         {showDots ? (
           <StreamingDots />
+        ) : message.fallbackParts ? (
+          <p><AllAIFallback parts={message.fallbackParts} /></p>
+        ) : message.listingFailure ? (
+          <div role="alert">
+            <p>{resources.listingRecovery[message.listingFailure]} {resources.listingRecovery.guidance}</p>
+            <ListingRecoveryLinks search={resources.listingRecovery.search} support={resources.listingRecovery.support} />
+          </div>
         ) : (
           <Markdown
             components={{
