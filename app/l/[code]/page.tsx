@@ -98,6 +98,7 @@ export default async function SharePage({ params }: Props) {
             </div>
             <Link
               href={listingHref}
+              prefetch={listingHref.startsWith('/listings/') ? false : undefined}
               className="inline-flex items-center rounded-md bg-[#3F51B5] px-4 py-2 text-sm font-semibold text-white hover:bg-[#303F9F]"
             >
               View listing

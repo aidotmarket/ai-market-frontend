@@ -1,9 +1,10 @@
 'use client';
 
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useRef, useState, useSyncExternalStore } from 'react';
 import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
 import { useAuthStore } from '@/store/auth';
+import { authSessionOwner, subscribeAuthSessionOwner } from '@/lib/auth-session-owner';
 import { getCapabilities, type CapabilityStatus } from '@/api/capabilities';
 import {
   getSellerWorkspaceCapabilities,
@@ -108,18 +109,54 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
   const buyerRoute = buyerAllowedRoutes.some((p) =>
     pathname === p || (p !== '/dashboard' && pathname.startsWith(`${p}/`)));
   const authenticated = !isLoading && hydrated && isAuthenticated && !!owner && !!token;
-  const routeReady = authenticated && (buyerRoute || isSeller);
+  const checkOwnerListings = authenticated && pathname === '/dashboard/seller-workspace' &&
+    !isSeller && (capabilitiesResolved || current?.phase === 'error');
+  const ownerGeneration = useSyncExternalStore(subscribeAuthSessionOwner, authSessionOwner, authSessionOwner);
+  const [ownerAdmission, setOwnerAdmission] = useState<{owner: string; generation: number; result: 'allowed' | 'denied' | 'error'} | null>(null);
+  const [ownerRetry, setOwnerRetry] = useState(0);
+  useEffect(() => {
+    if (!checkOwnerListings || !owner) return;
+    const request = new AbortController();
+    const apply = (result: 'allowed' | 'denied' | 'error') => {
+      if (!request.signal.aborted && authSessionOwner() === ownerGeneration && useAuthStore.getState().user?.id === owner) {
+        setOwnerAdmission({owner, generation: ownerGeneration, result});
+      }
+    };
+    void import('@/api/sellerListingPublication').then(({hasOwnerListings}) => {
+      if (!request.signal.aborted && authSessionOwner() === ownerGeneration && useAuthStore.getState().user?.id === owner) {
+        return hasOwnerListings(request.signal).then(allowed => apply(allowed ? 'allowed' : 'denied'));
+      }
+    }).catch(() => apply('error'));
+    return () => request.abort();
+  }, [checkOwnerListings, owner, ownerGeneration, current, ownerRetry]);
+  const ownerAccess = checkOwnerListings && ownerAdmission?.owner === owner &&
+    ownerAdmission?.generation === ownerGeneration ? ownerAdmission.result : undefined;
+  const checkingOwnerAccess = checkOwnerListings && ownerAccess === undefined;
+  const routeReady = authenticated && (buyerRoute || isSeller || ownerAccess === 'allowed');
 
   useEffect(() => {
     if (isLoading || !hydrated) return;
     if (!isAuthenticated) {
       router.push(`/login?redirect=${encodeURIComponent(pathname + (typeof window !== 'undefined' ? window.location.search : ''))}`);
-    } else if (owner && !buyerRoute && capabilitiesResolved && !isSeller) {
+    } else if (owner && !buyerRoute && capabilitiesResolved && !isSeller && (!checkOwnerListings || ownerAccess === 'denied')) {
       router.push(current?.sellerStatus === 'not_requested' ? '/dashboard' : '/dashboard/inquiries');
     }
-  }, [buyerRoute, capabilitiesResolved, current?.sellerStatus, hydrated, isAuthenticated, isLoading, isSeller, owner, pathname, router]);
+  }, [buyerRoute, capabilitiesResolved, checkOwnerListings, ownerAccess, current?.sellerStatus, hydrated, isAuthenticated, isLoading, isSeller, owner, pathname, router]);
 
-  if (authenticated && !buyerRoute && current?.phase === 'error') {
+  if (ownerAccess === 'error') {
+    return (
+      <div className="flex min-h-screen flex-col items-center justify-center gap-4">
+        <p role="alert">Unable to check your Workspace listings. Please try again.</p>
+        <button type="button" onClick={() => { setOwnerAdmission(null); setOwnerRetry(value => value + 1); }}
+          className="rounded-md bg-[#3F51B5] px-4 py-2 text-white">
+          Retry
+        </button>
+        <Link href="/dashboard">Back to Overview</Link>
+      </div>
+    );
+  }
+
+  if (authenticated && !buyerRoute && current?.phase === 'error' && !checkingOwnerAccess && ownerAccess !== 'allowed') {
     return (
       <div className="flex min-h-screen flex-col items-center justify-center gap-4">
         <p role="alert">Unable to check seller access. Please try again.</p>

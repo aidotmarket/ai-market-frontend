@@ -4,6 +4,8 @@ import { describe, expect, it, vi } from 'vitest';
 import OrderVersionAccessSummary, { formatTimeRemaining } from './OrderVersionAccessSummary';
 import type { BuyerOrder } from '@/types';
 
+vi.mock('next/link', () => import('@/tests/listingLinkPrefetchMock'));
+
 const baseOrder: BuyerOrder = {
   id: 'order-1',
   listing_id: 'listing-1',
@@ -32,6 +34,7 @@ describe('OrderVersionAccessSummary', () => {
     expect(html).not.toContain('(superseded)');
     expect(html).toContain('Newer version available');
     expect(html).toContain('/listings/listing-1');
+    expect(html).toContain('data-prefetch="false"');
     expect(html).not.toContain('?version=');
   });
 

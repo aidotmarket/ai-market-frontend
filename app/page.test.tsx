@@ -9,6 +9,7 @@ import { browseResponse, conflictingShortDescription, listingSummaryCases, markd
 const auth = vi.hoisted(() => ({ isAuthenticated: false }));
 vi.mock('@/store/auth', () => ({ useAuthStore: () => auth }));
 afterEach(cleanup);
+vi.mock('next/link', () => import('@/tests/listingLinkPrefetchMock'));
 
 const serverTerms = vi.hoisted(() => ({ getPublicTermsVersion: vi.fn().mockResolvedValue('1.1') }));
 vi.mock('@/lib/publicTermsVersion', () => serverTerms);
@@ -67,6 +68,7 @@ describe('homepage listing grid', () => {
     for (const item of [listing, withMarkdown]) {
       const card = screen.getByRole('heading', { name: item.title }).closest('a')!;
       expect(card.getAttribute('href')).toBe(`/listings/${item.slug}`);
+      expect(card.getAttribute('data-prefetch')).toBe('false');
       expect(within(card).getByRole('paragraph').textContent)
         .toBe(summary === undefined ? conflictingShortDescription : summary ?? '');
     }

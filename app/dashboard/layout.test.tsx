@@ -36,6 +36,9 @@ vi.mock('next/link', () => ({
   ),
 }));
 
+const ownerListings = vi.hoisted(() => ({hasOwnerListings: vi.fn(async () => false)}));
+vi.mock('@/api/sellerListingPublication', () => ownerListings);
+
 vi.mock('@/api/capabilities', () => ({
   getCapabilities: capabilitiesApi.getCapabilities,
 }));
@@ -739,6 +742,43 @@ describe('DashboardLayout canonical capability ownership', () => {
     expect(sellerWorkspaceApi.getSellerWorkspaceCapabilities).not.toHaveBeenCalled();
     expect(gatewaysApi.listSellerGateways).not.toHaveBeenCalled();
     expect(useAuthStore.getState().user).toEqual(user);
+  });
+
+  it('allows only the Workspace route through the owner listing read when seller setup is unavailable', async () => {
+    navigation.pathname = '/dashboard/seller-workspace';
+    capabilitiesApi.getCapabilities.mockResolvedValueOnce(capability('not_requested'));
+    ownerListings.hasOwnerListings.mockResolvedValueOnce(true);
+    render(<DashboardLayout><div>owner listing controls</div></DashboardLayout>);
+    await screen.findByText('owner listing controls');
+    expect(navigation.push).not.toHaveBeenCalled();
+    expect(screen.queryByRole('link', {name: 'Listings'})).toBeNull();
+  });
+
+  it.each([
+    {response: {status: 503, data: {detail: {code: 'READ_UNCERTAIN'}}}},
+    new Error('Network error'),
+  ])('retries an uncertain owner read and admits in place', async error => {
+    navigation.pathname = '/dashboard/seller-workspace';
+    capabilitiesApi.getCapabilities.mockResolvedValueOnce(capability('not_requested'));
+    ownerListings.hasOwnerListings.mockRejectedValueOnce(error).mockResolvedValueOnce(true);
+    render(<DashboardLayout><div>owner listing controls</div></DashboardLayout>);
+    expect((await screen.findByRole('alert')).textContent).toContain('Unable to check your Workspace listings');
+    expect(screen.queryByText('owner listing controls')).toBeNull();
+    expect(navigation.push).not.toHaveBeenCalled();
+    fireEvent.click(screen.getByRole('button', {name: 'Retry'}));
+    await screen.findByText('owner listing controls');
+    expect(ownerListings.hasOwnerListings).toHaveBeenCalledTimes(2);
+    expect(navigation.push).not.toHaveBeenCalled();
+  });
+
+  it('denies Workspace after a confirmed empty owner admission result', async () => {
+    navigation.pathname = '/dashboard/seller-workspace';
+    capabilitiesApi.getCapabilities.mockResolvedValueOnce(capability('not_requested'));
+    ownerListings.hasOwnerListings.mockResolvedValueOnce(false);
+    render(<DashboardLayout><div>owner listing controls</div></DashboardLayout>);
+    await waitFor(() => expect(navigation.push).toHaveBeenCalledWith('/dashboard'));
+    expect(screen.queryByRole('alert')).toBeNull();
+    expect(screen.queryByText('owner listing controls')).toBeNull();
   });
 
   it.each(['unknown', undefined, null, { status: 'not_requested' }])(

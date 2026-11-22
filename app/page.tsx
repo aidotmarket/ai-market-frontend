@@ -570,6 +570,7 @@ export default async function LandingPage() {
                   <Link
                     key={l.id}
                     href={`/listings/${l.slug}`}
+                    prefetch={false}
                     className="card-texture rounded-2xl border border-[#E8E8E8] bg-white p-5 flex flex-col hover:border-[#3F51B5] hover:shadow-sm transition-all"
                   >
                     <span className={`inline-flex w-fit rounded-md px-2 py-0.5 text-[11px] font-bold uppercase tracking-wide ${categoryBadge[l.category] ?? defaultBadge}`}>

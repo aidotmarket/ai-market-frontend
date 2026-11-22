@@ -1,3 +1,4 @@
+import {LISTING_DATA_HEADER, LISTING_UUID, ListingUnavailable} from '@/lib/listing-http-status';
 import CurrentDisplayFreshness from '@/components/listings/CurrentDisplayFreshness';
 import { formatMarketplaceCategoryName } from '@/lib/marketplaceCategories';
 import GeneratedSamplePage from './GeneratedSamplePage';
@@ -33,8 +34,6 @@ import { isListingLicenseDetails } from '@/lib/listingLicense';
 
 export const dynamic = 'force-dynamic';
 
-// UUID v4 pattern
-const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 const DATASET_JSONLD_ENABLED = process.env.NEXT_PUBLIC_ENABLE_DATASET_JSONLD !== 'false';
 
 interface Props {
@@ -42,16 +41,27 @@ interface Props {
   searchParams?: Promise<{ version?: string }>;
 }
 
+function forwardedListing(requestHeaders: Headers) {
+  const snapshot = requestHeaders.get(LISTING_DATA_HEADER);
+  return snapshot === null ? undefined : JSON.parse(decodeURIComponent(snapshot));
+}
+
 export async function generateMetadata({ params }: Props): Promise<Metadata> {
   const { slug } = await params;
 
-  if (UUID_RE.test(slug)) {
+  const requestHeaders = await headers();
+  if (LISTING_UUID.test(slug)) {
     return { title: 'Redirecting...' };
   }
 
 
-  const userAgent = (await headers()).get('user-agent');
-  const listing: ListingDetail | null = await fetchPublicListing(slug, userAgent);
+  const userAgent = requestHeaders.get('user-agent');
+  const snapshot = forwardedListing(requestHeaders);
+  if (snapshot) await verifyCurrentListing(snapshot);
+  const listing: ListingDetail | null = snapshot ?? await fetchPublicListing(slug, userAgent).catch(error => {
+    if (error instanceof ListingUnavailable) return null;
+    throw error;
+  });
   if (!listing) {
     return { title: 'Not Found' };
   }
@@ -87,21 +97,31 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
   };
 }
 
+function failClosed(error: unknown): never {
+  if (error instanceof ListingUnavailable) notFound();
+  throw error;
+}
+
 export default async function ListingDetailPage({ params, searchParams }: Props) {
   const { slug } = await params;
   const requestedVersionId = (await searchParams)?.version ?? null;
 
+  const requestHeaders = await headers();
+  const snapshot = forwardedListing(requestHeaders);
+
   // UUID redirect: resolve UUID → slug, 308 redirect
-  if (UUID_RE.test(slug)) {
-    const resolved = await resolveListingUUID(slug);
+  if (LISTING_UUID.test(slug)) {
+    const resolved = snapshot ?? await resolveListingUUID(slug).catch(failClosed);
     if (resolved?.slug) {
-      permanentRedirect(`/listings/${resolved.slug}`);
+      const query = requestedVersionId === null ? '' : `?${new URLSearchParams({version: requestedVersionId})}`;
+      permanentRedirect(`/listings/${resolved.slug}${query}`);
     }
     notFound();
   }
 
-  const userAgent = (await headers()).get('user-agent');
-  const listing: ListingWithSamples | null = await fetchPublicListing(slug, userAgent);
+  const userAgent = requestHeaders.get('user-agent');
+  if (snapshot) await verifyCurrentListing(snapshot);
+  const listing: ListingWithSamples | null = snapshot ?? await fetchPublicListing(slug, userAgent).catch(failClosed);
   if (!listing) {
     notFound();
   }

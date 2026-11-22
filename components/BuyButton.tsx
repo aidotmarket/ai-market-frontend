@@ -285,7 +285,7 @@ export default function BuyButton({
 
   if (domainEnabled && processingIdentity === requestIdentity) return <div className="space-y-4">
     {!checkoutRefusal?.blocked && <p role="status">Checkout is processing. Retry to check the same purchase.</p>}
-    {checkoutRefusal && <div role="alert"><p>{checkoutRefusal.message}</p>{checkoutRefusal.webPath && <Link href={checkoutRefusal.webPath}>{checkoutRefusal.code === 'TERMS_ACCEPTANCE_REQUIRED' ? 'Accept platform terms' : checkoutRefusal.linkLabel ?? 'Review listing'}</Link>}</div>}
+    {checkoutRefusal && <div role="alert"><p>{checkoutRefusal.message}</p>{checkoutRefusal.webPath && <Link href={checkoutRefusal.webPath} prefetch={checkoutRefusal.webPath.startsWith('/listings/') ? false : undefined}>{checkoutRefusal.code === 'TERMS_ACCEPTANCE_REQUIRED' ? 'Accept platform terms' : checkoutRefusal.linkLabel ?? 'Review listing'}</Link>}</div>}
     <button type="button" disabled={loading || !!checkoutRefusal?.blocked} onClick={startCheckout} className="rounded-lg bg-[#3F51B5] px-5 py-2.5 text-white disabled:opacity-50">
       {loading ? 'Checking checkout…' : 'Retry checkout'}
     </button>
@@ -344,7 +344,7 @@ export default function BuyButton({
           <div role="alert" className="rounded-lg border border-red-200 bg-red-50 p-4 text-sm text-red-800">
             <p>{checkoutRefusal.message}</p>
             {checkoutRefusal.reconciliationUrl && <Link href={checkoutRefusal.reconciliationUrl} className="mt-2 inline-block font-medium underline">Reconcile legal identity</Link>}
-            {checkoutRefusal.webPath && <Link href={checkoutRefusal.webPath} className="mt-2 inline-block font-medium underline">{checkoutRefusal.code === 'TERMS_ACCEPTANCE_REQUIRED' ? 'Accept platform terms' : checkoutRefusal.linkLabel ?? 'Review listing'}</Link>}
+            {checkoutRefusal.webPath && <Link href={checkoutRefusal.webPath} prefetch={checkoutRefusal.webPath.startsWith('/listings/') ? false : undefined} className="mt-2 inline-block font-medium underline">{checkoutRefusal.code === 'TERMS_ACCEPTANCE_REQUIRED' ? 'Accept platform terms' : checkoutRefusal.linkLabel ?? 'Review listing'}</Link>}
           </div>
         )}
         <button
@@ -363,7 +363,7 @@ export default function BuyButton({
     <div>
       <TermsGatePrompt />
       {termsVersion === '1.2' && <p className="text-sm text-gray-600">{CARD_BUYER_TOTAL}</p>}
-      {checkoutRefusal && <div role="alert"><p>{checkoutRefusal.message}</p>{checkoutRefusal.webPath && <Link href={checkoutRefusal.webPath}>{checkoutRefusal.linkLabel ?? 'Review listing'}</Link>}</div>}
+      {checkoutRefusal && <div role="alert"><p>{checkoutRefusal.message}</p>{checkoutRefusal.webPath && <Link href={checkoutRefusal.webPath} prefetch={checkoutRefusal.webPath.startsWith('/listings/') ? false : undefined}>{checkoutRefusal.linkLabel ?? 'Review listing'}</Link>}</div>}
       <button
         onClick={handleBuy}
         disabled={loading || checkingPurchase || checkingTerms || !!disabledReason || domainEnabled}

@@ -195,7 +195,7 @@ export default function PendingActionReview() {
         {continuation && !checkoutRefusal && <><p>Review the licence and confirm your authority at checkout.</p>
           <Link href={continuation} replace prefetch={false} rel="noreferrer">Continue to checkout</Link></>}
         {checkoutRefusal && <div role="alert"><p>{checkoutRefusal.message}</p>
-          {checkoutRefusal.webPath && <Link href={checkoutRefusal.webPath}>Review listing</Link>}</div>}
+          {checkoutRefusal.webPath && <Link href={checkoutRefusal.webPath} prefetch={checkoutRefusal.webPath.startsWith('/listings/') ? false : undefined}>Review listing</Link>}</div>}
         {data?.status === 'denied' && <p role="status">Declined. This request will not be carried out.</p>}
         {data?.status === 'failed' && !checkoutRefusal && <p role="alert">This request could not be completed. Ask your assistant for a new request.</p>}
         {expired && <p role="alert">This request expired or its terms changed. Ask your assistant for a new request.</p>}

@@ -9,6 +9,7 @@ const fetchShareMetadata = vi.fn();
 vi.mock('@/lib/api', () => ({
   fetchShareMetadata,
 }));
+vi.mock('next/link', () => import('@/tests/listingLinkPrefetchMock'));
 
 const { default: SharePage, generateMetadata } = await import('./page');
 
@@ -127,6 +128,12 @@ describe('SharePage', () => {
     expect(html).toContain('View listing');
     expect(html).toContain('src="https://ai.market/l/AbC123xYz987/card.png?v=fresh-card"');
     expect(html).toMatchSnapshot();
+  });
+
+  it('renders the canonical listing link with prefetch disabled', async () => {
+    const html = await renderSharePage({ status: 'published', data: makeShareMetadata() });
+    expect(html).toContain('href="/listings/shared-dataset"');
+    expect(html).toContain('data-prefetch="false"');
   });
 
   it('returns generic noindex metadata and renders the friendly unavailable page for 410 shares', async () => {

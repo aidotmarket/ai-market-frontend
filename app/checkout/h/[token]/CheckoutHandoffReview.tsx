@@ -85,7 +85,7 @@ export default function CheckoutHandoffReview() {
   else if (!hydrated || isLoading) content = <p role="status">Loading checkout…</p>;
   else if (!user || !accessToken || status === 401) content = <><h1>Review checkout</h1><Link href={`/login?redirect=${encodeURIComponent(path)}`} prefetch={false}>Sign in to review checkout</Link></>;
   else if (failure && (!data || status === 403 || status === 404)) content = <><h1>Checkout link unavailable</h1><p role="alert">{refusal?.message || 'Return to the listing or try again later.'}</p>
-    {refusal?.webPath && <Link href={refusal.webPath}>Review listing</Link>}</>;
+    {refusal?.webPath && <Link href={refusal.webPath} prefetch={refusal.webPath.startsWith('/listings/') ? false : undefined}>Review listing</Link>}</>;
   else if (!data) content = <p role="status">Loading checkout…</p>;
   else {
     const { handoff, listing } = data;
@@ -108,7 +108,7 @@ export default function CheckoutHandoffReview() {
       if (!license || listing.id !== handoff.listing_id || license.sha256 !== handoff.license_sha256
         || license.covenant_sha256 !== handoff.covenant_sha256 || license.rider_sha256 !== handoff.rider_sha256
         || Math.round(listing.pricing.price * 100) !== handoff.price_cents) {
-        content = <><h1>The terms changed</h1><Link href={`/listings/${encodeURIComponent(listing.slug)}`}>Review the current listing</Link></>;
+        content = <><h1>The terms changed</h1><Link href={`/listings/${encodeURIComponent(listing.slug)}`} prefetch={false}>Review the current listing</Link></>;
       } else content = <><h1 className="text-2xl font-semibold">Review checkout for {listing.title}</h1>
         <p>{handoff.currency} {(handoff.price_cents / 100).toFixed(2)}</p>
         <p>Review the licence and confirm your authority before continuing to payment.</p>

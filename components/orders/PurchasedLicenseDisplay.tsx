@@ -33,6 +33,6 @@ function PurchasedDisplayVisit({orderId,listingId,omitOriginalEvidence}:{orderId
     {!omitOriginalEvidence&&display.license_record_url&&<Link href={`/dashboard/orders/${encodeURIComponent(orderId)}/license-record`} className="text-indigo-700 underline">Original licence record</Link>}
     {display.retained_presentation&&<><p>{display.retained_presentation.notice}</p>{!omitOriginalEvidence&&display.retained_presentation.presentation.rendered_html!==null&&<ApprovedListingPreview title="Original seller evidence for purchased version" html={display.retained_presentation.presentation.rendered_html}/>}</>}
     {!omitOriginalEvidence&&!display.retained_presentation&&<p>Original seller presentation is {display.retained_presentation_status??'not retained'}.</p>}
-    <Link href={`/listings/${encodeURIComponent(listingId)}`} className="block text-indigo-700 underline">Current public display (may differ from this purchase)</Link>
+    <Link href={`/listings/${encodeURIComponent(listingId)}`} prefetch={false} className="block text-indigo-700 underline">Current public display (may differ from this purchase)</Link>
   </section>;
 }

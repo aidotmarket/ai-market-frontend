@@ -6,6 +6,7 @@ import PurchasedLicenseDisplay from './PurchasedLicenseDisplay';
 import {AxiosError} from 'axios';
 const client=vi.hoisted(()=>({get:vi.fn()}));
 vi.mock('@/api/client',()=>({api:client}));
+vi.mock('next/link', () => import('@/tests/listingLinkPrefetchMock'));
 afterEach(()=>{cleanup();vi.resetAllMocks();});
 it('silently omits a missing deployment endpoint through the real API reader',async()=>{
  const f=wire.purchased[0];
@@ -37,7 +38,9 @@ it.each(wire.purchased)('shows purchased $instrument_display.license_version sep
  expect(screen.getByText('Purchased instrument display; original accepted evidence retained.')).toBeTruthy();
  expect(screen.getByText('Original seller evidence for the purchased version; not a checkout receipt.')).toBeTruthy();
  expect(screen.getByTitle('Original seller evidence for purchased version').getAttribute('srcdoc')).toContain('ai.market Standard Data Licence v1.0');
- expect(screen.getByRole('link',{name:'Current public display (may differ from this purchase)'}).getAttribute('href')).toBe(`/listings/${f.listing_id}`);
+ const listingLink = screen.getByRole('link',{name:'Current public display (may differ from this purchase)'});
+ expect(listingLink.getAttribute('href')).toBe(`/listings/${f.listing_id}`);
+ expect(listingLink.getAttribute('data-prefetch')).toBe('false');
  expect(screen.queryByRole('checkbox')).toBeNull();
  expect(screen.queryByRole('button')).toBeNull();
  expect(JSON.stringify(f)).toBe(before);
