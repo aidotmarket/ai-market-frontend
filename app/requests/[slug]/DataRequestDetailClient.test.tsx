@@ -6,7 +6,8 @@ import { StrictMode } from 'react';
 import type React from 'react';
 import http from 'node:http';
 import https from 'node:https';
-import type { DataRequestDetail, User } from '@/types';
+import fixture from '@/tests/fixtures/buyer-request-anonymization-chunk1.json';
+import type { DataRequestDetail, RequestPublicationPreparation, User } from '@/types';
 import { AxiosError, AxiosHeaders } from 'axios';
 import DataRequestDetailClient from './DataRequestDetailClient';
 
@@ -85,7 +86,9 @@ const owner: User = {
   primary_auth: 'password',
 };
 
-function makeDraft(): DataRequestDetail {
+type ExistingRequest = DataRequestDetail & { slug: string };
+
+function makeDraft(): ExistingRequest {
   return {
     id: 'request-1',
     slug: 'draft-request',
@@ -108,7 +111,22 @@ function makeDraft(): DataRequestDetail {
   };
 }
 
-function makeOwnerRequest(overrides: Partial<DataRequestDetail> = {}): DataRequestDetail {
+const connectorDraftId = '00000000-0000-4000-8000-000000000001';
+function makeGatedDraft(publication_preparation: RequestPublicationPreparation) {
+  return { ...makeDraft(), id: connectorDraftId, slug: null, publication_preparation };
+}
+
+function makePreview(revision: string, fields: { label: string; value: string }[]) {
+  return {
+    status: 'preview_ready' as const,
+    binding: { revision, render_digest: (revision === 'rev-1' ? 'a' : 'b').repeat(64), screening_policy_version: 'screen-1' },
+    public_content_hash: 'same-normalized-hash',
+    policy_version: 'consent-1',
+    presentation: { language: 'en', slug: 'synthetic-data', fields },
+  };
+}
+
+function makeOwnerRequest(overrides: Partial<ExistingRequest> = {}): ExistingRequest {
   return {
     ...makeDraft(),
     slug: 'buyer-request',
@@ -151,13 +169,340 @@ describe('DataRequestDetailClient authenticated fallback loading', () => {
     mocks.auth.token = null;
     vi.restoreAllMocks();
     vi.unstubAllGlobals();
+    vi.unstubAllEnvs();
+  });
+
+  it.each([
+    { ownerDraftFields: false, approvalState: null },
+    { ownerDraftFields: true, approvalState: { status: 'approved' } },
+  ])('follows the shared publication journey (owner draft fields: $ownerDraftFields)', async ({ ownerDraftFields, approvalState }) => {
+    vi.stubEnv('NEXT_PUBLIC_BUYER_REQUEST_ANONYMIZATION_ENABLED', 'true');
+    const base = { ...makeDraft(), id: connectorDraftId };
+    const ownerResponse = ({ slug, status, publication_preparation, ...fields }: typeof fixture.draft) => ({
+      ...base,
+      ...fields,
+      slug,
+      status,
+      publication_preparation,
+      ...(ownerDraftFields ? {
+        title: '', description: '', categories: [], format_preferences: [], regulatory_requirements: [],
+        provenance_requirements: null, draft_fields: fields,
+      } : {}),
+    });
+    const preview = fixture.preview.publication_preparation;
+    mocks.getDataRequest.mockResolvedValueOnce(ownerResponse(fixture.draft));
+    mocks.updateDataRequest
+      .mockResolvedValueOnce(ownerResponse(fixture.edited))
+      .mockResolvedValueOnce(ownerResponse(fixture.corrected));
+    mocks.publishDataRequest
+      .mockResolvedValueOnce(ownerResponse(fixture.correction_required))
+      .mockResolvedValueOnce(ownerResponse(fixture.preview));
+    mocks.confirmDataRequestPublication.mockResolvedValueOnce({
+      ...base, ...fixture.approved, publication_preparation: approvalState,
+    });
+    const draftView = render(<DataRequestDetailClient slug={base.id} initialRequest={null} />);
+
+    const editRequest = async () => {
+      fireEvent.click(await screen.findByRole('button', { name: 'Edit request' }));
+      return within(screen.getByRole('form', { name: 'Edit request' }));
+    };
+    const edit = await editRequest();
+    expect(edit.getByDisplayValue(fixture.create.title)).toBeTruthy();
+    expect(edit.getByDisplayValue(fixture.create.description)).toBeTruthy();
+    expect(edit.getByDisplayValue(fixture.create.categories.join(', '))).toBeTruthy();
+    fireEvent.change(edit.getByLabelText('Categories'), { target: { value: fixture.edit.categories.join(', ') } });
+    fireEvent.click(edit.getByRole('button', { name: 'Save changes' }));
+    const editedFields = {
+      title: fixture.create.title,
+      description: fixture.create.description,
+      categories: fixture.edit.categories,
+      format_preferences: fixture.create.format_preferences,
+      regulatory_requirements: fixture.create.regulatory_requirements,
+      provenance_requirements: fixture.create.provenance_requirements,
+    };
+    expect(mocks.updateDataRequest).toHaveBeenNthCalledWith(1, base.id, editedFields);
+
+    const prepare = async () => fireEvent.click(await screen.findByRole('button', { name: 'Prepare preview' }));
+    await prepare();
+    expect(await screen.findByText(/This version is private. Edit the request/)).toBeTruthy();
+    expect(screen.queryByRole('button', { name: 'Approve this version' })).toBeNull();
+
+    const correction = await editRequest();
+    expect(correction.getByDisplayValue(fixture.edited.categories.join(', '))).toBeTruthy();
+    fireEvent.change(correction.getByLabelText('Description'), { target: { value: fixture.correct.description } });
+    fireEvent.click(correction.getByRole('button', { name: 'Save changes' }));
+    expect(mocks.updateDataRequest).toHaveBeenNthCalledWith(2, base.id, {
+      ...editedFields,
+      description: fixture.correct.description,
+    });
+    await prepare();
+
+    const approval = await screen.findByRole('button', { name: 'Approve this version' });
+    const presentation = screen.getByRole('region', { name: 'Prepare for publication' });
+    expect(presentation.querySelector('[lang]')?.getAttribute('lang')).toBe(preview.presentation.language);
+    expect(Array.from(presentation.querySelectorAll('dt, dd'), node => node.textContent)).toEqual([
+      ...preview.presentation.fields.flatMap(({ label, value }) => [label, value]),
+      'Public address after approval', `https://ai.market/requests/${preview.presentation.slug}`,
+    ]);
+    const servingHref = `/requests/${fixture.serving.slug}`;
+    expect(screen.getByRole('button', { name: 'Refresh' })).toBeTruthy();
+    expect(screen.queryByRole('link', { name: 'Refresh' })).toBeNull();
+    expect(fixture.preview.slug).toBeNull();
+    expect(mocks.publishDataRequest.mock.calls).toEqual([[base.id], [base.id]]);
+
+    fireEvent.click(approval);
+    expect(mocks.confirmDataRequestPublication).toHaveBeenCalledExactlyOnceWith(
+      base.id, fixture.confirmation.public_content_hash, fixture.confirmation.policy_version, preview.binding,
+    );
+    expect((await screen.findByRole('link', { name: 'Refresh' })).getAttribute('href')).toBe(servingHref);
+    expect(screen.queryByRole('region', { name: 'Prepare for publication' })).toBeNull();
+    draftView.unmount();
+
+    mocks.auth.user = null;
+    mocks.auth.isAuthenticated = false;
+    mocks.getDataRequest.mockResolvedValueOnce({ ...base, ...fixture.serving, buyer_display_name: null });
+    render(<DataRequestDetailClient slug={fixture.serving.slug} initialRequest={null} />);
+    expect(await screen.findByRole('heading', { name: fixture.serving.title })).toBeTruthy();
+    expect(screen.getByText(fixture.serving.description)).toBeTruthy();
+    expect(screen.queryByText(fixture.correct.description)).toBeNull();
+    expect(screen.queryByRole('button', { name: 'Edit request' })).toBeNull();
+    expect(mocks.getDataRequest.mock.calls).toEqual([[base.id], [fixture.serving.slug]]);
+  });
+
+  it('keeps the approved public version on its slug until the owner approves the replacement', async () => {
+    vi.stubEnv('NEXT_PUBLIC_BUYER_REQUEST_ANONYMIZATION_ENABLED', 'true');
+    const published: DataRequestDetail = {
+      ...makeDraft(), ...fixture.approved, id: connectorDraftId, published_at: '2026-07-31T00:00:00Z',
+      status: 'open', urgency: 'high', publication_decision: 'eligible', public_consent_status: 'consented',
+    };
+    const slug = fixture.serving.slug;
+    const revisedTitle = 'Regional weather observations for research';
+    const privateDescription = fixture.correct.description + ' We need an estimate at scale. App events should cover usage. synthetic-private-marker@example.invalid';
+    const replacement: DataRequestDetail = { ...published, title: revisedTitle };
+    const unprepared = { status: 'unprepared' } as const;
+    const preview = {
+      ...fixture.preview.publication_preparation,
+      status: 'preview_ready',
+      binding: {
+        ...fixture.preview.publication_preparation.binding,
+        revision: '00000000-0000-4000-8000-000000000002',
+        render_digest: 'a'.repeat(64),
+      },
+      public_content_hash: 'b'.repeat(64),
+      presentation: {
+        ...fixture.preview.publication_preparation.presentation,
+        fields: fixture.preview.publication_preparation.presentation.fields.map(field =>
+          field.label === 'Title' ? { ...field, value: revisedTitle } : field),
+      },
+    } satisfies RequestPublicationPreparation;
+    let ownerResponse = published;
+    let serving = { ...makeDraft(), ...fixture.serving, buyer_display_name: null };
+    mocks.getDataRequest.mockImplementation(async () => mocks.auth.isAuthenticated ? ownerResponse : serving);
+    mocks.updateDataRequest
+      .mockImplementationOnce(async () => ownerResponse = {
+        ...published, description: privateDescription, publication_preparation: unprepared,
+      })
+      .mockImplementationOnce(async () => ownerResponse = {
+        ...published, title: revisedTitle, description: fixture.correct.description, publication_preparation: unprepared,
+      });
+    mocks.publishDataRequest
+      .mockImplementationOnce(async () => ownerResponse = {
+        ...ownerResponse, publication_preparation: { status: 'correction_required' },
+      })
+      .mockImplementationOnce(async () => ownerResponse = { ...ownerResponse, publication_preparation: preview });
+    mocks.confirmDataRequestPublication.mockImplementation(async () => {
+      serving = { ...serving, title: revisedTitle };
+      return ownerResponse = replacement;
+    });
+
+    const openRequest = () => render(<DataRequestDetailClient slug={slug} initialRequest={null} />);
+    const expectPublicVersion = async (title: string) => {
+      mocks.auth.user = null;
+      mocks.auth.isAuthenticated = false;
+      const view = openRequest();
+      expect(await screen.findByRole('heading', { name: title })).toBeTruthy();
+      expect(screen.getByText(fixture.serving.description)).toBeTruthy();
+      expect(screen.queryByText(/synthetic-private-marker/)).toBeNull();
+      expect(screen.queryByText(fixture.correct.description)).toBeNull();
+      expect(screen.queryByRole('region', { name: 'Prepare for publication' })).toBeNull();
+      view.unmount();
+      mocks.auth.user = owner;
+      mocks.auth.isAuthenticated = true;
+    };
+    const editRequest = async (title: string, description: string) => {
+      fireEvent.click(await screen.findByRole('button', { name: 'Edit request' }));
+      fireEvent.change(screen.getByLabelText('Title'), { target: { value: title } });
+      fireEvent.change(screen.getByLabelText('Description'), { target: { value: description } });
+      fireEvent.click(screen.getByRole('button', { name: 'Save changes' }));
+    };
+    const prepare = async () => fireEvent.click(await screen.findByRole('button', { name: 'Prepare preview' }));
+
+    let view = openRequest();
+    expect(await screen.findByRole('heading', { name: fixture.serving.title })).toBeTruthy();
+    expect(screen.queryByRole('button', { name: 'Prepare preview' })).toBeNull();
+    await editRequest(fixture.serving.title, privateDescription);
+    expect(await screen.findByRole('button', { name: 'Prepare preview' })).toBeTruthy();
+    expect(mocks.updateDataRequest).toHaveBeenNthCalledWith(1, published.id, expect.objectContaining({
+      description: privateDescription,
+    }));
+    view.unmount();
+    await expectPublicVersion(fixture.serving.title);
+
+    view = openRequest();
+    await prepare();
+    expect(await screen.findByText(/This version is private/)).toBeTruthy();
+    expect(screen.queryByRole('button', { name: 'Approve this version' })).toBeNull();
+    await editRequest(revisedTitle, fixture.correct.description);
+    await prepare();
+    expect(mocks.updateDataRequest).toHaveBeenNthCalledWith(2, published.id, expect.objectContaining({
+      title: revisedTitle, description: fixture.correct.description,
+    }));
+    const region = within(await screen.findByRole('region', { name: 'Prepare for publication' }));
+    expect(await region.findByRole('button', { name: 'Approve this version' })).toBeTruthy();
+    expect(region.getByText('The current version stays public while these changes are pending.')).toBeTruthy();
+    expect(region.getByText(revisedTitle)).toBeTruthy();
+    expect(region.getByText(fixture.serving.description)).toBeTruthy();
+    expect(region.getByText(`https://ai.market/requests/${slug}`)).toBeTruthy();
+    expect(mocks.publishDataRequest.mock.calls).toEqual([[published.id], [published.id]]);
+    expect(mocks.confirmDataRequestPublication).not.toHaveBeenCalled();
+    view.unmount();
+    await expectPublicVersion(fixture.serving.title);
+
+    view = openRequest();
+    fireEvent.click(await screen.findByRole('button', { name: 'Approve this version' }));
+    expect(mocks.confirmDataRequestPublication).toHaveBeenCalledExactlyOnceWith(
+      published.id, preview.public_content_hash, preview.policy_version, preview.binding,
+    );
+    expect((await screen.findByRole('link', { name: 'Refresh' })).getAttribute('href')).toBe(`/requests/${slug}`);
+    expect(screen.queryByRole('region', { name: 'Prepare for publication' })).toBeNull();
+    view.unmount();
+    await expectPublicVersion(revisedTitle);
+  });
+
+  it('prepares a private connector draft by ID once and displays only its screened presentation for approval', async () => {
+    vi.stubEnv('NEXT_PUBLIC_BUYER_REQUEST_ANONYMIZATION_ENABLED', 'true');
+    const draft = makeGatedDraft({ status: 'unprepared' });
+    const pending = deferred<DataRequestDetail>();
+    const preview = makePreview('rev-1', [
+      { label: 'Title', value: 'Synthetic weather dataset' },
+      { label: 'Deliverable', value: '240 hours of SYNTHETIC-DATA' },
+    ]);
+    mocks.getDataRequest.mockResolvedValue(draft);
+    mocks.publishDataRequest.mockReturnValue(pending.promise);
+    render(<DataRequestDetailClient slug={draft.id} initialRequest={null} />);
+    const prepare = await screen.findByRole('button', { name: 'Prepare preview' });
+    act(() => { fireEvent.click(prepare); fireEvent.click(prepare); });
+    expect(mocks.publishDataRequest).toHaveBeenCalledExactlyOnceWith(draft.id);
+    expect(screen.queryByRole('button', { name: 'Approve this version' })).toBeNull();
+    await act(async () => pending.resolve({ ...draft, publication_preparation: { status: 'preparing' } }));
+    expect(screen.getByText(/being checked/)).toBeTruthy();
+    expect(screen.queryByRole('link', { name: /synthetic-data/ })).toBeNull();
+    mocks.getDataRequest.mockResolvedValue({ ...draft, publication_preparation: preview });
+    fireEvent.click(screen.getByRole('button', { name: 'Refresh' }));
+    const presentation = await screen.findByRole('region', { name: 'Prepare for publication' });
+    const view = within(presentation);
+    expect(view.getByText('240 hours of SYNTHETIC-DATA')).toBeTruthy();
+    expect(view.queryByText(draft.description)).toBeNull();
+    expect(view.getByText('https://ai.market/requests/synthetic-data').tagName).toBe('DD');
+    mocks.confirmDataRequestPublication.mockResolvedValue({
+      ...draft, publication_preparation: null, slug: 'synthetic-data', status: 'open', publication_decision: 'eligible',
+    });
+    fireEvent.click(view.getByRole('button', { name: 'Approve this version' }));
+    await waitFor(() => expect(mocks.toast).toHaveBeenCalledWith('Your request is now available to the market.', 'success'));
+    expect(mocks.confirmDataRequestPublication).toHaveBeenCalledExactlyOnceWith(
+      draft.id, preview.public_content_hash, preview.policy_version, preview.binding,
+    );
+    expect(screen.getByRole('link', { name: 'Refresh' }).getAttribute('href')).toBe('/requests/synthetic-data');
+  });
+
+  it('clears a rejected preview and requires explicit approval of the reordered revision even with the same consent hash', async () => {
+    vi.stubEnv('NEXT_PUBLIC_BUYER_REQUEST_ANONYMIZATION_ENABLED', 'true');
+    const fields = [{ label: 'Dataset', value: 'SYNTHETIC-DATA' }, { label: 'Duration', value: '240 hours' }];
+    const original = makePreview('rev-1', fields);
+    const draft = makeGatedDraft(original);
+    const reordered = makePreview('rev-2', [...fields].reverse());
+    mocks.getDataRequest.mockResolvedValue(draft);
+    mocks.confirmDataRequestPublication.mockRejectedValueOnce(responseFailure(409, 'synthetic private provider detail'));
+    render(<DataRequestDetailClient slug={draft.id} initialRequest={null} />);
+    fireEvent.click(await screen.findByRole('button', { name: 'Approve this version' }));
+    expect((await screen.findByRole('alert')).textContent).toMatch(/no longer current/);
+    expect(screen.queryByText('synthetic private provider detail')).toBeNull();
+    expect(screen.queryByRole('button', { name: 'Approve this version' })).toBeNull();
+    expect(mocks.confirmDataRequestPublication).toHaveBeenCalledTimes(1);
+    mocks.getDataRequest.mockResolvedValue({ ...draft, publication_preparation: reordered });
+    fireEvent.click(screen.getByRole('button', { name: 'Refresh' }));
+    const approve = await screen.findByRole('button', { name: 'Approve this version' });
+    const view = await screen.findByRole('region', { name: 'Prepare for publication' });
+    expect(Array.from(view.querySelectorAll('dt')).slice(0, 2).map(term => term.textContent)).toEqual(['Duration', 'Dataset']);
+    expect(mocks.confirmDataRequestPublication).toHaveBeenCalledTimes(1);
+    mocks.confirmDataRequestPublication.mockResolvedValue(draft);
+    fireEvent.click(approve);
+    expect(mocks.confirmDataRequestPublication).toHaveBeenNthCalledWith(
+      2, draft.id, original.public_content_hash, reordered.policy_version, reordered.binding,
+    );
+  });
+
+  it.each(['added dataset', 'missing required dataset', 'incompatible units'])('prompts a private correction when screening reports %s', async () => {
+    vi.stubEnv('NEXT_PUBLIC_BUYER_REQUEST_ANONYMIZATION_ENABLED', 'true');
+    const draft = makeGatedDraft({ status: 'correction_required' });
+    mocks.getDataRequest.mockResolvedValue(draft);
+    render(<DataRequestDetailClient slug={draft.id} initialRequest={null} />);
+    expect(await screen.findByText(/This version is private/)).toBeTruthy();
+    expect(screen.queryByRole('button', { name: 'Approve this version' })).toBeNull();
+    fireEvent.click(screen.getByRole('button', { name: 'Edit request' }));
+    expect(screen.getByRole('form', { name: 'Edit request' })).toBeTruthy();
+    expect(mocks.publishDataRequest).not.toHaveBeenCalled();
+  });
+
+  it('saves an owner correction privately and waits for a fresh prepare action', async () => {
+    vi.stubEnv('NEXT_PUBLIC_BUYER_REQUEST_ANONYMIZATION_ENABLED', 'true');
+    const draft = makeGatedDraft({ status: 'correction_required' });
+    mocks.getDataRequest.mockResolvedValue(draft);
+    mocks.updateDataRequest.mockResolvedValue(makeGatedDraft({ status: 'unprepared' }));
+    render(<DataRequestDetailClient slug={draft.id} initialRequest={null} />);
+    fireEvent.click(await screen.findByRole('button', { name: 'Edit request' }));
+    fireEvent.change(screen.getByLabelText('Description'), { target: { value: '240 hours of synthetic weather observations' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Save changes' }));
+    const prepare = await screen.findByRole('button', { name: 'Prepare preview' });
+    expect(mocks.updateDataRequest).toHaveBeenCalledExactlyOnceWith(draft.id, expect.objectContaining({
+      description: '240 hours of synthetic weather observations',
+    }));
+    expect(mocks.publishDataRequest).not.toHaveBeenCalled();
+    expect(mocks.confirmDataRequestPublication).not.toHaveBeenCalled();
+    mocks.publishDataRequest.mockResolvedValue(makeGatedDraft({ status: 'preparing' }));
+    fireEvent.click(prepare);
+    expect(mocks.publishDataRequest).toHaveBeenCalledExactlyOnceWith(draft.id);
+    expect(await screen.findByText(/being checked/)).toBeTruthy();
+  });
+
+  it('offers sign-in continuation by connector draft ID when the anonymous request is unknown', async () => {
+    vi.stubEnv('NEXT_PUBLIC_BUYER_REQUEST_ANONYMIZATION_ENABLED', 'true');
+    mocks.auth.user = null;
+    mocks.auth.isAuthenticated = false;
+    mocks.getDataRequest.mockRejectedValue(responseFailure(404, 'Request not found'));
+    render(<DataRequestDetailClient slug={connectorDraftId} initialRequest={null} />);
+    const link = await screen.findByRole('link', { name: 'Sign in to continue' });
+    expect(link.getAttribute('href')).toBe(`/login?redirect=%2Frequests%2F${connectorDraftId}`);
+    expect(mocks.getDataRequestResponses).not.toHaveBeenCalled();
+  });
+
+  it.each(['held', 'nonowner'] as const)('suppresses owner preview and approval when %s', async (access) => {
+    vi.stubEnv('NEXT_PUBLIC_BUYER_REQUEST_ANONYMIZATION_ENABLED', access === 'nonowner' ? 'true' : '');
+    if (access === 'nonowner') mocks.auth.user = { ...owner, id: 'another-buyer' };
+    const draft = makeGatedDraft(makePreview('rev-1', [{ label: 'Dataset', value: 'Synthetic private preview' }]));
+    mocks.getDataRequest.mockResolvedValue(draft);
+    render(<DataRequestDetailClient slug={draft.id} initialRequest={null} />);
+    await screen.findByRole('heading', { name: access === 'nonowner' ? 'Request not found' : draft.title });
+    expect(screen.queryByText('Synthetic private preview')).toBeNull();
+    expect(screen.queryByRole('button', { name: 'Approve this version' })).toBeNull();
+    expect(mocks.publishDataRequest).not.toHaveBeenCalled();
   });
 
   it.each([true, false, undefined, 'true', 1, null])('tags only an explicit sample flag (%s) in the detail title/status row', async is_sample => {
     mocks.auth.user = null;
     mocks.auth.isAuthenticated = false;
     const extra = is_sample === undefined ? {} : { is_sample };
-    const request = { ...makeOwnerRequest(), title: 'Synthetic data request', ...extra } as DataRequestDetail;
+    const request = { ...makeOwnerRequest(), title: 'Synthetic data request', ...extra } as ExistingRequest;
     mocks.getDataRequest.mockResolvedValue(request);
     render(<DataRequestDetailClient slug={request.slug} initialRequest={request} />);
     await waitFor(() => expect(mocks.getDataRequest).toHaveBeenCalled());
@@ -194,7 +539,7 @@ describe('DataRequestDetailClient authenticated fallback loading', () => {
     created_at: '2026-10-06T00:00:00Z', updated_at: null,
   };
 
-  async function renderSupplier(overrides: Partial<DataRequestDetail> = {}) {
+  async function renderSupplier(overrides: Partial<ExistingRequest> = {}) {
     mocks.auth.user = { ...owner, id: 'supplier-1', role: 'seller' };
     const request = makeOwnerRequest(overrides);
     mocks.getDataRequest.mockResolvedValue(request);
@@ -1191,7 +1536,7 @@ describe('DataRequestDetailClient authenticated fallback loading', () => {
     [{ publication_check_outcome: 'unavailable', publication_checked_at: '2026-09-28T02:08:00Z', publication_retry_at: '2026-09-28T03:08:00Z', publication_retry_stage: 'fast_retry', publication_retry_count: 5 }, 'A fast retry is scheduled.', 'A fast retry is scheduled.'],
     [{ publication_check_outcome: 'unavailable', publication_checked_at: null, publication_retry_at: '2026-09-28T03:08:00Z', publication_retry_stage: 'fast_retry', publication_retry_count: 6 }, 'Retry stage unknown.', 'Retry stage unknown.'],
   ] as const)('handles absent or malformed check state without inventing a completed check %#', async (fields, expected, retry) => {
-    const request = makeOwnerRequest(fields as Partial<DataRequestDetail>);
+    const request = makeOwnerRequest(fields as Partial<ExistingRequest>);
     mocks.getDataRequest.mockResolvedValue(request);
     render(<DataRequestDetailClient slug={request.slug} initialRequest={request} />);
     expect(await screen.findAllByText((content) => content.includes(expected))).not.toHaveLength(0);

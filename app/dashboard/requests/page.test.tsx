@@ -49,6 +49,33 @@ afterEach(() => {
 });
 
 describe('My Data Requests server paging through the actual API helper', () => {
+  it('uses the owner draft titles for accessible desktop and mobile links to distinct request IDs', async () => {
+    const titles = ['Private weather request', 'Private climate request'];
+    const ids = ['00000000-0000-4000-8000-000000000001', '00000000-0000-4000-8000-000000000002'];
+    const { data } = envelope(1, 2);
+    mocks.get.mockResolvedValue({ data: {
+      ...data,
+      items: data.items.map((item, index) => ({
+        ...item, id: ids[index], slug: null, status: 'draft', title: '', draft_fields: { title: titles[index] },
+      })),
+    } });
+    const view = render(<MyDataRequestsPage />);
+    await screen.findByRole('table');
+    for (const [index, title] of titles.entries()) {
+      const links = screen.getAllByRole('link', { name: new RegExp(title) });
+      expect(links).toHaveLength(2);
+      expect(links.map(link => link.getAttribute('href'))).toEqual([
+        `/requests/${ids[index]}`, `/requests/${ids[index]}`,
+      ]);
+    }
+    expect(mocks.get).toHaveBeenCalledExactlyOnceWith('/data-requests', {
+      params: { mine: true, page: 1, per_page: 20 },
+    });
+    mocks.auth = { isAuthenticated: false, user: null };
+    view.rerender(<MyDataRequestsPage />);
+    expect(screen.queryByRole('link', { name: /Private .* request/ })).toBeNull();
+  });
+
   it('reaches all 82 owned records, including every lifecycle state, and goes back', async () => {
     render(<MyDataRequestsPage />);
     await expectPage(1);

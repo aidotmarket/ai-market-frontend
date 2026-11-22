@@ -52,6 +52,10 @@ async function mounted(strict = false, state = initialAuth()) {
     'next/navigation': { useRouter: () => ({ push: (path) => pushes.push(path) }) },
     '@/store/auth': { useAuthStore },
     '@/components/Toast': { useToast: () => ({ toast: (...args) => toasts.push(args) }) },
+    '@/lib/buyer-request-publication': {
+      buyerRequestAnonymizationEnabled: () => false,
+      ownerRequestHref: ({ id, slug }) => `/requests/${encodeURIComponent(slug || id)}`,
+    },
     '@/api/data-requests': { createDataRequest: (data) => {
       // Normalize VM realm prototypes while preserving undefined payload fields.
       calls.push(structuredClone(data));

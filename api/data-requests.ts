@@ -6,6 +6,7 @@ import type {
   DataRequestDetail,
   CreateDataRequestPayload,
   DataRequestResponse,
+  RequestPublicationBinding,
 } from '@/types';
 
 export async function getDataRequests(): Promise<DataRequestListItem[]> {
@@ -39,11 +40,20 @@ export async function publishDataRequest(requestId: string): Promise<DataRequest
 export async function confirmDataRequestPublication(
   requestId: string,
   publicContentHash: string,
-  policyVersion: string
+  policyVersion: string,
+  binding?: RequestPublicationBinding,
 ): Promise<DataRequestDetail> {
   const res = await api.put<DataRequestDetail>(
     `/data-requests/${encodeURIComponent(requestId)}/publication-consent`,
-    { public_content_hash: publicContentHash, policy_version: policyVersion }
+    {
+      public_content_hash: publicContentHash,
+      policy_version: policyVersion,
+      ...(binding && {
+        revision: binding.revision,
+        render_digest: binding.render_digest,
+        screening_policy_version: binding.screening_policy_version,
+      }),
+    }
   );
   return res.data;
 }
@@ -77,15 +87,19 @@ export async function getDataRequestResponses(requestId: string): Promise<DataRe
   return Array.isArray(res.data) ? res.data : res.data.items;
 }
 
-export async function getMyDataRequests(): Promise<DataRequestListItem[]> {
-  const res = await api.get<{ items: DataRequestListItem[] } | DataRequestListItem[]>('/data-requests', {
+interface MyDataRequestListItem extends DataRequestListItem {
+  draft_fields?: Pick<DataRequestListItem, 'title'> | null;
+}
+
+export async function getMyDataRequests(): Promise<MyDataRequestListItem[]> {
+  const res = await api.get<{ items: MyDataRequestListItem[] } | MyDataRequestListItem[]>('/data-requests', {
     params: { mine: true },
   });
   return Array.isArray(res.data) ? res.data : res.data.items;
 }
 
 export interface MyDataRequestsPage {
-  items: DataRequestListItem[];
+  items: MyDataRequestListItem[];
   total: number;
   page: number;
   per_page: number;
