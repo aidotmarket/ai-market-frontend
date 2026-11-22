@@ -25,9 +25,11 @@ import {
   type AnonymousMessagePayload,
 } from '@/api/anonymousChat';
 import type { TicketStatusCardData } from './TicketStatusCard';
+import { anonymousFallbackDestinations, type FallbackDestinations } from '@/lib/anonymous-allai-fallback';
 import {
   ANONYMOUS_ALLAI_LOCALES,
   anonymousAllAIResources,
+  isAnonymousSafeOutcome,
   preferredAnonymousAllAILocale,
   type AnonymousAllAILocale,
   type AnonymousSafeOutcome,
@@ -41,6 +43,8 @@ export interface Message {
   role: 'user' | 'assistant' | 'system';
   content: string;
   failureNotice?: string;
+  listingFailure?: 'error' | 'timeout';
+  fallbackDestinations?: FallbackDestinations;
   timestamp: number;
   ticketStatusCards?: TicketStatusCardData[];
   historical?: boolean;
@@ -134,17 +138,6 @@ function extractTicketStatusCards(evt: Record<string, any>): TicketStatusCardDat
   );
 }
 
-function isAnonymousSafeOutcome(value: unknown): value is AnonymousSafeOutcome {
-  return (
-    value === 'no_matches' ||
-    value === 'retrieval_unavailable' ||
-    value === 'answer_unverified' ||
-    value === 'surface_disabled' ||
-    value === 'rate_limited' ||
-    value === 'unsupported_language'
-  );
-}
-
 function isAnonymousNextStep(value: unknown): value is AnonymousNextStep {
   if (!value || typeof value !== 'object') return false;
   const candidate = value as Record<string, unknown>;
@@ -190,6 +183,13 @@ export function useAllAI() {
   const ctx = useContext(AllAIContext);
   if (!ctx) throw new Error('useAllAI must be used within AllAIProvider');
   return ctx;
+}
+
+export function useAllAILocale() {
+  const context = useContext(AllAIContext);
+  return context?.locale ?? preferredAnonymousAllAILocale(
+    typeof navigator === 'undefined' ? undefined : navigator.language
+  );
 }
 
 export function AllAIProvider({ children }: { children: ReactNode }) {
@@ -478,12 +478,13 @@ export function AllAIProvider({ children }: { children: ReactNode }) {
       ]);
       setIsStreaming(true);
 
+      const listingMatch = pathname.match(/^\/listings\/([^/]+)/);
+
       try {
         const sessionId = await ensureSession();
         const controller = new AbortController();
         abortRef.current = controller;
 
-        const listingMatch = pathname.match(/^\/listings\/([^/]+)/);
         const context: AnonymousMessagePayload['context'] = { page: contextPath };
         if (listingMatch) context.listing_id = listingMatch[1];
 
@@ -598,13 +599,17 @@ export function AllAIProvider({ children }: { children: ReactNode }) {
             if (evt.type === 'safe_failure' && isAnonymousSafeOutcome(evt.outcome)) {
               const outcome = evt.outcome;
               const fallback = resources.safeOutcomes[outcome];
+              const surface = listingMatch ? 'listing' : contextPath === '/' ? 'homepage' : undefined;
+              const fallbackDestinations = surface && anonymousFallbackDestinations(evt, surface);
               setMessages((prev) =>
                 prev.map((m) =>
                   m.id === assistantId
                     ? {
                         ...m,
-                        content: typeof evt.text === 'string' && evt.text ? evt.text : fallback,
+                        content: !fallbackDestinations && typeof evt.text === 'string' && evt.text ? evt.text : fallback,
                         safeOutcome: outcome,
+                        fallbackDestinations,
+                        listingFailure: undefined,
                       }
                     : m
                 )
@@ -626,11 +631,10 @@ export function AllAIProvider({ children }: { children: ReactNode }) {
             const error = evt.error ?? (evt.type === 'error' ? evt.message : undefined);
             if (typeof error === 'string' && error) {
               setMessages((prev) =>
-                prev.map((m) =>
-                  m.id === assistantId
-                    ? { ...m, content: error || 'Something went wrong.' }
-                    : m
-                )
+                prev.map((m) => {
+                  if (m.id !== assistantId || (listingMatch && m.safeOutcome)) return m;
+                  return listingMatch ? { ...m, listingFailure: 'error' } : { ...m, content: error };
+                })
               );
             }
 
@@ -674,7 +678,14 @@ export function AllAIProvider({ children }: { children: ReactNode }) {
                 )
               );
             }
-          });
+          }, undefined, controller.signal);
+          if (listingMatch && !controller.signal.aborted) {
+            setMessages((prev) => prev.map((m) =>
+              m.id === assistantId && !m.content.trim() && !m.ticketStatusCards?.length
+                ? { ...m, listingFailure: 'error' }
+                : m
+            ));
+          }
         } catch (readErr) {
           // On timeout, abort the request so the connection is torn down
           if (readErr instanceof Error && readErr.message === 'Stream read timeout') {
@@ -684,14 +695,15 @@ export function AllAIProvider({ children }: { children: ReactNode }) {
         }
       } catch (err: any) {
         if (err?.name !== 'AbortError') {
+          const failure = err?.message === 'Stream read timeout' ? 'timeout' : 'error';
           setMessages((prev) =>
-            prev.map((m) =>
-              m.id === assistantId
-                ? m.content
-                  ? { ...m, failureNotice: resources.genericError }
-                  : { ...m, content: resources.genericError }
-                : m
-            )
+            prev.map((m) => {
+              if (m.id !== assistantId || m.safeOutcome) return m;
+              if (listingMatch) return { ...m, listingFailure: failure };
+              return m.content.trim()
+                ? { ...m, failureNotice: resources.genericError }
+                : { ...m, content: resources.genericError };
+            })
           );
         }
       } finally {

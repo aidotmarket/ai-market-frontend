@@ -26,7 +26,10 @@ vi.mock('@/hooks/useConversationPoll', () => ({
   useConversationPoll: () => ({ updateSince: mocks.updateSince }),
 }));
 
+vi.mock('next/navigation', () => ({ usePathname: () => '/listings/weather-observations' }));
+
 import InquiryWidget from './InquiryWidget';
+import { AllAIProvider, useAllAI } from './allai/AllAIContext';
 
 const SESSION_URL = 'http://localhost:8000/api/allai/support/anonymous/session';
 const MESSAGE_URL = 'http://localhost:8000/api/allai/support/anonymous/message';
@@ -83,7 +86,7 @@ function progressiveSseResponse(firstText: string, secondText: string) {
   };
 }
 
-function completedSseResponse(text: string) {
+function completedSseResponse(text: string, event: Record<string, unknown> = {}) {
   let readCount = 0;
   const reader = {
     read: vi.fn(async () => {
@@ -92,7 +95,7 @@ function completedSseResponse(text: string) {
         return {
           done: false,
           value: new TextEncoder().encode(
-            `event: delta\ndata: ${JSON.stringify({ text })}\n\n`
+            `data: ${JSON.stringify({ text, ...event })}\n\n`
           ),
         };
       }
@@ -139,6 +142,24 @@ function renderWidget() {
   );
 }
 
+function renderWidgetWithLanguagePicker() {
+  function LanguagePicker() {
+    const { setLocale } = useAllAI();
+    return <button onClick={() => setLocale('es')}>Español</button>;
+  }
+  render(
+    <AllAIProvider>
+      <LanguagePicker />
+      <InquiryWidget listingId="listing-123" listingSlug="weather-observations" listingTitle="Weather Observations" />
+    </AllAIProvider>
+  );
+}
+
+function renderSpanishWidget() {
+  renderWidgetWithLanguagePicker();
+  fireEvent.click(screen.getByRole('button', { name: 'Español' }));
+}
+
 function typeQuestion(question: string) {
   fireEvent.change(screen.getByRole('textbox'), { target: { value: question } });
   fireEvent.click(screen.getByRole('button', { name: 'Submit Question' }));
@@ -166,6 +187,95 @@ afterEach(() => {
 });
 
 describe('InquiryWidget', () => {
+  it('sends the selected language and shows actionable Spanish guidance on a network failure', async () => {
+    fetchMock.mockResolvedValueOnce(response(200, { session_id: 'anon-session' }))
+      .mockRejectedValueOnce(new Error('English network error'));
+    renderSpanishWidget();
+    typeQuestion('¿Qué formato tiene?');
+
+    const alert = await screen.findByRole('alert');
+    expect(JSON.parse(String(fetchMock.mock.calls[1][1]?.body)).locale).toBe('es');
+    expect(alert.textContent).toContain('No pudimos obtener una respuesta. Prueba con una pregunta más concreta');
+    expect(alert.textContent).not.toMatch(/English network error|couldn't get an answer/);
+    expect(screen.getByRole('link', { name: 'Buscar en el catálogo' }).getAttribute('href')).toBe('/search');
+    expect(screen.getByRole('link', { name: 'Contactar con soporte' }).getAttribute('href')).toBe('/support');
+  });
+
+  it('localizes the timeout guidance and retains the question and sign-in handoff', async () => {
+    vi.useFakeTimers();
+    try {
+      fetchMock.mockResolvedValueOnce(response(200, { session_id: 'anon-session' }))
+        .mockResolvedValueOnce(pendingSseResponse().response);
+      renderSpanishWidget();
+      typeQuestion('¿Cuál es la licencia?');
+      await act(async () => { await vi.advanceTimersByTimeAsync(45_000); });
+
+      expect(screen.getByRole('alert').textContent).toContain('La respuesta está tardando más de lo esperado.');
+      expect(screen.queryByText(/longer than expected/)).toBeNull();
+      expect(screen.getByRole('link', { name: 'Buscar en el catálogo' }).getAttribute('href')).toBe('/search');
+      expect(screen.getByRole('link', { name: 'Contactar con soporte' }).getAttribute('href')).toBe('/support');
+      const sellerLink = screen.getByRole('link', { name: 'Inicia sesión para preguntar al vendedor.' });
+      clickWithoutNavigation(sellerLink);
+      expect(sessionStorage.getItem('inquiry_draft_listing-123')).toBe('¿Cuál es la licencia?');
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it.each(['/support', 'https://ai.market/support'])('renders the internal backend support link from %s', async (href) => {
+    fetchMock.mockResolvedValueOnce(response(200, { session_id: 'anon-session' }))
+      .mockResolvedValueOnce(completedSseResponse(
+        `No pude verificar una respuesta. [Contacta con soporte](${href}). [Externo](//example.test/support)`,
+        { type: 'safe_failure', outcome: 'answer_unverified', locale: 'es' },
+      ));
+    renderSpanishWidget();
+    typeQuestion('¿Qué significan las valoraciones?');
+
+    expect((await screen.findByRole('link', { name: 'Contactar con soporte' })).getAttribute('href')).toBe('/support');
+    expect(screen.queryByText(/No pude verificar una respuesta/)).toBeNull();
+    expect(screen.queryByRole('link', { name: 'Externo' })).toBeNull();
+    expect(screen.queryByRole('alert')).toBeNull();
+  });
+
+  it.each(['before', 'after'])('keeps the support destination when switching to Spanish %s the response', async (order) => {
+    const pendingMessage = deferred<Response>();
+    fetchMock.mockResolvedValueOnce(response(200, { session_id: 'anon-session' }))
+      .mockReturnValueOnce(pendingMessage.promise);
+    renderWidgetWithLanguagePicker();
+    typeQuestion('What do the ratings mean?');
+    await waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(2));
+    expect(JSON.parse(String(fetchMock.mock.calls[1][1]?.body)).locale).toBe('en');
+    const switchToSpanish = () => fireEvent.click(screen.getByRole('button', { name: 'Español' }));
+    if (order === 'before') switchToSpanish();
+    pendingMessage.resolve(completedSseResponse(
+      'Could not verify an answer. [Contact support](/support)',
+      { type: 'safe_failure', outcome: 'answer_unverified', locale: 'en' },
+    ));
+
+    if (order === 'after') {
+      expect((await screen.findByRole('link', { name: 'Contact support' })).getAttribute('href')).toBe('/support');
+      switchToSpanish();
+    }
+    expect((await screen.findByRole('link', { name: 'Contactar con soporte' })).getAttribute('href')).toBe('/support');
+    expect(screen.getByText(/Prueba con una pregunta más concreta/)).toBeTruthy();
+    expect(screen.queryByRole('link', { name: 'Contact support' })).toBeNull();
+    expect(screen.queryByText(/Could not verify an answer/)).toBeNull();
+  });
+
+  it.each(['https://ai.market.example/support', '/\\example.test/support', 'javascript:alert(1)'])(
+    'retains localized safe-failure copy when a backend link targets %s', async (href) => {
+      fetchMock.mockResolvedValueOnce(response(200, { session_id: 'anon-session' }))
+        .mockResolvedValueOnce(completedSseResponse(
+          `[Untrusted](${href})`, { type: 'safe_failure', outcome: 'answer_unverified' },
+        ));
+      renderSpanishWidget();
+      typeQuestion('¿Qué significan las valoraciones?');
+
+      expect(await screen.findByText(/No pude contrastar esa respuesta/)).toBeTruthy();
+      expect(screen.queryByRole('link', { name: 'Untrusted' })).toBeNull();
+    },
+  );
+
   it('creates an anonymous session, sends listing context, and renders streamed deltas', async () => {
     const stream = progressiveSseResponse('It contains ', 'daily readings.');
     fetchMock.mockImplementation(async (input) => {
@@ -232,7 +342,7 @@ describe('InquiryWidget', () => {
     typeQuestion('Can I recover from an expired session?');
 
     expect((await screen.findByRole('alert')).textContent).toContain(
-      "We couldn't get an answer. Please try again."
+      "We couldn't get an answer. Try a narrower question"
     );
     expect(screen.getByRole('button', { name: 'Submit Question' })).toBeTruthy();
     expect(fetchMock).toHaveBeenCalledTimes(2);
@@ -346,7 +456,7 @@ describe('InquiryWidget', () => {
       });
 
       expect(screen.getByRole('alert').textContent).toContain(
-        "We couldn't get an answer. Please try again."
+        "We couldn't get an answer. Try a narrower question"
       );
       expect(screen.getByRole('button', { name: 'Submit Question' })).toBeTruthy();
     } finally {
@@ -418,7 +528,7 @@ describe('InquiryWidget', () => {
       });
 
       const alert = screen.getByRole('alert');
-      expect(alert.textContent).toContain('This is taking longer than expected. Please try again');
+      expect(alert.textContent).toContain('This is taking longer than expected. Try a narrower question');
       expect(screen.queryByText(
         'Will a stalled request release the form?',
         { selector: 'p' }
@@ -429,7 +539,7 @@ describe('InquiryWidget', () => {
       );
       expect(screen.getByRole('button', { name: 'Submit Question' })).toBeTruthy();
       expect(requestSignal.aborted).toBe(true);
-      const sellerLink = screen.getByRole('link', { name: 'sign in to ask the seller.' });
+      const sellerLink = screen.getByRole('link', { name: 'Sign in to ask the seller.' });
       expect(sellerLink.getAttribute('href')).toBe(
         '/login?redirect=/listings/weather-observations'
       );
@@ -460,7 +570,7 @@ describe('InquiryWidget', () => {
       });
 
       fireEvent.change(screen.getByRole('textbox'), { target: { value: 'Q2' } });
-      const sellerLink = screen.getByRole('link', { name: 'sign in to ask the seller.' });
+      const sellerLink = screen.getByRole('link', { name: 'Sign in to ask the seller.' });
       expect(sellerLink.getAttribute('href')).toBe(
         '/login?redirect=/listings/weather-observations'
       );
@@ -498,7 +608,7 @@ describe('InquiryWidget', () => {
       });
       expect(firstSignal.aborted).toBe(true);
       expect(screen.getByRole('alert').textContent).toContain(
-        'This is taking longer than expected. Please try again'
+        'This is taking longer than expected. Try a narrower question'
       );
 
       fireEvent.click(screen.getByRole('button', { name: 'Submit Question' }));
@@ -576,7 +686,7 @@ describe('InquiryWidget', () => {
         await vi.advanceTimersByTimeAsync(0);
       });
       expect(screen.getByRole('alert').textContent).toContain(
-        "We couldn't get an answer. Please try again."
+        "We couldn't get an answer. Try a narrower question"
       );
 
       fireEvent.click(screen.getByRole('button', { name: 'Submit Question' }));
@@ -638,7 +748,7 @@ describe('InquiryWidget', () => {
       });
 
       expect(screen.getByRole('alert').textContent).toContain(
-        'This is taking longer than expected. Please try again'
+        'This is taking longer than expected. Try a narrower question'
       );
       expect(screen.getAllByRole('link', { name: /sign in to ask the seller/i })).toHaveLength(1);
     } finally {
@@ -667,11 +777,13 @@ describe('InquiryWidget', () => {
       });
 
       expect(screen.getByRole('alert').textContent).toContain(
-        "We couldn't get an answer. Please try again."
+        "We couldn't get an answer. Try a narrower question"
       );
       expect(screen.getByRole('button', { name: 'Submit Question' })).toBeTruthy();
       expect(screen.getByRole('status').textContent).toBe('');
       expect(screen.getByRole('status').className).toBe('sr-only');
+      // Next's links schedule an idle visibility check in jsdom.
+      await act(async () => { await vi.advanceTimersByTimeAsync(1); });
       expect(vi.getTimerCount()).toBe(0);
     } finally {
       vi.useRealTimers();
@@ -828,7 +940,7 @@ describe('InquiryWidget', () => {
     typeQuestion('Please do not lose this question');
 
     expect((await screen.findByRole('alert')).textContent).toContain(
-      "We couldn't get an answer. Please try again."
+      "We couldn't get an answer. Try a narrower question"
     );
     expect((screen.getByRole('textbox') as HTMLTextAreaElement).value).toBe(
       'Please do not lose this question'
