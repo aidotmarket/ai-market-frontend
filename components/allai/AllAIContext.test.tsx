@@ -681,9 +681,9 @@ describe('anonymous initial-message stale-session recovery', () => {
 
   it.each([
     ['HTTP 500', () => response(500), '', 'error'],
-    ['HTTP 429', () => response(429), LIMIT_ERROR],
+    ['HTTP 429', () => response(429), LIMIT_ERROR, undefined],
     ['a network rejection', () => Promise.reject(new Error('network failure')), '', 'error'],
-    ['an abort', () => Promise.reject(abortError()), ''],
+    ['an abort', () => Promise.reject(abortError()), '', undefined],
     ['a stream-read failure', () => streamReadFailure(), '', 'error'],
   ])('does not recover or replay after initial %s', async (_label, initialResult, expectedContent, expectedFailure) => {
     fetchMock.mockImplementation(async (input) => {
