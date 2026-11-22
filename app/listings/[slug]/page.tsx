@@ -38,7 +38,7 @@ const DATASET_JSONLD_ENABLED = process.env.NEXT_PUBLIC_ENABLE_DATASET_JSONLD !==
 
 interface Props {
   params: Promise<{ slug: string }>;
-  searchParams?: Promise<{ version?: string }>;
+  searchParams?: Promise<{ version?: string | string[] }>;
 }
 
 function forwardedListing(requestHeaders: Headers) {
@@ -104,7 +104,8 @@ function failClosed(error: unknown): never {
 
 export default async function ListingDetailPage({ params, searchParams }: Props) {
   const { slug } = await params;
-  const requestedVersionId = (await searchParams)?.version ?? null;
+  const version = (await searchParams)?.version;
+  const requestedVersionId = (Array.isArray(version) ? version[0] : version) ?? null;
 
   const requestHeaders = await headers();
   const snapshot = forwardedListing(requestHeaders);

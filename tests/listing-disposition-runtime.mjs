@@ -118,6 +118,22 @@ test('next start preserves version disposition and forwards a 99,900-byte presen
           });
         }
 
+        await state.test(`${rsc ? 'RSC' : 'HTML'} repeated superseded version`, async () => {
+          const [active, superseded] = visible;
+          const query = `?version=${superseded.version_id}`;
+          for (const second of [superseded, active]) {
+            const start = requests.length;
+            const response = await fetch(`${origin}${listingPath}${query}&version=${second.version_id}`, { headers });
+            const body = await response.text();
+            assert.equal(response.status, 200);
+            assert.ok(body.includes(rsc
+              ? `"initialVersionId":"${superseded.version_id}"`
+              : `value="${superseded.version_id}" selected=""`), 'the first version is selected');
+            assert.deepEqual(requests.slice(start).filter(path => path === fullReadPath || path.startsWith(dispositionPath)),
+              [dispositionPath + query, fullReadPath]);
+          }
+        });
+
         const start = requests.length;
         const malformed = await fetch(`${origin}/listings/%E0`, { headers });
         assert.equal(malformed.status, 404);
