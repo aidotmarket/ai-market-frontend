@@ -180,11 +180,28 @@ describe('DataRequestDetailClient authenticated fallback loading', () => {
   ])('displays the public detail response count when supplied (%s)', (response_count, expected) => {
     mocks.auth.user = null;
     mocks.auth.isAuthenticated = false;
-    const request = makeOwnerRequest({ response_count });
+    const request = makeOwnerRequest({ status: response_count ? 'responses_received' : 'open', response_count });
 
     render(<DataRequestDetailClient slug={request.slug} initialRequest={request} />);
 
     expect(screen.queryByText(/^\d*\s*responses?$/)?.textContent ?? null).toBe(expected);
+    expect(screen.queryByText('responses received')).toBeNull();
+    expect(Boolean(screen.queryByText('Responses are visible to the requester and to the sellers who sent them.')))
+      .toBe(Boolean(response_count));
+  });
+
+  it('shows the full generated title on the public detail page', () => {
+    mocks.auth.user = null;
+    mocks.auth.isAuthenticated = false;
+    const title = 'I need an entirely synthetic retail sales dataset to test a sales analytics dashboard';
+    const request = makeOwnerRequest({
+      title: 'I need an entirely synthetic retail sales dataset to test a sales analytics...',
+      description: `${title}. Include transactions from multiple regions.`,
+    });
+
+    render(<DataRequestDetailClient slug={request.slug} initialRequest={request} />);
+
+    expect(screen.getByRole('heading', { level: 1, name: title })).not.toBeNull();
   });
 
   it.each([
@@ -531,7 +548,7 @@ describe('DataRequestDetailClient authenticated fallback loading', () => {
 
   it.each([
     ['**Title: Licensed retail data**', '**Title: Licensed retail data**. Buyer description.', 'Licensed retail data'],
-    ['**Title: Licensed retail transaction data for regional demand forecasting...', '**Title: Licensed retail transaction data for regional demand forecasting and inventory planning**. Buyer description.', 'Licensed retail transaction data for regional demand forecasting...'],
+    ['**Title: Licensed retail transaction data for regional demand forecasting...', '**Title: Licensed retail transaction data for regional demand forecasting and inventory planning**. Buyer description.', 'Licensed retail transaction data for regional demand forecasting and inventory planning'],
     ['**Title: Explicit title**', '**Title: Different title**. Buyer description.', '**Title: Explicit title**'],
     ['Ordinary explicit title', '**Title: Different title**. Buyer description.', 'Ordinary explicit title'],
   ])('displays the guarded detail title without changing owner values: %s', async (title, description, display) => {
@@ -862,7 +879,7 @@ describe('DataRequestDetailClient authenticated fallback loading', () => {
   });
 
   it.each(['supplier', 'owner'] as const)('restores saved %s responses after explicit detail retry without writes', async (role) => {
-    const request = makeOwnerRequest();
+    const request = makeOwnerRequest({ status: 'responses_received', response_count: 1 });
     if (role === 'supplier') mocks.auth.user = { ...owner, id: 'supplier-1', role: 'seller' };
     const responsesRead = deferred<typeof savedQuote[]>();
     mocks.getDataRequest.mockRejectedValueOnce(new Error('Offline')).mockResolvedValueOnce(request);
@@ -878,7 +895,8 @@ describe('DataRequestDetailClient authenticated fallback loading', () => {
       expect(screen.getByRole('button', { name: 'Submit Response' })).toHaveProperty('disabled', true);
       fireEvent.submit(screen.getByRole('button', { name: 'Submit Response' }).closest('form')!);
     } else {
-      expect(await screen.findByRole('heading', { name: 'Responses (1)' })).not.toBeNull();
+      expect(await screen.findByRole('heading', { name: 'Responses' })).not.toBeNull();
+      expect(screen.getByText('1 response')).not.toBeNull();
       expect(screen.getByText(savedQuote.proposal)).not.toBeNull();
       expect(screen.getByText('submitted')).not.toBeNull();
     }

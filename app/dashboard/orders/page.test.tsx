@@ -38,6 +38,7 @@ describe('OrdersListPage Purchases heading', () => {
 
     expect(screen.getByRole('heading', { level: 2, name: 'No orders yet' })).not.toBeNull();
     expect(screen.getByText("You haven't purchased any datasets yet.")).not.toBeNull();
+    expect(screen.getByText('After a purchase, any available licence record appears with that order here.')).not.toBeNull();
     expect(screen.getByRole('link', { name: 'Browse data' }).getAttribute('href')).toBe('/find-data');
     expect(ordersApi.getMyOrders).toHaveBeenCalledOnce();
   });

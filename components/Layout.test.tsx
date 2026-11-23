@@ -33,7 +33,7 @@ vi.mock('@/components/NotificationCenter', () => ({
 
 vi.mock('next/link', () => ({
   default: ({ children, href, ...props }: AnchorHTMLAttributes<HTMLAnchorElement> & { children: ReactNode; href: string }) => (
-    <a href={href} {...props}>
+    <a href={href} data-next-link="true" {...props}>
       {children}
     </a>
   ),
@@ -120,4 +120,23 @@ describe('Layout registration links', () => {
       expect(link.getAttribute('href')).toBe('/register');
     }
   });
+});
+
+it.each(['/', '/search', '/legal/terms'])('leaves desktop Buyer Requests navigation to the browser on %s', (pathname) => {
+  navigation.pathname = pathname;
+  render(<Layout><div>Page content</div></Layout>);
+
+  const header = within(screen.getByRole('banner'));
+  const navigationMenu = within(header.getByRole('navigation'));
+  const link = navigationMenu.getByRole('link', { name: 'Buyer Requests' });
+  expect(link.getAttribute('href')).toBe('/requests');
+  expect(link.hasAttribute('data-next-link')).toBe(false);
+
+  let defaultPrevented: boolean | undefined;
+  window.addEventListener('click', (event) => {
+    defaultPrevented = event.defaultPrevented;
+    event.preventDefault(); // Stop jsdom from attempting the document navigation.
+  }, { once: true });
+  fireEvent.click(link);
+  expect(defaultPrevented).toBe(false);
 });

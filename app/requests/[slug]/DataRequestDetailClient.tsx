@@ -33,7 +33,6 @@ const URGENCY_BADGE: Record<DataRequestUrgency, string> = {
 const STATUS_BADGE: Record<string, string> = {
   draft: 'bg-gray-100 text-gray-600',
   open: 'bg-green-100 text-green-800',
-  responses_received: 'bg-[#E8EAF6] text-[#303F9F]',
   fulfilled: 'bg-purple-100 text-purple-800',
   closed: 'bg-gray-100 text-gray-600',
   expired: 'bg-red-100 text-red-700',
@@ -581,15 +580,17 @@ export default function DataRequestDetailClient({
       {/* Header */}
       <div className="mb-6">
         <div className="flex flex-wrap items-start gap-3 mb-3">
-          <h1 className="text-2xl font-bold text-gray-900 flex-1">{requestDisplayTitle(request.title, request.description)}</h1>
+          <h1 className="min-w-0 flex-1 wrap-break-word text-2xl font-bold text-gray-900">{requestDisplayTitle(request.title, request.description, 'detail')}</h1>
           {request.is_sample === true && (
             <span className="inline-flex items-center rounded-full bg-amber-100 px-2.5 py-0.5 text-xs font-medium text-amber-800 shrink-0">
               (SAMPLE)
             </span>
           )}
-          <span className={`inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-medium shrink-0 ${statusCss}`}>
-            {request.status.replace('_', ' ')}
-          </span>
+          {request.status !== 'responses_received' && (
+            <span className={`inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-medium shrink-0 ${statusCss}`}>
+              {request.status.replace('_', ' ')}
+            </span>
+          )}
         </div>
         <div className="flex flex-wrap items-center gap-3 text-sm text-gray-500">
           <span className={`inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-medium ${urgencyCss}`}>
@@ -601,6 +602,9 @@ export default function DataRequestDetailClient({
           {request.buyer_display_name && <span>by {request.buyer_display_name}</span>}
           {hasResponseCount && <span>{responseCount} response{responseCount !== 1 ? 's' : ''}</span>}
         </div>
+        {!isAuthenticated && hasResponseCount && responseCount > 0 && (
+          <p className="mt-2 text-sm text-gray-600">Responses are visible to the requester and to the sellers who sent them.</p>
+        )}
       </div>
 
       {/* Owner actions */}
@@ -841,7 +845,7 @@ export default function DataRequestDetailClient({
       {/* Owner: Responses list */}
       {isOwner && responses.length > 0 && (
         <div className="mb-6">
-          <h2 className="text-lg font-semibold text-gray-900 mb-4">Responses ({responses.length})</h2>
+          <h2 className="text-lg font-semibold text-gray-900 mb-4">Responses</h2>
           <div className="space-y-4">
             {responses.map((resp) => (
               <div key={resp.id} className="rounded-xl border border-gray-200 p-4">

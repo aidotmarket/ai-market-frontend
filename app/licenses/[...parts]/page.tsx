@@ -1,4 +1,5 @@
 import type { Metadata } from 'next';
+import Link from 'next/link';
 import { notFound } from 'next/navigation';
 import PrePurchaseLicensor from '@/components/PrePurchaseLicensor';
 
@@ -14,6 +15,7 @@ type StockDocument = {
 type CustomNotice = { code: 'custom'; sha256: string; notice: string };
 
 const hashPattern = /^[a-f0-9]{64}$/;
+const termsReference = 'ai.market marketplace terms';
 const stockPaths = new Set([
   'standard/1.1/ai-training',
   'standard/1.1/no-ai-training',
@@ -80,6 +82,9 @@ export default async function LicencePage({ params }: Props) {
   }
   const title = document.code === 'standard' ? 'ai.market Standard Data Licence' : document.code === 'marketplace-listing' ? 'ai.market Marketplace Listing Covenant' : 'ai.market AI-Training Rider';
   const apiBase = getApiBase();
+  const termsIndex = document.code === 'marketplace-listing' && document.version === '1.1'
+    ? document.full_text.indexOf(termsReference)
+    : -1;
   return <main className="mx-auto max-w-3xl px-6 py-16">
     <h1 className="text-3xl font-bold text-gray-900">{title}</h1>
     <p className="mt-2 text-sm text-gray-600">Version {document.version}{document.variant ? ` · ${document.variant.replaceAll('-', ' ')}` : ''}</p>
@@ -90,7 +95,13 @@ export default async function LicencePage({ params }: Props) {
     </section>
     <section className="mt-10" aria-label="Full licence text">
       <h2 className="text-xl font-semibold text-gray-900">Full text</h2>
-      <pre dir="auto" className="mt-4 whitespace-pre-wrap break-words [tab-size:4] font-sans leading-7 text-gray-700">{document.full_text}</pre>
+      <pre dir="auto" className="mt-4 whitespace-pre-wrap break-words [tab-size:4] font-sans leading-7 text-gray-700">
+        {termsIndex < 0 ? document.full_text : <>
+          {document.full_text.slice(0, termsIndex)}
+          <Link href="/legal/terms" className="text-indigo-700 underline">{termsReference}</Link>
+          {document.full_text.slice(termsIndex + termsReference.length)}
+        </>}
+      </pre>
     </section>
     <p className="mt-8 break-all text-sm text-gray-600">SHA-256: <code>{document.sha256}</code></p>
     <a className="mt-4 inline-block text-indigo-700 underline" href={`${apiBase}/api/v1/licenses/${parts.join('/')}?download=1`}>Download exact document</a>
