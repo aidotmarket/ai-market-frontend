@@ -91,7 +91,7 @@ beforeEach(() => {
 });
 afterEach(() => { cleanup(); vi.useRealTimers(); vi.restoreAllMocks(); vi.unstubAllEnvs(); vi.unstubAllGlobals(); });
 
-it.each(['allowed', 'denied', 'incomplete', 'expired proof', 'renewed again', 'allowance exhausted', 'owner changed', 'route changed'] as const)(
+it.each(['allowed', 'denied', 'incomplete', 'missing accepted turn', 'expired proof', 'renewed again', 'allowance exhausted', 'owner changed', 'route changed'] as const)(
   'applies a held answer after final consumer renewal only with current scoped proof (%s)', async outcome => {
     const { appendExplain } = await vi.importActual<typeof import('@/api/explain')>('@/api/explain');
     const request: ExplainRequest = { intent: 'explain', question: 'where_am_i', locale: 'en', target: questions.where_am_i };
@@ -120,7 +120,7 @@ it.each(['allowed', 'denied', 'incomplete', 'expired proof', 'renewed again', 'a
       return { ...response, data: {
         conversation_id: answer.conversation_id,
         expires_at: outcome === 'incomplete' ? null : outcome === 'expired proof' ? '2000-01-01T00:00:00Z' : answer.expires_at,
-        turns: [answer.turn], before: null,
+        turns: outcome === 'missing accepted turn' ? [] : [answer.turn], before: null, predecessor_verified: true,
       } };
     });
 
@@ -152,6 +152,7 @@ it.each(['allowed', 'denied', 'incomplete', 'expired proof', 'renewed again', 'a
     if (outcome !== 'allowance exhausted') {
       expect(calls[2].params).toEqual({ conversation_id: answer.conversation_id });
       expect(calls[2].headers.get('Authorization')).toBe(`Bearer ${successor}`);
+      expect(calls[2].headers.get('X-Explain-Predecessor-Session')).toBe(ids.session);
     }
     if (outcome === 'allowed') {
       expect(within(panel()).getByText(answer.turn.answer)).toBeTruthy();
@@ -200,7 +201,10 @@ it.each([
         { ...response, status: 503, data: { detail: 'UNAVAILABLE' } });
     }
     if (!config.params) return { ...response, data: { conversation_id: null, expires_at: null, turns: [], before: null } };
-    return { ...response, data: { ...history, turns: writes === 2 && notice === 'possibleMatch' ? [candidate] : [] } };
+    return { ...response, data: {
+      ...history, turns: writes === 2 && notice === 'possibleMatch' ? [prior.turn, candidate] : [prior.turn],
+      ...(config.headers.has('X-Explain-Predecessor-Session') && { predecessor_verified: true }),
+    } };
   });
 
   render(tree(workspace));
@@ -227,6 +231,7 @@ it.each([
   expect(calls.map(({ method }) => method)).toEqual(['get', 'post', 'get', 'post', 'get']);
   expect(calls[4].params).toEqual({ conversation_id: prior.conversation_id });
   expect(calls[4].headers.get('Authorization') === `Bearer ${confirmationBearer}`).toBe(true);
+  expect(calls[4].headers.has('X-Explain-Predecessor-Session')).toBe(scenario === 'successor confirmed');
   expect(within(panel()).getByText(copy[renewed ? 'uncertain' : notice])).toBeTruthy();
   expect(within(panel()).queryByText(copy[renewed ? notice : 'uncertain'])).toBeNull();
   expect(within(panel()).queryByText(prior.turn.answer) !== null).toBe(!renewed);
@@ -524,8 +529,14 @@ it.each([
   expect(fetch).not.toHaveBeenCalled();
 });
 
-it('hides painted answers on a credential replacement until the thread is authorized again', async () => {
+it.each([true, false])('keeps an established thread hidden until a successor proves it (%s)', async verified => {
+  const { appendExplain } = await vi.importActual<typeof import('@/api/explain')>('@/api/explain');
+  const request: ExplainRequest = { intent: 'explain', question: 'where_am_i', locale: 'en', target: questions.where_am_i };
+  const prior = answerFixture(request);
+  const next = answerFixture(request);
+  next.turn.answer = 'Second synthetic answer';
   render(tree(workspace));
+  mock.append.mockResolvedValueOnce({ kind: 'answer', answer: prior });
   fireEvent.click(await screen.findByRole('button', { name: 'Where am I?' }));
   await within(panel()).findByText(/Your last saved step was Review/);
 
@@ -537,9 +548,66 @@ it('hides painted answers on a credential replacement until the thread is author
   expect(within(panel()).queryByText(/Your last saved step was Review/)).toBeNull();
   expect(mock.append).toHaveBeenCalledOnce();
 
-  mock.append.mockResolvedValueOnce({ kind: 'refused', clear: true });
+  const proof = deferred();
+  mock.handoff.mockImplementationOnce(appendExplain);
+  mock.transport.mockImplementation(async config => {
+    const response = { config, status: 200, statusText: 'Synthetic response', headers: {} };
+    if (config.method === 'post') return { ...response, data: next };
+    await proof.promise;
+    return { ...response, data: {
+      conversation_id: prior.conversation_id, expires_at: prior.expires_at, before: null, turns: [prior.turn],
+      ...(verified && { predecessor_verified: true }),
+    } };
+  });
   fireEvent.click(within(panel()).getByRole('button', { name: 'Where am I?' }));
-  await within(panel()).findByText(explainCopy().unavailable);
-  expect(mock.append.mock.calls[1][1].conversation_id).toBe(ids.conversation);
+  await waitFor(() => expect(mock.transport).toHaveBeenCalledOnce());
+  const read = mock.transport.mock.calls[0][0];
+  expect(read.params).toEqual({ conversation_id: ids.conversation });
+  expect(read.headers.get('X-Explain-Predecessor-Session')).toBe(ids.session);
   expect(within(panel()).queryByText(/Your last saved step was Review/)).toBeNull();
+  await act(async () => proof.resolve());
+  if (verified) {
+    expect(within(panel()).getByText(prior.turn.answer)).toBeTruthy();
+    expect(within(panel()).getByText(next.turn.answer)).toBeTruthy();
+    const post = mock.transport.mock.calls[1][0];
+    expect(JSON.parse(post.data)).toEqual({ ...request, conversation_id: ids.conversation });
+    expect(post.headers.get('X-Explain-Predecessor-Session')).toBe(ids.session);
+  } else {
+    expect(within(panel()).getByText(explainCopy().unavailable)).toBeTruthy();
+    expect(within(panel()).queryByText(prior.turn.answer)).toBeNull();
+    expect(mock.transport).toHaveBeenCalledOnce();
+  }
+});
+
+it('cancels a pending successor read when the established conversation expires', async () => {
+  const { appendExplain } = await vi.importActual<typeof import('@/api/explain')>('@/api/explain');
+  const request: ExplainRequest = { intent: 'explain', question: 'where_am_i', locale: 'en', target: questions.where_am_i };
+  const prior = answerFixture(request);
+  vi.useFakeTimers({ toFake: ['Date', 'setInterval', 'clearInterval'] });
+  vi.setSystemTime(Date.parse(prior.expires_at) - 500);
+  mock.append.mockResolvedValueOnce({ kind: 'answer', answer: prior });
+  render(tree(workspace));
+  fireEvent.click(await screen.findByRole('button', { name: 'Where am I?' }));
+  await within(panel()).findByText(prior.turn.answer);
+
+  const proof = deferred();
+  const readStarted = deferred();
+  mock.handoff.mockImplementationOnce(appendExplain);
+  mock.transport.mockImplementationOnce(async config => {
+    readStarted.resolve();
+    await proof.promise;
+    return { config, status: 200, statusText: 'Synthetic response', headers: {}, data: {
+      conversation_id: prior.conversation_id, expires_at: prior.expires_at, before: null,
+      turns: [prior.turn], predecessor_verified: true,
+    } };
+  });
+  act(() => useAuthStore.setState({ token: bearer(ids.successor) }));
+  fireEvent.click(within(panel()).getByRole('button', { name: 'Where am I?' }));
+  await readStarted.promise;
+  await act(async () => { await vi.advanceTimersByTimeAsync(500); });
+  expect(mock.transport.mock.calls[0][0].signal.aborted).toBe(true);
+  await act(async () => proof.resolve());
+  expect(within(panel()).queryByText(prior.turn.answer)).toBeNull();
+  expect(within(panel()).queryByText(explainCopy().busy)).toBeNull();
+  expect(mock.transport).toHaveBeenCalledOnce();
 });

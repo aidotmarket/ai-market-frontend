@@ -25,7 +25,8 @@ const third = bearer('77777777-7777-4777-8777-777777777777');
 const request: ExplainRequest = { intent: 'explain', locale: 'en', question: 'storage', target: questions.storage };
 const initialHistory = { conversation_id: ids.conversation, expires_at: '2099-01-01T00:00:00Z', turns: [], before: null };
 const emptyHistory = { ...initialHistory, conversation_id: null, expires_at: null };
-const rotated = { detail: 'SESSION_ROTATED' };
+const firstPartyRequired = { detail: 'FIRST_PARTY_SESSION_REQUIRED' };
+const proved = { ...initialHistory, predecessor_verified: true };
 async function appendExplain(...args: Parameters<typeof startExplain>) {
   const apply = await startExplain(...args);
   return new Promise<Parameters<Parameters<typeof apply>[0]>[0]>((resolve, reject) => {
@@ -62,12 +63,12 @@ beforeEach(() => {
 });
 afterEach(() => vi.restoreAllMocks());
 
-it('uses the isolated credential, current CSRF and exact context after one scoped 409 retry', async () => {
+it('uses the isolated credential, current CSRF and exact context after one proved pre-write 401 retry', async () => {
   vi.mocked(axios.post).mockResolvedValueOnce({ data: { access_token: second } });
   let writes = 0;
   ports.explain.mockImplementation(async config => {
-    if (config.method === 'get') return response(config, initialHistory);
-    if (++writes === 1) reject(config, 409, rotated);
+    if (config.method === 'get') return response(config, config.headers.has('X-Explain-Predecessor-Session') ? proved : initialHistory);
+    if (++writes === 1) reject(config, 401, firstPartyRequired);
     return response(config, answerFixture(request));
   });
   await expect(appendExplain(admit(), request)).resolves.toMatchObject({ kind: 'answer' });
@@ -76,8 +77,8 @@ it('uses the isolated credential, current CSRF and exact context after one scope
   expect(calls()).toEqual([
     { method: 'get', bearer: `Bearer ${first}`, csrf: sessionCsrf(first) },
     { method: 'post', bearer: `Bearer ${first}`, csrf: sessionCsrf(first), body },
-    { method: 'get', bearer: `Bearer ${second}`, csrf: sessionCsrf(second), params },
-    { method: 'post', bearer: `Bearer ${second}`, csrf: sessionCsrf(second), body },
+    { method: 'get', bearer: `Bearer ${second}`, csrf: sessionCsrf(second), predecessor: ids.session, params },
+    { method: 'post', bearer: `Bearer ${second}`, csrf: sessionCsrf(second), predecessor: ids.session, body },
   ]);
   expect(axios.post).toHaveBeenCalledOnce();
   expect(ports.generic).not.toHaveBeenCalled();
@@ -89,12 +90,12 @@ it('joins the existing auth refresh flight and refuses a second rotation', async
   vi.mocked(axios.post).mockReturnValueOnce(refresh as never);
   let inFlight: Promise<string> | undefined;
   ports.explain.mockImplementation(async config => {
-    if (config.method === 'get') return response(config, initialHistory);
+    if (config.method === 'get') return response(config, config.headers.has('X-Explain-Predecessor-Session') ? proved : initialHistory);
     if (!inFlight) {
       inFlight = refreshAccessToken(first);
       queueMicrotask(() => finishRefresh({ data: { access_token: second } }));
     }
-    reject(config, 409, rotated);
+    reject(config, 401, firstPartyRequired);
   });
   await expect(appendExplain(admit(), request)).resolves.toEqual({ kind: 'refused', clear: true });
   expect(axios.post).toHaveBeenCalledOnce();
@@ -112,15 +113,31 @@ it.each([401, 403, 404, 422, 409])('keeps general %s refusals out of refresh and
   expect(calls().map(call => call.method)).toEqual(['get', 'post']);
 });
 
-it('keeps a first-party session refusal out of replay even when a new credential appeared', async () => {
+it.each([
+  { detail: 'Unauthorized' },
+  { detail: 'SESSION_EXPIRED' },
+  { detail: { code: 'FIRST_PARTY_SESSION_REQUIRED' } },
+  { ...firstPartyRequired, extra: true },
+])('keeps a generic or unsupported 401 out of recovery even when a new credential appeared (%j)', async detail => {
   ports.explain.mockImplementation(async config => {
     if (config.method === 'get') return response(config, initialHistory);
     useAuthStore.setState({ token: second });
-    reject(config, 401, { detail: 'FIRST_PARTY_SESSION_REQUIRED' });
+    reject(config, 401, detail);
   });
   await expect(appendExplain(admit(), request)).resolves.toEqual({ kind: 'refused', clear: true });
   expect(calls().map(call => call.method)).toEqual(['get', 'post']);
   expect(axios.post).not.toHaveBeenCalled();
+});
+
+it('stops a structured first-party refusal when ordinary refresh supplies no distinct successor', async () => {
+  vi.mocked(axios.post).mockResolvedValueOnce({ data: { access_token: first } });
+  ports.explain.mockImplementation(async config => {
+    if (config.method === 'get') return response(config, initialHistory);
+    reject(config, 401, firstPartyRequired);
+  });
+  await expect(appendExplain(admit(), request)).resolves.toEqual({ kind: 'refused', clear: true });
+  expect(calls().map(call => call.method)).toEqual(['get', 'post']);
+  expect(axios.post).toHaveBeenCalledOnce();
 });
 
 it.each([true, false])('checks scoped history for an ambiguous write with possible match %s', async hasMatch => {
@@ -139,37 +156,53 @@ it.each([true, false])('checks scoped history for an ambiguous write with possib
   expect(axios.post).not.toHaveBeenCalled();
 });
 
-it('lets an already rotated bearer confirm ambiguous history only with a scoped conversation', async () => {
+it.each([200, 408])('uses history alone for an ambiguous append response with status %s', async status => {
+  let attempted = false;
   ports.explain.mockImplementation(async config => {
-    if (config.method === 'get') return response(config, initialHistory);
+    if (config.method === 'get') return response(config, {
+      ...initialHistory, turns: attempted ? [answerFixture(request).turn] : [],
+    });
+    attempted = true;
+    if (status === 408) reject(config, status, { detail: 'Synthetic timeout' });
+    return response(config, { outcome: 'answered' });
+  });
+  await expect(appendExplain(admit(), request)).resolves.toEqual({ kind: 'uncertain', history: 'possibleMatch' });
+  expect(calls().map(call => call.method)).toEqual(['get', 'post', 'get']);
+  expect(calls()[2].params).toEqual({ conversation_id: ids.conversation });
+  expect(axios.post).not.toHaveBeenCalled();
+});
+
+it('lets an already rotated bearer confirm ambiguous history with scope and predecessor proof', async () => {
+  ports.explain.mockImplementation(async config => {
+    if (config.method === 'get') return response(config, config.headers.has('X-Explain-Predecessor-Session') ? proved : initialHistory);
     useAuthStore.setState({ token: second });
     reject(config, 503, { detail: 'UNAVAILABLE' });
   });
   await expect(appendExplain(admit(), request)).resolves.toEqual({ kind: 'uncertain', history: 'noMatch' });
-  expect(calls()[2]).toMatchObject({ bearer: `Bearer ${second}`, csrf: sessionCsrf(second), params: { conversation_id: ids.conversation } });
+  expect(calls()[2]).toMatchObject({ bearer: `Bearer ${second}`, csrf: sessionCsrf(second), predecessor: ids.session, params: { conversation_id: ids.conversation } });
   expect(axios.post).not.toHaveBeenCalled();
 });
 
 it('recovers a retired initial GET through scoped history with one POST', async () => {
   vi.mocked(axios.post).mockResolvedValueOnce({ data: { access_token: second } });
   ports.explain.mockImplementation(async config => {
-    if (config.headers.get('Authorization') === `Bearer ${first}`) reject(config, 409, rotated);
-    return response(config, config.method === 'get' ? initialHistory : answerFixture(request));
+    if (config.headers.get('Authorization') === `Bearer ${first}`) reject(config, 401, firstPartyRequired);
+    return response(config, config.method === 'get' ? proved : answerFixture(request));
   });
   const params = { conversation_id: ids.conversation };
   const body = { ...request, ...params };
   await expect(appendExplain(admit(), body)).resolves.toMatchObject({ kind: 'answer' });
   expect(calls()).toEqual([
     { method: 'get', bearer: `Bearer ${first}`, csrf: sessionCsrf(first), params },
-    { method: 'get', bearer: `Bearer ${second}`, csrf: sessionCsrf(second), params },
-    { method: 'post', bearer: `Bearer ${second}`, csrf: sessionCsrf(second), body },
+    { method: 'get', bearer: `Bearer ${second}`, csrf: sessionCsrf(second), predecessor: ids.session, params },
+    { method: 'post', bearer: `Bearer ${second}`, csrf: sessionCsrf(second), predecessor: ids.session, body },
   ]);
   expect(axios.post).toHaveBeenCalledOnce();
 });
 
 it('stops without a POST when the successor also retires during history proof', async () => {
   vi.mocked(axios.post).mockResolvedValueOnce({ data: { access_token: second } });
-  ports.explain.mockImplementation(async config => reject(config, 409, rotated));
+  ports.explain.mockImplementation(async config => reject(config, 401, firstPartyRequired));
   await expect(appendExplain(admit(), request)).resolves.toEqual({ kind: 'refused', clear: true });
   expect(calls().map(call => call.method)).toEqual(['get', 'get']);
   expect(axios.post).toHaveBeenCalledOnce();
@@ -180,7 +213,7 @@ it.each(['get', 'post'])('requires anchorless predecessor proof on a retired fir
   vi.mocked(axios.post).mockResolvedValueOnce({ data: { access_token: second } });
   ports.explain.mockImplementation(async config => {
     if (config.headers.get('Authorization') === `Bearer ${first}`) {
-      if (config.method === phase) reject(config, 409, rotated);
+      if (config.method === phase) reject(config, 401, firstPartyRequired);
       return response(config, emptyHistory);
     }
     return response(config, config.method === 'get'
@@ -199,7 +232,7 @@ it.each(['get', 'post'])('requires anchorless predecessor proof on a retired fir
 it.each(['legacy', 'denied', 'purged'] as const)('refreshes but stops the automatic first turn when predecessor proof is %s', async proof => {
   vi.mocked(axios.post).mockResolvedValueOnce({ data: { access_token: second } });
   ports.explain.mockImplementation(async config => {
-    if (config.headers.get('Authorization') === `Bearer ${first}`) reject(config, 409, rotated);
+    if (config.headers.get('Authorization') === `Bearer ${first}`) reject(config, 401, firstPartyRequired);
     if (config.headers.has('X-Explain-Predecessor-Session')) {
       if (proof === 'purged') reject(config, 404, { detail: 'NOT_FOUND' });
       return response(config, proof === 'legacy' ? initialHistory : { ...emptyHistory, predecessor_verified: false });
@@ -220,7 +253,7 @@ it.each(['route', 'owner', 'logout', 'bearer'] as const)('drops a successful pen
   vi.mocked(axios.post).mockResolvedValueOnce({ data: { access_token: second } });
   let finish!: () => void;
   ports.explain.mockImplementation(async config => {
-    if (!config.headers.has('X-Explain-Predecessor-Session')) reject(config, 409, rotated);
+    if (!config.headers.has('X-Explain-Predecessor-Session')) reject(config, 401, firstPartyRequired);
     return new Promise(resolve => { finish = () => resolve(response(config, { ...emptyHistory, predecessor_verified: true })); });
   });
   const operation = appendExplain(admit(route), request);
@@ -233,6 +266,34 @@ it.each(['route', 'owner', 'logout', 'bearer'] as const)('drops a successful pen
   if (change === 'bearer') await expect(operation).resolves.toEqual({ kind: 'refused', clear: true });
   else await expect(operation).rejects.toThrow();
   expect(calls().map(call => call.method)).toEqual(['get', 'get']);
+});
+
+it('cancels a refused append during renewal through ordinary cookie logout', async () => {
+  let finishProof!: () => void;
+  let finishLogout!: () => void;
+  vi.mocked(axios.post).mockResolvedValueOnce({ data: { access_token: second } });
+  ports.generic.mockImplementationOnce(async config => new Promise(resolve => {
+    finishLogout = () => resolve(response(config, { message: 'Logged out' }));
+  }));
+  ports.explain.mockImplementation(async config => {
+    if (config.method === 'post') reject(config, 401, firstPartyRequired);
+    if (!config.params) return response(config, initialHistory);
+    return new Promise(resolve => { finishProof = () => resolve(response(config, proved)); });
+  });
+  const operation = appendExplain(admit(), request);
+  await vi.waitFor(() => expect(finishProof).toBeTypeOf('function'));
+  const cancelled = expect(operation).rejects.toThrow();
+  const logout = useAuthStore.getState().logout();
+  expect(useAuthStore.getState().token).toBeNull();
+  await cancelled;
+  await vi.waitFor(() => expect(finishLogout).toBeTypeOf('function'));
+  finishProof();
+  finishLogout();
+  await logout;
+  expect(ports.generic).toHaveBeenCalledExactlyOnceWith(expect.objectContaining({
+    method: 'post', url: '/auth/logout', withCredentials: true,
+  }));
+  expect(calls().map(call => call.method)).toEqual(['get', 'post', 'get']);
 });
 
 it('joins a pending refresh before history and proves the bearer change before a first POST', async () => {
@@ -292,15 +353,16 @@ it.each(['verified', 'denied', 'renewed again', 'owner changed'] as const)(
   'handles a valid first response when current conversation proof is %s',
   async proof => {
     let finishProof!: () => void;
+    const accepted = answerFixture(request);
     ports.explain.mockImplementation(async config => {
       if (config.method === 'post') {
         useAuthStore.setState({ token: second });
-        return response(config, answerFixture(request));
+        return response(config, accepted);
       }
       if (!config.params) return response(config, emptyHistory);
       if (proof === 'denied') reject(config, 404, { detail: 'NOT_FOUND' });
       return new Promise(resolve => {
-        finishProof = () => resolve(response(config, initialHistory));
+        finishProof = () => resolve(response(config, { ...proved, turns: [accepted.turn] }));
       });
     });
 
@@ -324,7 +386,7 @@ it.each(['verified', 'denied', 'renewed again', 'owner changed'] as const)(
       ['get', `Bearer ${first}`], ['post', `Bearer ${first}`], ['get', `Bearer ${second}`],
     ]);
     expect(calls()[1].body).toEqual(request);
-    expect(calls()[2].params).toEqual({ conversation_id: ids.conversation });
+    expect(calls()[2]).toMatchObject({ params: { conversation_id: ids.conversation }, predecessor: ids.session });
     expect(axios.post).not.toHaveBeenCalled();
   },
 );
@@ -376,7 +438,7 @@ it.each(['submit', 'confirmation'] as const)('ends the question after a pending 
     }
     if (config.method === 'get' && ++reads === 1) return response(config, { ...emptyHistory, predecessor_verified: true });
     if (config.method === 'post' && phase === 'confirmation') throw new AxiosError('lost response', 'ERR_NETWORK', config);
-    reject(config, 409, rotated);
+    reject(config, 401, firstPartyRequired);
   });
 
   const operation = appendExplain(admit(), request);
@@ -409,7 +471,7 @@ it.each([null, '', 'invalid-session', `${ids.session}\n`].flatMap(id =>
   }
   ports.explain.mockImplementation(async config => {
     if (config.method === 'get') return response(config, emptyHistory);
-    reject(config, 409, rotated);
+    reject(config, 401, firstPartyRequired);
   });
 
   const operation = appendExplain(admit(), request);
@@ -421,17 +483,19 @@ it.each([null, '', 'invalid-session', `${ids.session}\n`].flatMap(id =>
   expect(axios.post).toHaveBeenCalledOnce();
 });
 
-it.each(['family', 'org', 'route', 'owner'] as const)('suppresses a retry on %s mismatch', async mismatch => {
+it.each(['family', 'org', 'route', 'owner', 'missing predecessor proof', 'wrong conversation'] as const)('suppresses a retry on %s mismatch', async mismatch => {
   const route = { current: true };
   ports.explain.mockImplementation(async config => {
     if (config.method === 'get') {
-      if (config.params) reject(config, 404, { detail: 'NOT_FOUND' });
-      return response(config, initialHistory);
+      if (!config.params) return response(config, initialHistory);
+      if (mismatch === 'family') reject(config, 404, { detail: 'NOT_FOUND' });
+      if (mismatch === 'missing predecessor proof') return response(config, initialHistory);
+      return response(config, { ...proved, conversation_id: ids.order });
     }
-    useAuthStore.setState({ token: mismatch === 'org' ? bearer('other-row', 'other-org') : second });
+    useAuthStore.setState({ token: mismatch === 'org' ? bearer(ids.successor, 'other-org') : second });
     if (mismatch === 'route') route.current = false;
     if (mismatch === 'owner') advanceAuthSessionOwner(false);
-    reject(config, 409, rotated);
+    reject(config, 401, firstPartyRequired);
   });
   const operation = appendExplain(admit(route), request);
   if (mismatch === 'route' || mismatch === 'owner') await expect(operation).rejects.toThrow();
@@ -445,15 +509,15 @@ it('checks history after a lost retry response without sending a third append', 
   vi.mocked(axios.post).mockResolvedValueOnce({ data: { access_token: second } });
   let writes = 0;
   ports.explain.mockImplementation(async config => {
-    if (config.method === 'get') return response(config, {
-      ...initialHistory, turns: writes === 2 ? [answerFixture(request).turn] : [],
+    if (config.method === 'get') return response(config, writes === 0 ? initialHistory : {
+      ...proved, turns: writes === 2 ? [answerFixture(request).turn] : [],
     });
-    if (++writes === 1) reject(config, 409, rotated);
+    if (++writes === 1) reject(config, 401, firstPartyRequired);
     throw new AxiosError('lost retry response', 'ERR_NETWORK', config);
   });
   await expect(appendExplain(admit(), request)).resolves.toEqual({ kind: 'uncertain', history: 'possibleMatch' });
   expect(calls().map(call => call.method)).toEqual(['get', 'post', 'get', 'post', 'get']);
-  expect(calls()[4]).toMatchObject({ bearer: `Bearer ${second}`, params: { conversation_id: ids.conversation } });
+  expect(calls()[4]).toMatchObject({ bearer: `Bearer ${second}`, predecessor: ids.session, params: { conversation_id: ids.conversation } });
 });
 
 it('checks an uncertain first append with the original verified credential', async () => {
@@ -480,7 +544,7 @@ it.each(['verified', 'legacy', 'refused', 'retired'] as const)('uses read-only p
       throw new AxiosError('lost response', 'ERR_NETWORK', config);
     }
     if (!attempted) return response(config, emptyHistory);
-    if (config.headers.get('Authorization') === `Bearer ${first}`) reject(config, 409, rotated);
+    if (config.headers.get('Authorization') === `Bearer ${first}`) reject(config, 401, firstPartyRequired);
     const evidence = { ...initialHistory, turns: [answerFixture(request).turn] };
     if (proof === 'refused') reject(config, 404, { detail: 'NOT_FOUND' });
     return response(config, proof === 'legacy' ? evidence : { ...evidence, predecessor_verified: true });
@@ -497,6 +561,7 @@ it.each(['verified', 'legacy', 'refused', 'retired'] as const)('uses read-only p
 it.each(['select_context', 'suggestions'] as const)('recognizes %s as a definite non-append', async outcome => {
   ports.explain.mockImplementation(async config => response(config, config.method === 'get' ? initialHistory : {
     outcome, locale: 'en', message: 'Synthetic reviewed response',
+    ...(outcome === 'select_context' ? { question: 'storage' } : { suggestions: [{ question: 'storage', label: 'Storage' }] }),
   }));
   await expect(appendExplain(admit(), request)).resolves.toEqual({ kind: outcome });
   expect(calls().map(call => call.method)).toEqual(['get', 'post']);
@@ -532,8 +597,8 @@ it.each([
 
 it('ends an expired selected conversation and lets a later explicit question start a new one', async () => {
   ports.explain.mockImplementation(async config => {
-    if (config.method === 'get') reject(config, 404, { detail: 'NOT_FOUND' });
-    return response(config, answerFixture(request));
+    if (config.method === 'get' && config.params) reject(config, 404, { detail: 'NOT_FOUND' });
+    return response(config, config.method === 'get' ? emptyHistory : answerFixture(request));
   });
   await expect(appendExplain(admit(), { ...request, conversation_id: ids.conversation })).resolves.toEqual({
     kind: 'refused', clear: true,

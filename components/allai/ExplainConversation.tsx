@@ -37,7 +37,7 @@ function Conversation({ view, launchId, consume, locale, close }: {
   const [noticeToken, setNoticeToken] = useState<string | null>(null);
   const token = useAuthStore(state => state.token);
   const flight = useRef<AbortController | null>(null);
-  const thread = useRef<{ id: string; expires: number } | null>(null);
+  const thread = useRef<{ id: string; expires: number; token: string } | null>(null);
   const lastRole = useRef<'buyer' | 'seller' | null>(null);
   const started = useRef<number | undefined>(undefined);
   const input = useRef<HTMLTextAreaElement>(null);
@@ -70,9 +70,16 @@ function Conversation({ view, launchId, consume, locale, close }: {
     if (log.current) log.current.scrollTop = log.current.scrollHeight;
   }, [turns, notice]);
   useEffect(() => {
-    const expiry = thread.current?.expires;
-    if (!expiry) return;
-    const expire = () => { thread.current = null; setTurns([]); };
+    const active = thread.current;
+    if (!active) return;
+    const { expires: expiry } = active;
+    const expire = () => {
+      if (thread.current !== active) return;
+      thread.current = null;
+      flight.current?.abort();
+      setTurns([]);
+      setBusy(false);
+    };
     const remaining = expiry - Date.now();
     if (remaining <= 0) { expire(); return; }
     // The maximum timeout is shorter than the server's 30-day retention.
@@ -111,17 +118,20 @@ function Conversation({ view, launchId, consume, locale, close }: {
       }
       const apply = await appendExplain({ owner: view.registration.owner, signal: controller.signal, currentToken }, {
         intent: 'explain', question, locale, target, ...(thread.current && { conversation_id: thread.current.id }),
-      });
+      }, thread.current?.token);
       await apply(reply => flushSync(() => {
         const credential = currentToken();
         setNoticeToken(credential);
         if (reply.kind === 'answer') {
           setTurnsToken(credential);
-          thread.current = { id: reply.answer.conversation_id, expires: Date.parse(reply.answer.expires_at) };
+          thread.current = { id: reply.answer.conversation_id, expires: Date.parse(reply.answer.expires_at), token: credential };
           setTurns(previous => [...previous, reply.answer]);
         } else if (reply.kind === 'uncertain') {
           if (reply.history === 'unverified') { thread.current = null; setTurns([]); }
-          else setTurnsToken(credential);
+          else {
+            if (thread.current) thread.current.token = credential;
+            setTurnsToken(credential);
+          }
           setNotice(reply.history === 'unverified' ? 'uncertain' : reply.history);
         } else if (reply.kind === 'select_context') {
           setChooseRole(question === 'order_status' && !!page.orderChoices?.length);

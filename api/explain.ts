@@ -124,8 +124,13 @@ async function history(admission: Admission, token: string, conversationId?: str
     params: conversationId ? { conversation_id: conversationId } : undefined,
   });
   admission.currentToken();
-  if (!data || !Array.isArray(data.turns) || (data.conversation_id !== null && typeof data.conversation_id !== 'string')
-    || (conversationId && data.conversation_id !== conversationId)) throw new Error('Invalid Explain history');
+  if (!data || !Array.isArray(data.turns) || (conversationId && data.conversation_id !== conversationId)
+    || (data.conversation_id === null
+      ? data.expires_at !== null || data.turns.length !== 0 || data.before !== null
+      : typeof data.conversation_id !== 'string' || data.conversation_id.length !== 36 || !sessionRowId.test(data.conversation_id)
+        || typeof data.expires_at !== 'string' || !(Date.parse(data.expires_at) > Date.now()))) {
+    throw new Error('Invalid Explain history');
+  }
   if (predecessor !== undefined && data.predecessor_verified !== true) throw new Error('Unverified Explain predecessor');
   return data;
 }
@@ -140,27 +145,25 @@ async function waitForRefresh(admission: Admission, retired?: string) {
 async function replacementHistory(admission: Admission, previous: string, token: string, conversationId?: string) {
   const original = explainSession(previous);
   const successor = explainSession(token);
-  if (!original || !successor?.sessionId || successor.sessionId.toLowerCase() === original.sessionId?.toLowerCase()
+  if (!original?.sessionId || !successor?.sessionId || successor.sessionId.toLowerCase() === original.sessionId.toLowerCase()
     || successor.subject !== original.subject || successor.organization !== original.organization
     || successor.generation !== original.generation) throw new Error('Invalid Explain successor');
-  // Scoped history proves a conversation's family. Without an anchor, only
-  // the server can verify the retained predecessor row against that family.
-  const predecessor = conversationId ? undefined : original.sessionId;
-  if (predecessor === null) throw new Error('Invalid Explain predecessor');
+  const predecessor = original.sessionId;
   const snapshot = await history(admission, token, conversationId, predecessor);
   if (token !== admission.currentToken()) throw new Error('Explain credential changed during verification');
   return { snapshot, predecessor };
 }
 
-function hasDetail(error: unknown, status: number, detail: string): boolean {
-  if (!axios.isAxiosError(error) || error.response?.status !== status) return false;
+function firstPartyRefusal(error: unknown): boolean {
+  if (!axios.isAxiosError(error) || error.response?.status !== 401) return false;
   const data = error.response.data;
-  return !!data && typeof data === 'object' && Object.keys(data).length === 1 && data.detail === detail;
+  return !!data && typeof data === 'object' && Object.keys(data).length === 1
+    && data.detail === 'FIRST_PARTY_SESSION_REQUIRED';
 }
 
 function refused(error: unknown): Reply {
   const status = axios.isAxiosError(error) ? error.response?.status : undefined;
-  return { kind: 'refused', clear: status === 401 || status === 403 || status === 404 || status === 503 || hasDetail(error, 409, 'SESSION_ROTATED') };
+  return { kind: 'refused', clear: status === 401 || status === 403 || status === 404 || status === 503 };
 }
 
 function validAnswer(data: ExplainAnswer, request: ExplainRequest): boolean {
@@ -180,23 +183,24 @@ function knownListingStates(facts: ExplainAnswer['facts']) {
       && Object.keys(counts).every(code => listingStates.has(code))));
 }
 
-export async function appendExplain(scope: Admission, request: ExplainRequest): Promise<ApplyReply> {
+export async function appendExplain(scope: Admission, request: ExplainRequest, previousToken?: string): Promise<ApplyReply> {
   const controller = new AbortController();
   const signal = AbortSignal.any([scope.signal, controller.signal]);
   const admission = { ...scope, signal, currentToken: () => {
     signal.throwIfAborted();
     return scope.currentToken();
   } };
-  let token = admission.currentToken();
+  const initialToken = admission.currentToken();
+  let token = previousToken ?? initialToken;
   let body = request;
   let before: History | undefined;
   let predecessor: string | undefined;
-  let confirmingToken: string | undefined;
+  let confirmation: { token: string; expiresAt: string | null } | undefined;
   let replacementUsed = false;
   let mayHaveAppended = false;
 
   const replacementLimit = new Error('Explain credential replacement limit reached');
-  let replacements = 0;
+  let replacements = initialToken === token ? 0 : 1;
   // Count publications even while a refresh, request or proof is pending.
   const unsubscribeAuth = useAuthStore.subscribe((state, previous) => {
     if (state.token !== previous.token && ++replacements === 2) controller.abort(replacementLimit);
@@ -242,7 +246,7 @@ export async function appendExplain(scope: Admission, request: ExplainRequest): 
     applied = true;
     try {
       let result = reply;
-      let provedToken = reply.kind === 'answer' ? token : confirmingToken;
+      let provedToken = reply.kind === 'answer' ? token : confirmation?.token;
       if (!signal.aborted && reply.kind === 'answer') {
         const { answer } = reply;
         const current = admission.currentToken();
@@ -252,13 +256,16 @@ export async function appendExplain(scope: Admission, request: ExplainRequest): 
               cancellation, proveReplacement(current, answer.conversation_id),
             ]);
             const expiry = snapshot.expires_at;
-            if (typeof expiry !== 'string' || !(Date.parse(expiry) > Date.now())) {
+            const recovered = snapshot.turns.find(turn => turn.id === answer.turn.id
+              && turn.question === answer.turn.question && turn.locale === answer.turn.locale
+              && turn.label === answer.turn.label && turn.answer === answer.turn.answer
+              && turn.created_at === answer.turn.created_at);
+            if (expiry === null || !recovered) {
               result = unknown;
             } else {
               provedToken = current;
-              if (Date.parse(expiry) < Date.parse(answer.expires_at)) {
-                result = { kind: 'answer', answer: { ...answer, expires_at: expiry } };
-              }
+              const expires_at = Date.parse(expiry) < Date.parse(answer.expires_at) ? expiry : answer.expires_at;
+              result = { kind: 'answer', answer: { ...answer, turn: recovered, expires_at } };
             }
           } catch {
             result = unknown;
@@ -272,6 +279,9 @@ export async function appendExplain(scope: Admission, request: ExplainRequest): 
       if (signal.aborted) result = limited();
       if ((result.kind === 'answer' || (result.kind === 'uncertain' && result.history !== 'unverified'))
         && latest !== provedToken) result = unknown;
+      if (result.kind === 'uncertain' && confirmation?.expiresAt && Date.parse(confirmation.expiresAt) <= Date.now()) {
+        result = unknown;
+      }
       if (result.kind === 'answer') {
         if (Date.parse(result.answer.expires_at) <= Date.now()) result = unknown;
         else if (body.question === 'listing_status' && !knownListingStates(result.answer.facts)) {
@@ -307,14 +317,12 @@ export async function appendExplain(scope: Admission, request: ExplainRequest): 
       if (admission.currentToken() === token) {
         try {
           before = await history(admission, token, body.conversation_id);
-          anchorHistory();
         } catch (error) {
-          if (hasDetail(error, 409, 'SESSION_ROTATED')) {
-            try { await waitForRefresh(admission, token); } catch { throw error; }
-            await adoptReplacement(admission.currentToken());
-          // A legacy backend may refuse the implicit latest expired thread.
-          } else if (body.conversation_id || !hasDetail(error, 404, 'NOT_FOUND')) throw error;
+          if (!firstPartyRefusal(error)) throw error;
+          try { await waitForRefresh(admission, token); } catch { throw error; }
+          await adoptReplacement(admission.currentToken());
         }
+        anchorHistory();
       }
       const latest = admission.currentToken();
       if (latest !== token) await adoptReplacement(latest);
@@ -333,9 +341,9 @@ export async function appendExplain(scope: Admission, request: ExplainRequest): 
       let after: History | undefined;
       if (current === token) {
         try {
-          after = await history(admission, token, body.conversation_id);
+          after = await history(admission, token, body.conversation_id, predecessor);
         } catch (error) {
-          if (replacementUsed || !hasDetail(error, 409, 'SESSION_ROTATED')) throw error;
+          if (replacementUsed || !firstPartyRefusal(error)) throw error;
           await waitForRefresh(admission, token);
         }
         current = admission.currentToken();
@@ -346,7 +354,7 @@ export async function appendExplain(scope: Admission, request: ExplainRequest): 
         const possible = after.turns.some(turn => turn.question === body.question && turn.locale === body.locale && !existing.has(turn.id));
         // History has neither a request identifier nor a target. A candidate
         // may belong to another page or tab and cannot be displayed as this turn.
-        confirmingToken = current;
+        confirmation = { token: current, expiresAt: after.expires_at };
         return { kind: 'uncertain', history: possible ? 'possibleMatch' : 'noMatch' };
       }
     } catch {
@@ -365,9 +373,11 @@ export async function appendExplain(scope: Admission, request: ExplainRequest): 
     } catch (error) {
       admission.currentToken();
       const status = axios.isAxiosError(error) ? error.response?.status : undefined;
-      if (!status || status >= 500) return confirmHistory();
+      if (!status || status === 408 || status >= 500) return confirmHistory();
       mayHaveAppended = false;
-      if (!replacementUsed && hasDetail(error, 409, 'SESSION_ROTATED')) {
+      // R11 emits this refusal during authority admission, before any turn
+      // write. The successor GET still has to prove the claimed rotation.
+      if (!replacementUsed && firstPartyRefusal(error)) {
         try {
           await waitForRefresh(admission, token);
           await adoptReplacement(admission.currentToken());
