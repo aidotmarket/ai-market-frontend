@@ -4,6 +4,11 @@ import type { SellerWorkspaceConnection } from '@/api/sellerWorkspace';
 
 export type WorkspaceView = 'storage' | 'data' | 'listing' | 'review' | 'license' | 'publish' | 'manage';
 
+const explainControls = {
+  storage: 'open_storage', data: 'open_files', listing: 'open_listing', review: 'open_review',
+  license: 'open_license', publish: undefined, manage: 'view_listing view_listings',
+} satisfies Record<WorkspaceView, string | undefined>;
+
 export function WorkspaceOverview({ connections, view, onViewChange }: {
   connections: SellerWorkspaceConnection[];
   view: WorkspaceView;
@@ -23,7 +28,7 @@ export function WorkspaceOverview({ connections, view, onViewChange }: {
         <p className="text-xs font-semibold uppercase tracking-[0.18em] text-indigo-200">Your data business</p>
         <div className="relative mt-3 flex flex-wrap items-end justify-between gap-6">
           <div className="max-w-xl">
-            <h1 className="text-3xl font-semibold tracking-tight sm:text-4xl">Seller Workspace</h1>
+            <h1 data-explain-control="open_workspace" tabIndex={-1} className="text-3xl font-semibold tracking-tight sm:text-4xl">Seller Workspace</h1>
             <p className="mt-3 text-sm leading-6 text-indigo-100">Choose what to sell. allAI helps describe it and add the right tags. Your data stays in your cloud account. You approve what becomes public.</p>
           </div>
           <button type="button" onClick={() => onViewChange('manage')} className="rounded-lg border border-white/30 px-4 py-2.5 text-sm font-medium hover:bg-white/10 focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-white">Manage listings</button>
@@ -36,7 +41,7 @@ export function WorkspaceOverview({ connections, view, onViewChange }: {
       </header>
       <nav aria-label="Workspace sections" className="flex gap-1 overflow-x-auto border-b border-gray-200">
         {([...LISTING_STEPS, ['manage', 'Your listings']] as const).map(([key, label]) => (
-          <button key={key} type="button" aria-current={view === key ? 'page' : undefined} onClick={() => onViewChange(key)} className={`shrink-0 border-b-2 px-4 py-3 text-sm font-medium focus-visible:outline-2 focus-visible:outline-[#3F51B5] ${view === key ? 'border-[#3F51B5] text-[#3F51B5]' : 'border-transparent text-gray-600 hover:border-gray-300 hover:text-gray-900'}`}>{label}</button>
+          <button key={key} type="button" data-explain-control={explainControls[key]} aria-current={view === key ? 'page' : undefined} onClick={() => onViewChange(key)} className={`shrink-0 border-b-2 px-4 py-3 text-sm font-medium focus-visible:outline-2 focus-visible:outline-[#3F51B5] ${view === key ? 'border-[#3F51B5] text-[#3F51B5]' : 'border-transparent text-gray-600 hover:border-gray-300 hover:text-gray-900'}`}>{label}</button>
         ))}
       </nav>
     </>

@@ -1,5 +1,7 @@
 'use client';
 
+import { ExplainEntry, isExplainId, useExplainPage } from '@/components/allai/ExplainContext';
+
 import { use, useEffect, useState } from 'react';
 import type { AxiosRequestConfig } from 'axios';
 import Link from 'next/link';
@@ -26,6 +28,13 @@ export default function ListingPage({ params }: { params: Promise<{ id: string }
   // Reload only when the signed-in account changes. A token refresh replaces the
   // user object; reloading then remounted the panel and dropped the seller's click.
   const userId = user?.id;
+  useExplainPage(state === 'ready' && isAuthenticated && loadOwner?.userId === userId && loadOwner?.id === id
+    && isExplainId(id) ? {
+      route: `/dashboard/listings/${id}`,
+      scope: 'owner-listing',
+      targets: { listing_status: { kind: 'listing', listing_id: id } },
+      actions: ['view_listing', 'view_listings'],
+    } : null);
   useEffect(() => {
     if (!hydrated || !isAuthenticated || !userId) return;
     let current = true;
@@ -91,8 +100,9 @@ export default function ListingPage({ params }: { params: Promise<{ id: string }
   if (state === 'unavailable') return <p>We could not find a listing you can manage here. Open Your listings to choose another listing. <Link href="/dashboard/listings" className="underline">Your listings</Link></p>;
   if (state === 'error') return <><p>We could not load your listing just now. Try again, or contact support if it keeps happening.</p><button onClick={() => setRetry(value => value + 1)}>Try again</button></>;
   return <div className="space-y-6">
-    <Link href="/dashboard/listings" className="text-indigo-700 underline">Back to listings</Link>
-    <h1 className="text-2xl font-semibold">{listing?.title}</h1>
+    <Link data-explain-control="view_listings" href="/dashboard/listings" className="text-indigo-700 underline">Back to listings</Link>
+    <h1 data-explain-control="view_listing" tabIndex={-1} className="text-2xl font-semibold">{listing?.title}</h1>
+    <ExplainEntry question="listing_status" />
     <p className="text-sm text-gray-600">Your private owner view remains available when this listing is not public.</p>
     <Link href={`/dashboard/listings/${encodeURIComponent(id)}/edit`} className="text-indigo-700 underline">Edit listing</Link>
     {listing?.status === 'published' && <>

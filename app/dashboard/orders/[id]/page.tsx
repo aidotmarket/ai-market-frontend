@@ -1,11 +1,14 @@
 'use client';
+
+import { ExplainEntry, isExplainId, useExplainPage } from '@/components/allai/ExplainContext';
 import { customerLoadError, customerActionError } from '@/lib/customerMessages';
 import PurchasedLicenseDisplay from '@/components/orders/PurchasedLicenseDisplay';
 import PurchaseEvidence from '@/components/orders/PurchaseEvidence';
 import AcceptedLicenseDocument from '@/components/orders/AcceptedLicenseDocument';
 import { deliveryPermitted } from '@/lib/order-purchase-evidence';
 
-import { canonicalOrderId } from '@/lib/order-route';
+import type { ExplainTarget } from '@/api/explain';
+import { canonicalOrderId, isOrderDetailPath } from '@/lib/order-route';
 import { ACTION_AUTH_REFRESH, isLegacyActionAuthError } from '@/lib/action-auth-error';
 
 import { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react';
@@ -98,6 +101,18 @@ function OrderDetailVisit({ orderId, txIdParam, userId, sessionGeneration, issue
   const [order, setOrder] = useState<BuyerOrderDetail | null>(null);
   const isBuyerOfRecord = order !== null && order.id === orderId && userId === order.buyer_id;
   const isSellerOfRecord = order !== null && order.id === orderId && userId === order.seller_id;
+  const explainOrderChoices: Extract<ExplainTarget, { kind: 'order' }>[] = [];
+  if (isExplainId(orderId)) {
+    if (isBuyerOfRecord) explainOrderChoices.push({ kind: 'order', role: 'buyer', order_id: orderId });
+    if (isSellerOfRecord) explainOrderChoices.push({ kind: 'order', role: 'seller', order_id: orderId });
+  }
+  useExplainPage(explainOrderChoices.length ? {
+    route: path => isOrderDetailPath(path, orderId),
+    scope: JSON.stringify([orderId, txIdParam, issueProposal]),
+    targets: explainOrderChoices.length === 1 ? { order_status: explainOrderChoices[0] } : {},
+    orderChoices: explainOrderChoices,
+    actions: ['view_order'],
+  } : null);
   const [events, setEvents] = useState<OrderEvent[]>([]);
   const [orderAccess, setOrderAccess] = useState<{ orderId: string; buyerId: string; status: string; data: OrderAccessResponse } | null>(null);
   // Keep legacy downloads hidden until the gateway check has completed for this order.
@@ -236,7 +251,8 @@ function OrderDetailVisit({ orderId, txIdParam, userId, sessionGeneration, issue
           <RecoveryRenderBoundary resetKey={order} onFailure={() => { setRenderFailed(true); if (recovery.attempt) void recovery.attempt.stop('failed'); }}>
           <div className="rounded-lg border border-gray-200 p-6">
             <div className="flex items-center justify-between mb-4">
-              <h1 className="text-xl font-bold text-gray-900">Order #{order.id.slice(0, 8)}</h1>
+              <h1 data-explain-control="view_order" tabIndex={-1} className="text-xl font-bold text-gray-900">Order #{order.id.slice(0, 8)}</h1>
+              <ExplainEntry question="order_status" />
               <span className={`inline-flex items-center rounded-full px-3 py-1 text-sm font-medium ${statusCss}`}>
                 {statusLabel}
               </span>
