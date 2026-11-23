@@ -1,5 +1,6 @@
 import type { Metadata } from 'next';
 import { notFound } from 'next/navigation';
+import PrePurchaseLicensor from '@/components/PrePurchaseLicensor';
 
 type Props = { params: Promise<{ parts: string[] }> };
 type StockDocument = {
@@ -82,6 +83,7 @@ export default async function LicencePage({ params }: Props) {
   return <main className="mx-auto max-w-3xl px-6 py-16">
     <h1 className="text-3xl font-bold text-gray-900">{title}</h1>
     <p className="mt-2 text-sm text-gray-600">Version {document.version}{document.variant ? ` · ${document.variant.replaceAll('-', ' ')}` : ''}</p>
+    {document.code === 'standard' && <div className="mt-4"><PrePurchaseLicensor /></div>}
     <section className="mt-8 rounded-xl border border-gray-200 bg-gray-50 p-6" aria-label="Licence summary">
       <h2 className="text-xl font-semibold text-gray-900">Major points</h2>
       <ul className="mt-4 list-disc space-y-2 pl-5 text-gray-700">{document.summary.map((line) => <li key={line}>{line}</li>)}</ul>

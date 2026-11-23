@@ -38,6 +38,7 @@ it('renders the full base marketplace 1.0 page on flag-off 404', async () => {
   expect(html).toContain('19.6 Notices.');
   expect(html).toContain('id="fees" class="mt-10 space-y-4 scroll-mt-24"');
   expect(html).not.toContain('Listings without a chosen licence are offered under');
+  expect(html).not.toContain('https://stripe.com/pricing');
   expect(fetchMock).toHaveBeenCalledTimes(1);
 });
 
@@ -55,6 +56,8 @@ it('renders the verified backend marketplace 1.1 document once', async () => {
   expect(html).toContain('<h2 id="fees" class="scroll-mt-24">5. Commission, transaction costs, payment, and tax</h2>');
   expect(html.match(/id="fees"/g)).toHaveLength(1);
   expect(html).toContain('<h2>4. What the Platform is, and what it is not</h2>');
+  expect(html).not.toContain('fee-explanation-heading');
+  expect(html).not.toContain('https://stripe.com/pricing');
   expect(fetchMock.mock.calls[1][0]).toBe('https://api.example/api/v1/legal/terms/document');
 });
 
@@ -70,11 +73,10 @@ it('refuses a mismatched 1.1 document and does not treat other failures as flag-
 
 const backendDocument12 = readFileSync('app/legal/terms/terms_v1_2.test.md', 'utf8')
   .replace('{{TERMS_1_2_EFFECTIVE_AT}}', effectiveAt);
-
 it.each([
   ['1.1', backendDocument, 'app/legal/terms/terms_v1_1.test.md', '1f2c9c8c9f22bc510623d5c91c86c01e5f48ed2afbd8d96701e1417d4d1b69eb'],
   ['1.2', backendDocument12, 'app/legal/terms/terms_v1_2.test.md', '44e09f69faeee3611f47f72b16c97ded8414d2fec1dea52f13eac23a00135cdd'],
-])('links the licence names in Terms %s without changing the accepted document or rendered text', async (version, markdown, fixture, fixtureHash) => {
+])('matches the complete Terms %s article to the accepted Markdown and links the licences', async (version, markdown, fixture, fixtureHash) => {
   // Pin the original document bytes independently of the rendering change.
   expect(hash(readFileSync(fixture, 'utf8'))).toBe(fixtureHash);
   const config = { terms_version: version, terms_hash_sha256: hash(markdown), effective_at: effectiveAt, text_url: '/api/v1/legal/terms/document' };
@@ -87,16 +89,41 @@ it.each([
   const html = renderToStaticMarkup(await TermsAndConditionsPage());
   const container = document.createElement('div');
   container.innerHTML = html;
-  const links = [...container.querySelectorAll('a')];
-  expect(links.map(link => [link.textContent, link.getAttribute('href')])).toEqual([
+  const article = container.querySelector('article')!;
+  const originalHtml = renderToStaticMarkup(<ReactMarkdown rehypePlugins={[rehypeSanitize]}>{markdown}</ReactMarkdown>);
+  expect(normalizedLegalText(article.innerHTML)).toBe(normalizedLegalText(originalHtml));
+
+  const licenceTerms = [...article.querySelectorAll('p')].find(p => p.textContent?.startsWith('7.2 '));
+  const licenceLinks = [...licenceTerms!.nextElementSibling!.querySelectorAll('a')];
+  expect(licenceLinks.map(link => [link.textContent, link.getAttribute('href')])).toEqual([
     ['Standard Data Licence', '/licenses/standard/1.1/ai-training'],
     ['Marketplace Listing Covenant', '/licenses/marketplace-listing/1.1'],
   ]);
-  const originalHtml = renderToStaticMarkup(<ReactMarkdown rehypePlugins={[rehypeSanitize]}>{markdown}</ReactMarkdown>);
-  expect(normalizedLegalText(html)).toBe(normalizedLegalText(originalHtml));
   expect(config).toEqual(originalConfig);
   expect(hash(markdown)).toBe(originalConfig.terms_hash_sha256);
   expect(normalizedLegalText(html)).toContain(`Version ${originalConfig.terms_version}`);
+});
+
+it('shows the approved fee example and Stripe pricing link after the Terms 1.2 article', async () => {
+  process.env.API_URL = 'https://api.example';
+  vi.stubGlobal('fetch', vi.fn()
+    .mockResolvedValueOnce({ ok: true, json: async () => ({ terms_version: '1.2', terms_hash_sha256: hash(backendDocument12), effective_at: effectiveAt, text_url: '/api/v1/legal/terms/document' }) })
+    .mockResolvedValueOnce({ ok: true, text: async () => backendDocument12 }));
+
+  const container = document.createElement('div');
+  container.innerHTML = renderToStaticMarkup(await TermsAndConditionsPage());
+  const note = container.querySelector('article + aside')!;
+  const heading = note.querySelector('h2');
+  expect(heading?.textContent).toBe('Fees explained (not part of the Terms)');
+  expect(note.getAttribute('aria-labelledby')).toBe(heading?.id);
+
+  const [pricing, example] = note.querySelectorAll('p');
+  expect(pricing.textContent).toBe('Stripe pricing');
+  const stripeLink = pricing.querySelector('a');
+  expect(stripeLink?.getAttribute('href')).toBe('https://stripe.com/pricing');
+  expect(stripeLink?.target).toBe('_blank');
+  expect(stripeLink?.rel).toBe('noopener noreferrer');
+  expect(example.textContent).toBe("Example: on a $1,000 sale, ai.market's 5% commission is $50 and the card fee is about 2.9% + 30¢ (about $29), so the seller receives about $921. This is an example; the actual card fee varies.");
 });
 
 it('renders the hash-verified 1.2 document without old fee or hold wording', async () => {
