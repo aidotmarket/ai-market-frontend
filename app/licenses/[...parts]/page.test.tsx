@@ -38,6 +38,8 @@ it('renders the backend Standard summary before the full text at its canonical U
   const html = renderToStaticMarkup(await LicencePage(props));
   expect(html.indexOf('Summary from backend')).toBeLessThan(html.indexOf('Full text from backend'));
   expect(html).toContain('SHA-256:');
+  expect(html).toContain('Licensor: verified seller via ai.market');
+  expect(html).toContain('The licensor&#x27;s legal identity is recorded in the signed licence held by ai.market.');
   expect((await generateMetadata(props)).alternates).toEqual({ canonical: 'https://ai.market/licenses/standard/1.0/ai-training' });
   expect(fetchMock).toHaveBeenCalledWith('https://api.ai.market/api/v1/licenses/standard/1.0/ai-training?format=json', expect.anything());
 });
@@ -79,7 +81,7 @@ it.each([
  expect(html).toContain(`>${fullText}</pre>`);
  if(code==='standard') {
   expect(html).toContain('Licensor: verified seller via ai.market');
-  expect(html).toContain('The seller&#x27;s legal name appears only in the signed licence after purchase.');
+  expect(html).toContain('The licensor&#x27;s legal identity is recorded in the signed licence held by ai.market.');
  }
  expect(fetchMock).toHaveBeenCalledWith(`https://api.ai.market/api/v1/licenses/${parts.join('/')}?format=json`,expect.anything());
  expect(html).toContain(`/api/v1/licenses/${parts.join('/')}?download=1`);

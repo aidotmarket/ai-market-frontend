@@ -168,8 +168,8 @@ export default async function ListingDetailPage({ params, searchParams }: Props)
   const emptyNotice = technical || pdf || hasPublicSampleFiles ? undefined
     : 'Want to check field names or whether a data dictionary is included? Use Ask a Question before you buy.';
   const hasVersionRows = versions.length > 0;
-  // S1097: legacy listings intentionally keep byte-identical rendering and omit
-  // the pre-purchase download-window line pending Max's R5.1h-vs-parity adjudication.
+  // S1097: legacy listings omit the pre-purchase download-window line pending
+  // Max's R5.1h-vs-parity adjudication.
   const accessWindowDays = hasVersionRows
     ? await fetchListingAccessWindowDays(listing.id, userAgent)
     : null;
@@ -278,7 +278,7 @@ export default async function ListingDetailPage({ params, searchParams }: Props)
           {publicLicenseUrl && <Link href={publicLicenseUrl} className={`inline-flex rounded-full px-3 py-1 text-sm font-medium ${licenseDetails?.code === 'standard' ? 'bg-green-50 text-green-900' : 'bg-amber-50 text-amber-950'}`}>
             {licenseDetails?.code === 'standard' ? 'ai.market standard terms' : "Seller's own licence"}
           </Link>}
-          {(licenseDetails?.code === 'standard' || currentDisplay) && <PrePurchaseLicensor />}
+          <PrePurchaseLicensor />
           {licenseDetails && (pendingSellerTerms || approved && !listing.purchasable) && <ListingLicenseDisclosure license={licenseDetails} />}
           {pendingSellerTerms && <div role="status" className="rounded-lg border border-amber-200 bg-amber-50 p-4 text-sm text-amber-950">
             <p className="font-medium">Not yet available to buy. The seller needs to accept the current terms.</p>

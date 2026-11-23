@@ -34,13 +34,6 @@ export default async function TermsAndConditionsPage() {
       <ReactMarkdown rehypePlugins={[rehypeSanitize]} components={{
         // Presentation only: keep the verified markdown and its acceptance hash intact.
         p: ({ children }) => {
-          if (typeof children === 'string' && children.startsWith('5.2 Card processing costs.')) {
-            return <>
-              <p>{children}</p>
-              <p><a href="https://stripe.com/pricing">Stripe pricing</a></p>
-              <p>Example: on a $1,000 sale, ai.market&apos;s 5% commission is $50 and the card fee is about 2.9% + 30¢ (about $29), so the seller receives about $921. This is an example; the actual card fee varies.</p>
-            </>;
-          }
           if (children === 'Listings without a chosen licence are offered under the ai.market Standard Data Licence with AI training permitted, and the seller accepts the ai.market Marketplace Listing Covenant for them.') {
             return <p>Listings without a chosen licence are offered under the ai.market <a href={STANDARD_DATA_LICENCE_PATH}>Standard Data Licence</a> with AI training permitted, and the seller accepts the ai.market <a href={MARKETPLACE_LISTING_COVENANT_PATH}>Marketplace Listing Covenant</a> for them.</p>;
           }
@@ -51,6 +44,13 @@ export default async function TermsAndConditionsPage() {
           : <h2>{children}</h2>,
       }}>{markdown}</ReactMarkdown>
     </article>
+    {config.terms_version === '1.2' && (
+      <aside aria-labelledby="fee-explanation-heading" className="mt-8 space-y-3 rounded-xl border border-gray-200 bg-gray-50 p-6 text-gray-700">
+        <h2 id="fee-explanation-heading" className="text-lg font-semibold text-gray-900">Fees explained (not part of the Terms)</h2>
+        <p><a className="text-indigo-700 underline" href="https://stripe.com/pricing" target="_blank" rel="noopener noreferrer">Stripe pricing</a></p>
+        <p>Example: on a $1,000 sale, ai.market&apos;s 5% commission is $50 and the card fee is about 2.9% + 30¢ (about $29), so the seller receives about $921. This is an example; the actual card fee varies.</p>
+      </aside>
+    )}
   </main>;
 }
 

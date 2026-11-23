@@ -385,7 +385,7 @@ describe('seller presentation on the real listing route', () => {
     const page = within(document.body);
     const heading = page.getByRole('heading', { name: 'License', level: 3 });
     expect(within(heading.parentElement!).getByText('CC-BY-4.0')).toBeTruthy();
-    expect(page.queryByText('Licensor: verified seller via ai.market')).toBeNull();
+    expect(page.getByText('Licensor: verified seller via ai.market')).toBeTruthy();
     expect(page.queryByRole('heading', { name: 'Trust Metrics' })).toBeNull();
   });
 
@@ -747,7 +747,10 @@ describe('ListingDetailPage Dataset JSON-LD', () => {
       expect(html).not.toContain(forbidden);
     }
     expect(html).toContain('the seller can request a verified scan of this data.');
-    expect(html.replace('the seller can request a verified scan of this data.', '')).not.toMatch(/\bverified\b/);
+    expect(html).toContain('<p>licensor: verified seller via ai.market</p>');
+    expect(html
+      .replace('the seller can request a verified scan of this data.', '')
+      .replace('<p>licensor: verified seller via ai.market</p>', '')).not.toMatch(/\bverified\b/);
   });
 });
 
@@ -1069,7 +1072,25 @@ it.each([false,true])('shows one licence disclosure when seller terms are pendin
  const html=await renderPage(makeListing({license,license_status:pending?'pending_seller_terms':'bound'}));
  expect(html.match(/aria-label="Licence terms"/g)).toHaveLength(1);
  expect(html).toContain('Licensor: verified seller via ai.market');
- expect(html).toContain('The seller&#x27;s legal name appears only in the signed licence after purchase.');
+ expect(html).toContain('The licensor&#x27;s legal identity is recorded in the signed licence held by ai.market.');
+});
+
+it('shows the licensor attribution for a seller listing with a custom licence', async () => {
+  const sha256 = 'a'.repeat(64);
+  const license = {
+    code: 'custom' as const,
+    version: '1.0',
+    params: { ai_training: true },
+    summary: [],
+    full_text_url: `/licenses/custom/${sha256}`,
+    download_url: `/licenses/custom/${sha256}?download=1`,
+    sha256,
+    covenant_sha256: 'b'.repeat(64),
+    rider_sha256: 'c'.repeat(64),
+  };
+  const html = await renderPage(makeListing({ license }));
+  expect(html).toContain('Licensor: verified seller via ai.market');
+  expect(html).toContain('The licensor&#x27;s legal identity is recorded in the signed licence held by ai.market.');
 });
 
 it('uses the same UTC Published date in the header and version card near midnight',async()=>{
