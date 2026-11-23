@@ -16,7 +16,7 @@ vi.mock('@/components/Toast', () => ({ useToast: () => ({ toast: vi.fn() }) }));
 vi.mock('@/components/orders/GatewayDeliverySection', () => ({ default: () => null }));
 vi.mock('@/components/legal/TermsGate', () => ({ useTermsGate: () => ({ TermsGatePrompt: () => null }) }));
 import { useAuthStore } from '@/store/auth';
-import { answerFixture, bearer, explainUser } from '@/tests/explain-fixtures';
+import { answerFixture, bearer, explainUser, ids } from '@/tests/explain-fixtures';
 import AllAIPanel from '@/components/allai/AllAIPanel';
 const append = vi.hoisted(() => vi.fn());
 vi.mock('@/api/explain', async original => ({ ...await original<typeof import('@/api/explain')>(), appendExplain: append }));
@@ -65,7 +65,7 @@ it('uses the owned role and canonical order selector while preserving Report Iss
   vi.stubEnv('NEXT_PUBLIC_STAGE_A_EXPLAIN_ENABLED', 'true');
   route.segment = canonical.toUpperCase();
   route.path = '/dashboard/orders/' + route.segment;
-  useAuthStore.setState({ user: { ...explainUser, id: 'buyer-fixture' }, token: bearer('row', 'org', 'buyer-fixture') });
+  useAuthStore.setState({ user: { ...explainUser, id: 'buyer-fixture' }, token: bearer(ids.session, 'org', 'buyer-fixture') });
   append.mockImplementation(async (_admission, request) => ({ kind: 'answer', answer: answerFixture(request) }));
   try {
     render(<AllAIProvider><Page /><AllAIPanel /></AllAIProvider>);

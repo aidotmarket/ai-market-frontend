@@ -233,6 +233,61 @@ it('joins a pending refresh before history and proves the bearer change before a
   expect(calls().map(call => [call.method, call.predecessor])).toEqual([['get', ids.session], ['post', ids.session]]);
 });
 
+it.each(['submit', 'confirmation'] as const)('ends the question after a pending refresh followed by retirement during %s', async phase => {
+  let finish!: (value: unknown) => void;
+  vi.mocked(axios.post).mockReturnValueOnce(new Promise(resolve => { finish = resolve; }) as never)
+    .mockResolvedValueOnce({ data: { access_token: third } });
+  const refresh = refreshAccessToken(first);
+  let reads = 0;
+  ports.explain.mockImplementation(async config => {
+    if (config.headers.get('Authorization') === `Bearer ${third}`) {
+      return response(config, config.method === 'get' ? emptyHistory : answerFixture(request));
+    }
+    if (config.method === 'get' && ++reads === 1) return response(config, { ...emptyHistory, predecessor_verified: true });
+    if (config.method === 'post' && phase === 'confirmation') throw new AxiosError('lost response', 'ERR_NETWORK', config);
+    reject(config, 409, rotated);
+  });
+
+  const operation = appendExplain(admit(), request);
+  finish({ data: { access_token: second } });
+  await refresh;
+  await expect(operation).resolves.toEqual(phase === 'submit'
+    ? { kind: 'refused', clear: true } : { kind: 'uncertain', history: 'unverified' });
+  expect(calls().map(call => [call.method, call.bearer])).toEqual(
+    (phase === 'submit' ? ['get', 'post'] : ['get', 'post', 'get']).map(method => [method, `Bearer ${second}`]));
+  expect(useAuthStore.getState().token).toBe(third);
+
+  await expect(appendExplain(admit(), request)).resolves.toMatchObject({ kind: 'answer' });
+  expect(calls().at(-1)).toEqual({ method: 'post', bearer: `Bearer ${third}`, csrf: sessionCsrf(third), body: request });
+  expect(axios.post).toHaveBeenCalledTimes(2);
+});
+
+it.each([null, '', 'invalid-session', `${ids.session}\n`].flatMap(id =>
+  (['pending', 'retired'] as const).map(phase => ({ id, phase })),
+))('stops anchorless $phase continuation with predecessor $id', async ({ id, phase }) => {
+  const previous = bearer(id);
+  useAuthStore.setState({ token: previous });
+  let finish!: (value: unknown) => void;
+  if (phase === 'pending') {
+    vi.mocked(axios.post).mockReturnValueOnce(new Promise(resolve => { finish = resolve; }) as never);
+    void refreshAccessToken(previous);
+  } else {
+    vi.mocked(axios.post).mockResolvedValueOnce({ data: { access_token: second } });
+  }
+  ports.explain.mockImplementation(async config => {
+    if (config.method === 'get') return response(config, emptyHistory);
+    reject(config, 409, rotated);
+  });
+
+  const operation = appendExplain(admit(), request);
+  if (phase === 'pending') finish({ data: { access_token: second } });
+  await expect(operation).resolves.toEqual({ kind: 'refused', clear: true });
+  expect(calls().map(call => [call.method, call.bearer])).toEqual(
+    phase === 'pending' ? [] : [['get', `Bearer ${previous}`], ['post', `Bearer ${previous}`]]);
+  expect(useAuthStore.getState().token).toBe(second);
+  expect(axios.post).toHaveBeenCalledOnce();
+});
+
 it.each(['family', 'org', 'route', 'owner'] as const)('suppresses a retry on %s mismatch', async mismatch => {
   const route = { current: true };
   ports.explain.mockImplementation(async config => {

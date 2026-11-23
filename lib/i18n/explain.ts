@@ -23,18 +23,18 @@ const select_context = ["Open the relevant page and choose its role or item.", "
 const unavailable = ["I couldn't verify the current status. Try again from the page.", "No pude verificar el estado actual. Vuelve a intentarlo desde la página.", "暂时无法核实当前状态，请在相关页面重试。"] as const;
 
 const actions: Record<ExplainAction, readonly [string, string, string]> = {
-  open_workspace: ['Open Seller Workspace', 'Abrir el espacio de trabajo del vendedor', '打开卖家工作区'],
-  open_storage: ['Open Storage', 'Abrir Almacenamiento', '打开存储'],
-  open_files: ['Open Files', 'Abrir Archivos', '打开文件'],
-  save_files: ['Go to Save selected files', 'Ir a Guardar archivos seleccionados', '前往“保存所选文件”'],
-  open_license: ['Open Licence', 'Abrir Licencia', '打开许可证'],
-  open_listing: ['Open Describe and price', 'Abrir Describir y fijar precio', '打开描述与定价'],
-  open_review: ['Open Review', 'Abrir Revisar', '打开审核'],
-  publish: ['Go to Publish', 'Ir a Publicar', '前往“发布”'],
-  view_listing: ['View listing', 'Ver anuncio', '查看商品'],
-  view_listings: ['View listings', 'Ver anuncios', '查看商品列表'],
-  view_order: ['View order', 'Ver pedido', '查看订单'],
-  view_orders: ['View orders', 'Ver pedidos', '查看订单列表'],
+  open_workspace: ['Focus Seller Workspace', 'Poner el foco en el espacio de trabajo del vendedor', '将焦点移至卖家工作区'],
+  open_storage: ['Focus Storage', 'Poner el foco en Almacenamiento', '将焦点移至存储'],
+  open_files: ['Focus Choose your files', 'Poner el foco en Elegir archivos', '将焦点移至“选择文件”'],
+  save_files: ['Focus Save selected files', 'Poner el foco en Guardar archivos seleccionados', '将焦点移至“保存所选文件”'],
+  open_license: ['Focus Licence', 'Poner el foco en Licencia', '将焦点移至许可证'],
+  open_listing: ['Focus Describe and price', 'Poner el foco en Describir y fijar precio', '将焦点移至“描述与定价”'],
+  open_review: ['Focus Review', 'Poner el foco en Revisar', '将焦点移至审核'],
+  publish: ['Focus Publish this listing', 'Poner el foco en Publicar este anuncio', '将焦点移至“发布此商品”'],
+  view_listing: ['Focus the listing', 'Poner el foco en el anuncio', '将焦点移至商品'],
+  view_listings: ['Focus the listings', 'Poner el foco en los anuncios', '将焦点移至商品列表'],
+  view_order: ['Focus the order', 'Poner el foco en el pedido', '将焦点移至订单'],
+  view_orders: ['Focus the orders', 'Poner el foco en los pedidos', '将焦点移至订单列表'],
 };
 
 export const explainQuestions = Object.keys(LABELS) as ExplainQuestion[];

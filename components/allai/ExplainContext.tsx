@@ -53,7 +53,7 @@ export function isExplainId(value: string | undefined): value is string {
 
 function principal(state: ReturnType<typeof useAuthStore.getState>): string | null {
   const session = explainSession(state.token);
-  if (!state.isAuthenticated || !session || session.subject !== state.user?.id) return null;
+  if (!state.isAuthenticated || !session?.sessionId || session.subject !== state.user?.id) return null;
   return JSON.stringify([session.subject, session.organization, session.generation]);
 }
 

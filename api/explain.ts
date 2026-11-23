@@ -61,19 +61,22 @@ type Reply =
   | { kind: 'uncertain'; history: 'unverified' | 'possibleMatch' | 'noMatch' }
   | { kind: 'refused'; clear: boolean };
 
-type Session = { subject: string; organization: string | null; generation: number; sessionId: string };
+type Session = { subject: string; organization: string | null; generation: number; sessionId: string | null };
 const listingStates = new Set(['draft', 'review', 'published', 'unlisted', 'withdrawn', 'hidden']);
+const sessionRowId = /^[a-f\d]{8}-[a-f\d]{4}-[a-f\d]{4}-[a-f\d]{4}-[a-f\d]{12}$/i;
 
 export function explainSession(token: string | null): Session | null {
   try {
     const payload = token?.split('.')[1];
     if (!payload) return null;
     const claims = JSON.parse(atob(payload.replaceAll('-', '+').replaceAll('_', '/')));
-    if (claims.type !== 'access' || typeof claims.sub !== 'string' || typeof claims.session_id !== 'string'
+    if (claims.type !== 'access' || typeof claims.sub !== 'string'
       || !Number.isInteger(claims.auth_generation)
       || (claims.organization_id !== undefined && typeof claims.organization_id !== 'string')) return null;
+    const id = claims.session_id;
+    const sessionId = typeof id === 'string' && id.length === 36 && sessionRowId.test(id) ? id : null;
     return { subject: claims.sub, organization: claims.organization_id ?? null,
-      generation: claims.auth_generation, sessionId: claims.session_id };
+      generation: claims.auth_generation, sessionId };
   } catch {
     return null;
   }
@@ -81,7 +84,6 @@ export function explainSession(token: string | null): Session | null {
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000';
 const predecessorHeader = 'X-Explain-Predecessor-Session';
-const sessionRowId = /^[a-f\d]{8}-[a-f\d]{4}-[a-f\d]{4}-[a-f\d]{4}-[a-f\d]{12}$/i;
 
 // This instance has no generic request/response interceptors. Each request uses
 // the admitted bearer and its own CSRF value, without a cookie or replay.
@@ -107,7 +109,7 @@ function credentialConfig(admission: Admission, token: string, predecessor?: str
     headers: {
       Authorization: `Bearer ${token}`,
       'X-CSRF-Token': sessionCsrf(token),
-      ...(predecessor && { [predecessorHeader]: predecessor }),
+      ...(predecessor !== undefined && { [predecessorHeader]: predecessor }),
     },
     signal: admission.signal,
   };
@@ -121,7 +123,7 @@ async function history(admission: Admission, token: string, conversationId?: str
   admission.currentToken();
   if (!data || !Array.isArray(data.turns) || (data.conversation_id !== null && typeof data.conversation_id !== 'string')
     || (conversationId && data.conversation_id !== conversationId)) throw new Error('Invalid Explain history');
-  if (predecessor && data.predecessor_verified !== true) throw new Error('Unverified Explain predecessor');
+  if (predecessor !== undefined && data.predecessor_verified !== true) throw new Error('Unverified Explain predecessor');
   return data;
 }
 
@@ -135,13 +137,13 @@ async function waitForRefresh(admission: Admission, retired?: string) {
 async function replacementHistory(admission: Admission, previous: string, token: string, conversationId?: string) {
   const original = explainSession(previous);
   const successor = explainSession(token);
-  if (!original || !successor || successor.sessionId === original.sessionId
+  if (!original || !successor?.sessionId || successor.sessionId.toLowerCase() === original.sessionId?.toLowerCase()
     || successor.subject !== original.subject || successor.organization !== original.organization
     || successor.generation !== original.generation) throw new Error('Invalid Explain successor');
   // Scoped history proves a conversation's family. Without an anchor, only
   // the server can verify the retained predecessor row against that family.
   const predecessor = conversationId ? undefined : original.sessionId;
-  if (predecessor && !sessionRowId.test(predecessor)) throw new Error('Invalid Explain predecessor');
+  if (predecessor === null) throw new Error('Invalid Explain predecessor');
   const snapshot = await history(admission, token, conversationId, predecessor);
   if (token !== admission.currentToken()) throw new Error('Explain credential changed during verification');
   return { snapshot, predecessor };
@@ -179,20 +181,23 @@ export async function appendExplain(admission: Admission, request: ExplainReques
   let body = request;
   let before: History | undefined;
   let predecessor: string | undefined;
-  let recoveredRetirement = false;
-  let provingReplacement = false;
+  let replacementUsed = false;
 
-  async function proveReplacement(replacement: string) {
-    provingReplacement = true;
-    let proof: Awaited<ReturnType<typeof replacementHistory>>;
+  async function proveReplacement(replacement: string, conversationId = body.conversation_id) {
+    if (replacementUsed) throw new Error('Explain credential replacement already used');
+    replacementUsed = true;
     try {
-      proof = await replacementHistory(admission, token, replacement, body.conversation_id);
+      return await replacementHistory(admission, token, replacement, conversationId);
     } catch (error) {
       // A successor can retire during proof as well. Update the active bearer
       // for the next explicit question and end this attempt.
       if (hasDetail(error, 409, 'SESSION_ROTATED')) await waitForRefresh(admission, replacement);
       throw error;
     }
+  }
+
+  async function adoptReplacement(replacement: string) {
+    const proof = await proveReplacement(replacement);
     before = proof.snapshot;
     predecessor = proof.predecessor;
     token = replacement;
@@ -210,44 +215,36 @@ export async function appendExplain(admission: Admission, request: ExplainReques
         anchorHistory();
       } catch (error) {
         if (hasDetail(error, 409, 'SESSION_ROTATED')) {
-          recoveredRetirement = true;
-          await waitForRefresh(admission, token);
-          await proveReplacement(admission.currentToken());
+          try { await waitForRefresh(admission, token); } catch { throw error; }
+          await adoptReplacement(admission.currentToken());
         // A legacy backend may refuse the implicit latest expired thread.
         } else if (body.conversation_id || !hasDetail(error, 404, 'NOT_FOUND')) throw error;
       }
     }
     const latest = admission.currentToken();
-    if (latest !== token) {
-      if (recoveredRetirement) return { kind: 'refused', clear: true };
-      await proveReplacement(latest);
-    }
+    if (latest !== token) await adoptReplacement(latest);
     anchorHistory();
   } catch (error) {
     admission.currentToken();
-    return recoveredRetirement || provingReplacement ? { kind: 'refused', clear: true } : refused(error);
+    return replacementUsed ? { kind: 'refused', clear: true } : refused(error);
   }
 
   async function confirmHistory(): Promise<Reply> {
     try {
       await waitForRefresh(admission);
       let current = admission.currentToken();
-      let after: History;
-      try {
-        if (current === token) {
-          after = await history(admission, current, body.conversation_id);
-          current = admission.currentToken();
-          if (current !== token) after = (await replacementHistory(admission, token, current, body.conversation_id)).snapshot;
-        } else {
-          after = (await replacementHistory(admission, token, current, body.conversation_id)).snapshot;
+      let after: History | undefined;
+      if (current === token) {
+        try {
+          after = await history(admission, token, body.conversation_id);
+        } catch (error) {
+          if (!hasDetail(error, 409, 'SESSION_ROTATED')) throw error;
+          await waitForRefresh(admission, token);
         }
-      } catch (error) {
-        if (!hasDetail(error, 409, 'SESSION_ROTATED')) throw error;
-        await waitForRefresh(admission, current);
         current = admission.currentToken();
-        after = (await replacementHistory(admission, token, current, body.conversation_id)).snapshot;
       }
-      if (admission.currentToken() === current) {
+      if (current !== token) after = (await proveReplacement(current)).snapshot;
+      if (after && admission.currentToken() === current) {
         const existing = new Set(before?.turns.map(turn => turn.id));
         const possible = after.turns.some(turn => turn.question === body.question && turn.locale === body.locale && !existing.has(turn.id));
         // History has neither a request identifier nor a target. A candidate
@@ -269,12 +266,9 @@ export async function appendExplain(admission: Admission, request: ExplainReques
     } catch (error) {
       admission.currentToken();
       if (hasDetail(error, 409, 'SESSION_ROTATED')) {
-        const mayContinue = !recoveredRetirement;
-        recoveredRetirement = true;
         try {
           await waitForRefresh(admission, token);
-          if (!mayContinue) return refused(error);
-          await proveReplacement(admission.currentToken());
+          await adoptReplacement(admission.currentToken());
           anchorHistory();
         } catch {
           admission.currentToken();
@@ -292,7 +286,7 @@ export async function appendExplain(admission: Admission, request: ExplainReques
     if (!validAnswer(data, body)) return confirmHistory();
     if (current !== token) {
       try {
-        await replacementHistory(admission, token, current, data.conversation_id);
+        await proveReplacement(current, data.conversation_id);
         if (current !== admission.currentToken()) return { kind: 'refused', clear: true };
       } catch {
         admission.currentToken();

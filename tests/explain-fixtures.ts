@@ -15,9 +15,9 @@ export const explainUser = {
   id: 'synthetic-user', status: 'active', role: 'seller', email_verified_at: '2026-11-01T00:00:00Z',
 } as User;
 
-export function bearer(id = ids.session, organization = 'synthetic-organization', subject = explainUser.id) {
+export function bearer(id: string | null = ids.session, organization = 'synthetic-organization', subject = explainUser.id) {
   return `fixture.${btoa(JSON.stringify({
-    type: 'access', sub: subject, organization_id: organization, auth_generation: 0, session_id: id,
+    type: 'access', sub: subject, organization_id: organization, auth_generation: 0, session_id: id ?? undefined,
   })).replace(/=+$/, '')}.fixture`;
 }
 

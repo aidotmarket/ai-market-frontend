@@ -181,15 +181,48 @@ it('maps only the authorized current action and returns mobile focus on Escape',
   fireEvent.click(entry);
   await within(panel()).findByText(/Your last saved step was Review/);
   expect(panel().getAttribute('aria-modal')).toBe('true');
-  expect(within(panel()).queryByRole('button', { name: 'Go to Publish' })).toBeNull();
+  expect(within(panel()).queryByRole('button', { name: 'Focus Publish this listing' })).toBeNull();
   await waitFor(() => expect(document.activeElement).toBe(input()));
   fireEvent.keyDown(input(), { key: 'Escape' });
   await waitFor(() => expect(document.activeElement).toBe(entry));
   expect(screen.queryByRole('dialog')).toBeNull();
   fireEvent.click(entry);
-  fireEvent.click(await within(panel()).findByRole('button', { name: 'Go to Save selected files' }));
+  fireEvent.click(await within(panel()).findByRole('button', { name: 'Focus Save selected files' }));
   await waitFor(() => expect(document.activeElement).toBe(screen.getByRole('button', { name: 'Save selection' })));
   expect(saveControl).not.toHaveBeenCalled();
+});
+
+it.each(['reopen', 'navigation', 'owner'] as const)('ignores queued Escape focus after %s', async change => {
+  const view = render(tree(workspace));
+  const entry = await screen.findByRole('button', { name: 'Where am I?' });
+  fireEvent.click(entry);
+  await waitFor(() => expect(document.activeElement).toBe(input()));
+
+  const frames: FrameRequestCallback[] = [];
+  vi.stubGlobal('requestAnimationFrame', (frame: FrameRequestCallback) => frames.push(frame));
+  const openerFocus = vi.spyOn(entry, 'focus');
+  const anotherOpener = screen.getByRole('button', { name: 'Open assistant' });
+  const anotherFocus = vi.spyOn(anotherOpener, 'focus');
+  fireEvent.keyDown(input(), { key: 'Escape' });
+  expect(frames).toHaveLength(1);
+  const restore = frames[0];
+
+  if (change === 'reopen') {
+    anotherOpener.focus();
+    anotherFocus.mockClear();
+    fireEvent.click(anotherOpener);
+    expect(panel()).toBeTruthy();
+  } else if (change === 'navigation') {
+    mock.query = 'view=storage';
+    window.history.pushState(null, '', '?view=storage');
+    view.rerender(tree(workspace));
+  } else {
+    act(() => { advanceAuthSessionOwner(false); });
+  }
+
+  act(() => restore(0));
+  expect(openerFocus).not.toHaveBeenCalled();
+  expect(anotherFocus).not.toHaveBeenCalled();
 });
 
 it('follows the real Save control through empty selection, folder resolution and enabled focus', async () => {
@@ -207,7 +240,7 @@ it('follows the real Save control through empty selection, folder resolution and
   expect(control.disabled).toBe(true);
   fireEvent.click(screen.getByRole('button', { name: 'Where am I?' }));
   await within(panel()).findByText(/Your last saved step was Review/);
-  const actionName = 'Go to Save selected files';
+  const actionName = 'Focus Save selected files';
   expect(within(panel()).queryByRole('button', { name: actionName })).toBeNull();
 
   const extraFile = { ...guidedObjects[0], key: 'weekly/extra.csv' };
@@ -286,7 +319,7 @@ it('focuses the mounted Workspace section button without changing sections', asy
   render(tree({ scope: 'storage', targets: { storage: questions.storage }, actions: ['open_files'] },
     <WorkspaceOverview connections={[guidedConnection]} view="storage" onViewChange={navigate} />));
   fireEvent.click(screen.getByRole('button', { name: explainCopy().question('storage') }));
-  fireEvent.click(await within(panel()).findByRole('button', { name: explainCopy().action('open_files') }));
+  fireEvent.click(await within(panel()).findByRole('button', { name: 'Focus Choose your files' }));
   const control = within(screen.getByRole('navigation', { name: 'Workspace sections' })).getByRole('button', { name: 'Choose your files' });
   await waitFor(() => expect(document.activeElement).toBe(control));
   expect(navigate).not.toHaveBeenCalled();

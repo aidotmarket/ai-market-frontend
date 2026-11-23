@@ -10,7 +10,9 @@ import { explainControl, useExplain } from './ExplainContext';
 
 const buttonClass = 'min-h-11 rounded-md border border-white/20 px-2 text-start text-sm text-white focus-visible:ring-2 focus-visible:ring-blue-300 disabled:opacity-50';
 
-export default function ExplainConversation({ locale, close }: { locale: AnonymousAllAILocale; close: () => void }) {
+type Close = (getFocusTarget?: () => HTMLElement | null) => void;
+
+export default function ExplainConversation({ locale, close }: { locale: AnonymousAllAILocale; close: Close }) {
   const explain = useExplain();
   const view = explain?.view;
   if (!view) return <p role="status" lang={locale} className="px-4 py-3 text-sm text-white">{explainCopy(locale).unavailable}</p>;
@@ -22,7 +24,7 @@ export default function ExplainConversation({ locale, close }: { locale: Anonymo
 type View = NonNullable<NonNullable<ReturnType<typeof useExplain>>['view']>;
 
 function Conversation({ view, launchId, consume, locale, close }: {
-  view: View; launchId?: number; consume: (id: number) => void; locale: AnonymousAllAILocale; close: () => void;
+  view: View; launchId?: number; consume: (id: number) => void; locale: AnonymousAllAILocale; close: Close;
 }) {
   const [value, setValue] = useState('');
   const [turns, setTurns] = useState<ExplainAnswer[]>([]);
@@ -192,10 +194,9 @@ function Conversation({ view, launchId, consume, locale, close }: {
         try { view.admit(); } catch { return; }
         const control = getPage().actions?.includes(action) && explainControl(action);
         if (!control) return;
-        close();
-        requestAnimationFrame(() => {
-          try { view.admit(); } catch { return; }
-          if (getPage().actions?.includes(action) && explainControl(action) === control) control.focus();
+        close(() => {
+          try { view.admit(); } catch { return null; }
+          return getPage().actions?.includes(action) && explainControl(action) === control ? control : null;
         });
       }}>{copy.action(action)}</button>}
     </div>

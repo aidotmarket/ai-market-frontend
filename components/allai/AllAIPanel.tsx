@@ -44,9 +44,9 @@ export default function AllAIPanel({ dockOnDesktop = false }: { dockOnDesktop?: 
   const bridge = useWizardBridge();
   const explain = useExplain();
   const leaveExplain = explain?.leave;
-  const close = useCallback(() => {
+  const close = useCallback((getFocusTarget?: () => HTMLElement | null) => {
     leaveExplain?.();
-    closeAssistant();
+    closeAssistant(getFocusTarget);
   }, [closeAssistant, leaveExplain]);
   useEffect(() => {
     if (!isOpen || supportSession || reportSession) leaveExplain?.();
@@ -267,7 +267,7 @@ export default function AllAIPanel({ dockOnDesktop = false }: { dockOnDesktop?: 
       {/* Close button */}
       <button
         type="button"
-        onClick={close}
+        onClick={() => close()}
         className="absolute top-3 right-3 z-10 p-1.5 rounded-full text-white/40 hover:text-white/80 hover:bg-white/10 transition-all"
         aria-label={resources.closeAssistant}
       >

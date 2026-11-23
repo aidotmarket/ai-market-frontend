@@ -113,7 +113,7 @@ test('mobile fills the viewport and focuses the existing save button without usi
   await expect(panel.getByText(/Your file and licence changes are unsaved/)).toBeVisible();
   expect(await panel.boundingBox()).toEqual({ x: 0, y: 0, width: 390, height: 700 });
   expect(await panel.evaluate(node => node.scrollWidth)).toBe(390);
-  await panel.getByRole('button', { name: 'Go to Save selected files' }).click();
+  await panel.getByRole('button', { name: 'Focus Save selected files' }).click();
   await expect(page.getByRole('button', { name: 'Save selected files' })).toBeFocused();
   await expect(page).toHaveTitle('Explain fixture');
 });
