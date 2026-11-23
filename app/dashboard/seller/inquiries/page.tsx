@@ -7,6 +7,7 @@ import InquiryListPager from '@/components/InquiryListPager';
 import { useInquiryList } from '@/hooks/useInquiryList';
 import { replyToConversation, getConversation } from '@/api/conversations';
 import { useConversationPoll } from '@/hooks/useConversationPoll';
+import { useMarkConversationRead } from '@/hooks/useMarkConversationRead';
 import ConversationThread from '@/components/ConversationThread';
 import { formatDate } from '@/lib/format';
 import type { ConversationListItem, ConversationDetail, ConversationMessage, ConversationStatus } from '@/types';
@@ -214,6 +215,8 @@ function SellerInquiryThread({ id, onReplied, isCurrent }: { id: string; onRepli
     void refresh();
     return () => { active.current = false; readVersion.current += 1; };
   }, [refresh]);
+
+  useMarkConversationRead(!loading && conversation ? id : null, isCurrent);
 
   useEffect(() => {
     if (accepted && messages.some((message) => message.id === accepted)) {

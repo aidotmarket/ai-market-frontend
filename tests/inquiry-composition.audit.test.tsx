@@ -7,7 +7,7 @@ import SellerPage from '@/app/dashboard/seller/inquiries/page';
 import InquiryWidget from '@/components/InquiryWidget';
 
 const api = vi.hoisted(() => ({
-  getConversation: vi.fn(), createInquiry: vi.fn(), replyToConversation: vi.fn(),
+  getConversation: vi.fn(), createInquiry: vi.fn(), markConversationRead: vi.fn(async () => {}), replyToConversation: vi.fn(),
   updateSince: vi.fn(), refetch: vi.fn(), toast: vi.fn(), isCurrent: () => true,
 }));
 vi.mock('@/api/conversations', () => api);

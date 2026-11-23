@@ -5,6 +5,7 @@ import { useEffect, useState, useCallback, useRef, use } from 'react';
 import Link from 'next/link';
 import { getConversation, replyToConversation } from '@/api/conversations';
 import { useConversationPoll } from '@/hooks/useConversationPoll';
+import { useMarkConversationRead } from '@/hooks/useMarkConversationRead';
 import { authSessionIdentity, useAuthStore } from '@/store/auth';
 import ConversationThread from '@/components/ConversationThread';
 import type { ConversationDetail, ConversationMessage } from '@/types';
@@ -96,6 +97,8 @@ function ConversationView({ id, isCurrent }: { id: string; isCurrent: () => bool
     void refresh();
     return () => { active.current = false; readVersion.current += 1; };
   }, [refresh]);
+
+  useMarkConversationRead(!loading && conversation ? id : null, isCurrent);
 
   useEffect(() => {
     if (accepted && messages.some((message) => message.id === accepted)) {

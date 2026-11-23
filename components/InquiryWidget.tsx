@@ -12,6 +12,7 @@ import {
   sendAnonymousMessage,
 } from '@/api/anonymousChat';
 import { useConversationPoll } from '@/hooks/useConversationPoll';
+import { useMarkConversationRead } from '@/hooks/useMarkConversationRead';
 import ConversationThread from '@/components/ConversationThread';
 import type { ConversationDetail, ConversationMessage } from '@/types';
 import { AxiosError } from 'axios';
@@ -189,6 +190,7 @@ function ListingInquiryWidget({ listingId, listingSlug, listingTitle }: Props) {
     handleNewMessages,
     current
   );
+  useMarkConversationRead(conversation?.id ?? null, current);
 
   const handleSubmit = async () => {
     if (!current() || creating.current || anonymousAbortRef.current || !question.trim()) return;

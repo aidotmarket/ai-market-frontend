@@ -1,6 +1,6 @@
 'use client';
 
-import axios, { type AxiosError, type AxiosInstance, type InternalAxiosRequestConfig } from 'axios';
+import axios, { type AxiosError, type AxiosInstance, type AxiosRequestConfig, type InternalAxiosRequestConfig } from 'axios';
 import { useAuthStore } from '@/store/auth';
 import { authSessionOwner, advanceAuthSessionOwner, assertAuthSessionOwner, isAuthSessionOwner } from '@/lib/auth-session-owner';
 import { sessionCsrf } from '@/lib/session-csrf';
@@ -63,7 +63,15 @@ export function reserveRecoveryRefresh(assertCurrent: () => void) {
   };
 }
 
-export type OwnedRequest = InternalAxiosRequestConfig & { _authOwner?: number; _authToken?: string | null; _retry?: boolean };
+export interface SessionRequestConfig extends AxiosRequestConfig {
+  skipAuthRetry?: boolean;
+}
+
+export type OwnedRequest = InternalAxiosRequestConfig & Pick<SessionRequestConfig, 'skipAuthRetry'> & {
+  _authOwner?: number;
+  _authToken?: string | null;
+  _retry?: boolean;
+};
 
 const DEFAULT_REFRESH_RETRY_SECONDS = 60;
 const MAX_REFRESH_RETRY_SECONDS = 60;
@@ -277,6 +285,7 @@ api.interceptors.response.use(
     if (
       error.response.status === 401 &&
       !hasRecoveryRefresh() &&
+      !originalRequest.skipAuthRetry &&
       !originalRequest.url?.includes('/recovery/') &&
       !originalRequest._retry &&
       !originalRequest.url?.includes('/auth/refresh') &&

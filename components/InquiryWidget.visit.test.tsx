@@ -5,7 +5,7 @@ import { useAuthStore } from '@/store/auth';
 import InquiryWidget from './InquiryWidget';
 import type { ConversationDetail, User } from '@/types';
 const anonymous = vi.hoisted(() => ({ createAnonymousSession: vi.fn(), readAnonymousMessageStream: vi.fn(), sendAnonymousMessage: vi.fn() }));
-const mock = vi.hoisted(() => ({ createInquiry: vi.fn(), getConversation: vi.fn(), replyToConversation: vi.fn(), pollConversation: vi.fn() }));
+const mock = vi.hoisted(() => ({ createInquiry: vi.fn(), getConversation: vi.fn(), markConversationRead: vi.fn(async () => {}), replyToConversation: vi.fn(), pollConversation: vi.fn() }));
 vi.mock('@/api/conversations', () => mock);
 vi.mock('@/api/auth', () => ({}));
 vi.mock('@/api/anonymousChat', () => anonymous);
@@ -39,6 +39,7 @@ it('does not show or poll a late create result from listing A in listing B', asy
     await act(async () => pending.resolve(detail()));
     expect(screen.queryByText('Private thread a')).toBeNull();
     expect(mock.pollConversation).not.toHaveBeenCalled();
+    expect(mock.markConversationRead).not.toHaveBeenCalled();
     expect(screen.getByRole('button', { name: 'Submit Question' })).toBeTruthy();
 });
 it('does not install a late old-account thread after another account arrives', async () => {
@@ -50,6 +51,7 @@ it('does not install a late old-account thread after another account arrives', a
     await act(async () => pending.resolve(detail()));
     expect(screen.queryByText('Private thread a')).toBeNull();
     expect(screen.queryByPlaceholderText('Follow up...')).toBeNull();
+    expect(mock.markConversationRead).not.toHaveBeenCalled();
 });
 it('preserves an ordinary same-account token refresh and does not repeat creation', async () => {
     mock.createInquiry.mockResolvedValue(detail());

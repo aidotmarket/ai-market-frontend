@@ -4,7 +4,7 @@ import { act, cleanup, fireEvent, render, renderHook, screen } from '@testing-li
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { AxiosError } from 'axios';
 import { useConversationPoll } from '@/hooks/useConversationPoll';
-import { pollConversation, replyToConversation } from '@/api/conversations';
+import { markConversationRead, pollConversation, replyToConversation } from '@/api/conversations';
 import DetailPage from '@/app/dashboard/inquiries/[id]/page';
 import SellerPage from '@/app/dashboard/seller/inquiries/page';
 import InquiryWidget from '@/components/InquiryWidget';
@@ -42,8 +42,11 @@ function deferred<T>() {
 }
 async function tick(ms: number) { await act(async () => { await vi.advanceTimersByTimeAsync(ms); }); }
 async function settle() { await act(async () => {}); }
+const readPosts = () => client.post.mock.calls.filter(([path]) => path.endsWith('/read'));
+const replyPosts = () => client.post.mock.calls.filter(([path]) => path.endsWith('/reply'));
 beforeEach(() => {
-  vi.useFakeTimers(); vi.clearAllMocks(); client.listError = '';
+  vi.useFakeTimers(); vi.resetAllMocks(); client.listError = '';
+  client.post.mockResolvedValue({ status: 204 });
   Object.defineProperty(document, 'hidden', { configurable: true, value: false });
   Element.prototype.scrollIntoView = vi.fn();
   vi.stubGlobal('fetch', () => { throw new Error('Network forbidden'); });
@@ -52,6 +55,12 @@ beforeEach(() => {
 afterEach(() => { cleanup(); vi.useRealTimers(); vi.unstubAllGlobals(); });
 
 describe('actual API and mounted poll transport', () => {
+  it('posts the encoded read route and accepts an empty 204 response', async () => {
+    expect(await markConversationRead('a/b')).toBeUndefined();
+    expect(readPosts()).toEqual([['/conversations/a%2Fb/read', undefined, { skipAuthRetry: true }]]);
+    expect(client.get).not.toHaveBeenCalled();
+  });
+
   it('keeps reply acknowledgement distinct and preserves the poll envelope and encoded routes', async () => {
     const ack = { success: true, message_id: 'm2', filtered: true, mediation_disclosure: 'Mediated' };
     client.post.mockResolvedValue({ data: ack }); client.get.mockResolvedValue(envelope([message()]));
@@ -107,12 +116,11 @@ describe('actual API and mounted poll transport', () => {
 async function mountPage(kind: 'detail' | 'seller' | 'widget', response?: Promise<{ data: ConversationDetail }>) {
   client.get.mockImplementation((url: string) => url.endsWith('/poll') ? Promise.resolve(envelope()) : response ?? Promise.resolve({ data: detail('a', [message()], kind === 'seller') }));
   if (kind === 'widget') {
-    client.post.mockResolvedValueOnce({ data: detail() });
+    client.post.mockReturnValueOnce(response ?? Promise.resolve({ data: detail() }));
     const view = render(<InquiryWidget listingId="listing-a" listingSlug="a" listingTitle="Listing a" />);
     fireEvent.change(screen.getByRole('textbox'), { target: { value: 'Initial server question' } });
     fireEvent.click(screen.getByRole('button', { name: 'Submit Question' }));
     await settle();
-    client.post.mockClear();
     return view;
   }
   if (kind === 'seller') {
@@ -126,6 +134,42 @@ async function mountPage(kind: 'detail' | 'seller' | 'widget', response?: Promis
 }
 
 describe.each(['detail', 'seller', 'widget'] as const)('%s mounted reply form', (kind) => {
+  it('marks the loaded thread once after it is shown in a visible tab', async () => {
+    const pending = deferred<{ data: ConversationDetail }>();
+    await mountPage(kind, pending.promise);
+    expect(readPosts()).toHaveLength(0);
+
+    Object.defineProperty(document, 'hidden', { configurable: true, value: true });
+    pending.resolve({ data: detail('a', [message()], kind === 'seller') });
+    await settle();
+    expect(screen.getByText('Initial server question')).toBeTruthy();
+    expect(readPosts()).toHaveLength(0);
+
+    Object.defineProperty(document, 'hidden', { configurable: true, value: false });
+    fireEvent(document, new Event('visibilitychange'));
+    await tick(1000);
+    fireEvent(document, new Event('visibilitychange'));
+    expect(readPosts().map(([path]) => path)).toEqual(['/conversations/a/read']);
+  });
+
+  it('keeps the thread and reply form usable after a failed read marker', async () => {
+    client.post.mockRejectedValue(new Error('Mark-read unavailable'));
+    await mountPage(kind);
+    expect(readPosts()).toHaveLength(1);
+    expect(screen.getByText('Initial server question')).toBeTruthy();
+    expect(screen.queryByRole('alert')).toBeNull();
+
+    client.post.mockResolvedValue({ data: { success: true, message_id: 'm2' } });
+    const server = message('m2', 'a', later, 'Server reply after read marker failed');
+    client.get.mockResolvedValue({ data: detail('a', [message(), server], kind === 'seller') });
+    fireEvent.change(screen.getByRole('textbox'), { target: { value: 'Reply draft' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Reply' }));
+    await settle();
+    expect(screen.getByText(server.content)).toBeTruthy();
+    expect(replyPosts()).toHaveLength(1);
+    expect(readPosts()).toHaveLength(1);
+  });
+
   it('starts polls after deferred detail, renders actual messages once, and reflects current status', async () => {
     if (kind === 'widget') {
       await mountPage(kind);
@@ -150,7 +194,7 @@ describe.each(['detail', 'seller', 'widget'] as const)('%s mounted reply form', 
     const pending = deferred<{ data: unknown }>(); client.post.mockReturnValue(pending.promise);
     const input = screen.getByRole('textbox'); fireEvent.change(input, { target: { value: 'Raw submitted draft' } });
     fireEvent.keyDown(input, { key: 'Enter' }); fireEvent.keyDown(input, { key: 'Enter' }); fireEvent.click(screen.getByRole('button', { name: 'Sending...' }));
-    expect(client.post).toHaveBeenCalledTimes(1);
+    expect(replyPosts()).toHaveLength(1);
     expect(client.post).toHaveBeenCalledWith('/conversations/a/reply', { content: 'Raw submitted draft', role: kind === 'seller' ? 'seller' : 'buyer' });
     const server = message('m2', 'a', later, 'Server rewritten reply');
     client.get.mockImplementation((url: string) => Promise.resolve(url.endsWith('/poll') ? envelope([server]) : { data: { ...detail('a', [message(), server]), status: 'awaiting_buyer' } }));
@@ -169,12 +213,12 @@ describe.each(['detail', 'seller', 'widget'] as const)('%s mounted reply form', 
     expect(screen.getByRole('alert').textContent).toContain('refresh');
     expect(screen.queryByText(/Failed to send/)).toBeNull();
     fireEvent.keyDown(screen.getByRole('textbox'), { key: 'Enter' });
-    expect(client.post).toHaveBeenCalledTimes(1);
+    expect(replyPosts()).toHaveLength(1);
     client.get.mockResolvedValue({ data: detail('a', [message(), message('m2', 'a', later, 'Recovered server reply')]) });
     fireEvent.click(screen.getByRole('button', { name: 'Refresh conversation' })); await settle();
     expect(screen.getByText('Recovered server reply')).toBeTruthy();
     expect(screen.queryByRole('status')).toBeNull(); expect(screen.queryByRole('alert')).toBeNull();
-    expect(client.post).toHaveBeenCalledTimes(1);
+    expect(replyPosts()).toHaveLength(1);
   });
   it.each(['Message held for review. Please revise and try again.', [{ loc: ['body', 'content'], msg: 'invalid' }]])('retains rejected draft and persistent safe error (%j)', async (detailValue) => {
     await mountPage(kind);
@@ -222,7 +266,7 @@ describe.each(['detail', 'seller', 'widget'] as const)('%s mounted reply form', 
     await tick(1000);
     expect(screen.getByText('Polled accepted reply')).toBeTruthy();
     expect(screen.queryByRole('status')).toBeNull(); expect(screen.queryByRole('alert')).toBeNull();
-    expect(client.post).toHaveBeenCalledTimes(1);
+    expect(replyPosts()).toHaveLength(1);
   });
   it('does not let a late refresh from the old thread alter the new thread', async () => {
     const view = await mountPage(kind);

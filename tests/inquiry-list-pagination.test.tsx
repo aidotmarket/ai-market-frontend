@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 import React from 'react';
-import { act, cleanup, fireEvent, render, renderHook, screen } from '@testing-library/react';
+import { act, cleanup, fireEvent, render, renderHook, screen, within } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import Buyer from '@/app/dashboard/inquiries/page';
 import Seller from '@/app/dashboard/seller/inquiries/page';
@@ -48,6 +48,39 @@ beforeEach(() => {
   vi.stubGlobal('XMLHttpRequest', class { constructor() { throw new Error('Network forbidden'); } });
 });
 afterEach(() => { cleanup(); vi.useRealTimers(); vi.unstubAllGlobals(); });
+
+it('clears the seller badge on the existing list refresh after showing the thread', async () => {
+  const item = items[0];
+  let unread = item.unread_by_seller;
+  client.get.mockImplementation(async (path: string) => {
+    if (path === '/conversations/mine') return { data: [{ ...item, unread_by_seller: unread }] };
+    if (path.endsWith('/poll')) return { data: { new_messages: [], inquiry_status: item.status, has_more: false } };
+    return { data: { ...item, unread_by_seller: unread, messages: [{
+      id: 'message', inquiry_id: item.id, role: 'buyer', content: 'Thread message', created_at: item.last_message_at,
+    }] } };
+  });
+  client.post.mockImplementation(async (path: string) => {
+    if (path === `/conversations/${item.id}/read`) unread = 0;
+    return { status: 204 };
+  });
+
+  render(<Seller />);
+  await settle();
+  const card = screen.getByRole('button', { name: /Synthetic inquiry 1/ });
+  expect(within(card).getByText('1')).toBeTruthy();
+  expect(client.post).not.toHaveBeenCalled();
+  fireEvent.click(card);
+  await settle();
+  expect(screen.getByText('Thread message')).toBeTruthy();
+  await tick();
+  expect(within(card).queryByText('1')).toBeNull();
+  expect(client.post).toHaveBeenCalledOnce();
+
+  fireEvent.click(card);
+  fireEvent.click(card);
+  await settle();
+  expect(client.post).toHaveBeenCalledTimes(2);
+});
 
 describe.each([['buyer', Buyer], ['seller', Seller]] as const)('%s mounted list', (role, Page) => {
   it('reaches synthetic record 21 and returns without detail, send or read marking', async () => {
@@ -151,7 +184,9 @@ it('collapses a seller thread across page navigation and never reopens it on ret
   client.get.mockResolvedValueOnce({ data: { ...items[0], messages: [] } });
   fireEvent.click(screen.getByText(items[0].listing_title).closest('button')!); await settle();
   expect(screen.getByRole('textbox')).toBeTruthy();
-  client.get.mockClear(); next(); await settle(); previous(); await settle();
+  expect(client.post).toHaveBeenCalledOnce();
+  client.get.mockClear(); client.post.mockClear();
+  next(); await settle(); previous(); await settle();
   expect(screen.queryByRole('textbox')).toBeNull(); onlyListReads();
 });
 

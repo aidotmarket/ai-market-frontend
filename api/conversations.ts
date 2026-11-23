@@ -1,4 +1,4 @@
-import { api } from './client';
+import { api, type SessionRequestConfig } from './client';
 import type {
   ConversationListItem,
   ConversationDetail,
@@ -41,6 +41,11 @@ export async function getConversation(
     `/conversations/${encodeURIComponent(id)}`
   );
   return res.data;
+}
+
+export async function markConversationRead(id: string): Promise<void> {
+  const config: SessionRequestConfig = { skipAuthRetry: true };
+  await api.post<void>(`/conversations/${encodeURIComponent(id)}/read`, undefined, config);
 }
 
 export async function replyToConversation(

@@ -52,6 +52,19 @@ afterEach(() => {
   vi.useRealTimers();
 });
 
+it('keeps an unauthorized conversation read marker from refreshing or replaying the session', async () => {
+  const refresh = vi.spyOn(axios, 'post').mockRejectedValue(makeResponseError(401));
+  const { api } = await import('./client');
+  const { markConversationRead } = await import('./conversations');
+  const adapter = vi.fn(makeUnauthorizedAdapter());
+  api.defaults.adapter = adapter;
+
+  await expect(markConversationRead('thread')).rejects.toMatchObject({ response: { status: 401 } });
+  expect(adapter).toHaveBeenCalledOnce();
+  expect(refresh).not.toHaveBeenCalled();
+  expect(setAuthState).not.toHaveBeenCalled();
+});
+
 describe('refreshAccessToken', () => {
   it('waits for Retry-After delta-seconds without retrying early', async () => {
     vi.useFakeTimers();
