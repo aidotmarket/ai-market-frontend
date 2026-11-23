@@ -48,7 +48,7 @@ vi.mock('next/link', () => ({
     href: string;
     className?: string;
   }) => (
-    <a href={href} className={className}>
+    <a href={href} className={className} data-next-link>
       {children}
     </a>
   ),
@@ -177,17 +177,29 @@ describe('DataRequestDetailClient authenticated fallback loading', () => {
     [0, '0 responses'],
     [1, '1 response'],
     [2, '2 responses'],
-  ])('displays the public detail response count when supplied (%s)', (response_count, expected) => {
+  ])('displays the public detail response indicator for a count of %s', (response_count, expected) => {
     mocks.auth.user = null;
     mocks.auth.isAuthenticated = false;
-    const request = makeOwnerRequest({ status: response_count ? 'responses_received' : 'open', response_count });
+    const request = makeOwnerRequest({ status: 'responses_received', response_count });
 
     render(<DataRequestDetailClient slug={request.slug} initialRequest={request} />);
 
     expect(screen.queryByText(/^\d*\s*responses?$/)?.textContent ?? null).toBe(expected);
-    expect(screen.queryByText('responses received')).toBeNull();
+    expect(screen.queryAllByText('responses received')).toHaveLength(response_count === undefined ? 1 : 0);
     expect(Boolean(screen.queryByText('Responses are visible to the requester and to the sellers who sent them.')))
       .toBe(Boolean(response_count));
+  });
+
+  it.each([
+    [undefined, '/requests'],
+    ['page=3&category=retail', '/requests?page=3&category=retail'],
+  ])('links directly back to the requests board with query %s', (boardQuery, destination) => {
+    const request = makeOwnerRequest();
+    render(<DataRequestDetailClient slug={request.slug} initialRequest={request} boardQuery={boardQuery} />);
+
+    const link = screen.getByRole('link', { name: /Back to requests/ });
+    expect(link.getAttribute('href')).toBe(destination);
+    expect(link.hasAttribute('data-next-link')).toBe(false);
   });
 
   it('shows the full generated title on the public detail page', () => {
@@ -878,8 +890,12 @@ describe('DataRequestDetailClient authenticated fallback loading', () => {
     expectNoWrites();
   });
 
-  it.each(['supplier', 'owner'] as const)('restores saved %s responses after explicit detail retry without writes', async (role) => {
-    const request = makeOwnerRequest({ status: 'responses_received', response_count: 1 });
+  it.each([
+    { role: 'supplier', response_count: undefined },
+    { role: 'owner', response_count: undefined },
+    { role: 'owner', response_count: 2 },
+  ])('restores saved $role responses after detail retry with aggregate $response_count', async ({ role, response_count }) => {
+    const request = makeOwnerRequest({ status: 'responses_received', response_count });
     if (role === 'supplier') mocks.auth.user = { ...owner, id: 'supplier-1', role: 'seller' };
     const responsesRead = deferred<typeof savedQuote[]>();
     mocks.getDataRequest.mockRejectedValueOnce(new Error('Offline')).mockResolvedValueOnce(request);
@@ -891,12 +907,15 @@ describe('DataRequestDetailClient authenticated fallback loading', () => {
     await act(async () => { responsesRead.resolve([savedQuote]); });
     if (role === 'supplier') {
       expect((await screen.findByRole('status')).textContent).toContain('Response ID: response-1 · Status: submitted');
+      expect(screen.getByText('responses received')).toBeTruthy();
+      expect(screen.queryByText(/^\d+ responses?$/)).toBeNull();
       fillQuote();
       expect(screen.getByRole('button', { name: 'Submit Response' })).toHaveProperty('disabled', true);
       fireEvent.submit(screen.getByRole('button', { name: 'Submit Response' }).closest('form')!);
     } else {
-      expect(await screen.findByRole('heading', { name: 'Responses' })).not.toBeNull();
-      expect(screen.getByText('1 response')).not.toBeNull();
+      expect(await screen.findByRole('heading', { name: '1 response' })).not.toBeNull();
+      expect(screen.getAllByText(/^\d+ responses?$/)).toHaveLength(1);
+      expect(screen.queryByText('responses received')).toBeNull();
       expect(screen.getByText(savedQuote.proposal)).not.toBeNull();
       expect(screen.getByText('submitted')).not.toBeNull();
     }

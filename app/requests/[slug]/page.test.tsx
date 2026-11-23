@@ -21,11 +21,13 @@ vi.mock('./DataRequestDetailClient', () => ({
   default: ({
     slug,
     initialRequest,
+    boardQuery,
   }: {
     slug: string;
     initialRequest: DataRequestDetail | null;
+    boardQuery: string;
   }) => (
-    <main data-slug={slug} data-has-initial-request={initialRequest !== null}>
+    <main data-slug={slug} data-has-initial-request={initialRequest !== null} data-board-query={boardQuery}>
       {initialRequest && <h1>{initialRequest.title}</h1>}
     </main>
   ),
@@ -109,6 +111,18 @@ describe('DataRequestDetailPage Demand JSON-LD', () => {
     expect(scripts).toHaveLength(1);
     expect(JSON.parse(scripts[0])).toEqual(request.jsonld);
     expect(html).toContain('Need Claims Data');
+  });
+
+  it('passes only the originating board filters to the detail client', async () => {
+    fetchDataRequest.mockResolvedValueOnce(makeRequest());
+    const { default: Page } = await importPage();
+
+    const html = renderToStaticMarkup(await Page({
+      params: Promise.resolve({ slug: 'need-claims-data' }),
+      searchParams: Promise.resolve({ page: '3', category: 'retail', response_id: 'response-1' }),
+    }));
+
+    expect(html).toContain('data-board-query="page=3&amp;category=retail"');
   });
 
   it('suppresses Demand JSON-LD when the request flag is false', async () => {

@@ -122,8 +122,9 @@ describe('Layout registration links', () => {
   });
 });
 
-it.each(['/', '/search', '/legal/terms'])('leaves desktop Buyer Requests navigation to the browser on %s', (pathname) => {
+it.each(['/', '/search', '/legal/terms', '/requests/retail-data'])('links the desktop header directly to /requests from %s', (pathname) => {
   navigation.pathname = pathname;
+  navigation.search = pathname.startsWith('/requests/') ? 'page=3&category=retail' : '';
   render(<Layout><div>Page content</div></Layout>);
 
   const header = within(screen.getByRole('banner'));

@@ -205,6 +205,7 @@ export async function fetchDataRequests(params?: {
   const qs = searchParams.toString();
   const res = await fetch(`${API_URL}/api/v1/data-requests${qs ? `?${qs}` : ''}`, {
     cache: 'no-store',
+    signal: AbortSignal.timeout(10_000),
   });
   if (!res.ok) return null;
   return res.json();

@@ -65,7 +65,7 @@ describe('public data request freshness', () => {
     expect(fetchMock).toHaveBeenCalledTimes(2);
     for (const [url, options] of fetchMock.mock.calls) {
       expect(url).toContain('/api/v1/data-requests?page=2&per_page=20&category=healthcare');
-      expect(options).toEqual({ cache: 'no-store' });
+      expect(options).toEqual({ cache: 'no-store', signal: expect.any(AbortSignal) });
     }
   });
 

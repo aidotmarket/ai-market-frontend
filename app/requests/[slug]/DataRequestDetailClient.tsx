@@ -33,6 +33,7 @@ const URGENCY_BADGE: Record<DataRequestUrgency, string> = {
 const STATUS_BADGE: Record<string, string> = {
   draft: 'bg-gray-100 text-gray-600',
   open: 'bg-green-100 text-green-800',
+  responses_received: 'bg-[#E8EAF6] text-[#303F9F]',
   fulfilled: 'bg-purple-100 text-purple-800',
   closed: 'bg-gray-100 text-gray-600',
   expired: 'bg-red-100 text-red-700',
@@ -98,12 +99,15 @@ function quoteErrorMessage(err: unknown): string {
 interface DataRequestDetailClientProps {
   slug: string;
   initialRequest: DataRequestDetail | null;
+  boardQuery?: string;
 }
 
 export default function DataRequestDetailClient({
   slug,
   initialRequest,
+  boardQuery,
 }: DataRequestDetailClientProps) {
+  const boardHref = boardQuery ? `/requests?${boardQuery}` : '/requests';
   const { user, isAuthenticated } = useAuthStore();
   const router = useRouter();
   const { toast } = useToast();
@@ -206,6 +210,8 @@ export default function DataRequestDetailClient({
   const responsePending = useRef(false);
 
   const isOwner = isAuthenticated && user && request && user.id === request.buyer_id;
+  const showOwnerResponseList = isOwner && responses.length > 0;
+  const showPublicResponseCount = hasResponseCount && !showOwnerResponseList;
   const privatePublication = Boolean(request && hasPrivatePublication(request));
   const gatedPublication = isOwner && privatePublication && buyerRequestAnonymizationEnabled();
   const preparation = gatedPublication && !previewInvalidated ? request?.publication_preparation : null;
@@ -545,12 +551,12 @@ export default function DataRequestDetailClient({
             Sign in to continue
           </Link>
         )}
-        <Link
-          href="/requests"
+        <a
+          href={boardHref}
           className="rounded-lg bg-[#3F51B5] px-6 py-2.5 text-sm font-medium text-white hover:bg-[#3545a0]"
         >
           Browse Requests
-        </Link>
+        </a>
       </div>
     );
   }
@@ -573,9 +579,9 @@ export default function DataRequestDetailClient({
   return (
     <div className="mx-auto max-w-3xl px-4 sm:px-6 lg:px-8 py-8">
       {/* Back link */}
-      <Link href="/requests" className="text-sm text-[#3F51B5] hover:underline mb-6 inline-block">
+      <a href={boardHref} className="text-sm text-[#3F51B5] hover:underline mb-6 inline-block">
         &larr; Back to requests
-      </Link>
+      </a>
 
       {/* Header */}
       <div className="mb-6">
@@ -586,7 +592,7 @@ export default function DataRequestDetailClient({
               (SAMPLE)
             </span>
           )}
-          {request.status !== 'responses_received' && (
+          {(request.status !== 'responses_received' || (!showPublicResponseCount && !showOwnerResponseList)) && (
             <span className={`inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-medium shrink-0 ${statusCss}`}>
               {request.status.replace('_', ' ')}
             </span>
@@ -600,7 +606,7 @@ export default function DataRequestDetailClient({
           {!priceRange && <span>Currency: {request.currency || 'USD'}</span>}
           <span>Posted {formatDate(request.created_at)}</span>
           {request.buyer_display_name && <span>by {request.buyer_display_name}</span>}
-          {hasResponseCount && <span>{responseCount} response{responseCount !== 1 ? 's' : ''}</span>}
+          {showPublicResponseCount && <span>{responseCount} response{responseCount !== 1 ? 's' : ''}</span>}
         </div>
         {!isAuthenticated && hasResponseCount && responseCount > 0 && (
           <p className="mt-2 text-sm text-gray-600">Responses are visible to the requester and to the sellers who sent them.</p>
@@ -843,9 +849,9 @@ export default function DataRequestDetailClient({
       <RequestConversation requestId={request.id} requestStatus={request.status} quoteRevision={responses.length} navigationRevision={conversationNavigation} />
 
       {/* Owner: Responses list */}
-      {isOwner && responses.length > 0 && (
+      {showOwnerResponseList && (
         <div className="mb-6">
-          <h2 className="text-lg font-semibold text-gray-900 mb-4">Responses</h2>
+          <h2 className="text-lg font-semibold text-gray-900 mb-4">{responses.length} response{responses.length !== 1 ? 's' : ''}</h2>
           <div className="space-y-4">
             {responses.map((resp) => (
               <div key={resp.id} className="rounded-xl border border-gray-200 p-4">
@@ -856,10 +862,10 @@ export default function DataRequestDetailClient({
                   </span>
                 </div>
                 <p className="text-sm text-gray-800 whitespace-pre-wrap mb-2">{resp.proposal}</p>
-                <a href={`?response_id=${encodeURIComponent(resp.id)}`} onClick={event => {
+                <a href={`?${boardQuery ? `${boardQuery}&` : ''}response_id=${encodeURIComponent(resp.id)}`} onClick={event => {
                   if (event.button !== 0 || event.metaKey || event.ctrlKey || event.shiftKey || event.altKey) return;
                   event.preventDefault();
-                  window.history.pushState(null, '', `?response_id=${encodeURIComponent(resp.id)}`);
+                  window.history.pushState(null, '', event.currentTarget.href);
                   setConversationNavigation(x => x + 1);
                 }} className="text-sm text-[#3F51B5] underline focus:ring-2 focus:ring-[#3F51B5]">Open private conversation for this response</a>
                 <div className="flex gap-4 text-xs text-gray-500">

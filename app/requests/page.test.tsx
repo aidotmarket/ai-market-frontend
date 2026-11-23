@@ -21,10 +21,25 @@ async function renderPage(params: { page?: string; category?: string } = {}) {
   return render(await BrowseRequestsPage({ searchParams: Promise.resolve(params) }));
 }
 
-beforeEach(() => fetchDataRequests.mockReset());
+beforeEach(() => {
+  fetchDataRequests.mockReset();
+});
 afterEach(cleanup);
 
 describe('public request browsing', () => {
+  it('includes the active page and category in board card links', async () => {
+    fetchDataRequests.mockResolvedValue({ items: [request('retail')] });
+    await renderPage({ page: '3', category: 'retail' });
+    expect(screen.getByRole('link', { name: /Request retail/ }).getAttribute('href'))
+      .toBe('/requests/request-retail?page=3&category=retail');
+  });
+
+  it('shows the unavailable state when the board read times out', async () => {
+    fetchDataRequests.mockRejectedValue(new DOMException('Timed out', 'TimeoutError'));
+    await renderPage();
+    expect(screen.getByText('Requests are unavailable')).toBeTruthy();
+  });
+
   it.each([
     ['**Title: Licensed retail data**', '**Title: Licensed retail data**. Buyer description.', 'Licensed retail data'],
     ['**Title: Licensed retail transaction data for regional demand forecasting...', '**Title: Licensed retail transaction data for regional demand forecasting and inventory planning**. Buyer description.', 'Licensed retail transaction data for regional demand forecasting...'],
