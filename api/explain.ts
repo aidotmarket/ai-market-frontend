@@ -2,9 +2,11 @@
 
 import axios from 'axios';
 import { currentSessionRefresh, refreshAccessToken } from '@/api/client';
+import { subscribeAuthSessionOwner } from '@/lib/auth-session-owner';
 import { sessionCsrf } from '@/lib/session-csrf';
 import type { AnonymousAllAILocale } from '@/lib/i18n/anonymous-allai';
 import type { ListingStep, ListingStepReason, ListingStepView } from '@/components/seller-workspace/listingSteps';
+import { useAuthStore } from '@/store/auth';
 
 export type ExplainQuestion = 'publish' | 'storage' | 'where_am_i' | 'listing_status' | 'order_status';
 export type OrderRole = 'buyer' | 'seller';
@@ -176,12 +178,47 @@ function knownListingStates(facts: ExplainAnswer['facts']) {
       && Object.keys(counts).every(code => listingStates.has(code))));
 }
 
-export async function appendExplain(admission: Admission, request: ExplainRequest): Promise<Reply> {
+export async function appendExplain(scope: Admission, request: ExplainRequest): Promise<Reply> {
+  const controller = new AbortController();
+  const signal = AbortSignal.any([scope.signal, controller.signal]);
+  const admission = { ...scope, signal, currentToken: () => {
+    signal.throwIfAborted();
+    return scope.currentToken();
+  } };
   let token = admission.currentToken();
   let body = request;
   let before: History | undefined;
   let predecessor: string | undefined;
   let replacementUsed = false;
+  let mayHaveAppended = false;
+
+  const replacementLimit = new Error('Explain credential replacement limit reached');
+  let replacements = 0;
+  // Count publications even while a refresh, request or proof is pending.
+  const unsubscribeAuth = useAuthStore.subscribe((state, previous) => {
+    if (state.token !== previous.token && ++replacements === 2) controller.abort(replacementLimit);
+  });
+  const unsubscribeOwner = subscribeAuthSessionOwner(() => controller.abort());
+  let onAbort!: () => void;
+  const cancellation = new Promise<never>((_, reject) => {
+    onAbort = () => reject(signal.reason);
+    signal.addEventListener('abort', onAbort, { once: true });
+  });
+
+  try {
+    const reply = await Promise.race([cancellation, run()]);
+    signal.throwIfAborted();
+    return reply;
+  } catch (error) {
+    if (error !== replacementLimit) throw error;
+    scope.signal.throwIfAborted();
+    scope.currentToken();
+    return mayHaveAppended ? { kind: 'uncertain', history: 'unverified' } : { kind: 'refused', clear: true };
+  } finally {
+    signal.removeEventListener('abort', onAbort);
+    unsubscribeOwner();
+    unsubscribeAuth();
+  }
 
   async function proveReplacement(replacement: string, conversationId = body.conversation_id) {
     if (replacementUsed) throw new Error('Explain credential replacement already used');
@@ -207,26 +244,29 @@ export async function appendExplain(admission: Admission, request: ExplainReques
     if (!body.conversation_id && before?.conversation_id) body = { ...body, conversation_id: before.conversation_id };
   }
 
-  try {
-    await waitForRefresh(admission);
-    if (admission.currentToken() === token) {
-      try {
-        before = await history(admission, token, body.conversation_id);
-        anchorHistory();
-      } catch (error) {
-        if (hasDetail(error, 409, 'SESSION_ROTATED')) {
-          try { await waitForRefresh(admission, token); } catch { throw error; }
-          await adoptReplacement(admission.currentToken());
-        // A legacy backend may refuse the implicit latest expired thread.
-        } else if (body.conversation_id || !hasDetail(error, 404, 'NOT_FOUND')) throw error;
+  async function run(): Promise<Reply> {
+    try {
+      await waitForRefresh(admission);
+      if (admission.currentToken() === token) {
+        try {
+          before = await history(admission, token, body.conversation_id);
+          anchorHistory();
+        } catch (error) {
+          if (hasDetail(error, 409, 'SESSION_ROTATED')) {
+            try { await waitForRefresh(admission, token); } catch { throw error; }
+            await adoptReplacement(admission.currentToken());
+          // A legacy backend may refuse the implicit latest expired thread.
+          } else if (body.conversation_id || !hasDetail(error, 404, 'NOT_FOUND')) throw error;
+        }
       }
+      const latest = admission.currentToken();
+      if (latest !== token) await adoptReplacement(latest);
+      anchorHistory();
+    } catch (error) {
+      admission.currentToken();
+      return replacementUsed ? { kind: 'refused', clear: true } : refused(error);
     }
-    const latest = admission.currentToken();
-    if (latest !== token) await adoptReplacement(latest);
-    anchorHistory();
-  } catch (error) {
-    admission.currentToken();
-    return replacementUsed ? { kind: 'refused', clear: true } : refused(error);
+    return send();
   }
 
   async function confirmHistory(): Promise<Reply> {
@@ -262,9 +302,13 @@ export async function appendExplain(admission: Admission, request: ExplainReques
     if (token !== admission.currentToken()) return { kind: 'refused', clear: true };
     const config = credentialConfig(admission, token, predecessor);
     try {
+      mayHaveAppended = true;
       ({ data } = await firstPartyExplain.post<typeof data>('', body, config));
     } catch (error) {
       admission.currentToken();
+      const status = axios.isAxiosError(error) ? error.response?.status : undefined;
+      if (!status || status >= 500) return confirmHistory();
+      mayHaveAppended = false;
       if (hasDetail(error, 409, 'SESSION_ROTATED')) {
         try {
           await waitForRefresh(admission, token);
@@ -276,12 +320,13 @@ export async function appendExplain(admission: Admission, request: ExplainReques
         }
         return send();
       }
-      const status = axios.isAxiosError(error) ? error.response?.status : undefined;
-      if (!status || status >= 500) return confirmHistory();
       return refused(error);
     }
     const current = admission.currentToken();
-    if (data?.outcome === 'select_context' || data?.outcome === 'suggestions') return { kind: data.outcome };
+    if (data?.outcome === 'select_context' || data?.outcome === 'suggestions') {
+      mayHaveAppended = false;
+      return { kind: data.outcome };
+    }
     if (data?.outcome !== 'answered') return confirmHistory();
     if (!validAnswer(data, body)) return confirmHistory();
     if (current !== token) {
@@ -296,6 +341,4 @@ export async function appendExplain(admission: Admission, request: ExplainReques
     if (body.question === 'listing_status' && !knownListingStates(data.facts)) return { kind: 'refused', clear: false };
     return { kind: 'answer', answer: data };
   }
-
-  return send();
 }

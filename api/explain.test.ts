@@ -233,6 +233,80 @@ it('joins a pending refresh before history and proves the bearer change before a
   expect(calls().map(call => [call.method, call.predecessor])).toEqual([['get', ids.session], ['post', ids.session]]);
 });
 
+it.each(['get', 'post'])('cancels a pending %s after two ordinary renewals and accepts a new explicit question', async phase => {
+  const scope = admit();
+  vi.mocked(axios.post).mockResolvedValueOnce({ data: { access_token: second } })
+    .mockResolvedValueOnce({ data: { access_token: third } });
+  let pending!: InternalAxiosRequestConfig;
+  let finish!: () => void;
+  ports.explain.mockImplementation(async config => {
+    if (config.headers.get('Authorization') === `Bearer ${first}` && config.method === phase) {
+      pending = config;
+      const data = config.method === 'get' ? initialHistory : answerFixture(request);
+      return new Promise(resolve => { finish = () => resolve(response(config, data)); });
+    }
+    if (config.method === 'post') return response(config, answerFixture(request));
+    return response(config, config.headers.get('Authorization') === `Bearer ${first}` ? initialHistory : emptyHistory);
+  });
+
+  const operation = appendExplain(scope, request);
+  await vi.waitFor(() => expect(finish).toBeTypeOf('function'));
+  await refreshAccessToken(first);
+  useAuthStore.setState({ token: second, isLoading: true });
+  expect(pending.signal?.aborted).toBe(false);
+  await refreshAccessToken(second);
+  expect(pending.signal?.aborted).toBe(true);
+  expect(scope.signal.aborted).toBe(false);
+  await expect(operation).resolves.toEqual(phase === 'get'
+    ? { kind: 'refused', clear: true } : { kind: 'uncertain', history: 'unverified' });
+  expect(useAuthStore.getState().token).toBe(third);
+  expect(calls().map(call => call.method)).toEqual(phase === 'get' ? ['get'] : ['get', 'post']);
+
+  await expect(appendExplain(admit(), request)).resolves.toMatchObject({ kind: 'answer' });
+  finish();
+  await new Promise(resolve => setTimeout(resolve, 0));
+  expect(calls().slice(phase === 'get' ? 1 : 2)).toEqual([
+    { method: 'get', bearer: `Bearer ${third}`, csrf: sessionCsrf(third) },
+    { method: 'post', bearer: `Bearer ${third}`, csrf: sessionCsrf(third), body: request },
+  ]);
+  expect(axios.post).toHaveBeenCalledTimes(2);
+});
+
+it.each([
+  ['answer', 'answer'], ['refusal', 'refused'], ['lost response', 'uncertain'], ['owner change', null],
+])('disposes the question auth observer on %s', async (outcome, kind) => {
+  const subscribe = useAuthStore.subscribe;
+  const dispose = vi.fn();
+  vi.spyOn(useAuthStore, 'subscribe').mockImplementation(listener => {
+    const unsubscribe = subscribe(listener);
+    return () => { unsubscribe(); dispose(); };
+  });
+  let finish!: () => void;
+  ports.explain.mockImplementation(async config => {
+    if (config.method === 'get') return response(config, initialHistory);
+    if (outcome === 'refusal') reject(config, 403, { detail: 'SYNTHETIC_GENERAL_FAILURE' });
+    if (outcome === 'lost response') throw new AxiosError('lost response', 'ERR_NETWORK', config);
+    if (outcome === 'owner change') {
+      return new Promise(resolve => { finish = () => resolve(response(config, answerFixture(request))); });
+    }
+    return response(config, answerFixture(request));
+  });
+
+  const operation = appendExplain(admit(), request);
+  expect(dispose).not.toHaveBeenCalled();
+  if (kind === null) {
+    await vi.waitFor(() => expect(finish).toBeTypeOf('function'));
+    const rejected = expect(operation).rejects.toThrow();
+    advanceAuthSessionOwner(false);
+    await rejected;
+    expect(dispose).toHaveBeenCalledOnce();
+    finish();
+  } else {
+    await expect(operation).resolves.toMatchObject({ kind });
+  }
+  expect(dispose).toHaveBeenCalledOnce();
+});
+
 it.each(['submit', 'confirmation'] as const)('ends the question after a pending refresh followed by retirement during %s', async phase => {
   let finish!: (value: unknown) => void;
   vi.mocked(axios.post).mockReturnValueOnce(new Promise(resolve => { finish = resolve; }) as never)
