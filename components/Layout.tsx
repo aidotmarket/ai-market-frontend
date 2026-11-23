@@ -8,6 +8,7 @@ import { useAuthStore } from '@/store/auth';
 import NotificationCenter from '@/components/NotificationCenter';
 import { TermsSignUpLink } from '@/components/TermsSignUpLink';
 import NewsletterForm from '@/components/NewsletterForm';
+import { MARKETPLACE_LISTING_COVENANT_PATH, STANDARD_DATA_LICENCE_PATH } from '@/lib/publicLegalDocuments';
 
 const footerLinkSections = [
   {
@@ -48,6 +49,8 @@ const footerLinkSections = [
     title: 'Legal',
     links: [
       { label: 'Terms', href: '/legal/terms' },
+      { label: 'Standard Data Licence', href: STANDARD_DATA_LICENCE_PATH },
+      { label: 'Marketplace Listing Covenant', href: MARKETPLACE_LISTING_COVENANT_PATH },
       { label: 'Privacy Notice', href: '/legal/privacy' },
       { label: 'Cookie Policy', href: '/legal/cookies' },
     ],

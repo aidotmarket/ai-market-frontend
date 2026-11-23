@@ -2,6 +2,7 @@ import type { Metadata } from 'next';
 import { createHash } from 'node:crypto';
 import ReactMarkdown from 'react-markdown';
 import rehypeSanitize from 'rehype-sanitize';
+import { MARKETPLACE_LISTING_COVENANT_PATH, STANDARD_DATA_LICENCE_PATH } from '@/lib/publicLegalDocuments';
 import StaticTerms from './StaticTerms';
 
 export const metadata: Metadata = {
@@ -32,9 +33,19 @@ export default async function TermsAndConditionsPage() {
     <article className="prose max-w-none text-gray-700">
       <ReactMarkdown rehypePlugins={[rehypeSanitize]} components={{
         // Presentation only: keep the verified markdown and its acceptance hash intact.
-        p: ({ children }) => <p>{children === 'Listings without a chosen licence are offered under the ai.market Standard Data Licence with AI training permitted, and the seller accepts the ai.market Marketplace Listing Covenant for them.'
-          ? <>Listings without a chosen licence are offered under the ai.market <a href="/licenses/standard/1.1/ai-training">Standard Data Licence</a> with AI training permitted, and the seller accepts the ai.market <a href="/licenses/marketplace-listing/1.1">Marketplace Listing Covenant</a> for them.</>
-          : children}</p>,
+        p: ({ children }) => {
+          if (typeof children === 'string' && children.startsWith('5.2 Card processing costs.')) {
+            return <>
+              <p>{children}</p>
+              <p><a href="https://stripe.com/pricing">Stripe pricing</a></p>
+              <p>Example: on a $1,000 sale, ai.market&apos;s 5% commission is $50 and the card fee is about 2.9% + 30¢ (about $29), so the seller receives about $921. This is an example; the actual card fee varies.</p>
+            </>;
+          }
+          if (children === 'Listings without a chosen licence are offered under the ai.market Standard Data Licence with AI training permitted, and the seller accepts the ai.market Marketplace Listing Covenant for them.') {
+            return <p>Listings without a chosen licence are offered under the ai.market <a href={STANDARD_DATA_LICENCE_PATH}>Standard Data Licence</a> with AI training permitted, and the seller accepts the ai.market <a href={MARKETPLACE_LISTING_COVENANT_PATH}>Marketplace Listing Covenant</a> for them.</p>;
+          }
+          return <p>{children}</p>;
+        },
         h2: ({ children }) => children === '5. Commission, transaction costs, payment, and tax'
           ? <h2 id="fees" className="scroll-mt-24">{children}</h2>
           : <h2>{children}</h2>,

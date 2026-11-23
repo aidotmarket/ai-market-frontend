@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 
-import { fireEvent, render, screen } from '@testing-library/react';
+import { fireEvent, render, screen, within } from '@testing-library/react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import type { AnchorHTMLAttributes, ReactNode } from 'react';
 import { Layout } from './Layout';
@@ -63,6 +63,13 @@ describe('Layout registration links', () => {
     for (const link of screen.getAllByRole('link', { name: 'Privacy Notice' })) {
       expect(link.getAttribute('href')).toBe('/legal/privacy');
     }
+  });
+
+  it('links both current licence documents from the legal footer menu', () => {
+    render(<Layout><div>Page content</div></Layout>);
+    const legal = within(screen.getByRole('heading', { name: 'Legal' }).parentElement!);
+    expect(legal.getByRole('link', { name: 'Standard Data Licence' }).getAttribute('href')).toBe('/licenses/standard/1.1/ai-training');
+    expect(legal.getByRole('link', { name: 'Marketplace Listing Covenant' }).getAttribute('href')).toBe('/licenses/marketplace-listing/1.1');
   });
 
   it('restores a validated listing redirect from both desktop and mobile terms Sign up actions', () => {

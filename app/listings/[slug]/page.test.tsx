@@ -385,6 +385,7 @@ describe('seller presentation on the real listing route', () => {
     const page = within(document.body);
     const heading = page.getByRole('heading', { name: 'License', level: 3 });
     expect(within(heading.parentElement!).getByText('CC-BY-4.0')).toBeTruthy();
+    expect(page.queryByText('Licensor: verified seller via ai.market')).toBeNull();
     expect(page.queryByRole('heading', { name: 'Trust Metrics' })).toBeNull();
   });
 
@@ -1067,6 +1068,8 @@ it.each([false,true])('shows one licence disclosure when seller terms are pendin
  const license={code:'standard' as const,version:'1.0',params:{ai_training:true},summary:['Standard summary'],full_text_url:'/licenses/standard/1.0/ai-training',download_url:'/licenses/standard/1.0/ai-training?download=1',sha256:'a'.repeat(64),covenant_sha256:'b'.repeat(64),rider_sha256:null};
  const html=await renderPage(makeListing({license,license_status:pending?'pending_seller_terms':'bound'}));
  expect(html.match(/aria-label="Licence terms"/g)).toHaveLength(1);
+ expect(html).toContain('Licensor: verified seller via ai.market');
+ expect(html).toContain('The seller&#x27;s legal name appears only in the signed licence after purchase.');
 });
 
 it('uses the same UTC Published date in the header and version card near midnight',async()=>{
@@ -1211,6 +1214,7 @@ it('emits actual backend current JSON-LD alongside unchanged original summary ev
  expect(glance.textContent).toContain(CORRECTION_NOTICE_BUYER);
  expect(glance.textContent).not.toContain('v1.0');
  expect(glance.textContent).not.toContain('provided by the seller');
+ expect(within(container).getByText('Licensor: verified seller via ai.market')).toBeTruthy();
 });
 
 describe('C4 Documentation page integration', () => {

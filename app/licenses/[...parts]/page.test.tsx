@@ -63,14 +63,25 @@ it('escapes markup in the public amber notice and never exposes custom text',asy
 });
 
 it.each([
- ['standard','ai-training'],['standard','no-ai-training'],['marketplace-listing',null],
-])('serves the 1.1 %s %s canonical page',async(code,variant)=>{
+ ['standard','ai-training','881266a455d100e6b263ec121523001e5e53f6e3bf3bd97047e29ae39f8959fb'],
+ ['standard','no-ai-training','0bec503dac137e80fa405f47e9ecded8a424ca73f794f8eef54d01ff10d25317'],
+ ['marketplace-listing',null,'58eff1def7acb59db75920fe0da89a3f4f87bb12bd6765ec8eae231bbea118b5'],
+])('serves the 1.1 %s %s canonical page',async(code,variant,sha256)=>{
  process.env.API_URL='https://api.ai.market';
  const parts=[code,'1.1',...(variant?[variant]:[])];
- globalThis.fetch=vi.fn().mockResolvedValue({ok:true,json:async()=>({code,version:'1.1',variant,summary:[],full_text:'New full text',sha256:'a'.repeat(64)})});
+ const fullText='Full text from the API\n\nSecond paragraph\n';
+ const fetchMock=vi.fn().mockResolvedValue({ok:true,json:async()=>({code,version:'1.1',variant,summary:[],full_text:fullText,sha256})});
+ globalThis.fetch=fetchMock;
  const props={params:Promise.resolve({parts})};
  const html=renderToStaticMarkup(await LicencePage(props));
  expect(html).toContain('Version 1.1');
+ expect(html).toContain(`<code>${sha256}</code>`);
+ expect(html).toContain(`>${fullText}</pre>`);
+ if(code==='standard') {
+  expect(html).toContain('Licensor: verified seller via ai.market');
+  expect(html).toContain('The seller&#x27;s legal name appears only in the signed licence after purchase.');
+ }
+ expect(fetchMock).toHaveBeenCalledWith(`https://api.ai.market/api/v1/licenses/${parts.join('/')}?format=json`,expect.anything());
  expect(html).toContain(`/api/v1/licenses/${parts.join('/')}?download=1`);
  expect((await generateMetadata(props)).alternates?.canonical).toBe(`https://ai.market/licenses/${parts.join('/')}`);
 });

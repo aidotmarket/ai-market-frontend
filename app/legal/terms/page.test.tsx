@@ -70,11 +70,12 @@ it('refuses a mismatched 1.1 document and does not treat other failures as flag-
 
 const backendDocument12 = readFileSync('app/legal/terms/terms_v1_2.test.md', 'utf8')
   .replace('{{TERMS_1_2_EFFECTIVE_AT}}', effectiveAt);
+const feeExample = "Example: on a $1,000 sale, ai.market's 5% commission is $50 and the card fee is about 2.9% + 30¢ (about $29), so the seller receives about $921. This is an example; the actual card fee varies.";
 
 it.each([
   ['1.1', backendDocument, 'app/legal/terms/terms_v1_1.test.md', '1f2c9c8c9f22bc510623d5c91c86c01e5f48ed2afbd8d96701e1417d4d1b69eb'],
   ['1.2', backendDocument12, 'app/legal/terms/terms_v1_2.test.md', '44e09f69faeee3611f47f72b16c97ded8414d2fec1dea52f13eac23a00135cdd'],
-])('links the licence names in Terms %s without changing the accepted document or rendered text', async (version, markdown, fixture, fixtureHash) => {
+])('adds the approved links and fee example to Terms %s while preserving the original wording', async (version, markdown, fixture, fixtureHash) => {
   // Pin the original document bytes independently of the rendering change.
   expect(hash(readFileSync(fixture, 'utf8'))).toBe(fixtureHash);
   const config = { terms_version: version, terms_hash_sha256: hash(markdown), effective_at: effectiveAt, text_url: '/api/v1/legal/terms/document' };
@@ -87,13 +88,30 @@ it.each([
   const html = renderToStaticMarkup(await TermsAndConditionsPage());
   const container = document.createElement('div');
   container.innerHTML = html;
-  const links = [...container.querySelectorAll('a')];
-  expect(links.map(link => [link.textContent, link.getAttribute('href')])).toEqual([
+  const licenceTerms = [...container.querySelectorAll('p')].find(p => p.textContent?.startsWith('7.2 '));
+  const licenceLinks = [...licenceTerms!.nextElementSibling!.querySelectorAll('a')];
+  expect(licenceLinks.map(link => [link.textContent, link.getAttribute('href')])).toEqual([
     ['Standard Data Licence', '/licenses/standard/1.1/ai-training'],
     ['Marketplace Listing Covenant', '/licenses/marketplace-listing/1.1'],
   ]);
+  const stripeLink = container.querySelector('a[href="https://stripe.com/pricing"]');
+  if (version === '1.2') {
+    const fees = [...container.querySelectorAll('p')].find(p => p.textContent?.startsWith('5.2 '));
+    const pricing = fees!.nextElementSibling!;
+    const example = pricing.nextElementSibling!;
+    expect(pricing.textContent).toBe('Stripe pricing');
+    expect(pricing.querySelector('a')).toBe(stripeLink);
+    expect(stripeLink).not.toBeNull();
+    expect(example.textContent).toBe(feeExample);
+    expect(example.nextElementSibling?.textContent).toMatch(/^5\.3 /);
+    pricing.remove();
+    example.remove();
+  } else {
+    expect(stripeLink).toBeNull();
+    expect(container.textContent).not.toContain(feeExample);
+  }
   const originalHtml = renderToStaticMarkup(<ReactMarkdown rehypePlugins={[rehypeSanitize]}>{markdown}</ReactMarkdown>);
-  expect(normalizedLegalText(html)).toBe(normalizedLegalText(originalHtml));
+  expect(normalizedLegalText(container.innerHTML)).toBe(normalizedLegalText(originalHtml));
   expect(config).toEqual(originalConfig);
   expect(hash(markdown)).toBe(originalConfig.terms_hash_sha256);
   expect(normalizedLegalText(html)).toContain(`Version ${originalConfig.terms_version}`);
