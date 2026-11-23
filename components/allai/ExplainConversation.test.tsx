@@ -169,6 +169,71 @@ it.each(['allowed', 'denied', 'incomplete', 'expired proof', 'renewed again', 'a
   },
 );
 
+it.each([
+  ['possibleMatch', 'same credential'],
+  ['noMatch', 'same credential'],
+  ['possibleMatch', 'renewed before application'],
+  ['noMatch', 'renewed before application'],
+  ['possibleMatch', 'successor confirmed'],
+  ['noMatch', 'successor confirmed'],
+] as const)('applies a %s history notice with the confirming credential (%s)', async (notice, scenario) => {
+  const { appendExplain } = await vi.importActual<typeof import('@/api/explain')>('@/api/explain');
+  const request: ExplainRequest = { intent: 'explain', question: 'where_am_i', locale: 'en', target: questions.where_am_i };
+  const prior = answerFixture(request);
+  const candidate = { ...answerFixture(request).turn, answer: 'Synthetic history candidate' };
+  const history = { conversation_id: prior.conversation_id, expires_at: prior.expires_at, before: null };
+  const first = bearer();
+  const successor = bearer(ids.successor);
+  const renewed = scenario === 'renewed before application';
+  const confirmationBearer = scenario === 'successor confirmed' ? successor : first;
+  const ready = deferred();
+  const consumer = deferred();
+  const copy = explainCopy();
+  let writes = 0;
+  mock.handoff.mockImplementation(appendExplain);
+  mock.transport.mockImplementation(async config => {
+    const response = { config, status: 200, statusText: 'Synthetic response', headers: {} };
+    if (config.method === 'post') {
+      if (++writes === 1) return { ...response, data: prior };
+      if (scenario === 'successor confirmed') useAuthStore.setState({ token: successor });
+      throw new AxiosError('Synthetic unavailable response', undefined, config, undefined,
+        { ...response, status: 503, data: { detail: 'UNAVAILABLE' } });
+    }
+    if (!config.params) return { ...response, data: { conversation_id: null, expires_at: null, turns: [], before: null } };
+    return { ...response, data: { ...history, turns: writes === 2 && notice === 'possibleMatch' ? [candidate] : [] } };
+  });
+
+  render(tree(workspace));
+  fireEvent.click(await screen.findByRole('button', { name: copy.question(request.question) }));
+  await within(panel()).findByText(prior.turn.answer);
+  mock.handoff.mockImplementationOnce(async (...args: Parameters<typeof appendExplain>) => {
+    const apply = await appendExplain(...args);
+    ready.resolve();
+    await consumer.promise;
+    return apply;
+  });
+  await act(async () => {
+    fireEvent.change(input(), { target: { value: copy.question(request.question) } });
+    fireEvent.keyDown(input(), { key: 'Enter' });
+    await ready.promise;
+  });
+  expect(within(panel()).queryByText(copy[notice])).toBeNull();
+  await act(async () => {
+    if (renewed) useAuthStore.setState({ token: first.replace(/\.fixture$/, '.renewed') });
+    consumer.resolve();
+  });
+
+  const calls = mock.transport.mock.calls.map(([config]) => config);
+  expect(calls.map(({ method }) => method)).toEqual(['get', 'post', 'get', 'post', 'get']);
+  expect(calls[4].params).toEqual({ conversation_id: prior.conversation_id });
+  expect(calls[4].headers.get('Authorization') === `Bearer ${confirmationBearer}`).toBe(true);
+  expect(within(panel()).getByText(copy[renewed ? 'uncertain' : notice])).toBeTruthy();
+  expect(within(panel()).queryByText(copy[renewed ? notice : 'uncertain'])).toBeNull();
+  expect(within(panel()).queryByText(prior.turn.answer) !== null).toBe(!renewed);
+  expect(within(panel()).queryByText(candidate.answer)).toBeNull();
+  expect(fetch).not.toHaveBeenCalled();
+});
+
 it.each(explainQuestions)('dispatches only the closed selector for %s and renders approved output', async question => {
   const target = questions[question];
   render(tree({ scope: question, targets: { [question]: target } }));

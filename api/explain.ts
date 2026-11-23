@@ -191,6 +191,7 @@ export async function appendExplain(scope: Admission, request: ExplainRequest): 
   let body = request;
   let before: History | undefined;
   let predecessor: string | undefined;
+  let confirmingToken: string | undefined;
   let replacementUsed = false;
   let mayHaveAppended = false;
 
@@ -241,7 +242,7 @@ export async function appendExplain(scope: Admission, request: ExplainRequest): 
     applied = true;
     try {
       let result = reply;
-      let provedToken = token;
+      let provedToken = reply.kind === 'answer' ? token : confirmingToken;
       if (!signal.aborted && reply.kind === 'answer') {
         const { answer } = reply;
         const current = admission.currentToken();
@@ -269,8 +270,10 @@ export async function appendExplain(scope: Admission, request: ExplainRequest): 
       const latest = scope.currentToken();
       if (signal.aborted && signal.reason !== replacementLimit) signal.throwIfAborted();
       if (signal.aborted) result = limited();
+      if ((result.kind === 'answer' || (result.kind === 'uncertain' && result.history !== 'unverified'))
+        && latest !== provedToken) result = unknown;
       if (result.kind === 'answer') {
-        if (latest !== provedToken || Date.parse(result.answer.expires_at) <= Date.now()) result = unknown;
+        if (Date.parse(result.answer.expires_at) <= Date.now()) result = unknown;
         else if (body.question === 'listing_status' && !knownListingStates(result.answer.facts)) {
           result = { kind: 'refused', clear: false };
         }
@@ -350,12 +353,13 @@ export async function appendExplain(scope: Admission, request: ExplainRequest): 
         const possible = after.turns.some(turn => turn.question === body.question && turn.locale === body.locale && !existing.has(turn.id));
         // History has neither a request identifier nor a target. A candidate
         // may belong to another page or tab and cannot be displayed as this turn.
+        confirmingToken = current;
         return { kind: 'uncertain', history: possible ? 'possibleMatch' : 'noMatch' };
       }
     } catch {
       admission.currentToken();
     }
-    return { kind: 'uncertain', history: 'unverified' };
+    return unknown;
   }
 
   async function send(): Promise<Reply> {
