@@ -1,28 +1,30 @@
 import { NextRequest } from 'next/server';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
-const fake = vi.hoisted(() => ({
+const fake = {
   config: { storage: { kind: 'github', repo: { owner: 'fixture', name: 'fixture' } } },
   factory: vi.fn(),
   dependencyLoaded: vi.fn(),
   configLoaded: vi.fn(),
-}));
+};
 
-vi.mock('@keystatic/next/route-handler', () => {
-  fake.dependencyLoaded();
-  return { makeRouteHandler: fake.factory };
-});
-vi.mock('../../../../keystatic.config', () => {
-  fake.configLoaded();
-  return { default: fake.config };
-});
-
-beforeEach(() => {
-  vi.resetModules();
+function mockKeystatic() {
   vi.resetAllMocks();
   fake.config.storage.kind = 'github';
-});
+  vi.doMock('@keystatic/next/route-handler', () => {
+    fake.dependencyLoaded();
+    return { makeRouteHandler: fake.factory };
+  });
+  vi.doMock('../../../../keystatic.config', () => {
+    fake.configLoaded();
+    return { default: fake.config };
+  });
+}
+
+beforeEach(() => vi.resetModules());
 afterEach(() => {
+  vi.doUnmock('@keystatic/next/route-handler');
+  vi.doUnmock('../../../../keystatic.config');
   vi.unstubAllGlobals();
   vi.unstubAllEnvs();
 });
@@ -35,6 +37,7 @@ function deferred<T>() {
 }
 
 describe('lazy Keystatic route (offline fakes only)', () => {
+  beforeEach(mockKeystatic);
   beforeEach(() => vi.stubEnv('NODE_ENV', 'test'));
 
   it('imports without loading dependencies, invoking the factory, or reading private settings', async () => {
@@ -164,35 +167,13 @@ describe('lazy Keystatic route (offline fakes only)', () => {
 describe('Keystatic public request origin', () => {
   const internalUrl = 'https://127.0.0.1:8080/api/keystatic/github/login?from=%2Fkeystatic';
 
+  beforeEach(mockKeystatic);
   beforeEach(() => {
     vi.stubEnv('NODE_ENV', 'production');
     vi.stubEnv('NEXT_PUBLIC_SITE_URL', undefined);
   });
 
-  it('passes the public origin and original path and query to the GET handler', async () => {
-    const GET = vi.fn((request: Request) => new Response(request.url));
-    fake.factory.mockReturnValue({ GET });
-    const route = await import('./route');
-
-    const response = await route.GET(new Request(internalUrl));
-
-    expect(await response.text()).toBe('https://ai.market/api/keystatic/github/login?from=%2Fkeystatic');
-  });
-
-  it('uses the configured site origin even with a spoofed forwarded host', async () => {
-    vi.stubEnv('NEXT_PUBLIC_SITE_URL', 'https://www.ai.market/blog');
-    const GET = vi.fn((request: Request) => new Response(request.url));
-    fake.factory.mockReturnValue({ GET });
-    const route = await import('./route');
-
-    const response = await route.GET(new Request(internalUrl, {
-      headers: { 'x-forwarded-host': 'spoofed.example' },
-    }));
-
-    expect(await response.text()).toBe('https://www.ai.market/api/keystatic/github/login?from=%2Fkeystatic');
-  });
-
-  it('forwards the POST method, stream, headers, and response cookies', async () => {
+  it('preserves the POST path, query, method, stream, headers, and response cookies', async () => {
     const result = new Response(null, { status: 204 });
     result.headers.append('Set-Cookie', 'session=updated; Path=/; HttpOnly');
     result.headers.append('Set-Cookie', 'state=; Path=/; Max-Age=0');
@@ -211,7 +192,7 @@ describe('Keystatic public request origin', () => {
       duplex: 'half' as const,
     };
     const POST = vi.fn(async (request: Request) => {
-      expect(request.url).toBe('https://ai.market/api/keystatic/test');
+      expect(request.url).toBe('https://ai.market/api/keystatic/test?from=%2Fkeystatic');
       expect(request.method).toBe('POST');
       expect(request.headers.get('content-type')).toBe('application/json');
       expect(request.headers.get('cookie')).toBe('session=fixture');
@@ -222,7 +203,7 @@ describe('Keystatic public request origin', () => {
     fake.factory.mockReturnValue({ POST });
     const route = await import('./route');
 
-    const response = await route.POST(new NextRequest('https://127.0.0.1:8080/api/keystatic/test', init));
+    const response = await route.POST(new NextRequest('https://127.0.0.1:8080/api/keystatic/test?from=%2Fkeystatic', init));
 
     expect(response).toBe(result);
     expect(response.headers.getSetCookie()).toEqual([
@@ -232,6 +213,7 @@ describe('Keystatic public request origin', () => {
   });
 
   it.each([
+    ['development', 'local'],
     ['development', 'github'],
     ['production', 'local'],
   ] as const)('passes through the original request in %s with %s storage', async (env, storage) => {
@@ -245,5 +227,35 @@ describe('Keystatic public request origin', () => {
     await route.GET(request);
 
     expect(GET.mock.calls[0][0]).toBe(request);
+  });
+});
+
+describe('Keystatic GitHub OAuth login', () => {
+  beforeEach(() => {
+    vi.stubEnv('NODE_ENV', 'production');
+    vi.stubEnv('KEYSTATIC_GITHUB_CLIENT_ID', 'fixture-client-id');
+    vi.stubEnv('KEYSTATIC_GITHUB_CLIENT_SECRET', 'fixture-client-secret');
+    vi.stubEnv('KEYSTATIC_SECRET', 'fixture-'.repeat(4));
+    vi.stubGlobal('fetch', vi.fn(() => { throw new Error('OAuth login should not make a network request'); }));
+  });
+
+  it.each([
+    { siteUrl: 'https://www.ai.market/blog', publicOrigin: 'https://www.ai.market' },
+    { siteUrl: undefined, publicOrigin: 'https://ai.market' },
+  ])('uses $publicOrigin as the callback origin despite spoofed host headers', async ({ siteUrl, publicOrigin }) => {
+    vi.stubEnv('NEXT_PUBLIC_SITE_URL', siteUrl);
+    const route = await import('./route');
+    const request = new NextRequest('https://127.0.0.1:8080/api/keystatic/github/login', {
+      headers: { Host: 'evil.example', 'X-Forwarded-Host': 'evil.example' },
+    });
+
+    const response = await route.GET(request);
+
+    expect(response.status).toBeGreaterThanOrEqual(300);
+    expect(response.status).toBeLessThan(400);
+    const location = new URL(response.headers.get('location') ?? '');
+    expect(`${location.origin}${location.pathname}`).toBe('https://github.com/login/oauth/authorize');
+    expect(location.searchParams.get('redirect_uri')).toBe(`${publicOrigin}/api/keystatic/github/oauth/callback`);
+    expect(fetch).not.toHaveBeenCalled();
   });
 });
