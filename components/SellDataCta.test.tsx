@@ -20,6 +20,24 @@ beforeEach(() => {
 afterEach(cleanup);
 
 describe('SellDataCta', () => {
+  it.each([false, true])('explains the gateway signup requirement only when signed out (authenticated: %s)', (isAuthenticated) => {
+    mocks.auth.isAuthenticated = isAuthenticated;
+    render(<SellDataCta variant="self-hosted" />);
+
+    const link = screen.getByRole('link', { name: 'Set up a gateway' });
+    expect(link.getAttribute('href')).toBe(
+      isAuthenticated ? '/dashboard/gateways' : '/register?redirect=%2Fdashboard%2Fgateways',
+    );
+    const note = screen.queryByText('You’ll need a free ai.market account. After you sign up, allAI walks you through setting up the gateway.');
+    if (isAuthenticated) {
+      expect(note).toBeNull();
+      expect(link.hasAttribute('aria-describedby')).toBe(false);
+    } else {
+      expect(note).not.toBeNull();
+      expect(link.getAttribute('aria-describedby')).toBe(note?.id);
+    }
+  });
+
   it.each(['hero', 'inline', 'final'] as const)('keeps registration for signed-out %s CTAs', (variant) => {
     render(<SellDataCta variant={variant} />);
 

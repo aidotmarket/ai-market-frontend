@@ -1,5 +1,6 @@
 'use client';
 
+import { useId } from 'react';
 import Link from 'next/link';
 import { useAuthStore } from '@/store/auth';
 
@@ -48,6 +49,7 @@ function AuthenticatedCtas({
 
 export default function SellDataCta({ variant, className, finalCopy }: SellDataCtaProps) {
   const { isAuthenticated } = useAuthStore();
+  const gatewayNoteId = useId();
 
   if (variant === 'homepage') {
     return (
@@ -61,6 +63,7 @@ export default function SellDataCta({ variant, className, finalCopy }: SellDataC
   }
 
   if (variant === 'cloud' || variant === 'self-hosted') {
+    const showGatewayNote = variant === 'self-hosted' && !isAuthenticated;
     const href = variant === 'self-hosted'
       ? isAuthenticated
         ? '/dashboard/gateways'
@@ -70,9 +73,16 @@ export default function SellDataCta({ variant, className, finalCopy }: SellDataC
         : `/register?redirect=${encodeURIComponent('/dashboard/seller-workspace')}`;
 
     return (
-      <Link href={href} className={withClassName(greenPrimaryClassName, className)}>
-        {variant === 'self-hosted' ? 'Set up a gateway' : isAuthenticated ? 'Open Seller Workspace' : 'Create Your Account'}
-      </Link>
+      <>
+        <Link href={href} className={withClassName(greenPrimaryClassName, className)} aria-describedby={showGatewayNote ? gatewayNoteId : undefined}>
+          {variant === 'self-hosted' ? 'Set up a gateway' : isAuthenticated ? 'Open Seller Workspace' : 'Create Your Account'}
+        </Link>
+        {showGatewayNote && (
+          <p id={gatewayNoteId} className="mt-2 text-sm text-gray-600">
+            You’ll need a free ai.market account. After you sign up, allAI walks you through setting up the gateway.
+          </p>
+        )}
+      </>
     );
   }
 

@@ -182,7 +182,7 @@ export default async function SellDataPage() {
               </p>
               <p className="mt-4 mb-6 text-base leading-7 text-gray-600">
                 After purchase, buyers download the files directly through your gateway.{' '}
-                <Link href="/aim-data" className="font-semibold text-[#3F51B5] underline hover:text-[#303F9F]">
+                <Link href="/aim-data#network-requirements" className="font-semibold text-[#3F51B5] underline hover:text-[#303F9F]">
                   Technical details for your IT team
                 </Link>
               </p>

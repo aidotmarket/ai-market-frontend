@@ -265,7 +265,7 @@ export default function PartnerPage() {
               You can separately publish a public sample on your listing.
             </p>
             <blockquote className="mt-8 rounded-2xl border border-[#D8EEE6] bg-white p-6 text-base font-semibold leading-7 text-gray-900 shadow-sm">
-              The gateway refuses to start as root or the wrong user, with a writable root filesystem, any capability, no-new-privileges off, or a mounted socket. You must restrict outbound access to api.ai.market:443 with a restricted proxy or firewall and DNS. Its egress canary reports open access, which blocks publishing and new permissions. Buyers download purchases directly through your HTTPS door.
+              The gateway refuses to start as root or the wrong user, with a writable root filesystem, any capability, no-new-privileges off, or a mounted socket. You must restrict outbound access to api.ai.market:443 with a restricted proxy or firewall and DNS. Its egress canary reports open access, which blocks publishing and new permissions. Buyers download purchases directly through your HTTPS endpoint.
             </blockquote>
             <p className="mt-5 text-sm leading-6 text-gray-600">
               Open-source project:{' '}

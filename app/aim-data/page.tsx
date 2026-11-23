@@ -83,7 +83,7 @@ export default function AimDataPage() {
           </section>
         </div>
 
-        <section className="mt-10 rounded-2xl border border-gray-200 p-6">
+        <section id="network-requirements" className="mt-10 scroll-mt-20 rounded-2xl border border-gray-200 p-6">
           <h2 className="text-xl font-semibold text-gray-900">Network requirements</h2>
           <p className="mt-3 leading-7 text-gray-600">
             Buyers download files through one seller-controlled HTTPS delivery endpoint. ai.market

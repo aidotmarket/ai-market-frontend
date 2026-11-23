@@ -12,7 +12,7 @@ it('describes signed permission and direct delivery without legacy cryptography 
 
   expect(text).toContain('ai.market signs file-specific download permissions');
   expect(text).toContain('seller gateway checks each signature');
-  expect(text).toContain('HTTPS door');
+  expect(text).toContain("the seller's own HTTPS endpoint");
   expect(text).toContain('automatically sends generated file references and fingerprints made with a secret key.');
   expect(text).toContain('It includes a display name if the seller sets one.');
   expect(text).toContain('After the seller confirms a file, the gateway sends a checksum of the file.');

@@ -339,8 +339,8 @@ describe('SalesPage', () => {
     const { container } = render(<SalesPage />);
 
     expect(await screen.findAllByText('SALE-001')).toHaveLength(2);
-    expect(screen.getByText(/gross amount less ai.market’s 5% commission.*card processing fee is deducted from your payout/)).toBeTruthy();
-    for (const label of ['Sale', 'Listing', 'Gross (USD)', 'You receive (USD)', 'Status', 'Paid']) {
+    expect(screen.getByText(/gross amount less ai.market’s 5% commission.*If a card processing fee applies, it’s deducted from your payout.*amounts shown here exclude that fee/)).toBeTruthy();
+    for (const label of ['Sale', 'Listing', 'Gross (USD)', 'You receive before card fees (USD)', 'Status', 'Paid']) {
       expect(screen.getAllByText(label)).toHaveLength(2);
     }
     expect(screen.getAllByText('Seller dataset')).toHaveLength(2);
@@ -353,14 +353,25 @@ describe('SalesPage', () => {
     expect(screen.queryByText(/Mark Delivered|Deliver now|Upload/)).toBeNull();
   });
 
-  it('links the seller licence record only when exposed by the backend', async () => {
+  it('includes the active filter in both seller license record links', async () => {
+    navigation.search = 'status=completed';
     sellerApi.getSellerOrders.mockResolvedValue({ data: [sellerOrder({ license_record_available: true })] });
 
     render(<SalesPage />);
 
+    expect(screen.getByRole('button', { name: 'Completed' }).getAttribute('aria-pressed')).toBe('true');
     const links = await screen.findAllByRole('link', { name: 'Licence record' });
-    expect(links).toHaveLength(2);
-    expect(links[0].getAttribute('href')).toBe('/dashboard/sales/sale-1/license-record');
+    expect(links.map((link) => link.getAttribute('href'))).toEqual([
+      '/dashboard/sales/sale-1/license-record?status=completed',
+      '/dashboard/sales/sale-1/license-record?status=completed',
+    ]);
+    expect(sellerApi.getSellerOrders).toHaveBeenCalledExactlyOnceWith({
+      status_filter: 'completed', limit: 100, offset: 0,
+    });
+    fireEvent.click(screen.getByRole('button', { name: 'All' }));
+    for (const link of await screen.findAllByRole('link', { name: 'Licence record' })) {
+      expect(link.getAttribute('href')).toBe('/dashboard/sales/sale-1/license-record?status=all');
+    }
   });
 
   it('keeps needs_action informational', async () => {
@@ -403,9 +414,18 @@ describe('SalesPage', () => {
     });
   });
 
-  it('renders null-paid fallback and delivered and completed dates', async () => {
+  it('shows no payment due for free sales and labels supplemental dates', async () => {
+    navigation.search = 'status=all';
     sellerApi.getSellerOrders.mockResolvedValue({
       data: [
+        sellerOrder({
+          id: 'sale-free',
+          order_number: 'SALE-FREE',
+          amount_cents: 0,
+          seller_amount_cents: 0,
+          paid_at: '2026-08-16T12:00:00Z',
+          created_at: '2026-08-15T12:00:00Z',
+        }),
         sellerOrder({
           id: 'sale-not-paid',
           order_number: 'SALE-NOT-PAID',
@@ -429,14 +449,20 @@ describe('SalesPage', () => {
 
     render(<SalesPage />);
 
+    const noPaymentDue = await screen.findAllByText('No payment due');
+    expect(noPaymentDue).toHaveLength(2);
+    for (const label of noPaymentDue) {
+      expect(within(label.parentElement as HTMLElement).getByText('Created Aug 15, 2026')).not.toBeNull();
+    }
+    expect(screen.queryByText(/Aug 16, 2026/)).toBeNull();
     for (const notPaid of await screen.findAllByText('Not paid')) {
       expect(within(notPaid.parentElement as HTMLElement).getByText('Created Aug 17, 2026')).not.toBeNull();
     }
     for (const deliveredBadge of screen.getAllByText('Delivered', { selector: 'span' })) {
-      expect(within(deliveredBadge.parentElement as HTMLElement).getByText('Aug 19, 2026')).not.toBeNull();
+      expect(within(deliveredBadge.parentElement as HTMLElement).getByText('Delivered Aug 19, 2026')).not.toBeNull();
     }
     for (const completedBadge of screen.getAllByText('Completed', { selector: 'span' })) {
-      expect(within(completedBadge.parentElement as HTMLElement).getByText('Aug 18, 2026')).not.toBeNull();
+      expect(within(completedBadge.parentElement as HTMLElement).getByText('Completed Aug 18, 2026')).not.toBeNull();
     }
   });
 

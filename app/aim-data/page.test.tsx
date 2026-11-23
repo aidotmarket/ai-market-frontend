@@ -42,6 +42,7 @@ describe('AimDataPage', () => {
   it('distinguishes public HTTPS delivery from private gateway HTTP and restricted egress', () => {
     render(<AimDataPage />);
     const heading = screen.getByRole('heading', { name: 'Network requirements' });
+    expect(heading.closest('section')?.id).toBe('network-requirements');
     const network = within(heading.closest('section')!);
     const inbound = network.getByText(/seller-controlled HTTPS delivery endpoint/).textContent;
     expect(inbound).toMatch(/signed reachability probe/);

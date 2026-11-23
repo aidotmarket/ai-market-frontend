@@ -53,7 +53,7 @@ describe('SellDataPage', () => {
     expect(within(cards[1]).getByText(/These messages contain no data values/)).toBeTruthy();
     expect(within(cards[1]).getByText(/public sample/)).toBeTruthy();
     expect(within(cards[1]).getByText(/After purchase, buyers download the files directly through your gateway/)).toBeTruthy();
-    expect(within(cards[1]).getByRole('link', { name: 'Technical details for your IT team' }).getAttribute('href')).toBe('/aim-data');
+    expect(within(cards[1]).getByRole('link', { name: 'Technical details for your IT team' }).getAttribute('href')).toBe('/aim-data#network-requirements');
 
     const structuredData = JSON.parse(container.querySelector('script[type="application/ld+json"]')!.textContent!);
     expect(structuredData['@type']).toBe('Service');

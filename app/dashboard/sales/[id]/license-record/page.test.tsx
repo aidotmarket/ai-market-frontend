@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 
-import { cleanup, render, screen } from '@testing-library/react';
+import { cleanup, fireEvent, render, screen } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { api } from '@/api/client';
 import { privateReadOptions } from '@/api/privateReads';
@@ -16,6 +16,10 @@ vi.mock('next/navigation', () => ({ useParams: () => ({ id: 'order-1' }) }));
 const { default: SellerLicenseRecordPage } = await import('./page');
 const orderPath = `/orders/${backendRecord.order.id}`;
 
+async function renderRecord(status?: string | string[]) {
+  return render(await SellerLicenseRecordPage({ searchParams: Promise.resolve({ status }) }));
+}
+
 describe('SellerLicenseRecordPage', () => {
   beforeEach(() => records.getLicenseRecord.mockResolvedValue(backendRecord as LicenseRecord));
   afterEach(() => { cleanup(); vi.clearAllMocks(); vi.restoreAllMocks(); });
@@ -28,7 +32,7 @@ describe('SellerLicenseRecordPage', () => {
       if (url === orderPath) return { data: { id: backendRecord.order.id, status } };
       throw new Error('Seller capability is inactive');
     });
-    render(<SellerLicenseRecordPage />);
+    await renderRecord();
 
     expect(await screen.findByRole('heading', { name: 'Licence record' })).not.toBeNull();
     expect(await screen.findByText(label)).toBe(screen.getByText('Delivery status').nextElementSibling);
@@ -45,10 +49,11 @@ describe('SellerLicenseRecordPage', () => {
 
   it('keeps the licence visible if the order request fails', async () => {
     vi.spyOn(api, 'get').mockRejectedValue(new Error('Order unavailable'));
-    render(<SellerLicenseRecordPage />);
+    await renderRecord();
 
     expect(await screen.findByText('Status unavailable')).toBe(screen.getByText('Delivery status').nextElementSibling);
     expect(screen.getByText('Licence status').nextElementSibling?.textContent).toBe('Active');
+    expect(screen.queryByText('Payment status')).toBeNull();
   });
 
   it('does not display counterparty details even if a response unexpectedly includes them', async () => {
@@ -59,9 +64,50 @@ describe('SellerLicenseRecordPage', () => {
       signature: { ...backendRecord.signature, typed_name: 'Private Signer', signer_title: 'Director' },
     });
 
-    render(<SellerLicenseRecordPage />);
+    await renderRecord();
 
     expect(await screen.findByText('Identified to ai.market for this order')).not.toBeNull();
     expect(screen.queryByText(/Private Buyer|Private Signer|Director|private-user/)).toBeNull();
+  });
+
+  it.each([
+    ['completed', '/dashboard/sales?status=completed'],
+    ['/register', '/dashboard/sales'],
+    [['all', 'completed'], '/dashboard/sales'],
+  ])('validates the return filter %j', async (filter, href) => {
+    vi.spyOn(api, 'get').mockResolvedValue({ data: { status: 'completed' } });
+    await renderRecord(filter);
+
+    expect((await screen.findByRole('link', { name: '← Back to sales' })).getAttribute('href')).toBe(href);
+  });
+
+  it.each([
+    [{ status: 'completed', amount_cents: 1000, paid_at: '2026-11-23T12:00:00Z' }, 'Paid on Nov 23, 2026'],
+    [{ status: 'created', amount_cents: 1000, paid_at: null }, 'Payment pending'],
+    [{ status: 'completed', amount_cents: 0, paid_at: '2026-11-23T12:00:00Z' }, 'No payment due'],
+  ])('shows the payment state from the existing order response', async (data, label) => {
+    const get = vi.spyOn(api, 'get').mockResolvedValue({ data });
+    await renderRecord();
+
+    expect(await screen.findByText(label)).toBe(screen.getByText('Payment status').nextElementSibling);
+    expect(get).toHaveBeenCalledExactlyOnceWith(orderPath, {
+      ...privateReadOptions, signal: expect.any(AbortSignal),
+    });
+  });
+
+  it('shows PDF progress and restores the download button on failure', async () => {
+    vi.spyOn(api, 'get').mockResolvedValue({ data: { status: 'completed' } });
+    let rejectDownload!: (error: Error) => void;
+    records.downloadLicenseRecordPdf.mockReturnValueOnce(new Promise((_, reject) => {
+      rejectDownload = reject;
+    }));
+    await renderRecord();
+
+    fireEvent.click(await screen.findByRole('button', { name: 'Download PDF' }));
+    expect((screen.getByRole('button', { name: 'Preparing PDF…' }) as HTMLButtonElement).disabled).toBe(true);
+    rejectDownload(new Error('Download unavailable'));
+
+    expect((await screen.findByRole('alert')).textContent).toMatch(/PDF could not be downloaded/);
+    expect((screen.getByRole('button', { name: 'Download PDF' }) as HTMLButtonElement).disabled).toBe(false);
   });
 });

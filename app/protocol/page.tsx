@@ -63,7 +63,7 @@ const platformDoesNot = [
   {
     label: 'Serve files',
     description:
-      "Files are served by the seller's own AWS or Cloudflare bucket, or by the seller gateway through the seller's HTTPS door",
+      "Files are served by the seller's own AWS or Cloudflare bucket, or by the seller gateway through the seller's own HTTPS endpoint",
   },
   {
     label: 'Lock in sellers',
