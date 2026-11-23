@@ -4,7 +4,7 @@ import type {SellerAcceptance} from './listingLicenses';
 export const LEGAL_IDENTITY_SUPPORT_PATH = '/seller-workspace/support/legal-identity';
 
 export async function readLatestSellerSigner(signal:AbortSignal):Promise<Pick<SellerAcceptance,'signer_name'|'signer_title'> | null> {
-  const {data}=await api.get('/seller-workspace/listing-licences/latest-signer',{signal});
+  const {data}=await api.get('/seller-workspace/license-signer',{signal});
   if(typeof data?.signer_name!=='string'||typeof data?.signer_title!=='string')return null;
   const signer_name=data.signer_name.trim();
   const signer_title=data.signer_title.trim();

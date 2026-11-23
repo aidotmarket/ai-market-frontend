@@ -49,6 +49,7 @@ it('lets a single listing with saved consent sign without another tick', async (
 });
 it('styles the load licences button as a primary action and waits for loaded instruments to show the hint', () => {
   render(<WorkspaceBatchSigning />);
+  expect(screen.getByText(/Nothing is published by signing\./)).toBeTruthy();
   const loadButton = screen.getByRole<HTMLButtonElement>('button', { name: 'Load licences' });
   expect(loadButton.type).toBe('button');
   expect(loadButton.classList.contains('bg-indigo-700')).toBe(true);

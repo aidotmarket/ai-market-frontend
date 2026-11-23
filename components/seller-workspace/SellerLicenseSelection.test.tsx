@@ -54,9 +54,27 @@ it('starts a new seller with blank signer fields',async()=>{
   signInAs('new');
   transport.get.mockResolvedValueOnce({data:null});
   render(<Harness/>);
-  await waitFor(()=>expect(transport.get).toHaveBeenCalledWith('/seller-workspace/listing-licences/latest-signer',{signal:expect.any(AbortSignal)}));
+  await waitFor(()=>expect(transport.get).toHaveBeenCalledOnce());
   expect(screen.getByRole<HTMLInputElement>('textbox',{name:'Signer full name'}).value).toBe('');
   expect(screen.getByRole<HTMLInputElement>('textbox',{name:'Signer title'}).value).toBe('');
+});
+
+it('leaves both signer fields editable when the previous signer lookup fails',async()=>{
+  signInAs('returning');
+  transport.get.mockRejectedValueOnce(new Error('Lookup failed'));
+  render(<Harness/>);
+  await waitFor(()=>expect(transport.get).toHaveBeenCalledOnce());
+  const name=screen.getByRole<HTMLInputElement>('textbox',{name:'Signer full name'});
+  const title=screen.getByRole<HTMLInputElement>('textbox',{name:'Signer title'});
+  expect(name.value).toBe('');
+  expect(title.value).toBe('');
+  expect(name.disabled || name.readOnly).toBe(false);
+  expect(title.disabled || title.readOnly).toBe(false);
+  fireEvent.change(name,{target:{value:'Sam Seller'}});
+  fireEvent.change(title,{target:{value:'Owner'}});
+  expect(JSON.parse(screen.getByTestId('wire').textContent!).seller_acceptance).toEqual({
+    signer_name:'Sam Seller',signer_title:'Owner',authority_confirmed:false,
+  });
 });
 
 it('discards a pending signer response when the account changes',async()=>{

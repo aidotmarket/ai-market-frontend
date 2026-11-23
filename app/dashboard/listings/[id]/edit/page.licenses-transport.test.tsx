@@ -1,22 +1,43 @@
 // @vitest-environment jsdom
-import {cleanup,fireEvent,render,screen,waitFor} from '@testing-library/react';
+import {act,cleanup,fireEvent,render,screen,waitFor} from '@testing-library/react';
 import {afterEach,expect,it,vi} from 'vitest';
 import EditListingPage from './page';
 import enabled from '@/api/fixtures/s1735-capability-on.json';
 import disabled from '@/api/fixtures/s1735-capability-off.json';
+import {useAuthStore} from '@/store/auth';
+import type {User} from '@/types';
 
 const transport=vi.hoisted(()=>({get:vi.fn(),post:vi.fn(),patch:vi.fn()}));
+const navigation=vi.hoisted(()=>({id:'listing-1',router:{push:vi.fn()}}));
 vi.mock('@/api/client', async original => ({ ...await original<typeof import('@/api/client')>(), api: transport }));
-vi.mock('next/navigation',()=>({useParams:()=>({id:'listing-1'}),useRouter:()=>({push:vi.fn()})}));
-vi.mock('@/components/Toast',()=>({useToast:()=>({toast:vi.fn()})}));
+vi.mock('next/navigation',()=>({useParams:()=>({id:navigation.id}),useRouter:()=>navigation.router}));
+vi.mock('@/components/Toast',()=>{const toast=vi.fn();return {useToast:()=>({toast})};});
 vi.mock('@/components/listings/SellerAtAGlance',()=>({default:()=>null}));
 vi.mock('@/components/listings/SellerShareControls',()=>({default:()=>null}));
 
 const listing={title:'Example listing',description:'Useful data',category:'Technology',tags:[],price:25,
   pricing_type:'one_time',status:'unlisted',listing_licenses_enabled:true};
-afterEach(()=>{cleanup();vi.resetAllMocks();});
+afterEach(()=>{cleanup();useAuthStore.setState({user:null,token:null});navigation.id='listing-1';vi.resetAllMocks();});
 const identity={status:'known',source:'stripe_connect',legal_name:'Sam Seller Ltd',jurisdiction:'US',version:2,seller_editable:false};
 const getFor=(capability:unknown)=>async(path:string)=>({data:path==='/seller-workspace/capabilities'?capability:path==='/seller-workspace/legal-identity'?identity:listing});
+
+it.each(['account','listing'])('restarts prefill when the %s changes after signer details appear',async(scope)=>{
+  const signInAs=(id:string)=>useAuthStore.setState({user:{id} as User,token:`session-${id}`});
+  signInAs('seller-1');
+  const signerLookup=vi.fn().mockResolvedValueOnce({data:{signer_name:'First Seller',signer_title:'Director'}})
+    .mockResolvedValueOnce({data:null});
+  transport.get.mockImplementation((path:string)=>path==='/seller-workspace/license-signer'?signerLookup():getFor(enabled)(path));
+  const view=render(<EditListingPage/>);
+  await screen.findByDisplayValue('First Seller');
+  expect(screen.getByDisplayValue('Director')).toBeTruthy();
+
+  if(scope==='account') act(()=>signInAs('seller-2'));
+  else {navigation.id='listing-2';view.rerender(<EditListingPage/>);}
+
+  await waitFor(()=>expect(signerLookup).toHaveBeenCalledTimes(2));
+  expect(screen.getByLabelText<HTMLInputElement>('Signer full name').value).toBe('');
+  expect(screen.getByLabelText<HTMLInputElement>('Signer title').value).toBe('');
+});
 
 it('omits the unpublished licence choice from the edit-page draft PATCH',async()=>{
   transport.get.mockImplementation(async(path:string)=>({data:path==='/seller-workspace/capabilities'?enabled:listing}));

@@ -82,7 +82,7 @@ export function BatchSigningScreen({ switches, preparation, onSigned }: { switch
   if (!enabled) return <><p role="status">Licence signing is currently unavailable.</p>{!!error&&<p role="alert">Licence signing could not be confirmed. Refresh and review again before signing.</p>}</>;
   return <section aria-label="Workspace batch licence signing" className="space-y-4 rounded-xl border bg-white p-6">
     <h2 className="text-xl font-semibold">Sign your licence</h2>
-    <p>{preparation ? 'Sign the saved licence choice for this listing.' : 'Read each licence and covenant below, then confirm and sign the batch.'} Signing saves the signature.</p>
+    <p>{preparation ? 'Sign the saved licence choice for this listing.' : 'Read each licence and covenant below, then confirm and sign the batch.'} Signing saves the signature. Nothing is published by signing.</p>
     {!preparation && <><label>Listing preparation IDs (one per line)<textarea className="block w-full rounded border p-2" value={ids} disabled={busy} onChange={e => { setIds(e.target.value); setInstruments([]); setTexts({}); setConsent(false); setDone(false); setError(null); request.current = null; }} /></label>
     <button type="button" className="rounded-lg bg-indigo-700 px-4 py-2.5 text-sm font-semibold text-white hover:bg-indigo-800 disabled:cursor-not-allowed disabled:bg-gray-300 disabled:text-gray-600" disabled={busy || !switches.effects} onClick={() => void load()}>Load licences</button></>}
     {(instruments.length > 50 || (!preparation && ids.split(/\s+/).filter(Boolean).length > 50)) && <p role="alert">You can sign up to 50 listings at once.</p>}
