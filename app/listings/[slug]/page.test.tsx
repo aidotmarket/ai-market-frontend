@@ -380,12 +380,13 @@ describe('seller presentation on the real listing route', () => {
     expect(absent).not.toMatch(/>Publisher<|completed purchases|No ratings yet|Stripe connected/);
   });
 
-  it('titles the legacy license card License', async () => {
+  it('shows the legacy CC-BY-4.0 license card without licensor attribution', async () => {
     document.body.innerHTML = await renderPage(makeListing());
     const page = within(document.body);
     const heading = page.getByRole('heading', { name: 'License', level: 3 });
     expect(within(heading.parentElement!).getByText('CC-BY-4.0')).toBeTruthy();
-    expect(page.getByText('Licensor: verified seller via ai.market')).toBeTruthy();
+    expect(page.queryByText('Licensor: verified seller via ai.market')).toBeNull();
+    expect(page.queryByText("The licensor's legal identity is recorded in the signed licence held by ai.market.")).toBeNull();
     expect(page.queryByRole('heading', { name: 'Trust Metrics' })).toBeNull();
   });
 
@@ -747,10 +748,7 @@ describe('ListingDetailPage Dataset JSON-LD', () => {
       expect(html).not.toContain(forbidden);
     }
     expect(html).toContain('the seller can request a verified scan of this data.');
-    expect(html).toContain('<p>licensor: verified seller via ai.market</p>');
-    expect(html
-      .replace('the seller can request a verified scan of this data.', '')
-      .replace('<p>licensor: verified seller via ai.market</p>', '')).not.toMatch(/\bverified\b/);
+    expect(html.replace('the seller can request a verified scan of this data.', '')).not.toMatch(/\bverified\b/);
   });
 });
 
@@ -1067,12 +1065,25 @@ describe('S1717 member_files and verification scope', () => {
   });
 });
 
-it.each([false,true])('shows one licence disclosure when seller terms are pending: %s',async pending=>{
- const license={code:'standard' as const,version:'1.0',params:{ai_training:true},summary:['Standard summary'],full_text_url:'/licenses/standard/1.0/ai-training',download_url:'/licenses/standard/1.0/ai-training?download=1',sha256:'a'.repeat(64),covenant_sha256:'b'.repeat(64),rider_sha256:null};
- const html=await renderPage(makeListing({license,license_status:pending?'pending_seller_terms':'bound'}));
- expect(html.match(/aria-label="Licence terms"/g)).toHaveLength(1);
- expect(html).toContain('Licensor: verified seller via ai.market');
- expect(html).toContain('The licensor&#x27;s legal identity is recorded in the signed licence held by ai.market.');
+it.each([
+  ['bound', true],
+  ['pending_seller_terms', false],
+] as const)('shows one Standard licence disclosure and sets licensor visibility for %s', async (license_status, showLicensor) => {
+  const license = {
+    code: 'standard' as const,
+    version: '1.1',
+    params: { ai_training: true },
+    summary: ['Standard summary'],
+    full_text_url: '/licenses/standard/1.1/ai-training',
+    download_url: '/licenses/standard/1.1/ai-training?download=1',
+    sha256: 'a'.repeat(64),
+    covenant_sha256: 'b'.repeat(64),
+    rider_sha256: null,
+  };
+  const html = await renderPage(makeListing({ license, license_status }));
+  expect(html.match(/aria-label="Licence terms"/g)).toHaveLength(1);
+  expect(html.includes('Licensor: verified seller via ai.market')).toBe(showLicensor);
+  expect(html.includes('The licensor&#x27;s legal identity is recorded in the signed licence held by ai.market.')).toBe(showLicensor);
 });
 
 it('shows the licensor attribution for a seller listing with a custom licence', async () => {
@@ -1235,7 +1246,7 @@ it('emits actual backend current JSON-LD alongside unchanged original summary ev
  expect(glance.textContent).toContain(CORRECTION_NOTICE_BUYER);
  expect(glance.textContent).not.toContain('v1.0');
  expect(glance.textContent).not.toContain('provided by the seller');
- expect(within(container).getByText('Licensor: verified seller via ai.market')).toBeTruthy();
+ expect(within(container).queryByText('Licensor: verified seller via ai.market')).toBeNull();
 });
 
 describe('C4 Documentation page integration', () => {

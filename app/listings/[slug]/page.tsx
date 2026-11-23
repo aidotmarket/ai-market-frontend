@@ -278,7 +278,7 @@ export default async function ListingDetailPage({ params, searchParams }: Props)
           {publicLicenseUrl && <Link href={publicLicenseUrl} className={`inline-flex rounded-full px-3 py-1 text-sm font-medium ${licenseDetails?.code === 'standard' ? 'bg-green-50 text-green-900' : 'bg-amber-50 text-amber-950'}`}>
             {licenseDetails?.code === 'standard' ? 'ai.market standard terms' : "Seller's own licence"}
           </Link>}
-          <PrePurchaseLicensor />
+          {licenseDetails && !pendingSellerTerms && <PrePurchaseLicensor />}
           {licenseDetails && (pendingSellerTerms || approved && !listing.purchasable) && <ListingLicenseDisclosure license={licenseDetails} />}
           {pendingSellerTerms && <div role="status" className="rounded-lg border border-amber-200 bg-amber-50 p-4 text-sm text-amber-950">
             <p className="font-medium">Not yet available to buy. The seller needs to accept the current terms.</p>
