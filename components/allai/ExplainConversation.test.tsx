@@ -136,7 +136,7 @@ it.each(['allowed', 'denied', 'incomplete', 'missing accepted turn', 'expired pr
     });
     expect(within(panel()).queryByText(answer.turn.answer)).toBeNull();
     if (outcome === 'allowed') {
-      vi.useFakeTimers({ toFake: ['Date', 'setInterval', 'clearInterval'] });
+      vi.useFakeTimers({ toFake: ['Date', 'setTimeout', 'clearTimeout'] });
       vi.setSystemTime(Date.parse(answer.expires_at) - 500);
     }
     await act(async () => {
@@ -579,16 +579,60 @@ it.each([true, false])('keeps an established thread hidden until a successor pro
   }
 });
 
+it.each(['timer', 'focus', 'pageshow', 'visibilitychange', 'render', 'late result'] as const)(
+  'hides an open conversation at its 61-second deadline and fences a pending answer (%s)', async wake => {
+    const request: ExplainRequest = { intent: 'explain', question: 'where_am_i', locale: 'en', target: questions.where_am_i };
+    const prior = answerFixture(request);
+    const deadline = Date.parse(prior.expires_at);
+    vi.useFakeTimers({ toFake: ['Date', 'setTimeout', 'clearTimeout', 'setInterval', 'clearInterval'] });
+    vi.setSystemTime(deadline - 61_000);
+    const pending = deferred();
+    const late = answerFixture(request);
+    late.expires_at = new Date(deadline + 60_000).toISOString();
+    late.turn.answer = 'Late synthetic answer';
+    mock.append.mockResolvedValueOnce({ kind: 'answer', answer: prior }).mockImplementationOnce(async () => {
+      await pending.promise;
+      return { kind: 'answer', answer: late };
+    });
+    render(tree(workspace));
+    await act(async () => fireEvent.click(screen.getByRole('button', { name: 'Where am I?' })));
+    expect(within(panel()).getByText(prior.turn.answer)).toBeTruthy();
+
+    fireEvent.change(input(), { target: { value: 'Where am I?' } });
+    fireEvent.keyDown(input(), { key: 'Enter' });
+    const [admit, anchored] = mock.append.mock.calls[1];
+    expect(anchored.conversation_id).toBe(prior.conversation_id);
+    expect(within(panel()).getByText(prior.turn.answer)).toBeTruthy();
+
+    if (wake === 'timer') {
+      await act(async () => { await vi.advanceTimersByTimeAsync(60_999); });
+      expect(within(panel()).getByText(prior.turn.answer)).toBeTruthy();
+      await act(async () => { await vi.advanceTimersByTimeAsync(1); });
+    } else {
+      vi.setSystemTime(deadline); // Move the wall clock without firing the scheduled timeout.
+      if (wake === 'render') fireEvent.change(input(), { target: { value: 'draft text' } });
+      else if (wake !== 'late result') fireEvent(wake === 'visibilitychange' ? document : window, new Event(wake));
+    }
+    if (wake !== 'late result') expect(within(panel()).queryByText(prior.turn.answer)).toBeNull();
+    await act(async () => pending.resolve());
+    expect(admit.signal.aborted).toBe(true);
+    expect(within(panel()).queryByText(prior.turn.answer)).toBeNull();
+    expect(within(panel()).queryByText(late.turn.answer)).toBeNull();
+    expect(within(panel()).queryByText(explainCopy().busy)).toBeNull();
+    expect(mock.append).toHaveBeenCalledTimes(2);
+  },
+);
+
 it('cancels a pending successor read when the established conversation expires', async () => {
   const { appendExplain } = await vi.importActual<typeof import('@/api/explain')>('@/api/explain');
   const request: ExplainRequest = { intent: 'explain', question: 'where_am_i', locale: 'en', target: questions.where_am_i };
   const prior = answerFixture(request);
-  vi.useFakeTimers({ toFake: ['Date', 'setInterval', 'clearInterval'] });
+  vi.useFakeTimers({ toFake: ['Date', 'setTimeout', 'clearTimeout'] });
   vi.setSystemTime(Date.parse(prior.expires_at) - 500);
   mock.append.mockResolvedValueOnce({ kind: 'answer', answer: prior });
   render(tree(workspace));
-  fireEvent.click(await screen.findByRole('button', { name: 'Where am I?' }));
-  await within(panel()).findByText(prior.turn.answer);
+  await act(async () => fireEvent.click(screen.getByRole('button', { name: 'Where am I?' })));
+  expect(within(panel()).getByText(prior.turn.answer)).toBeTruthy();
 
   const proof = deferred();
   const readStarted = deferred();

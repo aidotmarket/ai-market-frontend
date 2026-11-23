@@ -350,6 +350,7 @@ export async function appendExplain(scope: Admission, request: ExplainRequest, p
       }
       if (current !== token) after = (await proveReplacement(current)).snapshot;
       if (after && admission.currentToken() === current) {
+        if (!mayHaveAppended) return { kind: 'refused', clear: false };
         const existing = new Set(before?.turns.map(turn => turn.id));
         const possible = after.turns.some(turn => turn.question === body.question && turn.locale === body.locale && !existing.has(turn.id));
         // History has neither a request identifier nor a target. A candidate
@@ -360,7 +361,7 @@ export async function appendExplain(scope: Admission, request: ExplainRequest, p
     } catch {
       admission.currentToken();
     }
-    return unknown;
+    return mayHaveAppended ? unknown : { kind: 'refused', clear: true };
   }
 
   async function send(): Promise<Reply> {
@@ -375,19 +376,9 @@ export async function appendExplain(scope: Admission, request: ExplainRequest, p
       const status = axios.isAxiosError(error) ? error.response?.status : undefined;
       if (!status || status === 408 || status >= 500) return confirmHistory();
       mayHaveAppended = false;
-      // R11 emits this refusal during authority admission, before any turn
-      // write. The successor GET still has to prove the claimed rotation.
-      if (!replacementUsed && firstPartyRefusal(error)) {
-        try {
-          await waitForRefresh(admission, token);
-          await adoptReplacement(admission.currentToken());
-          anchorHistory();
-        } catch {
-          admission.currentToken();
-          return refused(error);
-        }
-        return send();
-      }
+      // Admission uses the same 401 for expiry and rotation. Successor proof
+      // establishes continuity for the history read only.
+      if (firstPartyRefusal(error)) return confirmHistory();
       return refused(error);
     }
     admission.currentToken();

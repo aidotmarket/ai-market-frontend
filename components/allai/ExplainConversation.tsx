@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useLayoutEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react';
 import { flushSync } from 'react-dom';
 import { appendExplain, explainActions, type ExplainAction, type ExplainAnswer, type ExplainQuestion } from '@/api/explain';
 import { useAuthStore } from '@/store/auth';
@@ -44,9 +44,24 @@ function Conversation({ view, launchId, consume, locale, close }: {
   const log = useRef<HTMLDivElement>(null);
   const copy = explainCopy(locale);
   const page = view.registration.getPage();
-  const visibleTurns = turnsToken === token ? turns : [];
-  const visibleNotice = noticeToken === token ? notice : undefined;
-  const showRoleChoices = noticeToken === token && chooseRole;
+  const lastTurn = turns.at(-1);
+  const deadline = lastTurn ? Date.parse(lastTurn.expires_at) : undefined;
+  const expired = deadline !== undefined && deadline <= Date.now();
+  const visibleTurns = !expired && turnsToken === token ? turns : [];
+  const visibleNotice = !expired && noticeToken === token ? notice : undefined;
+  const showRoleChoices = !expired && noticeToken === token && chooseRole;
+
+  const expireThread = useCallback(() => {
+    if (!thread.current || thread.current.expires > Date.now()) return false;
+    thread.current = null;
+    flight.current?.abort();
+    flight.current = null;
+    setTurns([]);
+    setNotice(undefined);
+    setChooseRole(false);
+    setBusy(false);
+    return true;
+  }, []);
 
   useLayoutEffect(() => {
     const abort = () => { flight.current?.abort(); thread.current = null; };
@@ -69,25 +84,30 @@ function Conversation({ view, launchId, consume, locale, close }: {
   useEffect(() => {
     if (log.current) log.current.scrollTop = log.current.scrollHeight;
   }, [turns, notice]);
-  useEffect(() => {
-    const active = thread.current;
-    if (!active) return;
-    const { expires: expiry } = active;
-    const expire = () => {
-      if (thread.current !== active) return;
-      thread.current = null;
-      flight.current?.abort();
-      setTurns([]);
-      setBusy(false);
+  useLayoutEffect(() => {
+    if (deadline === undefined) return;
+    let timer: number | undefined;
+    const schedule = () => {
+      window.clearTimeout(timer);
+      if (thread.current?.expires !== deadline || expireThread()) return;
+      // Browser delays use a signed 32-bit integer, shorter than retention.
+      timer = window.setTimeout(wake, Math.min(deadline - Date.now(), 2_147_483_647));
     };
-    const remaining = expiry - Date.now();
-    if (remaining <= 0) { expire(); return; }
-    // The maximum timeout is shorter than the server's 30-day retention.
-    const timer = window.setInterval(() => { if (Date.now() >= expiry) expire(); }, Math.min(remaining, 60_000));
-    return () => window.clearInterval(timer);
-  }, [turns]);
+    const wake = () => flushSync(schedule);
+    schedule();
+    window.addEventListener('pageshow', wake);
+    window.addEventListener('focus', wake);
+    document.addEventListener('visibilitychange', wake);
+    return () => {
+      window.clearTimeout(timer);
+      window.removeEventListener('pageshow', wake);
+      window.removeEventListener('focus', wake);
+      document.removeEventListener('visibilitychange', wake);
+    };
+  }, [deadline, expireThread]);
 
   async function ask(question: ExplainQuestion, target = page.targets[question]) {
+    expireThread();
     if (flight.current) return;
     setNotice(undefined);
     if (!target) {
@@ -108,14 +128,12 @@ function Conversation({ view, launchId, consume, locale, close }: {
     const currentToken = () => {
       controller.signal.throwIfAborted();
       if (url !== window.location.pathname + window.location.search) throw new Error('Explain route changed');
-      return view.admit();
+      const credential = view.admit();
+      if (expireThread()) controller.signal.throwIfAborted();
+      return credential;
     };
     setBusy(true);
     try {
-      if (thread.current && thread.current.expires <= Date.now()) {
-        thread.current = null;
-        setTurns([]);
-      }
       const apply = await appendExplain({ owner: view.registration.owner, signal: controller.signal, currentToken }, {
         intent: 'explain', question, locale, target, ...(thread.current && { conversation_id: thread.current.id }),
       }, thread.current?.token);
@@ -221,10 +239,12 @@ function Conversation({ view, launchId, consume, locale, close }: {
           className={buttonClass} onClick={() => void ask(question)}>{copy.question(question)}</button>)}
       </div>}
       {action && availableAction === action && <button type="button" className={buttonClass} onClick={() => {
+        if (expireThread()) return;
         try { view.admit(); } catch { return; }
         const control = getPage().actions?.includes(action) && explainControl(action);
         if (!control) return;
         close(() => {
+          if (deadline !== undefined && deadline <= Date.now()) return null;
           try { view.admit(); } catch { return null; }
           return getPage().actions?.includes(action) && explainControl(action) === control ? control : null;
         });
