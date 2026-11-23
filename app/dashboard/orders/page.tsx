@@ -1,5 +1,7 @@
 'use client';
 
+import { ExplainEntry, explainControl, useExplainPage } from '@/components/allai/ExplainContext';
+
 import { customerLoadError } from '@/lib/customerMessages';
 import { useEffect, useRef, useState } from 'react';
 import Link from 'next/link';
@@ -65,6 +67,12 @@ export default function OrdersListPage() {
   const [page, setPage] = useState(1);
   const [attempt, setAttempt] = useState(0);
   const generation = useRef(0);
+  useExplainPage(!loading && !error ? {
+    route: '/dashboard/orders',
+    scope: `buyer-orders:${page}`,
+    targets: { order_status: { kind: 'order', role: 'buyer' } },
+    actions: { view_orders: () => explainControl('view_orders')?.focus() },
+  } : null);
 
   function loadPage(nextPage: number) {
     // Retire work immediately, including the window before effect cleanup.
@@ -141,7 +149,8 @@ export default function OrdersListPage() {
   if (orders.length === 0 && page > 1) {
     return (
       <div>
-        <h1 className="text-2xl font-bold text-gray-900 mb-6">Purchases</h1>
+        <h1 data-explain-control="view_orders" tabIndex={-1} className="text-2xl font-bold text-gray-900 mb-6">Purchases</h1>
+        <ExplainEntry question="order_status" />
         <p>No more purchases. You have reached the end of the available orders.</p>
         {paging}
       </div>
@@ -152,7 +161,8 @@ export default function OrdersListPage() {
     return (
       <div className="flex min-h-[40vh] items-center justify-center">
         <div className="text-center">
-          <h1 className="text-2xl font-bold text-gray-900 mb-2">Purchases</h1>
+          <h1 data-explain-control="view_orders" tabIndex={-1} className="text-2xl font-bold text-gray-900 mb-2">Purchases</h1>
+          <ExplainEntry question="order_status" />
           <h2 className="text-lg font-medium text-gray-900 mb-2">No orders yet</h2>
           <p className="text-gray-500 mb-6">You haven&apos;t purchased any datasets yet.</p>
           <Link
@@ -168,7 +178,8 @@ export default function OrdersListPage() {
 
   return (
     <div>
-      <h1 className="text-2xl font-bold text-gray-900 mb-6">Purchases</h1>
+      <h1 data-explain-control="view_orders" tabIndex={-1} className="text-2xl font-bold text-gray-900 mb-6">Purchases</h1>
+      <ExplainEntry question="order_status" />
 
       {/* Desktop table */}
       <div className="hidden md:block overflow-x-auto rounded-lg border border-gray-200">

@@ -1,4 +1,7 @@
 // @vitest-environment jsdom
+import {AllAIProvider} from '@/components/allai/AllAIContext';
+import AllAIPanel from '@/components/allai/AllAIPanel';
+import {answerFixture,bearer,explainUser,ids,questions} from '@/tests/explain-fixtures';
 import {act,cleanup,fireEvent,render,screen,waitFor,within} from '@testing-library/react';
 import {afterEach,beforeEach,describe,it,expect,vi} from 'vitest';
 import {GuidedListingFlow,useListingFlow} from './GuidedListingFlow';
@@ -9,12 +12,14 @@ import {instrument,hash} from '@/tests/fixtures/seller-authority';
 import {WorkspaceOverview} from './WorkspaceOverview';
 import {categoryRows,guidedCapabilities,guidedConnection,emptyGuidedDraft} from '@/tests/guidedListingFixture';
 import {createStandardSelection} from '@/api/listingLicenses';
-const mocks=vi.hoisted(()=>({source:vi.fn(),categories:vi.fn(),review:vi.fn(),publication:vi.fn(),publish:vi.fn(),account:vi.fn(),load:vi.fn(),start:vi.fn(),draft:null as unknown}));
+const mocks=vi.hoisted(()=>({source:vi.fn(),categories:vi.fn(),review:vi.fn(),publication:vi.fn(),publish:vi.fn(),account:vi.fn(),load:vi.fn(),start:vi.fn(),draft:null as unknown,append:vi.fn()}));
+vi.mock('next/navigation',()=>({usePathname:()=>'/dashboard/seller-workspace',useSearchParams:()=>new URLSearchParams()}));
+vi.mock('@/api/explain',async original=>({...await original<typeof import('@/api/explain')>(),appendExplain:mocks.append}));
 vi.mock('@/api/sellerListingSource',()=>({readListingSource:async(id?:string)=>({source:await mocks.source(id),current_draft_id:id??null}),readSellerCategories:mocks.categories}));
 vi.mock('@/api/sellerListingReview',()=>({readListingReview:mocks.review}));
 vi.mock('@/api/sellerListingPublication',()=>({readPublication:mocks.publication,publishListing:mocks.publish}));
 vi.mock('@/api/capabilities',()=>({getCapabilities:mocks.account}));
-vi.mock('./SellerListingDraftStore',()=>({useSellerListingDraft:()=>({draft:mocks.draft,requestLoad:mocks.load,selectionSavePending:false,selectionSaveFailed:false,startNewDraft:mocks.start})}));
+vi.mock('./SellerListingDraftStore',()=>({useSellerListingDraft:()=>({draft:mocks.draft,available:true,loaded:true,requestLoad:mocks.load,selectionSavePending:false,selectionSaveFailed:false,startNewDraft:mocks.start})}));
 const source={version:1,connection_current:true,content:{connection_id:guidedConnection.id,connection_version:1,objects:[],version_mode:'current' as const}};
 const navigate=vi.fn();
 function Harness(){return <GuidedListingFlow capabilities={guidedCapabilities} connections={[guidedConnection]} view="manage" navigate={navigate}><WorkspaceOverview connections={[guidedConnection]} view="manage" onViewChange={navigate}/><Probe/></GuidedListingFlow>;}
@@ -125,4 +130,35 @@ it('shows customer guidance for a draft already in progress',async()=>{
  render(<Harness/>);await screen.findByRole('link',{name:'Published: view your listing'});
  fireEvent.click(screen.getByRole('button',{name:'Start another listing'}));
  expect((await screen.findByRole('alert')).textContent).toBe('You already have a listing draft in progress. Open Seller Workspace to finish it before starting another. Retry');expect(navigate).not.toHaveBeenCalled();
+});
+
+
+it('binds Explain to the real checklist, saved selector, and ephemeral Files and Licence changes',async()=>{
+ vi.stubEnv('NEXT_PUBLIC_STAGE_A_EXPLAIN_ENABLED','true');
+ useAuthStore.setState({user:explainUser,token:bearer(),isAuthenticated:true});
+ mocks.draft={...(mocks.draft as object),draft_id:ids.draft,version:2};
+ mocks.source.mockResolvedValue({...source,version:4,content:{...source.content,connection_version:7}});
+ mocks.review.mockResolvedValue({draft_version:2,source_version:4,missing_fields:[],approval:null});
+ mocks.append.mockImplementation(async (_admission,request)=>({kind:'answer',answer:answerFixture(request)}));
+ function FileEdit(){
+  const flow=useListingFlow()!;
+  return <button type="button" onClick={()=>{flow.setFilesDirty(true);flow.setLicenceDirty(true);}}>Edit file and licence choices</button>;
+ }
+ try {
+  render(<AllAIProvider>
+   <GuidedListingFlow capabilities={guidedCapabilities} connections={[{...guidedConnection,version:7}]} view="data" navigate={navigate}>
+    <WorkspaceOverview connections={[guidedConnection]} view="data" onViewChange={navigate}/><FileEdit/>
+   </GuidedListingFlow><AllAIPanel />
+  </AllAIProvider>);
+  await screen.findByRole('button',{name:'Where am I?'});
+  fireEvent.click(screen.getByRole('button',{name:'Edit file and licence choices'}));
+  fireEvent.click(screen.getByRole('button',{name:'Where am I?'}));
+  await screen.findByText(/Your last saved step was Review/);
+  expect(mocks.append.mock.calls[0][1]).toEqual({intent:'explain',locale:'en',question:'where_am_i',target:questions.where_am_i});
+  expect(mocks.publish).not.toHaveBeenCalled();
+ } finally {
+  cleanup();
+  useAuthStore.setState({user:null,token:null,isAuthenticated:false});
+  vi.unstubAllEnvs();
+ }
 });

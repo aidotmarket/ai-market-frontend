@@ -13,6 +13,7 @@ import {
 import { AllAISupportBridge } from './AllAISupportBridge';
 import { usePathname } from 'next/navigation';
 import { useAuthStore } from '@/store/auth';
+import { ExplainProvider, explainFrontendEnabled } from './ExplainContext';
 import { subscribeAuthSessionOwner, installAuthSessionOwnerSignals } from '@/lib/auth-session-owner';
 import { OrderIssueSession } from '@/lib/order-issue-report';
 import { canonicalOrderId, isOrderDetailPath } from '@/lib/order-route';
@@ -714,10 +715,11 @@ export function AllAIProvider({ children }: { children: ReactNode }) {
     [anonymousAvailable, anonymousSurfaceActive, ensureSession, isStreaming, locale, pathname, contextPath, token, leaveReportIssue]
   );
 
-  const open = useCallback(() => {
-    returnFocusRef.current = document.activeElement instanceof HTMLElement
-      ? document.activeElement
-      : null;
+  const open = useCallback((returnFocus?: HTMLElement) => {
+    const target = returnFocus instanceof HTMLElement ? returnFocus : document.activeElement;
+    if (target instanceof HTMLElement && !target.closest('#allai-assistant-dialog')) {
+      returnFocusRef.current = target;
+    }
     setIsOpen(true);
   }, []);
   const close = useCallback(() => {
@@ -746,7 +748,11 @@ export function AllAIProvider({ children }: { children: ReactNode }) {
         formSnapshotGetter: formSnapshotGetterState, setFormSnapshotGetter,
       }}
     >
-      <AllAISupportBridge.Provider value={{ openSupportConversation }}>{children}</AllAISupportBridge.Provider>
+      <AllAISupportBridge.Provider value={{ openSupportConversation }}>
+        {explainFrontendEnabled()
+          ? <ExplainProvider pathname={pathname} open={open} locale={locale}>{children}</ExplainProvider>
+          : children}
+      </AllAISupportBridge.Provider>
     </AllAIContext.Provider>
   );
 }

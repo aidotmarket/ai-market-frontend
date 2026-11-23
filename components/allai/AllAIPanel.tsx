@@ -1,6 +1,9 @@
 'use client';
 
 import { useRef, useEffect, useState, useCallback } from 'react';
+import ExplainConversation from './ExplainConversation';
+import { useExplain } from './ExplainContext';
+import { explainCopy } from '@/lib/i18n/explain';
 import { useAllAI } from './AllAIContext';
 import OrderIssueReport, { SupportConversation } from './OrderIssueReport';
 import AllAIMessage from './AllAIMessage';
@@ -27,7 +30,7 @@ export default function AllAIPanel({ dockOnDesktop = false }: { dockOnDesktop?: 
     reportSession, separateViewReport, previousReports, selectReport,
     leaveReportIssue,
     isOpen,
-    close,
+    close: closeAssistant,
     messages,
     isStreaming,
     sendMessage,
@@ -39,6 +42,17 @@ export default function AllAIPanel({ dockOnDesktop = false }: { dockOnDesktop?: 
   } = useAllAI();
   const resources = anonymousAllAIResources(locale);
   const bridge = useWizardBridge();
+  const explain = useExplain();
+  const leaveExplain = explain?.leave;
+  const close = useCallback(() => {
+    leaveExplain?.();
+    closeAssistant();
+  }, [closeAssistant, leaveExplain]);
+  useEffect(() => {
+    if (!isOpen || supportSession || reportSession) leaveExplain?.();
+  }, [isOpen, supportSession, reportSession, leaveExplain]);
+  const explainActive = !!explain?.view?.launch;
+  const explainCopyForLocale = explainCopy(locale);
   const scrollRef = useRef<HTMLDivElement>(null);
   const [visible, setVisible] = useState(false);
   const [isMobile, setIsMobile] = useState(false);
@@ -275,8 +289,11 @@ export default function AllAIPanel({ dockOnDesktop = false }: { dockOnDesktop?: 
             <span className="text-white/20 text-[10px] leading-none tracking-[2px]" aria-hidden>⠿</span>
           )}
           <h2 id="allai-assistant-title" className="text-sm font-semibold text-white/80">
-            {anonymousSurfaceActive ? resources.assistantLabel : 'allAI'}
+            {explainActive ? explainCopyForLocale.title : anonymousSurfaceActive ? resources.assistantLabel : 'allAI'}
           </h2>
+            {explain?.view && !explainActive && !supportSession && !reportSession &&
+              <button type="button" className="min-h-11 px-2 text-sm text-white underline focus-visible:ring-2 focus-visible:ring-blue-300"
+                onClick={() => explain.start()}>{explainCopyForLocale.title}</button>}
             <label className="ml-auto mr-8 flex items-center gap-2 text-xs text-white/50">
               <span className="sr-only">{resources.languageLabel}</span>
               <select
@@ -303,7 +320,8 @@ export default function AllAIPanel({ dockOnDesktop = false }: { dockOnDesktop?: 
         <button onClick={leaveSupportConversation}>Return to previous allAI conversation</button>
         <SupportConversation session={supportSession} />
       </div> : reportSession ? <OrderIssueReport key={reportSession.visitId} session={reportSession}
-        onLeave={leaveReportIssue} onSeparate={separateViewReport} /> : <>
+        onLeave={leaveReportIssue} onSeparate={separateViewReport} /> : explainActive ?
+        <ExplainConversation locale={locale} close={close} /> : <>
       {/* Messages */}
       <div
         ref={scrollRef}

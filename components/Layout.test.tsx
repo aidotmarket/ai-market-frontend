@@ -15,6 +15,7 @@ const auth = vi.hoisted(() => ({
   user: null,
   isAuthenticated: false,
   logout: vi.fn(),
+  logoutStatus: null as 'confirmed' | 'unconfirmed' | null,
 }));
 
 vi.mock('next/navigation', () => ({
@@ -113,4 +114,22 @@ describe('Layout registration links', () => {
       expect(link.getAttribute('href')).toBe('/register');
     }
   });
+});
+
+
+it.each([
+  ['es-ES', 'confirmed', 'Sesión cerrada.', 'es'],
+  ['zh-CN', 'unconfirmed', '你已退出此页面，无法确认服务器端是否已退出登录。', 'zh-Hans'],
+  ['fr-FR', 'unconfirmed', 'You’re signed out on this page. Server sign-out could not be confirmed.', 'en'],
+] as const)('uses the supported locale fallback for a normal logout in %s', (language, status, message, locale) => {
+  const browserLanguage = vi.spyOn(navigator, 'language', 'get').mockReturnValue(language);
+  auth.logoutStatus = status;
+  try {
+    render(<Layout><div>Page content</div></Layout>);
+    expect(screen.getByText(message).getAttribute('role')).toBe('status');
+    expect(screen.getByText(message).lang).toBe(locale);
+  } finally {
+    auth.logoutStatus = null;
+    browserLanguage.mockRestore();
+  }
 });

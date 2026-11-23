@@ -29,6 +29,7 @@ interface AuthState {
   magicLinkVerify: (token: string) => Promise<AuthFlowResult>;
   verifyTwoFactor: (code: string) => Promise<TwoFactorVerifyResult>;
   clearPendingTwoFactor: () => void;
+  logoutStatus: 'confirmed' | 'unconfirmed' | null;
   logout: () => Promise<void>;
   refreshAuth: () => Promise<void>;
   hydrate: () => Promise<void>;
@@ -72,7 +73,7 @@ export const useAuthStore = create<AuthState>((set, get) => {
     const session = advanceAuthSessionOwner();
     if (pendingLogin?.owner === owner) pendingLogin.owner = session;
     set({ token: tokenRes.access_token, user: null, isAuthenticated: true,
-      pendingTwoFactor: null, isLoading: false, hydrated: true });
+      pendingTwoFactor: null, isLoading: false, hydrated: true, logoutStatus: null });
     const user = await authApi.getMe();
     assertAuthSessionOwner(session);
     set({ user });
@@ -99,7 +100,7 @@ export const useAuthStore = create<AuthState>((set, get) => {
   function beginLogin(): number {
     const owner = advanceAuthSessionOwner();
     pendingLogin = { owner };
-    set({ pendingTwoFactor: null, isLoading: false, hydrated: true });
+    set({ pendingTwoFactor: null, isLoading: false, hydrated: true, logoutStatus: null });
     return owner;
   }
 
@@ -120,6 +121,7 @@ export const useAuthStore = create<AuthState>((set, get) => {
     isLoading: false,
     hydrated: false,
     pendingTwoFactor: null,
+    logoutStatus: null,
 
     rotateSession: async (tokenRes) => {
       const owner = authSessionOwner();
@@ -204,22 +206,19 @@ export const useAuthStore = create<AuthState>((set, get) => {
     },
 
     logout: async () => {
+      const knownSession = get().isAuthenticated || !!get().token;
       const owner = advanceAuthSessionOwner();
-      const clear = () => {
-        clearConnectorContinuation();
-        setConnectorStatus(false);
-        set({ user: null, token: null, isAuthenticated: false, pendingTwoFactor: null,
-          isLoading: false, hydrated: true });
-      };
-      try {
-        // Dispatch with the existing bearer for best-effort server revocation,
-        // then clear locally without waiting for the response.
-        const request = authApi.logout();
-        clear();
-        await request;
-      } finally {
-        if (isAuthSessionOwner(owner)) clear();
-      }
+      // Admit the server request while the departing bearer is still in memory.
+      const request = authApi.logout().catch(() => undefined);
+      clearConnectorContinuation();
+      setConnectorStatus(false);
+      set({ user: null, token: null, isAuthenticated: false, pendingTwoFactor: null,
+        isLoading: false, hydrated: true, logoutStatus: null });
+      const result = await request;
+      if (!isAuthSessionOwner(owner) || get().isAuthenticated) return;
+      set({
+        logoutStatus: result?.server_revoked ? 'confirmed' : result?.status === 503 || knownSession ? 'unconfirmed' : null,
+      });
     },
 
     refreshAuth: async () => {
@@ -234,7 +233,7 @@ export const useAuthStore = create<AuthState>((set, get) => {
       try {
         const user = await authApi.getMe();
         assertAuthSessionOwner(owner);
-        set({ user, isAuthenticated: true, pendingTwoFactor: null });
+        set({ user, isAuthenticated: true, pendingTwoFactor: null, logoutStatus: null });
       } catch {
         // Keep the current authenticated state if reloading the user fails transiently.
       }
@@ -254,7 +253,7 @@ export const useAuthStore = create<AuthState>((set, get) => {
         assertAuthSessionOwner(owner);
         const user = await authApi.getMe();
         assertAuthSessionOwner(owner);
-        set({ user, isAuthenticated: true, isLoading: false, hydrated: true, pendingTwoFactor: null });
+        set({ user, isAuthenticated: true, isLoading: false, hydrated: true, pendingTwoFactor: null, logoutStatus: null });
       } catch {
         // refreshAccessToken owns terminal 401/403 clearing. Hydration must not
         // erase an existing session for a transient 429, network error, or 5xx.

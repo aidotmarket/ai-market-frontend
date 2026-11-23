@@ -1,4 +1,7 @@
 'use client';
+
+import { ExplainEntry, explainControl, isExplainId, useExplainPage } from '@/components/allai/ExplainContext';
+import type { DraftSelector, ExplainTarget } from '@/api/explain';
 import {Fragment, createContext, useContext, useEffect, useState, useRef, type ReactNode} from 'react';
 import axios from 'axios';
 import {listingDraftError} from '@/lib/listing-action-error';
@@ -189,11 +192,54 @@ export function GuidedListingFlow({connections, capabilities, view, navigate, ch
       if (listingDirty) { setDraftEditNotice(polishCopy.dirtyReturn); return; }
       setPolishPublication(null);
     }};
+  const saved: DraftSelector | undefined = available && loaded && !startingListing
+    && sourceLoaded && sourceMatchesDraft && pointerMatchesDraft
+    && (!draft?.draft_id || isExplainId(draft.draft_id)) ? {
+      draft_id: draft?.draft_id ?? null,
+      draft_version: draft?.version ?? null,
+      source_version: source?.version ?? null,
+    } : undefined;
+  const activeStep = steps.find(step => step.view === view);
+  const workspaceTarget: ExplainTarget | undefined = saved ? { kind: 'workspace', ...saved } : undefined;
+  useExplainPage({
+    route: '/dashboard/seller-workspace',
+    scope: view,
+    targets: {
+      ...(workspaceTarget && { publish: workspaceTarget, storage: workspaceTarget }),
+      ...(saved && activeStep && { where_am_i: {
+        kind: 'step', ...saved, visible_step: activeStep.view, visible_step_state: activeStep.state,
+        visible_reason_code: activeStep.reasonCode, files_pending: pending, licence_unsaved: licenceDirty,
+      } }),
+      ...(view === 'manage' ? { listing_status: { kind: 'listing' } }
+        : saved?.draft_id ? { listing_status: { kind: 'listing', draft: saved } } : {}),
+    },
+    actions: {
+      open_workspace: () => explainControl('open_workspace')?.focus(),
+      open_storage: () => navigate('storage'),
+      open_files: () => navigate('data'),
+      ...(licensesEnabled && { open_license: () => navigate('license') }),
+      open_listing: () => navigate('listing'),
+      open_review: () => navigate('review'),
+      ...(view === 'data' && filesDirty && !selectionSavePending && { save_files: () => explainControl('save_files')?.focus() }),
+      ...(!listingDirty && !pending && !licenceDirty && steps[4].state === 'done'
+        && publication?.publication_available && !publication.publication && {
+        publish: () => view === 'publish' ? explainControl('publish')?.focus() : navigate('publish'),
+      }),
+      view_listing: () => navigate('manage'),
+      view_listings: () => navigate('manage'),
+    },
+  });
   const published=steps[5].state==='done' ? publication?.publication : null;
   return <Context.Provider value={flow}><div className="grid items-start gap-6 xl:grid-cols-[minmax(0,1fr)_290px]">
     <aside aria-label="Listing checklist" className="rounded-xl border border-gray-200 bg-white p-4 xl:sticky xl:top-5 xl:col-start-2 xl:row-start-1">
       <button type="button" aria-expanded={expanded} aria-controls="listing-checklist-steps" onClick={()=>setExpanded(v=>!v)} className="w-full text-left font-semibold xl:hidden">Listing checklist · {published?'Published':`Next: ${next?.name??'Check publication'}`} {expanded?'−':'+'}</button>
       <h2 className="hidden font-semibold xl:block">Listing checklist</h2>
+      <div className="flex flex-wrap">
+        {view === 'storage' && <ExplainEntry question="storage" />}
+        {activeStep && <ExplainEntry question="where_am_i" />}
+        {(view === 'review' || view === 'publish') && <ExplainEntry question="publish" />}
+        {(view === 'listing' || view === 'manage') && <ExplainEntry question="listing_status" />}
+      </div>
       <div id="listing-checklist-steps" className={`${expanded?'block':'hidden'} mt-4 space-y-4 xl:block`}>
         {accountNext&&<a href="#seller-setup-next" onClick={()=>window.dispatchEvent(new Event('seller-setup:next'))} className="block text-sm text-indigo-700 underline">Finish account setup: {SELLER_SETUP_STEPS.find(s=>s.id===accountNext)?.label??'Next account step'}</a>}
         <ol className="space-y-4">{steps.map((s,i)=><li key={s.view}><button type="button" aria-current={view===s.view?'step':undefined} onClick={()=>navigate(s.view)} className="text-left text-sm font-medium"><span aria-hidden="true">{s.state==='done'?'✓':s.state==='blocked'?'🔒':'○'}</span> {i+1}. {s.name} <span className="text-xs">· {s.state==='blocked'?'Needs attention':s.state==='done'?'Complete':'To do'}{s.next?' · Next':''}</span></button>{s.reason&&s.reason!==reviewError&&<p className="mt-1 text-xs leading-5 text-gray-600">{s.reason}</p>}</li>)}</ol>

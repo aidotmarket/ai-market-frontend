@@ -30,7 +30,7 @@ async function setup() {
   const authApi = await import('./auth');
   const { useAuthStore } = await import('@/store/auth');
   const getMe = vi.spyOn(authApi, 'getMe').mockResolvedValue(account('A'));
-  vi.spyOn(authApi, 'logout').mockResolvedValue(undefined);
+  vi.spyOn(authApi, 'logout').mockResolvedValue({ status: 200, server_revoked: true });
   client.api.defaults.adapter = async () => { throw new Error('Audit forbids a real API request'); };
   await useAuthStore.getState().completeSession({ access_token: 'synthetic-A-initial', token_type: 'bearer' });
   async function signInB() {

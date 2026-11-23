@@ -4,6 +4,9 @@ import { Suspense, useState } from 'react';
 import type { MouseEventHandler } from 'react';
 import Link from 'next/link';
 import { useRouter, usePathname } from 'next/navigation';
+import { authSessionOwner, isAuthSessionOwner } from '@/lib/auth-session-owner';
+import { useAllAILocale } from '@/components/allai/AllAIContext';
+import { explainCopy } from '@/lib/i18n/explain';
 import { useAuthStore } from '@/store/auth';
 import NotificationCenter from '@/components/NotificationCenter';
 import { TermsSignUpLink } from '@/components/TermsSignUpLink';
@@ -79,7 +82,8 @@ function SignUpAction({
 }
 
 export function Layout({ children }: { children: React.ReactNode }) {
-  const { user, isAuthenticated, logout } = useAuthStore();
+  const { user, isAuthenticated, logout, logoutStatus } = useAuthStore();
+  const sessionCopy = explainCopy(useAllAILocale());
   const router = useRouter();
   const pathname = usePathname();
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
@@ -88,8 +92,10 @@ export function Layout({ children }: { children: React.ReactNode }) {
   const isAdminEmail = user?.email === 'max@ai.market';
 
   const handleLogout = async () => {
-    await logout();
-    router.push('/');
+    const request = logout();
+    const owner = authSessionOwner();
+    await request;
+    if (isAuthSessionOwner(owner) && !useAuthStore.getState().isAuthenticated) router.push('/');
   };
 
   if (isKeystatic) {
@@ -98,6 +104,9 @@ export function Layout({ children }: { children: React.ReactNode }) {
 
   return (
     <div className="min-h-screen flex flex-col">
+      {logoutStatus && <p role="status" lang={sessionCopy.locale} className="bg-indigo-50 px-4 py-2 text-center text-sm text-indigo-950">
+        {logoutStatus === 'confirmed' ? sessionCopy.logoutConfirmed : sessionCopy.logoutUnconfirmed}
+      </p>}
       <header className="border-b border-gray-200 bg-white sticky top-0 z-40">
         <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
           <div className="flex h-16 items-center justify-between">

@@ -1,5 +1,7 @@
 'use client';
 
+import { ExplainEntry, explainControl, useExplainPage } from '@/components/allai/ExplainContext';
+
 import { customerLoadError } from '@/lib/customerMessages';
 import { useEffect, useState, useCallback, useRef } from 'react';
 import { useAuthStore } from '@/store/auth';
@@ -74,6 +76,12 @@ function OwnerListings({ userId }: { userId: string }) {
   const busy = useRef(false);
   const mutating = useRef(false);
   const pageOffset = useRef(0);
+  useExplainPage(!loading && !error ? {
+    route: '/dashboard/listings',
+    scope: `owner-listings:${offset}`,
+    targets: { listing_status: { kind: 'listing' } },
+    actions: { view_listings: () => explainControl('view_listings')?.focus() },
+  } : null);
   const isCurrent = useCallback((request: number) => {
     const auth = useAuthStore.getState();
     return mounted.current && sequence.current === request &&
@@ -181,7 +189,8 @@ function OwnerListings({ userId }: { userId: string }) {
         <Link href="/legal/terms/accept?context=seller&redirect=%2Fdashboard%2Flistings" className="mt-2 inline-block font-semibold underline">Review and accept Terms {termsVersion || '1.1'}</Link>
       </div>}
       <div className="flex items-center justify-between">
-        <h1 className="text-2xl font-bold text-gray-900">Your listings</h1>
+        <h1 data-explain-control="view_listings" tabIndex={-1} className="text-2xl font-bold text-gray-900">Your listings</h1>
+        <ExplainEntry question="listing_status" />
       </div>
 
       <nav aria-label="Listing pages" className="flex items-center justify-between gap-4">

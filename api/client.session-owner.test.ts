@@ -29,7 +29,7 @@ async function setup() {
   const auth = await import('./auth');
   const { useAuthStore: store, authSessionIdentity } = await import('@/store/auth');
   const getMe = vi.spyOn(auth, 'getMe').mockResolvedValue(account('A'));
-  const logout = vi.spyOn(auth, 'logout').mockResolvedValue(undefined);
+  const logout = vi.spyOn(auth, 'logout').mockResolvedValue({ status: 200, server_revoked: true });
   const post = vi.spyOn(axios, 'post').mockRejectedValue(new Error('No real refresh transport allowed'));
   client.api.defaults.adapter = async () => { throw new Error('No real API transport allowed'); };
   const signIn = async (id = 'A', value = 'initial') => {
@@ -207,15 +207,15 @@ describe('real client/store deferred lifecycle fencing', () => {
   it('preserves the new session after late logout success or failure', async () => {
     const { store, logout, signIn } = await setup();
     for (const fails of [false, true]) {
-      const old = deferred<void>();
+      const old = deferred<{ status: 200; server_revoked: boolean }>();
       logout.mockReturnValueOnce(old.promise);
       const pending = store.getState().logout().catch(error => error);
       expect(store.getState().token).toBeNull();
       await signIn('B', 'new');
       if (fails) old.reject(new Error('Synthetic offline'));
-      else old.resolve();
+      else old.resolve({ status: 200, server_revoked: true });
       await pending;
-      expect(store.getState()).toMatchObject({ token: 'new', user: { id: 'B' }, isAuthenticated: true });
+      expect(store.getState()).toMatchObject({ token: 'new', user: { id: 'B' }, isAuthenticated: true, logoutStatus: null });
     }
   });
 
@@ -293,7 +293,7 @@ describe('real client/store deferred lifecycle fencing', () => {
     });
     vi.stubGlobal('localStorage', storage(local));
     vi.stubGlobal('sessionStorage', storage(session));
-    const old = deferred<void>();
+    const old = deferred<{ status: 200; server_revoked: boolean }>();
     logout.mockReturnValueOnce(old.promise);
     const pending = store.getState().logout();
     await signIn('B', 'new');
@@ -301,10 +301,37 @@ describe('real client/store deferred lifecycle fencing', () => {
     setConnectorStatus(true);
     expect(saveConnectorContinuation(path)).toBe(true);
     const before = [...local];
-    old.resolve();
+    old.resolve({ status: 200, server_revoked: true });
     await pending;
     expect([...local]).toEqual(before);
     expect(local.get('connector_authorization_request')).toBeDefined();
   });
 
+});
+
+
+it.each([
+  { status: 200, revoked: true, signedIn: true, notice: 'confirmed' },
+  { status: 503, revoked: false, signedIn: true, notice: 'unconfirmed' },
+  { status: 503, revoked: false, signedIn: false, notice: 'unconfirmed' },
+  { status: 200, revoked: false, signedIn: false, notice: null },
+])('uses the ordinary logout wire outcome $status/$revoked with local clearing first', async ({ status, revoked, signedIn, notice }) => {
+  const { store, api, logout, post } = await setup();
+  logout.mockRestore();
+  if (!signedIn) store.setState({ token: null, user: null, isAuthenticated: false });
+  const response = deferred<{ server_revoked: boolean }>();
+  const adapter = vi.fn<AxiosAdapter>(async config => {
+    expect(config.url).toBe('/auth/logout');
+    expect(config.headers.get('Authorization') ?? null).toBe(signedIn ? 'Bearer initial' : null);
+    expect(config.validateStatus?.(status)).toBe(true);
+    return { config, status, data: await response.promise, statusText: 'Synthetic logout', headers: {} };
+  });
+  api.defaults.adapter = adapter;
+  const pending = store.getState().logout();
+  expect(store.getState()).toMatchObject({ token: null, user: null, isAuthenticated: false, logoutStatus: null });
+  response.resolve({ server_revoked: revoked });
+  await pending;
+  expect(store.getState().logoutStatus).toBe(notice);
+  expect(adapter).toHaveBeenCalledOnce();
+  expect(post).not.toHaveBeenCalled();
 });

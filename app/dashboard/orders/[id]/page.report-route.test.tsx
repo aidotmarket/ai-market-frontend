@@ -15,6 +15,11 @@ vi.mock('@/api/orders', () => ({ getOrder: ports.order, getOrderEvents: ports.ev
 vi.mock('@/components/Toast', () => ({ useToast: () => ({ toast: vi.fn() }) }));
 vi.mock('@/components/orders/GatewayDeliverySection', () => ({ default: () => null }));
 vi.mock('@/components/legal/TermsGate', () => ({ useTermsGate: () => ({ TermsGatePrompt: () => null }) }));
+import { useAuthStore } from '@/store/auth';
+import { answerFixture, bearer, explainUser } from '@/tests/explain-fixtures';
+import AllAIPanel from '@/components/allai/AllAIPanel';
+const append = vi.hoisted(() => vi.fn());
+vi.mock('@/api/explain', async original => ({ ...await original<typeof import('@/api/explain')>(), appendExplain: append }));
 import OrderDetailPage from './page';
 import { AllAIProvider, useAllAI } from '@/components/allai/AllAIContext';
 import { principal, proposal } from '@/tests/support-fixtures';
@@ -53,4 +58,26 @@ it('the mounted failed order read opens an ordinary review draft with the captur
   expect(context.reportSession!.getSnapshot().saved).toBe(false);
   act(() => context.reportSession!.edit({ category: 'download_delivery', description: 'The file was not delivered', failed_operation: 'order_detail:normal_read_failed' }));
   expect(context.reportSession!.getSnapshot().draft).toEqual({ category: 'download_delivery', description: 'The file was not delivered' });
+});
+
+
+it('uses the owned role and canonical order selector while preserving Report Issue with Explain enabled', async () => {
+  vi.stubEnv('NEXT_PUBLIC_STAGE_A_EXPLAIN_ENABLED', 'true');
+  route.segment = canonical.toUpperCase();
+  route.path = '/dashboard/orders/' + route.segment;
+  useAuthStore.setState({ user: { ...explainUser, id: 'buyer-fixture' }, token: bearer('row', 'org', 'buyer-fixture') });
+  append.mockImplementation(async (_admission, request) => ({ kind: 'answer', answer: answerFixture(request) }));
+  try {
+    render(<AllAIProvider><Page /><AllAIPanel /></AllAIProvider>);
+    fireEvent.click(await screen.findByRole('button', { name: 'What is the status of my order?' }));
+    await screen.findByText(/This order is delivered/);
+    expect(append.mock.calls[0][1]).toEqual({
+      intent: 'explain', question: 'order_status', locale: 'en', target: { kind: 'order', role: 'buyer', order_id: canonical },
+    });
+    fireEvent.click(screen.getByRole('button', { name: 'Report Issue' }));
+    await waitFor(() => expect(ports.open).toHaveBeenCalledOnce());
+    expect(ports.open.mock.calls[0][0]).toBe(canonical);
+    expect(screen.queryByText(/This order is delivered/)).toBeNull();
+    expect(append).toHaveBeenCalledOnce();
+  } finally { vi.unstubAllEnvs(); }
 });

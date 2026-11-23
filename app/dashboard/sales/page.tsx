@@ -1,5 +1,7 @@
 'use client';
 
+import { ExplainEntry, explainControl, useExplainPage } from '@/components/allai/ExplainContext';
+
 import { Suspense, useEffect, useRef, useState } from 'react';
 import { useSearchParams } from 'next/navigation';
 import { getCapabilities } from '@/api/capabilities';
@@ -85,6 +87,12 @@ function SalesPageContent() {
     'loading' | 'active' | 'provisioning' | 'blocked' | 'error'
   >('loading');
   const reportedUnknownStatuses = useRef(new Set<string>());
+  useExplainPage(pageState === 'active' ? {
+    route: '/dashboard/sales',
+    scope: `seller-orders:${filter}:${offset}`,
+    targets: { order_status: { kind: 'order', role: 'seller' } },
+    actions: { view_orders: () => explainControl('view_orders')?.focus() },
+  } : null);
 
   function changeRequest(next: SalesRequest) {
     if (currentRequest.current !== request) return;
@@ -181,7 +189,8 @@ function SalesPageContent() {
 
   return (
     <div className="space-y-6">
-      <h1 className="text-2xl font-bold text-gray-900">Sales</h1>
+      <h1 data-explain-control="view_orders" tabIndex={-1} className="text-2xl font-bold text-gray-900">Sales</h1>
+      <ExplainEntry question="order_status" />
 
       {pageState === 'provisioning' && (
         <p className="text-gray-600">Sales unlock after seller setup is complete.</p>
