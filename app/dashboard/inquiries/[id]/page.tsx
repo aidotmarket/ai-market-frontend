@@ -3,7 +3,7 @@
 import { customerRefusal, INQUIRY_REFUSALS, customerActionError } from '@/lib/customerMessages';
 import { useEffect, useState, useCallback, useRef, use } from 'react';
 import Link from 'next/link';
-import { getConversation, replyToConversation } from '@/api/conversations';
+import { getConversation, markConversationRead, replyToConversation } from '@/api/conversations';
 import { useConversationPoll } from '@/hooks/useConversationPoll';
 import { authSessionIdentity, useAuthStore } from '@/store/auth';
 import ConversationThread from '@/components/ConversationThread';
@@ -55,6 +55,7 @@ function ConversationView({ id, isCurrent }: { id: string; isCurrent: () => bool
   const sending = useRef(false);
   const readVersion = useRef(0);
   const statusVersion = useRef(0);
+  const markedReadRef = useRef<string | null>(null);
 
   const handleNewMessages = useCallback((newMsgs: ConversationMessage[], status: ConversationDetail['status']) => {
     if (!active.current || !isCurrent()) return;
@@ -96,6 +97,17 @@ function ConversationView({ id, isCurrent }: { id: string; isCurrent: () => bool
     void refresh();
     return () => { active.current = false; readVersion.current += 1; };
   }, [refresh]);
+
+  useEffect(() => {
+    if (!conversation || !active.current || !isCurrent()) return;
+    if (markedReadRef.current === conversation.id) return;
+    markedReadRef.current = conversation.id;
+    try {
+      void Promise.resolve(markConversationRead(conversation.id)).catch(() => {});
+    } catch {
+      // Failed mark-read must not break the page.
+    }
+  }, [conversation, isCurrent]);
 
   useEffect(() => {
     if (accepted && messages.some((message) => message.id === accepted)) {

@@ -4,7 +4,7 @@ import { act, cleanup, fireEvent, render, renderHook, screen } from '@testing-li
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { AxiosError } from 'axios';
 import { useConversationPoll } from '@/hooks/useConversationPoll';
-import { pollConversation, replyToConversation } from '@/api/conversations';
+import { markConversationRead, pollConversation, replyToConversation } from '@/api/conversations';
 import DetailPage from '@/app/dashboard/inquiries/[id]/page';
 import SellerPage from '@/app/dashboard/seller/inquiries/page';
 import InquiryWidget from '@/components/InquiryWidget';
@@ -57,6 +57,8 @@ describe('actual API and mounted poll transport', () => {
     client.post.mockResolvedValue({ data: ack }); client.get.mockResolvedValue(envelope([message()]));
     expect(await replyToConversation('a/b', 'Draft', 'seller')).toEqual(ack);
     expect(client.post).toHaveBeenCalledWith('/conversations/a%2Fb/reply', { content: 'Draft', role: 'seller' });
+    await markConversationRead('a/b');
+    expect(client.post).toHaveBeenCalledWith('/conversations/a%2Fb/read');
     expect(await pollConversation('a/b', first)).toEqual(envelope([message()]).data);
     expect(client.get).toHaveBeenCalledWith('/conversations/a%2Fb/poll', { params: { since: first } });
   });
@@ -117,13 +119,101 @@ async function mountPage(kind: 'detail' | 'seller' | 'widget', response?: Promis
   }
   if (kind === 'seller') {
     const view = render(<SellerPage />); fireEvent.click(screen.getByRole('button', { name: /Listing a/ }));
-    await settle(); return view;
+    await settle(); client.post.mockClear(); return view;
   }
   const params = Promise.resolve({ id: 'a' });
   let view!: ReturnType<typeof render>;
   await act(async () => { view = render(<Suspense fallback="Suspended"><DetailPage params={params} /></Suspense>); });
-  await settle(); return view;
+  await settle(); client.post.mockClear(); return view;
 }
+
+describe.each(['detail', 'seller', 'widget'] as const)('%s explicit mark-as-read', (kind) => {
+  it('triggers one mark-read call when the thread is shown and does not repeat on poll or reply refresh', async () => {
+    client.get.mockImplementation((url: string) => url.endsWith('/poll')
+      ? Promise.resolve(envelope([message('m2', 'a', later, 'Polled update')], 'awaiting_buyer'))
+      : Promise.resolve({ data: detail('a', [message()], kind === 'seller') }));
+    if (kind === 'widget') {
+      client.post.mockResolvedValueOnce({ data: detail('a', [message()]) }).mockResolvedValue({ data: undefined });
+      render(<InquiryWidget listingId="listing-a" listingSlug="a" listingTitle="Listing a" />);
+      expect(client.post).not.toHaveBeenCalled();
+      fireEvent.change(screen.getByRole('textbox'), { target: { value: 'Initial server question' } });
+      fireEvent.click(screen.getByRole('button', { name: 'Submit Question' }));
+      await settle();
+    } else if (kind === 'seller') {
+      client.post.mockResolvedValue({ data: undefined });
+      const pending = deferred<{ data: ConversationDetail }>();
+      client.get.mockReturnValueOnce(pending.promise);
+      render(<SellerPage />);
+      expect(client.post).not.toHaveBeenCalled();
+      fireEvent.click(screen.getByRole('button', { name: /Listing a/ }));
+      await settle();
+      expect(client.post).not.toHaveBeenCalled();
+      pending.resolve({ data: detail('a', [message()], true) });
+      await settle();
+    } else {
+      client.post.mockResolvedValue({ data: undefined });
+      const pending = deferred<{ data: ConversationDetail }>();
+      client.get.mockReturnValueOnce(pending.promise);
+      const params = Promise.resolve({ id: 'a' });
+      await act(async () => { render(<Suspense fallback="Suspended"><DetailPage params={params} /></Suspense>); });
+      await settle();
+      expect(client.post).not.toHaveBeenCalled();
+      pending.resolve({ data: detail('a', [message()], false) });
+      await settle();
+    }
+
+    const readCalls = () => client.post.mock.calls.filter(([url]) => url === '/conversations/a/read');
+    expect(readCalls()).toHaveLength(1);
+
+    // Polling and replying must not trigger duplicate mark-read calls.
+    await tick(1000);
+    client.post.mockResolvedValueOnce({ data: { success: true, message_id: 'm3', filtered: false } });
+    fireEvent.change(screen.getByRole('textbox'), { target: { value: 'Follow-up reply' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Reply' }));
+    await settle();
+    expect(readCalls()).toHaveLength(1);
+  });
+
+  it('leaves the page usable when mark-read fails', async () => {
+    client.get.mockImplementation((url: string) => url.endsWith('/poll')
+      ? Promise.resolve(envelope())
+      : Promise.resolve({ data: detail('a', [message()], kind === 'seller') }));
+    if (kind === 'widget') {
+      client.post
+        .mockResolvedValueOnce({ data: detail('a', [message()]) })
+        .mockRejectedValueOnce(new Error('Read-only test fence refused POST /read'));
+      render(<InquiryWidget listingId="listing-a" listingSlug="a" listingTitle="Listing a" />);
+      fireEvent.change(screen.getByRole('textbox'), { target: { value: 'Initial server question' } });
+      fireEvent.click(screen.getByRole('button', { name: 'Submit Question' }));
+      await settle();
+    } else if (kind === 'seller') {
+      client.post.mockRejectedValueOnce(new Error('Read-only test fence refused POST /read'));
+      render(<SellerPage />);
+      fireEvent.click(screen.getByRole('button', { name: /Listing a/ }));
+      await settle();
+    } else {
+      client.post.mockRejectedValueOnce(new Error('Read-only test fence refused POST /read'));
+      const params = Promise.resolve({ id: 'a' });
+      await act(async () => { render(<Suspense fallback="Suspended"><DetailPage params={params} /></Suspense>); });
+      await settle();
+    }
+
+    expect(client.post).toHaveBeenCalledWith('/conversations/a/read');
+    expect(screen.getByText('Initial server question')).toBeTruthy();
+    expect(screen.queryByRole('alert')).toBeNull();
+
+    // Reply form still works normally after a mark-read failure.
+    client.post.mockResolvedValueOnce({ data: { success: true, message_id: 'm2', filtered: false } });
+    client.get.mockImplementation((url: string) => url.endsWith('/poll')
+      ? Promise.resolve(envelope())
+      : Promise.resolve({ data: detail('a', [message(), message('m2', 'a', later, 'Sent after mark-read failure')], kind === 'seller') }));
+    fireEvent.change(screen.getByRole('textbox'), { target: { value: 'Usable reply' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Reply' }));
+    await settle();
+    expect(screen.getByText('Sent after mark-read failure')).toBeTruthy();
+    expect(screen.queryByRole('alert')).toBeNull();
+  });
+});
 
 describe.each(['detail', 'seller', 'widget'] as const)('%s mounted reply form', (kind) => {
   it('starts polls after deferred detail, renders actual messages once, and reflects current status', async () => {

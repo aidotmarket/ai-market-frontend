@@ -151,7 +151,8 @@ it('collapses a seller thread across page navigation and never reopens it on ret
   client.get.mockResolvedValueOnce({ data: { ...items[0], messages: [] } });
   fireEvent.click(screen.getByText(items[0].listing_title).closest('button')!); await settle();
   expect(screen.getByRole('textbox')).toBeTruthy();
-  client.get.mockClear(); next(); await settle(); previous(); await settle();
+  expect(client.post).toHaveBeenCalledExactlyOnceWith(`/conversations/${items[0].id}/read`);
+  client.get.mockClear(); client.post.mockClear(); next(); await settle(); previous(); await settle();
   expect(screen.queryByRole('textbox')).toBeNull(); onlyListReads();
 });
 

@@ -9,6 +9,7 @@ const mocks = vi.hoisted(() => ({
   auth: { isAuthenticated: false, user: { id: 'viewer' }, token: 'synthetic' },
   createInquiry: vi.fn(),
   replyToConversation: vi.fn(),
+  markConversationRead: vi.fn(),
   updateSince: vi.fn(),
 }));
 
@@ -20,6 +21,7 @@ vi.mock('@/store/auth', async (importOriginal) => ({
 vi.mock('@/api/conversations', () => ({
   createInquiry: mocks.createInquiry,
   replyToConversation: mocks.replyToConversation,
+  markConversationRead: mocks.markConversationRead,
 }));
 
 vi.mock('@/hooks/useConversationPoll', () => ({

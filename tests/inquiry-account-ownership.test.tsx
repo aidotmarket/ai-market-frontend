@@ -8,7 +8,7 @@ import DetailPage from '@/app/dashboard/inquiries/[id]/page';
 import SellerPage from '@/app/dashboard/seller/inquiries/page';
 import type { ConversationDetail, ConversationListItem, User } from '@/types';
 
-const api = vi.hoisted(() => ({ getConversation: vi.fn(), getMyConversations: vi.fn(), replyToConversation: vi.fn(), pollConversation: vi.fn() }));
+const api = vi.hoisted(() => ({ getConversation: vi.fn(), getMyConversations: vi.fn(), replyToConversation: vi.fn(), pollConversation: vi.fn(), markConversationRead: vi.fn() }));
 vi.mock('@/api/conversations', () => api);
 vi.mock('@/api/auth', () => ({}));
 vi.mock('next/link', () => ({ default: ({ children, ...props }: React.ComponentProps<'a'>) => <a {...props}>{children}</a> }));

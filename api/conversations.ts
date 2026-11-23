@@ -43,6 +43,12 @@ export async function getConversation(
   return res.data;
 }
 
+export async function markConversationRead(
+  id: string
+): Promise<void> {
+  await api.post(`/conversations/${encodeURIComponent(id)}/read`);
+}
+
 export async function replyToConversation(
   id: string,
   content: string,

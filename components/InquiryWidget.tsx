@@ -5,7 +5,7 @@ import { useState, useCallback, useEffect, useRef } from 'react';
 import Link from 'next/link';
 import { authSessionIdentity, useAuthStore } from '@/store/auth';
 import { useToast } from '@/components/Toast';
-import { createInquiry, getConversation, replyToConversation } from '@/api/conversations';
+import { createInquiry, getConversation, markConversationRead, replyToConversation } from '@/api/conversations';
 import {
   createAnonymousSession,
   readAnonymousMessageStream,
@@ -72,6 +72,7 @@ function ListingInquiryWidget({ listingId, listingSlug, listingTitle }: Props) {
   const sending = useRef(false);
   const readVersion = useRef(0);
   const statusVersion = useRef(0);
+  const markedReadRef = useRef<string | null>(null);
   const owner = authSessionIdentity(useAuthStore.getState());
   const visitRef = useRef({ owner });
   const [renderedVisit, setRenderedVisit] = useState(visitRef.current);
@@ -107,6 +108,7 @@ function ListingInquiryWidget({ listingId, listingSlug, listingTitle }: Props) {
     creating.current = false;
     sending.current = false;
     readVersion.current += 1;
+    markedReadRef.current = null;
   }
   const [anonymousMessages, setAnonymousMessages] = useState<AnonymousInquiryMessage[]>([]);
   const [anonymousError, setAnonymousError] = useState<'error' | 'timeout' | null>(null);
@@ -441,6 +443,17 @@ function ListingInquiryWidget({ listingId, listingSlug, listingTitle }: Props) {
       setRefreshError('');
     }
   }, [accepted, messages]);
+
+  useEffect(() => {
+    if (!conversation || !current()) return;
+    if (markedReadRef.current === conversation.id) return;
+    markedReadRef.current = conversation.id;
+    try {
+      void Promise.resolve(markConversationRead(conversation.id)).catch(() => {});
+    } catch {
+      // Failed mark-read must not break the widget.
+    }
+  }, [conversation, current]);
 
   const handleReply = async () => {
     if (!current() || sending.current || accepted || !replyText.trim() || !conversation) return;
