@@ -1,5 +1,5 @@
 import type { LicenseSelection } from './listingLicenses';
-import type { ConfirmationKey, ListingApprovalV1, ListingApprovalV3 } from './sellerListingReview';
+import type { ConfirmationKey, ListingApprovalV1, ListingApprovalV3, ListingApprovalV4 } from './sellerListingReview';
 
 /** Backend PR #1063, 117f3468b86c4dbb0679a82cbf4300376b28a11c.
  * C0 contracts only: no endpoint calls or rollout activation.
@@ -91,8 +91,8 @@ export function isCoveredConfirmationVersion(value: unknown): value is CoveredCo
 }
 
 /** Intentionally excludes legacy seller-listing-confirmation-v2; must not gate the legacy v2 reader path. */
-export function isUncoveredConfirmationVersion(value: unknown): value is ListingApprovalV1['confirmation_version'] | ListingApprovalV3['confirmation_version'] {
-  return value === 'seller-listing-confirmation-v1' || value === 'seller-listing-confirmation-v3';
+export function isUncoveredConfirmationVersion(value: unknown): value is ListingApprovalV1['confirmation_version'] | ListingApprovalV3['confirmation_version'] | ListingApprovalV4['confirmation_version'] {
+  return value === 'seller-listing-confirmation-v1' || value === 'seller-listing-confirmation-v3' || value === 'seller-listing-confirmation-v4';
 }
 
 export function isCoveredApproval(value: ListingApproval): value is CoveredApproval {

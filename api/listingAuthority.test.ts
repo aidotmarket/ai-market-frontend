@@ -63,7 +63,7 @@ describe('T1 covered_contract_variants at the type/helper boundary', () => {
     expect(isUncoveredConfirmationVersion(approval.confirmation_version)).toBe(!covered);
   });
   it.each([null, undefined, {}, true, 1, 'seller-listing-confirmation-v2',
-    'seller-listing-confirmation-v4', 'seller-listing-confirmation-v2-authority-v1',
+    'seller-listing-confirmation-v5', 'seller-listing-confirmation-v2-authority-v1',
     'seller-listing-confirmation-v1-authority-v2', 'seller-listing-confirmation-v3-authority-v1 ',
   ])('never treats unknown confirmation %j as uncovered fallback', version => {
     expect(isCoveredConfirmationVersion(version)).toBe(false);

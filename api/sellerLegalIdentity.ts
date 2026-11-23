@@ -21,6 +21,13 @@ export async function getSellerLegalIdentity():Promise<SellerLegalIdentity> {
   return (await api.get<SellerLegalIdentity>('/seller-workspace/legal-identity')).data;
 }
 
+export type LastSigner = {signer_name:string|null;signer_title:string|null;signed_at:string|null};
+
+/** Signer name and title from this seller account's most recent licence signature. */
+export async function getLastSigner():Promise<LastSigner> {
+  return (await api.get<LastSigner>('/seller-workspace/legal-identity/last-signer')).data;
+}
+
 export async function refreshSellerLegalIdentity():Promise<SellerLegalIdentity> {
   return (await api.post<SellerLegalIdentity>('/seller-workspace/legal-identity/refresh')).data;
 }

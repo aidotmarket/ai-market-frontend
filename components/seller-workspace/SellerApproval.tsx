@@ -6,7 +6,8 @@ import NativeSellerAuth from '@/components/NativeSellerAuth';
 import {nativeAuthError} from '@/api/connector-seller-settings';
 import {useListingFlow} from './GuidedListingFlow';
 import SellerPublication from './SellerPublication';
-import { approveListingReview, CONFIRMATION_KEYS, LICENSE_CONFIRMATION_KEYS, type ConfirmationKey, type ListingReview } from '@/api/sellerListingReview';
+import { approveListingReview, reviewConfirmationKeys, type ConfirmationKey, type ListingReview } from '@/api/sellerListingReview';
+import CovenantConfirmedNote from './CovenantConfirmedNote';
 import { listingPolishEnabled, reviewError, reviewNetworkFailure, type ReviewError } from '@/api/listingPolish';
 import { listingPolish as polishCopy } from '@/lib/i18n/listing-polish';
 import { useOptionalSellerListingDraft } from './SellerListingDraftStore';
@@ -36,7 +37,8 @@ export default function SellerApproval({review, active, rendered,disabled=false}
     if (!active) {controller.current?.abort();controller.current = null;setBusy(false);}
   }, [active]);
   const sampleDecision=review.sample_decision??'none';
-  const confirmationKeys:ConfirmationKey[]=[...(review.license_selection?LICENSE_CONFIRMATION_KEYS:CONFIRMATION_KEYS),...(sampleDecision==='member_files'?['sample_files_confirmed' as const]:[])];
+  const confirmationKeys:ConfirmationKey[]=[...reviewConfirmationKeys(review),...(sampleDecision==='member_files'?['sample_files_confirmed' as const]:[])];
+  const covenantConfirmedEarlier=!!review.license_selection&&!confirmationKeys.includes('covenant_authority_confirmed')&&review.license_selection.seller_acceptance.authority_confirmed;
   const ready = active && rendered && !disabled && confirmed && !stale && !receipt && !polishRefusal && !flow?.polishBusy && !pendingAccept;
   async function approve(event: React.FormEvent) {
     event.preventDefault();
@@ -73,6 +75,7 @@ export default function SellerApproval({review, active, rendered,disabled=false}
         {sampleDecision==='none'&&<li>This listing has no public sample.</li>}
         {confirmationKeys.map(key => <li key={key}>{review.confirmation_statements[key]}{key==='sample_files_confirmed'&&<ul aria-label="Files covered by sample confirmation" className="mt-1 space-y-1 text-xs text-gray-600">{sampleFiles.map(file=><li key={file.index}>{file.key_basename} · {file.size.toLocaleString('en')} bytes · index {file.index}</li>)}</ul>}</li>)}
       </ul>
+      {covenantConfirmedEarlier&&<CovenantConfirmedNote />}
       <label className="flex items-start gap-3 text-sm font-medium leading-6 text-gray-900"><input type="checkbox" checked={confirmed} onChange={event => setConfirmed(event.target.checked)} className="mt-1 h-4 w-4 shrink-0 accent-indigo-700" /><span>I confirm all of the above.</span></label>
     </fieldset>
     <button type="submit" disabled={!ready || busy} className="rounded-lg bg-indigo-700 px-4 py-2.5 text-sm font-semibold text-white hover:bg-indigo-800 disabled:cursor-not-allowed disabled:opacity-50">{busy ? 'Saving approval…' : 'Approve this review'}</button>

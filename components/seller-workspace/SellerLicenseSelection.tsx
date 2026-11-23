@@ -6,7 +6,9 @@ import {
   type LicenseSelection,
 } from '@/api/listingLicenses';
 import {MAX_CUSTOM_LICENSE_CODEPOINTS,canonicalizeCustomText} from '@/lib/customLicenseVerification';
-import {getSellerLegalIdentity,refreshSellerLegalIdentity,saveSellerLegalIdentity,legalIdentityFailure,LEGAL_IDENTITY_SUPPORT_PATH,type SellerLegalIdentity} from '@/api/sellerLegalIdentity';
+import {getSellerLegalIdentity,getLastSigner,refreshSellerLegalIdentity,saveSellerLegalIdentity,legalIdentityFailure,LEGAL_IDENTITY_SUPPORT_PATH,type SellerLegalIdentity} from '@/api/sellerLegalIdentity';
+import {authSessionIdentity,useAuthStore} from '@/store/auth';
+import {COVENANT_AUTHORITY_CONFIRMATION} from '@/lib/sellerCovenantConfirmation';
 import LicenseReadingDialog from '@/components/LicenseReadingDialog';
 import CustomLicenseMarkdown from '@/components/CustomLicenseMarkdown';
 import CustomLicenseEditor from './CustomLicenseEditor';
@@ -37,6 +39,24 @@ export default function SellerLicenseSelection({value, onChange, disabled = fals
   const current=useRef({value,onChange,onIdentityStateChange});
   current.current={value,onChange,onIdentityStateChange};
   const mounted=useRef(true);
+  const sessionIdentity=useAuthStore(authSessionIdentity);
+  const [prefilled,setPrefilled]=useState(false);
+  // Pre-fill the signer from this account's most recent signature; never overwrite what the seller typed.
+  useEffect(()=>{
+    if(!sessionIdentity)return;
+    const signer=current.current.value.seller_acceptance;
+    if(signer.signer_name.trim()||signer.signer_title.trim())return;
+    let live=true;
+    getLastSigner().then(last=>{
+      const latest=current.current.value;
+      if(!live||!mounted.current||authSessionIdentity(useAuthStore.getState())!==sessionIdentity)return;
+      if(!last.signer_name||!last.signer_title)return;
+      if(latest.seller_acceptance.signer_name.trim()||latest.seller_acceptance.signer_title.trim())return;
+      current.current.onChange({...latest,seller_acceptance:{...latest.seller_acceptance,signer_name:last.signer_name,signer_title:last.signer_title}});
+      setPrefilled(true);
+    }).catch(()=>{/* Optional convenience: fields stay empty as before. */});
+    return()=>{live=false;};
+  },[sessionIdentity]);
   const setIdentityState=(state:IdentityState)=>{if(mounted.current){setLegalState(state);current.current.onIdentityStateChange?.(state);}};
   const applyIdentity=(result:SellerLegalIdentity)=>{
     setIdentityState({kind:result.status,value:result});
@@ -212,7 +232,9 @@ export default function SellerLicenseSelection({value, onChange, disabled = fals
       <label className="text-sm font-medium text-gray-900">Signer full name<input aria-label="Signer full name" value={identity.signer_name} onChange={event => updateIdentity('signer_name', event.target.value)} className="mt-2 block w-full rounded-lg border border-gray-300 px-3 py-2" /></label>
       <label className="text-sm font-medium text-gray-900">Signer title<input aria-label="Signer title" value={identity.signer_title} onChange={event => updateIdentity('signer_title', event.target.value)} className="mt-2 block w-full rounded-lg border border-gray-300 px-3 py-2" /></label>
     </div>
-    <label className="flex items-start gap-3 text-sm leading-6 text-gray-700"><input aria-label="Confirm covenant and authority" type="checkbox" checked={identity.authority_confirmed && !stale} disabled={stale || value.kind === 'custom' && !value.license_document_id} onChange={event => updateIdentity('authority_confirmed', event.target.checked)} className="mt-1 h-4 w-4 accent-indigo-700" /><span>I have read the selected licence and Marketplace Listing Covenant. I confirm the covenant facts and that I am authorised to accept them for the seller.</span></label>
+    {prefilled&&<p className="text-xs text-gray-600">Signer details filled in from your last licence signature. Change them if someone else is signing.</p>}
+    <label className="flex items-start gap-3 text-sm leading-6 text-gray-700"><input aria-label="Confirm covenant and authority" type="checkbox" checked={identity.authority_confirmed && !stale} disabled={stale || value.kind === 'custom' && !value.license_document_id} onChange={event => updateIdentity('authority_confirmed', event.target.checked)} className="mt-1 h-4 w-4 accent-indigo-700" /><span>{COVENANT_AUTHORITY_CONFIRMATION}</span></label>
+    <p className="text-xs text-gray-600">You confirm this once for this listing. The review and signing steps show it as confirmed and do not ask again unless you change the licence choice.</p>
     {value.kind==='custom'&&!value.license_document_id&&<p className="text-xs text-gray-600">Save your custom licence text before confirming.</p>}
   </fieldset></div>;
 }
