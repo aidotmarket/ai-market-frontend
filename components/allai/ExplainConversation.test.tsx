@@ -225,6 +225,58 @@ it.each(['reopen', 'navigation', 'owner'] as const)('ignores queued Escape focus
   expect(anotherFocus).not.toHaveBeenCalled();
 });
 
+it.each([
+  { change: 'path before close', remount: false, restores: true },
+  { change: 'query before close', remount: false, restores: true },
+  { change: 'query before close', remount: true, restores: false },
+  { change: 'query after close', remount: false, restores: false },
+  { change: 'owner before close', remount: false, restores: false },
+  { change: 'reopen before frame', remount: false, restores: false },
+])('handles shared launcher focus with $change (remount: $remount)', async ({ change, remount, restores }) => {
+  vi.stubEnv('NEXT_PUBLIC_STAGE_A_EXPLAIN_ENABLED', 'false');
+  const sharedTree = (key = 'original') => <AllAIProvider>
+    <SharedLauncher key={key} />
+    <AllAIPanel />
+  </AllAIProvider>;
+  function SharedLauncher() {
+    const { open } = useAllAI();
+    return <button id="shared-launcher" onClick={open}>Open assistant</button>;
+  }
+  const view = render(sharedTree());
+  const launcher = () => screen.getByRole('button', { name: 'Open assistant' });
+  const original = launcher();
+  original.focus();
+  fireEvent.click(original);
+  const textbox = () => within(panel()).getByRole('textbox');
+  await waitFor(() => expect(document.activeElement).toBe(textbox()));
+
+  const navigate = (path: string, query = '') => {
+    mock.path = path;
+    window.history.pushState(null, '', path + query);
+    view.rerender(sharedTree(remount ? 'replacement' : 'original'));
+  };
+  if (change === 'path before close') navigate('/dashboard/orders');
+  if (change === 'query before close') navigate(mock.path, '?view=storage');
+  if (change === 'owner before close') act(() => { advanceAuthSessionOwner(false); });
+
+  const frames: FrameRequestCallback[] = [];
+  vi.stubGlobal('requestAnimationFrame', (frame: FrameRequestCallback) => frames.push(frame));
+  const focus = vi.spyOn(launcher(), 'focus');
+  fireEvent.keyDown(textbox(), { key: 'Escape' });
+  expect(screen.queryByRole('dialog')).toBeNull();
+  expect(frames).toHaveLength(1);
+
+  if (change === 'query after close') navigate(mock.path, '?view=storage');
+  if (change === 'reopen before frame') {
+    fireEvent.click(launcher());
+    expect(panel()).toBeTruthy();
+  }
+
+  act(() => frames[0](0));
+  expect(focus).toHaveBeenCalledTimes(restores ? 1 : 0);
+  if (restores) expect(document.activeElement).toBe(original);
+});
+
 it('follows the real Save control through empty selection, folder resolution and enabled focus', async () => {
   const save = vi.fn();
   const savedSource = {

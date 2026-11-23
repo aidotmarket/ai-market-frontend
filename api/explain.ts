@@ -330,13 +330,15 @@ export async function appendExplain(scope: Admission, request: ExplainRequest): 
     if (data?.outcome !== 'answered') return confirmHistory();
     if (!validAnswer(data, body)) return confirmHistory();
     if (current !== token) {
+      let verified = false;
       try {
         await proveReplacement(current, data.conversation_id);
-        if (current !== admission.currentToken()) return { kind: 'refused', clear: true };
+        verified = current === admission.currentToken();
       } catch {
         admission.currentToken();
-        return { kind: 'refused', clear: true };
       }
+      // The turn may already be saved even if current authority cannot be verified.
+      if (!verified) return { kind: 'uncertain', history: 'unverified' };
     }
     if (body.question === 'listing_status' && !knownListingStates(data.facts)) return { kind: 'refused', clear: false };
     return { kind: 'answer', answer: data };

@@ -736,9 +736,11 @@ export function AllAIProvider({ children }: { children: ReactNode }) {
         || url !== window.location.href || owner !== authSessionOwner()) return;
       const target = getFocusTarget?.();
       if (target?.isConnected) target.focus();
-      else if (captured?.path === path && captured.url === url && captured.owner === owner) {
+      else if (captured?.owner === owner) {
         if (captured.target.isConnected) captured.target.focus();
-        else if (captured.id) document.getElementById(captured.id)?.focus();
+        else if (captured.id && captured.path === path && captured.url === url) {
+          document.getElementById(captured.id)?.focus();
+        }
       }
     });
   }, []);

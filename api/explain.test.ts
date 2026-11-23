@@ -272,6 +272,47 @@ it.each(['get', 'post'])('cancels a pending %s after two ordinary renewals and a
   expect(axios.post).toHaveBeenCalledTimes(2);
 });
 
+it.each(['verified', 'denied', 'renewed again', 'owner changed'] as const)(
+  'handles a valid first response when current conversation proof is %s',
+  async proof => {
+    let finishProof!: () => void;
+    ports.explain.mockImplementation(async config => {
+      if (config.method === 'post') {
+        useAuthStore.setState({ token: second });
+        return response(config, answerFixture(request));
+      }
+      if (!config.params) return response(config, emptyHistory);
+      if (proof === 'denied') reject(config, 404, { detail: 'NOT_FOUND' });
+      return new Promise(resolve => {
+        finishProof = () => resolve(response(config, initialHistory));
+      });
+    });
+
+    const operation = appendExplain(admit(), request);
+    if (proof === 'denied') {
+      await expect(operation).resolves.toEqual({ kind: 'uncertain', history: 'unverified' });
+    } else {
+      await vi.waitFor(() => expect(finishProof).toBeTypeOf('function'));
+      if (proof === 'renewed again') {
+        useAuthStore.setState({ token: third });
+        await expect(operation).resolves.toEqual({ kind: 'uncertain', history: 'unverified' });
+      } else if (proof === 'owner changed') {
+        advanceAuthSessionOwner(false);
+        await expect(operation).rejects.toThrow();
+      }
+      finishProof();
+      if (proof === 'verified') await expect(operation).resolves.toMatchObject({ kind: 'answer' });
+    }
+
+    expect(calls().map(call => [call.method, call.bearer])).toEqual([
+      ['get', `Bearer ${first}`], ['post', `Bearer ${first}`], ['get', `Bearer ${second}`],
+    ]);
+    expect(calls()[1].body).toEqual(request);
+    expect(calls()[2].params).toEqual({ conversation_id: ids.conversation });
+    expect(axios.post).not.toHaveBeenCalled();
+  },
+);
+
 it.each([
   ['answer', 'answer'], ['refusal', 'refused'], ['lost response', 'uncertain'], ['owner change', null],
 ])('disposes the question auth observer on %s', async (outcome, kind) => {
