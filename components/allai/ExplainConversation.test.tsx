@@ -2,6 +2,7 @@
 
 import { act, cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { afterEach, beforeEach, expect, it, vi } from 'vitest';
+import { AxiosError } from 'axios';
 import type { ReactNode } from 'react';
 import { advanceAuthSessionOwner } from '@/lib/auth-session-owner';
 import { explainCopy, explainQuestions, matchExplainQuestion } from '@/lib/i18n/explain';
@@ -19,14 +20,21 @@ import AllAIPanel from './AllAIPanel';
 import { ExplainEntry, useExplainPage, type ExplainPage } from './ExplainContext';
 
 const mock = vi.hoisted(() => ({
-  path: '/dashboard/seller-workspace', query: '', append: vi.fn(), objects: vi.fn(),
+  path: '/dashboard/seller-workspace', query: '', append: vi.fn(), handoff: vi.fn(), transport: vi.fn(), objects: vi.fn(),
   readPublication: vi.fn(), publishListing: vi.fn(),
 }));
 vi.mock('next/navigation', () => ({
   usePathname: () => mock.path,
   useSearchParams: () => new URLSearchParams(mock.query),
 }));
-vi.mock('@/api/explain', async original => ({ ...await original<typeof import('@/api/explain')>(), appendExplain: mock.append }));
+vi.mock('axios', async original => {
+  const actual = await original<typeof import('axios')>();
+  const create = actual.default.create.bind(actual.default);
+  vi.spyOn(actual.default, 'create').mockImplementation(config => create(config?.baseURL?.endsWith('/allai/explain')
+    ? { ...config, adapter: mock.transport } : config));
+  return actual;
+});
+vi.mock('@/api/explain', async original => ({ ...await original<typeof import('@/api/explain')>(), appendExplain: mock.handoff }));
 vi.mock('@/api/sellerWorkspace', async original => ({
   ...await original<typeof import('@/api/sellerWorkspace')>(), listWorkspaceObjects: mock.objects,
 }));
@@ -49,6 +57,12 @@ const panel = () => screen.getByRole('dialog');
 const input = () => within(panel()).getByRole('textbox', { name: explainCopy().input });
 const setLocale = (locale: string) => fireEvent.change(within(panel()).getByRole('combobox'), { target: { value: locale } });
 
+function deferred() {
+  let resolve!: () => void;
+  const promise = new Promise<void>(done => { resolve = done; });
+  return { promise, resolve };
+}
+
 beforeEach(() => {
   vi.stubEnv('NEXT_PUBLIC_STAGE_A_EXPLAIN_ENABLED', 'true');
   vi.stubGlobal('fetch', vi.fn().mockRejectedValue(new Error('fixture network denied')));
@@ -59,6 +73,14 @@ beforeEach(() => {
   mock.append.mockReset().mockImplementation((_admit, request: ExplainRequest) => Promise.resolve({
     kind: 'answer', answer: answerFixture(request),
   }));
+  mock.handoff.mockReset().mockImplementation(async (admit, request) => {
+    const reply = await mock.append(admit, request);
+    return async (commit: (reply: unknown) => void) => {
+      admit.currentToken();
+      commit(reply);
+    };
+  });
+  mock.transport.mockReset().mockRejectedValue(new Error('unexpected Explain request'));
   mock.objects.mockReset().mockResolvedValue({ objects: guidedObjects, next_cursor: null });
   mock.readPublication.mockReset().mockResolvedValue({ publication_available: true, publication: null });
   mock.publishListing.mockReset();
@@ -67,7 +89,85 @@ beforeEach(() => {
   sessionStorage.clear();
   localStorage.clear();
 });
-afterEach(() => { cleanup(); vi.restoreAllMocks(); vi.unstubAllEnvs(); vi.unstubAllGlobals(); });
+afterEach(() => { cleanup(); vi.useRealTimers(); vi.restoreAllMocks(); vi.unstubAllEnvs(); vi.unstubAllGlobals(); });
+
+it.each(['allowed', 'denied', 'incomplete', 'expired proof', 'renewed again', 'allowance exhausted', 'owner changed', 'route changed'] as const)(
+  'applies a held answer after final consumer renewal only with current scoped proof (%s)', async outcome => {
+    const { appendExplain } = await vi.importActual<typeof import('@/api/explain')>('@/api/explain');
+    const request: ExplainRequest = { intent: 'explain', question: 'where_am_i', locale: 'en', target: questions.where_am_i };
+    const answer = answerFixture(request);
+    const successor = bearer(ids.successor);
+    const later = bearer('77777777-7777-4777-8777-777777777777');
+    const copy = explainCopy();
+    const consumer = deferred();
+    const ready = deferred();
+    const proofRead = deferred();
+    const proof = deferred();
+    mock.handoff.mockImplementationOnce(async (...args: Parameters<typeof appendExplain>) => {
+      const apply = await appendExplain(...args);
+      ready.resolve();
+      await consumer.promise;
+      return apply;
+    });
+    mock.transport.mockImplementation(async config => {
+      const response = { config, status: 200, statusText: 'Synthetic response', headers: {} };
+      if (config.method === 'post') return { ...response, data: answer };
+      if (!config.params) return { ...response, data: { conversation_id: null, expires_at: null, turns: [], before: null } };
+      proofRead.resolve();
+      await proof.promise;
+      if (outcome === 'denied') throw new AxiosError('Synthetic denial', undefined, config, undefined,
+        { ...response, status: 404, data: { detail: 'NOT_FOUND' } });
+      return { ...response, data: {
+        conversation_id: answer.conversation_id,
+        expires_at: outcome === 'incomplete' ? null : outcome === 'expired proof' ? '2000-01-01T00:00:00Z' : answer.expires_at,
+        turns: [answer.turn], before: null,
+      } };
+    });
+
+    render(tree(workspace));
+    fireEvent.click(await screen.findByRole('button', { name: copy.question(request.question) }));
+    await ready.promise;
+    expect(within(panel()).queryByText(answer.turn.answer)).toBeNull();
+    await act(async () => {
+      useAuthStore.setState({ token: successor });
+      if (outcome === 'allowance exhausted') useAuthStore.setState({ token: later });
+      consumer.resolve();
+      if (outcome !== 'allowance exhausted') await proofRead.promise;
+    });
+    expect(within(panel()).queryByText(answer.turn.answer)).toBeNull();
+    if (outcome === 'allowed') {
+      vi.useFakeTimers({ toFake: ['Date', 'setInterval', 'clearInterval'] });
+      vi.setSystemTime(Date.parse(answer.expires_at) - 500);
+    }
+    await act(async () => {
+      if (outcome === 'renewed again') useAuthStore.setState({ token: later });
+      if (outcome === 'owner changed') advanceAuthSessionOwner(false);
+      if (outcome === 'route changed') window.history.replaceState(null, '', '/dashboard/elsewhere');
+      proof.resolve();
+    });
+
+    const calls = mock.transport.mock.calls.map(([config]) => config);
+    expect(calls.map(({ method }) => method)).toEqual(outcome === 'allowance exhausted' ? ['get', 'post'] : ['get', 'post', 'get']);
+    expect(JSON.parse(calls[1].data)).toEqual(request);
+    if (outcome !== 'allowance exhausted') {
+      expect(calls[2].params).toEqual({ conversation_id: answer.conversation_id });
+      expect(calls[2].headers.get('Authorization')).toBe(`Bearer ${successor}`);
+    }
+    if (outcome === 'allowed') {
+      expect(within(panel()).getByText(answer.turn.answer)).toBeTruthy();
+      await act(async () => { await vi.advanceTimersByTimeAsync(500); });
+      expect(screen.queryByText(answer.turn.answer)).toBeNull();
+    } else {
+      expect(screen.queryByText(answer.turn.answer)).toBeNull();
+      if (outcome === 'owner changed' || outcome === 'route changed') {
+        expect(screen.queryByText(copy.uncertain)).toBeNull();
+      } else {
+        expect(within(panel()).getByText(copy.uncertain)).toBeTruthy();
+      }
+    }
+    expect(fetch).not.toHaveBeenCalled();
+  },
+);
 
 it.each(explainQuestions)('dispatches only the closed selector for %s and renders approved output', async question => {
   const target = questions[question];

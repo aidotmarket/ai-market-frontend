@@ -66,7 +66,9 @@ it('uses the owned role and canonical order selector while preserving Report Iss
   route.segment = canonical.toUpperCase();
   route.path = '/dashboard/orders/' + route.segment;
   useAuthStore.setState({ user: { ...explainUser, id: 'buyer-fixture' }, token: bearer(ids.session, 'org', 'buyer-fixture') });
-  append.mockImplementation(async (_admission, request) => ({ kind: 'answer', answer: answerFixture(request) }));
+  append.mockImplementation(async (_admission, request) => async (commit: (reply: unknown) => void) => {
+    commit({ kind: 'answer', answer: answerFixture(request) });
+  });
   try {
     render(<AllAIProvider><Page /><AllAIPanel /></AllAIProvider>);
     fireEvent.click(await screen.findByRole('button', { name: 'What is the status of my order?' }));

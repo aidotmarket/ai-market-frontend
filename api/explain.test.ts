@@ -12,7 +12,7 @@ vi.mock('axios', async original => {
   return actual;
 });
 
-import { appendExplain, type ExplainRequest } from './explain';
+import { appendExplain as startExplain, type ExplainRequest } from './explain';
 import { refreshAccessToken } from './client';
 import { advanceAuthSessionOwner, assertAuthSessionOwner, authSessionOwner } from '@/lib/auth-session-owner';
 import { sessionCsrf } from '@/lib/session-csrf';
@@ -26,6 +26,12 @@ const request: ExplainRequest = { intent: 'explain', locale: 'en', question: 'st
 const initialHistory = { conversation_id: ids.conversation, expires_at: '2099-01-01T00:00:00Z', turns: [], before: null };
 const emptyHistory = { ...initialHistory, conversation_id: null, expires_at: null };
 const rotated = { detail: 'SESSION_ROTATED' };
+async function appendExplain(...args: Parameters<typeof startExplain>) {
+  const apply = await startExplain(...args);
+  return new Promise<Parameters<Parameters<typeof apply>[0]>[0]>((resolve, reject) => {
+    void apply(resolve).catch(reject);
+  });
+}
 const response = (config: InternalAxiosRequestConfig, data: unknown, status = 200) =>
   ({ config, status, data, headers: {}, statusText: 'Synthetic response' });
 function reject(config: InternalAxiosRequestConfig, status: number, data: unknown) {

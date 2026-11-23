@@ -62,6 +62,7 @@ type Reply =
   | { kind: NonAppend }
   | { kind: 'uncertain'; history: 'unverified' | 'possibleMatch' | 'noMatch' }
   | { kind: 'refused'; clear: boolean };
+type ApplyReply = (commit: (reply: Reply) => void) => Promise<void>;
 
 type Session = { subject: string; organization: string | null; generation: number; sessionId: string | null };
 const listingStates = new Set(['draft', 'review', 'published', 'unlisted', 'withdrawn', 'hidden']);
@@ -164,6 +165,7 @@ function refused(error: unknown): Reply {
 
 function validAnswer(data: ExplainAnswer, request: ExplainRequest): boolean {
   return data?.outcome === 'answered' && typeof data.conversation_id === 'string'
+    && data.conversation_id.length > 0
     && (!request.conversation_id || request.conversation_id === data.conversation_id)
     && Number.isFinite(Date.parse(data.expires_at))
     && data.turn?.question === request.question && data.turn.locale === request.locale
@@ -178,7 +180,7 @@ function knownListingStates(facts: ExplainAnswer['facts']) {
       && Object.keys(counts).every(code => listingStates.has(code))));
 }
 
-export async function appendExplain(scope: Admission, request: ExplainRequest): Promise<Reply> {
+export async function appendExplain(scope: Admission, request: ExplainRequest): Promise<ApplyReply> {
   const controller = new AbortController();
   const signal = AbortSignal.any([scope.signal, controller.signal]);
   const admission = { ...scope, signal, currentToken: () => {
@@ -200,25 +202,84 @@ export async function appendExplain(scope: Admission, request: ExplainRequest): 
   });
   const unsubscribeOwner = subscribeAuthSessionOwner(() => controller.abort());
   let onAbort!: () => void;
+  let disposed = false;
   const cancellation = new Promise<never>((_, reject) => {
-    onAbort = () => reject(signal.reason);
+    onAbort = () => {
+      dispose();
+      reject(signal.reason);
+    };
     signal.addEventListener('abort', onAbort, { once: true });
   });
 
-  try {
-    const reply = await Promise.race([cancellation, run()]);
-    signal.throwIfAborted();
-    return reply;
-  } catch (error) {
-    if (error !== replacementLimit) throw error;
-    scope.signal.throwIfAborted();
-    scope.currentToken();
-    return mayHaveAppended ? { kind: 'uncertain', history: 'unverified' } : { kind: 'refused', clear: true };
-  } finally {
+  const unknown = { kind: 'uncertain', history: 'unverified' } as const;
+  const limited = (): Reply => mayHaveAppended ? unknown : { kind: 'refused', clear: true };
+  function dispose() {
+    if (disposed) return;
+    disposed = true;
     signal.removeEventListener('abort', onAbort);
     unsubscribeOwner();
     unsubscribeAuth();
   }
+
+  let reply: Reply;
+  try {
+    reply = await Promise.race([cancellation, run()]);
+    signal.throwIfAborted();
+  } catch (error) {
+    if (error !== replacementLimit) {
+      dispose();
+      throw error;
+    }
+    reply = limited();
+  }
+
+  // The caller owns this one-use handoff. Keep the question's credential
+  // observer alive until the view applies or discards its result.
+  let applied = false;
+  return async commit => {
+    if (applied) return;
+    applied = true;
+    try {
+      let result = reply;
+      let provedToken = token;
+      if (!signal.aborted && reply.kind === 'answer') {
+        const { answer } = reply;
+        const current = admission.currentToken();
+        if (current !== token && Date.parse(answer.expires_at) > Date.now()) {
+          try {
+            const { snapshot } = await Promise.race([
+              cancellation, proveReplacement(current, answer.conversation_id),
+            ]);
+            const expiry = snapshot.expires_at;
+            if (typeof expiry !== 'string' || !(Date.parse(expiry) > Date.now())) {
+              result = unknown;
+            } else {
+              provedToken = current;
+              if (Date.parse(expiry) < Date.parse(answer.expires_at)) {
+                result = { kind: 'answer', answer: { ...answer, expires_at: expiry } };
+              }
+            }
+          } catch {
+            result = unknown;
+          }
+        }
+      }
+      // The authoritative view and credential are checked on the commit stack.
+      scope.signal.throwIfAborted();
+      const latest = scope.currentToken();
+      if (signal.aborted && signal.reason !== replacementLimit) signal.throwIfAborted();
+      if (signal.aborted) result = limited();
+      if (result.kind === 'answer') {
+        if (latest !== provedToken || Date.parse(result.answer.expires_at) <= Date.now()) result = unknown;
+        else if (body.question === 'listing_status' && !knownListingStates(result.answer.facts)) {
+          result = { kind: 'refused', clear: false };
+        }
+      }
+      commit(result);
+    } finally {
+      dispose();
+    }
+  };
 
   async function proveReplacement(replacement: string, conversationId = body.conversation_id) {
     if (replacementUsed) throw new Error('Explain credential replacement already used');
@@ -322,25 +383,13 @@ export async function appendExplain(scope: Admission, request: ExplainRequest): 
       }
       return refused(error);
     }
-    const current = admission.currentToken();
+    admission.currentToken();
     if (data?.outcome === 'select_context' || data?.outcome === 'suggestions') {
       mayHaveAppended = false;
       return { kind: data.outcome };
     }
     if (data?.outcome !== 'answered') return confirmHistory();
     if (!validAnswer(data, body)) return confirmHistory();
-    if (current !== token) {
-      let verified = false;
-      try {
-        await proveReplacement(current, data.conversation_id);
-        verified = current === admission.currentToken();
-      } catch {
-        admission.currentToken();
-      }
-      // The turn may already be saved even if current authority cannot be verified.
-      if (!verified) return { kind: 'uncertain', history: 'unverified' };
-    }
-    if (body.question === 'listing_status' && !knownListingStates(data.facts)) return { kind: 'refused', clear: false };
     return { kind: 'answer', answer: data };
   }
 }

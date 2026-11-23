@@ -1,6 +1,7 @@
 'use client';
 
 import { useEffect, useLayoutEffect, useRef, useState } from 'react';
+import { flushSync } from 'react-dom';
 import { appendExplain, explainActions, type ExplainAction, type ExplainAnswer, type ExplainQuestion } from '@/api/explain';
 import { useAuthStore } from '@/store/auth';
 import { subscribeAuthSessionOwner } from '@/lib/auth-session-owner';
@@ -97,35 +98,35 @@ function Conversation({ view, launchId, consume, locale, close }: {
         thread.current = null;
         setTurns([]);
       }
-      const reply = await appendExplain({ owner: view.registration.owner, signal: controller.signal, currentToken }, {
+      const apply = await appendExplain({ owner: view.registration.owner, signal: controller.signal, currentToken }, {
         intent: 'explain', question, locale, target, ...(thread.current && { conversation_id: thread.current.id }),
       });
-      currentToken();
-      if (reply.kind === 'answer') {
-        thread.current = { id: reply.answer.conversation_id, expires: Date.parse(reply.answer.expires_at) };
-        setTurns(previous => [...previous, reply.answer]);
-      } else if (reply.kind === 'uncertain') {
-        if (reply.history === 'unverified') { thread.current = null; setTurns([]); }
-        setNotice(reply.history === 'unverified' ? 'uncertain' : reply.history);
-      } else if (reply.kind === 'select_context') {
-        setChooseRole(question === 'order_status' && !!page.orderChoices?.length);
-        setNotice('selectContext');
-      } else if (reply.kind === 'suggestions') {
-        setNotice('suggestions');
-      } else if (reply.kind === 'refused') {
-        if (reply.clear) { thread.current = null; setTurns([]); }
-        setNotice('unavailable');
-      }
+      await apply(reply => flushSync(() => {
+        if (reply.kind === 'answer') {
+          thread.current = { id: reply.answer.conversation_id, expires: Date.parse(reply.answer.expires_at) };
+          setTurns(previous => [...previous, reply.answer]);
+        } else if (reply.kind === 'uncertain') {
+          if (reply.history === 'unverified') { thread.current = null; setTurns([]); }
+          setNotice(reply.history === 'unverified' ? 'uncertain' : reply.history);
+        } else if (reply.kind === 'select_context') {
+          setChooseRole(question === 'order_status' && !!page.orderChoices?.length);
+          setNotice('selectContext');
+        } else if (reply.kind === 'suggestions') {
+          setNotice('suggestions');
+        } else if (reply.kind === 'refused') {
+          if (reply.clear) { thread.current = null; setTurns([]); }
+          setNotice('unavailable');
+        }
+        setBusy(false);
+      }));
     } catch {
       try {
         currentToken();
         setNotice('unavailable');
+        setBusy(false);
       } catch { /* The invalidated view cannot publish its result. */ }
     } finally {
-      if (flight.current === controller) {
-        flight.current = null;
-        if (!controller.signal.aborted) setBusy(false);
-      }
+      if (flight.current === controller) flight.current = null;
     }
   }
 

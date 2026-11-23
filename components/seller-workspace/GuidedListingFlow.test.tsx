@@ -139,7 +139,9 @@ it('binds Explain to the real checklist, saved selector, and ephemeral Files and
  mocks.draft={...(mocks.draft as object),draft_id:ids.draft,version:2};
  mocks.source.mockResolvedValue({...source,version:4,content:{...source.content,connection_version:7}});
  mocks.review.mockResolvedValue({draft_version:2,source_version:4,missing_fields:[],approval:null});
- mocks.append.mockImplementation(async (_admission,request)=>({kind:'answer',answer:answerFixture(request)}));
+ mocks.append.mockImplementation(async (_admission,request)=>async (commit: (reply: unknown) => void) => {
+  commit({kind:'answer',answer:answerFixture(request)});
+ });
  function FileEdit(){
   const flow=useListingFlow()!;
   return <button type="button" onClick={()=>{flow.setFilesDirty(true);flow.setLicenceDirty(true);}}>Edit file and licence choices</button>;
