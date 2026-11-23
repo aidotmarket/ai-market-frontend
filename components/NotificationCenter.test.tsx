@@ -64,6 +64,24 @@ describe('NotificationList', () => {
     expect(action).toEqual({ kind: 'route', href: '/dashboard/orders/o-1' });
   });
 
+  it('shows a readable caption for an inquiry reply', () => {
+    const notification: NotificationItem = {
+      ...baseNotification,
+      type: 'inquiry_replied',
+      title: 'A seller replied to your inquiry',
+      body: null,
+      metadata: {},
+      link_url: null,
+    };
+
+    const html = renderToStaticMarkup(
+      <NotificationList notifications={[notification]} onNotificationClick={vi.fn()} />
+    );
+
+    expect(html).toContain('>Inquiry reply</span>');
+    expect(html).not.toContain('inquiry_replied');
+  });
+
   it('labels a terminated licence and keeps its record link routable', () => {
     const notification: NotificationItem = {
       ...baseNotification,
