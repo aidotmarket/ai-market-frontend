@@ -26,6 +26,7 @@ import InquiryWidget from '@/components/InquiryWidget';
 import ScanFindingsBadge from '@/components/listings/ScanFindingsBadge';
 import BackendListingHtml from '@/components/BackendListingHtml';
 import ListingDocumentation from '@/components/listing/ListingDocumentation';
+import { selectListingDocumentation } from '@/lib/listingDocumentation';
 import FileBreakdown from './FileBreakdown';
 import SampleFiles, { type ListingWithSamples } from './SampleFiles';
 import ListingLicenseDisclosure from '@/components/ListingLicenseDisclosure';
@@ -161,14 +162,10 @@ export default async function ListingDetailPage({ params, searchParams }: Props)
     : listing.at_a_glance;
   const [documents, versions] = await Promise.all([documentsPromise, fetchListingVersions(listing.id)]);
   const sampleFiles = listing.sample_files ?? approved?.sample_files;
-  const hasTechnicalDocumentation = documents.some((document) => document.kind === 'technical_markdown');
-  const hasPublicSampleFiles = sampleFiles?.some((file) => file.state === 'available');
-  const requiresFilePurchase = listing.fulfillment_type === 'file_download' && listing.purchasable
-    && !purchaseDisabledReason && !listing.is_accessible_for_free && listing.pricing.price > 0;
-  const emptyNotice = hasPublicSampleFiles || documents.length ? undefined
-    : requiresFilePurchase
-      ? 'No public documentation or sample is available. Use Ask a Question to check field names or ask whether a data dictionary comes with the purchased files.'
-      : 'No public documentation or sample is available. Use Ask a Question to check field names or ask for a data dictionary.';
+  const {technical, pdf} = selectListingDocumentation(documents);
+  const hasPublicSampleFiles = !pendingSellerTerms && sampleFiles?.some((file) => file.state === 'available');
+  const emptyNotice = technical || pdf || hasPublicSampleFiles ? undefined
+    : 'Want to check field names or whether a data dictionary is included? Use Ask a Question before you buy.';
   const hasVersionRows = versions.length > 0;
   // S1097: legacy listings intentionally keep byte-identical rendering and omit
   // the pre-purchase download-window line pending Max's R5.1h-vs-parity adjudication.
@@ -207,7 +204,7 @@ export default async function ListingDetailPage({ params, searchParams }: Props)
               <span>&middot;</span>
               <span>{listing.inquiry_count} inquiries</span>
             </div>
-            {hasTechnicalDocumentation && (
+            {technical && (
               <a href="#technical-documentation" className="mt-2 inline-block text-sm font-medium text-indigo-700 underline">
                 Read public technical documentation
               </a>
@@ -301,7 +298,9 @@ export default async function ListingDetailPage({ params, searchParams }: Props)
             </div>
           )}
 
-          {!pendingSellerTerms && <BuyerSamplePreview slug={listing.slug} listingId={listing.id} emptyNotice={emptyNotice} />}
+          {pendingSellerTerms
+            ? emptyNotice && <p className="text-sm text-gray-600">{emptyNotice}</p>
+            : <BuyerSamplePreview slug={listing.slug} listingId={listing.id} emptyNotice={emptyNotice} />}
         </div>
 
         {/* Sidebar */}
