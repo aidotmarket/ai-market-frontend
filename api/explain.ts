@@ -26,7 +26,7 @@ export type ExplainRequest = {
 };
 
 export const explainActions = {
-  publish: ['open_workspace', 'open_files', 'open_license', 'open_listing', 'open_review', 'publish', 'view_listing'],
+  publish: ['open_workspace', 'open_storage', 'open_files', 'open_license', 'open_listing', 'open_review', 'publish', 'view_listing'],
   storage: ['open_storage', 'open_files'],
   where_am_i: ['open_workspace', 'open_storage', 'open_files', 'save_files', 'open_license', 'open_listing', 'open_review'],
   listing_status: ['view_listing', 'view_listings'],

@@ -496,6 +496,49 @@ it('focuses the mounted Workspace section button without changing sections', asy
   expect(navigate).not.toHaveBeenCalled();
 });
 
+it.each([
+  ['revoked storage', 'open_storage', 'available'],
+  ['expired verification', 'open_storage', 'available'],
+  ['unmounted Storage control', 'open_storage', 'unmounted'],
+  ['unregistered Storage control', 'open_storage', 'unregistered'],
+  ['stale saved selection', 'open_files', 'available'],
+  ['missing files', 'open_files', 'available'],
+] as const)('uses the current Publish shortcut for %s', async (scenario, action, controlState) => {
+  const { appendExplain } = await vi.importActual<typeof import('@/api/explain')>('@/api/explain');
+  const request: ExplainRequest = { intent: 'explain', question: 'publish', locale: 'en', target: questions.publish };
+  const answer = answerFixture(request);
+  answer.turn.answer = `Synthetic Publish answer for ${scenario}.`;
+  const storage = action === 'open_storage';
+  const facts = {
+    ...answer.facts, next_action: action, saved_step: storage ? 'storage' : 'data',
+    blocking_reason_codes: [storage ? 'storage_verification_required' : 'files_selection_required'],
+  };
+  mock.handoff.mockImplementationOnce(appendExplain);
+  mock.transport.mockImplementation(async config => ({
+    config, status: 200, statusText: 'Synthetic response', headers: {},
+    data: config.method === 'post' ? { ...answer, facts }
+      : { conversation_id: null, expires_at: null, turns: [], before: null },
+  }));
+
+  const navigate = vi.fn();
+  const actions = controlState === 'unregistered' ? [] : [action];
+  render(tree({ scope: 'publish', targets: { publish: questions.publish }, actions },
+    controlState !== 'unmounted' && <WorkspaceOverview connections={[]} view="publish" onViewChange={navigate} />));
+  fireEvent.click(screen.getByRole('button', { name: explainCopy().question('publish') }));
+  await within(panel()).findByText(answer.turn.answer);
+  const name = explainCopy().action(action);
+  if (controlState === 'available') {
+    const control = within(screen.getByRole('navigation', { name: 'Workspace sections' }))
+      .getByRole('button', { name: storage ? 'Connect your storage' : 'Choose your files' });
+    fireEvent.click(within(panel()).getByRole('button', { name }));
+    await waitFor(() => expect(document.activeElement).toBe(control));
+  } else {
+    expect(within(panel()).queryByRole('button', { name })).toBeNull();
+  }
+  expect(navigate).not.toHaveBeenCalled();
+  expect(mock.transport.mock.calls.map(([config]) => config.method)).toEqual(['get', 'post']);
+});
+
 it('leaves the ordinary panel entry available while the frontend switch is off', () => {
   vi.stubEnv('NEXT_PUBLIC_STAGE_A_EXPLAIN_ENABLED', 'false');
   render(tree(workspace));
@@ -613,7 +656,19 @@ it.each(['timer', 'focus', 'pageshow', 'visibilitychange', 'render', 'late resul
       if (wake === 'render') fireEvent.change(input(), { target: { value: 'draft text' } });
       else if (wake !== 'late result') fireEvent(wake === 'visibilitychange' ? document : window, new Event(wake));
     }
-    if (wake !== 'late result') expect(within(panel()).queryByText(prior.turn.answer)).toBeNull();
+    if (wake === 'late result') {
+      expect(admit.signal.aborted).toBe(false);
+      expect(within(panel()).getByText(prior.turn.answer)).toBeTruthy();
+    } else {
+      expect(admit.signal.aborted).toBe(true);
+      expect(within(panel()).queryByText(prior.turn.answer)).toBeNull();
+      expect(within(panel()).queryByText(explainCopy().busy)).toBeNull();
+    }
+    if (wake === 'render') {
+      vi.setSystemTime(deadline - 1);
+      fireEvent.change(input(), { target: { value: 'more draft text' } });
+      expect(within(panel()).queryByText(prior.turn.answer)).toBeNull();
+    }
     await act(async () => pending.resolve());
     expect(admit.signal.aborted).toBe(true);
     expect(within(panel()).queryByText(prior.turn.answer)).toBeNull();
@@ -622,6 +677,27 @@ it.each(['timer', 'focus', 'pageshow', 'visibilitychange', 'render', 'late resul
     expect(mock.append).toHaveBeenCalledTimes(2);
   },
 );
+
+it('clears a private notice when a render observes expiry before the timer fires', async () => {
+  const answer = answerFixture({ intent: 'explain', question: 'where_am_i', locale: 'en', target: questions.where_am_i });
+  const deadline = Date.parse(answer.expires_at);
+  vi.useFakeTimers({ toFake: ['Date', 'setTimeout', 'clearTimeout'] });
+  vi.setSystemTime(deadline - 61_000);
+  mock.append.mockResolvedValueOnce({ kind: 'answer', answer });
+  render(tree(workspace));
+  await act(async () => fireEvent.click(screen.getByRole('button', { name: 'Where am I?' })));
+  fireEvent.change(input(), { target: { value: 'unmatched fixture' } });
+  fireEvent.keyDown(input(), { key: 'Enter' });
+  expect(within(panel()).getByText(explainCopy().suggestions)).toBeTruthy();
+
+  vi.setSystemTime(deadline);
+  fireEvent.change(input(), { target: { value: 'draft text' } });
+  expect(within(panel()).queryByText(explainCopy().suggestions)).toBeNull();
+  vi.setSystemTime(deadline - 1);
+  fireEvent.change(input(), { target: { value: 'more draft text' } });
+  expect(within(panel()).queryByText(explainCopy().suggestions)).toBeNull();
+  expect(within(panel()).queryByText(answer.turn.answer)).toBeNull();
+});
 
 it('cancels a pending successor read when the established conversation expires', async () => {
   const { appendExplain } = await vi.importActual<typeof import('@/api/explain')>('@/api/explain');

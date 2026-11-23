@@ -51,8 +51,12 @@ function Conversation({ view, launchId, consume, locale, close }: {
   const visibleNotice = !expired && noticeToken === token ? notice : undefined;
   const showRoleChoices = !expired && noticeToken === token && chooseRole;
 
-  const expireThread = useCallback(() => {
-    if (!thread.current || thread.current.expires > Date.now()) return false;
+  const expireThread = useCallback((observed?: ExplainAnswer) => {
+    const current = thread.current;
+    if (!current) return false;
+    if (observed) {
+      if (current.id !== observed.conversation_id || current.expires !== Date.parse(observed.expires_at)) return false;
+    } else if (current.expires > Date.now()) return false;
     thread.current = null;
     flight.current?.abort();
     flight.current = null;
@@ -84,6 +88,10 @@ function Conversation({ view, launchId, consume, locale, close }: {
   useEffect(() => {
     if (log.current) log.current.scrollTop = log.current.scrollHeight;
   }, [turns, notice]);
+  useLayoutEffect(() => {
+    // Apply the committed expiry observation even if the wall clock has moved back.
+    if (expired && lastTurn) expireThread(lastTurn);
+  }, [expired, lastTurn, expireThread]);
   useLayoutEffect(() => {
     if (deadline === undefined) return;
     let timer: number | undefined;
