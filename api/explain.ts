@@ -52,13 +52,17 @@ type History = {
   expires_at: string | null;
   turns: DisplayTurn[];
   before: string | null;
+  predecessor_verified?: boolean;
 };
+type NonAppend = 'select_context' | 'suggestions';
 type Reply =
   | { kind: 'answer'; answer: ExplainAnswer }
+  | { kind: NonAppend }
   | { kind: 'uncertain'; history: 'unverified' | 'possibleMatch' | 'noMatch' }
   | { kind: 'refused'; clear: boolean };
 
 type Session = { subject: string; organization: string | null; generation: number; sessionId: string };
+const listingStates = new Set(['draft', 'review', 'published', 'unlisted', 'withdrawn', 'hidden']);
 
 export function explainSession(token: string | null): Session | null {
   try {
@@ -76,6 +80,8 @@ export function explainSession(token: string | null): Session | null {
 }
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000';
+const predecessorHeader = 'X-Explain-Predecessor-Session';
+const sessionRowId = /^[a-f\d]{8}-[a-f\d]{4}-[a-f\d]{4}-[a-f\d]{4}-[a-f\d]{12}$/i;
 
 // This instance has no generic request/response interceptors. Each request uses
 // the admitted bearer and its own CSRF value, without a cookie or replay.
@@ -95,23 +101,50 @@ type Admission = {
   currentToken: () => string;
 };
 
-function credentialConfig(admission: Admission, token: string) {
+function credentialConfig(admission: Admission, token: string, predecessor?: string) {
   if (token !== admission.currentToken()) throw new Error('Explain credential changed');
   return {
-    headers: { Authorization: `Bearer ${token}`, 'X-CSRF-Token': sessionCsrf(token) },
+    headers: {
+      Authorization: `Bearer ${token}`,
+      'X-CSRF-Token': sessionCsrf(token),
+      ...(predecessor && { [predecessorHeader]: predecessor }),
+    },
     signal: admission.signal,
   };
 }
 
-async function history(admission: Admission, token: string, conversationId?: string): Promise<History> {
+async function history(admission: Admission, token: string, conversationId?: string, predecessor?: string): Promise<History> {
   const { data } = await firstPartyExplain.get<History>('/history', {
-    ...credentialConfig(admission, token),
+    ...credentialConfig(admission, token, predecessor),
     params: conversationId ? { conversation_id: conversationId } : undefined,
   });
   admission.currentToken();
   if (!data || !Array.isArray(data.turns) || (data.conversation_id !== null && typeof data.conversation_id !== 'string')
     || (conversationId && data.conversation_id !== conversationId)) throw new Error('Invalid Explain history');
+  if (predecessor && data.predecessor_verified !== true) throw new Error('Unverified Explain predecessor');
   return data;
+}
+
+async function waitForRefresh(admission: Admission, retired?: string) {
+  const current = admission.currentToken();
+  const pending = currentSessionRefresh(admission.owner);
+  if (pending) await pending;
+  else if (retired === current) await refreshAccessToken(retired);
+}
+
+async function replacementHistory(admission: Admission, previous: string, token: string, conversationId?: string) {
+  const original = explainSession(previous);
+  const successor = explainSession(token);
+  if (!original || !successor || successor.sessionId === original.sessionId
+    || successor.subject !== original.subject || successor.organization !== original.organization
+    || successor.generation !== original.generation) throw new Error('Invalid Explain successor');
+  // Scoped history proves a conversation's family. Without an anchor, only
+  // the server can verify the retained predecessor row against that family.
+  const predecessor = conversationId ? undefined : original.sessionId;
+  if (predecessor && !sessionRowId.test(predecessor)) throw new Error('Invalid Explain predecessor');
+  const snapshot = await history(admission, token, conversationId, predecessor);
+  if (token !== admission.currentToken()) throw new Error('Explain credential changed during verification');
+  return { snapshot, predecessor };
 }
 
 function hasDetail(error: unknown, status: number, detail: string): boolean {
@@ -134,39 +167,86 @@ function validAnswer(data: ExplainAnswer, request: ExplainRequest): boolean {
     && data.facts !== null && typeof data.facts === 'object';
 }
 
+function knownListingStates(facts: ExplainAnswer['facts']) {
+  const { listing_state: state, status_counts: counts } = facts as { listing_state?: unknown; status_counts?: unknown };
+  return (state == null || (typeof state === 'string' && listingStates.has(state)))
+    && (counts == null || (typeof counts === 'object' && !Array.isArray(counts)
+      && Object.keys(counts).every(code => listingStates.has(code))));
+}
+
 export async function appendExplain(admission: Admission, request: ExplainRequest): Promise<Reply> {
   let token = admission.currentToken();
   let body = request;
   let before: History | undefined;
-  try {
-    const pending = currentSessionRefresh(admission.owner);
-    if (pending) {
-      await pending;
-      token = admission.currentToken();
-    }
+  let predecessor: string | undefined;
+  let recoveredRetirement = false;
+  let provingReplacement = false;
+
+  async function proveReplacement(replacement: string) {
+    provingReplacement = true;
+    let proof: Awaited<ReturnType<typeof replacementHistory>>;
     try {
-      before = await history(admission, token, body.conversation_id);
+      proof = await replacementHistory(admission, token, replacement, body.conversation_id);
     } catch (error) {
-      // An implicit latest thread can be expired and still present. Let a
-      // newly asked question reach POST without an old conversation selector.
-      if (body.conversation_id || !hasDetail(error, 404, 'NOT_FOUND')) throw error;
+      // A successor can retire during proof as well. Update the active bearer
+      // for the next explicit question and end this attempt.
+      if (hasDetail(error, 409, 'SESSION_ROTATED')) await waitForRefresh(admission, replacement);
+      throw error;
     }
+    before = proof.snapshot;
+    predecessor = proof.predecessor;
+    token = replacement;
+  }
+
+  function anchorHistory() {
     if (!body.conversation_id && before?.conversation_id) body = { ...body, conversation_id: before.conversation_id };
-    credentialConfig(admission, token);
+  }
+
+  try {
+    await waitForRefresh(admission);
+    if (admission.currentToken() === token) {
+      try {
+        before = await history(admission, token, body.conversation_id);
+        anchorHistory();
+      } catch (error) {
+        if (hasDetail(error, 409, 'SESSION_ROTATED')) {
+          recoveredRetirement = true;
+          await waitForRefresh(admission, token);
+          await proveReplacement(admission.currentToken());
+        // A legacy backend may refuse the implicit latest expired thread.
+        } else if (body.conversation_id || !hasDetail(error, 404, 'NOT_FOUND')) throw error;
+      }
+    }
+    const latest = admission.currentToken();
+    if (latest !== token) {
+      if (recoveredRetirement) return { kind: 'refused', clear: true };
+      await proveReplacement(latest);
+    }
+    anchorHistory();
   } catch (error) {
     admission.currentToken();
-    return refused(error);
+    return recoveredRetirement || provingReplacement ? { kind: 'refused', clear: true } : refused(error);
   }
 
   async function confirmHistory(): Promise<Reply> {
     try {
-      const pending = currentSessionRefresh(admission.owner);
-      if (pending) await pending;
-      const current = admission.currentToken();
-      // Without an anchor only the original, still-valid credential proves
-      // which family the history belongs to.
-      if (current !== token && !body.conversation_id) return { kind: 'uncertain', history: 'unverified' };
-      const after = await history(admission, current, body.conversation_id);
+      await waitForRefresh(admission);
+      let current = admission.currentToken();
+      let after: History;
+      try {
+        if (current === token) {
+          after = await history(admission, current, body.conversation_id);
+          current = admission.currentToken();
+          if (current !== token) after = (await replacementHistory(admission, token, current, body.conversation_id)).snapshot;
+        } else {
+          after = (await replacementHistory(admission, token, current, body.conversation_id)).snapshot;
+        }
+      } catch (error) {
+        if (!hasDetail(error, 409, 'SESSION_ROTATED')) throw error;
+        await waitForRefresh(admission, current);
+        current = admission.currentToken();
+        after = (await replacementHistory(admission, token, current, body.conversation_id)).snapshot;
+      }
       if (admission.currentToken() === current) {
         const existing = new Set(before?.turns.map(turn => turn.id));
         const possible = after.turns.some(turn => turn.question === body.question && turn.locale === body.locale && !existing.has(turn.id));
@@ -180,53 +260,48 @@ export async function appendExplain(admission: Admission, request: ExplainReques
     return { kind: 'uncertain', history: 'unverified' };
   }
 
-  async function send(retried: boolean): Promise<Reply> {
-    let data: ExplainAnswer;
-    const config = credentialConfig(admission, token);
+  async function send(): Promise<Reply> {
+    let data: ExplainAnswer | { outcome: NonAppend };
+    if (token !== admission.currentToken()) return { kind: 'refused', clear: true };
+    const config = credentialConfig(admission, token, predecessor);
     try {
-      ({ data } = await firstPartyExplain.post<ExplainAnswer>('', body, config));
+      ({ data } = await firstPartyExplain.post<typeof data>('', body, config));
     } catch (error) {
       admission.currentToken();
       if (hasDetail(error, 409, 'SESSION_ROTATED')) {
-        if (retried || !body.conversation_id) return refused(error);
+        const mayContinue = !recoveredRetirement;
+        recoveredRetirement = true;
         try {
-          const original = explainSession(token);
-          const pending = currentSessionRefresh(admission.owner);
-          if (pending) await pending;
-          else if (admission.currentToken() === token) await refreshAccessToken(token);
-          const replacement = admission.currentToken();
-          const successor = explainSession(replacement);
-          if (!original || !successor || successor.sessionId === original.sessionId
-            || successor.subject !== original.subject || successor.organization !== original.organization
-            || successor.generation !== original.generation) return refused(error);
-          // The access token omits refresh_family. An exact scoped conversation
-          // read verifies the replacement web credential and family on the server.
-          await history(admission, replacement, body.conversation_id);
-          credentialConfig(admission, replacement);
-          token = replacement;
-        } catch (verificationError) {
+          await waitForRefresh(admission, token);
+          if (!mayContinue) return refused(error);
+          await proveReplacement(admission.currentToken());
+          anchorHistory();
+        } catch {
           admission.currentToken();
-          return refused(verificationError);
+          return refused(error);
         }
-        return send(true);
+        return send();
       }
       const status = axios.isAxiosError(error) ? error.response?.status : undefined;
       if (!status || status >= 500) return confirmHistory();
       return refused(error);
     }
     const current = admission.currentToken();
+    if (data?.outcome === 'select_context' || data?.outcome === 'suggestions') return { kind: data.outcome };
+    if (data?.outcome !== 'answered') return confirmHistory();
     if (!validAnswer(data, body)) return confirmHistory();
     if (current !== token) {
       try {
-        await history(admission, current, data.conversation_id);
+        await replacementHistory(admission, token, current, data.conversation_id);
         if (current !== admission.currentToken()) return { kind: 'refused', clear: true };
-      } catch (error) {
+      } catch {
         admission.currentToken();
-        return refused(error);
+        return { kind: 'refused', clear: true };
       }
     }
+    if (body.question === 'listing_status' && !knownListingStates(data.facts)) return { kind: 'refused', clear: false };
     return { kind: 'answer', answer: data };
   }
 
-  return send(false);
+  return send();
 }

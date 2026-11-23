@@ -7,13 +7,15 @@ export const ids = {
   listing: '22222222-2222-4222-8222-222222222222',
   order: '33333333-3333-4333-8333-333333333333',
   conversation: '44444444-4444-4444-8444-444444444444',
+  session: '55555555-5555-4555-8555-555555555555',
+  successor: '66666666-6666-4666-8666-666666666666',
 };
 
 export const explainUser = {
   id: 'synthetic-user', status: 'active', role: 'seller', email_verified_at: '2026-11-01T00:00:00Z',
 } as User;
 
-export function bearer(id = 'presenting-row', organization = 'synthetic-organization', subject = explainUser.id) {
+export function bearer(id = ids.session, organization = 'synthetic-organization', subject = explainUser.id) {
   return `fixture.${btoa(JSON.stringify({
     type: 'access', sub: subject, organization_id: organization, auth_generation: 0, session_id: id,
   })).replace(/=+$/, '')}.fixture`;

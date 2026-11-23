@@ -51,7 +51,7 @@ export default function AllAIPanel({ dockOnDesktop = false }: { dockOnDesktop?: 
   useEffect(() => {
     if (!isOpen || supportSession || reportSession) leaveExplain?.();
   }, [isOpen, supportSession, reportSession, leaveExplain]);
-  const explainActive = !!explain?.view?.launch;
+  const explainActive = !!explain?.active;
   const explainCopyForLocale = explainCopy(locale);
   const scrollRef = useRef<HTMLDivElement>(null);
   const [visible, setVisible] = useState(false);

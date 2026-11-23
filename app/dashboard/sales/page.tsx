@@ -1,6 +1,6 @@
 'use client';
 
-import { ExplainEntry, explainControl, useExplainPage } from '@/components/allai/ExplainContext';
+import { ExplainEntry, useExplainPage } from '@/components/allai/ExplainContext';
 
 import { Suspense, useEffect, useRef, useState } from 'react';
 import { useSearchParams } from 'next/navigation';
@@ -91,7 +91,7 @@ function SalesPageContent() {
     route: '/dashboard/sales',
     scope: `seller-orders:${filter}:${offset}`,
     targets: { order_status: { kind: 'order', role: 'seller' } },
-    actions: { view_orders: () => explainControl('view_orders')?.focus() },
+    actions: ['view_orders'],
   } : null);
 
   function changeRequest(next: SalesRequest) {

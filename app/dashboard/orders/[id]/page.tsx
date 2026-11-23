@@ -1,6 +1,6 @@
 'use client';
 
-import { ExplainEntry, explainControl, isExplainId, useExplainPage } from '@/components/allai/ExplainContext';
+import { ExplainEntry, isExplainId, useExplainPage } from '@/components/allai/ExplainContext';
 import { customerLoadError, customerActionError } from '@/lib/customerMessages';
 import PurchasedLicenseDisplay from '@/components/orders/PurchasedLicenseDisplay';
 import PurchaseEvidence from '@/components/orders/PurchaseEvidence';
@@ -111,7 +111,7 @@ function OrderDetailVisit({ orderId, txIdParam, userId, sessionGeneration, issue
     scope: JSON.stringify([orderId, txIdParam, issueProposal]),
     targets: explainOrderChoices.length === 1 ? { order_status: explainOrderChoices[0] } : {},
     orderChoices: explainOrderChoices,
-    actions: { view_order: () => explainControl('view_order')?.focus() },
+    actions: ['view_order'],
   } : null);
   const [events, setEvents] = useState<OrderEvent[]>([]);
   const [orderAccess, setOrderAccess] = useState<{ orderId: string; buyerId: string; status: string; data: OrderAccessResponse } | null>(null);

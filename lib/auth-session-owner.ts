@@ -3,20 +3,22 @@
 let generation = 0;
 let ownerChannel: BroadcastChannel | null = null;
 let signalUsers = 0;
-const restoredPage = (event: PageTransitionEvent) => { if (event.persisted) advanceAuthSessionOwner(false); };
-const listeners = new Set<() => void>();
-export function subscribeAuthSessionOwner(listener: () => void): () => void {
+type OwnerChange = 'changed' | 'restored';
+const restoredPage = (event: PageTransitionEvent) => { if (event.persisted) advanceOwner(false, 'restored'); };
+const listeners = new Set<(change: OwnerChange) => void>();
+export function subscribeAuthSessionOwner(listener: (change: OwnerChange) => void): () => void {
   listeners.add(listener);
   return () => { listeners.delete(listener); };
 }
 
 export const authSessionOwner = (): number => generation;
-export const advanceAuthSessionOwner = (broadcast = true): number => {
+function advanceOwner(broadcast: boolean, change: OwnerChange): number {
   ++generation;
   if (broadcast) { try { ownerChannel?.postMessage({ type: 'owner_changed' }); } catch { /* Local fences still apply. */ } }
-  listeners.forEach((listener) => listener());
+  listeners.forEach((listener) => listener(change));
   return generation;
-};
+}
+export const advanceAuthSessionOwner = (broadcast = true): number => advanceOwner(broadcast, 'changed');
 export const isAuthSessionOwner = (owner: number): boolean => owner === generation;
 
 export function assertAuthSessionOwner(owner: number): void {

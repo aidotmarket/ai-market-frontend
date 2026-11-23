@@ -1,7 +1,7 @@
 'use client';
 
 import { create } from 'zustand';
-import { authSessionOwner, advanceAuthSessionOwner, assertAuthSessionOwner, isAuthSessionOwner } from '@/lib/auth-session-owner';
+import { authSessionOwner, advanceAuthSessionOwner, assertAuthSessionOwner, isAuthSessionOwner, subscribeAuthSessionOwner } from '@/lib/auth-session-owner';
 import type { LoginResult, TokenResponse, User } from '@/types';
 import * as authApi from '@/api/auth';
 import { clearConnectorContinuation, setConnectorStatus } from '@/lib/aim-data-continuation';
@@ -13,6 +13,8 @@ export interface PendingTwoFactor {
 
 export type AuthFlowResult = { requiresTwoFactor: boolean };
 export type TwoFactorVerifyResult = { ok: true } | { ok: false; reason: 'invalid_code' | 'expired' | 'missing_challenge' };
+
+const logoutNoticeDuration = 6000;
 
 interface AuthState {
   user: User | null;
@@ -216,9 +218,17 @@ export const useAuthStore = create<AuthState>((set, get) => {
         isLoading: false, hydrated: true, logoutStatus: null });
       const result = await request;
       if (!isAuthSessionOwner(owner) || get().isAuthenticated) return;
-      set({
-        logoutStatus: result?.server_revoked ? 'confirmed' : result?.status === 503 || knownSession ? 'unconfirmed' : null,
-      });
+      const logoutStatus = result?.server_revoked === true ? 'confirmed'
+        : result?.status === 503 || (knownSession && (!result || result.server_revoked === false)) ? 'unconfirmed' : null;
+      if (logoutStatus === null) return;
+      const clearNotice = () => {
+        clearTimeout(timer);
+        unsubscribe();
+        if (get().logoutStatus === logoutStatus) set({ logoutStatus: null });
+      };
+      const timer = setTimeout(clearNotice, logoutNoticeDuration);
+      const unsubscribe = subscribeAuthSessionOwner(clearNotice);
+      set({ logoutStatus });
     },
 
     refreshAuth: async () => {

@@ -41,14 +41,14 @@ export async function getMe(): Promise<User> {
   return res.data;
 }
 
-export async function logout(): Promise<{ status: 200 | 503; server_revoked: boolean }> {
-  const response = await api.post<{ server_revoked: boolean }>('/auth/logout', undefined, {
+export async function logout(): Promise<{ status: 200; server_revoked?: boolean } | { status: 503; server_revoked: false }> {
+  const response = await api.post<{ server_revoked?: unknown }>('/auth/logout', undefined, {
     timeout: 15000,
     validateStatus: status => status === 200 || status === 503,
   });
-  return response.status === 503
-    ? { status: 503, server_revoked: false }
-    : { status: 200, server_revoked: response.data?.server_revoked === true };
+  if (response.status === 503) return { status: 503, server_revoked: false };
+  const revoked = response.data?.server_revoked;
+  return typeof revoked === 'boolean' ? { status: 200, server_revoked: revoked } : { status: 200 };
 }
 
 export async function updateProfile(data: { first_name?: string; last_name?: string; company_name?: string }): Promise<User> {

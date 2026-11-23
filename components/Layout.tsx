@@ -4,7 +4,6 @@ import { Suspense, useState } from 'react';
 import type { MouseEventHandler } from 'react';
 import Link from 'next/link';
 import { useRouter, usePathname } from 'next/navigation';
-import { authSessionOwner, isAuthSessionOwner } from '@/lib/auth-session-owner';
 import { useAllAILocale } from '@/components/allai/AllAIContext';
 import { explainCopy } from '@/lib/i18n/explain';
 import { useAuthStore } from '@/store/auth';
@@ -91,11 +90,9 @@ export function Layout({ children }: { children: React.ReactNode }) {
   const preserveTermsRedirect = pathname === '/legal/terms';
   const isAdminEmail = user?.email === 'max@ai.market';
 
-  const handleLogout = async () => {
-    const request = logout();
-    const owner = authSessionOwner();
-    await request;
-    if (isAuthSessionOwner(owner) && !useAuthStore.getState().isAuthenticated) router.push('/');
+  const handleLogout = () => {
+    void logout();
+    router.push('/');
   };
 
   if (isKeystatic) {

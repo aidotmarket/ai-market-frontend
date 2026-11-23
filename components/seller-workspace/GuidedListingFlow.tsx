@@ -1,6 +1,6 @@
 'use client';
 
-import { ExplainEntry, explainControl, isExplainId, useExplainPage } from '@/components/allai/ExplainContext';
+import { ExplainEntry, isExplainId, useExplainPage } from '@/components/allai/ExplainContext';
 import type { DraftSelector, ExplainTarget } from '@/api/explain';
 import {Fragment, createContext, useContext, useEffect, useState, useRef, type ReactNode} from 'react';
 import axios from 'axios';
@@ -213,21 +213,11 @@ export function GuidedListingFlow({connections, capabilities, view, navigate, ch
       ...(view === 'manage' ? { listing_status: { kind: 'listing' } }
         : saved?.draft_id ? { listing_status: { kind: 'listing', draft: saved } } : {}),
     },
-    actions: {
-      open_workspace: () => explainControl('open_workspace')?.focus(),
-      open_storage: () => navigate('storage'),
-      open_files: () => navigate('data'),
-      ...(licensesEnabled && { open_license: () => navigate('license') }),
-      open_listing: () => navigate('listing'),
-      open_review: () => navigate('review'),
-      ...(view === 'data' && filesDirty && !selectionSavePending && { save_files: () => explainControl('save_files')?.focus() }),
-      ...(!listingDirty && !pending && !licenceDirty && steps[4].state === 'done'
-        && publication?.publication_available && !publication.publication && {
-        publish: () => view === 'publish' ? explainControl('publish')?.focus() : navigate('publish'),
-      }),
-      view_listing: () => navigate('manage'),
-      view_listings: () => navigate('manage'),
-    },
+    actions: [
+      'open_workspace', 'open_storage', 'open_files', 'open_listing', 'open_review',
+      'save_files', 'publish', 'view_listing', 'view_listings',
+      ...(licensesEnabled ? ['open_license'] as const : []),
+    ],
   });
   const published=steps[5].state==='done' ? publication?.publication : null;
   return <Context.Provider value={flow}><div className="grid items-start gap-6 xl:grid-cols-[minmax(0,1fr)_290px]">

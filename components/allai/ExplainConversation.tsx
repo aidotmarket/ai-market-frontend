@@ -1,21 +1,21 @@
 'use client';
 
 import { useEffect, useLayoutEffect, useRef, useState } from 'react';
-import { appendExplain, explainActions, type ExplainAnswer, type ExplainQuestion } from '@/api/explain';
+import { appendExplain, explainActions, type ExplainAction, type ExplainAnswer, type ExplainQuestion } from '@/api/explain';
 import { useAuthStore } from '@/store/auth';
 import { subscribeAuthSessionOwner } from '@/lib/auth-session-owner';
 import { explainCopy, explainQuestions, matchExplainQuestion } from '@/lib/i18n/explain';
 import type { AnonymousAllAILocale } from '@/lib/i18n/anonymous-allai';
-import { useExplain } from './ExplainContext';
+import { explainControl, useExplain } from './ExplainContext';
 
 const buttonClass = 'min-h-11 rounded-md border border-white/20 px-2 text-start text-sm text-white focus-visible:ring-2 focus-visible:ring-blue-300 disabled:opacity-50';
 
 export default function ExplainConversation({ locale, close }: { locale: AnonymousAllAILocale; close: () => void }) {
   const explain = useExplain();
   const view = explain?.view;
-  if (!view) return null;
+  if (!view) return <p role="status" lang={locale} className="px-4 py-3 text-sm text-white">{explainCopy(locale).unavailable}</p>;
   const { registration, launch } = view;
-  return <Conversation key={JSON.stringify([registration.owner, registration.path, registration.location, registration.key, registration.principal])}
+  return <Conversation key={registration.id}
     view={view} launchId={launch?.id} consume={explain.consume} locale={locale} close={close} />;
 }
 
@@ -29,6 +29,7 @@ function Conversation({ view, launchId, consume, locale, close }: {
   const [notice, setNotice] = useState<'suggestions' | 'selectContext' | 'unavailable' | 'possibleMatch' | 'noMatch' | 'uncertain'>();
   const [busy, setBusy] = useState(false);
   const [chooseRole, setChooseRole] = useState(false);
+  const [availableAction, setAvailableAction] = useState<ExplainAction | null>(null);
   const flight = useRef<AbortController | null>(null);
   const thread = useRef<{ id: string; expires: number } | null>(null);
   const lastRole = useRef<'buyer' | 'seller' | null>(null);
@@ -104,7 +105,12 @@ function Conversation({ view, launchId, consume, locale, close }: {
       } else if (reply.kind === 'uncertain') {
         if (reply.history === 'unverified') { thread.current = null; setTurns([]); }
         setNotice(reply.history === 'unverified' ? 'uncertain' : reply.history);
-      } else {
+      } else if (reply.kind === 'select_context') {
+        setChooseRole(question === 'order_status' && !!page.orderChoices?.length);
+        setNotice('selectContext');
+      } else if (reply.kind === 'suggestions') {
+        setNotice('suggestions');
+      } else if (reply.kind === 'refused') {
         if (reply.clear) { thread.current = null; setTurns([]); }
         setNotice('unavailable');
       }
@@ -130,6 +136,7 @@ function Conversation({ view, launchId, consume, locale, close }: {
       void ask(view.launch.question);
     }
   });
+  useLayoutEffect(() => { input.current?.focus(); }, []);
 
   function submit() {
     if (busy || !value.trim()) return;
@@ -142,10 +149,27 @@ function Conversation({ view, launchId, consume, locale, close }: {
   const relevant = explainQuestions.filter(question => page.targets[question]
     || (question === 'order_status' && page.orderChoices?.length));
   const latest = turns.at(-1);
-  const action = !notice && !busy && latest?.facts.next_action;
-  const next = action && (action !== 'publish' || latest.facts.availability === 'known')
-    && (explainActions[latest.turn.question] as readonly string[]).includes(action)
-    && Object.hasOwn(page.actions ?? {}, action) ? page.actions?.[action] : undefined;
+  const candidate = latest?.facts.next_action;
+  const action = !notice && !busy && candidate && page.actions?.includes(candidate)
+    && (candidate !== 'publish' || latest.facts.availability === 'known')
+    && (explainActions[latest.turn.question] as readonly string[]).includes(candidate) ? candidate : null;
+  const getPage = view.registration.getPage;
+
+  useLayoutEffect(() => {
+    if (!action) {
+      setAvailableAction(null);
+      return;
+    }
+    const check = () => setAvailableAction(getPage().actions?.includes(action) && explainControl(action) ? action : null);
+    check();
+    const observer = new MutationObserver(check);
+    observer.observe(document.body, {
+      childList: true, subtree: true, attributes: true,
+      attributeFilter: ['disabled', 'hidden', 'inert', 'aria-disabled', 'class', 'style', 'data-explain-control'],
+    });
+    window.addEventListener('resize', check);
+    return () => { observer.disconnect(); window.removeEventListener('resize', check); };
+  }, [action, getPage]);
 
   return <section lang={locale} aria-label={copy.title} className="flex min-h-0 flex-1 flex-col text-white">
     <div ref={log} role="log" aria-label={copy.title} aria-live="polite"
@@ -164,12 +188,14 @@ function Conversation({ view, launchId, consume, locale, close }: {
         {(notice === 'suggestions' ? explainQuestions : relevant).map(question => <button type="button" key={question}
           className={buttonClass} onClick={() => void ask(question)}>{copy.question(question)}</button>)}
       </div>}
-      {next && action && <button type="button" className={buttonClass} onClick={() => {
+      {action && availableAction === action && <button type="button" className={buttonClass} onClick={() => {
         try { view.admit(); } catch { return; }
+        const control = getPage().actions?.includes(action) && explainControl(action);
+        if (!control) return;
         close();
         requestAnimationFrame(() => {
           try { view.admit(); } catch { return; }
-          view.registration.getPage().actions?.[action]?.();
+          if (getPage().actions?.includes(action) && explainControl(action) === control) control.focus();
         });
       }}>{copy.action(action)}</button>}
     </div>

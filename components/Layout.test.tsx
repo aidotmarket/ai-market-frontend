@@ -133,3 +133,18 @@ it.each([
     browserLanguage.mockRestore();
   }
 });
+
+it('starts sign-out and navigates immediately while the server response is pending', () => {
+  auth.isAuthenticated = true;
+  navigation.push.mockClear();
+  auth.logout.mockReturnValueOnce(new Promise(() => {}));
+  try {
+    render(<Layout><div>Page content</div></Layout>);
+    fireEvent.click(screen.getByRole('button', { name: 'Log out' }));
+    expect(auth.logout).toHaveBeenCalledOnce();
+    expect(navigation.push).toHaveBeenCalledExactlyOnceWith('/');
+    expect(screen.queryByText(/signed out/i)).toBeNull();
+  } finally {
+    auth.isAuthenticated = false;
+  }
+});

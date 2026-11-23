@@ -1,6 +1,6 @@
 'use client';
 
-import { ExplainEntry, explainControl, useExplainPage } from '@/components/allai/ExplainContext';
+import { ExplainEntry, useExplainPage } from '@/components/allai/ExplainContext';
 
 import { customerLoadError } from '@/lib/customerMessages';
 import { useEffect, useRef, useState } from 'react';
@@ -71,7 +71,7 @@ export default function OrdersListPage() {
     route: '/dashboard/orders',
     scope: `buyer-orders:${page}`,
     targets: { order_status: { kind: 'order', role: 'buyer' } },
-    actions: { view_orders: () => explainControl('view_orders')?.focus() },
+    actions: ['view_orders'],
   } : null);
 
   function loadPage(nextPage: number) {

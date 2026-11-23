@@ -23,7 +23,7 @@ beforeEach(() => {
   vi.resetModules();
   vi.stubGlobal('window', { location: { pathname: '/dashboard', search: '', hash: '', href: '/dashboard' } });
 });
-afterEach(() => { vi.restoreAllMocks(); vi.unstubAllGlobals(); vi.useRealTimers(); });
+afterEach(() => { vi.restoreAllMocks(); vi.unstubAllGlobals(); vi.unstubAllEnvs(); vi.useRealTimers(); });
 async function setup() {
   const client = await import('./client');
   const auth = await import('./auth');
@@ -312,14 +312,18 @@ describe('real client/store deferred lifecycle fencing', () => {
 
 it.each([
   { status: 200, revoked: true, signedIn: true, notice: 'confirmed' },
+  { status: 200, revoked: false, signedIn: true, notice: 'unconfirmed' },
+  { status: 200, revoked: undefined, signedIn: true, notice: null },
+  { status: 200, revoked: 'true', signedIn: true, notice: null },
   { status: 503, revoked: false, signedIn: true, notice: 'unconfirmed' },
   { status: 503, revoked: false, signedIn: false, notice: 'unconfirmed' },
   { status: 200, revoked: false, signedIn: false, notice: null },
 ])('uses the ordinary logout wire outcome $status/$revoked with local clearing first', async ({ status, revoked, signedIn, notice }) => {
+  vi.stubEnv('NEXT_PUBLIC_STAGE_A_EXPLAIN_ENABLED', 'false');
   const { store, api, logout, post } = await setup();
   logout.mockRestore();
   if (!signedIn) store.setState({ token: null, user: null, isAuthenticated: false });
-  const response = deferred<{ server_revoked: boolean }>();
+  const response = deferred<{ message: string; server_revoked?: unknown }>();
   const adapter = vi.fn<AxiosAdapter>(async config => {
     expect(config.url).toBe('/auth/logout');
     expect(config.headers.get('Authorization') ?? null).toBe(signedIn ? 'Bearer initial' : null);
@@ -329,9 +333,24 @@ it.each([
   api.defaults.adapter = adapter;
   const pending = store.getState().logout();
   expect(store.getState()).toMatchObject({ token: null, user: null, isAuthenticated: false, logoutStatus: null });
-  response.resolve({ server_revoked: revoked });
+  response.resolve({ message: 'Logged out', ...(revoked === undefined ? {} : { server_revoked: revoked }) });
   await pending;
   expect(store.getState().logoutStatus).toBe(notice);
   expect(adapter).toHaveBeenCalledOnce();
   expect(post).not.toHaveBeenCalled();
+});
+
+it.each(['timer', 'owner'] as const)('clears the explicit logout notice on %s', async change => {
+  const { store } = await setup();
+  const { advanceAuthSessionOwner } = await import('@/lib/auth-session-owner');
+  vi.useFakeTimers();
+  try {
+    await store.getState().logout();
+    expect(store.getState().logoutStatus).toBe('confirmed');
+    if (change === 'timer') await vi.advanceTimersByTimeAsync(6000);
+    else advanceAuthSessionOwner(false);
+    expect(store.getState().logoutStatus).toBeNull();
+  } finally {
+    vi.useRealTimers();
+  }
 });

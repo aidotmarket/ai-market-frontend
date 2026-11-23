@@ -1,6 +1,6 @@
 'use client';
 
-import { ExplainEntry, explainControl, useExplainPage } from '@/components/allai/ExplainContext';
+import { ExplainEntry, useExplainPage } from '@/components/allai/ExplainContext';
 
 import { customerLoadError } from '@/lib/customerMessages';
 import { useEffect, useState, useCallback, useRef } from 'react';
@@ -80,7 +80,7 @@ function OwnerListings({ userId }: { userId: string }) {
     route: '/dashboard/listings',
     scope: `owner-listings:${offset}`,
     targets: { listing_status: { kind: 'listing' } },
-    actions: { view_listings: () => explainControl('view_listings')?.focus() },
+    actions: ['view_listings'],
   } : null);
   const isCurrent = useCallback((request: number) => {
     const auth = useAuthStore.getState();

@@ -17,11 +17,11 @@ export type ExplainPage = {
   scope: string;
   targets: Partial<Record<ExplainQuestion, ExplainTarget>>;
   orderChoices?: readonly Extract<ExplainTarget, { kind: 'order' }>[];
-  actions?: Partial<Record<ExplainAction, () => void>>;
+  actions?: readonly ExplainAction[];
 };
 
 type Registration = {
-  key: string;
+  id: number;
   path: string;
   location: string;
   owner: number;
@@ -36,8 +36,9 @@ type ExplainView = {
 };
 
 const Context = createContext<{
+  active: boolean;
   view: ExplainView | null;
-  register: (key: string, getPage: () => ExplainPage) => (() => void) | undefined;
+  register: (getPage: () => ExplainPage) => (() => void) | undefined;
   locale: AnonymousAllAILocale;
   consume: (id: number) => void;
   start: (question?: ExplainQuestion, returnFocus?: HTMLElement) => void;
@@ -71,37 +72,67 @@ export function ExplainProvider({ children, pathname, open, locale }: {
   const identity = useAuthStore(principal);
   const pending = useRef<Registration | null>(null);
   const [registration, setRegistration] = useState<Registration | null>(null);
+  const [mode, setMode] = useState<Pick<Registration, 'owner' | 'principal' | 'path'> | null>(null);
   const [launch, setLaunch] = useState<ExplainView['launch']>(null);
   const serial = useRef(0);
   const [query, setQuery] = useState('');
-  const register = useCallback((key: string, getPage: () => ExplainPage) => {
+  const register = useCallback((getPage: () => ExplainPage) => {
     const route = getPage().route;
     if (typeof route === 'function' ? !route(pathname) : route !== pathname.replace(/\/$/, '')) return;
-    const item = { key, getPage, path: pathname, location: browserRoute(),
+    const item = { id: ++serial.current, getPage, path: pathname, location: browserRoute(),
       owner: authSessionOwner(), principal: principal(useAuthStore.getState()) };
     pending.current = item;
     setRegistration(item);
     return () => {
-      if (pending.current !== item) return;
+      if (pending.current?.getPage !== getPage) return;
       pending.current = null;
       setRegistration(null);
-      setLaunch(last => last?.registration === item ? null : last);
+      setLaunch(last => last?.registration.getPage === getPage ? null : last);
     };
   }, [pathname, query]);
 
+  useLayoutEffect(() => subscribeAuthSessionOwner(change => {
+    const previous = pending.current;
+    pending.current = null;
+    setRegistration(null);
+    setLaunch(null);
+    const owner = authSessionOwner();
+    // A persisted restore retires every old admission. Only the same
+    // mounted selection and still-current principal can register again.
+    if (change !== 'restored' || !previous?.principal || previous.owner !== owner - 1
+      || previous.location !== browserRoute() || previous.principal !== principal(useAuthStore.getState())) {
+      setMode(null);
+      return;
+    }
+    const restored = { ...previous, id: ++serial.current, owner };
+    pending.current = restored;
+    setRegistration(restored);
+    setMode(current => current?.owner === previous.owner && current.principal === restored.principal
+      && current.path === restored.path ? { owner, principal: restored.principal, path: restored.path } : null);
+  }), []);
+  useLayoutEffect(() => useAuthStore.subscribe(state => {
+    if (!pending.current?.principal || pending.current.principal === principal(state)) return;
+    pending.current = null;
+    setRegistration(null);
+    setLaunch(null);
+    setMode(null);
+  }), []);
+
   const registered = identity && registration?.owner === owner && registration.path === pathname
-    && registration.principal === identity ? registration : null;
+    && registration.principal === identity && registration.location === browserRoute() ? registration : null;
+  const active = !!identity && mode?.owner === owner && mode.principal === identity && mode.path === pathname;
 
   const start = (question?: ExplainQuestion, returnFocus?: HTMLElement) => {
     if (!registered || pending.current !== registered) return;
+    setMode({ owner, principal: identity, path: pathname });
     setLaunch({ registration: registered, question, id: ++serial.current });
     open(returnFocus);
   };
-  const leave = useCallback(() => setLaunch(null), []);
+  const leave = useCallback(() => { setMode(null); setLaunch(null); }, []);
   const consume = (id: number) => setLaunch(current => current?.id === id ? { ...current, question: undefined } : current);
   const view = registered ? {
     registration: registered,
-    launch: launch?.registration === registered ? launch : null,
+    launch: active && launch?.registration === registered ? launch : null,
     admit: () => {
       const state = useAuthStore.getState();
       if (pending.current !== registered || registered.location !== browserRoute() || authSessionOwner() !== registered.owner
@@ -110,7 +141,7 @@ export function ExplainProvider({ children, pathname, open, locale }: {
     },
   } : null;
 
-  return <Context.Provider value={{ view, register, start, leave, locale, consume }}>
+  return <Context.Provider value={{ active, view, register, start, leave, locale, consume }}>
     <Suspense><QueryObserver onChange={setQuery} /></Suspense>
     {children}
   </Context.Provider>;
@@ -122,12 +153,12 @@ export function useExplainPage(page: ExplainPage | null) {
   const register = useContext(Context)?.register;
   const ref = useRef(page);
   const key = register && page && (Object.keys(page.targets).length || page.orderChoices?.length)
-    ? JSON.stringify([page.scope, page.targets, page.orderChoices, Object.keys(page.actions ?? {})])
+    ? JSON.stringify([page.scope, page.targets, page.orderChoices])
     : null;
   useLayoutEffect(() => { ref.current = page; });
   useLayoutEffect(() => {
     if (!register || !key) return;
-    return register(key, () => ref.current!);
+    return register(() => ref.current!);
   }, [register, key]);
 }
 
@@ -141,6 +172,13 @@ export function ExplainEntry({ question }: { question: ExplainQuestion }) {
 }
 
 export function explainControl(action: ExplainAction): HTMLElement | null {
-  return Array.from(document.querySelectorAll<HTMLElement>(`[data-explain-control="${action}"]`))
-    .find(control => !control.closest('[hidden], [inert]') && !control.matches(':disabled')) ?? null;
+  return Array.from(document.querySelectorAll<HTMLElement>(`[data-explain-control~="${action}"]`))
+    .find(control => {
+      if (control.matches(':disabled') || control.closest('[hidden], [inert], [aria-disabled="true"]')
+        || getComputedStyle(control).visibility !== 'visible') return false;
+      for (let node: HTMLElement | null = control; node; node = node.parentElement) {
+        if (getComputedStyle(node).display === 'none') return false;
+      }
+      return true;
+    }) ?? null;
 }

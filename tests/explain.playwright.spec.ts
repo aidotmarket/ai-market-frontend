@@ -23,13 +23,13 @@ test.beforeAll(async () => {
       import { createRoot } from 'react-dom/client';
       import { AllAIProvider } from './components/allai/AllAIContext';
       import AllAIPanel from './components/allai/AllAIPanel';
-      import { ExplainEntry, useExplainPage, explainControl } from './components/allai/ExplainContext';
+      import { ExplainEntry, useExplainPage } from './components/allai/ExplainContext';
       import { useAuthStore } from './store/auth';
       import { bearer, explainUser, questions } from './tests/explain-fixtures';
       useAuthStore.setState({ token: bearer(), user: explainUser, isAuthenticated: true });
       function Page() {
         useExplainPage({ route: '/dashboard/seller-workspace', scope: 'data', targets: { where_am_i: questions.where_am_i },
-          actions: { save_files: () => explainControl('save_files')?.focus() } });
+          actions: ['save_files'] });
         return <main><ExplainEntry question="where_am_i" />
           <button data-explain-control="save_files" onClick={() => { document.title = 'Unexpected save'; }}>
             Save selected files

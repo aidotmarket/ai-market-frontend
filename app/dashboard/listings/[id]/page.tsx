@@ -1,6 +1,6 @@
 'use client';
 
-import { ExplainEntry, explainControl, isExplainId, useExplainPage } from '@/components/allai/ExplainContext';
+import { ExplainEntry, isExplainId, useExplainPage } from '@/components/allai/ExplainContext';
 
 import { use, useEffect, useState } from 'react';
 import type { AxiosRequestConfig } from 'axios';
@@ -33,7 +33,7 @@ export default function ListingPage({ params }: { params: Promise<{ id: string }
       route: `/dashboard/listings/${id}`,
       scope: 'owner-listing',
       targets: { listing_status: { kind: 'listing', listing_id: id } },
-      actions: { view_listing: () => explainControl('view_listing')?.focus(), view_listings: () => explainControl('view_listings')?.focus() },
+      actions: ['view_listing', 'view_listings'],
     } : null);
   useEffect(() => {
     if (!hydrated || !isAuthenticated || !userId) return;
