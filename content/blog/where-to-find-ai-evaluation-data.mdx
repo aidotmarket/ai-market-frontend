@@ -1,0 +1,50 @@
+---
+title: Where to find evaluation data for your AI model
+description: Where AI teams get evaluation data today, what to check before you buy, and what to do when you can't find it.
+date: 2026-11-23
+image: /blog/where-to-find-ai-evaluation-data/image.jpg
+author: Max Robbins
+tags:
+  - '#AI #AIEvaluation #Datasets #DataMarketplace #LLM'
+---
+A friend of mine has run several biopharma companies. He told me recently that getting at good data, even public data, is a nightmare. He said he would happily pay a premium just for someone to find the good stuff and put it in one place.
+
+I hear a version of that from AI teams all the time. You build a model, and at some point you need data it has never seen to find out if it actually works. Public benchmarks are a good start but they run out fast. A lot of them are already in the training data, and none of them look like your customers' real problems.
+
+So here is where evaluation data comes from today, what I would check before paying for it, and what to do when you can't find it.
+
+## What teams are looking for
+
+Most of the searches I see fall into a few buckets:
+
+- Held-out test sets in a specific field: chemistry, materials, biology, code, finance.
+- Real measurements a model has to predict: lab results, instrument data, sensor and process data.
+- Expert-graded examples with rubrics, so you can score answers and not just compare text.
+- Data from outside your own lab or company, to see if the model holds up somewhere new.
+
+## Where it comes from today
+
+- **Data and annotation vendors.** They build expert-graded sets to order. Good quality, and usually priced for enterprise budgets.
+- **Data marketplaces.** Catalogues from many providers. Quick to browse, but specialist evaluation data is pretty thin.
+- **Public repositories.** Hugging Face, Kaggle, government and research archives. Free, but scattered and uneven, and the licence often rules out commercial use.
+- **The people who generated it.** Labs, test houses, instrument makers and research groups sitting on exactly the measurements you need. Nobody has ever asked them.
+
+That last group is the biggest and the hardest to reach.
+
+## What to check before you buy
+
+- **Licence.** Evaluation only, training too, and is commercial use allowed?
+- **Provenance.** Who generated it, when and how? Is the seller allowed to license it?
+- **A sample.** Run it through your own tests before you commit.
+- **Contamination.** Has it ever been published or scraped? If so, your model may have already seen it.
+- **Fit.** Does it measure what your users care about, or just something close?
+
+## When you can't find it
+
+Honestly, that is the common case. The data exists somewhere but nobody has listed it.
+
+That is a big part of why we built ai.market. You can post what you are looking for as a data request. It is free, and requests are shown anonymised, so you don't have to say who you are. Data owners can see what is being asked for, and allAI, our AI assistant, helps buyers and sellers through the steps. If you work from an AI app, you can use ai.market through our connector too.
+
+And if you are on the other side, sitting on measurements or test data that would help someone evaluate a model, listing it is free. We only take 5% when it sells.
+
+[Post a data request](https://ai.market/requests)
