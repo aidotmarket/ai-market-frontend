@@ -18,6 +18,7 @@ type ListingTypeFilter = 'all' | 'data' | 'models';
 
 interface MarketplaceSearchExperienceProps {
   mode: SearchMode;
+  headingLevel?: 1 | 2;
 }
 
 function sortItems(items: ResultItem[], sort: string, semanticMode: boolean) {
@@ -77,7 +78,9 @@ const PRICE_DEBOUNCE_MS = 500;
 
 export function MarketplaceSearchExperience({
   mode,
+  headingLevel = 1,
 }: MarketplaceSearchExperienceProps) {
+  const Heading = headingLevel === 1 ? 'h1' : 'h2';
   const pathname = usePathname();
   const router = useRouter();
   const searchParams = useSearchParams();
@@ -216,12 +219,14 @@ export function MarketplaceSearchExperience({
           <div className="flex flex-col gap-6">
             <div className="flex flex-col gap-6 lg:flex-row lg:items-end lg:justify-between">
               <div className="max-w-2xl">
-                <p className="text-sm font-semibold uppercase tracking-[0.18em] text-[#0F6E56]">
-                  {mode === 'search' ? `Search ${typeLabel}` : `Browse ${typeLabel}`}
-                </p>
-                <h1 className="mt-2 text-3xl font-bold tracking-tight text-slate-900 sm:text-4xl">
+                {mode === 'browse' && (
+                  <p className="mb-2 text-sm font-semibold uppercase tracking-[0.18em] text-[#0F6E56]">
+                    Browse {typeLabel}
+                  </p>
+                )}
+                <Heading className="text-3xl font-bold tracking-tight text-slate-900 sm:text-4xl">
                   {mode === 'search' ? `Search ${typeLabel}` : 'Browse Marketplace'}
-                </h1>
+                </Heading>
                 <p className="mt-3 text-sm leading-6 text-slate-600 sm:text-base">
                   {mode === 'search'
                     ? 'Describe what you need in your own words, then narrow the results with filters.'

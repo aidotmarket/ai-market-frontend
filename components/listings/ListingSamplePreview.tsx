@@ -1,13 +1,13 @@
 "use client";
 
 import {useEffect, useRef, useState, type ComponentType} from 'react';
-import {fetchPreviewConsistency, fetchPreviewKeys, fetchPreviewManifest, fetchSignedSummaryPayload, readPreviewManifest} from '@/lib/api';
+import {fetchPreviewConsistency, fetchPreviewKeys, fetchPreviewManifest, fetchSignedSummaryPayload} from '@/lib/api';
 import type {ApprovedColumn} from '@/lib/listing-preview/columns';
 import type {Manifest, TrustedCheckpoint, TrustedKeys, VerifiedSample} from '@/lib/listing-preview/types';
 
 type TableProps = {sample: VerifiedSample; columns: readonly ApprovedColumn[]};
 type Ready = {manifest: Manifest; keys: TrustedKeys};
-type State = {kind: 'absent'} | {kind: 'missing'} | {kind: 'ready'; value: Ready} | {kind: 'loading'} | {kind: 'unavailable'} |
+type State = {kind: 'absent'} | {kind: 'ready'; value: Ready} | {kind: 'loading'} | {kind: 'unavailable'} |
   {kind: 'verified'; sample: VerifiedSample; columns: ApprovedColumn[]; Table: ComponentType<TableProps>};
 
 export default function ListingSamplePreview({slug, listingId, onManifest, emptyNotice}: {
@@ -36,9 +36,8 @@ export default function ListingSamplePreview({slug, listingId, onManifest, empty
       // expiry timer on an untouched tab. Abort and generation guard late replies.
       timer = setTimeout(() => {controller.abort(); if (!disposed && token === generation.current) {generation.current++; setState(requested.current ? {kind: 'unavailable'} : {kind: 'absent'});}}, 5000);
       try {
-        const manifest = await (emptyNotice && !view ? readPreviewManifest : fetchPreviewManifest)(slug, controller.signal);
+        const manifest = await fetchPreviewManifest(slug, controller.signal);
         if (!valid()) return;
-        if (manifest === 'missing') {setState({kind: 'missing'}); return;}
         if (!manifest || manifest.listing_id !== listingId) {onManifest?.(null); setState(requested.current ? {kind: 'unavailable'} : {kind: 'absent'}); return;}
         onManifest?.(manifest);
         const keys = await fetchPreviewKeys(controller.signal);
@@ -91,13 +90,13 @@ export default function ListingSamplePreview({slug, listingId, onManifest, empty
     return () => {disposed = true; clear(); startRef.current = () => undefined;
       document.removeEventListener('visibilitychange', visibility); window.removeEventListener('pageshow', restore);
       window.removeEventListener('pagehide', hide); window.removeEventListener('focus', focus);};
-  }, [slug, listingId, onManifest, emptyNotice]);
-  if (state.kind === 'absent') return null;
-  if (state.kind === 'missing') return <p className="text-sm text-gray-600">{emptyNotice}</p>;
+  }, [slug, listingId, onManifest]);
+  const guidance = emptyNotice && <p className="text-sm text-gray-600">{emptyNotice}</p>;
+  if (state.kind === 'absent') return guidance ?? null;
   return <section data-listing-sample="" aria-label="Seller-selected sample" className="min-w-0 max-w-full space-y-3 rounded-xl border border-gray-200 bg-white p-4">
     {state.kind === 'ready' && <button type="button" onClick={() => startRef.current(true)} className="rounded border border-indigo-700 px-3 py-2 text-indigo-700 focus-visible:outline-2 focus-visible:outline-indigo-700">View sample</button>}
-    {state.kind === 'loading' && <p role="status" aria-live="polite">Verifying sample…</p>}
-    {state.kind === 'unavailable' && <p role="status" aria-live="polite">We could not load this sample just now. Ask the seller for a sample using the question form on this listing.</p>}
+    {state.kind === 'loading' && <><p role="status" aria-live="polite">Verifying sample…</p>{guidance}</>}
+    {state.kind === 'unavailable' && <p role="status" aria-live="polite">{emptyNotice ?? 'We could not load this sample just now. Ask the seller for a sample using the question form on this listing.'}</p>}
     {state.kind === 'verified' && <><p className="text-sm text-gray-600">Original signed sample evidence; current public licence display is separate.</p><state.Table sample={state.sample} columns={state.columns} /></>}
   </section>;
 }

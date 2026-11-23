@@ -27,7 +27,7 @@ const permanentRedirect = vi.fn(() => {
 const redirect = vi.fn();
 
 const fetchPublicListing = vi.fn();
-const fetchPublicListingDocuments = vi.fn<() => Promise<ListingDocument[]>>().mockResolvedValue([]);
+const fetchPublicListingDocuments = vi.fn<(listingId: string) => Promise<ListingDocument[]>>().mockResolvedValue([]);
 const fetchListingVersions = vi.fn();
 const fetchListingAccessWindowDays = vi.fn();
 const resolveListingUUID = vi.fn();
@@ -92,6 +92,7 @@ vi.mock('@/components/UsdcLargePurchaseRequest', () => ({
 
 const { default: ListingDetailPage } = await import('./page');
 const {generateMetadata} = await import('./page');
+const documentationGuidance = 'Want to check field names or whether a data dictionary is included? Use Ask a Question before you buy.';
 
 describe('corrected backend 1ad9300 real composed detail wire',()=>{
   afterEach(()=>{vi.unstubAllGlobals();fetchPublicListing.mockReset();fetchListingVersions.mockReset();fetchPublicListingDocuments.mockReset().mockResolvedValue([]);});
@@ -408,24 +409,58 @@ describe('real public listing route sample composition', () => {
   afterEach(() => {
     composition.enabled = false;
     document.body.innerHTML = '';
+    vi.unstubAllGlobals();
   });
 
-  it.each<[string, Partial<ListingWithSamples>, string | undefined]>([
-    ['paid file download', {fulfillment_type: 'file_download'}, 'No public sample for this listing. Purchase is required to access the full files.'],
-    ['queryable listing', {fulfillment_type: 'ai_queryable'}, 'No public sample for this listing.'],
-    ['free file download', {fulfillment_type: 'file_download', is_accessible_for_free: true}, 'No public sample for this listing.'],
-    ['published documentation', {}, undefined],
-    ['public sample files', {sample_files: [{index: 0, key_basename: 'sample.csv', size: 12, binding: 'manifest', state: 'available', url: 'https://sample.example/sample.csv'}]}, undefined],
-  ])('supplies the appropriate empty notice for a %s', async (kind, overrides, emptyNotice) => {
-    fetchPublicListingDocuments.mockResolvedValueOnce(kind === 'published documentation' ? [documentFixture()] : []);
-    const listing = makeListing({
-      schema_summary: null,
-      is_accessible_for_free: false,
-      pricing: {price: 10, pricing_type: 'one_time', subscription_price_monthly: null},
-      ...overrides,
-    });
-    await renderPage(listing);
-    expect(composition.sampleProps).toHaveBeenCalledWith(expect.objectContaining({emptyNotice}));
+  it.each([
+    ['a document lookup returning 503', 503, []],
+    ['a successful empty list', 200, []],
+    ['a PDF with an invalid URL', 200, [documentFixture('data_sheet_pdf', {pdf_url: 'http://cdn.example.com/spec.pdf'})]],
+    ['a PDF with a missing URL', 200, [documentFixture('data_sheet_pdf', {pdf_url: null})]],
+  ] as const)('shows guidance and no documentation link for %s', async (_case, status, documents) => {
+    composition.enabled = false;
+    const api = await vi.importActual<typeof import('@/lib/api')>('@/lib/api');
+    fetchPublicListingDocuments.mockImplementationOnce(api.fetchPublicListingDocuments);
+    const fetch = vi.fn().mockResolvedValueOnce(Response.json(documents, {status}));
+    vi.stubGlobal('fetch', fetch);
+
+    document.body.innerHTML = await renderPage(makeListing({fulfillment_type: 'file_download'}));
+
+    expect(fetch).toHaveBeenCalledWith(expect.stringContaining('/documents'), {cache: 'no-store'});
+    const page = within(document.body);
+    expect(page.getByText(documentationGuidance)).toBeTruthy();
+    expect(page.queryByRole('link', {name: /public technical documentation|open data sheet/i})).toBeNull();
+    expect(page.queryByRole('button', {name: 'View sample'})).toBeNull();
+  });
+
+  it('links a valid PDF on its own and hides the guidance', async () => {
+    composition.enabled = false;
+    fetchPublicListingDocuments.mockResolvedValueOnce([documentFixture('data_sheet_pdf')]);
+    document.body.innerHTML = await renderPage(makeListing());
+
+    const page = within(document.body);
+    expect(page.getByRole('link', {name: /Open data sheet/}).getAttribute('href')).toBe('https://cdn.example.com/spec.pdf');
+    expect(page.queryByText(documentationGuidance)).toBeNull();
+  });
+
+  it('links public technical documentation and the public data sheet without the fallback notice', async () => {
+    fetchPublicListingDocuments.mockResolvedValueOnce([documentFixture(), documentFixture('data_sheet_pdf')]);
+    document.body.innerHTML = await renderPage(makeListing());
+
+    const page = within(document.body);
+    expect(page.getByRole('link', {name: 'Read public technical documentation'}).getAttribute('href')).toBe('#technical-documentation');
+    expect(document.getElementById('technical-documentation')?.textContent).toContain('Technical guide');
+    expect(page.getByRole('link', {name: /Open data sheet/}).getAttribute('href')).toBe('https://cdn.example.com/spec.pdf');
+    expect(composition.sampleProps).toHaveBeenCalledWith(expect.objectContaining({emptyNotice: undefined}));
+  });
+
+  it('links public sample files without the fallback notice', async () => {
+    document.body.innerHTML = await renderPage(makeListing({
+      sample_files: [{index: 0, key_basename: 'sample.csv', size: 12, binding: 'manifest', state: 'available', url: 'https://sample.example/sample.csv'}],
+    }));
+
+    expect(within(document.body).getByRole('link', {name: 'sample.csv'}).getAttribute('href')).toBe('https://sample.example/sample.csv');
+    expect(composition.sampleProps).toHaveBeenCalledWith(expect.objectContaining({emptyNotice: undefined}));
   });
 
   it('shows one availability notice when every sample file is unavailable', async () => {
@@ -442,7 +477,7 @@ describe('real public listing route sample composition', () => {
     expect(within(document.body).getAllByText('The seller’s sample is currently unavailable.')).toHaveLength(1);
     expect(within(document.body).queryByRole('heading', { name: /free sample/i })).toBeNull();
     expect(within(document.body).queryByText(/free to download/i)).toBeNull();
-    expect(composition.sampleProps).toHaveBeenCalledWith(expect.objectContaining({emptyNotice: undefined}));
+    expect(composition.sampleProps).toHaveBeenCalledWith(expect.objectContaining({emptyNotice: documentationGuidance}));
   });
 
   it.each(['normal', 'approved Workspace'] as const)(
@@ -529,7 +564,7 @@ describe('real public listing route sample composition', () => {
       }));
       expect(composition.sampleProps).toHaveBeenCalledTimes(1);
       expect(composition.sampleProps.mock.calls[0][0]).toEqual({
-        slug: listing.slug, listingId: listing.id,
+        slug: listing.slug, listingId: listing.id, emptyNotice: documentationGuidance,
       });
 
       const page = within(document.body);
@@ -569,6 +604,7 @@ it('marks inherited listings unavailable and preserves seller licence provenance
   expect(html).not.toContain('View sample');
   expect(html).not.toContain('Sample availability');
   expect(html).not.toContain('Free sample:');
+  expect(html).toContain(documentationGuidance);
 });
 
 it('keeps inherited seller provenance visible after terms acceptance', async () => {
