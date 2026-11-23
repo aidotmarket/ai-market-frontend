@@ -9,6 +9,7 @@ import record10 from '@/tests/fixtures/s1735_license_record.json';
 import record11 from '@/tests/fixtures/s1735_license_record_1_1.json';
 import type {ListingLicenseDetails} from '@/types';
 
+const trainingNotice = 'AI/ML training is permitted for this listing.';
 const get = vi.hoisted(() => vi.fn());
 vi.mock('@/api/client', () => ({api: {get}}));
 afterEach(() => {cleanup(); vi.unstubAllGlobals(); vi.clearAllMocks();});
@@ -26,7 +27,7 @@ async function backendBlock(kind: 'standard' | 'custom', version: '1.0' | '1.1')
   const publicUrl = kind === 'standard' ? `https://ai.market/licenses/standard/${version}/ai-training` : `https://ai.market/licenses/custom/${hash}`;
   const block = {
     code: kind, version: licenseVersion, variant: kind === 'standard' ? 'ai-training' : null, public_url: publicUrl, params,
-    summary: ['Read the full licence before accepting.'],
+    summary: ['Read the full licence before accepting.', ...(kind === 'standard' ? [trainingNotice] : [])],
     full_text_url: kind === 'standard' ? publicUrl : '/api/v1/listings/id/license-document',
     download_url: kind === 'standard' ? `${publicUrl}?download=1` : '/api/v1/listings/id/license-document?download=1',
     sha256: hash, covenant_sha256: record.covenant.sha256,
@@ -56,6 +57,8 @@ it.each([['standard', '1.1'], ['custom', '1.1'], ['standard', '1.0']] as const)(
     const verified = vi.fn();
     render(<ListingLicenseDisclosure license={block} onVerificationChange={verified}/>);
     await waitFor(() => expect(verified).toHaveBeenLastCalledWith(true));
+    expect(screen.getAllByText(trainingNotice)).toHaveLength(1);
+    expect(screen.getByText('Read the full licence before accepting.')).toBeTruthy();
     expect(screen.getAllByRole('status').every(node => node.textContent === 'Fetched bytes match the server hash')).toBe(true);
     expect(fetched).toHaveBeenCalledWith(`/licenses/marketplace-listing/${version}?download=1`, expect.anything());
   },

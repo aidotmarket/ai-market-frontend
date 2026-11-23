@@ -3,6 +3,8 @@
 import { act, cleanup, fireEvent, render, screen, within } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { ListingListItem, SearchResultItem } from '@/types';
+import FindDataPage from '@/app/find-data/page';
+import SearchPage from '@/app/search/page';
 
 const mocks = vi.hoisted(() => ({
   replace: vi.fn(),
@@ -87,6 +89,21 @@ describe('MarketplaceSearchExperience', () => {
     function renderedListingIds() {
       return screen.queryAllByTestId('listing-card').map((card) => card.getAttribute('data-listing-id'));
     }
+
+    it.each([
+      ['/find-data', FindDataPage, 2],
+      ['/search', SearchPage, 1],
+    ] as const)('shows one page h1 and one Search Marketplace label on %s', (path, Page, level) => {
+      mocks.pathname = path;
+      mocks.searchParams = new URLSearchParams();
+      mockLoadedItems([]);
+      render(<Page />);
+
+      expect(screen.getAllByRole('heading', { level: 1 })).toHaveLength(1);
+      expect(screen.getAllByText('Search Marketplace')).toEqual([
+        screen.getByRole('heading', { name: 'Search Marketplace', level }),
+      ]);
+    });
 
     it('offers counted formats from loaded browse metadata without inventing legacy formats', () => {
       mocks.searchParams = new URLSearchParams('type=data');

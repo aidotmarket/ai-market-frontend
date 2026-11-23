@@ -48,7 +48,7 @@ export default function FindDataPage() {
       </section>
 
       <section aria-label="Search marketplace data catalog">
-        <MarketplaceSearchExperience mode="search" />
+        <MarketplaceSearchExperience mode="search" headingLevel={2} />
       </section>
 
       <section className="bg-white py-16 sm:py-20">

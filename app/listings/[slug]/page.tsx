@@ -161,14 +161,14 @@ export default async function ListingDetailPage({ params, searchParams }: Props)
     : listing.at_a_glance;
   const [documents, versions] = await Promise.all([documentsPromise, fetchListingVersions(listing.id)]);
   const sampleFiles = listing.sample_files ?? approved?.sample_files;
-  const hasOtherPublicMaterials = documents.length > 0 || schemaColumns.length > 0
-    || atAGlanceSummary?.key_fields?.value?.length || atAGlanceSummary?.field_descriptions?.value?.length;
+  const hasTechnicalDocumentation = documents.some((document) => document.kind === 'technical_markdown');
+  const hasPublicSampleFiles = sampleFiles?.some((file) => file.state === 'available');
   const requiresFilePurchase = listing.fulfillment_type === 'file_download' && listing.purchasable
     && !purchaseDisabledReason && !listing.is_accessible_for_free && listing.pricing.price > 0;
-  const emptyNotice = sampleFiles?.length || hasOtherPublicMaterials ? undefined
+  const emptyNotice = hasPublicSampleFiles || documents.length ? undefined
     : requiresFilePurchase
-      ? 'No public sample for this listing. Purchase is required to access the full files.'
-      : 'No public sample for this listing.';
+      ? 'No public documentation or sample is available. Use Ask a Question to check field names or ask whether a data dictionary comes with the purchased files.'
+      : 'No public documentation or sample is available. Use Ask a Question to check field names or ask for a data dictionary.';
   const hasVersionRows = versions.length > 0;
   // S1097: legacy listings intentionally keep byte-identical rendering and omit
   // the pre-purchase download-window line pending Max's R5.1h-vs-parity adjudication.
@@ -207,6 +207,11 @@ export default async function ListingDetailPage({ params, searchParams }: Props)
               <span>&middot;</span>
               <span>{listing.inquiry_count} inquiries</span>
             </div>
+            {hasTechnicalDocumentation && (
+              <a href="#technical-documentation" className="mt-2 inline-block text-sm font-medium text-indigo-700 underline">
+                Read public technical documentation
+              </a>
+            )}
           </div>
 
           <BuyerAtAGlance licenseDisplay={currentDisplay} slug={listing.slug} listingId={listing.id} initialSummary={atAGlanceSummary} includeSample={false} hideSampleAvailability={pendingSellerTerms} />

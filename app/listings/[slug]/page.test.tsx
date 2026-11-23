@@ -410,22 +410,42 @@ describe('real public listing route sample composition', () => {
     document.body.innerHTML = '';
   });
 
-  it.each<[string, Partial<ListingWithSamples>, string | undefined]>([
-    ['paid file download', {fulfillment_type: 'file_download'}, 'No public sample for this listing. Purchase is required to access the full files.'],
-    ['queryable listing', {fulfillment_type: 'ai_queryable'}, 'No public sample for this listing.'],
-    ['free file download', {fulfillment_type: 'file_download', is_accessible_for_free: true}, 'No public sample for this listing.'],
-    ['published documentation', {}, undefined],
-    ['public sample files', {sample_files: [{index: 0, key_basename: 'sample.csv', size: 12, binding: 'manifest', state: 'available', url: 'https://sample.example/sample.csv'}]}, undefined],
-  ])('supplies the appropriate empty notice for a %s', async (kind, overrides, emptyNotice) => {
-    fetchPublicListingDocuments.mockResolvedValueOnce(kind === 'published documentation' ? [documentFixture()] : []);
+  const purchaseNotice = 'No public documentation or sample is available. Use Ask a Question to check field names or ask whether a data dictionary comes with the purchased files.';
+  const generalNotice = 'No public documentation or sample is available. Use Ask a Question to check field names or ask for a data dictionary.';
+
+  it.each<[string, Partial<ListingWithSamples>, string]>([
+    ['paid file download with a public schema', {fulfillment_type: 'file_download'}, purchaseNotice],
+    ['queryable listing', {fulfillment_type: 'ai_queryable'}, generalNotice],
+    ['free file download', {fulfillment_type: 'file_download', is_accessible_for_free: true}, generalNotice],
+  ])('supplies data dictionary guidance for a %s without published documentation or samples', async (_kind, overrides, emptyNotice) => {
+    fetchPublicListingDocuments.mockResolvedValueOnce([]);
     const listing = makeListing({
-      schema_summary: null,
       is_accessible_for_free: false,
       pricing: {price: 10, pricing_type: 'one_time', subscription_price_monthly: null},
       ...overrides,
     });
     await renderPage(listing);
     expect(composition.sampleProps).toHaveBeenCalledWith(expect.objectContaining({emptyNotice}));
+  });
+
+  it('links public technical documentation and the public data sheet without the fallback notice', async () => {
+    fetchPublicListingDocuments.mockResolvedValueOnce([documentFixture(), documentFixture('data_sheet_pdf')]);
+    document.body.innerHTML = await renderPage(makeListing());
+
+    const page = within(document.body);
+    expect(page.getByRole('link', {name: 'Read public technical documentation'}).getAttribute('href')).toBe('#technical-documentation');
+    expect(document.getElementById('technical-documentation')?.textContent).toContain('Technical guide');
+    expect(page.getByRole('link', {name: /Open data sheet/}).getAttribute('href')).toBe('https://cdn.example.com/spec.pdf');
+    expect(composition.sampleProps).toHaveBeenCalledWith(expect.objectContaining({emptyNotice: undefined}));
+  });
+
+  it('links public sample files without the fallback notice', async () => {
+    document.body.innerHTML = await renderPage(makeListing({
+      sample_files: [{index: 0, key_basename: 'sample.csv', size: 12, binding: 'manifest', state: 'available', url: 'https://sample.example/sample.csv'}],
+    }));
+
+    expect(within(document.body).getByRole('link', {name: 'sample.csv'}).getAttribute('href')).toBe('https://sample.example/sample.csv');
+    expect(composition.sampleProps).toHaveBeenCalledWith(expect.objectContaining({emptyNotice: undefined}));
   });
 
   it('shows one availability notice when every sample file is unavailable', async () => {
@@ -442,7 +462,7 @@ describe('real public listing route sample composition', () => {
     expect(within(document.body).getAllByText('The seller’s sample is currently unavailable.')).toHaveLength(1);
     expect(within(document.body).queryByRole('heading', { name: /free sample/i })).toBeNull();
     expect(within(document.body).queryByText(/free to download/i)).toBeNull();
-    expect(composition.sampleProps).toHaveBeenCalledWith(expect.objectContaining({emptyNotice: undefined}));
+    expect(composition.sampleProps).toHaveBeenCalledWith(expect.objectContaining({emptyNotice: generalNotice}));
   });
 
   it.each(['normal', 'approved Workspace'] as const)(
@@ -529,7 +549,7 @@ describe('real public listing route sample composition', () => {
       }));
       expect(composition.sampleProps).toHaveBeenCalledTimes(1);
       expect(composition.sampleProps.mock.calls[0][0]).toEqual({
-        slug: listing.slug, listingId: listing.id,
+        slug: listing.slug, listingId: listing.id, emptyNotice: generalNotice,
       });
 
       const page = within(document.body);

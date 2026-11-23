@@ -30,7 +30,7 @@ it('has byte-empty markup without a manifest and no seller fetch', async () => {
   await waitFor(() => expect(fetchPreviewManifest).toHaveBeenCalledOnce()); expect(v.container.innerHTML).toBe(''); expect(fetchPackage).not.toHaveBeenCalled();
 });
 it('shows the listing notice only when the preview endpoint reports a missing manifest', async () => {
-  const emptyNotice = 'No public sample for this listing.';
+  const emptyNotice = 'No public documentation or sample is available. Use Ask a Question to check field names or ask whether a data dictionary comes with the purchased files.';
   const readManifest = vi.mocked(readPreviewManifest);
   readManifest.mockResolvedValueOnce(null).mockResolvedValueOnce('missing').mockResolvedValueOnce(f.manifest);
   render(<ListingSamplePreview slug="sample" listingId={f.manifest.listing_id} emptyNotice={emptyNotice} />);

@@ -215,6 +215,8 @@ export default function ListingLicenseDisclosure({
   }, [onVerificationChange, references]);
 
   const standard = license.code === 'standard';
+  const trainingNotice = `AI/ML training is ${license.params.ai_training ? 'permitted' : 'not permitted'} for this listing.`;
+  const summary = [...new Set(license.summary.map((line) => line.trim()))].filter((line) => line && line !== trainingNotice);
   return (
     <section aria-label="Licence terms" className={`${compact ? 'space-y-3' : 'space-y-4 rounded-xl border border-gray-200 p-5'}`}>
       <div className={`rounded-lg p-4 text-sm ${standard ? 'bg-green-50 text-green-900' : 'bg-amber-50 text-amber-950'}`}>
@@ -223,11 +225,11 @@ export default function ListingLicenseDisclosure({
       <div>
         <h2 className={`${compact ? 'text-base' : 'text-lg'} font-semibold text-gray-900`}>Licence summary — not the contract</h2>
         <ul className="mt-2 list-disc space-y-1 pl-5 text-sm leading-6 text-gray-700">
-          {license.summary.map((line) => <li key={line}>{line}</li>)}
+          {summary.map((line) => <li key={line}>{line}</li>)}
         </ul>
       </div>
       <p className={`rounded-lg border px-4 py-3 text-sm font-semibold ${license.params.ai_training ? 'border-green-300 bg-green-50 text-green-900' : 'border-amber-300 bg-amber-50 text-amber-950'}`}>
-        AI/ML training is {license.params.ai_training ? 'permitted' : 'not permitted'} for this listing.
+        {trainingNotice}
       </p>
       <div className="space-y-3">
         {documents.map((document) => {
