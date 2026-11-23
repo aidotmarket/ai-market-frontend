@@ -3,7 +3,7 @@
 import { customerRefusal, INQUIRY_REFUSALS, customerActionError } from '@/lib/customerMessages';
 import { useEffect, useState, useCallback, useRef, use } from 'react';
 import Link from 'next/link';
-import { getConversation, replyToConversation } from '@/api/conversations';
+import { getConversation, markConversationRead, replyToConversation } from '@/api/conversations';
 import { useConversationPoll } from '@/hooks/useConversationPoll';
 import { authSessionIdentity, useAuthStore } from '@/store/auth';
 import ConversationThread from '@/components/ConversationThread';
@@ -81,6 +81,7 @@ function ConversationView({ id, isCurrent }: { id: string; isCurrent: () => bool
       if (latest) updateSince(latest);
       setError('');
       setAccepted((pending) => pending && !(data.messages ?? []).some((msg) => msg.id === pending) ? pending : null);
+      void markConversationRead(id, data.messages?.length ?? 0);
     } catch {
       if (active.current && isCurrent() && version === readVersion.current) setError(customerActionError("refresh your conversation"));
     } finally {

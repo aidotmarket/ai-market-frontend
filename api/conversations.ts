@@ -43,6 +43,26 @@ export async function getConversation(
   return res.data;
 }
 
+/**
+ * Clear the caller's unread count for a thread that has been shown to them.
+ * Best effort: resolves false instead of throwing, so a failed mark-read never
+ * breaks the thread view. `seenMessageCount` is the number of messages shown;
+ * messages that arrived after that view stay unread.
+ */
+export async function markConversationRead(
+  id: string,
+  seenMessageCount: number
+): Promise<boolean> {
+  try {
+    await api.post(`/conversations/${encodeURIComponent(id)}/read`, {
+      seen_message_count: seenMessageCount,
+    });
+    return true;
+  } catch {
+    return false;
+  }
+}
+
 export async function replyToConversation(
   id: string,
   content: string,

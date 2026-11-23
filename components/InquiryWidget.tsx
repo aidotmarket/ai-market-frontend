@@ -5,7 +5,7 @@ import { useState, useCallback, useEffect, useRef } from 'react';
 import Link from 'next/link';
 import { authSessionIdentity, useAuthStore } from '@/store/auth';
 import { useToast } from '@/components/Toast';
-import { createInquiry, getConversation, replyToConversation } from '@/api/conversations';
+import { createInquiry, getConversation, markConversationRead, replyToConversation } from '@/api/conversations';
 import {
   createAnonymousSession,
   readAnonymousMessageStream,
@@ -428,6 +428,7 @@ function ListingInquiryWidget({ listingId, listingSlug, listingTitle }: Props) {
       if (latest) updateSince(latest);
       setRefreshError('');
       setShowTyping(false);
+      void markConversationRead(conversation.id, data.messages?.length ?? 0);
     } catch {
       if (current() && version === readVersion.current) setRefreshError(customerActionError("refresh your conversation"));
     } finally {

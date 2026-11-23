@@ -5,7 +5,7 @@ import { useState, useEffect, useRef, useCallback } from 'react';
 import Link from 'next/link';
 import InquiryListPager from '@/components/InquiryListPager';
 import { useInquiryList } from '@/hooks/useInquiryList';
-import { replyToConversation, getConversation } from '@/api/conversations';
+import { replyToConversation, getConversation, markConversationRead } from '@/api/conversations';
 import { useConversationPoll } from '@/hooks/useConversationPoll';
 import ConversationThread from '@/components/ConversationThread';
 import { formatDate } from '@/lib/format';
@@ -199,6 +199,7 @@ function SellerInquiryThread({ id, onReplied, isCurrent }: { id: string; onRepli
       if (latest) updateSince(latest);
       setError('');
       setAccepted((pending) => pending && !(data.messages ?? []).some((msg) => msg.id === pending) ? pending : null);
+      void markConversationRead(id, data.messages?.length ?? 0);
     } catch {
       if (active.current && isCurrent() && version === readVersion.current) setError(customerActionError("refresh your conversation"));
     } finally {
