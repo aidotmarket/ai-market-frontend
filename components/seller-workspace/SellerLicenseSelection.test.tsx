@@ -6,12 +6,14 @@ import {webcrypto} from 'node:crypto';
 import SellerLicenseSelection,{CUSTOM_NOTICE,STANDARD_SELLER_SUMMARY} from './SellerLicenseSelection';
 import {createStandardSelection,LICENSE_HASHES_1_0,type LicenseSelection} from '@/api/listingLicenses';
 import {hashLicenseComponentBytes,sha256} from '@/lib/customLicenseVerification';
+import {authSessionIdentity,useAuthStore} from '@/store/auth';
+import type {User} from '@/types';
 
 const transport = vi.hoisted(()=>({post:vi.fn(),get:vi.fn().mockResolvedValue({data:{full_text:'The full terms'}})}));
 vi.mock('@/api/client',()=>({api:transport}));
 const legal=vi.hoisted(()=>({getSellerLegalIdentity:vi.fn(),refreshSellerLegalIdentity:vi.fn(),saveSellerLegalIdentity:vi.fn()}));
 vi.mock('@/api/sellerLegalIdentity',async(importOriginal)=>({...await importOriginal<typeof import('@/api/sellerLegalIdentity')>(),...legal}));
-afterEach(()=>{cleanup();vi.unstubAllGlobals();vi.clearAllMocks();});
+afterEach(()=>{cleanup();useAuthStore.setState({user:null,token:null});vi.unstubAllGlobals();vi.clearAllMocks();});
 beforeEach(()=>{vi.stubGlobal('URL',Object.assign(URL,{createObjectURL:vi.fn(()=> 'blob:licence'),revokeObjectURL:vi.fn()}));legal.refreshSellerLegalIdentity.mockResolvedValue({status:'known',source:'stripe_connect',legal_name:'Seller Ltd',jurisdiction:'GB',version:1});legal.getSellerLegalIdentity.mockResolvedValue({status:'known',source:'stripe_connect',legal_name:'Seller Ltd',jurisdiction:'GB',version:1});});
 
 async function responseFor(text:string,title='Terms') {
@@ -30,6 +32,48 @@ function readTerms(label='Read licence'){
  fireEvent.click(screen.getByRole(label==='Read licence'?'link':'button',{name:label}));fireEvent.keyDown(document,{key:'Escape'});
 }
 function openBoth(){readTerms();readTerms('Read Marketplace Listing Covenant');}
+
+function signInAs(id:string) {
+  useAuthStore.setState({user:{id} as User,token:`session-${id}`});
+}
+
+it('prefills editable signer details without confirming the licence',async()=>{
+  signInAs('returning');
+  transport.get.mockResolvedValueOnce({data:{signer_name:'Sam Seller',signer_title:'Director'}});
+  render(<Harness/>);
+  const name=screen.getByRole<HTMLInputElement>('textbox',{name:'Signer full name'});
+  const title=screen.getByRole<HTMLInputElement>('textbox',{name:'Signer title'});
+  await waitFor(()=>expect(title.value).toBe('Director'));
+  expect(name.value).toBe('Sam Seller');
+  expect(screen.getByRole<HTMLInputElement>('checkbox',{name:'Confirm covenant and authority'}).checked).toBe(false);
+  fireEvent.change(title,{target:{value:'Owner'}});
+  expect(title.value).toBe('Owner');
+});
+
+it('starts a new seller with blank signer fields',async()=>{
+  signInAs('new');
+  transport.get.mockResolvedValueOnce({data:null});
+  render(<Harness/>);
+  await waitFor(()=>expect(transport.get).toHaveBeenCalledWith('/seller-workspace/listing-licences/latest-signer',{signal:expect.any(AbortSignal)}));
+  expect(screen.getByRole<HTMLInputElement>('textbox',{name:'Signer full name'}).value).toBe('');
+  expect(screen.getByRole<HTMLInputElement>('textbox',{name:'Signer title'}).value).toBe('');
+});
+
+it('discards a pending signer response when the account changes',async()=>{
+  signInAs('first');
+  let finish!:(value:{data:unknown})=>void;
+  transport.get.mockImplementationOnce(()=>new Promise(resolve=>{finish=resolve;})).mockResolvedValueOnce({data:null});
+  function SessionHarness() {
+    return <Harness key={useAuthStore(authSessionIdentity)}/>;
+  }
+  render(<SessionHarness/>);
+  await waitFor(()=>expect(transport.get).toHaveBeenCalledTimes(1));
+  act(()=>signInAs('second'));
+  await waitFor(()=>expect(transport.get).toHaveBeenCalledTimes(2));
+  await act(async()=>finish({data:{signer_name:'First Seller',signer_title:'Owner'}}));
+  expect(screen.getByRole<HTMLInputElement>('textbox',{name:'Signer full name'}).value).toBe('');
+  expect(screen.getByRole<HTMLInputElement>('textbox',{name:'Signer title'}).value).toBe('');
+});
 
 describe('Seller licence selection',()=>{
   it('checks refresh before GET and shows a Stripe legal name without a save button',async()=>{
