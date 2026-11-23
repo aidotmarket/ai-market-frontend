@@ -85,7 +85,8 @@ export default function EditListingPage() {
   });
   const [tagInput, setTagInput] = useState('');
   const [listingLicensesEnabled, setListingLicensesEnabled] = useState(false);
-  const [licenseSelection, setLicenseSelection] = useState<LicenseSelection>(createStandardSelection());
+  const [licenceEdit, setLicenceEdit] = useState<{account:string|undefined;id:string;selection:LicenseSelection}>();
+  const licenseSelection = licenceEdit?.account===account&&licenceEdit?.id===id ? licenceEdit.selection : createStandardSelection();
   const [savedGatewaySourceListingId, setSavedGatewaySourceListingId] = useState<string | null>(null);
   const [savedGateway, setSavedGateway] = useState<SellerGateway | null>(null);
   const [sourceFiles, setSourceFiles] = useState<GatewayFile[]>([]);
@@ -105,12 +106,14 @@ export default function EditListingPage() {
   const canPublish = data.status === 'unlisted' || (data.status === 'draft' && savedGatewaySourceListingId === id);
 
   const fetchListing = useCallback(async () => {
+    const sameSession = sessionLifecycle();
     try {
       const [res, capabilities] = await Promise.all([getListing(id), getSellerWorkspaceCapabilities().catch(() => null)]);
+      if (!sameSession()) return;
       const l = res as any;
       const licensesEnabled = capabilities?.listing_licenses === true;
       setListingLicensesEnabled(licensesEnabled);
-      if (licensesEnabled && l.license_selection) setLicenseSelection(l.license_selection);
+      if (licensesEnabled && l.license_selection) setLicenceEdit({account,id,selection:l.license_selection});
       setListingSlug(typeof l.slug === 'string' ? l.slug : undefined);
       setHasStoredFormat(Boolean(l.data_format));
       setData({
@@ -132,7 +135,7 @@ export default function EditListingPage() {
     } finally {
       setLoading(false);
     }
-  }, [id, router, toast]);
+  }, [id, account, router, toast]);
 
   useEffect(() => {
     fetchListing();
@@ -463,7 +466,7 @@ export default function EditListingPage() {
 
       <ListingDocumentsEditor listingId={id}/>
 
-      {listingLicensesEnabled && <SellerLicenseSelection value={licenseSelection} onChange={setLicenseSelection} disabled={saving} />}
+      {listingLicensesEnabled && <SellerLicenseSelection key={JSON.stringify([account,id])} value={licenseSelection} onChange={selection=>setLicenceEdit({account,id,selection})} disabled={saving} />}
 
       {data.status === 'draft' && <ListingGatewaySource listingId={id} onSourceDirty={onSourceDirty} onSourceSaved={onSourceSaved} />}
 

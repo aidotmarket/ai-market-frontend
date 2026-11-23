@@ -6,7 +6,9 @@ import NativeSellerAuth from '@/components/NativeSellerAuth';
 import {nativeAuthError} from '@/api/connector-seller-settings';
 import {useListingFlow} from './GuidedListingFlow';
 import SellerPublication from './SellerPublication';
-import { approveListingReview, CONFIRMATION_KEYS, LICENSE_CONFIRMATION_KEYS, type ConfirmationKey, type ListingReview } from '@/api/sellerListingReview';
+import { approveListingReview, LISTING_CONFIRMATION_V4, reviewConfirmationKeys, type ListingReview } from '@/api/sellerListingReview';
+import CovenantConfirmationStatus from './CovenantConfirmationStatus';
+import {isSignableLicenseSelection} from '@/api/listingLicenses';
 import { listingPolishEnabled, reviewError, reviewNetworkFailure, type ReviewError } from '@/api/listingPolish';
 import { listingPolish as polishCopy } from '@/lib/i18n/listing-polish';
 import { useOptionalSellerListingDraft } from './SellerListingDraftStore';
@@ -36,8 +38,10 @@ export default function SellerApproval({review, active, rendered,disabled=false}
     if (!active) {controller.current?.abort();controller.current = null;setBusy(false);}
   }, [active]);
   const sampleDecision=review.sample_decision??'none';
-  const confirmationKeys:ConfirmationKey[]=[...(review.license_selection?LICENSE_CONFIRMATION_KEYS:CONFIRMATION_KEYS),...(sampleDecision==='member_files'?['sample_files_confirmed' as const]:[])];
-  const ready = active && rendered && !disabled && confirmed && !stale && !receipt && !polishRefusal && !flow?.polishBusy && !pendingAccept;
+  const confirmationKeys=reviewConfirmationKeys(review);
+  const signoffAtLicence=review.confirmation_version===LISTING_CONFIRMATION_V4;
+  const covenantConfirmed=!!review.license_selection&&isSignableLicenseSelection(review.license_selection);
+  const ready = active && rendered && !disabled && confirmed && (!signoffAtLicence||covenantConfirmed) && !stale && !receipt && !polishRefusal && !flow?.polishBusy && !pendingAccept;
   async function approve(event: React.FormEvent) {
     event.preventDefault();
     if (!ready || controller.current || flow?.polishLock?.current || polishEnabled && pendingPolishAccept()) return;
@@ -64,7 +68,8 @@ export default function SellerApproval({review, active, rendered,disabled=false}
     }
   }
   const sampleFiles=typeof review.sample_status==='object'?review.sample_status.files:[];
-  if (receipt) return <><p role="status" className="rounded-xl border border-green-200 bg-green-50 p-5 text-sm text-green-900">Review approved and saved.</p>{!flow&&<SellerPublication key={receipt.id} approval={receipt} active={active} rendered={rendered} sampleCount={sampleFiles.length} />}</>;
+  const covenantStatus=signoffAtLicence&&covenantConfirmed&&<CovenantConfirmationStatus confirmedAt={review.covenant_confirmed_at}/>;
+  if (receipt) return <><p role="status" className="rounded-xl border border-green-200 bg-green-50 p-5 text-sm text-green-900">Review approved and saved.</p>{covenantStatus}{!flow&&<SellerPublication key={receipt.id} approval={receipt} active={active} rendered={rendered} sampleCount={sampleFiles.length} />}</>;
   return <><form onSubmit={approve} className="space-y-5 rounded-xl border border-gray-200 bg-white p-5 sm:p-6">
     <fieldset disabled={busy || !active || stale || disabled || !!polishRefusal} className="space-y-4"><legend className="text-lg font-semibold text-gray-900">Confirm this review</legend>
       {review.source_page&&<p className="text-sm font-medium text-gray-900">Files included ({review.source_page.total_count.toLocaleString('en')})</p>}
@@ -75,6 +80,7 @@ export default function SellerApproval({review, active, rendered,disabled=false}
       </ul>
       <label className="flex items-start gap-3 text-sm font-medium leading-6 text-gray-900"><input type="checkbox" checked={confirmed} onChange={event => setConfirmed(event.target.checked)} className="mt-1 h-4 w-4 shrink-0 accent-indigo-700" /><span>I confirm all of the above.</span></label>
     </fieldset>
+    {covenantStatus}
     <button type="submit" disabled={!ready || busy} className="rounded-lg bg-indigo-700 px-4 py-2.5 text-sm font-semibold text-white hover:bg-indigo-800 disabled:cursor-not-allowed disabled:opacity-50">{busy ? 'Saving approval…' : 'Approve this review'}</button>
     {!ready&&!busy&&!polishRefusal&&<p role="status" className="text-sm text-amber-900">{stale?'Refresh the saved review before approving.':disabled?'Finish saving your file or sample choice in Choose your files, then refresh this review.':!rendered?'Wait for the saved listing and file preview to finish loading.':'Tick the confirmation box to continue.'}</p>}
     <p className="text-sm text-gray-600">Approval saves this exact review. It does not publish your listing.</p>

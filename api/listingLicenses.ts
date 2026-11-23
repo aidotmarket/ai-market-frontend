@@ -34,6 +34,7 @@ export interface CustomLicenseSubmission {
 
 export const CURRENT_STANDARD_VERSION = '1.1';
 export const CURRENT_COVENANT_VERSION = '1.1';
+export const COVENANT_CONFIRMATION = 'I have read the selected licence and Marketplace Listing Covenant. I confirm the covenant facts and that I am authorised to accept them for the seller.';
 
 export function licenseDocumentPath(kind: 'standard' | 'covenant' | 'rider', value?: boolean, version: string = kind === 'rider' ? '1.0' : '1.1'): string {
   if (kind === 'standard') return `/licenses/standard/${version}/${value === false ? 'no-ai-training' : 'ai-training'}`;
