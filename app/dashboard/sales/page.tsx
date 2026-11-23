@@ -274,7 +274,7 @@ function SalesPageContent() {
                   <tr key={order.id} className="hover:bg-gray-50">
                     <td className="px-4 py-3 font-mono text-xs text-gray-700">
                       {order.order_number}
-                      {order.license_record_available && <Link href={recordHref(order)} className="mt-2 block font-sans text-sm font-medium text-[#3F51B5] underline">Licence record</Link>}
+                      {order.license_record_available && <Link href={recordHref(order)} className="mt-2 block font-sans text-sm font-medium text-[#3F51B5] underline">License record</Link>}
                     </td>
                     <td className="px-4 py-3 text-gray-900">{order.listing_title}</td>
                     <td className="px-4 py-3 font-medium text-gray-900">{formatPrice(order.amount_cents / 100)}</td>
@@ -298,7 +298,7 @@ function SalesPageContent() {
                   <div><dt className="font-medium text-gray-500">Status</dt><dd>{renderStatus(order)}</dd></div>
                   <div><dt className="font-medium text-gray-500">Paid</dt><dd className="text-gray-900">{renderPaid(order)}</dd></div>
                 </dl>
-                {order.license_record_available && <Link href={recordHref(order)} className="mt-4 inline-block text-sm font-medium text-[#3F51B5] underline">Licence record</Link>}
+                {order.license_record_available && <Link href={recordHref(order)} className="mt-4 inline-block text-sm font-medium text-[#3F51B5] underline">License record</Link>}
               </article>
             ))}
           </div>

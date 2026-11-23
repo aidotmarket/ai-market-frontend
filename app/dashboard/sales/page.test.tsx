@@ -360,7 +360,7 @@ describe('SalesPage', () => {
     render(<SalesPage />);
 
     expect(screen.getByRole('button', { name: 'Completed' }).getAttribute('aria-pressed')).toBe('true');
-    const links = await screen.findAllByRole('link', { name: 'Licence record' });
+    const links = await screen.findAllByRole('link', { name: 'License record' });
     expect(links.map((link) => link.getAttribute('href'))).toEqual([
       '/dashboard/sales/sale-1/license-record?status=completed',
       '/dashboard/sales/sale-1/license-record?status=completed',
@@ -369,7 +369,7 @@ describe('SalesPage', () => {
       status_filter: 'completed', limit: 100, offset: 0,
     });
     fireEvent.click(screen.getByRole('button', { name: 'All' }));
-    for (const link of await screen.findAllByRole('link', { name: 'Licence record' })) {
+    for (const link of await screen.findAllByRole('link', { name: 'License record' })) {
       expect(link.getAttribute('href')).toBe('/dashboard/sales/sale-1/license-record?status=all');
     }
   });

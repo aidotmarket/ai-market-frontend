@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 
-import { cleanup, fireEvent, render, screen } from '@testing-library/react';
+import { cleanup, fireEvent, render, screen, within } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { api } from '@/api/client';
 import { privateReadOptions } from '@/api/privateReads';
@@ -89,7 +89,24 @@ describe('SellerLicenseRecordPage', () => {
     const get = vi.spyOn(api, 'get').mockResolvedValue({ data });
     await renderRecord();
 
-    expect(await screen.findByText(label)).toBe(screen.getByText('Payment status').nextElementSibling);
+    expect((await screen.findByText(label)).closest('dd')).toBe(screen.getByText('Payment status').nextElementSibling);
+    expect(get).toHaveBeenCalledExactlyOnceWith(orderPath, {
+      ...privateReadOptions, signal: expect.any(AbortSignal),
+    });
+  });
+
+  it.each([
+    ['refunded', 'Refunded'],
+    ['partially_refunded', 'Partially refunded'],
+  ])('shows the %s payment state with the original paid date', async (status, label) => {
+    const get = vi.spyOn(api, 'get').mockResolvedValue({
+      data: { status, amount_cents: 1000, paid_at: '2026-11-23T12:00:00Z' },
+    });
+    await renderRecord();
+
+    const paymentStatus = within((await screen.findByText('Payment status')).parentElement!);
+    expect(paymentStatus.getByText(label)).toBeTruthy();
+    expect(paymentStatus.getByText('Paid on Nov 23, 2026')).toBeTruthy();
     expect(get).toHaveBeenCalledExactlyOnceWith(orderPath, {
       ...privateReadOptions, signal: expect.any(AbortSignal),
     });

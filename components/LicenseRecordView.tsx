@@ -12,6 +12,7 @@ import type { BuyerOrderDetail, LicenseRecord, LicenseRecordCovenantDocument, Li
 
 type RecordDocument = LicenseRecordLicenseDocument | LicenseRecordCovenantDocument | LicenseRecordRiderDocument;
 type RecordParty = LicenseRecordIdentifiedParty | LicenseRecordReferencedParty;
+type PaymentStatus = { label: string; detail?: string };
 
 function partyLabel(value: RecordParty, isViewer: boolean): string {
   if (isViewer && 'legal_name' in value) return `${value.legal_name} (${value.jurisdiction})`;
@@ -19,12 +20,15 @@ function partyLabel(value: RecordParty, isViewer: boolean): string {
   return 'Identified to ai.market for this order';
 }
 
-function sellerPaymentStatus(order: BuyerOrderDetail): string | null {
-  if (order.amount === 0) return 'No payment due';
-  if ('paid_at' in order && typeof order.paid_at === 'string' && order.paid_at) {
-    return `Paid on ${formatDate(order.paid_at)}`;
-  }
-  return order.status === 'created' ? 'Payment pending' : null;
+function sellerPaymentStatus(order: BuyerOrderDetail): PaymentStatus | null {
+  if (order.amount === 0) return { label: 'No payment due' };
+  const paidOn = 'paid_at' in order && typeof order.paid_at === 'string' && order.paid_at
+    ? `Paid on ${formatDate(order.paid_at)}`
+    : undefined;
+  if (order.status === 'refunded') return { label: 'Refunded', detail: paidOn };
+  if (order.status === 'partially_refunded') return { label: 'Partially refunded', detail: paidOn };
+  if (paidOn) return { label: paidOn };
+  return order.status === 'created' ? { label: 'Payment pending' } : null;
 }
 
 function DocumentSection({ document, title }: { document: RecordDocument; title: string }) {
@@ -54,7 +58,7 @@ function LicenseRecordVisit({ id, party, backHref }: { id: string; party: 'buyer
   const [state, setState] = useState<'loading' | 'ready' | 'error'>('loading');
   const [readAttempt, setReadAttempt] = useState(0);
   const [deliveryStatus, setDeliveryStatus] = useState('Loading…');
-  const [paymentStatus, setPaymentStatus] = useState<string | null>(null);
+  const [paymentStatus, setPaymentStatus] = useState<PaymentStatus | null>(null);
   const [actionPending, setActionPending] = useState(false);
   const [actionError, setActionError] = useState<'pdf' | 'confirmation' | null>(null);
   const live = useRef(false);
@@ -183,7 +187,15 @@ function LicenseRecordVisit({ id, party, backHref }: { id: string; party: 'buyer
         <div className={party === 'seller' ? 'sm:col-span-2' : undefined}><dt className="text-gray-500">Signature</dt><dd className="mt-1 text-gray-900">{party === 'buyer' && 'typed_name' in record.signature ? (record.signature.typed_name ?? record.signature.principal_ref ?? record.signature.channel) : record.signature.channel}{party === 'buyer' && 'signer_title' in record.signature && record.signature.signer_title ? `, ${record.signature.signer_title}` : ''}</dd></div>
         <div><dt className="text-gray-500">Licence status</dt><dd className={`mt-1 font-semibold ${record.status === 'active' ? 'text-green-800' : 'text-red-800'}`}>{record.status === 'active' ? 'Active' : 'Terminated'}</dd></div>
         {party === 'seller' && <div><dt className="text-gray-500">Delivery status</dt><dd className="mt-1 font-semibold text-gray-900" aria-live="polite">{deliveryStatus}</dd></div>}
-        {paymentStatus && <div><dt className="text-gray-500">Payment status</dt><dd className="mt-1 font-semibold text-gray-900">{paymentStatus}</dd></div>}
+        {paymentStatus && (
+          <div>
+            <dt className="text-gray-500">Payment status</dt>
+            <dd className="mt-1 text-gray-900">
+              <span className="font-semibold">{paymentStatus.label}</span>
+              {paymentStatus.detail && <span className="block text-xs text-gray-600">{paymentStatus.detail}</span>}
+            </dd>
+          </div>
+        )}
       </dl>
       <p className="text-sm text-gray-700">{record.identity_notice}</p>
       {record.status === 'terminated' && (
