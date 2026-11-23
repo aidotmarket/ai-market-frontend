@@ -1,3 +1,4 @@
+import { NextRequest } from 'next/server';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 const fake = vi.hoisted(() => ({
@@ -19,8 +20,12 @@ vi.mock('../../../../keystatic.config', () => {
 beforeEach(() => {
   vi.resetModules();
   vi.resetAllMocks();
+  fake.config.storage.kind = 'github';
 });
-afterEach(() => vi.unstubAllGlobals());
+afterEach(() => {
+  vi.unstubAllGlobals();
+  vi.unstubAllEnvs();
+});
 
 function deferred<T>() {
   let resolve!: (value: T) => void;
@@ -30,6 +35,8 @@ function deferred<T>() {
 }
 
 describe('lazy Keystatic route (offline fakes only)', () => {
+  beforeEach(() => vi.stubEnv('NODE_ENV', 'test'));
+
   it('imports without loading dependencies, invoking the factory, or reading private settings', async () => {
     const privateRead = vi.fn(() => { throw new Error('private setting read during import'); });
     const env = new Proxy({ NODE_ENV: 'production' }, {
@@ -151,5 +158,92 @@ describe('lazy Keystatic route (offline fakes only)', () => {
     await expect(route.GET(request)).rejects.toBe(failure);
     expect(await route.POST(request)).toBe(result);
     expect(fake.factory).toHaveBeenCalledTimes(1);
+  });
+});
+
+describe('Keystatic public request origin', () => {
+  const internalUrl = 'https://127.0.0.1:8080/api/keystatic/github/login?from=%2Fkeystatic';
+
+  beforeEach(() => {
+    vi.stubEnv('NODE_ENV', 'production');
+    vi.stubEnv('NEXT_PUBLIC_SITE_URL', undefined);
+  });
+
+  it('passes the public origin and original path and query to the GET handler', async () => {
+    const GET = vi.fn((request: Request) => new Response(request.url));
+    fake.factory.mockReturnValue({ GET });
+    const route = await import('./route');
+
+    const response = await route.GET(new Request(internalUrl));
+
+    expect(await response.text()).toBe('https://ai.market/api/keystatic/github/login?from=%2Fkeystatic');
+  });
+
+  it('uses the configured site origin even with a spoofed forwarded host', async () => {
+    vi.stubEnv('NEXT_PUBLIC_SITE_URL', 'https://www.ai.market/blog');
+    const GET = vi.fn((request: Request) => new Response(request.url));
+    fake.factory.mockReturnValue({ GET });
+    const route = await import('./route');
+
+    const response = await route.GET(new Request(internalUrl, {
+      headers: { 'x-forwarded-host': 'spoofed.example' },
+    }));
+
+    expect(await response.text()).toBe('https://www.ai.market/api/keystatic/github/login?from=%2Fkeystatic');
+  });
+
+  it('forwards the POST method, stream, headers, and response cookies', async () => {
+    const result = new Response(null, { status: 204 });
+    result.headers.append('Set-Cookie', 'session=updated; Path=/; HttpOnly');
+    result.headers.append('Set-Cookie', 'state=; Path=/; Max-Age=0');
+    const encoder = new TextEncoder();
+    const body = new ReadableStream({
+      start(controller) {
+        controller.enqueue(encoder.encode('{"fixture":'));
+        controller.enqueue(encoder.encode('true}'));
+        controller.close();
+      },
+    });
+    const init = {
+      method: 'POST',
+      headers: { 'content-type': 'application/json', cookie: 'session=fixture' },
+      body,
+      duplex: 'half' as const,
+    };
+    const POST = vi.fn(async (request: Request) => {
+      expect(request.url).toBe('https://ai.market/api/keystatic/test');
+      expect(request.method).toBe('POST');
+      expect(request.headers.get('content-type')).toBe('application/json');
+      expect(request.headers.get('cookie')).toBe('session=fixture');
+      expect(request.body).toBe(body);
+      expect(await request.json()).toEqual({ fixture: true });
+      return result;
+    });
+    fake.factory.mockReturnValue({ POST });
+    const route = await import('./route');
+
+    const response = await route.POST(new NextRequest('https://127.0.0.1:8080/api/keystatic/test', init));
+
+    expect(response).toBe(result);
+    expect(response.headers.getSetCookie()).toEqual([
+      'session=updated; Path=/; HttpOnly',
+      'state=; Path=/; Max-Age=0',
+    ]);
+  });
+
+  it.each([
+    ['development', 'github'],
+    ['production', 'local'],
+  ] as const)('passes through the original request in %s with %s storage', async (env, storage) => {
+    vi.stubEnv('NODE_ENV', env);
+    fake.config.storage.kind = storage;
+    const GET = vi.fn().mockResolvedValue(new Response());
+    fake.factory.mockReturnValue({ GET });
+    const route = await import('./route');
+    const request = new Request(internalUrl);
+
+    await route.GET(request);
+
+    expect(GET.mock.calls[0][0]).toBe(request);
   });
 });
