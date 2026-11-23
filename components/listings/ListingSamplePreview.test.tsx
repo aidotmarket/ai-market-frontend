@@ -1,9 +1,9 @@
 // @vitest-environment jsdom
 import {readFileSync} from 'node:fs';
-import {disclosureBytes, platformBytes} from '@/lib/listing-preview/verifier';
+import * as verifier from '@/lib/listing-preview/verifier';
 import {testSign} from '@/tests/previewFixture';
 import {webcrypto} from 'node:crypto';
-import {act, cleanup, fireEvent, render, screen, waitFor} from '@testing-library/react';
+import {act, cleanup, fireEvent, render, screen, waitFor, within} from '@testing-library/react';
 import {afterEach, beforeEach, expect, it, vi} from 'vitest';
 import {makeCurrentPreview, makeFreshnessTransitionPreview, makePreview} from '@/tests/previewFixture';
 import {fetchPreviewKeys, fetchPreviewManifest, fetchSignedSummaryPayload} from '@/lib/api';
@@ -41,6 +41,19 @@ it('shows the listing guidance whenever the preview has no sample to show', asyn
   expect(screen.getByText(emptyNotice)).toBeTruthy();
   expect(screen.queryByRole('button', {name: 'View sample'})).toBeNull();
   expect(fetchPackage).not.toHaveBeenCalled();
+});
+it('shows the load failure and listing guidance together when verification fails after View sample', async () => {
+  const emptyNotice = 'Want to check field names or whether a data dictionary is included? Use Ask a Question before you buy.';
+  const failureMessage = 'We could not load this sample just now. Ask the seller for a sample using the question form on this listing.';
+  vi.spyOn(verifier, 'verifyManifest').mockRejectedValueOnce(new Error('verification failed'));
+  render(<ListingSamplePreview slug="sample" listingId={f.manifest.listing_id} emptyNotice={emptyNotice} />);
+
+  fireEvent.click(await screen.findByRole('button', {name: 'View sample'}));
+
+  await screen.findByText(failureMessage);
+  const status = within(screen.getByRole('status'));
+  expect(status.getByText(failureMessage)).toBeTruthy();
+  expect(status.getByText(emptyNotice)).toBeTruthy();
 });
 it('does not fetch the seller before an explicit request or when keys are 503/absent', async () => {
   await mount(); expect(fetchPackage).not.toHaveBeenCalled();
@@ -120,7 +133,7 @@ it('binds descriptions and units from the current signed payload before insertio
   for (const field of ['summary_hash', 'render_hash', 'source_revision'] as const) {
     f.manifest[field] = signed[field]; e.binding[field] = signed[field];
   }
-  e.seller_signature = testSign(disclosureBytes(e.binding)); e.signature = testSign(platformBytes(e));
+  e.seller_signature = testSign(verifier.disclosureBytes(e.binding)); e.signature = testSign(verifier.platformBytes(e));
   vi.mocked(fetchSignedSummaryPayload).mockResolvedValue(signed);
   await view(); expect(screen.getByText('Crop label')).toBeTruthy();
   expect(fetchSignedSummaryPayload).toHaveBeenCalledWith('current-canonical', expect.any(AbortSignal));
@@ -133,7 +146,7 @@ it('silently uses identity-only columns when the signed payload is absent or has
 it('hides all rows before seller contact for an F2-signed attestation digest mismatch', async () => {
   const e = f.manifest.approval.platform_envelope;
   e.binding.scan_attestation_digest = '0'.repeat(64);
-  e.seller_signature = testSign(disclosureBytes(e.binding)); e.signature = testSign(platformBytes(e));
+  e.seller_signature = testSign(verifier.disclosureBytes(e.binding)); e.signature = testSign(verifier.platformBytes(e));
   await mount(); fireEvent.click(screen.getByRole('button', {name: 'View sample'})); await screen.findByText('We could not load this sample just now. Ask the seller for a sample using the question form on this listing.');
   expect(fetchPackage).not.toHaveBeenCalled(); expect(screen.queryByRole('table')).toBeNull();
   expect(screen.queryByText('scan_mismatch')).toBeNull();
