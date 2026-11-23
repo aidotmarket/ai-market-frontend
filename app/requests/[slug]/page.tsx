@@ -11,6 +11,7 @@ const PUBLIC_REQUEST_STATUSES = new Set(['open', 'responses_received']);
 
 interface Props {
   params: Promise<{ slug: string }>;
+  searchParams?: Promise<{ page?: string | string[]; category?: string | string[] }>;
 }
 
 export async function generateMetadata({ params }: Props): Promise<Metadata> {
@@ -47,11 +48,18 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
   };
 }
 
-export default async function DataRequestDetailPage({ params }: Props) {
+export default async function DataRequestDetailPage({ params, searchParams }: Props) {
   const { slug } = await params;
+  const { page, category } = await searchParams ?? {};
+  const boardParams = new URLSearchParams();
+  if (typeof page === 'string' && /^\d+$/.test(page) && Number.isSafeInteger(Number(page)) && Number(page) > 0) {
+    boardParams.set('page', page);
+  }
+  if (typeof category === 'string' && category) boardParams.set('category', category);
+  const boardQuery = boardParams.toString();
   const request: DataRequestDetail | null = await fetchDataRequest(slug);
   if (!request || hasPrivatePublication(request)) {
-    return <DataRequestDetailClient slug={slug} initialRequest={null} />;
+    return <DataRequestDetailClient slug={slug} initialRequest={null} boardQuery={boardQuery} />;
   }
 
   const shouldEmitJsonLd = shouldEmitDemandJsonLd(request);
@@ -64,7 +72,7 @@ export default async function DataRequestDetailPage({ params }: Props) {
           dangerouslySetInnerHTML={{ __html: safeJsonLdStringify(request.jsonld) }}
         />
       )}
-      <DataRequestDetailClient slug={slug} initialRequest={request} />
+      <DataRequestDetailClient slug={slug} initialRequest={request} boardQuery={boardQuery} />
     </>
   );
 }

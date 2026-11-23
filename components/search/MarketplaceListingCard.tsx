@@ -33,7 +33,7 @@ export function MarketplaceListingCard({ listing }: { listing: CardListing }) {
     <Link
       href={`/listings/${listing.slug}`}
       prefetch={false}
-      className="flex h-full flex-col rounded-2xl border border-gray-200 bg-white p-6 transition-all hover:-translate-y-0.5 hover:border-[#C5CAE9] hover:shadow-md"
+      className="flex h-full min-w-0 flex-col rounded-2xl border border-gray-200 bg-white p-6 transition-all hover:-translate-y-0.5 hover:border-[#C5CAE9] hover:shadow-md"
     >
       <div className="flex items-start justify-between gap-3">
         <h3 className="line-clamp-2 flex-1 text-base font-semibold text-gray-900">
@@ -50,7 +50,7 @@ export function MarketplaceListingCard({ listing }: { listing: CardListing }) {
         </p>
       )}
 
-      {display && <p className="mt-3 text-xs text-gray-600">{display.license_label}. {CORRECTION_NOTICE_BUYER}</p>}
+      {display && <p className="mt-3 whitespace-normal wrap-normal text-xs text-gray-600">{display.license_label}. {CORRECTION_NOTICE_BUYER}</p>}
       <div className="mt-4 flex flex-wrap gap-1.5">
         <span className="inline-flex items-center rounded-full bg-gray-100 px-2.5 py-1 text-xs font-medium text-gray-700">
           {formatMarketplaceCategoryName(listing.category)}

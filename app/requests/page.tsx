@@ -37,7 +37,7 @@ export default async function BrowseRequestsPage({ searchParams }: Props) {
     page,
     per_page: PAGE_SIZE,
     category: category || undefined,
-  });
+  }).catch(() => null);
 
   const requests: DataRequestListItem[] = Array.isArray(data) ? data : data?.items ?? [];
   const total = Array.isArray(data) ? undefined : data?.total;
@@ -49,12 +49,14 @@ export default async function BrowseRequestsPage({ searchParams }: Props) {
     (a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime()
   );
 
-  function buildUrl(overrides: Record<string, string>) {
-    const p = new URLSearchParams();
-    const merged = { page: String(page), category, ...overrides };
-    for (const [k, v] of Object.entries(merged)) {
-      if (v) p.set(k, v);
-    }
+  const boardParams = new URLSearchParams();
+  if (parsedPage === page) boardParams.set('page', String(page));
+  if (category) boardParams.set('category', category);
+  const boardQuery = boardParams.toString();
+
+  function buildPageUrl(targetPage: number) {
+    const p = new URLSearchParams({ page: String(targetPage) });
+    if (category) p.set('category', category);
     return `/requests?${p.toString()}`;
   }
 
@@ -152,7 +154,7 @@ export default async function BrowseRequestsPage({ searchParams }: Props) {
       {sorted.length > 0 && (
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
           {sorted.map((req) => (
-            <RequestCard key={req.id} request={req} />
+            <RequestCard key={req.id} request={req} boardQuery={boardQuery} />
           ))}
         </div>
       )}
@@ -162,7 +164,7 @@ export default async function BrowseRequestsPage({ searchParams }: Props) {
         <div className="flex justify-center gap-2 mt-8">
           {page > 1 && sorted.length === 0 && (
             <Link
-              href={buildUrl({ page: '1' })}
+              href={buildPageUrl(1)}
               className="rounded-lg border border-gray-300 px-4 py-2 text-sm hover:bg-gray-50"
             >
               First page
@@ -170,7 +172,7 @@ export default async function BrowseRequestsPage({ searchParams }: Props) {
           )}
           {page > 1 && (
             <Link
-              href={buildUrl({ page: String(page - 1) })}
+              href={buildPageUrl(page - 1)}
               className="rounded-lg border border-gray-300 px-4 py-2 text-sm hover:bg-gray-50"
             >
               Previous
@@ -178,7 +180,7 @@ export default async function BrowseRequestsPage({ searchParams }: Props) {
           )}
           {hasNext && (
             <Link
-              href={buildUrl({ page: String(page + 1) })}
+              href={buildPageUrl(page + 1)}
               className="rounded-lg border border-gray-300 px-4 py-2 text-sm hover:bg-gray-50"
             >
               Next
@@ -190,7 +192,7 @@ export default async function BrowseRequestsPage({ searchParams }: Props) {
   );
 }
 
-function RequestCard({ request }: { request: DataRequestListItem }) {
+function RequestCard({ request, boardQuery }: { request: DataRequestListItem; boardQuery: string }) {
   const hasResponseCount = typeof request.response_count === 'number'
     && Number.isFinite(request.response_count) && request.response_count >= 0;
   const urgencyCss = URGENCY_BADGE[request.urgency] || URGENCY_BADGE.low;
@@ -202,7 +204,7 @@ function RequestCard({ request }: { request: DataRequestListItem }) {
 
   return (
     <Link
-      href={`/requests/${request.slug}`}
+      href={`/requests/${request.slug}${boardQuery ? `?${boardQuery}` : ''}`}
       className="block rounded-xl border border-gray-200 p-6 hover:border-[#C5CAE9] hover:shadow-md transition-all"
     >
       <div className="flex flex-wrap items-start justify-between gap-y-2 mb-3">

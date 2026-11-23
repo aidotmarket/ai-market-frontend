@@ -110,7 +110,9 @@ export function Layout({ children }: { children: React.ReactNode }) {
 
             <nav className="hidden md:flex items-center gap-6">
               <Link href="/find-data" className="text-sm text-[#666666] hover:text-[#1A1A1A]">Find Data</Link>
-              <Link href="/requests" className="text-sm text-[#666666] hover:text-[#1A1A1A]">Buyer Requests</Link>
+              {/* Use a document navigation so this entry point can reach the board without the client router. */}
+              {/* eslint-disable-next-line @next/next/no-html-link-for-pages */}
+              <a href="/requests" className="text-sm text-[#666666] hover:text-[#1A1A1A]">Buyer Requests</a>
               <Link href="/sell-data" className="text-sm text-[#666666] hover:text-[#1A1A1A]">Sell Data</Link>
               <Link href="/pricing" className="text-sm text-[#666666] hover:text-[#1A1A1A]">Pricing</Link>
               <Link href="/protocol" className="text-sm text-[#666666] hover:text-[#1A1A1A]">The Protocol</Link>

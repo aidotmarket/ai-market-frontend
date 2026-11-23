@@ -54,6 +54,19 @@ it('shows only the backend custom notice and hash', async () => {
   expect(html).not.toContain('Full text');
 });
 
+it('links the existing marketplace terms reference in Covenant v1.1', async () => {
+  process.env.API_URL = 'https://api.ai.market';
+  const fullText = 'The seller accepts that the ai.market marketplace terms prevail for non-custodial delivery, the 5% commission, refunds, dispute holds and the evaluation-only sample rule.\n';
+  globalThis.fetch = vi.fn().mockResolvedValue({ ok: true, json: async () => ({
+    code: 'marketplace-listing', version: '1.1', variant: null, summary: [], full_text: fullText, sha256: 'a'.repeat(64),
+  }) });
+
+  const html = renderToStaticMarkup(await LicencePage({ params: Promise.resolve({ parts: ['marketplace-listing', '1.1'] }) }));
+
+  expect(html).toMatch(/href="\/legal\/terms"[^>]*>ai\.market marketplace terms<\/a>/);
+  expect(html.match(/<pre[^>]*>([\s\S]*?)<\/pre>/)?.[1].replace(/<\/?a\b[^>]*>/g, '')).toBe(fullText);
+});
+
 it('escapes markup in the public amber notice and never exposes custom text',async()=>{
   process.env.API_URL='https://api.ai.market';
   const hash='c'.repeat(64);
