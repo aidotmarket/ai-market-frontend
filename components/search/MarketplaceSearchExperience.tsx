@@ -158,7 +158,7 @@ export function MarketplaceSearchExperience({
     ? 'Explore model listings with URL-driven filters, sorting, and incremental loading.'
     : listingCategory === 'data'
       ? 'Explore data listings with URL-driven filters, sorting, and incremental loading.'
-      : 'Explore marketplace listings with URL-driven filters, sorting, and incremental loading.';
+      : 'Browse every listing. Pick a category or sort to narrow it down.';
   const emptyLabel = listingCategory === 'data' ? 'data' : listingCategory === 'models' ? 'models' : 'listings';
   const hasSemanticSuggestions = semanticMode && Boolean(q) && !isLoading && !isError && items.length > 0;
 

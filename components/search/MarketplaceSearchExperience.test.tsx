@@ -5,6 +5,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { ListingListItem, SearchResultItem } from '@/types';
 import FindDataPage from '@/app/find-data/page';
 import SearchPage from '@/app/search/page';
+import BrowseListingsPage from '@/app/listings/page';
 
 const mocks = vi.hoisted(() => ({
   replace: vi.fn(),
@@ -103,6 +104,14 @@ describe('MarketplaceSearchExperience', () => {
       expect(screen.getAllByText('Search Marketplace')).toEqual([
         screen.getByRole('heading', { name: 'Search Marketplace', level }),
       ]);
+    });
+
+    it('introduces Browse Marketplace in plain buyer language', () => {
+      mocks.searchParams = new URLSearchParams();
+      mockLoadedItems([]);
+      render(<BrowseListingsPage />);
+
+      expect(screen.getByText('Browse every listing. Pick a category or sort to narrow it down.')).toBeTruthy();
     });
 
     it('offers counted formats from loaded browse metadata without inventing legacy formats', () => {
