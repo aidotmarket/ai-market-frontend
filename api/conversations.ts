@@ -1,4 +1,5 @@
 import { api } from './client';
+import { useAuthStore } from '@/store/auth';
 import type {
   ConversationListItem,
   ConversationDetail,
@@ -54,10 +55,18 @@ export async function markConversationRead(
   seenMessageCount: number
 ): Promise<boolean> {
   try {
-    await api.post(`/conversations/${encodeURIComponent(id)}/read`, {
-      seen_message_count: seenMessageCount,
+    const token = useAuthStore.getState().token;
+    if (!token) return false;
+
+    const url = api.getUri({ url: `/conversations/${encodeURIComponent(id)}/read` });
+    const response = await fetch(url, {
+      method: 'POST',
+      credentials: 'include',
+      redirect: 'error',
+      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+      body: JSON.stringify({ seen_message_count: seenMessageCount }),
     });
-    return true;
+    return response.ok;
   } catch {
     return false;
   }

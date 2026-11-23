@@ -1,61 +1,101 @@
 // @vitest-environment jsdom
 import React, { Suspense } from 'react';
 import { act, cleanup, fireEvent, render, screen } from '@testing-library/react';
+import axios, { AxiosError, type AxiosAdapter, type InternalAxiosRequestConfig } from 'axios';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { api } from '@/api/client';
 import { markConversationRead } from '@/api/conversations';
 import DetailPage from '@/app/dashboard/inquiries/[id]/page';
 import SellerPage from '@/app/dashboard/seller/inquiries/page';
 import InquiryWidget from '@/components/InquiryWidget';
+import { useAuthStore } from '@/store/auth';
+import type { ConversationDetail, ConversationMessage, User } from '@/types';
 
-// The real API module runs against a stubbed HTTP client, so these tests see
-// exactly which requests a thread view makes.
-const client = vi.hoisted(() => ({ get: vi.fn(), post: vi.fn(), updateSince: vi.fn() }));
-vi.mock('@/api/client', () => ({ api: client }));
-vi.mock('@/api/anonymousChat', () => ({ createAnonymousSession: vi.fn(() => { throw new Error('No anonymous session'); }), sendAnonymousMessage: vi.fn(() => { throw new Error('No messages'); }), readAnonymousMessageStream: vi.fn() }));
-vi.mock('@/store/auth', async (importOriginal) => {
-  const state = { user: { id: 'viewer' }, token: 'synthetic', isAuthenticated: true };
-  return { ...await importOriginal<typeof import('@/store/auth')>(), useAuthStore: Object.assign((select?: (value: typeof state) => unknown) => select ? select(state) : state, { getState: () => state, subscribe: () => () => {} }) };
-});
-vi.mock('@/components/Toast', () => ({ useToast: () => ({ toast: vi.fn() }) }));
-// A stable stub: the views reload whenever this callback's identity changes.
-vi.mock('@/hooks/useConversationPoll', () => ({ useConversationPoll: () => ({ updateSince: client.updateSince }) }));
-vi.mock('@/components/ConversationThread', () => ({ default: () => null }));
-vi.mock('@/hooks/useInquiryList', () => ({ useInquiryList: () => ({ inquiries: [{ id: 'thread', listing_title: 'Synthetic listing', status: 'awaiting_seller', last_message_at: '2026-10-18T00:00:00Z', unread_by_seller: 2 }], loading: false, error: '', refetch: vi.fn(), isCurrent: () => true, page: 1, changePage: vi.fn(), hasNext: false }) }));
+const list = vi.hoisted(() => ({
+  inquiries: [{ id: 'thread', listing_title: 'Synthetic listing', status: 'awaiting_seller', last_message_at: '2026-10-18T00:00:00Z', unread_by_seller: 2 }],
+  loading: false, error: '', refetch: vi.fn(), isCurrent: () => true, page: 1, changePage: vi.fn(), hasNext: false,
+}));
+vi.mock('@/hooks/useInquiryList', () => ({ useInquiryList: () => list }));
 
-const messages = [
+const messages: ConversationMessage[] = [
   { id: 'm1', inquiry_id: 'thread', role: 'buyer', content: 'Is the data updated daily?', created_at: '2026-10-18T00:00:00Z' },
   { id: 'm2', inquiry_id: 'thread', role: 'allai', content: 'Yes, every day.', created_at: '2026-10-18T00:01:00Z' },
 ];
-const detail = { id: 'thread', listing_id: 'listing', listing_title: 'Synthetic listing', buyer_id: 'viewer', seller_id: null, status: 'awaiting_seller', created_at: '2026-10-18T00:00:00Z', unread_by_buyer: 2, unread_by_seller: 0, messages };
-const readCalls = () => client.post.mock.calls.filter(([path]) => String(path).endsWith('/read'));
+const counterpart: ConversationMessage = {
+  id: 'm3', inquiry_id: 'thread', role: 'seller', content: 'The updates run at midnight.', created_at: '2026-10-18T00:02:00Z',
+};
+const detail: ConversationDetail = {
+  id: 'thread', listing_id: 'listing', listing_title: 'Synthetic listing', buyer_id: 'buyer', seller_id: 'seller',
+  status: 'awaiting_seller', created_at: messages[0].created_at, last_message_at: messages[1].created_at,
+  unread_by_buyer: 2, unread_by_seller: 0, messages,
+};
+const adapters = [api.defaults.adapter, axios.defaults.adapter] as const;
+const fetchMarker = vi.fn<typeof fetch>();
+const request = vi.fn<AxiosAdapter>();
+let snapshot: ConversationDetail;
+let polled: ConversationMessage[];
+
+function unauthorized(config: InternalAxiosRequestConfig) {
+  return new AxiosError('Unauthorized', 'ERR_BAD_REQUEST', config, undefined,
+    { config, status: 401, statusText: 'Unauthorized', data: {}, headers: {} });
+}
+
+function readCounts() {
+  return fetchMarker.mock.calls.map(([, options]) => JSON.parse(String(options?.body)).seen_message_count);
+}
+
+function setVisibility(value: DocumentVisibilityState) {
+  vi.spyOn(document, 'visibilityState', 'get').mockReturnValue(value);
+  fireEvent(document, new Event('visibilitychange'));
+}
 
 beforeEach(() => {
   vi.resetAllMocks();
   sessionStorage.clear();
   Element.prototype.scrollIntoView = vi.fn();
-  vi.stubGlobal('fetch', () => { throw new Error('Network forbidden'); });
+  const viewer = { id: 'buyer' } as User;
+  useAuthStore.setState({ user: viewer, token: 'synthetic', isAuthenticated: true, hydrated: true, isLoading: false });
+  snapshot = detail;
+  polled = [];
+  fetchMarker.mockResolvedValue(new Response(null, { status: 204 }));
+  vi.stubGlobal('fetch', fetchMarker);
   vi.stubGlobal('XMLHttpRequest', class { constructor() { throw new Error('Network forbidden'); } });
-  client.get.mockImplementation(async (path: string) => {
-    if (path === '/conversations/thread') return { data: detail };
-    throw new Error(`unexpected GET ${path}`);
+  request.mockImplementation(async (config) => {
+    const response = (data: unknown) => ({ config, data, status: 200, statusText: 'OK', headers: {} });
+    switch (config.url) {
+      case '/conversations/':
+      case '/conversations/thread': return response(snapshot);
+      case '/conversations/thread/reply': return response({ success: true, message_id: 'pending-reply' });
+      case '/conversations/thread/poll': return response({ new_messages: polled, inquiry_status: detail.status, has_more: false });
+      case '/conversations/thread/read': throw unauthorized(config);
+      default: throw new Error(`Unexpected request ${config.url}`);
+    }
   });
-  client.post.mockImplementation(async (path: string) => {
-    if (path === '/conversations/thread/read') return { data: '' };
-    if (path === '/conversations/') return { data: { ...detail, messages: messages.slice(0, 1) } };
-    if (path === '/conversations/thread/reply') return { data: { success: true, message_id: 'm3' } };
-    throw new Error(`unexpected POST ${path}`);
-  });
+  api.defaults.adapter = request;
+  axios.defaults.adapter = vi.fn(async config => { throw unauthorized(config); });
 });
-afterEach(() => { cleanup(); vi.unstubAllGlobals(); });
+afterEach(() => {
+  cleanup();
+  [api.defaults.adapter, axios.defaults.adapter] = adapters;
+  vi.useRealTimers();
+  vi.restoreAllMocks();
+  vi.unstubAllGlobals();
+});
 
 describe('markConversationRead', () => {
-  it('posts the seen message count to the encoded read route', async () => {
-    client.post.mockResolvedValueOnce({ data: '' });
+  it('posts the seen message count and current token to the encoded read route', async () => {
+    useAuthStore.setState({ token: 'rotated-token' });
     expect(await markConversationRead('a/b', 4)).toBe(true);
-    expect(client.post).toHaveBeenCalledExactlyOnceWith('/conversations/a%2Fb/read', { seen_message_count: 4 });
+    expect(fetchMarker).toHaveBeenCalledExactlyOnceWith(`${api.defaults.baseURL}/conversations/a%2Fb/read`, {
+      method: 'POST', credentials: 'include', redirect: 'error',
+      headers: { 'Content-Type': 'application/json', Authorization: 'Bearer rotated-token' },
+      body: JSON.stringify({ seen_message_count: 4 }),
+    });
+    expect(request).not.toHaveBeenCalled();
   });
-  it('resolves false instead of throwing when the request fails', async () => {
-    client.post.mockRejectedValueOnce(new Error('Synthetic network failure'));
+
+  it('resolves false when the network fails', async () => {
+    fetchMarker.mockRejectedValueOnce(new Error('Synthetic network failure'));
     expect(await markConversationRead('thread', 2)).toBe(false);
   });
 });
@@ -63,54 +103,100 @@ describe('markConversationRead', () => {
 async function openDetail() {
   const params = Promise.resolve({ id: 'thread' });
   await act(async () => { render(<Suspense fallback="Loading"><DetailPage params={params} /></Suspense>); });
-  await screen.findByRole('heading', { name: 'Synthetic listing' });
-}
-async function openSeller() {
-  render(<SellerPage />);
-  await act(async () => { fireEvent.click(screen.getByRole('button', { name: /Synthetic listing/ })); });
-  await screen.findByRole('textbox');
 }
 
-describe.each([['detail', openDetail], ['seller', openSeller]] as const)('%s thread view', (_, open) => {
-  it('marks the shown thread read exactly once', async () => {
-    await open();
-    expect(client.get).toHaveBeenCalledWith('/conversations/thread');
-    expect(readCalls()).toEqual([['/conversations/thread/read', { seen_message_count: messages.length }]]);
-  });
-  it('stays usable when mark-read fails', async () => {
-    client.post.mockImplementation(async (path: string) => {
-      if (path === '/conversations/thread/read') throw new Error('Synthetic mark-read failure');
-      if (path === '/conversations/thread/reply') return { data: { success: true, message_id: 'm3' } };
-      throw new Error(`unexpected POST ${path}`);
+async function openSeller() {
+  useAuthStore.setState({ user: { id: 'seller' } as User });
+  render(<SellerPage />);
+  await act(async () => { fireEvent.click(screen.getByRole('button', { name: /Synthetic listing/ })); });
+}
+
+async function openWidget() {
+  render(<InquiryWidget listingId="listing" listingSlug="listing" listingTitle="Synthetic listing" />);
+  fireEvent.change(screen.getByRole('textbox'), { target: { value: messages[0].content } });
+  await act(async () => { fireEvent.click(screen.getByRole('button', { name: 'Submit Question' })); });
+}
+
+async function reply() {
+  fireEvent.change(screen.getByRole('textbox'), { target: { value: 'Thanks for the details' } });
+  await act(async () => { fireEvent.click(screen.getByRole('button', { name: 'Reply' })); });
+}
+
+async function refresh() {
+  await act(async () => { fireEvent.click(screen.getByRole('button', { name: 'Refresh conversation' })); });
+}
+
+describe.each([['detail', openDetail], ['seller', openSeller], ['widget', openWidget]] as const)('%s thread view', (view, open) => {
+  const newMessage = { ...counterpart, role: view === 'seller' ? 'buyer' : 'seller' } as const;
+
+  it('marks the initial display and marks again only when a refresh adds a message', async () => {
+    let renderedAtRequest = false;
+    fetchMarker.mockImplementationOnce(async () => {
+      renderedAtRequest = screen.queryByText(messages[1].content) !== null;
+      return new Response(null, { status: 204 });
     });
     await open();
-    expect(readCalls()).toHaveLength(1);
-    expect(screen.queryByRole('alert')).toBeNull();
-    const box = screen.getByRole<HTMLInputElement>('textbox');
-    expect(box.disabled).toBe(false);
-    fireEvent.change(box, { target: { value: 'Thanks for the details' } });
-    await act(async () => { fireEvent.click(screen.getByRole('button', { name: 'Reply' })); });
-    expect(client.post).toHaveBeenCalledWith('/conversations/thread/reply', expect.objectContaining({ content: 'Thanks for the details' }));
+    expect(renderedAtRequest).toBe(true);
+    expect(readCounts()).toEqual([2]);
+
+    await reply(); // The reply triggers a GET, which still returns the same two messages.
+    expect(request).toHaveBeenLastCalledWith(expect.objectContaining({ url: '/conversations/thread', method: 'get' }));
+    expect(readCounts()).toEqual([2]);
+    snapshot = { ...detail, messages: [...messages, newMessage] };
+    await refresh();
+    expect(screen.getByText(newMessage.content)).toBeTruthy();
+    expect(readCounts()).toEqual([2, 3]);
+  });
+
+  it('waits for visibility and marks the displayed count once', async () => {
+    setVisibility('hidden');
+    await open();
+    expect(screen.getByText(messages[1].content)).toBeTruthy();
+    expect(readCounts()).toEqual([]);
+    await act(async () => { setVisibility('visible'); });
+    await act(async () => { setVisibility('visible'); });
+    expect(readCounts()).toEqual([2]);
+
+    setVisibility('hidden');
+    snapshot = { ...detail, messages: [...messages, newMessage] };
+    await reply();
+    expect(screen.getByText(newMessage.content)).toBeTruthy();
+    expect(readCounts()).toEqual([2]);
+    await act(async () => { setVisibility('visible'); });
+    expect(readCounts()).toEqual([2, 3]);
+  });
+
+  it('marks new messages when a poll adds them to the displayed thread', async () => {
+    vi.useFakeTimers();
+    await open();
+    expect(readCounts()).toEqual([2]);
+    polled = [newMessage];
+    await act(async () => { await vi.advanceTimersByTimeAsync(1000); });
+    expect(screen.getByText(newMessage.content)).toBeTruthy();
+    expect(readCounts()).toEqual([2, 3]);
   });
 });
 
-describe('listing inquiry widget', () => {
-  it('marks the thread read when it refreshes the shown thread, and tolerates failure', async () => {
-    render(<InquiryWidget listingId="listing" listingSlug="listing" listingTitle="Synthetic listing" />);
-    fireEvent.change(screen.getByRole('textbox'), { target: { value: 'Is the data updated daily?' } });
-    await act(async () => { fireEvent.click(screen.getByRole('button', { name: 'Submit Question' })); });
-    // Creating the thread is not a read of the other side's messages.
-    expect(readCalls()).toHaveLength(0);
-    client.post.mockImplementation(async (path: string) => {
-      if (path === '/conversations/thread/reply') return { data: { success: true, message_id: 'm3' } };
-      if (path === '/conversations/thread/read') throw new Error('Synthetic mark-read failure');
-      throw new Error(`unexpected POST ${path}`);
-    });
-    const box = await screen.findByRole<HTMLInputElement>('textbox');
-    fireEvent.change(box, { target: { value: 'And the history?' } });
-    await act(async () => { fireEvent.click(screen.getByRole('button', { name: 'Reply' })); });
-    expect(client.get).toHaveBeenCalledWith('/conversations/thread');
-    expect(readCalls()).toEqual([['/conversations/thread/read', { seen_message_count: messages.length }]]);
-    expect(screen.queryByRole('alert')).toBeNull();
-  });
+it('keeps the detail page usable after a marker 401 and retries on the next display', async () => {
+  fetchMarker.mockResolvedValueOnce(new Response(null, { status: 401 }));
+  const auth = useAuthStore.getState();
+  const url = window.location.href;
+  const consoleError = vi.spyOn(console, 'error');
+  await openDetail();
+
+  expect(readCounts()).toEqual([2]);
+  expect(axios.defaults.adapter).not.toHaveBeenCalled();
+  expect(window.location.href).toBe(url);
+  // jsdom reports attempted navigation through its virtual console.
+  expect(consoleError.mock.calls.flat().map(String).join('\n')).not.toMatch(/navigation/i);
+  expect(useAuthStore.getState()).toBe(auth);
+  expect(screen.getByText(messages[1].content)).toBeTruthy();
+  expect(screen.queryByRole('alert')).toBeNull();
+  expect(screen.getByRole<HTMLInputElement>('textbox').disabled).toBe(false);
+
+  await reply();
+  expect(request).toHaveBeenCalledWith(expect.objectContaining({ url: '/conversations/thread/reply' }));
+  expect(readCounts()).toEqual([2, 2]);
+  await refresh();
+  expect(readCounts()).toEqual([2, 2]);
 });

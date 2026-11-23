@@ -3,8 +3,9 @@
 import { customerRefusal, INQUIRY_REFUSALS, customerActionError } from '@/lib/customerMessages';
 import { useEffect, useState, useCallback, useRef, use } from 'react';
 import Link from 'next/link';
-import { getConversation, markConversationRead, replyToConversation } from '@/api/conversations';
+import { getConversation, replyToConversation } from '@/api/conversations';
 import { useConversationPoll } from '@/hooks/useConversationPoll';
+import { useMarkThreadRead } from '@/hooks/useMarkThreadRead';
 import { authSessionIdentity, useAuthStore } from '@/store/auth';
 import ConversationThread from '@/components/ConversationThread';
 import type { ConversationDetail, ConversationMessage } from '@/types';
@@ -81,7 +82,6 @@ function ConversationView({ id, isCurrent }: { id: string; isCurrent: () => bool
       if (latest) updateSince(latest);
       setError('');
       setAccepted((pending) => pending && !(data.messages ?? []).some((msg) => msg.id === pending) ? pending : null);
-      void markConversationRead(id, data.messages?.length ?? 0);
     } catch {
       if (active.current && isCurrent() && version === readVersion.current) setError(customerActionError("refresh your conversation"));
     } finally {
@@ -97,6 +97,8 @@ function ConversationView({ id, isCurrent }: { id: string; isCurrent: () => bool
     void refresh();
     return () => { active.current = false; readVersion.current += 1; };
   }, [refresh]);
+
+  useMarkThreadRead(!loading && conversation ? id : null, messages, isCurrent, active);
 
   useEffect(() => {
     if (accepted && messages.some((message) => message.id === accepted)) {

@@ -19,6 +19,7 @@ vi.mock('@/store/auth', async (importOriginal) => ({
 
 vi.mock('@/api/conversations', () => ({
   createInquiry: mocks.createInquiry,
+  markConversationRead: async () => true,
   replyToConversation: mocks.replyToConversation,
 }));
 

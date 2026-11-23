@@ -5,13 +5,14 @@ import { useState, useCallback, useEffect, useRef } from 'react';
 import Link from 'next/link';
 import { authSessionIdentity, useAuthStore } from '@/store/auth';
 import { useToast } from '@/components/Toast';
-import { createInquiry, getConversation, markConversationRead, replyToConversation } from '@/api/conversations';
+import { createInquiry, getConversation, replyToConversation } from '@/api/conversations';
 import {
   createAnonymousSession,
   readAnonymousMessageStream,
   sendAnonymousMessage,
 } from '@/api/anonymousChat';
 import { useConversationPoll } from '@/hooks/useConversationPoll';
+import { useMarkThreadRead } from '@/hooks/useMarkThreadRead';
 import ConversationThread from '@/components/ConversationThread';
 import type { ConversationDetail, ConversationMessage } from '@/types';
 import { AxiosError } from 'axios';
@@ -428,13 +429,14 @@ function ListingInquiryWidget({ listingId, listingSlug, listingTitle }: Props) {
       if (latest) updateSince(latest);
       setRefreshError('');
       setShowTyping(false);
-      void markConversationRead(conversation.id, data.messages?.length ?? 0);
     } catch {
       if (current() && version === readVersion.current) setRefreshError(customerActionError("refresh your conversation"));
     } finally {
       if (current() && version === readVersion.current) setRefreshing(false);
     }
   };
+
+  useMarkThreadRead(conversation?.id ?? null, messages, current);
 
   useEffect(() => {
     if (accepted && messages.some((message) => message.id === accepted)) {
