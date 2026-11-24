@@ -517,8 +517,7 @@ export function MarketplaceSearchExperience({
                 Not what you need?{' '}
                 <Link href="/requests/new" className="font-medium text-[#3F51B5] underline">
                   Post a data request
-                </Link>{' '}
-                and we&apos;ll tell matching sellers.
+                </Link>.
               </p>
             )}
           </section>

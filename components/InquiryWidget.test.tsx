@@ -8,6 +8,7 @@ import { AxiosError } from 'axios';
 const mocks = vi.hoisted(() => ({
   auth: { isAuthenticated: false, user: { id: 'viewer' }, token: 'synthetic' },
   createInquiry: vi.fn(),
+  getConversation: vi.fn(),
   replyToConversation: vi.fn(),
   updateSince: vi.fn(),
 }));
@@ -19,6 +20,7 @@ vi.mock('@/store/auth', async (importOriginal) => ({
 
 vi.mock('@/api/conversations', () => ({
   createInquiry: mocks.createInquiry,
+  getConversation: mocks.getConversation,
   replyToConversation: mocks.replyToConversation,
 }));
 
@@ -174,6 +176,7 @@ function clickWithoutNavigation(link: HTMLElement) {
 beforeEach(() => {
   mocks.auth.isAuthenticated = false;
   mocks.createInquiry.mockReset();
+  mocks.getConversation.mockReset();
   mocks.replyToConversation.mockReset();
   mocks.updateSince.mockReset();
   fetchMock = vi.fn<typeof fetch>();
@@ -872,7 +875,7 @@ describe('InquiryWidget', () => {
     }
   });
 
-  it('keeps authenticated submission on the existing inquiry path', async () => {
+  it('keeps authenticated submission on the existing inquiry path and targets the conversation heading', async () => {
     const conversation: ConversationDetail = {
       id: 'conversation-1',
       listing_id: 'listing-123',
@@ -894,7 +897,10 @@ describe('InquiryWidget', () => {
     };
     mocks.auth.isAuthenticated = true;
     mocks.createInquiry.mockResolvedValue(conversation);
+    mocks.replyToConversation.mockResolvedValue({ success: true, message_id: 'reply-1' });
+    mocks.getConversation.mockRejectedValue(new Error('Refresh failed'));
 
+    render(<ListingPurchaseAdvisory price={10} scanFindings={null} />);
     renderWidget();
     typeQuestion('Is this current?');
 
@@ -902,7 +908,18 @@ describe('InquiryWidget', () => {
       expect(mocks.createInquiry).toHaveBeenCalledWith('listing-123', 'Is this current?');
     });
     expect(fetchMock).not.toHaveBeenCalled();
-    expect(await screen.findByText('Your Inquiry')).toBeTruthy();
+    const heading = await screen.findByRole('heading', { name: 'Your Inquiry' });
+    const reply = screen.getByRole('textbox') as HTMLInputElement;
+    fireEvent.change(reply, { target: { value: 'How often is it updated?' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Reply' }));
+    await screen.findByRole('alert');
+    expect(reply.disabled).toBe(true);
+
+    const link = screen.getByRole('link', { name: 'Ask the seller a question' });
+    expect(document.querySelector(link.getAttribute('href')!)).toBe(heading);
+    expect(heading.getAttribute('tabindex')).toBe('-1');
+    heading.focus();
+    expect(document.activeElement).toBe(heading);
   });
 
   it('keeps an authenticated mediation rejection visible after submission ends', async () => {

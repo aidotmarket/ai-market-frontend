@@ -571,7 +571,7 @@ describe('MarketplaceSearchExperience', () => {
     expect(cards).toHaveLength(2);
     const requestPrompt = screen.getByText(/Not what you need\?/);
     const requestLink = within(requestPrompt).getByRole('link', { name: 'Post a data request' });
-    expect(requestPrompt.textContent).toBe("Not what you need? Post a data request and we'll tell matching sellers.");
+    expect(requestPrompt.textContent).toBe('Not what you need? Post a data request.');
     expect(requestLink.getAttribute('href')).toBe('/requests/new');
     expect(cards[1].compareDocumentPosition(requestPrompt) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
   });

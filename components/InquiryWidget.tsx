@@ -477,7 +477,9 @@ function ListingInquiryWidget({ listingId, listingSlug, listingTitle }: Props) {
   if (conversation) {
     return (
       <div className="rounded-xl border border-gray-200 p-6">
-        <h3 className="font-semibold text-gray-900 mb-4">Your Inquiry</h3>
+        <h3 id="ask-a-question" tabIndex={-1} className="scroll-mt-24 font-semibold text-gray-900 mb-4">
+          Your Inquiry
+        </h3>
         <div className="max-h-80 overflow-y-auto mb-4">
           <ConversationThread
             messages={messages}
@@ -500,7 +502,6 @@ function ListingInquiryWidget({ listingId, listingSlug, listingTitle }: Props) {
         {replyError && <p role="alert">{replyError}</p>}
         <div className="flex gap-2">
           <input
-            id="ask-a-question"
             type="text"
             disabled={replying || !!accepted}
             value={replyText}
@@ -510,7 +511,7 @@ function ListingInquiryWidget({ listingId, listingSlug, listingTitle }: Props) {
               if (e.key === 'Enter' && !e.shiftKey) void handleReply();
             }}
             placeholder="Follow up..."
-            className="flex-1 scroll-mt-24 rounded-lg border border-gray-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-[#3F51B5] focus:border-transparent"
+            className="flex-1 rounded-lg border border-gray-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-[#3F51B5] focus:border-transparent"
           />
           <button
             onClick={handleReply}

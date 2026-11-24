@@ -22,8 +22,9 @@ function formatNotificationType(type: NotificationItem['type']): string {
     case 'license_terminated':
       return 'Licence terminated';
     default: {
-      const label = type.replace(/_+/g, ' ').trim().toLowerCase();
-      return label ? label.charAt(0).toUpperCase() + label.slice(1) : 'Notification';
+      if (!/^[a-z][a-z0-9_]*$/.test(type)) return 'Notification';
+      const label = type.replace(/_+/g, ' ').trim();
+      return label.charAt(0).toUpperCase() + label.slice(1);
     }
   }
 }

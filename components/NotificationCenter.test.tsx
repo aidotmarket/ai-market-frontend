@@ -53,6 +53,7 @@ describe('NotificationList', () => {
   it.each([
     ['data_request_matched', 'Data request match'],
     ['future_event_type', 'Future event type'],
+    ['Future-event type', 'Notification'],
   ])('uses a readable visible and accessible label for %s', (type, label) => {
     const notification = { ...baseNotification, type, title: 'A new update', body: null };
     render(<NotificationList notifications={[notification]} onNotificationClick={vi.fn()} />);
