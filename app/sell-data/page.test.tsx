@@ -47,7 +47,8 @@ describe('SellDataPage', () => {
     expect(within(cards[1]).getByRole('link', { name: 'Set up a gateway' }).getAttribute('href')).toBe(
       isAuthenticated ? '/dashboard/gateways' : '/register?redirect=%2Fdashboard%2Fgateways'
     );
-    expect(within(cards[1]).getByText(/Install the open-source AIM Data Gateway using Docker/)).toBeTruthy();
+    expect(within(cards[1]).getByText(/keep your data on your own server, you'll need someone who can install and run the AIM Data Gateway using a tool called Docker/)).toBeTruthy();
+    expect(within(cards[1]).getByRole('link', { name: 'Read the AIM Data setup guide' }).getAttribute('href')).toBe('/aim-data');
     expect(within(cards[1]).getByText(/automatically sends limited information to identify your files/)).toBeTruthy();
     expect(within(cards[1]).getByText(/confirm each file before it shares a description/)).toBeTruthy();
     expect(within(cards[1]).getByText(/These messages contain no data values/)).toBeTruthy();

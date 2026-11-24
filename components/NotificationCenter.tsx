@@ -15,12 +15,17 @@ const SUPPORT_TYPES = new Set(['support_ticket_status_changed', 'support_ticket_
 
 function formatNotificationType(type: NotificationItem['type']): string {
   switch (type) {
+    case 'data_request_matched':
+      return 'Data request match';
     case 'inquiry_replied':
       return 'Inquiry reply';
     case 'license_terminated':
       return 'Licence terminated';
-    default:
-      return type;
+    default: {
+      if (!/^[a-z][a-z0-9_]*$/.test(type)) return 'Notification';
+      const label = type.replace(/_+/g, ' ').trim();
+      return label.charAt(0).toUpperCase() + label.slice(1);
+    }
   }
 }
 

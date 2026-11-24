@@ -511,6 +511,15 @@ export function MarketplaceSearchExperience({
                 )}
               </div>
             )}
+
+            {hasSemanticSuggestions && (
+              <p className="mt-4 text-center text-sm text-slate-600">
+                Not what you need?{' '}
+                <Link href="/requests/new" className="font-medium text-[#3F51B5] underline">
+                  Post a data request
+                </Link>.
+              </p>
+            )}
           </section>
         </div>
       </div>

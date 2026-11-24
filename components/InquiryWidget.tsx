@@ -477,7 +477,9 @@ function ListingInquiryWidget({ listingId, listingSlug, listingTitle }: Props) {
   if (conversation) {
     return (
       <div className="rounded-xl border border-gray-200 p-6">
-        <h3 className="font-semibold text-gray-900 mb-4">Your Inquiry</h3>
+        <h3 id="ask-a-question" tabIndex={-1} className="scroll-mt-24 font-semibold text-gray-900 mb-4">
+          Your Inquiry
+        </h3>
         <div className="max-h-80 overflow-y-auto mb-4">
           <ConversationThread
             messages={messages}
@@ -554,11 +556,12 @@ function ListingInquiryWidget({ listingId, listingSlug, listingTitle }: Props) {
         </div>
       )}
       <textarea
+        id="ask-a-question"
         value={question}
         onChange={(e) => setQuestion(e.target.value)}
         placeholder="What would you like to know about this dataset?"
         rows={3}
-        className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-[#3F51B5] focus:border-transparent resize-none"
+        className="w-full scroll-mt-32 rounded-lg border border-gray-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-[#3F51B5] focus:border-transparent resize-none"
       />
       <button
         onClick={handleSubmit}
