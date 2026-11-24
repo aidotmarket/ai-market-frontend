@@ -285,7 +285,7 @@ export default function DataRequestDetailClient({
     }
   }
 
-  const loadData = useCallback(async () => {
+  const loadData = useCallback(async (recoverSavedQuote = false) => {
     const generation = ++loadGeneration.current;
     const epoch = contextEpoch.current;
     const startedDuringMutation = mutationPending.current;
@@ -308,7 +308,12 @@ export default function DataRequestDetailClient({
               ...resps,
               ...existing.filter((item) => !resps.some((saved) => saved.id === item.id)),
             ]);
-            if (resps.length > 0) setResponseError('');
+            if (resps.length > 0) {
+              setResponseError('');
+              if (recoverSavedQuote && userId !== data.buyer_id) {
+                setQuoteRevision(revision => revision + 1);
+              }
+            }
           }
         } catch {
           // May not have permission
@@ -914,7 +919,7 @@ export default function DataRequestDetailClient({
           {responseError && (
             <div role="alert" className="mb-4 text-sm text-red-700">
               <p>{responseError}</p>
-              <button type="button" onClick={() => loadData()} className="mt-2 underline">Check saved quotes</button>
+              <button type="button" onClick={() => loadData(true)} className="mt-2 underline">Check saved quotes</button>
             </div>
           )}
           <form onSubmit={handleSubmitResponse} className="space-y-4">
