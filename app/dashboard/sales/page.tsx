@@ -9,16 +9,10 @@ import type { SellerOrder } from '@/types';
 import Link from 'next/link';
 import { sellerLicenseRecordPath } from '@/lib/licenseRecordRoutes';
 import { getSellerStatusPresentation, isSellerOrderStatus } from '@/lib/sellerOrderStatus';
+import { parseSalesFilter, SALES_FILTERS, type SalesFilter } from './filters';
 
-type SalesFilter = 'pending_delivery' | 'all' | 'delivered' | 'completed';
 type SalesRequest = { filter: SalesFilter; offset: number; retryKey: number };
-
-const FILTERS: { value: SalesFilter; label: string }[] = [
-  { value: 'pending_delivery', label: 'Awaiting delivery' },
-  { value: 'all', label: 'All' },
-  { value: 'delivered', label: 'Delivered' },
-  { value: 'completed', label: 'Completed' },
-];
+const SELLER_AMOUNT_LABEL = 'You receive before card fees (USD)';
 
 function compareNullableDates(
   first: string | null,
@@ -73,10 +67,7 @@ function formatRelativeAge(date: string, now: Date): string {
 
 function SalesPageContent() {
   const searchParams = useSearchParams();
-  const requestedFilter = searchParams.get('status');
-  const initialFilter = FILTERS.some(({ value }) => value === requestedFilter)
-    ? (requestedFilter as SalesFilter)
-    : 'pending_delivery';
+  const initialFilter = parseSalesFilter(searchParams.get('status')) ?? 'pending_delivery';
   const [request, setRequest] = useState<SalesRequest>({ filter: initialFilter, offset: 0, retryKey: 0 });
   const currentRequest = useRef(request);
   const { filter, offset } = request;
@@ -156,28 +147,30 @@ function SalesPageContent() {
           {presentation.label}
         </span>
         {order.status === 'delivered' && order.delivered_at && (
-          <div className="mt-1 text-xs text-gray-500">{formatDate(order.delivered_at)}</div>
+          <div className="mt-1 text-xs text-gray-500">Delivered {formatDate(order.delivered_at)}</div>
         )}
         {order.status === 'completed' && order.completed_at && (
-          <div className="mt-1 text-xs text-gray-500">{formatDate(order.completed_at)}</div>
+          <div className="mt-1 text-xs text-gray-500">Completed {formatDate(order.completed_at)}</div>
         )}
       </>
     );
   };
 
   const renderPaid = (order: SellerOrder) =>
-    order.paid_at ? (
+    order.amount_cents !== 0 && order.paid_at ? (
       <>
         {formatDate(order.paid_at)} ({formatRelativeAge(order.paid_at, new Date())})
       </>
     ) : (
       <>
-        <div>Not paid</div>
+        <div>{order.amount_cents === 0 ? 'No payment due' : 'Not paid'}</div>
         {order.created_at && (
           <div className="mt-1 text-xs text-gray-500">Created {formatDate(order.created_at)}</div>
         )}
       </>
     );
+
+  const recordHref = (order: SellerOrder) => `${sellerLicenseRecordPath(order.id)}?status=${filter}`;
 
   return (
     <div className="space-y-6">
@@ -193,7 +186,7 @@ function SalesPageContent() {
 
       {(pageState === 'active' || pageState === 'loading' || pageState === 'error') && (
         <div className="flex flex-wrap gap-2" aria-label="Sales status filter">
-          {FILTERS.map(({ value, label }) => (
+          {SALES_FILTERS.map(({ value, label }) => (
             <button
               key={value}
               type="button"
@@ -265,13 +258,13 @@ function SalesPageContent() {
       {pageState === 'active' && rows.length > 0 && (
         <>
           <p className="text-sm text-gray-600">
-            “You receive” shows the gross amount less ai.market’s 5% commission. Any applicable card processing fee is deducted from your payout.
+            The amount you receive before card fees is the gross amount less ai.market’s 5% commission. If a card processing fee applies, it’s deducted from your payout. The amounts shown here exclude that fee.
           </p>
           <div className="hidden md:block overflow-x-auto rounded-lg border border-gray-200">
             <table className="min-w-full text-sm">
               <thead className="bg-gray-50">
                 <tr>
-                  {['Sale', 'Listing', 'Gross (USD)', 'You receive (USD)', 'Status', 'Paid'].map((label) => (
+                  {['Sale', 'Listing', 'Gross (USD)', SELLER_AMOUNT_LABEL, 'Status', 'Paid'].map((label) => (
                     <th key={label} className="px-4 py-3 text-left font-medium text-gray-700">{label}</th>
                   ))}
                 </tr>
@@ -281,7 +274,7 @@ function SalesPageContent() {
                   <tr key={order.id} className="hover:bg-gray-50">
                     <td className="px-4 py-3 font-mono text-xs text-gray-700">
                       {order.order_number}
-                      {order.license_record_available && <Link href={sellerLicenseRecordPath(order.id)} className="mt-2 block font-sans text-sm font-medium text-[#3F51B5] underline">Licence record</Link>}
+                      {order.license_record_available && <Link href={recordHref(order)} className="mt-2 block font-sans text-sm font-medium text-[#3F51B5] underline">License record</Link>}
                     </td>
                     <td className="px-4 py-3 text-gray-900">{order.listing_title}</td>
                     <td className="px-4 py-3 font-medium text-gray-900">{formatPrice(order.amount_cents / 100)}</td>
@@ -301,11 +294,11 @@ function SalesPageContent() {
                   <div><dt className="font-medium text-gray-500">Sale</dt><dd className="font-mono text-xs text-gray-900">{order.order_number}</dd></div>
                   <div><dt className="font-medium text-gray-500">Listing</dt><dd className="text-gray-900">{order.listing_title}</dd></div>
                   <div><dt className="font-medium text-gray-500">Gross (USD)</dt><dd className="text-gray-900">{formatPrice(order.amount_cents / 100)}</dd></div>
-                  <div><dt className="font-medium text-gray-500">You receive (USD)</dt><dd className="text-gray-900">{formatPrice(order.seller_amount_cents / 100)}</dd></div>
+                  <div><dt className="font-medium text-gray-500">{SELLER_AMOUNT_LABEL}</dt><dd className="text-gray-900">{formatPrice(order.seller_amount_cents / 100)}</dd></div>
                   <div><dt className="font-medium text-gray-500">Status</dt><dd>{renderStatus(order)}</dd></div>
                   <div><dt className="font-medium text-gray-500">Paid</dt><dd className="text-gray-900">{renderPaid(order)}</dd></div>
                 </dl>
-                {order.license_record_available && <Link href={sellerLicenseRecordPath(order.id)} className="mt-4 inline-block text-sm font-medium text-[#3F51B5] underline">Licence record</Link>}
+                {order.license_record_available && <Link href={recordHref(order)} className="mt-4 inline-block text-sm font-medium text-[#3F51B5] underline">License record</Link>}
               </article>
             ))}
           </div>

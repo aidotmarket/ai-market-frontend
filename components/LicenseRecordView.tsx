@@ -8,15 +8,27 @@ import { confirmLicenseRecordDeletion, downloadLicenseRecordPdf, getLicenseRecor
 import { getOrder } from '@/api/orders';
 import { formatDate } from '@/lib/format';
 import { getSellerStatusPresentation } from '@/lib/sellerOrderStatus';
-import type { LicenseRecord, LicenseRecordCovenantDocument, LicenseRecordIdentifiedParty, LicenseRecordLicenseDocument, LicenseRecordReferencedParty, LicenseRecordRiderDocument } from '@/types';
+import type { BuyerOrderDetail, LicenseRecord, LicenseRecordCovenantDocument, LicenseRecordIdentifiedParty, LicenseRecordLicenseDocument, LicenseRecordReferencedParty, LicenseRecordRiderDocument } from '@/types';
 
 type RecordDocument = LicenseRecordLicenseDocument | LicenseRecordCovenantDocument | LicenseRecordRiderDocument;
 type RecordParty = LicenseRecordIdentifiedParty | LicenseRecordReferencedParty;
+type PaymentStatus = { label: string; detail?: string };
 
 function partyLabel(value: RecordParty, isViewer: boolean): string {
   if (isViewer && 'legal_name' in value) return `${value.legal_name} (${value.jurisdiction})`;
   if ('reference' in value) return value.reference;
   return 'Identified to ai.market for this order';
+}
+
+function sellerPaymentStatus(order: BuyerOrderDetail): PaymentStatus | null {
+  if (order.amount === 0) return { label: 'No payment due' };
+  const paidOn = 'paid_at' in order && typeof order.paid_at === 'string' && order.paid_at
+    ? `Paid on ${formatDate(order.paid_at)}`
+    : undefined;
+  if (order.status === 'refunded') return { label: 'Refunded', detail: paidOn };
+  if (order.status === 'partially_refunded') return { label: 'Partially refunded', detail: paidOn };
+  if (paidOn) return { label: paidOn };
+  return order.status === 'created' ? { label: 'Payment pending' } : null;
 }
 
 function DocumentSection({ document, title }: { document: RecordDocument; title: string }) {
@@ -29,7 +41,7 @@ function DocumentSection({ document, title }: { document: RecordDocument; title:
   );
 }
 
-export default function LicenseRecordView({ party }: { party: 'buyer' | 'seller' }) {
+export default function LicenseRecordView({ party, backHref }: { party: 'buyer' | 'seller'; backHref?: string }) {
   const { id } = useParams<{ id: string }>();
   const identity = useAuthStore(authSessionIdentity);
   const [accountVisit, setAccountVisit] = useState(0);
@@ -38,14 +50,15 @@ export default function LicenseRecordView({ party }: { party: 'buyer' | 'seller'
       setAccountVisit((visit) => visit + 1);
     }
   }), []);
-  return <LicenseRecordVisit key={JSON.stringify([id, party, identity, accountVisit])} id={id} party={party} />;
+  return <LicenseRecordVisit key={JSON.stringify([id, party, identity, accountVisit])} id={id} party={party} backHref={backHref} />;
 }
 
-function LicenseRecordVisit({ id, party }: { id: string; party: 'buyer' | 'seller' }) {
+function LicenseRecordVisit({ id, party, backHref }: { id: string; party: 'buyer' | 'seller'; backHref?: string }) {
   const [record, setRecord] = useState<LicenseRecord | null>(null);
   const [state, setState] = useState<'loading' | 'ready' | 'error'>('loading');
   const [readAttempt, setReadAttempt] = useState(0);
   const [deliveryStatus, setDeliveryStatus] = useState('Loading…');
+  const [paymentStatus, setPaymentStatus] = useState<PaymentStatus | null>(null);
   const [actionPending, setActionPending] = useState(false);
   const [actionError, setActionError] = useState<'pdf' | 'confirmation' | null>(null);
   const live = useRef(false);
@@ -68,6 +81,7 @@ function LicenseRecordVisit({ id, party }: { id: string; party: 'buyer' | 'selle
     setState('loading');
     setRecord(null);
     setDeliveryStatus('Loading…');
+    setPaymentStatus(null);
     async function read() {
       let value: LicenseRecord;
       try {
@@ -82,8 +96,11 @@ function LicenseRecordVisit({ id, party }: { id: string; party: 'buyer' | 'selle
 
       if (party === 'seller') {
         try {
-          const { status } = await getOrder(value.order.id, { signal: controller.signal });
-          if (isCurrent()) setDeliveryStatus(getSellerStatusPresentation(status).label);
+          const order = await getOrder(value.order.id, { signal: controller.signal });
+          if (isCurrent()) {
+            setDeliveryStatus(getSellerStatusPresentation(order.status).label);
+            setPaymentStatus(sellerPaymentStatus(order));
+          }
         } catch {
           if (isCurrent()) setDeliveryStatus('Status unavailable');
         }
@@ -149,16 +166,16 @@ function LicenseRecordVisit({ id, party }: { id: string; party: 'buyer' | 'selle
   const termination = record.lifecycle_events.find((event) => event.event_type === 'terminated');
   const deletionConfirmation = record.lifecycle_events.find((event) => event.event_type === 'deletion_confirmed');
   const canConfirmDeletion = party === 'buyer' && record.status === 'terminated' && !deletionConfirmation;
-  const backHref = party === 'seller' ? '/dashboard/sales' : '/dashboard/orders';
+  const backTarget = backHref ?? (party === 'seller' ? '/dashboard/sales' : '/dashboard/orders');
   const backLabel = party === 'seller' ? 'sales' : 'purchases';
 
   return (
     <div className="space-y-6">
       <div>
-        <Link href={backHref} className="text-sm text-indigo-700 underline">← Back to {backLabel}</Link>
+        <Link href={backTarget} className="text-sm text-indigo-700 underline">← Back to {backLabel}</Link>
         <div className="mt-3 flex flex-wrap items-center justify-between gap-3">
           <div><h1 className="text-2xl font-bold text-gray-900">Licence record</h1><p className="mt-1 text-sm text-gray-600">{record.listing.title}</p></div>
-          <button type="button" disabled={actionPending} onClick={downloadPdf} className="rounded-lg bg-[#3F51B5] px-4 py-2 text-sm font-medium text-white disabled:opacity-50">Download PDF</button>
+          <button type="button" disabled={actionPending} onClick={downloadPdf} className="rounded-lg bg-[#3F51B5] px-4 py-2 text-sm font-medium text-white disabled:opacity-50">{party === 'seller' && actionPending ? 'Preparing PDF…' : 'Download PDF'}</button>
         </div>
       </div>
       {actionError === 'pdf' && <p role="alert" className="text-sm text-red-800">The licence record PDF could not be downloaded. Please try again.</p>}
@@ -170,6 +187,15 @@ function LicenseRecordVisit({ id, party }: { id: string; party: 'buyer' | 'selle
         <div className={party === 'seller' ? 'sm:col-span-2' : undefined}><dt className="text-gray-500">Signature</dt><dd className="mt-1 text-gray-900">{party === 'buyer' && 'typed_name' in record.signature ? (record.signature.typed_name ?? record.signature.principal_ref ?? record.signature.channel) : record.signature.channel}{party === 'buyer' && 'signer_title' in record.signature && record.signature.signer_title ? `, ${record.signature.signer_title}` : ''}</dd></div>
         <div><dt className="text-gray-500">Licence status</dt><dd className={`mt-1 font-semibold ${record.status === 'active' ? 'text-green-800' : 'text-red-800'}`}>{record.status === 'active' ? 'Active' : 'Terminated'}</dd></div>
         {party === 'seller' && <div><dt className="text-gray-500">Delivery status</dt><dd className="mt-1 font-semibold text-gray-900" aria-live="polite">{deliveryStatus}</dd></div>}
+        {paymentStatus && (
+          <div>
+            <dt className="text-gray-500">Payment status</dt>
+            <dd className="mt-1 text-gray-900">
+              <span className="font-semibold">{paymentStatus.label}</span>
+              {paymentStatus.detail && <span className="block text-xs text-gray-600">{paymentStatus.detail}</span>}
+            </dd>
+          </div>
+        )}
       </dl>
       <p className="text-sm text-gray-700">{record.identity_notice}</p>
       {record.status === 'terminated' && (
