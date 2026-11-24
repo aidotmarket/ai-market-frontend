@@ -137,7 +137,7 @@ describe('SalesPage', () => {
 
     await screen.findByRole('heading', { name: 'No sales match this filter' });
     expect(screen.getByRole('button', {
-      name: 'Delivered', description: 'The buyer has access and delivery is awaiting confirmation.',
+      name: 'Delivered', description: 'Delivery is awaiting confirmation by the buyer or automatic confirmation.',
     })).toBeTruthy();
 
     fireEvent.click(screen.getByRole('button', { name: 'Completed' }));
@@ -145,7 +145,7 @@ describe('SalesPage', () => {
     expect(screen.getByRole('button', {
       name: 'Completed', description: 'Delivered sales can move here after buyer or automatic confirmation.',
     })).toBeTruthy();
-    expect(screen.queryByText('The buyer has access and delivery is awaiting confirmation.')).toBeNull();
+    expect(screen.queryByText('Delivery is awaiting confirmation by the buyer or automatic confirmation.')).toBeNull();
   });
 
   it.each(['', 'status=all', 'status=delivered', 'status=completed'])(

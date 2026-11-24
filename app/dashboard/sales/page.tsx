@@ -16,7 +16,7 @@ const SELLER_AMOUNT_LABEL = 'You receive before card fees (USD)';
 // The API returns an array without a total. Reserve one row to detect another page.
 const SALES_PAGE_SIZE = SELLER_ORDERS_MAX_LIMIT - 1;
 const SALES_STATUS_HELP: Partial<Record<SalesFilter, string>> = {
-  delivered: 'The buyer has access and delivery is awaiting confirmation.',
+  delivered: 'Delivery is awaiting confirmation by the buyer or automatic confirmation.',
   completed: 'Delivered sales can move here after buyer or automatic confirmation.',
 };
 
