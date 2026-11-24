@@ -18,7 +18,7 @@ export default defineConfig({
     storageState: { cookies: [], origins: [] },
   },
   webServer: {
-    command: `rtk proxy npx next dev --hostname 127.0.0.1 --port ${port}`,
+    command: `npm run dev -- --hostname 127.0.0.1 --port ${port}`,
     url: `${baseURL}/pricing`,
     timeout: 120_000,
   },

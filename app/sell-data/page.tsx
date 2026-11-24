@@ -244,8 +244,8 @@ export default async function SellDataPage() {
       </section>
 
       <section className="bg-white py-16 sm:py-20" aria-labelledby="pricing-heading">
-        <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
-          <div className="grid gap-8 lg:grid-cols-[minmax(0,1fr)_360px] lg:items-start">
+        <div className="@container mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
+          <div className="grid gap-8 @3xl:grid-cols-[minmax(0,1fr)_360px] @3xl:items-start">
             <div className="rounded-2xl border border-gray-200 bg-white p-6 shadow-sm sm:p-8">
               <p className="text-sm font-semibold uppercase tracking-[0.18em] text-[#0F6E56]">
                 Pricing

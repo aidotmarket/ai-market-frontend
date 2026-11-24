@@ -30,3 +30,7 @@ jobs:
       - run: npm run typecheck
       - run: npm run test
       - run: npm run test:ssm-startup
+      - name: Install Chromium for Playwright
+        run: npx playwright install --with-deps chromium
+      - name: Check Sell Data pricing in Chromium
+        run: npx playwright test --config playwright.navigation.config.ts
