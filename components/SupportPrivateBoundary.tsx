@@ -13,6 +13,16 @@ import AllAIPanel from '@/components/allai/AllAIPanel';
 export function SupportPrivateBoundary({ children }: { children: React.ReactNode }) {
   useHandoffBoundary();
   const path = usePathname();
-  if (path === null || path.replace(/\/$/, '') === '/support/mailbox-account') return <>{children}</>;
-  return <Providers><AllAIProvider><Layout><PendingProfileChanges />{children}</Layout><AllAIFab /><AllAIPanel dockOnDesktop={path === '/support'} /></AllAIProvider></Providers>;
+  const route = path?.replace(/\/$/, '');
+  if (path === null || route === '/support/mailbox-account') return <>{children}</>;
+  const dockOnDesktop = route === '/support' || route === '/pricing';
+  return (
+    <Providers>
+      <AllAIProvider>
+        <Layout><PendingProfileChanges />{children}</Layout>
+        <AllAIFab />
+        <AllAIPanel dockOnDesktop={dockOnDesktop} />
+      </AllAIProvider>
+    </Providers>
+  );
 }

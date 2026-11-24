@@ -20,6 +20,7 @@ import { buyerRequestAnonymizationEnabled, exactPublicationPreview, hasPrivatePu
 import RequestConversation from '@/components/RequestConversation';
 import { formatDate } from '@/lib/format';
 import { requestDisplayTitle } from '@/lib/request-display-title';
+import { requestUrgencyLabel } from '@/lib/request-urgency';
 import { AxiosError } from 'axios';
 import type { DataRequestDetail, DataRequestResponse, DataRequestUrgency } from '@/types';
 
@@ -586,7 +587,7 @@ export default function DataRequestDetailClient({
       {/* Header */}
       <div className="mb-6">
         <div className="flex flex-wrap items-start gap-3 mb-3">
-          <h1 className="min-w-0 flex-1 wrap-break-word text-2xl font-bold text-gray-900">{requestDisplayTitle(request.title, request.description, 'detail')}</h1>
+          <h1 className="min-w-0 flex-1 whitespace-normal wrap-anywhere text-2xl font-bold text-gray-900">{requestDisplayTitle(request.title, request.description, 'detail')}</h1>
           {request.is_sample === true && (
             <span className="inline-flex items-center rounded-full bg-amber-100 px-2.5 py-0.5 text-xs font-medium text-amber-800 shrink-0">
               (SAMPLE)
@@ -600,7 +601,7 @@ export default function DataRequestDetailClient({
         </div>
         <div className="flex flex-wrap items-center gap-3 text-sm text-gray-500">
           <span className={`inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-medium ${urgencyCss}`}>
-            {request.urgency} urgency
+            {requestUrgencyLabel(request.urgency)}
           </span>
           {priceRange && <span className="font-medium text-gray-700">{priceRange}</span>}
           {!priceRange && <span>Currency: {request.currency || 'USD'}</span>}

@@ -348,6 +348,7 @@ describe('DashboardOverview seller setup 2FA state', () => {
 
     expect(screen.getByText('12')).not.toBeNull();
     expect(screen.getByText('3')).not.toBeNull();
+    expect(screen.getByText('Total Sales')).not.toBeNull();
     expect(screen.getByText('$45.50')).not.toBeNull();
     expect(screen.getByText('Revenue (30 days)')).not.toBeNull();
     expect(screen.queryByText('Total Revenue')).toBeNull();
@@ -432,11 +433,21 @@ describe('DashboardOverview seller setup 2FA state', () => {
     });
 
     expect(screen.getByText("You haven't bought anything yet")).not.toBeNull();
+    expect(screen.getByText('Review your purchases here and manage your buyer requests under My Requests.')).toBeTruthy();
+    expect(screen.queryByText("Here's what's happening with your store today.")).toBeNull();
+    expect(screen.queryByRole('region', { name: 'Payout account' })).toBeNull();
+    expect(screen.queryByRole('region', { name: 'Sales summary and listings' })).toBeNull();
+    expect(screen.queryByRole('link', { name: 'View listings' })).toBeNull();
+    expect(screen.queryByText('Total Sales')).toBeNull();
+    expect(screen.queryByText('Revenue (30 days)')).toBeNull();
+    expect(screen.queryByRole('link', { name: 'Sales awaiting delivery' })).toBeNull();
     expect(screen.getByRole('link', { name: 'Browse data' }).getAttribute('href')).toBe('/find-data');
     expect(screen.getByRole('heading', { name: 'Interested in selling on AI Market?' })).not.toBeNull();
     expect(screen.queryByText('Finish seller setup')).toBeNull();
     expect(ordersApi.getMyOrders).toHaveBeenCalledOnce();
     expect(sellerApi.getSellerStats).not.toHaveBeenCalled();
+    expect(connectApi.getConnectStatus).not.toHaveBeenCalled();
+    expect(listingsApi.getMyListings).not.toHaveBeenCalled();
   });
 
   it('summarizes recent buyer orders with status and an orders entry point', async () => {

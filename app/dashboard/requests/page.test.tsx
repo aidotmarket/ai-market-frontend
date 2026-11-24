@@ -61,6 +61,8 @@ describe('My Data Requests server paging through the actual API helper', () => {
     } });
     const view = render(<MyDataRequestsPage />);
     await screen.findByRole('table');
+    expect(screen.getAllByText('Normal')).toHaveLength(4);
+    expect(screen.queryByText(/normal urgency/i)).toBeNull();
     for (const [index, title] of titles.entries()) {
       const links = screen.getAllByRole('link', { name: new RegExp(title) });
       expect(links).toHaveLength(2);

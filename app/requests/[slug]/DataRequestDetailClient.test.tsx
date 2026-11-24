@@ -209,11 +209,16 @@ describe('DataRequestDetailClient authenticated fallback loading', () => {
     const request = makeOwnerRequest({
       title: 'I need an entirely synthetic retail sales dataset to test a sales analytics...',
       description: `${title}. Include transactions from multiple regions.`,
+      urgency: 'urgent',
     });
 
     render(<DataRequestDetailClient slug={request.slug} initialRequest={request} />);
 
-    expect(screen.getByRole('heading', { level: 1, name: title })).not.toBeNull();
+    const heading = screen.getByRole('heading', { level: 1, name: title });
+    expect(heading.classList.contains('whitespace-normal')).toBe(true);
+    expect(heading.className).not.toMatch(/truncate|line-clamp/);
+    expect(screen.getByText('Urgent')).toBeTruthy();
+    expect(screen.queryByText('urgent urgency')).toBeNull();
   });
 
   it.each([

@@ -322,14 +322,14 @@ function OverviewVisit({ identity, retireVisit }: { identity: string; retireVisi
   }
 
   const sellerStatus = capabilities?.seller.effective_status;
-  const sellerMissingSteps = capabilities?.seller.missing_steps ?? [];
-  const isStripeConnected = !!stripeStatus?.details_submitted;
-  const payoutsEnabled = sellerStatus === 'active'
-    ? !!stripeStatus?.payouts_enabled
-    : !!capabilities && !sellerMissingSteps.includes('stripe_payouts_live');
   const isSellerActive = sellerStatus === 'active';
   const isSellerProvisioning = sellerStatus === 'provisioning';
   const isBuyerView = !isSellerActive && !isSellerProvisioning;
+  const sellerMissingSteps = capabilities?.seller.missing_steps ?? [];
+  const isStripeConnected = !!stripeStatus?.details_submitted;
+  const payoutsEnabled = isSellerActive
+    ? !!stripeStatus?.payouts_enabled
+    : !!capabilities && !sellerMissingSteps.includes('stripe_payouts_live');
   const canStartSelling = sellerStatus === 'not_requested';
   const twoFactorEnabled = !!user?.totp_enabled;
   const sellerSecurityReady = sellerSecuritySatisfied(user, capabilities?.seller.missing_steps);
@@ -348,7 +348,7 @@ function OverviewVisit({ identity, retireVisit }: { identity: string; retireVisi
           {isSellerActive
             ? "Here's what's happening with your store today."
             : isBuyerView
-              ? 'View your purchases and manage your marketplace account.'
+              ? 'Review your purchases here and manage your buyer requests under My Requests.'
               : 'Manage your marketplace account.'}
         </p>
       </div>

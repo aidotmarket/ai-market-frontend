@@ -149,6 +149,7 @@ describe('private request conversation', () => {
     mocks.send.mockRejectedValueOnce(new Error('Lost'));
     const view = await mount(); await select(); write(); await screen.findByText(/We could not confirm/);
     view.rerender(<RequestConversation requestId="request" requestStatus={state} />);
+    expect(screen.getByText(`This request is ${state}. New messages cannot be sent.`)).toBeTruthy();
     expect(screen.getByRole('button', { name: 'Retry same message' })).toHaveProperty('disabled', true); expect(mocks.send).toHaveBeenCalledTimes(1);
   });
   it('keeps an authorized in-app conversation usable while email is proof-blocked, with internal metadata excluded', async () => {
@@ -159,8 +160,11 @@ describe('private request conversation', () => {
   it('allows matched active requests when the server authorizes messages, independent of publication', async () => {
     await mount('matched'); await select(); write(); await screen.findByText(/Message sent/);
   });
-  it('honors server refusal for an apparently active request', async () => {
-    mocks.history.mockResolvedValue(history('one', { can_send: false })); await mount('open'); await select();
+  it.each(['selector', 'history'])('explains a send refusal from %s for an active request', async source => {
+    if (source === 'selector') mocks.selector.mockResolvedValue(selector({ threads: [{ response_id: 'one', can_send: false }] }));
+    else mocks.history.mockResolvedValue(history('one', { can_send: false }));
+    await mount('open'); await select();
+    expect(screen.getByText(/This response isn't accepting new messages. Refresh the conversation/)).toBeTruthy();
     fireEvent.change(screen.getByRole('textbox'), { target: { value: 'Draft retained' } });
     expect(screen.getByRole('button', { name: 'Send private message' })).toHaveProperty('disabled', true); expect(mocks.send).not.toHaveBeenCalled();
   });
@@ -176,7 +180,10 @@ describe('private request conversation', () => {
   });
   it.each(['off', 'unavailable', 'unknown'])('truthfully disables new messages for %s while leaving authorized reads available', async availability => {
     mocks.selector.mockResolvedValue(selector({ availability })); await mount(); await select();
-    expect(screen.getByText('Sending private messages is currently unavailable.')).not.toBeNull(); write(); expect(mocks.send).not.toHaveBeenCalled();
+    const copy = availability === 'off'
+      ? 'Private messaging is turned off for this request. You can still read any available conversations.'
+      : 'Sending private messages is unavailable right now. Check this page again for updates.';
+    expect(screen.getByText(copy)).not.toBeNull(); write(); expect(mocks.send).not.toHaveBeenCalled();
   });
   it.each(['?response_id=', '?response_id=one&response_id=two'])('rejects ambiguous or empty deep links %s before reading any thread', async search => {
     window.history.replaceState({}, '', '/requests/example' + search); render(<RequestConversation requestId="request" requestStatus="open" />);
