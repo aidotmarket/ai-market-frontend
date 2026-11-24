@@ -15,7 +15,7 @@ export function SupportPrivateBoundary({ children }: { children: React.ReactNode
   const path = usePathname();
   const route = path?.replace(/\/$/, '');
   if (path === null || route === '/support/mailbox-account') return <>{children}</>;
-  const dockOnDesktop = route === '/support' || route === '/pricing';
+  const dockOnDesktop = route === '/support' || route === '/pricing' || route === '/sell-data';
   return (
     <Providers>
       <AllAIProvider>
