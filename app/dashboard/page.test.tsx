@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 
-import { act, cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { act, cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { AxiosError } from 'axios';
 import { StrictMode } from 'react';
@@ -321,7 +321,16 @@ describe('DashboardOverview seller setup 2FA state', () => {
     expect(connectApi.getConnectStatus).toHaveBeenCalledTimes(2);
   });
 
-  it('renders active seller stats from the real contract shape', async () => {
+  it.each([
+    sellerStats,
+    {
+      ...sellerStats,
+      total_sales: 0,
+      period_revenue_cents: 2375,
+      period_revenue_display: '$23.75',
+      pending_fulfillments: 1,
+    },
+  ])('shows active seller stats with context when Total Sales is $total_sales', async (stats) => {
     capabilitiesApi.getCapabilities.mockResolvedValue({
       buyer: { persisted_status: 'active', effective_status: 'active', missing_steps: [], reason: null },
       seller: {
@@ -336,7 +345,7 @@ describe('DashboardOverview seller setup 2FA state', () => {
       data: { details_submitted: true, payouts_enabled: true },
     });
     sellerApi.getSellerStats.mockResolvedValue({
-      data: sellerStats,
+      data: stats,
     });
     listingsApi.getMyListings.mockResolvedValue({ data: [] });
 
@@ -347,14 +356,16 @@ describe('DashboardOverview seller setup 2FA state', () => {
     });
 
     expect(screen.getByText('12')).not.toBeNull();
-    expect(screen.getByText('3')).not.toBeNull();
-    expect(screen.getByText('Total Sales')).not.toBeNull();
-    expect(screen.getByText('$45.50')).not.toBeNull();
-    expect(screen.getByText('Revenue (30 days)')).not.toBeNull();
+    const totalSales = within(screen.getByText('Total Sales').closest('dl')!);
+    expect(totalSales.getByText(String(stats.total_sales))).not.toBeNull();
+    expect(totalSales.getByRole('link', { name: 'View sales by status' }).getAttribute('href')).toBe('/dashboard/sales?status=all');
+    const revenue = within(screen.getByText('Revenue (30 days)').closest('dl')!);
+    expect(revenue.getByText(stats.period_revenue_display)).not.toBeNull();
+    expect(revenue.getByText('From your sales summary')).not.toBeNull();
     expect(screen.queryByText('Total Revenue')).toBeNull();
     const salesPointer = screen.getByRole('link', { name: 'Sales awaiting delivery' });
     expect(salesPointer.getAttribute('href')).toBe('/dashboard/sales?status=pending_delivery');
-    expect(salesPointer.textContent).toContain('2');
+    expect(within(salesPointer).getByText(String(stats.pending_fulfillments))).not.toBeNull();
     expect(screen.queryByText('Finish seller setup')).toBeNull();
     expect(capabilitiesApi.getCapabilities).toHaveBeenCalledOnce();
     expect(connectApi.getConnectStatus).toHaveBeenCalledOnce();
@@ -440,6 +451,8 @@ describe('DashboardOverview seller setup 2FA state', () => {
     expect(screen.queryByRole('link', { name: 'View listings' })).toBeNull();
     expect(screen.queryByText('Total Sales')).toBeNull();
     expect(screen.queryByText('Revenue (30 days)')).toBeNull();
+    expect(screen.queryByRole('link', { name: 'View sales by status' })).toBeNull();
+    expect(screen.queryByText('From your sales summary')).toBeNull();
     expect(screen.queryByRole('link', { name: 'Sales awaiting delivery' })).toBeNull();
     expect(screen.getByRole('link', { name: 'Browse data' }).getAttribute('href')).toBe('/find-data');
     expect(screen.getByRole('heading', { name: 'Interested in selling on AI Market?' })).not.toBeNull();
