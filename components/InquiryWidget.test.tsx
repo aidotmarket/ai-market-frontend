@@ -196,7 +196,7 @@ describe('InquiryWidget', () => {
     renderWidget();
 
     const advisory = screen.getByRole('complementary', { name: 'Review before buying' });
-    const link = screen.getByRole('link', { name: 'Ask the seller a question' });
+    const link = screen.getByRole('link', { name: /^Ask the seller$/ });
     const question = screen.getByRole('textbox');
     const fragment = link.getAttribute('href');
 
@@ -915,7 +915,7 @@ describe('InquiryWidget', () => {
     await screen.findByRole('alert');
     expect(reply.disabled).toBe(true);
 
-    const link = screen.getByRole('link', { name: 'Ask the seller a question' });
+    const link = screen.getByRole('link', { name: /^Ask the seller$/ });
     expect(document.querySelector(link.getAttribute('href')!)).toBe(heading);
     expect(heading.getAttribute('tabindex')).toBe('-1');
     heading.focus();

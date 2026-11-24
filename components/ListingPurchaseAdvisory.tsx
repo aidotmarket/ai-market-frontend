@@ -29,7 +29,7 @@ export default function ListingPurchaseAdvisory({
           : 'No active scan findings are published for this listing. Their absence does not establish the data’s condition or suitability; review the listing and ask the seller questions before you buy.'}
       </p>
       <a href="#ask-a-question" className="mt-2 inline-block text-sm font-medium text-amber-900 underline">
-        Ask the seller a question
+        Ask the seller
       </a>
     </aside>
   );
