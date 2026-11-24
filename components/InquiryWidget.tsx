@@ -12,6 +12,7 @@ import {
   sendAnonymousMessage,
 } from '@/api/anonymousChat';
 import { useConversationPoll } from '@/hooks/useConversationPoll';
+import { useMarkThreadRead } from '@/hooks/useMarkThreadRead';
 import ConversationThread from '@/components/ConversationThread';
 import type { ConversationDetail, ConversationMessage } from '@/types';
 import { AxiosError } from 'axios';
@@ -434,6 +435,8 @@ function ListingInquiryWidget({ listingId, listingSlug, listingTitle }: Props) {
       if (current() && version === readVersion.current) setRefreshing(false);
     }
   };
+
+  useMarkThreadRead(conversation?.id ?? null, messages, current);
 
   useEffect(() => {
     if (accepted && messages.some((message) => message.id === accepted)) {

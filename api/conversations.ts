@@ -1,4 +1,5 @@
 import { api } from './client';
+import { useAuthStore } from '@/store/auth';
 import type {
   ConversationListItem,
   ConversationDetail,
@@ -41,6 +42,34 @@ export async function getConversation(
     `/conversations/${encodeURIComponent(id)}`
   );
   return res.data;
+}
+
+/**
+ * Clear the caller's unread count for a thread that has been shown to them.
+ * Best effort: resolves false instead of throwing, so a failed mark-read never
+ * breaks the thread view. `seenMessageCount` is the number of messages shown;
+ * messages that arrived after that view stay unread.
+ */
+export async function markConversationRead(
+  id: string,
+  seenMessageCount: number
+): Promise<boolean> {
+  try {
+    const token = useAuthStore.getState().token;
+    if (!token) return false;
+
+    const url = api.getUri({ url: `/conversations/${encodeURIComponent(id)}/read` });
+    const response = await fetch(url, {
+      method: 'POST',
+      credentials: 'include',
+      redirect: 'error',
+      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+      body: JSON.stringify({ seen_message_count: seenMessageCount }),
+    });
+    return response.ok;
+  } catch {
+    return false;
+  }
 }
 
 export async function replyToConversation(

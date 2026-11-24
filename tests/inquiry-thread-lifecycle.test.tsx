@@ -42,6 +42,8 @@ function deferred<T>() {
 }
 async function tick(ms: number) { await act(async () => { await vi.advanceTimersByTimeAsync(ms); }); }
 async function settle() { await act(async () => {}); }
+// Reply writes only; showing a thread also sends a separate mark-read request.
+const replyPosts = () => client.post.mock.calls.filter(([path]) => String(path).endsWith('/reply'));
 beforeEach(() => {
   vi.useFakeTimers(); vi.clearAllMocks(); client.listError = '';
   Object.defineProperty(document, 'hidden', { configurable: true, value: false });
@@ -150,7 +152,7 @@ describe.each(['detail', 'seller', 'widget'] as const)('%s mounted reply form', 
     const pending = deferred<{ data: unknown }>(); client.post.mockReturnValue(pending.promise);
     const input = screen.getByRole('textbox'); fireEvent.change(input, { target: { value: 'Raw submitted draft' } });
     fireEvent.keyDown(input, { key: 'Enter' }); fireEvent.keyDown(input, { key: 'Enter' }); fireEvent.click(screen.getByRole('button', { name: 'Sending...' }));
-    expect(client.post).toHaveBeenCalledTimes(1);
+    expect(replyPosts()).toHaveLength(1);
     expect(client.post).toHaveBeenCalledWith('/conversations/a/reply', { content: 'Raw submitted draft', role: kind === 'seller' ? 'seller' : 'buyer' });
     const server = message('m2', 'a', later, 'Server rewritten reply');
     client.get.mockImplementation((url: string) => Promise.resolve(url.endsWith('/poll') ? envelope([server]) : { data: { ...detail('a', [message(), server]), status: 'awaiting_buyer' } }));
@@ -169,12 +171,12 @@ describe.each(['detail', 'seller', 'widget'] as const)('%s mounted reply form', 
     expect(screen.getByRole('alert').textContent).toContain('refresh');
     expect(screen.queryByText(/Failed to send/)).toBeNull();
     fireEvent.keyDown(screen.getByRole('textbox'), { key: 'Enter' });
-    expect(client.post).toHaveBeenCalledTimes(1);
+    expect(replyPosts()).toHaveLength(1);
     client.get.mockResolvedValue({ data: detail('a', [message(), message('m2', 'a', later, 'Recovered server reply')]) });
     fireEvent.click(screen.getByRole('button', { name: 'Refresh conversation' })); await settle();
     expect(screen.getByText('Recovered server reply')).toBeTruthy();
     expect(screen.queryByRole('status')).toBeNull(); expect(screen.queryByRole('alert')).toBeNull();
-    expect(client.post).toHaveBeenCalledTimes(1);
+    expect(replyPosts()).toHaveLength(1);
   });
   it.each(['Message held for review. Please revise and try again.', [{ loc: ['body', 'content'], msg: 'invalid' }]])('retains rejected draft and persistent safe error (%j)', async (detailValue) => {
     await mountPage(kind);
@@ -222,7 +224,7 @@ describe.each(['detail', 'seller', 'widget'] as const)('%s mounted reply form', 
     await tick(1000);
     expect(screen.getByText('Polled accepted reply')).toBeTruthy();
     expect(screen.queryByRole('status')).toBeNull(); expect(screen.queryByRole('alert')).toBeNull();
-    expect(client.post).toHaveBeenCalledTimes(1);
+    expect(replyPosts()).toHaveLength(1);
   });
   it('does not let a late refresh from the old thread alter the new thread', async () => {
     const view = await mountPage(kind);

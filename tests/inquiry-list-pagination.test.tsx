@@ -10,7 +10,8 @@ import { useAuthStore } from '@/store/auth';
 import type { User } from '@/types';
 import type { ConversationListItem } from '@/types';
 
-const client = vi.hoisted(() => ({ get: vi.fn(), post: vi.fn() }));
+const client = vi.hoisted(() => ({ get: vi.fn(), getUri: ({ url }: { url: string }) => url }));
+const fetchMarker = vi.fn<typeof fetch>();
 vi.mock('@/api/client', () => ({ api: client }));
 vi.mock('next/link', () => ({ default: ({ children, ...props }: React.ComponentProps<'a'>) => <a {...props}>{children}</a> }));
 const items = Array.from({ length: 21 }, (_, i) => ({
@@ -37,14 +38,15 @@ function next() { fireEvent.click(screen.getByRole('button', { name: 'Next' }));
 function previous() { fireEvent.click(screen.getByRole('button', { name: 'Previous' })); }
 function onlyListReads() {
   expect(client.get.mock.calls.every(([path]) => path === '/conversations/mine')).toBe(true);
-  expect(client.post).not.toHaveBeenCalled();
+  expect(fetchMarker).not.toHaveBeenCalled();
 }
 beforeEach(() => {
   vi.useFakeTimers(); vi.resetAllMocks(); backend();
   useAuthStore.setState({ user: { id: 'viewer' } as User, token: 'synthetic', isAuthenticated: true, hydrated: true, isLoading: false });
   Element.prototype.scrollIntoView = vi.fn();
   Object.defineProperty(document, 'hidden', { configurable: true, value: false });
-  vi.stubGlobal('fetch', () => { throw new Error('Network forbidden'); });
+  fetchMarker.mockResolvedValue(new Response(null, { status: 204 }));
+  vi.stubGlobal('fetch', fetchMarker);
   vi.stubGlobal('XMLHttpRequest', class { constructor() { throw new Error('Network forbidden'); } });
 });
 afterEach(() => { cleanup(); vi.useRealTimers(); vi.unstubAllGlobals(); });
@@ -151,7 +153,11 @@ it('collapses a seller thread across page navigation and never reopens it on ret
   client.get.mockResolvedValueOnce({ data: { ...items[0], messages: [] } });
   fireEvent.click(screen.getByText(items[0].listing_title).closest('button')!); await settle();
   expect(screen.getByRole('textbox')).toBeTruthy();
-  client.get.mockClear(); next(); await settle(); previous(); await settle();
+  // Showing the thread marks it read once; navigation must not repeat either call.
+  expect(fetchMarker).toHaveBeenCalledExactlyOnceWith('/conversations/synthetic-1/read', expect.objectContaining({
+    method: 'POST', body: JSON.stringify({ seen_message_count: 0 }),
+  }));
+  client.get.mockClear(); fetchMarker.mockClear(); next(); await settle(); previous(); await settle();
   expect(screen.queryByRole('textbox')).toBeNull(); onlyListReads();
 });
 

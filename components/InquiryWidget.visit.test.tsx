@@ -5,7 +5,7 @@ import { useAuthStore } from '@/store/auth';
 import InquiryWidget from './InquiryWidget';
 import type { ConversationDetail, User } from '@/types';
 const anonymous = vi.hoisted(() => ({ createAnonymousSession: vi.fn(), readAnonymousMessageStream: vi.fn(), sendAnonymousMessage: vi.fn() }));
-const mock = vi.hoisted(() => ({ createInquiry: vi.fn(), getConversation: vi.fn(), replyToConversation: vi.fn(), pollConversation: vi.fn() }));
+const mock = vi.hoisted(() => ({ createInquiry: vi.fn(), getConversation: vi.fn(), replyToConversation: vi.fn(), pollConversation: vi.fn(), markConversationRead: vi.fn() }));
 vi.mock('@/api/conversations', () => mock);
 vi.mock('@/api/auth', () => ({}));
 vi.mock('@/api/anonymousChat', () => anonymous);
