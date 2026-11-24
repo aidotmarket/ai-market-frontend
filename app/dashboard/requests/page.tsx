@@ -7,6 +7,7 @@ import { useAuthStore } from '@/store/auth';
 import { getMyDataRequestsPage, type MyDataRequestsPage as RequestsPage } from '@/api/data-requests';
 import { formatDate } from '@/lib/format';
 import { ownerRequestHref } from '@/lib/buyer-request-publication';
+import { requestUrgencyLabel } from '@/lib/request-urgency';
 import { AxiosError } from 'axios';
 import type { DataRequestStatus, DataRequestUrgency } from '@/types';
 
@@ -152,7 +153,7 @@ function OwnedRequests() {
                 <td className="px-4 py-3">{statusBadge(req.status)}</td>
                 <td className="px-4 py-3">
                   <span className={`inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-medium ${URGENCY_BADGE[req.urgency] || ''}`}>
-                    {req.urgency}
+                    {requestUrgencyLabel(req.urgency)}
                   </span>
                 </td>
                 <td className="px-4 py-3 text-gray-500">{req.response_count}</td>
@@ -177,7 +178,7 @@ function OwnedRequests() {
             </div>
             <div className="flex items-center justify-between text-xs text-gray-500">
               <span className={`inline-flex items-center rounded-full px-2 py-0.5 font-medium ${URGENCY_BADGE[req.urgency] || ''}`}>
-                {req.urgency}
+                {requestUrgencyLabel(req.urgency)}
               </span>
               <span>{req.response_count} responses &middot; {formatDate(req.created_at)}</span>
             </div>

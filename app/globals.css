@@ -53,20 +53,20 @@ div:has(> [data-listing-sample]) { min-width: 0; max-width: 100%; }
 }
 
 @media (min-width: 640px) {
-  body:has(.allai-support-dock) {
-    --allai-support-width: min(480px, 45vw);
-    --allai-support-inset: 20px;
+  body:has(.allai-desktop-dock) {
+    --allai-dock-width: min(480px, 45vw);
+    --allai-dock-inset: 20px;
   }
 
-  body:has(.allai-support-dock) main {
-    padding-right: calc(var(--allai-support-width) + var(--allai-support-inset));
+  body:has(.allai-desktop-dock) .marketplace-main {
+    padding-inline-end: calc(var(--allai-dock-width) + var(--allai-dock-inset));
   }
 
-  .allai-support-dock {
-    width: var(--allai-support-width);
-    right: var(--allai-support-inset);
-    bottom: var(--allai-support-inset);
-    max-height: calc(100dvh - 2 * var(--allai-support-inset));
+  .allai-desktop-dock {
+    width: var(--allai-dock-width);
+    right: var(--allai-dock-inset);
+    bottom: var(--allai-dock-inset);
+    max-height: calc(100dvh - 2 * var(--allai-dock-inset));
   }
 }
 

@@ -51,6 +51,7 @@ describe('public request browsing', () => {
     fetchDataRequests.mockResolvedValue({ items: [item] });
     await renderPage();
     const heading = screen.getByRole('heading', { name: display });
+    expect(heading.classList.contains('line-clamp-2')).toBe(true);
     const card = heading.closest('a')!;
     expect(card.getAttribute('href')).toBe('/requests/request-display');
     expect(within(card).getByText(plainTextExcerpt(description))).toBeTruthy();
@@ -65,7 +66,7 @@ describe('public request browsing', () => {
     const heading = screen.getByRole('heading', { name: 'Request sample' });
     const header = within(heading.parentElement!);
     expect(header.queryByText('(SAMPLE)') !== null).toBe(is_sample === true);
-    expect(header.getByText('normal')).toBeTruthy();
+    expect(header.getByText('Normal')).toBeTruthy();
     expect(screen.queryAllByText('(SAMPLE)')).toHaveLength(is_sample === true ? 1 : 0);
     expect(screen.getByRole('link', { name: /Synthetic data request/ }).getAttribute('href')).toBe('/requests/request-ordinary');
   });

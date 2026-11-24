@@ -194,7 +194,7 @@ export function Layout({ children }: { children: React.ReactNode }) {
         </div>
       </header>
 
-      <main className="flex-1">{children}</main>
+      <main className="marketplace-main flex-1">{children}</main>
 
       <footer className="bg-[#1b2332] text-[#c1c9d4]">
         <div className="mx-auto max-w-7xl px-6 lg:px-8 pt-12 pb-10">

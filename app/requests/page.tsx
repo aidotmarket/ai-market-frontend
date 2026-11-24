@@ -4,6 +4,7 @@ import type { Metadata } from 'next';
 import { fetchDataRequests } from '@/lib/api';
 import { formatDate } from '@/lib/format';
 import { requestDisplayTitle } from '@/lib/request-display-title';
+import { requestUrgencyLabel } from '@/lib/request-urgency';
 import type { DataRequestListItem, DataRequestUrgency } from '@/types';
 
 export const metadata: Metadata = {
@@ -215,7 +216,7 @@ function RequestCard({ request, boardQuery }: { request: DataRequestListItem; bo
           </span>
         )}
         <span className={`inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-medium shrink-0 ${urgencyCss}`}>
-          {request.urgency}
+          {requestUrgencyLabel(request.urgency)}
         </span>
       </div>
 

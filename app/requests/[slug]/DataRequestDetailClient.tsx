@@ -20,6 +20,7 @@ import { buyerRequestAnonymizationEnabled, exactPublicationPreview, hasPrivatePu
 import RequestConversation from '@/components/RequestConversation';
 import { formatDate } from '@/lib/format';
 import { requestDisplayTitle } from '@/lib/request-display-title';
+import { requestUrgencyLabel } from '@/lib/request-urgency';
 import { AxiosError } from 'axios';
 import type { DataRequestDetail, DataRequestResponse, DataRequestUrgency } from '@/types';
 
@@ -123,6 +124,7 @@ export default function DataRequestDetailClient({
   const hasResponseCount = typeof responseCount === 'number' && Number.isFinite(responseCount) && responseCount >= 0;
   const setRequest = (value: DataRequestDetail | null) => setRequestRecord({ context, value });
   const [conversationNavigation, setConversationNavigation] = useState(0);
+  const [quoteRevision, setQuoteRevision] = useState(0);
   const [responses, setResponses] = useState<DataRequestResponse[]>([]);
   const [loading, setLoading] = useState(initialRequest === null);
   const [readError, setReadError] = useState<'unavailable' | 'gone' | null>(null);
@@ -283,7 +285,7 @@ export default function DataRequestDetailClient({
     }
   }
 
-  const loadData = useCallback(async () => {
+  const loadData = useCallback(async (recoverSavedQuote = false) => {
     const generation = ++loadGeneration.current;
     const epoch = contextEpoch.current;
     const startedDuringMutation = mutationPending.current;
@@ -306,7 +308,12 @@ export default function DataRequestDetailClient({
               ...resps,
               ...existing.filter((item) => !resps.some((saved) => saved.id === item.id)),
             ]);
-            if (resps.length > 0) setResponseError('');
+            if (resps.length > 0) {
+              setResponseError('');
+              if (recoverSavedQuote && userId !== data.buyer_id) {
+                setQuoteRevision(revision => revision + 1);
+              }
+            }
           }
         } catch {
           // May not have permission
@@ -503,6 +510,7 @@ export default function DataRequestDetailClient({
       });
       if (!isCurrentMutation(epoch)) return;
       setResponses((existing) => [...existing.filter((item) => item.id !== response.id), response]);
+      setQuoteRevision(revision => revision + 1);
       if (hasResponseCount) {
         setRequest({ ...request, response_count: responseCount + 1 });
       }
@@ -514,7 +522,10 @@ export default function DataRequestDetailClient({
         const saved = await getDataRequestResponses(request.id);
         if (isCurrentMutation(epoch)) {
           setResponses(saved);
-          if (saved.length > 0) setResponseError('');
+          if (saved.length > 0) {
+            setResponseError('');
+            setQuoteRevision(revision => revision + 1);
+          }
         }
       } catch {
         // Keep the original outcome and entered fields visible.
@@ -586,7 +597,7 @@ export default function DataRequestDetailClient({
       {/* Header */}
       <div className="mb-6">
         <div className="flex flex-wrap items-start gap-3 mb-3">
-          <h1 className="min-w-0 flex-1 wrap-break-word text-2xl font-bold text-gray-900">{requestDisplayTitle(request.title, request.description, 'detail')}</h1>
+          <h1 className="min-w-0 flex-1 whitespace-normal wrap-anywhere text-2xl font-bold text-gray-900">{requestDisplayTitle(request.title, request.description, 'detail')}</h1>
           {request.is_sample === true && (
             <span className="inline-flex items-center rounded-full bg-amber-100 px-2.5 py-0.5 text-xs font-medium text-amber-800 shrink-0">
               (SAMPLE)
@@ -600,7 +611,7 @@ export default function DataRequestDetailClient({
         </div>
         <div className="flex flex-wrap items-center gap-3 text-sm text-gray-500">
           <span className={`inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-medium ${urgencyCss}`}>
-            {request.urgency} urgency
+            {requestUrgencyLabel(request.urgency)}
           </span>
           {priceRange && <span className="font-medium text-gray-700">{priceRange}</span>}
           {!priceRange && <span>Currency: {request.currency || 'USD'}</span>}
@@ -846,7 +857,7 @@ export default function DataRequestDetailClient({
         )}
       </div>
 
-      <RequestConversation requestId={request.id} requestStatus={request.status} quoteRevision={responses.length} navigationRevision={conversationNavigation} />
+      <RequestConversation requestId={request.id} requestStatus={request.status} quoteRevision={quoteRevision} navigationRevision={conversationNavigation} />
 
       {/* Owner: Responses list */}
       {showOwnerResponseList && (
@@ -908,7 +919,7 @@ export default function DataRequestDetailClient({
           {responseError && (
             <div role="alert" className="mb-4 text-sm text-red-700">
               <p>{responseError}</p>
-              <button type="button" onClick={() => loadData()} className="mt-2 underline">Check saved quotes</button>
+              <button type="button" onClick={() => loadData(true)} className="mt-2 underline">Check saved quotes</button>
             </div>
           )}
           <form onSubmit={handleSubmitResponse} className="space-y-4">

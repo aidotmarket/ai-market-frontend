@@ -49,8 +49,8 @@ export default async function PricingPage() {
         </div>
       </section>
 
-      <main className="mx-auto max-w-5xl px-6 py-14 sm:py-18">
-        <div className="grid gap-6 md:grid-cols-2">
+      <div className="@container mx-auto max-w-5xl px-6 py-14 sm:py-18">
+        <div className="grid gap-6 @2xl:grid-cols-2">
           {feeCards.map((card) => (
             <section key={card.audience} className="rounded-2xl border border-gray-200 p-7 shadow-sm">
               <p className="text-sm font-semibold text-[#3F51B5]">{card.audience}</p>
@@ -84,7 +84,7 @@ export default async function PricingPage() {
             Read Section 5 of the Terms →
           </Link>
         </section>
-      </main>
+      </div>
     </div></TermsVersionProvider>
   );
 }

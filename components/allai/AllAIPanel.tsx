@@ -403,7 +403,7 @@ export default function AllAIPanel({ dockOnDesktop = false }: { dockOnDesktop?: 
       aria-labelledby="allai-assistant-title"
       data-testid="allai-dialog"
       onKeyDown={onDialogKeyDown}
-      className={`fixed z-50 flex flex-col rounded-2xl overflow-hidden shadow-[0_8px_40px_rgba(0,0,0,0.5)] motion-reduce:transition-none ${dockOnDesktop ? 'allai-support-dock' : ''}`}
+      className={`fixed z-50 flex flex-col rounded-2xl overflow-hidden shadow-[0_8px_40px_rgba(0,0,0,0.5)] motion-reduce:transition-none ${dockOnDesktop ? 'allai-desktop-dock' : ''}`}
       style={{
         height: dockOnDesktop ? DEFAULT_HEIGHT : size.h,
         ...(isFloating && { width: size.w, left: computedPos.x, top: computedPos.y }),

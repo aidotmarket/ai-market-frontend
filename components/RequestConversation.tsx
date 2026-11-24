@@ -141,7 +141,8 @@ function OwnedConversation({ requestId, requestStatus, quoteRevision, navigation
     return () => { live = false; };
   }, [selection, selector]);
   const closed = ['closed', 'expired', 'fulfilled'].includes(requestStatus);
-  const allowed = !selecting && !reading && !closed && selector?.availability === 'enabled' && selector.threads.some(t => t.response_id === selection && t.can_send) && history?.can_send === true && !readError;
+  const selectedThread = selector?.threads.find(t => t.response_id === selection);
+  const allowed = !selecting && !reading && !closed && selector?.availability === 'enabled' && selectedThread?.can_send === true && history?.can_send === true && !readError;
   function changeThread(value: string) {
     const url = new URL(window.location.href);
     if (value) url.searchParams.set('response_id', value); else url.searchParams.delete('response_id');
@@ -213,18 +214,22 @@ function OwnedConversation({ requestId, requestStatus, quoteRevision, navigation
     <h2 id="private-conversation-heading" className="text-lg font-semibold text-gray-900">Private conversation</h2>
     {recovery.message && <p role="status">{recovery.message}</p>}
     {recovery.reportControl}
-    <p className="text-sm text-gray-600">Messages are checked before sending. Only approved text appears in this conversation. Email availability does not affect in-app access.</p>
+    <p className="text-sm text-gray-600">Messages are checked before sending. You can read approved messages here.</p>
     {selectorError ? <><p role="alert">Private conversations are currently unavailable.</p><button className={button} onClick={refresh}>Reload conversations</button></> : !selector ? <p role="status">Loading conversations…</p> : <>
       {selector.side === 'buyer' ? <label className="block text-sm font-medium">Response for private conversation<select aria-label="Response for private conversation" className="block w-full rounded-lg border border-gray-300 p-2 mt-1" value={selection} onChange={e => changeThread(e.target.value)}><option value="">Choose a response</option>{selector.threads.map((t, i) => <option key={t.response_id} value={t.response_id}>Response {i + 1} · {t.response_id}</option>)}</select></label> : <p className="text-sm">Your response conversation</p>}
-      {!selector.threads.length && <p>No response conversation is available yet.</p>}
-      {selector.availability !== 'enabled' && <p role="status">Sending private messages is currently unavailable.</p>}
+      {!selector.threads.length && <p>Private conversations are tied to responses. Check this page for available conversations.</p>}
+      {closed ? <p role="status">This request is {requestStatus}. New messages cannot be sent.</p>
+        : selector.availability === 'off' ? <p role="status">Private messaging is turned off for this request. You can still read any available conversations.</p>
+        : selector.availability !== 'enabled' && <p role="status">Sending private messages is unavailable right now. Check this page again for updates.</p>}
       {selection && <>
         {reading && <p role="status">Loading messages…</p>}
         {readError && <p role="alert">Messages could not be loaded. This does not confirm whether your last message was sent.</p>}
         <button type="button" className={button} onClick={refresh}>Refresh conversation</button>
         {history && <RecoveryRenderBoundary resetKey={history} onFailure={() => { setRenderFailed(true); if (recovery.attempt) void recovery.attempt.stop("failed"); }}><RecoveryDisplayBoundary attempt={recovery.attempt} display={recovery.progress?.display} installed={history}><ol aria-label="Private messages" className="space-y-3">{history.items.map(m => <li key={m.id} className="rounded-lg bg-gray-50 p-3"><span className="text-xs font-medium text-gray-500">{m.role === 'system' ? 'Update' : m.role === selector.side ? 'You' : 'Other participant'}</span><p className="whitespace-pre-wrap text-sm text-gray-800">{m.content}</p></li>)}</ol>{!history.items.length && <p>No messages in this conversation.</p>}{history.next_cursor && <button className={button} disabled={reading} onClick={loadMore}>Load more messages</button>}</RecoveryDisplayBoundary></RecoveryRenderBoundary>}
-        {closed && <p>This request is {requestStatus}. New messages cannot be sent.</p>}
-        {history && !closed && !history.can_send && <p>This conversation is closed to new messages. {selector.side === 'buyer' && <>Browse data to find another seller. <a href="/find-data" className="underline">Browse data</a></>}</p>}
+        {!selecting && !reading && !readError && !closed && selector.availability === 'enabled'
+          && (selectedThread?.can_send === false || history?.can_send === false) && (
+            <p role="status">This response isn&apos;t accepting new messages. Refresh the conversation to check for changes. {selector.side === 'buyer' && <a href="/find-data" className="underline">Browse data</a>}</p>
+          )}
         <form aria-label="Private message" onSubmit={e => { e.preventDefault(); void execute('send'); }} className="space-y-3">
           <label htmlFor="private-request-message" className="block text-sm font-medium">Private message for selected response</label>
           <textarea id="private-request-message" rows={4} maxLength={5000} value={draft} readOnly={!!attempt} onChange={e => { editGeneration.current++; setDraft(e.target.value); }} className="w-full rounded-lg border border-gray-300 p-3 focus:ring-2 focus:ring-[#3F51B5]" />

@@ -108,7 +108,7 @@ it('keeps an earlier dispatched loss unknown when a later retry is locally refus
   fireEvent.click(screen.getByRole('button', { name: 'Retry same message' }));
   historySend = false; fireEvent.click(screen.getByRole('button', { name: 'Refresh conversation' }));
   await act(async () => release({ data: { access_token: token() } }));
-  await screen.findByText("This conversation is closed to new messages.");
+  await screen.findByText("This response isn't accepting new messages. Refresh the conversation to check for changes.");
   expect(screen.queryByRole('link', {name: 'Browse data'})).toBeNull();
   await screen.findByText(/We could not confirm/); expect(screen.queryByText(/Message not sent/)).toBeNull();
   expect(mocks.adapter.mock.calls.filter(([c]) => c.method === 'post')).toHaveLength(1);
