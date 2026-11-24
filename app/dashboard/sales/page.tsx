@@ -3,7 +3,7 @@
 import { Suspense, useEffect, useRef, useState } from 'react';
 import { useSearchParams } from 'next/navigation';
 import { getCapabilities } from '@/api/capabilities';
-import { getSellerOrders, SELLER_ORDERS_PAGE_SIZE, type SellerOrderListParams } from '@/api/seller';
+import { getSellerOrders, SELLER_ORDERS_MAX_LIMIT, type SellerOrderListParams } from '@/api/seller';
 import { formatDate, formatPrice } from '@/lib/format';
 import type { SellerOrder } from '@/types';
 import Link from 'next/link';
@@ -13,6 +13,12 @@ import { parseSalesFilter, SALES_FILTERS, type SalesFilter } from './filters';
 
 type SalesRequest = { filter: SalesFilter; offset: number; retryKey: number };
 const SELLER_AMOUNT_LABEL = 'You receive before card fees (USD)';
+// The API returns an array without a total. Reserve one row to detect another page.
+const SALES_PAGE_SIZE = SELLER_ORDERS_MAX_LIMIT - 1;
+const SALES_STATUS_HELP: Partial<Record<SalesFilter, string>> = {
+  delivered: 'The buyer has access and delivery is awaiting confirmation.',
+  completed: 'Delivered sales can move here after buyer or automatic confirmation.',
+};
 
 function compareNullableDates(
   first: string | null,
@@ -72,6 +78,7 @@ function SalesPageContent() {
   const currentRequest = useRef(request);
   const { filter, offset } = request;
   const [rows, setRows] = useState<SellerOrder[]>([]);
+  const [hasNextPage, setHasNextPage] = useState(false);
   const [pageState, setPageState] = useState<
     'loading' | 'active' | 'provisioning' | 'blocked' | 'error'
   >('loading');
@@ -107,14 +114,16 @@ function SalesPageContent() {
           return;
         }
 
-        const params: SellerOrderListParams =
-          request.filter === 'all'
-            ? { limit: SELLER_ORDERS_PAGE_SIZE, offset: request.offset }
-            : { status_filter: request.filter, limit: SELLER_ORDERS_PAGE_SIZE, offset: request.offset };
+        const params: SellerOrderListParams = {
+          limit: SELLER_ORDERS_MAX_LIMIT,
+          offset: request.offset,
+        };
+        if (request.filter !== 'all') params.status_filter = request.filter;
         const response = await getSellerOrders(params);
         if (!isCurrent()) return;
 
-        setRows(sortSellerOrders(response.data, request.filter));
+        setRows(sortSellerOrders(response.data.slice(0, SALES_PAGE_SIZE), request.filter));
+        setHasNextPage(response.data.length > SALES_PAGE_SIZE);
         setPageState('active');
       } catch {
         if (isCurrent()) {
@@ -185,24 +194,30 @@ function SalesPageContent() {
       )}
 
       {(pageState === 'active' || pageState === 'loading' || pageState === 'error') && (
-        <div className="flex flex-wrap gap-2" aria-label="Sales status filter">
-          {SALES_FILTERS.map(({ value, label }) => (
-            <button
-              key={value}
-              type="button"
-              aria-pressed={filter === value}
-              onClick={() => {
-                if (value !== filter) changeRequest({ filter: value, offset: 0, retryKey: 0 });
-              }}
-              className={`rounded-lg border px-4 py-2 text-sm font-medium ${
-                filter === value
-                  ? 'border-[#3F51B5] bg-[#3F51B5] text-white'
-                  : 'border-gray-300 bg-white text-gray-700 hover:bg-gray-50'
-              }`}
-            >
-              {label}
-            </button>
-          ))}
+        <div className="space-y-2">
+          <div className="flex flex-wrap gap-2" role="group" aria-label="Sales status filter">
+            {SALES_FILTERS.map(({ value, label }) => (
+              <button
+                key={value}
+                type="button"
+                aria-pressed={filter === value}
+                aria-describedby={filter === value && SALES_STATUS_HELP[filter] ? 'sales-status-help' : undefined}
+                onClick={() => {
+                  if (value !== filter) changeRequest({ filter: value, offset: 0, retryKey: 0 });
+                }}
+                className={`rounded-lg border px-4 py-2 text-sm font-medium ${
+                  filter === value
+                    ? 'border-[#3F51B5] bg-[#3F51B5] text-white'
+                    : 'border-gray-300 bg-white text-gray-700 hover:bg-gray-50'
+                }`}
+              >
+                {label}
+              </button>
+            ))}
+          </div>
+          {SALES_STATUS_HELP[filter] && (
+            <p id="sales-status-help" className="text-sm text-gray-600">{SALES_STATUS_HELP[filter]}</p>
+          )}
         </div>
       )}
 
@@ -309,16 +324,16 @@ function SalesPageContent() {
           <button
             type="button"
             disabled={offset === 0 || pageState === 'loading'}
-            onClick={() => changeRequest({ ...request, offset: Math.max(0, offset - SELLER_ORDERS_PAGE_SIZE) })}
+            onClick={() => changeRequest({ ...request, offset: Math.max(0, offset - SALES_PAGE_SIZE) })}
             className="rounded-lg border border-gray-300 px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50 disabled:cursor-not-allowed disabled:opacity-50"
           >
             Previous
           </button>
-          <span aria-live="polite" className="text-sm text-gray-600">Page {offset / SELLER_ORDERS_PAGE_SIZE + 1}</span>
+          <span aria-live="polite" className="text-sm text-gray-600">Page {offset / SALES_PAGE_SIZE + 1}</span>
           <button
             type="button"
-            disabled={pageState !== 'active' || rows.length < SELLER_ORDERS_PAGE_SIZE}
-            onClick={() => changeRequest({ ...request, offset: offset + SELLER_ORDERS_PAGE_SIZE })}
+            disabled={pageState !== 'active' || !hasNextPage}
+            onClick={() => changeRequest({ ...request, offset: offset + SALES_PAGE_SIZE })}
             className="rounded-lg border border-gray-300 px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50 disabled:cursor-not-allowed disabled:opacity-50"
           >
             Next

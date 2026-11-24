@@ -56,7 +56,7 @@ function tableSaleNumbers(container: HTMLElement): string[] {
   );
 }
 
-function fullPage(): SellerOrder[] {
+function pageWithLookahead(): SellerOrder[] {
   return Array.from({ length: 100 }, (_, index) => sellerOrder({
     id: `sale-${index}`, order_number: `PAGE1-${String(index).padStart(3, '0')}`,
   }));
@@ -93,45 +93,70 @@ describe('SalesPage', () => {
     vi.restoreAllMocks();
   });
 
-  it('reaches distinct sales beyond 100 and reads the previous page normally', async () => {
-    sellerApi.getSellerOrders
-      .mockResolvedValueOnce({ data: fullPage() })
-      .mockResolvedValueOnce({ data: [sellerOrder({ id: 'sale-101', order_number: 'PAGE2-101' })] })
-      .mockResolvedValueOnce({ data: fullPage() });
+  it.each([100, 198])('pages through %i Delivered sales and disables Next on the last page', async (total) => {
+    navigation.search = 'status=delivered';
+    const deliveredOrders = Array.from({ length: total }, (_, index) => sellerOrder({
+      id: `sale-${index}`,
+      order_number: `SALE-${String(index).padStart(3, '0')}`,
+      status: 'delivered',
+    }));
+    sellerApi.getSellerOrders.mockImplementation(async ({ limit, offset }) => ({
+      data: deliveredOrders.slice(offset, offset + limit),
+    }));
     const { container } = render(<SalesPage />);
-    await waitFor(() => expect(tableSaleNumbers(container)).toHaveLength(100));
+    await waitFor(() => expect(tableSaleNumbers(container)).toHaveLength(99));
+    expect(screen.queryByText('SALE-099')).toBeNull();
     expect(screen.getByText('Page 1')).not.toBeNull();
     expect(pagingButton('Previous').disabled).toBe(true);
     expect(pagingButton('Next').disabled).toBe(false);
     // One shared navigation outside the desktop/mobile row containers.
     expect(screen.getAllByRole('navigation', { name: 'Sales pagination' })).toHaveLength(1);
     fireEvent.click(pagingButton('Next'));
-    await waitFor(() => expect(tableSaleNumbers(container)).toEqual(['PAGE2-101']));
-    expect(screen.getAllByText('PAGE2-101')).toHaveLength(2);
-    expect(screen.queryByText('PAGE1-000')).toBeNull();
+    await waitFor(() => expect(tableSaleNumbers(container)).toEqual(
+      deliveredOrders.slice(99).map((order) => order.order_number),
+    ));
+    expect(screen.getAllByText('SALE-099')).toHaveLength(2);
+    expect(screen.queryByText('SALE-000')).toBeNull();
     expect(screen.getByText('Page 2')).not.toBeNull();
     expect(pagingButton('Next').disabled).toBe(true);
     expect(pagingButton('Previous').disabled).toBe(false);
     fireEvent.click(pagingButton('Previous'));
-    await waitFor(() => expect(tableSaleNumbers(container)).toHaveLength(100));
+    await waitFor(() => expect(tableSaleNumbers(container)).toHaveLength(99));
     expect(screen.getByText('Page 1')).not.toBeNull();
     expect(pagingButton('Previous').disabled).toBe(true);
     expect(sellerApi.getSellerOrders.mock.calls.map(([params]) => params)).toEqual([
-      { status_filter: 'pending_delivery', limit: 100, offset: 0 },
-      { status_filter: 'pending_delivery', limit: 100, offset: 100 },
-      { status_filter: 'pending_delivery', limit: 100, offset: 0 },
+      { status_filter: 'delivered', limit: 100, offset: 0 },
+      { status_filter: 'delivered', limit: 100, offset: 99 },
+      { status_filter: 'delivered', limit: 100, offset: 0 },
     ]);
+  });
+
+  it('describes Delivered and Completed as the seller changes filters', async () => {
+    navigation.search = 'status=delivered';
+    render(<SalesPage />);
+
+    await screen.findByRole('heading', { name: 'No sales match this filter' });
+    expect(screen.getByRole('button', {
+      name: 'Delivered', description: 'The buyer has access and delivery is awaiting confirmation.',
+    })).toBeTruthy();
+
+    fireEvent.click(screen.getByRole('button', { name: 'Completed' }));
+    await screen.findByRole('heading', { name: 'No sales match this filter' });
+    expect(screen.getByRole('button', {
+      name: 'Completed', description: 'Delivered sales can move here after buyer or automatic confirmation.',
+    })).toBeTruthy();
+    expect(screen.queryByText('The buyer has access and delivery is awaiting confirmation.')).toBeNull();
   });
 
   it.each(['', 'status=all', 'status=delivered', 'status=completed'])(
     'keeps Previous on an empty terminal page without first-page empty copy: %s', async (search) => {
       navigation.search = search;
       sellerApi.getSellerOrders
-        .mockResolvedValueOnce({ data: fullPage() })
+        .mockResolvedValueOnce({ data: pageWithLookahead() })
         .mockResolvedValueOnce({ data: [] })
-        .mockResolvedValueOnce({ data: fullPage() });
+        .mockResolvedValueOnce({ data: pageWithLookahead() });
       const { container } = render(<SalesPage />);
-      await waitFor(() => expect(tableSaleNumbers(container)).toHaveLength(100));
+      await waitFor(() => expect(tableSaleNumbers(container)).toHaveLength(99));
       fireEvent.click(pagingButton('Next'));
       expect(await screen.findByRole('heading', { name: 'End of sales results' })).not.toBeNull();
       expect(screen.queryByText(/No sales yet|No sales awaiting delivery|No sales match this filter/)).toBeNull();
@@ -139,15 +164,15 @@ describe('SalesPage', () => {
       expect(pagingButton('Next').disabled).toBe(true);
       expect(pagingButton('Previous').disabled).toBe(false);
       fireEvent.click(pagingButton('Previous'));
-      await waitFor(() => expect(tableSaleNumbers(container)).toHaveLength(100));
+      await waitFor(() => expect(tableSaleNumbers(container)).toHaveLength(99));
       expect(screen.getByText('Page 1')).not.toBeNull();
     }
   );
 
   it('resets the filter and offset together with no new-filter old-offset request', async () => {
-    sellerApi.getSellerOrders.mockResolvedValue({ data: fullPage() });
+    sellerApi.getSellerOrders.mockResolvedValue({ data: pageWithLookahead() });
     const { container } = render(<SalesPage />);
-    await waitFor(() => expect(tableSaleNumbers(container)).toHaveLength(100));
+    await waitFor(() => expect(tableSaleNumbers(container)).toHaveLength(99));
     fireEvent.click(pagingButton('Next'));
     await waitFor(() => expect(screen.getByText('Page 2')).not.toBeNull());
     await waitFor(() => expect(pagingButton('Next').disabled).toBe(false));
@@ -156,7 +181,7 @@ describe('SalesPage', () => {
     expect(sellerApi.getSellerOrders).toHaveBeenLastCalledWith({ limit: 100, offset: 0 });
     expect(screen.getByText('Page 1')).not.toBeNull();
     expect(screen.getByRole('button', { name: 'All' }).getAttribute('aria-pressed')).toBe('true');
-    expect(sellerApi.getSellerOrders.mock.calls.map(([params]) => params.offset)).toEqual([0, 100, 0]);
+    expect(sellerApi.getSellerOrders.mock.calls.map(([params]) => params.offset)).toEqual([0, 99, 0]);
   });
 
   it('clears rows, disables paging during load, and retries the same later filter/page', async () => {
@@ -164,11 +189,11 @@ describe('SalesPage', () => {
     const later = deferred<{ data: SellerOrder[] }>();
     const retry = deferred<{ data: SellerOrder[] }>();
     sellerApi.getSellerOrders
-      .mockResolvedValueOnce({ data: fullPage() })
+      .mockResolvedValueOnce({ data: pageWithLookahead() })
       .mockReturnValueOnce(later.promise)
       .mockReturnValueOnce(retry.promise);
     const { container } = render(<SalesPage />);
-    await waitFor(() => expect(tableSaleNumbers(container)).toHaveLength(100));
+    await waitFor(() => expect(tableSaleNumbers(container)).toHaveLength(99));
     fireEvent.click(pagingButton('Next'));
     await waitFor(() => expect(sellerApi.getSellerOrders).toHaveBeenCalledTimes(2));
     expect(screen.getByText('Loading sales...')).not.toBeNull();
@@ -187,23 +212,23 @@ describe('SalesPage', () => {
     expect(pagingButton('Previous').disabled).toBe(true);
     await act(async () => retry.resolve({ data: [sellerOrder({ order_number: 'RETRY-PAGE2' })] }));
     expect(tableSaleNumbers(container)).toEqual(['RETRY-PAGE2']);
-    expect(sellerApi.getSellerOrders).toHaveBeenNthCalledWith(2, { status_filter: 'completed', limit: 100, offset: 100 });
-    expect(sellerApi.getSellerOrders).toHaveBeenNthCalledWith(3, { status_filter: 'completed', limit: 100, offset: 100 });
+    expect(sellerApi.getSellerOrders).toHaveBeenNthCalledWith(2, { status_filter: 'completed', limit: 100, offset: 99 });
+    expect(sellerApi.getSellerOrders).toHaveBeenNthCalledWith(3, { status_filter: 'completed', limit: 100, offset: 99 });
   });
 
   it.each(['resolve', 'reject'] as const)('ignores a retired page %s while the new filter is loading', async (settle) => {
     const retired = deferred<{ data: SellerOrder[] }>();
     const current = deferred<{ data: SellerOrder[] }>();
-    sellerApi.getSellerOrders.mockResolvedValueOnce({ data: fullPage() })
+    sellerApi.getSellerOrders.mockResolvedValueOnce({ data: pageWithLookahead() })
       .mockReturnValueOnce(retired.promise).mockReturnValueOnce(current.promise);
     const { container } = render(<SalesPage />);
-    await waitFor(() => expect(tableSaleNumbers(container)).toHaveLength(100));
+    await waitFor(() => expect(tableSaleNumbers(container)).toHaveLength(99));
     fireEvent.click(pagingButton('Next'));
     await waitFor(() => expect(sellerApi.getSellerOrders).toHaveBeenCalledTimes(2));
     fireEvent.click(screen.getByRole('button', { name: 'Delivered' }));
     await waitFor(() => expect(sellerApi.getSellerOrders).toHaveBeenCalledTimes(3));
     await act(async () => {
-      if (settle === 'resolve') retired.resolve({ data: fullPage() });
+      if (settle === 'resolve') retired.resolve({ data: pageWithLookahead() });
       else retired.reject(new Error('late page error'));
     });
     expect(screen.getByText('Page 1')).not.toBeNull();
@@ -217,18 +242,18 @@ describe('SalesPage', () => {
 
   it.each(['resolve', 'reject'] as const)('ignores a retired retry %s after a new filter succeeds', async (settle) => {
     const retired = deferred<{ data: SellerOrder[] }>();
-    sellerApi.getSellerOrders.mockResolvedValueOnce({ data: fullPage() })
+    sellerApi.getSellerOrders.mockResolvedValueOnce({ data: pageWithLookahead() })
       .mockRejectedValueOnce(new Error('page failed')).mockReturnValueOnce(retired.promise)
       .mockResolvedValueOnce({ data: [sellerOrder({ order_number: 'CURRENT' })] });
     const { container } = render(<SalesPage />);
-    await waitFor(() => expect(tableSaleNumbers(container)).toHaveLength(100));
+    await waitFor(() => expect(tableSaleNumbers(container)).toHaveLength(99));
     fireEvent.click(pagingButton('Next'));
     fireEvent.click(await screen.findByRole('button', { name: 'Try again' }));
     await waitFor(() => expect(sellerApi.getSellerOrders).toHaveBeenCalledTimes(3));
     fireEvent.click(screen.getByRole('button', { name: 'Completed' }));
     await waitFor(() => expect(tableSaleNumbers(container)).toEqual(['CURRENT']));
     await act(async () => {
-      if (settle === 'resolve') retired.resolve({ data: fullPage() });
+      if (settle === 'resolve') retired.resolve({ data: pageWithLookahead() });
       else retired.reject(new Error('late retry error'));
     });
     expect(tableSaleNumbers(container)).toEqual(['CURRENT']);
