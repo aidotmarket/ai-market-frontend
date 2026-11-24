@@ -508,11 +508,15 @@ describe('MarketplaceSearchExperience', () => {
       name: 'Browse all marketplace listings',
     });
     expect(recoveryLink.getAttribute('href')).toBe('/listings');
+    expect(screen.queryByRole('link', { name: 'Post a data request' })).toBeNull();
   });
 
-  it('labels nonempty semantic results as related suggestions', () => {
-    const query = 'real-time telepathy recordings from wild unicorns on Mars';
-    mocks.pathname = '/search';
+  it.each([
+    ['/find-data', FindDataPage],
+    ['/search', SearchPage],
+  ] as const)('labels suggestions and links to the request form below the results on %s', (path, Page) => {
+    const query = 'historical weather';
+    mocks.pathname = path;
     mocks.searchParams = new URLSearchParams({ q: query });
     mocks.useSearchListings.mockReturnValue({
       items: [
@@ -557,12 +561,18 @@ describe('MarketplaceSearchExperience', () => {
       refetch: vi.fn(),
     });
 
-    render(<MarketplaceSearchExperience mode="search" />);
+    render(<Page />);
 
     expect(screen.getByText(`Marketplace suggestions for "${query}"`)).toBeTruthy();
     expect(screen.getByText('2 suggestions')).toBeTruthy();
     expect(screen.getByText(/ranked by meaning and may be related rather than exact/i)).toBeTruthy();
     expect(screen.getByText(/refine your search text or filters if they do not fit/i)).toBeTruthy();
-    expect(screen.getAllByTestId('listing-card')).toHaveLength(2);
+    const cards = screen.getAllByTestId('listing-card');
+    expect(cards).toHaveLength(2);
+    const requestPrompt = screen.getByText(/Not what you need\?/);
+    const requestLink = within(requestPrompt).getByRole('link', { name: 'Post a data request' });
+    expect(requestPrompt.textContent).toBe("Not what you need? Post a data request and we'll tell matching sellers.");
+    expect(requestLink.getAttribute('href')).toBe('/requests/new');
+    expect(cards[1].compareDocumentPosition(requestPrompt) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
   });
 });

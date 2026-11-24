@@ -28,6 +28,9 @@ export default function ListingPurchaseAdvisory({
           ? 'Seller-published, point-in-time scan findings are available. They are not a warranty or guarantee; review the full report and its limitations before you buy.'
           : 'No active scan findings are published for this listing. Their absence does not establish the data’s condition or suitability; review the listing and ask the seller questions before you buy.'}
       </p>
+      <a href="#ask-a-question" className="mt-2 inline-block text-sm font-medium text-amber-900 underline">
+        Ask the seller a question
+      </a>
     </aside>
   );
 }

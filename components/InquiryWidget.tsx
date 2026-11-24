@@ -500,6 +500,7 @@ function ListingInquiryWidget({ listingId, listingSlug, listingTitle }: Props) {
         {replyError && <p role="alert">{replyError}</p>}
         <div className="flex gap-2">
           <input
+            id="ask-a-question"
             type="text"
             disabled={replying || !!accepted}
             value={replyText}
@@ -509,7 +510,7 @@ function ListingInquiryWidget({ listingId, listingSlug, listingTitle }: Props) {
               if (e.key === 'Enter' && !e.shiftKey) void handleReply();
             }}
             placeholder="Follow up..."
-            className="flex-1 rounded-lg border border-gray-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-[#3F51B5] focus:border-transparent"
+            className="flex-1 scroll-mt-24 rounded-lg border border-gray-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-[#3F51B5] focus:border-transparent"
           />
           <button
             onClick={handleReply}
@@ -554,11 +555,12 @@ function ListingInquiryWidget({ listingId, listingSlug, listingTitle }: Props) {
         </div>
       )}
       <textarea
+        id="ask-a-question"
         value={question}
         onChange={(e) => setQuestion(e.target.value)}
         placeholder="What would you like to know about this dataset?"
         rows={3}
-        className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-[#3F51B5] focus:border-transparent resize-none"
+        className="w-full scroll-mt-32 rounded-lg border border-gray-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-[#3F51B5] focus:border-transparent resize-none"
       />
       <button
         onClick={handleSubmit}

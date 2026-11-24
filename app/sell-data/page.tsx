@@ -175,8 +175,12 @@ export default async function SellDataPage() {
                 Set up AIM Data for self-hosting
               </h3>
               <p className="mt-4 text-base leading-7 text-gray-600">
-                Install the open-source AIM Data Gateway using Docker. It automatically sends limited
-                information to identify your files. You confirm each file before it shares a description
+                To keep your data on your own server, you&apos;ll need someone who can install and run the
+                AIM Data Gateway using a tool called Docker.{' '}
+                <Link href="/aim-data" className="font-semibold text-[#3F51B5] underline hover:text-[#303F9F]">
+                  Read the AIM Data setup guide
+                </Link>. The gateway automatically sends limited information to identify your files.
+                You confirm each file before it shares a description
                 of what the file contains. These messages contain no data values. You can also choose to
                 publish a public sample.
               </p>

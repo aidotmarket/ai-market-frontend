@@ -29,6 +29,7 @@ vi.mock('@/hooks/useConversationPoll', () => ({
 vi.mock('next/navigation', () => ({ usePathname: () => '/listings/weather-observations' }));
 
 import InquiryWidget from './InquiryWidget';
+import ListingPurchaseAdvisory from './ListingPurchaseAdvisory';
 import { AllAIProvider, useAllAI } from './allai/AllAIContext';
 
 const SESSION_URL = 'http://localhost:8000/api/allai/support/anonymous/session';
@@ -187,6 +188,22 @@ afterEach(() => {
 });
 
 describe('InquiryWidget', () => {
+  it('exposes the question input as the focusable target of the purchase advisory link', () => {
+    render(<ListingPurchaseAdvisory price={10} scanFindings={null} />);
+    renderWidget();
+
+    const advisory = screen.getByRole('complementary', { name: 'Review before buying' });
+    const link = screen.getByRole('link', { name: 'Ask the seller a question' });
+    const question = screen.getByRole('textbox');
+    const fragment = link.getAttribute('href');
+
+    expect(advisory.contains(link)).toBe(true);
+    expect(fragment).toBe('#ask-a-question');
+    expect(document.querySelector(fragment!)).toBe(question);
+    question.focus();
+    expect(document.activeElement).toBe(question);
+  });
+
   it('sends the selected language and shows actionable Spanish guidance on a network failure', async () => {
     fetchMock.mockResolvedValueOnce(response(200, { session_id: 'anon-session' }))
       .mockRejectedValueOnce(new Error('English network error'));
