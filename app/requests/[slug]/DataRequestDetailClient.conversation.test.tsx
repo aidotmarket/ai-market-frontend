@@ -2,7 +2,7 @@
 import "@/tests/support-network-trap";
 import "@/tests/fixtures/request-thread-network-guard";
 import React from 'react';
-import { act, cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { act, cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { beforeEach, afterEach, expect, it, vi } from 'vitest';
 import DataRequestDetailClient from './DataRequestDetailClient';
 import { useAuthStore } from '@/store/auth';
@@ -42,10 +42,23 @@ it('provides seller discovery and messaging on the page after an existing quote,
   const matched = { ...request, status: 'matched' } as DataRequestDetail; mocks.get.mockResolvedValue(matched);
   useAuthStore.setState({ user: { id: 'seller', role: 'seller' } as User });
   mocks.selector.mockResolvedValue({ contract: 'request-thread-v1', request_id: 'request', side: 'seller', availability: 'enabled', threads: [{ response_id: 'response', can_send: true }] });
+  mocks.history.mockResolvedValue({ ...history, items: [{ request_id: 'request', response_id: 'response', id: 'prior', role: 'buyer', content: 'Earlier approved message' }] });
+  let resolveQuotes!: (value: typeof response[]) => void;
+  mocks.responses.mockReturnValue(new Promise<typeof response[]>(resolve => { resolveQuotes = resolve; }));
   render(<DataRequestDetailClient slug="example" initialRequest={matched} />);
-  await screen.findByText('No messages in this conversation.'); expect(screen.queryByRole('combobox')).toBeNull();
+  const messages = within(await screen.findByRole('list', { name: 'Private messages' }));
+  expect(messages.getByText('Earlier approved message')).not.toBeNull();
+  expect(screen.queryByRole('combobox')).toBeNull();
   fireEvent.change(screen.getByLabelText('Private message for selected response'), { target: { value: 'Private seller reply' } });
-  fireEvent.click(screen.getByRole('button', { name: 'Send private message' })); await screen.findByText('Approved private message');
+  expect(screen.getByRole('button', { name: 'Send private message' })).toHaveProperty('disabled', false);
+  fireEvent.click(screen.getByRole('button', { name: 'Send private message' }));
+  await messages.findByText('Approved private message');
+
+  await act(async () => { resolveQuotes([response]); });
+  expect(await screen.findByText(response.proposal)).not.toBeNull();
+  const currentMessages = within(screen.getByRole('list', { name: 'Private messages' }));
+  expect(currentMessages.getByText('Earlier approved message')).not.toBeNull();
+  expect(currentMessages.getByText('Approved private message')).not.toBeNull();
   expect(mocks.history).toHaveBeenCalledWith('request', 'response'); expect(mocks.quote).not.toHaveBeenCalled();
 });
 it('keeps the existing page and quote independent when C4 routes are absent', async () => {

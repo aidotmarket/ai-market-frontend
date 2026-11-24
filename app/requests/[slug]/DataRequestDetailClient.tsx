@@ -124,6 +124,7 @@ export default function DataRequestDetailClient({
   const hasResponseCount = typeof responseCount === 'number' && Number.isFinite(responseCount) && responseCount >= 0;
   const setRequest = (value: DataRequestDetail | null) => setRequestRecord({ context, value });
   const [conversationNavigation, setConversationNavigation] = useState(0);
+  const [quoteRevision, setQuoteRevision] = useState(0);
   const [responses, setResponses] = useState<DataRequestResponse[]>([]);
   const [loading, setLoading] = useState(initialRequest === null);
   const [readError, setReadError] = useState<'unavailable' | 'gone' | null>(null);
@@ -504,6 +505,7 @@ export default function DataRequestDetailClient({
       });
       if (!isCurrentMutation(epoch)) return;
       setResponses((existing) => [...existing.filter((item) => item.id !== response.id), response]);
+      setQuoteRevision(revision => revision + 1);
       if (hasResponseCount) {
         setRequest({ ...request, response_count: responseCount + 1 });
       }
@@ -515,7 +517,10 @@ export default function DataRequestDetailClient({
         const saved = await getDataRequestResponses(request.id);
         if (isCurrentMutation(epoch)) {
           setResponses(saved);
-          if (saved.length > 0) setResponseError('');
+          if (saved.length > 0) {
+            setResponseError('');
+            setQuoteRevision(revision => revision + 1);
+          }
         }
       } catch {
         // Keep the original outcome and entered fields visible.
@@ -847,7 +852,7 @@ export default function DataRequestDetailClient({
         )}
       </div>
 
-      <RequestConversation requestId={request.id} requestStatus={request.status} quoteRevision={responses.length} navigationRevision={conversationNavigation} />
+      <RequestConversation requestId={request.id} requestStatus={request.status} quoteRevision={quoteRevision} navigationRevision={conversationNavigation} />
 
       {/* Owner: Responses list */}
       {showOwnerResponseList && (
