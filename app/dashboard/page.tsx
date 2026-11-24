@@ -680,6 +680,7 @@ function OverviewVisit({ identity, retireVisit }: { identity: string; retireVisi
                     <dt className="text-sm font-medium text-gray-500 truncate">Total Sales</dt>
                     <dd>
                       <div className="text-2xl font-semibold text-gray-900">{stats?.total_sales ?? 0}</div>
+                      <p className="text-sm text-gray-600">Purchases on currently published listings, across all time</p>
                       <Link href="/dashboard/sales?status=all" className="text-sm text-indigo-700 underline">
                         View sales by status
                       </Link>
@@ -703,7 +704,7 @@ function OverviewVisit({ identity, retireVisit }: { identity: string; retireVisi
                     <dt className="text-sm font-medium text-gray-500 truncate">Revenue (30 days)</dt>
                     <dd>
                       <div className="text-2xl font-semibold text-gray-900">{stats?.period_revenue_display ?? '$0.00'}</div>
-                      <p className="text-sm text-gray-600">From your sales summary</p>
+                      <p className="text-sm text-gray-600">Your share of orders completed in the last 30 days</p>
                     </dd>
                   </dl>
                 </div>
