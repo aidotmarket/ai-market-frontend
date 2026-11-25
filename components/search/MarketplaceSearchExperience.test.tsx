@@ -106,12 +106,16 @@ describe('MarketplaceSearchExperience', () => {
       ]);
     });
 
-    it('introduces Browse Marketplace in plain buyer language', () => {
-      mocks.searchParams = new URLSearchParams();
+    it.each([
+      ['', 'Browse every listing. Pick a category or sort to narrow it down.'],
+      ['type=data', 'Use filters and sorting to find data listings.'],
+      ['type=models', 'Use filters and sorting to find model listings.'],
+    ])('introduces Browse Marketplace in plain buyer language for "%s"', (params, description) => {
+      mocks.searchParams = new URLSearchParams(params);
       mockLoadedItems([]);
       render(<BrowseListingsPage />);
 
-      expect(screen.getByText('Browse every listing. Pick a category or sort to narrow it down.')).toBeTruthy();
+      expect(screen.getByText(description)).toBeTruthy();
     });
 
     it('offers counted formats from loaded browse metadata without inventing legacy formats', () => {
@@ -277,7 +281,7 @@ describe('MarketplaceSearchExperience', () => {
       expect(screen.getByText(/Load more results to look for matches/)).toBeTruthy();
       expect((screen.getByRole('combobox', { name: 'Data type' }) as HTMLSelectElement).value).toBe('json');
       expect(screen.getByRole('option', { name: 'JSON (0 loaded)' })).toBeTruthy();
-      expect(screen.getByText('0 results filtered to JSON')).toBeTruthy();
+      expect(screen.getByText('Showing 0 results filtered to JSON')).toBeTruthy();
       expect(screen.getByText('Counts reflect loaded results only')).toBeTruthy();
       expect(state.fetchNextPage).not.toHaveBeenCalled();
       expect(mocks.replace).not.toHaveBeenCalled();
@@ -297,9 +301,18 @@ describe('MarketplaceSearchExperience', () => {
       expect(state.fetchNextPage).toHaveBeenCalledTimes(1);
     });
 
+    it('labels a loaded format match while more pages are available', () => {
+      setup({ items: [csv, json] });
+      render(<MarketplaceSearchExperience mode={mode} />);
+
+      expect(screen.getByText(`Showing 1 ${semanticMode ? 'suggestion' : 'result'} filtered to JSON`)).toBeTruthy();
+      expect(screen.getByRole('button', { name: 'Load more' })).toBeTruthy();
+    });
+
     it('preserves definitive empty recovery when no pages remain', () => {
       const state = setup({ hasNextPage: false });
       render(<MarketplaceSearchExperience mode={mode} />);
+      expect(screen.getByText('0 results filtered to JSON')).toBeTruthy();
       expect(screen.getByText('No data found')).toBeTruthy();
       expect(screen.getByText(/Try adjusting the search text or filters/)).toBeTruthy();
       expect(screen.queryByRole('button', { name: 'Load more' })).toBeNull();
@@ -330,16 +343,20 @@ describe('MarketplaceSearchExperience', () => {
       }
     });
 
-    it('preserves ordinary unfiltered counts, ordering and explicit pagination', () => {
+    it('labels paginated Browse counts and preserves semantic totals, ordering and explicit pagination', () => {
       const state = setup({ items: [csv, json] });
       mocks.searchParams.delete('data_type');
-      render(<MarketplaceSearchExperience mode={mode} />);
-      expect(screen.getByText(semanticMode ? '24 suggestions' : '2 results')).toBeTruthy();
+      const view = render(<MarketplaceSearchExperience mode={mode} />);
+      expect(screen.getByText(semanticMode ? '24 suggestions' : 'Showing 2 results')).toBeTruthy();
       expect(screen.getAllByTestId('listing-card').map((card) => card.getAttribute('data-listing-id'))).toEqual(['first-csv', 'later-json']);
       expect((screen.getByRole('combobox', { name: 'Sort' }) as HTMLSelectElement).value).toBe(semanticMode ? 'relevance' : 'newest');
       expect(state.fetchNextPage).not.toHaveBeenCalled();
       fireEvent.click(screen.getByRole('button', { name: 'Load more' }));
       expect(state.fetchNextPage).toHaveBeenCalledTimes(1);
+
+      mocks.useSearchListings.mockReturnValue({ ...state, hasNextPage: false });
+      view.rerender(<MarketplaceSearchExperience mode={mode} />);
+      expect(screen.getByText(semanticMode ? '24 suggestions' : '2 results')).toBeTruthy();
     });
 
     it('keeps an exact case-sensitive URL format without assigning missing metadata', () => {
