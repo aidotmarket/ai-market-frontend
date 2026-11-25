@@ -612,15 +612,13 @@ function ListingInquiryWidget({ listingId, listingSlug, listingTitle }: Props) {
         <div className="text-xs text-red-600 mt-2" role="alert">
           <p>{recovery[anonymousError]} {recovery.guidance}</p>
           <ListingRecoveryLinks search={recovery.search} support={recovery.support} />
-          {anonymousError === 'timeout' && (
-            <Link
-              href={`/login?redirect=/listings/${encodeURIComponent(listingSlug)}`}
-              onClick={preserveAnonymousDraft}
-              className="mt-2 inline-block text-[#3F51B5] hover:underline"
-            >
-              {recovery.signIn}
-            </Link>
-          )}
+          <Link
+            href={`/login?redirect=/listings/${encodeURIComponent(listingSlug)}`}
+            onClick={preserveAnonymousDraft}
+            className="mt-2 inline-block text-[#3F51B5] hover:underline"
+          >
+            {recovery.signIn}
+          </Link>
         </div>
       )}
       {anonymousAnswerReturned && (

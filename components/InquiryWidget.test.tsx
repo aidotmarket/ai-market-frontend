@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 
-import { act, cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { act, cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { ConversationDetail } from '@/types';
 import { AxiosError } from 'axios';
@@ -219,6 +219,10 @@ describe('InquiryWidget', () => {
     expect(alert.textContent).not.toMatch(/English network error|couldn't get an answer/);
     expect(screen.getByRole('link', { name: 'Buscar en el catálogo' }).getAttribute('href')).toBe('/search');
     expect(screen.getByRole('link', { name: 'Contactar con soporte' }).getAttribute('href')).toBe('/support');
+    const sellerLink = within(alert).getByRole('link', { name: 'Inicia sesión para preguntar al vendedor.' });
+    expect(sellerLink.getAttribute('href')).toBe('/login?redirect=/listings/weather-observations');
+    clickWithoutNavigation(sellerLink);
+    expect(sessionStorage.getItem('inquiry_draft_listing-123')).toBe('¿Qué formato tiene?');
   });
 
   it('localizes the timeout guidance and retains the question and sign-in handoff', async () => {
