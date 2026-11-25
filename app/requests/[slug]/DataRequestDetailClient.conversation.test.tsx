@@ -15,7 +15,16 @@ vi.mock('@/lib/auth-session-owner', async original => {
   const actual = await original<typeof import('@/lib/auth-session-owner')>();
   return { ...actual, subscribeAuthSessionOwner: (listener: () => void) => actual.subscribeAuthSessionOwner(() => { if (!mocks.suppressOwnerNotification) listener(); }) };
 });
-vi.mock('next/navigation', () => ({ useRouter: () => ({ push: vi.fn() }) }));
+vi.mock('next/navigation', () => ({
+  useRouter: () => ({ push: vi.fn() }),
+  useSearchParams: () => {
+    const search = React.useSyncExternalStore(listener => {
+      window.addEventListener('popstate', listener);
+      return () => window.removeEventListener('popstate', listener);
+    }, () => window.location.search);
+    return new URLSearchParams(search);
+  },
+}));
 vi.mock('next/link', () => ({ default: ({ children, href, ...props }: React.AnchorHTMLAttributes<HTMLAnchorElement>) => <a href={href} {...props}>{children}</a> }));
 vi.mock('@/components/Toast', () => ({ useToast: () => ({ toast: vi.fn() }) }));
 const request = { id: 'request', slug: 'example', buyer_id: 'buyer', title: 'Buyer data request', description: 'Public safe request description', status: 'open', urgency: 'normal', categories: [], format_preferences: [], currency: 'USD', created_at: '2026-11-07T00:00:00Z', response_count: 1, provenance_requirements: null, published_at: null, price_range_min: null, price_range_max: null, updated_at: null, buyer_display_name: 'Buyer' } satisfies DataRequestDetail;
@@ -36,6 +45,7 @@ it('makes the bilateral conversation reachable from the real page while preservi
   expect(await screen.findByText('Choose a response to read its private conversation history.')).not.toBeNull();
   fireEvent.change(await screen.findByRole('combobox'), { target: { value: 'response' } });
   await screen.findByText('No messages in this conversation.'); fireEvent.change(screen.getByLabelText('Private message for selected response'), { target: { value: 'Private buyer message' } });
+  expect(document.activeElement).not.toBe(screen.getByRole('heading', { name: 'Private conversation' }));
   fireEvent.click(screen.getByRole('button', { name: 'Send private message' })); await screen.findByText('Approved private message');
   expect(mocks.send.mock.calls[0][1].response_id).toBe('response'); expect(screen.getByText(response.proposal)).not.toBeNull(); expect(mocks.quote).not.toHaveBeenCalled();
 });
@@ -158,6 +168,69 @@ it('quote-card navigation and back/forward reauthorize exact threads without los
   await act(async () => { window.history.replaceState(null, '', '?response_id=denied'); window.dispatchEvent(new PopStateEvent('popstate')); });
   await waitFor(() => expect(screen.queryByLabelText('Private message for selected response')).toBeNull());
   expect(mocks.history).not.toHaveBeenCalledWith('request', 'denied'); expect(mocks.send).toHaveBeenCalledOnce();
+});
+
+it.each([403, 404])('focuses a valid quote history after landing on a response denied with %s', async status => {
+  window.history.replaceState({}, '', '?response_id=denied');
+  const selector = { contract: 'request-thread-v1', request_id: 'request', side: 'buyer', availability: 'enabled', threads: [{ response_id: 'response', can_send: true }] };
+  let resolveSelector!: (value: typeof selector) => void;
+  mocks.selector.mockRejectedValueOnce({ response: { status } })
+    .mockReturnValueOnce(new Promise<typeof selector>(resolve => { resolveSelector = resolve; }));
+  const message = 'Approved history for the valid response';
+  mocks.history.mockResolvedValue({ ...history, items: [{ request_id: 'request', response_id: 'response', id: 'prior', role: 'seller', content: message }] });
+  const scroll = vi.fn();
+  const restoreScroll = Object.getOwnPropertyDescriptor(HTMLElement.prototype, 'scrollIntoView');
+  Object.defineProperty(HTMLElement.prototype, 'scrollIntoView', { configurable: true, value: scroll });
+  try {
+    render(<DataRequestDetailClient slug="example" initialRequest={request} />);
+    const link = await screen.findByRole('link', { name: 'Open private conversation for this response' });
+    await waitFor(() => expect(screen.queryByRole('heading', { name: 'Private conversation' })).toBeNull());
+    expect(mocks.history).not.toHaveBeenCalled();
+    link.focus();
+    // Native keyboard activation of an anchor dispatches a click with detail 0.
+    expect(fireEvent.click(link, { detail: 0 })).toBe(false);
+    expect(document.activeElement).toBe(link);
+    expect(scroll).not.toHaveBeenCalled();
+
+    await act(async () => { resolveSelector(selector); });
+    expect(within(await screen.findByRole('list', { name: 'Private messages' })).getByText(message)).not.toBeNull();
+    expect(document.activeElement).toBe(screen.getByRole('heading', { name: 'Private conversation' }));
+    expect(scroll).toHaveBeenCalledOnce();
+    expect(mocks.selector.mock.calls).toEqual([['request', 'denied'], ['request', 'response']]);
+    expect(mocks.history).toHaveBeenCalledExactlyOnceWith('request', 'response');
+  } finally {
+    if (restoreScroll) Object.defineProperty(HTMLElement.prototype, 'scrollIntoView', restoreScroll);
+    else Reflect.deleteProperty(HTMLElement.prototype, 'scrollIntoView');
+  }
+});
+
+it('keeps quote-card hrefs current across same-page history and native modified clicks', async () => {
+  window.history.replaceState({}, '', '?view=first&view=second');
+  render(<DataRequestDetailClient slug="example" initialRequest={request} />);
+  const link = await screen.findByRole('link', { name: 'Open private conversation for this response' });
+  expect(link.getAttribute('href')).toBe('?view=first&view=second&response_id=response#private-conversation-heading');
+
+  window.history.pushState({}, '', '?view=third&view=fourth');
+  window.history.back();
+  await waitFor(() => expect(window.location.search).toBe('?view=first&view=second'));
+  window.history.forward();
+  await waitFor(() => expect(link.getAttribute('href')).toBe('?view=third&view=fourth&response_id=response#private-conversation-heading'));
+
+  const observeClick = vi.fn((event: MouseEvent) => {
+    const destination = event.defaultPrevented ? null : link.getAttribute('href');
+    event.preventDefault();
+    return destination;
+  });
+  window.addEventListener('click', observeClick, { once: true });
+  fireEvent.click(link, { ctrlKey: true });
+  expect(observeClick).toHaveReturnedWith('?view=third&view=fourth&response_id=response#private-conversation-heading');
+  expect(window.location.search).toBe('?view=third&view=fourth');
+  expect(mocks.history).not.toHaveBeenCalled();
+
+  window.history.replaceState({}, '', '?view=fifth&view=sixth');
+  fireEvent.click(link);
+  await screen.findByText('No messages in this conversation.');
+  expect(window.location.search).toBe('?view=fifth&view=sixth&response_id=response');
 });
 
 it('brings the buyer to readable private history on a closed request while preserving native modified clicks', async () => {

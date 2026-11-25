@@ -25,15 +25,16 @@ const resultText = {
 // Thrown only by our admission callback; transport has not dispatched.
 class LocalAdmissionRefused extends Error {}
 type Attempt = { command: RequestMessageCommand; digest?: string; state: RequestCommandResult['state'] | 'local_not_sent'; busy: boolean; flight?: symbol };
+type SelectionSettled = (responseId: string, heading: HTMLHeadingElement | null) => void;
 
-export default function RequestConversation({ requestId, requestStatus, quoteRevision = 0, navigationRevision = 0 }: { requestId: string; requestStatus: string; quoteRevision?: number; navigationRevision?: number }) {
+export default function RequestConversation({ requestId, requestStatus, quoteRevision = 0, navigationRevision = 0, onSelectionSettled }: { requestId: string; requestStatus: string; quoteRevision?: number; navigationRevision?: number; onSelectionSettled?: SelectionSettled }) {
   const { user, token, isAuthenticated } = useAuthStore();
   const owner = useSyncExternalStore(subscribeAuthSessionOwner, authSessionOwner, authSessionOwner);
   if (!user || !token || !isAuthenticated) return null;
-  return <OwnedConversation key={`${requestId}:${user.id}:${owner}`} requestId={requestId} requestStatus={requestStatus} quoteRevision={quoteRevision} navigationRevision={navigationRevision} principal={user.id} owner={owner} />;
+  return <OwnedConversation key={`${requestId}:${user.id}:${owner}`} requestId={requestId} requestStatus={requestStatus} quoteRevision={quoteRevision} navigationRevision={navigationRevision} principal={user.id} owner={owner} onSelectionSettled={onSelectionSettled} />;
 }
 
-function OwnedConversation({ requestId, requestStatus, quoteRevision, navigationRevision, principal, owner }: { requestId: string; requestStatus: string; quoteRevision: number; navigationRevision: number; principal: string; owner: number }) {
+function OwnedConversation({ requestId, requestStatus, quoteRevision, navigationRevision, principal, owner, onSelectionSettled }: { requestId: string; requestStatus: string; quoteRevision: number; navigationRevision: number; principal: string; owner: number; onSelectionSettled?: SelectionSettled }) {
   const [selector, setSelector] = useState<RequestThreadSelector | null>(null);
   const [selection, setSelection] = useState('');
   const [selectorError, setSelectorError] = useState(false);
@@ -69,6 +70,10 @@ function OwnedConversation({ requestId, requestStatus, quoteRevision, navigation
     setHistory(null); setSelecting(true); setReload(x => x + 1);
   }
   const resultFocus = useRef<HTMLParagraphElement>(null);
+  const headingRef = useRef<HTMLHeadingElement>(null);
+  useLayoutEffect(() => {
+    if (!selecting) onSelectionSettled?.(selection, headingRef.current);
+  }, [selecting, selection, onSelectionSettled]);
   useLayoutEffect(() => {
     if (attempt || notice) resultFocus.current?.focus();
   }, [attempt?.state, attempt?.busy, notice]);
@@ -213,7 +218,7 @@ function OwnedConversation({ requestId, requestStatus, quoteRevision, navigation
   }
   if (selectorAbsent) return null;
   return <section aria-labelledby={PRIVATE_CONVERSATION_HEADING_ID} className="mb-6 rounded-xl border border-gray-200 p-6 space-y-4">
-    <h2 id={PRIVATE_CONVERSATION_HEADING_ID} tabIndex={-1} className="scroll-mt-24 text-lg font-semibold text-gray-900">Private conversation</h2>
+    <h2 ref={headingRef} id={PRIVATE_CONVERSATION_HEADING_ID} tabIndex={-1} className="scroll-mt-24 text-lg font-semibold text-gray-900">Private conversation</h2>
     {recovery.message && <p role="status">{recovery.message}</p>}
     {recovery.reportControl}
     <p className="text-sm text-gray-600">Messages are checked before sending. You can read approved messages here.</p>
