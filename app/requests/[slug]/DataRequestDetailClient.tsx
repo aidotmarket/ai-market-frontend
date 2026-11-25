@@ -1,7 +1,7 @@
 'use client';
 
 import { useEffect, useLayoutEffect, useState, useCallback, useRef, useSyncExternalStore } from 'react';
-import { useRouter } from 'next/navigation';
+import { useRouter, useSearchParams } from 'next/navigation';
 import Link from 'next/link';
 import { useAuthStore } from '@/store/auth';
 import { useToast } from '@/components/Toast';
@@ -17,7 +17,7 @@ import {
 } from '@/api/data-requests';
 import { authSessionOwner, isAuthSessionOwner, subscribeAuthSessionOwner } from '@/lib/auth-session-owner';
 import { buyerRequestAnonymizationEnabled, exactPublicationPreview, hasPrivatePublication, isRequestId, ownerRequestHref } from '@/lib/buyer-request-publication';
-import RequestConversation from '@/components/RequestConversation';
+import RequestConversation, { PRIVATE_CONVERSATION_HEADING_ID } from '@/components/RequestConversation';
 import { formatDate } from '@/lib/format';
 import { requestDisplayTitle } from '@/lib/request-display-title';
 import { requestUrgencyLabel } from '@/lib/request-urgency';
@@ -103,6 +103,17 @@ interface DataRequestDetailClientProps {
   boardQuery?: string;
 }
 
+function conversationHref(search: string, responseId: string) {
+  const query = new URLSearchParams(search);
+  query.set('response_id', responseId);
+  return `?${query}#${PRIVATE_CONVERSATION_HEADING_ID}`;
+}
+
+function focusConversationHeading(heading: HTMLElement) {
+  heading.focus({ preventScroll: true });
+  heading.scrollIntoView?.();
+}
+
 export default function DataRequestDetailClient({
   slug,
   initialRequest,
@@ -111,6 +122,7 @@ export default function DataRequestDetailClient({
   const boardHref = boardQuery ? `/requests?${boardQuery}` : '/requests';
   const { user, isAuthenticated } = useAuthStore();
   const router = useRouter();
+  const search = useSearchParams()?.toString() ?? '';
   const { toast } = useToast();
 
   const owner = useSyncExternalStore(subscribeAuthSessionOwner, authSessionOwner, authSessionOwner);
@@ -124,6 +136,50 @@ export default function DataRequestDetailClient({
   const hasResponseCount = typeof responseCount === 'number' && Number.isFinite(responseCount) && responseCount >= 0;
   const setRequest = (value: DataRequestDetail | null) => setRequestRecord({ context, value });
   const [conversationNavigation, setConversationNavigation] = useState(0);
+  // A denied selector hides the heading until the next selection settles.
+  const pendingConversationFocus = useRef<{ responseId: string; url: string } | null>(null);
+  const requestId = request?.id;
+
+  useLayoutEffect(() => {
+    const clearFocus = () => { pendingConversationFocus.current = null; };
+    window.addEventListener('popstate', clearFocus);
+    window.addEventListener('hashchange', clearFocus);
+    return () => {
+      clearFocus();
+      window.removeEventListener('popstate', clearFocus);
+      window.removeEventListener('hashchange', clearFocus);
+    };
+  }, [context, requestId]);
+
+  useLayoutEffect(() => {
+    if (pendingConversationFocus.current?.url !== window.location.href) pendingConversationFocus.current = null;
+  }, [search]);
+
+  const onConversationSelectionSettled = useCallback((responseId: string, heading: HTMLHeadingElement | null) => {
+    const intent = pendingConversationFocus.current;
+    pendingConversationFocus.current = null;
+    if (intent && heading && intent.responseId === responseId && intent.url === window.location.href && isAuthSessionOwner(owner)) {
+      focusConversationHeading(heading);
+    }
+  }, [owner]);
+
+  function activateConversation(event: React.MouseEvent<HTMLAnchorElement>, responseId: string) {
+    if (event.defaultPrevented) return;
+    const href = conversationHref(window.location.search, responseId);
+    pendingConversationFocus.current = null;
+    if (event.button !== 0 || event.metaKey || event.ctrlKey || event.shiftKey || event.altKey) {
+      // History can change before the router updates the rendered href.
+      event.currentTarget.href = href;
+      return;
+    }
+    event.preventDefault();
+    const url = new URL(href, window.location.href).href;
+    const heading = document.getElementById(PRIVATE_CONVERSATION_HEADING_ID);
+    if (!heading) pendingConversationFocus.current = { responseId, url };
+    if (window.location.href !== url) window.history.pushState(null, '', url);
+    setConversationNavigation(x => x + 1);
+    if (heading) focusConversationHeading(heading);
+  }
   const [quoteRevision, setQuoteRevision] = useState(0);
   const [responses, setResponses] = useState<DataRequestResponse[]>([]);
   const [loading, setLoading] = useState(initialRequest === null);
@@ -857,7 +913,7 @@ export default function DataRequestDetailClient({
         )}
       </div>
 
-      <RequestConversation requestId={request.id} requestStatus={request.status} quoteRevision={quoteRevision} navigationRevision={conversationNavigation} />
+      <RequestConversation requestId={request.id} requestStatus={request.status} quoteRevision={quoteRevision} navigationRevision={conversationNavigation} onSelectionSettled={onConversationSelectionSettled} />
 
       {/* Owner: Responses list */}
       {showOwnerResponseList && (
@@ -873,12 +929,7 @@ export default function DataRequestDetailClient({
                   </span>
                 </div>
                 <p className="text-sm text-gray-800 whitespace-pre-wrap mb-2">{resp.proposal}</p>
-                <a href={`?${boardQuery ? `${boardQuery}&` : ''}response_id=${encodeURIComponent(resp.id)}`} onClick={event => {
-                  if (event.button !== 0 || event.metaKey || event.ctrlKey || event.shiftKey || event.altKey) return;
-                  event.preventDefault();
-                  window.history.pushState(null, '', event.currentTarget.href);
-                  setConversationNavigation(x => x + 1);
-                }} className="text-sm text-[#3F51B5] underline focus:ring-2 focus:ring-[#3F51B5]">Open private conversation for this response</a>
+                <a href={conversationHref(search, resp.id)} onClick={event => activateConversation(event, resp.id)} onAuxClick={event => activateConversation(event, resp.id)} className="text-sm text-[#3F51B5] underline focus:ring-2 focus:ring-[#3F51B5]">Open private conversation for this response</a>
                 <div className="flex gap-4 text-xs text-gray-500">
                   {resp.proposed_price != null && (
                     <span>Price: <span className="font-medium text-gray-700">${resp.proposed_price.toLocaleString()}</span></span>

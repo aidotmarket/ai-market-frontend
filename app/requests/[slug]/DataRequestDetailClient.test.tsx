@@ -36,6 +36,7 @@ vi.mock('@/store/auth', () => ({
 
 vi.mock('next/navigation', () => ({
   useRouter: () => ({ push: mocks.routerPush }),
+  useSearchParams: () => null,
 }));
 
 vi.mock('next/link', () => ({

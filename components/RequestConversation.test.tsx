@@ -149,7 +149,7 @@ describe('private request conversation', () => {
     mocks.send.mockRejectedValueOnce(new Error('Lost'));
     const view = await mount(); await select(); write(); await screen.findByText(/We could not confirm/);
     view.rerender(<RequestConversation requestId="request" requestStatus={state} />);
-    expect(screen.getByText(`This request is ${state}. New messages cannot be sent.`)).toBeTruthy();
+    expect(screen.getByText(`This request is ${state}. New messages cannot be sent. You can still read existing history for available responses.`)).toBeTruthy();
     expect(screen.getByRole('button', { name: 'Retry same message' })).toHaveProperty('disabled', true); expect(mocks.send).toHaveBeenCalledTimes(1);
   });
   it('keeps an authorized in-app conversation usable while email is proof-blocked, with internal metadata excluded', async () => {
