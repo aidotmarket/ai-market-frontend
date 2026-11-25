@@ -67,6 +67,49 @@ it('links the existing marketplace terms reference in Covenant v1.1', async () =
   expect(html.match(/<pre[^>]*>([\s\S]*?)<\/pre>/)?.[1].replace(/<\/?a\b[^>]*>/g, '')).toBe(fullText);
 });
 
+const standardSection11 = '11. Notices and marketplace role. The Marketplace  Terms apply. See the marketplace terms.\n\n';
+const standardSection12 = '12. General. See the marketplace terms in section 11.\n';
+
+it.each(['ai-training', 'no-ai-training'])('links the terms only in section 11 of Standard v1.1 %s', async (variant) => {
+  process.env.API_URL = 'https://api.example.invalid';
+  const precedingText = '10. Example. See the marketplace terms.\n\n';
+  const fullText = precedingText + standardSection11 + standardSection12;
+  const sha256 = 'd'.repeat(64);
+  const parts = ['standard', '1.1', variant];
+  globalThis.fetch = vi.fn().mockResolvedValue({ ok: true, json: async () => ({
+    code: 'standard', version: '1.1', variant, summary: [], full_text: fullText, sha256,
+  }) });
+
+  const html = renderToStaticMarkup(await LicencePage({ params: Promise.resolve({ parts }) }));
+
+  const body = html.match(/<pre[^>]*>([\s\S]*?)<\/pre>/)?.[1];
+  expect(body?.startsWith(precedingText)).toBe(true);
+  expect(body?.endsWith(standardSection12)).toBe(true);
+  expect(body?.match(/<a\b[^>]*>[^<]*<\/a>/g)).toEqual([
+    expect.stringMatching(/href="\/legal\/terms"[^>]*>Marketplace  Terms<\/a>/),
+    expect.stringMatching(/href="\/legal\/terms"[^>]*>marketplace terms<\/a>/),
+  ]);
+  expect(body?.replace(/<\/?a\b[^>]*>/g, '')).toBe(fullText);
+  expect(html).toContain(`SHA-256: <code>${sha256}</code>`);
+  expect(html).toContain(`href="https://api.example.invalid/api/v1/licenses/${parts.join('/')}?download=1">Download exact document</a>`);
+});
+
+it.each([
+  ['1.0', standardSection11 + standardSection12],
+  ['1.1', standardSection11],
+  ['1.1', '11. Example. See the marketplace terms.\n\n' + standardSection12],
+])('renders plain text for Standard v%s without an applicable section', async (version, fullText) => {
+  process.env.API_URL = 'https://api.example.invalid';
+  globalThis.fetch = vi.fn().mockResolvedValue({ ok: true, json: async () => ({
+    code: 'standard', version, variant: 'ai-training', summary: [], full_text: fullText, sha256: 'd'.repeat(64),
+  }) });
+
+  const html = renderToStaticMarkup(await LicencePage({ params: Promise.resolve({ parts: ['standard', version, 'ai-training'] }) }));
+
+  expect(html).toContain(`>${fullText}</pre>`);
+  expect(html).not.toContain('href="/legal/terms"');
+});
+
 it('escapes markup in the public amber notice and never exposes custom text',async()=>{
   process.env.API_URL='https://api.ai.market';
   const hash='c'.repeat(64);
