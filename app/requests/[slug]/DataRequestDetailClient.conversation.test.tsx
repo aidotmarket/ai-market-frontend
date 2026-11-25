@@ -32,7 +32,8 @@ afterEach(cleanup);
 it('makes the bilateral conversation reachable from the real page while preserving the buyer quote list', async () => {
   render(<DataRequestDetailClient slug="example" initialRequest={request} />);
   expect(await screen.findByText(response.proposal)).not.toBeNull();
-  expect(screen.getByRole('link', { name: 'Open private conversation for this response' }).getAttribute('href')).toBe('?response_id=response');
+  expect(screen.getByRole('link', { name: 'Open private conversation for this response' }).getAttribute('href')).toBe('?response_id=response#private-conversation-heading');
+  expect(await screen.findByText('Choose a response to read its private conversation history.')).not.toBeNull();
   fireEvent.change(await screen.findByRole('combobox'), { target: { value: 'response' } });
   await screen.findByText('No messages in this conversation.'); fireEvent.change(screen.getByLabelText('Private message for selected response'), { target: { value: 'Private buyer message' } });
   fireEvent.click(screen.getByRole('button', { name: 'Send private message' })); await screen.findByText('Approved private message');
@@ -143,14 +144,74 @@ it('quote-card navigation and back/forward reauthorize exact threads without los
   fireEvent.click(screen.getAllByRole('link', { name: 'Open private conversation for this response' })[1]);
   await waitFor(() => expect(mocks.history).toHaveBeenLastCalledWith('request', 'second'));
   expect(screen.getByLabelText('Private message for selected response')).toHaveProperty('value', '');
-  await act(async () => { window.history.replaceState(null, '', '?response_id=response'); window.dispatchEvent(new PopStateEvent('popstate')); });
+  window.history.back();
   await screen.findByText(/We could not confirm/);
+  expect(window.location.hash).toBe('#private-conversation-heading');
   expect(screen.getByLabelText('Private message for selected response')).toHaveProperty('value', original.content);
   expect(mocks.selector).toHaveBeenLastCalledWith('request', 'response'); expect(mocks.send).toHaveBeenCalledOnce();
   expect(window.location.search).not.toContain(original.content); expect(window.location.search).not.toContain(original.client_message_nonce);
   expect(screen.getByText(/Leaving or reloading this page/)).not.toBeNull();
+  window.history.forward();
+  await waitFor(() => expect(screen.getByRole('combobox')).toHaveProperty('value', 'second'));
+  expect(window.location.search).toBe('?response_id=second');
   mocks.selector.mockRejectedValueOnce({ response: { status: 403 } });
   await act(async () => { window.history.replaceState(null, '', '?response_id=denied'); window.dispatchEvent(new PopStateEvent('popstate')); });
   await waitFor(() => expect(screen.queryByLabelText('Private message for selected response')).toBeNull());
   expect(mocks.history).not.toHaveBeenCalledWith('request', 'denied'); expect(mocks.send).toHaveBeenCalledOnce();
+});
+
+it('brings the buyer to readable private history on a closed request while preserving native modified clicks', async () => {
+  const closed = { ...request, status: 'closed' } as const;
+  const priorMessage = 'Approved message from before this request closed';
+  const initialUrl = '/requests/example?page=3&category=retail&view=compact&view=quotes';
+  window.history.replaceState({}, '', initialUrl);
+  mocks.get.mockResolvedValue(closed);
+  mocks.history.mockResolvedValue({ ...history, items: [{ request_id: 'request', response_id: 'response', id: 'prior', role: 'seller', content: priorMessage }] });
+  render(<DataRequestDetailClient slug="example" initialRequest={closed} boardQuery="page=3&category=retail" />);
+  const link = await screen.findByRole('link', { name: 'Open private conversation for this response' });
+  const heading = screen.getByRole('heading', { name: 'Private conversation' });
+  const scroll = vi.fn();
+  Object.defineProperty(heading, 'scrollIntoView', { value: scroll });
+  const destination = `${initialUrl}&response_id=response#private-conversation-heading`;
+  expect(link.getAttribute('href')).toBe(destination.slice('/requests/example'.length));
+  expect(await screen.findByText('This request is closed. New messages cannot be sent. You can still read existing history for available responses.')).not.toBeNull();
+
+  const modifiedClicks = vi.fn((event: MouseEvent) => {
+    const wasPrevented = event.defaultPrevented;
+    event.preventDefault(); // Suppress navigation only after the React handler has run.
+    return wasPrevented;
+  });
+  window.addEventListener('click', modifiedClicks);
+  try {
+    for (const modifier of [{ ctrlKey: true }, { metaKey: true }, { shiftKey: true }, { altKey: true }, { button: 1 }]) {
+      fireEvent.click(link, modifier);
+    }
+  } finally {
+    window.removeEventListener('click', modifiedClicks);
+  }
+  expect(modifiedClicks.mock.results.map(result => result.value)).toEqual([false, false, false, false, false]);
+  expect(window.location.pathname + window.location.search + window.location.hash).toBe(initialUrl);
+  expect(scroll).not.toHaveBeenCalled();
+  expect(mocks.selector).toHaveBeenCalledTimes(1);
+
+  const entries = window.history.length;
+  link.focus();
+  expect(fireEvent.click(link, { detail: 0 })).toBe(false);
+  expect(document.activeElement).toBe(heading);
+  expect(scroll).toHaveBeenCalledOnce();
+  expect(window.location.pathname + window.location.search + window.location.hash).toBe(destination);
+  expect(window.history.length).toBe(entries + 1);
+  await screen.findByText(priorMessage);
+  expect(document.activeElement).toBe(heading);
+  expect(screen.getByRole('combobox')).toHaveProperty('value', 'response');
+  expect(mocks.selector.mock.calls).toEqual([['request', undefined], ['request', 'response']]);
+  expect(mocks.history).toHaveBeenCalledExactlyOnceWith('request', 'response');
+  fireEvent.change(screen.getByRole('textbox', { name: 'Private message for selected response' }), { target: { value: 'Synthetic draft' } });
+  expect(screen.getByRole('button', { name: 'Send private message' })).toHaveProperty('disabled', true);
+  expect(mocks.send).not.toHaveBeenCalled();
+
+  fireEvent.click(link);
+  expect(window.history.length).toBe(entries + 1);
+  expect(scroll).toHaveBeenCalledTimes(2);
+  await screen.findByText(priorMessage);
 });

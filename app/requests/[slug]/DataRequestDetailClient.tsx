@@ -17,7 +17,7 @@ import {
 } from '@/api/data-requests';
 import { authSessionOwner, isAuthSessionOwner, subscribeAuthSessionOwner } from '@/lib/auth-session-owner';
 import { buyerRequestAnonymizationEnabled, exactPublicationPreview, hasPrivatePublication, isRequestId, ownerRequestHref } from '@/lib/buyer-request-publication';
-import RequestConversation from '@/components/RequestConversation';
+import RequestConversation, { PRIVATE_CONVERSATION_HEADING_ID } from '@/components/RequestConversation';
 import { formatDate } from '@/lib/format';
 import { requestDisplayTitle } from '@/lib/request-display-title';
 import { requestUrgencyLabel } from '@/lib/request-urgency';
@@ -864,8 +864,10 @@ export default function DataRequestDetailClient({
         <div className="mb-6">
           <h2 className="text-lg font-semibold text-gray-900 mb-4">{responses.length} response{responses.length !== 1 ? 's' : ''}</h2>
           <div className="space-y-4">
-            {responses.map((resp) => (
-              <div key={resp.id} className="rounded-xl border border-gray-200 p-4">
+            {responses.map((resp) => {
+              const query = new URLSearchParams(window.location.search);
+              query.set('response_id', resp.id);
+              return <div key={resp.id} className="rounded-xl border border-gray-200 p-4">
                 <div className="flex items-center justify-between mb-2">
                   <span className="text-xs font-medium text-gray-500">{formatDate(resp.created_at)}</span>
                   <span className="inline-flex items-center rounded-full bg-gray-100 px-2.5 py-0.5 text-xs font-medium text-gray-600">
@@ -873,11 +875,16 @@ export default function DataRequestDetailClient({
                   </span>
                 </div>
                 <p className="text-sm text-gray-800 whitespace-pre-wrap mb-2">{resp.proposal}</p>
-                <a href={`?${boardQuery ? `${boardQuery}&` : ''}response_id=${encodeURIComponent(resp.id)}`} onClick={event => {
-                  if (event.button !== 0 || event.metaKey || event.ctrlKey || event.shiftKey || event.altKey) return;
+                <a href={`?${query}#${PRIVATE_CONVERSATION_HEADING_ID}`} onClick={event => {
+                  if (event.defaultPrevented || event.button !== 0 || event.metaKey || event.ctrlKey || event.shiftKey || event.altKey) return;
                   event.preventDefault();
-                  window.history.pushState(null, '', event.currentTarget.href);
+                  if (window.location.href !== event.currentTarget.href) {
+                    window.history.pushState(null, '', event.currentTarget.href);
+                  }
                   setConversationNavigation(x => x + 1);
+                  const heading = document.getElementById(PRIVATE_CONVERSATION_HEADING_ID);
+                  heading?.focus({ preventScroll: true });
+                  heading?.scrollIntoView?.();
                 }} className="text-sm text-[#3F51B5] underline focus:ring-2 focus:ring-[#3F51B5]">Open private conversation for this response</a>
                 <div className="flex gap-4 text-xs text-gray-500">
                   {resp.proposed_price != null && (
@@ -886,7 +893,7 @@ export default function DataRequestDetailClient({
                   {(resp.proposed_timeline ?? resp.timeline) && <span>Timeline: {resp.proposed_timeline ?? resp.timeline}</span>}
                 </div>
               </div>
-            ))}
+            })}
           </div>
         </div>
       )}
