@@ -147,7 +147,8 @@ export function MarketplaceSearchExperience({
   const priceStats = facets?.price || null;
   const isFormatFiltered = listingCategory === 'data' && Boolean(dataType);
   const selectedDataTypeIsMissing = Boolean(dataType) && !dataTypeCounts.some(([value]) => value === dataType);
-  const resultCount = semanticMode && !isFormatFiltered ? total : items.length;
+  const usesSemanticTotal = semanticMode && !isFormatFiltered;
+  const resultCount = usesSemanticTotal ? total : items.length;
   const typeLabel = listingCategory === 'data' ? 'Data' : listingCategory === 'models' ? 'Models' : 'Marketplace';
   const searchPlaceholder = listingCategory === 'models'
     ? 'Search models by provider, task, capability, or category'
@@ -155,9 +156,9 @@ export function MarketplaceSearchExperience({
       ? 'Search data by topic, company, geography, or format'
       : 'Search data and models by topic, provider, geography, or capability';
   const browseDescription = listingCategory === 'models'
-    ? 'Explore model listings with URL-driven filters, sorting, and incremental loading.'
+    ? 'Use filters and sorting to find model listings.'
     : listingCategory === 'data'
-      ? 'Explore data listings with URL-driven filters, sorting, and incremental loading.'
+      ? 'Use filters and sorting to find data listings.'
       : 'Browse every listing. Pick a category or sort to narrow it down.';
   const emptyLabel = listingCategory === 'data' ? 'data' : listingCategory === 'models' ? 'models' : 'listings';
   const hasSemanticSuggestions = semanticMode && Boolean(q) && !isLoading && !isError && items.length > 0;
@@ -408,6 +409,7 @@ export function MarketplaceSearchExperience({
                 <p className="mt-1 text-sm text-slate-500">
                   {isLoading ? 'Loading results...' : (
                     <>
+                      {!usesSemanticTotal && hasNextPage ? 'Showing ' : ''}
                       {resultCount} {hasSemanticSuggestions ? 'suggestion' : 'result'}{resultCount === 1 ? '' : 's'}
                       {listingCategory === 'data' && dataType ? ` filtered to ${dataType.toUpperCase()}` : ''}
                     </>
