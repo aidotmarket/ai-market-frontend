@@ -4,9 +4,13 @@ import { useAllAI } from './AllAIContext';
 import { anonymousAllAIResources } from '@/lib/i18n/anonymous-allai';
 
 export default function AllAIFab() {
-  const { toggle, isOpen, locale, anonymousSurfaceActive, anonymousAvailable, page } = useAllAI();
+  const { toggle, isOpen, isSignedIn, locale, anonymousSurfaceActive, anonymousAvailable, page } = useAllAI();
   const resources = anonymousAllAIResources(locale);
   const sellerWorkspace = page?.startsWith('/dashboard/seller-workspace');
+  const showLabel = anonymousSurfaceActive || sellerWorkspace;
+  const showDesktopLabel = isSignedIn && (page === '/' || page === '/support');
+  const launcherSize = showLabel ? 'min-w-11 gap-2 px-4' : 'w-12';
+  const desktopPill = showDesktopLabel ? ' sm:w-auto sm:min-w-11 sm:gap-2 sm:px-4' : '';
 
   if (isOpen) return null;
   if (anonymousSurfaceActive && !anonymousAvailable) return null;
@@ -17,8 +21,8 @@ export default function AllAIFab() {
       id="allai-launcher"
       onClick={toggle}
       className={`allai-fab-pulse fixed bottom-[max(1.25rem,env(safe-area-inset-bottom))] right-5 z-40 h-12 rounded-full flex items-center justify-center shadow-lg transition-all hover:scale-105 active:scale-95 border border-white/[0.1] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-300 motion-reduce:transition-none motion-reduce:hover:scale-100 ${
-        anonymousSurfaceActive || sellerWorkspace ? 'min-w-11 gap-2 px-4' : 'w-12'
-      }`}
+        launcherSize
+      }${desktopPill}`}
       style={{
         background: 'rgba(12, 17, 30, 0.7)',
         backdropFilter: 'blur(16px)',
@@ -42,9 +46,9 @@ export default function AllAIFab() {
       >
         <path d="M21 15a2 2 0 01-2 2H7l-4 4V5a2 2 0 012-2h14a2 2 0 012 2z" />
       </svg>
-      {(anonymousSurfaceActive || sellerWorkspace) && (
-        <span className="whitespace-nowrap text-sm font-semibold text-white/90">
-          {anonymousSurfaceActive ? resources.assistantLabel : 'allAI · Here to help'}
+      {(showLabel || showDesktopLabel) && (
+        <span className={`whitespace-nowrap text-sm font-semibold text-white/90${showLabel ? '' : ' hidden sm:inline'}`}>
+          {anonymousSurfaceActive ? resources.assistantLabel : sellerWorkspace ? 'allAI · Here to help' : 'allAI'}
         </span>
       )}
     </button>
