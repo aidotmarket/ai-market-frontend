@@ -84,6 +84,7 @@ interface AllAIContextValue {
   isStreaming: boolean;
   sendMessage: (text: string) => Promise<void>;
   page: string;
+  isSignedIn: boolean;
   locale: AnonymousAllAILocale;
   setLocale: (locale: AnonymousAllAILocale) => void;
   anonymousSurfaceActive: boolean;
@@ -740,7 +741,7 @@ export function AllAIProvider({ children }: { children: ReactNode }) {
         supportSession, openSupportConversation, leaveSupportConversation,
         reportSession, openReportIssue, leaveReportIssue, separateViewReport, previousReports, selectReport,
         isOpen, open, close, toggle, messages, isStreaming, sendMessage, page: contextPath,
-        locale, setLocale, anonymousSurfaceActive, anonymousAvailable,
+        isSignedIn: Boolean(user), locale, setLocale, anonymousSurfaceActive, anonymousAvailable,
         onFieldProposal: onFieldProposalState, setOnFieldProposal,
         onBatchProposal: onBatchProposalState, setOnBatchProposal,
         formSnapshotGetter: formSnapshotGetterState, setFormSnapshotGetter,
