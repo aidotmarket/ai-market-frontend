@@ -21,6 +21,14 @@ describe('canonical auth origin', () => {
 });
 
 describe('next.config listing redirects', () => {
+  it.each(['/aim-node', '/download/aim-node', '/download/aim-node/install'])
+    ('permanently redirects %s to Find Data', async (path) => {
+      const { default: nextConfig } = await import('./next.config');
+      const response = await unstable_getResponseFromNextConfig({ url: `https://ai.market${path}`, nextConfig });
+      expect(response.status).toBe(308);
+      expect(response.headers.get('location')).toBe('https://ai.market/find-data');
+    });
+
   it('permanently redirects the branded listing slug to the neutral slug', async () => {
     const { default: config } = await import('./next.config');
 

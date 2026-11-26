@@ -2,7 +2,7 @@ import Link from 'next/link';
 import type { ListingDetail } from '@/types';
 import {
   samplePresentation, sampleStandardDocument, STANDARD_DOCUMENTS,
-  SAMPLE_DATA_COPY, SAMPLE_MODEL_COPY, SAMPLE_STANDARD_COPY,
+  SAMPLE_DATA_COPY, SAMPLE_STANDARD_COPY,
 } from '@/lib/generatedSample';
 
 export default function GeneratedSamplePage({ listing, emitJsonLd }: { listing: ListingDetail; emitJsonLd: boolean }) {
@@ -24,10 +24,9 @@ export default function GeneratedSamplePage({ listing, emitJsonLd }: { listing: 
       {valid && <>
         <p className="font-semibold">Not for sale</p>
         <p>{SAMPLE_DATA_COPY}</p>
-        <p>{SAMPLE_MODEL_COPY}</p>
         <section className="space-y-3" aria-label="Illustrative content licence reference">
           <h2 className="font-semibold">{SAMPLE_STANDARD_COPY}</h2>
-          <p>Standard applies only to our generated illustrative listing content. It does not relicense third-party data, model weights, APIs or trademarks.</p>
+          <p>Standard applies only to the example content we created. It grants no rights to third-party material or trademarks.</p>
           {!document && <p>No contractual variant is established by viewing this example. These are document references for comparison.</p>}
           {(document ? [document] : STANDARD_DOCUMENTS).map(url => <p key={url}><Link href={url} className="text-indigo-700 underline">Standard {url.split('/')[5]} — {url.endsWith('/no-ai-training') ? 'no AI training' : 'AI training'}</Link></p>)}
         </section>

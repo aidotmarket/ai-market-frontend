@@ -52,6 +52,26 @@ function request(id: string) {
 }
 
 describe('homepage listing grid', () => {
+  it('omits model and pipeline listings from the latest data', async () => {
+    const dataset = browseResponse.items[0];
+    fetchPublicListings.mockResolvedValue({
+      items: [
+        dataset,
+        { ...dataset, slug: 'legacy-model', title: 'Legacy Model', fulfillment_type: 'model_access' },
+        { ...dataset, slug: 'legacy-pipeline', title: 'Legacy Pipeline', fulfillment_type: 'pipeline_invocation' },
+      ],
+    });
+    fetchFeaturedFeed.mockResolvedValue(null);
+    fetchDataRequests.mockResolvedValue({ items: [] });
+    const { default: LandingPage } = await import('./page');
+
+    render(await LandingPage());
+
+    expect(screen.getByRole('heading', { name: dataset.title })).toBeTruthy();
+    expect(screen.queryByRole('heading', { name: 'Legacy Model' })).toBeNull();
+    expect(screen.queryByRole('heading', { name: 'Legacy Pipeline' })).toBeNull();
+  });
+
   it.each(listingSummaryCases())('renders the browse excerpt for $state', async ({ summary }) => {
     const listing = { ...browseResponse.items[0], summary };
     const withMarkdown = {

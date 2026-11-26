@@ -22,12 +22,6 @@ export function MarketplaceListingCard({ listing }: { listing: CardListing }) {
   const description = 'summary' in listing
     ? listing.summary ?? ''
     : listing.short_description || ('description' in listing ? listing.description : null);
-  const fulfillmentType = 'fulfillment_type' in listing ? listing.fulfillment_type : null;
-  const fulfillmentBadge = fulfillmentType === 'model_access'
-    ? 'Model'
-    : fulfillmentType === 'pipeline_invocation'
-      ? 'Pipeline'
-      : null;
 
   return (
     <Link
@@ -58,11 +52,6 @@ export function MarketplaceListingCard({ listing }: { listing: CardListing }) {
         {'data_format' in listing && listing.data_format && (
           <span className="inline-flex items-center rounded-full bg-emerald-50 px-2.5 py-1 text-xs font-medium uppercase tracking-wide text-emerald-700">
             {listing.data_format}
-          </span>
-        )}
-        {fulfillmentBadge && (
-          <span className="inline-flex items-center rounded-full bg-purple-100 px-2.5 py-1 text-xs font-medium text-purple-700">
-            {fulfillmentBadge}
           </span>
         )}
         {tags.map((tag) => (

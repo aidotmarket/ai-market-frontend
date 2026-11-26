@@ -39,7 +39,7 @@ export function HeroSearch() {
             type="search"
             value={value}
             onChange={(e) => setValue(e.target.value)}
-            placeholder="Search datasets, models, and pipelines..."
+            placeholder="Search data by topic, provider, geography, or capability"
             className="w-full min-w-0 bg-transparent h-12 text-base sm:text-lg text-gray-900 placeholder:text-gray-400 focus:outline-none"
           />
         </div>

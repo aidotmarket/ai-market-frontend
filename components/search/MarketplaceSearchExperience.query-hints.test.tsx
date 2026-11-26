@@ -120,6 +120,6 @@ it('clears the previous hint during loading, after a new query fails, and in bro
   expectNoHints();
 
   navigate(new URLSearchParams());
-  expect(await screen.findByText('No listings found')).toBeTruthy();
+  expect(await screen.findByText('No data found')).toBeTruthy();
   expectNoHints();
 });

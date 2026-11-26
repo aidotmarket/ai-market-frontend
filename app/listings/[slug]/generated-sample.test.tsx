@@ -27,7 +27,7 @@ const { default: Page, generateMetadata } = await import('./page');
 
 import { sampleFixture, originalSampleIdentities } from '@/tests/generatedSampleFixture';
 import { listingSummaryCases } from '@/tests/listingSummaryFixture';
-import { SAMPLE_COPY, SAMPLE_DATA_COPY, SAMPLE_MODEL_COPY, SAMPLE_STANDARD_COPY, SAMPLE_UNAVAILABLE_COPY, STANDARD_DOCUMENTS } from '@/lib/generatedSample';
+import { SAMPLE_COPY, SAMPLE_DATA_COPY, SAMPLE_STANDARD_COPY, SAMPLE_UNAVAILABLE_COPY, STANDARD_DOCUMENTS } from '@/lib/generatedSample';
 
 async function render(listing = sampleFixture()) {
   api.fetchPublicListing.mockResolvedValue(listing);
@@ -59,7 +59,6 @@ describe('actual public sample detail SSR and metadata', () => {
     expect(page.getByRole('heading', {level: 1}).textContent).toBe(`SAMPLE — ${listing.title}`);
     expect(page.getByRole('status').textContent).toBe(SAMPLE_COPY);
     expect(page.getByText(SAMPLE_DATA_COPY)).toBeTruthy();
-    expect(page.getByText(SAMPLE_MODEL_COPY)).toBeTruthy();
     expect(page.getByText(SAMPLE_STANDARD_COPY)).toBeTruthy();
     expect(page.getByText('Not for sale')).toBeTruthy();
     expect(document.body.textContent).not.toMatch(/2500|\$|\bFree\b/);

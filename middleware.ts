@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse, type NextFetchEvent } from 'next/server';
 import { LISTING_DATA_HEADER, listingHttpStatus, listingIsWithdrawn, listingUnavailableResponse } from './lib/listing-http-status';
 import { requestPublicListing } from './lib/public-listing-read';
+import { isModelFulfillment } from './lib/listingFulfillment';
 import { detectAiBot } from './lib/aiBot';
 import { isSupportPrivatePath, supportAccountCsp, SUPPORT_ACCOUNT_PATH } from './lib/support-private-policy';
 
@@ -46,6 +47,12 @@ export async function middleware(request: NextRequest, event: NextFetchEvent) {
   }
 
   const path = request.nextUrl.pathname;
+  if (/^\/(find-data|listings|search)\/?$/.test(path) && request.nextUrl.searchParams.has('type')) {
+    const destination = request.nextUrl.clone();
+    destination.searchParams.delete('type');
+    return NextResponse.redirect(destination, 308);
+  }
+
   const isPublicRoute = path === '/' ||
     /^\/(listings|requests)(\/|$)/.test(path) ||
     ['/llms.txt', '/llms-full.txt', '/sitemap.xml'].includes(path) ||
@@ -82,6 +89,9 @@ export async function middleware(request: NextRequest, event: NextFetchEvent) {
         if (response.status === 200) {
           const payload: unknown = await response.json();
           if (!payload || typeof payload !== 'object' || Array.isArray(payload)) return listingUnavailableResponse(503);
+          if ('fulfillment_type' in payload && isModelFulfillment(payload.fulfillment_type)) {
+            return NextResponse.redirect(new URL('/find-data', request.url), 308);
+          }
           listingData = encodeURIComponent(JSON.stringify(payload));
         } else {
           const status = listingHttpStatus(response.status);
@@ -140,6 +150,8 @@ export const config = {
     '/api/v1/support/email-visit/:path*',
     '/api/keystatic/:path*',
     '/',
+    '/find-data',
+    '/search',
     '/listings/:path*',
     '/requests/:path*',
     '/llms.txt',

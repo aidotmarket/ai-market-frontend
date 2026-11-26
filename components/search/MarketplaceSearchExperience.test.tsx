@@ -34,7 +34,7 @@ vi.mock('@/hooks/useMarketplaceCategoryFacets', () => ({
 }));
 
 vi.mock('@/components/search/SearchForm', () => ({
-  SearchForm: () => <div data-testid="search-form" />,
+  SearchForm: ({ placeholder }: { placeholder: string }) => <input type="search" placeholder={placeholder} />,
 }));
 
 vi.mock('@/components/search/MarketplaceListingCard', () => ({
@@ -94,32 +94,36 @@ describe('MarketplaceSearchExperience', () => {
     it.each([
       ['/find-data', FindDataPage, 2],
       ['/search', SearchPage, 1],
-    ] as const)('shows one page h1 and one Search Marketplace label on %s', (path, Page, level) => {
+    ] as const)('shows one page h1 and one Search Data label on %s', (path, Page, level) => {
       mocks.pathname = path;
       mocks.searchParams = new URLSearchParams();
       mockLoadedItems([]);
       render(<Page />);
 
       expect(screen.getAllByRole('heading', { level: 1 })).toHaveLength(1);
-      expect(screen.getAllByText('Search Marketplace')).toEqual([
-        screen.getByRole('heading', { name: 'Search Marketplace', level }),
+      expect(screen.getAllByText('Search Data')).toEqual([
+        screen.getByRole('heading', { name: 'Search Data', level }),
       ]);
     });
 
-    it.each([
-      ['', 'Browse every listing. Pick a category or sort to narrow it down.'],
-      ['type=data', 'Use filters and sorting to find data listings.'],
-      ['type=models', 'Use filters and sorting to find model listings.'],
-    ])('introduces Browse Marketplace in plain buyer language for "%s"', (params, description) => {
-      mocks.searchParams = new URLSearchParams(params);
-      mockLoadedItems([]);
-      render(<BrowseListingsPage />);
+    it.each([FindDataPage, SearchPage, BrowseListingsPage])(
+      'shows data search without the listing type toggle',
+      (Page) => {
+        mocks.searchParams = new URLSearchParams('type=models');
+        mockLoadedItems([]);
+        render(<Page />);
 
-      expect(screen.getByText(description)).toBeTruthy();
-    });
+        expect(screen.queryByRole('button', { name: /^(all|data|models)$/i })).toBeNull();
+        expect(screen.queryAllByRole('button', { pressed: false })).toHaveLength(0);
+        expect(screen.queryAllByRole('button', { pressed: true })).toHaveLength(0);
+        expect(screen.getByPlaceholderText('Search data by topic, provider, geography, or capability')).toBeTruthy();
+        expect(screen.getByRole('combobox', { name: 'Data type' })).toBeTruthy();
+        expect(screen.getByText('No data found')).toBeTruthy();
+      },
+    );
 
     it('offers counted formats from loaded browse metadata without inventing legacy formats', () => {
-      mocks.searchParams = new URLSearchParams('type=data');
+      mocks.searchParams = new URLSearchParams();
       mockLoadedItems(browseItems);
       render(<MarketplaceSearchExperience mode="browse" />);
 
@@ -137,7 +141,7 @@ describe('MarketplaceSearchExperience', () => {
       { format: 'json', ids: ['json'] },
       { format: 'parquet', ids: ['parquet'] },
     ])('selects $format through the URL and excludes other and unknown formats', ({ format, ids }) => {
-      mocks.searchParams = new URLSearchParams('type=data&category=finance');
+      mocks.searchParams = new URLSearchParams('category=finance');
       mockLoadedItems(browseItems);
       const view = render(<MarketplaceSearchExperience mode="browse" />);
 
@@ -145,7 +149,7 @@ describe('MarketplaceSearchExperience', () => {
       expect(mocks.replace).toHaveBeenCalledTimes(1);
       const url = new URL(mocks.replace.mock.calls[0][0], 'https://ai.market');
       expect(url.pathname).toBe('/listings');
-      expect(url.searchParams.get('type')).toBe('data');
+      expect(url.searchParams.has('type')).toBe(false);
       expect(url.searchParams.get('category')).toBe('finance');
       expect(url.searchParams.get('data_type')).toBe(format);
       mocks.searchParams = url.searchParams;
@@ -165,7 +169,7 @@ describe('MarketplaceSearchExperience', () => {
     });
 
     it('keeps null and absent legacy metadata visible with only the all-formats choice', () => {
-      mocks.searchParams = new URLSearchParams('type=data');
+      mocks.searchParams = new URLSearchParams();
       mockLoadedItems(browseItems.slice(4));
       render(<MarketplaceSearchExperience mode="browse" />);
 
@@ -177,7 +181,7 @@ describe('MarketplaceSearchExperience', () => {
 
     it('continues filtering semantic format metadata through the URL', () => {
       mocks.pathname = '/search';
-      mocks.searchParams = new URLSearchParams('q=traffic&type=data');
+      mocks.searchParams = new URLSearchParams('q=traffic');
       const semanticItems: SearchResultItem[] = ['csv', 'json', null].map((data_format, index) => ({
         id: `semantic-${index}`, slug: `semantic-${index}`, title: 'Related listing',
         description: null, short_description: null, category: 'finance', price: 10,
@@ -193,7 +197,7 @@ describe('MarketplaceSearchExperience', () => {
       const url = new URL(mocks.replace.mock.calls[0][0], 'https://ai.market');
       expect(url.pathname).toBe('/search');
       expect(url.searchParams.get('q')).toBe('traffic');
-      expect(url.searchParams.get('type')).toBe('data');
+      expect(url.searchParams.has('type')).toBe(false);
       expect(url.searchParams.get('data_type')).toBe('csv');
       mocks.searchParams = url.searchParams;
       view.rerender(<MarketplaceSearchExperience mode="search" />);
@@ -206,8 +210,8 @@ describe('MarketplaceSearchExperience', () => {
   });
 
   describe.each([
-    { mode: 'browse' as const, semanticMode: false, params: 'type=data&data_type=json' },
-    { mode: 'search' as const, semanticMode: true, params: 'q=traffic&type=data&data_type=json' },
+    { mode: 'browse' as const, semanticMode: false, params: 'data_type=json' },
+    { mode: 'search' as const, semanticMode: true, params: 'q=traffic&data_type=json' },
   ])('$mode result loading', ({ mode, semanticMode, params }) => {
     it.each([0, 1, 2])('replaces pending text with the completed count of %i', (count) => {
       mocks.pathname = mode === 'search' ? '/search' : '/listings';
@@ -259,7 +263,7 @@ describe('MarketplaceSearchExperience', () => {
     function setup(overrides = {}) {
       mocks.pathname = semanticMode ? '/search' : '/listings';
       mocks.searchParams = new URLSearchParams({
-        type: 'data', data_type: 'json', ...(semanticMode ? { q: 'traffic' } : {}),
+        data_type: 'json', ...(semanticMode ? { q: 'traffic' } : {}),
       });
       const state = {
         items: [csv], facets: null, total: 24, semanticMode,
@@ -317,7 +321,7 @@ describe('MarketplaceSearchExperience', () => {
       expect(screen.getByText(/Try adjusting the search text or filters/)).toBeTruthy();
       expect(screen.queryByRole('button', { name: 'Load more' })).toBeNull();
       expect(state.fetchNextPage).not.toHaveBeenCalled();
-      if (semanticMode) expect(screen.getByRole('link', { name: 'Browse all marketplace listings' }).getAttribute('href')).toBe('/listings');
+      if (semanticMode) expect(screen.getByRole('link', { name: 'Browse all data listings' }).getAttribute('href')).toBe('/listings');
     });
 
     it('disables continuation while the next page is pending', () => {
@@ -371,7 +375,7 @@ describe('MarketplaceSearchExperience', () => {
 
   it('clears the search query and filters from the marketplace URL', () => {
     mocks.searchParams = new URLSearchParams(
-      'q=financial+markets&type=data&category=finance&sort=price-asc',
+      'q=financial+markets&category=finance&sort=price-asc',
     );
     mocks.useSearchListings.mockReturnValue({
       items: [],
@@ -467,7 +471,7 @@ describe('MarketplaceSearchExperience', () => {
     expect(mocks.useSearchListings).toHaveBeenCalledWith(
       expect.objectContaining({ category: 'finance' }),
     );
-    expect(screen.getByText('No listings found')).toBeTruthy();
+    expect(screen.getByText('No data found')).toBeTruthy();
 
     const select = screen.getByRole('combobox', { name: 'Category' }) as HTMLSelectElement;
     expect(select.value).toBe('finance');
@@ -520,9 +524,9 @@ describe('MarketplaceSearchExperience', () => {
     render(<MarketplaceSearchExperience mode="search" />);
 
     expect(screen.getByText('Describe what you need in your own words, then narrow the results with filters.')).toBeTruthy();
-    expect(screen.getByText('No listings found')).toBeTruthy();
+    expect(screen.getByText('No data found')).toBeTruthy();
     const recoveryLink = screen.getByRole('link', {
-      name: 'Browse all marketplace listings',
+      name: 'Browse all data listings',
     });
     expect(recoveryLink.getAttribute('href')).toBe('/listings');
     expect(screen.queryByRole('link', { name: 'Post a data request' })).toBeNull();

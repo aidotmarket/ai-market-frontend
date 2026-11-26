@@ -13,6 +13,7 @@ const correction = { suggested_query: 'climate data', hint: 'first-page hint' };
 const emptyPage = { results: [], total: 0 };
 const fullPage = { results: Array.from({ length: 12 }, (_, id) => ({ id })), total: 13 };
 const noHints = { suggestedQuery: undefined, hint: undefined };
+const dataFulfillmentTypes = ['ai_queryable', 'file_download'];
 
 function setup() {
   const client = new QueryClient({ defaultOptions: { queries: { retry: false, placeholderData: keepPreviousData } } });
@@ -38,11 +39,15 @@ it.each([true, false])('uses only page one with first-page metadata present: %s'
 
   await waitFor(() => expect(search.result.current.hasNextPage).toBe(true));
   expect(search.result.current).toMatchObject(expected);
-  expect(api.searchListings).toHaveBeenCalledExactlyOnceWith('climte data', expect.objectContaining({ offset: 0 }));
+  expect(api.searchListings).toHaveBeenCalledExactlyOnceWith('climte data', expect.objectContaining({
+    offset: 0, fulfillment_type: dataFulfillmentTypes,
+  }));
 
   await act(async () => { await search.result.current.fetchNextPage(); });
   await waitFor(() => expect(search.result.current.hasNextPage).toBe(false));
-  expect(api.searchListings).toHaveBeenLastCalledWith('climte data', expect.objectContaining({ offset: 12 }));
+  expect(api.searchListings).toHaveBeenLastCalledWith('climte data', expect.objectContaining({
+    offset: 12, fulfillment_type: dataFulfillmentTypes,
+  }));
   expect(search.result.current).toMatchObject(expected);
 });
 
@@ -91,4 +96,28 @@ it('withholds search metadata when switching to browse without a query', async (
   await waitFor(() => expect(search.result.current.isFetching).toBe(false));
   expect(search.result.current).toMatchObject({ semanticMode: false, ...noHints });
   expect(api.listListings).toHaveBeenCalledTimes(1);
+});
+
+it('requests only data in search and browse and ignores legacy model results', async () => {
+  const data = { id: 'dataset', fulfillment_type: 'file_download' };
+  const items = [
+    { id: 'model', fulfillment_type: 'model_access' },
+    data,
+    { id: 'pipeline', fulfillment_type: 'pipeline_invocation' },
+  ];
+  api.searchListings.mockResolvedValueOnce({ ...emptyPage, results: items });
+  api.listListings.mockResolvedValueOnce(items);
+  const search = setup();
+
+  await waitFor(() => expect(search.result.current.items).toEqual([data]));
+  expect(api.searchListings).toHaveBeenCalledExactlyOnceWith('climte data', expect.objectContaining({
+    fulfillment_type: dataFulfillmentTypes,
+  }));
+
+  search.rerender({ q: '' });
+  await waitFor(() => expect(search.result.current.isPlaceholderData).toBe(false));
+  expect(search.result.current.items).toEqual([data]);
+  expect(api.listListings).toHaveBeenCalledExactlyOnceWith(expect.objectContaining({
+    fulfillment_type: dataFulfillmentTypes,
+  }));
 });

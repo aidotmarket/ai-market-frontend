@@ -14,7 +14,6 @@ import { MarketplaceListingCard } from '@/components/search/MarketplaceListingCa
 import { SearchForm } from '@/components/search/SearchForm';
 
 type SearchMode = 'browse' | 'search';
-type ListingTypeFilter = 'all' | 'data' | 'models';
 
 interface MarketplaceSearchExperienceProps {
   mode: SearchMode;
@@ -69,11 +68,6 @@ function parseNumber(value: string | null) {
   return Number.isFinite(parsed) ? parsed : undefined;
 }
 
-function parseListingType(value: string | null): ListingTypeFilter {
-  if (value === 'data' || value === 'models') return value;
-  return 'all';
-}
-
 const PRICE_DEBOUNCE_MS = 500;
 
 export function MarketplaceSearchExperience({
@@ -90,7 +84,6 @@ export function MarketplaceSearchExperience({
   const dataType = searchParams.get('data_type') || '';
   const minPrice = parseNumber(searchParams.get('min_price'));
   const maxPrice = parseNumber(searchParams.get('max_price'));
-  const [listingCategory, setListingCategory] = useState<ListingTypeFilter>(() => parseListingType(searchParams.get('type')));
 
   const [localMinPrice, setLocalMinPrice] = useState(searchParams.get('min_price') ?? '');
   const [localMaxPrice, setLocalMaxPrice] = useState(searchParams.get('max_price') ?? '');
@@ -101,7 +94,6 @@ export function MarketplaceSearchExperience({
     if (priceTimerRef.current) clearTimeout(priceTimerRef.current);
     priceTimerRef.current = null;
     pendingPricesRef.current = {};
-    setListingCategory(parseListingType(searchParams.get('type')));
     setLocalMinPrice(searchParams.get('min_price') ?? '');
     setLocalMaxPrice(searchParams.get('max_price') ?? '');
   }, [searchParams]);
@@ -120,7 +112,7 @@ export function MarketplaceSearchExperience({
     isFetchingNextPage,
     fetchNextPage,
     refetch,
-  } = useSearchListings({ q, category, listingCategory, minPrice, maxPrice });
+  } = useSearchListings({ q, category, minPrice, maxPrice });
   const {
     data: inventoryCategoryFacets,
     isError: areInventoryCategoryFacetsUnavailable,
@@ -129,7 +121,7 @@ export function MarketplaceSearchExperience({
   const sort = searchParams.get('sort') || (semanticMode ? 'relevance' : 'newest');
 
   const filteredItems = rawItems.filter((item) => {
-    if (!dataType || listingCategory !== 'data') return true;
+    if (!dataType) return true;
     return 'data_format' in item && item.data_format === dataType;
   });
 
@@ -147,22 +139,9 @@ export function MarketplaceSearchExperience({
 
   const dataTypeCounts = buildDataTypeCounts(rawItems);
   const priceStats = facets?.price || null;
-  const isFormatFiltered = listingCategory === 'data' && Boolean(dataType);
   const selectedDataTypeIsMissing = Boolean(dataType) && !dataTypeCounts.some(([value]) => value === dataType);
-  const usesSemanticTotal = semanticMode && !isFormatFiltered;
+  const usesSemanticTotal = semanticMode && !dataType;
   const resultCount = usesSemanticTotal ? total : items.length;
-  const typeLabel = listingCategory === 'data' ? 'Data' : listingCategory === 'models' ? 'Models' : 'Marketplace';
-  const searchPlaceholder = listingCategory === 'models'
-    ? 'Search models by provider, task, capability, or category'
-    : listingCategory === 'data'
-      ? 'Search data by topic, company, geography, or format'
-      : 'Search data and models by topic, provider, geography, or capability';
-  const browseDescription = listingCategory === 'models'
-    ? 'Use filters and sorting to find model listings.'
-    : listingCategory === 'data'
-      ? 'Use filters and sorting to find data listings.'
-      : 'Browse every listing. Pick a category or sort to narrow it down.';
-  const emptyLabel = listingCategory === 'data' ? 'data' : listingCategory === 'models' ? 'models' : 'listings';
   const showQueryHints = semanticMode && Boolean(q) && !isLoading && !isError;
   const hasSemanticSuggestions = showQueryHints && items.length > 0;
 
@@ -225,53 +204,22 @@ export function MarketplaceSearchExperience({
               <div className="max-w-2xl">
                 {mode === 'browse' && (
                   <p className="mb-2 text-sm font-semibold uppercase tracking-[0.18em] text-[#0F6E56]">
-                    Browse {typeLabel}
+                    Browse Data
                   </p>
                 )}
                 <Heading className="text-3xl font-bold tracking-tight text-slate-900 sm:text-4xl">
-                  {mode === 'search' ? `Search ${typeLabel}` : 'Browse Marketplace'}
+                  {mode === 'search' ? 'Search Data' : 'Browse Marketplace'}
                 </Heading>
                 <p className="mt-3 text-sm leading-6 text-slate-600 sm:text-base">
                   {mode === 'search'
                     ? 'Describe what you need in your own words, then narrow the results with filters.'
-                    : browseDescription}
+                    : 'Use filters and sorting to find data listings.'}
                 </p>
               </div>
               <div className="w-full max-w-3xl">
-                <div className="mb-4 inline-flex rounded-full bg-white p-1">
-                  {[
-                    { label: 'Data', value: 'data' as const },
-                    { label: 'Models', value: 'models' as const },
-                  ].map((option) => {
-                    const isActive = listingCategory === option.value;
-
-                    return (
-                      <button
-                        key={option.value}
-                        type="button"
-                        aria-pressed={isActive}
-                        onClick={() => {
-                          const nextCategory = isActive ? 'all' : option.value;
-                          setListingCategory(nextCategory);
-                          updateParams({
-                            type: nextCategory === 'all' ? undefined : nextCategory,
-                            data_type: nextCategory === 'data' ? dataType : undefined,
-                          });
-                        }}
-                        className={`rounded-full px-4 py-2 text-sm font-semibold transition-colors ${
-                          isActive
-                            ? 'bg-[#0F6E56] text-white'
-                            : 'bg-gray-100 text-gray-600'
-                        }`}
-                      >
-                        {option.label}
-                      </button>
-                    );
-                  })}
-                </div>
                 <SearchForm
                   targetPath={mode === 'search' ? '/search' : '/listings'}
-                  placeholder={searchPlaceholder}
+                  placeholder="Search data by topic, provider, geography, or capability"
                 />
               </div>
             </div>
@@ -324,34 +272,32 @@ export function MarketplaceSearchExperience({
               </select>
             </div>
 
-            {listingCategory === 'data' && (
-              <div className="space-y-2">
-                <label htmlFor="filter-data-type" className="text-xs font-semibold uppercase tracking-wide text-slate-500">
-                  Data type
-                </label>
-                <select
-                  id="filter-data-type"
-                  value={dataType}
-                  onChange={(event) => updateParams({ data_type: event.target.value })}
-                  className="w-full rounded-2xl border border-slate-200 px-3 py-2.5 text-sm text-slate-900 focus:border-[#3F51B5] focus:outline-none"
-                >
-                  <option value="">All formats</option>
-                  {selectedDataTypeIsMissing && (
-                    <option value={dataType}>
-                      {dataType.toUpperCase()} (0 loaded)
-                    </option>
-                  )}
-                  {dataTypeCounts.map(([value, count]) => (
-                    <option key={value} value={value}>
-                      {value.toUpperCase()} ({count})
-                    </option>
-                  ))}
-                </select>
-                {(dataTypeCounts.length > 0 || dataType) && (
-                  <p className="text-xs text-slate-400">Counts reflect loaded results only</p>
+            <div className="space-y-2">
+              <label htmlFor="filter-data-type" className="text-xs font-semibold uppercase tracking-wide text-slate-500">
+                Data type
+              </label>
+              <select
+                id="filter-data-type"
+                value={dataType}
+                onChange={(event) => updateParams({ data_type: event.target.value })}
+                className="w-full rounded-2xl border border-slate-200 px-3 py-2.5 text-sm text-slate-900 focus:border-[#3F51B5] focus:outline-none"
+              >
+                <option value="">All formats</option>
+                {selectedDataTypeIsMissing && (
+                  <option value={dataType}>
+                    {dataType.toUpperCase()} (0 loaded)
+                  </option>
                 )}
-              </div>
-            )}
+                {dataTypeCounts.map(([value, count]) => (
+                  <option key={value} value={value}>
+                    {value.toUpperCase()} ({count})
+                  </option>
+                ))}
+              </select>
+              {(dataTypeCounts.length > 0 || dataType) && (
+                <p className="text-xs text-slate-400">Counts reflect loaded results only</p>
+              )}
+            </div>
 
             <div className="space-y-3">
               <span className="text-xs font-semibold uppercase tracking-wide text-slate-500" id="price-range-label">
@@ -406,15 +352,15 @@ export function MarketplaceSearchExperience({
                   {hasSemanticSuggestions
                     ? `Marketplace suggestions for "${q}"`
                     : semanticMode && q
-                      ? `${typeLabel} results for "${q}"`
-                      : `${typeLabel} results`}
+                      ? `Data results for "${q}"`
+                      : 'Data results'}
                 </p>
                 <p className="mt-1 text-sm text-slate-500">
                   {isLoading ? 'Loading results...' : (
                     <>
                       {!usesSemanticTotal && hasNextPage ? 'Showing ' : ''}
                       {resultCount} {hasSemanticSuggestions ? 'suggestion' : 'result'}{resultCount === 1 ? '' : 's'}
-                      {listingCategory === 'data' && dataType ? ` filtered to ${dataType.toUpperCase()}` : ''}
+                      {dataType ? ` filtered to ${dataType.toUpperCase()}` : ''}
                     </>
                   )}
                 </p>
@@ -486,7 +432,7 @@ export function MarketplaceSearchExperience({
             {!isLoading && !isError && items.length === 0 && (
               <div className="mt-6 rounded-3xl border border-dashed border-slate-300 bg-white px-6 py-16 text-center shadow-sm">
                 <p className="text-lg font-semibold text-slate-900">
-                  {hasNextPage ? `No matching ${emptyLabel} loaded yet` : `No ${emptyLabel} found`}
+                  {hasNextPage ? 'No matching data loaded yet' : 'No data found'}
                 </p>
                 <p className="mt-2 text-sm text-slate-500">
                   {hasNextPage
@@ -498,7 +444,7 @@ export function MarketplaceSearchExperience({
                     href="/listings"
                     className="mt-5 inline-flex rounded-full bg-[#3F51B5] px-5 py-2.5 text-sm font-medium text-white transition-colors hover:bg-[#3545a0]"
                   >
-                    Browse all marketplace listings
+                    Browse all data listings
                   </Link>
                 )}
               </div>

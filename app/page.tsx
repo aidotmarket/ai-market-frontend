@@ -2,6 +2,7 @@ import { plainTextExcerpt } from '@/lib/plainTextExcerpt';
 import { formatMarketplaceCategoryName } from '@/lib/marketplaceCategories';
 import GeneratedSampleCard from '@/components/listings/GeneratedSampleCard';
 import { generatedSampleState } from '@/lib/generatedSample';
+import { isModelFulfillment } from '@/lib/listingFulfillment';
 import { formatPrice } from '@/lib/format';
 import Link from 'next/link';
 import SellDataCta from '@/components/SellDataCta';
@@ -131,7 +132,6 @@ const accentStyles = {
 
 const categoryBadge: Record<string, string> = {
   dataset: 'bg-[#E1F5EE] text-[#0F6E56]',
-  model: 'bg-[#E8EAF6] text-[#3F51B5]',
 };
 
 const defaultBadge = 'bg-[#F0F0F0] text-[#666666]';
@@ -286,7 +286,9 @@ export default async function LandingPage() {
       fetchFeaturedFeed(),
       fetchDataRequests({ per_page: 3 }).catch(() => null),
     ]);
-  const featuredListings = listingsData?.items ?? [];
+  const featuredListings = (listingsData?.items ?? []).filter(
+    (listing) => !isModelFulfillment(listing.fulfillment_type),
+  );
   const activityItems = featuredFeed?.items ?? [];
   const activityItemList = featuredFeed?.item_list ?? null;
   const buyerRequests: DataRequestListItem[] = Array.isArray(requestData)

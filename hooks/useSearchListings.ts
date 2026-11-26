@@ -3,33 +3,20 @@
 import {useEffect,useState,useSyncExternalStore} from 'react';
 import { useInfiniteQuery, useQueryClient, type QueryClient } from '@tanstack/react-query';
 import { listListings, searchListings } from '@/api/listings';
+import { isModelFulfillment } from '@/lib/listingFulfillment';
 import type { FulfillmentType, ListingListItem, SearchResultItem } from '@/types';
 
 const PAGE_SIZE = 12;
-type ListingCategory = 'data' | 'models' | 'all';
-type FulfillmentTypeParam = FulfillmentType | FulfillmentType[];
+const DATA_FULFILLMENT_TYPES: FulfillmentType[] = ['ai_queryable', 'file_download'];
 
 export type ResultItem = ListingListItem | SearchResultItem;
 
 export interface UseSearchListingsParams {
   q?: string;
   category?: string;
-  listingCategory?: ListingCategory;
   minPrice?: number;
   maxPrice?: number;
   enabled?: boolean;
-}
-
-function getFulfillmentTypesForCategory(listingCategory: ListingCategory): FulfillmentTypeParam | undefined {
-  if (listingCategory === 'data') {
-    return ['ai_queryable', 'file_download'];
-  }
-
-  if (listingCategory === 'models') {
-    return ['model_access', 'pipeline_invocation'];
-  }
-
-  return undefined;
 }
 
 // Restoration invalidation must outlive route observers, just like the cache.
@@ -109,7 +96,6 @@ function createRestorationClock(client: QueryClient) {
 export function useSearchListings({
   q = '',
   category,
-  listingCategory = 'all',
   minPrice,
   maxPrice,
   enabled = true,
@@ -125,10 +111,9 @@ export function useSearchListings({
     restorationClock.subscribe, restorationClock.getSnapshot, restorationClock.getSnapshot,
   );
   const semanticMode = q.length > 0;
-  const fulfillmentType = getFulfillmentTypesForCategory(listingCategory);
 
   const query = useInfiniteQuery({
-    queryKey: ['marketplace-results', semanticMode ? 'semantic' : 'browse', q, category, listingCategory, minPrice, maxPrice],
+    queryKey: ['marketplace-results', semanticMode ? 'semantic' : 'browse', q, category, minPrice, maxPrice],
     enabled: semanticMode ? q.length > 0 && enabled : enabled,
     initialPageParam: 0,
     staleTime: 0,
@@ -145,7 +130,7 @@ export function useSearchListings({
           category: category || undefined,
           min_price: minPrice,
           max_price: maxPrice,
-          fulfillment_type: fulfillmentType,
+          fulfillment_type: DATA_FULFILLMENT_TYPES,
           limit: PAGE_SIZE,
           offset,
         });
@@ -158,7 +143,7 @@ export function useSearchListings({
         category: category || undefined,
         min_price: minPrice,
         max_price: maxPrice,
-        fulfillment_type: fulfillmentType,
+        fulfillment_type: DATA_FULFILLMENT_TYPES,
       });
       return {result, observedAt:Date.now(), observedAtMonotonic:performance.now(), observationEpoch};
     },
@@ -227,5 +212,8 @@ export function useSearchListings({
 }
 
 export function filterDiscoverableItems(items: ResultItem[]) {
-  return items.filter((item) => !('status' in item) || item.status !== 'unlisted');
+  return items.filter((item) =>
+    (!('status' in item) || item.status !== 'unlisted') &&
+    !('fulfillment_type' in item && isModelFulfillment(item.fulfillment_type)),
+  );
 }

@@ -34,6 +34,29 @@ describe('AI crawler middleware', () => {
     vi.unstubAllEnvs();
   });
 
+  describe.each(['/find-data', '/listings', '/search'])('data search on %s', (path) => {
+    it.each(['models', 'all', 'data', 'unknown', ''])('permanently removes type=%s and keeps every other parameter', async (type) => {
+      const query = 'q=road+traffic&category=transportation&min_price=3&max_price=20&tag=a&tag=b';
+      const legacyPath = `${path}?${query}&type=${type}&type=models`;
+      expect(unstable_doesMiddlewareMatch({ config, nextConfig: {}, url: legacyPath })).toBe(true);
+
+      const response = await middleware(request(legacyPath, 'Mozilla/5.0'), event);
+      expect(response.status).toBe(308);
+      expect(response.headers.get('location')).toBe(`https://ai.market${path}?${query}`);
+      expectNext(await middleware(request(`${path}?${query}`, 'Mozilla/5.0'), event));
+    });
+  });
+
+  it.each(['model_access', 'pipeline_invocation'])('redirects a public %s listing before rendering', async (fulfillment_type) => {
+    fetchMock.mockResolvedValueOnce(new Response(null, { status: 204 }))
+      .mockResolvedValueOnce(Response.json({ title: 'Legacy listing', fulfillment_type }));
+
+    const response = await middleware(request('/listings/legacy'), event);
+    expect(response.status).toBe(308);
+    expect(response.headers.get('location')).toBe('https://ai.market/find-data');
+    expect(waitUntil).not.toHaveBeenCalled();
+  });
+
   it('sends exactly one POST for GPTBot and returns next before the beacon settles', async () => {
     fetchMock.mockResolvedValueOnce(new Response(null, {status: 204}))
       .mockResolvedValueOnce(Response.json({title: 'Public listing'})).mockReturnValue(new Promise(() => {}));

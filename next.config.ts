@@ -44,8 +44,8 @@ const nextConfig: NextConfig = {
       { source: '/download/aim-channel', destination: '/aim-data', permanent: true },
       { source: '/download/aim-channel/:path*', destination: '/aim-data', permanent: true },
       { source: '/download', destination: '/sell-data', permanent: true },
-      { source: '/download/aim-node', destination: '/partner#technology-partner', permanent: true },
-      { source: '/aim-node', destination: '/aim-data', permanent: true },
+      { source: '/download/aim-node/:path*', destination: '/find-data', permanent: true },
+      { source: '/aim-node/:path*', destination: '/find-data', permanent: true },
     ];
   },
   async rewrites() {
