@@ -4,10 +4,11 @@ import { act, cleanup, fireEvent, render, screen, waitFor, within } from '@testi
 import { Suspense, use, useState, useSyncExternalStore } from 'react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { SellerOrder, SellerOrderStatus } from '@/types';
+import { advanceAuthSessionOwner } from '@/lib/auth-session-owner';
 
 const capabilitiesApi = vi.hoisted(() => ({ getCapabilities: vi.fn() }));
 const sellerApi = vi.hoisted(() => ({ getSellerOrders: vi.fn() }));
-const ordersApi = vi.hoisted(() => ({ getMyOrders: vi.fn() }));
+const ordersApi = vi.hoisted(() => ({ getMyOrders: vi.fn(), getOrder: vi.fn() }));
 const transactionsApi = vi.hoisted(() => ({ getMyTransactions: vi.fn() }));
 const router = vi.hoisted(() => ({ push: vi.fn(), replace: vi.fn() }));
 
@@ -59,7 +60,7 @@ function sellerOrder(overrides: Partial<SellerOrder> = {}): SellerOrder {
 
 function tableSaleNumbers(container: HTMLElement): string[] {
   return Array.from(container.querySelectorAll('tbody tr')).map(
-    (row) => row.querySelector('td')?.textContent ?? ''
+    (row) => row.querySelector('td > span')?.textContent ?? ''
   );
 }
 
@@ -101,6 +102,7 @@ describe('SalesPage', () => {
     capabilitiesApi.getCapabilities.mockReset();
     sellerApi.getSellerOrders.mockReset();
     ordersApi.getMyOrders.mockReset();
+    ordersApi.getOrder.mockReset();
     transactionsApi.getMyTransactions.mockReset();
     capabilitiesApi.getCapabilities.mockResolvedValue(activeCapabilities);
     sellerApi.getSellerOrders.mockResolvedValue({ data: [] });
@@ -515,6 +517,27 @@ describe('SalesPage', () => {
     expect(container.querySelector('a')).toBeNull();
     expect(container.innerHTML).not.toContain('/dashboard/orders/');
     expect(screen.queryByText(/Mark Delivered|Deliver now|Upload/)).toBeNull();
+  });
+
+  it('retires expanded confirmation details when the session owner changes', async () => {
+    setSalesSearch('status=delivered');
+    const sale = sellerOrder({ status: 'delivered' });
+    sellerApi.getSellerOrders.mockResolvedValue({ data: [sale] });
+    ordersApi.getOrder.mockResolvedValue({
+      id: sale.id, status: 'delivered', auto_confirm_at: '2026-08-21T12:00:00Z',
+    });
+    const { container } = render(<SalesPage />);
+
+    expect(await screen.findAllByText('Order details')).toHaveLength(2);
+    const details = container.querySelector('tbody details') as HTMLDetailsElement;
+    details.open = true;
+    fireEvent(details, new Event('toggle'));
+    expect(await within(details).findByText('Expected auto-confirmation')).toBeTruthy();
+
+    act(() => { advanceAuthSessionOwner(false); });
+    expect(await screen.findAllByText('Order details')).toHaveLength(2);
+    expect(screen.queryByText('Expected auto-confirmation')).toBeNull();
+    expect(ordersApi.getOrder).toHaveBeenCalledExactlyOnceWith(sale.id, { signal: expect.any(AbortSignal) });
   });
 
   it('includes the active filter in both seller license record links', async () => {

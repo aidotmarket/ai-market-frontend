@@ -43,12 +43,16 @@ it('switches 1.2 card claims to the approved seller-bears text', async () => {
   ]) expect(screen.getByText(copy)).toBeTruthy();
   expect(screen.queryByText('List free. Keep 95% when data sells.')).toBeNull();
   expect(screen.queryByText(/Stripe, stablecoin, or escrow fees/)).toBeNull();
-  expect(screen.queryByText(/90.day/)).toBeNull();
+  expect(screen.queryByText(/90.day|48.hours|payout hold/i)).toBeNull();
+  expect(screen.getByRole('link', { name: /Read Section 5/ }).getAttribute('href')).toBe('/legal/terms#fees');
 });
 
-it('keeps served 1.1 pricing text exactly at the fda22fca base snapshot', async () => {
+it('adds the free-request guidance while keeping the served 1.1 fee copy', async () => {
   const container = document.createElement('div');
   container.innerHTML = renderToStaticMarkup(await PricingPage());
+  const request = container.querySelector('a[href="/requests"]')!.closest('p')!;
+  expect(request.textContent).toBe('Post a Data Request for free. Free account needed.');
+  request.remove();
   const text = container.textContent!.replace(/\s+/gu, ' ').trim();
   expect(createHash('sha256').update(text).digest('hex')).toBe('78c3b2b6aec3ae1c8f09d753bcaddd1c0af99b794c8c5053fcc2babeac642457');
 });

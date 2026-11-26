@@ -2,7 +2,7 @@ import type { Metadata } from 'next';
 import Link from 'next/link';
 import { getPublicTermsVersion } from '@/lib/publicTermsVersion';
 import VersionedTermsCopy, { TermsVersionProvider } from '@/components/legal/VersionedTermsCopy';
-import { CARD_PRICING_HEADLINE, CARD_SELLER_FEES, CARD_BUYER_HEADLINE, CARD_BUYER_DETAIL, CARD_PRICING_SUMMARY, CARD_CHECKOUT_NOTE } from '@/components/legal/terms12Copy';
+import { CARD_PRICING_HEADLINE, CARD_SELLER_FEES, CARD_BUYER_HEADLINE, CARD_BUYER_DETAIL, CARD_PRICING_SUMMARY, CARD_CHECKOUT_NOTE, CARD_PAYOUT_EXAMPLE } from '@/components/legal/terms12Copy';
 
 export const metadata: Metadata = {
   title: 'Pricing and fees — ai.market',
@@ -63,6 +63,17 @@ export default async function PricingPage() {
                   </li>
                 ))}
               </ul>
+              {card.audience === 'Sellers' && (
+                <VersionedTermsCopy legacy={null} terms12={(
+                  <p className="mt-5 border-t border-gray-200 pt-4 text-sm leading-6 text-gray-700">{CARD_PAYOUT_EXAMPLE}</p>
+                )} />
+              )}
+              {card.audience === 'Buyers' && (
+                <p className="mt-5 border-t border-gray-200 pt-4 text-sm leading-6 text-gray-700">
+                  <Link href="/requests" className="font-semibold text-[#3F51B5] underline">Post a Data Request</Link>
+                  {' '}for free. Free account needed.
+                </p>
+              )}
             </section>
           ))}
         </div>

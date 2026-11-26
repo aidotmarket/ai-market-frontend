@@ -878,6 +878,8 @@ export interface PurchasedPresentation {
 }
 
 export interface BuyerOrderDetail extends BuyerOrder {
+  auto_confirm_at?: string | null;
+  confirmed_at?: string | null;
   purchased_presentation?: PurchasedPresentation | null;
   listing_notice?: string | null;
   delivery_access_state?: string | null;

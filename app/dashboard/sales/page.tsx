@@ -1,6 +1,6 @@
 'use client';
 
-import { Suspense, useEffect, useRef, useState, useTransition } from 'react';
+import { Suspense, useEffect, useRef, useState, useSyncExternalStore, useTransition } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { getCapabilities } from '@/api/capabilities';
 import { getSellerOrders, SELLER_ORDERS_MAX_LIMIT, type SellerOrderListParams } from '@/api/seller';
@@ -9,6 +9,8 @@ import type { SellerOrder } from '@/types';
 import Link from 'next/link';
 import { sellerLicenseRecordPath } from '@/lib/licenseRecordRoutes';
 import { getSellerStatusPresentation, isSellerOrderStatus } from '@/lib/sellerOrderStatus';
+import { authSessionOwner, subscribeAuthSessionOwner } from '@/lib/auth-session-owner';
+import SalesOrderDetails from './SalesOrderDetails';
 import { parseSalesFilter, parseSalesOffset, salesSearchParams, SALES_FILTERS, type SalesFilter } from './filters';
 
 type SalesRequest = { filter: SalesFilter; offset: number; retry: number };
@@ -304,7 +306,8 @@ function SalesPageContent() {
                 {rows.map((order) => (
                   <tr key={order.id} className="hover:bg-gray-50">
                     <td className="px-4 py-3 font-mono text-xs text-gray-700">
-                      {order.order_number}
+                      <span>{order.order_number}</span>
+                      <div className="mt-2"><SalesOrderDetails order={order} /></div>
                       {order.license_record_available && <Link href={recordHref(order)} className="mt-2 block font-sans text-sm font-medium text-[#3F51B5] underline">License record</Link>}
                     </td>
                     <td className="px-4 py-3 text-gray-900">{order.listing_title}</td>
@@ -329,6 +332,7 @@ function SalesPageContent() {
                   <div><dt className="font-medium text-gray-500">Status</dt><dd>{renderStatus(order)}</dd></div>
                   <div><dt className="font-medium text-gray-500">Paid</dt><dd className="text-gray-900">{renderPaid(order)}</dd></div>
                 </dl>
+                <div className="mt-4"><SalesOrderDetails order={order} /></div>
                 {order.license_record_available && <Link href={recordHref(order)} className="mt-4 inline-block text-sm font-medium text-[#3F51B5] underline">License record</Link>}
               </article>
             ))}
@@ -361,6 +365,7 @@ function SalesPageContent() {
 }
 
 export default function SalesPage() {
+  const owner = useSyncExternalStore(subscribeAuthSessionOwner, authSessionOwner, authSessionOwner);
   return (
     <Suspense
       fallback={(
@@ -370,7 +375,7 @@ export default function SalesPage() {
         </div>
       )}
     >
-      <SalesPageContent />
+      <SalesPageContent key={owner} />
     </Suspense>
   );
 }
