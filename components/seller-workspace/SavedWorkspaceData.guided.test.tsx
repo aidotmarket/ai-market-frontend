@@ -8,7 +8,7 @@ const mocks=vi.hoisted(()=>({read:vi.fn(),save:vi.fn(),list:vi.fn(),sourceSaved:
 vi.mock('@/api/sellerListingSource',()=>({readListingSource:async(id?:string)=>({source:await mocks.read(id),current_draft_id:id??null}),saveListingSource:async(...args:unknown[])=>({source:await mocks.save(...args),current_draft_id:args[3]??"created"})}));
 vi.mock('@/api/sellerListingDraft',()=>({readListingDraft:vi.fn().mockResolvedValue(null),saveListingDraft:vi.fn()}));
 vi.mock('@/api/sellerWorkspace',async original=>({...await original<typeof import('@/api/sellerWorkspace')>(),listWorkspaceObjects:mocks.list}));
-vi.mock('./GuidedListingFlow',()=>({useListingFlow:()=>({source:mocks.source,sourceCurrentDraftId:null,sourceLoaded:true,sourceError:'',samplesBlocked:false,licensesEnabled:true,sourceSaved:mocks.sourceSaved,setFilesDirty:mocks.dirty,navigate:mocks.navigate})}));
+vi.mock('./GuidedListingFlow',()=>({useListingFlow:()=>({source:mocks.source,sourceCurrentDraftId:null,sourceLoaded:true,sourceError:'',samplesBlocked:false,licensesEnabled:true,beginSourceSave:()=>()=>true,sourceSaved:mocks.sourceSaved,setFilesDirty:mocks.dirty,navigate:mocks.navigate})}));
 afterEach(()=>{cleanup();vi.clearAllMocks();});
 it('hydrates the lifted saved selection immediately and uses its version on the next changed save',async()=>{
  resetSellerListingDraftOwnerForTests();mocks.source={version:4,connection_current:true,content:{connection_id:guidedConnection.id,connection_version:1,version_mode:'current',objects:guidedObjects}};

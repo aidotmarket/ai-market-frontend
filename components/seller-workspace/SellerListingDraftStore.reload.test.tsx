@@ -174,6 +174,38 @@ it("hides retained owner updates while disabled and reloads the current draft on
   expect(api.read).toHaveBeenCalledTimes(3);
   expect(api.save).not.toHaveBeenCalled();
 });
+it("retires an awaited draft mutation across on/off/on and exposes only the fresh read",async()=>{
+  const draftA={...initial,draft_id:"A"};
+  const draftB={...saved,draft_id:"B"};
+  const oldWrite=deferred<SavedListingDraft>();
+  const fresh=deferred<SavedListingDraft>();
+  api.read.mockResolvedValueOnce(draftA).mockReturnValueOnce(fresh.promise);
+  api.save.mockReturnValueOnce(oldWrite.promise);
+  let store!:ReturnType<typeof useSellerListingDraft>;
+  function Capture(){store=useSellerListingDraft();return null;}
+  const provider=(enabled:boolean)=><SellerListingDraftProvider enabled={enabled} sampleCapability><Capture/></SellerListingDraftProvider>;
+  const {rerender}=render(provider(true));
+  await waitFor(()=>expect(store.draft).toEqual(draftA));
+  let mutation!:Promise<unknown>;
+  act(()=>{mutation=store.saveSamples([0]).catch(error=>error);});
+  await waitFor(()=>expect(api.save).toHaveBeenCalledOnce());
+  expect(store.selectionSavePending).toBe(true);
+  rerender(provider(false));
+  rerender(provider(true));
+  await act(async()=>{
+    oldWrite.resolve({...saved,draft_id:"A"});
+    expect(await mutation).toBeInstanceOf(Error);
+  });
+  await waitFor(()=>expect(api.read).toHaveBeenCalledTimes(2));
+  expect(store.selectionSavePending).toBe(false);
+  expect(store.selectionSaveFailed).toBe(false);
+  expect(store.draft).toBeNull();
+  expect(store.loaded).toBe(false);
+  await act(async()=>fresh.resolve(draftB));
+  expect(store.draft).toEqual(draftB);
+  expect(store.loaded).toBe(true);
+  expect(api.save).toHaveBeenCalledOnce();
+});
 it("does not treat a failed save as a committed local revision",async()=>{
   await mount();const read=await startRead();api.save.mockRejectedValueOnce(new Error("offline"));
   fireEvent.change(screen.getByLabelText("Your price (USD)"),{target:{value:"30"}});

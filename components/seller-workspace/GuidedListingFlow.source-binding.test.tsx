@@ -3,7 +3,8 @@ import {act,cleanup,fireEvent,render,screen,waitFor} from "@testing-library/reac
 import {afterEach,beforeEach,expect,it,vi} from "vitest";
 import {GuidedListingFlow,useListingFlow} from "./GuidedListingFlow";
 import SavedWorkspaceData from "./SavedWorkspaceData";
-import {SellerListingDraftProvider,resetSellerListingDraftOwnerForTests} from "./SellerListingDraftStore";
+import {SellerListingDraftProvider,resetSellerListingDraftOwnerForTests,useSellerListingDraft} from "./SellerListingDraftStore";
+import {RecoverableWorkspacePanel} from "./WorkspacePanel";
 import {categoryRows,emptyGuidedDraft,guidedCapabilities,guidedConnection,guidedObjects} from "@/tests/guidedListingFixture";
 const api=vi.hoisted(()=>({draft:vi.fn(),source:vi.fn(),save:vi.fn(),objects:vi.fn(),currentDraftId:null as string|null}));
 vi.mock("@/api/sellerListingDraft",()=>({readListingDraft:api.draft}));
@@ -63,4 +64,128 @@ it("keeps superseded source guidance above the keyed editor after B files load a
  await waitFor(()=>expect(api.save).toHaveBeenCalledTimes(2));
  expect(api.save.mock.calls[1][3]).toBe("B");
  await waitFor(()=>expect(screen.queryByRole("alert")).toBeNull());
+});
+
+function deferred<T>(){
+ let resolve!:(value:T)=>void;
+ let reject!:(reason:unknown)=>void;
+ const promise=new Promise<T>((done,fail)=>{resolve=done;reject=fail;});
+ return {promise,resolve,reject};
+}
+
+it.each(["success","superseded","pointer refusal"])("ignores a late A PUT %s after the public source accepts B and the panel retries",async outcome=>{
+ const late=deferred<ReturnType<typeof source>>();
+ const navigate=vi.fn();
+ api.save.mockReturnValueOnce(late.promise);
+ function Data({fail}:{fail:boolean}){
+  if(fail)throw new Error("Mock panel failure");
+  return <SavedWorkspaceData enabled connections={[guidedConnection]}/>;
+ }
+ function SourceControls(){
+  const flow=useListingFlow()!;
+  const store=useSellerListingDraft();
+  return <><output data-testid="source-pointer">{flow.sourceCurrentDraftId}</output>
+   <output data-testid="selection-status">{store.selectionSavePending?"pending":store.selectionSaveFailed?"failed":"idle"}</output>
+   <button onClick={()=>void flow.reloadSource()}>Reload saved source</button></>;
+ }
+ const workspace=(enabled:boolean,fail=false)=><SellerListingDraftProvider enabled={enabled} sampleCapability>
+  <GuidedListingFlow capabilities={caps} connections={[guidedConnection]} view="data" navigate={navigate}>
+   <SourceControls/><RecoverableWorkspacePanel active><Data fail={fail}/></RecoverableWorkspacePanel>
+  </GuidedListingFlow>
+ </SellerListingDraftProvider>;
+ const {rerender}=render(workspace(true));
+ await screen.findByRole("checkbox",{name:"Select weekly/sales.csv"});
+ fireEvent.click(screen.getByRole("checkbox",{name:"Select weekly/b.csv"}));
+ fireEvent.click(screen.getByRole("button",{name:"Next: Describe and price →"}));
+ expect(api.save).toHaveBeenCalledOnce();
+ expect(api.save.mock.calls[0][3]).toBe("A");
+
+ api.currentDraftId="B";
+ rerender(workspace(false));
+ expect((await screen.findByRole("checkbox",{name:"Select weekly/b.csv"}) as HTMLInputElement).checked).toBe(true);
+ expect(screen.getByTestId("source-pointer").textContent).toBe("B");
+ const draftReads=api.draft.mock.calls.length;
+ const sourceReads=api.source.mock.calls.length;
+ await act(async()=>{
+  if(outcome==="success")late.resolve({...source(),version:5});
+  else late.reject({isAxiosError:true,response:{status:409,data:{detail:{code:outcome==="superseded"?"DRAFT_SUPERSEDED":"CURRENT_DRAFT_CHANGED"}}}});
+ });
+ expect(api.draft).toHaveBeenCalledTimes(draftReads);
+ expect(api.source).toHaveBeenCalledTimes(sourceReads);
+ vi.spyOn(console,"error").mockImplementation(()=>{});
+ rerender(workspace(false,true));
+ rerender(workspace(false));
+ fireEvent.click(screen.getByRole("button",{name:"Retry this step"}));
+ expect((await screen.findByRole("checkbox",{name:"Select weekly/b.csv"}) as HTMLInputElement).checked).toBe(true);
+ expect((screen.getByRole("checkbox",{name:"Select weekly/sales.csv"}) as HTMLInputElement).checked).toBe(false);
+ expect(screen.getByTestId("source-pointer").textContent).toBe("B");
+ expect(screen.queryByRole("alert")).toBeNull();
+ expect(screen.getByTestId("selection-status").textContent).toBe("idle");
+ expect(navigate).not.toHaveBeenCalled();
+ expect(api.save).toHaveBeenCalledOnce();
+ api.source.mockResolvedValueOnce({...source([guidedObjects[0]]),version:6});
+ fireEvent.click(screen.getByRole("button",{name:"Reload saved source"}));
+ expect((await screen.findByRole("checkbox",{name:"Select weekly/sales.csv"}) as HTMLInputElement).checked).toBe(true);
+ expect(screen.getByTestId("source-pointer").textContent).toBe("B");
+ expect(api.draft).toHaveBeenCalledTimes(draftReads);
+ expect(api.save).toHaveBeenCalledOnce();
+});
+
+it("publishes selection completion after re-enable while withholding A until the fresh B read completes",async()=>{
+ let store!:ReturnType<typeof useSellerListingDraft>;
+ function Capture(){store=useSellerListingDraft();return null;}
+ const workspace=(enabled:boolean)=><SellerListingDraftProvider enabled={enabled} sampleCapability={false}>
+  <GuidedListingFlow capabilities={caps} connections={[guidedConnection]} view="data" navigate={vi.fn()}><Capture/></GuidedListingFlow>
+ </SellerListingDraftProvider>;
+ const {rerender}=render(workspace(true));
+ await waitFor(()=>expect(api.source).toHaveBeenCalledWith("A"));
+ const old=store;
+ act(()=>old.beginSelectionSave());
+ rerender(workspace(false));
+ api.source.mockClear();
+ const fresh=deferred<typeof b>();
+ api.draft.mockReturnValueOnce(fresh.promise);
+ rerender(workspace(true));
+ await waitFor(()=>expect(api.draft).toHaveBeenCalledTimes(2));
+ expect(store.selectionSavePending).toBe(true);
+ expect(store.draft).toBeNull();
+ await act(async()=>old.finishSelectionSave(true));
+ expect(store.selectionSavePending).toBe(false);
+ expect(store.loaded).toBe(false);
+ expect(store.draft).toBeNull();
+ expect(api.source).not.toHaveBeenCalledWith("A");
+ await act(async()=>fresh.resolve(b));
+ expect(store.draft).toEqual(b);
+ expect(store.loaded).toBe(true);
+ expect(api.source).toHaveBeenCalledWith("B");
+});
+
+it("keeps the newer save when an older PUT completes after a panel remount",async()=>{
+ const older=deferred<ReturnType<typeof source>>();
+ const newer=deferred<ReturnType<typeof source>>();
+ api.save.mockReturnValueOnce(older.promise).mockReturnValueOnce(newer.promise);
+ const navigate=vi.fn();
+ const workspace=(attempt:number)=><SellerListingDraftProvider enabled sampleCapability={false}>
+  <GuidedListingFlow capabilities={caps} connections={[guidedConnection]} view="data" navigate={navigate}>
+   <SourceStatus/><SavedWorkspaceData key={attempt} enabled connections={[guidedConnection]}/>
+  </GuidedListingFlow>
+ </SellerListingDraftProvider>;
+ const {rerender}=render(workspace(0));
+ const selectAndSave=async()=>{
+  fireEvent.click(await screen.findByRole("checkbox",{name:"Select weekly/b.csv"}));
+  fireEvent.click(screen.getByRole("button",{name:"Next: Describe and price →"}));
+ };
+ await selectAndSave();
+ rerender(workspace(1));
+ await selectAndSave();
+ expect(api.save).toHaveBeenCalledTimes(2);
+ const saved={...source([extra]),version:6};
+ await act(async()=>newer.resolve(saved));
+ expect(screen.getByTestId("source-state").textContent).toBe(JSON.stringify(saved));
+ const draftReads=api.draft.mock.calls.length;
+ await act(async()=>older.resolve({...source(),version:5}));
+ expect(screen.getByTestId("source-state").textContent).toBe(JSON.stringify(saved));
+ expect(api.draft).toHaveBeenCalledTimes(draftReads);
+ expect(api.save).toHaveBeenCalledTimes(2);
+ expect(navigate).toHaveBeenCalledOnce();
 });

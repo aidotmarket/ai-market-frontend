@@ -1,5 +1,5 @@
 'use client';
-import {Fragment, createContext, useContext, useEffect, useState, useRef, type ReactNode} from 'react';
+import {Fragment, createContext, useContext, useEffect, useLayoutEffect, useMemo, useState, useRef, type ReactNode} from 'react';
 import axios from 'axios';
 import {listingDraftError} from '@/lib/listing-action-error';
 import type {ListingDraftContent} from '@/api/sellerListingDraft';
@@ -25,6 +25,7 @@ type StartListingRecovery = 'published-refusal';
 
 type Flow = {samplesBlocked:boolean; stepsForContent:(content:ListingDraftContent)=>ListingStep[]; sourceCurrentDraftId:string|null; sourceLoaded:boolean; sourceDraftChanged:boolean; reloadSource:()=>Promise<void>; sourceError:string; fileRevision:number; setFilesDirty:(dirty:boolean)=>void; setListingDirty:(dirty:boolean)=>void; setLicenceDirty:(dirty:boolean)=>void; source: SourceRead|null; categories: SellerCategory[]; steps: ListingStep[]; review: ListingReview|null;
   reviewError: string; reviewLoading: boolean; publication: PublicationState|null; publicationError: string;
+  beginSourceSave: ()=>()=>boolean;
   refreshReview: ()=>void; refreshPublication: ()=>void; sourceSaved: (response:SourceSaveResponse)=>void; sourceSaveRefused:(message:string)=>void;
   sourcePointerRefused:(draftId:string|null)=>void;
   approved: (approval:ApprovalReceipt)=>void; published: (state:PublicationState)=>void;
@@ -37,7 +38,7 @@ const Context = createContext<Flow|null>(null);
 export function useListingFlow(){return useContext(Context);}
 
 export function GuidedListingFlow({connections, capabilities, view, navigate, children}: {connections:SellerWorkspaceConnection[]; capabilities:SellerWorkspaceCapabilities|null; view:WorkspaceView; navigate:(view:WorkspaceView)=>void; children:ReactNode}) {
-  const {draft, available, loaded, requestLoad, reload, selectionSavePending, selectionSaveFailed, startNewDraft} = useSellerListingDraft();
+  const {draft, available, loaded, requestLoad, reload, selectionSavePending, selectionSaveFailed, startNewDraft, isCurrentDraftScope} = useSellerListingDraft();
   const [startingListing,setStartingListing]=useState(false);
   const [startError,setStartError]=useState<{message:string;draftId:string|null;recovery?:StartListingRecovery}|null>(null);
   const [sourceSaveNotice,setSourceSaveNotice]=useState('');
@@ -62,7 +63,7 @@ export function GuidedListingFlow({connections, capabilities, view, navigate, ch
     try {
       await startNewDraft(startAttempt.current);
       startAttempt.current=null;
-      setSource(null);setSourceLoaded(false);setFilesDirty(false);setListingDirty(false);setLicenceDirty(false);
+      setSource(null);setLoadedSourceScope(null);setFilesDirty(false);setListingDirty(false);setLicenceDirty(false);
       setFileRevision(n=>n+1);setReview(null);setReviewError('');setReviewLoading(false);
       setPublication(null);setPublicationError('');reconciled.current='';
       setPolishPublication(null);
@@ -94,9 +95,8 @@ export function GuidedListingFlow({connections, capabilities, view, navigate, ch
   }, [polishEnabled, listingDirty]);
   const [licenceDirty,setLicenceDirty]=useState(false);
   const [fileRevision,setFileRevision]=useState(0);
-  const [sourceLoaded,setSourceLoaded]=useState(false);
+  const [loadedSourceScope,setLoadedSourceScope]=useState<{revision:number}|null>(null);
   const [sourceCurrentDraftId,setSourceCurrentDraftId]=useState<string|null>(null);
-  const [sourceDraftId,setSourceDraftId]=useState<string|null>(null);
   const [source,setSource] = useState<SourceRead|null>(null);
   const [categories,setCategories] = useState<SellerCategory[]>([]);
   const [readError,setReadError] = useState('');
@@ -116,6 +116,20 @@ export function GuidedListingFlow({connections, capabilities, view, navigate, ch
   const licensesEnabled = capabilities?.listing_licenses === true;
   const sourcesEnabled = capabilities?.master.enabled && capabilities.sources?.enabled && capabilities.sources.status === 'available';
   const reviewEnabled = capabilities?.master.enabled && capabilities.review?.enabled && capabilities.review.status === 'available';
+  const draftId=draft?.draft_id;
+  // The flow outlives panel retries. A new scope or a newer operation retires old callbacks.
+  const sourceScope=useMemo(()=>({revision:0}),[sourcesEnabled,available,draftId,readRetry,isCurrentDraftScope]);
+  const committedSourceScope=useRef<typeof sourceScope|null>(null);
+  useLayoutEffect(()=>{
+    committedSourceScope.current=sourceScope;
+    return()=>{committedSourceScope.current=null;};
+  },[sourceScope]);
+  const sourceScopeCurrent=()=>committedSourceScope.current===sourceScope&&isCurrentDraftScope();
+  const beginSourceOperation=()=>{
+    const revision=++sourceScope.revision;
+    return()=>sourceScopeCurrent()&&sourceScope.revision===revision;
+  };
+  const sourceLoaded=loadedSourceScope===sourceScope;
   useEffect(()=>{requestLoad();},[requestLoad]);
   useEffect(()=>{
     const controller=new AbortController();
@@ -125,42 +139,44 @@ export function GuidedListingFlow({connections, capabilities, view, navigate, ch
     return()=>{controller.abort();window.removeEventListener('capabilities:changed',changed);};
   },[]);
   useEffect(()=>{
+    setReadError('');
     if(!sourcesEnabled)return;
-    let alive=true;setReadError('');setSourceLoaded(false);
-    Promise.all([readListingSource(draft?.draft_id),readSellerCategories()]).then(([s,c])=>{if(alive){
-      setSource(s.source);setSourceCurrentDraftId(s.current_draft_id);setCategories(c);setSourceDraftId(draft?.draft_id??null);setSourceLoaded(true);
+    const isCurrent=beginSourceOperation();
+    Promise.all([readListingSource(draftId),readSellerCategories()]).then(([s,c])=>{if(isCurrent()){
+      setSource(s.source);setSourceCurrentDraftId(s.current_draft_id);setCategories(c);setLoadedSourceScope(sourceScope);
       setSourceRefusal(refusal=>refusal && readRetry>refusal.readRetry ? null : refusal);
-    }}).catch(()=>{if(alive)setReadError('Your saved files and category list could not be loaded. Retry before continuing.');});
-    return()=>{alive=false;};
-  },[sourcesEnabled,readRetry,draft?.draft_id]);
+    }}).catch(()=>{if(isCurrent())setReadError('Your saved files and category list could not be loaded. Retry before continuing.');});
+  },[sourceScope]);
   const reconciled=useRef('');
   const pending=selectionSavePending||selectionSaveFailed||filesDirty;
   useEffect(()=>{
     setReview(null);setReviewError('');setReviewStatus('');setReviewNeedsFiles(false);setReviewLoading(false);setPublication(null);
-    if(!reviewEnabled||!source||!draft||pending)return;
+    if(!reviewEnabled||!sourceLoaded||!source||!draft||pending)return;
     const controller=new AbortController();setReviewLoading(true);
+    const revision=sourceScope.revision;
+    const isCurrent=()=>!controller.signal.aborted&&sourceScopeCurrent()&&sourceScope.revision===revision;
     readListingReview(controller.signal,draft.draft_id).then(async r=>{
-      if(controller.signal.aborted)return;
+      if(!isCurrent())return;
       if(r.source_version!==source.version||r.draft_version!==draft.version){
         const key=`${reviewRetry}:${r.source_version}:${r.draft_version}`;
         if(reconciled.current===key){setReviewNeedsFiles(r.source_version!==source.version);setReviewError(r.source_version!==source.version?'Your storage changed since you last saved. Choose your files again, then review.':'Your saved draft changed. Save your listing in Describe and price, then try again.');return;}
         reconciled.current=key;
         setReviewStatus('The saved review changed elsewhere. Reloading your saved files and draft…');
         const savedSource=await readListingSource(draft?.draft_id);
-        if(controller.signal.aborted)return;
-        await reload(controller.signal,()=>{setSource(savedSource.source);setSourceCurrentDraftId(savedSource.current_draft_id);});
+        if(!isCurrent())return;
+        await reload(controller.signal,()=>{if(isCurrent()){sourceScope.revision+=1;setSource(savedSource.source);setSourceCurrentDraftId(savedSource.current_draft_id);}});
         return;
       }
       setReview(r);
     }).catch(error=>{
-      if(controller.signal.aborted)return;
+      if(!isCurrent())return;
       const detail=axios.isAxiosError(error)?error.response?.data?.detail:undefined;
       const code=typeof detail==='string'?detail:detail?.code;
       setReviewNeedsFiles(code==='source_connection_changed'||code==='source_required');
       setReviewError(code==='source_connection_changed'?'Your storage changed since you last saved. Choose your files again, then review.':['draft_required','source_required'].includes(code)?listingReviewErrorReason(error):"We couldn't load your saved review. Try again.");
     }).finally(()=>{if(!controller.signal.aborted){setReviewLoading(false);setReviewStatus('');}});
     return()=>controller.abort();
-  },[reviewEnabled,source,draft,pending,reviewRetry]);
+  },[reviewEnabled,sourceLoaded,source,draft,pending,reviewRetry]);
   const approval=review?.approval;
   useEffect(()=>{
     setPublication(null);setPublicationError('');
@@ -171,17 +187,17 @@ export function GuidedListingFlow({connections, capabilities, view, navigate, ch
   },[approval,publicationRetry]);
   const steps=listingSteps({connections,source,draft,categories,licensesEnabled,review,publication:publication?.publication??null,pending,licenceDirty,reviewReason:listingDirty?'Save your changes in Describe and price before continuing.':reviewError});
   const next=steps.find(s=>s.next);
-  const sourceMatchesDraft=sourceDraftId===(draft?.draft_id??null);
   const pointerMatchesDraft=!available||sourceCurrentDraftId===(draft?.draft_id??null);
   // Keep a known refusal across a data panel remount until a fresh source read.
   const sourceDraftChanged=sourceRefusal?.draftId===(draft?.draft_id??null)||
-    sourceLoaded&&available&&loaded&&sourceMatchesDraft&&!pointerMatchesDraft;
+    sourceLoaded&&available&&loaded&&!pointerMatchesDraft;
   const reloadSource=async()=>{
-    setSourceLoaded(false);
+    const isCurrent=beginSourceOperation();
+    setLoadedSourceScope(null);
     // Saved sources can be available independently of saved drafts.
-    try{if(available)await reload();}finally{setReadRetry(n=>n+1);}
+    try{if(available)await reload();}finally{if(isCurrent())setReadRetry(n=>n+1);}
   };
-  const flow:Flow={startAnotherListing:recovery=>void startAnotherListing(recovery),startingListing,samplesBlocked:selectionSavePending||selectionSaveFailed,stepsForContent:content=>listingSteps({connections,source,draft:{version:draft?.version??0,updated_at:draft?.updated_at??'',content:{...draft?.content,...content}},categories,licensesEnabled,review:null,publication:null,pending,licenceDirty}),sourceCurrentDraftId,sourceLoaded:sourceLoaded&&sourceMatchesDraft&&pointerMatchesDraft,sourceDraftChanged,reloadSource,sourceError:readError,fileRevision,setFilesDirty:dirty=>{setFilesDirty(dirty);if(dirty)setFileRevision(n=>n+1);},setListingDirty,setLicenceDirty,source,categories,steps,review,reviewError,reviewLoading,publication,publicationError,licensesEnabled,navigate,
+  const flow:Flow={startAnotherListing:recovery=>void startAnotherListing(recovery),startingListing,samplesBlocked:selectionSavePending||selectionSaveFailed,stepsForContent:content=>listingSteps({connections,source,draft:{version:draft?.version??0,updated_at:draft?.updated_at??'',content:{...draft?.content,...content}},categories,licensesEnabled,review:null,publication:null,pending,licenceDirty}),sourceCurrentDraftId,sourceLoaded:sourceLoaded&&pointerMatchesDraft,sourceDraftChanged,reloadSource,sourceError:readError,fileRevision,setFilesDirty:dirty=>{setFilesDirty(dirty);if(dirty)setFileRevision(n=>n+1);},setListingDirty,setLicenceDirty,source,categories,steps,review,reviewError,reviewLoading,publication,publicationError,licensesEnabled,navigate,beginSourceSave:beginSourceOperation,
     refreshReview:()=>setReviewRetry(n=>n+1),refreshPublication:()=>setPublicationRetry(n=>n+1),sourceSaveRefused:setSourceSaveNotice,sourceSaved:value=>{setSourceSaveNotice('');setSource(value.source);setSourceCurrentDraftId(value.current_draft_id);setFilesDirty(false);},
     sourcePointerRefused:draftId=>setSourceRefusal({draftId,readRetry}),
     approved:a=>setReview(r=>r?{...r,approval:a}:r),published:setPublication,

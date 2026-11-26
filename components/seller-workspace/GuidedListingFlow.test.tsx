@@ -9,12 +9,12 @@ import {instrument,hash} from '@/tests/fixtures/seller-authority';
 import {WorkspaceOverview} from './WorkspaceOverview';
 import {categoryRows,guidedCapabilities,guidedConnection,emptyGuidedDraft} from '@/tests/guidedListingFixture';
 import {createStandardSelection} from '@/api/listingLicenses';
-const mocks=vi.hoisted(()=>({source:vi.fn(),categories:vi.fn(),review:vi.fn(),publication:vi.fn(),publish:vi.fn(),account:vi.fn(),load:vi.fn(),start:vi.fn(),draft:null as unknown}));
+const mocks=vi.hoisted(()=>({source:vi.fn(),categories:vi.fn(),review:vi.fn(),publication:vi.fn(),publish:vi.fn(),account:vi.fn(),load:vi.fn(),start:vi.fn(),isCurrentDraftScope:()=>true,draft:null as unknown}));
 vi.mock('@/api/sellerListingSource',()=>({readListingSource:async(id?:string)=>({source:await mocks.source(id),current_draft_id:id??null}),readSellerCategories:mocks.categories}));
 vi.mock('@/api/sellerListingReview',()=>({readListingReview:mocks.review}));
 vi.mock('@/api/sellerListingPublication',()=>({readPublication:mocks.publication,publishListing:mocks.publish}));
 vi.mock('@/api/capabilities',()=>({getCapabilities:mocks.account}));
-vi.mock('./SellerListingDraftStore',()=>({useSellerListingDraft:()=>({draft:mocks.draft,requestLoad:mocks.load,selectionSavePending:false,selectionSaveFailed:false,startNewDraft:mocks.start})}));
+vi.mock('./SellerListingDraftStore',()=>({useSellerListingDraft:()=>({draft:mocks.draft,requestLoad:mocks.load,selectionSavePending:false,selectionSaveFailed:false,startNewDraft:mocks.start,isCurrentDraftScope:mocks.isCurrentDraftScope})}));
 const source={version:1,connection_current:true,content:{connection_id:guidedConnection.id,connection_version:1,objects:[],version_mode:'current' as const}};
 const navigate=vi.fn();
 function Harness(){return <GuidedListingFlow capabilities={guidedCapabilities} connections={[guidedConnection]} view="manage" navigate={navigate}><WorkspaceOverview connections={[guidedConnection]} view="manage" onViewChange={navigate}/><Probe/></GuidedListingFlow>;}

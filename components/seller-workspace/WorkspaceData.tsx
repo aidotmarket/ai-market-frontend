@@ -37,7 +37,8 @@ export function WorkspaceNotice({ title, children }: { title: string; children: 
   return <div className="rounded-xl border border-gray-200 bg-white p-6 sm:p-8"><h2 className="text-lg font-semibold text-gray-900">{title}</h2><div className="mt-2 max-w-2xl text-sm leading-6 text-gray-600">{children}</div></div>;
 }
 
-type SaveSelection = (connection: SellerWorkspaceConnection, objects: WorkspaceObject[]) => Promise<void|boolean>;
+// A null result retires the callback after the source scope changes.
+type SaveSelection = (connection: SellerWorkspaceConnection, objects: WorkspaceObject[]) => Promise<void|boolean|null>;
 type SaveSampleSelection=(indices:number[])=>Promise<void>;
 export function WorkspaceData({ connections, enabled, savedSource, onSaveSelection, saving = false,
   sampleFilesAvailable=false,initialSampleIndices=[],onSaveSampleSelection,onVisibleSampleSelectionChange,sampleLimits=DEFAULT_LIMITS,
@@ -207,6 +208,7 @@ function ObjectBrowser({ connection, initialSelection, onSaveSelection,sourceVer
     const submitted = selectionSnapshot;
     try {
       const complete=await onSaveSelection(connection, [...selected]);
+      if(complete===null)return false;
       if (mounted.current) {setSavedSelection(submitted);setConfirmation(null);}
       if(complete===false){setSelectionError('Your files were saved, but your sample choice could not be saved. Finish or clear the sample choice before continuing.');return false;}
       return true;
