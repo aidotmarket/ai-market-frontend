@@ -18,6 +18,24 @@ export const dynamic = 'force-dynamic';
 
 const PAGE_SIZE = 20;
 
+const HIDDEN_SAMPLE_SLUGS = new Set([
+  'seeking-10-000-entirely-synthetic-retail-transaction-records-for-testing-a-d31ab91e',
+  'seeking-a-fully-synthetic-retail-sales-dataset-for-testing-a-ce9be9aa',
+  'i-need-a-fully-synthetic-retail-transactions-dataset-to-test-a-sales-15228d5e',
+  'i-need-a-fully-synthetic-retail-sales-dataset-for-testing-a-demand-49e7b84c',
+  'seeking-a-fully-synthetic-retail-transactions-dataset-for-testing-a-sales-047d7cd2',
+  'i-need-a-fully-synthetic-retail-transactions-dataset-to-test-a-sales-07e5b9a4',
+  'i-need-a-fully-synthetic-retail-transactions-dataset-to-test-a-sales-9d78ecb4',
+  'i-need-a-fully-synthetic-retail-sales-dataset-for-testing-a-demand-40b47d84',
+]);
+
+const FULFILLED_EXAMPLES = [
+  'Synthetic retail transaction records for a sales analytics dashboard',
+  'Synthetic retail sales for a demand-forecasting demo',
+  'Synthetic daily retail transactions for a sales analytics dashboard',
+  'Synthetic retail sales and inventory for a demand-forecasting demo',
+];
+
 const URGENCY_BADGE: Record<DataRequestUrgency, string> = {
   low: 'bg-gray-100 text-gray-700',
   normal: 'bg-[#E8EAF6] text-[#3F51B5]',
@@ -69,9 +87,9 @@ export default async function BrowseRequestsPage({ searchParams }: Props) {
     ? page * PAGE_SIZE < total
     : requests.length === PAGE_SIZE;
 
-  const sorted = [...requests].sort(
-    (a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime()
-  );
+  const visibleRequests = requests
+    .filter(({ is_sample, slug }) => !(is_sample === true && slug !== null && HIDDEN_SAMPLE_SLUGS.has(slug)))
+    .sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime());
 
   return (
     <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8 py-8">
@@ -144,15 +162,15 @@ export default async function BrowseRequestsPage({ searchParams }: Props) {
       )}
 
       {/* Empty state */}
-      {data !== null && sorted.length === 0 && (
+      {data !== null && visibleRequests.length === 0 && (
         <div className="text-center py-16">
           <p className="text-gray-500 text-lg mb-2">
-            {page > 1 ? 'No requests on this page' : search ? 'No requests match your filters' : category ? 'No requests match this category' : 'No data requests yet'}
+            {page > 1 || hasNext ? 'No requests on this page' : search ? 'No requests match your filters' : category ? 'No requests match this category' : 'No data requests yet'}
           </p>
           <p className="text-gray-400 text-sm mb-6">
-            {page > 1 ? 'Return to the first page or try the previous page.' : search ? 'Try a different keyword or category.' : category ? 'Try another category.' : 'Be the first to tell the market what you need.'}
+            {hasNext ? 'Try the next page.' : page > 1 ? 'Return to the first page or try the previous page.' : search ? 'Try a different keyword or category.' : category ? 'Try another category.' : 'Be the first to tell the market what you need.'}
           </p>
-          {page === 1 && !hasFilters && (
+          {page === 1 && !hasFilters && !hasNext && (
             <div>
               <Link
                 href="/requests/new"
@@ -168,18 +186,18 @@ export default async function BrowseRequestsPage({ searchParams }: Props) {
       )}
 
       {/* Results */}
-      {sorted.length > 0 && (
+      {visibleRequests.length > 0 && (
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-          {sorted.map((req) => (
+          {visibleRequests.map((req) => (
             <RequestCard key={req.id} request={req} boardQuery={boardQuery} />
           ))}
         </div>
       )}
 
       {/* Pagination and empty-page recovery */}
-      {data !== null && (sorted.length > 0 || page > 1) && (
+      {data !== null && (page > 1 || hasNext) && (
         <div className="flex justify-center gap-2 mt-8">
-          {page > 1 && sorted.length === 0 && (
+          {page > 1 && visibleRequests.length === 0 && (
             <Link
               href={buildPageUrl(1)}
               className="rounded-lg border border-gray-300 px-4 py-2 text-sm hover:bg-gray-50"
@@ -204,6 +222,23 @@ export default async function BrowseRequestsPage({ searchParams }: Props) {
             </Link>
           )}
         </div>
+      )}
+
+      {page === 1 && !hasFilters && (
+        <section aria-labelledby="fulfilled-examples" className="mt-10 border-t border-gray-200 pt-8">
+          <h2 id="fulfilled-examples" className="text-xl font-semibold text-gray-900">Fulfilled examples</h2>
+          <p className="mt-1 text-sm text-gray-600">These fictional requests show what a fulfilled request might look like.</p>
+          <div className="mt-5 grid grid-cols-1 gap-6 md:grid-cols-2">
+            {FULFILLED_EXAMPLES.map(title => (
+              <article key={title} className="rounded-xl border border-gray-200 bg-gray-50 p-6">
+                <h3 className="font-semibold text-gray-900">{title}</h3>
+                <span className="mt-3 inline-flex rounded-full bg-[#E8EAF6] px-2.5 py-0.5 text-xs font-medium text-[#3F51B5]">
+                  Fulfilled
+                </span>
+              </article>
+            ))}
+          </div>
+        </section>
       )}
     </div>
   );
