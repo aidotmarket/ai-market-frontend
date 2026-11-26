@@ -83,7 +83,7 @@ export default function AtAGlance({summary, licenseDisplay}: {summary?: ListingS
       const correction = key === 'license' ? currentDisplay : null;
       if ((!field || field.provenance === 'absent') && !correction) return null;
       const value = correction ? correction.license_label : field!.value;
-      return <div key={key} className="min-w-0">
+      return <div key={key} id={key === 'key_fields' ? 'listing-key-fields' : undefined} className="min-w-0">
         <h3 className="text-sm font-medium text-gray-900">{label}</h3>
         {key === 'key_fields' ? <SchemaTable variant="summary" columns={summary?.key_fields?.value ?? []} descriptions={descriptions} />
           : key === 'field_descriptions' ? <ul className="space-y-1 text-sm text-gray-700">{descriptions.map(d =>

@@ -5,7 +5,8 @@ import { formatBytes } from '@/lib/formatBytes';
 import { useMemo, useState } from 'react';
 import BuyButton from '@/components/BuyButton';
 import { formatPublishedDate } from '@/lib/format';
-import type { ListingLicenseDetails, ListingVersion } from '@/types';
+import type { FileBreakdownGroup, ListingLicenseDetails, ListingVersion } from '@/types';
+import FileBreakdown from '@/app/listings/[slug]/FileBreakdown';
 
 interface ListingPurchasePanelProps {
   listingId: string;
@@ -19,6 +20,7 @@ interface ListingPurchasePanelProps {
   licenseDetails?: ListingLicenseDetails;
   dataFormat?: string | null;
   fulfillmentType?: string | null;
+  fileBreakdown?: FileBreakdownGroup[] | null;
   initialVersionId?: string | null;
   disabledReason?: string;
 }
@@ -35,6 +37,7 @@ export default function ListingPurchasePanel({
   licenseDetails,
   dataFormat,
   fulfillmentType,
+  fileBreakdown,
   initialVersionId,
   disabledReason: listingDisabledReason,
 }: ListingPurchasePanelProps) {
@@ -45,6 +48,12 @@ export default function ListingPurchasePanel({
   );
   const [selectedVersionId, setSelectedVersionId] = useState(defaultVersion?.version_id ?? '');
   const selectedVersion = visibleVersions.find((version) => version.version_id === selectedVersionId) ?? defaultVersion;
+  // Listing-level format and inventory describe the current active version only.
+  const currentVersionId = visibleVersions.find((version) => version.status === 'active')?.version_id;
+  const selectedIsCurrent = selectedVersion?.version_id === currentVersionId;
+  const selectedFiles = selectedVersion && describeVersionFiles(
+    selectedVersion, selectedIsCurrent ? dataFormat : undefined, selectedIsCurrent ? fileBreakdown : undefined,
+  );
   const disabledReason = selectedVersion?.status === 'superseded'
     ? 'This version has been superseded and is shown for provenance only.'
     : listingDisabledReason;
@@ -56,6 +65,8 @@ export default function ListingPurchasePanel({
           versions={visibleVersions}
           selectedVersionId={selectedVersion?.version_id ?? ''}
           onSelectVersion={setSelectedVersionId}
+          dataFormat={dataFormat}
+          fileBreakdown={fileBreakdown}
         />
       )}
       {accessWindowDays != null && (
@@ -77,6 +88,7 @@ export default function ListingPurchasePanel({
           licenseDetails={licenseDetails}
           dataFormat={dataFormat}
           fulfillmentType={fulfillmentType}
+          downloadDescription={selectedFiles?.delivery}
           disabledReason={disabledReason}
         />
       </div>
@@ -88,12 +100,17 @@ export function VersionSelector({
   versions,
   selectedVersionId,
   onSelectVersion,
+  dataFormat,
+  fileBreakdown,
 }: {
   versions: ListingVersion[];
   selectedVersionId: string;
   onSelectVersion: (versionId: string) => void;
+  dataFormat?: string | null;
+  fileBreakdown?: FileBreakdownGroup[] | null;
 }) {
   const visibleVersions = sortVersions(versions);
+  const currentVersionId = visibleVersions.find((version) => version.status === 'active')?.version_id;
 
   if (visibleVersions.length === 0) return null;
 
@@ -117,6 +134,9 @@ export function VersionSelector({
       <div className="space-y-2">
         {visibleVersions.map((version) => {
           const selected = version.version_id === selectedVersionId;
+          const isCurrent = version.version_id === currentVersionId;
+          const groups = isCurrent ? fileBreakdown : undefined;
+          const files = describeVersionFiles(version, isCurrent ? dataFormat : undefined, groups);
           return (
             <div
               key={version.version_id}
@@ -134,8 +154,10 @@ export function VersionSelector({
                 </span>
               </div>
               <p className="mt-1 text-gray-600">
-                Published {formatPublishedDate(version.published_at)} · {formatBytes(version.total_size_bytes)} · {version.object_count.toLocaleString()} objects
+                Published {formatPublishedDate(version.published_at)}
               </p>
+              <p className="mt-1 text-gray-700">{files.summary}</p>
+              {selected && <div className="mt-2"><FileBreakdown groups={groups} showUnavailable /></div>}
               {version.status === 'superseded' && (
                 <p className="mt-1 text-gray-500">Visible for provenance. Not purchasable.</p>
               )}
@@ -145,6 +167,37 @@ export function VersionSelector({
       </div>
     </div>
   );
+}
+
+const archiveFormats: Record<string, string> = {
+  zip: 'ZIP', 'application/zip': 'ZIP',
+  '7z': '7Z', 'application/x-7z-compressed': '7Z',
+  rar: 'RAR', 'application/vnd.rar': 'RAR',
+  tar: 'TAR', 'application/x-tar': 'TAR',
+  tgz: 'TAR.GZ', 'tar.gz': 'TAR.GZ', 'tar.bz2': 'TAR.BZ2', 'tar.xz': 'TAR.XZ',
+};
+const individualFormats = new Set(['csv', 'tsv', 'json', 'jsonl', 'ndjson', 'json_lines', 'parquet', 'xlsx', 'xls', 'xml', 'pdf', 'txt']);
+
+function describeVersionFiles(version: ListingVersion, dataFormat?: string | null, groups?: FileBreakdownGroup[] | null) {
+  const count = version.object_count;
+  const size = formatBytes(version.total_size_bytes);
+  const format = dataFormat?.trim().toLowerCase().replace(/^\./, '') ?? '';
+  const publicFormat = groups?.length === 1 && groups[0].format !== 'other' ? groups[0].format : undefined;
+  const archive = !groups?.length && Object.hasOwn(archiveFormats, format) ? archiveFormats[format] : undefined;
+  const individual = publicFormat ?? (!groups?.length && individualFormats.has(format) ? format : undefined);
+  if (count > 1) {
+    return { delivery: 'individual files', summary: `${count.toLocaleString('en-US')} individual files, ${size} total.` };
+  }
+  if (count === 1 && archive) {
+    return { delivery: `single ${archive} archive`, summary: `1 download file, a single ${archive} archive, ${size} total.` };
+  }
+  if (count === 1 && individual) {
+    return { delivery: 'one individual file', summary: `1 ${individual.replace('json_lines', 'jsonl').toUpperCase()} file, ${size} total.` };
+  }
+  if (count === 1) {
+    return { delivery: '1 file, format unspecified', summary: `1 download file, ${size} total. The file format is unspecified.` };
+  }
+  return { delivery: undefined, summary: `Total download size ${size}. The file count is unspecified.` };
 }
 
 export function selectDefaultVersion(versions: ListingVersion[], initialVersionId?: string | null) {

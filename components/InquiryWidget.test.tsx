@@ -135,12 +135,13 @@ function pendingSseResponse() {
   };
 }
 
-function renderWidget() {
+function renderWidget(links?: Pick<React.ComponentProps<typeof InquiryWidget>, 'schemaHref' | 'documentationHref'>) {
   return render(
     <InquiryWidget
       listingId="listing-123"
       listingSlug="weather-observations"
       listingTitle="Weather Observations"
+      {...links}
     />
   );
 }
@@ -191,6 +192,36 @@ afterEach(() => {
 });
 
 describe('InquiryWidget', () => {
+  it.each([
+    [false, 'allAI checks public listing information first. Sign in to contact the seller.'],
+    [true, 'allAI checks public listing information first. If allAI can’t answer from that information, your question can be passed to the seller.'],
+  ])('explains the question route before writing when signed in is %s', (signedIn, copy) => {
+    mocks.auth.isAuthenticated = signedIn;
+    renderWidget();
+
+    const disclosure = screen.getByText(copy);
+    const question = screen.getByRole('textbox') as HTMLTextAreaElement;
+    expect(question.value).toBe('');
+    expect(question.getAttribute('aria-describedby')).toBe(disclosure.id);
+    expect(disclosure.compareDocumentPosition(question) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+  });
+
+  it.each([true, false])('offers a seller handoff after no qualifying answer, with public links only when available (%s)', async (hasPublicInfo) => {
+    fetchMock.mockResolvedValueOnce(response(200, { session_id: 'anon-session' }))
+      .mockResolvedValueOnce(completedSseResponse('No matches', { type: 'safe_failure', outcome: 'no_matches' }));
+    renderWidget(hasPublicInfo ? { schemaHref: '#listing-schema', documentationHref: '#listing-documentation' } : undefined);
+    typeQuestion('What are the join keys?');
+
+    expect(await screen.findByText(/allAI couldn’t find a reliable answer/)).toBeTruthy();
+    expect(screen.queryByRole('link', { name: 'View field names and types' })?.getAttribute('href'))
+      .toBe(hasPublicInfo ? '#listing-schema' : undefined);
+    expect(screen.queryByRole('link', { name: 'View public documentation' })?.getAttribute('href'))
+      .toBe(hasPublicInfo ? '#listing-documentation' : undefined);
+    clickWithoutNavigation(screen.getByRole('link', { name: 'Sign in to ask the seller.' }));
+    expect(sessionStorage.getItem('inquiry_draft_listing-123')).toBe('What are the join keys?');
+    expect(mocks.createInquiry).not.toHaveBeenCalled();
+  });
+
   it('exposes the question input as the focusable target of the purchase advisory link', () => {
     render(<ListingPurchaseAdvisory price={10} scanFindings={null} />);
     renderWidget();
@@ -281,7 +312,7 @@ describe('InquiryWidget', () => {
       switchToSpanish();
     }
     expect((await screen.findByRole('link', { name: 'Contactar con soporte' })).getAttribute('href')).toBe('/support');
-    expect(screen.getByText(/Prueba con una pregunta más concreta/)).toBeTruthy();
+    expect(screen.getByText(/allAI no pudo encontrar una respuesta fiable/)).toBeTruthy();
     expect(screen.queryByRole('link', { name: 'Contact support' })).toBeNull();
     expect(screen.queryByText(/Could not verify an answer/)).toBeNull();
   });
@@ -295,7 +326,7 @@ describe('InquiryWidget', () => {
       renderSpanishWidget();
       typeQuestion('¿Qué significan las valoraciones?');
 
-      expect(await screen.findByText(/No pude contrastar esa respuesta/)).toBeTruthy();
+      expect(await screen.findByText(/allAI no pudo encontrar una respuesta fiable/)).toBeTruthy();
       expect(screen.queryByRole('link', { name: 'Untrusted' })).toBeNull();
     },
   );
@@ -397,7 +428,7 @@ describe('InquiryWidget', () => {
     try {
       renderWidget();
       expect(screen.getByText(
-        'allAI checks current public information to answer questions about this listing.'
+        'allAI checks public listing information first. Sign in to contact the seller.'
       )).toBeTruthy();
       expect(screen.queryByText(/your question will be forwarded to the seller/i)).toBeNull();
       const status = screen.getByRole('status');

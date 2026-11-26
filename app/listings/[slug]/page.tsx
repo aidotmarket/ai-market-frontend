@@ -164,10 +164,15 @@ export default async function ListingDetailPage({ params, searchParams }: Props)
   const [documents, versions] = await Promise.all([documentsPromise, fetchListingVersions(listing.id)]);
   const sampleFiles = listing.sample_files ?? approved?.sample_files;
   const {technical, pdf} = selectListingDocumentation(documents);
+  const keyFields = atAGlanceSummary?.key_fields;
+  const hasSummarySchema = keyFields?.provenance !== 'absent' && Array.isArray(keyFields?.value) && keyFields.value.length > 0;
+  const schemaHref = schemaColumns.length ? '#listing-schema' : hasSummarySchema ? '#listing-key-fields' : undefined;
+  const documentationHref = technical ? '#technical-documentation' : pdf ? '#listing-documentation' : undefined;
   const hasPublicSampleFiles = !pendingSellerTerms && sampleFiles?.some((file) => file.state === 'available');
   const emptyNotice = technical || pdf || hasPublicSampleFiles ? undefined
     : 'Want to check field names or whether a data dictionary is included? Use Ask a Question before you buy.';
   const hasVersionRows = versions.length > 0;
+  const showVersionInventory = hasVersionRows && !pendingSellerTerms && !(approved && !listing.purchasable);
   // S1097: legacy listings omit the pre-purchase download-window line pending
   // Max's R5.1h-vs-parity adjudication.
   const accessWindowDays = hasVersionRows
@@ -205,10 +210,13 @@ export default async function ListingDetailPage({ params, searchParams }: Props)
               <span>&middot;</span>
               <span>{listing.inquiry_count} inquiries</span>
             </div>
-            {technical && (
-              <a href="#technical-documentation" className="mt-2 inline-block text-sm font-medium text-indigo-700 underline">
-                Read public technical documentation
-              </a>
+            {(schemaHref || documentationHref) && (
+              <div className="mt-2 flex flex-wrap gap-x-4 gap-y-1 text-sm font-medium text-indigo-700">
+                {schemaHref && <a href={schemaHref} className="underline">View field names and types</a>}
+                {documentationHref && <a href={documentationHref} className="underline">
+                  {technical ? 'Read public technical documentation' : 'Find the public data sheet'}
+                </a>}
+              </div>
             )}
           </div>
 
@@ -240,7 +248,7 @@ export default async function ListingDetailPage({ params, searchParams }: Props)
           <ScanFindingsBadge scanFindings={listing.scan_findings ?? null} />
           {!hasActiveScanFindings && <p className="text-sm text-gray-600">The seller can request a verified scan of this data.</p>}
           {listing.verification_scope != null && <p className="text-sm text-gray-600">{listing.verification_scope}</p>}
-          <FileBreakdown groups={listing.file_breakdown} />
+          {!showVersionInventory && <FileBreakdown groups={listing.file_breakdown} />}
 
           </>}
           {(!approved || approved.approved_display_html != null) && <>
@@ -272,7 +280,7 @@ export default async function ListingDetailPage({ params, searchParams }: Props)
             <ScanFindingsBadge scanFindings={listing.scan_findings ?? null} />
             {!hasActiveScanFindings && <p className="text-sm text-gray-600">The seller can request a verified scan of this data.</p>}
             {listing.verification_scope != null && <p className="text-sm text-gray-600">{listing.verification_scope}</p>}
-            <FileBreakdown groups={listing.file_breakdown} />
+            {!showVersionInventory && <FileBreakdown groups={listing.file_breakdown} />}
           </>}
 
           {publicLicenseUrl && <Link href={publicLicenseUrl} className={`inline-flex rounded-full px-3 py-1 text-sm font-medium ${licenseDetails?.code === 'standard' ? 'bg-green-50 text-green-900' : 'bg-amber-50 text-amber-950'}`}>
@@ -289,7 +297,7 @@ export default async function ListingDetailPage({ params, searchParams }: Props)
 
           {/* Schema Info */}
           {(rowCount != null || schemaColumns.length > 0) && (
-            <div>
+            <div id={schemaColumns.length ? 'listing-schema' : undefined} className="scroll-mt-24">
               <h2 className="text-lg font-semibold mb-3">Schema Information</h2>
               {rowCount != null && (
                 <p className="text-sm text-gray-500 mb-3">{rowCount.toLocaleString()} rows</p>
@@ -331,6 +339,7 @@ export default async function ListingDetailPage({ params, searchParams }: Props)
                 fulfillmentType={listing.fulfillment_type}
                 disabledReason={purchaseDisabledReason}
                 initialVersionId={requestedVersionId}
+                fileBreakdown={listing.file_breakdown}
               />
             ) : (
               <BuyButton
@@ -374,6 +383,8 @@ export default async function ListingDetailPage({ params, searchParams }: Props)
             listingId={listing.id}
             listingSlug={listing.slug}
             listingTitle={listing.title}
+            schemaHref={schemaHref}
+            documentationHref={documentationHref}
           />
 
           {/* Non-custodial trust strip */}

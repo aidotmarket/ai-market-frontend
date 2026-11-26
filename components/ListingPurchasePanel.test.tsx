@@ -41,7 +41,39 @@ describe('VersionSelector', () => {
     expect(html).toContain('v2');
     expect(html).toContain('Jun 2, 2026');
     expect(html).toContain('2.05 KB');
-    expect(html).toContain('20 objects');
+    expect(html).toContain('20 individual files, 2.05 KB total.');
+    expect(html).toContain('published a file list for this version.');
+  });
+
+  it('describes a single archive when its format is public', () => {
+    const archive = { ...versions[1], object_count: 1, total_size_bytes: 7_520_000 };
+    const html = renderToStaticMarkup(
+      <VersionSelector versions={[archive]} selectedVersionId={archive.version_id} onSelectVersion={() => undefined} dataFormat=".zip" />,
+    );
+
+    expect(html).toContain('1 download file, a single ZIP archive, 7.52 MB total.');
+    expect(html).toContain('published a file list for this version.');
+  });
+
+  it('shows the public inventory only for the current version', () => {
+    const render = (selectedVersionId: string) => renderToStaticMarkup(
+      <VersionSelector versions={versions} selectedVersionId={selectedVersionId} onSelectVersion={() => undefined}
+        fileBreakdown={[{ format: 'csv', count: 2, size_bytes: 1200 }, { format: 'other', count: 1, size_bytes: 848 }]} />,
+    );
+
+    expect(render('v2-id')).toContain('CSV tables: 2 files · 1.2 KB');
+    expect(render('v2-id')).toContain('Other files: 1 file · 848 B');
+    expect(render('v1-id')).not.toContain('Files included');
+    expect(render('v1-id')).toContain('published a file list for this version.');
+  });
+
+  it('does not infer an archive from a count of one', () => {
+    const version = { ...versions[1], object_count: 1 };
+    const html = renderToStaticMarkup(
+      <VersionSelector versions={[version]} selectedVersionId={version.version_id} onSelectVersion={() => undefined} />,
+    );
+
+    expect(html).toContain('1 download file, 2.05 KB total. The file format is unspecified.');
   });
 
   it('defaults to the latest active version and keeps superseded versions visible', () => {

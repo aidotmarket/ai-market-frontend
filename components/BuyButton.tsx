@@ -36,6 +36,7 @@ interface BuyButtonProps {
   licenseDetails?: ListingLicenseDetails;
   dataFormat?: string | null;
   fulfillmentType?: string | null;
+  downloadDescription?: string;
   disabledReason?: string;
   checkoutContext?: DomainCheckoutOptions;
   onCheckoutStarted?: () => void;
@@ -55,6 +56,7 @@ export default function BuyButton({
   licenseDetails,
   dataFormat,
   fulfillmentType,
+  downloadDescription,
   disabledReason,
   checkoutContext,
   onCheckoutStarted,
@@ -165,6 +167,7 @@ export default function BuyButton({
         license={license}
         dataFormat={dataFormat}
         fulfillmentType={fulfillmentType}
+        downloadDescription={downloadDescription}
       />
       </>
     );
@@ -508,6 +511,7 @@ export function SignedOutPurchase({
   license,
   dataFormat,
   fulfillmentType,
+  downloadDescription,
 }: Pick<
   BuyButtonProps,
   | 'slug'
@@ -518,6 +522,7 @@ export function SignedOutPurchase({
   | 'license'
   | 'dataFormat'
   | 'fulfillmentType'
+  | 'downloadDescription'
 >) {
   const returnPath = `/listings/${encodeURIComponent(slug)}`;
   const encodedReturnPath = encodeURIComponent(returnPath);
@@ -590,7 +595,10 @@ export function SignedOutPurchase({
           {fulfillmentTypeLabel && (
             <div className="flex justify-between gap-3">
               <dt>Fulfillment type</dt>
-              <dd className="font-medium text-gray-900">{fulfillmentTypeLabel}</dd>
+              <dd className="font-medium text-gray-900">
+                {fulfillmentTypeLabel}
+                {fulfillmentTypeLabel === 'File download' && downloadDescription && ` (${downloadDescription})`}
+              </dd>
             </div>
           )}
         </dl>
