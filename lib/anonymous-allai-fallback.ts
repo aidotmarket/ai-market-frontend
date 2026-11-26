@@ -1,9 +1,18 @@
 import type { AnonymousChatEvent } from '@/api/anonymousChat';
 
 export interface FallbackDestinations {
+  gateway?: '/aim-data#gateway-setup';
   support?: '/support';
   search?: string;
   request?: '/requests/new';
+}
+
+export function gatewaySetupFallback(page: string, question: string): FallbackDestinations | undefined {
+  if (page !== '/aim-data' && page !== '/support') return;
+  const mentionsGateway = /\b(?:aim[\s-]+data|docker|gateways?)\b|网关|閘道/i.test(question);
+  const asksAboutSetup = /\b(?:setup|set up|install\w*|network(?:ing)?|configur\w*|instal\w*|red)\b|安装|设置|配置|网络/i.test(question);
+  if (!mentionsGateway && !(page === '/aim-data' && asksAboutSetup)) return;
+  return { gateway: '/aim-data#gateway-setup' };
 }
 
 function marketplaceUrl(raw: string) {

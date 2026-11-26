@@ -88,3 +88,19 @@ it('uses empty states on current fetch failure rather than an old price-bearing 
   expect(page.queryByRole('heading', {name: 'Marketplace activity'})).toBeNull();
   expect(document.querySelectorAll('script[type="application/ld+json"]')).toHaveLength(1);
 });
+
+it('formats featured listing prices with grouping and keeps free listings labelled', async () => {
+  const cases = [[5000, '$5,000'], [5000.25, '$5,000.25'], [0, 'Free']] as const;
+  const listings = [...cases.map(([price]) => ({ ...publicRow(String(price)), price })), { ...publicRow('unpriced'), price: null }];
+  vi.stubGlobal('fetch', vi.fn(async (input: string | URL | Request) => ({
+    ok: true,
+    json: async () => ({ items: String(input).includes('/public/listings?') ? listings : [] }),
+  })));
+  const page = await renderHome();
+  for (const [price, formatted] of cases) {
+    const card = page.getByRole('heading', { name: `Title ${price}` }).closest('a')!;
+    expect(within(card).getByText(formatted, { exact: true })).toBeTruthy();
+  }
+  const unpriced = page.getByRole('heading', { name: 'Title unpriced' }).closest('a')!;
+  expect(unpriced.textContent).not.toMatch(/\$|Free/);
+});

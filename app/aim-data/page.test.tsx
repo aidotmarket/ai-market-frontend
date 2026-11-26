@@ -10,6 +10,15 @@ import AimDataPage, { metadata } from './page';
 afterEach(cleanup);
 
 describe('AimDataPage', () => {
+  it('puts the free-account requirement before the gateway registration link', () => {
+    render(<AimDataPage />);
+    const setup = screen.getByRole('heading', { name: 'Set up your gateway' }).closest('section')!;
+    expect(setup.id).toBe('gateway-setup');
+    const signup = within(setup).getByRole('link', { name: 'Create a free account' });
+    expect(signup.getAttribute('href')).toBe('/register?redirect=%2Fdashboard%2Fgateways');
+    expect(signup.previousElementSibling?.textContent).toContain('Start with a free ai.market account.');
+  });
+
   it('explains the gateway boundary and restores product structured data', () => {
     const { container } = render(<AimDataPage />);
     const text = container.textContent ?? '';

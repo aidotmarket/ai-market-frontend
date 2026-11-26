@@ -63,8 +63,12 @@ export default function SellDataCta({ variant, className, finalCopy }: SellDataC
   }
 
   if (variant === 'cloud' || variant === 'self-hosted') {
-    const showGatewayNote = variant === 'self-hosted' && !isAuthenticated;
-    const href = variant === 'self-hosted'
+    const isGateway = variant === 'self-hosted';
+    const showGatewayNote = isGateway && !isAuthenticated;
+    const label = isGateway
+      ? isAuthenticated ? 'Set up a gateway' : 'Create a free account'
+      : isAuthenticated ? 'Open Seller Workspace' : 'Create Your Account';
+    const href = isGateway
       ? isAuthenticated
         ? '/dashboard/gateways'
         : `/register?redirect=${encodeURIComponent('/dashboard/gateways')}`
@@ -74,14 +78,14 @@ export default function SellDataCta({ variant, className, finalCopy }: SellDataC
 
     return (
       <>
-        <Link href={href} className={withClassName(greenPrimaryClassName, className)} aria-describedby={showGatewayNote ? gatewayNoteId : undefined}>
-          {variant === 'self-hosted' ? 'Set up a gateway' : isAuthenticated ? 'Open Seller Workspace' : 'Create Your Account'}
-        </Link>
         {showGatewayNote && (
-          <p id={gatewayNoteId} className="mt-2 text-sm text-gray-600">
-            You’ll need a free ai.market account. After you sign up, allAI walks you through setting up the gateway.
+          <p id={gatewayNoteId} className="mt-4 mb-2 text-sm text-gray-600">
+            Start with a free ai.market account. After you sign up, allAI walks you through setting up the gateway.
           </p>
         )}
+        <Link href={href} className={withClassName(greenPrimaryClassName, className)} aria-describedby={showGatewayNote ? gatewayNoteId : undefined}>
+          {label}
+        </Link>
       </>
     );
   }

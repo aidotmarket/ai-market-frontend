@@ -6,8 +6,16 @@ export function AllAIFallback({ destinations, locale }: {
   destinations: FallbackDestinations;
   locale: AnonymousAllAILocale;
 }) {
-  const { listingRecovery, recoveryLinks, homepageFallbackGuidance } = anonymousAllAIResources(locale);
-  const { support, search, request } = destinations;
+  const { listingRecovery, recoveryLinks, homepageFallbackGuidance, gatewayFallback } = anonymousAllAIResources(locale);
+  const { gateway, support, search, request } = destinations;
+  if (gateway) {
+    return (
+      <>
+        {gatewayFallback.guidance}{' '}
+        <Link href={gateway} className="underline">{gatewayFallback.link}</Link>
+      </>
+    );
+  }
   return (
     <>
       {support ? `${listingRecovery.error} ${listingRecovery.guidance}` : homepageFallbackGuidance}

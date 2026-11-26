@@ -91,11 +91,11 @@ describe('public sample browse and search cards', () => {
   it('closes hold-only legacy records and preserves unmarked zero and paid peers', () => {
     const held = {...sampleCard}; delete (held as Partial<typeof held>).generated_sample;
     expect(renderToStaticMarkup(<MarketplaceListingCard listing={held} />)).toContain('Unavailable —');
-    for (const price of [0, 12]) {
+    for (const [price, formatted] of [[0, '$0.00'], [12, '$12.00'], [5000, '$5,000.00']] as const) {
       const ordinary = {...held, price, purchase_hold_reason: null, short_description: 'Ordinary retained description', category: 'Business'};
       const html = renderToStaticMarkup(<MarketplaceListingCard listing={ordinary} />);
       expect(html).toContain('Ordinary retained description');
-      expect(html).toContain(price ? '$12.00' : '$0.00');
+      expect(html).toContain(formatted);
       expect(html).not.toContain('Not for sale');
     }
   });

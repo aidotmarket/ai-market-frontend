@@ -2,6 +2,7 @@ import { plainTextExcerpt } from '@/lib/plainTextExcerpt';
 import { formatMarketplaceCategoryName } from '@/lib/marketplaceCategories';
 import GeneratedSampleCard from '@/components/listings/GeneratedSampleCard';
 import { generatedSampleState } from '@/lib/generatedSample';
+import { formatPrice } from '@/lib/format';
 import Link from 'next/link';
 import SellDataCta from '@/components/SellDataCta';
 import { getPublicTermsVersion } from '@/lib/publicTermsVersion';
@@ -583,7 +584,11 @@ export default async function LandingPage() {
                     <div className="flex-1" />
                     <div className="mt-5 pt-4 border-t border-[#F0F0F0] flex items-center justify-between text-xs">
                       <span className="text-[#888888]">{formatMarketplaceCategoryName(l.category)}</span>
-                      <span className="font-semibold text-[#1A1A1A]">{l.price === 0 ? 'Free' : `$${l.price}`}</span>
+                      {l.price != null && (
+                        <span className="font-semibold text-[#1A1A1A]">
+                          {l.price === 0 ? 'Free' : formatPrice(l.price, { omitTrailingZeros: true })}
+                        </span>
+                      )}
                     </div>
                   </Link>
                 ))

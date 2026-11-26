@@ -1054,6 +1054,54 @@ const accountNextSteps = [
   { action: 'view_account', url: '/dashboard' },
 ].map((step) => ({ ...step, label: step.action, requires_account: true }));
 
+describe('signed-out gateway help', () => {
+  const gatewayQuestion = 'How do I set up the AIM Data gateway with Docker?';
+  const gatewayError = "We couldn't answer that question about Docker and networking.";
+
+  function mount(path: string, reply: Response) {
+    mocks.pathname = path;
+    fetchMock.mockImplementation(async (input) => {
+      if (String(input) === MESSAGE_URL) return reply;
+      if (String(input) === `${SESSION_URL}/stale-session`) return response(200, { messages: [] });
+      throw new Error(`Unexpected request: ${input}`);
+    });
+    renderProvider('stale-session', true);
+  }
+
+  it.each(['/aim-data', '/support'])('renders the verified AIM Data next step on %s', async (path) => {
+    mount(path, sseEvents({
+      type: 'answer',
+      text: 'Verified setup instructions.',
+      next_step: { action: 'view_aim_data', url: '/aim-data', label: 'View AIM Data', requires_account: false },
+    }));
+    await send(gatewayQuestion);
+    expect(screen.getByText('Verified setup instructions.')).toBeTruthy();
+    expect(screen.getByRole('link', { name: 'View AIM Data' }).getAttribute('href')).toBe('/aim-data');
+    expect(messagePayload(messageCalls()[0]).context).toEqual({ page: path });
+  });
+
+  it.each([
+    ['/aim-data', 'safe failure', () => sseEvents({ type: 'safe_failure', outcome: 'answer_unverified', text: gatewayError })],
+    ['/support', 'stream error', () => sseEvents({ type: 'error', message: gatewayError })],
+    ['/aim-data', 'HTTP failure', () => response(503)],
+    ['/support', 'empty stream', () => sseEvents({ type: 'done' })],
+  ] as const)('links to published setup guidance on %s after a %s', async (path, _failure, reply) => {
+    mount(path, reply());
+    await send(gatewayQuestion);
+    expect(screen.getByText(/Start with a free ai.market account/)).toBeTruthy();
+    expect(screen.getByRole('link', { name: 'Read the AIM Data setup guide' }).getAttribute('href')).toBe('/aim-data#gateway-setup');
+    expect(screen.queryByText(gatewayError)).toBeNull();
+    expect(screen.queryByText(GENERIC_ERROR)).toBeNull();
+  });
+
+  it('keeps unrelated support questions on their existing recovery path', async () => {
+    mount('/support', response(503));
+    await send('Where can I find my order?');
+    expect(screen.getByText(GENERIC_ERROR)).toBeTruthy();
+    expect(screen.queryByRole('link')).toBeNull();
+  });
+});
+
 describe('mounted anonymous next-step navigation', () => {
   async function mountAnswer(nextStep: Record<string, unknown>, safeFailure = false) {
     mocks.pathname = '/';

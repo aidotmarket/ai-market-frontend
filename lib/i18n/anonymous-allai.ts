@@ -24,6 +24,7 @@ interface AnonymousAllAIResources {
   accountRequired: string;
   genericError: string;
   homepageFallbackGuidance: string;
+  gatewayFallback: { guidance: string; link: string };
   listingRecovery: {
     error: string;
     timeout: string;
@@ -57,6 +58,10 @@ export const ANONYMOUS_ALLAI_RESOURCES: Record<
     accountRequired: 'An account is required for this step.',
     genericError: 'Sorry, something went wrong. Please try again.',
     homepageFallbackGuidance: "I couldn't verify that answer against current listings. Try asking about a specific sector.",
+    gatewayFallback: {
+      guidance: 'Start with a free ai.market account. Once signed in, go to Sell Data, open Gateways, and choose Add a gateway.',
+      link: 'Read the AIM Data setup guide',
+    },
     listingRecovery: {
       error: "We couldn't get an answer.",
       timeout: 'This is taking longer than expected.',
@@ -93,6 +98,10 @@ export const ANONYMOUS_ALLAI_RESOURCES: Record<
     accountRequired: 'Necesitas una cuenta para realizar este paso.',
     genericError: 'Ha ocurrido un error. Inténtalo de nuevo.',
     homepageFallbackGuidance: 'No pude contrastar esa respuesta con los anuncios actuales. Prueba a preguntar por un sector concreto.',
+    gatewayFallback: {
+      guidance: 'Empieza con una cuenta gratuita de ai.market. Tras iniciar sesión, ve a Sell Data, abre Gateways y selecciona Add a gateway.',
+      link: 'Leer la guía de configuración de AIM Data',
+    },
     listingRecovery: {
       error: 'No pudimos obtener una respuesta.',
       timeout: 'La respuesta está tardando más de lo esperado.',
@@ -129,6 +138,10 @@ export const ANONYMOUS_ALLAI_RESOURCES: Record<
     accountRequired: '此步骤需要账户。',
     genericError: '抱歉，出现了问题。请重试。',
     homepageFallbackGuidance: '无法根据当前商品核实该回答。请尝试询问具体行业。',
+    gatewayFallback: {
+      guidance: '先创建一个免费的 ai.market 账户。登录后，前往 Sell Data，打开 Gateways，然后选择 Add a gateway。',
+      link: '阅读 AIM Data 设置指南',
+    },
     listingRecovery: {
       error: '暂时无法获取答案。',
       timeout: '回答所需的时间比预期更长。',

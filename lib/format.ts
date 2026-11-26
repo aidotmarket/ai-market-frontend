@@ -1,7 +1,8 @@
-export function formatPrice(price: number): string {
+export function formatPrice(price: number, options?: { omitTrailingZeros?: boolean }): string {
   return new Intl.NumberFormat('en-US', {
     style: 'currency',
     currency: 'USD',
+    minimumFractionDigits: options?.omitTrailingZeros && Number.isInteger(price) ? 0 : undefined,
   }).format(price);
 }
 
