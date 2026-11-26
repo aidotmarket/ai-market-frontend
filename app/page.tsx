@@ -484,7 +484,7 @@ export default async function LandingPage() {
                       Buyer demand, live now
                     </h2>
                     <p className="mt-3 text-lg text-[#666666]">
-                      See what verified buyers need and respond with a relevant listing.
+                      See what email-verified buyers need and respond with a relevant listing.
                     </p>
                   </div>
                   <Link href="/requests" className="text-sm font-semibold text-[#3F51B5] hover:text-[#3545a0]">
