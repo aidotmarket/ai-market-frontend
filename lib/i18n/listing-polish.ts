@@ -22,6 +22,7 @@ export const listingPolish = {
   accept: "Accept selected suggestions",
   applying: "Applying suggestions...",
   acceptPaused: "Applying suggestions is paused.",
+  acceptSentPaused: "Your suggestions may already have been applied. Resume to check the outcome.",
   resumeAccept: "Resume applying suggestions",
   acceptRetry: "Still checking whether your suggestions were applied. You can edit once the result is confirmed.",
   acceptRetryLong: "This is taking longer than expected. You can reload this page to check your saved draft.",

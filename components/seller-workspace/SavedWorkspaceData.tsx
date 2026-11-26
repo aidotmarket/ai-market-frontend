@@ -108,6 +108,7 @@ export default function SavedWorkspaceData({connections, enabled,sampleLimits,li
       }
       if(available&&loaded){try{await reloadDraft();}catch{retryDraft();}}
     } catch(failure) {
+      if(authorityCode(failure)==='CURRENT_DRAFT_CHANGED')flow?.sourcePointerRefused(sampleState.draft?.draft_id??null);
       if(authorityCode(failure)==='DRAFT_SUPERSEDED'){const message=listingDraftError(failure)?.message??'Your draft was replaced. Check the current draft before choosing files again.';if(flow)flow.sourceSaveRefused?.(message);else setSaveNotice(message);pending.current=null;try{await reloadDraft();}catch{retryDraft();}}
       throw failure;
     } finally { finishSelectionSave(succeeded);inFlight.current = false; setSaving(false); }

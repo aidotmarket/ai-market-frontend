@@ -7,9 +7,9 @@ import type { SavedListingDraft } from "@/api/sellerListingDraft";
 import { listingPolish as copy } from "@/lib/i18n/listing-polish";
 import { PolishDiscard, polishButton } from "./PolishDiscard";
 import { expandReviewSelection, reviewBaseline, sentenceDiff } from "./listingPolishText";
-import { finishPolishAccept, pendingPolishAccept, queuePolishAccept, usePendingPolishAccept } from "./pendingPolishAccept";
+import { finishPolishAccept, pendingPolishAccept, queuePolishAccept, resumePolishAccept, usePendingPolishAccept,
+  usePolishAcceptPaused } from "./pendingPolishAccept";
 import { polishFailure, usePolishAction, type ReloadDraft } from "./usePolishAction";
-import { useRetriedWorkspacePanel } from "./WorkspacePanel";
 
 export type ListingPolishOptions = {
   draft: SavedListingDraft | null;
@@ -41,10 +41,8 @@ export function useListingPolish(options: ListingPolishOptions | undefined, acti
   const runTarget = useRef<string | undefined>(undefined);
   const action = usePolishAction(options?.lock, options?.onBusy);
   const pending = usePendingPolishAccept(!!options);
-  const retriedPanel = useRetriedWorkspacePanel();
-  // The step retry remounts the editor. Require a separate action to resume any pending write.
-  const [pausedAccept, setPausedAccept] = useState(() => retriedPanel ? pending : null);
-  const acceptPaused = !!pending && pending === pausedAccept;
+  const acceptPaused = usePolishAcceptPaused(!!options);
+  const pausedMessage = pending?.sent ? copy.acceptSentPaused : copy.acceptPaused;
   const [settledAccept, setSettledAccept] = useState<typeof pending>(null);
   useLayoutEffect(() => {
     if (settledAccept) finishPolishAccept(settledAccept);
@@ -167,7 +165,7 @@ export function useListingPolish(options: ListingPolishOptions | undefined, acti
   };
 
   const executeAccept = useEffectEvent((entry: NonNullable<typeof pending>) => {
-    if (!options || !entry.sameSession()) return;
+    if (!options || !entry.sameSession() || entry.paused) return;
     void action.run(copy.applying, async signal => {
       const { runId, body, sent: replaying } = entry;
       entry.sent = true;
@@ -293,8 +291,8 @@ export function useListingPolish(options: ListingPolishOptions | undefined, acti
           .map(question => <p key={question} className="text-sm">{question}</p>)}
       </fieldset>}
     </>}
-    {(action.status || pending) && <p role="status" className="text-sm font-semibold text-indigo-900">{action.status || (acceptPaused ? copy.acceptPaused : copy.applying)}</p>}
-    {acceptPaused && active && <button type="button" className={polishButton} onClick={() => setPausedAccept(null)}>{copy.resumeAccept}</button>}
+    {(action.status || pending) && <p role="status" className="text-sm font-semibold text-indigo-900">{action.status || (acceptPaused ? pausedMessage : copy.applying)}</p>}
+    {acceptPaused && pending && active && <button type="button" className={polishButton} onClick={() => resumePolishAccept(pending)}>{copy.resumeAccept}</button>}
     {error && <p role="alert" className="text-sm text-red-800">{error}</p>}
     {notice && <p role="status" className="text-sm text-green-900">{notice}</p>}
     {discard && options && <PolishDiscard key={`${discard.draftId}:${discard.runId}`} runId={discard.runId} version={discard.version}

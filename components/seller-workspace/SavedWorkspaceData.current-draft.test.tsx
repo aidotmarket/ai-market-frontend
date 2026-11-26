@@ -11,6 +11,7 @@ import {categoryRows,guidedCapabilities,guidedConnection,guidedObjects} from '@/
 import {SellerListingDraftProvider,resetSellerListingDraftOwnerForTests,useSellerListingDraft} from './SellerListingDraftStore';
 import SavedWorkspaceData from './SavedWorkspaceData';
 import {GuidedListingFlow} from './GuidedListingFlow';
+import {RecoverableWorkspacePanel} from './WorkspacePanel';
 vi.mock('@/api/capabilities',()=>({getCapabilities:vi.fn(async()=>({}))}));
 
 vi.mock('@/api/sellerWorkspace',async original=>({...await original<typeof import('@/api/sellerWorkspace')>(),
@@ -113,6 +114,53 @@ it('handles a draft created after the empty GET without touching it and offers a
   expect(model.drafts.size).toBe(1);expect(model.drafts.get(b)).toEqual(before);
   expect(model.sources.size).toBe(0);
   expect((screen.getByRole('checkbox',{name:'Select weekly/sales.csv'}) as HTMLInputElement).checked).toBe(true);
+});
+
+function RecoverableDataStep({fail}:{fail:boolean}){
+  if(fail)throw new Error('Synthetic data-step render failure');
+  return <SavedWorkspaceData enabled connections={[guidedConnection]}/>;
+}
+
+it('keeps a guided source-save refusal across panel retry and only shows the current source after reload',async()=>{
+  const model=backend();
+  model.createOrdinary(a);
+  const source:SourceRead={version:1,connection_current:true,content:{
+    connection_id:guidedConnection.id,connection_version:1,version_mode:'current',objects:guidedObjects}};
+  model.sources.set(a,source);
+  const capabilities={...guidedCapabilities,review:{enabled:false,status:'unavailable' as const,reason:'disabled'},listing_licenses:false};
+  const workspace=(fail:boolean)=><SellerListingDraftProvider enabled sampleCapability={false}>
+    <GuidedListingFlow capabilities={capabilities} connections={[guidedConnection]} view="data" navigate={vi.fn()}>
+      <DraftStatus/>
+      <RecoverableWorkspacePanel active><RecoverableDataStep fail={fail}/></RecoverableWorkspacePanel>
+    </GuidedListingFlow>
+  </SellerListingDraftProvider>;
+  const {rerender}=render(workspace(false),{onCaughtError:vi.fn()});
+  await screen.findByText(/File selection saved to your account/);
+  fireEvent.click(screen.getByRole('checkbox',{name:'Select weekly/extra.csv'}));
+  model.createOrdinary(b);
+  model.sources.set(b,{...source,content:{...source.content,objects:[{...guidedObjects[0],key:'weekly/extra.csv'}]}});
+  save();
+  await screen.findByRole('button',{name:'Reload current draft'});
+  expect(model.writes).toHaveLength(1);
+  const readsBeforeRetry=model.sourceReads.slice();
+
+  rerender(workspace(true));
+  await screen.findByRole('button',{name:'Retry this step'});
+  rerender(workspace(false));
+  fireEvent.click(screen.getByRole('button',{name:'Retry this step'}));
+  await screen.findByRole('button',{name:'Reload current draft'});
+  expect(screen.getByRole('alert').textContent).toContain('Your listing draft changed.');
+  expect(screen.queryByText(/File selection saved to your account/)).toBeNull();
+  expect(model.sourceReads).toEqual(readsBeforeRetry);
+  expect(model.writes).toHaveLength(1);
+
+  fireEvent.click(screen.getByRole('button',{name:'Reload current draft'}));
+  const extra=await screen.findByRole('checkbox',{name:'Select weekly/extra.csv'}) as HTMLInputElement;
+  expect(extra.checked).toBe(true);
+  expect((screen.getByRole('checkbox',{name:'Select weekly/sales.csv'}) as HTMLInputElement).checked).toBe(false);
+  expect(screen.getByTestId('draft-id').textContent).toBe(b);
+  expect(model.sourceReads).toContain(b);
+  expect(model.writes).toHaveLength(1);
 });
 
 it('reloads an ordinary draft created without an organization and saves its source in an org-scoped session',async()=>{

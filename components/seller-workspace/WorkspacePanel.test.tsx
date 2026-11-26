@@ -51,8 +51,9 @@ it.each(['visible', 'hidden'])('contains a render error in a visited %s step and
   const openListing = () => fireEvent.click(screen.getByRole('button', { name: 'Describe and price' }));
   const openLicence = () => fireEvent.click(screen.getByRole('button', { name: 'Choose a licence' }));
   const retry = () => fireEvent.click(screen.getByRole('button', { name: 'Retry this step' }));
-  const expectFallback = () => {
-    expect(screen.getByRole('alert').textContent).toBe('This step could not be displayed.');
+  const expectFallback = (message: string) => {
+    expect(screen.getByRole('alert').textContent).toBe(message);
+    expect(screen.getByText(/Unsaved changes in this step may be lost/)).toBeTruthy();
     expect(screen.queryByText('Synthetic render failure')).toBeNull();
   };
 
@@ -71,17 +72,19 @@ it.each(['visible', 'hidden'])('contains a render error in a visited %s step and
     openLicence();
   }
 
-  expectFallback();
+  expectFallback('This step could not be displayed.');
+  const firstAlert = screen.getByRole('alert');
   expect(screen.getByRole('navigation', { name: 'Workspace steps' })).toBeTruthy();
   retry();
   expect(onCaughtError).toHaveBeenCalledTimes(2);
-  expectFallback();
+  expectFallback('This step still could not be displayed.');
+  expect(screen.getByRole('alert')).not.toBe(firstAlert);
 
   rerender(<PanelHarness fail={false} />);
-  expectFallback();
+  expectFallback('This step still could not be displayed.');
   retry();
   expect(screen.queryByRole('alert')).toBeNull();
-  expect(screen.getByText('Draft title in this step: My offering')).toBeTruthy();
+  expect(document.activeElement).toBe(screen.getByText('Draft title in this step: My offering').parentElement);
 
   openListing();
   expect(screen.getByRole('textbox', { name: 'Unsaved description' })).toBe(description);

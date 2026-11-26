@@ -5,6 +5,7 @@ import { Component, type ErrorInfo, type ReactNode } from 'react';
 interface Props {
   children: ReactNode;
   fallback?: (retry: () => void) => ReactNode;
+  onError?: () => void;
 }
 
 interface State {
@@ -19,6 +20,7 @@ export class ErrorBoundary extends Component<Props, State> {
   }
 
   componentDidCatch(error: Error, info: ErrorInfo) {
+    this.props.onError?.();
     if (!this.props.fallback) console.error('ErrorBoundary caught:', error, info);
   }
 

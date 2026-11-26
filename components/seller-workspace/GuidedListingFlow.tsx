@@ -26,6 +26,7 @@ type StartListingRecovery = 'published-refusal';
 type Flow = {samplesBlocked:boolean; stepsForContent:(content:ListingDraftContent)=>ListingStep[]; sourceCurrentDraftId:string|null; sourceLoaded:boolean; sourceDraftChanged:boolean; reloadSource:()=>Promise<void>; sourceError:string; fileRevision:number; setFilesDirty:(dirty:boolean)=>void; setListingDirty:(dirty:boolean)=>void; setLicenceDirty:(dirty:boolean)=>void; source: SourceRead|null; categories: SellerCategory[]; steps: ListingStep[]; review: ListingReview|null;
   reviewError: string; reviewLoading: boolean; publication: PublicationState|null; publicationError: string;
   refreshReview: ()=>void; refreshPublication: ()=>void; sourceSaved: (response:SourceSaveResponse)=>void; sourceSaveRefused:(message:string)=>void;
+  sourcePointerRefused:(draftId:string|null)=>void;
   approved: (approval:ApprovalReceipt)=>void; published: (state:PublicationState)=>void;
   startAnotherListing:(recovery?:StartListingRecovery)=>void; startingListing:boolean; navigate: (view:WorkspaceView)=>void; licensesEnabled: boolean;
   polishLock: React.RefObject<boolean>; polishBusy: boolean; setPolishBusy:(busy:boolean)=>void;
@@ -100,6 +101,7 @@ export function GuidedListingFlow({connections, capabilities, view, navigate, ch
   const [categories,setCategories] = useState<SellerCategory[]>([]);
   const [readError,setReadError] = useState('');
   const [readRetry,setReadRetry] = useState(0);
+  const [sourceRefusal,setSourceRefusal] = useState<{draftId:string|null; readRetry:number}|null>(null);
   const [review,setReview] = useState<ListingReview|null>(null);
   const [reviewError,setReviewError] = useState('');
   const [reviewStatus,setReviewStatus] = useState('');
@@ -125,7 +127,10 @@ export function GuidedListingFlow({connections, capabilities, view, navigate, ch
   useEffect(()=>{
     if(!sourcesEnabled)return;
     let alive=true;setReadError('');setSourceLoaded(false);
-    Promise.all([readListingSource(draft?.draft_id),readSellerCategories()]).then(([s,c])=>{if(alive){setSource(s.source);setSourceCurrentDraftId(s.current_draft_id);setCategories(c);setSourceDraftId(draft?.draft_id??null);setSourceLoaded(true);}}).catch(()=>{if(alive)setReadError('Your saved files and category list could not be loaded. Retry before continuing.');});
+    Promise.all([readListingSource(draft?.draft_id),readSellerCategories()]).then(([s,c])=>{if(alive){
+      setSource(s.source);setSourceCurrentDraftId(s.current_draft_id);setCategories(c);setSourceDraftId(draft?.draft_id??null);setSourceLoaded(true);
+      setSourceRefusal(refusal=>refusal && readRetry>refusal.readRetry ? null : refusal);
+    }}).catch(()=>{if(alive)setReadError('Your saved files and category list could not be loaded. Retry before continuing.');});
     return()=>{alive=false;};
   },[sourcesEnabled,readRetry,draft?.draft_id]);
   const reconciled=useRef('');
@@ -168,13 +173,16 @@ export function GuidedListingFlow({connections, capabilities, view, navigate, ch
   const next=steps.find(s=>s.next);
   const sourceMatchesDraft=sourceDraftId===(draft?.draft_id??null);
   const pointerMatchesDraft=!available||sourceCurrentDraftId===(draft?.draft_id??null);
-  const sourceDraftChanged=sourceLoaded&&available&&loaded&&sourceMatchesDraft&&!pointerMatchesDraft;
+  // Keep a known refusal across a data panel remount until a fresh source read.
+  const sourceDraftChanged=sourceRefusal?.draftId===(draft?.draft_id??null)||
+    sourceLoaded&&available&&loaded&&sourceMatchesDraft&&!pointerMatchesDraft;
   const reloadSource=async()=>{
     setSourceLoaded(false);
     try{await reload();}finally{setReadRetry(n=>n+1);}
   };
   const flow:Flow={startAnotherListing:recovery=>void startAnotherListing(recovery),startingListing,samplesBlocked:selectionSavePending||selectionSaveFailed,stepsForContent:content=>listingSteps({connections,source,draft:{version:draft?.version??0,updated_at:draft?.updated_at??'',content:{...draft?.content,...content}},categories,licensesEnabled,review:null,publication:null,pending,licenceDirty}),sourceCurrentDraftId,sourceLoaded:sourceLoaded&&sourceMatchesDraft&&pointerMatchesDraft,sourceDraftChanged,reloadSource,sourceError:readError,fileRevision,setFilesDirty:dirty=>{setFilesDirty(dirty);if(dirty)setFileRevision(n=>n+1);},setListingDirty,setLicenceDirty,source,categories,steps,review,reviewError,reviewLoading,publication,publicationError,licensesEnabled,navigate,
     refreshReview:()=>setReviewRetry(n=>n+1),refreshPublication:()=>setPublicationRetry(n=>n+1),sourceSaveRefused:setSourceSaveNotice,sourceSaved:value=>{setSourceSaveNotice('');setSource(value.source);setSourceCurrentDraftId(value.current_draft_id);setFilesDirty(false);},
+    sourcePointerRefused:draftId=>setSourceRefusal({draftId,readRetry}),
     approved:a=>setReview(r=>r?{...r,approval:a}:r),published:setPublication,
     polishLock,polishBusy,setPolishBusy,polishPublication,polishNotice,setPolishNotice,listingDirty,
     openPublicationPolish:item=>{
