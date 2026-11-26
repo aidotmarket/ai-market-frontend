@@ -110,6 +110,8 @@ export function MarketplaceSearchExperience({
     items: rawItems,
     facets,
     total,
+    suggestedQuery,
+    hint,
     semanticMode,
     isLoading,
     isError,
@@ -161,7 +163,8 @@ export function MarketplaceSearchExperience({
       ? 'Use filters and sorting to find data listings.'
       : 'Browse every listing. Pick a category or sort to narrow it down.';
   const emptyLabel = listingCategory === 'data' ? 'data' : listingCategory === 'models' ? 'models' : 'listings';
-  const hasSemanticSuggestions = semanticMode && Boolean(q) && !isLoading && !isError && items.length > 0;
+  const showQueryHints = semanticMode && Boolean(q) && !isLoading && !isError;
+  const hasSemanticSuggestions = showQueryHints && items.length > 0;
 
   const updateParams = useCallback((updates: Record<string, string | number | undefined>) => {
     const next = new URLSearchParams(searchParams.toString());
@@ -415,6 +418,20 @@ export function MarketplaceSearchExperience({
                     </>
                   )}
                 </p>
+                {showQueryHints && suggestedQuery && (
+                  <p className="mt-2 text-sm text-slate-600">
+                    <button
+                      type="button"
+                      onClick={() => updateParams({ q: suggestedQuery })}
+                      className="text-left font-medium text-[#3F51B5] underline"
+                    >
+                      Did you mean {suggestedQuery}?
+                    </button>
+                  </p>
+                )}
+                {showQueryHints && hint === 'no_results_try_other_words' && (
+                  <p className="mt-2 text-sm text-slate-600">Try searching with different words.</p>
+                )}
                 {hasSemanticSuggestions && (
                   <p className="mt-2 max-w-2xl text-sm leading-6 text-slate-600">
                     Suggestions are ranked by meaning and may be related rather than exact. Refine your search text or filters if they do not fit.

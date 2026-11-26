@@ -531,6 +531,8 @@ export interface SearchResponse {
   query: string;
   facets: FacetInfo;
   fallback?: boolean;
+  suggested_query?: string | null;
+  hint?: string | null;
 }
 
 // ============================================================================

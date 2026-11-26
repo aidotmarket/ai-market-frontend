@@ -8,7 +8,23 @@ vi.mock('./client', () => ({
   api: { get: apiGet, post: apiPost, patch: apiPatch },
 }));
 
-const { createDraftListing, getMarketplaceCategoryFacets, getListingOwnership, getMyListings, getListingAccessWindow, updateListingAccessWindow } = await import('./listings');
+const { createDraftListing, getMarketplaceCategoryFacets, getListingOwnership, getMyListings, getListingAccessWindow, updateListingAccessWindow, searchListings } = await import('./listings');
+
+it.each([
+  { suggested_query: 'climate data' },
+  { hint: 'no_results_try_other_words' },
+])('preserves optional search metadata %j', async (metadata) => {
+  const data = { results: [], total: 0, query: 'climte data', ...metadata };
+  apiGet.mockResolvedValueOnce({ data });
+
+  const { suggested_query, hint } = await searchListings('climte data', { offset: 0 });
+
+  expect(suggested_query).toBe(metadata.suggested_query);
+  expect(hint).toBe(metadata.hint);
+  expect(apiGet).toHaveBeenLastCalledWith('/search/listings', expect.objectContaining({
+    params: { q: 'climte data', offset: 0 },
+  }));
+});
 
 it('keeps owner GET authority state separate from the original PATCH response',async()=>{
   apiGet.mockResolvedValueOnce({data:{listing_id:'listing-1',access_window_days:7,authority_version_id:'version'}});
