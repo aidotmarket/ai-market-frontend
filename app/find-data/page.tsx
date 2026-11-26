@@ -2,6 +2,7 @@ import Link from 'next/link';
 import type { Metadata } from 'next';
 import { MarketplaceSearchExperience } from '@/components/search/MarketplaceSearchExperience';
 import { MarketplaceCategoryCards } from '@/components/categories/MarketplaceCategoryCards';
+import { redirectLegacyModelSearch, type MarketplaceSearchParams } from '@/lib/marketplaceSearchRedirect';
 
 export const metadata: Metadata = {
   alternates: { canonical: '/find-data' },
@@ -28,7 +29,9 @@ export const metadata: Metadata = {
 
 export const dynamic = 'force-dynamic';
 
-export default function FindDataPage() {
+export default async function FindDataPage({ searchParams }: { searchParams: Promise<MarketplaceSearchParams> }) {
+  redirectLegacyModelSearch('/find-data', await searchParams);
+
   return (
     <div className="bg-white">
       <section className="bg-gradient-to-b from-[#F7FCFA] to-white">

@@ -58,6 +58,13 @@ describe('AI crawler middleware', () => {
     expect(waitUntil).not.toHaveBeenCalled();
   });
 
+  it('keeps a direct listing link with the same query parameter on the listing read path', async () => {
+    const response = await middleware(request('/listings/some-slug?type=models', 'Chrome'), event);
+    expect(response.headers.get('location')).toBeNull();
+    expect(response.headers.get('x-middleware-next')).toBe('1');
+    expect(fetchMock).toHaveBeenCalledTimes(2);
+  });
+
   it.each(['/listings-private', '/requests-private'])('excludes %s even for GPTBot', async (path) => {
     expect(unstable_doesMiddlewareMatch({ config, nextConfig: {}, url: path })).toBe(false);
     expectNext(await middleware(request(path), event));

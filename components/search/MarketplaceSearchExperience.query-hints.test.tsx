@@ -62,7 +62,11 @@ afterEach(() => {
 });
 
 it('waits for an explicit correction and then searches with all the active filters', async () => {
-  const filters = { category: 'finance', type: 'data', data_type: 'csv', min_price: '5', max_price: '30', sort: 'price-asc' };
+  const filters = { category: 'finance', data_type: 'csv', min_price: '5', max_price: '30', sort: 'price-asc' };
+  const request = {
+    category: 'finance', min_price: 5, max_price: 30,
+    fulfillment_type: ['ai_queryable', 'file_download'], limit: 12, offset: 0,
+  };
   mocks.searchParams = new URLSearchParams({ q: 'climte data', ...filters, page: '2', per_page: '12', offset: '12' });
   mocks.searchListings
     .mockResolvedValueOnce({ ...emptyPage, ...correction })
@@ -74,7 +78,7 @@ it('waits for an explicit correction and then searches with all the active filte
   expect(screen.getByText('Data results for "climte data"')).toBeTruthy();
   expect(mocks.replace).not.toHaveBeenCalled();
   expect(mocks.push).not.toHaveBeenCalled();
-  expect(mocks.searchListings).toHaveBeenCalledExactlyOnceWith('climte data', expect.objectContaining({ offset: 0 }));
+  expect(mocks.searchListings).toHaveBeenCalledExactlyOnceWith('climte data', request);
 
   fireEvent.click(button);
   expect(mocks.replace).toHaveBeenCalledTimes(1);
@@ -85,9 +89,8 @@ it('waits for an explicit correction and then searches with all the active filte
 
   expect(await screen.findByText('EU emissions dataset')).toBeTruthy();
   expect((screen.getByRole('searchbox') as HTMLInputElement).value).toBe('climate data');
-  expect(mocks.searchListings).toHaveBeenLastCalledWith('climate data', expect.objectContaining({
-    category: 'finance', min_price: 5, max_price: 30, fulfillment_type: ['ai_queryable', 'file_download'], offset: 0,
-  }));
+  expect(mocks.searchListings).toHaveBeenLastCalledWith('climate data', request);
+  expect(mocks.listListings).not.toHaveBeenCalled();
   expectNoHints();
 });
 
@@ -99,7 +102,34 @@ it('ignores correction and hint metadata on a later page', async () => {
 
   fireEvent.click(await screen.findByRole('button', { name: 'Load more' }));
   expect(await screen.findByText('Later result')).toBeTruthy();
+  expect(mocks.searchListings).toHaveBeenCalledTimes(2);
+  expect(mocks.searchListings).toHaveBeenNthCalledWith(2, 'climte data', expect.objectContaining({
+    fulfillment_type: ['ai_queryable', 'file_download'], limit: 12, offset: 12,
+  }));
   expectNoHints();
+});
+
+it('browses and pages through data with no type selector in the URL', async () => {
+  mocks.searchParams = new URLSearchParams('category=finance&min_price=5&max_price=30&data_type=csv&sort=price-asc');
+  mocks.listListings
+    .mockResolvedValueOnce(Array.from({ length: 12 }, (_, id) => ({ id, data_format: 'json', price: 15 })))
+    .mockResolvedValueOnce([{ id: 'csv', title: 'CSV dataset', data_format: 'csv', price: 20 }]);
+  setup();
+
+  const loadMore = await screen.findByRole('button', { name: 'Load more' });
+  const request = {
+    category: 'finance', min_price: 5, max_price: 30,
+    fulfillment_type: ['ai_queryable', 'file_download'], limit: 12,
+  };
+  expect(mocks.listListings).toHaveBeenCalledExactlyOnceWith({ ...request, skip: 0 });
+  expect(screen.getByText('Showing 0 results filtered to CSV')).toBeTruthy();
+
+  fireEvent.click(loadMore);
+  expect(await screen.findByText('CSV dataset')).toBeTruthy();
+  expect(screen.getByText('1 result filtered to CSV')).toBeTruthy();
+  expect(mocks.listListings).toHaveBeenCalledTimes(2);
+  expect(mocks.listListings).toHaveBeenLastCalledWith({ ...request, skip: 12 });
+  expect(mocks.searchListings).not.toHaveBeenCalled();
 });
 
 it('clears the previous hint during loading, after a new query fails, and in browse', async () => {
@@ -120,6 +150,6 @@ it('clears the previous hint during loading, after a new query fails, and in bro
   expectNoHints();
 
   navigate(new URLSearchParams());
-  expect(await screen.findByText('No listings found')).toBeTruthy();
+  expect(await screen.findByText('No data found')).toBeTruthy();
   expectNoHints();
 });
