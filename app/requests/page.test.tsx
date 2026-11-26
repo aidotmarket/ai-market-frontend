@@ -97,6 +97,70 @@ describe('public request browsing', () => {
     expect(screen.getByRole('link', { name: /Synthetic data request/ }).getAttribute('href')).toBe('/requests/request-ordinary');
   });
 
+  const hiddenSampleSlugs = [
+    'seeking-10-000-entirely-synthetic-retail-transaction-records-for-testing-a-d31ab91e',
+    'seeking-a-fully-synthetic-retail-sales-dataset-for-testing-a-ce9be9aa',
+    'i-need-a-fully-synthetic-retail-transactions-dataset-to-test-a-sales-15228d5e',
+    'i-need-a-fully-synthetic-retail-sales-dataset-for-testing-a-demand-49e7b84c',
+    'seeking-a-fully-synthetic-retail-transactions-dataset-for-testing-a-sales-047d7cd2',
+    'i-need-a-fully-synthetic-retail-transactions-dataset-to-test-a-sales-07e5b9a4',
+    'i-need-a-fully-synthetic-retail-transactions-dataset-to-test-a-sales-9d78ecb4',
+    'i-need-a-fully-synthetic-retail-sales-dataset-for-testing-a-demand-40b47d84',
+  ];
+
+  it('replaces only the specified flagged cards with four static fictional examples below live results', async () => {
+    fetchDataRequests.mockResolvedValue({ items: [
+      ...hiddenSampleSlugs.map((slug, i) => request(`hidden-${i}`, { slug, is_sample: true })),
+      ...[false, undefined, 'true'].map((is_sample, i) =>
+        request(`visible-${i}`, { slug: hiddenSampleSlugs[i], title: `Synthetic request ${i}`, is_sample })),
+      request('other-sample', { slug: `${hiddenSampleSlugs[0]}-other`, is_sample: true }),
+    ], total: 12 });
+    await renderPage({ page: '1' });
+
+    const section = screen.getByRole('region', { name: 'Fulfilled examples' });
+    const liveLinks = screen.getAllByRole('link', { name: /Synthetic request \d|Request other-sample/ });
+    expect(liveLinks).toHaveLength(4);
+    expect(liveLinks.map(link => link.getAttribute('href'))).toEqual([
+      ...hiddenSampleSlugs.slice(0, 3).map(slug => `/requests/${slug}?page=1`),
+      `/requests/${hiddenSampleSlugs[0]}-other?page=1`,
+    ]);
+    expect(screen.queryByRole('link', { name: /Request hidden-/ })).toBeNull();
+    expect(screen.getAllByText('(SAMPLE)')).toHaveLength(1);
+    expect(screen.queryByRole('link', { name: 'Next' })).toBeNull();
+    expect(liveLinks[3].compareDocumentPosition(section) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    expect(within(section).getByText(/fictional requests/)).toBeTruthy();
+    const cards = within(section).getAllByRole('article');
+    expect(cards.map(card => within(card).getByRole('heading', { level: 3 }).textContent)).toEqual([
+      'Synthetic retail transaction records for a sales analytics dashboard',
+      'Synthetic retail sales for a demand-forecasting demo',
+      'Synthetic daily retail transactions for a sales analytics dashboard',
+      'Synthetic retail sales and inventory for a demand-forecasting demo',
+    ]);
+    cards.forEach(card => expect(within(card).getByText('Fulfilled')).toBeTruthy());
+    expect(section.querySelector('a, button, form, input, select, [tabindex], [role="button"]')).toBeNull();
+    expect(section.textContent).not.toMatch(/\$|response|\bbids?\b|@/i);
+  });
+
+  it.each([
+    { search: 'synthetic' }, { category: 'retail' }, { page: '2' },
+  ])('omits the examples outside the unfiltered first page (%j)', async params => {
+    fetchDataRequests.mockResolvedValue({ items: [request('live')], total: 41 });
+    await renderPage(params);
+    expect(screen.queryByRole('region', { name: 'Fulfilled examples' })).toBeNull();
+    expect(screen.getByRole('link', { name: /Request live/ })).toBeTruthy();
+  });
+
+  it('offers the next upstream page when every first-page row is an excluded sample', async () => {
+    fetchDataRequests.mockResolvedValue({ items: hiddenSampleSlugs.map((slug, i) => (
+      request(`hidden-${i}`, { slug, is_sample: true })
+    )), total: 21 });
+    await renderPage({ category: 'retail', search: 'sales' });
+    expect(screen.queryByRole('link', { name: /Request hidden-/ })).toBeNull();
+    expect(screen.getByText('No requests on this page')).toBeTruthy();
+    expect(screen.getByRole('link', { name: 'Next' }).getAttribute('href'))
+      .toBe('/requests?page=2&category=retail&search=sales');
+  });
+
   it('renders newest requests first with existing detail, budget and post links', async () => {
     fetchDataRequests.mockResolvedValue({ items: [
       request('older'), request('newer', { created_at: '2026-10-02T12:00:00Z', categories: ['finance', 'Custom category'] }),
