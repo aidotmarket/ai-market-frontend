@@ -368,7 +368,9 @@ describe('seller presentation on the real listing route', () => {
     expect(html).toContain('Synthetic Co');
     expect(html).toContain('Stripe connected');
     expect(html).toContain('12 completed purchases');
+    expect(html).toContain('This count covers genuine completed paid purchases across this seller’s public listings');
     expect(html).toContain('4.7/5 from 9 ratings');
+    expect(html).toContain('Only eligible buyer ratings from genuine completed paid purchases across this seller’s public listings count.');
     expect(html).not.toContain('Privacy Score');
     expect(html).not.toContain('Trust Level');
   });
@@ -713,6 +715,7 @@ describe('ListingDetailPage Dataset JSON-LD', () => {
     expect(html).not.toContain('Not scored');
     expect(html).toContain('The seller can request a verified scan of this data.');
     expect(html).toContain('Review before buying');
+    expect(html).toMatch(/<a href="#ask-a-question"[^>]*>Ask a question about this listing<\/a>/);
     expect(html).toContain('No active scan findings are published for this listing');
     expect(html.toLowerCase()).not.toContain('quality score');
     expect(html).toContain('<button type="button">Buy</button>');
