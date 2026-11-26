@@ -25,7 +25,7 @@ const HIDDEN_SAMPLE_SLUGS = new Set([
   'i-need-a-fully-synthetic-retail-sales-dataset-for-testing-a-demand-49e7b84c',
   'seeking-a-fully-synthetic-retail-transactions-dataset-for-testing-a-sales-047d7cd2',
   'i-need-a-fully-synthetic-retail-transactions-dataset-to-test-a-sales-07e5b9a4',
-  'i-need-a-fully-synthetic-retail-transactions-dataset-to-test-a-sales-9d78ecb4',
+  'i-need-a-fully-synthetic-retail-transactions-dataset-for-testing-a-sales-9d78ecb4',
   'i-need-a-fully-synthetic-retail-sales-dataset-for-testing-a-demand-40b47d84',
 ]);
 
