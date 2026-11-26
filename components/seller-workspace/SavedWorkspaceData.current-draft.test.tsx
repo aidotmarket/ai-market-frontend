@@ -86,9 +86,9 @@ function backend(){
   return {drafts,sources,writes,sourceReads,createOrdinary,onSourceSave:(callback:()=>void)=>{afterSourceSave=callback;},onDraftRead:(callback:()=>Promise<SavedListingDraft|null>)=>{readDraft=callback;},onSourceRead:(callback:(id:string|null)=>void|Promise<void>)=>{beforeSourceRead=callback;},get draftReads(){return draftReads;},loseNextResponse:()=>{loseResponse=true;}};
 }
 function DraftStatus(){const {draft,sampleIndices,selectionSavePending,selectionSaveFailed}=useSellerListingDraft();return <output data-testid="draft-id" data-sample-decision={draft?.content.sample_decision} data-sample-indices={JSON.stringify(sampleIndices)} data-samples-blocked={selectionSavePending||selectionSaveFailed}>{draft?.draft_id??"empty"}</output>;}
-function mount(enabled=true,guided=false,sampleCapability=false){
+function mount(enabled=true,guided=false,sampleCapability=false,navigate=vi.fn()){
   const editor=<><DraftStatus/><SavedWorkspaceData enabled connections={[guidedConnection]}/></>;
-  return render(<SellerListingDraftProvider enabled={enabled} sampleCapability={sampleCapability}>{guided?<GuidedListingFlow capabilities={{...guidedCapabilities,review:{enabled:false,status:'unavailable',reason:'disabled'},listing_licenses:false}} connections={[guidedConnection]} view="data" navigate={vi.fn()}>{editor}</GuidedListingFlow>:editor}</SellerListingDraftProvider>);
+  return render(<SellerListingDraftProvider enabled={enabled} sampleCapability={sampleCapability}>{guided?<GuidedListingFlow capabilities={{...guidedCapabilities,review:{enabled:false,status:'unavailable',reason:'disabled'},listing_licenses:false}} connections={[guidedConnection]} view="data" navigate={navigate}>{editor}</GuidedListingFlow>:editor}</SellerListingDraftProvider>);
 }
 async function select(){fireEvent.click(await screen.findByRole('checkbox',{name:'Select weekly/sales.csv'}));}
 function save(){fireEvent.click(screen.getByRole('button',{name:'Save selected files'}));fireEvent.click(screen.getByRole('button',{name:'Confirm selection'}));}
@@ -289,6 +289,42 @@ it.each([false,true])('fences A while the successful PUT reports B and the draft
   expect((sales as HTMLInputElement).checked).toBe(false);
   expect(screen.getByTestId('draft-id').textContent).toBe(b);
   expect(model.sourceReads).toContain(b);expect(model.sources.has(b)).toBe(false);expect(model.writes).toHaveLength(1);
+});
+
+it.each(['same draft','first save','replacement'] as const)('advances Next only when the deferred draft reload confirms its target: %s',async outcome=>{
+  const model=backend();
+  const initialId=outcome==='first save'?null:a;
+  if(initialId)model.createOrdinary(initialId);
+  const navigate=vi.fn();
+  mount(true,true,true,navigate);
+  await select();
+  expect(screen.getByTestId('draft-id').textContent).toBe(initialId??'empty');
+  const readsBeforeNext=model.draftReads;
+  let finishReload!:(draft:SavedListingDraft)=>void;
+  const draftRead=new Promise<SavedListingDraft>(resolve=>{finishReload=resolve;});
+  model.onDraftRead(()=>draftRead);
+  fireEvent.click(screen.getByRole('button',{name:'Next: Describe and price →'}));
+  await waitFor(()=>expect(model.draftReads).toBe(readsBeforeNext+1));
+  expect(model.writes).toHaveLength(1);
+  expect(model.writes[0]).toMatchObject({expected_current_draft_id:initialId,expected_version:0});
+  expect(model.sources.get(a)?.version).toBe(1);
+  expect(navigate).not.toHaveBeenCalled();
+
+  const current=outcome==='replacement'?model.createOrdinary(b):model.drafts.get(a)!;
+  await act(async()=>finishReload(current));
+  const sales=await screen.findByRole('checkbox',{name:'Select weekly/sales.csv'}) as HTMLInputElement;
+  expect(screen.getByTestId('draft-id').textContent).toBe(current.draft_id);
+  expect(model.writes).toHaveLength(1);
+  if(outcome==='replacement'){
+    expect(model.sourceReads).toContain(b);
+    expect(model.sources.has(b)).toBe(false);
+    expect(model.drafts.get(b)).toEqual(current);
+    expect(sales.checked).toBe(false);
+    expect(navigate).not.toHaveBeenCalled();
+  }else{
+    expect(sales.checked).toBe(true);
+    expect(navigate.mock.calls).toEqual([['listing']]);
+  }
 });
 
 

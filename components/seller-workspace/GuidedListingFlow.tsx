@@ -23,11 +23,12 @@ type PublicationPolish = {
 };
 type StartListingRecovery = 'published-refusal';
 
-type Flow = {samplesBlocked:boolean; stepsForContent:(content:ListingDraftContent)=>ListingStep[]; sourceCurrentDraftId:string|null; sourceLoaded:boolean; sourceDraftChanged:boolean; reloadSource:()=>Promise<void>; sourceError:string; fileRevision:number; setFilesDirty:(dirty:boolean)=>void; setListingDirty:(dirty:boolean)=>void; setLicenceDirty:(dirty:boolean)=>void; source: SourceRead|null; categories: SellerCategory[]; steps: ListingStep[]; review: ListingReview|null;
+type Flow = {samplesBlocked:boolean; stepsForContent:(content:ListingDraftContent)=>ListingStep[]; sourceCurrentDraftId:string|null; sourceLoaded:boolean; sourceDraftChanged:boolean; sourceReloadRequired:boolean; reloadSource:()=>Promise<void>; sourceError:string; fileRevision:number; setFilesDirty:(dirty:boolean)=>void; setListingDirty:(dirty:boolean)=>void; setLicenceDirty:(dirty:boolean)=>void; source: SourceRead|null; categories: SellerCategory[]; steps: ListingStep[]; review: ListingReview|null;
   reviewError: string; reviewLoading: boolean; publication: PublicationState|null; publicationError: string;
-  beginSourceSave: ()=>()=>boolean;
+  beginSourceSave: ()=>(options?:{allowDraftTransition?:boolean})=>boolean;
   refreshReview: ()=>void; refreshPublication: ()=>void; sourceSaved: (response:SourceSaveResponse)=>void; sourceSaveRefused:(message:string)=>void;
   sourcePointerRefused:(draftId:string|null)=>void;
+  sourceVersionRefused:(draftId:string|null)=>void;
   approved: (approval:ApprovalReceipt)=>void; published: (state:PublicationState)=>void;
   startAnotherListing:(recovery?:StartListingRecovery)=>void; startingListing:boolean; navigate: (view:WorkspaceView)=>void; licensesEnabled: boolean;
   polishLock: React.RefObject<boolean>; polishBusy: boolean; setPolishBusy:(busy:boolean)=>void;
@@ -97,11 +98,11 @@ export function GuidedListingFlow({connections, capabilities, view, navigate, ch
   const [fileRevision,setFileRevision]=useState(0);
   const [loadedSourceScope,setLoadedSourceScope]=useState<{revision:number}|null>(null);
   const [sourceCurrentDraftId,setSourceCurrentDraftId]=useState<string|null>(null);
-  const [source,setSource] = useState<SourceRead|null>(null);
+  const [savedSource,setSource] = useState<SourceRead|null>(null);
   const [categories,setCategories] = useState<SellerCategory[]>([]);
   const [readError,setReadError] = useState('');
   const [readRetry,setReadRetry] = useState(0);
-  const [sourceRefusal,setSourceRefusal] = useState<{draftId:string|null; readRetry:number}|null>(null);
+  const [sourceRefusal,setSourceRefusal] = useState<{draftId:string|null; readRetry:number; reason:'draft'|'files'}|null>(null);
   const [review,setReview] = useState<ListingReview|null>(null);
   const [reviewError,setReviewError] = useState('');
   const [reviewStatus,setReviewStatus] = useState('');
@@ -127,9 +128,16 @@ export function GuidedListingFlow({connections, capabilities, view, navigate, ch
   const sourceScopeCurrent=()=>committedSourceScope.current===sourceScope&&isCurrentDraftScope();
   const beginSourceOperation=()=>{
     const revision=++sourceScope.revision;
-    return()=>sourceScopeCurrent()&&sourceScope.revision===revision;
+    return(options?:{allowDraftTransition?:boolean})=>committedSourceScope.current===sourceScope&&
+      sourceScope.revision===revision&&(options?.allowDraftTransition||isCurrentDraftScope());
   };
-  const sourceLoaded=loadedSourceScope===sourceScope;
+  const pointerMatchesDraft=!available||sourceCurrentDraftId===(draftId??null);
+  // Retain refusals across panel retries until a fresh source read.
+  const refusal=sourceRefusal?.draftId===(draftId??null)?sourceRefusal.reason:null;
+  const sourceDraftChanged=refusal==='draft'||loadedSourceScope===sourceScope&&available&&loaded&&!pointerMatchesDraft;
+  const sourceReloadRequired=refusal==='files';
+  const sourceLoaded=loadedSourceScope===sourceScope&&pointerMatchesDraft&&!refusal;
+  const source=sourceLoaded?savedSource:null;
   useEffect(()=>{requestLoad();},[requestLoad]);
   useEffect(()=>{
     const controller=new AbortController();
@@ -187,19 +195,16 @@ export function GuidedListingFlow({connections, capabilities, view, navigate, ch
   },[approval,publicationRetry]);
   const steps=listingSteps({connections,source,draft,categories,licensesEnabled,review,publication:publication?.publication??null,pending,licenceDirty,reviewReason:listingDirty?'Save your changes in Describe and price before continuing.':reviewError});
   const next=steps.find(s=>s.next);
-  const pointerMatchesDraft=!available||sourceCurrentDraftId===(draft?.draft_id??null);
-  // Keep a known refusal across a data panel remount until a fresh source read.
-  const sourceDraftChanged=sourceRefusal?.draftId===(draft?.draft_id??null)||
-    sourceLoaded&&available&&loaded&&!pointerMatchesDraft;
   const reloadSource=async()=>{
     const isCurrent=beginSourceOperation();
     setLoadedSourceScope(null);
     // Saved sources can be available independently of saved drafts.
     try{if(available)await reload();}finally{if(isCurrent())setReadRetry(n=>n+1);}
   };
-  const flow:Flow={startAnotherListing:recovery=>void startAnotherListing(recovery),startingListing,samplesBlocked:selectionSavePending||selectionSaveFailed,stepsForContent:content=>listingSteps({connections,source,draft:{version:draft?.version??0,updated_at:draft?.updated_at??'',content:{...draft?.content,...content}},categories,licensesEnabled,review:null,publication:null,pending,licenceDirty}),sourceCurrentDraftId,sourceLoaded:sourceLoaded&&pointerMatchesDraft,sourceDraftChanged,reloadSource,sourceError:readError,fileRevision,setFilesDirty:dirty=>{setFilesDirty(dirty);if(dirty)setFileRevision(n=>n+1);},setListingDirty,setLicenceDirty,source,categories,steps,review,reviewError,reviewLoading,publication,publicationError,licensesEnabled,navigate,beginSourceSave:beginSourceOperation,
+  const flow:Flow={startAnotherListing:recovery=>void startAnotherListing(recovery),startingListing,samplesBlocked:selectionSavePending||selectionSaveFailed,stepsForContent:content=>listingSteps({connections,source,draft:{version:draft?.version??0,updated_at:draft?.updated_at??'',content:{...draft?.content,...content}},categories,licensesEnabled,review:null,publication:null,pending,licenceDirty}),sourceCurrentDraftId,sourceLoaded,sourceDraftChanged,sourceReloadRequired,reloadSource,sourceError:readError,fileRevision,setFilesDirty:dirty=>{setFilesDirty(dirty);if(dirty)setFileRevision(n=>n+1);},setListingDirty,setLicenceDirty,source,categories,steps,review,reviewError,reviewLoading,publication,publicationError,licensesEnabled,navigate,beginSourceSave:beginSourceOperation,
     refreshReview:()=>setReviewRetry(n=>n+1),refreshPublication:()=>setPublicationRetry(n=>n+1),sourceSaveRefused:setSourceSaveNotice,sourceSaved:value=>{setSourceSaveNotice('');setSource(value.source);setSourceCurrentDraftId(value.current_draft_id);setFilesDirty(false);},
-    sourcePointerRefused:draftId=>setSourceRefusal({draftId,readRetry}),
+    sourcePointerRefused:draftId=>setSourceRefusal({draftId,readRetry,reason:'draft'}),
+    sourceVersionRefused:draftId=>setSourceRefusal({draftId,readRetry,reason:'files'}),
     approved:a=>setReview(r=>r?{...r,approval:a}:r),published:setPublication,
     polishLock,polishBusy,setPolishBusy,polishPublication,polishNotice,setPolishNotice,listingDirty,
     openPublicationPolish:item=>{

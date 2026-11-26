@@ -189,3 +189,74 @@ it("keeps the newer save when an older PUT completes after a panel remount",asyn
  expect(api.save).toHaveBeenCalledTimes(2);
  expect(navigate).toHaveBeenCalledOnce();
 });
+
+it("requires a fresh source read after a remounted panel's overlapping save conflicts",async()=>{
+ const first=deferred<ReturnType<typeof source>>();
+ const second=deferred<ReturnType<typeof source>>();
+ const navigate=vi.fn();
+ api.save.mockReturnValueOnce(first.promise).mockReturnValueOnce(second.promise);
+ const workspace=(attempt:number)=><SellerListingDraftProvider enabled sampleCapability={false}>
+  <GuidedListingFlow capabilities={caps} connections={[guidedConnection]} view="data" navigate={navigate}>
+   <SourceStatus/><SavedWorkspaceData key={attempt} enabled connections={[guidedConnection]}/>
+  </GuidedListingFlow>
+ </SellerListingDraftProvider>;
+ const {rerender}=render(workspace(0));
+ const next=()=>fireEvent.click(screen.getByRole("button",{name:"Next: Describe and price →"}));
+ fireEvent.click(await screen.findByRole("checkbox",{name:"Select weekly/sales.csv"}));
+ fireEvent.click(screen.getByRole("checkbox",{name:"Select weekly/b.csv"}));
+ next();
+ expect(api.save).toHaveBeenCalledOnce();
+
+ // The first PUT commits before the second checks its precondition.
+ const committed={...source([extra]),version:5};
+ api.source.mockResolvedValue(committed);
+ rerender(workspace(1));
+ fireEvent.click(await screen.findByRole("checkbox",{name:"Select weekly/b.csv"}));
+ next();
+ expect(api.save.mock.calls.map(call=>[call[1],call[3]])).toEqual([[4,"A"],[4,"A"]]);
+ expect(api.save.mock.calls[0][0].objects).toMatchObject([{key:"weekly/b.csv"}]);
+ expect(api.save.mock.calls[1][0].objects).toHaveLength(2);
+ await act(async()=>second.reject({isAxiosError:true,response:{status:409,data:{detail:"Source selection changed. Refresh the files before saving again."}}}));
+ await act(async()=>first.resolve(committed));
+ expect(navigate).not.toHaveBeenCalled();
+
+ rerender(workspace(2));
+ expect(screen.queryByText(/File selection saved to your account/)).toBeNull();
+ const reload=await screen.findByRole("button",{name:"Reload saved files"});
+ expect(api.save).toHaveBeenCalledTimes(2);
+ fireEvent.click(reload);
+ expect((await screen.findByRole("checkbox",{name:"Select weekly/b.csv"}) as HTMLInputElement).checked).toBe(true);
+ expect((screen.getByRole("checkbox",{name:"Select weekly/sales.csv"}) as HTMLInputElement).checked).toBe(false);
+ expect(screen.getByTestId("source-state").textContent).toBe(JSON.stringify(committed));
+ expect(await screen.findByText(/File selection saved to your account/)).toBeTruthy();
+ expect(api.save).toHaveBeenCalledTimes(2);
+ expect(navigate).not.toHaveBeenCalled();
+});
+
+it.each([false,true])("updates a remounted panel's saved baseline when its predecessor commits, with newer edits=%s",async edit=>{
+ const first=deferred<ReturnType<typeof source>>();
+ api.save.mockReturnValueOnce(first.promise);
+ const workspace=(attempt:number)=><SellerListingDraftProvider enabled sampleCapability={false}>
+  <GuidedListingFlow capabilities={caps} connections={[guidedConnection]} view="data" navigate={vi.fn()}>
+   <SavedWorkspaceData key={attempt} enabled connections={[guidedConnection]}/>
+  </GuidedListingFlow>
+ </SellerListingDraftProvider>;
+ const {rerender}=render(workspace(0));
+ const sales=()=>screen.getByRole("checkbox",{name:"Select weekly/sales.csv"}) as HTMLInputElement;
+ const added=()=>screen.findByRole("checkbox",{name:"Select weekly/b.csv"}) as Promise<HTMLInputElement>;
+ fireEvent.click(await added());
+ fireEvent.click(sales());
+ fireEvent.click(screen.getByRole("button",{name:"Save selected files"}));
+ fireEvent.click(screen.getByRole("button",{name:"Confirm selection"}));
+ expect(api.save).toHaveBeenCalledOnce();
+
+ rerender(workspace(1));
+ const extraBox=await added();
+ expect((screen.getByRole("button",{name:"Next: Describe and price →"}) as HTMLButtonElement).disabled).toBe(true);
+ if(edit)fireEvent.click(extraBox);
+ await act(async()=>first.resolve({...source([extra]),version:5}));
+ expect(sales().checked).toBe(edit);
+ expect(extraBox.checked).toBe(true);
+ expect(Boolean(screen.queryByText(/File selection saved to your account/))).toBe(!edit);
+ expect(api.save).toHaveBeenCalledOnce();
+});

@@ -116,8 +116,10 @@ function ObjectBrowser({ connection, initialSelection, onSaveSelection,sourceVer
   onSaveSampleSelection,onVisibleSampleSelectionChange,sampleLimits }: { connection: SellerWorkspaceConnection; initialSelection?: WorkspaceObject[]; onSaveSelection?: SaveSelection;
   sourceVersion?:number;sampleFilesAvailable:boolean;initialSampleIndices:number[];onSaveSampleSelection?:SaveSampleSelection;onVisibleSampleSelectionChange?:(indices:number[]|null)=>void;sampleLimits:SampleLimits }) {
   const flow=useListingFlow();
-  const initial = useRef(initialSelection ?? []);
-  const [savedSelection, setSavedSelection] = useState(JSON.stringify((initialSelection ?? []).map(objectIdentity)));
+  const hydratedSelection = useRef(initialSelection ?? []);
+  const sourceSelection = JSON.stringify((initialSelection??[]).map(objectIdentity));
+  const previousSourceSelection = useRef(sourceSelection);
+  const [savedSelection, setSavedSelection] = useState(sourceSelection);
   const [savingSelection, setSavingSelection] = useState(false);
   const saving = useRef(false);
   const [confirmation,setConfirmation]=useState<string|null>(null);
@@ -135,7 +137,7 @@ function ObjectBrowser({ connection, initialSelection, onSaveSelection,sourceVer
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(false);
   const [query, setQuery] = useState('');
-  const [selected, setSelected] = useState<WorkspaceObject[]>(initial.current);
+  const [selected, setSelected] = useState<WorkspaceObject[]>(hydratedSelection.current);
   const [retry, setRetry] = useState(0);
   const mounted = useRef(true);
   const pending = useRef(false);
@@ -197,11 +199,22 @@ function ObjectBrowser({ connection, initialSelection, onSaveSelection,sourceVer
     finally { pending.current = false; if (mounted.current) setLoading(false); }
   };
   const selectionSnapshot = useMemo(()=>JSON.stringify(selected.map(objectIdentity)),[selected]);
+  useEffect(()=>{
+    if(previousSourceSelection.current===sourceSelection)return;
+    previousSourceSelection.current=sourceSelection;
+    // A save started by the previous panel can update this editor's baseline.
+    if(selected===hydratedSelection.current){
+      hydratedSelection.current=initialSelection??[];
+      setSelected(hydratedSelection.current);
+      setSelectedFolders([]);
+    }
+    setSavedSelection(sourceSelection);
+  },[initialSelection,sourceSelection,selected]);
   const selectedIdentities=useMemo(()=>new Set(selected.map(objectIdentity)),[selected]);
   const selectionBytes=useMemo(()=>selected.reduce((sum,item)=>sum+item.size,0),[selected]);
   useEffect(()=>setSelectionPage(0),[selected]);
   const flowRef=useRef(flow);flowRef.current=flow;
-  useEffect(()=>{flowRef.current?.setFilesDirty(selectionSnapshot!==savedSelection);},[selectionSnapshot,savedSelection]);
+  useEffect(()=>{flowRef.current?.setFilesDirty(selectionSnapshot!==savedSelection);},[selectionSnapshot,savedSelection,sourceVersion]);
   const saveSelection = async (movingOn = false) => {
     if (!onSaveSelection || saving.current || resolvingRef.current || selected.length === 0 || (!movingOn && confirmation !== selectionSnapshot)) return false;
     saving.current = true; setSavingSelection(true); setSelectionError(null);
@@ -209,7 +222,7 @@ function ObjectBrowser({ connection, initialSelection, onSaveSelection,sourceVer
     try {
       const complete=await onSaveSelection(connection, [...selected]);
       if(complete===null)return false;
-      if (mounted.current) {setSavedSelection(submitted);setConfirmation(null);}
+      if (mounted.current) {hydratedSelection.current=selected;setSavedSelection(submitted);setConfirmation(null);}
       if(complete===false){setSelectionError('Your files were saved, but your sample choice could not be saved. Finish or clear the sample choice before continuing.');return false;}
       return true;
     } catch (error) {
