@@ -1103,14 +1103,27 @@ describe('signed-out gateway help', () => {
     expect(screen.queryByRole('link', { name: 'Read the AIM Data setup guide' })).toBeNull();
   });
 
-  it.each(['Where can I find my order?', 'My payment gateway declined my card'])(
-    'keeps ordinary support recovery for %s', async (question) => {
-      mount('/support', response(503));
+  it.each([
+    ['/support', 'Where can I find my order?'],
+    ['/support', 'My payment gateway declined my card'],
+    ['/support', 'Does your checkout gateway support installment payments?'],
+    ['/aim-data', 'My payment gateway declined my card'],
+    ['/aim-data', 'How do I install it?'],
+  ])(
+    'keeps ordinary recovery on %s for %s', async (path, question) => {
+      mount(path, response(503));
       await send(question);
       expect(screen.getByText(GENERIC_ERROR)).toBeTruthy();
       expect(screen.queryByRole('link')).toBeNull();
     }
   );
+
+  it('links to the setup guide for an explicit gateway install question on support', async () => {
+    mount('/support', response(503));
+    await send('How do I install the gateway?');
+    expect(screen.getByRole('link', { name: 'Read the AIM Data setup guide' }).getAttribute('href'))
+      .toBe('/aim-data#gateway-setup');
+  });
 });
 
 describe('mounted anonymous next-step navigation', () => {
