@@ -1055,9 +1055,10 @@ const accountNextSteps = [
 ].map((step) => ({ ...step, label: step.action, requires_account: true }));
 
 describe('signed-out gateway help', () => {
-  const gatewayQuestion = 'How do I set up the AIM Data gateway with Docker?';
-  const portsQuestion = 'Which ports do I need to open?';
-  const gatewayError = "We couldn't answer that question about Docker and networking.";
+  const pages = ['/support', '/aim-data'];
+  const guideUrl = '/aim-data#network-requirements';
+  const setupQuestion = 'How do I install the gateway?';
+  const gatewayError = 'Unable to answer. [Set up your gateway](/aim-data#gateway-setup)';
 
   function mount(path: string, reply: Response) {
     mocks.pathname = path;
@@ -1069,61 +1070,59 @@ describe('signed-out gateway help', () => {
     renderProvider('stale-session', true);
   }
 
-  it.each(['/aim-data', '/support'])('renders the verified AIM Data next step on %s', async (path) => {
+  it.each(pages)('renders the verified AIM Data next step on %s', async (path) => {
     mount(path, sseEvents({
       type: 'answer',
       text: 'Verified network instructions.',
       next_step: { action: 'view_aim_data', url: '/aim-data', label: 'View AIM Data', requires_account: false },
     }));
-    await send(portsQuestion);
+    await send('Which ports do I need to open?');
     expect(screen.getByText('Verified network instructions.')).toBeTruthy();
     expect(screen.getByRole('link', { name: 'View AIM Data' }).getAttribute('href')).toBe('/aim-data');
+    expect(screen.getAllByRole('link')).toHaveLength(1);
     expect(messagePayload(messageCalls()[0]).context).toEqual({ page: path });
   });
 
-  it.each([
-    ['/aim-data', 'safe failure', () => sseEvents({ type: 'safe_failure', outcome: 'answer_unverified', text: gatewayError })],
-    ['/support', 'stream error', () => sseEvents({ type: 'error', message: gatewayError })],
-    ['/aim-data', 'HTTP failure', () => response(503)],
-    ['/support', 'empty stream', () => sseEvents({ type: 'done' })],
-  ] as const)('links to published setup guidance on %s after a %s', async (path, _failure, reply) => {
-    mount(path, reply());
-    await send(gatewayQuestion);
-    expect(screen.getByText(/Start with a free ai.market account/)).toBeTruthy();
-    expect(screen.getByRole('link', { name: 'Read the AIM Data setup guide' }).getAttribute('href')).toBe('/aim-data#gateway-setup');
-    expect(screen.queryByText(gatewayError)).toBeNull();
-    expect(screen.queryByText(GENERIC_ERROR)).toBeNull();
-  });
-
-  it('links to published network requirements when the ports question fails on AIM Data', async () => {
-    mount('/aim-data', sseEvents({ type: 'safe_failure', outcome: 'answer_unverified', text: gatewayError }));
-    await send(portsQuestion);
-    expect(screen.getByRole('link', { name: 'Read the AIM Data network requirements' }).getAttribute('href'))
-      .toBe('/aim-data#network-requirements');
-    expect(screen.queryByRole('link', { name: 'Read the AIM Data setup guide' })).toBeNull();
-  });
-
-  it.each([
-    ['/support', 'Where can I find my order?'],
-    ['/support', 'My payment gateway declined my card'],
-    ['/support', 'Does your checkout gateway support installment payments?'],
-    ['/aim-data', 'My payment gateway declined my card'],
-    ['/aim-data', 'How do I install it?'],
-  ])(
-    'keeps ordinary recovery on %s for %s', async (path, question) => {
+  it.each(pages.flatMap((path) => [
+    '502 Bad Gateway while downloading my purchase',
+    'installment payments',
+    'payment gateway declined my card',
+    setupQuestion,
+    'Which ports do I need to open?',
+  ].map((question) => [path, question] as const)))(
+    'uses page context for HTTP failure recovery on %s for %s', async (path, question) => {
       mount(path, response(503));
       await send(question);
       expect(screen.getByText(GENERIC_ERROR)).toBeTruthy();
-      expect(screen.queryByRole('link')).toBeNull();
+      expect(screen.queryAllByRole('link').map((link) => link.getAttribute('href')))
+        .toEqual(path === '/aim-data' ? [guideUrl] : []);
+      if (path === '/aim-data') expect(screen.getByRole('link', { name: 'AIM Data setup guide' })).toBeTruthy();
     }
   );
 
-  it('links to the setup guide for an explicit gateway install question on support', async () => {
-    mount('/support', response(503));
-    await send('How do I install the gateway?');
-    expect(screen.getByRole('link', { name: 'Read the AIM Data setup guide' }).getAttribute('href'))
-      .toBe('/aim-data#gateway-setup');
+  it.each(pages)('preserves ordinary safe-failure recovery on %s', async (path) => {
+    mount(path, sseEvents({ type: 'safe_failure', outcome: 'answer_unverified', text: gatewayError }));
+    await send(setupQuestion);
+    expect(screen.getByText(anonymousAllAIResources('en').safeOutcomes.answer_unverified)).toBeTruthy();
+    expect(screen.getAllByRole('link').map((link) => link.getAttribute('href'))).toEqual([
+      '/find-data',
+      '/register?redirect=%2Frequests%2Fnew',
+      ...(path === '/aim-data' ? [guideUrl] : []),
+    ]);
   });
+
+  it.each(pages.flatMap((path) => ([
+    ['stream error', () => sseEvents({ type: 'error', message: gatewayError })],
+    ['empty stream', () => sseEvents({ type: 'done' })],
+  ] as const).map(([failure, reply]) => [path, failure, reply] as const)))(
+    'preserves ordinary recovery on %s after a %s', async (path, _failure, reply) => {
+      mount(path, reply());
+      await send(setupQuestion);
+      expect(screen.getByText(GENERIC_ERROR)).toBeTruthy();
+      expect(screen.queryAllByRole('link').map((link) => link.getAttribute('href')))
+        .toEqual(path === '/aim-data' ? [guideUrl] : []);
+    }
+  );
 });
 
 describe('mounted anonymous next-step navigation', () => {

@@ -1,33 +1,9 @@
 import type { AnonymousChatEvent } from '@/api/anonymousChat';
 
-export type GatewayFallbackDestination = '/aim-data#gateway-setup' | '/aim-data#network-requirements';
-
 export interface FallbackDestinations {
-  gateway?: GatewayFallbackDestination;
   support?: '/support';
   search?: string;
   request?: '/requests/new';
-}
-
-export function isGatewayHelpPage(page: string) {
-  return page === '/aim-data' || page === '/support';
-}
-
-export function gatewayHelpFallback(page: string, question: string): { gateway: GatewayFallbackDestination } | undefined {
-  if (!isGatewayHelpPage(page)) return;
-  if (/\b(?:payments?|check-?outs?|cards?|install?ments?|pagos?|tarjetas?|cuotas?)\b|支付|付款|结账|結帳|银行卡|銀行卡|信用卡|借记卡|扣帳卡|分期/i.test(question)) return;
-
-  const mentionsAimData = /\b(?:aim[\s-]+data|docker)\b/i.test(question);
-  const mentionsGateway = /\bgateways?\b|网关|閘道/i.test(question);
-  const asksAboutGatewayInstall = (mentionsAimData || mentionsGateway) &&
-    /\b(?:install(?:s|ed|ing|ations?)?|instalar|instalaci[oó]n)\b|安装|安裝/i.test(question);
-  const asksAboutSetup = asksAboutGatewayInstall || /\b(?:setup|set up|configur\w*)\b|设置|配置/i.test(question);
-  const asksAboutNetwork = /\b(?:network(?:ing)?|ports?|firewalls?|egress|red|puertos?)\b|网络|端口|防火墙/i.test(question);
-  if (page === '/support' && !mentionsAimData && (!mentionsGateway || !(asksAboutSetup || asksAboutNetwork))) return;
-
-  if (asksAboutNetwork) return { gateway: '/aim-data#network-requirements' };
-  if (!mentionsAimData && !mentionsGateway && !asksAboutSetup) return;
-  return { gateway: '/aim-data#gateway-setup' };
 }
 
 function marketplaceUrl(raw: string) {

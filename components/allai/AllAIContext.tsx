@@ -25,7 +25,7 @@ import {
   type AnonymousMessagePayload,
 } from '@/api/anonymousChat';
 import type { TicketStatusCardData } from './TicketStatusCard';
-import { anonymousFallbackDestinations, gatewayHelpFallback, isGatewayHelpPage, type FallbackDestinations } from '@/lib/anonymous-allai-fallback';
+import { anonymousFallbackDestinations, type FallbackDestinations } from '@/lib/anonymous-allai-fallback';
 import {
   ANONYMOUS_ALLAI_LOCALES,
   anonymousAllAIResources,
@@ -45,6 +45,7 @@ export interface Message {
   failureNotice?: string;
   listingFailure?: 'error' | 'timeout';
   fallbackDestinations?: FallbackDestinations;
+  showAimDataSetupGuide?: boolean;
   timestamp: number;
   ticketStatusCards?: TicketStatusCardData[];
   historical?: boolean;
@@ -430,12 +431,14 @@ export function AllAIProvider({ children }: { children: ReactNode }) {
       const trimmed = text.trim();
       if (!trimmed || isStreaming) return;
       const resources = anonymousAllAIResources(locale);
+      const showAimDataSetupGuide = !user && contextPath === '/aim-data';
       if (trimmed.length > 4000) {
         setMessages((prev) => [...prev, {
           id: `assistant-${Date.now()}`,
           role: 'assistant',
           content: resources.safeOutcomes.message_too_long,
           safeOutcome: 'message_too_long',
+          showAimDataSetupGuide,
           timestamp: Date.now(),
         }]);
         return;
@@ -480,14 +483,7 @@ export function AllAIProvider({ children }: { children: ReactNode }) {
       setIsStreaming(true);
 
       const listingMatch = pathname.match(/^\/listings\/([^/]+)/);
-      const signedOutGatewayHelp = !user && isGatewayHelpPage(contextPath);
-      function getGatewayRecovery() {
-        const destinations = signedOutGatewayHelp ? gatewayHelpFallback(contextPath, trimmed) : undefined;
-        return destinations && {
-          content: resources.gatewayFallback[destinations.gateway].guidance,
-          fallbackDestinations: destinations,
-        };
-      }
+      const signedOutGatewayHelp = !user && (contextPath === '/aim-data' || contextPath === '/support');
 
       try {
         const sessionId = await ensureSession();
@@ -541,7 +537,7 @@ export function AllAIProvider({ children }: { children: ReactNode }) {
             });
           if (messageTooLong) {
             setMessages((prev) => prev.map((m) => m.id === assistantId
-              ? { ...m, content: resources.safeOutcomes.message_too_long, safeOutcome: 'message_too_long' }
+              ? { ...m, content: resources.safeOutcomes.message_too_long, safeOutcome: 'message_too_long', showAimDataSetupGuide }
               : m));
             return;
           }
@@ -559,6 +555,7 @@ export function AllAIProvider({ children }: { children: ReactNode }) {
                     ...m,
                     content: limitContent,
                     safeOutcome: limitOutcome,
+                    showAimDataSetupGuide,
                   }
                 : m
             )
@@ -610,17 +607,16 @@ export function AllAIProvider({ children }: { children: ReactNode }) {
               const outcome = evt.outcome;
               const fallback = resources.safeOutcomes[outcome];
               const surface = listingMatch ? 'listing' : contextPath === '/' ? 'homepage' : undefined;
-              const recovery = outcome === 'answer_unverified' || outcome === 'retrieval_unavailable' || outcome === 'no_matches'
-                ? getGatewayRecovery() : undefined;
-              const fallbackDestinations = recovery?.fallbackDestinations ?? (surface && anonymousFallbackDestinations(evt, surface));
+              const fallbackDestinations = surface && anonymousFallbackDestinations(evt, surface);
               setMessages((prev) =>
                 prev.map((m) =>
                   m.id === assistantId
                     ? {
                         ...m,
-                        content: recovery?.content ?? (!fallbackDestinations && typeof evt.text === 'string' && evt.text ? evt.text : fallback),
+                        content: !signedOutGatewayHelp && !fallbackDestinations && typeof evt.text === 'string' && evt.text ? evt.text : fallback,
                         safeOutcome: outcome,
                         fallbackDestinations,
+                        showAimDataSetupGuide,
                         listingFailure: undefined,
                       }
                     : m
@@ -642,11 +638,13 @@ export function AllAIProvider({ children }: { children: ReactNode }) {
             // Error: support both {"error":"..."} and {"type":"error","message":"..."}
             const error = evt.error ?? (evt.type === 'error' ? evt.message : undefined);
             if (typeof error === 'string' && error) {
-              const gatewayRecovery = getGatewayRecovery();
               setMessages((prev) =>
                 prev.map((m) => {
-                  if (m.id !== assistantId || ((listingMatch || gatewayRecovery) && m.safeOutcome)) return m;
-                  if (gatewayRecovery) return m.factRevisionSet ? m : { ...m, ...gatewayRecovery };
+                  if (m.id !== assistantId || ((listingMatch || signedOutGatewayHelp) && m.safeOutcome)) return m;
+                  if (signedOutGatewayHelp) {
+                    if (m.factRevisionSet || m.nextStep) return m;
+                    return { ...m, content: resources.genericError, showAimDataSetupGuide };
+                  }
                   return listingMatch ? { ...m, listingFailure: 'error' } : { ...m, content: error };
                 })
               );
@@ -696,9 +694,9 @@ export function AllAIProvider({ children }: { children: ReactNode }) {
           if ((listingMatch || signedOutGatewayHelp) && !controller.signal.aborted) {
             setMessages((prev) => prev.map((m) => {
               if (m.id !== assistantId || m.content.trim() || m.ticketStatusCards?.length || m.nextStep) return m;
-              const gatewayRecovery = getGatewayRecovery();
-              if (gatewayRecovery) return { ...m, ...gatewayRecovery };
-              return listingMatch ? { ...m, listingFailure: 'error' } : m;
+              return listingMatch
+                ? { ...m, listingFailure: 'error' }
+                : { ...m, content: resources.genericError, showAimDataSetupGuide };
             }));
           }
         } catch (readErr) {
@@ -711,15 +709,14 @@ export function AllAIProvider({ children }: { children: ReactNode }) {
       } catch (err: any) {
         if (err?.name !== 'AbortError') {
           const failure = err?.message === 'Stream read timeout' ? 'timeout' : 'error';
-          const gatewayRecovery = getGatewayRecovery();
           setMessages((prev) =>
             prev.map((m) => {
               if (m.id !== assistantId || m.safeOutcome) return m;
               if (listingMatch) return { ...m, listingFailure: failure };
-              if (gatewayRecovery) return m.factRevisionSet ? m : { ...m, ...gatewayRecovery };
+              if (signedOutGatewayHelp && (m.factRevisionSet || m.nextStep)) return m;
               return m.content.trim()
-                ? { ...m, failureNotice: resources.genericError }
-                : { ...m, content: resources.genericError };
+                ? { ...m, failureNotice: resources.genericError, showAimDataSetupGuide }
+                : { ...m, content: resources.genericError, showAimDataSetupGuide };
             })
           );
         }
