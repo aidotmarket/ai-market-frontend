@@ -44,13 +44,15 @@ describe('SellDataPage', () => {
     expect(within(cards[0]).getByText(/There is nothing to install/)).toBeTruthy();
     expect(within(cards[0]).getByText(/time-limited links/)).toBeTruthy();
     expect(within(cards[1]).getByRole('heading', { name: 'Set up AIM Data for self-hosting' })).toBeTruthy();
-    expect(within(cards[1]).getByRole('link', { name: 'Set up a gateway' }).getAttribute('href')).toBe(
+    expect(within(cards[1]).getByRole('link', { name: isAuthenticated ? 'Set up a gateway' : 'Create a free account' }).getAttribute('href')).toBe(
       isAuthenticated ? '/dashboard/gateways' : '/register?redirect=%2Fdashboard%2Fgateways'
     );
     expect(within(cards[1]).getByText(/keep your data on your own server, you'll need someone who can install and run the AIM Data Gateway using a tool called Docker/)).toBeTruthy();
     expect(within(cards[1]).getByRole('link', { name: 'Read the AIM Data setup guide' }).getAttribute('href')).toBe('/aim-data');
-    expect(within(cards[1]).getByText(/automatically sends limited information to identify your files/)).toBeTruthy();
-    expect(within(cards[1]).getByText(/confirm each file before it shares a description/)).toBeTruthy();
+    expect(within(cards[1]).getByText(/automatically sends generated file references, fingerprints made with a secret key, file sizes, formats, and timestamps/)).toBeTruthy();
+    expect(within(cards[1]).getByText(/uses a neutral name unless you choose a display name/)).toBeTruthy();
+    expect(within(cards[1]).getByText(/After you confirm a file, it sends a checksum and, for supported formats, a structural description with the row count and selected column names and types/)).toBeTruthy();
+    expect(within(cards[1]).getByText(/roughly how much is missing and a range for the number of distinct values/)).toBeTruthy();
     expect(within(cards[1]).getByText(/These messages contain no data values/)).toBeTruthy();
     expect(within(cards[1]).getByText(/public sample/)).toBeTruthy();
     expect(within(cards[1]).getByText(/After purchase, buyers download the files directly through your gateway/)).toBeTruthy();

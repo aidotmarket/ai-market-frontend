@@ -101,7 +101,7 @@ export default function AimDataPage() {
           </p>
         </section>
 
-        <section className="mt-10 rounded-2xl bg-[#F7FCFA] p-6">
+        <section id="gateway-setup" className="mt-10 scroll-mt-20 rounded-2xl bg-[#F7FCFA] p-6">
           <h2 className="text-xl font-semibold text-gray-900">Set up your gateway</h2>
           <p className="mt-3 leading-7 text-gray-600">
             In Sell Data, open Gateways and choose Add a gateway. You get a one-time pairing code

@@ -45,6 +45,7 @@ export interface Message {
   failureNotice?: string;
   listingFailure?: 'error' | 'timeout';
   fallbackDestinations?: FallbackDestinations;
+  showAimDataSetupGuide?: boolean;
   timestamp: number;
   ticketStatusCards?: TicketStatusCardData[];
   historical?: boolean;
@@ -430,12 +431,14 @@ export function AllAIProvider({ children }: { children: ReactNode }) {
       const trimmed = text.trim();
       if (!trimmed || isStreaming) return;
       const resources = anonymousAllAIResources(locale);
+      const showAimDataSetupGuide = !user && contextPath === '/aim-data';
       if (trimmed.length > 4000) {
         setMessages((prev) => [...prev, {
           id: `assistant-${Date.now()}`,
           role: 'assistant',
           content: resources.safeOutcomes.message_too_long,
           safeOutcome: 'message_too_long',
+          showAimDataSetupGuide,
           timestamp: Date.now(),
         }]);
         return;
@@ -480,6 +483,7 @@ export function AllAIProvider({ children }: { children: ReactNode }) {
       setIsStreaming(true);
 
       const listingMatch = pathname.match(/^\/listings\/([^/]+)/);
+      const signedOutGatewayHelp = !user && (contextPath === '/aim-data' || contextPath === '/support');
 
       try {
         const sessionId = await ensureSession();
@@ -533,7 +537,7 @@ export function AllAIProvider({ children }: { children: ReactNode }) {
             });
           if (messageTooLong) {
             setMessages((prev) => prev.map((m) => m.id === assistantId
-              ? { ...m, content: resources.safeOutcomes.message_too_long, safeOutcome: 'message_too_long' }
+              ? { ...m, content: resources.safeOutcomes.message_too_long, safeOutcome: 'message_too_long', showAimDataSetupGuide }
               : m));
             return;
           }
@@ -551,6 +555,7 @@ export function AllAIProvider({ children }: { children: ReactNode }) {
                     ...m,
                     content: limitContent,
                     safeOutcome: limitOutcome,
+                    showAimDataSetupGuide,
                   }
                 : m
             )
@@ -576,9 +581,10 @@ export function AllAIProvider({ children }: { children: ReactNode }) {
         try {
           await readAnonymousMessageStream(res.body, (evt) => {
             if (evt.type === 'answer' && typeof evt.text === 'string') {
-              const nextStep = anonymousSurfaceActive && isAnonymousNextStep(evt.next_step)
-                ? evt.next_step
-                : undefined;
+              const step = evt.next_step;
+              const nextStep = isAnonymousNextStep(step) &&
+                (anonymousSurfaceActive || (signedOutGatewayHelp && step.action === 'view_aim_data'))
+                ? step : undefined;
               setMessages((prev) =>
                 prev.map((m) =>
                   m.id === assistantId
@@ -607,9 +613,10 @@ export function AllAIProvider({ children }: { children: ReactNode }) {
                   m.id === assistantId
                     ? {
                         ...m,
-                        content: !fallbackDestinations && typeof evt.text === 'string' && evt.text ? evt.text : fallback,
+                        content: !signedOutGatewayHelp && !fallbackDestinations && typeof evt.text === 'string' && evt.text ? evt.text : fallback,
                         safeOutcome: outcome,
                         fallbackDestinations,
+                        showAimDataSetupGuide,
                         listingFailure: undefined,
                       }
                     : m
@@ -633,7 +640,11 @@ export function AllAIProvider({ children }: { children: ReactNode }) {
             if (typeof error === 'string' && error) {
               setMessages((prev) =>
                 prev.map((m) => {
-                  if (m.id !== assistantId || (listingMatch && m.safeOutcome)) return m;
+                  if (m.id !== assistantId || ((listingMatch || signedOutGatewayHelp) && m.safeOutcome)) return m;
+                  if (signedOutGatewayHelp) {
+                    if (m.factRevisionSet || m.nextStep) return m;
+                    return { ...m, content: resources.genericError, showAimDataSetupGuide };
+                  }
                   return listingMatch ? { ...m, listingFailure: 'error' } : { ...m, content: error };
                 })
               );
@@ -680,12 +691,13 @@ export function AllAIProvider({ children }: { children: ReactNode }) {
               );
             }
           }, undefined, controller.signal);
-          if (listingMatch && !controller.signal.aborted) {
-            setMessages((prev) => prev.map((m) =>
-              m.id === assistantId && !m.content.trim() && !m.ticketStatusCards?.length
+          if ((listingMatch || signedOutGatewayHelp) && !controller.signal.aborted) {
+            setMessages((prev) => prev.map((m) => {
+              if (m.id !== assistantId || m.content.trim() || m.ticketStatusCards?.length || m.nextStep) return m;
+              return listingMatch
                 ? { ...m, listingFailure: 'error' }
-                : m
-            ));
+                : { ...m, content: resources.genericError, showAimDataSetupGuide };
+            }));
           }
         } catch (readErr) {
           // On timeout, abort the request so the connection is torn down
@@ -701,9 +713,10 @@ export function AllAIProvider({ children }: { children: ReactNode }) {
             prev.map((m) => {
               if (m.id !== assistantId || m.safeOutcome) return m;
               if (listingMatch) return { ...m, listingFailure: failure };
+              if (signedOutGatewayHelp && (m.factRevisionSet || m.nextStep)) return m;
               return m.content.trim()
-                ? { ...m, failureNotice: resources.genericError }
-                : { ...m, content: resources.genericError };
+                ? { ...m, failureNotice: resources.genericError, showAimDataSetupGuide }
+                : { ...m, content: resources.genericError, showAimDataSetupGuide };
             })
           );
         }
@@ -712,7 +725,7 @@ export function AllAIProvider({ children }: { children: ReactNode }) {
         abortRef.current = null;
       }
     },
-    [anonymousAvailable, anonymousSurfaceActive, ensureSession, isStreaming, locale, pathname, contextPath, token, leaveReportIssue]
+    [anonymousAvailable, anonymousSurfaceActive, ensureSession, isStreaming, locale, pathname, contextPath, token, user, leaveReportIssue]
   );
 
   const open = useCallback(() => {

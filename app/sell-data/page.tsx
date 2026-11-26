@@ -179,9 +179,12 @@ export default async function SellDataPage() {
                 AIM Data Gateway using a tool called Docker.{' '}
                 <Link href="/aim-data" className="font-semibold text-[#3F51B5] underline hover:text-[#303F9F]">
                   Read the AIM Data setup guide
-                </Link>. The gateway automatically sends limited information to identify your files.
-                You confirm each file before it shares a description
-                of what the file contains. These messages contain no data values. You can also choose to
+                </Link>. The gateway automatically sends generated file references, fingerprints made with a
+                secret key, file sizes, formats, and timestamps. It uses a neutral name unless you choose a
+                display name. After you confirm a file, it sends a checksum and, for supported formats, a
+                structural description with the row count and selected column names and types. For each
+                included column, the description reports roughly how much is missing and a range for the
+                number of distinct values. These messages contain no data values. You can also choose to
                 publish a public sample.
               </p>
               <p className="mt-4 mb-6 text-base leading-7 text-gray-600">

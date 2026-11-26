@@ -123,6 +123,13 @@ export default function AllAIMessage({
             {message.failureNotice}
           </p>
         )}
+        {message.showAimDataSetupGuide && !user && page === '/aim-data' && (
+          <div className="mt-2">
+            <Link href="/aim-data#network-requirements" className="inline-flex min-h-11 items-center text-blue-400 underline hover:text-blue-300">
+              {resources.aimDataSetupGuide}
+            </Link>
+          </div>
+        )}
         {ticketStatusCards.map((card) => (
           <TicketStatusCard key={`${message.id}-${card.public_ref}-${card.updated_at}`} card={card} />
         ))}
