@@ -71,7 +71,7 @@ export default function SavedWorkspaceData({connections, enabled,sampleLimits,li
     // Reload adopts the saved draft and samples; it never writes a sample decision.
     observedVersion.current=null;
     setReloading(true);setDraftChanged(true);pending.current=null;
-    try{if(flow)await flow.reloadSource();else{setLoading(true);await reloadDraft();setRetry(n=>n+1);}setDraftChanged(false);}
+    try{if(flow)await flow.reloadSource();else{setLoading(true);if(available)await reloadDraft();setRetry(n=>n+1);}setDraftChanged(false);}
     catch{setDraftChanged(true);}
     finally{setReloading(false);}
   }
@@ -109,7 +109,7 @@ export default function SavedWorkspaceData({connections, enabled,sampleLimits,li
       if(available&&loaded){try{await reloadDraft();}catch{retryDraft();}}
     } catch(failure) {
       if(authorityCode(failure)==='CURRENT_DRAFT_CHANGED')flow?.sourcePointerRefused(sampleState.draft?.draft_id??null);
-      if(authorityCode(failure)==='DRAFT_SUPERSEDED'){const message=listingDraftError(failure)?.message??'Your draft was replaced. Check the current draft before choosing files again.';if(flow)flow.sourceSaveRefused?.(message);else setSaveNotice(message);pending.current=null;try{await reloadDraft();}catch{retryDraft();}}
+      if(authorityCode(failure)==='DRAFT_SUPERSEDED'){const message=listingDraftError(failure)?.message??'Your draft was replaced. Check the current draft before choosing files again.';if(flow)flow.sourceSaveRefused?.(message);else setSaveNotice(message);pending.current=null;if(available){try{await reloadDraft();}catch{retryDraft();}}}
       throw failure;
     } finally { finishSelectionSave(succeeded);inFlight.current = false; setSaving(false); }
     return succeeded;

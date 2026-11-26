@@ -123,6 +123,57 @@ it("ignores an aborted read even when it returns a newer draft",async()=>{
   await savePrice();controller.abort();await finishRead(read,{...saved,version:4});
   expect(screen.getByTestId("version").textContent).toBe("3");expect(onLoaded).not.toHaveBeenCalled();
 });
+it("hides retained owner updates while disabled and reloads the current draft on re-enable",async()=>{
+  const draftA={...initial,draft_id:"A",content:{...content,sample_decision:"member_files" as const,sample_object_indices:[0]}};
+  const draftB={...saved,draft_id:"B"};
+  api.read.mockResolvedValue(draftA);
+  let store!:ReturnType<typeof useSellerListingDraft>;
+  const disabledFrames: Array<Pick<typeof store,"draft"|"loaded"|"error"|"sampleIndices">>=[];
+  function Capture(){
+    store=useSellerListingDraft();
+    const {available,draft,loaded,error,sampleIndices}=store;
+    if(!available)disabledFrames.push({draft,loaded,error,sampleIndices});
+    return null;
+  }
+  const provider=(enabled:boolean,key=0)=><SellerListingDraftProvider key={key} enabled={enabled} sampleCapability><Capture/></SellerListingDraftProvider>;
+  const {rerender}=render(provider(true));
+  await waitFor(()=>expect(store.loaded).toBe(true));
+  expect(store.draft).toEqual(draftA);
+
+  const enabledStore=store;
+  const late=deferred<SavedListingDraft|null>();
+  api.read.mockReturnValueOnce(late.promise);
+  const oldReload=enabledStore.reload(undefined,onLoaded).catch(error=>error);
+  await waitFor(()=>expect(api.read).toHaveBeenCalledTimes(2));
+
+  rerender(provider(false));
+  act(()=>{store.beginSelectionSave();});
+  expect(store.selectionSavePending).toBe(true);
+  rerender(provider(false,1));
+  expect(store.selectionSavePending).toBe(true);
+  act(()=>{enabledStore.finishSelectionSave(true);});
+  expect(store.selectionSavePending).toBe(false);
+  expect(disabledFrames.length).toBeGreaterThan(1);
+  for(const frame of disabledFrames)expect(frame).toEqual({draft:null,loaded:false,error:false,sampleIndices:[]});
+  await expect(enabledStore.reload()).rejects.toThrow("Load your saved draft");
+  await expect(enabledStore.saveSamples([])).rejects.toThrow("Load your saved draft");
+  await expect(store.startNewDraft("unavailable")).rejects.toThrow("Load your saved draft");
+  expect(api.read).toHaveBeenCalledTimes(2);
+
+  const current=deferred<SavedListingDraft>();
+  api.read.mockReturnValue(current.promise);
+  rerender(provider(true,1));
+  await waitFor(()=>expect(api.read).toHaveBeenCalledTimes(3));
+  await act(async()=>{late.resolve(draftA);await oldReload;});
+  expect(store.draft).toBeNull();
+  expect(store.loaded).toBe(false);
+  expect(onLoaded).not.toHaveBeenCalled();
+  await act(async()=>{current.resolve(draftB);});
+  expect(store.draft).toEqual(draftB);
+  expect(store.loaded).toBe(true);
+  expect(api.read).toHaveBeenCalledTimes(3);
+  expect(api.save).not.toHaveBeenCalled();
+});
 it("does not treat a failed save as a committed local revision",async()=>{
   await mount();const read=await startRead();api.save.mockRejectedValueOnce(new Error("offline"));
   fireEvent.change(screen.getByLabelText("Your price (USD)"),{target:{value:"30"}});

@@ -1,5 +1,5 @@
 // @vitest-environment jsdom
-import {cleanup,fireEvent,render,screen,waitFor} from '@testing-library/react';
+import {act,cleanup,fireEvent,render,screen,waitFor} from '@testing-library/react';
 import {afterEach,beforeEach,expect,it,vi} from 'vitest';
 import {AxiosError,type AxiosAdapter} from 'axios';
 import {api} from '@/api/client';
@@ -31,7 +31,7 @@ function backend(){
   const sources=new Map<string,SourceRead>();
   const receipts=new Map<string,{source:SourceRead;current_draft_id:string}>();
   let loseResponse=false;let draftReads=0;
-  let beforeSourceRead:((id:string|null)=>void)|undefined;
+  let beforeSourceRead:((id:string|null)=>void|Promise<void>)|undefined;
   let afterSourceSave:(()=>void)|undefined;
   let readDraft:(()=>Promise<SavedListingDraft|null>)|undefined;
   const sourceReads:Array<string|null>=[];
@@ -48,9 +48,10 @@ function backend(){
       if(config.url?.endsWith('/listing-draft')){draftReads++;data={draft:readDraft?await readDraft():current?drafts.get(current):null};}
       else if(config.url?.endsWith('/categories'))data=categoryRows;
       else if(config.url?.endsWith('/listing-source')){
-        const requested=config.params?.draft_id??null;sourceReads.push(requested);beforeSourceRead?.(requested);
+        const requested=config.params?.draft_id??null;sourceReads.push(requested);const delay=beforeSourceRead?.(requested);
         const target=requested??current;
         data={source:target?sources.get(target)??null:null,current_draft_id:current};
+        if(delay)await delay;
       }
       else throw new Error(`Unexpected GET ${config.url}`);
     }else{
@@ -82,7 +83,7 @@ function backend(){
     return {data,status:200,statusText:'OK',headers:{},config};
   };
   api.defaults.adapter=adapter;nativeClient.defaults.adapter=adapter;
-  return {drafts,sources,writes,sourceReads,createOrdinary,onSourceSave:(callback:()=>void)=>{afterSourceSave=callback;},onDraftRead:(callback:()=>Promise<SavedListingDraft|null>)=>{readDraft=callback;},onSourceRead:(callback:(id:string|null)=>void)=>{beforeSourceRead=callback;},get draftReads(){return draftReads;},loseNextResponse:()=>{loseResponse=true;}};
+  return {drafts,sources,writes,sourceReads,createOrdinary,onSourceSave:(callback:()=>void)=>{afterSourceSave=callback;},onDraftRead:(callback:()=>Promise<SavedListingDraft|null>)=>{readDraft=callback;},onSourceRead:(callback:(id:string|null)=>void|Promise<void>)=>{beforeSourceRead=callback;},get draftReads(){return draftReads;},loseNextResponse:()=>{loseResponse=true;}};
 }
 function DraftStatus(){const {draft,sampleIndices,selectionSavePending,selectionSaveFailed}=useSellerListingDraft();return <output data-testid="draft-id" data-sample-decision={draft?.content.sample_decision} data-sample-indices={JSON.stringify(sampleIndices)} data-samples-blocked={selectionSavePending||selectionSaveFailed}>{draft?.draft_id??"empty"}</output>;}
 function mount(enabled=true,guided=false,sampleCapability=false){
@@ -121,23 +122,32 @@ function RecoverableDataStep({fail}:{fail:boolean}){
   return <SavedWorkspaceData enabled connections={[guidedConnection]}/>;
 }
 
-it.each([true,false])('keeps a guided source-save refusal across panel retry and only shows the current source after reload (drafts enabled: %s)',async draftsEnabled=>{
+it.each(['enabled','initially disabled','disabled after loading A'] as const)('keeps a guided source-save refusal across panel retry and only shows the current source after reload (drafts %s)',async mode=>{
   const model=backend();
-  if(!draftsEnabled)model.onDraftRead(async()=>{throw new Error('Saved drafts are unavailable');});
+  const startsEnabled=mode!=='initially disabled';
+  const staysEnabled=mode==='enabled';
+  if(!startsEnabled)model.onDraftRead(async()=>{throw new Error('Saved drafts are unavailable');});
   model.createOrdinary(a);
   const source:SourceRead={version:1,connection_current:true,content:{
     connection_id:guidedConnection.id,connection_version:1,version_mode:'current',objects:guidedObjects}};
   model.sources.set(a,source);
-  const capabilities={...guidedCapabilities,
-    drafts:draftsEnabled?guidedCapabilities.drafts:{enabled:false,status:'unavailable' as const,reason:'disabled'},
-    review:{enabled:false,status:'unavailable' as const,reason:'disabled'},listing_licenses:false};
-  const workspace=(fail:boolean)=><SellerListingDraftProvider enabled={draftsEnabled} sampleCapability={false}>
-    <GuidedListingFlow capabilities={capabilities} connections={[guidedConnection]} view="data" navigate={vi.fn()}>
+  const workspace=(fail:boolean,draftsEnabled:boolean)=><SellerListingDraftProvider enabled={draftsEnabled} sampleCapability={false}>
+    <GuidedListingFlow capabilities={{...guidedCapabilities,
+      drafts:draftsEnabled?guidedCapabilities.drafts:{enabled:false,status:'unavailable',reason:'disabled'},
+      review:{enabled:false,status:'unavailable',reason:'disabled'},listing_licenses:false}} connections={[guidedConnection]} view="data" navigate={vi.fn()}>
       <DraftStatus/>
       <RecoverableWorkspacePanel active><RecoverableDataStep fail={fail}/></RecoverableWorkspacePanel>
     </GuidedListingFlow>
   </SellerListingDraftProvider>;
-  const {rerender}=render(workspace(false),{onCaughtError:vi.fn()});
+  const {rerender}=render(workspace(false,startsEnabled),{onCaughtError:vi.fn()});
+  await screen.findByText(/File selection saved to your account/);
+  expect(screen.getByTestId('draft-id').textContent).toBe(startsEnabled?a:'empty');
+  const draftReadsBeforeDisable=model.draftReads;
+  const sourceReadsBeforeDisable=startsEnabled?model.sourceReads.length:0;
+  if(startsEnabled&&!staysEnabled){
+    model.onDraftRead(async()=>{throw new Error('Saved drafts are unavailable');});
+    rerender(workspace(false,false));
+  }
   await screen.findByText(/File selection saved to your account/);
   fireEvent.click(await screen.findByRole('checkbox',{name:'Select weekly/extra.csv'}));
   model.createOrdinary(b);
@@ -149,9 +159,9 @@ it.each([true,false])('keeps a guided source-save refusal across panel retry and
   const readsBeforeRetry=model.sourceReads.slice();
   const draftReadsBeforeRetry=model.draftReads;
 
-  rerender(workspace(true));
+  rerender(workspace(true,staysEnabled));
   await screen.findByRole('button',{name:'Retry this step'});
-  rerender(workspace(false));
+  rerender(workspace(false,staysEnabled));
   fireEvent.click(screen.getByRole('button',{name:'Retry this step'}));
   await screen.findByRole('button',{name:'Reload current draft'});
   expect(screen.getByRole('alert').textContent).toContain('Your listing draft changed.');
@@ -160,18 +170,26 @@ it.each([true,false])('keeps a guided source-save refusal across panel retry and
   expect(model.draftReads).toBe(draftReadsBeforeRetry);
   expect(model.writes).toHaveLength(1);
 
+  let finishSourceRead!:()=>void;
+  const response=new Promise<void>(resolve=>{finishSourceRead=resolve;});
+  model.onSourceRead(()=>response);
   fireEvent.click(screen.getByRole('button',{name:'Reload current draft'}));
+  await waitFor(()=>expect(model.sourceReads.at(-1)).toBe(staysEnabled?b:null));
+  await waitFor(()=>expect(model.sourceReads.length).toBeGreaterThan(readsBeforeRetry.length));
+  if(!staysEnabled)expect(screen.getByRole('alert').textContent).toContain('Your listing draft changed.');
+  await act(async()=>{finishSourceRead();});
   const extra=await screen.findByRole('checkbox',{name:'Select weekly/extra.csv'}) as HTMLInputElement;
   expect(extra.checked).toBe(true);
   expect((screen.getByRole('checkbox',{name:'Select weekly/sales.csv'}) as HTMLInputElement).checked).toBe(false);
   expect(screen.queryByRole('button',{name:'Reload current draft'})).toBeNull();
-  expect(screen.getByTestId('draft-id').textContent).toBe(draftsEnabled?b:'empty');
-  if(draftsEnabled){
+  expect(screen.getByTestId('draft-id').textContent).toBe(staysEnabled?b:'empty');
+  if(staysEnabled){
     expect(model.sourceReads).toContain(b);
     expect(model.draftReads).toBe(draftReadsBeforeRetry+1);
   }else{
     expect(model.sourceReads).toEqual([...readsBeforeRetry,null]);
-    expect(model.draftReads).toBe(0);
+    expect(model.sourceReads.slice(sourceReadsBeforeDisable).every(id=>id===null)).toBe(true);
+    expect(model.draftReads).toBe(draftReadsBeforeDisable);
   }
   expect(model.writes).toHaveLength(1);
 });
