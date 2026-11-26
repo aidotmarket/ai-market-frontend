@@ -178,7 +178,8 @@ export function GuidedListingFlow({connections, capabilities, view, navigate, ch
     sourceLoaded&&available&&loaded&&sourceMatchesDraft&&!pointerMatchesDraft;
   const reloadSource=async()=>{
     setSourceLoaded(false);
-    try{await reload();}finally{setReadRetry(n=>n+1);}
+    // Saved sources can be available independently of saved drafts.
+    try{if(available)await reload();}finally{setReadRetry(n=>n+1);}
   };
   const flow:Flow={startAnotherListing:recovery=>void startAnotherListing(recovery),startingListing,samplesBlocked:selectionSavePending||selectionSaveFailed,stepsForContent:content=>listingSteps({connections,source,draft:{version:draft?.version??0,updated_at:draft?.updated_at??'',content:{...draft?.content,...content}},categories,licensesEnabled,review:null,publication:null,pending,licenceDirty}),sourceCurrentDraftId,sourceLoaded:sourceLoaded&&sourceMatchesDraft&&pointerMatchesDraft,sourceDraftChanged,reloadSource,sourceError:readError,fileRevision,setFilesDirty:dirty=>{setFilesDirty(dirty);if(dirty)setFileRevision(n=>n+1);},setListingDirty,setLicenceDirty,source,categories,steps,review,reviewError,reviewLoading,publication,publicationError,licensesEnabled,navigate,
     refreshReview:()=>setReviewRetry(n=>n+1),refreshPublication:()=>setPublicationRetry(n=>n+1),sourceSaveRefused:setSourceSaveNotice,sourceSaved:value=>{setSourceSaveNotice('');setSource(value.source);setSourceCurrentDraftId(value.current_draft_id);setFilesDirty(false);},

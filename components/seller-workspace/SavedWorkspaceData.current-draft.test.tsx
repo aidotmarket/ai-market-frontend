@@ -121,14 +121,17 @@ function RecoverableDataStep({fail}:{fail:boolean}){
   return <SavedWorkspaceData enabled connections={[guidedConnection]}/>;
 }
 
-it('keeps a guided source-save refusal across panel retry and only shows the current source after reload',async()=>{
+it.each([true,false])('keeps a guided source-save refusal across panel retry and only shows the current source after reload (drafts enabled: %s)',async draftsEnabled=>{
   const model=backend();
+  if(!draftsEnabled)model.onDraftRead(async()=>{throw new Error('Saved drafts are unavailable');});
   model.createOrdinary(a);
   const source:SourceRead={version:1,connection_current:true,content:{
     connection_id:guidedConnection.id,connection_version:1,version_mode:'current',objects:guidedObjects}};
   model.sources.set(a,source);
-  const capabilities={...guidedCapabilities,review:{enabled:false,status:'unavailable' as const,reason:'disabled'},listing_licenses:false};
-  const workspace=(fail:boolean)=><SellerListingDraftProvider enabled sampleCapability={false}>
+  const capabilities={...guidedCapabilities,
+    drafts:draftsEnabled?guidedCapabilities.drafts:{enabled:false,status:'unavailable' as const,reason:'disabled'},
+    review:{enabled:false,status:'unavailable' as const,reason:'disabled'},listing_licenses:false};
+  const workspace=(fail:boolean)=><SellerListingDraftProvider enabled={draftsEnabled} sampleCapability={false}>
     <GuidedListingFlow capabilities={capabilities} connections={[guidedConnection]} view="data" navigate={vi.fn()}>
       <DraftStatus/>
       <RecoverableWorkspacePanel active><RecoverableDataStep fail={fail}/></RecoverableWorkspacePanel>
@@ -136,13 +139,15 @@ it('keeps a guided source-save refusal across panel retry and only shows the cur
   </SellerListingDraftProvider>;
   const {rerender}=render(workspace(false),{onCaughtError:vi.fn()});
   await screen.findByText(/File selection saved to your account/);
-  fireEvent.click(screen.getByRole('checkbox',{name:'Select weekly/extra.csv'}));
+  fireEvent.click(await screen.findByRole('checkbox',{name:'Select weekly/extra.csv'}));
   model.createOrdinary(b);
   model.sources.set(b,{...source,content:{...source.content,objects:[{...guidedObjects[0],key:'weekly/extra.csv'}]}});
   save();
   await screen.findByRole('button',{name:'Reload current draft'});
   expect(model.writes).toHaveLength(1);
+  expect(model.writes[0].expected_current_draft_id).toBe(a);
   const readsBeforeRetry=model.sourceReads.slice();
+  const draftReadsBeforeRetry=model.draftReads;
 
   rerender(workspace(true));
   await screen.findByRole('button',{name:'Retry this step'});
@@ -152,14 +157,22 @@ it('keeps a guided source-save refusal across panel retry and only shows the cur
   expect(screen.getByRole('alert').textContent).toContain('Your listing draft changed.');
   expect(screen.queryByText(/File selection saved to your account/)).toBeNull();
   expect(model.sourceReads).toEqual(readsBeforeRetry);
+  expect(model.draftReads).toBe(draftReadsBeforeRetry);
   expect(model.writes).toHaveLength(1);
 
   fireEvent.click(screen.getByRole('button',{name:'Reload current draft'}));
   const extra=await screen.findByRole('checkbox',{name:'Select weekly/extra.csv'}) as HTMLInputElement;
   expect(extra.checked).toBe(true);
   expect((screen.getByRole('checkbox',{name:'Select weekly/sales.csv'}) as HTMLInputElement).checked).toBe(false);
-  expect(screen.getByTestId('draft-id').textContent).toBe(b);
-  expect(model.sourceReads).toContain(b);
+  expect(screen.queryByRole('button',{name:'Reload current draft'})).toBeNull();
+  expect(screen.getByTestId('draft-id').textContent).toBe(draftsEnabled?b:'empty');
+  if(draftsEnabled){
+    expect(model.sourceReads).toContain(b);
+    expect(model.draftReads).toBe(draftReadsBeforeRetry+1);
+  }else{
+    expect(model.sourceReads).toEqual([...readsBeforeRetry,null]);
+    expect(model.draftReads).toBe(0);
+  }
   expect(model.writes).toHaveLength(1);
 });
 
