@@ -3,7 +3,7 @@
 import {useEffect,useState,useSyncExternalStore} from 'react';
 import { useInfiniteQuery, useQueryClient, type QueryClient } from '@tanstack/react-query';
 import { listListings, searchListings } from '@/api/listings';
-import type { FulfillmentType, ListingListItem, SearchResultItem, SearchResponse } from '@/types';
+import type { FulfillmentType, ListingListItem, SearchResultItem } from '@/types';
 
 const PAGE_SIZE = 12;
 type ListingCategory = 'data' | 'models' | 'all';
@@ -203,10 +203,12 @@ export function useSearchListings({
   ) || []);
 
   const firstPage = query.data?.pages[0]?.result;
-  const facets = Array.isArray(firstPage) ? null : (firstPage as SearchResponse | undefined)?.facets;
-  const total = semanticMode
-    ? (Array.isArray(firstPage) ? rawItems.length : (firstPage as SearchResponse | undefined)?.total || rawItems.length)
-    : rawItems.length;
+  const firstSearchPage = Array.isArray(firstPage) ? undefined : firstPage;
+  const facets = Array.isArray(firstPage) ? null : firstSearchPage?.facets;
+  const total = semanticMode ? firstSearchPage?.total || rawItems.length : rawItems.length;
+
+  const queryHints = semanticMode && enabled && query.isSuccess && !query.isFetching
+    && !query.isPlaceholderData && !expired ? firstSearchPage : undefined;
 
   const refreshingExpired = expired && query.isFetching;
   return {
@@ -217,6 +219,8 @@ export function useSearchListings({
     error: refreshingExpired ? null : expired ? new Error('Refresh to load current marketplace results.') : query.error,
     facets,
     total,
+    suggestedQuery: queryHints?.suggested_query,
+    hint: queryHints?.hint,
     semanticMode,
     pageSize: PAGE_SIZE,
   };
