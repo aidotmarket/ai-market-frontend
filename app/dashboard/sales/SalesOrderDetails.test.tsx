@@ -1,10 +1,8 @@
 // @vitest-environment jsdom
 
 import { cleanup, fireEvent, render, screen, within } from '@testing-library/react';
-import { AxiosError } from 'axios';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import type { SellerOrder, SellerOrderMoneyStatement } from '@/types';
-import { formatDate } from '@/lib/format';
+import type { SellerOrder } from '@/types';
 import SalesOrderDetails from './SalesOrderDetails';
 
 const client = vi.hoisted(() => ({ get: vi.fn() }));
@@ -16,91 +14,88 @@ const order: SellerOrder = {
   status: 'delivered', needs_action: false, created_at: null, paid_at: null,
   delivered_at: null, completed_at: null,
 };
-const statement: SellerOrderMoneyStatement = { net_transfer_cents: 90045, A: 2930, S: 2812, G: 118, R: 2930 };
 const autoConfirm = '2026-11-26T12:00:00Z';
 const confirmed = '2026-11-25T12:00:00Z';
 
-function expandDetails(sale: SellerOrder = order) {
-  render(<SalesOrderDetails order={sale} />);
-  expect(client.get).not.toHaveBeenCalled();
-  const details = screen.getByText('Order details').closest('details')!;
+function expandDetails(summary: HTMLElement) {
+  const details = summary.closest('details')!;
   details.open = true;
   fireEvent(details, new Event('toggle'));
+  return within(details);
 }
 
-function field(label: string) {
-  return within(screen.getByText(label).parentElement!).getByRole('definition');
+function renderAndExpand(sale: SellerOrder = order) {
+  render(<SalesOrderDetails order={sale} />);
+  expect(client.get).not.toHaveBeenCalled();
+  return expandDetails(screen.getByText('Order details'));
 }
 
 describe('Sales order details', () => {
   beforeEach(() => {
-    client.get.mockReset().mockImplementation(async (url: string) => {
-      if (url === '/orders/sale-1') return { data: { id: order.id } };
-      if (url === '/orders/sale-1/money-statement') return { data: { seller_statement: statement } };
-      throw new Error(`Unexpected path ${url}`);
-    });
+    client.get.mockReset().mockResolvedValue({ data: {
+      id: order.id, status: 'delivered', auto_confirm_at: autoConfirm, confirmed_at: null,
+    } });
   });
   afterEach(cleanup);
 
-  it('shows the posted net transfer and each fee field directly from the statement', async () => {
-    expandDetails();
-    await screen.findByText('$900.45');
-    expect(field('Final payout').textContent).toBe('$900.45');
-    expect(field('Actual card processing fee (A)').textContent).toBe('$29.30');
-    expect(field('Seller policy share (S)').textContent).toBe('$28.12');
-    expect(field('Seller gap (G)').textContent).toBe('$1.18');
-    expect(field('Seller recovery (R)').textContent).toBe('$29.30');
-    expect(client.get).toHaveBeenCalledWith('/orders/sale-1/money-statement', expect.objectContaining({
+  it('reads only the expanded sale and shows its expected date while awaiting confirmation', async () => {
+    render(<>
+      <SalesOrderDetails order={order} />
+      <SalesOrderDetails order={{ ...order, id: 'sale-2' }} />
+    </>);
+    expect(client.get).not.toHaveBeenCalled();
+
+    const [first, second] = screen.getAllByText('Order details');
+    const expanded = expandDetails(first);
+    expect((await expanded.findByRole('time')).getAttribute('datetime')).toBe(autoConfirm);
+    expect(expanded.getByText('Expected auto-confirmation')).toBeTruthy();
+    expect(expanded.queryByText('Confirmed')).toBeNull();
+    expect(within(second.closest('details')!).queryByRole('time')).toBeNull();
+    expect(client.get).toHaveBeenCalledExactlyOnceWith('/orders/sale-1', expect.objectContaining({
       fetchOptions: { cache: 'no-store' }, signal: expect.any(AbortSignal),
     }));
   });
 
-  it('shows the unposted message for a 404 statement', async () => {
-    client.get.mockRejectedValueOnce(Object.assign(new AxiosError(), { response: { status: 404 } }));
-    expandDetails();
-    expect(await screen.findByText('Final payout not yet posted')).toBe(field('Final payout'));
-    expect(screen.queryByText('Actual card processing fee (A)')).toBeNull();
+  it.each(['delivered', 'completed'] as const)('shows only the actual date when confirmed with status %s', async (status) => {
+    client.get.mockResolvedValue({ data: { id: order.id, status, auto_confirm_at: autoConfirm, confirmed_at: confirmed } });
+    const expanded = renderAndExpand({ ...order, status });
+    expect((await expanded.findByRole('time')).getAttribute('datetime')).toBe(confirmed);
+    expect(expanded.getByText('Confirmed')).toBeTruthy();
+    expect(expanded.queryByText('Expected auto-confirmation')).toBeNull();
   });
 
-  it('shows the unposted message for a zero net transfer and preserves a zero fee', async () => {
-    client.get.mockResolvedValueOnce({ data: { seller_statement: { ...statement, net_transfer_cents: 0, G: 0, A: null } } });
-    expandDetails();
-    expect(await screen.findByText('Final payout not yet posted')).toBe(field('Final payout'));
-    expect(field('Seller gap (G)').textContent).toBe('$0.00');
-    expect(field('Actual card processing fee (A)').textContent).toBe('—');
+  it.each(['disputed', 'refunded', 'completed'])('hides a stale expected date when the order is now %s', async (status) => {
+    client.get.mockResolvedValue({ data: { id: order.id, status, auto_confirm_at: autoConfirm, confirmed_at: null } });
+    const expanded = renderAndExpand();
+    await expanded.findByText('No confirmation date available.');
+    expect(expanded.queryByRole('time')).toBeNull();
+    expect(expanded.queryByText('Expected auto-confirmation')).toBeNull();
+    expect(expanded.queryByText('Confirmed')).toBeNull();
   });
 
-  it('shows expected auto-confirmation and actual confirmation from order detail', async () => {
-    client.get.mockResolvedValueOnce({ data: { seller_statement: statement } })
-      .mockResolvedValueOnce({ data: { id: order.id, auto_confirm_at: autoConfirm, confirmed_at: confirmed } });
-    expandDetails();
-    await screen.findByText('Expected auto-confirmation');
-    const expected = within(field('Expected auto-confirmation')).getByText(formatDate(autoConfirm));
-    const actual = within(field('Confirmed')).getByText(formatDate(confirmed));
-    expect(expected.getAttribute('datetime')).toBe(autoConfirm);
-    expect(actual.getAttribute('datetime')).toBe(confirmed);
+  it('shows the pending delivery instruction without fetching order or transaction data', () => {
+    const expanded = renderAndExpand({ ...order, status: 'pending_delivery', needs_action: true });
+    expect(expanded.getByRole('link', { name: 'Claude' }).getAttribute('href')).toBe('/docs/claude');
+    expect(expanded.getByText(/to mark this order as delivered/).textContent)
+      .toBe('Ask Claude to mark this order as delivered.');
+    expect(client.get).not.toHaveBeenCalled();
   });
 
-  it('links an actionable pending delivery to the existing order transaction step', async () => {
-    client.get.mockImplementation(async (url: string, options: { params?: { offset: number } }) => {
-      if (url === '/transactions') {
-        return { data: options.params?.offset === 0
-          ? Array.from({ length: 100 }, () => ({ id: 'other-tx', order_id: 'other-sale', status: 'fulfilling' }))
-          : [{ id: 'sale-tx', order_id: order.id, status: 'fulfilling' }] };
-      }
-      return { data: { id: order.id, seller_statement: statement } };
-    });
-    expandDetails({ ...order, status: 'pending_delivery', needs_action: true });
-    expect((await screen.findByRole('link', { name: 'Mark Delivered' })).getAttribute('href'))
-      .toBe('/dashboard/orders/sale-1?tx=sale-tx');
+  it('omits delivery instructions when the sale does not need action', () => {
+    render(<SalesOrderDetails order={{ ...order, status: 'pending_delivery' }} />);
+    expect(screen.queryByText('Order details')).toBeNull();
+    expect(client.get).not.toHaveBeenCalled();
   });
 
-  it('shows the delivery instruction when no matching delivery step is available', async () => {
-    client.get.mockResolvedValueOnce({ data: { seller_statement: statement } })
-      .mockResolvedValueOnce({ data: { id: order.id } })
-      .mockResolvedValueOnce({ data: [{ id: 'other-tx', order_id: 'other-sale', status: 'fulfilling' }] });
-    expandDetails({ ...order, status: 'pending_delivery', needs_action: true });
-    expect(await screen.findByText('Ask Claude to mark this order as delivered.')).toBeTruthy();
-    expect(screen.queryByRole('link', { name: 'Mark Delivered' })).toBeNull();
+  it('shows a failed order read and clears the error on retry', async () => {
+    client.get.mockRejectedValueOnce(new Error('Network failure'));
+    const expanded = renderAndExpand();
+    await expanded.findByText(/couldn't load your order details/);
+    expect(expanded.queryByText(/mark this order as delivered/)).toBeNull();
+
+    fireEvent.click(expanded.getByRole('button', { name: 'Try again' }));
+    expect((await expanded.findByRole('time')).getAttribute('datetime')).toBe(autoConfirm);
+    expect(expanded.queryByText(/couldn't load your order details/)).toBeNull();
+    expect(client.get.mock.calls.map(([path]) => path)).toEqual(['/orders/sale-1', '/orders/sale-1']);
   });
 });

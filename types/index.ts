@@ -878,10 +878,8 @@ export interface PurchasedPresentation {
 }
 
 export interface BuyerOrderDetail extends BuyerOrder {
-  auto_confirm_days?: number;
   auto_confirm_at?: string | null;
   confirmed_at?: string | null;
-  confirmed_by?: string | null;
   purchased_presentation?: PurchasedPresentation | null;
   listing_notice?: string | null;
   delivery_access_state?: string | null;
@@ -890,14 +888,6 @@ export interface BuyerOrderDetail extends BuyerOrder {
   seller_id: string;
   access_url?: string | null;
   download_count?: number;
-}
-
-export interface SellerOrderMoneyStatement {
-  net_transfer_cents: number;
-  A: number | null;
-  S: number | null;
-  G: number | null;
-  R: number | null;
 }
 
 export interface PurchasedVersion {

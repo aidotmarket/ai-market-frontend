@@ -465,7 +465,7 @@ function OrderTransaction({ orderId, txIdParam, isBuyerOfRecord, isSellerOfRecor
                   <dd className="font-medium text-gray-900">{formatPrice(tx.platform_fee_cents / 100)}</dd>
                 </div>
                 <div>
-                  <dt className="text-gray-500">{isSellerOfRecord ? 'You receive before card fees (USD)' : 'Seller Receives'}</dt>
+                  <dt className="text-gray-500">Seller Receives</dt>
                   <dd className="font-medium text-gray-900">{formatPrice(tx.seller_amount_cents / 100)}</dd>
                 </div>
                 {tx.paid_at && (

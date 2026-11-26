@@ -7,6 +7,7 @@ import rehypeSanitize from 'rehype-sanitize';
 import { afterEach, expect, it, vi } from 'vitest';
 import StaticTerms from './StaticTerms';
 import TermsAndConditionsPage from './page';
+import PricingPage from '@/app/pricing/page';
 
 const hash = (text: string) => createHash('sha256').update(text, 'utf8').digest('hex');
 // Pinned to the rendered legal text in 6b6862cfc50c5f3e6ab2ab5f6dc182f7cfe0414c:app/legal/terms/page.tsx.
@@ -127,11 +128,12 @@ it.each([
   expect(normalizedLegalText(html)).toContain(`Version ${originalConfig.terms_version}`);
 });
 
-it('shows the approved fee example and Stripe pricing link after the Terms 1.2 article', async () => {
+it('shows the same approved fee example after the Terms 1.2 article and on Pricing', async () => {
   process.env.API_URL = 'https://api.example';
   vi.stubGlobal('fetch', vi.fn()
     .mockResolvedValueOnce({ ok: true, json: async () => ({ terms_version: '1.2', terms_hash_sha256: hash(backendDocument12), effective_at: effectiveAt, text_url: '/api/v1/legal/terms/document' }) })
-    .mockResolvedValueOnce({ ok: true, text: async () => backendDocument12 }));
+    .mockResolvedValueOnce({ ok: true, text: async () => backendDocument12 })
+    .mockResolvedValueOnce({ ok: true, json: async () => ({ terms_version: '1.2' }) }));
 
   const container = document.createElement('div');
   container.innerHTML = renderToStaticMarkup(await TermsAndConditionsPage());
@@ -147,6 +149,9 @@ it('shows the approved fee example and Stripe pricing link after the Terms 1.2 a
   expect(stripeLink?.target).toBe('_blank');
   expect(stripeLink?.rel).toBe('noopener noreferrer');
   expect(example.textContent).toBe("Example: on a $1,000 sale, ai.market's 5% commission is $50 and the card fee is about 2.9% + 30¢ (about $29), so the seller receives about $921. This is an example; the actual card fee varies.");
+  const pricingPage = document.createElement('div');
+  pricingPage.innerHTML = renderToStaticMarkup(await PricingPage());
+  expect([...pricingPage.querySelectorAll('p')].map((paragraph) => paragraph.textContent)).toContain(example.textContent);
 });
 
 it('renders the hash-verified 1.2 document without old fee or hold wording', async () => {

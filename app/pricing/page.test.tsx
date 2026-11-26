@@ -6,7 +6,6 @@ import { cleanup, render, screen } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import PricingPage from './page';
-import { CARD_PAYOUT_EXAMPLE, CARD_PAYOUT_HOLD } from '@/components/legal/terms12Copy';
 
 const serverTerms = vi.hoisted(() => ({ getPublicTermsVersion: vi.fn() }));
 vi.mock('@/lib/publicTermsVersion', () => serverTerms);
@@ -44,16 +43,8 @@ it('switches 1.2 card claims to the approved seller-bears text', async () => {
   ]) expect(screen.getByText(copy)).toBeTruthy();
   expect(screen.queryByText('List free. Keep 95% when data sells.')).toBeNull();
   expect(screen.queryByText(/Stripe, stablecoin, or escrow fees/)).toBeNull();
-  expect(screen.getByText(CARD_PAYOUT_HOLD)).toBeTruthy();
-});
-
-it('reuses the Terms 1.2 worked example and links to Section 5', async () => {
-  serverTerms.getPublicTermsVersion.mockResolvedValue('1.2');
-  render(await PricingPage());
-  expect(screen.getByText(CARD_PAYOUT_EXAMPLE)).toBeTruthy();
-  for (const link of screen.getAllByRole('link', { name: /Read Section 5/ })) {
-    expect(link.getAttribute('href')).toBe('/legal/terms#fees');
-  }
+  expect(screen.queryByText(/90.day|48.hours|payout hold/i)).toBeNull();
+  expect(screen.getByRole('link', { name: /Read Section 5/ }).getAttribute('href')).toBe('/legal/terms#fees');
 });
 
 it('adds the free-request guidance while keeping the served 1.1 fee copy', async () => {
