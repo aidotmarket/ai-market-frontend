@@ -1,6 +1,6 @@
 'use client';
 
-import { Suspense, useEffect, useMemo, useRef, useState } from 'react';
+import { Suspense, useEffect, useRef, useState, useTransition } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { getCapabilities } from '@/api/capabilities';
 import { getSellerOrders, SELLER_ORDERS_MAX_LIMIT, type SellerOrderListParams } from '@/api/seller';
@@ -11,7 +11,7 @@ import { sellerLicenseRecordPath } from '@/lib/licenseRecordRoutes';
 import { getSellerStatusPresentation, isSellerOrderStatus } from '@/lib/sellerOrderStatus';
 import { parseSalesFilter, parseSalesOffset, salesSearchParams, SALES_FILTERS, type SalesFilter } from './filters';
 
-type SalesRequest = { filter: SalesFilter; offset: number };
+type SalesRequest = { filter: SalesFilter; offset: number; retry: number };
 type SalesResult = { request: SalesRequest } & (
   | { state: 'active'; rows: SellerOrder[]; hasNextPage: boolean }
   | { state: 'provisioning' | 'blocked' | 'error' }
@@ -79,25 +79,42 @@ function formatRelativeAge(date: string, now: Date): string {
 function SalesPageContent() {
   const router = useRouter();
   const searchParams = useSearchParams();
-  const filter = parseSalesFilter(searchParams.get('status')) ?? 'all';
-  const offset = parseSalesOffset(searchParams.get('offset'), SALES_PAGE_SIZE);
+  const search = searchParams.toString();
+  const filter = parseSalesFilter(searchParams.get('status')) ?? 'pending_delivery';
+  const rawOffset = searchParams.get('offset');
+  const parsedOffset = parseSalesOffset(rawOffset, SALES_PAGE_SIZE);
+  const offset = parsedOffset ?? 0;
+  const hasInvalidOffset = rawOffset !== null && parsedOffset === undefined;
+  const [isNavigationPending, startNavigation] = useTransition();
+  const isNavigating = isNavigationPending || hasInvalidOffset;
   const [retry, setRetry] = useState(0);
-  const request = useMemo(() => ({ filter, offset, retry }), [filter, offset, retry]);
   const [result, setResult] = useState<SalesResult>();
-  const currentResult = result?.request === request ? result : undefined;
+  const currentResult = !isNavigating && result?.request.filter === filter &&
+    result.request.offset === offset && result.request.retry === retry ? result : undefined;
   const pageState = currentResult?.state ?? 'loading';
   const rows = currentResult?.state === 'active' ? currentResult.rows : EMPTY_ROWS;
   const hasNextPage = currentResult?.state === 'active' && currentResult.hasNextPage;
   const reportedUnknownStatuses = useRef(new Set<string>());
 
   function navigate(nextFilter: SalesFilter, nextOffset: number) {
-    const current = searchParams.toString();
-    const next = salesSearchParams(current, nextFilter, nextOffset);
-    if (next !== current) router.push(`/dashboard/sales${next ? `?${next}` : ''}`, { scroll: false });
+    if (isNavigating || (nextFilter === filter && nextOffset === offset)) return;
+    const next = salesSearchParams(search, nextFilter, nextOffset);
+    startNavigation(() => router.push(`/dashboard/sales?${next}`, { scroll: false }));
   }
 
   useEffect(() => {
+    if (!hasInvalidOffset) return;
+
+    const params = new URLSearchParams(search);
+    params.delete('offset');
+    const next = params.toString();
+    router.replace(`/dashboard/sales${next ? `?${next}` : ''}`, { scroll: false });
+  }, [hasInvalidOffset, router, search]);
+
+  useEffect(() => {
+    const request: SalesRequest = { filter, offset, retry };
     let cancelled = false;
+    setResult(undefined);
 
     async function fetchSales() {
       try {
@@ -137,7 +154,7 @@ function SalesPageContent() {
     return () => {
       cancelled = true;
     };
-  }, [request]);
+  }, [filter, offset, retry]);
 
   useEffect(() => {
     for (const { status } of rows) {
@@ -202,8 +219,9 @@ function SalesPageContent() {
                 type="button"
                 aria-pressed={filter === value}
                 aria-describedby={filter === value && SALES_STATUS_HELP[filter] ? 'sales-status-help' : undefined}
+                disabled={isNavigating}
                 onClick={() => navigate(value, 0)}
-                className={`rounded-lg border px-4 py-2 text-sm font-medium ${
+                className={`rounded-lg border px-4 py-2 text-sm font-medium disabled:cursor-not-allowed disabled:opacity-50 ${
                   filter === value
                     ? 'border-[#3F51B5] bg-[#3F51B5] text-white'
                     : 'border-gray-300 bg-white text-gray-700 hover:bg-gray-50'

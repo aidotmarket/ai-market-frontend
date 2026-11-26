@@ -11,16 +11,15 @@ export function parseSalesFilter(value: unknown): SalesFilter | undefined {
   return SALES_FILTERS.find((filter) => filter.value === value)?.value;
 }
 
-export function parseSalesOffset(value: string | null, pageSize: number): number {
-  if (value === null || !/^\d+$/.test(value)) return 0;
+export function parseSalesOffset(value: string | null, pageSize: number): number | undefined {
+  if (value === null || !/^\d+$/.test(value)) return undefined;
   const offset = Number(value);
-  return Number.isSafeInteger(offset) && offset % pageSize === 0 ? offset : 0;
+  return Number.isSafeInteger(offset) && offset % pageSize === 0 ? offset : undefined;
 }
 
 export function salesSearchParams(current: string, filter: SalesFilter, offset: number): string {
   const params = new URLSearchParams(current);
-  if (filter === 'all') params.delete('status');
-  else params.set('status', filter);
+  params.set('status', filter);
   if (offset === 0) params.delete('offset');
   else params.set('offset', String(offset));
   return params.toString();
