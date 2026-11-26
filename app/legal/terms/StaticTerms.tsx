@@ -15,7 +15,7 @@ export default function StaticTerms() {
         </p>
         <p className={paragraphClass}>
           Privacy Policy:{' '}
-          <a href="https://ai.market/legal/privacy" className="text-[#3F51B5] underline-offset-2 hover:underline">
+          <a href="https://ai.market/legal/privacy" className="text-[#3F51B5] underline">
             https://ai.market/legal/privacy
           </a>
         </p>
@@ -32,7 +32,7 @@ export default function StaticTerms() {
           <li>All dealing stays on ai.market. If you meet a counterparty here, you transact here. Take it off-platform within 24 months and you owe us 10 times the full transaction value.</li>
           <li>The buyer pays the transaction costs. That covers Stripe, stablecoin, and escrow fees. Our commission is 5% of the deal and it comes out of the seller&apos;s proceeds, not on top of the buyer&apos;s price.</li>
           <li>Card money is held until the refund window closes, which is 90 days. If a buyer pays by card, the seller gets paid after that period passes, and the payment processor holds the money in the meantime, not us.</li>
-          <li>Disputes are yours to sort out. Buyers and sellers handle disputes directly. We do not mediate. We only act on a court order. We will record that a transaction ended in a dispute, and that can lower a seller&apos;s quality score.</li>
+          <li><a href="#disputes" className="text-[#3F51B5] underline">Disputes are yours to sort out</a>. Buyers and sellers handle disputes directly. We do not mediate. We only act on a court order. We will record that a transaction ended in a dispute, and that can lower a seller&apos;s quality score.</li>
           <li>You use the market at your own risk. By agreeing, you give up the right to sue us, as far as the law allows.</li>
           <li>You sign this. You tick three boxes and add your electronic signature before you can trade.</li>
         </ul>
@@ -131,7 +131,7 @@ export default function StaticTerms() {
         </ul>
         <p className={paragraphClass}>9.2 You must not impersonate anyone, misrepresent your identity or your Data, manipulate search or quality rankings, create duplicate or misleading Listings, deliver a materially different dataset than the one described, abuse the APIs or agents, or interfere with the Platform or its security and metering.</p>
         <p className={paragraphClass}>9.3 Sanctions and export compliance. You represent that you and your beneficial owners are not sanctioned or on any government restricted-party list, are not located in or a national of an embargoed jurisdiction, and are not using the Platform for a restricted end use or end user. You will comply with U.S. OFAC sanctions, U.S. export controls (including the EAR), anti-money-laundering law, and applicable export and import laws.</p>
-        <p className={paragraphClass}>9.4 Reporting and takedown. Anyone may report a Listing or user that breaches this section through the contact channels we publish. We may remove a Listing, suspend an account, or end access if we determine, in our discretion, that this section is breached or that a Listing or user creates legal, regulatory, security, or reputational risk. We are under no obligation to review or monitor Listings, and we are not liable for failing to catch a problem.</p>
+        <p className={paragraphClass}>9.4 Reporting and takedown. Anyone may report a Listing or user that breaches this section through the <a href="/support" className="text-[#3F51B5] underline">contact channels we publish</a>. We may remove a Listing, suspend an account, or end access if we determine, in our discretion, that this section is breached or that a Listing or user creates legal, regulatory, security, or reputational risk. We are under no obligation to review or monitor Listings, and we are not liable for failing to catch a problem.</p>
       </section>
 
       <section className={sectionClass}>
@@ -139,9 +139,9 @@ export default function StaticTerms() {
         <p className={paragraphClass}>10.1 Sellers keep all rights in their Data. Buyers get only the licence the Seller grants for that Data. Nothing on the Platform transfers ownership of Data.</p>
         <p className={paragraphClass}>10.2 You grant ai.market a limited licence to use, display, translate, and distribute your Listing metadata so we can run the marketplace and make your Listing discoverable to humans and to AI agents, including outside our website. This licence covers metadata only. It never covers the Data.</p>
         <p className={paragraphClass}>10.3 The Platform, including our software, brand, and allAI, belongs to us. You get no rights in it beyond using the service under these Terms.</p>
-        <p className={paragraphClass}>10.4 Copyright / DMCA. If you believe a Listing or metadata infringes your copyright, send a notice to our designated Copyright Agent:</p>
+        <p className={paragraphClass}>10.4 Copyright / DMCA. If you believe a Listing or metadata infringes your copyright, send a notice to our <a href="#copyright-agent" className="text-[#3F51B5] underline">designated Copyright Agent</a>:</p>
         <blockquote className="border-l-4 border-gray-300 bg-gray-50 p-5 text-base leading-7 text-gray-700">
-          <p>Copyright Agent, AIMARKET LLC</p>
+          <p id="copyright-agent" className="scroll-mt-24">Copyright Agent, AIMARKET LLC</p>
           <p>30 N Gould St Ste R, Sheridan, WY 82801</p>
           <p>Phone: (208) 948-9786</p>
           <p>
@@ -157,11 +157,11 @@ export default function StaticTerms() {
         <h2 className={headingClass}>11. Data protection and the non-custodial architecture</h2>
         <p className={paragraphClass}>11.1 Because we are non-custodial, the Data does not flow through us. The data plane moves directly between the Buyer&apos;s and Seller&apos;s systems over an encrypted relay. We handle only control-plane and billing metadata.</p>
         <p className={paragraphClass}>11.2 Sellers are responsible for any personal data in their Datasets, including having a lawful basis to sell it and honouring the rights of the people it relates to. Buyers are responsible for their own lawful use.</p>
-        <p className={paragraphClass}>11.3 Neither the Buyer nor the Seller is our data processor, and we are not theirs, because we never receive the Data. Our handling of your account and billing information is governed by our Privacy Policy at https://ai.market/legal/privacy. We take commercially reasonable measures to protect the control-plane and billing metadata we do hold, and we will notify affected users of a data breach affecting it as required by law.</p>
+        <p className={paragraphClass}>11.3 Neither the Buyer nor the Seller is our data processor, and we are not theirs, because we never receive the Data. Our handling of your account and billing information is governed by our Privacy Policy at <a href="https://ai.market/legal/privacy" className="text-[#3F51B5] underline">https://ai.market/legal/privacy</a>. We take commercially reasonable measures to protect the control-plane and billing metadata we do hold, and we will notify affected users of a data breach affecting it as required by law.</p>
       </section>
 
       <section className={sectionClass}>
-        <h2 className={headingClass}>12. Disputes between Buyers and Sellers</h2>
+        <h2 id="disputes" className={`${headingClass} scroll-mt-24`}>12. Disputes between Buyers and Sellers</h2>
         <p className={paragraphClass}>12.1 Any dispute about a Dataset, its quality, its licence, payment, or a transaction is strictly between the Buyer and the Seller. They must first try in good faith to resolve it directly between themselves.</p>
         <p className={paragraphClass}>12.2 We do not mediate. ai.market does not mediate, arbitrate, or take sides in these disputes. We will act only where required to by a valid court order or legal process, and our involvement is limited to complying with that order.</p>
         <p className={paragraphClass}>12.3 Dispute record. We may record that a transaction resulted in a dispute. That record may be shown on the Platform and may affect a Seller&apos;s or a party&apos;s quality score. This keeps the marketplace honest for everyone.</p>
