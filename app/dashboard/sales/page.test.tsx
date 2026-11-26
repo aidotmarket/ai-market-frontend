@@ -1,17 +1,24 @@
 // @vitest-environment jsdom
 
 import { act, cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
+import { Suspense, use, useState, useSyncExternalStore } from 'react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { SellerOrder, SellerOrderStatus } from '@/types';
 
-const navigation = vi.hoisted(() => ({ search: '' }));
 const capabilitiesApi = vi.hoisted(() => ({ getCapabilities: vi.fn() }));
 const sellerApi = vi.hoisted(() => ({ getSellerOrders: vi.fn() }));
 const ordersApi = vi.hoisted(() => ({ getMyOrders: vi.fn() }));
 const transactionsApi = vi.hoisted(() => ({ getMyTransactions: vi.fn() }));
+const router = vi.hoisted(() => ({ push: vi.fn(), replace: vi.fn() }));
+
+function subscribeToLocation(listener: () => void) {
+  window.addEventListener('popstate', listener);
+  return () => window.removeEventListener('popstate', listener);
+}
 
 vi.mock('next/navigation', () => ({
-  useSearchParams: () => new URLSearchParams(navigation.search),
+  useSearchParams: () => new URLSearchParams(useSyncExternalStore(subscribeToLocation, () => window.location.search)),
+  useRouter: () => router,
 }));
 vi.mock('@/api/capabilities', () => capabilitiesApi);
 vi.mock('@/api/seller', async (importOriginal) => ({
@@ -74,9 +81,23 @@ function pagingButton(name: 'Previous' | 'Next'): HTMLButtonElement {
     .getByRole('button', { name }) as HTMLButtonElement;
 }
 
+function setSalesSearch(search: string) {
+  window.history.replaceState(null, '', `/dashboard/sales${search ? `?${search}` : ''}`);
+}
+
+function pushSalesLocation(href: string) {
+  window.history.pushState(null, '', href);
+  window.dispatchEvent(new PopStateEvent('popstate'));
+}
+
 describe('SalesPage', () => {
   beforeEach(() => {
-    navigation.search = '';
+    setSalesSearch('');
+    router.push.mockReset().mockImplementation(pushSalesLocation);
+    router.replace.mockReset().mockImplementation((href: string) => {
+      window.history.replaceState(null, '', href);
+      window.dispatchEvent(new PopStateEvent('popstate'));
+    });
     capabilitiesApi.getCapabilities.mockReset();
     sellerApi.getSellerOrders.mockReset();
     ordersApi.getMyOrders.mockReset();
@@ -94,7 +115,7 @@ describe('SalesPage', () => {
   });
 
   it.each([100, 198])('pages through %i Delivered sales and disables Next on the last page', async (total) => {
-    navigation.search = 'status=delivered';
+    setSalesSearch('status=delivered');
     const deliveredOrders = Array.from({ length: total }, (_, index) => sellerOrder({
       id: `sale-${index}`,
       order_number: `SALE-${String(index).padStart(3, '0')}`,
@@ -132,7 +153,7 @@ describe('SalesPage', () => {
   });
 
   it('describes Delivered and Completed as the seller changes filters', async () => {
-    navigation.search = 'status=delivered';
+    setSalesSearch('status=delivered');
     render(<SalesPage />);
 
     await screen.findByRole('heading', { name: 'No sales match this filter' });
@@ -150,7 +171,7 @@ describe('SalesPage', () => {
 
   it.each(['', 'status=all', 'status=delivered', 'status=completed'])(
     'keeps Previous on an empty terminal page without first-page empty copy: %s', async (search) => {
-      navigation.search = search;
+      setSalesSearch(search);
       sellerApi.getSellerOrders
         .mockResolvedValueOnce({ data: pageWithLookahead() })
         .mockResolvedValueOnce({ data: [] })
@@ -169,23 +190,119 @@ describe('SalesPage', () => {
     }
   );
 
-  it('resets the filter and offset together with no new-filter old-offset request', async () => {
-    sellerApi.getSellerOrders.mockResolvedValue({ data: pageWithLookahead() });
+  it('keeps filter and page URLs in sync with the results, including Back and All', async () => {
+    setSalesSearch('from=dashboard');
+    const sales = [
+      sellerOrder({ id: 'pending', order_number: 'PENDING' }),
+      ...pageWithLookahead().map((order): SellerOrder => ({ ...order, status: 'delivered' })),
+      sellerOrder({ id: 'completed', order_number: 'COMPLETED', status: 'completed' }),
+    ];
+    sellerApi.getSellerOrders.mockImplementation(async ({ status_filter, limit, offset }) => ({
+      data: sales.filter((order) => !status_filter || order.status === status_filter).slice(offset, offset + limit),
+    }));
     const { container } = render(<SalesPage />);
+    await waitFor(() => expect(tableSaleNumbers(container)).toEqual(['PENDING']));
+    expect(screen.getByRole('button', { name: 'Awaiting delivery' }).getAttribute('aria-pressed')).toBe('true');
+    fireEvent.click(screen.getByRole('button', { name: 'Delivered' }));
     await waitFor(() => expect(tableSaleNumbers(container)).toHaveLength(99));
+    expect(window.location.search).toBe('?from=dashboard&status=delivered');
+    expect(tableSaleNumbers(container)[0]).toBe('PAGE1-000');
     fireEvent.click(pagingButton('Next'));
-    await waitFor(() => expect(screen.getByText('Page 2')).not.toBeNull());
-    await waitFor(() => expect(pagingButton('Next').disabled).toBe(false));
+    await waitFor(() => expect(tableSaleNumbers(container)).toEqual(['PAGE1-099']));
+    expect(window.location.search).toBe('?from=dashboard&status=delivered&offset=99');
+    expect(screen.getByText('Page 2')).not.toBeNull();
     fireEvent.click(screen.getByRole('button', { name: 'All' }));
-    await waitFor(() => expect(sellerApi.getSellerOrders).toHaveBeenCalledTimes(3));
+    await waitFor(() => expect(tableSaleNumbers(container)).toHaveLength(99));
+    expect(window.location.search).toBe('?from=dashboard&status=all');
+    expect(tableSaleNumbers(container)).toContain('PENDING');
     expect(sellerApi.getSellerOrders).toHaveBeenLastCalledWith({ limit: 100, offset: 0 });
     expect(screen.getByText('Page 1')).not.toBeNull();
     expect(screen.getByRole('button', { name: 'All' }).getAttribute('aria-pressed')).toBe('true');
-    expect(sellerApi.getSellerOrders.mock.calls.map(([params]) => params.offset)).toEqual([0, 99, 0]);
+    expect(sellerApi.getSellerOrders.mock.calls.map(([params]) => params.offset)).toEqual([0, 0, 99, 0]);
+
+    window.history.back();
+    await waitFor(() => expect(tableSaleNumbers(container)).toEqual(['PAGE1-099']));
+    expect(window.location.search).toBe('?from=dashboard&status=delivered&offset=99');
+    fireEvent.click(pagingButton('Previous'));
+    await waitFor(() => expect(tableSaleNumbers(container)).toHaveLength(99));
+    expect(window.location.search).toBe('?from=dashboard&status=delivered');
+  });
+
+  it.each([
+    ['offset=99', 'Awaiting delivery', { status_filter: 'pending_delivery' }],
+    ['status=all&offset=99', 'All', {}],
+  ])('opens page two directly from %s', async (search, label, filterParams) => {
+    setSalesSearch(search);
+    const sales = pageWithLookahead();
+    sellerApi.getSellerOrders.mockImplementation(async ({ limit, offset }) => ({
+      data: sales.slice(offset, offset + limit),
+    }));
+    const { container } = render(<SalesPage />);
+
+    await waitFor(() => expect(tableSaleNumbers(container)).toEqual(['PAGE1-099']));
+    expect(screen.getByText('Page 2')).toBeTruthy();
+    expect(screen.getByRole('button', { name: label }).getAttribute('aria-pressed')).toBe('true');
+    expect(sellerApi.getSellerOrders).toHaveBeenCalledExactlyOnceWith({ limit: 100, offset: 99, ...filterParams });
+  });
+
+  it('replaces an unaligned offset with the first-page URL and preserves other parameters', async () => {
+    setSalesSearch('status=delivered&offset=100&from=dashboard');
+    const historyLength = window.history.length;
+    render(<SalesPage />);
+
+    await screen.findByRole('heading', { name: 'No sales match this filter' });
+    expect(screen.getByText('Page 1')).toBeTruthy();
+    expect(window.location.search).toBe('?status=delivered&from=dashboard');
+    expect(window.history.length).toBe(historyLength);
+    expect(sellerApi.getSellerOrders).toHaveBeenCalledExactlyOnceWith({ status_filter: 'delivered', limit: 100, offset: 0 });
+  });
+
+  it('clears rows and blocks repeated pushes before navigation commits', async () => {
+    const pending = deferred<void>();
+    sellerApi.getSellerOrders.mockResolvedValueOnce({ data: pageWithLookahead() });
+
+    function WaitForNavigation({ commit }: { commit: Promise<void> | null }) {
+      if (commit) use(commit);
+      return null;
+    }
+
+    function SalesWithDelayedNavigation() {
+      const [commit, setCommit] = useState<Promise<void> | null>(null);
+      router.push.mockImplementation(() => setCommit(pending.promise));
+      return (
+        <Suspense>
+          <SalesPage />
+          <WaitForNavigation commit={commit} />
+        </Suspense>
+      );
+    }
+
+    const { container } = render(<SalesWithDelayedNavigation />);
+    await waitFor(() => expect(tableSaleNumbers(container)).toHaveLength(99));
+    fireEvent.click(pagingButton('Next'));
+
+    expect(window.location.search).toBe('');
+    expect(tableSaleNumbers(container)).toEqual([]);
+    expect(screen.getByText('Loading sales...')).toBeTruthy();
+    expect(pagingButton('Next').disabled).toBe(true);
+    expect(pagingButton('Previous').disabled).toBe(true);
+    const all = screen.getByRole<HTMLButtonElement>('button', { name: 'All' });
+    expect(all.disabled).toBe(true);
+    fireEvent.click(pagingButton('Next'));
+    fireEvent.click(all);
+    expect(router.push).toHaveBeenCalledExactlyOnceWith('/dashboard/sales?status=pending_delivery&offset=99', { scroll: false });
+
+    await act(async () => {
+      pushSalesLocation(router.push.mock.calls[0][0]);
+      pending.resolve();
+    });
+    expect(await screen.findByRole('heading', { name: 'End of sales results' })).toBeTruthy();
+    expect(all.disabled).toBe(false);
+    expect(pagingButton('Previous').disabled).toBe(false);
   });
 
   it('clears rows, disables paging during load, and retries the same later filter/page', async () => {
-    navigation.search = 'status=completed';
+    setSalesSearch('status=completed');
     const later = deferred<{ data: SellerOrder[] }>();
     const retry = deferred<{ data: SellerOrder[] }>();
     sellerApi.getSellerOrders
@@ -238,6 +355,25 @@ describe('SalesPage', () => {
     await act(async () => current.resolve({ data: [sellerOrder({ order_number: 'CURRENT-FILTER' })] }));
     expect(tableSaleNumbers(container)).toEqual(['CURRENT-FILTER']);
     expect(pagingButton('Next').disabled).toBe(true);
+  });
+
+  it('keeps old rows hidden when Back returns to the same request fields', async () => {
+    const alternate = deferred<{ data: SellerOrder[] }>();
+    const returning = deferred<{ data: SellerOrder[] }>();
+    sellerApi.getSellerOrders.mockResolvedValueOnce({ data: [sellerOrder({ order_number: 'OLD' })] })
+      .mockReturnValueOnce(alternate.promise).mockReturnValueOnce(returning.promise);
+    const { container } = render(<SalesPage />);
+    await waitFor(() => expect(tableSaleNumbers(container)).toEqual(['OLD']));
+
+    fireEvent.click(screen.getByRole('button', { name: 'Delivered' }));
+    await waitFor(() => expect(sellerApi.getSellerOrders).toHaveBeenCalledTimes(2));
+    window.history.back();
+    await waitFor(() => expect(sellerApi.getSellerOrders).toHaveBeenCalledTimes(3));
+
+    expect(screen.getByText('Loading sales...')).toBeTruthy();
+    expect(tableSaleNumbers(container)).toEqual([]);
+    await act(async () => returning.resolve({ data: [sellerOrder({ order_number: 'FRESH' })] }));
+    expect(tableSaleNumbers(container)).toEqual(['FRESH']);
   });
 
   it.each(['resolve', 'reject'] as const)('ignores a retired retry %s after a new filter succeeds', async (settle) => {
@@ -331,11 +467,14 @@ describe('SalesPage', () => {
         offset: 0,
       });
     });
+    expect(window.location.search).toBe('');
+    expect(screen.getByRole('button', { name: 'Awaiting delivery' }).getAttribute('aria-pressed')).toBe('true');
 
     fireEvent.click(screen.getByRole('button', { name: 'All' }));
     await waitFor(() => {
       expect(sellerApi.getSellerOrders).toHaveBeenNthCalledWith(2, { limit: 100, offset: 0 });
     });
+    expect(window.location.search).toBe('?status=all');
 
     fireEvent.click(screen.getByRole('button', { name: 'Delivered' }));
     await waitFor(() => {
@@ -379,7 +518,7 @@ describe('SalesPage', () => {
   });
 
   it('includes the active filter in both seller license record links', async () => {
-    navigation.search = 'status=completed';
+    setSalesSearch('status=completed');
     sellerApi.getSellerOrders.mockResolvedValue({ data: [sellerOrder({ license_record_available: true })] });
 
     render(<SalesPage />);
@@ -440,7 +579,7 @@ describe('SalesPage', () => {
   });
 
   it('shows no payment due for free sales and labels supplemental dates', async () => {
-    navigation.search = 'status=all';
+    setSalesSearch('status=all');
     sellerApi.getSellerOrders.mockResolvedValue({
       data: [
         sellerOrder({

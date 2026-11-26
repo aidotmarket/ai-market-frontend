@@ -161,7 +161,7 @@ function LicenseRecordVisit({ id, party, backHref }: { id: string; party: 'buyer
   }
 
   if (state === 'loading') return <p className="text-sm text-gray-600">Loading licence record…</p>;
-  if (state === 'error' || !record) return <div><p role="alert" className="rounded-lg bg-red-50 p-4 text-sm text-red-800">We could not load your licence record just now. Try again, or contact support if it keeps happening.</p><button type="button" onClick={() => { if (live.current) setReadAttempt((attempt) => attempt + 1); }} className="mt-3 text-sm text-indigo-700 underline">Retry licence record</button></div>;
+  if (state === 'error' || !record) return <div><p role="alert" className="rounded-lg bg-red-50 p-4 text-sm text-red-800">We could not load your licence record just now. Try again, or <Link href="/support" className="underline">contact support</Link> if it keeps happening.</p><button type="button" onClick={() => { if (live.current) setReadAttempt((attempt) => attempt + 1); }} className="mt-3 text-sm text-indigo-700 underline">Retry licence record</button></div>;
 
   const termination = record.lifecycle_events.find((event) => event.event_type === 'terminated');
   const deletionConfirmation = record.lifecycle_events.find((event) => event.event_type === 'deletion_confirmed');

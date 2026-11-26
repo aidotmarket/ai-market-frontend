@@ -21,6 +21,21 @@ const effectiveAt = '2026-10-01T00:00:00Z';
 const backendDocument = readFileSync('app/legal/terms/terms_v1_1.test.md', 'utf8')
   .replace('{{TERMS_1_1_EFFECTIVE_AT}}', effectiveAt);
 
+function expectLegalLinks(container: ParentNode, disputeSummary: string) {
+  const links = [...container.querySelectorAll('a')];
+  const privacyUrl = 'https://ai.market/legal/privacy';
+  expect(links.filter((link) => link.textContent === privacyUrl).map((link) => link.getAttribute('href')))
+    .toEqual([privacyUrl, privacyUrl]);
+  for (const [text, href] of [
+    ['contact channels we publish', '/support'],
+    ['designated Copyright Agent', '#copyright-agent'],
+    [disputeSummary, '#disputes'],
+  ]) {
+    expect(links.find((link) => link.textContent === text)?.getAttribute('href')).toBe(href);
+    if (href.startsWith('#')) expect(container.querySelector(href)).not.toBeNull();
+  }
+}
+
 afterEach(() => {
   process.env.API_URL = previousApiUrl;
   vi.unstubAllGlobals();
@@ -34,7 +49,9 @@ it('renders the full base marketplace 1.0 page on flag-off 404', async () => {
   expect(html).toBe(renderToStaticMarkup(<StaticTerms />));
   expect(hash(normalizedLegalText(html))).toBe(baseTermsTextSha256);
   expect(html).toContain('Effective date: July 7, 2026 · Version 1.0');
-  expect(html).toContain('href="https://ai.market/legal/privacy"');
+  const container = document.createElement('div');
+  container.innerHTML = html;
+  expectLegalLinks(container, 'Disputes are yours to sort out');
   expect(html).toContain('19.6 Notices.');
   expect(html).toContain('id="fees" class="mt-10 space-y-4 scroll-mt-24"');
   expect(html).not.toContain('Listings without a chosen licence are offered under');
@@ -52,7 +69,7 @@ it('renders the verified backend marketplace 1.1 document once', async () => {
   expect(html.match(/ai.market — Terms and Conditions/g)).toHaveLength(1);
   expect(html.match(/Effective date: 2026-10-01T00:00:00Z · Version 1.1/g)).toHaveLength(1);
   expect(normalizedLegalText(html)).toContain('Listings without a chosen licence are offered under the ai.market Standard Data Licence with AI training permitted, and the seller accepts the ai.market Marketplace Listing Covenant for them.');
-  expect(html).toContain('Privacy Policy: https://ai.market/legal/privacy');
+  expect(normalizedLegalText(html)).toContain('Privacy Policy: https://ai.market/legal/privacy');
   expect(html).toContain('<h2 id="fees" class="scroll-mt-24">5. Commission, transaction costs, payment, and tax</h2>');
   expect(html.match(/id="fees"/g)).toHaveLength(1);
   expect(html).toContain('<h2>4. What the Platform is, and what it is not</h2>');
@@ -92,6 +109,12 @@ it.each([
   const article = container.querySelector('article')!;
   const originalHtml = renderToStaticMarkup(<ReactMarkdown rehypePlugins={[rehypeSanitize]}>{markdown}</ReactMarkdown>);
   expect(normalizedLegalText(article.innerHTML)).toBe(normalizedLegalText(originalHtml));
+  expectLegalLinks(article, version === '1.2' ? 'Data quality and licence disputes' : 'Disputes are yours to sort out');
+  if (version === '1.2') {
+    const cardDisputeLink = article.querySelector('a[href="#card-proceeds"]');
+    expect(cardDisputeLink?.textContent).toBe('Sections 5.3 and 5.4');
+    expect(article.querySelector('#card-proceeds')?.textContent).toMatch(/^5\.3 Card proceeds/);
+  }
 
   const licenceTerms = [...article.querySelectorAll('p')].find(p => p.textContent?.startsWith('7.2 '));
   const licenceLinks = [...licenceTerms!.nextElementSibling!.querySelectorAll('a')];
