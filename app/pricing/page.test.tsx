@@ -6,6 +6,7 @@ import { cleanup, render, screen } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import PricingPage from './page';
+import { CARD_PAYOUT_EXAMPLE, CARD_PAYOUT_HOLD } from '@/components/legal/terms12Copy';
 
 const serverTerms = vi.hoisted(() => ({ getPublicTermsVersion: vi.fn() }));
 vi.mock('@/lib/publicTermsVersion', () => serverTerms);
@@ -43,12 +44,24 @@ it('switches 1.2 card claims to the approved seller-bears text', async () => {
   ]) expect(screen.getByText(copy)).toBeTruthy();
   expect(screen.queryByText('List free. Keep 95% when data sells.')).toBeNull();
   expect(screen.queryByText(/Stripe, stablecoin, or escrow fees/)).toBeNull();
-  expect(screen.queryByText(/90.day/)).toBeNull();
+  expect(screen.getByText(CARD_PAYOUT_HOLD)).toBeTruthy();
 });
 
-it('keeps served 1.1 pricing text exactly at the fda22fca base snapshot', async () => {
+it('reuses the Terms 1.2 worked example and links to Section 5', async () => {
+  serverTerms.getPublicTermsVersion.mockResolvedValue('1.2');
+  render(await PricingPage());
+  expect(screen.getByText(CARD_PAYOUT_EXAMPLE)).toBeTruthy();
+  for (const link of screen.getAllByRole('link', { name: /Read Section 5/ })) {
+    expect(link.getAttribute('href')).toBe('/legal/terms#fees');
+  }
+});
+
+it('adds the free-request guidance while keeping the served 1.1 fee copy', async () => {
   const container = document.createElement('div');
   container.innerHTML = renderToStaticMarkup(await PricingPage());
+  const request = container.querySelector('a[href="/requests"]')!.closest('p')!;
+  expect(request.textContent).toBe('Post a Data Request for free. Free account needed.');
+  request.remove();
   const text = container.textContent!.replace(/\s+/gu, ' ').trim();
   expect(createHash('sha256').update(text).digest('hex')).toBe('78c3b2b6aec3ae1c8f09d753bcaddd1c0af99b794c8c5053fcc2babeac642457');
 });

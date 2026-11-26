@@ -2,7 +2,7 @@ import type { Metadata } from 'next';
 import Link from 'next/link';
 import { getPublicTermsVersion } from '@/lib/publicTermsVersion';
 import VersionedTermsCopy, { TermsVersionProvider } from '@/components/legal/VersionedTermsCopy';
-import { CARD_PRICING_HEADLINE, CARD_SELLER_FEES, CARD_BUYER_HEADLINE, CARD_BUYER_DETAIL, CARD_PRICING_SUMMARY, CARD_CHECKOUT_NOTE } from '@/components/legal/terms12Copy';
+import { CARD_PRICING_HEADLINE, CARD_SELLER_FEES, CARD_BUYER_HEADLINE, CARD_BUYER_DETAIL, CARD_PRICING_SUMMARY, CARD_CHECKOUT_NOTE, CARD_PAYOUT_EXAMPLE, CARD_PAYOUT_HOLD } from '@/components/legal/terms12Copy';
 
 export const metadata: Metadata = {
   title: 'Pricing and fees — ai.market',
@@ -63,6 +63,20 @@ export default async function PricingPage() {
                   </li>
                 ))}
               </ul>
+              {card.audience === 'Sellers' && (
+                <VersionedTermsCopy legacy={null} terms12={(
+                  <div className="mt-5 space-y-2 border-t border-gray-200 pt-4 text-sm leading-6 text-gray-700">
+                    <p>{CARD_PAYOUT_EXAMPLE}</p>
+                    <Link href="/legal/terms#fees" className="font-semibold text-[#3F51B5] hover:underline">Read Section 5 of the Terms →</Link>
+                  </div>
+                )} />
+              )}
+              {card.audience === 'Buyers' && (
+                <p className="mt-5 border-t border-gray-200 pt-4 text-sm leading-6 text-gray-700">
+                  <Link href="/requests" className="font-semibold text-[#3F51B5] underline">Post a Data Request</Link>
+                  {' '}for free. Free account needed.
+                </p>
+              )}
             </section>
           ))}
         </div>
@@ -80,6 +94,7 @@ export default async function PricingPage() {
             Section 5 of the ai.market Terms and Conditions is the authoritative fee schedule and
             explains commission, transaction costs, payment handling, and taxes in full.
           </p>
+          <VersionedTermsCopy legacy={null} terms12={<p className="mt-3 text-base leading-7 text-gray-700">{CARD_PAYOUT_HOLD}</p>} />
           <Link href="/legal/terms#fees" className="mt-4 inline-flex font-semibold text-[#3F51B5] hover:underline">
             Read Section 5 of the Terms →
           </Link>

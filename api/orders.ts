@@ -1,6 +1,7 @@
 import { api } from './client';
+import { isAxiosError } from 'axios';
 import { privateReadOptions } from './privateReads';
-import type { BuyerOrder, BuyerOrderDetail, OrderEvent, OrderAccessResponse } from '@/types';
+import type { BuyerOrder, BuyerOrderDetail, OrderEvent, OrderAccessResponse, SellerOrderMoneyStatement } from '@/types';
 
 export interface MyOrdersPaging {
   limit?: number;
@@ -26,6 +27,19 @@ export async function getOrder(orderId: string, options?: { signal: AbortSignal 
   );
   const data = res.data;
   return parseOrderDetail(data);
+}
+
+export async function getSellerOrderMoneyStatement(orderId: string, signal: AbortSignal): Promise<SellerOrderMoneyStatement | null> {
+  try {
+    const { data } = await api.get<{ seller_statement?: SellerOrderMoneyStatement }>(
+      `/orders/${encodeURIComponent(orderId)}/money-statement`, { ...privateReadOptions, signal },
+    );
+    if (!data.seller_statement) throw new Error('Missing seller statement');
+    return data.seller_statement;
+  } catch (error) {
+    if (isAxiosError(error) && error.response?.status === 404) return null;
+    throw error;
+  }
 }
 
 export function parseOrderDetail(data: BuyerOrderDetail & {amount_cents?: number; listing_snapshot?: {title?: string}}): BuyerOrderDetail {

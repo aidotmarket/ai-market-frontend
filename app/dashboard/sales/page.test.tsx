@@ -63,7 +63,7 @@ function sellerOrder(overrides: Partial<SellerOrder> = {}): SellerOrder {
 
 function tableSaleNumbers(container: HTMLElement): string[] {
   return Array.from(container.querySelectorAll('tbody tr')).map(
-    (row) => row.querySelector('td')?.textContent ?? ''
+    (row) => row.querySelector('td > span')?.textContent ?? ''
   );
 }
 
@@ -415,7 +415,8 @@ describe('SalesPage', () => {
     const { container } = render(<SalesPage />);
 
     expect(await screen.findAllByText('SALE-001')).toHaveLength(2);
-    expect(screen.getByText(/gross amount less ai.market’s 5% commission.*If a card processing fee applies, it’s deducted from your payout.*amounts shown here exclude that fee/)).toBeTruthy();
+    expect(screen.getByText(/gross amount less ai.market’s 5% commission.*If a card processing fee applies, it’s deducted from your payout/)).toBeTruthy();
+    expect(screen.getAllByText('Order details')).toHaveLength(2);
     for (const label of ['Sale', 'Listing', 'Gross (USD)', 'You receive before card fees (USD)', 'Status', 'Paid']) {
       expect(screen.getAllByText(label)).toHaveLength(2);
     }

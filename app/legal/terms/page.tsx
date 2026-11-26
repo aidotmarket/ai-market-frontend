@@ -4,6 +4,7 @@ import ReactMarkdown from 'react-markdown';
 import rehypeSanitize from 'rehype-sanitize';
 import type { ReactNode } from 'react';
 import { MARKETPLACE_LISTING_COVENANT_PATH, STANDARD_DATA_LICENCE_PATH } from '@/lib/publicLegalDocuments';
+import { CARD_PAYOUT_EXAMPLE } from '@/components/legal/terms12Copy';
 import StaticTerms from './StaticTerms';
 
 const privacyUrl = 'https://ai.market/legal/privacy';
@@ -85,7 +86,7 @@ export default async function TermsAndConditionsPage() {
       <aside aria-labelledby="fee-explanation-heading" className="mt-8 space-y-3 rounded-xl border border-gray-200 bg-gray-50 p-6 text-gray-700">
         <h2 id="fee-explanation-heading" className="text-lg font-semibold text-gray-900">Fees explained (not part of the Terms)</h2>
         <p><a className="text-indigo-700 underline" href="https://stripe.com/pricing" target="_blank" rel="noopener noreferrer">Stripe pricing</a></p>
-        <p>Example: on a $1,000 sale, ai.market&apos;s 5% commission is $50 and the card fee is about 2.9% + 30¢ (about $29), so the seller receives about $921. This is an example; the actual card fee varies.</p>
+        <p>{CARD_PAYOUT_EXAMPLE}</p>
       </aside>
     )}
   </main>;
