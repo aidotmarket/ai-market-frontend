@@ -1,17 +1,31 @@
 import type { AnonymousChatEvent } from '@/api/anonymousChat';
 
+export type GatewayFallbackDestination = '/aim-data#gateway-setup' | '/aim-data#network-requirements';
+
 export interface FallbackDestinations {
-  gateway?: '/aim-data#gateway-setup';
+  gateway?: GatewayFallbackDestination;
   support?: '/support';
   search?: string;
   request?: '/requests/new';
 }
 
-export function gatewaySetupFallback(page: string, question: string): FallbackDestinations | undefined {
-  if (page !== '/aim-data' && page !== '/support') return;
-  const mentionsGateway = /\b(?:aim[\s-]+data|docker|gateways?)\b|网关|閘道/i.test(question);
-  const asksAboutSetup = /\b(?:setup|set up|install\w*|network(?:ing)?|configur\w*|instal\w*|red)\b|安装|设置|配置|网络/i.test(question);
-  if (!mentionsGateway && !(page === '/aim-data' && asksAboutSetup)) return;
+export function isGatewayHelpPage(page: string) {
+  return page === '/aim-data' || page === '/support';
+}
+
+export function gatewayHelpFallback(page: string, question: string): { gateway: GatewayFallbackDestination } | undefined {
+  if (!isGatewayHelpPage(page)) return;
+  const mentionsAimData = /\b(?:aim[\s-]+data|docker)\b/i.test(question);
+  const mentionsGateway = /\bgateways?\b|网关|閘道/i.test(question);
+  const asksAboutSetup = /\b(?:setup|set up|instal\w*|configur\w*)\b|安装|设置|配置/i.test(question);
+  const asksAboutNetwork = /\b(?:network(?:ing)?|ports?|firewalls?|egress|red|puertos?)\b|网络|端口|防火墙/i.test(question);
+  if (page === '/support' && !mentionsAimData) {
+    if (/\bpayment[\s-]+gateways?\b|支付网关/i.test(question)) return;
+    if (!mentionsGateway || !(asksAboutSetup || asksAboutNetwork)) return;
+  }
+
+  if (asksAboutNetwork) return { gateway: '/aim-data#network-requirements' };
+  if (!mentionsAimData && !mentionsGateway && !asksAboutSetup) return;
   return { gateway: '/aim-data#gateway-setup' };
 }
 

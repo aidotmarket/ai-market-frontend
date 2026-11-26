@@ -9,10 +9,11 @@ export function AllAIFallback({ destinations, locale }: {
   const { listingRecovery, recoveryLinks, homepageFallbackGuidance, gatewayFallback } = anonymousAllAIResources(locale);
   const { gateway, support, search, request } = destinations;
   if (gateway) {
+    const { guidance, link } = gatewayFallback[gateway];
     return (
       <>
-        {gatewayFallback.guidance}{' '}
-        <Link href={gateway} className="underline">{gatewayFallback.link}</Link>
+        {guidance}{' '}
+        <Link href={gateway} className="underline">{link}</Link>
       </>
     );
   }

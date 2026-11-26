@@ -25,7 +25,7 @@ import {
   type AnonymousMessagePayload,
 } from '@/api/anonymousChat';
 import type { TicketStatusCardData } from './TicketStatusCard';
-import { anonymousFallbackDestinations, gatewaySetupFallback, type FallbackDestinations } from '@/lib/anonymous-allai-fallback';
+import { anonymousFallbackDestinations, gatewayHelpFallback, isGatewayHelpPage, type FallbackDestinations } from '@/lib/anonymous-allai-fallback';
 import {
   ANONYMOUS_ALLAI_LOCALES,
   anonymousAllAIResources,
@@ -480,11 +480,14 @@ export function AllAIProvider({ children }: { children: ReactNode }) {
       setIsStreaming(true);
 
       const listingMatch = pathname.match(/^\/listings\/([^/]+)/);
-      const gatewayDestinations = !user ? gatewaySetupFallback(contextPath, trimmed) : undefined;
-      const gatewayRecovery = gatewayDestinations && {
-        content: resources.gatewayFallback.guidance,
-        fallbackDestinations: gatewayDestinations,
-      };
+      const signedOutGatewayHelp = !user && isGatewayHelpPage(contextPath);
+      function getGatewayRecovery() {
+        const destinations = signedOutGatewayHelp ? gatewayHelpFallback(contextPath, trimmed) : undefined;
+        return destinations && {
+          content: resources.gatewayFallback[destinations.gateway].guidance,
+          fallbackDestinations: destinations,
+        };
+      }
 
       try {
         const sessionId = await ensureSession();
@@ -583,7 +586,7 @@ export function AllAIProvider({ children }: { children: ReactNode }) {
             if (evt.type === 'answer' && typeof evt.text === 'string') {
               const step = evt.next_step;
               const nextStep = isAnonymousNextStep(step) &&
-                (anonymousSurfaceActive || (gatewayRecovery && step.action === 'view_aim_data'))
+                (anonymousSurfaceActive || (signedOutGatewayHelp && step.action === 'view_aim_data'))
                 ? step : undefined;
               setMessages((prev) =>
                 prev.map((m) =>
@@ -608,7 +611,7 @@ export function AllAIProvider({ children }: { children: ReactNode }) {
               const fallback = resources.safeOutcomes[outcome];
               const surface = listingMatch ? 'listing' : contextPath === '/' ? 'homepage' : undefined;
               const recovery = outcome === 'answer_unverified' || outcome === 'retrieval_unavailable' || outcome === 'no_matches'
-                ? gatewayRecovery : undefined;
+                ? getGatewayRecovery() : undefined;
               const fallbackDestinations = recovery?.fallbackDestinations ?? (surface && anonymousFallbackDestinations(evt, surface));
               setMessages((prev) =>
                 prev.map((m) =>
@@ -639,6 +642,7 @@ export function AllAIProvider({ children }: { children: ReactNode }) {
             // Error: support both {"error":"..."} and {"type":"error","message":"..."}
             const error = evt.error ?? (evt.type === 'error' ? evt.message : undefined);
             if (typeof error === 'string' && error) {
+              const gatewayRecovery = getGatewayRecovery();
               setMessages((prev) =>
                 prev.map((m) => {
                   if (m.id !== assistantId || ((listingMatch || gatewayRecovery) && m.safeOutcome)) return m;
@@ -689,12 +693,13 @@ export function AllAIProvider({ children }: { children: ReactNode }) {
               );
             }
           }, undefined, controller.signal);
-          if ((listingMatch || gatewayRecovery) && !controller.signal.aborted) {
-            setMessages((prev) => prev.map((m) =>
-              m.id === assistantId && !m.content.trim() && !m.ticketStatusCards?.length
-                ? gatewayRecovery ? { ...m, ...gatewayRecovery } : { ...m, listingFailure: 'error' }
-                : m
-            ));
+          if ((listingMatch || signedOutGatewayHelp) && !controller.signal.aborted) {
+            setMessages((prev) => prev.map((m) => {
+              if (m.id !== assistantId || m.content.trim() || m.ticketStatusCards?.length || m.nextStep) return m;
+              const gatewayRecovery = getGatewayRecovery();
+              if (gatewayRecovery) return { ...m, ...gatewayRecovery };
+              return listingMatch ? { ...m, listingFailure: 'error' } : m;
+            }));
           }
         } catch (readErr) {
           // On timeout, abort the request so the connection is torn down
@@ -706,6 +711,7 @@ export function AllAIProvider({ children }: { children: ReactNode }) {
       } catch (err: any) {
         if (err?.name !== 'AbortError') {
           const failure = err?.message === 'Stream read timeout' ? 'timeout' : 'error';
+          const gatewayRecovery = getGatewayRecovery();
           setMessages((prev) =>
             prev.map((m) => {
               if (m.id !== assistantId || m.safeOutcome) return m;

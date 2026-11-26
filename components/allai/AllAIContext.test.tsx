@@ -1056,6 +1056,7 @@ const accountNextSteps = [
 
 describe('signed-out gateway help', () => {
   const gatewayQuestion = 'How do I set up the AIM Data gateway with Docker?';
+  const portsQuestion = 'Which ports do I need to open?';
   const gatewayError = "We couldn't answer that question about Docker and networking.";
 
   function mount(path: string, reply: Response) {
@@ -1071,11 +1072,11 @@ describe('signed-out gateway help', () => {
   it.each(['/aim-data', '/support'])('renders the verified AIM Data next step on %s', async (path) => {
     mount(path, sseEvents({
       type: 'answer',
-      text: 'Verified setup instructions.',
+      text: 'Verified network instructions.',
       next_step: { action: 'view_aim_data', url: '/aim-data', label: 'View AIM Data', requires_account: false },
     }));
-    await send(gatewayQuestion);
-    expect(screen.getByText('Verified setup instructions.')).toBeTruthy();
+    await send(portsQuestion);
+    expect(screen.getByText('Verified network instructions.')).toBeTruthy();
     expect(screen.getByRole('link', { name: 'View AIM Data' }).getAttribute('href')).toBe('/aim-data');
     expect(messagePayload(messageCalls()[0]).context).toEqual({ page: path });
   });
@@ -1094,12 +1095,22 @@ describe('signed-out gateway help', () => {
     expect(screen.queryByText(GENERIC_ERROR)).toBeNull();
   });
 
-  it('keeps unrelated support questions on their existing recovery path', async () => {
-    mount('/support', response(503));
-    await send('Where can I find my order?');
-    expect(screen.getByText(GENERIC_ERROR)).toBeTruthy();
-    expect(screen.queryByRole('link')).toBeNull();
+  it('links to published network requirements when the ports question fails on AIM Data', async () => {
+    mount('/aim-data', sseEvents({ type: 'safe_failure', outcome: 'answer_unverified', text: gatewayError }));
+    await send(portsQuestion);
+    expect(screen.getByRole('link', { name: 'Read the AIM Data network requirements' }).getAttribute('href'))
+      .toBe('/aim-data#network-requirements');
+    expect(screen.queryByRole('link', { name: 'Read the AIM Data setup guide' })).toBeNull();
   });
+
+  it.each(['Where can I find my order?', 'My payment gateway declined my card'])(
+    'keeps ordinary support recovery for %s', async (question) => {
+      mount('/support', response(503));
+      await send(question);
+      expect(screen.getByText(GENERIC_ERROR)).toBeTruthy();
+      expect(screen.queryByRole('link')).toBeNull();
+    }
+  );
 });
 
 describe('mounted anonymous next-step navigation', () => {
