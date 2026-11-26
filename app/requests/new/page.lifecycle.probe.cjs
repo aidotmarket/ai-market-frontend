@@ -155,7 +155,7 @@ for (const strict of [false, true]) test(`valid payload and ordinary success (St
     assert.match(h.el.textContent, /We save it as a draft so you can review it before it goes live/);
     await h.fill(); await h.submit();
     assert.deepEqual(h.calls, [payload]);
-    assert.equal(h.button().textContent, 'Creating...');
+    assert.equal(h.button().textContent, 'Saving draft');
     await h.submit(); assert.equal(h.calls.length, 1);
     await h.settle(0);
     assert.deepEqual(h.toasts, [success]);
@@ -200,7 +200,7 @@ for (const error of [null, validationError('Synthetic obsolete failure')]) {
       await h.fill(); await h.submit();
       await h.settle(0, error);
       assert.deepEqual(h.toasts, []); assert.deepEqual(h.pushes, []);
-      assert.equal(h.button().textContent, 'Creating...');
+      assert.equal(h.button().textContent, 'Saving draft');
       await h.settle(1); assert.deepEqual(h.toasts, [success]);
     } finally { await h.close(); }
   });
@@ -239,7 +239,7 @@ for (const batched of [false, true]) test(`A -> B -> A retires old owner and fin
     await h.fill(); await h.submit();
     await h.settle(0);
     assert.deepEqual(h.toasts, []); assert.deepEqual(h.pushes, []);
-    assert.equal(h.button().textContent, 'Creating...'); assert.equal(h.button().disabled, true);
+    assert.equal(h.button().textContent, 'Saving draft'); assert.equal(h.button().disabled, true);
     await h.submit(); assert.equal(h.calls.length, 2);
     await h.settle(1); assert.deepEqual(h.toasts, [success]);
   } finally { await h.close(); }
@@ -255,7 +255,7 @@ test('same ID token and user-object refresh preserves draft and pending operatio
     await h.update({ user: { id: 'account-A' }, token: 'synthetic-again', isLoading: true });
     assert.equal(h.el.querySelector('form'), null);
     await h.update({ isLoading: false });
-    assert.deepEqual(h.values(), fields); assert.equal(h.button().textContent, 'Creating...');
+    assert.deepEqual(h.values(), fields); assert.equal(h.button().textContent, 'Saving draft');
     await h.settle(0); assert.deepEqual(h.toasts, [success]);
     assert.deepEqual(h.pushes, ['/requests/synthetic-0']); assert.equal(h.calls.length, 1);
   } finally { await h.close(); }
@@ -286,7 +286,7 @@ for (const strict of [false, true]) for (const error of [null, validationError('
       assert.deepEqual(h.values(), blank);
       await h.fill(); await h.submit();
       assert.equal(h.calls.length, 2);
-      assert.equal(h.button().textContent, 'Creating...');
+      assert.equal(h.button().textContent, 'Saving draft');
       assert.equal(h.button().disabled, true);
       await h.submit(); assert.equal(h.calls.length, 2);
       await h.settle(1);

@@ -17,7 +17,7 @@ function request(id: string, extra: Record<string, unknown> = {}) {
   };
 }
 
-async function renderPage(params: { page?: string; category?: string } = {}) {
+async function renderPage(params: { page?: string; category?: string; search?: string } = {}) {
   return render(await BrowseRequestsPage({ searchParams: Promise.resolve(params) }));
 }
 
@@ -27,11 +27,37 @@ beforeEach(() => {
 afterEach(cleanup);
 
 describe('public request browsing', () => {
-  it('includes the active page and category in board card links', async () => {
-    fetchDataRequests.mockResolvedValue({ items: [request('retail')] });
-    await renderPage({ page: '3', category: 'retail' });
+  it('keeps keyword and category in the public read, card, pagination and clear links', async () => {
+    fetchDataRequests.mockResolvedValue({ items: [request('retail')], total: 80 });
+    await renderPage({ page: '3', category: 'retail', search: 'sales & inventory' });
+    expect(fetchDataRequests).toHaveBeenCalledExactlyOnceWith({ page: 3, per_page: 20, category: 'retail', search: 'sales & inventory' });
+    expect(screen.getByRole('searchbox', { name: 'Keyword' })).toHaveProperty('value', 'sales & inventory');
+    expect(screen.getAllByRole('combobox', { name: 'Category' })).toHaveLength(1);
     expect(screen.getByRole('link', { name: /Request retail/ }).getAttribute('href'))
-      .toBe('/requests/request-retail?page=3&category=retail');
+      .toBe('/requests/request-retail?page=3&category=retail&search=sales+%26+inventory');
+    expect(screen.getByRole('link', { name: 'Previous' }).getAttribute('href'))
+      .toBe('/requests?page=2&category=retail&search=sales+%26+inventory');
+    expect(screen.getByRole('link', { name: 'Next' }).getAttribute('href'))
+      .toBe('/requests?page=4&category=retail&search=sales+%26+inventory');
+    expect(screen.getByRole('link', { name: 'Clear filters' }).getAttribute('href')).toBe('/requests');
+  });
+
+  it.each([
+    [{ category: '', search: ' ' }, '/requests'],
+    [{ category: 'retail', search: '' }, '/requests?category=retail'],
+    [{ category: '', search: ' sales & inventory ' }, '/requests?search=sales+%26+inventory'],
+  ])('redirects empty or padded native GET filter values before fetching', async (params, href) => {
+    await expect(BrowseRequestsPage({ searchParams: Promise.resolve(params) }))
+      .rejects.toMatchObject({ digest: `NEXT_REDIRECT;replace;${href};307;` });
+    expect(fetchDataRequests).not.toHaveBeenCalled();
+  });
+
+  it('shows a filtered empty state for a keyword with no matches', async () => {
+    fetchDataRequests.mockResolvedValue({ items: [], total: 0 });
+    await renderPage({ search: 'sales' });
+    expect(screen.getByText('No requests match your filters')).toBeTruthy();
+    expect(screen.getByText('Try a different keyword or category.')).toBeTruthy();
+    expect(screen.queryByText('No data requests yet')).toBeNull();
   });
 
   it('shows the unavailable state when the board read times out', async () => {
@@ -76,7 +102,7 @@ describe('public request browsing', () => {
       request('older'), request('newer', { created_at: '2026-10-02T12:00:00Z', categories: ['finance', 'Custom category'] }),
     ] });
     await renderPage();
-    expect(fetchDataRequests).toHaveBeenCalledExactlyOnceWith({ page: 1, per_page: 20, category: undefined });
+    expect(fetchDataRequests).toHaveBeenCalledExactlyOnceWith({ page: 1, per_page: 20, category: undefined, search: undefined });
     const cards = screen.getAllByRole('link', { name: /Request (older|newer)/ });
     expect(cards.map(card => card.getAttribute('href'))).toEqual(['/requests/request-newer', '/requests/request-older']);
     expect(within(cards[0]).getByText('Data needed for newer')).toBeTruthy();
@@ -88,7 +114,7 @@ describe('public request browsing', () => {
     expect(screen.queryByText(/No data requests|Requests are unavailable/)).toBeNull();
   });
 
-  it.each(['', 'finance'])('shows null failure separately from empty results (category=%s)', async category => {
+  it.each([undefined, 'finance'])('shows null failure separately from empty results (category=%s)', async category => {
     fetchDataRequests.mockResolvedValue(null);
     await renderPage({ category });
     expect(screen.getByText('Requests are unavailable')).toBeTruthy();
@@ -113,7 +139,7 @@ describe('public request browsing', () => {
     const { rerender } = await renderPage({ category: 'finance' });
     expect(screen.getByText('No requests match this category')).toBeTruthy();
     expect(screen.getByText('Try another category.')).toBeTruthy();
-    expect(screen.getByRole('link', { name: 'View all requests' }).getAttribute('href')).toBe('/requests');
+    expect(screen.getByRole('link', { name: 'Clear filters' }).getAttribute('href')).toBe('/requests');
     expect(screen.queryByText(/No data requests|Be the first|Requests are unavailable/)).toBeNull();
     expect(screen.getAllByRole('link', { name: 'Post a Data Request' })).toHaveLength(1);
 
@@ -123,7 +149,7 @@ describe('public request browsing', () => {
     expect(screen.getByRole('link', { name: /Request unfiltered/ })).toBeTruthy();
   });
 
-  it.each(['healthcare', 'finance', ''])('submits a native GET preserving category %s and resetting pagination', async chosen => {
+  it.each(['healthcare', 'finance', 'retail'])('submits keyword and category %s together with a native GET and resets pagination', async chosen => {
     fetchDataRequests.mockResolvedValue({ items: [] });
     await renderPage({ page: '4', category: 'technology' });
     const select = screen.getByRole('combobox', { name: 'Category' }) as HTMLSelectElement;
@@ -133,6 +159,8 @@ describe('public request browsing', () => {
       '', 'healthcare', 'finance', 'technology', 'retail', 'real-estate', 'marketing', 'government', 'other',
     ]);
     fireEvent.change(select, { target: { value: chosen } });
+    const keyword = screen.getByRole('searchbox', { name: 'Keyword' });
+    fireEvent.change(keyword, { target: { value: 'sales & inventory' } });
     const button = screen.getByRole('button', { name: 'Apply filter' }) as HTMLButtonElement;
     const form = button.form!;
     expect(button.type).toBe('submit');
@@ -140,14 +168,14 @@ describe('public request browsing', () => {
     expect(form.method).toBe('get');
     expect(form.getAttribute('action')).toBe('/requests');
     const submitted = new FormData(form);
-    expect(Array.from(submitted.entries())).toEqual([['category', chosen]]);
+    expect(Array.from(submitted.entries())).toEqual([['search', 'sales & inventory'], ['category', chosen]]);
     const destination = new URL(form.action);
     destination.search = new URLSearchParams(Array.from(submitted, ([key, value]) => [key, String(value)])).toString();
     expect(destination.pathname).toBe('/requests');
     expect(destination.searchParams.has('page')).toBe(false);
     cleanup();
     await renderPage(Object.fromEntries(destination.searchParams));
-    expect(fetchDataRequests).toHaveBeenLastCalledWith({ page: 1, per_page: 20, category: chosen || undefined });
+    expect(fetchDataRequests).toHaveBeenLastCalledWith({ page: 1, per_page: 20, category: chosen, search: 'sales & inventory' });
     expect((screen.getByLabelText('Category') as HTMLSelectElement).value).toBe(chosen);
   });
 
@@ -192,7 +220,7 @@ describe('public request browsing', () => {
   });
 
   it.each([
-    ['', { items: [], total: 40 }], ['finance', { items: [], total: 40 }],
+    [undefined, { items: [], total: 40 }], ['finance', { items: [], total: 40 }],
     ['finance', []], ['finance', { items: [] }],
   ])('offers category-preserving recovery on an empty later page (category=%s, payload=%j)', async (category, payload) => {
     fetchDataRequests.mockResolvedValue(payload);
@@ -203,11 +231,11 @@ describe('public request browsing', () => {
     const suffix = category ? '&category=finance' : '';
     expect(screen.getByRole('link', { name: 'First page' }).getAttribute('href')).toBe(`/requests?page=1${suffix}`);
     expect(screen.getByRole('link', { name: 'Previous' }).getAttribute('href')).toBe(`/requests?page=3${suffix}`);
-    expect(screen.queryByRole('link', { name: 'View all requests' })?.getAttribute('href')).toBe(category ? '/requests' : undefined);
+    expect(screen.queryByRole('link', { name: 'Clear filters' })?.getAttribute('href')).toBe(category ? '/requests' : undefined);
     expect(screen.queryByRole('link', { name: 'Next' })).toBeNull();
   });
 
-  it.each(['', 'finance'])('keeps later-page failures separate from empty-page recovery (category=%s)', async category => {
+  it.each([undefined, 'finance'])('keeps later-page failures separate from empty-page recovery (category=%s)', async category => {
     fetchDataRequests.mockResolvedValue(null);
     await renderPage({ page: '3', category });
     expect(screen.getByText('Requests are unavailable')).toBeTruthy();
@@ -219,7 +247,7 @@ describe('public request browsing', () => {
     'normalizes invalid page %j to the first page before fetching and linking', async page => {
       fetchDataRequests.mockResolvedValue({ items: Array.from({ length: 20 }, (_, i) => request(String(i))), total: 40 });
       await renderPage({ page, category: 'finance' });
-      expect(fetchDataRequests).toHaveBeenCalledExactlyOnceWith({ page: 1, per_page: 20, category: 'finance' });
+      expect(fetchDataRequests).toHaveBeenCalledExactlyOnceWith({ page: 1, per_page: 20, category: 'finance', search: undefined });
       expect(screen.queryByRole('link', { name: 'Previous' })).toBeNull();
       expect(screen.getByRole('link', { name: 'Next' }).getAttribute('href')).toBe('/requests?page=2&category=finance');
     }

@@ -11,7 +11,7 @@ const PUBLIC_REQUEST_STATUSES = new Set(['open', 'responses_received']);
 
 interface Props {
   params: Promise<{ slug: string }>;
-  searchParams?: Promise<{ page?: string | string[]; category?: string | string[] }>;
+  searchParams?: Promise<{ page?: string | string[]; category?: string | string[]; search?: string | string[] }>;
 }
 
 export async function generateMetadata({ params }: Props): Promise<Metadata> {
@@ -50,12 +50,13 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
 
 export default async function DataRequestDetailPage({ params, searchParams }: Props) {
   const { slug } = await params;
-  const { page, category } = await searchParams ?? {};
+  const { page, category, search } = await searchParams ?? {};
   const boardParams = new URLSearchParams();
   if (typeof page === 'string' && /^\d+$/.test(page) && Number.isSafeInteger(Number(page)) && Number(page) > 0) {
     boardParams.set('page', page);
   }
-  if (typeof category === 'string' && category) boardParams.set('category', category);
+  if (typeof category === 'string' && category.trim()) boardParams.set('category', category.trim());
+  if (typeof search === 'string' && search.trim()) boardParams.set('search', search.trim());
   const boardQuery = boardParams.toString();
   const request: DataRequestDetail | null = await fetchDataRequest(slug);
   if (!request || hasPrivatePublication(request)) {

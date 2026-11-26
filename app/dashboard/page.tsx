@@ -630,11 +630,13 @@ function OverviewVisit({ identity, retireVisit }: { identity: string; retireVisi
         </section>
       )}
       {isSellerActive && (statsError || listingsError) && (
-        <section aria-label="Sales summary and listings" className="rounded-xl border border-red-200 bg-red-50 p-5">
+        <section aria-label="Sales summary and listings" className="min-w-0 space-y-2 rounded-xl border border-red-200 bg-red-50 p-5 whitespace-normal wrap-anywhere">
           {statsError && <p role="alert">{customerLoadError('sales summary')}</p>}
           {listingsError && <p role="alert">{customerLoadError('listings')}</p>}
-          <Link href="/support" className="underline">Contact support</Link>
-          <button type="button" onClick={fetchData} className="mt-3 min-h-11 rounded-lg border px-4">Retry</button>
+          <div className="flex flex-wrap items-center gap-x-4 gap-y-2">
+            <Link href="/support" className="inline-flex min-h-11 min-w-0 items-center rounded text-indigo-700 underline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-indigo-700">Contact support</Link>
+            <button type="button" onClick={fetchData} className="min-h-11 min-w-0 rounded-lg border px-4 py-2 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-indigo-700">Retry</button>
+          </div>
         </section>
       )}
 

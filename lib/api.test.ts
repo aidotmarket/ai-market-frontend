@@ -60,11 +60,12 @@ describe('public data request freshness', () => {
       .mockResolvedValueOnce({ ok: true, json: async () => ({ items: [] }) });
     vi.stubGlobal('fetch', fetchMock);
 
-    expect((await fetchDataRequests({ page: 2, per_page: 20, category: 'healthcare' })).items).toHaveLength(1);
-    expect((await fetchDataRequests({ page: 2, per_page: 20, category: 'healthcare' })).items).toHaveLength(0);
+    const params = { page: 2, per_page: 20, category: 'healthcare', search: 'claims & costs' };
+    expect((await fetchDataRequests(params)).items).toHaveLength(1);
+    expect((await fetchDataRequests(params)).items).toHaveLength(0);
     expect(fetchMock).toHaveBeenCalledTimes(2);
     for (const [url, options] of fetchMock.mock.calls) {
-      expect(url).toContain('/api/v1/data-requests?page=2&per_page=20&category=healthcare');
+      expect(url).toContain('/api/v1/data-requests?page=2&per_page=20&category=healthcare&search=claims+%26+costs');
       expect(options).toEqual({ cache: 'no-store', signal: expect.any(AbortSignal) });
     }
   });

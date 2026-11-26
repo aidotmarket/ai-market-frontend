@@ -31,6 +31,38 @@ beforeEach(() => {
 });
 afterEach(cleanup);
 describe('private request conversation', () => {
+  it('shows an empty state after a successful selector and clears it when an authorized response arrives', async () => {
+    const pending = deferred<ReturnType<typeof selector>>();
+    mocks.selector.mockReturnValueOnce(pending.promise);
+    const view = render(<RequestConversation requestId="request" requestStatus="open" />);
+    expect(screen.getByText('Loading conversations…')).toBeTruthy();
+    expect(screen.queryByText(/No private conversations are available/)).toBeNull();
+
+    await act(async () => pending.resolve(selector({ threads: [] })));
+    expect(screen.getByRole('status').textContent)
+      .toBe('No private conversations are available to you. Available conversations will appear with the corresponding response.');
+    expect(mocks.history).not.toHaveBeenCalled();
+
+    view.rerender(<RequestConversation requestId="request" requestStatus="responses_received" quoteRevision={1} />);
+    await screen.findByRole('option', { name: 'Response 1 · one' });
+    expect(screen.queryByText(/No private conversations are available/)).toBeNull();
+    await select();
+    expect(mocks.history).toHaveBeenCalledExactlyOnceWith('request', 'one');
+  });
+
+  it.each([
+    ['closed', 'enabled', 'This request is closed. New messages cannot be sent.'],
+    ['open', 'off', 'Private messaging is turned off for this request. You can still read any available conversations.'],
+    ['open', 'unavailable', 'Sending private messages is unavailable right now. Check this page again for updates.'],
+  ])('keeps empty-selector wording accurate for %s with messaging %s', async (status, availability, notice) => {
+    mocks.selector.mockResolvedValue(selector({ availability, threads: [] }));
+    await mount(status);
+    expect(screen.getByText('No private conversations are available to you.')).toBeTruthy();
+    expect(screen.getByText(notice)).toBeTruthy();
+    expect(screen.queryByText(/Available conversations will appear/)).toBeNull();
+    expect(screen.queryByRole('button', { name: 'Send private message' })).toBeNull();
+  });
+
   it.each(['principal', 'owner', 'signout'])('quarantines a private history read after %s changes', async kind => {
     const slow = deferred<ReturnType<typeof history>>(); mocks.history.mockReturnValueOnce(slow.promise);
     await mount(); fireEvent.change(screen.getByRole('combobox'), { target: { value: 'one' } }); await waitFor(() => expect(mocks.history).toHaveBeenCalledOnce());
@@ -171,6 +203,7 @@ describe('private request conversation', () => {
   it('reauthorizes an exact deep link and does not fall back after denial', async () => {
     window.history.replaceState({}, '', '/requests/example?response_id=denied'); mocks.selector.mockRejectedValue(new Error('Private denial'));
     render(<RequestConversation requestId="request" requestStatus="open" />); await screen.findByText('Private conversations are currently unavailable.');
+    expect(screen.queryByText(/No private conversations are available/)).toBeNull();
     expect(mocks.selector).toHaveBeenCalledWith('request', 'denied'); expect(mocks.history).not.toHaveBeenCalled(); expect(mocks.send).not.toHaveBeenCalled();
   });
   it('selects an authorized exact deep link with no extra authentication step', async () => {

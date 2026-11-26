@@ -275,7 +275,7 @@ function RequestForm({ accountId, retireVisit }: {
           disabled={submitting || !description.trim()}
           className="w-full rounded-lg bg-[#3F51B5] px-4 py-2.5 text-sm font-medium text-white hover:bg-[#3545a0] disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
         >
-          {submitting ? 'Creating...' : 'Create Data Request'}
+          {submitting ? 'Saving draft' : 'Save draft'}
         </button>
       </form>
     </div>

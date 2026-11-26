@@ -6,10 +6,10 @@ import fixture from '@/tests/fixtures/buyer-request-anonymization-chunk1.json';
 import NewDataRequestPage from './page';
 import type { User } from '@/types';
 
-const mocks = vi.hoisted(() => ({ push: vi.fn(), toast: vi.fn(), createDataRequest: vi.fn() }));
+const mocks = vi.hoisted(() => ({ push: vi.fn(), toast: vi.fn(), createDataRequest: vi.fn(), publishDataRequest: vi.fn() }));
 vi.mock('next/navigation', () => ({ useRouter: () => ({ push: mocks.push }) }));
 vi.mock('@/components/Toast', () => ({ useToast: () => ({ toast: mocks.toast }) }));
-vi.mock('@/api/data-requests', () => ({ createDataRequest: mocks.createDataRequest }));
+vi.mock('@/api/data-requests', () => ({ createDataRequest: mocks.createDataRequest, publishDataRequest: mocks.publishDataRequest }));
 beforeEach(() => {
   vi.clearAllMocks();
   useAuthStore.setState({ user: null, isAuthenticated: false, isLoading: false, hydrated: true });
@@ -34,9 +34,12 @@ it('explains draft review and confirms a saved draft with the existing detail de
   expect(screen.getByText('Describe the data you need. We save it as a draft so you can review it before it goes live.')).toBeTruthy();
   expect(screen.getByLabelText('Where the data must come from (optional)')).toBeTruthy();
   fireEvent.change(screen.getByLabelText('Description'), { target: { value: 'Licensed retail sales data' } });
-  fireEvent.click(screen.getByRole('button', { name: 'Create Data Request' }));
+  fireEvent.click(screen.getByRole('button', { name: 'Save draft' }));
+  expect(screen.getByRole('button', { name: 'Saving draft' })).toHaveProperty('disabled', true);
   await waitFor(() => expect(mocks.toast).toHaveBeenCalledWith("Saved as a draft. Review it and publish when you're ready.", 'success'));
-  expect(mocks.push).toHaveBeenCalledWith('/requests/retail-data');
+  expect(mocks.push).toHaveBeenCalledExactlyOnceWith('/requests/retail-data');
+  expect(mocks.createDataRequest).toHaveBeenCalledOnce();
+  expect(mocks.publishDataRequest).not.toHaveBeenCalled();
 });
 
 it('continues the shared gated draft by ID while its serving slug is null', async () => {
@@ -45,6 +48,6 @@ it('continues the shared gated draft by ID while its serving slug is null', asyn
   mocks.createDataRequest.mockResolvedValue({ id, ...fixture.draft });
   render(<NewDataRequestPage />);
   fireEvent.change(screen.getByLabelText('Description'), { target: { value: fixture.create.description } });
-  fireEvent.click(screen.getByRole('button', { name: 'Create Data Request' }));
+  fireEvent.click(screen.getByRole('button', { name: 'Save draft' }));
   await waitFor(() => expect(mocks.push).toHaveBeenCalledExactlyOnceWith(`/requests/${id}`));
 });

@@ -278,6 +278,7 @@ export default function DataRequestDetailClient({
   const currentVersionIsPublic = Boolean(request?.published_at && request.slug && request.publication_decision === 'eligible');
   const ownResponses = isOwner ? [] : responses;
   const responseRefusal = request?.response_refusal || null;
+  const isOpenForResponses = request?.status === 'open' || request?.status === 'responses_received';
   const lastCheckTime = checkedTime(request?.publication_checked_at);
   const nextCheckTime = checkedTime(request?.publication_retry_at);
 
@@ -630,6 +631,10 @@ export default function DataRequestDetailClient({
 
   const urgencyCss = URGENCY_BADGE[request.urgency] || URGENCY_BADGE.low;
   const statusCss = STATUS_BADGE[request.status] || STATUS_BADGE.draft;
+  const showPublicResponseStatus = !isOwner && showPublicResponseCount;
+  const publicResponseStatus = isOpenForResponses
+    ? (responseRefusal ? 'Responses unavailable' : 'Open for responses')
+    : 'Closed to responses';
   const canConfirmPublication =
     !privatePublication && Boolean(request.public_content_hash) &&
     Boolean(request.required_public_consent_policy_version) &&
@@ -659,7 +664,8 @@ export default function DataRequestDetailClient({
               (SAMPLE)
             </span>
           )}
-          {(request.status !== 'responses_received' || (!showPublicResponseCount && !showOwnerResponseList)) && (
+          {!(showPublicResponseStatus && isOpenForResponses) &&
+            (request.status !== 'responses_received' || (!showPublicResponseCount && !showOwnerResponseList)) && (
             <span className={`inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-medium shrink-0 ${statusCss}`}>
               {request.status.replace('_', ' ')}
             </span>
@@ -674,6 +680,7 @@ export default function DataRequestDetailClient({
           <span>Posted {formatDate(request.created_at)}</span>
           {request.buyer_display_name && <span>by {request.buyer_display_name}</span>}
           {showPublicResponseCount && <span>{responseCount} response{responseCount !== 1 ? 's' : ''}</span>}
+          {showPublicResponseStatus && <span className="font-medium text-gray-700">{publicResponseStatus}</span>}
         </div>
         {!isAuthenticated && hasResponseCount && responseCount > 0 && (
           <p className="mt-2 text-sm text-gray-600">Responses are visible to the requester and to the sellers who sent them.</p>
@@ -957,14 +964,14 @@ export default function DataRequestDetailClient({
         </div>
       )}
 
-      {!isOwner && responseRefusal && (request.status === 'open' || request.status === 'responses_received') && (
+      {!isOwner && responseRefusal && isOpenForResponses && (
         <p role="status" className="mb-4 rounded-xl border border-amber-200 bg-amber-50 p-4 text-sm text-amber-900">
           {responseRefusal}
         </p>
       )}
 
       {/* Seller: Submit Response form */}
-      {isAuthenticated && !isOwner && (request.status === 'open' || request.status === 'responses_received') && (
+      {isAuthenticated && !isOwner && isOpenForResponses && (
         <div className="rounded-xl border border-gray-200 p-6">
           <h2 className="text-lg font-semibold text-gray-900 mb-4">Respond to Request</h2>
           {responseError && (
@@ -1029,7 +1036,7 @@ export default function DataRequestDetailClient({
       )}
 
       {/* Not logged in CTA */}
-      {!isAuthenticated && request.slug && (request.status === 'open' || request.status === 'responses_received') && (
+      {!isAuthenticated && request.slug && isOpenForResponses && (
         <div className="rounded-xl border border-gray-200 p-6 text-center">
           <p className="text-gray-600 mb-4">Have the data this buyer needs?</p>
           {responseRefusal ? (
