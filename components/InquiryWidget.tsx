@@ -17,7 +17,7 @@ import type { ConversationDetail, ConversationMessage } from '@/types';
 import { AxiosError } from 'axios';
 import { mergeConversationMessages } from '@/lib/conversationMessages';
 import { useAllAILocale } from '@/components/allai/AllAIContext';
-import { AllAIFallback, ListingRecoveryLinks } from '@/components/allai/AllAIFallback';
+import { ListingRecoveryLinks } from '@/components/allai/AllAIFallback';
 import { anonymousFallbackDestinations, type FallbackDestinations } from '@/lib/anonymous-allai-fallback';
 import {
   anonymousAllAIResources,
@@ -29,6 +29,8 @@ interface Props {
   listingId: string;
   listingSlug: string;
   listingTitle: string;
+  schemaHref?: '#listing-schema' | '#listing-key-fields';
+  documentationHref?: '#technical-documentation' | '#listing-documentation';
 }
 
 const DRAFT_KEY_PREFIX = 'inquiry_draft_';
@@ -50,7 +52,7 @@ export default function InquiryWidget(props: Props) {
   return <ListingInquiryWidget key={props.listingId} {...props} />;
 }
 
-function ListingInquiryWidget({ listingId, listingSlug, listingTitle }: Props) {
+function ListingInquiryWidget({ listingId, listingSlug, listingTitle, schemaHref, documentationHref }: Props) {
   const { isAuthenticated } = useAuthStore();
   const { toast } = useToast();
   const locale = useAllAILocale();
@@ -472,6 +474,12 @@ function ListingInquiryWidget({ listingId, listingSlug, listingTitle }: Props) {
 
   const escalatedStatus = conversation?.status === 'escalated' || conversation?.status === 'awaiting_seller';
   const showAnonymousWaitNotice = anonymousSubmissionInProgress && anonymousWaitElapsed;
+  const publicInformationLinks = (schemaHref || documentationHref) && (
+    <span className="mt-2 flex flex-wrap gap-x-3 gap-y-1">
+      {schemaHref && <a href={schemaHref} className="underline">{recovery.schema}</a>}
+      {documentationHref && <a href={documentationHref} className="underline">{recovery.documentation}</a>}
+    </span>
+  );
 
   // Show conversation thread if already submitted
   if (conversation) {
@@ -491,8 +499,9 @@ function ListingInquiryWidget({ listingId, listingSlug, listingTitle }: Props) {
         {escalatedStatus && (
           <div className="rounded-lg bg-yellow-50 border border-yellow-200 px-3 py-2 mb-3">
             <p className="text-sm text-yellow-800">
-              Escalated to seller - you&apos;ll be notified when they respond.
+              Your question was passed to the seller. We&apos;ll notify you when they reply.
             </p>
+            {publicInformationLinks}
           </div>
         )}
 
@@ -538,10 +547,10 @@ function ListingInquiryWidget({ listingId, listingSlug, listingTitle }: Props) {
   return (
     <div className="rounded-xl border border-gray-200 p-6">
       <h3 className="font-semibold text-gray-900 mb-3">Ask a Question</h3>
-      <p className="text-sm text-gray-500 mb-4">
+      <p id="listing-question-guidance" className="text-sm text-gray-500 mb-4">
         {isAuthenticated
-          ? 'Get an instant AI-powered answer, or your question will be forwarded to the seller.'
-          : 'allAI checks current public information to answer questions about this listing.'}
+          ? 'allAI checks public listing information first. If allAI can’t answer from that information, your question can be passed to the seller.'
+          : 'allAI checks public listing information first. Sign in to contact the seller.'}
       </p>
       {anonymousMessages.length > 0 && (
         <div className="max-h-80 overflow-y-auto mb-4" aria-live="polite">
@@ -549,14 +558,23 @@ function ListingInquiryWidget({ listingId, listingSlug, listingTitle }: Props) {
             messages={anonymousMessages}
             viewerRole="buyer"
             showTypingIndicator={submitting && !anonymousAnswerStarted}
-            renderContent={(message) => message.fallbackDestinations
-              ? <AllAIFallback destinations={message.fallbackDestinations} locale={locale} />
-              : message.safeOutcome ? resources.safeOutcomes[message.safeOutcome] : message.content}
+            renderContent={(message) => {
+              if (message.safeOutcome === 'no_matches' || message.safeOutcome === 'answer_unverified'
+                || message.safeOutcome === 'retrieval_unavailable') {
+                return <>
+                  {message.safeOutcome === 'retrieval_unavailable' ? recovery.retrievalUnavailable : recovery.noAnswer}
+                  {publicInformationLinks}
+                  {message.fallbackDestinations?.support && <Link href={message.fallbackDestinations.support} className="mt-2 inline-block underline">{recovery.support}</Link>}
+                </>;
+              }
+              return message.safeOutcome ? resources.safeOutcomes[message.safeOutcome] : message.content;
+            }}
           />
         </div>
       )}
       <textarea
         id="ask-a-question"
+        aria-describedby="listing-question-guidance"
         value={question}
         onChange={(e) => setQuestion(e.target.value)}
         placeholder="What would you like to know about this dataset?"
@@ -611,6 +629,7 @@ function ListingInquiryWidget({ listingId, listingSlug, listingTitle }: Props) {
       {anonymousError && (
         <div className="text-xs text-red-600 mt-2" role="alert">
           <p>{recovery[anonymousError]} {recovery.guidance}</p>
+          {publicInformationLinks}
           <ListingRecoveryLinks search={recovery.search} support={recovery.support} />
           <Link
             href={`/login?redirect=/listings/${encodeURIComponent(listingSlug)}`}

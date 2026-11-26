@@ -41,7 +41,46 @@ describe('VersionSelector', () => {
     expect(html).toContain('v2');
     expect(html).toContain('Jun 2, 2026');
     expect(html).toContain('2.05 KB');
-    expect(html).toContain('20 objects');
+    expect(html).toContain('20 individual files, 2.05 KB total.');
+    expect(html).toContain('published a file list for this version.');
+  });
+
+  it('names the file format when the current inventory identifies the single file', () => {
+    const version = { ...versions[1], object_count: 1, total_size_bytes: 7_520_000 };
+    const html = renderToStaticMarkup(
+      <VersionSelector versions={[version]} selectedVersionId={version.version_id} onSelectVersion={() => undefined}
+        fileBreakdown={[{ format: 'parquet', count: 1, size_bytes: 7_520_000 }]} />,
+    );
+
+    expect(html).toContain('1 PARQUET file, 7.52 MB total.');
+  });
+
+  it('shows the public inventory only for the current version', () => {
+    const render = (selectedVersionId: string) => renderToStaticMarkup(
+      <VersionSelector versions={versions} selectedVersionId={selectedVersionId} onSelectVersion={() => undefined}
+        fileBreakdown={[
+          { format: 'csv', count: 2, size_bytes: 1200 },
+          { format: 'jsonl', count: 1, size_bytes: 800 },
+          { format: 'other', count: 1, size_bytes: 48 },
+        ]} />,
+    );
+
+    expect(render('v2-id')).toContain('CSV tables: 2 files · 1.2 KB');
+    expect(render('v2-id')).toContain('JSONL tables: 1 file · 800 B');
+    expect(render('v2-id')).toContain('Other files: 1 file · 48 B');
+    expect(render('v2-id')).toContain('This list covers 4 of 20 download files.');
+    expect(render('v1-id')).not.toContain('Files included');
+    expect(render('v1-id')).toContain('published a file list for this version.');
+  });
+
+  it('uses a neutral download summary and file list notice when inventory is unavailable', () => {
+    const version = { ...versions[1], object_count: 1 };
+    const html = renderToStaticMarkup(
+      <VersionSelector versions={[version]} selectedVersionId={version.version_id} onSelectVersion={() => undefined} />,
+    );
+
+    expect(html).toContain('1 download file, 2.05 KB total.');
+    expect(html).toContain('The seller hasn&#x27;t published a file list for this version.');
   });
 
   it('defaults to the latest active version and keeps superseded versions visible', () => {

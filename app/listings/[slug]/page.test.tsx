@@ -444,6 +444,8 @@ describe('real public listing route sample composition', () => {
 
     const page = within(document.body);
     expect(page.getByRole('link', {name: /Open data sheet/}).getAttribute('href')).toBe('https://cdn.example.com/spec.pdf');
+    expect(page.getByRole('link', {name: 'Find the public data sheet'}).getAttribute('href')).toBe('#listing-documentation');
+    expect(document.getElementById('listing-documentation')?.contains(page.getByRole('link', {name: /Open data sheet/}))).toBe(true);
     expect(page.queryByText(documentationGuidance)).toBeNull();
   });
 
@@ -577,6 +579,8 @@ describe('real public listing route sample composition', () => {
       expect(page.getAllByText('The seller can request a verified scan of this data.', {exact: true})).toHaveLength(1);
       const schemaHeading = page.getByRole('heading', { name: 'Schema Information', level: 2 });
       const schemaBlock = schemaHeading.parentElement!;
+      const schemaLink = page.getByRole('link', {name: 'View field names and types'});
+      expect(document.querySelector(schemaLink.getAttribute('href')!)).toBe(schemaBlock);
       expect(within(schemaBlock).getByRole('table')).toBeTruthy();
       expect(within(schemaBlock).getByText('region', { exact: true })).toBeTruthy();
       expect(within(schemaBlock).getByText('10 rows', { exact: true })).toBeTruthy();
@@ -699,7 +703,22 @@ describe('ListingDetailPage Dataset JSON-LD', () => {
       license: 'ODC-BY-1.0',
       dataFormat: 'json_lines',
       fulfillmentType: 'file_download',
+      downloadDescription: '1 file',
     }));
+  });
+
+  it.each([
+    'csv',
+    '.zip',
+  ])('describes a single archive with seller format %s neutrally when the delivery type is unknown', async format => {
+    // A workspace ZIP has one object and no version-bound public file type.
+    const html = await renderPage(makeListing({data_format: format, fulfillment_type: 'file_download'}), [{
+      version_id: 'v1', version_label: 'v1', published_at: '2026-06-01T00:00:00Z',
+      object_count: 1, total_size_bytes: 7_520_000, status: 'active',
+    }]);
+    expect(html).toContain('1 download file, 7.52 MB total.');
+    expect(html).not.toMatch(/CSV file|single ZIP archive/);
+    expect(buyButtonProps).toHaveBeenLastCalledWith(expect.objectContaining({downloadDescription: '1 file'}));
   });
 
   it('shows the absent-findings advisory on a paid listing without disabling purchase', async () => {

@@ -5,7 +5,8 @@ import { formatBytes } from '@/lib/formatBytes';
 import { useMemo, useState } from 'react';
 import BuyButton from '@/components/BuyButton';
 import { formatPublishedDate } from '@/lib/format';
-import type { ListingLicenseDetails, ListingVersion } from '@/types';
+import type { FileBreakdownGroup, ListingLicenseDetails, ListingVersion } from '@/types';
+import FileBreakdown from '@/app/listings/[slug]/FileBreakdown';
 
 interface ListingPurchasePanelProps {
   listingId: string;
@@ -19,6 +20,7 @@ interface ListingPurchasePanelProps {
   licenseDetails?: ListingLicenseDetails;
   dataFormat?: string | null;
   fulfillmentType?: string | null;
+  fileBreakdown?: FileBreakdownGroup[] | null;
   initialVersionId?: string | null;
   disabledReason?: string;
 }
@@ -35,6 +37,7 @@ export default function ListingPurchasePanel({
   licenseDetails,
   dataFormat,
   fulfillmentType,
+  fileBreakdown,
   initialVersionId,
   disabledReason: listingDisabledReason,
 }: ListingPurchasePanelProps) {
@@ -45,6 +48,12 @@ export default function ListingPurchasePanel({
   );
   const [selectedVersionId, setSelectedVersionId] = useState(defaultVersion?.version_id ?? '');
   const selectedVersion = visibleVersions.find((version) => version.version_id === selectedVersionId) ?? defaultVersion;
+  // The public inventory belongs to the current active version.
+  const currentVersionId = visibleVersions.find((version) => version.status === 'active')?.version_id;
+  const selectedIsCurrent = selectedVersion?.version_id === currentVersionId;
+  const selectedFiles = selectedVersion && describeVersionFiles(
+    selectedVersion, selectedIsCurrent ? fileBreakdown : undefined,
+  );
   const disabledReason = selectedVersion?.status === 'superseded'
     ? 'This version has been superseded and is shown for provenance only.'
     : listingDisabledReason;
@@ -56,6 +65,7 @@ export default function ListingPurchasePanel({
           versions={visibleVersions}
           selectedVersionId={selectedVersion?.version_id ?? ''}
           onSelectVersion={setSelectedVersionId}
+          fileBreakdown={fileBreakdown}
         />
       )}
       {accessWindowDays != null && (
@@ -77,6 +87,7 @@ export default function ListingPurchasePanel({
           licenseDetails={licenseDetails}
           dataFormat={dataFormat}
           fulfillmentType={fulfillmentType}
+          downloadDescription={selectedFiles?.delivery}
           disabledReason={disabledReason}
         />
       </div>
@@ -88,12 +99,15 @@ export function VersionSelector({
   versions,
   selectedVersionId,
   onSelectVersion,
+  fileBreakdown,
 }: {
   versions: ListingVersion[];
   selectedVersionId: string;
   onSelectVersion: (versionId: string) => void;
+  fileBreakdown?: FileBreakdownGroup[] | null;
 }) {
   const visibleVersions = sortVersions(versions);
+  const currentVersionId = visibleVersions.find((version) => version.status === 'active')?.version_id;
 
   if (visibleVersions.length === 0) return null;
 
@@ -117,6 +131,9 @@ export function VersionSelector({
       <div className="space-y-2">
         {visibleVersions.map((version) => {
           const selected = version.version_id === selectedVersionId;
+          const isCurrent = version.version_id === currentVersionId;
+          const groups = isCurrent ? fileBreakdown : undefined;
+          const files = describeVersionFiles(version, groups);
           return (
             <div
               key={version.version_id}
@@ -134,8 +151,14 @@ export function VersionSelector({
                 </span>
               </div>
               <p className="mt-1 text-gray-600">
-                Published {formatPublishedDate(version.published_at)} · {formatBytes(version.total_size_bytes)} · {version.object_count.toLocaleString()} objects
+                Published {formatPublishedDate(version.published_at)}
               </p>
+              <p className="mt-1 text-gray-700">{files.summary}</p>
+              {selected && (
+                <div className="mt-2">
+                  <FileBreakdown groups={groups} totalFileCount={version.object_count} heading="h3" showUnavailable />
+                </div>
+              )}
               {version.status === 'superseded' && (
                 <p className="mt-1 text-gray-500">Visible for provenance. Not purchasable.</p>
               )}
@@ -145,6 +168,23 @@ export function VersionSelector({
       </div>
     </div>
   );
+}
+
+function describeVersionFiles(version: ListingVersion, groups?: FileBreakdownGroup[] | null) {
+  const count = version.object_count;
+  const size = formatBytes(version.total_size_bytes);
+  if (count > 1) {
+    return { delivery: 'individual files', summary: `${count.toLocaleString('en-US')} individual files, ${size} total.` };
+  }
+  if (count === 1) {
+    const group = groups?.length === 1 ? groups[0] : undefined;
+    const format = group?.count === 1 && group.format !== 'other' ? group.format.toUpperCase() : undefined;
+    return {
+      delivery: format ? `1 ${format} file` : '1 file',
+      summary: `1 ${format ?? 'download'} file, ${size} total.`,
+    };
+  }
+  return { delivery: undefined, summary: `Total download size ${size}. The file count is unspecified.` };
 }
 
 export function selectDefaultVersion(versions: ListingVersion[], initialVersionId?: string | null) {

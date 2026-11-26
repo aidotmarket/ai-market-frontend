@@ -19,7 +19,7 @@ function TechnicalDocument({document}: {document: ListingDocument}) {
     observer.observe(element);
     return () => observer.disconnect();
   }, []);
-  return <article id="technical-documentation" className="space-y-3">
+  return <article id="technical-documentation" className="scroll-mt-24 space-y-3">
     <h3 className="text-lg font-semibold">{document.title}</h3>
     <div id={uid} ref={content} className={expanded ? '' : 'max-h-[600px] overflow-hidden'}>
       <BackendListingHtml description={document.body_markdown ?? ''} descriptionHtml={document.body_html}/>
@@ -31,7 +31,7 @@ function TechnicalDocument({document}: {document: ListingDocument}) {
 export default function ListingDocumentation({documents}: {documents: ListingDocument[]}) {
   const {technical, pdf} = selectListingDocumentation(documents);
   if (!technical && !pdf) return null;
-  return <section aria-label="Documentation" className="space-y-5">
+  return <section id="listing-documentation" aria-label="Documentation" className="scroll-mt-24 space-y-5">
     <h2 className="text-xl font-semibold text-gray-900">Documentation</h2>
     {technical && <TechnicalDocument key={technical.revision} document={technical}/>}
     {pdf && <article className="space-y-3 rounded-xl border border-gray-200 p-5">

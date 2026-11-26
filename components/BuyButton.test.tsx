@@ -709,8 +709,9 @@ describe('SignedOutPurchase', () => {
         versionLabel="2026-Q3"
         accessWindowDays={14}
         license="CC-BY-4.0"
-        dataFormat="json_lines"
+        dataFormat="csv"
         fulfillmentType="file_download"
+        downloadDescription="1 file"
       />,
     );
     const unavailableFacts = renderToStaticMarkup(
@@ -729,8 +730,8 @@ describe('SignedOutPurchase', () => {
     expect(knownFacts).toContain('Selected version</dt><dd class="font-medium text-gray-900">2026-Q3');
     expect(knownFacts).toContain('Download window</dt><dd class="font-medium text-gray-900">14 days after purchase');
     expect(knownFacts).toContain('License</dt><dd class="font-medium text-gray-900">CC-BY-4.0');
-    expect(knownFacts).toContain('Data format</dt><dd class="font-medium text-gray-900">Json lines');
-    expect(knownFacts).toContain('Fulfillment type</dt><dd class="font-medium text-gray-900">File download');
+    expect(knownFacts).toContain('Data format (as described by the seller)</dt><dd class="font-medium text-gray-900">CSV');
+    expect(knownFacts).toContain('Fulfillment type</dt><dd class="font-medium text-gray-900">File download (1 file)</dd>');
     expect(unavailableFacts).not.toContain('Selected version');
     expect(unavailableFacts).not.toContain('Download window');
     expect(unavailableFacts).not.toContain('License');
