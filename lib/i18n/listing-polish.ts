@@ -21,6 +21,8 @@ export const listingPolish = {
   confirmFact: "Confirm fact",
   accept: "Accept selected suggestions",
   applying: "Applying suggestions...",
+  acceptPaused: "Applying suggestions is paused.",
+  resumeAccept: "Resume applying suggestions",
   acceptRetry: "Still checking whether your suggestions were applied. You can edit once the result is confirmed.",
   acceptRetryLong: "This is taking longer than expected. You can reload this page to check your saved draft.",
   acceptPendingElsewhere: "A listing review action is still pending. Open Describe and price to check its result.",

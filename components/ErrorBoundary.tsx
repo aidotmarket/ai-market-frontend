@@ -4,6 +4,7 @@ import { Component, type ErrorInfo, type ReactNode } from 'react';
 
 interface Props {
   children: ReactNode;
+  fallback?: (retry: () => void) => ReactNode;
 }
 
 interface State {
@@ -18,11 +19,14 @@ export class ErrorBoundary extends Component<Props, State> {
   }
 
   componentDidCatch(error: Error, info: ErrorInfo) {
-    console.error('ErrorBoundary caught:', error, info);
+    if (!this.props.fallback) console.error('ErrorBoundary caught:', error, info);
   }
+
+  private retry = () => this.setState({ hasError: false });
 
   render() {
     if (this.state.hasError) {
+      if (this.props.fallback) return this.props.fallback(this.retry);
       return (
         <div style={{ padding: '2rem', textAlign: 'center' }}>
           <h1>Something went wrong</h1>

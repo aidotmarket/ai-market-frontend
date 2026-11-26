@@ -9,6 +9,7 @@ import { PolishDiscard, polishButton } from "./PolishDiscard";
 import { expandReviewSelection, reviewBaseline, sentenceDiff } from "./listingPolishText";
 import { finishPolishAccept, pendingPolishAccept, queuePolishAccept, usePendingPolishAccept } from "./pendingPolishAccept";
 import { polishFailure, usePolishAction, type ReloadDraft } from "./usePolishAction";
+import { useRetriedWorkspacePanel } from "./WorkspacePanel";
 
 export type ListingPolishOptions = {
   draft: SavedListingDraft | null;
@@ -40,6 +41,10 @@ export function useListingPolish(options: ListingPolishOptions | undefined, acti
   const runTarget = useRef<string | undefined>(undefined);
   const action = usePolishAction(options?.lock, options?.onBusy);
   const pending = usePendingPolishAccept(!!options);
+  const retriedPanel = useRetriedWorkspacePanel();
+  // The step retry remounts the editor. Require a separate action to resume any pending write.
+  const [pausedAccept, setPausedAccept] = useState(() => retriedPanel ? pending : null);
+  const acceptPaused = !!pending && pending === pausedAccept;
   const [settledAccept, setSettledAccept] = useState<typeof pending>(null);
   useLayoutEffect(() => {
     if (settledAccept) finishPolishAccept(settledAccept);
@@ -206,8 +211,8 @@ export function useListingPolish(options: ListingPolishOptions | undefined, acti
     });
   });
   useEffect(() => {
-    if (pending && active) executeAccept(pending);
-  }, [active, pending]);
+    if (pending && active && !acceptPaused) executeAccept(pending);
+  }, [active, pending, acceptPaused]);
 
   function end() {
     stream.current?.abort();
@@ -288,7 +293,8 @@ export function useListingPolish(options: ListingPolishOptions | undefined, acti
           .map(question => <p key={question} className="text-sm">{question}</p>)}
       </fieldset>}
     </>}
-    {(action.status || pending) && <p role="status" className="text-sm font-semibold text-indigo-900">{action.status || copy.applying}</p>}
+    {(action.status || pending) && <p role="status" className="text-sm font-semibold text-indigo-900">{action.status || (acceptPaused ? copy.acceptPaused : copy.applying)}</p>}
+    {acceptPaused && active && <button type="button" className={polishButton} onClick={() => setPausedAccept(null)}>{copy.resumeAccept}</button>}
     {error && <p role="alert" className="text-sm text-red-800">{error}</p>}
     {notice && <p role="status" className="text-sm text-green-900">{notice}</p>}
     {discard && options && <PolishDiscard key={`${discard.draftId}:${discard.runId}`} runId={discard.runId} version={discard.version}
