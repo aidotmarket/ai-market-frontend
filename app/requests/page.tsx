@@ -1,5 +1,6 @@
 import { plainTextExcerpt } from '@/lib/plainTextExcerpt';
 import Link from 'next/link';
+import { redirect } from 'next/navigation';
 import type { Metadata } from 'next';
 import { fetchDataRequests } from '@/lib/api';
 import { formatDate } from '@/lib/format';
@@ -25,19 +26,41 @@ const URGENCY_BADGE: Record<DataRequestUrgency, string> = {
 };
 
 interface Props {
-  searchParams: Promise<{ page?: string; category?: string }>;
+  searchParams: Promise<{ page?: string | string[]; category?: string | string[]; search?: string | string[] }>;
 }
 
 export default async function BrowseRequestsPage({ searchParams }: Props) {
   const params = await searchParams;
-  const parsedPage = params.page && /^\d+$/.test(params.page) ? Number(params.page) : NaN;
+  const parsedPage = typeof params.page === 'string' && /^\d+$/.test(params.page) ? Number(params.page) : NaN;
   const page = Number.isSafeInteger(parsedPage) && parsedPage > 0 ? parsedPage : 1;
-  const category = params.category || '';
+  const category = typeof params.category === 'string' ? params.category.trim() : '';
+  const search = typeof params.search === 'string' ? params.search.trim() : '';
+  const hasFilters = Boolean(category || search);
+
+  function buildBoardQuery(targetPage?: number) {
+    const query = new URLSearchParams();
+    if (targetPage) query.set('page', String(targetPage));
+    if (category) query.set('category', category);
+    if (search) query.set('search', search);
+    return query.toString();
+  }
+
+  const boardQuery = buildBoardQuery(parsedPage === page ? page : undefined);
+
+  function buildPageUrl(targetPage: number) {
+    return `/requests?${buildBoardQuery(targetPage)}`;
+  }
+
+  // A native GET includes empty controls. Canonicalize their values before fetching.
+  if (params.category !== (category || undefined) || params.search !== (search || undefined)) {
+    redirect(boardQuery ? `/requests?${boardQuery}` : '/requests');
+  }
 
   const data = await fetchDataRequests({
     page,
     per_page: PAGE_SIZE,
     category: category || undefined,
+    search: search || undefined,
   }).catch(() => null);
 
   const requests: DataRequestListItem[] = Array.isArray(data) ? data : data?.items ?? [];
@@ -49,17 +72,6 @@ export default async function BrowseRequestsPage({ searchParams }: Props) {
   const sorted = [...requests].sort(
     (a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime()
   );
-
-  const boardParams = new URLSearchParams();
-  if (parsedPage === page) boardParams.set('page', String(page));
-  if (category) boardParams.set('category', category);
-  const boardQuery = boardParams.toString();
-
-  function buildPageUrl(targetPage: number) {
-    const p = new URLSearchParams({ page: String(targetPage) });
-    if (category) p.set('category', category);
-    return `/requests?${p.toString()}`;
-  }
 
   return (
     <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8 py-8">
@@ -82,9 +94,20 @@ export default async function BrowseRequestsPage({ searchParams }: Props) {
         </div>
       </div>
 
-      {/* Category filter */}
+      {/* Board filters */}
       <div className="flex gap-3 mb-8">
         <form action="/requests" method="get" className="flex flex-wrap items-center gap-3">
+          <div className="flex flex-wrap items-center gap-3">
+            <label htmlFor="request-search" className="text-sm font-medium text-gray-700">Keyword</label>
+            <input
+              key={search}
+              id="request-search"
+              name="search"
+              type="search"
+              defaultValue={search}
+              className="min-w-0 max-w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-[#3F51B5]"
+            />
+          </div>
           <label htmlFor="request-category" className="text-sm font-medium text-gray-700">Category</label>
           <select
             key={category}
@@ -109,6 +132,7 @@ export default async function BrowseRequestsPage({ searchParams }: Props) {
           >
             Apply filter
           </button>
+          {hasFilters && <Link href="/requests" className="text-sm font-medium text-[#3F51B5] underline">Clear filters</Link>}
         </form>
       </div>
 
@@ -123,20 +147,12 @@ export default async function BrowseRequestsPage({ searchParams }: Props) {
       {data !== null && sorted.length === 0 && (
         <div className="text-center py-16">
           <p className="text-gray-500 text-lg mb-2">
-            {page > 1 ? 'No requests on this page' : category ? 'No requests match this category' : 'No data requests yet'}
+            {page > 1 ? 'No requests on this page' : search ? 'No requests match your filters' : category ? 'No requests match this category' : 'No data requests yet'}
           </p>
           <p className="text-gray-400 text-sm mb-6">
-            {page > 1 ? 'Return to the first page or try the previous page.' : category ? 'Try another category.' : 'Be the first to tell the market what you need.'}
+            {page > 1 ? 'Return to the first page or try the previous page.' : search ? 'Try a different keyword or category.' : category ? 'Try another category.' : 'Be the first to tell the market what you need.'}
           </p>
-          {category && (
-            <Link
-              href="/requests"
-              className="rounded-lg bg-[#3F51B5] px-6 py-2.5 text-sm font-medium text-white hover:bg-[#3545a0]"
-            >
-              View all requests
-            </Link>
-          )}
-          {page === 1 && !category && (
+          {page === 1 && !hasFilters && (
             <div>
               <Link
                 href="/requests/new"

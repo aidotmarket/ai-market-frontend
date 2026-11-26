@@ -225,7 +225,13 @@ function OwnedConversation({ requestId, requestStatus, quoteRevision, navigation
     {selectorError ? <><p role="alert">Private conversations are currently unavailable.</p><button className={button} onClick={refresh}>Reload conversations</button></> : !selector ? <p role="status">Loading conversations…</p> : <>
       {selector.side === 'buyer' && selector.threads.length > 0 && <p className="text-sm text-gray-600">Choose a response to read its private conversation history.</p>}
       {selector.side === 'buyer' ? <label className="block text-sm font-medium">Response for private conversation<select aria-label="Response for private conversation" className="block w-full rounded-lg border border-gray-300 p-2 mt-1" value={selection} onChange={e => changeThread(e.target.value)}><option value="">Choose a response</option>{selector.threads.map((t, i) => <option key={t.response_id} value={t.response_id}>Response {i + 1} · {t.response_id}</option>)}</select></label> : <p className="text-sm">Your response conversation</p>}
-      {!selector.threads.length && <p>Private conversations are tied to responses. Check this page for available conversations.</p>}
+      {!selecting && selector.threads.length === 0 && (
+        <p role="status">
+          No private conversations are available to you.
+          {selector.availability === 'enabled' && ['open', 'matched', 'responses_received'].includes(requestStatus)
+            && ' Available conversations will appear with the corresponding response.'}
+        </p>
+      )}
       {closed ? <p role="status">This request is {requestStatus}. New messages cannot be sent.{selector.side === 'buyer' && selector.threads.length > 0 && ' You can still read existing history for available responses.'}</p>
         : selector.availability === 'off' ? <p role="status">Private messaging is turned off for this request. You can still read any available conversations.</p>
         : selector.availability !== 'enabled' && <p role="status">Sending private messages is unavailable right now. Check this page again for updates.</p>}
