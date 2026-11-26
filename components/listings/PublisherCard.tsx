@@ -27,17 +27,27 @@ export default function PublisherCard({ publisher }: { publisher?: PublisherPubl
           <span tabIndex={0} title={VERIFIED_DOMAIN_EXPLANATION} aria-label={verifiedDomainAriaLabel()}
             className="inline-flex rounded-full bg-gray-100 px-2.5 py-1 text-xs font-medium text-gray-700">{VERIFIED_DOMAIN_CHIP}</span>
         </div> : stripeChip}
-        {seller.completed_order_count != null && <p className="text-sm text-gray-600">
-          {seller.completed_order_count > 0 ? `${seller.completed_order_count} completed purchases` : 'No completed purchases yet'}
-        </p>}
-        {seller.seller_rating_count != null && <p className="text-sm text-gray-600" aria-label={SELLER_RATINGS_LABEL}>
-          {seller.seller_rating_count > 0 && seller.seller_rating_average != null
-            ? sellerRatingText(seller.seller_rating_average, seller.seller_rating_count)
-            : seller.seller_rating_count === 0 ? NO_RATINGS_YET : SELLER_RATINGS_UNAVAILABLE}
-        </p>}
-        {(seller.completed_order_count === 0 || seller.seller_rating_count === 0) && <p className="text-sm text-gray-600">
-          These counts cover this publisher’s public listings. Buyers can only rate purchases they’ve completed.
-        </p>}
+        {seller.completed_order_count != null && <div>
+          <p className="text-sm text-gray-600">
+            {seller.completed_order_count > 0
+              ? `${seller.completed_order_count} completed ${seller.completed_order_count === 1 ? 'purchase' : 'purchases'}`
+              : 'No completed purchases yet'}
+          </p>
+          <p className="mt-1 text-xs text-gray-600">
+            This count covers genuine completed paid purchases across this seller’s public listings. It excludes test
+            purchases, self-purchases and orders that were refunded, disputed or revoked.
+          </p>
+        </div>}
+        {seller.seller_rating_count != null && <div>
+          <p className="text-sm text-gray-600" aria-label={SELLER_RATINGS_LABEL}>
+            {seller.seller_rating_count > 0 && seller.seller_rating_average != null
+              ? sellerRatingText(seller.seller_rating_average, seller.seller_rating_count)
+              : seller.seller_rating_count === 0 ? NO_RATINGS_YET : SELLER_RATINGS_UNAVAILABLE}
+          </p>
+          <p className="mt-1 text-xs text-gray-600">
+            Only eligible buyer ratings from genuine completed paid purchases across this seller’s public listings count.
+          </p>
+        </div>}
       </div>}
     </div>
   );

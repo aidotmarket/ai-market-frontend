@@ -69,6 +69,16 @@ describe('ListingPurchaseAdvisory', () => {
 
     expect(html).toContain('No active scan findings are published for this listing');
     expect(html).toContain('does not establish the data’s condition or suitability');
+    expect(html).not.toContain('ask the seller questions');
+  });
+
+  it.each([null, publishedFindings])('explains where listing questions go', (scanFindings) => {
+    const html = renderToStaticMarkup(<ListingPurchaseAdvisory price={10} scanFindings={scanFindings} />);
+
+    expect(html).toMatch(/<a href="#ask-a-question"[^>]*>Ask a question about this listing<\/a>/);
+    expect(html).toContain('If you’re signed out, your question goes to allAI, which uses public listing information to answer.');
+    expect(html).toContain('You must be signed in to contact the seller.');
+    expect(html).toContain('If you’re signed in, you may get an AI answer or have your question forwarded to the seller.');
   });
 
   it('describes published findings as point-in-time and not a guarantee', () => {

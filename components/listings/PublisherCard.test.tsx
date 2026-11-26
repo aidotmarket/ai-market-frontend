@@ -11,12 +11,16 @@ const anonymous: MarketplacePublisher = {
   schema_version: 'seller-presentation-v1', kind: 'marketplace', display_name: 'ai.market Seller', name_source: 'anonymous',
   stripe_connected: false, provider_observed_at: null, completed_order_count: 0, seller_rating_count: 0, seller_rating_average: null,
 };
+const purchaseScope = /This count covers genuine completed paid purchases across this seller’s public listings/;
+const ratingScope = 'Only eligible buyer ratings from genuine completed paid purchases across this seller’s public listings count.';
+
 describe('publisher presentation', () => {
   it('shows truthful anonymous newcomer states without a zero-star score', () => {
     render(<PublisherCard publisher={anonymous} />);
     expect(screen.getByText('ai.market Seller')).toBeTruthy();
     expect(screen.getByText('No completed purchases yet')).toBeTruthy();
-    expect(screen.getByText('These counts cover this publisher’s public listings. Buyers can only rate purchases they’ve completed.')).toBeTruthy();
+    expect(screen.getByText(purchaseScope)).toBeTruthy();
+    expect(screen.getByText(ratingScope)).toBeTruthy();
     expect(screen.getByText('No ratings yet')).toBeTruthy();
     expect(screen.queryByText(/Stripe connected|0\/5/)).toBeNull();
   });
@@ -30,6 +34,7 @@ describe('publisher presentation', () => {
     expect(badge.getAttribute('title')).toBe('Seller connected a Stripe payout account. This does not certify company affiliation or data quality.');
     expect(badge.tabIndex).toBe(0);
     expect(screen.getByText('12 completed purchases')).toBeTruthy();
+    expect(screen.getByText(purchaseScope)).toBeTruthy();
     expect(screen.getByText('4.7/5 from 9 ratings').getAttribute('aria-label')).toBe('Seller ratings');
   });
   it.each([false, null, undefined])('suppresses a Stripe badge for %s evidence', (stripe_connected) => {
@@ -41,6 +46,12 @@ describe('publisher presentation', () => {
     expect(screen.getByText('ai.market Seller')).toBeTruthy();
     expect(screen.getByText('Stripe connected')).toBeTruthy();
     expect(screen.getByText('2 completed purchases')).toBeTruthy();
+  });
+  it('explains a single completed purchase when ratings are unknown', () => {
+    render(<PublisherCard publisher={{ ...anonymous, completed_order_count: 1, seller_rating_count: null }} />);
+    expect(screen.getByText('1 completed purchase')).toBeTruthy();
+    expect(screen.getByText(purchaseScope)).toBeTruthy();
+    expect(screen.queryByText(ratingScope)).toBeNull();
   });
   it('falls back to the anonymous name and never fabricates missing aggregates', () => {
     render(<PublisherCard publisher={{ kind: 'marketplace', schema_version: 'seller-presentation-v1', display_name: '' }} />);
@@ -96,20 +107,25 @@ describe('verified domain and rating presentation', () => {
     expect(domain.parentElement?.classList.contains('gap-2')).toBe(true);
     expect(Array.from(domain.parentElement!.children)).toEqual([stripe, domain]);
   });
-  it('preserves the Stripe-only chip and shows the publisher counts with their scope', () => {
-    expect(renderToStaticMarkup(<PublisherCard publisher={{ ...anonymous, stripe_connected: true }} />)).toBe(
-      '<div class="rounded-xl border border-gray-200 p-6"><h3 class="font-semibold text-gray-900 mb-3">Publisher</h3><p class="text-sm text-gray-600 break-words">ai.market Seller</p><div class="mt-3 space-y-2 border-t border-gray-100 pt-3"><span tabindex="0" title="Seller connected a Stripe payout account. This does not certify company affiliation or data quality." aria-label="Stripe connected. Seller connected a Stripe payout account. This does not certify company affiliation or data quality." class="inline-flex rounded-full bg-gray-100 px-2.5 py-1 text-xs font-medium text-gray-700">Stripe connected</span><p class="text-sm text-gray-600">No completed purchases yet</p><p class="text-sm text-gray-600" aria-label="Seller ratings">No ratings yet</p><p class="text-sm text-gray-600">These counts cover this publisher’s public listings. Buyers can only rate purchases they’ve completed.</p></div></div>');
+  it('preserves the Stripe-only chip markup', () => {
+    render(<PublisherCard publisher={{ ...anonymous, stripe_connected: true }} />);
+    expect(screen.getByText('Stripe connected').outerHTML).toBe(
+      '<span tabindex="0" title="Seller connected a Stripe payout account. This does not certify company affiliation or data quality." aria-label="Stripe connected. Seller connected a Stripe payout account. This does not certify company affiliation or data quality." class="inline-flex rounded-full bg-gray-100 px-2.5 py-1 text-xs font-medium text-gray-700">Stripe connected</span>');
+    expect(screen.queryByText(VERIFIED_DOMAIN_CHIP)).toBeNull();
   });
   it.each([
     [0, null, 'No ratings yet'], [1, 5, '5/5 from 1 rating'],
     [2, 4.5, '4.5/5 from 2 ratings'], [3, 4, '4/5 from 3 ratings'],
     [1, null, 'Seller ratings unavailable'],
   ])('renders count %s and average %s', (seller_rating_count, seller_rating_average, text) => {
-    render(<PublisherCard publisher={{ ...anonymous, seller_rating_count, seller_rating_average }} />);
+    render(<PublisherCard publisher={{ ...anonymous, completed_order_count: null, seller_rating_count, seller_rating_average }} />);
     expect(screen.getByLabelText(SELLER_RATINGS_LABEL).textContent).toBe(text);
+    expect(screen.getByText(ratingScope)).toBeTruthy();
+    expect(screen.queryByText(purchaseScope)).toBeNull();
   });
   it.each([null, undefined])('omits ratings for unknown count %s', seller_rating_count => {
     render(<PublisherCard publisher={{ ...anonymous, seller_rating_count }} />);
     expect(screen.queryByLabelText(SELLER_RATINGS_LABEL)).toBeNull();
+    expect(screen.queryByText(ratingScope)).toBeNull();
   });
 });
