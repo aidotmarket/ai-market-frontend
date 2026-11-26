@@ -196,11 +196,13 @@ export async function fetchDataRequests(params?: {
   page?: number;
   per_page?: number;
   category?: string;
+  search?: string;
 }) {
   const searchParams = new URLSearchParams();
   if (params?.page) searchParams.set('page', String(params.page));
   if (params?.per_page) searchParams.set('per_page', String(params.per_page));
   if (params?.category) searchParams.set('category', params.category);
+  if (params?.search) searchParams.set('search', params.search);
 
   const qs = searchParams.toString();
   const res = await fetch(`${API_URL}/api/v1/data-requests${qs ? `?${qs}` : ''}`, {

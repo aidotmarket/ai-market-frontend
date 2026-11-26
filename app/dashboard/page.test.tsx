@@ -321,6 +321,34 @@ describe('DashboardOverview seller setup 2FA state', () => {
     expect(connectApi.getConnectStatus).toHaveBeenCalledTimes(2);
   });
 
+  it('shows the entire listings recovery message with separate focusable actions', async () => {
+    capabilitiesApi.getCapabilities.mockResolvedValue({
+      seller: { effective_status: 'active', missing_steps: [] }, next_action: null,
+    });
+    connectApi.getConnectStatus.mockResolvedValue({ data: { details_submitted: true, payouts_enabled: true } });
+    sellerApi.getSellerStats.mockResolvedValue({ data: sellerStats });
+    listingsApi.getMyListings.mockRejectedValueOnce(new Error('fixture listings failure')).mockResolvedValue({ data: [] });
+    render(<DashboardOverview />);
+
+    const region = await screen.findByRole('region', { name: 'Sales summary and listings' });
+    const recovery = within(region);
+    expect(recovery.getByRole('alert').textContent)
+      .toBe("We couldn't load your listings just now. Try again, or contact support if it keeps happening.");
+    const support = recovery.getByRole('link', { name: 'Contact support' });
+    const retry = recovery.getByRole('button', { name: 'Retry' });
+    expect(support.getAttribute('href')).toBe('/support');
+    expect(region.classList.contains('whitespace-normal')).toBe(true);
+    expect(retry.parentElement?.classList.contains('flex-wrap')).toBe(true);
+    for (const action of [support, retry]) {
+      expect(action.tabIndex).toBe(0);
+      action.focus();
+      expect(document.activeElement).toBe(action);
+    }
+    fireEvent.click(retry);
+    await screen.findByRole('link', { name: 'View listings' });
+    expect(listingsApi.getMyListings).toHaveBeenCalledTimes(2);
+  });
+
   it.each([
     sellerStats,
     {

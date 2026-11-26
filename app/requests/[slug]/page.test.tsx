@@ -119,10 +119,10 @@ describe('DataRequestDetailPage Demand JSON-LD', () => {
 
     const html = renderToStaticMarkup(await Page({
       params: Promise.resolve({ slug: 'need-claims-data' }),
-      searchParams: Promise.resolve({ page: '3', category: 'retail', response_id: 'response-1' }),
+      searchParams: Promise.resolve({ page: '3', category: 'retail', search: 'sales & inventory', response_id: 'response-1' }),
     }));
 
-    expect(html).toContain('data-board-query="page=3&amp;category=retail"');
+    expect(html).toContain('data-board-query="page=3&amp;category=retail&amp;search=sales+%26+inventory"');
   });
 
   it('suppresses Demand JSON-LD when the request flag is false', async () => {

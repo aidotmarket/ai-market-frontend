@@ -186,14 +186,33 @@ describe('DataRequestDetailClient authenticated fallback loading', () => {
     render(<DataRequestDetailClient slug={request.slug} initialRequest={request} />);
 
     expect(screen.queryByText(/^\d*\s*responses?$/)?.textContent ?? null).toBe(expected);
+    if (expected) {
+      expect(within(screen.getByText(expected).parentElement!).getByText('Open for responses')).toBeTruthy();
+      expect(screen.getByRole('link', { name: 'Log in to Respond' })).toBeTruthy();
+    }
     expect(screen.queryAllByText('responses received')).toHaveLength(response_count === undefined ? 1 : 0);
     expect(Boolean(screen.queryByText('Responses are visible to the requester and to the sellers who sent them.')))
       .toBe(Boolean(response_count));
   });
 
   it.each([
+    ['open', null, 'Open for responses'],
+    ['closed', null, 'Closed to responses'],
+    ['responses_received', 'Sample requests cannot receive public responses.', 'Responses unavailable'],
+  ] as const)('shows %s with refusal %s beside the public count', (status, response_refusal, label) => {
+    mocks.auth.user = null;
+    mocks.auth.isAuthenticated = false;
+    const request = makeOwnerRequest({ status, response_refusal, response_count: 1, is_sample: true });
+    render(<DataRequestDetailClient slug={request.slug} initialRequest={request} />);
+
+    expect(within(screen.getByText('1 response').parentElement!).getByText(label)).toBeTruthy();
+    if (response_refusal) expect(screen.getByRole('button', { name: 'Log in to Respond' })).toHaveProperty('disabled', true);
+    if (status === 'closed') expect(screen.queryByRole('link', { name: 'Log in to Respond' })).toBeNull();
+  });
+
+  it.each([
     [undefined, '/requests'],
-    ['page=3&category=retail', '/requests?page=3&category=retail'],
+    ['page=3&category=retail&search=sales+%26+inventory', '/requests?page=3&category=retail&search=sales+%26+inventory'],
   ])('links directly back to the requests board with query %s', (boardQuery, destination) => {
     const request = makeOwnerRequest();
     render(<DataRequestDetailClient slug={request.slug} initialRequest={request} boardQuery={boardQuery} />);
@@ -548,7 +567,7 @@ describe('DataRequestDetailClient authenticated fallback loading', () => {
     expect(mocks.publishDataRequest).not.toHaveBeenCalled();
   });
 
-  it.each([true, false, undefined, 'true', 1, null])('tags only an explicit sample flag (%s) in the detail title/status row', async is_sample => {
+  it.each([true, false, undefined, 'true', 1, null])('tags only an explicit sample flag (%s) beside the detail title', async is_sample => {
     mocks.auth.user = null;
     mocks.auth.isAuthenticated = false;
     const extra = is_sample === undefined ? {} : { is_sample };
@@ -559,7 +578,7 @@ describe('DataRequestDetailClient authenticated fallback loading', () => {
     const heading = screen.getByRole('heading', { name: 'Synthetic data request' });
     const header = within(heading.parentElement!);
     expect(header.queryByText('(SAMPLE)') !== null).toBe(is_sample === true);
-    expect(header.getByText('open')).toBeTruthy();
+    expect(screen.getByText('Open for responses')).toBeTruthy();
     expect(screen.queryAllByText('(SAMPLE)')).toHaveLength(is_sample === true ? 1 : 0);
     expect(screen.getByRole('link', { name: /Back to requests/ }).getAttribute('href')).toBe('/requests');
   });
@@ -922,6 +941,7 @@ describe('DataRequestDetailClient authenticated fallback loading', () => {
       expect(await screen.findByRole('heading', { name: '1 response' })).not.toBeNull();
       expect(screen.getAllByText(/^\d+ responses?$/)).toHaveLength(1);
       expect(screen.queryByText('responses received')).toBeNull();
+      expect(screen.queryByText('Open for responses')).toBeNull();
       expect(screen.getByText(savedQuote.proposal)).not.toBeNull();
       expect(screen.getByText('submitted')).not.toBeNull();
     }
